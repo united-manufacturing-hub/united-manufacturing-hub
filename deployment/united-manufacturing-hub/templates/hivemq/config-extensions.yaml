@@ -30,35 +30,60 @@ data:
         <users>
             <user>
                 <name>MQTT_KAFKA_BRIDGE</name>
-                <password>{{.Values.mqttkafkabridge.mqtt.encryptedPassword}}</password>
+                {{- $passMqttKafka := default .Values.mqttkafkabridge.mqtt.encryptedPassword }}
+                {{- if eq $passMqttKafka "" }}
+                <password>WDRkN1c4MnpVb3BsS25qZG5qbkcxSUFuQm5kVVZVbW4=:100:H/o0vsDqmVfzkoLU6rPG8C7+0gzYjkH2E7q3+/5aXKFlSYEyBO/tiin02gxpcB0A/1j7fudGbZhQfI+dZa1GCQ==</password>
+                {{- else }}
+                <password>{{- print $passMqttKafka }}</password>
+                {{- end }}
                 <roles>
                     <id>ia_read_write</id>
                 </roles>
             </user>
             <user>
                 <name>SENSORCONNECT</name>
-                <password>{{.Values.sensorconnect.mqtt.encryptedPassword}}</password>
+                {{- $passSensorconnect := default .Values.sensorconnect.mqtt.encryptedPassword }}
+                {{- if eq $passSensorconnect "" }}
+                <password>ZVF5bDJ4TWtjVXVWZVVESlRXZU1DSHA4cDdHbUhKSEc=:100:B42+ySldBE+uilWricvIif+UJ0oW5iXafloUyiZclbYoQOOthOet5NQAKCTHITDSHadxvjbgfiF/908QmwqZOw==</password>
+                {{- else }}
+                <password>{{- print $passSensorconnect}}</password>
+                {{- end }}
                 <roles>
                     <id>ia_read_write</id>
                 </roles>
             </user>
             <user>
                 <name>IOTSENSORSMQTT</name>
-                <password>{{.Values.iotsensorsmqtt.mqtt.encryptedPassword}}</password>
+                {{- $passIotSensor := default .Values.iotsensorsmqtt.mqtt.encryptedPassword }}
+                {{- if eq $passIotSensor "" }}
+                <password>T3VSY2szQ0diWDkyOGpoSGpDQzVqc29VZlJ2UkxiOTI=:100:6qxZS+Bhn8QXrF1dUo6fU9Eg/esjw6zipq6xv9uct84Jyhv0mJTUi5SHSBW4TbF66vBOrE3JnZ//rUutEl8/Bw==</password>
+                {{- else }}
+                <password>{{- print $passIotSensor}}</password>
+                {{- end }}
                 <roles>
                     <id>ia_raw</id>
                 </roles>
             </user>
             <user>
                 <name>PACKMLSIMULATOR</name>
-                <password>{{.Values.packmlmqttsimulator.env.mqtt.encryptedPassword}}</password>
+                {{- $passPackml := default .Values.packmlmqttsimulator.env.mqtt.encryptedPassword }}
+                {{- if eq $passPackml "" }}
+                <password>ZzBCbzEyaWlnZkRjbndTa2RLTW1aSmlsOWtQSWtpak0=:100:9FWqFUN88VPio9yFR59XbE9fr/GUkM1fnKCNn2wvK06MMtKp5LPtUrTCOLhHgkFQ6IMw92wi9HTsLRFxnM+reQ==</password>
+                {{- else }}
+                <password>{{- print $passPackml}}</password>
+                {{- end }}
                 <roles>
                     <id>packmlsimulator</id>
                 </roles>
             </user>
             <user>
                 <name>node-red</name>
-                <password>{{.Values.nodered.mqtt.encryptedPassword}}</password>
+                {{- $passNodered := default .Values.nodered.mqtt.encryptedPassword }}
+                {{- if eq $passNodered "" }}
+                <password>aVptalRWUk5Dd0QxQmtlekRYcnlZemJ3VTJKMTlDZWE=:100:PrJcg4O5Y371AnbS+Qt//rdNhjeBfkpWm24B0TBQPmNC+3ANbjIpFoJUh/gfBZHdE8fI6DwU8/u7RSjBuSTRkA==</password>
+                {{- else }}
+                <password>{{- print $passNodered}}</password>
+                {{- end }}
                 <roles>
                     <id>packmlsimulator</id>
                     <id>umh_read_write</id>

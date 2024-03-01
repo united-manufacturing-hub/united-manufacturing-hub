@@ -26,14 +26,13 @@ concurrency:
 
 jobs:
   barcodereader:
-    
     permissions:
       packages: write
       contents: read
     runs-on:  
       group: large-runners
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Docker Meta
         id: meta
         uses: docker/metadata-action@v5
@@ -45,9 +44,9 @@ jobs:
             type=ref,event=pr
             type=semver,pattern={{version}}
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
-      - name: Login to GitHub Container registry
-        uses: docker/login-action@v2
+        uses: docker/setup-buildx-action@v3
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
         env:
           GITHUB_USER: ${{ github.actor }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -56,22 +55,21 @@ jobs:
           username: $GITHUB_USER
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Build and Push
-        uses: docker/build-push-action@v4
+        uses: docker/build-push-action@v5
         with:
           context: .
           file: ./deployment/barcodereader/Dockerfile
           push: true
           tags: ${{ steps.meta.outputs.tags }}
 
-  factoryinsight:
-    
+  factoryinsight:   
     permissions:
       packages: write
       contents: read
     runs-on:  
       group: large-runners
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Docker Meta
         id: meta
         uses: docker/metadata-action@v5
@@ -83,15 +81,15 @@ jobs:
             type=ref,event=pr
             type=semver,pattern={{version}}
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
+        uses: docker/setup-buildx-action@v3
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@v2
+        uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Build and Push Docker Image
-        uses: docker/build-push-action@v4
+        uses: docker/build-push-action@v5
         with:
           context: .
           file: ./deployment/factoryinsight/Dockerfile
@@ -99,16 +97,14 @@ jobs:
           target: runner
           tags: ${{ steps.meta.outputs.tags }}
 
-
   grafana-umh:
-    
     permissions:
       packages: write
       contents: read
     runs-on:  
       group: large-runners
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Docker Meta
         id: meta
         uses: docker/metadata-action@v5
@@ -120,15 +116,15 @@ jobs:
             type=ref,event=pr
             type=semver,pattern={{version}}
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
+        uses: docker/setup-buildx-action@v3
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@v2
+        uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Build and Push Docker Image
-        uses: docker/build-push-action@v4
+        uses: docker/build-push-action@v5
         with:
           context: .
           file: ./deployment/grafana-umh/Dockerfile
@@ -136,14 +132,13 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
 
   hivemq-init:
-    
     permissions:
       packages: write
       contents: read
     runs-on:  
       group: large-runners
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Docker Meta
         id: meta
         uses: docker/metadata-action@v5
@@ -155,15 +150,15 @@ jobs:
             type=ref,event=pr
             type=semver,pattern={{version}}
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
+        uses: docker/setup-buildx-action@v3
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@v2
+        uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Build and Push Docker Image
-        uses: docker/build-push-action@v4
+        uses: docker/build-push-action@v5
         with:
           context: .
           file: ./deployment/hivemq-init/Dockerfile
@@ -171,14 +166,13 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
 
   kafka-bridge:
-    
     permissions:
       packages: write
       contents: read
     runs-on:  
       group: large-runners
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Docker Meta
         id: meta
         uses: docker/metadata-action@v5
@@ -190,15 +184,15 @@ jobs:
             type=ref,event=pr
             type=semver,pattern={{version}}
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
+        uses: docker/setup-buildx-action@v3
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@v2
+        uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Build and Push Docker Image
-        uses: docker/build-push-action@v4
+        uses: docker/build-push-action@v5
         with:
           context: .
           file: ./deployment/kafka-bridge/Dockerfile
@@ -206,16 +200,14 @@ jobs:
           target: runner
           tags: ${{ steps.meta.outputs.tags }}
 
-
   kafka-init:
-    
     permissions:
       packages: write
       contents: read
     runs-on:  
       group: large-runners
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Docker Meta
         id: meta
         uses: docker/metadata-action@v5
@@ -227,15 +219,15 @@ jobs:
             type=ref,event=pr
             type=semver,pattern={{version}}
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
+        uses: docker/setup-buildx-action@v3
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@v2
+        uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Build and Push Docker Image
-        uses: docker/build-push-action@v4
+        uses: docker/build-push-action@v5
         with:
           context: .
           file: ./deployment/kafka-init/Dockerfile
@@ -245,14 +237,13 @@ jobs:
 
 
   kafka-to-postgresql:
-    
     permissions:
       packages: write
       contents: read
     runs-on:  
       group: large-runners
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Docker Meta
         id: meta
         uses: docker/metadata-action@v5
@@ -264,15 +255,15 @@ jobs:
             type=ref,event=pr
             type=semver,pattern={{version}}
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
+        uses: docker/setup-buildx-action@v3
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@v2
+        uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Build and Push Docker Image
-        uses: docker/build-push-action@v4
+        uses: docker/build-push-action@v5
         with:
           context: .
           file: ./deployment/kafka-to-postgresql/Dockerfile
@@ -282,14 +273,13 @@ jobs:
 
 
   kafka-to-postgresql-v2:
-    
     permissions:
       packages: write
       contents: read
     runs-on: 
       group: large-runners
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Docker Meta
         id: meta
         uses: docker/metadata-action@v5
@@ -301,15 +291,15 @@ jobs:
             type=ref,event=pr
             type=semver,pattern={{version}}
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
+        uses: docker/setup-buildx-action@v3
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@v2
+        uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Build and Push Docker Image
-        uses: docker/build-push-action@v4
+        uses: docker/build-push-action@v5
         with:
           context: .
           file: ./deployment/kafka-to-postgresql-v2/Dockerfile
@@ -317,15 +307,14 @@ jobs:
           target: runner
           tags: ${{ steps.meta.outputs.tags }}
           
-  metrics:
-    
+  metrics:    
     permissions:
       packages: write
       contents: read
     runs-on:  
       group: large-runners
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Docker Meta
         id: meta
         uses: docker/metadata-action@v5
@@ -337,15 +326,15 @@ jobs:
             type=ref,event=pr
             type=semver,pattern={{version}}
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
+        uses: docker/setup-buildx-action@v3
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@v2
+        uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Build and Push Docker Image
-        uses: docker/build-push-action@v4
+        uses: docker/build-push-action@v5
         with:
           context: .
           file: ./deployment/metrics/Dockerfile
@@ -353,16 +342,14 @@ jobs:
           target: runner
           tags: ${{ steps.meta.outputs.tags }}
 
-
   mqtt-kafka-bridge:
-    
     permissions:
       packages: write
       contents: read
     runs-on:  
       group: large-runners
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Docker Meta
         id: meta
         uses: docker/metadata-action@v5
@@ -374,15 +361,15 @@ jobs:
             type=ref,event=pr
             type=semver,pattern={{version}}
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
+        uses: docker/setup-buildx-action@v3
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@v2
+        uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Build and Push Docker Image
-        uses: docker/build-push-action@v4
+        uses: docker/build-push-action@v5
         with:
           context: .
           file: ./deployment/mqtt-kafka-bridge/Dockerfile
@@ -391,14 +378,13 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
 
   sensorconnect:
-    
     permissions:
       packages: write
       contents: read
     runs-on:  
       group: large-runners
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Docker Meta
         id: meta
         uses: docker/metadata-action@v5
@@ -410,15 +396,15 @@ jobs:
             type=ref,event=pr
             type=semver,pattern={{version}}
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
+        uses: docker/setup-buildx-action@v3
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@v2
+        uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Build and Push Docker Image
-        uses: docker/build-push-action@v4
+        uses: docker/build-push-action@v5
         with:
           context: .
           file: ./deployment/sensorconnect/Dockerfile
