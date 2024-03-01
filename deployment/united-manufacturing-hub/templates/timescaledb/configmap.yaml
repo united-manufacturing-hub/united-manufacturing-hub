@@ -7642,13 +7642,6 @@ data:
     CREATE INDEX ON tag_string (asset_id, timestamp DESC);
     CREATE INDEX ON tag_string (name);
 
-    ALTER TABLE asset OWNER TO {{.Values.kafkatopostgresqlv2.database.user}};
-    ALTER TABLE tag OWNER TO {{.Values.kafkatopostgresqlv2.database.user}};
-    ALTER TABLE tag_string OWNER TO {{.Values.kafkatopostgresqlv2.database.user}};
-
-    GRANT SELECT ON {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.asset TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
-    GRANT SELECT ON {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.tag TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
-    GRANT SELECT ON {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.tag_string TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
     
     CREATE OR REPLACE FUNCTION get_asset_id(
         _enterprise text,
@@ -7790,6 +7783,32 @@ data:
 
     -- creating an index to increase performance
     CREATE INDEX idx_states_asset_starttime ON states(assetId, startTime DESC);
+
+
+      -------------------- FIX OWNERS --------------------
+
+      ALTER TABLE asset OWNER TO {{.Values.kafkatopostgresqlv2.database.user}};
+      ALTER TABLE tag OWNER TO {{.Values.kafkatopostgresqlv2.database.user}};
+      ALTER TABLE tag_string OWNER TO {{.Values.kafkatopostgresqlv2.database.user}};
+
+      ALTER TABLE work_orders OWNER TO {{.Values.kafkatopostgresqlv2.database.user}};
+      ALTER TABLE product_types OWNER TO {{.Values.kafkatopostgresqlv2.database.user}};
+      ALTER TABLE products OWNER TO {{.Values.kafkatopostgresqlv2.database.user}};
+      ALTER TABLE shifts OWNER TO {{.Values.kafkatopostgresqlv2.database.user}};
+      ALTER TABLE states OWNER TO {{.Values.kafkatopostgresqlv2.database.user}};
+
+
+      GRANT SELECT ON {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.asset TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
+      GRANT SELECT ON {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.tag TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
+      GRANT SELECT ON {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.tag_string TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
+
+
+      GRANT SELECT ON {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.work_orders TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
+      GRANT SELECT ON {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.product_types TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
+      GRANT SELECT ON {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.products TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
+      GRANT SELECT ON {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.shifts TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
+      GRANT SELECT ON {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.states TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
+
 
   __SQL__
 {{end}}
