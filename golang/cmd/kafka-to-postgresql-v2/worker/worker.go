@@ -86,7 +86,7 @@ func handleParsing(msgChan <-chan *shared.KafkaMessage, i int) {
 				continue
 			}
 		case "analytics":
-			zap.S().Warnf("Analytics not yet supported, ignoring")
+			zap.S().Warnf("Analytics not yet supported, ignoring: %+v", msg)
 		default:
 			zap.S().Errorf("Unknown usecase %s", topic.Schema)
 		}
