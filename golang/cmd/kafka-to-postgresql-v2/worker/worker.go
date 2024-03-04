@@ -99,7 +99,7 @@ func handleParsing(msgChan <-chan *shared.KafkaMessage, i int) {
 	}
 }
 
-func parseHistorianPayload(value []byte, tag string) ([]sharedStructs.Value, int64, error) {
+func parseHistorianPayload(value []byte, tag string) ([]sharedStructs.HistorianValue, int64, error) {
 	// Attempt to JSON decode the message
 	var message map[string]interface{}
 	err := json.Unmarshal(value, &message)
@@ -111,7 +111,7 @@ func parseHistorianPayload(value []byte, tag string) ([]sharedStructs.Value, int
 		return nil, 0, errors.New("message payload does not contain enough fields")
 	}
 	var timestampMs int64
-	var values = make([]sharedStructs.Value, 0)
+	var values = make([]sharedStructs.HistorianValue, 0)
 
 	// Extract and remove the timestamp_ms field
 	if ts, ok := message["timestamp_ms"]; !ok {
@@ -141,7 +141,7 @@ func parseInt(v interface{}) (int64, error) {
 	return int64(timestamp), nil
 }
 
-func parseValue(prefix string, v interface{}, values *[]sharedStructs.Value) (err error) {
+func parseValue(prefix string, v interface{}, values *[]sharedStructs.HistorianValue) (err error) {
 	switch val := v.(type) {
 	case map[string]interface{}:
 		for k, v := range val {
@@ -158,26 +158,26 @@ func parseValue(prefix string, v interface{}, values *[]sharedStructs.Value) (er
 		}
 	case float64:
 		f := float32(val)
-		*values = append(*values, sharedStructs.Value{
+		*values = append(*values, sharedStructs.HistorianValue{
 			Name:         prefix,
 			NumericValue: &f,
 			IsNumeric:    true,
 		})
 	case float32:
-		*values = append(*values, sharedStructs.Value{
+		*values = append(*values, sharedStructs.HistorianValue{
 			Name:         prefix,
 			NumericValue: &val,
 			IsNumeric:    true,
 		})
 	case int:
 		f := float32(val)
-		*values = append(*values, sharedStructs.Value{
+		*values = append(*values, sharedStructs.HistorianValue{
 			Name:         prefix,
 			NumericValue: &f,
 			IsNumeric:    true,
 		})
 	case string:
-		*values = append(*values, sharedStructs.Value{
+		*values = append(*values, sharedStructs.HistorianValue{
 			Name:        prefix,
 			StringValue: &val,
 		})
@@ -186,7 +186,7 @@ func parseValue(prefix string, v interface{}, values *[]sharedStructs.Value) (er
 		if val {
 			f = 1.0
 		}
-		*values = append(*values, sharedStructs.Value{
+		*values = append(*values, sharedStructs.HistorianValue{
 			Name:         prefix,
 			NumericValue: &f,
 			IsNumeric:    true,

@@ -21,7 +21,7 @@ type DBValue struct {
 	Timestamp time.Time
 	Origin    string
 	AssetId   int
-	Value     sharedStructs.Value
+	Value     sharedStructs.HistorianValue
 }
 
 func (r *DBValue) GetValue() interface{} {
@@ -336,7 +336,7 @@ func getCacheKey(topic *sharedStructs.TopicDetails) string {
 	return cacheKey.String()
 }
 
-func (c *Connection) InsertHistorianValue(value []sharedStructs.Value, timestampMs int64, origin string, topic *sharedStructs.TopicDetails) error {
+func (c *Connection) InsertHistorianValue(value []sharedStructs.HistorianValue, timestampMs int64, origin string, topic *sharedStructs.TopicDetails) error {
 	assetId, err := c.GetOrInsertAsset(topic)
 	if err != nil {
 		return err
