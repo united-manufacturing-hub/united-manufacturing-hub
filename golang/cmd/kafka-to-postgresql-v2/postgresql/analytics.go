@@ -16,23 +16,6 @@ func (c *Connection) InsertWorkOrderCreate(msg sharedStructs.WorkOrderCreateMess
 	if err != nil {
 		return err
 	}
-	// This is a direct table insert, no worker needed
-	/*
-		CREATE TABLE work_orders (
-		    workOrderId INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-		    externalWorkOrderId TEXT NOT NULL,
-		    assetId INTEGER NOT NULL REFERENCES assets(id),
-		    productTypeId INTEGER NOT NULL REFERENCES product_types(productTypeId),
-		    quantity INTEGER NOT NULL,
-		    status INTEGER NOT NULL DEFAULT 0, -- 0: planned, 1: in progress, 2: completed
-		    startTime TIMESTAMPTZ,
-		    endTime TIMESTAMPTZ,
-		    CONSTRAINT asset_workorder_uniq UNIQUE (assetId, externalWorkOrderId),
-		    CHECK (quantity > 0),
-		    CHECK (status BETWEEN 0 AND 2),
-		    EXCLUDE USING gist (assetId WITH =, tstzrange(startTime, endTime) WITH &&) WHERE (startTime IS NOT NULL AND endTime IS NOT NULL)
-		);
-	*/
 	// Start tx (this shouldn't take more then 1 minute)
 	ctx, cncl := get1MinuteContext()
 	defer cncl()
