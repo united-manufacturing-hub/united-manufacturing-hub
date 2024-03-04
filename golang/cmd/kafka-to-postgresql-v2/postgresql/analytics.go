@@ -95,7 +95,7 @@ func (c *Connection) InsertWorkOrderStop(msg *sharedStructs.WorkOrderStopMessage
 		UPDATE work_orders
 		SET status = 2, endTime = to_timestamp($2 / 1000)
 		WHERE externalWorkOrderId = $1
-		  AND status > 0
+		  AND status = 1
 		  AND endTime IS NULL
 	`, msg.ExternalWorkOrderId, msg.EndTimeUnixMs)
 	if err != nil {
