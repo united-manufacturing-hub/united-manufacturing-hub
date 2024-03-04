@@ -7703,7 +7703,7 @@ data:
     -- Here, each work order is linked to a specific asset and product type
     CREATE TABLE work_orders (
       workOrderId INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-      externalWorkOrderId TEXT UNIQUE NOT NULL,
+      externalWorkOrderId TEXT NOT NULL,
       assetId INTEGER NOT NULL REFERENCES assets(id),
       productTypeId INTEGER NOT NULL REFERENCES product_types(productTypeId),
       quantity INTEGER NOT NULL,
@@ -7719,8 +7719,8 @@ data:
     -------------------- PRODUCT TYPES TABLE --------------------
     CREATE TABLE product_types (
       productTypeId INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-      externalProductTypeId TEXT UNIQUE NOT NULL,
-      cycleTime REAL NOT NULL,
+      externalProductTypeId TEXT NOT NULL,
+      cycleTime INTEGER NOT NULL,
       assetId INTEGER REFERENCES assets(id),
       CONSTRAINT external_product_asset_uniq UNIQUE (externalProductTypeId, assetId),
       CHECK (cycleTime > 0)
