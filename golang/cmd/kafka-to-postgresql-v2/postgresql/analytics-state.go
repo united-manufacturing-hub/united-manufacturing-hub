@@ -12,26 +12,6 @@ func (c *Connection) InsertStateAdd(msg *sharedStructs.StateAddMessage, topic *s
 		return err
 	}
 
-	/*
-		-- State Table
-		-- Records the state changes of assets over time. State tracking supports ISA-95's goal of detailed monitoring and control of manufacturing operations.
-		-- State Table
-		CREATE TABLE states (
-		    stateId INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-		    assetId INTEGER REFERENCES assets(id),
-		    startTime TIMESTAMPTZ NOT NULL,
-			endTime TIMESTAMPTZ,
-		    state INT NOT NULL,
-		    CHECK (state >= 0),
-		    CONSTRAINT state_start_asset_uniq UNIQUE (startTime, assetId)
-		);
-		-- creating hypertable
-		SELECT create_hypertable('states', 'startTime');
-
-		-- creating an index to increase performance
-		CREATE INDEX idx_states_asset_starttime ON states(assetId, startTime DESC);
-	*/
-
 	// Start tx (this shouln't take more then 1 minute)
 	ctx, cncl := get1MinuteContext()
 	defer cncl()
