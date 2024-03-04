@@ -7775,6 +7775,7 @@ data:
       stateId INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
       assetId INTEGER REFERENCES assets(id),
       startTime TIMESTAMPTZ NOT NULL,
+    endTime TIMESTAMPTZ,
       state INT NOT NULL,
       CHECK (state >= 0),
       CONSTRAINT state_start_asset_uniq UNIQUE (startTime, assetId)

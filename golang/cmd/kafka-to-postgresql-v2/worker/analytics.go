@@ -134,3 +134,36 @@ func parseShiftDelete(value []byte) (*shared.ShiftDeleteMessage, error) {
 	}
 	return &message, err
 }
+
+func parseStateAdd(value []byte) (*shared.StateAddMessage, error) {
+	// Try parse to StateAddMessage
+	var message shared.StateAddMessage
+	err := json.Unmarshal(value, &message)
+
+	// Validate that State & StartTimeUnixMs are set
+	if message.State == 0 {
+		return nil, errors.New("state is required")
+	}
+	if message.StartTimeUnixMs == 0 {
+		return nil, errors.New("start_time_unix_ms is required")
+	}
+	return &message, err
+}
+
+func parseStateOverwrite(value []byte) (*shared.StateOverwriteMessage, error) {
+	// Try parse to StateOverwriteMessage
+	var message shared.StateOverwriteMessage
+	err := json.Unmarshal(value, &message)
+
+	// Validate that State, EndTimeUnixMs & StartTimeUnixMs are set
+	if message.State == 0 {
+		return nil, errors.New("state is required")
+	}
+	if message.EndTimeUnixMs == 0 {
+		return nil, errors.New("end_time_unix_ms is required")
+	}
+	if message.StartTimeUnixMs == 0 {
+		return nil, errors.New("start_time_unix_ms is required")
+	}
+	return &message, err
+}
