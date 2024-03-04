@@ -30,7 +30,7 @@ func (c *Connection) InsertProductAdd(msg *sharedStructs.ProductAddMessage, topi
 		VALUES ($1, $2, $3, to_timestamp($4/1000), to_timestamp($5/1000), $6, $7)
 	`, int(productTypeId), msg.ProductBatchId, int(assetId), msg.StartTimeUnixMs, msg.EndTimeUnixMs, int(msg.Quantity), int(msg.BadQuantity))
 	if err != nil {
-		zap.S().Warnf("Error inserting work order: %v (productTypeId: %v) [%s]", err, productTypeId, cmdTag)
+		zap.S().Warnf("Error inserting product: %v (productTypeId: %v) [%s]", err, productTypeId, cmdTag)
 		zap.S().Debugf("Message: %v (Topic: %v)", msg, topic)
 		errR := tx.Rollback(ctx)
 		if errR != nil {

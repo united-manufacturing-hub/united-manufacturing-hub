@@ -74,6 +74,11 @@ type ProductSetBadQuantityMessage struct {
 	BadQuantity       uint64 `json:"bad_quantity"`
 }
 
+type ProductTypeCreateMessage struct {
+	ExternalProductTypeId string `json:"external_product_type_id"`
+	CycleTimeMs           uint64 `json:"cycle_time_ms"`
+}
+
 type PgxIface interface {
 	Begin(context.Context) (pgx.Tx, error)
 	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
