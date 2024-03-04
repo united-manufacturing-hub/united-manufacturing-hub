@@ -59,6 +59,8 @@ func (c *Connection) InsertWorkOrderStart(msg *sharedStructs.WorkOrderStartMessa
 		UPDATE work_orders
 		SET status = 1, startTime = to_timestamp($2 / 1000)
 		WHERE externalWorkOrderId = $1
+		  AND status = 0 
+		  AND startTime IS NULL
 	`, msg.ExternalWorkOrderId, msg.StartTimeUnixMs)
 	if err != nil {
 		zap.S().Warnf("Error updating work order: %v (workOrderId: %v) [%s]", err, msg.ExternalWorkOrderId, cmdTag)
@@ -93,6 +95,8 @@ func (c *Connection) InsertWorkOrderStop(msg *sharedStructs.WorkOrderStopMessage
 		UPDATE work_orders
 		SET status = 2, endTime = to_timestamp($2 / 1000)
 		WHERE externalWorkOrderId = $1
+		  AND status > 0
+		  AND endTime IS NULL
 	`, msg.ExternalWorkOrderId, msg.EndTimeUnixMs)
 	if err != nil {
 		zap.S().Warnf("Error updating work order: %v (workOrderId: %v) [%s]", err, msg.ExternalWorkOrderId, cmdTag)
