@@ -8,7 +8,7 @@ import (
 
 func TestParseWorkOrderCreate(t *testing.T) {
 	t.Run("from-string-only-required", func(t *testing.T) {
-		workOrderCreateJson := `{"external_work_order_id": "#1278", "product":{"externalProductId": "sample"}, "quantity": 10}`
+		workOrderCreateJson := `{"external_work_order_id": "#1278", "product":{"external_product_id": "sample"}, "quantity": 10}`
 		workOrderCreate, err := parseWorkOrderCreate([]byte(workOrderCreateJson))
 		assert.NoError(t, err)
 		assert.Equal(t, "#1278", workOrderCreate.ExternalWorkOrderId)
@@ -19,7 +19,7 @@ func TestParseWorkOrderCreate(t *testing.T) {
 		assert.Zerof(t, workOrderCreate.EndTimeUnixMs, "end time should be zero")
 	})
 	t.Run("from-string-only-full", func(t *testing.T) {
-		workOrderCreateJson := `{"external_work_order_id": "#1278", "product":{"externalProductId": "sample", "cycle_time_ms": 10}, "quantity": 10, "start_time_unix_ms": 100, "end_time_unix_ms": 200}`
+		workOrderCreateJson := `{"external_work_order_id": "#1278", "product":{"external_product_id": "sample", "cycle_time_ms": 10}, "quantity": 10, "start_time_unix_ms": 100, "end_time_unix_ms": 200}`
 		workOrderCreate, err := parseWorkOrderCreate([]byte(workOrderCreateJson))
 		assert.NoError(t, err)
 		assert.Equal(t, "#1278", workOrderCreate.ExternalWorkOrderId)
@@ -30,27 +30,27 @@ func TestParseWorkOrderCreate(t *testing.T) {
 		assert.Equal(t, uint64(200), workOrderCreate.EndTimeUnixMs)
 	})
 	t.Run("disallow-negative-quantity", func(t *testing.T) {
-		workOrderCreateJson := `{"external_work_order_id": "#1278", "product":{"externalProductId": "sample"}, "quantity": -10}`
+		workOrderCreateJson := `{"external_work_order_id": "#1278", "product":{"external_product_id": "sample"}, "quantity": -10}`
 		_, err := parseWorkOrderCreate([]byte(workOrderCreateJson))
 		assert.Error(t, err)
 	})
 	t.Run("disallow-negative-cycle-time", func(t *testing.T) {
-		workOrderCreateJson := `{"external_work_order_id": "#1278", "product":{"externalProductId": "sample", "cycle_time_ms": -10}, "quantity": 10}`
+		workOrderCreateJson := `{"external_work_order_id": "#1278", "product":{"external_product_id": "sample", "cycle_time_ms": -10}, "quantity": 10}`
 		_, err := parseWorkOrderCreate([]byte(workOrderCreateJson))
 		assert.Error(t, err)
 	})
 	t.Run("disallow-negative-start-time", func(t *testing.T) {
-		workOrderCreateJson := `{"external_work_order_id": "#1278", "product":{"externalProductId": "sample"}, "quantity": 10, "start_time_unix_ms": -100}`
+		workOrderCreateJson := `{"external_work_order_id": "#1278", "product":{"external_product_id": "sample"}, "quantity": 10, "start_time_unix_ms": -100}`
 		_, err := parseWorkOrderCreate([]byte(workOrderCreateJson))
 		assert.Error(t, err)
 	})
 	t.Run("disallow-negative-end-time", func(t *testing.T) {
-		workOrderCreateJson := `{"external_work_order_id": "#1278", "product":{"externalProductId": "sample"}, "quantity": 10, "end_time_unix_ms": -100}`
+		workOrderCreateJson := `{"external_work_order_id": "#1278", "product":{"external_product_id": "sample"}, "quantity": 10, "end_time_unix_ms": -100}`
 		_, err := parseWorkOrderCreate([]byte(workOrderCreateJson))
 		assert.Error(t, err)
 	})
 	t.Run("disallow-no-external-work-order-id", func(t *testing.T) {
-		workOrderCreateJson := `{"product":{"externalProductId": "sample"}, "quantity": 10}`
+		workOrderCreateJson := `{"product":{"external_product_id": "sample"}, "quantity": 10}`
 		_, err := parseWorkOrderCreate([]byte(workOrderCreateJson))
 		assert.Error(t, err)
 	})
@@ -60,7 +60,7 @@ func TestParseWorkOrderCreate(t *testing.T) {
 		assert.Error(t, err)
 	})
 	t.Run("disallow-no-quantity", func(t *testing.T) {
-		workOrderCreateJson := `{"external_work_order_id": "#1278", "product":{"externalProductId": "sample"}}`
+		workOrderCreateJson := `{"external_work_order_id": "#1278", "product":{"external_product_id": "sample"}}`
 		_, err := parseWorkOrderCreate([]byte(workOrderCreateJson))
 		assert.Error(t, err)
 	})
@@ -70,7 +70,7 @@ func TestParseWorkOrderCreate(t *testing.T) {
 		assert.Error(t, err)
 	})
 	t.Run("status-fallback-zero", func(t *testing.T) {
-		workOrderCreateJson := `{"external_work_order_id": "#1278", "product":{"externalProductId": "sample"}, "quantity": 10}`
+		workOrderCreateJson := `{"external_work_order_id": "#1278", "product":{"external_product_id": "sample"}, "quantity": 10}`
 		workOrderCreate, err := parseWorkOrderCreate([]byte(workOrderCreateJson))
 		assert.NoError(t, err)
 		assert.Equal(t, "#1278", workOrderCreate.ExternalWorkOrderId)
@@ -79,7 +79,7 @@ func TestParseWorkOrderCreate(t *testing.T) {
 		assert.Equal(t, shared.Planned, workOrderCreate.Status)
 	})
 	t.Run("check-out-of-range-status", func(t *testing.T) {
-		workOrderCreateJson := `{"external_work_order_id": "#1278", "product":{"externalProductId": "sample"}, "quantity": 10, "status": 100}`
+		workOrderCreateJson := `{"external_work_order_id": "#1278", "product":{"external_product_id": "sample"}, "quantity": 10, "status": 100}`
 		_, err := parseWorkOrderCreate([]byte(workOrderCreateJson))
 		assert.Error(t, err)
 	})
