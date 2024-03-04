@@ -7579,7 +7579,9 @@ data:
     GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO {{.Values.factoryinsight.db_user}};
     GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO {{.Values.factoryinsight.db_user}};
 
+    ------------------------------------------------------
     -------------------- DATAMODEL V2 --------------------
+    ------------------------------------------------------
     CREATE USER {{.Values.kafkatopostgresqlv2.database.user}};
     CREATE DATABASE {{.Values._000_commonConfig.datamodel_v2.database.name}} OWNER {{.Values.kafkatopostgresqlv2.database.user}};
     GRANT ALL PRIVILEGES ON DATABASE {{.Values._000_commonConfig.datamodel_v2.database.name}} TO {{.Values.kafkatopostgresqlv2.database.user}};
@@ -7592,6 +7594,7 @@ data:
     GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO {{.Values.kafkatopostgresqlv2.database.user}};
     GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO {{.Values.kafkatopostgresqlv2.database.user}};
 
+    -------------------- ASSET TABLE --------------------
     CREATE TABLE asset (
       id SERIAL PRIMARY KEY,
       enterprise TEXT NOT NULL,
@@ -7609,6 +7612,9 @@ data:
     ALTER TABLE asset DROP CONSTRAINT IF EXISTS asset_enterprise_site_area_line_key;
     ALTER TABLE asset DROP CONSTRAINT IF EXISTS asset_enterprise_site_area_line_workcell_key;
 
+    -------------------- HISTORIAN --------------------
+
+    -------------------- TAG TABLE --------------------
 
     CREATE TABLE tag (
       timestamp TIMESTAMPTZ NOT NULL,
@@ -7622,6 +7628,8 @@ data:
     CREATE INDEX ON tag (asset_id, timestamp DESC);
     CREATE INDEX ON tag (name);
 
+    -------------------- TAG STRING TABLE --------------------
+
     CREATE TABLE tag_string (
       timestamp TIMESTAMPTZ NOT NULL,
       name TEXT NOT NULL,
@@ -7634,13 +7642,6 @@ data:
     CREATE INDEX ON tag_string (asset_id, timestamp DESC);
     CREATE INDEX ON tag_string (name);
 
-    ALTER TABLE asset OWNER TO {{.Values.kafkatopostgresqlv2.database.user}};
-    ALTER TABLE tag OWNER TO {{.Values.kafkatopostgresqlv2.database.user}};
-    ALTER TABLE tag_string OWNER TO {{.Values.kafkatopostgresqlv2.database.user}};
-
-    GRANT SELECT ON {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.asset TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
-    GRANT SELECT ON {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.tag TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
-    GRANT SELECT ON {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.tag_string TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
     
     CREATE OR REPLACE FUNCTION get_asset_id(
         _enterprise text,
@@ -7694,5 +7695,120 @@ data:
 
     GRANT EXECUTE ON FUNCTION {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.get_asset_ids(text, text, text, text, text, text) TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
 
-    __SQL__
+    -------------------- ANALYTICS --------------------
+
+    -------------------- WORK ORDER TABLE --------------------
+
+    -- This table stores information about manufacturing orders. The ISA-95 model defines work orders in terms of production requests.
+    -- Here, each work order is linked to a specific asset and product type
+    CREATE TABLE work_orders (
+      workOrderId INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+      externalWorkOrderId TEXT UNIQUE NOT NULL,
+      assetId INTEGER NOT NULL REFERENCES assets(id),
+      productTypeId INTEGER NOT NULL REFERENCES product_types(productTypeId),
+      quantity INTEGER NOT NULL,
+      status INTEGER NOT NULL DEFAULT 0, -- 0: planned, 1: in progress, 2: completed
+      startTime TIMESTAMPTZ,
+      endTime TIMESTAMPTZ,
+      CONSTRAINT asset_workorder_uniq UNIQUE (assetId, externalWorkOrderId),
+      CHECK (quantity > 0),
+      CHECK (status BETWEEN 0 AND 2),
+      EXCLUDE USING gist (assetId WITH =, tstzrange(startTime, endTime) WITH &&) WHERE (startTime IS NOT NULL AND endTime IS NOT NULL)
+    );
+
+    -------------------- PRODUCT TYPES TABLE --------------------
+    CREATE TABLE product_types (
+      productTypeId INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+      externalProductTypeId TEXT UNIQUE NOT NULL,
+      cycleTime REAL NOT NULL,
+      assetId INTEGER REFERENCES assets(id),
+      CONSTRAINT external_product_asset_uniq UNIQUE (externalProductTypeId, assetId),
+      CHECK (cycleTime > 0)
+    )
+
+    -------------------- PRODUCTS TABLE --------------------
+
+    -- -- Tracks individual products produced. This table captures production output, quality (through badQuantity), and timing
+    CREATE TABLE products (
+      productId INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+      externalProductTypeId INTEGER REFERENCES product_types(productTypeId),
+      assetId INTEGER REFERENCES assets(id),
+      startTime TIMESTAMPTZ,
+      endTime TIMESTAMPTZ NOT NULL,
+      quantity INTEGER NOT NULL,
+      badQuantity INTEGER DEFAULT 0,
+      CHECK (quantity > 0),
+      CHECK (badQuantity >= 0),
+      CHECK (startTime <= endTime),
+      CONSTRAINT product_endtime_asset_uniq UNIQUE (endTime, assetId)
+    );
+
+    -- creating hypertable
+    SELECT create_hypertable('products', 'endTime');
+
+    -- creating an index to increase performance
+    CREATE INDEX idx_products_asset_endtime ON products(assetId, endTime DESC);
+
+
+    -------------------- SHIFTS TABLE --------------------
+
+    -- Using btree_gist to avoid overlapping shifts
+    -- Source: https://gist.github.com/fphilipe/0a2a3d50a9f3834683bf
+
+    -- Manages work shifts for assets. Shift scheduling is a key operational aspect under ISA-95, impacting resource planning and allocation.
+    CREATE TABLE shifts (
+      shiftId INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+      assetId INTEGER REFERENCES assets(id),
+      startTime TIMESTAMPTZ NOT NULL,
+      endTime TIMESTAMPTZ NOT NULL,
+      CONSTRAINT shift_start_asset_uniq UNIQUE (startTime, assetId),
+      CHECK (startTime < endTime),
+      EXCLUDE USING gist (assetId WITH =, tstzrange(startTime, endTime) WITH &&)
+    );
+
+    -------------------- STATES TABLE --------------------
+
+    -- Records the state changes of assets over time. State tracking supports ISA-95's goal of detailed monitoring and control of manufacturing operations.
+    -- State Table
+    CREATE TABLE states (
+      stateId INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+      assetId INTEGER REFERENCES assets(id),
+      startTime TIMESTAMPTZ NOT NULL,
+      state INT NOT NULL,
+      CHECK (state >= 0),
+      CONSTRAINT state_start_asset_uniq UNIQUE (startTime, assetId)
+    );
+    -- creating hypertable
+    SELECT create_hypertable('states', 'startTime');
+
+    -- creating an index to increase performance
+    CREATE INDEX idx_states_asset_starttime ON states(assetId, startTime DESC);
+
+
+      -------------------- FIX OWNERS --------------------
+
+      ALTER TABLE asset OWNER TO {{.Values.kafkatopostgresqlv2.database.user}};
+      ALTER TABLE tag OWNER TO {{.Values.kafkatopostgresqlv2.database.user}};
+      ALTER TABLE tag_string OWNER TO {{.Values.kafkatopostgresqlv2.database.user}};
+
+      ALTER TABLE work_orders OWNER TO {{.Values.kafkatopostgresqlv2.database.user}};
+      ALTER TABLE product_types OWNER TO {{.Values.kafkatopostgresqlv2.database.user}};
+      ALTER TABLE products OWNER TO {{.Values.kafkatopostgresqlv2.database.user}};
+      ALTER TABLE shifts OWNER TO {{.Values.kafkatopostgresqlv2.database.user}};
+      ALTER TABLE states OWNER TO {{.Values.kafkatopostgresqlv2.database.user}};
+
+
+      GRANT SELECT ON {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.asset TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
+      GRANT SELECT ON {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.tag TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
+      GRANT SELECT ON {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.tag_string TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
+
+
+      GRANT SELECT ON {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.work_orders TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
+      GRANT SELECT ON {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.product_types TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
+      GRANT SELECT ON {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.products TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
+      GRANT SELECT ON {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.shifts TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
+      GRANT SELECT ON {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.states TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
+
+
+  __SQL__
 {{end}}
