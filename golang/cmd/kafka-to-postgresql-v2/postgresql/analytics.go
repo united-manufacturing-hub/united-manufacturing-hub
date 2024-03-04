@@ -6,7 +6,7 @@ import (
 	"go.uber.org/zap"
 )
 
-func (c *Connection) InsertWorkOrderCreate(msg sharedStructs.WorkOrderCreateMessage, topic *sharedStructs.TopicDetails) error {
+func (c *Connection) InsertWorkOrderCreate(msg *sharedStructs.WorkOrderCreateMessage, topic *sharedStructs.TopicDetails) error {
 	assetId, err := c.GetOrInsertAsset(topic)
 	if err != nil {
 		return err
@@ -27,7 +27,7 @@ func (c *Connection) InsertWorkOrderCreate(msg sharedStructs.WorkOrderCreateMess
 	cmdTag, err = tx.Exec(ctx, `
 		INSERT INTO work_orders (externalWorkOrderId, assetId, productTypeId, quantity, status, to_timestamp($6 / 1000), to_timestamp($7 / 1000))
 		VALUES ($1, $2, $3, $4, $5, $6, $7)
-	`, msg.ExternalWorkOrderId, int(assetId), productTypeId, msg.Quantity, int(msg.Status), msg.StartTimeUnixMs, msg.EndTimeUnixMs)
+	`, msg.ExternalWorkOrderId, int(assetId), int(productTypeId), msg.Quantity, int(msg.Status), msg.StartTimeUnixMs, msg.EndTimeUnixMs)
 	if err != nil {
 		zap.S().Warnf("Error inserting work order: %v (workOrderId: %v) [%s]", err, msg.ExternalWorkOrderId, cmdTag)
 		errR := tx.Rollback(ctx)
@@ -43,7 +43,7 @@ func (c *Connection) InsertWorkOrderCreate(msg sharedStructs.WorkOrderCreateMess
 	return nil
 }
 
-func (c *Connection) InsertWorkOrderStart(msg sharedStructs.WorkOrderStartMessage) error {
+func (c *Connection) InsertWorkOrderStart(msg *sharedStructs.WorkOrderStartMessage) error {
 	// Update work-order by externalWorkOrderId
 
 	// Start tx (this shouldn't take more then 1 minute)
@@ -77,7 +77,7 @@ func (c *Connection) InsertWorkOrderStart(msg sharedStructs.WorkOrderStartMessag
 	return nil
 }
 
-func (c *Connection) InsertWorkOrderStop(msg sharedStructs.WorkOrderStopMessage) error {
+func (c *Connection) InsertWorkOrderStop(msg *sharedStructs.WorkOrderStopMessage) error {
 	// Update work-order by externalWorkOrderId
 
 	// Start tx (this shouldn't take more then 1 minute)

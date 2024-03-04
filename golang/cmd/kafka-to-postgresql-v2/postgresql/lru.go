@@ -39,7 +39,9 @@ func (c *Connection) GetOrInsertAsset(topic *sharedStructs.TopicDetails) (uint64
 	defer selectRowContextCncl()
 
 	var err error
-	err = c.db.QueryRow(selectRowContext, selectQuery, topic.Enterprise, topic.Site, topic.Area, topic.ProductionLine, topic.WorkCell, topic.OriginId).Scan(&id)
+	var idx int
+	err = c.db.QueryRow(selectRowContext, selectQuery, topic.Enterprise, topic.Site, topic.Area, topic.ProductionLine, topic.WorkCell, topic.OriginId).Scan(&idx)
+	id = uint64(idx)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			// Row isn't found, need to insert
@@ -115,7 +117,9 @@ func (c *Connection) GetOrInsertProductType(assetId uint64, product sharedStruct
 	defer selectRowContextCncl()
 
 	var err error
-	err = c.db.QueryRow(selectRowContext, selectQuery, product.ExternalProductId, assetId).Scan(&ptId)
+	var ptIdX int
+	err = c.db.QueryRow(selectRowContext, selectQuery, product.ExternalProductId, int(assetId)).Scan(&ptIdX)
+	ptId = uint64(ptIdX)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			// Row isn't found, need to insert
@@ -123,7 +127,7 @@ func (c *Connection) GetOrInsertProductType(assetId uint64, product sharedStruct
 			insertRowContext, insertRowContextCncl := get1MinuteContext()
 			defer insertRowContextCncl()
 
-			err = c.db.QueryRow(insertRowContext, insertQuery, product.ExternalProductId, product.CycleTimeMs, assetId).Scan(&ptId)
+			err = c.db.QueryRow(insertRowContext, insertQuery, product.ExternalProductId, product.CycleTimeMs, int(assetId)).Scan(&ptId)
 			if err != nil {
 				return 0, err
 			}
@@ -185,7 +189,7 @@ func getCacheKeyFromTopic(topic *sharedStructs.TopicDetails) string {
 func getCacheKeyFromProduct(assetId uint64, product sharedStructs.WorkOrderCreateMessageProduct) string {
 	// Attempt cache lookup
 	hasher := sha3.New512()
-	var assetIdBytes []byte
+	assetIdBytes := make([]byte, 8)
 	binary.LittleEndian.PutUint64(assetIdBytes, assetId)
 	hasher.Write(assetIdBytes)
 	hasher.Write([]byte(product.ExternalProductId))

@@ -90,7 +90,7 @@ func handleParsing(msgChan <-chan *shared.KafkaMessage, i int) {
 					k.MarkMessage(msg)
 					continue
 				}
-				err = p.InsertWorkOrderCreate(parsed)
+				err = p.InsertWorkOrderCreate(parsed, topic)
 				if err != nil {
 					zap.S().Warnf("Failed to insert work-order.create %+v: %s", msg, err)
 					k.MarkMessage(msg)
