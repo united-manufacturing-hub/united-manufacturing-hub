@@ -79,6 +79,15 @@ type ProductTypeCreateMessage struct {
 	CycleTimeMs           uint64 `json:"cycle_time_ms"`
 }
 
+type ShiftAddMessage struct {
+	StartTimeUnixMs uint64 `json:"start_time_unix_ms"`
+	EndTimeUnixMs   uint64 `json:"end_time_unix_ms"`
+}
+
+type ShiftDeleteMessage struct {
+	StartTimeUnixMs uint64 `json:"start_time_unix_ms"`
+}
+
 type PgxIface interface {
 	Begin(context.Context) (pgx.Tx, error)
 	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row

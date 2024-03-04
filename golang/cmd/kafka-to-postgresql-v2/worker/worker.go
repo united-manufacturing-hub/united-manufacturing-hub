@@ -103,7 +103,7 @@ func handleParsing(msgChan <-chan *shared.KafkaMessage, i int) {
 					k.MarkMessage(msg)
 					continue
 				}
-				err = p.UpdateWorkOrderSetStart(parsed)
+				err = p.UpdateWorkOrderSetStart(parsed, topic)
 				if err != nil {
 					zap.S().Warnf("Failed to insert work-order.start %+v: %s", msg, err)
 					k.MarkMessage(msg)
@@ -116,7 +116,7 @@ func handleParsing(msgChan <-chan *shared.KafkaMessage, i int) {
 					k.MarkMessage(msg)
 					continue
 				}
-				err = p.UpdateWorkOrderSetStop(parsed)
+				err = p.UpdateWorkOrderSetStop(parsed, topic)
 				if err != nil {
 					zap.S().Warnf("Failed to insert work-order.stop %+v: %s", msg, err)
 					k.MarkMessage(msg)
@@ -158,6 +158,32 @@ func handleParsing(msgChan <-chan *shared.KafkaMessage, i int) {
 				err = p.InsertProductTypeCreate(parsed, topic)
 				if err != nil {
 					zap.S().Warnf("Failed to insert product-type.create %+v: %s", msg, err)
+					k.MarkMessage(msg)
+					continue
+				}
+			case "shift.add":
+				parsed, err := parseShiftAdd(msg.Value)
+				if err != nil {
+					zap.S().Warnf("Failed to parse shift.add %+v: %s", msg, err)
+					k.MarkMessage(msg)
+					continue
+				}
+				err = p.InsertShiftAdd(parsed, topic)
+				if err != nil {
+					zap.S().Warnf("Failed to insert shift.add %+v: %s", msg, err)
+					k.MarkMessage(msg)
+					continue
+				}
+			case "shift.delete":
+				parsed, err := parseShiftDelete(msg.Value)
+				if err != nil {
+					zap.S().Warnf("Failed to parse shift.delete %+v: %s", msg, err)
+					k.MarkMessage(msg)
+					continue
+				}
+				err = p.DeleteShiftByStartTime(parsed, topic)
+				if err != nil {
+					zap.S().Warnf("Failed to insert shift.delete %+v: %s", msg, err)
 					k.MarkMessage(msg)
 					continue
 				}
