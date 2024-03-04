@@ -28,7 +28,7 @@ func (c *Connection) InsertProductAdd(msg *sharedStructs.ProductAddMessage, topi
 	cmdTag, err = tx.Exec(ctx, `
 		INSERT INTO products (externalProductTypeId, productBatchId, assetId, startTime, endTime, quantity, badQuantity)
 		VALUES ($1, $2, $3, to_timestamp($4/1000), to_timestamp($5/1000), $6, $7)
-	`, int(productTypeId), msg.ProductBatchId, int(assetId), msg.StartTime, msg.EndTime, int(msg.Quantity), int(msg.BadQuantity))
+	`, int(productTypeId), msg.ProductBatchId, int(assetId), msg.StartTimeUnixMs, msg.EndTimeUnixMs, int(msg.Quantity), int(msg.BadQuantity))
 	if err != nil {
 		zap.S().Warnf("Error inserting work order: %v (productTypeId: %v) [%s]", err, productTypeId, cmdTag)
 		zap.S().Debugf("Message: %v (Topic: %v)", msg, topic)
@@ -70,7 +70,7 @@ func (c *Connection) UpdateBadQuantityForProduct(msg *sharedStructs.ProductSetBa
 		SELECT quantity, badQuantity
 		FROM products
 		WHERE externalProductTypeId = $1 AND assetId = $2 AND endTime = $3
-	`, productTypeId, assetId, msg.EndTime).Scan(&quantity, &badQuantity)
+	`, productTypeId, assetId, msg.EndTimeUnixMs).Scan(&quantity, &badQuantity)
 	if err != nil {
 		zap.S().Warnf("Error getting product quantity: %v", err)
 		errR := tx.Rollback(ctx)
@@ -98,7 +98,7 @@ func (c *Connection) UpdateBadQuantityForProduct(msg *sharedStructs.ProductSetBa
 		UPDATE products
 		SET badQuantity = $1
 		WHERE externalProductTypeId = $2 AND assetId = $3 AND endTime = $4
-	`, int(newBadQuantity), productTypeId, assetId, msg.EndTime)
+	`, int(newBadQuantity), productTypeId, assetId, msg.EndTimeUnixMs)
 
 	if err != nil {
 		zap.S().Warnf("Error updating bad quantity: %v [%s]", err, cmdTag)
