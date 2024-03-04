@@ -79,3 +79,47 @@ func TestParseWorkOrderCreate(t *testing.T) {
 		assert.Equal(t, shared.Planned, workOrderCreate.Status)
 	})
 }
+
+func TestParseWorkOrderStart(t *testing.T) {
+	t.Run("from-string-only-required", func(t *testing.T) {
+		workOrderStartJson := `{"externalWorkOrderId": "#1278", "startTimeUnixMs": 100}`
+		workOrderStart, err := parseWorkOrderStart([]byte(workOrderStartJson))
+		assert.NoError(t, err)
+		assert.Equal(t, "#1278", workOrderStart.ExternalWorkOrderId)
+		assert.Equal(t, uint64(100), workOrderStart.StartTimeUnixMs)
+	})
+
+	t.Run("disallow-no-external-work-order-id", func(t *testing.T) {
+		workOrderStartJson := `{"startTimeUnixMs": 100}`
+		_, err := parseWorkOrderStart([]byte(workOrderStartJson))
+		assert.Error(t, err)
+	})
+
+	t.Run("disallow-no-start-time", func(t *testing.T) {
+		workOrderStartJson := `{"externalWorkOrderId": "#1278"}`
+		_, err := parseWorkOrderStart([]byte(workOrderStartJson))
+		assert.Error(t, err)
+	})
+}
+
+func TestParseWorkOrderStop(t *testing.T) {
+	t.Run("from-string-only-required", func(t *testing.T) {
+		workOrderStopJson := `{"externalWorkOrderId": "#1278", "endTimeUnixMs": 100}`
+		workOrderEnd, err := parseWorkOrderStop([]byte(workOrderStopJson))
+		assert.NoError(t, err)
+		assert.Equal(t, "#1278", workOrderEnd.ExternalWorkOrderId)
+		assert.Equal(t, uint64(100), workOrderEnd.EndTimeUnixMs)
+	})
+
+	t.Run("disallow-no-external-work-order-id", func(t *testing.T) {
+		workOrderStopJson := `{"endTimeUnixMs": 100}`
+		_, err := parseWorkOrderStop([]byte(workOrderStopJson))
+		assert.Error(t, err)
+	})
+
+	t.Run("disallow-no-end-time", func(t *testing.T) {
+		workOrderStopJson := `{"externalWorkOrderId": "#1278"}`
+		_, err := parseWorkOrderStop([]byte(workOrderStopJson))
+		assert.Error(t, err)
+	})
+}
