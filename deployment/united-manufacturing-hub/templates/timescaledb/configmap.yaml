@@ -7740,7 +7740,7 @@ data:
       badQuantity INTEGER DEFAULT 0,
       CHECK (quantity > 0),
       CHECK (badQuantity >= 0),
-      CHECK (badQuantity <= quantity),
+    CHECK (badQuantity <= quantity),
       CHECK (startTime <= endTime),
       CONSTRAINT product_endtime_asset_uniq UNIQUE (endTime, assetId)
     );
