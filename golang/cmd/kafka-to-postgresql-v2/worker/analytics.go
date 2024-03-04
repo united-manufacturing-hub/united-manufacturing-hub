@@ -36,7 +36,7 @@ func parseWorkOrderStart(value []byte) (shared.WorkOrderStartMessage, error) {
 		return message, errors.New("externalWorkOrderId is required")
 	}
 	if message.StartTimeUnixMs == 0 {
-		return message, errors.New("startTimeUnixMs is required")
+		return message, errors.New("start_time_unix_ms is required")
 	}
 	return message, err
 }
@@ -51,7 +51,7 @@ func parseWorkOrderStop(value []byte) (shared.WorkOrderStopMessage, error) {
 		return message, errors.New("externalWorkOrderId is required")
 	}
 	if message.EndTimeUnixMs == 0 {
-		return message, errors.New("endTimeUnixMs is required")
+		return message, errors.New("end_time_unix_ms is required")
 	}
 	return message, err
 }
