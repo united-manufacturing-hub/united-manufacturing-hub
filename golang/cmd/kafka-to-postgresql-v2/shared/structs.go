@@ -1,5 +1,10 @@
 package shared
 
+import (
+	"context"
+	"github.com/jackc/pgx/v5"
+)
+
 const (
 	DbTagSeparator = "$"
 )
@@ -52,4 +57,9 @@ type WorkOrderStartMessage struct {
 type WorkOrderStopMessage struct {
 	ExternalWorkOrderId string `json:"external_work_order_id"`
 	EndTimeUnixMs       uint64 `json:"end_time_unix_ms"`
+}
+
+type PgxIface interface {
+	Begin(context.Context) (pgx.Tx, error)
+	Close()
 }

@@ -1,7 +1,6 @@
 package postgresql
 
 import (
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	sharedStructs "github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/kafka-to-postgresql-v2/shared"
 	"go.uber.org/zap"
@@ -19,7 +18,7 @@ func (c *Connection) InsertWorkOrderCreate(msg sharedStructs.WorkOrderCreateMess
 	// Start tx (this shouldn't take more then 1 minute)
 	ctx, cncl := get1MinuteContext()
 	defer cncl()
-	tx, err := c.db.BeginTx(ctx, pgx.TxOptions{})
+	tx, err := c.db.Begin(ctx)
 	if err != nil {
 		return err
 	}
@@ -50,7 +49,7 @@ func (c *Connection) InsertWorkOrderStart(msg sharedStructs.WorkOrderStartMessag
 	// Start tx (this shouldn't take more then 1 minute)
 	ctx, cncl := get1MinuteContext()
 	defer cncl()
-	tx, err := c.db.BeginTx(ctx, pgx.TxOptions{})
+	tx, err := c.db.Begin(ctx)
 	if err != nil {
 		return err
 	}
@@ -84,7 +83,7 @@ func (c *Connection) InsertWorkOrderStop(msg sharedStructs.WorkOrderStopMessage)
 	// Start tx (this shouldn't take more then 1 minute)
 	ctx, cncl := get1MinuteContext()
 	defer cncl()
-	tx, err := c.db.BeginTx(ctx, pgx.TxOptions{})
+	tx, err := c.db.Begin(ctx)
 	if err != nil {
 		return err
 	}

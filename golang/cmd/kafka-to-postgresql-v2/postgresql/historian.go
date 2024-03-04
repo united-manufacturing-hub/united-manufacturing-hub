@@ -95,7 +95,7 @@ func (c *Connection) tagWorker(tableName string, source *Source) {
 		txnExecutionCtx, txnExecutionCancel := get1MinuteContext()
 		// Create transaction
 		var txn pgx.Tx
-		txn, err = c.db.BeginTx(txnExecutionCtx, pgx.TxOptions{})
+		txn, err = c.db.Begin(txnExecutionCtx)
 		if err != nil {
 			zap.S().Errorf("Failed to create transaction: %s (%s)", err, tableName)
 

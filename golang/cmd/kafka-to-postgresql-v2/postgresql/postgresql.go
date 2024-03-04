@@ -43,7 +43,7 @@ type Metrics struct {
 }
 
 type Connection struct {
-	db                     *pgxpool.Pool
+	db                     sharedStructs.PgxIface
 	assetIdCache           *lru.ARCCache
 	productTypeIdCache     *lru.ARCCache
 	numericalValuesChannel chan DBValue
@@ -168,7 +168,14 @@ func (c *Connection) IsAvailable() bool {
 	}
 	ctx, cncl := get5SecondContext()
 	defer cncl()
-	err := c.db.Ping(ctx)
+	// Check if c.db is an real connection, by attempting to cast it back to a pgxpool.Pool
+	pool, ok := c.db.(*pgxpool.Pool)
+	if !ok {
+		// For mocks
+		return true
+	}
+
+	err := pool.Ping(ctx)
 	if err != nil {
 		zap.S().Debugf("Failed to ping database: %s", err)
 		return false
