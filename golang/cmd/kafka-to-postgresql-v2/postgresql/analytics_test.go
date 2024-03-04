@@ -276,6 +276,15 @@ func TestState(t *testing.T) {
 
 		// Expect Exec from InsertStateAdd
 		mock.ExpectBeginTx(pgx.TxOptions{})
+
+		mock.ExpectExec(`UPDATE states
+		SET endTime \= to_timestamp\(\$2\/1000\)
+		WHERE assetId \= \$1
+		AND endTime IS NULL
+		AND startTime \< to_timestamp\(\$2\/1000\)
+		`).WithArgs(1, uint64(1)).
+			WillReturnResult(pgxmock.NewResult("UPDATE", 0))
+
 		mock.ExpectExec(`INSERT INTO states \(assetId, startTime, state\)
 		VALUES \(\$1, to_timestamp\(\$2\/1000\), \$3\)
 		ON CONFLICT ON CONSTRAINT state_start_asset_uniq

@@ -40,26 +40,8 @@ func (c *Connection) InsertStateAdd(msg *sharedStructs.StateAddMessage, topic *s
 		return err
 	}
 
-	// Insert state
-	var cmdTag pgconn.CommandTag
-	cmdTag, err = tx.Exec(ctx, `
-		INSERT INTO states (assetId, startTime, state)
-		VALUES ($1, to_timestamp($2/1000), $3)
-		ON CONFLICT ON CONSTRAINT state_start_asset_uniq
-		DO NOTHING
-	`, int(assetId), msg.StartTimeUnixMs, int(msg.State))
-
-	if err != nil {
-		zap.S().Warnf("Error inserting state: %v (start: %v | state: %v) [%s]", err, msg.StartTimeUnixMs, msg.State, cmdTag)
-		zap.S().Debugf("Message: %v (Topic: %v)", msg, topic)
-		errR := tx.Rollback(ctx)
-		if errR != nil {
-			zap.S().Errorf("Error rolling back transaction: %v", errR)
-		}
-		return err
-	}
-
 	// If there is already a previous state, set it's end time to the new state's start time
+	var cmdTag pgconn.CommandTag
 	cmdTag, err = tx.Exec(ctx, `
 		UPDATE states
 		SET endTime = to_timestamp($2/1000)
@@ -70,6 +52,24 @@ func (c *Connection) InsertStateAdd(msg *sharedStructs.StateAddMessage, topic *s
 
 	if err != nil {
 		zap.S().Warnf("Error updating previous state: %v (start: %v | state: %v) [%s]", err, msg.StartTimeUnixMs, msg.State, cmdTag)
+		zap.S().Debugf("Message: %v (Topic: %v)", msg, topic)
+		errR := tx.Rollback(ctx)
+		if errR != nil {
+			zap.S().Errorf("Error rolling back transaction: %v", errR)
+		}
+		return err
+	}
+
+	// Insert state
+	cmdTag, err = tx.Exec(ctx, `
+		INSERT INTO states (assetId, startTime, state)
+		VALUES ($1, to_timestamp($2/1000), $3)
+		ON CONFLICT ON CONSTRAINT state_start_asset_uniq
+		DO NOTHING
+	`, int(assetId), msg.StartTimeUnixMs, int(msg.State))
+
+	if err != nil {
+		zap.S().Warnf("Error inserting state: %v (start: %v | state: %v) [%s]", err, msg.StartTimeUnixMs, msg.State, cmdTag)
 		zap.S().Debugf("Message: %v (Topic: %v)", msg, topic)
 		errR := tx.Rollback(ctx)
 		if errR != nil {
