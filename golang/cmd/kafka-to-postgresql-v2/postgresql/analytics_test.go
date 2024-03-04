@@ -12,6 +12,10 @@ func TestInsertWorkOrder(t *testing.T) {
 	c := CreateMockConnection(t)
 	defer c.db.Close()
 
+	// Cast c.db to pgxmock to access the underlying mock
+	mock, ok := c.db.(pgxmock.PgxPoolIface)
+	assert.True(t, ok)
+
 	t.Run("insert", func(t *testing.T) {
 		msg := sharedStructs.WorkOrderCreateMessage{
 			ExternalWorkOrderId: "#1274",
@@ -29,9 +33,6 @@ func TestInsertWorkOrder(t *testing.T) {
 			Tag:        "work-order.create",
 		}
 
-		// Cast c.db to pgxmock to access the underlying mock
-		mock, ok := c.db.(pgxmock.PgxPoolIface)
-		assert.True(t, ok)
 		// Expect Query from GetOrInsertAsset
 		mock.ExpectQuery(`SELECT id FROM asset WHERE enterprise = \$1 AND site = \$2 AND area = \$3 AND line = \$4 AND workcell = \$5 AND origin_id = \$6`).
 			WithArgs("umh", "", "", "", "", "").
@@ -53,5 +54,46 @@ func TestInsertWorkOrder(t *testing.T) {
 
 		err := c.InsertWorkOrderCreate(&msg, &topic)
 		assert.NoError(t, err)
+	})
+
+	t.Run("start", func(t *testing.T) {
+		msg := sharedStructs.WorkOrderStartMessage{
+			ExternalWorkOrderId: "#1274",
+			StartTimeUnixMs:     0,
+		}
+
+		// Expect Exec from InsertWorkOrderStart
+		mock.ExpectBeginTx(pgx.TxOptions{})
+		mock.ExpectExec(`
+		UPDATE work_orders
+		SET status = 1, startTime = to_timestamp\(\$2 \/ 1000\)
+		WHERE externalWorkOrderId = \$1
+	`).WithArgs("#1274", uint64(0)).
+			WillReturnResult(pgxmock.NewResult("UPDATE", 1))
+		mock.ExpectCommit()
+
+		err := c.InsertWorkOrderStart(&msg)
+		assert.NoError(t, err)
+	})
+
+	t.Run("stop", func(t *testing.T) {
+		msg := sharedStructs.WorkOrderStopMessage{
+			ExternalWorkOrderId: "#1274",
+			EndTimeUnixMs:       0,
+		}
+
+		// Expect Exec from InsertWorkOrderStop
+		mock.ExpectBeginTx(pgx.TxOptions{})
+		mock.ExpectExec(`
+		UPDATE work_orders
+		SET status = 2, endTime = to_timestamp\(\$2 \/ 1000\)
+		WHERE externalWorkOrderId = \$1
+		`).WithArgs("#1274", uint64(0)).
+			WillReturnResult(pgxmock.NewResult("UPDATE", 1))
+		mock.ExpectCommit()
+
+		err := c.InsertWorkOrderStop(&msg)
+		assert.NoError(t, err)
+
 	})
 }
