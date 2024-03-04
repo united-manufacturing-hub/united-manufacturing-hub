@@ -44,10 +44,10 @@ type WorkOrderCreateMessage struct {
 
 type WorkOrderStartMessage struct {
 	ExternalWorkOrderId string `json:"externalWorkOrderId"`
-	StartTimeUnixMs     int64  `json:"startTimeUnixMs"`
+	StartTimeUnixMs     uint64 `json:"startTimeUnixMs"`
 }
 
 type WorkOrderStopMessage struct {
 	ExternalWorkOrderId string `json:"externalWorkOrderId"`
-	EndTimeUnixMs       int64  `json:"endTimeUnixMs"`
+	EndTimeUnixMs       uint64 `json:"endTimeUnixMs"`
 }

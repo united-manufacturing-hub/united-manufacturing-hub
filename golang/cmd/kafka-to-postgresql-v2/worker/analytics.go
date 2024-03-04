@@ -30,6 +30,14 @@ func parseWorkOrderStart(value []byte) (shared.WorkOrderStartMessage, error) {
 	// Try parse to WorkOrderStartMessage
 	var message shared.WorkOrderStartMessage
 	err := json.Unmarshal(value, &message)
+
+	// Validate that ExternalWorkOrderId & StartTimeUnixMs are set
+	if message.ExternalWorkOrderId == "" {
+		return message, errors.New("externalWorkOrderId is required")
+	}
+	if message.StartTimeUnixMs == 0 {
+		return message, errors.New("startTimeUnixMs is required")
+	}
 	return message, err
 }
 
@@ -37,5 +45,13 @@ func parseWorkOrderStop(value []byte) (shared.WorkOrderStopMessage, error) {
 	// Try parse to WorkOrderStopMessage
 	var message shared.WorkOrderStopMessage
 	err := json.Unmarshal(value, &message)
+
+	// Validate that ExternalWorkOrderId & EndTimeUnixMs are set
+	if message.ExternalWorkOrderId == "" {
+		return message, errors.New("externalWorkOrderId is required")
+	}
+	if message.EndTimeUnixMs == 0 {
+		return message, errors.New("endTimeUnixMs is required")
+	}
 	return message, err
 }
