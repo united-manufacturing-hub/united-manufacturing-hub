@@ -70,7 +70,7 @@ func TestWorkOrder(t *testing.T) {
 		mock.ExpectExec(`
 		UPDATE work_orders
 		SET status = 1, startTime = to_timestamp\(\$2 \/ 1000\)
-		WHERE externalWorkOrderId = \$1 AND assetId = \$3
+		WHERE externalWorkOrderId = \$1 AND status = 0 AND startTime IS NULL AND assetId = \$3
 	`).WithArgs("#1274", uint64(0), 1).
 			WillReturnResult(pgxmock.NewResult("UPDATE", 1))
 		mock.ExpectCommit()
@@ -94,7 +94,7 @@ func TestWorkOrder(t *testing.T) {
 		mock.ExpectExec(`
 		UPDATE work_orders
 		SET status = 2, endTime = to_timestamp\(\$2 \/ 1000\)
-		WHERE externalWorkOrderId = \$1 AND assetId = \$3
+		WHERE externalWorkOrderId = \$1 AND status = 1 AND endTime IS NULL AND assetId = \$3
 		`).WithArgs("#1274", uint64(0), 1).
 			WillReturnResult(pgxmock.NewResult("UPDATE", 1))
 		mock.ExpectCommit()
