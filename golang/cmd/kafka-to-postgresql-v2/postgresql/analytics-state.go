@@ -81,7 +81,7 @@ func (c *Connection) InsertStateAdd(msg *sharedStructs.StateAddMessage, topic *s
 	return tx.Commit(ctx)
 }
 
-func (c *Connection) OverwriteStateByStartEndTime(msg sharedStructs.StateOverwriteMessage, topic *sharedStructs.TopicDetails) error {
+func (c *Connection) OverwriteStateByStartEndTime(msg *sharedStructs.StateOverwriteMessage, topic *sharedStructs.TopicDetails) error {
 	// This will do the following
 	// 1. Delete all states for the asset between the start and end time
 	// 2. Check if a state is reaching into the time range (from the left or right) and modify it's start/end time to be non-overlapping
