@@ -44,7 +44,7 @@ func (c *Connection) InsertWorkOrderCreate(msg *sharedStructs.WorkOrderCreateMes
 	return nil
 }
 
-func (c *Connection) InsertWorkOrderStart(msg *sharedStructs.WorkOrderStartMessage) error {
+func (c *Connection) UpdateWorkOrderSetStart(msg *sharedStructs.WorkOrderStartMessage) error {
 	// Update work-order by externalWorkOrderId
 
 	// Start tx (this shouldn't take more then 1 minute)
@@ -79,7 +79,7 @@ func (c *Connection) InsertWorkOrderStart(msg *sharedStructs.WorkOrderStartMessa
 	return nil
 }
 
-func (c *Connection) InsertWorkOrderStop(msg *sharedStructs.WorkOrderStopMessage) error {
+func (c *Connection) UpdateWorkOrderSetStop(msg *sharedStructs.WorkOrderStopMessage) error {
 	// Update work-order by externalWorkOrderId
 
 	// Start tx (this shouldn't take more then 1 minute)

@@ -62,15 +62,15 @@ type WorkOrderStopMessage struct {
 type ProductAddMessage struct {
 	ExternalProductId string `json:"external_product_id"`
 	ProductBatchId    string `json:"product_batch_id,omitempty"`
-	StartTime         uint64 `json:"start_time,omitempty"`
-	EndTime           uint64 `json:"end_time"`
+	StartTimeUnixMs   uint64 `json:"start_time_unix_ms,omitempty"`
+	EndTimeUnixMs     uint64 `json:"end_time_unix_ms"`
 	Quantity          uint64 `json:"quantity"`
 	BadQuantity       uint64 `json:"bad_quantity,omitempty"`
 }
 
 type ProductSetBadQuantityMessage struct {
 	ExternalProductId string `json:"external_product_id"`
-	EndTime           uint64 `json:"end_time"`
+	EndTimeUnixMs     uint64 `json:"end_time_unix_ms"`
 	BadQuantity       uint64 `json:"bad_quantity"`
 }
 

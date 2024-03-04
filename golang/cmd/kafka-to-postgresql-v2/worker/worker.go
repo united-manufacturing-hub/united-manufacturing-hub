@@ -103,7 +103,7 @@ func handleParsing(msgChan <-chan *shared.KafkaMessage, i int) {
 					k.MarkMessage(msg)
 					continue
 				}
-				err = p.InsertWorkOrderStart(parsed)
+				err = p.UpdateWorkOrderSetStart(parsed)
 				if err != nil {
 					zap.S().Warnf("Failed to insert work-order.start %+v: %s", msg, err)
 					k.MarkMessage(msg)
@@ -116,9 +116,35 @@ func handleParsing(msgChan <-chan *shared.KafkaMessage, i int) {
 					k.MarkMessage(msg)
 					continue
 				}
-				err = p.InsertWorkOrderStop(parsed)
+				err = p.UpdateWorkOrderSetStop(parsed)
 				if err != nil {
 					zap.S().Warnf("Failed to insert work-order.stop %+v: %s", msg, err)
+					k.MarkMessage(msg)
+					continue
+				}
+			case "product.add":
+				parsed, err := parseProductAdd(msg.Value)
+				if err != nil {
+					zap.S().Warnf("Failed to parse product.add %+v: %s", msg, err)
+					k.MarkMessage(msg)
+					continue
+				}
+				err = p.InsertProductAdd(parsed, topic)
+				if err != nil {
+					zap.S().Warnf("Failed to insert product.add %+v: %s", msg, err)
+					k.MarkMessage(msg)
+					continue
+				}
+			case "product.setBadQuantity":
+				parsed, err := parseProductSetBadQuantity(msg.Value)
+				if err != nil {
+					zap.S().Warnf("Failed to parse product.setBadQuantity %+v: %s", msg, err)
+					k.MarkMessage(msg)
+					continue
+				}
+				err = p.UpdateBadQuantityForProduct(parsed, topic)
+				if err != nil {
+					zap.S().Warnf("Failed to insert product.setBadQuantity %+v: %s", msg, err)
 					k.MarkMessage(msg)
 					continue
 				}

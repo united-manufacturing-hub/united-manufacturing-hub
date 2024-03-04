@@ -58,3 +58,37 @@ func parseWorkOrderStop(value []byte) (*shared.WorkOrderStopMessage, error) {
 	}
 	return &message, err
 }
+
+func parseProductAdd(value []byte) (*shared.ProductAddMessage, error) {
+	// Try parse to ProductAddMessage
+	var message shared.ProductAddMessage
+	err := json.Unmarshal(value, &message)
+
+	// Validate that ExternalProductId, EndTimeUnixMs, Quantity are set
+	if message.ExternalProductId == "" {
+		return nil, errors.New("externalProductId is required")
+	}
+	if message.EndTimeUnixMs == 0 {
+		return nil, errors.New("end_time is required")
+	}
+	if message.Quantity == 0 {
+		return nil, errors.New("quantity is required")
+	}
+	return &message, err
+}
+
+func parseProductSetBadQuantity(value []byte) (*shared.ProductSetBadQuantityMessage, error) {
+	// Try parse to ProductSetBadQuantityMessage
+	var message shared.ProductSetBadQuantityMessage
+	err := json.Unmarshal(value, &message)
+
+	// Validate that ExternalProductId, BadQuantity are set
+	if message.ExternalProductId == "" {
+		return nil, errors.New("externalProductId is required")
+	}
+	if message.BadQuantity == 0 {
+		return nil, errors.New("badQuantity is required")
+	}
+	return &message, err
+
+}

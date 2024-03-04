@@ -61,7 +61,7 @@ func TestWorkOrder(t *testing.T) {
 			StartTimeUnixMs:     0,
 		}
 
-		// Expect Exec from InsertWorkOrderStart
+		// Expect Exec from UpdateWorkOrderSetStart
 		mock.ExpectBeginTx(pgx.TxOptions{})
 		mock.ExpectExec(`
 		UPDATE work_orders
@@ -71,7 +71,7 @@ func TestWorkOrder(t *testing.T) {
 			WillReturnResult(pgxmock.NewResult("UPDATE", 1))
 		mock.ExpectCommit()
 
-		err := c.InsertWorkOrderStart(&msg)
+		err := c.UpdateWorkOrderSetStart(&msg)
 		assert.NoError(t, err)
 	})
 
@@ -81,7 +81,7 @@ func TestWorkOrder(t *testing.T) {
 			EndTimeUnixMs:       0,
 		}
 
-		// Expect Exec from InsertWorkOrderStop
+		// Expect Exec from UpdateWorkOrderSetStop
 		mock.ExpectBeginTx(pgx.TxOptions{})
 		mock.ExpectExec(`
 		UPDATE work_orders
@@ -91,7 +91,7 @@ func TestWorkOrder(t *testing.T) {
 			WillReturnResult(pgxmock.NewResult("UPDATE", 1))
 		mock.ExpectCommit()
 
-		err := c.InsertWorkOrderStop(&msg)
+		err := c.UpdateWorkOrderSetStop(&msg)
 		assert.NoError(t, err)
 
 	})
@@ -116,8 +116,8 @@ func TestProduct(t *testing.T) {
 		msg := sharedStructs.ProductAddMessage{
 			ExternalProductId: "#1274",
 			ProductBatchId:    "0000-1234",
-			StartTime:         0,
-			EndTime:           10,
+			StartTimeUnixMs:   0,
+			EndTimeUnixMs:     10,
 			Quantity:          512,
 			BadQuantity:       0,
 		}
