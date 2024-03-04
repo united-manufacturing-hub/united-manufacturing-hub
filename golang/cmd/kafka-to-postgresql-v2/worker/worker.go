@@ -84,23 +84,41 @@ func handleParsing(msgChan <-chan *shared.KafkaMessage, i int) {
 			zap.S().Warnf("Analytics not yet supported, ignoring: %+v", msg)
 			switch topic.Tag {
 			case "work-order.create":
-				_, err := parseWorkOrderCreate(msg.Value)
+				parsed, err := parseWorkOrderCreate(msg.Value)
 				if err != nil {
 					zap.S().Warnf("Failed to parse work-order.create %+v: %s", msg, err)
 					k.MarkMessage(msg)
 					continue
 				}
+				err = p.InsertWorkOrderCreate(parsed)
+				if err != nil {
+					zap.S().Warnf("Failed to insert work-order.create %+v: %s", msg, err)
+					k.MarkMessage(msg)
+					continue
+				}
 			case "work-order.start":
-				_, err := parseWorkOrderStart(msg.Value)
+				parsed, err := parseWorkOrderStart(msg.Value)
 				if err != nil {
 					zap.S().Warnf("Failed to parse work-order.start %+v: %s", msg, err)
 					k.MarkMessage(msg)
 					continue
 				}
+				err = p.InsertWorkOrderStart(parsed)
+				if err != nil {
+					zap.S().Warnf("Failed to insert work-order.start %+v: %s", msg, err)
+					k.MarkMessage(msg)
+					continue
+				}
 			case "work-order.stop":
-				_, err := parseWorkOrderStop(msg.Value)
+				parsed, err := parseWorkOrderStop(msg.Value)
 				if err != nil {
 					zap.S().Warnf("Failed to parse work-order.stop %+v: %s", msg, err)
+					k.MarkMessage(msg)
+					continue
+				}
+				err = p.InsertWorkOrderStop(parsed)
+				if err != nil {
+					zap.S().Warnf("Failed to insert work-order.stop %+v: %s", msg, err)
 					k.MarkMessage(msg)
 					continue
 				}

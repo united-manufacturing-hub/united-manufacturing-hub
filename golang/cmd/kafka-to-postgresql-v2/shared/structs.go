@@ -30,16 +30,18 @@ const (
 	Completed
 )
 
+type WorkOrderCreateMessageProduct struct {
+	ExternalProductId string `json:"external_product_id"`
+	CycleTimeMs       uint64 `json:"cycle_time_ms,omitempty"` //Note: omitempty is not checked when unmarshalling from JSON, and only used as a note for the reader
+}
+
 type WorkOrderCreateMessage struct {
-	ExternalWorkOrderId string `json:"external_work_order_id"`
-	Product             struct {
-		ExternalProductId string `json:"external_product_id"`
-		CycleTimeMs       uint64 `json:"cycle_time_ms,omitempty"` //Note: omitempty is not checked when unmarshalling from JSON, and only used as a note for the reader
-	} `json:"product"`
-	Quantity        uint64 `json:"quantity"`
-	Status          Status `json:"status"`
-	StartTimeUnixMs uint64 `json:"start_time_unix_ms,omitempty"`
-	EndTimeUnixMs   uint64 `json:"end_time_unix_ms,omitempty"`
+	ExternalWorkOrderId string                        `json:"external_work_order_id"`
+	Product             WorkOrderCreateMessageProduct `json:"product"`
+	Quantity            uint64                        `json:"quantity"`
+	Status              Status                        `json:"status"`
+	StartTimeUnixMs     uint64                        `json:"start_time_unix_ms,omitempty"`
+	EndTimeUnixMs       uint64                        `json:"end_time_unix_ms,omitempty"`
 }
 
 type WorkOrderStartMessage struct {
