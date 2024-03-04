@@ -46,6 +46,7 @@ func (c *Connection) UpdateWorkOrderSetStart(msg *sharedStructs.WorkOrderStartMe
 	if err != nil {
 		return err
 	}
+
 	// Start tx (this shouldn't take more then 1 minute)
 	ctx, cncl := get1MinuteContext()
 	defer cncl()
@@ -58,7 +59,10 @@ func (c *Connection) UpdateWorkOrderSetStart(msg *sharedStructs.WorkOrderStartMe
 	cmdTag, err = tx.Exec(ctx, `
 		UPDATE work_orders
 		SET status = 1, startTime = to_timestamp($2 / 1000)
-		WHERE externalWorkOrderId = $1 AND assetId = $3
+		WHERE externalWorkOrderId = $1
+		  AND status = 0 
+		  AND startTime IS NULL
+		  AND assetId = $3
 	`, msg.ExternalWorkOrderId, msg.StartTimeUnixMs, int(assetId))
 	if err != nil {
 		zap.S().Warnf("Error updating work order: %v (workOrderId: %v) [%s]", err, msg.ExternalWorkOrderId, cmdTag)
@@ -84,7 +88,6 @@ func (c *Connection) UpdateWorkOrderSetStop(msg *sharedStructs.WorkOrderStopMess
 	if err != nil {
 		return err
 	}
-
 	// Start tx (this shouldn't take more then 1 minute)
 	ctx, cncl := get1MinuteContext()
 	defer cncl()
@@ -97,7 +100,10 @@ func (c *Connection) UpdateWorkOrderSetStop(msg *sharedStructs.WorkOrderStopMess
 	cmdTag, err = tx.Exec(ctx, `
 		UPDATE work_orders
 		SET status = 2, endTime = to_timestamp($2 / 1000)
-		WHERE externalWorkOrderId = $1 AND assetId = $3
+		WHERE externalWorkOrderId = $1
+		  AND status = 1
+		  AND endTime IS NULL
+		  AND assetId = $3
 	`, msg.ExternalWorkOrderId, msg.EndTimeUnixMs, int(assetId))
 	if err != nil {
 		zap.S().Warnf("Error updating work order: %v (workOrderId: %v) [%s]", err, msg.ExternalWorkOrderId, cmdTag)
