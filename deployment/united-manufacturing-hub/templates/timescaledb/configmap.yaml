@@ -7732,6 +7732,7 @@ data:
     CREATE TABLE products (
       productId INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
       externalProductTypeId INTEGER REFERENCES product_types(productTypeId),
+    productBatchId TEXT,
       assetId INTEGER REFERENCES assets(id),
       startTime TIMESTAMPTZ,
       endTime TIMESTAMPTZ NOT NULL,
