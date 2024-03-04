@@ -235,3 +235,54 @@ func TestShiftDelete(t *testing.T) {
 		assert.Error(t, err)
 	})
 }
+
+func TestStateAdd(t *testing.T) {
+	t.Run("from-string-only-required", func(t *testing.T) {
+		stateAddJson := `{"state": 10000, "start_time_unix_ms": 100}`
+		stateAdd, err := parseStateAdd([]byte(stateAddJson))
+		assert.NoError(t, err)
+		assert.Equal(t, uint64(100), stateAdd.StartTimeUnixMs)
+		assert.Equal(t, uint64(10000), stateAdd.State)
+	})
+
+	t.Run("disallow-no-state", func(t *testing.T) {
+		stateAddJson := `{"start_time_unix_ms": 100}`
+		_, err := parseStateAdd([]byte(stateAddJson))
+		assert.Error(t, err)
+	})
+
+	t.Run("disallow-no-start-time", func(t *testing.T) {
+		stateAddJson := `{"state": 10000}`
+		_, err := parseStateAdd([]byte(stateAddJson))
+		assert.Error(t, err)
+	})
+}
+
+func TestStateOverwrite(t *testing.T) {
+	t.Run("from-string-only-required", func(t *testing.T) {
+		stateOverwriteJson := `{"state": 10000, "start_time_unix_ms": 100, "end_time_unix_ms": 200}`
+		stateOverwrite, err := parseStateOverwrite([]byte(stateOverwriteJson))
+		assert.NoError(t, err)
+		assert.Equal(t, uint64(100), stateOverwrite.StartTimeUnixMs)
+		assert.Equal(t, uint64(10000), stateOverwrite.State)
+		assert.Equal(t, uint64(200), stateOverwrite.EndTimeUnixMs)
+	})
+
+	t.Run("disallow-no-state", func(t *testing.T) {
+		stateOverwriteJson := `{"start_time_unix_ms": 100}`
+		_, err := parseStateOverwrite([]byte(stateOverwriteJson))
+		assert.Error(t, err)
+	})
+
+	t.Run("disallow-no-start-time", func(t *testing.T) {
+		stateOverwriteJson := `{"state": 10000}`
+		_, err := parseStateOverwrite([]byte(stateOverwriteJson))
+		assert.Error(t, err)
+	})
+
+	t.Run("disallow-no-end-time", func(t *testing.T) {
+		stateOverwriteJson := `{"state": 10000, "start_time_unix_ms": 100}`
+		_, err := parseStateOverwrite([]byte(stateOverwriteJson))
+		assert.Error(t, err)
+	})
+}
