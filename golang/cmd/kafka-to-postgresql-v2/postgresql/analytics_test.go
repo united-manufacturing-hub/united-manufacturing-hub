@@ -249,3 +249,42 @@ func TestShift(t *testing.T) {
 		assert.NoError(t, err)
 	})
 }
+
+func TestState(t *testing.T) {
+	c := CreateMockConnection(t)
+	defer c.db.Close()
+
+	// Cast c.db to pgxmock to access the underlying mock
+	mock, ok := c.db.(pgxmock.PgxPoolIface)
+	assert.True(t, ok)
+
+	t.Run("add", func(t *testing.T) {
+		msg := sharedStructs.StateAddMessage{
+			StartTimeUnixMs: 1,
+			State:           10000,
+		}
+
+		topic := sharedStructs.TopicDetails{
+			Enterprise: "umh",
+			Tag:        "state.add",
+		}
+
+		// Expect Query from GetOrInsertAsset
+		mock.ExpectQuery(`SELECT id FROM asset WHERE enterprise = \$1 AND site = \$2 AND area = \$3 AND line = \$4 AND workcell = \$5 AND origin_id = \$6`).
+			WithArgs("umh", "", "", "", "", "").
+			WillReturnRows(mock.NewRows([]string{"id"}).AddRow(1))
+
+		// Expect Exec from InsertStateAdd
+		mock.ExpectBeginTx(pgx.TxOptions{})
+		mock.ExpectExec(`INSERT INTO states \(assetId, startTime, state\)
+		VALUES \(\$1, to_timestamp\(\$2\/1000\), \$3\)
+		ON CONFLICT ON CONSTRAINT state_start_asset_uniq
+		DO NOTHING`).WithArgs(1, uint64(1), 10000).
+			WillReturnResult(pgxmock.NewResult("INSERT", 1))
+
+		mock.ExpectCommit()
+
+		err := c.InsertStateAdd(&msg, &topic)
+		assert.NoError(t, err)
+	})
+}

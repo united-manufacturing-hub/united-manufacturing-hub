@@ -88,6 +88,17 @@ type ShiftDeleteMessage struct {
 	StartTimeUnixMs uint64 `json:"start_time_unix_ms"`
 }
 
+type StateAddMessage struct {
+	StartTimeUnixMs uint64 `json:"start_time_unix_ms"`
+	State           uint64 `json:"state"`
+}
+
+type StateOverwriteMessage struct {
+	StartTimeUnixMs uint64 `json:"start_time_unix_ms"`
+	EndTimeUnixMs   uint64 `json:"end_time_unix_ms"`
+	State           uint64 `json:"state"`
+}
+
 type PgxIface interface {
 	Begin(context.Context) (pgx.Tx, error)
 	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
