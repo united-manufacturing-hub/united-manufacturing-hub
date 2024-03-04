@@ -21,6 +21,9 @@ func parseWorkOrderCreate(value []byte) (shared.WorkOrderCreateMessage, error) {
 	if message.Quantity == 0 {
 		return message, errors.New("quantity is required")
 	}
+	if int(message.Status) > int(shared.Completed) {
+		return message, errors.New("status must be 0, 1 or 2")
+	}
 	// Status falls back to zero, if not set
 
 	return message, err
