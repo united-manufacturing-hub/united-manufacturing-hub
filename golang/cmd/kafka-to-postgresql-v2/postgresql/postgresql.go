@@ -20,8 +20,8 @@ import (
 type DBValue struct {
 	Timestamp time.Time
 	Origin    string
-	AssetId   int
 	Value     sharedStructs.HistorianValue
+	AssetId   int
 }
 
 func (r *DBValue) GetValue() interface{} {

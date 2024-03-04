@@ -18,8 +18,8 @@ type TopicDetails struct {
 type HistorianValue struct {
 	NumericValue *float32
 	StringValue  *string
-	IsNumeric    bool
 	Name         string
+	IsNumeric    bool
 }
 
 type Status int
