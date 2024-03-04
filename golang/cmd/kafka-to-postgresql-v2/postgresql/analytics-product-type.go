@@ -36,9 +36,5 @@ func (c *Connection) InsertProductTypeCreate(msg *sharedStructs.ProductTypeCreat
 		}
 		return err
 	}
-	err = tx.Commit(ctx)
-	if err != nil {
-		return err
-	}
-	return nil
+	return tx.Commit(ctx)
 }

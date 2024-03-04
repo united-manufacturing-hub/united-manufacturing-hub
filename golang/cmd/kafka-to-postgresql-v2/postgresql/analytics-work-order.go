@@ -37,16 +37,15 @@ func (c *Connection) InsertWorkOrderCreate(msg *sharedStructs.WorkOrderCreateMes
 		}
 		return err
 	}
-	err = tx.Commit(ctx)
+	return tx.Commit(ctx)
+}
+
+func (c *Connection) UpdateWorkOrderSetStart(msg *sharedStructs.WorkOrderStartMessage, topic *sharedStructs.TopicDetails) error {
+	// Update work-order by externalWorkOrderId
+	assetId, err := c.GetOrInsertAsset(topic)
 	if err != nil {
 		return err
 	}
-	return nil
-}
-
-func (c *Connection) UpdateWorkOrderSetStart(msg *sharedStructs.WorkOrderStartMessage) error {
-	// Update work-order by externalWorkOrderId
-
 	// Start tx (this shouldn't take more then 1 minute)
 	ctx, cncl := get1MinuteContext()
 	defer cncl()
@@ -59,8 +58,8 @@ func (c *Connection) UpdateWorkOrderSetStart(msg *sharedStructs.WorkOrderStartMe
 	cmdTag, err = tx.Exec(ctx, `
 		UPDATE work_orders
 		SET status = 1, startTime = to_timestamp($2 / 1000)
-		WHERE externalWorkOrderId = $1
-	`, msg.ExternalWorkOrderId, msg.StartTimeUnixMs)
+		WHERE externalWorkOrderId = $1 AND assetId = $3
+	`, msg.ExternalWorkOrderId, msg.StartTimeUnixMs, int(assetId))
 	if err != nil {
 		zap.S().Warnf("Error updating work order: %v (workOrderId: %v) [%s]", err, msg.ExternalWorkOrderId, cmdTag)
 		zap.S().Debugf("Message: %v", msg)
@@ -79,8 +78,12 @@ func (c *Connection) UpdateWorkOrderSetStart(msg *sharedStructs.WorkOrderStartMe
 	return nil
 }
 
-func (c *Connection) UpdateWorkOrderSetStop(msg *sharedStructs.WorkOrderStopMessage) error {
+func (c *Connection) UpdateWorkOrderSetStop(msg *sharedStructs.WorkOrderStopMessage, topic *sharedStructs.TopicDetails) error {
 	// Update work-order by externalWorkOrderId
+	assetId, err := c.GetOrInsertAsset(topic)
+	if err != nil {
+		return err
+	}
 
 	// Start tx (this shouldn't take more then 1 minute)
 	ctx, cncl := get1MinuteContext()
@@ -94,8 +97,8 @@ func (c *Connection) UpdateWorkOrderSetStop(msg *sharedStructs.WorkOrderStopMess
 	cmdTag, err = tx.Exec(ctx, `
 		UPDATE work_orders
 		SET status = 2, endTime = to_timestamp($2 / 1000)
-		WHERE externalWorkOrderId = $1
-	`, msg.ExternalWorkOrderId, msg.EndTimeUnixMs)
+		WHERE externalWorkOrderId = $1 AND assetId = $3
+	`, msg.ExternalWorkOrderId, msg.EndTimeUnixMs, int(assetId))
 	if err != nil {
 		zap.S().Warnf("Error updating work order: %v (workOrderId: %v) [%s]", err, msg.ExternalWorkOrderId, cmdTag)
 		zap.S().Debugf("Message: %v", msg)
