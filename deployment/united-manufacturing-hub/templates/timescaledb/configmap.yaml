@@ -7732,7 +7732,7 @@ data:
     CREATE TABLE products (
       productId INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
       externalProductTypeId INTEGER REFERENCES product_types(productTypeId),
-    productBatchId TEXT,
+      productBatchId TEXT,
       assetId INTEGER REFERENCES assets(id),
       startTime TIMESTAMPTZ,
       endTime TIMESTAMPTZ NOT NULL,
@@ -7740,6 +7740,7 @@ data:
       badQuantity INTEGER DEFAULT 0,
       CHECK (quantity > 0),
       CHECK (badQuantity >= 0),
+      CHECK (badQuantity <= quantity),
       CHECK (startTime <= endTime),
       CONSTRAINT product_endtime_asset_uniq UNIQUE (endTime, assetId)
     );
