@@ -31,23 +31,23 @@ const (
 )
 
 type WorkOrderCreateMessage struct {
-	ExternalWorkOrderId string `json:"externalWorkOrderId"`
+	ExternalWorkOrderId string `json:"external_work_order_id"`
 	Product             struct {
-		ExternalProductId string `json:"externalProductId"`
-		CycleTimeMs       uint64 `json:"cycleTimeMs,omitempty"` //Note: omitempty is not checked when unmarshalling from JSON, and only used as a note for the reader
+		ExternalProductId string `json:"external_product_id"`
+		CycleTimeMs       uint64 `json:"cycle_time_ms,omitempty"` //Note: omitempty is not checked when unmarshalling from JSON, and only used as a note for the reader
 	} `json:"product"`
 	Quantity        uint64 `json:"quantity"`
 	Status          Status `json:"status"`
-	StartTimeUnixMs uint64 `json:"startTimeUnixMs,omitempty"`
-	EndTimeUnixMs   uint64 `json:"endTimeUnixMs,omitempty"`
+	StartTimeUnixMs uint64 `json:"start_time_unix_ms,omitempty"`
+	EndTimeUnixMs   uint64 `json:"end_time_unix_ms,omitempty"`
 }
 
 type WorkOrderStartMessage struct {
-	ExternalWorkOrderId string `json:"externalWorkOrderId"`
-	StartTimeUnixMs     uint64 `json:"startTimeUnixMs"`
+	ExternalWorkOrderId string `json:"external_work_order_id"`
+	StartTimeUnixMs     uint64 `json:"start_time_unix_ms"`
 }
 
 type WorkOrderStopMessage struct {
-	ExternalWorkOrderId string `json:"externalWorkOrderId"`
-	EndTimeUnixMs       uint64 `json:"endTimeUnixMs"`
+	ExternalWorkOrderId string `json:"external_work_order_id"`
+	EndTimeUnixMs       uint64 `json:"end_time_unix_ms"`
 }
