@@ -34,12 +34,12 @@ type WorkOrderCreateMessage struct {
 	ExternalWorkOrderId string `json:"externalWorkOrderId"`
 	Product             struct {
 		ExternalProductId string `json:"externalProductId"`
-		CycleTimeMs       int    `json:"cycleTimeMs"`
+		CycleTimeMs       uint64 `json:"cycleTimeMs,omitempty"` //Note: omitempty is not checked when unmarshalling from JSON, and only used as a note for the reader
 	} `json:"product"`
 	Quantity        uint64 `json:"quantity"`
 	Status          Status `json:"status"`
-	StartTimeUnixMs int64  `json:"startTimeUnixMs"`
-	EndTimeUnixMs   int64  `json:"endTimeUnixMs"`
+	StartTimeUnixMs uint64 `json:"startTimeUnixMs,omitempty"`
+	EndTimeUnixMs   uint64 `json:"endTimeUnixMs,omitempty"`
 }
 
 type WorkOrderStartMessage struct {
