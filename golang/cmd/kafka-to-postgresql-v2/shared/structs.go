@@ -61,5 +61,6 @@ type WorkOrderStopMessage struct {
 
 type PgxIface interface {
 	Begin(context.Context) (pgx.Tx, error)
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
 	Close()
 }
