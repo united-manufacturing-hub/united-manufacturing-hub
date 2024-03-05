@@ -7780,7 +7780,7 @@ data:
       end_time TIMESTAMPTZ,
       state INT NOT NULL,
       CHECK (state >= 0),
-      CHECK (start_time < end_time),
+      CHECK (end_time IS NULL OR start_time < end_time),
       UNIQUE (start_time, asset_id)
     );
     -- creating hypertable
