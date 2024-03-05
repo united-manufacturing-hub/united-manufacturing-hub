@@ -214,9 +214,13 @@ func handleParsing(msgChan <-chan *shared.KafkaMessage, i int) {
 				}
 			default:
 				zap.S().Warnf("Unknown tag %s for analytics [%s] [%v]", topic.Tag, topic, msg)
+				k.MarkMessage(msg)
+				continue
 			}
 		default:
 			zap.S().Errorf("Unknown usecase %s", topic.Schema)
+			k.MarkMessage(msg)
+			continue
 		}
 		k.MarkMessage(msg)
 		messagesHandled++
