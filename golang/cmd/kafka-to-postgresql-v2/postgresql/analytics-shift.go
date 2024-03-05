@@ -32,8 +32,8 @@ func (c *Connection) InsertShiftAdd(msg *sharedStructs.ShiftAddMessage, topic *s
             VALUES
             (
                         $1,
-                        to_timestamp($2 / 1000),
-                        to_timestamp($3 / 1000)
+                        to_timestamp($2 / 1000.0),
+                        to_timestamp($3 / 1000.0)
             )
 		on conflict
 		ON CONSTRAINT shift_start_asset_uniq do nothing
@@ -69,7 +69,7 @@ func (c *Connection) DeleteShiftByStartTime(msg *sharedStructs.ShiftDeleteMessag
 	cmdTag, err = tx.Exec(ctx, `
 		DELETE FROM shift
 		WHERE  asset_id = $1
-			   AND start_time = to_timestamp($2 / 1000); 
+			   AND start_time = to_timestamp($2 / 1000.0); 
 	`, int(assetId), msg.StartTimeUnixMs)
 
 	if err != nil {
