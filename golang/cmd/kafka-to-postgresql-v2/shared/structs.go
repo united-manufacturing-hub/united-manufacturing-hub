@@ -3,6 +3,7 @@ package shared
 import (
 	"context"
 	"github.com/jackc/pgx/v5"
+	"time"
 )
 
 const (
@@ -99,7 +100,22 @@ type StateOverwriteMessage struct {
 	State           uint64 `json:"state"`
 }
 
-type PgxIface interface {
+type DBHistorianValue struct {
+	Timestamp time.Time
+	Origin    string
+	Value     HistorianValue
+	AssetId   int
+}
+
+func (r *DBHistorianValue) GetValue() interface{} {
+	if r.Value.IsNumeric {
+		return *r.Value.NumericValue
+	} else {
+		return *r.Value.StringValue
+	}
+}
+
+type Ipgx interface {
 	Begin(context.Context) (pgx.Tx, error)
 	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
 	Close()
