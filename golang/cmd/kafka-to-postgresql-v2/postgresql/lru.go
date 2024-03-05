@@ -124,7 +124,7 @@ func (c *Connection) GetOrInsertProductType(assetId uint64, externalProductId st
 			defer insertRowContextCncl()
 
 			// The deref for cycleTimeMs is safe because we checked for nil earlier
-			err = c.Db.QueryRow(insertRowContext, insertQuery, externalProductId, helper.Uint64PtrToInt64Ptr(cycleTimeMs), int(assetId)).Scan(&ptId)
+			err = c.Db.QueryRow(insertRowContext, insertQuery, externalProductId, helper.Uint64PtrToNullInt64(cycleTimeMs), int(assetId)).Scan(&ptId)
 			if err != nil {
 				return 0, err
 			}
