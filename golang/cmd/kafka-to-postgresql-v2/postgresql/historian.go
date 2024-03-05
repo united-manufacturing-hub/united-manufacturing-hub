@@ -14,7 +14,7 @@ func (c *Connection) InsertHistorianValue(value []sharedStructs.HistorianValue, 
 	if err != nil {
 		return err
 	}
-	seconds := timestampMs / 1000
+	seconds := timestampMs / 1000.0
 	nanoseconds := (timestampMs % 1000) * 1000000
 	timestamp := time.Unix(seconds, nanoseconds)
 
