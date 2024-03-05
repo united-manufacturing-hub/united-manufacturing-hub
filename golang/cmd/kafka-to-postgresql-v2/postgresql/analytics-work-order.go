@@ -25,7 +25,7 @@ func (c *Connection) InsertWorkOrderCreate(msg *sharedStructs.WorkOrderCreateMes
 	// Don't forget to convert unix ms to timestamptz
 	var cmdTag pgconn.CommandTag
 	cmdTag, err = tx.Exec(ctx, `
-		INSERT INTO work_orders (externalWorkOrderId, assetId, productTypeId, quantity, status, startTime, endTime)
+		INSERT INTO work_orders (externalWorkOrderId, asset_id, productTypeId, quantity, status, start_time, end_time)
 		VALUES ($1, $2, $3, $4, $5, to_timestamp($6/1000), to_timestamp($7/1000))
 	`, msg.ExternalWorkOrderId, int(assetId), int(productTypeId), msg.Quantity, int(msg.Status), msg.StartTimeUnixMs, msg.EndTimeUnixMs)
 	if err != nil {
@@ -58,11 +58,11 @@ func (c *Connection) UpdateWorkOrderSetStart(msg *sharedStructs.WorkOrderStartMe
 	var cmdTag pgconn.CommandTag
 	cmdTag, err = tx.Exec(ctx, `
 		UPDATE work_orders
-		SET status = 1, startTime = to_timestamp($2 / 1000)
+		SET status = 1, start_time = to_timestamp($2 / 1000)
 		WHERE externalWorkOrderId = $1
 		  AND status = 0 
-		  AND startTime IS NULL
-		  AND assetId = $3
+		  AND start_time IS NULL
+		  AND asset_id = $3
 	`, msg.ExternalWorkOrderId, msg.StartTimeUnixMs, int(assetId))
 	if err != nil {
 		zap.S().Warnf("Error updating work order: %v (workOrderId: %v) [%s]", err, msg.ExternalWorkOrderId, cmdTag)
@@ -99,11 +99,11 @@ func (c *Connection) UpdateWorkOrderSetStop(msg *sharedStructs.WorkOrderStopMess
 	var cmdTag pgconn.CommandTag
 	cmdTag, err = tx.Exec(ctx, `
 		UPDATE work_orders
-		SET status = 2, endTime = to_timestamp($2 / 1000)
+		SET status = 2, end_time = to_timestamp($2 / 1000)
 		WHERE externalWorkOrderId = $1
 		  AND status = 1
-		  AND endTime IS NULL
-		  AND assetId = $3
+		  AND end_time IS NULL
+		  AND asset_id = $3
 	`, msg.ExternalWorkOrderId, msg.EndTimeUnixMs, int(assetId))
 	if err != nil {
 		zap.S().Warnf("Error updating work order: %v (workOrderId: %v) [%s]", err, msg.ExternalWorkOrderId, cmdTag)

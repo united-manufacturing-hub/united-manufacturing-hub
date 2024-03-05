@@ -85,16 +85,6 @@ func (c *Connection) lookupAssetIdLRU(topic *sharedStructs.TopicDetails) (uint64
 var ptIdLock = sync.Mutex{}
 
 func (c *Connection) GetOrInsertProductType(assetId uint64, externalProductId string, cycleTimeMs uint64) (uint64, error) {
-	/*
-		CREATE TABLE product_types (
-		    productTypeId INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-		    externalProductTypeId TEXT NOT NULL,
-		    cycleTime INTEGER NOT NULL,
-		    assetId INTEGER REFERENCES asset(id),
-		    CONSTRAINT external_product_asset_uniq UNIQUE (externalProductTypeId, assetId),
-		    CHECK (cycleTime > 0)
-		);
-	*/
 	if c.db == nil {
 		return 0, errors.New("database is nil")
 	}
@@ -117,7 +107,7 @@ func (c *Connection) GetOrInsertProductType(assetId uint64, externalProductId st
 		return 0, errors.New("not found")
 	}
 
-	selectQuery := `SELECT productTypeId FROM product_types WHERE externalProductTypeId = $1 AND assetId = $2`
+	selectQuery := `SELECT productTypeId FROM product_types WHERE external_product_type_id = $1 AND asset_id = $2`
 	selectRowContext, selectRowContextCncl := get1MinuteContext()
 	defer selectRowContextCncl()
 
@@ -128,7 +118,7 @@ func (c *Connection) GetOrInsertProductType(assetId uint64, externalProductId st
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			// Row isn't found, need to insert
-			insertQuery := `INSERT INTO product_types (externalProductTypeId, cycleTime, assetId) VALUES ($1, $2, $3) RETURNING productTypeId`
+			insertQuery := `INSERT INTO product_types (external_product_type_id, cycle_time_ms, asset_id) VALUES ($1, $2, $3) RETURNING productTypeId`
 			insertRowContext, insertRowContextCncl := get1MinuteContext()
 			defer insertRowContextCncl()
 
