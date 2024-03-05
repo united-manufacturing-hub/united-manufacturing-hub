@@ -128,3 +128,51 @@ func TestParseWorkOrderStop(t *testing.T) {
 		assert.Error(t, err)
 	})
 }
+
+func TestParseProductAdd(t *testing.T) {
+	t.Run("from-string-only-required", func(t *testing.T) {
+		productAddJson := `{"external_product_id": "#1274", "end_time_unix_ms": 100, "quantity": 10}`
+		productAdd, err := parseProductAdd([]byte(productAddJson))
+		assert.NoError(t, err)
+		assert.Equal(t, "#1274", productAdd.ExternalProductId)
+		assert.Equal(t, uint64(100), productAdd.EndTimeUnixMs)
+	})
+
+	t.Run("disallow-no-external-product-id", func(t *testing.T) {
+		productAddJson := `{"end_time_unix_ms": 100}`
+		_, err := parseProductAdd([]byte(productAddJson))
+		assert.Error(t, err)
+	})
+
+	t.Run("disallow-no-end-time", func(t *testing.T) {
+		productAddJson := `{"external_product_id": "#1274"}`
+		_, err := parseProductAdd([]byte(productAddJson))
+		assert.Error(t, err)
+	})
+
+	t.Run("disallow-no-quantity", func(t *testing.T) {
+		productAddJson := `{"external_product_id": "#1274", "end_time_unix_ms": 100}`
+		_, err := parseProductAdd([]byte(productAddJson))
+		assert.Error(t, err)
+	})
+}
+
+func TestParseProductSetBadQuantity(t *testing.T) {
+	t.Run("disallow-negative-quantity", func(t *testing.T) {
+		productSetJson := `{"external_product_id": "#1274", "quantity": -10}`
+		_, err := parseProductSetBadQuantity([]byte(productSetJson))
+		assert.Error(t, err)
+	})
+
+	t.Run("disallow-no-external-product-id", func(t *testing.T) {
+		productSetJson := `{"quantity": 10}`
+		_, err := parseProductSetBadQuantity([]byte(productSetJson))
+		assert.Error(t, err)
+	})
+
+	t.Run("disallow-no-quantity", func(t *testing.T) {
+		productSetJson := `{"external_product_id": "#1274"}`
+		_, err := parseProductSetBadQuantity([]byte(productSetJson))
+		assert.Error(t, err)
+	})
+}

@@ -11,7 +11,7 @@ func (c *Connection) InsertWorkOrderCreate(msg *sharedStructs.WorkOrderCreateMes
 	if err != nil {
 		return err
 	}
-	productTypeId, err := c.GetOrInsertProductType(assetId, msg.Product)
+	productTypeId, err := c.GetOrInsertProductType(assetId, msg.Product.ExternalProductId, msg.Product.CycleTimeMs)
 	if err != nil {
 		return err
 	}
@@ -25,11 +25,12 @@ func (c *Connection) InsertWorkOrderCreate(msg *sharedStructs.WorkOrderCreateMes
 	// Don't forget to convert unix ms to timestamptz
 	var cmdTag pgconn.CommandTag
 	cmdTag, err = tx.Exec(ctx, `
-		INSERT INTO work_orders (externalWorkOrderId, assetId, productTypeId, quantity, status, to_timestamp($6 / 1000), to_timestamp($7 / 1000))
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		INSERT INTO work_orders (externalWorkOrderId, assetId, productTypeId, quantity, status, startTime, endTime)
+		VALUES ($1, $2, $3, $4, $5, to_timestamp($6/1000), to_timestamp($7/1000))
 	`, msg.ExternalWorkOrderId, int(assetId), int(productTypeId), msg.Quantity, int(msg.Status), msg.StartTimeUnixMs, msg.EndTimeUnixMs)
 	if err != nil {
 		zap.S().Warnf("Error inserting work order: %v (workOrderId: %v) [%s]", err, msg.ExternalWorkOrderId, cmdTag)
+		zap.S().Debugf("Message: %v (Topic: %v)", msg, topic)
 		errR := tx.Rollback(ctx)
 		if errR != nil {
 			zap.S().Errorf("Error rolling back transaction: %v", errR)
@@ -43,7 +44,7 @@ func (c *Connection) InsertWorkOrderCreate(msg *sharedStructs.WorkOrderCreateMes
 	return nil
 }
 
-func (c *Connection) InsertWorkOrderStart(msg *sharedStructs.WorkOrderStartMessage) error {
+func (c *Connection) UpdateWorkOrderSetStart(msg *sharedStructs.WorkOrderStartMessage) error {
 	// Update work-order by externalWorkOrderId
 
 	// Start tx (this shouldn't take more then 1 minute)
@@ -64,6 +65,7 @@ func (c *Connection) InsertWorkOrderStart(msg *sharedStructs.WorkOrderStartMessa
 	`, msg.ExternalWorkOrderId, msg.StartTimeUnixMs)
 	if err != nil {
 		zap.S().Warnf("Error updating work order: %v (workOrderId: %v) [%s]", err, msg.ExternalWorkOrderId, cmdTag)
+		zap.S().Debugf("Message: %v", msg)
 		errR := tx.Rollback(ctx)
 		if errR != nil {
 			zap.S().Errorf("Error rolling back transaction: %v", errR)
@@ -79,7 +81,7 @@ func (c *Connection) InsertWorkOrderStart(msg *sharedStructs.WorkOrderStartMessa
 	return nil
 }
 
-func (c *Connection) InsertWorkOrderStop(msg *sharedStructs.WorkOrderStopMessage) error {
+func (c *Connection) UpdateWorkOrderSetStop(msg *sharedStructs.WorkOrderStopMessage) error {
 	// Update work-order by externalWorkOrderId
 
 	// Start tx (this shouldn't take more then 1 minute)
@@ -100,6 +102,7 @@ func (c *Connection) InsertWorkOrderStop(msg *sharedStructs.WorkOrderStopMessage
 	`, msg.ExternalWorkOrderId, msg.EndTimeUnixMs)
 	if err != nil {
 		zap.S().Warnf("Error updating work order: %v (workOrderId: %v) [%s]", err, msg.ExternalWorkOrderId, cmdTag)
+		zap.S().Debugf("Message: %v", msg)
 		errR := tx.Rollback(ctx)
 		if errR != nil {
 			zap.S().Errorf("Error rolling back transaction: %v", errR)

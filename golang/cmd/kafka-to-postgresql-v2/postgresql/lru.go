@@ -84,7 +84,7 @@ func (c *Connection) lookupAssetIdLRU(topic *sharedStructs.TopicDetails) (uint64
 
 var ptIdLock = sync.Mutex{}
 
-func (c *Connection) GetOrInsertProductType(assetId uint64, product sharedStructs.WorkOrderCreateMessageProduct) (uint64, error) {
+func (c *Connection) GetOrInsertProductType(assetId uint64, externalProductId string, cycleTimeMs uint64) (uint64, error) {
 	/*
 		CREATE TABLE product_types (
 		    productTypeId INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -98,7 +98,7 @@ func (c *Connection) GetOrInsertProductType(assetId uint64, product sharedStruct
 	if c.db == nil {
 		return 0, errors.New("database is nil")
 	}
-	ptId, hit := c.lookupProductTypeIdLRU(assetId, product)
+	ptId, hit := c.lookupProductTypeIdLRU(assetId, externalProductId)
 	if hit {
 		return ptId, nil
 	}
@@ -107,9 +107,14 @@ func (c *Connection) GetOrInsertProductType(assetId uint64, product sharedStruct
 	defer ptIdLock.Unlock()
 
 	// It might be that another locker already added it, so we do a double check
-	ptId, hit = c.lookupProductTypeIdLRU(assetId, product)
+	ptId, hit = c.lookupProductTypeIdLRU(assetId, externalProductId)
 	if hit {
 		return ptId, nil
+	}
+
+	// Don't add if cycleTimeMs is 0
+	if cycleTimeMs == 0 {
+		return 0, errors.New("not found")
 	}
 
 	selectQuery := `SELECT productTypeId FROM product_types WHERE externalProductTypeId = $1 AND assetId = $2`
@@ -118,7 +123,7 @@ func (c *Connection) GetOrInsertProductType(assetId uint64, product sharedStruct
 
 	var err error
 	var ptIdX int
-	err = c.db.QueryRow(selectRowContext, selectQuery, product.ExternalProductId, int(assetId)).Scan(&ptIdX)
+	err = c.db.QueryRow(selectRowContext, selectQuery, externalProductId, int(assetId)).Scan(&ptIdX)
 	ptId = uint64(ptIdX)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -127,13 +132,13 @@ func (c *Connection) GetOrInsertProductType(assetId uint64, product sharedStruct
 			insertRowContext, insertRowContextCncl := get1MinuteContext()
 			defer insertRowContextCncl()
 
-			err = c.db.QueryRow(insertRowContext, insertQuery, product.ExternalProductId, product.CycleTimeMs, int(assetId)).Scan(&ptId)
+			err = c.db.QueryRow(insertRowContext, insertQuery, externalProductId, cycleTimeMs, int(assetId)).Scan(&ptId)
 			if err != nil {
 				return 0, err
 			}
 
 			// Add to LRU cache
-			c.addToProductTypeIdLRU(assetId, product, ptId)
+			c.addToProductTypeIdLRU(assetId, externalProductId, ptId)
 
 			return ptId, nil
 		} else {
@@ -141,17 +146,17 @@ func (c *Connection) GetOrInsertProductType(assetId uint64, product sharedStruct
 		}
 	}
 
-	// If no error and product type exists
-	c.addToProductTypeIdLRU(assetId, product, ptId)
+	// If no error and externalProductId type exists
+	c.addToProductTypeIdLRU(assetId, externalProductId, ptId)
 	return ptId, nil
 }
 
-func (c *Connection) addToProductTypeIdLRU(assetId uint64, product sharedStructs.WorkOrderCreateMessageProduct, ptId uint64) {
-	c.productTypeIdCache.Add(getCacheKeyFromProduct(assetId, product), ptId)
+func (c *Connection) addToProductTypeIdLRU(assetId uint64, externalProductId string, ptId uint64) {
+	c.productTypeIdCache.Add(getCacheKeyFromProduct(assetId, externalProductId), ptId)
 }
 
-func (c *Connection) lookupProductTypeIdLRU(assetId uint64, product sharedStructs.WorkOrderCreateMessageProduct) (uint64, bool) {
-	value, ok := c.productTypeIdCache.Get(getCacheKeyFromProduct(assetId, product))
+func (c *Connection) lookupProductTypeIdLRU(assetId uint64, externalProductId string) (uint64, bool) {
+	value, ok := c.productTypeIdCache.Get(getCacheKeyFromProduct(assetId, externalProductId))
 	if ok {
 		c.lruHits.Add(1)
 		return value.(uint64), true
@@ -186,13 +191,13 @@ func getCacheKeyFromTopic(topic *sharedStructs.TopicDetails) string {
 	return cacheKey.String()
 }
 
-func getCacheKeyFromProduct(assetId uint64, product sharedStructs.WorkOrderCreateMessageProduct) string {
+func getCacheKeyFromProduct(assetId uint64, externalProductId string) string {
 	// Attempt cache lookup
 	hasher := sha3.New512()
 	assetIdBytes := make([]byte, 8)
 	binary.LittleEndian.PutUint64(assetIdBytes, assetId)
 	hasher.Write(assetIdBytes)
-	hasher.Write([]byte(product.ExternalProductId))
+	hasher.Write([]byte(externalProductId))
 
 	return string(hasher.Sum(nil))
 }
