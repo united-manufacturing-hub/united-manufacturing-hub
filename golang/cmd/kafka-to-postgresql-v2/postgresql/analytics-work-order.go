@@ -28,8 +28,27 @@ func (c *Connection) InsertWorkOrderCreate(msg *sharedStructs.WorkOrderCreateMes
 	zap.S().Debugf("Inserting work order: %+v", values)
 	var cmdTag pgconn.CommandTag
 	cmdTag, err = tx.Exec(ctx, `
-		INSERT INTO work_order(external_work_order_id, asset_id, product_type_id, quantity, status, start_time, end_time)
-		VALUES ($1, $2, $3, $4, $5, CASE WHEN $6 IS NOT NULL THEN to_timestamp($6/1000) ELSE NULL END::timestamptz, CASE WHEN $7 IS NOT NULL THEN to_timestamp($7/1000) ELSE NULL END::timestamptz)
+		INSERT INTO work_order
+            (external_work_order_id,
+             asset_id,
+             product_type_id,
+             quantity,
+             status,
+             start_time,
+             end_time)
+		VALUES      ($1,
+					 $2,
+					 $3,
+					 $4,
+					 $5,
+					 CASE
+					   WHEN $6 :: INT IS NOT NULL THEN To_timestamp($6 :: INT / 1000)
+					   ELSE NULL
+					 END :: timestamptz,
+					 CASE
+					   WHEN $7 :: INT IS NOT NULL THEN To_timestamp($7 :: INT / 1000)
+					   ELSE NULL
+					 END :: timestamptz) 
 	`, values...)
 	if err != nil {
 		zap.S().Warnf("Error inserting work order: %v (workOrderId: %v) [%s]", err, msg.ExternalWorkOrderId, cmdTag)
@@ -61,11 +80,12 @@ func (c *Connection) UpdateWorkOrderSetStart(msg *sharedStructs.WorkOrderStartMe
 	var cmdTag pgconn.CommandTag
 	cmdTag, err = tx.Exec(ctx, `
 		UPDATE work_order
-		SET status = 1, start_time = to_timestamp($2 / 1000)
-		WHERE external_work_order_id = $1
-		  AND status = 0 
-		  AND start_time IS NULL
-		  AND asset_id = $3
+		SET    status = 1,
+			   start_time = To_timestamp($2 / 1000)
+		WHERE  external_work_order_id = $1
+			   AND status = 0
+			   AND start_time IS NULL
+			   AND asset_id = $3 
 	`, msg.ExternalWorkOrderId, msg.StartTimeUnixMs, int(assetId))
 	if err != nil {
 		zap.S().Warnf("Error updating work order: %v (workOrderId: %v) [%s]", err, msg.ExternalWorkOrderId, cmdTag)
@@ -102,11 +122,12 @@ func (c *Connection) UpdateWorkOrderSetStop(msg *sharedStructs.WorkOrderStopMess
 	var cmdTag pgconn.CommandTag
 	cmdTag, err = tx.Exec(ctx, `
 		UPDATE work_order
-		SET status = 2, end_time = to_timestamp($2 / 1000)
-		WHERE external_work_order_id = $1
-		  AND status = 1
-		  AND end_time IS NULL
-		  AND asset_id = $3
+		SET    status = 2,
+			   end_time = To_timestamp($2 / 1000)
+		WHERE  external_work_order_id = $1
+			   AND status = 1
+			   AND end_time IS NULL
+			   AND asset_id = $3 
 	`, msg.ExternalWorkOrderId, msg.EndTimeUnixMs, int(assetId))
 	if err != nil {
 		zap.S().Warnf("Error updating work order: %v (workOrderId: %v) [%s]", err, msg.ExternalWorkOrderId, cmdTag)

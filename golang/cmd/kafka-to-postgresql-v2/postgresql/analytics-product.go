@@ -28,17 +28,27 @@ func (c *Connection) InsertProductAdd(msg *sharedStructs.ProductAddMessage, topi
 	// Insert producth
 	var cmdTag pgconn.CommandTag
 	cmdTag, err = tx.Exec(ctx, `
-			INSERT INTO product(external_product_type_id, product_batch_id, asset_id, start_time, end_time, quantity, bad_quantity)
-				VALUES (
-					$1, 
-					$2, 
-					$3, 
-					CASE 
-						WHEN $4 IS NOT NULL THEN to_timestamp($4/1000) 
-						END, 
-					to_timestamp($5/1000), 
-					$6, 
-					$7
+			INSERT INTO product
+            (
+                        external_product_type_id,
+                        product_batch_id,
+                        asset_id,
+                        start_time,
+                        end_time,
+                        quantity,
+                        bad_quantity
+            )
+            VALUES
+            (
+                        $1,
+                        $2,
+                        $3,
+                        CASE
+                                    WHEN $4::int IS NOT NULL THEN To_timestamp($4::int/1000)
+                        END::timestamptz,
+                        To_timestamp($5/1000),
+                        $6,
+                        $7::int
 				)
 		`, int(productTypeId), helper.StringPtrToNullString(msg.ProductBatchId), int(assetId), helper.Uint64PtrToNullInt64(msg.StartTimeUnixMs), msg.EndTimeUnixMs, int(msg.Quantity), helper.Uint64PtrToNullInt64(msg.BadQuantity))
 	if err != nil {
@@ -74,11 +84,11 @@ func (c *Connection) UpdateBadQuantityForProduct(msg *sharedStructs.ProductSetBa
 	// Update bad quantity with check integrated in WHERE clause
 	cmdTag, err := tx.Exec(ctx, `
         UPDATE product
-        SET bad_quantity = bad_quantity + $1
-        WHERE external_product_type_id = $2
-          AND asset_id = $3
-          AND end_time = to_timestamp($4/1000)
-          AND (quantity - bad_quantity) >= $1
+		SET    bad_quantity = bad_quantity + $1
+		WHERE  external_product_type_id = $2
+			   AND asset_id = $3
+			   AND end_time = To_timestamp($4 / 1000)
+			   AND ( quantity - bad_quantity ) >= $1 
     `, int(msg.BadQuantity), int(productTypeId), int(assetId), msg.EndTimeUnixMs)
 
 	if err != nil {
