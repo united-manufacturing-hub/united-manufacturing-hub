@@ -325,7 +325,7 @@ func TestHandleParsing(t *testing.T) {
 	// Expect Exec from InsertWorkOrderCreate
 	mock.ExpectBeginTx(pgx.TxOptions{})
 	mock.ExpectExec(`
-		INSERT INTO work_order\(externalWorkOrderId, asset_id, product_type_id, quantity, status, start_time, end_time\) VALUES \(\$1, \$2, \$3, \$4, \$5, to_timestamp\(\$6\/1000\), to_timestamp\(\$7\/1000\)\)
+		INSERT INTO work_order\(external_work_order_id, asset_id, product_type_id, quantity, status, start_time, end_time\) VALUES \(\$1, \$2, \$3, \$4, \$5, to_timestamp\(\$6\/1000\), to_timestamp\(\$7\/1000\)\)
 	`).WithArgs("#1244", 1, 1, uint64(100), int(0), uint64(0), uint64(0)).
 		WillReturnResult(pgxmock.NewResult("INSERT", 1))
 	mock.ExpectCommit()

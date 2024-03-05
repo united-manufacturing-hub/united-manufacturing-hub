@@ -48,7 +48,7 @@ func TestWorkOrder(t *testing.T) {
 		// Expect Exec from InsertWorkOrderCreate
 		mock.ExpectBeginTx(pgx.TxOptions{})
 		mock.ExpectExec(`
-		INSERT INTO work_order\(externalWorkOrderId, asset_id, product_type_id, quantity, status, start_time, end_time\) VALUES \(\$1, \$2, \$3, \$4, \$5, to_timestamp\(\$6\/1000\), to_timestamp\(\$7\/1000\)\)
+		INSERT INTO work_order\(external_work_order_id, asset_id, product_type_id, quantity, status, start_time, end_time\) VALUES \(\$1, \$2, \$3, \$4, \$5, to_timestamp\(\$6\/1000\), to_timestamp\(\$7\/1000\)\)
 	`).WithArgs("#1274", 1, 1, uint64(0), int(0), uint64(0), uint64(0)).
 			WillReturnResult(pgxmock.NewResult("INSERT", 1))
 		mock.ExpectCommit()
@@ -72,7 +72,7 @@ func TestWorkOrder(t *testing.T) {
 		mock.ExpectExec(`
 		UPDATE work_order
 		SET status = 1, start_time = to_timestamp\(\$2 \/ 1000\)
-		WHERE externalWorkOrderId = \$1 AND status = 0 AND start_time IS NULL AND asset_id = \$3
+		WHERE external_work_order_id = \$1 AND status = 0 AND start_time IS NULL AND asset_id = \$3
 	`).WithArgs("#1274", uint64(0), 1).
 			WillReturnResult(pgxmock.NewResult("UPDATE", 1))
 		mock.ExpectCommit()
@@ -96,7 +96,7 @@ func TestWorkOrder(t *testing.T) {
 		mock.ExpectExec(`
 		UPDATE work_order
 		SET status = 2, end_time = to_timestamp\(\$2 \/ 1000\)
-		WHERE externalWorkOrderId = \$1 AND status = 1 AND end_time IS NULL AND asset_id = \$3
+		WHERE external_work_order_id = \$1 AND status = 1 AND end_time IS NULL AND asset_id = \$3
 		`).WithArgs("#1274", uint64(0), 1).
 			WillReturnResult(pgxmock.NewResult("UPDATE", 1))
 		mock.ExpectCommit()

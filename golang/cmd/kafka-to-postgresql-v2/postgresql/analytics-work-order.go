@@ -25,7 +25,7 @@ func (c *Connection) InsertWorkOrderCreate(msg *sharedStructs.WorkOrderCreateMes
 	// Don't forget to convert unix ms to timestamptz
 	var cmdTag pgconn.CommandTag
 	cmdTag, err = tx.Exec(ctx, `
-		INSERT INTO work_order(externalWorkOrderId, asset_id, product_type_id, quantity, status, start_time, end_time)
+		INSERT INTO work_order(external_work_order_id, asset_id, product_type_id, quantity, status, start_time, end_time)
 		VALUES ($1, $2, $3, $4, $5, to_timestamp($6/1000), to_timestamp($7/1000))
 	`, msg.ExternalWorkOrderId, int(assetId), int(productTypeId), msg.Quantity, int(msg.Status), msg.StartTimeUnixMs, msg.EndTimeUnixMs)
 	if err != nil {
@@ -41,7 +41,7 @@ func (c *Connection) InsertWorkOrderCreate(msg *sharedStructs.WorkOrderCreateMes
 }
 
 func (c *Connection) UpdateWorkOrderSetStart(msg *sharedStructs.WorkOrderStartMessage, topic *sharedStructs.TopicDetails) error {
-	// Update work-order by externalWorkOrderId
+	// Update work-order by external_work_order_id
 	assetId, err := c.GetOrInsertAsset(topic)
 	if err != nil {
 		return err
@@ -59,7 +59,7 @@ func (c *Connection) UpdateWorkOrderSetStart(msg *sharedStructs.WorkOrderStartMe
 	cmdTag, err = tx.Exec(ctx, `
 		UPDATE work_order
 		SET status = 1, start_time = to_timestamp($2 / 1000)
-		WHERE externalWorkOrderId = $1
+		WHERE external_work_order_id = $1
 		  AND status = 0 
 		  AND start_time IS NULL
 		  AND asset_id = $3
@@ -83,7 +83,7 @@ func (c *Connection) UpdateWorkOrderSetStart(msg *sharedStructs.WorkOrderStartMe
 }
 
 func (c *Connection) UpdateWorkOrderSetStop(msg *sharedStructs.WorkOrderStopMessage, topic *sharedStructs.TopicDetails) error {
-	// Update work-order by externalWorkOrderId
+	// Update work-order by external_work_order_id
 	assetId, err := c.GetOrInsertAsset(topic)
 	if err != nil {
 		return err
@@ -100,7 +100,7 @@ func (c *Connection) UpdateWorkOrderSetStop(msg *sharedStructs.WorkOrderStopMess
 	cmdTag, err = tx.Exec(ctx, `
 		UPDATE work_order
 		SET status = 2, end_time = to_timestamp($2 / 1000)
-		WHERE externalWorkOrderId = $1
+		WHERE external_work_order_id = $1
 		  AND status = 1
 		  AND end_time IS NULL
 		  AND asset_id = $3
