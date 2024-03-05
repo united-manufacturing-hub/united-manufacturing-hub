@@ -81,7 +81,6 @@ func handleParsing(msgChan <-chan *shared.KafkaMessage, i int) {
 				continue
 			}
 		case "analytics":
-			zap.S().Warnf("Analytics not yet supported, ignoring: %+v", msg)
 			switch topic.Tag {
 			case "work-order.create":
 				parsed, err := parseWorkOrderCreate(msg.Value)
@@ -213,6 +212,8 @@ func handleParsing(msgChan <-chan *shared.KafkaMessage, i int) {
 					k.MarkMessage(msg)
 					continue
 				}
+			default:
+				zap.S().Warnf("Unknown tag %s for analytics [%s] [%v]", topic.Tag, topic, msg)
 			}
 		default:
 			zap.S().Errorf("Unknown usecase %s", topic.Schema)
