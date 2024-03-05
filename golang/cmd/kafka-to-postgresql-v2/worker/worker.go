@@ -91,7 +91,7 @@ func handleParsing(msgChan <-chan *shared.KafkaMessage, i int, k kafka.IConnecti
 				}
 				err = p.InsertWorkOrderCreate(parsed, topic)
 				if err != nil {
-					zap.S().Warnf("Failed to insert work-order.create %+v: %s [%+v]", msg, err, parsed)
+					zap.S().Warnf("Failed to insert work-order.create %+v: %s", parsed, err)
 					k.MarkMessage(msg)
 					continue
 				}
@@ -104,7 +104,7 @@ func handleParsing(msgChan <-chan *shared.KafkaMessage, i int, k kafka.IConnecti
 				}
 				err = p.UpdateWorkOrderSetStart(parsed, topic)
 				if err != nil {
-					zap.S().Warnf("Failed to insert work-order.start %+v: %s [%+v]", msg, err, parsed)
+					zap.S().Warnf("Failed to insert work-order.start %+v: %s", parsed, err)
 					k.MarkMessage(msg)
 					continue
 				}
@@ -117,7 +117,7 @@ func handleParsing(msgChan <-chan *shared.KafkaMessage, i int, k kafka.IConnecti
 				}
 				err = p.UpdateWorkOrderSetStop(parsed, topic)
 				if err != nil {
-					zap.S().Warnf("Failed to insert work-order.stop %+v: %s [%+v]", msg, err, parsed)
+					zap.S().Warnf("Failed to insert work-order.stop %+v: %s", parsed, err)
 					k.MarkMessage(msg)
 					continue
 				}
@@ -130,7 +130,7 @@ func handleParsing(msgChan <-chan *shared.KafkaMessage, i int, k kafka.IConnecti
 				}
 				err = p.InsertProductAdd(parsed, topic)
 				if err != nil {
-					zap.S().Warnf("Failed to insert product.add %+v: %s [%+v]", msg, err, parsed)
+					zap.S().Warnf("Failed to insert product.add %+v: %s", parsed, err)
 					k.MarkMessage(msg)
 					continue
 				}
@@ -143,7 +143,7 @@ func handleParsing(msgChan <-chan *shared.KafkaMessage, i int, k kafka.IConnecti
 				}
 				err = p.UpdateBadQuantityForProduct(parsed, topic)
 				if err != nil {
-					zap.S().Warnf("Failed to insert product.setBadQuantity %+v: %s [%+v]", msg, err, parsed)
+					zap.S().Warnf("Failed to insert product.setBadQuantity %+v: %s", parsed, err)
 					k.MarkMessage(msg)
 					continue
 				}
@@ -156,7 +156,7 @@ func handleParsing(msgChan <-chan *shared.KafkaMessage, i int, k kafka.IConnecti
 				}
 				err = p.InsertProductTypeCreate(parsed, topic)
 				if err != nil {
-					zap.S().Warnf("Failed to insert product-type.create %+v: %s [%+v]", msg, err, parsed)
+					zap.S().Warnf("Failed to insert product-type.create %+v: %s", parsed, err)
 					k.MarkMessage(msg)
 					continue
 				}
@@ -169,7 +169,7 @@ func handleParsing(msgChan <-chan *shared.KafkaMessage, i int, k kafka.IConnecti
 				}
 				err = p.InsertShiftAdd(parsed, topic)
 				if err != nil {
-					zap.S().Warnf("Failed to insert shift.add %+v: %s [%+v]", msg, err, parsed)
+					zap.S().Warnf("Failed to insert shift.add %+v: %s", parsed, err)
 					k.MarkMessage(msg)
 					continue
 				}
@@ -182,7 +182,7 @@ func handleParsing(msgChan <-chan *shared.KafkaMessage, i int, k kafka.IConnecti
 				}
 				err = p.DeleteShiftByStartTime(parsed, topic)
 				if err != nil {
-					zap.S().Warnf("Failed to insert shift.delete %+v: %s [%+v]", msg, err, parsed)
+					zap.S().Warnf("Failed to insert shift.delete %+v: %s", parsed, err)
 					k.MarkMessage(msg)
 					continue
 				}
@@ -195,7 +195,7 @@ func handleParsing(msgChan <-chan *shared.KafkaMessage, i int, k kafka.IConnecti
 				}
 				err = p.InsertStateAdd(parsed, topic)
 				if err != nil {
-					zap.S().Warnf("Failed to insert state.add %+v: %s [%+v]", msg, err, parsed)
+					zap.S().Warnf("Failed to insert state.add %+v: %s", parsed, err)
 					k.MarkMessage(msg)
 					continue
 				}
@@ -208,7 +208,7 @@ func handleParsing(msgChan <-chan *shared.KafkaMessage, i int, k kafka.IConnecti
 				}
 				err = p.OverwriteStateByStartEndTime(parsed, topic)
 				if err != nil {
-					zap.S().Warnf("Failed to insert state.overwrite %+v: %s [%+v]", msg, err, parsed)
+					zap.S().Warnf("Failed to insert state.overwrite %+v: %s", parsed, err)
 					k.MarkMessage(msg)
 					continue
 				}
