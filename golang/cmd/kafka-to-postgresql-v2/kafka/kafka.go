@@ -10,36 +10,40 @@ import (
 	"math/rand"
 	"strconv"
 	"strings"
-	"sync"
 )
+
+type IConnection interface {
+	GetMessages() <-chan *shared.KafkaMessage
+	MarkMessage(message *shared.KafkaMessage)
+}
 
 type Connection struct {
 	consumer *redpanda.Consumer
 }
 
 var conn *Connection
-var once sync.Once
 
-func GetOrInit() *Connection {
-	once.Do(func() {
-		zap.S().Debugf("kafka.GetOrInit().once")
-		KafkaBrokers, err := env.GetAsString("KAFKA_BROKERS", true, "http://united-manufacturing-hub-kafka.united-manufacturing-hub.svc.cluster.local:9092")
-		if err != nil {
-			zap.S().Fatalf("Failed to get KAFKA_BROKERS from env")
-		}
-
-		brokers := strings.Split(KafkaBrokers, ",")
-		instanceID := rand.Int63() //nolint:gosec
-
-		consumer, err := redpanda.NewConsumer(brokers, []string{"^umh\\.v1.+$"}, "kafka-to-postgresql-v2", strconv.FormatInt(instanceID, 10))
-		if err != nil {
-			zap.S().Fatalf("Failed to create kafka client: %s", err)
-		}
-		conn = &Connection{
-			consumer: consumer,
-		}
-	})
+func GetKafkaClient() IConnection {
 	return conn
+}
+
+func InitKafkaClient() {
+	zap.S().Debugf("kafka.GetKafkaClient().once")
+	KafkaBrokers, err := env.GetAsString("KAFKA_BROKERS", true, "http://united-manufacturing-hub-kafka.united-manufacturing-hub.svc.cluster.local:9092")
+	if err != nil {
+		zap.S().Fatalf("Failed to get KAFKA_BROKERS from env")
+	}
+
+	brokers := strings.Split(KafkaBrokers, ",")
+	instanceID := rand.Int63() //nolint:gosec
+
+	consumer, err := redpanda.NewConsumer(brokers, []string{"^umh\\.v1.+$"}, "kafka-to-postgresql-v2", strconv.FormatInt(instanceID, 10))
+	if err != nil {
+		zap.S().Fatalf("Failed to create kafka client: %s", err)
+	}
+	conn = &Connection{
+		consumer: consumer,
+	}
 }
 
 func (c *Connection) GetMessages() <-chan *shared.KafkaMessage {
@@ -59,7 +63,13 @@ func GetLivenessCheck() healthcheck.Check {
 
 func GetReadinessCheck() healthcheck.Check {
 	return func() error {
-		if GetOrInit().consumer.IsReady() {
+		client := GetKafkaClient()
+		// Attempt to cast to Connection
+		c, ok := client.(*Connection)
+		if !ok {
+			return errors.New("kafka client is not running or mocked")
+		}
+		if c.consumer.IsReady() {
 			return nil
 		} else {
 			return errors.New("kafka consumer is not running")
