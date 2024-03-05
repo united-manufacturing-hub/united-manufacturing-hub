@@ -107,7 +107,7 @@ func (c *Connection) GetOrInsertProductType(assetId uint64, externalProductId st
 		return 0, errors.New("not found")
 	}
 
-	selectQuery := `SELECT productTypeId FROM product_types WHERE external_product_type_id = $1 AND asset_id = $2`
+	selectQuery := `SELECT productTypeId FROM product_type WHERE external_product_type_id = $1 AND asset_id = $2`
 	selectRowContext, selectRowContextCncl := get1MinuteContext()
 	defer selectRowContextCncl()
 

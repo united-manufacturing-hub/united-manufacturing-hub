@@ -319,7 +319,7 @@ func TestHandleParsing(t *testing.T) {
 		WillReturnRows(mock.NewRows([]string{"id"}).AddRow(1))
 
 	// Expect Query from GetOrInsertProduct (assume product type exists)
-	mock.ExpectQuery(`SELECT productTypeId FROM product_types WHERE external_product_type_id = \$1 AND asset_id = \$2`).
+	mock.ExpectQuery(`SELECT productTypeId FROM product_type WHERE external_product_type_id = \$1 AND asset_id = \$2`).
 		WithArgs("1234", 1).
 		WillReturnRows(mock.NewRows([]string{"productTypeId"}).AddRow(1))
 	// Expect Exec from InsertWorkOrderCreate
