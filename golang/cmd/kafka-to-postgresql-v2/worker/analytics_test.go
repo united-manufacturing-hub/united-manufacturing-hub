@@ -198,3 +198,40 @@ func TestProductTypeCreate(t *testing.T) {
 		assert.Error(t, err)
 	})
 }
+
+func TestShiftAdd(t *testing.T) {
+	t.Run("from-string-only-required", func(t *testing.T) {
+		shiftAddJson := `{"start_time_unix_ms": 100, "end_time_unix_ms": 200}`
+		shiftAdd, err := parseShiftAdd([]byte(shiftAddJson))
+		assert.NoError(t, err)
+		assert.Equal(t, uint64(100), shiftAdd.StartTimeUnixMs)
+		assert.Equal(t, uint64(200), shiftAdd.EndTimeUnixMs)
+	})
+
+	t.Run("disallow-no-start-time", func(t *testing.T) {
+		shiftAddJson := `{"external_shift_id": "#1274", "end_time_unix_ms": 200}`
+		_, err := parseShiftAdd([]byte(shiftAddJson))
+		assert.Error(t, err)
+	})
+
+	t.Run("disallow-no-end-time", func(t *testing.T) {
+		shiftAddJson := `{"external_shift_id": "#1274", "start_time_unix_ms": 100}`
+		_, err := parseShiftAdd([]byte(shiftAddJson))
+		assert.Error(t, err)
+	})
+}
+
+func TestShiftDelete(t *testing.T) {
+	t.Run("from-string-only-required", func(t *testing.T) {
+		shiftDeleteJson := `{"start_time_unix_ms": 100}`
+		shiftDelete, err := parseShiftDelete([]byte(shiftDeleteJson))
+		assert.NoError(t, err)
+		assert.Equal(t, uint64(100), shiftDelete.StartTimeUnixMs)
+	})
+
+	t.Run("disallow-no-start-time", func(t *testing.T) {
+		shiftDeleteJson := `{"external_shift_id": "#1274"}`
+		_, err := parseShiftDelete([]byte(shiftDeleteJson))
+		assert.Error(t, err)
+	})
+}
