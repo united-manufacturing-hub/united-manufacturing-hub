@@ -64,11 +64,11 @@ func TestWorkOrder(t *testing.T) {
 					 \$4,
 					 \$5,
 					 CASE
-					   WHEN \$6 \:\: INT IS NOT NULL THEN to_timestamp\(\$6 \:\: INT / 1000\)
+					   WHEN \$6 \:\: BIGINT IS NOT NULL THEN to_timestamp\(\$6 \:\: BIGINT / 1000\)
 					   ELSE NULL
 					 END \:\: timestamptz,
 					 CASE
-					   WHEN \$7 \:\: INT IS NOT NULL THEN to_timestamp\(\$7 \:\: INT / 1000\)
+					   WHEN \$7 \:\: BIGINT IS NOT NULL THEN to_timestamp\(\$7 \:\: BIGINT / 1000\)
 					   ELSE NULL
 					 END \:\: timestamptz\) 
 	`).WithArgs("#1274", 1, 1, 0, 0, helper.Uint64PtrToNullInt64(helper.IntToUint64Ptr(0)), helper.Uint64PtrToNullInt64(helper.IntToUint64Ptr(0))).
