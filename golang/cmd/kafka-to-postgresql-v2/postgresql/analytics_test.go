@@ -123,7 +123,7 @@ func TestProduct(t *testing.T) {
 		}
 		topic := sharedStructs.TopicDetails{
 			Enterprise: "umh",
-			Tag:        "work-order.create",
+			Tag:        "product.add",
 		}
 
 		// Expect Query from GetOrInsertAsset
@@ -140,6 +140,44 @@ func TestProduct(t *testing.T) {
 		mock.ExpectCommit()
 
 		err := c.InsertProductAdd(&msg, &topic)
+		assert.NoError(t, err)
+	})
+}
+
+func TestProductType(t *testing.T) {
+	c := CreateMockConnection(t)
+	defer c.db.Close()
+
+	// Cast c.db to pgxmock to access the underlying mock
+	mock, ok := c.db.(pgxmock.PgxPoolIface)
+	assert.True(t, ok)
+
+	t.Run("create", func(t *testing.T) {
+		msg := sharedStructs.ProductTypeCreateMessage{
+			ExternalProductTypeId: "#1275",
+			CycleTimeMs:           512,
+		}
+		topic := sharedStructs.TopicDetails{
+			Enterprise: "umh",
+			Tag:        "product-type.create",
+		}
+
+		// Expect Query from GetOrInsertAsset
+		mock.ExpectQuery(`SELECT id FROM asset WHERE enterprise = \$1 AND site = \$2 AND area = \$3 AND line = \$4 AND workcell = \$5 AND origin_id = \$6`).
+			WithArgs("umh", "", "", "", "", "").
+			WillReturnRows(mock.NewRows([]string{"id"}).AddRow(1))
+
+		// Expect Exec from InsertProductTypeCreate
+		mock.ExpectBeginTx(pgx.TxOptions{})
+		mock.ExpectExec(`INSERT INTO product_types \(externalProductTypeId, cycleTime, assetId\)
+		VALUES \(\$1, \$2, \$3\)
+		ON CONFLICT \(externalProductTypeId, assetId\) DO NOTHING`).
+			WithArgs("#1275", 512, 1).
+			WillReturnResult(pgxmock.NewResult("INSERT", 1))
+
+		mock.ExpectCommit()
+
+		err := c.InsertProductTypeCreate(&msg, &topic)
 		assert.NoError(t, err)
 	})
 }

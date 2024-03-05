@@ -176,3 +176,25 @@ func TestParseProductSetBadQuantity(t *testing.T) {
 		assert.Error(t, err)
 	})
 }
+
+func TestProductTypeCreate(t *testing.T) {
+	t.Run("from-string-only-required", func(t *testing.T) {
+		productTypeCreateJson := `{"external_product_type_id": "#1274", "cycle_time_ms": 100}`
+		productTypeCreate, err := parseProductTypeCreate([]byte(productTypeCreateJson))
+		assert.NoError(t, err)
+		assert.Equal(t, "#1274", productTypeCreate.ExternalProductTypeId)
+		assert.Equal(t, uint64(100), productTypeCreate.CycleTimeMs)
+	})
+
+	t.Run("disallow-no-external-product-type-id", func(t *testing.T) {
+		productTypeCreateJson := `{"cycle_time_ms": 100}`
+		_, err := parseProductTypeCreate([]byte(productTypeCreateJson))
+		assert.Error(t, err)
+	})
+
+	t.Run("disallow-no-cycle-time", func(t *testing.T) {
+		productTypeCreateJson := `{"external_product_type_id": "#1274"}`
+		_, err := parseProductTypeCreate([]byte(productTypeCreateJson))
+		assert.Error(t, err)
+	})
+}
