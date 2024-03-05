@@ -9,27 +9,12 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/united-manufacturing-hub/umh-utils/env"
-	sharedStructs "github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/kafka-to-postgresql-v2/shared"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/kafka-to-postgresql-v2/shared"
 	"go.uber.org/zap"
 	"sync"
 	"sync/atomic"
 	"time"
 )
-
-type DBValue struct {
-	Timestamp time.Time
-	Origin    string
-	Value     sharedStructs.HistorianValue
-	AssetId   int
-}
-
-func (r *DBValue) GetValue() interface{} {
-	if r.Value.IsNumeric {
-		return *r.Value.NumericValue
-	} else {
-		return *r.Value.StringValue
-	}
-}
 
 type Metrics struct {
 	LRUHitPercentage                    float64
@@ -43,11 +28,11 @@ type Metrics struct {
 }
 
 type Connection struct {
-	db                     sharedStructs.PgxIface
-	assetIdCache           *lru.ARCCache
-	productTypeIdCache     *lru.ARCCache
-	numericalValuesChannel chan DBValue
-	stringValuesChannel    chan DBValue
+	Db                     shared.Ipgx
+	AssetIdCache           *lru.ARCCache
+	ProductTypeIdCache     *lru.ARCCache
+	NumericalValuesChannel chan shared.DBHistorianValue
+	StringValuesChannel    chan shared.DBHistorianValue
 	numericalReceived      atomic.Uint64
 	stringsReceived        atomic.Uint64
 	databaseInserted       atomic.Uint64
@@ -120,11 +105,11 @@ func GetOrInit() *Connection {
 			zap.S().Fatalf("Failed to create ARC (productTypeId): %s", err)
 		}
 		conn = &Connection{
-			db:                     db,
-			assetIdCache:           assetIdCache,
-			productTypeIdCache:     productTypeIdCache,
-			numericalValuesChannel: make(chan DBValue, ChannelSize),
-			stringValuesChannel:    make(chan DBValue, ChannelSize),
+			Db:                     db,
+			AssetIdCache:           assetIdCache,
+			ProductTypeIdCache:     productTypeIdCache,
+			NumericalValuesChannel: make(chan shared.DBHistorianValue, ChannelSize),
+			StringValuesChannel:    make(chan shared.DBHistorianValue, ChannelSize),
 		}
 		if !conn.IsAvailable() {
 			zap.S().Fatalf("Database is not available !")
@@ -149,11 +134,11 @@ func GetOrInit() *Connection {
 		}
 
 		go conn.tagWorker("tag", &Source{
-			datachan:  conn.numericalValuesChannel,
+			datachan:  conn.NumericalValuesChannel,
 			isNumeric: true,
 		})
 		go conn.tagWorker("tag_string", &Source{
-			datachan:  conn.stringValuesChannel,
+			datachan:  conn.StringValuesChannel,
 			isNumeric: false,
 		})
 
@@ -163,13 +148,13 @@ func GetOrInit() *Connection {
 }
 
 func (c *Connection) IsAvailable() bool {
-	if c.db == nil {
+	if c.Db == nil {
 		return false
 	}
 	ctx, cncl := get5SecondContext()
 	defer cncl()
 	// Check if c.db is an real connection, by attempting to cast it back to a pgxpool.Pool
-	pool, ok := c.db.(*pgxpool.Pool)
+	pool, ok := c.Db.(*pgxpool.Pool)
 	if !ok {
 		// For mocks
 		return true
@@ -207,16 +192,16 @@ func (c *Connection) postStats() {
 		stringRate := float64(currentStringsReceived) / elapsedTime
 		databaseInsertionRate := float64(currentDatabaseInserted) / elapsedTime
 
-		numericalChannelFill := len(c.numericalValuesChannel)
+		numericalChannelFill := len(c.NumericalValuesChannel)
 		numericalChannelFillPercentage := float64(0)
 		if numericalChannelFill > 0 {
-			numericalChannelFillPercentage = float64(numericalChannelFill) / float64(cap(c.numericalValuesChannel)) * 100
+			numericalChannelFillPercentage = float64(numericalChannelFill) / float64(cap(c.NumericalValuesChannel)) * 100
 		}
 
-		stringsChannelFill := len(c.stringValuesChannel)
+		stringsChannelFill := len(c.StringValuesChannel)
 		stringsChannelFillPercentage := float64(0)
 		if stringsChannelFill > 0 {
-			stringsChannelFillPercentage = float64(stringsChannelFill) / float64(cap(c.stringValuesChannel)) * 100
+			stringsChannelFillPercentage = float64(stringsChannelFill) / float64(cap(c.StringValuesChannel)) * 100
 		}
 
 		totalCommits := c.commits.Load()
@@ -274,7 +259,7 @@ func get1MinuteContext() (context.Context, context.CancelFunc) {
 func (c *Connection) calculateSleepTime(copiedIn int64) time.Duration {
 	const maxSleep = 5 * time.Second
 	const minEntries = 1
-	maxEntries := int64(cap(c.numericalValuesChannel))
+	maxEntries := int64(cap(c.NumericalValuesChannel))
 
 	if copiedIn >= maxEntries {
 		return 0 // or a very small duration

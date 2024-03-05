@@ -24,7 +24,7 @@ func main() {
 	internal.Initfgtrace()
 	InitPrometheus()
 	_ = postgresql.GetOrInit()
-	_ = kafka.GetOrInit()
+	kafka.InitKafkaClient()
 	InitHealthCheck()
 	_ = worker.GetOrInit()
 
@@ -96,7 +96,7 @@ func registerCustomMetrics() {
 	// Update metrics in a separate go routine
 	go func() {
 		ticker10Seconds := time.NewTicker(10 * time.Second)
-		msgChan := kafka.GetOrInit().GetMessages()
+		msgChan := kafka.GetKafkaClient().GetMessages()
 		for {
 			metrics := postgresql.GetOrInit().GetMetrics()
 			lruHitGauge.Set(metrics.LRUHitPercentage)

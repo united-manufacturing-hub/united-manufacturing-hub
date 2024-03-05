@@ -3,6 +3,8 @@ package worker
 import (
 	"github.com/stretchr/testify/assert"
 	"github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper-2/pkg/kafka/shared"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/kafka-to-postgresql-v2/kafka"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/kafka-to-postgresql-v2/postgresql"
 	sharedStructs "github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/kafka-to-postgresql-v2/shared"
 	"math/rand"
 	"strings"
@@ -277,4 +279,12 @@ func TestParseHistorianPayload(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestHandleParsing(t *testing.T) {
+	kafkaClient := kafka.GetMockKafkaClient(t)
+	msgChannel := kafkaClient.GetMessages()
+	postgresqlClient := postgresql.CreateMockConnection(t)
+
+	go handleParsing(msgChannel, 0, kafkaClient, postgresqlClient)
 }

@@ -12,7 +12,7 @@ import (
 )
 
 type Worker struct {
-	kafka    *kafka.Connection
+	kafka    kafka.IConnection
 	postgres *postgresql.Connection
 }
 
@@ -22,7 +22,7 @@ var once sync.Once
 func GetOrInit() *Worker {
 	once.Do(func() {
 		worker = &Worker{
-			kafka:    kafka.GetOrInit(),
+			kafka:    kafka.GetKafkaClient(),
 			postgres: postgresql.GetOrInit(),
 		}
 		worker.startWorkLoop()
@@ -38,15 +38,15 @@ func (w *Worker) startWorkLoop() {
 	}
 	messageChannel := w.kafka.GetMessages()
 	zap.S().Debugf("Started using %d workers (logical cores * WORKER_MULTIPLIER)", workerMultiplier)
+	k := kafka.GetKafkaClient()
+	p := postgresql.GetOrInit()
 	for i := 0; i < /*runtime.NumCPU()*workerMultiplier*/ 1; i++ {
-		go handleParsing(messageChannel, i)
+		go handleParsing(messageChannel, i, k, p)
 	}
 	zap.S().Debugf("Started all workers")
 }
 
-func handleParsing(msgChan <-chan *shared.KafkaMessage, i int) {
-	k := kafka.GetOrInit()
-	p := postgresql.GetOrInit()
+func handleParsing(msgChan <-chan *shared.KafkaMessage, i int, k kafka.IConnection, p *postgresql.Connection) {
 	messagesHandled := 0
 	now := time.Now()
 	for {
