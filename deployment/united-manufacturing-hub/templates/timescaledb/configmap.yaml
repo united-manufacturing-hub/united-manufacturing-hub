@@ -7816,5 +7816,5 @@ data:
     GRANT SELECT ON {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.state TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
 
 
-    __SQL__
+  __SQL__
 {{end}}
