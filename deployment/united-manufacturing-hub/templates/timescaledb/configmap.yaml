@@ -60,10 +60,10 @@ data:
         UNIQUE(timestamp, asset_id)
     );
     -- creating hypertable
-    SELECT create_hypertable('stateTable', 'timestamp');
+    SELECT create_hypertable('stateTable', 'timestamp', if_not_exists => TRUE);;
 
     -- creating an index to increase performance
-    CREATE INDEX ON stateTable (asset_id, timestamp DESC);
+    CREATE INDEX IF NOT EXISTS ON stateTable (asset_id, timestamp DESC);
 
     -------------------- TimescaleDB table for counts --------------------
     CREATE TABLE IF NOT EXISTS countTable
@@ -74,10 +74,10 @@ data:
         UNIQUE(timestamp, asset_id)
     );
     -- creating hypertable
-    SELECT create_hypertable('countTable', 'timestamp');
+    SELECT create_hypertable('countTable', 'timestamp', if_not_exists => TRUE);;
 
     -- creating an index to increase performance
-    CREATE INDEX ON countTable (asset_id, timestamp DESC);
+    CREATE INDEX IF NOT EXISTS ON countTable (asset_id, timestamp DESC);
 
     -------------------- TimescaleDB table for process values --------------------
     CREATE TABLE IF NOT EXISTS processValueTable
@@ -89,16 +89,16 @@ data:
         UNIQUE(timestamp, asset_id, valueName)
     );
     -- creating hypertable
-    SELECT create_hypertable('processValueTable', 'timestamp');
+    SELECT create_hypertable('processValueTable', 'timestamp', if_not_exists => TRUE);;
 
     -- creating an index to increase performance
-    CREATE INDEX ON processValueTable (asset_id, timestamp DESC);
+    CREATE INDEX IF NOT EXISTS ON processValueTable (asset_id, timestamp DESC);
 
     -- creating an index to increase performance
-    CREATE INDEX ON processValueTable (valuename);
+    CREATE INDEX IF NOT EXISTS ON processValueTable (valuename);
 
     -- create an index to increase performance
-    CREATE INDEX ON processvaluetable(valuename, asset_id) WITH (timescaledb.transaction_per_chunk);
+    CREATE INDEX IF NOT EXISTS ON processvaluetable(valuename, asset_id) WITH (timescaledb.transaction_per_chunk);
 
     -------------------- TimescaleDB table for uniqueProduct --------------------
     CREATE TABLE IF NOT EXISTS uniqueProductTable
@@ -116,7 +116,7 @@ data:
     );
 
     -- creating an index to increase performance
-    CREATE INDEX ON uniqueProductTable (asset_id, uid, station_id);
+    CREATE INDEX IF NOT EXISTS ON uniqueProductTable (asset_id, uid, station_id);
 
 
     -------------------- TimescaleDB table for recommendations  --------------------
@@ -247,7 +247,7 @@ data:
     UNIQUE(product_uid, valueName)
     );
     -- creating hypertable
-    SELECT create_hypertable('productTagTable', 'product_uid', chunk_time_interval => 100000);
+    SELECT create_hypertable('productTagTable', 'product_uid', chunk_time_interval => 100000, if_not_exists => TRUE);;
 
     -------------------- TimescaleDB table for product tags strings --------------------
     CREATE TABLE IF NOT EXISTS productTagStringTable
@@ -259,7 +259,7 @@ data:
     UNIQUE(product_uid, valueName)
     );
     -- creating hypertable
-    SELECT create_hypertable('productTagStringTable', 'product_uid', chunk_time_interval => 100000);
+    SELECT create_hypertable('productTagStringTable', 'product_uid', chunk_time_interval => 100000, if_not_exists => TRUE);;
 
     -------------------- TimescaleDB table for product inheritance info --------------------
     CREATE TABLE IF NOT EXISTS productInheritanceTable
@@ -270,8 +270,8 @@ data:
     UNIQUE(parent_uid, child_uid)
     );
     -- creating hypertable
-    CREATE INDEX ON productInheritanceTable (parent_uid, timestamp DESC);
-    CREATE INDEX ON productInheritanceTable (child_uid, timestamp DESC);
+    CREATE INDEX IF NOT EXISTS ON productInheritanceTable (parent_uid, timestamp DESC);
+    CREATE INDEX IF NOT EXISTS ON productInheritanceTable (child_uid, timestamp DESC);
 
     -------------------- TimescaleDB table for process values string --------------------
     CREATE TABLE IF NOT EXISTS processValueStringTable
@@ -283,12 +283,12 @@ data:
     UNIQUE(timestamp, asset_id, valueName)
     );
     -- creating hypertable
-    SELECT create_hypertable('processValueStringTable', 'timestamp');
+    SELECT create_hypertable('processValueStringTable', 'timestamp', if_not_exists => TRUE);;
     -- creating an index to increase performance
-    CREATE INDEX ON processValueStringTable (asset_id, timestamp DESC);
+    CREATE INDEX IF NOT EXISTS ON processValueStringTable (asset_id, timestamp DESC);
 
     -- creating an index to increase performance
-    CREATE INDEX ON processValueStringTable (valueName);
+    CREATE INDEX IF NOT EXISTS ON processValueStringTable (valueName);
 
 
     -------------------- TimescaleDB table for components --------------------
@@ -7595,7 +7595,7 @@ data:
     GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO {{.Values.kafkatopostgresqlv2.database.user}};
 
     -------------------- ASSET TABLE --------------------
-    CREATE TABLE asset (
+    CREATE TABLE IF NOT EXISTS asset (
       id SERIAL PRIMARY KEY,
       enterprise TEXT NOT NULL,
       site TEXT DEFAULT '' NOT NULL,
@@ -7616,7 +7616,7 @@ data:
 
     -------------------- TAG TABLE --------------------
 
-    CREATE TABLE tag (
+    CREATE TABLE IF NOT EXISTS tag (
       timestamp TIMESTAMPTZ NOT NULL,
       name TEXT NOT NULL,
       origin TEXT NOT NULL,
@@ -7624,13 +7624,13 @@ data:
       value REAL,
       UNIQUE (name, asset_id, timestamp)
     );
-    SELECT create_hypertable('tag', 'timestamp');
-    CREATE INDEX ON tag (asset_id, timestamp DESC);
-    CREATE INDEX ON tag (name);
+    SELECT create_hypertable('tag', 'timestamp', if_not_exists => TRUE);;
+    CREATE INDEX IF NOT EXISTS ON tag (asset_id, timestamp DESC);
+    CREATE INDEX IF NOT EXISTS ON tag (name);
 
     -------------------- TAG STRING TABLE --------------------
 
-    CREATE TABLE tag_string (
+    CREATE TABLE IF NOT EXISTS tag_string (
       timestamp TIMESTAMPTZ NOT NULL,
       name TEXT NOT NULL,
       origin TEXT NOT NULL,
@@ -7638,9 +7638,9 @@ data:
       value TEXT,
       UNIQUE (name, asset_id, timestamp)
     );
-    SELECT create_hypertable('tag_string', 'timestamp');
-    CREATE INDEX ON tag_string (asset_id, timestamp DESC);
-    CREATE INDEX ON tag_string (name);
+    SELECT create_hypertable('tag_string', 'timestamp', if_not_exists => TRUE);;
+    CREATE INDEX IF NOT EXISTS ON tag_string (asset_id, timestamp DESC);
+    CREATE INDEX IF NOT EXISTS ON tag_string (name);
 
     
     CREATE OR REPLACE FUNCTION get_asset_id(
@@ -7697,59 +7697,61 @@ data:
 
     -------------------- ANALYTICS --------------------
 
+    -------------------- PRODUCT TYPES TABLE --------------------
+    CREATE TABLE IF NOT EXISTS product_type (
+      product_type_id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+      external_product_type_id TEXT NOT NULL,
+      cycle_time_ms INTEGER NOT NULL,
+      asset_id INTEGER REFERENCES asset(id),
+      CONSTRAINT external_product_asset_uniq UNIQUE (external_product_type_id, asset_id),
+      CHECK (cycle_time_ms > 0)
+    );
+
     -------------------- WORK ORDER TABLE --------------------
+    CREATE EXTENSION IF NOT EXISTS btree_gist;
 
     -- This table stores information about manufacturing orders. The ISA-95 model defines work orders in terms of production requests.
     -- Here, each work order is linked to a specific asset and product type
-    CREATE TABLE work_orders (
-      workOrderId INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-      externalWorkOrderId TEXT NOT NULL,
-      assetId INTEGER NOT NULL REFERENCES assets(id),
-      productTypeId INTEGER NOT NULL REFERENCES product_types(productTypeId),
+    CREATE TABLE IF NOT EXISTS work_order (
+      work_order_id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+      external_work_order_id TEXT NOT NULL,
+      asset_id INTEGER NOT NULL REFERENCES asset(id),
+      product_type_id INTEGER NOT NULL REFERENCES product_type(product_type_id),
       quantity INTEGER NOT NULL,
       status INTEGER NOT NULL DEFAULT 0, -- 0: planned, 1: in progress, 2: completed
-      startTime TIMESTAMPTZ,
-      endTime TIMESTAMPTZ,
-      CONSTRAINT asset_workorder_uniq UNIQUE (assetId, externalWorkOrderId),
+      start_time TIMESTAMPTZ,
+      end_time TIMESTAMPTZ,
+      CONSTRAINT asset_workorder_uniq UNIQUE (asset_id, external_work_order_id),
       CHECK (quantity > 0),
       CHECK (status BETWEEN 0 AND 2),
-      EXCLUDE USING gist (assetId WITH =, tstzrange(startTime, endTime) WITH &&) WHERE (startTime IS NOT NULL AND endTime IS NOT NULL)
+      EXCLUDE USING gist (asset_id WITH =, tstzrange(start_time, end_time) WITH &&) WHERE (start_time IS NOT NULL AND end_time IS NOT NULL)
     );
 
-    -------------------- PRODUCT TYPES TABLE --------------------
-    CREATE TABLE product_types (
-      productTypeId INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-      externalProductTypeId TEXT NOT NULL,
-      cycleTime INTEGER NOT NULL,
-      assetId INTEGER REFERENCES assets(id),
-      CONSTRAINT external_product_asset_uniq UNIQUE (externalProductTypeId, assetId),
-      CHECK (cycleTime > 0)
-    )
 
     -------------------- PRODUCTS TABLE --------------------
 
-    -- -- Tracks individual products produced. This table captures production output, quality (through badQuantity), and timing
-    CREATE TABLE products (
-      productId INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-      externalProductTypeId INTEGER REFERENCES product_types(productTypeId),
-      productBatchId TEXT,
-      assetId INTEGER REFERENCES assets(id),
-      startTime TIMESTAMPTZ,
-      endTime TIMESTAMPTZ NOT NULL,
+    -- -- Tracks individual products produced. This table captures production output, quality (through bad_quantity), and timing
+    CREATE TABLE IF NOT EXISTS product (
+      product_id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+      external_product_type_id INTEGER REFERENCES product_type(product_type_id),
+      product_batch_id TEXT,
+      asset_id INTEGER REFERENCES asset(id),
+      start_time TIMESTAMPTZ,
+      end_time TIMESTAMPTZ NOT NULL,
       quantity INTEGER NOT NULL,
-      badQuantity INTEGER DEFAULT 0,
+      bad_quantity INTEGER DEFAULT 0,
       CHECK (quantity > 0),
-      CHECK (badQuantity >= 0),
-    CHECK (badQuantity <= quantity),
-      CHECK (startTime <= endTime),
-      CONSTRAINT product_endtime_asset_uniq UNIQUE (endTime, assetId)
+      CHECK (bad_quantity >= 0),
+      CHECK (bad_quantity <= quantity),
+      CHECK (start_time <= end_time),
+      CONSTRAINT product_end_time_asset_uniq UNIQUE (end_time, asset_id)
     );
 
     -- creating hypertable
-    SELECT create_hypertable('products', 'endTime');
+    SELECT create_hypertable('product', 'end_time', if_not_exists => TRUE);;
 
     -- creating an index to increase performance
-    CREATE INDEX idx_products_asset_endtime ON products(assetId, endTime DESC);
+    CREATE INDEX IF NOT EXISTS idx_products_asset_end_time ON product(asset_id, end_time DESC);
 
 
     -------------------- SHIFTS TABLE --------------------
@@ -7758,35 +7760,35 @@ data:
     -- Source: https://gist.github.com/fphilipe/0a2a3d50a9f3834683bf
 
     -- Manages work shifts for assets. Shift scheduling is a key operational aspect under ISA-95, impacting resource planning and allocation.
-    CREATE TABLE shifts (
+    CREATE TABLE IF NOT EXISTS shift (
       shiftId INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-      assetId INTEGER REFERENCES assets(id),
-      startTime TIMESTAMPTZ NOT NULL,
-      endTime TIMESTAMPTZ NOT NULL,
-      CONSTRAINT shift_start_asset_uniq UNIQUE (startTime, assetId),
-      CHECK (startTime < endTime),
-      EXCLUDE USING gist (assetId WITH =, tstzrange(startTime, endTime) WITH &&)
+      asset_id INTEGER REFERENCES asset(id),
+      start_time TIMESTAMPTZ NOT NULL,
+      end_time TIMESTAMPTZ NOT NULL,
+      CONSTRAINT shift_start_asset_uniq UNIQUE (start_time, asset_id),
+      CHECK (start_time < end_time),
+      EXCLUDE USING gist (asset_id WITH =, tstzrange(start_time, end_time) WITH &&)
     );
 
     -------------------- STATES TABLE --------------------
 
     -- Records the state changes of assets over time. State tracking supports ISA-95's goal of detailed monitoring and control of manufacturing operations.
     -- State Table
-    CREATE TABLE states (
+    CREATE TABLE IF NOT EXISTS state (
       stateId INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-      assetId INTEGER REFERENCES assets(id),
-      startTime TIMESTAMPTZ NOT NULL,
-      endTime TIMESTAMPTZ,
+      asset_id INTEGER REFERENCES asset(id),
+      start_time TIMESTAMPTZ NOT NULL,
+      end_time TIMESTAMPTZ,
       state INT NOT NULL,
       CHECK (state >= 0),
-      CHECK (startTime < endTime),
-      CONSTRAINT state_start_asset_uniq UNIQUE (startTime, assetId)
+      CHECK (start_time < end_time),
+      CONSTRAINT state_start_asset_uniq UNIQUE (start_time, asset_id)
     );
     -- creating hypertable
-    SELECT create_hypertable('states', 'startTime');
+    SELECT create_hypertable('state', 'start_time', if_not_exists => TRUE);;
 
     -- creating an index to increase performance
-    CREATE INDEX idx_states_asset_starttime ON states(assetId, startTime DESC);
+    CREATE INDEX IF NOT EXISTS idx_states_asset_start_time ON state(asset_id, start_time DESC);
 
 
       -------------------- FIX OWNERS --------------------
