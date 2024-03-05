@@ -24,10 +24,10 @@ func (c *Connection) InsertStateAdd(msg *sharedStructs.StateAddMessage, topic *s
 	var cmdTag pgconn.CommandTag
 	cmdTag, err = tx.Exec(ctx, `
 		UPDATE state
-		SET    end_time = To_timestamp($2 / 1000)
+		SET    end_time = to_timestamp($2 / 1000)
 		WHERE  asset_id = $1
 			   AND end_time IS NULL
-			   AND start_time < To_timestamp($2 / 1000) 
+			   AND start_time < to_timestamp($2 / 1000) 
 	`, int(assetId), msg.StartTimeUnixMs)
 
 	if err != nil {
@@ -51,7 +51,7 @@ func (c *Connection) InsertStateAdd(msg *sharedStructs.StateAddMessage, topic *s
             VALUES
             (
                         $1,
-                        To_timestamp($2/1000),
+                        to_timestamp($2/1000),
                         $3
             )
 		on conflict
@@ -95,8 +95,8 @@ func (c *Connection) OverwriteStateByStartEndTime(msg *sharedStructs.StateOverwr
 	cmdTag, err = tx.Exec(ctx, `
 		DELETE FROM state
 		WHERE  asset_id = $1
-			   AND start_time >= To_timestamp($2 / 1000)
-			   AND start_time <= To_timestamp($3 / 1000) 
+			   AND start_time >= to_timestamp($2 / 1000)
+			   AND start_time <= to_timestamp($3 / 1000) 
 	`, int(assetId), msg.StartTimeUnixMs, msg.EndTimeUnixMs)
 
 	if err != nil {
@@ -112,10 +112,10 @@ func (c *Connection) OverwriteStateByStartEndTime(msg *sharedStructs.StateOverwr
 	// Check for overlapping state and modify it's end time
 	cmdTag, err = tx.Exec(ctx, `
 		UPDATE state
-		SET    end_time = To_timestamp($2 / 1000)
+		SET    end_time = to_timestamp($2 / 1000)
 		WHERE  asset_id = $1
-			   AND end_time > To_timestamp($2 / 1000)
-			   AND end_time <= To_timestamp($3 / 1000) 
+			   AND end_time > to_timestamp($2 / 1000)
+			   AND end_time <= to_timestamp($3 / 1000) 
 	`, int(assetId), msg.StartTimeUnixMs, msg.EndTimeUnixMs)
 
 	if err != nil {
@@ -131,10 +131,10 @@ func (c *Connection) OverwriteStateByStartEndTime(msg *sharedStructs.StateOverwr
 	// Check for overlapping state and modify it's start time
 	cmdTag, err = tx.Exec(ctx, `
 		UPDATE state
-		SET    start_time = To_timestamp($3 / 1000)
+		SET    start_time = to_timestamp($3 / 1000)
 		WHERE  asset_id = $1
-			   AND start_time >= To_timestamp($2 / 1000)
-			   AND start_time < To_timestamp($3 / 1000) 
+			   AND start_time >= to_timestamp($2 / 1000)
+			   AND start_time < to_timestamp($3 / 1000) 
 	`, int(assetId), msg.StartTimeUnixMs, msg.EndTimeUnixMs)
 
 	if err != nil {
@@ -156,8 +156,8 @@ func (c *Connection) OverwriteStateByStartEndTime(msg *sharedStructs.StateOverwr
              end_time,
              state)
 		VALUES      ($1,
-					 To_timestamp($2 / 1000),
-					 To_timestamp($3 / 1000),
+					 to_timestamp($2 / 1000),
+					 to_timestamp($3 / 1000),
 					 $4) 
 	`, int(assetId), msg.StartTimeUnixMs, msg.EndTimeUnixMs, int(msg.State))
 
