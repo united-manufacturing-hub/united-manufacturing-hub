@@ -574,7 +574,6 @@ google.golang.org/protobuf/types/known/durationpb
 google.golang.org/protobuf/types/known/timestamppb
 # gopkg.in/DATA-DOG/go-sqlmock.v1 v1.3.0
 ## explicit
-gopkg.in/DATA-DOG/go-sqlmock.v1
 # gopkg.in/inf.v0 v0.9.1
 ## explicit
 gopkg.in/inf.v0
