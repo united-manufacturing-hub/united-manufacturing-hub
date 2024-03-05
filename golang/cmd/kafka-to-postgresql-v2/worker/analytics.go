@@ -82,7 +82,7 @@ func parseProductSetBadQuantity(value []byte) (*shared.ProductSetBadQuantityMess
 	var message shared.ProductSetBadQuantityMessage
 	err := json.Unmarshal(value, &message)
 
-	// Validate that ExternalProductId, BadQuantity are set
+	// Validate that ExternalProductId & BadQuantity are set
 	if message.ExternalProductId == "" {
 		return nil, errors.New("externalProductId is required")
 	}
@@ -91,4 +91,19 @@ func parseProductSetBadQuantity(value []byte) (*shared.ProductSetBadQuantityMess
 	}
 	return &message, err
 
+}
+
+func parseProductTypeCreate(value []byte) (*shared.ProductTypeCreateMessage, error) {
+	// Try parse to ProductTypeCreateMessage
+	var message shared.ProductTypeCreateMessage
+	err := json.Unmarshal(value, &message)
+
+	// Validate that ExternalProductTypeId & CycleTimeMs are set
+	if message.ExternalProductTypeId == "" {
+		return nil, errors.New("externalProductTypeId is required")
+	}
+	if message.CycleTimeMs == 0 {
+		return nil, errors.New("cycleTimeMs is required")
+	}
+	return &message, err
 }

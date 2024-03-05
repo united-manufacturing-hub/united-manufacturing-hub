@@ -1,6 +1,7 @@
 package postgresql
 
 import (
+	"fmt"
 	"github.com/jackc/pgx/v5/pgconn"
 	sharedStructs "github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/kafka-to-postgresql-v2/shared"
 	"go.uber.org/zap"
@@ -30,7 +31,7 @@ func (c *Connection) InsertProductAdd(msg *sharedStructs.ProductAddMessage, topi
 		VALUES ($1, $2, $3, to_timestamp($4/1000), to_timestamp($5/1000), $6, $7)
 	`, int(productTypeId), msg.ProductBatchId, int(assetId), msg.StartTimeUnixMs, msg.EndTimeUnixMs, int(msg.Quantity), int(msg.BadQuantity))
 	if err != nil {
-		zap.S().Warnf("Error inserting work order: %v (productTypeId: %v) [%s]", err, productTypeId, cmdTag)
+		zap.S().Warnf("Error inserting product: %v (productTypeId: %v) [%s]", err, productTypeId, cmdTag)
 		zap.S().Debugf("Message: %v (Topic: %v)", msg, topic)
 		errR := tx.Rollback(ctx)
 		if errR != nil {
@@ -63,16 +64,18 @@ func (c *Connection) UpdateBadQuantityForProduct(msg *sharedStructs.ProductSetBa
 		return err
 	}
 
-	// Get product quantity by productTypeId for endTime
-	var quantity int
-	var badQuantity int
-	err = tx.QueryRow(ctx, `
-		SELECT quantity, badQuantity
-		FROM products
-		WHERE externalProductTypeId = $1 AND assetId = $2 AND endTime = $3
-	`, productTypeId, assetId, msg.EndTimeUnixMs).Scan(&quantity, &badQuantity)
+	// Update bad quantity with check integrated in WHERE clause
+	cmdTag, err := tx.Exec(ctx, `
+        UPDATE products
+        SET badQuantity = badQuantity + $1
+        WHERE externalProductTypeId = $2
+          AND assetId = $3
+          AND endTime = $4
+          AND (quantity - badQuantity) >= $1
+    `, int(msg.BadQuantity), productTypeId, assetId, msg.EndTimeUnixMs)
+
 	if err != nil {
-		zap.S().Warnf("Error getting product quantity: %v", err)
+		zap.S().Warnf("Error updating bad quantity: %v", err)
 		errR := tx.Rollback(ctx)
 		if errR != nil {
 			zap.S().Errorf("Error rolling back transaction: %v", errR)
@@ -80,34 +83,14 @@ func (c *Connection) UpdateBadQuantityForProduct(msg *sharedStructs.ProductSetBa
 		return err
 	}
 
-	// Check if (quantity - badQuantity) >= msg.BadQuantity, otherwise error
-	newBadQuantity := uint64(badQuantity) + msg.BadQuantity
-
-	if uint64(quantity) < newBadQuantity {
-		zap.S().Warnf("Bad quantity is greater than available quantity: %v", msg)
+	// Check if the update operation affected any rows
+	if cmdTag.RowsAffected() == 0 {
+		zap.S().Warnf("Bad quantity update condition not met for product: %v", msg)
 		errR := tx.Rollback(ctx)
 		if errR != nil {
-			zap.S().Errorf("Error rolling back transaction: %v", errR)
+			zap.S().Errorf("Error rolling back transaction due to condition not met: %v", errR)
 		}
-		return nil
-	}
-
-	// Update bad quantity
-	var cmdTag pgconn.CommandTag
-	cmdTag, err = tx.Exec(ctx, `
-		UPDATE products
-		SET badQuantity = $1
-		WHERE externalProductTypeId = $2 AND assetId = $3 AND endTime = $4
-	`, int(newBadQuantity), productTypeId, assetId, msg.EndTimeUnixMs)
-
-	if err != nil {
-		zap.S().Warnf("Error updating bad quantity: %v [%s]", err, cmdTag)
-		zap.S().Debugf("Message: %v (Topic: %v)", msg, topic)
-		errR := tx.Rollback(ctx)
-		if errR != nil {
-			zap.S().Errorf("Error rolling back transaction: %v", errR)
-		}
-		return err
+		return fmt.Errorf("bad quantity update condition not met for product: %v", msg)
 	}
 
 	err = tx.Commit(ctx)

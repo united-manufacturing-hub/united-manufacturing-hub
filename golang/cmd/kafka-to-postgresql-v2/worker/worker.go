@@ -148,6 +148,19 @@ func handleParsing(msgChan <-chan *shared.KafkaMessage, i int) {
 					k.MarkMessage(msg)
 					continue
 				}
+			case "product-type.create":
+				parsed, err := parseProductTypeCreate(msg.Value)
+				if err != nil {
+					zap.S().Warnf("Failed to parse product-type.create %+v: %s", msg, err)
+					k.MarkMessage(msg)
+					continue
+				}
+				err = p.InsertProductTypeCreate(parsed, topic)
+				if err != nil {
+					zap.S().Warnf("Failed to insert product-type.create %+v: %s", msg, err)
+					k.MarkMessage(msg)
+					continue
+				}
 			}
 		default:
 			zap.S().Errorf("Unknown usecase %s", topic.Schema)
