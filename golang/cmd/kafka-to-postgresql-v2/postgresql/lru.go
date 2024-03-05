@@ -90,7 +90,7 @@ func (c *Connection) GetOrInsertProductType(assetId uint64, externalProductId st
 		    productTypeId INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
 		    externalProductTypeId TEXT NOT NULL,
 		    cycleTime INTEGER NOT NULL,
-		    assetId INTEGER REFERENCES assets(id),
+		    assetId INTEGER REFERENCES asset(id),
 		    CONSTRAINT external_product_asset_uniq UNIQUE (externalProductTypeId, assetId),
 		    CHECK (cycleTime > 0)
 		);
