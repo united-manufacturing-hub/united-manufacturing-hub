@@ -50,7 +50,7 @@ func TestWorkOrder(t *testing.T) {
 		// Expect Exec from InsertWorkOrderCreate
 		mock.ExpectBeginTx(pgx.TxOptions{})
 		mock.ExpectExec(`
-		INSERT INTO work_order\(external_work_order_id, asset_id, product_type_id, quantity, status, start_time, end_time\) VALUES \(\$1, \$2, \$3, \$4, \$5, CASE WHEN \$6 IS NOT NULL THEN to_timestamp\(\$6/1000\) ELSE NULL END::timestamptz, CASE WHEN \$7 IS NOT NULL THEN to_timestamp\(\$7/1000\) ELSE NULL END::timestamptz\)
+		INSERT INTO work_order\(external_work_order_id, asset_id, product_type_id, quantity, status, start_time, end_time\) VALUES \(\$1, \$2, \$3, \$4, \$5, CASE WHEN \$6 IS NOT NULL THEN to_timestamp\(\$6/1000\) ELSE NULL END\:\:timestamptz, CASE WHEN \$7 IS NOT NULL THEN to_timestamp\(\$7/1000\) ELSE NULL END\:\:timestamptz\)
 	`).WithArgs("#1274", 1, 1, 0, 0, helper.Uint64PtrToNullInt64(helper.IntToUint64Ptr(0)), helper.Uint64PtrToNullInt64(helper.IntToUint64Ptr(0))).
 			WillReturnResult(pgxmock.NewResult("INSERT", 1))
 		mock.ExpectCommit()
