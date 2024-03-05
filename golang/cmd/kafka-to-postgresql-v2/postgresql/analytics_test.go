@@ -41,7 +41,7 @@ func TestWorkOrder(t *testing.T) {
 			WillReturnRows(mock.NewRows([]string{"id"}).AddRow(1))
 
 		// Expect Query from GetOrInsertProduct
-		mock.ExpectQuery(`SELECT productTypeId FROM product_types WHERE external_product_type_id = \$1 AND asset_id = \$2`).
+		mock.ExpectQuery(`SELECT productTypeId FROM product_type WHERE external_product_type_id = \$1 AND asset_id = \$2`).
 			WithArgs("test", 1).
 			WillReturnRows(mock.NewRows([]string{"productTypeId"}).AddRow(1))
 
@@ -118,7 +118,7 @@ func TestProduct(t *testing.T) {
 	assert.True(t, ok)
 
 	// Insert mock product type
-	mock.ExpectQuery(`SELECT productTypeId FROM product_types WHERE external_product_type_id = \$1 AND asset_id = \$2`).
+	mock.ExpectQuery(`SELECT productTypeId FROM product_type WHERE external_product_type_id = \$1 AND asset_id = \$2`).
 		WithArgs("#1274", 1).
 		WillReturnRows(mock.NewRows([]string{"productTypeId"}).AddRow(1))
 	_, err := c.GetOrInsertProductType(1, "#1274", 1)
