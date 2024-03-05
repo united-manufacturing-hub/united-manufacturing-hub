@@ -13,7 +13,7 @@ import (
 var goiLock = sync.Mutex{}
 
 func (c *Connection) GetOrInsertAsset(topic *sharedStructs.TopicDetails) (uint64, error) {
-	if c.db == nil {
+	if c.Db == nil {
 		return 0, errors.New("database is nil")
 	}
 	id, hit := c.lookupAssetIdLRU(topic)
@@ -40,7 +40,7 @@ func (c *Connection) GetOrInsertAsset(topic *sharedStructs.TopicDetails) (uint64
 
 	var err error
 	var idx int
-	err = c.db.QueryRow(selectRowContext, selectQuery, topic.Enterprise, topic.Site, topic.Area, topic.ProductionLine, topic.WorkCell, topic.OriginId).Scan(&idx)
+	err = c.Db.QueryRow(selectRowContext, selectQuery, topic.Enterprise, topic.Site, topic.Area, topic.ProductionLine, topic.WorkCell, topic.OriginId).Scan(&idx)
 	id = uint64(idx)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -49,7 +49,7 @@ func (c *Connection) GetOrInsertAsset(topic *sharedStructs.TopicDetails) (uint64
 			insertRowContext, insertRowContextCncl := get1MinuteContext()
 			defer insertRowContextCncl()
 
-			err = c.db.QueryRow(insertRowContext, insertQuery, topic.Enterprise, topic.Site, topic.Area, topic.ProductionLine, topic.WorkCell, topic.OriginId).Scan(&id)
+			err = c.Db.QueryRow(insertRowContext, insertQuery, topic.Enterprise, topic.Site, topic.Area, topic.ProductionLine, topic.WorkCell, topic.OriginId).Scan(&id)
 			if err != nil {
 				return 0, err
 			}
@@ -69,11 +69,11 @@ func (c *Connection) GetOrInsertAsset(topic *sharedStructs.TopicDetails) (uint64
 }
 
 func (c *Connection) addToAssetIdLRU(topic *sharedStructs.TopicDetails, id uint64) {
-	c.assetIdCache.Add(getCacheKeyFromTopic(topic), id)
+	c.AssetIdCache.Add(getCacheKeyFromTopic(topic), id)
 }
 
 func (c *Connection) lookupAssetIdLRU(topic *sharedStructs.TopicDetails) (uint64, bool) {
-	value, ok := c.assetIdCache.Get(getCacheKeyFromTopic(topic))
+	value, ok := c.AssetIdCache.Get(getCacheKeyFromTopic(topic))
 	if ok {
 		c.lruHits.Add(1)
 		return value.(uint64), true
@@ -85,17 +85,7 @@ func (c *Connection) lookupAssetIdLRU(topic *sharedStructs.TopicDetails) (uint64
 var ptIdLock = sync.Mutex{}
 
 func (c *Connection) GetOrInsertProductType(assetId uint64, externalProductId string, cycleTimeMs uint64) (uint64, error) {
-	/*
-		CREATE TABLE product_types (
-		    productTypeId INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-		    externalProductTypeId TEXT NOT NULL,
-		    cycleTime INTEGER NOT NULL,
-		    assetId INTEGER REFERENCES assets(id),
-		    CONSTRAINT external_product_asset_uniq UNIQUE (externalProductTypeId, assetId),
-		    CHECK (cycleTime > 0)
-		);
-	*/
-	if c.db == nil {
+	if c.Db == nil {
 		return 0, errors.New("database is nil")
 	}
 	ptId, hit := c.lookupProductTypeIdLRU(assetId, externalProductId)
@@ -117,22 +107,22 @@ func (c *Connection) GetOrInsertProductType(assetId uint64, externalProductId st
 		return 0, errors.New("not found")
 	}
 
-	selectQuery := `SELECT productTypeId FROM product_types WHERE externalProductTypeId = $1 AND assetId = $2`
+	selectQuery := `SELECT productTypeId FROM product_type WHERE external_product_type_id = $1 AND asset_id = $2`
 	selectRowContext, selectRowContextCncl := get1MinuteContext()
 	defer selectRowContextCncl()
 
 	var err error
 	var ptIdX int
-	err = c.db.QueryRow(selectRowContext, selectQuery, externalProductId, int(assetId)).Scan(&ptIdX)
+	err = c.Db.QueryRow(selectRowContext, selectQuery, externalProductId, int(assetId)).Scan(&ptIdX)
 	ptId = uint64(ptIdX)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			// Row isn't found, need to insert
-			insertQuery := `INSERT INTO product_types (externalProductTypeId, cycleTime, assetId) VALUES ($1, $2, $3) RETURNING productTypeId`
+			insertQuery := `INSERT INTO product_type(external_product_type_id, cycle_time_ms, asset_id) VALUES ($1, $2, $3) RETURNING productTypeId`
 			insertRowContext, insertRowContextCncl := get1MinuteContext()
 			defer insertRowContextCncl()
 
-			err = c.db.QueryRow(insertRowContext, insertQuery, externalProductId, cycleTimeMs, int(assetId)).Scan(&ptId)
+			err = c.Db.QueryRow(insertRowContext, insertQuery, externalProductId, cycleTimeMs, int(assetId)).Scan(&ptId)
 			if err != nil {
 				return 0, err
 			}
@@ -152,11 +142,11 @@ func (c *Connection) GetOrInsertProductType(assetId uint64, externalProductId st
 }
 
 func (c *Connection) addToProductTypeIdLRU(assetId uint64, externalProductId string, ptId uint64) {
-	c.productTypeIdCache.Add(getCacheKeyFromProduct(assetId, externalProductId), ptId)
+	c.ProductTypeIdCache.Add(getCacheKeyFromProduct(assetId, externalProductId), ptId)
 }
 
 func (c *Connection) lookupProductTypeIdLRU(assetId uint64, externalProductId string) (uint64, bool) {
-	value, ok := c.productTypeIdCache.Get(getCacheKeyFromProduct(assetId, externalProductId))
+	value, ok := c.ProductTypeIdCache.Get(getCacheKeyFromProduct(assetId, externalProductId))
 	if ok {
 		c.lruHits.Add(1)
 		return value.(uint64), true
