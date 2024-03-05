@@ -41,14 +41,14 @@ func TestWorkOrder(t *testing.T) {
 			WillReturnRows(mock.NewRows([]string{"id"}).AddRow(1))
 
 		// Expect Query from GetOrInsertProduct
-		mock.ExpectQuery(`SELECT productTypeId FROM product_type WHERE external_product_type_id = \$1 AND asset_id = \$2`).
+		mock.ExpectQuery(`SELECT product_type_id FROM product_type WHERE external_product_type_id = \$1 AND asset_id = \$2`).
 			WithArgs("test", 1).
-			WillReturnRows(mock.NewRows([]string{"productTypeId"}).AddRow(1))
+			WillReturnRows(mock.NewRows([]string{"product_type_id"}).AddRow(1))
 
 		// Expect Exec from InsertWorkOrderCreate
 		mock.ExpectBeginTx(pgx.TxOptions{})
 		mock.ExpectExec(`
-		INSERT INTO work_order\(externalWorkOrderId, asset_id, productTypeId, quantity, status, start_time, end_time\) VALUES \(\$1, \$2, \$3, \$4, \$5, to_timestamp\(\$6\/1000\), to_timestamp\(\$7\/1000\)\)
+		INSERT INTO work_order\(externalWorkOrderId, asset_id, product_type_id, quantity, status, start_time, end_time\) VALUES \(\$1, \$2, \$3, \$4, \$5, to_timestamp\(\$6\/1000\), to_timestamp\(\$7\/1000\)\)
 	`).WithArgs("#1274", 1, 1, uint64(0), int(0), uint64(0), uint64(0)).
 			WillReturnResult(pgxmock.NewResult("INSERT", 1))
 		mock.ExpectCommit()
@@ -118,9 +118,9 @@ func TestProduct(t *testing.T) {
 	assert.True(t, ok)
 
 	// Insert mock product type
-	mock.ExpectQuery(`SELECT productTypeId FROM product_type WHERE external_product_type_id = \$1 AND asset_id = \$2`).
+	mock.ExpectQuery(`SELECT product_type_id FROM product_type WHERE external_product_type_id = \$1 AND asset_id = \$2`).
 		WithArgs("#1274", 1).
-		WillReturnRows(mock.NewRows([]string{"productTypeId"}).AddRow(1))
+		WillReturnRows(mock.NewRows([]string{"product_type_id"}).AddRow(1))
 	_, err := c.GetOrInsertProductType(1, "#1274", 1)
 	assert.NoError(t, err)
 
