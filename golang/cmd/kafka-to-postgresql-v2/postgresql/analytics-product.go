@@ -20,7 +20,7 @@ func (c *Connection) InsertProductAdd(msg *sharedStructs.ProductAddMessage, topi
 	// Start tx (this shouln't take more then 1 minute)
 	ctx, cncl := get1MinuteContext()
 	defer cncl()
-	tx, err := c.db.Begin(ctx)
+	tx, err := c.Db.Begin(ctx)
 	if err != nil {
 		return err
 	}
@@ -55,7 +55,7 @@ func (c *Connection) UpdateBadQuantityForProduct(msg *sharedStructs.ProductSetBa
 	// Start tx
 	ctx, cncl := get1MinuteContext()
 	defer cncl()
-	tx, err := c.db.Begin(ctx)
+	tx, err := c.Db.Begin(ctx)
 	if err != nil {
 		return err
 	}

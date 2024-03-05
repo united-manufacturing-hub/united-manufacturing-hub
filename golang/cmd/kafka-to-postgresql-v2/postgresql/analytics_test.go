@@ -10,10 +10,12 @@ import (
 
 func TestWorkOrder(t *testing.T) {
 	c := CreateMockConnection(t)
-	defer c.db.Close()
+	// Cast to PostgresqlConnection to access the DB field
+
+	defer c.Db.Close()
 
 	// Cast c.db to pgxmock to access the underlying mock
-	mock, ok := c.db.(pgxmock.PgxPoolIface)
+	mock, ok := c.Db.(pgxmock.PgxPoolIface)
 	assert.True(t, ok)
 
 	t.Run("create", func(t *testing.T) {
@@ -107,10 +109,12 @@ func TestWorkOrder(t *testing.T) {
 
 func TestProduct(t *testing.T) {
 	c := CreateMockConnection(t)
-	defer c.db.Close()
+	// Cast to PostgresqlConnection to access the DB field
+
+	defer c.Db.Close()
 
 	// Cast c.db to pgxmock to access the underlying mock
-	mock, ok := c.db.(pgxmock.PgxPoolIface)
+	mock, ok := c.Db.(pgxmock.PgxPoolIface)
 	assert.True(t, ok)
 
 	// Insert mock product type
@@ -154,10 +158,12 @@ func TestProduct(t *testing.T) {
 
 func TestProductType(t *testing.T) {
 	c := CreateMockConnection(t)
-	defer c.db.Close()
+	// Cast to PostgresqlConnection to access the DB field
+
+	defer c.Db.Close()
 
 	// Cast c.db to pgxmock to access the underlying mock
-	mock, ok := c.db.(pgxmock.PgxPoolIface)
+	mock, ok := c.Db.(pgxmock.PgxPoolIface)
 	assert.True(t, ok)
 
 	t.Run("create", func(t *testing.T) {
@@ -192,10 +198,12 @@ func TestProductType(t *testing.T) {
 
 func TestShift(t *testing.T) {
 	c := CreateMockConnection(t)
-	defer c.db.Close()
+	// Cast to PostgresqlConnection to access the DB field
+
+	defer c.Db.Close()
 
 	// Cast c.db to pgxmock to access the underlying mock
-	mock, ok := c.db.(pgxmock.PgxPoolIface)
+	mock, ok := c.Db.(pgxmock.PgxPoolIface)
 	assert.True(t, ok)
 
 	t.Run("add", func(t *testing.T) {
@@ -252,10 +260,12 @@ func TestShift(t *testing.T) {
 
 func TestState(t *testing.T) {
 	c := CreateMockConnection(t)
-	defer c.db.Close()
+	// Cast to PostgresqlConnection to access the DB field
+
+	defer c.Db.Close()
 
 	// Cast c.db to pgxmock to access the underlying mock
-	mock, ok := c.db.(pgxmock.PgxPoolIface)
+	mock, ok := c.Db.(pgxmock.PgxPoolIface)
 	assert.True(t, ok)
 
 	t.Run("add", func(t *testing.T) {

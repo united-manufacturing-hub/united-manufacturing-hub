@@ -18,7 +18,7 @@ func (c *Connection) InsertWorkOrderCreate(msg *sharedStructs.WorkOrderCreateMes
 	// Start tx (this shouldn't take more then 1 minute)
 	ctx, cncl := get1MinuteContext()
 	defer cncl()
-	tx, err := c.db.Begin(ctx)
+	tx, err := c.Db.Begin(ctx)
 	if err != nil {
 		return err
 	}
@@ -50,7 +50,7 @@ func (c *Connection) UpdateWorkOrderSetStart(msg *sharedStructs.WorkOrderStartMe
 	// Start tx (this shouldn't take more then 1 minute)
 	ctx, cncl := get1MinuteContext()
 	defer cncl()
-	tx, err := c.db.Begin(ctx)
+	tx, err := c.Db.Begin(ctx)
 	if err != nil {
 		return err
 	}
@@ -91,7 +91,7 @@ func (c *Connection) UpdateWorkOrderSetStop(msg *sharedStructs.WorkOrderStopMess
 	// Start tx (this shouldn't take more then 1 minute)
 	ctx, cncl := get1MinuteContext()
 	defer cncl()
-	tx, err := c.db.Begin(ctx)
+	tx, err := c.Db.Begin(ctx)
 	if err != nil {
 		return err
 	}
