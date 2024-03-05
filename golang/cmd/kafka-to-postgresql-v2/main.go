@@ -21,9 +21,9 @@ import (
 func main() {
 	helper.InitLogging()
 	internal.Initfgtrace()
-	InitPrometheus()
 	kafka.InitKafkaClient()
 	_ = postgresql.GetOrInit()
+	InitPrometheus()
 	InitHealthCheck()
 	_ = worker.GetOrInit()
 
