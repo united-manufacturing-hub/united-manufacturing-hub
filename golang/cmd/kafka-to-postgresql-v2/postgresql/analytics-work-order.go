@@ -25,7 +25,7 @@ func (c *Connection) InsertWorkOrderCreate(msg *sharedStructs.WorkOrderCreateMes
 	// Don't forget to convert unix ms to timestamptz
 	var cmdTag pgconn.CommandTag
 	cmdTag, err = tx.Exec(ctx, `
-		INSERT INTO work_order(externalWorkOrderId, asset_id, productTypeId, quantity, status, start_time, end_time)
+		INSERT INTO work_order(externalWorkOrderId, asset_id, product_type_id, quantity, status, start_time, end_time)
 		VALUES ($1, $2, $3, $4, $5, to_timestamp($6/1000), to_timestamp($7/1000))
 	`, msg.ExternalWorkOrderId, int(assetId), int(productTypeId), msg.Quantity, int(msg.Status), msg.StartTimeUnixMs, msg.EndTimeUnixMs)
 	if err != nil {

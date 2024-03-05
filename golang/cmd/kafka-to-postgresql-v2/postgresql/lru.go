@@ -107,7 +107,7 @@ func (c *Connection) GetOrInsertProductType(assetId uint64, externalProductId st
 		return 0, errors.New("not found")
 	}
 
-	selectQuery := `SELECT productTypeId FROM product_type WHERE external_product_type_id = $1 AND asset_id = $2`
+	selectQuery := `SELECT product_type_id FROM product_type WHERE external_product_type_id = $1 AND asset_id = $2`
 	selectRowContext, selectRowContextCncl := get1MinuteContext()
 	defer selectRowContextCncl()
 
@@ -118,7 +118,7 @@ func (c *Connection) GetOrInsertProductType(assetId uint64, externalProductId st
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			// Row isn't found, need to insert
-			insertQuery := `INSERT INTO product_type(external_product_type_id, cycle_time_ms, asset_id) VALUES ($1, $2, $3) RETURNING productTypeId`
+			insertQuery := `INSERT INTO product_type(external_product_type_id, cycle_time_ms, asset_id) VALUES ($1, $2, $3) RETURNING product_type_id`
 			insertRowContext, insertRowContextCncl := get1MinuteContext()
 			defer insertRowContextCncl()
 
