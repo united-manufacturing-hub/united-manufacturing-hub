@@ -29,7 +29,7 @@ func (c *Connection) InsertWorkOrderCreate(msg *sharedStructs.WorkOrderCreateMes
 	var cmdTag pgconn.CommandTag
 	cmdTag, err = tx.Exec(ctx, `
 		INSERT INTO work_order(external_work_order_id, asset_id, product_type_id, quantity, status, start_time, end_time)
-		VALUES ($1, $2, $3, $4, $5, CASE WHEN $6 IS NOT NULL THEN to_timestamp($6/1000) END, CASE WHEN $7 IS NOT NULL THEN to_timestamp($7/1000) END)
+		VALUES ($1, $2, $3, $4, $5, CASE WHEN $6 IS NOT NULL THEN to_timestamp($6/1000) ELSE NULL END::timestamptz, CASE WHEN $7 IS NOT NULL THEN to_timestamp($7/1000) ELSE NULL END::timestamptz)
 	`, values...)
 	if err != nil {
 		zap.S().Warnf("Error inserting work order: %v (workOrderId: %v) [%s]", err, msg.ExternalWorkOrderId, cmdTag)
