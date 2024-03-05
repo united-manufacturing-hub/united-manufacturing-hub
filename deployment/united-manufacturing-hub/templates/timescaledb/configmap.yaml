@@ -7713,7 +7713,14 @@ data:
       CONSTRAINT asset_workorder_uniq UNIQUE (assetId, externalWorkOrderId),
       CHECK (quantity > 0),
       CHECK (status BETWEEN 0 AND 2),
+<<<<<<< HEAD
       EXCLUDE USING gist (assetId WITH =, tstzrange(startTime, endTime) WITH &&) WHERE (startTime IS NOT NULL AND endTime IS NOT NULL)
+||||||| parent of e9ed222b (fix: make asset_id+start_time unique)
+      EXCLUDE USING gist (asset_id WITH =, tstzrange(start_time, end_time) WITH &&) WHERE (start_time IS NOT NULL AND end_time IS NOT NULL)
+=======
+      UNIQUE (asset_id, start_time),
+      EXCLUDE USING gist (asset_id WITH =, tstzrange(start_time, end_time) WITH &&) WHERE (start_time IS NOT NULL AND end_time IS NOT NULL)
+>>>>>>> e9ed222b (fix: make asset_id+start_time unique)
     );
 
     -------------------- PRODUCT TYPES TABLE --------------------
