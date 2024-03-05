@@ -10,15 +10,22 @@ import (
 	"math/rand"
 	"strconv"
 	"strings"
+	"sync/atomic"
 )
 
 type IConnection interface {
 	GetMessages() <-chan *shared.KafkaMessage
 	MarkMessage(message *shared.KafkaMessage)
+	GetMarkedMessageCount() uint64
 }
 
 type Connection struct {
 	consumer *redpanda.Consumer
+	marked   atomic.Uint64
+}
+
+func (c *Connection) GetMarkedMessageCount() uint64 {
+	return c.marked.Load()
 }
 
 var conn *Connection
@@ -28,7 +35,7 @@ func GetKafkaClient() IConnection {
 }
 
 func InitKafkaClient() {
-	zap.S().Debugf("kafka.GetKafkaClient().once")
+	zap.S().Debugf("kafka.GetKafkaClient()")
 	KafkaBrokers, err := env.GetAsString("KAFKA_BROKERS", true, "http://united-manufacturing-hub-kafka.united-manufacturing-hub.svc.cluster.local:9092")
 	if err != nil {
 		zap.S().Fatalf("Failed to get KAFKA_BROKERS from env")

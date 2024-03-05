@@ -1,14 +1,18 @@
 package worker
 
 import (
+	"github.com/jackc/pgx/v5"
+	"github.com/pashagolub/pgxmock/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper-2/pkg/kafka/shared"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/kafka-to-postgresql-v2/helper"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/kafka-to-postgresql-v2/kafka"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/kafka-to-postgresql-v2/postgresql"
 	sharedStructs "github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/kafka-to-postgresql-v2/shared"
 	"math/rand"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestRecreateTopic(t *testing.T) {
@@ -282,9 +286,56 @@ func TestParseHistorianPayload(t *testing.T) {
 }
 
 func TestHandleParsing(t *testing.T) {
-	kafkaClient := kafka.GetMockKafkaClient(t)
-	msgChannel := kafkaClient.GetMessages()
+	helper.InitTestLogging()
+	senderChannel := make(chan *shared.KafkaMessage, 100)
+	kafkaClient := kafka.GetMockKafkaClient(t, senderChannel)
 	postgresqlClient := postgresql.CreateMockConnection(t)
 
+	mock, ok := postgresqlClient.Db.(pgxmock.PgxPoolIface)
+	assert.True(t, ok)
+
+	msg := shared.KafkaMessage{
+		Headers: nil,
+		Topic:   "umh.v1.abc._analytics",
+		Key:     []byte("work-order.create"),
+		Value: []byte(`
+{
+   "external_work_order_id":"#1244",
+   "product":{
+      "external_product_id":"1234",
+      "cycle_time_ms":1000
+   },
+   "quantity":100
+}
+`),
+		Offset:    0,
+		Partition: 0,
+	}
+	senderChannel <- &msg
+
+	// Expect Query from GetOrInsertAsset
+	mock.ExpectQuery(`SELECT id FROM asset WHERE enterprise = \$1 AND site = \$2 AND area = \$3 AND line = \$4 AND workcell = \$5 AND origin_id = \$6`).
+		WithArgs("abc", "", "", "", "", "").
+		WillReturnRows(mock.NewRows([]string{"id"}).AddRow(1))
+
+	// Expect Query from GetOrInsertProduct (assume product type exists)
+	mock.ExpectQuery(`SELECT productTypeId FROM product_types WHERE external_product_type_id = \$1 AND asset_id = \$2`).
+		WithArgs("1234", 1).
+		WillReturnRows(mock.NewRows([]string{"productTypeId"}).AddRow(1))
+	// Expect Exec from InsertWorkOrderCreate
+	mock.ExpectBeginTx(pgx.TxOptions{})
+	mock.ExpectExec(`
+		INSERT INTO work_order\(externalWorkOrderId, asset_id, productTypeId, quantity, status, start_time, end_time\) VALUES \(\$1, \$2, \$3, \$4, \$5, to_timestamp\(\$6\/1000\), to_timestamp\(\$7\/1000\)\)
+	`).WithArgs("#1244", 1, 1, uint64(100), int(0), uint64(0), uint64(0)).
+		WillReturnResult(pgxmock.NewResult("INSERT", 1))
+	mock.ExpectCommit()
+
+	msgChannel := kafkaClient.GetMessages()
 	go handleParsing(msgChannel, 0, kafkaClient, postgresqlClient)
+
+	time.Sleep(1 * time.Second)
+
+	// Validate that the message was marked as processed
+	assert.Equal(t, 0, len(msgChannel), "unexpected number of messages in the channel. want %d, got %d", 0, len(msgChannel))
+	assert.Equal(t, uint64(1), kafkaClient.GetMarkedMessageCount(), "unexpected number of marked messages. want %d, got %d", 1, kafkaClient.GetMarkedMessageCount())
 }
