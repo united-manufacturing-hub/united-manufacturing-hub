@@ -39,7 +39,7 @@ func (c *Connection) InsertProductAdd(msg *sharedStructs.ProductAddMessage, topi
                         bad_quantity
             )
             VALUES
-            (
+            	(
                         $1,
                         $2,
                         $3,
