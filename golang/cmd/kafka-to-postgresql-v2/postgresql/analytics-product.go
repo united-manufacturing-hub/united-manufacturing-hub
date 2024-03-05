@@ -25,7 +25,7 @@ func (c *Connection) InsertProductAdd(msg *sharedStructs.ProductAddMessage, topi
 	if err != nil {
 		return err
 	}
-	// Insert product
+	// Insert producth
 	var cmdTag pgconn.CommandTag
 	cmdTag, err = tx.Exec(ctx, `
 			INSERT INTO product(external_product_type_id, product_batch_id, asset_id, start_time, end_time, quantity, bad_quantity)
@@ -40,7 +40,7 @@ func (c *Connection) InsertProductAdd(msg *sharedStructs.ProductAddMessage, topi
 					$6, 
 					$7
 				)
-		`, int(productTypeId), msg.ProductBatchId, int(assetId), helper.Uint64PtrToInt64Ptr(msg.StartTimeUnixMs), msg.EndTimeUnixMs, int(msg.Quantity), helper.Uint64PtrToInt64Ptr(msg.BadQuantity))
+		`, int(productTypeId), helper.StringPtrToNullString(msg.ProductBatchId), int(assetId), helper.Uint64PtrToNullInt64(msg.StartTimeUnixMs), msg.EndTimeUnixMs, int(msg.Quantity), helper.Uint64PtrToNullInt64(msg.BadQuantity))
 	if err != nil {
 		zap.S().Warnf("Error inserting product: %v (productTypeId: %v) [%s]", err, productTypeId, cmdTag)
 		zap.S().Debugf("Message: %v (Topic: %v)", msg, topic)
