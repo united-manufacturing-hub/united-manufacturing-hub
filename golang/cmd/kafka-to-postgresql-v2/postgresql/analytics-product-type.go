@@ -15,7 +15,7 @@ func (c *Connection) InsertProductTypeCreate(msg *sharedStructs.ProductTypeCreat
 	// Start tx (this shouln't take more then 1 minute)
 	ctx, cncl := get1MinuteContext()
 	defer cncl()
-	tx, err := c.db.Begin(ctx)
+	tx, err := c.Db.Begin(ctx)
 	if err != nil {
 		return err
 	}
@@ -23,12 +23,27 @@ func (c *Connection) InsertProductTypeCreate(msg *sharedStructs.ProductTypeCreat
 	// Insert product_type
 	var cmdTag pgconn.CommandTag
 	cmdTag, err = tx.Exec(ctx, `
-		INSERT INTO product_types (externalProductTypeId, cycleTime, assetId)
-		VALUES ($1, $2, $3)
-		ON CONFLICT (externalProductTypeId, assetId) DO NOTHING
+		INSERT INTO product_type
+            (
+                        external_product_type_id,
+                        cycle_time_ms,
+                        asset_id
+            )
+            VALUES
+            (
+                        $1,
+                        $2,
+                        $3
+            )
+			on conflict
+				(
+							external_product_type_id,
+							asset_id
+				)
+				do nothing
 	`, msg.ExternalProductTypeId, int(msg.CycleTimeMs), int(assetId))
 	if err != nil {
-		zap.S().Warnf("Error inserting product-type: %v (externalProductTypeId: %v) [%s]", err, msg.ExternalProductTypeId, cmdTag)
+		zap.S().Warnf("Error inserting product-type: %v (external_product_type_id: %v) [%s]", err, msg.ExternalProductTypeId, cmdTag)
 		zap.S().Debugf("Message: %v (Topic: %v)", msg, topic)
 		errR := tx.Rollback(ctx)
 		if errR != nil {
