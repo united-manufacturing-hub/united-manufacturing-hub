@@ -7697,6 +7697,7 @@ data:
 
     -------------------- ANALYTICS --------------------
 
+
     -------------------- PRODUCT TYPES TABLE --------------------
     CREATE TABLE IF NOT EXISTS product_type (
       product_type_id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -7732,7 +7733,6 @@ data:
 
     -- -- Tracks individual products produced. This table captures production output, quality (through bad_quantity), and timing
     CREATE TABLE IF NOT EXISTS product (
-      product_id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
       external_product_type_id INTEGER REFERENCES product_type(product_type_id),
       product_batch_id TEXT,
       asset_id INTEGER REFERENCES asset(id),
@@ -7744,7 +7744,7 @@ data:
       CHECK (bad_quantity >= 0),
       CHECK (bad_quantity <= quantity),
       CHECK (start_time <= end_time),
-      CONSTRAINT product_end_time_asset_uniq UNIQUE (end_time, asset_id)
+      UNIQUE (asset_id, end_time, product_batch_id)
     );
 
     -- creating hypertable
@@ -7775,14 +7775,13 @@ data:
     -- Records the state changes of assets over time. State tracking supports ISA-95's goal of detailed monitoring and control of manufacturing operations.
     -- State Table
     CREATE TABLE IF NOT EXISTS state (
-      stateId INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
       asset_id INTEGER REFERENCES asset(id),
       start_time TIMESTAMPTZ NOT NULL,
       end_time TIMESTAMPTZ,
       state INT NOT NULL,
       CHECK (state >= 0),
       CHECK (start_time < end_time),
-      CONSTRAINT state_start_asset_uniq UNIQUE (start_time, asset_id)
+      UNIQUE (start_time, asset_id)
     );
     -- creating hypertable
     SELECT create_hypertable('state', 'start_time', if_not_exists => TRUE);;
@@ -7791,17 +7790,18 @@ data:
     CREATE INDEX IF NOT EXISTS idx_states_asset_start_time ON state(asset_id, start_time DESC);
 
 
+
       -------------------- FIX OWNERS --------------------
 
       ALTER TABLE asset OWNER TO {{.Values.kafkatopostgresqlv2.database.user}};
       ALTER TABLE tag OWNER TO {{.Values.kafkatopostgresqlv2.database.user}};
       ALTER TABLE tag_string OWNER TO {{.Values.kafkatopostgresqlv2.database.user}};
 
-      ALTER TABLE work_orders OWNER TO {{.Values.kafkatopostgresqlv2.database.user}};
-      ALTER TABLE product_types OWNER TO {{.Values.kafkatopostgresqlv2.database.user}};
-      ALTER TABLE products OWNER TO {{.Values.kafkatopostgresqlv2.database.user}};
-      ALTER TABLE shifts OWNER TO {{.Values.kafkatopostgresqlv2.database.user}};
-      ALTER TABLE states OWNER TO {{.Values.kafkatopostgresqlv2.database.user}};
+      ALTER TABLE work_order OWNER TO {{.Values.kafkatopostgresqlv2.database.user}};
+      ALTER TABLE product_type OWNER TO {{.Values.kafkatopostgresqlv2.database.user}};
+      ALTER TABLE product OWNER TO {{.Values.kafkatopostgresqlv2.database.user}};
+      ALTER TABLE shift OWNER TO {{.Values.kafkatopostgresqlv2.database.user}};
+      ALTER TABLE state OWNER TO {{.Values.kafkatopostgresqlv2.database.user}};
 
 
       GRANT SELECT ON {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.asset TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
@@ -7809,11 +7809,11 @@ data:
       GRANT SELECT ON {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.tag_string TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
 
 
-      GRANT SELECT ON {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.work_orders TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
-      GRANT SELECT ON {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.product_types TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
-      GRANT SELECT ON {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.products TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
-      GRANT SELECT ON {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.shifts TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
-      GRANT SELECT ON {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.states TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
+      GRANT SELECT ON {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.work_order TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
+      GRANT SELECT ON {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.product_type TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
+      GRANT SELECT ON {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.product TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
+      GRANT SELECT ON {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.shift TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
+      GRANT SELECT ON {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.state TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
 
 
   __SQL__
