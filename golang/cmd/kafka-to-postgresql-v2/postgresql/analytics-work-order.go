@@ -2,6 +2,7 @@ package postgresql
 
 import (
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/kafka-to-postgresql-v2/helper"
 	sharedStructs "github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/kafka-to-postgresql-v2/shared"
 	"go.uber.org/zap"
 )
@@ -26,8 +27,8 @@ func (c *Connection) InsertWorkOrderCreate(msg *sharedStructs.WorkOrderCreateMes
 	var cmdTag pgconn.CommandTag
 	cmdTag, err = tx.Exec(ctx, `
 		INSERT INTO work_order(external_work_order_id, asset_id, product_type_id, quantity, status, start_time, end_time)
-		VALUES ($1, $2, $3, $4, $5, to_timestamp($6/1000), to_timestamp($7/1000))
-	`, msg.ExternalWorkOrderId, int(assetId), int(productTypeId), msg.Quantity, int(msg.Status), msg.StartTimeUnixMs, msg.EndTimeUnixMs)
+		VALUES ($1, $2, $3, $4, $5, CASE WHEN $6 IS NOT NULL THEN to_timestamp($6/1000) END, CASE WHEN $7 IS NOT NULL THEN to_timestamp($7/1000) END)
+	`, msg.ExternalWorkOrderId, int(assetId), int(productTypeId), int(msg.Quantity), int(msg.Status), helper.Uint64PtrToInt64Ptr(msg.StartTimeUnixMs), helper.Uint64PtrToInt64Ptr(msg.EndTimeUnixMs))
 	if err != nil {
 		zap.S().Warnf("Error inserting work order: %v (workOrderId: %v) [%s]", err, msg.ExternalWorkOrderId, cmdTag)
 		zap.S().Debugf("Message: %v (Topic: %v)", msg, topic)

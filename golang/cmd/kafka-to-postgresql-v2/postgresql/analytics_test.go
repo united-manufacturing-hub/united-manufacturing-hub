@@ -4,11 +4,13 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/pashagolub/pgxmock/v3"
 	"github.com/stretchr/testify/assert"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/kafka-to-postgresql-v2/helper"
 	sharedStructs "github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/kafka-to-postgresql-v2/shared"
 	"testing"
 )
 
 func TestWorkOrder(t *testing.T) {
+	helper.InitTestLogging()
 	c := CreateMockConnection(t)
 	// Cast to PostgresqlConnection to access the DB field
 
@@ -23,12 +25,12 @@ func TestWorkOrder(t *testing.T) {
 			ExternalWorkOrderId: "#1274",
 			Product: sharedStructs.WorkOrderCreateMessageProduct{
 				ExternalProductId: "test",
-				CycleTimeMs:       120,
+				CycleTimeMs:       helper.IntToUint64Ptr(120),
 			},
 			Quantity:        0,
 			Status:          0,
-			StartTimeUnixMs: 0,
-			EndTimeUnixMs:   0,
+			StartTimeUnixMs: helper.IntToUint64Ptr(0),
+			EndTimeUnixMs:   helper.IntToUint64Ptr(0),
 		}
 		topic := sharedStructs.TopicDetails{
 			Enterprise: "umh",
@@ -48,8 +50,8 @@ func TestWorkOrder(t *testing.T) {
 		// Expect Exec from InsertWorkOrderCreate
 		mock.ExpectBeginTx(pgx.TxOptions{})
 		mock.ExpectExec(`
-		INSERT INTO work_order\(external_work_order_id, asset_id, product_type_id, quantity, status, start_time, end_time\) VALUES \(\$1, \$2, \$3, \$4, \$5, to_timestamp\(\$6\/1000\), to_timestamp\(\$7\/1000\)\)
-	`).WithArgs("#1274", 1, 1, uint64(0), int(0), uint64(0), uint64(0)).
+		INSERT INTO work_order\(external_work_order_id, asset_id, product_type_id, quantity, status, start_time, end_time\) VALUES \(\$1, \$2, \$3, \$4, \$5, CASE WHEN \$6 IS NOT NULL THEN to_timestamp\(\$6/1000\) END, CASE WHEN \$7 IS NOT NULL THEN to_timestamp\(\$7/1000\) END\)
+	`).WithArgs("#1274", 1, 1, 0, 0, helper.MatchInt64Ptr(helper.IntToInt64Ptr(0)), helper.MatchInt64Ptr(helper.IntToInt64Ptr(0))).
 			WillReturnResult(pgxmock.NewResult("INSERT", 1))
 		mock.ExpectCommit()
 
@@ -121,17 +123,17 @@ func TestProduct(t *testing.T) {
 	mock.ExpectQuery(`SELECT product_type_id FROM product_type WHERE external_product_type_id = \$1 AND asset_id = \$2`).
 		WithArgs("#1274", 1).
 		WillReturnRows(mock.NewRows([]string{"product_type_id"}).AddRow(1))
-	_, err := c.GetOrInsertProductType(1, "#1274", 1)
+	_, err := c.GetOrInsertProductType(1, "#1274", helper.IntToUint64Ptr(1))
 	assert.NoError(t, err)
 
 	t.Run("add", func(t *testing.T) {
 		msg := sharedStructs.ProductAddMessage{
 			ExternalProductId: "#1274",
-			ProductBatchId:    "0000-1234",
-			StartTimeUnixMs:   0,
+			ProductBatchId:    helper.StringToPtr("0000-1234"),
+			StartTimeUnixMs:   helper.IntToUint64Ptr(0),
 			EndTimeUnixMs:     10,
 			Quantity:          512,
-			BadQuantity:       0,
+			BadQuantity:       helper.IntToUint64Ptr(0),
 		}
 		topic := sharedStructs.TopicDetails{
 			Enterprise: "umh",
@@ -146,7 +148,7 @@ func TestProduct(t *testing.T) {
 		// Expect Exec from InsertProductAdd
 		mock.ExpectBeginTx(pgx.TxOptions{})
 		mock.ExpectExec(`INSERT INTO product\(external_product_type_id, product_batch_id, asset_id, start_time, end_time, quantity, bad_quantity\)
-		VALUES \(\$1, \$2, \$3, to_timestamp\(\$4\/1000\), to_timestamp\(\$5\/1000\), \$6, \$7\)`).
+		VALUES \(\$1, \$2, \$3, CASE WHEN \$4 IS NOT NULL THEN to_timestamp\(\$4\/1000\) END, to_timestamp\(\$5\/1000\), \$6, \$7\)`).
 			WithArgs(1, "0000-1234", 1, uint64(0), uint64(10), 512, 0).
 			WillReturnResult(pgxmock.NewResult("INSERT", 1))
 		mock.ExpectCommit()

@@ -3,6 +3,7 @@ package postgresql
 import (
 	"fmt"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/kafka-to-postgresql-v2/helper"
 	sharedStructs "github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/kafka-to-postgresql-v2/shared"
 	"go.uber.org/zap"
 )
@@ -12,7 +13,7 @@ func (c *Connection) InsertProductAdd(msg *sharedStructs.ProductAddMessage, topi
 	if err != nil {
 		return err
 	}
-	productTypeId, err := c.GetOrInsertProductType(assetId, msg.ExternalProductId, 0)
+	productTypeId, err := c.GetOrInsertProductType(assetId, msg.ExternalProductId, nil)
 	if err != nil {
 		return err
 	}
@@ -27,9 +28,19 @@ func (c *Connection) InsertProductAdd(msg *sharedStructs.ProductAddMessage, topi
 	// Insert product
 	var cmdTag pgconn.CommandTag
 	cmdTag, err = tx.Exec(ctx, `
-		INSERT INTO product(external_product_type_id, product_batch_id, asset_id, start_time, end_time, quantity, bad_quantity)
-		VALUES ($1, $2, $3, to_timestamp($4/1000), to_timestamp($5/1000), $6, $7)
-	`, int(productTypeId), msg.ProductBatchId, int(assetId), msg.StartTimeUnixMs, msg.EndTimeUnixMs, int(msg.Quantity), int(msg.BadQuantity))
+			INSERT INTO product(external_product_type_id, product_batch_id, asset_id, start_time, end_time, quantity, bad_quantity)
+				VALUES (
+					$1, 
+					$2, 
+					$3, 
+					CASE 
+						WHEN $4 IS NOT NULL THEN to_timestamp($4/1000) 
+						END, 
+					to_timestamp($5/1000), 
+					$6, 
+					$7
+				)
+		`, int(productTypeId), msg.ProductBatchId, int(assetId), helper.Uint64PtrToInt64Ptr(msg.StartTimeUnixMs), msg.EndTimeUnixMs, int(msg.Quantity), helper.Uint64PtrToInt64Ptr(msg.BadQuantity))
 	if err != nil {
 		zap.S().Warnf("Error inserting product: %v (productTypeId: %v) [%s]", err, productTypeId, cmdTag)
 		zap.S().Debugf("Message: %v (Topic: %v)", msg, topic)
@@ -47,7 +58,7 @@ func (c *Connection) UpdateBadQuantityForProduct(msg *sharedStructs.ProductSetBa
 	if err != nil {
 		return err
 	}
-	productTypeId, err := c.GetOrInsertProductType(assetId, msg.ExternalProductId, 0)
+	productTypeId, err := c.GetOrInsertProductType(assetId, msg.ExternalProductId, nil)
 	if err != nil {
 		return err
 	}
@@ -66,9 +77,9 @@ func (c *Connection) UpdateBadQuantityForProduct(msg *sharedStructs.ProductSetBa
         SET bad_quantity = bad_quantity + $1
         WHERE external_product_type_id = $2
           AND asset_id = $3
-          AND end_time = $4
+          AND end_time = to_timestamp($4/1000)
           AND (quantity - bad_quantity) >= $1
-    `, int(msg.BadQuantity), productTypeId, assetId, msg.EndTimeUnixMs)
+    `, int(msg.BadQuantity), int(productTypeId), int(assetId), msg.EndTimeUnixMs)
 
 	if err != nil {
 		zap.S().Warnf("Error updating bad quantity: %v", err)
