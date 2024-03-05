@@ -23,7 +23,7 @@ func (c *Connection) InsertShiftAdd(msg *sharedStructs.ShiftAddMessage, topic *s
 	// Insert shift
 	var cmdTag pgconn.CommandTag
 	cmdTag, err = tx.Exec(ctx, `
-		INSERT INTO shifts (asset_id, start_time, end_time)
+		INSERT INTO shift(asset_id, start_time, end_time)
 		VALUES ($1, to_timestamp($2 / 1000), to_timestamp($3 / 1000))
 		ON CONFLICT ON CONSTRAINT shift_start_asset_uniq
 		DO NOTHING;
@@ -57,7 +57,7 @@ func (c *Connection) DeleteShiftByStartTime(msg *sharedStructs.ShiftDeleteMessag
 	// Delete shift
 	var cmdTag pgconn.CommandTag
 	cmdTag, err = tx.Exec(ctx, `
-		DELETE FROM shifts
+		DELETE FROM shift
 		WHERE asset_id = $1 AND start_time = to_timestamp($2 / 1000);
 	`, int(assetId), msg.StartTimeUnixMs)
 

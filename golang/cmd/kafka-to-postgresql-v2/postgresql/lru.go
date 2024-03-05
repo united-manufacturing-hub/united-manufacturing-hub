@@ -118,7 +118,7 @@ func (c *Connection) GetOrInsertProductType(assetId uint64, externalProductId st
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			// Row isn't found, need to insert
-			insertQuery := `INSERT INTO product_types (external_product_type_id, cycle_time_ms, asset_id) VALUES ($1, $2, $3) RETURNING productTypeId`
+			insertQuery := `INSERT INTO product_type(external_product_type_id, cycle_time_ms, asset_id) VALUES ($1, $2, $3) RETURNING productTypeId`
 			insertRowContext, insertRowContextCncl := get1MinuteContext()
 			defer insertRowContextCncl()
 
