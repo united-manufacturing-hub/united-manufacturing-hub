@@ -59,6 +59,21 @@ type WorkOrderStopMessage struct {
 	EndTimeUnixMs       uint64 `json:"end_time_unix_ms"`
 }
 
+type ProductAddMessage struct {
+	ExternalProductId string `json:"external_product_id"`
+	ProductBatchId    string `json:"product_batch_id,omitempty"`
+	StartTimeUnixMs   uint64 `json:"start_time_unix_ms,omitempty"`
+	EndTimeUnixMs     uint64 `json:"end_time_unix_ms"`
+	Quantity          uint64 `json:"quantity"`
+	BadQuantity       uint64 `json:"bad_quantity,omitempty"`
+}
+
+type ProductSetBadQuantityMessage struct {
+	ExternalProductId string `json:"external_product_id"`
+	EndTimeUnixMs     uint64 `json:"end_time_unix_ms"`
+	BadQuantity       uint64 `json:"bad_quantity"`
+}
+
 type PgxIface interface {
 	Begin(context.Context) (pgx.Tx, error)
 	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
