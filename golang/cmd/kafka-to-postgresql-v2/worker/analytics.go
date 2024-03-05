@@ -107,3 +107,30 @@ func parseProductTypeCreate(value []byte) (*shared.ProductTypeCreateMessage, err
 	}
 	return &message, err
 }
+
+func parseShiftAdd(value []byte) (*shared.ShiftAddMessage, error) {
+	// Try parse to ShiftAddMessage
+	var message shared.ShiftAddMessage
+	err := json.Unmarshal(value, &message)
+
+	// Validate that StartTimeUnixMs & EndTimeUnixMs are set
+	if message.StartTimeUnixMs == 0 {
+		return nil, errors.New("start_time_unix_ms is required")
+	}
+	if message.EndTimeUnixMs == 0 {
+		return nil, errors.New("end_time_unix_ms is required")
+	}
+	return &message, err
+}
+
+func parseShiftDelete(value []byte) (*shared.ShiftDeleteMessage, error) {
+	// Try parse to ShiftDeleteMessage
+	var message shared.ShiftDeleteMessage
+	err := json.Unmarshal(value, &message)
+
+	// Validate that StartTimeUnixMs is set
+	if message.StartTimeUnixMs == 0 {
+		return nil, errors.New("start_time_unix_ms is required")
+	}
+	return &message, err
+}

@@ -39,11 +39,7 @@ func (c *Connection) InsertProductAdd(msg *sharedStructs.ProductAddMessage, topi
 		}
 		return err
 	}
-	err = tx.Commit(ctx)
-	if err != nil {
-		return err
-	}
-	return nil
+	return tx.Commit(ctx)
 }
 
 func (c *Connection) UpdateBadQuantityForProduct(msg *sharedStructs.ProductSetBadQuantityMessage, topic *sharedStructs.TopicDetails) error {
@@ -93,9 +89,5 @@ func (c *Connection) UpdateBadQuantityForProduct(msg *sharedStructs.ProductSetBa
 		return fmt.Errorf("bad quantity update condition not met for product: %v", msg)
 	}
 
-	err = tx.Commit(ctx)
-	if err != nil {
-		return err
-	}
-	return nil
+	return tx.Commit(ctx)
 }
