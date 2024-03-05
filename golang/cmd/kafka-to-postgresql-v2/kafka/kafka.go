@@ -58,6 +58,7 @@ func (c *Connection) GetMessages() <-chan *shared.KafkaMessage {
 }
 
 func (c *Connection) MarkMessage(message *shared.KafkaMessage) {
+	c.marked.Add(1)
 	c.consumer.MarkMessage(message)
 }
 
