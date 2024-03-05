@@ -44,9 +44,9 @@ func (c *Connection) InsertProductAdd(msg *sharedStructs.ProductAddMessage, topi
                         $2,
                         $3,
                         CASE
-                                    WHEN $4::int IS NOT NULL THEN To_timestamp($4::int/1000)
+                                    WHEN $4::int IS NOT NULL THEN to_timestamp($4::int/1000)
                         END::timestamptz,
-                        To_timestamp($5/1000),
+                        to_timestamp($5/1000),
                         $6,
                         $7::int
 				)
@@ -87,7 +87,7 @@ func (c *Connection) UpdateBadQuantityForProduct(msg *sharedStructs.ProductSetBa
 		SET    bad_quantity = bad_quantity + $1
 		WHERE  external_product_type_id = $2
 			   AND asset_id = $3
-			   AND end_time = To_timestamp($4 / 1000)
+			   AND end_time = to_timestamp($4 / 1000)
 			   AND ( quantity - bad_quantity ) >= $1 
     `, int(msg.BadQuantity), int(productTypeId), int(assetId), msg.EndTimeUnixMs)
 
