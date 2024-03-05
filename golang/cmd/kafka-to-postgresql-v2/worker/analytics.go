@@ -100,7 +100,7 @@ func parseProductTypeCreate(value []byte) (*shared.ProductTypeCreateMessage, err
 
 	// Validate that ExternalProductTypeId & CycleTimeMs are set
 	if message.ExternalProductTypeId == "" {
-		return nil, errors.New("externalProductTypeId is required")
+		return nil, errors.New("external_product_type_id is required")
 	}
 	if message.CycleTimeMs == 0 {
 		return nil, errors.New("cycleTimeMs is required")

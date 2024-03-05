@@ -27,7 +27,7 @@ func (c *Connection) InsertProductAdd(msg *sharedStructs.ProductAddMessage, topi
 	// Insert product
 	var cmdTag pgconn.CommandTag
 	cmdTag, err = tx.Exec(ctx, `
-		INSERT INTO products (externalProductTypeId, productBatchId, assetId, startTime, endTime, quantity, badQuantity)
+		INSERT INTO products (external_product_type_id, product_batch_id, asset_id, start_time, end_time, quantity, bad_quantity)
 		VALUES ($1, $2, $3, to_timestamp($4/1000), to_timestamp($5/1000), $6, $7)
 	`, int(productTypeId), msg.ProductBatchId, int(assetId), msg.StartTimeUnixMs, msg.EndTimeUnixMs, int(msg.Quantity), int(msg.BadQuantity))
 	if err != nil {
@@ -63,11 +63,11 @@ func (c *Connection) UpdateBadQuantityForProduct(msg *sharedStructs.ProductSetBa
 	// Update bad quantity with check integrated in WHERE clause
 	cmdTag, err := tx.Exec(ctx, `
         UPDATE products
-        SET badQuantity = badQuantity + $1
-        WHERE externalProductTypeId = $2
-          AND assetId = $3
-          AND endTime = $4
-          AND (quantity - badQuantity) >= $1
+        SET bad_quantity = bad_quantity + $1
+        WHERE external_product_type_id = $2
+          AND asset_id = $3
+          AND end_time = $4
+          AND (quantity - bad_quantity) >= $1
     `, int(msg.BadQuantity), productTypeId, assetId, msg.EndTimeUnixMs)
 
 	if err != nil {
