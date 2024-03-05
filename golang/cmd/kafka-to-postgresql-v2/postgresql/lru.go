@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"github.com/jackc/pgx/v5"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/kafka-to-postgresql-v2/helper"
 	sharedStructs "github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/kafka-to-postgresql-v2/shared"
 	"golang.org/x/crypto/sha3"
 	"strings"
@@ -84,7 +85,7 @@ func (c *Connection) lookupAssetIdLRU(topic *sharedStructs.TopicDetails) (uint64
 
 var ptIdLock = sync.Mutex{}
 
-func (c *Connection) GetOrInsertProductType(assetId uint64, externalProductId string, cycleTimeMs uint64) (uint64, error) {
+func (c *Connection) GetOrInsertProductType(assetId uint64, externalProductId string, cycleTimeMs *uint64) (uint64, error) {
 	if c.Db == nil {
 		return 0, errors.New("database is nil")
 	}
@@ -103,7 +104,7 @@ func (c *Connection) GetOrInsertProductType(assetId uint64, externalProductId st
 	}
 
 	// Don't add if cycleTimeMs is 0
-	if cycleTimeMs == 0 {
+	if cycleTimeMs == nil || *cycleTimeMs == 0 {
 		return 0, errors.New("not found")
 	}
 
@@ -122,7 +123,8 @@ func (c *Connection) GetOrInsertProductType(assetId uint64, externalProductId st
 			insertRowContext, insertRowContextCncl := get1MinuteContext()
 			defer insertRowContextCncl()
 
-			err = c.Db.QueryRow(insertRowContext, insertQuery, externalProductId, cycleTimeMs, int(assetId)).Scan(&ptId)
+			// The deref for cycleTimeMs is safe because we checked for nil earlier
+			err = c.Db.QueryRow(insertRowContext, insertQuery, externalProductId, helper.Uint64PtrToInt64Ptr(cycleTimeMs), int(assetId)).Scan(&ptId)
 			if err != nil {
 				return 0, err
 			}
