@@ -148,7 +148,7 @@ func TestProduct(t *testing.T) {
 		// Expect Exec from InsertProductAdd
 		mock.ExpectBeginTx(pgx.TxOptions{})
 		mock.ExpectExec(`INSERT INTO product\(external_product_type_id, product_batch_id, asset_id, start_time, end_time, quantity, bad_quantity\)
-		VALUES \( \$1, \$2, \$3, CASE WHEN \$4 IS NOT NULL THEN to_timestamp\(\$4\/1000\) ELSE NULL END::timestamptz, to_timestamp\(\$5\/1000\), \$6, \$7 \)`).
+		VALUES \( \$1, \$2, \$3, CASE WHEN \$4 IS NOT NULL THEN to_timestamp\(\$4\/1000\) ELSE NULL END\:\:timestamptz, to_timestamp\(\$5\/1000\), \$6, \$7 \)`).
 			WithArgs(1, helper.StringToNullString("0000-1234"), 1, helper.Uint64PtrToNullInt64(helper.IntToUint64Ptr(0)), uint64(10), 512, helper.Uint64PtrToNullInt64(helper.IntToUint64Ptr(0))).
 			WillReturnResult(pgxmock.NewResult("INSERT", 1))
 		mock.ExpectCommit()
