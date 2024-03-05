@@ -13,7 +13,7 @@ func parseWorkOrderCreate(value []byte) (*shared.WorkOrderCreateMessage, error) 
 
 	// Validate that ExternalWorkOrderId, Product.ExternalProductId & Quantity are set
 	if message.ExternalWorkOrderId == "" {
-		return nil, errors.New("externalWorkOrderId is required")
+		return nil, errors.New("external_work_order_id is required")
 	}
 	if message.Product.ExternalProductId == "" {
 		return nil, errors.New("product.externalProductId is required")
@@ -36,7 +36,7 @@ func parseWorkOrderStart(value []byte) (*shared.WorkOrderStartMessage, error) {
 
 	// Validate that ExternalWorkOrderId & StartTimeUnixMs are set
 	if message.ExternalWorkOrderId == "" {
-		return nil, errors.New("externalWorkOrderId is required")
+		return nil, errors.New("external_work_order_id is required")
 	}
 	if message.StartTimeUnixMs == 0 {
 		return nil, errors.New("start_time_unix_ms is required")
@@ -51,7 +51,7 @@ func parseWorkOrderStop(value []byte) (*shared.WorkOrderStopMessage, error) {
 
 	// Validate that ExternalWorkOrderId & EndTimeUnixMs are set
 	if message.ExternalWorkOrderId == "" {
-		return nil, errors.New("externalWorkOrderId is required")
+		return nil, errors.New("external_work_order_id is required")
 	}
 	if message.EndTimeUnixMs == 0 {
 		return nil, errors.New("end_time_unix_ms is required")
