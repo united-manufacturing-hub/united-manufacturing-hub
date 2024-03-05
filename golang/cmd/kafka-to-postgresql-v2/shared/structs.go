@@ -36,8 +36,8 @@ const (
 )
 
 type WorkOrderCreateMessageProduct struct {
-	ExternalProductId string `json:"external_product_id"`
-	CycleTimeMs       uint64 `json:"cycle_time_ms,omitempty"` //Note: omitempty is not checked when unmarshalling from JSON, and only used as a note for the reader
+	ExternalProductId string  `json:"external_product_id"`
+	CycleTimeMs       *uint64 `json:"cycle_time_ms,omitempty"`
 }
 
 type WorkOrderCreateMessage struct {
@@ -45,8 +45,8 @@ type WorkOrderCreateMessage struct {
 	Product             WorkOrderCreateMessageProduct `json:"product"`
 	Quantity            uint64                        `json:"quantity"`
 	Status              Status                        `json:"status"`
-	StartTimeUnixMs     uint64                        `json:"start_time_unix_ms,omitempty"`
-	EndTimeUnixMs       uint64                        `json:"end_time_unix_ms,omitempty"`
+	StartTimeUnixMs     *uint64                       `json:"start_time_unix_ms,omitempty"`
+	EndTimeUnixMs       *uint64                       `json:"end_time_unix_ms,omitempty"`
 }
 
 type WorkOrderStartMessage struct {
@@ -60,12 +60,12 @@ type WorkOrderStopMessage struct {
 }
 
 type ProductAddMessage struct {
-	ExternalProductId string `json:"external_product_id"`
-	ProductBatchId    string `json:"product_batch_id,omitempty"`
-	StartTimeUnixMs   uint64 `json:"start_time_unix_ms,omitempty"`
-	EndTimeUnixMs     uint64 `json:"end_time_unix_ms"`
-	Quantity          uint64 `json:"quantity"`
-	BadQuantity       uint64 `json:"bad_quantity,omitempty"`
+	ExternalProductId string  `json:"external_product_id"`
+	ProductBatchId    *string `json:"product_batch_id,omitempty"`
+	StartTimeUnixMs   *uint64 `json:"start_time_unix_ms,omitempty"`
+	EndTimeUnixMs     uint64  `json:"end_time_unix_ms"`
+	Quantity          uint64  `json:"quantity"`
+	BadQuantity       *uint64 `json:"bad_quantity,omitempty"`
 }
 
 type ProductSetBadQuantityMessage struct {
