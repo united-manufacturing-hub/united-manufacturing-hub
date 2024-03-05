@@ -36,7 +36,7 @@ func (c *Connection) InsertShiftAdd(msg *sharedStructs.ShiftAddMessage, topic *s
                         To_timestamp($3 / 1000)
             )
 		on conflict
-		ON CONSTRAINT shift_start_asset_uniq do nothing;
+		ON CONSTRAINT shift_start_asset_uniq do nothing
 	`, int(assetId), msg.StartTimeUnixMs, msg.EndTimeUnixMs)
 
 	if err != nil {
