@@ -24,11 +24,13 @@ func (c *Connection) InsertWorkOrderCreate(msg *sharedStructs.WorkOrderCreateMes
 		return err
 	}
 	// Don't forget to convert unix ms to timestamptz
+	values := []interface{}{msg.ExternalWorkOrderId, int(assetId), int(productTypeId), int(msg.Quantity), int(msg.Status), helper.Uint64PtrToNullInt64(msg.StartTimeUnixMs), helper.Uint64PtrToNullInt64(msg.EndTimeUnixMs)}
+	zap.S().Debugf("Inserting work order: %+v", values)
 	var cmdTag pgconn.CommandTag
 	cmdTag, err = tx.Exec(ctx, `
 		INSERT INTO work_order(external_work_order_id, asset_id, product_type_id, quantity, status, start_time, end_time)
 		VALUES ($1, $2, $3, $4, $5, CASE WHEN $6 IS NOT NULL THEN to_timestamp($6/1000) END, CASE WHEN $7 IS NOT NULL THEN to_timestamp($7/1000) END)
-	`, msg.ExternalWorkOrderId, int(assetId), int(productTypeId), int(msg.Quantity), int(msg.Status), helper.Uint64PtrToNullInt64(msg.StartTimeUnixMs), helper.Uint64PtrToNullInt64(msg.EndTimeUnixMs))
+	`, values...)
 	if err != nil {
 		zap.S().Warnf("Error inserting work order: %v (workOrderId: %v) [%s]", err, msg.ExternalWorkOrderId, cmdTag)
 		zap.S().Debugf("Message: %v (Topic: %v)", msg, topic)
