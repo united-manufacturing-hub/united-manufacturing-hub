@@ -64,11 +64,11 @@ func TestWorkOrder(t *testing.T) {
 					 \$4,
 					 \$5,
 					 CASE
-					   WHEN \$6 \:\: BIGINT IS NOT NULL THEN to_timestamp\(\$6 \:\: BIGINT / 1000\)
+					   WHEN \$6 \:\: INT IS NOT NULL THEN to_timestamp\(\$6 \:\: INT / 1000.0\)
 					   ELSE NULL
 					 END \:\: timestamptz,
 					 CASE
-					   WHEN \$7 \:\: BIGINT IS NOT NULL THEN to_timestamp\(\$7 \:\: BIGINT / 1000\)
+					   WHEN \$7 \:\: INT IS NOT NULL THEN to_timestamp\(\$7 \:\: INT / 1000.0\)
 					   ELSE NULL
 					 END \:\: timestamptz\) 
 	`).WithArgs("#1274", 1, 1, 0, 0, helper.Uint64PtrToNullInt64(helper.IntToUint64Ptr(0)), helper.Uint64PtrToNullInt64(helper.IntToUint64Ptr(0))).
@@ -94,7 +94,7 @@ func TestWorkOrder(t *testing.T) {
 		mock.ExpectExec(`
 		UPDATE work_order
 		SET    status = 1,
-			   start_time = to_timestamp\(\$2 / 1000\)
+			   start_time = to_timestamp\(\$2 / 1000.0\)
 		WHERE  external_work_order_id = \$1
 			   AND status = 0
 			   AND start_time IS NULL
@@ -122,7 +122,7 @@ func TestWorkOrder(t *testing.T) {
 		mock.ExpectExec(`
 		UPDATE work_order
 		SET    status = 2,
-			   end_time = to_timestamp\(\$2 / 1000\)
+			   end_time = to_timestamp\(\$2 / 1000.0\)
 		WHERE  external_work_order_id = \$1
 			   AND status = 1
 			   AND end_time IS NULL
@@ -303,8 +303,8 @@ func TestShift(t *testing.T) {
             VALUES
             \(
                         \$1,
-                        to_timestamp\(\$2 / 1000\),
-                        to_timestamp\(\$3 / 1000\)
+                        to_timestamp\(\$2 / 1000.0\),
+                        to_timestamp\(\$3 / 1000.0\)
             \)
 		on conflict
 		ON CONSTRAINT shift_start_asset_uniq do nothing
@@ -331,7 +331,7 @@ func TestShift(t *testing.T) {
 		mock.ExpectExec(`
 		DELETE FROM shift
 		WHERE  asset_id = \$1
-			   AND start_time = to_timestamp\(\$2 / 1000\); 
+			   AND start_time = to_timestamp\(\$2 / 1000.0\); 
 `).
 			WithArgs(1, uint64(1)).
 			WillReturnResult(pgxmock.NewResult("DELETE", 1))
@@ -374,10 +374,10 @@ func TestState(t *testing.T) {
 
 		mock.ExpectExec(`		
 		UPDATE state
-		SET    end_time = to_timestamp\(\$2 / 1000\)
+		SET    end_time = to_timestamp\(\$2 / 1000.0\)
 		WHERE  asset_id = \$1
 			   AND end_time IS NULL
-			   AND start_time < to_timestamp\(\$2 / 1000\) 
+			   AND start_time < to_timestamp\(\$2 / 1000.0\) 
 		`).WithArgs(1, uint64(1)).
 			WillReturnResult(pgxmock.NewResult("UPDATE", 0))
 
@@ -414,10 +414,10 @@ func TestState(t *testing.T) {
 		mock.ExpectBeginTx(pgx.TxOptions{})
 		mock.ExpectExec(`
 		UPDATE state
-		SET    end_time = to_timestamp\(\$2 / 1000\)
+		SET    end_time = to_timestamp\(\$2 / 1000.0\)
 		WHERE  asset_id = \$1
 			   AND end_time IS NULL
-			   AND start_time < to_timestamp\(\$2 / 1000\) 
+			   AND start_time < to_timestamp\(\$2 / 1000.0\) 
 		`).WithArgs(1, uint64(100)).
 			WillReturnResult(pgxmock.NewResult("UPDATE", 1))
 
@@ -452,10 +452,10 @@ func TestState(t *testing.T) {
 		mock.ExpectBeginTx(pgx.TxOptions{})
 		mock.ExpectExec(`
 		UPDATE state
-		SET    end_time = to_timestamp\(\$2 / 1000\)
+		SET    end_time = to_timestamp\(\$2 / 1000.0\)
 		WHERE  asset_id = \$1
 			   AND end_time IS NULL
-			   AND start_time < to_timestamp\(\$2 / 1000\) 
+			   AND start_time < to_timestamp\(\$2 / 1000.0\) 
 		`).WithArgs(1, uint64(200)).
 			WillReturnResult(pgxmock.NewResult("UPDATE", 1))
 
@@ -504,28 +504,28 @@ func TestState(t *testing.T) {
 		mock.ExpectExec(`
 		DELETE FROM state
 		WHERE  asset_id = \$1
-			   AND start_time >= to_timestamp\(\$2 / 1000\)
-			   AND start_time <= to_timestamp\(\$3 / 1000\) 
+			   AND start_time >= to_timestamp\(\$2 / 1000.0\)
+			   AND start_time <= to_timestamp\(\$3 / 1000.0\) 
 		`).WithArgs(1, uint64(0), uint64(100)).
 			WillReturnResult(pgxmock.NewResult("DELETE", 1))
 
 		// The left update command will not change anything
 		mock.ExpectExec(`
 		UPDATE state
-		SET    end_time = to_timestamp\(\$2 / 1000\)
+		SET    end_time = to_timestamp\(\$2 / 1000.0\)
 		WHERE  asset_id = \$1
-			   AND end_time > to_timestamp\(\$2 / 1000\)
-			   AND end_time <= to_timestamp\(\$3 / 1000\) 
+			   AND end_time > to_timestamp\(\$2 / 1000.0\)
+			   AND end_time <= to_timestamp\(\$3 / 1000.0\) 
 		`).WithArgs(1, uint64(0), uint64(100)).
 			WillReturnResult(pgxmock.NewResult("UPDATE", 0))
 
 		// The right update command will not change anything
 		mock.ExpectExec(`
 		UPDATE state
-		SET    start_time = to_timestamp\(\$3 / 1000\)
+		SET    start_time = to_timestamp\(\$3 / 1000.0\)
 		WHERE  asset_id = \$1
-			   AND start_time >= to_timestamp\(\$2 / 1000\)
-			   AND start_time < to_timestamp\(\$3 / 1000\) 
+			   AND start_time >= to_timestamp\(\$2 / 1000.0\)
+			   AND start_time < to_timestamp\(\$3 / 1000.0\) 
 		`).WithArgs(1, uint64(0), uint64(100)).
 			WillReturnResult(pgxmock.NewResult("UPDATE", 0))
 
@@ -537,8 +537,8 @@ func TestState(t *testing.T) {
              end_time,
              state\)
 		VALUES      \(\$1,
-					 to_timestamp\(\$2 / 1000\),
-					 to_timestamp\(\$3 / 1000\),
+					 to_timestamp\(\$2 / 1000.0\),
+					 to_timestamp\(\$3 / 1000.0\),
 					 \$4\) 
 `).
 			WithArgs(1, uint64(0), uint64(100), 40000).
@@ -561,28 +561,28 @@ func TestState(t *testing.T) {
 		mock.ExpectExec(`
 		DELETE FROM state
 		WHERE  asset_id = \$1
-			   AND start_time >= to_timestamp\(\$2 / 1000\)
-			   AND start_time <= to_timestamp\(\$3 / 1000\) 
+			   AND start_time >= to_timestamp\(\$2 / 1000.0\)
+			   AND start_time <= to_timestamp\(\$3 / 1000.0\) 
 		`).WithArgs(1, uint64(50), uint64(150)).
 			WillReturnResult(pgxmock.NewResult("DELETE", 0))
 
 		// The left update command will update the end time of the first state
 		mock.ExpectExec(`
 		UPDATE state
-		SET    end_time = to_timestamp\(\$2 / 1000\)
+		SET    end_time = to_timestamp\(\$2 / 1000.0\)
 		WHERE  asset_id = \$1
-			   AND end_time > to_timestamp\(\$2 / 1000\)
-			   AND end_time <= to_timestamp\(\$3 / 1000\) 
+			   AND end_time > to_timestamp\(\$2 / 1000.0\)
+			   AND end_time <= to_timestamp\(\$3 / 1000.0\) 
 		`).WithArgs(1, uint64(50), uint64(150)).
 			WillReturnResult(pgxmock.NewResult("UPDATE", 1))
 
 		// The right update command will update the start time of the second state
 		mock.ExpectExec(`
 		UPDATE state
-		SET    start_time = to_timestamp\(\$3 / 1000\)
+		SET    start_time = to_timestamp\(\$3 / 1000.0\)
 		WHERE  asset_id = \$1
-			   AND start_time >= to_timestamp\(\$2 / 1000\)
-			   AND start_time < to_timestamp\(\$3 / 1000\) 
+			   AND start_time >= to_timestamp\(\$2 / 1000.0\)
+			   AND start_time < to_timestamp\(\$3 / 1000.0\) 
 		`).WithArgs(1, uint64(50), uint64(150)).
 			WillReturnResult(pgxmock.NewResult("UPDATE", 1))
 
@@ -594,8 +594,8 @@ func TestState(t *testing.T) {
              end_time,
              state\)
 		VALUES      \(\$1,
-					 to_timestamp\(\$2 / 1000\),
-					 to_timestamp\(\$3 / 1000\),
+					 to_timestamp\(\$2 / 1000.0\),
+					 to_timestamp\(\$3 / 1000.0\),
 					 \$4\) 
 `).
 			WithArgs(1, uint64(50), uint64(150), 50000).
