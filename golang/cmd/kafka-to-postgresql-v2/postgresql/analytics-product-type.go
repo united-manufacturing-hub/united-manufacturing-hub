@@ -22,6 +22,7 @@ func (c *Connection) InsertProductTypeCreate(msg *sharedStructs.ProductTypeCreat
 
 	// Insert product_type
 	var cmdTag pgconn.CommandTag
+	// TODO: Change the on conflict later to return errors if the product type already exists
 	cmdTag, err = tx.Exec(ctx, `
 		INSERT INTO product_type
             (
