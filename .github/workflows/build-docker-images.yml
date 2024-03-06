@@ -31,7 +31,16 @@ jobs:
     outputs:
       barcodereader: ${{ steps.filter.outputs.barcodereader }}
       factoryinsight: ${{ steps.filter.outputs.factoryinsight }}
-      # Add outputs for other jobs as needed
+      grafana_umh: ${{ steps.filter.outputs.grafana_umh }}
+      hivemq_init: ${{ steps.filter.outputs.hivemq_init }}
+      kafka_bridge: ${{ steps.filter.outputs.kafka_bridge }}
+      kafka_init: ${{ steps.filter.outputs.kafka_init }}
+      kafka_to_postgresql: ${{ steps.filter.outputs.kafka_to_postgresql }}
+      kafka_to_postgresql_v2: ${{ steps.filter.outputs.kafka_to_postgresql_v2 }}
+      metrics: ${{ steps.filter.outputs.metrics }}
+      mqtt_kafka_bridge: ${{ steps.filter.outputs.mqtt_kafka_bridge }}
+      sensorconnect: ${{ steps.filter.outputs.sensorconnect }}
+
     steps:
       - uses: actions/checkout@v4
         with:
@@ -366,7 +375,7 @@ jobs:
 
   kafka-to-postgresql-v2:
     needs: check_paths
-    if: needs.check_paths.outputs.kafka_to_postgresql_v2 == true
+    if: needs.check_paths.outputs.kafka_to_postgresql_v2 == 'true'
     permissions:
       packages: write
       contents: read
