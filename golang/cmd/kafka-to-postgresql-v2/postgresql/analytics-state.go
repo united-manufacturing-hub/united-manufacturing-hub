@@ -54,8 +54,6 @@ func (c *Connection) InsertStateAdd(msg *sharedStructs.StateAddMessage, topic *s
                         to_timestamp($2::BIGINT  / 1000.0),
                         $3
             )
-		on conflict
-		ON CONSTRAINT state_start_asset_uniq do nothing
 	`, int(assetId), msg.StartTimeUnixMs, int(msg.State))
 
 	if err != nil {

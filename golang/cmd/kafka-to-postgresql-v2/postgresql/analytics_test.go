@@ -396,8 +396,6 @@ func TestState(t *testing.T) {
                         to_timestamp\(\$2/1000.0\),
                         \$3
             \)
-		on conflict
-		ON CONSTRAINT state_start_asset_uniq do nothing
 `).WithArgs(1, uint64(1), 10000).
 			WillReturnResult(pgxmock.NewResult("INSERT", 1))
 
@@ -436,8 +434,6 @@ func TestState(t *testing.T) {
                         to_timestamp\(\$2/1000.0\),
                         \$3
             \)
-		on conflict
-		ON CONSTRAINT state_start_asset_uniq do nothing
 `).WithArgs(1, uint64(100), 20000).
 			WillReturnResult(pgxmock.NewResult("INSERT", 1))
 
@@ -474,8 +470,6 @@ func TestState(t *testing.T) {
                         to_timestamp\(\$2/1000.0\),
                         \$3
             \)
-		on conflict
-		ON CONSTRAINT state_start_asset_uniq do nothing
 		`).WithArgs(1, uint64(200), 30000).
 			WillReturnResult(pgxmock.NewResult("INSERT", 1))
 
