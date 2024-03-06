@@ -83,13 +83,14 @@ func (c *Connection) UpdateBadQuantityForProduct(msg *sharedStructs.ProductSetBa
 	}
 
 	// Update bad quantity with check integrated in WHERE clause
+	// The coallesce is used to handle the case where bad_quantity is NULL, in which case we consider it to be 0
 	cmdTag, err := tx.Exec(ctx, `
         UPDATE product
 		SET    bad_quantity = bad_quantity + $1
 		WHERE  external_product_type_id = $2
 			   AND asset_id = $3
 			   AND end_time = to_timestamp($4::BIGINT / 1000.0)
-			   AND ( quantity - bad_quantity ) >= $1 
+			   AND ( quantity - coalesce(bad_quantity,0) ) >= $1 
     `, int(msg.BadQuantity), int(productTypeId), int(assetId), msg.EndTimeUnixMs)
 
 	if err != nil {
