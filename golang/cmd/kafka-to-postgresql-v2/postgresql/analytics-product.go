@@ -51,7 +51,7 @@ func (c *Connection) InsertProductAdd(msg *sharedStructs.ProductAddMessage, topi
                         $6,
                         $7::int
 				)
-		`, int(productTypeId), helper.StringPtrToNullString(msg.ProductBatchId), int(assetId), helper.Uint64PtrToNullInt64(msg.StartTimeUnixMs), int(msg.EndTimeUnixMs), int(msg.Quantity), helper.Uint64PtrToNullInt64(msg.BadQuantity))
+		`, int(productTypeId), helper.StringPtrToNullString(msg.ProductBatchId), int(assetId), helper.Uint64PtrToNullInt64(msg.StartTimeUnixMs), msg.EndTimeUnixMs, int(msg.Quantity), helper.Uint64PtrToNullInt64(msg.BadQuantity))
 	if err != nil {
 		zap.S().Warnf("Error inserting product: %v (productTypeId: %v) [%s]", err, productTypeId, cmdTag)
 		zap.S().Debugf("Message: %v (Topic: %v)", msg, topic)
@@ -90,7 +90,7 @@ func (c *Connection) UpdateBadQuantityForProduct(msg *sharedStructs.ProductSetBa
 			   AND asset_id = $3
 			   AND end_time = to_timestamp($4::BIGINT / 1000.0)
 			   AND ( quantity - bad_quantity ) >= $1 
-    `, int(msg.BadQuantity), int(productTypeId), int(assetId), int(msg.EndTimeUnixMs))
+    `, int(msg.BadQuantity), int(productTypeId), int(assetId), msg.EndTimeUnixMs)
 
 	if err != nil {
 		zap.S().Warnf("Error updating bad quantity: %v", err)
