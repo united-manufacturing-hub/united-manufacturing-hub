@@ -57,36 +57,47 @@ jobs:
           previousSHA=$(git rev-parse HEAD^)
           
           if git diff --name-only $previousSHA $currentSHA | grep -E '^(go.work|go.work.sum|golang/internal/|golang/pkg/|golang/test/|golang/go.mod|golang/go.sum|golang/cmd/barcodereader/)'; then
+            echo "Building barcodereader"
             echo "barcodereader=true" >> $GITHUB_OUTPUT
           fi
           if git diff --name-only $previousSHA $currentSHA | grep -E '^(go.work|go.work.sum|golang/internal/|golang/pkg/|golang/test/|golang/go.mod|golang/go.sum|golang/cmd/factoryinsight/)'; then
+            echo "Building factoryinsight"
             echo "factoryinsight=true" >> $GITHUB_OUTPUT
           fi
           if git diff --name-only $previousSHA $currentSHA | grep -E '^(go.work|go.work.sum|golang/internal/|golang/pkg/|golang/test/|golang/go.mod|golang/go.sum|golang/cmd/grafana-umh/)'; then
+              echo "Building grafana-umh"
               echo "grafana-umh=true" >> $GITHUB_OUTPUT
           fi
           if git diff --name-only $previousSHA $currentSHA | grep -E '^(go.work|go.work.sum|golang/internal/|golang/pkg/|golang/test/|golang/go.mod|golang/go.sum|golang/cmd/hivemq-init/)'; then
+              echo "Building hivemq-init"
               echo "hivemq-init=true" >> $GITHUB_OUTPUT
           fi
           if git diff --name-only $previousSHA $currentSHA | grep -E '^(go.work|go.work.sum|golang/internal/|golang/pkg/|golang/test/|golang/go.mod|golang/go.sum|golang/cmd/kafka-bridge/)'; then
+              echo "Building kafka-bridge"
               echo "kafka-bridge=true" >> $GITHUB_OUTPUT
           fi
           if git diff --name-only $previousSHA $currentSHA | grep -E '^(go.work|go.work.sum|golang/internal/|golang/pkg/|golang/test/|golang/go.mod|golang/go.sum|golang/cmd/kafka-init/)'; then
+              echo "Building kafka-init"
               echo "kafka-init=true" >> $GITHUB_OUTPUT
           fi
           if git diff --name-only $previousSHA $currentSHA | grep -E '^(go.work|go.work.sum|golang/internal/|golang/pkg/|golang/test/|golang/go.mod|golang/go.sum|golang/cmd/kafka-to-postgresql/)'; then
+              echo "Building kafka-to-postgresql"
               echo "kafka-to-postgresql=true" >> $GITHUB_OUTPUT
           fi
           if git diff --name-only $previousSHA $currentSHA | grep -E '^(go.work|go.work.sum|golang/internal/|golang/pkg/|golang/test/|golang/go.mod|golang/go.sum|golang/cmd/kafka-to-postgresql-v2/)'; then
+            echo "Building kafka-to-postgresql-v2"
             echo "kafka-to-postgresql-v2=true" >> $GITHUB_OUTPUT
           fi
           if git diff --name-only $previousSHA $currentSHA | grep -E '^(go.work|go.work.sum|golang/internal/|golang/pkg/|golang/test/|golang/go.mod|golang/go.sum|golang/cmd/metrics/)'; then
+            echo "Building metrics"
             echo "metrics=true" >> $GITHUB_OUTPUT
           fi
           if git diff --name-only $previousSHA $currentSHA | grep -E '^(go.work|go.work.sum|golang/internal/|golang/pkg/|golang/test/|golang/go.mod|golang/go.sum|golang/cmd/mqtt-kafka-bridge/)'; then
+            echo "Building mqtt-kafka-bridge"
             echo "mqtt-kafka-bridge=true" >> $GITHUB_OUTPUT
           fi
           if git diff --name-only $previousSHA $currentSHA | grep -E '^(go.work|go.work.sum|golang/internal/|golang/pkg/|golang/test/|golang/go.mod|golang/go.sum|golang/cmd/sensorconnect/)'; then
+            echo "Building sensorconnect"
             echo "sensorconnect=true" >> $GITHUB_OUTPUT
           fi
           
