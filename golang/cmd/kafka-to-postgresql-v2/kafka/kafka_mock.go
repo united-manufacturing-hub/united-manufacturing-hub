@@ -30,5 +30,4 @@ func GetMockKafkaClient(t *testing.T, msgchan chan *shared.KafkaMessage) IConnec
 		MessagesToSend: msgchan,
 		Marked:         make([]*shared.KafkaMessage, 0),
 	}
-	
 }
