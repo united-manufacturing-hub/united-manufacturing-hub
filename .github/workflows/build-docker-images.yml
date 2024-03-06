@@ -34,8 +34,8 @@ jobs:
       # Add outputs for other jobs as needed
     steps:
       - uses: actions/checkout@v4
-      - name: Checkout actual branch
-        run: git checkout ${{ github.ref }}
+      - name: Checkout actual branch (and not the refs/pull/<pr>/merge) to get the correct diff
+        run: git checkout ${{ github.head_ref }}
       - id: filter
         run: |
           echo "barcodereader=false"
