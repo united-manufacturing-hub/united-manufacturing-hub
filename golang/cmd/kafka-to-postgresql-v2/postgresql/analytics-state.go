@@ -28,7 +28,7 @@ func (c *Connection) InsertStateAdd(msg *sharedStructs.StateAddMessage, topic *s
 		WHERE  asset_id = $1
 			   AND end_time IS NULL
 			   AND start_time < to_timestamp($2 / 1000.0) 
-	`, int(assetId), msg.StartTimeUnixMs)
+	`, int(assetId), int(msg.StartTimeUnixMs))
 
 	if err != nil {
 		zap.S().Warnf("Error updating previous state: %v (start: %v | state: %v) [%s]", err, msg.StartTimeUnixMs, msg.State, cmdTag)
@@ -41,7 +41,6 @@ func (c *Connection) InsertStateAdd(msg *sharedStructs.StateAddMessage, topic *s
 	}
 
 	// Insert state
-	// TODO: Error if there is already a state with the same start time
 	cmdTag, err = tx.Exec(ctx, `
 		INSERT INTO state
             (
@@ -52,12 +51,12 @@ func (c *Connection) InsertStateAdd(msg *sharedStructs.StateAddMessage, topic *s
             VALUES
             (
                         $1,
-                        to_timestamp($2/1000.0),
+                        to_timestamp($2::int / 1000.0),
                         $3
             )
 		on conflict
 		ON CONSTRAINT state_start_asset_uniq do nothing
-	`, int(assetId), msg.StartTimeUnixMs, int(msg.State))
+	`, int(assetId), int(msg.StartTimeUnixMs), int(msg.State))
 
 	if err != nil {
 		zap.S().Warnf("Error inserting state: %v (start: %v | state: %v) [%s]", err, msg.StartTimeUnixMs, msg.State, cmdTag)
@@ -98,7 +97,7 @@ func (c *Connection) OverwriteStateByStartEndTime(msg *sharedStructs.StateOverwr
 		WHERE  asset_id = $1
 			   AND start_time >= to_timestamp($2 / 1000.0)
 			   AND start_time <= to_timestamp($3 / 1000.0) 
-	`, int(assetId), msg.StartTimeUnixMs, msg.EndTimeUnixMs)
+	`, int(assetId), int(msg.StartTimeUnixMs), int(msg.EndTimeUnixMs))
 
 	if err != nil {
 		zap.S().Warnf("Error deleting states: %v (start: %v | end: %v) [%v]", err, msg.StartTimeUnixMs, msg.EndTimeUnixMs, cmdTag)
@@ -117,7 +116,7 @@ func (c *Connection) OverwriteStateByStartEndTime(msg *sharedStructs.StateOverwr
 		WHERE  asset_id = $1
 			   AND end_time > to_timestamp($2 / 1000.0)
 			   AND end_time <= to_timestamp($3 / 1000.0) 
-	`, int(assetId), msg.StartTimeUnixMs, msg.EndTimeUnixMs)
+	`, int(assetId), int(msg.StartTimeUnixMs), int(msg.EndTimeUnixMs))
 
 	if err != nil {
 		zap.S().Warnf("Error updating states (left): %v (start: %v | end: %v) [%v]", err, msg.StartTimeUnixMs, msg.EndTimeUnixMs, cmdTag)
@@ -136,7 +135,7 @@ func (c *Connection) OverwriteStateByStartEndTime(msg *sharedStructs.StateOverwr
 		WHERE  asset_id = $1
 			   AND start_time >= to_timestamp($2 / 1000.0)
 			   AND start_time < to_timestamp($3 / 1000.0) 
-	`, int(assetId), msg.StartTimeUnixMs, msg.EndTimeUnixMs)
+	`, int(assetId), int(msg.StartTimeUnixMs), int(msg.EndTimeUnixMs))
 
 	if err != nil {
 		zap.S().Warnf("Error updating states (right): %v (start: %v | end: %v) [%v]", err, msg.StartTimeUnixMs, msg.EndTimeUnixMs, cmdTag)
@@ -160,7 +159,7 @@ func (c *Connection) OverwriteStateByStartEndTime(msg *sharedStructs.StateOverwr
 					 to_timestamp($2 / 1000.0),
 					 to_timestamp($3 / 1000.0),
 					 $4) 
-	`, int(assetId), msg.StartTimeUnixMs, msg.EndTimeUnixMs, int(msg.State))
+	`, int(assetId), int(msg.StartTimeUnixMs), int(msg.EndTimeUnixMs), int(msg.State))
 
 	if err != nil {
 		zap.S().Warnf("Error inserting state: %v (start: %v | end: %v | state: %v) [%v]", err, msg.StartTimeUnixMs, msg.EndTimeUnixMs, msg.State, cmdTag)
