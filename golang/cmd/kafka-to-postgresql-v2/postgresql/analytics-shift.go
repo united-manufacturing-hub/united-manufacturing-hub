@@ -37,7 +37,7 @@ func (c *Connection) InsertShiftAdd(msg *sharedStructs.ShiftAddMessage, topic *s
             )
 		on conflict
 		ON CONSTRAINT shift_start_asset_uniq do nothing
-	`, int(assetId), int(msg.StartTimeUnixMs), int(msg.EndTimeUnixMs))
+	`, int(assetId), msg.StartTimeUnixMs, msg.EndTimeUnixMs)
 
 	if err != nil {
 		zap.S().Warnf("Error inserting shift: %v (start: %v | end: %v) [%s]", err, msg.StartTimeUnixMs, msg.EndTimeUnixMs, cmdTag)
@@ -70,7 +70,7 @@ func (c *Connection) DeleteShiftByStartTime(msg *sharedStructs.ShiftDeleteMessag
 		DELETE FROM shift
 		WHERE  asset_id = $1
 			   AND start_time = to_timestamp($2::BIGINT / 1000.0); 
-	`, int(assetId), int(msg.StartTimeUnixMs))
+	`, int(assetId), msg.StartTimeUnixMs)
 
 	if err != nil {
 		zap.S().Warnf("Error deleting shift: %v (start: %v) [%s]", err, msg.StartTimeUnixMs, cmdTag)

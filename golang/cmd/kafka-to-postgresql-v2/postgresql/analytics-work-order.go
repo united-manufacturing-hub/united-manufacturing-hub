@@ -86,7 +86,7 @@ func (c *Connection) UpdateWorkOrderSetStart(msg *sharedStructs.WorkOrderStartMe
 			   AND status = 0
 			   AND start_time IS NULL
 			   AND asset_id = $3 
-	`, msg.ExternalWorkOrderId, int(msg.StartTimeUnixMs), int(assetId))
+	`, msg.ExternalWorkOrderId, msg.StartTimeUnixMs, int(assetId))
 	if err != nil {
 		zap.S().Warnf("Error updating work order: %v (workOrderId: %v) [%s]", err, msg.ExternalWorkOrderId, cmdTag)
 		zap.S().Debugf("Message: %v", msg)
@@ -128,7 +128,7 @@ func (c *Connection) UpdateWorkOrderSetStop(msg *sharedStructs.WorkOrderStopMess
 			   AND status = 1
 			   AND end_time IS NULL
 			   AND asset_id = $3 
-	`, msg.ExternalWorkOrderId, int(msg.EndTimeUnixMs), int(assetId))
+	`, msg.ExternalWorkOrderId, msg.EndTimeUnixMs, int(assetId))
 	if err != nil {
 		zap.S().Warnf("Error updating work order: %v (workOrderId: %v) [%s]", err, msg.ExternalWorkOrderId, cmdTag)
 		zap.S().Debugf("Message: %v", msg)
