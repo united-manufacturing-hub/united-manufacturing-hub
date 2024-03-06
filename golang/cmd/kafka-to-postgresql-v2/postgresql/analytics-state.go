@@ -41,6 +41,7 @@ func (c *Connection) InsertStateAdd(msg *sharedStructs.StateAddMessage, topic *s
 	}
 
 	// Insert state
+	// TODO: Error if there is already a state with the same start time
 	cmdTag, err = tx.Exec(ctx, `
 		INSERT INTO state
             (
@@ -51,7 +52,7 @@ func (c *Connection) InsertStateAdd(msg *sharedStructs.StateAddMessage, topic *s
             VALUES
             (
                         $1,
-                        to_timestamp($2/1000),
+                        to_timestamp($2/1000.0),
                         $3
             )
 		on conflict
