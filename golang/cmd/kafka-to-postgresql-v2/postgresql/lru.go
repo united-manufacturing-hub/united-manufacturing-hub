@@ -105,7 +105,23 @@ func (c *Connection) GetOrInsertProductType(assetId uint64, externalProductId st
 
 	// Don't add if cycleTimeMs is 0
 	if cycleTimeMs == nil || *cycleTimeMs == 0 {
-		return 0, errors.New("not found")
+		// Attempt to query from DB as last resort
+		selectQuery := `SELECT product_type_id FROM product_type WHERE external_product_type_id = $1 AND asset_id = $2`
+		selectRowContext, selectRowContextCncl := get1MinuteContext()
+		defer selectRowContextCncl()
+
+		err := c.Db.QueryRow(selectRowContext, selectQuery, externalProductId, int(assetId)).Scan(&ptId)
+		if err != nil {
+			if errors.Is(pgx.ErrNoRows, err) {
+				return 0, errors.New("not found")
+			} else {
+				return 0, err
+			}
+		}
+		// Set to LRU cache
+		c.addToProductTypeIdLRU(assetId, externalProductId, ptId)
+
+		return ptId, nil
 	}
 
 	selectQuery := `SELECT product_type_id FROM product_type WHERE external_product_type_id = $1 AND asset_id = $2`
