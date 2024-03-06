@@ -33,7 +33,7 @@ jobs:
       factoryinsight: ${{ steps.filter.outputs.factoryinsight }}
       # Add outputs for other jobs as needed
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - id: filter
         run: |
           echo "barcodereader=false"
