@@ -41,22 +41,20 @@ jobs:
           git checkout ${{ github.head_ref }}
       - id: filter
         run: |
-          echo "barcodereader=false"
-          echo "factoryinsight=false"
-          echo "grafana-umh=false"
-          echo "hivemq-init=false"
-          echo "kafka-bridge=false"
-          echo "kafka-init=false"
-          echo "kafka-to-postgresql=false"
-          echo "kafka-to-postgresql-v2=false"
-          echo "metrics=false"
-          echo "mqtt-kafka-bridge=false"
-          echo "sensorconnect=false"          
+          echo "barcodereader=false" >> $GITHUB_OUTPUT
+          echo "factoryinsight=false" >> $GITHUB_OUTPUT
+          echo "grafana-umh=false" >> $GITHUB_OUTPUT
+          echo "hivemq-init=false" >> $GITHUB_OUTPUT
+          echo "kafka-bridge=false" >> $GITHUB_OUTPUT
+          echo "kafka-init=false" >> $GITHUB_OUTPUT
+          echo "kafka-to-postgresql=false" >> $GITHUB_OUTPUT
+          echo "kafka-to-postgresql-v2=false" >> $GITHUB_OUTPUT
+          echo "metrics=false" >> $GITHUB_OUTPUT
+          echo "mqtt-kafka-bridge=false" >> $GITHUB_OUTPUT
+          echo "sensorconnect=false" >> $GITHUB_OUTPUT
           
           currentSHA=$(git rev-parse HEAD)
           previousSHA=$(git rev-parse HEAD^)
-          
-          
           
           if git diff --name-only $previousSHA $currentSHA | grep -E '^(go.work|go.work.sum|golang/internal/|golang/pkg/|golang/test/|golang/go.mod|golang/go.sum|golang/cmd/barcodereader/)'; then
             echo "barcodereader=true" >> $GITHUB_OUTPUT
