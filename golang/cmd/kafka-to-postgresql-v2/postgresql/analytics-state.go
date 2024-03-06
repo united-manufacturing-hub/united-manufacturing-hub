@@ -94,7 +94,7 @@ func (c *Connection) OverwriteStateByStartEndTime(msg *sharedStructs.StateOverwr
 		DELETE FROM state
 		WHERE  asset_id = $1
 			   AND start_time >= to_timestamp($2::BIGINT / 1000.0)
-			   AND start_time <= to_timestamp($3::BIGINT / 1000.0) 
+			   AND end_time <= to_timestamp($3::BIGINT / 1000.0) 
 	`, int(assetId), msg.StartTimeUnixMs, msg.EndTimeUnixMs)
 
 	if err != nil {
