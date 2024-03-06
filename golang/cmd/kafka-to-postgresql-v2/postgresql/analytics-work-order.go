@@ -42,11 +42,11 @@ func (c *Connection) InsertWorkOrderCreate(msg *sharedStructs.WorkOrderCreateMes
 					 $4,
 					 $5,
 					 CASE
-					   WHEN $6 :: INT IS NOT NULL THEN to_timestamp($6 :: INT / 1000.0)
+					   WHEN $6::BIGINT IS NOT NULL THEN to_timestamp($6::BIGINT  / 1000.0)
 					   ELSE NULL
 					 END :: timestamptz,
 					 CASE
-					   WHEN $7 :: INT IS NOT NULL THEN to_timestamp($7 :: INT / 1000.0)
+					   WHEN $7::BIGINT IS NOT NULL THEN to_timestamp($7::BIGINT  / 1000.0)
 					   ELSE NULL
 					 END :: timestamptz) 
 	`, values...)
@@ -81,7 +81,7 @@ func (c *Connection) UpdateWorkOrderSetStart(msg *sharedStructs.WorkOrderStartMe
 	cmdTag, err = tx.Exec(ctx, `
 		UPDATE work_order
 		SET    status = 1,
-			   start_time = to_timestamp($2 / 1000.0)
+			   start_time = to_timestamp($2::BIGINT / 1000.0)
 		WHERE  external_work_order_id = $1
 			   AND status = 0
 			   AND start_time IS NULL
@@ -123,7 +123,7 @@ func (c *Connection) UpdateWorkOrderSetStop(msg *sharedStructs.WorkOrderStopMess
 	cmdTag, err = tx.Exec(ctx, `
 		UPDATE work_order
 		SET    status = 2,
-			   end_time = to_timestamp($2 / 1000.0)
+			   end_time = to_timestamp($2::BIGINT / 1000.0)
 		WHERE  external_work_order_id = $1
 			   AND status = 1
 			   AND end_time IS NULL
