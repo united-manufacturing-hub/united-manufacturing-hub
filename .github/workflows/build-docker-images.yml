@@ -366,7 +366,7 @@ jobs:
 
   kafka-to-postgresql-v2:
     needs: check_paths
-    if: needs.check_paths.outputs.kafka_to_postgresql_v2 == 'true'
+    if: needs.check_paths.outputs.kafka_to_postgresql_v2 == true
     permissions:
       packages: write
       contents: read
