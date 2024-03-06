@@ -152,6 +152,7 @@ func (c *Connection) GetOrInsertProductType(assetId uint64, externalProductId st
 		} else {
 			return 0, err
 		}
+
 	}
 
 	// If no error and externalProductId type exists
