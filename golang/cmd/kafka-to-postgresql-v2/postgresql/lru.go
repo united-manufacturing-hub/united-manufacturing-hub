@@ -117,7 +117,6 @@ func (c *Connection) GetOrInsertProductType(assetId uint64, externalProductId st
 			} else {
 				return 0, err
 			}
-
 		}
 		// Set to LRU cache
 		c.addToProductTypeIdLRU(assetId, externalProductId, ptId)
