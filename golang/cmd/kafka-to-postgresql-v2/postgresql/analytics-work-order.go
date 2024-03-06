@@ -27,6 +27,14 @@ func (c *Connection) InsertWorkOrderCreate(msg *sharedStructs.WorkOrderCreateMes
 	values := []interface{}{msg.ExternalWorkOrderId, int(assetId), int(productTypeId), int(msg.Quantity), int(msg.Status), helper.Uint64PtrToNullInt64(msg.StartTimeUnixMs), helper.Uint64PtrToNullInt64(msg.EndTimeUnixMs)}
 	zap.S().Debugf("Inserting work order: %+v", values)
 	var cmdTag pgconn.CommandTag
+	/*
+		The SQL query does the following:
+			1. Inserts a new work order into the work_order table
+			2. In case the start_time or end_time is not null, it converts the timestamp from milliseconds to seconds
+			3. Otherwise, it sets the value to NULL
+		$6 :: INT is a explicit type cast to INT, because postgresql otherwise doesn't know the type if it is NULL (Same for $7 :: INT)
+		Divide by 1000.0 is important, as this is a float division, otherwise the result would be an integer
+	*/
 	cmdTag, err = tx.Exec(ctx, `
 		INSERT INTO work_order
             (external_work_order_id,
