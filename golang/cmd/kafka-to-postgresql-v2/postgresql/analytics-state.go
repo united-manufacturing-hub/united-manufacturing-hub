@@ -32,7 +32,7 @@ func (c *Connection) InsertStateAdd(msg *sharedStructs.StateAddMessage, topic *s
             VALUES
             (
                         $1,
-                        to_timestamp($2::BIGINT  / 1000.0),
+                        to_timestamp($2::BIGINT / 1000.0),
                         $3
             )
 	`, int(assetId), msg.StartTimeUnixMs, int(msg.State))
@@ -76,8 +76,8 @@ INSERT INTO state (asset_id, start_time, state)
 SELECT $1, to_timestamp($3::BIGINT  / 1000.0), state
 FROM state s
 WHERE s.asset_id = $1
-				   AND s.start_time > to_timestamp($2::BIGINT  / 1000.0)
-                   AND s.start_time < to_timestamp($3::BIGINT  / 1000.0)
+				   AND s.start_time > to_timestamp($2::BIGINT /1000.0)
+                   AND s.start_time < to_timestamp($3::BIGINT /1000.0)
 ORDER BY s.start_time DESC
 LIMIT 1;
 	`, int(assetId), msg.StartTimeUnixMs, msg.EndTimeUnixMs)
@@ -96,8 +96,8 @@ LIMIT 1;
 	cmdTag, err = tx.Exec(ctx, `
 DELETE FROM state
     WHERE asset_id = $1
-    AND start_time >= to_timestamp($2::BIGINT  / 1000.0)
-    AND start_time < to_timestamp($3::BIGINT  / 1000.0)
+    AND start_time >= to_timestamp($2::BIGINT /1000.0)
+    AND start_time < to_timestamp($3::BIGINT /1000.0)
     	`, int(assetId), msg.StartTimeUnixMs, msg.EndTimeUnixMs)
 
 	if err != nil {
@@ -120,7 +120,7 @@ DELETE FROM state
 			VALUES
 			(
 						$1,
-						to_timestamp($2::BIGINT  / 1000.0),
+						to_timestamp($2::BIGINT /1000.0),
 						$3
 			)
 	`, int(assetId), msg.StartTimeUnixMs, int(msg.State))

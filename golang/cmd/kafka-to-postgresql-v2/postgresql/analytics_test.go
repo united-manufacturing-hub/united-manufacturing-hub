@@ -375,15 +375,6 @@ func TestState(t *testing.T) {
 		// Expect Exec from InsertStateAdd
 		mock.ExpectBeginTx(pgx.TxOptions{})
 
-		mock.ExpectExec(`		
-		UPDATE state
-		SET    end_time = to_timestamp\(\$2 / 1000.0\)
-		WHERE  asset_id = \$1
-			   AND end_time IS NULL
-			   AND start_time < to_timestamp\(\$2 / 1000.0\) 
-		`).WithArgs(1, uint64(1)).
-			WillReturnResult(pgxmock.NewResult("UPDATE", 0))
-
 		mock.ExpectExec(`
 		INSERT INTO state
             \(
@@ -394,7 +385,7 @@ func TestState(t *testing.T) {
             VALUES
             \(
                         \$1,
-                        to_timestamp\(\$2/1000.0\),
+                        to_timestamp\(\$2\:\:BIGINT \/ 1000.0\),
                         \$3
             \)
 `).WithArgs(1, uint64(1), 10000).
@@ -413,14 +404,6 @@ func TestState(t *testing.T) {
 		}
 
 		mock.ExpectBeginTx(pgx.TxOptions{})
-		mock.ExpectExec(`
-		UPDATE state
-		SET    end_time = to_timestamp\(\$2 / 1000.0\)
-		WHERE  asset_id = \$1
-			   AND end_time IS NULL
-			   AND start_time < to_timestamp\(\$2 / 1000.0\) 
-		`).WithArgs(1, uint64(100)).
-			WillReturnResult(pgxmock.NewResult("UPDATE", 1))
 
 		mock.ExpectExec(`
 		INSERT INTO state
@@ -432,7 +415,7 @@ func TestState(t *testing.T) {
             VALUES
             \(
                         \$1,
-                        to_timestamp\(\$2/1000.0\),
+                        to_timestamp\(\$2\:\:BIGINT \/ 1000.0\),
                         \$3
             \)
 `).WithArgs(1, uint64(100), 20000).
@@ -449,14 +432,6 @@ func TestState(t *testing.T) {
 		}
 
 		mock.ExpectBeginTx(pgx.TxOptions{})
-		mock.ExpectExec(`
-		UPDATE state
-		SET    end_time = to_timestamp\(\$2 / 1000.0\)
-		WHERE  asset_id = \$1
-			   AND end_time IS NULL
-			   AND start_time < to_timestamp\(\$2 / 1000.0\) 
-		`).WithArgs(1, uint64(200)).
-			WillReturnResult(pgxmock.NewResult("UPDATE", 1))
 
 		mock.ExpectExec(`
 		INSERT INTO state
@@ -468,7 +443,7 @@ func TestState(t *testing.T) {
             VALUES
             \(
                         \$1,
-                        to_timestamp\(\$2/1000.0\),
+                        to_timestamp\(\$2\:\:BIGINT \/ 1000.0\),
                         \$3
             \)
 		`).WithArgs(1, uint64(200), 30000).
@@ -497,50 +472,38 @@ func TestState(t *testing.T) {
 		}
 
 		mock.ExpectBeginTx(pgx.TxOptions{})
-		// The prev state will be cleanly deleted
+		// First there will be a INSERT
 		mock.ExpectExec(`
-		DELETE FROM state
-		WHERE  asset_id = \$1
-			   AND start_time >= to_timestamp\(\$2 / 1000.0\)
-			   AND start_time <= to_timestamp\(\$3 / 1000.0\) 
-		`).WithArgs(1, uint64(0), uint64(100)).
-			WillReturnResult(pgxmock.NewResult("DELETE", 1))
-
-		// The left update command will not change anything
-		mock.ExpectExec(`
-		UPDATE state
-		SET    end_time = to_timestamp\(\$2 / 1000.0\)
-		WHERE  asset_id = \$1
-			   AND end_time > to_timestamp\(\$2 / 1000.0\)
-			   AND end_time <= to_timestamp\(\$3 / 1000.0\) 
-		`).WithArgs(1, uint64(0), uint64(100)).
-			WillReturnResult(pgxmock.NewResult("UPDATE", 0))
-
-		// The right update command will not change anything
-		mock.ExpectExec(`
-		UPDATE state
-		SET    start_time = to_timestamp\(\$3 / 1000.0\)
-		WHERE  asset_id = \$1
-			   AND start_time >= to_timestamp\(\$2 / 1000.0\)
-			   AND start_time < to_timestamp\(\$3 / 1000.0\) 
-		`).WithArgs(1, uint64(0), uint64(100)).
-			WillReturnResult(pgxmock.NewResult("UPDATE", 0))
-
-		// The insert command will insert the new state
-		mock.ExpectExec(`
-		INSERT INTO state
-            \(asset_id,
-             start_time,
-             end_time,
-             state\)
-		VALUES      \(\$1,
-					 to_timestamp\(\$2 / 1000.0\),
-					 to_timestamp\(\$3 / 1000.0\),
-					 \$4\) 
-`).
-			WithArgs(1, uint64(0), uint64(100), 40000).
+INSERT INTO state \(asset_id, start_time, state\)
+SELECT \$1, to_timestamp\(\$3\:\:BIGINT  \/ 1000.0\), state
+FROM state s
+WHERE s.asset_id = \$1
+				   AND s.start_time > to_timestamp\(\$2\:\:BIGINT \/1000.0\)
+                   AND s.start_time < to_timestamp\(\$3\:\:BIGINT \/1000.0\)
+ORDER BY s.start_time DESC
+LIMIT 1;`).
+			WithArgs(1, uint64(0), uint64(100)).
 			WillReturnResult(pgxmock.NewResult("INSERT", 1))
 
+		// Now there will be an DELETE (but that is hidden from the mocker)
+
+		// And finally an INSERT again
+		mock.ExpectExec(`
+		INSERT INTO state
+			\(
+						asset_id,
+						start_time,
+						state
+			\)
+			VALUES
+			\(
+						\$1,
+						to_timestamp\(\$2\:\:BIGINT \/1000.0\),
+						\$3
+			\)
+			`).
+			WithArgs(1, uint64(0), 40000).
+			WillReturnResult(pgxmock.NewResult("INSERT", 1))
 		mock.ExpectCommit()
 
 		err := c.OverwriteStateByStartEndTime(&msg, &topic)
@@ -554,49 +517,39 @@ func TestState(t *testing.T) {
 		}
 
 		mock.ExpectBeginTx(pgx.TxOptions{})
-		// There is no state inbetween to be deleted, so we expect 0 deletes
-		mock.ExpectExec(`
-		DELETE FROM state
-		WHERE  asset_id = \$1
-			   AND start_time >= to_timestamp\(\$2 / 1000.0\)
-			   AND start_time <= to_timestamp\(\$3 / 1000.0\) 
-		`).WithArgs(1, uint64(50), uint64(150)).
-			WillReturnResult(pgxmock.NewResult("DELETE", 0))
+		// First there will be a INSERT
 
-		// The left update command will update the end time of the first state
 		mock.ExpectExec(`
-		UPDATE state
-		SET    end_time = to_timestamp\(\$2 / 1000.0\)
-		WHERE  asset_id = \$1
-			   AND end_time > to_timestamp\(\$2 / 1000.0\)
-			   AND end_time <= to_timestamp\(\$3 / 1000.0\) 
-		`).WithArgs(1, uint64(50), uint64(150)).
-			WillReturnResult(pgxmock.NewResult("UPDATE", 1))
+INSERT INTO state \(asset_id, start_time, state\)
+SELECT \$1, to_timestamp\(\$3\:\:BIGINT  \/ 1000.0\), state
+FROM state s
+WHERE s.asset_id = \$1
+				   AND s.start_time > to_timestamp\(\$2\:\:BIGINT \/1000.0\)
+                   AND s.start_time < to_timestamp\(\$3\:\:BIGINT \/1000.0\)
+ORDER BY s.start_time DESC
+LIMIT 1;`).
+			WithArgs(1, uint64(50), uint64(150)).
+			WillReturnResult(pgxmock.NewResult("INSERT", 1))
 
-		// The right update command will update the start time of the second state
-		mock.ExpectExec(`
-		UPDATE state
-		SET    start_time = to_timestamp\(\$3 / 1000.0\)
-		WHERE  asset_id = \$1
-			   AND start_time >= to_timestamp\(\$2 / 1000.0\)
-			   AND start_time < to_timestamp\(\$3 / 1000.0\) 
-		`).WithArgs(1, uint64(50), uint64(150)).
-			WillReturnResult(pgxmock.NewResult("UPDATE", 1))
+		// Now there will be an DELETE (but that is hidden from the mocker)
 
-		// The insert command will insert the new state
+		// Finally an INSERT
 		mock.ExpectExec(`
 		INSERT INTO state
-            \(asset_id,
-             start_time,
-             end_time,
-             state\)
-		VALUES      \(\$1,
-					 to_timestamp\(\$2 / 1000.0\),
-					 to_timestamp\(\$3 / 1000.0\),
-					 \$4\) 
+			\(
+						asset_id,
+						start_time,
+						state
+			\)
+			VALUES
+			\(
+						\$1,
+						to_timestamp\(\$2\:\:BIGINT \/1000.0\),
+						\$3
+			\)
 `).
-			WithArgs(1, uint64(50), uint64(150), 50000).
-			WillReturnResult(pgxmock.NewResult("INSERT", 1))
+			WithArgs(1, uint64(50), 50000).
+			WillReturnResult(pgxmock.NewResult("DELETE", 1))
 
 		mock.ExpectCommit()
 
