@@ -13,7 +13,7 @@ func (c *Connection) InsertProductAdd(msg *sharedStructs.ProductAddMessage, topi
 	if err != nil {
 		return err
 	}
-	productTypeId, err := c.GetOrInsertProductType(assetId, msg.ExternalProductId, nil)
+	productTypeId, err := c.GetOrInsertProductType(assetId, msg.ExternalProductTypeId, nil)
 	if err != nil {
 		return err
 	}
