@@ -73,9 +73,9 @@ func (c *Connection) OverwriteStateByStartEndTime(msg *sharedStructs.StateOverwr
 	var cmdTag pgconn.CommandTag
 	cmdTag, err = tx.Exec(ctx, `
 INSERT INTO state (asset_id, start_time, state)
-SELECT 1, $3, state
+SELECT $1, $3, state
 FROM state s
-WHERE s.asset_id = 1
+WHERE s.asset_id = $1
 				   AND s.start_time > to_timestamp($2::BIGINT  / 1000.0)
                    AND s.start_time < to_timestamp($4::BIGINT  / 1000.0)
 ORDER BY s.start_time DESC
