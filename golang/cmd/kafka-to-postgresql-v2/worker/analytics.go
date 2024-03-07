@@ -17,7 +17,7 @@ func parseWorkOrderCreate(value []byte) (*shared.WorkOrderCreateMessage, error) 
 		return nil, errors.New("external_work_order_id is required")
 	}
 	if message.Product.ExternalProductId == "" {
-		return nil, errors.New("product.externalProductId is required")
+		return nil, errors.New("external_product_id is required")
 	}
 	if message.Quantity == 0 {
 		zap.S().Debugf("%+v", message)
@@ -68,7 +68,7 @@ func parseProductAdd(value []byte) (*shared.ProductAddMessage, error) {
 
 	// Validate that ExternalProductId, EndTimeUnixMs, Quantity are set
 	if message.ExternalProductTypeId == "" {
-		return nil, errors.New("externalProductId is required")
+		return nil, errors.New("external_product_type_id is required")
 	}
 	if message.EndTimeUnixMs == 0 {
 		return nil, errors.New("end_time is required")
@@ -86,10 +86,10 @@ func parseProductSetBadQuantity(value []byte) (*shared.ProductSetBadQuantityMess
 
 	// Validate that ExternalProductId & BadQuantity are set
 	if message.ExternalProductId == "" {
-		return nil, errors.New("externalProductId is required")
+		return nil, errors.New("external_product_id is required")
 	}
 	if message.BadQuantity == 0 {
-		return nil, errors.New("badQuantity is required")
+		return nil, errors.New("bad_quantity is required")
 	}
 	return &message, err
 
@@ -105,7 +105,7 @@ func parseProductTypeCreate(value []byte) (*shared.ProductTypeCreateMessage, err
 		return nil, errors.New("external_product_type_id is required")
 	}
 	if message.CycleTimeMs == 0 {
-		return nil, errors.New("cycleTimeMs is required")
+		return nil, errors.New("cycle_time_ms is required")
 	}
 	return &message, err
 }
