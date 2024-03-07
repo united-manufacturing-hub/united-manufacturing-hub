@@ -208,7 +208,7 @@ github.com/jackc/pgpassfile
 # github.com/jackc/pgservicefile v0.0.0-20221227161230-091c0ba34f0a
 ## explicit; go 1.14
 github.com/jackc/pgservicefile
-# github.com/jackc/pgx/v5 v5.5.1
+# github.com/jackc/pgx/v5 v5.4.3
 ## explicit; go 1.19
 github.com/jackc/pgx/v5
 github.com/jackc/pgx/v5/internal/anynil
@@ -323,9 +323,6 @@ github.com/munnerz/goautoneg
 # github.com/omeid/pgerror v0.0.0-20201018020948-42c66c4d27d4
 ## explicit; go 1.15
 github.com/omeid/pgerror
-# github.com/pashagolub/pgxmock/v3 v3.3.0
-## explicit; go 1.21
-github.com/pashagolub/pgxmock/v3
 # github.com/patrickmn/go-cache v2.1.0+incompatible
 ## explicit
 github.com/patrickmn/go-cache
