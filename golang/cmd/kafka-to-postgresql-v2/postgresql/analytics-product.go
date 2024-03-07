@@ -30,7 +30,7 @@ func (c *Connection) InsertProductAdd(msg *sharedStructs.ProductAddMessage, topi
 	cmdTag, err = tx.Exec(ctx, `
 			INSERT INTO product
             (
-                        external_product_type_id,
+                        product_type_id,
                         product_batch_id,
                         asset_id,
                         start_time,
@@ -87,7 +87,7 @@ func (c *Connection) UpdateBadQuantityForProduct(msg *sharedStructs.ProductSetBa
 	cmdTag, err := tx.Exec(ctx, `
         UPDATE product
 		SET    bad_quantity = coalesce(bad_quantity,0) + $1
-		WHERE  external_product_type_id = $2
+		WHERE  product_type_id = $2
 			   AND asset_id = $3
 			   AND end_time = to_timestamp($4::BIGINT / 1000.0)
 			   AND ( quantity - coalesce(bad_quantity,0) ) >= $1 
