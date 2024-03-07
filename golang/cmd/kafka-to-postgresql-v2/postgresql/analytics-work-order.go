@@ -42,11 +42,11 @@ func (c *Connection) InsertWorkOrderCreate(msg *sharedStructs.WorkOrderCreateMes
 					 $4,
 					 $5,
 					 CASE
-					   WHEN $6::BIGINT IS NOT NULL THEN to_timestamp($6::BIGINT  / 1000.0)
+					   WHEN $6::BIGINT IS NOT NULL THEN to_timestamp($6::BIGINT / 1000.0)
 					   ELSE NULL
 					 END :: timestamptz,
 					 CASE
-					   WHEN $7::BIGINT IS NOT NULL THEN to_timestamp($7::BIGINT  / 1000.0)
+					   WHEN $7::BIGINT IS NOT NULL THEN to_timestamp($7::BIGINT / 1000.0)
 					   ELSE NULL
 					 END :: timestamptz) 
 	`, values...)
