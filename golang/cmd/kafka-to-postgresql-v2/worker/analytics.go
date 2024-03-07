@@ -67,7 +67,7 @@ func parseProductAdd(value []byte) (*shared.ProductAddMessage, error) {
 	err := json.Unmarshal(value, &message)
 
 	// Validate that ExternalProductId, EndTimeUnixMs, Quantity are set
-	if message.ExternalProductId == "" {
+	if message.ExternalProductTypeId == "" {
 		return nil, errors.New("externalProductId is required")
 	}
 	if message.EndTimeUnixMs == 0 {
