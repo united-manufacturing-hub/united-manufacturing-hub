@@ -306,8 +306,8 @@ func TestShift(t *testing.T) {
             VALUES
             \(
                         \$1,
-                        to_timestamp\(\$2 / 1000.0\),
-                        to_timestamp\(\$3 / 1000.0\)
+                        to_timestamp\(\$2\:\:BIGINT \/ 1000.0\),
+                        to_timestamp\(\$3\:\:BIGINT \/ 1000.0\)
             \)
 		on conflict
 		ON CONSTRAINT shift_start_asset_uniq do nothing
@@ -334,7 +334,7 @@ func TestShift(t *testing.T) {
 		mock.ExpectExec(`
 		DELETE FROM shift
 		WHERE  asset_id = \$1
-			   AND start_time = to_timestamp\(\$2 / 1000.0\); 
+			   AND start_time = to_timestamp\(\$2\:\:BIGINT / 1000.0\); 
 `).
 			WithArgs(1, uint64(1)).
 			WillReturnResult(pgxmock.NewResult("DELETE", 1))
