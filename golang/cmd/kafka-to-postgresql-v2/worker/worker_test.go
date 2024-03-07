@@ -111,7 +111,7 @@ func TestParseHistorianPayload(t *testing.T) {
 		input []byte
 		// tag is the tag parsed from the topic, including eventual tag groups
 		tag      string
-		expected []sharedStructs.HistorianValue
+		expected []sharedStructs.Value
 		wantErr  bool
 	}{
 		{
@@ -121,7 +121,7 @@ func TestParseHistorianPayload(t *testing.T) {
 				"stringValue": "this is a string"
 			}`),
 			tag: "tag1",
-			expected: []sharedStructs.HistorianValue{
+			expected: []sharedStructs.Value{
 				{
 					Name:        "tag1$stringValue",
 					StringValue: &sV,
@@ -137,7 +137,7 @@ func TestParseHistorianPayload(t *testing.T) {
 				"intValue": 1
 			}`),
 			tag: "tag2",
-			expected: []sharedStructs.HistorianValue{
+			expected: []sharedStructs.Value{
 				{
 					Name:         "tag2$intValue",
 					NumericValue: &iV,
@@ -153,7 +153,7 @@ func TestParseHistorianPayload(t *testing.T) {
 				"floatValue": 1.5
 			}`),
 			tag: "tag3",
-			expected: []sharedStructs.HistorianValue{
+			expected: []sharedStructs.Value{
 				{
 					Name:         "tag3$floatValue",
 					NumericValue: &fV,
@@ -169,7 +169,7 @@ func TestParseHistorianPayload(t *testing.T) {
 				"boolValue": true
 			}`),
 			tag: "tag4",
-			expected: []sharedStructs.HistorianValue{
+			expected: []sharedStructs.Value{
 				{
 					Name:         "tag4$boolValue",
 					NumericValue: &bV,
@@ -190,7 +190,7 @@ func TestParseHistorianPayload(t *testing.T) {
 				}
 			}`),
 			tag: "tag5",
-			expected: []sharedStructs.HistorianValue{
+			expected: []sharedStructs.Value{
 				{
 					Name:        "tag5$structValue$stringValue",
 					StringValue: &sV,
@@ -221,7 +221,7 @@ func TestParseHistorianPayload(t *testing.T) {
 				"unsupportedValue": ["this", "is", "an", "array"]
 			}`),
 			tag:      "tag6",
-			expected: []sharedStructs.HistorianValue{},
+			expected: []sharedStructs.Value{},
 			wantErr:  true,
 		},
 		{
@@ -231,7 +231,7 @@ func TestParseHistorianPayload(t *testing.T) {
 				"duplicateTag": "this is a string"
 			}`),
 			tag: "duplicateTag",
-			expected: []sharedStructs.HistorianValue{
+			expected: []sharedStructs.Value{
 				{
 					Name:        "duplicateTag",
 					StringValue: &sV,
@@ -247,7 +247,7 @@ func TestParseHistorianPayload(t *testing.T) {
 				"multipleTagGroups": "this is a string"
 			}`),
 			tag: "multipleTagGroups$tag1$tag2$tag3",
-			expected: []sharedStructs.HistorianValue{
+			expected: []sharedStructs.Value{
 				{
 					Name:        "multipleTagGroups$tag1$tag2$tag3$multipleTagGroups",
 					StringValue: &sV,
@@ -262,7 +262,7 @@ func TestParseHistorianPayload(t *testing.T) {
 				"timestamp_ms": 12345,
 			}`),
 			tag:      "tag7",
-			expected: []sharedStructs.HistorianValue{},
+			expected: []sharedStructs.Value{},
 			wantErr:  true,
 		},
 	}

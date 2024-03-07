@@ -35,11 +35,6 @@ func (q *Query) Sanitize(args ...any) (string, error) {
 			str = part
 		case int:
 			argIdx := part - 1
-
-			if argIdx < 0 {
-				return "", fmt.Errorf("first sql argument must be > 0")
-			}
-
 			if argIdx >= len(args) {
 				return "", fmt.Errorf("insufficient arguments")
 			}
