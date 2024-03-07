@@ -34,8 +34,7 @@ func (c *LRUCache) Get(key string) *pgconn.StatementDescription {
 
 }
 
-// Put stores sd in the cache. Put panics if sd.SQL is "". Put does nothing if sd.SQL already exists in the cache or
-// sd.SQL has been invalidated and HandleInvalidated has not been called yet.
+// Put stores sd in the cache. Put panics if sd.SQL is "". Put does nothing if sd.SQL already exists in the cache.
 func (c *LRUCache) Put(sd *pgconn.StatementDescription) {
 	if sd.SQL == "" {
 		panic("cannot store statement description with empty SQL")
@@ -43,13 +42,6 @@ func (c *LRUCache) Put(sd *pgconn.StatementDescription) {
 
 	if _, present := c.m[sd.SQL]; present {
 		return
-	}
-
-	// The statement may have been invalidated but not yet handled. Do not readd it to the cache.
-	for _, invalidSD := range c.invalidStmts {
-		if invalidSD.SQL == sd.SQL {
-			return
-		}
 	}
 
 	if c.l.Len() == c.cap {
@@ -81,8 +73,6 @@ func (c *LRUCache) InvalidateAll() {
 	c.l = list.New()
 }
 
-// HandleInvalidated returns a slice of all statement descriptions invalidated since the last call to HandleInvalidated.
-// Typically, the caller will then deallocate them.
 func (c *LRUCache) HandleInvalidated() []*pgconn.StatementDescription {
 	invalidStmts := c.invalidStmts
 	c.invalidStmts = nil

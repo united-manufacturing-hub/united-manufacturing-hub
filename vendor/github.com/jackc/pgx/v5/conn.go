@@ -2,8 +2,6 @@ package pgx
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"strconv"
@@ -37,7 +35,7 @@ type ConnConfig struct {
 
 	// DefaultQueryExecMode controls the default mode for executing queries. By default pgx uses the extended protocol
 	// and automatically prepares and caches prepared statements. However, this may be incompatible with proxies such as
-	// PGBouncer. In this case it may be preferable to use QueryExecModeExec or QueryExecModeSimpleProtocol. The same
+	// PGBouncer. In this case it may be preferrable to use QueryExecModeExec or QueryExecModeSimpleProtocol. The same
 	// functionality can be controlled on a per query basis by passing a QueryExecMode as the first query argument.
 	DefaultQueryExecMode QueryExecMode
 
@@ -101,12 +99,8 @@ func (ident Identifier) Sanitize() string {
 	return strings.Join(parts, ".")
 }
 
-var (
-	// ErrNoRows occurs when rows are expected but none are returned.
-	ErrNoRows = errors.New("no rows in result set")
-	// ErrTooManyRows occurs when more rows than expected are returned.
-	ErrTooManyRows = errors.New("too many rows in result set")
-)
+// ErrNoRows occurs when rows are expected but none are returned.
+var ErrNoRows = errors.New("no rows in result set")
 
 var errDisabledStatementCache = fmt.Errorf("cannot use QueryExecModeCacheStatement with disabled statement cache")
 var errDisabledDescriptionCache = fmt.Errorf("cannot use QueryExecModeCacheDescribe with disabled description cache")
@@ -275,7 +269,7 @@ func connect(ctx context.Context, config *ConnConfig) (c *Conn, err error) {
 	return c, nil
 }
 
-// Close closes a connection. It is safe to call Close on an already closed
+// Close closes a connection. It is safe to call Close on a already closed
 // connection.
 func (c *Conn) Close(ctx context.Context) error {
 	if c.IsClosed() {
@@ -286,15 +280,12 @@ func (c *Conn) Close(ctx context.Context) error {
 	return err
 }
 
-// Prepare creates a prepared statement with name and sql. sql can contain placeholders for bound parameters. These
-// placeholders are referenced positionally as $1, $2, etc. name can be used instead of sql with Query, QueryRow, and
-// Exec to execute the statement. It can also be used with Batch.Queue.
+// Prepare creates a prepared statement with name and sql. sql can contain placeholders
+// for bound parameters. These placeholders are referenced positional as $1, $2, etc.
 //
-// The underlying PostgreSQL identifier for the prepared statement will be name if name != sql or a digest of sql if
-// name == sql.
-//
-// Prepare is idempotent; i.e. it is safe to call Prepare multiple times with the same name and sql arguments. This
-// allows a code path to Prepare and Query/Exec without concern for if the statement has already been prepared.
+// Prepare is idempotent; i.e. it is safe to call Prepare multiple times with the same
+// name and sql arguments. This allows a code path to Prepare and Query/Exec without
+// concern for if the statement has already been prepared.
 func (c *Conn) Prepare(ctx context.Context, name, sql string) (sd *pgconn.StatementDescription, err error) {
 	if c.prepareTracer != nil {
 		ctx = c.prepareTracer.TracePrepareStart(ctx, c, TracePrepareStartData{Name: name, SQL: sql})
@@ -316,48 +307,23 @@ func (c *Conn) Prepare(ctx context.Context, name, sql string) (sd *pgconn.Statem
 		}()
 	}
 
-	var psName, psKey string
-	if name == sql {
-		digest := sha256.Sum256([]byte(sql))
-		psName = "stmt_" + hex.EncodeToString(digest[0:24])
-		psKey = sql
-	} else {
-		psName = name
-		psKey = name
-	}
-
-	sd, err = c.pgConn.Prepare(ctx, psName, sql, nil)
+	sd, err = c.pgConn.Prepare(ctx, name, sql, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	if psKey != "" {
-		c.preparedStatements[psKey] = sd
+	if name != "" {
+		c.preparedStatements[name] = sd
 	}
 
 	return sd, nil
 }
 
-// Deallocate releases a prepared statement. Calling Deallocate on a non-existent prepared statement will succeed.
+// Deallocate released a prepared statement
 func (c *Conn) Deallocate(ctx context.Context, name string) error {
-	var psName string
-	sd := c.preparedStatements[name]
-	if sd != nil {
-		psName = sd.Name
-	} else {
-		psName = name
-	}
-
-	err := c.pgConn.Deallocate(ctx, psName)
-	if err != nil {
-		return err
-	}
-
-	if sd != nil {
-		delete(c.preparedStatements, name)
-	}
-
-	return nil
+	delete(c.preparedStatements, name)
+	_, err := c.pgConn.Exec(ctx, "deallocate "+quoteIdentifier(name)).ReadAll()
+	return err
 }
 
 // DeallocateAll releases all previously prepared statements from the server and client, where it also resets the statement and description cache.
@@ -475,7 +441,7 @@ optionLoop:
 	if queryRewriter != nil {
 		sql, arguments, err = queryRewriter.RewriteQuery(ctx, c, sql, arguments)
 		if err != nil {
-			return pgconn.CommandTag{}, fmt.Errorf("rewrite query failed: %w", err)
+			return pgconn.CommandTag{}, fmt.Errorf("rewrite query failed: %v", err)
 		}
 	}
 
@@ -495,7 +461,7 @@ optionLoop:
 		}
 		sd := c.statementCache.Get(sql)
 		if sd == nil {
-			sd, err = c.Prepare(ctx, stmtcache.StatementName(sql), sql)
+			sd, err = c.Prepare(ctx, stmtcache.NextStatementName(), sql)
 			if err != nil {
 				return pgconn.CommandTag{}, err
 			}
@@ -607,16 +573,13 @@ type QueryExecMode int32
 const (
 	_ QueryExecMode = iota
 
-	// Automatically prepare and cache statements. This uses the extended protocol. Queries are executed in a single round
-	// trip after the statement is cached. This is the default. If the database schema is modified or the search_path is
-	// changed after a statement is cached then the first execution of a previously cached query may fail. e.g. If the
-	// number of columns returned by a "SELECT *" changes or the type of a column is changed.
+	// Automatically prepare and cache statements. This uses the extended protocol. Queries are executed in a single
+	// round trip after the statement is cached. This is the default.
 	QueryExecModeCacheStatement
 
-	// Cache statement descriptions (i.e. argument and result types) and assume they do not change. This uses the extended
-	// protocol. Queries are executed in a single round trip after the description is cached. If the database schema is
-	// modified or the search_path is changed after a statement is cached then the first execution of a previously cached
-	// query may fail. e.g. If the number of columns returned by a "SELECT *" changes or the type of a column is changed.
+	// Cache statement descriptions (i.e. argument and result types) and assume they do not change. This uses the
+	// extended protocol. Queries are executed in a single round trip after the description is cached. If the database
+	// schema is modified or the search_path is changed this may result in undetected result decoding errors.
 	QueryExecModeCacheDescribe
 
 	// Get the statement description on every execution. This uses the extended protocol. Queries require two round trips
@@ -629,13 +592,13 @@ const (
 	// Assume the PostgreSQL query parameter types based on the Go type of the arguments. This uses the extended protocol
 	// with text formatted parameters and results. Queries are executed in a single round trip. Type mappings can be
 	// registered with pgtype.Map.RegisterDefaultPgType. Queries will be rejected that have arguments that are
-	// unregistered or ambiguous. e.g. A map[string]string may have the PostgreSQL type json or hstore. Modes that know
+	// unregistered or ambigious. e.g. A map[string]string may have the PostgreSQL type json or hstore. Modes that know
 	// the PostgreSQL type can use a map[string]string directly as an argument. This mode cannot.
 	QueryExecModeExec
 
 	// Use the simple protocol. Assume the PostgreSQL query parameter types based on the Go type of the arguments.
 	// Queries are executed in a single round trip. Type mappings can be registered with
-	// pgtype.Map.RegisterDefaultPgType. Queries will be rejected that have arguments that are unregistered or ambiguous.
+	// pgtype.Map.RegisterDefaultPgType. Queries will be rejected that have arguments that are unregistered or ambigious.
 	// e.g. A map[string]string may have the PostgreSQL type json or hstore. Modes that know the PostgreSQL type can use
 	// a map[string]string directly as an argument. This mode cannot.
 	//
@@ -742,7 +705,7 @@ optionLoop:
 		sql, args, err = queryRewriter.RewriteQuery(ctx, c, sql, args)
 		if err != nil {
 			rows := c.getRows(ctx, originalSQL, originalArgs)
-			err = fmt.Errorf("rewrite query failed: %w", err)
+			err = fmt.Errorf("rewrite query failed: %v", err)
 			rows.fatal(err)
 			return rows, err
 		}
@@ -852,7 +815,7 @@ func (c *Conn) getStatementDescription(
 		}
 		sd = c.statementCache.Get(sql)
 		if sd == nil {
-			sd, err = c.Prepare(ctx, stmtcache.StatementName(sql), sql)
+			sd, err = c.Prepare(ctx, stmtcache.NextStatementName(), sql)
 			if err != nil {
 				return nil, err
 			}
@@ -902,6 +865,8 @@ func (c *Conn) SendBatch(ctx context.Context, b *Batch) (br BatchResults) {
 		return &batchResults{ctx: ctx, conn: c, err: err}
 	}
 
+	mode := c.config.DefaultQueryExecMode
+
 	for _, bi := range b.queuedQueries {
 		var queryRewriter QueryRewriter
 		sql := bi.query
@@ -909,7 +874,6 @@ func (c *Conn) SendBatch(ctx context.Context, b *Batch) (br BatchResults) {
 
 	optionLoop:
 		for len(arguments) > 0 {
-			// Update Batch.Queue function comment when additional options are implemented
 			switch arg := arguments[0].(type) {
 			case QueryRewriter:
 				queryRewriter = arg
@@ -923,7 +887,7 @@ func (c *Conn) SendBatch(ctx context.Context, b *Batch) (br BatchResults) {
 			var err error
 			sql, arguments, err = queryRewriter.RewriteQuery(ctx, c, sql, arguments)
 			if err != nil {
-				return &batchResults{ctx: ctx, conn: c, err: fmt.Errorf("rewrite query failed: %w", err)}
+				return &batchResults{ctx: ctx, conn: c, err: fmt.Errorf("rewrite query failed: %v", err)}
 			}
 		}
 
@@ -931,8 +895,6 @@ func (c *Conn) SendBatch(ctx context.Context, b *Batch) (br BatchResults) {
 		bi.arguments = arguments
 	}
 
-	// TODO: changing mode per batch? Update Batch.Queue function comment when implemented
-	mode := c.config.DefaultQueryExecMode
 	if mode == QueryExecModeSimpleProtocol {
 		return c.sendBatchQueryExecModeSimpleProtocol(ctx, b)
 	}
@@ -1032,7 +994,7 @@ func (c *Conn) sendBatchQueryExecModeCacheStatement(ctx context.Context, b *Batc
 					bi.sd = distinctNewQueries[idx]
 				} else {
 					sd = &pgconn.StatementDescription{
-						Name: stmtcache.StatementName(bi.query),
+						Name: stmtcache.NextStatementName(),
 						SQL:  bi.query,
 					}
 					distinctNewQueriesIdxMap[sd.SQL] = len(distinctNewQueries)
@@ -1100,7 +1062,7 @@ func (c *Conn) sendBatchQueryExecModeDescribeExec(ctx context.Context, b *Batch)
 }
 
 func (c *Conn) sendBatchExtendedWithDescription(ctx context.Context, b *Batch, distinctNewQueries []*pgconn.StatementDescription, sdCache stmtcache.Cache) (pbr *pipelineBatchResults) {
-	pipeline := c.pgConn.StartPipeline(ctx)
+	pipeline := c.pgConn.StartPipeline(context.Background())
 	defer func() {
 		if pbr != nil && pbr.err != nil {
 			pipeline.Close()
