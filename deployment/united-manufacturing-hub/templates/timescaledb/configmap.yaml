@@ -7773,38 +7773,10 @@ data:
 
     -------------------- STATES TABLE --------------------
 
-      -- This function prevents overlapping states for the same asset.
-      -- It guarantees that there are no overlapping states for the same asset.
-      -- It also fills "holes" in the state table by updating the end_time of states that have no end_time and are before the new state.
-      CREATE OR REPLACE FUNCTION check_state_overlap()
-      RETURNS TRIGGER AS $$
-      BEGIN
-        -- Check if the new state is after every other state (for the same asset).
-        -- If the old state has no end_time compare the start_time with our new state.
-        -- If the check fails, raise an error.
-        IF EXISTS (SELECT 1
-                   FROM state
-                   WHERE asset_id = NEW.asset_id
-                     AND
-                       (start_time > NEW.start_time AND (end_time IS NULL OR start_time < end_time))
-           )
-        THEN
-            RAISE EXCEPTION 'State overlaps with another state';
-        END IF;
-        -- Check if there is any state for the same asset that has no end_time and is before the new state.
-        -- Update it's end_time to the start_time of the new state.
-        UPDATE state
-        SET end_time = NEW.start_time
-        WHERE asset_id = NEW.asset_id
-          AND end_time IS NULL
-          AND start_time < NEW.start_time;
-        RETURN NEW;
-    END;
-    $$ LANGUAGE plpgsql;
 
     -- Records the state changes of assets over time. State tracking supports ISA-95's goal of detailed monitoring and control of manufacturing operations.
     -- State Table
-      -- It assumes that a state continues until a new state is recorded.
+    -- It assumes that a state continues until a new state is recorded.
     CREATE TABLE IF NOT EXISTS state (
       asset_id INTEGER REFERENCES asset(id),
       start_time TIMESTAMPTZ NOT NULL,
@@ -7812,10 +7784,6 @@ data:
       CHECK (state >= 0),
       UNIQUE (start_time, asset_id)
     );
-
-    CREATE TRIGGER trig_check_state_overlap
-    BEFORE INSERT OR UPDATE ON state
-    FOR EACH ROW EXECUTE FUNCTION check_state_overlap();
 
     -- creating hypertable
     SELECT create_hypertable('state', 'start_time', if_not_exists => TRUE);;
