@@ -44,10 +44,10 @@ func (c *Connection) InsertProductAdd(msg *sharedStructs.ProductAddMessage, topi
                         $2::TEXT,
                         $3,
                         CASE
-							WHEN $4::BIGINT IS NOT NULL THEN to_timestamp($4::BIGINT  / 1000.0)
+							WHEN $4::BIGINT IS NOT NULL THEN to_timestamp($4::BIGINT / 1000.0)
 					   		ELSE NULL
                         END::timestamptz,
-                        to_timestamp($5::BIGINT  / 1000.0),
+                        to_timestamp($5::BIGINT / 1000.0),
                         $6,
                         $7::int
 				)
