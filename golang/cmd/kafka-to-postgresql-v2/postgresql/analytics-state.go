@@ -76,8 +76,8 @@ INSERT INTO state (asset_id, start_time, state)
 SELECT 1, $3, state
 FROM state s
 WHERE s.asset_id = 1
-				   AND s.start_time > $2
-                   AND s.start_time < $3
+				   AND s.start_time > to_timestamp($2::BIGINT  / 1000.0)
+                   AND s.start_time < to_timestamp($4::BIGINT  / 1000.0)
 ORDER BY s.start_time DESC
 LIMIT 1;
 	`, int(assetId), msg.StartTimeUnixMs, msg.EndTimeUnixMs)
