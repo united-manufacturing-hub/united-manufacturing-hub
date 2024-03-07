@@ -7776,7 +7776,7 @@ data:
 
     -- Records the state changes of assets over time. State tracking supports ISA-95's goal of detailed monitoring and control of manufacturing operations.
     -- State Table
-      -- It assumes that a state continues until a new state is recorded.
+    -- It assumes that a state continues until a new state is recorded.
     CREATE TABLE IF NOT EXISTS state (
       asset_id INTEGER REFERENCES asset(id),
       start_time TIMESTAMPTZ NOT NULL,
