@@ -49,6 +49,7 @@ func TestWorkOrder(t *testing.T) {
 
 		// Expect Exec from InsertWorkOrderCreate
 		mock.ExpectBeginTx(pgx.TxOptions{})
+		// See analytics-work-order.go for more details on this query
 		mock.ExpectExec(`
 		INSERT INTO work_order
             \(external_work_order_id,
@@ -175,6 +176,7 @@ func TestProduct(t *testing.T) {
 
 		// Expect Exec from InsertProductAdd
 		mock.ExpectBeginTx(pgx.TxOptions{})
+		// See analytics-product.go for more details on this query
 		mock.ExpectExec(`
 			INSERT INTO product
             \(
@@ -192,9 +194,9 @@ func TestProduct(t *testing.T) {
                         \$2,
                         \$3,
                         CASE
-                                    WHEN \$4\:\:int IS NOT NULL THEN to_timestamp\(\$4\:\:int/1000\)
+                                    WHEN \$4\:\:int IS NOT NULL THEN to_timestamp\(\$4\:\:int/1000.0\)
                         END\:\:timestamptz,
-                        to_timestamp\(\$5/1000\),
+                        to_timestamp\(\$5/1000.0\),
                         \$6,
                         \$7\:\:int
 				\)
@@ -391,7 +393,7 @@ func TestState(t *testing.T) {
             VALUES
             \(
                         \$1,
-                        to_timestamp\(\$2/1000\),
+                        to_timestamp\(\$2/1000.0\),
                         \$3
             \)
 		on conflict
@@ -431,7 +433,7 @@ func TestState(t *testing.T) {
             VALUES
             \(
                         \$1,
-                        to_timestamp\(\$2/1000\),
+                        to_timestamp\(\$2/1000.0\),
                         \$3
             \)
 		on conflict
@@ -469,7 +471,7 @@ func TestState(t *testing.T) {
             VALUES
             \(
                         \$1,
-                        to_timestamp\(\$2/1000\),
+                        to_timestamp\(\$2/1000.0\),
                         \$3
             \)
 		on conflict
