@@ -5,6 +5,11 @@ on:
       - main
       - staging
 
+    paths:
+      - deployment/united-manufacturing-hub/
+      - deployment/united-manufacturing-hub/*
+      - deployment/united-manufacturing-hub/**/*
+
 jobs:
   run-tests:
     runs-on: ubuntu-latest
