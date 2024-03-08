@@ -187,6 +187,32 @@ func handleParsing(msgChan <-chan *shared.KafkaMessage, i int) {
 					k.MarkMessage(msg)
 					continue
 				}
+			case "state.add":
+				parsed, err := parseStateAdd(msg.Value)
+				if err != nil {
+					zap.S().Warnf("Failed to parse state.add %+v: %s", msg, err)
+					k.MarkMessage(msg)
+					continue
+				}
+				err = p.InsertStateAdd(parsed, topic)
+				if err != nil {
+					zap.S().Warnf("Failed to insert state.add %+v: %s", msg, err)
+					k.MarkMessage(msg)
+					continue
+				}
+			case "state.overwrite":
+				parsed, err := parseStateOverwrite(msg.Value)
+				if err != nil {
+					zap.S().Warnf("Failed to parse state.overwrite %+v: %s", msg, err)
+					k.MarkMessage(msg)
+					continue
+				}
+				err = p.OverwriteStateByStartEndTime(parsed, topic)
+				if err != nil {
+					zap.S().Warnf("Failed to insert state.overwrite %+v: %s", msg, err)
+					k.MarkMessage(msg)
+					continue
+				}
 			}
 		default:
 			zap.S().Errorf("Unknown usecase %s", topic.Schema)
