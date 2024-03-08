@@ -25,9 +25,9 @@ func TestParseWorkOrderCreate(t *testing.T) {
 		assert.Equal(t, "#1278", workOrderCreate.ExternalWorkOrderId)
 		assert.Equal(t, uint64(10), workOrderCreate.Quantity)
 		assert.Equal(t, "sample", workOrderCreate.Product.ExternalProductId)
-		assert.Equal(t, uint64(10), workOrderCreate.Product.CycleTimeMs)
-		assert.Equal(t, uint64(100), workOrderCreate.StartTimeUnixMs)
-		assert.Equal(t, uint64(200), workOrderCreate.EndTimeUnixMs)
+		assert.Equal(t, uint64(10), *workOrderCreate.Product.CycleTimeMs)
+		assert.Equal(t, uint64(100), *workOrderCreate.StartTimeUnixMs)
+		assert.Equal(t, uint64(200), *workOrderCreate.EndTimeUnixMs)
 	})
 	t.Run("disallow-negative-quantity", func(t *testing.T) {
 		workOrderCreateJson := `{"external_work_order_id": "#1278", "product":{"external_product_id": "sample"}, "quantity": -10}`
