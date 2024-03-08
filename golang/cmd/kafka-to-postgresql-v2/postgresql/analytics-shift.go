@@ -15,7 +15,7 @@ func (c *Connection) InsertShiftAdd(msg *sharedStructs.ShiftAddMessage, topic *s
 	// Start tx (this shouln't take more then 1 minute)
 	ctx, cncl := get1MinuteContext()
 	defer cncl()
-	tx, err := c.db.Begin(ctx)
+	tx, err := c.Db.Begin(ctx)
 	if err != nil {
 		return err
 	}
@@ -23,10 +23,20 @@ func (c *Connection) InsertShiftAdd(msg *sharedStructs.ShiftAddMessage, topic *s
 	// Insert shift
 	var cmdTag pgconn.CommandTag
 	cmdTag, err = tx.Exec(ctx, `
-		INSERT INTO shifts (assetId, startTime, endTime)
-		VALUES ($1, to_timestamp($2 / 1000), to_timestamp($3 / 1000))
-		ON CONFLICT ON CONSTRAINT shift_start_asset_uniq
-		DO NOTHING;
+		INSERT INTO shift
+            (
+                        asset_id,
+                        start_time,
+                        end_time
+            )
+            VALUES
+            (
+                        $1,
+                        to_timestamp($2::BIGINT / 1000.0),
+                        to_timestamp($3::BIGINT / 1000.0)
+            )
+		on conflict
+		ON CONSTRAINT shift_start_asset_uniq do nothing
 	`, int(assetId), msg.StartTimeUnixMs, msg.EndTimeUnixMs)
 
 	if err != nil {
@@ -49,7 +59,7 @@ func (c *Connection) DeleteShiftByStartTime(msg *sharedStructs.ShiftDeleteMessag
 
 	ctx, cncl := get1MinuteContext()
 	defer cncl()
-	tx, err := c.db.Begin(ctx)
+	tx, err := c.Db.Begin(ctx)
 	if err != nil {
 		return err
 	}
@@ -57,8 +67,9 @@ func (c *Connection) DeleteShiftByStartTime(msg *sharedStructs.ShiftDeleteMessag
 	// Delete shift
 	var cmdTag pgconn.CommandTag
 	cmdTag, err = tx.Exec(ctx, `
-		DELETE FROM shifts
-		WHERE assetId = $1 AND startTime = to_timestamp($2 / 1000);
+		DELETE FROM shift
+		WHERE  asset_id = $1
+			   AND start_time = to_timestamp($2::BIGINT / 1000.0); 
 	`, int(assetId), msg.StartTimeUnixMs)
 
 	if err != nil {

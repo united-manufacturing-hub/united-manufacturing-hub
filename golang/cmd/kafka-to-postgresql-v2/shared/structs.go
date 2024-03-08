@@ -3,6 +3,7 @@ package shared
 import (
 	"context"
 	"github.com/jackc/pgx/v5"
+	"time"
 )
 
 const (
@@ -36,8 +37,8 @@ const (
 )
 
 type WorkOrderCreateMessageProduct struct {
-	ExternalProductId string `json:"external_product_id"`
-	CycleTimeMs       uint64 `json:"cycle_time_ms,omitempty"` //Note: omitempty is not checked when unmarshalling from JSON, and only used as a note for the reader
+	ExternalProductId string  `json:"external_product_id"`
+	CycleTimeMs       *uint64 `json:"cycle_time_ms,omitempty"`
 }
 
 type WorkOrderCreateMessage struct {
@@ -45,8 +46,8 @@ type WorkOrderCreateMessage struct {
 	Product             WorkOrderCreateMessageProduct `json:"product"`
 	Quantity            uint64                        `json:"quantity"`
 	Status              Status                        `json:"status"`
-	StartTimeUnixMs     uint64                        `json:"start_time_unix_ms,omitempty"`
-	EndTimeUnixMs       uint64                        `json:"end_time_unix_ms,omitempty"`
+	StartTimeUnixMs     *uint64                       `json:"start_time_unix_ms,omitempty"`
+	EndTimeUnixMs       *uint64                       `json:"end_time_unix_ms,omitempty"`
 }
 
 type WorkOrderStartMessage struct {
@@ -60,12 +61,12 @@ type WorkOrderStopMessage struct {
 }
 
 type ProductAddMessage struct {
-	ExternalProductId string `json:"external_product_id"`
-	ProductBatchId    string `json:"product_batch_id,omitempty"`
-	StartTimeUnixMs   uint64 `json:"start_time_unix_ms,omitempty"`
-	EndTimeUnixMs     uint64 `json:"end_time_unix_ms"`
-	Quantity          uint64 `json:"quantity"`
-	BadQuantity       uint64 `json:"bad_quantity,omitempty"`
+	ExternalProductTypeId string  `json:"external_product_type_id"`
+	ProductBatchId        *string `json:"product_batch_id,omitempty"`
+	StartTimeUnixMs       *uint64 `json:"start_time_unix_ms,omitempty"`
+	EndTimeUnixMs         uint64  `json:"end_time_unix_ms"`
+	Quantity              uint64  `json:"quantity"`
+	BadQuantity           *uint64 `json:"bad_quantity,omitempty"`
 }
 
 type ProductSetBadQuantityMessage struct {
@@ -88,7 +89,33 @@ type ShiftDeleteMessage struct {
 	StartTimeUnixMs uint64 `json:"start_time_unix_ms"`
 }
 
-type PgxIface interface {
+type StateAddMessage struct {
+	StartTimeUnixMs uint64 `json:"start_time_unix_ms"`
+	State           uint64 `json:"state"`
+}
+
+type StateOverwriteMessage struct {
+	StartTimeUnixMs uint64 `json:"start_time_unix_ms"`
+	EndTimeUnixMs   uint64 `json:"end_time_unix_ms"`
+	State           uint64 `json:"state"`
+}
+
+type DBHistorianValue struct {
+	Timestamp time.Time
+	Origin    string
+	Value     HistorianValue
+	AssetId   int
+}
+
+func (r *DBHistorianValue) GetValue() interface{} {
+	if r.Value.IsNumeric {
+		return *r.Value.NumericValue
+	} else {
+		return *r.Value.StringValue
+	}
+}
+
+type Ipgx interface {
 	Begin(context.Context) (pgx.Tx, error)
 	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
 	Close()

@@ -12,7 +12,7 @@ import (
 )
 
 type Worker struct {
-	kafka    *kafka.Connection
+	kafka    kafka.IConnection
 	postgres *postgresql.Connection
 }
 
@@ -22,7 +22,7 @@ var once sync.Once
 func GetOrInit() *Worker {
 	once.Do(func() {
 		worker = &Worker{
-			kafka:    kafka.GetOrInit(),
+			kafka:    kafka.GetKafkaClient(),
 			postgres: postgresql.GetOrInit(),
 		}
 		worker.startWorkLoop()
@@ -38,15 +38,15 @@ func (w *Worker) startWorkLoop() {
 	}
 	messageChannel := w.kafka.GetMessages()
 	zap.S().Debugf("Started using %d workers (logical cores * WORKER_MULTIPLIER)", workerMultiplier)
+	k := kafka.GetKafkaClient()
+	p := postgresql.GetOrInit()
 	for i := 0; i < /*runtime.NumCPU()*workerMultiplier*/ 1; i++ {
-		go handleParsing(messageChannel, i)
+		go handleParsing(messageChannel, i, k, p)
 	}
 	zap.S().Debugf("Started all workers")
 }
 
-func handleParsing(msgChan <-chan *shared.KafkaMessage, i int) {
-	k := kafka.GetOrInit()
-	p := postgresql.GetOrInit()
+func handleParsing(msgChan <-chan *shared.KafkaMessage, i int, k kafka.IConnection, p *postgresql.Connection) {
 	messagesHandled := 0
 	now := time.Now()
 	for {
@@ -81,7 +81,6 @@ func handleParsing(msgChan <-chan *shared.KafkaMessage, i int) {
 				continue
 			}
 		case "analytics":
-			zap.S().Warnf("Analytics not yet supported, ignoring: %+v", msg)
 			switch topic.Tag {
 			case "work-order.create":
 				parsed, err := parseWorkOrderCreate(msg.Value)
@@ -92,7 +91,7 @@ func handleParsing(msgChan <-chan *shared.KafkaMessage, i int) {
 				}
 				err = p.InsertWorkOrderCreate(parsed, topic)
 				if err != nil {
-					zap.S().Warnf("Failed to insert work-order.create %+v: %s", msg, err)
+					zap.S().Warnf("Failed to insert work-order.create %+v: %s", parsed, err)
 					k.MarkMessage(msg)
 					continue
 				}
@@ -105,7 +104,7 @@ func handleParsing(msgChan <-chan *shared.KafkaMessage, i int) {
 				}
 				err = p.UpdateWorkOrderSetStart(parsed, topic)
 				if err != nil {
-					zap.S().Warnf("Failed to insert work-order.start %+v: %s", msg, err)
+					zap.S().Warnf("Failed to insert work-order.start %+v: %s", parsed, err)
 					k.MarkMessage(msg)
 					continue
 				}
@@ -118,7 +117,7 @@ func handleParsing(msgChan <-chan *shared.KafkaMessage, i int) {
 				}
 				err = p.UpdateWorkOrderSetStop(parsed, topic)
 				if err != nil {
-					zap.S().Warnf("Failed to insert work-order.stop %+v: %s", msg, err)
+					zap.S().Warnf("Failed to insert work-order.stop %+v: %s", parsed, err)
 					k.MarkMessage(msg)
 					continue
 				}
@@ -131,7 +130,7 @@ func handleParsing(msgChan <-chan *shared.KafkaMessage, i int) {
 				}
 				err = p.InsertProductAdd(parsed, topic)
 				if err != nil {
-					zap.S().Warnf("Failed to insert product.add %+v: %s", msg, err)
+					zap.S().Warnf("Failed to insert product.add %+v: %s", parsed, err)
 					k.MarkMessage(msg)
 					continue
 				}
@@ -144,7 +143,7 @@ func handleParsing(msgChan <-chan *shared.KafkaMessage, i int) {
 				}
 				err = p.UpdateBadQuantityForProduct(parsed, topic)
 				if err != nil {
-					zap.S().Warnf("Failed to insert product.setBadQuantity %+v: %s", msg, err)
+					zap.S().Warnf("Failed to insert product.setBadQuantity %+v: %s", parsed, err)
 					k.MarkMessage(msg)
 					continue
 				}
@@ -157,7 +156,7 @@ func handleParsing(msgChan <-chan *shared.KafkaMessage, i int) {
 				}
 				err = p.InsertProductTypeCreate(parsed, topic)
 				if err != nil {
-					zap.S().Warnf("Failed to insert product-type.create %+v: %s", msg, err)
+					zap.S().Warnf("Failed to insert product-type.create %+v: %s", parsed, err)
 					k.MarkMessage(msg)
 					continue
 				}
@@ -170,7 +169,7 @@ func handleParsing(msgChan <-chan *shared.KafkaMessage, i int) {
 				}
 				err = p.InsertShiftAdd(parsed, topic)
 				if err != nil {
-					zap.S().Warnf("Failed to insert shift.add %+v: %s", msg, err)
+					zap.S().Warnf("Failed to insert shift.add %+v: %s", parsed, err)
 					k.MarkMessage(msg)
 					continue
 				}
@@ -183,13 +182,45 @@ func handleParsing(msgChan <-chan *shared.KafkaMessage, i int) {
 				}
 				err = p.DeleteShiftByStartTime(parsed, topic)
 				if err != nil {
-					zap.S().Warnf("Failed to insert shift.delete %+v: %s", msg, err)
+					zap.S().Warnf("Failed to insert shift.delete %+v: %s", parsed, err)
 					k.MarkMessage(msg)
 					continue
 				}
+			case "state.add":
+				parsed, err := parseStateAdd(msg.Value)
+				if err != nil {
+					zap.S().Warnf("Failed to parse state.add %+v: %s", msg, err)
+					k.MarkMessage(msg)
+					continue
+				}
+				err = p.InsertStateAdd(parsed, topic)
+				if err != nil {
+					zap.S().Warnf("Failed to insert state.add %+v: %s", parsed, err)
+					k.MarkMessage(msg)
+					continue
+				}
+			case "state.overwrite":
+				parsed, err := parseStateOverwrite(msg.Value)
+				if err != nil {
+					zap.S().Warnf("Failed to parse state.overwrite %+v: %s", msg, err)
+					k.MarkMessage(msg)
+					continue
+				}
+				err = p.OverwriteStateByStartEndTime(parsed, topic)
+				if err != nil {
+					zap.S().Warnf("Failed to insert state.overwrite %+v: %s", parsed, err)
+					k.MarkMessage(msg)
+					continue
+				}
+			default:
+				zap.S().Warnf("Unknown tag %s for analytics [%s] [%v]", topic.Tag, topic, msg)
+				k.MarkMessage(msg)
+				continue
 			}
 		default:
 			zap.S().Errorf("Unknown usecase %s", topic.Schema)
+			k.MarkMessage(msg)
+			continue
 		}
 		k.MarkMessage(msg)
 		messagesHandled++
