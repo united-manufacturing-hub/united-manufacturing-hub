@@ -4,6 +4,7 @@ import (
 	"errors"
 	"github.com/goccy/go-json"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/kafka-to-postgresql-v2/shared"
+	"go.uber.org/zap"
 )
 
 func parseWorkOrderCreate(value []byte) (*shared.WorkOrderCreateMessage, error) {
@@ -19,7 +20,8 @@ func parseWorkOrderCreate(value []byte) (*shared.WorkOrderCreateMessage, error) 
 		return nil, errors.New("product.externalProductId is required")
 	}
 	if message.Quantity == 0 {
-		return nil, errors.New("quantity is required")
+		zap.S().Debugf("%+v", message)
+		return nil, errors.New("quantity is required to be greater than 0")
 	}
 	if int(message.Status) > int(shared.Completed) {
 		return nil, errors.New("status must be 0, 1 or 2")
@@ -100,7 +102,7 @@ func parseProductTypeCreate(value []byte) (*shared.ProductTypeCreateMessage, err
 
 	// Validate that ExternalProductTypeId & CycleTimeMs are set
 	if message.ExternalProductTypeId == "" {
-		return nil, errors.New("externalProductTypeId is required")
+		return nil, errors.New("external_product_type_id is required")
 	}
 	if message.CycleTimeMs == 0 {
 		return nil, errors.New("cycleTimeMs is required")
