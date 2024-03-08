@@ -7791,29 +7791,29 @@ data:
 
 
 
-    -------------------- FIX OWNERS --------------------
+      -------------------- FIX OWNERS --------------------
 
-    ALTER TABLE asset OWNER TO {{.Values.kafkatopostgresqlv2.database.user}};
-    ALTER TABLE tag OWNER TO {{.Values.kafkatopostgresqlv2.database.user}};
-    ALTER TABLE tag_string OWNER TO {{.Values.kafkatopostgresqlv2.database.user}};
+      ALTER TABLE asset OWNER TO {{.Values.kafkatopostgresqlv2.database.user}};
+      ALTER TABLE tag OWNER TO {{.Values.kafkatopostgresqlv2.database.user}};
+      ALTER TABLE tag_string OWNER TO {{.Values.kafkatopostgresqlv2.database.user}};
 
-    ALTER TABLE work_order OWNER TO {{.Values.kafkatopostgresqlv2.database.user}};
-    ALTER TABLE product_type OWNER TO {{.Values.kafkatopostgresqlv2.database.user}};
-    ALTER TABLE product OWNER TO {{.Values.kafkatopostgresqlv2.database.user}};
-    ALTER TABLE shift OWNER TO {{.Values.kafkatopostgresqlv2.database.user}};
-    ALTER TABLE state OWNER TO {{.Values.kafkatopostgresqlv2.database.user}};
-
-
-    GRANT SELECT ON {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.asset TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
-    GRANT SELECT ON {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.tag TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
-    GRANT SELECT ON {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.tag_string TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
+      ALTER TABLE work_order OWNER TO {{.Values.kafkatopostgresqlv2.database.user}};
+      ALTER TABLE product_type OWNER TO {{.Values.kafkatopostgresqlv2.database.user}};
+      ALTER TABLE product OWNER TO {{.Values.kafkatopostgresqlv2.database.user}};
+      ALTER TABLE shift OWNER TO {{.Values.kafkatopostgresqlv2.database.user}};
+      ALTER TABLE state OWNER TO {{.Values.kafkatopostgresqlv2.database.user}};
 
 
-    GRANT SELECT ON {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.work_order TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
-    GRANT SELECT ON {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.product_type TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
-    GRANT SELECT ON {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.product TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
-    GRANT SELECT ON {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.shift TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
-    GRANT SELECT ON {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.state TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
+      GRANT SELECT ON {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.asset TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
+      GRANT SELECT ON {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.tag TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
+      GRANT SELECT ON {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.tag_string TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
+
+
+      GRANT SELECT ON {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.work_order TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
+      GRANT SELECT ON {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.product_type TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
+      GRANT SELECT ON {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.product TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
+      GRANT SELECT ON {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.shift TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
+      GRANT SELECT ON {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.state TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
 
 
   __SQL__

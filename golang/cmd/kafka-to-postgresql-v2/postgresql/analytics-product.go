@@ -27,14 +27,6 @@ func (c *Connection) InsertProductAdd(msg *sharedStructs.ProductAddMessage, topi
 	}
 	// Insert producth
 	var cmdTag pgconn.CommandTag
-	/*
-		The SQL query does the following:
-			1. Inserts a new product into the product table
-			2. In case the start_time is not null, it converts the timestamp from milliseconds to seconds
-			3. Otherwise, it sets the value to NULL
-		$4 :: INT is a explicit type cast to INT, because postgresql otherwise doesn't know the type if it is NULL
-		Divide by 1000.0 is important, as this is a float division, otherwise the result would be an integer
-	*/
 	cmdTag, err = tx.Exec(ctx, `
 			INSERT INTO product
             (
@@ -49,12 +41,13 @@ func (c *Connection) InsertProductAdd(msg *sharedStructs.ProductAddMessage, topi
             VALUES
             	(
                         $1,
-                        $2,
+                        $2::TEXT,
                         $3,
                         CASE
-                                    WHEN $4::int IS NOT NULL THEN to_timestamp($4::int/1000.0)
+							WHEN $4::BIGINT IS NOT NULL THEN to_timestamp($4::BIGINT  / 1000.0)
+					   		ELSE NULL
                         END::timestamptz,
-                        to_timestamp($5/1000.0),
+                        to_timestamp($5::BIGINT  / 1000.0),
                         $6,
                         $7::int
 				)
@@ -90,13 +83,14 @@ func (c *Connection) UpdateBadQuantityForProduct(msg *sharedStructs.ProductSetBa
 	}
 
 	// Update bad quantity with check integrated in WHERE clause
+	// The coallesce is used to handle the case where bad_quantity is NULL, in which case we consider it to be 0
 	cmdTag, err := tx.Exec(ctx, `
         UPDATE product
-		SET    bad_quantity = bad_quantity + $1
+		SET    bad_quantity = coalesce(bad_quantity,0) + $1
 		WHERE  external_product_type_id = $2
 			   AND asset_id = $3
-			   AND end_time = to_timestamp($4 / 1000.0)
-			   AND ( quantity - bad_quantity ) >= $1 
+			   AND end_time = to_timestamp($4::BIGINT / 1000.0)
+			   AND ( quantity - coalesce(bad_quantity,0) ) >= $1 
     `, int(msg.BadQuantity), int(productTypeId), int(assetId), msg.EndTimeUnixMs)
 
 	if err != nil {
