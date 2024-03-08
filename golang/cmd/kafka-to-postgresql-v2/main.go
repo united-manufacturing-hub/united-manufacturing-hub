@@ -5,8 +5,7 @@ import (
 	"github.com/heptiolabs/healthcheck"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/united-manufacturing-hub/umh-utils/env"
-	"github.com/united-manufacturing-hub/umh-utils/logger"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/kafka-to-postgresql-v2/helper"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/kafka-to-postgresql-v2/kafka"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/kafka-to-postgresql-v2/postgresql"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/kafka-to-postgresql-v2/worker"
@@ -20,11 +19,11 @@ import (
 )
 
 func main() {
-	InitLogging()
+	helper.InitLogging()
 	internal.Initfgtrace()
-	InitPrometheus()
+	kafka.InitKafkaClient()
 	_ = postgresql.GetOrInit()
-	_ = kafka.GetOrInit()
+	InitPrometheus()
 	InitHealthCheck()
 	_ = worker.GetOrInit()
 
@@ -45,11 +44,6 @@ func awaitShutdown() {
 	zap.S().Infof("Received SIG %v", sig)
 
 	os.Exit(0)
-}
-
-func InitLogging() {
-	logLevel, _ := env.GetAsString("LOGGING_LEVEL", false, "PRODUCTION") //nolint:errcheck
-	_ = logger.New(logLevel)
 }
 
 func InitPrometheus() {
@@ -96,7 +90,7 @@ func registerCustomMetrics() {
 	// Update metrics in a separate go routine
 	go func() {
 		ticker10Seconds := time.NewTicker(10 * time.Second)
-		msgChan := kafka.GetOrInit().GetMessages()
+		msgChan := kafka.GetKafkaClient().GetMessages()
 		for {
 			metrics := postgresql.GetOrInit().GetMetrics()
 			lruHitGauge.Set(metrics.LRUHitPercentage)
