@@ -70,7 +70,7 @@ func TestWorkOrder(t *testing.T) {
 		mock.ExpectExec(`
 		UPDATE work_orders
 		SET status = 1, startTime = to_timestamp\(\$2 \/ 1000\)
-		WHERE externalWorkOrderId = \$1 AND assetId = \$3
+		WHERE externalWorkOrderId = \$1 AND status = 0 AND startTime IS NULL AND assetId = \$3
 	`).WithArgs("#1274", uint64(0), 1).
 			WillReturnResult(pgxmock.NewResult("UPDATE", 1))
 		mock.ExpectCommit()
@@ -94,7 +94,7 @@ func TestWorkOrder(t *testing.T) {
 		mock.ExpectExec(`
 		UPDATE work_orders
 		SET status = 2, endTime = to_timestamp\(\$2 \/ 1000\)
-		WHERE externalWorkOrderId = \$1 AND assetId = \$3
+		WHERE externalWorkOrderId = \$1 AND status = 1 AND endTime IS NULL AND assetId = \$3
 		`).WithArgs("#1274", uint64(0), 1).
 			WillReturnResult(pgxmock.NewResult("UPDATE", 1))
 		mock.ExpectCommit()
@@ -247,5 +247,206 @@ func TestShift(t *testing.T) {
 
 		err := c.DeleteShiftByStartTime(&msg, &topic)
 		assert.NoError(t, err)
+	})
+}
+
+func TestState(t *testing.T) {
+	c := CreateMockConnection(t)
+	defer c.db.Close()
+
+	// Cast c.db to pgxmock to access the underlying mock
+	mock, ok := c.db.(pgxmock.PgxPoolIface)
+	assert.True(t, ok)
+
+	t.Run("add", func(t *testing.T) {
+		msg := sharedStructs.StateAddMessage{
+			StartTimeUnixMs: 1,
+			State:           10000,
+		}
+
+		topic := sharedStructs.TopicDetails{
+			Enterprise: "umh",
+			Tag:        "state.add",
+		}
+
+		// Expect Query from GetOrInsertAsset
+		mock.ExpectQuery(`SELECT id FROM asset WHERE enterprise = \$1 AND site = \$2 AND area = \$3 AND line = \$4 AND workcell = \$5 AND origin_id = \$6`).
+			WithArgs("umh", "", "", "", "", "").
+			WillReturnRows(mock.NewRows([]string{"id"}).AddRow(1))
+
+		// Expect Exec from InsertStateAdd
+		mock.ExpectBeginTx(pgx.TxOptions{})
+
+		mock.ExpectExec(`UPDATE states
+		SET endTime \= to_timestamp\(\$2\/1000\)
+		WHERE assetId \= \$1
+		AND endTime IS NULL
+		AND startTime \< to_timestamp\(\$2\/1000\)
+		`).WithArgs(1, uint64(1)).
+			WillReturnResult(pgxmock.NewResult("UPDATE", 0))
+
+		mock.ExpectExec(`INSERT INTO states \(assetId, startTime, state\)
+		VALUES \(\$1, to_timestamp\(\$2\/1000\), \$3\)
+		ON CONFLICT ON CONSTRAINT state_start_asset_uniq
+		DO NOTHING`).WithArgs(1, uint64(1), 10000).
+			WillReturnResult(pgxmock.NewResult("INSERT", 1))
+
+		mock.ExpectCommit()
+
+		err := c.InsertStateAdd(&msg, &topic)
+		assert.NoError(t, err)
+
+		// Let's insert two more states to test the update functionality
+		// One starts at 100, the other at 200
+		msg = sharedStructs.StateAddMessage{
+			StartTimeUnixMs: 100,
+			State:           20000,
+		}
+
+		mock.ExpectBeginTx(pgx.TxOptions{})
+		mock.ExpectExec(`UPDATE states
+		SET endTime \= to_timestamp\(\$2\/1000\)
+		WHERE assetId \= \$1
+		AND endTime IS NULL
+		AND startTime \< to_timestamp\(\$2\/1000\)
+		`).WithArgs(1, uint64(100)).
+			WillReturnResult(pgxmock.NewResult("UPDATE", 1))
+
+		mock.ExpectExec(`INSERT INTO states \(assetId, startTime, state\)
+		VALUES \(\$1, to_timestamp\(\$2\/1000\), \$3\)
+		ON CONFLICT ON CONSTRAINT state_start_asset_uniq
+		DO NOTHING`).WithArgs(1, uint64(100), 20000).
+			WillReturnResult(pgxmock.NewResult("INSERT", 1))
+
+		mock.ExpectCommit()
+
+		err = c.InsertStateAdd(&msg, &topic)
+		assert.NoError(t, err)
+
+		msg = sharedStructs.StateAddMessage{
+			StartTimeUnixMs: 200,
+			State:           30000,
+		}
+
+		mock.ExpectBeginTx(pgx.TxOptions{})
+		mock.ExpectExec(`UPDATE states
+		SET endTime \= to_timestamp\(\$2\/1000\)
+		WHERE assetId \= \$1
+		AND endTime IS NULL
+		AND startTime \< to_timestamp\(\$2\/1000\)
+		`).WithArgs(1, uint64(200)).
+			WillReturnResult(pgxmock.NewResult("UPDATE", 1))
+
+		mock.ExpectExec(`INSERT INTO states \(assetId, startTime, state\)
+		VALUES \(\$1, to_timestamp\(\$2\/1000\), \$3\)
+		ON CONFLICT ON CONSTRAINT state_start_asset_uniq
+		DO NOTHING`).WithArgs(1, uint64(200), 30000).
+			WillReturnResult(pgxmock.NewResult("INSERT", 1))
+
+		mock.ExpectCommit()
+
+		err = c.InsertStateAdd(&msg, &topic)
+		assert.NoError(t, err)
+
+	})
+
+	t.Run("overwrite", func(t *testing.T) {
+		// We now have 3 states, 0-100, 100-200, 200-...
+		// Let's test the overwrite by first setting 0-100 to 40000
+
+		msg := sharedStructs.StateOverwriteMessage{
+			StartTimeUnixMs: 0,
+			EndTimeUnixMs:   100,
+			State:           40000,
+		}
+
+		topic := sharedStructs.TopicDetails{
+			Enterprise: "umh",
+			Tag:        "state.overwrite",
+		}
+
+		mock.ExpectBeginTx(pgx.TxOptions{})
+		// The prev state will be cleanly deleted
+		mock.ExpectExec(`DELETE FROM states
+		WHERE assetId = \$1
+		AND startTime >= to_timestamp\(\$2\/1000\)
+		AND startTime <= to_timestamp\(\$3\/1000\)
+		`).WithArgs(1, uint64(0), uint64(100)).
+			WillReturnResult(pgxmock.NewResult("DELETE", 1))
+
+		// The left update command will not change anything
+		mock.ExpectExec(`UPDATE states
+		SET endTime = to_timestamp\(\$2\/1000\)
+		WHERE assetId = \$1
+		AND endTime > to_timestamp\(\$2\/1000\)
+		AND endTime <= to_timestamp\(\$3\/1000\)
+		`).WithArgs(1, uint64(0), uint64(100)).
+			WillReturnResult(pgxmock.NewResult("UPDATE", 0))
+
+		// The right update command will not change anything
+		mock.ExpectExec(`UPDATE states
+		SET startTime = to_timestamp\(\$3\/1000\)
+		WHERE assetId = \$1
+		AND startTime >= to_timestamp\(\$2\/1000\)
+		AND startTime < to_timestamp\(\$3\/1000\)
+		`).WithArgs(1, uint64(0), uint64(100)).
+			WillReturnResult(pgxmock.NewResult("UPDATE", 0))
+
+		// The insert command will insert the new state
+		mock.ExpectExec(`INSERT INTO states \(assetId, startTime, endTime, state\)
+		VALUES \(\$1, to_timestamp\(\$2\/1000\), to_timestamp\(\$3\/1000\), \$4\)`).
+			WithArgs(1, uint64(0), uint64(100), 40000).
+			WillReturnResult(pgxmock.NewResult("INSERT", 1))
+
+		mock.ExpectCommit()
+
+		err := c.OverwriteStateByStartEndTime(&msg, &topic)
+		assert.NoError(t, err)
+
+		// Let's test an overwrite with state 50000 from 50 to 150, the result should be 0-50, 50-150, 150-200, 200-...
+		msg = sharedStructs.StateOverwriteMessage{
+			StartTimeUnixMs: 50,
+			EndTimeUnixMs:   150,
+			State:           50000,
+		}
+
+		mock.ExpectBeginTx(pgx.TxOptions{})
+		// There is no state inbetween to be deleted, so we expect 0 deletes
+		mock.ExpectExec(`DELETE FROM states
+		WHERE assetId = \$1
+		AND startTime >= to_timestamp\(\$2\/1000\)
+		AND startTime <= to_timestamp\(\$3\/1000\)
+		`).WithArgs(1, uint64(50), uint64(150)).
+			WillReturnResult(pgxmock.NewResult("DELETE", 0))
+
+		// The left update command will update the end time of the first state
+		mock.ExpectExec(`UPDATE states
+		SET endTime = to_timestamp\(\$2\/1000\)
+		WHERE assetId = \$1
+		AND endTime > to_timestamp\(\$2\/1000\)
+		AND endTime <= to_timestamp\(\$3\/1000\)
+		`).WithArgs(1, uint64(50), uint64(150)).
+			WillReturnResult(pgxmock.NewResult("UPDATE", 1))
+
+		// The right update command will update the start time of the second state
+		mock.ExpectExec(`UPDATE states
+		SET startTime = to_timestamp\(\$3\/1000\)
+		WHERE assetId = \$1
+		AND startTime >= to_timestamp\(\$2\/1000\)
+		AND startTime < to_timestamp\(\$3\/1000\)
+		`).WithArgs(1, uint64(50), uint64(150)).
+			WillReturnResult(pgxmock.NewResult("UPDATE", 1))
+
+		// The insert command will insert the new state
+		mock.ExpectExec(`INSERT INTO states \(assetId, startTime, endTime, state\)
+		VALUES \(\$1, to_timestamp\(\$2\/1000\), to_timestamp\(\$3\/1000\), \$4\)`).
+			WithArgs(1, uint64(50), uint64(150), 50000).
+			WillReturnResult(pgxmock.NewResult("INSERT", 1))
+
+		mock.ExpectCommit()
+
+		err = c.OverwriteStateByStartEndTime(&msg, &topic)
+		assert.NoError(t, err)
+
 	})
 }
