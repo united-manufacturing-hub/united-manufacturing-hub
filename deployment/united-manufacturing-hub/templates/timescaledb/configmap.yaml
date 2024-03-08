@@ -7773,6 +7773,7 @@ data:
 
     -------------------- STATES TABLE --------------------
 
+
     -- Records the state changes of assets over time. State tracking supports ISA-95's goal of detailed monitoring and control of manufacturing operations.
     -- State Table
       -- It assumes that a state continues until a new state is recorded.
@@ -7783,6 +7784,7 @@ data:
       CHECK (state >= 0),
       UNIQUE (start_time, asset_id)
     );
+
     -- creating hypertable
     SELECT create_hypertable('state', 'start_time', if_not_exists => TRUE);;
 

@@ -42,11 +42,11 @@ func (c *Connection) InsertWorkOrderCreate(msg *sharedStructs.WorkOrderCreateMes
 					 $4,
 					 $5,
 					 CASE
-					   WHEN $6::BIGINT IS NOT NULL THEN to_timestamp($6::BIGINT  / 1000.0)
+					   WHEN $6::BIGINT IS NOT NULL THEN to_timestamp($6::BIGINT / 1000.0)
 					   ELSE NULL
 					 END :: timestamptz,
 					 CASE
-					   WHEN $7::BIGINT IS NOT NULL THEN to_timestamp($7::BIGINT  / 1000.0)
+					   WHEN $7::BIGINT IS NOT NULL THEN to_timestamp($7::BIGINT / 1000.0)
 					   ELSE NULL
 					 END :: timestamptz) 
 	`, values...)
@@ -86,7 +86,7 @@ func (c *Connection) UpdateWorkOrderSetStart(msg *sharedStructs.WorkOrderStartMe
 			   AND status = 0
 			   AND start_time IS NULL
 			   AND asset_id = $3 
-	`, msg.ExternalWorkOrderId, msg.StartTimeUnixMs, int(assetId))
+	`, msg.ExternalWorkOrderId, int(msg.StartTimeUnixMs), int(assetId))
 	if err != nil {
 		zap.S().Warnf("Error updating work order: %v (workOrderId: %v) [%s]", err, msg.ExternalWorkOrderId, cmdTag)
 		zap.S().Debugf("Message: %v", msg)
@@ -128,7 +128,7 @@ func (c *Connection) UpdateWorkOrderSetStop(msg *sharedStructs.WorkOrderStopMess
 			   AND status = 1
 			   AND end_time IS NULL
 			   AND asset_id = $3 
-	`, msg.ExternalWorkOrderId, msg.EndTimeUnixMs, int(assetId))
+	`, msg.ExternalWorkOrderId, int(msg.EndTimeUnixMs), int(assetId))
 	if err != nil {
 		zap.S().Warnf("Error updating work order: %v (workOrderId: %v) [%s]", err, msg.ExternalWorkOrderId, cmdTag)
 		zap.S().Debugf("Message: %v", msg)
