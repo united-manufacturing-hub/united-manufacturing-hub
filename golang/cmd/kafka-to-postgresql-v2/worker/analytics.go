@@ -4,6 +4,7 @@ import (
 	"errors"
 	"github.com/goccy/go-json"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/kafka-to-postgresql-v2/shared"
+	"go.uber.org/zap"
 )
 
 func parseWorkOrderCreate(value []byte) (*shared.WorkOrderCreateMessage, error) {
@@ -13,13 +14,14 @@ func parseWorkOrderCreate(value []byte) (*shared.WorkOrderCreateMessage, error) 
 
 	// Validate that ExternalWorkOrderId, Product.ExternalProductId & Quantity are set
 	if message.ExternalWorkOrderId == "" {
-		return nil, errors.New("externalWorkOrderId is required")
+		return nil, errors.New("external_work_order_id is required")
 	}
 	if message.Product.ExternalProductId == "" {
-		return nil, errors.New("product.externalProductId is required")
+		return nil, errors.New("external_product_id is required")
 	}
 	if message.Quantity == 0 {
-		return nil, errors.New("quantity is required")
+		zap.S().Debugf("%+v", message)
+		return nil, errors.New("quantity is required to be greater than 0")
 	}
 	if int(message.Status) > int(shared.Completed) {
 		return nil, errors.New("status must be 0, 1 or 2")
@@ -36,7 +38,7 @@ func parseWorkOrderStart(value []byte) (*shared.WorkOrderStartMessage, error) {
 
 	// Validate that ExternalWorkOrderId & StartTimeUnixMs are set
 	if message.ExternalWorkOrderId == "" {
-		return nil, errors.New("externalWorkOrderId is required")
+		return nil, errors.New("external_work_order_id is required")
 	}
 	if message.StartTimeUnixMs == 0 {
 		return nil, errors.New("start_time_unix_ms is required")
@@ -51,7 +53,7 @@ func parseWorkOrderStop(value []byte) (*shared.WorkOrderStopMessage, error) {
 
 	// Validate that ExternalWorkOrderId & EndTimeUnixMs are set
 	if message.ExternalWorkOrderId == "" {
-		return nil, errors.New("externalWorkOrderId is required")
+		return nil, errors.New("external_work_order_id is required")
 	}
 	if message.EndTimeUnixMs == 0 {
 		return nil, errors.New("end_time_unix_ms is required")
@@ -65,8 +67,8 @@ func parseProductAdd(value []byte) (*shared.ProductAddMessage, error) {
 	err := json.Unmarshal(value, &message)
 
 	// Validate that ExternalProductId, EndTimeUnixMs, Quantity are set
-	if message.ExternalProductId == "" {
-		return nil, errors.New("externalProductId is required")
+	if message.ExternalProductTypeId == "" {
+		return nil, errors.New("external_product_type_id is required")
 	}
 	if message.EndTimeUnixMs == 0 {
 		return nil, errors.New("end_time is required")
@@ -84,10 +86,10 @@ func parseProductSetBadQuantity(value []byte) (*shared.ProductSetBadQuantityMess
 
 	// Validate that ExternalProductId & BadQuantity are set
 	if message.ExternalProductId == "" {
-		return nil, errors.New("externalProductId is required")
+		return nil, errors.New("external_product_id is required")
 	}
 	if message.BadQuantity == 0 {
-		return nil, errors.New("badQuantity is required")
+		return nil, errors.New("bad_quantity is required")
 	}
 	return &message, err
 
@@ -100,10 +102,10 @@ func parseProductTypeCreate(value []byte) (*shared.ProductTypeCreateMessage, err
 
 	// Validate that ExternalProductTypeId & CycleTimeMs are set
 	if message.ExternalProductTypeId == "" {
-		return nil, errors.New("externalProductTypeId is required")
+		return nil, errors.New("external_product_type_id is required")
 	}
 	if message.CycleTimeMs == 0 {
-		return nil, errors.New("cycleTimeMs is required")
+		return nil, errors.New("cycle_time_ms is required")
 	}
 	return &message, err
 }
@@ -129,6 +131,39 @@ func parseShiftDelete(value []byte) (*shared.ShiftDeleteMessage, error) {
 	err := json.Unmarshal(value, &message)
 
 	// Validate that StartTimeUnixMs is set
+	if message.StartTimeUnixMs == 0 {
+		return nil, errors.New("start_time_unix_ms is required")
+	}
+	return &message, err
+}
+
+func parseStateAdd(value []byte) (*shared.StateAddMessage, error) {
+	// Try parse to StateAddMessage
+	var message shared.StateAddMessage
+	err := json.Unmarshal(value, &message)
+
+	// Validate that State & StartTimeUnixMs are set
+	if message.State == 0 {
+		return nil, errors.New("state is required")
+	}
+	if message.StartTimeUnixMs == 0 {
+		return nil, errors.New("start_time_unix_ms is required")
+	}
+	return &message, err
+}
+
+func parseStateOverwrite(value []byte) (*shared.StateOverwriteMessage, error) {
+	// Try parse to StateOverwriteMessage
+	var message shared.StateOverwriteMessage
+	err := json.Unmarshal(value, &message)
+
+	// Validate that State, EndTimeUnixMs & StartTimeUnixMs are set
+	if message.State == 0 {
+		return nil, errors.New("state is required")
+	}
+	if message.EndTimeUnixMs == 0 {
+		return nil, errors.New("end_time_unix_ms is required")
+	}
 	if message.StartTimeUnixMs == 0 {
 		return nil, errors.New("start_time_unix_ms is required")
 	}

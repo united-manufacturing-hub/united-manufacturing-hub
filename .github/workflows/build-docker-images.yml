@@ -16,16 +16,105 @@ name: Build Docker Images
 
 on:
   pull_request:
-    branches:
-      - main
-      - staging
+    paths:
+      - 'go.work'
+      - 'go.work.sum'
+      - 'golang/**'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
+  check_paths:
+    runs-on: ubuntu-latest
+    outputs:
+      barcodereader: ${{ steps.filter.outputs.barcodereader }}
+      factoryinsight: ${{ steps.filter.outputs.factoryinsight }}
+      grafana_umh: ${{ steps.filter.outputs.grafana_umh }}
+      hivemq_init: ${{ steps.filter.outputs.hivemq_init }}
+      kafka_bridge: ${{ steps.filter.outputs.kafka_bridge }}
+      kafka_init: ${{ steps.filter.outputs.kafka_init }}
+      kafka_to_postgresql: ${{ steps.filter.outputs.kafka_to_postgresql }}
+      kafka_to_postgresql_v2: ${{ steps.filter.outputs.kafka_to_postgresql_v2 }}
+      metrics: ${{ steps.filter.outputs.metrics }}
+      mqtt_kafka_bridge: ${{ steps.filter.outputs.mqtt_kafka_bridge }}
+      sensorconnect: ${{ steps.filter.outputs.sensorconnect }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Checkout actual branch (and not the refs/pull/<pr>/merge) to get the correct diff
+        run: |
+          git checkout ${{ github.head_ref }}
+      - id: filter
+        run: |
+          echo "barcodereader=false" >> $GITHUB_OUTPUT
+          echo "factoryinsight=false" >> $GITHUB_OUTPUT
+          echo "grafana_umh=false" >> $GITHUB_OUTPUT
+          echo "hivemq_init=false" >> $GITHUB_OUTPUT
+          echo "kafka_bridge=false" >> $GITHUB_OUTPUT
+          echo "kafka_init=false" >> $GITHUB_OUTPUT
+          echo "kafka_to_postgresql=false" >> $GITHUB_OUTPUT
+          echo "kafka_to_postgresql_v2=false" >> $GITHUB_OUTPUT
+          echo "metrics=false" >> $GITHUB_OUTPUT
+          echo "mqtt_kafka_bridge=false" >> $GITHUB_OUTPUT
+          echo "sensorconnect=false" >> $GITHUB_OUTPUT
+          
+          currentSHA=$(git rev-parse HEAD)
+          previousSHA=$(git rev-parse HEAD^)
+          
+          if git diff --name-only $previousSHA $currentSHA | grep -E '^(go.work|go.work.sum|golang/internal/|golang/pkg/|golang/test/|golang/go.mod|golang/go.sum|golang/cmd/barcodereader/)'; then
+            echo "Building barcodereader"
+            echo "barcodereader=true" >> $GITHUB_OUTPUT
+          fi
+          if git diff --name-only $previousSHA $currentSHA | grep -E '^(go.work|go.work.sum|golang/internal/|golang/pkg/|golang/test/|golang/go.mod|golang/go.sum|golang/cmd/factoryinsight/)'; then
+            echo "Building factoryinsight"
+            echo "factoryinsight=true" >> $GITHUB_OUTPUT
+          fi
+          if git diff --name-only $previousSHA $currentSHA | grep -E '^(go.work|go.work.sum|golang/internal/|golang/pkg/|golang/test/|golang/go.mod|golang/go.sum|golang/cmd/grafana-umh/)'; then
+              echo "Building grafana_umh"
+              echo "grafana_umh=true" >> $GITHUB_OUTPUT
+          fi
+          if git diff --name-only $previousSHA $currentSHA | grep -E '^(go.work|go.work.sum|golang/internal/|golang/pkg/|golang/test/|golang/go.mod|golang/go.sum|golang/cmd/hivemq-init/)'; then
+              echo "Building hivemq_init"
+              echo "hivemq_init=true" >> $GITHUB_OUTPUT
+          fi
+          if git diff --name-only $previousSHA $currentSHA | grep -E '^(go.work|go.work.sum|golang/internal/|golang/pkg/|golang/test/|golang/go.mod|golang/go.sum|golang/cmd/kafka-bridge/)'; then
+              echo "Building kafka_bridge"
+              echo "kafka_bridge=true" >> $GITHUB_OUTPUT
+          fi
+          if git diff --name-only $previousSHA $currentSHA | grep -E '^(go.work|go.work.sum|golang/internal/|golang/pkg/|golang/test/|golang/go.mod|golang/go.sum|golang/cmd/kafka-init/)'; then
+              echo "Building kafka_init"
+              echo "kafka_init=true" >> $GITHUB_OUTPUT
+          fi
+          if git diff --name-only $previousSHA $currentSHA | grep -E '^(go.work|go.work.sum|golang/internal/|golang/pkg/|golang/test/|golang/go.mod|golang/go.sum|golang/cmd/kafka-to-postgresql/)'; then
+              echo "Building kafka_to_postgresql"
+              echo "kafka_to_postgresql=true" >> $GITHUB_OUTPUT
+          fi
+          if git diff --name-only $previousSHA $currentSHA | grep -E '^(go.work|go.work.sum|golang/internal/|golang/pkg/|golang/test/|golang/go.mod|golang/go.sum|golang/cmd/kafka-to-postgresql-v2/)'; then
+            echo "Building kafka_to_postgresql_v2"
+            echo "kafka_to_postgresql_v2=true" >> $GITHUB_OUTPUT
+          fi
+          if git diff --name-only $previousSHA $currentSHA | grep -E '^(go.work|go.work.sum|golang/internal/|golang/pkg/|golang/test/|golang/go.mod|golang/go.sum|golang/cmd/metrics/)'; then
+            echo "Building metrics"
+            echo "metrics=true" >> $GITHUB_OUTPUT
+          fi
+          if git diff --name-only $previousSHA $currentSHA | grep -E '^(go.work|go.work.sum|golang/internal/|golang/pkg/|golang/test/|golang/go.mod|golang/go.sum|golang/cmd/mqtt-kafka-bridge/)'; then
+            echo "Building mqtt_kafka_bridge"
+            echo "mqtt_kafka_bridge=true" >> $GITHUB_OUTPUT
+          fi
+          if git diff --name-only $previousSHA $currentSHA | grep -E '^(go.work|go.work.sum|golang/internal/|golang/pkg/|golang/test/|golang/go.mod|golang/go.sum|golang/cmd/sensorconnect/)'; then
+            echo "Building sensorconnect"
+            echo "sensorconnect=true" >> $GITHUB_OUTPUT
+          fi
+          
+          
+
   barcodereader:
+    needs: check_paths
+    if: needs.check_paths.outputs.barcodereader == 'true'
     permissions:
       packages: write
       contents: read
@@ -62,7 +151,9 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
 
-  factoryinsight:   
+  factoryinsight:
+    needs: check_paths
+    if: needs.check_paths.outputs.factoryinsight == 'true'
     permissions:
       packages: write
       contents: read
@@ -98,6 +189,8 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
 
   grafana-umh:
+    needs: check_paths
+    if: needs.check_paths.outputs.grafana_umh == 'true'
     permissions:
       packages: write
       contents: read
@@ -132,6 +225,8 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
 
   hivemq-init:
+    needs: check_paths
+    if: needs.check_paths.outputs.hivemq_init == 'true'
     permissions:
       packages: write
       contents: read
@@ -166,6 +261,8 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
 
   kafka-bridge:
+    needs: check_paths
+    if: needs.check_paths.outputs.kafka_bridge == 'true'
     permissions:
       packages: write
       contents: read
@@ -201,6 +298,8 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
 
   kafka-init:
+    needs: check_paths
+    if: needs.check_paths.outputs.kafka_init == 'true'
     permissions:
       packages: write
       contents: read
@@ -237,6 +336,8 @@ jobs:
 
 
   kafka-to-postgresql:
+    needs: check_paths
+    if: needs.check_paths.outputs.kafka_to_postgresql == 'true'
     permissions:
       packages: write
       contents: read
@@ -273,6 +374,8 @@ jobs:
 
 
   kafka-to-postgresql-v2:
+    needs: check_paths
+    if: needs.check_paths.outputs.kafka_to_postgresql_v2 == 'true'
     permissions:
       packages: write
       contents: read
@@ -307,7 +410,9 @@ jobs:
           target: runner
           tags: ${{ steps.meta.outputs.tags }}
           
-  metrics:    
+  metrics:
+    needs: check_paths
+    if: needs.check_paths.outputs.metrics == 'true'
     permissions:
       packages: write
       contents: read
@@ -343,6 +448,8 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
 
   mqtt-kafka-bridge:
+    needs: check_paths
+    if: needs.check_paths.outputs.mqtt_kafka_bridge == 'true'
     permissions:
       packages: write
       contents: read
@@ -378,6 +485,8 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
 
   sensorconnect:
+    needs: check_paths
+    if: needs.check_paths.outputs.sensorconnect == 'true'
     permissions:
       packages: write
       contents: read

@@ -3,6 +3,7 @@ package postgresql
 import (
 	"fmt"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/kafka-to-postgresql-v2/helper"
 	sharedStructs "github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/kafka-to-postgresql-v2/shared"
 	"go.uber.org/zap"
 )
@@ -12,7 +13,7 @@ func (c *Connection) InsertProductAdd(msg *sharedStructs.ProductAddMessage, topi
 	if err != nil {
 		return err
 	}
-	productTypeId, err := c.GetOrInsertProductType(assetId, msg.ExternalProductId, 0)
+	productTypeId, err := c.GetOrInsertProductType(assetId, msg.ExternalProductTypeId, nil)
 	if err != nil {
 		return err
 	}
@@ -20,16 +21,37 @@ func (c *Connection) InsertProductAdd(msg *sharedStructs.ProductAddMessage, topi
 	// Start tx (this shouln't take more then 1 minute)
 	ctx, cncl := get1MinuteContext()
 	defer cncl()
-	tx, err := c.db.Begin(ctx)
+	tx, err := c.Db.Begin(ctx)
 	if err != nil {
 		return err
 	}
-	// Insert product
+	// Insert producth
 	var cmdTag pgconn.CommandTag
 	cmdTag, err = tx.Exec(ctx, `
-		INSERT INTO products (externalProductTypeId, productBatchId, assetId, startTime, endTime, quantity, badQuantity)
-		VALUES ($1, $2, $3, to_timestamp($4/1000), to_timestamp($5/1000), $6, $7)
-	`, int(productTypeId), msg.ProductBatchId, int(assetId), msg.StartTimeUnixMs, msg.EndTimeUnixMs, int(msg.Quantity), int(msg.BadQuantity))
+			INSERT INTO product
+            (
+                        product_type_id,
+                        product_batch_id,
+                        asset_id,
+                        start_time,
+                        end_time,
+                        quantity,
+                        bad_quantity
+            )
+            VALUES
+            	(
+                        $1,
+                        $2::TEXT,
+                        $3,
+                        CASE
+							WHEN $4::BIGINT IS NOT NULL THEN to_timestamp($4::BIGINT / 1000.0)
+					   		ELSE NULL
+                        END::timestamptz,
+                        to_timestamp($5::BIGINT / 1000.0),
+                        $6,
+                        $7::int
+				)
+		`, int(productTypeId), helper.StringPtrToNullString(msg.ProductBatchId), int(assetId), helper.Uint64PtrToNullInt64(msg.StartTimeUnixMs), msg.EndTimeUnixMs, int(msg.Quantity), helper.Uint64PtrToNullInt64(msg.BadQuantity))
 	if err != nil {
 		zap.S().Warnf("Error inserting product: %v (productTypeId: %v) [%s]", err, productTypeId, cmdTag)
 		zap.S().Debugf("Message: %v (Topic: %v)", msg, topic)
@@ -47,7 +69,7 @@ func (c *Connection) UpdateBadQuantityForProduct(msg *sharedStructs.ProductSetBa
 	if err != nil {
 		return err
 	}
-	productTypeId, err := c.GetOrInsertProductType(assetId, msg.ExternalProductId, 0)
+	productTypeId, err := c.GetOrInsertProductType(assetId, msg.ExternalProductId, nil)
 	if err != nil {
 		return err
 	}
@@ -55,20 +77,21 @@ func (c *Connection) UpdateBadQuantityForProduct(msg *sharedStructs.ProductSetBa
 	// Start tx
 	ctx, cncl := get1MinuteContext()
 	defer cncl()
-	tx, err := c.db.Begin(ctx)
+	tx, err := c.Db.Begin(ctx)
 	if err != nil {
 		return err
 	}
 
 	// Update bad quantity with check integrated in WHERE clause
+	// The coalesce is used to handle the case where bad_quantity is NULL, in which case we consider it to be 0
 	cmdTag, err := tx.Exec(ctx, `
-        UPDATE products
-        SET badQuantity = badQuantity + $1
-        WHERE externalProductTypeId = $2
-          AND assetId = $3
-          AND endTime = $4
-          AND (quantity - badQuantity) >= $1
-    `, int(msg.BadQuantity), productTypeId, assetId, msg.EndTimeUnixMs)
+        UPDATE product
+		SET    bad_quantity = coalesce(bad_quantity,0) + $1
+		WHERE  product_type_id = $2
+			   AND asset_id = $3
+			   AND end_time = to_timestamp($4::BIGINT / 1000.0)
+			   AND ( quantity - coalesce(bad_quantity,0) ) >= $1 
+    `, int(msg.BadQuantity), int(productTypeId), int(assetId), msg.EndTimeUnixMs)
 
 	if err != nil {
 		zap.S().Warnf("Error updating bad quantity: %v", err)

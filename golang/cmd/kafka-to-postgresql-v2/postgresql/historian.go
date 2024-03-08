@@ -14,13 +14,13 @@ func (c *Connection) InsertHistorianValue(value []sharedStructs.HistorianValue, 
 	if err != nil {
 		return err
 	}
-	seconds := timestampMs / 1000
+	seconds := timestampMs / 1000.0
 	nanoseconds := (timestampMs % 1000) * 1000000
 	timestamp := time.Unix(seconds, nanoseconds)
 
 	for _, v := range value {
 		if v.IsNumeric {
-			c.numericalValuesChannel <- DBValue{
+			c.NumericalValuesChannel <- sharedStructs.DBHistorianValue{
 				Timestamp: timestamp,
 				Origin:    origin,
 				AssetId:   int(assetId), // AssetId is passed around as uint64 preventing parsing errors, but is also an int in the database
@@ -28,7 +28,7 @@ func (c *Connection) InsertHistorianValue(value []sharedStructs.HistorianValue, 
 			}
 			c.numericalReceived.Add(1)
 		} else {
-			c.stringValuesChannel <- DBValue{
+			c.StringValuesChannel <- sharedStructs.DBHistorianValue{
 				Timestamp: timestamp,
 				Origin:    origin,
 				AssetId:   int(assetId),
@@ -43,7 +43,7 @@ func (c *Connection) InsertHistorianValue(value []sharedStructs.HistorianValue, 
 
 // Source This implementation is not thread-safe !
 type Source struct {
-	datachan  chan DBValue
+	datachan  chan sharedStructs.DBHistorianValue
 	isNumeric bool
 }
 
@@ -95,7 +95,7 @@ func (c *Connection) tagWorker(tableName string, source *Source) {
 		txnExecutionCtx, txnExecutionCancel := get1MinuteContext()
 		// Create transaction
 		var txn pgx.Tx
-		txn, err = c.db.Begin(txnExecutionCtx)
+		txn, err = c.Db.Begin(txnExecutionCtx)
 		if err != nil {
 			zap.S().Errorf("Failed to create transaction: %s (%s)", err, tableName)
 
