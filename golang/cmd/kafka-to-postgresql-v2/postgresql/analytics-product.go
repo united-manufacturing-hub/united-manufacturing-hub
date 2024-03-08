@@ -27,6 +27,14 @@ func (c *Connection) InsertProductAdd(msg *sharedStructs.ProductAddMessage, topi
 	}
 	// Insert producth
 	var cmdTag pgconn.CommandTag
+	/*
+		The SQL query does the following:
+			1. Inserts a new product into the product table
+			2. In case the start_time is not null, it converts the timestamp from milliseconds to seconds
+			3. Otherwise, it sets the value to NULL
+		$4 :: INT is a explicit type cast to INT, because postgresql otherwise doesn't know the type if it is NULL
+		Divide by 1000.0 is important, as this is a float division, otherwise the result would be an integer
+	*/
 	cmdTag, err = tx.Exec(ctx, `
 			INSERT INTO product
             (
@@ -44,9 +52,9 @@ func (c *Connection) InsertProductAdd(msg *sharedStructs.ProductAddMessage, topi
                         $2,
                         $3,
                         CASE
-                                    WHEN $4::int IS NOT NULL THEN to_timestamp($4::int/1000)
+                                    WHEN $4::int IS NOT NULL THEN to_timestamp($4::int/1000.0)
                         END::timestamptz,
-                        to_timestamp($5/1000),
+                        to_timestamp($5/1000.0),
                         $6,
                         $7::int
 				)
