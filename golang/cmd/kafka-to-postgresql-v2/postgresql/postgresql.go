@@ -11,7 +11,6 @@ import (
 	"github.com/united-manufacturing-hub/umh-utils/env"
 	sharedStructs "github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/kafka-to-postgresql-v2/shared"
 	"go.uber.org/zap"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -20,8 +19,8 @@ import (
 type DBValue struct {
 	Timestamp time.Time
 	Origin    string
+	Value     sharedStructs.HistorianValue
 	AssetId   int
-	Value     sharedStructs.Value
 }
 
 func (r *DBValue) GetValue() interface{} {
@@ -44,8 +43,9 @@ type Metrics struct {
 }
 
 type Connection struct {
-	db                     *pgxpool.Pool
-	cache                  *lru.ARCCache
+	db                     sharedStructs.PgxIface
+	assetIdCache           *lru.ARCCache
+	productTypeIdCache     *lru.ARCCache
 	numericalValuesChannel chan DBValue
 	stringValuesChannel    chan DBValue
 	numericalReceived      atomic.Uint64
@@ -107,17 +107,22 @@ func GetOrInit() *Connection {
 		if err != nil {
 			zap.S().Fatalf("Failed to get POSTGRES_LRU_CACHE_SIZE from env: %s", err)
 		}
-		cache, err := lru.NewARC(PQLRUSize)
+		assetIdCache, err := lru.NewARC(PQLRUSize)
 		if err != nil {
-			zap.S().Fatalf("Failed to create ARC: %s", err)
+			zap.S().Fatalf("Failed to create ARC (assetId): %s", err)
 		}
 		ChannelSize, err := env.GetAsInt("VALUE_CHANNEL_SIZE", false, 10000)
 		if err != nil {
 			zap.S().Fatalf("Failed to get VALUE_CHANNEL_SIZE from env: %s", err)
 		}
+		productTypeIdCache, err := lru.NewARC(50)
+		if err != nil {
+			zap.S().Fatalf("Failed to create ARC (productTypeId): %s", err)
+		}
 		conn = &Connection{
 			db:                     db,
-			cache:                  cache,
+			assetIdCache:           assetIdCache,
+			productTypeIdCache:     productTypeIdCache,
 			numericalValuesChannel: make(chan DBValue, ChannelSize),
 			stringValuesChannel:    make(chan DBValue, ChannelSize),
 		}
@@ -163,7 +168,14 @@ func (c *Connection) IsAvailable() bool {
 	}
 	ctx, cncl := get5SecondContext()
 	defer cncl()
-	err := c.db.Ping(ctx)
+	// Check if c.db is an real connection, by attempting to cast it back to a pgxpool.Pool
+	pool, ok := c.db.(*pgxpool.Pool)
+	if !ok {
+		// For mocks
+		return true
+	}
+
+	err := pool.Ping(ctx)
 	if err != nil {
 		zap.S().Debugf("Failed to ping database: %s", err)
 		return false
@@ -238,265 +250,6 @@ func (c *Connection) GetMetrics() Metrics {
 	c.metricsLock.RLock()
 	c.metricsLock.RUnlock()
 	return c.metrics
-}
-
-var goiLock = sync.Mutex{}
-
-func (c *Connection) GetOrInsertAsset(topic *sharedStructs.TopicDetails) (int, error) {
-	if c.db == nil {
-		return 0, errors.New("database is nil")
-	}
-	id, hit := c.lookupLRU(topic)
-	if hit {
-		return id, nil
-	}
-
-	goiLock.Lock()
-	defer goiLock.Unlock()
-	// It might be that another locker already added it, so we do a double check
-	id, hit = c.lookupLRU(topic)
-	if hit {
-		return id, nil
-	}
-
-	selectQuery := `SELECT id FROM asset WHERE enterprise = $1 AND 
-    site = $2 AND 
-    area = $3 AND 
-    line = $4 AND 
-    workcell = $5 AND 
-    origin_id = $6`
-	selectRowContext, selectRowContextCncl := get1MinuteContext()
-	defer selectRowContextCncl()
-
-	var err error
-	err = c.db.QueryRow(selectRowContext, selectQuery, topic.Enterprise, topic.Site, topic.Area, topic.ProductionLine, topic.WorkCell, topic.OriginId).Scan(&id)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			// Row isn't found, need to insert
-			insertQuery := `INSERT INTO asset (enterprise, site, area, line, workcell, origin_id) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`
-			insertRowContext, insertRowContextCncl := get1MinuteContext()
-			defer insertRowContextCncl()
-
-			err = c.db.QueryRow(insertRowContext, insertQuery, topic.Enterprise, topic.Site, topic.Area, topic.ProductionLine, topic.WorkCell, topic.OriginId).Scan(&id)
-			if err != nil {
-				return 0, err
-			}
-
-			// Add to LRU cache
-			c.addToLRU(topic, id)
-
-			return id, nil
-		} else {
-			return 0, err
-		}
-	}
-
-	// If no error and asset exists
-	c.addToLRU(topic, id)
-	return id, nil
-}
-
-func (c *Connection) addToLRU(topic *sharedStructs.TopicDetails, id int) {
-	c.cache.Add(getCacheKey(topic), id)
-}
-
-func (c *Connection) lookupLRU(topic *sharedStructs.TopicDetails) (int, bool) {
-	value, ok := c.cache.Get(getCacheKey(topic))
-	if ok {
-		c.lruHits.Add(1)
-		return value.(int), true
-	}
-	c.lruMisses.Add(1)
-	return 0, false
-}
-
-func getCacheKey(topic *sharedStructs.TopicDetails) string {
-	// Attempt cache lookup
-	var cacheKey strings.Builder
-	cacheKey.WriteString(topic.Enterprise)
-	cacheKey.WriteRune('*') // This char cannot occur in the topic, and therefore can be safely used as a seperator
-	cacheKey.WriteRune('s')
-	cacheKey.WriteString(topic.Site)
-
-	cacheKey.WriteRune('*') // This char cannot occur in the topic, and therefore can be safely used as a seperator
-	cacheKey.WriteRune('a')
-	cacheKey.WriteString(topic.Area)
-
-	cacheKey.WriteRune('*') // This char cannot occur in the topic, and therefore can be safely used as a seperator
-	cacheKey.WriteRune('p')
-	cacheKey.WriteString(topic.ProductionLine)
-
-	cacheKey.WriteRune('*') // This char cannot occur in the topic, and therefore can be safely used as a seperator
-	cacheKey.WriteRune('w')
-	cacheKey.WriteString(topic.WorkCell)
-
-	cacheKey.WriteRune('*') // This char cannot occur in the topic, and therefore can be safely used as a seperator
-	cacheKey.WriteRune('o')
-	cacheKey.WriteString(topic.OriginId)
-	return cacheKey.String()
-}
-
-func (c *Connection) InsertHistorianValue(value []sharedStructs.Value, timestampMs int64, origin string, topic *sharedStructs.TopicDetails) error {
-	assetId, err := c.GetOrInsertAsset(topic)
-	if err != nil {
-		return err
-	}
-	seconds := timestampMs / 1000
-	nanoseconds := (timestampMs % 1000) * 1000000
-	timestamp := time.Unix(seconds, nanoseconds)
-
-	for _, v := range value {
-		if v.IsNumeric {
-			c.numericalValuesChannel <- DBValue{
-				Timestamp: timestamp,
-				Origin:    origin,
-				AssetId:   assetId,
-				Value:     v,
-			}
-			c.numericalReceived.Add(1)
-		} else {
-			c.stringValuesChannel <- DBValue{
-				Timestamp: timestamp,
-				Origin:    origin,
-				AssetId:   assetId,
-				Value:     v,
-			}
-			c.stringsReceived.Add(1)
-		}
-	}
-
-	return nil
-}
-
-// Source This implementation is not thread-safe !
-type Source struct {
-	datachan  chan DBValue
-	isNumeric bool
-}
-
-func (s *Source) Next() bool {
-	return len(s.datachan) != 0
-}
-
-func (s *Source) Values() ([]any, error) {
-	select {
-	case msg := <-s.datachan:
-		values := make([]any, 5)
-		values[0] = msg.Timestamp
-		values[1] = msg.Value.Name
-		values[2] = msg.Origin
-		values[3] = msg.AssetId
-		if s.isNumeric {
-			values[4] = msg.GetValue().(float32)
-		} else {
-			values[4] = msg.GetValue().(string)
-		}
-		zap.S().Debugf("Values: %+v", values)
-		return values, nil
-	default:
-		return nil, errors.New("no more rows available")
-	}
-}
-
-func (s *Source) Err() error {
-	return nil
-}
-
-func (c *Connection) tagWorker(tableName string, source *Source) {
-	zap.S().Debugf("Starting tagWorker for %s", tableName)
-	// The context is only used for preparation, not execution!
-
-	var err error
-	tableNameTemp := fmt.Sprintf("tmp_%s", tableName)
-	var copiedIn int64
-
-	for {
-		sleepTime := c.calculateSleepTime(copiedIn)
-		time.Sleep(sleepTime)
-
-		if !source.Next() {
-			zap.S().Debugf("No data available for %s", tableName)
-			continue
-		}
-
-		txnExecutionCtx, txnExecutionCancel := get1MinuteContext()
-		// Create transaction
-		var txn pgx.Tx
-		txn, err = c.db.BeginTx(txnExecutionCtx, pgx.TxOptions{})
-		if err != nil {
-			zap.S().Errorf("Failed to create transaction: %s (%s)", err, tableName)
-
-			txnExecutionCancel()
-			continue
-		}
-
-		// Create the temp table for COPY
-		_, err = txn.Exec(txnExecutionCtx, fmt.Sprintf(`
-	   CREATE TEMP TABLE %s
-	          ( LIKE %s INCLUDING DEFAULTS )
-	          ON COMMIT DROP;
-	   `, tableNameTemp, tableName))
-		if err != nil {
-			zap.S().Errorf("Failed to execute statementCreateTmpTag: %s (%s)", err, tableName)
-			rollbackCtx, rollbackCtxCncl := get5SecondContext()
-			err = txn.Rollback(rollbackCtx)
-			rollbackCtxCncl()
-			if err != nil {
-				zap.S().Errorf("Failed to rollback transaction: %s (%s)", err, tableName)
-			}
-
-			txnExecutionCancel()
-			continue
-		}
-		copiedIn, err = txn.CopyFrom(txnExecutionCtx, pgx.Identifier{tableNameTemp}, []string{
-			"timestamp", "name", "origin", "asset_id", "value",
-		}, source)
-
-		if err != nil {
-			zap.S().Warnf("Failed to execute stmtCopyToTag: %s (%s)", err, tableName)
-			rollbackCtx, rollbackCtxCncl := get5SecondContext()
-			err = txn.Rollback(rollbackCtx)
-			rollbackCtxCncl()
-			if err != nil {
-				zap.S().Errorf("Failed to rollback transaction: %s (%s)", err, tableName)
-			}
-			txnExecutionCancel()
-			continue
-		}
-
-		// Do insert via statementInsertSelect
-		_, err = txn.Exec(txnExecutionCtx, fmt.Sprintf(`
-				INSERT INTO %s (SELECT * FROM %s) ON CONFLICT DO NOTHING;
-			`, tableName, tableNameTemp))
-
-		if err != nil {
-			zap.S().Warnf("Failed to execute stmtCopyToTag: %s (%s)", err, tableName)
-			rollbackCtx, rollbackCtxCncl := get5SecondContext()
-			err = txn.Rollback(rollbackCtx)
-			rollbackCtxCncl()
-			if err != nil {
-				zap.S().Errorf("Failed to rollback transaction: %s (%s)", err, tableName)
-			}
-			txnExecutionCancel()
-			continue
-		}
-
-		zap.S().Debugf("Pre-commit")
-		now := time.Now()
-		err = txn.Commit(txnExecutionCtx)
-		c.commits.Add(1)
-		c.commitTime.Add(uint64(time.Since(now).Milliseconds()))
-		zap.S().Debugf("Committing to postgresql took: %s", time.Since(now))
-
-		if err != nil {
-			zap.S().Errorf("Failed to rollback transaction: %s (%s)", err, tableName)
-			txnExecutionCancel()
-			continue
-		}
-		zap.S().Debugf("Inserted %d values inside the %s table", copiedIn, tableName)
-		c.databaseInserted.Add(uint64(copiedIn))
-		txnExecutionCancel()
-	}
 }
 
 func GetHealthCheck() healthcheck.Check {
