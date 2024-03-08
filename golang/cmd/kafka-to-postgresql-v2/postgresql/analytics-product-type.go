@@ -22,10 +22,26 @@ func (c *Connection) InsertProductTypeCreate(msg *sharedStructs.ProductTypeCreat
 
 	// Insert product_type
 	var cmdTag pgconn.CommandTag
+	// TODO: Change the on conflict later to return errors if the product type already exists
 	cmdTag, err = tx.Exec(ctx, `
-		INSERT INTO product_type(external_product_type_id, cycle_time_ms, asset_id)
-		VALUES ($1, $2, $3)
-		ON CONFLICT (external_product_type_id, asset_id) DO NOTHING
+		INSERT INTO product_type
+            (
+                        external_product_type_id,
+                        cycle_time_ms,
+                        asset_id
+            )
+            VALUES
+            (
+                        $1,
+                        $2,
+                        $3
+            )
+			on conflict
+				(
+							external_product_type_id,
+							asset_id
+				)
+				do nothing
 	`, msg.ExternalProductTypeId, int(msg.CycleTimeMs), int(assetId))
 	if err != nil {
 		zap.S().Warnf("Error inserting product-type: %v (external_product_type_id: %v) [%s]", err, msg.ExternalProductTypeId, cmdTag)
