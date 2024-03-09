@@ -7762,7 +7762,7 @@ data:
 
     -- Manages work shifts for assets. Shift scheduling is a key operational aspect under ISA-95, impacting resource planning and allocation.
     CREATE TABLE IF NOT EXISTS shift (
-      shiftId INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+      shift_id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
       asset_id INTEGER REFERENCES asset(id),
       start_time TIMESTAMPTZ NOT NULL,
       end_time TIMESTAMPTZ NOT NULL,
