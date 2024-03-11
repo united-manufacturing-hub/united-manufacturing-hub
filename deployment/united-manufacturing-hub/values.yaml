@@ -828,7 +828,7 @@ mqtt_broker:
     hivemqextensioninit:
       image:
         repository: management.umh.app/oci/united-manufacturing-hub/hivemq-init
-        tag: 3.0.0
+        tag:
         pullPolicy: IfNotPresent
   resources:
     limits:
