@@ -100,7 +100,7 @@ func TestWorkOrder(t *testing.T) {
 			   AND status = 0
 			   AND start_time IS NULL
 			   AND asset_id = \$3 
-	`).WithArgs("#1274", uint64(0), 1).
+	`).WithArgs("#1274", 0, 1).
 			WillReturnResult(pgxmock.NewResult("UPDATE", 1))
 		mock.ExpectCommit()
 
@@ -128,7 +128,7 @@ func TestWorkOrder(t *testing.T) {
 			   AND status = 1
 			   AND end_time IS NULL
 			   AND asset_id = \$3 
-		`).WithArgs("#1274", uint64(0), 1).
+		`).WithArgs("#1274", 0, 1).
 			WillReturnResult(pgxmock.NewResult("UPDATE", 1))
 		mock.ExpectCommit()
 
@@ -157,12 +157,12 @@ func TestProduct(t *testing.T) {
 
 	t.Run("add", func(t *testing.T) {
 		msg := sharedStructs.ProductAddMessage{
-			ExternalProductId: "#1274",
-			ProductBatchId:    helper.StringToPtr("0000-1234"),
-			StartTimeUnixMs:   helper.IntToUint64Ptr(0),
-			EndTimeUnixMs:     10,
-			Quantity:          512,
-			BadQuantity:       helper.IntToUint64Ptr(0),
+			ExternalProductTypeId: "#1274",
+			ProductBatchId:        helper.StringToPtr("0000-1234"),
+			StartTimeUnixMs:       helper.IntToUint64Ptr(0),
+			EndTimeUnixMs:         10,
+			Quantity:              512,
+			BadQuantity:           helper.IntToUint64Ptr(0),
 		}
 		topic := sharedStructs.TopicDetails{
 			Enterprise: "umh",
@@ -180,7 +180,7 @@ func TestProduct(t *testing.T) {
 		mock.ExpectExec(`
 			INSERT INTO product
             \(
-                        external_product_type_id,
+                        product_type_id,
                         product_batch_id,
                         asset_id,
                         start_time,
@@ -485,7 +485,10 @@ LIMIT 1;`).
 			WithArgs(1, uint64(0), uint64(100)).
 			WillReturnResult(pgxmock.NewResult("INSERT", 1))
 
-		// Now there will be an DELETE (but that is hidden from the mocker)
+		mock.ExpectExec(`
+DELETE FROM state WHERE asset_id = \$1 AND start_time >= to_timestamp\(\$2\:\:BIGINT \/1000.0\) AND start_time < to_timestamp\(\$3\:\:BIGINT \/1000.0\)`).
+			WithArgs(1, uint64(0), uint64(100)).
+			WillReturnResult(pgxmock.NewResult("DELETE", 1))
 
 		// And finally an INSERT again
 		mock.ExpectExec(`

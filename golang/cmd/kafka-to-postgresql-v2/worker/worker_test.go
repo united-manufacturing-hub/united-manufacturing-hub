@@ -339,11 +339,11 @@ func TestHandleParsing(t *testing.T) {
 					 \$4,
 					 \$5,
 					 CASE
-					   WHEN \$6 \:\: INT IS NOT NULL THEN to_timestamp\(\$6 \:\: INT / 1000\)
+					   WHEN \$6\:\:BIGINT IS NOT NULL THEN to_timestamp\(\$6\:\:BIGINT \/ 1000.0\)
 					   ELSE NULL
 					 END \:\: timestamptz,
 					 CASE
-					   WHEN \$7 \:\: INT IS NOT NULL THEN to_timestamp\(\$7 \:\: INT / 1000\)
+					   WHEN \$7\:\:BIGINT IS NOT NULL THEN to_timestamp\(\$7\:\:BIGINT \/ 1000.0\)
 					   ELSE NULL
 					 END \:\: timestamptz\) 
 	`).WithArgs("#1244", 1, 1, 100, 0, helper.Uint64PtrToNullInt64(nil), helper.Uint64PtrToNullInt64(nil)).
