@@ -818,6 +818,7 @@ redis:
 
 ##### CONFIG FOR HIVEMQ CE
 ##### you can set a tag if you want a version other than 2024.1
+##### If you upgrade hivemq, adjust the mqtt_broker.initContainer.hivemqextensioninit.image.tag!!
 mqtt_broker:
   image:
     repository: management.umh.app/oci/hivemq/hivemq-ce
@@ -828,7 +829,7 @@ mqtt_broker:
     hivemqextensioninit:
       image:
         repository: management.umh.app/oci/united-manufacturing-hub/hivemq-init
-        tag:
+        tag: 0.11.0
         pullPolicy: IfNotPresent
   resources:
     limits:
