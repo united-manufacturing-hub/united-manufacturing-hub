@@ -440,6 +440,7 @@ timescaledb-single:
       type: LoadBalancer
   serviceAccount:
     create: false
+  clusterName: umh
 
 ### grafana ###
 grafana:
