@@ -35,7 +35,7 @@ If release name contains chart name it will be used as a full name.
 {{- end }}
 {{- end }}
 
-{{- define "clusterName" -}}
+{{- define "united-manufacturing-hub.clusterName" -}}
 {{- $clusterName := default "" .Values.clusterName -}}
 {{- tpl $clusterName . | trunc 63 -}}
 {{- end -}}
