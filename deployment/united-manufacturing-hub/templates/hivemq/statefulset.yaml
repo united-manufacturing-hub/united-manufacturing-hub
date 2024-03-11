@@ -56,7 +56,11 @@ spec:
         {{- end}}
       initContainers:
         - name: hivemqce-extension-init
+          {{if .Values.mqtt_broker.initContainer.hivemqextensioninit.image.tag}}
           image: {{.Values.mqtt_broker.initContainer.hivemqextensioninit.image.repository}}:{{.Values.mqtt_broker.initContainer.hivemqextensioninit.image.tag}}
+          {{- else}}
+          image: {{.Values.mqtt_broker.initContainer.hivemqextensioninit.image.repository}}:{{.Chart.AppVersion}}
+          {{end}}
           imagePullPolicy: {{.Values.mqtt_broker.initContainer.hivemqextensioninit.image.pullPolicy}}
           volumeMounts:
             - mountPath: /opt/hivemq-ce-2024.1/extensions
