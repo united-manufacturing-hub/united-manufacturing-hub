@@ -131,10 +131,10 @@ func TestParseWorkOrderStop(t *testing.T) {
 
 func TestParseProductAdd(t *testing.T) {
 	t.Run("from-string-only-required", func(t *testing.T) {
-		productAddJson := `{"external_product_id": "#1274", "end_time_unix_ms": 100, "quantity": 10}`
+		productAddJson := `{"external_product_type_id": "#1274", "end_time_unix_ms": 100, "quantity": 10}`
 		productAdd, err := parseProductAdd([]byte(productAddJson))
 		assert.NoError(t, err)
-		assert.Equal(t, "#1274", productAdd.ExternalProductId)
+		assert.Equal(t, "#1274", productAdd.ExternalProductTypeId)
 		assert.Equal(t, uint64(100), productAdd.EndTimeUnixMs)
 	})
 
