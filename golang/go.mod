@@ -18,7 +18,8 @@ go 1.22
 
 require (
 	github.com/EagleChen/mapmutex v0.0.0-20200716162114-c133e97096b7
-	github.com/IBM/sarama v1.42.1
+	github.com/IBM/sarama v1.41.3
+	github.com/beeker1121/goque v2.1.0+incompatible
 	github.com/confluentinc/confluent-kafka-go v1.9.2
 	github.com/coocood/freecache v1.2.4
 	github.com/eclipse/paho.mqtt.golang v1.4.3
@@ -35,7 +36,7 @@ require (
 	github.com/omeid/pgerror v0.0.0-20201018020948-42c66c4d27d4
 	github.com/pashagolub/pgxmock/v3 v3.3.0
 	github.com/patrickmn/go-cache v2.1.0+incompatible
-	github.com/prometheus/client_golang v1.16.0
+	github.com/prometheus/client_golang v1.17.0
 	github.com/rung/go-safecast v1.0.1
 	github.com/shirou/gopsutil v3.21.11+incompatible
 	github.com/stretchr/testify v1.8.4
