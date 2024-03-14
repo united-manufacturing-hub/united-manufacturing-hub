@@ -450,7 +450,7 @@ timescaledb-single:
             labelSelector:
               matchLabels:
                 app: united-manufacturing-hub-timescaledb
-                release: "{{ .Release.Name | quote }}"
+                release: timescaledb
                 cluster-name: ""
         - weight: 50
           podAffinityTerm:
@@ -458,7 +458,7 @@ timescaledb-single:
             labelSelector:
               matchLabels:
                 app: united-manufacturing-hub-timescaledb
-                release: { { .Release.Name | quote } }
+                release: timescaledb
                 cluster-name: ""
 
 ### grafana ###
