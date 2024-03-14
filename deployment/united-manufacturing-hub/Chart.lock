@@ -7,9 +7,9 @@ dependencies:
   version: 6.57.4
 - name: timescaledb-single
   repository: https://management.umh.app/helm/timescale
-  version: 0.29.0
+  version: 0.28.0
 - name: redpanda
   repository: https://management.umh.app/helm/redpanda
   version: 5.3.4
-digest: sha256:f7ffba89118b5ac8299b4c797ca9eaebb45dd54cd5de540d2865b0163012ec67
-generated: "2024-03-14T17:54:29.6321963+01:00"
+digest: sha256:db7d37ff6dd3a63047801c7316f3057ddb179e737be5f039e740d14bf1f29673
+generated: "2024-03-14T18:03:26.6160849+01:00"
