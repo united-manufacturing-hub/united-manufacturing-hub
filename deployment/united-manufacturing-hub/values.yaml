@@ -449,17 +449,17 @@ timescaledb-single:
             topologyKey: "kubernetes.io/hostname"
             labelSelector:
               matchLabels:
-                app: '{{ template "timescaledb.fullname" . }}'
+                app: united-manufacturing-hub-timescaledb
                 release: "{{ .Release.Name | quote }}"
-                cluster-name: '{{ template "clusterName" . }}'
+                cluster-name: ""
         - weight: 50
           podAffinityTerm:
             topologyKey: failure-domain.beta.kubernetes.io/zone
             labelSelector:
               matchLabels:
-                app: { { template "timescaledb.fullname" . } }
+                app: united-manufacturing-hub-timescaledb
                 release: { { .Release.Name | quote } }
-                cluster-name: { { template "clusterName" . } }
+                cluster-name: ""
 
 ### grafana ###
 grafana:
