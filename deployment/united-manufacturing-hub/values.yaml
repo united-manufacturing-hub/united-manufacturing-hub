@@ -407,7 +407,7 @@ kafkatopostgresql:
 
 ### timescaleDB ###
 timescaledb-single:
-  fullnameOverride: united-manufacturing-hub-timescaledb
+  fullnameOverride: timescaledb
   replicaCount: 1
   image:
     # Image was built from
@@ -441,25 +441,6 @@ timescaledb-single:
       type: LoadBalancer
   serviceAccount:
     create: false
-  affinity:
-    podAntiAffinity:
-      preferredDuringSchedulingIgnoredDuringExecution:
-        - weight: 100
-          podAffinityTerm:
-            topologyKey: "kubernetes.io/hostname"
-            labelSelector:
-              matchLabels:
-                app: united-manufacturing-hub-timescaledb
-                release: timescaledb
-                cluster-name: ""
-        - weight: 50
-          podAffinityTerm:
-            topologyKey: failure-domain.beta.kubernetes.io/zone
-            labelSelector:
-              matchLabels:
-                app: united-manufacturing-hub-timescaledb
-                release: timescaledb
-                cluster-name: ""
 
 ### grafana ###
 grafana:
