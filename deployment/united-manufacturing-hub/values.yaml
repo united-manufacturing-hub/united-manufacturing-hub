@@ -407,7 +407,8 @@ kafkatopostgresql:
 
 ### timescaleDB ###
 timescaledb-single:
-  fullnameOverride: timescaledb
+  fullnameOverride: united-manufacturing-hub-timescaledb
+  clusterName: united-manufacturing-hub
   replicaCount: 1
   image:
     # Image was built from
