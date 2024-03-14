@@ -5,9 +5,11 @@ github.com/DataDog/gostackparse
 # github.com/EagleChen/mapmutex v0.0.0-20200716162114-c133e97096b7
 ## explicit
 github.com/EagleChen/mapmutex
-# github.com/IBM/sarama v1.42.1
+# github.com/IBM/sarama v1.41.3
 ## explicit; go 1.17
 github.com/IBM/sarama
+# github.com/beeker1121/goque v2.1.0+incompatible
+## explicit
 # github.com/beorn7/perks v1.0.1
 ## explicit; go 1.11
 github.com/beorn7/perks/quantile
@@ -349,13 +351,15 @@ github.com/pkg/errors
 # github.com/pmezard/go-difflib v1.0.0
 ## explicit
 github.com/pmezard/go-difflib/difflib
-# github.com/prometheus/client_golang v1.16.0
-## explicit; go 1.17
+# github.com/prometheus/client_golang v1.17.0
+## explicit; go 1.19
 github.com/prometheus/client_golang/prometheus
 github.com/prometheus/client_golang/prometheus/internal
 github.com/prometheus/client_golang/prometheus/promhttp
 # github.com/prometheus/client_model v0.4.0
 ## explicit; go 1.18
+# github.com/prometheus/client_model v0.4.1-0.20230718164431-9a2bf3000d16
+## go 1.18
 github.com/prometheus/client_model/go
 # github.com/prometheus/common v0.44.0
 ## explicit; go 1.18
