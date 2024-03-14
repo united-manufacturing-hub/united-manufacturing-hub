@@ -407,6 +407,7 @@ kafkatopostgresql:
 
 ### timescaleDB ###
 timescaledb-single:
+  fullnameOverride: timescaledb
   replicaCount: 1
   image:
     # Image was built from
