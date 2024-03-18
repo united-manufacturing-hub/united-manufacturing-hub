@@ -416,7 +416,7 @@ timescaledb-single:
     # Image was built from
     # https://github.com/timescale/timescaledb-docker-ha
     repository: management.umh.app/oci/timescale/timescaledb-ha
-    tag: pg14.5-ts2.8.1-p1
+    tag: pg13.9-ts2.9.1-latest
     pullPolicy: IfNotPresent
   prometheus:
     image:
