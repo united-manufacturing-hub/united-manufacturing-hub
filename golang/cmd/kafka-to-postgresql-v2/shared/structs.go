@@ -7,7 +7,7 @@ import (
 )
 
 const (
-	DbTagSeparator = "$"
+	DbTagSeparator = "#"
 )
 
 type TopicDetails struct {
