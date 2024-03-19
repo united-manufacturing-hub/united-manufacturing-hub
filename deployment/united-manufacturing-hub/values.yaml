@@ -446,9 +446,11 @@ timescaledb-single:
 ### grafana ###
 grafana:
   image:
-    repository: management.umh.app/oci/grafana/grafana
+    registry: management.umh.app
+    repository: oci/grafana/grafana
   downloadDashboardsImage:
-    repository: management.umh.app/oci/curlimages/curl
+    registry: management.umh.app
+    repository: oci/curlimages/curl
   serviceAccount:
     create: false
 
@@ -463,7 +465,8 @@ grafana:
 
   testFramework:
     enabled: false
-    image: management.umh.app/oci/bats/bats
+    registry: management.umh.app
+    repository: oci/bats/bats
 
   ## Expose the grafana service to be accessed from outside the cluster (LoadBalancer service).
   ## or access it from within the cluster (ClusterIP service). Set the service type and the port to serve it.
@@ -493,8 +496,8 @@ grafana:
     ## This allows the prometheus-server to be run with an arbitrary user
     enabled: true
     image:
-      registry: management.umh.app/oci
-      repository: library/busybox
+      registry: management.umh.app
+      repository: oci/library/busybox
 
   sidecar:
     image:
