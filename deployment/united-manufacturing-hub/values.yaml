@@ -452,7 +452,7 @@ grafana:
   serviceAccount:
     create: false
 
-  ## this assertion should be disabled since installation breaks (19/13/2024) https://github.com/grafana/helm-charts/issues/2899
+  ## this assertion should be disabled since installation breaks https://github.com/grafana/helm-charts/issues/2899
   assertNoLeakedSecrets: false
 
   ## See `kubectl explain poddisruptionbudget.spec` for more
