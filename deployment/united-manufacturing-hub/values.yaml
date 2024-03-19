@@ -493,7 +493,8 @@ grafana:
     ## This allows the prometheus-server to be run with an arbitrary user
     enabled: true
     image:
-      repository: management.umh.app/oci/library/busybox
+      registry: management.umh.app/oci
+      repository: library/busybox
 
   sidecar:
     image:
