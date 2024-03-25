@@ -56,12 +56,7 @@ func parseValue(prefix string, v interface{}, values *[]sharedStructs.HistorianV
 		for k, v := range val {
 			fullKey := k
 			if prefix != "" {
-				// Handle duplicate tag groups
-				if strings.HasSuffix(prefix, k) {
-					fullKey = prefix
-				} else {
-					fullKey = prefix + sharedStructs.DbTagSeparator + k
-				}
+				fullKey = prefix + sharedStructs.DbTagSeparator + k
 			}
 			err = parseValue(fullKey, v, values)
 		}

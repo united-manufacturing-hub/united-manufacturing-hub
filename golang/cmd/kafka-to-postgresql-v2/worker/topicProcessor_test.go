@@ -101,3 +101,24 @@ func TestRecreateTopic(t *testing.T) {
 		assert.NoError(t, err, "modified topic %s with key %s failed to parse", modifiedTopic, key)
 	}
 }
+
+func TestProcessorTagGroupEqualsValueName(t *testing.T) {
+	msg := shared.KafkaMessage{
+		Headers:   nil,
+		Topic:     "umh.v1.abc._historian.val",
+		Key:       nil,
+		Value:     []byte("{\"timestamp_ms\": 1620000000000, \"val\": 123}"),
+		Offset:    0,
+		Partition: 0,
+	}
+	topicDetails, err := recreateTopic(&msg)
+	assert.NoError(t, err)
+	assert.Equal(t, "abc", topicDetails.Enterprise)
+	assert.Equal(t, "", topicDetails.Site)
+	assert.Equal(t, "", topicDetails.Area)
+	assert.Equal(t, "", topicDetails.ProductionLine)
+	assert.Equal(t, "", topicDetails.WorkCell)
+	assert.Equal(t, "", topicDetails.OriginId)
+	assert.Equal(t, "historian", topicDetails.Schema)
+	assert.Equal(t, "val", topicDetails.Tag)
+}
