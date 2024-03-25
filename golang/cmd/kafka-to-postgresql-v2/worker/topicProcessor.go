@@ -9,8 +9,8 @@ import (
 	sharedStructs "github.com/united-manufacturing-hub/united-manufacturing-hub/cmd/kafka-to-postgresql-v2/shared"
 )
 
-// Test this regex at https://regex101.com/r/VQAUvY/5
-var topicRegex = regexp.MustCompile(`^umh\.v1\.(?P<enterprise>[\w-_]+)\.((?P<site>[\w-_]+)\.)?((?P<area>[\w-_]+)\.)?((?P<productionLine>[\w-_]+)\.)?((?P<workCell>[\w-_]+)\.)?((?P<originId>[\w-_]+)\.)?_(?P<usecase>(historian)|(analytics))(\.(?P<tag>(?:[\w-_.]+\w)+))*$`)
+// Test this regex at https://regex101.com/r/VQAUvY/6
+var topicRegex = regexp.MustCompile(`^umh\.v1\.(?P<enterprise>[\w-_]+)\.((?P<site>[\w-_]+)\.)?((?P<area>[\w-_]+)\.)?((?P<productionLine>[\w-_]+)\.)?((?P<workCell>[\w-_]+)\.)?((?P<originId>[\w-_]+)\.)?_(?P<usecase>(historian)|(analytics))(\.(?P<tag>(?:[\w-_.]+\w)+))?$`)
 
 func recreateTopic(msg *shared.KafkaMessage) (*sharedStructs.TopicDetails, error) {
 	topic := strings.Builder{}
