@@ -62,5 +62,5 @@ dependencies:
 
   - name: redpanda
     repository: https://management.umh.app/helm/redpanda
-    version: 5.3.4
+    version: 5.7.33
     condition: _000_commonConfig.infrastructure.kafka.enabled
