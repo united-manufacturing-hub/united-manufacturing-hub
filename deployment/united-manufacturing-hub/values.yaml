@@ -950,3 +950,4 @@ kafkatopostgresqlv2:
   database:
     user: "kafkatopostgresqlv2"
     password: "changemetoo"
+
