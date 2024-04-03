@@ -409,12 +409,14 @@ kafkatopostgresql:
 
 ### timescaleDB ###
 timescaledb-single:
+  fullnameOverride: united-manufacturing-hub-timescaledb
+  clusterName: united-manufacturing-hub
   replicaCount: 1
   image:
     # Image was built from
     # https://github.com/timescale/timescaledb-docker-ha
     repository: management.umh.app/oci/timescale/timescaledb-ha
-    tag: pg13.8-ts2.8.0-p1
+    tag: pg13.9-ts2.9.1-latest
     pullPolicy: IfNotPresent
   prometheus:
     image:
