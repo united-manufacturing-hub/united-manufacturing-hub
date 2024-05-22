@@ -51,8 +51,12 @@ data:
       ],
       "CERTIFICATE":
       {
-        "Hosts" : [{{.Values.opcuasimulator.certadds.hosts | quote}}]{{if .Values.opcuasimulator.certadds.ips}},{{end}}
-        {{if .Values.opcuasimulator.certadds.ips}}
+        "Hosts" : [
+        {{- range $index, $host := .Values.opcuasimulator.certadds.hosts }}
+          {{- if $index }},{{ end }}
+          {{- $host | quote }}
+        {{- end }}
+        ]{{if .Values.opcuasimulator.certadds.ips}},
         "IPS" : [{{.Values.opcuasimulator.certadds.ips}}]
         {{end}}
       }
