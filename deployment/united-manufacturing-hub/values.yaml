@@ -447,12 +447,14 @@ timescaledb-single:
 
 ### grafana ###
 grafana:
+  global:
+    imageregistry: management.umh.app/oci
   image:
-    registry: management.umh.app
-    repository: oci/grafana/grafana
+    registry: management.umh.app/oci
+
   downloadDashboardsImage:
-    registry: management.umh.app
-    repository: oci/curlimages/curl
+    registry: management.umh.app/oci
+
   serviceAccount:
     create: false
 
@@ -467,8 +469,9 @@ grafana:
 
   testFramework:
     enabled: false
-    registry: management.umh.app
-    repository: oci/bats/bats
+    image:
+      registry: management.umh.app/oci
+
 
   ## Expose the grafana service to be accessed from outside the cluster (LoadBalancer service).
   ## or access it from within the cluster (ClusterIP service). Set the service type and the port to serve it.
@@ -498,15 +501,17 @@ grafana:
     ## This allows the prometheus-server to be run with an arbitrary user
     enabled: true
     image:
-      registry: management.umh.app
-      repository: oci/library/busybox
+      registry: management.umh.app/oci
+
 
   sidecar:
     image:
-      repository: management.umh.app/oci/kiwigrid/k8s-sidecar
+      registry: management.umh.app/oci
+
   imageRenderer:
     image:
-      repository: management.umh.app/oci/grafana/grafana-image-renderer
+      registry: management.umh.app/oci
+
   # Use an existing secret for the admin user.
   admin:
     existingSecret: "grafana-secret"
@@ -781,8 +786,11 @@ redpanda:
 
 ##### CONFIG FOR REDIS #####
 redis:
+  global:
+    imageregistry: management.umh.app/oci
   image:
     registry: management.umh.app/oci
+    repository: bitnami/redis
   architecture: standalone
   commonConfiguration: |-
     maxmemory-policy allkeys-lru
