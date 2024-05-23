@@ -31,7 +31,7 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.13.6.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.13.6.tgz
     version: 0.13.6
   - apiVersion: v2
     appVersion: 0.13.5
@@ -63,7 +63,7 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.13.5.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.13.5.tgz
     version: 0.13.5
   - apiVersion: v2
     appVersion: 0.13.4
@@ -95,7 +95,7 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.13.4.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.13.4.tgz
     version: 0.13.4
   - apiVersion: v2
     appVersion: 0.13.3
@@ -127,7 +127,7 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.13.3.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.13.3.tgz
     version: 0.13.3
   - apiVersion: v2
     appVersion: 0.13.2
@@ -159,7 +159,7 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.13.2.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.13.2.tgz
     version: 0.13.2
   - apiVersion: v2
     appVersion: 0.13.1
@@ -191,7 +191,7 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.13.1.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.13.1.tgz
     version: 0.13.1
   - apiVersion: v2
     appVersion: 0.13.0
@@ -223,7 +223,7 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.13.0.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.13.0.tgz
     version: 0.13.0
   - apiVersion: v2
     appVersion: 0.12.0
@@ -255,7 +255,7 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.12.0.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.12.0.tgz
     version: 0.12.0
   - apiVersion: v2
     appVersion: 0.11.0
@@ -287,7 +287,7 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.11.0.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.11.0.tgz
     version: 0.11.0
   - apiVersion: v2
     appVersion: 0.10.7
@@ -319,7 +319,7 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.10.7.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.10.7.tgz
     version: 0.10.7
   - apiVersion: v2
     appVersion: 0.10.6
@@ -351,7 +351,7 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.10.6.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.10.6.tgz
     version: 0.10.6
   - apiVersion: v2
     appVersion: 0.10.4
@@ -383,7 +383,7 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.10.4.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.10.4.tgz
     version: 0.10.4
   - apiVersion: v2
     appVersion: 0.10.3
@@ -415,7 +415,7 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.10.3.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.10.3.tgz
     version: 0.10.3
   - apiVersion: v2
     appVersion: 0.10.2
@@ -447,7 +447,7 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.10.2.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.10.2.tgz
     version: 0.10.2
   - apiVersion: v2
     appVersion: 0.10.1
@@ -479,7 +479,7 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.10.1.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.10.1.tgz
     version: 0.10.1
   - apiVersion: v2
     appVersion: 0.10.0
@@ -511,7 +511,7 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.10.0.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.10.0.tgz
     version: 0.10.0
   - apiVersion: v2
     appVersion: 0.9.34
@@ -543,7 +543,7 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.9.34.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.9.34.tgz
     version: 0.9.34
   - apiVersion: v2
     appVersion: 0.9.33
@@ -575,7 +575,7 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.9.33.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.9.33.tgz
     version: 0.9.33
   - apiVersion: v2
     appVersion: 0.9.32
@@ -607,7 +607,7 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.9.32.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.9.32.tgz
     version: 0.9.32
   - apiVersion: v2
     appVersion: 0.9.31
@@ -639,7 +639,7 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.9.31.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.9.31.tgz
     version: 0.9.31
   - apiVersion: v2
     appVersion: 0.9.30
@@ -671,7 +671,7 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.9.30.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.9.30.tgz
     version: 0.9.30
   - apiVersion: v2
     appVersion: 0.9.29
@@ -703,7 +703,7 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.9.29.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.9.29.tgz
     version: 0.9.29
   - apiVersion: v2
     appVersion: 0.9.28
@@ -735,7 +735,7 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.9.28.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.9.28.tgz
     version: 0.9.28
   - apiVersion: v2
     appVersion: 0.9.27
@@ -767,7 +767,7 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.9.27.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.9.27.tgz
     version: 0.9.27
   - apiVersion: v2
     appVersion: 0.9.26
@@ -799,7 +799,7 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.9.26.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.9.26.tgz
     version: 0.9.26
   - apiVersion: v2
     appVersion: 0.9.25
@@ -831,7 +831,7 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.9.25.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.9.25.tgz
     version: 0.9.25
   - apiVersion: v2
     appVersion: 0.9.24
@@ -863,7 +863,7 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.9.24.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.9.24.tgz
     version: 0.9.24
   - apiVersion: v2
     appVersion: 0.9.23
@@ -895,7 +895,7 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.9.23.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.9.23.tgz
     version: 0.9.23
   - apiVersion: v2
     appVersion: 0.9.22
@@ -927,7 +927,7 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.9.22.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.9.22.tgz
     version: 0.9.22
   - apiVersion: v2
     appVersion: 0.9.21
@@ -959,7 +959,7 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.9.21.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.9.21.tgz
     version: 0.9.21
   - apiVersion: v2
     appVersion: 0.9.20
@@ -991,7 +991,7 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.9.20.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.9.20.tgz
     version: 0.9.20
   - apiVersion: v2
     appVersion: 0.9.16
@@ -1023,7 +1023,7 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.9.18.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.9.18.tgz
     version: 0.9.18
   - apiVersion: v2
     appVersion: 0.9.16
@@ -1055,7 +1055,7 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.9.16.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.9.16.tgz
     version: 0.9.16
   - apiVersion: v2
     appVersion: 0.9.16-prerelease91
@@ -1599,7 +1599,7 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.9.15.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.9.15.tgz
     version: 0.9.15
   - apiVersion: v2
     appVersion: 0.9.15-prerelease6
@@ -1631,7 +1631,7 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.9.15-prerelease6.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.9.15-prerelease6.tgz
     version: 0.9.15-prerelease6
   - apiVersion: v2
     appVersion: 0.9.15-prerelease5
@@ -1663,7 +1663,7 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.9.15-prerelease5.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.9.15-prerelease5.tgz
     version: 0.9.15-prerelease5
   - apiVersion: v2
     appVersion: 0.9.15-prerelease4
@@ -1695,7 +1695,7 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.9.15-prerelease4.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.9.15-prerelease4.tgz
     version: 0.9.15-prerelease4
   - apiVersion: v2
     appVersion: 0.9.15-prerelease3
@@ -1727,7 +1727,7 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.9.15-prerelease3.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.9.15-prerelease3.tgz
     version: 0.9.15-prerelease3
   - apiVersion: v2
     appVersion: 0.9.15-prerelease2
@@ -1759,7 +1759,7 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.9.15-prerelease2.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.9.15-prerelease2.tgz
     version: 0.9.15-prerelease2
   - apiVersion: v2
     appVersion: 0.9.15-prerelease1
@@ -1791,7 +1791,7 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.9.15-prerelease1.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.9.15-prerelease1.tgz
     version: 0.9.15-prerelease1
   - apiVersion: v2
     appVersion: 0.9.14
@@ -1823,7 +1823,7 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.9.14.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.9.14.tgz
     version: 0.9.14
   - apiVersion: v2
     appVersion: 0.9.13
@@ -1859,7 +1859,7 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.9.13.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.9.13.tgz
     version: 0.9.13
   - apiVersion: v2
     appVersion: 0.9.12
@@ -1895,7 +1895,7 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.9.12.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.9.12.tgz
     version: 0.9.12
   - apiVersion: v2
     appVersion: 0.9.12-prerelease2
@@ -2011,7 +2011,7 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.9.11.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.9.11.tgz
     version: 0.9.11
   - apiVersion: v2
     appVersion: 0.9.10
@@ -2055,7 +2055,7 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.9.10.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.9.10.tgz
     version: 0.9.10
   - apiVersion: v2
     appVersion: 0.9.10-hf1
@@ -2146,7 +2146,7 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.9.9.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.9.9.tgz
     version: 0.9.9
   - apiVersion: v2
     appVersion: 0.9.8
@@ -2193,7 +2193,7 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.9.8.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.9.8.tgz
     version: 0.9.8
   - apiVersion: v2
     appVersion: 0.9.7
@@ -2240,7 +2240,7 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.9.7.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.9.7.tgz
     version: 0.9.7
   - apiVersion: v2
     appVersion: 0.9.6
@@ -2287,7 +2287,7 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.9.6.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.9.6.tgz
     version: 0.9.6
   - apiVersion: v2
     appVersion: 0.9.5
@@ -2334,7 +2334,7 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.9.5.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.9.5.tgz
     version: 0.9.5
   - apiVersion: v2
     appVersion: 0.9.4
@@ -2381,7 +2381,7 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.9.4.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.9.4.tgz
     version: 0.9.4
   - apiVersion: v2
     appVersion: 0.9.3
@@ -2424,7 +2424,7 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.9.3.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.9.3.tgz
     version: 0.9.3
   - apiVersion: v2
     appVersion: 0.9.2
@@ -2467,7 +2467,7 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.9.2.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.9.2.tgz
     version: 0.9.2
   - apiVersion: v2
     appVersion: 0.9.1
@@ -2510,7 +2510,7 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.9.1.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.9.1.tgz
     version: 0.9.1
   - apiVersion: v2
     appVersion: 0.9.0
@@ -2553,7 +2553,7 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.9.0.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.9.0.tgz
     version: 0.9.0
   - apiVersion: v2
     appVersion: 0.8.7
@@ -2596,7 +2596,7 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.8.7.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.8.7.tgz
     version: 0.8.7
   - apiVersion: v2
     appVersion: 0.8.6
@@ -2639,7 +2639,7 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.8.6.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.8.6.tgz
     version: 0.8.6
   - apiVersion: v2
     appVersion: 0.8.5
@@ -2682,7 +2682,7 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.8.5.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.8.5.tgz
     version: 0.8.5
   - apiVersion: v2
     appVersion: 0.8.4
@@ -2725,7 +2725,7 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.8.4.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.8.4.tgz
     version: 0.8.4
   - apiVersion: v2
     appVersion: 0.8.3
@@ -2768,7 +2768,7 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.8.3.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.8.3.tgz
     version: 0.8.3
   - apiVersion: v2
     appVersion: 0.8.2
@@ -2811,7 +2811,7 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.8.2.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.8.2.tgz
     version: 0.8.2
   - apiVersion: v2
     appVersion: 0.8.1
@@ -2854,7 +2854,7 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.8.1.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.8.1.tgz
     version: 0.8.1
   - apiVersion: v2
     appVersion: 0.8.0
@@ -2897,6 +2897,6 @@ entries:
     - https://github.com/united-manufacturing-hub/united-manufacturing-hub
     type: application
     urls:
-    - https://repo.umh.app/united-manufacturing-hub-0.8.0.tgz
+    - https://management.umh.app/helm/umh/united-manufacturing-hub-0.8.0.tgz
     version: 0.8.0
 generated: "2024-03-13T19:09:51.91786069Z"
