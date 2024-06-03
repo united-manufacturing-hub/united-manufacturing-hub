@@ -7692,7 +7692,7 @@ data:
         LIMIT 1;
 
         IF NOT FOUND THEN
-            RAISE EXCEPTION 'No asset found with the given parameters';
+            RAISE EXCEPTION ''No asset found with the given parameters'';
         END IF;
 
         RETURN result_id;
@@ -7723,7 +7723,7 @@ data:
         LIMIT 1;
 
         IF NOT FOUND THEN
-            RAISE EXCEPTION 'No asset found with the given parameters';
+            RAISE EXCEPTION ''No asset found with the given parameters'';
         END IF;
 
         RETURN result_id;
