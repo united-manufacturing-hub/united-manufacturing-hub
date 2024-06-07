@@ -7671,6 +7671,67 @@ data:
     GRANT EXECUTE ON FUNCTION {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.get_asset_id(text, text, text, text, text, text) TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
 
     -- $$
+    CREATE OR REPLACE FUNCTION get_asset_id_stable(
+        _enterprise text,
+        _site text DEFAULT '',
+        _area text DEFAULT '',
+        _line text DEFAULT '',
+        _workcell text DEFAULT '',
+        _origin_id text DEFAULT ''
+    ) RETURNS integer AS '
+    DECLARE
+        result_id integer;
+    BEGIN
+        SELECT id INTO result_id FROM asset
+        WHERE enterprise = _enterprise
+        AND site = _site
+        AND area = _area
+        AND line = _line
+        AND workcell = _workcell
+        AND origin_id = _origin_id
+        LIMIT 1;
+
+        IF NOT FOUND THEN
+            RAISE EXCEPTION ''No asset found with the given parameters'';
+        END IF;
+
+        RETURN result_id;
+    END;
+    ' LANGUAGE plpgsql STABLE;
+
+    GRANT EXECUTE ON FUNCTION {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.get_asset_id_stable(text, text, text, text, text, text) TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
+
+    -- $$
+    CREATE OR REPLACE FUNCTION get_asset_id_immutable(
+        _enterprise text,
+        _site text DEFAULT '',
+        _area text DEFAULT '',
+        _line text DEFAULT '',
+        _workcell text DEFAULT '',
+        _origin_id text DEFAULT ''
+    ) RETURNS integer AS '
+    DECLARE
+        result_id integer;
+    BEGIN
+        SELECT id INTO result_id FROM asset
+        WHERE enterprise = _enterprise
+        AND site = _site
+        AND area = _area
+        AND line = _line
+        AND workcell = _workcell
+        AND origin_id = _origin_id
+        LIMIT 1;
+
+        IF NOT FOUND THEN
+            RAISE EXCEPTION ''No asset found with the given parameters'';
+        END IF;
+
+        RETURN result_id;
+    END;
+    ' LANGUAGE plpgsql IMMUTABLE;
+
+    GRANT EXECUTE ON FUNCTION {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.get_asset_id_immutable(text, text, text, text, text, text) TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
+    -- $$
 
     CREATE OR REPLACE FUNCTION get_asset_ids(
         _enterprise text,
@@ -7694,6 +7755,31 @@ data:
     ' LANGUAGE plpgsql;
 
     GRANT EXECUTE ON FUNCTION {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.get_asset_ids(text, text, text, text, text, text) TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
+
+    -- $$
+
+    CREATE OR REPLACE FUNCTION get_asset_ids_stable(
+        _enterprise text,
+        _site text DEFAULT '',
+        _area text DEFAULT '',
+        _line text DEFAULT '',
+        _workcell text DEFAULT '',
+        _origin_id text DEFAULT ''
+    )
+    RETURNS SETOF integer AS '
+    BEGIN
+        RETURN QUERY
+        SELECT id FROM asset
+        WHERE enterprise = _enterprise
+        AND (_site = '''' OR site = _site)
+        AND (_area = '''' OR area = _area)
+        AND (_line = '''' OR line = _line)
+        AND (_workcell = '''' OR workcell = _workcell)
+        AND (_origin_id = '''' OR origin_id = _origin_id);
+    END;
+    ' LANGUAGE plpgsql STABLE;
+
+    GRANT EXECUTE ON FUNCTION {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.get_asset_ids_stable(text, text, text, text, text, text) TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
 
     -------------------- ANALYTICS --------------------
 
