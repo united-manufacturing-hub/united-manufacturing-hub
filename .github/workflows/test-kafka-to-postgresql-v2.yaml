@@ -21,7 +21,22 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+            # Explicitly set, even though this is default
+            lfs: false
 
+      - name: Create LFS file list
+        run: git lfs ls-files --long | cut -d ' ' -f1 | sort > .lfs-assets-id
+
+      - name: LFS Cache
+        uses: actions/cache@v4
+        with:
+          path: .git/lfs/objects
+          key: ${{ runner.os }}-lfs-${{ hashFiles('.lfs-assets-id') }}
+          restore-keys: |
+            ${{ runner.os }}-lfs-
+      - name: Git LFS Pull
+        run: git lfs pull
       - name: Start Services
         working-directory: ./test/integration/kafka-to-postgresql-v2
         run: |
