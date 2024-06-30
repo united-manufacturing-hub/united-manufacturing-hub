@@ -24,5 +24,5 @@ jobs:
     runs-on: 
       group: large-runners
     steps:
-      - uses: apache/skywalking-eyes@v0.5.0
+      - uses: apache/skywalking-eyes@v0.6.0
         name: License Eye Header
