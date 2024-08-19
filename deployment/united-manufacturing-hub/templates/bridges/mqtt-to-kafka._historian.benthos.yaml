@@ -49,4 +49,5 @@ pipeline:
         # Check if we are in the bridged_by array
         match {
           this.bridged_by == "benthos-mqtt-to-kafka-<INSTANCE_NAME>" => drop()
+          this.bridged_by == "benthos-kafka-to-mqtt-<INSTANCE_NAME>" => drop()
         }
