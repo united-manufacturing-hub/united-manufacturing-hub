@@ -13,7 +13,7 @@
 input:
   mqtt:
     urls:
-      - united-manufacturing-hub-mqtt:1883
+      - united-manufacturing-hub-mqtt.united-manufacturing-hub.svc.cluster.local:1883
     client_id: "benthos_mqtt_to_kafka"
     dynamic_client_id_suffix: "nanoid"
     topics:
@@ -39,3 +39,14 @@ input:
 #    The key should be an json array of bridges the data was passed through.
 #    bridged-by: ["benthos-mqtt-to-kafka-<INSTANCE_NAME>"]
 # 6. We can finally bridge the message to Kafka
+
+pipeline:
+  processors:
+    - bloblang: |
+        # Step 0 processor
+        message = this
+        message.bridged_by = message.bridged_by.catch([])
+        # Check if we are in the bridged_by array
+        match {
+          this.bridged_by == "benthos-mqtt-to-kafka-<INSTANCE_NAME>" => drop()
+        }
