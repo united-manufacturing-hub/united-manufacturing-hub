@@ -26,6 +26,9 @@ tasks:
       exit 0
 
 jetbrains:
+  goland:
+    prebuilds:
+      version: stable
   plugins:
     - lermitage.intellij.extratci # Extra colorfull icons
     - some.awesome # Nyan Cat
@@ -35,3 +38,11 @@ jetbrains:
     - com.intellij.grazie.pro # Grazie Pro
     - com.ypwang.plugin.go-linter # Go Linter
     - com.intellij.kubernetes # Kubernetes
+    - dev.blachut.svelte.lang # Svelte
+    - PythonCore # Python Community Edition
+    - org.toml.lang # TOML Language
+    - com.intellij.tailwindcss # Tailwind CSS
+    - intellij.vitejs # Vite.js
+    - org.intellij.plugins.postcss # PostCSS
+    - intellij.prettierJS # Prettier
+    - com.github.intellij.ginkgo # Ginkgo
