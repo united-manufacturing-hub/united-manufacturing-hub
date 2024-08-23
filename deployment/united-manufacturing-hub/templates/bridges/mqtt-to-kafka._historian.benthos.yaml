@@ -59,7 +59,7 @@ pipeline:
         meta "kafka_topic" = $kafka_topic
         meta "kafka_key" = $kafka_key
 
-        let invalid_json = this.parse_json().catch(true)
+        let invalid_json = this.parse_json().catch(this).format_json().catch(false)
 
         ## If not valid json build a new payload
         let encoded = this.format_json().catch(this).encode("base64")
