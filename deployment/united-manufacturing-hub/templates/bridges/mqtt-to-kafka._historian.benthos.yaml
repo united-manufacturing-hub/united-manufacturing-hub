@@ -97,6 +97,8 @@ pipeline:
           _ => false
         }
 
+        meta "parsing_failure" = $parsing_failure
+
 
         # Step 5
 
