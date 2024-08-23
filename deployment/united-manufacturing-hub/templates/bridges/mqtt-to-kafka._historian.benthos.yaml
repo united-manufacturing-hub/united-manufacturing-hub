@@ -107,10 +107,15 @@ pipeline:
         meta "bridged_by" = $bridged_by
 
 output:
-  kafka_franz:
-    topic: '${! meta("kafka_topic") }'
-    seed_brokers: [ "united-manufacturing-hub-kafka.united-manufacturing-hub.svc.cluster.local:9092" ]
-    client_id: 'mqtt_to_kafka_historian_bridge_achlys'
-    key: '${! meta("kafka_key") }'
-    metadata:
-      include_prefixes: [ "kafka_", "bridged_", "parsing_" ]
+  broker:
+    pattern: fan_out
+    outputs:
+      - kafka_franz:
+          topic: '${! meta("kafka_topic") }'
+          seed_brokers: [ "united-manufacturing-hub-kafka.united-manufacturing-hub.svc.cluster.local:9092" ]
+          client_id: 'mqtt_to_kafka_historian_bridge_achlys'
+          key: '${! meta("kafka_key") }'
+          metadata:
+            include_prefixes: [ "kafka_", "bridged_", "parsing_" ]
+      - stdout:
+          codec: lines
