@@ -59,16 +59,12 @@ pipeline:
         meta "kafka_topic" = $kafka_topic
         meta "kafka_key" = $kafka_key
 
-        let json_parse = this.parse_json().catch(false)
-        let is_valid_json = match {
-          $json_parse == false => false
-          _ => true
-        }
+        let invalid_json = this.format_json().catch(true)
 
         ## If not valid json build a new payload
-        let encoded = this.encode("base64").catch("")
+        let encoded = this.format_json().catch(this).encode("base64")
 
-        root = if $is_valid_json == false {
+        root = if $invalid_json == true {
           {
             "parsing_failure": "invalid-json",
             "payload": $encoded
