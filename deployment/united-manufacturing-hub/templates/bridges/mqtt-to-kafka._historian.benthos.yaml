@@ -45,7 +45,38 @@ input:
 pipeline:
   processors:
     - bloblang: |
-        root = this
+        # Step 2
+        let topic = meta("mqtt_topic")
+        let converted_topic = $topic.replace("/", ".")
+        ## Trim leading or trailing dots
+        let trimmed_topic = $converted_topic.trim(".")
+
+        # Step 3
+        let topic_parts = $trimmed_topic.split(".")
+        let kafka_topic = $topic_parts.slice(0, 5).join(".")
+        let kafka_key = $topic_parts.slice(5).join(".")
+
+        meta "kafka_topic" = $kafka_topic
+        meta "kafka_key" = $kafka_key
+
+        let json_parse = this.parse_json().catch(false)
+        let is_valid_json = match {
+          $json_parse == false => false
+          _ => true
+        }
+
+        ## If not valid json build a new payload
+        let encoded = this.encode("base64").catch("")
+
+        root = if $is_valid_json == false {
+          {
+            "parsing_failure": "invalid-json",
+            "payload": $encoded
+          }
+        } else {
+          root
+        }
+
 
         # Step 0
         ## Check if bridged-by header exists, if not create it
@@ -61,21 +92,6 @@ pipeline:
         } else{
           root
         }
-
-        # Step 2
-        let topic = meta("mqtt_topic")
-        let converted_topic = $topic.replace("/", ".")
-        ## Trim leading or trailing dots
-        let trimmed_topic = $converted_topic.trim(".")
-
-
-        # Step 3
-        let topic_parts = $trimmed_topic.split(".")
-        let kafka_topic = $topic_parts.slice(0, 5).join(".")
-        let kafka_key = $topic_parts.slice(5).join(".")
-
-        meta "kafka_topic" = $kafka_topic
-        meta "kafka_key" = $kafka_key
 
         # Step 4 (a/b)
         let valid_schema = root.json_schema("""{
@@ -109,15 +125,14 @@ pipeline:
         meta "bridged_by" = $bridged_by
 
 output:
-  broker:
-    pattern: fan_out
-    outputs:
-      - kafka_franz:
-          topic: '${! meta("kafka_topic") }'
-          seed_brokers: [ "united-manufacturing-hub-kafka.united-manufacturing-hub.svc.cluster.local:9092" ]
-          client_id: 'mqtt_to_kafka_historian_bridge_achlys'
-          key: '${! meta("kafka_key") }'
-          metadata:
-            include_prefixes: [ "kafka_", "bridged_", "parsing_" ]
-      - stdout:
-          codec: lines
+  kafka_franz:
+    topic: ${! meta("kafka_topic") }
+    seed_brokers:
+      - united-manufacturing-hub-kafka.united-manufacturing-hub.svc.cluster.local:9092
+    client_id: mqtt_to_kafka_historian_bridge_achlys
+    key: ${! meta("kafka_key") }
+    metadata:
+      include_prefixes:
+        - kafka_
+        - bridged_
+        - parsing_
