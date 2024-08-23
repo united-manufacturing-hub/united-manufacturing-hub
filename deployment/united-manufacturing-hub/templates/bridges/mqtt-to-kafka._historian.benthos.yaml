@@ -40,27 +40,46 @@ input:
 #    bridged-by: ["benthos-mqtt-to-kafka-<INSTANCE_NAME>"]
 # 6. We can finally bridge the message to Kafka
 
+# For debugging reason our instance name is achlys
+
 pipeline:
   processors:
     - bloblang: |
-        message = this
+        root = this
 
         # Step 0
         ## Check if bridged-by header exists, if not create it
-        message.bridged_by = if message.bridged_by == null {
-          []
-        } else {
-          message.bridged_by
+        root.bridged_by = match {
+          this.bridged_by => this.bridged_by
+          _ => []
         }
 
         # Step 1
         ## Check if the message was bridged by us, or the reverse of us
-        message = if message.bridged_by.contains("benthos-kafka-to-mqtt-{{ .Values.instanceName }}") || message.bridged_by.contains("benthos-mqtt-to-kafka-{{ .Values.instanceName }}") {
+        root = if root.bridged_by.contains("benthos-kafka-to-mqtt-achlys") || root.bridged_by.contains("benthos-mqtt-to-kafka-achlys") {
           deleted()
         } else{
-          message
+          root
         }
 
         ## Append our bridge to the bridged-by header
-        message.bridged_by = message.bridged_by.append("benthos-mqtt-to-kafka-{{ .Values.instanceName }}")
+        root.bridged_by = root.bridged_by.append("benthos-mqtt-to-kafka-achlys")
+
+        ### Transform bridged_by to meta as we are transfering to kafka
+        meta "bridged_by" = root.bridged_by
+        root.bridged_by = deleted()
+
+        # Step 2
+        let topic = meta("mqtt_topic")
+        let converted_topic = $topic.replace("/", ".")
+        ## Trim leading or trailing dots
+        let trimmed_topic = $converted_topic.trim(".")
+
+
+        # Step 3
+        let kafka_topic = $trimmed_topic.slice(0, 5).join(".")
+        let kafka_key = $trimmed_topic.slice(5).join(".")
+
+        meta "kafka_topic" = $kafka_topic
+        meta "kafka_key" = $kafka_key
 
