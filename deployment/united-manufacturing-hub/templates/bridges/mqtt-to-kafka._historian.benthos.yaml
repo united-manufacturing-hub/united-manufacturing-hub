@@ -43,11 +43,24 @@ input:
 pipeline:
   processors:
     - bloblang: |
-        # Step 0 processor
         message = this
-        message.bridged_by = message.bridged_by.catch([])
-        # Check if we are in the bridged_by array
-        match {
-          this.bridged_by == "benthos-mqtt-to-kafka-<INSTANCE_NAME>" => drop()
-          this.bridged_by == "benthos-kafka-to-mqtt-<INSTANCE_NAME>" => drop()
+
+        # Step 0
+        ## Check if bridged-by header exists, if not create it
+        message.bridged_by = if message.bridged_by == null {
+          []
+        } else {
+          message.bridged_by
         }
+
+        # Step 1
+        ## Check if the message was bridged by us, or the reverse of us
+        message = if message.bridged_by.contains("benthos-kafka-to-mqtt-{{ .Values.instanceName }}") || message.bridged_by.contains("benthos-mqtt-to-kafka-{{ .Values.instanceName }}") {
+          deleted()
+        } else{
+          message
+        }
+
+        ## Append our bridge to the bridged-by header
+        message.bridged_by = message.bridged_by.append("benthos-mqtt-to-kafka-{{ .Values.instanceName }}")
+
