@@ -49,25 +49,18 @@ pipeline:
 
         # Step 0
         ## Check if bridged-by header exists, if not create it
-        root.bridged_by = match {
+        let bridged_by = match {
           this.bridged_by => this.bridged_by
           _ => []
         }
 
         # Step 1
         ## Check if the message was bridged by us, or the reverse of us
-        root = if root.bridged_by.contains("benthos-kafka-to-mqtt-achlys") || root.bridged_by.contains("benthos-mqtt-to-kafka-achlys") {
+        root = if $bridged_by.contains("benthos-kafka-to-mqtt-achlys") || $bridged_by.contains("benthos-mqtt-to-kafka-achlys") {
           deleted()
         } else{
           root
         }
-
-        ## Append our bridge to the bridged-by header
-        root.bridged_by = root.bridged_by.append("benthos-mqtt-to-kafka-achlys")
-
-        ### Transform bridged_by to meta as we are transfering to kafka
-        meta "bridged_by" = root.bridged_by
-        root.bridged_by = deleted()
 
         # Step 2
         let topic = meta("mqtt_topic")
@@ -77,9 +70,47 @@ pipeline:
 
 
         # Step 3
-        let kafka_topic = $trimmed_topic.slice(0, 5).join(".")
-        let kafka_key = $trimmed_topic.slice(5).join(".")
+        let topic_parts = $trimmed_topic.split(".")
+        let kafka_topic = $topic_parts.slice(0, 5).join(".")
+        let kafka_key = $topic_parts.slice(5).join(".")
 
         meta "kafka_topic" = $kafka_topic
         meta "kafka_key" = $kafka_key
 
+        # Step 4 (a/b)
+        let valid_schema = root.json_schema("""{
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "required": ["timestamp_ms"],
+          "properties": {
+            "timestamp_ms": {
+              "type": "integer"
+            }
+          },
+          "minProperties": 2,
+          "additionalProperties": true
+        }
+        """).catch(false)
+
+        let parsing_failure = match {
+          $valid_schema == false => true
+          _ => false
+        }
+
+
+        # Step 5
+
+        ## Append our bridge to the bridged-by header
+        let bridged_by = $bridged_by.append("benthos-mqtt-to-kafka-achlys")
+
+        ### Transform bridged_by to meta as we are transfering to kafka
+        meta "bridged_by" = $bridged_by
+
+output:
+  kafka_franz:
+    topic: '${! meta("kafka_topic") }'
+    seed_brokers: [ "united-manufacturing-hub-kafka.united-manufacturing-hub.svc.cluster.local:9092" ]
+    client_id: 'mqtt_to_kafka_historian_bridge_achlys'
+    key: '${! meta("kafka_key") }'
+    metadata:
+      include_prefixes: [ "kafka_", "bridged_", "parsing_" ]
