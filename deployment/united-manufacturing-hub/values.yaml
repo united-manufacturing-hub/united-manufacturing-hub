@@ -20,6 +20,7 @@ _000_commonConfig:
 
   datamodel_v2:
     enabled: true
+    # The old "bridges" configuration is deprecated and will be removed in the future
     bridges:
       - mode: mqtt-kafka
         brokerA: united-manufacturing-hub-mqtt:1883
@@ -28,6 +29,10 @@ _000_commonConfig:
         topicMergePoint: 5
         partitions: 6                 # optional: number of partitions for the new kafka topic. default: 6
         replicationFactor: 1          # optional: replication factor for the new kafka topic. default: 1
+    benthos:
+      historian:
+        mqtt_to_kafka:
+          enabled: true
     database:
       name: "umh_v2"
       host: "united-manufacturing-hub"
