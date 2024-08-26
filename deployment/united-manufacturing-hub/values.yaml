@@ -775,3 +775,5 @@ bridges:
     #  requests:
     #    cpu: 400m
     #    memory: 300Mi
+    #debug:
+    #  enableStdout: false
