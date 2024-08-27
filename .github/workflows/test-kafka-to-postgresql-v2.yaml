@@ -25,7 +25,7 @@ jobs:
       - name: Start Services
         working-directory: ./test/integration/kafka-to-postgresql-v2
         run: |
-          docker-compose up -d --build
+          docker compose up -d --build
           docker pull confluentinc/cp-kafkacat:7.0.13
       
       - name: Wait for Services
@@ -45,4 +45,4 @@ jobs:
         working-directory: ./test/integration/kafka-to-postgresql-v2
         run: |
           docker logs kafka-to-postgresql-v2 || true
-          docker-compose down
+          docker compose down
