@@ -29,30 +29,6 @@ data:
     <file-rbac>
         <users>
             <user>
-                <name>MQTT_KAFKA_BRIDGE</name>
-                {{- $passMqttKafka := default .Values.mqttkafkabridge.mqtt.encryptedPassword }}
-                {{- if eq $passMqttKafka "" }}
-                <password>WDRkN1c4MnpVb3BsS25qZG5qbkcxSUFuQm5kVVZVbW4=:100:H/o0vsDqmVfzkoLU6rPG8C7+0gzYjkH2E7q3+/5aXKFlSYEyBO/tiin02gxpcB0A/1j7fudGbZhQfI+dZa1GCQ==</password>
-                {{- else }}
-                <password>{{- print $passMqttKafka }}</password>
-                {{- end }}
-                <roles>
-                    <id>ia_read_write</id>
-                </roles>
-            </user>
-            <user>
-                <name>SENSORCONNECT</name>
-                {{- $passSensorconnect := default .Values.sensorconnect.mqtt.encryptedPassword }}
-                {{- if eq $passSensorconnect "" }}
-                <password>ZVF5bDJ4TWtjVXVWZVVESlRXZU1DSHA4cDdHbUhKSEc=:100:B42+ySldBE+uilWricvIif+UJ0oW5iXafloUyiZclbYoQOOthOet5NQAKCTHITDSHadxvjbgfiF/908QmwqZOw==</password>
-                {{- else }}
-                <password>{{- print $passSensorconnect}}</password>
-                {{- end }}
-                <roles>
-                    <id>ia_read_write</id>
-                </roles>
-            </user>
-            <user>
                 <name>IOTSENSORSMQTT</name>
                 {{- $passIotSensor := default .Values.iotsensorsmqtt.mqtt.encryptedPassword }}
                 {{- if eq $passIotSensor "" }}

@@ -174,7 +174,7 @@ data:
                   - kafka_
                   - bridged_
                   - parsing_
-  {{ if (.Values.bridges.mqtttokafka.debug.enableStdout | default false) }}
+  {{ if and (.Values.bridges.mqtttokafka.debug | default false) (.Values.bridges.mqtttokafka.debug.enableStdout | default false) }}
           - stdout:
               codec: lines
   {{ end }}
