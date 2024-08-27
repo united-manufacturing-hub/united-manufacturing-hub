@@ -13,7 +13,7 @@
 # limitations under the License.
 
 ---
-{{if or .Values.kafkatopostgresql.enabled (and .Values._000_commonConfig.infrastructure.kafka.enabled .Values._000_commonConfig.datastorage.enabled .Values._000_commonConfig.datamodel_v2.enabled)}}
+{{if and .Values._000_commonConfig.infrastructure.kafka.enabled .Values._000_commonConfig.datastorage.enabled .Values._000_commonConfig.datamodel_v2.enabled}}
 
 apiVersion: apps/v1
 kind: Deployment
