@@ -30,6 +30,7 @@ _000_commonConfig:
     grafana:
       dbreader: "grafanareader"
       dbpassword: "changeme"
+    merge_point: 5
 
   # This allows to specify data sources, which is mostly used for instances running on the edge
   datasources:
