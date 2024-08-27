@@ -57,6 +57,7 @@ data:
           - united-manufacturing-hub-mqtt.united-manufacturing-hub.svc.cluster.local:1883
         client_id: "benthos_mqtt_to_kafka"
         dynamic_client_id_suffix: "nanoid"
+        auto_replay_nacks: false
         topics:
           - $share/benthos_mqtt_to_kafka/umh/v1/+/_historian/#
           - $share/benthos_mqtt_to_kafka/umh/v1/+/+/_historian/#
@@ -92,13 +93,13 @@ data:
 
             # Step 3
             let topic_parts = $trimmed_topic.split(".")
-            let kafka_topic = $topic_parts.slice(0, 5).join(".")
-            let kafka_key = $topic_parts.slice(5).join(".")
+            let kafka_topic = $topic_parts.slice(0, {{.Values._000_commonConfig.datamodel_v2.merge_point}}).join(".")
+            let kafka_key = $topic_parts.slice({{.Values._000_commonConfig.datamodel_v2.merge_point}}).join(".")
 
             meta "kafka_topic" = $kafka_topic
             meta "kafka_key" = $kafka_key
 
-            let invalid_json = this.parse_json().catch(this).format_json().catch(false)
+            let invalid_json = this.parse_json().catch(this.format_json().catch(true))
 
             ## If not valid json build a new payload
             let encoded = this.format_json().catch(this).encode("base64")
