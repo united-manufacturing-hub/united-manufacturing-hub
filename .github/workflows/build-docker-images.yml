@@ -78,32 +78,28 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Setup Build variables
+      - name: Setup variables and build
         run: |
-          export GIT_TAG         := $(shell git describe --tags --always)
-          export DOCKER_FILE    := ./deployment/${{ matrix.component }}/Dockerfile
-          export PLATFORM       := ${{ matrix.architecture }}
-          
-          if ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}; then
-            export BUILD_TAG := ghcr.io/united-manufacturing-hub/${{ matrix.component }}:latest-$(PLATFORM)
+          export GIT_TAG=$(git describe --tags --always)
+          export DOCKER_FILE=./deployment/${{ matrix.component }}/Dockerfile
+          export PLATFORM=${{ matrix.architecture }}
+
+          if [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == "refs/heads/main" ]]; then
+            export BUILD_TAG=ghcr.io/united-manufacturing-hub/${{ matrix.component }}:latest-${PLATFORM}
+          elif [[ ("${{ github.event_name }}" == "push" && "${{ github.ref }}" == "refs/heads/staging") || "${{ github.event.pull_request.head.ref }}" == "staging" ]]; then
+            export BUILD_TAG=ghcr.io/united-manufacturing-hub/${{ matrix.component }}:staging-${PLATFORM}
+          elif [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            export BUILD_TAG=ghcr.io/united-manufacturing-hub/${{ matrix.component }}:pr-${{ github.event.pull_request.number }}-${PLATFORM}
+          elif [[ "${{ github.event_name }}" == "merge_group" ]]; then
+            export BUILD_TAG=ghcr.io/united-manufacturing-hub/${{ matrix.component }}:$(git rev-parse --abbrev-ref HEAD)-${PLATFORM}
+          elif [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == refs/tags/* ]]; then
+            export BUILD_TAG=ghcr.io/united-manufacturing-hub/${{ matrix.component }}:${GIT_TAG}-${PLATFORM}
           fi
-          if ${{ (github.event_name == 'push' && github.ref == 'refs/heads/staging') || github.event.pull_request.head.ref == 'staging' }}; then
-            export BUILD_TAG := ghcr.io/united-manufacturing-hub/${{ matrix.component }}:staging-$(PLATFORM)
-          fi
-          if ${{ github.event_name == 'pull_request' }}; then
-            export BUILD_TAG := ghcr.io/united-manufacturing-hub/${{ matrix.component }}:pr-${{ env.PR_ID }}-$(PLATFORM)
-          fi
-          if ${{ github.event_name == 'merge_group' }}; then
-            export BUILD_TAG := ghcr.io/united-manufacturing-hub/${{ matrix.component }}:$(BRANCH)-$(PLATFORM)
-          fi
-          if ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') }}; then
-              export BUILD_TAG := ghcr.io/united-manufacturing-hub/${{ matrix.component }}:$(GIT_TAG)-$(PLATFORM)
-          fi
-          
-          docker buildx build --platform linux/$(PLATFORM) --provenance=false --progress=plain \
-             --build-arg APP_VERSION=$(GIT_TAG) -t $(BUILD_TAG) -f $(DOCKER_FILE) --push ../
-          
-          echo "BUILD_TAG=$(BUILD_TAG)" >> $GITHUB_OUTPUT
+
+          docker buildx build --platform linux/${PLATFORM} --provenance=false --progress=plain \
+            --build-arg APP_VERSION=${GIT_TAG} -t ${BUILD_TAG} -f ${DOCKER_FILE} --push ../
+
+          echo "BUILD_TAG=${BUILD_TAG}" >> $GITHUB_OUTPUT
 
   create-manifests:
     needs: build-docker
