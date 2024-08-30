@@ -39,10 +39,26 @@ jobs:
     outputs:
       BUILD_TAG: ${{ steps.output-build-tag.outputs.BUILD_TAG }}
     steps:
-      - name: Use Checkout and Setup Workflow
-        uses: ./.github/workflows/checkout.yaml
+      - name: Checkout
+        uses: actions/checkout@v4
         with:
-          branch: ${{ github.event.pull_request && github.head_ref || github.ref_name }}
+          ref: ${{ github.event.pull_request && github.head_ref || github.ref_name }}
+
+      - name: Check if Docker daemon is running
+        id: check_docker
+        run: |
+          SECONDS=0
+          TIMEOUT=120
+          while ! docker info >/dev/null 2>&1; do
+            if [ $SECONDS -ge $TIMEOUT ]; then
+              echo "Docker daemon is not running after ${TIMEOUT} seconds, exiting..."
+              docker info
+              exit 1
+            fi
+            echo "Waiting for Docker daemon to start..."
+            sleep 1
+          done
+          echo "Docker daemon is running."
 
       - name: Login to GitHub Container registry
         uses: docker/login-action@v3
