@@ -108,6 +108,7 @@ jobs:
             --build-arg APP_VERSION=${GIT_TAG} -t ${BUILD_TAG} -f ${DOCKER_FILE} --push .
 
           echo "BUILD_TAG=${BUILD_TAG}" >> $GITHUB_OUTPUT
+          echo "BUILD_TAG=${BUILD_TAG}"
 
   create-manifests:
     needs: build-docker
