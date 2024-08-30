@@ -45,7 +45,7 @@ jobs:
     env:
       PR_ID: ${{ github.event.pull_request.number }}
     outputs:
-      BUILD_TAG: ${{ steps.output-build-tag.outputs.BUILD_TAG }}
+      BUILD_TAG: ${{ steps.build-and-output.outputs.BUILD_TAG }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -87,6 +87,7 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Setup variables and build
+        id: build-and-output
         run: |
           export GIT_TAG=$(git describe --tags --always)
           export DOCKER_FILE=./deployment/${{ matrix.component }}/Dockerfile
