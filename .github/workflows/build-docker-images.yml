@@ -97,7 +97,7 @@ jobs:
           fi
 
           docker buildx build --platform linux/${PLATFORM} --provenance=false --progress=plain \
-            --build-arg APP_VERSION=${GIT_TAG} -t ${BUILD_TAG} -f ${DOCKER_FILE} --push ../
+            --build-arg APP_VERSION=${GIT_TAG} -t ${BUILD_TAG} -f ${DOCKER_FILE} --push .
 
           echo "BUILD_TAG=${BUILD_TAG}" >> $GITHUB_OUTPUT
 
