@@ -31,6 +31,15 @@ jobs:
       matrix:
         component: [ 'factoryinsight', 'grafana-umh', 'hivemq-init', 'kafka-init', 'metrics', 'sensorconnect', 'barcodereader' ]
         architecture: [ 'amd64', 'arm64' ]
+        exclude:
+          - component: 'factoryinsight'
+            architecture: 'arm64'
+          - component: 'kafka-init'
+            architecture: 'arm64'
+          - component: 'sensorconnect'
+            architecture: 'arm64'
+          - component: 'barcodereader'
+            architecture: 'arm64'
     runs-on:
       group: ${{ matrix.architecture == 'arm64' && 'arc-runners-small' || 'arc-runners' }}
     env:
@@ -126,8 +135,23 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+
+      - name: Check if ARM64 image exists
+        id: check_arm64
+        run: |
+          if docker manifest inspect ghcr.io/united-manufacturing-hub/${{ matrix.component}}:${{ needs.build-docker.outputs.BUILD_TAG }}-arm64 >/dev/null 2>&1; then
+            echo "ARM64_EXISTS=true" >> $GITHUB_ENV
+          else
+            echo "ARM64_EXISTS=false" >> $GITHUB_ENV
+          fi
+
       - name: Create multiarch manifests
         run: |
-          docker buildx imagetools create -t ghcr.io/united-manufacturing-hub/${{ matrix.component}}:${{ needs.build-docker.outputs.BUILD_TAG }} \
-            ghcr.io/united-manufacturing-hub/${{ matrix.component}}:${{ needs.build-docker.outputs.BUILD_TAG }}-amd64 \
-            ghcr.io/united-manufacturing-hub/${{ matrix.component}}:${{ needs.build-docker.outputs.BUILD_TAG }}-arm64
+          if [ "${{ env.ARM64_EXISTS }}" = "true" ]; then
+            docker buildx imagetools create -t ghcr.io/united-manufacturing-hub/${{ matrix.component}}:${{ needs.build-docker.outputs.BUILD_TAG }} \
+              ghcr.io/united-manufacturing-hub/${{ matrix.component}}:${{ needs.build-docker.outputs.BUILD_TAG }}-amd64 \
+              ghcr.io/united-manufacturing-hub/${{ matrix.component}}:${{ needs.build-docker.outputs.BUILD_TAG }}-arm64
+          else
+            docker buildx imagetools create -t ghcr.io/united-manufacturing-hub/${{ matrix.component}}:${{ needs.build-docker.outputs.BUILD_TAG }} \
+              ghcr.io/united-manufacturing-hub/${{ matrix.component}}:${{ needs.build-docker.outputs.BUILD_TAG }}-amd64
+          fi
