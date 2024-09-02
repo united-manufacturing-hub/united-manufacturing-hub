@@ -34,7 +34,7 @@ metadata:
     # Required for mgmtcompanion to manage the component
     managed-by: mgmtcompanion
     # Do not allow mgmtcompanion to modify the component
-    data-flow-component-is-read-only: true
+    data-flow-component-is-read-only: 'true'
     # The type of the component
     data-flow-component-type: bridge
 spec:
