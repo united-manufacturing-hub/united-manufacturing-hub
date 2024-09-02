@@ -20,39 +20,20 @@ _000_commonConfig:
 
   datamodel_v2:
     enabled: true
-    bridges:
-      - mode: mqtt-kafka
-        brokerA: united-manufacturing-hub-mqtt:1883
-        brokerB: united-manufacturing-hub-kafka:9092
-        topic: umh.v1..*              # accept mqtt or kafka topic format. after the topic seprator, you can use # for mqtt wildcard, or .* for kafka wildcard
-        topicMergePoint: 5
-        partitions: 6                 # optional: number of partitions for the new kafka topic. default: 6
-        replicationFactor: 1          # optional: replication factor for the new kafka topic. default: 1
+    benthos:
+      historian:
+        mqtt_to_kafka:
+          enabled: true
     database:
       name: "umh_v2"
       host: "united-manufacturing-hub"
     grafana:
       dbreader: "grafanareader"
       dbpassword: "changeme"
+    merge_point: 5
 
   # This allows to specify data sources, which is mostly used for instances running on the edge
   datasources:
-
-    # barcodereader reads out connected USB barcodereaders emulating a keyboard
-    barcodereader:
-      enabled: false
-      USBDeviceName: "Datalogic ADC, Inc. Handheld Barcode Scanner"
-      USBDevicePath: "" # Linux device path, if empty, USBDeviceName is used
-      customerID: "raw"
-      location: "barcodereader"
-      machineID: "barcodereader"
-
-    # sensorconnect searches for ifm IO-Link gateways and reads out the connected sensors
-    sensorconnect:
-      enabled: false
-      iprange: "192.168.10.1/24"  # IP Range in CIDR notation
-      enableKafka: true
-      enableMQTT: false
 
     # iotsensorsmqtt simulates IoT sensor data and publishes it over MQTT.
     # Learn more : https://github.com/amine-amaach/simulators/tree/main/ioTSensorsMQTT
@@ -134,28 +115,6 @@ _000_commonConfig:
     enabled: true
     db_password: "changeme"
 
-
-
-
-  kafkaBridge:
-    enabled: false
-    remotebootstrapServer: ""
-    topicCreationLocalList: ia.test.test.test.processValue;ia.test.test.test.count;umh.v1.kafka.newTopic # ; seperated list of topics to create on local broker, if they do not exist
-    topicCreationRemoteList: ia.test.test.test.processValue;ia.test.test.test.count;umh.v1.kafka.newTopic # ; seperated list of topics to create on remote broker, if they do not exist
-    topicmap:
-# Example topic map
-#      - bidirectional: false
-#        name: HighIntegrity
-#        send_direction: to_remote
-#        topic: ^ia\.(([^r.](\d|-|\w)*)|(r[b-z](\d|-|\w)*)|(ra[^w]))\.(\d|-|\w|_)+\.(\d|-|\w|_)+\.((addMaintenanceActivity)|(addOrder)|(addParentToChild)|(addProduct)|(addShift)|(count)|(deleteShiftByAssetIdAndBeginTimestamp)|(deleteShiftById)|(endOrder)|(modifyProducedPieces)|(modifyState)|(productTag)|(productTagString)|(recommendation)|(scrapCount)|(startOrder)|(state)|(uniqueProduct)|(scrapUniqueProduct))$
-#      - bidirectional: false
-#        name: HighThroughput
-#        send_direction: to_remote
-#        topic: ^ia\.(([^r.](\d|-|\w)*)|(r[b-z](\d|-|\w)*)|(ra[^w]))\.(\d|-|\w|_)+\.(\d|-|\w|_)+\.(process[V|v]alue).*$
-
-  kafkaStateDetector:
-    enabled: false
-
   debug:
     enableFGTrace: false # Enables https://github.com/felixge/fgtrace. DO NOT USE IN PRODUCTION!
   tulipconnector:
@@ -230,59 +189,6 @@ _001_customMicroservices:
 serviceAccount:
   create: true
 
-### kafkastatedetector ###
-kafkastatedetector:
-  enabled: false
-  image:
-    repository: management.umh.app/oci/united-manufacturing-hub/kafkastatedetector
-    pullPolicy: IfNotPresent
-  activityEnabled: true
-  anomalyEnabled: true
-
-### barcodereader ###
-barcodereader:
-  enabled: false
-  image:
-    repository: management.umh.app/oci/united-manufacturing-hub/barcodereader
-    pullPolicy: IfNotPresent
-  resources:
-    requests:
-      cpu: "2m"
-      memory: "30Mi"
-    limits:
-      cpu: "10m"
-      memory: "60Mi"
-  scanOnly: false # Debug mode, will not send data to kafka
-
-### sensorconnect ###
-sensorconnect:
-  storageRequest: 1Gi
-  image: management.umh.app/oci/united-manufacturing-hub/sensorconnect
-  ioddfilepath: "/ioddfiles"
-  lowerPollingTime: 100 # Fastest time, sensors should be requested to serve data
-  upperPollingTime: 1000 # Slowest time, sensors should be requested to serve data
-  pollingSpeedStepUpMs: 20 # Time to add to actual stepping in case of failure
-  pollingSpeedStepDownMs: 1 # Time to add to actual stepping in case of no-failure
-  sensorInitialPollingTimeMs: 100 # Time to begin retrieving sensor data (Set higher then lowerTickSpeedMs to not kill sensors instantly, after they recovered from overload)
-  deviceFinderTimeSec: 20 # Time in sec, before finding new devices
-  deviceFinderTimeoutSec: 1 # HTTP timeout for finding new sensors. NEVER set lower then DeviceFinderFrequenceySec
-  maxSensorErrorCount: 50 # Errors before a sensor is temporarily disabled
-  allowSubTwentyMs: 0 # Set to 1 to allow lowerTickSpeedMs of under 20ms. THIS IS DANGEROUS !!!
-  additionalSleepTimePerActivePortMs: 0.0 # Additional time to add to sleep time, based on active ports (especially helpful if you mix devices with 1-2 sensors and devices with 8 sensors)
-  additionalSlowDownMap: [] # JSON map, allowing for slowing down/speeding up sensors based on serialnumber, productcode or url
-                            # Example:
-                            # [{"serialnumber":"000200610104","slowdown_ms":-10},{"url":"http://192.168.0.13","slowdown_ms":20},{"productcode":"AL13500","slowdown_ms":20.01}]
-  resources:
-    requests:
-      cpu: "10m"
-      memory: "75Mi"
-    limits:
-      cpu: "100m"
-      memory: "200Mi"
-  mqtt:
-    password: INSECURE_INSECURE_INSECURE
-    encryptedPassword: ""
-
 ### iotsensorsmqtt ###
 iotsensorsmqtt:
   image: management.umh.app/oci/amineamaach/sensors-mqtt
@@ -318,16 +224,6 @@ opcuasimulator:
       - "united-manufacturing-hub-opcuasimulator-service.united-manufacturing-hub.svc.cluster.local"
     #ips: "1.1.1.1"
 
-### kafkabridge ###
-kafkabridge:
-  image:
-    repository: management.umh.app/oci/united-manufacturing-hub/kafka-bridge
-    pullPolicy: IfNotPresent
-  # tag: development
-  initContainer:
-    repository: management.umh.app/oci/united-manufacturing-hub/kafka-init
-    pullPolicy: IfNotPresent
-
 ### nodered ###
 nodered:
   mqtt:
@@ -345,8 +241,6 @@ nodered:
     publicHostSecretName: ""
   flows: {}
   settings: {}
-
-
 
 ### factoryinsight ###
 factoryinsight:
@@ -383,31 +277,6 @@ factoryinsight:
         cpu: 50m
         memory: 50Mi
   insecure_no_auth: false # DO NOT ENABLE IN PRODUCTION. This will disable authentication and authorization
-
-### kafka-to-postgresql ###
-kafkatopostgresql:
-  enabled: false
-  image:
-    repository: management.umh.app/oci/united-manufacturing-hub/kafka-to-postgresql
-    pullPolicy: IfNotPresent
-    # tag: latest
-  initContainer:
-    repository: management.umh.app/oci/united-manufacturing-hub/kafka-init
-    pullPolicy: IfNotPresent
-  replicas: 1
-  storageRequest: 1Gi
-  listenTopic:
-    # All topics except processValue
-    # Kafka doesn't seem to be able to do negative lookaheads
-    #highIntegrity: '^ia\..+\..+\..+\.((addMaintenanceActivity)|(addOrder)|(addParentToChild)|(addProduct)|(addShift)|(count)|(deleteShiftByAssetIdAndBeginTimestamp)|(deleteShiftById)|(endOrder)|(modifyProducedPieces)|(modifyState)|(productTag)|(productTagString)|(recommendation)|(scrapCount)|(startOrder)|(state)|(uniqueProduct)|(scrapUniqueProduct))$'
-    #highThroughput: '^ia\..+\..+\..+\.(process[V|v]alue).*$'
-  resources:
-    limits:
-      cpu: 200m
-      memory: 300Mi
-    requests:
-      cpu: 50m
-      memory: 150Mi
 
 ### timescaleDB ###
 timescaledb-single:
@@ -679,63 +548,6 @@ packmlmqttsimulator:
       cpu: "30m"
       memory: "50Mi"
 
-### tulip-connector ###
-tulipconnector:
-  image:
-    repository: management.umh.app/oci/united-manufacturing-hub/tulip-connector
-    pullPolicy: IfNotPresent
-    # Only specify tag if you want to use a specific version. If not specified the latest stable version is automatically selected
-    tag: 0.1.0
-  replicas: 1
-  env:
-    mode: prod
-  resources:
-    limits:
-      cpu: 30m
-      memory: 50Mi
-    requests:
-      cpu: 10m
-      memory: 20Mi
-
-### mqtt-kafka-bridge ###
-mqttkafkabridge:
-  enabled: false
-  image:
-    repository: management.umh.app/oci/united-manufacturing-hub/mqtt-kafka-bridge
-    pullPolicy: IfNotPresent
-  pdb:
-    enabled: true
-    minAvailable: 1
-  initContainer:
-    repository: management.umh.app/oci/united-manufacturing-hub/kafka-init
-    pullPolicy: IfNotPresent
-  resources:
-    requests:
-      cpu: "400m"
-      memory: "300Mi"
-    limits:
-      cpu: "500m"
-      memory: "450Mi"
-  mqttSenderThreads: 1
-  kafkaSenderThreads: 1
-  kafkaAcceptNoOrigin: "false"
-  rawMessageLRUSize: 100000
-  messageLRUSize: 100000
-  mqtt:
-    password: INSECURE_INSECURE_INSECURE
-    encryptedPassword: ""
-
-### kafka-to-blob ###
-kafkatoblob:
-  enabled: false
-  image:
-    repository: management.umh.app/oci/united-manufacturing-hub/kafka-to-blob
-    pullPolicy: IfNotPresent
-  replicas: 1
-  pdb:
-    enabled: true
-    minAvailable: 1
-
 ##### CONFIG FOR APACHE KAFKA #####
 redpanda:
   image:
@@ -909,24 +721,6 @@ metrics:
   cronJob:
     schedule: "0 */4 * * *" # Run every 4 hours
 
-databridge:
-  enabled: false
-  image:
-    repository: management.umh.app/oci/united-manufacturing-hub/databridge
-    pullPolicy: IfNotPresent
-  pdb:
-    enabled: true
-    minAvailable: 1
-  replicas: 1
-  resources:
-    requests:
-      cpu: "400m"
-      memory: "300Mi"
-    limits:
-      cpu: "500m"
-      memory: "450Mi"
-
-
 ### kafka-to-postgresql ###
 kafkatopostgresqlv2:
   enabled: false
@@ -966,3 +760,21 @@ kafkatopostgresqlv2:
     user: "kafkatopostgresqlv2"
     password: "changemetoo"
 
+### bridges ###
+bridges:
+  mqtttokafka:
+    enabled: true
+    #image:
+    #  repository: management.umh.app/oci/united-manufacturing-hub/benthos-umh
+    #  pullPolicy: IfNotPresent
+    #  tag: 0.3.12
+    #replicas: 1
+    #resources:
+    #  limits:
+    #    cpu: 500m
+    #    memory: 450Mi
+    #  requests:
+    #    cpu: 400m
+    #    memory: 300Mi
+    #debug:
+    #  enableStdout: false
