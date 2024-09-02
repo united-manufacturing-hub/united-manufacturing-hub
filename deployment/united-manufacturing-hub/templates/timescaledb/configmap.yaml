@@ -41,6 +41,9 @@ data:
     -- Extend the database with TimescaleDB
     CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE;
 
+    -- Enable pg_stat_statements plugin for observability;
+    CREATE EXTENSION IF NOT EXISTS pg_stat_statements CASCADE;
+
     -------------------- Table with all assets --------------------
     CREATE TABLE IF NOT EXISTS assetTable
     (
