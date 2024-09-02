@@ -38,7 +38,7 @@ version: 0.16.0-prerelease1
 # follow Semantic Versioning. They should reflect the version the application is using.
 # It is recommended to use it with quotes.
 
-appVersion: "0.16.0-prerelease1"
+appVersion: 0.16.0-prerelease1
 
 home: https://www.umh.app
 sources:
@@ -46,21 +46,21 @@ sources:
 
 dependencies:
   - name: redis
-    version: 18.17.0
+    version: 0.16.0-prerelease1
     repository: https://management.umh.app/helm/bitnami
     condition: _000_commonConfig.datastorage.enabled
 
   - name: grafana
-    version: 7.3.7
+    version: 0.16.0-prerelease1
     repository: https://management.umh.app/helm/grafana
     condition: _000_commonConfig.datastorage.enabled
 
   - name: timescaledb-single
-    version: 0.26.9
+    version: 0.16.0-prerelease1
     repository: https://management.umh.app/helm/timescale
     condition: _000_commonConfig.datastorage.enabled
 
   - name: redpanda
     repository: https://management.umh.app/helm/redpanda
-    version: 5.3.4
+    version: 0.16.0-prerelease1
     condition: _000_commonConfig.infrastructure.kafka.enabled
