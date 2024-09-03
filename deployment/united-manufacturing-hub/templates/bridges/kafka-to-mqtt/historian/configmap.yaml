@@ -1,0 +1,112 @@
+# Copyright 2023 UMH Systems GmbH
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+---
+{{if or .Values.bridges.kafkatomqtt.enabled .Values._000_commonConfig.datamodel_v2.enabled }}
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  # This is the name of the component, it should be unique within the namespace (63 chars max as per RFC 1035/1123)
+  name: dfc-fcdec4de-a930-4229-befc-d318c9964a2e-kafka-t-mqtt-historian
+  # To be scheduled in the open-source namespace
+  namespace: united-manufacturing-hub
+  labels:
+    # This does not change over time
+    data-flow-component-uuid: fcdec4de-a930-4229-befc-d318c9964a2e
+    # This is the random UUID of the version of the component
+    data-flow-component-version-uuid: 7a732a81-180f-4a14-8dd8-dafbb613fb44
+    # Timestamp of last change to the component in unix milliseconds since epoch
+    data-flow-version: '1724661195274'
+    # Generic label to indicate that this is a data flow component
+    is-data-flow-component: 'true'
+    # Required for mgmtcompanion to manage the component
+    managed-by: mgmtcompanion
+    # Do not allow mgmtcompanion to modify the component
+    data-flow-component-is-read-only: 'true'
+    # The type of the component
+    data-flow-component-type: bridge
+data:
+  benthos.yaml: |
+    ## Input
+    #
+    # This configuration bridges _historian messages from Kafka to MQTT
+
+    input:
+      kafka_franz:
+        consumer_group: "benthos_kafka_to_mqtt"
+        topics:
+          - umh.v1.*
+        regexp_topics: true
+        seed_brokers:
+          - united-manufacturing-hub-kafka.united-manufacturing-hub.svc.cluster.local:9092
+        auto_replay_nacks: false
+
+    ## Processors
+    #
+
+
+    pipeline:
+      processors:
+        - bloblang: |
+            # Re-assembly the topic
+            let t = metadata("kafka_topic").catch("")
+            let k = metadata("kafka_key").catch("")
+            let raw_topic = $t + "." + $k
+            # remove trailing dot
+            let kafka_topic_restored = $raw_topic.trim(".")
+
+            # Replace . with /
+            let topic = $kafka_topic_restored.replace_all(".", "/")
+
+            # Set the MQTT topic in metadata for output
+            meta "mqtt_topic" = $topic
+
+            # Check if bridged
+            let bridged_by = metadata("bridged_by").parse_json().catch([])
+
+            root = if $bridged_by.contains("benthos-mqtt-to-kafka-default") || $bridged_by.contains("benthos-kafka-to-mqtt-default") {
+              deleted()
+            } else {
+              root
+            }
+
+            meta "bridged_by" = $bridged_by
+
+        - bloblang: |
+            let bridged_by = metadata("bridged_by").catch([])
+            # Set ourself into header
+            let kafka_bridged_by = $bridged_by.append("benthos-kafka-to-mqtt-default")
+
+            root = this
+            # Update the message itself to include the kafka_bridged_by information
+            root.bridged_by = $kafka_bridged_by
+
+    output:
+      broker:
+        pattern: fan_out
+        outputs:
+          -   mqtt:
+                urls:
+                  - united-manufacturing-hub-mqtt.united-manufacturing-hub.svc.cluster.local:1883
+                topic: ${! meta("mqtt_topic") }
+                client_id: "benthos_kafka_to_mqtt"
+                dynamic_client_id_suffix: "nanoid"
+                qos: 1
+                retained: false
+  {{ if and (.Values.bridges.kafkatomqtt.debug | default false) (.Values.bridges.kafkatomqtt.debug.enableStdout | default false) }}
+          - stdout:
+              codec: lines
+  {{ end }}
+{{end}}
