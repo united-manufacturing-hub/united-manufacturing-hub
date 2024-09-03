@@ -778,3 +778,20 @@ bridges:
     #    memory: 300Mi
     #debug:
     #  enableStdout: false
+
+  kafkatomqtt:
+    enabled: true
+    #image:
+    #  repository: management.umh.app/oci/united-manufacturing-hub/benthos-umh
+    #  pullPolicy: IfNotPresent
+    #  tag: 0.3.12
+    #replicas: 1
+    #resources:
+    #  limits:
+    #    cpu: 500m
+    #    memory: 450Mi
+    #  requests:
+    #    cpu: 400m
+    #    memory: 300Mi
+    #debug:
+    #  enableStdout: false
