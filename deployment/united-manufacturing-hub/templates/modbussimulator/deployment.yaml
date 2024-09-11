@@ -13,36 +13,36 @@
 # limitations under the License.
 
 ---
-{{if .Values._000_commonConfig.datasources.opcuasimulatorv2.enabled}}
+{{if .Values._000_commonConfig.datasources.modbussimulator.enabled}}
 
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{include "united-manufacturing-hub.fullname" .}}-opcuasimulatorv2-deployment
+  name: {{include "united-manufacturing-hub.fullname" .}}-modbussimulator-deployment
   labels:
     {{- include "united-manufacturing-hub.labels.common" . | nindent 4}}
-    {{- include "united-manufacturing-hub.labels.opcuasimulatorv2" . | nindent 4}}
+    {{- include "united-manufacturing-hub.labels.modbussimulator" . | nindent 4}}
 spec:
   replicas: 1
   selector:
     matchLabels:
       {{- include "united-manufacturing-hub.matchLabels" . | nindent 6}}
-      {{- include "united-manufacturing-hub.labels.opcuasimulatorv2" . | nindent 6}}
+      {{- include "united-manufacturing-hub.labels.modbussimulator" . | nindent 6}}
   strategy:
     type: RollingUpdate
   template:
     metadata:
       labels:
         {{- include "united-manufacturing-hub.labels.common" . | nindent 8}}
-        {{- include "united-manufacturing-hub.labels.opcuasimulatorv2" . | nindent 8}}
+        {{- include "united-manufacturing-hub.labels.modbussimulator" . | nindent 8}}
     spec:
       volumes:
-        - name: opcuasimulatorv2-config
+        - name: modbussimulator-config
           configMap:
-            name: {{include "united-manufacturing-hub.fullname" .}}-opcuasimulatorv2-config
+            name: {{include "united-manufacturing-hub.fullname" .}}-modbussimulator-config
       containers:
-        - name: {{include "united-manufacturing-hub.fullname" .}}-opcuasimulatorv2
-          image: management.umh.app/oci/iotedge/opc-plc:1.3.2
+        - name: {{include "united-manufacturing-hub.fullname" .}}-modbussimulator
+          image: management.umh.app/oci/oitc/modbus-server:latest
           resources:
             requests:
               cpu: "50m"
@@ -51,27 +51,13 @@ spec:
               cpu: "100m"
               memory: "500Mi"
           ports:
-            - containerPort: 50000
-            - containerPort: 8080
+            - containerPort: 502
           command:
             [
-              "--pn=50000",
-              "--autoaccept",
-              "--sph",
-              "--sn=100",
-              "--sr=10",
-              "--st=uint",
-              "--fn=5",
-              "--fr=1",
-              "--ft=uint",
-              "--gn=5",
-              "--certdnsnames=localhost",
-              "--plchostname=localhost",
-              "--unsecuretransport",
-              "--nodesfile", "/app/nodesfile.json"
+              "-f /server_config.json",
             ]
           volumeMounts:
-          - name: nodesfile-volume
-            mountPath: /app/nodesfile.json
-            subPath: nodesfile.json
+          - name: modbussimulator-config
+            mountPath: /server_config.json
+            subPath: config-modbus.json
 {{end}}
