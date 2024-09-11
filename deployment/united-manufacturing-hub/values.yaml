@@ -46,6 +46,16 @@ _000_commonConfig:
     opcuasimulator:
        enabled: true
 
+    # opcuasimulatorv2 simulates a full-blown OPC UA server
+    # Learn more : https://github.com/Azure-Samples/iot-edge-opc-plc
+    opcuasimulatorv2:
+      enabled: true
+
+    # modbussimulator simulates a full-blown OPC UA server
+    # Learn more : https://github.com/cybcon/modbus-server
+    modbussimulator:
+      enabled: true
+
     # packmlmqttsimulator simulates PackML state data and publishes it over MQTT
     # Learn more: https://github.com/Spruik/PackML-MQTT-Simulator
     packmlmqttsimulator:
