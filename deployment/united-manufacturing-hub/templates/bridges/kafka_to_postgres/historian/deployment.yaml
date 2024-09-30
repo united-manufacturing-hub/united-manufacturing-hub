@@ -13,7 +13,7 @@
 # limitations under the License.
 
 ---
-{{if or .Values.bridges.kafkatopostgresq.enabled .Values._000_commonConfig.datamodel_v2.enabled }}
+{{if or .Values.bridges.kafkatopostgres.enabled .Values._000_commonConfig.datamodel_v2.enabled }}
 
 apiVersion: apps/v1
 kind: Deployment
@@ -38,7 +38,7 @@ metadata:
     # The type of the component
     data-flow-component-type: bridge
 spec:
-  replicas: {{ .Values.bridges.kafkatopostgresq.replicaCount | default 1 }}
+  replicas: {{ .Values.bridges.kafkatopostgres.replicaCount | default 1 }}
   selector:
     matchLabels:
       data-flow-component-uuid: 3e5c91f6-3dfc-45d6-8e9b-f17705e07b4c
@@ -67,9 +67,9 @@ spec:
       containers:
         - name: dfc-3e5c91f6-3dfc-45d6-8e9b-f17705e07b4c-kafka-t-psql-historian
           image:
-            {{- if .Values.bridges.kafkatopostgresq.image }}
-              {{- $repo := .Values.bridges.kafkatopostgresq.image.repository | default "management.umh.app/oci/united-manufacturing-hub/benthos-umh" }}
-              {{- $tag := .Values.bridges.kafkatopostgresq.image.tag | default "0.3.12" }}
+            {{- if .Values.bridges.kafkatopostgres.image }}
+              {{- $repo := .Values.bridges.kafkatopostgres.image.repository | default "management.umh.app/oci/united-manufacturing-hub/benthos-umh" }}
+              {{- $tag := .Values.bridges.kafkatopostgres.image.tag | default "0.3.12" }}
               {{- printf "%s:%s" $repo $tag | quote }}
             {{- else }}
             "management.umh.app/oci/united-manufacturing-hub/benthos-umh:0.3.12"
@@ -104,26 +104,26 @@ spec:
           terminationMessagePath: /dev/termination-log
           terminationMessagePolicy: File
           imagePullPolicy:
-            {{- if .Values.bridges.kafkatopostgresq.image }}
-            {{ .Values.bridges.kafkatopostgresq.image.pullPolicy | default "IfNotPresent" | quote }}
+            {{- if .Values.bridges.kafkatopostgres.image }}
+            {{ .Values.bridges.kafkatopostgres.image.pullPolicy | default "IfNotPresent" | quote }}
             {{- else }}
             "IfNotPresent"
             {{- end }}
 
-          {{- if .Values.bridges.kafkatopostgresq.resources }}
+          {{- if .Values.bridges.kafkatopostgres.resources }}
           resources:
-            {{- if .Values.bridges.kafkatopostgresq.resources.limits }}
+            {{- if .Values.bridges.kafkatopostgres.resources.limits }}
             limits:
-              cpu: #{{ .Values.bridges.kafkatopostgresq.resources.limits.cpu | default "500m" | quote }}
-              memory: #{{ .Values.bridges.kafkatopostgresq.resources.limits.memory | default "450Mi" | quote }}
+              cpu: #{{ .Values.bridges.kafkatopostgres.resources.limits.cpu | default "500m" | quote }}
+              memory: #{{ .Values.bridges.kafkatopostgres.resources.limits.memory | default "450Mi" | quote }}
             {{- else }}
               cpu: "500m"
               memory: "450Mi"
             {{- end }}
-            {{- if .Values.bridges.kafkatopostgresq.resources.requests }}
+            {{- if .Values.bridges.kafkatopostgres.resources.requests }}
             requests:
-              cpu: #{{ .Values.bridges.kafkatopostgresq.resources.requests.cpu | default "400m" | quote }}
-              memory: #{{ .Values.bridges.kafkatopostgresq.resources.requests.memory | default "300Mi" | quote }}
+              cpu: #{{ .Values.bridges.kafkatopostgres.resources.requests.cpu | default "400m" | quote }}
+              memory: #{{ .Values.bridges.kafkatopostgres.resources.requests.memory | default "300Mi" | quote }}
             {{- else }}
               cpu: "400m"
               memory: "300Mi"
