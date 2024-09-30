@@ -36,17 +36,17 @@ _000_commonConfig:
   umhMergePoint: 5
 
 _002_advancedConfig:
-  # Node-Red
-  ##
-  ## Some Node-Red plugins require a specific version of Node-Red, therefore we allow modifying the version here
-  nodeRed:
-    version: "TODO"
-
   # Grafana
   ##
-  ## Some Grafana plugins require a specific version of Grafana, therefore we allow modifying the version here
+  ## Some Grafana plugins require a specific version of Grafana
   grafana:
-    version: "TODO"
+    versionOverwrite: ""
+
+  # Node-Red
+  ##
+  ## Some Node-Red plugins require a specific version of Node-Red
+  nodered:
+      versionOverwrite: ""
 
 _003_legacyConfig:
   # Legacy data model
@@ -214,6 +214,7 @@ grafana:
 nodered:
   mqtt:
     encryptedPassword: ""
+  tag: 3.0.2
   port: 1880
   storageRequest: 1Gi
   env:
@@ -226,3 +227,125 @@ nodered:
     publicHostSecretName: ""
   flows: {}
   settings: {}
+
+redpanda:
+  image:
+    repository: management.umh.app/oci/redpandadata/redpanda
+  fullnameOverride: united-manufacturing-hub-kafka
+  statefulset:
+    replicas: 1
+    initContainerImage:
+      repository: management.umh.app/oci/library/busybox
+  rbac:
+    enabled: true
+  storage:
+    persistentVolume:
+      size: 10Gi
+  listeners:
+    kafka:
+      port: 9092
+  resources:
+    cpu:
+      cores: 1
+    memory:
+      enable_memory_locking: true
+      container:
+        max: 2Gi
+  config:
+    cluster:
+      auto_create_topics_enabled: true
+    tunable:
+      default_topic_partitions: 6
+  tls:
+    enabled: false
+  console:
+    image:
+      registry: management.umh.app/oci
+    serviceAccount:
+      create: false
+    service:
+      type: LoadBalancer
+      port: 8090
+      targetPort: 8080
+    console:
+      config:
+        kafka:
+          brokers:
+            - united-manufacturing-hub-kafka:9092
+
+
+redis:
+  global:
+    imageregistry: management.umh.app/oci
+  image:
+    registry: management.umh.app/oci
+    repository: bitnami/redis
+  architecture: standalone
+  commonConfiguration: |-
+    maxmemory-policy allkeys-lru
+    maxmemory 50mb
+    # Backwards compatability with Redis version 6.*
+    replica-ignore-disk-write-errors yes
+  master:
+    extraFlags:
+      - --maxmemory 50mb
+    livenessProbe:
+      initialDelaySeconds: 5
+    readinessProbe:
+      initialDelaySeconds: 120
+    resources:
+      limits:
+        cpu: 100m
+        memory: 100Mi
+      requests:
+        cpu: 50m
+        memory: 50Mi
+  metrics:
+    enabled: true
+    image:
+      registry: management.umh.app/oci
+  pdb:
+    create: true
+    minAvailable: 2
+  serviceAccount:
+    create: false
+  auth:
+    existingSecret: redis-secret
+    existingSecretPasswordKey: redispassword
+  sentinel:
+    image:
+      registry: management.umh.app/oci
+  volumePermissions:
+    image:
+      registry: management.umh.app/oci
+      repository: bitnami/os-shell
+  sysctl:
+    image:
+      registry: management.umh.app/oci
+      repository: bitnami/os-shell
+
+timescaledb-single:
+  replicaCount: 1
+  image:
+    repository: management.umh.app/oci/timescale/timescaledb-ha
+    tag: pg13.8-ts2.8.0-p1
+    pullPolicy: IfNotPresent
+  prometheus:
+    image:
+      repository: management.umh.app/oci/prometheuscommunity/postgres-exporter
+  patroni:
+    postgresql:
+      create_replica_methods:
+        - basebackup
+  postInit:
+    - configMap:
+        name: timescale-post-init
+        optional: false
+    - secret:
+        name: timescale-post-init-pw
+        optional: false
+  service:
+    primary:
+      type: LoadBalancer
+  serviceAccount:
+    create: false
