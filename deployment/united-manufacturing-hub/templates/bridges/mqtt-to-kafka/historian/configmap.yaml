@@ -49,7 +49,6 @@ data:
     # umh/v1/+/+/+/+/_historian/# (enterprise, site, area, productionLine)
     # umh/v1/+/+/+/+/+/_historian/# (enterprise, site, area, productionLine, workCell)
     # umh/v1/+/+/+/+/+/+/_historian/# (enterprise, site, area, productionLine, workCell, originID)
-    # We will use a HiveMQ shared subscription ($share/<GROUPID>/TOPIC) to allow scaling the number of consumers
 
     input:
       mqtt:
@@ -59,105 +58,102 @@ data:
         dynamic_client_id_suffix: "nanoid"
         auto_replay_nacks: false
         topics:
-          - $share/benthos_mqtt_to_kafka/umh/v1/+/_historian/#
-          - $share/benthos_mqtt_to_kafka/umh/v1/+/+/_historian/#
-          - $share/benthos_mqtt_to_kafka/umh/v1/+/+/+/_historian/#
-          - $share/benthos_mqtt_to_kafka/umh/v1/+/+/+/+/_historian/#
-          - $share/benthos_mqtt_to_kafka/umh/v1/+/+/+/+/+/_historian/#
-          - $share/benthos_mqtt_to_kafka/umh/v1/+/+/+/+/+/+/_historian/#
+           - umh/v1/+/_historian/#
+           - umh/v1/+/+/_historian/#
+           - umh/v1/+/+/+/_historian/#
+           - umh/v1/+/+/+/+/_historian/#
+           - umh/v1/+/+/+/+/+/_historian/#
+           - umh/v1/+/+/+/+/+/+/_historian/#
+
 
     ## Processors
     #
     # This part does the following:
-    # 0. We check if a bridged-by header already exists, if not we create it.
-    # 1. We check if the message was either bridged by us, or the reverse of us (benthos-kafka-to-mqtt-<INSTANCE_NAME>), in any of these cases we discard the message.
-    # 2. We convert the MQTT topic name into a Kafka topic name (replace / with .)
-    # 3. We slice the topic name into a topic and a key, by splitting it at the 5th dot (so after umh.v1.enterprise.site.area) [This is the same behaviour as the old databridge]
-    # 4. Check if the message is a valid JSON object
-    # 4a. If the message is not a valid JSON, we still bridge it, but we set a kafka header (parsing-failure="invalid-json").
-    # 4b. If the message is a valid JSON, we bridge it as is.
-    # 5. In both cases we add a new header to indicate that it was bridged by this benthos instance.
-    #    This key also needs to include our instance name, so we can bridge on multiple devices (We get that from Helm).
-    #    The key should be an json array of bridges the data was passed through.
-    #    bridged-by: ["benthos-mqtt-to-kafka-<INSTANCE_NAME>"]
-    # 6. We can finally bridge the message to Kafka
+    # 1. Create an Kakfa topic from MQTT
+    # 2. Create the split topic, to prevent topic exhaustion inside Kafka
+    # 3. Check that the incoming message is valid JSON
+    # 4. Encode the message as base64 if not valid and wrap it inside a JSON
+    # 5. Check if we previously bridged this message, and drop if we did
+    # 6. Check if the message fulfills the _historian schema, and otherwise tag it via a Kafka Header
+    # 7. Add our own bridge name to the list of bridges
+
 
     pipeline:
       processors:
         - bloblang: |
-            # Step 2
-            let topic = meta("mqtt_topic")
+            ######### Variables #########
+
+            ## Change "default" to the name of the local instance
+            let instance_name = "default"
+
+            ## Defaults to 5, do not change unless you know what you are doing or are asked to do it by UMH
+            let split_point = 5
+
+            ######### END Variables #########
+
+            # Step 1
+            let topic = meta("mqtt_topic").or("")
+            let topic = match {
+              $topic != "" => $topic
+              _ => deleted()
+            }
             let converted_topic = $topic.replace("/", ".")
-            ## Trim leading or trailing dots
             let trimmed_topic = $converted_topic.trim(".")
 
-            # Step 3
+            # Step 2
             let topic_parts = $trimmed_topic.split(".")
-            let kafka_topic = $topic_parts.slice(0, {{.Values._000_commonConfig.datamodel_v2.merge_point}}).join(".")
-            let kafka_key = $topic_parts.slice({{.Values._000_commonConfig.datamodel_v2.merge_point}}).join(".")
+            let topic_length = $topic_parts.length()
+            let min_point = [$split_point,$topic_length].min()
+            let kafka_topic = $topic_parts.slice(0, $min_point).join(".")
+            let kafka_key = $topic_parts.slice($min_point).join(".")
 
             meta "kafka_topic" = $kafka_topic
             meta "kafka_key" = $kafka_key
 
-            let invalid_json = this.parse_json().catch(this.format_json().catch(true))
+            # Step 3
+            let invalid_json = this.catch(true)
 
-            ## If not valid json build a new payload
-            let encoded = this.format_json().catch(this).encode("base64")
-
+            # Step 4
             root = if $invalid_json == true {
               {
                 "parsing_failure": "invalid-json",
-                "payload": $encoded
+                "payload": content().encode("base64")
               }
+            } else {
+              this
+            }
+
+            # Step 5
+            let bridged_by = root.bridged_by.or([])
+            root = if $bridged_by.contains("benthos-kafka-to-mqtt-" + $instance_name) || $bridged_by.contains("benthos-mqtt-to-kafka-" + $instance_name) {
+              deleted()
             } else {
               root
             }
 
-
-            # Step 0
-            ## Check if bridged-by header exists, if not create it
-            let bridged_by = match {
-              this.bridged_by => this.bridged_by
-              _ => []
+            # Step 6
+            let is_historian = $topic.contains("_historian")
+            let valid_schema = if $is_historian {
+              root.json_schema("""{
+                "$schema": "http://json-schema.org/draft-07/schema#",
+                "type": "object",
+                "required": ["timestamp_ms"],
+                "properties": {
+                  "timestamp_ms": {
+                    "type": "integer"
+                  }
+                },
+                "minProperties": 2,
+                "additionalProperties": true
+              }
+              """).catch(false)
+            }else{
+              true
             }
+            meta "parsing_failure" = $valid_schema == false
 
-            # Step 1
-            ## Check if the message was bridged by us, or the reverse of us
-            root = if $bridged_by.contains("benthos-kafka-to-mqtt-{{.Values._000_commonConfig.serialNumber}}") || $bridged_by.contains("benthos-mqtt-to-kafka-{{.Values._000_commonConfig.serialNumber}}") {
-              deleted()
-            } else{
-              root
-            }
-
-            # Step 4 (a/b)
-            let valid_schema = root.json_schema("""{
-              "$schema": "http://json-schema.org/draft-07/schema#",
-              "type": "object",
-              "required": ["timestamp_ms"],
-              "properties": {
-                "timestamp_ms": {
-                  "type": "integer"
-                }
-              },
-              "minProperties": 2,
-              "additionalProperties": true
-            }
-            """).catch(false)
-
-            let parsing_failure = match {
-              $valid_schema == false => true
-              _ => false
-            }
-
-            meta "parsing_failure" = $parsing_failure
-
-
-            # Step 5
-
-            ## Append our bridge to the bridged-by header
-            let bridged_by = $bridged_by.append("benthos-mqtt-to-kafka-{{.Values._000_commonConfig.serialNumber}}")
-
-            ### Transform bridged_by to meta as we are transfering to kafka
+            # Step 7
+            let bridged_by = $bridged_by.append("benthos-mqtt-to-kafka-" + $instance_name)
             meta "bridged_by" = $bridged_by
 
     output:
@@ -168,7 +164,7 @@ data:
               topic: ${! meta("kafka_topic") }
               seed_brokers:
                 - united-manufacturing-hub-kafka.united-manufacturing-hub.svc.cluster.local:9092
-              client_id: mqtt_to_kafka_historian_bridge_{{.Values._000_commonConfig.serialNumber}}
+              client_id: mqtt_to_kafka_historian_bridge
               key: ${! meta("kafka_key") }
               metadata:
                 include_prefixes:
