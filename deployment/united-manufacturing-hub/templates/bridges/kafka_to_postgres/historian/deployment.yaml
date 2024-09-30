@@ -1,0 +1,146 @@
+# Copyright 2023 UMH Systems GmbH
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+---
+{{if or .Values.bridges.kafkatopostgresq.enabled .Values._000_commonConfig.datamodel_v2.enabled }}
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  # This is the name of the component, it should be unique within the namespace (63 chars max as per RFC 1035/1123)
+  name: dfc-3e5c91f6-3dfc-45d6-8e9b-f17705e07b4c-kafka-to-psql-historian
+  # To be scheduled in the open-source namespace
+  namespace: united-manufacturing-hub
+  labels:
+    # This does not change over time
+    data-flow-component-uuid: 3e5c91f6-3dfc-45d6-8e9b-f17705e07b4c
+    # This is the random UUID of the version of the component
+    data-flow-component-version-uuid: d1e65879-0260-478c-9ac9-eeba4d9e84d6
+    # Timestamp of last change to the component in unix milliseconds since epoch
+    data-flow-version: '1727706153093'
+    # Generic label to indicate that this is a data flow component
+    is-data-flow-component: 'true'
+    # Required for mgmtcompanion to manage the component
+    managed-by: mgmtcompanion
+    # Do not allow mgmtcompanion to modify the component
+    data-flow-component-is-read-only: 'true'
+    # The type of the component
+    data-flow-component-type: bridge
+spec:
+  replicas: {{ .Values.bridges.kafkatopostgresq.replicaCount | default 1 }}
+  selector:
+    matchLabels:
+      data-flow-component-uuid: 3e5c91f6-3dfc-45d6-8e9b-f17705e07b4c
+  template:
+    metadata:
+      labels:
+        # This does not change over time
+        data-flow-component-uuid: 3e5c91f6-3dfc-45d6-8e9b-f17705e07b4c
+        # This is the random UUID of the version of the component
+        data-flow-component-version-uuid: 83bd6ace-58f7-4572-9ab4-f8a9237a47dd
+        # Timestamp of last change to the component in unix milliseconds since epoch
+        data-flow-version: '1724661195274'
+        # Generic label to indicate that this is a data flow component
+        is-data-flow-component: 'true'
+        # Required for mgmtcompanion to manage the component
+        managed-by: mgmtcompanion
+        # Do not allow mgmtcompanion to modify the component
+        data-flow-component-is-read-only: 'true'
+        # The type of the component
+        data-flow-component-type: bridge
+    spec:
+      volumes:
+        - name: config
+          configMap:
+            name: dfc-3e5c91f6-3dfc-45d6-8e9b-f17705e07b4c-kafka-t-psql-historian
+      containers:
+        - name: dfc-3e5c91f6-3dfc-45d6-8e9b-f17705e07b4c-kafka-t-psql-historian
+          image:
+            {{- if .Values.bridges.kafkatopostgresq.image }}
+              {{- $repo := .Values.bridges.kafkatopostgresq.image.repository | default "management.umh.app/oci/united-manufacturing-hub/benthos-umh" }}
+              {{- $tag := .Values.bridges.kafkatopostgresq.image.tag | default "0.3.12" }}
+              {{- printf "%s:%s" $repo $tag | quote }}
+            {{- else }}
+            "management.umh.app/oci/united-manufacturing-hub/benthos-umh:0.3.12"
+            {{- end }}
+          ports:
+            - name: http
+              containerPort: 4195
+              protocol: TCP
+          volumeMounts:
+            - name: config
+              readOnly: true
+              mountPath: /benthos.yaml
+              subPath: benthos.yaml
+          livenessProbe:
+            httpGet:
+              path: /ping
+              port: http
+              scheme: HTTP
+            timeoutSeconds: 1
+            periodSeconds: 10
+            successThreshold: 1
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: http
+              scheme: HTTP
+            timeoutSeconds: 1
+            periodSeconds: 10
+            successThreshold: 1
+            failureThreshold: 3
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+          imagePullPolicy:
+            {{- if .Values.bridges.kafkatopostgresq.image }}
+            {{ .Values.bridges.kafkatopostgresq.image.pullPolicy | default "IfNotPresent" | quote }}
+            {{- else }}
+            "IfNotPresent"
+            {{- end }}
+
+          {{- if .Values.bridges.kafkatopostgresq.resources }}
+          resources:
+            {{- if .Values.bridges.kafkatopostgresq.resources.limits }}
+            limits:
+              cpu: #{{ .Values.bridges.kafkatopostgresq.resources.limits.cpu | default "500m" | quote }}
+              memory: #{{ .Values.bridges.kafkatopostgresq.resources.limits.memory | default "450Mi" | quote }}
+            {{- else }}
+              cpu: "500m"
+              memory: "450Mi"
+            {{- end }}
+            {{- if .Values.bridges.kafkatopostgresq.resources.requests }}
+            requests:
+              cpu: #{{ .Values.bridges.kafkatopostgresq.resources.requests.cpu | default "400m" | quote }}
+              memory: #{{ .Values.bridges.kafkatopostgresq.resources.requests.memory | default "300Mi" | quote }}
+            {{- else }}
+              cpu: "400m"
+              memory: "300Mi"
+            {{- end }}
+          {{- else }}
+          resources:
+              limits:
+                cpu: "500m"
+                memory: "450Mi"
+              requests:
+                cpu: "400m"
+                memory: "300Mi"
+          {{- end }}
+      restartPolicy: Always
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 1
+{{end}}
