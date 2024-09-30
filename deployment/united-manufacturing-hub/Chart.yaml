@@ -49,6 +49,19 @@ dependencies:
     version: 0.16.0-prerelease1
     repository: https://management.umh.app/helm/bitnami
     condition: _000_commonConfig.datastorage.enabled
+    import-values:
+      - parent: global.imageregistry
+        child: registry
+      - parent: image.registry
+        child: registry
+      - parent: metrics.image.registry
+        child: registry
+      - parent: sentinel.image.registry
+        child: registry
+      - parent: volumePermissions.image.registry
+        child: registry
+      - parent: sysctl.image.registry
+        child: registry
 
   - name: grafana
     version: 0.16.0-prerelease1
@@ -57,6 +70,21 @@ dependencies:
     import-values:
       - parent: image.tag
         child: _002_advancedConfig.grafana.versionOverwrite
+      # Overwrite all image registry settings
+      - parent: global.imageregistry
+        child: registry
+      - parent: image.registry
+        child: registry
+      - parent: downloadDashboardsImage.registry
+        child: registry
+      - parent: testFramework.image.registry
+        child: registry
+      - parent: initChownData.image.registry
+        child: registry
+      - parent: sidecar.image.registry
+        child: registry
+      - parent: imageRenderer.image.registry
+        child: registry
 
   - name: timescaledb-single
     version: 0.16.0-prerelease1
@@ -67,3 +95,6 @@ dependencies:
     repository: https://management.umh.app/helm/redpanda
     version: 0.16.0-prerelease1
     condition: _000_commonConfig.infrastructure.kafka.enabled
+    import-values:
+      - parent: console.image.registry
+        child: registry
