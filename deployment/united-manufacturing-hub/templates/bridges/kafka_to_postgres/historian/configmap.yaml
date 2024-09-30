@@ -13,7 +13,7 @@
 # limitations under the License.
 
 ---
-{{if or .Values.bridges.kafkatopostgresq.enabled .Values._000_commonConfig.datamodel_v2.enabled }}
+{{if or .Values.bridges.kafkatopostgres.enabled .Values._000_commonConfig.datamodel_v2.enabled }}
 
 apiVersion: v1
 kind: ConfigMap
@@ -321,17 +321,12 @@ data:
         pattern: fan_out
         outputs:
           # Uncomment these lines to enable debugging output
-          #- stdout:
-          #    codec: lines
+  {{ if and (.Values.bridges.kafkatopostgres.debug | default false) (.Values.bridges.kafkatopostgres.debug.enableStdout | default false) }}
+          - stdout:
+              codec: lines
+  {{ end }}
           - switch:
               cases:
-                # Log to stdout if timestamp is null, missing, or not a number
-                # This can be useful for debugging
-                #- check: this.timestamp == null || this.timestamp == ""
-                #  output:
-                #    stdout:
-                #      codec: lines
-
                 # We have two tables (tag and tag_string):
                 # - 'tag' is for numeric values.
                 # - 'tag_string' is for any other data types.
