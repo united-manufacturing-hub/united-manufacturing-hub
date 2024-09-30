@@ -1,0 +1,212 @@
+# Copyright 2023 UMH Systems GmbH
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distrirbuted on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+---
+_000_commonConfig:
+  instanceName: "default"  # usually the hostname
+
+  # Classic vs Lite Mode
+  ##
+  ## 0: Classic Mode
+  ## 1: Lite Mode
+  ## Classic Mode is the default mode, which includes all features
+  ## Lite Mode is a reduced feature set, which is useful for edge devices
+  featureLevel: 0
+
+  # UMH Merge point
+  ##
+  ## This is the point where a Kafka topic will be split into a Topic and Key
+  ## We do this for perfomance reasons (Kafka is designed to handle a small number of topics with a large number of messages)
+  ## By default this will be "5", meaning that our topic structure:
+  ## umh.v1.<enterprise>.<site>.<area>.<productionLine>.<workCell>.<originID>.<_schema>.<schema context>
+  ## will be split into:
+  ## Topic: umh.v1.<enterprise>.<area>.<productionLine>
+  ## Key: <workCell>.<originID>.<_schema>.<schema context>
+  umhMergePoint: 5
+
+_002_advancedConfig:
+  # Node-Red
+  ##
+  ## Some Node-Red plugins require a specific version of Node-Red, therefore we allow modifying the version here
+  nodeRed:
+    version: "TODO"
+
+  # Grafana
+  ##
+  ## Some Grafana plugins require a specific version of Grafana, therefore we allow modifying the version here
+  grafana:
+    version: "TODO"
+
+_003_legacyConfig:
+  # Legacy data model
+  ##
+  ## This enables the "ia" data model for the device
+  ## Note: This data model is unsupported and will be removed in a future release
+  enableLegacyDataModel: true
+
+
+### Do not modify anything below this line, unless you know what you are doing ###
+
+
+grafana:
+  global:
+    imageregistry: management.umh.app/oci
+  image:
+    registry: management.umh.app/oci
+  downloadDashboardsImage:
+    registry: management.umh.app/oci
+  serviceAccount:
+    create: false
+  ## this assertion should be disabled since installation breaks https://github.com/grafana/helm-charts/issues/2899
+  assertNoLeakedSecrets: false
+  testFramework:
+    enabled: false
+    image:
+      registry: management.umh.app/oci
+  service:
+    enabled: true
+    type: LoadBalancer
+    port: 8080
+  extraInitContainers:
+    - image: management.umh.app/oci/united-manufacturing-hub/grafana-umh:1.2.1
+      name: init-plugins
+      imagePullPolicy: IfNotPresent
+      command: ['sh', '-c', 'cp -r /plugins /var/lib/grafana/']
+      volumeMounts:
+        - name: storage
+          mountPath: /var/lib/grafana
+  persistence:
+    enabled: true
+    size: 5Gi
+  initChownData:
+    enabled: true
+    image:
+      registry: management.umh.app/oci
+  sidecar:
+    image:
+      registry: management.umh.app/oci
+  imageRenderer:
+    image:
+      registry: management.umh.app/oci
+  admin:
+    existingSecret: "grafana-secret"
+    userKey: adminuser
+    passwordKey: adminpassword
+  env:
+    GF_PLUGINS_ALLOW_LOADING_UNSIGNED_PLUGINS: umh-datasource,umh-v2-datasource
+  envValueFrom:
+    FACTORYINSIGHT_BASEURL:
+      secretKeyRef:
+        name: factoryinsight-secret
+        key: baseURL
+    FACTORYINSIGHT_APIKEY:
+      secretKeyRef:
+        name: factoryinsight-secret
+        key: apiKey
+    FACTORYINSIGHT_CUSTOMERID:
+      secretKeyRef:
+        name: factoryinsight-secret
+        key: customerID
+    FACTORYINSIGHT_PASSWORD:
+      secretKeyRef:
+        name: factoryinsight-secret
+        key: password
+    GRAFANAREADER_USER:
+      secretKeyRef:
+        name: grafana-secret
+        key: databaseuser
+    GRAFANAREADER_PASSWORD:
+      secretKeyRef:
+        name: grafana-secret
+        key: databasepassword
+
+  ## Configure grafana datasources
+  ## ref: http://docs.grafana.org/administration/provisioning/#datasources
+  ##
+  datasources:
+    datasources.yaml:
+      apiVersion: 1
+      datasources:
+        - name: umh-v2-datasource
+          # <string, required> datasource type. Required
+          type: umh-v2-datasource
+          # <string, required> access mode. proxy or direct (Server or Browser in the UI). Required
+          access: proxy
+          # <int> org id. will default to orgId 1 if not specified
+          orgId: 1
+          url: "http://united-manufacturing-hub-factoryinsight-service/"
+          jsonData:
+            customerID: $FACTORYINSIGHT_CUSTOMERID
+            apiKey: $FACTORYINSIGHT_PASSWORD
+            baseURL: "http://united-manufacturing-hub-factoryinsight-service/"
+            apiKeyConfigured: true
+          version: 1
+          # <bool> allow users to edit datasources from the UI.
+          isDefault: false
+          editable: false
+        # <string, required> name of the datasource. Required
+        - name: umh-datasource
+          # <string, required> datasource type. Required
+          type: umh-datasource
+          # <string, required> access mode. proxy or direct (Server or Browser in the UI). Required
+          access: proxy
+          # <int> org id. will default to orgId 1 if not specified
+          orgId: 1
+          url: "http://united-manufacturing-hub-factoryinsight-service/"
+          jsonData:
+            customerId: $FACTORYINSIGHT_CUSTOMERID
+            apiKey: $FACTORYINSIGHT_PASSWORD
+            serverURL: "http://united-manufacturing-hub-factoryinsight-service/"
+            apiKeyConfigured: true
+          version: 1
+          # <bool> allow users to edit datasources from the UI.
+          isDefault: false
+          editable: false
+        # https://grafana.com/docs/grafana/latest/datasources/postgres/
+        - name: UMH TimescaleDB
+          type: postgres
+          url: united-manufacturing-hub:5432
+          user: $GRAFANAREADER_USER
+          isDefault: true
+          secureJsonData:
+            password: $GRAFANAREADER_PASSWORD
+          jsonData:
+            database: umh_v2
+            sslmode: 'require' # disable/require/verify-ca/verify-full
+            maxOpenConns: 100 # Grafana v5.4+
+            maxIdleConns: 100 # Grafana v5.4+
+            maxIdleConnsAuto: true # Grafana v9.5.1+
+            connMaxLifetime: 14400 # Grafana v5.4+
+            postgresVersion: 1300 # 903=9.3, 904=9.4, 905=9.5, 906=9.6, 1000=10
+            timescaledb: true
+
+  ## Grafana's primary configuration
+  ## NOTE: values in map will be converted to ini format
+  ## ref: http://docs.grafana.org/installation/configuration/
+  ##
+  grafana.ini:
+    paths:
+      data: /var/lib/grafana/data
+      logs: /var/log/grafana
+      plugins: /var/lib/grafana/plugins
+      provisioning: /etc/grafana/provisioning
+    database:
+      host: united-manufacturing-hub
+      user: "grafana"
+      name: "grafana"
+      password: "changeme"
+      ssl_mode: require
+      type: postgres
+    log.console:
+      format: json
