@@ -18,12 +18,18 @@
 _000_commonConfig:
   serialNumber: "default"  # usually the hostname
 
+  # Classic vs Lite Mode
+  # Lite only enables:
+  #  - MQTT Broker
+  # Classic enables everything
+  #
+  # Set to "true" to enable Classic Mode (default)
+  # Set to "false" to enable Lite Mode
+  # Note: A downgrade from Classic to Lite can lead to issues and is not recommended
+  classicMode: true
+
   datamodel_v2:
     enabled: true
-    benthos:
-      historian:
-        mqtt_to_kafka:
-          enabled: true
     database:
       name: "umh_v2"
       host: "united-manufacturing-hub"
@@ -106,7 +112,6 @@ _000_commonConfig:
     # apache kafka, mqttkafkabridge, kowl, kafkatopostgresql
     kafka:
       enabled: true
-      defaultTopics: ia.test.test.test.processValue;ia.test.test.test.count;umh.v1.kafka.newTopic
 
   # timescaledb, factoryinsight, grafana, redis
   # datastorage is the basic infrastructure to get messages from MQTT, storing them in a database and exposing a REST API with KPIs that can be used in Grafana (contains timescaledb, factoryinsight, mqtt-to-postgresql, grafana, vernemq, )
