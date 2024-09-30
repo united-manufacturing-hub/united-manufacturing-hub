@@ -54,6 +54,9 @@ dependencies:
     version: 0.16.0-prerelease1
     repository: https://management.umh.app/helm/grafana
     condition: _000_commonConfig.datastorage.enabled
+    import-values:
+      - parent: image.tag
+        child: _002_advancedConfig.grafana.versionOverwrite
 
   - name: timescaledb-single
     version: 0.16.0-prerelease1
