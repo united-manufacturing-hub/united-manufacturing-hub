@@ -210,3 +210,19 @@ grafana:
       type: postgres
     log.console:
       format: json
+
+nodered:
+  mqtt:
+    encryptedPassword: ""
+  port: 1880
+  storageRequest: 1Gi
+  env:
+    NODE_RED_ENABLE_SAFE_MODE: false
+  timezone: Berlin/Europe
+  serviceType: LoadBalancer
+  ingress:
+    enabled: false
+    publicHost: ""
+    publicHostSecretName: ""
+  flows: {}
+  settings: {}
