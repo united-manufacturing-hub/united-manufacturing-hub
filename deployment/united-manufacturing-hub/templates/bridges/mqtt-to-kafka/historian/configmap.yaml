@@ -54,7 +54,7 @@ data:
       mqtt:
         urls:
           - united-manufacturing-hub-mqtt.united-manufacturing-hub.svc.cluster.local:1883
-        client_id: "benthos_mqtt_to_kafka"
+        client_id: "mqtt_to_kafka_historian_bridge"
         dynamic_client_id_suffix: "nanoid"
         auto_replay_nacks: false
         topics:

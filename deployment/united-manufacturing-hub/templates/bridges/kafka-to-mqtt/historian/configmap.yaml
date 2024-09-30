@@ -39,72 +39,114 @@ metadata:
     data-flow-component-type: bridge
 data:
   benthos.yaml: |
+    # IMPORTANT
+    #
+    # Change the variables in the bloblang processor to match your setup.
+    # Also, ensure to set the ORIGIN_NAME and DESTINATION_NAME in the client_id (output section) to match your setup.
+
     ## Input
     #
-    # This configuration bridges _historian messages from Kafka to MQTT
+    # This configuration bridges umh.v1 messages from Kafka to MQTT.
+    # umh.v1.* (as we have topic/key splitting)
 
     input:
       kafka_franz:
-        consumer_group: "benthos_kafka_to_mqtt"
-        topics:
-          - umh.v1.*
-        regexp_topics: true
         seed_brokers:
           - united-manufacturing-hub-kafka.united-manufacturing-hub.svc.cluster.local:9092
+        regexp_topics: true
+        topics: ['umh.v1.*']
+        consumer_group: "kafka_to_mqtt_historian_bridge"
         auto_replay_nacks: false
 
     ## Processors
     #
 
 
+    ## Processors
+    #
+    # This part does the following:
+    # 1. Reassemble the topic from the Kafka topic and key.
+    # 2. Check if the reassembled topic contains the schema (_historian, etc.).
+    # 3. Validate that the message is valid JSON.
+    # 4. Check if we previously bridged this message, and drop it if we did.
+    # 5. Add our own bridge name to the list of bridges in the payload.
+    # 6. Prepare the MQTT topic by replacing dots with slashes.
+
     pipeline:
       processors:
         - bloblang: |
-            # Re-assembly the topic
-            let t = metadata("kafka_topic").catch("")
-            let k = metadata("kafka_key").catch("")
-            let raw_topic = $t + "." + $k
-            # remove trailing dot
-            let kafka_topic_restored = $raw_topic.trim(".")
+            ######### Variables #########
 
-            # Replace . with /
-            let topic = $kafka_topic_restored.replace_all(".", "/")
+            ## Change "local_instance_name" to the name of the local instance
+            let local_instance_name = "ORIGIN_NAME"
 
-            # Set the MQTT topic in metadata for output
-            meta "mqtt_topic" = $topic
+            ## Defaults to "_historian"
+            let bridge_schema = "_historian"
 
-            # Check if bridged
-            let bridged_by = metadata("bridged_by").parse_json().catch([])
+            ######### END Variables #########
+            meta "local_instance_name" = $local_instance_name
 
-            root = if $bridged_by.contains("benthos-mqtt-to-kafka-default") || $bridged_by.contains("benthos-kafka-to-mqtt-default") {
+            # Step 1: Reassemble the topic
+            let kafka_topic = meta("kafka_topic")
+            let kafka_key = meta("kafka_key").or("")
+            let reassembled_topic = $kafka_topic + "." + $kafka_key
+            let trimmed_topic = $reassembled_topic.trim(".")
+            meta "trimmed_topic" = $trimmed_topic
+
+            # Step 2: Check if the topic contains the schema
+            let is_bridge_schema = $trimmed_topic.contains($bridge_schema)
+            root = if $is_bridge_schema {
+              root
+            } else {
+              deleted()
+            }
+
+        - bloblang: |
+            # Step 3: Validate that the message is valid JSON
+            let invalid_json = this.catch(true)
+            root = if $invalid_json == true {
+              deleted()
+            } else {
+              this
+            }
+
+        - bloblang: |
+            let local_instance_name = meta("local_instance_name")
+            # Step 4: Check if the message was previously bridged
+            let bridged_by = meta("bridged_by").or("[]")
+            let bridged_by = $bridged_by.parse_json().or([])
+            meta "bridged_by" = $bridged_by
+            root = if $bridged_by.contains("benthos-mqtt-to-kafka-" + $local_instance_name) || $bridged_by.contains("benthos-kafka-to-mqtt-" + $local_instance_name) {
               deleted()
             } else {
               root
             }
 
-            meta "bridged_by" = $bridged_by
-
         - bloblang: |
-            let bridged_by = metadata("bridged_by").catch([])
-            # Set ourself into header
-            let kafka_bridged_by = $bridged_by.append("benthos-kafka-to-mqtt-default")
-
+            let bridged_by = meta("bridged_by")
+            let bridged_by = $bridged_by.parse_json()
+            let trimmed_topic = meta("trimmed_topic")
+            let local_instance_name = meta("local_instance_name")
             root = this
-            # Update the message itself to include the kafka_bridged_by information
-            root.bridged_by = $kafka_bridged_by
+
+            # Step 5: Add our own bridge name to the list of bridges in the payload
+            root.bridged_by = $bridged_by.append("benthos-kafka-to-mqtt-" + $local_instance_name)
+
+            # Step 6: Prepare the MQTT topic by replacing dots with slashes
+            let mqtt_topic = $trimmed_topic.replace(".", "/")
+            meta "mqtt_topic" = $mqtt_topic
+
 
     output:
       broker:
         pattern: fan_out
         outputs:
-          -   mqtt:
-                urls:
-                  - united-manufacturing-hub-mqtt.united-manufacturing-hub.svc.cluster.local:1883
-                topic: ${! meta("mqtt_topic") }
-                client_id: "benthos_kafka_to_mqtt"
-                dynamic_client_id_suffix: "nanoid"
-                qos: 1
-                retained: false
+          - mqtt:
+              urls:
+                - united-manufacturing-hub-mqtt.united-manufacturing-hub.svc.cluster.local:1883
+              client_id: "kafka_to_mqtt_historian_<ORIGIN_NAME>_to_<DESTINATION_NAME>_bridge"
+              dynamic_client_id_suffix: "nanoid"
+              topic: '${! meta("mqtt_topic") }'
   {{ if and (.Values.bridges.kafkatomqtt.debug | default false) (.Values.bridges.kafkatomqtt.debug.enableStdout | default false) }}
           - stdout:
               codec: lines
