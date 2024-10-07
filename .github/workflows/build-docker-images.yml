@@ -42,6 +42,7 @@ jobs:
       PR_ID: ${{ github.event.pull_request.number }}
     outputs:
       BUILD_TAG: ${{ steps.build-and-output.outputs.BUILD_TAG }}
+      SHORT_TAG: ${{ steps.build-and-output.outputs.SHORT_TAG }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
