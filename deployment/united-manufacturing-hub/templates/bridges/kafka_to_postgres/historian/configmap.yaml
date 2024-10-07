@@ -13,7 +13,7 @@
 # limitations under the License.
 
 ---
-{{if or .Values.bridges.kafkatopostgres.enabled .Values._000_commonConfig.datamodel_v2.enabled }}
+{{if .Values._000_commonConfig.featureLevel | default 0 | int64 eq 0}}
 
 apiVersion: v1
 kind: ConfigMap

@@ -13,7 +13,7 @@
 # limitations under the License.
 
 ---
-{{if or .Values.bridges.kafkatomqtt.enabled .Values._000_commonConfig.datamodel_v2.enabled }}
+{{if .Values._000_commonConfig.featureLevel | default 0 | int64 eq 0}}
 
 apiVersion: v1
 kind: ConfigMap
@@ -147,8 +147,4 @@ data:
               client_id: "kafka_to_mqtt_historian_<ORIGIN_NAME>_to_<DESTINATION_NAME>_bridge"
               dynamic_client_id_suffix: "nanoid"
               topic: '${! meta("mqtt_topic") }'
-  {{ if and (.Values.bridges.kafkatomqtt.debug | default false) (.Values.bridges.kafkatomqtt.debug.enableStdout | default false) }}
-          - stdout:
-              codec: lines
-  {{ end }}
 {{end}}
