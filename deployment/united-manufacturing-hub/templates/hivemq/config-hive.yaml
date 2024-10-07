@@ -87,9 +87,8 @@ data:
                 <allow-extensions>true</allow-extensions>
                 <tls>
                     <protocols>
-                        {{range .Values.mqtt_broker.service.wss.tls_versions}}
-                        <protocol>{{.}}</protocol>
-                        {{end}}
+                        <protocol>TLSv1.3</protocol>
+                        <protocol>TLSv1.2</protocol>
                     </protocols>
                     <keystore>
                         <path>/stores/keystore.jks</path>
@@ -102,9 +101,14 @@ data:
                     </truststore>
                     <client-authentication-mode>REQUIRED</client-authentication-mode>
                     <cipher-suites>
-                        {{range .Values.mqtt_broker.service.wss.cipher_suites}}
-                        <cipher-suite>{{.}}</cipher-suite>
-                        {{end}}
+                        <cipher-suite>TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384</cipher-suite>
+                        <cipher-suite>TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256</cipher-suite>
+                        <cipher-suite>TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256</cipher-suite>
+                        <cipher-suite>TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA</cipher-suite>
+                        <cipher-suite>TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA</cipher-suite>
+                        <cipher-suite>TLS_RSA_WITH_AES_128_GCM_SHA256</cipher-suite>
+                        <cipher-suite>TLS_RSA_WITH_AES_128_CBC_SHA</cipher-suite>
+                        <cipher-suite>TLS_RSA_WITH_AES_256_CBC_SHA</cipher-suite>
                     </cipher-suites>
                     <prefer-server-cipher-suites>true</prefer-server-cipher-suites>
                 </tls>
