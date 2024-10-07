@@ -12,7 +12,7 @@ lint:
 
 # Template the Helm chart for debugging (using default values.yaml)
 template:
-	helm template $(CHART_NAME) $(CHART_PATH) --debug
+	helm template $(CHART_NAME) $(CHART_PATH) --debug --values $(CHART_PATH)/values.yaml > $(CHART_PATH)/rendered.yaml
 
 # Package the Helm chart (create the .tgz)
 package:

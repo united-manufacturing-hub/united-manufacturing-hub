@@ -21,10 +21,6 @@ metadata:
   labels:
     {{- include "united-manufacturing-hub.labels.common" . | nindent 4}}
     {{- include "united-manufacturing-hub.labels.metrics-cron" . | nindent 4}}
-  {{if .Values.metrics.annotations}}
-  annotations:
-    {{- toYaml .Values.metrics.annotations | nindent 4}}
-  {{end}}
 spec:
   schedule: "0 */4 * * *"
   successfulJobsHistoryLimit: 0
