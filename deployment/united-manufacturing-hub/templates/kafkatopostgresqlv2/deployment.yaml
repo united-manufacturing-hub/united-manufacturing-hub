@@ -13,7 +13,7 @@
 # limitations under the License.
 
 ---
-{{if and .Values._000_commonConfig.infrastructure.kafka.enabled .Values._000_commonConfig.datastorage.enabled .Values._000_commonConfig.datamodel_v2.enabled}}
+{{if .Values.tags.classic }}
 
 apiVersion: apps/v1
 kind: Deployment
@@ -22,12 +22,8 @@ metadata:
   labels:
     {{- include "united-manufacturing-hub.labels.common" . | nindent 4}}
     {{- include "united-manufacturing-hub.labels.kafkatopostgresqlv2" . | nindent 4}}
-  {{if .Values.kafkatopostgresqlv2.annotations}}
-  annotations:
-    {{- toYaml .Values.kafkatopostgresqlv2.annotations | nindent 4}}
-  {{end}}
 spec:
-  replicas: {{.Values.kafkatopostgresqlv2.replicas}}
+  replicas: 1
   selector:
     matchLabels:
       {{- include "united-manufacturing-hub.matchLabels" . | nindent 6}}
@@ -53,11 +49,7 @@ spec:
       terminationGracePeriodSeconds: 180
       containers:
         - name: {{include "united-manufacturing-hub.fullname" .}}-kafkatopostgresqlv2
-          {{if .Values.kafkatopostgresqlv2.image.tag}}
-          image: {{.Values.kafkatopostgresqlv2.image.repository}}:{{.Values.kafkatopostgresqlv2.image.tag}}{{- if .Values._000_commonConfig.racedetector.enabled}}-race{{- end}}
-          {{- else}}
-          image: {{.Values.kafkatopostgresqlv2.image.repository}}:{{.Chart.AppVersion}}{{- if .Values._000_commonConfig.racedetector.enabled}}-race{{- end}}
-          {{end}}
+          image: "{{.Values.image.registry}}/united-manufacturing-hub/kafka-to-postgresql-v2:{{.Chart.AppVersion}}"
           imagePullPolicy: IfNotPresent
           ports:
             - name: metrics
@@ -66,32 +58,27 @@ spec:
             - name: healthcheck
               containerPort: 8086
               protocol: TCP
-          {{if .Values._000_commonConfig.debug.enableFGTrace}}
-            - containerPort: 1337
-              name: fgtrace
-              protocol: TCP
-          {{end}}
           env:
             - name: POSTGRES_HOST
-              value: {{.Values._000_commonConfig.datamodel_v2.database.host}}
+              value: united-manufacturing-hub
             - name: POSTGRES_DATABASE
               value: umh_v2
             - name: POSTGRES_USER
               value: kafkatopostgresqlv2
             - name: POSTGRES_PASSWORD
-              value: {{.Values.kafkatopostgresqlv2.database.password}}
+              value: changemetoo
             - name: POSTGRES_SSLMODE
               value: "require"
             - name: POSTGRES_PORT
               value: "5432"
             - name: POSTGRES_LRU_CACHE_SIZE
-              value: {{.Values.kafkatopostgresqlv2.asset.cache.lru.size | quote}}
+              value: "1000"
             - name: VALUE_CHANNEL_SIZE
-              value: {{.Values.kafkatopostgresqlv2.workers.channel.size | quote}}
+              value: "10000"
             - name: WORKER_MULTIPLIER
-              value: {{.Values.kafkatopostgresqlv2.workers.goroutines.multiplier | quote}}
+              value: "16"
             - name: LOGGING_LEVEL
-              value: {{.Values.kafkatopostgresqlv2.logging.level | quote}}
+              value: "PRODUCTION"
 
             - name: KAFKA_BROKERS
               value: {{include "united-manufacturing-hub.fullname" .}}-kafka:9092
@@ -114,27 +101,27 @@ spec:
             httpGet:
               path: /live
               port: 8086
-            failureThreshold: {{.Values.kafkatopostgresqlv2.probes.startup.failureThreshold}}
-            initialDelaySeconds: {{.Values.kafkatopostgresqlv2.probes.startup.initialDelaySeconds}}
-            periodSeconds: {{.Values.kafkatopostgresqlv2.probes.startup.periodSecondss}}
+            failureThreshold: 30
+            initialDelaySeconds: 10
+            periodSeconds: 10
           livenessProbe:
             httpGet:
               path: /live
               port: 8086
-            periodSeconds: {{.Values.kafkatopostgresqlv2.probes.liveness.periodSeconds}}
+            periodSeconds: 5
           # Not really useful as we don't expose any HTTP endpoint, but good for metrics
           readinessProbe:
             httpGet:
               path: /ready
               port: 8086
-            periodSeconds: {{.Values.kafkatopostgresqlv2.probes.readiness.periodSeconds}}
+            periodSeconds: 5
           resources:
             limits:
-              cpu: {{.Values.kafkatopostgresqlv2.resources.limits.cpu}}
-              memory: {{.Values.kafkatopostgresqlv2.resources.limits.memory}}
+              cpu: 1000m
+              memory: 300Mi
             requests:
-              cpu: {{.Values.kafkatopostgresqlv2.resources.requests.cpu}}
-              memory: {{.Values.kafkatopostgresqlv2.resources.requests.memory}}
+              cpu: 100m
+              memory: 150Mi
       serviceAccountName: ""
       restartPolicy: Always
 {{end}}

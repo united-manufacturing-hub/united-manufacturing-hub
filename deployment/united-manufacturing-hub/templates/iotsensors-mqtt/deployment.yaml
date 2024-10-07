@@ -13,7 +13,7 @@
 # limitations under the License.
 
 ---
-{{if .Values._000_commonConfig.datasources.iotsensorsmqtt.enabled}}
+{{if .Values.tags.classic }}
 
 apiVersion: apps/v1
 kind: Deployment
@@ -42,18 +42,14 @@ spec:
             name: {{include "united-manufacturing-hub.fullname" .}}-iotsensors-mqtt
       containers:
         - name: {{include "united-manufacturing-hub.fullname" .}}-iotsensorsmqtt
-          {{if .Values.iotsensorsmqtt.tag}}
-          image: {{.Values.iotsensorsmqtt.image}}:{{.Values.iotsensorsmqtt.tag}}
-          {{- else}}
-          image: {{.Values.iotsensorsmqtt.image}}:latest
-          {{end}}
+          image: "{{.Values.image.registry}}/amineamaach/sensors-mqtt:v1.0.0"
           resources:
-            limits:
-              cpu: {{.Values.iotsensorsmqtt.resources.limits.cpu}}
-              memory: {{.Values.iotsensorsmqtt.resources.limits.memory}}
             requests:
-              cpu: {{.Values.iotsensorsmqtt.resources.requests.cpu}}
-              memory: {{.Values.iotsensorsmqtt.resources.requests.memory}}
+              cpu: "10m"
+              memory: "20Mi"
+            limits:
+              cpu: "30m"
+              memory: "50Mi"
           volumeMounts:
             - mountPath: /configs
               name: iotsensors-mqtt-config
