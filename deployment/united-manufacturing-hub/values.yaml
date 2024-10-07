@@ -13,16 +13,17 @@
 # limitations under the License.
 
 ---
+
+# Classic vs Lite Mode
+##
+## Classic Mode is the default mode, which includes all features
+## Lite Mode is a reduced feature set, which is useful for edge devices
+tags:
+  classic: true
+  lite: false
+
 _000_commonConfig:
   instanceName: "default"  # usually the hostname
-
-  # Classic vs Lite Mode
-  ##
-  ## 0: Classic Mode
-  ## 1: Lite Mode
-  ## Classic Mode is the default mode, which includes all features
-  ## Lite Mode is a reduced feature set, which is useful for edge devices
-  featureLevel: 0
 
   # UMH Merge point
   ##
@@ -57,7 +58,6 @@ _003_legacyConfig:
 
 
 ### Do not modify anything below this line, unless you know what you are doing ###
-
 image:
   registry: management.umh.app/oci
 
