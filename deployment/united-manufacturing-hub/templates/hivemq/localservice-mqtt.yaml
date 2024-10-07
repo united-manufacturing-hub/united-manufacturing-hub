@@ -25,30 +25,22 @@ metadata:
 spec:
   type: LoadBalancer
   ports:
-    {{- if .Values.mqtt_broker.service.mqtt.enabled }}
-    - port: {{ .Values.mqtt_broker.service.mqtt.port }}
+    - port: 1883
       targetPort: mqtt
       protocol: TCP
       name: mqtt
-    {{- end }}
-    {{- if .Values.mqtt_broker.service.mqtts.enabled }}
-    - port: {{ .Values.mqtt_broker.service.mqtts.port }}
+    - port: 8883
       targetPort: mqtts
       protocol: TCP
       name: mqtts
-    {{- end }}
-    {{- if .Values.mqtt_broker.service.ws.enabled }}
-    - port: {{ .Values.mqtt_broker.service.ws.port }}
+    - port: 8080
       targetPort: ws
       protocol: TCP
       name: ws
-    {{- end }}
-    {{- if .Values.mqtt_broker.service.wss.enabled }}
-    - port: {{ .Values.mqtt_broker.service.wss.port }}
+    - port: 8443
       targetPort: wss
       protocol: TCP
       name: wss
-    {{- end }}
   selector:
     {{- include "united-manufacturing-hub.labels.hivemqce" . | nindent 4}}
 {{end}}
