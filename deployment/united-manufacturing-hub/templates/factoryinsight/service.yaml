@@ -21,10 +21,6 @@ metadata:
   labels:
     {{- include "united-manufacturing-hub.labels.common" . | nindent 4}}
     {{- include "united-manufacturing-hub.labels.factoryinsight" . | nindent 4}}
-  {{if .Values.factoryinsight.service.annotations}}
-  annotations:
-    {{- toYaml .Values.factoryinsight.service.annotations | nindent 4}}
-  {{end}}
 spec:
   type: ClusterIP
   ports:

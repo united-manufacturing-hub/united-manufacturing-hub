@@ -300,9 +300,5 @@ app.kubernetes.io/name: {{ include "united-manufacturing-hub.name" . }}-kafkatop
 Create the name of the service account to use
 */}}
 {{- define "united-manufacturing-hub.serviceAccountName" -}}
-{{- if .Values.serviceAccount.create }}
-{{- default (include "united-manufacturing-hub.fullname" .) .Values.serviceAccount.name }}
-{{- else }}
-{{- default "default" .Values.serviceAccount.name }}
-{{- end }}
+{{- include "united-manufacturing-hub.fullname" . }}
 {{- end }}

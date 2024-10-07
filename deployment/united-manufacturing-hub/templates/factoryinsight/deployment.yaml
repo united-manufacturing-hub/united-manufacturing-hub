@@ -22,10 +22,6 @@ metadata:
   labels:
     {{- include "united-manufacturing-hub.labels.common" . | nindent 4}}
     {{- include "united-manufacturing-hub.labels.factoryinsight" . | nindent 4}}
-  {{if .Values.factoryinsight.annotations}}
-  annotations:
-    {{- toYaml .Values.factoryinsight.annotations | nindent 4}}
-  {{end}}
 spec:
   replicas: 2
   selector:
@@ -80,7 +76,7 @@ spec:
             - name: POSTGRES_HOST
               value: "united-manufacturing-hub"
             - name: POSTGRES_PORT
-              value: {{.Values.factoryinsight.db_port | quote}}
+              value: "5432"
             - name: POSTGRES_DATABASE
               value: "factoryinsight"
             - name: POSTGRES_USER
