@@ -108,8 +108,8 @@ jobs:
           echo "BUILD_TAG=${BUILD_TAG}" >> $GITHUB_OUTPUT
           echo "BUILD_TAG=${BUILD_TAG}"
 
-          echo "SHORT_TAG={GIT_TAG}" >> $GITHUB_OUTPUT
-          echo "SHORT_TAG={GIT_TAG}"
+          echo "SHORT_TAG=${GIT_TAG}" >> $GITHUB_OUTPUT
+          echo "SHORT_TAG=${GIT_TAG}"
 
 
   create-manifests:
