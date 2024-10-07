@@ -174,8 +174,4 @@ data:
               batching:
                 count: 1000
                 period: 100ms
-  {{ if and (.Values.bridges.mqtttokafka.debug | default false) (.Values.bridges.mqtttokafka.debug.enableStdout | default false) }}
-          - stdout:
-              codec: lines
-  {{ end }}
 {{end}}
