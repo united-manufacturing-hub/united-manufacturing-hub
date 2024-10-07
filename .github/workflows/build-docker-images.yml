@@ -29,16 +29,12 @@ jobs:
       contents: read
     strategy:
       matrix:
-        component: [ 'factoryinsight', 'grafana-umh', 'hivemq-init', 'kafka-init', 'metrics', 'sensorconnect', 'barcodereader' ]
+        component: [ 'factoryinsight', 'grafana-umh', 'hivemq-init' ]
         architecture: [ 'amd64', 'arm64' ]
         exclude:
           - component: 'factoryinsight'
             architecture: 'arm64'
           - component: 'kafka-init'
-            architecture: 'arm64'
-          - component: 'sensorconnect'
-            architecture: 'arm64'
-          - component: 'barcodereader'
             architecture: 'arm64'
     runs-on:
       group: ${{ matrix.architecture == 'arm64' && 'arc-runners-small' || 'arc-runners' }}
