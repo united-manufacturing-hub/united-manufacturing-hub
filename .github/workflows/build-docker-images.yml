@@ -110,8 +110,8 @@ jobs:
             echo "sensorconnect=true" >> $GITHUB_OUTPUT
           fi
 
-          # Special case: We have changes to the deployment/Chart.yaml file (build everything)
-          if git diff --name-only $previousSHA $currentSHA | grep -E '^(deployment/Chart.yaml)'; then
+          # Special case: We have changes to the deployment/united-manufacturing-hub/Chart.yaml file (build everything)
+          if git diff --name-only $previousSHA $currentSHA | grep -E '^(deployment/united-manufacturing-hub/Chart.yaml)'; then
             echo "Building all images"
             echo "barcodereader=true" >> $GITHUB_OUTPUT
             echo "factoryinsight=true" >> $GITHUB_OUTPUT
