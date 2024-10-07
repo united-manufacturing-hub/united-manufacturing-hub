@@ -48,40 +48,12 @@ dependencies:
   - name: redis
     version: 0.16.0-prerelease1
     repository: https://management.umh.app/helm/bitnami
-    import-values:
-      - parent: global.imageregistry
-        child: image
-      - parent: image
-        child: image
-      - parent: metrics.image
-        child: image
-      - parent: sentinel.image
-        child: image
-      - parent: volumePermissions.image
-        child: image
-      - parent: sysctl.image
-        child: image
     tags:
       - classic
 
   - name: grafana
     version: 0.16.0-prerelease1
     repository: https://management.umh.app/helm/grafana
-    import-values:
-      - parent: global.imageregistry
-        child: image
-      - parent: image
-        child: image
-      - parent: downloadDashboardsimage
-        child: image
-      - parent: testFramework.image
-        child: image
-      - parent: initChownData.image
-        child: image
-      - parent: sidecar.image
-        child: image
-      - parent: imageRenderer.image
-        child: image
     tags:
       - classic
 
@@ -94,8 +66,5 @@ dependencies:
   - name: redpanda
     repository: https://management.umh.app/helm/redpanda
     version: 0.16.0-prerelease1
-    import-values:
-      - parent: console.image
-        child: image
     tags:
       - classic
