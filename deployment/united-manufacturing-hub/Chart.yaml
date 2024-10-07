@@ -68,9 +68,6 @@ dependencies:
     version: 0.16.0-prerelease1
     repository: https://management.umh.app/helm/grafana
     import-values:
-      - parent: image.tag
-        child: _002_advancedConfig.grafana.versionOverwrite
-      # Overwrite all image registry settings
       - parent: global.imageregistry
         child: image
       - parent: image

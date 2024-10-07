@@ -36,19 +36,6 @@ _000_commonConfig:
   ## Key: <workCell>.<originID>.<_schema>.<schema context>
   umhMergePoint: 5
 
-_002_advancedConfig:
-  # Grafana
-  ##
-  ## Some Grafana plugins require a specific version of Grafana
-  grafana:
-    versionOverwrite: ""
-
-  # Node-Red
-  ##
-  ## Some Node-Red plugins require a specific version of Node-Red
-  nodered:
-      versionOverwrite: ""
-
 _003_legacyConfig:
   # Legacy data model
   ##
@@ -57,11 +44,17 @@ _003_legacyConfig:
   enableLegacyDataModel: true
 
 
+###################################################################################
 ### Do not modify anything below this line, unless you know what you are doing ###
+###################################################################################
+
 image:
   registry: management.umh.app/oci
 
 grafana:
+  image:
+    # Use this to overwrite the default grafana image
+    tag: ""
   serviceAccount:
     create: false
   ## this assertion should be disabled since installation breaks https://github.com/grafana/helm-charts/issues/2899
