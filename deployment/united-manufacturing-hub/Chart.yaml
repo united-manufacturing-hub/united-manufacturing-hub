@@ -8,7 +8,7 @@
 #
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# WITHOUT WARRANTIES OR 
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
@@ -48,7 +48,6 @@ dependencies:
   - name: redis
     version: 0.16.0-prerelease1
     repository: https://management.umh.app/helm/bitnami
-    condition: _000_commonConfig.datastorage.enabled
     import-values:
       - parent: global.imageregistry
         child: image
@@ -62,11 +61,12 @@ dependencies:
         child: image
       - parent: sysctl.image
         child: image
+    tags:
+      - classic
 
   - name: grafana
     version: 0.16.0-prerelease1
     repository: https://management.umh.app/helm/grafana
-    condition: _000_commonConfig.datastorage.enabled
     import-values:
       - parent: image.tag
         child: _002_advancedConfig.grafana.versionOverwrite
@@ -85,16 +85,20 @@ dependencies:
         child: image
       - parent: imageRenderer.image
         child: image
+    tags:
+      - classic
 
   - name: timescaledb-single
     version: 0.16.0-prerelease1
     repository: https://management.umh.app/helm/timescale
-    condition: _000_commonConfig.datastorage.enabled
+    tags:
+      - classic
 
   - name: redpanda
     repository: https://management.umh.app/helm/redpanda
     version: 0.16.0-prerelease1
-    condition: _000_commonConfig.infrastructure.kafka.enabled
     import-values:
       - parent: console.image
         child: image
+    tags:
+      - classic
