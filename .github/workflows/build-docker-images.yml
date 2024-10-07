@@ -94,15 +94,15 @@ jobs:
           export PLATFORM=${{ matrix.architecture }}
 
           if [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == "refs/heads/main" ]]; then
-            export BUILD_TAG=${{ matrix.component }}:latest-${PLATFORM}
+            export BUILD_TAG=ghcr.io/united-manufacturing-hub/${{ matrix.component }}:latest-${PLATFORM}
           elif [[ ("${{ github.event_name }}" == "push" && "${{ github.ref }}" == "refs/heads/staging") || "${{ github.event.pull_request.head.ref }}" == "staging" ]]; then
-            export BUILD_TAG=${{ matrix.component }}:staging-${PLATFORM}
+            export BUILD_TAG=ghcr.io/united-manufacturing-hub/${{ matrix.component }}:staging-${PLATFORM}
           elif [[ "${{ github.event_name }}" == "pull_request" ]]; then
-            export BUILD_TAG=${{ matrix.component }}:pr-${{ github.event.pull_request.number }}-${PLATFORM}
+            export BUILD_TAG=ghcr.io/united-manufacturing-hub/${{ matrix.component }}:pr-${{ github.event.pull_request.number }}-${PLATFORM}
           elif [[ "${{ github.event_name }}" == "merge_group" ]]; then
-            export BUILD_TAG=${{ matrix.component }}:$(git rev-parse --abbrev-ref HEAD)-${PLATFORM}
+            export BUILD_TAG=ghcr.io/united-manufacturing-hub/${{ matrix.component }}:$(git rev-parse --abbrev-ref HEAD)-${PLATFORM}
           elif [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == refs/tags/* ]]; then
-            export BUILD_TAG=${{ matrix.component }}:${GIT_TAG}-${PLATFORM}
+            export BUILD_TAG=ghcr.io/united-manufacturing-hub/${{ matrix.component }}:${GIT_TAG}-${PLATFORM}
           fi
 
           docker buildx build --platform linux/${PLATFORM} --provenance=false --progress=plain \
@@ -111,9 +111,13 @@ jobs:
           echo "BUILD_TAG=${BUILD_TAG}" >> $GITHUB_OUTPUT
           echo "BUILD_TAG=${BUILD_TAG}"
 
+          # Short tag is build_tag without ghcr.io/united-manufacturing-hub/ prefix
+          echo "SHORT_TAG=${BUILD_TAG#ghcr.io/united-manufacturing-hub/}" >> $GITHUB_OUTPUT
+          echo "SHORT_TAG=${BUILD_TAG#ghcr.io/united-manufacturing-hub/}"
+
   create-manifests:
     needs: build-docker
-    if: needs.build-docker.outputs.BUILD_TAG != ''
+    if: needs.build-docker.outputs.SHORT_TAG != ''
     permissions:
       contents: read
       packages: write
@@ -141,7 +145,7 @@ jobs:
       - name: Check if ARM64 image exists
         id: check_arm64
         run: |
-          if docker manifest inspect ghcr.io/united-manufacturing-hub/${{ matrix.component}}:${{ needs.build-docker.outputs.BUILD_TAG }}-arm64 >/dev/null 2>&1; then
+          if docker manifest inspect ghcr.io/united-manufacturing-hub/${{ matrix.component}}:${{ needs.build-docker.outputs.SHORT_TAG }}-arm64 >/dev/null 2>&1; then
             echo "ARM64_EXISTS=true" >> $GITHUB_ENV
           else
             echo "ARM64_EXISTS=false" >> $GITHUB_ENV
@@ -149,11 +153,13 @@ jobs:
 
       - name: Create multiarch manifests
         run: |
+          # Remove ghcr.io prefix from the tag
+          TAG=${TAG#ghcr.io/united-manufacturing-hub/}
           if [ "${{ env.ARM64_EXISTS }}" = "true" ]; then
-            docker buildx imagetools create -t ghcr.io/united-manufacturing-hub/${{ matrix.component}}:${{ needs.build-docker.outputs.BUILD_TAG }} \
-              ghcr.io/united-manufacturing-hub/${{ matrix.component}}:${{ needs.build-docker.outputs.BUILD_TAG }}-amd64 \
-              ghcr.io/united-manufacturing-hub/${{ matrix.component}}:${{ needs.build-docker.outputs.BUILD_TAG }}-arm64
+            docker buildx imagetools create -t ghcr.io/united-manufacturing-hub/${{ matrix.component}}:${{ needs.build-docker.outputs.SHORT_TAG }} \
+              ghcr.io/united-manufacturing-hub/${{ matrix.component}}:${{ needs.build-docker.outputs.SHORT_TAG }}-amd64 \
+              ghcr.io/united-manufacturing-hub/${{ matrix.component}}:${{ needs.build-docker.outputs.SHORT_TAG }}-arm64
           else
-            docker buildx imagetools create -t ghcr.io/united-manufacturing-hub/${{ matrix.component}}:${{ needs.build-docker.outputs.BUILD_TAG }} \
-              ghcr.io/united-manufacturing-hub/${{ matrix.component}}:${{ needs.build-docker.outputs.BUILD_TAG }}-amd64
+            docker buildx imagetools create -t ghcr.io/united-manufacturing-hub/${{ matrix.component}}:${{ needs.build-docker.outputs.SHORT_TAG }} \
+              ghcr.io/united-manufacturing-hub/${{ matrix.component}}:${{ needs.build-docker.outputs.SHORT_TAG }}-amd64
           fi
