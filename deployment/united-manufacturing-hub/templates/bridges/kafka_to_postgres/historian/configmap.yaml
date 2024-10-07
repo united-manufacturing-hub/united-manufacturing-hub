@@ -13,7 +13,7 @@
 # limitations under the License.
 
 ---
-{{if .Values._000_commonConfig.featureLevel | default 0 | int64 | eq 0}}
+{{if .Values.tags.classic }}
 
 apiVersion: v1
 kind: ConfigMap
@@ -320,11 +320,6 @@ data:
       broker:
         pattern: fan_out
         outputs:
-          # Uncomment these lines to enable debugging output
-  {{ if and (.Values.bridges.kafkatopostgres.debug | default false) (.Values.bridges.kafkatopostgres.debug.enableStdout | default false) }}
-          - stdout:
-              codec: lines
-  {{ end }}
           - switch:
               cases:
                 # We have two tables (tag and tag_string):
