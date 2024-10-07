@@ -55,12 +55,19 @@ grafana:
   image:
     # Use this to overwrite the default grafana image
     tag: ""
+    registry: management.umh.app/oci
+  global:
+    imageregistry: management.umh.app/oci
+  downloadDashboardsImage:
+    registry: management.umh.app/oci
   serviceAccount:
     create: false
   ## this assertion should be disabled since installation breaks https://github.com/grafana/helm-charts/issues/2899
   assertNoLeakedSecrets: false
   testFramework:
     enabled: false
+    image:
+      registry: management.umh.app/oci
   service:
     enabled: true
     type: LoadBalancer
@@ -78,6 +85,11 @@ grafana:
     size: 5Gi
   initChownData:
     enabled: true
+    image:
+      registry: management.umh.app/oci
+  imageRenderer:
+    image:
+      registry: management.umh.app/oci
   admin:
     existingSecret: "grafana-secret"
     userKey: adminuser
@@ -247,10 +259,15 @@ redpanda:
         kafka:
           brokers:
             - united-manufacturing-hub-kafka:9092
-
+  console:
+    image:
+      registry: management.umh.app/oci
 
 redis:
+  global:
+    imageregistry: management.umh.app/oci
   image:
+    registry: management.umh.app/oci
     repository: bitnami/redis
   architecture: standalone
   commonConfiguration: |-
@@ -274,6 +291,8 @@ redis:
         memory: 50Mi
   metrics:
     enabled: true
+    image:
+      registry: management.umh.app/oci
   pdb:
     create: true
     minAvailable: 2
@@ -282,11 +301,16 @@ redis:
   auth:
     existingSecret: redis-secret
     existingSecretPasswordKey: redispassword
+  sentinel:
+    image:
+      registry: management.umh.app/oci
   volumePermissions:
     image:
+      registry: management.umh.app/oci
       repository: bitnami/os-shell
   sysctl:
     image:
+      registry: management.umh.app/oci
       repository: bitnami/os-shell
 
 timescaledb-single:
@@ -314,4 +338,3 @@ timescaledb-single:
       type: LoadBalancer
   serviceAccount:
     create: false
-

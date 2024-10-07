@@ -95,3 +95,6 @@ values_*.yaml
 development_*.yaml
 test.yaml
 venv
+
+# Ignore generated files
+/deployment/united-manufacturing-hub/rendered.yaml

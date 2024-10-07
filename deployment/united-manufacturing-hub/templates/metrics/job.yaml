@@ -25,9 +25,6 @@ metadata:
     {{- include (printf "united-manufacturing-hub.labels.metrics-%s" ($reason | lower)) $ | nindent 4 }}
   annotations:
     helm.sh/hook: {{ $hook }}
-    {{- if $.Values.metrics.annotations}}
-    {{- toYaml $.Values.metrics.annotations | nindent 4}}
-    {{- end}}
 spec:
   ttlSecondsAfterFinished: 60
   template:

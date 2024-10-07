@@ -41,7 +41,7 @@ spec:
         runAsUser: 1000
       containers:
       - name: {{include "united-manufacturing-hub.fullname" .}}-nodered
-        image: "{{.Values.image.registry}}/nodered/node-red:{{.Values.nodered.tag}}"
+        image: "{{.Values.image.registry}}/nodered/node-red:{{.Values.nodered.tag | default "3.0.2"}}"
         ports:
         - containerPort: 1880
           name: nodered-ui
