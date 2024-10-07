@@ -86,7 +86,7 @@ spec:
           {{- else}}
           image: {{.Values.kafkatopostgresql.image.repository}}:{{.Chart.AppVersion}}{{- if .Values._000_commonConfig.racedetector.enabled}}-race{{- end}}
           {{end}}
-          imagePullPolicy: {{.Values.kafkatopostgresql.image.pullPolicy}}
+          imagePullPolicy: IfNotPresent
           {{ if and (hasKey .Values._000_commonConfig.infrastructure.kafka "useSSL") .Values._000_commonConfig.infrastructure.kafka.useSSL }}
           volumeMounts:
             - name: {{include "united-manufacturing-hub.fullname" .}}-kafkatopostgresql-certificates

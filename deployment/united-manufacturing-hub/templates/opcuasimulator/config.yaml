@@ -13,7 +13,7 @@
 # limitations under the License.
 
 ---
-{{if .Values._000_commonConfig.datasources.opcuasimulator.enabled}}
+{{if .Values.tags.classic }}
 
 apiVersion: v1
 kind: ConfigMap
@@ -52,13 +52,9 @@ data:
       "CERTIFICATE":
       {
         "Hosts" : [
-        {{- range $index, $host := .Values.opcuasimulator.certadds.hosts }}
-          {{- if $index }},{{ end }}
-          {{- $host | quote }}
-        {{- end }}
-        ]{{if .Values.opcuasimulator.certadds.ips}},
-        "IPS" : [{{.Values.opcuasimulator.certadds.ips}}]
-        {{end}}
+            "united-manufacturing-hub-opcuasimulator-service",
+            "united-manufacturing-hub-opcuasimulator-service.united-manufacturing-hub.svc.cluster.local"
+        ]
       }
     }
 
