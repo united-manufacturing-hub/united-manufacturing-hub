@@ -108,9 +108,9 @@ jobs:
           echo "BUILD_TAG=${BUILD_TAG}" >> $GITHUB_OUTPUT
           echo "BUILD_TAG=${BUILD_TAG}"
 
-          # Short tag is build_tag without ghcr.io/united-manufacturing-hub/ prefix
-          echo "SHORT_TAG=${BUILD_TAG#ghcr.io/united-manufacturing-hub/}" >> $GITHUB_OUTPUT
-          echo "SHORT_TAG=${BUILD_TAG#ghcr.io/united-manufacturing-hub/}"
+          echo "SHORT_TAG={GIT_TAG}" >> $GITHUB_OUTPUT
+          echo "SHORT_TAG={GIT_TAG}"
+
 
   create-manifests:
     needs: build-docker
