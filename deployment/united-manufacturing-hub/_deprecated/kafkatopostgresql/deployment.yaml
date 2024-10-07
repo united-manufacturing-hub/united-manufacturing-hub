@@ -107,9 +107,9 @@ spec:
             - name: POSTGRES_HOST
               value: {{.Values.factoryinsight.db_host}}
             - name: POSTGRES_DATABASE
-              value: {{.Values.factoryinsight.db_database}}
+              value: factoryinsight
             - name: POSTGRES_USER
-              value: {{.Values.factoryinsight.db_user}}
+              value: factoryinsight
             - name: POSTGRES_PASSWORD
               value: {{.Values._000_commonConfig.datastorage.db_password}}
             - name: POSTGRES_SSLMODE
