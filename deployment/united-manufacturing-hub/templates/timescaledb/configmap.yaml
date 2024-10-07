@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 ---
-{{if .Values._000_commonConfig.datastorage.enabled}}
+{{if .Values.tags.classic }}
 
 apiVersion: v1
 kind: ConfigMap
