@@ -61,7 +61,7 @@ spec:
           {{- else}}
           image: {{.Values.mqtt_broker.initContainer.hivemqextensioninit.image.repository}}:{{.Chart.AppVersion}}
           {{end}}
-          imagePullPolicy: {{.Values.mqtt_broker.initContainer.hivemqextensioninit.image.pullPolicy}}
+          imagePullPolicy: IfNotPresent
           volumeMounts:
             - mountPath: /opt/hivemq-ce-2024.1/extensions
               name: {{include "united-manufacturing-hub.fullname" .}}-hivemqce-extensions
@@ -79,7 +79,7 @@ spec:
           {{- else}}
           image: {{.Values.mqtt_broker.image.repository}}:2024.1
           {{end}}
-          imagePullPolicy: {{.Values.mqtt_broker.image.pullPolicy}}
+          imagePullPolicy: IfNotPresent
           env:
             - name: HIVEMQ_ALLOW_ALL_CLIENTS
               {{- if .Values.mqtt_broker.rbacEnabled }}
