@@ -2,7 +2,7 @@ CHART_PATH := deployment/united-manufacturing-hub
 HELM_REPO_PATH := deployment/helm-repo
 CHART_NAME := united-manufacturing-hub
 VERSION := $(shell grep '^version:' $(CHART_PATH)/Chart.yaml | awk '{print $2}')
-BRANCH_NAME := $(shell git rev-parse --abbrev-ref HEAD)
+BRANCH_NAME := $(shell git rev-parse --abbrev-ref HEAD | sed 's/\./-/g')
 
 .PHONY: all lint template package index release package-prerelease index-prerelease release-prerelease
 
