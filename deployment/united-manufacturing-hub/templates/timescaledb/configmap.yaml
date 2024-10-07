@@ -32,11 +32,11 @@ data:
     \c {{index .Values "grafana" "grafana.ini" "database" "name"}}
     GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO {{index .Values "grafana" "grafana.ini" "database" "user"}};
     
-    CREATE USER {{.Values.factoryinsight.db_user}};
-    CREATE DATABASE {{.Values.factoryinsight.db_database}} OWNER {{.Values.factoryinsight.db_user}};
-    GRANT ALL PRIVILEGES ON DATABASE {{.Values.factoryinsight.db_database}} TO {{.Values.factoryinsight.db_user}};
+    CREATE USER factoryinsight;
+    CREATE DATABASE factoryinsight OWNER factoryinsight;
+    GRANT ALL PRIVILEGES ON DATABASE factoryinsight TO factoryinsight;
 
-    \c {{.Values.factoryinsight.db_database}}
+    \c factoryinsight
 
     -- Extend the database with TimescaleDB
     CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE;
@@ -7579,23 +7579,23 @@ data:
     INSERT INTO stateTable(timestamp,asset_id,state) VALUES ('2020-11-26 00:00:05+00',1,40000);
     INSERT INTO stateTable(timestamp,asset_id,state) VALUES ('2020-11-26 00:00:04+00',1,10000);
 
-    GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO {{.Values.factoryinsight.db_user}};
-    GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO {{.Values.factoryinsight.db_user}};
+    GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO factoryinsight;
+    GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO factoryinsight;
 
     ------------------------------------------------------
     -------------------- DATAMODEL V2 --------------------
     ------------------------------------------------------
-    CREATE USER {{.Values.kafkatopostgresqlv2.database.user}};
-    CREATE DATABASE {{.Values._000_commonConfig.datamodel_v2.database.name}} OWNER {{.Values.kafkatopostgresqlv2.database.user}};
-    GRANT ALL PRIVILEGES ON DATABASE {{.Values._000_commonConfig.datamodel_v2.database.name}} TO {{.Values.kafkatopostgresqlv2.database.user}};
+    CREATE USER kafkatopostgresqlv2;
+    CREATE DATABASE umh_v2 OWNER kafkatopostgresqlv2;
+    GRANT ALL PRIVILEGES ON DATABASE umh_v2 TO kafkatopostgresqlv2;
 
-    CREATE USER {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
-    GRANT USAGE ON SCHEMA public TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
+    CREATE USER grafanareader;
+    GRANT USAGE ON SCHEMA public TO grafanareader;
 
-    \c {{.Values._000_commonConfig.datamodel_v2.database.name}}
+    \c umh_v2
 
-    GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO {{.Values.kafkatopostgresqlv2.database.user}};
-    GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO {{.Values.kafkatopostgresqlv2.database.user}};
+    GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO kafkatopostgresqlv2;
+    GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO kafkatopostgresqlv2;
 
     -------------------- ASSET TABLE --------------------
     CREATE TABLE IF NOT EXISTS asset (
@@ -7671,7 +7671,7 @@ data:
     END;
     ' LANGUAGE plpgsql;
 
-    GRANT EXECUTE ON FUNCTION {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.get_asset_id(text, text, text, text, text, text) TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
+    GRANT EXECUTE ON FUNCTION umh_v2.public.get_asset_id(text, text, text, text, text, text) TO grafanareader;
 
     -- $$
     CREATE OR REPLACE FUNCTION get_asset_id_stable(
@@ -7702,7 +7702,7 @@ data:
     END;
     ' LANGUAGE plpgsql STABLE;
 
-    GRANT EXECUTE ON FUNCTION {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.get_asset_id_stable(text, text, text, text, text, text) TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
+    GRANT EXECUTE ON FUNCTION umh_v2.public.get_asset_id_stable(text, text, text, text, text, text) TO grafanareader;
 
     -- $$
     CREATE OR REPLACE FUNCTION get_asset_id_immutable(
@@ -7733,7 +7733,7 @@ data:
     END;
     ' LANGUAGE plpgsql IMMUTABLE;
 
-    GRANT EXECUTE ON FUNCTION {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.get_asset_id_immutable(text, text, text, text, text, text) TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
+    GRANT EXECUTE ON FUNCTION umh_v2.public.get_asset_id_immutable(text, text, text, text, text, text) TO grafanareader;
     -- $$
 
     CREATE OR REPLACE FUNCTION get_asset_ids(
@@ -7757,7 +7757,7 @@ data:
     END;
     ' LANGUAGE plpgsql;
 
-    GRANT EXECUTE ON FUNCTION {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.get_asset_ids(text, text, text, text, text, text) TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
+    GRANT EXECUTE ON FUNCTION umh_v2.public.get_asset_ids(text, text, text, text, text, text) TO grafanareader;
 
     -- $$
 
@@ -7782,7 +7782,7 @@ data:
     END;
     ' LANGUAGE plpgsql STABLE;
 
-    GRANT EXECUTE ON FUNCTION {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.get_asset_ids_stable(text, text, text, text, text, text) TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
+    GRANT EXECUTE ON FUNCTION umh_v2.public.get_asset_ids_stable(text, text, text, text, text, text) TO grafanareader;
 
     -------------------- ANALYTICS --------------------
 
@@ -7884,27 +7884,27 @@ data:
 
     -------------------- FIX OWNERS --------------------
 
-    ALTER TABLE asset OWNER TO {{.Values.kafkatopostgresqlv2.database.user}};
-    ALTER TABLE tag OWNER TO {{.Values.kafkatopostgresqlv2.database.user}};
-    ALTER TABLE tag_string OWNER TO {{.Values.kafkatopostgresqlv2.database.user}};
+    ALTER TABLE asset OWNER TO kafkatopostgresqlv2;
+    ALTER TABLE tag OWNER TO kafkatopostgresqlv2;
+    ALTER TABLE tag_string OWNER TO kafkatopostgresqlv2;
 
-    ALTER TABLE work_order OWNER TO {{.Values.kafkatopostgresqlv2.database.user}};
-    ALTER TABLE product_type OWNER TO {{.Values.kafkatopostgresqlv2.database.user}};
-    ALTER TABLE product OWNER TO {{.Values.kafkatopostgresqlv2.database.user}};
-    ALTER TABLE shift OWNER TO {{.Values.kafkatopostgresqlv2.database.user}};
-    ALTER TABLE state OWNER TO {{.Values.kafkatopostgresqlv2.database.user}};
-
-
-    GRANT SELECT ON {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.asset TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
-    GRANT SELECT ON {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.tag TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
-    GRANT SELECT ON {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.tag_string TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
+    ALTER TABLE work_order OWNER TO kafkatopostgresqlv2;
+    ALTER TABLE product_type OWNER TO kafkatopostgresqlv2;
+    ALTER TABLE product OWNER TO kafkatopostgresqlv2;
+    ALTER TABLE shift OWNER TO kafkatopostgresqlv2;
+    ALTER TABLE state OWNER TO kafkatopostgresqlv2;
 
 
-    GRANT SELECT ON {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.work_order TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
-    GRANT SELECT ON {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.product_type TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
-    GRANT SELECT ON {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.product TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
-    GRANT SELECT ON {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.shift TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
-    GRANT SELECT ON {{.Values._000_commonConfig.datamodel_v2.database.name}}.public.state TO {{.Values._000_commonConfig.datamodel_v2.grafana.dbreader}};
+    GRANT SELECT ON umh_v2.public.asset TO grafanareader;
+    GRANT SELECT ON umh_v2.public.tag TO grafanareader;
+    GRANT SELECT ON umh_v2.public.tag_string TO grafanareader;
+
+
+    GRANT SELECT ON umh_v2.public.work_order TO grafanareader;
+    GRANT SELECT ON umh_v2.public.product_type TO grafanareader;
+    GRANT SELECT ON umh_v2.public.product TO grafanareader;
+    GRANT SELECT ON umh_v2.public.shift TO grafanareader;
+    GRANT SELECT ON umh_v2.public.state TO grafanareader;
 
 
     __SQL__
