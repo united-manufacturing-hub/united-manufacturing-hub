@@ -366,10 +366,8 @@ data:
                         period: 5s     # Batch records every 5 seconds
                         count: 10000   # Or when 10,000 records are collected
                       max_in_flight: 512  # Allow up to 512 concurrent inserts
-
-    inject:
-      cache_resources:
-        - label: id_cache
-          memory:
-            default_ttl: 24h  # Cache entries expire after 24 hours
+    cache_resources:
+      - label: id_cache
+        memory:
+          default_ttl: 24h  # Cache entries expire after 24 hours
 {{end}}
