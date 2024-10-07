@@ -51,17 +51,17 @@ dependencies:
     condition: _000_commonConfig.datastorage.enabled
     import-values:
       - parent: global.imageregistry
-        child: registry
-      - parent: image.registry
-        child: registry
-      - parent: metrics.image.registry
-        child: registry
-      - parent: sentinel.image.registry
-        child: registry
-      - parent: volumePermissions.image.registry
-        child: registry
-      - parent: sysctl.image.registry
-        child: registry
+        child: image
+      - parent: image
+        child: image
+      - parent: metrics.image
+        child: image
+      - parent: sentinel.image
+        child: image
+      - parent: volumePermissions.image
+        child: image
+      - parent: sysctl.image
+        child: image
 
   - name: grafana
     version: 0.16.0-prerelease1
@@ -72,19 +72,19 @@ dependencies:
         child: _002_advancedConfig.grafana.versionOverwrite
       # Overwrite all image registry settings
       - parent: global.imageregistry
-        child: registry
-      - parent: image.registry
-        child: registry
-      - parent: downloadDashboardsImage.registry
-        child: registry
-      - parent: testFramework.image.registry
-        child: registry
-      - parent: initChownData.image.registry
-        child: registry
-      - parent: sidecar.image.registry
-        child: registry
-      - parent: imageRenderer.image.registry
-        child: registry
+        child: image
+      - parent: image
+        child: image
+      - parent: downloadDashboardsimage
+        child: image
+      - parent: testFramework.image
+        child: image
+      - parent: initChownData.image
+        child: image
+      - parent: sidecar.image
+        child: image
+      - parent: imageRenderer.image
+        child: image
 
   - name: timescaledb-single
     version: 0.16.0-prerelease1
@@ -96,5 +96,5 @@ dependencies:
     version: 0.16.0-prerelease1
     condition: _000_commonConfig.infrastructure.kafka.enabled
     import-values:
-      - parent: console.image.registry
-        child: registry
+      - parent: console.image
+        child: image
