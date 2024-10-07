@@ -94,15 +94,15 @@ jobs:
           export PLATFORM=${{ matrix.architecture }}
 
           if [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == "refs/heads/main" ]]; then
-            export BUILD_TAG=ghcr.io/united-manufacturing-hub/${{ matrix.component }}:latest-${PLATFORM}
+            export BUILD_TAG=${{ matrix.component }}:latest-${PLATFORM}
           elif [[ ("${{ github.event_name }}" == "push" && "${{ github.ref }}" == "refs/heads/staging") || "${{ github.event.pull_request.head.ref }}" == "staging" ]]; then
-            export BUILD_TAG=ghcr.io/united-manufacturing-hub/${{ matrix.component }}:staging-${PLATFORM}
+            export BUILD_TAG=${{ matrix.component }}:staging-${PLATFORM}
           elif [[ "${{ github.event_name }}" == "pull_request" ]]; then
-            export BUILD_TAG=ghcr.io/united-manufacturing-hub/${{ matrix.component }}:pr-${{ github.event.pull_request.number }}-${PLATFORM}
+            export BUILD_TAG=${{ matrix.component }}:pr-${{ github.event.pull_request.number }}-${PLATFORM}
           elif [[ "${{ github.event_name }}" == "merge_group" ]]; then
-            export BUILD_TAG=ghcr.io/united-manufacturing-hub/${{ matrix.component }}:$(git rev-parse --abbrev-ref HEAD)-${PLATFORM}
+            export BUILD_TAG=${{ matrix.component }}:$(git rev-parse --abbrev-ref HEAD)-${PLATFORM}
           elif [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == refs/tags/* ]]; then
-            export BUILD_TAG=ghcr.io/united-manufacturing-hub/${{ matrix.component }}:${GIT_TAG}-${PLATFORM}
+            export BUILD_TAG=${{ matrix.component }}:${GIT_TAG}-${PLATFORM}
           fi
 
           docker buildx build --platform linux/${PLATFORM} --provenance=false --progress=plain \
@@ -124,7 +124,7 @@ jobs:
         shell: bash
     strategy:
       matrix:
-        component: [ 'factoryinsight', 'grafana-umh', 'hivemq-init', 'kafka-init', 'metrics', 'sensorconnect', 'barcodereader' ]
+        component: [ 'factoryinsight', 'grafana-umh', 'hivemq-init' ]
     steps:
       - name: Login to GitHub Container registry
         uses: docker/login-action@v3
