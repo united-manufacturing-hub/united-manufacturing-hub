@@ -46,25 +46,25 @@ sources:
 
 dependencies:
   - name: redis
-    version: 0.16.0-prerelease1
+    version: 18.17.0
     repository: https://management.umh.app/helm/bitnami
     tags:
       - classic
 
   - name: grafana
-    version: 0.16.0-prerelease1
+    version: 7.3.7
     repository: https://management.umh.app/helm/grafana
     tags:
       - classic
 
   - name: timescaledb-single
-    version: 0.16.0-prerelease1
+    version: 0.26.9
     repository: https://management.umh.app/helm/timescale
     tags:
       - classic
 
   - name: redpanda
     repository: https://management.umh.app/helm/redpanda
-    version: 0.16.0-prerelease1
+    version: 5.3.4
     tags:
       - classic
