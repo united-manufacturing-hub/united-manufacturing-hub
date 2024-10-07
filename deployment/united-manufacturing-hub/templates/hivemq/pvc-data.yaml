@@ -31,6 +31,6 @@ spec:
     - ReadWriteOnce
   resources:
     requests:
-      storage: {{.Values.mqtt_broker.persistence.storage.size}}
+      storage: 2Gi
 
 {{end}}

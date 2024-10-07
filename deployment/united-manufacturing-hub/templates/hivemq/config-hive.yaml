@@ -27,44 +27,43 @@ data:
     <?xml version="1.0"?>
     <hivemq xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
         <listeners>
-            {{- if .Values.mqtt_broker.service.mqtt.enabled}}
             <tcp-listener>
                 <port>1883</port>
                 <bind-address>0.0.0.0</bind-address>
                 <name>hivemq-mqtt</name>
             </tcp-listener>
-            {{- end}}
-            {{- if .Values.mqtt_broker.service.mqtts.enabled}}
             <tls-tcp-listener>
                 <port>8883</port>
                 <bind-address>0.0.0.0</bind-address>
                 <name>hivemq-secure-mqtt</name>
                 <tls>
                     <protocols>
-                        {{range .Values.mqtt_broker.service.mqtts.tls_versions}}
-                        <protocol>{{.}}</protocol>
-                        {{end}}
+                        <protocol>TLSv1.3</protocol>
+                        <protocol>TLSv1.2</protocol>
                     </protocols>
                     <keystore>
                         <path>/stores/keystore.jks</path>
-                        <password>{{.Values._000_commonConfig.infrastructure.mqtt.tls.keystorePassword}}</password>
-                        <private-key-password>{{.Values._000_commonConfig.infrastructure.mqtt.tls.privateKeyPassword}}</private-key-password>
+                        <password>changeme</password>
+                        <private-key-password>changeme</private-key-password>
                     </keystore>
                     <truststore>
                         <path>/stores/truststore.jks</path>
-                        <password>{{.Values._000_commonConfig.infrastructure.mqtt.tls.truststorePassword}}</password>
+                        <password>changeme</password>
                     </truststore>
                     <client-authentication-mode>REQUIRED</client-authentication-mode>
                     <cipher-suites>
-                        {{range .Values.mqtt_broker.service.mqtts.cipher_suites}}
-                        <cipher-suite>{{.}}</cipher-suite>
-                        {{end}}
+                        <cipher-suite>TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384</cipher-suite>
+                        <cipher-suite>TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256</cipher-suite>
+                        <cipher-suite>TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256</cipher-suite>
+                        <cipher-suite>TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA</cipher-suite>
+                        <cipher-suite>TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA</cipher-suite>
+                        <cipher-suite>TLS_RSA_WITH_AES_128_GCM_SHA256</cipher-suite>
+                        <cipher-suite>TLS_RSA_WITH_AES_128_CBC_SHA</cipher-suite>
+                        <cipher-suite>TLS_RSA_WITH_AES_256_CBC_SHA</cipher-suite>
                     </cipher-suites>
                     <prefer-server-cipher-suites>true</prefer-server-cipher-suites>
                 </tls>
             </tls-tcp-listener>
-            {{- end}}
-            {{- if .Values.mqtt_broker.service.ws.enabled}}
             <websocket-listener>
                 <port>8080</port>
                 <bind-address>0.0.0.0</bind-address>
@@ -76,8 +75,6 @@ data:
                 </subprotocols>
                 <allow-extensions>true</allow-extensions>
             </websocket-listener>
-            {{- end}}
-            {{- if .Values.mqtt_broker.service.wss.enabled}}
             <tls-websocket-listener>
                 <port>8443</port>
                 <bind-address>0.0.0.0</bind-address>
@@ -96,12 +93,12 @@ data:
                     </protocols>
                     <keystore>
                         <path>/stores/keystore.jks</path>
-                        <password>{{.Values._000_commonConfig.infrastructure.mqtt.tls.keystorePassword}}</password>
-                        <private-key-password>{{.Values._000_commonConfig.infrastructure.mqtt.tls.privateKeyPassword}}</private-key-password>
+                        <password>changeme</password>
+                        <private-key-password>changeme</private-key-password>
                     </keystore>
                     <truststore>
                         <path>/stores/truststore.jks</path>
-                        <password>{{.Values._000_commonConfig.infrastructure.mqtt.tls.truststorePassword}}</password>
+                        <password>changeme</password>
                     </truststore>
                     <client-authentication-mode>REQUIRED</client-authentication-mode>
                     <cipher-suites>
@@ -112,7 +109,6 @@ data:
                     <prefer-server-cipher-suites>true</prefer-server-cipher-suites>
                 </tls>
             </tls-websocket-listener>
-            {{- end}}
         </listeners>
         <persistence>
             <client-session>
@@ -168,5 +164,10 @@ data:
                 <enabled>true</enabled>
             </dropped-messages-topic>
         </mqtt-addons>
+        <mqtt>
+            <retained-messages>
+                <enabled>false</enabled>
+            </retained-messages>
+        </mqtt>
     </hivemq>
 {{end}}
