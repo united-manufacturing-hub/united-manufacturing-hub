@@ -75,9 +75,9 @@ spec:
             - name: POSTGRES_HOST
               value: {{.Values._000_commonConfig.datamodel_v2.database.host}}
             - name: POSTGRES_DATABASE
-              value: {{.Values._000_commonConfig.datamodel_v2.database.name}}
+              value: umh_v2
             - name: POSTGRES_USER
-              value: {{.Values.kafkatopostgresqlv2.database.user}}
+              value: kafkatopostgresqlv2
             - name: POSTGRES_PASSWORD
               value: {{.Values.kafkatopostgresqlv2.database.password}}
             - name: POSTGRES_SSLMODE
