@@ -47,81 +47,10 @@ jobs:
     outputs:
       BUILD_TAG: ${{ steps.build-and-output.outputs.BUILD_TAG }}
     steps:
-      - name: Checkout from local repo
-        # Reset working dir for this step
-        working-directory: /home/runner/_work/ManagementConsole/ManagementConsole
-        id: fast-checkout
-        run: |
-          # Write current user to stdout
-          echo "Current user: $(whoami)"
-          echo "ID: $(id)"
-          # Echo permissions for /gitrepo & /gitrepo/ManagementConsole
-          echo "Permissions for /gitrepo: $(ls -ld /gitrepo)"
-          echo "Permissions for /gitrepo/ManagementConsole: $(ls -ld /gitrepo/ManagementConsole)"
-          echo "PWD: $(pwd)"
-
-          # Check for write lock (up to 10 minutes)
-          lock_file="/gitrepo/write.lock"
-          end=$((SECONDS+600))
-          while [ -f "$lock_file" ]; do
-            if [ $SECONDS -ge $end ]; then
-              echo "Timeout waiting for write lock"
-              exit 1
-            fi
-            sleep 10
-          done
-
-          # Create read lock <random number>-<timestamp>-read.lock
-          lock_id=$(date +%s)-$RANDOM
-          read_lock_file="/gitrepo/${lock_id}-read.lock"
-          touch "$read_lock_file"
-
-          # Export $read_lock_file for cleanup
-          echo "read_lock_file=$read_lock_file" >> $GITHUB_ENV
-
-          # At /gitrepo/ManagementConsole we have the repo for this action
-          shopt -s dotglob
-          cp -r /gitrepo/ManagementConsole/* .
-          shopt -u dotglob
-
-          echo "Files in current directory: $(ls -la)"
-
-          git fetch --all
-          branch=${{ github.event.pull_request && github.head_ref || github.ref_name }}
-          # Handle merge group
-          if [ -z "$branch" ]; then
-             branch=$(jq -r '.pull_requests[0].head.ref' $GITHUB_EVENT_PATH)
-          fi
-          # Checkout the current branch (do not use .ref, but use branch name)
-          ## Retry up to 10 times with 5 seconds delay
-          for i in {1..10}; do
-            git fetch --all || continue
-            git checkout $branch || continue
-            # Reset the branch to the latest commit
-            git reset --hard origin/$branch && break || git pull || true
-            sleep 1
-          done
-          # If not on correct branch, set output
-          if [ "$(git describe --exact-match --tags HEAD 2>/dev/null || git rev-parse --abbrev-ref HEAD)" != "$branch" ]; then
-            echo "needs_checkout=true" >> $GITHUB_OUTPUT
-            # Delete local data
-            rm -rf /home/runner/_work/ManagementConsole/ManagementConsole
-            # Ensure folder exists
-            mkdir -p /home/runner/_work/ManagementConsole/ManagementConsole
-          fi
-
       - name: Checkout
-        if: steps.fast-checkout.outputs.needs_checkout == 'true'
         uses: actions/checkout@v4
-
-      - name: Cleanup read lock
-        if: always()
-        run: |
-          read_lock_file=${{ env.read_lock_file }}
-          ## Cleanup the read lock
-          if [ -f "$read_lock_file" ]; then
-            sudo rm -f "$read_lock_file"
-          fi
+        with:
+          ref: ${{ github.event.pull_request && github.head_ref || github.ref_name }}
 
       - name: Check if Docker daemon is running
         id: check_docker
