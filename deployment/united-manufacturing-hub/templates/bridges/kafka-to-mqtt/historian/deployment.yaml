@@ -13,7 +13,7 @@
 # limitations under the License.
 
 ---
-{{if or .Values.bridges.kafkatomqtt.enabled .Values._000_commonConfig.datamodel_v2.enabled }}
+{{if .Values._000_commonConfig.featureLevel | default 0 | int64 eq 0}}
 
 apiVersion: apps/v1
 kind: Deployment
@@ -38,7 +38,7 @@ metadata:
     # The type of the component
     data-flow-component-type: bridge
 spec:
-  replicas: {{ .Values.bridges.kafkatomqtt.replicaCount | default 1 }}
+  replicas: 1
   selector:
     matchLabels:
       data-flow-component-uuid: fcdec4de-a930-4229-befc-d318c9964a2e
@@ -66,14 +66,7 @@ spec:
             name: dfc-fcdec4de-a930-4229-befc-d318c9964a2e-kafka-t-mqtt-historian
       containers:
         - name: dfc-fcdec4de-a930-4229-befc-d318c9964a2e-kafka-t-mqtt-historian
-          image:
-            {{- if .Values.bridges.kafkatomqtt.image }}
-              {{- $repo := .Values.bridges.kafkatomqtt.image.repository | default "management.umh.app/oci/united-manufacturing-hub/benthos-umh" }}
-              {{- $tag := .Values.bridges.kafkatomqtt.image.tag | default "0.3.12" }}
-              {{- printf "%s:%s" $repo $tag | quote }}
-            {{- else }}
-            "management.umh.app/oci/united-manufacturing-hub/benthos-umh:0.3.12"
-            {{- end }}
+          image: management.umh.app/oci/united-manufacturing-hub/benthos-umh:0.3.18
           ports:
             - name: http
               containerPort: 4195
@@ -103,32 +96,7 @@ spec:
             failureThreshold: 3
           terminationMessagePath: /dev/termination-log
           terminationMessagePolicy: File
-          imagePullPolicy:
-            {{- if .Values.bridges.kafkatomqtt.image }}
-            {{ .Values.bridges.kafkatomqtt.image.pullPolicy | default "IfNotPresent" | quote }}
-            {{- else }}
-            "IfNotPresent"
-            {{- end }}
-
-          {{- if .Values.bridges.kafkatomqtt.resources }}
-          resources:
-            {{- if .Values.bridges.kafkatomqtt.resources.limits }}
-            limits:
-              cpu: #{{ .Values.bridges.kafkatomqtt.resources.limits.cpu | default "500m" | quote }}
-              memory: #{{ .Values.bridges.kafkatomqtt.resources.limits.memory | default "450Mi" | quote }}
-            {{- else }}
-              cpu: "500m"
-              memory: "450Mi"
-            {{- end }}
-            {{- if .Values.bridges.kafkatomqtt.resources.requests }}
-            requests:
-              cpu: #{{ .Values.bridges.kafkatomqtt.resources.requests.cpu | default "400m" | quote }}
-              memory: #{{ .Values.bridges.kafkatomqtt.resources.requests.memory | default "300Mi" | quote }}
-            {{- else }}
-              cpu: "400m"
-              memory: "300Mi"
-            {{- end }}
-          {{- else }}
+          imagePullPolicy: IfNotPresent
           resources:
               limits:
                 cpu: "500m"
@@ -136,7 +104,6 @@ spec:
               requests:
                 cpu: "400m"
                 memory: "300Mi"
-          {{- end }}
       restartPolicy: Always
   strategy:
     type: RollingUpdate
