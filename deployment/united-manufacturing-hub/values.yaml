@@ -314,3 +314,4 @@ timescaledb-single:
       type: LoadBalancer
   serviceAccount:
     create: false
+
