@@ -58,7 +58,8 @@ _003_legacyConfig:
 
 ### Do not modify anything below this line, unless you know what you are doing ###
 
-registry: management.umh.app/oci
+image:
+  registry: management.umh.app/oci
 
 grafana:
   serviceAccount:
