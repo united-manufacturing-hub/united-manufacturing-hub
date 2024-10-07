@@ -58,7 +58,7 @@ spec:
           {{- else}}
           image: {{.Values.kafkatopostgresqlv2.image.repository}}:{{.Chart.AppVersion}}{{- if .Values._000_commonConfig.racedetector.enabled}}-race{{- end}}
           {{end}}
-          imagePullPolicy: {{.Values.kafkatopostgresqlv2.image.pullPolicy}}
+          imagePullPolicy: IfNotPresent
           ports:
             - name: metrics
               containerPort: 2112

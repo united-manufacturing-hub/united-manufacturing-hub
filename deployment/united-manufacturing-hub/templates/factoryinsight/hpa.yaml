@@ -13,7 +13,7 @@
 # limitations under the License.
 
 ---
-{{if or .Values.factoryinsight.enabled .Values._000_commonConfig.datastorage.enabled}}
+{{if .Values.tags.classic }}
 {{if .Values.factoryinsight.hpa.enabled}}
 
 apiVersion: autoscaling/v2beta2
