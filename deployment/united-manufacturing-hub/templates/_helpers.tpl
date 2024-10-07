@@ -187,6 +187,22 @@ app.kubernetes.io/component: "opcuasimulator"
 {{- end }}
 
 {{/*
+Labels for opcuasimulatorv2
+*/}}
+{{- define "united-manufacturing-hub.labels.opcuasimulatorv2" -}}
+app.kubernetes.io/name: {{ include "united-manufacturing-hub.name" . }}-opcuasimulatorv2
+app.kubernetes.io/component: "opcuasimulatorv2"
+{{- end }}
+
+{{/*
+Labels for modbussimulator
+*/}}
+{{- define "united-manufacturing-hub.labels.modbussimulator" -}}
+app.kubernetes.io/name: {{ include "united-manufacturing-hub.name" . }}-modbussimulator
+app.kubernetes.io/component: "modbussimulator"
+{{- end }}
+
+{{/*
 Labels for hivemqce
 */}}
 {{- define "united-manufacturing-hub.labels.hivemqce" -}}
