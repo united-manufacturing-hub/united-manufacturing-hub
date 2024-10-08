@@ -66,7 +66,7 @@ spec:
             - name: POSTGRES_USER
               value: kafkatopostgresqlv2
             - name: POSTGRES_PASSWORD
-              value: changemetoo
+              value: {{ include "united-manufacturing-hub.postgresql.kafkatopostgresqlv2.password" . }}
             - name: POSTGRES_SSLMODE
               value: "require"
             - name: POSTGRES_PORT
