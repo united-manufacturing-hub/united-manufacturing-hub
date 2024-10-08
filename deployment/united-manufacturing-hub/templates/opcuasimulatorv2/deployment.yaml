@@ -18,30 +18,30 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{include "united-manufacturing-hub.fullname" .}}-opcuasimulatorv2-deployment
+  name: {{include "united-manufacturing-hub.fullname" .}}-opcsimv2-deployment
   labels:
     {{- include "united-manufacturing-hub.labels.common" . | nindent 4}}
-    {{- include "united-manufacturing-hub.labels.opcuasimulatorv2" . | nindent 4}}
+    {{- include "united-manufacturing-hub.labels.opcsimv2" . | nindent 4}}
 spec:
   replicas: 1
   selector:
     matchLabels:
       {{- include "united-manufacturing-hub.matchLabels" . | nindent 6}}
-      {{- include "united-manufacturing-hub.labels.opcuasimulatorv2" . | nindent 6}}
+      {{- include "united-manufacturing-hub.labels.opcsimv2" . | nindent 6}}
   strategy:
     type: RollingUpdate
   template:
     metadata:
       labels:
         {{- include "united-manufacturing-hub.labels.common" . | nindent 8}}
-        {{- include "united-manufacturing-hub.labels.opcuasimulatorv2" . | nindent 8}}
+        {{- include "united-manufacturing-hub.labels.opcsimv2" . | nindent 8}}
     spec:
       volumes:
-        - name: opcuasimulatorv2-config
+        - name: opcsimv2-config
           configMap:
-            name: {{include "united-manufacturing-hub.fullname" .}}-opcuasimulatorv2-config
+            name: {{include "united-manufacturing-hub.fullname" .}}-opcsimv2-config
       containers:
-        - name: {{include "united-manufacturing-hub.fullname" .}}-opcuasimulatorv2
+        - name: {{include "united-manufacturing-hub.fullname" .}}-opcsimv2
           image: management.umh.app/oci/iotedge/opc-plc:1.3.2
           resources:
             requests:

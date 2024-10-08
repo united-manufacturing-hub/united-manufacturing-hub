@@ -18,10 +18,10 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: {{include "united-manufacturing-hub.fullname" .}}-opcuasimulatorv2-config
+  name: {{include "united-manufacturing-hub.fullname" .}}-opcsimv2-config
   labels:
     {{- include "united-manufacturing-hub.labels.common" . | nindent 4}}
-    {{- include "united-manufacturing-hub.labels.opcuasimulatorv2" . | nindent 4}}
+    {{- include "united-manufacturing-hub.labels.opcsimv2" . | nindent 4}}
 data:
   nodesfile.json: |
     {
