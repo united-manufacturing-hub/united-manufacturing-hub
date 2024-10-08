@@ -274,6 +274,8 @@ nodered:
 redpanda:
   image:
     repository: management.umh.app/oci/redpandadata/redpanda
+  serviceAccount:
+    create: false
   fullnameOverride: united-manufacturing-hub-kafka
   statefulset:
     replicas: 1
@@ -301,17 +303,6 @@ redpanda:
       default_topic_partitions: 6
   tls:
     enabled: false
-    serviceAccount:
-      create: false
-    service:
-      type: LoadBalancer
-      port: 8090
-      targetPort: 8080
-    console:
-      config:
-        kafka:
-          brokers:
-            - united-manufacturing-hub-kafka:9092
   console:
     image:
       registry: management.umh.app/oci
