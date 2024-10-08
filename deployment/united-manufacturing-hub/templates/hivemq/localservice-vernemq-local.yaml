@@ -13,7 +13,7 @@
 # limitations under the License.
 
 ---
-{{if .Values.tags.classic }}
+{{if and .Values.tags.classic .Values._003_legacyConfig.enableLegacyMQTTService}}
 # this is meant as a backwards compatibility layer for the old mqtt broker. services that are still using the old broker should be migrated to the new one
 apiVersion: v1
 kind: Service

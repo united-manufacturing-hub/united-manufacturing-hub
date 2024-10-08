@@ -28,63 +28,8 @@ data:
     <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
     <file-rbac>
         <users>
-            <user>
-                <name>IOTSENSORSMQTT</name>
-                <password>T3VSY2szQ0diWDkyOGpoSGpDQzVqc29VZlJ2UkxiOTI=:100:6qxZS+Bhn8QXrF1dUo6fU9Eg/esjw6zipq6xv9uct84Jyhv0mJTUi5SHSBW4TbF66vBOrE3JnZ//rUutEl8/Bw==</password>
-                <roles>
-                    <id>ia_raw</id>
-                </roles>
-            </user>
-            <user>
-                <name>PACKMLSIMULATOR</name>
-                <password>ZzBCbzEyaWlnZkRjbndTa2RLTW1aSmlsOWtQSWtpak0=:100:9FWqFUN88VPio9yFR59XbE9fr/GUkM1fnKCNn2wvK06MMtKp5LPtUrTCOLhHgkFQ6IMw92wi9HTsLRFxnM+reQ==</password>
-                <roles>
-                    <id>packmlsimulator</id>
-                </roles>
-            </user>
-            <user>
-                <name>node-red</name>
-                <password>aVptalRWUk5Dd0QxQmtlekRYcnlZemJ3VTJKMTlDZWE=:100:PrJcg4O5Y371AnbS+Qt//rdNhjeBfkpWm24B0TBQPmNC+3ANbjIpFoJUh/gfBZHdE8fI6DwU8/u7RSjBuSTRkA==</password>
-                <roles>
-                    <id>packmlsimulator</id>
-                    <id>umh_read_write</id>
-                    <id>ia_read_write</id>
-                </roles>
-            </user>
         </users>
         <roles>
-            <role>
-                <id>umh_read_write</id>
-                <permissions>
-                    <permission>
-                        <topic>umh/#</topic>
-                    </permission>
-                </permissions>
-            </role>
-            <role>
-                <id>ia_read_write</id>
-                <permissions>
-                    <permission>
-                        <topic>ia/#</topic>
-                    </permission>
-                </permissions>
-            </role>
-            <role>
-                <id>ia_raw</id>
-                <permissions>
-                    <permission>
-                        <topic>ia/raw/#</topic>
-                    </permission>
-                </permissions>
-            </role>
-            <role>
-                <id>packmlsimulator</id>
-                <permissions>
-                    <permission>
-                        <topic>testLocation/DefaultArea/DefaultProductionLine/#</topic>
-                    </permission>
-                </permissions>
-            </role>
             <role>
                 <id>superuser</id>
                 <permissions>
