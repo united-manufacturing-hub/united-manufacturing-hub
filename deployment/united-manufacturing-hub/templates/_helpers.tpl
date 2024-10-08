@@ -318,3 +318,10 @@ Create the name of the service account to use
 {{- define "united-manufacturing-hub.serviceAccountName" -}}
 {{- include "united-manufacturing-hub.fullname" . }}
 {{- end }}
+
+{{/*
+Define HiveMQ version (2024.1)
+*/}}
+{{- define "united-manufacturing-hub.hivemq.version" -}}
+2024.1
+{{- end }}

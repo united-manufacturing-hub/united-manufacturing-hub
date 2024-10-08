@@ -57,14 +57,14 @@ spec:
           image: "{{.Values.image.registry}}/united-manufacturing-hub/hivemq-init:0.11.0"
           imagePullPolicy: IfNotPresent
           volumeMounts:
-            - mountPath: /opt/hivemq-ce-2024.1/extensions
+            - mountPath: /opt/hivemq-ce-{{ include "united-manufacturing-hub.hivemq.version" . }}/extensions
               name: {{include "united-manufacturing-hub.fullname" .}}-hivemqce-extensions
           env:
             - name: RBAC_ENABLED
               value: "false"
       containers:
         - name: {{include "united-manufacturing-hub.fullname" .}}-hivemqce
-          image: "{{.Values.image.registry}}/hivemq/hivemq-ce:2024.1"
+          image: "{{.Values.image.registry}}/hivemq/hivemq-ce:{{ include "united-manufacturing-hub.hivemq.version" . }}"
           imagePullPolicy: IfNotPresent
           env:
             - name: HIVEMQ_ALLOW_ALL_CLIENTS
@@ -79,12 +79,12 @@ spec:
               cpu: 300m
               memory: 1000Mi
           volumeMounts:
-            - mountPath: /opt/hivemq-ce-2024.1/conf
+            - mountPath: /opt/hivemq-ce-{{ include "united-manufacturing-hub.hivemq.version" . }}/conf
               name: hivemqce-mqtt-config
               readOnly: true
-            - mountPath: /opt/hivemq-ce-2024.1/data
+            - mountPath: /opt/hivemq-ce-{{ include "united-manufacturing-hub.hivemq.version" . }}/data
               name: {{include "united-manufacturing-hub.fullname" .}}-hivemqce-data
-            - mountPath: /opt/hivemq-ce-2024.1/extensions
+            - mountPath: /opt/hivemq-ce-{{ include "united-manufacturing-hub.hivemq.version" . }}/extensions
               name: {{include "united-manufacturing-hub.fullname" .}}-hivemqce-extensions
             - mountPath: /configs
               name: hivemqce-extension-config
@@ -130,7 +130,7 @@ spec:
                     command: [
                       "/bin/sh",
                       "-c",
-                      "cp /configs/heartbeat.xml  /opt/hivemq-ce-2024.1/extensions/hivemq-heartbeat-extension/extension-config.xml && cp /configs/prometheus.properties /opt/hivemq-ce-2024.1/extensions/hivemq-prometheus-extension/prometheusConfiguration.properties"
+                      "cp /configs/heartbeat.xml  /opt/hivemq-ce-{{ include "united-manufacturing-hub.hivemq.version" . }}/extensions/hivemq-heartbeat-extension/extension-config.xml && cp /configs/prometheus.properties /opt/hivemq-ce-{{ include "united-manufacturing-hub.hivemq.version" . }}/extensions/hivemq-prometheus-extension/prometheusConfiguration.properties"
                     ]
 
 {{end}}
