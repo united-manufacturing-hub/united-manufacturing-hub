@@ -13,7 +13,7 @@
 # limitations under the License.
 
 ---
-{{if or .Values.tags.classic .Values.tags.lite }}
+{{if .Values.tags.classic }}
 {{- $hooks := dict "post-install" "INSTALL" "post-upgrade" "UPGRADE" "post-delete" "DELETE" "post-rollback" "ROLLBACK" }}
 {{- range $hook, $reason := $hooks }}
 apiVersion: batch/v1
