@@ -213,7 +213,7 @@ data:
                     - sql_raw:
                         driver: postgres
                         # Use Benthos meta lookup to insert PostgreSQL credentials into the DSN string
-                        dsn: postgres://kafkatopostgresqlv2:changemetoo@united-manufacturing-hub.united-manufacturing-hub.svc.cluster.local:5432/umh_v2
+                        dsn: postgres://kafkatopostgresqlv2:{{ include "united-manufacturing-hub.postgresql.kafkatopostgresqlv2.password" . }}@united-manufacturing-hub.united-manufacturing-hub.svc.cluster.local:5432/umh_v2
                         query: |
                           WITH insert_or_get AS (
                             INSERT INTO public.asset (enterprise, site, area, line, workcell, origin_id)
@@ -332,7 +332,7 @@ data:
                     sql_insert:
                       driver: postgres
                       # Use Benthos meta lookup to insert PostgreSQL credentials into the DSN string
-                      dsn: postgres://kafkatopostgresqlv2:changemetoo@united-manufacturing-hub.united-manufacturing-hub.svc.cluster.local:5432/umh_v2
+                      dsn: postgres://kafkatopostgresqlv2:{{ include "united-manufacturing-hub.postgresql.kafkatopostgresqlv2.password" . }}@united-manufacturing-hub.united-manufacturing-hub.svc.cluster.local:5432/umh_v2
                       table: tag
                       suffix: ON CONFLICT (timestamp,name,asset_id) DO NOTHING
                       columns:
@@ -352,7 +352,7 @@ data:
                     sql_insert:
                       driver: postgres
                       # Use Benthos meta lookup to insert PostgreSQL credentials into the DSN string
-                      dsn: postgres://kafkatopostgresqlv2:changemetoo@united-manufacturing-hub.united-manufacturing-hub.svc.cluster.local:5432/umh_v2
+                      dsn: postgres://kafkatopostgresqlv2:{{ include "united-manufacturing-hub.postgresql.kafkatopostgresqlv2.password" . }}@united-manufacturing-hub.united-manufacturing-hub.svc.cluster.local:5432/umh_v2
                       table: tag_string
                       suffix: ON CONFLICT (timestamp,name,asset_id) DO NOTHING
                       columns:
