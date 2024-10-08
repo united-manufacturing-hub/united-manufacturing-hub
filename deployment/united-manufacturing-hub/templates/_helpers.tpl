@@ -330,13 +330,13 @@ Define HiveMQ version (2024.1)
 Define Postgresq passwords
 */}}
 {{- define "united-manufacturing-hub.postgresql.factoryinsight.password" -}}
-{{- randAlphaNum 64 -}}
+changeme
 {{- end }}
 
 {{- define "united-manufacturing-hub.postgresql.kafkatopostgresqlv2.password" -}}
-{{- randAlphaNum 64 -}}
+changemetoo
 {{- end }}
 
 {{- define "united-manufacturing-hub.postgresql.grafanareader.password" -}}
-{{- randAlphaNum 64 -}}
+changeme
 {{- end }}
