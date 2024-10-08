@@ -315,6 +315,17 @@ redpanda:
   console:
     image:
       registry: management.umh.app/oci
+    serviceAccount:
+      create: false
+    service:
+      type: LoadBalancer
+      port: 8090
+      targetPort: 8080
+    console:
+      config:
+        kafka:
+          brokers:
+            - united-manufacturing-hub-kafka:9092
 
 redis:
   global:
