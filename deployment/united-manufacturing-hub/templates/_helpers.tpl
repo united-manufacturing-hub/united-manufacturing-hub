@@ -187,11 +187,11 @@ app.kubernetes.io/component: "opcuasimulator"
 {{- end }}
 
 {{/*
-Labels for opcuasimulatorv2
+Labels for opcsimv2
 */}}
-{{- define "united-manufacturing-hub.labels.opcuasimulatorv2" -}}
-app.kubernetes.io/name: {{ include "united-manufacturing-hub.name" . }}-opcuasimulatorv2
-app.kubernetes.io/component: "opcuasimulatorv2"
+{{- define "united-manufacturing-hub.labels.opcsimv2" -}}
+app.kubernetes.io/name: {{ include "united-manufacturing-hub.name" . }}-opcsimv2
+app.kubernetes.io/component: "opcsimv2"
 {{- end }}
 
 {{/*
