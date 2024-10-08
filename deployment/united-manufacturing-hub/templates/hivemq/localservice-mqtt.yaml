@@ -22,7 +22,7 @@ metadata:
     {{- include "united-manufacturing-hub.labels.common" . | nindent 4}}
     {{- include "united-manufacturing-hub.labels.hivemqce" . | nindent 4}}
 spec:
-  type: LoadBalancer
+  type: ClusterIP
   ports:
     - port: 1883
       targetPort: mqtt
