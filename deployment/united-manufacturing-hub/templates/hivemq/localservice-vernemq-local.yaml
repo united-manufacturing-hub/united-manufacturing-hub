@@ -13,7 +13,7 @@
 # limitations under the License.
 
 ---
-{{if or .Values.tags.classic .Values.tags.lite }}
+{{if .Values.tags.classic }}
 # this is meant as a backwards compatibility layer for the old mqtt broker. services that are still using the old broker should be migrated to the new one
 apiVersion: v1
 kind: Service
@@ -33,14 +33,6 @@ spec:
       targetPort: mqtts
       protocol: TCP
       name: mqtts
-    - port: 8080
-      targetPort: ws
-      protocol: TCP
-      name: ws
-    - port: 8443
-      targetPort: wss
-      protocol: TCP
-      name: wss
   selector:
     {{- include "united-manufacturing-hub.labels.hivemqce" . | nindent 4}}
 {{end}}
