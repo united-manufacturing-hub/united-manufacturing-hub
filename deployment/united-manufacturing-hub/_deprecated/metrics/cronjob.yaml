@@ -13,7 +13,7 @@
 # limitations under the License.
 
 ---
-{{if .Values._000_commonConfig.metrics.enabled }}
+{{if .Values.tags.classic }}
 apiVersion: batch/v1
 kind: CronJob
 metadata:
@@ -21,12 +21,8 @@ metadata:
   labels:
     {{- include "united-manufacturing-hub.labels.common" . | nindent 4}}
     {{- include "united-manufacturing-hub.labels.metrics-cron" . | nindent 4}}
-  {{if .Values.metrics.annotations}}
-  annotations:
-    {{- toYaml .Values.metrics.annotations | nindent 4}}
-  {{end}}
 spec:
-  schedule: {{ .Values.metrics.cronJob.schedule }}
+  schedule: "0 */4 * * *"
   successfulJobsHistoryLimit: 0
   jobTemplate:
     spec:
@@ -34,12 +30,8 @@ spec:
         spec:
           containers:
             - name: {{include "united-manufacturing-hub.fullname" .}}-metrics-cron
-              {{if .Values.metrics.image.tag}}
-              image: {{.Values.metrics.image.repository}}:{{.Values.metrics.image.tag}}{{- if .Values._000_commonConfig.racedetector.enabled}}-race{{- end}}
-              {{- else}}
-              image: {{.Values.metrics.image.repository}}:{{.Chart.AppVersion}}{{- if .Values._000_commonConfig.racedetector.enabled}}-race{{- end}}
-              {{end}}
-              imagePullPolicy: {{ .Values.metrics.image.pullPolicy }}
+              image: "{{$.Values.image.registry}}/united-manufacturing-hub/metrics:{{$.Chart.AppVersion}}"
+              imagePullPolicy: IfNotPresent
               env:
                 - name: REASON
                   value: "CRON"

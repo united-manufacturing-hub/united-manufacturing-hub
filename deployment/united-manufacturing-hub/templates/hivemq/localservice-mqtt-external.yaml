@@ -13,22 +13,32 @@
 # limitations under the License.
 
 ---
-{{if and .Values._000_commonConfig.infrastructure.kafka.enabled .Values._000_commonConfig.infrastructure.kafka.useSSL }}
-
-kind: Secret
+{{if and .Values.tags.classic .Values._001_mqttConfig.mqtt.external.enabled }}
 apiVersion: v1
+kind: Service
 metadata:
-  name: {{include "united-manufacturing-hub.fullname" .}}-nodered-secrets
+  name: {{include "united-manufacturing-hub.fullname" .}}-mqtt-external
   labels:
     {{- include "united-manufacturing-hub.labels.common" . | nindent 4}}
-    {{- include "united-manufacturing-hub.labels.nodered" . | nindent 4}}
-type: Opaque
-stringData:
-  ca.crt: |
-    {{.Values._000_commonConfig.infrastructure.kafka.tls.CACert | nindent 4}}
-  tls.crt: |
-    {{.Values._000_commonConfig.infrastructure.kafka.tls.nodered.sslCertificatePem | nindent 4}}
-  tls.key: |
-    {{.Values._000_commonConfig.infrastructure.kafka.tls.nodered.sslKeyPem | nindent 4}}
-
+    {{- include "united-manufacturing-hub.labels.hivemqce" . | nindent 4}}
+spec:
+  type: LoadBalancer
+  ports:
+  {{if .Values._001_mqttConfig.mqtt.external.tlsOnly}}
+    - port: 8883
+      targetPort: mqtts
+      protocol: TCP
+      name: mqtts
+  {{else}}
+    - port: 1883
+      targetPort: mqtt
+      protocol: TCP
+      name: mqtt
+    - port: 8883
+      targetPort: mqtts
+      protocol: TCP
+      name: mqtts
+  {{end}}
+  selector:
+    {{- include "united-manufacturing-hub.labels.hivemqce" . | nindent 4}}
 {{end}}

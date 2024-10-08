@@ -109,7 +109,24 @@ jobs:
             echo "Building sensorconnect"
             echo "sensorconnect=true" >> $GITHUB_OUTPUT
           fi
-          
+
+          # Special case: We have changes to the deployment/united-manufacturing-hub folder (In which case we need to build all images)
+            if git diff --name-only $previousSHA $currentSHA | grep -E '^(deployment/united-manufacturing-hub/)'; then
+                echo "Building all images"
+                echo "barcodereader=true" >> $GITHUB_OUTPUT
+                echo "factoryinsight=true" >> $GITHUB_OUTPUT
+                echo "grafana_umh=true" >> $GITHUB_OUTPUT
+                echo "hivemq_init=true" >> $GITHUB_OUTPUT
+                echo "kafka_bridge=true" >> $GITHUB_OUTPUT
+                echo "kafka_init=true" >> $GITHUB_OUTPUT
+                echo "kafka_to_postgresql=true" >> $GITHUB_OUTPUT
+                echo "kafka_to_postgresql_v2=true" >> $GITHUB_OUTPUT
+                echo "metrics=true" >> $GITHUB_OUTPUT
+                echo "mqtt_kafka_bridge=true" >> $GITHUB_OUTPUT
+                echo "sensorconnect=true" >> $GITHUB_OUTPUT
+            fi
+
+
           
 
   barcodereader:

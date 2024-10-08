@@ -187,11 +187,11 @@ app.kubernetes.io/component: "opcuasimulator"
 {{- end }}
 
 {{/*
-Labels for opcuasimulatorv2
+Labels for opcsimv2
 */}}
-{{- define "united-manufacturing-hub.labels.opcuasimulatorv2" -}}
-app.kubernetes.io/name: {{ include "united-manufacturing-hub.name" . }}-opcuasimulatorv2
-app.kubernetes.io/component: "opcuasimulatorv2"
+{{- define "united-manufacturing-hub.labels.opcsimv2" -}}
+app.kubernetes.io/name: {{ include "united-manufacturing-hub.name" . }}-opcsimv2
+app.kubernetes.io/component: "opcsimv2"
 {{- end }}
 
 {{/*
@@ -316,9 +316,27 @@ app.kubernetes.io/name: {{ include "united-manufacturing-hub.name" . }}-kafkatop
 Create the name of the service account to use
 */}}
 {{- define "united-manufacturing-hub.serviceAccountName" -}}
-{{- if .Values.serviceAccount.create }}
-{{- default (include "united-manufacturing-hub.fullname" .) .Values.serviceAccount.name }}
-{{- else }}
-{{- default "default" .Values.serviceAccount.name }}
+{{- include "united-manufacturing-hub.fullname" . }}
 {{- end }}
+
+{{/*
+Define HiveMQ version (2024.1)
+*/}}
+{{- define "united-manufacturing-hub.hivemq.version" -}}
+2024.1
+{{- end }}
+
+{{/*
+Define Postgresq passwords
+*/}}
+{{- define "united-manufacturing-hub.postgresql.factoryinsight.password" -}}
+changeme
+{{- end }}
+
+{{- define "united-manufacturing-hub.postgresql.kafkatopostgresqlv2.password" -}}
+changemetoo
+{{- end }}
+
+{{- define "united-manufacturing-hub.postgresql.grafanareader.password" -}}
+changeme
 {{- end }}

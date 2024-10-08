@@ -1,0 +1,373 @@
+# Copyright 2023 UMH Systems GmbH
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+---
+{{if .Values.tags.classic }}
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  # This is the name of the component, it should be unique within the namespace (63 chars max as per RFC 1035/1123)
+  name: dfc-3e5c91f6-3dfc-45d6-8e9b-f17705e07b4c-kafka-t-psql-historian
+  # To be scheduled in the open-source namespace
+  namespace: united-manufacturing-hub
+  labels:
+    # This does not change over time
+    data-flow-component-uuid: 3e5c91f6-3dfc-45d6-8e9b-f17705e07b4c
+    # This is the random UUID of the version of the component
+    data-flow-component-version-uuid: d1e65879-0260-478c-9ac9-eeba4d9e84d6
+    # Timestamp of last change to the component in unix milliseconds since epoch
+    data-flow-version: '1727706153093'
+    # Generic label to indicate that this is a data flow component
+    is-data-flow-component: 'true'
+    # Required for mgmtcompanion to manage the component
+    managed-by: mgmtcompanion
+    # Do not allow mgmtcompanion to modify the component
+    data-flow-component-is-read-only: 'true'
+    # The type of the component
+    data-flow-component-type: bridge
+data:
+  benthos.yaml: |
+    # IMPORTANT
+    #
+    # If you do not use the default credentials for the kafkatopostgresqlv2 user, you must change the DSN string in the SQL processor.
+    # Ensure that all other Kafka-to-PostgreSQL bridges are disabled to avoid conflicts.
+
+    ## Input
+    #
+    # This configuration bridges _historian messages from Kafka to PostgreSQL.
+    # According to our _historian schema, these messages can occur in the following topics:
+    # umh.v1.* (since we have topic/key splitting).
+
+    input:
+      kafka_franz:
+        seed_brokers:
+          - united-manufacturing-hub-kafka.united-manufacturing-hub.svc.cluster.local:9092
+        regexp_topics: true
+        topics: ['umh.v1.*']  # Consume from all topics starting with 'umh.v1.'
+        consumer_group: "kafka_to_postgresql_historian_bridge"
+        auto_replay_nacks: false
+
+
+    ## Processors
+    #
+    # This part performs the following steps:
+    # 1. Reconstructs the full topic name by combining the Kafka topic and key.
+    # 2. Checks if the topic contains the '_historian' schema.
+    # 3. Validates that the message is valid JSON.
+    # 4. Validates that the message conforms to the _historian schema, otherwise tags it via a Kafka header.
+    # 5. Extracts hierarchical information from the topic (enterprise, site, area, line, workcell, origin_id).
+    # 6. Caches asset IDs to minimize database queries.
+    # 7. Prepares data for insertion into the PostgreSQL database.
+
+    pipeline:
+      processors:
+        - bloblang: |
+            # Step 1: Reconstruct the full topic name
+            # Retrieve the original Kafka topic and key from metadata
+            let kafka_topic = meta("kafka_topic")
+            let kafka_key = meta("kafka_key").or("")
+
+            # Recreate the full topic by concatenating the topic and key, separated by a dot
+            let recreated_topic = $kafka_topic + "." + $kafka_key
+
+            # Trim any trailing dots in the topic name
+            let topic = $recreated_topic.trim(".")
+
+            # Store the reconstructed topic in metadata for later use
+            meta "topic" = $topic
+
+        - bloblang: |
+            # Step 2: Filter for '_historian' topics
+            let topic = meta("topic")
+
+            # Check if '_historian' is present in the topic name
+            let is_historian = $topic.contains("_historian")
+
+            # If the topic is a historian topic, proceed; otherwise, delete the message
+            root = match {
+              $is_historian => root,   # Keep the message
+              _ => deleted()           # Delete the message if not a historian topic
+            }
+
+        - bloblang: |
+            # Step 3: Validate JSON format
+            # Attempt to access 'this' (the message payload). If it's invalid JSON, an error occurs and 'catch(true)' returns true
+            let invalid_json = this.catch(true)
+
+            # If 'invalid_json' is true, it means parsing failed; delete the message
+            root = match {
+              $invalid_json == true => deleted(),   # Delete if invalid JSON
+              _ => this                             # Keep the message if valid JSON
+            }
+
+        - bloblang: |
+            # Step 4: Validate the message against the _historian schema
+            let topic = meta("topic")
+
+            # Define the JSON schema for _historian messages
+            let valid_schema = this.json_schema("""{
+                "$schema": "http://json-schema.org/draft-07/schema#",
+                "type": "object",
+                "required": ["timestamp_ms"],
+                "properties": {
+                  "timestamp_ms": {
+                    "type": "integer"
+                  }
+                },
+                "minProperties": 2,
+                "additionalProperties": true
+              }""").catch(false)
+
+            # If the message conforms to the schema, keep it; otherwise, delete it
+            root = match {
+              $valid_schema != false => this,    # Keep the message if valid
+              _ => deleted()                     # Delete if schema validation fails
+            }
+
+            # Additionally, ensure 'timestamp_ms' is present and is a number
+            # We already did the JSON schema validation above, but there are edge cases where the JSON schema validation passes but the field is missing or not a number
+            let timestamp_ms = this.timestamp_ms.catch(false)
+            root = match {
+              $timestamp_ms == false => deleted(),                # Delete if 'timestamp_ms' is missing
+              $timestamp_ms.type() != "number" => deleted(),      # Delete if 'timestamp_ms' is not a number
+              _ => this                                           # Keep the message
+            }
+
+        - bloblang: |
+            # Step 5: Extract hierarchical information from the topic
+            # Topic structure: umh.v1.<enterprise>.<site>.<area>.<line>.<workcell>.<origin_id>._<usecase>.<tag_group>.<tag_name>
+            let topic = meta("topic")
+
+            # Use a regular expression to extract components from the topic name
+            let matches = $topic.re_find_all_object("^umh\\.v1\\.(?P<enterprise>[\\w-_]+)\\.((?P<site>[\\w-_]+)\\.)?((?P<area>[\\w-_]+)\\.)?((?P<productionLine>[\\w-_]+)\\.)?((?P<workCell>[\\w-_]+)\\.)?((?P<originId>[\\w-_]+)\\.)?_(?P<usecase>(historian)|(analytics))(\\.(?P<tag>(?:[\\w-_.]+\\w)+))?$")
+
+            # Check if the regex matched (i.e., the topic follows the expected structure)
+            let match_length = $matches.length()
+            root = if $match_length > 0 {
+              root                          # Keep the message if regex matches
+            } else {
+              deleted()                     # Delete the message if no match
+            }
+
+            # Store the matches in metadata for later use
+            meta "matches" = $matches.format_json()
+
+        - bloblang: |
+            # Step 6: Extract components from the regex matches
+            let matches = meta("matches")
+
+            # Parse the JSON string back into an object
+            let matches = $matches.parse_json()
+
+            # Get the first match (should be only one match)
+            let first_match = $matches.index(0)
+
+            # Extract the components, using default values if not present
+            let enterprise = $first_match.get("enterprise")
+            let site = $first_match.get("site").or("")
+            let area = $first_match.get("area").or("")
+            let productionLine = $first_match.get("productionLine").or("")
+            let workCell = $first_match.get("workCell").or("")
+            let originId = $first_match.get("originId").or("")
+            let tag = $first_match.get("tag").or("")
+
+            # Create a cache key using the asset hierarchy
+            let cache_key = $enterprise + "." + $site + "." + $area + "." + $productionLine + "." + $workCell + "." + $originId
+            let cache_key = $cache_key.hash("xxhash64").encode("hex")
+            meta "cache_key" = $cache_key
+
+            # Reorganize the message to include the payload and topic information
+            root = {}
+            root.payload = this
+
+            root.topic = {
+              "enterprise": $enterprise,
+              "site": $site,
+              "area": $area,
+              "productionLine": $productionLine,
+              "workCell": $workCell,
+              "originId": $originId,
+              "tag": $tag,
+            }
+
+        - branch:
+            processors:
+              # Step 6 continued: Use a cache to store asset IDs and avoid repeated database queries
+              - cached:
+                  key: '${! meta("cache_key") }'   # Use the cache key generated earlier
+                  cache: id_cache
+                  processors:
+                    # If the asset_id is not in the cache, query the database
+                    - sql_raw:
+                        driver: postgres
+                        # Use Benthos meta lookup to insert PostgreSQL credentials into the DSN string
+                        dsn: postgres://kafkatopostgresqlv2:{{ include "united-manufacturing-hub.postgresql.kafkatopostgresqlv2.password" . }}@united-manufacturing-hub.united-manufacturing-hub.svc.cluster.local:5432/umh_v2
+                        query: |
+                          WITH insert_or_get AS (
+                            INSERT INTO public.asset (enterprise, site, area, line, workcell, origin_id)
+                            VALUES ($1, $2, $3, $4, $5, $6)
+                            ON CONFLICT (enterprise, site, area, line, workcell, origin_id)
+                            DO NOTHING
+                            RETURNING id
+                          )
+                          SELECT id FROM insert_or_get
+                          UNION ALL
+                          SELECT id FROM public.asset
+                          WHERE enterprise = $1
+                          AND site = $2
+                          AND area = $3
+                          AND line = $4
+                          AND workcell = $5
+                          AND origin_id = $6
+                          LIMIT 1;
+                        args_mapping: '[ this.topic.enterprise, this.topic.site, this.topic.area, this.topic.productionLine, this.topic.workCell, this.topic.originId ]'
+                    - bloblang: |
+                        # Extract the 'id' field from the SQL query result and set it as the cache value
+                        root = this.index(0).get("id")
+            result_map: 'root.asset_id = this'  # Store the asset_id in the message
+
+        - bloblang: |
+            # Step 7: Flatten the payload and prepare data for insertion
+            # Define a recursive function to flatten nested JSON objects
+            map collapse_rec {
+                let path = (this.path + "$") | ""
+                let data = this.data
+                root = $data.keys().map_each(k -> match $data.get(k) {
+                    this.type() == "object" => {"path": $path + k, "data": this}.apply("collapse_rec")
+                    this.type() == "array" => {$path + k: this.map_each(v -> match v.type() {
+                        "object" => v.apply("collapse")
+                        _ => v
+                    })}
+                    _ => {$path + k: this}
+                }).squash()
+            }
+
+            # Wrapper function to start the flattening process
+            map collapse {
+                root = {"data": this}.apply("collapse_rec")
+            }
+
+            # Extract the payload and timestamp
+            let payload = this.payload
+            let timestamp_s = $payload.timestamp_ms / 1000
+            let timestamp = $timestamp_s.ts_format()  # Convert timestamp to ISO8601 format
+
+            # Remove 'timestamp_ms' from the payload
+            let payload_without_timestamp = $payload.without("timestamp_ms")
+
+            # Flatten the payload to get all key-value pairs at the top level
+            let flat = $payload_without_timestamp.apply("collapse")
+
+            let asset_id = this.asset_id.number()
+
+            # Prepare an array of records for insertion, including timestamp and asset_id
+            let flat_array = $flat.keys().map_each(k -> {
+              "timestamp": $timestamp,
+              "k": k,
+              "v": $flat.get(k),
+              "t": $flat.get(k).type(),
+              "asset_id": $asset_id
+            })
+
+            # This substep prepares the records for insertion into the database
+            # It:
+            # - Encodes binary data as hex
+            # - Converts timestamps to strings
+            # - Converts arrays and objects to JSON strings
+            # - Check strings if there are null bytes, if so call quote on it
+            let flat_array = $flat_array.map_each(v -> {
+                "timestamp": v.timestamp,
+                "k": v.k,
+                "v": match v.t {
+                "string" => if v.v.contains("\u0000") {
+                    v.v.quote()
+                } else {
+                    v.v
+                },
+                "bytes" => v.v.encode("hex"),
+                "number" => v.v,
+                "bool" => v.v.string(),
+                "timestamp" => v.v.string(),
+                "array" => v.v.format_json(no_indent: true).string(),
+                "object" => v.v.format_json(no_indent: true).string(),
+                "null" => v.v,
+                _ => v.v.format_json(no_indent: true).string()
+                },
+                "t": v.t,
+                "asset_id": v.asset_id
+            })
+
+            # Set the root of the message to be the array of records
+            root = $flat_array
+
+        - unarchive:
+            format: json_array  # Split the array into individual messages
+
+
+    output:
+      broker:
+        pattern: fan_out
+        outputs:
+          - switch:
+              cases:
+                # We have two tables (tag and tag_string):
+                # - 'tag' is for numeric values.
+                # - 'tag_string' is for any other data types.
+
+                # Insert numeric values into 'tag' table
+                - check: this.t == "number"
+                  output:
+                    sql_insert:
+                      driver: postgres
+                      # Use Benthos meta lookup to insert PostgreSQL credentials into the DSN string
+                      dsn: postgres://kafkatopostgresqlv2:{{ include "united-manufacturing-hub.postgresql.kafkatopostgresqlv2.password" . }}@united-manufacturing-hub.united-manufacturing-hub.svc.cluster.local:5432/umh_v2
+                      table: tag
+                      suffix: ON CONFLICT (timestamp,name,asset_id) DO NOTHING
+                      columns:
+                        - timestamp
+                        - name
+                        - asset_id
+                        - value
+                        - origin
+                      args_mapping: '[ this.timestamp, this.k, this.asset_id, this.v, "unknown" ]'
+                      batching:
+                        period: 5s     # Batch records every 5 seconds
+                        count: 10000   # Or when 10,000 records are collected
+                      max_in_flight: 512  # Allow up to 512 concurrent inserts
+
+                # Insert non-numeric values into 'tag_string' table
+                - output:
+                    sql_insert:
+                      driver: postgres
+                      # Use Benthos meta lookup to insert PostgreSQL credentials into the DSN string
+                      dsn: postgres://kafkatopostgresqlv2:{{ include "united-manufacturing-hub.postgresql.kafkatopostgresqlv2.password" . }}@united-manufacturing-hub.united-manufacturing-hub.svc.cluster.local:5432/umh_v2
+                      table: tag_string
+                      suffix: ON CONFLICT (timestamp,name,asset_id) DO NOTHING
+                      columns:
+                        - timestamp
+                        - name
+                        - asset_id
+                        - value
+                        - origin
+                      args_mapping: '[ this.timestamp, this.k, this.asset_id, this.v, "unknown" ]'
+                      batching:
+                        period: 5s     # Batch records every 5 seconds
+                        count: 10000   # Or when 10,000 records are collected
+                      max_in_flight: 512  # Allow up to 512 concurrent inserts
+    cache_resources:
+      - label: id_cache
+        memory:
+          default_ttl: 24h  # Cache entries expire after 24 hours
+{{end}}

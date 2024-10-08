@@ -19,14 +19,14 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   # This is the name of the component, it should be unique within the namespace (63 chars max as per RFC 1035/1123)
-  name: dfc-1db88f9f-789d-45fa-b095-cf579cc9074d-mqtt-t-kafka-historian
+  name: dfc-fcdec4de-a930-4229-befc-d318c9964a2e-kafka-t-mqtt-historian
   # To be scheduled in the open-source namespace
   namespace: united-manufacturing-hub
   labels:
     # This does not change over time
-    data-flow-component-uuid: 1db88f9f-789d-45fa-b095-cf579cc9074d
+    data-flow-component-uuid: fcdec4de-a930-4229-befc-d318c9964a2e
     # This is the random UUID of the version of the component
-    data-flow-component-version-uuid: 83bd6ace-58f7-4572-9ab4-f8a9237a47dd
+    data-flow-component-version-uuid: 7a732a81-180f-4a14-8dd8-dafbb613fb44
     # Timestamp of last change to the component in unix milliseconds since epoch
     data-flow-version: '1724661195274'
     # Generic label to indicate that this is a data flow component
@@ -41,14 +41,14 @@ spec:
   replicas: 1
   selector:
     matchLabels:
-      data-flow-component-uuid: 1db88f9f-789d-45fa-b095-cf579cc9074d
+      data-flow-component-uuid: fcdec4de-a930-4229-befc-d318c9964a2e
   template:
     metadata:
       labels:
         # This does not change over time
-        data-flow-component-uuid: 1db88f9f-789d-45fa-b095-cf579cc9074d
+        data-flow-component-uuid: fcdec4de-a930-4229-befc-d318c9964a2e
         # This is the random UUID of the version of the component
-        data-flow-component-version-uuid: 83bd6ace-58f7-4572-9ab4-f8a9237a47dd
+        data-flow-component-version-uuid: 7a732a81-180f-4a14-8dd8-dafbb613fb44
         # Timestamp of last change to the component in unix milliseconds since epoch
         data-flow-version: '1724661195274'
         # Generic label to indicate that this is a data flow component
@@ -63,9 +63,9 @@ spec:
       volumes:
         - name: config
           configMap:
-            name: dfc-1db88f9f-789d-45fa-b095-cf579cc9074d-mqtt-t-kafka-historian
+            name: dfc-fcdec4de-a930-4229-befc-d318c9964a2e-kafka-t-mqtt-historian
       containers:
-        - name: dfc-1db88f9f-789d-45fa-b095-cf579cc9074d-mqtt-t-kafka-historian
+        - name: dfc-fcdec4de-a930-4229-befc-d318c9964a2e-kafka-t-mqtt-historian
           image: management.umh.app/oci/united-manufacturing-hub/benthos-umh:0.3.18
           ports:
             - name: http

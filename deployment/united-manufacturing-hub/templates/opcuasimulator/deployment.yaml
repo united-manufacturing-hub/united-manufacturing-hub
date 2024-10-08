@@ -13,7 +13,7 @@
 # limitations under the License.
 
 ---
-{{if .Values._000_commonConfig.datasources.opcuasimulator.enabled}}
+{{if .Values._002_simulatorConfig.opcuasimulator.enabled}}
 
 apiVersion: apps/v1
 kind: Deployment
@@ -42,18 +42,14 @@ spec:
             name: {{include "united-manufacturing-hub.fullname" .}}-opcuasimulator-config
       containers:
         - name: {{include "united-manufacturing-hub.fullname" .}}-opcuasimulator
-          {{if .Values.opcuasimulator.tag}}
-          image: {{.Values.opcuasimulator.image}}:{{.Values.opcuasimulator.tag}}
-          {{- else}}
-          image: {{.Values.opcuasimulator.image}}:latest
-          {{end}}
+          image: "{{.Values.image.registry}}/united-manufacturing-hub/opcuasimulator:0.1.0"
           resources:
-            limits:
-              cpu: {{.Values.opcuasimulator.resources.limits.cpu}}
-              memory: {{.Values.opcuasimulator.resources.limits.memory}}
             requests:
-              cpu: {{.Values.opcuasimulator.resources.requests.cpu}}
-              memory: {{.Values.opcuasimulator.resources.requests.memory}}
+              cpu: "10m"
+              memory: "20Mi"
+            limits:
+              cpu: "30m"
+              memory: "50Mi"
           volumeMounts:
             - mountPath: /configs
               name: opcuasimulator-config
