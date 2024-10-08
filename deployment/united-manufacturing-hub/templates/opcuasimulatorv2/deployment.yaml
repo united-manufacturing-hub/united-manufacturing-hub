@@ -71,7 +71,7 @@ spec:
               "--nodesfile", "/app/nodesfile.json"
             ]
           volumeMounts:
-          - name: nodesfile-volume
+          - name: opcsimv2-config
             mountPath: /app/nodesfile.json
             subPath: nodesfile.json
 {{end}}
