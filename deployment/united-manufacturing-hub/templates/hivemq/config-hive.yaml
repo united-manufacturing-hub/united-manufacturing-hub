@@ -50,7 +50,11 @@ data:
                         <path>/stores/truststore.jks</path>
                         <password>{{.Values._001_mqttConfig.mqtt.certificates.truststore.password}}</password>
                     </truststore>
+                    {{if .Values._001_mqttConfig.mqtt.external.requireMutualAuth}}
                     <client-authentication-mode>REQUIRED</client-authentication-mode>
+                    {{else}}
+                    <client-authentication-mode>OPTIONAL</client-authentication-mode>
+                    {{end}}
                     <cipher-suites>
                         <cipher-suite>TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384</cipher-suite>
                         <cipher-suite>TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256</cipher-suite>
