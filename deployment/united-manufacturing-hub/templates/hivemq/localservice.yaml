@@ -32,14 +32,6 @@ spec:
       targetPort: mqtts
       protocol: TCP
       name: mqtts
-    - port: 8080
-      targetPort: ws
-      protocol: TCP
-      name: ws
-    - port: 8443
-      targetPort: wss
-      protocol: TCP
-      name: wss
   selector:
     {{- include "united-manufacturing-hub.labels.hivemqce" . | nindent 4}}
 {{end}}

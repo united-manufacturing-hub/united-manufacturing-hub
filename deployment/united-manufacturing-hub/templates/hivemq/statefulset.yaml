@@ -117,12 +117,6 @@ spec:
             - name: mqtts
               containerPort: 8883
               protocol: TCP
-            - name: ws
-              containerPort: 8080
-              protocol: TCP
-            - name: wss
-              containerPort: 8443
-              protocol: TCP
             - name: prometheus
               containerPort: 9399
               protocol: TCP

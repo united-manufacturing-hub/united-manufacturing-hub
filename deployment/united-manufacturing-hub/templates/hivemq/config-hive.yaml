@@ -43,12 +43,12 @@ data:
                     </protocols>
                     <keystore>
                         <path>/stores/keystore.jks</path>
-                        <password>changeme</password>
-                        <private-key-password>changeme</private-key-password>
+                        <password>{{.Values._000_commonConfig.mqtt.certificates.keystore.password}}</password>
+                        <private-key-password>{{.Values._000_commonConfig.mqtt.certificates.keystore.privatekeypassword}}</private-key-password>
                     </keystore>
                     <truststore>
                         <path>/stores/truststore.jks</path>
-                        <password>changeme</password>
+                        <password>{{.Values._000_commonConfig.mqtt.certificates.truststore.password}}</password>
                     </truststore>
                     <client-authentication-mode>REQUIRED</client-authentication-mode>
                     <cipher-suites>
@@ -64,55 +64,6 @@ data:
                     <prefer-server-cipher-suites>true</prefer-server-cipher-suites>
                 </tls>
             </tls-tcp-listener>
-            <websocket-listener>
-                <port>8080</port>
-                <bind-address>0.0.0.0</bind-address>
-                <path>/mqtt</path>
-                <name>hivemq-websocket</name>
-                <subprotocols>
-                    <subprotocol>mqttv3.1</subprotocol>
-                    <subprotocol>mqtt</subprotocol>
-                </subprotocols>
-                <allow-extensions>true</allow-extensions>
-            </websocket-listener>
-            <tls-websocket-listener>
-                <port>8443</port>
-                <bind-address>0.0.0.0</bind-address>
-                <path>/mqtt</path>
-                <name>hivemq-secure-websocket</name>
-                <subprotocols>
-                    <subprotocol>mqttv3.1</subprotocol>
-                    <subprotocol>mqtt</subprotocol>
-                </subprotocols>
-                <allow-extensions>true</allow-extensions>
-                <tls>
-                    <protocols>
-                        <protocol>TLSv1.3</protocol>
-                        <protocol>TLSv1.2</protocol>
-                    </protocols>
-                    <keystore>
-                        <path>/stores/keystore.jks</path>
-                        <password>changeme</password>
-                        <private-key-password>changeme</private-key-password>
-                    </keystore>
-                    <truststore>
-                        <path>/stores/truststore.jks</path>
-                        <password>changeme</password>
-                    </truststore>
-                    <client-authentication-mode>REQUIRED</client-authentication-mode>
-                    <cipher-suites>
-                        <cipher-suite>TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384</cipher-suite>
-                        <cipher-suite>TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256</cipher-suite>
-                        <cipher-suite>TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256</cipher-suite>
-                        <cipher-suite>TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA</cipher-suite>
-                        <cipher-suite>TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA</cipher-suite>
-                        <cipher-suite>TLS_RSA_WITH_AES_128_GCM_SHA256</cipher-suite>
-                        <cipher-suite>TLS_RSA_WITH_AES_128_CBC_SHA</cipher-suite>
-                        <cipher-suite>TLS_RSA_WITH_AES_256_CBC_SHA</cipher-suite>
-                    </cipher-suites>
-                    <prefer-server-cipher-suites>true</prefer-server-cipher-suites>
-                </tls>
-            </tls-websocket-listener>
         </listeners>
         <persistence>
             <client-session>
