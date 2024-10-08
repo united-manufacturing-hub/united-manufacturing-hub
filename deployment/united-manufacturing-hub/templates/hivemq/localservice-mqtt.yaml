@@ -14,7 +14,6 @@
 
 ---
 {{if .Values.tags.classic }}
-# this is meant for future use
 apiVersion: v1
 kind: Service
 metadata:
