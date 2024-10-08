@@ -43,9 +43,8 @@ _001_mqttConfig:
     enabled: true
     external:
       enabled: true
-      # Using TLS requires the client to provide a certificate (mTLS)
-      # You need to modify the truststore to do this !
       tlsOnly: false
+      requireMutualAuth: false
     # See also: https://umh.docs.umh.app/docs/production-guide/security/setup-pki-mqtt-broker/
     certificates:
       keystore:
