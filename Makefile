@@ -23,7 +23,7 @@ index:
 	helm repo index $(HELM_REPO_PATH) --url https://management.umh.app/helm/umh
 
 # Create a new release (package and update index.yaml in default repo)
-release: package index
+release: lint package index
 	git add $(HELM_REPO_PATH)/*.tgz $(HELM_REPO_PATH)/index.yaml
 	git commit -m "Release $(VERSION)"
 	git push
@@ -37,7 +37,7 @@ index-prerelease:
 	helm repo index $(HELM_REPO_PATH) --url https://$(BRANCH_NAME).united-manufacturing-hub.pages.dev
 
 # Create a new prerelease (package and update index.yaml in prerelease repo)
-release-prerelease: package-prerelease index-prerelease
+release-prerelease: lint package-prerelease index-prerelease
 	git add $(HELM_REPO_PATH)/*.tgz $(HELM_REPO_PATH)/index.yaml
 	git commit -m "Prerelease $(VERSION) - $(BRANCH_NAME)"
 	git push

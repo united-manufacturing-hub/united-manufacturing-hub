@@ -325,3 +325,18 @@ Define HiveMQ version (2024.1)
 {{- define "united-manufacturing-hub.hivemq.version" -}}
 2024.1
 {{- end }}
+
+{{/*
+Define Postgresq passwords
+*/}}
+{{- define "united-manufacturing-hub.postgresql.factoryinsight.password" -}}
+{{- randAlphaNum 64 -}}
+{{- end }}
+
+{{- define "united-manufacturing-hub.postgresql.kafkatopostgresqlv2.password" -}}
+{{- randAlphaNum 64 -}}
+{{- end }}
+
+{{- define "united-manufacturing-hub.postgresql.grafanareader.password" -}}
+{{- randAlphaNum 64 -}}
+{{- end }}
