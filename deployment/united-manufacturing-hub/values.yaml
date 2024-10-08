@@ -42,8 +42,11 @@ _001_mqttConfig:
     # Enable/Disable the MQTT broker
     enabled: true
     external:
+      # Enables external access via port 1883 (MQTT) & 8883 (MQTT over TLS)
       enabled: true
+      # Disables access via port 1883 (MQTT)
       tlsOnly: false
+      # Enforces mTLS for 8883 (MQTT over TLS)
       requireMutualAuth: false
     # See also: https://umh.docs.umh.app/docs/production-guide/security/setup-pki-mqtt-broker/
     certificates:
