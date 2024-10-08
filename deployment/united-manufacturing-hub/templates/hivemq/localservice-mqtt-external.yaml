@@ -1,4 +1,4 @@
-# Copyright 2024 UMH Systems GmbH
+# Copyright 2023 UMH Systems GmbH
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,22 +13,32 @@
 # limitations under the License.
 
 ---
-{{if .Values._002_simulatorConfig.modbussimulator.enabled}}
+{{if and .Values.tags.classic .Values._001_mqttConfig.mqtt.external.enabled }}
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{include "united-manufacturing-hub.fullname" .}}-modbussimulator-service
+  name: {{include "united-manufacturing-hub.fullname" .}}-mqtt-external
   labels:
     {{- include "united-manufacturing-hub.labels.common" . | nindent 4}}
-    {{- include "united-manufacturing-hub.labels.modbussimulator" . | nindent 4}}
+    {{- include "united-manufacturing-hub.labels.hivemqce" . | nindent 4}}
 spec:
   type: LoadBalancer
   ports:
-    - port: 50502
-      targetPort: 502
+  {{if .Values._001_mqttConfig.mqtt.external.tlsOnly}}
+    - port: 8883
+      targetPort: mqtts
       protocol: TCP
-      name: modbus
+      name: mqtts
+  {{else}}
+    - port: 1883
+      targetPort: mqtt
+      protocol: TCP
+      name: mqtt
+    - port: 8883
+      targetPort: mqtts
+      protocol: TCP
+      name: mqtts
+  {{end}}
   selector:
-     {{- include "united-manufacturing-hub.labels.modbussimulator" . | nindent 4}}
-
+    {{- include "united-manufacturing-hub.labels.hivemqce" . | nindent 4}}
 {{end}}

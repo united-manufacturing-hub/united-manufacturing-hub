@@ -43,12 +43,12 @@ data:
                     </protocols>
                     <keystore>
                         <path>/stores/keystore.jks</path>
-                        <password>{{.Values._000_commonConfig.mqtt.certificates.keystore.password}}</password>
-                        <private-key-password>{{.Values._000_commonConfig.mqtt.certificates.keystore.privatekeypassword}}</private-key-password>
+                        <password>{{.Values._001_mqttConfig.mqtt.certificates.keystore.password}}</password>
+                        <private-key-password>{{.Values._001_mqttConfig.mqtt.certificates.keystore.privatekeypassword}}</private-key-password>
                     </keystore>
                     <truststore>
                         <path>/stores/truststore.jks</path>
-                        <password>{{.Values._000_commonConfig.mqtt.certificates.truststore.password}}</password>
+                        <password>{{.Values._001_mqttConfig.mqtt.certificates.truststore.password}}</password>
                     </truststore>
                     <client-authentication-mode>REQUIRED</client-authentication-mode>
                     <cipher-suites>

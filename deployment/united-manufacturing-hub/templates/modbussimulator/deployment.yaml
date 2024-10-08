@@ -13,7 +13,7 @@
 # limitations under the License.
 
 ---
-{{if .Values._000_commonConfig.datasources.modbussimulator.enabled}}
+{{if .Values._002_simulatorConfig.modbussimulator.enabled}}
 
 apiVersion: apps/v1
 kind: Deployment
