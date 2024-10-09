@@ -258,6 +258,11 @@ data:
                     _ => {$path + k: this}
                 }).squash()
             }
+            
+            # Wrapper function to start the flattening process
+            map collapse {
+                root = {"data": this}.apply("collapse_rec")
+            }
 
             # Extract the payload and timestamp
             let payload = this.payload
