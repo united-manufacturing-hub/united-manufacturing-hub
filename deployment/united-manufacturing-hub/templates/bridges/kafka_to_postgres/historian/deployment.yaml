@@ -48,9 +48,9 @@ spec:
         # This does not change over time
         data-flow-component-uuid: 3e5c91f6-3dfc-45d6-8e9b-f17705e07b4c
         # This is the random UUID of the version of the component
-        data-flow-component-version-uuid: 83bd6ace-58f7-4572-9ab4-f8a9237a47dd
+        data-flow-component-version-uuid: d1e65879-0260-478c-9ac9-eeba4d9e84d6
         # Timestamp of last change to the component in unix milliseconds since epoch
-        data-flow-version: '1724661195274'
+        data-flow-version: '1727706153093'
         # Generic label to indicate that this is a data flow component
         is-data-flow-component: 'true'
         # Required for mgmtcompanion to manage the component
