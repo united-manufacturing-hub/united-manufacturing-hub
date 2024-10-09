@@ -108,8 +108,9 @@ jobs:
           echo "BUILD_TAG=${BUILD_TAG}" >> $GITHUB_OUTPUT
           echo "BUILD_TAG=${BUILD_TAG}"
 
-          echo "SHORT_TAG=${GIT_TAG}" >> $GITHUB_OUTPUT
-          echo "SHORT_TAG=${GIT_TAG}"
+          # Extract from : to the-${PLATFORM}
+          echo "SHORT_TAG=$(echo ${BUILD_TAG} | cut -d ':' -f 2 | cut -d '-' -f 1)" >> $GITHUB_OUTPUT
+          echo "SHORT_TAG=$(echo ${BUILD_TAG} | cut -d ':' -f 2 | cut -d '-' -f 1)"
 
 
   create-manifests:
