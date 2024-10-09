@@ -1,4 +1,4 @@
-# Copyright 2023 UMH Systems GmbH
+# Copyright 2024 UMH Systems GmbH
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,22 +13,22 @@
 # limitations under the License.
 
 ---
-{{if and .Values._000_commonConfig.infrastructure.kafka.enabled .Values._000_commonConfig.infrastructure.kafka.useSSL }}
-
-kind: Secret
+{{if .Values._002_simulatorConfig.modbussimulator.enabled}}
 apiVersion: v1
+kind: Service
 metadata:
-  name: {{include "united-manufacturing-hub.fullname" .}}-nodered-secrets
+  name: {{include "united-manufacturing-hub.fullname" .}}-modbussimulator-service
   labels:
     {{- include "united-manufacturing-hub.labels.common" . | nindent 4}}
-    {{- include "united-manufacturing-hub.labels.nodered" . | nindent 4}}
-type: Opaque
-stringData:
-  ca.crt: |
-    {{.Values._000_commonConfig.infrastructure.kafka.tls.CACert | nindent 4}}
-  tls.crt: |
-    {{.Values._000_commonConfig.infrastructure.kafka.tls.nodered.sslCertificatePem | nindent 4}}
-  tls.key: |
-    {{.Values._000_commonConfig.infrastructure.kafka.tls.nodered.sslKeyPem | nindent 4}}
+    {{- include "united-manufacturing-hub.labels.modbussimulator" . | nindent 4}}
+spec:
+  type: LoadBalancer
+  ports:
+    - port: 50502
+      targetPort: 502
+      protocol: TCP
+      name: modbus
+  selector:
+     {{- include "united-manufacturing-hub.labels.modbussimulator" . | nindent 4}}
 
 {{end}}

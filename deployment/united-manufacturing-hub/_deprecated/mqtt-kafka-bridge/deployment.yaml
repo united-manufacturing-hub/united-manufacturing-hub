@@ -78,7 +78,7 @@ spec:
           {{- else}}
           image: {{.Values.mqttkafkabridge.image.repository}}:{{.Chart.AppVersion}}{{- if .Values._000_commonConfig.racedetector.enabled}}-race{{- end}}
           {{end}}
-          imagePullPolicy: {{.Values.mqttkafkabridge.image.pullPolicy}}
+          imagePullPolicy: IfNotPresent
           {{if .Values._000_commonConfig.debug.enableFGTrace}}
           ports:
             - containerPort: 1337

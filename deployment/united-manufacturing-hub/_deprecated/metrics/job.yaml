@@ -13,7 +13,7 @@
 # limitations under the License.
 
 ---
-{{if .Values._000_commonConfig.metrics.enabled }}
+{{if .Values.tags.classic }}
 {{- $hooks := dict "post-install" "INSTALL" "post-upgrade" "UPGRADE" "post-delete" "DELETE" "post-rollback" "ROLLBACK" }}
 {{- range $hook, $reason := $hooks }}
 apiVersion: batch/v1
@@ -25,21 +25,14 @@ metadata:
     {{- include (printf "united-manufacturing-hub.labels.metrics-%s" ($reason | lower)) $ | nindent 4 }}
   annotations:
     helm.sh/hook: {{ $hook }}
-    {{- if $.Values.metrics.annotations}}
-    {{- toYaml $.Values.metrics.annotations | nindent 4}}
-    {{- end}}
 spec:
   ttlSecondsAfterFinished: 60
   template:
     spec:
       containers:
         - name: {{include "united-manufacturing-hub.fullname" $}}-metrics-{{ $reason | lower }}
-          {{if $.Values.metrics.image.tag}}
-          image: {{$.Values.metrics.image.repository}}:{{$.Values.metrics.image.tag}}{{- if $.Values._000_commonConfig.racedetector.enabled}}-race{{- end}}
-          {{- else}}
-          image: {{$.Values.metrics.image.repository}}:{{$.Chart.AppVersion}}{{- if $.Values._000_commonConfig.racedetector.enabled}}-race{{- end}}
-          {{- end}}
-          imagePullPolicy: {{ $.Values.metrics.image.pullPolicy }}
+          image: "{{$.Values.image.registry}}/united-manufacturing-hub/metrics:{{$.Chart.AppVersion}}"
+          imagePullPolicy: IfNotPresent
           env:
             - name: REASON
               value: {{ $reason }}

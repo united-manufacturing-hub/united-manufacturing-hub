@@ -1,0 +1,177 @@
+# Copyright 2023 UMH Systems GmbH
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+---
+{{if .Values.tags.classic }}
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  # This is the name of the component, it should be unique within the namespace (63 chars max as per RFC 1035/1123)
+  name: dfc-1db88f9f-789d-45fa-b095-cf579cc9074d-mqtt-t-kafka-historian
+  # To be scheduled in the open-source namespace
+  namespace: united-manufacturing-hub
+  labels:
+    # This does not change over time
+    data-flow-component-uuid: 1db88f9f-789d-45fa-b095-cf579cc9074d
+    # This is the random UUID of the version of the component
+    data-flow-component-version-uuid: 83bd6ace-58f7-4572-9ab4-f8a9237a47dd
+    # Timestamp of last change to the component in unix milliseconds since epoch
+    data-flow-version: '1724661195274'
+    # Generic label to indicate that this is a data flow component
+    is-data-flow-component: 'true'
+    # Required for mgmtcompanion to manage the component
+    managed-by: mgmtcompanion
+    # Do not allow mgmtcompanion to modify the component
+    data-flow-component-is-read-only: 'true'
+    # The type of the component
+    data-flow-component-type: bridge
+data:
+  benthos.yaml: |
+    ## Input
+    #
+    # This configuration bridges _historian messages from MQTT to Kafka
+    # According to our _historian schema, these can occur in the following topics:
+    # umh/v1/+/_historian/# (enterprise)
+    # umh/v1/+/+/_historian/# (enterprise, site)
+    # umh/v1/+/+/+/_historian/# (enterprise, site, area)
+    # umh/v1/+/+/+/+/_historian/# (enterprise, site, area, productionLine)
+    # umh/v1/+/+/+/+/+/_historian/# (enterprise, site, area, productionLine, workCell)
+    # umh/v1/+/+/+/+/+/+/_historian/# (enterprise, site, area, productionLine, workCell, originID)
+
+    input:
+      mqtt:
+        urls:
+          - united-manufacturing-hub-mqtt.united-manufacturing-hub.svc.cluster.local:1883
+        client_id: "mqtt_to_kafka_historian_bridge"
+        dynamic_client_id_suffix: "nanoid"
+        auto_replay_nacks: false
+        topics:
+           - umh/v1/+/_historian/#
+           - umh/v1/+/+/_historian/#
+           - umh/v1/+/+/+/_historian/#
+           - umh/v1/+/+/+/+/_historian/#
+           - umh/v1/+/+/+/+/+/_historian/#
+           - umh/v1/+/+/+/+/+/+/_historian/#
+
+
+    ## Processors
+    #
+    # This part does the following:
+    # 1. Create an Kakfa topic from MQTT
+    # 2. Create the split topic, to prevent topic exhaustion inside Kafka
+    # 3. Check that the incoming message is valid JSON
+    # 4. Encode the message as base64 if not valid and wrap it inside a JSON
+    # 5. Check if we previously bridged this message, and drop if we did
+    # 6. Check if the message fulfills the _historian schema, and otherwise tag it via a Kafka Header
+    # 7. Add our own bridge name to the list of bridges
+
+
+    pipeline:
+      processors:
+        - bloblang: |
+            ######### Variables #########
+
+            ## Change "default" to the name of the local instance
+            let instance_name = "default"
+
+            ## Defaults to 5, do not change unless you know what you are doing or are asked to do it by UMH
+            let split_point = 5
+
+            ######### END Variables #########
+
+            # Step 1
+            let topic = meta("mqtt_topic").or("")
+            let topic = match {
+              $topic != "" => $topic
+              _ => deleted()
+            }
+            let converted_topic = $topic.replace("/", ".")
+            let trimmed_topic = $converted_topic.trim(".")
+
+            # Step 2
+            let topic_parts = $trimmed_topic.split(".")
+            let topic_length = $topic_parts.length()
+            let min_point = [$split_point,$topic_length].min()
+            let kafka_topic = $topic_parts.slice(0, $min_point).join(".")
+            let kafka_key = $topic_parts.slice($min_point).join(".")
+
+            meta "kafka_topic" = $kafka_topic
+            meta "kafka_key" = $kafka_key
+
+            # Step 3
+            let invalid_json = this.catch(true)
+
+            # Step 4
+            root = if $invalid_json == true {
+              {
+                "parsing_failure": "invalid-json",
+                "payload": content().encode("base64")
+              }
+            } else {
+              this
+            }
+
+            # Step 5
+            let bridged_by = root.bridged_by.or([])
+            root = if $bridged_by.contains("benthos-kafka-to-mqtt-" + $instance_name) || $bridged_by.contains("benthos-mqtt-to-kafka-" + $instance_name) {
+              deleted()
+            } else {
+              root
+            }
+
+            # Step 6
+            let is_historian = $topic.contains("_historian")
+            let valid_schema = if $is_historian {
+              root.json_schema("""{
+                "$schema": "http://json-schema.org/draft-07/schema#",
+                "type": "object",
+                "required": ["timestamp_ms"],
+                "properties": {
+                  "timestamp_ms": {
+                    "type": "integer"
+                  }
+                },
+                "minProperties": 2,
+                "additionalProperties": true
+              }
+              """).catch(false)
+            }else{
+              true
+            }
+            meta "parsing_failure" = $valid_schema == false
+
+            # Step 7
+            let bridged_by = $bridged_by.append("benthos-mqtt-to-kafka-" + $instance_name)
+            meta "bridged_by" = $bridged_by
+
+    output:
+      broker:
+        pattern: fan_out
+        outputs:
+          - kafka_franz:
+              topic: ${! meta("kafka_topic") }
+              seed_brokers:
+                - united-manufacturing-hub-kafka.united-manufacturing-hub.svc.cluster.local:9092
+              client_id: mqtt_to_kafka_historian_bridge
+              key: ${! meta("kafka_key") }
+              metadata:
+                include_prefixes:
+                  - kafka_
+                  - bridged_
+                  - parsing_
+              batching:
+                count: 1000
+                period: 100ms
+{{end}}

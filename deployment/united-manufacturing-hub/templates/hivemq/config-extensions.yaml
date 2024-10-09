@@ -13,7 +13,7 @@
 # limitations under the License.
 
 ---
-{{if .Values._000_commonConfig.infrastructure.mqtt.enabled}}
+{{if .Values.tags.classic }}
 
 apiVersion: v1
 kind: ConfigMap
@@ -28,111 +28,8 @@ data:
     <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
     <file-rbac>
         <users>
-            <user>
-                <name>MQTT_KAFKA_BRIDGE</name>
-                {{- $passMqttKafka := default .Values.mqttkafkabridge.mqtt.encryptedPassword }}
-                {{- if eq $passMqttKafka "" }}
-                <password>WDRkN1c4MnpVb3BsS25qZG5qbkcxSUFuQm5kVVZVbW4=:100:H/o0vsDqmVfzkoLU6rPG8C7+0gzYjkH2E7q3+/5aXKFlSYEyBO/tiin02gxpcB0A/1j7fudGbZhQfI+dZa1GCQ==</password>
-                {{- else }}
-                <password>{{- print $passMqttKafka }}</password>
-                {{- end }}
-                <roles>
-                    <id>ia_read_write</id>
-                </roles>
-            </user>
-            <user>
-                <name>SENSORCONNECT</name>
-                {{- $passSensorconnect := default .Values.sensorconnect.mqtt.encryptedPassword }}
-                {{- if eq $passSensorconnect "" }}
-                <password>ZVF5bDJ4TWtjVXVWZVVESlRXZU1DSHA4cDdHbUhKSEc=:100:B42+ySldBE+uilWricvIif+UJ0oW5iXafloUyiZclbYoQOOthOet5NQAKCTHITDSHadxvjbgfiF/908QmwqZOw==</password>
-                {{- else }}
-                <password>{{- print $passSensorconnect}}</password>
-                {{- end }}
-                <roles>
-                    <id>ia_read_write</id>
-                </roles>
-            </user>
-            <user>
-                <name>IOTSENSORSMQTT</name>
-                {{- $passIotSensor := default .Values.iotsensorsmqtt.mqtt.encryptedPassword }}
-                {{- if eq $passIotSensor "" }}
-                <password>T3VSY2szQ0diWDkyOGpoSGpDQzVqc29VZlJ2UkxiOTI=:100:6qxZS+Bhn8QXrF1dUo6fU9Eg/esjw6zipq6xv9uct84Jyhv0mJTUi5SHSBW4TbF66vBOrE3JnZ//rUutEl8/Bw==</password>
-                {{- else }}
-                <password>{{- print $passIotSensor}}</password>
-                {{- end }}
-                <roles>
-                    <id>ia_raw</id>
-                </roles>
-            </user>
-            <user>
-                <name>PACKMLSIMULATOR</name>
-                {{- $passPackml := default .Values.packmlmqttsimulator.env.mqtt.encryptedPassword }}
-                {{- if eq $passPackml "" }}
-                <password>ZzBCbzEyaWlnZkRjbndTa2RLTW1aSmlsOWtQSWtpak0=:100:9FWqFUN88VPio9yFR59XbE9fr/GUkM1fnKCNn2wvK06MMtKp5LPtUrTCOLhHgkFQ6IMw92wi9HTsLRFxnM+reQ==</password>
-                {{- else }}
-                <password>{{- print $passPackml}}</password>
-                {{- end }}
-                <roles>
-                    <id>packmlsimulator</id>
-                </roles>
-            </user>
-            <user>
-                <name>node-red</name>
-                {{- $passNodered := default .Values.nodered.mqtt.encryptedPassword }}
-                {{- if eq $passNodered "" }}
-                <password>aVptalRWUk5Dd0QxQmtlekRYcnlZemJ3VTJKMTlDZWE=:100:PrJcg4O5Y371AnbS+Qt//rdNhjeBfkpWm24B0TBQPmNC+3ANbjIpFoJUh/gfBZHdE8fI6DwU8/u7RSjBuSTRkA==</password>
-                {{- else }}
-                <password>{{- print $passNodered}}</password>
-                {{- end }}
-                <roles>
-                    <id>packmlsimulator</id>
-                    <id>umh_read_write</id>
-                    <id>ia_read_write</id>
-                </roles>
-            </user>
-            {{if .Values._000_commonConfig.infrastructure.mqtt.adminUser.enabled}}
-            <user>
-                <name>{{.Values._000_commonConfig.infrastructure.mqtt.adminUser.name}}</name>
-                <password>{{.Values._000_commonConfig.infrastructure.mqtt.adminUser.encryptedPassword}}</password>
-                <roles>
-                    <id>superuser</id>
-                </roles>
-            </user>
-            {{end}}
         </users>
         <roles>
-            <role>
-                <id>umh_read_write</id>
-                <permissions>
-                    <permission>
-                        <topic>umh/#</topic>
-                    </permission>
-                </permissions>
-            </role>
-            <role>
-                <id>ia_read_write</id>
-                <permissions>
-                    <permission>
-                        <topic>ia/#</topic>
-                    </permission>
-                </permissions>
-            </role>
-            <role>
-                <id>ia_raw</id>
-                <permissions>
-                    <permission>
-                        <topic>ia/raw/#</topic>
-                    </permission>
-                </permissions>
-            </role>
-            <role>
-                <id>packmlsimulator</id>
-                <permissions>
-                    <permission>
-                        <topic>{{.Values.packmlmqttsimulator.env.site}}/{{.Values.packmlmqttsimulator.env.area}}/{{.Values.packmlmqttsimulator.env.productionline}}/#</topic>
-                    </permission>
-                </permissions>
-            </role>
             <role>
                 <id>superuser</id>
                 <permissions>
