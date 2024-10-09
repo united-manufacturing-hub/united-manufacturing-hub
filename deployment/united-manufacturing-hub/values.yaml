@@ -102,30 +102,8 @@ _003_legacyConfig:
 ### Do not modify anything below this line, unless you know what you are doing ###
 ###################################################################################
 
-<<<<<<< HEAD
 image:
   registry: management.umh.app/oci
-||||||| parent of 8e6ec56a (Eng 1469 add new opc ua and modbus simulator (#1812))
-    # packmlmqttsimulator simulates PackML state data and publishes it over MQTT
-    # Learn more: https://github.com/Spruik/PackML-MQTT-Simulator
-    packmlmqttsimulator:
-      enabled: true
-=======
-    # opcuasimulatorv2 simulates a full-blown OPC UA server
-    # Learn more : https://github.com/Azure-Samples/iot-edge-opc-plc
-    opcuasimulatorv2:
-      enabled: true
-
-    # modbussimulator simulates a full-blown OPC UA server
-    # Learn more : https://github.com/cybcon/modbus-server
-    modbussimulator:
-      enabled: true
-
-    # packmlmqttsimulator simulates PackML state data and publishes it over MQTT
-    # Learn more: https://github.com/Spruik/PackML-MQTT-Simulator
-    packmlmqttsimulator:
-      enabled: true
->>>>>>> 8e6ec56a (Eng 1469 add new opc ua and modbus simulator (#1812))
 
 grafana:
   image:
