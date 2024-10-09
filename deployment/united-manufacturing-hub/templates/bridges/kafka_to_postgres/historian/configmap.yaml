@@ -242,7 +242,12 @@ data:
             # Step 7: Flatten the payload and prepare data for insertion
             # Define a recursive function to flatten nested JSON objects
             map collapse_rec {
-                let path = (this.path + "$") | ""
+                let path = match {
+                    this.path == "" => "",
+                    this.path == null => "",
+                    this.path == "null" => "",
+                    _ => this.path + "$"
+                }
                 let data = this.data
                 root = $data.keys().map_each(k -> match $data.get(k) {
                     this.type() == "object" => {"path": $path + k, "data": this}.apply("collapse_rec")
@@ -253,7 +258,7 @@ data:
                     _ => {$path + k: this}
                 }).squash()
             }
-
+            
             # Wrapper function to start the flattening process
             map collapse {
                 root = {"data": this}.apply("collapse_rec")
