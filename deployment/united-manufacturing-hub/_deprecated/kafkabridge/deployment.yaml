@@ -121,7 +121,7 @@ spec:
               name: fgtrace
               protocol: TCP
           {{end}}
-          imagePullPolicy: {{.Values.kafkabridge.image.pullPolicy}}
+          imagePullPolicy: IfNotPresent
           env:
             - name: LOCAL_KAFKA_BOOTSTRAP_SERVER
               value: {{include "united-manufacturing-hub.fullname" .}}-kafka:9092

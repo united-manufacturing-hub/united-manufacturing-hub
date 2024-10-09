@@ -13,7 +13,7 @@
 # limitations under the License.
 
 ---
-{{if or .Values.factoryinsight.enabled .Values._000_commonConfig.datastorage.enabled}}
+{{if .Values.tags.classic }}
 
 apiVersion: apps/v1
 kind: Deployment
@@ -22,12 +22,8 @@ metadata:
   labels:
     {{- include "united-manufacturing-hub.labels.common" . | nindent 4}}
     {{- include "united-manufacturing-hub.labels.factoryinsight" . | nindent 4}}
-  {{if .Values.factoryinsight.annotations}}
-  annotations:
-    {{- toYaml .Values.factoryinsight.annotations | nindent 4}}
-  {{end}}
 spec:
-  replicas: {{.Values.factoryinsight.replicas}}
+  replicas: 2
   selector:
     matchLabels:
       {{- include "united-manufacturing-hub.matchLabels" . | nindent 6}}
@@ -53,31 +49,24 @@ spec:
                 topologyKey: "kubernetes.io/hostname"
       containers:
         - name: {{include "united-manufacturing-hub.fullname" .}}-factoryinsight
-          {{if .Values.factoryinsight.image.tag}}
-          image: {{.Values.factoryinsight.image.repository}}:{{.Values.factoryinsight.image.tag}}{{- if .Values._000_commonConfig.racedetector.enabled}}-race{{- end}}
-          {{- else}}
-          image: {{.Values.factoryinsight.image.repository}}:{{.Chart.AppVersion}}{{- if .Values._000_commonConfig.racedetector.enabled}}-race{{- end}}
-          {{end}}
+          image: "{{.Values.image.registry}}/united-manufacturing-hub/factoryinsight:{{.Chart.AppVersion}}"
           imagePullPolicy: IfNotPresent
           ports:
               - name: http
                 containerPort: 80
                 protocol: TCP
-          {{if .Values._000_commonConfig.debug.enableFGTrace}}
-              - containerPort: 1337
-                name: fgtrace
-                protocol: TCP
-          {{end}}
           resources:
             limits:
-              cpu: {{.Values.factoryinsight.resources.limits.cpu}}
+              cpu: 200m
+              memory: 200Mi
             requests:
-              cpu: {{.Values.factoryinsight.resources.requests.cpu}}
+              cpu: 50m
+              memory: 50Mi
           env:
             - name: LOGGING_LEVEL
               value: PRODUCTION
             - name: REDIS_URI
-              value: {{.Values.factoryinsight.redis.URI}}
+              value: united-manufacturing-hub-redis-headless:6379
             - name: REDIS_PASSWORD
               valueFrom:
                 secretKeyRef:
@@ -85,15 +74,15 @@ spec:
                   key: redispassword
 
             - name: POSTGRES_HOST
-              value: {{.Values.factoryinsight.db_host}}
+              value: "united-manufacturing-hub"
             - name: POSTGRES_PORT
-              value: {{.Values.factoryinsight.db_port | quote}}
+              value: "5432"
             - name: POSTGRES_DATABASE
-              value: {{.Values.factoryinsight.db_database}}
+              value: "factoryinsight"
             - name: POSTGRES_USER
-              value: {{.Values.factoryinsight.db_user}}
+              value: "factoryinsight"
             - name: POSTGRES_PASSWORD
-              value: {{.Values._000_commonConfig.datastorage.db_password}}
+              value: '{{ include "united-manufacturing-hub.postgresql.factoryinsight.password" . }}'
 
               {{$index := 1}}
               {{range $customerName, $password := .Values.customers | default dict}}
@@ -105,21 +94,17 @@ spec:
               {{end}}
 
             - name: FACTORYINSIGHT_USER
-              value: {{.Values.factoryinsight.user}}
+              value: "factoryinsight"
             - name: FACTORYINSIGHT_PASSWORD
               valueFrom:
                 secretKeyRef:
                   name: factoryinsight-secret
                   key: password
             - name: VERSION
-              value: {{.Values.factoryinsight.version | default 2 | quote}}
+              value: "2"
             - name: INSECURE_NO_AUTH
-              value: {{.Values.factoryinsight.insecure_no_auth | default "false" | quote}}
+              value: "false"
 
-            {{if .Values._000_commonConfig.debug.enableFGTrace}}
-            - name: DEBUG_ENABLE_FGTRACE
-              value: "true"
-            {{end}}
             - name: MY_POD_NAME
               valueFrom:
                 fieldRef:
