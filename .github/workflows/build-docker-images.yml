@@ -108,9 +108,9 @@ jobs:
           echo "BUILD_TAG=${BUILD_TAG}" >> $GITHUB_OUTPUT
           echo "BUILD_TAG=${BUILD_TAG}"
 
-          # Extract from : to the-${PLATFORM}
-          echo "SHORT_TAG=$(echo ${BUILD_TAG} | cut -d ':' -f 2 | cut -d '-' -f 1)" >> $GITHUB_OUTPUT
-          echo "SHORT_TAG=$(echo ${BUILD_TAG} | cut -d ':' -f 2 | cut -d '-' -f 1)"
+          # Extract from : to the-${PLATFORM} (be careful: pr-XXX- contains 2 dashes, therefore we need to include everything between : and the last -)
+          echo "SHORT_TAG=$(echo ${BUILD_TAG} | sed 's/.*:\(.*\)-.*/\1/')" >> $GITHUB_OUTPUT
+          echo "SHORT_TAG=$(echo ${BUILD_TAG} | sed 's/.*:\(.*\)-.*/\1/')"
 
 
   create-manifests:
