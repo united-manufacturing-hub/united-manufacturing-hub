@@ -29,7 +29,7 @@ jobs:
       contents: read
     strategy:
       matrix:
-        component: [ 'factoryinsight', 'grafana-umh', 'hivemq-init' ]
+        component: [ 'factoryinsight', 'grafana-umh', 'hivemq-init', 'barcodereader', 'kafka-init', 'sensorconnect']
         architecture: [ 'amd64', 'arm64' ]
         exclude:
           - component: 'factoryinsight'
@@ -126,7 +126,7 @@ jobs:
         shell: bash
     strategy:
       matrix:
-        component: [ 'factoryinsight', 'grafana-umh', 'hivemq-init' ]
+        component: [ 'factoryinsight', 'grafana-umh', 'hivemq-init', 'barcodereader', 'kafka-init', 'sensorconnect']
     steps:
       - name: Login to GitHub Container registry
         uses: docker/login-action@v3
