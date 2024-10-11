@@ -20,12 +20,12 @@ import (
 
 	// "github.com/cristalhq/base64"
 	"fmt"
+	"go.uber.org/zap"
+	"math"
 	"math/big"
 	"reflect"
 	"strconv"
 	"time"
-
-	"go.uber.org/zap"
 )
 
 // processSensorData processes the donwnloaded information from one io-link-master and sends kafka messages with that information.
@@ -288,7 +288,7 @@ func processSimpleDatatype(
 		simpleDatatype.FixedLength,
 		outputBitLength,
 		bitOffset)
-	valueString := convertBinaryValueToString(binaryValue, simpleDatatype.Type)
+	valueString := convertBinaryValue(binaryValue, simpleDatatype.Type)
 	valueName := getNameFromExternalTextCollection(nameTextId, primLangExternalTextCollection)
 	(*payload)[valueName] = valueString
 	return
@@ -339,7 +339,7 @@ func processDatatype(
 			datatype.FixedLength,
 			outputBitLength,
 			bitOffset)
-		valueString := convertBinaryValueToString(binaryValue, datatype.Type)
+		valueString := convertBinaryValue(binaryValue, datatype.Type)
 		valueName := getNameFromExternalTextCollection(nameTextId, primLangExternalTextCollection)
 		(*payload)[valueName] = valueString
 		return
@@ -555,18 +555,41 @@ func valueRangeOrSingleValueExistsInSimpleDatatype(item RecordItem){
 	}
 }
 */
-// convertBinaryValueToString converts a binary string value to a readable string according to its datatype
-func convertBinaryValueToString(binaryValue string, datatype string) (output string) {
+// convertBinaryValue converts a binary to value according to its datatype
+func convertBinaryValue(binaryValue string, datatype string) (output interface{}) {
+	bitLen := len(binaryValue)
+	raw, err := strconv.ParseUint(binaryValue, 2, bitLen)
+	if err != nil {
+		zap.S().Errorf("Error while converting binary value to %v: %v", datatype, err)
+	}
+
 	switch datatype {
 	case "OctetStringT":
 		output = BinToHex(binaryValue)
-	default:
-		outputString, err := strconv.ParseUint(binaryValue, 2, 64)
-		if err != nil {
-			zap.S().Errorf("Error while converting binary value to string: %v", err)
+	case "UIntegerT":
+		output = raw
+	case "IntegerT":
+		switch bitLen {
+		case 8:
+			output = int(int8(raw))
+		case 16:
+			output = int(int16(raw))
+		case 32:
+			output = int(int32(raw))
+		case 64:
+			output = int(int64(raw))
+		default:
+			zap.S().Errorf("Unsupported bit length for IntegerT: %d", bitLen)
 		}
-		return fmt.Sprintf("%v", outputString)
+	case "Float32T":
+		output = math.Float32frombits(uint32(raw))
+	case "BooleanT":
+		output = raw == 1
+	default:
+		zap.S().Warnf("Datatype %s not supported", datatype)
+		output = BinToHex(binaryValue)
 	}
+
 	return
 }
 
@@ -581,7 +604,7 @@ func createDigitalInputPayload(timestampMs int64, dataPin2In []byte, payload *ma
 }
 
 // createDigitalInputPayload creates the upper json output body from an IoLink response to send via mqtt or kafka to the server
-func createIoLinkBeginPayload(timestampMs string, payload *map[string]interface{}) {
+func createIoLinkBeginPayload(timestampMs int64, payload *map[string]interface{}) {
 
 	(*payload)["timestamp_ms"] = timestampMs
 	(*payload)["type"] = "Io-Link"
