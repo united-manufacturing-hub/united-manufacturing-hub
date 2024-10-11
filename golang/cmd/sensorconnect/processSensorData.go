@@ -398,10 +398,9 @@ func isEmpty(object interface{}) bool {
 }
 
 // getUnixTimestampMs returns the current unix timestamp as string in milliseconds
-func getUnixTimestampMs() (timestampMs string) {
+func getUnixTimestampMs() (timestampMs int64) {
 	t := time.Now()
-	timestampMsInt := int(t.UnixNano() / 1000000)
-	timestampMs = strconv.Itoa(timestampMsInt)
+	timestampMs = t.UnixNano() / 1000000
 	return
 }
 
@@ -572,7 +571,7 @@ func convertBinaryValueToString(binaryValue string, datatype string) (output str
 }
 
 // createDigitalInputPayload creates a json output body from a DigitalInput to send via mqtt or kafka to the server
-func createDigitalInputPayload(timestampMs string, dataPin2In []byte, payload *map[string]interface{}) {
+func createDigitalInputPayload(timestampMs int64, dataPin2In []byte, payload *map[string]interface{}) {
 	(*payload)["timestamp_ms"] = timestampMs
 	(*payload)["type"] = "DI"
 	(*payload)["connected"] = "connected"
