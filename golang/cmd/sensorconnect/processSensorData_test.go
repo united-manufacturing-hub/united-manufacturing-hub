@@ -16,6 +16,7 @@ package main
 
 import (
 	"fmt"
+	"math"
 	"testing"
 )
 
@@ -132,5 +133,133 @@ func TestBitConversions(t *testing.T) {
 	fmt.Println(longHexString)
 	if endHexStringPadded != "0000fc000001ff000000ff000161ff000025ff03" {
 		t.Error("Problem with BitConversions")
+	}
+}
+
+// IO-Link Interface and System Specification V1.1.4 F.2.2
+func TestBooleanTTConversions(t *testing.T) {
+	tests := []struct {
+		binary   string
+		expected bool
+	}{
+		{
+			binary:   "1",
+			expected: true,
+		},
+		{
+			binary:   "0",
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(fmt.Sprintf("When binary is: %s, Then convertBinaryValue returns: %t", tt.binary, tt.expected), func(t *testing.T) {
+			result := convertBinaryValue(tt.binary, "BooleanT")
+			if result != tt.expected {
+				t.Errorf("Expected %t, got %t", tt.expected, result)
+			}
+		})
+	}
+}
+
+// IO-Link Interface and System Specification V1.1.4 F.2.5
+func TestFloat32TConversions(t *testing.T) {
+	tests := []struct {
+		binary   string
+		expected float32
+	}{
+		{
+			binary:   "01000000010000000000000000000000",
+			expected: 3.0,
+		},
+		{
+			binary:   "11000000010000000000000000000000",
+			expected: -3.0,
+		},
+		{
+			binary:   "00000000000000000000000000000000",
+			expected: 0.0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(fmt.Sprintf("When binary is: %s, Then convertBinaryValue returns: %f", tt.binary, tt.expected), func(t *testing.T) {
+			result := convertBinaryValue(tt.binary, "Float32T")
+			if result != tt.expected {
+				t.Errorf("Expected %f, got %f", tt.expected, result)
+			}
+		})
+	}
+}
+
+// IO-Link Interface and System Specification V1.1.4 F.2.3
+func TestUIntegerTConversions(t *testing.T) {
+	tests := []struct {
+		binary   string
+		expected uint64
+	}{
+		{
+			binary:   "0001101",
+			expected: 13,
+		},
+		{
+			binary:   "10110111001011010",
+			expected: 93786,
+		},
+		{
+			binary:   "11111111111111111111111111111111",
+			expected: math.MaxUint32,
+		},
+		{
+			binary:   "1111111111111111111111111111111111111111111111111111111111111111",
+			expected: math.MaxUint64,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(fmt.Sprintf("When binary is: %s, Then convertBinaryValue returns: %v", tt.binary, tt.expected), func(t *testing.T) {
+			result := convertBinaryValue(tt.binary, "UIntegerT")
+			if result != tt.expected {
+				t.Errorf("Expected %v, got %v", tt.expected, result)
+			}
+		})
+	}
+}
+
+// IO-Link Interface and System Specification V1.1.4 F.2.4
+func TestIntegerTConversions(t *testing.T) {
+	tests := []struct {
+		binary   string
+		expected int
+	}{
+		{
+			binary:   "10000000",
+			expected: math.MinInt8,
+		},
+		{
+			binary:   "01111111",
+			expected: math.MaxInt8,
+		},
+		{
+			binary:   "1000000000000000",
+			expected: math.MinInt16,
+		},
+		{
+			binary:   "10000000000000000000000000000000",
+			expected: math.MinInt32,
+		},
+		{
+			binary:   "1000000000000000000000000000000000000000000000000000000000000000",
+			expected: math.MinInt64,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(fmt.Sprintf("When binary is: %s, Then convertBinaryValue returns: %v", tt.binary, tt.expected), func(t *testing.T) {
+			result := convertBinaryValue(tt.binary, "IntegerT")
+			if result != tt.expected {
+				t.Errorf("Expected %v, got %v", tt.expected, result)
+			}
+		})
 	}
 }
