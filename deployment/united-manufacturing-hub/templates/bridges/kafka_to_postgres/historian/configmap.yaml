@@ -58,6 +58,7 @@ data:
         topics: ['umh.v1.*']  # Consume from all topics starting with 'umh.v1.'
         consumer_group: "kafka_to_postgresql_historian_bridge"
         auto_replay_nacks: false
+        metadata_max_age: 10s
 
 
     ## Processors
