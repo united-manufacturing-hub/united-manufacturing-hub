@@ -87,7 +87,7 @@ data:
             let instance_name = "default"
 
             ## Defaults to 5, do not change unless you know what you are doing or are asked to do it by UMH
-            let split_point = 5
+            let split_point = {{.Values._000_commonConfig.umhMergePoint | default 5}}
 
             ######### END Variables #########
 
