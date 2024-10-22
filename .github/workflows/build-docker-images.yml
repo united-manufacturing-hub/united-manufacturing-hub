@@ -36,6 +36,10 @@ jobs:
             architecture: 'arm64'
           - component: 'kafka-init'
             architecture: 'arm64'
+          - component: 'sensorconnect'
+            architecture: 'arm64'
+          - component: 'barcodereader'
+            architecture: 'arm64'
     runs-on:
       group: ${{ matrix.architecture == 'arm64' && 'arc-runners-small' || 'arc-runners' }}
     env:
