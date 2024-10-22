@@ -66,7 +66,7 @@ spec:
             name: dfc-3e5c91f6-3dfc-45d6-8e9b-f17705e07b4c-kafka-t-psql-historian
       containers:
         - name: dfc-3e5c91f6-3dfc-45d6-8e9b-f17705e07b4c-kafka-t-psql-historian
-          image: management.umh.app/oci/united-manufacturing-hub/benthos-umh:0.3.18
+          image: management.umh.app/oci/united-manufacturing-hub/benthos-umh:0.3.21-beta1
           ports:
             - name: http
               containerPort: 4195
