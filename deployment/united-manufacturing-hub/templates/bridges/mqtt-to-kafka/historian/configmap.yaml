@@ -54,7 +54,7 @@ data:
       mqtt:
         urls:
           - united-manufacturing-hub-mqtt.united-manufacturing-hub.svc.cluster.local:1883
-        client_id: "mqtt_to_kafka_historian_bridge"
+        client_id: "mqtt_to_kafka_historian_bridge_{{.Values._000_commonConfig.instanceName}}"
         dynamic_client_id_suffix: "nanoid"
         auto_replay_nacks: false
         topics:
@@ -84,7 +84,7 @@ data:
             ######### Variables #########
 
             ## Change "default" to the name of the local instance
-            let instance_name = "default"
+            let instance_name = "{{.Values._000_commonConfig.instanceName}}"
 
             ## Defaults to 5, do not change unless you know what you are doing or are asked to do it by UMH
             let split_point = {{.Values._000_commonConfig.umhMergePoint | default 5}}
@@ -165,7 +165,7 @@ data:
               seed_brokers:
                 - united-manufacturing-hub-kafka.united-manufacturing-hub.svc.cluster.local:9092
               client_id: mqtt_to_kafka_historian_bridge
-              key: ${! meta("kafka_key") }
+              key: '${! meta("kafka_key").or("") }'
               metadata:
                 include_prefixes:
                   - kafka_
