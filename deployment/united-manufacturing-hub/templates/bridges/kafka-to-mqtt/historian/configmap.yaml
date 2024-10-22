@@ -57,6 +57,7 @@ data:
         topics: ['umh.v1.*']
         consumer_group: "kafka_to_mqtt_historian_bridge"
         auto_replay_nacks: false
+        metadata_max_age: 10s
 
     ## Processors
     #
