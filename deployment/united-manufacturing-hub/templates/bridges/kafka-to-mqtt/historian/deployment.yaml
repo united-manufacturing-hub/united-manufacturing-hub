@@ -66,7 +66,7 @@ spec:
             name: dfc-fcdec4de-a930-4229-befc-d318c9964a2e-kafka-t-mqtt-historian
       containers:
         - name: dfc-fcdec4de-a930-4229-befc-d318c9964a2e-kafka-t-mqtt-historian
-          image: management.umh.app/oci/united-manufacturing-hub/benthos-umh:0.3.21-beta1
+          image: management.umh.app/oci/united-manufacturing-hub/benthos-umh:0.3.23
           ports:
             - name: http
               containerPort: 4195
