@@ -61,10 +61,6 @@ data:
 
     ## Processors
     #
-
-
-    ## Processors
-    #
     # This part does the following:
     # 1. Reassemble the topic from the Kafka topic and key.
     # 2. Check if the reassembled topic contains the schema (_historian, etc.).
@@ -85,11 +81,8 @@ data:
             let bridge_schema = "_historian"
 
             ######### END Variables #########
-            ## This is used to prevent bridging the same message multiple times
-            let local_bridge_name = "kafka_to_mqtt_bridge" + $bridge_schema + "_" + $instance_name
-            let remote_bridge_name = "mqtt_to_kafka_bridge" + $bridge_schema + "_" + $instance_name
-            meta "local_bridge_name" = $local_bridge_name
-            meta "remote_bridge_name" = $remote_bridge_name
+            meta "local_bridge_name" = "kafka_to_mqtt_bridge" + $bridge_schema + "_" + $local_instance_name
+            meta "remote_bridge_name" = "mqtt_to_kafka_bridge" + $bridge_schema + "_" + $local_instance_name
 
             # Step 1: Reassemble the topic
             let kafka_topic = meta("kafka_topic")
@@ -118,7 +111,7 @@ data:
         - bloblang: |
             let local_bridge_name = meta("local_bridge_name")
             let remote_bridge_name = meta("remote_bridge_name")
-            # Step 3: Check if the message was previously bridged
+            # Step 4: Check if the message was previously bridged
             let bridged_by = meta("bridged_by").or("[]")
             let bridged_by = $bridged_by.parse_json().or([])
             meta "bridged_by" = $bridged_by
@@ -129,16 +122,14 @@ data:
             }
 
         - bloblang: |
-            # Step 4: Add our own bridge name to the list of bridges in the payload
             let bridged_by = meta("bridged_by")
             let bridged_by = $bridged_by.parse_json()
             let trimmed_topic = meta("trimmed_topic")
             let local_bridge_name = meta("local_bridge_name")
-            meta "bridged_by" = $bridged_by.append($local_bridge_name)
             root = this
 
             # Step 5: Add our own bridge name to the list of bridges in the payload
-            root.bridged_by = meta("bridged_by")
+            root.bridged_by = $bridged_by.append($local_bridge_name)
 
             # Step 6: Prepare the MQTT topic by replacing dots with slashes
             let mqtt_topic = $trimmed_topic.replace(".", "/")
