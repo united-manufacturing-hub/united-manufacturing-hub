@@ -138,7 +138,7 @@ data:
             root = this
 
             # Step 5: Add our own bridge name to the list of bridges in the payload
-            root.bridged_by = $bridged_by.append("benthos-kafka-to-mqtt-" + $instance_name)
+            root.bridged_by = meta("bridged_by")
 
             # Step 6: Prepare the MQTT topic by replacing dots with slashes
             let mqtt_topic = $trimmed_topic.replace(".", "/")
