@@ -54,7 +54,7 @@ data:
       mqtt:
         urls:
           - united-manufacturing-hub-mqtt.united-manufacturing-hub.svc.cluster.local:1883
-        client_id: "mqtt_to_kafka_historian_bridge"
+        client_id: "mqtt_to_kafka_historian_bridge_{{.Values._000_commonConfig.instanceName}}"
         dynamic_client_id_suffix: "nanoid"
         auto_replay_nacks: false
         topics:
@@ -84,12 +84,21 @@ data:
             ######### Variables #########
 
             ## Change "default" to the name of the local instance
-            let instance_name = "default"
+            let instance_name = "{{.Values._000_commonConfig.instanceName}}"
+
+            ## Defaults to _historian
+            ## Remember to change the subscribed topics in mqtt input as well
+            let bridge_schema = "_historian"
 
             ## Defaults to 5, do not change unless you know what you are doing or are asked to do it by UMH
             let split_point = {{.Values._000_commonConfig.umhMergePoint | default 5}}
 
             ######### END Variables #########
+            ## This is used to prevent bridging the same message multiple times
+            let local_bridge_name = "mqtt_to_kafka_bridge" + $bridge_schema + "_" + $instance_name
+            let remote_bridge_name = "kafka_to_mqtt_bridge" + $bridge_schema + "_" + $instance_name
+            meta "local_bridge_name" = $local_bridge_name
+            meta "remote_bridge_name" = $remote_bridge_name
 
             # Step 1
             let topic = meta("mqtt_topic").or("")
@@ -101,14 +110,18 @@ data:
             let trimmed_topic = $converted_topic.trim(".")
 
             # Step 2
-            let topic_parts = $trimmed_topic.split(".")
-            let topic_length = $topic_parts.length()
-            let min_point = [$split_point,$topic_length].min()
-            let kafka_topic = $topic_parts.slice(0, $min_point).join(".")
-            let kafka_key = $topic_parts.slice($min_point).join(".")
-
-            meta "kafka_topic" = $kafka_topic
-            meta "kafka_key" = $kafka_key
+            if ($merge_point > 0) {
+              let topic_parts = $trimmed_topic.split(".")
+              let topic_length = $topic_parts.length()
+              let min_point = [$merge_point,$topic_length].min()
+              let kafka_topic = $topic_parts.slice(0, $min_point).join(".")
+              let kafka_key = $topic_parts.slice($min_point).join(".")
+              meta "kafka_topic" = $kafka_topic
+              meta "kafka_key" = $kafka_key
+            } else {
+              meta "kafka_topic" = $trimmed_topic
+              meta "kafka_key" = ""
+            }
 
             # Step 3
             let invalid_json = this.catch(true)
@@ -125,10 +138,10 @@ data:
 
             # Step 5
             let bridged_by = root.bridged_by.or([])
-            root = if $bridged_by.contains("benthos-kafka-to-mqtt-" + $instance_name) || $bridged_by.contains("benthos-mqtt-to-kafka-" + $instance_name) {
+            root = if $bridged_by.contains($local_bridge_name) || $bridged_by.contains($remote_bridge_name) {
               deleted()
             } else {
-              root
+              root.without("bridged_by")
             }
 
             # Step 6
@@ -153,7 +166,7 @@ data:
             meta "parsing_failure" = $valid_schema == false
 
             # Step 7
-            let bridged_by = $bridged_by.append("benthos-mqtt-to-kafka-" + $instance_name)
+            let bridged_by = $bridged_by.append($local_bridge_name)
             meta "bridged_by" = $bridged_by
 
     output:
@@ -164,13 +177,11 @@ data:
               topic: ${! meta("kafka_topic") }
               seed_brokers:
                 - united-manufacturing-hub-kafka.united-manufacturing-hub.svc.cluster.local:9092
-              client_id: mqtt_to_kafka_historian_bridge
-              key: ${! meta("kafka_key") }
+              client_id: ${! meta("local_bridge_name") }
+              key: ${! meta("kafka_key").or("") }
               metadata:
-                include_prefixes:
-                  - kafka_
-                  - bridged_
-                  - parsing_
+                include_patterns:
+                  - .*
               batching:
                 count: 1000
                 period: 100ms
