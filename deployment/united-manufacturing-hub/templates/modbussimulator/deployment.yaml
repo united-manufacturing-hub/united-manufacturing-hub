@@ -54,7 +54,11 @@ spec:
             - containerPort: 5020
           command:
             [
-              "-f /server_config.json",
+              "python",
+              "-u",
+              "/app/modbus_server.py",
+              "-f",
+              "/server_config.json"
             ]
           volumeMounts:
           - name: modbussimulator-config
