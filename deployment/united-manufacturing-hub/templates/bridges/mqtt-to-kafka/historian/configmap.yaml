@@ -91,7 +91,7 @@ data:
             let bridge_schema = "_historian"
 
             ## Defaults to 5, do not change unless you know what you are doing or are asked to do it by UMH
-            let split_point = {{.Values._000_commonConfig.umhMergePoint | default 5}}
+            let merge_point = {{.Values._000_commonConfig.umhMergePoint | default 5}}
 
             ######### END Variables #########
             ## This is used to prevent bridging the same message multiple times
@@ -99,7 +99,6 @@ data:
             let remote_bridge_name = "kafka_to_mqtt_bridge" + $bridge_schema + "_" + $instance_name
             meta "local_bridge_name" = $local_bridge_name
             meta "remote_bridge_name" = $remote_bridge_name
-
             # Step 1
             let topic = meta("mqtt_topic").or("")
             let topic = match {
@@ -108,7 +107,6 @@ data:
             }
             let converted_topic = $topic.replace("/", ".")
             let trimmed_topic = $converted_topic.trim(".")
-
             # Step 2
             if ($merge_point > 0) {
               let topic_parts = $trimmed_topic.split(".")
@@ -122,10 +120,8 @@ data:
               meta "kafka_topic" = $trimmed_topic
               meta "kafka_key" = ""
             }
-
             # Step 3
             let invalid_json = this.catch(true)
-
             # Step 4
             root = if $invalid_json == true {
               {
@@ -135,7 +131,6 @@ data:
             } else {
               this
             }
-
             # Step 5
             let bridged_by = root.bridged_by.or([])
             root = if $bridged_by.contains($local_bridge_name) || $bridged_by.contains($remote_bridge_name) {
@@ -143,7 +138,6 @@ data:
             } else {
               root.without("bridged_by")
             }
-
             # Step 6
             let is_historian = $topic.contains("_historian")
             let valid_schema = if $is_historian {
@@ -164,7 +158,6 @@ data:
               true
             }
             meta "parsing_failure" = $valid_schema == false
-
             # Step 7
             let bridged_by = $bridged_by.append($local_bridge_name)
             meta "bridged_by" = $bridged_by
