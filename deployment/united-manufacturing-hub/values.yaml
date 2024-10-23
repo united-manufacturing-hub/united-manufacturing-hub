@@ -283,6 +283,10 @@ redpanda:
     replicas: 1
     initContainerImage:
       repository: management.umh.app/oci/library/busybox
+    sideCars:
+      controllers:
+        image:
+          repository: management.umh.app/oci/redpandadata/redpanda-operator
   rbac:
     enabled: true
   storage:
