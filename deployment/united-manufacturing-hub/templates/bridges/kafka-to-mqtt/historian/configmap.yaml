@@ -26,9 +26,9 @@ metadata:
     # This does not change over time
     data-flow-component-uuid: fcdec4de-a930-4229-befc-d318c9964a2e
     # This is the random UUID of the version of the component
-    data-flow-component-version-uuid: 7a732a81-180f-4a14-8dd8-dafbb613fb44
+    data-flow-component-version-uuid: f19bfb10-55e9-45a0-94c5-450b8ff7310b
     # Timestamp of last change to the component in unix milliseconds since epoch
-    data-flow-version: '1724661195274'
+    data-flow-version: '1729671887007'
     # Generic label to indicate that this is a data flow component
     is-data-flow-component: 'true'
     # Required for mgmtcompanion to manage the component
@@ -61,10 +61,6 @@ data:
 
     ## Processors
     #
-
-
-    ## Processors
-    #
     # This part does the following:
     # 1. Reassemble the topic from the Kafka topic and key.
     # 2. Check if the reassembled topic contains the schema (_historian, etc.).
@@ -78,14 +74,15 @@ data:
         - bloblang: |
             ######### Variables #########
 
-            ## Change "local_instance_name" to the name of the local instance
-            let local_instance_name = "ORIGIN_NAME"
+            ## Change "default" to the name of the local instance
+            let instance_name = "{{.Values._000_commonConfig.instanceName}}"
 
             ## Defaults to "_historian"
             let bridge_schema = "_historian"
 
             ######### END Variables #########
-            meta "local_instance_name" = $local_instance_name
+            meta "local_bridge_name" = "kafka_to_mqtt_bridge" + $bridge_schema + "_" + $local_instance_name
+            meta "remote_bridge_name" = "mqtt_to_kafka_bridge" + $bridge_schema + "_" + $local_instance_name
 
             # Step 1: Reassemble the topic
             let kafka_topic = meta("kafka_topic")
@@ -112,12 +109,13 @@ data:
             }
 
         - bloblang: |
-            let local_instance_name = meta("local_instance_name")
+            let local_bridge_name = meta("local_bridge_name")
+            let remote_bridge_name = meta("remote_bridge_name")
             # Step 4: Check if the message was previously bridged
             let bridged_by = meta("bridged_by").or("[]")
             let bridged_by = $bridged_by.parse_json().or([])
             meta "bridged_by" = $bridged_by
-            root = if $bridged_by.contains("benthos-mqtt-to-kafka-" + $local_instance_name) || $bridged_by.contains("benthos-kafka-to-mqtt-" + $local_instance_name) {
+            root = if $bridged_by.contains($local_bridge_name) || $bridged_by.contains($remote_bridge_name) {
               deleted()
             } else {
               root
@@ -127,11 +125,11 @@ data:
             let bridged_by = meta("bridged_by")
             let bridged_by = $bridged_by.parse_json()
             let trimmed_topic = meta("trimmed_topic")
-            let local_instance_name = meta("local_instance_name")
+            let local_bridge_name = meta("local_bridge_name")
             root = this
 
             # Step 5: Add our own bridge name to the list of bridges in the payload
-            root.bridged_by = $bridged_by.append("benthos-kafka-to-mqtt-" + $local_instance_name)
+            root.bridged_by = $bridged_by.append($local_bridge_name)
 
             # Step 6: Prepare the MQTT topic by replacing dots with slashes
             let mqtt_topic = $trimmed_topic.replace(".", "/")
@@ -145,7 +143,7 @@ data:
           - mqtt:
               urls:
                 - united-manufacturing-hub-mqtt.united-manufacturing-hub.svc.cluster.local:1883
-              client_id: "kafka_to_mqtt_historian_<ORIGIN_NAME>_to_<DESTINATION_NAME>_bridge"
+              client_id: "kafka_to_mqtt_historian_{{.Values._000_commonConfig.instanceName}}"
               dynamic_client_id_suffix: "nanoid"
               topic: '${! meta("mqtt_topic") }'
 {{end}}
