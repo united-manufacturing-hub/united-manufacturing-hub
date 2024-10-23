@@ -51,7 +51,7 @@ spec:
               cpu: "100m"
               memory: "500Mi"
           ports:
-            - containerPort: 502
+            - containerPort: 5020
           command:
             [
               "-f /server_config.json",
