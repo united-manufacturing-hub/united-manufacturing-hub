@@ -55,6 +55,7 @@ spec:
             - containerPort: 8080
           command:
             [
+              "./opcplc",
               "--pn=50000",
               "--autoaccept",
               "--sph",
