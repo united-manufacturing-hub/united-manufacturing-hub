@@ -42,7 +42,7 @@ spec:
             name: {{include "united-manufacturing-hub.fullname" .}}-opcsimv2-config
       containers:
         - name: {{include "united-manufacturing-hub.fullname" .}}-opcsimv2
-          image: management.umh.app/oci/iotedge/opc-plc:1.3.2
+          image: management.umh.app/oci/iotedge/opc-plc:2.9.11
           resources:
             requests:
               cpu: "50m"
