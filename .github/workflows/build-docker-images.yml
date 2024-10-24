@@ -164,7 +164,7 @@ jobs:
         shell: bash
     strategy:
       matrix:
-        component: [ 'factoryinsight', 'grafana-umh', 'hivemq-init', 'barcodereader', 'kafka-init', 'sensorconnect']
+        component: [ 'factoryinsight', 'grafana-umh', 'hivemq-init', 'kafka-init']
     steps:
       - name: Login to GitHub Container registry
         uses: docker/login-action@v3
