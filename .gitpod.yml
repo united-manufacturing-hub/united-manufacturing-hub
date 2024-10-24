@@ -23,6 +23,13 @@ tasks:
       curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
       chmod 700 get_helm.sh
       ./get_helm.sh
+
+      # Setup repos
+      helm repo add bitnami https://management.umh.app/helm/bitnami
+      helm repo add grafana https://management.umh.app/helm/grafana
+      helm repo add timescale https://management.umh.app/helm/timescale
+      helm repo add redpanda https://management.umh.app/helm/redpanda
+
       exit 0
 
 jetbrains:
