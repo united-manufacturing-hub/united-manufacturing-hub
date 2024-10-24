@@ -73,8 +73,8 @@ spec:
             - sh
             - -c
             - |
-              # Wait for HiveMQ (60 seconds timeout)
-              TIMEOUT_HIVE=60
+              # Wait for HiveMQ (300 seconds timeout)
+              TIMEOUT_HIVE=300
               while [[ $TIMEOUT_HIVE -gt 0 ]]; do
                 if nc -z united-manufacturing-hub-mqtt.united-manufacturing-hub.svc.cluster.local 1883; then
                   echo "HiveMQ is ready."
@@ -88,8 +88,8 @@ spec:
                 echo "HiveMQ not available, proceeding anyway."
               fi
 
-              # Wait for Kafka (60 seconds timeout)
-              TIMEOUT_KAFKA=60
+              # Wait for Kafka (300 seconds timeout)
+              TIMEOUT_KAFKA=300
               while [[ $TIMEOUT_KAFKA -gt 0 ]]; do
                 if nc -z united-manufacturing-hub-kafka.united-manufacturing-hub.svc.cluster.local 9092; then
                   echo "Kafka is ready."

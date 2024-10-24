@@ -131,6 +131,21 @@ data:
             } else {
               this
             }
+            # Step 4 (report metric if invalid)
+            if $invalid_json == true {
+              meta "invalid_count" = 1
+            }else{
+              meta "invalid_count" = 0
+            }
+        - metric:
+            type: counter_by
+            name: invalid_message
+            value: ${! meta("invalid_count") }
+        - bloblang: |
+            let local_bridge_name = meta("local_bridge_name")
+            let remote_bridge_name = meta("remote_bridge_name")
+            let topic = meta("mqtt_topic").or("")
+            root = this
             # Step 5
             let bridged_by = root.bridged_by.or([])
             root = if $bridged_by.contains($local_bridge_name) || $bridged_by.contains($remote_bridge_name) {
