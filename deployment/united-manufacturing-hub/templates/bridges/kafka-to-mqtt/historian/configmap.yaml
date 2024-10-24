@@ -75,7 +75,7 @@ data:
             ######### Variables #########
 
             ## Change "default" to the name of the local instance
-            let instance_name = "{{.Values._000_commonConfig.instanceName}}"
+            let local_instance_name = "{{.Values._000_commonConfig.instanceName}}"
 
             ## Defaults to "_historian"
             let bridge_schema = "_historian"
