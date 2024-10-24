@@ -323,19 +323,19 @@ data:
                 "timestamp": v.timestamp,
                 "k": v.k,
                 "v": match v.t {
-                "string" => if v.v.contains("\u0000") {
-                    v.v.quote()
-                } else {
-                    v.v
-                },
-                "bytes" => v.v.encode("hex"),
-                "number" => v.v,
-                "bool" => v.v.string(),
-                "timestamp" => v.v.string(),
-                "array" => v.v.format_json(no_indent: true).string(),
-                "object" => v.v.format_json(no_indent: true).string(),
-                "null" => v.v,
-                _ => v.v.format_json(no_indent: true).string()
+                  "string" => if v.v.contains("\u0000") {
+                      v.v.quote()
+                  } else {
+                      v.v
+                  },
+                  "bytes" => v.v.encode("hex"),
+                  "number" => v.v,
+                  "bool" => v.v.string(),
+                  "timestamp" => v.v.string(),
+                  "array" => v.v.format_json(no_indent: true).string(),
+                  "object" => v.v.format_json(no_indent: true).string(),
+                  "null" => v.v,
+                  _ => v.v.format_json(no_indent: true).string()
                 },
                 "t": v.t,
                 "asset_id": v.asset_id
