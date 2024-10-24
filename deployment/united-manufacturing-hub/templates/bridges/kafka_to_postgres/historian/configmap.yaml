@@ -245,10 +245,26 @@ data:
                           LIMIT 1;
                         args_mapping: '[ this.topic.enterprise, this.topic.site, this.topic.area, this.topic.productionLine, this.topic.workCell, this.topic.originId ]'
                     - bloblang: |
-                        # Extract the 'id' field from the SQL query result and set it as the cache value
-                        root = this.index(0).get("id")
+                        # Safely extract the 'id' field from the SQL query result
+                        root = if this.length() > 0 {
+                          this.index(0).get("id")
+                        } else {
+                          null
+                        }
             result_map: 'root.asset_id = this'  # Store the asset_id in the message
 
+        - switch:
+            # Step 6 continued: Abort if asset_id is null
+            - check: this.asset_id == null
+              processors:
+                # Remove null from cache
+                - cache:
+                    resource: id_cache
+                    operator: delete
+                    key: '${! meta("cache_key") }'
+                # If the asset_id is null, delete the message
+                - bloblang: |
+                    root = deleted()
         - bloblang: |
             # Step 7: Flatten the payload and prepare data for insertion
             # Define a recursive function to flatten nested JSON objects
