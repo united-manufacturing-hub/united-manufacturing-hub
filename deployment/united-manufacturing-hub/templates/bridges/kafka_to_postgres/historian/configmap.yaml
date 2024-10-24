@@ -117,10 +117,10 @@ data:
             value: ${! meta("invalid_json_count") }
         - bloblang: |
             let invalid_json = meta("invalid_json_count")
-            root = if $invalid_json > 0 {
-              deleted()
-            } else {
+            root = if $invalid_json.string() == "0" {
               root
+            } else {
+              deleted()
             }
 
         - bloblang: |
