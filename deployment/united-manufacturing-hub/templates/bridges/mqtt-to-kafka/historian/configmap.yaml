@@ -176,6 +176,15 @@ data:
             # Step 7
             let bridged_by = $bridged_by.append($local_bridge_name)
             meta "bridged_by" = $bridged_by
+            if $valid_schema == false {
+              meta "invalid_schema_count" = 1
+            }else{
+              meta "invalid_schema_count" = 0
+            }
+        - metric:
+            type: counter_by
+            name: invalid_schema
+            value: ${! meta("invalid_schema_count") }
 
     output:
       broker:
