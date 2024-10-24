@@ -102,10 +102,22 @@ data:
         - bloblang: |
             # Step 3: Validate that the message is valid JSON
             let invalid_json = this.catch(true)
-            root = if $invalid_json == true {
+            if $invalid_json == true {
+              meta "invalid_json_count" = 1
+            } else {
+              meta "invalid_json_count" = 0
+            }
+            root = this
+        - metric:
+            type: counter_by
+            name: invalid_json
+            value: ${! meta("invalid_json_count") }
+        - bloblang: |
+            let invalid_json = meta("invalid_json_count")
+            if $invalid_json > 0 {
               deleted()
             } else {
-              this
+              root = this
             }
 
         - bloblang: |
