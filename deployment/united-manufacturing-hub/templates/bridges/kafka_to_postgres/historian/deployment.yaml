@@ -65,6 +65,8 @@ spec:
           configMap:
             name: dfc-3e5c91f6-3dfc-45d6-8e9b-f17705e07b4c-kafka-t-psql-historian
       initContainers:
+        # This init container waits for Postgres and Kafka to be available before starting the main container
+        # While not strictly necessary, it keeps the benthos logs cleaner
         - name: wait-for-postgres-and-kafka
           image: busybox
           command:

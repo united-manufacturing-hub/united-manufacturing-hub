@@ -65,6 +65,8 @@ spec:
           configMap:
             name: dfc-1db88f9f-789d-45fa-b095-cf579cc9074d-mqtt-t-kafka-historian
       initContainers:
+        # This init container waits for HiveMQ and Kafka to be available before starting the main container
+        # While not strictly necessary, it keeps the benthos logs cleaner
         - name: wait-for-hivemq-and-kafka
           image: busybox
           command:
