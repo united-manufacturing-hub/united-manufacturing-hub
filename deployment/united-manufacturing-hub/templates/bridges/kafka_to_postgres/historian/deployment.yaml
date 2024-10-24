@@ -73,8 +73,8 @@ spec:
             - sh
             - -c
             - |
-              # Wait for PostgreSQL (60 seconds timeout)
-              TIMEOUT_PG=60
+              # Wait for PostgreSQL (300 seconds timeout)
+              TIMEOUT_PG=300
               while [[ $TIMEOUT_PG -gt 0 ]]; do
                 if nc -z united-manufacturing-hub.united-manufacturing-hub.svc.cluster.local 5432; then
                   echo "PostgreSQL is ready."
@@ -88,8 +88,8 @@ spec:
                 echo "PostgreSQL not available, proceeding anyway."
               fi
 
-              # Wait for Kafka (60 seconds timeout)
-              TIMEOUT_KAFKA=60
+              # Wait for Kafka (300 seconds timeout)
+              TIMEOUT_KAFKA=300
               while [[ $TIMEOUT_KAFKA -gt 0 ]]; do
                 if nc -z united-manufacturing-hub-kafka.united-manufacturing-hub.svc.cluster.local 9092; then
                   echo "Kafka is ready."
