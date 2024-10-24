@@ -133,14 +133,14 @@ data:
             }
             # Step 4 (report metric if invalid)
             if $invalid_json == true {
-              meta "invalid_count" = 1
+              meta "invalid_json_count" = 1
             }else{
-              meta "invalid_count" = 0
+              meta "invalid_json_count" = 0
             }
         - metric:
             type: counter_by
-            name: invalid_message
-            value: ${! meta("invalid_count") }
+            name: invalid_json
+            value: ${! meta("invalid_json_count") }
         - bloblang: |
             let local_bridge_name = meta("local_bridge_name")
             let remote_bridge_name = meta("remote_bridge_name")
