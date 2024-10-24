@@ -64,6 +64,42 @@ spec:
         - name: config
           configMap:
             name: dfc-3e5c91f6-3dfc-45d6-8e9b-f17705e07b4c-kafka-t-psql-historian
+      initContainers:
+        - name: wait-for-postgres-and-kafka
+          image: busybox
+          command:
+            - sh
+            - -c
+            - |
+              # Wait for PostgreSQL (60 seconds timeout)
+              TIMEOUT_PG=60
+              while [[ $TIMEOUT_PG -gt 0 ]]; do
+                if nc -z united-manufacturing-hub.united-manufacturing-hub.svc.cluster.local 5432; then
+                  echo "PostgreSQL is ready."
+                  break
+                fi
+                echo "Waiting for PostgreSQL... $TIMEOUT_PG seconds left"
+                sleep 5
+                TIMEOUT_PG=$((TIMEOUT_PG - 5))
+              done
+              if [[ $TIMEOUT_PG -le 0 ]]; then
+                echo "PostgreSQL not available, proceeding anyway."
+              fi
+
+              # Wait for Kafka (60 seconds timeout)
+              TIMEOUT_KAFKA=60
+              while [[ $TIMEOUT_KAFKA -gt 0 ]]; do
+                if nc -z united-manufacturing-hub-kafka.united-manufacturing-hub.svc.cluster.local 9092; then
+                  echo "Kafka is ready."
+                  break
+                fi
+                echo "Waiting for Kafka... $TIMEOUT_KAFKA seconds left"
+                sleep 5
+                TIMEOUT_KAFKA=$((TIMEOUT_KAFKA - 5))
+              done
+              if [[ $TIMEOUT_KAFKA -le 0 ]]; then
+                echo "Kafka not available, proceeding anyway."
+              fi
       containers:
         - name: dfc-3e5c91f6-3dfc-45d6-8e9b-f17705e07b4c-kafka-t-psql-historian
           image: management.umh.app/oci/united-manufacturing-hub/benthos-umh:0.3.23
