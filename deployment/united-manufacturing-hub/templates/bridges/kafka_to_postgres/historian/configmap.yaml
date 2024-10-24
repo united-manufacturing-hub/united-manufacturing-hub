@@ -58,6 +58,7 @@ data:
         topics: ['umh.v1.*']  # Consume from all topics starting with 'umh.v1.'
         consumer_group: "kafka_to_postgresql_historian_bridge"
         auto_replay_nacks: false
+        metadata_max_age: 10s
 
 
     ## Processors
@@ -102,14 +103,24 @@ data:
             }
 
         - bloblang: |
-            # Step 3: Validate JSON format
-            # Attempt to access 'this' (the message payload). If it's invalid JSON, an error occurs and 'catch(true)' returns true
+            # Step 3: Validate that the message is valid JSON
             let invalid_json = this.catch(true)
-
-            # If 'invalid_json' is true, it means parsing failed; delete the message
-            root = match {
-              $invalid_json == true => deleted(),   # Delete if invalid JSON
-              _ => this                             # Keep the message if valid JSON
+            if $invalid_json == true {
+              meta "invalid_json_count" = 1
+            } else {
+              meta "invalid_json_count" = 0
+            }
+            root = this
+        - metric:
+            type: counter_by
+            name: invalid_json
+            value: ${! meta("invalid_json_count") }
+        - bloblang: |
+            let invalid_json = meta("invalid_json_count")
+            root = if $invalid_json.string() == "0" {
+              root
+            } else {
+              deleted()
             }
 
         - bloblang: |
@@ -234,10 +245,26 @@ data:
                           LIMIT 1;
                         args_mapping: '[ this.topic.enterprise, this.topic.site, this.topic.area, this.topic.productionLine, this.topic.workCell, this.topic.originId ]'
                     - bloblang: |
-                        # Extract the 'id' field from the SQL query result and set it as the cache value
-                        root = this.index(0).get("id")
+                        # Safely extract the 'id' field from the SQL query result
+                        root = if this.length() > 0 {
+                          this.index(0).get("id")
+                        } else {
+                          null
+                        }
             result_map: 'root.asset_id = this'  # Store the asset_id in the message
 
+        - switch:
+            # Step 6 continued: Abort if asset_id is null
+            - check: this.asset_id == null
+              processors:
+                # Remove null from cache
+                - cache:
+                    resource: id_cache
+                    operator: delete
+                    key: '${! meta("cache_key") }'
+                # If the asset_id is null, delete the message
+                - bloblang: |
+                    root = deleted()
         - bloblang: |
             # Step 7: Flatten the payload and prepare data for insertion
             # Define a recursive function to flatten nested JSON objects
@@ -296,19 +323,19 @@ data:
                 "timestamp": v.timestamp,
                 "k": v.k,
                 "v": match v.t {
-                "string" => if v.v.contains("\u0000") {
-                    v.v.quote()
-                } else {
-                    v.v
-                },
-                "bytes" => v.v.encode("hex"),
-                "number" => v.v,
-                "bool" => v.v.string(),
-                "timestamp" => v.v.string(),
-                "array" => v.v.format_json(no_indent: true).string(),
-                "object" => v.v.format_json(no_indent: true).string(),
-                "null" => v.v,
-                _ => v.v.format_json(no_indent: true).string()
+                  "string" => if v.v.contains("\u0000") {
+                      v.v.quote()
+                  } else {
+                      v.v
+                  },
+                  "bytes" => v.v.encode("hex"),
+                  "number" => v.v,
+                  "bool" => v.v.string(),
+                  "timestamp" => v.v.string(),
+                  "array" => v.v.format_json(no_indent: true).string(),
+                  "object" => v.v.format_json(no_indent: true).string(),
+                  "null" => v.v,
+                  _ => v.v.format_json(no_indent: true).string()
                 },
                 "t": v.t,
                 "asset_id": v.asset_id
