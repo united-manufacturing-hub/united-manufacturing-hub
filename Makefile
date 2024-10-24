@@ -41,3 +41,6 @@ release-prerelease: lint package-prerelease index-prerelease
 	git add $(HELM_REPO_PATH)/*.tgz $(HELM_REPO_PATH)/index.yaml
 	git commit -m "Prerelease $(VERSION) - $(BRANCH_NAME)"
 	git push
+
+update-depedencies:
+	helm dependency update $(CHART_PATH)

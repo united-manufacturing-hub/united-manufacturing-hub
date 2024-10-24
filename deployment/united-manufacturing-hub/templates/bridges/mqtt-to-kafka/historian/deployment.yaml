@@ -26,9 +26,9 @@ metadata:
     # This does not change over time
     data-flow-component-uuid: 1db88f9f-789d-45fa-b095-cf579cc9074d
     # This is the random UUID of the version of the component
-    data-flow-component-version-uuid: 83bd6ace-58f7-4572-9ab4-f8a9237a47dd
+    data-flow-component-version-uuid: 0a8c3ba3-7e0c-4f1c-8438-b07fdba36410
     # Timestamp of last change to the component in unix milliseconds since epoch
-    data-flow-version: '1724661195274'
+    data-flow-version: '1729671887007'
     # Generic label to indicate that this is a data flow component
     is-data-flow-component: 'true'
     # Required for mgmtcompanion to manage the component
@@ -48,9 +48,9 @@ spec:
         # This does not change over time
         data-flow-component-uuid: 1db88f9f-789d-45fa-b095-cf579cc9074d
         # This is the random UUID of the version of the component
-        data-flow-component-version-uuid: 83bd6ace-58f7-4572-9ab4-f8a9237a47dd
+        data-flow-component-version-uuid: 0a8c3ba3-7e0c-4f1c-8438-b07fdba36410
         # Timestamp of last change to the component in unix milliseconds since epoch
-        data-flow-version: '1724661195274'
+        data-flow-version: '1729671887007'
         # Generic label to indicate that this is a data flow component
         is-data-flow-component: 'true'
         # Required for mgmtcompanion to manage the component
@@ -64,9 +64,47 @@ spec:
         - name: config
           configMap:
             name: dfc-1db88f9f-789d-45fa-b095-cf579cc9074d-mqtt-t-kafka-historian
+      initContainers:
+        # This init container waits for HiveMQ and Kafka to be available before starting the main container
+        # While not strictly necessary, it keeps the benthos logs cleaner
+        - name: wait-for-hivemq-and-kafka
+          image: busybox
+          command:
+            - sh
+            - -c
+            - |
+              # Wait for HiveMQ (300 seconds timeout)
+              TIMEOUT_HIVE=300
+              while [[ $TIMEOUT_HIVE -gt 0 ]]; do
+                if nc -z united-manufacturing-hub-mqtt.united-manufacturing-hub.svc.cluster.local 1883; then
+                  echo "HiveMQ is ready."
+                  break
+                fi
+                echo "Waiting for HiveMQ... $TIMEOUT_HIVE seconds left"
+                sleep 5
+                TIMEOUT_HIVE=$((TIMEOUT_HIVE - 5))
+              done
+              if [[ $TIMEOUT_HIVE -le 0 ]]; then
+                echo "HiveMQ not available, proceeding anyway."
+              fi
+
+              # Wait for Kafka (300 seconds timeout)
+              TIMEOUT_KAFKA=300
+              while [[ $TIMEOUT_KAFKA -gt 0 ]]; do
+                if nc -z united-manufacturing-hub-kafka.united-manufacturing-hub.svc.cluster.local 9092; then
+                  echo "Kafka is ready."
+                  break
+                fi
+                echo "Waiting for Kafka... $TIMEOUT_KAFKA seconds left"
+                sleep 5
+                TIMEOUT_KAFKA=$((TIMEOUT_KAFKA - 5))
+              done
+              if [[ $TIMEOUT_KAFKA -le 0 ]]; then
+                echo "Kafka not available, proceeding anyway."
+              fi
       containers:
         - name: dfc-1db88f9f-789d-45fa-b095-cf579cc9074d-mqtt-t-kafka-historian
-          image: management.umh.app/oci/united-manufacturing-hub/benthos-umh:0.3.18
+          image: management.umh.app/oci/united-manufacturing-hub/benthos-umh:0.3.23
           ports:
             - name: http
               containerPort: 4195

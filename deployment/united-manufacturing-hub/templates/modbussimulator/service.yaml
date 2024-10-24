@@ -25,7 +25,7 @@ spec:
   type: LoadBalancer
   ports:
     - port: 50502
-      targetPort: 502
+      targetPort: 5020
       protocol: TCP
       name: modbus
   selector:
