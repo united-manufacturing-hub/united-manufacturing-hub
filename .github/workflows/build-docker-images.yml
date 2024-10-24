@@ -16,6 +16,12 @@ name: Build Docker Images
 
 on:
   pull_request:
+  push:
+    branches:
+      - main
+      - staging
+    tags:
+      - '*'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -47,6 +53,8 @@ jobs:
     outputs:
       BUILD_TAG: ${{ steps.build-and-output.outputs.BUILD_TAG }}
       SHORT_TAG: ${{ steps.build-and-output.outputs.SHORT_TAG }}
+      PRERELEASE_TAG: ${{ steps.build-and-output.outputs.PRERELEASE_TAG }}
+      PRERELEASE_SHORT_TAG: ${{ steps.build-and-output.outputs.PRERELEASE_SHORT_TAG }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -94,28 +102,58 @@ jobs:
           export DOCKER_FILE=./deployment/${{ matrix.component }}/Dockerfile
           export PLATFORM=${{ matrix.architecture }}
 
+          # Read appVersion from Chart.yaml
+          export APP_VERSION=$(grep '^appVersion:' deployment/united-manufacturing-hub/Chart.yaml | awk '{print $2}')
+
+          # Initialize BUILD_TAGS
+          BUILD_TAGS=""
+          PRERELEASE_TAG=""
+          PRERELEASE_SHORT_TAG=""
+
           if [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == "refs/heads/main" ]]; then
             export BUILD_TAG=ghcr.io/united-manufacturing-hub/${{ matrix.component }}:latest-${PLATFORM}
-          elif [[ ("${{ github.event_name }}" == "push" && "${{ github.ref }}" == "refs/heads/staging") || "${{ github.event.pull_request.head.ref }}" == "staging" ]]; then
+            BUILD_TAGS="-t ${BUILD_TAG}"
+          elif [[ ("${{ github.event_name }}" == "push" && "${{ github.ref }}" == "refs/heads/staging") || ("${{ github.event_name }}" == "pull_request" && "${{ github.event.pull_request.head.ref }}" == "staging") ]]; then
+            # Build staging tag
             export BUILD_TAG=ghcr.io/united-manufacturing-hub/${{ matrix.component }}:staging-${PLATFORM}
+            BUILD_TAGS="-t ${BUILD_TAG}"
+            # Check if APP_VERSION is a pre-release (contains '-')
+            if [[ "${APP_VERSION}" == *"-"* ]]; then
+              # APP_VERSION is a pre-release
+              export PRERELEASE_TAG=ghcr.io/united-manufacturing-hub/${{ matrix.component }}:${APP_VERSION}-${PLATFORM}
+              BUILD_TAGS="${BUILD_TAGS} -t ${PRERELEASE_TAG}"
+            fi
           elif [[ "${{ github.event_name }}" == "pull_request" ]]; then
             export BUILD_TAG=ghcr.io/united-manufacturing-hub/${{ matrix.component }}:pr-${{ github.event.pull_request.number }}-${PLATFORM}
+            BUILD_TAGS="-t ${BUILD_TAG}"
           elif [[ "${{ github.event_name }}" == "merge_group" ]]; then
             export BUILD_TAG=ghcr.io/united-manufacturing-hub/${{ matrix.component }}:$(git rev-parse --abbrev-ref HEAD)-${PLATFORM}
+            BUILD_TAGS="-t ${BUILD_TAG}"
           elif [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == refs/tags/* ]]; then
             export BUILD_TAG=ghcr.io/united-manufacturing-hub/${{ matrix.component }}:${GIT_TAG}-${PLATFORM}
+            BUILD_TAGS="-t ${BUILD_TAG}"
           fi
 
+          # Now build and push images with all tags
           docker buildx build --platform linux/${PLATFORM} --provenance=false --progress=plain \
-            --build-arg APP_VERSION=${GIT_TAG} -t ${BUILD_TAG} -f ${DOCKER_FILE} --push .
+            --build-arg APP_VERSION=${GIT_TAG} ${BUILD_TAGS} -f ${DOCKER_FILE} --push .
 
+          # Output the primary BUILD_TAG
           echo "BUILD_TAG=${BUILD_TAG}" >> $GITHUB_OUTPUT
           echo "BUILD_TAG=${BUILD_TAG}"
 
-          # Extract from : to the-${PLATFORM} (be careful: pr-XXX- contains 2 dashes, therefore we need to include everything between : and the last -)
+          # Extract SHORT_TAG from BUILD_TAG
           echo "SHORT_TAG=$(echo ${BUILD_TAG} | sed 's/.*:\(.*\)-.*/\1/')" >> $GITHUB_OUTPUT
           echo "SHORT_TAG=$(echo ${BUILD_TAG} | sed 's/.*:\(.*\)-.*/\1/')"
 
+          # If PRERELEASE_TAG exists, output it
+          if [[ -n "${PRERELEASE_TAG}" ]]; then
+            echo "PRERELEASE_TAG=${PRERELEASE_TAG}" >> $GITHUB_OUTPUT
+            echo "PRERELEASE_TAG=${PRERELEASE_TAG}"
+            # Extract PRERELEASE_SHORT_TAG from PRERELEASE_TAG
+            echo "PRERELEASE_SHORT_TAG=$(echo ${PRERELEASE_TAG} | sed 's/.*:\(.*\)-.*/\1/')" >> $GITHUB_OUTPUT
+            echo "PRERELEASE_SHORT_TAG=$(echo ${PRERELEASE_TAG} | sed 's/.*:\(.*\)-.*/\1/')"
+          fi
 
   create-manifests:
     needs: build-docker
@@ -134,12 +172,9 @@ jobs:
     steps:
       - name: Login to GitHub Container registry
         uses: docker/login-action@v3
-        env:
-          GITHUB_USER: ${{ github.actor }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           registry: ghcr.io
-          username: $GITHUB_USER
+          username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -147,21 +182,31 @@ jobs:
       - name: Check if ARM64 image exists
         id: check_arm64
         run: |
-          if docker manifest inspect ghcr.io/united-manufacturing-hub/${{ matrix.component}}:${{ needs.build-docker.outputs.SHORT_TAG }}-arm64 >/dev/null 2>&1; then
+          if docker manifest inspect ghcr.io/united-manufacturing-hub/${{ matrix.component }}:${{ needs.build-docker.outputs.SHORT_TAG }}-arm64 >/dev/null 2>&1; then
             echo "ARM64_EXISTS=true" >> $GITHUB_ENV
           else
             echo "ARM64_EXISTS=false" >> $GITHUB_ENV
           fi
 
-      - name: Create multiarch manifests
+      - name: Create multiarch manifests for primary tag
         run: |
-          # Remove ghcr.io prefix from the tag
-          TAG=${TAG#ghcr.io/united-manufacturing-hub/}
-          if [ "${{ env.ARM64_EXISTS }}" = "true" ]; then
-            docker buildx imagetools create -t ghcr.io/united-manufacturing-hub/${{ matrix.component}}:${{ needs.build-docker.outputs.SHORT_TAG }} \
-              ghcr.io/united-manufacturing-hub/${{ matrix.component}}:${{ needs.build-docker.outputs.SHORT_TAG }}-amd64 \
-              ghcr.io/united-manufacturing-hub/${{ matrix.component}}:${{ needs.build-docker.outputs.SHORT_TAG }}-arm64
+          if [ "${ARM64_EXISTS}" = "true" ]; then
+            docker buildx imagetools create -t ghcr.io/united-manufacturing-hub/${{ matrix.component }}:${{ needs.build-docker.outputs.SHORT_TAG }} \
+              ghcr.io/united-manufacturing-hub/${{ matrix.component }}:${{ needs.build-docker.outputs.SHORT_TAG }}-amd64 \
+              ghcr.io/united-manufacturing-hub/${{ matrix.component }}:${{ needs.build-docker.outputs.SHORT_TAG }}-arm64
           else
-            docker buildx imagetools create -t ghcr.io/united-manufacturing-hub/${{ matrix.component}}:${{ needs.build-docker.outputs.SHORT_TAG }} \
-              ghcr.io/united-manufacturing-hub/${{ matrix.component}}:${{ needs.build-docker.outputs.SHORT_TAG }}-amd64
+            docker buildx imagetools create -t ghcr.io/united-manufacturing-hub/${{ matrix.component }}:${{ needs.build-docker.outputs.SHORT_TAG }} \
+              ghcr.io/united-manufacturing-hub/${{ matrix.component }}:${{ needs.build-docker.outputs.SHORT_TAG }}-amd64
+          fi
+
+      - name: Create multiarch manifests for pre-release tag (if exists)
+        if: ${{ needs.build-docker.outputs.PRERELEASE_SHORT_TAG != '' }}
+        run: |
+          if [ "${ARM64_EXISTS}" = "true" ]; then
+            docker buildx imagetools create -t ghcr.io/united-manufacturing-hub/${{ matrix.component }}:${{ needs.build-docker.outputs.PRERELEASE_SHORT_TAG }} \
+              ghcr.io/united-manufacturing-hub/${{ matrix.component }}:${{ needs.build-docker.outputs.PRERELEASE_SHORT_TAG }}-amd64 \
+              ghcr.io/united-manufacturing-hub/${{ matrix.component }}:${{ needs.build-docker.outputs.PRERELEASE_SHORT_TAG }}-arm64
+          else
+            docker buildx imagetools create -t ghcr.io/united-manufacturing-hub/${{ matrix.component }}:${{ needs.build-docker.outputs.PRERELEASE_SHORT_TAG }} \
+              ghcr.io/united-manufacturing-hub/${{ matrix.component }}:${{ needs.build-docker.outputs.PRERELEASE_SHORT_TAG }}-amd64
           fi
