@@ -1,0 +1,132 @@
+# Copyright 2023 UMH Systems GmbH
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+---
+{{if .Values._003_legacyConfig.enableLegacyDataModel}}
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{include "united-manufacturing-hub.fullname" .}}-kafkatopostgresql
+  labels:
+    {{- include "united-manufacturing-hub.labels.common" . | nindent 4}}
+    {{- include "united-manufacturing-hub.labels.kafkatopostgresql" . | nindent 4}}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "united-manufacturing-hub.matchLabels" . | nindent 6}}
+      {{- include "united-manufacturing-hub.labels.kafkatopostgresql" . | nindent 6}}
+  strategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        {{- include "united-manufacturing-hub.labels.common" . | nindent 8}}
+        {{- include "united-manufacturing-hub.labels.kafkatopostgresql" . | nindent 8}}
+    spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 1
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    name: {{include "united-manufacturing-hub.fullname" .}}-kafkatopostgresql
+                topologyKey: "kubernetes.io/hostname"
+      # Be nice to kafka & the db
+      terminationGracePeriodSeconds: 180
+      initContainers:
+        - name: {{include "united-manufacturing-hub.fullname" .}}-kafkatopostgres-init
+          image: "{{.Values.image.registry}}/united-manufacturing-hub/kafka-init:{{.Chart.AppVersion}}"
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: KAFKA_BOOTSTRAP_SERVER
+              value: {{include "united-manufacturing-hub.fullname" .}}-kafka:9092
+            - name: KAFKA_TOPICS
+              value: ia.test.test.test.processValue;ia.test.test.test.count;umh.v1.kafka.newTopic
+
+            - name: KAFKA_USE_SSL
+              value: "false"
+            - name: KAFKA_SSL_KEY_PASSWORD
+              value: ""
+      containers:
+        - name: {{include "united-manufacturing-hub.fullname" .}}-kafkatopostgresql
+          image: "{{.Values.image.registry}}/united-manufacturing-hub/kafka-to-postgresql:{{.Chart.AppVersion}}"
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: metrics
+              containerPort: 2112
+              protocol: TCP
+          env:
+
+            - name: POSTGRES_HOST
+              value: united-manufacturing-hub
+            - name: POSTGRES_DATABASE
+              value: factoryinsight
+            - name: POSTGRES_USER
+              value: factoryinsight
+            - name: POSTGRES_PASSWORD
+              value: "changeme"
+            - name: POSTGRES_SSLMODE
+              value: "require"
+
+            - name: LOGGING_LEVEL
+              value: PRODUCTION
+
+            - name: KAFKA_BOOTSTRAP_SERVER
+              value: {{include "united-manufacturing-hub.fullname" .}}-kafka:9092
+            - name: MEMORY_REQUEST
+              value: "150Mi"
+
+            - name: MY_POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: MICROSERVICE_NAME
+              valueFrom:
+                fieldRef:
+                    fieldPath: metadata.labels['app.kubernetes.io/name']
+
+            - name: KAFKA_USE_SSL
+              value: "false"
+            - name: KAFKA_SSL_KEY_PASSWORD
+              value: ""
+
+            - name: SERIAL_NUMBER
+              value: {{.Values._000_commonConfig.instanceName | quote}}
+
+          # define a liveness probe that checks every 5 seconds, starting after 5 seconds
+          livenessProbe:
+            httpGet:
+              path: /live
+              port: 8086
+            periodSeconds: 5
+          startupProbe:
+            httpGet:
+              path: /live
+              port: 8086
+            periodSeconds: 10
+            failureThreshold: 5 # 5*periodSeconds (10) => 50 sec max startup time
+          resources:
+            limits:
+              cpu: 200m
+              memory: 300Mi
+            requests:
+              cpu: 50m
+              memory: 150Mi
+      serviceAccountName: ""
+      restartPolicy: Always
+{{end}}
+
