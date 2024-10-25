@@ -35,12 +35,14 @@ jobs:
       contents: read
     strategy:
       matrix:
-        component: [ 'factoryinsight', 'grafana-umh', 'hivemq-init', 'kafka-init','kafka-to-postgresql-v2']
+        component: [ 'factoryinsight', 'grafana-umh', 'hivemq-init', 'kafka-init','kafka-to-postgresql','kafka-to-postgresql-v2']
         architecture: [ 'amd64', 'arm64' ]
         exclude:
           - component: 'factoryinsight'
             architecture: 'arm64'
           - component: 'kafka-init'
+            architecture: 'arm64'
+          - component: 'kafka-to-postgresql'
             architecture: 'arm64'
           - component: 'kafka-to-postgresql-v2'
             architecture: 'arm64'
@@ -167,7 +169,7 @@ jobs:
         shell: bash
     strategy:
       matrix:
-        component: [ 'factoryinsight', 'grafana-umh', 'hivemq-init', 'kafka-init','kafka-to-postgresql-v2']
+        component: [ 'factoryinsight', 'grafana-umh', 'hivemq-init', 'kafka-init','kafka-to-postgresql','kafka-to-postgresql-v2']
     steps:
       - name: Login to GitHub Container registry
         uses: docker/login-action@v3
