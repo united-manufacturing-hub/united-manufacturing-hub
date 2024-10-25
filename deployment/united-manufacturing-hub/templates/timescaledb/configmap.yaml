@@ -418,7 +418,8 @@ data:
       origin_id TEXT DEFAULT '' NOT NULL,
       UNIQUE (enterprise, site, area, line, workcell, origin_id)
     );
-    -- These are just to drop for old installs.
+
+    -- Cleanup of old constraints
     ALTER TABLE asset DROP CONSTRAINT IF EXISTS asset_enterprise_key;
     ALTER TABLE asset DROP CONSTRAINT IF EXISTS asset_enterprise_site_key;
     ALTER TABLE asset DROP CONSTRAINT IF EXISTS asset_enterprise_site_area_key;
@@ -428,33 +429,10 @@ data:
     -------------------- HISTORIAN --------------------
 
     -------------------- TAG TABLE --------------------
-
-    CREATE TABLE IF NOT EXISTS tag (
-      timestamp TIMESTAMPTZ NOT NULL,
-      name TEXT NOT NULL,
-      origin TEXT NOT NULL,
-      asset_id INT REFERENCES asset(id) NOT NULL,
-      value REAL,
-      UNIQUE (name, asset_id, timestamp)
-    );
-    SELECT create_hypertable('tag', 'timestamp', if_not_exists => TRUE);;
-    CREATE INDEX IF NOT EXISTS ON tag (asset_id, timestamp DESC);
-    CREATE INDEX IF NOT EXISTS ON tag (name);
+    -- This has been moved into the kafka_to_postgresq benthos worker
 
     -------------------- TAG STRING TABLE --------------------
-
-    CREATE TABLE IF NOT EXISTS tag_string (
-      timestamp TIMESTAMPTZ NOT NULL,
-      name TEXT NOT NULL,
-      origin TEXT NOT NULL,
-      asset_id INT REFERENCES asset(id) NOT NULL,
-      value TEXT,
-      UNIQUE (name, asset_id, timestamp)
-    );
-    SELECT create_hypertable('tag_string', 'timestamp', if_not_exists => TRUE);;
-    CREATE INDEX IF NOT EXISTS ON tag_string (asset_id, timestamp DESC);
-    CREATE INDEX IF NOT EXISTS ON tag_string (name);
-
+    -- This has been moved into the kafka_to_postgresq benthos worker
     
     CREATE OR REPLACE FUNCTION get_asset_id(
         _enterprise text,
