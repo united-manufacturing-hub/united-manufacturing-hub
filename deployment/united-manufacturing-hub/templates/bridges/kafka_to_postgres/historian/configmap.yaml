@@ -378,6 +378,29 @@ data:
                         period: 5s     # Batch records every 5 seconds
                         count: 10000   # Or when 10,000 records are collected
                       max_in_flight: 512  # Allow up to 512 concurrent inserts
+                      init_statement: |
+                        DO $$
+                        BEGIN
+                          -- Create the table if it doesn't exist
+                          CREATE TABLE IF NOT EXISTS tag (
+                            timestamp TIMESTAMPTZ NOT NULL,
+                            name TEXT NOT NULL,
+                            origin TEXT NOT NULL,
+                            asset_id INT REFERENCES asset(id) NOT NULL,
+                            value REAL,
+                            UNIQUE (name, asset_id, timestamp)
+                          );
+
+                          -- Convert the table into a hypertable (TimescaleDB specific)
+                          PERFORM create_hypertable('tag', 'timestamp', if_not_exists => TRUE);
+
+                          -- Create indexes if they don't exist
+                          CREATE INDEX IF NOT EXISTS idx_tag_asset_timestamp ON tag (asset_id, timestamp DESC);
+                          CREATE INDEX IF NOT EXISTS idx_tag_name ON tag (name);
+                          CREATE INDEX IF NOT EXISTS idx_tag_asset_name ON tag (asset_id, name);
+                        END
+                        $$;
+
 
                 # Insert non-numeric values into 'tag_string' table
                 - output:
@@ -398,6 +421,29 @@ data:
                         period: 5s     # Batch records every 5 seconds
                         count: 10000   # Or when 10,000 records are collected
                       max_in_flight: 512  # Allow up to 512 concurrent inserts
+                      init_statement: |
+                        DO $$
+                        BEGIN
+                          -- Create the table if it doesn't exist
+                          CREATE TABLE IF NOT EXISTS tag_string (
+                            timestamp TIMESTAMPTZ NOT NULL,
+                            name TEXT NOT NULL,
+                            origin TEXT NOT NULL,
+                            asset_id INT REFERENCES asset(id) NOT NULL,
+                            value TEXT,
+                            UNIQUE (name, asset_id, timestamp)
+                          );
+
+                          -- Convert the table into a hypertable (TimescaleDB specific)
+                          PERFORM create_hypertable('tag_string', 'timestamp', if_not_exists => TRUE);
+
+                          -- Create indexes if they don't exist
+                          CREATE INDEX IF NOT EXISTS idx_tag_string_asset_timestamp ON tag_string (asset_id, timestamp DESC);
+                          CREATE INDEX IF NOT EXISTS idx_tag_string_name ON tag_string (name);
+                          CREATE INDEX IF NOT EXISTS idx_tag_string_asset_name ON tag_string (asset_id, name);
+                        END
+                        $$;
+
     cache_resources:
       - label: id_cache
         memory:
