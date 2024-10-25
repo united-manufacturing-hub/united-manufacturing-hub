@@ -390,6 +390,7 @@ data:
                         SELECT create_hypertable('tag', 'timestamp', if_not_exists => TRUE);;
                         CREATE INDEX IF NOT EXISTS ON tag (asset_id, timestamp DESC);
                         CREATE INDEX IF NOT EXISTS ON tag (name);
+                        CREATE INDEX IF NOT EXISTS ON tag (asset_id, name);
 
                 # Insert non-numeric values into 'tag_string' table
                 - output:
@@ -422,6 +423,7 @@ data:
                         SELECT create_hypertable('tag_string', 'timestamp', if_not_exists => TRUE);;
                         CREATE INDEX IF NOT EXISTS ON tag_string (asset_id, timestamp DESC);
                         CREATE INDEX IF NOT EXISTS ON tag_string (name);
+                        CREATE INDEX IF NOT EXISTS ON tag_string (asset_id, name);
     cache_resources:
       - label: id_cache
         memory:
