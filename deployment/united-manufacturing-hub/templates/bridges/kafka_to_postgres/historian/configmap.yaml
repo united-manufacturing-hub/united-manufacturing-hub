@@ -387,7 +387,7 @@ data:
                           value REAL,
                           UNIQUE (name, asset_id, timestamp)
                         );
-                        SELECT create_hypertable('tag', 'timestamp', if_not_exists => TRUE);;
+                        SELECT create_hypertable('tag', 'timestamp', if_not_exists => TRUE);
                         CREATE INDEX IF NOT EXISTS ON tag (asset_id, timestamp DESC);
                         CREATE INDEX IF NOT EXISTS ON tag (name);
                         CREATE INDEX IF NOT EXISTS ON tag (asset_id, name);
@@ -412,6 +412,7 @@ data:
                         count: 10000   # Or when 10,000 records are collected
                       max_in_flight: 512  # Allow up to 512 concurrent inserts
                       init_statement: |
+                        BEGIN;
                         CREATE TABLE IF NOT EXISTS tag_string (
                           timestamp TIMESTAMPTZ NOT NULL,
                           name TEXT NOT NULL,
@@ -420,10 +421,11 @@ data:
                           value TEXT,
                           UNIQUE (name, asset_id, timestamp)
                         );
-                        SELECT create_hypertable('tag_string', 'timestamp', if_not_exists => TRUE);;
                         CREATE INDEX IF NOT EXISTS ON tag_string (asset_id, timestamp DESC);
                         CREATE INDEX IF NOT EXISTS ON tag_string (name);
                         CREATE INDEX IF NOT EXISTS ON tag_string (asset_id, name);
+                        SELECT create_hypertable('tag_string', 'timestamp', if_not_exists => TRUE);
+                        COMMIT;
     cache_resources:
       - label: id_cache
         memory:
