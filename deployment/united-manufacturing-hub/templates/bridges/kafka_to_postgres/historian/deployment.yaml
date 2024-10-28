@@ -141,7 +141,7 @@ spec:
                 memory: {{ (((.Values._004_epConfig).kafka_to_postgres_historian).limit).memory | default "450Mi" }}
               requests:
                 cpu: {{ (((.Values._004_epConfig).kafka_to_postgres_historian).request).cpu | default "400m" }}
-                memory: {{ (((.Values._004_epConfig).kafka_to_postgres_historian).request).memory | default "350Mi" }}
+                memory: {{ (((.Values._004_epConfig).kafka_to_postgres_historian).request).memory | default "300Mi" }}
       restartPolicy: Always
   strategy:
     type: RollingUpdate
