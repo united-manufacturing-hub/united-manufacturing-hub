@@ -59,6 +59,7 @@ data:
         consumer_group: "kafka_to_postgresql_historian_bridge"
         auto_replay_nacks: false
         metadata_max_age: 10s
+        start_from_oldest: false
 
     ## Processors
     #
