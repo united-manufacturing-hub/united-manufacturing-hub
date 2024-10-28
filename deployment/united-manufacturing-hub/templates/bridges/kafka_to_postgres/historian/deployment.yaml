@@ -137,11 +137,11 @@ spec:
           imagePullPolicy: IfNotPresent
           resources:
               limits:
-                cpu: {{ (((.Values._004_epConfig).k2p).limit).cpu | default "500m" }}
-                memory: {{ (((.Values._004_epConfig).k2p).limit).memory | default "450Mi" }}
+                cpu: {{ (((.Values._004_epConfig).kafka_to_postgres_historian).limit).cpu | default "500m" }}
+                memory: {{ (((.Values._004_epConfig).kafka_to_postgres_historian).limit).memory | default "450Mi" }}
               requests:
-                cpu: {{ (((.Values._004_epConfig).k2p).request).cpu | default "400m" }}
-                memory: {{ (((.Values._004_epConfig).k2p).request).memory | default "350Mi" }}
+                cpu: {{ (((.Values._004_epConfig).kafka_to_postgres_historian).request).cpu | default "400m" }}
+                memory: {{ (((.Values._004_epConfig).kafka_to_postgres_historian).request).memory | default "350Mi" }}
       restartPolicy: Always
   strategy:
     type: RollingUpdate
