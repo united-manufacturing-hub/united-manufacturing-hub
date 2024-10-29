@@ -137,11 +137,11 @@ spec:
           imagePullPolicy: IfNotPresent
           resources:
               limits:
-                cpu: "500m"
-                memory: "450Mi"
+                cpu: {{ (((.Values._004_epConfig).mqtt_to_kafka_historian).limit).cpu | default "500m" }}
+                memory: {{ (((.Values._004_epConfig).mqtt_to_kafka_historian).limit).memory | default "450Mi" }}
               requests:
-                cpu: "400m"
-                memory: "300Mi"
+                cpu: {{ (((.Values._004_epConfig).mqtt_to_kafka_historian).request).cpu | default "400m" }}
+                memory: {{ (((.Values._004_epConfig).mqtt_to_kafka_historian).request).memory | default "300Mi" }}
       restartPolicy: Always
   strategy:
     type: RollingUpdate
