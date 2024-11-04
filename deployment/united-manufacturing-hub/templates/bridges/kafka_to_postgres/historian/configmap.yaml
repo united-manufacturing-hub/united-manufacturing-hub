@@ -386,7 +386,7 @@ data:
                       init_statement: |
                         DO $$
                         BEGIN
-                          -- Create the table if it doesn't exist
+                          -- Create tag table (if it doesn't exist)
                           CREATE TABLE IF NOT EXISTS tag (
                             timestamp TIMESTAMPTZ NOT NULL,
                             name TEXT NOT NULL,
@@ -403,6 +403,14 @@ data:
                           CREATE INDEX IF NOT EXISTS idx_tag_asset_timestamp ON tag (asset_id, timestamp DESC);
                           CREATE INDEX IF NOT EXISTS idx_tag_name ON tag (name);
                           CREATE INDEX IF NOT EXISTS idx_tag_asset_name ON tag (asset_id, name);
+
+                          -- Allow kafkatopostgresqlv2 to read/write to this table
+                          ALTER TABLE tag OWNER TO kafkatopostgresqlv2;
+
+                          -- Allow grafanareader to access this table
+                          GRANT SELECT ON umh_v2.public.asset TO grafanareader;
+                          GRANT SELECT ON umh_v2.public.tag TO grafanareader;
+
                         END
                         $$;
 
@@ -428,7 +436,7 @@ data:
                       init_statement: |
                         DO $$
                         BEGIN
-                          -- Create the table if it doesn't exist
+                          -- Create tag_string table (if it doesn't exist)
                           CREATE TABLE IF NOT EXISTS tag_string (
                             timestamp TIMESTAMPTZ NOT NULL,
                             name TEXT NOT NULL,
@@ -445,6 +453,14 @@ data:
                           CREATE INDEX IF NOT EXISTS idx_tag_string_asset_timestamp ON tag_string (asset_id, timestamp DESC);
                           CREATE INDEX IF NOT EXISTS idx_tag_string_name ON tag_string (name);
                           CREATE INDEX IF NOT EXISTS idx_tag_string_asset_name ON tag_string (asset_id, name);
+
+                          -- Allow kafkatopostgresqlv2 to read/write to this table
+                          ALTER TABLE tag_string OWNER TO kafkatopostgresqlv2;
+
+                          -- Allow grafanareader to access this table
+                          GRANT SELECT ON umh_v2.public.asset TO grafanareader;
+                          GRANT SELECT ON umh_v2.public.tag_string TO grafanareader;
+
                         END
                         $$;
 
