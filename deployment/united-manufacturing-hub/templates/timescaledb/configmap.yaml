@@ -687,7 +687,6 @@ data:
     GRANT SELECT ON umh_v2.public.tag TO grafanareader;
     GRANT SELECT ON umh_v2.public.tag_string TO grafanareader;
 
-
     GRANT SELECT ON umh_v2.public.work_order TO grafanareader;
     GRANT SELECT ON umh_v2.public.product_type TO grafanareader;
     GRANT SELECT ON umh_v2.public.product TO grafanareader;
