@@ -26,9 +26,9 @@ metadata:
     # This does not change over time
     data-flow-component-uuid: 3e5c91f6-3dfc-45d6-8e9b-f17705e07b4c
     # This is the random UUID of the version of the component
-    data-flow-component-version-uuid: d1e65879-0260-478c-9ac9-eeba4d9e84d6
+    data-flow-component-version-uuid: 11c6ef6f-8097-4aab-a79e-76beaa310c99
     # Timestamp of last change to the component in unix milliseconds since epoch
-    data-flow-version: '1727706153093'
+    data-flow-version: '1730815518000'
     # Generic label to indicate that this is a data flow component
     is-data-flow-component: 'true'
     # Required for mgmtcompanion to manage the component
@@ -386,6 +386,10 @@ data:
                       init_statement: |
                         DO $$
                         BEGIN
+                          IF EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'tag') THEN
+                            -- Lock the table to prevent concurrent modifications
+                            EXECUTE 'LOCK TABLE tag IN ACCESS EXCLUSIVE MODE';
+                          END IF;
                           -- Create tag table (if it doesn't exist)
                           CREATE TABLE IF NOT EXISTS tag (
                             timestamp TIMESTAMPTZ NOT NULL,
@@ -436,6 +440,10 @@ data:
                       init_statement: |
                         DO $$
                         BEGIN
+                          IF EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'tag_string') THEN
+                            -- Lock the table to prevent concurrent modifications
+                            EXECUTE 'LOCK TABLE tag_string IN ACCESS EXCLUSIVE MODE';
+                          END IF;
                           -- Create tag_string table (if it doesn't exist)
                           CREATE TABLE IF NOT EXISTS tag_string (
                             timestamp TIMESTAMPTZ NOT NULL,

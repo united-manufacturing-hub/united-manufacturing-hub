@@ -41,9 +41,6 @@ data:
     -- Extend the database with TimescaleDB
     CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE;
 
-    -- Enable pg_stat_statements plugin for observability;
-    CREATE EXTENSION IF NOT EXISTS pg_stat_statements CASCADE;
-
     -------------------- Table with all assets --------------------
     CREATE TABLE IF NOT EXISTS assetTable
     (
@@ -403,6 +400,9 @@ data:
     GRANT USAGE ON SCHEMA public TO grafanareader;
 
     \c umh_v2
+
+    -- Enable pg_stat_statements plugin for observability;
+    CREATE EXTENSION IF NOT EXISTS pg_stat_statements CASCADE;
 
     GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO kafkatopostgresqlv2;
     GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO kafkatopostgresqlv2;
