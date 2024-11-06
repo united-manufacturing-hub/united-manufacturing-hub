@@ -390,6 +390,10 @@ data:
                             -- Lock the table to prevent concurrent modifications
                             EXECUTE 'LOCK TABLE tag IN ACCESS EXCLUSIVE MODE';
                           END IF;
+                          IF EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'asset') THEN
+                            -- Lock the table to prevent concurrent modifications
+                            EXECUTE 'LOCK TABLE asset IN ACCESS EXCLUSIVE MODE';
+                          END IF;
                           -- Create tag table (if it doesn't exist)
                           CREATE TABLE IF NOT EXISTS tag (
                             timestamp TIMESTAMPTZ NOT NULL,
@@ -443,6 +447,10 @@ data:
                           IF EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'tag_string') THEN
                             -- Lock the table to prevent concurrent modifications
                             EXECUTE 'LOCK TABLE tag_string IN ACCESS EXCLUSIVE MODE';
+                          END IF;
+                          IF EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'asset') THEN
+                            -- Lock the table to prevent concurrent modifications
+                            EXECUTE 'LOCK TABLE asset IN ACCESS EXCLUSIVE MODE';
                           END IF;
                           -- Create tag_string table (if it doesn't exist)
                           CREATE TABLE IF NOT EXISTS tag_string (
