@@ -80,7 +80,8 @@ data:
 
     pipeline:
       processors:
-        - bloblang: |
+        - label: set_variables_and_create_kafka_topic
+          bloblang: |
             ######### Variables #########
 
             ## Change "default" to the name of the local instance
@@ -134,14 +135,18 @@ data:
             # Step 4 (report metric if invalid)
             if $invalid_json == true {
               meta "invalid_json_count" = 1
-            }else{
+            } else {
               meta "invalid_json_count" = 0
             }
-        - metric:
+
+        - label: increment_invalid_json_metric
+          metric:
             type: counter_by
             name: invalid_json
             value: ${! meta("invalid_json_count") }
-        - bloblang: |
+
+        - label: check_if_previously_bridged_and_validate_schema
+          bloblang: |
             let local_bridge_name = meta("local_bridge_name")
             let remote_bridge_name = meta("remote_bridge_name")
             let topic = meta("mqtt_topic").or("")
@@ -169,7 +174,7 @@ data:
                 "additionalProperties": true
               }
               """).catch(false)
-            }else{
+            } else {
               true
             }
             meta "parsing_failure" = $valid_schema == false
@@ -178,10 +183,11 @@ data:
             meta "bridged_by" = $bridged_by
             if $valid_schema == false {
               meta "invalid_schema_count" = 1
-            }else{
+            } else {
               meta "invalid_schema_count" = 0
-            }
-        - metric:
+
+        - label: increment_invalid_schema_metric
+          metric:
             type: counter_by
             name: invalid_schema
             value: ${! meta("invalid_schema_count") }
