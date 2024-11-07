@@ -170,7 +170,7 @@ data:
             let topic = meta("topic")
 
             # Use a regular expression to extract components from the topic name
-            let matches = $topic.re_find_all_object("^umh\\.v1\\.(?P<enterprise>[\\w-_]+)\\.((?P<site>[\\w-_]+)\\.)?((?P<area>[\\w-_]+)\\.)?((?P<productionLine>[\\w-_]+)\\.)?((?P<workCell>[\\w-_]+)\\.)?((?P<originId>[\\w-_]+)\\.)?_(?P<usecase>(historian)|(analytics))(\\.(?P<tag>(?:[\\w-_.]+\\w)+))?$")
+            let matches = $topic.re_find_all_object("^umh\\.v1\\.(?P<enterprise>[\\w-_]+)\\.((?P<site>[\\w-_]+)\\.)?((?P<area>[\\w-_]+)\\.)?((?P<productionLine>[\\w-_]+)\\.)?((?P<workCell>[\\w-_]+)\\.)?((?P<originId>[\\w-_]+)\\.)?_(?P<usecase>(historian)|(analytics))(\\.(?P<tag>(?:[\\w-_.]+)+))?$")
 
             # Check if the regex matched (i.e., the topic follows the expected structure)
             let match_length = $matches.length()
