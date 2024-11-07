@@ -72,7 +72,8 @@ data:
 
     pipeline:
       processors:
-        - bloblang: |
+        - label: reassemble_topic_and_filter_schema
+          bloblang: |
             ######### Variables #########
 
             ## Change "default" to the name of the local instance
@@ -100,7 +101,8 @@ data:
               deleted()
             }
 
-        - bloblang: |
+        - label: validate_message_json
+          bloblang: |
             # Step 3: Validate that the message is valid JSON
             let invalid_json = this.catch(true)
             if $invalid_json == true {
@@ -109,11 +111,13 @@ data:
               meta "invalid_json_count" = 0
             }
             root = this
-        - metric:
+        - label: increment_invalid_json_metric
+          metric:
             type: counter_by
             name: invalid_json
             value: ${! meta("invalid_json_count") }
-        - bloblang: |
+        - label: delete_if_invalid_json
+          bloblang: |
             let invalid_json = meta("invalid_json_count")
             root = if $invalid_json.string() == "0" {
               root
@@ -121,7 +125,8 @@ data:
               deleted()
             }
 
-        - bloblang: |
+        - label: check_and_delete_if_previously_bridged
+          bloblang: |
             let local_bridge_name = meta("local_bridge_name")
             let remote_bridge_name = meta("remote_bridge_name")
             # Step 4: Check if the message was previously bridged
@@ -134,7 +139,8 @@ data:
               root
             }
 
-        - bloblang: |
+        - label: add_bridge_name_and_prepare_topic
+          bloblang: |
             let bridged_by = meta("bridged_by")
             let bridged_by = $bridged_by.parse_json()
             let trimmed_topic = meta("trimmed_topic")
