@@ -216,7 +216,7 @@ jobs:
             docker buildx imagetools create -t ghcr.io/united-manufacturing-hub/${{ matrix.component }}:${{ needs.build-docker.outputs.PRERELEASE_SHORT_TAG }} \
               ghcr.io/united-manufacturing-hub/${{ matrix.component }}:${{ needs.build-docker.outputs.PRERELEASE_SHORT_TAG }}-amd64
           fi
-          
+
       - name: Create multiarch manifests for alternate tag (if exists)
         if: ${{ needs.build-docker.outputs.ALT_SHORT_TAG != '' }}
         run: |
