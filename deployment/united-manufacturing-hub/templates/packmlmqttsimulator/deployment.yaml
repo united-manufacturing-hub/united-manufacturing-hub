@@ -13,7 +13,7 @@
 # limitations under the License.
 
 ---
-{{if .Values._000_commonConfig.datasources.packmlmqttsimulator.enabled}}
+{{if .Values._002_simulatorConfig.packmlmqttsimulator.enabled}}
 
 apiVersion: apps/v1
 kind: Deployment
@@ -40,26 +40,26 @@ spec:
       restartPolicy: Always
       containers:
         - name: {{include "united-manufacturing-hub.fullname" .}}-packmlmqttsimulator
-          image: {{.Values.packmlmqttsimulator.image.repository}}@sha256:{{.Values.packmlmqttsimulator.image.hash}}
-          imagePullPolicy: {{.Values.packmlmqttsimulator.image.pullPolicy}}
+          image: "{{.Values.image.registry}}/spruiktec/packml-simulator@sha256:01e2f0da3542f1b4e0de830a8d24135de03fd9174dce184ed329bed3ee688e19"
+          imagePullPolicy: IfNotPresent
           env:
             - name: SITE
-              value: {{.Values.packmlmqttsimulator.env.site}}
+              value: testLocation
             - name: AREA
-              value: {{.Values.packmlmqttsimulator.env.area}}
+              value: DefaultArea
             - name: LINE
-              value: {{.Values.packmlmqttsimulator.env.productionline}}
+              value: DefaultProductionLine
             - name: MQTT_URL
               value: mqtt://{{include "united-manufacturing-hub.fullname" .}}-hivemqce-local-service
             - name: MQTT_USERNAME
               value: PACKMLSIMULATOR
             - name: MQTT_PASSWORD
-              value: {{.Values.packmlmqttsimulator.env.mqtt.password}}
+              value: INSECURE_INSECURE_INSECURE
           resources:
-            limits:
-              cpu: {{.Values.packmlmqttsimulator.resources.limits.cpu}}
-              memory: {{.Values.packmlmqttsimulator.resources.limits.memory}}
             requests:
-              cpu: {{.Values.packmlmqttsimulator.resources.requests.cpu}}
-              memory: {{.Values.packmlmqttsimulator.resources.requests.memory}}
+              cpu: "10m"
+              memory: "20Mi"
+            limits:
+              cpu: "30m"
+              memory: "50Mi"
 {{end}}

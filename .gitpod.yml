@@ -9,23 +9,26 @@ tasks:
     init: |
       git config push.autoSetupRemote true
       git config pull.rebase true
-  - name: Setup local GH action testing
-    init: |
-      cd /usr/local && curl -s https://raw.githubusercontent.com/nektos/act/master/install.sh | sudo bash 
-      echo "-P ubuntu-latest=catthehacker/ubuntu:act-latest" > ~/.actrc
-      echo "-P ubuntu-22.04=catthehacker/ubuntu:act-22.04" >> ~/.actrc
-      echo "-P ubuntu-20.04=catthehacker/ubuntu:act-20.04" >> ~/.actrc
-      echo "-P ubuntu-18.04=catthehacker/ubuntu:act-18.04" >> ~/.actrc
-  
+
   - name: Install Helm
     init: |
       cd /tmp
       curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
       chmod 700 get_helm.sh
       ./get_helm.sh
+
+      # Setup repos
+      helm repo add bitnami https://management.umh.app/helm/bitnami
+      helm repo add grafana https://management.umh.app/helm/grafana
+      helm repo add timescale https://management.umh.app/helm/timescale
+      helm repo add redpanda https://management.umh.app/helm/redpanda
+
       exit 0
 
 jetbrains:
+  goland:
+    prebuilds:
+      version: stable
   plugins:
     - lermitage.intellij.extratci # Extra colorfull icons
     - some.awesome # Nyan Cat
@@ -35,3 +38,11 @@ jetbrains:
     - com.intellij.grazie.pro # Grazie Pro
     - com.ypwang.plugin.go-linter # Go Linter
     - com.intellij.kubernetes # Kubernetes
+    - dev.blachut.svelte.lang # Svelte
+    - PythonCore # Python Community Edition
+    - org.toml.lang # TOML Language
+    - com.intellij.tailwindcss # Tailwind CSS
+    - intellij.vitejs # Vite.js
+    - org.intellij.plugins.postcss # PostCSS
+    - intellij.prettierJS # Prettier
+    - com.github.intellij.ginkgo # Ginkgo

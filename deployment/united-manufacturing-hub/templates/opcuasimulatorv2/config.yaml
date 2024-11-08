@@ -1,0 +1,65 @@
+# Copyright 2024 UMH Systems GmbH
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+---
+{{if .Values._002_simulatorConfig.opcuasimulatorv2.enabled}}
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{include "united-manufacturing-hub.fullname" .}}-opcsimv2-config
+  labels:
+    {{- include "united-manufacturing-hub.labels.common" . | nindent 4}}
+    {{- include "united-manufacturing-hub.labels.opcsimv2" . | nindent 4}}
+data:
+  nodesfile.json: |
+    {
+      "Folder": "IoTSensors",
+      "NodeList": [
+        {
+          "NodeId": "ConcentrationNH3",
+          "Name": "ConcentrationNH3",
+          "DataType": "Double",
+          "ValueRank": -1,
+          "AccessLevel": "CurrentReadOrWrite",
+          "Description": "Ammonia Concentration"
+        },
+        {
+          "NodeId": "ConcentrationN2",
+          "Name": "ConcentrationN2",
+          "DataType": "Double",
+          "ValueRank": -1,
+          "AccessLevel": "CurrentReadOrWrite",
+          "Description": "Nitrogen Concentration"
+        },
+        {
+          "NodeId": "ConcentrationH2",
+          "Name": "ConcentrationH2",
+          "DataType": "Double",
+          "ValueRank": -1,
+          "AccessLevel": "CurrentReadOrWrite",
+          "Description": "Hydrogen Concentration"
+        },
+        {
+          "NodeId": "Pressure",
+          "Name": "Pressure",
+          "DataType": "Double",
+          "ValueRank": -1,
+          "AccessLevel": "CurrentReadOrWrite",
+          "Description": "Pressure Reading"
+        }
+      ]
+    }
+
+{{end}}

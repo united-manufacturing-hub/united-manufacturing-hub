@@ -1,0 +1,151 @@
+# Copyright 2023 UMH Systems GmbH
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+---
+{{if .Values.tags.classic }}
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  # This is the name of the component, it should be unique within the namespace (63 chars max as per RFC 1035/1123)
+  name: dfc-1db88f9f-789d-45fa-b095-cf579cc9074d-mqtt-t-kafka-historian
+  # To be scheduled in the open-source namespace
+  namespace: united-manufacturing-hub
+  labels:
+    # This does not change over time
+    data-flow-component-uuid: 1db88f9f-789d-45fa-b095-cf579cc9074d
+    # This is the random UUID of the version of the component
+    data-flow-component-version-uuid: fb8c6d0c-d544-41c0-93e3-bac4a48d7f17
+    # Timestamp of last change to the component in unix milliseconds since epoch
+    data-flow-version: '1730983044602'
+    # Generic label to indicate that this is a data flow component
+    is-data-flow-component: 'true'
+    # Required for mgmtcompanion to manage the component
+    managed-by: mgmtcompanion
+    # Do not allow mgmtcompanion to modify the component
+    data-flow-component-is-read-only: 'true'
+    # The type of the component
+    data-flow-component-type: bridge
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      data-flow-component-uuid: 1db88f9f-789d-45fa-b095-cf579cc9074d
+  template:
+    metadata:
+      labels:
+        # This does not change over time
+        data-flow-component-uuid: 1db88f9f-789d-45fa-b095-cf579cc9074d
+        # This is the random UUID of the version of the component
+        data-flow-component-version-uuid: fb8c6d0c-d544-41c0-93e3-bac4a48d7f17
+        # Timestamp of last change to the component in unix milliseconds since epoch
+        data-flow-version: '1730983044602'
+        # Generic label to indicate that this is a data flow component
+        is-data-flow-component: 'true'
+        # Required for mgmtcompanion to manage the component
+        managed-by: mgmtcompanion
+        # Do not allow mgmtcompanion to modify the component
+        data-flow-component-is-read-only: 'true'
+        # The type of the component
+        data-flow-component-type: bridge
+    spec:
+      volumes:
+        - name: config
+          configMap:
+            name: dfc-1db88f9f-789d-45fa-b095-cf579cc9074d-mqtt-t-kafka-historian
+      initContainers:
+        # This init container waits for HiveMQ and Kafka to be available before starting the main container
+        # While not strictly necessary, it keeps the benthos logs cleaner
+        - name: wait-for-hivemq-and-kafka
+          image: busybox
+          command:
+            - sh
+            - -c
+            - |
+              # Wait for HiveMQ (300 seconds timeout)
+              TIMEOUT_HIVE=300
+              while [[ $TIMEOUT_HIVE -gt 0 ]]; do
+                if nc -z united-manufacturing-hub-mqtt.united-manufacturing-hub.svc.cluster.local 1883; then
+                  echo "HiveMQ is ready."
+                  break
+                fi
+                echo "Waiting for HiveMQ... $TIMEOUT_HIVE seconds left"
+                sleep 5
+                TIMEOUT_HIVE=$((TIMEOUT_HIVE - 5))
+              done
+              if [[ $TIMEOUT_HIVE -le 0 ]]; then
+                echo "HiveMQ not available, proceeding anyway."
+              fi
+
+              # Wait for Kafka (300 seconds timeout)
+              TIMEOUT_KAFKA=300
+              while [[ $TIMEOUT_KAFKA -gt 0 ]]; do
+                if nc -z united-manufacturing-hub-kafka.united-manufacturing-hub.svc.cluster.local 9092; then
+                  echo "Kafka is ready."
+                  break
+                fi
+                echo "Waiting for Kafka... $TIMEOUT_KAFKA seconds left"
+                sleep 5
+                TIMEOUT_KAFKA=$((TIMEOUT_KAFKA - 5))
+              done
+              if [[ $TIMEOUT_KAFKA -le 0 ]]; then
+                echo "Kafka not available, proceeding anyway."
+              fi
+      containers:
+        - name: dfc-1db88f9f-789d-45fa-b095-cf579cc9074d-mqtt-t-kafka-historian
+          image: management.umh.app/oci/united-manufacturing-hub/benthos-umh:0.4.2
+          ports:
+            - name: http
+              containerPort: 4195
+              protocol: TCP
+          volumeMounts:
+            - name: config
+              readOnly: true
+              mountPath: /benthos.yaml
+              subPath: benthos.yaml
+          livenessProbe:
+            httpGet:
+              path: /ping
+              port: http
+              scheme: HTTP
+            timeoutSeconds: 1
+            periodSeconds: 10
+            successThreshold: 1
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: http
+              scheme: HTTP
+            timeoutSeconds: 1
+            periodSeconds: 10
+            successThreshold: 1
+            failureThreshold: 3
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+          imagePullPolicy: IfNotPresent
+          resources:
+              limits:
+                cpu: {{ (((.Values._004_epConfig).mqtt_to_kafka_historian).limit).cpu | default "500m" }}
+                memory: {{ (((.Values._004_epConfig).mqtt_to_kafka_historian).limit).memory | default "450Mi" }}
+              requests:
+                cpu: {{ (((.Values._004_epConfig).mqtt_to_kafka_historian).request).cpu | default "400m" }}
+                memory: {{ (((.Values._004_epConfig).mqtt_to_kafka_historian).request).memory | default "300Mi" }}
+      restartPolicy: Always
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 1
+{{end}}
