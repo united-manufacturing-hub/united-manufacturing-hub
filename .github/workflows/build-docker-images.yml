@@ -160,6 +160,7 @@ jobs:
             # Extract PRERELEASE_SHORT_TAG from PRERELEASE_TAG
             echo "PRERELEASE_SHORT_TAG=$(echo ${PRERELEASE_TAG} | sed 's/.*:\(.*\)-.*/\1/')" >> $GITHUB_OUTPUT
             echo "PRERELEASE_SHORT_TAG=$(echo ${PRERELEASE_TAG} | sed 's/.*:\(.*\)-.*/\1/')"
+          fi
 
           # **Output ALT_TAG and ALT_SHORT_TAG if they exist**
           if [[ -n "${ALT_TAG}" ]]; then
