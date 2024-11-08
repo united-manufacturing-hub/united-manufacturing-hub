@@ -1,0 +1,129 @@
+# Copyright 2023 UMH Systems GmbH
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+---
+{{if or .Values.barcodereader.enabled .Values._000_commonConfig.datasources.barcodereader.enabled}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{include "united-manufacturing-hub.fullname" .}}-barcodereader
+  labels:
+    {{- include "united-manufacturing-hub.labels.common" . | nindent 4}}
+    {{- include "united-manufacturing-hub.labels.barcodereader" . | nindent 4}}
+  {{if .Values.barcodereader.annotations}}
+  annotations:
+    {{- toYaml .Values.barcodereader.annotations | nindent 4}}
+  {{end}}
+spec:
+  selector:
+    matchLabels:
+      {{- include "united-manufacturing-hub.matchLabels" . | nindent 6}}
+      {{- include "united-manufacturing-hub.labels.barcodereader" . | nindent 6}}
+  strategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        {{- include "united-manufacturing-hub.labels.common" . | nindent 8}}
+        {{- include "united-manufacturing-hub.labels.barcodereader" . | nindent 8}}
+    spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 1
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    name: {{include "united-manufacturing-hub.fullname" .}}-barcodereader
+                topologyKey: "kubernetes.io/hostname"
+      containers:
+        - name: {{include "united-manufacturing-hub.fullname" .}}-barcodereader
+          {{if .Values.barcodereader.image.tag}}
+          image: {{.Values.barcodereader.image.repository}}:{{.Values.barcodereader.image.tag}}{{- if .Values._000_commonConfig.racedetector.enabled}}-race{{- end}}
+          {{- else}}
+          image: {{.Values.barcodereader.image.repository}}:{{.Chart.AppVersion}}{{- if .Values._000_commonConfig.racedetector.enabled}}-race{{- end}}
+          {{end}}
+          imagePullPolicy: IfNotPresent
+          {{if .Values._000_commonConfig.debug.enableFGTrace}}
+          ports:
+            - containerPort: 1337
+              name: fgtrace
+              protocol: TCP
+          {{end}}
+          securityContext:
+            privileged: true
+          volumeMounts:
+            - name: devs
+              mountPath: /dev/
+          env:
+            - name: KAFKA_BOOTSTRAP_SERVER
+              value: {{include "united-manufacturing-hub.fullname" .}}-kafka:9092
+            - name: INPUT_DEVICE_NAME
+              value: {{.Values._000_commonConfig.datasources.barcodereader.USBDeviceName | quote}}
+            - name: INPUT_DEVICE_PATH
+              value: {{.Values._000_commonConfig.datasources.barcodereader.USBDevicePath | quote}}
+
+            - name: MY_POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: MICROSERVICE_NAME
+              valueFrom:
+                fieldRef:
+                    fieldPath: metadata.labels['app.kubernetes.io/name']
+            - name: CUSTOMER_ID
+              value: {{.Values._000_commonConfig.datasources.barcodereader.customerID | quote}}
+            - name: LOCATION
+              value: {{.Values._000_commonConfig.datasources.barcodereader.location | quote}}
+            - name: ASSET_ID
+              value: {{.Values._000_commonConfig.datasources.barcodereader.machineID | quote}}
+
+            - name: SERIAL_NUMBER
+              value: {{.Values._000_commonConfig.serialNumber | quote}}
+
+            - name: SCAN_ONLY
+              value: {{.Values.barcodereader.scanOnly | quote}}
+            {{if .Values._000_commonConfig.debug.enableFGTrace}}
+            - name: DEBUG_ENABLE_FGTRACE
+              value: "true"
+            {{end}}
+
+          # define a liveness probe that checks every 5 seconds, starting after 5 seconds
+          livenessProbe:
+            httpGet:
+              path: /live
+              port: 8086
+            periodSeconds: 5
+          startupProbe:
+            httpGet:
+              path: /live
+              port: 8086
+            periodSeconds: 10
+            failureThreshold: 5 # 5*periodSeconds (10) => 50 sec max startup time
+
+          resources:
+            limits:
+              cpu: {{.Values.barcodereader.resources.limits.cpu}}
+              memory: {{.Values.barcodereader.resources.limits.memory}}
+            requests:
+              cpu: {{.Values.barcodereader.resources.requests.cpu}}
+              memory: {{.Values.barcodereader.resources.requests.memory}}
+      serviceAccountName: ""
+      restartPolicy: Always
+      volumes:
+        - name: devs
+          hostPath:
+            path: /dev/
+{{end}}
+

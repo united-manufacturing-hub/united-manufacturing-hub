@@ -13,7 +13,7 @@
 # limitations under the License.
 
 ---
-{{if or .Values.kafkatopostgresql.enabled (and .Values._000_commonConfig.infrastructure.kafka.enabled .Values._000_commonConfig.datastorage.enabled)}}
+{{if .Values._003_legacyConfig.enableLegacyDataModel}}
 
 apiVersion: apps/v1
 kind: Deployment
@@ -22,12 +22,8 @@ metadata:
   labels:
     {{- include "united-manufacturing-hub.labels.common" . | nindent 4}}
     {{- include "united-manufacturing-hub.labels.kafkatopostgresql" . | nindent 4}}
-  {{if .Values.kafkatopostgresql.annotations}}
-  annotations:
-    {{- toYaml .Values.kafkatopostgresql.annotations | nindent 4}}
-  {{end}}
 spec:
-  replicas: {{.Values.kafkatopostgresql.replicas}}
+  replicas: 1
   selector:
     matchLabels:
       {{- include "united-manufacturing-hub.matchLabels" . | nindent 6}}
@@ -53,65 +49,36 @@ spec:
       terminationGracePeriodSeconds: 180
       initContainers:
         - name: {{include "united-manufacturing-hub.fullname" .}}-kafkatopostgres-init
-          {{if .Values.kafkatopostgresql.image.tag}}
-          image: {{.Values.kafkatopostgresql.initContainer.repository}}:{{.Values.kafkatopostgresql.initContainer.tag}}{{- if .Values._000_commonConfig.racedetector.enabled}}-race{{- end}}
-          {{- else}}
-          image: {{.Values.kafkatopostgresql.initContainer.repository}}:{{.Chart.AppVersion}}{{- if .Values._000_commonConfig.racedetector.enabled}}-race{{- end}}
-          {{ if and (hasKey .Values._000_commonConfig.infrastructure.kafka "useSSL") .Values._000_commonConfig.infrastructure.kafka.useSSL }}
-          volumeMounts:
-            - name: {{include "united-manufacturing-hub.fullname" .}}-kafkatopostgresql-certificates
-              mountPath: /SSL_certs/kafka
-              readOnly: true
-          {{end}}
-          {{end}}
-          imagePullPolicy: {{.Values.kafkatopostgresql.initContainer.pullPolicy}}
+          image: "{{.Values.image.registry}}/united-manufacturing-hub/kafka-init:{{.Chart.AppVersion}}"
+          imagePullPolicy: IfNotPresent
           env:
             - name: KAFKA_BOOTSTRAP_SERVER
               value: {{include "united-manufacturing-hub.fullname" .}}-kafka:9092
             - name: KAFKA_TOPICS
-              value: {{.Values._000_commonConfig.infrastructure.kafka.defaultTopics}}
+              value: ia.test.test.test.processValue;ia.test.test.test.count;umh.v1.kafka.newTopic
 
             - name: KAFKA_USE_SSL
-              value: {{.Values._000_commonConfig.infrastructure.kafka.useSSL | default "false" | quote}}
+              value: "false"
             - name: KAFKA_SSL_KEY_PASSWORD
-              {{ if and (hasKey .Values._000_commonConfig.infrastructure.kafka "useSSL") .Values._000_commonConfig.infrastructure.kafka.useSSL }}
-              value: {{.Values._000_commonConfig.infrastructure.kafka.tls.kafkatopostgresql.sslKeyPassword | quote}}
-              {{- else}}
               value: ""
-              {{- end}}
       containers:
         - name: {{include "united-manufacturing-hub.fullname" .}}-kafkatopostgresql
-          {{if .Values.kafkatopostgresql.image.tag}}
-          image: {{.Values.kafkatopostgresql.image.repository}}:{{.Values.kafkatopostgresql.image.tag}}{{- if .Values._000_commonConfig.racedetector.enabled}}-race{{- end}}
-          {{- else}}
-          image: {{.Values.kafkatopostgresql.image.repository}}:{{.Chart.AppVersion}}{{- if .Values._000_commonConfig.racedetector.enabled}}-race{{- end}}
-          {{end}}
-          imagePullPolicy: {{.Values.kafkatopostgresql.image.pullPolicy}}
-          {{ if and (hasKey .Values._000_commonConfig.infrastructure.kafka "useSSL") .Values._000_commonConfig.infrastructure.kafka.useSSL }}
-          volumeMounts:
-            - name: {{include "united-manufacturing-hub.fullname" .}}-kafkatopostgresql-certificates
-              mountPath: /SSL_certs/kafka
-              readOnly: true
-          {{end}}
+          image: "{{.Values.image.registry}}/united-manufacturing-hub/kafka-to-postgresql:{{.Chart.AppVersion}}"
+          imagePullPolicy: IfNotPresent
           ports:
             - name: metrics
               containerPort: 2112
               protocol: TCP
-          {{if .Values._000_commonConfig.debug.enableFGTrace}}
-            - containerPort: 1337
-              name: fgtrace
-              protocol: TCP
-          {{end}}
           env:
 
             - name: POSTGRES_HOST
-              value: {{.Values.factoryinsight.db_host}}
+              value: united-manufacturing-hub
             - name: POSTGRES_DATABASE
-              value: {{.Values.factoryinsight.db_database}}
+              value: factoryinsight
             - name: POSTGRES_USER
-              value: {{.Values.factoryinsight.db_user}}
+              value: factoryinsight
             - name: POSTGRES_PASSWORD
-              value: {{.Values._000_commonConfig.datastorage.db_password}}
+              value: "changeme"
             - name: POSTGRES_SSLMODE
               value: "require"
 
@@ -121,7 +88,7 @@ spec:
             - name: KAFKA_BOOTSTRAP_SERVER
               value: {{include "united-manufacturing-hub.fullname" .}}-kafka:9092
             - name: MEMORY_REQUEST
-              value: {{.Values.kafkatopostgresql.resources.requests.memory}}
+              value: "150Mi"
 
             - name: MY_POD_NAME
               valueFrom:
@@ -133,21 +100,13 @@ spec:
                     fieldPath: metadata.labels['app.kubernetes.io/name']
 
             - name: KAFKA_USE_SSL
-              value: {{.Values._000_commonConfig.infrastructure.kafka.useSSL | default "false" | quote}}
+              value: "false"
             - name: KAFKA_SSL_KEY_PASSWORD
-              {{ if and (hasKey .Values._000_commonConfig.infrastructure.kafka "useSSL") .Values._000_commonConfig.infrastructure.kafka.useSSL }}
-              value: {{.Values._000_commonConfig.infrastructure.kafka.tls.kafkatopostgresql.sslKeyPassword | quote}}
-              {{- else}}
               value: ""
-              {{- end}}
 
             - name: SERIAL_NUMBER
-              value: {{.Values._000_commonConfig.serialNumber | quote}}
+              value: {{.Values._000_commonConfig.instanceName | quote}}
 
-            {{if .Values._000_commonConfig.debug.enableFGTrace}}
-            - name: DEBUG_ENABLE_FGTRACE
-              value: "true"
-            {{end}}
           # define a liveness probe that checks every 5 seconds, starting after 5 seconds
           livenessProbe:
             httpGet:
@@ -160,22 +119,13 @@ spec:
               port: 8086
             periodSeconds: 10
             failureThreshold: 5 # 5*periodSeconds (10) => 50 sec max startup time
-
-
           resources:
             limits:
-              cpu: {{.Values.kafkatopostgresql.resources.limits.cpu}}
-              memory: {{.Values.kafkatopostgresql.resources.limits.memory}}
+              cpu: 200m
+              memory: 300Mi
             requests:
-              cpu: {{.Values.kafkatopostgresql.resources.requests.cpu}}
-              memory: {{.Values.kafkatopostgresql.resources.requests.memory}}
-      {{ if and (hasKey .Values._000_commonConfig.infrastructure.kafka "useSSL") .Values._000_commonConfig.infrastructure.kafka.useSSL }}
-      volumes:
-        - name: {{include "united-manufacturing-hub.fullname" .}}-kafkatopostgresql-certificates
-          secret:
-            secretName: {{include "united-manufacturing-hub.fullname" .}}-kafkatopostgresql-secrets
-      {{end}}
-
+              cpu: 50m
+              memory: 150Mi
       serviceAccountName: ""
       restartPolicy: Always
 {{end}}
