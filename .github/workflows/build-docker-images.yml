@@ -133,6 +133,12 @@ jobs:
           elif [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == refs/tags/* ]]; then
             export BUILD_TAG=ghcr.io/united-manufacturing-hub/${{ matrix.component }}:${GIT_TAG}-${PLATFORM}
             BUILD_TAGS="-t ${BUILD_TAG}"
+            # **Add this block to handle tags starting with 'v'**
+            if [[ "${GIT_TAG}" == v* ]]; then
+              # Remove leading 'v' and create an additional tag
+              export ALT_TAG=ghcr.io/united-manufacturing-hub/${{ matrix.component }}:${GIT_TAG#v}-${PLATFORM}
+              BUILD_TAGS="${BUILD_TAGS} -t ${ALT_TAG}"
+            fi
           fi
 
           # Now build and push images with all tags
@@ -146,7 +152,7 @@ jobs:
           # Extract SHORT_TAG from BUILD_TAG
           echo "SHORT_TAG=$(echo ${BUILD_TAG} | sed 's/.*:\(.*\)-.*/\1/')" >> $GITHUB_OUTPUT
           echo "SHORT_TAG=$(echo ${BUILD_TAG} | sed 's/.*:\(.*\)-.*/\1/')"
-
+          
           # If PRERELEASE_TAG exists, output it
           if [[ -n "${PRERELEASE_TAG}" ]]; then
             echo "PRERELEASE_TAG=${PRERELEASE_TAG}" >> $GITHUB_OUTPUT
@@ -154,6 +160,14 @@ jobs:
             # Extract PRERELEASE_SHORT_TAG from PRERELEASE_TAG
             echo "PRERELEASE_SHORT_TAG=$(echo ${PRERELEASE_TAG} | sed 's/.*:\(.*\)-.*/\1/')" >> $GITHUB_OUTPUT
             echo "PRERELEASE_SHORT_TAG=$(echo ${PRERELEASE_TAG} | sed 's/.*:\(.*\)-.*/\1/')"
+          fi
+
+          # **Output ALT_TAG and ALT_SHORT_TAG if they exist**
+          if [[ -n "${ALT_TAG}" ]]; then
+            echo "ALT_TAG=${ALT_TAG}" >> $GITHUB_OUTPUT
+            echo "ALT_TAG=${ALT_TAG}"
+            echo "ALT_SHORT_TAG=$(echo ${ALT_TAG} | sed 's/.*:\(.*\)-.*/\1/')" >> $GITHUB_OUTPUT
+            echo "ALT_SHORT_TAG=$(echo ${ALT_TAG} | sed 's/.*:\(.*\)-.*/\1/')"
           fi
 
   create-manifests:
@@ -210,4 +224,16 @@ jobs:
           else
             docker buildx imagetools create -t ghcr.io/united-manufacturing-hub/${{ matrix.component }}:${{ needs.build-docker.outputs.PRERELEASE_SHORT_TAG }} \
               ghcr.io/united-manufacturing-hub/${{ matrix.component }}:${{ needs.build-docker.outputs.PRERELEASE_SHORT_TAG }}-amd64
+          fi
+
+      - name: Create multiarch manifests for alternate tag (if exists)
+        if: ${{ needs.build-docker.outputs.ALT_SHORT_TAG != '' }}
+        run: |
+          if [ "${ARM64_EXISTS}" = "true" ]; then
+            docker buildx imagetools create -t ghcr.io/united-manufacturing-hub/${{ matrix.component }}:${{ needs.build-docker.outputs.ALT_SHORT_TAG }} \
+              ghcr.io/united-manufacturing-hub/${{ matrix.component }}:${{ needs.build-docker.outputs.ALT_SHORT_TAG }}-amd64 \
+              ghcr.io/united-manufacturing-hub/${{ matrix.component }}:${{ needs.build-docker.outputs.ALT_SHORT_TAG }}-arm64
+          else
+            docker buildx imagetools create -t ghcr.io/united-manufacturing-hub/${{ matrix.component }}:${{ needs.build-docker.outputs.ALT_SHORT_TAG }} \
+              ghcr.io/united-manufacturing-hub/${{ matrix.component }}:${{ needs.build-docker.outputs.ALT_SHORT_TAG }}-amd64
           fi
