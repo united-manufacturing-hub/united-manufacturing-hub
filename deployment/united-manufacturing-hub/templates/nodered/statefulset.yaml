@@ -13,7 +13,7 @@
 # limitations under the License.
 
 ---
-{{if .Values._000_commonConfig.dataprocessing.nodered.enabled}}
+{{if .Values.tags.classic }}
 
 apiVersion: apps/v1
 kind: StatefulSet
@@ -39,23 +39,9 @@ spec:
         fsGroup: 1000
         runAsNonRoot: true
         runAsUser: 1000
-      initContainers:
-
-        {{if .Values._000_commonConfig.dataprocessing.nodered.defaultFlows}}
-        - name: {{include "united-manufacturing-hub.fullname" .}}-nodered-init
-          image: busybox:1.28
-          command: ['sh', '-c', 'false | cp -ir /data/flows.default /data/flows.json 2>/dev/null']
-          volumeMounts:
-            - name: {{include "united-manufacturing-hub.fullname" .}}-nodered-data
-              mountPath: /data
-            - name: {{include "united-manufacturing-hub.fullname" .}}-nodered-flows
-              mountPath: /data/flows.default
-              subPath: nodered-flows
-        {{end}}
-
       containers:
       - name: {{include "united-manufacturing-hub.fullname" .}}-nodered
-        image: management.umh.app/oci/nodered/node-red:{{.Values.nodered.tag}}
+        image: "{{.Values.image.registry}}/nodered/node-red:{{.Values.nodered.tag | default "3.0.2"}}"
         ports:
         - containerPort: 1880
           name: nodered-ui

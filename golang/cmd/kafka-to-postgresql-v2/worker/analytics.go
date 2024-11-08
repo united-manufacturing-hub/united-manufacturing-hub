@@ -71,7 +71,7 @@ func parseProductAdd(value []byte) (*shared.ProductAddMessage, error) {
 		return nil, errors.New("external_product_type_id is required")
 	}
 	if message.EndTimeUnixMs == 0 {
-		return nil, errors.New("end_time is required")
+		return nil, errors.New("end_time_unix_ms is required")
 	}
 	if message.Quantity == 0 {
 		return nil, errors.New("quantity is required")
@@ -84,9 +84,12 @@ func parseProductSetBadQuantity(value []byte) (*shared.ProductSetBadQuantityMess
 	var message shared.ProductSetBadQuantityMessage
 	err := json.Unmarshal(value, &message)
 
-	// Validate that ExternalProductId & BadQuantity are set
+	// Validate that ExternalProductId, EndTimeUnixMs & BadQuantity are set
 	if message.ExternalProductId == "" {
 		return nil, errors.New("external_product_id is required")
+	}
+	if message.EndTimeUnixMs == 0 {
+		return nil, errors.New("end_time_unix_ms is required")
 	}
 	if message.BadQuantity == 0 {
 		return nil, errors.New("bad_quantity is required")

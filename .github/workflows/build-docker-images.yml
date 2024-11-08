@@ -16,125 +16,69 @@ name: Build Docker Images
 
 on:
   pull_request:
-    paths:
-      - 'go.work'
-      - 'go.work.sum'
-      - 'golang/**'
+  push:
+    branches:
+      - main
+      - staging
+    tags:
+      - '*'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  check_paths:
-    runs-on: ubuntu-latest
-    outputs:
-      barcodereader: ${{ steps.filter.outputs.barcodereader }}
-      factoryinsight: ${{ steps.filter.outputs.factoryinsight }}
-      grafana_umh: ${{ steps.filter.outputs.grafana_umh }}
-      hivemq_init: ${{ steps.filter.outputs.hivemq_init }}
-      kafka_bridge: ${{ steps.filter.outputs.kafka_bridge }}
-      kafka_init: ${{ steps.filter.outputs.kafka_init }}
-      kafka_to_postgresql: ${{ steps.filter.outputs.kafka_to_postgresql }}
-      kafka_to_postgresql_v2: ${{ steps.filter.outputs.kafka_to_postgresql_v2 }}
-      metrics: ${{ steps.filter.outputs.metrics }}
-      mqtt_kafka_bridge: ${{ steps.filter.outputs.mqtt_kafka_bridge }}
-      sensorconnect: ${{ steps.filter.outputs.sensorconnect }}
-
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Checkout actual branch (and not the refs/pull/<pr>/merge) to get the correct diff
-        run: |
-          git checkout ${{ github.head_ref }}
-      - id: filter
-        run: |
-          echo "barcodereader=false" >> $GITHUB_OUTPUT
-          echo "factoryinsight=false" >> $GITHUB_OUTPUT
-          echo "grafana_umh=false" >> $GITHUB_OUTPUT
-          echo "hivemq_init=false" >> $GITHUB_OUTPUT
-          echo "kafka_bridge=false" >> $GITHUB_OUTPUT
-          echo "kafka_init=false" >> $GITHUB_OUTPUT
-          echo "kafka_to_postgresql=false" >> $GITHUB_OUTPUT
-          echo "kafka_to_postgresql_v2=false" >> $GITHUB_OUTPUT
-          echo "metrics=false" >> $GITHUB_OUTPUT
-          echo "mqtt_kafka_bridge=false" >> $GITHUB_OUTPUT
-          echo "sensorconnect=false" >> $GITHUB_OUTPUT
-          
-          currentSHA=$(git rev-parse HEAD)
-          previousSHA=$(git rev-parse HEAD^)
-          
-          if git diff --name-only $previousSHA $currentSHA | grep -E '^(go.work|go.work.sum|golang/internal/|golang/pkg/|golang/test/|golang/go.mod|golang/go.sum|golang/cmd/barcodereader/)'; then
-            echo "Building barcodereader"
-            echo "barcodereader=true" >> $GITHUB_OUTPUT
-          fi
-          if git diff --name-only $previousSHA $currentSHA | grep -E '^(go.work|go.work.sum|golang/internal/|golang/pkg/|golang/test/|golang/go.mod|golang/go.sum|golang/cmd/factoryinsight/)'; then
-            echo "Building factoryinsight"
-            echo "factoryinsight=true" >> $GITHUB_OUTPUT
-          fi
-          if git diff --name-only $previousSHA $currentSHA | grep -E '^(go.work|go.work.sum|golang/internal/|golang/pkg/|golang/test/|golang/go.mod|golang/go.sum|golang/cmd/grafana-umh/)'; then
-              echo "Building grafana_umh"
-              echo "grafana_umh=true" >> $GITHUB_OUTPUT
-          fi
-          if git diff --name-only $previousSHA $currentSHA | grep -E '^(go.work|go.work.sum|golang/internal/|golang/pkg/|golang/test/|golang/go.mod|golang/go.sum|golang/cmd/hivemq-init/)'; then
-              echo "Building hivemq_init"
-              echo "hivemq_init=true" >> $GITHUB_OUTPUT
-          fi
-          if git diff --name-only $previousSHA $currentSHA | grep -E '^(go.work|go.work.sum|golang/internal/|golang/pkg/|golang/test/|golang/go.mod|golang/go.sum|golang/cmd/kafka-bridge/)'; then
-              echo "Building kafka_bridge"
-              echo "kafka_bridge=true" >> $GITHUB_OUTPUT
-          fi
-          if git diff --name-only $previousSHA $currentSHA | grep -E '^(go.work|go.work.sum|golang/internal/|golang/pkg/|golang/test/|golang/go.mod|golang/go.sum|golang/cmd/kafka-init/)'; then
-              echo "Building kafka_init"
-              echo "kafka_init=true" >> $GITHUB_OUTPUT
-          fi
-          if git diff --name-only $previousSHA $currentSHA | grep -E '^(go.work|go.work.sum|golang/internal/|golang/pkg/|golang/test/|golang/go.mod|golang/go.sum|golang/cmd/kafka-to-postgresql/)'; then
-              echo "Building kafka_to_postgresql"
-              echo "kafka_to_postgresql=true" >> $GITHUB_OUTPUT
-          fi
-          if git diff --name-only $previousSHA $currentSHA | grep -E '^(go.work|go.work.sum|golang/internal/|golang/pkg/|golang/test/|golang/go.mod|golang/go.sum|golang/cmd/kafka-to-postgresql-v2/)'; then
-            echo "Building kafka_to_postgresql_v2"
-            echo "kafka_to_postgresql_v2=true" >> $GITHUB_OUTPUT
-          fi
-          if git diff --name-only $previousSHA $currentSHA | grep -E '^(go.work|go.work.sum|golang/internal/|golang/pkg/|golang/test/|golang/go.mod|golang/go.sum|golang/cmd/metrics/)'; then
-            echo "Building metrics"
-            echo "metrics=true" >> $GITHUB_OUTPUT
-          fi
-          if git diff --name-only $previousSHA $currentSHA | grep -E '^(go.work|go.work.sum|golang/internal/|golang/pkg/|golang/test/|golang/go.mod|golang/go.sum|golang/cmd/mqtt-kafka-bridge/)'; then
-            echo "Building mqtt_kafka_bridge"
-            echo "mqtt_kafka_bridge=true" >> $GITHUB_OUTPUT
-          fi
-          if git diff --name-only $previousSHA $currentSHA | grep -E '^(go.work|go.work.sum|golang/internal/|golang/pkg/|golang/test/|golang/go.mod|golang/go.sum|golang/cmd/sensorconnect/)'; then
-            echo "Building sensorconnect"
-            echo "sensorconnect=true" >> $GITHUB_OUTPUT
-          fi
-          
-          
-
-  barcodereader:
-    needs: check_paths
-    if: needs.check_paths.outputs.barcodereader == 'true'
+  build-docker:
+    timeout-minutes: 60
     permissions:
       packages: write
       contents: read
-    runs-on:  
-      group: large-runners
+    strategy:
+      matrix:
+        component: [ 'factoryinsight', 'grafana-umh', 'hivemq-init', 'kafka-init','kafka-to-postgresql','kafka-to-postgresql-v2']
+        architecture: [ 'amd64', 'arm64' ]
+        exclude:
+          - component: 'factoryinsight'
+            architecture: 'arm64'
+          - component: 'kafka-init'
+            architecture: 'arm64'
+          - component: 'kafka-to-postgresql'
+            architecture: 'arm64'
+          - component: 'kafka-to-postgresql-v2'
+            architecture: 'arm64'
+    runs-on:
+      group: ${{ matrix.architecture == 'arm64' && 'arc-runners-small' || 'arc-runners' }}
+    env:
+      PR_ID: ${{ github.event.pull_request.number }}
+    outputs:
+      BUILD_TAG: ${{ steps.build-and-output.outputs.BUILD_TAG }}
+      SHORT_TAG: ${{ steps.build-and-output.outputs.SHORT_TAG }}
+      PRERELEASE_TAG: ${{ steps.build-and-output.outputs.PRERELEASE_TAG }}
+      PRERELEASE_SHORT_TAG: ${{ steps.build-and-output.outputs.PRERELEASE_SHORT_TAG }}
     steps:
-      - uses: actions/checkout@v4
-      - name: Docker Meta
-        id: meta
-        uses: docker/metadata-action@v5
+      - name: Checkout
+        uses: actions/checkout@v4
         with:
-          images: |
-            ghcr.io/united-manufacturing-hub/barcodereader
-          tags: |
-            type=ref,event=branch,branch=main,staging
-            type=ref,event=pr
-            type=semver,pattern={{version}}
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-      - name: Login to GitHub Container Registry
+          ref: ${{ github.event.pull_request && github.head_ref || github.ref_name }}
+          fetch-depth: '1'
+
+      - name: Check if Docker daemon is running
+        id: check_docker
+        run: |
+          SECONDS=0
+          TIMEOUT=120
+          while ! docker info >/dev/null 2>&1; do
+            if [ $SECONDS -ge $TIMEOUT ]; then
+              echo "Docker daemon is not running after ${TIMEOUT} seconds, exiting..."
+              docker info
+              exit 1
+            fi
+            echo "Waiting for Docker daemon to start..."
+            sleep 1
+          done
+          echo "Docker daemon is running."
+
+      - name: Login to GitHub Container registry
         uses: docker/login-action@v3
         env:
           GITHUB_USER: ${{ github.actor }}
@@ -143,380 +87,153 @@ jobs:
           registry: ghcr.io
           username: $GITHUB_USER
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build and Push
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./deployment/barcodereader/Dockerfile
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
 
-  factoryinsight:
-    needs: check_paths
-    if: needs.check_paths.outputs.factoryinsight == 'true'
-    permissions:
-      packages: write
-      contents: read
-    runs-on:  
-      group: large-runners
-    steps:
-      - uses: actions/checkout@v4
-      - name: Docker Meta
-        id: meta
-        uses: docker/metadata-action@v5
+      - name: Setup QEMU
+        uses: docker/setup-qemu-action@v3
         with:
-          images: |
-            ghcr.io/united-manufacturing-hub/factoryinsight
-          tags: |
-            type=ref,event=branch,branch=main,staging
-            type=ref,event=pr
-            type=semver,pattern={{version}}
+          image: management.umh.app/oci/tonistiigi/binfmt:latest
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.repository_owner }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build and Push Docker Image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./deployment/factoryinsight/Dockerfile
-          push: true
-          target: runner
-          tags: ${{ steps.meta.outputs.tags }}
 
-  grafana-umh:
-    needs: check_paths
-    if: needs.check_paths.outputs.grafana_umh == 'true'
-    permissions:
-      packages: write
-      contents: read
-    runs-on:  
-      group: large-runners
-    steps:
-      - uses: actions/checkout@v4
-      - name: Docker Meta
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: |
-            ghcr.io/united-manufacturing-hub/grafana-umh
-          tags: |
-            type=ref,event=branch,branch=main,staging
-            type=ref,event=pr
-            type=semver,pattern={{version}}
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.repository_owner }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build and Push Docker Image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./deployment/grafana-umh/Dockerfile
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
+      - name: Setup variables and build
+        id: build-and-output
+        run: |
+          export GIT_TAG=$(git describe --tags --always)
+          export DOCKER_FILE=./deployment/${{ matrix.component }}/Dockerfile
+          export PLATFORM=${{ matrix.architecture }}
 
-  hivemq-init:
-    needs: check_paths
-    if: needs.check_paths.outputs.hivemq_init == 'true'
-    permissions:
-      packages: write
-      contents: read
-    runs-on:  
-      group: large-runners
-    steps:
-      - uses: actions/checkout@v4
-      - name: Docker Meta
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: |
-            ghcr.io/united-manufacturing-hub/hivemq-init
-          tags: |
-            type=ref,event=branch,branch=main,staging
-            type=ref,event=pr
-            type=semver,pattern={{version}}
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.repository_owner }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build and Push Docker Image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./deployment/hivemq-init/Dockerfile
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
+          # Read appVersion from Chart.yaml
+          export APP_VERSION=$(grep '^appVersion:' deployment/united-manufacturing-hub/Chart.yaml | awk '{print $2}')
 
-  kafka-bridge:
-    needs: check_paths
-    if: needs.check_paths.outputs.kafka_bridge == 'true'
-    permissions:
-      packages: write
-      contents: read
-    runs-on:  
-      group: large-runners
-    steps:
-      - uses: actions/checkout@v4
-      - name: Docker Meta
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: |
-            ghcr.io/united-manufacturing-hub/kafka-bridge
-          tags: |
-            type=ref,event=branch,branch=main,staging
-            type=ref,event=pr
-            type=semver,pattern={{version}}
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.repository_owner }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build and Push Docker Image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./deployment/kafka-bridge/Dockerfile
-          push: true
-          target: runner
-          tags: ${{ steps.meta.outputs.tags }}
+          # Initialize BUILD_TAGS
+          BUILD_TAGS=""
+          PRERELEASE_TAG=""
+          PRERELEASE_SHORT_TAG=""
 
-  kafka-init:
-    needs: check_paths
-    if: needs.check_paths.outputs.kafka_init == 'true'
-    permissions:
-      packages: write
-      contents: read
-    runs-on:  
-      group: large-runners
-    steps:
-      - uses: actions/checkout@v4
-      - name: Docker Meta
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: |
-            ghcr.io/united-manufacturing-hub/kafka-init
-          tags: |
-            type=ref,event=branch,branch=main,staging
-            type=ref,event=pr
-            type=semver,pattern={{version}}
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.repository_owner }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build and Push Docker Image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./deployment/kafka-init/Dockerfile
-          push: true
-          target: runner
-          tags: ${{ steps.meta.outputs.tags }}
+          if [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == "refs/heads/main" ]]; then
+            export BUILD_TAG=ghcr.io/united-manufacturing-hub/${{ matrix.component }}:latest-${PLATFORM}
+            BUILD_TAGS="-t ${BUILD_TAG}"
+          elif [[ ("${{ github.event_name }}" == "push" && "${{ github.ref }}" == "refs/heads/staging") || ("${{ github.event_name }}" == "pull_request" && "${{ github.event.pull_request.head.ref }}" == "staging") ]]; then
+            # Build staging tag
+            export BUILD_TAG=ghcr.io/united-manufacturing-hub/${{ matrix.component }}:staging-${PLATFORM}
+            BUILD_TAGS="-t ${BUILD_TAG}"
+            # Check if APP_VERSION is a pre-release (contains '-')
+            if [[ "${APP_VERSION}" == *"-"* ]]; then
+              # APP_VERSION is a pre-release
+              export PRERELEASE_TAG=ghcr.io/united-manufacturing-hub/${{ matrix.component }}:${APP_VERSION}-${PLATFORM}
+              BUILD_TAGS="${BUILD_TAGS} -t ${PRERELEASE_TAG}"
+            fi
+          elif [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            export BUILD_TAG=ghcr.io/united-manufacturing-hub/${{ matrix.component }}:pr-${{ github.event.pull_request.number }}-${PLATFORM}
+            BUILD_TAGS="-t ${BUILD_TAG}"
+          elif [[ "${{ github.event_name }}" == "merge_group" ]]; then
+            export BUILD_TAG=ghcr.io/united-manufacturing-hub/${{ matrix.component }}:$(git rev-parse --abbrev-ref HEAD)-${PLATFORM}
+            BUILD_TAGS="-t ${BUILD_TAG}"
+          elif [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == refs/tags/* ]]; then
+            export BUILD_TAG=ghcr.io/united-manufacturing-hub/${{ matrix.component }}:${GIT_TAG}-${PLATFORM}
+            BUILD_TAGS="-t ${BUILD_TAG}"
+            # **Add this block to handle tags starting with 'v'**
+            if [[ "${GIT_TAG}" == v* ]]; then
+              # Remove leading 'v' and create an additional tag
+              export ALT_TAG=ghcr.io/united-manufacturing-hub/${{ matrix.component }}:${GIT_TAG#v}-${PLATFORM}
+              BUILD_TAGS="${BUILD_TAGS} -t ${ALT_TAG}"
+            fi
+          fi
 
+          # Now build and push images with all tags
+          docker buildx build --platform linux/${PLATFORM} --provenance=false --progress=plain \
+            --build-arg APP_VERSION=${GIT_TAG} ${BUILD_TAGS} -f ${DOCKER_FILE} --push .
 
-  kafka-to-postgresql:
-    needs: check_paths
-    if: needs.check_paths.outputs.kafka_to_postgresql == 'true'
-    permissions:
-      packages: write
-      contents: read
-    runs-on:  
-      group: large-runners
-    steps:
-      - uses: actions/checkout@v4
-      - name: Docker Meta
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: |
-            ghcr.io/united-manufacturing-hub/kafka-to-postgresql
-          tags: |
-            type=ref,event=branch,branch=main,staging
-            type=ref,event=pr
-            type=semver,pattern={{version}}
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.repository_owner }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build and Push Docker Image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./deployment/kafka-to-postgresql/Dockerfile
-          push: true
-          target: runner
-          tags: ${{ steps.meta.outputs.tags }}
+          # Output the primary BUILD_TAG
+          echo "BUILD_TAG=${BUILD_TAG}" >> $GITHUB_OUTPUT
+          echo "BUILD_TAG=${BUILD_TAG}"
 
-
-  kafka-to-postgresql-v2:
-    needs: check_paths
-    if: needs.check_paths.outputs.kafka_to_postgresql_v2 == 'true'
-    permissions:
-      packages: write
-      contents: read
-    runs-on: 
-      group: large-runners
-    steps:
-      - uses: actions/checkout@v4
-      - name: Docker Meta
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: |
-            ghcr.io/united-manufacturing-hub/kafka-to-postgresql-v2
-          tags: |
-            type=ref,event=branch,branch=main,staging
-            type=ref,event=pr
-            type=semver,pattern={{version}}
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.repository_owner }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build and Push Docker Image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./deployment/kafka-to-postgresql-v2/Dockerfile
-          push: true
-          target: runner
-          tags: ${{ steps.meta.outputs.tags }}
+          # Extract SHORT_TAG from BUILD_TAG
+          echo "SHORT_TAG=$(echo ${BUILD_TAG} | sed 's/.*:\(.*\)-.*/\1/')" >> $GITHUB_OUTPUT
+          echo "SHORT_TAG=$(echo ${BUILD_TAG} | sed 's/.*:\(.*\)-.*/\1/')"
           
-  metrics:
-    needs: check_paths
-    if: needs.check_paths.outputs.metrics == 'true'
-    permissions:
-      packages: write
-      contents: read
-    runs-on:  
-      group: large-runners
-    steps:
-      - uses: actions/checkout@v4
-      - name: Docker Meta
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: |
-            ghcr.io/united-manufacturing-hub/metrics
-          tags: |
-            type=ref,event=branch,branch=main,staging
-            type=ref,event=pr
-            type=semver,pattern={{version}}
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.repository_owner }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build and Push Docker Image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./deployment/metrics/Dockerfile
-          push: true
-          target: runner
-          tags: ${{ steps.meta.outputs.tags }}
+          # If PRERELEASE_TAG exists, output it
+          if [[ -n "${PRERELEASE_TAG}" ]]; then
+            echo "PRERELEASE_TAG=${PRERELEASE_TAG}" >> $GITHUB_OUTPUT
+            echo "PRERELEASE_TAG=${PRERELEASE_TAG}"
+            # Extract PRERELEASE_SHORT_TAG from PRERELEASE_TAG
+            echo "PRERELEASE_SHORT_TAG=$(echo ${PRERELEASE_TAG} | sed 's/.*:\(.*\)-.*/\1/')" >> $GITHUB_OUTPUT
+            echo "PRERELEASE_SHORT_TAG=$(echo ${PRERELEASE_TAG} | sed 's/.*:\(.*\)-.*/\1/')"
+          fi
 
-  mqtt-kafka-bridge:
-    needs: check_paths
-    if: needs.check_paths.outputs.mqtt_kafka_bridge == 'true'
-    permissions:
-      packages: write
-      contents: read
-    runs-on:  
-      group: large-runners
-    steps:
-      - uses: actions/checkout@v4
-      - name: Docker Meta
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: |
-            ghcr.io/united-manufacturing-hub/mqtt-kafka-bridge
-          tags: |
-            type=ref,event=branch,branch=main,staging
-            type=ref,event=pr
-            type=semver,pattern={{version}}
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.repository_owner }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build and Push Docker Image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./deployment/mqtt-kafka-bridge/Dockerfile
-          push: true
-          target: runner
-          tags: ${{ steps.meta.outputs.tags }}
+          # **Output ALT_TAG and ALT_SHORT_TAG if they exist**
+          if [[ -n "${ALT_TAG}" ]]; then
+            echo "ALT_TAG=${ALT_TAG}" >> $GITHUB_OUTPUT
+            echo "ALT_TAG=${ALT_TAG}"
+            echo "ALT_SHORT_TAG=$(echo ${ALT_TAG} | sed 's/.*:\(.*\)-.*/\1/')" >> $GITHUB_OUTPUT
+            echo "ALT_SHORT_TAG=$(echo ${ALT_TAG} | sed 's/.*:\(.*\)-.*/\1/')"
+          fi
 
-  sensorconnect:
-    needs: check_paths
-    if: needs.check_paths.outputs.sensorconnect == 'true'
+  create-manifests:
+    needs: build-docker
+    if: needs.build-docker.outputs.SHORT_TAG != ''
     permissions:
-      packages: write
       contents: read
-    runs-on:  
-      group: large-runners
+      packages: write
+    runs-on:
+      group: arc-runners
+    defaults:
+      run:
+        shell: bash
+    strategy:
+      matrix:
+        component: [ 'factoryinsight', 'grafana-umh', 'hivemq-init', 'kafka-init','kafka-to-postgresql','kafka-to-postgresql-v2']
     steps:
-      - uses: actions/checkout@v4
-      - name: Docker Meta
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: |
-            ghcr.io/united-manufacturing-hub/sensorconnect
-          tags: |
-            type=ref,event=branch,branch=main,staging
-            type=ref,event=pr
-            type=semver,pattern={{version}}
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-      - name: Login to GitHub Container Registry
+      - name: Login to GitHub Container registry
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
-          username: ${{ github.repository_owner }}
+          username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build and Push Docker Image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./deployment/sensorconnect/Dockerfile
-          push: true
-          target: runner
-          tags: ${{ steps.meta.outputs.tags }}
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Check if ARM64 image exists
+        id: check_arm64
+        run: |
+          if docker manifest inspect ghcr.io/united-manufacturing-hub/${{ matrix.component }}:${{ needs.build-docker.outputs.SHORT_TAG }}-arm64 >/dev/null 2>&1; then
+            echo "ARM64_EXISTS=true" >> $GITHUB_ENV
+          else
+            echo "ARM64_EXISTS=false" >> $GITHUB_ENV
+          fi
+
+      - name: Create multiarch manifests for primary tag
+        run: |
+          if [ "${ARM64_EXISTS}" = "true" ]; then
+            docker buildx imagetools create -t ghcr.io/united-manufacturing-hub/${{ matrix.component }}:${{ needs.build-docker.outputs.SHORT_TAG }} \
+              ghcr.io/united-manufacturing-hub/${{ matrix.component }}:${{ needs.build-docker.outputs.SHORT_TAG }}-amd64 \
+              ghcr.io/united-manufacturing-hub/${{ matrix.component }}:${{ needs.build-docker.outputs.SHORT_TAG }}-arm64
+          else
+            docker buildx imagetools create -t ghcr.io/united-manufacturing-hub/${{ matrix.component }}:${{ needs.build-docker.outputs.SHORT_TAG }} \
+              ghcr.io/united-manufacturing-hub/${{ matrix.component }}:${{ needs.build-docker.outputs.SHORT_TAG }}-amd64
+          fi
+
+      - name: Create multiarch manifests for pre-release tag (if exists)
+        if: ${{ needs.build-docker.outputs.PRERELEASE_SHORT_TAG != '' }}
+        run: |
+          if [ "${ARM64_EXISTS}" = "true" ]; then
+            docker buildx imagetools create -t ghcr.io/united-manufacturing-hub/${{ matrix.component }}:${{ needs.build-docker.outputs.PRERELEASE_SHORT_TAG }} \
+              ghcr.io/united-manufacturing-hub/${{ matrix.component }}:${{ needs.build-docker.outputs.PRERELEASE_SHORT_TAG }}-amd64 \
+              ghcr.io/united-manufacturing-hub/${{ matrix.component }}:${{ needs.build-docker.outputs.PRERELEASE_SHORT_TAG }}-arm64
+          else
+            docker buildx imagetools create -t ghcr.io/united-manufacturing-hub/${{ matrix.component }}:${{ needs.build-docker.outputs.PRERELEASE_SHORT_TAG }} \
+              ghcr.io/united-manufacturing-hub/${{ matrix.component }}:${{ needs.build-docker.outputs.PRERELEASE_SHORT_TAG }}-amd64
+          fi
+
+      - name: Create multiarch manifests for alternate tag (if exists)
+        if: ${{ needs.build-docker.outputs.ALT_SHORT_TAG != '' }}
+        run: |
+          if [ "${ARM64_EXISTS}" = "true" ]; then
+            docker buildx imagetools create -t ghcr.io/united-manufacturing-hub/${{ matrix.component }}:${{ needs.build-docker.outputs.ALT_SHORT_TAG }} \
+              ghcr.io/united-manufacturing-hub/${{ matrix.component }}:${{ needs.build-docker.outputs.ALT_SHORT_TAG }}-amd64 \
+              ghcr.io/united-manufacturing-hub/${{ matrix.component }}:${{ needs.build-docker.outputs.ALT_SHORT_TAG }}-arm64
+          else
+            docker buildx imagetools create -t ghcr.io/united-manufacturing-hub/${{ matrix.component }}:${{ needs.build-docker.outputs.ALT_SHORT_TAG }} \
+              ghcr.io/united-manufacturing-hub/${{ matrix.component }}:${{ needs.build-docker.outputs.ALT_SHORT_TAG }}-amd64
+          fi

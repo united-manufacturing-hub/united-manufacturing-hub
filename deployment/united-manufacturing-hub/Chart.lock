@@ -1,15 +1,15 @@
 dependencies:
 - name: redis
   repository: https://management.umh.app/helm/bitnami
-  version: 17.9.0
+  version: 18.17.0
 - name: grafana
   repository: https://management.umh.app/helm/grafana
-  version: 6.57.4
+  version: 7.3.7
 - name: timescaledb-single
   repository: https://management.umh.app/helm/timescale
   version: 0.26.9
 - name: redpanda
   repository: https://management.umh.app/helm/redpanda
-  version: 5.3.4
-digest: sha256:860e177ffd4937af2242c54656c1fb0bd703027548af9406f2a335c90d26c2f4
-generated: "2024-01-30T10:54:49.826404377Z"
+  version: 5.9.7
+digest: sha256:6219c965d05148e1e0b3bac95aea8f9d16c6a665d8dd9b393992a68db160a911
+generated: "2024-10-23T08:47:42.563644316Z"
