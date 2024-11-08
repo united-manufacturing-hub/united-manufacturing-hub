@@ -152,6 +152,14 @@ jobs:
           # Extract SHORT_TAG from BUILD_TAG
           echo "SHORT_TAG=$(echo ${BUILD_TAG} | sed 's/.*:\(.*\)-.*/\1/')" >> $GITHUB_OUTPUT
           echo "SHORT_TAG=$(echo ${BUILD_TAG} | sed 's/.*:\(.*\)-.*/\1/')"
+          
+          # If PRERELEASE_TAG exists, output it
+          if [[ -n "${PRERELEASE_TAG}" ]]; then
+            echo "PRERELEASE_TAG=${PRERELEASE_TAG}" >> $GITHUB_OUTPUT
+            echo "PRERELEASE_TAG=${PRERELEASE_TAG}"
+            # Extract PRERELEASE_SHORT_TAG from PRERELEASE_TAG
+            echo "PRERELEASE_SHORT_TAG=$(echo ${PRERELEASE_TAG} | sed 's/.*:\(.*\)-.*/\1/')" >> $GITHUB_OUTPUT
+            echo "PRERELEASE_SHORT_TAG=$(echo ${PRERELEASE_TAG} | sed 's/.*:\(.*\)-.*/\1/')"
 
           # **Output ALT_TAG and ALT_SHORT_TAG if they exist**
           if [[ -n "${ALT_TAG}" ]]; then
