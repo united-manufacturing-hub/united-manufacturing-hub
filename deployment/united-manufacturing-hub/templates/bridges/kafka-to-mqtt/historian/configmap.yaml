@@ -26,9 +26,9 @@ metadata:
     # This does not change over time
     data-flow-component-uuid: fcdec4de-a930-4229-befc-d318c9964a2e
     # This is the random UUID of the version of the component
-    data-flow-component-version-uuid: f19bfb10-55e9-45a0-94c5-450b8ff7310b
+    data-flow-component-version-uuid: 148530e8-c79a-4f45-9c76-9cc9d859b1c8
     # Timestamp of last change to the component in unix milliseconds since epoch
-    data-flow-version: '1729671887007'
+    data-flow-version: '1730983044602'
     # Generic label to indicate that this is a data flow component
     is-data-flow-component: 'true'
     # Required for mgmtcompanion to manage the component
@@ -72,7 +72,8 @@ data:
 
     pipeline:
       processors:
-        - bloblang: |
+        - label: reassemble_topic_and_filter_schema
+          bloblang: |
             ######### Variables #########
 
             ## Change "default" to the name of the local instance
@@ -100,7 +101,8 @@ data:
               deleted()
             }
 
-        - bloblang: |
+        - label: validate_message_json
+          bloblang: |
             # Step 3: Validate that the message is valid JSON
             let invalid_json = this.catch(true)
             if $invalid_json == true {
@@ -109,11 +111,13 @@ data:
               meta "invalid_json_count" = 0
             }
             root = this
-        - metric:
+        - label: increment_invalid_json_metric
+          metric:
             type: counter_by
             name: invalid_json
             value: ${! meta("invalid_json_count") }
-        - bloblang: |
+        - label: delete_if_invalid_json
+          bloblang: |
             let invalid_json = meta("invalid_json_count")
             root = if $invalid_json.string() == "0" {
               root
@@ -121,7 +125,8 @@ data:
               deleted()
             }
 
-        - bloblang: |
+        - label: check_and_delete_if_previously_bridged
+          bloblang: |
             let local_bridge_name = meta("local_bridge_name")
             let remote_bridge_name = meta("remote_bridge_name")
             # Step 4: Check if the message was previously bridged
@@ -134,7 +139,8 @@ data:
               root
             }
 
-        - bloblang: |
+        - label: add_bridge_name_and_prepare_topic
+          bloblang: |
             let bridged_by = meta("bridged_by")
             let bridged_by = $bridged_by.parse_json()
             let trimmed_topic = meta("trimmed_topic")

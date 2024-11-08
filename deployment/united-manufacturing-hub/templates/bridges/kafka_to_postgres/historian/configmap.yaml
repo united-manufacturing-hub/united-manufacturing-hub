@@ -26,9 +26,9 @@ metadata:
     # This does not change over time
     data-flow-component-uuid: 3e5c91f6-3dfc-45d6-8e9b-f17705e07b4c
     # This is the random UUID of the version of the component
-    data-flow-component-version-uuid: 11c6ef6f-8097-4aab-a79e-76beaa310c99
+    data-flow-component-version-uuid: 0edc0bc1-7df2-4fb8-ad90-955ad1aacc04
     # Timestamp of last change to the component in unix milliseconds since epoch
-    data-flow-version: '1730815518000'
+    data-flow-version: '1730983044602'
     # Generic label to indicate that this is a data flow component
     is-data-flow-component: 'true'
     # Required for mgmtcompanion to manage the component
@@ -74,7 +74,8 @@ data:
 
     pipeline:
       processors:
-        - bloblang: |
+        - label: reconstruct_full_topic_name
+          bloblang: |
             # Step 1: Reconstruct the full topic name
             # Retrieve the original Kafka topic and key from metadata
             let kafka_topic = meta("kafka_topic")
@@ -89,7 +90,8 @@ data:
             # Store the reconstructed topic in metadata for later use
             meta "topic" = $topic
 
-        - bloblang: |
+        - label: filter_for_historian_topics
+          bloblang: |
             # Step 2: Filter for '_historian' topics
             let topic = meta("topic")
 
@@ -102,7 +104,8 @@ data:
               _ => deleted()           # Delete the message if not a historian topic
             }
 
-        - bloblang: |
+        - label: validate_message_json
+          bloblang: |
             # Step 3: Validate that the message is valid JSON
             let invalid_json = this.catch(true)
             if $invalid_json == true {
@@ -111,11 +114,15 @@ data:
               meta "invalid_json_count" = 0
             }
             root = this
-        - metric:
+
+        - label: increment_invalid_json_metric
+          metric:
             type: counter_by
             name: invalid_json
             value: ${! meta("invalid_json_count") }
-        - bloblang: |
+
+        - label: delete_if_invalid_json
+          bloblang: |
             let invalid_json = meta("invalid_json_count")
             root = if $invalid_json.string() == "0" {
               root
@@ -123,7 +130,8 @@ data:
               deleted()
             }
 
-        - bloblang: |
+        - label: validate_against_historian_schema
+          bloblang: |
             # Step 4: Validate the message against the _historian schema
             let topic = meta("topic")
 
@@ -155,13 +163,14 @@ data:
               _ => this                                           # Keep the message
             }
 
-        - bloblang: |
+        - label: extract_hierarchy_from_topic
+          bloblang: |
             # Step 5: Extract hierarchical information from the topic
             # Topic structure: umh.v1.<enterprise>.<site>.<area>.<line>.<workcell>.<origin_id>._<usecase>.<tag_group>.<tag_name>
             let topic = meta("topic")
 
             # Use a regular expression to extract components from the topic name
-            let matches = $topic.re_find_all_object("^umh\\.v1\\.(?P<enterprise>[\\w-_]+)\\.((?P<site>[\\w-_]+)\\.)?((?P<area>[\\w-_]+)\\.)?((?P<productionLine>[\\w-_]+)\\.)?((?P<workCell>[\\w-_]+)\\.)?((?P<originId>[\\w-_]+)\\.)?_(?P<usecase>(historian)|(analytics))(\\.(?P<tag>(?:[\\w-_.]+\\w)+))?$")
+            let matches = $topic.re_find_all_object("^umh\\.v1\\.(?P<enterprise>[\\w-_]+)\\.((?P<site>[\\w-_]+)\\.)?((?P<area>[\\w-_]+)\\.)?((?P<productionLine>[\\w-_]+)\\.)?((?P<workCell>[\\w-_]+)\\.)?((?P<originId>[\\w-_]+)\\.)?_(?P<usecase>(historian)|(analytics))(\\.(?P<tag>(?:[\\w-_.]+)+))?$")
 
             # Check if the regex matched (i.e., the topic follows the expected structure)
             let match_length = $matches.length()
@@ -174,7 +183,8 @@ data:
             # Store the matches in metadata for later use
             meta "matches" = $matches.format_json()
 
-        - bloblang: |
+        - label: extract_components_from_regex
+          bloblang: |
             # Step 6: Extract components from the regex matches
             let matches = meta("matches")
 
@@ -215,7 +225,8 @@ data:
               "tag": $tag,
             }
 
-        - branch:
+        - label: get_asset_id
+          branch:
             processors:
               # Step 6 continued: Use a cache to store asset IDs and avoid repeated database queries
               - cached:
@@ -253,9 +264,10 @@ data:
                         } else {
                           null
                         }
-            result_map: 'root.asset_id = this'  # Store the asset_id in the message
+          result_map: 'root.asset_id = this'  # Store the asset_id in the message
 
-        - switch:
+        - label: delete_if_asset_id_null
+          switch:
             # Step 6 continued: Abort if asset_id is null
             - check: this.asset_id == null
               processors:
@@ -268,7 +280,8 @@ data:
                 - bloblang: |
                     root = deleted()
 
-        - bloblang: |
+        - label: flatten_payload_for_insertion
+          bloblang: |
             # Step 7: Flatten the payload and prepare data for insertion
             # Define a recursive function to flatten nested JSON objects
             map collapse_rec {
@@ -350,7 +363,8 @@ data:
             # Set the root of the message to be the array of records
             root = $flat_array
 
-        - unarchive:
+        - label: unarchive_json_array
+          unarchive:
             format: json_array  # Split the array into individual messages
 
     output:
