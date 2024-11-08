@@ -1,0 +1,217 @@
+# Copyright 2024 UMH Systems GmbH
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+---
+{{if .Values._002_simulatorConfig.modbussimulator.enabled}}
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{include "united-manufacturing-hub.fullname" .}}-modbussimulator-config
+  labels:
+    {{- include "united-manufacturing-hub.labels.common" . | nindent 4}}
+    {{- include "united-manufacturing-hub.labels.modbussimulator" . | nindent 4}}
+data:
+  config-modbus.json: |
+    {
+      "server": {
+        "listenerAddress": "0.0.0.0",
+        "listenerPort": 5020,
+        "tlsParams": {
+          "description": "path to certificate and private key to enable tls",
+          "privateKey": null,
+          "certificate": null
+        },
+        "logging": {
+          "format": "%(asctime)-15s %(threadName)-15s  %(levelname)-8s %(module)-15s:%(lineno)-8s %(message)s",
+          "logLevel": "DEBUG"
+        }
+      },
+      "registers": {
+        "description": "initial values for the register types",
+        "zeroMode": true,
+        "initializeUndefinedRegisters": true,
+        "discreteInput": {
+          "1": true,
+          "2": false,
+          "3": true,
+          "4": false
+        },
+        "coils": {
+          "1": false,
+          "2": true,
+          "3": true,
+          "4": false
+        },
+        "holdingRegister": {
+          "0": "0x0000",
+          "1": "0x0001",
+          "2": "0x0002",
+          "3": "0x0003",
+          "4": "0x0004",
+          "5": "0x0005",
+          "6": "0x0006",
+          "7": "0x0007",
+          "8": "0x0008",
+          "9": "0x0009",
+          "10": "0x000A",
+          "11": "0x000B",
+          "12": "0x000C",
+          "13": "0x000D",
+          "14": "0x000E",
+          "15": "0x000F",
+          "16": "0x0010",
+          "17": "0x0011",
+          "18": "0x0012",
+          "19": "0x0013",
+          "20": "0x0014",
+          "21": "0x0015",
+          "22": "0x0016",
+          "23": "0x0017",
+          "24": "0x0018",
+          "25": "0x0019",
+          "26": "0x001A",
+          "27": "0x001B",
+          "28": "0x001C",
+          "29": "0x001D",
+          "30": "0x001E",
+          "31": "0x001F",
+          "32": "0x0020",
+          "33": "0x0021",
+          "34": "0x0022",
+          "35": "0x0023",
+          "36": "0x0024",
+          "37": "0x0025",
+          "38": "0x0026",
+          "39": "0x0027",
+          "40": "0x0028",
+          "41": "0x0029",
+          "42": "0x002A",
+          "43": "0x002B",
+          "44": "0x002C",
+          "45": "0x002D",
+          "46": "0x002E",
+          "47": "0x002F",
+          "48": "0x0030",
+          "49": "0x0031",
+          "50": "0x0032",
+          "51": "0x0033",
+          "52": "0x0034",
+          "53": "0x0035",
+          "54": "0x0036",
+          "55": "0x0037",
+          "56": "0x0038",
+          "57": "0x0039",
+          "58": "0x003A",
+          "59": "0x003B",
+          "60": "0x003C",
+          "61": "0x003D",
+          "62": "0x003E",
+          "63": "0x003F",
+          "64": "0x0040",
+          "65": "0x0041",
+          "66": "0x0042",
+          "67": "0x0043",
+          "68": "0x0044",
+          "69": "0x0045",
+          "70": "0x0046",
+          "71": "0x0047",
+          "72": "0x0048",
+          "73": "0x0049",
+          "74": "0x004A",
+          "75": "0x004B",
+          "76": "0x004C",
+          "77": "0x004D",
+          "78": "0x004E",
+          "79": "0x004F",
+          "80": "0x0050",
+          "81": "0x0051",
+          "82": "0x0052",
+          "83": "0x0053",
+          "84": "0x0054",
+          "85": "0x0055",
+          "86": "0x0056",
+          "87": "0x0057",
+          "88": "0x0058",
+          "89": "0x0059",
+          "90": "0x005A",
+          "91": "0x005B",
+          "92": "0x005C",
+          "93": "0x005D",
+          "94": "0x005E",
+          "95": "0x005F",
+          "96": "0x0060",
+          "97": "0x0061",
+          "98": "0x0062",
+          "99": "0x0063"
+        },
+        "inputRegister": {
+          "0": "0x84D9",
+          "1": "0x41ED",
+          "3": "0xC24C",
+          "5": "0xBF80",
+          "6": "0x0068",
+          "7": "0x006C",
+          "8": "0x0074",
+          "9": "0x0032",
+          "426": "0x0039",
+          "427": "0x0038",
+          "428": "0x0038",
+          "429": "0x001B",
+          "430": "0x001A",
+          "431": "0x001A",
+          "456": "0x3F80",
+          "457": "0x6666",
+          "458": "0x4086",
+          "459": "0x0002",
+          "460": "0x0001",
+          "461": "0x0002",
+          "466": "0x0032",
+          "467": "0x0001",
+          "475": "0x0066",
+          "476": "0x0002",
+          "477": "0x0001",
+          "478": "0x0002",
+          "483": "0x0032",
+          "484": "0x0001",
+          "492": "0x0066",
+          "493": "0x0002",
+          "494": "0x0001",
+          "495": "0x0002",
+          "500": "0x0032",
+          "501": "0x0001",
+          "509": "0x0066",
+          "510": "0x0002",
+          "511": "0x0001",
+          "512": "0x0002",
+          "517": "0x0032",
+          "518": "0x0001",
+          "526": "0x0066",
+          "527": "0x0002",
+          "528": "0x0001",
+          "529": "0x0002",
+          "534": "0x0032",
+          "535": "0x0001",
+          "543": "0x0066",
+          "544": "0x0002",
+          "545": "0x0001",
+          "546": "0x0002",
+          "551": "0x0032",
+          "552": "0x0001",
+          "560": "0x0066"
+        }
+      }
+    }
+
+{{end}}

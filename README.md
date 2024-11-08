@@ -38,3 +38,4 @@ To get started with development, please refer to our [development guide](https:/
 ## Contact
 
 [UMH Systems GmbH](https://www.umh.app)
+
