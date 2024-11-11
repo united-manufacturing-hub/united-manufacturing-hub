@@ -55,6 +55,8 @@ jobs:
       SHORT_TAG: ${{ steps.build-and-output.outputs.SHORT_TAG }}
       PRERELEASE_TAG: ${{ steps.build-and-output.outputs.PRERELEASE_TAG }}
       PRERELEASE_SHORT_TAG: ${{ steps.build-and-output.outputs.PRERELEASE_SHORT_TAG }}
+      ALT_TAG: ${{ steps.build-and-output.outputs.ALT_TAG }}
+      ALT_SHORT_TAG: ${{ steps.build-and-output.outputs.ALT_SHORT_TAG }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -152,7 +154,7 @@ jobs:
           # Extract SHORT_TAG from BUILD_TAG
           echo "SHORT_TAG=$(echo ${BUILD_TAG} | sed 's/.*:\(.*\)-.*/\1/')" >> $GITHUB_OUTPUT
           echo "SHORT_TAG=$(echo ${BUILD_TAG} | sed 's/.*:\(.*\)-.*/\1/')"
-          
+
           # If PRERELEASE_TAG exists, output it
           if [[ -n "${PRERELEASE_TAG}" ]]; then
             echo "PRERELEASE_TAG=${PRERELEASE_TAG}" >> $GITHUB_OUTPUT
