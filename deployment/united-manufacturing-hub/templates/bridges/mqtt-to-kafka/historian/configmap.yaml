@@ -185,6 +185,7 @@ data:
               meta "invalid_schema_count" = 1
             } else {
               meta "invalid_schema_count" = 0
+            }
 
         - label: increment_invalid_schema_metric
           metric:
