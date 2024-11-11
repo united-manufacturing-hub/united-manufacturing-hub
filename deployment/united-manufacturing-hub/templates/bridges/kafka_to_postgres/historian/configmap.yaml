@@ -264,7 +264,7 @@ data:
                         } else {
                           null
                         }
-          result_map: 'root.asset_id = this'  # Store the asset_id in the message
+            result_map: 'root.asset_id = this'  # Store the asset_id in the message
 
         - label: delete_if_asset_id_null
           switch:
