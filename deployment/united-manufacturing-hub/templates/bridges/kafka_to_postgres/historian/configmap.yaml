@@ -292,6 +292,7 @@ data:
                     _ => this.path + "$"
                 }
                 let data = this.data
+                # Replacing . with ~1 tells Benthos to use the key as literal, instead of JSON path
                 root = $data.keys().map_each(k -> match $data.get(k.replace(".","~1")) {
                     this.type() == "object" => {"path": $path + k, "data": this}.apply("collapse_rec")
                     this.type() == "array" => {$path + k: this.map_each(v -> match v.type() {
@@ -327,7 +328,9 @@ data:
             let flat_array = $flat.keys().map_each(k -> {
               "timestamp": $timestamp,
               "k": ($tag + "$" + k.replace(".", "$")).trim("$"),
+                # Replacing . with ~1 tells Benthos to use the key as literal, instead of JSON path
               "v": $flat.get(k.replace(".","~1")),
+                # Replacing . with ~1 tells Benthos to use the key as literal, instead of JSON path
               "t": $flat.get(k.replace(".","~1")).type(),
               "asset_id": $asset_id
             })
