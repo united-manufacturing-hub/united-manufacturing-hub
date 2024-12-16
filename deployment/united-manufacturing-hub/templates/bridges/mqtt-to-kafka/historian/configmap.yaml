@@ -125,7 +125,7 @@ data:
               meta "kafka_key" = $kafka_key
             } else {
               # Ensure max topic length of 249 characters
-              let kafka_topic = $trimmed_topic.slice(0, 249)
+              let trimmed_topic = $trimmed_topic.slice(0, 249)
 
               meta "kafka_topic" = $trimmed_topic
               meta "kafka_key" = ""
