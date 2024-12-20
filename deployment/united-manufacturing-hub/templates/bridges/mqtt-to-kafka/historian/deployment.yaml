@@ -26,9 +26,9 @@ metadata:
     # This does not change over time
     data-flow-component-uuid: 1db88f9f-789d-45fa-b095-cf579cc9074d
     # This is the random UUID of the version of the component
-    data-flow-component-version-uuid: fb8c6d0c-d544-41c0-93e3-bac4a48d7f17
+    data-flow-component-version-uuid: 8c5ffaf0-356f-48bc-bcd5-645306e27b91
     # Timestamp of last change to the component in unix milliseconds since epoch
-    data-flow-version: '1730983044602'
+    data-flow-version: '1734512405848'
     # Generic label to indicate that this is a data flow component
     is-data-flow-component: 'true'
     # Required for mgmtcompanion to manage the component
@@ -48,9 +48,9 @@ spec:
         # This does not change over time
         data-flow-component-uuid: 1db88f9f-789d-45fa-b095-cf579cc9074d
         # This is the random UUID of the version of the component
-        data-flow-component-version-uuid: fb8c6d0c-d544-41c0-93e3-bac4a48d7f17
+        data-flow-component-version-uuid: 8c5ffaf0-356f-48bc-bcd5-645306e27b91
         # Timestamp of last change to the component in unix milliseconds since epoch
-        data-flow-version: '1730983044602'
+        data-flow-version: '1734512405848'
         # Generic label to indicate that this is a data flow component
         is-data-flow-component: 'true'
         # Required for mgmtcompanion to manage the component
