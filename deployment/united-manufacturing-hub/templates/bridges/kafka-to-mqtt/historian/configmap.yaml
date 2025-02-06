@@ -116,6 +116,7 @@ data:
             type: counter_by
             name: invalid_json
             value: ${! meta("invalid_json_count") }
+            
         - label: delete_if_invalid_json
           bloblang: |
             let invalid_json = meta("invalid_json_count")
