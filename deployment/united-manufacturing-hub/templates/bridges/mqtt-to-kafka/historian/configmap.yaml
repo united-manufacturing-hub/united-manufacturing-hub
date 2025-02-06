@@ -132,20 +132,17 @@ data:
             }
             # Step 3
             let invalid_json = this.catch(true)
-            # Step 4
-            root = if $invalid_json == true {
-              {
-                "parsing_failure": "invalid-json",
-                "payload": content().encode("base64")
-              }
-            } else {
-              this
-            }
             # Step 4 (report metric if invalid)
             if $invalid_json == true {
               meta "invalid_json_count" = 1
             } else {
               meta "invalid_json_count" = 0
+            }
+            # Step 4
+            root = if $invalid_json == true {
+              deleted()
+            } else {
+              this
             }
 
         - label: increment_invalid_json_metric
@@ -180,7 +177,25 @@ data:
                   }
                 },
                 "minProperties": 2,
-                "additionalProperties": true
+                "additionalProperties": {
+                  "$ref": "#/definitions/non_array_value"
+                },
+                "definitions": {
+                  "non_array_value": {
+                    "oneOf": [
+                      { "type": "string" },
+                      { "type": "number" },
+                      { "type": "boolean" },
+                      { "type": "null" },
+                      {
+                        "type": "object",
+                        "additionalProperties": {
+                          "$ref": "#/definitions/non_array_value"
+                        }
+                      }
+                    ]
+                  }
+                }
               }
               """).catch(false)
             } else {
@@ -201,6 +216,15 @@ data:
             type: counter_by
             name: invalid_schema
             value: ${! meta("invalid_schema_count") }
+
+        - label: delete_if_invalid_schema
+          bloblang: |
+            let invalid_schema = meta("invalid_schema_count")
+            root = if $invalid_schema.string() == "0" {
+              root
+            } else {
+              deleted()
+            }
 
     output:
       broker:
