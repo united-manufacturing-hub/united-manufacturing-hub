@@ -21,7 +21,7 @@ on:
       - main
       - staging
     tags:
-      - '*'
+      - "*"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -35,19 +35,27 @@ jobs:
       contents: read
     strategy:
       matrix:
-        component: [ 'factoryinsight', 'grafana-umh', 'hivemq-init', 'kafka-init','kafka-to-postgresql','kafka-to-postgresql-v2']
-        architecture: [ 'amd64', 'arm64' ]
+        component:
+          [
+            "factoryinsight",
+            "grafana-umh",
+            "hivemq-init",
+            "kafka-init",
+            "kafka-to-postgresql",
+            "kafka-to-postgresql-v2",
+          ]
+        architecture: ["amd64", "arm64"]
         exclude:
-          - component: 'factoryinsight'
-            architecture: 'arm64'
-          - component: 'kafka-init'
-            architecture: 'arm64'
-          - component: 'kafka-to-postgresql'
-            architecture: 'arm64'
-          - component: 'kafka-to-postgresql-v2'
-            architecture: 'arm64'
+          - component: "factoryinsight"
+            architecture: "arm64"
+          - component: "kafka-init"
+            architecture: "arm64"
+          - component: "kafka-to-postgresql"
+            architecture: "arm64"
+          - component: "kafka-to-postgresql-v2"
+            architecture: "arm64"
     runs-on:
-      group: ${{ matrix.architecture == 'arm64' && 'arc-runners-small' || 'arc-runners' }}
+      group: ${{ matrix.architecture == 'arm64' && 'arc-runners-small' || 'arc-runners-tests' }}
     env:
       PR_ID: ${{ github.event.pull_request.number }}
     outputs:
@@ -62,7 +70,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request && github.head_ref || github.ref_name }}
-          fetch-depth: '1'
+          fetch-depth: "1"
 
       - name: Check if Docker daemon is running
         id: check_docker
@@ -185,7 +193,15 @@ jobs:
         shell: bash
     strategy:
       matrix:
-        component: [ 'factoryinsight', 'grafana-umh', 'hivemq-init', 'kafka-init','kafka-to-postgresql','kafka-to-postgresql-v2']
+        component:
+          [
+            "factoryinsight",
+            "grafana-umh",
+            "hivemq-init",
+            "kafka-init",
+            "kafka-to-postgresql",
+            "kafka-to-postgresql-v2",
+          ]
     steps:
       - name: Login to GitHub Container registry
         uses: docker/login-action@v3
