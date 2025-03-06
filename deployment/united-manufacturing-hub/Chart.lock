@@ -4,12 +4,12 @@ dependencies:
   version: 18.17.0
 - name: grafana
   repository: https://management.umh.app/helm/grafana
-  version: 7.3.7
+  version: 8.10.1
 - name: timescaledb-single
   repository: https://management.umh.app/helm/timescale
   version: 0.26.9
 - name: redpanda
   repository: https://management.umh.app/helm/redpanda
   version: 5.9.7
-digest: sha256:6219c965d05148e1e0b3bac95aea8f9d16c6a665d8dd9b393992a68db160a911
-generated: "2024-10-23T08:47:42.563644316Z"
+digest: sha256:0700af2b03ee9457689a05069b9f4d05e3c4f64c1c4fc397110ac48ca39531a9
+generated: "2025-03-06T13:29:43.352361+01:00"
