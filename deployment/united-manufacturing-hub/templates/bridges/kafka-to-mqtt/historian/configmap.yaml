@@ -58,7 +58,7 @@ data:
         consumer_group: "kafka_to_mqtt_historian_bridge"
         auto_replay_nacks: false
         metadata_max_age: 10s
-        start_from_oldest: false
+        start_from_oldest: true
 
     ## Processors
     #
