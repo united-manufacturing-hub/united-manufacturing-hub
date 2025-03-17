@@ -52,9 +52,16 @@ update-go-dependencies:
 	go work vendor || true; \
 	currentFolder=$$(pwd); \
 	cd golang; \
-	go get -u ./...; \
-	go mod tidy; \
+	go get -u ./... || true; \
+	go mod tidy || true; \
 	go work sync || true; \
 	cd $$currentFolder; \
 	go work sync || true; \
 	go work vendor || true; \
+
+go-vet:
+	@SHELL=/bin/bash; \
+	currentFolder=$$(pwd); \
+	cd golang; \
+	go vet ./... || true; \
+	cd $$currentFolder; \
