@@ -73,6 +73,17 @@ func (c *ConsumerGroupHandler) ConsumeClaim(session sarama.ConsumerGroupSession,
 		// If not, will raise `ErrRebalanceInProgress` or `read tcp <ip>:<port>: i/o timeout` when kafka rebalances. see:
 		// https://github.com/IBM/sarama/issues/1192
 		case _, ok := <-session.Context().Done():
+			// Session is over, we can drain the messages to mark channel and return
+			// As we cannot mark messages anymore
+		L:
+			for {
+				select {
+				case <-c.messagesToMarkChan:
+				default:
+					break L
+				}
+			}
+
 			if !ok {
 				zap.S().Infof("ConsumerGroupHandler: Session context channel closed")
 				return nil
