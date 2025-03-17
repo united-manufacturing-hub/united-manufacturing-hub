@@ -1,7 +1,7 @@
 dependencies:
 - name: redis
   repository: https://management.umh.app/helm/bitnami
-  version: 18.17.0
+  version: 20.5.0
 - name: grafana
   repository: https://management.umh.app/helm/grafana
   version: 8.10.1
@@ -11,5 +11,5 @@ dependencies:
 - name: redpanda
   repository: https://management.umh.app/helm/redpanda
   version: 5.9.7
-digest: sha256:0700af2b03ee9457689a05069b9f4d05e3c4f64c1c4fc397110ac48ca39531a9
-generated: "2025-03-06T13:29:43.352361+01:00"
+digest: sha256:08e80caf4443d605a95e424a9252e015410b89134cab604be47636e7dc3f43ef
+generated: "2025-03-06T13:06:27.081892+01:00"
