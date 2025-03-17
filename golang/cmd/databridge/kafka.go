@@ -17,6 +17,11 @@ package main
 import (
 	"encoding/hex"
 	"fmt"
+	"regexp"
+	"strings"
+	"sync/atomic"
+
+	"github.com/IBM/sarama"
 	"github.com/goccy/go-json"
 	"github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper-2/pkg/kafka/consumer/redpanda"
 	"github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper-2/pkg/kafka/producer"
@@ -24,9 +29,6 @@ import (
 	"github.com/united-manufacturing-hub/umh-utils/env"
 	"go.uber.org/zap"
 	"golang.org/x/crypto/sha3"
-	"regexp"
-	"strings"
-	"sync/atomic"
 )
 
 type kafkaClient struct {
@@ -65,7 +67,7 @@ func newKafkaClient(broker, topic, serialNumber string, split int) (kc *kafkaCli
 	brokers = resolver(brokers)
 
 	zap.S().Infof("connecting to kafka brokers: %s (topic: %s, consumer group: %s)", broker, topic, consumerGroupId)
-	kc.consumer, err = redpanda.NewConsumer(brokers, []string{topic}, consumerGroupId, podName)
+	kc.consumer, err = redpanda.NewConsumer(brokers, []string{topic}, consumerGroupId, podName, sarama.OffsetOldest)
 	if err != nil {
 		return nil, err
 	}

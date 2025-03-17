@@ -16,6 +16,17 @@ type KafkaMessage struct {
 	Value     []byte            `json:"value"`
 	Offset    int64             `json:"offset"`
 	Partition int32             `json:"partition"`
+	Metadata  Metadata          `json:"metadata"`
+	Tracing   Tracing           `json:"tracing"`
+}
+
+type Metadata struct {
+	Timestamp time.Time `json:"timestamp"`
+}
+
+type Tracing struct {
+	OriginId      string `json:"originId"`
+	DestinationId string `json:"destinationId"`
 }
 
 // FromConsumerMessage converts a sarama.ConsumerMessage to a KafkaMessage.
@@ -33,6 +44,22 @@ func FromConsumerMessage(message *sarama.ConsumerMessage) *KafkaMessage {
 	}
 	for _, header := range message.Headers {
 		m.Headers[string(header.Key)] = string(header.Value)
+	}
+	metadata := Metadata{
+		// This is the timestamp the message was inserted into the topic, not the timestamp of the message itself.
+		Timestamp: message.Timestamp,
+	}
+	m.Metadata = metadata
+
+	tracing := Tracing{
+		OriginId:      "",
+		DestinationId: "",
+	}
+	m.Tracing = tracing
+
+	hasOrigin, origin := GetSXOrigin(m)
+	if hasOrigin {
+		m.Tracing.OriginId = origin
 	}
 	return m
 }

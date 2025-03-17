@@ -44,3 +44,24 @@ release-prerelease: lint package-prerelease index-prerelease
 
 update-depedencies:
 	helm dependency update $(CHART_PATH)
+
+update-go-dependencies:
+	@echo "Updating Go dependencies..."
+	@SHELL=/bin/bash; \
+	go work sync || true; \
+	go work vendor || true; \
+	currentFolder=$$(pwd); \
+	cd golang; \
+	go get -u ./... || true; \
+	go mod tidy || true; \
+	go work sync || true; \
+	cd $$currentFolder; \
+	go work sync || true; \
+	go work vendor || true; \
+
+go-vet:
+	@SHELL=/bin/bash; \
+	currentFolder=$$(pwd); \
+	cd golang; \
+	go vet ./... || true; \
+	cd $$currentFolder; \
