@@ -4,7 +4,7 @@ dependencies:
   version: 20.5.0
 - name: grafana
   repository: https://management.umh.app/helm/grafana
-  version: 7.3.7
+  version: 8.10.1
 - name: timescaledb-single
   repository: https://management.umh.app/helm/timescale
   version: 0.26.9
