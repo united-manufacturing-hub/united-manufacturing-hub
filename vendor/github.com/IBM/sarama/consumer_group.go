@@ -213,8 +213,11 @@ func (c *consumerGroup) Consume(ctx context.Context, topics []string, handler Co
 		return err
 	}
 
-	// Wait for session exit signal
-	<-sess.ctx.Done()
+	// Wait for session exit signal or Close() call
+	select {
+	case <-c.closed:
+	case <-sess.ctx.Done():
+	}
 
 	// Gracefully release session claims
 	return sess.release(true)
@@ -326,7 +329,7 @@ func (c *consumerGroup) newSession(ctx context.Context, topics []string, handler
 		// response and send another join request with that id to actually join the
 		// group
 		c.memberID = join.MemberId
-		return c.retryNewSession(ctx, topics, handler, retries+1 /*keep retry time*/, false)
+		return c.newSession(ctx, topics, handler, retries)
 	case ErrFencedInstancedId:
 		if c.groupInstanceId != nil {
 			Logger.Printf("JoinGroup failed: group instance id %s has been fenced\n", *c.groupInstanceId)
@@ -858,17 +861,31 @@ func newConsumerGroupSession(ctx context.Context, parent *consumerGroup, claims 
 		return nil, err
 	}
 
-	// start consuming
+	// start consuming each topic partition in its own goroutine
 	for topic, partitions := range claims {
 		for _, partition := range partitions {
-			sess.waitGroup.Add(1)
-
+			sess.waitGroup.Add(1) // increment wait group before spawning goroutine
 			go func(topic string, partition int32) {
 				defer sess.waitGroup.Done()
-
-				// cancel the as session as soon as the first
-				// goroutine exits
+				// cancel the group session as soon as any of the consume calls return
 				defer sess.cancel()
+
+				// if partition not currently readable, wait for it to become readable
+				if sess.parent.client.PartitionNotReadable(topic, partition) {
+					timer := time.NewTimer(5 * time.Second)
+					defer timer.Stop()
+
+					for sess.parent.client.PartitionNotReadable(topic, partition) {
+						select {
+						case <-ctx.Done():
+							return
+						case <-parent.closed:
+							return
+						case <-timer.C:
+							timer.Reset(5 * time.Second)
+						}
+					}
+				}
 
 				// consume a single topic/partition, blocking
 				sess.consume(topic, partition)
