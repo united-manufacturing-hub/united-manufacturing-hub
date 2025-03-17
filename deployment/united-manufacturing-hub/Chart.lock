@@ -11,5 +11,5 @@ dependencies:
 - name: redpanda
   repository: https://management.umh.app/helm/redpanda
   version: 5.9.7
-digest: sha256:08e80caf4443d605a95e424a9252e015410b89134cab604be47636e7dc3f43ef
-generated: "2025-03-06T13:06:27.081892+01:00"
+digest: sha256:fe74e54ee80678e2694e025a5571f54e1216130314dc2160705af9e2df14e73b
+generated: "2025-03-17T11:20:22.62129+01:00"
