@@ -2,15 +2,17 @@ package kafka
 
 import (
 	"errors"
+	"math/rand"
+	"strconv"
+	"strings"
+	"sync/atomic"
+
+	"github.com/IBM/sarama"
 	"github.com/heptiolabs/healthcheck"
 	"github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper-2/pkg/kafka/consumer/redpanda"
 	"github.com/united-manufacturing-hub/Sarama-Kafka-Wrapper-2/pkg/kafka/shared"
 	"github.com/united-manufacturing-hub/umh-utils/env"
 	"go.uber.org/zap"
-	"math/rand"
-	"strconv"
-	"strings"
-	"sync/atomic"
 )
 
 type IConnection interface {
@@ -44,7 +46,7 @@ func InitKafkaClient() {
 	brokers := strings.Split(KafkaBrokers, ",")
 	instanceID := rand.Int63() //nolint:gosec
 
-	consumer, err := redpanda.NewConsumer(brokers, []string{"^umh\\.v1.+$"}, "kafka-to-postgresql-v2", strconv.FormatInt(instanceID, 10))
+	consumer, err := redpanda.NewConsumer(brokers, []string{"^umh\\.v1.+$"}, "kafka-to-postgresql-v2", strconv.FormatInt(instanceID, 10), sarama.OffsetOldest)
 	if err != nil {
 		zap.S().Fatalf("Failed to create kafka client: %s", err)
 	}

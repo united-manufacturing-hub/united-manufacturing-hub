@@ -52,7 +52,7 @@ dependencies:
       - classic
 
   - name: grafana
-    version: 7.3.7
+    version: 8.10.1
     repository: https://management.umh.app/helm/grafana
     tags:
       - classic
