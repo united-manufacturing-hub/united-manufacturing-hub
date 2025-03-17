@@ -46,7 +46,7 @@ sources:
 
 dependencies:
   - name: redis
-    version: 18.17.0
+    version: 20.5.0
     repository: https://management.umh.app/helm/bitnami
     tags:
       - classic

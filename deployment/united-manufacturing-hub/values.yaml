@@ -325,6 +325,11 @@ redpanda:
 redis:
   global:
     imageregistry: management.umh.app/oci
+    security:
+      # Contrary to it's name, this is not about security but about allowing
+      # images to be downloaded from other sources than docker hub
+      # See https://github.com/bitnami/charts/issues/30850 for more details
+      allowInsecureImages: true
   image:
     registry: management.umh.app/oci
     repository: bitnami/redis
