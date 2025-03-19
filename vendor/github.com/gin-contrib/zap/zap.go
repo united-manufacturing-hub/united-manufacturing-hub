@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"os"
+	"regexp"
 	"runtime/debug"
 	"strings"
 	"time"
@@ -18,6 +19,9 @@ import (
 
 type Fn func(c *gin.Context) []zapcore.Field
 
+// Skipper is a function to skip logs based on provided Context
+type Skipper func(c *gin.Context) bool
+
 // ZapLogger is the minimal logger interface compatible with zap.Logger
 type ZapLogger interface {
 	Info(msg string, fields ...zap.Field)
@@ -26,10 +30,15 @@ type ZapLogger interface {
 
 // Config is config setting for Ginzap
 type Config struct {
-	TimeFormat string
-	UTC        bool
-	SkipPaths  []string
-	Context    Fn
+	TimeFormat      string
+	UTC             bool
+	SkipPaths       []string
+	SkipPathRegexps []*regexp.Regexp
+	Context         Fn
+	DefaultLevel    zapcore.Level
+	// skip is a Skipper that indicates which logs should not be written.
+	// Optional.
+	Skipper Skipper
 }
 
 // Ginzap returns a gin.HandlerFunc (middleware) that logs requests using uber-go/zap.
@@ -41,7 +50,7 @@ type Config struct {
 //  1. A time package format string (e.g. time.RFC3339).
 //  2. A boolean stating whether to use UTC time zone or local.
 func Ginzap(logger ZapLogger, timeFormat string, utc bool) gin.HandlerFunc {
-	return GinzapWithConfig(logger, &Config{TimeFormat: timeFormat, UTC: utc})
+	return GinzapWithConfig(logger, &Config{TimeFormat: timeFormat, UTC: utc, DefaultLevel: zapcore.InfoLevel})
 }
 
 // GinzapWithConfig returns a gin.HandlerFunc using configs
@@ -57,8 +66,24 @@ func GinzapWithConfig(logger ZapLogger, conf *Config) gin.HandlerFunc {
 		path := c.Request.URL.Path
 		query := c.Request.URL.RawQuery
 		c.Next()
+		track := true
 
-		if _, ok := skipPaths[path]; !ok {
+		if _, ok := skipPaths[path]; ok || (conf.Skipper != nil && conf.Skipper(c)) {
+			track = false
+		}
+
+		if track && len(conf.SkipPathRegexps) > 0 {
+			for _, reg := range conf.SkipPathRegexps {
+				if !reg.MatchString(path) {
+					continue
+				}
+
+				track = false
+				break
+			}
+		}
+
+		if track {
 			end := time.Now()
 			latency := end.Sub(start)
 			if conf.UTC {
@@ -88,7 +113,13 @@ func GinzapWithConfig(logger ZapLogger, conf *Config) gin.HandlerFunc {
 					logger.Error(e, fields...)
 				}
 			} else {
-				logger.Info(path, fields...)
+				if zl, ok := logger.(*zap.Logger); ok {
+					zl.Log(conf.DefaultLevel, path, fields...)
+				} else if conf.DefaultLevel == zapcore.InfoLevel {
+					logger.Info(path, fields...)
+				} else {
+					logger.Error(path, fields...)
+				}
 			}
 		}
 	}
@@ -121,7 +152,8 @@ func CustomRecoveryWithZap(logger ZapLogger, stack bool, recovery gin.RecoveryFu
 				var brokenPipe bool
 				if ne, ok := err.(*net.OpError); ok {
 					if se, ok := ne.Err.(*os.SyscallError); ok {
-						if strings.Contains(strings.ToLower(se.Error()), "broken pipe") || strings.Contains(strings.ToLower(se.Error()), "connection reset by peer") {
+						if strings.Contains(strings.ToLower(se.Error()), "broken pipe") ||
+							strings.Contains(strings.ToLower(se.Error()), "connection reset by peer") {
 							brokenPipe = true
 						}
 					}
@@ -134,7 +166,7 @@ func CustomRecoveryWithZap(logger ZapLogger, stack bool, recovery gin.RecoveryFu
 						zap.String("request", string(httpRequest)),
 					)
 					// If the connection is dead, we can't write a status to it.
-					c.Error(err.(error)) // nolint: errcheck
+					c.Error(err.(error)) //nolint: errcheck
 					c.Abort()
 					return
 				}

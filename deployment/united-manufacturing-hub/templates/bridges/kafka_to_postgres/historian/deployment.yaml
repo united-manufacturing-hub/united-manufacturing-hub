@@ -28,7 +28,7 @@ metadata:
     # This is the random UUID of the version of the component
     data-flow-component-version-uuid: 0edc0bc1-7df2-4fb8-ad90-955ad1aacc04
     # Timestamp of last change to the component in unix milliseconds since epoch
-    data-flow-version: '1730983044602'
+    data-flow-version: '1738848631531'
     # Generic label to indicate that this is a data flow component
     is-data-flow-component: 'true'
     # Required for mgmtcompanion to manage the component
@@ -50,7 +50,7 @@ spec:
         # This is the random UUID of the version of the component
         data-flow-component-version-uuid: 0edc0bc1-7df2-4fb8-ad90-955ad1aacc04
         # Timestamp of last change to the component in unix milliseconds since epoch
-        data-flow-version: '1730983044602'
+        data-flow-version: '1738848631531'
         # Generic label to indicate that this is a data flow component
         is-data-flow-component: 'true'
         # Required for mgmtcompanion to manage the component
@@ -104,7 +104,7 @@ spec:
               fi
       containers:
         - name: dfc-3e5c91f6-3dfc-45d6-8e9b-f17705e07b4c-kafka-t-psql-historian
-          image: management.umh.app/oci/united-manufacturing-hub/benthos-umh:0.4.2
+          image: management.umh.app/oci/united-manufacturing-hub/benthos-umh:0.6.2
           ports:
             - name: http
               containerPort: 4195
