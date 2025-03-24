@@ -12,6 +12,7 @@ clean:
 	docker rmi $(IMAGE_NAME):$(TAG) || true
 
 test:
+	go vet ./...
 	go test -v ./...
 
 unit-test:

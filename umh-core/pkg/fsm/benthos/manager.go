@@ -154,7 +154,10 @@ func (m *BenthosManager) HandleInstanceRemoved(instanceName string) {
 // Reconcile overrides the base manager's Reconcile method to add port management
 func (m *BenthosManager) Reconcile(ctx context.Context, cfg config.FullConfig, tick uint64) (error, bool) {
 	start := time.Now()
-	defer metrics.ObserveReconcileTime(logger.ComponentBenthosManager, m.BaseFSMManager.GetManagerName(), time.Since(start))
+	defer func() {
+		duration := time.Since(start)
+		metrics.ObserveReconcileTime(logger.ComponentBenthosManager, m.BaseFSMManager.GetManagerName(), duration)
+	}()
 	// Phase 1: Port Management Pre-reconciliation
 	benthosConfigs := cfg.Benthos
 	instanceNames := make([]string, len(benthosConfigs))
