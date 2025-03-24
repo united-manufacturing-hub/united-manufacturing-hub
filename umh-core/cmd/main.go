@@ -34,7 +34,14 @@ func main() {
 
 	// Start the metrics server
 	server := metrics.SetupMetricsEndpoint(fmt.Sprintf(":%d", config.Agent.MetricsPort))
-	defer server.Shutdown(ctx)
+	defer func() {
+		// S6_KILL_FINISH_MAXTIME is 5 seconds, so we need to finish before that
+		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer shutdownCancel()
+		if err := server.Shutdown(shutdownCtx); err != nil {
+			log.Errorf("Failed to shutdown metrics server: %s", err)
+		}
+	}()
 
 	// Start the control loop
 	controlLoop := control.NewControlLoop()
