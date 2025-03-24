@@ -578,8 +578,8 @@ var _ = Describe("S6Manager", func() {
 			Expect(ok).To(BeTrue(), "Service is not a mock service")
 
 			// Configure the mock service to fail with a permanent error
-			permanentErrorMsg := fmt.Sprintf("%s: critical configuration error", backoff.PermanentFailureError)
-			mockService.GetConfigError = fmt.Errorf(permanentErrorMsg)
+			permanentErrorMsg := backoff.PermanentFailureError + ": critical configuration error"
+			mockService.GetConfigError = fmt.Errorf("%s", permanentErrorMsg)
 
 			// Run several reconciliations to allow the error to be detected and handled
 			nextTick, err = fsmtest.RunMultipleReconciliations(ctx, manager, config.FullConfig{Services: serviceConfig}, 5, tick)
@@ -733,8 +733,8 @@ var _ = Describe("S6Manager", func() {
 			Expect(ok).To(BeTrue(), "Service is not a mock service")
 
 			// Configure permanent error for the failing service
-			permanentErrorMsg := fmt.Sprintf("%s: critical configuration error", backoff.PermanentFailureError)
-			mockService.GetConfigError = fmt.Errorf(permanentErrorMsg)
+			permanentErrorMsg := backoff.PermanentFailureError + ": critical configuration error"
+			mockService.GetConfigError = fmt.Errorf("%s", permanentErrorMsg)
 
 			// Run reconciliation multiple times to allow error handling
 			nextTick, err = fsmtest.RunMultipleReconciliations(ctx, manager, config.FullConfig{Services: multiServiceConfig},

@@ -138,7 +138,10 @@ func (m *FileConfigManagerWithBackoff) WithFileSystemService(fsService filesyste
 // It will return either a temporary backoff error or a permanent failure error
 func (m *FileConfigManagerWithBackoff) GetConfig(ctx context.Context, tick uint64) (FullConfig, error) {
 	start := time.Now()
-	defer metrics.ObserveReconcileTime(logger.ComponentConfigManager, "get_config", time.Since(start))
+	defer func() {
+		duration := time.Since(start)
+		metrics.ObserveReconcileTime(logger.ComponentConfigManager, "get_config", duration)
+	}()
 
 	// Check if context is already cancelled
 	if ctx.Err() != nil {
