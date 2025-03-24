@@ -20,6 +20,7 @@ unit-test:
 update-go-dependencies:
 	go get -u ./...
 	go mod tidy
+	go mod vendor
 
 test-empty: clean build
 	@mkdir -p $(PWD)/data
