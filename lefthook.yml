@@ -4,17 +4,29 @@
 #   https://lefthook.dev/configuration/
 #
 
+pre-push:
+  parallel: true
+  jobs:
+    # Nilaway is to heavy for pre-commit, so we run it in pre-push
+    - name: nilaway
+      glob: "**/*.go"
+      root: "umh-core"
+      run: |
+        go install go.uber.org/nilaway/cmd/nilaway@latest
+        nilaway ./...
+
 pre-commit:
   parallel: true
   jobs:
     - name: govet-backend
-      glob: "umh-core**/*.go"
+      glob: "**/*.go"
+      root: "umh-core"
       run: |
-        cd umh-core
         go vet ./...
 
     - name: gofmt
       glob: "**/*.go"
+      root: "umh-core"
       run: |
         gofmt -w {staged_files}
         git update-index --again
