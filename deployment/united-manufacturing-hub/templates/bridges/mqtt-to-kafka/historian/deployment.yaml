@@ -104,7 +104,7 @@ spec:
               fi
       containers:
         - name: dfc-1db88f9f-789d-45fa-b095-cf579cc9074d-mqtt-t-kafka-historian
-          image: management.umh.app/oci/united-manufacturing-hub/benthos-umh:0.6.2
+          image: management.umh.app/oci/united-manufacturing-hub/united-manufacturing-hub:0.6.2
           ports:
             - name: http
               containerPort: 4195

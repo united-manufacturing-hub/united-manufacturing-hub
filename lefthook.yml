@@ -1,0 +1,20 @@
+# EXAMPLE USAGE:
+#
+#   Refer for explanation to following link:
+#   https://lefthook.dev/configuration/
+#
+
+pre-commit:
+  parallel: true
+  jobs:
+    - name: govet-backend
+      glob: "umh-core**/*.go"
+      run: |
+        cd umh-core
+        go vet ./...
+
+    - name: gofmt
+      glob: "**/*.go"
+      run: |
+        gofmt -w {staged_files}
+        git update-index --again
