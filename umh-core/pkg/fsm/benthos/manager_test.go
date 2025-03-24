@@ -55,6 +55,15 @@ func createBenthosConfig(name, desiredState string) config.BenthosConfig {
 // setupServiceState configures the mock service state for a given service
 func setupServiceState(mockService *benthossvc.MockBenthosService, serviceName string, flags benthossvc.ServiceStateFlags) {
 	mockService.SetServiceState(serviceName, flags)
+
+	if mockService.ServiceStates == nil {
+		mockService.ServiceStates = make(map[string]*benthossvc.ServiceInfo)
+	}
+
+	if mockService.ServiceStates[serviceName] == nil {
+		mockService.ServiceStates[serviceName] = &benthossvc.ServiceInfo{}
+	}
+
 	mockService.ServiceStates[serviceName].BenthosStatus.HealthCheck = benthossvc.HealthCheck{
 		IsLive:  flags.IsHealthchecksPassed,
 		IsReady: flags.IsHealthchecksPassed,

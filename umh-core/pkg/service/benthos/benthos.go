@@ -720,7 +720,7 @@ func (s *BenthosService) GetHealthCheckAndMetrics(ctx context.Context, s6Service
 	var healthCheck HealthCheck
 
 	// Check liveness
-	if resp, err := doRequest("/ping"); err == nil {
+	if resp, err := doRequest("/ping"); err == nil && resp != nil {
 		healthCheck.IsLive = resp.StatusCode == http.StatusOK
 		resp.Body.Close()
 	} else {
@@ -728,7 +728,7 @@ func (s *BenthosService) GetHealthCheckAndMetrics(ctx context.Context, s6Service
 	}
 
 	// Check readiness
-	if resp, err := doRequest("/ready"); err == nil {
+	if resp, err := doRequest("/ready"); err == nil && resp != nil {
 		defer resp.Body.Close()
 
 		// Even if status is 503, we still want to read the body to get the detailed status
@@ -759,7 +759,7 @@ func (s *BenthosService) GetHealthCheckAndMetrics(ctx context.Context, s6Service
 	}
 
 	// Get version
-	if resp, err := doRequest("/version"); err == nil {
+	if resp, err := doRequest("/version"); err == nil && resp != nil {
 		defer resp.Body.Close()
 
 		body, err := io.ReadAll(resp.Body)
@@ -779,7 +779,7 @@ func (s *BenthosService) GetHealthCheckAndMetrics(ctx context.Context, s6Service
 	var metrics Metrics
 
 	// Get metrics
-	if resp, err := doRequest("/metrics"); err == nil {
+	if resp, err := doRequest("/metrics"); err == nil && resp != nil {
 		defer resp.Body.Close()
 
 		body, err := io.ReadAll(resp.Body)
