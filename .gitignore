@@ -1,0 +1,4 @@
+# Git ignore for go (tests, coverage, etc.)
+*.test
+*.cover
+*.out
