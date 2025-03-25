@@ -78,7 +78,12 @@ func StopContainer() {
 }
 
 func runDockerCommand(args ...string) (string, error) {
-	cmd := exec.Command("docker", args...)
+	// Check if we use docker or podman
+	dockerCmd := "docker"
+	if _, err := exec.LookPath("podman"); err == nil {
+		dockerCmd = "podman"
+	}
+	cmd := exec.Command(dockerCmd, args...)
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	cmd.Stderr = &out

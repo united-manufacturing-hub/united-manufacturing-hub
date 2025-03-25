@@ -25,11 +25,13 @@ clean:
 	docker rm $(IMAGE_NAME) || true
 	docker rmi $(IMAGE_NAME):$(TAG) || true
 
-test:
+vet:
 	go vet ./...
+
+test: vet
 	go test -v ./...
 
-unit-test:
+unit-test: vet
 	ginkgo -r -v --label-filter='!integration' --fail-fast ./...
 
 update-go-dependencies:

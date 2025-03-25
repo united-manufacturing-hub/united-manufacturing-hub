@@ -724,6 +724,14 @@ func (s *DefaultService) GetConfig(ctx context.Context, servicePath string) (con
 
 	// Fetch run script
 	runScript := filepath.Join(servicePath, "run")
+	exists, err = s.fsService.FileExists(ctx, runScript)
+	if err != nil {
+		return config.S6ServiceConfig{}, fmt.Errorf("failed to check if run script exists: %w", err)
+	}
+	if !exists {
+		return config.S6ServiceConfig{}, fmt.Errorf("run script not found")
+	}
+
 	content, err := s.fsService.ReadFile(ctx, runScript)
 	if err != nil {
 		return config.S6ServiceConfig{}, fmt.Errorf("failed to read run script: %w", err)
@@ -807,6 +815,8 @@ func (s *DefaultService) GetConfig(ctx context.Context, servicePath string) (con
 				}
 
 				observedS6ServiceConfig.Command = append([]string{cmd}, args...)
+			} else {
+				return config.S6ServiceConfig{}, fmt.Errorf("failed to parse run script: no valid command found")
 			}
 		}
 	}

@@ -28,6 +28,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	filesystem "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	"go.uber.org/zap"
 )
 
 var _ = Describe("S6 Run Script", func() {
@@ -38,12 +39,19 @@ var _ = Describe("S6 Run Script", func() {
 		servicePath   string
 		configPath    string
 		runScriptPath string
+		logger        *zap.SugaredLogger
 	)
 
 	BeforeEach(func() {
 		ctx = context.Background()
 		mockFS = filesystem.NewMockFileSystem()
-		s6Service = &DefaultService{fsService: mockFS}
+		zapLogger, err := zap.NewDevelopment()
+		Expect(err).NotTo(HaveOccurred())
+		logger = zapLogger.Sugar()
+		s6Service = &DefaultService{
+			fsService: mockFS,
+			logger:    logger,
+		}
 		servicePath = constants.S6BaseDir + "/test-service"
 		runScriptPath = filepath.Join(servicePath, "run")
 		configPath = filepath.Join(servicePath, "config")
@@ -204,6 +212,58 @@ var _ = Describe("S6 Run Script", func() {
 				Expect(readConfig.Env).To(HaveKey(key))
 				Expect(readConfig.Env[key]).To(Equal(val))
 			}
+		})
+	})
+
+	Context("with error conditions", func() {
+		Context("when run script is missing", func() {
+			It("should return an appropriate error", func() {
+				// Mock file existence check to return false for run script
+				mockFS.WithFileExistsFunc(func(_ context.Context, path string) (bool, error) {
+					if path == runScriptPath {
+						return false, nil
+					}
+					return true, nil
+				})
+
+				_, err := s6Service.GetConfig(ctx, servicePath)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("run script not found"))
+			})
+		})
+
+		Context("when there are permission issues", func() {
+			It("should handle permission denied errors", func() {
+				mockFS.WithFileExistsFunc(func(_ context.Context, path string) (bool, error) {
+					return true, nil
+				})
+
+				// Simulate permission denied error
+				mockFS.WithReadFileFunc(func(_ context.Context, path string) ([]byte, error) {
+					if path == runScriptPath {
+						return nil, os.ErrPermission
+					}
+					return []byte{}, os.ErrNotExist
+				})
+
+				_, err := s6Service.GetConfig(ctx, servicePath)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("permission denied"))
+			})
+		})
+
+		Context("when service path is invalid", func() {
+			It("should handle invalid service path", func() {
+				invalidServicePath := "/nonexistent/path"
+
+				mockFS.WithFileExistsFunc(func(_ context.Context, path string) (bool, error) {
+					return false, nil
+				})
+
+				_, err := s6Service.GetConfig(ctx, invalidServicePath)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("service does not exist"))
+			})
 		})
 	})
 })
