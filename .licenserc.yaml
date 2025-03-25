@@ -34,6 +34,7 @@ header:
     - "deployment/united-manufacturing-hub/.helmignore"
     - "deployment/helm-repo/index.yaml"
     - "umh-core/vendor/*"
+    - "umh-core/vendor/**/*"
     - ".releaserc"
     - ".gitignore"
     - ".licenserc.yaml"
