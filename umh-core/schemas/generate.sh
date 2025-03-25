@@ -46,10 +46,26 @@ echo "Git root: $git_root"
 generated_dir="$git_root/umh-core/pkg/generated"
 mkdir -p "$generated_dir"
 
+# Copyright header to prepend to each generated file
+copyright_header='// Copyright 2025 UMH Systems GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.'
+
 echo "Generating Go files"
 for schema_file in $schema_files; do
-    base_name=$(basename "$schema_file" .schema.json)
     echo "Processing $schema_file"
+    base_name=$(basename "$schema_file" .schema.json)
+    temp_file=$(mktemp)
 
     quicktype \
         --src "$schema_file" \
@@ -57,5 +73,10 @@ for schema_file in $schema_files; do
         --lang go \
         --package generated \
         --top-level "${base_name}" \
-        --out "$generated_dir/${base_name}.go" || exit 1
+        --out "$temp_file" || exit 1
+
+    # Prepend copyright header to the generated file
+    output_file="$generated_dir/${base_name}.go"
+    { echo "$copyright_header"; echo ""; cat "$temp_file"; } > "$output_file"
+    rm "$temp_file"
 done
