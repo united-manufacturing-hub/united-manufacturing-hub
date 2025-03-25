@@ -19,8 +19,8 @@ header:
     software-name: United Manufacturing Hub
 
   paths-ignore:
-    - "*/*.md"
-    - "*/*.mdc"
+    - "**/*.md"
+    - "**/*.mdc"
     - "LICENSE"
     - "NOTICE"
     - "CODEOWNERS"
@@ -32,6 +32,7 @@ header:
     - "deployment/united-manufacturing-hub/templates/NOTES.txt"
     - "deployment/united-manufacturing-hub/Chart.lock"
     - "deployment/united-manufacturing-hub/.helmignore"
+    - "deployment/helm-repo/index.yaml"
     - "umh-core/vendor/*"
     - ".releaserc"
     - ".gitignore"
@@ -43,7 +44,8 @@ header:
     - "Makefile"
     - "README.md"
     - "SECURITY.md"
-    - "*/*.go.sum"
-    - "*/*.go.mod"
+    - "**/go.sum"
+    - "**/go.mod"
+    - "**/.dockerignore"
 
   comment: on-failure
