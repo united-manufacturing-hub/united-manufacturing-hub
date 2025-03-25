@@ -18,13 +18,14 @@ func getDash(inp string) string {
 // reportFatal sends a fatal error to Sentry, including a stack trace and a message
 // Afterwards it will report the error to the logger and panic
 func reportFatal(err error, log *zap.SugaredLogger) {
-	event := createSentryEvent(sentry.LevelFatal, err)
-	sendSentryEvent(event)
-
-	sentry.Flush(time.Second * 5)
 	log.Error("The UMH-Core has encountered a fatal error and will now terminate. Please contact our customer support.")
 	log.Errorf("Error: %s", err)
 	log.Errorf("Stack trace: %s", string(debug.Stack()))
+
+	event := createSentryEvent(sentry.LevelFatal, err)
+	sendSentryEvent(event)
+	sentry.Flush(time.Second * 5)
+
 	log.Panic("Fatal error")
 }
 
@@ -41,10 +42,10 @@ func reportError(err error, log *zap.SugaredLogger) {
 		return
 	}
 
+	log.Error(err)
 	event := createSentryEvent(sentry.LevelError, err)
 	sendSentryEvent(event)
 	errorLastSent = time.Now()
-	log.Error(err)
 }
 
 var warningLastSent time.Time = time.Now().Add(-time.Hour * 24)
@@ -60,8 +61,8 @@ func reportWarning(err error, log *zap.SugaredLogger) {
 		return
 	}
 
+	log.Warn(err)
 	event := createSentryEvent(sentry.LevelWarning, err)
 	sendSentryEvent(event)
 	warningLastSent = time.Now()
-	log.Warn(err)
 }

@@ -49,7 +49,7 @@ func main() {
 	configManager := config.NewFileConfigManager()
 	config, err := configManager.GetConfig(ctx, 0)
 	if err != nil {
-		log.Fatalf("Failed to load config: %s", err)
+		sentry.ReportIssuef(err, sentry.IssueTypeFatal, log, "Failed to load config: %s", err)
 	}
 
 	// Start the metrics server
@@ -59,7 +59,7 @@ func main() {
 		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer shutdownCancel()
 		if err := server.Shutdown(shutdownCtx); err != nil {
-			log.Errorf("Failed to shutdown metrics server: %s", err)
+			sentry.ReportIssuef(err, sentry.IssueTypeError, log, "Failed to shutdown metrics server: %s", err)
 		}
 	}()
 
