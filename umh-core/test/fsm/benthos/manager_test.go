@@ -25,6 +25,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/backoff"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	benthosfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/portmanager"
 	benthossvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
 )
 
@@ -383,4 +384,102 @@ var _ = Describe("BenthosManager", func() {
 			Expect(inst.GetCurrentFSMState()).To(Equal(benthosfsm.OperationalStateStopped))
 		})
 	})
+
+	Context("Port Management", func() {
+		It("should allocate ports before base reconciliation", func() {
+			serviceName := "test-service-port-alloc"
+
+			// Create a BenthosConfig that desires an Active state
+			benthosCfg := fsmtest.CreateBenthosTestConfig(serviceName, benthosfsm.OperationalStateActive)
+			fullCfg := config.FullConfig{
+				Benthos: []config.BenthosConfig{benthosCfg},
+			}
+
+			// Initialize a mock port manager that tracks Pre/Post calls
+			mockPortMgr := portmanager.NewMockPortManager()
+			manager.WithPortManager(mockPortMgr)
+
+			// Perform a single manager reconcile using a helper (not a for-loop)
+			newTick, err, reconciled := fsmtest.ReconcileOnceBenthosManager(
+				ctx,
+				manager,
+				fullCfg,
+				tick,
+			)
+			tick = newTick
+
+			// Check results
+			Expect(err).NotTo(HaveOccurred())
+			Expect(reconciled).To(BeTrue(), "Expected a change during the first reconcile")
+			Expect(mockPortMgr.PreReconcileCalled).To(BeTrue(), "Manager should call PreReconcile first")
+			Expect(mockPortMgr.PostReconcileCalled).To(BeTrue(), "Manager should call PostReconcile after the base reconcile")
+
+			// Optionally verify the instance's port was allocated
+			inst, found := manager.GetInstance(serviceName)
+			Expect(found).To(BeTrue(), "Instance should be created after reconcile")
+			_, ok := inst.(*benthosfsm.BenthosInstance)
+			Expect(ok).To(BeTrue(), "Instance should be a BenthosInstance")
+
+			port, exists := mockPortMgr.GetPort(serviceName)
+			Expect(exists).To(BeTrue(), "Port should be allocated for the service")
+			Expect(port).To(BeNumerically(">", 0), "Expected a valid (>0) port to be allocated")
+		})
+
+		It("should handle port allocation failures gracefully", func() {
+			serviceName := "test-service-port-error"
+
+			// Create config for the service
+			benthosCfg := fsmtest.CreateBenthosTestConfig(serviceName, benthosfsm.OperationalStateActive)
+			fullCfg := config.FullConfig{
+				Benthos: []config.BenthosConfig{benthosCfg},
+			}
+
+			// Create a mock port manager that returns an error on PreReconcile
+			mockPortMgr := portmanager.NewMockPortManager()
+			mockPortMgr.PreReconcileError = fmt.Errorf("test port allocation error")
+			manager.WithPortManager(mockPortMgr)
+
+			// Reconcile once
+			newTick, err, reconciled := fsmtest.ReconcileOnceBenthosManager(
+				ctx,
+				manager,
+				fullCfg,
+				tick,
+			)
+			tick = newTick
+
+			// Verify we got an error and no changes occurred
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("test port allocation error"))
+			Expect(reconciled).To(BeFalse(), "No changes should be recorded if port allocation fails")
+
+			// The manager should not create any instance
+			Expect(manager.GetInstances()).To(BeEmpty(), "Expected zero instances due to port allocation failure")
+		})
+
+		It("should call post-reconciliation after base reconciliation", func() {
+			serviceName := "test-service-port-post"
+			benthosCfg := fsmtest.CreateBenthosTestConfig(serviceName, benthosfsm.OperationalStateActive)
+			fullCfg := config.FullConfig{Benthos: []config.BenthosConfig{benthosCfg}}
+
+			// Set up a mock port manager
+			mockPortMgr := portmanager.NewMockPortManager()
+			manager.WithPortManager(mockPortMgr)
+
+			// Single reconcile
+			newTick, err, reconciled := fsmtest.ReconcileOnceBenthosManager(
+				ctx,
+				manager,
+				fullCfg,
+				tick,
+			)
+			tick = newTick
+			Expect(err).NotTo(HaveOccurred())
+			Expect(reconciled).To(BeTrue())
+
+			// Verify post was called
+			Expect(mockPortMgr.PostReconcileCalled).To(BeTrue())
+		})
+	})
+
 })
