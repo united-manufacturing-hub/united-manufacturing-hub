@@ -25,6 +25,6 @@ func ReportIssue(err error, issueType IssueType, log *zap.SugaredLogger) {
 	}
 }
 
-func ReportIssuef(err error, issueType IssueType, log *zap.SugaredLogger, template string, args ...interface{}) {
+func ReportIssuef(issueType IssueType, log *zap.SugaredLogger, template string, args ...interface{}) {
 	ReportIssue(fmt.Errorf(template, args...), issueType, log)
 }

@@ -48,6 +48,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/starvationchecker"
 	"go.uber.org/zap"
@@ -128,7 +129,7 @@ func NewControlLoop() *ControlLoop {
 	log.Debugf("Cleaning S6 service directory: %s", constants.S6BaseDir)
 	err := s6Service.CleanS6ServiceDirectory(context.Background(), constants.S6BaseDir)
 	if err != nil {
-		log.Errorf("Failed to clean S6 service directory: %s", err)
+		sentry.ReportIssuef(sentry.IssueTypeError, log, "Failed to clean S6 service directory: %s", err)
 	}
 	log.Debugf("S6 service directory cleaned: %s", constants.S6BaseDir)
 
