@@ -15,6 +15,10 @@ const (
 )
 
 func ReportIssue(err error, issueType IssueType, log *zap.SugaredLogger) {
+	if log == nil {
+		// If logger initialization failed somehow, create a no-op logger to avoid nil panics
+		log = zap.NewNop().Sugar()
+	}
 	switch issueType {
 	case IssueTypeFatal:
 		reportFatal(err, log)
