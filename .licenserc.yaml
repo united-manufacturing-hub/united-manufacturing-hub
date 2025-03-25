@@ -19,22 +19,17 @@ header:
     software-name: United Manufacturing Hub
 
   paths-ignore:
-    - '*/*.md'
-    - 'LICENSE'
-    - 'NOTICE'
-    - 'CODEOWNERS'
-    - 'AUTHORS'
-    - '.git'
-    - 'deployment/united-manufacturing-hub/_mqttDevCertificates/'
-    - 'deployment/united-manufacturing-hub/developmentCertificates/'
-    - 'golang/test/factoryinsight/testfiles/'
-    - 'deployment/kafka-to-postgresql/postgresql.conf'
-    - 'golang/test/mqtt-bridge/config/mosquitto.conf'
-    - 'golang/test/factoryinput/EMPTY'
-    - 'golang/go.sum'
-    - 'deployment/united-manufacturing-hub/templates/NOTES.txt'
-    - 'deployment/united-manufacturing-hub/Chart.lock'
-    - 'deployment/united-manufacturing-hub/.helmignore'
-
+    - "*/*.md"
+    - "LICENSE"
+    - "NOTICE"
+    - "CODEOWNERS"
+    - "AUTHORS"
+    - ".git"
+    - "deployment/united-manufacturing-hub/_mqttDevCertificates/"
+    - "deployment/united-manufacturing-hub/developmentCertificates/"
+    - "deployment/kafka-to-postgresql/postgresql.conf"
+    - "deployment/united-manufacturing-hub/templates/NOTES.txt"
+    - "deployment/united-manufacturing-hub/Chart.lock"
+    - "deployment/united-manufacturing-hub/.helmignore"
 
   comment: on-failure

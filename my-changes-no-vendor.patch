@@ -1,0 +1,3018 @@
+diff --color -Naur --exclude=vendor /tmp/benthos-umh-temp/umh-core/.dockerignore umh-core/.dockerignore
+--- /tmp/benthos-umh-temp/umh-core/.dockerignore	1970-01-01 01:00:00
++++ umh-core/.dockerignore	2025-03-24 18:05:50
+@@ -0,0 +1 @@
++vendor/
+diff --color -Naur --exclude=vendor /tmp/benthos-umh-temp/umh-core/Dockerfile umh-core/Dockerfile
+--- /tmp/benthos-umh-temp/umh-core/Dockerfile	2025-03-25 09:22:23
++++ umh-core/Dockerfile	2025-03-24 17:01:39
+@@ -1,6 +1,6 @@
+-FROM golang:1.23-alpine as build
++FROM golang:1.24-alpine as build
+ 
+-WORKDIR /go/src/github.com/united-manufacturing-hub/benthos-umh
++WORKDIR /go/src/github.com/united-manufacturing-hub/united-manufacturing-hub
+ 
+ # Install build dependencies
+ RUN apk add --no-cache \
+@@ -9,7 +9,7 @@
+ 
+ # Copy go.mod first for better caching
+ COPY ./go.mod ./umh-core/
+-WORKDIR /go/src/github.com/united-manufacturing-hub/benthos-umh/umh-core
++WORKDIR /go/src/github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core
+ RUN go mod download
+ 
+ # Copy and build umh-core
+@@ -19,7 +19,7 @@
+     -o /go/bin/umh-core \
+     cmd/main.go
+ 
+-FROM alpine:3.18
++FROM alpine:3.21
+ 
+ # Install basic dependencies
+ RUN apk add --no-cache \
+@@ -65,7 +65,7 @@
+     esac && \
+     echo "Using BENTHOS_ARCH: ${BENTHOS_ARCH}" && \
+     curl -sSL -o /usr/local/bin/benthos \
+-    "https://github.com/united-manufacturing-hub/benthos-umh/releases/download/v${BENTHOS_UMH_VERSION}/benthos-linux-${BENTHOS_ARCH}" && \
++    "https://github.com/united-manufacturing-hub/united-manufacturing-hub/releases/download/v${BENTHOS_UMH_VERSION}/benthos-linux-${BENTHOS_ARCH}" && \
+     chmod +x /usr/local/bin/benthos
+ 
+ # Step 5: Copy the built application and set permissions
+diff --color -Naur --exclude=vendor /tmp/benthos-umh-temp/umh-core/Makefile umh-core/Makefile
+--- /tmp/benthos-umh-temp/umh-core/Makefile	2025-03-25 09:22:23
++++ umh-core/Makefile	2025-03-24 17:20:35
+@@ -12,10 +12,16 @@
+ 	docker rmi $(IMAGE_NAME):$(TAG) || true
+ 
+ test:
++	go vet ./...
+ 	go test -v ./...
+ 
+ unit-test:
+ 	ginkgo -r -v --label-filter='!integration' --fail-fast ./...
++
++update-go-dependencies:
++	go get -u ./...
++	go mod tidy
++	go mod vendor
+ 
+ test-empty: clean build
+ 	@mkdir -p $(PWD)/data
+diff --color -Naur --exclude=vendor /tmp/benthos-umh-temp/umh-core/cmd/main.go umh-core/cmd/main.go
+--- /tmp/benthos-umh-temp/umh-core/cmd/main.go	2025-03-25 09:22:23
++++ umh-core/cmd/main.go	2025-03-24 17:58:46
+@@ -5,10 +5,10 @@
+ 	"fmt"
+ 	"time"
+ 
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/config"
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/control"
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/logger"
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/metrics"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/control"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
+ 	"go.uber.org/zap"
+ )
+ 
+@@ -34,7 +34,14 @@
+ 
+ 	// Start the metrics server
+ 	server := metrics.SetupMetricsEndpoint(fmt.Sprintf(":%d", config.Agent.MetricsPort))
+-	defer server.Shutdown(ctx)
++	defer func() {
++		// S6_KILL_FINISH_MAXTIME is 5 seconds, so we need to finish before that
++		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 3*time.Second)
++		defer shutdownCancel()
++		if err := server.Shutdown(shutdownCtx); err != nil {
++			log.Errorf("Failed to shutdown metrics server: %s", err)
++		}
++	}()
+ 
+ 	// Start the control loop
+ 	controlLoop := control.NewControlLoop()
+diff --color -Naur --exclude=vendor /tmp/benthos-umh-temp/umh-core/examples/example-config-100.yaml umh-core/examples/example-config-100.yaml
+--- /tmp/benthos-umh-temp/umh-core/examples/example-config-100.yaml	2025-03-25 09:22:23
++++ umh-core/examples/example-config-100.yaml	2025-03-24 17:01:15
+@@ -6,11 +6,12 @@
+     name: hello-world-1
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-1/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-1/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"1\"\n   \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"1\"\n   \
+           \ interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -19,11 +20,12 @@
+     name: hello-world-2
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-2/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-2/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"2\"\n   \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"2\"\n   \
+           \ interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -32,11 +34,12 @@
+     name: hello-world-3
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-3/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-3/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"3\"\n   \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"3\"\n   \
+           \ interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -45,11 +48,12 @@
+     name: hello-world-4
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-4/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-4/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"4\"\n   \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"4\"\n   \
+           \ interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -58,11 +62,12 @@
+     name: hello-world-5
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-5/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-5/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"5\"\n   \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"5\"\n   \
+           \ interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -71,11 +76,12 @@
+     name: hello-world-6
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-6/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-6/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"6\"\n   \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"6\"\n   \
+           \ interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -84,11 +90,12 @@
+     name: hello-world-7
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-7/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-7/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"7\"\n   \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"7\"\n   \
+           \ interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -97,11 +104,12 @@
+     name: hello-world-8
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-8/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-8/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"8\"\n   \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"8\"\n   \
+           \ interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -110,11 +118,12 @@
+     name: hello-world-9
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-9/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-9/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"9\"\n   \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"9\"\n   \
+           \ interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -123,11 +132,12 @@
+     name: hello-world-10
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-10/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-10/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"10\"\n  \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"10\"\n  \
+           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -136,11 +146,12 @@
+     name: hello-world-11
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-11/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-11/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"11\"\n  \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"11\"\n  \
+           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -149,11 +160,12 @@
+     name: hello-world-12
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-12/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-12/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"12\"\n  \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"12\"\n  \
+           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -162,11 +174,12 @@
+     name: hello-world-13
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-13/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-13/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"13\"\n  \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"13\"\n  \
+           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -175,11 +188,12 @@
+     name: hello-world-14
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-14/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-14/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"14\"\n  \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"14\"\n  \
+           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -188,11 +202,12 @@
+     name: hello-world-15
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-15/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-15/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"15\"\n  \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"15\"\n  \
+           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -201,11 +216,12 @@
+     name: hello-world-16
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-16/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-16/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"16\"\n  \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"16\"\n  \
+           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -214,11 +230,12 @@
+     name: hello-world-17
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-17/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-17/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"17\"\n  \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"17\"\n  \
+           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -227,11 +244,12 @@
+     name: hello-world-18
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-18/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-18/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"18\"\n  \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"18\"\n  \
+           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -240,11 +258,12 @@
+     name: hello-world-19
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-19/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-19/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"19\"\n  \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"19\"\n  \
+           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -253,11 +272,12 @@
+     name: hello-world-20
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-20/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-20/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"20\"\n  \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"20\"\n  \
+           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -266,11 +286,12 @@
+     name: hello-world-21
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-21/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-21/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"21\"\n  \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"21\"\n  \
+           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -279,11 +300,12 @@
+     name: hello-world-22
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-22/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-22/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"22\"\n  \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"22\"\n  \
+           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -292,11 +314,12 @@
+     name: hello-world-23
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-23/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-23/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"23\"\n  \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"23\"\n  \
+           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -305,11 +328,12 @@
+     name: hello-world-24
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-24/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-24/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"24\"\n  \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"24\"\n  \
+           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -318,11 +342,12 @@
+     name: hello-world-25
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-25/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-25/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"25\"\n  \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"25\"\n  \
+           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -331,11 +356,12 @@
+     name: hello-world-26
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-26/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-26/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"26\"\n  \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"26\"\n  \
+           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -344,11 +370,12 @@
+     name: hello-world-27
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-27/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-27/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"27\"\n  \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"27\"\n  \
+           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -357,11 +384,12 @@
+     name: hello-world-28
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-28/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-28/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"28\"\n  \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"28\"\n  \
+           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -370,11 +398,12 @@
+     name: hello-world-29
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-29/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-29/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"29\"\n  \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"29\"\n  \
+           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -383,11 +412,12 @@
+     name: hello-world-30
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-30/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-30/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"30\"\n  \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"30\"\n  \
+           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -396,11 +426,12 @@
+     name: hello-world-31
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-31/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-31/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"31\"\n  \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"31\"\n  \
+           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -409,11 +440,12 @@
+     name: hello-world-32
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-32/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-32/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"32\"\n  \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"32\"\n  \
+           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -422,11 +454,12 @@
+     name: hello-world-33
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-33/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-33/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"33\"\n  \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"33\"\n  \
+           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -435,11 +468,12 @@
+     name: hello-world-34
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-34/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-34/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"34\"\n  \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"34\"\n  \
+           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -448,11 +482,12 @@
+     name: hello-world-35
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-35/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-35/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"35\"\n  \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"35\"\n  \
+           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -461,11 +496,12 @@
+     name: hello-world-36
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-36/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-36/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"36\"\n  \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"36\"\n  \
+           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -474,11 +510,12 @@
+     name: hello-world-37
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-37/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-37/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"37\"\n  \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"37\"\n  \
+           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -487,11 +524,12 @@
+     name: hello-world-38
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-38/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-38/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"38\"\n  \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"38\"\n  \
+           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -500,11 +538,12 @@
+     name: hello-world-39
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-39/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-39/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"39\"\n  \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"39\"\n  \
+           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -513,11 +552,12 @@
+     name: hello-world-40
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-40/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-40/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"40\"\n  \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"40\"\n  \
+           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -526,11 +566,12 @@
+     name: hello-world-41
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-41/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-41/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"41\"\n  \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"41\"\n  \
+           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -539,11 +580,12 @@
+     name: hello-world-42
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-42/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-42/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"42\"\n  \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"42\"\n  \
+           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -552,11 +594,12 @@
+     name: hello-world-43
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-43/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-43/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"43\"\n  \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"43\"\n  \
+           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -565,11 +608,12 @@
+     name: hello-world-44
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-44/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-44/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"44\"\n  \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"44\"\n  \
+           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -578,11 +622,12 @@
+     name: hello-world-45
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-45/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-45/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"45\"\n  \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"45\"\n  \
+           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -591,11 +636,12 @@
+     name: hello-world-46
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-46/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-46/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"46\"\n  \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"46\"\n  \
+           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -604,11 +650,12 @@
+     name: hello-world-47
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-47/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-47/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"47\"\n  \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"47\"\n  \
+           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -617,11 +664,12 @@
+     name: hello-world-48
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-48/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-48/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"48\"\n  \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"48\"\n  \
+           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -630,11 +678,12 @@
+     name: hello-world-49
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-49/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-49/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"49\"\n  \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"49\"\n  \
+           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -643,11 +692,12 @@
+     name: hello-world-50
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-50/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-50/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"50\"\n  \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"50\"\n  \
+           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -656,11 +706,12 @@
+     name: hello-world-51
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-51/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-51/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"51\"\n  \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"51\"\n  \
+           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -669,11 +720,12 @@
+     name: hello-world-52
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-52/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-52/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"52\"\n  \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"52\"\n  \
+           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -682,11 +734,12 @@
+     name: hello-world-53
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-53/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-53/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"53\"\n  \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"53\"\n  \
+           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -695,11 +748,12 @@
+     name: hello-world-54
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-54/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-54/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"54\"\n  \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"54\"\n  \
+           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -708,11 +762,12 @@
+     name: hello-world-55
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-55/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-55/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"55\"\n  \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"55\"\n  \
+           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -721,11 +776,12 @@
+     name: hello-world-56
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-56/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-56/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"56\"\n  \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"56\"\n  \
+           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -734,11 +790,12 @@
+     name: hello-world-57
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-57/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-57/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"57\"\n  \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"57\"\n  \
+           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -747,11 +804,12 @@
+     name: hello-world-58
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-58/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-58/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"58\"\n  \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"58\"\n  \
+           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -760,11 +818,12 @@
+     name: hello-world-59
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-59/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-59/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"59\"\n  \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"59\"\n  \
+           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -773,11 +832,12 @@
+     name: hello-world-60
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-60/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-60/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"60\"\n  \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"60\"\n  \
+           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -786,11 +846,12 @@
+     name: hello-world-61
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-61/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-61/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"61\"\n  \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"61\"\n  \
+           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -799,11 +860,12 @@
+     name: hello-world-62
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-62/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-62/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"62\"\n  \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"62\"\n  \
+           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -812,11 +874,12 @@
+     name: hello-world-63
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-63/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-63/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"63\"\n  \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"63\"\n  \
+           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -825,11 +888,12 @@
+     name: hello-world-64
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-64/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-64/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"64\"\n  \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"64\"\n  \
+           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -838,11 +902,12 @@
+     name: hello-world-65
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-65/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-65/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"65\"\n  \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"65\"\n  \
+           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -851,11 +916,12 @@
+     name: hello-world-66
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-66/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-66/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"66\"\n  \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"66\"\n  \
+           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -864,11 +930,12 @@
+     name: hello-world-67
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-67/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-67/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"67\"\n  \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"67\"\n  \
+           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -877,11 +944,12 @@
+     name: hello-world-68
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-68/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-68/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"68\"\n  \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"68\"\n  \
+           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -890,11 +958,12 @@
+     name: hello-world-69
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-69/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-69/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"69\"\n  \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"69\"\n  \
+           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -903,11 +972,12 @@
+     name: hello-world-70
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-70/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-70/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"70\"\n  \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"70\"\n  \
+           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -916,11 +986,12 @@
+     name: hello-world-71
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-71/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-71/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"71\"\n  \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"71\"\n  \
+           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -929,11 +1000,12 @@
+     name: hello-world-72
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-72/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-72/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"72\"\n  \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"72\"\n  \
+           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -942,11 +1014,12 @@
+     name: hello-world-73
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-73/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-73/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"73\"\n  \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"73\"\n  \
+           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -955,11 +1028,12 @@
+     name: hello-world-74
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-74/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-74/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"74\"\n  \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"74\"\n  \
+           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -968,11 +1042,12 @@
+     name: hello-world-75
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-75/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-75/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"75\"\n  \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"75\"\n  \
+           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -981,11 +1056,12 @@
+     name: hello-world-76
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-76/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-76/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"76\"\n  \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"76\"\n  \
+           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -994,11 +1070,12 @@
+     name: hello-world-77
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-77/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-77/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"77\"\n  \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"77\"\n  \
+           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -1007,11 +1084,12 @@
+     name: hello-world-78
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-78/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-78/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"78\"\n  \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"78\"\n  \
+           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -1020,11 +1098,12 @@
+     name: hello-world-79
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-79/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-79/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"79\"\n  \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"79\"\n  \
+           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -1033,11 +1112,12 @@
+     name: hello-world-80
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-80/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-80/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"80\"\n  \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"80\"\n  \
+           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -1046,11 +1126,12 @@
+     name: hello-world-81
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-81/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-81/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"81\"\n  \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"81\"\n  \
+           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -1059,11 +1140,12 @@
+     name: hello-world-82
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-82/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-82/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"82\"\n  \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"82\"\n  \
+           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -1072,11 +1154,12 @@
+     name: hello-world-83
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-83/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-83/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"83\"\n  \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"83\"\n  \
+           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -1085,11 +1168,12 @@
+     name: hello-world-84
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-84/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-84/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"84\"\n  \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"84\"\n  \
+           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -1098,11 +1182,12 @@
+     name: hello-world-85
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-85/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-85/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"85\"\n  \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"85\"\n  \
+           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -1111,11 +1196,12 @@
+     name: hello-world-86
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-86/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-86/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"86\"\n  \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"86\"\n  \
+           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -1124,11 +1210,12 @@
+     name: hello-world-87
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-87/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-87/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"87\"\n  \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"87\"\n  \
+           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -1137,11 +1224,12 @@
+     name: hello-world-88
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-88/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-88/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"88\"\n  \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"88\"\n  \
+           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -1150,11 +1238,12 @@
+     name: hello-world-89
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-89/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-89/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"89\"\n  \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"89\"\n  \
+           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -1163,11 +1252,12 @@
+     name: hello-world-90
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-90/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-90/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"90\"\n  \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"90\"\n  \
+           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -1176,11 +1266,12 @@
+     name: hello-world-91
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-91/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-91/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"91\"\n  \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"91\"\n  \
+           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -1189,11 +1280,12 @@
+     name: hello-world-92
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-92/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-92/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"92\"\n  \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"92\"\n  \
+           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -1202,11 +1294,12 @@
+     name: hello-world-93
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-93/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-93/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"93\"\n  \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"93\"\n  \
+           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -1215,11 +1308,12 @@
+     name: hello-world-94
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-94/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-94/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"94\"\n  \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"94\"\n  \
+           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -1228,11 +1322,12 @@
+     name: hello-world-95
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-95/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-95/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"95\"\n  \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"95\"\n  \
+           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -1241,11 +1336,12 @@
+     name: hello-world-96
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-96/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-96/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"96\"\n  \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"96\"\n  \
+           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -1254,11 +1350,12 @@
+     name: hello-world-97
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-97/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-97/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"97\"\n  \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"97\"\n  \
+           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -1267,11 +1364,12 @@
+     name: hello-world-98
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-98/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-98/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"98\"\n  \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"98\"\n  \
+           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -1280,11 +1378,12 @@
+     name: hello-world-99
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-99/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-99/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"99\"\n  \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"99\"\n  \
+           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+@@ -1293,13 +1392,13 @@
+     name: hello-world-100
+     s6ServiceConfig:
+       command:
+-      - /usr/local/bin/benthos
+-      - -c
+-      - /run/service/hello-world-100/config/hello-world.yaml
++        - /usr/local/bin/benthos
++        - -c
++        - /run/service/hello-world-100/config/hello-world.yaml
+       configFiles:
+-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"100\"\n \
++        hello-world.yaml:
++          "---\ninput:\n  generate:\n    mapping: root = \"100\"\n \
+           \   interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
+           \ messages\noutput:\n  stdout: {}\n"
+       env:
+         LOG_LEVEL: DEBUG
+-    
+\ No newline at end of file
+diff --color -Naur --exclude=vendor /tmp/benthos-umh-temp/umh-core/examples/example-config-benthos.yaml umh-core/examples/example-config-benthos.yaml
+--- /tmp/benthos-umh-temp/umh-core/examples/example-config-benthos.yaml	2025-03-25 09:22:23
++++ umh-core/examples/example-config-benthos.yaml	2025-03-24 17:01:15
+@@ -7,18 +7,18 @@
+     benthosServiceConfig:
+       input:
+         generate:
+-          mapping: root = "hello world from Benthos!" 
++          mapping: root = "hello world from Benthos!"
+           interval: 1s # Output every 2 seconds
+           count: 0 # Set to 0 for unlimited messages
+       output:
+-        stdout: {} 
++        stdout: {}
+   - name: hello-world-2
+     desiredState: active
+     benthosServiceConfig:
+       input:
+         generate:
+-          mapping: root = "hello world from Benthos 2!" 
++          mapping: root = "hello world from Benthos 2!"
+           interval: 1s # Output every 2 seconds
+           count: 0 # Set to 0 for unlimited messages
+       output:
+-        stdout: {} 
+\ No newline at end of file
++        stdout: {}
+diff --color -Naur --exclude=vendor /tmp/benthos-umh-temp/umh-core/examples/example-config-broken.yaml umh-core/examples/example-config-broken.yaml
+--- /tmp/benthos-umh-temp/umh-core/examples/example-config-broken.yaml	2025-03-25 09:22:23
++++ umh-core/examples/example-config-broken.yaml	2025-03-24 17:01:15
+@@ -20,4 +20,4 @@
+               interval: 2s # Output every 2 seconds
+               count: 0 # Set to 0 for unlimited messages
+           output:
+-            stdout: {} 
+\ No newline at end of file
++            stdout: {}
+diff --color -Naur --exclude=vendor /tmp/benthos-umh-temp/umh-core/examples/example-config-empty.yaml umh-core/examples/example-config-empty.yaml
+--- /tmp/benthos-umh-temp/umh-core/examples/example-config-empty.yaml	2025-03-25 09:22:23
++++ umh-core/examples/example-config-empty.yaml	2025-03-24 17:01:15
+@@ -1,4 +1,4 @@
+ agent:
+   metricsPort: 8080
+ 
+-services: []
+\ No newline at end of file
++services: []
+diff --color -Naur --exclude=vendor /tmp/benthos-umh-temp/umh-core/examples/example-config.yaml umh-core/examples/example-config.yaml
+--- /tmp/benthos-umh-temp/umh-core/examples/example-config.yaml	2025-03-25 09:22:23
++++ umh-core/examples/example-config.yaml	2025-03-24 17:01:15
+@@ -20,4 +20,4 @@
+               interval: 2s # Output every 2 seconds
+               count: 0 # Set to 0 for unlimited messages
+           output:
+-            stdout: {} 
+\ No newline at end of file
++            stdout: {}
+diff --color -Naur --exclude=vendor /tmp/benthos-umh-temp/umh-core/go.mod umh-core/go.mod
+--- /tmp/benthos-umh-temp/umh-core/go.mod	2025-03-25 09:22:23
++++ umh-core/go.mod	2025-03-24 17:00:27
+@@ -1,39 +1,37 @@
+-module github.com/united-manufacturing-hub/benthos-umh/umh-core
++module github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core
+ 
+-go 1.23.0
++go 1.24.1
+ 
+-toolchain go1.23.7
+-
+ require (
+ 	github.com/cactus/tai64 v1.0.3
+ 	github.com/looplab/fsm v1.0.2
+-	github.com/onsi/ginkgo/v2 v2.23.0
+-	github.com/onsi/gomega v1.36.2
++	github.com/onsi/ginkgo/v2 v2.23.3
++	github.com/onsi/gomega v1.36.3
+ 	github.com/prometheus/client_golang v1.21.1
+ 	github.com/prometheus/client_model v0.6.1
+-	github.com/prometheus/common v0.62.0
++	github.com/prometheus/common v0.63.0
+ 	go.uber.org/zap v1.27.0
+ )
+ 
+ require (
+ 	github.com/beorn7/perks v1.0.1 // indirect
+ 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
+-	github.com/klauspost/compress v1.17.11 // indirect
++	github.com/klauspost/compress v1.18.0 // indirect
+ 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
+-	github.com/prometheus/procfs v0.15.1 // indirect
+-	go.uber.org/multierr v1.10.0 // indirect
+-	google.golang.org/protobuf v1.36.1 // indirect
++	github.com/prometheus/procfs v0.16.0 // indirect
++	go.uber.org/multierr v1.11.0 // indirect
++	google.golang.org/protobuf v1.36.6 // indirect
+ )
+ 
+ require (
+ 	github.com/cenkalti/backoff v2.2.1+incompatible
+ 	github.com/go-logr/logr v1.4.2 // indirect
+ 	github.com/go-task/slim-sprig/v3 v3.0.0 // indirect
+-	github.com/google/go-cmp v0.6.0 // indirect
+-	github.com/google/pprof v0.0.0-20241210010833-40e02aabc2ad // indirect
+-	golang.org/x/net v0.35.0 // indirect
+-	golang.org/x/sys v0.30.0 // indirect
+-	golang.org/x/text v0.22.0 // indirect
+-	golang.org/x/tools v0.30.0 // indirect
++	github.com/google/go-cmp v0.7.0 // indirect
++	github.com/google/pprof v0.0.0-20250317173921-a4b03ec1a45e // indirect
++	golang.org/x/net v0.37.0 // indirect
++	golang.org/x/sys v0.31.0 // indirect
++	golang.org/x/text v0.23.0 // indirect
++	golang.org/x/tools v0.31.0 // indirect
+ 	gopkg.in/yaml.v3 v3.0.1
+ )
+diff --color -Naur --exclude=vendor /tmp/benthos-umh-temp/umh-core/go.sum umh-core/go.sum
+--- /tmp/benthos-umh-temp/umh-core/go.sum	2025-03-25 09:22:23
++++ umh-core/go.sum	2025-03-24 16:59:38
+@@ -12,12 +12,12 @@
+ github.com/go-logr/logr v1.4.2/go.mod h1:9T104GzyrTigFIr8wt5mBrctHMim0Nb2HLGrmQ40KvY=
+ github.com/go-task/slim-sprig/v3 v3.0.0 h1:sUs3vkvUymDpBKi3qH1YSqBQk9+9D/8M2mN1vB6EwHI=
+ github.com/go-task/slim-sprig/v3 v3.0.0/go.mod h1:W848ghGpv3Qj3dhTPRyJypKRiqCdHZiAzKg9hl15HA8=
+-github.com/google/go-cmp v0.6.0 h1:ofyhxvXcZhMsU5ulbFiLKl/XBFqE1GSq7atu8tAmTRI=
+-github.com/google/go-cmp v0.6.0/go.mod h1:17dUlkBOakJ0+DkrSSNjCkIjxS6bF9zb3elmeNGIjoY=
+-github.com/google/pprof v0.0.0-20241210010833-40e02aabc2ad h1:a6HEuzUHeKH6hwfN/ZoQgRgVIWFJljSWa/zetS2WTvg=
+-github.com/google/pprof v0.0.0-20241210010833-40e02aabc2ad/go.mod h1:vavhavw2zAxS5dIdcRluK6cSGGPlZynqzFM8NdvU144=
+-github.com/klauspost/compress v1.17.11 h1:In6xLpyWOi1+C7tXUUWv2ot1QvBjxevKAaI6IXrJmUc=
+-github.com/klauspost/compress v1.17.11/go.mod h1:pMDklpSncoRMuLFrf1W9Ss9KT+0rH90U12bZKk7uwG0=
++github.com/google/go-cmp v0.7.0 h1:wk8382ETsv4JYUZwIsn6YpYiWiBsYLSJiTsyBybVuN8=
++github.com/google/go-cmp v0.7.0/go.mod h1:pXiqmnSA92OHEEa9HXL2W4E7lf9JzCmGVUdgjX3N/iU=
++github.com/google/pprof v0.0.0-20250317173921-a4b03ec1a45e h1:ijClszYn+mADRFY17kjQEVQ1XRhq2/JR1M3sGqeJoxs=
++github.com/google/pprof v0.0.0-20250317173921-a4b03ec1a45e/go.mod h1:boTsfXsheKC2y+lKOCMpSfarhxDeIzfZG1jqGcPl3cA=
++github.com/klauspost/compress v1.18.0 h1:c/Cqfb0r+Yi+JtIEq73FWXVkRonBlf0CRNYc8Zttxdo=
++github.com/klauspost/compress v1.18.0/go.mod h1:2Pp+KzxcywXVXMr50+X0Q/Lsb43OQHYWRCY2AiWywWQ=
+ github.com/kr/pretty v0.3.1 h1:flRD4NNwYAUpkphVc1HcthR4KEIFJ65n8Mw5qdRn3LE=
+ github.com/kr/pretty v0.3.1/go.mod h1:hoEshYVHaxMs3cyo3Yncou5ZscifuDolrwPKZanG3xk=
+ github.com/kr/text v0.2.0 h1:5Nx0Ya0ZqY2ygV366QzturHI13Jq95ApcVaJBhpS+AY=
+@@ -28,40 +28,40 @@
+ github.com/looplab/fsm v1.0.2/go.mod h1:PmD3fFvQEIsjMEfvZdrCDZ6y8VwKTwWNjlpEr6IKPO4=
+ github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 h1:C3w9PqII01/Oq1c1nUAm88MOHcQC9l5mIlSMApZMrHA=
+ github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822/go.mod h1:+n7T8mK8HuQTcFwEeznm/DIxMOiR9yIdICNftLE1DvQ=
+-github.com/onsi/ginkgo/v2 v2.23.0 h1:FA1xjp8ieYDzlgS5ABTpdUDB7wtngggONc8a7ku2NqQ=
+-github.com/onsi/ginkgo/v2 v2.23.0/go.mod h1:zXTP6xIp3U8aVuXN8ENK9IXRaTjFnpVB9mGmaSRvxnM=
+-github.com/onsi/gomega v1.36.2 h1:koNYke6TVk6ZmnyHrCXba/T/MoLBXFjeC1PtvYgw0A8=
+-github.com/onsi/gomega v1.36.2/go.mod h1:DdwyADRjrc825LhMEkD76cHR5+pUnjhUN8GlHlRPHzY=
++github.com/onsi/ginkgo/v2 v2.23.3 h1:edHxnszytJ4lD9D5Jjc4tiDkPBZ3siDeJJkUZJJVkp0=
++github.com/onsi/ginkgo/v2 v2.23.3/go.mod h1:zXTP6xIp3U8aVuXN8ENK9IXRaTjFnpVB9mGmaSRvxnM=
++github.com/onsi/gomega v1.36.3 h1:hID7cr8t3Wp26+cYnfcjR6HpJ00fdogN6dqZ1t6IylU=
++github.com/onsi/gomega v1.36.3/go.mod h1:8D9+Txp43QWKhM24yyOBEdpkzN8FvJyAwecBgsU4KU0=
+ github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
+ github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
+ github.com/prometheus/client_golang v1.21.1 h1:DOvXXTqVzvkIewV/CDPFdejpMCGeMcbGCQ8YOmu+Ibk=
+ github.com/prometheus/client_golang v1.21.1/go.mod h1:U9NM32ykUErtVBxdvD3zfi+EuFkkaBvMb09mIfe0Zgg=
+ github.com/prometheus/client_model v0.6.1 h1:ZKSh/rekM+n3CeS952MLRAdFwIKqeY8b62p8ais2e9E=
+ github.com/prometheus/client_model v0.6.1/go.mod h1:OrxVMOVHjw3lKMa8+x6HeMGkHMQyHDk9E3jmP2AmGiY=
+-github.com/prometheus/common v0.62.0 h1:xasJaQlnWAeyHdUBeGjXmutelfJHWMRr+Fg4QszZ2Io=
+-github.com/prometheus/common v0.62.0/go.mod h1:vyBcEuLSvWos9B1+CyL7JZ2up+uFzXhkqml0W5zIY1I=
+-github.com/prometheus/procfs v0.15.1 h1:YagwOFzUgYfKKHX6Dr+sHT7km/hxC76UB0learggepc=
+-github.com/prometheus/procfs v0.15.1/go.mod h1:fB45yRUv8NstnjriLhBQLuOUt+WW4BsoGhij/e3PBqk=
++github.com/prometheus/common v0.63.0 h1:YR/EIY1o3mEFP/kZCD7iDMnLPlGyuU2Gb3HIcXnA98k=
++github.com/prometheus/common v0.63.0/go.mod h1:VVFF/fBIoToEnWRVkYoXEkq3R3paCoxG9PXP74SnV18=
++github.com/prometheus/procfs v0.16.0 h1:xh6oHhKwnOJKMYiYBDWmkHqQPyiY40sny36Cmx2bbsM=
++github.com/prometheus/procfs v0.16.0/go.mod h1:8veyXUu3nGP7oaCxhX6yeaM5u4stL2FeMXnCqhDthZg=
+ github.com/rogpeppe/go-internal v1.10.0 h1:TMyTOH3F/DB16zRVcYyreMH6GnZZrwQVAoYjRBZyWFQ=
+ github.com/rogpeppe/go-internal v1.10.0/go.mod h1:UQnix2H7Ngw/k4C5ijL5+65zddjncjaFoBhdsK/akog=
+ github.com/stretchr/testify v1.10.0 h1:Xv5erBjTwe/5IxqUQTdXv5kgmIvbHo3QQyRwhJsOfJA=
+ github.com/stretchr/testify v1.10.0/go.mod h1:r2ic/lqez/lEtzL7wO/rwa5dbSLXVDPFyf8C91i36aY=
+ go.uber.org/goleak v1.3.0 h1:2K3zAYmnTNqV73imy9J1T3WC+gmCePx2hEGkimedGto=
+ go.uber.org/goleak v1.3.0/go.mod h1:CoHD4mav9JJNrW/WLlf7HGZPjdw8EucARQHekz1X6bE=
+-go.uber.org/multierr v1.10.0 h1:S0h4aNzvfcFsC3dRF1jLoaov7oRaKqRGC/pUEJ2yvPQ=
+-go.uber.org/multierr v1.10.0/go.mod h1:20+QtiLqy0Nd6FdQB9TLXag12DsQkrbs3htMFfDN80Y=
++go.uber.org/multierr v1.11.0 h1:blXXJkSxSSfBVBlC76pxqeO+LN3aDfLQo+309xJstO0=
++go.uber.org/multierr v1.11.0/go.mod h1:20+QtiLqy0Nd6FdQB9TLXag12DsQkrbs3htMFfDN80Y=
+ go.uber.org/zap v1.27.0 h1:aJMhYGrd5QSmlpLMr2MftRKl7t8J8PTZPA732ud/XR8=
+ go.uber.org/zap v1.27.0/go.mod h1:GB2qFLM7cTU87MWRP2mPIjqfIDnGu+VIO4V/SdhGo2E=
+-golang.org/x/net v0.35.0 h1:T5GQRQb2y08kTAByq9L4/bz8cipCdA8FbRTXewonqY8=
+-golang.org/x/net v0.35.0/go.mod h1:EglIi67kWsHKlRzzVMUD93VMSWGFOMSZgxFjparz1Qk=
+-golang.org/x/sys v0.30.0 h1:QjkSwP/36a20jFYWkSue1YwXzLmsV5Gfq7Eiy72C1uc=
+-golang.org/x/sys v0.30.0/go.mod h1:/VUhepiaJMQUp4+oa/7Zr1D23ma6VTLIYjOOTFZPUcA=
+-golang.org/x/text v0.22.0 h1:bofq7m3/HAFvbF51jz3Q9wLg3jkvSPuiZu/pD1XwgtM=
+-golang.org/x/text v0.22.0/go.mod h1:YRoo4H8PVmsu+E3Ou7cqLVH8oXWIHVoX0jqUWALQhfY=
+-golang.org/x/tools v0.30.0 h1:BgcpHewrV5AUp2G9MebG4XPFI1E2W41zU1SaqVA9vJY=
+-golang.org/x/tools v0.30.0/go.mod h1:c347cR/OJfw5TI+GfX7RUPNMdDRRbjvYTS0jPyvsVtY=
+-google.golang.org/protobuf v1.36.1 h1:yBPeRvTftaleIgM3PZ/WBIZ7XM/eEYAaEyCwvyjq/gk=
+-google.golang.org/protobuf v1.36.1/go.mod h1:9fA7Ob0pmnwhb644+1+CVWFRbNajQ6iRojtC/QF5bRE=
++golang.org/x/net v0.37.0 h1:1zLorHbz+LYj7MQlSf1+2tPIIgibq2eL5xkrGk6f+2c=
++golang.org/x/net v0.37.0/go.mod h1:ivrbrMbzFq5J41QOQh0siUuly180yBYtLp+CKbEaFx8=
++golang.org/x/sys v0.31.0 h1:ioabZlmFYtWhL+TRYpcnNlLwhyxaM9kWTDEmfnprqik=
++golang.org/x/sys v0.31.0/go.mod h1:BJP2sWEmIv4KK5OTEluFJCKSidICx8ciO85XgH3Ak8k=
++golang.org/x/text v0.23.0 h1:D71I7dUrlY+VX0gQShAThNGHFxZ13dGLBHQLVl1mJlY=
++golang.org/x/text v0.23.0/go.mod h1:/BLNzu4aZCJ1+kcD0DNRotWKage4q2rGVAg4o22unh4=
++golang.org/x/tools v0.31.0 h1:0EedkvKDbh+qistFTd0Bcwe/YLh4vHwWEkiI0toFIBU=
++golang.org/x/tools v0.31.0/go.mod h1:naFTU+Cev749tSJRXJlna0T3WxKvb1kWEx15xA4SdmQ=
++google.golang.org/protobuf v1.36.6 h1:z1NpPI8ku2WgiWnf+t9wTPsn6eP1L7ksHUlkfLvd9xY=
++google.golang.org/protobuf v1.36.6/go.mod h1:jduwjTPXsFjZGTmRluh+L6NjiWu7pchiJ2/5YcXBHnY=
+ gopkg.in/check.v1 v0.0.0-20161208181325-20d25e280405/go.mod h1:Co6ibVJAznAaIkqp8huTwlJQCZ016jof/cbN4VW5Yz0=
+ gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c h1:Hei/4ADfdWqJk1ZMxUNpqntNwaWcugrBjAiHlqqRiVk=
+ gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c/go.mod h1:JHkPIbrfpd72SG/EVd6muEfDQjcINNoR0C8j2r3qZ4Q=
+diff --color -Naur --exclude=vendor /tmp/benthos-umh-temp/umh-core/integration/benthos_builder.go umh-core/integration/benthos_builder.go
+--- /tmp/benthos-umh-temp/umh-core/integration/benthos_builder.go	2025-03-25 09:22:23
++++ umh-core/integration/benthos_builder.go	2025-03-24 17:01:45
+@@ -1,7 +1,7 @@
+ package integration_test
+ 
+ import (
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/config"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+ 	"gopkg.in/yaml.v3"
+ )
+ 
+diff --color -Naur --exclude=vendor /tmp/benthos-umh-temp/umh-core/integration/config_builder.go umh-core/integration/config_builder.go
+--- /tmp/benthos-umh-temp/umh-core/integration/config_builder.go	2025-03-25 09:22:23
++++ umh-core/integration/config_builder.go	2025-03-24 17:01:45
+@@ -2,7 +2,7 @@
+ package integration_test
+ 
+ import (
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/config"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+ 	"gopkg.in/yaml.v3"
+ )
+ 
+diff --color -Naur --exclude=vendor /tmp/benthos-umh-temp/umh-core/integration/data/config.yaml umh-core/integration/data/config.yaml
+--- /tmp/benthos-umh-temp/umh-core/integration/data/config.yaml	1970-01-01 01:00:00
++++ umh-core/integration/data/config.yaml	2025-03-24 17:26:28
+@@ -0,0 +1,5 @@
++
++agent:
++  metricsPort: 8080
++services: []
++benthos: []
+diff --color -Naur --exclude=vendor /tmp/benthos-umh-temp/umh-core/internal/fsm/baseFSM.go umh-core/internal/fsm/baseFSM.go
+--- /tmp/benthos-umh-temp/umh-core/internal/fsm/baseFSM.go	2025-03-25 09:22:23
++++ umh-core/internal/fsm/baseFSM.go	2025-03-24 17:01:45
+@@ -7,7 +7,7 @@
+ 	"github.com/looplab/fsm"
+ 	"go.uber.org/zap"
+ 
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/backoff"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/backoff"
+ )
+ 
+ // BaseFSMInstance implements the public fsm.FSM interface
+diff --color -Naur --exclude=vendor /tmp/benthos-umh-temp/umh-core/internal/fsm/baseFSM_test.go umh-core/internal/fsm/baseFSM_test.go
+--- /tmp/benthos-umh-temp/umh-core/internal/fsm/baseFSM_test.go	2025-03-25 09:22:23
++++ umh-core/internal/fsm/baseFSM_test.go	2025-03-24 17:01:45
+@@ -10,7 +10,7 @@
+ 	"go.uber.org/zap"
+ 	"go.uber.org/zap/zaptest"
+ 
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/backoff"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/backoff"
+ )
+ 
+ func TestBaseFSM(t *testing.T) {
+diff --color -Naur --exclude=vendor /tmp/benthos-umh-temp/umh-core/internal/fsmtest/benthos.go umh-core/internal/fsmtest/benthos.go
+--- /tmp/benthos-umh-temp/umh-core/internal/fsmtest/benthos.go	2025-03-25 09:22:23
++++ umh-core/internal/fsmtest/benthos.go	2025-03-24 17:01:45
+@@ -1,11 +1,11 @@
+ package fsmtest
+ 
+ import (
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/config"
+-	benthosfsm "github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/fsm/benthos"
+-	s6fsm "github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/fsm/s6"
+-	benthossvc "github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/service/benthos"
+-	s6svc "github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/service/s6"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
++	benthosfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
++	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
++	benthossvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
++	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+ )
+ 
+ // CreateBenthosTestConfig creates a standard Benthos config for testing
+diff --color -Naur --exclude=vendor /tmp/benthos-umh-temp/umh-core/internal/fsmtest/s6.go umh-core/internal/fsmtest/s6.go
+--- /tmp/benthos-umh-temp/umh-core/internal/fsmtest/s6.go	2025-03-25 09:22:23
++++ umh-core/internal/fsmtest/s6.go	2025-03-24 17:01:45
+@@ -5,10 +5,10 @@
+ 	"fmt"
+ 	"path/filepath"
+ 
+-	internal_fsm "github.com/united-manufacturing-hub/benthos-umh/umh-core/internal/fsm"
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/config"
+-	s6fsm "github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/fsm/s6"
+-	s6service "github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/service/s6"
++	internal_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
++	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
++	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+ )
+ 
+ // Common test states
+diff --color -Naur --exclude=vendor /tmp/benthos-umh-temp/umh-core/internal/fsmtest/s6_manager.go umh-core/internal/fsmtest/s6_manager.go
+--- /tmp/benthos-umh-temp/umh-core/internal/fsmtest/s6_manager.go	2025-03-25 09:22:23
++++ umh-core/internal/fsmtest/s6_manager.go	2025-03-24 17:01:45
+@@ -3,9 +3,9 @@
+ import (
+ 	"context"
+ 
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/config"
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/fsm/s6"
+-	s6service "github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/service/s6"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
++	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+ )
+ 
+ // ConfigureS6MockServiceState configures the mock service for a specific instance
+diff --color -Naur --exclude=vendor /tmp/benthos-umh-temp/umh-core/internal/fsmtest/wait.go umh-core/internal/fsmtest/wait.go
+--- /tmp/benthos-umh-temp/umh-core/internal/fsmtest/wait.go	2025-03-25 09:22:23
++++ umh-core/internal/fsmtest/wait.go	2025-03-24 17:01:45
+@@ -4,9 +4,9 @@
+ 	"context"
+ 	"fmt"
+ 
+-	internal_fsm "github.com/united-manufacturing-hub/benthos-umh/umh-core/internal/fsm"
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/config"
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/fsm"
++	internal_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
+ )
+ 
+ // InstanceReconciler is an interface for any FSM instance that can be reconciled
+diff --color -Naur --exclude=vendor /tmp/benthos-umh-temp/umh-core/pkg/backoff/errors_test.go umh-core/pkg/backoff/errors_test.go
+--- /tmp/benthos-umh-temp/umh-core/pkg/backoff/errors_test.go	2025-03-25 09:22:23
++++ umh-core/pkg/backoff/errors_test.go	2025-03-24 17:01:45
+@@ -7,7 +7,7 @@
+ 	. "github.com/onsi/ginkgo/v2"
+ 	. "github.com/onsi/gomega"
+ 
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/backoff"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/backoff"
+ )
+ 
+ var _ = Describe("Error Helpers", func() {
+diff --color -Naur --exclude=vendor /tmp/benthos-umh-temp/umh-core/pkg/config/manager.go umh-core/pkg/config/manager.go
+--- /tmp/benthos-umh-temp/umh-core/pkg/config/manager.go	2025-03-25 09:22:23
++++ umh-core/pkg/config/manager.go	2025-03-24 17:26:13
+@@ -9,10 +9,10 @@
+ 	"go.uber.org/zap"
+ 	"gopkg.in/yaml.v3"
+ 
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/backoff"
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/logger"
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/metrics"
+-	filesystem "github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/service/filesystem"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/backoff"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
++	filesystem "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+ )
+ 
+ const (
+@@ -138,7 +138,10 @@
+ // It will return either a temporary backoff error or a permanent failure error
+ func (m *FileConfigManagerWithBackoff) GetConfig(ctx context.Context, tick uint64) (FullConfig, error) {
+ 	start := time.Now()
+-	defer metrics.ObserveReconcileTime(logger.ComponentConfigManager, "get_config", time.Since(start))
++	defer func() {
++		duration := time.Since(start)
++		metrics.ObserveReconcileTime(logger.ComponentConfigManager, "get_config", duration)
++	}()
+ 
+ 	// Check if context is already cancelled
+ 	if ctx.Err() != nil {
+diff --color -Naur --exclude=vendor /tmp/benthos-umh-temp/umh-core/pkg/config/manager_test.go umh-core/pkg/config/manager_test.go
+--- /tmp/benthos-umh-temp/umh-core/pkg/config/manager_test.go	2025-03-25 09:22:23
++++ umh-core/pkg/config/manager_test.go	2025-03-24 17:01:45
+@@ -10,7 +10,7 @@
+ 	. "github.com/onsi/ginkgo/v2"
+ 	. "github.com/onsi/gomega"
+ 
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/service/filesystem"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+ )
+ 
+ var _ = Describe("ConfigManager", func() {
+diff --color -Naur --exclude=vendor /tmp/benthos-umh-temp/umh-core/pkg/control/loop.go umh-core/pkg/control/loop.go
+--- /tmp/benthos-umh-temp/umh-core/pkg/control/loop.go	2025-03-25 09:22:23
++++ umh-core/pkg/control/loop.go	2025-03-24 17:01:45
+@@ -26,16 +26,16 @@
+ 	"fmt"
+ 	"time"
+ 
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/backoff"
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/config"
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/constants"
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/fsm"
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/fsm/benthos"
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/fsm/s6"
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/logger"
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/metrics"
+-	s6svc "github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/service/s6"
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/starvationchecker"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/backoff"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
++	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/starvationchecker"
+ 	"go.uber.org/zap"
+ )
+ 
+diff --color -Naur --exclude=vendor /tmp/benthos-umh-temp/umh-core/pkg/control/loop_test.go umh-core/pkg/control/loop_test.go
+--- /tmp/benthos-umh-temp/umh-core/pkg/control/loop_test.go	2025-03-25 09:22:23
++++ umh-core/pkg/control/loop_test.go	2025-03-24 17:01:45
+@@ -11,11 +11,11 @@
+ 	. "github.com/onsi/ginkgo/v2"
+ 	. "github.com/onsi/gomega"
+ 
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/config"
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/fsm"
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/logger"
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/service/filesystem"
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/starvationchecker"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/starvationchecker"
+ )
+ 
+ // Generates defective configurations
+diff --color -Naur --exclude=vendor /tmp/benthos-umh-temp/umh-core/pkg/fsm/base_manager.go umh-core/pkg/fsm/base_manager.go
+--- /tmp/benthos-umh-temp/umh-core/pkg/fsm/base_manager.go	2025-03-25 09:22:23
++++ umh-core/pkg/fsm/base_manager.go	2025-03-24 17:42:58
+@@ -5,11 +5,11 @@
+ 	"fmt"
+ 	"time"
+ 
+-	internalfsm "github.com/united-manufacturing-hub/benthos-umh/umh-core/internal/fsm"
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/backoff"
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/config"
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/logger"
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/metrics"
++	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/backoff"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
+ 	"go.uber.org/zap"
+ )
+ 
+@@ -294,7 +294,7 @@
+ 
+ 			createStart := time.Now()
+ 			instance, err := m.createInstance(cfg)
+-			if err != nil {
++			if err != nil || instance == nil {
+ 				metrics.IncErrorCount(metrics.ComponentBaseFSMManager, m.managerName)
+ 				return fmt.Errorf("failed to create instance: %w", err), false
+ 			}
+@@ -398,7 +398,14 @@
+ 			}
+ 		}
+ 
+-		switch m.instances[instanceName].GetCurrentFSMState() {
++		instance := m.instances[instanceName]
++		if instance == nil {
++			m.logger.Debugf("instance %s is nil, will be deleted from the manager", instanceName)
++			// TODO: Check if we need to do anything else here
++			continue
++		}
++
++		switch instance.GetCurrentFSMState() {
+ 		case internalfsm.LifecycleStateRemoving:
+ 			m.logger.Debugf("instance %s is already in removing state, waiting until it is removed", instanceName)
+ 			continue
+@@ -425,8 +432,8 @@
+ 			}
+ 
+ 			// Otherwise, we need to remove the instance
+-			m.logger.Debugf("instance %s is in state %s, starting the removing process", instanceName, m.instances[instanceName].GetCurrentFSMState())
+-			m.instances[instanceName].Remove(ctx)
++			m.logger.Debugf("instance %s is in state %s, starting the removing process", instanceName, instance.GetCurrentFSMState())
++			instance.Remove(ctx)
+ 
+ 			// Update last remove tick using manager-specific tick
+ 			m.lastRemoveTick = m.managerTick
+diff --color -Naur --exclude=vendor /tmp/benthos-umh-temp/umh-core/pkg/fsm/benthos/actions.go umh-core/pkg/fsm/benthos/actions.go
+--- /tmp/benthos-umh-temp/umh-core/pkg/fsm/benthos/actions.go	2025-03-25 09:22:23
++++ umh-core/pkg/fsm/benthos/actions.go	2025-03-24 17:01:45
+@@ -7,10 +7,10 @@
+ 	"strings"
+ 	"time"
+ 
+-	internalfsm "github.com/united-manufacturing-hub/benthos-umh/umh-core/internal/fsm"
+-	s6fsm "github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/fsm/s6"
+-	benthos_service "github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/service/benthos"
+-	benthosyaml "github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/service/benthos/yaml"
++	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
++	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
++	benthos_service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
++	benthosyaml "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos/yaml"
+ )
+ 
+ // The functions in this file define heavier, possibly fail-prone operations
+diff --color -Naur --exclude=vendor /tmp/benthos-umh-temp/umh-core/pkg/fsm/benthos/benthos_test.go umh-core/pkg/fsm/benthos/benthos_test.go
+--- /tmp/benthos-umh-temp/umh-core/pkg/fsm/benthos/benthos_test.go	2025-03-25 09:22:23
++++ umh-core/pkg/fsm/benthos/benthos_test.go	2025-03-24 17:01:45
+@@ -7,14 +7,14 @@
+ 	. "github.com/onsi/ginkgo/v2"
+ 	. "github.com/onsi/gomega"
+ 
+-	internalfsm "github.com/united-manufacturing-hub/benthos-umh/umh-core/internal/fsm"
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/backoff"
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/config"
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/constants"
+-	s6fsm "github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/fsm/s6"
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/portmanager"
+-	benthossvc "github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/service/benthos"
+-	s6svc "github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/service/s6"
++	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/backoff"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
++	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/portmanager"
++	benthossvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
++	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+ )
+ 
+ // TODO: needs to be refactored based on the test approach in umh-core/test/fsm/s6/manager_test.go
+diff --color -Naur --exclude=vendor /tmp/benthos-umh-temp/umh-core/pkg/fsm/benthos/machine.go umh-core/pkg/fsm/benthos/machine.go
+--- /tmp/benthos-umh-temp/umh-core/pkg/fsm/benthos/machine.go	2025-03-25 09:22:23
++++ umh-core/pkg/fsm/benthos/machine.go	2025-03-24 17:01:45
+@@ -6,11 +6,11 @@
+ 
+ 	"github.com/looplab/fsm"
+ 
+-	internal_fsm "github.com/united-manufacturing-hub/benthos-umh/umh-core/internal/fsm"
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/config"
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/logger"
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/metrics"
+-	benthos_service "github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/service/benthos"
++	internal_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
++	benthos_service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
+ )
+ 
+ // NewBenthosInstance creates a new BenthosInstance with the given ID and service path
+diff --color -Naur --exclude=vendor /tmp/benthos-umh-temp/umh-core/pkg/fsm/benthos/manager.go umh-core/pkg/fsm/benthos/manager.go
+--- /tmp/benthos-umh-temp/umh-core/pkg/fsm/benthos/manager.go	2025-03-25 09:22:23
++++ umh-core/pkg/fsm/benthos/manager.go	2025-03-24 17:26:15
+@@ -5,12 +5,12 @@
+ 	"fmt"
+ 	"time"
+ 
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/config"
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/constants"
+-	public_fsm "github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/fsm"
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/logger"
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/metrics"
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/portmanager"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
++	public_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/portmanager"
+ )
+ 
+ const (
+@@ -154,7 +154,10 @@
+ // Reconcile overrides the base manager's Reconcile method to add port management
+ func (m *BenthosManager) Reconcile(ctx context.Context, cfg config.FullConfig, tick uint64) (error, bool) {
+ 	start := time.Now()
+-	defer metrics.ObserveReconcileTime(logger.ComponentBenthosManager, m.BaseFSMManager.GetManagerName(), time.Since(start))
++	defer func() {
++		duration := time.Since(start)
++		metrics.ObserveReconcileTime(logger.ComponentBenthosManager, m.BaseFSMManager.GetManagerName(), duration)
++	}()
+ 	// Phase 1: Port Management Pre-reconciliation
+ 	benthosConfigs := cfg.Benthos
+ 	instanceNames := make([]string, len(benthosConfigs))
+diff --color -Naur --exclude=vendor /tmp/benthos-umh-temp/umh-core/pkg/fsm/benthos/manager_test.go umh-core/pkg/fsm/benthos/manager_test.go
+--- /tmp/benthos-umh-temp/umh-core/pkg/fsm/benthos/manager_test.go	2025-03-25 09:22:23
++++ umh-core/pkg/fsm/benthos/manager_test.go	2025-03-24 17:54:18
+@@ -7,12 +7,12 @@
+ 	. "github.com/onsi/ginkgo/v2"
+ 	. "github.com/onsi/gomega"
+ 
+-	internalfsm "github.com/united-manufacturing-hub/benthos-umh/umh-core/internal/fsm"
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/backoff"
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/config"
+-	s6fsm "github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/fsm/s6"
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/portmanager"
+-	benthossvc "github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/service/benthos"
++	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/backoff"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
++	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/portmanager"
++	benthossvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
+ )
+ 
+ // TODO: needs to be refactored based on the test approach in umh-core/test/fsm/s6/manager_test.go
+@@ -55,6 +55,15 @@
+ // setupServiceState configures the mock service state for a given service
+ func setupServiceState(mockService *benthossvc.MockBenthosService, serviceName string, flags benthossvc.ServiceStateFlags) {
+ 	mockService.SetServiceState(serviceName, flags)
++
++	if mockService.ServiceStates == nil {
++		mockService.ServiceStates = make(map[string]*benthossvc.ServiceInfo)
++	}
++
++	if mockService.ServiceStates[serviceName] == nil {
++		mockService.ServiceStates[serviceName] = &benthossvc.ServiceInfo{}
++	}
++
+ 	mockService.ServiceStates[serviceName].BenthosStatus.HealthCheck = benthossvc.HealthCheck{
+ 		IsLive:  flags.IsHealthchecksPassed,
+ 		IsReady: flags.IsHealthchecksPassed,
+diff --color -Naur --exclude=vendor /tmp/benthos-umh-temp/umh-core/pkg/fsm/benthos/models.go umh-core/pkg/fsm/benthos/models.go
+--- /tmp/benthos-umh-temp/umh-core/pkg/fsm/benthos/models.go	2025-03-25 09:22:23
++++ umh-core/pkg/fsm/benthos/models.go	2025-03-24 17:01:45
+@@ -1,10 +1,10 @@
+ package benthos
+ 
+ import (
+-	internalfsm "github.com/united-manufacturing-hub/benthos-umh/umh-core/internal/fsm"
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/config"
+-	publicfsm "github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/fsm"
+-	benthossvc "github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/service/benthos"
++	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
++	publicfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
++	benthossvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
+ )
+ 
+ // Operational state constants (using internal_fsm compatible naming)
+diff --color -Naur --exclude=vendor /tmp/benthos-umh-temp/umh-core/pkg/fsm/benthos/observed_state_snapshot.go umh-core/pkg/fsm/benthos/observed_state_snapshot.go
+--- /tmp/benthos-umh-temp/umh-core/pkg/fsm/benthos/observed_state_snapshot.go	2025-03-25 09:22:23
++++ umh-core/pkg/fsm/benthos/observed_state_snapshot.go	2025-03-24 17:01:45
+@@ -1,9 +1,9 @@
+ package benthos
+ 
+ import (
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/config"
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/fsm"
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/service/benthos"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
+ )
+ 
+ // BenthosObservedStateSnapshot is a deep-copyable snapshot of BenthosObservedState
+diff --color -Naur --exclude=vendor /tmp/benthos-umh-temp/umh-core/pkg/fsm/benthos/reconcile.go umh-core/pkg/fsm/benthos/reconcile.go
+--- /tmp/benthos-umh-temp/umh-core/pkg/fsm/benthos/reconcile.go	2025-03-25 09:22:23
++++ umh-core/pkg/fsm/benthos/reconcile.go	2025-03-24 17:01:45
+@@ -6,12 +6,12 @@
+ 	"fmt"
+ 	"time"
+ 
+-	internal_fsm "github.com/united-manufacturing-hub/benthos-umh/umh-core/internal/fsm"
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/backoff"
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/constants"
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/fsm"
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/metrics"
+-	benthos_service "github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/service/benthos"
++	internal_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/backoff"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
++	benthos_service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
+ )
+ 
+ // Reconcile examines the BenthosInstance and, in three steps:
+diff --color -Naur --exclude=vendor /tmp/benthos-umh-temp/umh-core/pkg/fsm/mock.go umh-core/pkg/fsm/mock.go
+--- /tmp/benthos-umh-temp/umh-core/pkg/fsm/mock.go	2025-03-25 09:22:23
++++ umh-core/pkg/fsm/mock.go	2025-03-24 17:01:45
+@@ -5,7 +5,7 @@
+ 	"sync"
+ 	"time"
+ 
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/config"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+ )
+ 
+ // MockFSMManager is a mock implementation of FSMManager for testing
+diff --color -Naur --exclude=vendor /tmp/benthos-umh-temp/umh-core/pkg/fsm/s6/actions.go umh-core/pkg/fsm/s6/actions.go
+--- /tmp/benthos-umh-temp/umh-core/pkg/fsm/s6/actions.go	2025-03-25 09:22:23
++++ umh-core/pkg/fsm/s6/actions.go	2025-03-24 17:01:45
+@@ -6,10 +6,10 @@
+ 	"reflect"
+ 	"time"
+ 
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/internal/fsm"
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/config"
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/metrics"
+-	s6service "github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/service/s6"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
++	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+ )
+ 
+ // The functions in this file define heavier, possibly fail-prone operations
+diff --color -Naur --exclude=vendor /tmp/benthos-umh-temp/umh-core/pkg/fsm/s6/machine.go umh-core/pkg/fsm/s6/machine.go
+--- /tmp/benthos-umh-temp/umh-core/pkg/fsm/s6/machine.go	2025-03-25 09:22:23
++++ umh-core/pkg/fsm/s6/machine.go	2025-03-24 17:01:45
+@@ -7,11 +7,11 @@
+ 
+ 	"github.com/looplab/fsm"
+ 
+-	internal_fsm "github.com/united-manufacturing-hub/benthos-umh/umh-core/internal/fsm"
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/config"
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/logger"
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/metrics"
+-	s6service "github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/service/s6"
++	internal_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
++	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+ )
+ 
+ // NewS6Instance creates a new S6Instance with the given ID and service path
+diff --color -Naur --exclude=vendor /tmp/benthos-umh-temp/umh-core/pkg/fsm/s6/manager.go umh-core/pkg/fsm/s6/manager.go
+--- /tmp/benthos-umh-temp/umh-core/pkg/fsm/s6/manager.go	2025-03-25 09:22:23
++++ umh-core/pkg/fsm/s6/manager.go	2025-03-24 17:01:45
+@@ -3,11 +3,11 @@
+ import (
+ 	"fmt"
+ 
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/config"
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/constants"
+-	public_fsm "github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/fsm"
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/logger"
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/metrics"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
++	public_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
+ )
+ 
+ const (
+diff --color -Naur --exclude=vendor /tmp/benthos-umh-temp/umh-core/pkg/fsm/s6/manager_mock.go umh-core/pkg/fsm/s6/manager_mock.go
+--- /tmp/benthos-umh-temp/umh-core/pkg/fsm/s6/manager_mock.go	2025-03-25 09:22:23
++++ umh-core/pkg/fsm/s6/manager_mock.go	2025-03-24 17:01:45
+@@ -3,11 +3,11 @@
+ import (
+ 	"fmt"
+ 
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/config"
+-	public_fsm "github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/fsm"
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/logger"
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/metrics"
+-	s6service "github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/service/s6"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
++	public_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
++	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+ )
+ 
+ // NewS6ManagerWithMockedServices creates an S6Manager with fully mocked instances
+diff --color -Naur --exclude=vendor /tmp/benthos-umh-temp/umh-core/pkg/fsm/s6/models.go umh-core/pkg/fsm/s6/models.go
+--- /tmp/benthos-umh-temp/umh-core/pkg/fsm/s6/models.go	2025-03-25 09:22:23
++++ umh-core/pkg/fsm/s6/models.go	2025-03-24 17:01:45
+@@ -1,10 +1,10 @@
+ package s6
+ 
+ import (
+-	internalfsm "github.com/united-manufacturing-hub/benthos-umh/umh-core/internal/fsm"
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/config"
+-	publicfsm "github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/fsm"
+-	s6svc "github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/service/s6"
++	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
++	publicfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
++	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+ )
+ 
+ // Operational state constants represent the runtime states of a service
+diff --color -Naur --exclude=vendor /tmp/benthos-umh-temp/umh-core/pkg/fsm/s6/observed_state_snapshot.go umh-core/pkg/fsm/s6/observed_state_snapshot.go
+--- /tmp/benthos-umh-temp/umh-core/pkg/fsm/s6/observed_state_snapshot.go	2025-03-25 09:22:23
++++ umh-core/pkg/fsm/s6/observed_state_snapshot.go	2025-03-24 17:01:45
+@@ -1,9 +1,9 @@
+ package s6
+ 
+ import (
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/config"
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/fsm"
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/service/s6"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+ )
+ 
+ // S6ObservedStateSnapshot is a deep-copyable snapshot of S6ObservedState
+diff --color -Naur --exclude=vendor /tmp/benthos-umh-temp/umh-core/pkg/fsm/s6/reconcile.go umh-core/pkg/fsm/s6/reconcile.go
+--- /tmp/benthos-umh-temp/umh-core/pkg/fsm/s6/reconcile.go	2025-03-25 09:22:23
++++ umh-core/pkg/fsm/s6/reconcile.go	2025-03-24 17:01:45
+@@ -6,11 +6,11 @@
+ 	"fmt"
+ 	"time"
+ 
+-	internal_fsm "github.com/united-manufacturing-hub/benthos-umh/umh-core/internal/fsm"
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/backoff"
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/fsm"
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/metrics"
+-	s6service "github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/service/s6"
++	internal_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/backoff"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
++	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+ )
+ 
+ // Reconcile examines the S6Instance and, in three steps:
+diff --color -Naur --exclude=vendor /tmp/benthos-umh-temp/umh-core/pkg/fsm/snapshot.go umh-core/pkg/fsm/snapshot.go
+--- /tmp/benthos-umh-temp/umh-core/pkg/fsm/snapshot.go	2025-03-25 09:22:23
++++ umh-core/pkg/fsm/snapshot.go	2025-03-24 17:01:45
+@@ -5,7 +5,7 @@
+ 	"sync"
+ 	"time"
+ 
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/config"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+ )
+ 
+ // ObservedStateSnapshot represents a deep copy of an observed state
+diff --color -Naur --exclude=vendor /tmp/benthos-umh-temp/umh-core/pkg/portmanager/portmanager.go umh-core/pkg/portmanager/portmanager.go
+--- /tmp/benthos-umh-temp/umh-core/pkg/portmanager/portmanager.go	2025-03-25 09:22:23
++++ umh-core/pkg/portmanager/portmanager.go	2025-03-24 17:26:05
+@@ -260,7 +260,7 @@
+ 		for _, err := range errs {
+ 			errMsg += "\n  - " + err.Error()
+ 		}
+-		return fmt.Errorf(errMsg)
++		return fmt.Errorf("%s", errMsg)
+ 	}
+ 
+ 	return nil
+diff --color -Naur --exclude=vendor /tmp/benthos-umh-temp/umh-core/pkg/service/benthos/benthos.go umh-core/pkg/service/benthos/benthos.go
+--- /tmp/benthos-umh-temp/umh-core/pkg/service/benthos/benthos.go	2025-03-25 09:22:23
++++ umh-core/pkg/service/benthos/benthos.go	2025-03-24 17:49:29
+@@ -16,16 +16,16 @@
+ 
+ 	dto "github.com/prometheus/client_model/go"
+ 	"github.com/prometheus/common/expfmt"
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/config"
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/constants"
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/logger"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
+ 	"go.uber.org/zap"
+ 
+-	s6fsm "github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/fsm/s6"
++	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
+ 	"gopkg.in/yaml.v3"
+ 
+-	benthosyaml "github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/service/benthos/yaml"
+-	s6service "github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/service/s6"
++	benthosyaml "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos/yaml"
++	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+ )
+ 
+ // IBenthosService is the interface for managing Benthos services
+@@ -720,7 +720,7 @@
+ 	var healthCheck HealthCheck
+ 
+ 	// Check liveness
+-	if resp, err := doRequest("/ping"); err == nil {
++	if resp, err := doRequest("/ping"); err == nil && resp != nil {
+ 		healthCheck.IsLive = resp.StatusCode == http.StatusOK
+ 		resp.Body.Close()
+ 	} else {
+@@ -728,7 +728,7 @@
+ 	}
+ 
+ 	// Check readiness
+-	if resp, err := doRequest("/ready"); err == nil {
++	if resp, err := doRequest("/ready"); err == nil && resp != nil {
+ 		defer resp.Body.Close()
+ 
+ 		// Even if status is 503, we still want to read the body to get the detailed status
+@@ -759,7 +759,7 @@
+ 	}
+ 
+ 	// Get version
+-	if resp, err := doRequest("/version"); err == nil {
++	if resp, err := doRequest("/version"); err == nil && resp != nil {
+ 		defer resp.Body.Close()
+ 
+ 		body, err := io.ReadAll(resp.Body)
+@@ -779,7 +779,7 @@
+ 	var metrics Metrics
+ 
+ 	// Get metrics
+-	if resp, err := doRequest("/metrics"); err == nil {
++	if resp, err := doRequest("/metrics"); err == nil && resp != nil {
+ 		defer resp.Body.Close()
+ 
+ 		body, err := io.ReadAll(resp.Body)
+diff --color -Naur --exclude=vendor /tmp/benthos-umh-temp/umh-core/pkg/service/benthos/benthos_test.go umh-core/pkg/service/benthos/benthos_test.go
+--- /tmp/benthos-umh-temp/umh-core/pkg/service/benthos/benthos_test.go	2025-03-25 09:22:23
++++ umh-core/pkg/service/benthos/benthos_test.go	2025-03-24 17:01:45
+@@ -4,8 +4,8 @@
+ 	"context"
+ 	"time"
+ 
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/config"
+-	s6service "github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/service/s6"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
++	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+ 
+ 	. "github.com/onsi/ginkgo/v2"
+ 	. "github.com/onsi/gomega"
+diff --color -Naur --exclude=vendor /tmp/benthos-umh-temp/umh-core/pkg/service/benthos/metrics_state_test.go umh-core/pkg/service/benthos/metrics_state_test.go
+--- /tmp/benthos-umh-temp/umh-core/pkg/service/benthos/metrics_state_test.go	2025-03-25 09:22:23
++++ umh-core/pkg/service/benthos/metrics_state_test.go	2025-03-24 17:01:45
+@@ -4,7 +4,7 @@
+ 	. "github.com/onsi/ginkgo/v2"
+ 	. "github.com/onsi/gomega"
+ 
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/service/benthos"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
+ )
+ 
+ var _ = Describe("MetricsState", Label("metrics_state"), func() {
+diff --color -Naur --exclude=vendor /tmp/benthos-umh-temp/umh-core/pkg/service/benthos/mock.go umh-core/pkg/service/benthos/mock.go
+--- /tmp/benthos-umh-temp/umh-core/pkg/service/benthos/mock.go	2025-03-25 09:22:23
++++ umh-core/pkg/service/benthos/mock.go	2025-03-24 17:01:45
+@@ -5,9 +5,9 @@
+ 	"fmt"
+ 	"time"
+ 
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/config"
+-	s6_fsm "github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/fsm/s6"
+-	s6service "github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/service/s6"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
++	s6_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
++	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+ )
+ 
+ // MockBenthosService is a mock implementation of the IBenthosService interface for testing
+diff --color -Naur --exclude=vendor /tmp/benthos-umh-temp/umh-core/pkg/service/benthos/yaml/comparator.go umh-core/pkg/service/benthos/yaml/comparator.go
+--- /tmp/benthos-umh-temp/umh-core/pkg/service/benthos/yaml/comparator.go	2025-03-25 09:22:23
++++ umh-core/pkg/service/benthos/yaml/comparator.go	2025-03-24 17:01:45
+@@ -5,7 +5,7 @@
+ 	"reflect"
+ 	"strings"
+ 
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/config"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+ )
+ 
+ // Comparator handles the comparison of Benthos configurations
+diff --color -Naur --exclude=vendor /tmp/benthos-umh-temp/umh-core/pkg/service/benthos/yaml/comparator_test.go umh-core/pkg/service/benthos/yaml/comparator_test.go
+--- /tmp/benthos-umh-temp/umh-core/pkg/service/benthos/yaml/comparator_test.go	2025-03-25 09:22:23
++++ umh-core/pkg/service/benthos/yaml/comparator_test.go	2025-03-24 17:01:45
+@@ -3,7 +3,7 @@
+ import (
+ 	. "github.com/onsi/ginkgo/v2"
+ 	. "github.com/onsi/gomega"
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/config"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+ )
+ 
+ var _ = Describe("Benthos YAML Comparator", func() {
+diff --color -Naur --exclude=vendor /tmp/benthos-umh-temp/umh-core/pkg/service/benthos/yaml/generator.go umh-core/pkg/service/benthos/yaml/generator.go
+--- /tmp/benthos-umh-temp/umh-core/pkg/service/benthos/yaml/generator.go	2025-03-25 09:22:23
++++ umh-core/pkg/service/benthos/yaml/generator.go	2025-03-24 17:01:45
+@@ -5,7 +5,7 @@
+ 	"strings"
+ 	"text/template"
+ 
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/config"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+ 	"gopkg.in/yaml.v3"
+ )
+ 
+diff --color -Naur --exclude=vendor /tmp/benthos-umh-temp/umh-core/pkg/service/benthos/yaml/generator_test.go umh-core/pkg/service/benthos/yaml/generator_test.go
+--- /tmp/benthos-umh-temp/umh-core/pkg/service/benthos/yaml/generator_test.go	2025-03-25 09:22:23
++++ umh-core/pkg/service/benthos/yaml/generator_test.go	2025-03-24 17:01:45
+@@ -3,7 +3,7 @@
+ import (
+ 	. "github.com/onsi/ginkgo/v2"
+ 	. "github.com/onsi/gomega"
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/config"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+ )
+ 
+ var _ = Describe("Benthos YAML Generator", func() {
+diff --color -Naur --exclude=vendor /tmp/benthos-umh-temp/umh-core/pkg/service/benthos/yaml/normalizer.go umh-core/pkg/service/benthos/yaml/normalizer.go
+--- /tmp/benthos-umh-temp/umh-core/pkg/service/benthos/yaml/normalizer.go	2025-03-25 09:22:23
++++ umh-core/pkg/service/benthos/yaml/normalizer.go	2025-03-24 17:01:45
+@@ -1,7 +1,7 @@
+ package yaml
+ 
+ import (
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/config"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+ )
+ 
+ // Normalizer handles the normalization of Benthos configurations
+diff --color -Naur --exclude=vendor /tmp/benthos-umh-temp/umh-core/pkg/service/benthos/yaml/normalizer_test.go umh-core/pkg/service/benthos/yaml/normalizer_test.go
+--- /tmp/benthos-umh-temp/umh-core/pkg/service/benthos/yaml/normalizer_test.go	2025-03-25 09:22:23
++++ umh-core/pkg/service/benthos/yaml/normalizer_test.go	2025-03-24 17:01:45
+@@ -3,7 +3,7 @@
+ import (
+ 	. "github.com/onsi/ginkgo/v2"
+ 	. "github.com/onsi/gomega"
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/config"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+ )
+ 
+ var _ = Describe("Benthos YAML Normalizer", func() {
+diff --color -Naur --exclude=vendor /tmp/benthos-umh-temp/umh-core/pkg/service/benthos/yaml/package.go umh-core/pkg/service/benthos/yaml/package.go
+--- /tmp/benthos-umh-temp/umh-core/pkg/service/benthos/yaml/package.go	2025-03-25 09:22:23
++++ umh-core/pkg/service/benthos/yaml/package.go	2025-03-24 17:01:45
+@@ -1,7 +1,7 @@
+ package yaml
+ 
+ import (
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/config"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+ )
+ 
+ var (
+diff --color -Naur --exclude=vendor /tmp/benthos-umh-temp/umh-core/pkg/service/filesystem/filesystem.go umh-core/pkg/service/filesystem/filesystem.go
+--- /tmp/benthos-umh-temp/umh-core/pkg/service/filesystem/filesystem.go	2025-03-25 09:22:23
++++ umh-core/pkg/service/filesystem/filesystem.go	2025-03-24 17:47:31
+@@ -7,7 +7,7 @@
+ 	"os/exec"
+ 	"time"
+ 
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/metrics"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
+ )
+ 
+ // Service provides an interface for filesystem operations
+@@ -121,7 +121,11 @@
+ 		}
+ 		return res.data, nil
+ 	case <-ctx.Done():
+-		return nil, ctx.Err()
++		err := ctx.Err()
++		if err == nil {
++			err = fmt.Errorf("context cancelled")
++		}
++		return nil, err
+ 	}
+ }
+ 
+diff --color -Naur --exclude=vendor /tmp/benthos-umh-temp/umh-core/pkg/service/s6/mock.go umh-core/pkg/service/s6/mock.go
+--- /tmp/benthos-umh-temp/umh-core/pkg/service/s6/mock.go	2025-03-25 09:22:23
++++ umh-core/pkg/service/s6/mock.go	2025-03-24 17:01:45
+@@ -3,7 +3,7 @@
+ import (
+ 	"context"
+ 
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/config"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+ )
+ 
+ // MockService is a mock implementation of the S6 Service interface for testing
+diff --color -Naur --exclude=vendor /tmp/benthos-umh-temp/umh-core/pkg/service/s6/run_script_test.go umh-core/pkg/service/s6/run_script_test.go
+--- /tmp/benthos-umh-temp/umh-core/pkg/service/s6/run_script_test.go	2025-03-25 09:22:23
++++ umh-core/pkg/service/s6/run_script_test.go	2025-03-24 17:01:45
+@@ -11,9 +11,9 @@
+ 	. "github.com/onsi/ginkgo/v2"
+ 	. "github.com/onsi/gomega"
+ 
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/config"
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/constants"
+-	filesystem "github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/service/filesystem"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
++	filesystem "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+ )
+ 
+ var _ = Describe("S6 Run Script", func() {
+diff --color -Naur --exclude=vendor /tmp/benthos-umh-temp/umh-core/pkg/service/s6/s6.go umh-core/pkg/service/s6/s6.go
+--- /tmp/benthos-umh-temp/umh-core/pkg/service/s6/s6.go	2025-03-25 09:22:23
++++ umh-core/pkg/service/s6/s6.go	2025-03-24 17:01:45
+@@ -16,13 +16,13 @@
+ 	"time"
+ 
+ 	"github.com/cactus/tai64"
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/config"
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/constants"
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/logger"
+-	filesystem "github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/service/filesystem"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
++	filesystem "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+ 	"go.uber.org/zap"
+ 
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/metrics"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
+ )
+ 
+ // ServiceStatus represents the status of an S6 service
+diff --color -Naur --exclude=vendor /tmp/benthos-umh-temp/umh-core/pkg/service/s6/s6_test.go umh-core/pkg/service/s6/s6_test.go
+--- /tmp/benthos-umh-temp/umh-core/pkg/service/s6/s6_test.go	2025-03-25 09:22:23
++++ umh-core/pkg/service/s6/s6_test.go	2025-03-24 17:01:45
+@@ -7,9 +7,9 @@
+ 
+ 	. "github.com/onsi/ginkgo/v2"
+ 	. "github.com/onsi/gomega"
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/config"
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/constants"
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/service/filesystem"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+ )
+ 
+ // Mock implementation of os.DirEntry for testing
+diff --color -Naur --exclude=vendor /tmp/benthos-umh-temp/umh-core/pkg/starvationchecker/starvation.go umh-core/pkg/starvationchecker/starvation.go
+--- /tmp/benthos-umh-temp/umh-core/pkg/starvationchecker/starvation.go	2025-03-25 09:22:23
++++ umh-core/pkg/starvationchecker/starvation.go	2025-03-24 17:01:45
+@@ -5,9 +5,9 @@
+ 	"sync"
+ 	"time"
+ 
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/config"
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/logger"
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/metrics"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
+ 	"go.uber.org/zap"
+ )
+ 
+diff --color -Naur --exclude=vendor /tmp/benthos-umh-temp/umh-core/pkg/starvationchecker/starvation_test.go umh-core/pkg/starvationchecker/starvation_test.go
+--- /tmp/benthos-umh-temp/umh-core/pkg/starvationchecker/starvation_test.go	2025-03-25 09:22:23
++++ umh-core/pkg/starvationchecker/starvation_test.go	2025-03-24 17:01:45
+@@ -6,7 +6,7 @@
+ 
+ 	. "github.com/onsi/ginkgo/v2"
+ 	. "github.com/onsi/gomega"
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/config"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+ )
+ 
+ var _ = Describe("StarvationChecker", func() {
+diff --color -Naur --exclude=vendor /tmp/benthos-umh-temp/umh-core/test/fsm/s6/instance_test.go umh-core/test/fsm/s6/instance_test.go
+--- /tmp/benthos-umh-temp/umh-core/test/fsm/s6/instance_test.go	2025-03-25 09:22:23
++++ umh-core/test/fsm/s6/instance_test.go	2025-03-24 17:01:45
+@@ -8,11 +8,11 @@
+ 	. "github.com/onsi/ginkgo/v2"
+ 	. "github.com/onsi/gomega"
+ 
+-	internal_fsm "github.com/united-manufacturing-hub/benthos-umh/umh-core/internal/fsm"
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/internal/fsmtest"
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/constants"
+-	s6fsm "github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/fsm/s6"
+-	s6service "github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/service/s6"
++	internal_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsmtest"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
++	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
++	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+ )
+ 
+ var _ = Describe("S6Instance FSM", func() {
+diff --color -Naur --exclude=vendor /tmp/benthos-umh-temp/umh-core/test/fsm/s6/manager_test.go umh-core/test/fsm/s6/manager_test.go
+--- /tmp/benthos-umh-temp/umh-core/test/fsm/s6/manager_test.go	2025-03-25 09:22:23
++++ umh-core/test/fsm/s6/manager_test.go	2025-03-24 17:26:20
+@@ -7,11 +7,11 @@
+ 	. "github.com/onsi/ginkgo/v2"
+ 	. "github.com/onsi/gomega"
+ 
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/internal/fsmtest"
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/backoff"
+-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/config"
+-	s6fsm "github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/fsm/s6"
+-	s6service "github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/service/s6"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsmtest"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/backoff"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
++	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
++	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+ )
+ 
+ var _ = Describe("S6Manager", func() {
+@@ -578,8 +578,8 @@
+ 			Expect(ok).To(BeTrue(), "Service is not a mock service")
+ 
+ 			// Configure the mock service to fail with a permanent error
+-			permanentErrorMsg := fmt.Sprintf("%s: critical configuration error", backoff.PermanentFailureError)
+-			mockService.GetConfigError = fmt.Errorf(permanentErrorMsg)
++			permanentErrorMsg := backoff.PermanentFailureError + ": critical configuration error"
++			mockService.GetConfigError = fmt.Errorf("%s", permanentErrorMsg)
+ 
+ 			// Run several reconciliations to allow the error to be detected and handled
+ 			nextTick, err = fsmtest.RunMultipleReconciliations(ctx, manager, config.FullConfig{Services: serviceConfig}, 5, tick)
+@@ -733,8 +733,8 @@
+ 			Expect(ok).To(BeTrue(), "Service is not a mock service")
+ 
+ 			// Configure permanent error for the failing service
+-			permanentErrorMsg := fmt.Sprintf("%s: critical configuration error", backoff.PermanentFailureError)
+-			mockService.GetConfigError = fmt.Errorf(permanentErrorMsg)
++			permanentErrorMsg := backoff.PermanentFailureError + ": critical configuration error"
++			mockService.GetConfigError = fmt.Errorf("%s", permanentErrorMsg)
+ 
+ 			// Run reconciliation multiple times to allow error handling
+ 			nextTick, err = fsmtest.RunMultipleReconciliations(ctx, manager, config.FullConfig{Services: multiServiceConfig},

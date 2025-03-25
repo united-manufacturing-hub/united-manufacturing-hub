@@ -1,0 +1,32 @@
+# EXAMPLE USAGE:
+#
+#   Refer for explanation to following link:
+#   https://lefthook.dev/configuration/
+#
+
+pre-push:
+  parallel: true
+  jobs:
+    # Nilaway is to heavy for pre-commit, so we run it in pre-push
+    - name: nilaway
+      glob: "**/*.go"
+      root: "umh-core"
+      run: |
+        go install go.uber.org/nilaway/cmd/nilaway@latest
+        nilaway -include-pkgs="github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core" ./...
+
+pre-commit:
+  parallel: true
+  jobs:
+    - name: govet-backend
+      glob: "**/*.go"
+      root: "umh-core"
+      run: |
+        go vet ./...
+
+    - name: gofmt
+      glob: "**/*.go"
+      root: "umh-core"
+      run: |
+        gofmt -w {staged_files}
+        git update-index --again

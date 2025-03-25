@@ -1,0 +1,49 @@
+name: Go Code Analysis
+
+on:
+  pull_request:
+    branches:
+      - main
+      - staging
+
+jobs:
+  vet:
+    name: Go Vet
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./umh-core
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.24.1"
+          cache: true
+
+      - name: Run go vet
+        run: go vet ./...
+
+  nilaway:
+    name: Nilaway Analysis
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./umh-core
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.24.1"
+          cache: true
+
+      - name: Install nilaway
+        run: go install go.uber.org/nilaway/cmd/nilaway@latest
+
+      - name: Run nilaway
+        run: nilaway -include-pkgs="github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core" ./...
