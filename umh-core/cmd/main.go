@@ -23,12 +23,18 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/control"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	"go.uber.org/zap"
 )
+
+var appVersion string // set by the build system
 
 func main() {
 	// Initialize the global logger first thing
 	logger.Initialize()
+
+	// Initialize Sentry
+	sentry.InitSentry(appVersion)
 
 	// Get a logger for the main component
 	log := logger.For(logger.ComponentCore)
