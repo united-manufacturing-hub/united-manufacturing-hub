@@ -198,7 +198,7 @@ func (c *ControlLoop) Execute(ctx context.Context) error {
 					return nil
 				} else {
 					// Any other unhandled error will result in the control loop stopping
-					c.logger.Errorf("Control loop error: %v", err)
+					sentry.ReportIssuef(sentry.IssueTypeError, c.logger, "Control loop error: %v", err)
 					return err
 				}
 			}
@@ -237,7 +237,7 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 			return nil
 		} else if backoff.IsPermanentFailureError(err) { // Handle permanent failure errors --> we want to stop the control loop
 			originalErr := backoff.ExtractOriginalError(err)
-			c.logger.Errorf("Config manager has permanently failed after max retries: %v (original error: %v)",
+			sentry.ReportIssuef(sentry.IssueTypeError, c.logger, "Config manager has permanently failed after max retries: %v (original error: %v)",
 				err, originalErr)
 			metrics.IncErrorCount(metrics.ComponentControlLoop, "config_permanent_failure")
 
@@ -245,7 +245,7 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 			return fmt.Errorf("config permanently failed, system needs intervention: %w", err)
 		} else {
 			// Handle other errors --> we want to continue reconciling
-			c.logger.Errorf("Config manager error: %v", err)
+			sentry.ReportIssuef(sentry.IssueTypeError, c.logger, "Config manager error: %v", err)
 			return nil
 		}
 	}
@@ -295,7 +295,7 @@ func (c *ControlLoop) updateSystemSnapshot(ctx context.Context, cfg config.FullC
 
 	snapshot, err := fsm.GetManagerSnapshots(c.managers, c.currentTick, cfg)
 	if err != nil {
-		c.logger.Errorf("Failed to create system snapshot: %v", err)
+		sentry.ReportIssuef(sentry.IssueTypeError, c.logger, "Failed to create system snapshot: %v", err)
 		metrics.IncErrorCount(metrics.ComponentControlLoop, "snapshot_creation")
 		return
 	}

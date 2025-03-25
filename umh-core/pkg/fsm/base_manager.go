@@ -24,6 +24,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	"go.uber.org/zap"
 )
 
@@ -442,7 +443,7 @@ func (m *BaseFSMManager[C]) Reconcile(
 
 			// Temporary logging
 			if instanceName == "golden-service" {
-				m.logger.Errorf("m.instances: %v, desiredState: %v", m.instances, desiredState)
+				sentry.ReportIssuef(sentry.IssueTypeError, m.logger, "m.instances: %v, desiredState: %v", m.instances, desiredState)
 			}
 
 			// Otherwise, we need to remove the instance
@@ -475,8 +476,7 @@ func (m *BaseFSMManager[C]) Reconcile(
 			// If the error is a permanent failure, remove the instance from the manager
 			// so that it can be recreated in further ticks
 			if backoff.IsPermanentFailureError(err) {
-				m.logger.Errorf("Permanent failure reconciling instance %s: %w. Removing instance from manager.", name, err)
-
+				sentry.ReportIssuef(sentry.IssueTypeError, m.logger, "Permanent failure reconciling instance %s: %w. Removing instance from manager.", name, err)
 				delete(m.instances, name)
 				return nil, true
 			}
