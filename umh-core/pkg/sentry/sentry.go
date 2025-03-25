@@ -11,6 +11,9 @@ import (
 
 // InitSentry initializes sentry with the given app name and version
 func InitSentry(appVersion string) {
+	if appVersion == "" {
+		appVersion = "0.0.0"
+	}
 
 	environment := "development"
 	sampleRate := 0.3

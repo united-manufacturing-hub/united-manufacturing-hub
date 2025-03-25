@@ -35,6 +35,7 @@ func main() {
 
 	// Initialize Sentry
 	sentry.InitSentry(appVersion)
+	sentry.ReportIssuef(sentry.IssueTypeFatal, logger.For(logger.ComponentCore), "TEST")
 
 	// Get a logger for the main component
 	log := logger.For(logger.ComponentCore)
