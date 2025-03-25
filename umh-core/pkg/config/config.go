@@ -20,6 +20,7 @@ type FullConfig struct {
 	Agent    AgentConfig     `yaml:"agent"`    // Agent config, requires restart to take effect
 	Services []S6FSMConfig   `yaml:"services"` // Services to manage, can be updated while running
 	Benthos  []BenthosConfig `yaml:"benthos"`  // Benthos services to manage, can be updated while running
+	Nmap     []NmapConfig    `yaml:"nmap"`     // Nmap services to manage, can be updated while running
 }
 
 type AgentConfig struct {
@@ -83,14 +84,38 @@ func (c BenthosServiceConfig) Equal(other BenthosServiceConfig) bool {
 	return reflect.DeepEqual(c, other)
 }
 
+// NmapConfig contains configuration for creating a Nmap service
+type NmapConfig struct {
+	// For the FSM
+	FSMInstanceConfig `yaml:",inline"`
+
+	// For the Nmap service
+	NmapServiceConfig NmapServiceConfig `yaml:"nmapServiceConfig"`
+}
+
+// NmapServiceConfig represents the configuration for a Nmap service
+type NmapServiceConfig struct {
+	// Target to scan (hostname or IP)
+	Target string `yaml:"target"`
+	// Port to scan (single port number)
+	Port int `yaml:"port"`
+}
+
+// Equal checks if two NmapServiceConfigs are equal
+func (c NmapServiceConfig) Equal(other NmapServiceConfig) bool {
+	return reflect.DeepEqual(c, other)
+}
+
 // Clone creates a deep copy of FullConfig
 func (c FullConfig) Clone() FullConfig {
 	clone := FullConfig{
 		Agent:    c.Agent,
 		Services: make([]S6FSMConfig, len(c.Services)),
 		Benthos:  make([]BenthosConfig, len(c.Benthos)),
+		Nmap:     make([]NmapConfig, len(c.Nmap)),
 	}
 	copy(clone.Services, c.Services)
 	copy(clone.Benthos, c.Benthos)
+	copy(clone.Nmap, c.Nmap)
 	return clone
 }
