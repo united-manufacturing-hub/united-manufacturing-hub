@@ -758,7 +758,10 @@ func (s *DefaultService) GetConfig(ctx context.Context, servicePath string) (con
 	if len(cmdMatch) >= 2 && cmdMatch[1] != "" {
 		// If we captured the command on the same line as fdmove
 		cmdLine := strings.TrimSpace(cmdMatch[1])
-		observedS6ServiceConfig.Command = parseCommandLine(cmdLine)
+		observedS6ServiceConfig.Command, err = parseCommandLine(cmdLine)
+		if err != nil {
+			return config.S6ServiceConfig{}, fmt.Errorf("failed to parse command: %w", err)
+		}
 	} else {
 		// If the command is on the line after fdmove, or regex didn't match properly
 		lines := strings.Split(scriptContent, "\n")
@@ -793,7 +796,10 @@ func (s *DefaultService) GetConfig(ctx context.Context, servicePath string) (con
 		}
 
 		if commandLine != "" {
-			observedS6ServiceConfig.Command = parseCommandLine(commandLine)
+			observedS6ServiceConfig.Command, err = parseCommandLine(commandLine)
+			if err != nil {
+				return config.S6ServiceConfig{}, fmt.Errorf("failed to parse command: %w", err)
+			}
 		} else {
 			// Absolute fallback - try to look for the command we know should be there
 			s.logger.Warnf("Could not find command in run script for %s, searching for known paths", servicePath)
@@ -810,7 +816,10 @@ func (s *DefaultService) GetConfig(ctx context.Context, servicePath string) (con
 				if argIndex < len(scriptContent) {
 					argPart := strings.TrimSpace(scriptContent[argIndex:])
 					if argPart != "" {
-						args = parseCommandLine(argPart)
+						args, err = parseCommandLine(argPart)
+						if err != nil {
+							return config.S6ServiceConfig{}, fmt.Errorf("failed to parse command: %w", err)
+						}
 					}
 				}
 
@@ -864,14 +873,21 @@ func (s *DefaultService) GetConfig(ctx context.Context, servicePath string) (con
 }
 
 // parseCommandLine splits a command line into command and arguments, respecting quotes
-func parseCommandLine(cmdLine string) []string {
+func parseCommandLine(cmdLine string) ([]string, error) {
 	var cmdParts []string
 	var currentPart strings.Builder
 	inQuote := false
 	quoteChar := byte(0)
+	escaped := false
 
 	for i := 0; i < len(cmdLine); i++ {
-		if cmdLine[i] == '"' || cmdLine[i] == '\'' {
+		// Handle escape character
+		if cmdLine[i] == '\\' && !escaped {
+			escaped = true
+			continue
+		}
+
+		if (cmdLine[i] == '"' || cmdLine[i] == '\'') && !escaped {
 			if inQuote && cmdLine[i] == quoteChar {
 				inQuote = false
 				quoteChar = 0
@@ -882,24 +898,32 @@ func parseCommandLine(cmdLine string) []string {
 				// This is a different quote character inside a quote
 				currentPart.WriteByte(cmdLine[i])
 			}
-			continue
-		}
-
-		if cmdLine[i] == ' ' && !inQuote {
-			if currentPart.Len() > 0 {
-				cmdParts = append(cmdParts, currentPart.String())
-				currentPart.Reset()
-			}
-		} else {
+		} else if escaped {
+			// Handle the escaped character
 			currentPart.WriteByte(cmdLine[i])
+			escaped = false
+		} else {
+			if cmdLine[i] == ' ' && !inQuote {
+				if currentPart.Len() > 0 {
+					cmdParts = append(cmdParts, currentPart.String())
+					currentPart.Reset()
+				}
+			} else {
+				currentPart.WriteByte(cmdLine[i])
+			}
 		}
+	}
+
+	// Check for unclosed quotes
+	if inQuote {
+		return nil, fmt.Errorf("unclosed quote")
 	}
 
 	if currentPart.Len() > 0 {
 		cmdParts = append(cmdParts, currentPart.String())
 	}
 
-	return cmdParts
+	return cmdParts, nil
 }
 
 // These constants define file locations and offsets for direct S6 supervision file access
