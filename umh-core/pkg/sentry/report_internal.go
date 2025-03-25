@@ -40,8 +40,8 @@ func reportFatal(err string) {
 	panic(err)
 }
 
-var warningLastSent time.Time
-var warningLastSentMutex sync.Mutex
+var warningLastSent time.Time = time.Now().Add(-time.Hour * 24)
+var warningLastSentMutex sync.Mutex = sync.Mutex{}
 
 func reportWarning(err string) {
 	warningLastSentMutex.Lock()
@@ -56,8 +56,8 @@ func reportWarning(err string) {
 	warningLastSent = time.Now()
 }
 
-var errorLastSent time.Time
-var errorLastSentMutex sync.Mutex
+var errorLastSent time.Time = time.Now().Add(-time.Hour * 24)
+var errorLastSentMutex sync.Mutex = sync.Mutex{}
 
 func reportError(err string) {
 	errorLastSentMutex.Lock()
