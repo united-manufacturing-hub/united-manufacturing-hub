@@ -1,0 +1,11 @@
+---
+description: Golang
+globs: *.go
+alwaysApply: false
+---
+
+# Golang Rules
+
+- We use Ginkgo v2 & Gomega for testing
+- Do not remove focused tests
+- Do not remove existing documentation, unless they are being replaced with a better or more up to date one.
