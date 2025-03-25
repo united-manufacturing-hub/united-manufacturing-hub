@@ -190,9 +190,6 @@ func SetupBenthosInstance(serviceName string, desiredState string) (*benthosfsm.
 	// Create test config
 	cfg := CreateBenthosTestConfig(serviceName, desiredState)
 
-	// Create new instance directly using the correct constructor signature
-	instance := benthosfsm.NewBenthosInstance(constants.S6BaseDir, cfg)
-
 	// Create mock service
 	mockService := benthossvc.NewMockBenthosService()
 
@@ -206,12 +203,22 @@ func SetupBenthosInstance(serviceName string, desiredState string) (*benthosfsm.
 	// Add default service info
 	mockService.ServiceStates[serviceName] = &benthossvc.ServiceInfo{}
 
-	// Replace the real service
-	// Note: This requires creating a new instance in test code since we can't
-	// access private fields directly. In the tests, we'll create the instance with
-	// a mock service from the beginning.
+	// Create new instance directly using the specialized constructor
+	instance := setUpMockBenthosInstance(cfg, mockService)
 
 	return instance, mockService, cfg
+}
+
+// setUpMockBenthosInstance creates a BenthosInstance with a mock service
+// This is an internal helper function used by SetupBenthosInstance
+func setUpMockBenthosInstance(cfg config.BenthosConfig, mockService *benthossvc.MockBenthosService) *benthosfsm.BenthosInstance {
+	// First create the instance normally
+	instance := benthosfsm.NewBenthosInstance(constants.S6BaseDir, cfg)
+
+	// Set the mock service using the test utility method
+	instance.SetService(mockService)
+
+	return instance
 }
 
 // TestBenthosStateTransition tests a transition from one state to another without directly calling Reconcile.
@@ -382,4 +389,86 @@ func StabilizeBenthosInstance(
 	return tick, fmt.Errorf(
 		"failed to reach state %s after %d attempts; current state: %s",
 		targetState, maxAttempts, instance.GetCurrentFSMState())
+}
+
+// WaitForBenthosDesiredState waits for an instance's desired state to reach a target value.
+// This is useful for testing error handling scenarios where the instance changes its own desired state.
+//
+// Parameters:
+//   - ctx: Context for cancellation
+//   - instance: The BenthosInstance to monitor
+//   - startTick: The starting tick value for reconciliation
+//   - targetState: The desired state to wait for
+//   - maxAttempts: Maximum number of reconcile cycles to attempt
+//
+// Returns:
+//   - uint64: The final tick value after waiting
+//   - error: Any error that occurred during waiting
+func WaitForBenthosDesiredState(
+	ctx context.Context,
+	instance *benthosfsm.BenthosInstance,
+	startTick uint64,
+	targetState string,
+	maxAttempts int,
+) (uint64, error) {
+	tick := startTick
+
+	for i := 0; i < maxAttempts; i++ {
+		// Check if we've reached the target desired state
+		if instance.GetDesiredFSMState() == targetState {
+			return tick, nil
+		}
+
+		// Run a reconcile cycle
+		err, _ := instance.Reconcile(ctx, tick)
+		if err != nil {
+			return tick, err
+		}
+
+		tick++
+	}
+
+	return tick, fmt.Errorf(
+		"failed to reach desired state %s after %d attempts; current desired state: %s",
+		targetState, maxAttempts, instance.GetDesiredFSMState())
+}
+
+// ReconcileBenthosUntilError performs reconciliation until an error occurs or maximum attempts are reached.
+// This is useful for testing error handling scenarios where we expect an error to occur during reconciliation.
+//
+// Parameters:
+//   - ctx: Context for cancellation
+//   - instance: The BenthosInstance to reconcile
+//   - mockService: The mock service that may produce an error
+//   - serviceName: The name of the service
+//   - startTick: The starting tick value for reconciliation
+//   - maxAttempts: Maximum number of reconcile cycles to attempt
+//
+// Returns:
+//   - uint64: The final tick value after reconciliation
+//   - error: The error encountered during reconciliation (nil if no error occurred after maxAttempts)
+//   - bool: Whether reconciliation was successful (false if an error was encountered)
+func ReconcileBenthosUntilError(
+	ctx context.Context,
+	instance *benthosfsm.BenthosInstance,
+	mockService *benthossvc.MockBenthosService,
+	serviceName string,
+	startTick uint64,
+	maxAttempts int,
+) (uint64, error, bool) {
+	tick := startTick
+
+	for i := 0; i < maxAttempts; i++ {
+		// Perform a reconcile cycle and capture the error and reconciled status
+		err, reconciled := instance.Reconcile(ctx, tick)
+		tick++
+
+		if err != nil {
+			// Error found, return it along with the current tick
+			return tick, err, reconciled
+		}
+	}
+
+	// No error found after maxAttempts
+	return tick, nil, true
 }
