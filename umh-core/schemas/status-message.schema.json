@@ -1,0 +1,619 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "title": "Status Message Schema",
+  "description": "Schema for the status message containing system state and DFC information",
+  "definitions": {
+    "Health": {
+      "type": "object",
+      "required": [
+        "state",
+        "message"
+      ],
+      "properties": {
+        "state": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        }
+      }
+    },
+    "EventValue": {
+      "oneOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "EventKafka": {
+      "type": "object",
+      "required": [
+        "messagesPerMinute",
+        "topic",
+        "key",
+        "lastPayload",
+        "kafkaInsertedTimestamp"
+      ],
+      "properties": {
+        "messagesPerMinute": {
+          "type": "number"
+        },
+        "topic": {
+          "type": "string"
+        },
+        "key": {
+          "type": "string"
+        },
+        "headers": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            }
+          ]
+        },
+        "lastPayload": {
+          "type": "string"
+        },
+        "kafkaInsertedTimestamp": {
+          "type": "number"
+        },
+        "origin": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          ]
+        },
+        "destination": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          ]
+        }
+      }
+    },
+    "Connection": {
+      "type": "object",
+      "required": [
+        "uuid",
+        "name",
+        "host",
+        "port",
+        "latency",
+        "health"
+      ],
+      "properties": {
+        "uuid": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "host": {
+          "type": "string"
+        },
+        "port": {
+          "type": "number"
+        },
+        "latency": {
+          "type": "number"
+        },
+        "health": {
+          "$ref": "#/definitions/Health"
+        }
+      }
+    },
+    "DFCMetrics": {
+      "type": "object",
+      "required": [
+        "throughput",
+        "failedMessages",
+        "unprocessable",
+        "unprocessable24h"
+      ],
+      "properties": {
+        "throughput": {
+          "type": "number"
+        },
+        "failedMessages": {
+          "type": "number"
+        },
+        "unprocessable": {
+          "type": "number"
+        },
+        "unprocessable24h": {
+          "type": "number"
+        }
+      }
+    }
+  },
+  "required": [
+    "general",
+    "core",
+    "plugins"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "general": {
+      "type": "object",
+      "required": [
+        "location"
+      ],
+      "properties": {
+        "location": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "core": {
+      "type": "object",
+      "required": [
+        "supportedFeatures",
+        "version",
+        "releaseChannel",
+        "latency",
+        "container",
+        "agent",
+        "dfcs",
+        "redpanda"
+      ],
+      "properties": {
+        "supportedFeatures": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "version": {
+          "type": "string"
+        },
+        "releaseChannel": {
+          "type": "string"
+        },
+        "latency": {
+          "type": "object",
+          "required": [
+            "avg",
+            "max",
+            "min",
+            "p95",
+            "p99"
+          ],
+          "properties": {
+            "avg": {
+              "type": "number"
+            },
+            "max": {
+              "type": "number"
+            },
+            "min": {
+              "type": "number"
+            },
+            "p95": {
+              "type": "number"
+            },
+            "p99": {
+              "type": "number"
+            }
+          }
+        },
+        "container": {
+          "type": "object",
+          "required": [
+            "cpu",
+            "memory",
+            "disk",
+            "architecture",
+            "hwid"
+          ],
+          "properties": {
+            "cpu": {
+              "type": "object",
+              "required": [
+                "usage",
+                "limit",
+                "health"
+              ],
+              "properties": {
+                "usage": {
+                  "type": "number"
+                },
+                "limit": {
+                  "type": "number"
+                },
+                "health": {
+                  "$ref": "#/definitions/Health"
+                }
+              }
+            },
+            "memory": {
+              "type": "object",
+              "required": [
+                "usage",
+                "limit",
+                "health"
+              ],
+              "properties": {
+                "usage": {
+                  "type": "number"
+                },
+                "limit": {
+                  "type": "number"
+                },
+                "health": {
+                  "$ref": "#/definitions/Health"
+                }
+              }
+            },
+            "disk": {
+              "type": "object",
+              "required": [
+                "usage",
+                "limit",
+                "health"
+              ],
+              "properties": {
+                "usage": {
+                  "type": "number"
+                },
+                "limit": {
+                  "type": "number"
+                },
+                "health": {
+                  "$ref": "#/definitions/Health"
+                }
+              }
+            },
+            "architecture": {
+              "type": "string"
+            },
+            "hwid": {
+              "type": "string"
+            }
+          }
+        },
+        "agent": {
+          "type": "object",
+          "required": [
+            "health"
+          ],
+          "properties": {
+            "health": {
+              "$ref": "#/definitions/Health"
+            }
+          }
+        },
+        "dfcs": {
+          "type": "array",
+          "items": {
+            "oneOf": [
+              {
+                "type": "object",
+                "required": [
+                  "uuid",
+                  "type",
+                  "deploySuccess",
+                  "connections"
+                ],
+                "properties": {
+                  "uuid": {
+                    "type": "string"
+                  },
+                  "currentVersionUUID": {
+                    "type": "null"
+                  },
+                  "name": {
+                    "type": "null"
+                  },
+                  "health": {
+                    "type": "null"
+                  },
+                  "metrics": {
+                    "type": "null"
+                  },
+                  "deploySuccess": {
+                    "type": "boolean"
+                  },
+                  "type": {
+                    "const": "uninitialized"
+                  },
+                  "connections": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/Connection"
+                    }
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "required": [
+                  "uuid",
+                  "currentVersionUUID",
+                  "name",
+                  "health",
+                  "metrics",
+                  "deploySuccess",
+                  "type",
+                  "connections"
+                ],
+                "properties": {
+                  "uuid": {
+                    "type": "string"
+                  },
+                  "currentVersionUUID": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "health": {
+                    "$ref": "#/definitions/Health"
+                  },
+                  "metrics": {
+                    "$ref": "#/definitions/DFCMetrics"
+                  },
+                  "deploySuccess": {
+                    "type": "boolean"
+                  },
+                  "type": {
+                    "const": "protocol-converter"
+                  },
+                  "connections": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/Connection"
+                    }
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "required": [
+                  "uuid",
+                  "currentVersionUUID",
+                  "name",
+                  "health",
+                  "metrics",
+                  "deploySuccess",
+                  "type"
+                ],
+                "properties": {
+                  "uuid": {
+                    "type": "string"
+                  },
+                  "currentVersionUUID": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "health": {
+                    "$ref": "#/definitions/Health"
+                  },
+                  "metrics": {
+                    "$ref": "#/definitions/DFCMetrics"
+                  },
+                  "deploySuccess": {
+                    "type": "boolean"
+                  },
+                  "type": {
+                    "const": "custom"
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "required": [
+                  "uuid",
+                  "currentVersionUUID",
+                  "name",
+                  "health",
+                  "metrics",
+                  "deploySuccess",
+                  "type",
+                  "connections",
+                  "isReadOnly",
+                  "inputType",
+                  "outputType",
+                  "dataContract"
+                ],
+                "properties": {
+                  "uuid": {
+                    "type": "string"
+                  },
+                  "currentVersionUUID": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "health": {
+                    "$ref": "#/definitions/Health"
+                  },
+                  "metrics": {
+                    "$ref": "#/definitions/DFCMetrics"
+                  },
+                  "deploySuccess": {
+                    "type": "boolean"
+                  },
+                  "type": {
+                    "const": "data-bridge"
+                  },
+                  "connections": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/Connection"
+                    }
+                  },
+                  "isReadOnly": {
+                    "type": "boolean"
+                  },
+                  "inputType": {
+                    "type": "string"
+                  },
+                  "outputType": {
+                    "type": "string"
+                  },
+                  "dataContract": {
+                    "type": "string"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "redpanda": {
+          "type": "object",
+          "required": [
+            "health",
+            "throughput"
+          ],
+          "properties": {
+            "health": {
+              "$ref": "#/definitions/Health"
+            },
+            "throughput": {
+              "type": "number"
+            }
+          }
+        },
+        "unsTable": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "enterprise": {
+                "type": "string"
+              },
+              "site": {
+                "type": "string"
+              },
+              "area": {
+                "type": "string"
+              },
+              "line": {
+                "type": "string"
+              },
+              "workCell": {
+                "type": "string"
+              },
+              "schema": {
+                "type": "string"
+              },
+              "eventGroup": {
+                "type": "string"
+              },
+              "eventTag": {
+                "type": "string"
+              },
+              "originId": {
+                "type": "string"
+              },
+              "isError": {
+                "type": "boolean"
+              },
+              "instances": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "enterprise"
+            ]
+          }
+        },
+        "eventsTable": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "required": [
+              "unsTreeId",
+              "error",
+              "timestamp_ms",
+              "value",
+              "rawKafkaMessage"
+            ],
+            "properties": {
+              "unsTreeId": {
+                "type": "string"
+              },
+              "error": {
+                "type": "string"
+              },
+              "timestamp_ms": {
+                "type": "number"
+              },
+              "bridges": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                ]
+              },
+              "origin": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "type": "string"
+                  }
+                ]
+              },
+              "value": {
+                "$ref": "#/definitions/EventValue"
+              },
+              "rawKafkaMessage": {
+                "$ref": "#/definitions/EventKafka"
+              }
+            }
+          }
+        }
+      }
+    },
+    "plugins": {
+      "type": "object"
+    }
+  }
+}
