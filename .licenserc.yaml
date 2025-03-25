@@ -47,5 +47,6 @@ header:
     - "**/go.sum"
     - "**/go.mod"
     - "**/.dockerignore"
+    - "umh-core/s6-base/**/*"
 
   comment: on-failure

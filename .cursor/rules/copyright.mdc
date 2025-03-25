@@ -1,7 +1,7 @@
 ---
 description: 
-globs: 
-alwaysApply: true
+globs: *.go,*.yaml
+alwaysApply: false
 ---
 When creating files, ensure that the following copyright header is present:
 // Copyright 2025 UMH Systems GmbH
@@ -17,35 +17,5 @@ When creating files, ensure that the following copyright header is present:
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
-You might need to adapt the comment for different programming languages or markup types.
-Excluded files:
-    - "*/*.md"
-    - "*/*.mdc"
-    - "LICENSE"
-    - "NOTICE"
-    - "CODEOWNERS"
-    - "AUTHORS"
-    - ".git"
-    - "deployment/united-manufacturing-hub/_mqttDevCertificates/"
-    - "deployment/united-manufacturing-hub/developmentCertificates/"
-    - "deployment/kafka-to-postgresql/postgresql.conf"
-    - "deployment/united-manufacturing-hub/templates/NOTES.txt"
-    - "deployment/united-manufacturing-hub/Chart.lock"
-    - "deployment/united-manufacturing-hub/.helmignore"
-    - "umh-core/vendor/*"
-    - ".releaserc"
-    - ".gitignore"
-    - ".licenserc.yaml"
-    - "CODE_OF_CONDUCT.md"
-    - "CONTRIBUTING.md"
-    - "CONTRIBUTOR_LICENSE_AGREEMENT_ENTITY.md"
-    - "CONTRIBUTOR_LICENSE_AGREEMENT_INDIVIDUAL.md"
-    - "Makefile"
-    - "README.md"
-    - "SECURITY.md"
-    - "*/*.go.sum"
-    - "*/*.go.mod"
-
 
 
