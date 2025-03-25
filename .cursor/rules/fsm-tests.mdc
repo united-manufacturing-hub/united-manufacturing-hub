@@ -32,7 +32,7 @@ To keep the tests readable and maintainable, we separate **manager tests** from 
 ### 2. Instance Tests Cover All FSM Transitions
 
 **Rule**: Instance tests thoroughly test the per-instance state machine:
-- They can manually force sub-states, set flags on the mock service (like “S6 is running,” “Benthos config loaded,” etc.), or call the instance’s `Reconcile(...)` directly.
+- They can manually force sub-states, set flags on the mock service (like “S6 is running,” “Benthos config loaded,” etc.), see Rule 8 for more details.
 - They verify transitions (e.g. `ToBeCreated` → `Creating` → `Stopped`, `Stopped` → `Starting` → `Degraded` → `Active`, etc.).
 - They do **not** manage multiple instances. Each test is about a single instance’s FSM logic.
 
