@@ -2,6 +2,8 @@ package sentry
 
 import (
 	"fmt"
+
+	"go.uber.org/zap"
 )
 
 type IssueType string
@@ -12,17 +14,17 @@ const (
 	IssueTypeFatal   IssueType = "fatal"
 )
 
-func ReportIssue(err error, issueType IssueType) {
+func ReportIssue(err error, issueType IssueType, log *zap.SugaredLogger) {
 	switch issueType {
 	case IssueTypeFatal:
-		reportFatal(err.Error())
+		reportFatal(err, log)
 	case IssueTypeError:
-		reportError(err.Error())
+		reportError(err, log)
 	case IssueTypeWarning:
-		reportWarning(err.Error())
+		reportWarning(err, log)
 	}
 }
 
-func ReportIssuef(err error, issueType IssueType, template string, args ...interface{}) {
-	ReportIssue(fmt.Errorf(template, args...), issueType)
+func ReportIssuef(err error, issueType IssueType, log *zap.SugaredLogger, template string, args ...interface{}) {
+	ReportIssue(fmt.Errorf(template, args...), issueType, log)
 }
