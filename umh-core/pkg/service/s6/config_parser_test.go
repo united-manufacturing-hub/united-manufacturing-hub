@@ -15,8 +15,6 @@
 package s6
 
 import (
-	"strings"
-
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
@@ -80,44 +78,7 @@ export SINGLE_QUOTED 'single quoted'`,
 	})
 
 	Describe("Command Line Parsing", func() {
-		// Mock parseCommandLine function with the same logic as in s6.go
-		parseCommandLine := func(cmdLine string) []string {
-			var cmdParts []string
-			var currentPart strings.Builder
-			inQuote := false
-			quoteChar := byte(0)
-
-			for i := 0; i < len(cmdLine); i++ {
-				if cmdLine[i] == '"' || cmdLine[i] == '\'' {
-					if inQuote && cmdLine[i] == quoteChar {
-						inQuote = false
-						quoteChar = 0
-					} else if !inQuote {
-						inQuote = true
-						quoteChar = cmdLine[i]
-					} else {
-						// This is a different quote character inside a quote
-						currentPart.WriteByte(cmdLine[i])
-					}
-					continue
-				}
-
-				if cmdLine[i] == ' ' && !inQuote {
-					if currentPart.Len() > 0 {
-						cmdParts = append(cmdParts, currentPart.String())
-						currentPart.Reset()
-					}
-				} else {
-					currentPart.WriteByte(cmdLine[i])
-				}
-			}
-
-			if currentPart.Len() > 0 {
-				cmdParts = append(cmdParts, currentPart.String())
-			}
-
-			return cmdParts
-		}
+		// parseCommandLine comes from s6.go
 
 		DescribeTable("splitting command line respecting quotes",
 			func(cmdLine string, expected []string) {

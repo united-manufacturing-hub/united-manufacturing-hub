@@ -868,10 +868,20 @@ func parseCommandLine(cmdLine string) []string {
 	var cmdParts []string
 	var currentPart strings.Builder
 	inQuote := false
+	quoteChar := byte(0)
 
 	for i := 0; i < len(cmdLine); i++ {
 		if cmdLine[i] == '"' || cmdLine[i] == '\'' {
-			inQuote = !inQuote
+			if inQuote && cmdLine[i] == quoteChar {
+				inQuote = false
+				quoteChar = 0
+			} else if !inQuote {
+				inQuote = true
+				quoteChar = cmdLine[i]
+			} else {
+				// This is a different quote character inside a quote
+				currentPart.WriteByte(cmdLine[i])
+			}
 			continue
 		}
 
