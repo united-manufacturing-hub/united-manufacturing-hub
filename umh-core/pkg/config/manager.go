@@ -26,6 +26,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/backoff"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	filesystem "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
@@ -169,7 +170,7 @@ func (m *FileConfigManagerWithBackoff) GetConfig(ctx context.Context, tick uint6
 
 		// Log additional information for permanent failures
 		if m.backoffManager.IsPermanentlyFailed() {
-			m.logger.Errorf("ConfigManager is permanently failed. Last error: %v", m.backoffManager.GetLastError())
+			sentry.ReportIssuef(sentry.IssueTypeError, m.logger, "ConfigManager is permanently failed. Last error: %v", m.backoffManager.GetLastError())
 		}
 
 		return FullConfig{}, backoffErr
