@@ -334,7 +334,7 @@ var _ = Describe("ControlLoop", func() {
 
 	Describe("Stop", func() {
 		It("should cancel the context", func() {
-			err := controlLoop.Stop(ctx)
+			err := controlLoop.Stop(ctx, cancel)
 			Expect(err).NotTo(HaveOccurred())
 		})
 	})

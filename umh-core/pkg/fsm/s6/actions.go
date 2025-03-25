@@ -191,7 +191,10 @@ func (s *S6Instance) updateObservedState(ctx context.Context) error {
 	}
 	s.ObservedState.ObservedS6ServiceConfig = config
 
-	// the easiest way to do this is causing this instance to be removed, which will trigger a re-create by the manager
+	// TODO: Implement hot reloading of configuration instead of recreating the service.
+	// The current approach of removing and recreating the service when configs differ
+	// causes service disruption. A future improvement would be to update the config in-place
+	// when possible to minimize downtime.
 	if !reflect.DeepEqual(s.ObservedState.ObservedS6ServiceConfig, s.config.S6ServiceConfig) {
 		s.baseFSMInstance.GetLogger().Debugf("Observed config is different from desired config, triggering a re-create")
 		s.logConfigDifferences(s.config.S6ServiceConfig, s.ObservedState.ObservedS6ServiceConfig)

@@ -256,4 +256,77 @@ var _ = Describe("Benthos YAML Comparator", func() {
 			Expect(diff1).To(Equal(diff2))
 		})
 	})
+
+	var _ = Describe("Benthos YAML Comparator", func() {
+		// Add tests for robustness with invalid inputs
+		Describe("Robustness", func() {
+			It("should handle nil maps gracefully", func() {
+				// Create configs with nil maps
+				config1 := config.BenthosServiceConfig{
+					Input:    nil,
+					Pipeline: nil,
+					Output:   nil,
+					Buffer:   nil,
+				}
+
+				config2 := config.BenthosServiceConfig{
+					Input:    map[string]interface{}{},
+					Pipeline: map[string]interface{}{},
+					Output:   map[string]interface{}{},
+					Buffer:   map[string]interface{}{},
+				}
+
+				comparator := NewComparator()
+
+				// These operations should not panic
+				equal := comparator.ConfigsEqual(config1, config2)
+				diff := comparator.ConfigDiff(config1, config2)
+
+				// The result is less important than not panicking
+				Expect(equal).To(BeTrue())
+				Expect(diff).Should(Equal("No significant differences"))
+			})
+
+			It("should handle empty processor lists gracefully", func() {
+				config1 := config.BenthosServiceConfig{
+					Pipeline: map[string]interface{}{
+						"processors": []interface{}{},
+					},
+				}
+
+				config2 := config.BenthosServiceConfig{
+					Pipeline: map[string]interface{}{
+						"processors": []interface{}{},
+					},
+				}
+
+				comparator := NewComparator()
+				equal := comparator.ConfigsEqual(config1, config2)
+				Expect(equal).To(BeTrue())
+			})
+
+			It("should handle processor lists with invalid types gracefully", func() {
+				config1 := config.BenthosServiceConfig{
+					Pipeline: map[string]interface{}{
+						"processors": "not-an-array", // Invalid type
+					},
+				}
+
+				config2 := config.BenthosServiceConfig{
+					Pipeline: map[string]interface{}{
+						"processors": []interface{}{},
+					},
+				}
+
+				comparator := NewComparator()
+
+				// These should not panic
+				equal := comparator.ConfigsEqual(config1, config2)
+				diff := comparator.ConfigDiff(config1, config2)
+
+				Expect(equal).To(BeTrue())
+				Expect(diff).Should(Equal("Pipeline config differences:\n"))
+			})
+		})
+	})
 })

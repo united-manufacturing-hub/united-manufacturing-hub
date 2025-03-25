@@ -187,7 +187,7 @@ func (m *BenthosManager) Reconcile(ctx context.Context, cfg config.FullConfig, t
 	countBefore := len(m.BaseFSMManager.GetInstances())
 
 	// Create a new config with allocated ports
-	cfgWithPorts := cfg.Clone() // Ensure you have a proper Clone method in config.FullConfig
+	cfgWithPorts := cfg.Clone()
 	for i, bc := range cfgWithPorts.Benthos {
 		if port, exists := m.portManager.GetPort(bc.Name); exists {
 			// Update the BenthosServiceConfig with the allocated port
