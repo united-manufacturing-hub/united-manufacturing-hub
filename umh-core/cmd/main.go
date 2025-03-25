@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/control"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
@@ -60,6 +61,11 @@ func main() {
 	// Start the control loop
 	controlLoop := control.NewControlLoop()
 	go SystemSnapshotLogger(ctx, controlLoop)
+
+	// Start the communicator
+	comm := communicator.NewCommunicator()
+	go comm.Execute(ctx)
+
 	controlLoop.Execute(ctx)
 
 	log.Info("umh-core test completed")
