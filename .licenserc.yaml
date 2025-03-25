@@ -32,5 +32,18 @@ header:
     - "deployment/united-manufacturing-hub/templates/NOTES.txt"
     - "deployment/united-manufacturing-hub/Chart.lock"
     - "deployment/united-manufacturing-hub/.helmignore"
+    - "umh-core/vendor/*"
+    - ".releaserc"
+    - ".gitignore"
+    - ".licenserc.yaml"
+    - "CODE_OF_CONDUCT.md"
+    - "CONTRIBUTING.md"
+    - "CONTRIBUTOR_LICENSE_AGREEMENT_ENTITY.md"
+    - "CONTRIBUTOR_LICENSE_AGREEMENT_INDIVIDUAL.md"
+    - "Makefile"
+    - "README.md"
+    - "SECURITY.md"
+    - "*/*.go.sum"
+    - "*/*.go.mod"
 
   comment: on-failure
