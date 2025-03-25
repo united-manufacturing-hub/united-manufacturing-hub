@@ -1,2 +1,0 @@
-foreground { mkdir -p /data/logs }
-foreground { mkdir -p /data/logs/umh-core }
