@@ -15,6 +15,7 @@
 package benthos
 
 import (
+	"github.com/tiendc/go-deepcopy"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
@@ -37,10 +38,9 @@ func (b *BenthosInstance) CreateObservedStateSnapshot() fsm.ObservedStateSnapsho
 	snapshot := &BenthosObservedStateSnapshot{}
 
 	// Deep copy config
-	snapshot.Config = b.config
+	deepcopy.Copy(&snapshot.Config, &b.config)
 
 	// Deep copy service info
-	snapshot.ServiceInfo = b.ObservedState.ServiceInfo
-
+	deepcopy.Copy(&snapshot.ServiceInfo, &b.ObservedState.ServiceInfo)
 	return snapshot
 }

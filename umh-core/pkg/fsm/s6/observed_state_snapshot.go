@@ -15,6 +15,7 @@
 package s6
 
 import (
+	"github.com/tiendc/go-deepcopy"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
@@ -41,13 +42,13 @@ func (s *S6Instance) CreateObservedStateSnapshot() fsm.ObservedStateSnapshot {
 	}
 
 	// Deep copy config
-	snapshot.Config = s.config
+	deepcopy.Copy(&snapshot.Config, &s.config)
 
 	// Deep copy service info
-	snapshot.ServiceInfo = s.ObservedState.ServiceInfo
+	deepcopy.Copy(&snapshot.ServiceInfo, &s.ObservedState.ServiceInfo)
 
 	// Deep copy observed config
-	snapshot.ObservedS6ServiceConfig = s.ObservedState.ObservedS6ServiceConfig
+	deepcopy.Copy(&snapshot.ObservedS6ServiceConfig, &s.ObservedState.ObservedS6ServiceConfig)
 
 	return snapshot
 }

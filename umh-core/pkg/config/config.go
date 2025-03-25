@@ -14,7 +14,11 @@
 
 package config
 
-import "reflect"
+import (
+	"reflect"
+
+	"github.com/tiendc/go-deepcopy"
+)
 
 type FullConfig struct {
 	Agent    AgentConfig     `yaml:"agent"`    // Agent config, requires restart to take effect
@@ -90,7 +94,7 @@ func (c FullConfig) Clone() FullConfig {
 		Services: make([]S6FSMConfig, len(c.Services)),
 		Benthos:  make([]BenthosConfig, len(c.Benthos)),
 	}
-	copy(clone.Services, c.Services)
-	copy(clone.Benthos, c.Benthos)
+	deepcopy.Copy(&clone.Services, &c.Services)
+	deepcopy.Copy(&clone.Benthos, &c.Benthos)
 	return clone
 }
