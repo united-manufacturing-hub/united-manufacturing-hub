@@ -18,7 +18,9 @@ IMAGE_NAME = umh-core
 TAG = latest
 
 build:
-	docker build -t $(IMAGE_NAME):$(TAG) -f Dockerfile .
+	docker build --platform=$$(if [ "$$(uname -m)" = "arm64" ]; then echo "linux/arm64"; else echo "linux/amd64"; fi) \
+		--build-arg TARGETARCH=$$(if [ "$$(uname -m)" = "arm64" ]; then echo "arm64"; else echo "amd64"; fi) \
+		-t $(IMAGE_NAME):$(TAG) -f Dockerfile .
 	
 clean:
 	docker stop $(IMAGE_NAME) || true
@@ -77,4 +79,4 @@ test-benthos: clean build
 		-e LOGGING_LEVEL=DEBUG \
 		-p 8081:8080 \
 		-p 4195:4195 \
-		$(IMAGE_NAME):$(TAG)
+		$(IMAGE_NAME):$(TAG) 
