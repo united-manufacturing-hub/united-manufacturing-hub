@@ -148,11 +148,15 @@ func (s *BaseFSMInstance) SetDesiredFSMState(state string) {
 
 // GetDesiredFSMState returns the desired state of the FSM
 func (s *BaseFSMInstance) GetDesiredFSMState() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	return s.cfg.DesiredFSMState
 }
 
 // GetCurrentFSMState returns the current state of the FSM
 func (s *BaseFSMInstance) GetCurrentFSMState() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	return s.fsm.Current()
 }
 
