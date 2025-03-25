@@ -15,6 +15,8 @@
 package config
 
 import (
+	"reflect"
+
 	"github.com/tiendc/go-deepcopy"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
@@ -24,6 +26,7 @@ type FullConfig struct {
 	Agent    AgentConfig     `yaml:"agent"`    // Agent config, requires restart to take effect
 	Services []S6FSMConfig   `yaml:"services"` // Services to manage, can be updated while running
 	Benthos  []BenthosConfig `yaml:"benthos"`  // Benthos services to manage, can be updated while running
+	Nmap     []NmapConfig    `yaml:"nmap"`     // Nmap services to manage, can be updated while running
 }
 
 type AgentConfig struct {
@@ -54,12 +57,35 @@ type BenthosConfig struct {
 	BenthosServiceConfig benthosserviceconfig.BenthosServiceConfig `yaml:"benthosServiceConfig"`
 }
 
+// NmapConfig contains configuration for creating a Nmap service
+type NmapConfig struct {
+	// For the FSM
+	FSMInstanceConfig `yaml:",inline"`
+
+	// For the Nmap service
+	NmapServiceConfig NmapServiceConfig `yaml:"nmapServiceConfig"`
+}
+
+// NmapServiceConfig represents the configuration for a Nmap service
+type NmapServiceConfig struct {
+	// Target to scan (hostname or IP)
+	Target string `yaml:"target"`
+	// Port to scan (single port number)
+	Port int `yaml:"port"`
+}
+
+// Equal checks if two NmapServiceConfigs are equal
+func (c NmapServiceConfig) Equal(other NmapServiceConfig) bool {
+	return reflect.DeepEqual(c, other)
+}
+
 // Clone creates a deep copy of FullConfig
 func (c FullConfig) Clone() FullConfig {
 	clone := FullConfig{
 		Agent:    c.Agent,
 		Services: make([]S6FSMConfig, len(c.Services)),
 		Benthos:  make([]BenthosConfig, len(c.Benthos)),
+		Nmap:     make([]NmapConfig, len(c.Nmap)),
 	}
 	deepcopy.Copy(&clone.Services, &c.Services)
 	deepcopy.Copy(&clone.Benthos, &c.Benthos)
