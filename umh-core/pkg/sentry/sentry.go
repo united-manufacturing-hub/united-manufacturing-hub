@@ -54,3 +54,29 @@ func InitSentry(appVersion string) {
 		return
 	}
 }
+
+func createSentryEvent(level sentry.Level, err error) *sentry.Event {
+	event := sentry.NewEvent()
+	event.Level = level
+	event.Message = err.Error()
+	event.SetException(err, 1)
+
+	// Capture all goroutines and convert them to Sentry threads
+	if level == sentry.LevelFatal || level == sentry.LevelError {
+		threads, stacktrace := captureGoroutinesAsThreads()
+		event.Threads = threads
+		event.Attachments = append(event.Attachments, &sentry.Attachment{
+			Filename:    "stacktrace.txt",
+			ContentType: "text/plain",
+			Payload:     stacktrace,
+		})
+	}
+
+	return event
+}
+
+// Helper function to send an event to Sentry
+func sendSentryEvent(event *sentry.Event) {
+	localHub := sentry.CurrentHub().Clone()
+	localHub.CaptureEvent(event)
+}
