@@ -17,8 +17,9 @@ name: Go Code Analysis
 on:
   pull_request:
     branches:
-      - main
-      - staging
+      - "**"
+    paths:
+      - "umh-core/**"
 
 jobs:
   vet:
