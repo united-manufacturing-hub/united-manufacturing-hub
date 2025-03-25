@@ -326,7 +326,7 @@ func (c *ControlLoop) GetSystemSnapshot() *fsm.SystemSnapshot {
 //
 // This should be called as part of system shutdown to prevent
 // resource leaks and ensure clean termination.
-func (c *ControlLoop) Stop(ctx context.Context) error {
+func (c *ControlLoop) Stop(ctx context.Context, cancel context.CancelFunc) error {
 
 	if c.starvationChecker != nil {
 		// Stop the starvation checker
@@ -335,7 +335,8 @@ func (c *ControlLoop) Stop(ctx context.Context) error {
 		return fmt.Errorf("starvation checker is not set")
 	}
 
-	// Signal the control loop to stop
-	ctx.Done()
+	// Signal the control loop to stop & wait for it to finish
+	cancel()
+	<-ctx.Done()
 	return nil
 }

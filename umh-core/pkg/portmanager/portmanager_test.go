@@ -351,7 +351,7 @@ var _ = Describe("PortManager", func() {
 				go func(id int) {
 					defer wg.Done()
 					instance := fmt.Sprintf("new-instance-%d", id)
-					pm.AllocatePort(instance) // Ignore errors, we might run out of ports
+					_, _ = pm.AllocatePort(instance) // Ignore errors, we might run out of ports
 				}(i)
 			}
 
@@ -360,8 +360,8 @@ var _ = Describe("PortManager", func() {
 				go func(id int) {
 					defer wg.Done()
 					instance := fmt.Sprintf("reserve-instance-%d", id)
-					port := 8000 + id%1000         // Ensure we stay in range
-					pm.ReservePort(instance, port) // Ignore errors, some might fail
+					port := 8000 + id%1000             // Ensure we stay in range
+					_ = pm.ReservePort(instance, port) // Ignore errors, some might fail
 				}(i)
 			}
 
@@ -369,7 +369,7 @@ var _ = Describe("PortManager", func() {
 			for i := 0; i < numGoroutines; i++ {
 				go func(id int) {
 					defer wg.Done()
-					pm.ReleasePort(instances[id]) // Release pre-allocated instances
+					_ = pm.ReleasePort(instances[id]) // Release pre-allocated instances
 				}(i)
 			}
 

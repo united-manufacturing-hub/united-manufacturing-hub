@@ -245,7 +245,13 @@ func (b *BenthosInstance) AnyRestartsSinceCreation() bool {
 		return false
 	}
 
-	return true
+	for _, exit := range b.ObservedState.ServiceInfo.S6ObservedState.ServiceInfo.ExitHistory {
+		if exit.ExitCode == 0 && exit.Timestamp.After(time.Now().Add(-10*time.Second)) {
+			return true
+		}
+	}
+
+	return false
 }
 
 // IsBenthosRunningForSomeTimeWithoutErrors determines if the Benthos service has been running for some time.
