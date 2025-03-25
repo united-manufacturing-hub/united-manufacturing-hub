@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/config"
-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/control"
-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/logger"
-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/metrics"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/control"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"go.uber.org/zap"
 )
 
@@ -34,7 +34,14 @@ func main() {
 
 	// Start the metrics server
 	server := metrics.SetupMetricsEndpoint(fmt.Sprintf(":%d", config.Agent.MetricsPort))
-	defer server.Shutdown(ctx)
+	defer func() {
+		// S6_KILL_FINISH_MAXTIME is 5 seconds, so we need to finish before that
+		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer shutdownCancel()
+		if err := server.Shutdown(shutdownCtx); err != nil {
+			log.Errorf("Failed to shutdown metrics server: %s", err)
+		}
+	}()
 
 	// Start the control loop
 	controlLoop := control.NewControlLoop()

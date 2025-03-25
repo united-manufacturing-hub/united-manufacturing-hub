@@ -1,10 +1,10 @@
 package s6
 
 import (
-	internalfsm "github.com/united-manufacturing-hub/benthos-umh/umh-core/internal/fsm"
-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/config"
-	publicfsm "github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/fsm"
-	s6svc "github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/service/s6"
+	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	publicfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
+	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 )
 
 // Operational state constants represent the runtime states of a service

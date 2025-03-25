@@ -1,10 +1,10 @@
 package benthos
 
 import (
-	internalfsm "github.com/united-manufacturing-hub/benthos-umh/umh-core/internal/fsm"
-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/config"
-	publicfsm "github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/fsm"
-	benthossvc "github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/service/benthos"
+	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	publicfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
+	benthossvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
 )
 
 // Operational state constants (using internal_fsm compatible naming)

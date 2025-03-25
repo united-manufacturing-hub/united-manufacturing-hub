@@ -7,12 +7,12 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	internalfsm "github.com/united-manufacturing-hub/benthos-umh/umh-core/internal/fsm"
-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/backoff"
-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/config"
-	s6fsm "github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/fsm/s6"
-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/portmanager"
-	benthossvc "github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/service/benthos"
+	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/backoff"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/portmanager"
+	benthossvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
 )
 
 // TODO: needs to be refactored based on the test approach in umh-core/test/fsm/s6/manager_test.go
@@ -55,6 +55,15 @@ func createBenthosConfig(name, desiredState string) config.BenthosConfig {
 // setupServiceState configures the mock service state for a given service
 func setupServiceState(mockService *benthossvc.MockBenthosService, serviceName string, flags benthossvc.ServiceStateFlags) {
 	mockService.SetServiceState(serviceName, flags)
+
+	if mockService.ServiceStates == nil {
+		mockService.ServiceStates = make(map[string]*benthossvc.ServiceInfo)
+	}
+
+	if mockService.ServiceStates[serviceName] == nil {
+		mockService.ServiceStates[serviceName] = &benthossvc.ServiceInfo{}
+	}
+
 	mockService.ServiceStates[serviceName].BenthosStatus.HealthCheck = benthossvc.HealthCheck{
 		IsLive:  flags.IsHealthchecksPassed,
 		IsReady: flags.IsHealthchecksPassed,

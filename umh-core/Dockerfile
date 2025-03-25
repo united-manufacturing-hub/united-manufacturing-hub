@@ -65,7 +65,7 @@ RUN case "${TARGETARCH}" in \
     esac && \
     echo "Using BENTHOS_ARCH: ${BENTHOS_ARCH}" && \
     curl -sSL -o /usr/local/bin/benthos \
-    "https://github.com/united-manufacturing-hub/united-manufacturing-hub/releases/download/v${BENTHOS_UMH_VERSION}/benthos-linux-${BENTHOS_ARCH}" && \
+    "https://github.com/united-manufacturing-hub/benthos-umh/releases/download/v${BENTHOS_UMH_VERSION}/benthos-linux-${BENTHOS_ARCH}" && \
     chmod +x /usr/local/bin/benthos
 
 # Step 5: Copy the built application and set permissions

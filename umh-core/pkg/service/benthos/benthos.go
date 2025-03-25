@@ -16,16 +16,16 @@ import (
 
 	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/common/expfmt"
-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/config"
-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/constants"
-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/logger"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"go.uber.org/zap"
 
-	s6fsm "github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/fsm/s6"
+	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 	"gopkg.in/yaml.v3"
 
-	benthosyaml "github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/service/benthos/yaml"
-	s6service "github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/service/s6"
+	benthosyaml "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos/yaml"
+	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 )
 
 // IBenthosService is the interface for managing Benthos services
@@ -720,7 +720,7 @@ func (s *BenthosService) GetHealthCheckAndMetrics(ctx context.Context, s6Service
 	var healthCheck HealthCheck
 
 	// Check liveness
-	if resp, err := doRequest("/ping"); err == nil {
+	if resp, err := doRequest("/ping"); err == nil && resp != nil {
 		healthCheck.IsLive = resp.StatusCode == http.StatusOK
 		resp.Body.Close()
 	} else {
@@ -728,7 +728,7 @@ func (s *BenthosService) GetHealthCheckAndMetrics(ctx context.Context, s6Service
 	}
 
 	// Check readiness
-	if resp, err := doRequest("/ready"); err == nil {
+	if resp, err := doRequest("/ready"); err == nil && resp != nil {
 		defer resp.Body.Close()
 
 		// Even if status is 503, we still want to read the body to get the detailed status
@@ -759,7 +759,7 @@ func (s *BenthosService) GetHealthCheckAndMetrics(ctx context.Context, s6Service
 	}
 
 	// Get version
-	if resp, err := doRequest("/version"); err == nil {
+	if resp, err := doRequest("/version"); err == nil && resp != nil {
 		defer resp.Body.Close()
 
 		body, err := io.ReadAll(resp.Body)
@@ -779,7 +779,7 @@ func (s *BenthosService) GetHealthCheckAndMetrics(ctx context.Context, s6Service
 	var metrics Metrics
 
 	// Get metrics
-	if resp, err := doRequest("/metrics"); err == nil {
+	if resp, err := doRequest("/metrics"); err == nil && resp != nil {
 		defer resp.Body.Close()
 
 		body, err := io.ReadAll(resp.Body)

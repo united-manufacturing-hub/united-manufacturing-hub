@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/config"
-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/control"
-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/logger"
-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/metrics"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/control"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"go.uber.org/zap"
 )
 

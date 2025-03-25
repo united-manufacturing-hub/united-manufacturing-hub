@@ -1,9 +1,9 @@
 package benthos
 
 import (
-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/config"
-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/fsm"
-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/service/benthos"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
 )
 
 // BenthosObservedStateSnapshot is a deep-copyable snapshot of BenthosObservedState

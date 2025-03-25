@@ -3,7 +3,7 @@ package s6
 import (
 	"context"
 
-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 )
 
 // MockService is a mock implementation of the S6 Service interface for testing

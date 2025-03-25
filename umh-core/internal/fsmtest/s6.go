@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"path/filepath"
 
-	internal_fsm "github.com/united-manufacturing-hub/benthos-umh/umh-core/internal/fsm"
-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/config"
-	s6fsm "github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/fsm/s6"
-	s6service "github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/service/s6"
+	internal_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
+	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 )
 
 // Common test states

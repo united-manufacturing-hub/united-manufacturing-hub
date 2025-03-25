@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 )
 
 // ObservedStateSnapshot represents a deep copy of an observed state

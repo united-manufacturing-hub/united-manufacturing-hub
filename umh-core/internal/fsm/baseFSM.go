@@ -7,7 +7,7 @@ import (
 	"github.com/looplab/fsm"
 	"go.uber.org/zap"
 
-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/backoff"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/backoff"
 )
 
 // BaseFSMInstance implements the public fsm.FSM interface

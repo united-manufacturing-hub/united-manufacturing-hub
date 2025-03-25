@@ -260,7 +260,7 @@ func (pm *DefaultPortManager) PreReconcile(ctx context.Context, instanceNames []
 		for _, err := range errs {
 			errMsg += "\n  - " + err.Error()
 		}
-		return fmt.Errorf(errMsg)
+		return fmt.Errorf("%s", errMsg)
 	}
 
 	return nil

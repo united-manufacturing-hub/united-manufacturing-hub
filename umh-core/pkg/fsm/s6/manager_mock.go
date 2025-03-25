@@ -3,11 +3,11 @@ package s6
 import (
 	"fmt"
 
-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/config"
-	public_fsm "github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/fsm"
-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/logger"
-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/metrics"
-	s6service "github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/service/s6"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	public_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
+	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 )
 
 // NewS6ManagerWithMockedServices creates an S6Manager with fully mocked instances

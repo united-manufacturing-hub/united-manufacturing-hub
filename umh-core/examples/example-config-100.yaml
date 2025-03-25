@@ -6,11 +6,12 @@ services:
     name: hello-world-1
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-1/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-1/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"1\"\n   \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"1\"\n   \
           \ interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -19,11 +20,12 @@ services:
     name: hello-world-2
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-2/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-2/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"2\"\n   \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"2\"\n   \
           \ interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -32,11 +34,12 @@ services:
     name: hello-world-3
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-3/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-3/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"3\"\n   \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"3\"\n   \
           \ interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -45,11 +48,12 @@ services:
     name: hello-world-4
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-4/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-4/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"4\"\n   \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"4\"\n   \
           \ interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -58,11 +62,12 @@ services:
     name: hello-world-5
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-5/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-5/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"5\"\n   \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"5\"\n   \
           \ interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -71,11 +76,12 @@ services:
     name: hello-world-6
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-6/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-6/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"6\"\n   \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"6\"\n   \
           \ interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -84,11 +90,12 @@ services:
     name: hello-world-7
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-7/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-7/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"7\"\n   \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"7\"\n   \
           \ interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -97,11 +104,12 @@ services:
     name: hello-world-8
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-8/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-8/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"8\"\n   \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"8\"\n   \
           \ interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -110,11 +118,12 @@ services:
     name: hello-world-9
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-9/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-9/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"9\"\n   \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"9\"\n   \
           \ interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -123,11 +132,12 @@ services:
     name: hello-world-10
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-10/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-10/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"10\"\n  \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"10\"\n  \
           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -136,11 +146,12 @@ services:
     name: hello-world-11
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-11/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-11/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"11\"\n  \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"11\"\n  \
           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -149,11 +160,12 @@ services:
     name: hello-world-12
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-12/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-12/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"12\"\n  \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"12\"\n  \
           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -162,11 +174,12 @@ services:
     name: hello-world-13
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-13/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-13/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"13\"\n  \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"13\"\n  \
           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -175,11 +188,12 @@ services:
     name: hello-world-14
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-14/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-14/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"14\"\n  \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"14\"\n  \
           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -188,11 +202,12 @@ services:
     name: hello-world-15
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-15/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-15/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"15\"\n  \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"15\"\n  \
           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -201,11 +216,12 @@ services:
     name: hello-world-16
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-16/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-16/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"16\"\n  \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"16\"\n  \
           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -214,11 +230,12 @@ services:
     name: hello-world-17
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-17/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-17/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"17\"\n  \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"17\"\n  \
           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -227,11 +244,12 @@ services:
     name: hello-world-18
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-18/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-18/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"18\"\n  \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"18\"\n  \
           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -240,11 +258,12 @@ services:
     name: hello-world-19
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-19/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-19/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"19\"\n  \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"19\"\n  \
           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -253,11 +272,12 @@ services:
     name: hello-world-20
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-20/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-20/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"20\"\n  \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"20\"\n  \
           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -266,11 +286,12 @@ services:
     name: hello-world-21
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-21/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-21/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"21\"\n  \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"21\"\n  \
           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -279,11 +300,12 @@ services:
     name: hello-world-22
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-22/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-22/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"22\"\n  \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"22\"\n  \
           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -292,11 +314,12 @@ services:
     name: hello-world-23
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-23/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-23/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"23\"\n  \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"23\"\n  \
           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -305,11 +328,12 @@ services:
     name: hello-world-24
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-24/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-24/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"24\"\n  \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"24\"\n  \
           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -318,11 +342,12 @@ services:
     name: hello-world-25
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-25/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-25/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"25\"\n  \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"25\"\n  \
           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -331,11 +356,12 @@ services:
     name: hello-world-26
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-26/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-26/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"26\"\n  \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"26\"\n  \
           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -344,11 +370,12 @@ services:
     name: hello-world-27
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-27/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-27/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"27\"\n  \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"27\"\n  \
           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -357,11 +384,12 @@ services:
     name: hello-world-28
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-28/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-28/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"28\"\n  \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"28\"\n  \
           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -370,11 +398,12 @@ services:
     name: hello-world-29
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-29/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-29/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"29\"\n  \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"29\"\n  \
           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -383,11 +412,12 @@ services:
     name: hello-world-30
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-30/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-30/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"30\"\n  \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"30\"\n  \
           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -396,11 +426,12 @@ services:
     name: hello-world-31
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-31/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-31/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"31\"\n  \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"31\"\n  \
           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -409,11 +440,12 @@ services:
     name: hello-world-32
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-32/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-32/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"32\"\n  \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"32\"\n  \
           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -422,11 +454,12 @@ services:
     name: hello-world-33
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-33/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-33/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"33\"\n  \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"33\"\n  \
           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -435,11 +468,12 @@ services:
     name: hello-world-34
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-34/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-34/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"34\"\n  \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"34\"\n  \
           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -448,11 +482,12 @@ services:
     name: hello-world-35
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-35/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-35/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"35\"\n  \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"35\"\n  \
           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -461,11 +496,12 @@ services:
     name: hello-world-36
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-36/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-36/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"36\"\n  \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"36\"\n  \
           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -474,11 +510,12 @@ services:
     name: hello-world-37
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-37/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-37/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"37\"\n  \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"37\"\n  \
           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -487,11 +524,12 @@ services:
     name: hello-world-38
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-38/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-38/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"38\"\n  \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"38\"\n  \
           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -500,11 +538,12 @@ services:
     name: hello-world-39
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-39/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-39/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"39\"\n  \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"39\"\n  \
           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -513,11 +552,12 @@ services:
     name: hello-world-40
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-40/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-40/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"40\"\n  \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"40\"\n  \
           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -526,11 +566,12 @@ services:
     name: hello-world-41
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-41/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-41/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"41\"\n  \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"41\"\n  \
           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -539,11 +580,12 @@ services:
     name: hello-world-42
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-42/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-42/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"42\"\n  \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"42\"\n  \
           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -552,11 +594,12 @@ services:
     name: hello-world-43
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-43/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-43/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"43\"\n  \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"43\"\n  \
           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -565,11 +608,12 @@ services:
     name: hello-world-44
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-44/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-44/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"44\"\n  \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"44\"\n  \
           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -578,11 +622,12 @@ services:
     name: hello-world-45
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-45/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-45/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"45\"\n  \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"45\"\n  \
           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -591,11 +636,12 @@ services:
     name: hello-world-46
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-46/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-46/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"46\"\n  \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"46\"\n  \
           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -604,11 +650,12 @@ services:
     name: hello-world-47
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-47/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-47/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"47\"\n  \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"47\"\n  \
           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -617,11 +664,12 @@ services:
     name: hello-world-48
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-48/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-48/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"48\"\n  \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"48\"\n  \
           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -630,11 +678,12 @@ services:
     name: hello-world-49
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-49/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-49/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"49\"\n  \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"49\"\n  \
           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -643,11 +692,12 @@ services:
     name: hello-world-50
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-50/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-50/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"50\"\n  \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"50\"\n  \
           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -656,11 +706,12 @@ services:
     name: hello-world-51
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-51/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-51/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"51\"\n  \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"51\"\n  \
           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -669,11 +720,12 @@ services:
     name: hello-world-52
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-52/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-52/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"52\"\n  \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"52\"\n  \
           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -682,11 +734,12 @@ services:
     name: hello-world-53
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-53/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-53/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"53\"\n  \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"53\"\n  \
           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -695,11 +748,12 @@ services:
     name: hello-world-54
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-54/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-54/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"54\"\n  \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"54\"\n  \
           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -708,11 +762,12 @@ services:
     name: hello-world-55
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-55/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-55/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"55\"\n  \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"55\"\n  \
           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -721,11 +776,12 @@ services:
     name: hello-world-56
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-56/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-56/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"56\"\n  \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"56\"\n  \
           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -734,11 +790,12 @@ services:
     name: hello-world-57
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-57/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-57/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"57\"\n  \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"57\"\n  \
           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -747,11 +804,12 @@ services:
     name: hello-world-58
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-58/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-58/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"58\"\n  \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"58\"\n  \
           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -760,11 +818,12 @@ services:
     name: hello-world-59
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-59/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-59/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"59\"\n  \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"59\"\n  \
           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -773,11 +832,12 @@ services:
     name: hello-world-60
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-60/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-60/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"60\"\n  \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"60\"\n  \
           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -786,11 +846,12 @@ services:
     name: hello-world-61
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-61/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-61/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"61\"\n  \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"61\"\n  \
           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -799,11 +860,12 @@ services:
     name: hello-world-62
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-62/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-62/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"62\"\n  \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"62\"\n  \
           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -812,11 +874,12 @@ services:
     name: hello-world-63
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-63/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-63/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"63\"\n  \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"63\"\n  \
           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -825,11 +888,12 @@ services:
     name: hello-world-64
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-64/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-64/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"64\"\n  \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"64\"\n  \
           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -838,11 +902,12 @@ services:
     name: hello-world-65
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-65/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-65/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"65\"\n  \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"65\"\n  \
           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -851,11 +916,12 @@ services:
     name: hello-world-66
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-66/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-66/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"66\"\n  \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"66\"\n  \
           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -864,11 +930,12 @@ services:
     name: hello-world-67
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-67/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-67/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"67\"\n  \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"67\"\n  \
           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -877,11 +944,12 @@ services:
     name: hello-world-68
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-68/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-68/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"68\"\n  \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"68\"\n  \
           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -890,11 +958,12 @@ services:
     name: hello-world-69
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-69/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-69/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"69\"\n  \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"69\"\n  \
           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -903,11 +972,12 @@ services:
     name: hello-world-70
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-70/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-70/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"70\"\n  \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"70\"\n  \
           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -916,11 +986,12 @@ services:
     name: hello-world-71
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-71/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-71/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"71\"\n  \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"71\"\n  \
           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -929,11 +1000,12 @@ services:
     name: hello-world-72
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-72/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-72/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"72\"\n  \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"72\"\n  \
           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -942,11 +1014,12 @@ services:
     name: hello-world-73
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-73/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-73/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"73\"\n  \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"73\"\n  \
           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -955,11 +1028,12 @@ services:
     name: hello-world-74
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-74/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-74/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"74\"\n  \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"74\"\n  \
           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -968,11 +1042,12 @@ services:
     name: hello-world-75
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-75/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-75/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"75\"\n  \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"75\"\n  \
           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -981,11 +1056,12 @@ services:
     name: hello-world-76
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-76/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-76/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"76\"\n  \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"76\"\n  \
           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -994,11 +1070,12 @@ services:
     name: hello-world-77
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-77/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-77/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"77\"\n  \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"77\"\n  \
           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -1007,11 +1084,12 @@ services:
     name: hello-world-78
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-78/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-78/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"78\"\n  \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"78\"\n  \
           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -1020,11 +1098,12 @@ services:
     name: hello-world-79
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-79/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-79/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"79\"\n  \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"79\"\n  \
           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -1033,11 +1112,12 @@ services:
     name: hello-world-80
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-80/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-80/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"80\"\n  \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"80\"\n  \
           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -1046,11 +1126,12 @@ services:
     name: hello-world-81
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-81/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-81/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"81\"\n  \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"81\"\n  \
           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -1059,11 +1140,12 @@ services:
     name: hello-world-82
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-82/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-82/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"82\"\n  \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"82\"\n  \
           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -1072,11 +1154,12 @@ services:
     name: hello-world-83
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-83/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-83/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"83\"\n  \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"83\"\n  \
           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -1085,11 +1168,12 @@ services:
     name: hello-world-84
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-84/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-84/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"84\"\n  \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"84\"\n  \
           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -1098,11 +1182,12 @@ services:
     name: hello-world-85
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-85/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-85/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"85\"\n  \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"85\"\n  \
           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -1111,11 +1196,12 @@ services:
     name: hello-world-86
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-86/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-86/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"86\"\n  \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"86\"\n  \
           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -1124,11 +1210,12 @@ services:
     name: hello-world-87
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-87/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-87/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"87\"\n  \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"87\"\n  \
           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -1137,11 +1224,12 @@ services:
     name: hello-world-88
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-88/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-88/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"88\"\n  \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"88\"\n  \
           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -1150,11 +1238,12 @@ services:
     name: hello-world-89
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-89/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-89/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"89\"\n  \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"89\"\n  \
           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -1163,11 +1252,12 @@ services:
     name: hello-world-90
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-90/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-90/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"90\"\n  \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"90\"\n  \
           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -1176,11 +1266,12 @@ services:
     name: hello-world-91
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-91/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-91/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"91\"\n  \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"91\"\n  \
           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -1189,11 +1280,12 @@ services:
     name: hello-world-92
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-92/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-92/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"92\"\n  \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"92\"\n  \
           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -1202,11 +1294,12 @@ services:
     name: hello-world-93
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-93/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-93/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"93\"\n  \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"93\"\n  \
           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -1215,11 +1308,12 @@ services:
     name: hello-world-94
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-94/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-94/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"94\"\n  \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"94\"\n  \
           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -1228,11 +1322,12 @@ services:
     name: hello-world-95
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-95/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-95/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"95\"\n  \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"95\"\n  \
           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -1241,11 +1336,12 @@ services:
     name: hello-world-96
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-96/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-96/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"96\"\n  \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"96\"\n  \
           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -1254,11 +1350,12 @@ services:
     name: hello-world-97
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-97/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-97/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"97\"\n  \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"97\"\n  \
           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -1267,11 +1364,12 @@ services:
     name: hello-world-98
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-98/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-98/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"98\"\n  \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"98\"\n  \
           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -1280,11 +1378,12 @@ services:
     name: hello-world-99
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-99/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-99/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"99\"\n  \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"99\"\n  \
           \  interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
@@ -1293,13 +1392,13 @@ services:
     name: hello-world-100
     s6ServiceConfig:
       command:
-      - /usr/local/bin/benthos
-      - -c
-      - /run/service/hello-world-100/config/hello-world.yaml
+        - /usr/local/bin/benthos
+        - -c
+        - /run/service/hello-world-100/config/hello-world.yaml
       configFiles:
-        hello-world.yaml: "---\ninput:\n  generate:\n    mapping: root = \"100\"\n \
+        hello-world.yaml:
+          "---\ninput:\n  generate:\n    mapping: root = \"100\"\n \
           \   interval: 2s # Output every 2 seconds\n    count: 0 # Set to 0 for unlimited\
           \ messages\noutput:\n  stdout: {}\n"
       env:
         LOG_LEVEL: DEBUG
-    

@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/config"
-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/constants"
-	public_fsm "github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/fsm"
-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/logger"
-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/metrics"
-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/portmanager"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
+	public_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/portmanager"
 )
 
 const (
@@ -154,7 +154,10 @@ func (m *BenthosManager) HandleInstanceRemoved(instanceName string) {
 // Reconcile overrides the base manager's Reconcile method to add port management
 func (m *BenthosManager) Reconcile(ctx context.Context, cfg config.FullConfig, tick uint64) (error, bool) {
 	start := time.Now()
-	defer metrics.ObserveReconcileTime(logger.ComponentBenthosManager, m.BaseFSMManager.GetManagerName(), time.Since(start))
+	defer func() {
+		duration := time.Since(start)
+		metrics.ObserveReconcileTime(logger.ComponentBenthosManager, m.BaseFSMManager.GetManagerName(), duration)
+	}()
 	// Phase 1: Port Management Pre-reconciliation
 	benthosConfigs := cfg.Benthos
 	instanceNames := make([]string, len(benthosConfigs))

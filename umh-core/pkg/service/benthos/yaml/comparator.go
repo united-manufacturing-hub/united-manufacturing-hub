@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 )
 
 // Comparator handles the comparison of Benthos configurations

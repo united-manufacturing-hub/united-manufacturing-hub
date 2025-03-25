@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/config"
-	s6service "github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/service/s6"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"

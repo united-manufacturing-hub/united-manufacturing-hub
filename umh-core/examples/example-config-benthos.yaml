@@ -7,18 +7,18 @@ benthos:
     benthosServiceConfig:
       input:
         generate:
-          mapping: root = "hello world from Benthos!" 
+          mapping: root = "hello world from Benthos!"
           interval: 1s # Output every 2 seconds
           count: 0 # Set to 0 for unlimited messages
       output:
-        stdout: {} 
+        stdout: {}
   - name: hello-world-2
     desiredState: active
     benthosServiceConfig:
       input:
         generate:
-          mapping: root = "hello world from Benthos 2!" 
+          mapping: root = "hello world from Benthos 2!"
           interval: 1s # Output every 2 seconds
           count: 0 # Set to 0 for unlimited messages
       output:
-        stdout: {} 
+        stdout: {}

@@ -1,11 +1,11 @@
 package fsmtest
 
 import (
-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/config"
-	benthosfsm "github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/fsm/benthos"
-	s6fsm "github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/fsm/s6"
-	benthossvc "github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/service/benthos"
-	s6svc "github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/service/s6"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	benthosfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
+	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
+	benthossvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
+	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 )
 
 // CreateBenthosTestConfig creates a standard Benthos config for testing

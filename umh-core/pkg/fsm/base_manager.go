@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"time"
 
-	internalfsm "github.com/united-manufacturing-hub/benthos-umh/umh-core/internal/fsm"
-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/backoff"
-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/config"
-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/logger"
-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/metrics"
+	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/backoff"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"go.uber.org/zap"
 )
 
@@ -294,7 +294,7 @@ func (m *BaseFSMManager[C]) Reconcile(
 
 			createStart := time.Now()
 			instance, err := m.createInstance(cfg)
-			if err != nil {
+			if err != nil || instance == nil {
 				metrics.IncErrorCount(metrics.ComponentBaseFSMManager, m.managerName)
 				return fmt.Errorf("failed to create instance: %w", err), false
 			}
@@ -398,7 +398,14 @@ func (m *BaseFSMManager[C]) Reconcile(
 			}
 		}
 
-		switch m.instances[instanceName].GetCurrentFSMState() {
+		instance := m.instances[instanceName]
+		if instance == nil {
+			m.logger.Debugf("instance %s is nil, will be deleted from the manager", instanceName)
+			// TODO: Check if we need to do anything else here
+			continue
+		}
+
+		switch instance.GetCurrentFSMState() {
 		case internalfsm.LifecycleStateRemoving:
 			m.logger.Debugf("instance %s is already in removing state, waiting until it is removed", instanceName)
 			continue
@@ -425,8 +432,8 @@ func (m *BaseFSMManager[C]) Reconcile(
 			}
 
 			// Otherwise, we need to remove the instance
-			m.logger.Debugf("instance %s is in state %s, starting the removing process", instanceName, m.instances[instanceName].GetCurrentFSMState())
-			m.instances[instanceName].Remove(ctx)
+			m.logger.Debugf("instance %s is in state %s, starting the removing process", instanceName, instance.GetCurrentFSMState())
+			instance.Remove(ctx)
 
 			// Update last remove tick using manager-specific tick
 			m.lastRemoveTick = m.managerTick

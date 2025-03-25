@@ -7,7 +7,7 @@ import (
 	"os/exec"
 	"time"
 
-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/metrics"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 )
 
 // Service provides an interface for filesystem operations
@@ -121,7 +121,11 @@ func (s *DefaultService) ReadFile(ctx context.Context, path string) ([]byte, err
 		}
 		return res.data, nil
 	case <-ctx.Done():
-		return nil, ctx.Err()
+		err := ctx.Err()
+		if err == nil {
+			err = fmt.Errorf("context cancelled")
+		}
+		return nil, err
 	}
 }
 

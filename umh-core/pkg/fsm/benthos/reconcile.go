@@ -6,12 +6,12 @@ import (
 	"fmt"
 	"time"
 
-	internal_fsm "github.com/united-manufacturing-hub/benthos-umh/umh-core/internal/fsm"
-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/backoff"
-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/constants"
-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/fsm"
-	"github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/metrics"
-	benthos_service "github.com/united-manufacturing-hub/benthos-umh/umh-core/pkg/service/benthos"
+	internal_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/backoff"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
+	benthos_service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
 )
 
 // Reconcile examines the BenthosInstance and, in three steps:
