@@ -2,12 +2,10 @@
 
 user_cwd=$(pwd)
 
-# On exit, change back to the user's original working directory
 function cleanup {
     cd "$user_cwd" || exit 1
 }
 
-# Set up a trap to call the cleanup function on script exit or error
 trap cleanup EXIT
 
 echo "Moving to the script's directory"
@@ -30,7 +28,7 @@ fi
 # Find all *.schema.json files recursively, excluding those that begin with common
 schema_files=$(find . -type f -name "*.schema.json" ! -name "common*.schema.json")
 
-# Format and validate each JSON schema file using jq
+# Format and validate each JSON schema file
 for schema_file in $schema_files; do
   echo "Formatting and validating $schema_file"
   jq . "$schema_file" > tmp.$$.json && mv tmp.$$.json "$schema_file"
@@ -75,7 +73,6 @@ for schema_file in $schema_files; do
         --top-level "${base_name}" \
         --out "$temp_file" || exit 1
 
-    # Prepend copyright header to the generated file
     output_file="$generated_dir/${base_name}.go"
     { echo "$copyright_header"; echo ""; cat "$temp_file"; } > "$output_file"
     rm "$temp_file"
