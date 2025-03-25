@@ -33,6 +33,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	filesystem "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"go.uber.org/zap"
 
@@ -399,7 +400,7 @@ func (s *DefaultService) Remove(ctx context.Context, servicePath string) error {
 	// Clean up logs directory (best effort - don't block removal if this fails)
 	logDir := filepath.Join(constants.S6LogBaseDir, serviceName)
 	if logErr := s.fsService.RemoveAll(ctx, logDir); logErr != nil && s.logger != nil {
-		s.logger.Warnf("Failed to clean up log directory %s: %v", logDir, logErr)
+		sentry.ReportIssuef(sentry.IssueTypeWarning, s.logger, "Failed to clean up log directory %s: %v", logDir, logErr)
 	}
 
 	if s.logger != nil {
@@ -802,7 +803,7 @@ func (s *DefaultService) GetConfig(ctx context.Context, servicePath string) (con
 			}
 		} else {
 			// Absolute fallback - try to look for the command we know should be there
-			s.logger.Warnf("Could not find command in run script for %s, searching for known paths", servicePath)
+			sentry.ReportIssuef(sentry.IssueTypeWarning, s.logger, "Could not find command in run script for %s, searching for known paths", servicePath)
 			cmdRegex := regexp.MustCompile(`(/[^\s]+)`)
 			cmdMatches := cmdRegex.FindAllString(scriptContent, -1)
 
@@ -1013,7 +1014,7 @@ func (s *DefaultService) CleanS6ServiceDirectory(ctx context.Context, path strin
 			// Simply remove the directory (and its contents)
 			if err := s.fsService.RemoveAll(ctx, dirPath); err != nil {
 				if s.logger != nil {
-					s.logger.Warnf("Failed to remove directory %s: %v", dirPath, err)
+					sentry.ReportIssuef(sentry.IssueTypeWarning, s.logger, "Failed to remove directory %s: %v", dirPath, err)
 				}
 			} else if s.logger != nil {
 				s.logger.Infof("Successfully removed directory: %s", dirPath)

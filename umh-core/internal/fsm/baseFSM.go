@@ -22,6 +22,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/backoff"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 )
 
 // BaseFSMInstance implements the public fsm.FSM interface
@@ -132,7 +133,7 @@ func (s *BaseFSMInstance) GetError() error {
 func (s *BaseFSMInstance) SetError(err error, tick uint64) bool {
 	isPermanent := s.backoffManager.SetError(err, tick)
 	if isPermanent {
-		s.logger.Errorf("FSM %s has reached permanent failure state", s.cfg.ID)
+		sentry.ReportIssuef(sentry.IssueTypeError, s.logger, "FSM %s has reached permanent failure state", s.cfg.ID)
 	}
 	return isPermanent
 }

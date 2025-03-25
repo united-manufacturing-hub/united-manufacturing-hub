@@ -191,7 +191,7 @@ func (c *ControlLoop) Execute(ctx context.Context) error {
 
 				if errors.Is(err, context.DeadlineExceeded) {
 					// For timeouts, log warning but continue
-					c.logger.Warnf("Control loop reconcile timed out: %v", err)
+					sentry.ReportIssuef(sentry.IssueTypeWarning, c.logger, "Control loop reconcile timed out: %v", err)
 				} else if errors.Is(err, context.Canceled) {
 					// For cancellation, exit the loop
 					c.logger.Infof("Control loop cancelled")
@@ -289,7 +289,7 @@ func (c *ControlLoop) updateSystemSnapshot(ctx context.Context, cfg config.FullC
 	}
 
 	if c.snapshotManager == nil {
-		c.logger.Warnf("Cannot create system snapshot: snapshot manager is not set")
+		sentry.ReportIssuef(sentry.IssueTypeWarning, c.logger, "Cannot create system snapshot: snapshot manager is not set")
 		return
 	}
 
@@ -314,7 +314,7 @@ func (c *ControlLoop) GetSystemSnapshot() *fsm.SystemSnapshot {
 	}
 
 	if c.snapshotManager == nil {
-		c.logger.Warnf("Cannot get system snapshot: snapshot manager is not set")
+		sentry.ReportIssuef(sentry.IssueTypeWarning, c.logger, "Cannot get system snapshot: snapshot manager is not set")
 		return nil
 	}
 	return c.snapshotManager.GetSnapshot()

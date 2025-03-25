@@ -92,7 +92,7 @@ func SystemSnapshotLogger(ctx context.Context, controlLoop *control.ControlLoop)
 		case <-ticker.C:
 			snapshot := controlLoop.GetSystemSnapshot()
 			if snapshot == nil {
-				logger.Warn("No system snapshot available")
+				sentry.ReportIssuef(sentry.IssueTypeWarning, logger, "No system snapshot available")
 				continue
 			}
 
