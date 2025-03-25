@@ -3,6 +3,7 @@ module github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core
 go 1.24.1
 
 require (
+	github.com/Masterminds/semver/v3 v3.3.1
 	github.com/cactus/tai64 v1.0.3
 	github.com/cenkalti/backoff v2.2.1+incompatible
 	github.com/looplab/fsm v1.0.2
@@ -13,6 +14,7 @@ require (
 	github.com/prometheus/common v0.63.0
 	go.uber.org/zap v1.27.0
 	gopkg.in/yaml.v3 v3.0.1
+	github.com/google/uuid v1.6.0
 )
 
 require (
