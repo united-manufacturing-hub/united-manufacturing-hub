@@ -108,8 +108,56 @@ func GetGoldenServiceURL() string {
 	return fmt.Sprintf("http://%s:%d", "localhost", port)
 }
 
+// writeConfigFile writes the given YAML content to a config file for the container to read.
+// If containerName is not empty, it will also write the config directly into that container.
+func writeConfigFile(yamlContent string, containerName ...string) error {
+	configPath := getConfigFilePath()
+
+	// Always remove any existing file first
+	os.Remove(configPath)
+
+	// Ensure the directory exists with wide permissions
+	dir := filepath.Dir(configPath)
+	if err := os.MkdirAll(dir, 0o777); err != nil {
+		return fmt.Errorf("failed to create config dir: %w", err)
+	}
+
+	// Write the file with permissions that allow anyone to read/write
+	if err := os.WriteFile(configPath, []byte(yamlContent), 0o666); err != nil {
+		return fmt.Errorf("failed to write config file: %w", err)
+	}
+
+	// If container name is provided, also write directly to container
+	if len(containerName) > 0 && containerName[0] != "" {
+		container := containerName[0]
+		fmt.Printf("Writing config directly to container %s...\n", container)
+
+		// Escape double quotes and newlines for echo command
+		escapedConfig := strings.ReplaceAll(yamlContent, "\"", "\\\"")
+		escapedConfig = strings.ReplaceAll(escapedConfig, "$", "\\$")
+
+		// Create the config file in the container
+		cmd := fmt.Sprintf("bash -c \"echo '%s' > /data/config.yaml\"", escapedConfig)
+		out, err := runDockerCommand("exec", container, "bash", "-c", cmd)
+		if err != nil {
+			fmt.Printf("Failed to write config to container: %v\n%s\n", err, out)
+			return fmt.Errorf("failed to write config to container: %w", err)
+		}
+
+		// Verify the config was written correctly
+		out, err = runDockerCommand("exec", container, "cat", "/data/config.yaml")
+		if err != nil {
+			fmt.Printf("Failed to verify config in container: %v\n", err)
+			return fmt.Errorf("failed to verify config in container: %w", err)
+		}
+		fmt.Printf("Config file in container:\n%s\n", out)
+	}
+
+	return nil
+}
+
 // BuildAndRunContainer rebuilds your Docker image, starts the container, etc.
-func BuildAndRunContainer(configFilePath string, memory string) error {
+func BuildAndRunContainer(configYaml string, memory string) error {
 	// Get the unique container name for this test run
 	containerName := getContainerName()
 
@@ -160,17 +208,19 @@ func BuildAndRunContainer(configFilePath string, memory string) error {
 	}
 	fmt.Println("Docker build successful")
 
-	// 3. Run container
-	configFile := getConfigFilePath()
-	fmt.Printf("Using config file: %s\n", configFile)
+	// 3. First just write the config to the local file
+	fmt.Println("Writing local config file...")
+	if err := writeConfigFile(configYaml); err != nil {
+		return fmt.Errorf("failed to write local config file: %w", err)
+	}
 
+	// 4. Run container WITHOUT mounting the config file
 	fmt.Println("Starting container...")
 	out, err = runDockerCommand(
 		"run", "-d",
 		"--name", containerName,
 		"--cpus=1",
 		"--memory", memory,
-		"-v", fmt.Sprintf("%s:/data/config.yaml:Z", configFile), // Add :Z to fix SELinux contexts
 		"-e", "LOGGING_LEVEL=debug",
 		// Map the host ports to the container's fixed ports
 		"-p", fmt.Sprintf("%d:8080", metricsPrt), // Map host's dynamic port to container's fixed metrics port
@@ -184,7 +234,12 @@ func BuildAndRunContainer(configFilePath string, memory string) error {
 	}
 	fmt.Printf("Container started with ID: %s\n", strings.TrimSpace(out))
 
-	// 4. Verify the container is actually running
+	// 5. Now write the config directly to the container
+	if err := writeConfigFile(configYaml, containerName); err != nil {
+		return fmt.Errorf("failed to write config to container: %w", err)
+	}
+
+	// 6. Verify the container is actually running
 	out, err = runDockerCommand("inspect", "--format", "{{.State.Status}}", containerName)
 	if err != nil {
 		fmt.Printf("Failed to inspect container: %v\n", err)
@@ -198,7 +253,7 @@ func BuildAndRunContainer(configFilePath string, memory string) error {
 		}
 	}
 
-	// 5. Wait for the container to be healthy
+	// 7. Wait for the container to be healthy
 	fmt.Println("Waiting for metrics endpoint to become available...")
 	return waitForMetrics()
 }
@@ -399,26 +454,4 @@ func GetCurrentDir() string {
 		return "."
 	}
 	return strings.TrimSpace(wd)
-}
-
-// writeConfigFile writes the given YAML content to a config file for the container to read.
-func writeConfigFile(yamlContent string) error {
-	configPath := getConfigFilePath()
-
-	// Always remove any existing file first
-	os.Remove(configPath)
-
-	// Ensure the directory exists with wide permissions
-	dir := filepath.Dir(configPath)
-	if err := os.MkdirAll(dir, 0o777); err != nil {
-		return fmt.Errorf("failed to create config dir: %w", err)
-	}
-
-	// Write the file with permissions that allow anyone to read/write
-	if err := os.WriteFile(configPath, []byte(yamlContent), 0o666); err != nil {
-		return fmt.Errorf("failed to write config file: %w", err)
-	}
-
-	// Skip the chmod which might fail if ownership has changed
-	return nil
 }

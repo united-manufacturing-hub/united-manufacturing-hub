@@ -187,7 +187,7 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 			// Build configuration with the golden service first
 			builder := NewBuilder().AddGoldenService()
 			cfg := builder.BuildYAML()
-			Expect(writeConfigFile(cfg)).To(Succeed())
+			Expect(writeConfigFile(cfg, getContainerName())).To(Succeed())
 
 			By("Waiting for the golden service to become responsive")
 			Eventually(func() int {
@@ -202,7 +202,7 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 				builder.AddSleepService(serviceName, "600")
 				cfg = builder.BuildYAML()
 				GinkgoWriter.Printf("Added service %s\n", serviceName)
-				Expect(writeConfigFile(cfg)).To(Succeed())
+				Expect(writeConfigFile(cfg, getContainerName())).To(Succeed())
 			}
 
 			By("Simulating random stop/start actions on sleep services (chaos monkey)")
@@ -223,7 +223,7 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 				}
 				GinkgoWriter.Printf("Chaos monkey: %sing service %s\n", action, randomServiceName)
 				// Apply the updated configuration
-				Expect(writeConfigFile(builder.BuildYAML())).To(Succeed())
+				Expect(writeConfigFile(builder.BuildYAML(), getContainerName())).To(Succeed())
 
 				// Random delay between operations
 				delay := time.Duration(100+r.Intn(500)) * time.Millisecond
@@ -288,7 +288,7 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 
 			// Add golden service as constant baseline
 			builder := NewBuilder().AddGoldenService()
-			Expect(writeConfigFile(builder.BuildYAML())).To(Succeed())
+			Expect(writeConfigFile(builder.BuildYAML(), getContainerName())).To(Succeed())
 
 			// Wait for golden service to be ready
 			Eventually(func() int {
@@ -340,7 +340,7 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 				}
 
 				// Apply changes
-				Expect(writeConfigFile(builder.BuildYAML())).To(Succeed())
+				Expect(writeConfigFile(builder.BuildYAML(), getContainerName())).To(Succeed())
 
 				// Check health
 				monitorHealth()
@@ -504,7 +504,7 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 
 				// Apply changes
 				cfg := builder.BuildYAML()
-				Expect(writeConfigFile(cfg)).To(Succeed())
+				Expect(writeConfigFile(cfg, getContainerName())).To(Succeed())
 
 				// Logging every 5 operations to show current state
 				if actionCount%5 == 0 {
@@ -589,7 +589,7 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 			builder := NewBenthosBuilder()
 			builder.AddGoldenBenthos()
 			cfg := builder.BuildYAML()
-			Expect(writeConfigFile(cfg)).To(Succeed())
+			Expect(writeConfigFile(cfg, getContainerName())).To(Succeed())
 
 			By("Waiting for the golden service to become responsive")
 			Eventually(func() int {
@@ -604,7 +604,7 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 				builder.AddGeneratorBenthos(serviceName, fmt.Sprintf("%ds", 1+i%3)) // Varying intervals
 				cfg = builder.BuildYAML()
 				GinkgoWriter.Printf("Added benthos service %s\n", serviceName)
-				Expect(writeConfigFile(cfg)).To(Succeed())
+				Expect(writeConfigFile(cfg, getContainerName())).To(Succeed())
 
 				// Allow time for service to start before adding the next one
 				time.Sleep(1 * time.Second)
@@ -637,7 +637,7 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 				}
 
 				// Apply the updated configuration
-				Expect(writeConfigFile(builder.BuildYAML())).To(Succeed())
+				Expect(writeConfigFile(builder.BuildYAML(), getContainerName())).To(Succeed())
 
 				// Random delay between operations
 				delay := time.Duration(1000+r.Intn(2000)) * time.Millisecond
