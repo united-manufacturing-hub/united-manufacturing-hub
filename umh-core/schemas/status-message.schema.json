@@ -241,6 +241,7 @@
                 "limit",
                 "health"
               ],
+              "additionalProperties": false,
               "properties": {
                 "usage": {
                   "type": "number",
@@ -262,6 +263,7 @@
                 "limit",
                 "health"
               ],
+              "additionalProperties": false,
               "properties": {
                 "usage": {
                   "type": "number",
@@ -283,6 +285,7 @@
                 "limit",
                 "health"
               ],
+              "additionalProperties": false,
               "properties": {
                 "usage": {
                   "type": "number",
@@ -565,7 +568,8 @@
             },
             "required": [
               "enterprise"
-            ]
+            ],
+            "additionalProperties": false
           }
         },
         "eventsTable": {
@@ -579,6 +583,7 @@
               "value",
               "rawKafkaMessage"
             ],
+            "additionalProperties": false,
             "properties": {
               "unsTreeId": {
                 "type": "string"
