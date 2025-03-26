@@ -67,7 +67,7 @@ func getTestDataDir() string {
 	dataDirOnce.Do(func() {
 		// Use the same suffix as the container name for consistency
 		suffix := strings.TrimPrefix(getContainerName(), containerBaseName+"-")
-		dataDir = filepath.Join(GetCurrentDir(), "data")
+		dataDir = filepath.Join("/tmp", "data")
 		dataDir = filepath.Join(dataDir, "data-"+suffix)
 		// Create the directory
 		err := os.MkdirAll(dataDir, 0o755)
