@@ -73,7 +73,7 @@ func getConfigFilePath() string {
 		tmpDir := filepath.Join(currentDir, "umh-config")
 
 		// Create the directory
-		err := os.MkdirAll(tmpDir, 0o755)
+		err := os.MkdirAll(tmpDir, 0o777)
 		if err != nil {
 			// Fallback to current directory if directory creation fails
 			tmpDir = currentDir
@@ -368,8 +368,8 @@ func writeConfigFile(yamlContent string) error {
 	configPath := getConfigFilePath()
 	// Ensure the directory exists
 	dir := filepath.Dir(configPath)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, 0o777); err != nil {
 		return fmt.Errorf("failed to create config dir: %w", err)
 	}
-	return os.WriteFile(configPath, []byte(yamlContent), 0o644)
+	return os.WriteFile(configPath, []byte(yamlContent), 0o777)
 }
