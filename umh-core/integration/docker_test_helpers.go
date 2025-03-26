@@ -41,9 +41,9 @@ var (
 	goldenPort  int
 	portMu      sync.Mutex
 
-	// Test-specific data directory
-	dataDir     string
-	dataDirOnce sync.Once
+	// Test-specific config file path
+	configFilePath string
+	configOnce     sync.Once
 )
 
 // getContainerName returns a unique container name for this test run
@@ -62,21 +62,21 @@ func getContainerName() string {
 	return containerName
 }
 
-// getTestDataDir returns a unique data directory for this test run
-func getTestDataDir() string {
-	dataDirOnce.Do(func() {
+// getConfigFilePath returns a unique config file path for this test run
+func getConfigFilePath() string {
+	configOnce.Do(func() {
 		// Use the same suffix as the container name for consistency
 		suffix := strings.TrimPrefix(getContainerName(), containerBaseName+"-")
-		dataDir = filepath.Join("/tmp", "data")
-		dataDir = filepath.Join(dataDir, "data-"+suffix)
+		tmpDir := filepath.Join("/tmp", "umh-config")
 		// Create the directory
-		err := os.MkdirAll(dataDir, 0o755)
+		err := os.MkdirAll(tmpDir, 0o755)
 		if err != nil {
-			// Fallback to standard data dir
-			dataDir = filepath.Join(GetCurrentDir(), "data")
+			// Fallback to current directory
+			tmpDir = GetCurrentDir()
 		}
+		configFilePath = filepath.Join(tmpDir, fmt.Sprintf("config-%s.yaml", suffix))
 	})
-	return dataDir
+	return configFilePath
 }
 
 // GetMetricsURL returns the URL for the metrics endpoint, using the container's IP if possible
@@ -167,8 +167,8 @@ func BuildAndRunContainer(configFilePath string, memory string) error {
 	fmt.Println("Docker build successful")
 
 	// 3. Run container
-	dataDir := getTestDataDir()
-	fmt.Printf("Using data directory: %s\n", dataDir)
+	configFile := getConfigFilePath()
+	fmt.Printf("Using config file: %s\n", configFile)
 
 	fmt.Println("Starting container...")
 	out, err = runDockerCommand(
@@ -176,7 +176,7 @@ func BuildAndRunContainer(configFilePath string, memory string) error {
 		"--name", containerName,
 		"--cpus=1",
 		"--memory", memory,
-		"-v", fmt.Sprintf("%s:/data", dataDir),
+		"-v", fmt.Sprintf("%s:/data/config.yaml", configFile),
 		"-e", "LOGGING_LEVEL=debug",
 		// Map the host ports to the container's fixed ports
 		"-p", fmt.Sprintf("%d:8080", metricsPrt), // Map host's dynamic port to container's fixed metrics port
@@ -209,11 +209,11 @@ func BuildAndRunContainer(configFilePath string, memory string) error {
 	return waitForMetrics()
 }
 
-// cleanupTestData removes the test-specific data directory
-func cleanupTestData() {
-	if dataDir != "" {
+// cleanupConfigFile removes the test-specific config file
+func cleanupConfigFile() {
+	if configFilePath != "" {
 		// Just attempt to remove it, ignoring errors
-		os.RemoveAll(dataDir)
+		os.Remove(configFilePath)
 	}
 }
 
@@ -280,8 +280,8 @@ func StopContainer() {
 	// Then remove it
 	runDockerCommand("rm", "-f", containerName)
 
-	// Clean up test data
-	cleanupTestData()
+	// Clean up config file
+	cleanupConfigFile()
 }
 
 // printContainerDebugInfo prints detailed information about the container
@@ -363,12 +363,13 @@ func GetCurrentDir() string {
 	return strings.TrimSpace(wd)
 }
 
-// writeConfigFile writes the given YAML content to ./data/config.yaml so the container will read it.
+// writeConfigFile writes the given YAML content to a config file for the container to read.
 func writeConfigFile(yamlContent string) error {
-	dataDir := getTestDataDir()
-	if err := os.MkdirAll(dataDir, 0o755); err != nil {
-		return fmt.Errorf("failed to create data dir: %w", err)
+	configPath := getConfigFilePath()
+	// Ensure the directory exists
+	dir := filepath.Dir(configPath)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return fmt.Errorf("failed to create config dir: %w", err)
 	}
-	configPath := filepath.Join(dataDir, "config.yaml")
 	return os.WriteFile(configPath, []byte(yamlContent), 0o644)
 }

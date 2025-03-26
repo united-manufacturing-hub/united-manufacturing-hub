@@ -257,8 +257,9 @@ func (s *DefaultService) Create(ctx context.Context, servicePath string, config 
 	logRunContent := fmt.Sprintf(`#!/command/execlineb -P
 fdmove -c 2 1
 foreground { mkdir -p %s }
+foreground { chown -R nobody:nobody %s }
 logutil-service %s
-`, logDir, logDir)
+`, logDir, logDir, logDir)
 
 	if err := s.fsService.WriteFile(ctx, logRunPath, []byte(logRunContent), 0755); err != nil {
 		return fmt.Errorf("failed to write log run script: %w", err)

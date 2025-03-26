@@ -21,7 +21,6 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -35,7 +34,7 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 
 	AfterAll(func() {
 		// Always stop container after the entire suite
-		StopContainer()
+		//StopContainer()
 	})
 
 	Context("with an empty config", func() {
@@ -55,11 +54,6 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 			}
 			Expect(waitForMetrics()).To(Succeed(), "Metrics endpoint should be available with empty config")
 		})
-
-		AfterAll(func() {
-			StopContainer() // Stop container after empty config scenario
-		})
-
 		It("exposes metrics and has zero s6 services running", func() {
 			// Check the /metrics endpoint
 			resp, err := http.Get(GetMetricsURL())
@@ -160,7 +154,7 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 
 				// Print the latest YAML config
 				fmt.Println("\nLatest YAML config at time of failure:")
-				configPath := filepath.Join(getTestDataDir(), "config.yaml")
+				configPath := getConfigFilePath()
 				config, err := os.ReadFile(configPath)
 				if err != nil {
 					fmt.Printf("Failed to read config file %s: %v\n", configPath, err)
@@ -562,7 +556,7 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 
 				// Print the latest YAML config
 				fmt.Println("\nLatest YAML config at time of failure:")
-				configPath := filepath.Join(getTestDataDir(), "config.yaml")
+				configPath := getConfigFilePath()
 				config, err := os.ReadFile(configPath)
 				if err != nil {
 					fmt.Printf("Failed to read config file %s: %v\n", configPath, err)

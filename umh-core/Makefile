@@ -88,3 +88,13 @@ test-benthos: clean build
 		-p 8081:8080 \
 		-p 4195:4195 \
 		$(IMAGE_NAME):$(TAG)
+
+test-benthos-tmp: clean build
+	@cp $(PWD)/examples/example-config-benthos.yaml $(PWD)/config.yaml
+	docker run \
+		--name $(IMAGE_NAME) \
+		-v $(PWD)/config.yaml:/data/config.yaml \
+		-e LOGGING_LEVEL=DEBUG \
+		-p 8081:8080 \
+		-p 4195:4195 \
+		$(IMAGE_NAME):$(TAG)
