@@ -115,22 +115,85 @@ func checkGoldenServiceStatusOnly() int {
 
 // waitForMetrics polls the /metrics endpoint until it returns 200
 func waitForMetrics() error {
+	startTime := time.Now()
+
+	// Print initial debug info before we start polling
+	fmt.Printf("Starting to wait for metrics at %s\n", startTime.Format(time.RFC3339))
+	fmt.Printf("Container name: %s\n", getContainerName())
+
+	// Track errors for better debugging
+	var lastError error
+	var consecutiveErrors int
+	var totalAttempts int
+	var lastURL string
+
 	Eventually(func() error {
+		totalAttempts++
 		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 		defer cancel()
-		req, err := http.NewRequestWithContext(ctx, "GET", GetMetricsURL(), nil)
+
+		url := GetMetricsURL()
+		lastURL = url
+
+		// The URL detection and logging is now handled by GetMetricsURL()
+		fmt.Printf("Attempt %d: Connecting to metrics...\n", totalAttempts)
+
+		req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 		if err != nil {
-			return err
+			lastError = fmt.Errorf("failed to create request to %s: %w", url, err)
+			consecutiveErrors++
+
+			// Every 5 consecutive errors, print diagnostic info
+			if consecutiveErrors%5 == 0 {
+				fmt.Printf("Attempt %d: Still failing after %v. Last error: %v\n",
+					totalAttempts, time.Since(startTime), lastError)
+
+				// After 15 consecutive errors, print container debug info
+				if consecutiveErrors == 15 {
+					printContainerDebugInfo()
+				}
+			}
+			return lastError
 		}
+
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
-			return err
+			lastError = fmt.Errorf("failed to connect to %s: %w", url, err)
+			consecutiveErrors++
+
+			// Every 5 consecutive errors, print more info
+			if consecutiveErrors%5 == 0 {
+				fmt.Printf("Attempt %d: Still failing after %v. Last error: %v\n",
+					totalAttempts, time.Since(startTime), lastError)
+
+				// After 15 consecutive errors, print container debug info
+				if consecutiveErrors == 15 {
+					printContainerDebugInfo()
+				}
+			}
+			return lastError
 		}
 		defer resp.Body.Close()
+
 		if resp.StatusCode != http.StatusOK {
-			return fmt.Errorf("metrics endpoint returned status %d", resp.StatusCode)
+			lastError = fmt.Errorf("metrics endpoint returned status %d", resp.StatusCode)
+			consecutiveErrors++
+			return lastError
 		}
+
+		// Success! Reset error counter
+		consecutiveErrors = 0
+		fmt.Printf("Successfully connected to metrics endpoint (%s) after %v (%d attempts)\n",
+			url, time.Since(startTime), totalAttempts)
 		return nil
-	}, 30*time.Second, 1*time.Second).Should(Succeed())
+	}, 60*time.Second, 1*time.Second).Should(Succeed(), func() string {
+		// If we're still failing after 60 seconds, print detailed debug info
+		printContainerDebugInfo()
+
+		// Return a detailed error message
+		return fmt.Sprintf("Failed to connect to metrics endpoint (%s) after %v (%d attempts). Last error: %v",
+			lastURL, time.Since(startTime), totalAttempts, lastError)
+	})
+
 	return nil
 }

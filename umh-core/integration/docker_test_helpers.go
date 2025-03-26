@@ -24,8 +24,6 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-
-	. "github.com/onsi/gomega"
 )
 
 const (
@@ -93,10 +91,16 @@ func GetMetricsURL() string {
 		if port == 0 {
 			port = 8081 // Fallback to default port
 		}
+		fmt.Printf("Using localhost URL with host port: http://localhost:%d/metrics\n", port)
 		return fmt.Sprintf("http://localhost:%d/metrics", port)
 	}
-	// Use the container's internal port directly
-	return fmt.Sprintf("http://%s:8080/metrics", ip)
+
+	// Use the container's internal port - this should match what's in the config
+	// By default, in the container the metrics server runs on port 8080
+	containerMetricsPort := 8080
+	fmt.Printf("Using direct container IP with container's internal port: http://%s:%d/metrics\n",
+		ip, containerMetricsPort)
+	return fmt.Sprintf("http://%s:%d/metrics", ip, containerMetricsPort)
 }
 
 // GetGoldenServiceURL returns the URL for the golden service
@@ -115,10 +119,18 @@ func BuildAndRunContainer(configFilePath string, memory string) error {
 	// Get the unique container name for this test run
 	containerName := getContainerName()
 
+	fmt.Printf("\n=== STARTING CONTAINER BUILD AND RUN ===\n")
+	fmt.Printf("Container name: %s\n", containerName)
+	fmt.Printf("Memory limit: %s\n", memory)
+
 	// Generate random ports to avoid conflicts
 	// Use PID to create somewhat unique ports, but with a limited range to avoid system port limits
 	metricsPrt := 8081 + (os.Getpid() % 1000) // Base port 8081 + offset based on PID
 	goldenPrt := 8082 + (os.Getpid() % 1000)  // Base port 8082 + offset based on PID
+
+	fmt.Printf("Port mappings - Host:Container\n")
+	fmt.Printf("- Metrics: %d:8080\n", metricsPrt)
+	fmt.Printf("- Golden: %d:8082\n", goldenPrt)
 
 	// Store these ports for later use
 	portMu.Lock()
@@ -127,30 +139,73 @@ func BuildAndRunContainer(configFilePath string, memory string) error {
 	portMu.Unlock()
 
 	// 1. Stop/Remove the old container if any
-	runDockerCommand("rm", "-f", containerName) // ignoring error
-	runDockerCommand("stop", containerName)     // ignoring error
+	fmt.Println("Cleaning up any previous containers with the same name...")
+	out, err := runDockerCommand("rm", "-f", containerName) // ignoring error
+	if err != nil {
+		fmt.Printf("Note: Container removal returned: %v, output: %s (this may be normal)\n", err, out)
+	}
+
+	out, err = runDockerCommand("stop", containerName) // ignoring error
+	if err != nil {
+		fmt.Printf("Note: Container stop returned: %v, output: %s (this may be normal)\n", err, out)
+	}
 
 	// 2. Build image
+	fmt.Println("Building Docker image...")
 	coreDir := filepath.Dir(GetCurrentDir())
 	dockerfilePath := filepath.Join(coreDir, "Dockerfile")
-	out, err := runDockerCommand("build", "-t", imageName, "-f", dockerfilePath, coreDir)
-	Expect(err).ToNot(HaveOccurred(), fmt.Sprintf("Docker build failed: %s", out))
+
+	fmt.Printf("Core directory: %s\n", coreDir)
+	fmt.Printf("Dockerfile path: %s\n", dockerfilePath)
+
+	out, err = runDockerCommand("build", "-t", imageName, "-f", dockerfilePath, coreDir)
+	if err != nil {
+		fmt.Printf("Docker build failed: %v\n", err)
+		fmt.Printf("Build output:\n%s\n", out)
+		return fmt.Errorf("Docker build failed: %s", out)
+	}
+	fmt.Println("Docker build successful")
 
 	// 3. Run container
+	dataDir := getTestDataDir()
+	fmt.Printf("Using data directory: %s\n", dataDir)
+
+	fmt.Println("Starting container...")
 	out, err = runDockerCommand(
 		"run", "-d",
 		"--name", containerName,
 		"--cpus=1",
 		"--memory", memory,
-		"-v", fmt.Sprintf("%s:/data", getTestDataDir()),
+		"-v", fmt.Sprintf("%s:/data", dataDir),
 		"-e", "LOGGING_LEVEL=debug",
-		"-p", fmt.Sprintf("%d:8080", metricsPrt),
-		"-p", fmt.Sprintf("%d:8082", goldenPrt),
+		// Map the host ports to the container's fixed ports
+		"-p", fmt.Sprintf("%d:8080", metricsPrt), // Map host's dynamic port to container's fixed metrics port
+		"-p", fmt.Sprintf("%d:8082", goldenPrt), // Map host's dynamic port to container's golden service port
 		imageName,
 	)
-	Expect(err).ToNot(HaveOccurred(), fmt.Sprintf("Could not run container: %s", out))
+	if err != nil {
+		fmt.Printf("Container start failed: %v\n", err)
+		fmt.Printf("Container run output:\n%s\n", out)
+		return fmt.Errorf("could not run container: %s", out)
+	}
+	fmt.Printf("Container started with ID: %s\n", strings.TrimSpace(out))
 
-	// 4. Wait for the container to be healthy
+	// 4. Verify the container is actually running
+	out, err = runDockerCommand("inspect", "--format", "{{.State.Status}}", containerName)
+	if err != nil {
+		fmt.Printf("Failed to inspect container: %v\n", err)
+	} else {
+		containerState := strings.TrimSpace(out)
+		fmt.Printf("Container state: %s\n", containerState)
+		if containerState != "running" {
+			fmt.Println("WARNING: Container is not in running state!")
+			printContainerDebugInfo()
+			return fmt.Errorf("container is in %s state, not running", containerState)
+		}
+	}
+
+	// 5. Wait for the container to be healthy
+	fmt.Println("Waiting for metrics endpoint to become available...")
 	return waitForMetrics()
 }
 
@@ -164,7 +219,7 @@ func cleanupTestData() {
 
 // getContainerIP returns the IP address of a running container
 func getContainerIP(container string) (string, error) {
-	// We're using runDockerCommand which already handles docker/podman selection
+	// First try the traditional IPAddress field
 	out, err := runDockerCommand("inspect", "--format", "{{.NetworkSettings.IPAddress}}", container)
 	if err != nil {
 		return "", fmt.Errorf("failed to get container IP: %w", err)
@@ -172,6 +227,37 @@ func getContainerIP(container string) (string, error) {
 
 	// Trim whitespace
 	ip := strings.TrimSpace(out)
+
+	// If we got an empty IP, try to get it from the networks
+	if ip == "" {
+		// Try to get from bridge network (common default)
+		out, err = runDockerCommand("inspect", "--format", "{{.NetworkSettings.Networks.bridge.IPAddress}}", container)
+		if err == nil {
+			ip = strings.TrimSpace(out)
+		}
+	}
+
+	// If still empty, try "networks" plural for Docker Compose setups
+	if ip == "" {
+		out, err = runDockerCommand("inspect", "--format", "{{range $net, $conf := .NetworkSettings.Networks}}{{$conf.IPAddress}} {{end}}", container)
+		if err == nil {
+			// This might return multiple IPs, take the first non-empty one
+			for _, possibleIP := range strings.Fields(out) {
+				if possibleIP != "" {
+					ip = possibleIP
+					break
+				}
+			}
+		}
+	}
+
+	// If we still don't have an IP, log a warning
+	if ip == "" {
+		fmt.Printf("WARNING: Could not determine container IP for %s. Will use localhost instead.\n", container)
+	} else {
+		fmt.Printf("Found container IP for %s: %s\n", container, ip)
+	}
+
 	return ip, nil
 }
 
@@ -196,6 +282,61 @@ func StopContainer() {
 
 	// Clean up test data
 	cleanupTestData()
+}
+
+// printContainerDebugInfo prints detailed information about the container
+// for debugging purposes - useful when tests fail
+func printContainerDebugInfo() {
+	containerName := getContainerName()
+
+	fmt.Println("\n==== CONTAINER DEBUG INFO ====")
+
+	// 1. List all running containers
+	fmt.Println("\n[ALL RUNNING CONTAINERS]")
+	out, err := runDockerCommand("ps", "-a")
+	if err != nil {
+		fmt.Printf("Failed to list containers: %v\n", err)
+	} else {
+		fmt.Println(out)
+	}
+
+	// 2. Check our container's status
+	fmt.Printf("\n[CONTAINER STATUS: %s]\n", containerName)
+	out, err = runDockerCommand("inspect", "--format", "{{.State.Status}}", containerName)
+	if err != nil {
+		fmt.Printf("Failed to get container status: %v\n", err)
+	} else {
+		fmt.Printf("Status: %s\n", strings.TrimSpace(out))
+	}
+
+	// 3. Get container IP info
+	fmt.Println("\n[CONTAINER NETWORK INFO]")
+	out, err = runDockerCommand("inspect", "--format", "{{json .NetworkSettings}}", containerName)
+	if err != nil {
+		fmt.Printf("Failed to get network info: %v\n", err)
+	} else {
+		fmt.Printf("Network Settings: %s\n", out)
+	}
+
+	// 4. Check container logs for errors
+	fmt.Println("\n[CONTAINER LOGS (last 30 lines)]")
+	out, err = runDockerCommand("logs", "--tail", "30", containerName)
+	if err != nil {
+		fmt.Printf("Failed to get container logs: %v\n", err)
+	} else {
+		fmt.Println(out)
+	}
+
+	// 5. Print port mappings
+	fmt.Println("\n[PORT MAPPINGS]")
+	out, err = runDockerCommand("port", containerName)
+	if err != nil {
+		fmt.Printf("Failed to get port mappings: %v\n", err)
+	} else {
+		fmt.Println(out)
+	}
+
+	fmt.Println("\n==== END DEBUG INFO ====")
 }
 
 func runDockerCommand(args ...string) (string, error) {

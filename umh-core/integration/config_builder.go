@@ -28,12 +28,18 @@ func NewBuilder() *Builder {
 	return &Builder{
 		full: config.FullConfig{
 			Agent: config.AgentConfig{
-				MetricsPort: 8080,
+				MetricsPort: 8080, // Default port inside container
 			},
 			Services: []config.S6FSMConfig{},
 			Benthos:  []config.BenthosConfig{},
 		},
 	}
+}
+
+// SetMetricsPort sets a custom metrics port for the agent
+func (b *Builder) SetMetricsPort(port int) *Builder {
+	b.full.Agent.MetricsPort = port
+	return b
 }
 
 func (b *Builder) AddGoldenService() *Builder {

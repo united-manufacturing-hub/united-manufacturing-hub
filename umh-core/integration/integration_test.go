@@ -41,14 +41,18 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 	Context("with an empty config", func() {
 		BeforeAll(func() {
 			By("Building an empty config and writing to data/config.yaml")
-			emptyConfig := `
-agent:
-  metricsPort: 8080
-services: []
-benthos: []
-`
+			// Create a config builder and ensure the metrics port is 8080 (container internal default)
+			configBuilder := NewBuilder().SetMetricsPort(8080)
+			emptyConfig := configBuilder.BuildYAML()
+
 			Expect(writeConfigFile(emptyConfig)).To(Succeed())
-			Expect(BuildAndRunContainer(emptyConfig, "1024m")).To(Succeed())
+			err := BuildAndRunContainer(emptyConfig, "1024m")
+			if err != nil {
+				// If container startup fails, print detailed debug info
+				fmt.Println("Container startup failed, printing debug info:")
+				printContainerDebugInfo()
+				Expect(err).ToNot(HaveOccurred(), "Container startup failed")
+			}
 			Expect(waitForMetrics()).To(Succeed(), "Metrics endpoint should be available with empty config")
 		})
 
