@@ -1235,7 +1235,7 @@ logger:
 			mockClient.SetReadyStatus(200, true, true, "")
 
 			// Get the service status (which includes the logs)
-			info, err := service.Status(ctx, benthosName, 4195, 1)
+			info, err := service.Status(ctx, benthosName, 4195, 20) // tick 20, so that the logs are fetched and not cached
 			Expect(err).NotTo(HaveOccurred())
 
 			// Check if logs are fine - this should return false with our error logs
@@ -1244,6 +1244,7 @@ logger:
 		})
 
 		It("should identify different types of errors in the logs", func() {
+			tick := uint64(20)
 			// Test various error types
 			errorCases := []struct {
 				description string
@@ -1346,7 +1347,8 @@ logger:
 				mockS6Service.GetLogsResult = testCase.logs
 
 				// Get status with the test logs
-				info, err := service.Status(ctx, benthosName, 4195, 1)
+				info, err := service.Status(ctx, benthosName, 4195, tick)
+				tick = tick + 20 // increment tick by 20 to bypass the cache
 				Expect(err).NotTo(HaveOccurred())
 
 				// Check logs status
@@ -1386,7 +1388,7 @@ logger:
 			})
 
 			// Get the service status
-			info, err := service.Status(ctx, benthosName, 4195, 1)
+			info, err := service.Status(ctx, benthosName, 4195, 20) // tick 20, so that the logs are fetched and not cached
 			Expect(err).NotTo(HaveOccurred())
 
 			// Check if logs are fine

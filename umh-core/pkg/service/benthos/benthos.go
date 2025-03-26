@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/rand"
 	"net/http"
 	"path/filepath"
 	"regexp"
@@ -222,6 +223,18 @@ type connStatus struct {
 	Error     string `json:"error,omitempty"`
 }
 
+// LogCache stores cached logs and metadata for a service
+type LogCache struct {
+	// Logs contains the cached log entries
+	Logs []s6service.LogEntry
+	// LastFetchTick is the last tick when logs were fetched
+	LastFetchTick uint64
+	// NextFetchTick is the tick when logs should be fetched next
+	NextFetchTick uint64
+	// FetchInterval is the number of ticks between fetches
+	FetchInterval uint64
+}
+
 // BenthosService is the default implementation of the IBenthosService interface
 type BenthosService struct {
 	logger           *zap.SugaredLogger
@@ -230,6 +243,8 @@ type BenthosService struct {
 	s6ServiceConfigs []config.S6FSMConfig
 	httpClient       HTTPClient
 	metricsState     *BenthosMetricsState
+	// Cache for service logs to reduce fetch operations
+	cachedLogs map[string]*LogCache
 }
 
 // BenthosServiceOption is a function that modifies a BenthosService
@@ -259,6 +274,7 @@ func NewDefaultBenthosService(benthosName string, opts ...BenthosServiceOption) 
 		s6Service:    s6service.NewDefaultService(),
 		httpClient:   newDefaultHTTPClient(),
 		metricsState: NewBenthosMetricsState(),
+		cachedLogs:   make(map[string]*LogCache),
 	}
 
 	// Apply options
@@ -294,6 +310,22 @@ func (s *BenthosService) generateBenthosYaml(config *benthosserviceconfig.Bentho
 // getS6ServiceName converts a benthosName (e.g. "myservice") to its S6 service name (e.g. "benthos-myservice")
 func (s *BenthosService) getS6ServiceName(benthosName string) string {
 	return fmt.Sprintf("benthos-%s", benthosName)
+}
+
+// calculateNextFetchTick determines the next tick to fetch logs with randomization
+// to prevent all services from fetching logs on the same tick
+func (s *BenthosService) calculateNextFetchTick(currentTick uint64) (nextTick, interval uint64) {
+	// Base interval is 10 ticks
+	baseInterval := uint64(10)
+
+	// Randomize between 8-12 ticks to spread out fetches
+	// This prevents all services from fetching logs on the same cycle
+	interval = baseInterval + uint64(rand.Intn(5)-2) // -2 to +2 from base
+
+	// Calculate next fetch tick
+	nextTick = currentTick + interval
+
+	return nextTick, interval
 }
 
 // generateS6ConfigForBenthos creates a S6 config for a given benthos instance
@@ -479,16 +511,62 @@ func (s *BenthosService) Status(ctx context.Context, benthosName string, metrics
 		return ServiceInfo{}, fmt.Errorf("failed to get current FSM state: %w", err)
 	}
 
-	// Let's get the logs of the Benthos service
+	// Log fetching optimization with tick-based scheduling
+	var logs []s6service.LogEntry
+	var fetchErr error
+	shouldFetchLogs := false
 	s6ServicePath := filepath.Join(constants.S6BaseDir, s6ServiceName)
-	logs, err := s.s6Service.GetLogs(ctx, s6ServicePath)
-	if err != nil {
-		if errors.Is(err, s6service.ErrServiceNotExist) {
-			s.logger.Debugf("Service %s does not exist, returning empty logs", s6ServiceName)
-			return ServiceInfo{}, ErrServiceNotExist
-		} else {
-			return ServiceInfo{}, fmt.Errorf("failed to get logs: %w", err)
+
+	// Check if this service has a cache entry
+	cache, exists := s.cachedLogs[s6ServiceName]
+
+	if exists {
+		// Determine if we should fetch logs this cycle based on NextFetchTick
+		shouldFetchLogs = tick >= cache.NextFetchTick
+		if !shouldFetchLogs {
+			// Use cached logs
+			logs = cache.Logs
+			s.logger.Debugf("Using cached logs for service %s (next fetch at tick %d, current %d)",
+				s6ServiceName, cache.NextFetchTick, tick)
 		}
+	} else {
+		// Initialize cache with randomized schedule for new service
+		shouldFetchLogs = true
+		nextTick, interval := s.calculateNextFetchTick(tick)
+
+		s.cachedLogs[s6ServiceName] = &LogCache{
+			Logs:          []s6service.LogEntry{},
+			LastFetchTick: 0, // Not fetched yet
+			NextFetchTick: nextTick,
+			FetchInterval: interval,
+		}
+		s.logger.Debugf("Initialized log cache for service %s, first fetch scheduled at tick %d",
+			s6ServiceName, nextTick)
+	}
+
+	if shouldFetchLogs {
+		s.logger.Debugf("Fetching logs for service %s at tick %d", s6ServiceName, tick)
+		logs, fetchErr = s.s6Service.GetLogs(ctx, s6ServicePath)
+		if fetchErr != nil {
+			if errors.Is(fetchErr, s6service.ErrServiceNotExist) {
+				s.logger.Debugf("Service %s does not exist, returning empty logs", s6ServiceName)
+				return ServiceInfo{}, ErrServiceNotExist
+			} else {
+				return ServiceInfo{}, fmt.Errorf("failed to get logs: %w", fetchErr)
+			}
+		}
+
+		// Calculate next fetch with randomization
+		nextTick, interval := s.calculateNextFetchTick(tick)
+
+		// Update cache
+		s.cachedLogs[s6ServiceName].Logs = logs
+		s.cachedLogs[s6ServiceName].LastFetchTick = tick
+		s.cachedLogs[s6ServiceName].NextFetchTick = nextTick
+		s.cachedLogs[s6ServiceName].FetchInterval = interval
+
+		s.logger.Debugf("Updated log cache for service %s, next fetch at tick %d",
+			s6ServiceName, nextTick)
 	}
 
 	// Let's get the health check of the Benthos service
@@ -515,8 +593,6 @@ func (s *BenthosService) Status(ctx context.Context, benthosName string, metrics
 	}
 
 	// set the logs to the service info
-	// TODO: this is a hack to get the logs to the service info
-	// we should find a better way to do this
 	serviceInfo.BenthosStatus.Logs = logs
 
 	return serviceInfo, nil
@@ -823,6 +899,29 @@ func (s *BenthosService) GetHealthCheckAndMetrics(ctx context.Context, s6Service
 	}, nil
 }
 
+// resetLogCacheSchedule resets the log fetch schedule for a service
+func (s *BenthosService) resetLogCacheSchedule(s6ServiceName string, currentTick uint64) {
+	// If cache exists, just update next fetch time
+	if cache, exists := s.cachedLogs[s6ServiceName]; exists {
+		nextTick, interval := s.calculateNextFetchTick(currentTick)
+		cache.NextFetchTick = nextTick
+		cache.FetchInterval = interval
+		s.logger.Debugf("Reset log cache schedule for service %s, next fetch at tick %d",
+			s6ServiceName, nextTick)
+	} else {
+		// Create new cache entry with immediate fetch schedule
+		nextTick, interval := s.calculateNextFetchTick(currentTick)
+		s.cachedLogs[s6ServiceName] = &LogCache{
+			Logs:          []s6service.LogEntry{},
+			LastFetchTick: 0, // Not fetched yet
+			NextFetchTick: nextTick,
+			FetchInterval: interval,
+		}
+		s.logger.Debugf("Created new log cache schedule for service %s, next fetch at tick %d",
+			s6ServiceName, nextTick)
+	}
+}
+
 // AddBenthosToS6Manager adds a Benthos instance to the S6 manager
 // Expects benthosName (e.g. "myservice") as defined in the UMH config
 func (s *BenthosService) AddBenthosToS6Manager(ctx context.Context, cfg *benthosserviceconfig.BenthosServiceConfig, benthosName string) error {
@@ -1019,7 +1118,36 @@ func (s *BenthosService) ReconcileManager(ctx context.Context, tick uint64) (err
 		return ctx.Err(), false
 	}
 
+	// First-time initialization of cache schedules
+	// We know it's the first run if tick is small and we have no cached log entries
+	isFirstRun := tick < 10 && len(s.cachedLogs) == 0
+	if isFirstRun {
+		s.initializeAllCacheSchedules(tick)
+	}
+
+	// Clean up log cache periodically (every 100 ticks)
+	if tick%100 == 0 {
+		s.cleanupLogCache(tick)
+	}
+
 	return s.s6Manager.Reconcile(ctx, config.FullConfig{Services: s.s6ServiceConfigs}, tick)
+}
+
+// cleanupLogCache removes stale cache entries
+func (s *BenthosService) cleanupLogCache(currentTick uint64) {
+	// Max ticks to keep cache without service existence (50 = ~5x fetch interval)
+	const maxTicksStale uint64 = 50
+
+	for serviceName, cache := range s.cachedLogs {
+		// Verify service still exists
+		if _, exists := s.s6Manager.GetInstance(serviceName); !exists {
+			// If service doesn't exist and cache is stale, clean up
+			if currentTick-cache.LastFetchTick > maxTicksStale {
+				s.logger.Debugf("Removing stale log cache for service %s", serviceName)
+				delete(s.cachedLogs, serviceName)
+			}
+		}
+	}
 }
 
 // IsLogsFine analyzes Benthos logs to determine if there are any critical issues
@@ -1121,5 +1249,43 @@ func (s *BenthosService) ServiceExists(ctx context.Context, benthosName string) 
 // and the instance itself cannot be stopped or removed
 // Expects benthosName (e.g. "myservice") as defined in the UMH config
 func (s *BenthosService) ForceRemoveBenthos(ctx context.Context, benthosName string) error {
-	return s.s6Service.ForceRemove(ctx, s.getS6ServiceName(benthosName))
+	s6ServiceName := s.getS6ServiceName(benthosName)
+
+	// Clean up the cache entry for this service
+	delete(s.cachedLogs, s6ServiceName)
+	s.logger.Debugf("Removed log cache for force-removed service %s", s6ServiceName)
+
+	return s.s6Service.ForceRemove(ctx, s6ServiceName)
+}
+
+// initializeAllCacheSchedules initializes cache schedules for all services
+// This should be called at startup to distribute log fetching across ticks
+func (s *BenthosService) initializeAllCacheSchedules(tick uint64) {
+	s.logger.Debugf("Initializing log cache schedules for all services at tick %d", tick)
+
+	// Randomly distribute initial fetches across instances to spread load
+	for _, config := range s.s6ServiceConfigs {
+		s6ServiceName := config.Name
+
+		// Skip if already initialized
+		if _, exists := s.cachedLogs[s6ServiceName]; exists {
+			continue
+		}
+
+		// Calculate spread-out initial fetch schedules
+		// Add random offset (0-9) to avoid all services fetching at once
+		initialOffset := uint64(rand.Intn(10))
+		nextTick := tick + initialOffset
+		interval := uint64(10) // Base interval
+
+		s.cachedLogs[s6ServiceName] = &LogCache{
+			Logs:          []s6service.LogEntry{},
+			LastFetchTick: 0,
+			NextFetchTick: nextTick,
+			FetchInterval: interval,
+		}
+
+		s.logger.Debugf("Initialized log cache for service %s, first fetch at tick %d",
+			s6ServiceName, nextTick)
+	}
 }
