@@ -265,12 +265,49 @@ func getContainerIP(container string) (string, error) {
 // printContainerLogs prints the logs from the container
 func printContainerLogs() {
 	containerName := getContainerName()
+	fmt.Printf("Test failed, printing container logs:\n")
+
+	// 1. Regular container logs (stdout/stderr)
+	fmt.Printf("\n=== DOCKER CONTAINER LOGS ===\n")
 	out, err := runDockerCommand("logs", containerName)
 	if err != nil {
 		fmt.Printf("Failed to get container logs: %v\n", err)
-		return
+	} else {
+		fmt.Printf("%s\n", out)
 	}
-	fmt.Printf("Container logs:\n%s\n", out)
+
+	// 2. Internal UMH Core logs
+	fmt.Printf("\n=== UMH CORE INTERNAL LOGS ===\n")
+	out, err = runDockerCommand("exec", containerName, "cat", "/data/logs/umh-core/current")
+	if err != nil {
+		fmt.Printf("Failed to get UMH Core internal logs: %v\n", err)
+	} else if out == "" {
+		fmt.Printf("UMH Core internal logs are empty or not found\n")
+	} else {
+		fmt.Printf("%s\n", out)
+	}
+
+	// 3. Golden Service logs
+	fmt.Printf("\n=== GOLDEN SERVICE INTERNAL LOGS ===\n")
+	out, err = runDockerCommand("exec", containerName, "cat", "/data/logs/golden-service/current")
+	if err != nil {
+		fmt.Printf("Failed to get Golden Service internal logs: %v\n", err)
+	} else if out == "" {
+		fmt.Printf("Golden Service internal logs are empty or not found\n")
+	} else {
+		fmt.Printf("%s\n", out)
+	}
+
+	// 4. List all available log files for reference
+	fmt.Printf("\n=== AVAILABLE LOG FILES ===\n")
+	out, err = runDockerCommand("exec", containerName, "find", "/data/logs", "-type", "f")
+	if err != nil {
+		fmt.Printf("Failed to list log files: %v\n", err)
+	} else if out == "" {
+		fmt.Printf("No log files found in /data/logs\n")
+	} else {
+		fmt.Printf("%s\n", out)
+	}
 }
 
 // StopContainer stops and removes your container
