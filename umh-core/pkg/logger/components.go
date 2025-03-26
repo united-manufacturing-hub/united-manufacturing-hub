@@ -22,17 +22,17 @@ const (
 	ComponentStarvationChecker = "StarveCheck"
 
 	// Manager components
-	ComponentS6Manager      = "S6Manager"
-	ComponentBenthosManager = "BenthosManager"
-
+	ComponentS6Manager       = "S6Manager"
+	ComponentBenthosManager  = "BenthosManager"
+	ComponentRedpandaManager = "RedpandaManager"
 	// FSM components
 	ComponentBaseFSM    = "BaseFSM"
 	ComponentS6Instance = "S6Instance"
 
 	// Service components
-	ComponentS6Service      = "S6Service"
-	ComponentBenthosService = "BenthosService"
-
+	ComponentS6Service       = "S6Service"
+	ComponentBenthosService  = "BenthosService"
+	ComponentRedpandaService = "RedpandaService"
 	// Configuration
 	ComponentConfigManager = "ConfigManager"
 )
