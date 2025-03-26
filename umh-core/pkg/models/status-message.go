@@ -14,11 +14,10 @@
 
 package models
 
-// Schema for the status message containing system state and DFC information
+// StatusMessage represents the complete system state including core components and plugins.
 type StatusMessage struct {
-	Core Core `json:"core"`
-	// TBD: this is a placeholder for future plugins
-	Plugins map[string]interface{} `json:"plugins"`
+	Core    Core                   `json:"core"`
+	Plugins map[string]interface{} `json:"plugins"` // Extension point for future plugins
 }
 
 type Core struct {
@@ -54,116 +53,105 @@ const (
 )
 
 type Health struct {
-	// Human-readable message describing the health state
-	Message string `json:"message"`
-	// Observed state of the component
-	ObservedState string `json:"state"`
-	// Desired state of the component
-	DesiredState string `json:"desiredState"`
-	// Category of the health state for easy classification
-	Category HealthCategory `json:"category"`
+	Message       string         `json:"message"`      // Human-readable message describing the health state
+	ObservedState string         `json:"state"`        // Observed state of the component
+	DesiredState  string         `json:"desiredState"` // Desired state of the component
+	Category      HealthCategory `json:"category"`     // Category of the health state for easy classification
 }
 
 type Latency struct {
-	AvgMs float64 `json:"avgMs"`
-	MaxMs float64 `json:"maxMs"`
-	MinMs float64 `json:"minMs"`
-	P95Ms float64 `json:"p95Ms"`
-	P99Ms float64 `json:"p99Ms"`
+	AvgMs float64 `json:"avgMs"` // Average latency in milliseconds
+	MaxMs float64 `json:"maxMs"` // Maximum latency in milliseconds
+	MinMs float64 `json:"minMs"` // Minimum latency in milliseconds
+	P95Ms float64 `json:"p95Ms"` // 95th percentile latency in milliseconds
+	P99Ms float64 `json:"p99Ms"` // 99th percentile latency in milliseconds
 }
 
+// ContainerArchitecture represents the processor architecture of the container.
 type ContainerArchitecture string
 
 const (
-	ContainerArchitectureArm64 ContainerArchitecture = "arm64"
-	ContainerArchitectureAmd64 ContainerArchitecture = "amd64"
+	ArchitectureArm64 ContainerArchitecture = "arm64"
+	ArchitectureAmd64 ContainerArchitecture = "amd64"
 )
 
 type Container struct {
-	Health *Health `json:"health"`
-	CPU    *CPU    `json:"cpu"`
-	Disk   *Disk   `json:"disk"`
-	Memory *Memory `json:"memory"`
-	Hwid   string  `json:"hwid"`
-	// Processor architecture. Currently arm64 and amd64 are supported.
-	Architecture ContainerArchitecture `json:"architecture"`
+	Health       *Health               `json:"health"`
+	CPU          *CPU                  `json:"cpu"`
+	Disk         *Disk                 `json:"disk"`
+	Memory       *Memory               `json:"memory"`
+	Hwid         string                `json:"hwid"`         // Hardware identifier
+	Architecture ContainerArchitecture `json:"architecture"` // Processor architecture
 }
 
 type CPU struct {
-	Health *Health `json:"health"`
-	// Total usage in milli-cores
-	TotalUsageMCpu float64 `json:"totalUsageMCpu"`
-	// Number of cores
-	CoreCount int `json:"coreCount"`
+	Health         *Health `json:"health"`
+	TotalUsageMCpu float64 `json:"totalUsageMCpu"` // Total usage in milli-cores (1000m = 1 core)
+	CoreCount      int     `json:"coreCount"`      // Number of CPU cores
 }
 
 type Disk struct {
-	Health *Health `json:"health"`
-	// Used bytes of the disk's data partition
-	DataPartitionUsedBytes float64 `json:"dataPartitionUsedBytes"`
-	// Total bytes of the disk's data partition
-	DataPartitionTotalBytes float64 `json:"dataPartitionTotalBytes"`
+	Health                  *Health `json:"health"`
+	DataPartitionUsedBytes  int64   `json:"dataPartitionUsedBytes"`  // Used bytes of the disk's data partition
+	DataPartitionTotalBytes int64   `json:"dataPartitionTotalBytes"` // Total bytes of the disk's data partition
 }
 
 type Memory struct {
-	Health *Health `json:"health"`
-	// Used bytes of the cgroup's memory
-	CGroupUsedBytes float64 `json:"cGroupUsedBytes"`
-	// Total bytes of the cgroup's memory
-	CGroupTotalBytes float64 `json:"cGroupTotalBytes"`
+	Health           *Health `json:"health"`
+	CGroupUsedBytes  int64   `json:"cGroupUsedBytes"`  // Used bytes of the cgroup's memory
+	CGroupTotalBytes int64   `json:"cGroupTotalBytes"` // Total bytes of the cgroup's memory
 }
 
+// DfcType represents the type of Data Flow Component.
 type DfcType string
 
 const (
-	Custom            DfcType = "custom"
-	DataBridge        DfcType = "data-bridge"
-	ProtocolConverter DfcType = "protocol-converter"
+	DfcTypeCustom            DfcType = "custom"
+	DfcTypeDataBridge        DfcType = "data-bridge"
+	DfcTypeProtocolConverter DfcType = "protocol-converter"
 )
 
+// Dfc represents a Data Flow Component.
 type Dfc struct {
-	// Deprecated: here for backward compatibility. Should just use `UUID` instead.
-	CurrentVersionUUID *string     `json:"currentVersionUUID"`
-	Name               *string     `json:"name"`
-	UUID               string      `json:"uuid"`
-	Health             *Health     `json:"health"`
-	DfcType            DfcType     `json:"dfcType"`
-	Metrics            *DFCMetrics `json:"metrics"`
+	CurrentVersionUUID *string        `json:"currentVersionUUID,omitempty"` // Deprecated: use UUID instead
+	Name               *string        `json:"name"`
+	UUID               string         `json:"uuid"`
+	Health             *Health        `json:"health"`
+	Type               DfcType        `json:"dfcType"` // Type of the DFC
+	Metrics            *DfcMetrics    `json:"metrics"`
+	Bridge             *DfcBridgeInfo `json:"bridge,omitempty"` // Additional info for data-bridge type
 	// For 'protocol-converter' type, this array contains exactly one connection.
 	//
 	// For 'data-bridge' type, this array always contains exactly two connections.
 	//
 	// For 'custom' type, this array is empty.
-	Connections []Connection `json:"connections,omitempty"`
-	// Additional information for 'data-bridge' type DFCs.
-	Bridge *DfcBridgeInfo `json:"bridge,omitempty"`
+	Connections []Connection `json:"connections,omitempty"` // Connection details based on DFC type
 }
 
-type DFCMetrics struct {
-	AvgInputThroughputPerMinuteInMsgSec float64 `json:"avgInputThroughputPerMinuteInMsgSec"`
+// DfcMetrics contains metrics about a Data Flow Component.
+type DfcMetrics struct {
+	AvgInputThroughputPerMinute float64 `json:"avgInputThroughputPerMinuteInMsgSec"` // Messages per second, averaged over a minute
 }
 
+// Connection represents a connection to an external system.
 type Connection struct {
-	Name   string  `json:"name"`
-	UUID   string  `json:"uuid"`
-	Health *Health `json:"health"`
-	// The connection URI in full, e.g., 'opc.tcp://hostname:port/path'. This includes the
-	// scheme, host, port, and any required path elements.
-	URI string `json:"uri"`
-	// Last reported latency in milliseconds
-	LastLatencyMs float64 `json:"lastLatencyMs"`
+	Name          string  `json:"name"`
+	UUID          string  `json:"uuid"`
+	Health        *Health `json:"health"`
+	URI           string  `json:"uri"`           // Full connection URI including scheme, host, port, and path
+	LastLatencyMs float64 `json:"lastLatencyMs"` // Last reported latency in milliseconds
 }
 
 type DfcBridgeInfo struct {
-	DataContract string `json:"dataContract"`
-	InputType    string `json:"inputType"`
-	OutputType   string `json:"outputType"`
+	DataContract string `json:"dataContract"` // Contract defining the data format
+	InputType    string `json:"inputType"`    // Type of input data
+	OutputType   string `json:"outputType"`   // Type of output data
 }
 
 type Redpanda struct {
-	Health                                 *Health `json:"health"`
-	AvgIncomingThroughputPerMinuteInMsgSec float64 `json:"avgIncomingThroughputPerMinuteInMsgSec"`
-	AvgOutgoingThroughputPerMinuteInMsgSec float64 `json:"avgOutgoingThroughputPerMinuteInMsgSec"`
+	Health                         *Health `json:"health"`
+	AvgIncomingThroughputPerMinute float64 `json:"avgIncomingThroughputPerMinuteInMsgSec"` // Incoming messages per second, averaged over a minute
+	AvgOutgoingThroughputPerMinute float64 `json:"avgOutgoingThroughputPerMinuteInMsgSec"` // Outgoing messages per second, averaged over a minute
 }
 
 type UnifiedNamespace struct {
