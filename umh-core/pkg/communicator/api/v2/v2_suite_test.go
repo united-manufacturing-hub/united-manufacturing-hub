@@ -3,7 +3,7 @@ package v2_test
 import (
 	"testing"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/tools"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"

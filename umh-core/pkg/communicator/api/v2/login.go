@@ -7,6 +7,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2/http"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/backend_api_structs"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/hash"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools"
 	"go.uber.org/zap"
 )
@@ -74,4 +75,8 @@ func NewLogin(authToken string, insecureTLS bool) *LoginResponse {
 	}
 	zap.S().Debugf("SetLoginResponse successful: %s", credentials)
 	return credentials
+}
+
+func LoginHash(authToken string) string {
+	return hash.Sha3Hash(hash.Sha3Hash(authToken))
 }

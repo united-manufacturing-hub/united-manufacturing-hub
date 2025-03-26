@@ -3,7 +3,7 @@ package push_test
 import (
 	"testing"
 
-	"github.com/united-manufacturing-hub/ManagementConsole/shared/tools"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"

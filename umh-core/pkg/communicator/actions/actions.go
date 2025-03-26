@@ -4,10 +4,10 @@ import (
 	"database/sql"
 
 	"github.com/google/uuid"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/safejson"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/shared/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/shared/models/mgmtconfig"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/shared/watchdog"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/tools/safejson"
 	"go.uber.org/zap"
 )
 
