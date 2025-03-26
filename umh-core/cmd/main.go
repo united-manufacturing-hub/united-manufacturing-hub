@@ -22,6 +22,7 @@ import (
 	v2 "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/communication_state"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/fail"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/control"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
@@ -64,7 +65,9 @@ func main() {
 	// Start the control loop
 	controlLoop := control.NewControlLoop()
 	systemSnapshot := fsm.SystemSnapshot{}
-	communicationState := communication_state.CommunicationState{}
+	communicationState := communication_state.CommunicationState{
+		Watchdog: watchdog.NewWatchdog(ctx, time.NewTicker(time.Second*10), true),
+	}
 	go SystemSnapshotLogger(ctx, controlLoop, &systemSnapshot)
 
 	// Start the communicator
@@ -146,10 +149,8 @@ func enableBackendConnection(config *config.FullConfig, state *fsm.SystemSnapsho
 		logger.Info("Backend connection enabled, login response: ", zap.Any("login_name", login.Name))
 
 		communicationState.InitialiseAndStartPuller()
-		// state.InitialiseAndStartPusher()
-		// state.InitialiseAndStartSubscriberHandler(time.Minute*5, time.Minute, config)
-		// state.InitialiseAndStartRouter()
-		// state.InitialiseAndStartUpdateScheduler()
-		// state.InitialiseAndStartConfigurationHandler()
+		communicationState.InitialiseAndStartPusher()
+		communicationState.InitialiseAndStartSubscriberHandler(time.Minute*5, time.Minute, config)
+		communicationState.InitialiseAndStartRouter()
 	}
 }

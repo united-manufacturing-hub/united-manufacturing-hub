@@ -2,8 +2,6 @@ package pull
 
 import (
 	"context"
-	"crypto/x509"
-	"encoding/base64"
 	"errors"
 	"fmt"
 	http2 "net/http"
@@ -12,7 +10,6 @@ import (
 	"time"
 
 	"github.com/getsentry/sentry-go"
-	"github.com/united-manufacturing-hub/expiremap/v2/pkg/expiremap"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2/error_handler"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2/http"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/backend_api_structs"
@@ -30,7 +27,6 @@ type Puller struct {
 	jwt                   atomic.Value
 	dog                   watchdog.Iface
 	insecureTLS           bool
-	userCertificateCache  *expiremap.ExpireMap[string, *x509.Certificate]
 }
 
 func NewPuller(jwt string, dog watchdog.Iface, inboundChannel chan *models.UMHMessage, insecureTLS bool) *Puller {
@@ -40,7 +36,6 @@ func NewPuller(jwt string, dog watchdog.Iface, inboundChannel chan *models.UMHMe
 		jwt:                   atomic.Value{},
 		dog:                   dog,
 		insecureTLS:           insecureTLS,
-		userCertificateCache:  expiremap.NewEx[string, *x509.Certificate](10*time.Second, 10*time.Second), // Refresh every 10 seconds
 	}
 	p.jwt.Store(jwt)
 	return &p
@@ -111,55 +106,17 @@ func (p *Puller) pull() {
 					}
 				}
 
-				userCertificate, ok := p.userCertificateCache.Load(message.Email)
-				if !ok {
-					zap.S().Infof("Getting user certificate for %s", message.Email)
-					cert, err := GetUserCertificate(transaction.Context(), message.Email, &cookies, p.insecureTLS)
-					if err == nil && cert != nil && cert.Certificate != "" {
-						zap.S().Infof("User certificate for %s found", message.Email)
-
-						base64Decoded, err := base64.StdEncoding.DecodeString(cert.Certificate)
-						if err != nil {
-							zap.S().Errorf("Failed to decode user certificate: %v", err)
-						}
-						x509Cert, err := x509.ParseCertificate(base64Decoded)
-						if err != nil {
-							zap.S().Errorf("Failed to parse user certificate: %v", err)
-							x509Cert = nil
-						}
-						p.userCertificateCache.Set(message.Email, x509Cert)
-						userCertificate = &x509Cert
-
-					} else {
-						zap.S().Errorf("Failed to get user certificate: %v", err)
-					}
-				}
-
 				insertionTimeout := time.After(10 * time.Second)
-				if userCertificate == nil {
-					select {
-					case p.inboundMessageChannel <- &models.UMHMessage{
-						Email:        message.Email,
-						Content:      message.Content,
-						InstanceUUID: message.InstanceUUID,
-						Metadata:     message.Metadata,
-					}:
-					case <-insertionTimeout:
-						zap.S().Warnf("Inbound message channel is full !")
-						p.dog.ReportHeartbeatStatus(watcherUUID, watchdog.HEARTBEAT_STATUS_WARNING)
-					}
-				} else {
-					select {
-					case p.inboundMessageChannel <- &models.UMHMessage{
-						Email:        message.Email,
-						Content:      message.Content,
-						InstanceUUID: message.InstanceUUID,
-						Metadata:     message.Metadata,
-					}:
-					case <-insertionTimeout:
-						zap.S().Warnf("Inbound message channel is full !")
-						p.dog.ReportHeartbeatStatus(watcherUUID, watchdog.HEARTBEAT_STATUS_WARNING)
-					}
+				select {
+				case p.inboundMessageChannel <- &models.UMHMessage{
+					Email:        message.Email,
+					Content:      message.Content,
+					InstanceUUID: message.InstanceUUID,
+					Metadata:     message.Metadata,
+				}:
+				case <-insertionTimeout:
+					zap.S().Warnf("Inbound message channel is full !")
+					p.dog.ReportHeartbeatStatus(watcherUUID, watchdog.HEARTBEAT_STATUS_WARNING)
 				}
 				if span != nil {
 					span.Finish()

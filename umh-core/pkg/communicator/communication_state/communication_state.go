@@ -2,15 +2,16 @@ package communication_state
 
 import (
 	"sync"
+	"time"
 
 	v2 "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2/pull"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2/push"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/subscriber"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/fail"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/router"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/subscriber"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/shared/models"
 )
 
@@ -22,7 +23,7 @@ type CommunicationState struct {
 	InsecureTLS       bool
 	Puller            *pull.Puller
 	Pusher            *push.Pusher
-	SubscriberHandler *subscriber.SubscriberHandler
+	SubscriberHandler *subscriber.Handler
 	OutboundChannel   chan *models.UMHMessage
 	Router            *router.Router
 	ReleaseChannel    config.ReleaseChannel
@@ -81,4 +82,42 @@ func (c *CommunicationState) InitialiseAndStartRouter() {
 		fail.Fatalf("Failed to create router")
 	}
 	c.Router.Start()
+}
+
+// InitialiseAndStartSubscriberHandler creates a new subscriber handler and starts it
+// ttl is the time until a subscriber is considered dead (if no new subscriber message is received)
+// cull is the cycle time to remove dead subscribers
+func (s *CommunicationState) InitialiseAndStartSubscriberHandler(ttl time.Duration, cull time.Duration, config *config.FullConfig) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.Watchdog == nil {
+		fail.Fatalf("Watchdog is nil, cannot start subscriber handler")
+	}
+
+	if s.Pusher == nil {
+		fail.Fatalf("Pusher is nil, cannot start subscriber handler")
+	}
+	if s.LoginResponse == nil {
+		fail.Fatalf("LoginResponse is nil, cannot start subscriber handler")
+	}
+	if config == nil {
+		fail.Fatalf("Config is nil, cannot start subscriber handler")
+	}
+
+	s.SubscriberHandler = subscriber.NewHandler(
+		s.Watchdog,
+		s.Pusher,
+		s.LoginResponse.UUID,
+		ttl,
+		cull,
+		config,
+		s.ReleaseChannel,
+		false, // disableHardwareStatusCheck
+
+	)
+	if s.SubscriberHandler == nil {
+		fail.Fatalf("Failed to create subscriber handler")
+	}
+	s.SubscriberHandler.StartNotifier()
 }

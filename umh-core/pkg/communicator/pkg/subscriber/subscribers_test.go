@@ -9,7 +9,6 @@ import (
 	"github.com/united-manufacturing-hub/ManagementConsole/companion/cmd/appstate"
 	"github.com/united-manufacturing-hub/ManagementConsole/companion/cmd/helper/config"
 	"github.com/united-manufacturing-hub/ManagementConsole/companion/cmd/models"
-	"github.com/united-manufacturing-hub/ManagementConsole/companion/cmd/subscriber"
 	"github.com/united-manufacturing-hub/ManagementConsole/shared/helper"
 	models2 "github.com/united-manufacturing-hub/ManagementConsole/shared/models"
 )

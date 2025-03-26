@@ -1,7 +1,6 @@
 package subscriber
 
 import (
-	"crypto/x509"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2/push"
@@ -38,11 +37,6 @@ func NewHandler(
 	config *config.FullConfig,
 	releaseChannel config.ReleaseChannel,
 	disableHardwareStatusCheck bool,
-	instanceCertificate *string,
-	certChangeChannelForSubscriberHandler chan struct {
-		Email string
-		Cert  *x509.Certificate
-	},
 ) *Handler {
 	s := &Handler{}
 	s.subscribers = expiremap.NewEx[string, string](cull, ttl)
