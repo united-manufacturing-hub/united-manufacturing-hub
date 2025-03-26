@@ -148,3 +148,15 @@ type BenthosInstance struct {
 func (b *BenthosInstance) GetLastObservedState() publicfsm.ObservedState {
 	return b.ObservedState
 }
+
+// SetService sets the Benthos service implementation
+// This is a testing-only utility to access the private field
+func (b *BenthosInstance) SetService(service benthossvc.IBenthosService) {
+	b.service = service
+}
+
+// GetConfig returns the BenthosServiceConfig of the instance
+// This is a testing-only utility to access the private field
+func (b *BenthosInstance) GetConfig() config.BenthosServiceConfig {
+	return b.config
+}
