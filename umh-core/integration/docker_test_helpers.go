@@ -87,8 +87,8 @@ func GetMetricsURL() string {
 	if port == 0 {
 		port = 8080 // Fallback to default port
 	}
-	fmt.Printf("Using localhost URL with host port: http://%s:%d/metrics\n", "host.docker.internal", port)
-	return fmt.Sprintf("http://%s:%d/metrics", "host.docker.internal", port)
+	fmt.Printf("Using localhost URL with host port: http://%s:%d/metrics\n", "localhost", port)
+	return fmt.Sprintf("http://%s:%d/metrics", "localhost", port)
 }
 
 // GetGoldenServiceURL returns the URL for the golden service
@@ -99,7 +99,7 @@ func GetGoldenServiceURL() string {
 	if port == 0 {
 		port = 8082 // Fallback to default port
 	}
-	return fmt.Sprintf("http://%s:%d", "host.docker.internal", port)
+	return fmt.Sprintf("http://%s:%d", "localhost", port)
 }
 
 // BuildAndRunContainer rebuilds your Docker image, starts the container, etc.
