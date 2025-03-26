@@ -104,6 +104,7 @@ func GetGoldenServiceURL() string {
 	if port == 0 {
 		port = 8082 // Fallback to default port
 	}
+	fmt.Printf("Using localhost URL with host port: http://%s:%d/health\n", "localhost", port)
 	return fmt.Sprintf("http://%s:%d", "localhost", port)
 }
 
