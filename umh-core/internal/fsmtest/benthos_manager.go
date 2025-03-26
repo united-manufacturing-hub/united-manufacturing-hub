@@ -23,7 +23,6 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	benthosfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
 	benthossvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
 	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
@@ -149,7 +148,7 @@ func SetupServiceInManager(
 	desiredState string,
 ) {
 	// Create a properly configured instance
-	instance := benthosfsm.NewBenthosInstance(constants.S6BaseDir, CreateBenthosTestConfig(serviceName, desiredState))
+	instance := benthosfsm.NewBenthosInstance(CreateBenthosTestConfig(serviceName, desiredState))
 
 	// Add it to the manager
 	manager.BaseFSMManager.AddInstanceForTest(serviceName, instance)

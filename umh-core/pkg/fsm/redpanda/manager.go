@@ -61,7 +61,7 @@ func NewRedpandaManager(name string) *RedpandaManager {
 		},
 		// Create Redpanda instance from config
 		func(cfg config.RedpandaConfig) (public_fsm.FSMInstance, error) {
-			return NewRedpandaInstance(baseRedpandaDir, cfg), nil
+			return NewRedpandaInstance(cfg), nil
 		},
 		// Compare Redpanda configs
 		func(instance public_fsm.FSMInstance, cfg config.RedpandaConfig) (bool, error) {
