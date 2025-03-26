@@ -30,7 +30,7 @@ jobs:
         run: go install github.com/onsi/ginkgo/v2/ginkgo@latest
 
       - name: Run unit tests
-        run: ginkgo -r -v --label-filter='!integration' ./...
+        run: ginkgo -r -v --label-filter='!integration' -tags=test ./...
 
   integration-tests:
     name: Integration Tests
@@ -51,4 +51,4 @@ jobs:
         run: go install github.com/onsi/ginkgo/v2/ginkgo@latest
 
       - name: Run integration tests
-        run: ginkgo -r -v --label-filter='integration' ./...
+        run: ginkgo -r -v --label-filter='integration' -tags=test ./...
