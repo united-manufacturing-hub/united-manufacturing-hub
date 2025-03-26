@@ -1,0 +1,54 @@
+name: Test UMH Core
+
+on:
+  push:
+    branches:
+      - "**"
+    paths:
+      - "umh-core/**"
+  pull_request:
+    paths:
+      - "umh-core/**"
+
+jobs:
+  unit-tests:
+    name: Unit Tests
+    runs-on:
+      group: arc-runners-tests
+    defaults:
+      run:
+        working-directory: ./umh-core
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.24.1"
+
+      - name: Install Ginkgo
+        run: go install github.com/onsi/ginkgo/v2/ginkgo@latest
+
+      - name: Run unit tests
+        run: ginkgo -r -v --label-filter='!integration' -tags=test ./...
+
+  integration-tests:
+    name: Integration Tests
+    runs-on:
+      group: arc-runners-tests
+    defaults:
+      run:
+        working-directory: ./umh-core
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.24.1"
+
+      - name: Install Ginkgo
+        run: go install github.com/onsi/ginkgo/v2/ginkgo@latest
+
+      - name: Run integration tests
+        run: ginkgo -r -v --label-filter='integration' -tags=test ./...
