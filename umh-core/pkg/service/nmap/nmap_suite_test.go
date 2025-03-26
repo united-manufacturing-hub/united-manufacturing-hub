@@ -12,21 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package logger
+package nmap
 
-const (
-	// ComponentAgentManager is the name of the agent manager
-	ComponentAgentManager = "agent:"
+import (
+	"testing"
 
-	// ComponentBenthosService is the name of the benthos service
-	ComponentBenthosService = "benthos:"
-
-	// ComponentNmapService is the name of the nmap service
-	ComponentNmapService = "nmap:"
-
-	// ComponentS6FSM is the name of the S6 FSM
-	ComponentS6FSM = "s6-fsm:"
-
-	// ComponentS6Service is the name of the S6 service
-	ComponentS6Service = "s6:"
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 )
+
+func TestNmap(t *testing.T) {
+	RegisterFailHandler(Fail)
+	RunSpecs(t, "Nmap Service Suite")
+}
