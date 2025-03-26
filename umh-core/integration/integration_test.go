@@ -42,7 +42,7 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 			By("Building an empty config and writing to data/config.yaml")
 			emptyConfig := `
 agent:
-  metricsPort: 8080
+  metricsPort: 8081
 services: []
 benthos: []
 `
