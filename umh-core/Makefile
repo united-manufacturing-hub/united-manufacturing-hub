@@ -44,6 +44,10 @@ test: vet nilaway
 unit-test: vet nilaway
 	ginkgo -r -v --tags=test --label-filter='!integration' --fail-fast ./...
 
+
+integration-test: vet nilaway
+	ginkgo -r -v --tags=test --label-filter='integration' --fail-fast ./...
+
 update-go-dependencies:
 	go get -u ./...
 	go mod tidy
@@ -90,10 +94,9 @@ test-benthos: clean build
 		$(IMAGE_NAME):$(TAG)
 
 test-benthos-tmp: clean build
-	@cp $(PWD)/examples/example-config-benthos.yaml $(PWD)/config.yaml
 	docker run \
 		--name $(IMAGE_NAME) \
-		-v $(PWD)/config.yaml:/data/config.yaml \
+		-v $(PWD)/examples/example-config-benthos.yaml:/data/config.yaml \
 		-e LOGGING_LEVEL=DEBUG \
 		-p 8081:8080 \
 		-p 4195:4195 \

@@ -87,8 +87,8 @@ func GetMetricsURL() string {
 	if port == 0 {
 		port = 8080 // Fallback to default port
 	}
-	fmt.Printf("Using localhost URL with host port: http://%s:%d/metrics\n", getDockerGatewayIP(), port)
-	return fmt.Sprintf("http://%s:%d/metrics", getDockerGatewayIP(), port)
+	fmt.Printf("Using localhost URL with host port: http://%s:%d/metrics\n", "host.docker.internal", port)
+	return fmt.Sprintf("http://%s:%d/metrics", "host.docker.internal", port)
 }
 
 // GetGoldenServiceURL returns the URL for the golden service
@@ -99,16 +99,7 @@ func GetGoldenServiceURL() string {
 	if port == 0 {
 		port = 8082 // Fallback to default port
 	}
-	return fmt.Sprintf("http://%s:%d", getDockerGatewayIP(), port)
-}
-
-func getDockerGatewayIP() string {
-	cmd := exec.Command("sh", "-c", "ip route | grep default | cut -d' ' -f3")
-	out, err := cmd.Output()
-	if err != nil {
-		return "172.17.0.1" // Fallback to common Docker bridge gateway
-	}
-	return strings.TrimSpace(string(out))
+	return fmt.Sprintf("http://%s:%d", "host.docker.internal", port)
 }
 
 // BuildAndRunContainer rebuilds your Docker image, starts the container, etc.

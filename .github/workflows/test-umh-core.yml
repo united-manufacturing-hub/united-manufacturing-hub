@@ -45,12 +45,12 @@ jobs:
         run: go install github.com/onsi/ginkgo/v2/ginkgo@latest
 
       - name: Run unit tests
-        run: ginkgo -r -v --label-filter='!integration' -tags=test ./...
+        run: make unit-test
 
   integration-tests:
     name: Integration Tests
     runs-on:
-      group: arc-runners-tests
+      group: eos
     defaults:
       run:
         working-directory: ./umh-core
@@ -66,4 +66,4 @@ jobs:
         run: go install github.com/onsi/ginkgo/v2/ginkgo@latest
 
       - name: Run integration tests
-        run: ginkgo -r -v --label-filter='integration' -tags=test ./...
+        run: make integration-test
