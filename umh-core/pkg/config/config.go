@@ -24,6 +24,7 @@ type FullConfig struct {
 	Agent    AgentConfig     `yaml:"agent"`    // Agent config, requires restart to take effect
 	Services []S6FSMConfig   `yaml:"services"` // Services to manage, can be updated while running
 	Benthos  []BenthosConfig `yaml:"benthos"`  // Benthos services to manage, can be updated while running
+	Redpanda RedpandaConfig  `yaml:"redpanda"` // Redpanda config, can be updated while running
 }
 
 type AgentConfig struct {
@@ -84,6 +85,21 @@ type BenthosServiceConfig struct {
 
 // Equal checks if two BenthosServiceConfigs are equal
 func (c BenthosServiceConfig) Equal(other BenthosServiceConfig) bool {
+	return reflect.DeepEqual(c, other)
+}
+
+// RedpandaConfig contains configuration for a Redpanda service
+type RedpandaConfig struct {
+	RedpandaServiceConfig RedpandaServiceConfig `yaml:"redpandaServiceConfig"`
+}
+
+type RedpandaServiceConfig struct {
+	Command    string `yaml:"command"`
+	ConfigPath string `yaml:"config_path"`
+}
+
+// Equal checks if two RedpandaServiceConfigs are equal
+func (c RedpandaServiceConfig) Equal(other RedpandaServiceConfig) bool {
 	return reflect.DeepEqual(c, other)
 }
 
