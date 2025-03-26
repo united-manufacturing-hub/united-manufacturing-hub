@@ -41,8 +41,8 @@ jobs:
         with:
           go-version: "1.24.1"
 
-      - name: Install Ginkgo
-        run: go install github.com/onsi/ginkgo/v2/ginkgo@latest
+      - name: Install ginkgo and nilaway
+        run: make install
 
       - name: Run unit tests
         run: make unit-test
@@ -62,8 +62,8 @@ jobs:
         with:
           go-version: "1.24.1"
 
-      - name: Install Ginkgo
-        run: go install github.com/onsi/ginkgo/v2/ginkgo@latest
+      - name: Install ginkgo and nilaway
+        run: make install
 
       - name: Run integration tests
         run: make integration-test
