@@ -163,13 +163,19 @@ func BuildAndRunContainer(configFilePath string, memory string) error {
 	configFile := getConfigFilePath()
 	fmt.Printf("Using config file: %s\n", configFile)
 
+	// Instead of mounting the file directly, we'll change permissions to make it accessible to anyone
+	err = os.Chmod(configFile, 0o666)
+	if err != nil {
+		fmt.Printf("Warning: Couldn't set file permissions: %v\n", err)
+	}
+
 	fmt.Println("Starting container...")
 	out, err = runDockerCommand(
 		"run", "-d",
 		"--name", containerName,
 		"--cpus=1",
 		"--memory", memory,
-		"-v", fmt.Sprintf("%s:/data/config.yaml", configFile),
+		"-v", fmt.Sprintf("%s:/data/config.yaml:Z", configFile), // Add :Z to fix SELinux contexts
 		"-e", "LOGGING_LEVEL=debug",
 		// Map the host ports to the container's fixed ports
 		"-p", fmt.Sprintf("%d:8080", metricsPrt), // Map host's dynamic port to container's fixed metrics port
@@ -371,5 +377,12 @@ func writeConfigFile(yamlContent string) error {
 	if err := os.MkdirAll(dir, 0o777); err != nil {
 		return fmt.Errorf("failed to create config dir: %w", err)
 	}
-	return os.WriteFile(configPath, []byte(yamlContent), 0o777)
+
+	// Write the file with permissions that allow anyone to read/write
+	if err := os.WriteFile(configPath, []byte(yamlContent), 0o666); err != nil {
+		return fmt.Errorf("failed to write config file: %w", err)
+	}
+
+	// Double-check permissions to ensure they are set correctly
+	return os.Chmod(configPath, 0o666)
 }
