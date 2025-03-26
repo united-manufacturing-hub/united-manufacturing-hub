@@ -117,12 +117,13 @@ type Dfc struct {
 
 type Connection struct {
 	Health Health `json:"health"`
-	Host   string `json:"host"`
 	// Latency in milliseconds
 	Latency float64 `json:"latency"`
 	Name    string  `json:"name"`
-	Port    float64 `json:"port"`
-	UUID    string  `json:"uuid"`
+	// The connection URI in full, e.g., 'opc.tcp://hostname:port/path'. This includes the
+	// scheme, host, port, and any required path elements.
+	URI  string `json:"uri"`
+	UUID string `json:"uuid"`
 }
 
 type DFCMetrics struct {

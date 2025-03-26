@@ -92,8 +92,7 @@
       "required": [
         "uuid",
         "name",
-        "host",
-        "port",
+        "uri",
         "latency",
         "health"
       ],
@@ -104,11 +103,9 @@
         "name": {
           "type": "string"
         },
-        "host": {
-          "type": "string"
-        },
-        "port": {
-          "type": "number"
+        "uri": {
+          "type": "string",
+          "description": "The connection URI in full, e.g., 'opc.tcp://hostname:port/path'. This includes the scheme, host, port, and any required path elements."
         },
         "latency": {
           "type": "number",
