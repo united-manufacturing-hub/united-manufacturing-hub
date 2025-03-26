@@ -91,6 +91,16 @@ test-benthos: clean build
 		-p 4195:4195 \
 		$(IMAGE_NAME):$(TAG)
 
+test-redpanda: clean build
+	@mkdir -p $(PWD)/data
+	@cp $(PWD)/examples/example-config-redpanda.yaml $(PWD)/data/config.yaml
+	docker run \
+		--name $(IMAGE_NAME) \
+		-v $(PWD)/data:/data \
+		-e LOGGING_LEVEL=DEBUG \
+		-p 8081:8080 \
+		$(IMAGE_NAME):$(TAG)
+
 pod-shell:
 	docker exec -it $(IMAGE_NAME) /bin/bash
 

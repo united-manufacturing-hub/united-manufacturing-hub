@@ -70,8 +70,6 @@ RUN case "${TARGETARCH}" in \
 
 # --- Final Stage ---
 FROM downloader
-# Copy redpanda config
-COPY ./redpanda/redpanda.yaml /opt/redpanda/etc/redpanda/redpanda.yaml
 # Copy built application
 COPY --from=build /go/bin/umh-core /usr/local/bin/umh-core
 RUN chmod +x /usr/local/bin/umh-core && \

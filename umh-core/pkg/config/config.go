@@ -90,12 +90,15 @@ func (c BenthosServiceConfig) Equal(other BenthosServiceConfig) bool {
 
 // RedpandaConfig contains configuration for a Redpanda service
 type RedpandaConfig struct {
+	// For the FSM
+	FSMInstanceConfig `yaml:",inline"`
+
+	// For the Redpanda service
 	RedpandaServiceConfig RedpandaServiceConfig `yaml:"redpandaServiceConfig"`
 }
 
 type RedpandaServiceConfig struct {
-	Command    string `yaml:"command"`
-	ConfigPath string `yaml:"config_path"`
+	Config map[string]interface{} `yaml:"config"`
 }
 
 // Equal checks if two RedpandaServiceConfigs are equal
