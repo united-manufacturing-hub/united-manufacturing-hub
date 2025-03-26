@@ -10,9 +10,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/shared/backend_api_structs"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/shared/encoding"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/tools"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/backend_api_structs"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/encoding"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/safejson"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/shared/models"
 
 	"github.com/google/uuid"
 	"github.com/h2non/gock"
@@ -21,10 +23,8 @@ import (
 	"github.com/onsi/gomega/ghttp"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/mocks"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2/push"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/shared/helper"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/shared/models"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/tools/safejson"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/tools/watchdog"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/helper"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
 )
 
 var _ = Describe("Pusher", Label("msgpush"), func() {
