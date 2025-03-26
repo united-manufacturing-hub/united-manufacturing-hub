@@ -67,13 +67,18 @@ func getConfigFilePath() string {
 	configOnce.Do(func() {
 		// Use the same suffix as the container name for consistency
 		suffix := strings.TrimPrefix(getContainerName(), containerBaseName+"-")
-		tmpDir := filepath.Join("/tmp", "umh-config")
+
+		// Create a umh-config directory within the current directory
+		currentDir := GetCurrentDir()
+		tmpDir := filepath.Join(currentDir, "umh-config")
+
 		// Create the directory
 		err := os.MkdirAll(tmpDir, 0o755)
 		if err != nil {
-			// Fallback to current directory
-			tmpDir = GetCurrentDir()
+			// Fallback to current directory if directory creation fails
+			tmpDir = currentDir
 		}
+
 		configFilePath = filepath.Join(tmpDir, fmt.Sprintf("config-%s.yaml", suffix))
 	})
 	return configFilePath
@@ -202,6 +207,13 @@ func cleanupConfigFile() {
 	if configFilePath != "" {
 		// Just attempt to remove it, ignoring errors
 		os.Remove(configFilePath)
+
+		// Try to clean up the umh-config directory if it exists
+		dir := filepath.Dir(configFilePath)
+		if strings.HasSuffix(dir, "umh-config") {
+			// This will only succeed if the directory is empty
+			os.Remove(dir)
+		}
 	}
 }
 
