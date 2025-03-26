@@ -345,7 +345,7 @@ func (m *MockBenthosService) StopBenthos(ctx context.Context, serviceName string
 }
 
 // ReconcileManager mocks reconciling the Benthos manager
-func (m *MockBenthosService) ReconcileManager(ctx context.Context, tick uint64) (error, bool) {
+func (m *MockBenthosService) ReconcileManager(ctx context.Context, tick uint64, tickStartTime time.Time) (error, bool) {
 	m.ReconcileManagerCalled = true
 	return m.ReconcileManagerError, m.ReconcileManagerReconciled
 }

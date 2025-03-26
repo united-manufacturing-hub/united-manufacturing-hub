@@ -35,7 +35,7 @@ import (
 // This function is intended to be called repeatedly (e.g. in a periodic control loop).
 // Over multiple calls, it converges the actual state to the desired state. Transitions
 // that fail are retried in subsequent reconcile calls after a backoff period.
-func (s *S6Instance) Reconcile(ctx context.Context, tick uint64) (err error, reconciled bool) {
+func (s *S6Instance) Reconcile(ctx context.Context, tick uint64, tickStartTime time.Time) (err error, reconciled bool) {
 	start := time.Now()
 	s6InstanceName := s.baseFSMInstance.GetID()
 	defer func() {

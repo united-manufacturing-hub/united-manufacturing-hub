@@ -20,6 +20,7 @@ package s6_test
 import (
 	"context"
 	"fmt"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -33,15 +34,17 @@ import (
 
 var _ = Describe("S6Instance FSM", func() {
 	var (
-		ctx         context.Context
-		testBaseDir string
-		tick        uint64
+		ctx           context.Context
+		testBaseDir   string
+		tick          uint64
+		tickStartTime time.Time
 	)
 
 	BeforeEach(func() {
 		ctx = context.Background()
 		testBaseDir = constants.S6BaseDir
 		tick = 0
+		tickStartTime = time.Unix(0, 0)
 	})
 
 	// -------------------------------------------------------------------------
@@ -61,6 +64,7 @@ var _ = Describe("S6Instance FSM", func() {
 				internal_fsm.LifecycleStateToBeCreated,
 				internal_fsm.LifecycleStateCreating,
 				5, tick,
+				tickStartTime,
 			)
 			tick = nextTick
 			Expect(err).NotTo(HaveOccurred())
@@ -70,6 +74,7 @@ var _ = Describe("S6Instance FSM", func() {
 				internal_fsm.LifecycleStateCreating,
 				s6fsm.OperationalStateStopped,
 				5, tick,
+				tickStartTime,
 			)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(instance.GetCurrentFSMState()).To(Equal(s6fsm.OperationalStateStopped))
@@ -83,7 +88,7 @@ var _ = Describe("S6Instance FSM", func() {
 			mockService.CreateError = fmt.Errorf("simulated create failure")
 
 			// 3. Verify it remains in to_be_created despite multiple reconciles
-			_, err := fsmtest.VerifyStableState(ctx, instance, internal_fsm.LifecycleStateToBeCreated, 3, tick)
+			_, err := fsmtest.VerifyStableState(ctx, instance, internal_fsm.LifecycleStateToBeCreated, 3, tick, tickStartTime)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(instance.GetError()).ToNot(BeNil()) // Should record the error
 
@@ -96,6 +101,7 @@ var _ = Describe("S6Instance FSM", func() {
 				internal_fsm.LifecycleStateToBeCreated,
 				internal_fsm.LifecycleStateCreating,
 				10, tick,
+				tickStartTime,
 			)
 			tick = nextTick
 			Expect(err).NotTo(HaveOccurred())
@@ -106,6 +112,7 @@ var _ = Describe("S6Instance FSM", func() {
 				internal_fsm.LifecycleStateCreating,
 				s6fsm.OperationalStateStopped,
 				10, tick,
+				tickStartTime,
 			)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(instance.GetCurrentFSMState()).To(Equal(s6fsm.OperationalStateStopped))
@@ -139,6 +146,7 @@ var _ = Describe("S6Instance FSM", func() {
 				internal_fsm.LifecycleStateToBeCreated,
 				s6fsm.OperationalStateStopped,
 				5, tick,
+				tickStartTime,
 			)
 			tick = nextTick
 			Expect(err).NotTo(HaveOccurred())
@@ -152,6 +160,7 @@ var _ = Describe("S6Instance FSM", func() {
 				s6fsm.OperationalStateStopped,
 				s6fsm.OperationalStateRunning,
 				10, tick,
+				tickStartTime,
 			)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(mockService.StartCalled).To(BeTrue())
@@ -166,6 +175,7 @@ var _ = Describe("S6Instance FSM", func() {
 				internal_fsm.LifecycleStateToBeCreated,
 				s6fsm.OperationalStateStopped,
 				5, tick,
+				tickStartTime,
 			)
 			tick = nextTick
 			Expect(err).NotTo(HaveOccurred())
@@ -179,6 +189,7 @@ var _ = Describe("S6Instance FSM", func() {
 				s6fsm.OperationalStateStopped,
 				s6fsm.OperationalStateStarting,
 				5, tick,
+				tickStartTime,
 			)
 			tick = nextTick
 			Expect(err).NotTo(HaveOccurred())
@@ -189,7 +200,7 @@ var _ = Describe("S6Instance FSM", func() {
 			}
 
 			// Verify it remains in "starting"
-			_, err = fsmtest.VerifyStableState(ctx, instance, s6fsm.OperationalStateStarting, 3, tick)
+			_, err = fsmtest.VerifyStableState(ctx, instance, s6fsm.OperationalStateStarting, 3, tick, tickStartTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Finally let the service become up => instance can go to running
@@ -198,6 +209,7 @@ var _ = Describe("S6Instance FSM", func() {
 				s6fsm.OperationalStateStarting,
 				s6fsm.OperationalStateRunning,
 				5, tick,
+				tickStartTime,
 			)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(instance.GetCurrentFSMState()).To(Equal(s6fsm.OperationalStateRunning))
@@ -211,6 +223,7 @@ var _ = Describe("S6Instance FSM", func() {
 				internal_fsm.LifecycleStateToBeCreated,
 				s6fsm.OperationalStateStopped,
 				5, tick,
+				tickStartTime,
 			)
 			tick = nextTick
 			Expect(err).NotTo(HaveOccurred())
@@ -223,7 +236,7 @@ var _ = Describe("S6Instance FSM", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify it remains in stopped due to start error
-			nextTick, err = fsmtest.VerifyStableState(ctx, instance, s6fsm.OperationalStateStopped, 3, tick)
+			nextTick, err = fsmtest.VerifyStableState(ctx, instance, s6fsm.OperationalStateStopped, 3, tick, tickStartTime)
 			tick = nextTick
 			Expect(err).NotTo(HaveOccurred())
 			Expect(instance.GetError()).NotTo(BeNil()) // Should record the error
@@ -231,7 +244,7 @@ var _ = Describe("S6Instance FSM", func() {
 
 			// Fix the error
 			mockService.StartError = nil
-			fsmtest.ResetInstanceError(instance)
+			fsmtest.ResetInstanceError(instance, tickStartTime)
 			mockService.StartCalled = false
 
 			// from stopped => starting
@@ -239,6 +252,7 @@ var _ = Describe("S6Instance FSM", func() {
 				s6fsm.OperationalStateStopped,
 				s6fsm.OperationalStateStarting,
 				5, tick,
+				tickStartTime,
 			)
 			tick = nextTick
 			Expect(err).NotTo(HaveOccurred())
@@ -248,6 +262,7 @@ var _ = Describe("S6Instance FSM", func() {
 				s6fsm.OperationalStateStarting,
 				s6fsm.OperationalStateRunning,
 				5, tick,
+				tickStartTime,
 			)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(instance.GetCurrentFSMState()).To(Equal(s6fsm.OperationalStateRunning))
@@ -267,6 +282,7 @@ var _ = Describe("S6Instance FSM", func() {
 				internal_fsm.LifecycleStateToBeCreated,
 				s6fsm.OperationalStateRunning,
 				8, tick,
+				tickStartTime,
 			)
 			tick = nextTick
 			Expect(err).NotTo(HaveOccurred())
@@ -276,6 +292,7 @@ var _ = Describe("S6Instance FSM", func() {
 				s6fsm.OperationalStateRunning,
 				s6fsm.OperationalStateStopped,
 				8, tick,
+				tickStartTime,
 			)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(mockService.StopCalled).To(BeTrue())
@@ -290,6 +307,7 @@ var _ = Describe("S6Instance FSM", func() {
 				internal_fsm.LifecycleStateToBeCreated,
 				s6fsm.OperationalStateRunning,
 				8, tick,
+				tickStartTime,
 			)
 			tick = nextTick
 			Expect(err).NotTo(HaveOccurred())
@@ -302,6 +320,7 @@ var _ = Describe("S6Instance FSM", func() {
 				s6fsm.OperationalStateRunning,
 				s6fsm.OperationalStateStopping,
 				5, tick,
+				tickStartTime,
 			)
 			tick = nextTick
 			Expect(err).NotTo(HaveOccurred())
@@ -312,7 +331,7 @@ var _ = Describe("S6Instance FSM", func() {
 			}
 
 			// Verify stable in stopping
-			_, err = fsmtest.VerifyStableState(ctx, instance, s6fsm.OperationalStateStopping, 3, tick)
+			_, err = fsmtest.VerifyStableState(ctx, instance, s6fsm.OperationalStateStopping, 3, tick, tickStartTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Finally let service go down => instance => stopped
@@ -320,6 +339,7 @@ var _ = Describe("S6Instance FSM", func() {
 				s6fsm.OperationalStateStopping,
 				s6fsm.OperationalStateStopped,
 				5, tick,
+				tickStartTime,
 			)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(instance.GetCurrentFSMState()).To(Equal(s6fsm.OperationalStateStopped))
@@ -333,6 +353,7 @@ var _ = Describe("S6Instance FSM", func() {
 				internal_fsm.LifecycleStateToBeCreated,
 				s6fsm.OperationalStateRunning,
 				8, tick,
+				tickStartTime,
 			)
 			tick = nextTick
 			Expect(err).NotTo(HaveOccurred())
@@ -345,7 +366,7 @@ var _ = Describe("S6Instance FSM", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify it stays in running due to failure
-			nextTick, err = fsmtest.VerifyStableState(ctx, instance, s6fsm.OperationalStateRunning, 3, tick)
+			nextTick, err = fsmtest.VerifyStableState(ctx, instance, s6fsm.OperationalStateRunning, 3, tick, tickStartTime)
 			tick = nextTick
 			Expect(err).NotTo(HaveOccurred())
 			Expect(instance.GetError()).NotTo(BeNil())
@@ -353,7 +374,7 @@ var _ = Describe("S6Instance FSM", func() {
 
 			// Fix the error
 			mockService.StopError = nil
-			fsmtest.ResetInstanceError(instance)
+			fsmtest.ResetInstanceError(instance, tickStartTime)
 			mockService.StopCalled = false
 
 			// from running => stopping
@@ -361,6 +382,7 @@ var _ = Describe("S6Instance FSM", func() {
 				s6fsm.OperationalStateRunning,
 				s6fsm.OperationalStateStopping,
 				5, tick,
+				tickStartTime,
 			)
 			tick = nextTick
 			Expect(err).NotTo(HaveOccurred())
@@ -370,6 +392,7 @@ var _ = Describe("S6Instance FSM", func() {
 				s6fsm.OperationalStateStopping,
 				s6fsm.OperationalStateStopped,
 				5, tick,
+				tickStartTime,
 			)
 			Expect(err).NotTo(HaveOccurred())
 		})
@@ -388,6 +411,7 @@ var _ = Describe("S6Instance FSM", func() {
 				internal_fsm.LifecycleStateToBeCreated,
 				s6fsm.OperationalStateStopped,
 				5, tick,
+				tickStartTime,
 			)
 			tick = nextTick
 			Expect(err).NotTo(HaveOccurred())
@@ -400,7 +424,7 @@ var _ = Describe("S6Instance FSM", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify it remains in stopped + eventually hits backoff
-			nextTick, err = fsmtest.VerifyStableState(ctx, instance, s6fsm.OperationalStateStopped, 100, tick)
+			nextTick, err = fsmtest.VerifyStableState(ctx, instance, s6fsm.OperationalStateStopped, 100, tick, tickStartTime)
 			tick = nextTick
 			Expect(err).To(HaveOccurred()) // should have hit permanent failure
 			Expect(mockService.StartCalled).To(BeTrue())
@@ -408,7 +432,7 @@ var _ = Describe("S6Instance FSM", func() {
 
 			// Check backoff is active by verifying no further start calls
 			mockService.StartCalled = false
-			_, err = fsmtest.VerifyStableState(ctx, instance, s6fsm.OperationalStateStopped, 3, tick)
+			_, err = fsmtest.VerifyStableState(ctx, instance, s6fsm.OperationalStateStopped, 3, tick, tickStartTime)
 			Expect(err).To(HaveOccurred()) // should have hit permanent failure
 			Expect(mockService.StartCalled).To(BeFalse(), "Should not re-attempt immediately due to backoff")
 		})
@@ -421,6 +445,7 @@ var _ = Describe("S6Instance FSM", func() {
 				internal_fsm.LifecycleStateToBeCreated,
 				s6fsm.OperationalStateStopped,
 				5, tick,
+				tickStartTime,
 			)
 			tick = nextTick
 			Expect(err).NotTo(HaveOccurred())
@@ -431,7 +456,7 @@ var _ = Describe("S6Instance FSM", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// verify stable in stopped due to repeated start errors
-			nextTick, err = fsmtest.VerifyStableState(ctx, instance, s6fsm.OperationalStateStopped, 5, tick)
+			nextTick, err = fsmtest.VerifyStableState(ctx, instance, s6fsm.OperationalStateStopped, 5, tick, tickStartTime)
 			tick = nextTick
 			Expect(err).NotTo(HaveOccurred())
 			Expect(mockService.StartCalled).To(BeTrue())
@@ -439,13 +464,13 @@ var _ = Describe("S6Instance FSM", func() {
 
 			// confirm backoff is active
 			mockService.StartCalled = false
-			_, err = fsmtest.VerifyStableState(ctx, instance, s6fsm.OperationalStateStopped, 2, tick)
+			_, err = fsmtest.VerifyStableState(ctx, instance, s6fsm.OperationalStateStopped, 2, tick, tickStartTime)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(mockService.StartCalled).To(BeFalse())
 
 			// fix the error
 			mockService.StartError = nil
-			fsmtest.ResetInstanceError(instance)
+			fsmtest.ResetInstanceError(instance, tickStartTime)
 			mockService.StartCalled = false
 
 			// now from stopped => running
@@ -453,6 +478,7 @@ var _ = Describe("S6Instance FSM", func() {
 				s6fsm.OperationalStateStopped,
 				s6fsm.OperationalStateRunning,
 				10, tick,
+				tickStartTime,
 			)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(mockService.StartCalled).To(BeTrue())

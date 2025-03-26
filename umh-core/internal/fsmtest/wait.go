@@ -20,6 +20,7 @@ package fsmtest
 import (
 	"context"
 	"fmt"
+	"time"
 
 	internal_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
@@ -28,23 +29,23 @@ import (
 
 // InstanceReconciler is an interface for any FSM instance that can be reconciled
 type InstanceReconciler interface {
-	Reconcile(ctx context.Context, tick uint64) (error, bool)
+	Reconcile(ctx context.Context, tick uint64, tickStartTime time.Time) (error, bool)
 	GetCurrentFSMState() string
 	GetDesiredFSMState() string
 }
 
 // ManagerReconciler is an interface for any FSM manager that can be reconciled
 type ManagerReconciler interface {
-	Reconcile(ctx context.Context, config config.FullConfig, tick uint64) (error, bool)
+	Reconcile(ctx context.Context, config config.FullConfig, tick uint64, tickStartTime time.Time) (error, bool)
 	GetInstance(id string) (fsm.FSMInstance, bool)
 }
 
 // WaitForInstanceState repeatedly calls Reconcile on an instance until it reaches the desired state or times out
-func WaitForInstanceState(ctx context.Context, instance InstanceReconciler, desiredState string, maxAttempts int, startTick uint64) (uint64, error) {
+func WaitForInstanceState(ctx context.Context, instance InstanceReconciler, desiredState string, maxAttempts int, startTick uint64, tickStartTime time.Time) (uint64, error) {
 	tick := startTick
 
 	for i := 0; i < maxAttempts; i++ {
-		err, _ := instance.Reconcile(ctx, tick)
+		err, _ := instance.Reconcile(ctx, tick, tickStartTime)
 		if err != nil {
 			return tick, fmt.Errorf("error during reconcile: %w", err)
 		}
@@ -63,12 +64,12 @@ func WaitForInstanceState(ctx context.Context, instance InstanceReconciler, desi
 // WaitForManagerInstanceState repeatedly calls Reconcile on a manager until the specified instance
 // reaches the desired state or times out
 func WaitForManagerInstanceState(ctx context.Context, manager ManagerReconciler, config config.FullConfig,
-	instanceID string, desiredState string, maxAttempts int, startTick uint64) (uint64, error) {
+	instanceID string, desiredState string, maxAttempts int, startTick uint64, tickStartTime time.Time) (uint64, error) {
 
 	tick := startTick
 
 	for i := 0; i < maxAttempts; i++ {
-		err, _ := manager.Reconcile(ctx, config, tick)
+		err, _ := manager.Reconcile(ctx, config, tick, tickStartTime)
 		if err != nil {
 			return tick, fmt.Errorf("error during manager reconcile: %w", err)
 		}
@@ -102,13 +103,13 @@ func WaitForManagerInstanceState(ctx context.Context, manager ManagerReconciler,
 // WaitForManagerState repeatedly calls Reconcile on a manager until all its instances
 // reach the desired state or maxAttempts is exceeded
 func WaitForManagerState(ctx context.Context, manager ManagerReconciler, config config.FullConfig,
-	desiredState string, maxAttempts int, startTick uint64, printDetails bool) (uint64, error) {
+	desiredState string, maxAttempts int, startTick uint64, tickStartTime time.Time, printDetails bool) (uint64, error) {
 
 	tick := startTick
 	var lastErr error
 
 	for i := 0; i < maxAttempts; i++ {
-		lastErr, _ = manager.Reconcile(ctx, config, tick)
+		lastErr, _ = manager.Reconcile(ctx, config, tick, tickStartTime)
 		if lastErr != nil {
 			return tick, lastErr
 		}
@@ -198,11 +199,12 @@ func WaitForManagerInstanceCreation(
 	instanceID string,
 	maxAttempts int,
 	startTick uint64,
+	tickStartTime time.Time,
 ) (uint64, error) {
 	tick := startTick
 
 	for i := 0; i < maxAttempts; i++ {
-		err, _ := manager.Reconcile(ctx, config, tick)
+		err, _ := manager.Reconcile(ctx, config, tick, tickStartTime)
 		if err != nil {
 			return tick, fmt.Errorf("error during manager reconcile: %w", err)
 		}
@@ -228,11 +230,12 @@ func WaitForManagerInstanceRemoval(
 	instanceID string,
 	maxAttempts int,
 	startTick uint64,
+	tickStartTime time.Time,
 ) (uint64, error) {
 	tick := startTick
 
 	for i := 0; i < maxAttempts; i++ {
-		err, _ := manager.Reconcile(ctx, config, tick)
+		err, _ := manager.Reconcile(ctx, config, tick, tickStartTime)
 		if err != nil {
 			return tick, fmt.Errorf("error during manager reconcile: %w", err)
 		}
@@ -256,11 +259,12 @@ func RunMultipleReconciliations(
 	config config.FullConfig,
 	numReconciliations int,
 	startTick uint64,
+	tickStartTime time.Time,
 ) (uint64, error) {
 	tick := startTick
 
 	for i := 0; i < numReconciliations; i++ {
-		err, _ := manager.Reconcile(ctx, config, tick)
+		err, _ := manager.Reconcile(ctx, config, tick, tickStartTime)
 		if err != nil {
 			return tick, fmt.Errorf("error during manager reconcile (attempt %d): %w", i+1, err)
 		}

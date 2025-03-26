@@ -19,6 +19,7 @@ package fsmtest
 
 import (
 	"context"
+	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
@@ -80,7 +81,8 @@ func WaitForMockedManagerInstanceState(
 	instanceName, desiredState string,
 	maxAttempts int,
 	tick uint64,
+	tickStartTime time.Time,
 ) (uint64, error) {
 	// Simply call the regular function
-	return WaitForManagerInstanceState(ctx, manager, fullConfig, instanceName, desiredState, maxAttempts, tick)
+	return WaitForManagerInstanceState(ctx, manager, fullConfig, instanceName, desiredState, maxAttempts, tick, tickStartTime)
 }

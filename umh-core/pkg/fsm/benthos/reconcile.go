@@ -36,7 +36,7 @@ import (
 // This function is intended to be called repeatedly (e.g. in a periodic control loop).
 // Over multiple calls, it converges the actual state to the desired state. Transitions
 // that fail are retried in subsequent reconcile calls after a backoff period.
-func (b *BenthosInstance) Reconcile(ctx context.Context, tick uint64) (err error, reconciled bool) {
+func (b *BenthosInstance) Reconcile(ctx context.Context, tick uint64, tickStartTime time.Time) (err error, reconciled bool) {
 	start := time.Now()
 	benthosInstanceName := b.baseFSMInstance.GetID()
 	defer func() {
@@ -110,7 +110,7 @@ func (b *BenthosInstance) Reconcile(ctx context.Context, tick uint64) (err error
 	}
 
 	// Reconcile the s6Manager
-	s6Err, s6Reconciled := b.service.ReconcileManager(ctx, tick)
+	s6Err, s6Reconciled := b.service.ReconcileManager(ctx, tick, tickStartTime)
 	if s6Err != nil {
 		b.baseFSMInstance.SetError(s6Err, tick)
 		b.baseFSMInstance.GetLogger().Errorf("error reconciling s6Manager: %s", s6Err)

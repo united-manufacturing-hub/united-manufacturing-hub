@@ -74,7 +74,7 @@ type IBenthosService interface {
 	// ServiceExists checks if a Benthos service exists
 	// Expects benthosName (e.g. "myservice") as defined in the UMH config
 	ServiceExists(ctx context.Context, benthosName string) bool
-	ReconcileManager(ctx context.Context, tick uint64) (error, bool)
+	ReconcileManager(ctx context.Context, tick uint64, tickStartTime time.Time) (error, bool)
 	// IsLogsFine checks if the logs of a Benthos service are fine
 	// Expects logs ([]s6service.LogEntry), currentTime (time.Time), and logWindow (time.Duration)
 	IsLogsFine(logs []s6service.LogEntry, currentTime time.Time, logWindow time.Duration) bool
@@ -1008,7 +1008,7 @@ func (s *BenthosService) StopBenthos(ctx context.Context, benthosName string) er
 }
 
 // ReconcileManager reconciles the Benthos manager
-func (s *BenthosService) ReconcileManager(ctx context.Context, tick uint64) (err error, reconciled bool) {
+func (s *BenthosService) ReconcileManager(ctx context.Context, tick uint64, tickStartTime time.Time) (err error, reconciled bool) {
 	if s.s6Manager == nil {
 		return errors.New("s6 manager not initialized"), false
 	}
@@ -1017,7 +1017,7 @@ func (s *BenthosService) ReconcileManager(ctx context.Context, tick uint64) (err
 		return ctx.Err(), false
 	}
 
-	return s.s6Manager.Reconcile(ctx, config.FullConfig{Services: s.s6ServiceConfigs}, tick)
+	return s.s6Manager.Reconcile(ctx, config.FullConfig{Services: s.s6ServiceConfigs}, tick, tickStartTime)
 }
 
 // IsLogsFine analyzes Benthos logs to determine if there are any critical issues

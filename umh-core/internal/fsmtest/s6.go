@@ -21,6 +21,7 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"time"
 
 	internal_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
@@ -174,6 +175,7 @@ func waitForInstanceState(
 	targetState string,
 	maxAttempts int,
 	startTick uint64,
+	tickStartTime time.Time,
 ) (uint64, error) {
 	var tick = startTick
 	var currentState string
@@ -185,7 +187,7 @@ func waitForInstanceState(
 		}
 
 		// Call Reconcile to progress the state
-		_, _ = instance.Reconcile(ctx, tick)
+		_, _ = instance.Reconcile(ctx, tick, tickStartTime)
 		tick++
 	}
 
@@ -199,7 +201,7 @@ func waitForInstanceState(
 //
 // Parameters:
 //   - instance: The S6Instance to reset error state for
-func ResetInstanceError(instance *s6fsm.S6Instance) {
+func ResetInstanceError(instance *s6fsm.S6Instance, tickStartTime time.Time) {
 	// Force a reconcile cycle with empty errors by simulating
 	// a successful operation cycle. We rely on the fact that
 	// each instance.Reconcile call will reset the error state
@@ -218,7 +220,7 @@ func ResetInstanceError(instance *s6fsm.S6Instance) {
 	// Force a reconcile with ctx.Done to just reset internal state
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // Immediately cancel to avoid actual operations
-	instance.Reconcile(ctx, 0)
+	instance.Reconcile(ctx, 0, tickStartTime)
 }
 
 // StabilizeS6Instance is a simplified helper that configures the service and waits for an S6 instance
@@ -241,6 +243,7 @@ func StabilizeS6Instance(
 	targetState string,
 	maxAttempts int,
 	startTick uint64,
+	tickStartTime time.Time,
 ) (uint64, error) {
 	// Get the mock service and service path from the instance
 	mockService, ok := instance.GetService().(*s6service.MockService)
@@ -254,7 +257,7 @@ func StabilizeS6Instance(
 	ConfigureServiceForState(mockService, servicePath, targetState)
 
 	// Wait for the instance to reach the target state
-	return waitForInstanceState(ctx, instance, targetState, maxAttempts, startTick)
+	return waitForInstanceState(ctx, instance, targetState, maxAttempts, startTick, tickStartTime)
 }
 
 // TestS6StateTransition tests a transition between two states using reconciliation.
@@ -279,6 +282,7 @@ func TestS6StateTransition(
 	toState string,
 	maxAttempts int,
 	startTick uint64,
+	tickStartTime time.Time,
 	skipSetupDesiredState ...bool,
 ) (uint64, error) {
 	// Configure initial state
@@ -299,11 +303,11 @@ func TestS6StateTransition(
 	var tick = startTick
 
 	// Run initial reconcile to trigger transition
-	_, _ = instance.Reconcile(ctx, tick)
+	_, _ = instance.Reconcile(ctx, tick, tickStartTime)
 	tick++
 
 	// Now stabilize to the target state
-	return StabilizeS6Instance(ctx, instance, toState, maxAttempts, tick)
+	return StabilizeS6Instance(ctx, instance, toState, maxAttempts, tick, tickStartTime)
 }
 
 // SetupS6Instance creates a new S6Instance with a mock service
@@ -356,6 +360,7 @@ func VerifyStableState(
 	expectedState string,
 	reconcileCount int,
 	startTick uint64,
+	tickStartTime time.Time,
 ) (uint64, error) {
 	currentTick := startTick
 
@@ -368,7 +373,7 @@ func VerifyStableState(
 	// Perform specified number of reconciliations
 	for i := 0; i < reconcileCount; i++ {
 		// Reconcile and advance tick
-		err, _ := instance.Reconcile(ctx, currentTick)
+		err, _ := instance.Reconcile(ctx, currentTick, tickStartTime)
 		if err != nil {
 			return currentTick, fmt.Errorf("reconcile failed at tick %d: %w", currentTick, err)
 		}

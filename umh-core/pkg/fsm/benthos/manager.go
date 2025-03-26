@@ -166,7 +166,7 @@ func (m *BenthosManager) HandleInstanceRemoved(instanceName string) {
 }
 
 // Reconcile overrides the base manager's Reconcile method to add port management
-func (m *BenthosManager) Reconcile(ctx context.Context, cfg config.FullConfig, tick uint64) (error, bool) {
+func (m *BenthosManager) Reconcile(ctx context.Context, cfg config.FullConfig, tick uint64, tickStartTime time.Time) (error, bool) {
 	start := time.Now()
 	defer func() {
 		duration := time.Since(start)
@@ -196,7 +196,7 @@ func (m *BenthosManager) Reconcile(ctx context.Context, cfg config.FullConfig, t
 	}
 
 	// Phase 2: Base FSM Reconciliation with port-aware config
-	err, reconciled := m.BaseFSMManager.Reconcile(ctx, cfgWithPorts, tick)
+	err, reconciled := m.BaseFSMManager.Reconcile(ctx, cfgWithPorts, tick, tickStartTime)
 
 	// Check if instances were removed as part of reconciliation (e.g., due to permanent errors)
 	countAfter := len(m.BaseFSMManager.GetInstances())

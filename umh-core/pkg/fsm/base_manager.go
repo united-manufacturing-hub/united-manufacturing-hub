@@ -60,7 +60,7 @@ type FSMInstance interface {
 	// Reconcile moves the instance toward its desired state
 	// Returns an error if reconciliation fails, and a boolean indicating
 	// whether a change was made to the instance's state
-	Reconcile(ctx context.Context, tick uint64) (error, bool)
+	Reconcile(ctx context.Context, tick uint64, tickStartTime time.Time) (error, bool)
 	// Remove initiates the removal process for this instance
 	Remove(ctx context.Context) error
 	// GetLastObservedState returns the last known state of the instance
@@ -77,7 +77,7 @@ type FSMManager[C any] interface {
 	GetInstance(name string) (FSMInstance, bool)
 	// Reconcile ensures that all instances are moving toward their desired state
 	// The tick parameter provides a counter to track operation rate limiting
-	Reconcile(ctx context.Context, config config.FullConfig, tick uint64) (error, bool)
+	Reconcile(ctx context.Context, config config.FullConfig, tick uint64, tickStartTime time.Time) (error, bool)
 	// GetManagerName returns the name of this manager for logging and metrics
 	GetManagerName() string
 }
@@ -264,6 +264,7 @@ func (m *BaseFSMManager[C]) Reconcile(
 	ctx context.Context,
 	config config.FullConfig,
 	tick uint64,
+	tickStartTime time.Time,
 ) (error, bool) {
 	// Increment manager-specific tick counter
 	m.managerTick++
@@ -465,7 +466,7 @@ func (m *BaseFSMManager[C]) Reconcile(
 	for name, instance := range m.instances {
 		reconcileStart := time.Now()
 		// Pass manager-specific tick to instance.Reconcile
-		err, reconciled := instance.Reconcile(ctx, m.managerTick)
+		err, reconciled := instance.Reconcile(ctx, m.managerTick, tickStartTime)
 		reconcileTime := time.Since(reconcileStart)
 		metrics.ObserveReconcileTime(metrics.ComponentBaseFSMManager, m.managerName+".instances."+name, reconcileTime)
 

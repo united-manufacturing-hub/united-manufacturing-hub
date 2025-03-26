@@ -23,3 +23,7 @@ const (
 const (
 	BenthosLogWindow = time.Minute * 10
 )
+
+const (
+	BenthosMaxRestartLookback = time.Second * 10
+)

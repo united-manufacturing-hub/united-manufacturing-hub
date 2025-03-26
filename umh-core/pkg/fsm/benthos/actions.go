@@ -22,6 +22,7 @@ import (
 	"time"
 
 	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 	benthos_service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
 	benthosyaml "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos/yaml"
@@ -237,16 +238,15 @@ func (b *BenthosInstance) IsBenthosHealthchecksPassed() bool {
 }
 
 // AnyRestartsSinceCreation determines if the Benthos service has restarted since its creation.
-func (b *BenthosInstance) AnyRestartsSinceCreation() bool {
+func (b *BenthosInstance) AnyRestartsSinceCreation(tickStartTime time.Time) bool {
 	// We can analyse the S6 ExitHistory to determine if the service has restarted in the last seconds
-	// We need to check if any of the exit codes are 0 (which means a restart)
-	// and if the time of the restart is within the last seconds
+	// We need to check if the time of the restart is within the last seconds
 	if len(b.ObservedState.ServiceInfo.S6ObservedState.ServiceInfo.ExitHistory) == 0 {
 		return false
 	}
 
 	for _, exit := range b.ObservedState.ServiceInfo.S6ObservedState.ServiceInfo.ExitHistory {
-		if exit.ExitCode == 0 && exit.Timestamp.After(time.Now().Add(-10*time.Second)) {
+		if exit.Timestamp.After(tickStartTime.Add(-constants.BenthosMaxRestartLookback)) {
 			return true
 		}
 	}

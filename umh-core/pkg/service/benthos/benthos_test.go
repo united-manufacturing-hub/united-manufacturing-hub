@@ -27,11 +27,12 @@ import (
 
 var _ = Describe("Benthos Service", func() {
 	var (
-		service     *BenthosService
-		client      *MockHTTPClient
-		tick        uint64
-		benthosName string
-		serviceName string
+		service       *BenthosService
+		client        *MockHTTPClient
+		tick          uint64
+		benthosName   string
+		serviceName   string
+		tickStartTime time.Time
 	)
 
 	BeforeEach(func() {
@@ -39,6 +40,7 @@ var _ = Describe("Benthos Service", func() {
 		service = NewDefaultBenthosService(benthosName, WithHTTPClient(client))
 		tick = 0
 		serviceName = service.getS6ServiceName(benthosName)
+		tickStartTime = time.Unix(0, 0)
 		// Add the service to the S6 manager
 		err := service.AddBenthosToS6Manager(context.Background(), &config.BenthosServiceConfig{
 			MetricsPort: 4195,
@@ -47,7 +49,7 @@ var _ = Describe("Benthos Service", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Reconcile the S6 manager
-		err, _ = service.ReconcileManager(context.Background(), tick)
+		err, _ = service.ReconcileManager(context.Background(), tick, tickStartTime)
 		Expect(err).NotTo(HaveOccurred())
 
 		client.SetReadyStatus(200, true, true, "")
@@ -597,7 +599,7 @@ var _ = Describe("Benthos Service", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Reconcile the S6 manager
-			err, _ = service.ReconcileManager(context.Background(), tick)
+			err, _ = service.ReconcileManager(context.Background(), tick, tickStartTime)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -1041,7 +1043,7 @@ processor_batch_sent{label="1",path="root.pipeline.processors.1"} 18
 
 			// First reconciliation - creates the service
 			By("Reconciling the manager to create the service")
-			err, _ = service.ReconcileManager(ctx, tick)
+			err, _ = service.ReconcileManager(ctx, tick, tickStartTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Set up the mock S6 service status to simulate running service
@@ -1096,7 +1098,7 @@ processor_batch_sent{label="1",path="root.pipeline.processors.1"} 18
 			// Second reconciliation - detects the config change and triggers restart
 			By("Reconciling the manager to apply the configuration change")
 			tick++
-			err, _ = service.ReconcileManager(ctx, tick)
+			err, _ = service.ReconcileManager(ctx, tick, tickStartTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Change the mock to return the updated config
@@ -1205,7 +1207,7 @@ logger:
 			Expect(err).NotTo(HaveOccurred())
 
 			// Reconcile the S6 manager
-			err, _ = service.ReconcileManager(ctx, 0)
+			err, _ = service.ReconcileManager(ctx, 0, tickStartTime)
 			Expect(err).NotTo(HaveOccurred())
 		})
 

@@ -36,7 +36,7 @@ func NewMockFSMManager() *MockFSMManager {
 }
 
 // Reconcile implements the FSMManager interface
-func (m *MockFSMManager) Reconcile(ctx context.Context, cfg config.FullConfig, tick uint64) (error, bool) {
+func (m *MockFSMManager) Reconcile(ctx context.Context, cfg config.FullConfig, tick uint64, tickStartTime time.Time) (error, bool) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 	m.ReconcileCalled = true

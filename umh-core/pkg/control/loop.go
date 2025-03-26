@@ -178,7 +178,7 @@ func (c *ControlLoop) Execute(ctx context.Context) error {
 			start := time.Now()
 
 			// Reconcile the managers
-			err := c.Reconcile(timeoutCtx, c.currentTick)
+			err := c.Reconcile(timeoutCtx, c.currentTick, start)
 
 			// Record metrics for the reconcile cycle
 			cycleTime := time.Since(start)
@@ -214,7 +214,7 @@ func (c *ControlLoop) Execute(ctx context.Context) error {
 //   - If reconciliation occurred (bool=true), skip the reconcilation of the next managers to avoid reaching the ticker interval
 //
 // 3. Create a snapshot of the current system state for external consumers
-func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
+func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64, tickStartTime time.Time) error {
 	// Get the config
 	if c.configManager == nil {
 		return fmt.Errorf("config manager is not set")
@@ -251,7 +251,7 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 
 	// Reconcile each manager with the current tick count
 	for _, manager := range c.managers {
-		err, reconciled := manager.Reconcile(ctx, cfg, c.currentTick)
+		err, reconciled := manager.Reconcile(ctx, cfg, c.currentTick, tickStartTime)
 		if err != nil {
 			metrics.IncErrorCount(metrics.ComponentControlLoop, manager.GetManagerName())
 			return err
