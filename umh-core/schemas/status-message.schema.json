@@ -17,23 +17,8 @@
         "message": {
           "type": "string"
         }
-      }
-    },
-    "EventValue": {
-      "oneOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "number"
-        },
-        {
-          "type": "boolean"
-        },
-        {
-          "type": "null"
-        }
-      ]
+      },
+      "additionalProperties": false
     },
     "EventKafka": {
       "type": "object",
@@ -99,7 +84,8 @@
             }
           ]
         }
-      }
+      },
+      "additionalProperties": false
     },
     "Connection": {
       "type": "object",
@@ -125,24 +111,27 @@
           "type": "number"
         },
         "latency": {
-          "type": "number"
+          "type": "number",
+          "description": "Latency in milliseconds"
         },
         "health": {
           "$ref": "#/definitions/Health"
         }
-      }
+      },
+      "additionalProperties": false
     },
     "DFCMetrics": {
       "type": "object",
       "required": [
-        "throughput",
+        "throughputMsgPerSec",
         "failedMessages",
         "unprocessable",
         "unprocessable24h"
       ],
       "properties": {
-        "throughput": {
-          "type": "number"
+        "throughputMsgPerSec": {
+          "type": "number",
+          "description": "Throughput expressed in messages per second"
         },
         "failedMessages": {
           "type": "number"
@@ -153,7 +142,8 @@
         "unprocessable24h": {
           "type": "number"
         }
-      }
+      },
+      "additionalProperties": false
     }
   },
   "required": [
@@ -175,7 +165,8 @@
             "type": "string"
           }
         }
-      }
+      },
+      "additionalProperties": false
     },
     "core": {
       "type": "object",
@@ -192,6 +183,7 @@
       "properties": {
         "supportedFeatures": {
           "type": "array",
+          "description": "List of supported feature keywords. If a feature is supported, its corresponding keyword will be included in the array.",
           "items": {
             "type": "string"
           }
@@ -213,21 +205,27 @@
           ],
           "properties": {
             "avg": {
-              "type": "number"
+              "type": "number",
+              "description": "Average latency in milliseconds"
             },
             "max": {
-              "type": "number"
+              "type": "number",
+              "description": "Maximum latency in milliseconds"
             },
             "min": {
-              "type": "number"
+              "type": "number",
+              "description": "Minimum latency in milliseconds"
             },
             "p95": {
-              "type": "number"
+              "type": "number",
+              "description": "95th percentile latency in milliseconds"
             },
             "p99": {
-              "type": "number"
+              "type": "number",
+              "description": "99th percentile latency in milliseconds"
             }
-          }
+          },
+          "additionalProperties": false
         },
         "container": {
           "type": "object",
@@ -248,10 +246,12 @@
               ],
               "properties": {
                 "usage": {
-                  "type": "number"
+                  "type": "number",
+                  "description": "CPU usage as a percentage (0-100%)"
                 },
                 "limit": {
-                  "type": "number"
+                  "type": "number",
+                  "description": "CPU limit in number of cores"
                 },
                 "health": {
                   "$ref": "#/definitions/Health"
@@ -267,10 +267,12 @@
               ],
               "properties": {
                 "usage": {
-                  "type": "number"
+                  "type": "number",
+                  "description": "Memory usage in bytes"
                 },
                 "limit": {
-                  "type": "number"
+                  "type": "number",
+                  "description": "Memory limit in bytes"
                 },
                 "health": {
                   "$ref": "#/definitions/Health"
@@ -286,10 +288,12 @@
               ],
               "properties": {
                 "usage": {
-                  "type": "number"
+                  "type": "number",
+                  "description": "Disk usage in bytes"
                 },
                 "limit": {
-                  "type": "number"
+                  "type": "number",
+                  "description": "Disk limit in bytes"
                 },
                 "health": {
                   "$ref": "#/definitions/Health"
@@ -297,12 +301,14 @@
               }
             },
             "architecture": {
-              "type": "string"
+              "type": "string",
+              "description": "Processor architecture. Examples: 'arm/v7', 'armv7', 'armhf', 'x86_64', etc."
             },
             "hwid": {
               "type": "string"
             }
-          }
+          },
+          "additionalProperties": false
         },
         "agent": {
           "type": "object",
@@ -313,20 +319,22 @@
             "health": {
               "$ref": "#/definitions/Health"
             }
-          }
+          },
+          "additionalProperties": false
         },
         "dfcs": {
           "type": "array",
+          "description": "List of deployed DFCs. Different DFC types can have different properties",
           "items": {
             "oneOf": [
               {
                 "type": "object",
                 "required": [
                   "uuid",
-                  "type",
-                  "deploySuccess",
-                  "connections"
+                  "dfcType",
+                  "deploySuccess"
                 ],
+                "additionalProperties": false,
                 "properties": {
                   "uuid": {
                     "type": "string"
@@ -346,14 +354,8 @@
                   "deploySuccess": {
                     "type": "boolean"
                   },
-                  "type": {
+                  "dfcType": {
                     "const": "uninitialized"
-                  },
-                  "connections": {
-                    "type": "array",
-                    "items": {
-                      "$ref": "#/definitions/Connection"
-                    }
                   }
                 }
               },
@@ -366,9 +368,10 @@
                   "health",
                   "metrics",
                   "deploySuccess",
-                  "type",
+                  "dfcType",
                   "connections"
                 ],
+                "additionalProperties": false,
                 "properties": {
                   "uuid": {
                     "type": "string"
@@ -388,11 +391,12 @@
                   "deploySuccess": {
                     "type": "boolean"
                   },
-                  "type": {
+                  "dfcType": {
                     "const": "protocol-converter"
                   },
                   "connections": {
                     "type": "array",
+                    "description": "For 'protocol-converter' type, this array contains exactly one connection.",
                     "items": {
                       "$ref": "#/definitions/Connection"
                     }
@@ -408,8 +412,9 @@
                   "health",
                   "metrics",
                   "deploySuccess",
-                  "type"
+                  "dfcType"
                 ],
+                "additionalProperties": false,
                 "properties": {
                   "uuid": {
                     "type": "string"
@@ -429,7 +434,7 @@
                   "deploySuccess": {
                     "type": "boolean"
                   },
-                  "type": {
+                  "dfcType": {
                     "const": "custom"
                   }
                 }
@@ -443,13 +448,14 @@
                   "health",
                   "metrics",
                   "deploySuccess",
-                  "type",
+                  "dfcType",
                   "connections",
                   "isReadOnly",
                   "inputType",
                   "outputType",
                   "dataContract"
                 ],
+                "additionalProperties": false,
                 "properties": {
                   "uuid": {
                     "type": "string"
@@ -469,11 +475,12 @@
                   "deploySuccess": {
                     "type": "boolean"
                   },
-                  "type": {
+                  "dfcType": {
                     "const": "data-bridge"
                   },
                   "connections": {
                     "type": "array",
+                    "description": "For 'data-bridge' type, this array always contains exactly two connections.",
                     "items": {
                       "$ref": "#/definitions/Connection"
                     }
@@ -499,16 +506,23 @@
           "type": "object",
           "required": [
             "health",
-            "throughput"
+            "throughputIncomingMsgPerSec",
+            "throughputOutgoingMsgPerSec"
           ],
           "properties": {
             "health": {
               "$ref": "#/definitions/Health"
             },
-            "throughput": {
-              "type": "number"
+            "throughputIncomingMsgPerSec": {
+              "type": "number",
+              "description": "Incoming throughput in messages per second"
+            },
+            "throughputOutgoingMsgPerSec": {
+              "type": "number",
+              "description": "Outgoing throughput in messages per second"
             }
-          }
+          },
+          "additionalProperties": false
         },
         "unsTable": {
           "type": "object",
@@ -576,7 +590,8 @@
                 "type": "string"
               },
               "timestamp_ms": {
-                "type": "number"
+                "type": "number",
+                "description": "Timestamp in milliseconds"
               },
               "bridges": {
                 "oneOf": [
@@ -601,19 +616,19 @@
                   }
                 ]
               },
-              "value": {
-                "$ref": "#/definitions/EventValue"
-              },
+              "value": {},
               "rawKafkaMessage": {
                 "$ref": "#/definitions/EventKafka"
               }
             }
           }
         }
-      }
+      },
+      "additionalProperties": false
     },
     "plugins": {
-      "type": "object"
+      "type": "object",
+      "additionalProperties": true
     }
   }
 }
