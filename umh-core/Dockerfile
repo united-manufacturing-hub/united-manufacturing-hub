@@ -95,7 +95,8 @@ RUN case "${TARGETARCH}" in \
     tar -xzf /tmp/redpanda/redpanda.tar.gz -C /opt/redpanda && \
     rm /tmp/redpanda/redpanda.tar.gz && \
     mkdir -p /data/redpanda && \
-    mkdir -p /data/redpanda/coredump
+    mkdir -p /data/redpanda/coredump && \
+    chmod +x /opt/redpanda/bin/redpanda
 
 # Step 6: Copy the redpanda config
 COPY ./redpanda/redpanda.yaml /opt/redpanda/etc/redpanda/redpanda.yaml

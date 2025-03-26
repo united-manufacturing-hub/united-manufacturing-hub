@@ -1,0 +1,2 @@
+#!/command/execlineb -P
+/opt/redpanda/bin/redpanda --redpanda-cfg /opt/redpanda/etc/redpanda/redpanda.yaml
