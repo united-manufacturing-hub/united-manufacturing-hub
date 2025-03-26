@@ -28,8 +28,8 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/shared/encoding"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/shared/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/shared/models/mgmtconfig"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/shared/tools"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/shared/watchdog"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/tools/maptostruct"
 	"go.uber.org/zap"
 )
 
@@ -118,7 +118,7 @@ func (r *Router) handleAction(messageContent models.UMHMessageContent, message *
 		return
 	}
 
-	if err := tools.MapToStruct(payloadMap, &actionPayload); err != nil {
+	if err := maptostruct.MapToStruct(payloadMap, &actionPayload); err != nil {
 		zap.S().Warnf("Failed to convert payload into ActionMessagePayload: %v", err)
 		return
 	}

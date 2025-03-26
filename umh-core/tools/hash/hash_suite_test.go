@@ -1,4 +1,4 @@
-package watchdog_test
+package hash_test
 
 import (
 	"testing"
@@ -7,7 +7,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-func TestShared(t *testing.T) {
+func TestTools(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Watchdog Suite")
+	RunSpecs(t, "Hash Suite")
 }

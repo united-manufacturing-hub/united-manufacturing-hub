@@ -16,7 +16,7 @@ import (
 	new "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/shared/encoding/new"
 	old "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/shared/encoding/old"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/shared/models"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/shared/tools/safejson"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/tools/safejson"
 )
 
 var _ = Describe("Encode", func() {
