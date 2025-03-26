@@ -81,26 +81,14 @@ func getConfigFilePath() string {
 
 // GetMetricsURL returns the URL for the metrics endpoint, using the container's IP if possible
 func GetMetricsURL() string {
-	// Try to get the container's IP address first
-	ip, err := getContainerIP(getContainerName())
-	if err != nil || ip == "" {
-		// Fall back to localhost if we can't get the container IP
-		portMu.Lock()
-		port := metricsPort
-		portMu.Unlock()
-		if port == 0 {
-			port = 8081 // Fallback to default port
-		}
-		fmt.Printf("Using localhost URL with host port: http://localhost:%d/metrics\n", port)
-		return fmt.Sprintf("http://localhost:%d/metrics", port)
+	portMu.Lock()
+	port := metricsPort
+	portMu.Unlock()
+	if port == 0 {
+		port = 8080 // Fallback to default port
 	}
-
-	// Use the container's internal port - this should match what's in the config
-	// By default, in the container the metrics server runs on port 8080
-	containerMetricsPort := 8080
-	fmt.Printf("Using direct container IP with container's internal port: http://%s:%d/metrics\n",
-		ip, containerMetricsPort)
-	return fmt.Sprintf("http://%s:%d/metrics", ip, containerMetricsPort)
+	fmt.Printf("Using localhost URL with host port: http://localhost:%d/metrics\n", port)
+	return fmt.Sprintf("http://localhost:%d/metrics", port)
 }
 
 // GetGoldenServiceURL returns the URL for the golden service
