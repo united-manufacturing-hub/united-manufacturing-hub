@@ -20,6 +20,7 @@ package fsmtest
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
@@ -248,6 +249,7 @@ func TestBenthosStateTransition(
 	toState string,
 	maxAttempts int,
 	startTick uint64,
+	tickStartTime time.Time,
 ) (uint64, error) {
 	// 1. Verify the instance is in the expected starting state
 	if instance.GetCurrentFSMState() != fromState {
@@ -267,7 +269,7 @@ func TestBenthosStateTransition(
 		}
 
 		// Perform a reconcile cycle
-		_, _ = instance.Reconcile(ctx, tick)
+		_, _ = instance.Reconcile(ctx, tick, tickStartTime)
 		tick++
 	}
 
@@ -300,6 +302,7 @@ func VerifyBenthosStableState(
 	expectedState string,
 	numCycles int,
 	startTick uint64,
+	tickStartTime time.Time,
 ) (uint64, error) {
 	// Initial state check
 	if instance.GetCurrentFSMState() != expectedState {
@@ -313,7 +316,7 @@ func VerifyBenthosStableState(
 	// Execute reconcile cycles and check state stability
 	tick := startTick
 	for i := 0; i < numCycles; i++ {
-		_, _ = instance.Reconcile(ctx, tick)
+		_, _ = instance.Reconcile(ctx, tick, tickStartTime)
 		tick++
 
 		if instance.GetCurrentFSMState() != expectedState {
@@ -372,6 +375,7 @@ func StabilizeBenthosInstance(
 	targetState string,
 	maxAttempts int,
 	startTick uint64,
+	tickStartTime time.Time,
 ) (uint64, error) {
 	// Configure the mock service for the target state
 	TransitionToBenthosState(mockService, serviceName, targetState)
@@ -382,10 +386,10 @@ func StabilizeBenthosInstance(
 		currentState := instance.GetCurrentFSMState()
 		if currentState == targetState {
 			// Now verify it remains stable
-			return VerifyBenthosStableState(ctx, instance, mockService, serviceName, targetState, 3, tick)
+			return VerifyBenthosStableState(ctx, instance, mockService, serviceName, targetState, 3, tick, tickStartTime)
 		}
 
-		_, _ = instance.Reconcile(ctx, tick)
+		_, _ = instance.Reconcile(ctx, tick, tickStartTime)
 		tick++
 	}
 
@@ -413,6 +417,7 @@ func WaitForBenthosDesiredState(
 	startTick uint64,
 	targetState string,
 	maxAttempts int,
+	tickStartTime time.Time,
 ) (uint64, error) {
 	tick := startTick
 
@@ -423,7 +428,7 @@ func WaitForBenthosDesiredState(
 		}
 
 		// Run a reconcile cycle
-		err, _ := instance.Reconcile(ctx, tick)
+		err, _ := instance.Reconcile(ctx, tick, tickStartTime)
 		if err != nil {
 			return tick, err
 		}
@@ -458,12 +463,13 @@ func ReconcileBenthosUntilError(
 	serviceName string,
 	startTick uint64,
 	maxAttempts int,
+	tickStartTime time.Time,
 ) (uint64, error, bool) {
 	tick := startTick
 
 	for i := 0; i < maxAttempts; i++ {
 		// Perform a reconcile cycle and capture the error and reconciled status
-		err, reconciled := instance.Reconcile(ctx, tick)
+		err, reconciled := instance.Reconcile(ctx, tick, tickStartTime)
 		tick++
 
 		if err != nil {

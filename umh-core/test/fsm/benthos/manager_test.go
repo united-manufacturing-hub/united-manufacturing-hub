@@ -20,6 +20,7 @@ package benthos_test
 import (
 	"context"
 	"fmt"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -37,16 +38,17 @@ import (
 
 var _ = Describe("BenthosManager", func() {
 	var (
-		manager     *benthosfsm.BenthosManager
-		mockService *benthossvc.MockBenthosService
-		ctx         context.Context
-		tick        uint64
+		manager       *benthosfsm.BenthosManager
+		mockService   *benthossvc.MockBenthosService
+		ctx           context.Context
+		tick          uint64
+		tickStartTime time.Time
 	)
 
 	BeforeEach(func() {
 		ctx = context.Background()
 		tick = 0
-
+		tickStartTime = time.Unix(0, 0)
 		// Create a new BenthosManager with the mock service
 		manager, mockService = fsmtest.CreateMockBenthosManager("test-manager")
 
@@ -64,7 +66,7 @@ var _ = Describe("BenthosManager", func() {
 
 			// Single call to a helper that wraps Reconcile
 			newTick, err := fsmtest.WaitForBenthosManagerStable(
-				ctx, manager, emptyConfig, tick,
+				ctx, manager, emptyConfig, tick, tickStartTime,
 			)
 			tick = newTick
 			Expect(err).NotTo(HaveOccurred())
@@ -91,7 +93,7 @@ var _ = Describe("BenthosManager", func() {
 				benthosfsm.OperationalStateStopped,
 				10,
 				tick,
-			)
+				tickStartTime)
 			tick = newTick
 			Expect(err).NotTo(HaveOccurred())
 
@@ -123,7 +125,7 @@ var _ = Describe("BenthosManager", func() {
 				benthosfsm.OperationalStateIdle, // or OperationalStateActive, whichever is stable
 				20,
 				tick,
-			)
+				tickStartTime)
 			tick = newTick
 			Expect(err).NotTo(HaveOccurred())
 		})
@@ -147,7 +149,7 @@ var _ = Describe("BenthosManager", func() {
 
 			// 1) Wait for idle
 			newTick, err := fsmtest.WaitForBenthosManagerInstanceState(ctx, manager, fullCfg,
-				serviceName, benthosfsm.OperationalStateIdle, 20, tick)
+				serviceName, benthosfsm.OperationalStateIdle, 20, tick, tickStartTime)
 			tick = newTick
 			Expect(err).NotTo(HaveOccurred())
 
@@ -156,7 +158,7 @@ var _ = Describe("BenthosManager", func() {
 
 			// Wait for state transition
 			newTick, err = fsmtest.WaitForBenthosManagerInstanceState(ctx, manager, fullCfg,
-				serviceName, benthosfsm.OperationalStateDegraded, 10, tick)
+				serviceName, benthosfsm.OperationalStateDegraded, 10, tick, tickStartTime)
 			tick = newTick
 			Expect(err).NotTo(HaveOccurred())
 
@@ -172,7 +174,7 @@ var _ = Describe("BenthosManager", func() {
 				serviceName,
 				30, // More attempts for removal
 				tick,
-			)
+				tickStartTime)
 			tick = newTick
 			Expect(err).NotTo(HaveOccurred())
 
@@ -193,7 +195,7 @@ var _ = Describe("BenthosManager", func() {
 
 			// Wait for idle or active
 			newTick, err := fsmtest.WaitForBenthosManagerInstanceState(ctx, manager, activeCfg,
-				serviceName, benthosfsm.OperationalStateIdle, 20, tick)
+				serviceName, benthosfsm.OperationalStateIdle, 20, tick, tickStartTime)
 			tick = newTick
 			Expect(err).NotTo(HaveOccurred())
 
@@ -208,7 +210,7 @@ var _ = Describe("BenthosManager", func() {
 			}
 
 			newTick, err = fsmtest.WaitForBenthosManagerInstanceState(ctx, manager, stoppedCfg,
-				serviceName, benthosfsm.OperationalStateStopped, 20, tick)
+				serviceName, benthosfsm.OperationalStateStopped, 20, tick, tickStartTime)
 			tick = newTick
 			Expect(err).NotTo(HaveOccurred())
 
@@ -217,7 +219,7 @@ var _ = Describe("BenthosManager", func() {
 
 			// Switch config back to active
 			newTick, err = fsmtest.WaitForBenthosManagerInstanceState(ctx, manager, activeCfg,
-				serviceName, benthosfsm.OperationalStateIdle, 20, tick)
+				serviceName, benthosfsm.OperationalStateIdle, 20, tick, tickStartTime)
 			tick = newTick
 			Expect(err).NotTo(HaveOccurred())
 		})
@@ -250,7 +252,7 @@ var _ = Describe("BenthosManager", func() {
 				},
 				30,
 				tick,
-			)
+				tickStartTime)
 			tick = newTick
 			Expect(err).NotTo(HaveOccurred())
 
@@ -285,7 +287,7 @@ var _ = Describe("BenthosManager", func() {
 			fsmtest.ConfigureBenthosManagerForState(mockService, serviceName, benthosfsm.OperationalStateStarting)
 
 			// Initial reconcile to create the instance (using helper instead of direct call)
-			newTick, err := fsmtest.WaitForBenthosManagerStable(ctx, manager, fullCfg, tick)
+			newTick, err := fsmtest.WaitForBenthosManagerStable(ctx, manager, fullCfg, tick, tickStartTime)
 			Expect(err).NotTo(HaveOccurred())
 			tick = newTick
 
@@ -294,7 +296,7 @@ var _ = Describe("BenthosManager", func() {
 
 			// Eventually, it should try again and go to idle
 			newTick, err = fsmtest.WaitForBenthosManagerInstanceState(ctx, manager, fullCfg,
-				serviceName, benthosfsm.OperationalStateIdle, 25, tick)
+				serviceName, benthosfsm.OperationalStateIdle, 25, tick, tickStartTime)
 			tick = newTick
 			Expect(err).NotTo(HaveOccurred())
 		})
@@ -312,7 +314,7 @@ var _ = Describe("BenthosManager", func() {
 
 			// Wait for idle
 			newTick, err := fsmtest.WaitForBenthosManagerInstanceState(ctx, manager, fullCfg,
-				serviceName, benthosfsm.OperationalStateIdle, 20, tick)
+				serviceName, benthosfsm.OperationalStateIdle, 20, tick, tickStartTime)
 			tick = newTick
 			Expect(err).NotTo(HaveOccurred())
 
@@ -328,7 +330,7 @@ var _ = Describe("BenthosManager", func() {
 
 			// Wait for stopped
 			newTick, err = fsmtest.WaitForBenthosManagerInstanceState(ctx, manager, stoppedCfg,
-				serviceName, benthosfsm.OperationalStateStopped, 20, tick)
+				serviceName, benthosfsm.OperationalStateStopped, 20, tick, tickStartTime)
 			tick = newTick
 			Expect(err).NotTo(HaveOccurred())
 
@@ -342,7 +344,7 @@ var _ = Describe("BenthosManager", func() {
 				serviceName,
 				15,
 				tick,
-			)
+				tickStartTime)
 			tick = newTick
 			Expect(err).NotTo(HaveOccurred())
 
@@ -371,13 +373,13 @@ var _ = Describe("BenthosManager", func() {
 			fsmtest.ConfigureBenthosManagerForState(mockService, serviceName, benthosfsm.OperationalStateStopped)
 
 			// Initial reconcile to create the instance
-			newTick, err := fsmtest.WaitForBenthosManagerStable(ctx, manager, fullCfg, tick)
+			newTick, err := fsmtest.WaitForBenthosManagerStable(ctx, manager, fullCfg, tick, tickStartTime)
 			Expect(err).NotTo(HaveOccurred())
 			tick = newTick
 
 			// The manager tries to reconcile, but the service isn't found initially
 			newTick, err = fsmtest.WaitForBenthosManagerInstanceState(ctx, manager, fullCfg,
-				serviceName, benthosfsm.OperationalStateStopped, 15, tick)
+				serviceName, benthosfsm.OperationalStateStopped, 15, tick, tickStartTime)
 			tick = newTick
 			Expect(err).NotTo(HaveOccurred())
 
@@ -408,7 +410,7 @@ var _ = Describe("BenthosManager", func() {
 				manager,
 				fullCfg,
 				tick,
-			)
+				tickStartTime)
 			tick = newTick
 
 			// Check results
@@ -448,7 +450,7 @@ var _ = Describe("BenthosManager", func() {
 				manager,
 				fullCfg,
 				tick,
-			)
+				tickStartTime)
 			tick = newTick
 
 			// Verify we got an error and no changes occurred
@@ -475,7 +477,7 @@ var _ = Describe("BenthosManager", func() {
 				manager,
 				fullCfg,
 				tick,
-			)
+				tickStartTime)
 			tick = newTick
 			Expect(err).NotTo(HaveOccurred())
 			Expect(reconciled).To(BeTrue())

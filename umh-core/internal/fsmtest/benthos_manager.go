@@ -20,6 +20,7 @@ package fsmtest
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
@@ -36,8 +37,9 @@ func WaitForBenthosManagerStable(
 	manager *benthosfsm.BenthosManager,
 	fullCfg config.FullConfig,
 	startTick uint64,
+	tickStartTime time.Time,
 ) (uint64, error) {
-	err, _ := manager.Reconcile(ctx, fullCfg, startTick)
+	err, _ := manager.Reconcile(ctx, fullCfg, startTick, tickStartTime)
 	if err != nil {
 		return startTick, err
 	}
@@ -55,10 +57,11 @@ func WaitForBenthosManagerInstanceState(
 	desiredState string,
 	maxAttempts int,
 	startTick uint64,
+	tickStartTime time.Time,
 ) (uint64, error) {
 	tick := startTick
 	for i := 0; i < maxAttempts; i++ {
-		err, _ := manager.Reconcile(ctx, fullCfg, tick)
+		err, _ := manager.Reconcile(ctx, fullCfg, tick, tickStartTime)
 		if err != nil {
 			return tick, err
 		}
@@ -82,10 +85,11 @@ func WaitForBenthosManagerInstanceRemoval(
 	instanceName string,
 	maxAttempts int,
 	startTick uint64,
+	tickStartTime time.Time,
 ) (uint64, error) {
 	tick := startTick
 	for i := 0; i < maxAttempts; i++ {
-		err, _ := manager.Reconcile(ctx, fullCfg, tick)
+		err, _ := manager.Reconcile(ctx, fullCfg, tick, tickStartTime)
 		if err != nil {
 			return tick, err
 		}
@@ -108,10 +112,11 @@ func WaitForBenthosManagerMultiState(
 	desiredMap map[string]string, // e.g. { "svc1": "idle", "svc2": "active" }
 	maxAttempts int,
 	startTick uint64,
+	tickStartTime time.Time,
 ) (uint64, error) {
 	tick := startTick
 	for i := 0; i < maxAttempts; i++ {
-		err, _ := manager.Reconcile(ctx, fullCfg, tick)
+		err, _ := manager.Reconcile(ctx, fullCfg, tick, tickStartTime)
 		if err != nil {
 			return tick, err
 		}
@@ -225,7 +230,8 @@ func ReconcileOnceBenthosManager(
 	manager *benthosfsm.BenthosManager,
 	cfg config.FullConfig,
 	tick uint64,
+	tickStartTime time.Time,
 ) (newTick uint64, err error, reconciled bool) {
-	err, rec := manager.Reconcile(ctx, cfg, tick)
+	err, rec := manager.Reconcile(ctx, cfg, tick, tickStartTime)
 	return tick + 1, err, rec
 }

@@ -20,6 +20,7 @@ package benthos_test
 import (
 	"context"
 	"fmt"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -37,11 +38,12 @@ import (
 
 var _ = Describe("BenthosInstance FSM", func() {
 	var (
-		instance    *benthosfsm.BenthosInstance
-		mockService *benthossvc.MockBenthosService
-		serviceName string
-		ctx         context.Context
-		tick        uint64
+		instance      *benthosfsm.BenthosInstance
+		mockService   *benthossvc.MockBenthosService
+		serviceName   string
+		ctx           context.Context
+		tick          uint64
+		tickStartTime time.Time
 	)
 
 	BeforeEach(func() {
@@ -54,6 +56,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 		inst, ms, _ := fsmtest.SetupBenthosInstance(serviceName, benthosfsm.OperationalStateStopped)
 		instance = inst
 		mockService = ms
+		tickStartTime = time.Unix(0, 0)
 	})
 
 	// -------------------------------------------------------------------------
@@ -72,7 +75,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				internalfsm.LifecycleStateCreating,
 				5, // attempts
 				tick,
-			)
+				tickStartTime)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(mockService.AddBenthosToS6ManagerCalled).To(BeTrue())
 
@@ -95,7 +98,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				benthosfsm.OperationalStateStopped,
 				5,
 				tick,
-			)
+				tickStartTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			// 2. Now set desired state = Active => from "stopped" => "starting"
@@ -113,7 +116,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				benthosfsm.OperationalStateStarting,
 				5,
 				tick,
-			)
+				tickStartTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			// check that StartBenthos was called
@@ -133,7 +136,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				internalfsm.LifecycleStateCreating,
 				3,
 				tick,
-			)
+				tickStartTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			mockService.ServiceStates[serviceName] = &benthossvc.ServiceInfo{
@@ -147,7 +150,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				benthosfsm.OperationalStateStopped,
 				5,
 				tick,
-			)
+				tickStartTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Step 2: from stopped => starting => configLoading
@@ -158,7 +161,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				benthosfsm.OperationalStateStarting,
 				5,
 				tick,
-			)
+				tickStartTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Now set the S6 running so we go to config loading
@@ -175,7 +178,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				benthosfsm.OperationalStateStartingConfigLoading,
 				5,
 				tick,
-			)
+				tickStartTime)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -194,7 +197,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				internalfsm.LifecycleStateCreating,
 				5,
 				tick,
-			)
+				tickStartTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			mockService.ServiceStates[serviceName] = &benthossvc.ServiceInfo{S6FSMState: s6fsm.OperationalStateStopped}
@@ -206,7 +209,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				benthosfsm.OperationalStateStopped,
 				5,
 				tick,
-			)
+				tickStartTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Step 2: from stopped => starting => configLoading => idle
@@ -219,7 +222,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				benthosfsm.OperationalStateStarting,
 				5,
 				tick,
-			)
+				tickStartTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			// from starting => startingConfigLoading
@@ -235,7 +238,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				benthosfsm.OperationalStateStartingConfigLoading,
 				5,
 				tick,
-			)
+				tickStartTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Finally from startingConfigLoading => idle
@@ -253,7 +256,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				benthosfsm.OperationalStateIdle,
 				10,
 				tick,
-			)
+				tickStartTime)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(instance.GetCurrentFSMState()).To(Equal(benthosfsm.OperationalStateIdle))
 		})
@@ -274,7 +277,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				internalfsm.LifecycleStateCreating,
 				5,
 				tick,
-			)
+				tickStartTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			mockService.ServiceStates[serviceName] = &benthossvc.ServiceInfo{S6FSMState: s6fsm.OperationalStateStopped}
@@ -286,7 +289,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				benthosfsm.OperationalStateStopped,
 				5,
 				tick,
-			)
+				tickStartTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Step 2: from stopped => starting => configLoading => waiting => idle
@@ -299,7 +302,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				benthosfsm.OperationalStateStarting,
 				5,
 				tick,
-			)
+				tickStartTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			// from starting => startingConfigLoading
@@ -315,7 +318,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				benthosfsm.OperationalStateStartingConfigLoading,
 				5,
 				tick,
-			)
+				tickStartTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			// from startingConfigLoading => idle
@@ -332,7 +335,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				benthosfsm.OperationalStateIdle,
 				10,
 				tick,
-			)
+				tickStartTime)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(instance.GetCurrentFSMState()).To(Equal(benthosfsm.OperationalStateIdle))
 
@@ -351,7 +354,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				benthosfsm.OperationalStateActive,
 				5,
 				tick,
-			)
+				tickStartTime)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -364,7 +367,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				internalfsm.LifecycleStateCreating,
 				5,
 				tick,
-			)
+				tickStartTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			mockService.ServiceStates[serviceName] = &benthossvc.ServiceInfo{S6FSMState: s6fsm.OperationalStateStopped}
@@ -376,7 +379,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				benthosfsm.OperationalStateStopped,
 				5,
 				tick,
-			)
+				tickStartTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Step 2: from stopped => starting => configLoading => waiting => idle => active
@@ -389,7 +392,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				benthosfsm.OperationalStateStarting,
 				5,
 				tick,
-			)
+				tickStartTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			// from starting => startingConfigLoading
@@ -405,7 +408,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				benthosfsm.OperationalStateStartingConfigLoading,
 				5,
 				tick,
-			)
+				tickStartTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			// from startingConfigLoading => idle
@@ -422,7 +425,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				benthosfsm.OperationalStateIdle,
 				10,
 				tick,
-			)
+				tickStartTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			// from idle => active
@@ -439,7 +442,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				benthosfsm.OperationalStateActive,
 				5,
 				tick,
-			)
+				tickStartTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Step 3: Then degrade => set flags => "degraded"
@@ -456,7 +459,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				benthosfsm.OperationalStateDegraded,
 				10,
 				tick,
-			)
+				tickStartTime)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -469,7 +472,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				internalfsm.LifecycleStateCreating,
 				5,
 				tick,
-			)
+				tickStartTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			mockService.ServiceStates[serviceName] = &benthossvc.ServiceInfo{S6FSMState: s6fsm.OperationalStateStopped}
@@ -481,7 +484,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				benthosfsm.OperationalStateStopped,
 				5,
 				tick,
-			)
+				tickStartTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Step 2: from stopped => starting => configLoading => waiting => idle => active => degraded
@@ -494,7 +497,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				benthosfsm.OperationalStateStarting,
 				5,
 				tick,
-			)
+				tickStartTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			// from starting => startingConfigLoading
@@ -510,7 +513,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				benthosfsm.OperationalStateStartingConfigLoading,
 				5,
 				tick,
-			)
+				tickStartTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			// from startingConfigLoading => idle
@@ -527,7 +530,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				benthosfsm.OperationalStateIdle,
 				10,
 				tick,
-			)
+				tickStartTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			// from idle => active
@@ -544,7 +547,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				benthosfsm.OperationalStateActive,
 				5,
 				tick,
-			)
+				tickStartTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			// from active => degraded
@@ -561,7 +564,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				benthosfsm.OperationalStateDegraded,
 				10,
 				tick,
-			)
+				tickStartTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Step 3: From degraded => idle when fixed
@@ -579,7 +582,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				benthosfsm.OperationalStateIdle,
 				10,
 				tick,
-			)
+				tickStartTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Step 4: from idle => active if HasProcessingActivity again
@@ -595,7 +598,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				benthosfsm.OperationalStateActive,
 				5,
 				tick,
-			)
+				tickStartTime)
 			Expect(err).NotTo(HaveOccurred())
 		})
 	})
@@ -613,7 +616,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				internalfsm.LifecycleStateCreating,
 				5,
 				tick,
-			)
+				tickStartTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			mockService.ServiceStates[serviceName] = &benthossvc.ServiceInfo{S6FSMState: s6fsm.OperationalStateStopped}
@@ -625,7 +628,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				benthosfsm.OperationalStateStopped,
 				5,
 				tick,
-			)
+				tickStartTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Step 2: from stopped => starting => configLoading => waiting => idle => active
@@ -638,7 +641,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				benthosfsm.OperationalStateStarting,
 				5,
 				tick,
-			)
+				tickStartTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			// from starting => startingConfigLoading
@@ -654,7 +657,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				benthosfsm.OperationalStateStartingConfigLoading,
 				5,
 				tick,
-			)
+				tickStartTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			// from startingConfigLoading => idle
@@ -671,7 +674,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				benthosfsm.OperationalStateIdle,
 				10,
 				tick,
-			)
+				tickStartTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			// from idle => active
@@ -689,7 +692,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				benthosfsm.OperationalStateActive,
 				5,
 				tick,
-			)
+				tickStartTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Step 3: from active => stopping => stopped
@@ -702,7 +705,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				benthosfsm.OperationalStateStopping,
 				10,
 				tick,
-			)
+				tickStartTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			// simulate S6 stopping
@@ -717,7 +720,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				benthosfsm.OperationalStateStopped,
 				5,
 				tick,
-			)
+				tickStartTime)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -730,7 +733,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				internalfsm.LifecycleStateCreating,
 				5,
 				tick,
-			)
+				tickStartTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			mockService.ServiceStates[serviceName] = &benthossvc.ServiceInfo{S6FSMState: s6fsm.OperationalStateStopped}
@@ -742,7 +745,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				benthosfsm.OperationalStateStopped,
 				5,
 				tick,
-			)
+				tickStartTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Step 2: from stopped => starting => configLoading => waiting => idle => active => degraded
@@ -755,7 +758,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				benthosfsm.OperationalStateStarting,
 				5,
 				tick,
-			)
+				tickStartTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			// from starting => startingConfigLoading
@@ -771,7 +774,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				benthosfsm.OperationalStateStartingConfigLoading,
 				5,
 				tick,
-			)
+				tickStartTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			// from startingConfigLoading => idle
@@ -788,7 +791,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				benthosfsm.OperationalStateIdle,
 				10,
 				tick,
-			)
+				tickStartTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			// from idle => active
@@ -805,7 +808,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				benthosfsm.OperationalStateActive,
 				5,
 				tick,
-			)
+				tickStartTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			// from active => degraded
@@ -822,7 +825,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				benthosfsm.OperationalStateDegraded,
 				10,
 				tick,
-			)
+				tickStartTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Step 3: set desired=stopped => degraded => stopping => stopped
@@ -834,7 +837,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				benthosfsm.OperationalStateStopping,
 				10,
 				tick,
-			)
+				tickStartTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			// simulate S6 stopping
@@ -848,7 +851,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				benthosfsm.OperationalStateStopped,
 				5,
 				tick,
-			)
+				tickStartTime)
 			Expect(err).NotTo(HaveOccurred())
 		})
 	})
@@ -867,7 +870,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				internalfsm.LifecycleStateCreating,
 				5,
 				tick,
-			)
+				tickStartTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			// mock creation success
@@ -883,7 +886,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				benthosfsm.OperationalStateStopped,
 				5,
 				tick,
-			)
+				tickStartTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			// set desired => active => from stopped => starting
@@ -894,7 +897,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				benthosfsm.OperationalStateStarting,
 				5,
 				tick,
-			)
+				tickStartTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			// from starting => startingConfigLoading
@@ -908,7 +911,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				benthosfsm.OperationalStateStartingConfigLoading,
 				5,
 				tick,
-			)
+				tickStartTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			// S6 crash => go back to "starting"
@@ -922,7 +925,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				benthosfsm.OperationalStateStarting,
 				5,
 				tick,
-			)
+				tickStartTime)
 			Expect(err).NotTo(HaveOccurred())
 
 		})
@@ -949,7 +952,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 			//      - no external error returned (err == nil)
 			//      - reconciled == false
 			//      - instance remains in to_be_created
-			err, reconciled := instance.Reconcile(ctx, tick)
+			err, reconciled := instance.Reconcile(ctx, tick, tickStartTime)
 			tick++
 			Expect(err).NotTo(HaveOccurred())
 			Expect(reconciled).To(BeFalse())
@@ -966,14 +969,14 @@ var _ = Describe("BenthosInstance FSM", func() {
 			mockService.ExistingServices[serviceName] = true
 
 			// 7) Next reconcile => now we succeed => instance transitions to "creating"
-			err, reconciled = instance.Reconcile(ctx, tick)
+			err, reconciled = instance.Reconcile(ctx, tick, tickStartTime)
 			tick++
 			Expect(err).NotTo(HaveOccurred())
 			Expect(reconciled).To(BeTrue())
 			Expect(instance.GetCurrentFSMState()).To(Equal(internalfsm.LifecycleStateCreating))
 
 			// 8) Another reconcile => we complete creation => "stopped"
-			err, reconciled = instance.Reconcile(ctx, tick)
+			err, reconciled = instance.Reconcile(ctx, tick, tickStartTime)
 			tick++
 			Expect(err).NotTo(HaveOccurred())
 			Expect(reconciled).To(BeTrue())
@@ -990,7 +993,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				internalfsm.LifecycleStateCreating,
 				5,
 				tick,
-			)
+				tickStartTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			mockService.ServiceStates[serviceName] = &benthossvc.ServiceInfo{
@@ -1004,7 +1007,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				benthosfsm.OperationalStateStopped,
 				5,
 				tick,
-			)
+				tickStartTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Step B: from stopped => idle => active
@@ -1021,7 +1024,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				benthosfsm.OperationalStateStarting,
 				5,
 				tick,
-			)
+				tickStartTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			//  B3) from "starting => startingConfigLoading"
@@ -1037,7 +1040,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				benthosfsm.OperationalStateStartingConfigLoading,
 				5,
 				tick,
-			)
+				tickStartTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			//  B4) from "startingConfigLoading => idle"
@@ -1054,7 +1057,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				benthosfsm.OperationalStateIdle,
 				10,
 				tick,
-			)
+				tickStartTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			//  B5) from "idle => active"
@@ -1071,7 +1074,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				benthosfsm.OperationalStateActive,
 				5,
 				tick,
-			)
+				tickStartTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Step C: simulate runtime crash => degrade
@@ -1085,7 +1088,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				benthosfsm.OperationalStateDegraded,
 				5,
 				tick,
-			)
+				tickStartTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Step D: fix => degrade => idle
@@ -1101,7 +1104,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				benthosfsm.OperationalStateIdle,
 				10,
 				tick,
-			)
+				tickStartTime)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -1116,7 +1119,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				internalfsm.LifecycleStateCreating,
 				5,
 				tick,
-			)
+				tickStartTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			mockService.ServiceStates[serviceName] = &benthossvc.ServiceInfo{S6FSMState: s6fsm.OperationalStateStopped}
@@ -1128,7 +1131,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				benthosfsm.OperationalStateStopped,
 				5,
 				tick,
-			)
+				tickStartTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Now set desired state to active and transition to it
@@ -1151,7 +1154,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				benthosfsm.OperationalStateActive,
 				15, // Allow more attempts for multiple transitions
 				tick,
-			)
+				tickStartTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify we're in active state
@@ -1164,6 +1167,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 			// Wait for the FSM to detect the error and change desired state to stopped
 			tick, err = fsmtest.WaitForBenthosDesiredState(
 				ctx, instance, tick, benthosfsm.OperationalStateStopped, 10,
+				tickStartTime,
 			)
 			Expect(err).NotTo(HaveOccurred(), "Instance should change desired state to stopped after permanent error")
 
@@ -1182,7 +1186,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				internalfsm.LifecycleStateCreating,
 				5,
 				tick,
-			)
+				tickStartTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Setup service in stopped state
@@ -1196,7 +1200,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				benthosfsm.OperationalStateStopped,
 				5,
 				tick,
-			)
+				tickStartTime)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Ensure desired state is also stopped
@@ -1210,6 +1214,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 			var reconciled bool
 			tick, recErr, reconciled = fsmtest.ReconcileBenthosUntilError(
 				ctx, instance, mockService, serviceName, tick, 5,
+				tickStartTime,
 			)
 
 			// Now we should get the error
