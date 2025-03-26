@@ -21,6 +21,7 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -57,7 +58,7 @@ benthos: []
 
 		It("exposes metrics and has zero s6 services running", func() {
 			// Check the /metrics endpoint
-			resp, err := http.Get(metricsURL)
+			resp, err := http.Get(GetMetricsURL())
 			Expect(err).NotTo(HaveOccurred())
 			defer resp.Body.Close()
 
@@ -88,7 +89,7 @@ benthos: []
 
 		It("should have the golden service up and expose metrics", func() {
 			// Check /metrics
-			resp, err := http.Get(metricsURL)
+			resp, err := http.Get(GetMetricsURL())
 			Expect(err).NotTo(HaveOccurred())
 			defer resp.Body.Close()
 
@@ -131,7 +132,7 @@ benthos: []
 
 		It("should have both services active and expose healthy metrics", func() {
 			By("Verifying the metrics endpoint contains expected metrics")
-			resp, err := http.Get(metricsURL)
+			resp, err := http.Get(GetMetricsURL())
 			Expect(err).NotTo(HaveOccurred())
 			defer resp.Body.Close()
 
@@ -155,12 +156,17 @@ benthos: []
 
 				// Print the latest YAML config
 				fmt.Println("\nLatest YAML config at time of failure:")
-				config, err := os.ReadFile("data/config.yaml")
+				configPath := filepath.Join(getTestDataDir(), "config.yaml")
+				config, err := os.ReadFile(configPath)
 				if err != nil {
-					fmt.Printf("Failed to read config file: %v\n", err)
+					fmt.Printf("Failed to read config file %s: %v\n", configPath, err)
 				} else {
 					fmt.Println(string(config))
 				}
+
+				// Save logs for debugging
+				containerNameInError := getContainerName()
+				fmt.Printf("\nTest failed. Container name: %s\n", containerNameInError)
 			}
 		})
 
@@ -552,12 +558,17 @@ benthos: []
 
 				// Print the latest YAML config
 				fmt.Println("\nLatest YAML config at time of failure:")
-				config, err := os.ReadFile("data/config.yaml")
+				configPath := filepath.Join(getTestDataDir(), "config.yaml")
+				config, err := os.ReadFile(configPath)
 				if err != nil {
-					fmt.Printf("Failed to read config file: %v\n", err)
+					fmt.Printf("Failed to read config file %s: %v\n", configPath, err)
 				} else {
 					fmt.Println(string(config))
 				}
+
+				// Save logs for debugging
+				containerNameInError := getContainerName()
+				fmt.Printf("\nTest failed. Container name: %s\n", containerNameInError)
 			}
 		})
 

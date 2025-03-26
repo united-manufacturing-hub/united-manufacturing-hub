@@ -54,7 +54,7 @@ func monitorHealth() {
 func checkMetricsHealthy() {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, "GET", metricsURL, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", GetMetricsURL(), nil)
 	if err != nil {
 		Fail(fmt.Errorf("failed to create request: %w\n", err).Error())
 	}
@@ -80,7 +80,7 @@ func checkMetricsHealthy() {
 func checkGoldenService() (int, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, "POST", "http://localhost:8082", bytes.NewBuffer([]byte(`{"message": "test"}`)))
+	req, err := http.NewRequestWithContext(ctx, "POST", GetGoldenServiceURL(), bytes.NewBuffer([]byte(`{"message": "test"}`)))
 	if err != nil {
 		return 0, fmt.Errorf("failed to create request: %w\n", err)
 	}
@@ -118,7 +118,7 @@ func waitForMetrics() error {
 	Eventually(func() error {
 		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 		defer cancel()
-		req, err := http.NewRequestWithContext(ctx, "GET", metricsURL, nil)
+		req, err := http.NewRequestWithContext(ctx, "GET", GetMetricsURL(), nil)
 		if err != nil {
 			return err
 		}
