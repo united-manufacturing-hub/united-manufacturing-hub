@@ -12,14 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package yaml
+package benthosserviceconfig
 
 import (
 	"fmt"
 	"reflect"
 	"strings"
-
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 )
 
 // Comparator handles the comparison of Benthos configurations
@@ -35,10 +33,16 @@ func NewComparator() *Comparator {
 }
 
 // ConfigsEqual compares two BenthosServiceConfigs after normalization
-func (c *Comparator) ConfigsEqual(desired, observed config.BenthosServiceConfig) bool {
+func (c *Comparator) ConfigsEqual(desired, observed BenthosServiceConfig) (isEqual bool) {
 	// First normalize both configs
 	normDesired := c.normalizer.NormalizeConfig(desired)
 	normObserved := c.normalizer.NormalizeConfig(observed)
+	defer func() {
+		if !isEqual {
+			fmt.Printf("Normalized desired: %+v\n", normDesired)
+			fmt.Printf("Normalized observed: %+v\n", normObserved)
+		}
+	}()
 
 	// Compare essential fields that must match exactly
 	// Ignoring MetricsPort since it's allocated by the port manager
@@ -49,8 +53,8 @@ func (c *Comparator) ConfigsEqual(desired, observed config.BenthosServiceConfig)
 	// Compare maps with deep equality
 	if !reflect.DeepEqual(normDesired.Input, normObserved.Input) ||
 		!reflect.DeepEqual(normDesired.Output, normObserved.Output) ||
-		!reflect.DeepEqual(normDesired.CacheResources, normObserved.CacheResources) ||
-		!reflect.DeepEqual(normDesired.RateLimitResources, normObserved.RateLimitResources) {
+		!isResourcesEqual(normDesired.CacheResources, normObserved.CacheResources) ||
+		!isResourcesEqual(normDesired.RateLimitResources, normObserved.RateLimitResources) {
 		return false
 	}
 
@@ -83,7 +87,7 @@ func (c *Comparator) ConfigsEqual(desired, observed config.BenthosServiceConfig)
 }
 
 // ConfigDiff returns a human-readable string describing differences between configs
-func (c *Comparator) ConfigDiff(desired, observed config.BenthosServiceConfig) string {
+func (c *Comparator) ConfigDiff(desired, observed BenthosServiceConfig) string {
 	var diff strings.Builder
 
 	// First normalize both configs
@@ -144,13 +148,15 @@ func (c *Comparator) ConfigDiff(desired, observed config.BenthosServiceConfig) s
 	}
 
 	// Compare cache resources
-	if !reflect.DeepEqual(normDesired.CacheResources, normObserved.CacheResources) {
-		diff.WriteString("Cache resources differ\n")
+	if !isResourcesEqual(normDesired.CacheResources, normObserved.CacheResources) {
+		diff.WriteString(fmt.Sprintf("Cache resources differ. Want: %v, Have: %v\n",
+			normDesired.CacheResources, normObserved.CacheResources))
 	}
 
 	// Compare rate limit resources
-	if !reflect.DeepEqual(normDesired.RateLimitResources, normObserved.RateLimitResources) {
-		diff.WriteString("Rate limit resources differ\n")
+	if !isResourcesEqual(normDesired.RateLimitResources, normObserved.RateLimitResources) {
+		diff.WriteString(fmt.Sprintf("Rate limit resources differ. Want: %v, Have: %v\n",
+			normDesired.RateLimitResources, normObserved.RateLimitResources))
 	}
 
 	if diff.Len() == 0 {
@@ -218,4 +224,34 @@ func compareMapKeys(desired, observed map[string]interface{}, prefix string, dif
 			diff.WriteString(fmt.Sprintf("  - %s.%s: exists in observed but missing in desired\n", prefix, k))
 		}
 	}
+}
+
+// isResourcesEqual handles comparison of resource slices, properly handling nil and empty slices
+func isResourcesEqual(a, b interface{}) bool {
+	// For nil or empty slices
+	aIsNilOrEmpty := isNilOrEmpty(a)
+	bIsNilOrEmpty := isNilOrEmpty(b)
+
+	// If both are nil or empty, consider them equal
+	if aIsNilOrEmpty && bIsNilOrEmpty {
+		return true
+	}
+
+	// Otherwise, use standard deep equality
+	return reflect.DeepEqual(a, b)
+}
+
+// isNilOrEmpty checks if a value is nil or an empty slice
+func isNilOrEmpty(v interface{}) bool {
+	if v == nil {
+		return true
+	}
+
+	// Check if it's a slice
+	rv := reflect.ValueOf(v)
+	if rv.Kind() == reflect.Slice {
+		return rv.Len() == 0
+	}
+
+	return false
 }

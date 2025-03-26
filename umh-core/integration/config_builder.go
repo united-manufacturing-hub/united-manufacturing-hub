@@ -17,6 +17,7 @@ package integration_test
 
 import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
 	"gopkg.in/yaml.v3"
 )
 
@@ -48,7 +49,7 @@ func (b *Builder) AddGoldenService() *Builder {
 			Name:            "golden-service",
 			DesiredFSMState: "running",
 		},
-		S6ServiceConfig: config.S6ServiceConfig{
+		S6ServiceConfig: s6serviceconfig.S6ServiceConfig{
 			Command: []string{
 				"/usr/local/bin/benthos",
 				"-c",
@@ -88,7 +89,7 @@ func (b *Builder) AddSleepService(name string, duration string) *Builder {
 			Name:            name,
 			DesiredFSMState: "running",
 		},
-		S6ServiceConfig: config.S6ServiceConfig{
+		S6ServiceConfig: s6serviceconfig.S6ServiceConfig{
 			Command: []string{"sleep", duration},
 		},
 	})

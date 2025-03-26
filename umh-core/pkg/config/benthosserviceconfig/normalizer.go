@@ -12,11 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package yaml
-
-import (
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
-)
+package benthosserviceconfig
 
 // Normalizer handles the normalization of Benthos configurations
 type Normalizer struct{}
@@ -27,7 +23,7 @@ func NewNormalizer() *Normalizer {
 }
 
 // NormalizeConfig applies Benthos defaults to a structured config
-func (n *Normalizer) NormalizeConfig(cfg config.BenthosServiceConfig) config.BenthosServiceConfig {
+func (n *Normalizer) NormalizeConfig(cfg BenthosServiceConfig) BenthosServiceConfig {
 	// Create a copy
 	normalized := cfg
 

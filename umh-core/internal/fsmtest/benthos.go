@@ -22,6 +22,7 @@ import (
 	"fmt"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	benthosfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
@@ -36,7 +37,7 @@ func CreateBenthosTestConfig(name string, desiredState string) config.BenthosCon
 			Name:            name,
 			DesiredFSMState: desiredState,
 		},
-		BenthosServiceConfig: config.BenthosServiceConfig{
+		BenthosServiceConfig: benthosserviceconfig.BenthosServiceConfig{
 			Input: map[string]interface{}{
 				"generate": map[string]interface{}{
 					"mapping":  "root = {\"message\":\"hello world\"}",
@@ -113,7 +114,7 @@ func SetupBenthosServiceState(
 
 // ConfigureBenthosServiceConfig configures the mock service with a default Benthos config
 func ConfigureBenthosServiceConfig(mockService *benthossvc.MockBenthosService) {
-	mockService.GetConfigResult = config.BenthosServiceConfig{
+	mockService.GetConfigResult = benthosserviceconfig.BenthosServiceConfig{
 		Input: map[string]interface{}{
 			"generate": map[string]interface{}{
 				"mapping":  "root = {\"message\":\"hello world\"}",

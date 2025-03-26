@@ -16,6 +16,7 @@ package integration_test
 
 import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
 	"gopkg.in/yaml.v3"
 )
 
@@ -48,7 +49,7 @@ func (b *BenthosBuilder) AddGoldenBenthos() *BenthosBuilder {
 			Name:            "golden-benthos",
 			DesiredFSMState: "active",
 		},
-		BenthosServiceConfig: config.BenthosServiceConfig{
+		BenthosServiceConfig: benthosserviceconfig.BenthosServiceConfig{
 			MetricsPort: 0, // Auto-assign port
 			Input: map[string]interface{}{
 				"http_server": map[string]interface{}{
@@ -77,7 +78,7 @@ func (b *BenthosBuilder) AddGeneratorBenthos(name string, interval string) *Bent
 			Name:            name,
 			DesiredFSMState: "active",
 		},
-		BenthosServiceConfig: config.BenthosServiceConfig{
+		BenthosServiceConfig: benthosserviceconfig.BenthosServiceConfig{
 			MetricsPort: 0, // Auto-assign port
 			Input: map[string]interface{}{
 				"generate": map[string]interface{}{

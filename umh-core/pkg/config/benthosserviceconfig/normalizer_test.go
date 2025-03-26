@@ -12,31 +12,35 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package yaml
+package benthosserviceconfig
 
 import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 )
 
 var _ = Describe("Benthos YAML Normalizer", func() {
 	Describe("NormalizeConfig", func() {
 		It("should set default values for empty config", func() {
-			config := config.BenthosServiceConfig{}
+			config := BenthosServiceConfig{}
 			normalizer := NewNormalizer()
 
 			normalizedConfig := normalizer.NormalizeConfig(config)
+			normalizedInput := normalizedConfig.Input
+			normalizedOutput := normalizedConfig.Output
+			normalizedPipeline := normalizedConfig.Pipeline
+			normalizedMetricsPort := normalizedConfig.MetricsPort
+			normalizedLogLevel := normalizedConfig.LogLevel
 
-			Expect(normalizedConfig.Input).NotTo(BeNil())
-			Expect(normalizedConfig.Output).NotTo(BeNil())
-			Expect(normalizedConfig.Pipeline).NotTo(BeNil())
-			Expect(normalizedConfig.MetricsPort).To(Equal(4195))
-			Expect(normalizedConfig.LogLevel).To(Equal("INFO"))
+			Expect(normalizedInput).NotTo(BeNil())
+			Expect(normalizedOutput).NotTo(BeNil())
+			Expect(normalizedPipeline).NotTo(BeNil())
+			Expect(normalizedMetricsPort).To(Equal(4195))
+			Expect(normalizedLogLevel).To(Equal("INFO"))
 		})
 
 		It("should preserve existing values", func() {
-			config := config.BenthosServiceConfig{
+			config := BenthosServiceConfig{
 				Input: map[string]interface{}{
 					"mqtt": map[string]interface{}{
 						"topic": "test/topic",
@@ -62,20 +66,25 @@ var _ = Describe("Benthos YAML Normalizer", func() {
 
 			normalizer := NewNormalizer()
 			normalizedConfig := normalizer.NormalizeConfig(config)
+			normalizedInput := normalizedConfig.Input
+			normalizedOutput := normalizedConfig.Output
+			normalizedPipeline := normalizedConfig.Pipeline
+			normalizedMetricsPort := normalizedConfig.MetricsPort
+			normalizedLogLevel := normalizedConfig.LogLevel
 
-			Expect(normalizedConfig.MetricsPort).To(Equal(8000))
-			Expect(normalizedConfig.LogLevel).To(Equal("DEBUG"))
+			Expect(normalizedMetricsPort).To(Equal(8000))
+			Expect(normalizedLogLevel).To(Equal("DEBUG"))
 
 			// Check input preserved
-			inputMqtt := normalizedConfig.Input["mqtt"].(map[string]interface{})
+			inputMqtt := normalizedInput["mqtt"].(map[string]interface{})
 			Expect(inputMqtt["topic"]).To(Equal("test/topic"))
 
 			// Check output preserved
-			outputKafka := normalizedConfig.Output["kafka"].(map[string]interface{})
+			outputKafka := normalizedOutput["kafka"].(map[string]interface{})
 			Expect(outputKafka["topic"]).To(Equal("test-output"))
 
 			// Check pipeline processors preserved
-			processors := normalizedConfig.Pipeline["processors"].([]interface{})
+			processors := normalizedPipeline["processors"].([]interface{})
 			Expect(processors).To(HaveLen(1))
 			processor := processors[0].(map[string]interface{})
 			processorText := processor["text"].(map[string]interface{})
@@ -83,7 +92,7 @@ var _ = Describe("Benthos YAML Normalizer", func() {
 		})
 
 		It("should normalize maps by ensuring they're not nil", func() {
-			config := config.BenthosServiceConfig{
+			config := BenthosServiceConfig{
 				// Input is nil
 				// Output is nil
 				Pipeline: map[string]interface{}{}, // Empty but not nil
@@ -96,24 +105,30 @@ var _ = Describe("Benthos YAML Normalizer", func() {
 
 			normalizer := NewNormalizer()
 			normalizedConfig := normalizer.NormalizeConfig(config)
+			normalizedInput := normalizedConfig.Input
+			normalizedOutput := normalizedConfig.Output
+			normalizedPipeline := normalizedConfig.Pipeline
+			normalizedBuffer := normalizedConfig.Buffer
+			normalizedCacheResources := normalizedConfig.CacheResources
+			normalizedRateLimitResources := normalizedConfig.RateLimitResources
 
-			Expect(normalizedConfig.Input).NotTo(BeNil())
-			Expect(normalizedConfig.Output).NotTo(BeNil())
-			Expect(normalizedConfig.Pipeline).NotTo(BeNil())
+			Expect(normalizedInput).NotTo(BeNil())
+			Expect(normalizedOutput).NotTo(BeNil())
+			Expect(normalizedPipeline).NotTo(BeNil())
 
 			// Buffer should have the none buffer set
-			Expect(normalizedConfig.Buffer).To(HaveKey("none"))
+			Expect(normalizedBuffer).To(HaveKey("none"))
 
 			// These should be empty
-			Expect(normalizedConfig.CacheResources).To(BeEmpty())
-			Expect(normalizedConfig.RateLimitResources).To(BeEmpty())
+			Expect(normalizedCacheResources).To(BeEmpty())
+			Expect(normalizedRateLimitResources).To(BeEmpty())
 		})
 	})
 
 	// Test the package-level function
 	Describe("NormalizeBenthosConfig package function", func() {
 		It("should use the default normalizer", func() {
-			config := config.BenthosServiceConfig{}
+			config := BenthosServiceConfig{}
 
 			// Use package-level function
 			normalizedConfig1 := NormalizeBenthosConfig(config)

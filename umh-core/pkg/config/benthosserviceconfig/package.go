@@ -12,11 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package yaml
-
-import (
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
-)
+package benthosserviceconfig
 
 var (
 	defaultGenerator  = NewGenerator()
@@ -24,10 +20,30 @@ var (
 	defaultComparator = NewComparator()
 )
 
+// BenthosServiceConfig represents the configuration for a Benthos service
+type BenthosServiceConfig struct {
+	// Benthos-specific configuration
+	Input              map[string]interface{}   `yaml:"input"`
+	Pipeline           map[string]interface{}   `yaml:"pipeline"`
+	Output             map[string]interface{}   `yaml:"output"`
+	CacheResources     []map[string]interface{} `yaml:"cache_resources"`
+	RateLimitResources []map[string]interface{} `yaml:"rate_limit_resources"`
+	Buffer             map[string]interface{}   `yaml:"buffer"`
+
+	// Advanced configuration
+	MetricsPort int    `yaml:"metrics_port"`
+	LogLevel    string `yaml:"log_level"`
+}
+
+// Equal checks if two BenthosServiceConfigs are equal
+func (c BenthosServiceConfig) Equal(other BenthosServiceConfig) bool {
+	return NewComparator().ConfigsEqual(c, other)
+}
+
 // RenderBenthosYAML is a package-level function for easy YAML generation
 func RenderBenthosYAML(input, output, pipeline, cacheResources, rateLimitResources, buffer interface{}, metricsPort int, logLevel string) (string, error) {
 	// Create a config object from the individual components
-	cfg := config.BenthosServiceConfig{
+	cfg := BenthosServiceConfig{
 		MetricsPort: metricsPort,
 		LogLevel:    logLevel,
 	}
@@ -89,16 +105,16 @@ func RenderBenthosYAML(input, output, pipeline, cacheResources, rateLimitResourc
 }
 
 // NormalizeBenthosConfig is a package-level function for easy config normalization
-func NormalizeBenthosConfig(cfg config.BenthosServiceConfig) config.BenthosServiceConfig {
+func NormalizeBenthosConfig(cfg BenthosServiceConfig) BenthosServiceConfig {
 	return defaultNormalizer.NormalizeConfig(cfg)
 }
 
 // ConfigsEqual is a package-level function for easy config comparison
-func ConfigsEqual(desired, observed config.BenthosServiceConfig) bool {
+func ConfigsEqual(desired, observed BenthosServiceConfig) bool {
 	return defaultComparator.ConfigsEqual(desired, observed)
 }
 
 // ConfigDiff is a package-level function for easy config diff generation
-func ConfigDiff(desired, observed config.BenthosServiceConfig) string {
+func ConfigDiff(desired, observed BenthosServiceConfig) string {
 	return defaultComparator.ConfigDiff(desired, observed)
 }

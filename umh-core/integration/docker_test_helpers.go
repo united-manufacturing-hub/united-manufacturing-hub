@@ -150,7 +150,6 @@ func writeConfigFile(yamlContent string, containerName ...string) error {
 			fmt.Printf("Failed to verify config in container: %v\n", err)
 			return fmt.Errorf("failed to verify config in container: %w", err)
 		}
-		fmt.Printf("Config file in container:\n%s\n", out)
 	}
 
 	return nil

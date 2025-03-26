@@ -16,7 +16,7 @@ package benthos
 
 import (
 	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	benthosserviceconfig "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
 	publicfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	benthossvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
 )
@@ -115,7 +115,7 @@ type BenthosObservedState struct {
 	ServiceInfo benthossvc.ServiceInfo
 
 	// ObservedBenthosServiceConfig contains the observed Benthos service config
-	ObservedBenthosServiceConfig config.BenthosServiceConfig
+	ObservedBenthosServiceConfig benthosserviceconfig.BenthosServiceConfig
 }
 
 // IsObservedState implements the ObservedState interface
@@ -141,7 +141,7 @@ type BenthosInstance struct {
 	service benthossvc.IBenthosService
 
 	// config contains all the configuration for this service
-	config config.BenthosServiceConfig
+	config benthosserviceconfig.BenthosServiceConfig
 }
 
 // GetLastObservedState returns the last known state of the instance
@@ -157,6 +157,6 @@ func (b *BenthosInstance) SetService(service benthossvc.IBenthosService) {
 
 // GetConfig returns the BenthosServiceConfig of the instance
 // This is a testing-only utility to access the private field
-func (b *BenthosInstance) GetConfig() config.BenthosServiceConfig {
+func (b *BenthosInstance) GetConfig() benthosserviceconfig.BenthosServiceConfig {
 	return b.config
 }

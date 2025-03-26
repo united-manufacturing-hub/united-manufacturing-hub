@@ -12,14 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package yaml
+package benthosserviceconfig
 
 import (
 	"fmt"
 	"strings"
 	"text/template"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"gopkg.in/yaml.v3"
 )
 
@@ -36,7 +35,7 @@ func NewGenerator() *Generator {
 }
 
 // RenderConfig generates a Benthos YAML configuration from a BenthosServiceConfig
-func (g *Generator) RenderConfig(cfg config.BenthosServiceConfig) (string, error) {
+func (g *Generator) RenderConfig(cfg BenthosServiceConfig) (string, error) {
 	if cfg.LogLevel == "" {
 		cfg.LogLevel = "INFO"
 	}
@@ -60,7 +59,7 @@ func (g *Generator) RenderConfig(cfg config.BenthosServiceConfig) (string, error
 }
 
 // configToMap converts a BenthosServiceConfig to a raw map for YAML generation
-func (g *Generator) configToMap(cfg config.BenthosServiceConfig) map[string]interface{} {
+func (g *Generator) configToMap(cfg BenthosServiceConfig) map[string]interface{} {
 	configMap := make(map[string]interface{})
 
 	// Add all sections

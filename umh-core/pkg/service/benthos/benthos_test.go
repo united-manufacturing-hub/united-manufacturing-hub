@@ -18,7 +18,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -40,7 +41,7 @@ var _ = Describe("Benthos Service", func() {
 		tick = 0
 		serviceName = service.getS6ServiceName(benthosName)
 		// Add the service to the S6 manager
-		err := service.AddBenthosToS6Manager(context.Background(), &config.BenthosServiceConfig{
+		err := service.AddBenthosToS6Manager(context.Background(), &benthosserviceconfig.BenthosServiceConfig{
 			MetricsPort: 4195,
 			LogLevel:    "info",
 		}, benthosName)
@@ -219,7 +220,7 @@ var _ = Describe("Benthos Service", func() {
 	Describe("GenerateS6ConfigForBenthos", func() {
 		Context("with minimal configuration", func() {
 			It("should generate valid YAML", func() {
-				cfg := &config.BenthosServiceConfig{
+				cfg := &benthosserviceconfig.BenthosServiceConfig{
 					MetricsPort: 4195,
 					LogLevel:    "INFO",
 				}
@@ -240,7 +241,7 @@ var _ = Describe("Benthos Service", func() {
 
 		Context("with complete configuration", func() {
 			It("should generate valid YAML with all sections", func() {
-				cfg := &config.BenthosServiceConfig{
+				cfg := &benthosserviceconfig.BenthosServiceConfig{
 					Input: map[string]interface{}{
 						"mqtt": map[string]interface{}{"topic": "test/topic"},
 					},
@@ -285,7 +286,7 @@ var _ = Describe("Benthos Service", func() {
 			It("should return error", func() {
 				s6Config, err := service.GenerateS6ConfigForBenthos(nil, "test")
 				Expect(err).To(HaveOccurred())
-				Expect(s6Config).To(Equal(config.S6ServiceConfig{}))
+				Expect(s6Config).To(Equal(s6serviceconfig.S6ServiceConfig{}))
 			})
 		})
 	})
@@ -590,7 +591,7 @@ var _ = Describe("Benthos Service", func() {
 			mockS6Service.ServiceExistsResult = true
 
 			// Add the service to the S6 manager
-			err := service.AddBenthosToS6Manager(context.Background(), &config.BenthosServiceConfig{
+			err := service.AddBenthosToS6Manager(context.Background(), &benthosserviceconfig.BenthosServiceConfig{
 				MetricsPort: 4195,
 				LogLevel:    "info",
 			}, benthosName)
@@ -970,8 +971,8 @@ processor_batch_sent{label="1",path="root.pipeline.processors.1"} 18
 			tick          uint64
 			benthosName   string
 			s6ServiceMock *s6service.MockService
-			initialConfig *config.BenthosServiceConfig
-			updatedConfig *config.BenthosServiceConfig
+			initialConfig *benthosserviceconfig.BenthosServiceConfig
+			updatedConfig *benthosserviceconfig.BenthosServiceConfig
 		)
 
 		BeforeEach(func() {
@@ -1000,7 +1001,7 @@ processor_batch_sent{label="1",path="root.pipeline.processors.1"} 18
 				WithS6Service(s6ServiceMock))
 
 			// Setup initial configuration
-			initialConfig = &config.BenthosServiceConfig{
+			initialConfig = &benthosserviceconfig.BenthosServiceConfig{
 				MetricsPort: 4195,
 				LogLevel:    "info",
 				Input: map[string]interface{}{
@@ -1015,7 +1016,7 @@ processor_batch_sent{label="1",path="root.pipeline.processors.1"} 18
 			}
 
 			// Setup updated configuration with different input
-			updatedConfig = &config.BenthosServiceConfig{
+			updatedConfig = &benthosserviceconfig.BenthosServiceConfig{
 				MetricsPort: 4195,
 				LogLevel:    "info",
 				Input: map[string]interface{}{
@@ -1066,7 +1067,7 @@ processor_batch_sent{label="1",path="root.pipeline.processors.1"} 18
 			Expect(err).NotTo(HaveOccurred())
 
 			// Create expected S6 config with initial Benthos config
-			s6ServiceMock.GetConfigResult = config.S6ServiceConfig{
+			s6ServiceMock.GetConfigResult = s6serviceconfig.S6ServiceConfig{
 				ConfigFiles: map[string]string{
 					"config.yaml": serviceConfigYaml,
 				},
@@ -1121,7 +1122,7 @@ logger:
 `
 
 			// Update mock service to return the new config
-			s6ServiceMock.GetConfigResult = config.S6ServiceConfig{
+			s6ServiceMock.GetConfigResult = s6serviceconfig.S6ServiceConfig{
 				ConfigFiles: map[string]string{
 					"config.yaml": updatedServiceConfigYaml,
 				},
@@ -1198,7 +1199,7 @@ logger:
 			mockS6Service.ServiceExistsResult = true
 
 			// Add the service to the S6 manager
-			err := service.AddBenthosToS6Manager(ctx, &config.BenthosServiceConfig{
+			err := service.AddBenthosToS6Manager(ctx, &benthosserviceconfig.BenthosServiceConfig{
 				MetricsPort: 4195,
 				LogLevel:    "info",
 			}, benthosName)

@@ -12,18 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package yaml
+package benthosserviceconfig
 
 import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 )
 
 var _ = Describe("Benthos YAML Comparator", func() {
 	Describe("ConfigsEqual", func() {
 		It("should consider identical configs equal", func() {
-			config1 := config.BenthosServiceConfig{
+			config1 := BenthosServiceConfig{
 				Input: map[string]interface{}{
 					"mqtt": map[string]interface{}{
 						"topic": "test/topic",
@@ -38,7 +37,7 @@ var _ = Describe("Benthos YAML Comparator", func() {
 				LogLevel:    "INFO",
 			}
 
-			config2 := config.BenthosServiceConfig{
+			config2 := BenthosServiceConfig{
 				Input: map[string]interface{}{
 					"mqtt": map[string]interface{}{
 						"topic": "test/topic",
@@ -60,7 +59,7 @@ var _ = Describe("Benthos YAML Comparator", func() {
 		})
 
 		It("should consider configs with different inputs not equal", func() {
-			config1 := config.BenthosServiceConfig{
+			config1 := BenthosServiceConfig{
 				Input: map[string]interface{}{
 					"mqtt": map[string]interface{}{
 						"topic": "test/topic",
@@ -73,7 +72,7 @@ var _ = Describe("Benthos YAML Comparator", func() {
 				},
 			}
 
-			config2 := config.BenthosServiceConfig{
+			config2 := BenthosServiceConfig{
 				Input: map[string]interface{}{
 					"mqtt": map[string]interface{}{
 						"topic": "different/topic",
@@ -96,7 +95,7 @@ var _ = Describe("Benthos YAML Comparator", func() {
 		})
 
 		It("should consider configs with different outputs not equal", func() {
-			config1 := config.BenthosServiceConfig{
+			config1 := BenthosServiceConfig{
 				Input: map[string]interface{}{
 					"mqtt": map[string]interface{}{
 						"topic": "test/topic",
@@ -109,7 +108,7 @@ var _ = Describe("Benthos YAML Comparator", func() {
 				},
 			}
 
-			config2 := config.BenthosServiceConfig{
+			config2 := BenthosServiceConfig{
 				Input: map[string]interface{}{
 					"mqtt": map[string]interface{}{
 						"topic": "test/topic",
@@ -133,14 +132,14 @@ var _ = Describe("Benthos YAML Comparator", func() {
 
 		It("should normalize configs before comparison", func() {
 			// Config with default values
-			config1 := config.BenthosServiceConfig{
+			config1 := BenthosServiceConfig{
 				Input:       map[string]interface{}{},
 				MetricsPort: 4195,
 				LogLevel:    "INFO",
 			}
 
 			// Missing fields that should get default values
-			config2 := config.BenthosServiceConfig{}
+			config2 := BenthosServiceConfig{}
 
 			comparator := NewComparator()
 			equal := comparator.ConfigsEqual(config1, config2)
@@ -151,7 +150,7 @@ var _ = Describe("Benthos YAML Comparator", func() {
 
 	Describe("ConfigDiff", func() {
 		It("should generate readable diff for different configs", func() {
-			config1 := config.BenthosServiceConfig{
+			config1 := BenthosServiceConfig{
 				Input: map[string]interface{}{
 					"mqtt": map[string]interface{}{
 						"topic": "test/topic",
@@ -166,7 +165,7 @@ var _ = Describe("Benthos YAML Comparator", func() {
 				LogLevel:    "INFO",
 			}
 
-			config2 := config.BenthosServiceConfig{
+			config2 := BenthosServiceConfig{
 				Input: map[string]interface{}{
 					"mqtt": map[string]interface{}{
 						"topic": "different/topic",
@@ -203,7 +202,7 @@ var _ = Describe("Benthos YAML Comparator", func() {
 	// Test package-level functions
 	Describe("Package-level functions", func() {
 		It("ConfigsEqual should use default comparator", func() {
-			config1 := config.BenthosServiceConfig{
+			config1 := BenthosServiceConfig{
 				Input: map[string]interface{}{
 					"mqtt": map[string]interface{}{
 						"topic": "test/topic",
@@ -211,7 +210,7 @@ var _ = Describe("Benthos YAML Comparator", func() {
 				},
 			}
 
-			config2 := config.BenthosServiceConfig{
+			config2 := BenthosServiceConfig{
 				Input: map[string]interface{}{
 					"mqtt": map[string]interface{}{
 						"topic": "test/topic",
@@ -230,7 +229,7 @@ var _ = Describe("Benthos YAML Comparator", func() {
 		})
 
 		It("ConfigDiff should use default comparator", func() {
-			config1 := config.BenthosServiceConfig{
+			config1 := BenthosServiceConfig{
 				Input: map[string]interface{}{
 					"mqtt": map[string]interface{}{
 						"topic": "test/topic",
@@ -238,7 +237,7 @@ var _ = Describe("Benthos YAML Comparator", func() {
 				},
 			}
 
-			config2 := config.BenthosServiceConfig{
+			config2 := BenthosServiceConfig{
 				Input: map[string]interface{}{
 					"mqtt": map[string]interface{}{
 						"topic": "different/topic",

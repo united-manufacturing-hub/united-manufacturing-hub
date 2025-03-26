@@ -12,17 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package yaml
+package benthosserviceconfig
 
 import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 )
 
 var _ = Describe("Benthos YAML Generator", func() {
 	type testCase struct {
-		config      *config.BenthosServiceConfig
+		config      *BenthosServiceConfig
 		expected    []string
 		notExpected []string
 	}
@@ -45,7 +44,7 @@ var _ = Describe("Benthos YAML Generator", func() {
 		},
 		Entry("should render empty stdout output correctly",
 			testCase{
-				config: &config.BenthosServiceConfig{
+				config: &BenthosServiceConfig{
 					Output: map[string]interface{}{
 						"stdout": map[string]interface{}{},
 					},
@@ -66,7 +65,7 @@ var _ = Describe("Benthos YAML Generator", func() {
 			}),
 		Entry("should render configured output correctly",
 			testCase{
-				config: &config.BenthosServiceConfig{
+				config: &BenthosServiceConfig{
 					Output: map[string]interface{}{
 						"stdout": map[string]interface{}{
 							"codec": "lines",
@@ -86,7 +85,7 @@ var _ = Describe("Benthos YAML Generator", func() {
 			}),
 		Entry("should render empty input correctly",
 			testCase{
-				config: &config.BenthosServiceConfig{
+				config: &BenthosServiceConfig{
 					Input: map[string]interface{}{},
 					Output: map[string]interface{}{
 						"stdout": map[string]interface{}{},
@@ -104,7 +103,7 @@ var _ = Describe("Benthos YAML Generator", func() {
 			}),
 		Entry("should render Kafka input with processor and AWS S3 output",
 			testCase{
-				config: &config.BenthosServiceConfig{
+				config: &BenthosServiceConfig{
 					Input: map[string]interface{}{
 						"kafka": map[string]interface{}{
 							"addresses": []string{"kafka:9092"},
@@ -188,7 +187,7 @@ var _ = Describe("Benthos YAML Generator", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Use Generator directly
-			cfg := config.BenthosServiceConfig{
+			cfg := BenthosServiceConfig{
 				Input:       inputConfig,
 				Output:      outputConfig,
 				MetricsPort: 4195,
