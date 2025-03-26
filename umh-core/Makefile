@@ -16,8 +16,6 @@
 
 IMAGE_NAME = umh-core
 TAG = latest
-# Dynamically select podman if available, otherwise use docker
-OCI_RUNTIME := $(shell command -v podman >/dev/null 2>&1 && echo podman || echo docker)
 
 GINKGO_VERSION = v2.23.3
 NILWAY_VERSION = latest
@@ -27,12 +25,12 @@ install:
 	go install github.com/onsi/ginkgo/v2/ginkgo@$(GINKGO_VERSION)
 
 build:
-	$(OCI_RUNTIME) build -t $(IMAGE_NAME):$(TAG) -f Dockerfile .
+	docker build -t $(IMAGE_NAME):$(TAG) -f Dockerfile .
 	
 clean:
-	$(OCI_RUNTIME) stop $(IMAGE_NAME) || true
-	$(OCI_RUNTIME) rm $(IMAGE_NAME) || true
-	$(OCI_RUNTIME) rmi $(IMAGE_NAME):$(TAG) || true
+	docker stop $(IMAGE_NAME) || true
+	docker rm $(IMAGE_NAME) || true
+	docker rmi $(IMAGE_NAME):$(TAG) || true
 
 vet:
 	go vet -tags=test ./...
@@ -54,7 +52,7 @@ update-go-dependencies:
 test-empty: clean build
 	@mkdir -p $(PWD)/data
 	@cp $(PWD)/examples/example-config-empty.yaml $(PWD)/data/config.yaml
-	$(OCI_RUNTIME) run \
+	docker run \
 		--name $(IMAGE_NAME) \
 		-v $(PWD)/data:/data \
 		-p 8081:8080 \
@@ -63,7 +61,7 @@ test-empty: clean build
 test-hello: clean build
 	@mkdir -p $(PWD)/data
 	@cp $(PWD)/examples/example-config.yaml $(PWD)/data/config.yaml
-	$(OCI_RUNTIME) run \
+	docker run \
 		--name $(IMAGE_NAME) \
 		-v $(PWD)/data:/data \
 		-p 8081:8080 \
@@ -73,7 +71,7 @@ test-hello: clean build
 test-broken: clean build
 	@mkdir -p $(PWD)/data
 	@cp $(PWD)/examples/example-config-broken.yaml $(PWD)/data/config.yaml
-	$(OCI_RUNTIME) run \
+	docker run \
 		--name $(IMAGE_NAME) \
 		-v $(PWD)/data:/data \
 		-p 8081:8080 \
@@ -83,7 +81,7 @@ test-broken: clean build
 test-benthos: clean build
 	@mkdir -p $(PWD)/data
 	@cp $(PWD)/examples/example-config-benthos.yaml $(PWD)/data/config.yaml
-	$(OCI_RUNTIME) run \
+	docker run \
 		--name $(IMAGE_NAME) \
 		-v $(PWD)/data:/data \
 		-e LOGGING_LEVEL=DEBUG \
