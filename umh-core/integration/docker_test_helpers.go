@@ -24,8 +24,6 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-
-	. "github.com/onsi/gomega"
 )
 
 const (
@@ -43,9 +41,9 @@ var (
 	goldenPort  int
 	portMu      sync.Mutex
 
-	// Test-specific data directory
-	dataDir     string
-	dataDirOnce sync.Once
+	// Test-specific config file path
+	configFilePath string
+	configOnce     sync.Once
 )
 
 // getContainerName returns a unique container name for this test run
@@ -64,21 +62,21 @@ func getContainerName() string {
 	return containerName
 }
 
-// getTestDataDir returns a unique data directory for this test run
-func getTestDataDir() string {
-	dataDirOnce.Do(func() {
+// getConfigFilePath returns a unique config file path for this test run
+func getConfigFilePath() string {
+	configOnce.Do(func() {
 		// Use the same suffix as the container name for consistency
 		suffix := strings.TrimPrefix(getContainerName(), containerBaseName+"-")
-		dataDir = filepath.Join(GetCurrentDir(), "data")
-		dataDir = filepath.Join(dataDir, "data-"+suffix)
+		tmpDir := filepath.Join("/tmp", "umh-config")
 		// Create the directory
-		err := os.MkdirAll(dataDir, 0o755)
+		err := os.MkdirAll(tmpDir, 0o755)
 		if err != nil {
-			// Fallback to standard data dir
-			dataDir = filepath.Join(GetCurrentDir(), "data")
+			// Fallback to current directory
+			tmpDir = GetCurrentDir()
 		}
+		configFilePath = filepath.Join(tmpDir, fmt.Sprintf("config-%s.yaml", suffix))
 	})
-	return dataDir
+	return configFilePath
 }
 
 // GetMetricsURL returns the URL for the metrics endpoint, using the container's IP if possible
@@ -89,6 +87,7 @@ func GetMetricsURL() string {
 	if port == 0 {
 		port = 8080 // Fallback to default port
 	}
+	fmt.Printf("Using localhost URL with host port: http://host.docker.internal:%d/metrics\n", port)
 	return fmt.Sprintf("http://host.docker.internal:%d/metrics", port)
 }
 
@@ -108,10 +107,18 @@ func BuildAndRunContainer(configFilePath string, memory string) error {
 	// Get the unique container name for this test run
 	containerName := getContainerName()
 
+	fmt.Printf("\n=== STARTING CONTAINER BUILD AND RUN ===\n")
+	fmt.Printf("Container name: %s\n", containerName)
+	fmt.Printf("Memory limit: %s\n", memory)
+
 	// Generate random ports to avoid conflicts
 	// Use PID to create somewhat unique ports, but with a limited range to avoid system port limits
 	metricsPrt := 8081 + (os.Getpid() % 1000) // Base port 8081 + offset based on PID
 	goldenPrt := 8082 + (os.Getpid() % 1000)  // Base port 8082 + offset based on PID
+
+	fmt.Printf("Port mappings - Host:Container\n")
+	fmt.Printf("- Metrics: %d:8080\n", metricsPrt)
+	fmt.Printf("- Golden: %d:8082\n", goldenPrt)
 
 	// Store these ports for later use
 	portMu.Lock()
@@ -120,44 +127,87 @@ func BuildAndRunContainer(configFilePath string, memory string) error {
 	portMu.Unlock()
 
 	// 1. Stop/Remove the old container if any
-	runDockerCommand("rm", "-f", containerName) // ignoring error
-	runDockerCommand("stop", containerName)     // ignoring error
+	fmt.Println("Cleaning up any previous containers with the same name...")
+	out, err := runDockerCommand("rm", "-f", containerName) // ignoring error
+	if err != nil {
+		fmt.Printf("Note: Container removal returned: %v, output: %s (this may be normal)\n", err, out)
+	}
+
+	out, err = runDockerCommand("stop", containerName) // ignoring error
+	if err != nil {
+		fmt.Printf("Note: Container stop returned: %v, output: %s (this may be normal)\n", err, out)
+	}
 
 	// 2. Build image
+	fmt.Println("Building Docker image...")
 	coreDir := filepath.Dir(GetCurrentDir())
 	dockerfilePath := filepath.Join(coreDir, "Dockerfile")
-	out, err := runDockerCommand("build", "-t", imageName, "-f", dockerfilePath, coreDir)
-	Expect(err).ToNot(HaveOccurred(), fmt.Sprintf("Docker build failed: %s", out))
+
+	fmt.Printf("Core directory: %s\n", coreDir)
+	fmt.Printf("Dockerfile path: %s\n", dockerfilePath)
+
+	out, err = runDockerCommand("build", "-t", imageName, "-f", dockerfilePath, coreDir)
+	if err != nil {
+		fmt.Printf("Docker build failed: %v\n", err)
+		fmt.Printf("Build output:\n%s\n", out)
+		return fmt.Errorf("Docker build failed: %s", out)
+	}
+	fmt.Println("Docker build successful")
 
 	// 3. Run container
+	configFile := getConfigFilePath()
+	fmt.Printf("Using config file: %s\n", configFile)
+
+	fmt.Println("Starting container...")
 	out, err = runDockerCommand(
 		"run", "-d",
 		"--name", containerName,
 		"--cpus=1",
 		"--memory", memory,
-		"-v", fmt.Sprintf("%s:/data", getTestDataDir()),
+		"-v", fmt.Sprintf("%s:/data/config.yaml", configFile),
 		"-e", "LOGGING_LEVEL=debug",
-		"-p", fmt.Sprintf("%d:8080", metricsPrt),
-		"-p", fmt.Sprintf("%d:8082", goldenPrt),
+		// Map the host ports to the container's fixed ports
+		"-p", fmt.Sprintf("%d:8080", metricsPrt), // Map host's dynamic port to container's fixed metrics port
+		"-p", fmt.Sprintf("%d:8082", goldenPrt), // Map host's dynamic port to container's golden service port
 		imageName,
 	)
-	Expect(err).ToNot(HaveOccurred(), fmt.Sprintf("Could not run container: %s", out))
+	if err != nil {
+		fmt.Printf("Container start failed: %v\n", err)
+		fmt.Printf("Container run output:\n%s\n", out)
+		return fmt.Errorf("could not run container: %s", out)
+	}
+	fmt.Printf("Container started with ID: %s\n", strings.TrimSpace(out))
 
-	// 4. Wait for the container to be healthy
+	// 4. Verify the container is actually running
+	out, err = runDockerCommand("inspect", "--format", "{{.State.Status}}", containerName)
+	if err != nil {
+		fmt.Printf("Failed to inspect container: %v\n", err)
+	} else {
+		containerState := strings.TrimSpace(out)
+		fmt.Printf("Container state: %s\n", containerState)
+		if containerState != "running" {
+			fmt.Println("WARNING: Container is not in running state!")
+			printContainerDebugInfo()
+			return fmt.Errorf("container is in %s state, not running", containerState)
+		}
+	}
+
+	// 5. Wait for the container to be healthy
+	fmt.Println("Waiting for metrics endpoint to become available...")
 	return waitForMetrics()
 }
 
-// cleanupTestData removes the test-specific data directory
-func cleanupTestData() {
-	if dataDir != "" {
+// cleanupConfigFile removes the test-specific config file
+func cleanupConfigFile() {
+	if configFilePath != "" {
 		// Just attempt to remove it, ignoring errors
-		os.RemoveAll(dataDir)
+		os.Remove(configFilePath)
 	}
 }
 
 // getContainerIP returns the IP address of a running container
 func getContainerIP(container string) (string, error) {
-	// We're using runDockerCommand which already handles docker/podman selection
+	// First try the traditional IPAddress field
 	out, err := runDockerCommand("inspect", "--format", "{{.NetworkSettings.IPAddress}}", container)
 	if err != nil {
 		return "", fmt.Errorf("failed to get container IP: %w", err)
@@ -165,6 +215,37 @@ func getContainerIP(container string) (string, error) {
 
 	// Trim whitespace
 	ip := strings.TrimSpace(out)
+
+	// If we got an empty IP, try to get it from the networks
+	if ip == "" {
+		// Try to get from bridge network (common default)
+		out, err = runDockerCommand("inspect", "--format", "{{.NetworkSettings.Networks.bridge.IPAddress}}", container)
+		if err == nil {
+			ip = strings.TrimSpace(out)
+		}
+	}
+
+	// If still empty, try "networks" plural for Docker Compose setups
+	if ip == "" {
+		out, err = runDockerCommand("inspect", "--format", "{{range $net, $conf := .NetworkSettings.Networks}}{{$conf.IPAddress}} {{end}}", container)
+		if err == nil {
+			// This might return multiple IPs, take the first non-empty one
+			for _, possibleIP := range strings.Fields(out) {
+				if possibleIP != "" {
+					ip = possibleIP
+					break
+				}
+			}
+		}
+	}
+
+	// If we still don't have an IP, log a warning
+	if ip == "" {
+		fmt.Printf("WARNING: Could not determine container IP for %s. Will use localhost instead.\n", container)
+	} else {
+		fmt.Printf("Found container IP for %s: %s\n", container, ip)
+	}
+
 	return ip, nil
 }
 
@@ -187,42 +268,8 @@ func StopContainer() {
 	// Then remove it
 	runDockerCommand("rm", "-f", containerName)
 
-	// Clean up test data
-	cleanupTestData()
-}
-
-func runDockerCommand(args ...string) (string, error) {
-	// Check if we use docker or podman
-	dockerCmd := "docker"
-	if _, err := exec.LookPath("podman"); err == nil {
-		dockerCmd = "podman"
-	}
-	cmd := exec.Command(dockerCmd, args...)
-	var out bytes.Buffer
-	cmd.Stdout = &out
-	cmd.Stderr = &out
-	err := cmd.Run()
-	return out.String(), err
-}
-
-// GetCurrentDir returns the directory of this test file (or your project root).
-// Adjust if you need something else.
-func GetCurrentDir() string {
-	wd, err := os.Getwd()
-	if err != nil {
-		return "."
-	}
-	return strings.TrimSpace(wd)
-}
-
-// writeConfigFile writes the given YAML content to ./data/config.yaml so the container will read it.
-func writeConfigFile(yamlContent string) error {
-	dataDir := getTestDataDir()
-	if err := os.MkdirAll(dataDir, 0o755); err != nil {
-		return fmt.Errorf("failed to create data dir: %w", err)
-	}
-	configPath := filepath.Join(dataDir, "config.yaml")
-	return os.WriteFile(configPath, []byte(yamlContent), 0o644)
+	// Clean up config file
+	cleanupConfigFile()
 }
 
 // printContainerDebugInfo prints detailed information about the container
@@ -278,4 +325,39 @@ func printContainerDebugInfo() {
 	}
 
 	fmt.Println("\n==== END DEBUG INFO ====")
+}
+
+func runDockerCommand(args ...string) (string, error) {
+	// Check if we use docker or podman
+	dockerCmd := "docker"
+	if _, err := exec.LookPath("podman"); err == nil {
+		dockerCmd = "podman"
+	}
+	cmd := exec.Command(dockerCmd, args...)
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = &out
+	err := cmd.Run()
+	return out.String(), err
+}
+
+// GetCurrentDir returns the directory of this test file (or your project root).
+// Adjust if you need something else.
+func GetCurrentDir() string {
+	wd, err := os.Getwd()
+	if err != nil {
+		return "."
+	}
+	return strings.TrimSpace(wd)
+}
+
+// writeConfigFile writes the given YAML content to a config file for the container to read.
+func writeConfigFile(yamlContent string) error {
+	configPath := getConfigFilePath()
+	// Ensure the directory exists
+	dir := filepath.Dir(configPath)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return fmt.Errorf("failed to create config dir: %w", err)
+	}
+	return os.WriteFile(configPath, []byte(yamlContent), 0o644)
 }
