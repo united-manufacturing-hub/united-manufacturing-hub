@@ -12,7 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// file: s6_instance_test.go
+//go:build test
+// +build test
+
 package s6_test
 
 import (

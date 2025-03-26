@@ -38,7 +38,7 @@ jobs:
           cache: true
 
       - name: Run go vet
-        run: go vet ./...
+        run: make vet
 
   nilaway:
     name: Nilaway Analysis
@@ -60,4 +60,4 @@ jobs:
         run: go install go.uber.org/nilaway/cmd/nilaway@latest
 
       - name: Run nilaway
-        run: nilaway -include-pkgs="github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core" ./...
+        run: make nilaway

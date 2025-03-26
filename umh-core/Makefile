@@ -17,6 +17,13 @@
 IMAGE_NAME = umh-core
 TAG = latest
 
+GINKGO_VERSION = v2.23.3
+NILWAY_VERSION = latest
+
+install:
+	go install go.uber.org/nilaway/cmd/nilaway@$(NILWAY_VERSION)
+	go install github.com/onsi/ginkgo/v2/ginkgo@$(GINKGO_VERSION)
+
 build:
 	docker build -t $(IMAGE_NAME):$(TAG) -f Dockerfile .
 	
@@ -28,10 +35,13 @@ clean:
 vet:
 	go vet -tags=test ./...
 
-test: vet
+nilaway:
+	nilaway -include-pkgs="github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core" -tags=test ./...
+
+test: vet nilaway
 	go test -v -tags=test ./...
 
-unit-test: vet
+unit-test: vet nilaway
 	ginkgo -r -v --tags=test --label-filter='!integration' --fail-fast ./...
 
 update-go-dependencies:
