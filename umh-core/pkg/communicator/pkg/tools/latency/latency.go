@@ -55,10 +55,10 @@ func CalculateLatency(latencies *expiremap.ExpireMap[time.Time, time.Duration]) 
 	}
 
 	return models.Latency{
-		Min: minimumDuration,
-		Max: maximumDuration,
-		P95: p95,
-		P99: p99,
-		Avg: time.Duration(avgNs),
+		Min: float64(minimumDuration),
+		Max: float64(maximumDuration),
+		P95: float64(p95),
+		P99: float64(p99),
+		Avg: float64(avgNs),
 	}
 }

@@ -1,13 +1,11 @@
 package actions
 
 import (
-	"database/sql"
-
 	"github.com/google/uuid"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/safejson"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/shared/models"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/shared/models/mgmtconfig"
 	"go.uber.org/zap"
 )
 
@@ -25,7 +23,7 @@ type Action interface {
 	getUuid() uuid.UUID
 }
 
-func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePayload, sender string, outboundChannel chan *models.UMHMessage, releaseChannel mgmtconfig.ReleaseChannel, dog watchdog.Iface, traceID uuid.UUID, database *sql.DB) {
+func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePayload, sender string, outboundChannel chan *models.UMHMessage, releaseChannel config.ReleaseChannel, dog watchdog.Iface, traceID uuid.UUID) {
 	// Start a new transaction for this action
 	zap.S().Infof("Handling action message: Type: %s, Payload: %v", payload.ActionType, payload.ActionPayload)
 

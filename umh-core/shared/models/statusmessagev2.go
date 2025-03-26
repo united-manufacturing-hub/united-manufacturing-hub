@@ -1,208 +1,180 @@
+// Copyright 2025 UMH Systems GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// This file was generated from JSON Schema using quicktype, do not modify it directly.
+// To parse and unparse this JSON data, add this code to your project and do:
+//
+//    statusMessage, err := UnmarshalStatusMessage(bytes)
+//    bytes, err = statusMessage.Marshal()
+
 package models
 
-import (
-	"time"
+import "encoding/json"
 
-	"github.com/google/uuid"
-	"github.com/united-manufacturing-hub/ManagementConsole/shared/healthstatus"
-	"github.com/united-manufacturing-hub/ManagementConsole/shared/models/ctypes"
-	"github.com/united-manufacturing-hub/ManagementConsole/shared/models/generated"
-	"github.com/united-manufacturing-hub/ManagementConsole/shared/models/mgmtconfig"
-)
-
-type StatusMessageV2 struct {
-	Instance     Instance                                              `json:"instance"`
-	InstanceData generated.StatusMessageInstanceSchemaJsonInstanceData `json:"instanceData"`
-	Data         Data                                                  `json:"data"`
-	Kubernetes   Kubernetes                                            `json:"kubernetes"`
-	Network      Network                                               `json:"network"`
-	// Deprecated: Use `UnsTable` & `EventTable` instead
-	UnifiedNamespace   UnifiedNamespaceV2                                                   `json:"unifiedNamespace"`
-	UnsTable           UnsTable                                                             `json:"unsTable"`
-	EventTable         EventTable                                                           `json:"eventTable"`
-	Module             Module                                                               `json:"module"`
-	Version            int                                                                  `json:"version"`
-	Secrets            Secrets                                                              `json:"secrets"`
-	DataFlowComponents generated.StatusMessageDataflowcomponentSchemaJsonDataFlowComponents `json:"dataFlowComponents"`
-	Cryptography       Cryptography                                                         `json:"cryptography"`
+func UnmarshalStatusMessage(data []byte) (StatusMessage, error) {
+	var r StatusMessage
+	err := json.Unmarshal(data, &r)
+	return r, err
 }
 
-// General Health Type
-type Health struct {
-	GoodHealth bool                      `json:"goodHealth"`
-	Status     healthstatus.HealthStatus `json:"status"`
-	Tooltip    string                    `json:"tooltip"`
+func (r *StatusMessage) Marshal() ([]byte, error) {
+	return json.Marshal(r)
 }
 
-// General Types
-type OSInfo struct {
-	KernelVersion   string `json:"kernelVersion"`
-	OperatingSystem string `json:"operatingSystem"`
-	Architecture    string `json:"architecture"`
+// Schema for the status message containing system state and DFC information
+type StatusMessage struct {
+	Core    Core                   `json:"core"`
+	General General                `json:"general"`
+	Plugins map[string]interface{} `json:"plugins"`
 }
 
-type EthernetAdapter struct {
-	Name    string   `json:"name"`
-	IP4     []string `json:"ip4"`
-	IP6     []string `json:"ip6"`
-	Gateway string   `json:"gateway"`
-	DNS     []string `json:"dns"`
-	MAC     string   `json:"mac"`
+type Core struct {
+	Agent     Agent     `json:"agent"`
+	Container Container `json:"container"`
+	// List of deployed DFCs. Different DFC types can have different properties
+	Dfcs           []Dfc                  `json:"dfcs"`
+	EventsTable    map[string]EventsTable `json:"eventsTable,omitempty"`
+	Latency        Latency                `json:"latency"`
+	Redpanda       Redpanda               `json:"redpanda"`
+	ReleaseChannel string                 `json:"releaseChannel"`
+	// List of supported feature keywords. If a feature is supported, its corresponding keyword
+	// will be included in the array.
+	SupportedFeatures []string            `json:"supportedFeatures"`
+	UnsTable          map[string]UnsTable `json:"unsTable,omitempty"`
+	Version           string              `json:"version"`
 }
 
-// Health Types
-type ResourceUtilization struct {
-	CpuPercent  float64 `json:"cpuPercent"`
-	CpuMax      string  `json:"cpuMax"`
-	RamPercent  float64 `json:"ramPercent"`
-	RamMax      string  `json:"ramMax"`
-	DiskPercent float64 `json:"diskPercent"`
-	DiskMax     string  `json:"diskMax"`
-}
-
-type KubernetesEvent struct {
-	Event   string `json:"event"`
-	Count   int    `json:"count"`
-	Message string `json:"message"`
-}
-
-type DataSourceMetric struct { // Deprecated
-	Name           string    `json:"name"`
-	ConnectionUUID uuid.UUID `json:"connectionUUID"`
-	UUID           uuid.UUID `json:"uuid"`
-	RatePerSecond  float64   `json:"ratePerSecond"`
-	Health         Health    `json:"health"`
-}
-
-type ProtocolConverterMetric struct { // Deprecated
-	Name           string          `json:"name"`
-	Type           ctypes.Protocol `json:"type"`
-	ConnectionUUID uuid.UUID       `json:"connectionUUID"`
-	UUID           uuid.UUID       `json:"uuid"`
-	RatePerSecond  float64         `json:"ratePerSecond"`
-	Health         Health          `json:"health"`
-}
-
-type KubernetesHealth struct {
-	Health          Health            `json:"health"`
-	ErrorEvents     []KubernetesEvent `json:"errorEvents"`
-	CompanionUptime float64           `json:"companionUptime"`
-	UMHUptime       float64           `json:"umhUptime"`
-}
-
-type ModuleHealth struct {
-	Name   string `json:"name"`
+type Agent struct {
 	Health Health `json:"health"`
 }
 
-type ConnectionHealth struct {
-	Name           string                          `json:"name"`
-	UUID           uuid.UUID                       `json:"uuid"`
-	IsInitialized  bool                            `json:"isInitialized"`
-	URI            string                          `json:"uri"`
-	ConnectionType ctypes.DatasourceConnectionType `json:"connectionType"`
-	LatencyMs      float64                         `json:"latencyMs"`
-	Health         Health                          `json:"health"`
-	Location       *mgmtconfig.ConnectionLocation  `json:"location"`
+type Health struct {
+	Message string `json:"message"`
+	State   string `json:"state"`
 }
 
-type DataHealth struct {
-	KafkaRate               int                       `json:"kafkaRate"`
-	TimescaleDBRate         int                       `json:"timescaleDBRate"`
-	DataSourceHealth        []DataSourceMetric        `json:"dataSourceHealth"`
-	ProtocolConverterHealth []ProtocolConverterMetric `json:"protocolConverterHealth"`
-	Health                  Health                    `json:"health"`
+type Container struct {
+	// Processor architecture. Examples: 'arm/v7', 'armv7', 'armhf', 'x86_64', etc.
+	Architecture string `json:"architecture"`
+	CPU          CPU    `json:"cpu"`
+	Disk         Disk   `json:"disk"`
+	Hwid         string `json:"hwid"`
+	Memory       Memory `json:"memory"`
 }
 
-type InstanceHealth struct {
-	Health              Health              `json:"health"`
-	ResourceUtilization ResourceUtilization `json:"resourceUtilization"`
-	DeviceUptime        float64             `json:"deviceUptime"`
+type CPU struct {
+	Health Health `json:"health"`
+	// CPU limit in number of cores
+	Limit float64 `json:"limit"`
+	// CPU usage as a percentage (0-100%)
+	Usage float64 `json:"usage"`
 }
 
-type InstanceLocation struct {
-	Enterprise string `json:"enterprise"`
-	Site       string `json:"site"`
-	Area       string `json:"area"`
-	Line       string `json:"line"`
-	WorkCell   string `json:"workCell"`
+type Disk struct {
+	Health Health `json:"health"`
+	// Disk limit in bytes
+	Limit float64 `json:"limit"`
+	// Disk usage in bytes
+	Usage float64 `json:"usage"`
 }
 
-type InstallationScope struct {
-	Enabled    bool             `json:"enabled"`
-	MQTTBroker MqttBrokerStatus `json:"mqttBroker"`
+type Memory struct {
+	Health Health `json:"health"`
+	// Memory limit in bytes
+	Limit float64 `json:"limit"`
+	// Memory usage in bytes
+	Usage float64 `json:"usage"`
 }
 
-type MqttBrokerStatus struct {
-	Ip          string    `json:"ip"`
-	Port        uint32    `json:"port"`
-	Username    string    `json:"username"`
-	Password    string    `json:"password"`
-	LastUpdated uint64    `json:"lastUpdated"`
-	UUID        uuid.UUID `json:"uuid"`
+type Dfc struct {
+	CurrentVersionUUID *string     `json:"currentVersionUUID"`
+	DeploySuccess      bool        `json:"deploySuccess"`
+	DfcType            DfcType     `json:"dfcType"`
+	Health             *Health     `json:"health"`
+	Metrics            *DFCMetrics `json:"metrics"`
+	Name               *string     `json:"name"`
+	UUID               string      `json:"uuid"`
+	// For 'protocol-converter' type, this array contains exactly one connection.
+	//
+	// For 'data-bridge' type, this array always contains exactly two connections.
+	Connections  []Connection `json:"connections,omitempty"`
+	DataContract *string      `json:"dataContract,omitempty"`
+	InputType    *string      `json:"inputType,omitempty"`
+	IsReadOnly   *bool        `json:"isReadOnly,omitempty"`
+	OutputType   *string      `json:"outputType,omitempty"`
 }
 
-type Instance struct {
-	General           OSInfo            `json:"general"` // Deprecated
-	Health            InstanceHealth    `json:"health"`  // Deprecated
-	Location          InstanceLocation  `json:"location"`
-	InstallationScope InstallationScope `json:"installationScope"` // Deprecated
-	Latency           Latency           `json:"latency"`           // Deprecated
-	// LatencyExtended is a map of DNS, TLS, and other latencies
-	// It is not meant to be parsed by the UI, but is used for debugging purposes
-	// It is therefore also not required to be sent by the simulator
-	LatencyExtended map[string]Latency `json:"latencyExtended"` // Deprecated
+type Connection struct {
+	Health Health `json:"health"`
+	// Latency in milliseconds
+	Latency float64 `json:"latency"`
+	Name    string  `json:"name"`
+	// The connection URI in full, e.g., 'opc.tcp://hostname:port/path'. This includes the
+	// scheme, host, port, and any required path elements.
+	URI  string `json:"uri"`
+	UUID string `json:"uuid"`
+}
+
+type DFCMetrics struct {
+	FailedMessages float64 `json:"failedMessages"`
+	// Throughput expressed in messages per second
+	ThroughputMsgPerSEC float64 `json:"throughputMsgPerSec"`
+	Unprocessable       float64 `json:"unprocessable"`
+	Unprocessable24H    float64 `json:"unprocessable24h"`
+}
+
+type EventsTable struct {
+	Bridges         []string   `json:"bridges"`
+	Error           string     `json:"error"`
+	Origin          *string    `json:"origin"`
+	RawKafkaMessage EventKafka `json:"rawKafkaMessage"`
+	// Timestamp in milliseconds
+	TimestampMS float64     `json:"timestamp_ms"`
+	UnsTreeID   string      `json:"unsTreeId"`
+	Value       interface{} `json:"value"`
 }
 
 type Latency struct {
-	Min time.Duration `json:"min"`
-	Max time.Duration `json:"max"`
-	P95 time.Duration `json:"p95"`
-	P99 time.Duration `json:"p99"`
-	Avg time.Duration `json:"avg"`
+	// Average latency in milliseconds
+	Avg float64 `json:"avg"`
+	// Maximum latency in milliseconds
+	Max float64 `json:"max"`
+	// Minimum latency in milliseconds
+	Min float64 `json:"min"`
+	// 95th percentile latency in milliseconds
+	P95 float64 `json:"p95"`
+	// 99th percentile latency in milliseconds
+	P99 float64 `json:"p99"`
 }
 
-type KubernetesGeneral struct {
-	ManagementCompanionVersion string `json:"managementCompanionVersion"`
-	UMHVersion                 string `json:"umhVersion"`
+type Redpanda struct {
+	Health Health `json:"health"`
+	// Incoming throughput in messages per second
+	ThroughputIncomingMsgPerSEC float64 `json:"throughputIncomingMsgPerSec"`
+	// Outgoing throughput in messages per second
+	ThroughputOutgoingMsgPerSEC float64 `json:"throughputOutgoingMsgPerSec"`
 }
 
-type Kubernetes struct {
-	General KubernetesGeneral `json:"general"`
-	Health  KubernetesHealth  `json:"health"`
+type General struct {
+	Location map[string]string `json:"location"`
 }
 
-type Module struct {
-	General struct{}       `json:"general"`
-	Health  []ModuleHealth `json:"health"`
-}
+type DfcType string
 
-type EthernetAdaptersGeneral struct {
-	EthernetAdapters []EthernetAdapter `json:"ethernetAdapters"`
-}
-
-type ConnectionHealthInfo struct {
-	Connections []ConnectionHealth `json:"connections"`
-}
-
-type Network struct {
-	General EthernetAdaptersGeneral `json:"general"`
-	Health  ConnectionHealthInfo    `json:"health"`
-}
-
-type Data struct {
-	General struct{}   `json:"general"`
-	Health  DataHealth `json:"health"`
-}
-
-type Secrets map[string]string
-
-type Cryptography struct {
-	Version uint64 `json:"version"` // If version is 0, then no encrypted connection can be established (for example because the instance was created without a certificate & private key)
-	// VersionMetaInformation currently can be CryptographyVersion1MetaInformation
-	VersionMetaInformation interface{} `json:"versionMetaInformation"`
-}
-
-type CryptographyVersion1MetaInformation struct {
-	Certificate string `json:"certificate"`
-}
+const (
+	Custom            DfcType = "custom"
+	DataBridge        DfcType = "data-bridge"
+	ProtocolConverter DfcType = "protocol-converter"
+	Uninitialized     DfcType = "uninitialized"
+)

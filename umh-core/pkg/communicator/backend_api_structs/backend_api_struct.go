@@ -102,10 +102,6 @@ type DemoInstanceResponsePayload struct {
 	TestCertificatePrivate string `json:"test_certificate_private"`
 }
 
-type GetAllUMHInstancesResponse struct {
-	UMHInstances []models.UMHInstance `json:"UMHInstances"`
-}
-
 type InstanceLoginResponse struct {
 	UUID             string         `json:"uuid"`
 	Name             string         `json:"name"`

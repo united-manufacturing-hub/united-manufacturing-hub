@@ -15,7 +15,6 @@
 package router
 
 import (
-	"database/sql"
 	"sync"
 	"time"
 
@@ -23,23 +22,22 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 
 	//"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/subscriber"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/encoding"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/maptostruct"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/shared/models"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/shared/models/mgmtconfig"
 	"go.uber.org/zap"
 )
 
 type Router struct {
 	dog                   watchdog.Iface
-	database              *sql.DB
-	inboundChannel        chan *models.UMHMessageWithAdditionalInfo
+	inboundChannel        chan *models.UMHMessage
 	outboundChannel       chan *models.UMHMessage
 	instanceUUID          uuid.UUID
-	releaseChannel        mgmtconfig.ReleaseChannel
+	releaseChannel        config.ReleaseChannel
 	clientConnections     map[string]*ClientConnection
 	clientConnectionsLock sync.RWMutex
 }
@@ -50,15 +48,13 @@ type ClientConnection struct {
 }
 
 func NewRouter(dog watchdog.Iface,
-	inboundChannel chan *models.UMHMessageWithAdditionalInfo,
+	inboundChannel chan *models.UMHMessage,
 	instanceUUID uuid.UUID,
 	outboundChannel chan *models.UMHMessage,
-	releaseChannel mgmtconfig.ReleaseChannel,
-	database *sql.DB,
+	releaseChannel config.ReleaseChannel,
 ) *Router {
 	return &Router{
 		dog:                   dog,
-		database:              database,
 		inboundChannel:        inboundChannel,
 		instanceUUID:          instanceUUID,
 		outboundChannel:       outboundChannel,
@@ -109,7 +105,7 @@ func (r *Router) router() {
 // 	r.subHandler.AddSubscriber(message.Email, message.Certificate)
 // }
 
-func (r *Router) handleAction(messageContent models.UMHMessageContent, message *models.UMHMessageWithAdditionalInfo, watcherUUID uuid.UUID) {
+func (r *Router) handleAction(messageContent models.UMHMessageContent, message *models.UMHMessage, watcherUUID uuid.UUID) {
 	var actionPayload models.ActionMessagePayload
 
 	payloadMap, ok := messageContent.Payload.(map[string]interface{})
@@ -135,6 +131,5 @@ func (r *Router) handleAction(messageContent models.UMHMessageContent, message *
 		r.releaseChannel,
 		r.dog,
 		traceId,
-		r.database,
 	)
 }

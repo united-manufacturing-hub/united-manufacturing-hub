@@ -19,9 +19,12 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator"
+	v2 "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/communication_state"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/fail"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/control"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"go.uber.org/zap"
@@ -60,11 +63,15 @@ func main() {
 
 	// Start the control loop
 	controlLoop := control.NewControlLoop()
-	go SystemSnapshotLogger(ctx, controlLoop)
+	systemSnapshot := fsm.SystemSnapshot{}
+	communicationState := communication_state.CommunicationState{}
+	go SystemSnapshotLogger(ctx, controlLoop, &systemSnapshot)
 
 	// Start the communicator
-	comm := communicator.NewCommunicator()
-	go comm.Execute(ctx)
+	//comm := communicator.NewCommunicator()
+	//go comm.Execute(ctx) -> this is not needed anymore, because the communicator is now started in the control loop, remove this line
+
+	enableBackendConnection(&config, &systemSnapshot, &communicationState)
 
 	controlLoop.Execute(ctx)
 
@@ -73,7 +80,7 @@ func main() {
 
 // SystemSnapshotLogger logs the system snapshot every 5 seconds
 // It is an example on how to access the system snapshot and log it for communication with other components
-func SystemSnapshotLogger(ctx context.Context, controlLoop *control.ControlLoop) {
+func SystemSnapshotLogger(ctx context.Context, controlLoop *control.ControlLoop, systemSnapshot *fsm.SystemSnapshot) {
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 
@@ -117,5 +124,32 @@ func SystemSnapshotLogger(ctx context.Context, controlLoop *control.ControlLoop)
 				}
 			}
 		}
+	}
+}
+
+func enableBackendConnection(config *config.FullConfig, state *fsm.SystemSnapshot, communicationState *communication_state.CommunicationState) {
+	logger := logger.For("enableBackendConnection")
+	if logger == nil {
+		logger = zap.NewNop().Sugar()
+	}
+
+	logger.Info("Enabling backend connection")
+	// directly log the config to console, not to the logger
+	if config.Agent.CommunicatorConfig.APIURL != "" && config.Agent.CommunicatorConfig.AuthToken != "" {
+		// This can temporarely deactivated, e.g., during integration tests where just the mgmtcompanion-config is changed directly
+
+		login := v2.NewLogin(config.Agent.CommunicatorConfig.AuthToken, false)
+		if login == nil {
+			fail.Fatalf("Failed to create login object")
+		}
+		communicationState.LoginResponse = login
+		logger.Info("Backend connection enabled, login response: ", zap.Any("login_name", login.Name))
+
+		communicationState.InitialiseAndStartPuller()
+		// state.InitialiseAndStartPusher()
+		// state.InitialiseAndStartSubscriberHandler(time.Minute*5, time.Minute, config)
+		// state.InitialiseAndStartRouter()
+		// state.InitialiseAndStartUpdateScheduler()
+		// state.InitialiseAndStartConfigurationHandler()
 	}
 }

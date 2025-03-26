@@ -60,6 +60,15 @@ test-hello: clean build
 		-p 4195:4195 \
 		$(IMAGE_NAME):$(TAG)
 
+test-comm: clean build
+	@mkdir -p $(PWD)/data
+	@cp $(PWD)/examples/example-config-comm.yaml $(PWD)/data/config.yaml
+	docker run \
+		--name $(IMAGE_NAME) \
+		-v $(PWD)/data:/data \
+		-p 8081:8080 \
+		$(IMAGE_NAME):$(TAG)
+
 test-broken: clean build
 	@mkdir -p $(PWD)/data
 	@cp $(PWD)/examples/example-config-broken.yaml $(PWD)/data/config.yaml

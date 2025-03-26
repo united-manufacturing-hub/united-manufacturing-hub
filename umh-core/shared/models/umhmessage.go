@@ -1,13 +1,9 @@
 package models
 
 import (
-	"crypto/x509"
-
-	"github.com/united-manufacturing-hub/ManagementConsole/shared/models/ctypes"
-	"github.com/united-manufacturing-hub/ManagementConsole/shared/models/mgmtconfig"
-
 	"github.com/Masterminds/semver/v3"
 	"github.com/google/uuid"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/shared/models/ctypes"
 )
 
 type MessageMetadata struct {
@@ -22,11 +18,6 @@ type UMHMessage struct {
 	Content      string           `json:"content"`
 	InstanceUUID uuid.UUID        `json:"umhInstance"`
 	Metadata     *MessageMetadata `json:"metadata"`
-}
-
-type UMHMessageWithAdditionalInfo struct {
-	UMHMessage
-	Certificate *x509.Certificate `json:"certificate"`
 }
 
 // Define MessageType as a custom type for better type safety
@@ -166,12 +157,6 @@ type EditInstanceLocationAction struct {
 // GetProtocolConverterPayload contains the necessary fields for getting a protocol converter.
 type GetProtocolConverterPayload struct {
 	UUID uuid.UUID `json:"uuid" binding:"required"`
-}
-
-// GetProtocolConverterReplyPayload contains the necessary fields for replying to a GetProtocolConverter action.
-type GetProtocolConverterReplyPayload struct {
-	ProtocolConverter mgmtconfig.ProtocolConverter `json:"protocolConverter"`
-	Logs              string                       `json:"logs"`
 }
 
 // DeployConnectionPayload contains the necessary fields for executing a DeployConnection action.

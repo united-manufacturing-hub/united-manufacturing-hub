@@ -25,30 +25,22 @@ import (
 )
 
 type Puller struct {
-	inboundMessageChannel                 chan *models.UMHMessageWithAdditionalInfo
-	shallRun                              atomic.Bool
-	jwt                                   atomic.Value
-	dog                                   watchdog.Iface
-	insecureTLS                           bool
-	userCertificateCache                  *expiremap.ExpireMap[string, *x509.Certificate]
-	certChangeChannelForSubscriberHandler chan struct {
-		Email string
-		Cert  *x509.Certificate
-	}
+	inboundMessageChannel chan *models.UMHMessage
+	shallRun              atomic.Bool
+	jwt                   atomic.Value
+	dog                   watchdog.Iface
+	insecureTLS           bool
+	userCertificateCache  *expiremap.ExpireMap[string, *x509.Certificate]
 }
 
-func NewPuller(jwt string, dog watchdog.Iface, inboundChannel chan *models.UMHMessageWithAdditionalInfo, insecureTLS bool, certChangeChannelForSubscriberHandler chan struct {
-	Email string
-	Cert  *x509.Certificate
-}) *Puller {
+func NewPuller(jwt string, dog watchdog.Iface, inboundChannel chan *models.UMHMessage, insecureTLS bool) *Puller {
 	p := Puller{
-		inboundMessageChannel:                 inboundChannel,
-		shallRun:                              atomic.Bool{},
-		jwt:                                   atomic.Value{},
-		dog:                                   dog,
-		insecureTLS:                           insecureTLS,
-		userCertificateCache:                  expiremap.NewEx[string, *x509.Certificate](10*time.Second, 10*time.Second), // Refresh every 10 seconds
-		certChangeChannelForSubscriberHandler: certChangeChannelForSubscriberHandler,
+		inboundMessageChannel: inboundChannel,
+		shallRun:              atomic.Bool{},
+		jwt:                   atomic.Value{},
+		dog:                   dog,
+		insecureTLS:           insecureTLS,
+		userCertificateCache:  expiremap.NewEx[string, *x509.Certificate](10*time.Second, 10*time.Second), // Refresh every 10 seconds
 	}
 	p.jwt.Store(jwt)
 	return &p
@@ -138,16 +130,6 @@ func (p *Puller) pull() {
 						p.userCertificateCache.Set(message.Email, x509Cert)
 						userCertificate = &x509Cert
 
-						// Send the new certificate to the channel
-						if p.certChangeChannelForSubscriberHandler != nil {
-							p.certChangeChannelForSubscriberHandler <- struct {
-								Email string
-								Cert  *x509.Certificate
-							}{
-								Email: message.Email,
-								Cert:  x509Cert,
-							}
-						}
 					} else {
 						zap.S().Errorf("Failed to get user certificate: %v", err)
 					}
@@ -156,9 +138,11 @@ func (p *Puller) pull() {
 				insertionTimeout := time.After(10 * time.Second)
 				if userCertificate == nil {
 					select {
-					case p.inboundMessageChannel <- &models.UMHMessageWithAdditionalInfo{
-						UMHMessage:  message,
-						Certificate: nil,
+					case p.inboundMessageChannel <- &models.UMHMessage{
+						Email:        message.Email,
+						Content:      message.Content,
+						InstanceUUID: message.InstanceUUID,
+						Metadata:     message.Metadata,
 					}:
 					case <-insertionTimeout:
 						zap.S().Warnf("Inbound message channel is full !")
@@ -166,9 +150,11 @@ func (p *Puller) pull() {
 					}
 				} else {
 					select {
-					case p.inboundMessageChannel <- &models.UMHMessageWithAdditionalInfo{
-						UMHMessage:  message,
-						Certificate: *userCertificate,
+					case p.inboundMessageChannel <- &models.UMHMessage{
+						Email:        message.Email,
+						Content:      message.Content,
+						InstanceUUID: message.InstanceUUID,
+						Metadata:     message.Metadata,
 					}:
 					case <-insertionTimeout:
 						zap.S().Warnf("Inbound message channel is full !")

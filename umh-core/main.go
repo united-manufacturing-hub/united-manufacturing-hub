@@ -19,8 +19,6 @@ import (
 	"fmt"
 	"time"
 
-	v2 "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/fail"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/control"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
@@ -55,7 +53,9 @@ func main() {
 
 	// Start the control loop
 	controlLoop := control.NewControlLoop()
-	go SystemSnapshotLogger(ctx, controlLoop)
+	systemSnapshot := fsm.SystemSnapshot{}
+	go SystemSnapshotLogger(ctx, controlLoop, &systemSnapshot)
+
 	controlLoop.Execute(ctx)
 
 	log.Info("umh-core test completed")
@@ -107,29 +107,5 @@ func SystemSnapshotLogger(ctx context.Context, controlLoop *control.ControlLoop,
 				}
 			}
 		}
-	}
-}
-
-func enableBackendConnection(config *config.FullConfig, state *fsm.SystemSnapshot) {
-	if !(*config).Debug.DisableBackendConnection {
-		// This can temporarely deactivated, e.g., during integration tests where just the mgmtcompanion-config is changed directly
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		secrets := kubernetes2.GetSecrets(ctx, state.ResourceController.Cache)
-		if secrets == nil || secrets.AuthToken == "" {
-			fail.Fatal("no authToken found from the secrets")
-		}
-		login := v2.NewLogin(secrets.AuthToken, state.InsecureTLS)
-		if login == nil {
-			fail.Fatalf("Failed to create login object")
-		}
-		state.SetLoginResponse(login)
-
-		state.InitialiseAndStartPuller()
-		state.InitialiseAndStartPusher()
-		state.InitialiseAndStartSubscriberHandler(time.Minute*5, time.Minute, config)
-		state.InitialiseAndStartRouter()
-		state.InitialiseAndStartUpdateScheduler()
-		state.InitialiseAndStartConfigurationHandler()
 	}
 }

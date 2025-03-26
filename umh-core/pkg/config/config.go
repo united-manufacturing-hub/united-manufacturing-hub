@@ -27,7 +27,13 @@ type FullConfig struct {
 }
 
 type AgentConfig struct {
-	MetricsPort int `yaml:"metricsPort"` // Port to expose metrics on
+	MetricsPort        int `yaml:"metricsPort"` // Port to expose metrics on
+	CommunicatorConfig `yaml:"communicator"`
+}
+
+type CommunicatorConfig struct {
+	APIURL    string `yaml:"apiUrl"`
+	AuthToken string `yaml:"authToken"`
 }
 
 // FSMInstanceConfig is the config for a FSM instance
@@ -35,6 +41,14 @@ type FSMInstanceConfig struct {
 	Name            string `yaml:"name"`
 	DesiredFSMState string `yaml:"desiredState"`
 }
+
+type ReleaseChannel string
+
+const (
+	ReleaseChannelNightly    ReleaseChannel = "nightly"
+	ReleaseChannelStable     ReleaseChannel = "stable"
+	ReleaseChannelEnterprise ReleaseChannel = "enterprise"
+)
 
 // S6FSMConfig contains configuration for creating a service
 type S6FSMConfig struct {
