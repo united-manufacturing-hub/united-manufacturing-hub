@@ -31,8 +31,8 @@ type Core struct {
 }
 
 type Agent struct {
-	Health  *Health `json:"health"`
-	Latency Latency `json:"latency"`
+	Health  *Health  `json:"health"`
+	Latency *Latency `json:"latency"`
 	// Hierarchical location of the agent within the factory.
 	// The map keys represent different levels in the hierarchy, ordered from top to bottom:
 	//
@@ -80,13 +80,13 @@ const (
 )
 
 type Container struct {
-	Health Health `json:"health"`
-	// Processor architecture. Currently, we support only arm64 and amd64 architectures.
+	Health *Health `json:"health"`
+	CPU    *CPU    `json:"cpu"`
+	Disk   *Disk   `json:"disk"`
+	Memory *Memory `json:"memory"`
+	Hwid   string  `json:"hwid"`
+	// Processor architecture. Currently arm64 and amd64 are supported.
 	Architecture ContainerArchitecture `json:"architecture"`
-	CPU          *CPU                  `json:"cpu"`
-	Disk         *Disk                 `json:"disk"`
-	Hwid         string                `json:"hwid"`
-	Memory       *Memory               `json:"memory"`
 }
 
 type CPU struct {
@@ -135,7 +135,8 @@ type Dfc struct {
 	//
 	// For 'custom' type, this array is empty.
 	Connections []Connection `json:"connections,omitempty"`
-	Bridge      *DfcBridge   `json:"bridge,omitempty"`
+	// Additional information for 'data-bridge' type DFCs.
+	Bridge *DfcBridgeInfo `json:"bridge,omitempty"`
 }
 
 type DFCMetrics struct {
@@ -143,9 +144,9 @@ type DFCMetrics struct {
 }
 
 type Connection struct {
-	Name   string `json:"name"`
-	UUID   string `json:"uuid"`
-	Health Health `json:"health"`
+	Name   string  `json:"name"`
+	UUID   string  `json:"uuid"`
+	Health *Health `json:"health"`
 	// The connection URI in full, e.g., 'opc.tcp://hostname:port/path'. This includes the
 	// scheme, host, port, and any required path elements.
 	URI string `json:"uri"`
@@ -153,14 +154,14 @@ type Connection struct {
 	LastLatencyMs float64 `json:"lastLatencyMs"`
 }
 
-type DfcBridge struct {
+type DfcBridgeInfo struct {
 	DataContract string `json:"dataContract"`
 	InputType    string `json:"inputType"`
 	OutputType   string `json:"outputType"`
 }
 
 type Redpanda struct {
-	Health                                 Health  `json:"health"`
+	Health                                 *Health `json:"health"`
 	AvgIncomingThroughputPerMinuteInMsgSec float64 `json:"avgIncomingThroughputPerMinuteInMsgSec"`
 	AvgOutgoingThroughputPerMinuteInMsgSec float64 `json:"avgOutgoingThroughputPerMinuteInMsgSec"`
 }
