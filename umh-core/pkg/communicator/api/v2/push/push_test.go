@@ -10,23 +10,21 @@ import (
 	"strings"
 	"time"
 
-	"github.com/united-manufacturing-hub/ManagementConsole/shared/backend_api_structs"
-	"github.com/united-manufacturing-hub/ManagementConsole/shared/encoding"
-	"github.com/united-manufacturing-hub/ManagementConsole/shared/tools"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/shared/backend_api_structs"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/shared/encoding"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/tools"
 
 	"github.com/google/uuid"
 	"github.com/h2non/gock"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/ghttp"
-	"github.com/united-manufacturing-hub/ManagementConsole/companion/cmd/api/mocks"
-	"github.com/united-manufacturing-hub/ManagementConsole/companion/cmd/api/v2/push"
-	"github.com/united-manufacturing-hub/ManagementConsole/companion/cmd/appstate"
-	models2 "github.com/united-manufacturing-hub/ManagementConsole/companion/cmd/models"
-	"github.com/united-manufacturing-hub/ManagementConsole/shared/helper"
-	"github.com/united-manufacturing-hub/ManagementConsole/shared/models"
-	"github.com/united-manufacturing-hub/ManagementConsole/shared/tools/safejson"
-	"github.com/united-manufacturing-hub/ManagementConsole/shared/watchdog"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/mocks"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2/push"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/shared/helper"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/shared/models"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/tools/safejson"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/tools/watchdog"
 )
 
 var _ = Describe("Pusher", Label("msgpush"), func() {

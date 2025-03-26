@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"github.com/getsentry/sentry-go"
-	"github.com/united-manufacturing-hub/ManagementConsole/shared/tools/fail"
-	"github.com/united-manufacturing-hub/ManagementConsole/shared/tools/safejson"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/tools/fail"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/tools/safejson"
 )
 
 // Package error_handler provides HTTP error handling with intelligent error reporting based on error types.

@@ -4,7 +4,7 @@ import (
 	"crypto/rand"
 	"os"
 
-	hash2 "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/tools/hash"
+	hash2 "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/hash"
 	"go.uber.org/zap"
 )
 

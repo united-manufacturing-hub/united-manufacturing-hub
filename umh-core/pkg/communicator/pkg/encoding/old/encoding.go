@@ -7,9 +7,9 @@ import (
 	"strings"
 
 	"github.com/klauspost/compress/zstd"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/fail"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/safejson"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/shared/models"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/tools/fail"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/tools/safejson"
 )
 
 func Compress(message string) (string, error) {

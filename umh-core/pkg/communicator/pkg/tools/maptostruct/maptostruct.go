@@ -3,7 +3,7 @@ package maptostruct
 import (
 	"fmt"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/tools/safejson"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/safejson"
 )
 
 func MapToStruct(payloadMap map[string]interface{}, dest interface{}) error {

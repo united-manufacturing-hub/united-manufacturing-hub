@@ -7,8 +7,8 @@ package pull_test
 import (
 	"context"
 
-	"github.com/united-manufacturing-hub/ManagementConsole/shared/backend_api_structs"
-	"github.com/united-manufacturing-hub/ManagementConsole/shared/encoding"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/shared/backend_api_structs"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/shared/encoding"
 
 	"github.com/google/uuid"
 	"github.com/h2non/gock"

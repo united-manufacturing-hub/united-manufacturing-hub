@@ -12,15 +12,15 @@ import (
 	"time"
 
 	"github.com/getsentry/sentry-go"
-	"github.com/united-manufacturing-hub/ManagementConsole/companion/cmd/api/v2/error_handler"
-	"github.com/united-manufacturing-hub/ManagementConsole/companion/cmd/api/v2/http"
-	"github.com/united-manufacturing-hub/ManagementConsole/companion/cmd/helper"
-	"github.com/united-manufacturing-hub/ManagementConsole/shared/backend_api_structs"
-	"github.com/united-manufacturing-hub/ManagementConsole/shared/models"
-	"github.com/united-manufacturing-hub/ManagementConsole/shared/tools/fail"
-	"github.com/united-manufacturing-hub/ManagementConsole/shared/tracing"
-	"github.com/united-manufacturing-hub/ManagementConsole/shared/watchdog"
 	"github.com/united-manufacturing-hub/expiremap/v2/pkg/expiremap"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2/error_handler"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2/http"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/backend_api_structs"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/helper"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/fail"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/tracing"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/shared/models"
 	"go.uber.org/zap"
 )
 

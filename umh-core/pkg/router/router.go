@@ -22,14 +22,14 @@ import (
 	//"github.com/united-manufacturing-hub/ManagementConsole/shared/models/mgmtconfig"
 
 	"github.com/google/uuid"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/actions"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions"
 
 	//"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/subscriber"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/shared/encoding"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/encoding"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/maptostruct"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/shared/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/shared/models/mgmtconfig"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/shared/watchdog"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/tools/maptostruct"
 	"go.uber.org/zap"
 )
 

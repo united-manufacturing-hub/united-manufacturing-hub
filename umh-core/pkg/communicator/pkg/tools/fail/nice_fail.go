@@ -12,7 +12,7 @@ import (
 
 	"github.com/getsentry/sentry-go"
 	"github.com/united-manufacturing-hub/expiremap/v2/pkg/expiremap"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/tools/hwid"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/hwid"
 
 	"github.com/DataDog/gostackparse"
 	"go.uber.org/zap"

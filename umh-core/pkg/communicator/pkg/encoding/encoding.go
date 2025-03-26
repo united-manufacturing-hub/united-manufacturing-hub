@@ -1,8 +1,8 @@
 package encoding
 
 import (
-	encoding_new "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/shared/encoding/new"
-	encoding_old "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/shared/encoding/old"
+	encoding_new "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/encoding/new"
+	encoding_old "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/encoding/old"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/shared/models"
 	"go.uber.org/zap"
 )
