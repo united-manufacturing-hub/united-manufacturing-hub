@@ -163,12 +163,6 @@ func BuildAndRunContainer(configFilePath string, memory string) error {
 	configFile := getConfigFilePath()
 	fmt.Printf("Using config file: %s\n", configFile)
 
-	// Instead of mounting the file directly, we'll change permissions to make it accessible to anyone
-	err = os.Chmod(configFile, 0o666)
-	if err != nil {
-		fmt.Printf("Warning: Couldn't set file permissions: %v\n", err)
-	}
-
 	fmt.Println("Starting container...")
 	out, err = runDockerCommand(
 		"run", "-d",
@@ -372,7 +366,11 @@ func GetCurrentDir() string {
 // writeConfigFile writes the given YAML content to a config file for the container to read.
 func writeConfigFile(yamlContent string) error {
 	configPath := getConfigFilePath()
-	// Ensure the directory exists
+
+	// Always remove any existing file first
+	os.Remove(configPath)
+
+	// Ensure the directory exists with wide permissions
 	dir := filepath.Dir(configPath)
 	if err := os.MkdirAll(dir, 0o777); err != nil {
 		return fmt.Errorf("failed to create config dir: %w", err)
@@ -383,6 +381,6 @@ func writeConfigFile(yamlContent string) error {
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
 
-	// Double-check permissions to ensure they are set correctly
-	return os.Chmod(configPath, 0o666)
+	// Skip the chmod which might fail if ownership has changed
+	return nil
 }
