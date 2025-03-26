@@ -47,6 +47,7 @@ RUN apk add --no-cache \
 # Set versions
 ARG S6_OVERLAY_VERSION=3.2.0.2
 ARG BENTHOS_UMH_VERSION=0.6.2
+ARG REDPANDA_VERSION=24.3.8
 ARG TARGETARCH=amd64
 
 # Step 1: Install s6-overlay noarch components
@@ -57,7 +58,6 @@ RUN tar -C / -Jxpf /tmp/s6-overlay-noarch.tar.xz && rm /tmp/s6-overlay-noarch.ta
 RUN case "${TARGETARCH}" in \
     "amd64") S6_ARCH="x86_64" ;; \
     "arm64") S6_ARCH="aarch64" ;; \
-    "arm/v7") S6_ARCH="arm" ;; \
     *) echo "Unsupported architecture: ${TARGETARCH}" && exit 1 ;; \
     esac && \
     echo "Using S6_ARCH: ${S6_ARCH}" && \
@@ -74,13 +74,31 @@ RUN tar -C / -Jxpf /tmp/syslogd-overlay-noarch.tar.xz && rm /tmp/syslogd-overlay
 RUN case "${TARGETARCH}" in \
     "amd64") BENTHOS_ARCH="amd64" ;; \
     "arm64") BENTHOS_ARCH="arm64" ;; \
-    "arm/v7") BENTHOS_ARCH="armv7" ;; \
     *) echo "Unsupported architecture: ${TARGETARCH}" && exit 1 ;; \
     esac && \
     echo "Using BENTHOS_ARCH: ${BENTHOS_ARCH}" && \
     curl -sSL -o /usr/local/bin/benthos \
     "https://github.com/united-manufacturing-hub/benthos-umh/releases/download/v${BENTHOS_UMH_VERSION}/benthos-linux-${BENTHOS_ARCH}" && \
     chmod +x /usr/local/bin/benthos
+
+# Step 5: Install redpanda
+RUN case "${TARGETARCH}" in \
+    "amd64") REDPANDA_ARCH="amd64" ;; \
+    "arm64") REDPANDA_ARCH="arm64" ;; \
+    *) echo "Unsupported architecture: ${TARGETARCH}" && exit 1 ;; \    
+    esac && \
+    echo "Using REDPANDA_ARCH: ${REDPANDA_ARCH}" && \
+    mkdir -p /tmp/redpanda && \
+    mkdir -p /opt/redpanda && \
+    curl -sSL -o /tmp/redpanda/redpanda.tar.gz \
+    "https://dl.redpanda.com/nzc4ZYQK3WRGd9sy/redpanda/raw/names/redpanda-${REDPANDA_ARCH}/versions/${REDPANDA_VERSION}/redpanda-${REDPANDA_VERSION}-${REDPANDA_ARCH}.tar.gz" && \
+    tar -xzf /tmp/redpanda/redpanda.tar.gz -C /opt/redpanda && \
+    rm /tmp/redpanda/redpanda.tar.gz && \
+    mkdir -p /data/redpanda && \
+    mkdir -p /data/redpanda/coredump
+
+# Step 6: Copy the redpanda config
+COPY ./redpanda/redpanda.yaml /opt/redpanda/etc/redpanda/redpanda.yaml
 
 # Step 5: Copy the built application and set permissions
 COPY --from=build /go/bin/umh-core /usr/local/bin/umh-core

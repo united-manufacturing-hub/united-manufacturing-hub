@@ -18,6 +18,8 @@ IMAGE_NAME = umh-core
 TAG = latest
 # Dynamically select podman if available, otherwise use docker
 OCI_RUNTIME := $(shell command -v podman >/dev/null 2>&1 && echo podman || echo docker)
+# Default to the architecture of the host
+TARGETARCH := $(shell go env GOARCH)
 
 GINKGO_VERSION = v2.23.3
 NILWAY_VERSION = latest
@@ -27,7 +29,7 @@ install:
 	go install github.com/onsi/ginkgo/v2/ginkgo@$(GINKGO_VERSION)
 
 build:
-	$(OCI_RUNTIME) build -t $(IMAGE_NAME):$(TAG) -f Dockerfile .
+	$(OCI_RUNTIME) build --build-arg TARGETARCH=$(TARGETARCH) -t $(IMAGE_NAME):$(TAG) -f Dockerfile .
 	
 clean:
 	$(OCI_RUNTIME) stop $(IMAGE_NAME) || true
@@ -90,3 +92,25 @@ test-benthos: clean build
 		-p 8081:8080 \
 		-p 4195:4195 \
 		$(IMAGE_NAME):$(TAG)
+
+pod-shell:
+	$(OCI_RUNTIME) exec -it $(IMAGE_NAME) /bin/bash
+
+
+install-podman:
+	brew install podman
+
+install-go:
+	curl -sSL https://go.dev/dl/go1.24.1.darwin-arm64.pkg -o /tmp/go.pkg
+	sudo installer -pkg /tmp/go.pkg -target /
+	rm /tmp/go.pkg
+
+install-ginkgo:
+	go install github.com/onsi/ginkgo/v2/ginkgo@latest
+
+add-go-path:
+	echo "export GOPATH=$HOME/go" >> ~/.zshrc
+	echo "export PATH=$PATH:$GOPATH/bin" >> ~/.zshrc
+	echo "Please restart your shell to apply the changes"
+
+install-dependencies: install-podman install-go install-ginkgo add-go-path
