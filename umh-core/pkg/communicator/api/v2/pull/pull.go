@@ -106,6 +106,8 @@ func (p *Puller) pull() {
 					}
 				}
 
+				zap.S().Infof("Received message: %v", message)
+
 				insertionTimeout := time.After(10 * time.Second)
 				select {
 				case p.inboundMessageChannel <- &models.UMHMessage{

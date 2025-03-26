@@ -28,6 +28,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/shared/models"
 	"go.uber.org/zap"
 )
 
@@ -66,16 +67,14 @@ func main() {
 	controlLoop := control.NewControlLoop()
 	systemSnapshot := fsm.SystemSnapshot{}
 	communicationState := communication_state.CommunicationState{
-		Watchdog: watchdog.NewWatchdog(ctx, time.NewTicker(time.Second*10), true),
+		Watchdog:        watchdog.NewWatchdog(ctx, time.NewTicker(time.Second*10), true),
+		InboundChannel:  make(chan *models.UMHMessage, 100),
+		OutboundChannel: make(chan *models.UMHMessage, 100),
+		ReleaseChannel:  config.Agent.ReleaseChannel,
 	}
 	go SystemSnapshotLogger(ctx, controlLoop, &systemSnapshot)
 
-	// Start the communicator
-	//comm := communicator.NewCommunicator()
-	//go comm.Execute(ctx) -> this is not needed anymore, because the communicator is now started in the control loop, remove this line
-
 	enableBackendConnection(&config, &systemSnapshot, &communicationState)
-
 	controlLoop.Execute(ctx)
 
 	log.Info("umh-core test completed")

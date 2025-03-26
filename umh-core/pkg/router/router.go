@@ -24,8 +24,8 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 
-	//"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/subscriber"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/encoding"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/subscriber"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/maptostruct"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/shared/models"
@@ -40,6 +40,7 @@ type Router struct {
 	releaseChannel        config.ReleaseChannel
 	clientConnections     map[string]*ClientConnection
 	clientConnectionsLock sync.RWMutex
+	subHandler            *subscriber.Handler
 }
 
 type ClientConnection struct {
@@ -52,6 +53,7 @@ func NewRouter(dog watchdog.Iface,
 	instanceUUID uuid.UUID,
 	outboundChannel chan *models.UMHMessage,
 	releaseChannel config.ReleaseChannel,
+	subHandler *subscriber.Handler,
 ) *Router {
 	return &Router{
 		dog:                   dog,
@@ -61,6 +63,7 @@ func NewRouter(dog watchdog.Iface,
 		releaseChannel:        releaseChannel,
 		clientConnections:     make(map[string]*ClientConnection),
 		clientConnectionsLock: sync.RWMutex{},
+		subHandler:            subHandler,
 	}
 }
 
@@ -74,6 +77,7 @@ func (r *Router) router() {
 	for {
 		select {
 		case message := <-r.inboundChannel:
+			zap.S().Infof("Router received message: %v", message)
 			r.dog.ReportHeartbeatStatus(watcherUUID, watchdog.HEARTBEAT_STATUS_OK)
 			// Decode message
 			messageContent, err := encoding.DecodeMessageFromUserToUMHInstance(message.Content)
@@ -82,8 +86,8 @@ func (r *Router) router() {
 				continue
 			}
 			switch messageContent.MessageType {
-			// case models.Subscribe:
-			// 	r.handleSub(message, watcherUUID)
+			case models.Subscribe:
+				r.handleSub(message, watcherUUID)
 			case models.Action:
 				r.handleAction(messageContent, message, watcherUUID)
 			default:
@@ -92,18 +96,19 @@ func (r *Router) router() {
 			}
 		case <-ticker.C:
 			r.dog.ReportHeartbeatStatus(watcherUUID, watchdog.HEARTBEAT_STATUS_OK)
+			zap.S().Infof("Router heartbeat ok")
 		}
 	}
 }
 
-// func (r *Router) handleSub(message *models.UMHMessageWithAdditionalInfo, watcherUUID uuid.UUID) {
-// 	if r.subHandler == nil {
-// 		r.dog.ReportHeartbeatStatus(watcherUUID, watchdog.HEARTBEAT_STATUS_WARNING)
-// 		zap.S().Warnf("Subscribe handler not yet initialized")
-// 		return
-// 	}
-// 	r.subHandler.AddSubscriber(message.Email, message.Certificate)
-// }
+func (r *Router) handleSub(message *models.UMHMessage, watcherUUID uuid.UUID) {
+	if r.subHandler == nil {
+		r.dog.ReportHeartbeatStatus(watcherUUID, watchdog.HEARTBEAT_STATUS_WARNING)
+		zap.S().Warnf("Subscribe handler not yet initialized")
+		return
+	}
+	r.subHandler.AddSubscriber(message.Email)
+}
 
 func (r *Router) handleAction(messageContent models.UMHMessageContent, message *models.UMHMessage, watcherUUID uuid.UUID) {
 	var actionPayload models.ActionMessagePayload

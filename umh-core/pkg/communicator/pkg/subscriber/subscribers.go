@@ -34,7 +34,6 @@ func NewHandler(
 	instanceUUID uuid.UUID,
 	ttl time.Duration,
 	cull time.Duration,
-	config *config.FullConfig,
 	releaseChannel config.ReleaseChannel,
 	disableHardwareStatusCheck bool,
 ) *Handler {
@@ -45,7 +44,6 @@ func NewHandler(
 	s.instanceUUID = instanceUUID
 	s.StatusCollector = generator.NewStatusCollector(
 		dog,
-		config,
 	)
 
 	return s

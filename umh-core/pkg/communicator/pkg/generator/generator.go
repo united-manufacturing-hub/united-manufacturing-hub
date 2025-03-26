@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/shared/models"
 )
 
@@ -17,7 +16,6 @@ const (
 type StatusCollectorType struct {
 	latestData *LatestData
 	dog        watchdog.Iface
-	config     *config.FullConfig
 }
 
 type LatestData struct {
@@ -29,7 +27,6 @@ type LatestData struct {
 
 func NewStatusCollector(
 	dog watchdog.Iface,
-	config *config.FullConfig,
 ) *StatusCollectorType {
 
 	latestData := &LatestData{}
@@ -37,12 +34,12 @@ func NewStatusCollector(
 	collector := &StatusCollectorType{
 		latestData: latestData,
 		dog:        dog,
-		config:     config,
 	}
 
 	return collector
 }
 
 func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
-	return nil
+	// mock the status message
+
 }

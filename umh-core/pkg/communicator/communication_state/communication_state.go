@@ -76,7 +76,7 @@ func (c *CommunicationState) InitialiseAndStartRouter() {
 	}
 
 	c.mu.Lock()
-	c.Router = router.NewRouter(c.Watchdog, c.InboundChannel, c.LoginResponse.UUID, c.OutboundChannel, c.ReleaseChannel)
+	c.Router = router.NewRouter(c.Watchdog, c.InboundChannel, c.LoginResponse.UUID, c.OutboundChannel, c.ReleaseChannel, c.SubscriberHandler)
 	c.mu.Unlock()
 	if c.Router == nil {
 		fail.Fatalf("Failed to create router")
@@ -111,7 +111,6 @@ func (s *CommunicationState) InitialiseAndStartSubscriberHandler(ttl time.Durati
 		s.LoginResponse.UUID,
 		ttl,
 		cull,
-		config,
 		s.ReleaseChannel,
 		false, // disableHardwareStatusCheck
 

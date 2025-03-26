@@ -29,6 +29,7 @@ type FullConfig struct {
 type AgentConfig struct {
 	MetricsPort        int `yaml:"metricsPort"` // Port to expose metrics on
 	CommunicatorConfig `yaml:"communicator"`
+	ReleaseChannel     ReleaseChannel `yaml:"releaseChannel"`
 }
 
 type CommunicatorConfig struct {
