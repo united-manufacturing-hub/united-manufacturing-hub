@@ -24,33 +24,29 @@ import (
 
 // MockNmapService is a mock implementation of the INmapService interface for testing
 type MockNmapService struct {
-	// Tracks calls to methods
-	GenerateS6ConfigForNmapCalled bool
-	GetConfigCalled               bool
-	StatusCalled                  bool
-	AddNmapToS6ManagerCalled      bool
-	UpdateNmapInS6ManagerCalled   bool
-	RemoveNmapFromS6ManagerCalled bool
-	StartNmapCalled               bool
-	StopNmapCalled                bool
-	ServiceExistsCalled           bool
-	ReconcileManagerCalled        bool
+	// Configs keeps track of registered services
+	Configs map[string]*config.NmapServiceConfig
 
-	// Return values for each method
-	GenerateS6ConfigForNmapResult config.S6ServiceConfig
-	GenerateS6ConfigForNmapError  error
-	GetConfigResult               config.NmapServiceConfig
-	GetConfigError                error
-	StatusResult                  ServiceInfo
-	StatusError                   error
-	AddNmapToS6ManagerError       error
-	UpdateNmapInS6ManagerError    error
-	RemoveNmapFromS6ManagerError  error
-	StartNmapError                error
-	StopNmapError                 error
-	ServiceExistsResult           bool
-	ReconcileManagerError         error
-	ReconcileManagerReconciled    bool
+	// StateMap keeps track of desired states
+	StateMap map[string]string
+
+	// Status response to return
+	StatusResult ServiceInfo
+
+	// GetConfig response to return
+	GetConfigResult config.NmapServiceConfig
+
+	// Error to return for various operations
+	GenerateConfigError error
+	GetConfigError      error
+	StatusError         error
+	AddServiceError     error
+	UpdateServiceError  error
+	RemoveServiceError  error
+	StartServiceError   error
+	StopServiceError    error
+	ReconcileError      error
+	ExistsError         bool // if true, ServiceExists returns false
 
 	// For more complex testing scenarios
 	ServiceStates    map[string]*ServiceInfo
@@ -61,193 +57,242 @@ type MockNmapService struct {
 // Ensure MockNmapService implements INmapService
 var _ INmapService = (*MockNmapService)(nil)
 
-// NewMockNmapService creates a new mock Nmap service
+// NewMockNmapService creates a new mock nmap service
 func NewMockNmapService() *MockNmapService {
 	return &MockNmapService{
+		Configs:          make(map[string]*config.NmapServiceConfig),
+		StateMap:         make(map[string]string),
 		ServiceStates:    make(map[string]*ServiceInfo),
 		ExistingServices: make(map[string]bool),
-		S6ServiceConfigs: make([]config.S6FSMConfig, 0),
 	}
 }
 
-// GenerateS6ConfigForNmap mocks generating S6 config for Nmap
+// GenerateS6ConfigForNmap generates a mock S6 config
 func (m *MockNmapService) GenerateS6ConfigForNmap(nmapConfig *config.NmapServiceConfig, s6ServiceName string) (config.S6ServiceConfig, error) {
-	m.GenerateS6ConfigForNmapCalled = true
-	return m.GenerateS6ConfigForNmapResult, m.GenerateS6ConfigForNmapError
+	if m.GenerateConfigError != nil {
+		return config.S6ServiceConfig{}, m.GenerateConfigError
+	}
+
+	return config.S6ServiceConfig{
+		Command: []string{"/bin/sh", "/path/to/script.sh"},
+		ConfigFiles: map[string]string{
+			"run_nmap.sh": "mock script content",
+		},
+	}, nil
 }
 
-// GetConfig mocks getting the Nmap configuration
-func (m *MockNmapService) GetConfig(ctx context.Context, serviceName string) (config.NmapServiceConfig, error) {
-	m.GetConfigCalled = true
+// GetConfig returns the mock config
+func (m *MockNmapService) GetConfig(ctx context.Context, nmapName string) (config.NmapServiceConfig, error) {
+	if ctx.Err() != nil {
+		return config.NmapServiceConfig{}, ctx.Err()
+	}
 
-	// If error is set, return it
 	if m.GetConfigError != nil {
 		return config.NmapServiceConfig{}, m.GetConfigError
 	}
 
-	// If a result is preset, return it
-	if m.GetConfigResult.Target != "" || m.GetConfigResult.Port != 0 {
-		return m.GetConfigResult, nil
+	if cfg, exists := m.Configs[nmapName]; exists {
+		return *cfg, nil
 	}
 
-	// Otherwise return a default config with some test values
-	return config.NmapServiceConfig{
-		Target: "example.com",
-		Port:   443,
-	}, nil
+	return m.GetConfigResult, nil
 }
 
-// Status mocks getting the status of a Nmap service
-func (m *MockNmapService) Status(ctx context.Context, serviceName string, tick uint64) (ServiceInfo, error) {
-	m.StatusCalled = true
+// Status returns the mock status
+func (m *MockNmapService) Status(ctx context.Context, nmapName string, tick uint64) (ServiceInfo, error) {
+	if ctx.Err() != nil {
+		return ServiceInfo{}, ctx.Err()
+	}
 
-	// Check if the service exists in the ExistingServices map
-	if exists, ok := m.ExistingServices[serviceName]; !ok || !exists {
+	if m.StatusError != nil {
+		return ServiceInfo{}, m.StatusError
+	}
+
+	if _, exists := m.Configs[nmapName]; !exists {
 		return ServiceInfo{}, ErrServiceNotExist
 	}
 
-	// If we have a state already stored, return it
-	if state, exists := m.ServiceStates[serviceName]; exists {
-		return *state, m.StatusError
-	}
-
-	// If no state is stored, return the default mock result
-	return m.StatusResult, m.StatusError
+	return m.StatusResult, nil
 }
 
-// AddNmapToS6Manager mocks adding a Nmap instance to the S6 manager
-func (m *MockNmapService) AddNmapToS6Manager(ctx context.Context, cfg *config.NmapServiceConfig, serviceName string) error {
-	m.AddNmapToS6ManagerCalled = true
-
-	// Check whether the service already exists
-	for _, s6Config := range m.S6ServiceConfigs {
-		if s6Config.Name == serviceName {
-			return ErrServiceAlreadyExists
-		}
+// AddNmapToS6Manager mocks adding a service
+func (m *MockNmapService) AddNmapToS6Manager(ctx context.Context, cfg *config.NmapServiceConfig, nmapName string) error {
+	if ctx.Err() != nil {
+		return ctx.Err()
 	}
 
-	// Add the service to the list of existing services
-	m.ExistingServices[serviceName] = true
+	if m.AddServiceError != nil {
+		return m.AddServiceError
+	}
+
+	if _, exists := m.Configs[nmapName]; exists {
+		return ErrServiceAlreadyExists
+	}
+
+	m.Configs[nmapName] = cfg
+	m.StateMap[nmapName] = s6fsm.OperationalStateRunning // default state is running
+
+	// Add to legacy fields for compatibility
+	s6ServiceName := "nmap-" + nmapName
+	m.ExistingServices[s6ServiceName] = true
 
 	// Create an S6FSMConfig for this service
 	s6FSMConfig := config.S6FSMConfig{
 		FSMInstanceConfig: config.FSMInstanceConfig{
-			Name:            serviceName,
+			Name:            s6ServiceName,
 			DesiredFSMState: s6fsm.OperationalStateRunning,
 		},
-		S6ServiceConfig: m.GenerateS6ConfigForNmapResult,
 	}
 
-	// Add the S6FSMConfig to the list of S6FSMConfigs
+	// Add to S6ServiceConfigs
 	m.S6ServiceConfigs = append(m.S6ServiceConfigs, s6FSMConfig)
 
-	return m.AddNmapToS6ManagerError
+	return nil
 }
 
-// RemoveNmapFromS6Manager mocks removing a Nmap instance from the S6 manager
-func (m *MockNmapService) RemoveNmapFromS6Manager(ctx context.Context, serviceName string) error {
-	m.RemoveNmapFromS6ManagerCalled = true
+// UpdateNmapInS6Manager mocks updating a service
+func (m *MockNmapService) UpdateNmapInS6Manager(ctx context.Context, cfg *config.NmapServiceConfig, nmapName string) error {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
 
-	found := false
+	if m.UpdateServiceError != nil {
+		return m.UpdateServiceError
+	}
 
-	// Remove the service from the list of S6FSMConfigs
+	if _, exists := m.Configs[nmapName]; !exists {
+		return ErrServiceNotExist
+	}
+
+	m.Configs[nmapName] = cfg
+
+	// Update legacy fields for compatibility
+	s6ServiceName := "nmap-" + nmapName
 	for i, s6Config := range m.S6ServiceConfigs {
-		if s6Config.Name == serviceName {
+		if s6Config.Name == s6ServiceName {
+			m.S6ServiceConfigs[i].S6ServiceConfig = config.S6ServiceConfig{
+				Command: []string{"/bin/sh", "/path/to/script.sh"},
+				ConfigFiles: map[string]string{
+					"run_nmap.sh": "updated mock script content",
+				},
+			}
+			break
+		}
+	}
+
+	return nil
+}
+
+// RemoveNmapFromS6Manager mocks removing a service
+func (m *MockNmapService) RemoveNmapFromS6Manager(ctx context.Context, nmapName string) error {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+
+	if m.RemoveServiceError != nil {
+		return m.RemoveServiceError
+	}
+
+	if _, exists := m.Configs[nmapName]; !exists {
+		return ErrServiceNotExist
+	}
+
+	delete(m.Configs, nmapName)
+	delete(m.StateMap, nmapName)
+
+	// Update legacy fields for compatibility
+	s6ServiceName := "nmap-" + nmapName
+	delete(m.ExistingServices, s6ServiceName)
+	delete(m.ServiceStates, s6ServiceName)
+
+	// Remove from S6ServiceConfigs
+	for i, s6Config := range m.S6ServiceConfigs {
+		if s6Config.Name == s6ServiceName {
 			m.S6ServiceConfigs = append(m.S6ServiceConfigs[:i], m.S6ServiceConfigs[i+1:]...)
-			found = true
 			break
 		}
 	}
 
-	if !found {
+	return nil
+}
+
+// StartNmap mocks starting a service
+func (m *MockNmapService) StartNmap(ctx context.Context, nmapName string) error {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+
+	if m.StartServiceError != nil {
+		return m.StartServiceError
+	}
+
+	if _, exists := m.Configs[nmapName]; !exists {
 		return ErrServiceNotExist
 	}
 
-	// Remove the service from the list of existing services
-	delete(m.ExistingServices, serviceName)
-	delete(m.ServiceStates, serviceName)
+	m.StateMap[nmapName] = s6fsm.OperationalStateRunning
 
-	return m.RemoveNmapFromS6ManagerError
-}
-
-// StartNmap mocks starting a Nmap instance
-func (m *MockNmapService) StartNmap(ctx context.Context, serviceName string) error {
-	m.StartNmapCalled = true
-
-	found := false
-
-	// Set the desired state to running for the given instance
+	// Update legacy fields for compatibility
+	s6ServiceName := "nmap-" + nmapName
 	for i, s6Config := range m.S6ServiceConfigs {
-		if s6Config.Name == serviceName {
+		if s6Config.Name == s6ServiceName {
 			m.S6ServiceConfigs[i].DesiredFSMState = s6fsm.OperationalStateRunning
-			found = true
 			break
 		}
 	}
 
-	if !found {
+	return nil
+}
+
+// StopNmap mocks stopping a service
+func (m *MockNmapService) StopNmap(ctx context.Context, nmapName string) error {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+
+	if m.StopServiceError != nil {
+		return m.StopServiceError
+	}
+
+	if _, exists := m.Configs[nmapName]; !exists {
 		return ErrServiceNotExist
 	}
 
-	return m.StartNmapError
-}
+	m.StateMap[nmapName] = s6fsm.OperationalStateStopped
 
-// StopNmap mocks stopping a Nmap instance
-func (m *MockNmapService) StopNmap(ctx context.Context, serviceName string) error {
-	m.StopNmapCalled = true
-
-	found := false
-
-	// Set the desired state to stopped for the given instance
+	// Update legacy fields for compatibility
+	s6ServiceName := "nmap-" + nmapName
 	for i, s6Config := range m.S6ServiceConfigs {
-		if s6Config.Name == serviceName {
+		if s6Config.Name == s6ServiceName {
 			m.S6ServiceConfigs[i].DesiredFSMState = s6fsm.OperationalStateStopped
-			found = true
 			break
 		}
 	}
 
-	if !found {
-		return ErrServiceNotExist
-	}
-
-	return m.StopNmapError
+	return nil
 }
 
-// ReconcileManager mocks reconciling the Nmap manager
+// ReconcileManager mocks reconciling the manager
 func (m *MockNmapService) ReconcileManager(ctx context.Context, tick uint64) (error, bool) {
-	m.ReconcileManagerCalled = true
-	return m.ReconcileManagerError, m.ReconcileManagerReconciled
-}
-
-// ServiceExists mocks checking if a Nmap service exists
-func (m *MockNmapService) ServiceExists(ctx context.Context, serviceName string) bool {
-	m.ServiceExistsCalled = true
-	return m.ServiceExistsResult
-}
-
-// UpdateNmapInS6Manager mocks updating a Nmap service configuration in the S6 manager
-func (m *MockNmapService) UpdateNmapInS6Manager(ctx context.Context, cfg *config.NmapServiceConfig, serviceName string) error {
-	m.UpdateNmapInS6ManagerCalled = true
-
-	// Check if the service exists
-	found := false
-	for i, s6Config := range m.S6ServiceConfigs {
-		if s6Config.Name == serviceName {
-			found = true
-
-			// Update the config
-			s6Config.S6ServiceConfig = m.GenerateS6ConfigForNmapResult
-			m.S6ServiceConfigs[i] = s6Config
-			break
-		}
+	if ctx.Err() != nil {
+		return ctx.Err(), false
 	}
 
-	if !found {
-		return ErrServiceNotExist
+	if m.ReconcileError != nil {
+		return m.ReconcileError, false
 	}
 
-	return m.UpdateNmapInS6ManagerError
+	return nil, true
+}
+
+// ServiceExists mocks checking if a service exists
+func (m *MockNmapService) ServiceExists(ctx context.Context, nmapName string) bool {
+	if m.ExistsError {
+		return false
+	}
+
+	_, exists := m.Configs[nmapName]
+	return exists
 }
 
 // SetStatusInfo sets a mock status for a given service

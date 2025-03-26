@@ -38,7 +38,7 @@ type NmapService struct {
 	s6Manager        *s6fsm.S6Manager
 	s6Service        s6service.Service
 	s6ServiceConfigs []config.S6FSMConfig
-	scanResults      map[string]*NmapScanResult // Cache for scan results
+	lastScanResult   *NmapScanResult // Cache for scan results
 }
 
 // NmapServiceOption is a function that modifies a NmapService
@@ -55,10 +55,10 @@ func WithS6Service(s6Service s6service.Service) NmapServiceOption {
 func NewDefaultNmapService(nmapName string, opts ...NmapServiceOption) *NmapService {
 	managerName := fmt.Sprintf("%s%s", logger.ComponentNmapService, nmapName)
 	service := &NmapService{
-		logger:      logger.For(managerName),
-		s6Manager:   s6fsm.NewS6Manager(managerName),
-		s6Service:   s6service.NewDefaultService(),
-		scanResults: make(map[string]*NmapScanResult),
+		logger:         logger.For(managerName),
+		s6Manager:      s6fsm.NewS6Manager(managerName),
+		s6Service:      s6service.NewDefaultService(),
+		lastScanResult: nil,
 	}
 
 	// Apply options
@@ -441,7 +441,7 @@ func (s *NmapService) RemoveNmapFromS6Manager(ctx context.Context, nmapName stri
 	}
 
 	// Clean up the cached scan results
-	delete(s.scanResults, nmapName)
+	s.lastScanResult = nil
 
 	return nil
 }
