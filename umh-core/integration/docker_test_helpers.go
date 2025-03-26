@@ -224,3 +224,58 @@ func writeConfigFile(yamlContent string) error {
 	configPath := filepath.Join(dataDir, "config.yaml")
 	return os.WriteFile(configPath, []byte(yamlContent), 0o644)
 }
+
+// printContainerDebugInfo prints detailed information about the container
+// for debugging purposes - useful when tests fail
+func printContainerDebugInfo() {
+	containerName := getContainerName()
+
+	fmt.Println("\n==== CONTAINER DEBUG INFO ====")
+
+	// 1. List all running containers
+	fmt.Println("\n[ALL RUNNING CONTAINERS]")
+	out, err := runDockerCommand("ps", "-a")
+	if err != nil {
+		fmt.Printf("Failed to list containers: %v\n", err)
+	} else {
+		fmt.Println(out)
+	}
+
+	// 2. Check our container's status
+	fmt.Printf("\n[CONTAINER STATUS: %s]\n", containerName)
+	out, err = runDockerCommand("inspect", "--format", "{{.State.Status}}", containerName)
+	if err != nil {
+		fmt.Printf("Failed to get container status: %v\n", err)
+	} else {
+		fmt.Printf("Status: %s\n", strings.TrimSpace(out))
+	}
+
+	// 3. Get container IP info
+	fmt.Println("\n[CONTAINER NETWORK INFO]")
+	out, err = runDockerCommand("inspect", "--format", "{{json .NetworkSettings}}", containerName)
+	if err != nil {
+		fmt.Printf("Failed to get network info: %v\n", err)
+	} else {
+		fmt.Printf("Network Settings: %s\n", out)
+	}
+
+	// 4. Check container logs for errors
+	fmt.Println("\n[CONTAINER LOGS (last 30 lines)]")
+	out, err = runDockerCommand("logs", "--tail", "30", containerName)
+	if err != nil {
+		fmt.Printf("Failed to get container logs: %v\n", err)
+	} else {
+		fmt.Println(out)
+	}
+
+	// 5. Print port mappings
+	fmt.Println("\n[PORT MAPPINGS]")
+	out, err = runDockerCommand("port", containerName)
+	if err != nil {
+		fmt.Printf("Failed to get port mappings: %v\n", err)
+	} else {
+		fmt.Println(out)
+	}
+
+	fmt.Println("\n==== END DEBUG INFO ====")
+}
