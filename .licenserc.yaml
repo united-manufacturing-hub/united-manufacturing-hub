@@ -50,6 +50,6 @@ header:
     - "**/.dockerignore"
     - "umh-core/s6-base/**/*"
     - ".devcontainer/devcontainer.json"
-    - ".vscode/launch.json"
+    - ".vscode/**"
 
   comment: on-failure
