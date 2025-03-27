@@ -11,6 +11,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/fail"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/router"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/shared/models"
 )
@@ -87,7 +88,7 @@ func (c *CommunicationState) InitialiseAndStartRouter() {
 // InitialiseAndStartSubscriberHandler creates a new subscriber handler and starts it
 // ttl is the time until a subscriber is considered dead (if no new subscriber message is received)
 // cull is the cycle time to remove dead subscribers
-func (s *CommunicationState) InitialiseAndStartSubscriberHandler(ttl time.Duration, cull time.Duration, config *config.FullConfig) {
+func (s *CommunicationState) InitialiseAndStartSubscriberHandler(ttl time.Duration, cull time.Duration, config *config.FullConfig, state *fsm.SystemSnapshot) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -113,7 +114,7 @@ func (s *CommunicationState) InitialiseAndStartSubscriberHandler(ttl time.Durati
 		cull,
 		s.ReleaseChannel,
 		false, // disableHardwareStatusCheck
-
+		state,
 	)
 	if s.SubscriberHandler == nil {
 		fail.Fatalf("Failed to create subscriber handler")

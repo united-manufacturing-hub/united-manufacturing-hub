@@ -16,6 +16,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/shared/models"
 
 	"github.com/united-manufacturing-hub/expiremap/v2/pkg/expiremap"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"go.uber.org/zap"
 )
 
@@ -26,6 +27,7 @@ type Handler struct {
 	instanceUUID               uuid.UUID
 	StatusCollector            *generator.StatusCollectorType
 	disableHardwareStatusCheck bool
+	state                      *fsm.SystemSnapshot
 }
 
 func NewHandler(
@@ -36,14 +38,17 @@ func NewHandler(
 	cull time.Duration,
 	releaseChannel config.ReleaseChannel,
 	disableHardwareStatusCheck bool,
+	state *fsm.SystemSnapshot,
 ) *Handler {
 	s := &Handler{}
 	s.subscribers = expiremap.NewEx[string, string](cull, ttl)
 	s.dog = dog
 	s.pusher = pusher
 	s.instanceUUID = instanceUUID
+	s.state = state
 	s.StatusCollector = generator.NewStatusCollector(
 		dog,
+		state,
 	)
 
 	return s

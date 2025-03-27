@@ -1,10 +1,12 @@
 package generator
 
 import (
+	"fmt"
 	"sync"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/shared/models"
 )
 
@@ -16,6 +18,8 @@ const (
 type StatusCollectorType struct {
 	latestData *LatestData
 	dog        watchdog.Iface
+	stateMu    sync.RWMutex // Mutex to protect access to state
+	state      *fsm.SystemSnapshot
 }
 
 type LatestData struct {
@@ -27,6 +31,7 @@ type LatestData struct {
 
 func NewStatusCollector(
 	dog watchdog.Iface,
+	state *fsm.SystemSnapshot,
 ) *StatusCollectorType {
 
 	latestData := &LatestData{}
@@ -34,6 +39,7 @@ func NewStatusCollector(
 	collector := &StatusCollectorType{
 		latestData: latestData,
 		dog:        dog,
+		state:      state,
 	}
 
 	return collector
@@ -43,11 +49,16 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 	s.latestData.mu.RLock()
 	defer s.latestData.mu.RUnlock()
 
+	// Lock state for reading
+	s.stateMu.RLock()
+	observedState := s.state
+	s.stateMu.RUnlock()
+
 	return &models.StatusMessage{
 		Core: models.Core{
 			Agent: models.Agent{
 				Health: models.Health{
-					Message: "Agent is healthy",
+					Message: fmt.Sprintf("System snapshot at tick %d, managers: %d", observedState.Tick, len(observedState.Managers)),
 					State:   "running",
 				},
 			},

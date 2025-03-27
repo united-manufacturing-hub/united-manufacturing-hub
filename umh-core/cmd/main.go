@@ -79,16 +79,16 @@ func main() {
 
 	// Start the control loop
 	controlLoop := control.NewControlLoop()
-	systemSnapshot := fsm.SystemSnapshot{}
+	systemSnapshot := new(fsm.SystemSnapshot)
 	communicationState := communication_state.CommunicationState{
 		Watchdog:        watchdog.NewWatchdog(ctx, time.NewTicker(time.Second*10), true),
 		InboundChannel:  make(chan *models.UMHMessage, 100),
 		OutboundChannel: make(chan *models.UMHMessage, 100),
 		ReleaseChannel:  config.Agent.ReleaseChannel,
 	}
-	go SystemSnapshotLogger(ctx, controlLoop, &systemSnapshot)
+	go SystemSnapshotLogger(ctx, controlLoop, systemSnapshot)
 
-	enableBackendConnection(&config, &systemSnapshot, &communicationState)
+	enableBackendConnection(&config, systemSnapshot, &communicationState)
 	controlLoop.Execute(ctx)
 
 	log.Info("umh-core test completed")
@@ -114,6 +114,9 @@ func SystemSnapshotLogger(ctx context.Context, controlLoop *control.ControlLoop,
 			return
 		case <-ticker.C:
 			snapshot := controlLoop.GetSystemSnapshot()
+			if snapshot != nil {
+				*systemSnapshot = *snapshot
+			}
 			if snapshot == nil {
 				logger.Warn("No system snapshot available")
 				continue
@@ -163,7 +166,7 @@ func enableBackendConnection(config *config.FullConfig, state *fsm.SystemSnapsho
 
 		communicationState.InitialiseAndStartPuller()
 		communicationState.InitialiseAndStartPusher()
-		communicationState.InitialiseAndStartSubscriberHandler(time.Minute*5, time.Minute, config)
+		communicationState.InitialiseAndStartSubscriberHandler(time.Minute*5, time.Minute, config, state)
 		communicationState.InitialiseAndStartRouter()
 	}
 }
