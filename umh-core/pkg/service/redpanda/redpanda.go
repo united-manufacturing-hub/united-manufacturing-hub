@@ -257,7 +257,7 @@ func (s *RedpandaService) GenerateS6ConfigForRedpanda(redpandaConfig *redpandase
 	s6Config = s6serviceconfig.S6ServiceConfig{
 		Command: []string{
 			"/opt/redpanda/bin/redpanda",
-			"--redpanda-config",
+			"--redpanda-cfg",
 			configPath,
 		},
 		Env: map[string]string{},
