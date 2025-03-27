@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 )
@@ -31,7 +32,7 @@ const (
 // INmapService defines the interface for managing nmap scan services
 type INmapService interface {
 	// GenerateS6ConfigForNmap generates a S6 config for a given nmap instance
-	GenerateS6ConfigForNmap(nmapConfig *config.NmapServiceConfig, s6ServiceName string) (config.S6ServiceConfig, error)
+	GenerateS6ConfigForNmap(nmapConfig *config.NmapServiceConfig, s6ServiceName string) (s6serviceconfig.S6ServiceConfig, error)
 	// GetConfig returns the actual nmap config from the S6 service
 	GetConfig(ctx context.Context, nmapName string) (config.NmapServiceConfig, error)
 	// Status checks the status of a nmap service

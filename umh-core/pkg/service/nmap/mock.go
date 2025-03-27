@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 )
 
@@ -68,12 +69,12 @@ func NewMockNmapService() *MockNmapService {
 }
 
 // GenerateS6ConfigForNmap generates a mock S6 config
-func (m *MockNmapService) GenerateS6ConfigForNmap(nmapConfig *config.NmapServiceConfig, s6ServiceName string) (config.S6ServiceConfig, error) {
+func (m *MockNmapService) GenerateS6ConfigForNmap(nmapConfig *config.NmapServiceConfig, s6ServiceName string) (s6serviceconfig.S6ServiceConfig, error) {
 	if m.GenerateConfigError != nil {
-		return config.S6ServiceConfig{}, m.GenerateConfigError
+		return s6serviceconfig.S6ServiceConfig{}, m.GenerateConfigError
 	}
 
-	return config.S6ServiceConfig{
+	return s6serviceconfig.S6ServiceConfig{
 		Command: []string{"/bin/sh", "/path/to/script.sh"},
 		ConfigFiles: map[string]string{
 			"run_nmap.sh": "mock script content",
@@ -170,7 +171,7 @@ func (m *MockNmapService) UpdateNmapInS6Manager(ctx context.Context, cfg *config
 	s6ServiceName := "nmap-" + nmapName
 	for i, s6Config := range m.S6ServiceConfigs {
 		if s6Config.Name == s6ServiceName {
-			m.S6ServiceConfigs[i].S6ServiceConfig = config.S6ServiceConfig{
+			m.S6ServiceConfigs[i].S6ServiceConfig = s6serviceconfig.S6ServiceConfig{
 				Command: []string{"/bin/sh", "/path/to/script.sh"},
 				ConfigFiles: map[string]string{
 					"run_nmap.sh": "updated mock script content",

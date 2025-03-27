@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
@@ -106,13 +107,13 @@ func (s *NmapService) getS6ServiceName(nmapName string) string {
 }
 
 // GenerateS6ConfigForNmap creates a S6 config for a given nmap instance
-func (s *NmapService) GenerateS6ConfigForNmap(nmapConfig *config.NmapServiceConfig, s6ServiceName string) (config.S6ServiceConfig, error) {
+func (s *NmapService) GenerateS6ConfigForNmap(nmapConfig *config.NmapServiceConfig, s6ServiceName string) (s6serviceconfig.S6ServiceConfig, error) {
 	scriptContent, err := s.generateNmapScript(nmapConfig)
 	if err != nil {
-		return config.S6ServiceConfig{}, err
+		return s6serviceconfig.S6ServiceConfig{}, err
 	}
 
-	s6Config := config.S6ServiceConfig{
+	s6Config := s6serviceconfig.S6ServiceConfig{
 		Command: []string{
 			"/bin/sh",
 			fmt.Sprintf("%s/%s/config/run_nmap.sh", constants.S6BaseDir, s6ServiceName),
