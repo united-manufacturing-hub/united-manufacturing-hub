@@ -2,6 +2,8 @@ package actions
 
 import (
 	"github.com/google/uuid"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/encoding"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/fail"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/safejson"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
@@ -38,6 +40,7 @@ func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePay
 		}
 	default:
 		zap.S().Errorf("Unknown action type: %s", payload.ActionType)
+		SendActionReply(instanceUUID, sender, payload.ActionUUID, models.ActionFinishedWithFailure, "Unknown action type", outboundChannel, payload.ActionType)
 		return
 	}
 
@@ -79,4 +82,84 @@ func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePay
 			TraceID: traceID,
 		},
 	}
+}
+
+// SendActionReply sends an action reply with the given state and payload
+// and returns false if an error occurred
+// Deprecated: Use SendActionReplyV2 instead. This function accepts payload of type interface{} which is discouraged for further usage.
+func SendActionReply(instanceUUID uuid.UUID, userEmail string, actionUUID uuid.UUID, arstate models.ActionReplyState, payload interface{}, outboundChannel chan *models.UMHMessage, action models.ActionType) bool {
+	return SendActionReplyWithAdditionalContext(instanceUUID, userEmail, actionUUID, arstate, payload, outboundChannel, action, nil)
+}
+
+// SendActionReplyWithAdditionalContext is the same as SendActionReply but with additional context
+func SendActionReplyWithAdditionalContext(instanceUUID uuid.UUID, userEmail string, actionUUID uuid.UUID, arstate models.ActionReplyState, payload interface{}, outboundChannel chan *models.UMHMessage, action models.ActionType, actionContext map[string]interface{}) bool {
+	// zap.S().Debugf("SendingActionReply [InstanceUUID: %s, UserEmail: %s, ActionUUID: %s, ActionReplyState: %s, Payload: %v]", instanceUUID, userEmail, actionUUID, arstate, payload)
+
+	err := sendActionReplyInternal(instanceUUID, userEmail, actionUUID, arstate, payload, outboundChannel, actionContext)
+	if err != nil {
+		fail.ErrorBatchedf("Error generating action reply: %s", err)
+		return false
+	}
+	return true
+}
+
+// sendActionReplyInternal sends an action reply with the given state and payload
+// This function is only meant to be called within the actions.go file !
+// Use SendActionReply instead (or SendActionReplyWithAdditionalContext if you need to pass additional context)
+func sendActionReplyInternal(instanceUUID uuid.UUID, userEmail string, actionUUID uuid.UUID, arstate models.ActionReplyState, payload interface{}, outboundChannel chan *models.UMHMessage, actionContext map[string]interface{}) error {
+	var err error
+	var umhMessage models.UMHMessage
+	if actionContext == nil {
+		umhMessage, err = generateUMHMessage(instanceUUID, userEmail, models.ActionReply, models.ActionReplyMessagePayload{
+			ActionUUID:         actionUUID,
+			ActionReplyState:   arstate,
+			ActionReplyPayload: payload,
+		})
+	} else {
+		umhMessage, err = generateUMHMessage(instanceUUID, userEmail, models.ActionReply, models.ActionReplyMessagePayload{
+			ActionUUID:         actionUUID,
+			ActionReplyState:   arstate,
+			ActionReplyPayload: payload,
+			ActionContext:      actionContext,
+		})
+	}
+	if err != nil {
+		fail.ErrorBatchedf("Error generating umh message: %v", err)
+		return err
+	}
+	outboundChannel <- &umhMessage
+	if arstate == models.ActionFinishedSuccessfull || arstate == models.ActionFinishedWithFailure {
+		at := GetActionTracker()
+		if at != nil {
+			at.StopTracking(actionUUID)
+		} else {
+			zap.S().Debugf("[ActionTracker] ActionTracker not initialized")
+		}
+	}
+	return nil
+}
+
+// generateUMHMessage generates a UMHMessage with the given user email, message type and payload.
+// There is no check for matching message type and payload, so make sure that the payload is
+// compatible with the message type.
+//
+// The message content gets encrypted before it is added to the UMHMessage
+func generateUMHMessage(instanceUUID uuid.UUID, userEmail string, messageType models.MessageType, payload any) (umhMessage models.UMHMessage, err error) {
+	messageContent := models.UMHMessageContent{
+		MessageType: messageType,
+		Payload:     payload,
+	}
+
+	encryptedContent, err := encoding.EncodeMessageFromUMHInstanceToUser(messageContent)
+	if err != nil {
+		return
+	}
+
+	umhMessage = models.UMHMessage{
+		Email:        userEmail,
+		Content:      encryptedContent,
+		InstanceUUID: instanceUUID,
+	}
+
+	return
 }
