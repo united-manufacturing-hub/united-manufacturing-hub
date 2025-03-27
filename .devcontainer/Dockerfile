@@ -19,5 +19,5 @@ FROM ubuntu:${VARIANT}
 RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
      && apt-get -y install --no-install-recommends iputils-ping
 
-# Install gnupg2
-RUN export DEBIAN_FRONTEND=noninteractive && apt-get install -y gnupg2
+# Install wget and required tools
+RUN apt-get update && apt-get install -y wget dpkg
