@@ -14,7 +14,6 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/h2non/gock v1.2.0
 	github.com/klauspost/compress v1.18.0
-	github.com/getsentry/sentry-go v0.31.1
 	github.com/looplab/fsm v1.0.2
 	github.com/onsi/ginkgo/v2 v2.23.3
 	github.com/onsi/gomega v1.36.3
