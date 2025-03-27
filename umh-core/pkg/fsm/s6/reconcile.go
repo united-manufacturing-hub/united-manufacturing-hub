@@ -22,6 +22,7 @@ import (
 
 	internal_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/backoff"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
@@ -100,6 +101,15 @@ func (s *S6Instance) Reconcile(ctx context.Context, tick uint64) (err error, rec
 			return nil, false
 		}
 
+		if errors.Is(err, context.DeadlineExceeded) {
+			// Updating the observed state can sometimes take longer,
+			// resulting in context.DeadlineExceeded errors. In this case, we want to
+			// mark the reconciliation as complete for this tick since we've likely
+			// already consumed significant time. We return reconciled=true to prevent
+			// further reconciliation attempts in the current tick.
+			return nil, true // We don't want to return an error here, as this can happen in normal operations
+		}
+
 		s.baseFSMInstance.SetError(err, tick)
 		s.baseFSMInstance.GetLogger().Errorf("error reconciling state: %s", err)
 		return nil, false // We don't want to return an error here, because we want to continue reconciling
@@ -119,7 +129,9 @@ func (s *S6Instance) reconcileExternalChanges(ctx context.Context) error {
 		metrics.ObserveReconcileTime(metrics.ComponentS6Instance, s.baseFSMInstance.GetID()+".reconcileExternalChanges", time.Since(start))
 	}()
 
-	err := s.updateObservedState(ctx)
+	observedStateCtx, cancel := context.WithTimeout(ctx, constants.S6UpdateObservedStateTimeout)
+	defer cancel()
+	err := s.updateObservedState(observedStateCtx)
 	if err != nil {
 		return fmt.Errorf("failed to update observed state: %w", err)
 	}

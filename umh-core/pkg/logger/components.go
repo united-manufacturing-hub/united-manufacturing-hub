@@ -26,8 +26,9 @@ const (
 	ComponentBenthosManager = "BenthosManager"
 
 	// FSM components
-	ComponentBaseFSM    = "BaseFSM"
-	ComponentS6Instance = "S6Instance"
+	ComponentBaseFSM         = "BaseFSM"
+	ComponentS6Instance      = "S6Instance"
+	ComponentBenthosInstance = "BenthosInstance"
 
 	// Service components
 	ComponentS6Service      = "S6Service"

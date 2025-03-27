@@ -24,6 +24,8 @@ import (
 	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
 	benthosserviceconfig "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
+	logger "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	benthos_service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
 )
 
@@ -152,16 +154,19 @@ func (b *BenthosInstance) updateObservedState(ctx context.Context, tick uint64) 
 		return ctx.Err()
 	}
 
+	start := time.Now()
 	info, err := b.getServiceStatus(ctx, tick)
 	if err != nil {
 		return err
 	}
-
+	metrics.ObserveReconcileTime(logger.ComponentBenthosInstance, b.baseFSMInstance.GetID()+".getServiceStatus", time.Since(start))
 	// Store the raw service info
 	b.ObservedState.ServiceInfo = info
 
 	// Fetch the actual Benthos config from the service
+	start = time.Now()
 	observedConfig, err := b.service.GetConfig(ctx, b.baseFSMInstance.GetID())
+	metrics.ObserveReconcileTime(logger.ComponentBenthosInstance, b.baseFSMInstance.GetID()+".getConfig", time.Since(start))
 	if err == nil {
 		// Only update if we successfully got the config
 		b.ObservedState.ObservedBenthosServiceConfig = observedConfig

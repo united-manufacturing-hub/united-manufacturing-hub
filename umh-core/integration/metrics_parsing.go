@@ -174,7 +174,7 @@ func checkWhetherMetricsHealthy(body string) {
 		}
 	}
 
-	// Print all reconcile durations over 20ms for debugging
+	// Print all reconcile durations over threshold for debugging
 	printAllReconcileDurations(body, 20.0)
 
 	// Still enforce the 99th percentile threshold

@@ -46,7 +46,6 @@ func (b *BenthosInstance) Reconcile(ctx context.Context, tick uint64) (err error
 			b.PrintState()
 			// Add metrics for error
 			metrics.IncErrorCount(metrics.ComponentBenthosInstance, benthosInstanceName)
-
 		}
 	}()
 
@@ -86,6 +85,15 @@ func (b *BenthosInstance) Reconcile(ctx context.Context, tick uint64) (err error
 		if !errors.Is(err, benthos_service.ErrServiceNotExist) {
 			b.baseFSMInstance.SetError(err, tick)
 			b.baseFSMInstance.GetLogger().Errorf("error reconciling external changes: %s", err)
+
+			if errors.Is(err, context.DeadlineExceeded) {
+				// Healthchecks occasionally take longer (sometimes up to 70ms),
+				// resulting in context.DeadlineExceeded errors. In this case, we want to
+				// mark the reconciliation as complete for this tick since we've likely
+				// already consumed significant time. We return reconciled=true to prevent
+				// further reconciliation attempts in the current tick.
+				return nil, true // We don't want to return an error here, as this can happen in normal operations
+			}
 			return nil, false // We don't want to return an error here, because we want to continue reconciling
 		}
 
@@ -133,7 +141,12 @@ func (b *BenthosInstance) reconcileExternalChanges(ctx context.Context, tick uin
 		metrics.ObserveReconcileTime(metrics.ComponentBenthosInstance, b.baseFSMInstance.GetID()+".reconcileExternalChanges", time.Since(start))
 	}()
 
-	err := b.updateObservedState(ctx, tick)
+	// Fetching the observed state can sometimes take longer, but we need to ensure when reconciling a lot of instances
+	// that a single status of a single instance does not block the whole reconciliation
+	observedStateCtx, cancel := context.WithTimeout(ctx, constants.BenthosUpdateObservedStateTimeout)
+	defer cancel()
+
+	err := b.updateObservedState(observedStateCtx, tick)
 	if err != nil {
 		return fmt.Errorf("failed to update observed state: %w", err)
 	}

@@ -14,8 +14,14 @@
 
 package constants
 
+import "time"
+
 const (
 	S6BaseDir       = "/run/service"
 	S6ConfigDirName = "config"
 	S6LogBaseDir    = "/data/logs"
+)
+
+const (
+	S6UpdateObservedStateTimeout = time.Millisecond * 3
 )

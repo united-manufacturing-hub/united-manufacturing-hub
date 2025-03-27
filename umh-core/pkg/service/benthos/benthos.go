@@ -35,6 +35,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"go.uber.org/zap"
 
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
@@ -697,6 +698,11 @@ func updateLatencyFromMetric(latency *Latency, metric *dto.Metric) {
 // GetHealthCheckAndMetrics returns the health check and metrics of a Benthos service
 // Expects s6ServiceName (e.g. "benthos-myservice"), not the raw benthosName
 func (s *BenthosService) GetHealthCheckAndMetrics(ctx context.Context, s6ServiceName string, metricsPort int, tick uint64) (BenthosStatus, error) {
+	start := time.Now()
+	defer func() {
+		metrics.ObserveReconcileTime(logger.ComponentBenthosService, s6ServiceName, time.Since(start))
+	}()
+
 	if ctx.Err() != nil {
 		return BenthosStatus{}, ctx.Err()
 	}
@@ -722,6 +728,12 @@ func (s *BenthosService) GetHealthCheckAndMetrics(ctx context.Context, s6Service
 
 	// Helper function to make HTTP requests with context
 	doRequest := func(endpoint string) (*http.Response, error) {
+		start := time.Now()
+
+		defer func() {
+			s.logger.Debugf("Request for %s took %s", endpoint, time.Since(start))
+		}()
+
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, baseURL+endpoint, nil)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create request for %s: %w", endpoint, err)
