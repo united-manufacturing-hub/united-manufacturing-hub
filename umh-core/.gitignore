@@ -1,5 +1,6 @@
 data/
 
-integration/data
+integration/umh-config
 
 *.test
+
