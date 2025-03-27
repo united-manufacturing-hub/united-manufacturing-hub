@@ -22,9 +22,11 @@ import (
 	"time"
 
 	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
+	benthosserviceconfig "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
+	logger "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	benthos_service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
-	benthosyaml "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos/yaml"
 )
 
 // The functions in this file define heavier, possibly fail-prone operations
@@ -152,16 +154,19 @@ func (b *BenthosInstance) updateObservedState(ctx context.Context, tick uint64) 
 		return ctx.Err()
 	}
 
+	start := time.Now()
 	info, err := b.getServiceStatus(ctx, tick)
 	if err != nil {
 		return err
 	}
-
+	metrics.ObserveReconcileTime(logger.ComponentBenthosInstance, b.baseFSMInstance.GetID()+".getServiceStatus", time.Since(start))
 	// Store the raw service info
 	b.ObservedState.ServiceInfo = info
 
 	// Fetch the actual Benthos config from the service
+	start = time.Now()
 	observedConfig, err := b.service.GetConfig(ctx, b.baseFSMInstance.GetID())
+	metrics.ObserveReconcileTime(logger.ComponentBenthosInstance, b.baseFSMInstance.GetID()+".getConfig", time.Since(start))
 	if err == nil {
 		// Only update if we successfully got the config
 		b.ObservedState.ObservedBenthosServiceConfig = observedConfig
@@ -177,13 +182,13 @@ func (b *BenthosInstance) updateObservedState(ctx context.Context, tick uint64) 
 
 	// Detect a config change - but let the S6 manager handle the actual reconciliation
 	// Use new ConfigsEqual function that handles Benthos defaults properly
-	if !benthosyaml.ConfigsEqual(b.config, b.ObservedState.ObservedBenthosServiceConfig) {
+	if !benthosserviceconfig.ConfigsEqual(b.config, b.ObservedState.ObservedBenthosServiceConfig) {
 		// Check if the service exists before attempting to update
 		if b.service.ServiceExists(ctx, b.baseFSMInstance.GetID()) {
 			b.baseFSMInstance.GetLogger().Debugf("Observed Benthos config is different from desired config, updating S6 configuration")
 
 			// Use the new ConfigDiff function for better debug output
-			diffStr := benthosyaml.ConfigDiff(b.config, b.ObservedState.ObservedBenthosServiceConfig)
+			diffStr := benthosserviceconfig.ConfigDiff(b.config, b.ObservedState.ObservedBenthosServiceConfig)
 			b.baseFSMInstance.GetLogger().Debugf("Configuration differences: %s", diffStr)
 
 			// Update the config in the S6 manager

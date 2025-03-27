@@ -30,7 +30,7 @@ import (
 	"time"
 
 	"github.com/cactus/tai64"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	filesystem "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
@@ -88,7 +88,7 @@ type LogEntry struct {
 // Service defines the interface for interacting with S6 services
 type Service interface {
 	// Create creates the service with specific configuration
-	Create(ctx context.Context, servicePath string, config config.S6ServiceConfig) error
+	Create(ctx context.Context, servicePath string, config s6serviceconfig.S6ServiceConfig) error
 	// Remove removes the service directory structure
 	Remove(ctx context.Context, servicePath string) error
 	// Start starts the service
@@ -104,7 +104,7 @@ type Service interface {
 	// ServiceExists checks if the service directory exists
 	ServiceExists(ctx context.Context, servicePath string) (bool, error)
 	// GetConfig gets the actual service config from s6
-	GetConfig(ctx context.Context, servicePath string) (config.S6ServiceConfig, error)
+	GetConfig(ctx context.Context, servicePath string) (s6serviceconfig.S6ServiceConfig, error)
 	// CleanS6ServiceDirectory cleans the S6 service directory, removing non-standard services
 	CleanS6ServiceDirectory(ctx context.Context, path string) error
 	// GetS6ConfigFile retrieves a config file for a service
@@ -136,7 +136,7 @@ func (s *DefaultService) WithFileSystemService(fsService filesystem.Service) *De
 }
 
 // Create creates the S6 service with specific configuration
-func (s *DefaultService) Create(ctx context.Context, servicePath string, config config.S6ServiceConfig) error {
+func (s *DefaultService) Create(ctx context.Context, servicePath string, config s6serviceconfig.S6ServiceConfig) error {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentS6Service, servicePath+".create", time.Since(start))
@@ -257,8 +257,9 @@ func (s *DefaultService) Create(ctx context.Context, servicePath string, config 
 	logRunContent := fmt.Sprintf(`#!/command/execlineb -P
 fdmove -c 2 1
 foreground { mkdir -p %s }
+foreground { chown -R nobody:nobody %s }
 logutil-service %s
-`, logDir, logDir)
+`, logDir, logDir, logDir)
 
 	if err := s.fsService.WriteFile(ctx, logRunPath, []byte(logRunContent), 0755); err != nil {
 		return fmt.Errorf("failed to write log run script: %w", err)
@@ -707,16 +708,16 @@ func (s *DefaultService) ServiceExists(ctx context.Context, servicePath string) 
 }
 
 // GetConfig gets the actual service config from s6
-func (s *DefaultService) GetConfig(ctx context.Context, servicePath string) (config.S6ServiceConfig, error) {
+func (s *DefaultService) GetConfig(ctx context.Context, servicePath string) (s6serviceconfig.S6ServiceConfig, error) {
 	exists, err := s.ServiceExists(ctx, servicePath)
 	if err != nil {
-		return config.S6ServiceConfig{}, fmt.Errorf("failed to check if service exists: %w", err)
+		return s6serviceconfig.S6ServiceConfig{}, fmt.Errorf("failed to check if service exists: %w", err)
 	}
 	if !exists {
-		return config.S6ServiceConfig{}, ErrServiceNotExist
+		return s6serviceconfig.S6ServiceConfig{}, ErrServiceNotExist
 	}
 
-	observedS6ServiceConfig := config.S6ServiceConfig{
+	observedS6ServiceConfig := s6serviceconfig.S6ServiceConfig{
 		ConfigFiles: make(map[string]string),
 		Env:         make(map[string]string),
 		MemoryLimit: 0,
@@ -726,15 +727,15 @@ func (s *DefaultService) GetConfig(ctx context.Context, servicePath string) (con
 	runScript := filepath.Join(servicePath, "run")
 	exists, err = s.fsService.FileExists(ctx, runScript)
 	if err != nil {
-		return config.S6ServiceConfig{}, fmt.Errorf("failed to check if run script exists: %w", err)
+		return s6serviceconfig.S6ServiceConfig{}, fmt.Errorf("failed to check if run script exists: %w", err)
 	}
 	if !exists {
-		return config.S6ServiceConfig{}, fmt.Errorf("run script not found")
+		return s6serviceconfig.S6ServiceConfig{}, fmt.Errorf("run script not found")
 	}
 
 	content, err := s.fsService.ReadFile(ctx, runScript)
 	if err != nil {
-		return config.S6ServiceConfig{}, fmt.Errorf("failed to read run script: %w", err)
+		return s6serviceconfig.S6ServiceConfig{}, fmt.Errorf("failed to read run script: %w", err)
 	}
 
 	// Parse the run script content
@@ -760,7 +761,7 @@ func (s *DefaultService) GetConfig(ctx context.Context, servicePath string) (con
 		cmdLine := strings.TrimSpace(cmdMatch[1])
 		observedS6ServiceConfig.Command, err = parseCommandLine(cmdLine)
 		if err != nil {
-			return config.S6ServiceConfig{}, fmt.Errorf("failed to parse command: %w", err)
+			return s6serviceconfig.S6ServiceConfig{}, fmt.Errorf("failed to parse command: %w", err)
 		}
 	} else {
 		// If the command is on the line after fdmove, or regex didn't match properly
@@ -798,7 +799,7 @@ func (s *DefaultService) GetConfig(ctx context.Context, servicePath string) (con
 		if commandLine != "" {
 			observedS6ServiceConfig.Command, err = parseCommandLine(commandLine)
 			if err != nil {
-				return config.S6ServiceConfig{}, fmt.Errorf("failed to parse command: %w", err)
+				return s6serviceconfig.S6ServiceConfig{}, fmt.Errorf("failed to parse command: %w", err)
 			}
 		} else {
 			// Absolute fallback - try to look for the command we know should be there
@@ -818,14 +819,14 @@ func (s *DefaultService) GetConfig(ctx context.Context, servicePath string) (con
 					if argPart != "" {
 						args, err = parseCommandLine(argPart)
 						if err != nil {
-							return config.S6ServiceConfig{}, fmt.Errorf("failed to parse command: %w", err)
+							return s6serviceconfig.S6ServiceConfig{}, fmt.Errorf("failed to parse command: %w", err)
 						}
 					}
 				}
 
 				observedS6ServiceConfig.Command = append([]string{cmd}, args...)
 			} else {
-				return config.S6ServiceConfig{}, fmt.Errorf("failed to parse run script: no valid command found")
+				return s6serviceconfig.S6ServiceConfig{}, fmt.Errorf("failed to parse run script: no valid command found")
 			}
 		}
 	}
@@ -835,7 +836,7 @@ func (s *DefaultService) GetConfig(ctx context.Context, servicePath string) (con
 	if len(memoryLimitMatches) >= 2 && memoryLimitMatches[1] != "" {
 		observedS6ServiceConfig.MemoryLimit, err = strconv.ParseInt(memoryLimitMatches[1], 10, 64)
 		if err != nil {
-			return config.S6ServiceConfig{}, fmt.Errorf("failed to parse memory limit: %w", err)
+			return s6serviceconfig.S6ServiceConfig{}, fmt.Errorf("failed to parse memory limit: %w", err)
 		}
 	}
 
@@ -843,7 +844,7 @@ func (s *DefaultService) GetConfig(ctx context.Context, servicePath string) (con
 	configPath := filepath.Join(servicePath, "config")
 	exists, err = s.fsService.FileExists(ctx, configPath)
 	if err != nil {
-		return config.S6ServiceConfig{}, fmt.Errorf("failed to check if config directory exists: %w", err)
+		return s6serviceconfig.S6ServiceConfig{}, fmt.Errorf("failed to check if config directory exists: %w", err)
 	}
 	if !exists {
 		return observedS6ServiceConfig, nil
@@ -851,7 +852,7 @@ func (s *DefaultService) GetConfig(ctx context.Context, servicePath string) (con
 
 	entries, err := s.fsService.ReadDir(ctx, configPath)
 	if err != nil {
-		return config.S6ServiceConfig{}, fmt.Errorf("failed to read config directory: %w", err)
+		return s6serviceconfig.S6ServiceConfig{}, fmt.Errorf("failed to read config directory: %w", err)
 	}
 
 	// Extract config files
@@ -863,7 +864,7 @@ func (s *DefaultService) GetConfig(ctx context.Context, servicePath string) (con
 		filePath := filepath.Join(configPath, entry.Name())
 		content, err := s.fsService.ReadFile(ctx, filePath)
 		if err != nil {
-			return config.S6ServiceConfig{}, fmt.Errorf("failed to read config file %s: %w", entry.Name(), err)
+			return s6serviceconfig.S6ServiceConfig{}, fmt.Errorf("failed to read config file %s: %w", entry.Name(), err)
 		}
 
 		observedS6ServiceConfig.ConfigFiles[entry.Name()] = string(content)

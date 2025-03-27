@@ -21,7 +21,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
@@ -60,7 +60,7 @@ var _ = Describe("S6 Service", func() {
 
 	It("should track method calls in the mock implementation", func() {
 		Expect(mockService.CreateCalled).To(BeFalse())
-		mockService.Create(ctx, testPath, config.S6ServiceConfig{})
+		mockService.Create(ctx, testPath, s6serviceconfig.S6ServiceConfig{})
 		Expect(mockService.CreateCalled).To(BeTrue())
 
 		Expect(mockService.StartCalled).To(BeFalse())
@@ -90,7 +90,7 @@ var _ = Describe("S6 Service", func() {
 		Expect(exists).To(BeFalse())
 
 		// Create service should make it exist
-		mockService.Create(ctx, testPath, config.S6ServiceConfig{})
+		mockService.Create(ctx, testPath, s6serviceconfig.S6ServiceConfig{})
 		exists, _ = mockService.ServiceExists(ctx, testPath)
 		Expect(exists).To(BeTrue())
 

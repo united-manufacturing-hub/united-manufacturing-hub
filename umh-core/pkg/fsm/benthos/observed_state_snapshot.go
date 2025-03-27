@@ -16,14 +16,14 @@ package benthos
 
 import (
 	"github.com/tiendc/go-deepcopy"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	benthosserviceconfig "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
 )
 
 // BenthosObservedStateSnapshot is a deep-copyable snapshot of BenthosObservedState
 type BenthosObservedStateSnapshot struct {
-	Config      config.BenthosServiceConfig
+	Config      benthosserviceconfig.BenthosServiceConfig
 	ServiceInfo benthos.ServiceInfo
 }
 

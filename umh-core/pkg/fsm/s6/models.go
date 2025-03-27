@@ -17,6 +17,7 @@ package s6
 import (
 	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
 	publicfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 )
@@ -68,7 +69,7 @@ type S6ObservedState struct {
 	ServiceInfo s6svc.ServiceInfo
 
 	// ObservedS6ServiceConfig contains the actual service config from s6
-	ObservedS6ServiceConfig config.S6ServiceConfig
+	ObservedS6ServiceConfig s6serviceconfig.S6ServiceConfig
 }
 
 // IsObservedState implements the ObservedState interface

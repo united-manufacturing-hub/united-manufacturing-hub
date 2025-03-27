@@ -34,30 +34,29 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 
 	AfterAll(func() {
 		// Always stop container after the entire suite
-		StopContainer()
+		//StopContainer()
 	})
 
 	Context("with an empty config", func() {
 		BeforeAll(func() {
 			By("Building an empty config and writing to data/config.yaml")
-			emptyConfig := `
-agent:
-  metricsPort: 8080
-services: []
-benthos: []
-`
+			// Create a config builder and ensure the metrics port is 8080 (container internal default)
+			configBuilder := NewBuilder().SetMetricsPort(8080)
+			emptyConfig := configBuilder.BuildYAML()
+
 			Expect(writeConfigFile(emptyConfig)).To(Succeed())
-			Expect(BuildAndRunContainer(emptyConfig, "1024m")).To(Succeed())
+			err := BuildAndRunContainer(emptyConfig, "1024m")
+			if err != nil {
+				// If container startup fails, print detailed debug info
+				fmt.Println("Container startup failed, printing debug info:")
+				printContainerDebugInfo()
+				Expect(err).ToNot(HaveOccurred(), "Container startup failed")
+			}
 			Expect(waitForMetrics()).To(Succeed(), "Metrics endpoint should be available with empty config")
 		})
-
-		AfterAll(func() {
-			StopContainer() // Stop container after empty config scenario
-		})
-
 		It("exposes metrics and has zero s6 services running", func() {
 			// Check the /metrics endpoint
-			resp, err := http.Get(metricsURL)
+			resp, err := http.Get(GetMetricsURL())
 			Expect(err).NotTo(HaveOccurred())
 			defer resp.Body.Close()
 
@@ -88,7 +87,7 @@ benthos: []
 
 		It("should have the golden service up and expose metrics", func() {
 			// Check /metrics
-			resp, err := http.Get(metricsURL)
+			resp, err := http.Get(GetMetricsURL())
 			Expect(err).NotTo(HaveOccurred())
 			defer resp.Body.Close()
 
@@ -131,7 +130,7 @@ benthos: []
 
 		It("should have both services active and expose healthy metrics", func() {
 			By("Verifying the metrics endpoint contains expected metrics")
-			resp, err := http.Get(metricsURL)
+			resp, err := http.Get(GetMetricsURL())
 			Expect(err).NotTo(HaveOccurred())
 			defer resp.Body.Close()
 
@@ -155,12 +154,17 @@ benthos: []
 
 				// Print the latest YAML config
 				fmt.Println("\nLatest YAML config at time of failure:")
-				config, err := os.ReadFile("data/config.yaml")
+				configPath := getConfigFilePath()
+				config, err := os.ReadFile(configPath)
 				if err != nil {
-					fmt.Printf("Failed to read config file: %v\n", err)
+					fmt.Printf("Failed to read config file %s: %v\n", configPath, err)
 				} else {
 					fmt.Println(string(config))
 				}
+
+				// Save logs for debugging
+				containerNameInError := getContainerName()
+				fmt.Printf("\nTest failed. Container name: %s\n", containerNameInError)
 			}
 		})
 
@@ -183,7 +187,7 @@ benthos: []
 			// Build configuration with the golden service first
 			builder := NewBuilder().AddGoldenService()
 			cfg := builder.BuildYAML()
-			Expect(writeConfigFile(cfg)).To(Succeed())
+			Expect(writeConfigFile(cfg, getContainerName())).To(Succeed())
 
 			By("Waiting for the golden service to become responsive")
 			Eventually(func() int {
@@ -198,7 +202,7 @@ benthos: []
 				builder.AddSleepService(serviceName, "600")
 				cfg = builder.BuildYAML()
 				GinkgoWriter.Printf("Added service %s\n", serviceName)
-				Expect(writeConfigFile(cfg)).To(Succeed())
+				Expect(writeConfigFile(cfg, getContainerName())).To(Succeed())
 			}
 
 			By("Simulating random stop/start actions on sleep services (chaos monkey)")
@@ -219,7 +223,7 @@ benthos: []
 				}
 				GinkgoWriter.Printf("Chaos monkey: %sing service %s\n", action, randomServiceName)
 				// Apply the updated configuration
-				Expect(writeConfigFile(builder.BuildYAML())).To(Succeed())
+				Expect(writeConfigFile(builder.BuildYAML(), getContainerName())).To(Succeed())
 
 				// Random delay between operations
 				delay := time.Duration(100+r.Intn(500)) * time.Millisecond
@@ -284,7 +288,7 @@ benthos: []
 
 			// Add golden service as constant baseline
 			builder := NewBuilder().AddGoldenService()
-			Expect(writeConfigFile(builder.BuildYAML())).To(Succeed())
+			Expect(writeConfigFile(builder.BuildYAML(), getContainerName())).To(Succeed())
 
 			// Wait for golden service to be ready
 			Eventually(func() int {
@@ -336,7 +340,7 @@ benthos: []
 				}
 
 				// Apply changes
-				Expect(writeConfigFile(builder.BuildYAML())).To(Succeed())
+				Expect(writeConfigFile(builder.BuildYAML(), getContainerName())).To(Succeed())
 
 				// Check health
 				monitorHealth()
@@ -500,7 +504,7 @@ benthos: []
 
 				// Apply changes
 				cfg := builder.BuildYAML()
-				Expect(writeConfigFile(cfg)).To(Succeed())
+				Expect(writeConfigFile(cfg, getContainerName())).To(Succeed())
 
 				// Logging every 5 operations to show current state
 				if actionCount%5 == 0 {
@@ -552,12 +556,17 @@ benthos: []
 
 				// Print the latest YAML config
 				fmt.Println("\nLatest YAML config at time of failure:")
-				config, err := os.ReadFile("data/config.yaml")
+				configPath := getConfigFilePath()
+				config, err := os.ReadFile(configPath)
 				if err != nil {
-					fmt.Printf("Failed to read config file: %v\n", err)
+					fmt.Printf("Failed to read config file %s: %v\n", configPath, err)
 				} else {
 					fmt.Println(string(config))
 				}
+
+				// Save logs for debugging
+				containerNameInError := getContainerName()
+				fmt.Printf("\nTest failed. Container name: %s\n", containerNameInError)
 			}
 		})
 
@@ -580,7 +589,7 @@ benthos: []
 			builder := NewBenthosBuilder()
 			builder.AddGoldenBenthos()
 			cfg := builder.BuildYAML()
-			Expect(writeConfigFile(cfg)).To(Succeed())
+			Expect(writeConfigFile(cfg, getContainerName())).To(Succeed())
 
 			By("Waiting for the golden service to become responsive")
 			Eventually(func() int {
@@ -595,7 +604,7 @@ benthos: []
 				builder.AddGeneratorBenthos(serviceName, fmt.Sprintf("%ds", 1+i%3)) // Varying intervals
 				cfg = builder.BuildYAML()
 				GinkgoWriter.Printf("Added benthos service %s\n", serviceName)
-				Expect(writeConfigFile(cfg)).To(Succeed())
+				Expect(writeConfigFile(cfg, getContainerName())).To(Succeed())
 
 				// Allow time for service to start before adding the next one
 				time.Sleep(1 * time.Second)
@@ -628,7 +637,7 @@ benthos: []
 				}
 
 				// Apply the updated configuration
-				Expect(writeConfigFile(builder.BuildYAML())).To(Succeed())
+				Expect(writeConfigFile(builder.BuildYAML(), getContainerName())).To(Succeed())
 
 				// Random delay between operations
 				delay := time.Duration(1000+r.Intn(2000)) * time.Millisecond

@@ -12,19 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build test
-// +build test
+package s6serviceconfig
 
-package s6_test
+import "reflect"
 
-import (
-	"testing"
+// S6ServiceConfig contains configuration for creating a service
+type S6ServiceConfig struct {
+	Command     []string          `yaml:"command"`
+	Env         map[string]string `yaml:"env"`
+	ConfigFiles map[string]string `yaml:"configFiles"`
+	MemoryLimit int64             `yaml:"memoryLimit"` // 0 means no memory limit, see also https://skarnet.org/software/s6/s6-softlimit.html
+}
 
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
-)
-
-func TestS6(t *testing.T) {
-	RegisterFailHandler(Fail)
-	RunSpecs(t, "S6 Test Suite")
+// Equal checks if two S6ServiceConfigs are equal
+func (c S6ServiceConfig) Equal(other S6ServiceConfig) bool {
+	return reflect.DeepEqual(c, other)
 }

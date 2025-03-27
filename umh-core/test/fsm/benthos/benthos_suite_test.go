@@ -15,7 +15,7 @@
 //go:build test
 // +build test
 
-package s6_test
+package benthos_test
 
 import (
 	"testing"
@@ -24,7 +24,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-func TestS6(t *testing.T) {
+func TestBenthos(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "S6 Test Suite")
+	RunSpecs(t, "Benthos Test Suite")
 }

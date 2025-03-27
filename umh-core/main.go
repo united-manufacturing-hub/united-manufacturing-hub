@@ -21,7 +21,6 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/control"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"go.uber.org/zap"
@@ -53,9 +52,7 @@ func main() {
 
 	// Start the control loop
 	controlLoop := control.NewControlLoop()
-	systemSnapshot := fsm.SystemSnapshot{}
-	go SystemSnapshotLogger(ctx, controlLoop, &systemSnapshot)
-
+	go SystemSnapshotLogger(ctx, controlLoop)
 	controlLoop.Execute(ctx)
 
 	log.Info("umh-core test completed")
@@ -63,7 +60,7 @@ func main() {
 
 // SystemSnapshotLogger logs the system snapshot every 5 seconds
 // It is an example on how to access the system snapshot and log it for communication with other components
-func SystemSnapshotLogger(ctx context.Context, controlLoop *control.ControlLoop, state *fsm.SystemSnapshot) {
+func SystemSnapshotLogger(ctx context.Context, controlLoop *control.ControlLoop) {
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 

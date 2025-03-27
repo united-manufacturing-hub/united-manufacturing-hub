@@ -21,7 +21,7 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 )
@@ -57,7 +57,7 @@ func (s *S6Instance) initiateS6Create(ctx context.Context) error {
 		}
 	} else {
 		// Simple creation with no configuration, useful for testing
-		err := s.service.Create(ctx, s.servicePath, config.S6ServiceConfig{})
+		err := s.service.Create(ctx, s.servicePath, s6serviceconfig.S6ServiceConfig{})
 		if err != nil {
 			return fmt.Errorf("failed to create service directory for %s: %w", s.baseFSMInstance.GetID(), err)
 		}
@@ -249,7 +249,7 @@ func (s *S6Instance) GetExitHistory() []s6service.ExitEvent {
 }
 
 // logConfigDifferences logs the specific differences between desired and observed configurations
-func (s *S6Instance) logConfigDifferences(desired, observed config.S6ServiceConfig) {
+func (s *S6Instance) logConfigDifferences(desired, observed s6serviceconfig.S6ServiceConfig) {
 	s.baseFSMInstance.GetLogger().Infof("Configuration differences for %s:", s.baseFSMInstance.GetID())
 
 	// Command differences

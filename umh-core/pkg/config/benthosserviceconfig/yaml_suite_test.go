@@ -12,10 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build test
-// +build test
-
-package s6_test
+package benthosserviceconfig
 
 import (
 	"testing"
@@ -24,7 +21,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-func TestS6(t *testing.T) {
+func TestYAML(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "S6 Test Suite")
+	RunSpecs(t, "Benthos YAML Suite")
 }
