@@ -16,7 +16,7 @@ package redpanda
 
 import (
 	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	redpandaserviceconfig "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/redpandaserviceconfig"
 	publicfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 
 	redpandasvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda"
@@ -116,7 +116,7 @@ type RedpandaObservedState struct {
 	ServiceInfo redpandasvc.ServiceInfo
 
 	// ObservedRedpandaServiceConfig contains the observed Redpanda service config
-	ObservedRedpandaServiceConfig config.RedpandaServiceConfig
+	ObservedRedpandaServiceConfig redpandaserviceconfig.RedpandaServiceConfig
 }
 
 // IsObservedState implements the ObservedState interface
@@ -142,7 +142,7 @@ type RedpandaInstance struct {
 	service redpandasvc.IRedpandaService
 
 	// config contains all the configuration for this service
-	config config.RedpandaServiceConfig
+	config redpandaserviceconfig.RedpandaServiceConfig
 }
 
 // GetLastObservedState returns the last known state of the instance
@@ -158,6 +158,6 @@ func (b *RedpandaInstance) SetService(service redpandasvc.IRedpandaService) {
 
 // GetConfig returns the RedpandaServiceConfig of the instance
 // This is a testing-only utility to access the private field
-func (b *RedpandaInstance) GetConfig() config.RedpandaServiceConfig {
+func (b *RedpandaInstance) GetConfig() redpandaserviceconfig.RedpandaServiceConfig {
 	return b.config
 }

@@ -14,8 +14,18 @@
 
 package constants
 
+import "time"
+
 const (
 	RedpandaConfigFileName = "redpanda.yaml"
 	RedpandaServiceName    = "redpanda"
 	RedpandaVersion        = "24.3.8"
+)
+
+const (
+	RedpandaUpdateObservedStateTimeout = 5 * time.Millisecond
+)
+
+const (
+	RedpandaLogWindow = 10 * time.Minute
 )

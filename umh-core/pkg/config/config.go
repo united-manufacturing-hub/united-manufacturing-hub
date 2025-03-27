@@ -18,6 +18,7 @@ import (
 	"reflect"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/redpandaserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
 
 	"github.com/tiendc/go-deepcopy"
@@ -101,7 +102,7 @@ type RedpandaConfig struct {
 	FSMInstanceConfig `yaml:",inline"`
 
 	// For the Redpanda service
-	RedpandaServiceConfig RedpandaServiceConfig `yaml:"redpandaServiceConfig"`
+	RedpandaServiceConfig redpandaserviceconfig.RedpandaServiceConfig `yaml:"redpandaServiceConfig"`
 }
 
 type RedpandaServiceConfig struct {
