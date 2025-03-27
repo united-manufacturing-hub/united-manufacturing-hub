@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	"go.uber.org/zap"
 )
 
@@ -132,7 +133,7 @@ func (m *BackoffManager) SetError(err error, currentTick uint64) bool {
 
 	// Check if we've reached permanent failure (backoff.Stop)
 	if next == backoff.Stop {
-		m.logger.Errorf("Backoff manager has exceeded maximum retries, marking as permanently failed")
+		sentry.ReportIssuef(sentry.IssueTypeError, m.logger, "Backoff manager has exceeded maximum retries, marking as permanently failed")
 		m.permanentFailure = true
 		m.suspendedUntilTick = 0 // Clear suspension tick
 		return true

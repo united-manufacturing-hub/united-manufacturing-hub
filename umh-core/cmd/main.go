@@ -42,13 +42,19 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/shared/models"
 	"go.uber.org/zap"
 )
 
+var appVersion string // set by the build system
+
 func main() {
 	// Initialize the global logger first thing
 	logger.Initialize()
+
+	// Initialize Sentry
+	sentry.InitSentry(appVersion)
 
 	// Get a logger for the main component
 	log := logger.For(logger.ComponentCore)
@@ -63,7 +69,7 @@ func main() {
 	configManager := config.NewFileConfigManager()
 	config, err := configManager.GetConfig(ctx, 0)
 	if err != nil {
-		log.Fatalf("Failed to load config: %s", err)
+		sentry.ReportIssuef(sentry.IssueTypeFatal, log, "Failed to load config: %s", err)
 	}
 
 	// Start the metrics server
@@ -73,7 +79,7 @@ func main() {
 		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer shutdownCancel()
 		if err := server.Shutdown(shutdownCtx); err != nil {
-			log.Errorf("Failed to shutdown metrics server: %s", err)
+			sentry.ReportIssuef(sentry.IssueTypeError, log, "Failed to shutdown metrics server: %s", err)
 		}
 	}()
 
@@ -118,7 +124,7 @@ func SystemSnapshotLogger(ctx context.Context, controlLoop *control.ControlLoop,
 				*systemSnapshot = *snapshot
 			}
 			if snapshot == nil {
-				logger.Warn("No system snapshot available")
+				sentry.ReportIssuef(sentry.IssueTypeWarning, logger, "No system snapshot available")
 				continue
 			}
 

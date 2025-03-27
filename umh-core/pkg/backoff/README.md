@@ -40,13 +40,13 @@ func DoSomething() error {
         // Record error and check if we're permanently failed
         isPermanent := manager.SetError(err)
         if isPermanent {
-            log.Error("Component has reached permanent failure state")
+            sentry.ReportIssuef(sentry.IssueTypeError, log, "Component has reached permanent failure state")
         }
-        
+
         // Get a properly formatted backoff error to return
         return manager.GetBackoffError()
     }
-    
+
     // Success! Reset backoff state
     manager.Reset()
     return nil
@@ -62,7 +62,7 @@ func TryOperation() error {
         // Get appropriate backoff error
         return manager.GetBackoffError()
     }
-    
+
     // Proceed with operation...
     // ...
 }
@@ -79,10 +79,10 @@ if err != nil {
         log.Info("Operation temporarily suspended, will retry later")
         return nil
     }
-    
+
     if backoff.IsPermanentFailureError(err) {
         // Handle permanent failure (e.g., alert and abort)
-        log.Fatal("Operation permanently failed, system needs intervention")
+        sentry.ReportIssuef(sentry.IssueTypeFatal, log, "Operation permanently failed, system needs intervention")
         return err
     }
 
@@ -98,4 +98,4 @@ This package enables a consistent error escalation pattern:
 2. **Permanent failures**: After max retries, a component signals it can't recover on its own
 3. **Parent components**: Can detect permanent failures and take recovery actions (restart, notify, etc.)
 
-This provides graceful degradation while avoiding error spam during temporary issues. 
+This provides graceful degradation while avoiding error spam during temporary issues.
