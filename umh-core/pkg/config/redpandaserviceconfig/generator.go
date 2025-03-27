@@ -40,16 +40,11 @@ func (g *Generator) RenderConfig(cfg RedpandaServiceConfig) (string, error) {
 
 	// Render the template
 	var rendered bytes.Buffer
-	if err := g.tmpl.Execute(&rendered, templateData{dataDirectory: cfg.DataDirectory}); err != nil {
+	if err := g.tmpl.Execute(&rendered, cfg); err != nil {
 		return "", fmt.Errorf("failed to execute template: %w", err)
 	}
 
 	return rendered.String(), nil
-}
-
-// templateData represents the data structure expected by the simplified Redpanda YAML template
-type templateData struct {
-	dataDirectory string
 }
 
 // simplifiedTemplate is a much simpler template that just places pre-rendered YAML blocks
@@ -58,7 +53,7 @@ var simplifiedTemplate = `# Redpanda configuration file
 redpanda:
   # Data directory where all the files will be stored.
   # This directory MUST reside on an ext4 or xfs partition.
-  data_directory: {{.dataDirectory}}
+  data_directory: {{.DataDirectory}}
 
   # The initial cluster nodes addresses
   seed_servers: []
@@ -123,5 +118,5 @@ rpk:
   enable_memory_locking: false
   tune_coredump: false
 
-  coredump_dir: {{.dataDirectory}}/coredump
+  coredump_dir: {{.DataDirectory}}/coredump
 `
