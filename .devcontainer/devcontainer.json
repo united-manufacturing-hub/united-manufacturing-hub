@@ -52,7 +52,6 @@
         "HOME": "/home/vscode"
     },
     "mounts": [
-        "source=profile,target=/home/vscode,type=volume",
-        "target=/root/.vscode-server,type=volume"
+        "source=profile,target=/home/vscode,type=volume"
     ]
 }
