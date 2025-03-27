@@ -17,7 +17,7 @@ agent:
 
 redpanda:
   name: redpanda
-  desiredState: running
+  desiredState: active
   redpandaServiceConfig:
     # Data directory where the redpanda state is stored
     dataDirectory: "/data/redpanda"
