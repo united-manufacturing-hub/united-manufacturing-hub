@@ -34,8 +34,8 @@ ARG REDPANDA_VERSION=24.3.8
 ARG TARGETARCH=amd64
 
 # s6-overlay noarch
-ADD https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/s6-overlay-noarch.tar.xz /tmp/
-RUN tar -C / -Jxpf /tmp/s6-overlay-noarch.tar.xz && rm /tmp/s6-overlay-noarch.tar.xz
+RUN wget -O /tmp/s6-overlay-noarch.tar.xz "https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/s6-overlay-noarch.tar.xz" && \
+    tar -C / -Jxpf /tmp/s6-overlay-noarch.tar.xz && rm /tmp/s6-overlay-noarch.tar.xz
 
 # s6-overlay arch-specific
 RUN case "${TARGETARCH}" in \
@@ -47,8 +47,8 @@ RUN case "${TARGETARCH}" in \
     tar -C / -Jxpf /tmp/s6-overlay-arch.tar.xz && rm /tmp/s6-overlay-arch.tar.xz
 
 # syslogd overlay
-ADD https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/syslogd-overlay-noarch.tar.xz /tmp/
-RUN tar -C / -Jxpf /tmp/syslogd-overlay-noarch.tar.xz && rm /tmp/syslogd-overlay-noarch.tar.xz
+RUN wget -O /tmp/syslogd-overlay-noarch.tar.xz "https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/syslogd-overlay-noarch.tar.xz" && \
+    tar -C / -Jxpf /tmp/syslogd-overlay-noarch.tar.xz && rm /tmp/syslogd-overlay-noarch.tar.xz
 
 # Benthos installation
 RUN case "${TARGETARCH}" in \
@@ -56,7 +56,7 @@ RUN case "${TARGETARCH}" in \
     "arm64") BENTHOS_ARCH="arm64" ;; \
     *) echo "Unsupported architecture: ${TARGETARCH}" && exit 1 ;; \
     esac && \
-    curl -sSL -o /usr/local/bin/benthos "https://github.com/united-manufacturing-hub/benthos-umh/releases/download/v${BENTHOS_UMH_VERSION}/benthos-linux-${BENTHOS_ARCH}" && \
+    wget -O /usr/local/bin/benthos "https://github.com/united-manufacturing-hub/benthos-umh/releases/download/v${BENTHOS_UMH_VERSION}/benthos-linux-${BENTHOS_ARCH}" && \
     chmod +x /usr/local/bin/benthos
 
 # Redpanda installation
@@ -66,7 +66,7 @@ RUN case "${TARGETARCH}" in \
     *) echo "Unsupported architecture: ${TARGETARCH}" && exit 1 ;; \
     esac && \
     mkdir -p /tmp/redpanda /opt/redpanda && \
-    curl -sSL -o /tmp/redpanda/redpanda.tar.gz "https://dl.redpanda.com/nzc4ZYQK3WRGd9sy/redpanda/raw/names/redpanda-${REDPANDA_ARCH}/versions/${REDPANDA_VERSION}/redpanda-${REDPANDA_VERSION}-${REDPANDA_ARCH}.tar.gz" && \
+    wget -O /tmp/redpanda/redpanda.tar.gz "https://dl.redpanda.com/nzc4ZYQK3WRGd9sy/redpanda/raw/names/redpanda-${REDPANDA_ARCH}/versions/${REDPANDA_VERSION}/redpanda-${REDPANDA_VERSION}-${REDPANDA_ARCH}.tar.gz" && \
     tar -xzf /tmp/redpanda/redpanda.tar.gz -C /opt/redpanda && rm /tmp/redpanda/redpanda.tar.gz && \
     mkdir -p /data/redpanda /data/redpanda/coredump && \
     chmod +x /opt/redpanda/bin/redpanda
