@@ -96,7 +96,6 @@ func (r *Router) router() {
 			}
 		case <-ticker.C:
 			r.dog.ReportHeartbeatStatus(watcherUUID, watchdog.HEARTBEAT_STATUS_OK)
-			zap.S().Infof("Router heartbeat ok")
 		}
 	}
 }

@@ -54,14 +54,29 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 	state := s.state
 	s.stateMu.RUnlock()
 
+	// Save the state in a map
+	managersMap := make(map[string]map[string]fsm.FSMInstanceSnapshot)
+	if state != nil {
+		for managerName, manager := range state.Managers {
+			instancesMap := make(map[string]fsm.FSMInstanceSnapshot)
+			instances := manager.GetInstances()
+
+			for instanceName, instance := range instances {
+				instancesMap[instanceName] = instance
+			}
+
+			managersMap[managerName] = instancesMap
+		}
+	}
+
 	// Create a mocked status message
 	statusMessage := &models.StatusMessage{
 		Core: models.Core{
 			Agent: models.Agent{
 				Health: &models.Health{
 					Message:       fmt.Sprintf("Agent is healthy, tick: %d", state.Tick),
-					ObservedState: "running",
-					DesiredState:  "running",
+					ObservedState: managersMap["BenthosManagerCore"]["hello-world"].CurrentState,
+					DesiredState:  managersMap["BenthosManagerCore"]["hello-world"].DesiredState,
 					Category:      models.Active,
 				},
 				Latency: &models.Latency{
