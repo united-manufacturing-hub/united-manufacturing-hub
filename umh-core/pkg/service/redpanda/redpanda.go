@@ -19,6 +19,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"path/filepath"
 	"strings"
@@ -30,6 +31,8 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	"go.uber.org/zap"
 	"gopkg.in/yaml.v3"
 
@@ -48,7 +51,7 @@ type IRedpandaService interface {
 	// Status checks the status of a Redpanda service
 	Status(ctx context.Context, tick uint64) (ServiceInfo, error)
 	// AddRedpandaToS6Manager adds a Redpanda instance to the S6 manager
-	AddRedpandaToS6Manager(ctx context.Context, cfg *redpandaserviceconfig.RedpandaServiceConfig, redpandaName string) error
+	AddRedpandaToS6Manager(ctx context.Context, cfg *redpandaserviceconfig.RedpandaServiceConfig) error
 	// UpdateRedpandaInS6Manager updates an existing Redpanda instance in the S6 manager
 	UpdateRedpandaInS6Manager(ctx context.Context, cfg *redpandaserviceconfig.RedpandaServiceConfig) error
 	// RemoveRedpandaFromS6Manager removes a Redpanda instance from the S6 manager
@@ -352,7 +355,7 @@ func (s *RedpandaService) Status(ctx context.Context, tick uint64) (ServiceInfo,
 	}
 
 	// Let's get the health check of the Benthos service
-	redpandaStatus, err := s.GetHealthCheckAndMetrics(ctx, constants.RedpandaServiceName, tick)
+	redpandaStatus, err := s.GetHealthCheckAndMetrics(ctx, tick)
 	if err != nil {
 		if strings.Contains(err.Error(), "connection refused") {
 			return ServiceInfo{
@@ -421,4 +424,390 @@ func parseMetrics(data []byte) (Metrics, error) {
 		return ""
 	}
 
+	// Process each metric family
+	for name, family := range mf {
+		switch {
+		// Infrastructure metrics
+		case name == "redpanda_storage_disk_free_bytes":
+			if len(family.Metric) > 0 {
+				metrics.Infrastructure.Storage.FreeBytes = int64(getValue(family.Metric[0]))
+			}
+		case name == "redpanda_storage_disk_total_bytes":
+			if len(family.Metric) > 0 {
+				metrics.Infrastructure.Storage.TotalBytes = int64(getValue(family.Metric[0]))
+			}
+		case name == "redpanda_storage_disk_free_space_alert":
+			if len(family.Metric) > 0 {
+				metrics.Infrastructure.Storage.FreeSpaceAlert = getValue(family.Metric[0]) == 0
+			}
+		case name == "redpanda_uptime_seconds_total":
+			if len(family.Metric) > 0 {
+				metrics.Infrastructure.Uptime.Uptime = int64(getValue(family.Metric[0]))
+			}
+		case name == "redpanda_cluster_topics":
+			if len(family.Metric) > 0 {
+				metrics.Cluster.Topics = int64(getValue(family.Metric[0]))
+			}
+		case name == "redpanda_cluster_unavailable_partitions":
+			if len(family.Metric) > 0 {
+				metrics.Cluster.UnavailableTopics = int64(getValue(family.Metric[0]))
+			}
+		case name == "redpanda_kafka_request_bytes_total":
+			// Based on the label redpanda_request, we can determine if it's bytes in or bytes out
+			// We need to check the label value for that
+			for _, metric := range family.Metric {
+				label := getLabel(metric, "redpanda_request")
+				if label == "produce" {
+					metrics.Throughput.BytesIn = int64(getValue(metric))
+				} else if label == "consume" {
+					metrics.Throughput.BytesOut = int64(getValue(metric))
+				}
+			}
+
+		}
+	}
+
+	return metrics, nil
+}
+
+// GetHealthCheckAndMetrics returns the health check and metrics of a Redpanda service
+func (s *RedpandaService) GetHealthCheckAndMetrics(ctx context.Context, tick uint64) (RedpandaStatus, error) {
+	start := time.Now()
+	defer func() {
+		metrics.ObserveReconcileTime(logger.ComponentRedpandaService, constants.RedpandaServiceName, time.Since(start))
+	}()
+
+	if ctx.Err() != nil {
+		return RedpandaStatus{}, ctx.Err()
+	}
+
+	// Skip health checks and metrics if the service doesn't exist yet
+	// This avoids unnecessary errors in Status() when the service is still being created
+	if _, exists := s.s6Manager.GetInstance(constants.RedpandaServiceName); !exists {
+		return RedpandaStatus{
+			HealthCheck: HealthCheck{
+				IsLive:  false,
+				IsReady: false,
+			},
+			Metrics: Metrics{},
+			Logs:    []s6service.LogEntry{},
+		}, nil
+	}
+
+	baseURL := "http://localhost:9644/"
+	metricsEndpoint := "public_metrics"
+	livenessEndpoint := "ping"
+	readinessEndpoint := "ready"
+
+	// Helper function to make HTTP requests with context
+	doRequest := func(endpoint string) (*http.Response, error) {
+		start := time.Now()
+
+		defer func() {
+			s.logger.Debugf("Request for %s took %s", endpoint, time.Since(start))
+		}()
+
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, baseURL+endpoint, nil)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create request for %s: %w", endpoint, err)
+		}
+		resp, err := s.httpClient.Do(req)
+		if err != nil {
+			return nil, fmt.Errorf("failed to execute request for %s: %w", endpoint, err)
+		}
+		return resp, nil
+	}
+
+	var healthCheck HealthCheck
+
+	// Check liveness
+	if resp, err := doRequest(livenessEndpoint); err == nil && resp != nil {
+		healthCheck.IsLive = resp.StatusCode == http.StatusOK
+		resp.Body.Close()
+	} else {
+		return RedpandaStatus{}, fmt.Errorf("failed to check liveness: %w", err)
+	}
+
+	// Check readiness
+	if resp, err := doRequest(readinessEndpoint); err == nil && resp != nil {
+		defer resp.Body.Close()
+
+		// Even if status is 503, we still want to read the body to get the detailed status
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return RedpandaStatus{}, fmt.Errorf("failed to read ready response body: %w", err)
+		}
+
+		// Service is ready if status is 200 and there's no error
+		healthCheck.IsReady = resp.StatusCode == http.StatusOK
+
+		// Log detailed status if not ready
+		if !healthCheck.IsReady {
+			s.logger.Debugw("Service not ready",
+				"service", constants.RedpandaServiceName,
+				"error", string(body))
+		}
+	} else {
+		return RedpandaStatus{}, fmt.Errorf("failed to check readiness: %w", err)
+	}
+
+	// Get version
+	healthCheck.Version = constants.RedpandaVersion
+
+	var metrics Metrics
+
+	// Get metrics
+	if resp, err := doRequest(metricsEndpoint); err == nil && resp != nil {
+		defer resp.Body.Close()
+
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return RedpandaStatus{}, fmt.Errorf("failed to read metrics response body: %w", err)
+		}
+
+		metrics, err = parseMetrics(body)
+		if err != nil {
+			return RedpandaStatus{}, fmt.Errorf("failed to parse metrics: %w", err)
+		}
+	}
+
+	// Update the metrics state
+	if s.metricsState == nil {
+		return RedpandaStatus{}, fmt.Errorf("metrics state not initialized")
+	}
+
+	s.metricsState.UpdateFromMetrics(metrics, tick)
+
+	return RedpandaStatus{
+		HealthCheck:  healthCheck,
+		Metrics:      metrics,
+		MetricsState: s.metricsState,
+	}, nil
+}
+
+// AddRedpandaToS6Manager adds a Redpanda instance to the S6 manager
+func (s *RedpandaService) AddRedpandaToS6Manager(ctx context.Context, cfg *redpandaserviceconfig.RedpandaServiceConfig) error {
+	if s.s6Manager == nil {
+		return errors.New("s6 manager not initialized")
+	}
+
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+
+	s6ServiceName := constants.RedpandaServiceName
+
+	// Check whether s6ServiceConfigs already contains an entry for this instance
+	for _, s6Config := range s.s6ServiceConfigs {
+		if s6Config.Name == s6ServiceName {
+			return ErrServiceAlreadyExists
+		}
+	}
+
+	// Generate the S6 config for this instance
+	s6Config, err := s.GenerateS6ConfigForRedpanda(cfg)
+	if err != nil {
+		return fmt.Errorf("failed to generate S6 config for Redpanda service %s: %w", s6ServiceName, err)
+	}
+
+	// Create the S6 FSM config for this instance
+	s6FSMConfig := config.S6FSMConfig{
+		FSMInstanceConfig: config.FSMInstanceConfig{
+			Name:            s6ServiceName,
+			DesiredFSMState: s6fsm.OperationalStateRunning,
+		},
+		S6ServiceConfig: s6Config,
+	}
+
+	// Add the S6 FSM config to the list of S6 FSM configs
+	s.s6ServiceConfigs = append(s.s6ServiceConfigs, s6FSMConfig)
+
+	return nil
+}
+
+// UpdateRedpandaInS6Manager updates an existing Redpanda instance in the S6 manager
+func (s *RedpandaService) UpdateRedpandaInS6Manager(ctx context.Context, cfg *redpandaserviceconfig.RedpandaServiceConfig) error {
+	if s.s6Manager == nil {
+		return errors.New("s6 manager not initialized")
+	}
+
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+
+	s6ServiceName := constants.RedpandaServiceName
+
+	// Check if the service exists
+	found := false
+	index := -1
+	for i, s6Config := range s.s6ServiceConfigs {
+		if s6Config.Name == s6ServiceName {
+			found = true
+			index = i
+			break
+		}
+	}
+
+	if !found {
+		return ErrServiceNotExist
+	}
+
+	// Generate the new S6 config for this instance
+	s6Config, err := s.GenerateS6ConfigForRedpanda(cfg)
+	if err != nil {
+		return fmt.Errorf("failed to generate S6 config for Redpanda service %s: %w", s6ServiceName, err)
+	}
+
+	// Update the S6 FSM config for this instance
+	s.s6ServiceConfigs[index].S6ServiceConfig = s6Config
+
+	return nil
+}
+
+// RemoveRedpandaFromS6Manager removes a Redpanda instance from the S6 manager
+func (s *RedpandaService) RemoveRedpandaFromS6Manager(ctx context.Context) error {
+	if s.s6Manager == nil {
+		return errors.New("s6 manager not initialized")
+	}
+
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+
+	s6ServiceName := constants.RedpandaServiceName
+
+	found := false
+
+	// Remove the S6 FSM config from the list of S6 FSM configs
+	// so that the S6 manager will stop the service
+	// The S6 manager itself will handle a graceful shutdown of the udnerlying S6 service
+	for i, s6Config := range s.s6ServiceConfigs {
+		if s6Config.Name == s6ServiceName {
+			s.s6ServiceConfigs = append(s.s6ServiceConfigs[:i], s.s6ServiceConfigs[i+1:]...)
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		return ErrServiceNotExist
+	}
+
+	return nil
+}
+
+// StartRedpanda starts a Redpanda instance
+func (s *RedpandaService) StartRedpanda(ctx context.Context) error {
+	if s.s6Manager == nil {
+		return errors.New("s6 manager not initialized")
+	}
+
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+
+	s6ServiceName := constants.RedpandaServiceName
+
+	found := false
+
+	// Set the desired state to running for the given instance
+	for i, s6Config := range s.s6ServiceConfigs {
+		if s6Config.Name == s6ServiceName {
+			s.s6ServiceConfigs[i].DesiredFSMState = s6fsm.OperationalStateRunning
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		return ErrServiceNotExist
+	}
+
+	return nil
+}
+
+// StopRedpanda stops a Redpanda instance
+func (s *RedpandaService) StopRedpanda(ctx context.Context) error {
+	if s.s6Manager == nil {
+		return errors.New("s6 manager not initialized")
+	}
+
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+
+	s6ServiceName := constants.RedpandaServiceName
+
+	found := false
+
+	// Set the desired state to stopped for the given instance
+	for i, s6Config := range s.s6ServiceConfigs {
+		if s6Config.Name == s6ServiceName {
+			s.s6ServiceConfigs[i].DesiredFSMState = s6fsm.OperationalStateStopped
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		return ErrServiceNotExist
+	}
+
+	return nil
+}
+
+// ReconcileManager reconciles the Redpanda manager
+func (s *RedpandaService) ReconcileManager(ctx context.Context, tick uint64) (err error, reconciled bool) {
+	if s.s6Manager == nil {
+		return errors.New("s6 manager not initialized"), false
+	}
+
+	if ctx.Err() != nil {
+		return ctx.Err(), false
+	}
+
+	return s.s6Manager.Reconcile(ctx, config.FullConfig{Services: s.s6ServiceConfigs}, tick)
+}
+
+// IsLogsFine analyzes Redpanda logs to determine if there are any critical issues
+func (s *RedpandaService) IsLogsFine(logs []s6service.LogEntry, currentTime time.Time, logWindow time.Duration) bool {
+	// TODO: Implement this
+	return true
+}
+
+// IsMetricsErrorFree checks if the metrics of a Redpanda service are error-free
+func (s *RedpandaService) IsMetricsErrorFree(metrics Metrics) bool {
+	// Check output errors
+	if metrics.Infrastructure.Storage.FreeSpaceAlert {
+		return false
+	}
+	// TODO: Extend this later
+
+	return true
+}
+
+// HasProcessingActivity checks if a Redpanda service has processing activity
+func (s *RedpandaService) HasProcessingActivity(status RedpandaStatus) bool {
+	return status.MetricsState.IsActive
+}
+
+// ServiceExists checks if a Redpanda service exists
+func (s *RedpandaService) ServiceExists(ctx context.Context) bool {
+	s6ServiceName := constants.RedpandaServiceName
+	s6ServicePath := filepath.Join(constants.S6BaseDir, s6ServiceName)
+
+	exists, err := s.s6Service.ServiceExists(ctx, s6ServicePath)
+	if err != nil {
+		sentry.ReportIssuef(sentry.IssueTypeError, s.logger, "Error checking if service exists for %s: %v", s6ServiceName, err)
+		return false
+	}
+
+	return exists
+}
+
+// ForceRemoveRedpanda removes a Redpanda instance from the S6 manager
+// This should only be called if the Benthos instance is in a permanent failure state
+// and the instance itself cannot be stopped or removed
+func (s *RedpandaService) ForceRemoveRedpanda(ctx context.Context) error {
+	return s.s6Service.ForceRemove(ctx, constants.RedpandaServiceName)
 }

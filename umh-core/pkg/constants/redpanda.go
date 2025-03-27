@@ -17,4 +17,5 @@ package constants
 const (
 	RedpandaConfigFileName = "redpanda.yaml"
 	RedpandaServiceName    = "redpanda"
+	RedpandaVersion        = "24.3.8"
 )

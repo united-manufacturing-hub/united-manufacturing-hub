@@ -20,8 +20,8 @@ type ComponentThroughput struct {
 	LastTick uint64
 	// LastCount is the last message count seen
 	LastCount int64
-	// MessagesPerTick is the number of messages processed per tick (averaged over window)
-	MessagesPerTick float64
+	// BytesPerTick is the number of messages processed per tick (averaged over window)
+	BytesPerTick float64
 	// Window stores the last N message counts for calculating sliding window average
 	Window []MessageCount
 }
@@ -64,11 +64,11 @@ func NewRedpandaMetricsState() *RedpandaMetricsState {
 // UpdateFromMetrics updates the metrics state based on new metrics
 func (s *RedpandaMetricsState) UpdateFromMetrics(metrics Metrics, tick uint64) {
 	// Update component throughput
-	s.updateComponentThroughput(&s.Input, metrics.Input.Received, tick)
-	s.updateComponentThroughput(&s.Output, metrics.Output.Sent, tick)
+	s.updateComponentThroughput(&s.Input, metrics.Throughput.BytesIn, tick)
+	s.updateComponentThroughput(&s.Output, metrics.Throughput.BytesOut, tick)
 
 	// Update activity status based on input throughput
-	s.IsActive = s.Input.MessagesPerTick > 0
+	s.IsActive = s.Input.BytesPerTick > 0
 
 	// Update last tick
 	s.LastTick = tick
@@ -86,7 +86,7 @@ func (s *RedpandaMetricsState) updateComponentThroughput(throughput *ComponentTh
 	if (throughput.LastTick == 0 && throughput.LastCount == 0) || count < throughput.LastCount {
 		throughput.Window = throughput.Window[:0]
 		throughput.LastCount = count
-		throughput.MessagesPerTick = float64(count)
+		throughput.BytesPerTick = float64(count)
 		throughput.Window = append(throughput.Window, MessageCount{Tick: tick, Count: count})
 	} else {
 		// Add new count to window
@@ -105,9 +105,9 @@ func (s *RedpandaMetricsState) updateComponentThroughput(throughput *ComponentTh
 			countDiff := last.Count - first.Count
 
 			if tickDiff > 0 {
-				throughput.MessagesPerTick = float64(countDiff) / float64(tickDiff)
+				throughput.BytesPerTick = float64(countDiff) / float64(tickDiff)
 			} else {
-				throughput.MessagesPerTick = 0
+				throughput.BytesPerTick = 0
 			}
 		}
 
