@@ -128,12 +128,11 @@ type Dfc struct {
 	Connections []Connection `json:"connections,omitempty"` // Connection details based on DFC type
 }
 
-// DfcMetrics contains metrics about a Data Flow Component.
 type DfcMetrics struct {
 	AvgInputThroughputPerMinuteInMsgSec float64 `json:"avgInputThroughputPerMinuteInMsgSec"` // Messages per second, averaged over a minute
 }
 
-// Connection represents a connection to an external system.
+// Connection represents a connection to an external system and only exists within a DFC.
 type Connection struct {
 	Name          string  `json:"name"`
 	UUID          string  `json:"uuid"`
