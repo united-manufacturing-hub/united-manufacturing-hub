@@ -38,11 +38,10 @@ func InitSentry(appVersion string) {
 	}
 
 	err = sentry.Init(sentry.ClientOptions{
-		// management.umh.app is not working anymore, so we use the direct DSN
-		Dsn:           "https://1e1f51c30e576ff39d2445e76dc89da7@o4507265932394496.ingest.de.sentry.io/4509039283798097",
+		Dsn:           "https://abc@staging.management.umh.app/sentry?project=umhcore",
 		Environment:   environment,
 		Release:       "umhcore@" + appVersion,
-		EnableTracing: false, // no need for tracing, it doesnt work anyway
+		EnableTracing: false,
 	})
 	if err != nil {
 		zap.S().Error("Failed to initialize Sentry: %s", err)
