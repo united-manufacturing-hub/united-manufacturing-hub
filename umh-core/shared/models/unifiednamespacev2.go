@@ -1,3 +1,17 @@
+// Copyright 2025 UMH Systems GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package models
 
 import (
@@ -5,7 +19,6 @@ import (
 	"time"
 
 	"github.com/cespare/xxhash/v2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/shared/constants"
 )
 
 type UnsElement interface {
@@ -39,6 +52,20 @@ type Event struct {
 	Kafka EventKafka `json:"kafka"`
 }
 
+type SchemaName string
+
+// Schema definitions
+const (
+	SCHEMA_ERROR_NO_SCHEMA_PRESENT SchemaName = "ERROR_NO_SCHEMA" // Do not add this to the ValidSchemas array
+	SCHEMA_ERROR_NO_ENTERPRISE     SchemaName = "ERROR_NO_ENTERPRISE"
+	SCHEMA_ANALYTICS               SchemaName = "_analytics"
+	SCHEMA_HISTORIAN               SchemaName = "_historian"
+	SCHEMA_LOCAL                   SchemaName = "_local"
+)
+
+// ValidSchemas is an array of strings that represents the valid schemas.
+var ValidSchemas = [...]SchemaName{SCHEMA_HISTORIAN, SCHEMA_ANALYTICS, SCHEMA_LOCAL}
+
 type EventData struct {
 	// The value's type MUST be a string, bool, int (float64 for JSON numbers), or nil
 	Value       interface{} `json:"value"`
@@ -48,8 +75,8 @@ type EventData struct {
 
 // Schema represents the leaf node and contains additional information.
 type Schema struct {
-	Name   constants.SchemaName `json:"name"`
-	Events []Event              `json:"events"`
+	Name   SchemaName `json:"name"`
+	Events []Event    `json:"events"`
 }
 
 // OriginId represents an origin id and contains schemas.

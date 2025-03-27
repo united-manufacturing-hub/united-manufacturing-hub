@@ -1,14 +1,39 @@
+// Copyright 2025 UMH Systems GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package models
 
 import (
 	"github.com/Masterminds/semver/v3"
 	"github.com/google/uuid"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/shared/models/ctypes"
 )
 
 type MessageMetadata struct {
 	TraceID uuid.UUID `json:"traceId"`
 }
+
+// DatasourceConnectionType specifies the type of data source connection.
+type DatasourceConnectionType string
+
+type Protocol string
+
+const (
+	// Deprecated: Use a data flow component instead.
+	BenthosOPCUA Protocol = "benthos_opcua"
+	// Deprecated: Use a data flow component instead.
+	BenthosGeneric Protocol = "benthos_generic"
+)
 
 // UMHMessage is sent between UMH instances and users.
 // UMHInstance contains the UUID of the UMH instance.
@@ -121,18 +146,18 @@ const (
 
 // TestNetworkConnectionPayload contains the necessary fields for executing a TestNetworkConnection action.
 type TestNetworkConnectionPayload struct {
-	IP   string                          `json:"ip" binding:"required"`         // IP address of the target
-	Type ctypes.DatasourceConnectionType `json:"datasource" binding:"required"` // Type of data source connection (e.g., OPC-UA)
-	Port uint32                          `json:"port" binding:"required"`       // Port to connect on
+	IP   string                   `json:"ip" binding:"required"`         // IP address of the target
+	Type DatasourceConnectionType `json:"datasource" binding:"required"` // Type of data source connection (e.g., OPC-UA)
+	Port uint32                   `json:"port" binding:"required"`       // Port to connect on
 }
 
 const (
 	// OpcuaServer represents an OPC-UA server as the data source connection type.
-	OpcuaServer ctypes.DatasourceConnectionType = "opcua-server"
+	OpcuaServer DatasourceConnectionType = "opcua-server"
 	// GenericAsset represents a generic asset as the data source connection type (not tied to a specific protocol).
-	GenericAsset ctypes.DatasourceConnectionType = "generic-asset"
+	GenericAsset DatasourceConnectionType = "generic-asset"
 	// ExternalMQTT represents an external MQTT broker as the data source connection type.
-	ExternalMQTT ctypes.DatasourceConnectionType = "external-mqtt"
+	ExternalMQTT DatasourceConnectionType = "external-mqtt"
 )
 
 // EditMqttBrokerPayload contains the necessary fields for setting the MQTT broker details.
@@ -161,13 +186,13 @@ type GetProtocolConverterPayload struct {
 
 // DeployConnectionPayload contains the necessary fields for executing a DeployConnection action.
 type DeployConnectionPayload struct {
-	Name     string                          `json:"name" binding:"required"`
-	IP       string                          `json:"ip" binding:"required"`
-	Type     ctypes.DatasourceConnectionType `json:"datasource" binding:"required"`
-	Notes    string                          `json:"notes"`
-	Port     uint32                          `json:"port" binding:"required"`
-	Uuid     uuid.UUID                       `json:"uuid" binding:"required"`
-	Location *ConnectionLocation             `json:"location"`
+	Name     string                   `json:"name" binding:"required"`
+	IP       string                   `json:"ip" binding:"required"`
+	Type     DatasourceConnectionType `json:"datasource" binding:"required"`
+	Notes    string                   `json:"notes"`
+	Port     uint32                   `json:"port" binding:"required"`
+	Uuid     uuid.UUID                `json:"uuid" binding:"required"`
+	Location *ConnectionLocation      `json:"location"`
 }
 
 type GetConfigurationPayload struct {
@@ -190,13 +215,13 @@ type ConnectionLocation struct {
 // EditConnectionPayload contains the necessary fields for executing an EditConnection action.
 // It allows to partially edit different fields of a connection.
 type EditConnectionPayload struct {
-	Name     *string                          `json:"name,omitempty"`
-	IP       *string                          `json:"ip,omitempty"`
-	Type     *ctypes.DatasourceConnectionType `json:"datasource,omitempty"`
-	Notes    *string                          `json:"notes,omitempty"`
-	Port     *uint32                          `json:"port,omitempty"`
-	Uuid     uuid.UUID                        `json:"uuid" binding:"required"`
-	Location *ConnectionLocation              `json:"location,omitempty"`
+	Name     *string                   `json:"name,omitempty"`
+	IP       *string                   `json:"ip,omitempty"`
+	Type     *DatasourceConnectionType `json:"datasource,omitempty"`
+	Notes    *string                   `json:"notes,omitempty"`
+	Port     *uint32                   `json:"port,omitempty"`
+	Uuid     uuid.UUID                 `json:"uuid" binding:"required"`
+	Location *ConnectionLocation       `json:"location,omitempty"`
 }
 
 // DeleteConnectionPayload only contains the UUID to identify the connection to delete.
@@ -238,7 +263,7 @@ type UpgradeCompanionPayload struct {
 }
 
 type DeployProtocolConverterPayload struct {
-	Type           ctypes.Protocol   `json:"type" binding:"required"`
+	Type           Protocol          `json:"type" binding:"required"`
 	Name           string            `json:"name" binding:"required"`
 	ConnectionUUID uuid.UUID         `json:"connectionUUID" binding:"required"`
 	UUID           uuid.UUID         `json:"uuid" binding:"required"`
