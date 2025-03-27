@@ -50,10 +50,5 @@
     "updateRemoteUserUID": true,
     "containerEnv": {
         "HOME": "/home/vscode"
-    },
-    "mounts": [
-        "source=profile,target=/home/vscode,type=volume",
-        "target=/home/vscode/.vscode-server,type=volume",
-        "target=/home/vscode/.cursor-server,type=volume"
-    ]
+    }
 }
