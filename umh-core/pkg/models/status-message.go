@@ -130,7 +130,7 @@ type Dfc struct {
 
 // DfcMetrics contains metrics about a Data Flow Component.
 type DfcMetrics struct {
-	AvgInputThroughputPerMinute float64 `json:"avgInputThroughputPerMinuteInMsgSec"` // Messages per second, averaged over a minute
+	AvgInputThroughputPerMinuteInMsgSec float64 `json:"avgInputThroughputPerMinuteInMsgSec"` // Messages per second, averaged over a minute
 }
 
 // Connection represents a connection to an external system.
@@ -149,9 +149,9 @@ type DfcBridgeInfo struct {
 }
 
 type Redpanda struct {
-	Health                         *Health `json:"health"`
-	AvgIncomingThroughputPerMinute float64 `json:"avgIncomingThroughputPerMinuteInMsgSec"` // Incoming messages per second, averaged over a minute
-	AvgOutgoingThroughputPerMinute float64 `json:"avgOutgoingThroughputPerMinuteInMsgSec"` // Outgoing messages per second, averaged over a minute
+	Health                                 *Health `json:"health"`
+	AvgIncomingThroughputPerMinuteInMsgSec float64 `json:"avgIncomingThroughputPerMinuteInMsgSec"` // Incoming messages per second, averaged over a minute
+	AvgOutgoingThroughputPerMinuteInMsgSec float64 `json:"avgOutgoingThroughputPerMinuteInMsgSec"` // Outgoing messages per second, averaged over a minute
 }
 
 type UnifiedNamespace struct {
