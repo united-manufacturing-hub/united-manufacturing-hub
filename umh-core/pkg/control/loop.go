@@ -48,6 +48,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/starvationchecker"
 	"go.uber.org/zap"
@@ -128,7 +129,8 @@ func NewControlLoop() *ControlLoop {
 	log.Debugf("Cleaning S6 service directory: %s", constants.S6BaseDir)
 	err := s6Service.CleanS6ServiceDirectory(context.Background(), constants.S6BaseDir)
 	if err != nil {
-		log.Errorf("Failed to clean S6 service directory: %s", err)
+		sentry.ReportIssuef(sentry.IssueTypeError, log, "Failed to clean S6 service directory: %s", err)
+
 	}
 	log.Debugf("S6 service directory cleaned: %s", constants.S6BaseDir)
 
@@ -190,14 +192,14 @@ func (c *ControlLoop) Execute(ctx context.Context) error {
 
 				if errors.Is(err, context.DeadlineExceeded) {
 					// For timeouts, log warning but continue
-					c.logger.Warnf("Control loop reconcile timed out: %v", err)
+					sentry.ReportIssuef(sentry.IssueTypeWarning, c.logger, "Control loop reconcile timed out: %v", err)
 				} else if errors.Is(err, context.Canceled) {
 					// For cancellation, exit the loop
 					c.logger.Infof("Control loop cancelled")
 					return nil
 				} else {
 					// Any other unhandled error will result in the control loop stopping
-					c.logger.Errorf("Control loop error: %v", err)
+					sentry.ReportIssuef(sentry.IssueTypeError, c.logger, "Control loop error: %v", err)
 					return err
 				}
 			}
@@ -236,7 +238,7 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 			return nil
 		} else if backoff.IsPermanentFailureError(err) { // Handle permanent failure errors --> we want to stop the control loop
 			originalErr := backoff.ExtractOriginalError(err)
-			c.logger.Errorf("Config manager has permanently failed after max retries: %v (original error: %v)",
+			sentry.ReportIssuef(sentry.IssueTypeError, c.logger, "Config manager has permanently failed after max retries: %v (original error: %v)",
 				err, originalErr)
 			metrics.IncErrorCount(metrics.ComponentControlLoop, "config_permanent_failure")
 
@@ -244,7 +246,7 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 			return fmt.Errorf("config permanently failed, system needs intervention: %w", err)
 		} else {
 			// Handle other errors --> we want to continue reconciling
-			c.logger.Errorf("Config manager error: %v", err)
+			sentry.ReportIssuef(sentry.IssueTypeError, c.logger, "Config manager error: %v", err)
 			return nil
 		}
 	}
@@ -288,14 +290,14 @@ func (c *ControlLoop) updateSystemSnapshot(ctx context.Context, cfg config.FullC
 	}
 
 	if c.snapshotManager == nil {
-		c.logger.Warnf("Cannot create system snapshot: snapshot manager is not set")
+		sentry.ReportIssuef(sentry.IssueTypeWarning, c.logger, "Cannot create system snapshot: snapshot manager is not set")
 		return
 	}
 
 	snapshot, err := fsm.GetManagerSnapshots(c.managers, c.currentTick, cfg)
 	if err != nil {
 		c.logger.Errorf("Failed to create system snapshot: %v", err)
-		metrics.IncErrorCount(metrics.ComponentControlLoop, "snapshot_creation")
+		sentry.ReportIssuef(sentry.IssueTypeError, c.logger, "Failed to create system snapshot: %v", err)
 		return
 	}
 
@@ -313,7 +315,7 @@ func (c *ControlLoop) GetSystemSnapshot() *fsm.SystemSnapshot {
 	}
 
 	if c.snapshotManager == nil {
-		c.logger.Warnf("Cannot get system snapshot: snapshot manager is not set")
+		sentry.ReportIssuef(sentry.IssueTypeWarning, c.logger, "Cannot get system snapshot: snapshot manager is not set")
 		return nil
 	}
 	return c.snapshotManager.GetSnapshot()
