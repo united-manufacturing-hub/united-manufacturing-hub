@@ -154,6 +154,11 @@ func enableBackendConnection(config *config.FullConfig, state *fsm.SystemSnapsho
 
 	logger.Info("Enabling backend connection")
 	// directly log the config to console, not to the logger
+	if config == nil {
+		logger.Warn("Config is nil, cannot enable backend connection")
+		return
+	}
+
 	if config.Agent.CommunicatorConfig.APIURL != "" && config.Agent.CommunicatorConfig.AuthToken != "" {
 		// This can temporarely deactivated, e.g., during integration tests where just the mgmtcompanion-config is changed directly
 

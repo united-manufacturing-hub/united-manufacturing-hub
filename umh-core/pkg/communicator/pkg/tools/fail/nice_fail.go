@@ -139,10 +139,24 @@ func logAndSendBatched(err error, amountMap *expiremap.ExpireMap[string, int], l
 
 	errStr := err.Error()
 	store, _ := amountMap.LoadOrStore(errStr, 0)
-	*store = (*store) + 1
-	amountMap.Set(errStr, *store)
+	if store == nil {
+		// Handle nil value case
+		store = new(int)
+		*store = 1
+		amountMap.Set(errStr, *store)
+	} else {
+		*store = (*store) + 1
+		amountMap.Set(errStr, *store)
+	}
 
 	lastErr, _ := lastSendMap.LoadOrStore(errStr, time.Unix(0, 0))
+	if lastErr == nil {
+		// Handle nil value case
+		lastErr = new(time.Time)
+		*lastErr = time.Unix(0, 0)
+		lastSendMap.Set(errStr, *lastErr)
+	}
+
 	if time.Since(*lastErr) < 1*time.Hour {
 		return
 	}

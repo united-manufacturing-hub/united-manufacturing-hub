@@ -50,8 +50,12 @@ func CalculateLatency(latencies *expiremap.ExpireMap[time.Time, time.Duration]) 
 		if p99Index < 0 {
 			p99Index = 0
 		}
-		p95 = durations[p95Index]
-		p99 = durations[p99Index]
+
+		// Only try to access durations if it's properly initialized and has items
+		if len(durations) > 0 {
+			p95 = durations[p95Index]
+			p99 = durations[p99Index]
+		}
 	}
 
 	return models.Latency{

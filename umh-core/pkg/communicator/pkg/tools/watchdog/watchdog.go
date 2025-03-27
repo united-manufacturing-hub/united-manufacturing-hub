@@ -237,6 +237,13 @@ func (s *Watchdog) ReportHeartbeatStatus(uniqueIdentifier uuid.UUID, status Hear
 	// Update the heartbeat
 	s.registeredHeartbeatsMutex.Lock()
 	hb := s.registeredHeartbeats[name]
+	if hb == nil {
+		// If the heartbeat doesn't exist, unlock and return
+		s.registeredHeartbeatsMutex.Unlock()
+		fail.WarnBatchedf("Report heartbeat called with now invalid name: %s (UUID: %s)", name, uniqueIdentifier)
+		return
+	}
+
 	hb.lastReportedStatus.Store(int32(status))
 	hb.lastHeatbeatTime.Store(time.Now().UTC().Unix())
 	hb.heartbeatsReceived.Add(1)
@@ -298,6 +305,11 @@ func (s *Watchdog) reportStateToNiceFail() {
 	s.registeredHeartbeatsMutex.Lock()
 	defer s.registeredHeartbeatsMutex.Unlock()
 	for name, hb := range s.registeredHeartbeats {
+		if hb == nil {
+			// Skip nil heartbeats
+			continue
+		}
+
 		lastReportedStatus := hb.lastReportedStatus.Load()
 		lastHeartbeat := hb.lastHeatbeatTime.Load()
 		warningCount := hb.warningCount.Load()
