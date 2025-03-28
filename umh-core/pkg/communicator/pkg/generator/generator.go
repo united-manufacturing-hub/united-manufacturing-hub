@@ -99,6 +99,11 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 		}
 	}
 
+	if state == nil {
+		sentry.ReportIssuef(sentry.IssueTypeError, s.logger.Sugar(), "State is nil, using empty state")
+		return nil
+	}
+
 	// Create a mocked status message
 	statusMessage := &models.StatusMessage{
 		Core: models.Core{
