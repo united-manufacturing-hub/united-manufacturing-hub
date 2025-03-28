@@ -24,9 +24,9 @@ require (
 	github.com/united-manufacturing-hub/expiremap/v2 v2.1.0
 	github.com/united-manufacturing-hub/umh-utils v0.2.2
 	go.uber.org/zap v1.27.0
-	golang.org/x/sync v0.12.0
 	golang.org/x/crypto v0.36.0
 	golang.org/x/net v0.37.0
+	golang.org/x/sync v0.12.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 
