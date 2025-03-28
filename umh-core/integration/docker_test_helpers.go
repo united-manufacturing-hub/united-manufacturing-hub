@@ -218,8 +218,6 @@ func BuildAndRunContainer(configYaml string, memory string) error {
 	out, err = runDockerCommand(
 		"run", "-d",
 		"--name", containerName,
-		"--cpus=1",
-		"--memory", memory,
 		"-e", "LOGGING_LEVEL=debug",
 		// Map the host ports to the container's fixed ports
 		"-p", fmt.Sprintf("%d:8080", metricsPrt), // Map host's dynamic port to container's fixed metrics port
