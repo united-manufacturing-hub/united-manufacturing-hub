@@ -53,13 +53,17 @@ var _ = Describe("Redpanda Service", func() {
 	Describe("GetHealthCheckAndMetrics", func() {
 		Context("with valid metrics endpoint", func() {
 			BeforeEach(func() {
+				// Create a fresh client to avoid interference from defaults
+				client = NewMockHTTPClient()
+				service.httpClient = client
+
 				// Configure mock client with healthy metrics
 				client.SetMetricsResponse(MetricsConfig{
 					Infrastructure: InfrastructureMetricsConfig{
 						Storage: StorageMetricsConfig{
 							FreeBytes:      5000000000,
 							TotalBytes:     10000000000,
-							FreeSpaceAlert: false,
+							FreeSpaceAlert: false, // Explicitly set to false
 						},
 						Uptime: UptimeMetricsConfig{
 							Uptime: 3600, // 1 hour in seconds
@@ -406,11 +410,35 @@ var _ = Describe("Redpanda Service", func() {
 		})
 
 		It("should calculate throughput based on ticks", func() {
+			// Create a fresh client to avoid default value conflicts
+			client := NewMockHTTPClient()
+			service.httpClient = client
+
 			// Set up metrics for first tick with some throughput
 			client.SetMetricsResponse(MetricsConfig{
 				Throughput: ThroughputMetricsConfig{
 					BytesIn:  1000,
 					BytesOut: 900,
+				},
+				// Add required metrics to prevent nil errors
+				Infrastructure: InfrastructureMetricsConfig{
+					Storage: StorageMetricsConfig{
+						FreeBytes:      5000000000,
+						TotalBytes:     10000000000,
+						FreeSpaceAlert: false,
+					},
+					Uptime: UptimeMetricsConfig{
+						Uptime: 3600,
+					},
+				},
+				Cluster: ClusterMetricsConfig{
+					Topics:            5,
+					UnavailableTopics: 0,
+				},
+				Topic: TopicMetricsConfig{
+					TopicPartitionMap: map[string]int64{
+						"test-topic": 3,
+					},
 				},
 			})
 
@@ -445,11 +473,35 @@ var _ = Describe("Redpanda Service", func() {
 		})
 
 		It("should detect inactivity", func() {
+			// Create a fresh client to avoid default value conflicts
+			client := NewMockHTTPClient()
+			service.httpClient = client
+
 			// First tick with some activity
 			client.SetMetricsResponse(MetricsConfig{
 				Throughput: ThroughputMetricsConfig{
 					BytesIn:  1000,
 					BytesOut: 900,
+				},
+				// Add required metrics to prevent nil errors
+				Infrastructure: InfrastructureMetricsConfig{
+					Storage: StorageMetricsConfig{
+						FreeBytes:      5000000000,
+						TotalBytes:     10000000000,
+						FreeSpaceAlert: false,
+					},
+					Uptime: UptimeMetricsConfig{
+						Uptime: 3600,
+					},
+				},
+				Cluster: ClusterMetricsConfig{
+					Topics:            5,
+					UnavailableTopics: 0,
+				},
+				Topic: TopicMetricsConfig{
+					TopicPartitionMap: map[string]int64{
+						"test-topic": 3,
+					},
 				},
 			})
 

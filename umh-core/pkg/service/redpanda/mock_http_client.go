@@ -49,7 +49,7 @@ func NewMockHTTPClient() *MockHTTPClient {
 	client.SetMetricsResponse(MetricsConfig{
 		Infrastructure: InfrastructureMetricsConfig{
 			Storage: StorageMetricsConfig{
-				FreeBytes:      1000000000,
+				FreeBytes:      5000000000,
 				TotalBytes:     10000000000,
 				FreeSpaceAlert: false,
 			},
@@ -58,18 +58,16 @@ func NewMockHTTPClient() *MockHTTPClient {
 			},
 		},
 		Cluster: ClusterMetricsConfig{
-			Topics:            10,
+			Topics:            5,
 			UnavailableTopics: 0,
 		},
 		Throughput: ThroughputMetricsConfig{
-			BytesIn:  1000,
-			BytesOut: 2000,
+			BytesIn:  1024,
+			BytesOut: 2048,
 		},
 		Topic: TopicMetricsConfig{
 			TopicPartitionMap: map[string]int64{
-				"test-topic":  3,
-				"other-topic": 2,
-				"third-topic": 1,
+				"test-topic": 3,
 			},
 		},
 	})
@@ -133,7 +131,8 @@ func (m *MockHTTPClient) SetMetricsResponse(config MetricsConfig) {
 	metrics = append(metrics,
 		createGaugeMetric("redpanda_storage_disk_free_bytes", "Storage free bytes", config.Infrastructure.Storage.FreeBytes),
 		createGaugeMetric("redpanda_storage_disk_total_bytes", "Storage total bytes", config.Infrastructure.Storage.TotalBytes),
-		createGaugeMetric("redpanda_storage_disk_free_space_alert", "Storage free space alert", boolToInt64(config.Infrastructure.Storage.FreeSpaceAlert)),
+		createGaugeMetric("redpanda_storage_disk_free_space_alert", "Storage free space alert",
+			boolToInt64(config.Infrastructure.Storage.FreeSpaceAlert)),
 	)
 
 	// Infrastructure metrics - Uptime
@@ -147,10 +146,13 @@ func (m *MockHTTPClient) SetMetricsResponse(config MetricsConfig) {
 		createGaugeMetric("redpanda_cluster_unavailable_partitions", "Number of unavailable partitions", config.Cluster.UnavailableTopics),
 	)
 
-	// Throughput metrics
+	// Throughput metrics - combine both metrics in a single metric family
+	throughputMetrics := []*dto.Metric{
+		createMetricWithLabelsForCounter(config.Throughput.BytesIn, map[string]string{"redpanda_request": "produce"}),
+		createMetricWithLabelsForCounter(config.Throughput.BytesOut, map[string]string{"redpanda_request": "consume"}),
+	}
 	metrics = append(metrics,
-		createCounterMetricWithLabels("redpanda_kafka_request_bytes_total", "Bytes in", config.Throughput.BytesIn, map[string]string{"redpanda_request": "produce"}),
-		createCounterMetricWithLabels("redpanda_kafka_request_bytes_total", "Bytes out", config.Throughput.BytesOut, map[string]string{"redpanda_request": "consume"}),
+		createMetricFamily("redpanda_kafka_request_bytes_total", "Kafka request bytes", dto.MetricType_COUNTER, throughputMetrics),
 	)
 
 	// Topic metrics - partition count per topic
@@ -173,6 +175,9 @@ func (m *MockHTTPClient) SetMetricsResponse(config MetricsConfig) {
 		expfmt.MetricFamilyToText(&buf, mf)
 	}
 
+	// Clear out any existing metrics response before setting the new one
+	delete(m.ResponseMap, "/public_metrics")
+
 	m.ResponseMap["/public_metrics"] = MockResponse{
 		StatusCode: http.StatusOK,
 		Body:       buf.Bytes(),
@@ -180,6 +185,9 @@ func (m *MockHTTPClient) SetMetricsResponse(config MetricsConfig) {
 }
 
 // Helper function to convert bool to int64 (0 for false, 1 for true)
+// Important: The parser in redpanda.go expects:
+// - A value of 0 means FreeSpaceAlert is false (no alert)
+// - A value of 1 means FreeSpaceAlert is true (alert triggered)
 func boolToInt64(b bool) int64 {
 	if b {
 		return 1
@@ -199,6 +207,24 @@ func createMetricWithLabels(value int64, labels map[string]string) *dto.Metric {
 	return &dto.Metric{
 		Label: labelPairs,
 		Gauge: &dto.Gauge{
+			Value: float64Ptr(float64(value)),
+		},
+	}
+}
+
+// Helper function to create a metric with labels specifically for counter metrics
+func createMetricWithLabelsForCounter(value int64, labels map[string]string) *dto.Metric {
+	labelPairs := make([]*dto.LabelPair, 0, len(labels))
+	for k, v := range labels {
+		labelPairs = append(labelPairs, &dto.LabelPair{
+			Name:  strPtr(k),
+			Value: strPtr(v),
+		})
+	}
+
+	return &dto.Metric{
+		Label: labelPairs,
+		Counter: &dto.Counter{
 			Value: float64Ptr(float64(value)),
 		},
 	}
