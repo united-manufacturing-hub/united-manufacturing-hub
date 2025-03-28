@@ -1,3 +1,5 @@
+#!/bin/sh
+
 # Copyright 2025 UMH Systems GmbH
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,18 +14,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-name: license-eye-header
-on:
-  pull_request:
-    branches:
-      - main
-      - staging
-jobs:
-  license-eye-header:
-    name: License Eye Header
-    runs-on:
-      group: large-runners
-    steps:
-      - uses: actions/checkout@v4
-      - uses: apache/skywalking-eyes@v0.7.0
-        name: License Eye Header
+while true; do
+  echo "NMAP_SCAN_START"
+  echo "NMAP_TIMESTAMP: $(date -Iseconds)"
+  SCAN_START=$(date +%s.%N)
+  echo "NMAP_COMMAND: nmap -n -Pn -p 443 umh.app -v"
+  nmap -n -Pn -p 443 umh.app -v
+  EXIT_CODE=$?
+  SCAN_END=$(date +%s.%N)
+  SCAN_DURATION=$(echo "$SCAN_END - $SCAN_START" | bc)
+  echo "NMAP_EXIT_CODE: $EXIT_CODE"
+  echo "NMAP_DURATION: $SCAN_DURATION"
+  echo "NMAP_SCAN_END"
+  sleep 1
+done
