@@ -87,6 +87,10 @@ func NewLogin(authToken string, insecureTLS bool) *LoginResponse {
 			loggedIn = true
 		}
 	}
+	if credentials == nil {
+		zap.S().Error("Login successful but credentials are nil")
+		return nil
+	}
 	zap.S().Debugf("SetLoginResponse successful: %s", credentials)
 	return credentials
 }

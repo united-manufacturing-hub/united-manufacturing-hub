@@ -24,12 +24,13 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/generator"
 
+	"sync"
+
+	"github.com/united-manufacturing-hub/expiremap/v2/pkg/expiremap"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
-
-	"github.com/united-manufacturing-hub/expiremap/v2/pkg/expiremap"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"go.uber.org/zap"
 )
@@ -53,6 +54,7 @@ func NewHandler(
 	releaseChannel config.ReleaseChannel,
 	disableHardwareStatusCheck bool,
 	state *fsm.SystemSnapshot,
+	systemMu *sync.Mutex,
 ) *Handler {
 	s := &Handler{}
 	s.subscribers = expiremap.NewEx[string, string](cull, ttl)
@@ -63,6 +65,7 @@ func NewHandler(
 	s.StatusCollector = generator.NewStatusCollector(
 		dog,
 		state,
+		systemMu,
 	)
 
 	return s

@@ -51,9 +51,11 @@ func (c *CommunicationState) InitialiseAndStartPuller() {
 	defer c.mu.Unlock()
 	if c.LoginResponse == nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "LoginResponse is nil, cannot start puller")
+		return
 	}
 	if c.Watchdog == nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "Watchdog is nil, cannot start puller")
+		return
 	}
 	c.Puller = pull.NewPuller(c.LoginResponse.JWT, c.Watchdog, c.InboundChannel, c.InsecureTLS)
 	if c.Puller == nil {
@@ -68,9 +70,11 @@ func (c *CommunicationState) InitialiseAndStartPusher() {
 	defer c.mu.Unlock()
 	if c.LoginResponse == nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "LoginResponse is nil, cannot start pusher")
+		return
 	}
 	if c.Watchdog == nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "Watchdog is nil, cannot start pusher")
+		return
 	}
 	c.Pusher = push.NewPusher(c.LoginResponse.UUID, c.LoginResponse.JWT, c.Watchdog, c.OutboundChannel, push.DefaultDeadLetterChanBuffer(), push.DefaultBackoffPolicy(), c.InsecureTLS)
 	if c.Pusher == nil {
@@ -83,12 +87,15 @@ func (c *CommunicationState) InitialiseAndStartPusher() {
 func (c *CommunicationState) InitialiseAndStartRouter() {
 	if c.Puller == nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "Puller is nil, cannot start router")
+		return
 	}
 	if c.Pusher == nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "Pusher is nil, cannot start router")
+		return
 	}
 	if c.LoginResponse == nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "LoginResponse is nil, cannot start router")
+		return
 	}
 
 	c.mu.Lock()
@@ -103,22 +110,26 @@ func (c *CommunicationState) InitialiseAndStartRouter() {
 // InitialiseAndStartSubscriberHandler creates a new subscriber handler and starts it
 // ttl is the time until a subscriber is considered dead (if no new subscriber message is received)
 // cull is the cycle time to remove dead subscribers
-func (s *CommunicationState) InitialiseAndStartSubscriberHandler(ttl time.Duration, cull time.Duration, config *config.FullConfig, state *fsm.SystemSnapshot) {
+func (s *CommunicationState) InitialiseAndStartSubscriberHandler(ttl time.Duration, cull time.Duration, config *config.FullConfig, state *fsm.SystemSnapshot, systemMu *sync.Mutex) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	if s.Watchdog == nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "Watchdog is nil, cannot start subscriber handler")
+		return
 	}
 
 	if s.Pusher == nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "Pusher is nil, cannot start subscriber handler")
+		return
 	}
 	if s.LoginResponse == nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "LoginResponse is nil, cannot start subscriber handler")
+		return
 	}
 	if config == nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "Config is nil, cannot start subscriber handler")
+		return
 	}
 
 	s.SubscriberHandler = subscriber.NewHandler(
@@ -130,6 +141,7 @@ func (s *CommunicationState) InitialiseAndStartSubscriberHandler(ttl time.Durati
 		s.ReleaseChannel,
 		false, // disableHardwareStatusCheck
 		state,
+		systemMu,
 	)
 	if s.SubscriberHandler == nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "Failed to create subscriber handler")
