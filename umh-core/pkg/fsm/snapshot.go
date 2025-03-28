@@ -86,10 +86,11 @@ func (s *BaseManagerSnapshot) GetManagerTick() uint64 {
 
 // SystemSnapshot contains a thread-safe snapshot of the entire system state
 type SystemSnapshot struct {
-	Managers     map[string]ManagerSnapshot
-	SnapshotTime time.Time
-	ConfigHash   string
-	Tick         uint64
+	Managers      map[string]ManagerSnapshot
+	SnapshotTime  time.Time
+	ConfigHash    string
+	Tick          uint64
+	AgentLocation map[int]string
 }
 
 // SnapshotManager manages thread-safe creation, storage, and retrieval of system snapshots

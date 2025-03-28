@@ -26,6 +26,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/control"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/env"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
@@ -53,13 +54,53 @@ func main() {
 
 	// Load the config
 	configManager := config.NewFileConfigManager()
-	config, err := configManager.GetConfig(ctx, 0)
+	configData, err := configManager.GetConfig(ctx, 0)
 	if err != nil {
 		sentry.ReportIssuef(sentry.IssueTypeFatal, log, "Failed to load config: %s", err)
 	}
 
+	// Extract environment variables and apply them to the config
+	configModified := false
+
+	// Extract AUTH_TOKEN from environment if present
+	authToken, err := env.GetAsString("AUTH_TOKEN", false, "")
+	if err == nil && authToken != "" {
+		log.Info("Using AUTH_TOKEN from environment variable")
+		configData.Agent.CommunicatorConfig.AuthToken = authToken
+		configModified = true
+	}
+
+	// Extract RELEASE_CHANNEL from environment if present
+	releaseChannel, err := env.GetAsString("RELEASE_CHANNEL", false, "")
+	if err == nil && releaseChannel != "" {
+		log.Info("Using RELEASE_CHANNEL from environment variable:", zap.String("channel", releaseChannel))
+		configData.Agent.ReleaseChannel = config.ReleaseChannel(releaseChannel)
+		configModified = true
+	}
+
+	// Extract multiple location environment variables (LOCATION_0 through LOCATION_6)
+	locations := make(map[int]string)
+	for i := 0; i <= 6; i++ {
+		locationKey := fmt.Sprintf("LOCATION_%d", i)
+		locationValue, err := env.GetAsString(locationKey, false, "")
+		if err == nil && locationValue != "" {
+			log.Info(fmt.Sprintf("Using %s from environment variable:", locationKey), zap.String("location", locationValue))
+			locations[i] = locationValue
+		}
+	}
+	//write locations to config
+	configData.Agent.Location = locations
+
+	// If config was modified, write it back to disk
+	if configModified {
+		log.Info("Writing modified configuration back to disk...")
+		if err := configManager.WriteConfig(ctx, configData); err != nil {
+			log.Warn("Failed to write configuration to disk:", zap.Error(err))
+		}
+	}
+
 	// Start the metrics server
-	server := metrics.SetupMetricsEndpoint(fmt.Sprintf(":%d", config.Agent.MetricsPort))
+	server := metrics.SetupMetricsEndpoint(fmt.Sprintf(":%d", configData.Agent.MetricsPort))
 	defer func() {
 		// S6_KILL_FINISH_MAXTIME is 5 seconds, so we need to finish before that
 		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -77,11 +118,12 @@ func main() {
 		Watchdog:        watchdog.NewWatchdog(ctx, time.NewTicker(time.Second*10), true),
 		InboundChannel:  make(chan *models.UMHMessage, 100),
 		OutboundChannel: make(chan *models.UMHMessage, 100),
-		ReleaseChannel:  config.Agent.ReleaseChannel,
+		ReleaseChannel:  configData.Agent.ReleaseChannel,
 	}
+
 	go SystemSnapshotLogger(ctx, controlLoop, systemSnapshot, systemMu)
 
-	enableBackendConnection(&config, systemSnapshot, &communicationState, systemMu)
+	enableBackendConnection(&configData, systemSnapshot, &communicationState, systemMu)
 	controlLoop.Execute(ctx)
 
 	log.Info("umh-core test completed")
@@ -141,33 +183,31 @@ func SystemSnapshotLogger(ctx context.Context, controlLoop *control.ControlLoop,
 	}
 }
 
-func enableBackendConnection(config *config.FullConfig, state *fsm.SystemSnapshot, communicationState *communication_state.CommunicationState, systemMu *sync.Mutex) {
+func enableBackendConnection(configData *config.FullConfig, systemSnapshot *fsm.SystemSnapshot, communicationState *communication_state.CommunicationState, systemMu *sync.Mutex) {
 	logger := logger.For("enableBackendConnection")
 	if logger == nil {
 		logger = zap.NewNop().Sugar()
 	}
 
-	logger.Info("Enabling backend connection")
-	// directly log the config to console, not to the logger
-	if config == nil {
-		logger.Warn("Config is nil, cannot enable backend connection")
+	// Check if the backend communication should be enabled (APIURL and AuthToken must be set)
+	if configData.Agent.CommunicatorConfig.APIURL == "" || configData.Agent.CommunicatorConfig.AuthToken == "" {
+		logger.Info("Backend communication disabled - missing APIURL or AuthToken")
 		return
 	}
 
-	if config.Agent.CommunicatorConfig.APIURL != "" && config.Agent.CommunicatorConfig.AuthToken != "" {
-		// This can temporarely deactivated, e.g., during integration tests where just the mgmtcompanion-config is changed directly
+	logger.Info("Backend communication enabled")
 
-		login := v2.NewLogin(config.Agent.CommunicatorConfig.AuthToken, false)
-		if login == nil {
-			sentry.ReportIssuef(sentry.IssueTypeError, logger, "Failed to create login object")
-			return
-		}
-		communicationState.LoginResponse = login
-		logger.Info("Backend connection enabled, login response: ", zap.Any("login_name", login.Name))
-
-		communicationState.InitialiseAndStartPuller()
-		communicationState.InitialiseAndStartPusher()
-		communicationState.InitialiseAndStartSubscriberHandler(time.Minute*5, time.Minute, config, state, systemMu)
-		communicationState.InitialiseAndStartRouter()
+	// Login to the backend
+	login := v2.NewLogin(configData.Agent.CommunicatorConfig.AuthToken, false)
+	if login == nil {
+		sentry.ReportIssuef(sentry.IssueTypeError, logger, "Failed to create login object")
+		return
 	}
+	communicationState.LoginResponse = login
+	logger.Info("Backend connection enabled, login response: ", zap.Any("login_name", login.Name))
+
+	communicationState.InitialiseAndStartPuller()
+	communicationState.InitialiseAndStartPusher()
+	communicationState.InitialiseAndStartSubscriberHandler(time.Minute*5, time.Minute, configData, systemSnapshot, systemMu)
+	communicationState.InitialiseAndStartRouter()
 }

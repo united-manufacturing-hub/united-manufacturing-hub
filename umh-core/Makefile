@@ -95,6 +95,11 @@ test-comm: clean build
 		--name $(IMAGE_NAME) \
 		-v $(PWD)/data:/data \
 		-p 8081:8080 \
+		-e LOCATION_0="Location 0" \
+		-e LOCATION_1="Location 1" \
+		-e RELEASE_CHANNEL=enterprise \
+		-e APIURL="https://management.umh.app/api" \
+		-e AUTH_TOKEN="a7caf5d82dacb972c300baf72d76326a3168141975f9e31f077aa28beced1ab7" \
 		$(IMAGE_NAME):$(TAG)
 
 test-broken: clean build

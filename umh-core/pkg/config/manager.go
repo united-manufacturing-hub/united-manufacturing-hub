@@ -112,6 +112,34 @@ func (m *FileConfigManager) GetConfig(ctx context.Context, tick uint64) (FullCon
 	return config, nil
 }
 
+// WriteConfig writes the given config to disk
+func (m *FileConfigManager) WriteConfig(ctx context.Context, config FullConfig) error {
+	// Check if context is already cancelled
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+
+	// Create the directory if it doesn't exist
+	dir := filepath.Dir(m.configPath)
+	if err := m.fsService.EnsureDirectory(ctx, dir); err != nil {
+		return fmt.Errorf("failed to create config directory: %w", err)
+	}
+
+	// Marshal the config to YAML
+	data, err := yaml.Marshal(config)
+	if err != nil {
+		return fmt.Errorf("failed to marshal config: %w", err)
+	}
+
+	// Write the file
+	if err := m.fsService.WriteFile(ctx, m.configPath, data, 0644); err != nil {
+		return fmt.Errorf("failed to write config file: %w", err)
+	}
+
+	m.logger.Infof("Successfully wrote config to %s", m.configPath)
+	return nil
+}
+
 // FileConfigManagerWithBackoff wraps a FileConfigManager and implements backoff for GetConfig errors
 type FileConfigManagerWithBackoff struct {
 	// The wrapped file config manager
