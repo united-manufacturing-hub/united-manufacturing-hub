@@ -16,23 +16,19 @@ package push
 
 import (
 	"context"
-	"fmt"
 	http2 "net/http"
 	"sync/atomic"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/backend_api_structs"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/safejson"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 
-	"github.com/getsentry/sentry-go"
 	"github.com/google/uuid"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2/error_handler"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2/http"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/fail"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/tracing"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/shared/models"
 	"go.uber.org/zap"
 )
 
@@ -113,22 +109,6 @@ func (p *Pusher) push() {
 				continue
 			}
 
-			// Start a new transaction for this push cycle
-			// We only do this if we have messages to push
-			transaction := sentry.StartTransaction(context.Background(), "push.cycle")
-
-			// Create a span for message batch processing
-			var span *sentry.Span
-			if transaction != nil {
-				span = transaction.StartChild("process.message_batch")
-				// Add trace IDs from all messages in batch
-				for _, msg := range messages {
-					if msg.Metadata != nil && span != nil {
-						tracing.AddTraceUUIDToSpan(span, msg.Metadata.TraceID)
-					}
-				}
-			}
-
 			var cookies = map[string]string{
 				"token": p.jwt.Load().(string),
 			}
@@ -136,14 +116,8 @@ func (p *Pusher) push() {
 			payload := backend_api_structs.PushPayload{
 				UMHMessages: messages,
 			}
-			_, err, status := http.PostRequest[any, backend_api_structs.PushPayload](transaction.Context(), http.PushEndpoint, &payload, nil, &cookies, p.insecureTLS)
+			_, err, status := http.PostRequest[any, backend_api_structs.PushPayload](context.Background(), http.PushEndpoint, &payload, nil, &cookies, p.insecureTLS)
 			if err != nil {
-				// Start a new span for the error handling
-				var errorSpan *sentry.Span
-				if transaction != nil {
-					errorSpan = transaction.StartChild("error.handling")
-					errorSpan.Status = sentry.SpanStatusInternalError
-				}
 				error_handler.ReportHTTPErrors(err, status, string(http.PushEndpoint), "POST", &payload, nil)
 				p.dog.ReportHeartbeatStatus(p.watcherUUID, watchdog.HEARTBEAT_STATUS_WARNING)
 				if status == http2.StatusBadRequest {
@@ -152,29 +126,18 @@ func (p *Pusher) push() {
 					// If the error is 400, drop the message, then the message is invalid.
 					// Hence do not reenqueue the message to the deadletter channel.
 					boPostRequest.IncrementAndSleep()
-					if errorSpan != nil {
-						errorSpan.Finish()
-					}
+
 					continue
 				}
 				// In case of an error, push the message back to the deadletter channel.
 				go enqueueToDeadLetterChannel(p.deadletterCh, messages, cookies, 0)
 				boPostRequest.IncrementAndSleep()
-				if errorSpan != nil {
-					errorSpan.Finish()
-				}
-				if span != nil {
-					span.Finish()
-				}
-				if transaction != nil {
-					transaction.Finish()
-				}
+
 				continue
 			}
 			error_handler.ResetErrorCounter()
 			boPostRequest.Reset()
-			span.Finish()
-			transaction.Finish()
+
 		case d, ok := <-p.deadletterCh:
 			if !ok {
 				continue
@@ -187,24 +150,7 @@ func (p *Pusher) push() {
 			p.dog.ReportHeartbeatStatus(p.watcherUUID, watchdog.HEARTBEAT_STATUS_OK)
 			// Retry the messages in deadletter channel only thrice. If it fails after 3 retryAttempts, log the message and drop.
 			if d.retryAttempts > 2 {
-				messageJson, err := safejson.Marshal(d.messages)
-				if err == nil {
-					fail.ErrorBatchedfWithAttachment("Dropping the message after 3 retry attempts", []sentry.Attachment{
-						{
-							Filename:    "dropped.json",
-							ContentType: "application/json",
-							Payload:     messageJson,
-						},
-					})
-				} else {
-					fail.ErrorBatchedfWithAttachment("Dropping the message after 3 retry attempts", []sentry.Attachment{
-						{
-							Filename:    "dropped.error.txt",
-							ContentType: "text/plain",
-							Payload:     []byte(fmt.Sprintf("Failed to marshal message to json: %s", err)),
-						},
-					})
-				}
+
 				continue
 			}
 			d.retryAttempts++
@@ -223,32 +169,11 @@ func (p *Pusher) push() {
 func enqueueToDeadLetterChannel(deadLetterCh chan DeadLetter, messages []models.UMHMessage, cookies map[string]string, retryAttempt int) {
 	zap.S().Debugf("Enqueueing to deadletter channel to push messages: %v with retry attempts: %d", messages, retryAttempt)
 
-	// Convert msg to json for attachment
-	messageJson, err := safejson.Marshal(messages)
-
-	if err == nil {
-		fail.WarnBatchedfWithAttachment("Enqueueing to deadletter channel to push messages: Attempt %d", []sentry.Attachment{
-			{
-				Filename:    "deadletter.log",
-				ContentType: "application/json",
-				Payload:     messageJson,
-			},
-		}, retryAttempt)
-	} else {
-		fail.WarnBatchedfWithAttachment("Enqueueing to deadletter channel to push messages: Attempt %d", []sentry.Attachment{
-			{
-				Filename:    "deadletter.error.txt",
-				ContentType: "text/plain",
-				Payload:     []byte(fmt.Sprintf("Failed to marshal message to json: %s", err)),
-			},
-		}, retryAttempt)
-	}
-
 	select {
 	case _, ok := <-deadLetterCh:
 		if !ok {
 			// Channel is closed
-			fail.ErrorBatchedf("Deadletter channel is closed, cannot enqueue messages!")
+			sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "Deadletter channel is closed, cannot enqueue messages!")
 			return
 		}
 	case deadLetterCh <- DeadLetter{
@@ -258,7 +183,7 @@ func enqueueToDeadLetterChannel(deadLetterCh chan DeadLetter, messages []models.
 	}:
 		// Message successfully enqueued to deadletter channel. Do nothing.
 	default:
-		fail.ErrorBatchedf("Deadletter channel is not open or ready to receive the re-enqueued messages from the Pusher!")
+		sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "Deadletter channel is not open or ready to receive the re-enqueued messages from the Pusher!")
 	}
 }
 

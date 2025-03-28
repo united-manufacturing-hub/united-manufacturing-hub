@@ -16,7 +16,7 @@ package actions
 
 import (
 	"github.com/google/uuid"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/shared/models"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/models"
 )
 
 // DummyAction represents a dummy action that does nothing, used for testing purposes

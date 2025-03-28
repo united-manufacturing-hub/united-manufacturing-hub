@@ -15,16 +15,13 @@
 package error_handler
 
 import (
-	"bytes"
-	"encoding/json"
 	"fmt"
 	"slices"
 	"sync"
 	"time"
 
-	"github.com/getsentry/sentry-go"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/fail"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/safejson"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
+	"go.uber.org/zap"
 )
 
 // Package error_handler provides HTTP error handling with intelligent error reporting based on error types.
@@ -97,13 +94,12 @@ func ReportHTTPErrors(err error, status int, endpoint string, method string, req
 		Timestamp:   time.Now(),
 	}
 
-	attachments := buildErrorAttachments(ctx)
 	errorMessage := buildErrorMessage(ctx)
 	additionalContext := buildErrorContext(ctx)
 
 	// Always report invalid status codes
 	if status < 200 || status > 999 {
-		fail.ErrorBatchedfWithAttachmentAndContext(errorMessage, attachments, additionalContext)
+		sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), errorMessage, additionalContext)
 		return
 	}
 
@@ -115,9 +111,8 @@ func ReportHTTPErrors(err error, status int, endpoint string, method string, req
 		transientErrorCountMapMux.Unlock()
 
 		if count >= transientErrorThreshold {
-			fail.ErrorBatchedfWithAttachmentAndContext(
+			sentry.ReportIssuef(sentry.IssueTypeError, zap.S(),
 				fmt.Sprintf("[HTTP Error] %s (occurred %d times)", errorMessage, count),
-				attachments,
 				additionalContext,
 			)
 		}
@@ -125,7 +120,7 @@ func ReportHTTPErrors(err error, status int, endpoint string, method string, req
 	}
 
 	// Report permanent errors immediately
-	fail.ErrorBatchedfWithAttachmentAndContext(errorMessage, attachments, additionalContext)
+	sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), errorMessage, additionalContext)
 }
 
 // buildErrorMessage creates a detailed error message
@@ -138,65 +133,10 @@ func buildErrorMessage(ctx HTTPErrorContext) string {
 	)
 }
 
-// buildErrorAttachments creates error attachments with relevant debugging information
-func buildErrorAttachments(ctx HTTPErrorContext) []sentry.Attachment {
-	var attachments []sentry.Attachment
-
-	// Add request body if available
-	if ctx.RequestBody != nil {
-		if requestJSON, err := safejson.Marshal(ctx.RequestBody); err == nil {
-			attachments = append(attachments, sentry.Attachment{
-				Filename:    "request.json",
-				ContentType: "application/json",
-				Payload:     requestJSON,
-			})
-		}
-	}
-
-	// Add response body if available
-	if len(ctx.Response) > 0 {
-		// Try to pretty print if it's JSON
-		var prettyJSON bytes.Buffer
-		if err := json.Indent(&prettyJSON, ctx.Response, "", "  "); err == nil {
-			attachments = append(attachments, sentry.Attachment{
-				Filename:    "response.json",
-				ContentType: "application/json",
-				Payload:     prettyJSON.Bytes(),
-			})
-		} else {
-			// If not JSON, attach as plain text
-			attachments = append(attachments, sentry.Attachment{
-				Filename:    "response.txt",
-				ContentType: "text/plain",
-				Payload:     ctx.Response,
-			})
-		}
-	}
-
-	// Add error context as a separate attachment
-	contextMap := map[string]interface{}{
-		"timestamp": ctx.Timestamp.Format(time.RFC3339),
-		"method":    ctx.Method,
-		"endpoint":  ctx.Endpoint,
-		"status":    ctx.StatusCode,
-		"error":     ctx.Error.Error(),
-	}
-
-	if contextJSON, err := safejson.Marshal(contextMap); err == nil {
-		attachments = append(attachments, sentry.Attachment{
-			Filename:    "error_context.json",
-			ContentType: "application/json",
-			Payload:     contextJSON,
-		})
-	}
-
-	return attachments
-}
-
 // buildErrorContext creates a map of additional context information
-func buildErrorContext(ctx HTTPErrorContext) map[string]sentry.Context {
-	return map[string]sentry.Context{
-		"HTTP": sentry.Context{
+func buildErrorContext(ctx HTTPErrorContext) map[string]interface{} {
+	return map[string]interface{}{
+		"HTTP": map[string]interface{}{
 			"method":      ctx.Method,
 			"endpoint":    ctx.Endpoint,
 			"status_code": ctx.StatusCode,

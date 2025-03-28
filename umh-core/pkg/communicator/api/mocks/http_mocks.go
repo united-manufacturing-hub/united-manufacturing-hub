@@ -17,15 +17,15 @@ package mocks
 import (
 	"net/http"
 
-	http2 "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2/http"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/backend_api_structs"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/encoding"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/fail"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/safejson"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/shared/models"
-
 	"github.com/google/uuid"
 	"github.com/h2non/gock"
+	http2 "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2/http"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/backend_api_structs"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/models"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/encoding"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/safejson"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
+	"go.uber.org/zap"
 )
 
 func MockLogin() {
@@ -48,7 +48,7 @@ func MockLogin() {
 			}
 			bodyBytes, err := safejson.Marshal(body)
 			if err != nil {
-				fail.ErrorBatchedf("Failed to marshal the body: %v", err)
+				sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "Failed to marshal the body: %v", err)
 				response.StatusCode = 500
 			}
 
@@ -62,7 +62,7 @@ func MockSubscribeMessage() {
 	gock.InterceptClient(http2.GetClient(false))
 	message, err := encoding.EncodeMessageFromUserToUMHInstance(models.UMHMessageContent{MessageType: models.Subscribe, Payload: ""})
 	if err != nil {
-		fail.Fatalf("Failed to encrypt message: %v", err)
+		sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "Failed to encrypt message: %v", err)
 	}
 	gock.New("https://management.umh.app").
 		Get("/api/v2/instance/pull").
