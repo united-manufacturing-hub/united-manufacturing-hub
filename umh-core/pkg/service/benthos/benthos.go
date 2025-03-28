@@ -36,6 +36,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	"go.uber.org/zap"
 
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
@@ -1121,7 +1122,7 @@ func (s *BenthosService) ServiceExists(ctx context.Context, benthosName string) 
 
 	exists, err := s.s6Service.ServiceExists(ctx, s6ServicePath)
 	if err != nil {
-		s.logger.Error("Error checking if service exists", zap.String("service", s6ServiceName), zap.Error(err))
+		sentry.ReportIssuef(sentry.IssueTypeError, s.logger, "Error checking if service exists for %s: %v", s6ServiceName, err)
 		return false
 	}
 

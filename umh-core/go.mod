@@ -3,8 +3,11 @@ module github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core
 go 1.24.1
 
 require (
+	github.com/DataDog/gostackparse v0.7.0
+	github.com/Masterminds/semver/v3 v3.3.1
 	github.com/cactus/tai64 v1.0.3
 	github.com/cenkalti/backoff v2.2.1+incompatible
+	github.com/getsentry/sentry-go v0.31.1
 	github.com/looplab/fsm v1.0.2
 	github.com/onsi/ginkgo/v2 v2.23.3
 	github.com/onsi/gomega v1.36.3

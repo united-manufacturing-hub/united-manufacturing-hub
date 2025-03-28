@@ -42,6 +42,7 @@ RUN apk add --no-cache \
     jq \
     tzdata \
     ca-certificates \
+    bc \
     xz
 
 # Set versions
