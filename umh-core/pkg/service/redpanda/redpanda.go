@@ -823,7 +823,7 @@ func (s *RedpandaService) IsMetricsErrorFree(metrics Metrics) bool {
 
 // HasProcessingActivity checks if a Redpanda service has processing activity
 func (s *RedpandaService) HasProcessingActivity(status RedpandaStatus) bool {
-	return status.MetricsState.IsActive
+	return status.MetricsState != nil && status.MetricsState.IsActive
 }
 
 // ServiceExists checks if a Redpanda service exists
