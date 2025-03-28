@@ -16,6 +16,7 @@ package generator
 
 import (
 	"fmt"
+	"math/rand"
 	"sync"
 	"time"
 
@@ -97,7 +98,7 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 					AvgMs: 10.5,
 					MaxMs: 25.0,
 					MinMs: 5.0,
-					P95Ms: 18.2,
+					P95Ms: float64(rand.Intn(91) + 10),
 					P99Ms: 22.8,
 				},
 				Location: map[int]string{
@@ -158,7 +159,7 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 						Category:      models.Active,
 					},
 					Metrics: &models.DfcMetrics{
-						AvgInputThroughputPerMinuteInMsgSec: 25.3,
+						AvgInputThroughputPerMinuteInMsgSec: float64(rand.Intn(91) + 10),
 					},
 					Bridge: &models.DfcBridgeInfo{
 						DataContract: "sensor-v1",
