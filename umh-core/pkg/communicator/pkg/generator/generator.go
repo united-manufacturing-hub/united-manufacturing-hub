@@ -33,8 +33,8 @@ const (
 type StatusCollectorType struct {
 	latestData *LatestData
 	dog        watchdog.Iface
-	stateMu    sync.RWMutex // Mutex to protect access to state
 	state      *fsm.SystemSnapshot
+	systemMu   *sync.Mutex
 }
 
 type LatestData struct {
@@ -47,6 +47,7 @@ type LatestData struct {
 func NewStatusCollector(
 	dog watchdog.Iface,
 	state *fsm.SystemSnapshot,
+	systemMu *sync.Mutex,
 ) *StatusCollectorType {
 
 	latestData := &LatestData{}
@@ -55,6 +56,7 @@ func NewStatusCollector(
 		latestData: latestData,
 		dog:        dog,
 		state:      state,
+		systemMu:   systemMu,
 	}
 
 	return collector
@@ -65,9 +67,9 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 	defer s.latestData.mu.RUnlock()
 
 	// Lock state for reading
-	s.stateMu.RLock()
+	s.systemMu.Lock()
 	state := s.state
-	s.stateMu.RUnlock()
+	s.systemMu.Unlock()
 
 	// Save the state in a map
 	managersMap := make(map[string]map[string]fsm.FSMInstanceSnapshot)
