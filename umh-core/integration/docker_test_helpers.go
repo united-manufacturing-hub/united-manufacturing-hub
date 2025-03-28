@@ -147,7 +147,7 @@ func writeConfigFile(yamlContent string, containerName ...string) error {
 		}
 
 		// Verify the config was written correctly
-		out, err = runDockerCommand("exec", container, "cat", "/data/config.yaml")
+		_, err = runDockerCommand("exec", container, "cat", "/data/config.yaml")
 		if err != nil {
 			fmt.Printf("Failed to verify config in container: %v\n", err)
 			return fmt.Errorf("failed to verify config in container: %w", err)
