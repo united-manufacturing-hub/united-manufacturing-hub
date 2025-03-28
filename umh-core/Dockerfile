@@ -26,59 +26,73 @@ WORKDIR /go/src/github.com/united-manufacturing-hub/united-manufacturing-hub/umh
 RUN go mod download
 COPY . .
 RUN CGO_ENABLED=0 go build \
+    -ldflags "-s -w \
     -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants.S6OverlayVersion=${S6_OVERLAY_VERSION} \
     -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants.BenthosVersion=${BENTHOS_UMH_VERSION} \
-    -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants.RedpandaVersion=${REDPANDA_VERSION} \
+    -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants.RedpandaVersion=${REDPANDA_VERSION}" \
     -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/main.appVersion=${APP_VERSION} \
-    -ldflags "-s -w" \
     -o /go/bin/umh-core cmd/main.go
 
-# --- Downloader Stage (slow downloads) ---
+# --- Cache Stage ---
+FROM scratch as cache
+COPY .docker-cache/s6-overlay/ /s6-overlay/
+COPY .docker-cache/benthos/ /benthos/
+COPY .docker-cache/redpanda/ /redpanda/
+
+# --- Downloader Stage (using cached files) ---
 FROM alpine:3.21 as downloader
-RUN apk add --no-cache bash curl jq tzdata ca-certificates xz wget bc
+RUN apk add --no-cache bash curl jq tzdata ca-certificates xz bc
 
 ARG S6_OVERLAY_VERSION=3.2.0.2
 ARG BENTHOS_UMH_VERSION=0.6.2
 ARG REDPANDA_VERSION=24.3.8
 ARG TARGETARCH=amd64
 
+# Copy cached files from cache stage
+COPY --from=cache /s6-overlay/s6-overlay-noarch.tar.xz /tmp/
+COPY --from=cache /s6-overlay/syslogd-overlay-noarch.tar.xz /tmp/
+
 # s6-overlay noarch
-RUN wget -O /tmp/s6-overlay-noarch.tar.xz "https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/s6-overlay-noarch.tar.xz" && \
-    tar -C / -Jxpf /tmp/s6-overlay-noarch.tar.xz && rm /tmp/s6-overlay-noarch.tar.xz
+RUN tar -C / -Jxpf /tmp/s6-overlay-noarch.tar.xz && rm /tmp/s6-overlay-noarch.tar.xz
 
 # s6-overlay arch-specific
-RUN case "${TARGETARCH}" in \
-    "amd64") S6_ARCH="x86_64" ;; \
-    "arm64") S6_ARCH="aarch64" ;; \
-    *) echo "Unsupported architecture: ${TARGETARCH}" && exit 1 ;; \
-    esac && \
-    wget -O /tmp/s6-overlay-arch.tar.xz "https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/s6-overlay-${S6_ARCH}.tar.xz" && \
-    tar -C / -Jxpf /tmp/s6-overlay-arch.tar.xz && rm /tmp/s6-overlay-arch.tar.xz
+COPY --from=cache /s6-overlay/s6-overlay-aarch64.tar.xz /s6-overlay/s6-overlay-aarch64.tar.xz
+COPY --from=cache /s6-overlay/s6-overlay-x86_64.tar.xz /s6-overlay/s6-overlay-x86_64.tar.xz
+RUN S6_ARCH=$([ "${TARGETARCH}" = "arm64" ] && echo "aarch64" || echo "x86_64") && \
+    cp /s6-overlay/s6-overlay-${S6_ARCH}.tar.xz /tmp/ && \
+    tar -C / -Jxpf /tmp/s6-overlay-${S6_ARCH}.tar.xz && rm /tmp/s6-overlay-${S6_ARCH}.tar.xz
 
 # syslogd overlay
-RUN wget -O /tmp/syslogd-overlay-noarch.tar.xz "https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/syslogd-overlay-noarch.tar.xz" && \
-    tar -C / -Jxpf /tmp/syslogd-overlay-noarch.tar.xz && rm /tmp/syslogd-overlay-noarch.tar.xz
+RUN tar -C / -Jxpf /tmp/syslogd-overlay-noarch.tar.xz && rm /tmp/syslogd-overlay-noarch.tar.xz
 
 # Benthos installation
+COPY --from=cache /benthos/benthos-linux-amd64 /benthos/benthos-linux-amd64
+COPY --from=cache /benthos/benthos-linux-arm64 /benthos/benthos-linux-arm64
 RUN case "${TARGETARCH}" in \
     "amd64") BENTHOS_ARCH="amd64" ;; \
     "arm64") BENTHOS_ARCH="arm64" ;; \
     *) echo "Unsupported architecture: ${TARGETARCH}" && exit 1 ;; \
     esac && \
-    wget -O /usr/local/bin/benthos "https://github.com/united-manufacturing-hub/benthos-umh/releases/download/v${BENTHOS_UMH_VERSION}/benthos-linux-${BENTHOS_ARCH}" && \
+    cp /benthos/benthos-linux-${BENTHOS_ARCH} /usr/local/bin/benthos && \
     chmod +x /usr/local/bin/benthos
 
 # Redpanda installation
+COPY --from=cache /redpanda/redpanda-${REDPANDA_VERSION}-amd64.tar.gz /redpanda/redpanda-${REDPANDA_VERSION}-arm64.tar.gz /redpanda/
+COPY --from=cache /redpanda/redpanda-${REDPANDA_VERSION}-amd64.tar.gz /redpanda/redpanda-${REDPANDA_VERSION}-arm64.tar.gz /redpanda/
 RUN case "${TARGETARCH}" in \
     "amd64") REDPANDA_ARCH="amd64" ;; \
     "arm64") REDPANDA_ARCH="arm64" ;; \
     *) echo "Unsupported architecture: ${TARGETARCH}" && exit 1 ;; \
     esac && \
     mkdir -p /tmp/redpanda /opt/redpanda && \
-    wget -O /tmp/redpanda/redpanda.tar.gz "https://dl.redpanda.com/nzc4ZYQK3WRGd9sy/redpanda/raw/names/redpanda-${REDPANDA_ARCH}/versions/${REDPANDA_VERSION}/redpanda-${REDPANDA_VERSION}-${REDPANDA_ARCH}.tar.gz" && \
+    cp /redpanda/redpanda-${REDPANDA_VERSION}-${REDPANDA_ARCH}.tar.gz /tmp/redpanda/redpanda.tar.gz && \
     tar -xzf /tmp/redpanda/redpanda.tar.gz -C /opt/redpanda && rm /tmp/redpanda/redpanda.tar.gz && \
     mkdir -p /data/redpanda /data/redpanda/coredump && \
     chmod +x /opt/redpanda/bin/redpanda
+
+# Cleanup all the files we don't need
+RUN rm -rf /s6-overlay /benthos /redpanda 
+
 
 # --- Final Stage ---
 FROM downloader

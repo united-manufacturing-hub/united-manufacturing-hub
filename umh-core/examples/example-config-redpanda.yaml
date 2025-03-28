@@ -19,5 +19,4 @@ redpanda:
   name: redpanda
   desiredState: active
   redpandaServiceConfig:
-    # Data directory where the redpanda state is stored
-    dataDirectory: "/data/redpanda"
+    # None for now

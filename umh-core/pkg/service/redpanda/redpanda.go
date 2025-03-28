@@ -241,7 +241,7 @@ func (s *RedpandaService) generateRedpandaYaml(config *redpandaserviceconfig.Red
 		return "", fmt.Errorf("config is nil")
 	}
 
-	return redpandayaml.RenderRedpandaYAML(config.DataDirectory)
+	return redpandayaml.RenderRedpandaYAML(config.RetentionMs, config.RetentionBytes)
 }
 
 // generateS6ConfigForBenthos creates a S6 config for a given benthos instance
@@ -263,18 +263,6 @@ func (s *RedpandaService) GenerateS6ConfigForRedpanda(redpandaConfig *redpandase
 		Env: map[string]string{},
 		ConfigFiles: map[string]string{
 			constants.RedpandaConfigFileName: yamlConfig,
-		},
-	}
-
-	return s6Config, nil
-}
-
-func (s *RedpandaService) GenerateS6ConfigForDirectoryCreation(redpandaConfig *redpandaserviceconfig.RedpandaServiceConfig) (s6Config s6serviceconfig.S6ServiceConfig, err error) {
-	s6Config = s6serviceconfig.S6ServiceConfig{
-		Command: []string{
-			"mkdir",
-			"-p",
-			redpandaConfig.DataDirectory,
 		},
 	}
 
@@ -303,9 +291,14 @@ func (s *RedpandaService) GetConfig(ctx context.Context) (redpandaserviceconfig.
 
 	result := redpandaserviceconfig.RedpandaServiceConfig{}
 
-	// Safely extract data_directory
-	if dataDirectory, ok := redpandaConfig["data_directory"].(string); ok {
-		result.DataDirectory = dataDirectory
+	// Safely extract retention_ms
+	if retentionMs, ok := redpandaConfig["log_retention_ms"].(int); ok {
+		result.RetentionMs = retentionMs
+	}
+
+	// Safely extract retention_bytes
+	if retentionBytes, ok := redpandaConfig["retention_bytes"].(int); ok {
+		result.RetentionBytes = retentionBytes
 	}
 
 	return redpandayaml.NormalizeRedpandaConfig(result), nil
@@ -616,23 +609,6 @@ func (s *RedpandaService) AddRedpandaToS6Manager(ctx context.Context, cfg *redpa
 		}
 	}
 
-	// Generate the S6 config for the directory creation
-	s6ConfigDirectoryCreation, err := s.GenerateS6ConfigForDirectoryCreation(cfg)
-	if err != nil {
-		return fmt.Errorf("failed to generate S6 config for Redpanda service %s: %w", s6ServiceName, err)
-	}
-
-	s6FSMConfigDirectoryCreation := config.S6FSMConfig{
-		FSMInstanceConfig: config.FSMInstanceConfig{
-			Name:            fmt.Sprintf("%s-directory-creation", s6ServiceName),
-			DesiredFSMState: s6fsm.OperationalStateRunning,
-		},
-		S6ServiceConfig: s6ConfigDirectoryCreation,
-	}
-
-	// Add the S6 FSM config to the list of S6 FSM configs
-	s.s6ServiceConfigs = append(s.s6ServiceConfigs, s6FSMConfigDirectoryCreation)
-
 	// Generate the S6 config for this instance
 	s6Config, err := s.GenerateS6ConfigForRedpanda(cfg)
 	if err != nil {
@@ -680,30 +656,6 @@ func (s *RedpandaService) UpdateRedpandaInS6Manager(ctx context.Context, cfg *re
 	if !found {
 		return ErrServiceNotExist
 	}
-
-	// Check if the service exists
-	foundDirectoryCreation := false
-	indexDirectoryCreation := -1
-	for i, s6Config := range s.s6ServiceConfigs {
-		if s6Config.Name == fmt.Sprintf("%s-directory-creation", s6ServiceName) {
-			foundDirectoryCreation = true
-			indexDirectoryCreation = i
-			break
-		}
-	}
-
-	if !foundDirectoryCreation {
-		return ErrServiceNotExist
-	}
-
-	// Generate the S6 config for the directory creation
-	s6ConfigDirectoryCreation, err := s.GenerateS6ConfigForDirectoryCreation(cfg)
-	if err != nil {
-		return fmt.Errorf("failed to generate S6 config for Redpanda service %s: %w", s6ServiceName, err)
-	}
-
-	// Add the S6 FSM config to the list of S6 FSM configs
-	s.s6ServiceConfigs[indexDirectoryCreation].S6ServiceConfig = s6ConfigDirectoryCreation
 
 	// Generate the new S6 config for this instance
 	s6Config, err := s.GenerateS6ConfigForRedpanda(cfg)

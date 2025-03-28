@@ -56,9 +56,14 @@ func (c *Comparator) ConfigDiff(desired, observed RedpandaServiceConfig) string 
 	normObserved := c.normalizer.NormalizeConfig(observed)
 
 	// Check basic scalar fields
-	if normDesired.DataDirectory != normObserved.DataDirectory {
-		diff.WriteString(fmt.Sprintf("DataDirectory: Want: %s, Have: %s\n",
-			normDesired.DataDirectory, normObserved.DataDirectory))
+	if normDesired.RetentionMs != normObserved.RetentionMs {
+		diff.WriteString(fmt.Sprintf("RetentionMs: Want: %d, Have: %d\n",
+			normDesired.RetentionMs, normObserved.RetentionMs))
+	}
+
+	if normDesired.RetentionBytes != normObserved.RetentionBytes {
+		diff.WriteString(fmt.Sprintf("RetentionBytes: Want: %d, Have: %d\n",
+			normDesired.RetentionBytes, normObserved.RetentionBytes))
 	}
 
 	if diff.Len() == 0 {

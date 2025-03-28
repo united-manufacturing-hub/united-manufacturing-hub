@@ -23,7 +23,8 @@ var (
 // RedpandaServiceConfig represents the configuration for a Redpanda service
 type RedpandaServiceConfig struct {
 	// Redpanda-specific configuration
-	DataDirectory string `yaml:"dataDirectory"`
+	RetentionMs    int `yaml:"retentionMs"`
+	RetentionBytes int `yaml:"retentionBytes"`
 }
 
 // Equal checks if two RedpandaServiceConfigs are equal
@@ -32,10 +33,11 @@ func (c RedpandaServiceConfig) Equal(other RedpandaServiceConfig) bool {
 }
 
 // RenderRedpandaYAML is a package-level function for easy YAML generation
-func RenderRedpandaYAML(dataDirectory string) (string, error) {
+func RenderRedpandaYAML(retentionMs int, retentionBytes int) (string, error) {
 	// Create a config object from the individual components
 	cfg := RedpandaServiceConfig{
-		DataDirectory: dataDirectory,
+		RetentionMs:    retentionMs,
+		RetentionBytes: retentionBytes,
 	}
 
 	// Use the generator to render the YAML

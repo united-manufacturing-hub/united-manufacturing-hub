@@ -27,8 +27,12 @@ func (n *Normalizer) NormalizeConfig(cfg RedpandaServiceConfig) RedpandaServiceC
 	// Create a copy
 	normalized := cfg
 
-	if normalized.DataDirectory == "" {
-		normalized.DataDirectory = "/data/redpanda"
+	if normalized.RetentionMs == 0 {
+		normalized.RetentionMs = 0
+	}
+
+	if normalized.RetentionBytes == 0 {
+		normalized.RetentionBytes = 0
 	}
 
 	return normalized

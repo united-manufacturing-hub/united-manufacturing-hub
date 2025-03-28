@@ -26,7 +26,8 @@ var _ = Describe("Redpanda YAML Normalizer", func() {
 			normalizer := NewNormalizer()
 
 			normalizedConfig := normalizer.NormalizeConfig(config)
-			Expect(normalizedConfig.DataDirectory).To(Equal("/data/redpanda"))
+			Expect(normalizedConfig.RetentionMs).To(Equal(0))
+			Expect(normalizedConfig.RetentionBytes).To(Equal(0))
 		})
 	})
 })

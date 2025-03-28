@@ -36,6 +36,11 @@ NILWAY_VERSION = latest
 # Default to the architecture of the host
 TARGETARCH := $(shell go env GOARCH)
 
+# Default values for build arguments
+S6_OVERLAY_VERSION = 3.2.0.2
+BENTHOS_UMH_VERSION = 0.6.2
+REDPANDA_VERSION = 24.3.8
+
 # Determine version based on git
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "0.0.0-dev")
 
@@ -43,11 +48,64 @@ install:
 	go install go.uber.org/nilaway/cmd/nilaway@$(NILWAY_VERSION)
 	go install github.com/onsi/ginkgo/v2/ginkgo@$(GINKGO_VERSION)
 
-build:
+download-docker-binaries:
+	@mkdir -p .docker-cache/s6-overlay .docker-cache/benthos .docker-cache/redpanda
+	@echo "Downloading binaries with caching..."
+	
+	@# Check and update s6-overlay version
+	@if [ ! -f .docker-cache/s6-overlay/version ] || [ "$$(cat .docker-cache/s6-overlay/version)" != "$(S6_OVERLAY_VERSION)" ]; then \
+		rm -f .docker-cache/s6-overlay/*.tar.xz; \
+		echo "$(S6_OVERLAY_VERSION)" > .docker-cache/s6-overlay/version; \
+		wget -O .docker-cache/s6-overlay/s6-overlay-noarch.tar.xz "https://github.com/just-containers/s6-overlay/releases/download/v$(S6_OVERLAY_VERSION)/s6-overlay-noarch.tar.xz"; \
+		wget -O .docker-cache/s6-overlay/syslogd-overlay-noarch.tar.xz "https://github.com/just-containers/s6-overlay/releases/download/v$(S6_OVERLAY_VERSION)/syslogd-overlay-noarch.tar.xz"; \
+		wget -O .docker-cache/s6-overlay/s6-overlay-x86_64.tar.xz "https://github.com/just-containers/s6-overlay/releases/download/v$(S6_OVERLAY_VERSION)/s6-overlay-x86_64.tar.xz"; \
+		wget -O .docker-cache/s6-overlay/s6-overlay-aarch64.tar.xz "https://github.com/just-containers/s6-overlay/releases/download/v$(S6_OVERLAY_VERSION)/s6-overlay-aarch64.tar.xz"; \
+	fi
+	
+	@# Check and update Benthos version
+	@if [ ! -f .docker-cache/benthos/version ] || [ "$$(cat .docker-cache/benthos/version)" != "$(BENTHOS_UMH_VERSION)" ]; then \
+		rm -f .docker-cache/benthos/benthos-linux-*; \
+		echo "$(BENTHOS_UMH_VERSION)" > .docker-cache/benthos/version; \
+		wget -O .docker-cache/benthos/benthos-linux-amd64 "https://github.com/united-manufacturing-hub/benthos-umh/releases/download/v$(BENTHOS_UMH_VERSION)/benthos-linux-amd64"; \
+		wget -O .docker-cache/benthos/benthos-linux-arm64 "https://github.com/united-manufacturing-hub/benthos-umh/releases/download/v$(BENTHOS_UMH_VERSION)/benthos-linux-arm64"; \
+	fi
+	
+	@# Check and update Redpanda version
+	@if [ ! -f .docker-cache/redpanda/version ] || [ "$$(cat .docker-cache/redpanda/version)" != "$(REDPANDA_VERSION)" ]; then \
+		rm -f .docker-cache/redpanda/redpanda-*.tar.gz; \
+		echo "$(REDPANDA_VERSION)" > .docker-cache/redpanda/version; \
+		wget -O .docker-cache/redpanda/redpanda-$(REDPANDA_VERSION)-amd64.tar.gz "https://dl.redpanda.com/nzc4ZYQK3WRGd9sy/redpanda/raw/names/redpanda-amd64/versions/$(REDPANDA_VERSION)/redpanda-$(REDPANDA_VERSION)-amd64.tar.gz"; \
+		wget -O .docker-cache/redpanda/redpanda-$(REDPANDA_VERSION)-arm64.tar.gz "https://dl.redpanda.com/nzc4ZYQK3WRGd9sy/redpanda/raw/names/redpanda-arm64/versions/$(REDPANDA_VERSION)/redpanda-$(REDPANDA_VERSION)-arm64.tar.gz"; \
+	fi
+	
+	@# Verify all required files exist
+	@echo "Verifying downloaded files..."
+	@for f in \
+		.docker-cache/s6-overlay/s6-overlay-noarch.tar.xz \
+		.docker-cache/s6-overlay/s6-overlay-x86_64.tar.xz \
+		.docker-cache/s6-overlay/s6-overlay-aarch64.tar.xz \
+		.docker-cache/s6-overlay/syslogd-overlay-noarch.tar.xz \
+		.docker-cache/benthos/benthos-linux-amd64 \
+		.docker-cache/benthos/benthos-linux-arm64 \
+		.docker-cache/redpanda/redpanda-$(REDPANDA_VERSION)-amd64.tar.gz \
+		.docker-cache/redpanda/redpanda-$(REDPANDA_VERSION)-arm64.tar.gz; \
+	do \
+		if [ ! -f $$f ]; then \
+			echo "Missing required file: $$f"; \
+			exit 1; \
+		fi; \
+	done
+	@echo "All required files are present and up to date"
+
+build: download-docker-binaries
 	docker build \
-	--build-arg TARGETARCH=$(TARGETARCH) \
-	--build-arg APP_VERSION=$(VERSION) \
-	-t $(IMAGE_NAME):$(TAG) -f Dockerfile .
+		--build-arg TARGETARCH=$(TARGETARCH) \
+		--build-arg S6_OVERLAY_VERSION=$(S6_OVERLAY_VERSION) \
+		--build-arg BENTHOS_UMH_VERSION=$(BENTHOS_UMH_VERSION) \
+		--build-arg REDPANDA_VERSION=$(REDPANDA_VERSION) \
+		--build-arg APP_VERSION=$(VERSION) \
+		-t $(IMAGE_NAME):$(TAG) \
+		-f Dockerfile .
 	
 clean:
 	docker stop $(IMAGE_NAME) || true

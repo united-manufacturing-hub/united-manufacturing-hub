@@ -45,19 +45,23 @@ var _ = Describe("Redpanda YAML Generator", func() {
 		Entry("should render empty paths correctly",
 			testCase{
 				config: &RedpandaServiceConfig{
-					DataDirectory: "",
+					RetentionMs:    0,
+					RetentionBytes: 0,
 				},
 				expected: []string{
-					"data_directory: /data/redpanda",
+					"retention_ms: 0",
+					"retention_bytes: 0",
 				},
 			}),
 		Entry("should render configured paths correctly",
 			testCase{
 				config: &RedpandaServiceConfig{
-					DataDirectory: "/data/redpanda2",
+					RetentionMs:    1000,
+					RetentionBytes: 1000,
 				},
 				expected: []string{
-					"data_directory: /data/redpanda2",
+					"retention_ms: 1000",
+					"retention_bytes: 1000",
 				},
 			}),
 	)

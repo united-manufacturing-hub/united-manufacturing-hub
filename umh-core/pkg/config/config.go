@@ -106,7 +106,8 @@ type RedpandaConfig struct {
 }
 
 type RedpandaServiceConfig struct {
-	DataDirectory string `yaml:"dataDirectory"`
+	RetentionMs    int `yaml:"retentionMs"`
+	RetentionBytes int `yaml:"retentionBytes"`
 }
 
 // Clone creates a deep copy of FullConfig

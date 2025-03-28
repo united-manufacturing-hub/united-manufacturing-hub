@@ -23,11 +23,13 @@ var _ = Describe("Redpanda YAML Comparator", func() {
 	Describe("ConfigsEqual", func() {
 		It("should consider identical configs equal", func() {
 			config1 := RedpandaServiceConfig{
-				DataDirectory: "/data/redpanda",
+				RetentionMs:    1000,
+				RetentionBytes: 1000,
 			}
 
 			config2 := RedpandaServiceConfig{
-				DataDirectory: "/data/redpanda",
+				RetentionMs:    1000,
+				RetentionBytes: 1000,
 			}
 
 			comparator := NewComparator()
@@ -37,11 +39,13 @@ var _ = Describe("Redpanda YAML Comparator", func() {
 		})
 		It("should consider different configs unequal", func() {
 			config1 := RedpandaServiceConfig{
-				DataDirectory: "/data/redpanda",
+				RetentionMs:    1000,
+				RetentionBytes: 1000,
 			}
 
 			config2 := RedpandaServiceConfig{
-				DataDirectory: "/data/redpanda2",
+				RetentionMs:    1000,
+				RetentionBytes: 1000,
 			}
 
 			comparator := NewComparator()
@@ -54,19 +58,21 @@ var _ = Describe("Redpanda YAML Comparator", func() {
 	Describe("ConfigDiff", func() {
 		It("should generate readable diff for different configs", func() {
 			config1 := RedpandaServiceConfig{
-				DataDirectory: "/data/redpanda",
+				RetentionMs:    1000,
+				RetentionBytes: 1000,
 			}
 
 			config2 := RedpandaServiceConfig{
-				DataDirectory: "/data/redpanda2",
+				RetentionMs:    1001,
+				RetentionBytes: 1000,
 			}
 
 			comparator := NewComparator()
 			diff := comparator.ConfigDiff(config1, config2)
 
-			Expect(diff).To(ContainSubstring("DataDirectory"))
-			Expect(diff).To(ContainSubstring("Want: /data/redpanda"))
-			Expect(diff).To(ContainSubstring("Have: /data/redpanda2"))
+			Expect(diff).To(ContainSubstring("RetentionMs"))
+			Expect(diff).To(ContainSubstring("1000"))
+			Expect(diff).To(ContainSubstring("1001"))
 		})
 	})
 })
