@@ -175,7 +175,7 @@ func (s *Watchdog) Start() {
 					errorMsg := fmt.Sprintf("Heartbeat too old: [%s] %s (%s) [Lifetime heartbeats: %d] (%d seconds overdue)",
 						s.watchdogID, overdueHeartbeat.name, overdueHeartbeat.hb.uniqueIdentifier,
 						overdueHeartbeat.hb.heartbeatsReceived.Load(), overdueHeartbeat.secondsOverdue)
-					sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), errorMsg)
+
 					panic(errorMsg)
 				}
 
