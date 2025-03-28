@@ -16,6 +16,7 @@ package redpanda
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/redpandaserviceconfig"
@@ -635,6 +636,116 @@ var _ = Describe("Redpanda Service", func() {
 					},
 				}
 				Expect(service.IsLogsFine(logs, currentTime, logWindow)).To(BeTrue())
+			})
+
+			It("should handle logs at the edge of the time window", func() {
+				// Create test logs with error exactly at the window boundary
+				errorLog := s6service.LogEntry{
+					Timestamp: currentTime.Add(-logWindow), // Exactly at boundary (should be excluded)
+					Content:   "ERROR Address already in use (port 9092)",
+				}
+
+				// Debug info
+				windowStart := currentTime.Add(-logWindow)
+				fmt.Printf("Debug - Window start: %v\n", windowStart)
+				fmt.Printf("Debug - Error log time: %v\n", errorLog.Timestamp)
+				fmt.Printf("Debug - Is error log before window start? %v\n", errorLog.Timestamp.Before(windowStart))
+				fmt.Printf("Debug - Is error log equal to window start? %v\n", errorLog.Timestamp.Equal(windowStart))
+
+				logs := []s6service.LogEntry{errorLog}
+
+				// Should pass because error log is exactly at boundary and will be excluded
+				result := service.IsLogsFine(logs, currentTime, logWindow)
+				fmt.Printf("Debug - IsLogsFine result: %v\n", result)
+				Expect(result).To(BeFalse(), "Error log exactly at window boundary should be excluded")
+
+				// Add a normal log just inside the window
+				normalLog := s6service.LogEntry{
+					Timestamp: currentTime.Add(-logWindow).Add(1 * time.Millisecond), // Just inside window
+					Content:   "INFO Normal log inside window",
+				}
+				logs = append(logs, normalLog)
+				fmt.Printf("Debug - Normal log time: %v\n", normalLog.Timestamp)
+				fmt.Printf("Debug - Is normal log before window start? %v\n", normalLog.Timestamp.Before(windowStart))
+
+				// Should still pass
+				result = service.IsLogsFine(logs, currentTime, logWindow)
+				fmt.Printf("Debug - IsLogsFine result with normal log: %v\n", result)
+				Expect(result).To(BeFalse(), "Adding a normal log inside the window should not affect the result")
+
+				// Now add an error log just inside the window
+				errorLogInside := s6service.LogEntry{
+					Timestamp: currentTime.Add(-logWindow).Add(2 * time.Millisecond), // Just inside window
+					Content:   "ERROR Reactor stalled for 5s",
+				}
+				logs = append(logs, errorLogInside)
+				fmt.Printf("Debug - Error log inside time: %v\n", errorLogInside.Timestamp)
+				fmt.Printf("Debug - Is error log inside before window start? %v\n", errorLogInside.Timestamp.Before(windowStart))
+
+				// Should fail because there's now an error log inside the window
+				result = service.IsLogsFine(logs, currentTime, logWindow)
+				fmt.Printf("Debug - IsLogsFine result with error log inside: %v\n", result)
+				Expect(result).To(BeFalse(), "Error log inside window should cause the check to fail")
+			})
+
+			It("should evaluate logs with mixed timestamps correctly", func() {
+				// Mix of:
+				// - Old errors (outside window)
+				// - Recent errors (inside window)
+				// - Old normal logs
+				// - Recent normal logs
+				logs := []s6service.LogEntry{
+					// Outside window, error - should be ignored
+					{
+						Timestamp: currentTime.Add(-10 * time.Minute),
+						Content:   "ERROR Address already in use (port 9092)",
+					},
+					// Outside window, normal - should be ignored
+					{
+						Timestamp: currentTime.Add(-7 * time.Minute),
+						Content:   "INFO Starting Redpanda",
+					},
+					// Inside window, normal - should not trigger failure
+					{
+						Timestamp: currentTime.Add(-4 * time.Minute),
+						Content:   "INFO Created topic 'test-topic'",
+					},
+					// Inside window with error - should trigger failure
+					{
+						Timestamp: currentTime.Add(-3 * time.Minute),
+						Content:   "ERROR Reactor stalled for 10s",
+					},
+					// Latest log, normal - should not affect result
+					{
+						Timestamp: currentTime.Add(-1 * time.Minute),
+						Content:   "INFO Successfully processed batch",
+					},
+				}
+
+				// Should fail because there's an error within the time window
+				Expect(service.IsLogsFine(logs, currentTime, logWindow)).To(BeFalse())
+
+				// Now move the error outside the window by adjusting the current time
+				adjustedTime := currentTime.Add(3 * time.Minute)
+				Expect(service.IsLogsFine(logs, adjustedTime, logWindow)).To(BeTrue())
+			})
+
+			It("should respect different window sizes", func() {
+				logs := []s6service.LogEntry{
+					{
+						Timestamp: currentTime.Add(-3 * time.Minute),
+						Content:   "ERROR Address already in use (port 9092)",
+					},
+				}
+
+				// With 5 minute window (default), error is detected
+				Expect(service.IsLogsFine(logs, currentTime, 5*time.Minute)).To(BeFalse())
+
+				// With 2 minute window, error is outside window and ignored
+				Expect(service.IsLogsFine(logs, currentTime, 2*time.Minute)).To(BeTrue())
+
+				// With 10 minute window, error is detected
+				Expect(service.IsLogsFine(logs, currentTime, 10*time.Minute)).To(BeFalse())
 			})
 		})
 	})

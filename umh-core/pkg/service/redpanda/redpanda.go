@@ -798,6 +798,8 @@ func (s *RedpandaService) IsLogsFine(logs []s6service.LogEntry, currentTime time
 
 	for _, log := range logs {
 		// Skip logs outside the time window
+		// Note: This makes the window exclusive at the start boundary (logs exactly at windowStart are excluded)
+		// and inclusive at the end boundary (up to currentTime)
 		if log.Timestamp.Before(windowStart) {
 			continue
 		}
