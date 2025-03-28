@@ -89,7 +89,7 @@ func (s *DefaultService) Initialize(ctx context.Context, config config.AgentConf
 	s.logger.Infof("Initializing agent service with config: %+v", config)
 
 	// Update location information
-	if config.Location != nil && len(config.Location) > 0 {
+	if len(config.Location) > 0 {
 		s.agentInfo.Location = config.Location
 	}
 
