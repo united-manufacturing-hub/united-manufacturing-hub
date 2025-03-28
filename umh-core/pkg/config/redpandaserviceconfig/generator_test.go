@@ -49,8 +49,8 @@ var _ = Describe("Redpanda YAML Generator", func() {
 					RetentionBytes: 0,
 				},
 				expected: []string{
-					"retention_ms: 0",
-					"retention_bytes: 0",
+					"retention_ms: -1",
+					"retention_bytes: null",
 				},
 			}),
 		Entry("should render configured paths correctly",
