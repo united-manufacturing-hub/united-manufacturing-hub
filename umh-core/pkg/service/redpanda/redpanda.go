@@ -454,7 +454,12 @@ func parseMetrics(data []byte) (Metrics, error) {
 			}
 		case name == "redpanda_storage_disk_free_space_alert":
 			if len(family.Metric) > 0 {
-				metrics.Infrastructure.Storage.FreeSpaceAlert = getValue(family.Metric[0]) == 0
+				// According to Redpanda metrics documentation:
+				// 0 = OK (no alert)
+				// 1 = Low space (alert level 1)
+				// 2 = Degraded (alert level 2)
+				// So any non-zero value indicates an alert condition
+				metrics.Infrastructure.Storage.FreeSpaceAlert = getValue(family.Metric[0]) != 0
 			}
 		case name == "redpanda_uptime_seconds_total":
 			if len(family.Metric) > 0 {

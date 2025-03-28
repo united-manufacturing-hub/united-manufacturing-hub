@@ -132,7 +132,12 @@ func (m *MockHTTPClient) SetMetricsResponse(config MetricsConfig) {
 		createGaugeMetric("redpanda_storage_disk_free_bytes", "Storage free bytes", config.Infrastructure.Storage.FreeBytes),
 		createGaugeMetric("redpanda_storage_disk_total_bytes", "Storage total bytes", config.Infrastructure.Storage.TotalBytes),
 		createGaugeMetric("redpanda_storage_disk_free_space_alert", "Storage free space alert",
-			boolToInt64(config.Infrastructure.Storage.FreeSpaceAlert)),
+			func() int64 {
+				if config.Infrastructure.Storage.FreeSpaceAlert {
+					return 1 // Alert active = 1 (Low space)
+				}
+				return 0 // No alert = 0 (OK)
+			}()),
 	)
 
 	// Infrastructure metrics - Uptime
@@ -182,17 +187,6 @@ func (m *MockHTTPClient) SetMetricsResponse(config MetricsConfig) {
 		StatusCode: http.StatusOK,
 		Body:       buf.Bytes(),
 	}
-}
-
-// Helper function to convert bool to int64 (0 for false, 1 for true)
-// Important: The parser in redpanda.go expects:
-// - A value of 0 means FreeSpaceAlert is false (no alert)
-// - A value of 1 means FreeSpaceAlert is true (alert triggered)
-func boolToInt64(b bool) int64 {
-	if b {
-		return 1
-	}
-	return 0
 }
 
 func createMetricWithLabels(value int64, labels map[string]string) *dto.Metric {
@@ -325,4 +319,12 @@ func (m *MockHTTPClient) GetWithBody(ctx context.Context, urlString string) (*ht
 	resp.Body = io.NopCloser(bytes.NewReader(body))
 
 	return resp, body, nil
+}
+
+// Helper function to convert bool to int64 (0 for false, 1 for true)
+func boolToInt64(b bool) int64 {
+	if b {
+		return 1 // True maps to 1
+	}
+	return 0 // False maps to 0
 }
