@@ -89,5 +89,6 @@ func (c FullConfig) Clone() FullConfig {
 	}
 	deepcopy.Copy(&clone.Services, &c.Services)
 	deepcopy.Copy(&clone.Benthos, &c.Benthos)
+	deepcopy.Copy(&clone.Nmap, &c.Nmap)
 	return clone
 }
