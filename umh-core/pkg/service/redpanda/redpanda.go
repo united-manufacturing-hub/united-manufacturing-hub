@@ -231,8 +231,8 @@ func (s *RedpandaService) generateRedpandaYaml(config *redpandaserviceconfig.Red
 	return redpandayaml.RenderRedpandaYAML(config.RetentionMs, config.RetentionBytes)
 }
 
-// generateS6ConfigForBenthos creates a S6 config for a given benthos instance
-// Expects s6ServiceName (e.g. "benthos-myservice"), not the raw benthosName
+// generateS6ConfigForRedpanda creates a S6 config for a given redpanda instance
+// Expects s6ServiceName (e.g. "redpanda-myservice"), not the raw redpandaName
 func (s *RedpandaService) GenerateS6ConfigForRedpanda(redpandaConfig *redpandaserviceconfig.RedpandaServiceConfig) (s6Config s6serviceconfig.S6ServiceConfig, err error) {
 	configPath := fmt.Sprintf("%s/%s/config/%s", constants.S6BaseDir, constants.RedpandaServiceName, constants.RedpandaConfigFileName)
 
@@ -334,7 +334,7 @@ func (s *RedpandaService) Status(ctx context.Context, tick uint64) (ServiceInfo,
 		return ServiceInfo{}, fmt.Errorf("failed to get current FSM state: %w", err)
 	}
 
-	// Let's get the logs of the Benthos service
+	// Let's get the logs of the Redpanda service
 	s6ServicePath := filepath.Join(constants.S6BaseDir, constants.RedpandaServiceName)
 	logs, err := s.s6Service.GetLogs(ctx, s6ServicePath)
 	if err != nil {
@@ -346,7 +346,7 @@ func (s *RedpandaService) Status(ctx context.Context, tick uint64) (ServiceInfo,
 		}
 	}
 
-	// Let's get the health check of the Benthos service
+	// Let's get the health check of the Redpanda service
 	redpandaStatus, err := s.GetHealthCheckAndMetrics(ctx, tick)
 	if err != nil {
 		if strings.Contains(err.Error(), "connection refused") {
@@ -847,7 +847,7 @@ func (s *RedpandaService) ServiceExists(ctx context.Context) bool {
 }
 
 // ForceRemoveRedpanda removes a Redpanda instance from the S6 manager
-// This should only be called if the Benthos instance is in a permanent failure state
+// This should only be called if the Redpanda instance is in a permanent failure state
 // and the instance itself cannot be stopped or removed
 func (s *RedpandaService) ForceRemoveRedpanda(ctx context.Context) error {
 	return s.s6Service.ForceRemove(ctx, constants.RedpandaServiceName)

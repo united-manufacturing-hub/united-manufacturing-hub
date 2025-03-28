@@ -107,12 +107,12 @@ func (m *RedpandaManager) CreateSnapshot() public_fsm.ManagerSnapshot {
 	// We need to convert the interface to the concrete type
 	baseManagerSnapshot, ok := baseSnapshot.(*public_fsm.BaseManagerSnapshot)
 	if !ok {
-		logger.For(logger.ComponentBenthosManager).Errorf(
+		logger.For(logger.ComponentRedpandaManager).Errorf(
 			"Failed to convert base snapshot to BaseManagerSnapshot, using generic snapshot")
 		return baseSnapshot
 	}
 
-	// Create Benthos-specific snapshot
+	// Create Redpanda-specific snapshot
 	redpandaSnapshot := &RedpandaManagerSnapshot{
 		BaseManagerSnapshot: baseManagerSnapshot,
 	}
