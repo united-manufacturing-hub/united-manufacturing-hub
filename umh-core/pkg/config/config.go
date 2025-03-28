@@ -17,9 +17,10 @@ package config
 import (
 	"reflect"
 
-	"github.com/tiendc/go-deepcopy"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
+
+	"github.com/tiendc/go-deepcopy"
 )
 
 type FullConfig struct {
@@ -30,7 +31,14 @@ type FullConfig struct {
 }
 
 type AgentConfig struct {
-	MetricsPort int `yaml:"metricsPort"` // Port to expose metrics on
+	MetricsPort        int `yaml:"metricsPort"` // Port to expose metrics on
+	CommunicatorConfig `yaml:"communicator"`
+	ReleaseChannel     ReleaseChannel `yaml:"releaseChannel"`
+}
+
+type CommunicatorConfig struct {
+	APIURL    string `yaml:"apiUrl"`
+	AuthToken string `yaml:"authToken"`
 }
 
 // FSMInstanceConfig is the config for a FSM instance
@@ -39,12 +47,19 @@ type FSMInstanceConfig struct {
 	DesiredFSMState string `yaml:"desiredState"`
 }
 
+type ReleaseChannel string
+
+const (
+	ReleaseChannelNightly    ReleaseChannel = "nightly"
+	ReleaseChannelStable     ReleaseChannel = "stable"
+	ReleaseChannelEnterprise ReleaseChannel = "enterprise"
+)
+
 // S6FSMConfig contains configuration for creating a service
 type S6FSMConfig struct {
 	// For the FSM
 	FSMInstanceConfig `yaml:",inline"`
 
-	// For the S6 service
 	S6ServiceConfig s6serviceconfig.S6ServiceConfig `yaml:"s6ServiceConfig"`
 }
 

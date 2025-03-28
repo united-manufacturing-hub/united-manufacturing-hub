@@ -17,10 +17,16 @@ package main
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
+	v2 "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/communication_state"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/models"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/control"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
@@ -65,7 +71,17 @@ func main() {
 
 	// Start the control loop
 	controlLoop := control.NewControlLoop()
-	go SystemSnapshotLogger(ctx, controlLoop)
+	systemSnapshot := new(fsm.SystemSnapshot)
+	systemMu := new(sync.Mutex)
+	communicationState := communication_state.CommunicationState{
+		Watchdog:        watchdog.NewWatchdog(ctx, time.NewTicker(time.Second*10), true),
+		InboundChannel:  make(chan *models.UMHMessage, 100),
+		OutboundChannel: make(chan *models.UMHMessage, 100),
+		ReleaseChannel:  config.Agent.ReleaseChannel,
+	}
+	go SystemSnapshotLogger(ctx, controlLoop, systemSnapshot, systemMu)
+
+	enableBackendConnection(&config, systemSnapshot, &communicationState, systemMu)
 	controlLoop.Execute(ctx)
 
 	log.Info("umh-core test completed")
@@ -73,7 +89,7 @@ func main() {
 
 // SystemSnapshotLogger logs the system snapshot every 5 seconds
 // It is an example on how to access the system snapshot and log it for communication with other components
-func SystemSnapshotLogger(ctx context.Context, controlLoop *control.ControlLoop) {
+func SystemSnapshotLogger(ctx context.Context, controlLoop *control.ControlLoop, systemSnapshot *fsm.SystemSnapshot, systemMu *sync.Mutex) {
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 
@@ -91,6 +107,11 @@ func SystemSnapshotLogger(ctx context.Context, controlLoop *control.ControlLoop)
 			return
 		case <-ticker.C:
 			snapshot := controlLoop.GetSystemSnapshot()
+			if snapshot != nil {
+				systemMu.Lock()
+				*systemSnapshot = *snapshot
+				systemMu.Unlock()
+			}
 			if snapshot == nil {
 				sentry.ReportIssuef(sentry.IssueTypeWarning, logger, "No system snapshot available")
 				continue
@@ -117,5 +138,36 @@ func SystemSnapshotLogger(ctx context.Context, controlLoop *control.ControlLoop)
 				}
 			}
 		}
+	}
+}
+
+func enableBackendConnection(config *config.FullConfig, state *fsm.SystemSnapshot, communicationState *communication_state.CommunicationState, systemMu *sync.Mutex) {
+	logger := logger.For("enableBackendConnection")
+	if logger == nil {
+		logger = zap.NewNop().Sugar()
+	}
+
+	logger.Info("Enabling backend connection")
+	// directly log the config to console, not to the logger
+	if config == nil {
+		logger.Warn("Config is nil, cannot enable backend connection")
+		return
+	}
+
+	if config.Agent.CommunicatorConfig.APIURL != "" && config.Agent.CommunicatorConfig.AuthToken != "" {
+		// This can temporarely deactivated, e.g., during integration tests where just the mgmtcompanion-config is changed directly
+
+		login := v2.NewLogin(config.Agent.CommunicatorConfig.AuthToken, false)
+		if login == nil {
+			sentry.ReportIssuef(sentry.IssueTypeError, logger, "Failed to create login object")
+			return
+		}
+		communicationState.LoginResponse = login
+		logger.Info("Backend connection enabled, login response: ", zap.Any("login_name", login.Name))
+
+		communicationState.InitialiseAndStartPuller()
+		communicationState.InitialiseAndStartPusher()
+		communicationState.InitialiseAndStartSubscriberHandler(time.Minute*5, time.Minute, config, state, systemMu)
+		communicationState.InitialiseAndStartRouter()
 	}
 }
