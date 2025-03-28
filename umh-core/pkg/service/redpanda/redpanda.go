@@ -33,6 +33,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/httpclient"
 	"go.uber.org/zap"
 	"gopkg.in/yaml.v3"
 
@@ -202,21 +203,22 @@ type RedpandaService struct {
 	s6Manager        *s6fsm.S6Manager
 	s6Service        s6service.Service // S6 service for direct S6 operations
 	s6ServiceConfigs []config.S6FSMConfig
-	httpClient       HTTPClient
+	httpClient       httpclient.HTTPClient
 	metricsState     *RedpandaMetricsState
 }
 
 // RedpandaServiceOption is a function that modifies a RedpandaService
 type RedpandaServiceOption func(*RedpandaService)
 
-// WithHTTPClient sets a custom HTTP client for the BenthosService
-func WithHTTPClient(client HTTPClient) RedpandaServiceOption {
+// WithHTTPClient sets a custom HTTP client for the RedpandaService
+// This is only used for testing purposes
+func WithHTTPClient(client httpclient.HTTPClient) RedpandaServiceOption {
 	return func(s *RedpandaService) {
 		s.httpClient = client
 	}
 }
 
-// WithS6Service sets a custom S6 service for the BenthosService
+// WithS6Service sets a custom S6 service for the RedpandaService
 func WithS6Service(s6Service s6service.Service) RedpandaServiceOption {
 	return func(s *RedpandaService) {
 		s.s6Service = s6Service
@@ -231,7 +233,7 @@ func NewDefaultRedpandaService(redpandaName string, opts ...RedpandaServiceOptio
 		logger:       logger.For(managerName),
 		s6Manager:    s6fsm.NewS6Manager(managerName),
 		s6Service:    s6service.NewDefaultService(),
-		httpClient:   newDefaultHTTPClient(),
+		httpClient:   nil, // this is only for a mock in the tests
 		metricsState: NewRedpandaMetricsState(),
 	}
 
@@ -522,6 +524,16 @@ func (s *RedpandaService) GetHealthCheckAndMetrics(ctx context.Context, tick uin
 	baseURL := "http://localhost:9644/"
 	metricsEndpoint := "public_metrics"
 
+	// Create a client to use for our requests
+	// If it's a mock client (used in tests), use it directly
+	// Otherwise, create a new client with timeouts based on context
+	var requestClient httpclient.HTTPClient = s.httpClient
+
+	// Only create a default client if we're not using a mock client
+	if requestClient == nil {
+		requestClient = httpclient.NewDefaultHTTPClient()
+	}
+
 	// Helper function to make HTTP requests with context
 	doRequest := func(endpoint string) (*http.Response, error) {
 		start := time.Now()
@@ -534,7 +546,7 @@ func (s *RedpandaService) GetHealthCheckAndMetrics(ctx context.Context, tick uin
 		if err != nil {
 			return nil, fmt.Errorf("failed to create request for %s: %w", endpoint, err)
 		}
-		resp, err := s.httpClient.Do(req)
+		resp, err := requestClient.Do(req)
 		if err != nil {
 			return nil, fmt.Errorf("failed to execute request for %s: %w", endpoint, err)
 		}
