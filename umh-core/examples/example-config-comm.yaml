@@ -14,10 +14,7 @@
 
 agent:
   metricsPort: 8080
-  communicator:
-    apiUrl: https://management.umh.app/api
-    authToken: 
-  releaseChannel: stable
+ 
 benthos:
   - name: hello-world
     desiredState: active

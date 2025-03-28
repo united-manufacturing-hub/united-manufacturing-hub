@@ -70,6 +70,14 @@ func main() {
 		configModified = true
 	}
 
+	// Extract API_URL from environment if present
+	apiURL, err := env.GetAsString("API_URL", false, "")
+	if err == nil && apiURL != "" {
+		log.Info("Using API_URL from environment variable:", zap.String("url", apiURL))
+		configData.Agent.CommunicatorConfig.APIURL = apiURL
+		configModified = true
+	}
+
 	// Extract RELEASE_CHANNEL from environment if present
 	releaseChannel, err := env.GetAsString("RELEASE_CHANNEL", false, "")
 	if err == nil && releaseChannel != "" {
