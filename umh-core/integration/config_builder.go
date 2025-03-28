@@ -89,8 +89,8 @@ output:
 			DesiredFSMState: "stopped",
 		},
 		RedpandaServiceConfig: redpandaserviceconfig.RedpandaServiceConfig{
-			DefaultTopicRetentionMs:    1000 * 60 * 60 * 24, // 1 day
-			DefaultTopicRetentionBytes: 1024 * 1024 * 10,    // 10 MB
+			DefaultTopicRetentionMs:    0,
+			DefaultTopicRetentionBytes: 0,
 		},
 	}
 	return b
