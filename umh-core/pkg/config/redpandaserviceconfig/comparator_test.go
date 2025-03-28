@@ -23,13 +23,13 @@ var _ = Describe("Redpanda YAML Comparator", func() {
 	Describe("ConfigsEqual", func() {
 		It("should consider identical configs equal", func() {
 			config1 := RedpandaServiceConfig{
-				RetentionMs:    1000,
-				RetentionBytes: 1000,
+				DefaultTopicRetentionMs:    1000,
+				DefaultTopicRetentionBytes: 1000,
 			}
 
 			config2 := RedpandaServiceConfig{
-				RetentionMs:    1000,
-				RetentionBytes: 1000,
+				DefaultTopicRetentionMs:    1000,
+				DefaultTopicRetentionBytes: 1000,
 			}
 
 			comparator := NewComparator()
@@ -39,13 +39,13 @@ var _ = Describe("Redpanda YAML Comparator", func() {
 		})
 		It("should consider different configs unequal", func() {
 			config1 := RedpandaServiceConfig{
-				RetentionMs:    1000,
-				RetentionBytes: 1000,
+				DefaultTopicRetentionMs:    1000,
+				DefaultTopicRetentionBytes: 1000,
 			}
 
 			config2 := RedpandaServiceConfig{
-				RetentionMs:    1000,
-				RetentionBytes: 1001,
+				DefaultTopicRetentionMs:    1000,
+				DefaultTopicRetentionBytes: 1001,
 			}
 
 			comparator := NewComparator()
@@ -58,19 +58,19 @@ var _ = Describe("Redpanda YAML Comparator", func() {
 	Describe("ConfigDiff", func() {
 		It("should generate readable diff for different configs", func() {
 			config1 := RedpandaServiceConfig{
-				RetentionMs:    1000,
-				RetentionBytes: 1000,
+				DefaultTopicRetentionMs:    1000,
+				DefaultTopicRetentionBytes: 1000,
 			}
 
 			config2 := RedpandaServiceConfig{
-				RetentionMs:    1001,
-				RetentionBytes: 1000,
+				DefaultTopicRetentionMs:    1001,
+				DefaultTopicRetentionBytes: 1000,
 			}
 
 			comparator := NewComparator()
 			diff := comparator.ConfigDiff(config1, config2)
 
-			Expect(diff).To(ContainSubstring("RetentionMs"))
+			Expect(diff).To(ContainSubstring("DefaultTopicRetentionMs"))
 			Expect(diff).To(ContainSubstring("1000"))
 			Expect(diff).To(ContainSubstring("1001"))
 		})

@@ -30,5 +30,6 @@ const (
 )
 
 var (
+	// Set by build process via ldflags
 	RedpandaVersion = "unknown"
 )

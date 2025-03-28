@@ -45,8 +45,8 @@ var _ = Describe("Redpanda YAML Generator", func() {
 		Entry("should render empty paths correctly",
 			testCase{
 				config: &RedpandaServiceConfig{
-					RetentionMs:    0,
-					RetentionBytes: 0,
+					DefaultTopicRetentionMs:    0,
+					DefaultTopicRetentionBytes: 0,
 				},
 				expected: []string{
 					"retention_ms: -1",
@@ -56,8 +56,8 @@ var _ = Describe("Redpanda YAML Generator", func() {
 		Entry("should render configured paths correctly",
 			testCase{
 				config: &RedpandaServiceConfig{
-					RetentionMs:    1000,
-					RetentionBytes: 1000,
+					DefaultTopicRetentionMs:    1000,
+					DefaultTopicRetentionBytes: 1000,
 				},
 				expected: []string{
 					"retention_ms: 1000",

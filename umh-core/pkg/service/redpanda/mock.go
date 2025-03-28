@@ -145,14 +145,14 @@ func (m *MockRedpandaService) GetConfig(ctx context.Context) (redpandaservicecon
 	}
 
 	// If a result is preset, return it
-	if m.GetConfigResult.RetentionMs != 0 || m.GetConfigResult.RetentionBytes != 0 {
+	if m.GetConfigResult.DefaultTopicRetentionMs != 0 || m.GetConfigResult.DefaultTopicRetentionBytes != 0 {
 		return m.GetConfigResult, nil
 	}
 
 	// Otherwise return a default config with some test values
 	return redpandaserviceconfig.RedpandaServiceConfig{
-		RetentionMs:    1000000,
-		RetentionBytes: 1000000000,
+		DefaultTopicRetentionMs:    1000000,
+		DefaultTopicRetentionBytes: 1000000000,
 	}, nil
 }
 

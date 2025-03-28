@@ -131,9 +131,11 @@ type InfrastructureMetrics struct {
 type StorageMetrics struct {
 	// redpanda_storage_disk_free_bytes
 	// type: gauge
+	// Docs: https://docs.redpanda.com/current/reference/public-metrics-reference/#redpanda_storage_disk_free_bytes
 	FreeBytes int64
 	// redpanda_storage_disk_total_bytes
 	// type: gauge
+	// Docs: https://docs.redpanda.com/current/reference/public-metrics-reference/#redpanda_storage_disk_total_bytes
 	TotalBytes int64
 	// redpanda_storage_disk_free_space_alert (0 == false, everything else == true)
 	// type: gauge
@@ -144,6 +146,7 @@ type StorageMetrics struct {
 type UptimeMetrics struct {
 	// redpanda_uptime_seconds_total
 	// type: gauge
+	// Docs: https://docs.redpanda.com/current/reference/public-metrics-reference/#redpanda_uptime_seconds_total
 	Uptime int64
 }
 
@@ -151,9 +154,11 @@ type UptimeMetrics struct {
 type ClusterMetrics struct {
 	// redpanda_cluster_topics
 	// type: gauge
+	// Docs: https://docs.redpanda.com/current/reference/public-metrics-reference/#redpanda_cluster_topics
 	Topics int64
 	// redpanda_cluster_unavailable_partitions
 	// type: gauge
+	// Docs: https://docs.redpanda.com/current/reference/public-metrics-reference/#redpanda_cluster_unavailable_partitions
 	UnavailableTopics int64
 }
 
@@ -161,9 +166,11 @@ type ClusterMetrics struct {
 type ThroughputMetrics struct {
 	// redpanda_kafka_request_bytes_total over all redpanda_namespace and redpanda_topic labels using redpanda_request=("produce")
 	// type: counter
+	// Docs: https://docs.redpanda.com/current/reference/public-metrics-reference/#redpanda_kafka_request_bytes_total
 	BytesIn int64
 	// redpanda_kafka_request_bytes_total over all redpanda_namespace and redpanda_topic labels using redpanda_request=("consume")
 	// type: counter
+	// Docs: https://docs.redpanda.com/current/reference/public-metrics-reference/#redpanda_kafka_request_bytes_total
 	BytesOut int64
 }
 
@@ -171,6 +178,7 @@ type ThroughputMetrics struct {
 type TopicMetrics struct {
 	// redpanda_kafka_partitions
 	// type: gauge
+	// Docs: https://docs.redpanda.com/current/reference/public-metrics-reference/#redpanda_kafka_partitions
 	TopicPartitionMap map[string]int64
 }
 
@@ -228,7 +236,7 @@ func (s *RedpandaService) generateRedpandaYaml(config *redpandaserviceconfig.Red
 		return "", fmt.Errorf("config is nil")
 	}
 
-	return redpandayaml.RenderRedpandaYAML(config.RetentionMs, config.RetentionBytes)
+	return redpandayaml.RenderRedpandaYAML(config.DefaultTopicRetentionMs, config.DefaultTopicRetentionBytes)
 }
 
 // generateS6ConfigForRedpanda creates a S6 config for a given redpanda instance
@@ -279,13 +287,13 @@ func (s *RedpandaService) GetConfig(ctx context.Context) (redpandaserviceconfig.
 	result := redpandaserviceconfig.RedpandaServiceConfig{}
 
 	// Safely extract retention_ms
-	if retentionMs, ok := redpandaConfig["log_retention_ms"].(int); ok {
-		result.RetentionMs = retentionMs
+	if defaultTopicDefaultTopicRetentionMs, ok := redpandaConfig["log_retention_ms"].(int); ok {
+		result.DefaultTopicRetentionMs = defaultTopicDefaultTopicRetentionMs
 	}
 
 	// Safely extract retention_bytes
-	if retentionBytes, ok := redpandaConfig["retention_bytes"].(int); ok {
-		result.RetentionBytes = retentionBytes
+	if defaultTopicRetentionBytes, ok := redpandaConfig["retention_bytes"].(int); ok {
+		result.DefaultTopicRetentionBytes = defaultTopicRetentionBytes
 	}
 
 	return redpandayaml.NormalizeRedpandaConfig(result), nil
@@ -774,6 +782,7 @@ func (s *RedpandaService) StopRedpanda(ctx context.Context) error {
 }
 
 // ReconcileManager reconciles the Redpanda manager
+// This basically just calls the Reconcile method of the S6 manager, resulting in a (re)start of the Redpanda service with the latest configuration
 func (s *RedpandaService) ReconcileManager(ctx context.Context, tick uint64) (err error, reconciled bool) {
 	if s.s6Manager == nil {
 		return errors.New("s6 manager not initialized"), false

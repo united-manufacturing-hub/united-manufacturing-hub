@@ -39,6 +39,7 @@ const (
 =======
 
 var (
+	// Set by build process via ldflags
 	BenthosVersion = "unknown"
 )
 >>>>>>> 544a2ad1 (fix: remove states)

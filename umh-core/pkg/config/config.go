@@ -106,8 +106,8 @@ type RedpandaConfig struct {
 }
 
 type RedpandaServiceConfig struct {
-	RetentionMs    int `yaml:"retentionMs"`
-	RetentionBytes int `yaml:"retentionBytes"`
+	DefaultTopicRetentionMs    int `yaml:"defaultTopicDefaultTopicRetentionMs"`
+	DefaultTopicRetentionBytes int `yaml:"defaultTopicRetentionBytes"`
 }
 
 // Clone creates a deep copy of FullConfig

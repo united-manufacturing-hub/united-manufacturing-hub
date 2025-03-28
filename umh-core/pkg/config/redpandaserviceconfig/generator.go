@@ -34,12 +34,12 @@ func NewGenerator() *Generator {
 
 // RenderConfig generates a Redpanda YAML configuration from a RedpandaServiceConfig
 func (g *Generator) RenderConfig(cfg RedpandaServiceConfig) (string, error) {
-	if cfg.RetentionMs == 0 {
-		cfg.RetentionMs = 0
+	if cfg.DefaultTopicRetentionMs == 0 {
+		cfg.DefaultTopicRetentionMs = 0
 	}
 
-	if cfg.RetentionBytes == 0 {
-		cfg.RetentionBytes = 0
+	if cfg.DefaultTopicRetentionBytes == 0 {
+		cfg.DefaultTopicRetentionBytes = 0
 	}
 
 	// Render the template
@@ -81,8 +81,8 @@ redpanda:
   developer_mode: true
 
   # Default topic retention configuration:
-  log_retention_ms: {{if eq .RetentionMs 0}}-1{{else}}{{.RetentionMs}}{{end}}
-  retention_bytes: {{if eq .RetentionBytes 0}}null{{else}}{{.RetentionBytes}}{{end}}
+  log_retention_ms: {{if eq .DefaultTopicRetentionMs 0}}-1{{else}}{{.DefaultTopicRetentionMs}}{{end}}
+  retention_bytes: {{if eq .DefaultTopicRetentionBytes 0}}null{{else}}{{.DefaultTopicRetentionBytes}}{{end}}
 
   # Auto topic creation configuration:
   auto_create_topics_enabled: true  # Enable automatic topic creation

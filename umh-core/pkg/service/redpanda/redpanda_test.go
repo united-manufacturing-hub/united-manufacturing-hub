@@ -41,8 +41,8 @@ var _ = Describe("Redpanda Service", func() {
 
 		// Add the service to the S6 manager
 		err := service.AddRedpandaToS6Manager(context.Background(), &redpandaserviceconfig.RedpandaServiceConfig{
-			RetentionMs:    1000000,
-			RetentionBytes: 1000000000,
+			DefaultTopicRetentionMs:    1000000,
+			DefaultTopicRetentionBytes: 1000000000,
 		})
 		Expect(err).NotTo(HaveOccurred())
 
@@ -149,8 +149,8 @@ var _ = Describe("Redpanda Service", func() {
 		Context("with valid configuration", func() {
 			It("should generate valid YAML", func() {
 				cfg := &redpandaserviceconfig.RedpandaServiceConfig{
-					RetentionMs:    1000000,
-					RetentionBytes: 1000000000,
+					DefaultTopicRetentionMs:    1000000,
+					DefaultTopicRetentionBytes: 1000000000,
 				}
 
 				s6Config, err := service.GenerateS6ConfigForRedpanda(cfg)
@@ -193,8 +193,8 @@ var _ = Describe("Redpanda Service", func() {
 
 			// Initial config
 			config := &redpandaserviceconfig.RedpandaServiceConfig{
-				RetentionMs:    1000000,
-				RetentionBytes: 1000000000,
+				DefaultTopicRetentionMs:    1000000,
+				DefaultTopicRetentionBytes: 1000000000,
 			}
 
 			// Add the service
@@ -242,8 +242,8 @@ var _ = Describe("Redpanda Service", func() {
 
 			// Initial config
 			initialConfig := &redpandaserviceconfig.RedpandaServiceConfig{
-				RetentionMs:    1000000,
-				RetentionBytes: 1000000000,
+				DefaultTopicRetentionMs:    1000000,
+				DefaultTopicRetentionBytes: 1000000000,
 			}
 
 			// Add the service with initial config
@@ -254,8 +254,8 @@ var _ = Describe("Redpanda Service", func() {
 
 			// Updated config with different retention
 			updatedConfig := &redpandaserviceconfig.RedpandaServiceConfig{
-				RetentionMs:    2000000,    // Doubled
-				RetentionBytes: 2000000000, // Doubled
+				DefaultTopicRetentionMs:    2000000,    // Doubled
+				DefaultTopicRetentionBytes: 2000000000, // Doubled
 			}
 
 			// Update the service configuration
@@ -434,8 +434,8 @@ var _ = Describe("Redpanda Service", func() {
 
 			// Add the service to the S6 manager
 			err := service.AddRedpandaToS6Manager(context.Background(), &redpandaserviceconfig.RedpandaServiceConfig{
-				RetentionMs:    1000000,
-				RetentionBytes: 1000000000,
+				DefaultTopicRetentionMs:    1000000,
+				DefaultTopicRetentionBytes: 1000000000,
 			})
 			Expect(err).NotTo(HaveOccurred())
 

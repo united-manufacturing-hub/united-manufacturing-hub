@@ -27,12 +27,12 @@ func (n *Normalizer) NormalizeConfig(cfg RedpandaServiceConfig) RedpandaServiceC
 	// Create a copy
 	normalized := cfg
 
-	if normalized.RetentionMs == 0 {
-		normalized.RetentionMs = 0
+	if normalized.DefaultTopicRetentionMs == 0 {
+		normalized.DefaultTopicRetentionMs = 0
 	}
 
-	if normalized.RetentionBytes == 0 {
-		normalized.RetentionBytes = 0
+	if normalized.DefaultTopicRetentionBytes == 0 {
+		normalized.DefaultTopicRetentionBytes = 0
 	}
 
 	return normalized
