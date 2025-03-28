@@ -325,7 +325,7 @@ var _ = Describe("Redpanda Service", func() {
 					},
 					Cluster: ClusterMetrics{
 						Topics:            5,
-						UnavailableTopics: 0,
+						UnavailableTopics: 0, // No unavailable topics
 					},
 				}
 				Expect(service.IsMetricsErrorFree(metrics)).To(BeTrue())
@@ -342,6 +342,40 @@ var _ = Describe("Redpanda Service", func() {
 					},
 				}
 				Expect(service.IsMetricsErrorFree(metrics)).To(BeFalse())
+			})
+
+			It("should detect unavailable topics", func() {
+				metrics := Metrics{
+					Infrastructure: InfrastructureMetrics{
+						Storage: StorageMetrics{
+							FreeBytes:      5000000000,
+							TotalBytes:     10000000000,
+							FreeSpaceAlert: false, // No storage alert
+						},
+					},
+					Cluster: ClusterMetrics{
+						Topics:            10,
+						UnavailableTopics: 2, // Some topics are unavailable
+					},
+				}
+				Expect(service.IsMetricsErrorFree(metrics)).To(BeFalse())
+			})
+
+			It("should pass when no storage alerts and all topics available", func() {
+				metrics := Metrics{
+					Infrastructure: InfrastructureMetrics{
+						Storage: StorageMetrics{
+							FreeBytes:      5000000000,
+							TotalBytes:     10000000000,
+							FreeSpaceAlert: false, // No storage alert
+						},
+					},
+					Cluster: ClusterMetrics{
+						Topics:            10,
+						UnavailableTopics: 0, // All topics available
+					},
+				}
+				Expect(service.IsMetricsErrorFree(metrics)).To(BeTrue())
 			})
 		})
 
@@ -526,6 +560,82 @@ var _ = Describe("Redpanda Service", func() {
 
 			// Should detect inactivity
 			Expect(status2.RedpandaStatus.MetricsState.IsActive).To(BeFalse())
+		})
+	})
+
+	Context("Log Analysis", func() {
+		var (
+			service     *RedpandaService
+			currentTime time.Time
+			logWindow   time.Duration
+		)
+
+		BeforeEach(func() {
+			service = NewDefaultRedpandaService("redpanda")
+			currentTime = time.Now()
+			logWindow = 5 * time.Minute
+		})
+
+		Context("IsLogsFine", func() {
+			It("should return true when there are no logs", func() {
+				Expect(service.IsLogsFine([]s6service.LogEntry{}, currentTime, logWindow)).To(BeTrue())
+			})
+
+			It("should detect 'Address already in use' errors", func() {
+				logs := []s6service.LogEntry{
+					{
+						Timestamp: currentTime.Add(-1 * time.Minute),
+						Content:   "INFO Starting Redpanda",
+					},
+					{
+						Timestamp: currentTime.Add(-30 * time.Second),
+						Content:   "ERROR Address already in use (port 9092)",
+					},
+				}
+				Expect(service.IsLogsFine(logs, currentTime, logWindow)).To(BeFalse())
+			})
+
+			It("should detect 'Reactor stalled for' errors", func() {
+				logs := []s6service.LogEntry{
+					{
+						Timestamp: currentTime.Add(-1 * time.Minute),
+						Content:   "INFO Starting Redpanda",
+					},
+					{
+						Timestamp: currentTime.Add(-30 * time.Second),
+						Content:   "WARN Reactor stalled for 2s",
+					},
+				}
+				Expect(service.IsLogsFine(logs, currentTime, logWindow)).To(BeFalse())
+			})
+
+			It("should pass with normal logs", func() {
+				logs := []s6service.LogEntry{
+					{
+						Timestamp: currentTime.Add(-1 * time.Minute),
+						Content:   "INFO Starting Redpanda",
+					},
+					{
+						Timestamp: currentTime.Add(-30 * time.Second),
+						Content:   "INFO Created topic 'test-topic' with 3 partitions",
+					},
+				}
+				Expect(service.IsLogsFine(logs, currentTime, logWindow)).To(BeTrue())
+			})
+
+			It("should ignore logs outside the time window", func() {
+				logs := []s6service.LogEntry{
+					{
+						Timestamp: currentTime.Add(-10 * time.Minute), // Outside our 5-minute window
+						Content:   "ERROR Address already in use (port 9092)",
+					},
+					{
+						Timestamp: currentTime.Add(-30 * time.Second), // Inside window
+						Content:   "INFO Created topic 'test-topic' with 3 partitions",
+					},
+				}
+				Expect(service.IsLogsFine(logs, currentTime, logWindow)).To(BeTrue())
+			})
 		})
 	})
 })

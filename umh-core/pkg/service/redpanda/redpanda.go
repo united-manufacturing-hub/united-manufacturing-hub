@@ -80,29 +80,6 @@ type HTTPClient interface {
 	Do(req *http.Request) (*http.Response, error)
 }
 
-// defaultHTTPClient is the default implementation of HTTPClient
-type defaultHTTPClient struct {
-	client *http.Client
-}
-
-func newDefaultHTTPClient() *defaultHTTPClient {
-	transport := &http.Transport{
-		MaxIdleConns:      10,
-		IdleConnTimeout:   30 * time.Second,
-		DisableKeepAlives: false,
-	}
-
-	return &defaultHTTPClient{
-		client: &http.Client{
-			Transport: transport,
-		},
-	}
-}
-
-func (c *defaultHTTPClient) Do(req *http.Request) (*http.Response, error) {
-	return c.client.Do(req)
-}
-
 // ServiceInfo contains information about a Redpanda service
 type ServiceInfo struct {
 	// S6ObservedState contains information about the S6 service
@@ -811,7 +788,26 @@ func (s *RedpandaService) ReconcileManager(ctx context.Context, tick uint64) (er
 
 // IsLogsFine analyzes Redpanda logs to determine if there are any critical issues
 func (s *RedpandaService) IsLogsFine(logs []s6service.LogEntry, currentTime time.Time, logWindow time.Duration) bool {
-	// TODO: Implement this
+	failures := []string{
+		"Address already in use", // https://github.com/redpanda-data/redpanda/issues/3763
+		"Reactor stalled for",    // Multiple sources
+	}
+
+	// Check logs within the time window
+	windowStart := currentTime.Add(-logWindow)
+
+	for _, log := range logs {
+		// Skip logs outside the time window
+		if log.Timestamp.Before(windowStart) {
+			continue
+		}
+
+		for _, failure := range failures {
+			if strings.Contains(log.Content, failure) {
+				return false
+			}
+		}
+	}
 	return true
 }
 
@@ -821,7 +817,10 @@ func (s *RedpandaService) IsMetricsErrorFree(metrics Metrics) bool {
 	if metrics.Infrastructure.Storage.FreeSpaceAlert {
 		return false
 	}
-	// TODO: Extend this later
+
+	if metrics.Cluster.UnavailableTopics > 0 {
+		return false
+	}
 
 	return true
 }
