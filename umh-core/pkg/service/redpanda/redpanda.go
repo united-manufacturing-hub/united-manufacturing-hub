@@ -501,8 +501,6 @@ func (s *RedpandaService) GetHealthCheckAndMetrics(ctx context.Context, tick uin
 
 	baseURL := "http://localhost:9644/"
 	metricsEndpoint := "public_metrics"
-	livenessEndpoint := "ping"
-	readinessEndpoint := "ready"
 
 	// Helper function to make HTTP requests with context
 	doRequest := func(endpoint string) (*http.Response, error) {
@@ -526,7 +524,7 @@ func (s *RedpandaService) GetHealthCheckAndMetrics(ctx context.Context, tick uin
 	var healthCheck HealthCheck
 
 	// Check liveness
-	if resp, err := doRequest(livenessEndpoint); err == nil && resp != nil {
+	if resp, err := doRequest(metricsEndpoint); err == nil && resp != nil {
 		healthCheck.IsLive = resp.StatusCode == http.StatusOK
 		resp.Body.Close()
 	} else {
@@ -534,7 +532,7 @@ func (s *RedpandaService) GetHealthCheckAndMetrics(ctx context.Context, tick uin
 	}
 
 	// Check readiness
-	if resp, err := doRequest(readinessEndpoint); err == nil && resp != nil {
+	if resp, err := doRequest(metricsEndpoint); err == nil && resp != nil {
 		defer resp.Body.Close()
 
 		// Even if status is 503, we still want to read the body to get the detailed status

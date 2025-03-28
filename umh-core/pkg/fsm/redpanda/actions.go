@@ -112,7 +112,7 @@ func (b *RedpandaInstance) initiateRedpandaStop(ctx context.Context) error {
 // its main purpose is to habdle the edge cases where the service is not yet created or not yet running
 func (b *RedpandaInstance) getServiceStatus(ctx context.Context, tick uint64) (redpanda_service.ServiceInfo, error) {
 	info, err := b.service.Status(ctx, tick)
-	b.baseFSMInstance.GetLogger().Debugf("Service status: %+v", info.S6ObservedState.ServiceInfo.Status)
+	b.baseFSMInstance.GetLogger().Debugf("Service status: %+v", info.S6ObservedState)
 	b.baseFSMInstance.GetLogger().Debugf("Error: %+v", err)
 	if err != nil {
 		// If there's an error getting the service status, we need to distinguish between cases
