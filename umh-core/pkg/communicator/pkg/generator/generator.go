@@ -16,6 +16,7 @@ package generator
 
 import (
 	"fmt"
+	"math/rand"
 	"sync"
 	"time"
 
@@ -32,8 +33,8 @@ const (
 type StatusCollectorType struct {
 	latestData *LatestData
 	dog        watchdog.Iface
+	stateMu    sync.RWMutex // Mutex to protect access to state
 	state      *fsm.SystemSnapshot
-	systemMu   *sync.Mutex
 }
 
 type LatestData struct {
@@ -46,7 +47,6 @@ type LatestData struct {
 func NewStatusCollector(
 	dog watchdog.Iface,
 	state *fsm.SystemSnapshot,
-	systemMu *sync.Mutex,
 ) *StatusCollectorType {
 
 	latestData := &LatestData{}
@@ -55,7 +55,6 @@ func NewStatusCollector(
 		latestData: latestData,
 		dog:        dog,
 		state:      state,
-		systemMu:   systemMu,
 	}
 
 	return collector
@@ -66,9 +65,9 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 	defer s.latestData.mu.RUnlock()
 
 	// Lock state for reading
-	s.systemMu.Lock()
+	s.stateMu.RLock()
 	state := s.state
-	s.systemMu.Unlock()
+	s.stateMu.RUnlock()
 
 	// Save the state in a map
 	managersMap := make(map[string]map[string]fsm.FSMInstanceSnapshot)
@@ -99,7 +98,7 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 					AvgMs: 10.5,
 					MaxMs: 25.0,
 					MinMs: 5.0,
-					P95Ms: 18.2,
+					P95Ms: float64(rand.Intn(91) + 10),
 					P99Ms: 22.8,
 				},
 				Location: map[int]string{
@@ -160,7 +159,7 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 						Category:      models.Active,
 					},
 					Metrics: &models.DfcMetrics{
-						AvgInputThroughputPerMinuteInMsgSec: 25.3,
+						AvgInputThroughputPerMinuteInMsgSec: float64(rand.Intn(91) + 10),
 					},
 					Bridge: &models.DfcBridgeInfo{
 						DataContract: "sensor-v1",
