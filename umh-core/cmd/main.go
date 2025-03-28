@@ -17,6 +17,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	v2 "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2"
@@ -71,15 +72,16 @@ func main() {
 	// Start the control loop
 	controlLoop := control.NewControlLoop()
 	systemSnapshot := new(fsm.SystemSnapshot)
+	systemMu := new(sync.Mutex)
 	communicationState := communication_state.CommunicationState{
 		Watchdog:        watchdog.NewWatchdog(ctx, time.NewTicker(time.Second*10), true),
 		InboundChannel:  make(chan *models.UMHMessage, 100),
 		OutboundChannel: make(chan *models.UMHMessage, 100),
 		ReleaseChannel:  config.Agent.ReleaseChannel,
 	}
-	go SystemSnapshotLogger(ctx, controlLoop, systemSnapshot)
+	go SystemSnapshotLogger(ctx, controlLoop, systemSnapshot, systemMu)
 
-	enableBackendConnection(&config, systemSnapshot, &communicationState)
+	enableBackendConnection(&config, systemSnapshot, &communicationState, systemMu)
 	controlLoop.Execute(ctx)
 
 	log.Info("umh-core test completed")
@@ -87,7 +89,7 @@ func main() {
 
 // SystemSnapshotLogger logs the system snapshot every 5 seconds
 // It is an example on how to access the system snapshot and log it for communication with other components
-func SystemSnapshotLogger(ctx context.Context, controlLoop *control.ControlLoop, systemSnapshot *fsm.SystemSnapshot) {
+func SystemSnapshotLogger(ctx context.Context, controlLoop *control.ControlLoop, systemSnapshot *fsm.SystemSnapshot, systemMu *sync.Mutex) {
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 
@@ -106,7 +108,9 @@ func SystemSnapshotLogger(ctx context.Context, controlLoop *control.ControlLoop,
 		case <-ticker.C:
 			snapshot := controlLoop.GetSystemSnapshot()
 			if snapshot != nil {
+				systemMu.Lock()
 				*systemSnapshot = *snapshot
+				systemMu.Unlock()
 			}
 			if snapshot == nil {
 				sentry.ReportIssuef(sentry.IssueTypeWarning, logger, "No system snapshot available")
@@ -137,7 +141,7 @@ func SystemSnapshotLogger(ctx context.Context, controlLoop *control.ControlLoop,
 	}
 }
 
-func enableBackendConnection(config *config.FullConfig, state *fsm.SystemSnapshot, communicationState *communication_state.CommunicationState) {
+func enableBackendConnection(config *config.FullConfig, state *fsm.SystemSnapshot, communicationState *communication_state.CommunicationState, systemMu *sync.Mutex) {
 	logger := logger.For("enableBackendConnection")
 	if logger == nil {
 		logger = zap.NewNop().Sugar()
@@ -162,7 +166,7 @@ func enableBackendConnection(config *config.FullConfig, state *fsm.SystemSnapsho
 
 		communicationState.InitialiseAndStartPuller()
 		communicationState.InitialiseAndStartPusher()
-		communicationState.InitialiseAndStartSubscriberHandler(time.Minute*5, time.Minute, config, state)
+		communicationState.InitialiseAndStartSubscriberHandler(time.Minute*5, time.Minute, config, state, systemMu)
 		communicationState.InitialiseAndStartRouter()
 	}
 }
