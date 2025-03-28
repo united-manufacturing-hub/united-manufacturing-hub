@@ -147,7 +147,8 @@ var _ = Describe("Benthos Service", func() {
 			})
 
 			It("should return health check and metrics", func() {
-				ctx := context.Background()
+				ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+				defer cancel()
 				status, err := service.GetHealthCheckAndMetrics(ctx, serviceName, 4195, tick)
 				tick++
 				Expect(err).NotTo(HaveOccurred())
@@ -189,11 +190,12 @@ var _ = Describe("Benthos Service", func() {
 			})
 
 			It("should return error", func() {
-				ctx := context.Background()
+				ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+				defer cancel()
 				_, err := service.GetHealthCheckAndMetrics(ctx, serviceName, 4195, tick)
 				tick++
 				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("failed to check liveness: failed to execute request for /ping: connection refused"))
+				Expect(err.Error()).To(ContainSubstring("connection refused"))
 			})
 		})
 

@@ -20,12 +20,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	dto "github.com/prometheus/client_model/go"
@@ -37,7 +37,9 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/httpclient"
 	"go.uber.org/zap"
+	"golang.org/x/sync/errgroup"
 
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 	"gopkg.in/yaml.v3"
@@ -86,34 +88,6 @@ type IBenthosService interface {
 	IsMetricsErrorFree(metrics Metrics) bool
 	// HasProcessingActivity checks if a Benthos service has processing activity
 	HasProcessingActivity(status BenthosStatus) bool
-}
-
-// HTTPClient interface for making HTTP requests
-type HTTPClient interface {
-	Do(req *http.Request) (*http.Response, error)
-}
-
-// defaultHTTPClient is the default implementation of HTTPClient
-type defaultHTTPClient struct {
-	client *http.Client
-}
-
-func newDefaultHTTPClient() *defaultHTTPClient {
-	transport := &http.Transport{
-		MaxIdleConns:      10,
-		IdleConnTimeout:   30 * time.Second,
-		DisableKeepAlives: false,
-	}
-
-	return &defaultHTTPClient{
-		client: &http.Client{
-			Transport: transport,
-		},
-	}
-}
-
-func (c *defaultHTTPClient) Do(req *http.Request) (*http.Response, error) {
-	return c.client.Do(req)
 }
 
 // ServiceInfo contains information about a Benthos service
@@ -230,7 +204,7 @@ type BenthosService struct {
 	s6Manager        *s6fsm.S6Manager
 	s6Service        s6service.Service // S6 service for direct S6 operations
 	s6ServiceConfigs []config.S6FSMConfig
-	httpClient       HTTPClient
+	httpClient       httpclient.HTTPClient
 	metricsState     *BenthosMetricsState
 }
 
@@ -238,7 +212,8 @@ type BenthosService struct {
 type BenthosServiceOption func(*BenthosService)
 
 // WithHTTPClient sets a custom HTTP client for the BenthosService
-func WithHTTPClient(client HTTPClient) BenthosServiceOption {
+// This is only used for testing purposes
+func WithHTTPClient(client httpclient.HTTPClient) BenthosServiceOption {
 	return func(s *BenthosService) {
 		s.httpClient = client
 	}
@@ -259,7 +234,7 @@ func NewDefaultBenthosService(benthosName string, opts ...BenthosServiceOption) 
 		logger:       logger.For(managerName),
 		s6Manager:    s6fsm.NewS6Manager(managerName),
 		s6Service:    s6service.NewDefaultService(),
-		httpClient:   newDefaultHTTPClient(),
+		httpClient:   nil, // this is only for a mock in the tests
 		metricsState: NewBenthosMetricsState(),
 	}
 
@@ -701,7 +676,7 @@ func updateLatencyFromMetric(latency *Latency, metric *dto.Metric) {
 func (s *BenthosService) GetHealthCheckAndMetrics(ctx context.Context, s6ServiceName string, metricsPort int, tick uint64) (BenthosStatus, error) {
 	start := time.Now()
 	defer func() {
-		metrics.ObserveReconcileTime(logger.ComponentBenthosService, s6ServiceName, time.Since(start))
+		metrics.ObserveReconcileTime(logger.ComponentBenthosService, s6ServiceName+".GetHealthCheckAndMetrics", time.Since(start))
 	}()
 
 	if ctx.Err() != nil {
@@ -727,99 +702,125 @@ func (s *BenthosService) GetHealthCheckAndMetrics(ctx context.Context, s6Service
 
 	baseURL := fmt.Sprintf("http://localhost:%d", metricsPort)
 
-	// Helper function to make HTTP requests with context
-	doRequest := func(endpoint string) (*http.Response, error) {
-		start := time.Now()
+	// Create a client to use for our requests
+	// If it's a mock client (used in tests), use it directly
+	// Otherwise, create a new client with timeouts based on context
+	var requestClient httpclient.HTTPClient = s.httpClient
 
-		defer func() {
-			s.logger.Debugf("Request for %s took %s", endpoint, time.Since(start))
-		}()
-
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, baseURL+endpoint, nil)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create request for %s: %w", endpoint, err)
-		}
-		resp, err := s.httpClient.Do(req)
-		if err != nil {
-			return nil, fmt.Errorf("failed to execute request for %s: %w", endpoint, err)
-		}
-		return resp, nil
+	// Only create a default client if we're not using a mock client
+	if requestClient == nil {
+		requestClient = httpclient.NewDefaultHTTPClient()
 	}
 
+	// Start an errgroup with the **same context** so if one sub-task
+	// fails or the context is canceled, all sub-tasks are signaled to stop.
+	g, gctx := errgroup.WithContext(ctx)
+
+	var mu sync.Mutex
+
+	// Results
 	var healthCheck HealthCheck
+	var metricsData Metrics
 
-	// Check liveness
-	if resp, err := doRequest("/ping"); err == nil && resp != nil {
-		healthCheck.IsLive = resp.StatusCode == http.StatusOK
-		resp.Body.Close()
-	} else {
-		return BenthosStatus{}, fmt.Errorf("failed to check liveness: %w", err)
-	}
-
-	// Check readiness
-	if resp, err := doRequest("/ready"); err == nil && resp != nil {
-		defer resp.Body.Close()
-
-		// Even if status is 503, we still want to read the body to get the detailed status
-		body, err := io.ReadAll(resp.Body)
+	// 1) Check liveness
+	g.Go(func() error {
+		resp, _, err := requestClient.GetWithBody(gctx, baseURL+"/ping")
 		if err != nil {
-			return BenthosStatus{}, fmt.Errorf("failed to read ready response body: %w", err)
+			return fmt.Errorf("failed liveness check: %w", err)
 		}
+		mu.Lock()
+		healthCheck.IsLive = (resp.StatusCode == http.StatusOK)
+		mu.Unlock()
+		return nil
+	})
 
+	// 2) Check readiness
+	g.Go(func() error {
+		resp, body, err := requestClient.GetWithBody(gctx, baseURL+"/ready")
+		if err != nil {
+			return fmt.Errorf("failed readiness check: %w", err)
+		}
 		var readyResp readyResponse
 		if err := json.Unmarshal(body, &readyResp); err != nil {
-			return BenthosStatus{}, fmt.Errorf("failed to unmarshal ready response: %w", err)
+			return fmt.Errorf("unmarshal readiness: %w", err)
 		}
 
-		// Service is ready if status is 200 and there's no error
-		healthCheck.IsReady = resp.StatusCode == http.StatusOK && readyResp.Error == ""
+		// Update fields
+		mu.Lock()
+		healthCheck.IsReady = (resp.StatusCode == http.StatusOK && readyResp.Error == "")
 		healthCheck.ReadyError = readyResp.Error
 		healthCheck.ConnectionStatuses = readyResp.Statuses
+		mu.Unlock()
 
-		// Log detailed status if not ready
 		if !healthCheck.IsReady {
 			s.logger.Debugw("Service not ready",
 				"service", s6ServiceName,
 				"error", readyResp.Error,
-				"statuses", readyResp.Statuses)
+				"statuses", readyResp.Statuses,
+			)
 		}
-	} else {
-		return BenthosStatus{}, fmt.Errorf("failed to check readiness: %w", err)
-	}
+		return nil
+	})
 
-	// Get version
-	if resp, err := doRequest("/version"); err == nil && resp != nil {
-		defer resp.Body.Close()
-
-		body, err := io.ReadAll(resp.Body)
+	// 3) Get version
+	g.Go(func() error {
+		_, body, err := requestClient.GetWithBody(gctx, baseURL+"/version")
 		if err != nil {
-			return BenthosStatus{}, fmt.Errorf("failed to read version response body: %w", err)
+			return fmt.Errorf("get version: %w", err)
 		}
-
 		var vData versionResponse
 		if err := json.Unmarshal(body, &vData); err != nil {
-			return BenthosStatus{}, fmt.Errorf("failed to unmarshal version response: %w", err)
+			return fmt.Errorf("unmarshal version: %w", err)
 		}
+		mu.Lock()
 		healthCheck.Version = vData.Version
-	} else {
-		return BenthosStatus{}, fmt.Errorf("failed to get version: %w", err)
-	}
+		mu.Unlock()
+		return nil
+	})
 
-	var metrics Metrics
-
-	// Get metrics
-	if resp, err := doRequest("/metrics"); err == nil && resp != nil {
-		defer resp.Body.Close()
-
-		body, err := io.ReadAll(resp.Body)
+	// 4) Get metrics
+	g.Go(func() error {
+		_, body, err := requestClient.GetWithBody(gctx, baseURL+"/metrics")
 		if err != nil {
-			return BenthosStatus{}, fmt.Errorf("failed to read metrics response body: %w", err)
+			return fmt.Errorf("get metrics: %w", err)
 		}
-
-		metrics, err = parseMetrics(body)
+		m, err := parseMetrics(body)
 		if err != nil {
-			return BenthosStatus{}, fmt.Errorf("failed to parse metrics: %w", err)
+			return fmt.Errorf("parse metrics: %w", err)
 		}
+		mu.Lock()
+		metricsData = m
+		mu.Unlock()
+		return nil
+	})
+
+	// Create a buffered channel to receive the result from g.Wait().
+	// The channel is buffered so that the goroutine sending on it doesn't block.
+	errc := make(chan error, 1)
+
+	// Run g.Wait() in a separate goroutine.
+	// This allows us to use a select statement to return early if the context is canceled.
+	go func() {
+		// g.Wait() blocks until all goroutines launched with g.Go() have returned.
+		// It returns the first non-nil error, if any.
+		errc <- g.Wait()
+	}()
+
+	// Use a select statement to wait for either the g.Wait() result or the context's cancellation.
+	select {
+	case err := <-errc:
+		// g.Wait() has finished, so check if any goroutine returned an error.
+		if err != nil {
+			// If there was an error in any sub-call, return that error.
+			return BenthosStatus{}, err
+		}
+		// If err is nil, all goroutines completed successfully.
+	case <-ctx.Done():
+		// The context was canceled or its deadline was exceeded before all goroutines finished.
+		// Although some goroutines might still be running in the background,
+		// they use a context (gctx) that should cause them to terminate promptly.
+		// Experiments have shown that without using this, some goroutines can still take up to 70ms to terminate.
+		return BenthosStatus{}, ctx.Err()
 	}
 
 	// Update the metrics state
@@ -827,11 +828,11 @@ func (s *BenthosService) GetHealthCheckAndMetrics(ctx context.Context, s6Service
 		return BenthosStatus{}, fmt.Errorf("metrics state not initialized")
 	}
 
-	s.metricsState.UpdateFromMetrics(metrics, tick)
+	s.metricsState.UpdateFromMetrics(metricsData, tick)
 
 	return BenthosStatus{
 		HealthCheck:  healthCheck,
-		Metrics:      metrics,
+		Metrics:      metricsData,
 		MetricsState: s.metricsState,
 	}, nil
 }
