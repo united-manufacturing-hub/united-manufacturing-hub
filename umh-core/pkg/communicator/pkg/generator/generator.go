@@ -20,9 +20,13 @@ import (
 	"sync"
 	"time"
 
+	"github.com/tiendc/go-deepcopy"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
+	"go.uber.org/zap"
 )
 
 const (
@@ -35,6 +39,7 @@ type StatusCollectorType struct {
 	dog        watchdog.Iface
 	state      *fsm.SystemSnapshot
 	systemMu   *sync.Mutex
+	logger     *zap.Logger
 }
 
 type LatestData struct {
@@ -50,6 +55,8 @@ func NewStatusCollector(
 	systemMu *sync.Mutex,
 ) *StatusCollectorType {
 
+	logger := logger.New("generator.NewStatusCollector", logger.FormatJSON)
+
 	latestData := &LatestData{}
 
 	collector := &StatusCollectorType{
@@ -57,6 +64,7 @@ func NewStatusCollector(
 		dog:        dog,
 		state:      state,
 		systemMu:   systemMu,
+		logger:     logger,
 	}
 
 	return collector
@@ -68,7 +76,12 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 
 	// Lock state for reading
 	s.systemMu.Lock()
-	state := s.state
+	var state *fsm.SystemSnapshot
+	err := deepcopy.Copy(&state, s.state)
+	if err != nil {
+		sentry.ReportIssuef(sentry.IssueTypeError, s.logger.Sugar(), "Failed to deepcopy state: %s", err)
+		return nil
+	}
 	s.systemMu.Unlock()
 
 	// Save the state in a map
