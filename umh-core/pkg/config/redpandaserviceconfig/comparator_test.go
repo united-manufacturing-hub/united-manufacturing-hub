@@ -45,7 +45,7 @@ var _ = Describe("Redpanda YAML Comparator", func() {
 
 			config2 := RedpandaServiceConfig{
 				RetentionMs:    1000,
-				RetentionBytes: 1000,
+				RetentionBytes: 1001,
 			}
 
 			comparator := NewComparator()
