@@ -16,22 +16,28 @@ package constants
 
 // Container monitor constants
 const (
-	// Thresholds for determining critical health status
-	CPUCriticalPercent    = 90.0
-	MemoryCriticalPercent = 90.0
-	DiskCriticalPercent   = 90.0
-
 	// Hardware information sources
 	HWIDFilePath  = "/data/hwid"
 	DataMountPath = "/data"
 )
 
-// Health state constants
-// TODO: put in fsm package
+// SnapshotPeriod is the time between snapshots
+const SnapshotPeriod = "1s"
+
+// SnapshotLimit is the maximum number of snapshots to keep
+const SnapshotLimit = 60 * 10 // 10 minutes of 1-second snapshots
+
+// ContainerStateRunning is needed for backward compatibility with some code
+const ContainerStateRunning = "running"
+
+// Health assessment thresholds
 const (
-	// Health states aligned with generator.go
-	ContainerStateNormal   = "normal"
-	ContainerStateWarning  = "warning"
-	ContainerStateCritical = "critical"
-	ContainerStateRunning  = "running"
+	CPUHighThresholdPercent   = 90.0 // Degraded if above this
+	CPUMediumThresholdPercent = 70.0 // Warning level (but still Active)
+
+	MemoryHighThresholdPercent   = 90.0 // Degraded if above this
+	MemoryMediumThresholdPercent = 80.0 // Warning level (but still Active)
+
+	DiskHighThresholdPercent   = 90.0 // Degraded if above this
+	DiskMediumThresholdPercent = 80.0 // Warning level (but still Active)
 )
