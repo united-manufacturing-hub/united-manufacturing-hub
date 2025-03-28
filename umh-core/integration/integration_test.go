@@ -34,7 +34,7 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 
 	AfterAll(func() {
 		// Always stop container after the entire suite
-		//StopContainer()
+		StopContainer()
 	})
 
 	Context("with an empty config", func() {
@@ -603,7 +603,6 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 
 		AfterAll(func() {
 			By("Stopping the container after the benthos scaling test")
-			StopContainer()
 		})
 
 		It("should scale up to multiple benthos instances while maintaining stability", func() {
