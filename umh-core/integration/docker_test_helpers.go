@@ -16,6 +16,7 @@ package integration_test
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
@@ -24,6 +25,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 )
 
 const (
@@ -366,7 +368,14 @@ func printContainerLogs() {
 func StopContainer() {
 	containerName := getContainerName()
 	// First stop the container
-	runDockerCommand("stop", containerName)
+	_, err := runDockerCommand("stop", containerName)
+	if err != nil {
+		// Retry with -9
+		_, err = runDockerCommand("stop", "-s", "9", containerName)
+		if err != nil {
+			fmt.Printf("Failed to stop container: %v\n", err)
+		}
+	}
 	// Then remove it
 	runDockerCommand("rm", "-f", containerName)
 
@@ -441,16 +450,30 @@ func printContainerDebugInfo() {
 }
 
 func runDockerCommand(args ...string) (string, error) {
+	// Default timeout of 60 seconds
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	return runDockerCommandWithContext(ctx, args...)
+}
+
+func runDockerCommandWithContext(ctx context.Context, args ...string) (string, error) {
 	// Check if we use docker or podman
 	dockerCmd := "docker"
 	if _, err := exec.LookPath("podman"); err == nil {
 		dockerCmd = "podman"
 	}
-	cmd := exec.Command(dockerCmd, args...)
+
+	cmd := exec.CommandContext(ctx, dockerCmd, args...)
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	cmd.Stderr = &out
+
 	err := cmd.Run()
+
+	if ctx.Err() == context.DeadlineExceeded {
+		return "", fmt.Errorf("docker command timed out: %s %s", dockerCmd, strings.Join(args, " "))
+	}
+
 	return out.String(), err
 }
 
