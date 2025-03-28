@@ -58,7 +58,7 @@ func (b *Builder) AddGoldenService() *Builder {
 	b.full.Services = append(b.full.Services, config.S6FSMConfig{
 		FSMInstanceConfig: config.FSMInstanceConfig{
 			Name:            "golden-service",
-			DesiredFSMState: "running",
+			DesiredFSMState: "active",
 		},
 		S6ServiceConfig: s6serviceconfig.S6ServiceConfig{
 			Command: []string{
@@ -84,7 +84,7 @@ output:
 	b.full.Redpanda = config.RedpandaConfig{
 		FSMInstanceConfig: config.FSMInstanceConfig{
 			Name:            "redpanda",
-			DesiredFSMState: "running",
+			DesiredFSMState: "active",
 		},
 		RedpandaServiceConfig: redpandaserviceconfig.RedpandaServiceConfig{
 			DefaultTopicRetentionMs:    1000 * 60 * 60 * 24, // 1 day
@@ -108,7 +108,7 @@ func (b *Builder) AddSleepService(name string, duration string) *Builder {
 	b.full.Services = append(b.full.Services, config.S6FSMConfig{
 		FSMInstanceConfig: config.FSMInstanceConfig{
 			Name:            name,
-			DesiredFSMState: "running",
+			DesiredFSMState: "active",
 		},
 		S6ServiceConfig: s6serviceconfig.S6ServiceConfig{
 			Command: []string{"sleep", duration},
@@ -135,12 +135,12 @@ func (b *Builder) StopService(name string) *Builder {
 func (b *Builder) StartService(name string) *Builder {
 	for i, s := range b.full.Services {
 		if s.FSMInstanceConfig.Name == name {
-			b.full.Services[i].FSMInstanceConfig.DesiredFSMState = "running"
+			b.full.Services[i].FSMInstanceConfig.DesiredFSMState = "active"
 			break
 		}
 	}
 	if name == "redpanda" {
-		b.full.Redpanda.FSMInstanceConfig.DesiredFSMState = "running"
+		b.full.Redpanda.FSMInstanceConfig.DesiredFSMState = "active"
 	}
 	return b
 }
