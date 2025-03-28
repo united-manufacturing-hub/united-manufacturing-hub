@@ -84,7 +84,7 @@ output:
 	b.full.Redpanda = config.RedpandaConfig{
 		FSMInstanceConfig: config.FSMInstanceConfig{
 			Name:            "redpanda",
-			DesiredFSMState: "active",
+			DesiredFSMState: "stopped",
 		},
 		RedpandaServiceConfig: redpandaserviceconfig.RedpandaServiceConfig{
 			DefaultTopicRetentionMs:    1000 * 60 * 60 * 24, // 1 day
