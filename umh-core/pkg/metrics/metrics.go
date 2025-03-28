@@ -33,6 +33,7 @@ const (
 	ComponentBenthosInstance = "benthos_instance"
 	ComponentS6Service       = "s6_service"
 	ComponentFilesystem      = "filesystem"
+	ComponentAgentService    = "agent_service"
 )
 
 var (
