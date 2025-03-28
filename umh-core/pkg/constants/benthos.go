@@ -27,6 +27,7 @@ const (
 const (
 	BenthosUpdateObservedStateTimeout = time.Millisecond * 5
 )
+<<<<<<< HEAD
 
 const (
 	// BenthosExpectedMaxP95ExecutionTimePerInstance means that an instance will not reconcile if not 30ms are left
@@ -34,3 +35,10 @@ const (
 	// So by setting this to 30 ms, we can ensure that an instance will never start if it triggers the alerting threshold
 	BenthosExpectedMaxP95ExecutionTimePerInstance = time.Millisecond * 30
 )
+||||||| parent of 544a2ad1 (fix: remove states)
+=======
+
+var (
+	BenthosVersion = "unknown"
+)
+>>>>>>> 544a2ad1 (fix: remove states)

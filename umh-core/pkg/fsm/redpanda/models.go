@@ -32,11 +32,6 @@ const (
 	OperationalStateStarting = "starting"
 	// OperationalStateStartingConfigLoading is the state when the process itself is running but is waiting for the config to be loaded
 	OperationalStateStartingConfigLoading = "starting_config_loading"
-	// OperationalStateStartingWaitingForHealthchecks is the state when there was no fatal config error but is waiting for the healthchecks to pass
-	OperationalStateStartingWaitingForHealthchecks = "starting_waiting_for_healthchecks"
-	// OperationalStateStartingWaitingForServiceToRemainRunning is the state when the service is running but is waiting for the service to remain running
-	OperationalStateStartingWaitingForServiceToRemainRunning = "starting_waiting_for_service_to_remain_running"
-
 	// Running phase states
 	// OperationalStateIdle is the state when the service is running but not actively processing data
 	OperationalStateIdle = "idle"
@@ -58,10 +53,9 @@ const (
 	EventStopDone  = "stop_done"
 
 	// Starting phase events
-	EventS6Started          = "s6_started"
-	EventConfigLoaded       = "config_loaded"
-	EventHealthchecksPassed = "healthchecks_passed"
-	EventStartFailed        = "start_failed"
+	EventS6Started    = "s6_started"
+	EventConfigLoaded = "config_loaded"
+	EventStartFailed  = "start_failed"
 
 	// Running phase events
 	EventDataReceived  = "data_received"
@@ -76,8 +70,6 @@ func IsOperationalState(state string) bool {
 	case OperationalStateStopped,
 		OperationalStateStarting,
 		OperationalStateStartingConfigLoading,
-		OperationalStateStartingWaitingForHealthchecks,
-		OperationalStateStartingWaitingForServiceToRemainRunning,
 		OperationalStateIdle,
 		OperationalStateActive,
 		OperationalStateDegraded,
@@ -91,9 +83,7 @@ func IsOperationalState(state string) bool {
 func IsStartingState(state string) bool {
 	switch state {
 	case OperationalStateStarting,
-		OperationalStateStartingConfigLoading,
-		OperationalStateStartingWaitingForHealthchecks,
-		OperationalStateStartingWaitingForServiceToRemainRunning:
+		OperationalStateStartingConfigLoading:
 		return true
 	}
 	return false

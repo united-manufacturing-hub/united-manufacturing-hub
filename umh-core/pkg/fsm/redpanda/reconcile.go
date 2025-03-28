@@ -299,30 +299,6 @@ func (b *RedpandaInstance) reconcileStartingState(ctx context.Context, currentSt
 		}
 
 		return b.baseFSMInstance.SendEvent(ctx, EventConfigLoaded), true
-	case OperationalStateStartingWaitingForHealthchecks:
-		// If the S6 is not running, go back to starting
-		if !b.IsRedpandaS6Running() || !b.IsRedpandaConfigLoaded() {
-			return b.baseFSMInstance.SendEvent(ctx, EventStartFailed), true
-		}
-
-		// Check if healthchecks have passed
-		if !b.IsRedpandaHealthchecksPassed() {
-			return nil, false
-		}
-
-		return b.baseFSMInstance.SendEvent(ctx, EventHealthchecksPassed), true
-	case OperationalStateStartingWaitingForServiceToRemainRunning:
-		// If the S6 is not running, go back to starting
-		if !b.IsRedpandaS6Running() || !b.IsRedpandaConfigLoaded() || !b.IsRedpandaHealthchecksPassed() {
-			return b.baseFSMInstance.SendEvent(ctx, EventStartFailed), true
-		}
-
-		// Check if service has been running stably for some time
-		if !b.IsRedpandaRunningForSomeTimeWithoutErrors(currentTime, constants.RedpandaLogWindow) {
-			return nil, false
-		}
-
-		return b.baseFSMInstance.SendEvent(ctx, EventStartDone), true
 	default:
 		return fmt.Errorf("invalid starting state: %s", currentState), false
 	}

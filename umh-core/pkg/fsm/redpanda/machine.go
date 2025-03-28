@@ -43,13 +43,12 @@ func NewRedpandaInstance(
 
 			// Starting phase transitions
 			{Name: EventS6Started, Src: []string{OperationalStateStarting}, Dst: OperationalStateStartingConfigLoading},
-			{Name: EventConfigLoaded, Src: []string{OperationalStateStartingConfigLoading}, Dst: OperationalStateStartingWaitingForHealthchecks},
-			{Name: EventHealthchecksPassed, Src: []string{OperationalStateStartingWaitingForHealthchecks}, Dst: OperationalStateStartingWaitingForServiceToRemainRunning},
-			{Name: EventStartDone, Src: []string{OperationalStateStartingWaitingForServiceToRemainRunning}, Dst: OperationalStateIdle},
-			{Name: EventStop, Src: []string{OperationalStateStarting, OperationalStateStartingConfigLoading, OperationalStateStartingWaitingForHealthchecks, OperationalStateStartingWaitingForServiceToRemainRunning}, Dst: OperationalStateStopping},
+			{Name: EventConfigLoaded, Src: []string{OperationalStateStartingConfigLoading}, Dst: OperationalStateIdle},
+			{Name: EventStartDone, Src: []string{OperationalStateStarting}, Dst: OperationalStateIdle},
+			{Name: EventStop, Src: []string{OperationalStateStarting, OperationalStateStartingConfigLoading}, Dst: OperationalStateStopping},
 
 			// From any starting state, we can either go back to OperationalStateStarting (e.g., if there was an error)
-			{Name: EventStartFailed, Src: []string{OperationalStateStarting, OperationalStateStartingConfigLoading, OperationalStateStartingWaitingForHealthchecks, OperationalStateStartingWaitingForServiceToRemainRunning}, Dst: OperationalStateStarting},
+			{Name: EventStartFailed, Src: []string{OperationalStateStarting, OperationalStateStartingConfigLoading}, Dst: OperationalStateStarting},
 
 			// Running phase transitions
 			// From Idle, we can go to Active when data is processed or to Stopping

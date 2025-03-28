@@ -19,7 +19,6 @@ import "time"
 const (
 	RedpandaConfigFileName = "redpanda.yaml"
 	RedpandaServiceName    = "redpanda"
-	RedpandaVersion        = "24.3.8"
 )
 
 const (
@@ -28,4 +27,8 @@ const (
 
 const (
 	RedpandaLogWindow = 10 * time.Minute
+)
+
+var (
+	RedpandaVersion = "unknown"
 )

@@ -13,6 +13,9 @@
 # limitations under the License.
 # --- Build Stage ---
 FROM golang:1.24-alpine as build
+ARG S6_OVERLAY_VERSION=3.2.0.2
+ARG BENTHOS_UMH_VERSION=0.6.2
+ARG REDPANDA_VERSION=24.3.8
 WORKDIR /go/src/github.com/united-manufacturing-hub/united-manufacturing-hub
 
 # Set app version with a default value - can be overridden at build time
@@ -22,7 +25,13 @@ COPY ./go.mod ./umh-core/
 WORKDIR /go/src/github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core
 RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 go build -ldflags "-s -w -X main.appVersion=${APP_VERSION}" -o /go/bin/umh-core cmd/main.go
+RUN CGO_ENABLED=0 go build \
+    -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants.S6OverlayVersion=${S6_OVERLAY_VERSION} \
+    -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants.BenthosVersion=${BENTHOS_UMH_VERSION} \
+    -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants.RedpandaVersion=${REDPANDA_VERSION} \
+    -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/main.appVersion=${APP_VERSION} \
+    -ldflags "-s -w" \
+    -o /go/bin/umh-core cmd/main.go
 
 # --- Downloader Stage (slow downloads) ---
 FROM alpine:3.21 as downloader

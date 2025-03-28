@@ -20,6 +20,7 @@
     },
     "runArgs": [
         "--cap-add=SYS_PTRACE",
+        "--cap-add=SYS_ADMIN",
         "--security-opt",
         "seccomp=unconfined",
         "--userns=keep-id"
