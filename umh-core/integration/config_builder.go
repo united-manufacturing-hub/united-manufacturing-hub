@@ -15,6 +15,8 @@
 // builder.go (or in integration_test.go)
 package integration_test
 
+// TODO: Ferdinand (29.03.2025 @ 00:35): This test needs to work with activated redpanda !
+
 import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/redpandaserviceconfig"
