@@ -15,6 +15,7 @@
 package v2
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -31,7 +32,7 @@ func login(token string, insecureTLS bool) (*LoginResponse, error) {
 	//	zap.S().Debugf("Attempting to login with: %s", token)
 	var cookieMap map[string]string
 	cookieMap = make(map[string]string)
-	request, err, status := http.PostRequest[backend_api_structs.InstanceLoginResponse, any](nil, http.LoginEndpoint, nil, map[string]string{
+	request, err, status := http.PostRequest[backend_api_structs.InstanceLoginResponse, any](context.Background(), http.LoginEndpoint, nil, map[string]string{
 		"Authorization": fmt.Sprint("Bearer ", LoginHash(token)),
 	}, &cookieMap, insecureTLS)
 	if err != nil {
