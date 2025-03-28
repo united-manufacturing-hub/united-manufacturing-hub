@@ -200,8 +200,9 @@ type Version struct {
 }
 
 type Release struct {
-	Version string `json:"version"`
-	Channel string `json:"channel"`
+	Health  *Health `json:"health"`
+	Version string  `json:"version"`
+	Channel string  `json:"channel"`
 	// List of supported feature keywords. If a feature is supported, its corresponding keyword
 	// will be included in the array.
 	//
