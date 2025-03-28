@@ -160,6 +160,7 @@ func enableBackendConnection(config *config.FullConfig, state *fsm.SystemSnapsho
 		login := v2.NewLogin(config.Agent.CommunicatorConfig.AuthToken, false)
 		if login == nil {
 			sentry.ReportIssuef(sentry.IssueTypeError, logger, "Failed to create login object")
+			return
 		}
 		communicationState.LoginResponse = login
 		logger.Info("Backend connection enabled, login response: ", zap.Any("login_name", login.Name))
