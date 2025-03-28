@@ -1,4 +1,4 @@
-# Copyright 2023 UMH Systems GmbH
+# Copyright 2025 UMH Systems GmbH
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM --platform=$BUILDPLATFORM docker.io/golang:1.22-alpine3.18 AS source
+FROM --platform=$BUILDPLATFORM docker.io/golang:1.24-alpine3.21 AS source
 ARG TARGETPLATFORM
 ARG BUILDPLATFORM
 

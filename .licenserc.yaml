@@ -1,4 +1,4 @@
-# Copyright 2023 UMH Systems GmbH
+# Copyright 2025 UMH Systems GmbH
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,22 +19,37 @@ header:
     software-name: United Manufacturing Hub
 
   paths-ignore:
-    - '*/*.md'
-    - 'LICENSE'
-    - 'NOTICE'
-    - 'CODEOWNERS'
-    - 'AUTHORS'
-    - '.git'
-    - 'deployment/united-manufacturing-hub/_mqttDevCertificates/'
-    - 'deployment/united-manufacturing-hub/developmentCertificates/'
-    - 'golang/test/factoryinsight/testfiles/'
-    - 'deployment/kafka-to-postgresql/postgresql.conf'
-    - 'golang/test/mqtt-bridge/config/mosquitto.conf'
-    - 'golang/test/factoryinput/EMPTY'
-    - 'golang/go.sum'
-    - 'deployment/united-manufacturing-hub/templates/NOTES.txt'
-    - 'deployment/united-manufacturing-hub/Chart.lock'
-    - 'deployment/united-manufacturing-hub/.helmignore'
-
+    - "**/*.md"
+    - "**/*.mdc"
+    - "LICENSE"
+    - "NOTICE"
+    - "CODEOWNERS"
+    - "AUTHORS"
+    - ".git"
+    - "deployment/united-manufacturing-hub/_mqttDevCertificates/"
+    - "deployment/united-manufacturing-hub/developmentCertificates/"
+    - "deployment/kafka-to-postgresql/postgresql.conf"
+    - "deployment/united-manufacturing-hub/templates/NOTES.txt"
+    - "deployment/united-manufacturing-hub/Chart.lock"
+    - "deployment/united-manufacturing-hub/.helmignore"
+    - "deployment/helm-repo/index.yaml"
+    - "umh-core/vendor/*"
+    - "umh-core/vendor/**/*"
+    - ".releaserc"
+    - ".gitignore"
+    - ".licenserc.yaml"
+    - "CODE_OF_CONDUCT.md"
+    - "CONTRIBUTING.md"
+    - "CONTRIBUTOR_LICENSE_AGREEMENT_ENTITY.md"
+    - "CONTRIBUTOR_LICENSE_AGREEMENT_INDIVIDUAL.md"
+    - "Makefile"
+    - "README.md"
+    - "SECURITY.md"
+    - "**/go.sum"
+    - "**/go.mod"
+    - "**/.dockerignore"
+    - "umh-core/s6-base/**/*"
+    - ".devcontainer/devcontainer.json"
+    - ".vscode/**"
 
   comment: on-failure

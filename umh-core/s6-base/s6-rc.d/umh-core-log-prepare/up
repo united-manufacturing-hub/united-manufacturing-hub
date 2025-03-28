@@ -1,0 +1,3 @@
+foreground { mkdir -p /data/logs }
+foreground { mkdir -p /data/logs/umh-core }
+foreground { chown -R nobody:nobody /data }

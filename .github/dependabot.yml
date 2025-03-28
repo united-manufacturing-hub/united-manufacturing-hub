@@ -1,4 +1,4 @@
-# Copyright 2023 UMH Systems GmbH
+# Copyright 2025 UMH Systems GmbH
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,110 +19,14 @@ updates:
     schedule:
       interval: daily
 
-  - directory: /golang
-    labels:
-      - 'lang: go'
+  - directory: /umh-core
     package-ecosystem: gomod
     schedule:
       interval: daily
     target-branch: main
 
-  - directory: /deployment/barcodereader
-    labels:
-      - 'lang: docker'
+  - directory: /umh-core
     package-ecosystem: docker
-    schedule:
-      interval: daily
-    target-branch: main
-
-  - directory: /deployment/cameraconnect
-    labels:
-      - 'lang: docker'
-    package-ecosystem: docker
-    schedule:
-      interval: daily
-    target-branch: main
-
-
-  - directory: /deployment/factoryinsight
-    labels:
-      - 'lang: docker'
-    package-ecosystem: docker
-    schedule:
-      interval: daily
-    target-branch: main
-
-
-
-  - directory: /deployment/kafka-init
-    labels:
-      - 'lang: docker'
-    package-ecosystem: docker
-    schedule:
-      interval: daily
-    target-branch: main
-
-  - directory: /deployment/kafka-to-blob
-    labels:
-      - 'lang: docker'
-    package-ecosystem: docker
-    schedule:
-      interval: daily
-    target-branch: main
-
-
-  - directory: /deployment/mqtt-kafka-bridge
-    labels:
-      - 'lang: docker'
-    package-ecosystem: docker
-    schedule:
-      interval: daily
-    target-branch: main
-
-  - directory: /deployment/mqtt-to-blob
-    labels:
-      - 'lang: docker'
-    package-ecosystem: docker
-    schedule:
-      interval: daily
-    target-branch: main
-
-  - directory: /deployment/mqtt-to-postgresql
-    labels:
-      - 'lang: docker'
-    package-ecosystem: docker
-    schedule:
-      interval: daily
-    target-branch: main
-
-  - directory: /deployment/sensorconnect
-    labels:
-      - 'lang: docker'
-    package-ecosystem: docker
-    schedule:
-      interval: daily
-    target-branch: main
-
-  - directory: /mqtt-to-blob
-    labels:
-      - 'lang: python'
-    package-ecosystem: pip
-    schedule:
-      interval: daily
-    target-branch: main
-
-  - directory: /cameraconnect
-    labels:
-      - 'lang: python'
-    package-ecosystem: pip
-    schedule:
-      interval: daily
-    target-branch: main
-
-  - directory: /barcodereader
-    labels:
-      - 'lang: python'
-    package-ecosystem: pip
     schedule:
       interval: daily
     target-branch: main

@@ -1,4 +1,4 @@
-# Copyright 2023 UMH Systems GmbH
+# Copyright 2025 UMH Systems GmbH
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -26,9 +26,9 @@ metadata:
     # This does not change over time
     data-flow-component-uuid: fcdec4de-a930-4229-befc-d318c9964a2e
     # This is the random UUID of the version of the component
-    data-flow-component-version-uuid: 148530e8-c79a-4f45-9c76-9cc9d859b1c8
+    data-flow-component-version-uuid: 5b12b552-2b76-43dd-91f7-50d746e654bf
     # Timestamp of last change to the component in unix milliseconds since epoch
-    data-flow-version: '1730983044602'
+    data-flow-version: '1738848631531'
     # Generic label to indicate that this is a data flow component
     is-data-flow-component: 'true'
     # Required for mgmtcompanion to manage the component
@@ -48,9 +48,9 @@ spec:
         # This does not change over time
         data-flow-component-uuid: fcdec4de-a930-4229-befc-d318c9964a2e
         # This is the random UUID of the version of the component
-        data-flow-component-version-uuid: 148530e8-c79a-4f45-9c76-9cc9d859b1c8
+        data-flow-component-version-uuid: 5b12b552-2b76-43dd-91f7-50d746e654bf
         # Timestamp of last change to the component in unix milliseconds since epoch
-        data-flow-version: '1730983044602'
+        data-flow-version: '1738848631531'
         # Generic label to indicate that this is a data flow component
         is-data-flow-component: 'true'
         # Required for mgmtcompanion to manage the component
@@ -104,7 +104,7 @@ spec:
               fi
       containers:
         - name: dfc-fcdec4de-a930-4229-befc-d318c9964a2e-kafka-t-mqtt-historian
-          image: management.umh.app/oci/united-manufacturing-hub/benthos-umh:0.4.2
+          image: management.umh.app/oci/united-manufacturing-hub/benthos-umh:0.6.2
           ports:
             - name: http
               containerPort: 4195

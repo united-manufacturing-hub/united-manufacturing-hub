@@ -1,4 +1,4 @@
-# Copyright 2023 UMH Systems GmbH
+# Copyright 2025 UMH Systems GmbH
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -41,7 +41,7 @@ spec:
         runAsUser: 1000
       containers:
       - name: {{include "united-manufacturing-hub.fullname" .}}-nodered
-        image: "{{.Values.image.registry}}/nodered/node-red:{{.Values.nodered.tag | default "3.0.2"}}"
+        image: "{{.Values.image.registry}}/nodered/node-red:{{.Values.nodered.tag | default "4.0.9-20"}}"
         ports:
         - containerPort: 1880
           name: nodered-ui

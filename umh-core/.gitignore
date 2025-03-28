@@ -1,0 +1,6 @@
+data/
+
+integration/umh-config
+
+*.test
+

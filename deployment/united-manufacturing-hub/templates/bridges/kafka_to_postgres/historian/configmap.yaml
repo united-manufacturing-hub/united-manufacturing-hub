@@ -1,4 +1,4 @@
-# Copyright 2023 UMH Systems GmbH
+# Copyright 2025 UMH Systems GmbH
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -28,7 +28,7 @@ metadata:
     # This is the random UUID of the version of the component
     data-flow-component-version-uuid: 0edc0bc1-7df2-4fb8-ad90-955ad1aacc04
     # Timestamp of last change to the component in unix milliseconds since epoch
-    data-flow-version: '1730983044602'
+    data-flow-version: '1738848631531'
     # Generic label to indicate that this is a data flow component
     is-data-flow-component: 'true'
     # Required for mgmtcompanion to manage the component
@@ -59,7 +59,7 @@ data:
         consumer_group: "kafka_to_postgresql_historian_bridge"
         auto_replay_nacks: false
         metadata_max_age: 10s
-        start_from_oldest: false
+        start_from_oldest: true
 
     ## Processors
     #
