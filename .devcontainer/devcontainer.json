@@ -23,7 +23,8 @@
         "--cap-add=SYS_ADMIN",
         "--security-opt",
         "seccomp=unconfined",
-        "--userns=keep-id"
+        "--userns=keep-id",
+        "--privileged"
     ],
     // Configure tool-specific properties.
     "customizations": {
