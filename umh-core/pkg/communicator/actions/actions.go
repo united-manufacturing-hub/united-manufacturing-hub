@@ -16,12 +16,12 @@ package actions
 
 import (
 	"github.com/google/uuid"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/encoding"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/safejson"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/shared/models"
 	"go.uber.org/zap"
 )
 

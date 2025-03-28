@@ -18,8 +18,6 @@ import (
 	"sync"
 	"time"
 
-	//"github.com/united-manufacturing-hub/ManagementConsole/shared/models/mgmtconfig"
-
 	"github.com/google/uuid"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
