@@ -16,6 +16,7 @@ package benthos
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -358,4 +359,32 @@ func (m *MockHTTPClient) SetServiceNotFound(serviceName string) {
 	m.ResponseMap["/ready"] = notFoundResponse
 	m.ResponseMap["/metrics"] = notFoundResponse
 	m.ResponseMap["/version"] = notFoundResponse
+}
+
+// GetWithBody performs a mock GET request and returns the response with body
+func (m *MockHTTPClient) GetWithBody(ctx context.Context, urlString string) (*http.Response, []byte, error) {
+	// Create a request with the given context
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, urlString, nil)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create request for %s: %w", urlString, err)
+	}
+
+	// Use the Do method to maintain consistent behavior
+	resp, err := m.Do(req)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to execute request for %s: %w", urlString, err)
+	}
+
+	// For mock responses, we can avoid closing the body since it's a NopCloser
+	// But we'll read it anyway to simulate real behavior
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return resp, nil, fmt.Errorf("failed to read response body for %s: %w", urlString, err)
+	}
+	resp.Body.Close()
+
+	// Recreate the response with a fresh body for the caller
+	resp.Body = io.NopCloser(bytes.NewReader(body))
+
+	return resp, body, nil
 }

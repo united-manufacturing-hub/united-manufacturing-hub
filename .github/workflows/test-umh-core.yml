@@ -16,12 +16,9 @@
 name: Test UMH Core
 
 on:
-  push:
+  pull_request:
     branches:
       - "**"
-    paths:
-      - "umh-core/**"
-  pull_request:
     paths:
       - "umh-core/**"
 
@@ -39,7 +36,9 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: "1.24.1"
+          go-version-file: 'umh-core/go.mod'
+          cache-dependency-path: |
+             umh-core/go.sum
 
       - name: Install ginkgo and nilaway
         run: make install
@@ -60,7 +59,9 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: "1.24.1"
+          go-version-file: 'umh-core/go.mod'
+          cache-dependency-path: |
+             umh-core/go.sum
 
       - name: Install ginkgo and nilaway
         run: make install
