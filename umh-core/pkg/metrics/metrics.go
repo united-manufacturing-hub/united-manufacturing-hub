@@ -34,6 +34,7 @@ const (
 	ComponentS6Service       = "s6_service"
 	ComponentFilesystem      = "filesystem"
 	ComponentCoreInstance    = "core_instance"
+	ComponentAgentInstance   = "agent_instance"
 )
 
 var (
