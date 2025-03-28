@@ -100,7 +100,8 @@ FROM downloader
 COPY --from=build /go/bin/umh-core /usr/local/bin/umh-core
 RUN chmod +x /usr/local/bin/umh-core && \
     ls -la /usr/local/bin/umh-core && \
-    test -x /usr/local/bin/umh-core || (echo "Binary not executable" && exit 1)
+    test -x /usr/local/bin/umh-core || (echo "Binary not executable" && exit 1) && \
+    mkdir -p /data/redpanda/coredump
 # Copy s6 service configuration
 COPY ./s6-base/s6-rc.d /etc/s6-overlay/s6-rc.d/
 RUN chmod +x /etc/s6-overlay/s6-rc.d/umh-core/run
