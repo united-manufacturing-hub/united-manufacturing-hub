@@ -16,6 +16,7 @@ require (
 	github.com/prometheus/common v0.63.0
 	github.com/tiendc/go-deepcopy v1.5.1
 	go.uber.org/zap v1.27.0
+	golang.org/x/sync v0.12.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 

@@ -21,11 +21,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	dto "github.com/prometheus/client_model/go"
@@ -38,6 +40,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	"go.uber.org/zap"
+	"golang.org/x/sync/errgroup"
 
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 	"gopkg.in/yaml.v3"
@@ -701,7 +704,7 @@ func updateLatencyFromMetric(latency *Latency, metric *dto.Metric) {
 func (s *BenthosService) GetHealthCheckAndMetrics(ctx context.Context, s6ServiceName string, metricsPort int, tick uint64) (BenthosStatus, error) {
 	start := time.Now()
 	defer func() {
-		metrics.ObserveReconcileTime(logger.ComponentBenthosService, s6ServiceName, time.Since(start))
+		metrics.ObserveReconcileTime(logger.ComponentBenthosService, s6ServiceName+".GetHealthCheckAndMetrics", time.Since(start))
 	}()
 
 	if ctx.Err() != nil {
@@ -727,111 +730,164 @@ func (s *BenthosService) GetHealthCheckAndMetrics(ctx context.Context, s6Service
 
 	baseURL := fmt.Sprintf("http://localhost:%d", metricsPort)
 
-	// Helper function to make HTTP requests with context
-	doRequest := func(endpoint string) (*http.Response, error) {
-		start := time.Now()
+	// Create a client to use for our requests
+	// If it's a mock client (used in tests), use it directly
+	// Otherwise, create a new client with timeouts based on context
+	var requestClient HTTPClient = s.httpClient
 
+	// Only create a custom client with timeouts if we're not using a mock client
+	_, isMockClient := s.httpClient.(*MockHTTPClient)
+	if !isMockClient {
+		// Create HTTP transport with timeouts based on context deadline
+		transport := &http.Transport{}
+
+		// Set timeouts based on context deadline if available
+		if deadline, ok := ctx.Deadline(); ok {
+			timeout := time.Until(deadline)
+
+			transport = &http.Transport{
+				DialContext: (&net.Dialer{
+					Timeout: timeout / 2, // Use half the available time for connection
+				}).DialContext,
+				ResponseHeaderTimeout: timeout / 2, // And half for response
+				ExpectContinueTimeout: timeout / 4,
+				IdleConnTimeout:       timeout / 4,
+				TLSHandshakeTimeout:   timeout / 4,
+			}
+		} else {
+			return BenthosStatus{}, fmt.Errorf("no deadline set in context")
+		}
+
+		// Create a new client instead of modifying the existing one
+		requestClient = &http.Client{
+			Transport: transport,
+		}
+	}
+
+	// Start an errgroup with the **same context** so if one sub-task
+	// fails or the context is canceled, all sub-tasks are signaled to stop.
+	g, gctx := errgroup.WithContext(ctx)
+
+	// Helper function to make HTTP requests with context
+	doRequest := func(endpoint string) (*http.Response, []byte, error) {
+		requestStart := time.Now()
 		defer func() {
-			s.logger.Debugf("Request for %s took %s", endpoint, time.Since(start))
+			s.logger.Debugf("Request for %s took %s", endpoint, time.Since(requestStart))
 		}()
 
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, baseURL+endpoint, nil)
+		req, err := http.NewRequestWithContext(gctx, http.MethodGet, baseURL+endpoint, nil)
 		if err != nil {
-			return nil, fmt.Errorf("failed to create request for %s: %w", endpoint, err)
+			return nil, nil, fmt.Errorf("failed to create request for %s: %w", endpoint, err)
 		}
-		resp, err := s.httpClient.Do(req)
+
+		resp, err := requestClient.Do(req)
 		if err != nil {
-			return nil, fmt.Errorf("failed to execute request for %s: %w", endpoint, err)
+			return nil, nil, fmt.Errorf("failed to execute request for %s: %w", endpoint, err)
 		}
-		return resp, nil
-	}
-
-	var healthCheck HealthCheck
-
-	// Check liveness
-	if resp, err := doRequest("/ping"); err == nil && resp != nil {
-		healthCheck.IsLive = resp.StatusCode == http.StatusOK
-		resp.Body.Close()
-	} else {
-		return BenthosStatus{}, fmt.Errorf("failed to check liveness: %w", err)
-	}
-
-	// Check readiness
-	if resp, err := doRequest("/ready"); err == nil && resp != nil {
 		defer resp.Body.Close()
 
-		// Even if status is 503, we still want to read the body to get the detailed status
 		body, err := io.ReadAll(resp.Body)
 		if err != nil {
-			return BenthosStatus{}, fmt.Errorf("failed to read ready response body: %w", err)
+			return resp, nil, fmt.Errorf("failed to read response body for %s: %w", endpoint, err)
 		}
 
+		return resp, body, nil
+	}
+
+	var mu sync.Mutex
+
+	// Results
+	var healthCheck HealthCheck
+	var metricsData Metrics
+
+	// 1) Check liveness
+	g.Go(func() error {
+		resp, _, err := doRequest("/ping")
+		if err != nil {
+			return fmt.Errorf("failed liveness check: %w", err)
+		}
+		mu.Lock()
+		healthCheck.IsLive = (resp.StatusCode == http.StatusOK)
+		mu.Unlock()
+		return nil
+	})
+
+	// 2) Check readiness
+	g.Go(func() error {
+		resp, body, err := doRequest("/ready")
+		if err != nil {
+			return fmt.Errorf("failed readiness check: %w", err)
+		}
 		var readyResp readyResponse
 		if err := json.Unmarshal(body, &readyResp); err != nil {
-			return BenthosStatus{}, fmt.Errorf("failed to unmarshal ready response: %w", err)
+			return fmt.Errorf("unmarshal readiness: %w", err)
 		}
 
-		// Service is ready if status is 200 and there's no error
-		healthCheck.IsReady = resp.StatusCode == http.StatusOK && readyResp.Error == ""
+		// Update fields
+		mu.Lock()
+		healthCheck.IsReady = (resp.StatusCode == http.StatusOK && readyResp.Error == "")
 		healthCheck.ReadyError = readyResp.Error
 		healthCheck.ConnectionStatuses = readyResp.Statuses
+		mu.Unlock()
 
-		// Log detailed status if not ready
 		if !healthCheck.IsReady {
 			s.logger.Debugw("Service not ready",
 				"service", s6ServiceName,
 				"error", readyResp.Error,
-				"statuses", readyResp.Statuses)
+				"statuses", readyResp.Statuses,
+			)
 		}
-	} else {
-		return BenthosStatus{}, fmt.Errorf("failed to check readiness: %w", err)
-	}
+		return nil
+	})
 
-	// Get version
-	if resp, err := doRequest("/version"); err == nil && resp != nil {
-		defer resp.Body.Close()
-
-		body, err := io.ReadAll(resp.Body)
+	// 3) Get version
+	g.Go(func() error {
+		_, body, err := doRequest("/version")
 		if err != nil {
-			return BenthosStatus{}, fmt.Errorf("failed to read version response body: %w", err)
+			return fmt.Errorf("get version: %w", err)
 		}
-
 		var vData versionResponse
 		if err := json.Unmarshal(body, &vData); err != nil {
-			return BenthosStatus{}, fmt.Errorf("failed to unmarshal version response: %w", err)
+			return fmt.Errorf("unmarshal version: %w", err)
 		}
+		mu.Lock()
 		healthCheck.Version = vData.Version
-	} else {
-		return BenthosStatus{}, fmt.Errorf("failed to get version: %w", err)
-	}
+		mu.Unlock()
+		return nil
+	})
 
-	var metrics Metrics
-
-	// Get metrics
-	if resp, err := doRequest("/metrics"); err == nil && resp != nil {
-		defer resp.Body.Close()
-
-		body, err := io.ReadAll(resp.Body)
+	// 4) Get metrics
+	g.Go(func() error {
+		_, body, err := doRequest("/metrics")
 		if err != nil {
-			return BenthosStatus{}, fmt.Errorf("failed to read metrics response body: %w", err)
+			return fmt.Errorf("get metrics: %w", err)
 		}
-
-		metrics, err = parseMetrics(body)
+		m, err := parseMetrics(body)
 		if err != nil {
-			return BenthosStatus{}, fmt.Errorf("failed to parse metrics: %w", err)
+			return fmt.Errorf("parse metrics: %w", err)
 		}
-	}
+		mu.Lock()
+		metricsData = m
+		mu.Unlock()
+		return nil
+	})
 
+	// Wait for all calls or immediate context cancellation
+	if err := g.Wait(); err != nil {
+		// If *any* sub‑call failed or the context got canceled,
+		// errgroup returns immediately here.
+		return BenthosStatus{}, err
+	}
 	// Update the metrics state
 	if s.metricsState == nil {
 		return BenthosStatus{}, fmt.Errorf("metrics state not initialized")
 	}
 
-	s.metricsState.UpdateFromMetrics(metrics, tick)
+	s.metricsState.UpdateFromMetrics(metricsData, tick)
 
 	return BenthosStatus{
 		HealthCheck:  healthCheck,
-		Metrics:      metrics,
+		Metrics:      metricsData,
 		MetricsState: s.metricsState,
 	}, nil
 }
