@@ -15,6 +15,7 @@
 package watchdog
 
 import (
+	"fmt"
 	"runtime"
 	"sync"
 	"sync/atomic"
@@ -211,8 +212,8 @@ func (s *Watchdog) RegisterHeartbeat(name string, warningsUntilFailure uint64, t
 	if v, ok := s.registeredHeartbeats[name]; ok {
 		s.registeredHeartbeatsMutex.Unlock()
 		zap.S().Errorf("[%s] Heartbeat already registered: %s (%s)", s.watchdogID, name, v.uniqueIdentifier)
-		s.reportStateToNiceFail()
 		sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "Heartbeat already registered: %s", name)
+		panic(fmt.Sprintf("Heartbeat already registered: %s (%s)", name, v.uniqueIdentifier))
 	}
 	s.registeredHeartbeats[name] = &hb
 	zap.S().Infof("[%s] Registered heartbeat %s (%s)", s.watchdogID, name, uniqueIdentifier)
