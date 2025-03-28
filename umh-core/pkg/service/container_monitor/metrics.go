@@ -20,6 +20,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 )
 
 const (
@@ -106,9 +107,10 @@ var (
 )
 
 // RecordContainerMetrics updates all Prometheus metrics based on the current metrics values
+// using standard models.Container type
 // instanceName is used as a label for all metrics to distinguish between different containers
-func RecordContainerMetrics(containerMetrics *ContainerMetrics, instanceName string) {
-	if containerMetrics == nil {
+func RecordContainerMetrics(container *models.Container, instanceName string) {
+	if container == nil {
 		return
 	}
 
@@ -125,32 +127,38 @@ func RecordContainerMetrics(containerMetrics *ContainerMetrics, instanceName str
 	})
 
 	// CPU metrics
-	if containerMetrics.CPU != nil {
-		containerCPUUsageMCores.WithLabelValues(instanceName).Set(containerMetrics.CPU.TotalUsageMCpu)
-		containerCPUCoreCount.WithLabelValues(instanceName).Set(float64(containerMetrics.CPU.CoreCount))
-		containerCPULoadPercent.WithLabelValues(instanceName).Set(containerMetrics.CPU.LoadPercent)
+	if container.CPU != nil {
+		containerCPUUsageMCores.WithLabelValues(instanceName).Set(container.CPU.TotalUsageMCpu)
+		containerCPUCoreCount.WithLabelValues(instanceName).Set(float64(container.CPU.CoreCount))
+
+		// CPU load percent is calculated during metrics collection
+		// but we need to derive it here for Prometheus
+		if container.CPU.TotalUsageMCpu > 0 && container.CPU.CoreCount > 0 {
+			cpuLoadPercent := (container.CPU.TotalUsageMCpu / 1000.0) / float64(container.CPU.CoreCount) * 100.0
+			containerCPULoadPercent.WithLabelValues(instanceName).Set(cpuLoadPercent)
+		}
 	}
 
 	// Memory metrics
-	if containerMetrics.Memory != nil {
-		containerMemoryUsedBytes.WithLabelValues(instanceName).Set(float64(containerMetrics.Memory.CGroupUsedBytes))
-		containerMemoryTotalBytes.WithLabelValues(instanceName).Set(float64(containerMetrics.Memory.CGroupTotalBytes))
+	if container.Memory != nil {
+		containerMemoryUsedBytes.WithLabelValues(instanceName).Set(float64(container.Memory.CGroupUsedBytes))
+		containerMemoryTotalBytes.WithLabelValues(instanceName).Set(float64(container.Memory.CGroupTotalBytes))
 
 		// Calculate percentage
-		if containerMetrics.Memory.CGroupTotalBytes > 0 {
-			usagePercent := float64(containerMetrics.Memory.CGroupUsedBytes) / float64(containerMetrics.Memory.CGroupTotalBytes) * 100.0
+		if container.Memory.CGroupTotalBytes > 0 {
+			usagePercent := float64(container.Memory.CGroupUsedBytes) / float64(container.Memory.CGroupTotalBytes) * 100.0
 			containerMemoryUsagePercent.WithLabelValues(instanceName).Set(usagePercent)
 		}
 	}
 
 	// Disk metrics
-	if containerMetrics.Disk != nil {
-		containerDiskUsedBytes.WithLabelValues(instanceName).Set(float64(containerMetrics.Disk.DataPartitionUsedBytes))
-		containerDiskTotalBytes.WithLabelValues(instanceName).Set(float64(containerMetrics.Disk.DataPartitionTotalBytes))
+	if container.Disk != nil {
+		containerDiskUsedBytes.WithLabelValues(instanceName).Set(float64(container.Disk.DataPartitionUsedBytes))
+		containerDiskTotalBytes.WithLabelValues(instanceName).Set(float64(container.Disk.DataPartitionTotalBytes))
 
 		// Calculate percentage
-		if containerMetrics.Disk.DataPartitionTotalBytes > 0 {
-			usagePercent := float64(containerMetrics.Disk.DataPartitionUsedBytes) / float64(containerMetrics.Disk.DataPartitionTotalBytes) * 100.0
+		if container.Disk.DataPartitionTotalBytes > 0 {
+			usagePercent := float64(container.Disk.DataPartitionUsedBytes) / float64(container.Disk.DataPartitionTotalBytes) * 100.0
 			containerDiskUsagePercent.WithLabelValues(instanceName).Set(usagePercent)
 		}
 	}

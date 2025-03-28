@@ -22,11 +22,12 @@ const (
 	DiskCriticalPercent   = 90.0
 
 	// Hardware information sources
-	HWIDFilePath  = "/etc/machine-id"
+	HWIDFilePath  = "/data/hwid"
 	DataMountPath = "/data"
 )
 
 // Health state constants
+// TODO: put in fsm package
 const (
 	// Health states aligned with generator.go
 	ContainerStateNormal   = "normal"
