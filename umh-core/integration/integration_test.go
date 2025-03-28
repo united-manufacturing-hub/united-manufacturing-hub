@@ -28,11 +28,9 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-// Ferdinand (28.03.2025 @ 23:35): If you need the logs, comment out the StopContainer() call in the tests AfterAll() function
-
 // ---------- Actual Ginkgo Tests ----------
 
-func printFailureLogs() {
+func printFailureLogsAndStopContainer() {
 	if CurrentSpecReport().Failed() {
 		fmt.Println("Test failed, printing container logs:")
 		printContainerLogs()
@@ -57,11 +55,11 @@ func printFailureLogs() {
 var _ = Describe("UMH Container Integration", Ordered, Label("integration"), func() {
 
 	AfterEach(func() {
-		printFailureLogs()
+		printFailureLogsAndStopContainer()
 	})
 
 	AfterAll(func() {
-		printFailureLogs()
+		printFailureLogsAndStopContainer()
 		CleanupDockerBuildCache()
 	})
 
@@ -118,7 +116,7 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 		})
 
 		AfterAll(func() {
-			printFailureLogs()
+			printFailureLogsAndStopContainer()
 		})
 
 		It("should have the golden service up and expose metrics", func() {
@@ -167,7 +165,7 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 		})
 
 		AfterAll(func() {
-			printFailureLogs()
+			printFailureLogsAndStopContainer()
 		})
 
 		It("should have both services active and expose healthy metrics", func() {
@@ -207,7 +205,7 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 		})
 
 		AfterAll(func() {
-			printFailureLogs()
+			printFailureLogsAndStopContainer()
 		})
 
 		It("should scale up to multiple services while maintaining healthy metrics", func() {
@@ -288,7 +286,7 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 					fmt.Printf("Container logs:\n%s\n", line)
 				}
 			}
-			printFailureLogs()
+			printFailureLogsAndStopContainer()
 		})
 
 		It("should handle random service additions, deletions, starts and stops", func() {
@@ -572,7 +570,7 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 		})
 
 		AfterAll(func() {
-			printFailureLogs()
+			printFailureLogsAndStopContainer()
 		})
 
 		It("should scale up to multiple benthos instances while maintaining stability", func() {
