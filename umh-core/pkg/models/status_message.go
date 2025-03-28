@@ -21,6 +21,7 @@ type StatusMessage struct {
 }
 
 type Core struct {
+	Health           *Health          `json:"health"`
 	Agent            Agent            `json:"agent"`
 	Container        Container        `json:"container"`
 	Dfcs             []Dfc            `json:"dfcs"`
@@ -193,13 +194,20 @@ type UnsTable struct {
 	WorkCell   *string  `json:"workCell,omitempty"`
 }
 
-type Release struct {
+type Version struct {
+	Name    string `json:"name"`
 	Version string `json:"version"`
-	Channel string `json:"channel"`
+}
+
+type Release struct {
+	Health  *Health `json:"health"`
+	Version string  `json:"version"`
+	Channel string  `json:"channel"`
 	// List of supported feature keywords. If a feature is supported, its corresponding keyword
 	// will be included in the array.
 	//
 	// Note: at some point we should rethink this approach to avoid bloating the status message as
 	// this list will likely grow over time.
-	SupportedFeatures []string `json:"supportedFeatures"`
+	SupportedFeatures []string  `json:"supportedFeatures"`
+	Versions          []Version `json:"versions"`
 }
