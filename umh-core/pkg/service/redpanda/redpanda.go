@@ -287,8 +287,8 @@ func (s *RedpandaService) GetConfig(ctx context.Context) (redpandaserviceconfig.
 	result := redpandaserviceconfig.RedpandaServiceConfig{}
 
 	// Safely extract retention_ms
-	if defaultTopicDefaultTopicRetentionMs, ok := redpandaConfig["log_retention_ms"].(int); ok {
-		result.DefaultTopicRetentionMs = defaultTopicDefaultTopicRetentionMs
+	if defaultTopicRetentionMs, ok := redpandaConfig["log_retention_ms"].(int); ok {
+		result.DefaultTopicRetentionMs = defaultTopicRetentionMs
 	}
 
 	// Safely extract retention_bytes

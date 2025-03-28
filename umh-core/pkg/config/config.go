@@ -106,7 +106,7 @@ type RedpandaConfig struct {
 }
 
 type RedpandaServiceConfig struct {
-	DefaultTopicRetentionMs    int `yaml:"defaultTopicDefaultTopicRetentionMs"`
+	DefaultTopicRetentionMs    int `yaml:"defaultTopicRetentionMs"`
 	DefaultTopicRetentionBytes int `yaml:"defaultTopicRetentionBytes"`
 }
 

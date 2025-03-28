@@ -22,7 +22,7 @@ redpanda:
     # Note: The below settings only apply to newly created topics
 
     # this corresponds to log_retention_ms (See also: https://docs.redpanda.com/current/manage/cluster-maintenance/disk-utilization/)
-    defaultTopicDefaultTopicRetentionMs: 604800000
+    defaultTopicRetentionMs: 604800000
 
     # this corresponds to retention_bytes (See also: https://docs.redpanda.com/current/manage/cluster-maintenance/disk-utilization/)
     defaultTopicRetentionBytes: 0
