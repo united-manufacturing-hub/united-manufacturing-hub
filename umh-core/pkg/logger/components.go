@@ -31,9 +31,10 @@ const (
 	ComponentBenthosInstance = "BenthosInstance"
 
 	// Service components
-	ComponentS6Service      = "S6Service"
-	ComponentBenthosService = "BenthosService"
-	ComponentNmapService    = "NmapService"
+	ComponentS6Service           = "S6Service"
+	ComponentBenthosService      = "BenthosService"
+	ComponentNmapService         = "NmapService"
+	ComponentContainerMonService = "ContainerMonService"
 
 	// Configuration
 	ComponentConfigManager = "ConfigManager"
