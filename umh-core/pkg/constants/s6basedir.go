@@ -20,6 +20,8 @@ const (
 	S6BaseDir       = "/run/service"
 	S6ConfigDirName = "config"
 	S6LogBaseDir    = "/data/logs"
+	AgentDir        = "agent"
+	CoreDir         = "core"
 )
 
 const (

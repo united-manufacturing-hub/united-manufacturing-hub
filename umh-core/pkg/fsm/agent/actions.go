@@ -18,7 +18,21 @@ import (
 	"context"
 	"fmt"
 	"time"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
+	agentservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/agent"
 )
+
+// The functions in this file define heavier, possibly fail-prone operations
+// (for example, network or file I/O) that the Agent FSM might need to perform.
+// They are intended to be called from Reconcile.
+//
+// IMPORTANT:
+//   - Each action is expected to be idempotent, since it may be retried
+//     multiple times due to transient failures.
+//   - Each action takes a context.Context and can return an error if the operation fails.
+//   - If an error occurs, the Reconcile function must handle
+//     setting AgentInstance.lastError and scheduling a retry/backoff.
 
 // UpdateErrorStatus updates the error status of the agent instance
 // This can be used to track error conditions that might lead to a degraded state
@@ -129,6 +143,105 @@ func (a *AgentInstance) syncWithParent(ctx context.Context) error {
 	// - Update agent configuration based on parent settings
 	// - Trigger specific actions based on parent state
 	// - Perform cleanup if parent is being removed
+
+	return nil
+}
+
+// initiateAgentStart attempts to start monitoring the agent.
+func (a *AgentInstance) initiateAgentStart(ctx context.Context) error {
+	start := time.Now()
+	defer func() {
+		metrics.ObserveReconcileTime(metrics.ComponentAgentInstance, a.baseFSMInstance.GetID()+".initiateAgentStart", time.Since(start))
+	}()
+
+	a.baseFSMInstance.GetLogger().Debugf("Starting Action: Starting agent monitoring for %s ...", a.baseFSMInstance.GetID())
+
+	err := a.service.Start(ctx, a.agentID)
+	if err != nil {
+		return fmt.Errorf("failed to start agent monitoring for %s: %w", a.baseFSMInstance.GetID(), err)
+	}
+
+	a.baseFSMInstance.GetLogger().Debugf("Agent %s monitoring started", a.baseFSMInstance.GetID())
+	return nil
+}
+
+// initiateAgentStop attempts to stop monitoring the agent.
+func (a *AgentInstance) initiateAgentStop(ctx context.Context) error {
+	start := time.Now()
+	defer func() {
+		metrics.ObserveReconcileTime(metrics.ComponentAgentInstance, a.baseFSMInstance.GetID()+".initiateAgentStop", time.Since(start))
+	}()
+
+	a.baseFSMInstance.GetLogger().Debugf("Starting Action: Stopping agent monitoring for %s ...", a.baseFSMInstance.GetID())
+
+	err := a.service.Stop(ctx, a.agentID)
+	if err != nil {
+		return fmt.Errorf("failed to stop agent monitoring for %s: %w", a.baseFSMInstance.GetID(), err)
+	}
+
+	a.baseFSMInstance.GetLogger().Debugf("Agent %s monitoring stopped", a.baseFSMInstance.GetID())
+	return nil
+}
+
+// initiateAgentRemove attempts to remove the agent from monitoring.
+func (a *AgentInstance) initiateAgentRemove(ctx context.Context) error {
+	start := time.Now()
+	defer func() {
+		metrics.ObserveReconcileTime(metrics.ComponentAgentInstance, a.baseFSMInstance.GetID()+".initiateAgentRemove", time.Since(start))
+	}()
+
+	a.baseFSMInstance.GetLogger().Debugf("Starting Action: Removing agent %s ...", a.baseFSMInstance.GetID())
+
+	// First ensure the agent monitoring is stopped
+	if a.IsActive() {
+		return fmt.Errorf("agent %s cannot be removed while active", a.baseFSMInstance.GetID())
+	}
+
+	// Remove the agent
+	err := a.service.Remove(ctx, a.agentID)
+	if err != nil {
+		return fmt.Errorf("failed to remove agent %s: %w", a.baseFSMInstance.GetID(), err)
+	}
+
+	a.baseFSMInstance.GetLogger().Debugf("Agent %s removed", a.baseFSMInstance.GetID())
+	return nil
+}
+
+// updateObservedState updates the observed state of the agent
+func (a *AgentInstance) updateObservedState(ctx context.Context) error {
+	start := time.Now()
+	defer func() {
+		metrics.ObserveReconcileTime(metrics.ComponentAgentInstance, a.baseFSMInstance.GetID()+".updateObservedState", time.Since(start))
+	}()
+
+	// Get agent status
+	info, err := a.service.Status(ctx, a.agentID)
+	if err != nil {
+		a.ObservedState.IsConnected = false
+		a.ObservedState.LastHeartbeat = 0
+
+		// If agent doesn't exist, we don't want to count this as an error
+		if err == agentservice.ErrAgentNotExist {
+			return err
+		}
+
+		// Otherwise, log and return the error
+		a.baseFSMInstance.GetLogger().Errorf("error updating observed state for %s: %s", a.baseFSMInstance.GetID(), err)
+		return err
+	}
+
+	// Update observed state with latest information
+	a.ObservedState.IsConnected = info.IsConnected
+	a.ObservedState.LastHeartbeat = info.LastHeartbeat
+	a.ObservedState.ErrorCount = info.ErrorCount
+	a.ObservedState.LastErrorTime = info.LastErrorTime
+	a.ObservedState.IsMonitoring = (info.Status == agentservice.AgentActive || info.Status == agentservice.AgentDegraded)
+
+	// Update location from parent core if available
+	if a.parentCore != nil {
+		// Location data would come from the parent core or config in a real implementation
+		// For now, we just maintain what's already there
+	}
 
 	return nil
 }

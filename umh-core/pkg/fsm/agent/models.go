@@ -21,6 +21,7 @@ import (
 	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
 	publicfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/core"
+	agentservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/agent"
 )
 
 // We use the same state constants as core to ensure compatibility
@@ -62,6 +63,9 @@ type AgentObservedState struct {
 	// Agent-specific observed state
 	LastHeartbeat int64
 	IsConnected   bool
+
+	// Location information from config
+	Location map[int]string
 }
 
 // IsObservedState implements the ObservedState interface
@@ -86,6 +90,9 @@ type AgentInstance struct {
 
 	// Reference to the parent CoreInstance that owns this agent
 	parentCore *core.CoreInstance
+
+	// Agent service for monitoring and controlling the agent
+	service agentservice.Agent
 }
 
 // GetLastObservedState returns the last known state of the instance
@@ -164,4 +171,11 @@ func (a *AgentInstance) PrintState() {
 	a.baseFSMInstance.GetLogger().Debugf("Desired state: %s", a.baseFSMInstance.GetDesiredFSMState())
 	a.baseFSMInstance.GetLogger().Debugf("Observed state: %+v", a.ObservedState)
 	a.baseFSMInstance.GetLogger().Debugf("Parent core: %s", a.parentCore.GetCurrentFSMState())
+
+	// Log location information
+	if len(a.ObservedState.Location) > 0 {
+		a.baseFSMInstance.GetLogger().Debugf("Location data: %v", a.ObservedState.Location)
+	} else {
+		a.baseFSMInstance.GetLogger().Debugf("No location data available")
+	}
 }

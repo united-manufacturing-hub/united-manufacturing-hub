@@ -23,6 +23,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/core"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
+	agentservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/agent"
 )
 
 // NewAgentInstance creates a new AgentInstance with the given ID and parent core instance
@@ -63,13 +64,28 @@ func NewAgentInstance(id string, agentType string, parentCore *core.CoreInstance
 			IsMonitoring: false,
 			ErrorCount:   0,
 			IsConnected:  false,
+			Location:     make(map[int]string),
 		},
+		service: agentservice.NewDefaultAgent(),
 	}
 
 	instance.registerCallbacks()
 
 	metrics.InitErrorCounter(metrics.ComponentAgentInstance, id)
 
+	return instance
+}
+
+// NewAgentInstanceWithService creates a new AgentInstance with a custom service implementation
+// This is useful for testing
+func NewAgentInstanceWithService(
+	id string,
+	agentType string,
+	parentCore *core.CoreInstance,
+	service agentservice.Agent) *AgentInstance {
+
+	instance := NewAgentInstance(id, agentType, parentCore)
+	instance.service = service
 	return instance
 }
 

@@ -16,265 +16,272 @@ package agent
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
-	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/core"
+	internal_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/backoff"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
+	agentservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/agent"
 )
 
-// Reconcile implements the FSMInstance Reconcile method
-// It moves the instance toward its desired state by checking the current status
-// and performing the appropriate actions to reach the desired state
-func (a *AgentInstance) Reconcile(ctx context.Context, tick uint64) (error, bool) {
-	// Start timing the reconciliation process
+// Reconcile examines the AgentInstance and, in three steps:
+//  1. Check if a previous transition failed or if fetching external state failed; if so, verify whether the backoff has elapsed.
+//  2. Detect any external changes (e.g., a new configuration or external signals).
+//  3. Attempt the required state transition by sending the appropriate event.
+//
+// This function is intended to be called repeatedly (e.g. in a periodic control loop).
+// Over multiple calls, it converges the actual state to the desired state. Transitions
+// that fail are retried in subsequent reconcile calls after a backoff period.
+func (a *AgentInstance) Reconcile(ctx context.Context, tick uint64) (err error, reconciled bool) {
 	start := time.Now()
 	agentInstanceName := a.baseFSMInstance.GetID()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentAgentInstance, agentInstanceName, time.Since(start))
+		if err != nil {
+			a.baseFSMInstance.GetLogger().Errorf("error reconciling Agent instance %s: %s", a.baseFSMInstance.GetID(), err)
+			a.PrintState()
+			// Add metrics for error
+			metrics.IncErrorCount(metrics.ComponentAgentInstance, agentInstanceName)
+		}
 	}()
 
-	// Check for previous error conditions and skip if necessary
+	// Check if context is already cancelled
+	if ctx.Err() != nil {
+		return ctx.Err(), false
+	}
+
+	// Step 1: If there's a lastError, see if we've waited enough.
 	if a.baseFSMInstance.ShouldSkipReconcileBecauseOfError(tick) {
-		a.baseFSMInstance.GetLogger().Debugf("Skipping reconcile due to backoff")
-		metrics.IncErrorCount(metrics.ComponentAgentInstance, agentInstanceName)
-		return a.baseFSMInstance.GetError(), false
+		err := a.baseFSMInstance.GetBackoffError(tick)
+		a.baseFSMInstance.GetLogger().Debugf("Skipping reconcile for Agent %s: %s", a.baseFSMInstance.GetID(), err)
+
+		// if it is a permanent error, start the removal process and reset the error (so that we can reconcile towards a stopped / removed state)
+		if backoff.IsPermanentFailureError(err) {
+			// if it is already in stopped, stopping, removing states, and it again returns a permanent error,
+			// we need to throw it to the manager as the instance itself here cannot fix it anymore
+			if a.IsRemoved() || a.IsMonitoringStopped() {
+				a.baseFSMInstance.GetLogger().Errorf("Agent instance %s is already in a terminal state, force removing it", a.baseFSMInstance.GetID())
+				// force remove the agent
+				a.service.Remove(ctx, a.agentID)
+				return err, false
+			} else {
+				a.baseFSMInstance.GetLogger().Errorf("Agent instance %s is not in a terminal state, resetting state and removing it", a.baseFSMInstance.GetID())
+				a.baseFSMInstance.ResetState()
+				a.Remove(ctx)
+				return nil, false // let's try to at least reconcile towards a stopped / removed state
+			}
+		}
+
+		return nil, false
 	}
 
-	// Important: check parent core state first as it may override agent's desired state
-	err, parentStateChanged := a.reconcileParentCoreState(ctx)
+	// Step 2: Detect external changes.
+	if err := a.reconcileExternalChanges(ctx); err != nil {
+		// If the agent is not running, we don't want to return an error here, because we want to continue reconciling
+		if !errors.Is(err, agentservice.ErrAgentNotExist) {
+			a.baseFSMInstance.SetError(err, tick)
+			a.baseFSMInstance.GetLogger().Errorf("error reconciling external changes: %s", err)
+			return nil, false // We don't want to return an error here, because we want to continue reconciling
+		}
+
+		err = nil // The agent does not exist, which is fine as this happens in the reconcileStateTransition
+	}
+
+	// Step 3: Attempt to reconcile the state.
+	err, reconciled = a.reconcileStateTransition(ctx)
 	if err != nil {
+		// If the instance is removed, we don't want to return an error here, because we want to continue reconciling
+		if errors.Is(err, fsm.ErrInstanceRemoved) {
+			return nil, false
+		}
+
+		if errors.Is(err, context.DeadlineExceeded) {
+			// Updating the observed state can sometimes take longer,
+			// resulting in context.DeadlineExceeded errors. In this case, we want to
+			// mark the reconciliation as complete for this tick since we've likely
+			// already consumed significant time. We return reconciled=true to prevent
+			// further reconciliation attempts in the current tick.
+			return nil, true // We don't want to return an error here, as this can happen in normal operations
+		}
+
 		a.baseFSMInstance.SetError(err, tick)
-		metrics.IncErrorCount(metrics.ComponentAgentInstance, agentInstanceName)
-		return err, parentStateChanged
+		a.baseFSMInstance.GetLogger().Errorf("error reconciling state: %s", err)
+		return nil, false // We don't want to return an error here, because we want to continue reconciling
 	}
 
-	// Current and desired state
-	currentState := a.baseFSMInstance.GetCurrentFSMState()
-	desiredState := a.baseFSMInstance.GetDesiredFSMState()
-
-	changed := parentStateChanged
-
-	// Handle LifecycleState transitions first if in a lifecycle state
-	if IsLifecycleState(currentState) {
-		err, stateChanged := a.reconcileLifecycleStates(ctx)
-		if err != nil {
-			a.baseFSMInstance.SetError(err, tick)
-			metrics.IncErrorCount(metrics.ComponentAgentInstance, agentInstanceName)
-			return err, stateChanged
-		}
-		changed = changed || stateChanged
-	}
-
-	// Then handle OperationalState transitions if in an operational state
-	if IsOperationalState(currentState) {
-		err, stateChanged := a.reconcileOperationalStates(ctx, desiredState)
-		if err != nil {
-			a.baseFSMInstance.SetError(err, tick)
-			metrics.IncErrorCount(metrics.ComponentAgentInstance, agentInstanceName)
-			return err, stateChanged
-		}
-		changed = changed || stateChanged
-	}
-
-	// If we've successfully reconciled with no errors, reset any error state
+	// It went all right, so clear the error
 	a.baseFSMInstance.ResetState()
-	return nil, changed
+
+	return err, reconciled
 }
 
-// reconcileParentCoreState checks if the parent core state requires agent state changes
-func (a *AgentInstance) reconcileParentCoreState(ctx context.Context) (error, bool) {
-	parentCore := a.parentCore
-	if parentCore == nil {
-		return fmt.Errorf("parent core is nil"), false
+// reconcileExternalChanges checks if the AgentInstance status has changed
+// externally (e.g., if an agent has disconnected, or if it's reporting errors)
+func (a *AgentInstance) reconcileExternalChanges(ctx context.Context) error {
+	start := time.Now()
+	defer func() {
+		metrics.ObserveReconcileTime(metrics.ComponentAgentInstance, a.baseFSMInstance.GetID()+".reconcileExternalChanges", time.Since(start))
+	}()
+
+	observedStateCtx, cancel := context.WithTimeout(ctx, constants.S6UpdateObservedStateTimeout)
+	defer cancel()
+	err := a.updateObservedState(observedStateCtx)
+	if err != nil {
+		return fmt.Errorf("failed to update observed state: %w", err)
 	}
 
-	parentState := parentCore.GetCurrentFSMState()
-	currentState := a.GetCurrentFSMState()
-	a.baseFSMInstance.GetLogger().Debugf("Parent core state: %s, Agent state: %s", parentState, currentState)
-
-	changed := false
-
-	// If parent core is removed, agent should be removed too
-	if parentCore.IsRemoved() && !a.IsRemoved() {
-		if err := a.Remove(ctx); err != nil {
-			return fmt.Errorf("failed to remove agent: %w", err), false
+	// Check if parent core state has changed
+	if a.parentCore != nil {
+		if a.parentCore.IsMonitoringStopped() && !a.IsMonitoringStopped() {
+			// If parent core is stopped, agent should also be stopped
+			a.baseFSMInstance.GetLogger().Infof("Parent core is monitoring_stopped, stopping agent %s", a.baseFSMInstance.GetID())
+			a.SetDesiredFSMState(OperationalStateMonitoringStopped)
 		}
-		changed = true
-	}
 
-	// If parent core is not active, agent cannot be active
-	if parentState != core.OperationalStateActive &&
-		currentState != OperationalStateMonitoringStopped &&
-		!IsLifecycleState(currentState) {
-		// Set desired state to monitoring_stopped
-		a.SetDesiredFSMState(OperationalStateMonitoringStopped)
-		changed = true
-	}
-
-	// If parent core is degraded, agent might need to adjust (optional logic)
-	if parentState == core.OperationalStateDegraded && currentState == OperationalStateActive {
-		// Consider transitioning agent to degraded as well
-		// This is just one approach - you might want different behavior
-		err := a.updateAgentStatusBasedOnParentDegradation(ctx)
-		if err != nil {
-			return err, false
+		if a.parentCore.IsRemoved() && !a.IsRemoved() {
+			// If parent core is removed, agent should also be removed
+			a.baseFSMInstance.GetLogger().Infof("Parent core is removed, removing agent %s", a.baseFSMInstance.GetID())
+			a.Remove(ctx)
 		}
-		// Don't mark as changed since we didn't directly change state
 	}
-
-	// Trigger the check_parent_state callback to perform any additional logic
-	if err := a.baseFSMInstance.SendEvent(ctx, "check_parent_state"); err != nil {
-		// This isn't fatal - just log it
-		a.baseFSMInstance.GetLogger().Warnf("Failed to trigger parent state check: %v", err)
-	}
-
-	return nil, changed
-}
-
-// updateAgentStatusBasedOnParentDegradation handles agent state when parent is degraded
-// This is called when the parent core is in a degraded state
-func (a *AgentInstance) updateAgentStatusBasedOnParentDegradation(ctx context.Context) error {
-	// This is an example implementation - customize based on requirements
-	// For instance, you might check specific conditions to determine if agent should be degraded
-
-	// Example: Increment error count which might lead to degraded state in future reconciles
-	a.ObservedState.ErrorCount++
-	a.baseFSMInstance.GetLogger().Warnf("Parent core is degraded, incrementing agent error count: %d",
-		a.ObservedState.ErrorCount)
 
 	return nil
 }
 
-// reconcileLifecycleStates handles transitions between lifecycle states
-func (a *AgentInstance) reconcileLifecycleStates(ctx context.Context) (error, bool) {
+// reconcileStateTransition compares the current state with the desired state
+// and, if necessary, sends events to drive the FSM from the current to the desired state.
+func (a *AgentInstance) reconcileStateTransition(ctx context.Context) (err error, reconciled bool) {
+	start := time.Now()
+	defer func() {
+		metrics.ObserveReconcileTime(metrics.ComponentAgentInstance, a.baseFSMInstance.GetID()+".reconcileStateTransition", time.Since(start))
+	}()
+
 	currentState := a.baseFSMInstance.GetCurrentFSMState()
-	a.baseFSMInstance.GetLogger().Debugf("Reconciling lifecycle state: %s", currentState)
+	desiredState := a.baseFSMInstance.GetDesiredFSMState()
 
-	switch currentState {
-	case LifecycleStateCreate:
-		// Handle creation logic
-		if err := a.baseFSMInstance.SendEvent(ctx, EventCreate); err != nil {
-			return fmt.Errorf("failed to send create event: %w", err), false
-		}
-		return nil, true
-
-	case LifecycleStateRemove:
-		// Handle removal logic - cleanup any agent-specific resources
-
-		// Notify the parent about agent removal (optional)
-		if a.parentCore != nil {
-			a.baseFSMInstance.GetLogger().Infof("Notifying parent core %s about agent %s removal",
-				a.parentCore.GetCurrentFSMState(), a.agentID)
-		}
-
-		// Complete removal
-		if err := a.baseFSMInstance.SendEvent(ctx, internalfsm.LifecycleEventRemoveDone); err != nil {
-			return fmt.Errorf("failed to send remove done event: %w", err), false
-		}
-		return nil, true
+	// If already in the desired state, nothing to do.
+	if currentState == desiredState {
+		return nil, false
 	}
 
-	return nil, false
+	// Handle lifecycle states first - these take precedence over operational states
+	if internal_fsm.IsLifecycleState(currentState) {
+		err, reconciled := a.reconcileLifecycleStates(ctx, currentState)
+		if err != nil {
+			return err, false
+		}
+		if reconciled {
+			return nil, true
+		} else {
+			return nil, false
+		}
+	}
+
+	// Handle operational states
+	if IsOperationalState(currentState) {
+		err, reconciled := a.reconcileOperationalStates(ctx, currentState, desiredState)
+		if err != nil {
+			return err, false
+		}
+		if reconciled {
+			return nil, true
+		} else {
+			return nil, false
+		}
+	}
+
+	return fmt.Errorf("invalid state: %s", currentState), false
 }
 
-// reconcileOperationalStates handles transitions between operational states
-func (a *AgentInstance) reconcileOperationalStates(ctx context.Context, desiredState string) (error, bool) {
-	currentState := a.baseFSMInstance.GetCurrentFSMState()
-	a.baseFSMInstance.GetLogger().Debugf("Reconciling operational state: %s (desired: %s)", currentState, desiredState)
+// reconcileLifecycleStates handles states related to instance lifecycle (creating/removing)
+func (a *AgentInstance) reconcileLifecycleStates(ctx context.Context, currentState string) (err error, reconciled bool) {
+	start := time.Now()
+	defer func() {
+		metrics.ObserveReconcileTime(metrics.ComponentAgentInstance, a.baseFSMInstance.GetID()+".reconcileLifecycleStates", time.Since(start))
+	}()
 
-	// Check if desired state requires a state transition
+	// Independent what the desired state is, we always need to reconcile the lifecycle states first
 	switch currentState {
-	case OperationalStateMonitoringStopped:
-		if desiredState == OperationalStateActive {
-			// First verify parent core is in a state that allows this agent to be active
-			if a.parentCore != nil && a.parentCore.GetCurrentFSMState() != core.OperationalStateActive {
-				a.baseFSMInstance.GetLogger().Infof("Cannot transition to active: parent core not active")
-				return nil, false
-			}
-			// Transition to active state
-			return a.reconcileTransitionToActive(ctx)
+	case internal_fsm.LifecycleStateToBeCreated:
+		// Nothing to create for an agent, it's just a virtual entity
+		return a.baseFSMInstance.SendEvent(ctx, internal_fsm.LifecycleEventCreate), true
+	case internal_fsm.LifecycleStateCreating:
+		// Nothing to wait for when creating an agent
+		return a.baseFSMInstance.SendEvent(ctx, internal_fsm.LifecycleEventCreateDone), true
+	case internal_fsm.LifecycleStateRemoving:
+		if err := a.initiateAgentRemove(ctx); err != nil {
+			return err, true
 		}
+		return a.baseFSMInstance.SendEvent(ctx, internal_fsm.LifecycleEventRemoveDone), true
+	case internal_fsm.LifecycleStateRemoved:
+		return fsm.ErrInstanceRemoved, true
+	default:
+		// If we are not in a lifecycle state, just continue
+		return nil, false
+	}
+}
 
+// reconcileOperationalStates handles states related to instance operations (monitoring/stopping)
+func (a *AgentInstance) reconcileOperationalStates(ctx context.Context, currentState string, desiredState string) (err error, reconciled bool) {
+	start := time.Now()
+	defer func() {
+		metrics.ObserveReconcileTime(metrics.ComponentAgentInstance, a.baseFSMInstance.GetID()+".reconcileOperationalStates", time.Since(start))
+	}()
+
+	switch desiredState {
 	case OperationalStateActive:
-		// If we're in active state but desire is stopped, transition to stopped
-		if desiredState == OperationalStateMonitoringStopped {
-			return a.reconcileTransitionToStopped(ctx)
-		}
-
-		// Check if we need to transition to degraded
-		if a.shouldTransitionToDegraded() {
-			if err := a.baseFSMInstance.SendEvent(ctx, EventDegraded); err != nil {
-				return fmt.Errorf("failed to send degraded event: %w", err), false
-			}
-			return nil, true
-		}
-
-	case OperationalStateDegraded:
-		// If we're in degraded state but desire is stopped, transition to stopped
-		if desiredState == OperationalStateMonitoringStopped {
-			return a.reconcileTransitionToStopped(ctx)
-		}
-
-		// Check if we can recover back to active
-		if a.canRecoverFromDegraded() {
-			if err := a.baseFSMInstance.SendEvent(ctx, EventStart); err != nil {
-				return fmt.Errorf("failed to send start event from degraded: %w", err), false
-			}
-			return nil, true
-		}
+		return a.reconcileTransitionToActive(ctx, currentState)
+	case OperationalStateMonitoringStopped:
+		return a.reconcileTransitionToMonitoringStopped(ctx, currentState)
+	default:
+		return fmt.Errorf("invalid desired state: %s", desiredState), false // its simply an error, but we did not take any action
 	}
-
-	return nil, false
 }
 
-// reconcileTransitionToActive handles the transition to an active state
-func (a *AgentInstance) reconcileTransitionToActive(ctx context.Context) (error, bool) {
-	// Start agent monitoring logic
-	a.baseFSMInstance.GetLogger().Infof("Starting monitoring for agent %s", a.baseFSMInstance.GetID())
+// reconcileTransitionToActive handles transitions when the desired state is Active.
+// It deals with moving from MonitoringStopped to Active.
+func (a *AgentInstance) reconcileTransitionToActive(ctx context.Context, currentState string) (err error, reconciled bool) {
+	start := time.Now()
+	defer func() {
+		metrics.ObserveReconcileTime(metrics.ComponentAgentInstance, a.baseFSMInstance.GetID()+".reconcileTransitionToActive", time.Since(start))
+	}()
 
-	// Start monitoring - implementation in actions.go
-	if err := a.startMonitoring(); err != nil {
-		return fmt.Errorf("failed to start agent monitoring: %w", err), false
+	if currentState == OperationalStateMonitoringStopped {
+		// Attempt to initiate start
+		if err := a.initiateAgentStart(ctx); err != nil {
+			return err, true
+		}
+		// Send event to transition from MonitoringStopped to Active
+		return a.baseFSMInstance.SendEvent(ctx, EventStart), true
+	} else if currentState == OperationalStateDegraded {
+		// From degraded, we can recover to active
+		// In a real implementation, we might need additional recovery logic here
+		return a.baseFSMInstance.SendEvent(ctx, EventStart), true
 	}
 
-	// Send the event to transition to active state
-	if err := a.baseFSMInstance.SendEvent(ctx, EventStart); err != nil {
-		return fmt.Errorf("failed to send start event: %w", err), false
-	}
-
-	return nil, true
+	return fmt.Errorf("cannot transition from %s to active", currentState), false
 }
 
-// reconcileTransitionToStopped handles the transition to a stopped state
-func (a *AgentInstance) reconcileTransitionToStopped(ctx context.Context) (error, bool) {
-	// Stop agent monitoring logic
-	a.baseFSMInstance.GetLogger().Infof("Stopping monitoring for agent %s", a.baseFSMInstance.GetID())
+// reconcileTransitionToMonitoringStopped handles transitions when the desired state is MonitoringStopped.
+// It deals with moving from Active/Degraded to MonitoringStopped.
+func (a *AgentInstance) reconcileTransitionToMonitoringStopped(ctx context.Context, currentState string) (err error, reconciled bool) {
+	start := time.Now()
+	defer func() {
+		metrics.ObserveReconcileTime(metrics.ComponentAgentInstance, a.baseFSMInstance.GetID()+".reconcileTransitionToMonitoringStopped", time.Since(start))
+	}()
 
-	// Stop monitoring - implementation in actions.go
-	if err := a.stopMonitoring(); err != nil {
-		return fmt.Errorf("failed to stop agent monitoring: %w", err), false
+	if currentState == OperationalStateActive || currentState == OperationalStateDegraded {
+		// Attempt to initiate stop
+		if err := a.initiateAgentStop(ctx); err != nil {
+			return err, true
+		}
+		// Send event to transition to MonitoringStopped
+		return a.baseFSMInstance.SendEvent(ctx, EventStop), true
 	}
 
-	// Send the event to transition to stopped state
-	if err := a.baseFSMInstance.SendEvent(ctx, EventStop); err != nil {
-		return fmt.Errorf("failed to send stop event: %w", err), false
-	}
-
-	return nil, true
-}
-
-// shouldTransitionToDegraded checks if the instance should transition to a degraded state
-func (a *AgentInstance) shouldTransitionToDegraded() bool {
-	// Implement criteria for degradation
-	// For example, check error count thresholds
-	return a.ObservedState.ErrorCount > 5 || !a.ObservedState.IsConnected
-}
-
-// canRecoverFromDegraded checks if the instance can recover from a degraded state
-func (a *AgentInstance) canRecoverFromDegraded() bool {
-	// Implement recovery criteria
-	// For example, check if error count has decreased or issues resolved
-	return a.ObservedState.ErrorCount <= 2 && a.ObservedState.IsConnected
+	return fmt.Errorf("cannot transition from %s to monitoring_stopped", currentState), false
 }
