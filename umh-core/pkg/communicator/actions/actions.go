@@ -17,10 +17,10 @@ package actions
 import (
 	"github.com/google/uuid"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/encoding"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/fail"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/safejson"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/shared/models"
 	"go.uber.org/zap"
 )
@@ -111,7 +111,7 @@ func SendActionReplyWithAdditionalContext(instanceUUID uuid.UUID, userEmail stri
 
 	err := sendActionReplyInternal(instanceUUID, userEmail, actionUUID, arstate, payload, outboundChannel, actionContext)
 	if err != nil {
-		fail.ErrorBatchedf("Error generating action reply: %s", err)
+		sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "Error generating action reply: %s", err)
 		return false
 	}
 	return true
@@ -138,18 +138,11 @@ func sendActionReplyInternal(instanceUUID uuid.UUID, userEmail string, actionUUI
 		})
 	}
 	if err != nil {
-		fail.ErrorBatchedf("Error generating umh message: %v", err)
+		sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "Error generating umh message: %v", err)
 		return err
 	}
 	outboundChannel <- &umhMessage
-	if arstate == models.ActionFinishedSuccessfull || arstate == models.ActionFinishedWithFailure {
-		at := GetActionTracker()
-		if at != nil {
-			at.StopTracking(actionUUID)
-		} else {
-			zap.S().Debugf("[ActionTracker] ActionTracker not initialized")
-		}
-	}
+
 	return nil
 }
 
