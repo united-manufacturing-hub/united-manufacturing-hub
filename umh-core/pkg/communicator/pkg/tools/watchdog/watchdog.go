@@ -119,6 +119,7 @@ func (s *Watchdog) Start() {
 				name := s.getHeartbeatNameByUUID(uniqueIdentifier)
 				s.reportStateToNiceFail()
 				sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "Heartbeat errored: [%s] %s (%s)", s.watchdogID, name, uniqueIdentifier)
+				panic(fmt.Sprintf("Heartbeat errored: [%s] %s (%s)", s.watchdogID, name, uniqueIdentifier))
 			}
 		case <-s.ticker.C:
 			{
@@ -126,6 +127,14 @@ func (s *Watchdog) Start() {
 				now := time.Now()
 				zap.S().Infof("Checking heartbeats: [%s] at %s", s.watchdogID, now)
 				s.registeredHeartbeatsMutex.Lock()
+
+				// Check all heartbeats and collect the overdue ones
+				var overdueHeartbeat *struct {
+					name           string
+					hb             *Heartbeat
+					secondsOverdue int64
+				}
+
 				for name, hb := range s.registeredHeartbeats {
 					lastHeartbeat := now.UTC().Unix() - hb.lastHeatbeatTime.Load()
 					if lastHeartbeat < 0 {
@@ -138,18 +147,38 @@ func (s *Watchdog) Start() {
 					// timeout = 0 disables this check
 					if secondsOverdue > 0 && hb.timeout != 0 {
 						if (onlyIfHasSub && hasSubs) || !onlyIfHasSub {
-							// Remove panicked heartbeat from the list
+							// Found an overdue heartbeat
+							overdueHeartbeat = &struct {
+								name           string
+								hb             *Heartbeat
+								secondsOverdue int64
+							}{
+								name:           name,
+								hb:             hb,
+								secondsOverdue: secondsOverdue,
+							}
+							// Remove from the map and break the loop
 							delete(s.registeredHeartbeats, name)
-							s.registeredHeartbeatsMutex.Unlock()
-							// zap.S().Debuff("[%s] Heartbeat %s (%s) from %s:%d has failed", s.watchdogID, name, hb.uniqueIdentifier, hb.file, hb.line)
-							s.reportStateToNiceFail()
-							sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "Heartbeat too old: [%s] %s (%s) [Lifetime heartbeats: %d] (%d seconds overdue)", s.watchdogID, name, hb.uniqueIdentifier, hb.heartbeatsReceived.Load(), secondsOverdue)
+							break
 						} else {
 							zap.S().Infof("Heartbeat: [%s] %s (%s) would fail, but no subscribers are present", s.watchdogID, name, hb.uniqueIdentifier)
 						}
 					}
 				}
+
+				// Unlock before any potential panic
 				s.registeredHeartbeatsMutex.Unlock()
+
+				// If we found an overdue heartbeat, panic
+				if overdueHeartbeat != nil {
+					// zap.S().Debuff("[%s] Heartbeat %s (%s) from %s:%d has failed", s.watchdogID, overdueHeartbeat.name, overdueHeartbeat.hb.uniqueIdentifier, overdueHeartbeat.hb.file, overdueHeartbeat.hb.line)
+					errorMsg := fmt.Sprintf("Heartbeat too old: [%s] %s (%s) [Lifetime heartbeats: %d] (%d seconds overdue)",
+						s.watchdogID, overdueHeartbeat.name, overdueHeartbeat.hb.uniqueIdentifier,
+						overdueHeartbeat.hb.heartbeatsReceived.Load(), overdueHeartbeat.secondsOverdue)
+					sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), errorMsg)
+					panic(errorMsg)
+				}
+
 				zap.S().Infof("Heartbeats are ok: [%s] ", s.watchdogID)
 			}
 		case <-s.ctx.Done():
