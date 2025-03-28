@@ -201,7 +201,9 @@ func BuildAndRunContainer(configYaml string, memory string) error {
 	fmt.Printf("Core directory: %s\n", coreDir)
 	fmt.Printf("Dockerfile path: %s\n", dockerfilePath)
 
-	out, err = runDockerCommand("build", "-t", imageName, "-f", dockerfilePath, coreDir)
+	ctx10M, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+	out, err = runDockerCommandWithContext(ctx10M, "build", "-t", imageName, "-f", dockerfilePath, coreDir)
 	if err != nil {
 		fmt.Printf("Docker build failed: %v\n", err)
 		fmt.Printf("Build output:\n%s\n", out)
@@ -217,7 +219,9 @@ func BuildAndRunContainer(configYaml string, memory string) error {
 
 	// 4. Run container WITHOUT mounting the config file
 	fmt.Println("Starting container...")
-	out, err = runDockerCommand(
+	ctx1M, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
+	defer cancel()
+	out, err = runDockerCommandWithContext(ctx1M,
 		"run", "-d",
 		"--name", containerName,
 		"-e", "LOGGING_LEVEL=debug",
