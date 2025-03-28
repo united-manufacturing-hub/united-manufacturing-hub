@@ -20,8 +20,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"net"
 	"net/http"
 	"path/filepath"
 	"regexp"
@@ -39,6 +37,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/httpclient"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 
@@ -89,34 +88,6 @@ type IBenthosService interface {
 	IsMetricsErrorFree(metrics Metrics) bool
 	// HasProcessingActivity checks if a Benthos service has processing activity
 	HasProcessingActivity(status BenthosStatus) bool
-}
-
-// HTTPClient interface for making HTTP requests
-type HTTPClient interface {
-	Do(req *http.Request) (*http.Response, error)
-}
-
-// defaultHTTPClient is the default implementation of HTTPClient
-type defaultHTTPClient struct {
-	client *http.Client
-}
-
-func newDefaultHTTPClient() *defaultHTTPClient {
-	transport := &http.Transport{
-		MaxIdleConns:      10,
-		IdleConnTimeout:   30 * time.Second,
-		DisableKeepAlives: false,
-	}
-
-	return &defaultHTTPClient{
-		client: &http.Client{
-			Transport: transport,
-		},
-	}
-}
-
-func (c *defaultHTTPClient) Do(req *http.Request) (*http.Response, error) {
-	return c.client.Do(req)
 }
 
 // ServiceInfo contains information about a Benthos service
@@ -233,7 +204,7 @@ type BenthosService struct {
 	s6Manager        *s6fsm.S6Manager
 	s6Service        s6service.Service // S6 service for direct S6 operations
 	s6ServiceConfigs []config.S6FSMConfig
-	httpClient       HTTPClient
+	httpClient       httpclient.HTTPClient
 	metricsState     *BenthosMetricsState
 }
 
@@ -241,7 +212,8 @@ type BenthosService struct {
 type BenthosServiceOption func(*BenthosService)
 
 // WithHTTPClient sets a custom HTTP client for the BenthosService
-func WithHTTPClient(client HTTPClient) BenthosServiceOption {
+// This is only used for testing purposes
+func WithHTTPClient(client httpclient.HTTPClient) BenthosServiceOption {
 	return func(s *BenthosService) {
 		s.httpClient = client
 	}
@@ -262,7 +234,7 @@ func NewDefaultBenthosService(benthosName string, opts ...BenthosServiceOption) 
 		logger:       logger.For(managerName),
 		s6Manager:    s6fsm.NewS6Manager(managerName),
 		s6Service:    s6service.NewDefaultService(),
-		httpClient:   newDefaultHTTPClient(),
+		httpClient:   nil, // this is only for a mock in the tests
 		metricsState: NewBenthosMetricsState(),
 	}
 
@@ -733,66 +705,16 @@ func (s *BenthosService) GetHealthCheckAndMetrics(ctx context.Context, s6Service
 	// Create a client to use for our requests
 	// If it's a mock client (used in tests), use it directly
 	// Otherwise, create a new client with timeouts based on context
-	var requestClient HTTPClient = s.httpClient
+	var requestClient httpclient.HTTPClient = s.httpClient
 
-	// Only create a custom client with timeouts if we're not using a mock client
-	_, isMockClient := s.httpClient.(*MockHTTPClient)
-	if !isMockClient {
-		// Create HTTP transport with timeouts based on context deadline
-		transport := &http.Transport{}
-
-		// Set timeouts based on context deadline if available
-		if deadline, ok := ctx.Deadline(); ok {
-			timeout := time.Until(deadline)
-
-			transport = &http.Transport{
-				DialContext: (&net.Dialer{
-					Timeout: timeout / 2, // Use half the available time for connection
-				}).DialContext,
-				ResponseHeaderTimeout: timeout / 2, // And half for response
-				ExpectContinueTimeout: timeout / 4,
-				IdleConnTimeout:       timeout / 4,
-				TLSHandshakeTimeout:   timeout / 4,
-			}
-		} else {
-			return BenthosStatus{}, fmt.Errorf("no deadline set in context")
-		}
-
-		// Create a new client instead of modifying the existing one
-		requestClient = &http.Client{
-			Transport: transport,
-		}
+	// Only create a default client if we're not using a mock client
+	if requestClient == nil {
+		requestClient = httpclient.NewDefaultHTTPClient()
 	}
 
 	// Start an errgroup with the **same context** so if one sub-task
 	// fails or the context is canceled, all sub-tasks are signaled to stop.
 	g, gctx := errgroup.WithContext(ctx)
-
-	// Helper function to make HTTP requests with context
-	doRequest := func(endpoint string) (*http.Response, []byte, error) {
-		requestStart := time.Now()
-		defer func() {
-			s.logger.Debugf("Request for %s took %s", endpoint, time.Since(requestStart))
-		}()
-
-		req, err := http.NewRequestWithContext(gctx, http.MethodGet, baseURL+endpoint, nil)
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to create request for %s: %w", endpoint, err)
-		}
-
-		resp, err := requestClient.Do(req)
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to execute request for %s: %w", endpoint, err)
-		}
-		defer resp.Body.Close()
-
-		body, err := io.ReadAll(resp.Body)
-		if err != nil {
-			return resp, nil, fmt.Errorf("failed to read response body for %s: %w", endpoint, err)
-		}
-
-		return resp, body, nil
-	}
 
 	var mu sync.Mutex
 
@@ -802,7 +724,7 @@ func (s *BenthosService) GetHealthCheckAndMetrics(ctx context.Context, s6Service
 
 	// 1) Check liveness
 	g.Go(func() error {
-		resp, _, err := doRequest("/ping")
+		resp, _, err := requestClient.GetWithBody(gctx, baseURL+"/ping")
 		if err != nil {
 			return fmt.Errorf("failed liveness check: %w", err)
 		}
@@ -814,7 +736,7 @@ func (s *BenthosService) GetHealthCheckAndMetrics(ctx context.Context, s6Service
 
 	// 2) Check readiness
 	g.Go(func() error {
-		resp, body, err := doRequest("/ready")
+		resp, body, err := requestClient.GetWithBody(gctx, baseURL+"/ready")
 		if err != nil {
 			return fmt.Errorf("failed readiness check: %w", err)
 		}
@@ -842,7 +764,7 @@ func (s *BenthosService) GetHealthCheckAndMetrics(ctx context.Context, s6Service
 
 	// 3) Get version
 	g.Go(func() error {
-		_, body, err := doRequest("/version")
+		_, body, err := requestClient.GetWithBody(gctx, baseURL+"/version")
 		if err != nil {
 			return fmt.Errorf("get version: %w", err)
 		}
@@ -858,7 +780,7 @@ func (s *BenthosService) GetHealthCheckAndMetrics(ctx context.Context, s6Service
 
 	// 4) Get metrics
 	g.Go(func() error {
-		_, body, err := doRequest("/metrics")
+		_, body, err := requestClient.GetWithBody(gctx, baseURL+"/metrics")
 		if err != nil {
 			return fmt.Errorf("get metrics: %w", err)
 		}

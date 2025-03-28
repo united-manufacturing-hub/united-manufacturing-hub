@@ -56,16 +56,24 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 		})
 		It("exposes metrics and has zero s6 services running", func() {
 			// Check the /metrics endpoint
-			resp, err := http.Get(GetMetricsURL())
-			Expect(err).NotTo(HaveOccurred())
-			defer resp.Body.Close()
+			Eventually(func() bool {
+				resp, err := http.Get(GetMetricsURL())
+				if err != nil {
+					return false
+				}
+				defer resp.Body.Close()
 
-			Expect(resp.StatusCode).To(Equal(http.StatusOK))
-			body, err := io.ReadAll(resp.Body)
-			Expect(err).NotTo(HaveOccurred())
+				if resp.StatusCode != http.StatusOK {
+					return false
+				}
 
-			// Check that the metrics endpoint contains the expected metrics
-			Expect(string(body)).To(ContainSubstring("umh_core_reconcile_duration_milliseconds"))
+				body, err := io.ReadAll(resp.Body)
+				if err != nil {
+					return false
+				}
+
+				return strings.Contains(string(body), "umh_core_reconcile_duration_milliseconds")
+			}, 10*time.Second, 1*time.Second).Should(BeTrue(), "Metrics endpoint should contain the expected metrics")
 		})
 	})
 
@@ -87,13 +95,20 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 
 		It("should have the golden service up and expose metrics", func() {
 			// Check /metrics
-			resp, err := http.Get(GetMetricsURL())
-			Expect(err).NotTo(HaveOccurred())
-			defer resp.Body.Close()
+			Eventually(func() bool {
+				resp, err := http.Get(GetMetricsURL())
+				if err != nil {
+					return false
+				}
+				defer resp.Body.Close()
 
-			body, err := io.ReadAll(resp.Body)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(string(body)).To(ContainSubstring("umh_core_reconcile_duration_milliseconds"))
+				body, err := io.ReadAll(resp.Body)
+				if err != nil {
+					return false
+				}
+
+				return strings.Contains(string(body), "umh_core_reconcile_duration_milliseconds")
+			}, 10*time.Second, 1*time.Second).Should(BeTrue(), "Metrics endpoint should contain the expected metrics")
 
 			Eventually(func() int {
 				return checkGoldenServiceStatusOnly()
@@ -130,13 +145,20 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 
 		It("should have both services active and expose healthy metrics", func() {
 			By("Verifying the metrics endpoint contains expected metrics")
-			resp, err := http.Get(GetMetricsURL())
-			Expect(err).NotTo(HaveOccurred())
-			defer resp.Body.Close()
+			Eventually(func() bool {
+				resp, err := http.Get(GetMetricsURL())
+				if err != nil {
+					return false
+				}
+				defer resp.Body.Close()
 
-			body, err := io.ReadAll(resp.Body)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(string(body)).To(ContainSubstring("umh_core_reconcile_duration_milliseconds"))
+				body, err := io.ReadAll(resp.Body)
+				if err != nil {
+					return false
+				}
+
+				return strings.Contains(string(body), "umh_core_reconcile_duration_milliseconds")
+			}, 10*time.Second, 1*time.Second).Should(BeTrue(), "Metrics endpoint should contain the expected metrics")
 
 			By("Verifying that the golden service is returning 200 OK")
 			Eventually(func() int {

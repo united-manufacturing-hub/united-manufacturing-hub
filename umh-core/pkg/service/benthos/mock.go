@@ -23,6 +23,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
 	s6_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/httpclient"
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 )
 
@@ -76,7 +77,7 @@ type MockBenthosService struct {
 	stateFlags map[string]*ServiceStateFlags
 
 	// HTTP client for mocking HTTP requests
-	HTTPClient HTTPClient
+	HTTPClient httpclient.HTTPClient
 
 	// S6 service mock
 	S6Service s6service.Service
