@@ -370,7 +370,6 @@ func StopContainer() {
 	// First stop the container
 	_, err := runDockerCommand("stop", containerName)
 	if err != nil {
-		// Retry with -9
 		_, err = runDockerCommand("stop", "-s", "9", containerName)
 		if err != nil {
 			fmt.Printf("Failed to stop container: %v\n", err)
