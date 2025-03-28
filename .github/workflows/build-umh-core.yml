@@ -15,7 +15,7 @@
 name: Build UMH Core
 
 on:
-  push:
+  pull_request:
     branches:
       - "**"
     paths:

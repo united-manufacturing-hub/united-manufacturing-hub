@@ -16,12 +16,9 @@
 name: Test UMH Core
 
 on:
-  push:
+  pull_request:
     branches:
       - "**"
-    paths:
-      - "umh-core/**"
-  pull_request:
     paths:
       - "umh-core/**"
 
