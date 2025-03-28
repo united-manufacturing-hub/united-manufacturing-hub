@@ -872,12 +872,35 @@ func (s *BenthosService) GetHealthCheckAndMetrics(ctx context.Context, s6Service
 		return nil
 	})
 
-	// Wait for all calls or immediate context cancellation
-	if err := g.Wait(); err != nil {
-		// If *any* sub‑call failed or the context got canceled,
-		// errgroup returns immediately here.
-		return BenthosStatus{}, err
+	// Create a buffered channel to receive the result from g.Wait().
+	// The channel is buffered so that the goroutine sending on it doesn't block.
+	errc := make(chan error, 1)
+
+	// Run g.Wait() in a separate goroutine.
+	// This allows us to use a select statement to return early if the context is canceled.
+	go func() {
+		// g.Wait() blocks until all goroutines launched with g.Go() have returned.
+		// It returns the first non-nil error, if any.
+		errc <- g.Wait()
+	}()
+
+	// Use a select statement to wait for either the g.Wait() result or the context's cancellation.
+	select {
+	case err := <-errc:
+		// g.Wait() has finished, so check if any goroutine returned an error.
+		if err != nil {
+			// If there was an error in any sub-call, return that error.
+			return BenthosStatus{}, err
+		}
+		// If err is nil, all goroutines completed successfully.
+	case <-ctx.Done():
+		// The context was canceled or its deadline was exceeded before all goroutines finished.
+		// Although some goroutines might still be running in the background,
+		// they use a context (gctx) that should cause them to terminate promptly.
+		// Experiments have shown that without using this, some goroutines can still take up to 70ms to terminate.
+		return BenthosStatus{}, ctx.Err()
 	}
+
 	// Update the metrics state
 	if s.metricsState == nil {
 		return BenthosStatus{}, fmt.Errorf("metrics state not initialized")
