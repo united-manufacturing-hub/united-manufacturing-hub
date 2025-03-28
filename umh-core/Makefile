@@ -33,6 +33,8 @@ TAG = latest
 
 GINKGO_VERSION = v2.23.3
 NILWAY_VERSION = latest
+# Default to the architecture of the host
+TARGETARCH := $(shell go env GOARCH)
 
 # Determine version based on git
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "0.0.0-dev")
@@ -42,10 +44,10 @@ install:
 	go install github.com/onsi/ginkgo/v2/ginkgo@$(GINKGO_VERSION)
 
 build:
-	docker build --platform=$$(if [ "$$(uname -m)" = "arm64" ]; then echo "linux/arm64"; else echo "linux/amd64"; fi) \
-		--build-arg TARGETARCH=$$(if [ "$$(uname -m)" = "arm64" ]; then echo "arm64"; else echo "amd64"; fi) \
-		--build-arg APP_VERSION=$(VERSION) \
-		-t $(IMAGE_NAME):$(TAG) -f Dockerfile .
+	docker build \
+	--build-arg TARGETARCH=$(TARGETARCH) \
+	--build-arg APP_VERSION=$(VERSION) \
+	-t $(IMAGE_NAME):$(TAG) -f Dockerfile .
 	
 clean:
 	docker stop $(IMAGE_NAME) || true
@@ -135,3 +137,18 @@ test-benthos-tmp: clean build
 		-p 8081:8080 \
 		-p 4195:4195 \
 		$(IMAGE_NAME):$(TAG)
+
+
+test-redpanda: clean build
+	@mkdir -p $(PWD)/data
+	@cp $(PWD)/examples/example-config-redpanda.yaml $(PWD)/data/config.yaml
+	docker run \
+		--name $(IMAGE_NAME) \
+		-v $(PWD)/data:/data \
+		-e LOGGING_LEVEL=DEBUG \
+		-p 8081:8080 \
+		$(IMAGE_NAME):$(TAG)
+
+
+pod-shell:
+	docker exec -it $(IMAGE_NAME) /bin/bash

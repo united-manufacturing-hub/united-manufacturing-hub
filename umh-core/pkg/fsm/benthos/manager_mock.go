@@ -63,7 +63,7 @@ func NewBenthosManagerWithMockedServices(name string) (*BenthosManager, *benthos
 		// Create Benthos instance from config - with mock service
 		func(cfg config.BenthosConfig) (public_fsm.FSMInstance, error) {
 			// Create an instance with the basic config
-			instance := NewBenthosInstance("/dev/null", cfg)
+			instance := NewBenthosInstance(cfg)
 
 			// Create a mock S6 service and attach it to the Benthos mock
 			s6MockService := s6svc.NewMockService()

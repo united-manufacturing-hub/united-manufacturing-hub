@@ -28,6 +28,7 @@ type FullConfig struct {
 	Services []S6FSMConfig   `yaml:"services"` // Services to manage, can be updated while running
 	Benthos  []BenthosConfig `yaml:"benthos"`  // Benthos services to manage, can be updated while running
 	Nmap     []NmapConfig    `yaml:"nmap"`     // Nmap services to manage, can be updated while running
+	Redpanda RedpandaConfig  `yaml:"redpanda"` // Redpanda config, can be updated while running
 }
 
 type AgentConfig struct {
@@ -92,6 +93,19 @@ type NmapServiceConfig struct {
 // Equal checks if two NmapServiceConfigs are equal
 func (c NmapServiceConfig) Equal(other NmapServiceConfig) bool {
 	return reflect.DeepEqual(c, other)
+}
+
+// RedpandaConfig contains configuration for a Redpanda service
+type RedpandaConfig struct {
+	// For the FSM
+	FSMInstanceConfig `yaml:",inline"`
+
+	// For the Redpanda service
+	RedpandaServiceConfig RedpandaServiceConfig `yaml:"redpandaServiceConfig"`
+}
+
+type RedpandaServiceConfig struct {
+	DataDirectory string `yaml:"dataDirectory"`
 }
 
 // Clone creates a deep copy of FullConfig

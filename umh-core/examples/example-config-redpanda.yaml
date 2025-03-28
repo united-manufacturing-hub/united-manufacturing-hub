@@ -1,0 +1,78 @@
+# Copyright 2025 UMH Systems GmbH
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+agent:
+  metricsPort: 8080
+
+redpanda:
+  name: redpanda
+  desiredState: running
+  redpandaServiceConfig:
+    # Data directory where all the files will be stored.
+    # This directory MUST reside on an ext4 or xfs partition.
+    dataDirectory: "/data/redpanda"
+
+    # The initial cluster nodes addresses
+    #seed_servers: []
+
+    # Redpanda server
+    #rpc_server:
+    #  address: "0.0.0.0"
+    #  port: 33145
+
+    # Redpanda server for other nodes to connect too
+    #advertised_rpc_api:
+    #  address: "127.0.0.1"
+    #  port: 33145
+
+    # Kafka transport
+    #kafka_api:
+    #  - address: "0.0.0.0"
+    #    port: 9092
+
+    # Kafka transport for other nodes to connect too
+    #advertised_kafka_api:
+    #  - address: "127.0.0.1"
+    #    port: 9092
+
+    # Admin server includes metrics, and cluster management
+    #admin:
+    #  address: "0.0.0.0"
+    #  port: 9644
+
+    # Skips most of the checks performed at startup (i.e. memory, xfs)
+    # not recomended for production use
+    #developer_mode: true
+
+    # Enable Pandaproxy on port 8082
+    #pandaproxy: {}
+
+    # Enable Schema Registry on port 8081
+    #schema_registry: {}
+
+    # Available tuners
+    #rpk:
+    #  tune_network: false
+    #  tune_disk_scheduler: false
+    #  tune_disk_nomerges: false
+    #  tune_disk_irq: false
+    #  tune_fstrim: false
+    #  tune_cpu: false
+    #  tune_aio_events: false
+    #  tune_clocksource: false
+    #  tune_swappiness: false
+    #  enable_memory_locking: false
+    #  tune_coredump: false
+
+    #  coredump_dir: "/data/redpanda/coredump"
