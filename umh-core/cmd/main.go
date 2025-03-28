@@ -21,7 +21,7 @@ import (
 
 	v2 "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/communication_state"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/fail"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/control"
@@ -29,7 +29,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/shared/models"
 	"go.uber.org/zap"
 )
 
@@ -156,7 +155,7 @@ func enableBackendConnection(config *config.FullConfig, state *fsm.SystemSnapsho
 
 		login := v2.NewLogin(config.Agent.CommunicatorConfig.AuthToken, false)
 		if login == nil {
-			fail.Fatalf("Failed to create login object")
+			sentry.ReportIssuef(sentry.IssueTypeError, logger, "Failed to create login object")
 		}
 		communicationState.LoginResponse = login
 		logger.Info("Backend connection enabled, login response: ", zap.Any("login_name", login.Name))

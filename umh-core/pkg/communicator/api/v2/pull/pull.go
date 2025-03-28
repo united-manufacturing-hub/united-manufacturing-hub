@@ -23,15 +23,13 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/getsentry/sentry-go"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2/error_handler"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2/http"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/backend_api_structs"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/helper"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/fail"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/tracing"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/shared/models"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	"go.uber.org/zap"
 )
 
@@ -71,7 +69,7 @@ func (p *Puller) Stop() {
 		zap.S().Warnf("WARNING: Stopping puller !")
 		p.shallRun.Store(false)
 	} else {
-		fail.Fatal("Stop MUST NOT be used outside tests")
+		sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "Stop MUST NOT be used outside tests")
 	}
 }
 
@@ -81,27 +79,18 @@ func (p *Puller) pull() {
 	for p.shallRun.Load() {
 		select {
 		case <-ticker.C:
-			// Start a new transaction for this pull cycle
-			transaction := sentry.StartTransaction(context.Background(), "pull.cycle")
 
 			p.dog.ReportHeartbeatStatus(watcherUUID, watchdog.HEARTBEAT_STATUS_OK)
 			var cookies = map[string]string{
 				"token": p.jwt.Load().(string),
 			}
-			incomingMessages, err, status := http.GetRequest[backend_api_structs.PullPayload](transaction.Context(), http.PullEndpoint, nil, &cookies, p.insecureTLS)
+			incomingMessages, err, _ := http.GetRequest[backend_api_structs.PullPayload](context.Background(), http.PullEndpoint, nil, &cookies, p.insecureTLS)
 			if err != nil {
 				// Ignore context canceled errors
 				if errors.Is(err, context.Canceled) {
 					time.Sleep(1 * time.Second)
 					continue
 				}
-				// Start a new transaction for this error
-				errorTransaction := sentry.StartTransaction(context.Background(), "error.pull")
-				transaction.Status = sentry.SpanStatusInternalError
-				error_handler.ReportHTTPErrors(err, status, string(http.PullEndpoint), "GET", nil, nil)
-				time.Sleep(1 * time.Second)
-				errorTransaction.Finish()
-				transaction.Finish()
 				continue
 			}
 			error_handler.ResetErrorCounter()
@@ -111,14 +100,6 @@ func (p *Puller) pull() {
 			}
 
 			for _, message := range (*incomingMessages).UMHMessages {
-				var span *sentry.Span
-				if transaction != nil {
-					// Create a span for each message processing
-					span = transaction.StartChild("process.message")
-					if message.Metadata != nil && span != nil {
-						tracing.AddTraceUUIDToSpan(span, message.Metadata.TraceID)
-					}
-				}
 
 				zap.S().Infof("Received message: %v", message)
 
@@ -134,12 +115,6 @@ func (p *Puller) pull() {
 					zap.S().Warnf("Inbound message channel is full !")
 					p.dog.ReportHeartbeatStatus(watcherUUID, watchdog.HEARTBEAT_STATUS_WARNING)
 				}
-				if span != nil {
-					span.Finish()
-				}
-			}
-			if transaction != nil {
-				transaction.Finish()
 			}
 		}
 	}

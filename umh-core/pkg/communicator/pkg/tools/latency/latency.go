@@ -19,7 +19,7 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/expiremap/v2/pkg/expiremap"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/shared/models"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/models"
 )
 
 func CalculateLatency(latencies *expiremap.ExpireMap[time.Time, time.Duration]) models.Latency {
