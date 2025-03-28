@@ -140,6 +140,7 @@ type Metrics struct {
 	Infrastructure InfrastructureMetrics
 	Cluster        ClusterMetrics
 	Throughput     ThroughputMetrics
+	Topic          TopicMetrics
 }
 
 // InfrastructureMetrics contains information about the infrastructure metrics of the Redpanda service
@@ -186,6 +187,13 @@ type ThroughputMetrics struct {
 	// redpanda_kafka_request_bytes_total over all redpanda_namespace and redpanda_topic labels using redpanda_request=("consume")
 	// type: counter
 	BytesOut int64
+}
+
+// TopicMetrics contains information about the topic metrics of the Redpanda service
+type TopicMetrics struct {
+	// redpanda_kafka_partitions
+	// type: gauge
+	TopicPartitionMap map[string]int64
 }
 
 // RedpandaService is the default implementation of the IRedpandaService interface
@@ -397,6 +405,7 @@ func parseMetrics(data []byte) (Metrics, error) {
 		Infrastructure: InfrastructureMetrics{},
 		Cluster:        ClusterMetrics{},
 		Throughput:     ThroughputMetrics{},
+		Topic:          TopicMetrics{},
 	}
 
 	// Parse the metrics text into prometheus format
@@ -468,7 +477,18 @@ func parseMetrics(data []byte) (Metrics, error) {
 					metrics.Throughput.BytesOut = int64(getValue(metric))
 				}
 			}
-
+		case name == "redpanda_kafka_partitions":
+			// Initialize the map if it's nil
+			if metrics.Topic.TopicPartitionMap == nil {
+				metrics.Topic.TopicPartitionMap = make(map[string]int64)
+			}
+			// Iterate through each metric and get the topic name and partition count
+			for _, metric := range family.Metric {
+				topic := getLabel(metric, "redpanda_topic")
+				if topic != "" {
+					metrics.Topic.TopicPartitionMap[topic] = int64(getValue(metric))
+				}
+			}
 		}
 	}
 
