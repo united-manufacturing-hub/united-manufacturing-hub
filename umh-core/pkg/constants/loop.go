@@ -37,5 +37,5 @@ const (
 	DefaultInstanceName = "Core"
 
 	// DefaultMinimumRemainingTimePerManager is the default minimum remaining time for a manager.
-	DefaultMinimumRemainingTimePerManager = time.Millisecond * 40
+	DefaultMinimumRemainingTimePerManager = time.Millisecond * 50
 )

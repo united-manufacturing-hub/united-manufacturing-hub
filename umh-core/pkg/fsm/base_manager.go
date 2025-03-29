@@ -499,8 +499,11 @@ func (m *BaseFSMManager[C]) Reconcile(
 			return nil, true // return true to indicate that we should not run another manager and instead should wait for the next tick
 		}
 
+		instanceCtx, instanceCancel := context.WithTimeout(ctx, expectedMaxP95ExecutionTime)
+		defer instanceCancel()
+
 		// Pass manager-specific tick to instance.Reconcile
-		err, reconciled := instance.Reconcile(ctx, m.managerTick)
+		err, reconciled := instance.Reconcile(instanceCtx, m.managerTick)
 		reconcileTime := time.Since(reconcileStart)
 		metrics.ObserveReconcileTime(metrics.ComponentBaseFSMManager, m.managerName+".instances."+name, reconcileTime)
 

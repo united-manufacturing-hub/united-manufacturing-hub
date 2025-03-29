@@ -17,6 +17,7 @@ package ctxutil
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 )
 
@@ -41,7 +42,7 @@ func HasSufficientTime(ctx context.Context, requiredTime time.Duration) (remaini
 
 	remaining = time.Until(deadline)
 	if remaining < requiredTime {
-		return remaining, false, ErrInsufficientTime
+		return remaining, false, fmt.Errorf("%w: %v", ErrInsufficientTime, remaining)
 	}
 
 	return remaining, true, nil
