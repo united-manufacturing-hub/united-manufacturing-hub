@@ -53,6 +53,20 @@ const (
 	Degraded
 )
 
+// String returns the string representation of a HealthCategory
+func (hc HealthCategory) String() string {
+	switch hc {
+	case Active:
+		return "active"
+	case Degraded:
+		return "degraded"
+	case Neutral:
+		return "neutral"
+	default:
+		return "unknown"
+	}
+}
+
 type Health struct {
 	Message       string         `json:"message"`      // Human-readable message describing the health state
 	ObservedState string         `json:"state"`        // Observed state of the component
