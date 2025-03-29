@@ -36,8 +36,7 @@ const (
 	benthosManagerName   = logger.ComponentBenthosManager + constants.DefaultManagerName
 
 	// Instance name constants
-	coreInstanceName   = "Core"
-	helloWorldInstance = "hello-world"
+	coreInstanceName = "Core"
 )
 
 type StatusCollectorType struct {
@@ -130,8 +129,8 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 			Agent: models.Agent{
 				Health: &models.Health{
 					Message:       fmt.Sprintf("Agent is healthy, tick: %d", state.Tick),
-					ObservedState: managersMap[benthosManagerName][helloWorldInstance].CurrentState,
-					DesiredState:  managersMap[benthosManagerName][helloWorldInstance].DesiredState,
+					ObservedState: "running",
+					DesiredState:  "running",
 					Category:      models.Active,
 				},
 				Latency: &models.Latency{
