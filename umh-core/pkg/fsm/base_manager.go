@@ -16,12 +16,14 @@ package fsm
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/backoff"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/ctxutil"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
@@ -481,19 +483,27 @@ func (m *BaseFSMManager[C]) Reconcile(
 			return fmt.Errorf("failed to get expected max p95 execution time: %w", err), false
 		}
 
-		deadline, ok := ctx.Deadline()
-		if !ok {
-			return fmt.Errorf("no deadline set in context"), false
+		remaining, sufficient, err := ctxutil.HasSufficientTime(ctx, expectedMaxP95ExecutionTime)
+		if err != nil {
+			if errors.Is(err, ctxutil.ErrNoDeadline) {
+				return fmt.Errorf("no deadline set in context"), false
+			}
+			// For any other error, log and abort reconciliation
+			metrics.IncErrorCount(metrics.ComponentBaseFSMManager, m.managerName)
+			return fmt.Errorf("deadline check error: %w", err), false
 		}
 
-		timeout := time.Until(deadline)
-		if timeout < expectedMaxP95ExecutionTime {
-			m.logger.Warnf("not enough time left to reconcile instance %s, skipping", name)
+		if !sufficient {
+			m.logger.Warnf("not enough time left to reconcile instance %s (only %v remaining, needed %v), skipping",
+				name, remaining, expectedMaxP95ExecutionTime)
 			return nil, true // return true to indicate that we should not run another manager and instead should wait for the next tick
 		}
 
+		instanceCtx, instanceCancel := context.WithTimeout(ctx, expectedMaxP95ExecutionTime)
+		defer instanceCancel()
+
 		// Pass manager-specific tick to instance.Reconcile
-		err, reconciled := instance.Reconcile(ctx, m.managerTick)
+		err, reconciled := instance.Reconcile(instanceCtx, m.managerTick)
 		reconcileTime := time.Since(reconcileStart)
 		metrics.ObserveReconcileTime(metrics.ComponentBaseFSMManager, m.managerName+".instances."+name, reconcileTime)
 

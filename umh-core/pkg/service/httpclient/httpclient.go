@@ -16,12 +16,14 @@ package httpclient
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
 	"time"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/ctxutil"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"go.uber.org/zap"
 )
@@ -66,13 +68,18 @@ func (c *DefaultHTTPClient) Do(req *http.Request) (*http.Response, error) {
 
 // createClientFromContext creates an HTTP client with timeouts based on context deadline
 func (c *DefaultHTTPClient) createClientFromContext(ctx context.Context) (*http.Client, error) {
-	// Verify context has deadline
-	deadline, ok := ctx.Deadline()
-	if !ok {
-		return nil, fmt.Errorf("no deadline set in context")
+	// Verify context has deadline and sufficient time
+	remaining, _, err := ctxutil.HasSufficientTime(ctx, time.Millisecond) // Just need a minimal required time
+	if err != nil {
+		if errors.Is(err, ctxutil.ErrNoDeadline) {
+			return nil, fmt.Errorf("no deadline set in context")
+		}
+		// For other errors, we still want to create a client with whatever time remains
+		c.logger.Warnf("Creating HTTP client with limited time: %v", err)
 	}
 
-	timeout := time.Until(deadline)
+	// Use the available time for timeouts
+	timeout := remaining
 
 	// Create transport with timeouts scaled from context deadline
 	transport := &http.Transport{
