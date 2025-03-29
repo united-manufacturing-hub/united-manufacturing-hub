@@ -17,29 +17,65 @@ package container_monitor
 import (
 	"context"
 
-	"github.com/stretchr/testify/mock"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 )
 
 // MockService is a mock implementation of the container monitor Service interface
 type MockService struct {
-	mock.Mock
+	// Tracks calls to methods
+	GetStatusCalled bool
+	GetHealthCalled bool
+
+	// Return values for each method
+	GetStatusError error
+	GetHealthError error
+
+	// Results for each method
+	GetStatusResult *ContainerStatus
+	GetHealthResult *models.Health
+
+	// For more complex testing scenarios
+	healthState models.HealthCategory
 }
 
 // NewMockService creates a new mock service instance
 func NewMockService() *MockService {
-	return &MockService{}
+	return &MockService{
+		// Default to Active health
+		healthState: models.Active,
+		// Initialize with default healthy status
+		GetStatusResult: CreateDefaultContainerStatus(),
+		GetHealthResult: &models.Health{
+			Message:       "Container is operating normally",
+			ObservedState: models.Active.String(),
+			DesiredState:  models.Active.String(),
+			Category:      models.Active,
+		},
+	}
 }
 
 // GetStatus is a mock implementation of Service.GetStatus
 func (m *MockService) GetStatus(ctx context.Context) (*ContainerStatus, error) {
-	args := m.Called(ctx)
+	m.GetStatusCalled = true
 
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
+	if m.GetStatusError != nil {
+		return nil, m.GetStatusError
 	}
 
-	return args.Get(0).(*ContainerStatus), args.Error(1)
+	// Return the configured result
+	return m.GetStatusResult, nil
+}
+
+// GetHealth is a mock implementation of Service.GetHealth
+func (m *MockService) GetHealth(ctx context.Context) (*models.Health, error) {
+	m.GetHealthCalled = true
+
+	if m.GetHealthError != nil {
+		return nil, m.GetHealthError
+	}
+
+	// Return the configured result
+	return m.GetHealthResult, nil
 }
 
 // CreateDefaultContainerStatus returns a default container status with healthy metrics for testing
@@ -92,23 +128,38 @@ func CreateDegradedContainerStatus() *ContainerStatus {
 
 // SetupMockForHealthyState configures the mock to return healthy container status
 func (m *MockService) SetupMockForHealthyState() {
-	status := CreateDefaultContainerStatus()
-	m.On("GetStatus", mock.Anything).Return(status, nil)
+	m.GetStatusResult = CreateDefaultContainerStatus()
+	m.healthState = models.Active
+
+	m.GetHealthResult = &models.Health{
+		Message:       "Container is operating normally",
+		ObservedState: models.Active.String(),
+		DesiredState:  models.Active.String(),
+		Category:      models.Active,
+	}
 }
 
 // SetupMockForDegradedState configures the mock to return degraded container status
 func (m *MockService) SetupMockForDegradedState() {
-	status := CreateDegradedContainerStatus()
-	m.On("GetStatus", mock.Anything).Return(status, nil)
+	m.GetStatusResult = CreateDegradedContainerStatus()
+	m.healthState = models.Degraded
+
+	m.GetHealthResult = &models.Health{
+		Message:       "CPU metrics degraded",
+		ObservedState: models.Degraded.String(),
+		DesiredState:  models.Active.String(),
+		Category:      models.Degraded,
+	}
 }
 
-// SetupMockForCriticalState configures the mock to return degraded container status (for backward compatibility)
+// SetupMockForCriticalState is deprecated, use SetupMockForDegradedState instead
+// This is kept for backward compatibility with existing tests
 func (m *MockService) SetupMockForCriticalState() {
-	status := CreateDegradedContainerStatus()
-	m.On("GetStatus", mock.Anything).Return(status, nil)
+	m.SetupMockForDegradedState()
 }
 
 // SetupMockForError configures the mock to return errors
 func (m *MockService) SetupMockForError(err error) {
-	m.On("GetStatus", mock.Anything).Return(nil, err)
+	m.GetStatusError = err
+	m.GetHealthError = err
 }

@@ -117,7 +117,7 @@ var _ = Describe("Container FSM", func() {
 
 		It("Remains degraded if metrics are not healthy", func() {
 			// Let's set the mock to return critical metrics
-			mockSvc.SetupMockForCriticalState()
+			mockSvc.SetupMockForDegradedState()
 
 			err, did := inst.Reconcile(ctx, 24)
 			Expect(err).ToNot(HaveOccurred())

@@ -28,18 +28,21 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 )
 
+// Reconcile periodically checks if the FSM needs state transitions based on metrics
 func (c *ContainerInstance) Reconcile(ctx context.Context, tick uint64) (err error, reconciled bool) {
-	startTime := time.Now()
+	start := time.Now()
 	instanceName := c.baseFSMInstance.GetID()
 	defer func() {
-		metrics.ObserveReconcileTime(metrics.ComponentContainerMonitor, instanceName, time.Since(startTime))
+		metrics.ObserveReconcileTime(metrics.ComponentContainerMonitor, instanceName, time.Since(start))
 		if err != nil {
-			c.baseFSMInstance.GetLogger().Errorf("error reconciling container monitor %s: %v", instanceName, err)
+			c.baseFSMInstance.GetLogger().Errorf("error reconciling container instance %s: %s", instanceName, err)
+			c.PrintState()
+			// Add metrics for error
 			metrics.IncErrorCount(metrics.ComponentContainerMonitor, instanceName)
 		}
 	}()
 
-	// 1) Check if context canceled
+	// Check if context is already cancelled
 	if ctx.Err() != nil {
 		return ctx.Err(), false
 	}
@@ -64,33 +67,100 @@ func (c *ContainerInstance) Reconcile(ctx context.Context, tick uint64) (err err
 		return nil, false
 	}
 
-	// 3) Reconcile lifecycle states first
-	if internal_fsm.IsLifecycleState(c.GetCurrentFSMState()) {
-		err, did := c.reconcileLifecycleStates(ctx)
-		return err, did
-	}
-
-	// 4) Update observed state (i.e., fetch container metrics) with a timeout
-	updateCtx, cancel := context.WithTimeout(ctx, constants.BenthosUpdateObservedStateTimeout) // or separate constant if you prefer
+	// 2) Update observed state (i.e., fetch container metrics) with a timeout
+	updateCtx, cancel := context.WithTimeout(ctx, constants.ContainerMonitorUpdateObservedStateTimeout)
 	defer cancel()
+
 	if err := c.updateObservedState(updateCtx); err != nil {
-		// If fetching metrics fails, set the error for backoff
+		if errors.Is(err, context.DeadlineExceeded) {
+			// Updating the observed state can sometimes take longer,
+			// resulting in context.DeadlineExceeded errors. In this case, we want to
+			// mark the reconciliation as complete for this tick since we've likely
+			// already consumed significant time.
+			c.baseFSMInstance.GetLogger().Warnf("Timeout while updating observed state for container instance %s", instanceName)
+			return nil, true
+		}
+
+		// For other errors, set the error for backoff
 		c.baseFSMInstance.SetError(err, tick)
 		return nil, false
 	}
 
-	// 5) Reconcile operational states
-	err, opDid := c.reconcileOperationalStates(ctx)
+	// Step 3: Attempt to reconcile the state.
+	err, reconciled = c.reconcileStateTransition(ctx)
 	if err != nil {
-		// If we got an error, set it for backoff
-		if !errors.Is(err, fsm.ErrInstanceRemoved) {
-			c.baseFSMInstance.SetError(err, tick)
+		// If the instance is removed, we don't want to return an error here, because we want to continue reconciling
+		// Also this should not
+		if errors.Is(err, fsm.ErrInstanceRemoved) {
+			return nil, false
 		}
+
+		if errors.Is(err, context.DeadlineExceeded) {
+			// Updating the observed state can sometimes take longer,
+			// resulting in context.DeadlineExceeded errors. In this case, we want to
+			// mark the reconciliation as complete for this tick since we've likely
+			// already consumed significant time. We return reconciled=true to prevent
+			// further reconciliation attempts in the current tick.
+			return nil, true // We don't want to return an error here, as this can happen in normal operations
+		}
+
+		c.baseFSMInstance.SetError(err, tick)
+		c.baseFSMInstance.GetLogger().Errorf("error reconciling state: %s", err)
+		return nil, false // We don't want to return an error here, because we want to continue reconciling
+	}
+
+	// It went all right, so clear the error
+	c.baseFSMInstance.ResetState()
+
+	return nil, reconciled
+}
+
+// reconcileStateTransition compares the current state with the desired state
+// and, if necessary, sends events to drive the FSM from the current to the desired state.
+// Any functions that fetch information are disallowed here and must be called in reconcileExternalChanges
+// and exist in ExternalState.
+// This is to ensure full testability of the FSM.
+func (c *ContainerInstance) reconcileStateTransition(ctx context.Context) (err error, reconciled bool) {
+	start := time.Now()
+	defer func() {
+		metrics.ObserveReconcileTime(metrics.ComponentS6Instance, c.baseFSMInstance.GetID()+".reconcileStateTransition", time.Since(start))
+	}()
+
+	currentState := c.baseFSMInstance.GetCurrentFSMState()
+	desiredState := c.baseFSMInstance.GetDesiredFSMState()
+
+	// If already in the desired state, nothing to do.
+	if currentState == desiredState {
 		return nil, false
 	}
 
-	// all done
-	return nil, opDid
+	// Handle lifecycle states first - these take precedence over operational states
+	if internal_fsm.IsLifecycleState(currentState) {
+		err, reconciled := c.reconcileLifecycleStates(ctx, currentState)
+		if err != nil {
+			return err, false
+		}
+		if reconciled {
+			return nil, true
+		} else {
+			return nil, false
+		}
+	}
+
+	// Handle operational states
+	if IsOperationalState(currentState) {
+		err, reconciled := c.reconcileOperationalStates(ctx, currentState, desiredState)
+		if err != nil {
+			return err, false
+		}
+		if reconciled {
+			return nil, true
+		} else {
+			return nil, false
+		}
+	}
+
+	return fmt.Errorf("invalid state: %s", currentState), false
 }
 
 // updateObservedState queries container_monitor.Service for new metrics
@@ -105,9 +175,8 @@ func (c *ContainerInstance) updateObservedState(ctx context.Context) error {
 }
 
 // reconcileLifecycleStates handles to_be_created, creating, removing, removed
-func (c *ContainerInstance) reconcileLifecycleStates(ctx context.Context) (error, bool) {
-	current := c.GetCurrentFSMState()
-	switch current {
+func (c *ContainerInstance) reconcileLifecycleStates(ctx context.Context, currentState string) (error, bool) {
+	switch currentState {
 	case internal_fsm.LifecycleStateToBeCreated:
 		// do creation
 		if err := c.initiateContainerCreate(ctx); err != nil {
@@ -135,14 +204,9 @@ func (c *ContainerInstance) reconcileLifecycleStates(ctx context.Context) (error
 }
 
 // reconcileOperationalStates checks the desired state (active or stopped) and the observed metrics
-func (c *ContainerInstance) reconcileOperationalStates(ctx context.Context) (error, bool) {
+func (c *ContainerInstance) reconcileOperationalStates(ctx context.Context, currentState string, desiredState string) (error, bool) {
 	current := c.GetCurrentFSMState()
 	desired := c.GetDesiredFSMState()
-
-	// If we are not in an operational state, just return
-	if !IsOperationalState(current) {
-		return nil, false
-	}
 
 	// 1) If desired is "stopped" and we are not "monitoring_stopped", we should eventStop
 	if desired == MonitoringStateStopped && current != MonitoringStateStopped {

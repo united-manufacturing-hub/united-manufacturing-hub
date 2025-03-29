@@ -14,6 +14,8 @@
 
 package constants
 
+import "time"
+
 // Container monitor constants
 const (
 	// Hardware information sources
@@ -27,8 +29,8 @@ const SnapshotPeriod = "1s"
 // SnapshotLimit is the maximum number of snapshots to keep
 const SnapshotLimit = 60 * 10 // 10 minutes of 1-second snapshots
 
-// ContainerStateRunning is needed for backward compatibility with some code
-const ContainerStateRunning = "running"
+// ContainerMonitorUpdateObservedStateTimeout is the timeout for updating the observed state
+const ContainerMonitorUpdateObservedStateTimeout = 5 * time.Second
 
 // Health assessment thresholds
 const (
