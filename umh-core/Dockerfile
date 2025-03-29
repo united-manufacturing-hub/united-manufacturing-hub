@@ -16,6 +16,9 @@ FROM golang:1.24-alpine as build
 
 WORKDIR /go/src/github.com/united-manufacturing-hub/united-manufacturing-hub
 
+# Set app version with a default value - can be overridden at build time
+ARG APP_VERSION=0.0.0-dev
+
 # Install build dependencies
 RUN apk add --no-cache \
     gcc \
@@ -29,7 +32,7 @@ RUN go mod download
 # Copy and build umh-core
 COPY . .
 RUN CGO_ENABLED=0 go build \
-    -ldflags "-s -w" \
+    -ldflags "-s -w -X main.appVersion=${APP_VERSION}" \
     -o /go/bin/umh-core \
     cmd/main.go
 

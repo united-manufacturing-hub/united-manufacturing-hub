@@ -33,7 +33,7 @@ import (
 	"go.uber.org/zap"
 )
 
-var appVersion string // set by the build system
+var appVersion = "0.0.0-dev" // set by the build system
 
 func main() {
 	// Initialize the global logger first thing

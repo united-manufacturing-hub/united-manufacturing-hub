@@ -34,6 +34,9 @@ TAG = latest
 GINKGO_VERSION = v2.23.3
 NILWAY_VERSION = latest
 
+# Determine version based on git
+VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "0.0.0-dev")
+
 install:
 	go install go.uber.org/nilaway/cmd/nilaway@$(NILWAY_VERSION)
 	go install github.com/onsi/ginkgo/v2/ginkgo@$(GINKGO_VERSION)
@@ -41,6 +44,7 @@ install:
 build:
 	docker build --platform=$$(if [ "$$(uname -m)" = "arm64" ]; then echo "linux/arm64"; else echo "linux/amd64"; fi) \
 		--build-arg TARGETARCH=$$(if [ "$$(uname -m)" = "arm64" ]; then echo "arm64"; else echo "amd64"; fi) \
+		--build-arg APP_VERSION=$(VERSION) \
 		-t $(IMAGE_NAME):$(TAG) -f Dockerfile .
 	
 clean:
