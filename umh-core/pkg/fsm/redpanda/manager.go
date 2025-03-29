@@ -80,6 +80,14 @@ func NewRedpandaManager(name string) *RedpandaManager {
 			RedpandaInstance.config = cfg.RedpandaServiceConfig
 			return nil
 		},
+		// Get expected max p95 execution time per instance
+		func(instance public_fsm.FSMInstance) (time.Duration, error) {
+			redpandaInstance, ok := instance.(*RedpandaInstance)
+			if !ok {
+				return 0, fmt.Errorf("instance is not a RedpandaInstance")
+			}
+			return redpandaInstance.GetExpectedMaxP95ExecutionTimePerInstance(), nil
+		},
 	)
 
 	metrics.InitErrorCounter(metrics.ComponentRedpandaManager, name)

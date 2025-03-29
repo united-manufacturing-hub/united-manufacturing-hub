@@ -17,11 +17,13 @@ package redpanda
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/looplab/fsm"
 
 	internal_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	redpanda_service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda"
@@ -158,3 +160,8 @@ func (b *RedpandaInstance) PrintState() {
 // - IsProcessingData() - Checks if Redpanda is actively processing data
 // - HasWarnings() - Checks if Redpanda is reporting warnings
 // - HasErrors() - Checks if Redpanda is reporting errors
+
+// GetExpectedMaxP95ExecutionTimePerInstance returns the expected max p95 execution time of the instance
+func (b *RedpandaInstance) GetExpectedMaxP95ExecutionTimePerInstance() time.Duration {
+	return constants.RedpandaExpectedMaxP95ExecutionTimePerInstance
+}
