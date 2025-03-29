@@ -25,3 +25,10 @@ const (
 const (
 	S6UpdateObservedStateTimeout = time.Millisecond * 3
 )
+
+const (
+	// S6ExpectedMaxP95ExecutionTimePerInstance means that an instance will not reconcile if not 30ms are left
+	// Note: in the intergation test, we defined an alerting threshold of 80% of the max ticker time, which is 100ms
+	// So by setting this to 30 ms, we can ensure that an instance will never start if it triggers the alerting threshold
+	S6ExpectedMaxP95ExecutionTimePerInstance = time.Millisecond * 30
+)

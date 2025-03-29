@@ -85,6 +85,20 @@ jobs:
           PLATFORM_SHORT="${PLATFORM_SHORT//\//-}"
           echo "PLATFORM_SHORT=${PLATFORM_SHORT}" >> $GITHUB_OUTPUT
 
+      - name: Determine app version
+        id: set_version
+        run: |
+          # Check if this is a tag build
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            # If it's a tag, use the tag name as version
+            VERSION="${{ github.ref_name }}"
+          else
+            # For branch builds, use a dev version with the SHA
+            VERSION="0.0.0-dev-${{ github.sha }}"
+          fi
+          echo "APP_VERSION=${VERSION}" >> $GITHUB_OUTPUT
+          echo "Setting APP_VERSION to ${VERSION}"
+
       - name: Docker meta
         id: meta
         uses: docker/metadata-action@v5
@@ -126,6 +140,8 @@ jobs:
           platforms: linux/${{ matrix.architecture }}
           tags: ${{ steps.prepare_tags.outputs.NEW_TAGS }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            APP_VERSION=${{ steps.set_version.outputs.APP_VERSION }}
           provenance: false
 
       - name: Set Output Tags

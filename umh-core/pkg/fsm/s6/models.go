@@ -15,9 +15,12 @@
 package s6
 
 import (
+	"time"
+
 	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	publicfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 )
@@ -138,4 +141,9 @@ func (s *S6Instance) SetService(service s6svc.Service) {
 // This is a testing-only utility to access the private field
 func (s *S6Instance) GetConfig() config.S6FSMConfig {
 	return s.config
+}
+
+// GetExpectedMaxP95ExecutionTimePerInstance returns the expected max p95 execution time of the instance
+func (s *S6Instance) GetExpectedMaxP95ExecutionTimePerInstance() time.Duration {
+	return constants.S6ExpectedMaxP95ExecutionTimePerInstance
 }

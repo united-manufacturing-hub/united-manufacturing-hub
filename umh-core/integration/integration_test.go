@@ -56,6 +56,7 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 	AfterAll(func() {
 		// Always stop container after the entire suite
 		StopContainer()
+		CleanupDockerBuildCache()
 	})
 
 	Context("with an empty config", func() {

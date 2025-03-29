@@ -20,6 +20,7 @@ package benthos_test
 import (
 	"context"
 	"fmt"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -41,10 +42,15 @@ var _ = Describe("BenthosManager", func() {
 		mockService *benthossvc.MockBenthosService
 		ctx         context.Context
 		tick        uint64
+		cancel      context.CancelFunc
 	)
 
+	AfterEach(func() {
+		cancel()
+	})
+
 	BeforeEach(func() {
-		ctx = context.Background()
+		ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second) // we need to have a deadline as the reconcile logic in the base fsm manager requires it
 		tick = 0
 
 		// Create a new BenthosManager with the mock service
