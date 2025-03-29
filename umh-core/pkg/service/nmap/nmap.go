@@ -527,7 +527,6 @@ func (s *NmapService) ServiceExists(ctx context.Context, nmapName string) bool {
 
 	exists, err := s.s6Service.ServiceExists(ctx, s6ServicePath)
 	if err != nil {
-		s.logger.Error("Error checking if service exists", zap.String("service", s6ServiceName), zap.Error(err))
 		return false
 	}
 

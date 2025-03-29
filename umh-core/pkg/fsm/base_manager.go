@@ -503,11 +503,26 @@ func (m *BaseFSMManager[C]) Reconcile(
 			// If the error is a permanent failure, remove the instance from the manager
 			// so that it can be recreated in further ticks
 			if backoff.IsPermanentFailureError(err) {
-				sentry.ReportIssuef(sentry.IssueTypeError, m.logger, "Permanent failure reconciling instance %s: %w. Removing instance from manager.", name, err)
+				sentry.ReportFSMErrorf(
+					m.logger,
+					name,
+					m.managerName,
+					"reconcile_permanent_failure",
+					"Permanent failure reconciling instance: %v",
+					err,
+				)
 
 				delete(m.instances, name)
 				return nil, true
 			}
+			sentry.ReportFSMErrorf(
+				m.logger,
+				name,
+				m.managerName,
+				"reconcile_error",
+				"Error reconciling instance: %v",
+				err,
+			)
 			return fmt.Errorf("error reconciling instance: %w", err), false
 		}
 		if reconciled {

@@ -401,7 +401,14 @@ func (s *DefaultService) Remove(ctx context.Context, servicePath string) error {
 	// Clean up logs directory (best effort - don't block removal if this fails)
 	logDir := filepath.Join(constants.S6LogBaseDir, serviceName)
 	if logErr := s.fsService.RemoveAll(ctx, logDir); logErr != nil && s.logger != nil {
-		sentry.ReportIssuef(sentry.IssueTypeWarning, s.logger, "Failed to clean up log directory %s: %v", logDir, logErr)
+		sentry.ReportServiceErrorf(
+			s.logger,
+			serviceName,
+			"s6",
+			"cleanup_logs",
+			"Failed to clean up log directory: %v",
+			logErr,
+		)
 	}
 
 	if s.logger != nil {
