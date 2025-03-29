@@ -24,6 +24,7 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 )
 
@@ -36,12 +37,10 @@ var _ = Describe("Sentry Integration", func() {
 		logger = testLogger.Sugar()
 	})
 
-	// This test is focused (F) so it can be run manually
-	// Use: go test -v -ginkgo.focus "FManually sends a test message to Sentry" ./pkg/sentry
 	It("Manually sends a test message to Sentry", func() {
 		Skip("Skipping Sentry test")
 		// Initialize Sentry with a test version
-		sentry.InitSentry("0.0.0-test")
+		sentry.InitSentry(constants.SentryTestVersion, false)
 
 		// Generate a unique test message with timestamp
 		testMessage := fmt.Sprintf("Sentry test message at %s", time.Now().Format(time.RFC3339))
@@ -55,6 +54,45 @@ var _ = Describe("Sentry Integration", func() {
 
 		By("Sending a formatted message via ReportIssuef")
 		sentry.ReportIssuef(sentry.IssueTypeWarning, logger, "Formatted test message: %s", testMessage)
+
+		// Test context-based reporting
+		context := map[string]interface{}{
+			"test_id":     "test-1234",
+			"environment": "test",
+			"operation":   "sentry_test",
+		}
+
+		By("Sending an error with context via ReportIssueWithContext")
+		sentry.ReportIssueWithContext(testError, sentry.IssueTypeError, logger, context)
+
+		By("Sending a formatted message with context via ReportIssuefWithContext")
+		sentry.ReportIssuefWithContext(
+			sentry.IssueTypeWarning,
+			logger,
+			context,
+			"Formatted context test message: %s",
+			testMessage,
+		)
+
+		By("Testing FSM error reporting via ReportFSMErrorf")
+		sentry.ReportFSMErrorf(
+			logger,
+			"test-fsm-instance",
+			"test-fsm-type",
+			"fsm_test",
+			"FSM test error with message: %s",
+			testMessage,
+		)
+
+		By("Testing service error reporting via ReportServiceErrorf")
+		sentry.ReportServiceErrorf(
+			logger,
+			"test-service-instance",
+			"test-service-type",
+			"service_test",
+			"Service test error with message: %s",
+			testMessage,
+		)
 
 		// Flush to ensure messages are sent before test completes
 		// Sleep to allow Sentry to process the messages
@@ -70,6 +108,10 @@ var _ = Describe("Sentry Integration", func() {
 		fmt.Println("- Warning issue:", testError.Error())
 		fmt.Println("- Error issue:", testError.Error())
 		fmt.Println("- Formatted warning:", "Formatted test message: "+testMessage)
+		fmt.Println("- Error with context:", testError.Error(), "with test_id=test-1234")
+		fmt.Println("- Formatted warning with context:", "Formatted context test message: "+testMessage)
+		fmt.Println("- FSM error:", "FSM test error with message: "+testMessage, "for instance=test-fsm-instance")
+		fmt.Println("- Service error:", "Service test error with message: "+testMessage, "for service=test-service-instance")
 		fmt.Println("==================================================")
 	})
 })

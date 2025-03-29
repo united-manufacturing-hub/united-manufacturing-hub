@@ -17,6 +17,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
 	"sync"
 	"time"
 
@@ -25,6 +26,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/control"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
@@ -33,14 +35,14 @@ import (
 	"go.uber.org/zap"
 )
 
-var appVersion = "0.0.0-dev" // set by the build system
+var appVersion = constants.DefaultAppVersion // set by the build system
 
 func main() {
 	// Initialize the global logger first thing
 	logger.Initialize()
 
 	// Initialize Sentry
-	sentry.InitSentry(appVersion)
+	sentry.InitSentry(appVersion, true)
 
 	// Get a logger for the main component
 	log := logger.For(logger.ComponentCore)
@@ -55,7 +57,8 @@ func main() {
 	configManager := config.NewFileConfigManager()
 	config, err := configManager.GetConfig(ctx, 0)
 	if err != nil {
-		sentry.ReportIssuef(sentry.IssueTypeFatal, log, "Failed to load config: %s", err)
+		sentry.ReportIssuef(sentry.IssueTypeFatal, log, "Failed to load config: %w", err)
+		os.Exit(1)
 	}
 
 	// Start the metrics server
@@ -65,7 +68,7 @@ func main() {
 		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer shutdownCancel()
 		if err := server.Shutdown(shutdownCtx); err != nil {
-			sentry.ReportIssuef(sentry.IssueTypeError, log, "Failed to shutdown metrics server: %s", err)
+			sentry.ReportIssuef(sentry.IssueTypeError, log, "Failed to shutdown metrics server: %w", err)
 		}
 	}()
 
@@ -84,7 +87,7 @@ func main() {
 	enableBackendConnection(&config, systemSnapshot, &communicationState, systemMu)
 	controlLoop.Execute(ctx)
 
-	log.Info("umh-core test completed")
+	log.Info("umh-core completed")
 }
 
 // SystemSnapshotLogger logs the system snapshot every 5 seconds
