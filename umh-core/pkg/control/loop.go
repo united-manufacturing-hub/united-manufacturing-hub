@@ -43,6 +43,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/backoff"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/ctxutil"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
@@ -253,6 +254,27 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 
 	// Reconcile each manager with the current tick count
 	for _, manager := range c.managers {
+		// Check if we have enough time to reconcile the manager
+		remaining, sufficient, err := ctxutil.HasSufficientTime(ctx, constants.DefaultMinimumRemainingTimePerManager)
+		if err != nil {
+			if errors.Is(err, ctxutil.ErrNoDeadline) {
+				return fmt.Errorf("context has no deadline")
+			}
+			// For ErrInsufficientTime, skip reconciliation
+			if errors.Is(err, ctxutil.ErrInsufficientTime) {
+				c.logger.Warnf("Skipping reconcile cycle due to remaining time: %v", remaining)
+				return nil
+			}
+			// Any other unexpected error
+			return fmt.Errorf("deadline check error: %w", err)
+		}
+
+		// If sufficient is true but err is nil, we're good to proceed
+		if !sufficient {
+			c.logger.Warnf("Skipping reconcile cycle due to remaining time: %v", remaining)
+			return nil
+		}
+
 		err, reconciled := manager.Reconcile(ctx, cfg, c.currentTick)
 		if err != nil {
 			metrics.IncErrorCount(metrics.ComponentControlLoop, manager.GetManagerName())
