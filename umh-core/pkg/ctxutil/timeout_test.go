@@ -25,6 +25,11 @@ import (
 )
 
 var _ = Describe("HasSufficientTime", func() {
+	// These tests validate the HasSufficientTime function which is designed to check
+	// if a context has enough time remaining before its deadline to perform an operation.
+	// Importantly, insufficient time is not treated as an error condition - it simply
+	// returns sufficient=false with nil error, allowing callers to gracefully skip operations
+	// rather than treating timeout as a failure condition.
 	It("should return error for context with no deadline", func() {
 		ctx := context.Background()
 		remaining, sufficient, err := ctxutil.HasSufficientTime(ctx, time.Millisecond*10)
