@@ -1,93 +1,126 @@
-# UMH Sentry Package
+# Sentry Integration
 
-The sentry package provides a standardized way to handle error reporting and issue tracking across the UMH system. It integrates logging with different severity levels and ensures consistent error reporting behavior.
+This package contains utilities for reporting errors to Sentry with proper context and structure.
 
-## Features
+## Basic Usage
 
-- **Severity levels**: Supports warning, error, and fatal issue types
-- **Logger integration**: Seamlessly works with zap logger
-- **Structured reporting**: Consistent error reporting format
-- **Nil-safe**: Handles nil logger cases gracefully
-- **Version tracking**: Integrates with application version reporting
-
-## Usage
-
-### Basic Error Reporting
+To report an issue to Sentry, you can use one of the basic reporter functions:
 
 ```go
-// Get a logger for your component
-logger := logger.For("MyComponent")
-
-// Report an error with different severity levels
-sentry.ReportIssue(err, sentry.IssueTypeWarning, logger)
+// Simple error reporting
 sentry.ReportIssue(err, sentry.IssueTypeError, logger)
-sentry.ReportIssue(err, sentry.IssueTypeFatal, logger)
-```
 
-### Using Formatted Error Reporting
-
-```go
-// Report formatted errors directly
+// Formatted error messages
 sentry.ReportIssuef(sentry.IssueTypeError, logger, "Failed to process item %d: %s", itemID, err)
 
-// Use in error handling flows
-if err != nil {
-    sentry.ReportIssuef(sentry.IssueTypeFatal, logger, "Failed to load config: %s", err)
-    return err
-}
+// Fatal errors will automatically terminate the application
+sentry.ReportIssuef(sentry.IssueTypeFatal, logger, "Failed to load config: %s", err)
 ```
 
-### Initializing Sentry
+## Context-Based Reporting (Recommended)
+
+The context-based API is the recommended approach as it provides structured data for better error grouping and analysis in Sentry:
 
 ```go
-// Initialize sentry with version tracking
-appVersion := "1.0.0" // typically set by build system
-sentry.InitSentry(appVersion)
+// Report with context
+context := map[string]interface{}{
+    "item_id": 123,
+    "operation": "process_record",
+    "batch_size": 50,
+}
+sentry.ReportIssueWithContext(err, sentry.IssueTypeError, logger, context)
+
+// Formatted version with context
+sentry.ReportIssuefWithContext(
+    sentry.IssueTypeWarning, 
+    logger,
+    context,
+    "Config has warnings: %v", 
+    config.Warnings,
+)
 ```
 
-### Error Severity Levels
+## Domain-Specific Helpers
 
-The package provides three severity levels:
+For common scenarios, specialized helper functions are available:
 
-1. **Warning** (`IssueTypeWarning`): For non-critical issues that need attention
-2. **Error** (`IssueTypeError`): For significant issues that might affect functionality
-3. **Fatal** (`IssueTypeFatal`): For critical issues requiring immediate attention
-
-## Error Handling Pattern
-
-This package enables a consistent error reporting pattern:
-
-1. **Component-level errors**: Use appropriate severity level based on impact
-2. **System-wide tracking**: All errors are tracked centrally through sentry
-3. **Version context**: Errors are associated with specific app versions
-4. **Graceful degradation**: Nil-safe operations prevent cascading failures
-
-## Best Practices
-
-1. Always provide a context-specific logger
-2. Use appropriate severity levels based on impact
-3. Include relevant context in error messages
-4. Initialize sentry early in application startup
-5. Use formatted reporting for dynamic error messages
-
-## Example Integration
+### FSM-Related Errors
 
 ```go
-func ProcessConfig(ctx context.Context) error {
-    logger := logger.For("ConfigProcessor")
+// Report an FSM error with contextual information
+sentry.ReportFSMError(
+    logger,
+    "benthos-instance-1",
+    "benthosfsm",
+    "reconcile", 
+    err,
+)
 
-    config, err := loadConfig()
-    if err != nil {
-        // Report fatal error for critical configuration issues
-        sentry.ReportIssuef(sentry.IssueTypeFatal, logger, "Failed to load config: %s", err)
-        return err
-    }
-
-    if config.HasWarnings() {
-        // Report warning for non-critical issues
-        sentry.ReportIssuef(sentry.IssueTypeWarning, logger, "Config has warnings: %v", config.Warnings)
-    }
-
-    return nil
-}
+// Formatted FSM error
+sentry.ReportFSMErrorf(
+    logger,
+    "benthos-instance-1",
+    "benthosfsm", 
+    "create_failure",
+    "Failed to create Benthos instance: %v", 
+    err,
+)
 ```
+
+### Service-Related Errors
+
+```go
+// Report a service error with contextual information
+sentry.ReportServiceError(
+    logger,
+    "kafka-broker-1",
+    "kafka",
+    "start_service",
+    err,
+)
+
+// Formatted service error
+sentry.ReportServiceErrorf(
+    logger,
+    "s6-service-abc",
+    "s6",
+    "status_check",
+    "Failed to check service status: %v",
+    err,
+)
+```
+
+## Benefits of Context-Based Reporting
+
+The context-based approach offers several advantages:
+
+1. **Better Error Grouping**: Errors are grouped by operation and error type in Sentry, not by specific instance IDs or variable data.
+
+2. **Enhanced Filtering**: You can filter errors in Sentry based on tags like `service_type`, `operation`, or `instance_id`.
+
+3. **Structured Context**: All relevant contextual data is stored in a structured format, making it easier to analyze patterns.
+
+4. **Consistent Fingerprinting**: Ensures similar errors are grouped together even if they occur on different instances.
+
+## Sentry Output Example
+
+With context-based reporting, errors in Sentry will appear like:
+
+```
+Error: failed to check if service exists: context deadline exceeded
+
+Tags:
+  service_id: benthos-benthos-2
+  service_type: benthos
+  operation: check_exists
+
+Events: 5
+```
+
+Rather than:
+
+```
+Error: Error checking if service exists for benthos-benthos-2: failed to check if S6 service exists: context deadline exceeded
+```
+
+This makes it much easier to analyze and group related errors in Sentry.

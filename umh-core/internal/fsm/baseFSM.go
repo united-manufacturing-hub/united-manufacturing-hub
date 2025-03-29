@@ -133,7 +133,7 @@ func (s *BaseFSMInstance) GetError() error {
 func (s *BaseFSMInstance) SetError(err error, tick uint64) bool {
 	isPermanent := s.backoffManager.SetError(err, tick)
 	if isPermanent {
-		sentry.ReportIssuef(sentry.IssueTypeError, s.logger, "FSM %s has reached permanent failure state", s.cfg.ID)
+		sentry.ReportFSMErrorf(s.logger, s.cfg.ID, "BaseFSM", "permanent_failure", "FSM has reached permanent failure state: %v", err)
 	}
 	return isPermanent
 }
