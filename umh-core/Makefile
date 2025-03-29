@@ -98,8 +98,8 @@ download-docker-binaries:
 	@echo "All required files are present and up to date"
 
 build: download-docker-binaries
-	docker build \
-		--build-arg TARGETARCH=$(TARGETARCH) \
+	docker buildx build \
+		--platform linux/$(TARGETARCH) \
 		--build-arg S6_OVERLAY_VERSION=$(S6_OVERLAY_VERSION) \
 		--build-arg BENTHOS_UMH_VERSION=$(BENTHOS_UMH_VERSION) \
 		--build-arg REDPANDA_VERSION=$(REDPANDA_VERSION) \

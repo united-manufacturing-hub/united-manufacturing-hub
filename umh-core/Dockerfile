@@ -93,9 +93,10 @@ RUN case "${TARGETARCH}" in \
 # Cleanup all the files we don't need
 RUN rm -rf /s6-overlay /benthos /redpanda 
 
-
 # --- Final Stage ---
-FROM downloader
+FROM alpine:3.21 as runner
+# Copy everything from the downloader stage
+COPY --from=downloader / /
 # Copy built application
 COPY --from=build /go/bin/umh-core /usr/local/bin/umh-core
 RUN chmod +x /usr/local/bin/umh-core && \
