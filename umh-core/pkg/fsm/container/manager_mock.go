@@ -16,6 +16,7 @@ package container
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	public_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
@@ -64,6 +65,13 @@ func NewContainerManagerWithMockedService(name string, mockSvc container_monitor
 			}
 			ci.config = cc
 			return ci.SetDesiredFSMState(cc.DesiredFSMState)
+		},
+		func(instance public_fsm.FSMInstance) (time.Duration, error) {
+			ci, ok := instance.(*ContainerInstance)
+			if !ok {
+				return 0, fmt.Errorf("instance not a ContainerInstance")
+			}
+			return ci.GetExpectedMaxP95ExecutionTimePerInstance(), nil
 		},
 	)
 

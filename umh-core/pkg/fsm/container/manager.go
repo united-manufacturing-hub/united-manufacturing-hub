@@ -96,8 +96,15 @@ func NewContainerManager(name string) *ContainerManager {
 			// Also update desired state so the FSM can adapt
 			return ci.SetDesiredFSMState(cc.DesiredFSMState)
 		},
+		// Get expected max p95 execution time per instance
+		func(instance public_fsm.FSMInstance) (time.Duration, error) {
+			ci, ok := instance.(*ContainerInstance)
+			if !ok {
+				return 0, fmt.Errorf("instance is not a ContainerInstance")
+			}
+			return ci.GetExpectedMaxP95ExecutionTimePerInstance(), nil
+		},
 	)
-
 	metrics.InitErrorCounter(ContainerManagerComponentName, name)
 
 	return &ContainerManager{

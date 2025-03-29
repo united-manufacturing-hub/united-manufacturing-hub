@@ -17,9 +17,11 @@ package container
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/looplab/fsm"
 	internal_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/container_monitor"
@@ -146,4 +148,9 @@ func (c *ContainerInstance) IsStopped() bool {
 func (c *ContainerInstance) PrintState() {
 	c.baseFSMInstance.GetLogger().Infof("ContainerInstance %s - Current state: %s, Desired: %s",
 		c.baseFSMInstance.GetID(), c.GetCurrentFSMState(), c.GetDesiredFSMState())
+}
+
+// GetExpectedMaxP95ExecutionTimePerInstance returns the expected max p95 execution time of the instance
+func (c *ContainerInstance) GetExpectedMaxP95ExecutionTimePerInstance() time.Duration {
+	return constants.ContainerExpectedMaxP95ExecutionTimePerInstance
 }
