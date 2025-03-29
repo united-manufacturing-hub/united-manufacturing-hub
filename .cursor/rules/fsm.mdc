@@ -1,0 +1,77 @@
+---
+description: for all golang files in the fsm folder
+globs: umh-core/**/*.go
+alwaysApply: false
+---
+# FSM
+
+1. **Goal of This Folder**  
+   - All code in `fsm/` deals with finite state machines (FSMs) using [looplab/fsm](mdc:https:/github.com/looplab/fsm).  
+   - Each subpackage (e.g. `benthos`, `redpanda`, `s6`) manages a distinct FSM for that subsystem.  
+   - The pattern is a reconciliation loop that compares the current state with the desired state, issuing events to the FSM.  
+
+2. **State Types**
+   - **Lifecycle States**: Handle creation and removal
+     - Take precedence over operational states
+     - Examples: `to_be_created -> creating -> created`, `to_be_removed -> removing -> removed`
+     - Cannot be set as desired states (they are transitional)
+   - **Operational States**: Handle running state of the instance
+     - Only processed after lifecycle states are complete
+     - Examples: `stopped -> starting -> running -> stopping -> stopped`
+     - Can be set as desired states (`running` or `stopped`)
+
+2. **State Management Rules**
+   - Lifecycle states always take precedence
+   - Only operational states can be desired states
+   - State transitions must go through the reconciliation loop
+   - External state changes are detected at the start of reconciliation
+   - Backoff is checked before any state transition
+
+2. **Separation of Concerns**  
+   - **`machine.go`**: Holds the states, events, and the looplab/fsm constructor. This file only sets up how the FSM transitions happen (e.g. `Stopped -> Starting -> Running`).  
+   - **`fsm_callbacks.go`**: Contains short, **fail-free** callbacks attached to transitions (like `enter_running`). These callbacks log or do trivial in-memory operations. They should never block or fail.  
+   - **`actions.go`**: Contains heavier or potentially fail-prone logic that might block or return errors (e.g. actually starting a process, performing I/O). These actions must be idempotent since the system will retry them on errors. They are typically invoked from the Reconcile function.  
+   - **`reconcile.go`**: Provides the top-level reconciliation function that is called periodically by a single-threaded loop. It:
+     1. Detects external changes (like new config)  
+     2. Checks whether a previous transition failed and if the backoff has elapsed  
+     3. Issues events or calls `actions.go` to converge the FSM to the desired state  
+
+3. **Callbacks vs. Actions**  
+   - **Callbacks** (in `fsm_callbacks.go`):  
+     - Are triggered by FSM events (like “enter_running”).  
+     - Perform only quick, fail-free tasks (e.g. logging, setting local fields).  
+     - **No** networking, no disk I/O, no blocking or heavy computations.  
+   - **Actions** (in `actions.go`):  
+     - Potentially fail-prone or blocking logic (like spawning processes, writing files).  
+     - Must be idempotent because they can be retried by the reconcile loop.  
+     - Return errors if something goes wrong, so the reconcile loop or event logic can handle it and schedule a retry with backoff.
+
+4. **Deterministic Single-Threaded Logic**  
+   - All state transitions occur under a single goroutine or a single “control loop.” We do not modify the FSM from multiple goroutines simultaneously.  
+   - Any concurrency or asynchronous tasks must return results via channels or dedicated methods, never directly changing the FSM state.  
+
+5. **Exponential Backoff**  
+   - The system uses a backoff manager (e.g. `TransitionBackoffManager`) to handle transient failures.  
+   - Once a transition fails, the system waits an exponential backoff period before attempting the same transition again, preventing immediate spam of events on repeated failures.
+
+6. **Idempotency**  
+   - Both the Reconcile function and all actions in `actions.go` must be idempotent. Reconcile might call the same action multiple times if the system sees repeated errors.  
+   - For example, if “StartBenthos” is called repeatedly, it should be safe to do nothing if Benthos is already started, returning success to avoid a spurious error.
+
+7. **Testing and Logging**  
+   - We rely on Ginkgo/Gomega to test each subpackage’s FSM transitions (`fsm_test.go`).  
+   - For debugging, always log transitions (or states) in the callbacks or in the Reconcile steps so that failures are traceable.
+
+8. **When in Doubt, Keep Callbacks Simple**  
+   - If an operation can fail, do **not** put it in the callback. Put it in “actions.go” and call it from Reconcile.  
+   - The only logic in your callback is something that is guaranteed not to fail (like local memory updates or printing a log message).
+
+9. **No Direct External State Changes**  
+   - Do not let external code mutate an FSM’s state. Instead, change the external factors like `DesiredState` and call `Reconcile(...)`.  
+   - This ensures that transitions remain atomic and consistent.
+
+10. **File Summaries**  
+   - **`machine.go`**: Declares states/events & sets up the FSM with looplab/fsm.  
+   - **`fsm_callbacks.go`**: Contains short, fail-free “enter_<state>” or “before_<event>” callbacks.  
+   - **`actions.go`**: Defines heavier, possibly failing operations. Must be idempotent and handle context cancellation.  
+   - **`reconcile.go`**: The single-threaded logic that calls “actions” and issues events to converge to the desired state, also handling backoff and transient errors.

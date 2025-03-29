@@ -1,0 +1,73 @@
+# Copyright 2025 UMH Systems GmbH
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+
+name: Test UMH Core
+
+on:
+  pull_request:
+    branches:
+      - "**"
+    paths:
+      - "umh-core/**"
+
+jobs:
+  unit-tests:
+    name: Unit Tests
+    runs-on:
+      group: arc-runners-tests
+    defaults:
+      run:
+        working-directory: ./umh-core
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'umh-core/go.mod'
+          cache-dependency-path: |
+             umh-core/go.sum
+
+      - name: Install ginkgo and nilaway
+        run: make install
+
+      - name: Run unit tests
+        run: make unit-test
+
+  integration-tests:
+    name: Integration Tests
+    runs-on:
+      group: eos
+    defaults:
+      run:
+        working-directory: ./umh-core
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'umh-core/go.mod'
+          cache-dependency-path: |
+             umh-core/go.sum
+
+      - name: Install ginkgo and nilaway
+        run: make install
+
+      - name: Run integration tests
+        env:
+          CI: true
+          VERSION: ${{ github.ref_name }}
+        run: make integration-test-ci

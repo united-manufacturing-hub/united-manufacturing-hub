@@ -1,0 +1,157 @@
+---
+description: 
+globs: umh-core/test/**/*,umh-core/internal/fsmtest/**/*
+alwaysApply: false
+---
+# CursorRules for FSM Testing
+
+This document outlines fundamental rules and guidelines for writing and maintaining test code in our FSM system. It applies both to the **internal test utilities** (in `internal/fsmtest`) and the **test suites** (in `test/fsm/...` or wherever the new test files reside).
+
+## Overview
+
+Our project has two major layers of logic:
+
+1. **Manager** (e.g. `S6Manager`, `BenthosManager`), which orchestrates multiple instances based on some higher-level configuration.
+2. **Instance** (e.g. `S6Instance`, `BenthosInstance`), which maintains an internal finite-state machine (FSM) and transitions through various sub-states (e.g., “starting,” “degraded,” “stopping,” etc.).
+
+To keep the tests readable and maintainable, we separate **manager tests** from **instance tests** and limit how they interact with each other’s concerns. This is similar to how Kubernetes controllers are tested (controller logic vs. underlying resource logic).
+
+---
+
+## Fundamental Rules
+
+### 1. Manager Tests Must **Not** Micromanage Instances
+
+**Rule**: Manager tests focus on *manager-level* behavior:
+- They **only** call the manager’s public methods (e.g., `Reconcile(ctx, config, tick)`), and then check the manager’s public API (like `GetInstances()`) or high-level instance states (e.g., “is it Running or Removed?”).
+- They **do not** manually set or force an instance’s internal sub-state (like “Creating” or “Starting”).  
+- They **do not** directly call the instance’s `Reconcile()` or sub-FSM transitions.
+
+**Why**: This ensures each suite tests only its own layer’s logic. Manager tests verify that “adding a config entry leads to a new instance eventually becoming stable,” not the micro-steps inside the instance’s state machine.
+
+### 2. Instance Tests Cover All FSM Transitions
+
+**Rule**: Instance tests thoroughly test the per-instance state machine:
+- They can manually force sub-states, set flags on the mock service (like “S6 is running,” “Benthos config loaded,” etc.), see Rule 8 for more details.
+- They verify transitions (e.g. `ToBeCreated` → `Creating` → `Stopped`, `Stopped` → `Starting` → `Degraded` → `Active`, etc.).
+- They do **not** manage multiple instances. Each test is about a single instance’s FSM logic.
+
+**Why**: This ensures we do not replicate the same sub-state checks in the manager test suite. All the complexity of how an instance transitions is local to the instance tests.
+
+### 3. Use the Internal `fsmtest` Helpers
+
+**Rule**: Common test actions, like:
+- **Creating a mock instance** and attaching a mock service,
+- **Transitioning** a service from “S6 down” to “S6 up,”
+- **Waiting** for a manager to finish reconciling a config,
+
+should live in the **internal `fsmtest`** package. Tests in `test/fsm/...` or in `pkg/fsm/...` can import these helpers to avoid duplicating code.
+
+**Why**: Centralizing repeated setup/teardown or state simulation in `fsmtest` keeps tests consistent, easier to read, and reduces maintenance overhead.
+
+### 4. Manager Tests Use High-Level “Wait” Helpers
+
+**Rule**: When manager tests need to confirm that an instance is stable, they should use high-level helpers like:
+
+```go
+WaitForManagerInstanceState(ctx, manager, fullConfig, instanceName, "Running", maxAttempts, tick, /*debug*/ false)
+```
+
+rather than individually calling sub-states or toggling flags. This helper:
+1. Calls `manager.Reconcile(...)` in a loop,
+2. Looks if the instance is in the final desired (public) state—like `Running`, `Stopped`, or `Removed`,
+3. Exits once stable or times out.
+
+**Why**: This ensures the manager test does not “reach into” the instance’s private details.
+
+### 5. Instance Tests Can Manipulate the Mock Directly
+
+**Rule**: In **instance** tests, it is fine to do:
+
+```go
+mockService.SetServiceState("my-service", ServiceStateFlags{
+   IsS6Running: true,
+   IsHealthchecksPassed: false,
+   ...
+})
+err, _ := instance.Reconcile(ctx, tick)
+```
+
+because you **are** focusing on the instance’s FSM reaction to each scenario. You might also use small wrappers in `fsmtest` (e.g., `TransitionToBenthosState(mockService, "Idle")`) that set the correct flags internally.
+
+**Why**: The instance test suite is the place to confirm every micro-transition. Directly controlling the mock environment is typical.
+
+### 6. Avoid Repetition of Logic
+
+**Rule**: If you see the same “set up service as S6 down, call Reconcile, check for final state” logic repeated in multiple tests, move it into a function in `fsmtest`. Keep only the scenario’s unique steps in each test.
+
+**Why**: Minimizes copy-paste errors and makes future changes simpler.
+
+### 7. Keep the MECE Approach in Mind
+
+We aim to have a **M**utually **E**xclusive, **C**ollectively **E**xhaustive set of test scenarios. For example:
+
+- **Manager Tests** might have:
+  - “Empty config => No instances”  
+  - “Add single service => instance is created => stable”  
+  - “Add multiple services => manager handles them”  
+  - “Remove service => instance is removed”  
+  - “Port allocation fails => manager errors”  
+  - etc.
+
+- **Instance Tests** might have:
+  - “toBeCreated => creating => stopped”  
+  - “stopped => starting => idle => active”  
+  - “active => degraded => recovers => idle => active”  
+  - “stopping => stopped”  
+  - etc.
+
+No single test attempts to cover all of these transitions in one place; they’re distributed in a cohesive, non-overlapping way.
+
+### 8. Never Call Reconcile Directly
+- Tests should never call instance.Reconcile() directly
+- Instead use helper functions:
+   * TestS6StateTransition - for testing state transitions
+   * StabilizeS6Instance - for verifying state stability
+   * WaitForInstanceState - for waiting for a specific state
+- This ensures consistent handling of reconciliation, proper tick management,
+   and standard error handling across all tests
+
+---
+
+## Implementation Guidelines
+
+1. **For Manager Tests**  
+   - Create or modify them in `test/fsm/<manager>_test.go` (or in the `pkg/fsm/...` if your structure allows), but ensure you only call the manager’s public methods.  
+   - Use the “`WaitForManagerInstanceState`” helper to confirm final states.  
+   - If you must create a mock instance for some reason, call a `fsmtest.SetupMock<Manager>` function so you aren’t directly messing with instance states.
+
+2. **For Instance Tests**  
+   - Keep them in `test/fsm/<instance>_test.go` or `pkg/fsm/<instance>_test.go`.  
+   - Freely call `instance.Reconcile(...)`, manipulate the `mockService` states, and verify each transition.  
+   - If certain logic is repeated, factor it into `fsmtest` (e.g., “StopService,” “StartService,” “DegradeService” helpers).
+
+3. **In `internal/fsmtest`**  
+   - Provide well-documented helpers for:
+     - Creating or destroying mocks,  
+     - Setting up config objects,  
+     - Waiting for states,  
+     - Transitioning from one sub-state to another quickly.  
+   - Keep it minimal but complete—only add new helpers if multiple tests truly need them.
+
+4. **Pull Request / Commit Strategy**  
+   - If rewriting or migrating old tests, do it incrementally: keep old tests until the new ones are confirmed to cover the same scenarios.  
+   - Merge the final step once you’ve verified coverage is at least as high as before.
+
+---
+
+## Conclusion
+
+Following these **CursorRules** will ensure:
+
+- Manager and instance tests remain **well-separated** and **non-overlapping**.
+- **High‐level** manager tests remain short and stable, testing orchestration rather than micro-FSM steps.
+- **Detailed** instance tests thoroughly cover state transitions without polluting manager logic.
+- The `fsmtest` package remains the **single source** of utility code, preventing duplicated or inconsistent logic across multiple test files.
+
+By adhering to these guidelines, we guarantee a **maintainable**, **MECE**, and **well‐organized** test suite for our FSM systems.

@@ -4,9 +4,8 @@
 *       @JeremyTheocharis
 
 # Ferdinand is responsible for the Go code
-/golang/ @Scarjit
+/umh-core/ @Scarjit
 /deployment/ @Scarjit
-/tools/ @Scarjit
 
 # Remaining files are owned by Jeremy
 AUTHORS @JeremyTheocharis
