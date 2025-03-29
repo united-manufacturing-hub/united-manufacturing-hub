@@ -48,6 +48,11 @@ clean:
 	docker rm $(IMAGE_NAME) || true
 	docker rmi $(IMAGE_NAME):$(TAG) || true
 
+# Clean up Docker build cache and unused objects for CI environments
+cleanup-ci: clean
+	docker builder prune -f
+	docker system prune -f --volumes
+
 vet:
 	go vet -tags=test ./...
 
