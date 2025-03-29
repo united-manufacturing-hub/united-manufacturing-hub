@@ -136,10 +136,6 @@ func (c *ContainerInstance) IsRemoving() bool {
 	return c.baseFSMInstance.IsRemoving()
 }
 
-func (c *ContainerInstance) IsStopping() bool {
-	return c.baseFSMInstance.GetCurrentFSMState() == MonitoringStateStopped
-}
-
 func (c *ContainerInstance) IsStopped() bool {
 	return c.baseFSMInstance.GetCurrentFSMState() == MonitoringStateStopped
 }
