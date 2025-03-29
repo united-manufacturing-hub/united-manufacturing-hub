@@ -24,6 +24,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/backoff"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
@@ -86,6 +87,11 @@ func (m *FileConfigManager) GetConfig(ctx context.Context, tick uint64) (FullCon
 		return FullConfig{}, fmt.Errorf("failed to create config directory: %w", err)
 	}
 
+	// Check if context is already cancelled
+	if ctx.Err() != nil {
+		return FullConfig{}, ctx.Err()
+	}
+
 	// Check if the file exists
 	exists, err := m.fsService.FileExists(ctx, m.configPath)
 	if err != nil {
@@ -95,6 +101,11 @@ func (m *FileConfigManager) GetConfig(ctx context.Context, tick uint64) (FullCon
 	// Return empty config if the file doesn't exist
 	if !exists {
 		return FullConfig{}, fmt.Errorf("config file does not exist: %s", m.configPath)
+	}
+
+	// Check if context is already cancelled
+	if ctx.Err() != nil {
+		return FullConfig{}, ctx.Err()
 	}
 
 	// Read the file
@@ -177,7 +188,10 @@ func (m *FileConfigManagerWithBackoff) GetConfig(ctx context.Context, tick uint6
 	}
 
 	// Try to fetch the config
-	config, err := m.configManager.GetConfig(ctx, tick)
+	getConfigCtx, cancel := context.WithTimeout(ctx, constants.ConfigGetConfigTimeout)
+	defer cancel()
+
+	config, err := m.configManager.GetConfig(getConfigCtx, tick)
 	if err != nil {
 		m.backoffManager.SetError(err, tick)
 		return FullConfig{}, err
