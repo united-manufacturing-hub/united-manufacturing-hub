@@ -17,5 +17,8 @@ package constants
 import "time"
 
 const (
+	// ConfigGetConfigTimeout defines the maximum time allowed for retrieving configurations.
+	// This short timeout (5ms) prevents configuration retrieval from blocking the reconciliation
+	// loop, assuming that most config operations are fast in-memory lookups.
 	ConfigGetConfigTimeout = time.Millisecond * 5
 )
