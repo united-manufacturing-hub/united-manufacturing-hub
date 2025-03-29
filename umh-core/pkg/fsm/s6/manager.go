@@ -16,6 +16,7 @@ package s6
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
@@ -74,6 +75,14 @@ func NewS6Manager(name string) *S6Manager {
 			}
 			s6Instance.config.S6ServiceConfig = cfg.S6ServiceConfig
 			return nil
+		},
+		// Get expected max p95 execution time per instance
+		func(instance public_fsm.FSMInstance) (time.Duration, error) {
+			s6Instance, ok := instance.(*S6Instance)
+			if !ok {
+				return 0, fmt.Errorf("instance is not an S6Instance")
+			}
+			return s6Instance.GetExpectedMaxP95ExecutionTimePerInstance(), nil
 		},
 	)
 
