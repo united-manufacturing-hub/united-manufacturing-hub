@@ -16,8 +16,10 @@ package s6
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	public_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
@@ -107,6 +109,10 @@ func NewS6ManagerWithMockedServices(name string) *S6Manager {
 			}
 
 			return nil
+		},
+		// Get expected max p95 execution time per instance - same as original
+		func(instance public_fsm.FSMInstance) (time.Duration, error) {
+			return constants.S6ExpectedMaxP95ExecutionTimePerInstance, nil
 		},
 	)
 

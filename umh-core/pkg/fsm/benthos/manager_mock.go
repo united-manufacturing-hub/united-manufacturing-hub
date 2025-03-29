@@ -16,8 +16,10 @@ package benthos
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	public_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
@@ -122,6 +124,10 @@ func NewBenthosManagerWithMockedServices(name string) (*BenthosManager, *benthos
 			}
 
 			return nil
+		},
+		// Get expected max p95 execution time per instance - same as original
+		func(instance public_fsm.FSMInstance) (time.Duration, error) {
+			return constants.BenthosExpectedMaxP95ExecutionTimePerInstance, nil
 		},
 	)
 
