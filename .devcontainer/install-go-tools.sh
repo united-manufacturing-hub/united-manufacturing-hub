@@ -1,3 +1,4 @@
+#!/bin/bash
 # Copyright 2025 UMH Systems GmbH
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,12 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
-ARG VARIANT=24.04
-FROM ubuntu:${VARIANT}
-
-RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
-     && apt-get -y install --no-install-recommends iputils-ping
-
-# Install wget and required tools
-RUN apt-get update && apt-get install -y wget dpkg
+set -e
+go install github.com/onsi/ginkgo/v2/ginkgo@v2.23.3
+go install github.com/evilmartians/lefthook@latest

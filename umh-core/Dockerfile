@@ -11,102 +11,108 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
+# --- Build Stage ---
 FROM golang:1.24-alpine as build
-
+ARG S6_OVERLAY_VERSION=3.2.0.2
+ARG BENTHOS_UMH_VERSION=0.6.2
+ARG REDPANDA_VERSION=24.3.8
 WORKDIR /go/src/github.com/united-manufacturing-hub/united-manufacturing-hub
 
 # Set app version with a default value - can be overridden at build time
 ARG APP_VERSION=0.0.0-dev
-
-# Install build dependencies
-RUN apk add --no-cache \
-    gcc \
-    musl-dev
-
-# Copy go.mod first for better caching
+RUN apk add --no-cache gcc musl-dev
 COPY ./go.mod ./umh-core/
 WORKDIR /go/src/github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core
 RUN go mod download
-
-# Copy and build umh-core
 COPY . .
 RUN CGO_ENABLED=0 go build \
-    -ldflags "-s -w -X main.appVersion=${APP_VERSION}" \
-    -o /go/bin/umh-core \
-    cmd/main.go
+    -ldflags "-s -w \
+    -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants.S6OverlayVersion=${S6_OVERLAY_VERSION} \
+    -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants.BenthosVersion=${BENTHOS_UMH_VERSION} \
+    -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants.RedpandaVersion=${REDPANDA_VERSION}" \
+    -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/main.appVersion=${APP_VERSION} \
+    -o /go/bin/umh-core cmd/main.go
 
-FROM alpine:3.21
+# --- Cache Stage ---
+FROM scratch as cache
+COPY .docker-cache/s6-overlay/ /s6-overlay/
+COPY .docker-cache/benthos/ /benthos/
+COPY .docker-cache/redpanda/ /redpanda/
 
-# Install basic dependencies
-RUN apk add --no-cache \
-    bash \
-    curl \
-    jq \
-    tzdata \
-    ca-certificates \
-    bc \
-    xz
+# --- Downloader Stage (using cached files) ---
+FROM alpine:3.21 as downloader
+RUN apk add --no-cache bash curl jq tzdata ca-certificates xz bc
 
-# Set versions
 ARG S6_OVERLAY_VERSION=3.2.0.2
 ARG BENTHOS_UMH_VERSION=0.6.2
+ARG REDPANDA_VERSION=24.3.8
 ARG TARGETARCH=amd64
 
-# Step 1: Install s6-overlay noarch components
-ADD https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/s6-overlay-noarch.tar.xz /tmp/
+# Copy cached files from cache stage
+COPY --from=cache /s6-overlay/s6-overlay-noarch.tar.xz /tmp/
+COPY --from=cache /s6-overlay/syslogd-overlay-noarch.tar.xz /tmp/
+
+# s6-overlay noarch
 RUN tar -C / -Jxpf /tmp/s6-overlay-noarch.tar.xz && rm /tmp/s6-overlay-noarch.tar.xz
 
-# Step 2: Install architecture-specific s6-overlay components
-RUN case "${TARGETARCH}" in \
-    "amd64") S6_ARCH="x86_64" ;; \
-    "arm64") S6_ARCH="aarch64" ;; \
-    "arm/v7") S6_ARCH="arm" ;; \
-    *) echo "Unsupported architecture: ${TARGETARCH}" && exit 1 ;; \
-    esac && \
-    echo "Using S6_ARCH: ${S6_ARCH}" && \
-    wget -O /tmp/s6-overlay-arch.tar.xz \
-    "https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/s6-overlay-${S6_ARCH}.tar.xz" && \
-    tar -C / -Jxpf /tmp/s6-overlay-arch.tar.xz && \
-    rm /tmp/s6-overlay-arch.tar.xz
+# s6-overlay arch-specific
+COPY --from=cache /s6-overlay/s6-overlay-aarch64.tar.xz /s6-overlay/s6-overlay-aarch64.tar.xz
+COPY --from=cache /s6-overlay/s6-overlay-x86_64.tar.xz /s6-overlay/s6-overlay-x86_64.tar.xz
+RUN S6_ARCH=$([ "${TARGETARCH}" = "arm64" ] && echo "aarch64" || echo "x86_64") && \
+    cp /s6-overlay/s6-overlay-${S6_ARCH}.tar.xz /tmp/ && \
+    tar -C / -Jxpf /tmp/s6-overlay-${S6_ARCH}.tar.xz && rm /tmp/s6-overlay-${S6_ARCH}.tar.xz
 
-# Step 3: Install syslogd components
-ADD https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/syslogd-overlay-noarch.tar.xz /tmp/
+# syslogd overlay
 RUN tar -C / -Jxpf /tmp/syslogd-overlay-noarch.tar.xz && rm /tmp/syslogd-overlay-noarch.tar.xz
 
-# Step 4: Install Benthos
+# Benthos installation
+COPY --from=cache /benthos/benthos-linux-amd64 /benthos/benthos-linux-amd64
+COPY --from=cache /benthos/benthos-linux-arm64 /benthos/benthos-linux-arm64
 RUN case "${TARGETARCH}" in \
     "amd64") BENTHOS_ARCH="amd64" ;; \
     "arm64") BENTHOS_ARCH="arm64" ;; \
-    "arm/v7") BENTHOS_ARCH="armv7" ;; \
     *) echo "Unsupported architecture: ${TARGETARCH}" && exit 1 ;; \
     esac && \
-    echo "Using BENTHOS_ARCH: ${BENTHOS_ARCH}" && \
-    curl -sSL -o /usr/local/bin/benthos \
-    "https://github.com/united-manufacturing-hub/benthos-umh/releases/download/v${BENTHOS_UMH_VERSION}/benthos-linux-${BENTHOS_ARCH}" && \
+    cp /benthos/benthos-linux-${BENTHOS_ARCH} /usr/local/bin/benthos && \
     chmod +x /usr/local/bin/benthos
 
-# Step 5: Copy the built application and set permissions
+# Redpanda installation
+COPY --from=cache /redpanda/redpanda-${REDPANDA_VERSION}-amd64.tar.gz /redpanda/redpanda-${REDPANDA_VERSION}-arm64.tar.gz /redpanda/
+COPY --from=cache /redpanda/redpanda-${REDPANDA_VERSION}-amd64.tar.gz /redpanda/redpanda-${REDPANDA_VERSION}-arm64.tar.gz /redpanda/
+RUN case "${TARGETARCH}" in \
+    "amd64") REDPANDA_ARCH="amd64" ;; \
+    "arm64") REDPANDA_ARCH="arm64" ;; \
+    *) echo "Unsupported architecture: ${TARGETARCH}" && exit 1 ;; \
+    esac && \
+    mkdir -p /tmp/redpanda /opt/redpanda && \
+    cp /redpanda/redpanda-${REDPANDA_VERSION}-${REDPANDA_ARCH}.tar.gz /tmp/redpanda/redpanda.tar.gz && \
+    tar -xzf /tmp/redpanda/redpanda.tar.gz -C /opt/redpanda && rm /tmp/redpanda/redpanda.tar.gz && \
+    mkdir -p /data/redpanda /data/redpanda/coredump && \
+    chmod +x /opt/redpanda/bin/redpanda
+
+# Cleanup all the files we don't need
+RUN rm -rf /s6-overlay /benthos /redpanda 
+
+# --- Final Stage ---
+FROM alpine:3.21 as runner
+# Copy everything from the downloader stage
+COPY --from=downloader / /
+# Copy built application
 COPY --from=build /go/bin/umh-core /usr/local/bin/umh-core
 RUN chmod +x /usr/local/bin/umh-core && \
     ls -la /usr/local/bin/umh-core && \
-    test -x /usr/local/bin/umh-core || (echo "Binary not executable" && exit 1) 
-
-# Step 6: Copy s6 service configuration
+    test -x /usr/local/bin/umh-core || (echo "Binary not executable" && exit 1) && \
+    mkdir -p /data/redpanda/coredump
+# Copy s6 service configuration
 COPY ./s6-base/s6-rc.d /etc/s6-overlay/s6-rc.d/
-RUN chmod +x /etc/s6-overlay/s6-rc.d/umh-core/run 
-
-# Step 7: Set environment variables
-# S6_SYNC_DISKS makes sense for redpanda
+RUN chmod +x /etc/s6-overlay/s6-rc.d/umh-core/run
+# Set environment variables and volume
 ENV S6_KEEP_ENV=1 \
     S6_BEHAVIOUR_IF_STAGE2_FAILS=2 \
     S6_CMD_WAIT_FOR_SERVICES=1 \
     S6_SERVICES_READYTIME=50 \
     S6_SYNC_DISKS=1 \
     S6_LOGGING_SCRIPT="n20 s1000000 T"
-
-VOLUME [ "/data" ]
-
-# Step 8: Set entrypoint
+VOLUME ["/data"]
 ENTRYPOINT ["/init"]
 CMD []

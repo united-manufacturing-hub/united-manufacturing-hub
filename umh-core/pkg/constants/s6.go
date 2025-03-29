@@ -22,6 +22,11 @@ const (
 	S6LogBaseDir    = "/data/logs"
 )
 
+var (
+	// Set by build process via ldflags
+	S6OverlayVersion = "unknown"
+)
+
 const (
 	S6UpdateObservedStateTimeout = time.Millisecond * 3
 )

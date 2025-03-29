@@ -4,30 +4,23 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+//	http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package sentry
 
 import (
 	"runtime/debug"
-	"strings"
 	"sync"
 	"time"
 
 	"github.com/getsentry/sentry-go"
 	"go.uber.org/zap"
 )
-
-func getDash(inp string) string {
-	// Generate enough = to fill the length of inp
-	return strings.Repeat("=", len(inp))
-}
 
 // reportFatal sends a fatal error to Sentry, including a stack trace and a message
 // Afterwards it will report the error to the logger and panic

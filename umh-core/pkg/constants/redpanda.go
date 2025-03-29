@@ -17,25 +17,26 @@ package constants
 import "time"
 
 const (
-	BenthosConfigFileName = "benthos.yaml"
+	RedpandaConfigFileName = "redpanda.yaml"
+	RedpandaServiceName    = "redpanda"
 )
 
 const (
-	BenthosLogWindow = time.Minute * 10
+	RedpandaUpdateObservedStateTimeout = 5 * time.Millisecond
 )
 
 const (
-	BenthosUpdateObservedStateTimeout = time.Millisecond * 5
+	RedpandaLogWindow = 10 * time.Minute
 )
 
 const (
-	// BenthosExpectedMaxP95ExecutionTimePerInstance means that an instance will not reconcile if not 30ms are left
+	// RedpandaExpectedMaxP95ExecutionTimePerInstance means that an instance will not reconcile if not 30s are left
 	// Note: in the intergation test, we defined an alerting threshold of 80% of the max ticker time, which is 100ms
 	// So by setting this to 30 ms, we can ensure that an instance will never start if it triggers the alerting threshold
-	BenthosExpectedMaxP95ExecutionTimePerInstance = time.Millisecond * 30
+	RedpandaExpectedMaxP95ExecutionTimePerInstance = time.Second * 30
 )
 
 var (
 	// Set by build process via ldflags
-	BenthosVersion = "unknown"
+	RedpandaVersion = "unknown"
 )

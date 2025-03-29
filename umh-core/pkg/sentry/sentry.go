@@ -4,14 +4,13 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+//	http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package sentry
 
 import (
@@ -63,11 +62,10 @@ func InitSentry(appVersion string, debounceErrors bool) {
 	}
 
 	err = sentry.Init(sentry.ClientOptions{
-		// management.umh.app is not working anymore, so we use the direct DSN
-		Dsn:           "https://1e1f51c30e576ff39d2445e76dc89da7@o4507265932394496.ingest.de.sentry.io/4509039283798097",
+		Dsn:           "https://abc@staging.management.umh.app/sentry?project=umhcore",
 		Environment:   environment,
 		Release:       "umhcore@" + appVersion,
-		EnableTracing: false, // no need for tracing, it doesnt work anyway
+		EnableTracing: false,
 	})
 	if err != nil {
 		zap.S().Error("Failed to initialize Sentry: %s", err)

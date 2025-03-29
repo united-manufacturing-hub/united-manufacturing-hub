@@ -18,6 +18,7 @@ import (
 	"reflect"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/redpandaserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
 
 	"github.com/tiendc/go-deepcopy"
@@ -28,6 +29,7 @@ type FullConfig struct {
 	Services []S6FSMConfig   `yaml:"services"` // Services to manage, can be updated while running
 	Benthos  []BenthosConfig `yaml:"benthos"`  // Benthos services to manage, can be updated while running
 	Nmap     []NmapConfig    `yaml:"nmap"`     // Nmap services to manage, can be updated while running
+	Redpanda RedpandaConfig  `yaml:"redpanda"` // Redpanda config, can be updated while running
 }
 
 type AgentConfig struct {
@@ -92,6 +94,20 @@ type NmapServiceConfig struct {
 // Equal checks if two NmapServiceConfigs are equal
 func (c NmapServiceConfig) Equal(other NmapServiceConfig) bool {
 	return reflect.DeepEqual(c, other)
+}
+
+// RedpandaConfig contains configuration for a Redpanda service
+type RedpandaConfig struct {
+	// For the FSM
+	FSMInstanceConfig `yaml:",inline"`
+
+	// For the Redpanda service
+	RedpandaServiceConfig redpandaserviceconfig.RedpandaServiceConfig `yaml:"redpandaServiceConfig"`
+}
+
+type RedpandaServiceConfig struct {
+	DefaultTopicRetentionMs    int `yaml:"defaultTopicRetentionMs"`
+	DefaultTopicRetentionBytes int `yaml:"defaultTopicRetentionBytes"`
 }
 
 // Clone creates a deep copy of FullConfig

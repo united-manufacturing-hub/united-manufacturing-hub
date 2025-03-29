@@ -12,12 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+agent:
+  metricsPort: 8080
 
-ARG VARIANT=24.04
-FROM ubuntu:${VARIANT}
+redpanda:
+  name: redpanda
+  desiredState: active
+  redpandaServiceConfig:
+    # Note: The below settings only apply to newly created topics
 
-RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
-     && apt-get -y install --no-install-recommends iputils-ping
+    # this corresponds to log_retention_ms (See also: https://docs.redpanda.com/current/manage/cluster-maintenance/disk-utilization/)
+    defaultTopicRetentionMs: 604800000
 
-# Install wget and required tools
-RUN apt-get update && apt-get install -y wget dpkg
+    # this corresponds to retention_bytes (See also: https://docs.redpanda.com/current/manage/cluster-maintenance/disk-utilization/)
+    defaultTopicRetentionBytes: 0
