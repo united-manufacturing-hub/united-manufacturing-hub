@@ -52,7 +52,8 @@ func reportError(err error, log *zap.SugaredLogger) {
 	errorLastSentMutex.Lock()
 	defer errorLastSentMutex.Unlock()
 
-	if time.Since(errorLastSent) < time.Hour*2 {
+	// Skip if debouncing is enabled and error was sent recently
+	if shouldDebounceErrors && time.Since(errorLastSent) < time.Hour*2 {
 		return
 	}
 
@@ -71,12 +72,61 @@ func reportWarning(err error, log *zap.SugaredLogger) {
 	warningLastSentMutex.Lock()
 	defer warningLastSentMutex.Unlock()
 
-	if time.Since(warningLastSent) < time.Hour*2 {
+	// Skip if debouncing is enabled and warning was sent recently
+	if shouldDebounceErrors && time.Since(warningLastSent) < time.Hour*2 {
 		return
 	}
 
 	log.Warn(err)
 	event := createSentryEvent(sentry.LevelWarning, err)
+	sendSentryEvent(event)
+	warningLastSent = time.Now()
+}
+
+// reportFatalWithContext sends a fatal error to Sentry with additional context data
+// Afterwards it will report the error to the logger and panic
+func reportFatalWithContext(err error, log *zap.SugaredLogger, context map[string]interface{}) {
+	log.Error("The UMH-Core has encountered a fatal error and will now terminate. Please contact our customer support.")
+	log.Errorf("Error: %s", err)
+	log.Errorf("Stack trace: %s", string(debug.Stack()))
+
+	event := createSentryEventWithContext(sentry.LevelFatal, err, context)
+	sendSentryEvent(event)
+	sentry.Flush(time.Second * 5)
+
+	log.Panic("Fatal error")
+}
+
+// reportErrorWithContext sends an error to Sentry with additional context data
+// Afterwards it will report the error to the logger
+func reportErrorWithContext(err error, log *zap.SugaredLogger, context map[string]interface{}) {
+	errorLastSentMutex.Lock()
+	defer errorLastSentMutex.Unlock()
+
+	// Skip if debouncing is enabled and error was sent recently
+	if shouldDebounceErrors && time.Since(errorLastSent) < time.Hour*2 {
+		return
+	}
+
+	log.Error(err)
+	event := createSentryEventWithContext(sentry.LevelError, err, context)
+	sendSentryEvent(event)
+	errorLastSent = time.Now()
+}
+
+// reportWarningWithContext sends a warning to Sentry with additional context data
+// Afterwards it will report the warning to the logger
+func reportWarningWithContext(err error, log *zap.SugaredLogger, context map[string]interface{}) {
+	warningLastSentMutex.Lock()
+	defer warningLastSentMutex.Unlock()
+
+	// Skip if debouncing is enabled and warning was sent recently
+	if shouldDebounceErrors && time.Since(warningLastSent) < time.Hour*2 {
+		return
+	}
+
+	log.Warn(err)
+	event := createSentryEventWithContext(sentry.LevelWarning, err, context)
 	sendSentryEvent(event)
 	warningLastSent = time.Now()
 }

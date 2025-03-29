@@ -73,6 +73,13 @@ unit-test: vet nilaway
 integration-test: vet nilaway
 	ginkgo -r -v --tags=test --label-filter='integration' --fail-fast ./...
 
+# integration-test-ci: Runs integration tests in CI environments with proper version tagging
+# - Injects VERSION via ldflags into AppVersion for proper error identification in Sentry
+# - CI test failures SHOULD be reported to Sentry (unlike local dev failures)
+# - Helps identify flaky tests by consistently tracking failures in CI pipelines
+integration-test-ci: vet nilaway
+	VERSION=$(VERSION) ginkgo -r -v --tags=test --label-filter='integration' --fail-fast -ldflags="-X 'github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/version.AppVersion=$(VERSION)'" ./...
+
 update-go-dependencies:
 	go get -u ./...
 	go mod tidy
