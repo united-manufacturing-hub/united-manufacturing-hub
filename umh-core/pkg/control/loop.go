@@ -45,6 +45,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/container"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
@@ -111,7 +112,7 @@ func NewControlLoop() *ControlLoop {
 	managers := []fsm.FSMManager[any]{
 		s6.NewS6Manager("Core"),
 		benthos.NewBenthosManager("Core"),
-		//container.NewContainerManager("Core"),
+		container.NewContainerManager("Core"),
 	}
 
 	// Create the config manager with backoff support
