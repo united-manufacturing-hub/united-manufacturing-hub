@@ -55,21 +55,6 @@ import (
 	"go.uber.org/zap"
 )
 
-const (
-	// defaultTickerTime is the interval between reconciliation cycles.
-	// This value balances responsiveness with resource utilization:
-	// - Too small: could mean that the managers do not have enough time to complete their work
-	// - Too high: Delayed response to configuration changes
-	defaultTickerTime = 100 * time.Millisecond
-
-	// starvationThreshold defines when to consider the control loop starved.
-	// If no reconciliation has happened for this duration, the starvation
-	// detector will log warnings and record metrics.
-	// Starvation will take place for example when adding hundreds of new services
-	// at once.
-	starvationThreshold = 15 * time.Second
-)
-
 // ControlLoop is the central orchestration component of the UMH Core.
 // It implements the primary reconciliation loop that drives the entire system
 // toward its desired state by coordinating multiple FSM managers.
@@ -110,16 +95,16 @@ func NewControlLoop() *ControlLoop {
 
 	// Create the managers
 	managers := []fsm.FSMManager[any]{
-		s6.NewS6Manager("Core"),
-		benthos.NewBenthosManager("Core"),
-		container.NewContainerManager("Core"),
+		s6.NewS6Manager(constants.DefaultManagerName),
+		benthos.NewBenthosManager(constants.DefaultManagerName),
+		container.NewContainerManager(constants.DefaultManagerName),
 	}
 
 	// Create the config manager with backoff support
 	configManager := config.NewFileConfigManagerWithBackoff()
 
 	// Create a starvation checker
-	starvationChecker := starvationchecker.NewStarvationChecker(starvationThreshold)
+	starvationChecker := starvationchecker.NewStarvationChecker(constants.StarvationThreshold)
 
 	// Create a snapshot manager
 	snapshotManager := fsm.NewSnapshotManager()
@@ -138,7 +123,7 @@ func NewControlLoop() *ControlLoop {
 
 	return &ControlLoop{
 		managers:          managers,
-		tickerTime:        defaultTickerTime,
+		tickerTime:        constants.DefaultTickerTime,
 		configManager:     configManager,
 		logger:            log,
 		starvationChecker: starvationChecker,

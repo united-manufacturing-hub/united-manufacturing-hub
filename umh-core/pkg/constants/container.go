@@ -23,12 +23,6 @@ const (
 	DataMountPath = "/data"
 )
 
-// SnapshotPeriod is the time between snapshots
-const SnapshotPeriod = "1s"
-
-// SnapshotLimit is the maximum number of snapshots to keep
-const SnapshotLimit = 60 * 10 // 10 minutes of 1-second snapshots
-
 // ContainerMonitorUpdateObservedStateTimeout is the timeout for updating the observed state
 const ContainerMonitorUpdateObservedStateTimeout = 5 * time.Second
 

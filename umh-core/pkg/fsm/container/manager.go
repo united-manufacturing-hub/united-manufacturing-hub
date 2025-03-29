@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	public_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
@@ -55,7 +56,7 @@ func NewContainerManager(name string) *ContainerManager {
 			// Always return a single config
 			var configs []ContainerConfig
 			configs = append(configs, ContainerConfig{
-				Name:            "Core",
+				Name:            constants.DefaultInstanceName,
 				DesiredFSMState: MonitoringStateActive,
 			})
 			return configs, nil
