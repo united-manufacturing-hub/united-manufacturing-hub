@@ -20,6 +20,7 @@ package s6_test
 import (
 	"context"
 	"fmt"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -37,12 +38,18 @@ var _ = Describe("S6Manager", func() {
 		manager *s6fsm.S6Manager
 		ctx     context.Context
 		tick    uint64
+		cancel  context.CancelFunc
 	)
 
+	AfterEach(func() {
+		cancel()
+	})
+
 	BeforeEach(func() {
-		ctx = context.Background()
+		ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second) // we need to have a deadline as the reconcile logic in the base fsm manager requires it
+		tick = 0
+
 		manager = s6fsm.NewS6ManagerWithMockedServices("")
-		tick = uint64(0)
 	})
 
 	Context("Initialization", func() {

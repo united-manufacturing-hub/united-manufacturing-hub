@@ -32,9 +32,31 @@ import (
 
 var _ = Describe("UMH Container Integration", Ordered, Label("integration"), func() {
 
+	AfterEach(func() {
+		if CurrentSpecReport().Failed() {
+			fmt.Println("Test failed, printing container logs:")
+			printContainerLogs()
+
+			// Print the latest YAML config
+			fmt.Println("\nLatest YAML config at time of failure:")
+			configPath := getConfigFilePath()
+			config, err := os.ReadFile(configPath)
+			if err != nil {
+				fmt.Printf("Failed to read config file %s: %v\n", configPath, err)
+			} else {
+				fmt.Println(string(config))
+			}
+
+			// Save logs for debugging
+			containerNameInError := getContainerName()
+			fmt.Printf("\nTest failed. Container name: %s\n", containerNameInError)
+		}
+	})
+
 	AfterAll(func() {
 		// Always stop container after the entire suite
 		StopContainer()
+		CleanupDockerBuildCache()
 	})
 
 	Context("with an empty config", func() {
@@ -169,26 +191,6 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 	})
 
 	Context("with service scaling test", Label("scaling"), func() {
-		AfterEach(func() {
-			if CurrentSpecReport().Failed() {
-				fmt.Println("Test failed, printing container logs:")
-				printContainerLogs()
-
-				// Print the latest YAML config
-				fmt.Println("\nLatest YAML config at time of failure:")
-				configPath := getConfigFilePath()
-				config, err := os.ReadFile(configPath)
-				if err != nil {
-					fmt.Printf("Failed to read config file %s: %v\n", configPath, err)
-				} else {
-					fmt.Println(string(config))
-				}
-
-				// Save logs for debugging
-				containerNameInError := getContainerName()
-				fmt.Printf("\nTest failed. Container name: %s\n", containerNameInError)
-			}
-		})
 
 		BeforeAll(func() {
 			By("Starting with an empty configuration")
@@ -260,22 +262,6 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 	})
 
 	Context("with comprehensive chaos test", Label("chaos"), func() {
-
-		AfterEach(func() {
-			if CurrentSpecReport().Failed() {
-				//fmt.Println("Test failed, printing container logs:")
-				//printContainerLogs()
-
-				// Print the latest YAML config
-				//fmt.Println("\nLatest YAML config at time of failure:")
-				//config, err := os.ReadFile("data/config.yaml")
-				//if err != nil {
-				//	fmt.Printf("Failed to read config file: %v\n", err)
-				//} else {
-				//	fmt.Println(string(config))
-				//}
-			}
-		})
 
 		BeforeAll(func() {
 			//Skip("Skipping comprehensive chaos test due to time constraints")
@@ -571,26 +557,6 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 	})
 
 	Context("with benthos scaling test", Label("benthos-scaling"), func() {
-		AfterEach(func() {
-			if CurrentSpecReport().Failed() {
-				fmt.Println("Test failed, printing container logs:")
-				printContainerLogs()
-
-				// Print the latest YAML config
-				fmt.Println("\nLatest YAML config at time of failure:")
-				configPath := getConfigFilePath()
-				config, err := os.ReadFile(configPath)
-				if err != nil {
-					fmt.Printf("Failed to read config file %s: %v\n", configPath, err)
-				} else {
-					fmt.Println(string(config))
-				}
-
-				// Save logs for debugging
-				containerNameInError := getContainerName()
-				fmt.Printf("\nTest failed. Container name: %s\n", containerNameInError)
-			}
-		})
 
 		BeforeAll(func() {
 			By("Starting with an empty configuration")

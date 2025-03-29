@@ -372,6 +372,17 @@ func StopContainer() {
 
 	// Clean up config file
 	cleanupConfigFile()
+
+}
+
+func CleanupDockerBuildCache() {
+	// If running in CI environment, also clean up Docker build cache
+	if os.Getenv("CI") == "true" {
+		fmt.Println("Running in CI environment, cleaning up Docker build cache...")
+		runDockerCommand("builder", "prune", "-f")
+		// Only prune non-running containers/images to avoid conflicts with other tests
+		runDockerCommand("system", "prune", "-f")
+	}
 }
 
 // printContainerDebugInfo prints detailed information about the container
