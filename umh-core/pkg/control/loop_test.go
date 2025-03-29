@@ -104,13 +104,13 @@ var _ = Describe("ControlLoop", func() {
 		mockConfig = config.NewMockConfigManager()
 
 		// Set up a context with timeout
-		ctx, cancel = context.WithTimeout(context.Background(), 200*time.Millisecond)
+		ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
 
 		starvationChecker := starvationchecker.NewStarvationChecker(constants.StarvationThreshold)
 
 		// Initialize control loop with mocks
 		controlLoop = &ControlLoop{
-			tickerTime:        10 * time.Millisecond, // Fast ticker for tests
+			tickerTime:        100 * time.Millisecond,
 			managers:          []fsm.FSMManager[any]{mockManager},
 			configManager:     mockConfig,
 			logger:            logger.For(logger.ComponentControlLoop),
@@ -201,6 +201,7 @@ var _ = Describe("ControlLoop", func() {
 				managers:          []fsm.FSMManager[any]{fsm.NewMockFSMManager()},
 				configManager:     trackingConfig,
 				starvationChecker: starvationChecker,
+				logger:            logger.For(logger.ComponentControlLoop),
 			}
 
 			// Use an atomic counter to track calls safely

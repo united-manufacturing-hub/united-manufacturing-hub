@@ -35,4 +35,7 @@ const (
 
 	// DefaultInstanceName is the default name for an instance.
 	DefaultInstanceName = "Core"
+  
+	// DefaultMinimumRemainingTimePerManager is the default minimum remaining time for a manager.
+	DefaultMinimumRemainingTimePerManager = time.Millisecond * 50
 )
