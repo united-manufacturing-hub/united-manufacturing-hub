@@ -86,8 +86,15 @@ func NewBenthosManager(name string) *BenthosManager {
 			benthosInstance.config = cfg.BenthosServiceConfig
 			return nil
 		},
+		// Get expected max p95 execution time per instance
+		func(instance public_fsm.FSMInstance) (time.Duration, error) {
+			benthosInstance, ok := instance.(*BenthosInstance)
+			if !ok {
+				return 0, fmt.Errorf("instance is not a BenthosInstance")
+			}
+			return benthosInstance.GetExpectedMaxP95ExecutionTimePerInstance(), nil
+		},
 	)
-
 	metrics.InitErrorCounter(metrics.ComponentBenthosManager, name)
 
 	// Initialize port manager with default range (9000-9999)

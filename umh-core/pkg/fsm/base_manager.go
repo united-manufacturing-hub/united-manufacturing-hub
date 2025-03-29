@@ -67,6 +67,8 @@ type FSMInstance interface {
 	// GetLastObservedState returns the last known state of the instance
 	// This is cached data from the last reconciliation cycle
 	GetLastObservedState() ObservedState
+	// GetExpectedMaxP95ExecutionTimePerInstance returns the expected max p95 execution time of the instance
+	GetExpectedMaxP95ExecutionTimePerInstance() time.Duration
 }
 
 // FSMManager defines the interface for managing multiple FSM instances.
@@ -119,12 +121,13 @@ type BaseFSMManager[C any] struct {
 	lastStateChange uint64 // Last manager tick when an instance state was changed
 
 	// These methods are implemented by each concrete manager
-	extractConfigs  func(config config.FullConfig) ([]C, error)
-	getName         func(C) (string, error)
-	getDesiredState func(C) (string, error)
-	createInstance  func(C) (FSMInstance, error)
-	compareConfig   func(FSMInstance, C) (bool, error)
-	setConfig       func(FSMInstance, C) error
+	extractConfigs                            func(config config.FullConfig) ([]C, error)
+	getName                                   func(C) (string, error)
+	getDesiredState                           func(C) (string, error)
+	createInstance                            func(C) (FSMInstance, error)
+	compareConfig                             func(FSMInstance, C) (bool, error)
+	setConfig                                 func(FSMInstance, C) error
+	getExpectedMaxP95ExecutionTimePerInstance func(FSMInstance) (time.Duration, error)
 }
 
 // NewBaseFSMManager creates a new base manager with dependencies injected.
@@ -149,6 +152,7 @@ func NewBaseFSMManager[C any](
 	createInstance func(C) (FSMInstance, error),
 	compareConfig func(FSMInstance, C) (bool, error),
 	setConfig func(FSMInstance, C) error,
+	getExpectedMaxP95ExecutionTimePerInstance func(FSMInstance) (time.Duration, error),
 ) *BaseFSMManager[C] {
 
 	metrics.InitErrorCounter(metrics.ComponentBaseFSMManager, managerName)
@@ -167,6 +171,7 @@ func NewBaseFSMManager[C any](
 		createInstance:  createInstance,
 		compareConfig:   compareConfig,
 		setConfig:       setConfig,
+		getExpectedMaxP95ExecutionTimePerInstance: getExpectedMaxP95ExecutionTimePerInstance,
 	}
 }
 
@@ -465,6 +470,28 @@ func (m *BaseFSMManager[C]) Reconcile(
 	// Reconcile instances
 	for name, instance := range m.instances {
 		reconcileStart := time.Now()
+
+		// Check whether we have enough time left to reconcile the instance
+		// This is another fallback to prevent high p99 spikes
+		// If maybe a couple of previous instances were slow, we don't want to
+		// have a ripple effect on the whole control loop
+		expectedMaxP95ExecutionTime, err := m.getExpectedMaxP95ExecutionTimePerInstance(instance)
+		if err != nil {
+			metrics.IncErrorCount(metrics.ComponentBaseFSMManager, m.managerName)
+			return fmt.Errorf("failed to get expected max p95 execution time: %w", err), false
+		}
+
+		deadline, ok := ctx.Deadline()
+		if !ok {
+			return fmt.Errorf("no deadline set in context"), false
+		}
+
+		timeout := time.Until(deadline)
+		if timeout < expectedMaxP95ExecutionTime {
+			m.logger.Warnf("not enough time left to reconcile instance %s, skipping", name)
+			return nil, true // return true to indicate that we should not run another manager and instead should wait for the next tick
+		}
+
 		// Pass manager-specific tick to instance.Reconcile
 		err, reconciled := instance.Reconcile(ctx, m.managerTick)
 		reconcileTime := time.Since(reconcileStart)
