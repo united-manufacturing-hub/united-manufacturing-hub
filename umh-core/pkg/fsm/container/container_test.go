@@ -44,7 +44,7 @@ var _ = Describe("Container FSM", func() {
 			Name:            "test-container",
 			DesiredFSMState: container.MonitoringStateStopped,
 		}
-		inst = container.NewContainerInstance(cfg, mockSvc)
+		inst = container.NewContainerInstanceWithService(cfg, mockSvc)
 	})
 
 	AfterEach(func() {

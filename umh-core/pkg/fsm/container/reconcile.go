@@ -86,6 +86,11 @@ func (c *ContainerInstance) Reconcile(ctx context.Context, tick uint64) (err err
 		return nil, false
 	}
 
+	// Print system state every 10 ticks
+	if tick%10 == 0 {
+		c.printSystemState(instanceName, tick)
+	}
+
 	// Step 3: Attempt to reconcile the state.
 	err, reconciled = c.reconcileStateTransition(ctx)
 	if err != nil {
@@ -113,6 +118,66 @@ func (c *ContainerInstance) Reconcile(ctx context.Context, tick uint64) (err err
 	c.baseFSMInstance.ResetState()
 
 	return nil, reconciled
+}
+
+// printSystemState prints the full system state in a human-readable format
+func (c *ContainerInstance) printSystemState(instanceName string, tick uint64) {
+	logger := c.baseFSMInstance.GetLogger()
+	status := c.ObservedState.ContainerStatus
+
+	logger.Infof("======= Container Instance State: %s (tick: %d) =======", instanceName, tick)
+	logger.Infof("FSM States: Current=%s, Desired=%s", c.baseFSMInstance.GetCurrentFSMState(), c.baseFSMInstance.GetDesiredFSMState())
+
+	if status == nil {
+		logger.Infof("Container Status: No data available")
+	} else {
+		logger.Infof("Health: Overall=%s, CPU=%s, Memory=%s, Disk=%s",
+			healthCategoryToString(status.OverallHealth),
+			healthCategoryToString(status.CPUHealth),
+			healthCategoryToString(status.MemoryHealth),
+			healthCategoryToString(status.DiskHealth))
+
+		if status.CPU != nil {
+			logger.Infof("CPU: Usage=%.2fm cores, Cores=%d", status.CPU.TotalUsageMCpu, status.CPU.CoreCount)
+		}
+
+		if status.Memory != nil {
+			usedMB := float64(status.Memory.CGroupUsedBytes) / 1024 / 1024
+			totalMB := float64(status.Memory.CGroupTotalBytes) / 1024 / 1024
+			usagePercent := 0.0
+			if status.Memory.CGroupTotalBytes > 0 {
+				usagePercent = float64(status.Memory.CGroupUsedBytes) / float64(status.Memory.CGroupTotalBytes) * 100
+			}
+			logger.Infof("Memory: Used=%.2f MB, Total=%.2f MB, Usage=%.2f%%", usedMB, totalMB, usagePercent)
+		}
+
+		if status.Disk != nil {
+			usedGB := float64(status.Disk.DataPartitionUsedBytes) / 1024 / 1024 / 1024
+			totalGB := float64(status.Disk.DataPartitionTotalBytes) / 1024 / 1024 / 1024
+			usagePercent := 0.0
+			if status.Disk.DataPartitionTotalBytes > 0 {
+				usagePercent = float64(status.Disk.DataPartitionUsedBytes) / float64(status.Disk.DataPartitionTotalBytes) * 100
+			}
+			logger.Infof("Disk: Used=%.2f GB, Total=%.2f GB, Usage=%.2f%%", usedGB, totalGB, usagePercent)
+		}
+
+		logger.Infof("Architecture: %s, HWID: %s", status.Architecture, status.Hwid)
+	}
+	logger.Infof("=================================================")
+}
+
+// healthCategoryToString converts a HealthCategory to a human-readable string
+func healthCategoryToString(category models.HealthCategory) string {
+	switch category {
+	case models.Neutral:
+		return "Neutral"
+	case models.Active:
+		return "Active"
+	case models.Degraded:
+		return "Degraded"
+	default:
+		return fmt.Sprintf("Unknown(%d)", category)
+	}
 }
 
 // reconcileStateTransition compares the current state with the desired state

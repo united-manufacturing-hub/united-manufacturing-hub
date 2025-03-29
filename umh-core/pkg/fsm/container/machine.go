@@ -23,6 +23,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/container_monitor"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
 // ContainerConfig is the portion of your FullConfig for container monitoring.
@@ -51,7 +52,12 @@ type ContainerInstance struct {
 var _ ContainerMonitorInstance = (*ContainerInstance)(nil)
 
 // NewContainerInstance creates a new ContainerInstance with the standard transitions.
-func NewContainerInstance(config ContainerConfig, svc container_monitor.Service) *ContainerInstance {
+func NewContainerInstance(config ContainerConfig) *ContainerInstance {
+	return NewContainerInstanceWithService(config, container_monitor.NewContainerMonitorService(filesystem.NewDefaultService()))
+}
+
+// NewContainerInstanceWithService creates a new ContainerInstance with a custom monitor service.
+func NewContainerInstanceWithService(config ContainerConfig, service container_monitor.Service) *ContainerInstance {
 	// Build the config for the base FSM
 	fsmCfg := internal_fsm.BaseFSMInstanceConfig{
 		ID: config.Name,
@@ -81,7 +87,7 @@ func NewContainerInstance(config ContainerConfig, svc container_monitor.Service)
 	// Create our instance
 	instance := &ContainerInstance{
 		baseFSMInstance: baseFSM,
-		monitorService:  svc,
+		monitorService:  service,
 		config:          config,
 	}
 

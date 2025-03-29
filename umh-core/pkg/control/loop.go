@@ -111,6 +111,7 @@ func NewControlLoop() *ControlLoop {
 	managers := []fsm.FSMManager[any]{
 		s6.NewS6Manager("Core"),
 		benthos.NewBenthosManager("Core"),
+		//container.NewContainerManager("Core"),
 	}
 
 	// Create the config manager with backoff support

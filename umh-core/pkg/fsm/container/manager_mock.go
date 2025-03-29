@@ -47,7 +47,7 @@ func NewContainerManagerWithMockedService(name string, mockSvc container_monitor
 			return cc.DesiredFSMState, nil
 		},
 		func(cc ContainerConfig) (public_fsm.FSMInstance, error) {
-			inst := NewContainerInstance(cc, &mockSvc)
+			inst := NewContainerInstanceWithService(cc, &mockSvc)
 			return inst, nil
 		},
 		func(instance public_fsm.FSMInstance, cc ContainerConfig) (bool, error) {

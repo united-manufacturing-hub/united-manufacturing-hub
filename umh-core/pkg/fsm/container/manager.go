@@ -23,7 +23,6 @@ import (
 	public_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/container_monitor"
 )
 
 const (
@@ -45,7 +44,7 @@ func (c *ContainerManagerSnapshot) IsObservedStateSnapshot() {}
 
 // NewContainerManager constructs a manager.
 // You might keep `sharedMonitorService` if you want one global service instance.
-func NewContainerManager(name string, svc container_monitor.Service) *ContainerManager {
+func NewContainerManager(name string) *ContainerManager {
 	managerName := fmt.Sprintf("%s_%s", ContainerManagerComponentName, name)
 
 	baseMgr := public_fsm.NewBaseFSMManager[ContainerConfig](
@@ -73,7 +72,7 @@ func NewContainerManager(name string, svc container_monitor.Service) *ContainerM
 		func(cc ContainerConfig) (public_fsm.FSMInstance, error) {
 			// Typically create a new container_monitor.Service or reuse shared
 			// Here let's reuse the shared:
-			inst := NewContainerInstance(cc, svc)
+			inst := NewContainerInstance(cc)
 			return inst, nil
 		},
 		// Compare config => if same, no recreation needed
