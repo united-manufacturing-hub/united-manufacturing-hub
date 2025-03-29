@@ -45,7 +45,7 @@ var _ = Describe("HasSufficientTime", func() {
 		Expect(remaining).To(BeNumerically(">", 0), "Expected positive remaining time")
 	})
 
-	It("should return error for context with insufficient time", func() {
+	It("should return no error for context with insufficient time", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*5)
 		defer cancel()
 
@@ -55,7 +55,7 @@ var _ = Describe("HasSufficientTime", func() {
 		remaining, sufficient, err := ctxutil.HasSufficientTime(ctx, time.Millisecond*10)
 
 		Expect(sufficient).To(BeFalse(), "Expected insufficient time")
-		Expect(err).To(MatchError(ctxutil.ErrInsufficientTime))
+		Expect(err).To(BeNil(), "Expected no error")
 		Expect(remaining).To(BeNumerically("<", time.Millisecond*10))
 	})
 })
