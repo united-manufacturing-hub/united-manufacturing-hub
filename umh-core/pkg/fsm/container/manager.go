@@ -27,7 +27,7 @@ import (
 )
 
 const (
-	ContainerManagerComponentName = "containerManager"
+	ContainerManagerComponentName = "ContainerManager"
 )
 
 // ContainerManager is the FSM manager for multiple container monitor instances
