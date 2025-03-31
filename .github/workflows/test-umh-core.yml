@@ -77,4 +77,5 @@ jobs:
       - name: Run integration tests
         env:
           CI: true
-        run: make integration-test
+          VERSION: ${{ github.ref_name }}
+        run: make integration-test-ci

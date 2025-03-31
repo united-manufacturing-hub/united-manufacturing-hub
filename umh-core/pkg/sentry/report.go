@@ -45,3 +45,66 @@ func ReportIssue(err error, issueType IssueType, log *zap.SugaredLogger) {
 func ReportIssuef(issueType IssueType, log *zap.SugaredLogger, template string, args ...interface{}) {
 	ReportIssue(fmt.Errorf(template, args...), issueType, log)
 }
+
+// ReportIssueWithContext reports an issue with additional context data that will be included in Sentry
+func ReportIssueWithContext(err error, issueType IssueType, log *zap.SugaredLogger, context map[string]interface{}) {
+	if log == nil {
+		// If logger initialization failed somehow, create a no-op logger to avoid nil panics
+		log = zap.NewNop().Sugar()
+	}
+	switch issueType {
+	case IssueTypeFatal:
+		reportFatalWithContext(err, log, context)
+	case IssueTypeError:
+		reportErrorWithContext(err, log, context)
+	case IssueTypeWarning:
+		reportWarningWithContext(err, log, context)
+	}
+}
+
+// ReportIssuefWithContext formats an error message and reports it with additional context data
+func ReportIssuefWithContext(issueType IssueType, log *zap.SugaredLogger, context map[string]interface{}, template string, args ...interface{}) {
+	ReportIssueWithContext(fmt.Errorf(template, args...), issueType, log, context)
+}
+
+// Helper functions for common error patterns
+
+// ReportFSMError reports an FSM-related error with proper context
+func ReportFSMError(log *zap.SugaredLogger, instanceID string, fsmType string, operation string, err error) {
+	context := map[string]interface{}{
+		"instance_id": instanceID,
+		"fsm_type":    fsmType,
+		"operation":   operation,
+	}
+	ReportIssueWithContext(err, IssueTypeError, log, context)
+}
+
+// ReportFSMErrorf formats an FSM-related error message and reports it with proper context
+func ReportFSMErrorf(log *zap.SugaredLogger, instanceID string, fsmType string, operation string, template string, args ...interface{}) {
+	context := map[string]interface{}{
+		"instance_id": instanceID,
+		"fsm_type":    fsmType,
+		"operation":   operation,
+	}
+	ReportIssuefWithContext(IssueTypeError, log, context, template, args...)
+}
+
+// ReportServiceError reports a service-related error with proper context
+func ReportServiceError(log *zap.SugaredLogger, serviceID string, serviceType string, operation string, err error) {
+	context := map[string]interface{}{
+		"service_id":   serviceID,
+		"service_type": serviceType,
+		"operation":    operation,
+	}
+	ReportIssueWithContext(err, IssueTypeError, log, context)
+}
+
+// ReportServiceErrorf formats a service-related error message and reports it with proper context
+func ReportServiceErrorf(log *zap.SugaredLogger, serviceID string, serviceType string, operation string, template string, args ...interface{}) {
+	context := map[string]interface{}{
+		"service_id":   serviceID,
+		"service_type": serviceType,
+		"operation":    operation,
+	}
+	ReportIssuefWithContext(IssueTypeError, log, context, template, args...)
+}
