@@ -74,6 +74,42 @@ func (m *FileConfigManager) WithFileSystemService(fsService filesystem.Service) 
 	return m
 }
 
+// get config or create new with given config parameters (communicator, release channel, location)
+// if the config file does not exist, it will be created with default values and then overwritten with the given config parameters
+func (m *FileConfigManager) GetConfigWithOverwritesOrCreateNew(ctx context.Context, config FullConfig) (FullConfig, error) {
+	// Check if context is already cancelled
+	if ctx.Err() != nil {
+		return FullConfig{}, ctx.Err()
+	}
+
+	configReturn := FullConfig{}
+
+	// Check if the file exists
+	exists, err := m.fsService.FileExists(ctx, m.configPath)
+	if err == nil && exists {
+		configReturn, err = m.GetConfig(ctx, 0)
+		if err != nil {
+			return FullConfig{}, fmt.Errorf("failed to get config that exists: %w", err)
+		}
+		// overwrite the config with the given config parameters
+		configReturn.Agent.CommunicatorConfig = config.Agent.CommunicatorConfig
+		configReturn.Agent.ReleaseChannel = config.Agent.ReleaseChannel
+		configReturn.Agent.Location = config.Agent.Location
+	} else {
+		configReturn.Agent.MetricsPort = 8080
+		// set the given config parameters
+		configReturn.Agent.CommunicatorConfig = config.Agent.CommunicatorConfig
+		configReturn.Agent.ReleaseChannel = config.Agent.ReleaseChannel
+		configReturn.Agent.Location = config.Agent.Location
+		// write the config to the file
+		if err := m.WriteConfig(ctx, configReturn); err != nil {
+			return FullConfig{}, fmt.Errorf("failed to write new config: %w", err)
+		}
+	}
+
+	return configReturn, nil
+}
+
 // GetConfig returns the current config, always reading fresh from disk
 func (m *FileConfigManager) GetConfig(ctx context.Context, tick uint64) (FullConfig, error) {
 	// Check if context is already cancelled
@@ -100,15 +136,7 @@ func (m *FileConfigManager) GetConfig(ctx context.Context, tick uint64) (FullCon
 
 	// Return empty config if the file doesn't exist
 	if !exists {
-		m.logger.Warnf("Config file does not exist: %s", m.configPath)
-		// create a new config file with default values
-		config := FullConfig{}
-		config.Agent.MetricsPort = 8080
-		// write the config to the file
-		if err := m.WriteConfig(ctx, config); err != nil {
-			return FullConfig{}, fmt.Errorf("no config found and failed to create default config file: %w", err)
-		}
-		return config, nil
+		return FullConfig{}, fmt.Errorf("config file does not exist: %s", m.configPath)
 	}
 
 	// Check if context is already cancelled
