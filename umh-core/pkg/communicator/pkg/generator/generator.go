@@ -18,11 +18,12 @@ import (
 	"fmt"
 	"math/rand"
 	"sync"
-	"time"
 
 	"github.com/tiendc/go-deepcopy"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/container"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
@@ -30,8 +31,12 @@ import (
 )
 
 const (
-	defaultCacheExpiration = 1 * time.Hour
-	defaultCacheCullPeriod = 10 * time.Minute
+	// Manager name constants
+	containerManagerName = logger.ComponentContainerManager + constants.DefaultManagerName
+	benthosManagerName   = logger.ComponentBenthosManager + constants.DefaultManagerName
+
+	// Instance name constants
+	coreInstanceName = "Core"
 )
 
 type StatusCollectorType struct {
@@ -104,14 +109,28 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 		return nil
 	}
 
+	// Create container data from the container manager if available
+	var containerData models.Container
+	if containerManager, ok := managersMap[containerManagerName]; ok {
+		if instance, ok := containerManager[coreInstanceName]; ok {
+			containerData = buildContainerDataFromSnapshot(instance, s.logger)
+		} else {
+			s.logger.Warn("Core instance not found in container manager")
+			containerData = buildDefaultContainerData()
+		}
+	} else {
+		s.logger.Warn("Container manager not found in system snapshot")
+		containerData = buildDefaultContainerData()
+	}
+
 	// Create a mocked status message
 	statusMessage := &models.StatusMessage{
 		Core: models.Core{
 			Agent: models.Agent{
 				Health: &models.Health{
 					Message:       fmt.Sprintf("Agent is healthy, tick: %d", state.Tick),
-					ObservedState: managersMap["BenthosManagerCore"]["hello-world"].CurrentState,
-					DesiredState:  managersMap["BenthosManagerCore"]["hello-world"].DesiredState,
+					ObservedState: "running",
+					DesiredState:  "running",
 					Category:      models.Active,
 				},
 				Latency: &models.Latency{
@@ -127,46 +146,7 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 					2: "Assembly Line 3",
 				},
 			},
-			Container: models.Container{
-				Health: &models.Health{
-					Message:       "Container is operating normally",
-					ObservedState: "running",
-					DesiredState:  "running",
-					Category:      models.Active,
-				},
-				CPU: &models.CPU{
-					Health: &models.Health{
-						Message:       "CPU utilization normal",
-						ObservedState: "normal",
-						DesiredState:  "normal",
-						Category:      models.Active,
-					},
-					TotalUsageMCpu: 350.0,
-					CoreCount:      4,
-				},
-				Disk: &models.Disk{
-					Health: &models.Health{
-						Message:       "Disk utilization normal",
-						ObservedState: "normal",
-						DesiredState:  "normal",
-						Category:      models.Active,
-					},
-					DataPartitionUsedBytes:  536870912,   // 512 MB
-					DataPartitionTotalBytes: 10737418240, // 10 GB
-				},
-				Memory: &models.Memory{
-					Health: &models.Health{
-						Message:       "Memory utilization normal",
-						ObservedState: "normal",
-						DesiredState:  "normal",
-						Category:      models.Active,
-					},
-					CGroupUsedBytes:  1073741824, // 1 GB
-					CGroupTotalBytes: 4294967296, // 4 GB
-				},
-				Hwid:         "hwid-12345",
-				Architecture: models.ArchitectureAmd64,
-			},
+			Container: containerData,
 			Dfcs: []models.Dfc{
 				{
 					Name: stringPtr("Data Bridge 1"),
@@ -250,13 +230,139 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 		},
 	}
 
-	// Check if we have state information to use (replace with actual logic based on state)
-	if state != nil {
-		// Here you would integrate information from the state into the status message
-		// For now, we'll just leave the mock data as is
+	return statusMessage
+}
+
+// buildContainerDataFromSnapshot creates container data from a FSM instance snapshot
+func buildContainerDataFromSnapshot(instance fsm.FSMInstanceSnapshot, log *zap.Logger) models.Container {
+	// Try to get observed state from instance
+	containerData := buildDefaultContainerData()
+
+	// Check if we have actual observedState
+	if instance.LastObservedState != nil {
+		// Try to cast to the right type
+		if snapshot, ok := instance.LastObservedState.(*container.ContainerObservedStateSnapshot); ok {
+			status := snapshot.ContainerStatusSnapshot
+
+			// Create health status
+			containerData.Health = &models.Health{
+				Message:       getHealthMessage(status.OverallHealth),
+				ObservedState: instance.CurrentState,
+				DesiredState:  instance.DesiredState,
+				Category:      status.OverallHealth,
+			}
+
+			// Fill in CPU metrics
+			if status.CPU != nil {
+				containerData.CPU = status.CPU
+				// Ensure health is set
+				if containerData.CPU.Health == nil {
+					containerData.CPU.Health = &models.Health{
+						Message:       getHealthMessage(status.CPUHealth),
+						ObservedState: status.CPUHealth.String(),
+						DesiredState:  models.Active.String(),
+						Category:      status.CPUHealth,
+					}
+				}
+			}
+
+			// Fill in Memory metrics
+			if status.Memory != nil {
+				containerData.Memory = status.Memory
+				// Ensure health is set
+				if containerData.Memory.Health == nil {
+					containerData.Memory.Health = &models.Health{
+						Message:       getHealthMessage(status.MemoryHealth),
+						ObservedState: status.MemoryHealth.String(),
+						DesiredState:  models.Active.String(),
+						Category:      status.MemoryHealth,
+					}
+				}
+			}
+
+			// Fill in Disk metrics
+			if status.Disk != nil {
+				containerData.Disk = status.Disk
+				// Ensure health is set
+				if containerData.Disk.Health == nil {
+					containerData.Disk.Health = &models.Health{
+						Message:       getHealthMessage(status.DiskHealth),
+						ObservedState: status.DiskHealth.String(),
+						DesiredState:  models.Active.String(),
+						Category:      status.DiskHealth,
+					}
+				}
+			}
+
+			// Set hardware info
+			containerData.Hwid = status.Hwid
+			containerData.Architecture = status.Architecture
+		} else {
+			log.Warn("Container observed state is not of expected type")
+		}
+	} else {
+		log.Warn("Container instance has no observed state")
 	}
 
-	return statusMessage
+	return containerData
+}
+
+// getHealthMessage returns an appropriate message based on health category
+func getHealthMessage(health models.HealthCategory) string {
+	switch health {
+	case models.Active:
+		return "Component is operating normally"
+	case models.Degraded:
+		return "Component is operating at reduced capacity"
+	case models.Neutral:
+		return "Component status is neutral"
+	default:
+		return "Component status unknown"
+	}
+}
+
+// buildDefaultContainerData creates default container data when no real data is available
+func buildDefaultContainerData() models.Container {
+	return models.Container{
+		Health: &models.Health{
+			Message:       "Container status unknown",
+			ObservedState: "unknown",
+			DesiredState:  "running",
+			Category:      models.Neutral,
+		},
+		CPU: &models.CPU{
+			Health: &models.Health{
+				Message:       "CPU status unknown",
+				ObservedState: "unknown",
+				DesiredState:  "normal",
+				Category:      models.Neutral,
+			},
+			TotalUsageMCpu: 0,
+			CoreCount:      0,
+		},
+		Disk: &models.Disk{
+			Health: &models.Health{
+				Message:       "Disk status unknown",
+				ObservedState: "unknown",
+				DesiredState:  "normal",
+				Category:      models.Neutral,
+			},
+			DataPartitionUsedBytes:  0,
+			DataPartitionTotalBytes: 0,
+		},
+		Memory: &models.Memory{
+			Health: &models.Health{
+				Message:       "Memory status unknown",
+				ObservedState: "unknown",
+				DesiredState:  "normal",
+				Category:      models.Neutral,
+			},
+			CGroupUsedBytes:  0,
+			CGroupTotalBytes: 0,
+		},
+		Hwid:         "unknown",
+		Architecture: models.ArchitectureAmd64,
+	}
 }
 
 // Helper function to create string pointers
