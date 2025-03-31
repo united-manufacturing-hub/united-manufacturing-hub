@@ -36,7 +36,7 @@ func NewBuilder() *Builder {
 			Redpanda: config.RedpandaConfig{
 				FSMInstanceConfig: config.FSMInstanceConfig{
 					Name:            "redpanda",
-					DesiredFSMState: "active",
+					DesiredFSMState: "stopped",
 				},
 			},
 		},
@@ -78,6 +78,13 @@ output:
 	})
 	b.full.Redpanda.Name = "redpanda"
 	b.full.Redpanda.FSMInstanceConfig.DesiredFSMState = "active"
+
+	b.full.Services = append(b.full.Services, config.S6FSMConfig{
+		FSMInstanceConfig: config.FSMInstanceConfig{
+			Name:            "redpanda",
+			DesiredFSMState: "running",
+		},
+	})
 	return b
 }
 

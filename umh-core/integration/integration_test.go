@@ -55,7 +55,7 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 
 	AfterAll(func() {
 		// Always stop container after the entire suite
-		StopContainer()
+		//StopContainer()
 		CleanupDockerBuildCache()
 	})
 
@@ -112,7 +112,7 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 		})
 
 		AfterAll(func() {
-			StopContainer() // Stop container after golden config scenario
+			//StopContainer() // Stop container after golden config scenario
 		})
 
 		It("should have the golden service up and expose metrics", func() {
@@ -162,7 +162,7 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 
 		AfterAll(func() {
 			By("Stopping container after the multiple services test")
-			StopContainer()
+			//StopContainer()
 		})
 
 		It("should have both services active and expose healthy metrics", func() {
@@ -203,7 +203,7 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 
 		AfterAll(func() {
 			By("Stopping the container after the scaling test")
-			StopContainer()
+			//StopContainer()
 		})
 
 		It("should scale up to multiple services while maintaining healthy metrics", func() {
@@ -284,7 +284,7 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 					fmt.Printf("Container logs:\n%s\n", line)
 				}
 			}
-			StopContainer()
+			//StopContainer()
 		})
 
 		It("should handle random service additions, deletions, starts and stops", func() {

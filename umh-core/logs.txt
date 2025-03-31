@@ -5,7 +5,7 @@ ginkgo -r -v --tags=test --label-filter='integration' --fail-fast ./...
   Ginkgo CLI Version:
     [1m2.22.0[0m
   Mismatched package versions found:
-    [1m2.23.3[0m used by integration, fsm, backoff, api, v2, http, pull, push, encoding, hash, subscriber, tracing, watchdog, config, benthosserviceconfig, redpandaserviceconfig, control, ctxutil, benthos, s6, portmanager, sentry, benthos, nmap, redpanda, s6, starvationchecker, benthos, s6
+    [1m2.23.3[0m used by integration, fsm, backoff, api, v2, http, pull, push, encoding, hash, subscriber, tracing, watchdog, config, benthosserviceconfig, redpandaserviceconfig, control, ctxutil, benthos, container, s6, portmanager, sentry, benthos, container_monitor, nmap, redpanda, s6, starvationchecker, benthos, s6
 
   [38;5;243mGinkgo will continue to attempt to run but you may see errors (including flag
   parsing errors) and should either update your go.mod or your version of the
@@ -24,23 +24,23 @@ ginkgo -r -v --tags=test --label-filter='integration' --fail-fast ./...
   [0m
 Running Suite: UMH Integration Suite - /home/scarjit/Git/united-manufacturing-hub/umh-core/integration
 ======================================================================================================
-Random Seed: [1m1743418379[0m
+Random Seed: [1m1743419382[0m
 
 Will run [1m1[0m of [1m12[0m specs
 [38;5;14mS[0m[38;5;14mS[0m[38;5;14mS[0m[38;5;14mS[0m[38;5;14mS[0m[38;5;14mS[0m[38;5;14mS[0m[38;5;14mS[0m[38;5;14mS[0m
 [38;5;243m------------------------------[0m
 [0mUMH Container Integration [38;5;243mwith service scaling test [0m[1mshould scale up to multiple services while maintaining healthy metrics[0m [38;5;204m[integration, scaling][0m
 [38;5;243m/home/scarjit/Git/united-manufacturing-hub/umh-core/integration/integration_test.go:209[0m
-  [1mSTEP:[0m Starting with an empty configuration [38;5;243m@ 03/31/25 12:52:59.788[0m
+  [1mSTEP:[0m Starting with an empty configuration [38;5;243m@ 03/31/25 13:09:43.473[0m
 
 === STARTING CONTAINER BUILD AND RUN ===
-Container name: umh-core-ae7e8ac2
+Container name: umh-core-d3e91440
 Memory limit: 1024m
 Port mappings - Host:Container
-- Metrics: 8280:8080
-- Golden: 8281:8082
+- Metrics: 8561:8080
+- Golden: 8562:8082
 Cleaning up any previous containers with the same name...
-Note: Container stop returned: exit status 125, output: Error: no container with name or ID "umh-core-ae7e8ac2" found: no such container
+Note: Container stop returned: exit status 125, output: Error: no container with name or ID "umh-core-d3e91440" found: no such container
  (this may be normal)
 Building Docker image...
 Core directory: /home/scarjit/Git/united-manufacturing-hub/umh-core
@@ -48,52 +48,53 @@ Dockerfile path: /home/scarjit/Git/united-manufacturing-hub/umh-core/Dockerfile
 Docker build successful
 Writing local config file...
 Starting container...
-Container started with ID: 601e776e41d746db2cba8649d37656084529767f3a4a9d1d4baf92f4c5e1f183
-Writing config directly to container umh-core-ae7e8ac2...
+Container started with ID: 6d36802187a145d570caab331b88b1fddd4a5961817d0a3cc3e5ae8e0ed2dd29
+Writing config directly to container umh-core-d3e91440...
 Container state: running
 Waiting for metrics endpoint to become available...
-Starting to wait for metrics at 2025-03-31T12:53:54+02:00
-Container name: umh-core-ae7e8ac2
-Using localhost URL with host port: http://localhost:8280/metrics
+Starting to wait for metrics at 2025-03-31T13:10:31+02:00
+Container name: umh-core-d3e91440
+Using localhost URL with host port: http://localhost:8561/metrics
 Attempt 1: Connecting to metrics...
-Using localhost URL with host port: http://localhost:8280/metrics
+Using localhost URL with host port: http://localhost:8561/metrics
 Attempt 2: Connecting to metrics...
-Successfully connected to metrics endpoint (http://localhost:8280/metrics) after 1.005577539s (2 attempts)
-Starting to wait for metrics at 2025-03-31T12:53:55+02:00
-Container name: umh-core-ae7e8ac2
-Using localhost URL with host port: http://localhost:8280/metrics
+Successfully connected to metrics endpoint (http://localhost:8561/metrics) after 1.00413933s (2 attempts)
+Starting to wait for metrics at 2025-03-31T13:10:32+02:00
+Container name: umh-core-d3e91440
+Using localhost URL with host port: http://localhost:8561/metrics
 Attempt 1: Connecting to metrics...
-Successfully connected to metrics endpoint (http://localhost:8280/metrics) after 1.770291ms (1 attempts)
-  [1mSTEP:[0m Adding the golden service as a baseline [38;5;243m@ 03/31/25 12:53:55.036[0m
-Writing config directly to container umh-core-ae7e8ac2...
-  [1mSTEP:[0m Waiting for the golden service to become responsive [38;5;243m@ 03/31/25 12:53:55.761[0m
-Using localhost URL with host port: http://localhost:8281/health
-  [1mSTEP:[0m Scaling up by adding 10 sleep services [38;5;243m@ 03/31/25 12:53:55.762[0m
+Successfully connected to metrics endpoint (http://localhost:8561/metrics) after 1.297946ms (1 attempts)
+  [1mSTEP:[0m Adding the golden service as a baseline [38;5;243m@ 03/31/25 13:10:32.394[0m
+Writing config directly to container umh-core-d3e91440...
+  [1mSTEP:[0m Waiting for the golden service to become responsive [38;5;243m@ 03/31/25 13:10:32.972[0m
+Using localhost URL with host port: http://localhost:8562/health
+Using localhost URL with host port: http://localhost:8562/health
+  [1mSTEP:[0m Scaling up by adding 10 sleep services [38;5;243m@ 03/31/25 13:10:33.975[0m
   Added service sleepy-0
-Writing config directly to container umh-core-ae7e8ac2...
+Writing config directly to container umh-core-d3e91440...
   Added service sleepy-1
-Writing config directly to container umh-core-ae7e8ac2...
+Writing config directly to container umh-core-d3e91440...
   Added service sleepy-2
-Writing config directly to container umh-core-ae7e8ac2...
+Writing config directly to container umh-core-d3e91440...
   Added service sleepy-3
-Writing config directly to container umh-core-ae7e8ac2...
+Writing config directly to container umh-core-d3e91440...
   Added service sleepy-4
-Writing config directly to container umh-core-ae7e8ac2...
+Writing config directly to container umh-core-d3e91440...
   Added service sleepy-5
-Writing config directly to container umh-core-ae7e8ac2...
+Writing config directly to container umh-core-d3e91440...
   Added service sleepy-6
-Writing config directly to container umh-core-ae7e8ac2...
+Writing config directly to container umh-core-d3e91440...
   Added service sleepy-7
-Writing config directly to container umh-core-ae7e8ac2...
+Writing config directly to container umh-core-d3e91440...
   Added service sleepy-8
-Writing config directly to container umh-core-ae7e8ac2...
+Writing config directly to container umh-core-d3e91440...
   Added service sleepy-9
-Writing config directly to container umh-core-ae7e8ac2...
-  [1mSTEP:[0m Simulating random stop/start actions on sleep services (chaos monkey) [38;5;243m@ 03/31/25 12:54:01.137[0m
+Writing config directly to container umh-core-d3e91440...
+  [1mSTEP:[0m Simulating random stop/start actions on sleep services (chaos monkey) [38;5;243m@ 03/31/25 13:10:38.627[0m
   Chaos monkey: stoping service sleepy-5
-Writing config directly to container umh-core-ae7e8ac2...
-Using localhost URL with host port: http://localhost:8280/metrics
-  ✓ Memory: 10.02 MB (limit: 512.00 MB)
+Writing config directly to container umh-core-d3e91440...
+Using localhost URL with host port: http://localhost:8561/metrics
+  ✓ Memory: 10.03 MB (limit: 512.00 MB)
   ✓ Starved seconds: 0.00 (limit: 0)
   ✓ No errors found above limit
 
@@ -105,12 +106,12 @@ Using localhost URL with host port: http://localhost:8280/metrics
 
   Reconcile p99 durations over 20.0 ms:
   ✅ Metrics are healthy
-Using localhost URL with host port: http://localhost:8281/health
+Using localhost URL with host port: http://localhost:8562/health
   ✅ Golden service is running
   Chaos monkey: stoping service sleepy-0
-Writing config directly to container umh-core-ae7e8ac2...
-Using localhost URL with host port: http://localhost:8280/metrics
-  ✓ Memory: 9.57 MB (limit: 512.00 MB)
+Writing config directly to container umh-core-d3e91440...
+Using localhost URL with host port: http://localhost:8561/metrics
+  ✓ Memory: 12.62 MB (limit: 512.00 MB)
   ✓ Starved seconds: 0.00 (limit: 0)
   ✓ No errors found above limit
 
@@ -122,12 +123,12 @@ Using localhost URL with host port: http://localhost:8280/metrics
 
   Reconcile p99 durations over 20.0 ms:
   ✅ Metrics are healthy
-Using localhost URL with host port: http://localhost:8281/health
+Using localhost URL with host port: http://localhost:8562/health
   ✅ Golden service is running
   Chaos monkey: stoping service sleepy-7
-Writing config directly to container umh-core-ae7e8ac2...
-Using localhost URL with host port: http://localhost:8280/metrics
-  ✓ Memory: 11.70 MB (limit: 512.00 MB)
+Writing config directly to container umh-core-d3e91440...
+Using localhost URL with host port: http://localhost:8561/metrics
+  ✓ Memory: 12.97 MB (limit: 512.00 MB)
   ✓ Starved seconds: 0.00 (limit: 0)
   ✓ No errors found above limit
 
@@ -139,12 +140,12 @@ Using localhost URL with host port: http://localhost:8280/metrics
 
   Reconcile p99 durations over 20.0 ms:
   ✅ Metrics are healthy
-Using localhost URL with host port: http://localhost:8281/health
+Using localhost URL with host port: http://localhost:8562/health
   ✅ Golden service is running
   Chaos monkey: starting service sleepy-3
-Writing config directly to container umh-core-ae7e8ac2...
-Using localhost URL with host port: http://localhost:8280/metrics
-  ✓ Memory: 13.65 MB (limit: 512.00 MB)
+Writing config directly to container umh-core-d3e91440...
+Using localhost URL with host port: http://localhost:8561/metrics
+  ✓ Memory: 15.14 MB (limit: 512.00 MB)
   ✓ Starved seconds: 0.00 (limit: 0)
   ✓ No errors found above limit
 
@@ -152,16 +153,16 @@ Using localhost URL with host port: http://localhost:8280/metrics
     0.5 quantile: 0.00 ms
     0.9 quantile: 1.00 ms
     0.95 quantile: 1.00 ms
-    0.99 quantile: 2.00 ms
+    0.99 quantile: 1.00 ms
 
   Reconcile p99 durations over 20.0 ms:
   ✅ Metrics are healthy
-Using localhost URL with host port: http://localhost:8281/health
+Using localhost URL with host port: http://localhost:8562/health
   ✅ Golden service is running
   Chaos monkey: stoping service sleepy-5
-Writing config directly to container umh-core-ae7e8ac2...
-Using localhost URL with host port: http://localhost:8280/metrics
-  ✓ Memory: 13.18 MB (limit: 512.00 MB)
+Writing config directly to container umh-core-d3e91440...
+Using localhost URL with host port: http://localhost:8561/metrics
+  ✓ Memory: 17.65 MB (limit: 512.00 MB)
   ✓ Starved seconds: 0.00 (limit: 0)
   ✓ No errors found above limit
 
@@ -169,16 +170,16 @@ Using localhost URL with host port: http://localhost:8280/metrics
     0.5 quantile: 0.00 ms
     0.9 quantile: 1.00 ms
     0.95 quantile: 1.00 ms
-    0.99 quantile: 2.00 ms
+    0.99 quantile: 1.00 ms
 
   Reconcile p99 durations over 20.0 ms:
   ✅ Metrics are healthy
-Using localhost URL with host port: http://localhost:8281/health
+Using localhost URL with host port: http://localhost:8562/health
   ✅ Golden service is running
   Chaos monkey: starting service sleepy-3
-Writing config directly to container umh-core-ae7e8ac2...
-Using localhost URL with host port: http://localhost:8280/metrics
-  ✓ Memory: 16.27 MB (limit: 512.00 MB)
+Writing config directly to container umh-core-d3e91440...
+Using localhost URL with host port: http://localhost:8561/metrics
+  ✓ Memory: 15.49 MB (limit: 512.00 MB)
   ✓ Starved seconds: 0.00 (limit: 0)
   ✓ No errors found above limit
 
@@ -186,16 +187,50 @@ Using localhost URL with host port: http://localhost:8280/metrics
     0.5 quantile: 0.00 ms
     0.9 quantile: 1.00 ms
     0.95 quantile: 1.00 ms
-    0.99 quantile: 2.00 ms
+    0.99 quantile: 1.00 ms
 
   Reconcile p99 durations over 20.0 ms:
   ✅ Metrics are healthy
-Using localhost URL with host port: http://localhost:8281/health
+Using localhost URL with host port: http://localhost:8562/health
   ✅ Golden service is running
   Chaos monkey: starting service sleepy-5
-Writing config directly to container umh-core-ae7e8ac2...
-Using localhost URL with host port: http://localhost:8280/metrics
-  ✓ Memory: 18.54 MB (limit: 512.00 MB)
+Writing config directly to container umh-core-d3e91440...
+Using localhost URL with host port: http://localhost:8561/metrics
+  ✓ Memory: 18.28 MB (limit: 512.00 MB)
+  ✓ Starved seconds: 0.00 (limit: 0)
+  ✓ No errors found above limit
+
+  Control loop reconcile time quantiles:
+    0.5 quantile: 0.00 ms
+    0.9 quantile: 1.00 ms
+    0.95 quantile: 1.00 ms
+    0.99 quantile: 1.00 ms
+
+  Reconcile p99 durations over 20.0 ms:
+  ✅ Metrics are healthy
+Using localhost URL with host port: http://localhost:8562/health
+  ✅ Golden service is running
+  Chaos monkey: stoping service sleepy-4
+Writing config directly to container umh-core-d3e91440...
+Using localhost URL with host port: http://localhost:8561/metrics
+  ✓ Memory: 20.58 MB (limit: 512.00 MB)
+  ✓ Starved seconds: 0.00 (limit: 0)
+  ✓ No errors found above limit
+
+  Control loop reconcile time quantiles:
+    0.5 quantile: 0.00 ms
+    0.9 quantile: 1.00 ms
+    0.95 quantile: 1.00 ms
+    0.99 quantile: 1.00 ms
+
+  Reconcile p99 durations over 20.0 ms:
+  ✅ Metrics are healthy
+Using localhost URL with host port: http://localhost:8562/health
+  ✅ Golden service is running
+  Chaos monkey: stoping service sleepy-4
+Writing config directly to container umh-core-d3e91440...
+Using localhost URL with host port: http://localhost:8561/metrics
+  ✓ Memory: 17.17 MB (limit: 512.00 MB)
   ✓ Starved seconds: 0.00 (limit: 0)
   ✓ No errors found above limit
 
@@ -207,46 +242,12 @@ Using localhost URL with host port: http://localhost:8280/metrics
 
   Reconcile p99 durations over 20.0 ms:
   ✅ Metrics are healthy
-Using localhost URL with host port: http://localhost:8281/health
-  ✅ Golden service is running
-  Chaos monkey: stoping service sleepy-4
-Writing config directly to container umh-core-ae7e8ac2...
-Using localhost URL with host port: http://localhost:8280/metrics
-  ✓ Memory: 19.92 MB (limit: 512.00 MB)
-  ✓ Starved seconds: 0.00 (limit: 0)
-  ✓ No errors found above limit
-
-  Control loop reconcile time quantiles:
-    0.5 quantile: 0.00 ms
-    0.9 quantile: 1.00 ms
-    0.95 quantile: 1.00 ms
-    0.99 quantile: 2.00 ms
-
-  Reconcile p99 durations over 20.0 ms:
-  ✅ Metrics are healthy
-Using localhost URL with host port: http://localhost:8281/health
-  ✅ Golden service is running
-  Chaos monkey: stoping service sleepy-4
-Writing config directly to container umh-core-ae7e8ac2...
-Using localhost URL with host port: http://localhost:8280/metrics
-  ✓ Memory: 15.78 MB (limit: 512.00 MB)
-  ✓ Starved seconds: 0.00 (limit: 0)
-  ✓ No errors found above limit
-
-  Control loop reconcile time quantiles:
-    0.5 quantile: 1.00 ms
-    0.9 quantile: 1.00 ms
-    0.95 quantile: 1.00 ms
-    0.99 quantile: 2.00 ms
-
-  Reconcile p99 durations over 20.0 ms:
-  ✅ Metrics are healthy
-Using localhost URL with host port: http://localhost:8281/health
+Using localhost URL with host port: http://localhost:8562/health
   ✅ Golden service is running
   Chaos monkey: stoping service sleepy-9
-Writing config directly to container umh-core-ae7e8ac2...
-Using localhost URL with host port: http://localhost:8280/metrics
-  ✓ Memory: 17.16 MB (limit: 512.00 MB)
+Writing config directly to container umh-core-d3e91440...
+Using localhost URL with host port: http://localhost:8561/metrics
+  ✓ Memory: 18.57 MB (limit: 512.00 MB)
   ✓ Starved seconds: 0.00 (limit: 0)
   ✓ No errors found above limit
 
@@ -258,12 +259,12 @@ Using localhost URL with host port: http://localhost:8280/metrics
 
   Reconcile p99 durations over 20.0 ms:
   ✅ Metrics are healthy
-Using localhost URL with host port: http://localhost:8281/health
+Using localhost URL with host port: http://localhost:8562/health
   ✅ Golden service is running
   Chaos monkey: starting service sleepy-2
-Writing config directly to container umh-core-ae7e8ac2...
-Using localhost URL with host port: http://localhost:8280/metrics
-  ✓ Memory: 19.45 MB (limit: 512.00 MB)
+Writing config directly to container umh-core-d3e91440...
+Using localhost URL with host port: http://localhost:8561/metrics
+  ✓ Memory: 20.89 MB (limit: 512.00 MB)
   ✓ Starved seconds: 0.00 (limit: 0)
   ✓ No errors found above limit
 
@@ -275,43 +276,1463 @@ Using localhost URL with host port: http://localhost:8280/metrics
 
   Reconcile p99 durations over 20.0 ms:
   ✅ Metrics are healthy
-Using localhost URL with host port: http://localhost:8281/health
+Using localhost URL with host port: http://localhost:8562/health
   ✅ Golden service is running
   Chaos monkey: stoping service sleepy-0
-Writing config directly to container umh-core-ae7e8ac2...
-Using localhost URL with host port: http://localhost:8280/metrics
-  ✓ Memory: 21.00 MB (limit: 512.00 MB)
-  [38;5;9m[FAILED][0m in [It] - /home/scarjit/Git/united-manufacturing-hub/umh-core/integration/metrics_parsing.go:135 [38;5;243m@ 03/31/25 12:54:10.188[0m
-  [1mSTEP:[0m Stopping the container after the scaling test [38;5;243m@ 03/31/25 12:54:10.188[0m
+Writing config directly to container umh-core-d3e91440...
+Using localhost URL with host port: http://localhost:8561/metrics
+  ✓ Memory: 22.58 MB (limit: 512.00 MB)
+  [38;5;9m[FAILED][0m in [It] - /home/scarjit/Git/united-manufacturing-hub/umh-core/integration/metrics_parsing.go:135 [38;5;243m@ 03/31/25 13:10:47.609[0m
+  [1mSTEP:[0m Stopping the container after the scaling test [38;5;243m@ 03/31/25 13:10:47.609[0m
 Test failed, printing container logs:
 Test failed, printing container logs:
 
 === DOCKER CONTAINER LOGS ===
-Failed to get container logs: exit status 125
+s6-rc: info: service s6rc-fdholder: starting
+s6-rc: info: service s6rc-oneshot-runner: starting
+s6-rc: info: service s6rc-oneshot-runner successfully started
+s6-rc: info: service fix-attrs: starting
+s6-rc: info: service s6rc-fdholder successfully started
+s6-rc: info: service fix-attrs successfully started
+s6-rc: info: service legacy-cont-init: starting
+s6-rc: info: service legacy-cont-init successfully started
+s6-rc: info: service umh-core-log-prepare: starting
+s6-rc: info: service syslogd-prepare: starting
+s6-rc: info: service umh-core-log-prepare successfully started
+s6-rc: info: service umh-core-log: starting
+s6-rc: info: service umh-core-log successfully started
+s6-rc: info: service umh-core: starting
+s6-rc: info: service umh-core successfully started
+s6-rc: info: service syslogd-prepare successfully started
+s6-rc: info: service syslogd-log: starting
+s6-rc: info: service syslogd-log successfully started
+s6-rc: info: service syslogd: starting
+s6-rc: info: service syslogd successfully started
+s6-rc: info: service legacy-services: starting
+s6-rc: info: service legacy-services successfully started
+
 
 === UMH CORE INTERNAL LOGS ===
-Failed to get UMH Core internal logs: exit status 125
+2025-03-31 11:10:30.914417750   [INFO]	Logger initialized - level=debug, format=PRETTY
+2025-03-31 11:10:30.914444090   [DEBUG]	Sentry disabled for local development build
+2025-03-31 11:10:30.914445061   [INFO]	[Core]			Starting umh-core...
+2025-03-31 11:10:30.914459539   [ERROR]	[Core]			The UMH-Core has encountered a fatal error and will now terminate. Please contact our customer support.
+2025-03-31 11:10:30.914467043   [ERROR]	[Core]			Error: Failed to load config: config file does not exist: /data/config.yaml
+2025-03-31 11:10:30.914511446   [ERROR]	[Core]			Stack trace: goroutine 1 [running]:
+2025-03-31 11:10:30.914512088  runtime/debug.Stack()
+2025-03-31 11:10:30.914512849  	/usr/local/go/src/runtime/debug/stack.go:26 +0x5e
+2025-03-31 11:10:30.914515204  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry.reportFatal({0xdfa1c0, 0xc000280fc0}, 0xc0002840f8)
+2025-03-31 11:10:30.914516486  	/go/src/github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry/report_internal.go:30 +0xf2
+2025-03-31 11:10:30.914518139  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry.ReportIssue({0xdfa1c0?, 0xc000280fc0?}, {0xcceb4a?, 0x1?}, 0x1?)
+2025-03-31 11:10:30.914519291  	/go/src/github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry/report.go:37 +0xbd
+2025-03-31 11:10:30.914520814  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry.ReportIssuef({0xcceb4a, 0x5}, 0xc0002840f8, {0xce15a1?, 0x0?}, {0xc000189e68?, 0x0?, 0x0?})
+2025-03-31 11:10:30.914527086  	/go/src/github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry/report.go:46 +0x4f
+2025-03-31 11:10:30.914533949  main.main()
+2025-03-31 11:10:30.914534931  	/go/src/github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/cmd/main.go:60 +0x1d0
+2025-03-31 11:10:30.914535412  
+2025-03-31 11:10:30.914713677   [PANIC]	[Core]			Fatal error
+2025-03-31 11:10:30.916848570  panic: Fatal error
+2025-03-31 11:10:30.916849181  
+2025-03-31 11:10:30.916855844  goroutine 1 [running]:
+2025-03-31 11:10:30.916862146  go.uber.org/zap/zapcore.CheckWriteAction.OnWrite(0x0?, 0x0?, {0x0?, 0x0?, 0xc000280f60?})
+2025-03-31 11:10:30.916868177  	/go/pkg/mod/go.uber.org/zap@v1.27.0/zapcore/entry.go:196 +0x54
+2025-03-31 11:10:30.916874629  go.uber.org/zap/zapcore.(*CheckedEntry).Write(0xc000288b60, {0x0, 0x0, 0x0})
+2025-03-31 11:10:30.916875301  	/go/pkg/mod/go.uber.org/zap@v1.27.0/zapcore/entry.go:262 +0x24a
+2025-03-31 11:10:30.916889608  go.uber.org/zap.(*SugaredLogger).log(0xc0002840f8, 0x4, {0x0?, 0xf?}, {0xc000189a88?, 0x1?, 0x1?}, {0x0, 0x0, 0x0})
+2025-03-31 11:10:30.916895609  	/go/pkg/mod/go.uber.org/zap@v1.27.0/sugar.go:355 +0xec
+2025-03-31 11:10:30.916896210  go.uber.org/zap.(*SugaredLogger).Panic(...)
+2025-03-31 11:10:30.916902211  	/go/pkg/mod/go.uber.org/zap@v1.27.0/sugar.go:180
+2025-03-31 11:10:30.916903153  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry.reportFatal({0xdfa1c0, 0xc000280fc0}, 0xc0002840f8)
+2025-03-31 11:10:30.916909485  	/go/src/github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry/report_internal.go:36 +0x1dc
+2025-03-31 11:10:30.916915927  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry.ReportIssue({0xdfa1c0?, 0xc000280fc0?}, {0xcceb4a?, 0x1?}, 0x1?)
+2025-03-31 11:10:30.916922309  	/go/src/github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry/report.go:37 +0xbd
+2025-03-31 11:10:30.916930455  github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry.ReportIssuef({0xcceb4a, 0x5}, 0xc0002840f8, {0xce15a1?, 0x0?}, {0xc000189e68?, 0x0?, 0x0?})
+2025-03-31 11:10:30.916936676  	/go/src/github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry/report.go:46 +0x4f
+2025-03-31 11:10:30.916937117  main.main()
+2025-03-31 11:10:30.916943289  	/go/src/github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/cmd/main.go:60 +0x1d0
+2025-03-31 11:10:31.923983882   [INFO]	Logger initialized - level=debug, format=PRETTY
+2025-03-31 11:10:31.923987388   [DEBUG]	Sentry disabled for local development build
+2025-03-31 11:10:31.923988490   [INFO]	[Core]			Starting umh-core...
+2025-03-31 11:10:31.924161947   [INFO]	[StarveCheck]			Starvation checker created with threshold 15s
+2025-03-31 11:10:31.924163711   [DEBUG]	[ControlLoop]			Cleaning S6 service directory: /run/service
+2025-03-31 11:10:31.924210198   [INFO]	[S6Service]			Cleaning S6 service directory: /run/service, found 8 entries
+2025-03-31 11:10:31.924211430   [DEBUG]	[S6Service]			Keeping known directory: .s6-svscan
+2025-03-31 11:10:31.924212663   [DEBUG]	[S6Service]			Keeping known directory: s6-linux-init-shutdownd
+2025-03-31 11:10:31.924213725   [DEBUG]	[S6Service]			Skipping non-directory: s6rc-fdholder
+2025-03-31 11:10:31.924214997   [DEBUG]	[S6Service]			Skipping non-directory: s6rc-oneshot-runner
+2025-03-31 11:10:31.924216049   [DEBUG]	[S6Service]			Skipping non-directory: syslogd
+2025-03-31 11:10:31.924217091   [DEBUG]	[S6Service]			Skipping non-directory: syslogd-log
+2025-03-31 11:10:31.924226058   [DEBUG]	[S6Service]			Skipping non-directory: umh-core
+2025-03-31 11:10:31.924227180   [DEBUG]	[S6Service]			Skipping non-directory: umh-core-log
+2025-03-31 11:10:31.924228332   [INFO]	[S6Service]			Finished cleaning S6 service directory: /run/service
+2025-03-31 11:10:31.924229424   [DEBUG]	[ControlLoop]			S6 service directory cleaned: /run/service
+2025-03-31 11:10:31.924230476   [INFO]	[enableBackendConnection]			Enabling backend connection
+2025-03-31 11:10:31.924238642   [INFO]	[SnapshotLogger]			Starting system snapshot logger
+2025-03-31 11:10:32.025076280   [INFO]	[Core]			Setting desired state of FSM Core to active
+2025-03-31 11:10:32.025079576   [INFO]	[containerManager_Core]			Created instance Core
+2025-03-31 11:10:32.025102750   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 1
+2025-03-31 11:10:32.126046358   [DEBUG]	[Core]			Creating container monitor instance Core (no-op)
+2025-03-31 11:10:32.126048942   [INFO]	[Core]			Container Core is creating...
+2025-03-31 11:10:32.126116740   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 2
+2025-03-31 11:10:32.225544702   [INFO]	[Core]			Container Core entered state: monitoring_stopped
+2025-03-31 11:10:32.225546716   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 3
+2025-03-31 11:10:32.325042335   [INFO]	[Core]			Enabling monitoring for Core (no-op)
+2025-03-31 11:10:32.325044308   [WARN]	[Core]			Container Core entered state: degraded
+2025-03-31 11:10:32.325103921   [INFO]	[redpanda]			Setting desired state of FSM redpanda to stopped
+2025-03-31 11:10:32.325105013   [INFO]	[RedpandaManagerCore]			Created instance redpanda
+2025-03-31 11:10:32.325139808   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 4
+2025-03-31 11:10:32.425321711   [WARN]	[RedpandaManagerCore]			not enough time left to reconcile instance redpanda (only 99.459642ms remaining, needed 30s), skipping
+2025-03-31 11:10:32.425341187   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 5
+2025-03-31 11:10:32.524746967   [WARN]	[RedpandaManagerCore]			not enough time left to reconcile instance redpanda (only 99.677562ms remaining, needed 30s), skipping
+2025-03-31 11:10:32.524789938   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 6
+2025-03-31 11:10:32.625168491   [INFO]	[golden-service]			Setting desired state of FSM golden-service to running
+2025-03-31 11:10:32.625172258   [INFO]	[S6ManagerCore]			Created instance golden-service
+2025-03-31 11:10:32.625312582   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 7
+2025-03-31 11:10:32.725350022   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance redpanda (waiting 9 more ticks)
+2025-03-31 11:10:32.725370952   [DEBUG]	[S6Service]			S6 service /run/service/golden-service does not exist
+2025-03-31 11:10:32.725423731   [DEBUG]	[golden-service]			Starting Action: Creating S6 service golden-service ...
+2025-03-31 11:10:32.725425945   [DEBUG]	[S6Service]			Creating S6 service /run/service/golden-service
+2025-03-31 11:10:32.726344887   [DEBUG]	[S6Service]			S6 service /run/service/golden-service created with logging to /data/logs/golden-service
+2025-03-31 11:10:32.726346520   [DEBUG]	[golden-service]			S6 service golden-service directory structure created
+2025-03-31 11:10:32.726361238   [DEBUG]	[golden-service]			Entering creating state for FSM golden-service
+2025-03-31 11:10:32.727002195   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 8
+2025-03-31 11:10:32.824577876   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance redpanda (waiting 8 more ticks)
+2025-03-31 11:10:32.824836323   [INFO]	[golden-service]			Entering stopped state for golden-service
+2025-03-31 11:10:32.825001525   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 9
+2025-03-31 11:10:32.924855409   [INFO]	[StarveCheck]			Control loop is healthy, last reconcile was 1.00 seconds ago
+2025-03-31 11:10:32.925075333   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance redpanda (waiting 7 more ticks)
+2025-03-31 11:10:32.925237910   [DEBUG]	[golden-service]			Starting Action: Starting S6 service golden-service ...
+2025-03-31 11:10:32.925239082   [DEBUG]	[S6Service]			Starting S6 service /run/service/golden-service
+2025-03-31 11:10:32.925587679   [DEBUG]	[S6Service]			Started S6 service /run/service/golden-service
+2025-03-31 11:10:32.925604621   [DEBUG]	[golden-service]			S6 service golden-service start command executed
+2025-03-31 11:10:32.925635208   [INFO]	[golden-service]			Entering starting state for golden-service
+2025-03-31 11:10:32.925693017   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 10
+2025-03-31 11:10:33.025056106   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance redpanda (waiting 6 more ticks)
+2025-03-31 11:10:33.025240273   [INFO]	[golden-service]			Entering running state for golden-service
+2025-03-31 11:10:33.025282823   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 11
+2025-03-31 11:10:33.124532668   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance redpanda (waiting 5 more ticks)
+2025-03-31 11:10:33.124926119   [INFO]	[RedpandaManagerCore]			Updated desired state of instance redpanda from stopped to active
+2025-03-31 11:10:33.124928283   [INFO]	[redpanda]			Setting desired state of FSM redpanda to active
+2025-03-31 11:10:33.124954242   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 12
+2025-03-31 11:10:33.225282549   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance redpanda (waiting 4 more ticks)
+2025-03-31 11:10:33.225695648   [WARN]	[RedpandaManagerCore]			not enough time left to reconcile instance redpanda (only 99.412423ms remaining, needed 30s), skipping
+2025-03-31 11:10:33.225736725   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 13
+2025-03-31 11:10:33.325045571   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance redpanda (waiting 3 more ticks)
+2025-03-31 11:10:33.325512781   [WARN]	[RedpandaManagerCore]			not enough time left to reconcile instance redpanda (only 99.279151ms remaining, needed 30s), skipping
+2025-03-31 11:10:33.325539552   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 14
+2025-03-31 11:10:33.424856854   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance redpanda (waiting 2 more ticks)
+2025-03-31 11:10:33.425188739   [INFO]	[Core]			======= Container Instance State: Core (tick: 10) =======
+2025-03-31 11:10:33.425190021   [INFO]	[Core]			FSM States: Current=degraded, Desired=active
+2025-03-31 11:10:33.425191003   [INFO]	[Core]			Health: Overall=Degraded, CPU=Active, Memory=Active, Disk=Degraded
+2025-03-31 11:10:33.425191664   [INFO]	[Core]			CPU: Usage=100.42m cores, Cores=24
+2025-03-31 11:10:33.425201062   [INFO]	[Core]			Memory: Used=12836.75 MB, Total=128729.00 MB, Usage=9.97%
+2025-03-31 11:10:33.425201824   [INFO]	[Core]			Disk: Used=874.59 GB, Total=930.51 GB, Usage=93.99%
+2025-03-31 11:10:33.425208516   [INFO]	[Core]			Architecture: amd64, HWID: 98fa93e86a20d35fb334e33f0cb6b90577234d7e80a1d0134a5a3e6cde036089
+2025-03-31 11:10:33.425209228   [INFO]	[Core]			=================================================
+2025-03-31 11:10:33.425222953   [WARN]	[RedpandaManagerCore]			not enough time left to reconcile instance redpanda (only 99.437189ms remaining, needed 30s), skipping
+2025-03-31 11:10:33.425245255   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 15
+2025-03-31 11:10:33.524428485   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance redpanda (waiting 1 more ticks)
+2025-03-31 11:10:33.524855920   [WARN]	[RedpandaManagerCore]			not enough time left to reconcile instance redpanda (only 99.453811ms remaining, needed 30s), skipping
+2025-03-31 11:10:33.524867552   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 16
+2025-03-31 11:10:33.625291471   [INFO]	[redpanda]			Setting desired state of FSM redpanda to running
+2025-03-31 11:10:33.625294546   [INFO]	[S6ManagerCore]			Created instance redpanda
+2025-03-31 11:10:33.625318912   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 17
+2025-03-31 11:10:33.725780841   [DEBUG]	[S6Service]			S6 service /run/service/redpanda does not exist
+2025-03-31 11:10:33.725819153   [DEBUG]	[redpanda]			Starting Action: Creating S6 service redpanda ...
+2025-03-31 11:10:33.725821107   [DEBUG]	[S6Service]			Creating S6 service /run/service/redpanda
+2025-03-31 11:10:33.726013239   [DEBUG]	[redpanda]			Suspending operations for 1 ticks because of error: failed to create service with config for redpanda: no command specified for service /run/service/redpanda
+2025-03-31 11:10:33.726014632   [ERROR]	[redpanda]			error reconciling state: failed to create service with config for redpanda: no command specified for service /run/service/redpanda
+2025-03-31 11:10:33.726186936   [WARN]	[RedpandaManagerCore]			not enough time left to reconcile instance redpanda (only 99.141523ms remaining, needed 30s), skipping
+2025-03-31 11:10:33.726209950   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 18
+2025-03-31 11:10:33.824666059   [DEBUG]	[redpanda]			Starting Action: Creating S6 service redpanda ...
+2025-03-31 11:10:33.824668755   [DEBUG]	[S6Service]			Creating S6 service /run/service/redpanda
+2025-03-31 11:10:33.824685226   [DEBUG]	[redpanda]			Suspending operations for 1 ticks because of error: failed to create service with config for redpanda: no command specified for service /run/service/redpanda
+2025-03-31 11:10:33.824686809   [ERROR]	[redpanda]			error reconciling state: failed to create service with config for redpanda: no command specified for service /run/service/redpanda
+2025-03-31 11:10:33.824891695   [WARN]	[RedpandaManagerCore]			not enough time left to reconcile instance redpanda (only 99.424917ms remaining, needed 30s), skipping
+2025-03-31 11:10:33.824908837   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 19
+2025-03-31 11:10:33.925101018   [INFO]	[StarveCheck]			Control loop is healthy, last reconcile was 2.00 seconds ago
+2025-03-31 11:10:33.925419227   [DEBUG]	[redpanda]			Starting Action: Creating S6 service redpanda ...
+2025-03-31 11:10:33.925419978   [DEBUG]	[S6Service]			Creating S6 service /run/service/redpanda
+2025-03-31 11:10:33.925441659   [DEBUG]	[redpanda]			Suspending operations for 2 ticks because of error: failed to create service with config for redpanda: no command specified for service /run/service/redpanda
+2025-03-31 11:10:33.925442591   [ERROR]	[redpanda]			error reconciling state: failed to create service with config for redpanda: no command specified for service /run/service/redpanda
+2025-03-31 11:10:33.925613182   [WARN]	[RedpandaManagerCore]			not enough time left to reconcile instance redpanda (only 99.45857ms remaining, needed 30s), skipping
+2025-03-31 11:10:33.925631347   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 20
+2025-03-31 11:10:34.024922920   [DEBUG]	[redpanda]			Skipping operation because of error: failed to create service with config for redpanda: no command specified for service /run/service/redpanda. Remaining ticks: 1
+2025-03-31 11:10:34.024932177   [DEBUG]	[redpanda]			Skipping reconcile for S6 service redpanda: operation suspended due to temporary error (retry after 1 ticks): failed to create service with config for redpanda: no command specified for service /run/service/redpanda
+2025-03-31 11:10:34.025307404   [WARN]	[RedpandaManagerCore]			not enough time left to reconcile instance redpanda (only 99.415359ms remaining, needed 30s), skipping
+2025-03-31 11:10:34.025364752   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 21
+2025-03-31 11:10:34.124809734   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-0 (waiting 5 more ticks)
+2025-03-31 11:10:34.125256576   [DEBUG]	[redpanda]			Starting Action: Creating S6 service redpanda ...
+2025-03-31 11:10:34.125259010   [DEBUG]	[S6Service]			Creating S6 service /run/service/redpanda
+2025-03-31 11:10:34.125281763   [DEBUG]	[redpanda]			Suspending operations for 3 ticks because of error: failed to create service with config for redpanda: no command specified for service /run/service/redpanda
+2025-03-31 11:10:34.125283066   [ERROR]	[redpanda]			error reconciling state: failed to create service with config for redpanda: no command specified for service /run/service/redpanda
+2025-03-31 11:10:34.125481960   [WARN]	[RedpandaManagerCore]			not enough time left to reconcile instance redpanda (only 99.043858ms remaining, needed 30s), skipping
+2025-03-31 11:10:34.125510093   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 22
+2025-03-31 11:10:34.225140394   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-0 (waiting 4 more ticks)
+2025-03-31 11:10:34.225308511   [DEBUG]	[redpanda]			Skipping operation because of error: failed to create service with config for redpanda: no command specified for service /run/service/redpanda. Remaining ticks: 2
+2025-03-31 11:10:34.225315334   [DEBUG]	[redpanda]			Skipping reconcile for S6 service redpanda: operation suspended due to temporary error (retry after 2 ticks): failed to create service with config for redpanda: no command specified for service /run/service/redpanda
+2025-03-31 11:10:34.225519709   [WARN]	[RedpandaManagerCore]			not enough time left to reconcile instance redpanda (only 99.127205ms remaining, needed 30s), skipping
+2025-03-31 11:10:34.225548944   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 23
+2025-03-31 11:10:34.325072313   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-0 (waiting 3 more ticks)
+2025-03-31 11:10:34.325256420   [DEBUG]	[redpanda]			Skipping operation because of error: failed to create service with config for redpanda: no command specified for service /run/service/redpanda. Remaining ticks: 1
+2025-03-31 11:10:34.325257933   [DEBUG]	[redpanda]			Skipping reconcile for S6 service redpanda: operation suspended due to temporary error (retry after 1 ticks): failed to create service with config for redpanda: no command specified for service /run/service/redpanda
+2025-03-31 11:10:34.325425629   [WARN]	[RedpandaManagerCore]			not enough time left to reconcile instance redpanda (only 99.285834ms remaining, needed 30s), skipping
+2025-03-31 11:10:34.325452479   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 24
+2025-03-31 11:10:34.424832628   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-0 (waiting 2 more ticks)
+2025-03-31 11:10:34.425003060   [DEBUG]	[redpanda]			Starting Action: Creating S6 service redpanda ...
+2025-03-31 11:10:34.425004312   [DEBUG]	[S6Service]			Creating S6 service /run/service/redpanda
+2025-03-31 11:10:34.425021965   [DEBUG]	[redpanda]			Suspending operations for 5 ticks because of error: failed to create service with config for redpanda: no command specified for service /run/service/redpanda
+2025-03-31 11:10:34.425022947   [ERROR]	[redpanda]			error reconciling state: failed to create service with config for redpanda: no command specified for service /run/service/redpanda
+2025-03-31 11:10:34.425208346   [WARN]	[RedpandaManagerCore]			not enough time left to reconcile instance redpanda (only 99.376685ms remaining, needed 30s), skipping
+2025-03-31 11:10:34.425235187   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 25
+2025-03-31 11:10:34.524704614   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-0 (waiting 1 more ticks)
+2025-03-31 11:10:34.524708983   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-1 (waiting 1 more ticks)
+2025-03-31 11:10:34.524711748   [DEBUG]	[redpanda]			Skipping operation because of error: failed to create service with config for redpanda: no command specified for service /run/service/redpanda. Remaining ticks: 4
+2025-03-31 11:10:34.524737697   [DEBUG]	[redpanda]			Skipping reconcile for S6 service redpanda: operation suspended due to temporary error (retry after 4 ticks): failed to create service with config for redpanda: no command specified for service /run/service/redpanda
+2025-03-31 11:10:34.525066817   [INFO]	[Core]			======= Container Instance State: Core (tick: 20) =======
+2025-03-31 11:10:34.525068911   [INFO]	[Core]			FSM States: Current=degraded, Desired=active
+2025-03-31 11:10:34.525070434   [INFO]	[Core]			Health: Overall=Degraded, CPU=Active, Memory=Active, Disk=Degraded
+2025-03-31 11:10:34.525082767   [INFO]	[Core]			CPU: Usage=1310.92m cores, Cores=24
+2025-03-31 11:10:34.525084220   [INFO]	[Core]			Memory: Used=12782.19 MB, Total=128729.00 MB, Usage=9.93%
+2025-03-31 11:10:34.525085402   [INFO]	[Core]			Disk: Used=874.59 GB, Total=930.51 GB, Usage=93.99%
+2025-03-31 11:10:34.525086875   [INFO]	[Core]			Architecture: amd64, HWID: 98fa93e86a20d35fb334e33f0cb6b90577234d7e80a1d0134a5a3e6cde036089
+2025-03-31 11:10:34.525088107   [INFO]	[Core]			=================================================
+2025-03-31 11:10:34.525108616   [WARN]	[RedpandaManagerCore]			not enough time left to reconcile instance redpanda (only 99.333474ms remaining, needed 30s), skipping
+2025-03-31 11:10:34.525145395   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 26
+2025-03-31 11:10:34.625552359   [INFO]	[sleepy-0]			Setting desired state of FSM sleepy-0 to running
+2025-03-31 11:10:34.625556827   [INFO]	[S6ManagerCore]			Created instance sleepy-0
+2025-03-31 11:10:34.625600439   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 27
+2025-03-31 11:10:34.724682978   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-1 (waiting 9 more ticks)
+2025-03-31 11:10:34.724828662   [DEBUG]	[redpanda]			Skipping operation because of error: failed to create service with config for redpanda: no command specified for service /run/service/redpanda. Remaining ticks: 2
+2025-03-31 11:10:34.724830836   [DEBUG]	[redpanda]			Skipping reconcile for S6 service redpanda: operation suspended due to temporary error (retry after 2 ticks): failed to create service with config for redpanda: no command specified for service /run/service/redpanda
+2025-03-31 11:10:34.724850524   [DEBUG]	[S6Service]			S6 service /run/service/sleepy-0 does not exist
+2025-03-31 11:10:34.724872575   [DEBUG]	[sleepy-0]			Starting Action: Creating S6 service sleepy-0 ...
+2025-03-31 11:10:34.724874248   [DEBUG]	[S6Service]			Creating S6 service /run/service/sleepy-0
+2025-03-31 11:10:34.725432600   [DEBUG]	[S6Service]			S6 service /run/service/sleepy-0 created with logging to /data/logs/sleepy-0
+2025-03-31 11:10:34.725445404   [DEBUG]	[sleepy-0]			S6 service sleepy-0 directory structure created
+2025-03-31 11:10:34.725446897   [DEBUG]	[sleepy-0]			Entering creating state for FSM sleepy-0
+2025-03-31 11:10:34.725506139   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 28
+2025-03-31 11:10:34.824859758   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-1 (waiting 8 more ticks)
+2025-03-31 11:10:34.825045278   [DEBUG]	[redpanda]			Skipping operation because of error: failed to create service with config for redpanda: no command specified for service /run/service/redpanda. Remaining ticks: 1
+2025-03-31 11:10:34.825049896   [DEBUG]	[redpanda]			Skipping reconcile for S6 service redpanda: operation suspended due to temporary error (retry after 1 ticks): failed to create service with config for redpanda: no command specified for service /run/service/redpanda
+2025-03-31 11:10:34.825184560   [INFO]	[sleepy-0]			Entering stopped state for sleepy-0
+2025-03-31 11:10:34.825237360   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 29
+2025-03-31 11:10:34.925198003   [INFO]	[StarveCheck]			Control loop is healthy, last reconcile was 3.00 seconds ago
+2025-03-31 11:10:34.925442704   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-1 (waiting 7 more ticks)
+2025-03-31 11:10:34.925674811   [ERROR]	[redpanda]			Backoff manager has exceeded maximum retries, marking as permanently failed
+2025-03-31 11:10:34.925961972   [ERROR]	[redpanda]			error reconciling external changes: failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:34.926044818   [DEBUG]	[sleepy-0]			Starting Action: Starting S6 service sleepy-0 ...
+2025-03-31 11:10:34.926045449   [DEBUG]	[S6Service]			Starting S6 service /run/service/sleepy-0
+2025-03-31 11:10:34.926320608   [DEBUG]	[S6Service]			Started S6 service /run/service/sleepy-0
+2025-03-31 11:10:34.926327641   [DEBUG]	[sleepy-0]			S6 service sleepy-0 start command executed
+2025-03-31 11:10:34.926342990   [INFO]	[sleepy-0]			Entering starting state for sleepy-0
+2025-03-31 11:10:34.926389247   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 30
+2025-03-31 11:10:35.024776595   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-1 (waiting 6 more ticks)
+2025-03-31 11:10:35.024779100   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-2 (waiting 6 more ticks)
+2025-03-31 11:10:35.024936466   [DEBUG]	[redpanda]			Skipping reconcile for S6 service redpanda: operation permanently failed after max retries: failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:35.024937599   [ERROR]	[redpanda]			S6 instance redpanda is not in a terminal state, resetting state and removing it
+2025-03-31 11:10:35.024938330   [INFO]	[redpanda]			Setting desired state of FSM redpanda to stopped
+2025-03-31 11:10:35.025243595   [INFO]	[sleepy-0]			Entering running state for sleepy-0
+2025-03-31 11:10:35.025269784   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 31
+2025-03-31 11:10:35.125017896   [INFO]	[S6ManagerCore]			Updated desired state of instance redpanda from stopped to running
+2025-03-31 11:10:35.125020211   [INFO]	[redpanda]			Setting desired state of FSM redpanda to running
+2025-03-31 11:10:35.125047131   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 32
+2025-03-31 11:10:35.225350879   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-1 (waiting 4 more ticks)
+2025-03-31 11:10:35.225369514   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-2 (waiting 4 more ticks)
+2025-03-31 11:10:35.225552569   [DEBUG]	[redpanda]			Suspending operations for 1 ticks because of error: failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:35.225554884   [ERROR]	[redpanda]			error reconciling external changes: failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:35.225804254   [WARN]	[RedpandaManagerCore]			not enough time left to reconcile instance redpanda (only 99.293358ms remaining, needed 30s), skipping
+2025-03-31 11:10:35.225828419   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 33
+2025-03-31 11:10:35.325234386   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-1 (waiting 3 more ticks)
+2025-03-31 11:10:35.325237572   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-2 (waiting 3 more ticks)
+2025-03-31 11:10:35.325501209   [DEBUG]	[redpanda]			Suspending operations for 1 ticks because of error: failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:35.325503022   [ERROR]	[redpanda]			error reconciling external changes: failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:35.325838855   [WARN]	[RedpandaManagerCore]			not enough time left to reconcile instance redpanda (only 99.102328ms remaining, needed 30s), skipping
+2025-03-31 11:10:35.325881305   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 34
+2025-03-31 11:10:35.425939571   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-1 (waiting 2 more ticks)
+2025-03-31 11:10:35.425944410   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-2 (waiting 2 more ticks)
+2025-03-31 11:10:35.426178862   [DEBUG]	[redpanda]			Suspending operations for 2 ticks because of error: failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:35.426180585   [ERROR]	[redpanda]			error reconciling external changes: failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:35.426400990   [WARN]	[RedpandaManagerCore]			not enough time left to reconcile instance redpanda (only 98.584182ms remaining, needed 30s), skipping
+2025-03-31 11:10:35.426425717   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 35
+2025-03-31 11:10:35.524631963   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-1 (waiting 1 more ticks)
+2025-03-31 11:10:35.524635099   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-2 (waiting 1 more ticks)
+2025-03-31 11:10:35.524636341   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-3 (waiting 1 more ticks)
+2025-03-31 11:10:35.524759142   [DEBUG]	[redpanda]			Skipping operation because of error: failed to update observed state: failed to get S6 service config for redpanda: run script not found. Remaining ticks: 1
+2025-03-31 11:10:35.524761046   [DEBUG]	[redpanda]			Skipping reconcile for S6 service redpanda: operation suspended due to temporary error (retry after 1 ticks): failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:35.525025965   [WARN]	[RedpandaManagerCore]			not enough time left to reconcile instance redpanda (only 99.366276ms remaining, needed 30s), skipping
+2025-03-31 11:10:35.525056583   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 36
+2025-03-31 11:10:35.625583151   [INFO]	[sleepy-1]			Setting desired state of FSM sleepy-1 to running
+2025-03-31 11:10:35.625586267   [INFO]	[S6ManagerCore]			Created instance sleepy-1
+2025-03-31 11:10:35.625587349   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 37
+2025-03-31 11:10:35.724819538   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-2 (waiting 9 more ticks)
+2025-03-31 11:10:35.724865455   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-3 (waiting 9 more ticks)
+2025-03-31 11:10:35.725025947   [DEBUG]	[redpanda]			Suspending operations for 3 ticks because of error: failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:35.725028843   [ERROR]	[redpanda]			error reconciling external changes: failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:35.725206748   [DEBUG]	[S6Service]			S6 service /run/service/sleepy-1 does not exist
+2025-03-31 11:10:35.725252835   [DEBUG]	[sleepy-1]			Starting Action: Creating S6 service sleepy-1 ...
+2025-03-31 11:10:35.725254568   [DEBUG]	[S6Service]			Creating S6 service /run/service/sleepy-1
+2025-03-31 11:10:35.726007327   [DEBUG]	[S6Service]			S6 service /run/service/sleepy-1 created with logging to /data/logs/sleepy-1
+2025-03-31 11:10:35.726041150   [DEBUG]	[sleepy-1]			S6 service sleepy-1 directory structure created
+2025-03-31 11:10:35.726057832   [DEBUG]	[sleepy-1]			Entering creating state for FSM sleepy-1
+2025-03-31 11:10:35.726128575   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 38
+2025-03-31 11:10:35.825424554   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-2 (waiting 8 more ticks)
+2025-03-31 11:10:35.825426799   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-3 (waiting 8 more ticks)
+2025-03-31 11:10:35.825560651   [DEBUG]	[redpanda]			Skipping operation because of error: failed to update observed state: failed to get S6 service config for redpanda: run script not found. Remaining ticks: 2
+2025-03-31 11:10:35.825562594   [DEBUG]	[redpanda]			Skipping reconcile for S6 service redpanda: operation suspended due to temporary error (retry after 2 ticks): failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:35.825714320   [INFO]	[sleepy-1]			Entering stopped state for sleepy-1
+2025-03-31 11:10:35.825752342   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 39
+2025-03-31 11:10:35.924849597   [INFO]	[StarveCheck]			Control loop is healthy, last reconcile was 4.00 seconds ago
+2025-03-31 11:10:35.925273265   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-2 (waiting 7 more ticks)
+2025-03-31 11:10:35.925274297   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-3 (waiting 7 more ticks)
+2025-03-31 11:10:35.925275049   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-4 (waiting 7 more ticks)
+2025-03-31 11:10:35.925443396   [DEBUG]	[redpanda]			Skipping operation because of error: failed to update observed state: failed to get S6 service config for redpanda: run script not found. Remaining ticks: 1
+2025-03-31 11:10:35.925444618   [DEBUG]	[redpanda]			Skipping reconcile for S6 service redpanda: operation suspended due to temporary error (retry after 1 ticks): failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:35.925627152   [DEBUG]	[sleepy-1]			Starting Action: Starting S6 service sleepy-1 ...
+2025-03-31 11:10:35.925627733   [DEBUG]	[S6Service]			Starting S6 service /run/service/sleepy-1
+2025-03-31 11:10:35.925944219   [DEBUG]	[S6Service]			Started S6 service /run/service/sleepy-1
+2025-03-31 11:10:35.925962985   [DEBUG]	[sleepy-1]			S6 service sleepy-1 start command executed
+2025-03-31 11:10:35.925974987   [INFO]	[sleepy-1]			Entering starting state for sleepy-1
+2025-03-31 11:10:35.926032947   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 40
+2025-03-31 11:10:36.025444934   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-2 (waiting 6 more ticks)
+2025-03-31 11:10:36.025447820   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-3 (waiting 6 more ticks)
+2025-03-31 11:10:36.025448661   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-4 (waiting 6 more ticks)
+2025-03-31 11:10:36.025687401   [DEBUG]	[redpanda]			Suspending operations for 5 ticks because of error: failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:36.025688503   [ERROR]	[redpanda]			error reconciling external changes: failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:36.025904410   [INFO]	[sleepy-1]			Entering running state for sleepy-1
+2025-03-31 11:10:36.025953413   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 41
+2025-03-31 11:10:36.125165443   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-2 (waiting 5 more ticks)
+2025-03-31 11:10:36.125168058   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-3 (waiting 5 more ticks)
+2025-03-31 11:10:36.125168909   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-4 (waiting 5 more ticks)
+2025-03-31 11:10:36.125406307   [DEBUG]	[redpanda]			Skipping operation because of error: failed to update observed state: failed to get S6 service config for redpanda: run script not found. Remaining ticks: 4
+2025-03-31 11:10:36.125413009   [DEBUG]	[redpanda]			Skipping reconcile for S6 service redpanda: operation suspended due to temporary error (retry after 4 ticks): failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:36.125796612   [WARN]	[RedpandaManagerCore]			not enough time left to reconcile instance redpanda (only 98.913643ms remaining, needed 30s), skipping
+2025-03-31 11:10:36.125826388   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 42
+2025-03-31 11:10:36.225209210   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-2 (waiting 4 more ticks)
+2025-03-31 11:10:36.225211434   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-3 (waiting 4 more ticks)
+2025-03-31 11:10:36.225212276   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-4 (waiting 4 more ticks)
+2025-03-31 11:10:36.225488627   [DEBUG]	[redpanda]			Skipping operation because of error: failed to update observed state: failed to get S6 service config for redpanda: run script not found. Remaining ticks: 3
+2025-03-31 11:10:36.225489919   [DEBUG]	[redpanda]			Skipping reconcile for S6 service redpanda: operation suspended due to temporary error (retry after 3 ticks): failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:36.225662154   [WARN]	[RedpandaManagerCore]			not enough time left to reconcile instance redpanda (only 99.295713ms remaining, needed 30s), skipping
+2025-03-31 11:10:36.225693533   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 43
+2025-03-31 11:10:36.325085542   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-2 (waiting 3 more ticks)
+2025-03-31 11:10:36.325088708   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-3 (waiting 3 more ticks)
+2025-03-31 11:10:36.325089970   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-4 (waiting 3 more ticks)
+2025-03-31 11:10:36.325326716   [DEBUG]	[redpanda]			Skipping operation because of error: failed to update observed state: failed to get S6 service config for redpanda: run script not found. Remaining ticks: 2
+2025-03-31 11:10:36.325329051   [DEBUG]	[redpanda]			Skipping reconcile for S6 service redpanda: operation suspended due to temporary error (retry after 2 ticks): failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:36.325799367   [WARN]	[RedpandaManagerCore]			not enough time left to reconcile instance redpanda (only 98.997902ms remaining, needed 30s), skipping
+2025-03-31 11:10:36.325830355   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 44
+2025-03-31 11:10:36.425246210   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-2 (waiting 2 more ticks)
+2025-03-31 11:10:36.425248784   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-3 (waiting 2 more ticks)
+2025-03-31 11:10:36.425249856   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-4 (waiting 2 more ticks)
+2025-03-31 11:10:36.425250788   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-5 (waiting 2 more ticks)
+2025-03-31 11:10:36.425403987   [DEBUG]	[redpanda]			Skipping operation because of error: failed to update observed state: failed to get S6 service config for redpanda: run script not found. Remaining ticks: 1
+2025-03-31 11:10:36.425406532   [DEBUG]	[redpanda]			Skipping reconcile for S6 service redpanda: operation suspended due to temporary error (retry after 1 ticks): failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:36.425747184   [WARN]	[RedpandaManagerCore]			not enough time left to reconcile instance redpanda (only 99.153013ms remaining, needed 30s), skipping
+2025-03-31 11:10:36.425797048   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 45
+2025-03-31 11:10:36.525269959   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-2 (waiting 1 more ticks)
+2025-03-31 11:10:36.525273185   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-3 (waiting 1 more ticks)
+2025-03-31 11:10:36.525274388   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-4 (waiting 1 more ticks)
+2025-03-31 11:10:36.525275400   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-5 (waiting 1 more ticks)
+2025-03-31 11:10:36.525551700   [ERROR]	[redpanda]			error reconciling external changes: failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:36.526000155   [WARN]	[RedpandaManagerCore]			not enough time left to reconcile instance redpanda (only 98.860513ms remaining, needed 30s), skipping
+2025-03-31 11:10:36.526038017   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 46
+2025-03-31 11:10:36.625426459   [INFO]	[sleepy-2]			Setting desired state of FSM sleepy-2 to running
+2025-03-31 11:10:36.625429325   [INFO]	[S6ManagerCore]			Created instance sleepy-2
+2025-03-31 11:10:36.625460293   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 47
+2025-03-31 11:10:36.724748717   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-3 (waiting 9 more ticks)
+2025-03-31 11:10:36.724751572   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-4 (waiting 9 more ticks)
+2025-03-31 11:10:36.724752815   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-5 (waiting 9 more ticks)
+2025-03-31 11:10:36.724986715   [DEBUG]	[S6Service]			S6 service /run/service/sleepy-2 does not exist
+2025-03-31 11:10:36.725023585   [DEBUG]	[sleepy-2]			Starting Action: Creating S6 service sleepy-2 ...
+2025-03-31 11:10:36.725024376   [DEBUG]	[S6Service]			Creating S6 service /run/service/sleepy-2
+2025-03-31 11:10:36.725714927   [DEBUG]	[S6Service]			S6 service /run/service/sleepy-2 created with logging to /data/logs/sleepy-2
+2025-03-31 11:10:36.725722722   [DEBUG]	[sleepy-2]			S6 service sleepy-2 directory structure created
+2025-03-31 11:10:36.725739954   [DEBUG]	[sleepy-2]			Entering creating state for FSM sleepy-2
+2025-03-31 11:10:36.725812471   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 48
+2025-03-31 11:10:36.825319808   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-3 (waiting 8 more ticks)
+2025-03-31 11:10:36.825322313   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-4 (waiting 8 more ticks)
+2025-03-31 11:10:36.825323425   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-5 (waiting 8 more ticks)
+2025-03-31 11:10:36.825591880   [INFO]	[sleepy-2]			Entering stopped state for sleepy-2
+2025-03-31 11:10:36.825636174   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 49
+2025-03-31 11:10:36.924606178   [INFO]	[SnapshotLogger]			System snapshot at tick 49, managers: 4
+2025-03-31 11:10:36.924608202   [INFO]	[SnapshotLogger]			Manager: S6ManagerCore, instances: 5, tick: 49
+2025-03-31 11:10:36.924609024   [INFO]	[SnapshotLogger]			Instance: golden-service, current state: running, desired state: running
+2025-03-31 11:10:36.924629111   [INFO]	[StarveCheck]			Control loop is healthy, last reconcile was 5.00 seconds ago
+2025-03-31 11:10:36.924677012   [DEBUG]	[SnapshotLogger]			Observed state: &{{{golden-service running} {[/usr/local/bin/benthos -c /run/service/golden-service/config/golden-service.yaml] map[LOG_LEVEL:DEBUG] map[golden-service.yaml:---
+2025-03-31 11:10:36.924677432  input:
+2025-03-31 11:10:36.924677803    http_server:
+2025-03-31 11:10:36.924678154      path: /
+2025-03-31 11:10:36.924678494      address: 0.0.0.0:8082
+2025-03-31 11:10:36.924678795  output:
+2025-03-31 11:10:36.924679106    stdout: {}
+2025-03-31 11:10:36.924682783  ] 0}} 1743419432 {up 3 0 3 168 168 0 false false false true false [] 2025-03-31 11:10:32.925747159 +0000 UTC 2025-03-31 11:10:32.726921553 +0000 UTC} {[/usr/local/bin/benthos -c /run/service/golden-service/config/golden-service.yaml] map[LOG_LEVEL:DEBUG] map[golden-service.yaml:---
+2025-03-31 11:10:36.924683123  input:
+2025-03-31 11:10:36.924683454    http_server:
+2025-03-31 11:10:36.924683764      path: /
+2025-03-31 11:10:36.924684145      address: 0.0.0.0:8082
+2025-03-31 11:10:36.924684436  output:
+2025-03-31 11:10:36.924684746    stdout: {}
+2025-03-31 11:10:36.924685027  ] 0}}
+2025-03-31 11:10:36.924685608   [INFO]	[SnapshotLogger]			Instance: redpanda, current state: to_be_created, desired state: running
+2025-03-31 11:10:36.924696609   [DEBUG]	[SnapshotLogger]			Observed state: &{{{redpanda running} {[] map[] map[] 0}} 1743419434 {down 0 1 1 0 0 0 false false false false true [] 2025-03-31 11:10:34.726191801 +0000 UTC 2025-03-31 11:10:34.726191801 +0000 UTC} {[] map[] map[] 0}}
+2025-03-31 11:10:36.924697250   [INFO]	[SnapshotLogger]			Instance: sleepy-0, current state: running, desired state: running
+2025-03-31 11:10:36.924698382   [DEBUG]	[SnapshotLogger]			Observed state: &{{{sleepy-0 running} {[sleep 600] map[] map[] 0}} 1743419434 {up 1 0 2 207 207 0 false false false true false [] 2025-03-31 11:10:34.926604633 +0000 UTC 2025-03-31 11:10:34.726817941 +0000 UTC} {[sleep 600] map[] map[] 0}}
+2025-03-31 11:10:36.924698983   [INFO]	[SnapshotLogger]			Instance: sleepy-1, current state: running, desired state: running
+2025-03-31 11:10:36.924708170   [DEBUG]	[SnapshotLogger]			Observed state: &{{{sleepy-1 running} {[sleep 600] map[] map[] 0}} 1743419435 {up 0 0 1 224 224 0 false false false true false [] 2025-03-31 11:10:35.926190494 +0000 UTC 2025-03-31 11:10:35.726363387 +0000 UTC} {[sleep 600] map[] map[] 0}}
+2025-03-31 11:10:36.924708782   [INFO]	[SnapshotLogger]			Instance: sleepy-2, current state: stopped, desired state: running
+2025-03-31 11:10:36.924709934   [DEBUG]	[SnapshotLogger]			Observed state: &{{{sleepy-2 running} {[sleep 600] map[] map[] 0}} 1743419436 {down 0 0 0 0 0 0 false false false false true [] 2025-03-31 11:10:36.726159064 +0000 UTC 2025-03-31 11:10:36.726159064 +0000 UTC} {[sleep 600] map[] map[] 0}}
+2025-03-31 11:10:36.924714552   [INFO]	[SnapshotLogger]			Manager: BenthosManagerCore, instances: 0, tick: 29
+2025-03-31 11:10:36.924715093   [INFO]	[SnapshotLogger]			Manager: containerManager_Core, instances: 1, tick: 29
+2025-03-31 11:10:36.924715654   [INFO]	[SnapshotLogger]			Instance: Core, current state: degraded, desired state: active
+2025-03-31 11:10:36.924726024   [DEBUG]	[SnapshotLogger]			Observed state: &{{0xc00011ba28 0xc00011ba40 0xc00011ba58 degraded active active degraded 98fa93e86a20d35fb334e33f0cb6b90577234d7e80a1d0134a5a3e6cde036089 amd64}}
+2025-03-31 11:10:36.924726575   [INFO]	[SnapshotLogger]			Manager: RedpandaManagerCore, instances: 1, tick: 26
+2025-03-31 11:10:36.924731444   [INFO]	[SnapshotLogger]			Instance: redpanda, current state: to_be_created, desired state: active
+2025-03-31 11:10:36.924896215   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-3 (waiting 7 more ticks)
+2025-03-31 11:10:36.924897738   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-4 (waiting 7 more ticks)
+2025-03-31 11:10:36.924898830   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-5 (waiting 7 more ticks)
+2025-03-31 11:10:36.924899831   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-6 (waiting 7 more ticks)
+2025-03-31 11:10:36.925190850   [DEBUG]	[sleepy-2]			Starting Action: Starting S6 service sleepy-2 ...
+2025-03-31 11:10:36.925192753   [DEBUG]	[S6Service]			Starting S6 service /run/service/sleepy-2
+2025-03-31 11:10:36.925541230   [DEBUG]	[S6Service]			Started S6 service /run/service/sleepy-2
+2025-03-31 11:10:36.925552621   [DEBUG]	[sleepy-2]			S6 service sleepy-2 start command executed
+2025-03-31 11:10:36.925568642   [INFO]	[sleepy-2]			Entering starting state for sleepy-2
+2025-03-31 11:10:36.925631149   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 50
+2025-03-31 11:10:37.025232873   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-3 (waiting 6 more ticks)
+2025-03-31 11:10:37.025235949   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-4 (waiting 6 more ticks)
+2025-03-31 11:10:37.025237232   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-5 (waiting 6 more ticks)
+2025-03-31 11:10:37.025238244   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-6 (waiting 6 more ticks)
+2025-03-31 11:10:37.025427821   [DEBUG]	[redpanda]			Skipping reconcile for S6 service redpanda: operation permanently failed after max retries: failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:37.025429284   [ERROR]	[redpanda]			S6 instance redpanda is not in a terminal state, resetting state and removing it
+2025-03-31 11:10:37.025430095   [INFO]	[redpanda]			Setting desired state of FSM redpanda to stopped
+2025-03-31 11:10:37.025729489   [INFO]	[sleepy-2]			Entering running state for sleepy-2
+2025-03-31 11:10:37.025786266   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 51
+2025-03-31 11:10:37.124872548   [INFO]	[S6ManagerCore]			Updated desired state of instance redpanda from stopped to running
+2025-03-31 11:10:37.124875313   [INFO]	[redpanda]			Setting desired state of FSM redpanda to running
+2025-03-31 11:10:37.124910911   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 52
+2025-03-31 11:10:37.225083390   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-3 (waiting 4 more ticks)
+2025-03-31 11:10:37.225086145   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-4 (waiting 4 more ticks)
+2025-03-31 11:10:37.225087397   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-5 (waiting 4 more ticks)
+2025-03-31 11:10:37.225088449   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-6 (waiting 4 more ticks)
+2025-03-31 11:10:37.225337118   [DEBUG]	[redpanda]			Suspending operations for 1 ticks because of error: failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:37.225338530   [ERROR]	[redpanda]			error reconciling external changes: failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:37.225712004   [INFO]	[Core]			======= Container Instance State: Core (tick: 30) =======
+2025-03-31 11:10:37.225712866   [INFO]	[Core]			FSM States: Current=degraded, Desired=active
+2025-03-31 11:10:37.225713767   [INFO]	[Core]			Health: Overall=Degraded, CPU=Active, Memory=Active, Disk=Degraded
+2025-03-31 11:10:37.225714459   [INFO]	[Core]			CPU: Usage=1004.18m cores, Cores=24
+2025-03-31 11:10:37.225721782   [INFO]	[Core]			Memory: Used=12599.02 MB, Total=128729.00 MB, Usage=9.79%
+2025-03-31 11:10:37.225722544   [INFO]	[Core]			Disk: Used=874.59 GB, Total=930.51 GB, Usage=93.99%
+2025-03-31 11:10:37.225723486   [INFO]	[Core]			Architecture: amd64, HWID: 98fa93e86a20d35fb334e33f0cb6b90577234d7e80a1d0134a5a3e6cde036089
+2025-03-31 11:10:37.225724207   [INFO]	[Core]			=================================================
+2025-03-31 11:10:37.225731380   [WARN]	[RedpandaManagerCore]			not enough time left to reconcile instance redpanda (only 99.007891ms remaining, needed 30s), skipping
+2025-03-31 11:10:37.225771716   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 53
+2025-03-31 11:10:37.325332412   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-3 (waiting 3 more ticks)
+2025-03-31 11:10:37.325335548   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-4 (waiting 3 more ticks)
+2025-03-31 11:10:37.325337372   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-5 (waiting 3 more ticks)
+2025-03-31 11:10:37.325338534   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-6 (waiting 3 more ticks)
+2025-03-31 11:10:37.325339566   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-7 (waiting 3 more ticks)
+2025-03-31 11:10:37.325706096   [DEBUG]	[redpanda]			Suspending operations for 1 ticks because of error: failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:37.325707309   [ERROR]	[redpanda]			error reconciling external changes: failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:37.325913998   [WARN]	[RedpandaManagerCore]			not enough time left to reconcile instance redpanda (only 98.990488ms remaining, needed 30s), skipping
+2025-03-31 11:10:37.325952952   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 54
+2025-03-31 11:10:37.425438075   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-3 (waiting 2 more ticks)
+2025-03-31 11:10:37.425441251   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-4 (waiting 2 more ticks)
+2025-03-31 11:10:37.425442664   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-5 (waiting 2 more ticks)
+2025-03-31 11:10:37.425443866   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-6 (waiting 2 more ticks)
+2025-03-31 11:10:37.425444928   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-7 (waiting 2 more ticks)
+2025-03-31 11:10:37.425553353   [DEBUG]	[redpanda]			Suspending operations for 2 ticks because of error: failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:37.425554895   [ERROR]	[redpanda]			error reconciling external changes: failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:37.426172639   [WARN]	[RedpandaManagerCore]			not enough time left to reconcile instance redpanda (only 98.889427ms remaining, needed 30s), skipping
+2025-03-31 11:10:37.426200081   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 55
+2025-03-31 11:10:37.524742018   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-3 (waiting 1 more ticks)
+2025-03-31 11:10:37.524744713   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-4 (waiting 1 more ticks)
+2025-03-31 11:10:37.524746386   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-5 (waiting 1 more ticks)
+2025-03-31 11:10:37.524747328   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-6 (waiting 1 more ticks)
+2025-03-31 11:10:37.524748189   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-7 (waiting 1 more ticks)
+2025-03-31 11:10:37.524908351   [DEBUG]	[redpanda]			Skipping operation because of error: failed to update observed state: failed to get S6 service config for redpanda: run script not found. Remaining ticks: 1
+2025-03-31 11:10:37.524911136   [DEBUG]	[redpanda]			Skipping reconcile for S6 service redpanda: operation suspended due to temporary error (retry after 1 ticks): failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:37.525290812   [WARN]	[RedpandaManagerCore]			not enough time left to reconcile instance redpanda (only 99.010526ms remaining, needed 30s), skipping
+2025-03-31 11:10:37.525316199   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 56
+2025-03-31 11:10:37.624852279   [INFO]	[sleepy-3]			Setting desired state of FSM sleepy-3 to running
+2025-03-31 11:10:37.624854804   [INFO]	[S6ManagerCore]			Created instance sleepy-3
+2025-03-31 11:10:37.624882887   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 57
+2025-03-31 11:10:37.725095461   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-4 (waiting 9 more ticks)
+2025-03-31 11:10:37.725098327   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-5 (waiting 9 more ticks)
+2025-03-31 11:10:37.725099469   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-6 (waiting 9 more ticks)
+2025-03-31 11:10:37.725100380   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-7 (waiting 9 more ticks)
+2025-03-31 11:10:37.725188867   [DEBUG]	[redpanda]			Suspending operations for 3 ticks because of error: failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:37.725190220   [ERROR]	[redpanda]			error reconciling external changes: failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:37.725458976   [DEBUG]	[S6Service]			S6 service /run/service/sleepy-3 does not exist
+2025-03-31 11:10:37.725659273   [DEBUG]	[sleepy-3]			Starting Action: Creating S6 service sleepy-3 ...
+2025-03-31 11:10:37.725660947   [DEBUG]	[S6Service]			Creating S6 service /run/service/sleepy-3
+2025-03-31 11:10:37.726481062   [DEBUG]	[S6Service]			S6 service /run/service/sleepy-3 created with logging to /data/logs/sleepy-3
+2025-03-31 11:10:37.726489428   [DEBUG]	[sleepy-3]			S6 service sleepy-3 directory structure created
+2025-03-31 11:10:37.726503825   [DEBUG]	[sleepy-3]			Entering creating state for FSM sleepy-3
+2025-03-31 11:10:37.726571953   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 58
+2025-03-31 11:10:37.825063464   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-4 (waiting 8 more ticks)
+2025-03-31 11:10:37.825066510   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-5 (waiting 8 more ticks)
+2025-03-31 11:10:37.825067773   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-6 (waiting 8 more ticks)
+2025-03-31 11:10:37.825068825   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-7 (waiting 8 more ticks)
+2025-03-31 11:10:37.825069746   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-8 (waiting 8 more ticks)
+2025-03-31 11:10:37.825295983   [INFO]	[sleepy-3]			Entering stopped state for sleepy-3
+2025-03-31 11:10:37.825333072   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 59
+2025-03-31 11:10:37.924346046   [INFO]	[StarveCheck]			Control loop is healthy, last reconcile was 6.00 seconds ago
+2025-03-31 11:10:37.924674986   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-4 (waiting 7 more ticks)
+2025-03-31 11:10:37.924677541   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-5 (waiting 7 more ticks)
+2025-03-31 11:10:37.924679705   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-6 (waiting 7 more ticks)
+2025-03-31 11:10:37.924681549   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-7 (waiting 7 more ticks)
+2025-03-31 11:10:37.924695876   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-8 (waiting 7 more ticks)
+2025-03-31 11:10:37.924915489   [DEBUG]	[sleepy-3]			Starting Action: Starting S6 service sleepy-3 ...
+2025-03-31 11:10:37.924916922   [DEBUG]	[S6Service]			Starting S6 service /run/service/sleepy-3
+2025-03-31 11:10:37.925282391   [DEBUG]	[S6Service]			Started S6 service /run/service/sleepy-3
+2025-03-31 11:10:37.925284986   [DEBUG]	[sleepy-3]			S6 service sleepy-3 start command executed
+2025-03-31 11:10:37.925300906   [INFO]	[sleepy-3]			Entering starting state for sleepy-3
+2025-03-31 11:10:37.925444867   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 60
+2025-03-31 11:10:38.024673918   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-4 (waiting 6 more ticks)
+2025-03-31 11:10:38.024676843   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-5 (waiting 6 more ticks)
+2025-03-31 11:10:38.024678727   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-6 (waiting 6 more ticks)
+2025-03-31 11:10:38.024680480   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-7 (waiting 6 more ticks)
+2025-03-31 11:10:38.024682113   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-8 (waiting 6 more ticks)
+2025-03-31 11:10:38.024979504   [INFO]	[sleepy-3]			Entering running state for sleepy-3
+2025-03-31 11:10:38.025025180   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 61
+2025-03-31 11:10:38.125325719   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-4 (waiting 5 more ticks)
+2025-03-31 11:10:38.125328714   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-5 (waiting 5 more ticks)
+2025-03-31 11:10:38.125329836   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-6 (waiting 5 more ticks)
+2025-03-31 11:10:38.125330788   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-7 (waiting 5 more ticks)
+2025-03-31 11:10:38.125331620   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-8 (waiting 5 more ticks)
+2025-03-31 11:10:38.126145924   [DEBUG]	[redpanda]			Suspending operations for 5 ticks because of error: failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:38.126168156   [ERROR]	[redpanda]			error reconciling external changes: failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:38.126310684   [WARN]	[RedpandaManagerCore]			not enough time left to reconcile instance redpanda (only 98.633876ms remaining, needed 30s), skipping
+2025-03-31 11:10:38.126342374   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 62
+2025-03-31 11:10:38.224825459   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-4 (waiting 4 more ticks)
+2025-03-31 11:10:38.224830328   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-5 (waiting 4 more ticks)
+2025-03-31 11:10:38.224832332   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-6 (waiting 4 more ticks)
+2025-03-31 11:10:38.224834366   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-7 (waiting 4 more ticks)
+2025-03-31 11:10:38.224836279   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-8 (waiting 4 more ticks)
+2025-03-31 11:10:38.225421291   [DEBUG]	[redpanda]			Skipping operation because of error: failed to update observed state: failed to get S6 service config for redpanda: run script not found. Remaining ticks: 4
+2025-03-31 11:10:38.225423886   [DEBUG]	[redpanda]			Skipping reconcile for S6 service redpanda: operation suspended due to temporary error (retry after 4 ticks): failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:38.225601150   [WARN]	[RedpandaManagerCore]			not enough time left to reconcile instance redpanda (only 98.857157ms remaining, needed 30s), skipping
+2025-03-31 11:10:38.225749370   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 63
+2025-03-31 11:10:38.325105329   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-4 (waiting 3 more ticks)
+2025-03-31 11:10:38.325110328   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-5 (waiting 3 more ticks)
+2025-03-31 11:10:38.325112542   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-6 (waiting 3 more ticks)
+2025-03-31 11:10:38.325114596   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-7 (waiting 3 more ticks)
+2025-03-31 11:10:38.325116460   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-8 (waiting 3 more ticks)
+2025-03-31 11:10:38.325118604   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-9 (waiting 3 more ticks)
+2025-03-31 11:10:38.325239461   [DEBUG]	[redpanda]			Skipping operation because of error: failed to update observed state: failed to get S6 service config for redpanda: run script not found. Remaining ticks: 3
+2025-03-31 11:10:38.325241195   [DEBUG]	[redpanda]			Skipping reconcile for S6 service redpanda: operation suspended due to temporary error (retry after 3 ticks): failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:38.325681234   [WARN]	[RedpandaManagerCore]			not enough time left to reconcile instance redpanda (only 99.106416ms remaining, needed 30s), skipping
+2025-03-31 11:10:38.325719526   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 64
+2025-03-31 11:10:38.425186574   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-4 (waiting 2 more ticks)
+2025-03-31 11:10:38.425189270   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-5 (waiting 2 more ticks)
+2025-03-31 11:10:38.425190462   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-6 (waiting 2 more ticks)
+2025-03-31 11:10:38.425191524   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-7 (waiting 2 more ticks)
+2025-03-31 11:10:38.425192466   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-8 (waiting 2 more ticks)
+2025-03-31 11:10:38.425193387   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-9 (waiting 2 more ticks)
+2025-03-31 11:10:38.425194730   [DEBUG]	[redpanda]			Skipping operation because of error: failed to update observed state: failed to get S6 service config for redpanda: run script not found. Remaining ticks: 2
+2025-03-31 11:10:38.425196313   [DEBUG]	[redpanda]			Skipping reconcile for S6 service redpanda: operation suspended due to temporary error (retry after 2 ticks): failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:38.425759795   [WARN]	[RedpandaManagerCore]			not enough time left to reconcile instance redpanda (only 99.137845ms remaining, needed 30s), skipping
+2025-03-31 11:10:38.425798448   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 65
+2025-03-31 11:10:38.525242222   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-4 (waiting 1 more ticks)
+2025-03-31 11:10:38.525246640   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-5 (waiting 1 more ticks)
+2025-03-31 11:10:38.525248173   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-6 (waiting 1 more ticks)
+2025-03-31 11:10:38.525249716   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-7 (waiting 1 more ticks)
+2025-03-31 11:10:38.525251399   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-8 (waiting 1 more ticks)
+2025-03-31 11:10:38.525253062   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-9 (waiting 1 more ticks)
+2025-03-31 11:10:38.526184447   [DEBUG]	[redpanda]			Skipping operation because of error: failed to update observed state: failed to get S6 service config for redpanda: run script not found. Remaining ticks: 1
+2025-03-31 11:10:38.526185970   [DEBUG]	[redpanda]			Skipping reconcile for S6 service redpanda: operation suspended due to temporary error (retry after 1 ticks): failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:38.526349669   [WARN]	[RedpandaManagerCore]			not enough time left to reconcile instance redpanda (only 98.507748ms remaining, needed 30s), skipping
+2025-03-31 11:10:38.526379856   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 66
+2025-03-31 11:10:38.625090609   [INFO]	[sleepy-4]			Setting desired state of FSM sleepy-4 to running
+2025-03-31 11:10:38.625092783   [INFO]	[S6ManagerCore]			Created instance sleepy-4
+2025-03-31 11:10:38.625093474   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 67
+2025-03-31 11:10:38.725248910   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-5 (waiting 9 more ticks)
+2025-03-31 11:10:38.725251044   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-6 (waiting 9 more ticks)
+2025-03-31 11:10:38.725251936   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-7 (waiting 9 more ticks)
+2025-03-31 11:10:38.725252637   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-8 (waiting 9 more ticks)
+2025-03-31 11:10:38.725253288   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-9 (waiting 9 more ticks)
+2025-03-31 11:10:38.725506345   [ERROR]	[redpanda]			error reconciling external changes: failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:38.725947456   [DEBUG]	[S6Service]			S6 service /run/service/sleepy-4 does not exist
+2025-03-31 11:10:38.725980198   [DEBUG]	[sleepy-4]			Starting Action: Creating S6 service sleepy-4 ...
+2025-03-31 11:10:38.725981099   [DEBUG]	[S6Service]			Creating S6 service /run/service/sleepy-4
+2025-03-31 11:10:38.726573135   [DEBUG]	[S6Service]			S6 service /run/service/sleepy-4 created with logging to /data/logs/sleepy-4
+2025-03-31 11:10:38.726588043   [DEBUG]	[sleepy-4]			S6 service sleepy-4 directory structure created
+2025-03-31 11:10:38.726601558   [DEBUG]	[sleepy-4]			Entering creating state for FSM sleepy-4
+2025-03-31 11:10:38.726673925   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 68
+2025-03-31 11:10:38.825245777   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-5 (waiting 8 more ticks)
+2025-03-31 11:10:38.825250706   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-6 (waiting 8 more ticks)
+2025-03-31 11:10:38.825253000   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-7 (waiting 8 more ticks)
+2025-03-31 11:10:38.825255335   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-8 (waiting 8 more ticks)
+2025-03-31 11:10:38.825257388   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-9 (waiting 8 more ticks)
+2025-03-31 11:10:38.825432318   [INFO]	[sleepy-4]			Entering stopped state for sleepy-4
+2025-03-31 11:10:38.825498803   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 69
+2025-03-31 11:10:38.924531443   [INFO]	[StarveCheck]			Control loop is healthy, last reconcile was 7.00 seconds ago
+2025-03-31 11:10:38.924859802   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-5 (waiting 7 more ticks)
+2025-03-31 11:10:38.924861495   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-6 (waiting 7 more ticks)
+2025-03-31 11:10:38.924862687   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-7 (waiting 7 more ticks)
+2025-03-31 11:10:38.924863759   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-8 (waiting 7 more ticks)
+2025-03-31 11:10:38.924875872   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-9 (waiting 7 more ticks)
+2025-03-31 11:10:38.925030013   [DEBUG]	[redpanda]			Skipping reconcile for S6 service redpanda: operation permanently failed after max retries: failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:38.925084535   [ERROR]	[redpanda]			S6 instance redpanda is not in a terminal state, resetting state and removing it
+2025-03-31 11:10:38.925087361   [INFO]	[redpanda]			Setting desired state of FSM redpanda to stopped
+2025-03-31 11:10:38.925626296   [DEBUG]	[sleepy-4]			Starting Action: Starting S6 service sleepy-4 ...
+2025-03-31 11:10:38.925627849   [DEBUG]	[S6Service]			Starting S6 service /run/service/sleepy-4
+2025-03-31 11:10:38.925910131   [DEBUG]	[S6Service]			Started S6 service /run/service/sleepy-4
+2025-03-31 11:10:38.925929377   [DEBUG]	[sleepy-4]			S6 service sleepy-4 start command executed
+2025-03-31 11:10:38.925937032   [INFO]	[sleepy-4]			Entering starting state for sleepy-4
+2025-03-31 11:10:38.925999349   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 70
+2025-03-31 11:10:39.025375686   [INFO]	[S6ManagerCore]			Updated desired state of instance redpanda from stopped to running
+2025-03-31 11:10:39.025378171   [INFO]	[redpanda]			Setting desired state of FSM redpanda to running
+2025-03-31 11:10:39.025412175   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 71
+2025-03-31 11:10:39.124938444   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-5 (waiting 5 more ticks)
+2025-03-31 11:10:39.124940939   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-6 (waiting 5 more ticks)
+2025-03-31 11:10:39.124942772   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-7 (waiting 5 more ticks)
+2025-03-31 11:10:39.124943864   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-8 (waiting 5 more ticks)
+2025-03-31 11:10:39.124944886   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-9 (waiting 5 more ticks)
+2025-03-31 11:10:39.125273546   [INFO]	[sleepy-4]			Entering running state for sleepy-4
+2025-03-31 11:10:39.125322638   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 72
+2025-03-31 11:10:39.225143682   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-5 (waiting 4 more ticks)
+2025-03-31 11:10:39.225146397   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-6 (waiting 4 more ticks)
+2025-03-31 11:10:39.225147750   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-7 (waiting 4 more ticks)
+2025-03-31 11:10:39.225148852   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-8 (waiting 4 more ticks)
+2025-03-31 11:10:39.225149844   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-9 (waiting 4 more ticks)
+2025-03-31 11:10:39.225235636   [DEBUG]	[redpanda]			Suspending operations for 1 ticks because of error: failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:39.225237189   [ERROR]	[redpanda]			error reconciling external changes: failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:39.226089615   [WARN]	[RedpandaManagerCore]			not enough time left to reconcile instance redpanda (only 98.702645ms remaining, needed 30s), skipping
+2025-03-31 11:10:39.226131393   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 73
+2025-03-31 11:10:39.325754966   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-5 (waiting 3 more ticks)
+2025-03-31 11:10:39.325757541   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-6 (waiting 3 more ticks)
+2025-03-31 11:10:39.325758823   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-7 (waiting 3 more ticks)
+2025-03-31 11:10:39.325759925   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-8 (waiting 3 more ticks)
+2025-03-31 11:10:39.325760897   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-9 (waiting 3 more ticks)
+2025-03-31 11:10:39.326231163   [DEBUG]	[redpanda]			Suspending operations for 1 ticks because of error: failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:39.326235451   [ERROR]	[redpanda]			error reconciling external changes: failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:39.326720705   [INFO]	[Core]			======= Container Instance State: Core (tick: 40) =======
+2025-03-31 11:10:39.326721777   [INFO]	[Core]			FSM States: Current=degraded, Desired=active
+2025-03-31 11:10:39.326722399   [INFO]	[Core]			Health: Overall=Degraded, CPU=Active, Memory=Active, Disk=Degraded
+2025-03-31 11:10:39.326728340   [INFO]	[Core]			CPU: Usage=597.51m cores, Cores=24
+2025-03-31 11:10:39.326728941   [INFO]	[Core]			Memory: Used=12524.68 MB, Total=128729.00 MB, Usage=9.73%
+2025-03-31 11:10:39.326729482   [INFO]	[Core]			Disk: Used=874.59 GB, Total=930.51 GB, Usage=93.99%
+2025-03-31 11:10:39.326730143   [INFO]	[Core]			Architecture: amd64, HWID: 98fa93e86a20d35fb334e33f0cb6b90577234d7e80a1d0134a5a3e6cde036089
+2025-03-31 11:10:39.326730654   [INFO]	[Core]			=================================================
+2025-03-31 11:10:39.326743789   [WARN]	[RedpandaManagerCore]			not enough time left to reconcile instance redpanda (only 98.464066ms remaining, needed 30s), skipping
+2025-03-31 11:10:39.326787962   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 74
+2025-03-31 11:10:39.425323945   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-5 (waiting 2 more ticks)
+2025-03-31 11:10:39.425326530   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-6 (waiting 2 more ticks)
+2025-03-31 11:10:39.425327672   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-7 (waiting 2 more ticks)
+2025-03-31 11:10:39.425328594   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-8 (waiting 2 more ticks)
+2025-03-31 11:10:39.425329456   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-9 (waiting 2 more ticks)
+2025-03-31 11:10:39.425792077   [DEBUG]	[redpanda]			Suspending operations for 2 ticks because of error: failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:39.425793861   [ERROR]	[redpanda]			error reconciling external changes: failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:39.426078226   [WARN]	[RedpandaManagerCore]			not enough time left to reconcile instance redpanda (only 98.781735ms remaining, needed 30s), skipping
+2025-03-31 11:10:39.426106229   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 75
+2025-03-31 11:10:39.525650372   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping state change of instance sleepy-0 (waiting 5 more ticks)
+2025-03-31 11:10:39.525716707   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-5 (waiting 1 more ticks)
+2025-03-31 11:10:39.525718440   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-6 (waiting 1 more ticks)
+2025-03-31 11:10:39.525719262   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-7 (waiting 1 more ticks)
+2025-03-31 11:10:39.525720043   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-8 (waiting 1 more ticks)
+2025-03-31 11:10:39.525720724   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-9 (waiting 1 more ticks)
+2025-03-31 11:10:39.526023445   [DEBUG]	[redpanda]			Skipping operation because of error: failed to update observed state: failed to get S6 service config for redpanda: run script not found. Remaining ticks: 1
+2025-03-31 11:10:39.526025529   [DEBUG]	[redpanda]			Skipping reconcile for S6 service redpanda: operation suspended due to temporary error (retry after 1 ticks): failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:39.526384805   [WARN]	[RedpandaManagerCore]			not enough time left to reconcile instance redpanda (only 98.87972ms remaining, needed 30s), skipping
+2025-03-31 11:10:39.526414812   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 76
+2025-03-31 11:10:39.624959982   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping state change of instance sleepy-0 (waiting 4 more ticks)
+2025-03-31 11:10:39.624988717   [INFO]	[sleepy-5]			Setting desired state of FSM sleepy-5 to stopped
+2025-03-31 11:10:39.624990300   [INFO]	[S6ManagerCore]			Created instance sleepy-5
+2025-03-31 11:10:39.625046255   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 77
+2025-03-31 11:10:39.725119935   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping state change of instance sleepy-0 (waiting 3 more ticks)
+2025-03-31 11:10:39.725124274   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-6 (waiting 9 more ticks)
+2025-03-31 11:10:39.725126257   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-7 (waiting 9 more ticks)
+2025-03-31 11:10:39.725128001   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-8 (waiting 9 more ticks)
+2025-03-31 11:10:39.725129744   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-9 (waiting 9 more ticks)
+2025-03-31 11:10:39.725482669   [DEBUG]	[S6Service]			S6 service /run/service/sleepy-5 does not exist
+2025-03-31 11:10:39.725688657   [DEBUG]	[sleepy-5]			Starting Action: Creating S6 service sleepy-5 ...
+2025-03-31 11:10:39.725701511   [DEBUG]	[S6Service]			Creating S6 service /run/service/sleepy-5
+2025-03-31 11:10:39.726399496   [DEBUG]	[S6Service]			S6 service /run/service/sleepy-5 created with logging to /data/logs/sleepy-5
+2025-03-31 11:10:39.726470550   [DEBUG]	[sleepy-5]			S6 service sleepy-5 directory structure created
+2025-03-31 11:10:39.726471642   [DEBUG]	[sleepy-5]			Entering creating state for FSM sleepy-5
+2025-03-31 11:10:39.726478225   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 78
+2025-03-31 11:10:39.824902477   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping state change of instance sleepy-0 (waiting 2 more ticks)
+2025-03-31 11:10:39.824904802   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-6 (waiting 8 more ticks)
+2025-03-31 11:10:39.824905663   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-7 (waiting 8 more ticks)
+2025-03-31 11:10:39.824906365   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-8 (waiting 8 more ticks)
+2025-03-31 11:10:39.824917796   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-9 (waiting 8 more ticks)
+2025-03-31 11:10:39.825423018   [INFO]	[sleepy-5]			Entering stopped state for sleepy-5
+2025-03-31 11:10:39.825467552   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 79
+2025-03-31 11:10:39.925154073   [INFO]	[StarveCheck]			Control loop is healthy, last reconcile was 8.00 seconds ago
+2025-03-31 11:10:39.925491388   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping state change of instance sleepy-0 (waiting 1 more ticks)
+2025-03-31 11:10:39.925493512   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-6 (waiting 7 more ticks)
+2025-03-31 11:10:39.925494925   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-7 (waiting 7 more ticks)
+2025-03-31 11:10:39.925496057   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-8 (waiting 7 more ticks)
+2025-03-31 11:10:39.925510244   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-9 (waiting 7 more ticks)
+2025-03-31 11:10:39.925872075   [DEBUG]	[redpanda]			Suspending operations for 3 ticks because of error: failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:39.925874470   [ERROR]	[redpanda]			error reconciling external changes: failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:39.926386174   [WARN]	[RedpandaManagerCore]			not enough time left to reconcile instance redpanda (only 98.677478ms remaining, needed 30s), skipping
+2025-03-31 11:10:39.926417483   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 80
+2025-03-31 11:10:40.024981278   [INFO]	[S6ManagerCore]			Updated desired state of instance sleepy-0 from running to stopped
+2025-03-31 11:10:40.024984354   [INFO]	[sleepy-0]			Setting desired state of FSM sleepy-0 to stopped
+2025-03-31 11:10:40.025029890   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 81
+2025-03-31 11:10:40.125092328   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-6 (waiting 5 more ticks)
+2025-03-31 11:10:40.125094231   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-7 (waiting 5 more ticks)
+2025-03-31 11:10:40.125095423   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-8 (waiting 5 more ticks)
+2025-03-31 11:10:40.125096435   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-9 (waiting 5 more ticks)
+2025-03-31 11:10:40.125181726   [DEBUG]	[sleepy-0]			Starting Action: Stopping S6 service sleepy-0 ...
+2025-03-31 11:10:40.125182758   [DEBUG]	[S6Service]			Stopping S6 service /run/service/sleepy-0
+2025-03-31 11:10:40.125531325   [DEBUG]	[S6Service]			Stopped S6 service /run/service/sleepy-0
+2025-03-31 11:10:40.125547495   [DEBUG]	[sleepy-0]			S6 service sleepy-0 stop command executed
+2025-03-31 11:10:40.125567683   [INFO]	[sleepy-0]			Entering stopping state for sleepy-0
+2025-03-31 11:10:40.125635922   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 82
+2025-03-31 11:10:40.225054677   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-6 (waiting 4 more ticks)
+2025-03-31 11:10:40.225056701   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-7 (waiting 4 more ticks)
+2025-03-31 11:10:40.225057923   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-8 (waiting 4 more ticks)
+2025-03-31 11:10:40.225058955   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-9 (waiting 4 more ticks)
+2025-03-31 11:10:40.225353921   [DEBUG]	[redpanda]			Suspending operations for 5 ticks because of error: failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:40.225355293   [ERROR]	[redpanda]			error reconciling external changes: failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:40.225427439   [INFO]	[sleepy-0]			Entering stopped state for sleepy-0
+2025-03-31 11:10:40.225456965   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 83
+2025-03-31 11:10:40.325185975   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-6 (waiting 3 more ticks)
+2025-03-31 11:10:40.325188670   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-7 (waiting 3 more ticks)
+2025-03-31 11:10:40.325189542   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-8 (waiting 3 more ticks)
+2025-03-31 11:10:40.325190263   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-9 (waiting 3 more ticks)
+2025-03-31 11:10:40.325413814   [DEBUG]	[redpanda]			Skipping operation because of error: failed to update observed state: failed to get S6 service config for redpanda: run script not found. Remaining ticks: 4
+2025-03-31 11:10:40.325420497   [DEBUG]	[redpanda]			Skipping reconcile for S6 service redpanda: operation suspended due to temporary error (retry after 4 ticks): failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:40.325926059   [WARN]	[RedpandaManagerCore]			not enough time left to reconcile instance redpanda (only 98.94396ms remaining, needed 30s), skipping
+2025-03-31 11:10:40.325972627   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 84
+2025-03-31 11:10:40.425560501   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-6 (waiting 2 more ticks)
+2025-03-31 11:10:40.425563357   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-7 (waiting 2 more ticks)
+2025-03-31 11:10:40.425564659   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-8 (waiting 2 more ticks)
+2025-03-31 11:10:40.425565771   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-9 (waiting 2 more ticks)
+2025-03-31 11:10:40.425567194   [DEBUG]	[redpanda]			Skipping operation because of error: failed to update observed state: failed to get S6 service config for redpanda: run script not found. Remaining ticks: 3
+2025-03-31 11:10:40.425579517   [DEBUG]	[redpanda]			Skipping reconcile for S6 service redpanda: operation suspended due to temporary error (retry after 3 ticks): failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:40.426326875   [WARN]	[RedpandaManagerCore]			not enough time left to reconcile instance redpanda (only 98.840605ms remaining, needed 30s), skipping
+2025-03-31 11:10:40.426360498   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 85
+2025-03-31 11:10:40.524761185   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-6 (waiting 1 more ticks)
+2025-03-31 11:10:40.524781013   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-7 (waiting 1 more ticks)
+2025-03-31 11:10:40.524782135   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-8 (waiting 1 more ticks)
+2025-03-31 11:10:40.524783056   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-9 (waiting 1 more ticks)
+2025-03-31 11:10:40.524795931   [DEBUG]	[redpanda]			Skipping operation because of error: failed to update observed state: failed to get S6 service config for redpanda: run script not found. Remaining ticks: 2
+2025-03-31 11:10:40.524797424   [DEBUG]	[redpanda]			Skipping reconcile for S6 service redpanda: operation suspended due to temporary error (retry after 2 ticks): failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:40.525781698   [WARN]	[RedpandaManagerCore]			not enough time left to reconcile instance redpanda (only 98.691464ms remaining, needed 30s), skipping
+2025-03-31 11:10:40.525845789   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 86
+2025-03-31 11:10:40.625201385   [INFO]	[sleepy-6]			Setting desired state of FSM sleepy-6 to running
+2025-03-31 11:10:40.625203910   [INFO]	[S6ManagerCore]			Created instance sleepy-6
+2025-03-31 11:10:40.625240599   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 87
+2025-03-31 11:10:40.725774145   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-7 (waiting 9 more ticks)
+2025-03-31 11:10:40.725777110   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-8 (waiting 9 more ticks)
+2025-03-31 11:10:40.725778353   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-9 (waiting 9 more ticks)
+2025-03-31 11:10:40.725886537   [ERROR]	[redpanda]			error reconciling external changes: failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:40.726262275   [DEBUG]	[S6Service]			S6 service /run/service/sleepy-6 does not exist
+2025-03-31 11:10:40.726297331   [DEBUG]	[sleepy-6]			Starting Action: Creating S6 service sleepy-6 ...
+2025-03-31 11:10:40.726298312   [DEBUG]	[S6Service]			Creating S6 service /run/service/sleepy-6
+2025-03-31 11:10:40.726848128   [DEBUG]	[S6Service]			S6 service /run/service/sleepy-6 created with logging to /data/logs/sleepy-6
+2025-03-31 11:10:40.726865902   [DEBUG]	[sleepy-6]			S6 service sleepy-6 directory structure created
+2025-03-31 11:10:40.726880279   [DEBUG]	[sleepy-6]			Entering creating state for FSM sleepy-6
+2025-03-31 11:10:40.726954709   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 88
+2025-03-31 11:10:40.824889909   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-7 (waiting 8 more ticks)
+2025-03-31 11:10:40.824892685   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-8 (waiting 8 more ticks)
+2025-03-31 11:10:40.824894208   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-9 (waiting 8 more ticks)
+2025-03-31 11:10:40.824895981   [DEBUG]	[redpanda]			Skipping reconcile for S6 service redpanda: operation permanently failed after max retries: failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:40.824914295   [ERROR]	[redpanda]			S6 instance redpanda is not in a terminal state, resetting state and removing it
+2025-03-31 11:10:40.824915247   [INFO]	[redpanda]			Setting desired state of FSM redpanda to stopped
+2025-03-31 11:10:40.825365085   [INFO]	[sleepy-6]			Entering stopped state for sleepy-6
+2025-03-31 11:10:40.825412644   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 89
+2025-03-31 11:10:40.924806061   [INFO]	[StarveCheck]			Control loop is healthy, last reconcile was 9.00 seconds ago
+2025-03-31 11:10:40.925088934   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping state change of instance redpanda (waiting 1 more ticks)
+2025-03-31 11:10:40.925090828   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-7 (waiting 7 more ticks)
+2025-03-31 11:10:40.925092110   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-8 (waiting 7 more ticks)
+2025-03-31 11:10:40.925093122   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-9 (waiting 7 more ticks)
+2025-03-31 11:10:40.925167683   [DEBUG]	[redpanda]			Suspending operations for 1 ticks because of error: failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:40.925169155   [ERROR]	[redpanda]			error reconciling external changes: failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:40.925479100   [DEBUG]	[sleepy-6]			Starting Action: Starting S6 service sleepy-6 ...
+2025-03-31 11:10:40.925480953   [DEBUG]	[S6Service]			Starting S6 service /run/service/sleepy-6
+2025-03-31 11:10:40.925861991   [DEBUG]	[S6Service]			Started S6 service /run/service/sleepy-6
+2025-03-31 11:10:40.925881708   [DEBUG]	[sleepy-6]			S6 service sleepy-6 start command executed
+2025-03-31 11:10:40.925897899   [INFO]	[sleepy-6]			Entering starting state for sleepy-6
+2025-03-31 11:10:40.926030368   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 90
+2025-03-31 11:10:41.025446508   [INFO]	[S6ManagerCore]			Updated desired state of instance redpanda from stopped to running
+2025-03-31 11:10:41.025449294   [INFO]	[redpanda]			Setting desired state of FSM redpanda to running
+2025-03-31 11:10:41.025499107   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 91
+2025-03-31 11:10:41.124677829   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-7 (waiting 5 more ticks)
+2025-03-31 11:10:41.124682949   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-8 (waiting 5 more ticks)
+2025-03-31 11:10:41.124685053   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-9 (waiting 5 more ticks)
+2025-03-31 11:10:41.125181378   [INFO]	[sleepy-6]			Entering running state for sleepy-6
+2025-03-31 11:10:41.125315601   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 92
+2025-03-31 11:10:41.224837990   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-7 (waiting 4 more ticks)
+2025-03-31 11:10:41.224840685   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-8 (waiting 4 more ticks)
+2025-03-31 11:10:41.224841938   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-9 (waiting 4 more ticks)
+2025-03-31 11:10:41.224914915   [DEBUG]	[redpanda]			Suspending operations for 1 ticks because of error: failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:41.224916308   [ERROR]	[redpanda]			error reconciling external changes: failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:41.225773423   [WARN]	[RedpandaManagerCore]			not enough time left to reconcile instance redpanda (only 98.77418ms remaining, needed 30s), skipping
+2025-03-31 11:10:41.225808319   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 93
+2025-03-31 11:10:41.325247692   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-7 (waiting 3 more ticks)
+2025-03-31 11:10:41.325250397   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-8 (waiting 3 more ticks)
+2025-03-31 11:10:41.325251288   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-9 (waiting 3 more ticks)
+2025-03-31 11:10:41.325935958   [DEBUG]	[redpanda]			Suspending operations for 2 ticks because of error: failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:41.325937591   [ERROR]	[redpanda]			error reconciling external changes: failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:41.326121588   [WARN]	[RedpandaManagerCore]			not enough time left to reconcile instance redpanda (only 98.745456ms remaining, needed 30s), skipping
+2025-03-31 11:10:41.326178065   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 94
+2025-03-31 11:10:41.425661651   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-7 (waiting 2 more ticks)
+2025-03-31 11:10:41.425664376   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-8 (waiting 2 more ticks)
+2025-03-31 11:10:41.425665619   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-9 (waiting 2 more ticks)
+2025-03-31 11:10:41.425679254   [DEBUG]	[redpanda]			Skipping operation because of error: failed to update observed state: failed to get S6 service config for redpanda: run script not found. Remaining ticks: 1
+2025-03-31 11:10:41.425680927   [DEBUG]	[redpanda]			Skipping reconcile for S6 service redpanda: operation suspended due to temporary error (retry after 1 ticks): failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:41.426628853   [WARN]	[RedpandaManagerCore]			not enough time left to reconcile instance redpanda (only 98.648393ms remaining, needed 30s), skipping
+2025-03-31 11:10:41.426665603   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 95
+2025-03-31 11:10:41.525033948   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-7 (waiting 1 more ticks)
+2025-03-31 11:10:41.525036833   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-8 (waiting 1 more ticks)
+2025-03-31 11:10:41.525038196   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-9 (waiting 1 more ticks)
+2025-03-31 11:10:41.525598942   [DEBUG]	[redpanda]			Suspending operations for 3 ticks because of error: failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:41.525600555   [ERROR]	[redpanda]			error reconciling external changes: failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:41.526054180   [INFO]	[Core]			======= Container Instance State: Core (tick: 50) =======
+2025-03-31 11:10:41.526055202   [INFO]	[Core]			FSM States: Current=degraded, Desired=active
+2025-03-31 11:10:41.526056114   [INFO]	[Core]			Health: Overall=Degraded, CPU=Active, Memory=Active, Disk=Degraded
+2025-03-31 11:10:41.526056775   [INFO]	[Core]			CPU: Usage=817.02m cores, Cores=24
+2025-03-31 11:10:41.526057526   [INFO]	[Core]			Memory: Used=12413.05 MB, Total=128729.00 MB, Usage=9.64%
+2025-03-31 11:10:41.526065662   [INFO]	[Core]			Disk: Used=874.59 GB, Total=930.51 GB, Usage=93.99%
+2025-03-31 11:10:41.526066653   [INFO]	[Core]			Architecture: amd64, HWID: 98fa93e86a20d35fb334e33f0cb6b90577234d7e80a1d0134a5a3e6cde036089
+2025-03-31 11:10:41.526067435   [INFO]	[Core]			=================================================
+2025-03-31 11:10:41.526074618   [WARN]	[RedpandaManagerCore]			not enough time left to reconcile instance redpanda (only 98.519611ms remaining, needed 30s), skipping
+2025-03-31 11:10:41.526110035   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 96
+2025-03-31 11:10:41.625594884   [INFO]	[sleepy-7]			Setting desired state of FSM sleepy-7 to stopped
+2025-03-31 11:10:41.625596577   [INFO]	[S6ManagerCore]			Created instance sleepy-7
+2025-03-31 11:10:41.625640690   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 97
+2025-03-31 11:10:41.724907458   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-8 (waiting 9 more ticks)
+2025-03-31 11:10:41.724910243   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-9 (waiting 9 more ticks)
+2025-03-31 11:10:41.725097265   [DEBUG]	[S6Service]			S6 service /run/service/sleepy-7 does not exist
+2025-03-31 11:10:41.725117814   [DEBUG]	[sleepy-7]			Starting Action: Creating S6 service sleepy-7 ...
+2025-03-31 11:10:41.725118896   [DEBUG]	[S6Service]			Creating S6 service /run/service/sleepy-7
+2025-03-31 11:10:41.725774471   [DEBUG]	[S6Service]			S6 service /run/service/sleepy-7 created with logging to /data/logs/sleepy-7
+2025-03-31 11:10:41.725791453   [DEBUG]	[sleepy-7]			S6 service sleepy-7 directory structure created
+2025-03-31 11:10:41.725798727   [DEBUG]	[sleepy-7]			Entering creating state for FSM sleepy-7
+2025-03-31 11:10:41.725864751   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 98
+2025-03-31 11:10:41.825326117   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-8 (waiting 8 more ticks)
+2025-03-31 11:10:41.825328672   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-9 (waiting 8 more ticks)
+2025-03-31 11:10:41.825511807   [INFO]	[sleepy-7]			Entering stopped state for sleepy-7
+2025-03-31 11:10:41.825570187   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 99
+2025-03-31 11:10:41.924598034   [INFO]	[StarveCheck]			Control loop is healthy, last reconcile was 10.00 seconds ago
+2025-03-31 11:10:41.924600398   [INFO]	[SnapshotLogger]			System snapshot at tick 99, managers: 4
+2025-03-31 11:10:41.924617501   [INFO]	[SnapshotLogger]			Manager: S6ManagerCore, instances: 10, tick: 99
+2025-03-31 11:10:41.924618643   [INFO]	[SnapshotLogger]			Instance: redpanda, current state: to_be_created, desired state: running
+2025-03-31 11:10:41.924637228   [DEBUG]	[SnapshotLogger]			Observed state: &{{{redpanda running} {[] map[] map[] 0}} 1743419434 {down 0 6 6 0 0 0 false false false false true [] 2025-03-31 11:10:34.726191801 +0000 UTC 2025-03-31 11:10:34.726191801 +0000 UTC} {[] map[] map[] 0}}
+2025-03-31 11:10:41.924638290   [INFO]	[SnapshotLogger]			Instance: sleepy-0, current state: stopped, desired state: stopped
+2025-03-31 11:10:41.924674277   [DEBUG]	[SnapshotLogger]			Observed state: &{{{sleepy-0 running} {[sleep 600] map[] map[] 0}} 1743419434 {down 0 1 1 0 0 -15 false false false false true [{2025-03-31 11:10:40.125638447 +0000 UTC 143 15}] 2025-03-31 11:10:40.125638447 +0000 UTC 2025-03-31 11:10:40.125885372 +0000 UTC} {[sleep 600] map[] map[] 0}}
+2025-03-31 11:10:41.924675339   [INFO]	[SnapshotLogger]			Instance: sleepy-6, current state: running, desired state: running
+2025-03-31 11:10:41.924683495   [DEBUG]	[SnapshotLogger]			Observed state: &{{{sleepy-6 running} {[sleep 600] map[] map[] 0}} 1743419440 {up 0 0 0 297 297 0 false false false true false [] 2025-03-31 11:10:40.926135036 +0000 UTC 2025-03-31 11:10:40.727293548 +0000 UTC} {[sleep 600] map[] map[] 0}}
+2025-03-31 11:10:41.924684427   [INFO]	[SnapshotLogger]			Instance: golden-service, current state: running, desired state: running
+2025-03-31 11:10:41.924699004   [DEBUG]	[SnapshotLogger]			Observed state: &{{{golden-service running} {[/usr/local/bin/benthos -c /run/service/golden-service/config/golden-service.yaml] map[LOG_LEVEL:DEBUG] map[golden-service.yaml:---
+2025-03-31 11:10:41.924699545  input:
+2025-03-31 11:10:41.924700096    http_server:
+2025-03-31 11:10:41.924700567      path: /
+2025-03-31 11:10:41.924701078      address: 0.0.0.0:8082
+2025-03-31 11:10:41.924701509  output:
+2025-03-31 11:10:41.924701990    stdout: {}
+2025-03-31 11:10:41.924703803  ] 0}} 1743419432 {up 8 0 8 168 168 0 false false false true false [] 2025-03-31 11:10:32.925747159 +0000 UTC 2025-03-31 11:10:32.726921553 +0000 UTC} {[/usr/local/bin/benthos -c /run/service/golden-service/config/golden-service.yaml] map[LOG_LEVEL:DEBUG] map[golden-service.yaml:---
+2025-03-31 11:10:41.924704264  input:
+2025-03-31 11:10:41.924704745    http_server:
+2025-03-31 11:10:41.924705206      path: /
+2025-03-31 11:10:41.924705757      address: 0.0.0.0:8082
+2025-03-31 11:10:41.924706178  output:
+2025-03-31 11:10:41.924706628    stdout: {}
+2025-03-31 11:10:41.924707049  ] 0}}
+2025-03-31 11:10:41.924707921   [INFO]	[SnapshotLogger]			Instance: sleepy-4, current state: running, desired state: running
+2025-03-31 11:10:41.924723049   [DEBUG]	[SnapshotLogger]			Observed state: &{{{sleepy-4 running} {[sleep 600] map[] map[] 0}} 1743419438 {up 2 0 2 270 270 0 false false false true false [] 2025-03-31 11:10:38.92645063 +0000 UTC 2025-03-31 11:10:38.727136356 +0000 UTC} {[sleep 600] map[] map[] 0}}
+2025-03-31 11:10:41.924724021   [INFO]	[SnapshotLogger]			Instance: sleepy-7, current state: stopped, desired state: stopped
+2025-03-31 11:10:41.924725775   [DEBUG]	[SnapshotLogger]			Observed state: &{{{sleepy-7 stopped} {[sleep 600] map[] map[] 0}} 1743419441 {down 0 0 0 0 0 0 false false false false true [] 2025-03-31 11:10:41.726202618 +0000 UTC 2025-03-31 11:10:41.726202618 +0000 UTC} {[sleep 600] map[] map[] 0}}
+2025-03-31 11:10:41.924726646   [INFO]	[SnapshotLogger]			Instance: sleepy-2, current state: running, desired state: running
+2025-03-31 11:10:41.924728480   [DEBUG]	[SnapshotLogger]			Observed state: &{{{sleepy-2 running} {[sleep 600] map[] map[] 0}} 1743419436 {up 4 0 4 239 239 0 false false false true false [] 2025-03-31 11:10:36.92588636 +0000 UTC 2025-03-31 11:10:36.726159064 +0000 UTC} {[sleep 600] map[] map[] 0}}
+2025-03-31 11:10:41.924729411   [INFO]	[SnapshotLogger]			Instance: sleepy-3, current state: running, desired state: running
+2025-03-31 11:10:41.924746393   [DEBUG]	[SnapshotLogger]			Observed state: &{{{sleepy-3 running} {[sleep 600] map[] map[] 0}} 1743419437 {up 3 0 3 255 255 0 false false false true false [] 2025-03-31 11:10:37.925736056 +0000 UTC 2025-03-31 11:10:37.726879222 +0000 UTC} {[sleep 600] map[] map[] 0}}
+2025-03-31 11:10:41.924747355   [INFO]	[SnapshotLogger]			Instance: sleepy-5, current state: stopped, desired state: stopped
+2025-03-31 11:10:41.924749098   [DEBUG]	[SnapshotLogger]			Observed state: &{{{sleepy-5 stopped} {[sleep 600] map[] map[] 0}} 1743419439 {down 0 1 1 0 0 0 false false false false true [] 2025-03-31 11:10:39.727803051 +0000 UTC 2025-03-31 11:10:39.727803051 +0000 UTC} {[sleep 600] map[] map[] 0}}
+2025-03-31 11:10:41.924749960   [INFO]	[SnapshotLogger]			Instance: sleepy-1, current state: running, desired state: running
+2025-03-31 11:10:41.924751693   [DEBUG]	[SnapshotLogger]			Observed state: &{{{sleepy-1 running} {[sleep 600] map[] map[] 0}} 1743419435 {up 5 0 5 224 224 0 false false false true false [] 2025-03-31 11:10:35.926190494 +0000 UTC 2025-03-31 11:10:35.726363387 +0000 UTC} {[sleep 600] map[] map[] 0}}
+2025-03-31 11:10:41.924752505   [INFO]	[SnapshotLogger]			Manager: BenthosManagerCore, instances: 0, tick: 50
+2025-03-31 11:10:41.924753296   [INFO]	[SnapshotLogger]			Manager: containerManager_Core, instances: 1, tick: 50
+2025-03-31 11:10:41.924760450   [INFO]	[SnapshotLogger]			Instance: Core, current state: degraded, desired state: active
+2025-03-31 11:10:41.924761812   [DEBUG]	[SnapshotLogger]			Observed state: &{{0xc00011a678 0xc00011a690 0xc00011a6a8 degraded active active degraded 98fa93e86a20d35fb334e33f0cb6b90577234d7e80a1d0134a5a3e6cde036089 amd64}}
+2025-03-31 11:10:41.924773094   [INFO]	[SnapshotLogger]			Manager: RedpandaManagerCore, instances: 1, tick: 47
+2025-03-31 11:10:41.924774045   [INFO]	[SnapshotLogger]			Instance: redpanda, current state: to_be_created, desired state: active
+2025-03-31 11:10:41.924837485   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-8 (waiting 7 more ticks)
+2025-03-31 11:10:41.924838547   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-9 (waiting 7 more ticks)
+2025-03-31 11:10:41.925577079   [DEBUG]	[redpanda]			Suspending operations for 5 ticks because of error: failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:41.925578321   [ERROR]	[redpanda]			error reconciling external changes: failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:41.926087090   [WARN]	[RedpandaManagerCore]			not enough time left to reconcile instance redpanda (only 98.4926ms remaining, needed 30s), skipping
+2025-03-31 11:10:41.926130822   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 100
+2025-03-31 11:10:42.024587513   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-8 (waiting 6 more ticks)
+2025-03-31 11:10:42.024589577   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-9 (waiting 6 more ticks)
+2025-03-31 11:10:42.025100038   [DEBUG]	[redpanda]			Skipping operation because of error: failed to update observed state: failed to get S6 service config for redpanda: run script not found. Remaining ticks: 4
+2025-03-31 11:10:42.025102834   [DEBUG]	[redpanda]			Skipping reconcile for S6 service redpanda: operation suspended due to temporary error (retry after 4 ticks): failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:42.025720327   [WARN]	[RedpandaManagerCore]			not enough time left to reconcile instance redpanda (only 98.521154ms remaining, needed 30s), skipping
+2025-03-31 11:10:42.025752808   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 101
+2025-03-31 11:10:42.125232156   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-8 (waiting 5 more ticks)
+2025-03-31 11:10:42.125234280   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-9 (waiting 5 more ticks)
+2025-03-31 11:10:42.125235412   [DEBUG]	[redpanda]			Skipping operation because of error: failed to update observed state: failed to get S6 service config for redpanda: run script not found. Remaining ticks: 3
+2025-03-31 11:10:42.125246263   [DEBUG]	[redpanda]			Skipping reconcile for S6 service redpanda: operation suspended due to temporary error (retry after 3 ticks): failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:42.126123005   [WARN]	[RedpandaManagerCore]			not enough time left to reconcile instance redpanda (only 98.780933ms remaining, needed 30s), skipping
+2025-03-31 11:10:42.126166637   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 102
+2025-03-31 11:10:42.225632329   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-8 (waiting 4 more ticks)
+2025-03-31 11:10:42.225635795   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-9 (waiting 4 more ticks)
+2025-03-31 11:10:42.226149904   [DEBUG]	[redpanda]			Skipping operation because of error: failed to update observed state: failed to get S6 service config for redpanda: run script not found. Remaining ticks: 2
+2025-03-31 11:10:42.226151757   [DEBUG]	[redpanda]			Skipping reconcile for S6 service redpanda: operation suspended due to temporary error (retry after 2 ticks): failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:42.226487710   [WARN]	[RedpandaManagerCore]			not enough time left to reconcile instance redpanda (only 98.799167ms remaining, needed 30s), skipping
+2025-03-31 11:10:42.226523588   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 103
+2025-03-31 11:10:42.324969448   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-8 (waiting 3 more ticks)
+2025-03-31 11:10:42.324971612   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-9 (waiting 3 more ticks)
+2025-03-31 11:10:42.324972754   [DEBUG]	[redpanda]			Skipping operation because of error: failed to update observed state: failed to get S6 service config for redpanda: run script not found. Remaining ticks: 1
+2025-03-31 11:10:42.324990587   [DEBUG]	[redpanda]			Skipping reconcile for S6 service redpanda: operation suspended due to temporary error (retry after 1 ticks): failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:42.325944334   [WARN]	[RedpandaManagerCore]			not enough time left to reconcile instance redpanda (only 98.697095ms remaining, needed 30s), skipping
+2025-03-31 11:10:42.325983037   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 104
+2025-03-31 11:10:42.425468166   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-8 (waiting 2 more ticks)
+2025-03-31 11:10:42.425471312   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-9 (waiting 2 more ticks)
+2025-03-31 11:10:42.426404309   [ERROR]	[redpanda]			error reconciling external changes: failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:42.427107274   [WARN]	[RedpandaManagerCore]			not enough time left to reconcile instance redpanda (only 98.050497ms remaining, needed 30s), skipping
+2025-03-31 11:10:42.427155304   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 105
+2025-03-31 11:10:42.525632964   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-8 (waiting 1 more ticks)
+2025-03-31 11:10:42.525637152   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-9 (waiting 1 more ticks)
+2025-03-31 11:10:42.525664824   [DEBUG]	[redpanda]			Skipping reconcile for S6 service redpanda: operation permanently failed after max retries: failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:42.525666397   [ERROR]	[redpanda]			S6 instance redpanda is not in a terminal state, resetting state and removing it
+2025-03-31 11:10:42.525667449   [INFO]	[redpanda]			Setting desired state of FSM redpanda to stopped
+2025-03-31 11:10:42.526915341   [WARN]	[RedpandaManagerCore]			not enough time left to reconcile instance redpanda (only 98.330144ms remaining, needed 30s), skipping
+2025-03-31 11:10:42.526963712   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 106
+2025-03-31 11:10:42.625046397   [INFO]	[S6ManagerCore]			Updated desired state of instance redpanda from stopped to running
+2025-03-31 11:10:42.625048752   [INFO]	[redpanda]			Setting desired state of FSM redpanda to running
+2025-03-31 11:10:42.625127801   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 107
+2025-03-31 11:10:42.725489040   [INFO]	[sleepy-8]			Setting desired state of FSM sleepy-8 to running
+2025-03-31 11:10:42.725493077   [INFO]	[S6ManagerCore]			Created instance sleepy-8
+2025-03-31 11:10:42.725566936   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 108
+2025-03-31 11:10:42.825531758   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-9 (waiting 9 more ticks)
+2025-03-31 11:10:42.825625966   [DEBUG]	[redpanda]			Suspending operations for 1 ticks because of error: failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:42.825627108   [ERROR]	[redpanda]			error reconciling external changes: failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:42.826535540   [DEBUG]	[S6Service]			S6 service /run/service/sleepy-8 does not exist
+2025-03-31 11:10:42.826568391   [DEBUG]	[sleepy-8]			Starting Action: Creating S6 service sleepy-8 ...
+2025-03-31 11:10:42.826569784   [DEBUG]	[S6Service]			Creating S6 service /run/service/sleepy-8
+2025-03-31 11:10:42.827317773   [DEBUG]	[S6Service]			S6 service /run/service/sleepy-8 created with logging to /data/logs/sleepy-8
+2025-03-31 11:10:42.827334986   [DEBUG]	[sleepy-8]			S6 service sleepy-8 directory structure created
+2025-03-31 11:10:42.827352659   [DEBUG]	[sleepy-8]			Entering creating state for FSM sleepy-8
+2025-03-31 11:10:42.827436367   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 109
+2025-03-31 11:10:42.924445259   [INFO]	[StarveCheck]			Control loop is healthy, last reconcile was 11.00 seconds ago
+2025-03-31 11:10:42.924761876   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-9 (waiting 8 more ticks)
+2025-03-31 11:10:42.925336178   [INFO]	[sleepy-8]			Entering stopped state for sleepy-8
+2025-03-31 11:10:42.925387825   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 110
+2025-03-31 11:10:43.025075715   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-9 (waiting 7 more ticks)
+2025-03-31 11:10:43.025619620   [DEBUG]	[sleepy-8]			Starting Action: Starting S6 service sleepy-8 ...
+2025-03-31 11:10:43.025620903   [DEBUG]	[S6Service]			Starting S6 service /run/service/sleepy-8
+2025-03-31 11:10:43.025920066   [DEBUG]	[S6Service]			Started S6 service /run/service/sleepy-8
+2025-03-31 11:10:43.025940254   [DEBUG]	[sleepy-8]			S6 service sleepy-8 start command executed
+2025-03-31 11:10:43.025957657   [INFO]	[sleepy-8]			Entering starting state for sleepy-8
+2025-03-31 11:10:43.026051153   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 111
+2025-03-31 11:10:43.125538645   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-9 (waiting 6 more ticks)
+2025-03-31 11:10:43.125679380   [INFO]	[sleepy-8]			Entering running state for sleepy-8
+2025-03-31 11:10:43.125745905   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 112
+2025-03-31 11:10:43.225130142   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-9 (waiting 5 more ticks)
+2025-03-31 11:10:43.225591291   [DEBUG]	[redpanda]			Suspending operations for 1 ticks because of error: failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:43.225592383   [ERROR]	[redpanda]			error reconciling external changes: failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:43.226092746   [WARN]	[RedpandaManagerCore]			not enough time left to reconcile instance redpanda (only 98.700371ms remaining, needed 30s), skipping
+2025-03-31 11:10:43.226132781   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 113
+2025-03-31 11:10:43.324898573   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-9 (waiting 4 more ticks)
+2025-03-31 11:10:43.325546173   [DEBUG]	[redpanda]			Suspending operations for 2 ticks because of error: failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:43.325547275   [ERROR]	[redpanda]			error reconciling external changes: failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:43.325951006   [WARN]	[RedpandaManagerCore]			not enough time left to reconcile instance redpanda (only 98.515263ms remaining, needed 30s), skipping
+2025-03-31 11:10:43.325989939   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 114
+2025-03-31 11:10:43.425482941   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-9 (waiting 3 more ticks)
+2025-03-31 11:10:43.425716551   [DEBUG]	[redpanda]			Skipping operation because of error: failed to update observed state: failed to get S6 service config for redpanda: run script not found. Remaining ticks: 1
+2025-03-31 11:10:43.425718795   [DEBUG]	[redpanda]			Skipping reconcile for S6 service redpanda: operation suspended due to temporary error (retry after 1 ticks): failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:43.426623079   [INFO]	[Core]			======= Container Instance State: Core (tick: 60) =======
+2025-03-31 11:10:43.426624001   [INFO]	[Core]			FSM States: Current=degraded, Desired=active
+2025-03-31 11:10:43.426624933   [INFO]	[Core]			Health: Overall=Degraded, CPU=Active, Memory=Active, Disk=Degraded
+2025-03-31 11:10:43.426625634   [INFO]	[Core]			CPU: Usage=197.53m cores, Cores=24
+2025-03-31 11:10:43.426626446   [INFO]	[Core]			Memory: Used=12373.69 MB, Total=128729.00 MB, Usage=9.61%
+2025-03-31 11:10:43.426634210   [INFO]	[Core]			Disk: Used=874.59 GB, Total=930.51 GB, Usage=93.99%
+2025-03-31 11:10:43.426635252   [INFO]	[Core]			Architecture: amd64, HWID: 98fa93e86a20d35fb334e33f0cb6b90577234d7e80a1d0134a5a3e6cde036089
+2025-03-31 11:10:43.426636034   [INFO]	[Core]			=================================================
+2025-03-31 11:10:43.426643428   [WARN]	[RedpandaManagerCore]			not enough time left to reconcile instance redpanda (only 98.470708ms remaining, needed 30s), skipping
+2025-03-31 11:10:43.426684205   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 115
+2025-03-31 11:10:43.525094687   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping creation of instance sleepy-9 (waiting 2 more ticks)
+2025-03-31 11:10:43.525890536   [DEBUG]	[redpanda]			Suspending operations for 3 ticks because of error: failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:43.525891699   [ERROR]	[redpanda]			error reconciling external changes: failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:43.526129046   [WARN]	[RedpandaManagerCore]			not enough time left to reconcile instance redpanda (only 98.663221ms remaining, needed 30s), skipping
+2025-03-31 11:10:43.526169342   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 116
+2025-03-31 11:10:43.625700375   [INFO]	[S6ManagerCore]			Updated desired state of instance sleepy-5 from stopped to running
+2025-03-31 11:10:43.625703311   [INFO]	[sleepy-5]			Setting desired state of FSM sleepy-5 to running
+2025-03-31 11:10:43.625774575   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 117
+2025-03-31 11:10:43.725025741   [INFO]	[sleepy-9]			Setting desired state of FSM sleepy-9 to running
+2025-03-31 11:10:43.725028817   [INFO]	[S6ManagerCore]			Created instance sleepy-9
+2025-03-31 11:10:43.725091675   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 118
+2025-03-31 11:10:43.825416044   [DEBUG]	[S6Service]			S6 service /run/service/sleepy-9 does not exist
+2025-03-31 11:10:43.825452061   [DEBUG]	[sleepy-9]			Starting Action: Creating S6 service sleepy-9 ...
+2025-03-31 11:10:43.825453975   [DEBUG]	[S6Service]			Creating S6 service /run/service/sleepy-9
+2025-03-31 11:10:43.826098640   [DEBUG]	[S6Service]			S6 service /run/service/sleepy-9 created with logging to /data/logs/sleepy-9
+2025-03-31 11:10:43.826109510   [DEBUG]	[sleepy-9]			S6 service sleepy-9 directory structure created
+2025-03-31 11:10:43.826151589   [DEBUG]	[sleepy-9]			Entering creating state for FSM sleepy-9
+2025-03-31 11:10:43.826215380   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 119
+2025-03-31 11:10:43.924315146   [INFO]	[StarveCheck]			Control loop is healthy, last reconcile was 12.00 seconds ago
+2025-03-31 11:10:43.925031686   [DEBUG]	[redpanda]			Suspending operations for 5 ticks because of error: failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:43.925033971   [ERROR]	[redpanda]			error reconciling external changes: failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:43.925282439   [DEBUG]	[sleepy-5]			Starting Action: Starting S6 service sleepy-5 ...
+2025-03-31 11:10:43.925283280   [DEBUG]	[S6Service]			Starting S6 service /run/service/sleepy-5
+2025-03-31 11:10:43.925571894   [DEBUG]	[S6Service]			Started S6 service /run/service/sleepy-5
+2025-03-31 11:10:43.925588505   [DEBUG]	[sleepy-5]			S6 service sleepy-5 start command executed
+2025-03-31 11:10:43.925741454   [INFO]	[sleepy-5]			Entering starting state for sleepy-5
+2025-03-31 11:10:43.925742476   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 120
+2025-03-31 11:10:44.025332971   [INFO]	[sleepy-5]			Entering running state for sleepy-5
+2025-03-31 11:10:44.025398134   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 121
+2025-03-31 11:10:44.125920765   [DEBUG]	[redpanda]			Skipping operation because of error: failed to update observed state: failed to get S6 service config for redpanda: run script not found. Remaining ticks: 3
+2025-03-31 11:10:44.125923319   [DEBUG]	[redpanda]			Skipping reconcile for S6 service redpanda: operation suspended due to temporary error (retry after 3 ticks): failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:44.126522859   [INFO]	[sleepy-9]			Entering stopped state for sleepy-9
+2025-03-31 11:10:44.126594504   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 122
+2025-03-31 11:10:44.225826633   [DEBUG]	[redpanda]			Skipping operation because of error: failed to update observed state: failed to get S6 service config for redpanda: run script not found. Remaining ticks: 2
+2025-03-31 11:10:44.225829869   [DEBUG]	[redpanda]			Skipping reconcile for S6 service redpanda: operation suspended due to temporary error (retry after 2 ticks): failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:44.226271181   [DEBUG]	[sleepy-9]			Starting Action: Starting S6 service sleepy-9 ...
+2025-03-31 11:10:44.226271932   [DEBUG]	[S6Service]			Starting S6 service /run/service/sleepy-9
+2025-03-31 11:10:44.226504691   [DEBUG]	[S6Service]			Started S6 service /run/service/sleepy-9
+2025-03-31 11:10:44.226514600   [DEBUG]	[sleepy-9]			S6 service sleepy-9 start command executed
+2025-03-31 11:10:44.226531562   [INFO]	[sleepy-9]			Entering starting state for sleepy-9
+2025-03-31 11:10:44.226597546   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 123
+2025-03-31 11:10:44.324988169   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping state change of instance sleepy-4 (waiting 3 more ticks)
+2025-03-31 11:10:44.325154493   [INFO]	[sleepy-9]			Entering running state for sleepy-9
+2025-03-31 11:10:44.325207693   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 124
+2025-03-31 11:10:44.425185367   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping state change of instance sleepy-4 (waiting 2 more ticks)
+2025-03-31 11:10:44.425827487   [ERROR]	[redpanda]			error reconciling external changes: failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:44.426509752   [WARN]	[RedpandaManagerCore]			not enough time left to reconcile instance redpanda (only 98.366533ms remaining, needed 30s), skipping
+2025-03-31 11:10:44.426549317   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 125
+2025-03-31 11:10:44.525074103   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping state change of instance sleepy-4 (waiting 1 more ticks)
+2025-03-31 11:10:44.525077750   [DEBUG]	[redpanda]			Skipping reconcile for S6 service redpanda: operation permanently failed after max retries: failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:44.525094071   [ERROR]	[redpanda]			S6 instance redpanda is not in a terminal state, resetting state and removing it
+2025-03-31 11:10:44.525095003   [INFO]	[redpanda]			Setting desired state of FSM redpanda to stopped
+2025-03-31 11:10:44.526267342   [WARN]	[RedpandaManagerCore]			not enough time left to reconcile instance redpanda (only 98.551461ms remaining, needed 30s), skipping
+2025-03-31 11:10:44.526285726   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 126
+2025-03-31 11:10:44.624648878   [INFO]	[S6ManagerCore]			Updated desired state of instance redpanda from stopped to running
+2025-03-31 11:10:44.624651393   [INFO]	[redpanda]			Setting desired state of FSM redpanda to running
+2025-03-31 11:10:44.624704834   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 127
+2025-03-31 11:10:44.725252712   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping state change of instance sleepy-4 (waiting 9 more ticks)
+2025-03-31 11:10:44.725758796   [DEBUG]	[redpanda]			Suspending operations for 1 ticks because of error: failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:44.725760469   [ERROR]	[redpanda]			error reconciling external changes: failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:44.726438025   [WARN]	[RedpandaManagerCore]			not enough time left to reconcile instance redpanda (only 98.522035ms remaining, needed 30s), skipping
+2025-03-31 11:10:44.726477079   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 128
+2025-03-31 11:10:44.825025991   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping state change of instance sleepy-4 (waiting 8 more ticks)
+2025-03-31 11:10:44.825415545   [DEBUG]	[redpanda]			Suspending operations for 1 ticks because of error: failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:44.825417017   [ERROR]	[redpanda]			error reconciling external changes: failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:44.826170778   [WARN]	[RedpandaManagerCore]			not enough time left to reconcile instance redpanda (only 98.440662ms remaining, needed 30s), skipping
+2025-03-31 11:10:44.826209110   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 129
+2025-03-31 11:10:44.924291503   [INFO]	[StarveCheck]			Control loop is healthy, last reconcile was 13.00 seconds ago
+2025-03-31 11:10:44.924553567   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping state change of instance sleepy-4 (waiting 7 more ticks)
+2025-03-31 11:10:44.924757641   [DEBUG]	[redpanda]			Suspending operations for 2 ticks because of error: failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:44.924758733   [ERROR]	[redpanda]			error reconciling external changes: failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:44.925521520   [WARN]	[RedpandaManagerCore]			not enough time left to reconcile instance redpanda (only 98.745837ms remaining, needed 30s), skipping
+2025-03-31 11:10:44.925558580   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 130
+2025-03-31 11:10:45.024881641   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping state change of instance sleepy-4 (waiting 6 more ticks)
+2025-03-31 11:10:45.025251497   [DEBUG]	[redpanda]			Skipping operation because of error: failed to update observed state: failed to get S6 service config for redpanda: run script not found. Remaining ticks: 1
+2025-03-31 11:10:45.025253000   [DEBUG]	[redpanda]			Skipping reconcile for S6 service redpanda: operation suspended due to temporary error (retry after 1 ticks): failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:45.025713598   [WARN]	[RedpandaManagerCore]			not enough time left to reconcile instance redpanda (only 98.963337ms remaining, needed 30s), skipping
+2025-03-31 11:10:45.025747722   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 131
+2025-03-31 11:10:45.125328728   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping state change of instance sleepy-4 (waiting 5 more ticks)
+2025-03-31 11:10:45.126086065   [DEBUG]	[redpanda]			Suspending operations for 3 ticks because of error: failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:45.126089141   [ERROR]	[redpanda]			error reconciling external changes: failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:45.126891012   [WARN]	[RedpandaManagerCore]			not enough time left to reconcile instance redpanda (only 97.99417ms remaining, needed 30s), skipping
+2025-03-31 11:10:45.126944833   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 132
+2025-03-31 11:10:45.225374399   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping state change of instance sleepy-4 (waiting 4 more ticks)
+2025-03-31 11:10:45.225607969   [DEBUG]	[redpanda]			Skipping operation because of error: failed to update observed state: failed to get S6 service config for redpanda: run script not found. Remaining ticks: 2
+2025-03-31 11:10:45.225609282   [DEBUG]	[redpanda]			Skipping reconcile for S6 service redpanda: operation suspended due to temporary error (retry after 2 ticks): failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:45.226381527   [WARN]	[RedpandaManagerCore]			not enough time left to reconcile instance redpanda (only 98.684511ms remaining, needed 30s), skipping
+2025-03-31 11:10:45.226423446   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 133
+2025-03-31 11:10:45.324907995   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping state change of instance sleepy-4 (waiting 3 more ticks)
+2025-03-31 11:10:45.324924536   [DEBUG]	[redpanda]			Skipping operation because of error: failed to update observed state: failed to get S6 service config for redpanda: run script not found. Remaining ticks: 1
+2025-03-31 11:10:45.324925829   [DEBUG]	[redpanda]			Skipping reconcile for S6 service redpanda: operation suspended due to temporary error (retry after 1 ticks): failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:45.326181334   [INFO]	[Core]			======= Container Instance State: Core (tick: 70) =======
+2025-03-31 11:10:45.326182967   [INFO]	[Core]			FSM States: Current=degraded, Desired=active
+2025-03-31 11:10:45.326184190   [INFO]	[Core]			Health: Overall=Degraded, CPU=Active, Memory=Active, Disk=Degraded
+2025-03-31 11:10:45.326193998   [INFO]	[Core]			CPU: Usage=911.39m cores, Cores=24
+2025-03-31 11:10:45.326195240   [INFO]	[Core]			Memory: Used=12314.71 MB, Total=128729.00 MB, Usage=9.57%
+2025-03-31 11:10:45.326196222   [INFO]	[Core]			Disk: Used=874.59 GB, Total=930.51 GB, Usage=93.99%
+2025-03-31 11:10:45.326197445   [INFO]	[Core]			Architecture: amd64, HWID: 98fa93e86a20d35fb334e33f0cb6b90577234d7e80a1d0134a5a3e6cde036089
+2025-03-31 11:10:45.326198316   [INFO]	[Core]			=================================================
+2025-03-31 11:10:45.326215088   [WARN]	[RedpandaManagerCore]			not enough time left to reconcile instance redpanda (only 98.327098ms remaining, needed 30s), skipping
+2025-03-31 11:10:45.326261365   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 134
+2025-03-31 11:10:45.424606041   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping state change of instance sleepy-4 (waiting 2 more ticks)
+2025-03-31 11:10:45.424699898   [DEBUG]	[redpanda]			Suspending operations for 5 ticks because of error: failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:45.424702002   [ERROR]	[redpanda]			error reconciling external changes: failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:45.425665427   [WARN]	[RedpandaManagerCore]			not enough time left to reconcile instance redpanda (only 98.641761ms remaining, needed 30s), skipping
+2025-03-31 11:10:45.425712386   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 135
+2025-03-31 11:10:45.525159599   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping state change of instance sleepy-4 (waiting 1 more ticks)
+2025-03-31 11:10:45.525645454   [DEBUG]	[redpanda]			Skipping operation because of error: failed to update observed state: failed to get S6 service config for redpanda: run script not found. Remaining ticks: 4
+2025-03-31 11:10:45.525647949   [DEBUG]	[redpanda]			Skipping reconcile for S6 service redpanda: operation suspended due to temporary error (retry after 4 ticks): failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:45.526162739   [WARN]	[RedpandaManagerCore]			not enough time left to reconcile instance redpanda (only 98.646129ms remaining, needed 30s), skipping
+2025-03-31 11:10:45.526200350   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 136
+2025-03-31 11:10:45.625241388   [INFO]	[S6ManagerCore]			Updated desired state of instance sleepy-4 from running to stopped
+2025-03-31 11:10:45.625243211   [INFO]	[sleepy-4]			Setting desired state of FSM sleepy-4 to stopped
+2025-03-31 11:10:45.625300419   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 137
+2025-03-31 11:10:45.725521070   [DEBUG]	[redpanda]			Skipping operation because of error: failed to update observed state: failed to get S6 service config for redpanda: run script not found. Remaining ticks: 2
+2025-03-31 11:10:45.725523705   [DEBUG]	[redpanda]			Skipping reconcile for S6 service redpanda: operation suspended due to temporary error (retry after 2 ticks): failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:45.726274910   [DEBUG]	[sleepy-4]			Starting Action: Stopping S6 service sleepy-4 ...
+2025-03-31 11:10:45.726276052   [DEBUG]	[S6Service]			Stopping S6 service /run/service/sleepy-4
+2025-03-31 11:10:45.726537435   [DEBUG]	[S6Service]			Stopped S6 service /run/service/sleepy-4
+2025-03-31 11:10:45.726563384   [DEBUG]	[sleepy-4]			S6 service sleepy-4 stop command executed
+2025-03-31 11:10:45.726610382   [INFO]	[sleepy-4]			Entering stopping state for sleepy-4
+2025-03-31 11:10:45.726657421   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 138
+2025-03-31 11:10:45.825050648   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping state change of instance sleepy-9 (waiting 8 more ticks)
+2025-03-31 11:10:45.825165595   [DEBUG]	[redpanda]			Skipping operation because of error: failed to update observed state: failed to get S6 service config for redpanda: run script not found. Remaining ticks: 1
+2025-03-31 11:10:45.825166977   [DEBUG]	[redpanda]			Skipping reconcile for S6 service redpanda: operation suspended due to temporary error (retry after 1 ticks): failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:45.825923754   [INFO]	[sleepy-4]			Entering stopped state for sleepy-4
+2025-03-31 11:10:45.825974790   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 139
+2025-03-31 11:10:45.925067946   [INFO]	[StarveCheck]			Control loop is healthy, last reconcile was 14.00 seconds ago
+2025-03-31 11:10:45.925676633   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping state change of instance sleepy-9 (waiting 7 more ticks)
+2025-03-31 11:10:45.927246270   [ERROR]	[redpanda]			error reconciling external changes: failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:45.927512963   [WARN]	[RedpandaManagerCore]			not enough time left to reconcile instance redpanda (only 97.529907ms remaining, needed 30s), skipping
+2025-03-31 11:10:45.927568467   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 140
+2025-03-31 11:10:46.025031742   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping state change of instance sleepy-9 (waiting 6 more ticks)
+2025-03-31 11:10:46.026115414   [DEBUG]	[redpanda]			Skipping reconcile for S6 service redpanda: operation permanently failed after max retries: failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:46.026117999   [ERROR]	[redpanda]			S6 instance redpanda is not in a terminal state, resetting state and removing it
+2025-03-31 11:10:46.026119712   [INFO]	[redpanda]			Setting desired state of FSM redpanda to stopped
+2025-03-31 11:10:46.026400942   [WARN]	[RedpandaManagerCore]			not enough time left to reconcile instance redpanda (only 98.255233ms remaining, needed 30s), skipping
+2025-03-31 11:10:46.026453030   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 141
+2025-03-31 11:10:46.124914986   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping state change of instance redpanda (waiting 5 more ticks)
+2025-03-31 11:10:46.124928542   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping state change of instance sleepy-9 (waiting 5 more ticks)
+2025-03-31 11:10:46.125028029   [DEBUG]	[redpanda]			Suspending operations for 1 ticks because of error: failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:46.125030985   [ERROR]	[redpanda]			error reconciling external changes: failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:46.126344950   [WARN]	[RedpandaManagerCore]			not enough time left to reconcile instance redpanda (only 98.233422ms remaining, needed 30s), skipping
+2025-03-31 11:10:46.126380097   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 142
+2025-03-31 11:10:46.224810684   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping state change of instance redpanda (waiting 4 more ticks)
+2025-03-31 11:10:46.224813660   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping state change of instance sleepy-9 (waiting 4 more ticks)
+2025-03-31 11:10:46.224925390   [DEBUG]	[redpanda]			Suspending operations for 1 ticks because of error: failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:46.224926723   [ERROR]	[redpanda]			error reconciling external changes: failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:46.226262069   [WARN]	[RedpandaManagerCore]			not enough time left to reconcile instance redpanda (only 98.172597ms remaining, needed 30s), skipping
+2025-03-31 11:10:46.226302425   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 143
+2025-03-31 11:10:46.324709828   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping state change of instance redpanda (waiting 3 more ticks)
+2025-03-31 11:10:46.324711942   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping state change of instance sleepy-9 (waiting 3 more ticks)
+2025-03-31 11:10:46.325099582   [DEBUG]	[redpanda]			Suspending operations for 2 ticks because of error: failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:46.325101225   [ERROR]	[redpanda]			error reconciling external changes: failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:46.326097933   [WARN]	[RedpandaManagerCore]			not enough time left to reconcile instance redpanda (only 98.337127ms remaining, needed 30s), skipping
+2025-03-31 11:10:46.326127940   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 144
+2025-03-31 11:10:46.425478119   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping state change of instance redpanda (waiting 2 more ticks)
+2025-03-31 11:10:46.425488619   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping state change of instance sleepy-9 (waiting 2 more ticks)
+2025-03-31 11:10:46.426544458   [DEBUG]	[redpanda]			Skipping operation because of error: failed to update observed state: failed to get S6 service config for redpanda: run script not found. Remaining ticks: 1
+2025-03-31 11:10:46.426549408   [DEBUG]	[redpanda]			Skipping reconcile for S6 service redpanda: operation suspended due to temporary error (retry after 1 ticks): failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:46.427143747   [WARN]	[RedpandaManagerCore]			not enough time left to reconcile instance redpanda (only 98.121932ms remaining, needed 30s), skipping
+2025-03-31 11:10:46.427186989   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 145
+2025-03-31 11:10:46.525537375   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping state change of instance redpanda (waiting 1 more ticks)
+2025-03-31 11:10:46.525551962   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping state change of instance sleepy-9 (waiting 1 more ticks)
+2025-03-31 11:10:46.526343003   [DEBUG]	[redpanda]			Suspending operations for 3 ticks because of error: failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:46.526345848   [ERROR]	[redpanda]			error reconciling external changes: failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:46.527069892   [WARN]	[RedpandaManagerCore]			not enough time left to reconcile instance redpanda (only 98.11576ms remaining, needed 30s), skipping
+2025-03-31 11:10:46.527122050   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 146
+2025-03-31 11:10:46.625536426   [INFO]	[S6ManagerCore]			Updated desired state of instance redpanda from stopped to running
+2025-03-31 11:10:46.625538420   [INFO]	[redpanda]			Setting desired state of FSM redpanda to running
+2025-03-31 11:10:46.625590518   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 147
+2025-03-31 11:10:46.724905582   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping state change of instance sleepy-9 (waiting 9 more ticks)
+2025-03-31 11:10:46.724912345   [DEBUG]	[redpanda]			Skipping operation because of error: failed to update observed state: failed to get S6 service config for redpanda: run script not found. Remaining ticks: 1
+2025-03-31 11:10:46.724916673   [DEBUG]	[redpanda]			Skipping reconcile for S6 service redpanda: operation suspended due to temporary error (retry after 1 ticks): failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:46.726013940   [INFO]	[Core]			======= Container Instance State: Core (tick: 80) =======
+2025-03-31 11:10:46.726015192   [INFO]	[Core]			FSM States: Current=degraded, Desired=active
+2025-03-31 11:10:46.726015854   [INFO]	[Core]			Health: Overall=Degraded, CPU=Active, Memory=Active, Disk=Degraded
+2025-03-31 11:10:46.726016365   [INFO]	[Core]			CPU: Usage=1106.92m cores, Cores=24
+2025-03-31 11:10:46.726030020   [INFO]	[Core]			Memory: Used=12278.13 MB, Total=128729.00 MB, Usage=9.54%
+2025-03-31 11:10:46.726030602   [INFO]	[Core]			Disk: Used=874.59 GB, Total=930.51 GB, Usage=93.99%
+2025-03-31 11:10:46.726031243   [INFO]	[Core]			Architecture: amd64, HWID: 98fa93e86a20d35fb334e33f0cb6b90577234d7e80a1d0134a5a3e6cde036089
+2025-03-31 11:10:46.726031754   [INFO]	[Core]			=================================================
+2025-03-31 11:10:46.726037194   [WARN]	[RedpandaManagerCore]			not enough time left to reconcile instance redpanda (only 98.45017ms remaining, needed 30s), skipping
+2025-03-31 11:10:46.726078973   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 148
+2025-03-31 11:10:46.825565169   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping state change of instance sleepy-9 (waiting 8 more ticks)
+2025-03-31 11:10:46.826216506   [DEBUG]	[redpanda]			Suspending operations for 5 ticks because of error: failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:46.826218319   [ERROR]	[redpanda]			error reconciling external changes: failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:46.826772223   [WARN]	[RedpandaManagerCore]			not enough time left to reconcile instance redpanda (only 98.438127ms remaining, needed 30s), skipping
+2025-03-31 11:10:46.826835602   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 149
+2025-03-31 11:10:46.925123179   [INFO]	[SnapshotLogger]			System snapshot at tick 149, managers: 4
+2025-03-31 11:10:46.925125484   [INFO]	[SnapshotLogger]			Manager: containerManager_Core, instances: 1, tick: 81
+2025-03-31 11:10:46.925126315   [INFO]	[SnapshotLogger]			Instance: Core, current state: degraded, desired state: active
+2025-03-31 11:10:46.925127317   [DEBUG]	[SnapshotLogger]			Observed state: &{{0xc000f4e840 0xc000f4e858 0xc000f4e870 degraded active active degraded 98fa93e86a20d35fb334e33f0cb6b90577234d7e80a1d0134a5a3e6cde036089 amd64}}
+2025-03-31 11:10:46.925127868   [INFO]	[SnapshotLogger]			Manager: RedpandaManagerCore, instances: 1, tick: 78
+2025-03-31 11:10:46.925143738   [INFO]	[SnapshotLogger]			Instance: redpanda, current state: to_be_created, desired state: active
+2025-03-31 11:10:46.925144349   [INFO]	[SnapshotLogger]			Manager: S6ManagerCore, instances: 12, tick: 149
+2025-03-31 11:10:46.925144980   [INFO]	[SnapshotLogger]			Instance: sleepy-2, current state: running, desired state: running
+2025-03-31 11:10:46.925145561   [WARN]	[StarveCheck]			Control loop starvation detected: 15.00 seconds since last reconcile
+2025-03-31 11:10:46.925152975   [DEBUG]	[SnapshotLogger]			Observed state: &{{{sleepy-2 running} {[sleep 600] map[] map[] 0}} 1743419436 {up 9 0 10 239 239 0 false false false true false [] 2025-03-31 11:10:36.92588636 +0000 UTC 2025-03-31 11:10:36.726159064 +0000 UTC} {[sleep 600] map[] map[] 0}}
+2025-03-31 11:10:46.925154108   [INFO]	[SnapshotLogger]			Instance: sleepy-5, current state: running, desired state: running
+2025-03-31 11:10:46.925163646   [DEBUG]	[SnapshotLogger]			Observed state: &{{{sleepy-5 stopped} {[sleep 600] map[] map[] 0}} 1743419439 {up 2 0 7 337 337 0 false false false true false [] 2025-03-31 11:10:43.926116831 +0000 UTC 2025-03-31 11:10:39.727803051 +0000 UTC} {[sleep 600] map[] map[] 0}}
+2025-03-31 11:10:46.925165289   [INFO]	[SnapshotLogger]			Instance: golden-service, current state: running, desired state: running
+2025-03-31 11:10:46.925204613   [DEBUG]	[SnapshotLogger]			Observed state: &{{{golden-service running} {[/usr/local/bin/benthos -c /run/service/golden-service/config/golden-service.yaml] map[LOG_LEVEL:DEBUG] map[golden-service.yaml:---
+2025-03-31 11:10:46.925206366  input:
+2025-03-31 11:10:46.925207188    http_server:
+2025-03-31 11:10:46.925207799      path: /
+2025-03-31 11:10:46.925208360      address: 0.0.0.0:8082
+2025-03-31 11:10:46.925208871  output:
+2025-03-31 11:10:46.925209362    stdout: {}
+2025-03-31 11:10:46.925211205  ] 0}} 1743419432 {up 13 0 14 168 168 0 false false false true false [] 2025-03-31 11:10:32.925747159 +0000 UTC 2025-03-31 11:10:32.726921553 +0000 UTC} {[/usr/local/bin/benthos -c /run/service/golden-service/config/golden-service.yaml] map[LOG_LEVEL:DEBUG] map[golden-service.yaml:---
+2025-03-31 11:10:46.925211796  input:
+2025-03-31 11:10:46.925212327    http_server:
+2025-03-31 11:10:46.925212838      path: /
+2025-03-31 11:10:46.925213359      address: 0.0.0.0:8082
+2025-03-31 11:10:46.925213850  output:
+2025-03-31 11:10:46.925214351    stdout: {}
+2025-03-31 11:10:46.925214802  ] 0}}
+2025-03-31 11:10:46.925215704   [INFO]	[SnapshotLogger]			Instance: sleepy-7, current state: stopped, desired state: stopped
+2025-03-31 11:10:46.925217497   [DEBUG]	[SnapshotLogger]			Observed state: &{{{sleepy-7 stopped} {[sleep 600] map[] map[] 0}} 1743419441 {down 0 5 5 0 0 0 false false false false true [] 2025-03-31 11:10:41.726202618 +0000 UTC 2025-03-31 11:10:41.726202618 +0000 UTC} {[sleep 600] map[] map[] 0}}
+2025-03-31 11:10:46.925218419   [INFO]	[SnapshotLogger]			Instance: sleepy-8, current state: running, desired state: running
+2025-03-31 11:10:46.925221324   [DEBUG]	[SnapshotLogger]			Observed state: &{{{sleepy-8 running} {[sleep 600] map[] map[] 0}} 1743419442 {up 3 0 3 323 323 0 false false false true false [] 2025-03-31 11:10:43.026249236 +0000 UTC 2025-03-31 11:10:42.827792327 +0000 UTC} {[sleep 600] map[] map[] 0}}
+2025-03-31 11:10:46.925234098   [INFO]	[SnapshotLogger]			Instance: redpanda, current state: to_be_created, desired state: running
+2025-03-31 11:10:46.925235872   [DEBUG]	[SnapshotLogger]			Observed state: &{{{redpanda running} {[] map[] map[] 0}} 1743419434 {down 0 12 12 0 0 0 false false false false true [] 2025-03-31 11:10:34.726191801 +0000 UTC 2025-03-31 11:10:34.726191801 +0000 UTC} {[] map[] map[] 0}}
+2025-03-31 11:10:46.925239178   [INFO]	[SnapshotLogger]			Instance: sleepy-0, current state: stopped, desired state: stopped
+2025-03-31 11:10:46.925241252   [DEBUG]	[SnapshotLogger]			Observed state: &{{{sleepy-0 running} {[sleep 600] map[] map[] 0}} 1743419434 {down 0 6 6 0 0 -15 false false false false true [{2025-03-31 11:10:40.125638447 +0000 UTC 143 15}] 2025-03-31 11:10:40.125638447 +0000 UTC 2025-03-31 11:10:40.125885372 +0000 UTC} {[sleep 600] map[] map[] 0}}
+2025-03-31 11:10:46.925260368   [INFO]	[SnapshotLogger]			Instance: sleepy-3, current state: running, desired state: running
+2025-03-31 11:10:46.925262211   [DEBUG]	[SnapshotLogger]			Observed state: &{{{sleepy-3 running} {[sleep 600] map[] map[] 0}} 1743419437 {up 8 0 9 255 255 0 false false false true false [] 2025-03-31 11:10:37.925736056 +0000 UTC 2025-03-31 11:10:37.726879222 +0000 UTC} {[sleep 600] map[] map[] 0}}
+2025-03-31 11:10:46.925263183   [INFO]	[SnapshotLogger]			Instance: sleepy-6, current state: running, desired state: running
+2025-03-31 11:10:46.925284543   [DEBUG]	[SnapshotLogger]			Observed state: &{{{sleepy-6 running} {[sleep 600] map[] map[] 0}} 1743419440 {up 5 0 6 297 297 0 false false false true false [] 2025-03-31 11:10:40.926135036 +0000 UTC 2025-03-31 11:10:40.727293548 +0000 UTC} {[sleep 600] map[] map[] 0}}
+2025-03-31 11:10:46.925285525   [INFO]	[SnapshotLogger]			Instance: sleepy-9, current state: running, desired state: running
+2025-03-31 11:10:46.925287329   [DEBUG]	[SnapshotLogger]			Observed state: &{{{sleepy-9 running} {[sleep 600] map[] map[] 0}} 1743419444 {up 2 0 2 339 339 0 false false false true false [] 2025-03-31 11:10:44.226889676 +0000 UTC 2025-03-31 11:10:43.826594183 +0000 UTC} {[sleep 600] map[] map[] 0}}
+2025-03-31 11:10:46.925288210   [INFO]	[SnapshotLogger]			Instance: sleepy-1, current state: running, desired state: running
+2025-03-31 11:10:46.925289974   [DEBUG]	[SnapshotLogger]			Observed state: &{{{sleepy-1 running} {[sleep 600] map[] map[] 0}} 1743419435 {up 10 0 11 224 224 0 false false false true false [] 2025-03-31 11:10:35.926190494 +0000 UTC 2025-03-31 11:10:35.726363387 +0000 UTC} {[sleep 600] map[] map[] 0}}
+2025-03-31 11:10:46.925290855   [INFO]	[SnapshotLogger]			Instance: sleepy-4, current state: stopped, desired state: stopped
+2025-03-31 11:10:46.925292809   [DEBUG]	[SnapshotLogger]			Observed state: &{{{sleepy-4 running} {[sleep 600] map[] map[] 0}} 1743419438 {down 0 1 1 0 0 -15 false false false false true [{2025-03-31 11:10:45.72684286 +0000 UTC 143 15}] 2025-03-31 11:10:45.72684286 +0000 UTC 2025-03-31 11:10:45.72705473 +0000 UTC} {[sleep 600] map[] map[] 0}}
+2025-03-31 11:10:46.925293661   [INFO]	[SnapshotLogger]			Manager: BenthosManagerCore, instances: 0, tick: 81
+2025-03-31 11:10:46.925482757   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping state change of instance sleepy-9 (waiting 7 more ticks)
+2025-03-31 11:10:46.926090883   [DEBUG]	[redpanda]			Skipping operation because of error: failed to update observed state: failed to get S6 service config for redpanda: run script not found. Remaining ticks: 4
+2025-03-31 11:10:46.926092746   [DEBUG]	[redpanda]			Skipping reconcile for S6 service redpanda: operation suspended due to temporary error (retry after 4 ticks): failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:46.926613287   [WARN]	[RedpandaManagerCore]			not enough time left to reconcile instance redpanda (only 98.536121ms remaining, needed 30s), skipping
+2025-03-31 11:10:46.926658923   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 150
+2025-03-31 11:10:47.025192684   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping state change of instance sleepy-9 (waiting 6 more ticks)
+2025-03-31 11:10:47.025334521   [DEBUG]	[redpanda]			Skipping operation because of error: failed to update observed state: failed to get S6 service config for redpanda: run script not found. Remaining ticks: 3
+2025-03-31 11:10:47.025337307   [DEBUG]	[redpanda]			Skipping reconcile for S6 service redpanda: operation suspended due to temporary error (retry after 3 ticks): failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:47.026382476   [WARN]	[RedpandaManagerCore]			not enough time left to reconcile instance redpanda (only 98.538266ms remaining, needed 30s), skipping
+2025-03-31 11:10:47.026419846   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 151
+2025-03-31 11:10:47.124875078   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping state change of instance sleepy-9 (waiting 5 more ticks)
+2025-03-31 11:10:47.125348961   [DEBUG]	[redpanda]			Skipping operation because of error: failed to update observed state: failed to get S6 service config for redpanda: run script not found. Remaining ticks: 2
+2025-03-31 11:10:47.125350484   [DEBUG]	[redpanda]			Skipping reconcile for S6 service redpanda: operation suspended due to temporary error (retry after 2 ticks): failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:47.125949603   [WARN]	[RedpandaManagerCore]			not enough time left to reconcile instance redpanda (only 98.576057ms remaining, needed 30s), skipping
+2025-03-31 11:10:47.125992233   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 152
+2025-03-31 11:10:47.225417032   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping state change of instance sleepy-9 (waiting 4 more ticks)
+2025-03-31 11:10:47.225420579   [DEBUG]	[redpanda]			Skipping operation because of error: failed to update observed state: failed to get S6 service config for redpanda: run script not found. Remaining ticks: 1
+2025-03-31 11:10:47.225422573   [DEBUG]	[redpanda]			Skipping reconcile for S6 service redpanda: operation suspended due to temporary error (retry after 1 ticks): failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:47.226411516   [WARN]	[RedpandaManagerCore]			not enough time left to reconcile instance redpanda (only 98.708567ms remaining, needed 30s), skipping
+2025-03-31 11:10:47.226452804   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 153
+2025-03-31 11:10:47.324999388   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping state change of instance sleepy-9 (waiting 3 more ticks)
+2025-03-31 11:10:47.325113994   [ERROR]	[redpanda]			error reconciling external changes: failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:47.326328272   [WARN]	[RedpandaManagerCore]			not enough time left to reconcile instance redpanda (only 98.242309ms remaining, needed 30s), skipping
+2025-03-31 11:10:47.326368568   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 154
+2025-03-31 11:10:47.424747436   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping state change of instance sleepy-9 (waiting 2 more ticks)
+2025-03-31 11:10:47.425066317   [DEBUG]	[redpanda]			Skipping reconcile for S6 service redpanda: operation permanently failed after max retries: failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:47.425067649   [ERROR]	[redpanda]			S6 instance redpanda is not in a terminal state, resetting state and removing it
+2025-03-31 11:10:47.425068621   [INFO]	[redpanda]			Setting desired state of FSM redpanda to stopped
+2025-03-31 11:10:47.425846857   [WARN]	[RedpandaManagerCore]			not enough time left to reconcile instance redpanda (only 98.6256ms remaining, needed 30s), skipping
+2025-03-31 11:10:47.425889538   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 155
+2025-03-31 11:10:47.525404937   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping state change of instance redpanda (waiting 1 more ticks)
+2025-03-31 11:10:47.525421008   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping state change of instance sleepy-9 (waiting 1 more ticks)
+2025-03-31 11:10:47.525740079   [DEBUG]	[redpanda]			Suspending operations for 1 ticks because of error: failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:47.525741501   [ERROR]	[redpanda]			error reconciling external changes: failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:47.526640716   [WARN]	[RedpandaManagerCore]			not enough time left to reconcile instance redpanda (only 98.321447ms remaining, needed 30s), skipping
+2025-03-31 11:10:47.526682184   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 156
+2025-03-31 11:10:47.625519196   [INFO]	[S6ManagerCore]			Updated desired state of instance redpanda from stopped to running
+2025-03-31 11:10:47.625521841   [INFO]	[redpanda]			Setting desired state of FSM redpanda to running
+2025-03-31 11:10:47.625572526   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 157
+2025-03-31 11:10:47.724678074   [DEBUG]	[S6ManagerCore]			Rate limiting: Skipping state change of instance sleepy-9 (waiting 9 more ticks)
+2025-03-31 11:10:47.725343177   [DEBUG]	[redpanda]			Suspending operations for 1 ticks because of error: failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:47.725345251   [ERROR]	[redpanda]			error reconciling external changes: failed to update observed state: failed to get S6 service config for redpanda: run script not found
+2025-03-31 11:10:47.726018830   [WARN]	[RedpandaManagerCore]			not enough time left to reconcile instance redpanda (only 98.282885ms remaining, needed 30s), skipping
+2025-03-31 11:10:47.726056781   [DEBUG]	[ControlLoop]			Updated system snapshot at tick 158
+
 
 === GOLDEN SERVICE INTERNAL LOGS ===
-Failed to get Golden Service internal logs: exit status 125
+2025-03-31 11:10:32.988741920  level=info msg="Running main config from specified file" @service=benthos benthos_version="" path=/run/service/golden-service/config/golden-service.yaml
+2025-03-31 11:10:32.990158449  level=info msg="Launching a Benthos instance, use CTRL+C to close" @service=benthos
+2025-03-31 11:10:32.990204015  level=info msg="Receiving HTTP messages at: http://0.0.0.0:8082/" @service=benthos label="" path=root.input
+2025-03-31 11:10:32.990312179  level=info msg="Listening for HTTP requests at: http://0.0.0.0:4195" @service=benthos
+2025-03-31 11:10:32.990352004  level=info msg="Output type stdout is now active" @service=benthos label="" path=root.output
+2025-03-31 11:10:33.974849808  {"message": "test"}
+2025-03-31 11:10:39.111642872  {"message": "test"}
+2025-03-31 11:10:39.866571010  {"message": "test"}
+2025-03-31 11:10:40.793485958  {"message": "test"}
+2025-03-31 11:10:41.501655859  {"message": "test"}
+2025-03-31 11:10:42.552748665  {"message": "test"}
+2025-03-31 11:10:43.300790248  {"message": "test"}
+2025-03-31 11:10:43.986741859  {"message": "test"}
+2025-03-31 11:10:44.654600041  {"message": "test"}
+2025-03-31 11:10:45.547243959  {"message": "test"}
+2025-03-31 11:10:46.133113113  {"message": "test"}
+2025-03-31 11:10:46.906919561  {"message": "test"}
+
 
 === AVAILABLE LOG FILES ===
-Failed to list log files: exit status 125
+/data/logs/umh-core/lock
+/data/logs/umh-core/state
+/data/logs/umh-core/current
+/data/logs/golden-service/lock
+/data/logs/golden-service/state
+/data/logs/golden-service/current
+/data/logs/sleepy-0/lock
+/data/logs/sleepy-0/state
+/data/logs/sleepy-0/current
+/data/logs/sleepy-1/lock
+/data/logs/sleepy-1/state
+/data/logs/sleepy-1/current
+/data/logs/sleepy-2/lock
+/data/logs/sleepy-2/state
+/data/logs/sleepy-2/current
+/data/logs/sleepy-3/lock
+/data/logs/sleepy-3/state
+/data/logs/sleepy-3/current
+/data/logs/sleepy-4/lock
+/data/logs/sleepy-4/state
+/data/logs/sleepy-4/current
+/data/logs/sleepy-5/lock
+/data/logs/sleepy-5/state
+/data/logs/sleepy-5/current
+/data/logs/sleepy-6/lock
+/data/logs/sleepy-6/state
+/data/logs/sleepy-6/current
+/data/logs/sleepy-7/lock
+/data/logs/sleepy-7/state
+/data/logs/sleepy-7/current
+/data/logs/sleepy-8/lock
+/data/logs/sleepy-8/state
+/data/logs/sleepy-8/current
+/data/logs/sleepy-9/lock
+/data/logs/sleepy-9/state
+/data/logs/sleepy-9/current
+
 
 Latest YAML config at time of failure:
-Failed to read config file /home/scarjit/Git/united-manufacturing-hub/umh-core/integration/umh-config/config-ae7e8ac2.yaml: open /home/scarjit/Git/united-manufacturing-hub/umh-core/integration/umh-config/config-ae7e8ac2.yaml: no such file or directory
+agent:
+    metricsPort: 8080
+    communicator:
+        apiUrl: ""
+        authToken: ""
+    releaseChannel: ""
+services:
+    - name: golden-service
+      desiredState: running
+      s6ServiceConfig:
+        command:
+            - /usr/local/bin/benthos
+            - -c
+            - /run/service/golden-service/config/golden-service.yaml
+        env:
+            LOG_LEVEL: DEBUG
+        configFiles:
+            golden-service.yaml: |
+                ---
+                input:
+                  http_server:
+                    path: /
+                    address: 0.0.0.0:8082
+                output:
+                  stdout: {}
+        memoryLimit: 0
+    - name: redpanda
+      desiredState: running
+      s6ServiceConfig:
+        command: []
+        env: {}
+        configFiles: {}
+        memoryLimit: 0
+    - name: sleepy-0
+      desiredState: stopped
+      s6ServiceConfig:
+        command:
+            - sleep
+            - "600"
+        env: {}
+        configFiles: {}
+        memoryLimit: 0
+    - name: sleepy-1
+      desiredState: running
+      s6ServiceConfig:
+        command:
+            - sleep
+            - "600"
+        env: {}
+        configFiles: {}
+        memoryLimit: 0
+    - name: sleepy-2
+      desiredState: running
+      s6ServiceConfig:
+        command:
+            - sleep
+            - "600"
+        env: {}
+        configFiles: {}
+        memoryLimit: 0
+    - name: sleepy-3
+      desiredState: running
+      s6ServiceConfig:
+        command:
+            - sleep
+            - "600"
+        env: {}
+        configFiles: {}
+        memoryLimit: 0
+    - name: sleepy-4
+      desiredState: stopped
+      s6ServiceConfig:
+        command:
+            - sleep
+            - "600"
+        env: {}
+        configFiles: {}
+        memoryLimit: 0
+    - name: sleepy-5
+      desiredState: running
+      s6ServiceConfig:
+        command:
+            - sleep
+            - "600"
+        env: {}
+        configFiles: {}
+        memoryLimit: 0
+    - name: sleepy-6
+      desiredState: running
+      s6ServiceConfig:
+        command:
+            - sleep
+            - "600"
+        env: {}
+        configFiles: {}
+        memoryLimit: 0
+    - name: sleepy-7
+      desiredState: stopped
+      s6ServiceConfig:
+        command:
+            - sleep
+            - "600"
+        env: {}
+        configFiles: {}
+        memoryLimit: 0
+    - name: sleepy-8
+      desiredState: running
+      s6ServiceConfig:
+        command:
+            - sleep
+            - "600"
+        env: {}
+        configFiles: {}
+        memoryLimit: 0
+    - name: sleepy-9
+      desiredState: stopped
+      s6ServiceConfig:
+        command:
+            - sleep
+            - "600"
+        env: {}
+        configFiles: {}
+        memoryLimit: 0
+benthos: []
+nmap: []
+redpanda:
+    name: redpanda
+    desiredState: active
+    redpandaServiceConfig:
+        defaultTopicRetentionMs: 0
+        defaultTopicRetentionBytes: 0
 
-Test failed. Container name: umh-core-ae7e8ac2
-[38;5;9m• [FAILED] [74.726 seconds][0m
+
+Test failed. Container name: umh-core-d3e91440
+[38;5;9m• [FAILED] [64.996 seconds][0m
 [0mUMH Container Integration [38;5;243mwith service scaling test [38;5;9m[1m[It] should scale up to multiple services while maintaining healthy metrics[0m [38;5;204m[integration, scaling][0m
 [38;5;243m/home/scarjit/Git/united-manufacturing-hub/umh-core/integration/integration_test.go:209[0m
 
   [38;5;9m[FAILED] Expected starved seconds (15.00) to be == 0.00
   Expected
-      <float64>: 15.001073302
+      <float64>: 15.000976571
   to be ==
       <float64>: 0[0m
-  [38;5;9mIn [1m[It][0m[38;5;9m at: [1m/home/scarjit/Git/united-manufacturing-hub/umh-core/integration/metrics_parsing.go:135[0m [38;5;243m@ 03/31/25 12:54:10.188[0m
+  [38;5;9mIn [1m[It][0m[38;5;9m at: [1m/home/scarjit/Git/united-manufacturing-hub/umh-core/integration/metrics_parsing.go:135[0m [38;5;243m@ 03/31/25 13:10:47.609[0m
 [38;5;243m------------------------------[0m
 [38;5;14mS[0m[38;5;14mS[0m
 
@@ -319,12 +1740,12 @@ Test failed. Container name: umh-core-ae7e8ac2
   [38;5;9m[FAIL][0m [0mUMH Container Integration [38;5;243mwith service scaling test [38;5;9m[1m[It] should scale up to multiple services while maintaining healthy metrics[0m [38;5;204m[integration, scaling][0m
   [38;5;243m/home/scarjit/Git/united-manufacturing-hub/umh-core/integration/metrics_parsing.go:135[0m
 
-[38;5;9m[1mRan 1 of 12 Specs in 74.727 seconds[0m
+[38;5;9m[1mRan 1 of 12 Specs in 64.997 seconds[0m
 [38;5;9m[1mFAIL![0m -- [38;5;10m[1m0 Passed[0m | [38;5;9m[1m1 Failed[0m | [38;5;11m[1m0 Pending[0m | [38;5;14m[1m11 Skipped[0m
---- FAIL: TestIntegration (74.73s)
+--- FAIL: TestIntegration (65.00s)
 FAIL
 
-Ginkgo ran 29 suites in 1m15.358884704s
+Ginkgo ran 31 suites in 1m5.57863906s
 
 There were failures detected in the following suites:
   [38;5;9mintegration [38;5;243m./integration[0m
