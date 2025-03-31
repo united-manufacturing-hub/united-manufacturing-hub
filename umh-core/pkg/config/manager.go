@@ -100,7 +100,15 @@ func (m *FileConfigManager) GetConfig(ctx context.Context, tick uint64) (FullCon
 
 	// Return empty config if the file doesn't exist
 	if !exists {
-		return FullConfig{}, fmt.Errorf("config file does not exist: %s", m.configPath)
+		m.logger.Warnf("Config file does not exist: %s", m.configPath)
+		// create a new config file with default values
+		config := FullConfig{}
+		config.Agent.MetricsPort = 8080
+		// write the config to the file
+		if err := m.WriteConfig(ctx, config); err != nil {
+			return FullConfig{}, fmt.Errorf("no config found and failed to create default config file: %w", err)
+		}
+		return config, nil
 	}
 
 	// Check if context is already cancelled
@@ -149,6 +157,33 @@ func NewFileConfigManagerWithBackoff() *FileConfigManagerWithBackoff {
 		backoffManager: backoffManager,
 		logger:         logger,
 	}
+}
+
+func (m *FileConfigManager) WriteConfig(ctx context.Context, config FullConfig) error {
+	// Check if context is already cancelled
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+
+	// Create the directory if it doesn't exist
+	dir := filepath.Dir(m.configPath)
+	if err := m.fsService.EnsureDirectory(ctx, dir); err != nil {
+		return fmt.Errorf("failed to create config directory: %w", err)
+	}
+
+	// Marshal the config to YAML
+	data, err := yaml.Marshal(config)
+	if err != nil {
+		return fmt.Errorf("failed to marshal config: %w", err)
+	}
+
+	// Write the file
+	if err := m.fsService.WriteFile(ctx, m.configPath, data, 0644); err != nil {
+		return fmt.Errorf("failed to write config file: %w", err)
+	}
+
+	m.logger.Infof("Successfully wrote config to %s", m.configPath)
+	return nil
 }
 
 // WithFileSystemService allows setting a custom filesystem service on the wrapped FileConfigManager
