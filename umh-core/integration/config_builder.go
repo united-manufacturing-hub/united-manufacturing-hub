@@ -85,10 +85,7 @@ output:
 			Name:            "redpanda",
 			DesiredFSMState: "stopped", // Set to stopped to avoid starvation during tests
 		},
-		RedpandaServiceConfig: redpandaserviceconfig.RedpandaServiceConfig{
-			DefaultTopicRetentionMs:    0,
-			DefaultTopicRetentionBytes: 0,
-		},
+		RedpandaServiceConfig: redpandaserviceconfig.RedpandaServiceConfig{},
 	}
 
 	return b

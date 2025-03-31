@@ -55,25 +55,26 @@ func (c *Comparator) ConfigDiff(desired, observed RedpandaServiceConfig) string 
 	normDesired := c.normalizer.NormalizeConfig(desired)
 	normObserved := c.normalizer.NormalizeConfig(observed)
 
-	// Check basic scalar fields
-	if normDesired.DefaultTopicRetentionMs != normObserved.DefaultTopicRetentionMs {
-		diff.WriteString(fmt.Sprintf("DefaultTopicRetentionMs: Want: %d, Have: %d\n",
-			normDesired.DefaultTopicRetentionMs, normObserved.DefaultTopicRetentionMs))
+	// Check topic configuration
+	if normDesired.Topic.DefaultTopicRetentionMs != normObserved.Topic.DefaultTopicRetentionMs {
+		diff.WriteString(fmt.Sprintf("Topic.DefaultTopicRetentionMs: Want: %d, Have: %d\n",
+			normDesired.Topic.DefaultTopicRetentionMs, normObserved.Topic.DefaultTopicRetentionMs))
 	}
 
-	if normDesired.DefaultTopicRetentionBytes != normObserved.DefaultTopicRetentionBytes {
-		diff.WriteString(fmt.Sprintf("DefaultTopicRetentionBytes: Want: %d, Have: %d\n",
-			normDesired.DefaultTopicRetentionBytes, normObserved.DefaultTopicRetentionBytes))
+	if normDesired.Topic.DefaultTopicRetentionBytes != normObserved.Topic.DefaultTopicRetentionBytes {
+		diff.WriteString(fmt.Sprintf("Topic.DefaultTopicRetentionBytes: Want: %d, Have: %d\n",
+			normDesired.Topic.DefaultTopicRetentionBytes, normObserved.Topic.DefaultTopicRetentionBytes))
 	}
 
-	if normDesired.MaxCores != normObserved.MaxCores {
-		diff.WriteString(fmt.Sprintf("MaxCores: Want: %d, Have: %d\n",
-			normDesired.MaxCores, normObserved.MaxCores))
+	// Check resources configuration
+	if normDesired.Resources.MaxCores != normObserved.Resources.MaxCores {
+		diff.WriteString(fmt.Sprintf("Resources.MaxCores: Want: %d, Have: %d\n",
+			normDesired.Resources.MaxCores, normObserved.Resources.MaxCores))
 	}
 
-	if normDesired.MemoryPerCoreInBytes != normObserved.MemoryPerCoreInBytes {
-		diff.WriteString(fmt.Sprintf("MemoryPerCoreInBytes: Want: %d, Have: %d\n",
-			normDesired.MemoryPerCoreInBytes, normObserved.MemoryPerCoreInBytes))
+	if normDesired.Resources.MemoryPerCoreInBytes != normObserved.Resources.MemoryPerCoreInBytes {
+		diff.WriteString(fmt.Sprintf("Resources.MemoryPerCoreInBytes: Want: %d, Have: %d\n",
+			normDesired.Resources.MemoryPerCoreInBytes, normObserved.Resources.MemoryPerCoreInBytes))
 	}
 
 	if diff.Len() == 0 {

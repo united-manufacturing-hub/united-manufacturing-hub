@@ -27,16 +27,20 @@ func (n *Normalizer) NormalizeConfig(cfg RedpandaServiceConfig) RedpandaServiceC
 	// Create a copy
 	normalized := cfg
 
-	if normalized.DefaultTopicRetentionMs == 0 {
-		normalized.DefaultTopicRetentionMs = 0
+	if normalized.Topic.DefaultTopicRetentionMs == 0 {
+		normalized.Topic.DefaultTopicRetentionMs = 0
 	}
 
-	if normalized.DefaultTopicRetentionBytes == 0 {
-		normalized.DefaultTopicRetentionBytes = 0
+	if normalized.Topic.DefaultTopicRetentionBytes == 0 {
+		normalized.Topic.DefaultTopicRetentionBytes = 0
 	}
 
-	if normalized.MaxCores == 0 {
-		normalized.MaxCores = 1
+	if normalized.Resources.MaxCores == 0 {
+		normalized.Resources.MaxCores = 1
+	}
+
+	if normalized.Resources.MemoryPerCoreInBytes == 0 {
+		normalized.Resources.MemoryPerCoreInBytes = 1073741824 // 1GB
 	}
 
 	return normalized

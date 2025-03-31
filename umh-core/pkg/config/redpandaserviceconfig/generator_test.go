@@ -44,10 +44,12 @@ var _ = Describe("Redpanda YAML Generator", func() {
 		},
 		Entry("should render empty paths correctly",
 			testCase{
-				config: &RedpandaServiceConfig{
-					DefaultTopicRetentionMs:    0,
-					DefaultTopicRetentionBytes: 0,
-				},
+				config: func() *RedpandaServiceConfig {
+					cfg := &RedpandaServiceConfig{}
+					cfg.Topic.DefaultTopicRetentionMs = 0
+					cfg.Topic.DefaultTopicRetentionBytes = 0
+					return cfg
+				}(),
 				expected: []string{
 					"retention_ms: -1",
 					"retention_bytes: null",
@@ -55,10 +57,12 @@ var _ = Describe("Redpanda YAML Generator", func() {
 			}),
 		Entry("should render configured paths correctly",
 			testCase{
-				config: &RedpandaServiceConfig{
-					DefaultTopicRetentionMs:    1000,
-					DefaultTopicRetentionBytes: 1000,
-				},
+				config: func() *RedpandaServiceConfig {
+					cfg := &RedpandaServiceConfig{}
+					cfg.Topic.DefaultTopicRetentionMs = 1000
+					cfg.Topic.DefaultTopicRetentionBytes = 1000
+					return cfg
+				}(),
 				expected: []string{
 					"retention_ms: 1000",
 					"retention_bytes: 1000",

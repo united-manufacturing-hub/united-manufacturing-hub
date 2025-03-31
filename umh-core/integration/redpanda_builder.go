@@ -49,13 +49,12 @@ func (b *RedpandaBuilder) AddGoldenRedpanda() *RedpandaBuilder {
 			Name:            "golden-redpanda",
 			DesiredFSMState: "active",
 		},
-		RedpandaServiceConfig: redpandaserviceconfig.RedpandaServiceConfig{
-			DefaultTopicRetentionMs:    0, // Default
-			DefaultTopicRetentionBytes: 0, // Default
-			MaxCores:                   1,
-			MemoryPerCoreInBytes:       1024 * 1024 * 1024, // 1GB
-		},
+		RedpandaServiceConfig: redpandaserviceconfig.RedpandaServiceConfig{},
 	}
+	redpandaConfig.RedpandaServiceConfig.Topic.DefaultTopicRetentionMs = 0
+	redpandaConfig.RedpandaServiceConfig.Topic.DefaultTopicRetentionBytes = 0
+	redpandaConfig.RedpandaServiceConfig.Resources.MaxCores = 1
+	redpandaConfig.RedpandaServiceConfig.Resources.MemoryPerCoreInBytes = 1024 * 1024 * 1024 // 1GB
 
 	// Add to configuration
 	b.full.Redpanda = redpandaConfig
@@ -75,17 +74,6 @@ func (b *RedpandaBuilder) StopRedpanda(name string) *RedpandaBuilder {
 	b.full.Redpanda.FSMInstanceConfig.DesiredFSMState = "stopped"
 	b.activeRedpanda[name] = false
 	return b
-}
-
-// CountActiveRedpanda returns the number of active Redpanda services
-func (b *RedpandaBuilder) CountActiveRedpanda() int {
-	count := 0
-	for _, isActive := range b.activeRedpanda {
-		if isActive {
-			count++
-		}
-	}
-	return count
 }
 
 // BuildYAML converts the configuration to YAML format

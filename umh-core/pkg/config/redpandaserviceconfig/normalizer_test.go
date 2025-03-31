@@ -26,8 +26,8 @@ var _ = Describe("Redpanda YAML Normalizer", func() {
 			normalizer := NewNormalizer()
 
 			normalizedConfig := normalizer.NormalizeConfig(config)
-			Expect(normalizedConfig.DefaultTopicRetentionMs).To(Equal(0))
-			Expect(normalizedConfig.DefaultTopicRetentionBytes).To(Equal(0))
+			Expect(normalizedConfig.Topic.DefaultTopicRetentionMs).To(Equal(0))
+			Expect(normalizedConfig.Topic.DefaultTopicRetentionBytes).To(Equal(0))
 		})
 	})
 })

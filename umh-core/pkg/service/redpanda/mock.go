@@ -17,6 +17,7 @@ package redpanda
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
@@ -151,15 +152,15 @@ func (m *MockRedpandaService) GetConfig(ctx context.Context) (redpandaservicecon
 	}
 
 	// If a result is preset, return it
-	if m.GetConfigResult.DefaultTopicRetentionMs != 0 || m.GetConfigResult.DefaultTopicRetentionBytes != 0 {
+	if m.GetConfigResult.Topic.DefaultTopicRetentionMs != 0 || m.GetConfigResult.Topic.DefaultTopicRetentionBytes != 0 {
 		return m.GetConfigResult, nil
 	}
 
 	// Otherwise return a default config with some test values
-	return redpandaserviceconfig.RedpandaServiceConfig{
-		DefaultTopicRetentionMs:    1000000,
-		DefaultTopicRetentionBytes: 1000000000,
-	}, nil
+	config := redpandaserviceconfig.RedpandaServiceConfig{}
+	config.Topic.DefaultTopicRetentionMs = 1000000
+	config.Topic.DefaultTopicRetentionBytes = 1000000000
+	return config, nil
 }
 
 // Status mocks getting the status of a Redpanda service
@@ -187,13 +188,13 @@ func (m *MockRedpandaService) AddRedpandaToS6Manager(ctx context.Context, cfg *r
 	// Ensure the required directories exist if filesystem mock is set
 	if m.FileSystemMock != nil {
 		// Ensure main data directory
-		if err := m.FileSystemMock.EnsureDirectory(ctx, "/data/redpanda"); err != nil {
-			return fmt.Errorf("failed to ensure /data/redpanda directory exists: %w", err)
+		if err := m.FileSystemMock.EnsureDirectory(ctx, filepath.Join(cfg.BaseDir, "redpanda")); err != nil {
+			return fmt.Errorf("failed to ensure %s/redpanda directory exists: %w", cfg.BaseDir, err)
 		}
 
 		// Ensure coredump directory
-		if err := m.FileSystemMock.EnsureDirectory(ctx, "/data/redpanda/coredump"); err != nil {
-			return fmt.Errorf("failed to ensure /data/redpanda/coredump directory exists: %w", err)
+		if err := m.FileSystemMock.EnsureDirectory(ctx, filepath.Join(cfg.BaseDir, "redpanda", "coredump")); err != nil {
+			return fmt.Errorf("failed to ensure %s/redpanda/coredump directory exists: %w", cfg.BaseDir, err)
 		}
 	}
 

@@ -40,10 +40,12 @@ var _ = Describe("Redpanda Service", func() {
 		tick = 0
 
 		// Add the service to the S6 manager
-		err := service.AddRedpandaToS6Manager(context.Background(), &redpandaserviceconfig.RedpandaServiceConfig{
-			DefaultTopicRetentionMs:    1000000,
-			DefaultTopicRetentionBytes: 1000000000,
-		})
+		config := &redpandaserviceconfig.RedpandaServiceConfig{
+			BaseDir: "./data",
+		}
+		config.Topic.DefaultTopicRetentionMs = 1000000
+		config.Topic.DefaultTopicRetentionBytes = 1000000000
+		err := service.AddRedpandaToS6Manager(context.Background(), config)
 		Expect(err).NotTo(HaveOccurred())
 
 		// Reconcile the S6 manager
@@ -149,9 +151,10 @@ var _ = Describe("Redpanda Service", func() {
 		Context("with valid configuration", func() {
 			It("should generate valid YAML", func() {
 				cfg := &redpandaserviceconfig.RedpandaServiceConfig{
-					DefaultTopicRetentionMs:    1000000,
-					DefaultTopicRetentionBytes: 1000000000,
+					BaseDir: "./data",
 				}
+				cfg.Topic.DefaultTopicRetentionMs = 1000000
+				cfg.Topic.DefaultTopicRetentionBytes = 1000000000
 
 				s6Config, err := service.GenerateS6ConfigForRedpanda(cfg)
 				Expect(err).NotTo(HaveOccurred())
@@ -193,9 +196,10 @@ var _ = Describe("Redpanda Service", func() {
 
 			// Initial config
 			config := &redpandaserviceconfig.RedpandaServiceConfig{
-				DefaultTopicRetentionMs:    1000000,
-				DefaultTopicRetentionBytes: 1000000000,
+				BaseDir: "./data",
 			}
+			config.Topic.DefaultTopicRetentionMs = 1000000
+			config.Topic.DefaultTopicRetentionBytes = 1000000000
 
 			// Add the service
 			By("Adding the Redpanda service")
@@ -242,9 +246,10 @@ var _ = Describe("Redpanda Service", func() {
 
 			// Initial config
 			initialConfig := &redpandaserviceconfig.RedpandaServiceConfig{
-				DefaultTopicRetentionMs:    1000000,
-				DefaultTopicRetentionBytes: 1000000000,
+				BaseDir: "./data",
 			}
+			initialConfig.Topic.DefaultTopicRetentionMs = 1000000
+			initialConfig.Topic.DefaultTopicRetentionBytes = 1000000000
 
 			// Add the service with initial config
 			By("Adding the Redpanda service with initial config")
@@ -254,9 +259,10 @@ var _ = Describe("Redpanda Service", func() {
 
 			// Updated config with different retention
 			updatedConfig := &redpandaserviceconfig.RedpandaServiceConfig{
-				DefaultTopicRetentionMs:    2000000,    // Doubled
-				DefaultTopicRetentionBytes: 2000000000, // Doubled
+				BaseDir: "./data",
 			}
+			updatedConfig.Topic.DefaultTopicRetentionMs = 2000000
+			updatedConfig.Topic.DefaultTopicRetentionBytes = 2000000000
 
 			// Update the service configuration
 			By("Updating the Redpanda service configuration")
@@ -278,7 +284,9 @@ var _ = Describe("Redpanda Service", func() {
 
 			// Try to update a non-existent service
 			By("Trying to update a non-existent service")
-			err := service.UpdateRedpandaInS6Manager(ctx, &redpandaserviceconfig.RedpandaServiceConfig{})
+			err := service.UpdateRedpandaInS6Manager(ctx, &redpandaserviceconfig.RedpandaServiceConfig{
+				BaseDir: "./data",
+			})
 			Expect(err).To(Equal(ErrServiceNotExist))
 
 			// Try to stop a non-existent service
@@ -297,12 +305,16 @@ var _ = Describe("Redpanda Service", func() {
 
 			// Add a service
 			By("Adding a service")
-			err := service.AddRedpandaToS6Manager(ctx, &redpandaserviceconfig.RedpandaServiceConfig{})
+			err := service.AddRedpandaToS6Manager(ctx, &redpandaserviceconfig.RedpandaServiceConfig{
+				BaseDir: "./data",
+			})
 			Expect(err).NotTo(HaveOccurred())
 
 			// Try to add the same service again
 			By("Trying to add the same service again")
-			err = service.AddRedpandaToS6Manager(ctx, &redpandaserviceconfig.RedpandaServiceConfig{})
+			err = service.AddRedpandaToS6Manager(ctx, &redpandaserviceconfig.RedpandaServiceConfig{
+				BaseDir: "./data",
+			})
 			Expect(err).To(Equal(ErrServiceAlreadyExists))
 		})
 	})
@@ -434,8 +446,7 @@ var _ = Describe("Redpanda Service", func() {
 
 			// Add the service to the S6 manager
 			err := service.AddRedpandaToS6Manager(context.Background(), &redpandaserviceconfig.RedpandaServiceConfig{
-				DefaultTopicRetentionMs:    1000000,
-				DefaultTopicRetentionBytes: 1000000000,
+				BaseDir: "./data",
 			})
 			Expect(err).NotTo(HaveOccurred())
 

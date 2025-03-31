@@ -22,15 +22,13 @@ import (
 var _ = Describe("Redpanda YAML Comparator", func() {
 	Describe("ConfigsEqual", func() {
 		It("should consider identical configs equal", func() {
-			config1 := RedpandaServiceConfig{
-				DefaultTopicRetentionMs:    1000,
-				DefaultTopicRetentionBytes: 1000,
-			}
+			config1 := RedpandaServiceConfig{}
+			config1.Topic.DefaultTopicRetentionMs = 1000
+			config1.Topic.DefaultTopicRetentionBytes = 1000
 
-			config2 := RedpandaServiceConfig{
-				DefaultTopicRetentionMs:    1000,
-				DefaultTopicRetentionBytes: 1000,
-			}
+			config2 := RedpandaServiceConfig{}
+			config2.Topic.DefaultTopicRetentionMs = 1000
+			config2.Topic.DefaultTopicRetentionBytes = 1000
 
 			comparator := NewComparator()
 			equal := comparator.ConfigsEqual(config1, config2)
@@ -38,15 +36,13 @@ var _ = Describe("Redpanda YAML Comparator", func() {
 			Expect(equal).To(BeTrue())
 		})
 		It("should consider different configs unequal", func() {
-			config1 := RedpandaServiceConfig{
-				DefaultTopicRetentionMs:    1000,
-				DefaultTopicRetentionBytes: 1000,
-			}
+			config1 := RedpandaServiceConfig{}
+			config1.Topic.DefaultTopicRetentionMs = 1000
+			config1.Topic.DefaultTopicRetentionBytes = 1000
 
-			config2 := RedpandaServiceConfig{
-				DefaultTopicRetentionMs:    1000,
-				DefaultTopicRetentionBytes: 1001,
-			}
+			config2 := RedpandaServiceConfig{}
+			config2.Topic.DefaultTopicRetentionMs = 1000
+			config2.Topic.DefaultTopicRetentionBytes = 1001
 
 			comparator := NewComparator()
 			equal := comparator.ConfigsEqual(config1, config2)
@@ -57,20 +53,18 @@ var _ = Describe("Redpanda YAML Comparator", func() {
 
 	Describe("ConfigDiff", func() {
 		It("should generate readable diff for different configs", func() {
-			config1 := RedpandaServiceConfig{
-				DefaultTopicRetentionMs:    1000,
-				DefaultTopicRetentionBytes: 1000,
-			}
+			config1 := RedpandaServiceConfig{}
+			config1.Topic.DefaultTopicRetentionMs = 1000
+			config1.Topic.DefaultTopicRetentionBytes = 1000
 
-			config2 := RedpandaServiceConfig{
-				DefaultTopicRetentionMs:    1001,
-				DefaultTopicRetentionBytes: 1000,
-			}
+			config2 := RedpandaServiceConfig{}
+			config2.Topic.DefaultTopicRetentionMs = 1001
+			config2.Topic.DefaultTopicRetentionBytes = 1000
 
 			comparator := NewComparator()
 			diff := comparator.ConfigDiff(config1, config2)
 
-			Expect(diff).To(ContainSubstring("DefaultTopicRetentionMs"))
+			Expect(diff).To(ContainSubstring("Topic.DefaultTopicRetentionMs"))
 			Expect(diff).To(ContainSubstring("1000"))
 			Expect(diff).To(ContainSubstring("1001"))
 		})

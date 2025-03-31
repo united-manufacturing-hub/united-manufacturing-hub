@@ -255,7 +255,7 @@ func (s *RedpandaService) generateRedpandaYaml(config *redpandaserviceconfig.Red
 		return "", fmt.Errorf("config is nil")
 	}
 
-	return redpandayaml.RenderRedpandaYAML(config.DefaultTopicRetentionMs, config.DefaultTopicRetentionBytes)
+	return redpandayaml.RenderRedpandaYAML(config.Topic.DefaultTopicRetentionMs, config.Topic.DefaultTopicRetentionBytes)
 }
 
 // generateS6ConfigForRedpanda creates a S6 config for a given redpanda instance
@@ -268,12 +268,12 @@ func (s *RedpandaService) GenerateS6ConfigForRedpanda(redpandaConfig *redpandase
 		return s6serviceconfig.S6ServiceConfig{}, err
 	}
 
-	if redpandaConfig.MaxCores == 0 {
-		redpandaConfig.MaxCores = 1
+	if redpandaConfig.Resources.MaxCores == 0 {
+		redpandaConfig.Resources.MaxCores = 1
 	}
 
-	if redpandaConfig.MemoryPerCoreInBytes == 0 {
-		redpandaConfig.MemoryPerCoreInBytes = 1024 * 1024 * 1024 // 1GB
+	if redpandaConfig.Resources.MemoryPerCoreInBytes == 0 {
+		redpandaConfig.Resources.MemoryPerCoreInBytes = 1024 * 1024 * 1024 // 1GB
 	}
 
 	s6Config = s6serviceconfig.S6ServiceConfig{
@@ -281,10 +281,12 @@ func (s *RedpandaService) GenerateS6ConfigForRedpanda(redpandaConfig *redpandase
 			"/opt/redpanda/bin/redpanda",
 			"--redpanda-cfg",
 			configPath,
+			// --memory comes directly from seastar (you can find all redpanda seastar options by executing `redpanda --help` or `redpanda --seastar-help`)
 			"--memory",
-			formatMemory(redpandaConfig.MemoryPerCoreInBytes),
+			formatMemory(redpandaConfig.Resources.MemoryPerCoreInBytes),
+			// --smp comes directly from seastar (you can find all redpanda seastar options by executing `redpanda --help` or `redpanda --seastar-help`)
 			"--smp",
-			fmt.Sprintf("%d", redpandaConfig.MaxCores),
+			fmt.Sprintf("%d", redpandaConfig.Resources.MaxCores),
 		},
 		Env: map[string]string{},
 		ConfigFiles: map[string]string{
@@ -319,17 +321,17 @@ func (s *RedpandaService) GetConfig(ctx context.Context) (redpandaserviceconfig.
 
 	// Safely extract retention_ms
 	if defaultTopicRetentionMs, ok := redpandaConfig["log_retention_ms"].(int); ok {
-		result.DefaultTopicRetentionMs = defaultTopicRetentionMs
+		result.Topic.DefaultTopicRetentionMs = defaultTopicRetentionMs
 	}
 
 	// Safely extract retention_bytes
 	if defaultTopicRetentionBytes, ok := redpandaConfig["retention_bytes"].(int); ok {
-		result.DefaultTopicRetentionBytes = defaultTopicRetentionBytes
+		result.Topic.DefaultTopicRetentionBytes = defaultTopicRetentionBytes
 	}
 
 	// Safely extract MaxCores (smp in the yaml)
 	if maxCores, ok := redpandaConfig["smp"].(int); ok {
-		result.MaxCores = maxCores
+		result.Resources.MaxCores = maxCores
 	}
 
 	return redpandayaml.NormalizeRedpandaConfig(result), nil
@@ -708,14 +710,6 @@ func (s *RedpandaService) ensureRedpandaDirectories(ctx context.Context, baseDir
 		return fmt.Errorf("failed to ensure %s/redpanda/coredump directory exists: %w", baseDir, err)
 	}
 
-	// Ensure that redpanda & subfolders belong to the nobody user & group
-	if err := s.filesystem.Chown(ctx, filepath.Join(baseDir, "redpanda"), "nobody", "nobody"); err != nil {
-		return fmt.Errorf("failed to chown %s/redpanda to nobody:nobody: %w", baseDir, err)
-	}
-
-	if err := s.filesystem.Chown(ctx, filepath.Join(baseDir, "redpanda", "coredump"), "nobody", "nobody"); err != nil {
-		return fmt.Errorf("failed to chown %s/redpanda/coredump to nobody:nobody: %w", baseDir, err)
-	}
 	return nil
 }
 
