@@ -94,6 +94,14 @@ test-empty: clean build
 		-p 8081:8080 \
 		$(IMAGE_NAME):$(TAG)
 
+test-clean-install: clean build
+	docker run \
+		--name $(IMAGE_NAME) \
+		-v $(PWD)/data:/data \
+		-e API_URL=https://management.umh.app/api \
+		-e RELEASE_CHANNEL=enterprise \
+		$(IMAGE_NAME):$(TAG)
+
 test-hello: clean build
 	@mkdir -p $(PWD)/data
 	@cp $(PWD)/examples/example-config.yaml $(PWD)/data/config.yaml
