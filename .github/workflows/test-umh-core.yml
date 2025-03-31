@@ -47,6 +47,7 @@ jobs:
         working-directory: ./umh-core
         run: |
           make download-docker-binaries
+
       - name: Run unit tests
         run: make unit-test
 
@@ -74,6 +75,7 @@ jobs:
         working-directory: ./umh-core
         run: |
           make download-docker-binaries
+          
       - name: Run integration tests
         env:
           CI: true

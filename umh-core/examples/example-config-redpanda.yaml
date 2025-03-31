@@ -16,11 +16,9 @@ agent:
   metricsPort: 8080
 
 redpanda:
-  name: redpanda
   desiredState: active
   redpandaServiceConfig:
     # Note: The below settings only apply to newly created topics
-
     # this corresponds to log_retention_ms (See also: https://docs.redpanda.com/current/manage/cluster-maintenance/disk-utilization/)
     defaultTopicRetentionMs: 604800000
 

@@ -192,6 +192,7 @@ type RedpandaService struct {
 	httpClient       httpclient.HTTPClient
 	metricsState     *RedpandaMetricsState
 	filesystem       filesystem.Service // Filesystem service for file operations
+	baseDir          string
 }
 
 // RedpandaServiceOption is a function that modifies a RedpandaService
@@ -219,6 +220,13 @@ func WithFilesystem(fs filesystem.Service) RedpandaServiceOption {
 	}
 }
 
+// WithBaseDir sets the base directory for the RedpandaService
+func WithBaseDir(baseDir string) RedpandaServiceOption {
+	return func(s *RedpandaService) {
+		s.baseDir = baseDir
+	}
+}
+
 // NewDefaultRedpandaService creates a new default Redpanda service
 // name is the name of the Redpanda service as defined in the UMH config
 func NewDefaultRedpandaService(redpandaName string, opts ...RedpandaServiceOption) *RedpandaService {
@@ -230,6 +238,7 @@ func NewDefaultRedpandaService(redpandaName string, opts ...RedpandaServiceOptio
 		httpClient:   nil, // this is only for a mock in the tests
 		metricsState: NewRedpandaMetricsState(),
 		filesystem:   filesystem.NewDefaultService(),
+		baseDir:      "/data",
 	}
 
 	// Apply options
@@ -648,7 +657,7 @@ func (s *RedpandaService) AddRedpandaToS6Manager(ctx context.Context, cfg *redpa
 	}
 
 	// Ensure the required directories exist
-	if err := s.ensureRedpandaDirectories(ctx); err != nil {
+	if err := s.ensureRedpandaDirectories(ctx, cfg.BaseDir); err != nil {
 		return err
 	}
 
@@ -683,24 +692,29 @@ func (s *RedpandaService) AddRedpandaToS6Manager(ctx context.Context, cfg *redpa
 }
 
 // ensureRedpandaDirectories creates all necessary directories for Redpanda
-func (s *RedpandaService) ensureRedpandaDirectories(ctx context.Context) error {
+func (s *RedpandaService) ensureRedpandaDirectories(ctx context.Context, baseDir string) error {
+	if baseDir == "" {
+		s.logger.Warn("baseDir is empty, using default value /data")
+		baseDir = "/data"
+	}
+
 	// Ensure main data directory
-	if err := s.filesystem.EnsureDirectory(ctx, "/data/redpanda"); err != nil {
-		return fmt.Errorf("failed to ensure /data/redpanda directory exists: %w", err)
+	if err := s.filesystem.EnsureDirectory(ctx, filepath.Join(baseDir, "redpanda")); err != nil {
+		return fmt.Errorf("failed to ensure %s/redpanda directory exists: %w", baseDir, err)
 	}
 
 	// Ensure coredump directory
-	if err := s.filesystem.EnsureDirectory(ctx, "/data/redpanda/coredump"); err != nil {
-		return fmt.Errorf("failed to ensure /data/redpanda/coredump directory exists: %w", err)
+	if err := s.filesystem.EnsureDirectory(ctx, filepath.Join(baseDir, "redpanda", "coredump")); err != nil {
+		return fmt.Errorf("failed to ensure %s/redpanda/coredump directory exists: %w", baseDir, err)
 	}
 
 	// Ensure that redpanda & subfolders belong to the nobody user & group
-	if err := s.filesystem.Chown(ctx, "/data/redpanda", "nobody", "nobody"); err != nil {
-		return fmt.Errorf("failed to chown /data/redpanda to nobody:nobody: %w", err)
+	if err := s.filesystem.Chown(ctx, filepath.Join(baseDir, "redpanda"), "nobody", "nobody"); err != nil {
+		return fmt.Errorf("failed to chown %s/redpanda to nobody:nobody: %w", baseDir, err)
 	}
 
-	if err := s.filesystem.Chown(ctx, "/data/redpanda/coredump", "nobody", "nobody"); err != nil {
-		return fmt.Errorf("failed to chown /data/redpanda/coredump to nobody:nobody: %w", err)
+	if err := s.filesystem.Chown(ctx, filepath.Join(baseDir, "redpanda", "coredump"), "nobody", "nobody"); err != nil {
+		return fmt.Errorf("failed to chown %s/redpanda/coredump to nobody:nobody: %w", baseDir, err)
 	}
 	return nil
 }
