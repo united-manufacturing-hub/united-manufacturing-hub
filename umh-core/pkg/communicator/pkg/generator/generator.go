@@ -31,8 +31,8 @@ import (
 
 const (
 	// Manager name constants
-	containerManagerName = logger.ComponentContainerManager + constants.DefaultManagerName
-	benthosManagerName   = logger.ComponentBenthosManager + constants.DefaultManagerName
+	containerManagerName = logger.ComponentContainerManager + "_" + constants.DefaultManagerName
+	benthosManagerName   = logger.ComponentBenthosManager + "_" + constants.DefaultManagerName
 
 	// Instance name constants
 	coreInstanceName = "Core"
@@ -78,61 +78,42 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 	s.latestData.mu.RLock()
 	defer s.latestData.mu.RUnlock()
 
-	s.logger.Info("Generating status message")
-
-	// Lock state for reading
+	// Lock state for reading and hold it until we're done accessing state data
 	s.systemMu.Lock()
-	// Use the DeepCopy method instead of manual copying
-	state := s.state.DeepCopy()
-	s.systemMu.Unlock()
+	defer s.systemMu.Unlock()
 
-	s.logger.Info("Save the state in a map")
-
-	// Save the state in a map
-	managersMap := make(map[string]map[string]fsm.FSMInstanceSnapshot)
-	if state != nil {
-		for managerName, manager := range state.Managers {
-			instancesMap := make(map[string]fsm.FSMInstanceSnapshot)
-			instances := manager.GetInstances()
-
-			for instanceName, instance := range instances {
-				instancesMap[instanceName] = instance
-			}
-
-			managersMap[managerName] = instancesMap
-		}
-	}
-
-	if state == nil {
+	if s.state == nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, s.logger.Sugar(), "State is nil, using empty state")
 		s.logger.Error("State is nil, using empty state")
 		return nil
 	}
 
-	s.logger.Info("Create container data from the container manager if available")
-
 	// Create container data from the container manager if available
 	var containerData models.Container
-	if containerManager, ok := managersMap[containerManagerName]; ok {
-		if instance, ok := containerManager[coreInstanceName]; ok {
+
+	if containerManager, exists := s.state.Managers[containerManagerName]; exists {
+		instances := containerManager.GetInstances()
+
+		if instance, ok := instances[coreInstanceName]; ok {
 			containerData = buildContainerDataFromSnapshot(instance, s.logger)
 		} else {
-			s.logger.Warn("Core instance not found in container manager")
+			s.logger.Warn("Core instance not found in container manager",
+				zap.String("instanceName", coreInstanceName))
 			containerData = buildDefaultContainerData()
 		}
 	} else {
-		s.logger.Warn("Container manager not found in system snapshot")
+		s.logger.Warn("Container manager not found in system snapshot",
+			zap.String("managerName", containerManagerName))
+
 		containerData = buildDefaultContainerData()
 	}
-
-	s.logger.Info("Create a mocked status message")
 
 	// Create a mocked status message
 	statusMessage := &models.StatusMessage{
 		Core: models.Core{
 			Agent: models.Agent{
 				Health: &models.Health{
-					Message:       fmt.Sprintf("Agent is healthy, tick: %d", state.Tick),
+					Message:       fmt.Sprintf("Agent is healthy, tick: %d", s.state.Tick),
 					ObservedState: "running",
 					DesiredState:  "running",
 					Category:      models.Active,
@@ -233,8 +214,6 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 			},
 		},
 	}
-
-	s.logger.Info("Return the status message")
 
 	return statusMessage
 }
