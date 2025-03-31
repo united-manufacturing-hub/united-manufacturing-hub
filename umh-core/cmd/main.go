@@ -21,6 +21,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/env"
+
 	v2 "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/communication_state"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/models"
@@ -53,10 +55,42 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	// get the environment variables
+	authToken, err := env.GetAsString("AUTH_TOKEN", false, "")
+	if err != nil {
+		sentry.ReportIssuef(sentry.IssueTypeWarning, log, "Failed to get AUTH_TOKEN: %w", err)
+	}
+	apiUrl, err := env.GetAsString("API_URL", false, "")
+	if err != nil {
+		sentry.ReportIssuef(sentry.IssueTypeWarning, log, "Failed to get API_URL: %w", err)
+	}
+	releaseChannel, err := env.GetAsString("RELEASE_CHANNEL", false, "")
+	if err != nil {
+		sentry.ReportIssuef(sentry.IssueTypeWarning, log, "Failed to get RELEASE_CHANNEL: %w", err)
+	}
+	locations := make(map[int]string)
+	for i := 0; i <= 6; i++ {
+		location, err := env.GetAsString(fmt.Sprintf("LOCATION_%d", i), false, "")
+		if err != nil {
+			sentry.ReportIssuef(sentry.IssueTypeWarning, log, "Failed to get LOCATION_%d: %w", i, err)
+		}
+		locations[i] = location
+	}
+
 	// Load the config
 	configManager := config.NewFileConfigManager()
 	// this will check if the config at the given path exists and if not, it will be created with default values
-	configData, err := configManager.GetConfig(ctx, 0)
+	// and then overwritten with the given config parameters (communicator, release channel, location)
+	configData, err := configManager.GetConfigWithOverwritesOrCreateNew(ctx, config.FullConfig{
+		Agent: config.AgentConfig{
+			CommunicatorConfig: config.CommunicatorConfig{
+				APIURL:    apiUrl,
+				AuthToken: authToken,
+			},
+			ReleaseChannel: config.ReleaseChannel(releaseChannel),
+			Location:       locations,
+		},
+	})
 	if err != nil {
 		sentry.ReportIssuef(sentry.IssueTypeFatal, log, "Failed to load config: %w", err)
 		os.Exit(1)
