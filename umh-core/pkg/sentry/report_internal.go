@@ -38,7 +38,10 @@ func reportFatal(err error, log *zap.SugaredLogger) {
 
 	event := createSentryEvent(sentry.LevelFatal, err)
 	sendSentryEvent(event)
-	sentry.Flush(time.Second * 5)
+	ok := sentry.Flush(time.Second * 5)
+	if !ok {
+		log.Error("Failed to flush Sentry events")
+	}
 
 	log.Panic("Fatal error")
 }

@@ -20,6 +20,10 @@ on:
       - "**"
     paths:
       - "umh-core/**"
+  push:
+    branches:
+      - staging
+      - main
 
 env:
   REGISTRY: ghcr.io
