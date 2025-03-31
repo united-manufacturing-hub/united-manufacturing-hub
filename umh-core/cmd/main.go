@@ -119,7 +119,12 @@ func main() {
 	}
 	go SystemSnapshotLogger(ctx, controlLoop, systemSnapshot, systemMu)
 
-	enableBackendConnection(&configData, systemSnapshot, &communicationState, systemMu)
+	if configData.Agent.CommunicatorConfig.APIURL != "" && configData.Agent.CommunicatorConfig.AuthToken != "" {
+		enableBackendConnection(&configData, systemSnapshot, &communicationState, systemMu)
+	} else {
+		log.Warnf("No backend connection enabled, please set API_URL and AUTH_TOKEN")
+	}
+
 	controlLoop.Execute(ctx)
 
 	log.Info("umh-core completed")
