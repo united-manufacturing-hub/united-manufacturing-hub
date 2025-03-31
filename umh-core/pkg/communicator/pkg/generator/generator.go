@@ -19,7 +19,6 @@ import (
 	"math/rand"
 	"sync"
 
-	"github.com/tiendc/go-deepcopy"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
@@ -79,15 +78,15 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 	s.latestData.mu.RLock()
 	defer s.latestData.mu.RUnlock()
 
+	s.logger.Info("Generating status message")
+
 	// Lock state for reading
 	s.systemMu.Lock()
-	var state *fsm.SystemSnapshot
-	err := deepcopy.Copy(&state, s.state)
-	if err != nil {
-		sentry.ReportIssuef(sentry.IssueTypeError, s.logger.Sugar(), "Failed to deepcopy state: %s", err)
-		return nil
-	}
+	// Use the DeepCopy method instead of manual copying
+	state := s.state.DeepCopy()
 	s.systemMu.Unlock()
+
+	s.logger.Info("Save the state in a map")
 
 	// Save the state in a map
 	managersMap := make(map[string]map[string]fsm.FSMInstanceSnapshot)
@@ -106,8 +105,11 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 
 	if state == nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, s.logger.Sugar(), "State is nil, using empty state")
+		s.logger.Error("State is nil, using empty state")
 		return nil
 	}
+
+	s.logger.Info("Create container data from the container manager if available")
 
 	// Create container data from the container manager if available
 	var containerData models.Container
@@ -122,6 +124,8 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 		s.logger.Warn("Container manager not found in system snapshot")
 		containerData = buildDefaultContainerData()
 	}
+
+	s.logger.Info("Create a mocked status message")
 
 	// Create a mocked status message
 	statusMessage := &models.StatusMessage{
@@ -229,6 +233,8 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 			},
 		},
 	}
+
+	s.logger.Info("Return the status message")
 
 	return statusMessage
 }
