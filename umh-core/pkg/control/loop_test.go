@@ -26,6 +26,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
@@ -105,7 +106,7 @@ var _ = Describe("ControlLoop", func() {
 		// Set up a context with timeout
 		ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
 
-		starvationChecker := starvationchecker.NewStarvationChecker(starvationThreshold)
+		starvationChecker := starvationchecker.NewStarvationChecker(constants.StarvationThreshold)
 
 		// Initialize control loop with mocks
 		controlLoop = &ControlLoop{
@@ -126,7 +127,7 @@ var _ = Describe("ControlLoop", func() {
 		It("should set default values", func() {
 			loop := NewControlLoop()
 			Expect(loop).NotTo(BeNil())
-			Expect(loop.tickerTime).To(Equal(defaultTickerTime))
+			Expect(loop.tickerTime).To(Equal(constants.DefaultTickerTime))
 			Expect(loop.managers).To(HaveLen(3))
 			Expect(loop.configManager).NotTo(BeNil())
 		})
@@ -192,7 +193,7 @@ var _ = Describe("ControlLoop", func() {
 		It("should call Reconcile repeatedly until context is cancelled", func() {
 			// Create a tracking config manager that we can use to monitor calls
 			trackingConfig := config.NewMockConfigManager().WithConfig(config.FullConfig{})
-			starvationChecker := starvationchecker.NewStarvationChecker(starvationThreshold)
+			starvationChecker := starvationchecker.NewStarvationChecker(constants.StarvationThreshold)
 
 			// We'll create a new control loop specifically for this test
 			testLoop := &ControlLoop{
@@ -273,7 +274,7 @@ var _ = Describe("ControlLoop", func() {
 			// Track calls to verify the loop continues
 			var callCount int32
 
-			starvationChecker := starvationchecker.NewStarvationChecker(starvationThreshold)
+			starvationChecker := starvationchecker.NewStarvationChecker(constants.StarvationThreshold)
 
 			// Create a control loop with this config
 			timeoutLoop := &ControlLoop{

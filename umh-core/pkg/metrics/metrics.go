@@ -37,6 +37,7 @@ const (
 	ComponentBenthosService   = "benthos_service"
 	ComponentRedpandaService  = "redpanda_service"
 	ComponentFilesystem       = "filesystem"
+	ComponentContainerMonitor = "container_monitor"
 )
 
 var (
