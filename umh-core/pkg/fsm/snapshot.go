@@ -92,27 +92,6 @@ type SystemSnapshot struct {
 	Tick         uint64
 }
 
-// DeepCopy creates a deep copy of the SystemSnapshot
-func (s *SystemSnapshot) DeepCopy() *SystemSnapshot {
-	if s == nil {
-		return nil
-	}
-
-	copy := &SystemSnapshot{
-		Managers:     make(map[string]ManagerSnapshot),
-		SnapshotTime: s.SnapshotTime,
-		ConfigHash:   s.ConfigHash,
-		Tick:         s.Tick,
-	}
-
-	// Copy managers map by reference - managers are immutable snapshots already
-	for name, manager := range s.Managers {
-		copy.Managers[name] = manager
-	}
-
-	return copy
-}
-
 // SnapshotManager manages thread-safe creation, storage, and retrieval of system snapshots
 type SnapshotManager struct {
 	mu           sync.RWMutex
