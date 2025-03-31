@@ -1,0 +1,332 @@
+go vet -tags=test ./...
+nilaway -include-pkgs="github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core" -tags=test ./...
+ginkgo -r -v --tags=test --label-filter='integration' --fail-fast ./...
+[38;5;9m[1mGinkgo detected a version mismatch between the Ginkgo CLI and the version of Ginkgo imported by your packages:[0m
+  Ginkgo CLI Version:
+    [1m2.22.0[0m
+  Mismatched package versions found:
+    [1m2.23.3[0m used by integration, fsm, backoff, api, v2, http, pull, push, encoding, hash, subscriber, tracing, watchdog, config, benthosserviceconfig, redpandaserviceconfig, control, ctxutil, benthos, s6, portmanager, sentry, benthos, nmap, redpanda, s6, starvationchecker, benthos, s6
+
+  [38;5;243mGinkgo will continue to attempt to run but you may see errors (including flag
+  parsing errors) and should either update your go.mod or your version of the
+  Ginkgo CLI to match.
+
+  To install the matching version of the CLI run
+    [1mgo install github.com/onsi/ginkgo/v2/ginkgo[0m[38;5;243m
+  from a path that contains a go.mod file.  Alternatively you can use
+    [1mgo run github.com/onsi/ginkgo/v2/ginkgo[0m[38;5;243m
+  from a path that contains a go.mod file to invoke the matching version of the
+  Ginkgo CLI.
+
+  If you are attempting to test multiple packages that each have a different
+  version of the Ginkgo library with a single Ginkgo CLI that is currently
+  unsupported.
+  [0m
+Running Suite: UMH Integration Suite - /home/scarjit/Git/united-manufacturing-hub/umh-core/integration
+======================================================================================================
+Random Seed: [1m1743418379[0m
+
+Will run [1m1[0m of [1m12[0m specs
+[38;5;14mS[0m[38;5;14mS[0m[38;5;14mS[0m[38;5;14mS[0m[38;5;14mS[0m[38;5;14mS[0m[38;5;14mS[0m[38;5;14mS[0m[38;5;14mS[0m
+[38;5;243m------------------------------[0m
+[0mUMH Container Integration [38;5;243mwith service scaling test [0m[1mshould scale up to multiple services while maintaining healthy metrics[0m [38;5;204m[integration, scaling][0m
+[38;5;243m/home/scarjit/Git/united-manufacturing-hub/umh-core/integration/integration_test.go:209[0m
+  [1mSTEP:[0m Starting with an empty configuration [38;5;243m@ 03/31/25 12:52:59.788[0m
+
+=== STARTING CONTAINER BUILD AND RUN ===
+Container name: umh-core-ae7e8ac2
+Memory limit: 1024m
+Port mappings - Host:Container
+- Metrics: 8280:8080
+- Golden: 8281:8082
+Cleaning up any previous containers with the same name...
+Note: Container stop returned: exit status 125, output: Error: no container with name or ID "umh-core-ae7e8ac2" found: no such container
+ (this may be normal)
+Building Docker image...
+Core directory: /home/scarjit/Git/united-manufacturing-hub/umh-core
+Dockerfile path: /home/scarjit/Git/united-manufacturing-hub/umh-core/Dockerfile
+Docker build successful
+Writing local config file...
+Starting container...
+Container started with ID: 601e776e41d746db2cba8649d37656084529767f3a4a9d1d4baf92f4c5e1f183
+Writing config directly to container umh-core-ae7e8ac2...
+Container state: running
+Waiting for metrics endpoint to become available...
+Starting to wait for metrics at 2025-03-31T12:53:54+02:00
+Container name: umh-core-ae7e8ac2
+Using localhost URL with host port: http://localhost:8280/metrics
+Attempt 1: Connecting to metrics...
+Using localhost URL with host port: http://localhost:8280/metrics
+Attempt 2: Connecting to metrics...
+Successfully connected to metrics endpoint (http://localhost:8280/metrics) after 1.005577539s (2 attempts)
+Starting to wait for metrics at 2025-03-31T12:53:55+02:00
+Container name: umh-core-ae7e8ac2
+Using localhost URL with host port: http://localhost:8280/metrics
+Attempt 1: Connecting to metrics...
+Successfully connected to metrics endpoint (http://localhost:8280/metrics) after 1.770291ms (1 attempts)
+  [1mSTEP:[0m Adding the golden service as a baseline [38;5;243m@ 03/31/25 12:53:55.036[0m
+Writing config directly to container umh-core-ae7e8ac2...
+  [1mSTEP:[0m Waiting for the golden service to become responsive [38;5;243m@ 03/31/25 12:53:55.761[0m
+Using localhost URL with host port: http://localhost:8281/health
+  [1mSTEP:[0m Scaling up by adding 10 sleep services [38;5;243m@ 03/31/25 12:53:55.762[0m
+  Added service sleepy-0
+Writing config directly to container umh-core-ae7e8ac2...
+  Added service sleepy-1
+Writing config directly to container umh-core-ae7e8ac2...
+  Added service sleepy-2
+Writing config directly to container umh-core-ae7e8ac2...
+  Added service sleepy-3
+Writing config directly to container umh-core-ae7e8ac2...
+  Added service sleepy-4
+Writing config directly to container umh-core-ae7e8ac2...
+  Added service sleepy-5
+Writing config directly to container umh-core-ae7e8ac2...
+  Added service sleepy-6
+Writing config directly to container umh-core-ae7e8ac2...
+  Added service sleepy-7
+Writing config directly to container umh-core-ae7e8ac2...
+  Added service sleepy-8
+Writing config directly to container umh-core-ae7e8ac2...
+  Added service sleepy-9
+Writing config directly to container umh-core-ae7e8ac2...
+  [1mSTEP:[0m Simulating random stop/start actions on sleep services (chaos monkey) [38;5;243m@ 03/31/25 12:54:01.137[0m
+  Chaos monkey: stoping service sleepy-5
+Writing config directly to container umh-core-ae7e8ac2...
+Using localhost URL with host port: http://localhost:8280/metrics
+  ✓ Memory: 10.02 MB (limit: 512.00 MB)
+  ✓ Starved seconds: 0.00 (limit: 0)
+  ✓ No errors found above limit
+
+  Control loop reconcile time quantiles:
+    0.5 quantile: 0.00 ms
+    0.9 quantile: 1.00 ms
+    0.95 quantile: 1.00 ms
+    0.99 quantile: 1.00 ms
+
+  Reconcile p99 durations over 20.0 ms:
+  ✅ Metrics are healthy
+Using localhost URL with host port: http://localhost:8281/health
+  ✅ Golden service is running
+  Chaos monkey: stoping service sleepy-0
+Writing config directly to container umh-core-ae7e8ac2...
+Using localhost URL with host port: http://localhost:8280/metrics
+  ✓ Memory: 9.57 MB (limit: 512.00 MB)
+  ✓ Starved seconds: 0.00 (limit: 0)
+  ✓ No errors found above limit
+
+  Control loop reconcile time quantiles:
+    0.5 quantile: 0.00 ms
+    0.9 quantile: 1.00 ms
+    0.95 quantile: 1.00 ms
+    0.99 quantile: 1.00 ms
+
+  Reconcile p99 durations over 20.0 ms:
+  ✅ Metrics are healthy
+Using localhost URL with host port: http://localhost:8281/health
+  ✅ Golden service is running
+  Chaos monkey: stoping service sleepy-7
+Writing config directly to container umh-core-ae7e8ac2...
+Using localhost URL with host port: http://localhost:8280/metrics
+  ✓ Memory: 11.70 MB (limit: 512.00 MB)
+  ✓ Starved seconds: 0.00 (limit: 0)
+  ✓ No errors found above limit
+
+  Control loop reconcile time quantiles:
+    0.5 quantile: 0.00 ms
+    0.9 quantile: 1.00 ms
+    0.95 quantile: 1.00 ms
+    0.99 quantile: 1.00 ms
+
+  Reconcile p99 durations over 20.0 ms:
+  ✅ Metrics are healthy
+Using localhost URL with host port: http://localhost:8281/health
+  ✅ Golden service is running
+  Chaos monkey: starting service sleepy-3
+Writing config directly to container umh-core-ae7e8ac2...
+Using localhost URL with host port: http://localhost:8280/metrics
+  ✓ Memory: 13.65 MB (limit: 512.00 MB)
+  ✓ Starved seconds: 0.00 (limit: 0)
+  ✓ No errors found above limit
+
+  Control loop reconcile time quantiles:
+    0.5 quantile: 0.00 ms
+    0.9 quantile: 1.00 ms
+    0.95 quantile: 1.00 ms
+    0.99 quantile: 2.00 ms
+
+  Reconcile p99 durations over 20.0 ms:
+  ✅ Metrics are healthy
+Using localhost URL with host port: http://localhost:8281/health
+  ✅ Golden service is running
+  Chaos monkey: stoping service sleepy-5
+Writing config directly to container umh-core-ae7e8ac2...
+Using localhost URL with host port: http://localhost:8280/metrics
+  ✓ Memory: 13.18 MB (limit: 512.00 MB)
+  ✓ Starved seconds: 0.00 (limit: 0)
+  ✓ No errors found above limit
+
+  Control loop reconcile time quantiles:
+    0.5 quantile: 0.00 ms
+    0.9 quantile: 1.00 ms
+    0.95 quantile: 1.00 ms
+    0.99 quantile: 2.00 ms
+
+  Reconcile p99 durations over 20.0 ms:
+  ✅ Metrics are healthy
+Using localhost URL with host port: http://localhost:8281/health
+  ✅ Golden service is running
+  Chaos monkey: starting service sleepy-3
+Writing config directly to container umh-core-ae7e8ac2...
+Using localhost URL with host port: http://localhost:8280/metrics
+  ✓ Memory: 16.27 MB (limit: 512.00 MB)
+  ✓ Starved seconds: 0.00 (limit: 0)
+  ✓ No errors found above limit
+
+  Control loop reconcile time quantiles:
+    0.5 quantile: 0.00 ms
+    0.9 quantile: 1.00 ms
+    0.95 quantile: 1.00 ms
+    0.99 quantile: 2.00 ms
+
+  Reconcile p99 durations over 20.0 ms:
+  ✅ Metrics are healthy
+Using localhost URL with host port: http://localhost:8281/health
+  ✅ Golden service is running
+  Chaos monkey: starting service sleepy-5
+Writing config directly to container umh-core-ae7e8ac2...
+Using localhost URL with host port: http://localhost:8280/metrics
+  ✓ Memory: 18.54 MB (limit: 512.00 MB)
+  ✓ Starved seconds: 0.00 (limit: 0)
+  ✓ No errors found above limit
+
+  Control loop reconcile time quantiles:
+    0.5 quantile: 0.00 ms
+    0.9 quantile: 1.00 ms
+    0.95 quantile: 1.00 ms
+    0.99 quantile: 2.00 ms
+
+  Reconcile p99 durations over 20.0 ms:
+  ✅ Metrics are healthy
+Using localhost URL with host port: http://localhost:8281/health
+  ✅ Golden service is running
+  Chaos monkey: stoping service sleepy-4
+Writing config directly to container umh-core-ae7e8ac2...
+Using localhost URL with host port: http://localhost:8280/metrics
+  ✓ Memory: 19.92 MB (limit: 512.00 MB)
+  ✓ Starved seconds: 0.00 (limit: 0)
+  ✓ No errors found above limit
+
+  Control loop reconcile time quantiles:
+    0.5 quantile: 0.00 ms
+    0.9 quantile: 1.00 ms
+    0.95 quantile: 1.00 ms
+    0.99 quantile: 2.00 ms
+
+  Reconcile p99 durations over 20.0 ms:
+  ✅ Metrics are healthy
+Using localhost URL with host port: http://localhost:8281/health
+  ✅ Golden service is running
+  Chaos monkey: stoping service sleepy-4
+Writing config directly to container umh-core-ae7e8ac2...
+Using localhost URL with host port: http://localhost:8280/metrics
+  ✓ Memory: 15.78 MB (limit: 512.00 MB)
+  ✓ Starved seconds: 0.00 (limit: 0)
+  ✓ No errors found above limit
+
+  Control loop reconcile time quantiles:
+    0.5 quantile: 1.00 ms
+    0.9 quantile: 1.00 ms
+    0.95 quantile: 1.00 ms
+    0.99 quantile: 2.00 ms
+
+  Reconcile p99 durations over 20.0 ms:
+  ✅ Metrics are healthy
+Using localhost URL with host port: http://localhost:8281/health
+  ✅ Golden service is running
+  Chaos monkey: stoping service sleepy-9
+Writing config directly to container umh-core-ae7e8ac2...
+Using localhost URL with host port: http://localhost:8280/metrics
+  ✓ Memory: 17.16 MB (limit: 512.00 MB)
+  ✓ Starved seconds: 0.00 (limit: 0)
+  ✓ No errors found above limit
+
+  Control loop reconcile time quantiles:
+    0.5 quantile: 1.00 ms
+    0.9 quantile: 1.00 ms
+    0.95 quantile: 1.00 ms
+    0.99 quantile: 2.00 ms
+
+  Reconcile p99 durations over 20.0 ms:
+  ✅ Metrics are healthy
+Using localhost URL with host port: http://localhost:8281/health
+  ✅ Golden service is running
+  Chaos monkey: starting service sleepy-2
+Writing config directly to container umh-core-ae7e8ac2...
+Using localhost URL with host port: http://localhost:8280/metrics
+  ✓ Memory: 19.45 MB (limit: 512.00 MB)
+  ✓ Starved seconds: 0.00 (limit: 0)
+  ✓ No errors found above limit
+
+  Control loop reconcile time quantiles:
+    0.5 quantile: 1.00 ms
+    0.9 quantile: 1.00 ms
+    0.95 quantile: 1.00 ms
+    0.99 quantile: 2.00 ms
+
+  Reconcile p99 durations over 20.0 ms:
+  ✅ Metrics are healthy
+Using localhost URL with host port: http://localhost:8281/health
+  ✅ Golden service is running
+  Chaos monkey: stoping service sleepy-0
+Writing config directly to container umh-core-ae7e8ac2...
+Using localhost URL with host port: http://localhost:8280/metrics
+  ✓ Memory: 21.00 MB (limit: 512.00 MB)
+  [38;5;9m[FAILED][0m in [It] - /home/scarjit/Git/united-manufacturing-hub/umh-core/integration/metrics_parsing.go:135 [38;5;243m@ 03/31/25 12:54:10.188[0m
+  [1mSTEP:[0m Stopping the container after the scaling test [38;5;243m@ 03/31/25 12:54:10.188[0m
+Test failed, printing container logs:
+Test failed, printing container logs:
+
+=== DOCKER CONTAINER LOGS ===
+Failed to get container logs: exit status 125
+
+=== UMH CORE INTERNAL LOGS ===
+Failed to get UMH Core internal logs: exit status 125
+
+=== GOLDEN SERVICE INTERNAL LOGS ===
+Failed to get Golden Service internal logs: exit status 125
+
+=== AVAILABLE LOG FILES ===
+Failed to list log files: exit status 125
+
+Latest YAML config at time of failure:
+Failed to read config file /home/scarjit/Git/united-manufacturing-hub/umh-core/integration/umh-config/config-ae7e8ac2.yaml: open /home/scarjit/Git/united-manufacturing-hub/umh-core/integration/umh-config/config-ae7e8ac2.yaml: no such file or directory
+
+Test failed. Container name: umh-core-ae7e8ac2
+[38;5;9m• [FAILED] [74.726 seconds][0m
+[0mUMH Container Integration [38;5;243mwith service scaling test [38;5;9m[1m[It] should scale up to multiple services while maintaining healthy metrics[0m [38;5;204m[integration, scaling][0m
+[38;5;243m/home/scarjit/Git/united-manufacturing-hub/umh-core/integration/integration_test.go:209[0m
+
+  [38;5;9m[FAILED] Expected starved seconds (15.00) to be == 0.00
+  Expected
+      <float64>: 15.001073302
+  to be ==
+      <float64>: 0[0m
+  [38;5;9mIn [1m[It][0m[38;5;9m at: [1m/home/scarjit/Git/united-manufacturing-hub/umh-core/integration/metrics_parsing.go:135[0m [38;5;243m@ 03/31/25 12:54:10.188[0m
+[38;5;243m------------------------------[0m
+[38;5;14mS[0m[38;5;14mS[0m
+
+[38;5;9m[1mSummarizing 1 Failure:[0m
+  [38;5;9m[FAIL][0m [0mUMH Container Integration [38;5;243mwith service scaling test [38;5;9m[1m[It] should scale up to multiple services while maintaining healthy metrics[0m [38;5;204m[integration, scaling][0m
+  [38;5;243m/home/scarjit/Git/united-manufacturing-hub/umh-core/integration/metrics_parsing.go:135[0m
+
+[38;5;9m[1mRan 1 of 12 Specs in 74.727 seconds[0m
+[38;5;9m[1mFAIL![0m -- [38;5;10m[1m0 Passed[0m | [38;5;9m[1m1 Failed[0m | [38;5;11m[1m0 Pending[0m | [38;5;14m[1m11 Skipped[0m
+--- FAIL: TestIntegration (74.73s)
+FAIL
+
+Ginkgo ran 29 suites in 1m15.358884704s
+
+There were failures detected in the following suites:
+  [38;5;9mintegration [38;5;243m./integration[0m
+
+Test Suite Failed
