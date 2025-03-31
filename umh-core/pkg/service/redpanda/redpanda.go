@@ -19,7 +19,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"path/filepath"
 	"strings"
@@ -74,11 +73,6 @@ type IRedpandaService interface {
 	IsMetricsErrorFree(metrics Metrics) bool
 	// HasProcessingActivity checks if a Redpanda service has processing activity
 	HasProcessingActivity(status RedpandaStatus) bool
-}
-
-// HTTPClient interface for making HTTP requests
-type HTTPClient interface {
-	Do(req *http.Request) (*http.Response, error)
 }
 
 // ServiceInfo contains information about a Redpanda service
@@ -549,8 +543,8 @@ func (s *RedpandaService) GetHealthCheckAndMetrics(ctx context.Context, tick uin
 		}, nil
 	}
 
-	baseURL := "http://localhost:9644/"
-	metricsEndpoint := "public_metrics"
+	baseURL := "http://localhost:9644"
+	metricsEndpoint := baseURL + "/public_metrics"
 
 	// Create a client to use for our requests
 	// If it's a mock client (used in tests), use it directly
@@ -562,76 +556,33 @@ func (s *RedpandaService) GetHealthCheckAndMetrics(ctx context.Context, tick uin
 		requestClient = httpclient.NewDefaultHTTPClient()
 	}
 
-	// Helper function to make HTTP requests with context
-	doRequest := func(endpoint string) (*http.Response, error) {
-		start := time.Now()
-
-		defer func() {
-			s.logger.Debugf("Request for %s took %s", endpoint, time.Since(start))
-		}()
-
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, baseURL+endpoint, nil)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create request for %s: %w", endpoint, err)
-		}
-		resp, err := requestClient.Do(req)
-		if err != nil {
-			return nil, fmt.Errorf("failed to execute request for %s: %w", endpoint, err)
-		}
-		return resp, nil
+	// For Redpanda, we can use a single call to the metrics endpoint for all checks
+	resp, body, err := requestClient.GetWithBody(ctx, metricsEndpoint)
+	if err != nil {
+		return RedpandaStatus{}, fmt.Errorf("failed to check metrics endpoint: %w", err)
 	}
 
-	var healthCheck HealthCheck
-
-	// Check liveness
-	if resp, err := doRequest(metricsEndpoint); err == nil && resp != nil {
-		healthCheck.IsLive = resp.StatusCode == http.StatusOK
-		resp.Body.Close()
-	} else {
-		return RedpandaStatus{}, fmt.Errorf("failed to check liveness: %w", err)
+	// Create our health check structure
+	healthCheck := HealthCheck{
+		// Both liveness and readiness are determined by a successful response
+		IsLive:  resp.StatusCode == http.StatusOK,
+		IsReady: resp.StatusCode == http.StatusOK,
+		// Redpanda version is constant
+		Version: constants.RedpandaVersion,
 	}
 
-	// Check readiness
-	if resp, err := doRequest(metricsEndpoint); err == nil && resp != nil {
-		defer resp.Body.Close()
-
-		// Even if status is 503, we still want to read the body to get the detailed status
-		body, err := io.ReadAll(resp.Body)
-		if err != nil {
-			return RedpandaStatus{}, fmt.Errorf("failed to read ready response body: %w", err)
-		}
-
-		// Service is ready if status is 200 and there's no error
-		healthCheck.IsReady = resp.StatusCode == http.StatusOK
-
-		// Log detailed status if not ready
-		if !healthCheck.IsReady {
-			s.logger.Debugw("Service not ready",
-				"service", constants.RedpandaServiceName,
-				"error", string(body))
-		}
-	} else {
-		return RedpandaStatus{}, fmt.Errorf("failed to check readiness: %w", err)
+	// If service is not ready, log detailed status
+	if !healthCheck.IsReady {
+		s.logger.Debugw("Service not ready",
+			"service", constants.RedpandaServiceName,
+			"status", resp.StatusCode,
+			"body", string(body))
 	}
 
-	// Get version
-	healthCheck.Version = constants.RedpandaVersion
-
-	var metrics Metrics
-
-	// Get metrics
-	if resp, err := doRequest(metricsEndpoint); err == nil && resp != nil {
-		defer resp.Body.Close()
-
-		body, err := io.ReadAll(resp.Body)
-		if err != nil {
-			return RedpandaStatus{}, fmt.Errorf("failed to read metrics response body: %w", err)
-		}
-
-		metrics, err = parseMetrics(body)
-		if err != nil {
-			return RedpandaStatus{}, fmt.Errorf("failed to parse metrics: %w", err)
-		}
+	// Parse metrics from the response body
+	metricsData, err := parseMetrics(body)
+	if err != nil {
+		return RedpandaStatus{}, fmt.Errorf("failed to parse metrics: %w", err)
 	}
 
 	// Update the metrics state
@@ -639,11 +590,11 @@ func (s *RedpandaService) GetHealthCheckAndMetrics(ctx context.Context, tick uin
 		return RedpandaStatus{}, fmt.Errorf("metrics state not initialized")
 	}
 
-	s.metricsState.UpdateFromMetrics(metrics, tick)
+	s.metricsState.UpdateFromMetrics(metricsData, tick)
 
 	return RedpandaStatus{
 		HealthCheck:  healthCheck,
-		Metrics:      metrics,
+		Metrics:      metricsData,
 		MetricsState: s.metricsState,
 	}, nil
 }

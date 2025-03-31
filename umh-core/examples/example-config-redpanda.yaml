@@ -18,6 +18,7 @@ agent:
 redpanda:
   desiredState: active
   redpandaServiceConfig:
+    # Note: Any change in here, will result in a restart of the Redpanda service
     topic:
       # Note: The below settings only apply to newly created topics
       # this corresponds to log_retention_ms (See also: https://docs.redpanda.com/current/manage/cluster-maintenance/disk-utilization/)
