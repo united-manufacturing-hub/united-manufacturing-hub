@@ -24,7 +24,7 @@ const (
 	// Manager components
 	ComponentS6Manager        = "S6Manager"
 	ComponentBenthosManager   = "BenthosManager"
-	ComponentContainerManager = "ContainerManager"
+	ComponentContainerManager = "containerManager"
 	// FSM components
 	ComponentBaseFSM         = "BaseFSM"
 	ComponentS6Instance      = "S6Instance"
