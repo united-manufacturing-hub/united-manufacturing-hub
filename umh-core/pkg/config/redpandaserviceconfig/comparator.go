@@ -71,6 +71,11 @@ func (c *Comparator) ConfigDiff(desired, observed RedpandaServiceConfig) string 
 			normDesired.MaxCores, normObserved.MaxCores))
 	}
 
+	if normDesired.MemoryPerCoreInBytes != normObserved.MemoryPerCoreInBytes {
+		diff.WriteString(fmt.Sprintf("MemoryPerCoreInBytes: Want: %d, Have: %d\n",
+			normDesired.MemoryPerCoreInBytes, normObserved.MemoryPerCoreInBytes))
+	}
+
 	if diff.Len() == 0 {
 		return "No significant differences"
 	}

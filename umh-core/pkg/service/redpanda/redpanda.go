@@ -236,7 +236,7 @@ func (s *RedpandaService) generateRedpandaYaml(config *redpandaserviceconfig.Red
 		return "", fmt.Errorf("config is nil")
 	}
 
-	return redpandayaml.RenderRedpandaYAML(config.DefaultTopicRetentionMs, config.DefaultTopicRetentionBytes, config.MaxCores)
+	return redpandayaml.RenderRedpandaYAML(config.DefaultTopicRetentionMs, config.DefaultTopicRetentionBytes)
 }
 
 // generateS6ConfigForRedpanda creates a S6 config for a given redpanda instance
@@ -254,6 +254,10 @@ func (s *RedpandaService) GenerateS6ConfigForRedpanda(redpandaConfig *redpandase
 			"/opt/redpanda/bin/redpanda",
 			"--redpanda-cfg",
 			configPath,
+			"--memory",
+			formatMemory(redpandaConfig.MemoryPerCoreInBytes),
+			"--smp",
+			fmt.Sprintf("%d", redpandaConfig.MaxCores),
 		},
 		Env: map[string]string{},
 		ConfigFiles: map[string]string{
@@ -865,4 +869,17 @@ func (s *RedpandaService) ServiceExists(ctx context.Context) bool {
 // and the instance itself cannot be stopped or removed
 func (s *RedpandaService) ForceRemoveRedpanda(ctx context.Context) error {
 	return s.s6Service.ForceRemove(ctx, constants.RedpandaServiceName)
+}
+
+func formatMemory(memory int) string {
+	// Convert bytes to B, K, M, G, T
+	units := []string{"B", "K", "M", "G", "T"}
+	unitIndex := 0
+
+	for memory >= 1024 {
+		memory /= 1024
+		unitIndex++
+	}
+
+	return fmt.Sprintf("%d%s", memory, units[unitIndex])
 }
