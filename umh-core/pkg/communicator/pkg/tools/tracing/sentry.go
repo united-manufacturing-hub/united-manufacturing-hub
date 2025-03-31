@@ -15,8 +15,6 @@
 package tracing
 
 import (
-	"time"
-
 	"github.com/getsentry/sentry-go"
 )
 
@@ -47,10 +45,4 @@ func InitSentryTracer(env, appVersion string) error {
 		TracesSampleRate: sampleRate,
 		EnableTracing:    true,
 	})
-}
-
-// FlushTracing flushes any pending traces to Sentry
-// This should be called before the application exits
-func FlushTracing() {
-	sentry.Flush(2 * time.Second)
 }

@@ -15,11 +15,8 @@
 // builder.go (or in integration_test.go)
 package integration_test
 
-// TODO: Ferdinand (29.03.2025 @ 00:35): This test needs to work with activated redpanda !
-
 import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/redpandaserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
 	"gopkg.in/yaml.v3"
 )
@@ -36,16 +33,6 @@ func NewBuilder() *Builder {
 			},
 			Services: []config.S6FSMConfig{},
 			Benthos:  []config.BenthosConfig{},
-			Redpanda: config.RedpandaConfig{
-				FSMInstanceConfig: config.FSMInstanceConfig{
-					Name:            "redpanda",
-					DesiredFSMState: "stopped",
-				},
-				RedpandaServiceConfig: redpandaserviceconfig.RedpandaServiceConfig{
-					DefaultTopicRetentionMs:    0,
-					DefaultTopicRetentionBytes: 0,
-				},
-			},
 		},
 	}
 }
@@ -83,16 +70,6 @@ output:
 			},
 		},
 	})
-	b.full.Redpanda = config.RedpandaConfig{
-		FSMInstanceConfig: config.FSMInstanceConfig{
-			Name:            "redpanda",
-			DesiredFSMState: "stopped",
-		},
-		RedpandaServiceConfig: redpandaserviceconfig.RedpandaServiceConfig{
-			DefaultTopicRetentionMs:    0,
-			DefaultTopicRetentionBytes: 0,
-		},
-	}
 	return b
 }
 
@@ -127,9 +104,6 @@ func (b *Builder) StopService(name string) *Builder {
 			break
 		}
 	}
-	if name == "redpanda" {
-		b.full.Redpanda.FSMInstanceConfig.DesiredFSMState = "stopped"
-	}
 	return b
 }
 
@@ -140,9 +114,6 @@ func (b *Builder) StartService(name string) *Builder {
 			b.full.Services[i].FSMInstanceConfig.DesiredFSMState = "running"
 			break
 		}
-	}
-	if name == "redpanda" {
-		b.full.Redpanda.FSMInstanceConfig.DesiredFSMState = "active"
 	}
 	return b
 }

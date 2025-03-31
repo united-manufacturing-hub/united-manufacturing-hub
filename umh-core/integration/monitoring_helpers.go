@@ -56,24 +56,20 @@ func checkMetricsHealthy() {
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, "GET", GetMetricsURL(), nil)
 	if err != nil {
-		fmt.Printf("Failed to create request: %v\n", err)
 		Fail(fmt.Errorf("failed to create request: %w\n", err).Error())
 	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		fmt.Printf("Failed to get metrics: %v\n", err)
 		Fail(fmt.Errorf("failed to get metrics: %w\n", err).Error())
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		fmt.Printf("Metrics endpoint returned non-200: %v\n", resp.StatusCode)
 		Fail(fmt.Sprintf("Metrics endpoint returned non-200: %v", resp.StatusCode))
 	}
 
 	data, err := io.ReadAll(resp.Body)
 	if err != nil {
-		fmt.Printf("Failed to read metrics: %v\n", err)
 		Fail(fmt.Errorf("failed to read metrics: %w\n", err).Error())
 	}
 

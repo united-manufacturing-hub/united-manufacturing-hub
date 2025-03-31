@@ -16,7 +16,6 @@ package integration_test
 
 import (
 	"bytes"
-	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
@@ -25,7 +24,6 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"time"
 )
 
 const (
@@ -147,7 +145,7 @@ func writeConfigFile(yamlContent string, containerName ...string) error {
 		}
 
 		// Verify the config was written correctly
-		_, err = runDockerCommand("exec", container, "cat", "/data/config.yaml")
+		out, err = runDockerCommand("exec", container, "cat", "/data/config.yaml")
 		if err != nil {
 			fmt.Printf("Failed to verify config in container: %v\n", err)
 			return fmt.Errorf("failed to verify config in container: %w", err)
@@ -201,9 +199,7 @@ func BuildAndRunContainer(configYaml string, memory string) error {
 	fmt.Printf("Core directory: %s\n", coreDir)
 	fmt.Printf("Dockerfile path: %s\n", dockerfilePath)
 
-	ctx10M, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
-	defer cancel()
-	out, err = runDockerCommandWithContext(ctx10M, "build", "-t", imageName, "-f", dockerfilePath, coreDir)
+	out, err = runDockerCommand("build", "-t", imageName, "-f", dockerfilePath, coreDir)
 	if err != nil {
 		fmt.Printf("Docker build failed: %v\n", err)
 		fmt.Printf("Build output:\n%s\n", out)
@@ -219,9 +215,7 @@ func BuildAndRunContainer(configYaml string, memory string) error {
 
 	// 4. Run container WITHOUT mounting the config file
 	fmt.Println("Starting container...")
-	ctx1M, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
-	defer cancel()
-	out, err = runDockerCommandWithContext(ctx1M,
+	out, err = runDockerCommand(
 		"run", "-d",
 		"--name", containerName,
 		"-e", "LOGGING_LEVEL=debug",
@@ -372,13 +366,7 @@ func printContainerLogs() {
 func StopContainer() {
 	containerName := getContainerName()
 	// First stop the container
-	_, err := runDockerCommand("stop", containerName)
-	if err != nil {
-		_, err = runDockerCommand("stop", "-s", "9", containerName)
-		if err != nil {
-			fmt.Printf("Failed to stop container: %v\n", err)
-		}
-	}
+	runDockerCommand("stop", containerName)
 	// Then remove it
 	runDockerCommand("rm", "-f", containerName)
 
@@ -453,30 +441,16 @@ func printContainerDebugInfo() {
 }
 
 func runDockerCommand(args ...string) (string, error) {
-	// Default timeout of 60 seconds
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-	defer cancel()
-	return runDockerCommandWithContext(ctx, args...)
-}
-
-func runDockerCommandWithContext(ctx context.Context, args ...string) (string, error) {
 	// Check if we use docker or podman
 	dockerCmd := "docker"
 	if _, err := exec.LookPath("podman"); err == nil {
 		dockerCmd = "podman"
 	}
-
-	cmd := exec.CommandContext(ctx, dockerCmd, args...)
+	cmd := exec.Command(dockerCmd, args...)
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	cmd.Stderr = &out
-
 	err := cmd.Run()
-
-	if ctx.Err() == context.DeadlineExceeded {
-		return "", fmt.Errorf("docker command timed out: %s %s", dockerCmd, strings.Join(args, " "))
-	}
-
 	return out.String(), err
 }
 
