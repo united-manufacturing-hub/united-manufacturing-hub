@@ -42,6 +42,10 @@ func (g *Generator) RenderConfig(cfg RedpandaServiceConfig) (string, error) {
 		cfg.DefaultTopicRetentionBytes = 0
 	}
 
+	if cfg.MaxCores == 0 {
+		cfg.MaxCores = 1
+	}
+
 	// Render the template
 	var rendered bytes.Buffer
 	if err := g.tmpl.Execute(&rendered, cfg); err != nil {
@@ -83,6 +87,9 @@ redpanda:
   # Default topic retention configuration:
   log_retention_ms: {{if eq .DefaultTopicRetentionMs 0}}-1{{else}}{{.DefaultTopicRetentionMs}}{{end}}
   retention_bytes: {{if eq .DefaultTopicRetentionBytes 0}}null{{else}}{{.DefaultTopicRetentionBytes}}{{end}}
+
+  # Performance configuration:
+  smp: {{.MaxCores}}
 
   # Auto topic creation configuration:
   auto_create_topics_enabled: true  # Enable automatic topic creation

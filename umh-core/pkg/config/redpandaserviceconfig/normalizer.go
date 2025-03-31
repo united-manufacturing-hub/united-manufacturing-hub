@@ -35,5 +35,9 @@ func (n *Normalizer) NormalizeConfig(cfg RedpandaServiceConfig) RedpandaServiceC
 		normalized.DefaultTopicRetentionBytes = 0
 	}
 
+	if normalized.MaxCores == 0 {
+		normalized.MaxCores = 1
+	}
+
 	return normalized
 }

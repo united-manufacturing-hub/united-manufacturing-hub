@@ -236,7 +236,7 @@ func (s *RedpandaService) generateRedpandaYaml(config *redpandaserviceconfig.Red
 		return "", fmt.Errorf("config is nil")
 	}
 
-	return redpandayaml.RenderRedpandaYAML(config.DefaultTopicRetentionMs, config.DefaultTopicRetentionBytes)
+	return redpandayaml.RenderRedpandaYAML(config.DefaultTopicRetentionMs, config.DefaultTopicRetentionBytes, config.MaxCores)
 }
 
 // generateS6ConfigForRedpanda creates a S6 config for a given redpanda instance
@@ -294,6 +294,11 @@ func (s *RedpandaService) GetConfig(ctx context.Context) (redpandaserviceconfig.
 	// Safely extract retention_bytes
 	if defaultTopicRetentionBytes, ok := redpandaConfig["retention_bytes"].(int); ok {
 		result.DefaultTopicRetentionBytes = defaultTopicRetentionBytes
+	}
+
+	// Safely extract MaxCores (smp in the yaml)
+	if maxCores, ok := redpandaConfig["smp"].(int); ok {
+		result.MaxCores = maxCores
 	}
 
 	return redpandayaml.NormalizeRedpandaConfig(result), nil

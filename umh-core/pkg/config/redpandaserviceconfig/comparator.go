@@ -66,6 +66,11 @@ func (c *Comparator) ConfigDiff(desired, observed RedpandaServiceConfig) string 
 			normDesired.DefaultTopicRetentionBytes, normObserved.DefaultTopicRetentionBytes))
 	}
 
+	if normDesired.MaxCores != normObserved.MaxCores {
+		diff.WriteString(fmt.Sprintf("MaxCores: Want: %d, Have: %d\n",
+			normDesired.MaxCores, normObserved.MaxCores))
+	}
+
 	if diff.Len() == 0 {
 		return "No significant differences"
 	}

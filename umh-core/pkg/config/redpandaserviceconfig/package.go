@@ -25,6 +25,7 @@ type RedpandaServiceConfig struct {
 	// Redpanda-specific configuration
 	DefaultTopicRetentionMs    int `yaml:"defaultTopicRetentionMs"`
 	DefaultTopicRetentionBytes int `yaml:"defaultTopicRetentionBytes"`
+	MaxCores                   int `yaml:"maxCores"`
 }
 
 // Equal checks if two RedpandaServiceConfigs are equal
@@ -33,11 +34,12 @@ func (c RedpandaServiceConfig) Equal(other RedpandaServiceConfig) bool {
 }
 
 // RenderRedpandaYAML is a package-level function for easy YAML generation
-func RenderRedpandaYAML(defaultTopicRetentionMs int, defaultTopicRetentionBytes int) (string, error) {
+func RenderRedpandaYAML(defaultTopicRetentionMs int, defaultTopicRetentionBytes int, maxCores int) (string, error) {
 	// Create a config object from the individual components
 	cfg := RedpandaServiceConfig{
 		DefaultTopicRetentionMs:    defaultTopicRetentionMs,
 		DefaultTopicRetentionBytes: defaultTopicRetentionBytes,
+		MaxCores:                   maxCores,
 	}
 
 	// Use the generator to render the YAML

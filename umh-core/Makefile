@@ -130,7 +130,7 @@ unit-test: vet nilaway
 	ginkgo -r -v --tags=test --label-filter='!integration' --fail-fast ./...
 
 
-integration-test: vet nilaway
+integration-test: stop-all-pods vet nilaway
 	ginkgo -r -v --tags=test --label-filter='integration' --fail-fast ./...
 
 # integration-test-ci: Runs integration tests in CI environments with proper version tagging
@@ -217,3 +217,8 @@ test-redpanda: clean build
 
 pod-shell:
 	docker exec -it $(IMAGE_NAME) /bin/bash
+
+stop-all-pods:
+	# Stops all pods starting with $(IMAGE_NAME)
+	docker ps -q --filter "name=$(IMAGE_NAME)*" | xargs -r docker stop
+
