@@ -78,7 +78,7 @@ RUN case "${TARGETARCH}" in \
 
 # Redpanda installation
 COPY --from=cache /redpanda/redpanda-${REDPANDA_VERSION}-arm64.tar.gz /redpanda/redpanda-${REDPANDA_VERSION}-arm64.tar.gz /redpanda/
-COPY --from=cache /redpanda/redpanda-${REDPANDA_VERSION}-amd64.tar.gz /redpanda/redpanda-${REDPANDA_VERSION}-arm64.tar.gz /redpanda/
+COPY --from=cache /redpanda/redpanda-${REDPANDA_VERSION}-amd64.tar.gz /redpanda/redpanda-${REDPANDA_VERSION}-amd64.tar.gz /redpanda/
 RUN case "${TARGETARCH}" in \
     "amd64") REDPANDA_ARCH="amd64" ;; \
     "arm64") REDPANDA_ARCH="arm64" ;; \
