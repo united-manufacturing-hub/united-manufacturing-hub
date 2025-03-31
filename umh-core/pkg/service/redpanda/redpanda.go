@@ -40,6 +40,7 @@ import (
 	dto "github.com/prometheus/client_model/go"
 	redpandayaml "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/redpandaserviceconfig"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 )
 
@@ -190,6 +191,7 @@ type RedpandaService struct {
 	s6ServiceConfigs []config.S6FSMConfig
 	httpClient       httpclient.HTTPClient
 	metricsState     *RedpandaMetricsState
+	filesystem       filesystem.Service // Filesystem service for file operations
 }
 
 // RedpandaServiceOption is a function that modifies a RedpandaService
@@ -210,6 +212,13 @@ func WithS6Service(s6Service s6service.Service) RedpandaServiceOption {
 	}
 }
 
+// WithFilesystem sets a custom filesystem service for the RedpandaService
+func WithFilesystem(fs filesystem.Service) RedpandaServiceOption {
+	return func(s *RedpandaService) {
+		s.filesystem = fs
+	}
+}
+
 // NewDefaultRedpandaService creates a new default Redpanda service
 // name is the name of the Redpanda service as defined in the UMH config
 func NewDefaultRedpandaService(redpandaName string, opts ...RedpandaServiceOption) *RedpandaService {
@@ -220,6 +229,7 @@ func NewDefaultRedpandaService(redpandaName string, opts ...RedpandaServiceOptio
 		s6Service:    s6service.NewDefaultService(),
 		httpClient:   nil, // this is only for a mock in the tests
 		metricsState: NewRedpandaMetricsState(),
+		filesystem:   filesystem.NewDefaultService(),
 	}
 
 	// Apply options
@@ -247,6 +257,14 @@ func (s *RedpandaService) GenerateS6ConfigForRedpanda(redpandaConfig *redpandase
 	yamlConfig, err := s.generateRedpandaYaml(redpandaConfig)
 	if err != nil {
 		return s6serviceconfig.S6ServiceConfig{}, err
+	}
+
+	if redpandaConfig.MaxCores == 0 {
+		redpandaConfig.MaxCores = 1
+	}
+
+	if redpandaConfig.MemoryPerCoreInBytes == 0 {
+		redpandaConfig.MemoryPerCoreInBytes = 1024 * 1024 * 1024 // 1GB
 	}
 
 	s6Config = s6serviceconfig.S6ServiceConfig{
@@ -629,6 +647,11 @@ func (s *RedpandaService) AddRedpandaToS6Manager(ctx context.Context, cfg *redpa
 		return ctx.Err()
 	}
 
+	// Ensure the required directories exist
+	if err := s.ensureRedpandaDirectories(ctx); err != nil {
+		return err
+	}
+
 	s6ServiceName := constants.RedpandaServiceName
 
 	// Check whether s6ServiceConfigs already contains an entry for this instance
@@ -656,6 +679,29 @@ func (s *RedpandaService) AddRedpandaToS6Manager(ctx context.Context, cfg *redpa
 	// Add the S6 FSM config to the list of S6 FSM configs
 	s.s6ServiceConfigs = append(s.s6ServiceConfigs, s6FSMConfig)
 
+	return nil
+}
+
+// ensureRedpandaDirectories creates all necessary directories for Redpanda
+func (s *RedpandaService) ensureRedpandaDirectories(ctx context.Context) error {
+	// Ensure main data directory
+	if err := s.filesystem.EnsureDirectory(ctx, "/data/redpanda"); err != nil {
+		return fmt.Errorf("failed to ensure /data/redpanda directory exists: %w", err)
+	}
+
+	// Ensure coredump directory
+	if err := s.filesystem.EnsureDirectory(ctx, "/data/redpanda/coredump"); err != nil {
+		return fmt.Errorf("failed to ensure /data/redpanda/coredump directory exists: %w", err)
+	}
+
+	// Ensure that redpanda & subfolders belong to the nobody user & group
+	if err := s.filesystem.Chown(ctx, "/data/redpanda", "nobody", "nobody"); err != nil {
+		return fmt.Errorf("failed to chown /data/redpanda to nobody:nobody: %w", err)
+	}
+
+	if err := s.filesystem.Chown(ctx, "/data/redpanda/coredump", "nobody", "nobody"); err != nil {
+		return fmt.Errorf("failed to chown /data/redpanda/coredump to nobody:nobody: %w", err)
+	}
 	return nil
 }
 

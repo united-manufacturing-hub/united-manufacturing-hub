@@ -26,3 +26,13 @@ redpanda:
 
     # this corresponds to retention_bytes (See also: https://docs.redpanda.com/current/manage/cluster-maintenance/disk-utilization/)
     defaultTopicRetentionBytes: 0
+
+    # this corresponds to --smp from scylladb/seastar
+    # See also:
+    # - https://docs.redpanda.com/current/manage/kubernetes/k-manage-resources/#cpu
+    maxCores: 1
+
+    # this corresponds to --memory from scylladb/seastar
+    # See also:
+    # - https://docs.redpanda.com/current/manage/kubernetes/k-manage-resources/#memory
+    memoryPerCoreInBytes: 1073741824 # 1GB

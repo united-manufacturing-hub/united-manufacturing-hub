@@ -441,6 +441,7 @@ func printContainerDebugInfo() {
 }
 
 func runDockerCommand(args ...string) (string, error) {
+	fmt.Printf("Running docker command: %v\n", args)
 	// Check if we use docker or podman
 	dockerCmd := "docker"
 	if _, err := exec.LookPath("podman"); err == nil {

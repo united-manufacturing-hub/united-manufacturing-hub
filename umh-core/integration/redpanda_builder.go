@@ -52,32 +52,14 @@ func (b *RedpandaBuilder) AddGoldenRedpanda() *RedpandaBuilder {
 		RedpandaServiceConfig: redpandaserviceconfig.RedpandaServiceConfig{
 			DefaultTopicRetentionMs:    0, // Default
 			DefaultTopicRetentionBytes: 0, // Default
+			MaxCores:                   1,
+			MemoryPerCoreInBytes:       1024 * 1024 * 1024, // 1GB
 		},
 	}
 
 	// Add to configuration
 	b.full.Redpanda = redpandaConfig
 	b.activeRedpanda["golden-redpanda"] = true
-	return b
-}
-
-// AddGeneratorRedpanda adds a Redpanda service that generates messages and sends to stdout
-func (b *RedpandaBuilder) AddGeneratorRedpanda(name string, interval string) *RedpandaBuilder {
-	// Create Redpanda config with a generator input
-	redpandaConfig := config.RedpandaConfig{
-		FSMInstanceConfig: config.FSMInstanceConfig{
-			Name:            name,
-			DesiredFSMState: "active",
-		},
-		RedpandaServiceConfig: redpandaserviceconfig.RedpandaServiceConfig{
-			DefaultTopicRetentionMs:    0, // Default
-			DefaultTopicRetentionBytes: 0, // Default
-		},
-	}
-
-	// Add to configuration
-	b.full.Redpanda = redpandaConfig
-	b.activeRedpanda[name] = true
 	return b
 }
 

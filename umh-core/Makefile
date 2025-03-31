@@ -221,4 +221,5 @@ pod-shell:
 stop-all-pods:
 	# Stops all pods starting with $(IMAGE_NAME)
 	docker ps -q --filter "name=$(IMAGE_NAME)*" | xargs -r docker stop
-
+	# Remove all pods starting with $(IMAGE_NAME) (also show stopped pods)
+	docker ps -a -q --filter "name=$(IMAGE_NAME)*" | xargs -r docker rm

@@ -87,7 +87,6 @@ RUN case "${TARGETARCH}" in \
     mkdir -p /tmp/redpanda /opt/redpanda && \
     cp /redpanda/redpanda-${REDPANDA_VERSION}-${REDPANDA_ARCH}.tar.gz /tmp/redpanda/redpanda.tar.gz && \
     tar -xzf /tmp/redpanda/redpanda.tar.gz -C /opt/redpanda && rm /tmp/redpanda/redpanda.tar.gz && \
-    mkdir -p /data/redpanda /data/redpanda/coredump && \
     chmod +x /opt/redpanda/bin/redpanda
 
 # Cleanup all the files we don't need

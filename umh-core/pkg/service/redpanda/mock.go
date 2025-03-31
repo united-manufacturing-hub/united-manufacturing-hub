@@ -16,6 +16,7 @@ package redpanda
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
@@ -23,6 +24,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	s6_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/httpclient"
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 )
@@ -75,6 +77,9 @@ type MockRedpandaService struct {
 
 	// S6 service mock
 	S6Service s6service.Service
+
+	// Configuration to return on method calls
+	FileSystemMock filesystem.Service // Mock filesystem service
 }
 
 // Ensure MockRedpandaService implements IRedpandaService
@@ -101,6 +106,7 @@ func NewMockRedpandaService() *MockRedpandaService {
 		stateFlags:        &ServiceStateFlags{},
 		HTTPClient:        NewMockHTTPClient(),
 		S6Service:         &s6service.MockService{},
+		FileSystemMock:    filesystem.NewDefaultService(),
 	}
 }
 
@@ -177,6 +183,19 @@ func (m *MockRedpandaService) Status(ctx context.Context, tick uint64) (ServiceI
 // AddRedpandaToS6Manager mocks adding a Redpanda instance to the S6 manager
 func (m *MockRedpandaService) AddRedpandaToS6Manager(ctx context.Context, cfg *redpandaserviceconfig.RedpandaServiceConfig) error {
 	m.AddRedpandaToS6ManagerCalled = true
+
+	// Ensure the required directories exist if filesystem mock is set
+	if m.FileSystemMock != nil {
+		// Ensure main data directory
+		if err := m.FileSystemMock.EnsureDirectory(ctx, "/data/redpanda"); err != nil {
+			return fmt.Errorf("failed to ensure /data/redpanda directory exists: %w", err)
+		}
+
+		// Ensure coredump directory
+		if err := m.FileSystemMock.EnsureDirectory(ctx, "/data/redpanda/coredump"); err != nil {
+			return fmt.Errorf("failed to ensure /data/redpanda/coredump directory exists: %w", err)
+		}
+	}
 
 	// Check whether the service already exists
 	s6ServiceName := constants.RedpandaServiceName

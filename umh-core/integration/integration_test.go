@@ -16,6 +16,7 @@
 package integration_test
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"math/rand"
@@ -645,6 +646,78 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 			}
 
 			GinkgoWriter.Println("Benthos scaling test completed successfully")
+		})
+	})
+
+	Context("with redpanda enabled but no benthos services", Label("redpanda-only"), func() {
+		BeforeAll(func() {
+			By("Starting with an empty configuration")
+			cfg := NewBuilder().BuildYAML()
+			// Write the empty config and start the container
+			Expect(writeConfigFile(cfg)).To(Succeed())
+			Expect(BuildAndRunContainer(cfg, "1024m")).To(Succeed())
+			Expect(waitForMetrics()).To(Succeed(), "Metrics endpoint should be available with empty config")
+		})
+
+		AfterAll(func() {
+			By("Stopping the container after the redpanda-only test")
+			StopContainer()
+		})
+
+		It("should run redpanda without errors when no benthos services are configured", func() {
+			By("Adding a golden service as baseline")
+			builder := NewRedpandaBuilder()
+			builder.AddGoldenRedpanda()
+			cfg := builder.BuildYAML()
+			Expect(writeConfigFile(cfg, getContainerName())).To(Succeed())
+
+			By("Waiting for the metrics endpoint to be healthy")
+			Eventually(func() bool {
+				ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+				defer cancel()
+				req, err := http.NewRequestWithContext(ctx, "GET", GetMetricsURL(), nil)
+				if err != nil {
+					return false
+				}
+				resp, err := http.DefaultClient.Do(req)
+				if err != nil {
+					return false
+				}
+				defer resp.Body.Close()
+				return resp.StatusCode == http.StatusOK
+			}, 20*time.Second, 1*time.Second).Should(BeTrue(),
+				"Metrics endpoint should be healthy")
+
+			By("Verifying the system is stable for 30 seconds")
+			startTime := time.Now()
+			for time.Since(startTime) < 30*time.Second {
+				// Check metrics endpoint is healthy
+				checkMetricsHealthy()
+
+				// Check for any warning or error logs
+				out, err := runDockerCommand("logs", getContainerName())
+				Expect(err).NotTo(HaveOccurred(), "Should be able to retrieve container logs")
+
+				// Count warnings and errors
+				warningCount := 0
+				errorCount := 0
+				for _, line := range strings.Split(out, "\n") {
+					if strings.Contains(line, "[WARN]") {
+						warningCount++
+					}
+					if strings.Contains(line, "[ERROR]") {
+						errorCount++
+					}
+				}
+
+				GinkgoWriter.Printf("System status: Warnings: %d, Errors: %d\n", warningCount, errorCount)
+				Expect(errorCount).To(Equal(0), "There should be no errors in the logs")
+
+				// Wait before next check
+				time.Sleep(5 * time.Second)
+			}
+
+			GinkgoWriter.Println("Redpanda-only test completed successfully")
 		})
 	})
 })
