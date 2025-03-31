@@ -17,6 +17,7 @@ package integration_test
 
 import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/redpandaserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
 	"gopkg.in/yaml.v3"
 )
@@ -76,15 +77,20 @@ output:
 			},
 		},
 	})
-	b.full.Redpanda.Name = "redpanda"
-	b.full.Redpanda.FSMInstanceConfig.DesiredFSMState = "active"
 
-	b.full.Services = append(b.full.Services, config.S6FSMConfig{
+	// Set the Redpanda configuration for the RedpandaManagerCore to handle
+	// instead of trying to manage it as an S6 service
+	b.full.Redpanda = config.RedpandaConfig{
 		FSMInstanceConfig: config.FSMInstanceConfig{
 			Name:            "redpanda",
-			DesiredFSMState: "running",
+			DesiredFSMState: "stopped", // Set to stopped to avoid starvation during tests
 		},
-	})
+		RedpandaServiceConfig: redpandaserviceconfig.RedpandaServiceConfig{
+			DefaultTopicRetentionMs:    0,
+			DefaultTopicRetentionBytes: 0,
+		},
+	}
+
 	return b
 }
 
