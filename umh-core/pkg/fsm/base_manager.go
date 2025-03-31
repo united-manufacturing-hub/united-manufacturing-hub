@@ -330,7 +330,7 @@ func (m *BaseFSMManager[C]) Reconcile(
 			err = instance.SetDesiredFSMState(desiredState)
 			if err != nil {
 				metrics.IncErrorCount(metrics.ComponentBaseFSMManager, m.managerName)
-				m.logger.Errorf("failed to set desired state: %w for instance %s", err, name)
+				m.logger.Errorf("failed to set desired state: %v for instance %s", err, name)
 				return fmt.Errorf("failed to set desired state: %w", err), false
 			}
 			m.instances[name] = instance

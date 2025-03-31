@@ -33,6 +33,12 @@ func NewBuilder() *Builder {
 			},
 			Services: []config.S6FSMConfig{},
 			Benthos:  []config.BenthosConfig{},
+			Redpanda: config.RedpandaConfig{
+				FSMInstanceConfig: config.FSMInstanceConfig{
+					Name:            "redpanda",
+					DesiredFSMState: "active",
+				},
+			},
 		},
 	}
 }
@@ -70,6 +76,8 @@ output:
 			},
 		},
 	})
+	b.full.Redpanda.Name = "redpanda"
+	b.full.Redpanda.FSMInstanceConfig.DesiredFSMState = "active"
 	return b
 }
 

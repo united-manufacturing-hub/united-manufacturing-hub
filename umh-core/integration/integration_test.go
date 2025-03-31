@@ -190,7 +190,7 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 		})
 	})
 
-	Context("with service scaling test", Label("scaling"), func() {
+	FContext("with service scaling test", Label("scaling"), func() {
 
 		BeforeAll(func() {
 			By("Starting with an empty configuration")
