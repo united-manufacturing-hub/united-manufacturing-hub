@@ -21,6 +21,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/env"
+
 	v2 "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/communication_state"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/models"
@@ -53,16 +55,49 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	// get the environment variables
+	authToken, err := env.GetAsString("AUTH_TOKEN", false, "")
+	if err != nil {
+		sentry.ReportIssuef(sentry.IssueTypeWarning, log, "Failed to get AUTH_TOKEN: %w", err)
+	}
+	apiUrl, err := env.GetAsString("API_URL", false, "")
+	if err != nil {
+		sentry.ReportIssuef(sentry.IssueTypeWarning, log, "Failed to get API_URL: %w", err)
+	}
+	releaseChannel, err := env.GetAsString("RELEASE_CHANNEL", false, "")
+	if err != nil {
+		sentry.ReportIssuef(sentry.IssueTypeWarning, log, "Failed to get RELEASE_CHANNEL: %w", err)
+	}
+	locations := make(map[int]string)
+	for i := 0; i <= 6; i++ {
+		location, err := env.GetAsString(fmt.Sprintf("LOCATION_%d", i), false, "")
+		if err != nil {
+			sentry.ReportIssuef(sentry.IssueTypeWarning, log, "Failed to get LOCATION_%d: %w", i, err)
+		}
+		locations[i] = location
+	}
+
 	// Load the config
 	configManager := config.NewFileConfigManager()
-	config, err := configManager.GetConfig(ctx, 0)
+	// this will check if the config at the given path exists and if not, it will be created with default values
+	// and then overwritten with the given config parameters (communicator, release channel, location)
+	configData, err := configManager.GetConfigWithOverwritesOrCreateNew(ctx, config.FullConfig{
+		Agent: config.AgentConfig{
+			CommunicatorConfig: config.CommunicatorConfig{
+				APIURL:    apiUrl,
+				AuthToken: authToken,
+			},
+			ReleaseChannel: config.ReleaseChannel(releaseChannel),
+			Location:       locations,
+		},
+	})
 	if err != nil {
 		sentry.ReportIssuef(sentry.IssueTypeFatal, log, "Failed to load config: %w", err)
 		os.Exit(1)
 	}
 
 	// Start the metrics server
-	server := metrics.SetupMetricsEndpoint(fmt.Sprintf(":%d", config.Agent.MetricsPort))
+	server := metrics.SetupMetricsEndpoint(fmt.Sprintf(":%d", configData.Agent.MetricsPort))
 	defer func() {
 		// S6_KILL_FINISH_MAXTIME is 5 seconds, so we need to finish before that
 		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -80,11 +115,16 @@ func main() {
 		Watchdog:        watchdog.NewWatchdog(ctx, time.NewTicker(time.Second*10), true),
 		InboundChannel:  make(chan *models.UMHMessage, 100),
 		OutboundChannel: make(chan *models.UMHMessage, 100),
-		ReleaseChannel:  config.Agent.ReleaseChannel,
+		ReleaseChannel:  configData.Agent.ReleaseChannel,
 	}
 	go SystemSnapshotLogger(ctx, controlLoop, systemSnapshot, systemMu)
 
-	enableBackendConnection(&config, systemSnapshot, &communicationState, systemMu)
+	if configData.Agent.CommunicatorConfig.APIURL != "" && configData.Agent.CommunicatorConfig.AuthToken != "" {
+		enableBackendConnection(&configData, systemSnapshot, &communicationState, systemMu)
+	} else {
+		log.Warnf("No backend connection enabled, please set API_URL and AUTH_TOKEN")
+	}
+
 	controlLoop.Execute(ctx)
 
 	log.Info("umh-core completed")
