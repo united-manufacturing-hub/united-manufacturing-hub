@@ -58,6 +58,7 @@ func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePay
 			actionUUID:      payload.ActionUUID,
 			instanceUUID:    instanceUUID,
 			outboundChannel: outboundChannel,
+			configManager:   config.NewFileConfigManager(),
 		}
 	default:
 		zap.S().Errorf("Unknown action type: %s", payload.ActionType)

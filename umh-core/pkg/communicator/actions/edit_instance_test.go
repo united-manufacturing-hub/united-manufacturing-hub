@@ -12,333 +12,363 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package actions
+package actions_test
 
 import (
 	"context"
-	"fmt"
-	"os"
-	"path/filepath"
-	"testing"
+	"errors"
+	"sync"
+	"time"
 
 	"github.com/google/uuid"
-	"github.com/stretchr/testify/assert"
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/models"
-	filesystem "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 )
 
-// Mock for SendActionReply
-var originalSendActionReply = SendActionReply
-
-// MockActionReply mocks the SendActionReply function
-type ActionReplyMock struct {
-	InstanceUUID     uuid.UUID
-	UserEmail        string
-	ActionUUID       uuid.UUID
-	ActionReplyState models.ActionReplyState
-	Payload          interface{}
-	ActionType       models.ActionType
-	CallCount        int
+// MockConfigManager implements the config.ConfigManager interface for testing
+type MockConfigManager struct {
+	config          config.FullConfig
+	getShouldFail   bool
+	writeShouldFail bool
+	latestConfig    config.FullConfig
+	mutex           sync.Mutex
+	writeCallCount  int
+	getCallCount    int
 }
 
-// MockFileSystem provides a mock implementation for testing
-type MockFileSystem struct {
-	filesystem.Service
-	Files            map[string][]byte
-	DirectoriesExist map[string]bool
-}
-
-func NewMockFileSystem() *MockFileSystem {
-	return &MockFileSystem{
-		Files:            make(map[string][]byte),
-		DirectoriesExist: make(map[string]bool),
+func NewMockConfigManager() *MockConfigManager {
+	return &MockConfigManager{
+		config: config.FullConfig{
+			Agent: config.AgentConfig{
+				MetricsPort: 8080,
+				CommunicatorConfig: config.CommunicatorConfig{
+					APIURL:    "https://example.com",
+					AuthToken: "test-token",
+				},
+				ReleaseChannel: config.ReleaseChannelStable,
+				Location: map[int]string{
+					0: "Old Enterprise",
+					1: "Old Site",
+				},
+			},
+			Services: []config.S6FSMConfig{},
+			Benthos:  []config.BenthosConfig{},
+			Nmap:     []config.NmapConfig{},
+		},
 	}
 }
 
-func (m *MockFileSystem) ReadFile(_ context.Context, path string) ([]byte, error) {
-	if data, ok := m.Files[path]; ok {
-		return data, nil
+func (m *MockConfigManager) GetConfig(_ context.Context, _ uint64) (config.FullConfig, error) {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+
+	m.getCallCount++
+
+	if m.getShouldFail {
+		return config.FullConfig{}, errors.New("mock GetConfig failure")
 	}
-	return nil, os.ErrNotExist
+	return m.config.Clone(), nil
 }
 
-func (m *MockFileSystem) WriteFile(_ context.Context, path string, data []byte, _ os.FileMode) error {
-	m.Files[path] = data
-	dirPath := filepath.Dir(path)
-	m.DirectoriesExist[dirPath] = true
+func (m *MockConfigManager) WriteConfig(_ context.Context, cfg config.FullConfig) error {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+
+	m.writeCallCount++
+
+	if m.writeShouldFail {
+		return errors.New("mock WriteConfig failure")
+	}
+
+	m.latestConfig = cfg.Clone()
+	m.config = cfg.Clone()
 	return nil
 }
 
-func (m *MockFileSystem) FileExists(_ context.Context, path string) (bool, error) {
-	_, exists := m.Files[path]
-	return exists, nil
+func (m *MockConfigManager) WithGetConfigFailure() *MockConfigManager {
+	m.getShouldFail = true
+	return m
 }
 
-func (m *MockFileSystem) EnsureDirectory(_ context.Context, path string) error {
-	m.DirectoriesExist[path] = true
-	return nil
+func (m *MockConfigManager) WithWriteConfigFailure() *MockConfigManager {
+	m.writeShouldFail = true
+	return m
 }
 
-func TestEditInstanceAction_Parse(t *testing.T) {
-	tests := []struct {
-		name        string
-		payload     interface{}
-		expectedErr bool
-		expected    *EditInstanceLocation
-	}{
-		{
-			name: "Valid payload with all fields",
-			payload: map[string]interface{}{
-				"location": map[string]interface{}{
-					"enterprise": "TestEnterprise",
-					"site":       "TestSite",
-					"area":       "TestArea",
-					"line":       "TestLine",
-					"workCell":   "TestWorkCell",
-				},
-			},
-			expectedErr: false,
-			expected: &EditInstanceLocation{
-				Enterprise: "TestEnterprise",
-				Site:       stringPtr("TestSite"),
-				Area:       stringPtr("TestArea"),
-				Line:       stringPtr("TestLine"),
-				WorkCell:   stringPtr("TestWorkCell"),
-			},
-		},
-		{
-			name: "Valid payload with required fields only",
-			payload: map[string]interface{}{
-				"location": map[string]interface{}{
-					"enterprise": "TestEnterprise",
-				},
-			},
-			expectedErr: false,
-			expected: &EditInstanceLocation{
-				Enterprise: "TestEnterprise",
-			},
-		},
-		{
-			name: "Invalid payload - no location",
-			payload: map[string]interface{}{
-				"otherField": "someValue",
-			},
-			expectedErr: false, // Not an error, as location is optional
-			expected:    nil,
-		},
-		{
-			name: "Invalid payload - location not a map",
-			payload: map[string]interface{}{
-				"location": "notAMap",
-			},
-			expectedErr: true,
-			expected:    nil,
-		},
-		{
-			name: "Invalid payload - missing enterprise",
-			payload: map[string]interface{}{
-				"location": map[string]interface{}{
-					"site": "TestSite",
-				},
-			},
-			expectedErr: true,
-			expected:    nil,
-		},
-	}
+func (m *MockConfigManager) GetWriteCallCount() int {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	return m.writeCallCount
+}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			action := &EditInstanceAction{}
-			err := action.Parse(tt.payload)
+func (m *MockConfigManager) GetGetCallCount() int {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	return m.getCallCount
+}
 
-			if tt.expectedErr {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-				if tt.expected == nil {
-					assert.Nil(t, action.location)
-				} else {
-					assert.NotNil(t, action.location)
-					assert.Equal(t, tt.expected.Enterprise, action.location.Enterprise)
-					assertEqualStringPtr(t, tt.expected.Site, action.location.Site)
-					assertEqualStringPtr(t, tt.expected.Area, action.location.Area)
-					assertEqualStringPtr(t, tt.expected.Line, action.location.Line)
-					assertEqualStringPtr(t, tt.expected.WorkCell, action.location.WorkCell)
-				}
+var _ = Describe("EditInstance", func() {
+	// Variables used across tests
+	var (
+		action          *actions.EditInstanceAction
+		userEmail       string
+		actionUUID      uuid.UUID
+		instanceUUID    uuid.UUID
+		outboundChannel chan *models.UMHMessage
+		mockConfig      *MockConfigManager
+	)
+
+	// Setup before each test
+	BeforeEach(func() {
+		// Initialize test variables
+		userEmail = "test@example.com"
+		actionUUID = uuid.New()
+		instanceUUID = uuid.New()
+		outboundChannel = make(chan *models.UMHMessage, 10) // Buffer to prevent blocking
+		mockConfig = NewMockConfigManager()
+
+		// Create the action instance using the new constructor
+		action = actions.NewEditInstanceAction(userEmail, actionUUID, instanceUUID, outboundChannel)
+		// Inject our mock config manager
+		action.WithConfigManager(mockConfig)
+	})
+
+	// Cleanup after each test
+	AfterEach(func() {
+		// Drain the outbound channel to prevent goroutine leaks
+		for len(outboundChannel) > 0 {
+			<-outboundChannel
+		}
+		close(outboundChannel)
+	})
+
+	Describe("Parse", func() {
+		It("should parse valid location data", func() {
+			// Valid payload with complete location information
+			payload := map[string]interface{}{
+				"location": map[string]interface{}{
+					"enterprise": "Test Enterprise",
+					"site":       "Test Site",
+					"area":       "Test Area",
+					"line":       "Test Line",
+					"workCell":   "Test WorkCell",
+				},
 			}
+
+			// Call Parse method
+			err := action.Parse(payload)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Check if the location was properly parsed
+			location := action.GetLocation()
+			Expect(location).NotTo(BeNil())
 		})
-	}
-}
 
-func TestEditInstanceAction_Validate(t *testing.T) {
-	tests := []struct {
-		name        string
-		location    *EditInstanceLocation
-		expectedErr bool
-	}{
-		{
-			name: "Valid location",
-			location: &EditInstanceLocation{
-				Enterprise: "TestEnterprise",
-			},
-			expectedErr: false,
-		},
-		{
-			name:        "No location",
-			location:    nil,
-			expectedErr: false,
-		},
-		{
-			name: "Invalid location - empty enterprise",
-			location: &EditInstanceLocation{
-				Enterprise: "",
-			},
-			expectedErr: true,
-		},
-	}
+		It("should handle missing location data", func() {
+			// Payload without location information
+			payload := map[string]interface{}{}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			action := &EditInstanceAction{
-				location: tt.location,
+			// Call Parse method
+			err := action.Parse(payload)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Location should be nil
+			location := action.GetLocation()
+			Expect(location).To(BeNil())
+		})
+
+		It("should return error for invalid location format", func() {
+			// Invalid payload with location as a string instead of a map
+			payload := map[string]interface{}{
+				"location": "Invalid Location",
 			}
+
+			// Call Parse method
+			err := action.Parse(payload)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("invalid location format"))
+		})
+
+		It("should return error for missing enterprise in location", func() {
+			// Payload with location missing the required enterprise field
+			payload := map[string]interface{}{
+				"location": map[string]interface{}{
+					"site": "Test Site",
+				},
+			}
+
+			// Call Parse method
+			err := action.Parse(payload)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("missing or invalid enterprise"))
+		})
+	})
+
+	Describe("Validate", func() {
+		It("should validate with valid location data", func() {
+			// Create a valid location and set it using the exported method
+			location := &actions.EditInstanceLocation{
+				Enterprise: "Test Enterprise",
+			}
+
+			action.SetLocation(location)
+
+			// Validate
 			err := action.Validate()
-
-			if tt.expectedErr {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-			}
+			Expect(err).NotTo(HaveOccurred())
 		})
-	}
-}
 
-// TestEditInstanceAction_Execute tests the basic logic of the Execute method
-func TestEditInstanceAction_Execute(t *testing.T) {
-	tests := []struct {
-		name            string
-		location        *EditInstanceLocation
-		expectedMessage string
-		expectSuccess   bool
-	}{
-		{
-			name: "Update all location fields",
-			location: &EditInstanceLocation{
-				Enterprise: "NewEnterprise",
-				Site:       stringPtr("NewSite"),
-				Area:       stringPtr("NewArea"),
-				Line:       stringPtr("NewLine"),
-				WorkCell:   stringPtr("NewWorkCell"),
-			},
-			expectedMessage: "Successfully updated instance location to Enterprise: NewEnterprise, Site: NewSite, Area: NewArea, Line: NewLine, WorkCell: NewWorkCell",
-			expectSuccess:   true,
-		},
-		{
-			name: "Update enterprise only",
-			location: &EditInstanceLocation{
-				Enterprise: "NewEnterprise",
-			},
-			expectedMessage: "Successfully updated instance location to Enterprise: NewEnterprise",
-			expectSuccess:   true,
-		},
-		{
-			name:            "No location provided",
-			location:        nil,
-			expectedMessage: "No changes were made to the instance",
-			expectSuccess:   true,
-		},
-	}
+		It("should validate with nil location", func() {
+			// Don't set any location (which results in nil location)
+			action.SetLocation(nil)
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Create a test action with a simplified executor
-			action := &simpleTestEditInstanceAction{
-				location:        tt.location,
-				expectFailure:   !tt.expectSuccess,
-				updateWasCalled: false,
-			}
+			// Validate
+			err := action.Validate()
+			Expect(err).NotTo(HaveOccurred())
+		})
+	})
+
+	Describe("Execute", func() {
+		It("should handle nil location gracefully", func() {
+			// Parse with nil location
+			payload := map[string]interface{}{}
+			err := action.Parse(payload)
+			Expect(err).NotTo(HaveOccurred())
 
 			// Execute the action
 			result, metadata, err := action.Execute()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result).To(ContainSubstring("No changes were made"))
+			Expect(metadata).To(BeNil())
 
-			// Verify the results
-			if tt.expectSuccess {
-				assert.NoError(t, err)
-				assert.Equal(t, tt.expectedMessage, result)
-				assert.Nil(t, metadata)
-			} else {
-				assert.Error(t, err)
+			// We should have 2 messages in the channel (Confirmed and Executing)
+			var messages []*models.UMHMessage
+			for i := 0; i < 2; i++ {
+				select {
+				case msg := <-outboundChannel:
+					messages = append(messages, msg)
+				default:
+					Fail("Expected more messages in the outbound channel")
+				}
 			}
+			Expect(messages).To(HaveLen(2))
 
-			// If location was provided, check that the update was attempted
-			if tt.location != nil {
-				assert.True(t, action.updateWasCalled, "updateLocation should have been called")
-			} else {
-				assert.False(t, action.updateWasCalled, "updateLocation should not have been called")
-			}
+			// No calls to config manager should be made
+			Expect(mockConfig.GetGetCallCount()).To(Equal(0))
+			Expect(mockConfig.GetWriteCallCount()).To(Equal(0))
 		})
-	}
-}
 
-// simpleTestEditInstanceAction is a minimal test implementation that focuses on just the logic we need to test
-type simpleTestEditInstanceAction struct {
-	location        *EditInstanceLocation
-	expectFailure   bool
-	updateWasCalled bool
-}
+		It("should update location successfully", func() {
+			// Parse with valid location
+			payload := map[string]interface{}{
+				"location": map[string]interface{}{
+					"enterprise": "New Enterprise",
+					"site":       "New Site",
+					"area":       "New Area",
+				},
+			}
+			err := action.Parse(payload)
+			Expect(err).NotTo(HaveOccurred())
 
-// Execute implements a simplified version of Execute that omits SendActionReply calls
-func (a *simpleTestEditInstanceAction) Execute() (interface{}, map[string]interface{}, error) {
-	// If we don't have any location to update, return early
-	if a.location == nil {
-		return "No changes were made to the instance", nil, nil
-	}
+			// Execute the action
+			result, metadata, err := action.Execute()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result).To(ContainSubstring("Successfully updated"))
+			Expect(metadata).To(BeNil())
 
-	// Simulate updateLocation
-	err := a.mockUpdateLocation()
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to update instance location: %w", err)
-	}
+			// We should have 3 messages in the channel (Confirmed + Executing + Success)
+			var messages []*models.UMHMessage
+			for i := 0; i < 3; i++ {
+				select {
+				case msg := <-outboundChannel:
+					messages = append(messages, msg)
+				case <-time.After(100 * time.Millisecond):
+					Fail("Timed out waiting for message")
+				}
+			}
+			Expect(messages).To(HaveLen(3))
 
-	// Create success message based on the provided location
-	message := fmt.Sprintf("Successfully updated instance location to Enterprise: %s", a.location.Enterprise)
+			// Config manager should be called
+			Expect(mockConfig.GetGetCallCount()).To(Equal(1))
+			Expect(mockConfig.GetWriteCallCount()).To(Equal(1))
 
-	// Add optional fields to the message if they exist
-	if a.location.Site != nil {
-		message += fmt.Sprintf(", Site: %s", *a.location.Site)
-	}
-	if a.location.Area != nil {
-		message += fmt.Sprintf(", Area: %s", *a.location.Area)
-	}
-	if a.location.Line != nil {
-		message += fmt.Sprintf(", Line: %s", *a.location.Line)
-	}
-	if a.location.WorkCell != nil {
-		message += fmt.Sprintf(", WorkCell: %s", *a.location.WorkCell)
-	}
+			// Check that config was updated correctly
+			Expect(mockConfig.latestConfig.Agent.Location[0]).To(Equal("New Enterprise"))
+			Expect(mockConfig.latestConfig.Agent.Location[1]).To(Equal("New Site"))
+			Expect(mockConfig.latestConfig.Agent.Location[2]).To(Equal("New Area"))
+		})
 
-	return message, nil, nil
-}
+		It("should handle GetConfig failure", func() {
+			// Set up mock to fail on GetConfig
+			mockConfig.WithGetConfigFailure()
 
-// mockUpdateLocation simulates the behavior of updateLocation
-func (a *simpleTestEditInstanceAction) mockUpdateLocation() error {
-	a.updateWasCalled = true
-	if a.expectFailure {
-		return fmt.Errorf("simulated failure in updateLocation")
-	}
-	return nil
-}
+			// Parse with valid location
+			payload := map[string]interface{}{
+				"location": map[string]interface{}{
+					"enterprise": "New Enterprise",
+				},
+			}
+			err := action.Parse(payload)
+			Expect(err).NotTo(HaveOccurred())
 
-// Helper functions
-func stringPtr(s string) *string {
-	return &s
-}
+			// Execute the action - should fail
+			result, metadata, err := action.Execute()
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("failed to update instance location"))
+			Expect(result).To(BeNil())
+			Expect(metadata).To(BeNil())
 
-func assertEqualStringPtr(t *testing.T, expected, actual *string) {
-	if expected == nil {
-		assert.Nil(t, actual)
-	} else {
-		assert.NotNil(t, actual)
-		assert.Equal(t, *expected, *actual)
-	}
-}
+			// We should have 3 messages in the channel (Confirmed + Executing + Failure)
+			var messages []*models.UMHMessage
+			for i := 0; i < 3; i++ {
+				select {
+				case msg := <-outboundChannel:
+					messages = append(messages, msg)
+				case <-time.After(100 * time.Millisecond):
+					Fail("Timed out waiting for message")
+				}
+			}
+			Expect(messages).To(HaveLen(3))
+		})
+
+		It("should handle WriteConfig failure", func() {
+			// Set up mock to fail on WriteConfig
+			mockConfig.WithWriteConfigFailure()
+
+			// Parse with valid location
+			payload := map[string]interface{}{
+				"location": map[string]interface{}{
+					"enterprise": "New Enterprise",
+				},
+			}
+			err := action.Parse(payload)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Execute the action - should fail
+			result, metadata, err := action.Execute()
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("failed to update instance location"))
+			Expect(result).To(BeNil())
+			Expect(metadata).To(BeNil())
+
+			// We should have 3 messages in the channel (Confirmed + Executing + Failure)
+			var messages []*models.UMHMessage
+			for i := 0; i < 3; i++ {
+				select {
+				case msg := <-outboundChannel:
+					messages = append(messages, msg)
+				case <-time.After(100 * time.Millisecond):
+					Fail("Timed out waiting for message")
+				}
+			}
+			Expect(messages).To(HaveLen(3))
+
+			// Config manager should be called
+			Expect(mockConfig.GetGetCallCount()).To(Equal(1))
+			Expect(mockConfig.GetWriteCallCount()).To(Equal(1))
+		})
+	})
+})
