@@ -52,6 +52,14 @@ func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePay
 			instanceUUID:    instanceUUID,
 			outboundChannel: outboundChannel,
 		}
+	case models.EditInstance:
+		action = &EditInstanceAction{
+			userEmail:       sender,
+			actionUUID:      payload.ActionUUID,
+			instanceUUID:    instanceUUID,
+			outboundChannel: outboundChannel,
+			configManager:   config.NewFileConfigManager(),
+		}
 	default:
 		zap.S().Errorf("Unknown action type: %s", payload.ActionType)
 		SendActionReply(instanceUUID, sender, payload.ActionUUID, models.ActionFinishedWithFailure, "Unknown action type", outboundChannel, payload.ActionType)
