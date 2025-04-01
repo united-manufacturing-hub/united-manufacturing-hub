@@ -34,6 +34,7 @@ type AgentConfig struct {
 	MetricsPort        int `yaml:"metricsPort"` // Port to expose metrics on
 	CommunicatorConfig `yaml:"communicator"`
 	ReleaseChannel     ReleaseChannel `yaml:"releaseChannel"`
+	Location           map[int]string `yaml:"location"`
 }
 
 type CommunicatorConfig struct {
@@ -101,6 +102,13 @@ func (c FullConfig) Clone() FullConfig {
 		Services: make([]S6FSMConfig, len(c.Services)),
 		Benthos:  make([]BenthosConfig, len(c.Benthos)),
 		Nmap:     make([]NmapConfig, len(c.Nmap)),
+	}
+	// deep copy the location map if it exists
+	if c.Agent.Location != nil {
+		clone.Agent.Location = make(map[int]string)
+		for k, v := range c.Agent.Location {
+			clone.Agent.Location[k] = v
+		}
 	}
 	deepcopy.Copy(&clone.Services, &c.Services)
 	deepcopy.Copy(&clone.Benthos, &c.Benthos)
