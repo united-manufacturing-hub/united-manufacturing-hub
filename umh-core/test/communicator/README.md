@@ -21,7 +21,8 @@ The `subscribe_and_receive_test.go` file tests the subscription mechanism. It:
 3. Sends a Subscribe message to the endpoint
 4. Verifies that:
    - The subscriber is added to the subscriber list
-   - Status messages are pushed to the subscribed user
+   - Status messages are sent to the subscriber by capturing and inspecting outgoing messages
+   - The content of status messages follows the expected format
 
 ## Running the Tests
 
