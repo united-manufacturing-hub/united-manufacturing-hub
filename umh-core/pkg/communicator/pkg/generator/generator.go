@@ -15,11 +15,14 @@
 package generator
 
 import (
+	"context"
 	"fmt"
 	"math/rand"
 	"sync"
+	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/container"
@@ -39,11 +42,12 @@ const (
 )
 
 type StatusCollectorType struct {
-	latestData *LatestData
-	dog        watchdog.Iface
-	state      *fsm.SystemSnapshot
-	systemMu   *sync.Mutex
-	logger     *zap.Logger
+	latestData    *LatestData
+	dog           watchdog.Iface
+	state         *fsm.SystemSnapshot
+	systemMu      *sync.Mutex
+	logger        *zap.Logger
+	configManager config.ConfigManager
 }
 
 type LatestData struct {
@@ -57,6 +61,7 @@ func NewStatusCollector(
 	dog watchdog.Iface,
 	state *fsm.SystemSnapshot,
 	systemMu *sync.Mutex,
+	configManager config.ConfigManager,
 ) *StatusCollectorType {
 
 	logger := logger.New("generator.NewStatusCollector", logger.FormatJSON)
@@ -64,11 +69,12 @@ func NewStatusCollector(
 	latestData := &LatestData{}
 
 	collector := &StatusCollectorType{
-		latestData: latestData,
-		dog:        dog,
-		state:      state,
-		systemMu:   systemMu,
-		logger:     logger,
+		latestData:    latestData,
+		dog:           dog,
+		state:         state,
+		systemMu:      systemMu,
+		logger:        logger,
+		configManager: configManager,
 	}
 
 	return collector
@@ -108,6 +114,24 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 		containerData = buildDefaultContainerData()
 	}
 
+	// Get the actual location from the system configuration
+	location := map[int]string{}
+
+	// Try to get the location from the config manager first
+	if s.configManager != nil {
+		// Create a context with a short timeout for getting the config
+		ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+		defer cancel()
+
+		// Get the current config
+		cfg, err := s.configManager.GetConfig(ctx, 0)
+		if err == nil {
+			location = cfg.Agent.Location
+		} else {
+			s.logger.Warn("Failed to get location from config manager", zap.Error(err))
+		}
+	}
+
 	// Create a mocked status message
 	statusMessage := &models.StatusMessage{
 		Core: models.Core{
@@ -125,11 +149,7 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 					P95Ms: float64(rand.Intn(91) + 10),
 					P99Ms: 22.8,
 				},
-				Location: map[int]string{
-					0: "Manufacturing Inc.",
-					1: "Berlin Factory",
-					2: "Assembly Line 3",
-				},
+				Location: location, // Use the actual location from config
 			},
 			Container: containerData,
 			Dfcs: []models.Dfc{

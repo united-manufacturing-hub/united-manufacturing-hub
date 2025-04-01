@@ -169,6 +169,7 @@ var _ = Describe("Subscribe and Receive Test", func() {
 			false,
 			systemSnapshot,
 			systemMu,
+			config.NewMockConfigManager(),
 		)
 		subHandler.StartNotifier()
 
