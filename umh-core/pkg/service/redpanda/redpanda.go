@@ -556,17 +556,51 @@ func (s *RedpandaService) GetHealthCheckAndMetrics(ctx context.Context, tick uin
 		requestClient = httpclient.NewDefaultHTTPClient()
 	}
 
+	// Get the logs to check for "Successfully started Redpanda!"
+	s6ServicePath := filepath.Join(constants.S6BaseDir, constants.RedpandaServiceName)
+	logs, err := s.s6Service.GetLogs(ctx, s6ServicePath)
+	if err != nil {
+		if errors.Is(err, s6service.ErrServiceNotExist) {
+			return RedpandaStatus{
+				HealthCheck: HealthCheck{
+					IsLive:  false,
+					IsReady: false,
+				},
+				Metrics: Metrics{},
+				Logs:    []s6service.LogEntry{},
+			}, nil
+		}
+		return RedpandaStatus{}, fmt.Errorf("failed to get logs: %w", err)
+	}
+
+	// Check if logs contain successful startup message
+	isReady := false
+	for _, log := range logs {
+		if strings.Contains(log.Content, "Successfully started Redpanda!") {
+			isReady = true
+			break
+		}
+	}
+
 	// For Redpanda, we can use a single call to the metrics endpoint for all checks
 	resp, body, err := requestClient.GetWithBody(ctx, metricsEndpoint)
 	if err != nil {
-		return RedpandaStatus{}, fmt.Errorf("failed to check metrics endpoint: %w", err)
+		return RedpandaStatus{
+			HealthCheck: HealthCheck{
+				IsLive:  false,
+				IsReady: isReady,
+			},
+			Metrics: Metrics{},
+			Logs:    logs,
+		}, fmt.Errorf("failed to check metrics endpoint: %w", err)
 	}
 
 	// Create our health check structure
 	healthCheck := HealthCheck{
-		// Both liveness and readiness are determined by a successful response
-		IsLive:  resp.StatusCode == http.StatusOK,
-		IsReady: resp.StatusCode == http.StatusOK,
+		// Liveness is determined by a successful response
+		IsLive: resp.StatusCode == http.StatusOK,
+		// Readiness is determined by the presence of the successful startup message in logs
+		IsReady: isReady,
 		// Redpanda version is constant
 		Version: constants.RedpandaVersion,
 	}
@@ -582,12 +616,23 @@ func (s *RedpandaService) GetHealthCheckAndMetrics(ctx context.Context, tick uin
 	// Parse metrics from the response body
 	metricsData, err := parseMetrics(body)
 	if err != nil {
-		return RedpandaStatus{}, fmt.Errorf("failed to parse metrics: %w", err)
+		return RedpandaStatus{
+			HealthCheck: HealthCheck{
+				IsLive:  healthCheck.IsLive,
+				IsReady: isReady,
+				Version: constants.RedpandaVersion,
+			},
+			Logs: logs,
+		}, fmt.Errorf("failed to parse metrics: %w", err)
 	}
 
 	// Update the metrics state
 	if s.metricsState == nil {
-		return RedpandaStatus{}, fmt.Errorf("metrics state not initialized")
+		return RedpandaStatus{
+			HealthCheck: healthCheck,
+			Metrics:     metricsData,
+			Logs:        logs,
+		}, fmt.Errorf("metrics state not initialized")
 	}
 
 	s.metricsState.UpdateFromMetrics(metricsData, tick)
@@ -596,6 +641,7 @@ func (s *RedpandaService) GetHealthCheckAndMetrics(ctx context.Context, tick uin
 		HealthCheck:  healthCheck,
 		Metrics:      metricsData,
 		MetricsState: s.metricsState,
+		Logs:         logs,
 	}, nil
 }
 

@@ -86,6 +86,20 @@ var _ = Describe("Redpanda Service", func() {
 						},
 					},
 				})
+
+				// Setup mock S6 service to return logs with successful startup message
+				mockS6Service := s6service.NewMockService()
+				mockS6Service.GetLogsResult = []s6service.LogEntry{
+					{
+						Timestamp: time.Now().Add(-1 * time.Minute),
+						Content:   "INFO Starting Redpanda",
+					},
+					{
+						Timestamp: time.Now().Add(-30 * time.Second),
+						Content:   "Successfully started Redpanda!",
+					},
+				}
+				service.s6Service = mockS6Service
 			})
 
 			It("should return health check and metrics", func() {
@@ -115,15 +129,31 @@ var _ = Describe("Redpanda Service", func() {
 					StatusCode: 500,
 					Body:       []byte("connection refused"),
 				})
+
+				// Setup mock S6 service to return logs with successful startup message
+				mockS6Service := s6service.NewMockService()
+				mockS6Service.GetLogsResult = []s6service.LogEntry{
+					{
+						Timestamp: time.Now().Add(-1 * time.Minute),
+						Content:   "INFO Starting Redpanda",
+					},
+					{
+						Timestamp: time.Now().Add(-30 * time.Second),
+						Content:   "Successfully started Redpanda!",
+					},
+				}
+				service.s6Service = mockS6Service
 			})
 
 			It("should return error", func() {
 				ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 				defer cancel()
-				_, err := service.GetHealthCheckAndMetrics(ctx, tick)
+				status, err := service.GetHealthCheckAndMetrics(ctx, tick)
 				tick++
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("connection refused"))
+				// Even with connection error, IsReady should be true if logs show successful startup
+				Expect(status.HealthCheck.IsReady).To(BeTrue())
 			})
 		})
 
@@ -133,16 +163,91 @@ var _ = Describe("Redpanda Service", func() {
 					StatusCode: 200,
 					Delay:      100 * time.Millisecond,
 				})
+
+				// Setup mock S6 service to return logs with successful startup message
+				mockS6Service := s6service.NewMockService()
+				mockS6Service.GetLogsResult = []s6service.LogEntry{
+					{
+						Timestamp: time.Now().Add(-1 * time.Minute),
+						Content:   "INFO Starting Redpanda",
+					},
+					{
+						Timestamp: time.Now().Add(-30 * time.Second),
+						Content:   "Successfully started Redpanda!",
+					},
+				}
+				service.s6Service = mockS6Service
 			})
 
 			It("should return error when context is cancelled", func() {
 				ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 				defer cancel()
 
-				_, err := service.GetHealthCheckAndMetrics(ctx, tick)
+				status, err := service.GetHealthCheckAndMetrics(ctx, tick)
 				tick++
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("context deadline exceeded"))
+				// Even with context cancellation, IsReady should be true if logs show successful startup
+				Expect(status.HealthCheck.IsReady).To(BeTrue())
+			})
+		})
+
+		Context("without successful startup message in logs", func() {
+			BeforeEach(func() {
+				// Create a fresh client to avoid interference from defaults
+				client = NewMockHTTPClient()
+				service.httpClient = client
+
+				// Configure mock client with healthy metrics
+				client.SetMetricsResponse(MetricsConfig{
+					Infrastructure: InfrastructureMetricsConfig{
+						Storage: StorageMetricsConfig{
+							FreeBytes:      5000000000,
+							TotalBytes:     10000000000,
+							FreeSpaceAlert: false,
+						},
+						Uptime: UptimeMetricsConfig{
+							Uptime: 3600,
+						},
+					},
+					Cluster: ClusterMetricsConfig{
+						Topics:            5,
+						UnavailableTopics: 0,
+					},
+					Throughput: ThroughputMetricsConfig{
+						BytesIn:  1024,
+						BytesOut: 2048,
+					},
+					Topic: TopicMetricsConfig{
+						TopicPartitionMap: map[string]int64{
+							"test-topic": 3,
+						},
+					},
+				})
+
+				// Setup mock S6 service to return logs WITHOUT successful startup message
+				mockS6Service := s6service.NewMockService()
+				mockS6Service.GetLogsResult = []s6service.LogEntry{
+					{
+						Timestamp: time.Now().Add(-1 * time.Minute),
+						Content:   "INFO Starting Redpanda",
+					},
+					{
+						Timestamp: time.Now().Add(-30 * time.Second),
+						Content:   "INFO Initializing resources",
+					},
+				}
+				service.s6Service = mockS6Service
+			})
+
+			It("should report not ready despite healthy metrics", func() {
+				ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+				defer cancel()
+				status, err := service.GetHealthCheckAndMetrics(ctx, tick)
+				tick++
+				Expect(err).NotTo(HaveOccurred())
+				Expect(status.HealthCheck.IsLive).To(BeTrue())
+				Expect(status.HealthCheck.IsReady).To(BeFalse())
 			})
 		})
 	})
