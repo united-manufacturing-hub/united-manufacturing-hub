@@ -127,6 +127,24 @@ var _ = Describe("DataFlowComponent FSM", func() {
 		// Create a new DataFlowComponent
 		testComponent = dfc.NewDataFlowComponent(componentConfig, mockConfigManager)
 		Expect(testComponent).NotTo(BeNil())
+
+		// Complete the lifecycle creation process (to_be_created -> creating -> created -> stopped)
+		// First reconcile to add to config and transition from to_be_created to creating
+		err, _ = testComponent.Reconcile(ctx, 1)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Second reconcile to complete creation (creating -> created)
+		err, _ = testComponent.Reconcile(ctx, 2)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Now the FSM should be in the stopped operational state as configured
+		Expect(testComponent.GetCurrentFSMState()).To(Equal(dfc.OperationalStateStopped))
+
+		// Reset mock flags after initialization
+		mockConfigManager.addCalled = false
+		mockConfigManager.removeCalled = false
+		mockConfigManager.updateCalled = false
+		mockConfigManager.checkExistenceCalled = false
 	})
 
 	AfterEach(func() {
@@ -147,13 +165,13 @@ var _ = Describe("DataFlowComponent FSM", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// First reconcile call should transition from Stopped to Starting
-			err, reconciled := testComponent.Reconcile(ctx, 1)
+			err, reconciled := testComponent.Reconcile(ctx, 3)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(reconciled).To(BeTrue())
 			Expect(testComponent.GetCurrentFSMState()).To(Equal(dfc.OperationalStateStarting))
 
 			// Second reconcile call should transition from Starting to Active
-			err, reconciled = testComponent.Reconcile(ctx, 2)
+			err, reconciled = testComponent.Reconcile(ctx, 4)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(reconciled).To(BeTrue())
 			Expect(testComponent.GetCurrentFSMState()).To(Equal(dfc.OperationalStateActive))
@@ -166,9 +184,9 @@ var _ = Describe("DataFlowComponent FSM", func() {
 			// Set the desired state to Active and reconcile to get to Active state
 			err := testComponent.SetDesiredFSMState(dfc.OperationalStateActive)
 			Expect(err).NotTo(HaveOccurred())
-			err, _ = testComponent.Reconcile(ctx, 1) // -> Starting
+			err, _ = testComponent.Reconcile(ctx, 3) // -> Starting
 			Expect(err).NotTo(HaveOccurred())
-			err, _ = testComponent.Reconcile(ctx, 2) // -> Active
+			err, _ = testComponent.Reconcile(ctx, 4) // -> Active
 			Expect(err).NotTo(HaveOccurred())
 			Expect(testComponent.GetCurrentFSMState()).To(Equal(dfc.OperationalStateActive))
 
@@ -177,13 +195,13 @@ var _ = Describe("DataFlowComponent FSM", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// First reconcile call should transition from Active to Stopping
-			err, reconciled := testComponent.Reconcile(ctx, 3)
+			err, reconciled := testComponent.Reconcile(ctx, 5)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(reconciled).To(BeTrue())
 			Expect(testComponent.GetCurrentFSMState()).To(Equal(dfc.OperationalStateStopping))
 
 			// Second reconcile call should transition from Stopping to Stopped
-			err, reconciled = testComponent.Reconcile(ctx, 4)
+			err, reconciled = testComponent.Reconcile(ctx, 6)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(reconciled).To(BeTrue())
 			Expect(testComponent.GetCurrentFSMState()).To(Equal(dfc.OperationalStateStopped))
@@ -200,7 +218,7 @@ var _ = Describe("DataFlowComponent FSM", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Reconcile to trigger config modification
-			err, _ = testComponent.Reconcile(ctx, 1)
+			err, _ = testComponent.Reconcile(ctx, 3)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify that the component was added to the benthos config
@@ -211,9 +229,9 @@ var _ = Describe("DataFlowComponent FSM", func() {
 			// Set the desired state to Active and reconcile to get to Active state
 			err := testComponent.SetDesiredFSMState(dfc.OperationalStateActive)
 			Expect(err).NotTo(HaveOccurred())
-			err, _ = testComponent.Reconcile(ctx, 1) // -> Starting
+			err, _ = testComponent.Reconcile(ctx, 3) // -> Starting
 			Expect(err).NotTo(HaveOccurred())
-			err, _ = testComponent.Reconcile(ctx, 2) // -> Active
+			err, _ = testComponent.Reconcile(ctx, 4) // -> Active
 			Expect(err).NotTo(HaveOccurred())
 
 			// Now set the desired state to Stopped
@@ -221,7 +239,7 @@ var _ = Describe("DataFlowComponent FSM", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Reconcile to trigger config modification
-			err, _ = testComponent.Reconcile(ctx, 3)
+			err, _ = testComponent.Reconcile(ctx, 5)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify that the component was removed from the benthos config
@@ -232,9 +250,9 @@ var _ = Describe("DataFlowComponent FSM", func() {
 			// Set the desired state to Active and reconcile to get to Active state
 			err := testComponent.SetDesiredFSMState(dfc.OperationalStateActive)
 			Expect(err).NotTo(HaveOccurred())
-			err, _ = testComponent.Reconcile(ctx, 1) // -> Starting
+			err, _ = testComponent.Reconcile(ctx, 3) // -> Starting
 			Expect(err).NotTo(HaveOccurred())
-			err, _ = testComponent.Reconcile(ctx, 2) // -> Active
+			err, _ = testComponent.Reconcile(ctx, 4) // -> Active
 			Expect(err).NotTo(HaveOccurred())
 
 			// Make a change to the component config
@@ -250,7 +268,7 @@ var _ = Describe("DataFlowComponent FSM", func() {
 			mockConfigManager.updateCalled = false
 
 			// Reconcile again to trigger config update
-			err, _ = testComponent.Reconcile(ctx, 3)
+			err, _ = testComponent.Reconcile(ctx, 5)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify that the component was updated in the benthos config
