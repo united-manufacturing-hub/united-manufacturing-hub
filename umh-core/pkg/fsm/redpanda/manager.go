@@ -49,10 +49,21 @@ func NewRedpandaManager(name string) *RedpandaManager {
 		baseRedpandaDir,
 		// Extract Redpanda configs from full config
 		func(fullConfig config.FullConfig) ([]config.RedpandaConfig, error) {
-			return []config.RedpandaConfig{fullConfig.Redpanda}, nil
+			redpandaConfig := fullConfig.Redpanda
+			// Check if name is empty and set a default if needed
+			if redpandaConfig.Name == "" {
+				// Option 1: Set a default name
+				redpandaConfig.Name = "redpanda"
+				// Option 2: Return an error
+				// return nil, fmt.Errorf("redpanda config name cannot be empty")
+			}
+			return []config.RedpandaConfig{redpandaConfig}, nil
 		},
 		// Get name from Redpanda config
 		func(cfg config.RedpandaConfig) (string, error) {
+			if cfg.Name == "" {
+				return "", fmt.Errorf("redpanda config name cannot be empty")
+			}
 			return cfg.Name, nil
 		},
 		// Get desired state from Redpanda config

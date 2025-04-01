@@ -547,6 +547,7 @@ func (s *RedpandaService) GetHealthCheckAndMetrics(ctx context.Context, tick uin
 			Logs:    []s6service.LogEntry{},
 		}, nil
 	}
+	s.logger.Infof("GetInstance returned after %s", time.Since(start))
 
 	baseURL := "http://localhost:9644"
 	metricsEndpoint := baseURL + "/public_metrics"
@@ -569,6 +570,7 @@ func (s *RedpandaService) GetHealthCheckAndMetrics(ctx context.Context, tick uin
 			break
 		}
 	}
+	s.logger.Infof("String search finished after %s", time.Since(start))
 
 	// For Redpanda, we can use a single call to the metrics endpoint for all checks
 	resp, body, err := requestClient.GetWithBody(ctx, metricsEndpoint)
@@ -582,6 +584,7 @@ func (s *RedpandaService) GetHealthCheckAndMetrics(ctx context.Context, tick uin
 			Logs:    logs,
 		}, fmt.Errorf("failed to check metrics endpoint: %w", err)
 	}
+	s.logger.Infof("Metrics endpoint check finished after %s", time.Since(start))
 
 	// Create our health check structure
 	healthCheck := HealthCheck{
@@ -614,6 +617,8 @@ func (s *RedpandaService) GetHealthCheckAndMetrics(ctx context.Context, tick uin
 		}, fmt.Errorf("failed to parse metrics: %w", err)
 	}
 
+	s.logger.Infof("Metrics parsing finished after %s", time.Since(start))
+
 	// Update the metrics state
 	if s.metricsState == nil {
 		return RedpandaStatus{
@@ -624,7 +629,7 @@ func (s *RedpandaService) GetHealthCheckAndMetrics(ctx context.Context, tick uin
 	}
 
 	s.metricsState.UpdateFromMetrics(metricsData, tick)
-
+	s.logger.Infof("Metrics state updated after %s", time.Since(start))
 	return RedpandaStatus{
 		HealthCheck:  healthCheck,
 		Metrics:      metricsData,
