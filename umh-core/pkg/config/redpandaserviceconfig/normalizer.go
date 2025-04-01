@@ -40,7 +40,7 @@ func (n *Normalizer) NormalizeConfig(cfg RedpandaServiceConfig) RedpandaServiceC
 	}
 
 	if normalized.Resources.MemoryPerCoreInBytes == 0 {
-		normalized.Resources.MemoryPerCoreInBytes = 1073741824 // 1GB
+		normalized.Resources.MemoryPerCoreInBytes = 2147483648 // 2GB
 	}
 
 	return normalized

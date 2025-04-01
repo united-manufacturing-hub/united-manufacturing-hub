@@ -22,7 +22,7 @@ const (
 )
 
 const (
-	RedpandaUpdateObservedStateTimeout = 5 * time.Millisecond
+	RedpandaUpdateObservedStateTimeout = 20 * time.Millisecond
 )
 
 const (

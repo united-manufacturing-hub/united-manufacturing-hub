@@ -156,6 +156,22 @@ func (b *RedpandaInstance) updateObservedState(ctx context.Context, tick uint64)
 		return ctx.Err()
 	}
 
+	// Skip health checks if the desired state or current state indicates stopped/stopping
+	currentState := b.baseFSMInstance.GetCurrentFSMState()
+	desiredState := b.baseFSMInstance.GetDesiredFSMState()
+	if desiredState == OperationalStateStopped || currentState == OperationalStateStopped || currentState == OperationalStateStopping {
+		b.baseFSMInstance.GetLogger().Debugf("Skipping detailed health checks for Redpanda instance %s since desired/current state is stopped or stopping", b.baseFSMInstance.GetID())
+
+		// For stopped instances, just check if the S6 service exists but don't do health checks
+		// This minimal information is sufficient for reconciliation
+		exists := b.service.ServiceExists(ctx)
+		if !exists {
+			// If the service doesn't exist, nothing more to do
+			b.ObservedState = RedpandaObservedState{}
+			return nil
+		}
+	}
+
 	start := time.Now()
 	info, err := b.getServiceStatus(ctx, tick)
 	if err != nil {

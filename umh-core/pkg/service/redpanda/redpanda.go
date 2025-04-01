@@ -267,7 +267,7 @@ func (s *RedpandaService) GenerateS6ConfigForRedpanda(redpandaConfig *redpandase
 	}
 
 	if redpandaConfig.Resources.MemoryPerCoreInBytes == 0 {
-		redpandaConfig.Resources.MemoryPerCoreInBytes = 1024 * 1024 * 1024 // 1GB
+		redpandaConfig.Resources.MemoryPerCoreInBytes = 2048 * 1024 * 1024 // 2GB
 	}
 
 	s6Config = s6serviceconfig.S6ServiceConfig{
@@ -333,6 +333,11 @@ func (s *RedpandaService) GetConfig(ctx context.Context) (redpandaserviceconfig.
 
 // Status checks the status of a Redpanda service
 func (s *RedpandaService) Status(ctx context.Context, tick uint64) (ServiceInfo, error) {
+	statusNow := time.Now()
+	defer func() {
+		s.logger.Warnf("Time taken to get status: %s", time.Since(statusNow))
+	}()
+
 	if ctx.Err() != nil {
 		return ServiceInfo{}, ctx.Err()
 	}
@@ -387,7 +392,10 @@ func (s *RedpandaService) Status(ctx context.Context, tick uint64) (ServiceInfo,
 	}
 
 	// Let's get the health check of the Redpanda service
+	now := time.Now()
 	redpandaStatus, err := s.GetHealthCheckAndMetrics(ctx, tick, logs)
+	s.logger.Warnf("Time taken to get health check and metrics: %s", time.Since(now))
+
 	if err != nil {
 		if strings.Contains(err.Error(), "connection refused") {
 			return ServiceInfo{
@@ -409,9 +417,6 @@ func (s *RedpandaService) Status(ctx context.Context, tick uint64) (ServiceInfo,
 		RedpandaStatus:  redpandaStatus,
 	}
 
-	// set the logs to the service info
-	// TODO: this is a hack to get the logs to the service info
-	// we should find a better way to do this
 	serviceInfo.RedpandaStatus.Logs = logs
 
 	return serviceInfo, nil
