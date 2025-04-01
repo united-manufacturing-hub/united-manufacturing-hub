@@ -26,6 +26,12 @@ import (
 	"go.uber.org/zap"
 )
 
+// editInstanceConfigManager extends config.ConfigManager with WriteConfig method
+type editInstanceConfigManager interface {
+	config.ConfigManager
+	WriteConfig(ctx context.Context, config config.FullConfig) error
+}
+
 // EditInstanceAction implements the Action interface for editing an instance's properties
 type EditInstanceAction struct {
 	userEmail       string
@@ -33,6 +39,24 @@ type EditInstanceAction struct {
 	instanceUUID    uuid.UUID
 	outboundChannel chan *models.UMHMessage
 	location        *EditInstanceLocation
+	configManager   editInstanceConfigManager
+}
+
+// NewEditInstanceAction creates a new EditInstanceAction with default config manager
+func NewEditInstanceAction(userEmail string, actionUUID, instanceUUID uuid.UUID, outboundChannel chan *models.UMHMessage) *EditInstanceAction {
+	return &EditInstanceAction{
+		userEmail:       userEmail,
+		actionUUID:      actionUUID,
+		instanceUUID:    instanceUUID,
+		outboundChannel: outboundChannel,
+		configManager:   config.NewFileConfigManager(),
+	}
+}
+
+// WithConfigManager allows setting a custom config manager for testing
+func (a *EditInstanceAction) WithConfigManager(manager editInstanceConfigManager) *EditInstanceAction {
+	a.configManager = manager
+	return a
 }
 
 // EditInstanceLocation holds the location information for the instance
@@ -145,11 +169,8 @@ func (a *EditInstanceAction) updateLocation() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	// Create a config manager to access the configuration
-	configManager := config.NewFileConfigManager()
-
-	// Get the current configuration
-	currentConfig, err := configManager.GetConfig(ctx, 0)
+	// Get the current configuration using the configManager
+	currentConfig, err := a.configManager.GetConfig(ctx, 0)
 	if err != nil {
 		return fmt.Errorf("failed to get current configuration: %w", err)
 	}
@@ -179,7 +200,7 @@ func (a *EditInstanceAction) updateLocation() error {
 	}
 
 	// Write the updated configuration back to disk
-	err = configManager.WriteConfig(ctx, currentConfig)
+	err = a.configManager.WriteConfig(ctx, currentConfig)
 	if err != nil {
 		return fmt.Errorf("failed to write updated configuration: %w", err)
 	}
@@ -195,4 +216,16 @@ func (a *EditInstanceAction) getUserEmail() string {
 // getUuid implements the Action interface
 func (a *EditInstanceAction) getUuid() uuid.UUID {
 	return a.actionUUID
+}
+
+// Methods added for testing purposes
+
+// GetLocation returns the location - for testing
+func (a *EditInstanceAction) GetLocation() *EditInstanceLocation {
+	return a.location
+}
+
+// SetLocation sets the location - for testing
+func (a *EditInstanceAction) SetLocation(location *EditInstanceLocation) {
+	a.location = location
 }
