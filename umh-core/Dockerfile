@@ -37,7 +37,8 @@ RUN CGO_ENABLED=0 go build \
 FROM scratch as cache
 COPY .docker-cache/s6-overlay/ /s6-overlay/
 COPY .docker-cache/benthos/ /benthos/
-COPY .docker-cache/redpanda/ /redpanda/
+COPY .docker-cache/redpanda/amd64/ /redpanda/amd64/
+COPY .docker-cache/redpanda/arm64/ /redpanda/arm64/
 
 # --- Downloader Stage (using cached files) ---
 FROM alpine:3.21 as downloader
@@ -77,17 +78,8 @@ RUN case "${TARGETARCH}" in \
     chmod +x /usr/local/bin/benthos
 
 # Redpanda installation
-COPY --from=cache /redpanda/redpanda-${REDPANDA_VERSION}-arm64.tar.gz /redpanda/redpanda-${REDPANDA_VERSION}-arm64.tar.gz /redpanda/
-COPY --from=cache /redpanda/redpanda-${REDPANDA_VERSION}-amd64.tar.gz /redpanda/redpanda-${REDPANDA_VERSION}-amd64.tar.gz /redpanda/
-RUN case "${TARGETARCH}" in \
-    "amd64") REDPANDA_ARCH="amd64" ;; \
-    "arm64") REDPANDA_ARCH="arm64" ;; \
-    *) echo "Unsupported architecture: ${TARGETARCH}" && exit 1 ;; \
-    esac && \
-    mkdir -p /tmp/redpanda /opt/redpanda && \
-    cp /redpanda/redpanda-${REDPANDA_VERSION}-${REDPANDA_ARCH}.tar.gz /tmp/redpanda/redpanda.tar.gz && \
-    tar -xzf /tmp/redpanda/redpanda.tar.gz -C /opt/redpanda && rm /tmp/redpanda/redpanda.tar.gz && \
-    chmod +x /opt/redpanda/bin/redpanda
+COPY --from=cache /redpanda/${TARGETARCH}/ /opt/
+RUN chmod +x /opt/redpanda/bin/redpanda
 
 # Cleanup all the files we don't need
 RUN rm -rf /s6-overlay /benthos /redpanda 

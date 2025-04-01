@@ -72,10 +72,19 @@ download-docker-binaries:
 	
 	@# Check and update Redpanda version
 	@if [ ! -f .docker-cache/redpanda/version ] || [ "$$(cat .docker-cache/redpanda/version)" != "$(REDPANDA_VERSION)" ]; then \
-		rm -f .docker-cache/redpanda/redpanda-*.tar.gz; \
+		rm -rf .docker-cache/redpanda/redpanda-*.tar.gz .docker-cache/redpanda/amd64 .docker-cache/redpanda/arm64; \
 		echo "$(REDPANDA_VERSION)" > .docker-cache/redpanda/version; \
-		wget -O .docker-cache/redpanda/redpanda-$(REDPANDA_VERSION)-amd64.tar.gz "https://dl.redpanda.com/nzc4ZYQK3WRGd9sy/redpanda/raw/names/redpanda-amd64/versions/$(REDPANDA_VERSION)/redpanda-$(REDPANDA_VERSION)-amd64.tar.gz"; \
-		wget -O .docker-cache/redpanda/redpanda-$(REDPANDA_VERSION)-arm64.tar.gz "https://dl.redpanda.com/nzc4ZYQK3WRGd9sy/redpanda/raw/names/redpanda-arm64/versions/$(REDPANDA_VERSION)/redpanda-$(REDPANDA_VERSION)-arm64.tar.gz"; \
+		mkdir -p .docker-cache/redpanda/amd64 .docker-cache/redpanda/arm64; \
+		echo "Pulling redpandadata/redpanda:$(REDPANDA_VERSION) for amd64..."; \
+		docker pull --platform linux/amd64 redpandadata/redpanda:$(REDPANDA_VERSION); \
+		CONTAINER_AMD64=$$(docker create --platform linux/amd64 redpandadata/redpanda:v$(REDPANDA_VERSION)); \
+		docker cp $$CONTAINER_AMD64:/opt/redpanda .docker-cache/redpanda/amd64/; \
+		docker rm -v $$CONTAINER_AMD64; \
+		echo "Pulling redpandadata/redpanda:$(REDPANDA_VERSION) for arm64..."; \
+		docker pull --platform linux/arm64 redpandadata/redpanda:$(REDPANDA_VERSION); \
+		CONTAINER_ARM64=$$(docker create --platform linux/arm64 redpandadata/redpanda:v$(REDPANDA_VERSION)); \
+		docker cp $$CONTAINER_ARM64:/opt/redpanda .docker-cache/redpanda/arm64/; \
+		docker rm -v $$CONTAINER_ARM64; \
 	fi
 	
 	@# Verify all required files exist
@@ -86,15 +95,31 @@ download-docker-binaries:
 		.docker-cache/s6-overlay/s6-overlay-aarch64.tar.xz \
 		.docker-cache/s6-overlay/syslogd-overlay-noarch.tar.xz \
 		.docker-cache/benthos/benthos-linux-amd64 \
-		.docker-cache/benthos/benthos-linux-arm64 \
-		.docker-cache/redpanda/redpanda-$(REDPANDA_VERSION)-amd64.tar.gz \
-		.docker-cache/redpanda/redpanda-$(REDPANDA_VERSION)-arm64.tar.gz; \
+		.docker-cache/benthos/benthos-linux-arm64; \
 	do \
 		if [ ! -f $$f ]; then \
 			echo "Missing required file: $$f"; \
+			rm -rf .docker-cache/redpanda; \
+			rm -rf .docker-cache/benthos; \
+			rm -rf .docker-cache/s6-overlay; \
 			exit 1; \
 		fi; \
 	done
+	
+	@# Verify redpanda directories exist
+	@if [ ! -d .docker-cache/redpanda/amd64/redpanda ] || [ ! -d .docker-cache/redpanda/arm64/redpanda ]; then \
+		echo "Missing required Redpanda directories"; \
+		rm -rf .docker-cache/redpanda; \
+		rm -rf .docker-cache/benthos; \
+		rm -rf .docker-cache/s6-overlay; \
+		exit 1; \
+	fi
+
+	@# Ensure .docker-cache is in the .gitignore file
+	@if ! grep -q ".docker-cache" .gitignore; then \
+		echo ".docker-cache" >> .gitignore; \
+	fi
+
 	@echo "All required files are present and up to date"
 
 build: download-docker-binaries
