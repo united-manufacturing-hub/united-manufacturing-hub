@@ -88,6 +88,7 @@ type Watchdog struct {
 	ticker                    *time.Ticker
 	watchdogID                uuid.UUID
 	warningsAreErrors         atomic.Bool
+	logger                    *zap.SugaredLogger
 }
 
 // NewWatchdog creates a new Watchdog
@@ -103,6 +104,7 @@ func NewWatchdog(ctx context.Context, ticker *time.Ticker, warningsAreErrors boo
 		ticker:            ticker,
 		watchdogID:        uuid.New(),
 		warningsAreErrors: atomic.Bool{},
+		logger:            zap.S(),
 	}
 	if warningsAreErrors {
 		w.warningsAreErrors.Store(true)
@@ -368,6 +370,7 @@ func (s *Watchdog) reportStateToNiceFail() {
 			status = "ERROR"
 		}
 
-		sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "WatchdogReport: %s, %s, %d, %d", name, status, lastHeartbeat, warningCount)
+		// Log to the console instead of reporting to Sentry
+		s.logger.Debugf("WatchdogReport: %s, %s, %d, %d", name, status, lastHeartbeat, warningCount)
 	}
 }
