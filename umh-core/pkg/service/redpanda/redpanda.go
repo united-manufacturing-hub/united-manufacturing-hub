@@ -387,7 +387,7 @@ func (s *RedpandaService) Status(ctx context.Context, tick uint64) (ServiceInfo,
 	}
 
 	// Let's get the health check of the Redpanda service
-	redpandaStatus, err := s.GetHealthCheckAndMetrics(ctx, tick)
+	redpandaStatus, err := s.GetHealthCheckAndMetrics(ctx, tick, logs)
 	if err != nil {
 		if strings.Contains(err.Error(), "connection refused") {
 			return ServiceInfo{
@@ -520,7 +520,7 @@ func parseMetrics(data []byte) (Metrics, error) {
 }
 
 // GetHealthCheckAndMetrics returns the health check and metrics of a Redpanda service
-func (s *RedpandaService) GetHealthCheckAndMetrics(ctx context.Context, tick uint64) (RedpandaStatus, error) {
+func (s *RedpandaService) GetHealthCheckAndMetrics(ctx context.Context, tick uint64, logs []s6service.LogEntry) (RedpandaStatus, error) {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(logger.ComponentRedpandaService, constants.RedpandaServiceName, time.Since(start))
@@ -554,23 +554,6 @@ func (s *RedpandaService) GetHealthCheckAndMetrics(ctx context.Context, tick uin
 	// Only create a default client if we're not using a mock client
 	if requestClient == nil {
 		requestClient = httpclient.NewDefaultHTTPClient()
-	}
-
-	// Get the logs to check for "Successfully started Redpanda!"
-	s6ServicePath := filepath.Join(constants.S6BaseDir, constants.RedpandaServiceName)
-	logs, err := s.s6Service.GetLogs(ctx, s6ServicePath)
-	if err != nil {
-		if errors.Is(err, s6service.ErrServiceNotExist) {
-			return RedpandaStatus{
-				HealthCheck: HealthCheck{
-					IsLive:  false,
-					IsReady: false,
-				},
-				Metrics: Metrics{},
-				Logs:    []s6service.LogEntry{},
-			}, nil
-		}
-		return RedpandaStatus{}, fmt.Errorf("failed to get logs: %w", err)
 	}
 
 	// Check if logs contain successful startup message

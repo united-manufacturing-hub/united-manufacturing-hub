@@ -21,7 +21,6 @@ import (
 	"io"
 	"math/rand"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
@@ -33,30 +32,9 @@ import (
 
 var _ = Describe("UMH Container Integration", Ordered, Label("integration"), func() {
 
-	AfterEach(func() {
-		if CurrentSpecReport().Failed() {
-			fmt.Println("Test failed, printing container logs:")
-			printContainerLogs()
-
-			// Print the latest YAML config
-			fmt.Println("\nLatest YAML config at time of failure:")
-			configPath := getConfigFilePath()
-			config, err := os.ReadFile(configPath)
-			if err != nil {
-				fmt.Printf("Failed to read config file %s: %v\n", configPath, err)
-			} else {
-				fmt.Println(string(config))
-			}
-
-			// Save logs for debugging
-			containerNameInError := getContainerName()
-			fmt.Printf("\nTest failed. Container name: %s\n", containerNameInError)
-		}
-	})
-
 	AfterAll(func() {
 		// Always stop container after the entire suite
-		StopContainer()
+		PrintLogsAndStopContainer()
 		CleanupDockerBuildCache()
 	})
 
@@ -113,7 +91,7 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 		})
 
 		AfterAll(func() {
-			StopContainer() // Stop container after golden config scenario
+			PrintLogsAndStopContainer() // Stop container after golden config scenario
 		})
 
 		It("should have the golden service up and expose metrics", func() {
@@ -163,7 +141,7 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 
 		AfterAll(func() {
 			By("Stopping container after the multiple services test")
-			StopContainer()
+			PrintLogsAndStopContainer()
 		})
 
 		It("should have both services active and expose healthy metrics", func() {
@@ -204,7 +182,7 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 
 		AfterAll(func() {
 			By("Stopping the container after the scaling test")
-			StopContainer()
+			PrintLogsAndStopContainer()
 		})
 
 		It("should scale up to multiple services while maintaining healthy metrics", func() {
@@ -285,7 +263,7 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 					fmt.Printf("Container logs:\n%s\n", line)
 				}
 			}
-			StopContainer()
+			PrintLogsAndStopContainer()
 		})
 
 		It("should handle random service additions, deletions, starts and stops", func() {
@@ -661,7 +639,7 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 
 		AfterAll(func() {
 			By("Stopping the container after the redpanda-only test")
-			StopContainer()
+			PrintLogsAndStopContainer()
 		})
 
 		It("should run redpanda without errors when no benthos services are configured", func() {

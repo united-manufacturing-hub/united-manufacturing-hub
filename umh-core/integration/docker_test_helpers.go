@@ -24,6 +24,8 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+
+	. "github.com/onsi/ginkgo/v2"
 )
 
 const (
@@ -362,8 +364,26 @@ func printContainerLogs() {
 	}
 }
 
-// StopContainer stops and removes your container
-func StopContainer() {
+// PrintLogsAndStopContainer stops and removes your container
+func PrintLogsAndStopContainer() {
+	if CurrentSpecReport().Failed() {
+		fmt.Println("Test failed, printing container logs:")
+		printContainerLogs()
+
+		// Print the latest YAML config
+		fmt.Println("\nLatest YAML config at time of failure:")
+		configPath := getConfigFilePath()
+		config, err := os.ReadFile(configPath)
+		if err != nil {
+			fmt.Printf("Failed to read config file %s: %v\n", configPath, err)
+		} else {
+			fmt.Println(string(config))
+		}
+
+		// Save logs for debugging
+		containerNameInError := getContainerName()
+		fmt.Printf("\nTest failed. Container name: %s\n", containerNameInError)
+	}
 	containerName := getContainerName()
 	// First stop the container
 	runDockerCommand("stop", containerName)
