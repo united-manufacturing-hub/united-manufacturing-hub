@@ -582,7 +582,6 @@ func (s *RedpandaService) GetHealthCheckAndMetrics(ctx context.Context, tick uin
 	metricsFetchStart := time.Now()
 	resp, body, err := requestClient.GetWithBody(ctx, metricsEndpoint)
 	metricsFetchTime := time.Since(metricsFetchStart)
-	s.logger.Infof("Metrics endpoint check finished after %s", metricsFetchTime)
 
 	// Get ready state result from goroutine
 	isReady := <-isReadyChan
@@ -621,7 +620,6 @@ func (s *RedpandaService) GetHealthCheckAndMetrics(ctx context.Context, tick uin
 	metricsParseStart := time.Now()
 	metricsData, err := parseMetrics(body)
 	metricsParseTime := time.Since(metricsParseStart)
-	s.logger.Infof("Metrics parsing finished after %s", metricsParseTime)
 
 	if err != nil {
 		return RedpandaStatus{
@@ -646,7 +644,6 @@ func (s *RedpandaService) GetHealthCheckAndMetrics(ctx context.Context, tick uin
 	stateUpdateStart := time.Now()
 	s.metricsState.UpdateFromMetrics(metricsData, tick)
 	stateUpdateTime := time.Since(stateUpdateStart)
-	s.logger.Infof("Metrics state updated after %s", stateUpdateTime)
 
 	// Detailed timing breakdown
 	if metricsFetchTime+metricsParseTime > 5*time.Millisecond {

@@ -15,7 +15,6 @@
 package s6
 
 import (
-	"fmt"
 	"time"
 
 	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
@@ -146,6 +145,6 @@ func (s *S6Instance) GetConfig() config.S6FSMConfig {
 
 // GetExpectedMaxP95ExecutionTimePerInstance returns the expected max p95 execution time of the instance
 func (s *S6Instance) GetExpectedMaxP95ExecutionTimePerInstance() time.Duration {
-	fmt.Printf("S6Instance GetExpectedMaxP95ExecutionTimePerInstance called (instance: %s)\n", s.baseFSMInstance.GetID())
+	s.baseFSMInstance.GetLogger().Debugf("S6Instance GetExpectedMaxP95ExecutionTimePerInstance called (instance: %s)", s.baseFSMInstance.GetID())
 	return constants.S6ExpectedMaxP95ExecutionTimePerInstance
 }
