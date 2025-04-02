@@ -17,9 +17,9 @@ agent:
 
 redpanda:
   desiredState: stopped
-  
+
 # Data Flow Components
-dataFlowComponent:
+dataFlowComponents:
   - name: data-flow-hello-world
     desiredState: active
     versionUUID: 123e4567-e89b-12d3-a456-426614174000

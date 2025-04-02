@@ -30,7 +30,7 @@ type FullConfig struct {
 	Benthos            []BenthosConfig           `yaml:"benthos"`            // Benthos services to manage, can be updated while running
 	Nmap               []NmapConfig              `yaml:"nmap"`               // Nmap services to manage, can be updated while running
 	Redpanda           RedpandaConfig            `yaml:"redpanda"`           // Redpanda config, can be updated while running
-	DataFlowComponents []DataFlowComponentConfig `yaml:"dataflowComponents"` // DataFlowComponent services to manage
+	DataFlowComponents []DataFlowComponentConfig `yaml:"dataFlowComponents"` // DataFlowComponent services to manage
 }
 
 type AgentConfig struct {
