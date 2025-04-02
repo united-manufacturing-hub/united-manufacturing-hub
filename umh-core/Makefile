@@ -253,6 +253,7 @@ test-dfc: clean build
 	docker run \
 		--name $(IMAGE_NAME) \
 		-v $(PWD)/data:/data \
+    	-e LOGGING_LEVEL=DEBUG \
 		$(IMAGE_NAME):$(TAG)
 
 pod-shell:
