@@ -290,6 +290,8 @@ func (m *BaseFSMManager[C]) Reconcile(
 
 	// Step 1: Extract the specific configs from the full config
 	extractStart := time.Now()
+	m.logger.Infof("extracting configs from full config")
+	m.logger.Infof("config: %+v", config)
 	desiredState, err := m.extractConfigs(config)
 	if err != nil {
 		metrics.IncErrorCount(metrics.ComponentBaseFSMManager, m.managerName)
@@ -298,7 +300,8 @@ func (m *BaseFSMManager[C]) Reconcile(
 	metrics.ObserveReconcileTime(metrics.ComponentBaseFSMManager, m.managerName+".extract_configs", time.Since(extractStart))
 
 	// Step 2: Create or update instances
-	for _, cfg := range desiredState {
+	for i, cfg := range desiredState {
+		m.logger.Infof("desiredState[%d]: %v", i, cfg)
 		name, err := m.getName(cfg)
 		if err != nil {
 			metrics.IncErrorCount(metrics.ComponentBaseFSMManager, m.managerName)
@@ -327,6 +330,7 @@ func (m *BaseFSMManager[C]) Reconcile(
 				metrics.IncErrorCount(metrics.ComponentBaseFSMManager, m.managerName)
 				return fmt.Errorf("failed to get desired state: %w", err), false
 			}
+			m.logger.Debugf("desiredState: %v", desiredState)
 			err = instance.SetDesiredFSMState(desiredState)
 			if err != nil {
 				metrics.IncErrorCount(metrics.ComponentBaseFSMManager, m.managerName)
