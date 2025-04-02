@@ -15,6 +15,7 @@
 package dataflowcomponent
 
 import (
+	"context"
 	"time"
 
 	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
@@ -113,16 +114,16 @@ type DataFlowComponent struct {
 // BenthosConfigManager is the interface for managing benthos configuration
 type BenthosConfigManager interface {
 	// AddComponentToBenthosConfig adds a component to the benthos config
-	AddComponentToBenthosConfig(component DataFlowComponentConfig) error
+	AddComponentToBenthosConfig(ctx context.Context, component DataFlowComponentConfig) error
 
 	// RemoveComponentFromBenthosConfig removes a component from the benthos config
-	RemoveComponentFromBenthosConfig(componentName string) error
+	RemoveComponentFromBenthosConfig(ctx context.Context, componentName string) error
 
 	// UpdateComponentInBenthosConfig updates a component in the benthos config
-	UpdateComponentInBenthosConfig(component DataFlowComponentConfig) error
+	UpdateComponentInBenthosConfig(ctx context.Context, component DataFlowComponentConfig) error
 
 	// ComponentExistsInBenthosConfig checks if a component exists in the benthos config
-	ComponentExistsInBenthosConfig(componentName string) (bool, error)
+	ComponentExistsInBenthosConfig(ctx context.Context, componentName string) (bool, error)
 }
 
 // GetLastObservedState returns the last known state of the component

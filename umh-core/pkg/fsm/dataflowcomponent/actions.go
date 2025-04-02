@@ -23,7 +23,7 @@ import (
 func (d *DataFlowComponent) initiateAddComponentToBenthosConfig(ctx context.Context) error {
 	d.baseFSMInstance.GetLogger().Debugf("Starting Action: Adding DataFlowComponent %s to Benthos config...", d.Config.Name)
 
-	err := d.BenthosConfigManager.AddComponentToBenthosConfig(d.Config)
+	err := d.BenthosConfigManager.AddComponentToBenthosConfig(ctx, d.Config)
 	if err != nil {
 		return fmt.Errorf("failed to add data flow component %s to benthos config: %w", d.Config.Name, err)
 	}
@@ -36,7 +36,7 @@ func (d *DataFlowComponent) initiateAddComponentToBenthosConfig(ctx context.Cont
 func (d *DataFlowComponent) initiateRemoveComponentFromBenthosConfig(ctx context.Context) error {
 	d.baseFSMInstance.GetLogger().Debugf("Starting Action: Removing DataFlowComponent %s from Benthos config...", d.Config.Name)
 
-	err := d.BenthosConfigManager.RemoveComponentFromBenthosConfig(d.Config.Name)
+	err := d.BenthosConfigManager.RemoveComponentFromBenthosConfig(ctx, d.Config.Name)
 	if err != nil {
 		return fmt.Errorf("failed to remove data flow component %s from benthos config: %w", d.Config.Name, err)
 	}
@@ -49,7 +49,7 @@ func (d *DataFlowComponent) initiateRemoveComponentFromBenthosConfig(ctx context
 func (d *DataFlowComponent) initiateUpdateComponentInBenthosConfig(ctx context.Context) error {
 	d.baseFSMInstance.GetLogger().Debugf("Starting Action: Updating DataFlowComponent %s in Benthos config...", d.Config.Name)
 
-	err := d.BenthosConfigManager.UpdateComponentInBenthosConfig(d.Config)
+	err := d.BenthosConfigManager.UpdateComponentInBenthosConfig(ctx, d.Config)
 	if err != nil {
 		return fmt.Errorf("failed to update data flow component %s in benthos config: %w", d.Config.Name, err)
 	}
@@ -62,7 +62,7 @@ func (d *DataFlowComponent) initiateUpdateComponentInBenthosConfig(ctx context.C
 func (d *DataFlowComponent) checkComponentExistsInBenthosConfig(ctx context.Context) (bool, error) {
 	d.baseFSMInstance.GetLogger().Debugf("Checking if DataFlowComponent %s exists in Benthos config...", d.Config.Name)
 
-	exists, err := d.BenthosConfigManager.ComponentExistsInBenthosConfig(d.Config.Name)
+	exists, err := d.BenthosConfigManager.ComponentExistsInBenthosConfig(ctx, d.Config.Name)
 	if err != nil {
 		return false, fmt.Errorf("failed to check if data flow component %s exists in benthos config: %w", d.Config.Name, err)
 	}
