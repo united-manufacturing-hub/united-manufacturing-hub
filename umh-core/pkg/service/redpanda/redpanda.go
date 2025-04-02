@@ -333,11 +333,6 @@ func (s *RedpandaService) GetConfig(ctx context.Context) (redpandaserviceconfig.
 
 // Status checks the status of a Redpanda service
 func (s *RedpandaService) Status(ctx context.Context, tick uint64) (ServiceInfo, error) {
-	statusNow := time.Now()
-	defer func() {
-		s.logger.Warnf("Time taken to get status: %s", time.Since(statusNow))
-	}()
-
 	if ctx.Err() != nil {
 		return ServiceInfo{}, ctx.Err()
 	}
@@ -392,9 +387,7 @@ func (s *RedpandaService) Status(ctx context.Context, tick uint64) (ServiceInfo,
 	}
 
 	// Let's get the health check of the Redpanda service
-	now := time.Now()
 	redpandaStatus, err := s.GetHealthCheckAndMetrics(ctx, tick, logs)
-	s.logger.Warnf("Time taken to get health check and metrics: %s", time.Since(now))
 
 	if err != nil {
 		if strings.Contains(err.Error(), "connection refused") {
@@ -543,7 +536,6 @@ func (s *RedpandaService) GetHealthCheckAndMetrics(ctx context.Context, tick uin
 			Logs:    []s6service.LogEntry{},
 		}, nil
 	}
-	s.logger.Infof("GetInstance returned after %s", time.Since(start))
 
 	baseURL := "http://localhost:9644"
 	metricsEndpoint := baseURL + "/public_metrics"
@@ -582,7 +574,6 @@ func (s *RedpandaService) GetHealthCheckAndMetrics(ctx context.Context, tick uin
 	metricsFetchStart := time.Now()
 	resp, body, err := requestClient.GetWithBody(ctx, metricsEndpoint)
 	metricsFetchTime := time.Since(metricsFetchStart)
-	s.logger.Infof("Metrics endpoint check finished after %s", metricsFetchTime)
 
 	// Get ready state result from goroutine
 	isReady := <-isReadyChan
@@ -621,7 +612,6 @@ func (s *RedpandaService) GetHealthCheckAndMetrics(ctx context.Context, tick uin
 	metricsParseStart := time.Now()
 	metricsData, err := parseMetrics(body)
 	metricsParseTime := time.Since(metricsParseStart)
-	s.logger.Infof("Metrics parsing finished after %s", metricsParseTime)
 
 	if err != nil {
 		return RedpandaStatus{
@@ -646,7 +636,6 @@ func (s *RedpandaService) GetHealthCheckAndMetrics(ctx context.Context, tick uin
 	stateUpdateStart := time.Now()
 	s.metricsState.UpdateFromMetrics(metricsData, tick)
 	stateUpdateTime := time.Since(stateUpdateStart)
-	s.logger.Infof("Metrics state updated after %s", stateUpdateTime)
 
 	// Detailed timing breakdown
 	if metricsFetchTime+metricsParseTime > 5*time.Millisecond {
@@ -696,7 +685,7 @@ func (s *RedpandaService) AddRedpandaToS6Manager(ctx context.Context, cfg *redpa
 	s6FSMConfig := config.S6FSMConfig{
 		FSMInstanceConfig: config.FSMInstanceConfig{
 			Name:            s6ServiceName,
-			DesiredFSMState: s6fsm.OperationalStateRunning,
+			DesiredFSMState: s6fsm.OperationalStateStopped, // Ensure we start with a stopped service, so we can start it later using the cfg
 		},
 		S6ServiceConfig: s6Config,
 	}

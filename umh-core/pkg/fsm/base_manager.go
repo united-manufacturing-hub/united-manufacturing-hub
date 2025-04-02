@@ -327,6 +327,7 @@ func (m *BaseFSMManager[C]) Reconcile(
 				metrics.IncErrorCount(metrics.ComponentBaseFSMManager, m.managerName)
 				return fmt.Errorf("failed to get desired state: %w", err), false
 			}
+			m.logger.Debugf("desiredState: %v", desiredState)
 			err = instance.SetDesiredFSMState(desiredState)
 			if err != nil {
 				metrics.IncErrorCount(metrics.ComponentBaseFSMManager, m.managerName)
@@ -480,7 +481,6 @@ func (m *BaseFSMManager[C]) Reconcile(
 		// If maybe a couple of previous instances were slow, we don't want to
 		// have a ripple effect on the whole control loop
 		expectedMaxP95ExecutionTime, err := m.getExpectedMaxP95ExecutionTimePerInstance(instance)
-		m.logger.Infof("expectedMaxP95ExecutionTime: %v (instance: %s)", expectedMaxP95ExecutionTime, name)
 		if err != nil {
 			metrics.IncErrorCount(metrics.ComponentBaseFSMManager, m.managerName)
 			return fmt.Errorf("failed to get expected max p95 execution time: %w", err), false

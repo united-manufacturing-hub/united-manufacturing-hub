@@ -167,12 +167,6 @@ func (b *RedpandaInstance) reconcileStateTransition(ctx context.Context, current
 	currentState := b.baseFSMInstance.GetCurrentFSMState()
 	desiredState := b.baseFSMInstance.GetDesiredFSMState()
 
-	// If already in the desired state, nothing to do.
-	// This is wrong, as there could be a degradation
-	// if currentState == desiredState {
-	// 	return nil, false
-	// }
-
 	// Handle lifecycle states first - these take precedence over operational states
 	if internal_fsm.IsLifecycleState(currentState) {
 		err, reconciled := b.reconcileLifecycleStates(ctx, currentState)
@@ -180,6 +174,11 @@ func (b *RedpandaInstance) reconcileStateTransition(ctx context.Context, current
 			return err, false
 		}
 		return nil, reconciled
+	}
+
+	// If both current and desired state are stopped, we don't need to do anything
+	if currentState == OperationalStateStopped && desiredState == OperationalStateStopped {
+		return nil, false
 	}
 
 	// Handle operational states
