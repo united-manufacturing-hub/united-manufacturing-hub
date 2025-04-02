@@ -167,8 +167,6 @@ func (b *RedpandaInstance) reconcileStateTransition(ctx context.Context, current
 	currentState := b.baseFSMInstance.GetCurrentFSMState()
 	desiredState := b.baseFSMInstance.GetDesiredFSMState()
 
-	b.baseFSMInstance.GetLogger().Infof("currentState: %s, desiredState: %s", currentState, desiredState)
-
 	// Handle lifecycle states first - these take precedence over operational states
 	if internal_fsm.IsLifecycleState(currentState) {
 		err, reconciled := b.reconcileLifecycleStates(ctx, currentState)
