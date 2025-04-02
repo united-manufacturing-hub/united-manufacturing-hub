@@ -47,6 +47,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/container"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/redpanda"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
@@ -101,6 +102,7 @@ func NewControlLoop() *ControlLoop {
 		benthos.NewBenthosManager(constants.DefaultManagerName),
 		container.NewContainerManager(constants.DefaultManagerName),
 		redpanda.NewRedpandaManager(constants.DefaultManagerName),
+		dataflowcomponent.NewDataFlowComponentManager(constants.DefaultManagerName),
 	}
 
 	// Create the config manager with backoff support
@@ -240,9 +242,6 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 			return nil
 		}
 	}
-	//c.logger.Infof("Reconciling with config: %+v", cfg)
-	// cfg is correct here
-	// TODO: REMOVE ME
 
 	// Reconcile each manager with the current tick count
 	for _, manager := range c.managers {

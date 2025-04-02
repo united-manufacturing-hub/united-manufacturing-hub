@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package dfc_test
+package dataflowcomponent_test
 
 import (
 	"context"
@@ -24,12 +24,12 @@ import (
 	. "github.com/onsi/gomega"
 
 	benthosserviceconfig "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dfc"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
 )
 
 // MockBenthosConfigManager is a mock implementation of the BenthosConfigManager interface for testing
 type MockBenthosConfigManager struct {
-	components           map[string]dfc.DataFlowComponentConfig
+	components           map[string]dataflowcomponent.DataFlowComponentConfig
 	addCalled            bool
 	removeCalled         bool
 	updateCalled         bool
@@ -43,12 +43,12 @@ type MockBenthosConfigManager struct {
 // NewMockBenthosConfigManager creates a new MockBenthosConfigManager
 func NewMockBenthosConfigManager() *MockBenthosConfigManager {
 	return &MockBenthosConfigManager{
-		components: make(map[string]dfc.DataFlowComponentConfig),
+		components: make(map[string]dataflowcomponent.DataFlowComponentConfig),
 	}
 }
 
 // AddComponentToBenthosConfig adds a component to the benthos config
-func (m *MockBenthosConfigManager) AddComponentToBenthosConfig(component dfc.DataFlowComponentConfig) error {
+func (m *MockBenthosConfigManager) AddComponentToBenthosConfig(component dataflowcomponent.DataFlowComponentConfig) error {
 	m.addCalled = true
 	if m.shouldFailAdd {
 		return fmt.Errorf("mock error adding component")
@@ -68,7 +68,7 @@ func (m *MockBenthosConfigManager) RemoveComponentFromBenthosConfig(componentNam
 }
 
 // UpdateComponentInBenthosConfig updates a component in the benthos config
-func (m *MockBenthosConfigManager) UpdateComponentInBenthosConfig(component dfc.DataFlowComponentConfig) error {
+func (m *MockBenthosConfigManager) UpdateComponentInBenthosConfig(component dataflowcomponent.DataFlowComponentConfig) error {
 	m.updateCalled = true
 	if m.shouldFailUpdate {
 		return fmt.Errorf("mock error updating component")
@@ -91,8 +91,8 @@ var _ = Describe("DataFlowComponent FSM", func() {
 	var (
 		ctx                context.Context
 		mockConfigManager  *MockBenthosConfigManager
-		testComponent      *dfc.DataFlowComponent
-		componentConfig    dfc.DataFlowComponentConfig
+		testComponent      *dataflowcomponent.DataFlowComponent
+		componentConfig    dataflowcomponent.DataFlowComponentConfig
 		tempConfigFilePath string
 	)
 
@@ -101,12 +101,12 @@ var _ = Describe("DataFlowComponent FSM", func() {
 		mockConfigManager = NewMockBenthosConfigManager()
 
 		// Create a temporary directory for config files
-		tempDir, err := os.MkdirTemp("", "dfc-test")
+		tempDir, err := os.MkdirTemp("", "dataFlowComponent-test")
 		Expect(err).NotTo(HaveOccurred())
 		tempConfigFilePath = filepath.Join(tempDir, "test-config.yaml")
 
 		// Basic component config
-		componentConfig = dfc.DataFlowComponentConfig{
+		componentConfig = dataflowcomponent.DataFlowComponentConfig{
 			Name:         "test-component",
 			DesiredState: "stopped",
 			VersionUUID:  "test-uuid-123",
@@ -125,7 +125,7 @@ var _ = Describe("DataFlowComponent FSM", func() {
 		}
 
 		// Create a new DataFlowComponent
-		testComponent = dfc.NewDataFlowComponent(componentConfig, mockConfigManager)
+		testComponent = dataflowcomponent.NewDataFlowComponent(componentConfig, mockConfigManager)
 		Expect(testComponent).NotTo(BeNil())
 
 		// Complete the lifecycle creation process (to_be_created -> creating -> created -> stopped)
@@ -138,7 +138,7 @@ var _ = Describe("DataFlowComponent FSM", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Now the FSM should be in the stopped operational state as configured
-		Expect(testComponent.GetCurrentFSMState()).To(Equal(dfc.OperationalStateStopped))
+		Expect(testComponent.GetCurrentFSMState()).To(Equal(dataflowcomponent.OperationalStateStopped))
 
 		// Reset mock flags after initialization
 		mockConfigManager.addCalled = false
@@ -156,25 +156,25 @@ var _ = Describe("DataFlowComponent FSM", func() {
 
 	Describe("State Transitions", func() {
 		It("should start in the Stopped state", func() {
-			Expect(testComponent.GetCurrentFSMState()).To(Equal(dfc.OperationalStateStopped))
+			Expect(testComponent.GetCurrentFSMState()).To(Equal(dataflowcomponent.OperationalStateStopped))
 		})
 
 		It("should transition to Active when the desired state is set to Active", func() {
 			// Set the desired state to Active
-			err := testComponent.SetDesiredFSMState(dfc.OperationalStateActive)
+			err := testComponent.SetDesiredFSMState(dataflowcomponent.OperationalStateActive)
 			Expect(err).NotTo(HaveOccurred())
 
 			// First reconcile call should transition from Stopped to Starting
 			err, reconciled := testComponent.Reconcile(ctx, 3)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(reconciled).To(BeTrue())
-			Expect(testComponent.GetCurrentFSMState()).To(Equal(dfc.OperationalStateStarting))
+			Expect(testComponent.GetCurrentFSMState()).To(Equal(dataflowcomponent.OperationalStateStarting))
 
 			// Second reconcile call should transition from Starting to Active
 			err, reconciled = testComponent.Reconcile(ctx, 4)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(reconciled).To(BeTrue())
-			Expect(testComponent.GetCurrentFSMState()).To(Equal(dfc.OperationalStateActive))
+			Expect(testComponent.GetCurrentFSMState()).To(Equal(dataflowcomponent.OperationalStateActive))
 
 			// Verify that the component was added to the benthos config
 			Expect(mockConfigManager.addCalled).To(BeTrue())
@@ -182,29 +182,29 @@ var _ = Describe("DataFlowComponent FSM", func() {
 
 		It("should transition to Stopped when the desired state is set to Stopped", func() {
 			// Set the desired state to Active and reconcile to get to Active state
-			err := testComponent.SetDesiredFSMState(dfc.OperationalStateActive)
+			err := testComponent.SetDesiredFSMState(dataflowcomponent.OperationalStateActive)
 			Expect(err).NotTo(HaveOccurred())
 			err, _ = testComponent.Reconcile(ctx, 3) // -> Starting
 			Expect(err).NotTo(HaveOccurred())
 			err, _ = testComponent.Reconcile(ctx, 4) // -> Active
 			Expect(err).NotTo(HaveOccurred())
-			Expect(testComponent.GetCurrentFSMState()).To(Equal(dfc.OperationalStateActive))
+			Expect(testComponent.GetCurrentFSMState()).To(Equal(dataflowcomponent.OperationalStateActive))
 
 			// Now set the desired state to Stopped
-			err = testComponent.SetDesiredFSMState(dfc.OperationalStateStopped)
+			err = testComponent.SetDesiredFSMState(dataflowcomponent.OperationalStateStopped)
 			Expect(err).NotTo(HaveOccurred())
 
 			// First reconcile call should transition from Active to Stopping
 			err, reconciled := testComponent.Reconcile(ctx, 5)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(reconciled).To(BeTrue())
-			Expect(testComponent.GetCurrentFSMState()).To(Equal(dfc.OperationalStateStopping))
+			Expect(testComponent.GetCurrentFSMState()).To(Equal(dataflowcomponent.OperationalStateStopping))
 
 			// Second reconcile call should transition from Stopping to Stopped
 			err, reconciled = testComponent.Reconcile(ctx, 6)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(reconciled).To(BeTrue())
-			Expect(testComponent.GetCurrentFSMState()).To(Equal(dfc.OperationalStateStopped))
+			Expect(testComponent.GetCurrentFSMState()).To(Equal(dataflowcomponent.OperationalStateStopped))
 
 			// Verify that the component was removed from the benthos config
 			Expect(mockConfigManager.removeCalled).To(BeTrue())
@@ -214,7 +214,7 @@ var _ = Describe("DataFlowComponent FSM", func() {
 	Describe("Benthos Config Management", func() {
 		It("should add the component to the benthos config when starting", func() {
 			// Set the desired state to Active
-			err := testComponent.SetDesiredFSMState(dfc.OperationalStateActive)
+			err := testComponent.SetDesiredFSMState(dataflowcomponent.OperationalStateActive)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Reconcile to trigger config modification
@@ -227,7 +227,7 @@ var _ = Describe("DataFlowComponent FSM", func() {
 
 		It("should remove the component from the benthos config when stopping", func() {
 			// Set the desired state to Active and reconcile to get to Active state
-			err := testComponent.SetDesiredFSMState(dfc.OperationalStateActive)
+			err := testComponent.SetDesiredFSMState(dataflowcomponent.OperationalStateActive)
 			Expect(err).NotTo(HaveOccurred())
 			err, _ = testComponent.Reconcile(ctx, 3) // -> Starting
 			Expect(err).NotTo(HaveOccurred())
@@ -235,7 +235,7 @@ var _ = Describe("DataFlowComponent FSM", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Now set the desired state to Stopped
-			err = testComponent.SetDesiredFSMState(dfc.OperationalStateStopped)
+			err = testComponent.SetDesiredFSMState(dataflowcomponent.OperationalStateStopped)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Reconcile to trigger config modification
@@ -248,7 +248,7 @@ var _ = Describe("DataFlowComponent FSM", func() {
 
 		It("should update the component in the benthos config when already active", func() {
 			// Set the desired state to Active and reconcile to get to Active state
-			err := testComponent.SetDesiredFSMState(dfc.OperationalStateActive)
+			err := testComponent.SetDesiredFSMState(dataflowcomponent.OperationalStateActive)
 			Expect(err).NotTo(HaveOccurred())
 			err, _ = testComponent.Reconcile(ctx, 3) // -> Starting
 			Expect(err).NotTo(HaveOccurred())
