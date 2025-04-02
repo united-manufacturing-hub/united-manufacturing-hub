@@ -31,6 +31,9 @@ type DataFlowComponentConfig struct {
 
 	// ServiceConfig contains the Benthos service configuration.
 	ServiceConfig *benthosserviceconfig.BenthosServiceConfig `yaml:"serviceConfig" json:"serviceConfig"`
+
+	// ConnectionConfig contains the connection configuration.
+	// TODO: ADD ME ConnectionConfig *connectionconfig.ConnectionConfig `yaml:"connectionConfig" json:"connectionConfig"`
 }
 
 // DataFlowConfig represents the configuration for data flow components
