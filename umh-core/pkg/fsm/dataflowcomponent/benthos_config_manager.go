@@ -23,16 +23,11 @@ import (
 	"go.uber.org/zap"
 	"gopkg.in/yaml.v3"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
-
-// BenthosConfigFile represents the structure of the benthos config file
-type BenthosConfigFile struct {
-	Agent   map[string]interface{} `yaml:"agent,omitempty"`
-	Benthos []BenthosEntry         `yaml:"benthos,omitempty"`
-}
 
 // BenthosEntry represents an entry in the benthos config file
 type BenthosEntry struct {
@@ -60,9 +55,9 @@ func NewBenthosConfigManager(configFilePath string) *DefaultBenthosConfigManager
 	}
 }
 
-// readBenthosConfig reads the benthos config file
-func (m *DefaultBenthosConfigManager) readBenthosConfig(ctx context.Context) (*BenthosConfigFile, error) {
-	m.logger.Debugf("Reading Benthos config from: %s", m.configFilePath)
+// readFullConfig reads the full config file
+func (m *DefaultBenthosConfigManager) readFullConfig(ctx context.Context) (*config.FullConfig, error) {
+	m.logger.Debugf("Reading full config from: %s", m.configFilePath)
 
 	// Ensure config file directory exists
 	configDir := filepath.Dir(m.configFilePath)
@@ -82,9 +77,14 @@ func (m *DefaultBenthosConfigManager) readBenthosConfig(ctx context.Context) (*B
 	if !exists {
 		// Config file doesn't exist yet, create a new empty one
 		m.logger.Infof("Config file %s doesn't exist, creating new empty config", m.configFilePath)
-		return &BenthosConfigFile{
-			Agent:   map[string]interface{}{"metricsPort": 8080},
-			Benthos: []BenthosEntry{},
+		return &config.FullConfig{
+			Agent: config.AgentConfig{
+				MetricsPort: 8080,
+			},
+			Benthos:            []config.BenthosConfig{},
+			Services:           []config.S6FSMConfig{},
+			Nmap:               []config.NmapConfig{},
+			DataFlowComponents: []config.DataFlowComponentConfig{},
 		}, nil
 	}
 
@@ -98,22 +98,22 @@ func (m *DefaultBenthosConfigManager) readBenthosConfig(ctx context.Context) (*B
 	m.logger.Debugf("Read %d bytes from config file", len(data))
 
 	// Parse config file
-	var config BenthosConfigFile
-	if err := yaml.Unmarshal(data, &config); err != nil {
+	var fullConfig config.FullConfig
+	if err := yaml.Unmarshal(data, &fullConfig); err != nil {
 		m.logger.Errorf("Failed to parse config file %s: %v", m.configFilePath, err)
 		return nil, fmt.Errorf("failed to parse config file %s: %w", m.configFilePath, err)
 	}
 
-	m.logger.Debugf("Successfully parsed config file with %d Benthos entries", len(config.Benthos))
-	return &config, nil
+	m.logger.Debugf("Successfully parsed full config file with %d Benthos entries", len(fullConfig.Benthos))
+	return &fullConfig, nil
 }
 
-// writeBenthosConfig writes the benthos config file
-func (m *DefaultBenthosConfigManager) writeBenthosConfig(ctx context.Context, config *BenthosConfigFile) error {
-	m.logger.Debugf("Writing Benthos config to: %s with %d entries", m.configFilePath, len(config.Benthos))
+// writeFullConfig writes the full config file
+func (m *DefaultBenthosConfigManager) writeFullConfig(ctx context.Context, fullConfig *config.FullConfig) error {
+	m.logger.Debugf("Writing full config to: %s with %d Benthos entries", m.configFilePath, len(fullConfig.Benthos))
 
 	// Marshal config to YAML
-	data, err := yaml.Marshal(config)
+	data, err := yaml.Marshal(fullConfig)
 	if err != nil {
 		m.logger.Errorf("Failed to marshal config to YAML: %v", err)
 		return fmt.Errorf("failed to marshal config to YAML: %w", err)
@@ -127,7 +127,7 @@ func (m *DefaultBenthosConfigManager) writeBenthosConfig(ctx context.Context, co
 		return fmt.Errorf("failed to write config file %s: %w", m.configFilePath, err)
 	}
 
-	m.logger.Infof("Successfully wrote Benthos config to %s", m.configFilePath)
+	m.logger.Infof("Successfully wrote full config to %s", m.configFilePath)
 	return nil
 }
 
@@ -137,35 +137,37 @@ func (m *DefaultBenthosConfigManager) AddComponentToBenthosConfig(ctx context.Co
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
-	// Read config file
-	config, err := m.readBenthosConfig(ctx)
+	// Read full config file
+	fullConfig, err := m.readFullConfig(ctx)
 	if err != nil {
-		m.logger.Errorf("Failed to read Benthos config: %v", err)
+		m.logger.Errorf("Failed to read full config: %v", err)
 		return err
 	}
 
-	// Check if component already exists
-	for i, entry := range config.Benthos {
+	// Check if component already exists in Benthos section
+	for i, entry := range fullConfig.Benthos {
 		if entry.Name == component.Name {
 			// Component already exists, update it
-			m.logger.Debugf("Component %s already exists in config, updating", component.Name)
-			config.Benthos[i].DesiredState = component.DesiredState
-			config.Benthos[i].BenthosServiceConfig = component.ServiceConfig
+			m.logger.Debugf("Component %s already exists in Benthos config, updating", component.Name)
+			fullConfig.Benthos[i].DesiredFSMState = component.DesiredState
+			fullConfig.Benthos[i].BenthosServiceConfig = component.ServiceConfig
 			m.logger.Infof("Updated component %s in Benthos config", component.Name)
-			return m.writeBenthosConfig(ctx, config)
+			return m.writeFullConfig(ctx, fullConfig)
 		}
 	}
 
-	// Component doesn't exist, add it
-	m.logger.Debugf("Component %s doesn't exist, adding as new entry", component.Name)
-	config.Benthos = append(config.Benthos, BenthosEntry{
-		Name:                 component.Name,
-		DesiredState:         component.DesiredState,
+	// Component doesn't exist, add it to Benthos section
+	m.logger.Debugf("Component %s doesn't exist in Benthos config, adding as new entry", component.Name)
+	fullConfig.Benthos = append(fullConfig.Benthos, config.BenthosConfig{
+		FSMInstanceConfig: config.FSMInstanceConfig{
+			Name:            component.Name,
+			DesiredFSMState: component.DesiredState,
+		},
 		BenthosServiceConfig: component.ServiceConfig,
 	})
 
 	m.logger.Infof("Added component %s to Benthos config", component.Name)
-	return m.writeBenthosConfig(ctx, config)
+	return m.writeFullConfig(ctx, fullConfig)
 }
 
 // RemoveComponentFromBenthosConfig removes a component from the benthos config
@@ -174,34 +176,34 @@ func (m *DefaultBenthosConfigManager) RemoveComponentFromBenthosConfig(ctx conte
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
-	// Read config file
-	config, err := m.readBenthosConfig(ctx)
+	// Read full config file
+	fullConfig, err := m.readFullConfig(ctx)
 	if err != nil {
-		m.logger.Errorf("Failed to read Benthos config: %v", err)
+		m.logger.Errorf("Failed to read full config: %v", err)
 		return err
 	}
 
-	// Find and remove the component
+	// Find and remove the component from Benthos section
 	found := false
-	newBenthos := []BenthosEntry{}
-	for _, entry := range config.Benthos {
+	newBenthos := []config.BenthosConfig{}
+	for _, entry := range fullConfig.Benthos {
 		if entry.Name == componentName {
 			found = true
-			m.logger.Debugf("Found component %s in config, removing", componentName)
+			m.logger.Debugf("Found component %s in Benthos config, removing", componentName)
 		} else {
 			newBenthos = append(newBenthos, entry)
 		}
 	}
 
 	if !found {
-		m.logger.Debugf("Component %s not found in config, nothing to remove", componentName)
+		m.logger.Debugf("Component %s not found in Benthos config, nothing to remove", componentName)
 		return nil
 	}
 
 	// Update config
-	config.Benthos = newBenthos
+	fullConfig.Benthos = newBenthos
 	m.logger.Infof("Removed component %s from Benthos config", componentName)
-	return m.writeBenthosConfig(ctx, config)
+	return m.writeFullConfig(ctx, fullConfig)
 }
 
 // UpdateComponentInBenthosConfig updates a component in the benthos config
@@ -210,21 +212,21 @@ func (m *DefaultBenthosConfigManager) UpdateComponentInBenthosConfig(ctx context
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
-	// Read config file
-	config, err := m.readBenthosConfig(ctx)
+	// Read full config file
+	fullConfig, err := m.readFullConfig(ctx)
 	if err != nil {
-		m.logger.Errorf("Failed to read Benthos config: %v", err)
+		m.logger.Errorf("Failed to read full config: %v", err)
 		return err
 	}
 
-	// Find and update the component
+	// Find and update the component in Benthos section
 	found := false
-	for i, entry := range config.Benthos {
+	for i, entry := range fullConfig.Benthos {
 		if entry.Name == component.Name {
-			config.Benthos[i].DesiredState = component.DesiredState
-			config.Benthos[i].BenthosServiceConfig = component.ServiceConfig
+			fullConfig.Benthos[i].DesiredFSMState = component.DesiredState
+			fullConfig.Benthos[i].BenthosServiceConfig = component.ServiceConfig
 			found = true
-			m.logger.Debugf("Found component %s in config, updating", component.Name)
+			m.logger.Debugf("Found component %s in Benthos config, updating", component.Name)
 			break
 		}
 	}
@@ -236,7 +238,7 @@ func (m *DefaultBenthosConfigManager) UpdateComponentInBenthosConfig(ctx context
 	}
 
 	m.logger.Infof("Updated component %s in Benthos config", component.Name)
-	return m.writeBenthosConfig(ctx, config)
+	return m.writeFullConfig(ctx, fullConfig)
 }
 
 // ComponentExistsInBenthosConfig checks if a component exists in the benthos config
@@ -245,15 +247,15 @@ func (m *DefaultBenthosConfigManager) ComponentExistsInBenthosConfig(ctx context
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
-	// Read config file
-	config, err := m.readBenthosConfig(ctx)
+	// Read full config file
+	fullConfig, err := m.readFullConfig(ctx)
 	if err != nil {
-		m.logger.Errorf("Failed to read Benthos config: %v", err)
+		m.logger.Errorf("Failed to read full config: %v", err)
 		return false, err
 	}
 
-	// Check if component exists
-	for _, entry := range config.Benthos {
+	// Check if component exists in Benthos section
+	for _, entry := range fullConfig.Benthos {
 		if entry.Name == componentName {
 			m.logger.Debugf("Component %s found in Benthos config", componentName)
 			return true, nil
