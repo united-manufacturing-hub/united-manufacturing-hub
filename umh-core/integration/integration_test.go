@@ -698,6 +698,96 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 			GinkgoWriter.Println("Redpanda-only test completed successfully")
 		})
 	})
+
+	Context("with dataFlowComponent and mixed services", Label("dataflow"), func() {
+		BeforeAll(func() {
+			By("Building a configuration with DataFlowComponents, Benthos, and Redpanda services")
+			builder := NewDataFlowComponentBuilder()
+
+			// Add a mix of service types to verify they co-exist correctly
+			builder.AddGoldenDataFlowComponent()
+			builder.AddBenthosService("benthos-service")
+			builder.EnableRedpanda()
+
+			cfg := builder.BuildYAML()
+
+			// Write the config and start the container
+			Expect(writeConfigFile(cfg)).To(Succeed())
+			Expect(BuildAndRunContainer(cfg, "1024m")).To(Succeed())
+			Expect(waitForMetrics()).To(Succeed(), "Metrics endpoint should be available")
+		})
+
+		AfterAll(func() {
+			By("Stopping the container after the dataFlowComponent test")
+			PrintLogsAndStopContainer()
+		})
+
+		It("should correctly handle mixed config types while maintaining all sections", func() {
+			// First, let's verify metrics are healthy
+			Eventually(func() bool {
+				resp, err := http.Get(GetMetricsURL())
+				if err != nil {
+					return false
+				}
+				defer resp.Body.Close()
+
+				body, err := io.ReadAll(resp.Body)
+				if err != nil {
+					return false
+				}
+
+				return strings.Contains(string(body), "umh_core_reconcile_duration_milliseconds")
+			}, 10*time.Second, 1*time.Second).Should(BeTrue(), "Metrics endpoint should contain the expected metrics")
+
+			// Now, update the configuration multiple times to test our config preservation fix
+			By("Adding another DataFlowComponent while preserving existing config")
+			builder := NewDataFlowComponentBuilder()
+
+			// Add the original components plus a new one
+			builder.AddGoldenDataFlowComponent()
+			builder.AddDataFlowComponent("second-data-flow", "3s")
+			builder.AddBenthosService("benthos-service")
+			builder.EnableRedpanda()
+
+			cfg := builder.BuildYAML()
+			Expect(writeConfigFile(cfg, getContainerName())).To(Succeed())
+
+			// Wait for system to stabilize after config change
+			time.Sleep(5 * time.Second)
+
+			By("Verifying that all config sections are preserved after multiple updates")
+			// Get the current config and verify it has all the expected sections
+			containerConfig, err := getContainerConfig()
+			Expect(err).NotTo(HaveOccurred())
+
+			// Check that our config contains all expected sections
+			Expect(containerConfig).To(ContainSubstring("golden-data-flow"), "Should contain the first DataFlowComponent")
+			Expect(containerConfig).To(ContainSubstring("second-data-flow"), "Should contain the second DataFlowComponent")
+			Expect(containerConfig).To(ContainSubstring("benthos-service"), "Should contain the Benthos service")
+			Expect(containerConfig).To(ContainSubstring("redpanda"), "Should contain the Redpanda configuration")
+
+			// Wait for system to process changes
+			time.Sleep(5 * time.Second)
+
+			By("Updating an existing DataFlowComponent to verify config preservation")
+			builder.UpdateDataFlowComponent("second-data-flow", "5s")
+			cfg = builder.BuildYAML()
+			Expect(writeConfigFile(cfg, getContainerName())).To(Succeed())
+
+			// Wait for system to stabilize after config change
+			time.Sleep(5 * time.Second)
+
+			// Verify config still has all sections after the update
+			containerConfig, err = getContainerConfig()
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(containerConfig).To(ContainSubstring("golden-data-flow"), "Should still contain the first DataFlowComponent")
+			Expect(containerConfig).To(ContainSubstring("second-data-flow"), "Should still contain the second DataFlowComponent")
+			Expect(containerConfig).To(ContainSubstring("5s"), "Should contain the updated interval")
+			Expect(containerConfig).To(ContainSubstring("benthos-service"), "Should still contain the Benthos service")
+			Expect(containerConfig).To(ContainSubstring("redpanda"), "Should still contain the Redpanda configuration")
+		})
+	})
 })
 
 // Helper functions for the chaos test
