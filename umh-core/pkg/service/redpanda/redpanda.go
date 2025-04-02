@@ -429,7 +429,9 @@ func parseMetrics(data []byte) (Metrics, error) {
 		Infrastructure: InfrastructureMetrics{},
 		Cluster:        ClusterMetrics{},
 		Throughput:     ThroughputMetrics{},
-		Topic:          TopicMetrics{},
+		Topic: TopicMetrics{
+			TopicPartitionMap: make(map[string]int64), // Pre-allocate map to avoid nil check later
+		},
 	}
 
 	// Parse the metrics text into prometheus format
@@ -438,90 +440,84 @@ func parseMetrics(data []byte) (Metrics, error) {
 		return metrics, fmt.Errorf("failed to parse metrics: %w", err)
 	}
 
-	// Helper function to get metric value
-	getValue := func(m *dto.Metric) float64 {
-		if m.Counter != nil {
-			return m.Counter.GetValue()
-		}
-		if m.Gauge != nil {
-			return m.Gauge.GetValue()
-		}
-		if m.Untyped != nil {
-			return m.Untyped.GetValue()
-		}
-		return 0
+	// Directly extract only the metrics we need instead of iterating all metrics
+
+	// Infrastructure metrics - Storage
+	if family, ok := mf["redpanda_storage_disk_free_bytes"]; ok && len(family.Metric) > 0 {
+		metrics.Infrastructure.Storage.FreeBytes = getMetricValue(family.Metric[0])
 	}
 
-	// Helper function to get label value
-	getLabel := func(m *dto.Metric, name string) string {
-		for _, label := range m.Label {
-			if label.GetName() == name {
-				return label.GetValue()
-			}
-		}
-		return ""
+	if family, ok := mf["redpanda_storage_disk_total_bytes"]; ok && len(family.Metric) > 0 {
+		metrics.Infrastructure.Storage.TotalBytes = getMetricValue(family.Metric[0])
 	}
 
-	// Process each metric family
-	for name, family := range mf {
-		switch {
-		// Infrastructure metrics
-		case name == "redpanda_storage_disk_free_bytes":
-			if len(family.Metric) > 0 {
-				metrics.Infrastructure.Storage.FreeBytes = int64(getValue(family.Metric[0]))
-			}
-		case name == "redpanda_storage_disk_total_bytes":
-			if len(family.Metric) > 0 {
-				metrics.Infrastructure.Storage.TotalBytes = int64(getValue(family.Metric[0]))
-			}
-		case name == "redpanda_storage_disk_free_space_alert":
-			if len(family.Metric) > 0 {
-				// According to Redpanda metrics documentation:
-				// 0 = OK (no alert)
-				// 1 = Low space (alert level 1)
-				// 2 = Degraded (alert level 2)
-				// So any non-zero value indicates an alert condition
-				metrics.Infrastructure.Storage.FreeSpaceAlert = getValue(family.Metric[0]) != 0
-			}
-		case name == "redpanda_uptime_seconds_total":
-			if len(family.Metric) > 0 {
-				metrics.Infrastructure.Uptime.Uptime = int64(getValue(family.Metric[0]))
-			}
-		case name == "redpanda_cluster_topics":
-			if len(family.Metric) > 0 {
-				metrics.Cluster.Topics = int64(getValue(family.Metric[0]))
-			}
-		case name == "redpanda_cluster_unavailable_partitions":
-			if len(family.Metric) > 0 {
-				metrics.Cluster.UnavailableTopics = int64(getValue(family.Metric[0]))
-			}
-		case name == "redpanda_kafka_request_bytes_total":
-			// Based on the label redpanda_request, we can determine if it's bytes in or bytes out
-			// We need to check the label value for that
-			for _, metric := range family.Metric {
-				label := getLabel(metric, "redpanda_request")
+	if family, ok := mf["redpanda_storage_disk_free_space_alert"]; ok && len(family.Metric) > 0 {
+		// Any non-zero value indicates an alert condition
+		metrics.Infrastructure.Storage.FreeSpaceAlert = getMetricValue(family.Metric[0]) != 0
+	}
+
+	// Infrastructure metrics - Uptime
+	if family, ok := mf["redpanda_uptime_seconds_total"]; ok && len(family.Metric) > 0 {
+		metrics.Infrastructure.Uptime.Uptime = getMetricValue(family.Metric[0])
+	}
+
+	// Cluster metrics
+	if family, ok := mf["redpanda_cluster_topics"]; ok && len(family.Metric) > 0 {
+		metrics.Cluster.Topics = getMetricValue(family.Metric[0])
+	}
+
+	if family, ok := mf["redpanda_cluster_unavailable_partitions"]; ok && len(family.Metric) > 0 {
+		metrics.Cluster.UnavailableTopics = getMetricValue(family.Metric[0])
+	}
+
+	// Throughput metrics
+	if family, ok := mf["redpanda_kafka_request_bytes_total"]; ok {
+		// Process only produce/consume metrics in a single pass
+		for _, metric := range family.Metric {
+			if label := getLabel(metric, "redpanda_request"); label != "" {
 				if label == "produce" {
-					metrics.Throughput.BytesIn = int64(getValue(metric))
+					metrics.Throughput.BytesIn = getMetricValue(metric)
 				} else if label == "consume" {
-					metrics.Throughput.BytesOut = int64(getValue(metric))
+					metrics.Throughput.BytesOut = getMetricValue(metric)
 				}
 			}
-		case name == "redpanda_kafka_partitions":
-			// Initialize the map if it's nil
-			if metrics.Topic.TopicPartitionMap == nil {
-				metrics.Topic.TopicPartitionMap = make(map[string]int64)
-			}
-			// Iterate through each metric and get the topic name and partition count
-			for _, metric := range family.Metric {
-				topic := getLabel(metric, "redpanda_topic")
-				if topic != "" {
-					metrics.Topic.TopicPartitionMap[topic] = int64(getValue(metric))
-				}
+		}
+	}
+
+	// Topic metrics
+	if family, ok := mf["redpanda_kafka_partitions"]; ok {
+		for _, metric := range family.Metric {
+			if topic := getLabel(metric, "redpanda_topic"); topic != "" {
+				metrics.Topic.TopicPartitionMap[topic] = getMetricValue(metric)
 			}
 		}
 	}
 
 	return metrics, nil
+}
+
+// getMetricValue extracts numeric value from a metric
+func getMetricValue(m *dto.Metric) int64 {
+	if m.Counter != nil {
+		return int64(m.Counter.GetValue())
+	}
+	if m.Gauge != nil {
+		return int64(m.Gauge.GetValue())
+	}
+	if m.Untyped != nil {
+		return int64(m.Untyped.GetValue())
+	}
+	return 0
+}
+
+// getLabel extracts a label value from a metric
+func getLabel(m *dto.Metric, name string) string {
+	for _, label := range m.Label {
+		if label.GetName() == name {
+			return label.GetValue()
+		}
+	}
+	return ""
 }
 
 // GetHealthCheckAndMetrics returns the health check and metrics of a Redpanda service
@@ -562,18 +558,36 @@ func (s *RedpandaService) GetHealthCheckAndMetrics(ctx context.Context, tick uin
 		requestClient = httpclient.NewDefaultHTTPClient()
 	}
 
-	// Check if logs contain successful startup message
-	isReady := false
-	for _, log := range logs {
-		if strings.Contains(log.Content, "Successfully started Redpanda!") {
-			isReady = true
-			break
+	// Check for ready state using log search (move this to a separate goroutine)
+	// We'll do this concurrently with the metrics fetch to save time
+	isReadyChan := make(chan bool, 1)
+	go func() {
+		isReady := false
+		// Only check a limited number of recent logs (checking all logs can be costly)
+		startIdx := 0
+		if len(logs) > 100 {
+			startIdx = len(logs) - 100
 		}
-	}
-	s.logger.Infof("String search finished after %s", time.Since(start))
 
-	// For Redpanda, we can use a single call to the metrics endpoint for all checks
+		for i := startIdx; i < len(logs); i++ {
+			if strings.Contains(logs[i].Content, "Successfully started Redpanda!") {
+				isReady = true
+				break
+			}
+		}
+		isReadyChan <- isReady
+	}()
+
+	// Start metrics fetch
+	metricsFetchStart := time.Now()
 	resp, body, err := requestClient.GetWithBody(ctx, metricsEndpoint)
+	metricsFetchTime := time.Since(metricsFetchStart)
+	s.logger.Infof("Metrics endpoint check finished after %s", metricsFetchTime)
+
+	// Get ready state result from goroutine
+	isReady := <-isReadyChan
+
+	// Handle errors from metrics fetch
 	if err != nil {
 		return RedpandaStatus{
 			HealthCheck: HealthCheck{
@@ -584,13 +598,12 @@ func (s *RedpandaService) GetHealthCheckAndMetrics(ctx context.Context, tick uin
 			Logs:    logs,
 		}, fmt.Errorf("failed to check metrics endpoint: %w", err)
 	}
-	s.logger.Infof("Metrics endpoint check finished after %s", time.Since(start))
 
-	// Create our health check structure
+	// Create health check structure
 	healthCheck := HealthCheck{
 		// Liveness is determined by a successful response
 		IsLive: resp.StatusCode == http.StatusOK,
-		// Readiness is determined by the presence of the successful startup message in logs
+		// Readiness comes from logs analysis
 		IsReady: isReady,
 		// Redpanda version is constant
 		Version: constants.RedpandaVersion,
@@ -605,7 +618,11 @@ func (s *RedpandaService) GetHealthCheckAndMetrics(ctx context.Context, tick uin
 	}
 
 	// Parse metrics from the response body
+	metricsParseStart := time.Now()
 	metricsData, err := parseMetrics(body)
+	metricsParseTime := time.Since(metricsParseStart)
+	s.logger.Infof("Metrics parsing finished after %s", metricsParseTime)
+
 	if err != nil {
 		return RedpandaStatus{
 			HealthCheck: HealthCheck{
@@ -617,8 +634,6 @@ func (s *RedpandaService) GetHealthCheckAndMetrics(ctx context.Context, tick uin
 		}, fmt.Errorf("failed to parse metrics: %w", err)
 	}
 
-	s.logger.Infof("Metrics parsing finished after %s", time.Since(start))
-
 	// Update the metrics state
 	if s.metricsState == nil {
 		return RedpandaStatus{
@@ -628,8 +643,17 @@ func (s *RedpandaService) GetHealthCheckAndMetrics(ctx context.Context, tick uin
 		}, fmt.Errorf("metrics state not initialized")
 	}
 
+	stateUpdateStart := time.Now()
 	s.metricsState.UpdateFromMetrics(metricsData, tick)
-	s.logger.Infof("Metrics state updated after %s", time.Since(start))
+	stateUpdateTime := time.Since(stateUpdateStart)
+	s.logger.Infof("Metrics state updated after %s", stateUpdateTime)
+
+	// Detailed timing breakdown
+	if metricsFetchTime+metricsParseTime > 5*time.Millisecond {
+		s.logger.Warnf("Metrics processing slow: fetch=%v, parse=%v, update=%v, total=%v",
+			metricsFetchTime, metricsParseTime, stateUpdateTime, time.Since(start))
+	}
+
 	return RedpandaStatus{
 		HealthCheck:  healthCheck,
 		Metrics:      metricsData,
