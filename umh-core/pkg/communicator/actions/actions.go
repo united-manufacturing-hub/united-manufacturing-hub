@@ -15,10 +15,11 @@
 package actions
 
 import (
+	"fmt"
+
 	"github.com/google/uuid"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/encoding"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/safejson"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
@@ -60,6 +61,8 @@ func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePay
 			outboundChannel: outboundChannel,
 			configManager:   config.NewFileConfigManager(),
 		}
+	case models.DeployDataFlowComponent:
+		action = NewDeployDFCAction(sender, payload.ActionUUID, instanceUUID, outboundChannel)
 	default:
 		zap.S().Errorf("Unknown action type: %s", payload.ActionType)
 		SendActionReply(instanceUUID, sender, payload.ActionUUID, models.ActionFinishedWithFailure, "Unknown action type", outboundChannel, payload.ActionType)
@@ -70,6 +73,7 @@ func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePay
 	err := action.Parse(payload.ActionPayload)
 	if err != nil {
 		zap.S().Errorf("Error parsing action payload: %s", err)
+		SendActionReply(instanceUUID, sender, payload.ActionUUID, models.ActionFinishedWithFailure, fmt.Sprintf("Error parsing action payload: %s", err), outboundChannel, payload.ActionType)
 		return
 	}
 
@@ -77,38 +81,24 @@ func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePay
 	err = action.Validate()
 	if err != nil {
 		zap.S().Errorf("Error validating action payload: %s", err)
+		SendActionReply(instanceUUID, sender, payload.ActionUUID, models.ActionFinishedWithFailure, fmt.Sprintf("Error validating action payload: %s", err), outboundChannel, payload.ActionType)
 		return
 	}
 
 	// Execute the action
-	result, metadata, err := action.Execute()
+	result, actionContext, err := action.Execute()
 	if err != nil {
 		zap.S().Errorf("Error executing action: %s", err)
+		SendActionReply(instanceUUID, sender, payload.ActionUUID, models.ActionFinishedWithFailure, fmt.Sprintf("Error executing action: %s", err), outboundChannel, payload.ActionType)
 		return
 	}
 
-	// Send the action result to the outbound channel
-	outboundChannel <- &models.UMHMessage{
-		Content: string(safejson.MustMarshal(models.UMHMessageContent{
-			MessageType: models.ActionReply,
-			Payload: models.ActionReplyMessagePayload{
-				ActionReplyState:   models.ActionFinishedSuccessfull,
-				ActionReplyPayload: result,
-				ActionUUID:         payload.ActionUUID,
-				ActionContext:      metadata,
-			},
-		})),
-		Email:        sender,
-		InstanceUUID: instanceUUID,
-		Metadata: &models.MessageMetadata{
-			TraceID: traceID,
-		},
-	}
+	// Send the action result to the outbound channel with context if available
+	SendActionReplyWithAdditionalContext(instanceUUID, action.getUserEmail(), action.getUuid(), models.ActionFinishedSuccessfull, result, outboundChannel, payload.ActionType, actionContext)
 }
 
 // SendActionReply sends an action reply with the given state and payload
 // and returns false if an error occurred
-// Deprecated: Use SendActionReplyV2 instead. This function accepts payload of type interface{} which is discouraged for further usage.
 func SendActionReply(instanceUUID uuid.UUID, userEmail string, actionUUID uuid.UUID, arstate models.ActionReplyState, payload interface{}, outboundChannel chan *models.UMHMessage, action models.ActionType) bool {
 	return SendActionReplyWithAdditionalContext(instanceUUID, userEmail, actionUUID, arstate, payload, outboundChannel, action, nil)
 }
