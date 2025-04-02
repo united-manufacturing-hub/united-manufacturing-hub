@@ -120,7 +120,7 @@ func main() {
 	go SystemSnapshotLogger(ctx, controlLoop, systemSnapshot, systemMu)
 
 	if configData.Agent.CommunicatorConfig.APIURL != "" && configData.Agent.CommunicatorConfig.AuthToken != "" {
-		enableBackendConnection(&configData, systemSnapshot, &communicationState, systemMu)
+		enableBackendConnection(&configData, systemSnapshot, &communicationState, systemMu, controlLoop)
 	} else {
 		log.Warnf("No backend connection enabled, please set API_URL and AUTH_TOKEN")
 	}
@@ -184,7 +184,7 @@ func SystemSnapshotLogger(ctx context.Context, controlLoop *control.ControlLoop,
 	}
 }
 
-func enableBackendConnection(config *config.FullConfig, state *fsm.SystemSnapshot, communicationState *communication_state.CommunicationState, systemMu *sync.Mutex) {
+func enableBackendConnection(config *config.FullConfig, state *fsm.SystemSnapshot, communicationState *communication_state.CommunicationState, systemMu *sync.Mutex, controlLoop *control.ControlLoop) {
 	logger := logger.For("enableBackendConnection")
 	if logger == nil {
 		logger = zap.NewNop().Sugar()
@@ -208,9 +208,12 @@ func enableBackendConnection(config *config.FullConfig, state *fsm.SystemSnapsho
 		communicationState.LoginResponse = login
 		logger.Info("Backend connection enabled, login response: ", zap.Any("login_name", login.Name))
 
+		// Get the config manager from the control loop
+		configManager := controlLoop.GetConfigManager()
+
 		communicationState.InitialiseAndStartPuller()
 		communicationState.InitialiseAndStartPusher()
-		communicationState.InitialiseAndStartSubscriberHandler(time.Minute*5, time.Minute, config, state, systemMu)
+		communicationState.InitialiseAndStartSubscriberHandler(time.Minute*5, time.Minute, config, state, systemMu, configManager)
 		communicationState.InitialiseAndStartRouter()
 	}
 }

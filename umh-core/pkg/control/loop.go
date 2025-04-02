@@ -332,6 +332,12 @@ func (c *ControlLoop) GetSystemSnapshot() *fsm.SystemSnapshot {
 	return c.snapshotManager.GetSnapshot()
 }
 
+// GetConfigManager returns the config manager
+// This can be used by components that need direct access to the current configuration
+func (c *ControlLoop) GetConfigManager() config.ConfigManager {
+	return c.configManager
+}
+
 // Stop gracefully terminates the control loop and its components.
 // This provides clean shutdown of all managed resources:
 // - Stops the starvation checker background goroutine
