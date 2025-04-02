@@ -290,8 +290,6 @@ func (m *BaseFSMManager[C]) Reconcile(
 
 	// Step 1: Extract the specific configs from the full config
 	extractStart := time.Now()
-	m.logger.Infof("extracting configs from full config")
-	m.logger.Infof("config: %+v", config)
 	desiredState, err := m.extractConfigs(config)
 	if err != nil {
 		metrics.IncErrorCount(metrics.ComponentBaseFSMManager, m.managerName)
@@ -300,8 +298,7 @@ func (m *BaseFSMManager[C]) Reconcile(
 	metrics.ObserveReconcileTime(metrics.ComponentBaseFSMManager, m.managerName+".extract_configs", time.Since(extractStart))
 
 	// Step 2: Create or update instances
-	for i, cfg := range desiredState {
-		m.logger.Infof("desiredState[%d]: %v", i, cfg)
+	for _, cfg := range desiredState {
 		name, err := m.getName(cfg)
 		if err != nil {
 			metrics.IncErrorCount(metrics.ComponentBaseFSMManager, m.managerName)
@@ -484,7 +481,6 @@ func (m *BaseFSMManager[C]) Reconcile(
 		// If maybe a couple of previous instances were slow, we don't want to
 		// have a ripple effect on the whole control loop
 		expectedMaxP95ExecutionTime, err := m.getExpectedMaxP95ExecutionTimePerInstance(instance)
-		m.logger.Infof("expectedMaxP95ExecutionTime: %v (instance: %s)", expectedMaxP95ExecutionTime, name)
 		if err != nil {
 			metrics.IncErrorCount(metrics.ComponentBaseFSMManager, m.managerName)
 			return fmt.Errorf("failed to get expected max p95 execution time: %w", err), false

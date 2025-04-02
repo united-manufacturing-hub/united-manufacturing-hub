@@ -117,7 +117,9 @@ func (m *RedpandaManager) Reconcile(ctx context.Context, cfg config.FullConfig, 
 
 	// We do not need to manage ports for Redpanda, therefore we can directly reconcile
 	// Log cfg
-	logger.For(logger.ComponentRedpandaManager).Info("Reconciling Redpanda manager with cfg: %+v", cfg)
+	// logger.For(logger.ComponentRedpandaManager).Infof("Reconciling Redpanda manager with cfg: %+v", cfg)
+	// CFG is correct here
+	// TODO: REMOVE ME
 	return m.BaseFSMManager.Reconcile(ctx, cfg, tick)
 }
 
