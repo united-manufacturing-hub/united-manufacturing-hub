@@ -25,11 +25,12 @@ import (
 )
 
 type FullConfig struct {
-	Agent    AgentConfig     `yaml:"agent"`    // Agent config, requires restart to take effect
-	Services []S6FSMConfig   `yaml:"services"` // Services to manage, can be updated while running
-	Benthos  []BenthosConfig `yaml:"benthos"`  // Benthos services to manage, can be updated while running
-	Nmap     []NmapConfig    `yaml:"nmap"`     // Nmap services to manage, can be updated while running
-	Redpanda RedpandaConfig  `yaml:"redpanda"` // Redpanda config, can be updated while running
+	Agent              AgentConfig               `yaml:"agent"`              // Agent config, requires restart to take effect
+	Services           []S6FSMConfig             `yaml:"services"`           // Services to manage, can be updated while running
+	Benthos            []BenthosConfig           `yaml:"benthos"`            // Benthos services to manage, can be updated while running
+	Nmap               []NmapConfig              `yaml:"nmap"`               // Nmap services to manage, can be updated while running
+	Redpanda           RedpandaConfig            `yaml:"redpanda"`           // Redpanda config, can be updated while running
+	DataFlowComponents []DataFlowComponentConfig `yaml:"dataflowComponents"` // DataFlowComponent services to manage
 }
 
 type AgentConfig struct {
@@ -106,18 +107,25 @@ type RedpandaConfig struct {
 	RedpandaServiceConfig redpandaserviceconfig.RedpandaServiceConfig `yaml:"redpandaServiceConfig"`
 }
 
-type RedpandaServiceConfig struct {
-	DefaultTopicRetentionMs    int `yaml:"defaultTopicRetentionMs"`
-	DefaultTopicRetentionBytes int `yaml:"defaultTopicRetentionBytes"`
+// DataFlowComponentConfig contains configuration for a DataFlowComponent
+type DataFlowComponentConfig struct {
+	// Basic component configuration
+	Name         string `yaml:"name"`
+	DesiredState string `yaml:"desiredState"`
+	VersionUUID  string `yaml:"versionUUID"`
+
+	// Service configuration similar to BenthosServiceConfig
+	ServiceConfig benthosserviceconfig.BenthosServiceConfig `yaml:"serviceConfig"`
 }
 
 // Clone creates a deep copy of FullConfig
 func (c FullConfig) Clone() FullConfig {
 	clone := FullConfig{
-		Agent:    c.Agent,
-		Services: make([]S6FSMConfig, len(c.Services)),
-		Benthos:  make([]BenthosConfig, len(c.Benthos)),
-		Nmap:     make([]NmapConfig, len(c.Nmap)),
+		Agent:              c.Agent,
+		Services:           make([]S6FSMConfig, len(c.Services)),
+		Benthos:            make([]BenthosConfig, len(c.Benthos)),
+		Nmap:               make([]NmapConfig, len(c.Nmap)),
+		DataFlowComponents: make([]DataFlowComponentConfig, len(c.DataFlowComponents)),
 	}
 	// deep copy the location map if it exists
 	if c.Agent.Location != nil {
@@ -129,5 +137,6 @@ func (c FullConfig) Clone() FullConfig {
 	deepcopy.Copy(&clone.Services, &c.Services)
 	deepcopy.Copy(&clone.Benthos, &c.Benthos)
 	deepcopy.Copy(&clone.Nmap, &c.Nmap)
+	deepcopy.Copy(&clone.DataFlowComponents, &c.DataFlowComponents)
 	return clone
 }
