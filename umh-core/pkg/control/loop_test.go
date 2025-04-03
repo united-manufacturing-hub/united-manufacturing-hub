@@ -263,7 +263,7 @@ var _ = Describe("ControlLoop", func() {
 			// Wait for Execute to finish with error
 			err := <-execDone
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(Equal("reconcile error"))
+			Expect(err.Error()).To(Equal("manager MockFSMManager reconciliation failed: reconcile error"))
 		})
 
 		It("should continue execution if Reconcile returns a context timeout error", func() {
