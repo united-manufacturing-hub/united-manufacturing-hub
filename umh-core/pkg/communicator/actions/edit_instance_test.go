@@ -233,7 +233,9 @@ var _ = Describe("EditInstance", func() {
 			Expect(mockConfig.GetConfigCalled).To(BeTrue())
 
 			// Check that config was updated correctly
-			updatedConfig, _ := mockConfig.GetConfig(nil, 0)
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			updatedConfig, _ := mockConfig.GetConfig(ctx, 0)
 			Expect(updatedConfig.Agent.Location[0]).To(Equal("New Enterprise"))
 			Expect(updatedConfig.Agent.Location[1]).To(Equal("New Site"))
 			Expect(updatedConfig.Agent.Location[2]).To(Equal("New Area"))
