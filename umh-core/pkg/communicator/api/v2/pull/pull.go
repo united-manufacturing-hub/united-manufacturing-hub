@@ -69,7 +69,7 @@ func (p *Puller) Stop() {
 		zap.S().Warnf("WARNING: Stopping puller !")
 		p.shallRun.Store(false)
 	} else {
-		sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "Stop MUST NOT be used outside tests")
+		sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "[Puller.Stop()] Stop MUST NOT be used outside tests")
 	}
 }
 
