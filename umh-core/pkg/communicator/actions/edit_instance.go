@@ -25,7 +25,6 @@ import (
 	"go.uber.org/zap"
 )
 
-// EditInstanceAction implements the Action interface for editing an instance's properties
 type EditInstanceAction struct {
 	userEmail       string
 	actionUUID      uuid.UUID
@@ -46,7 +45,6 @@ func NewEditInstanceAction(userEmail string, actionUUID uuid.UUID, instanceUUID 
 	}
 }
 
-// Parse implements the Action interface
 func (a *EditInstanceAction) Parse(payload interface{}) error {
 	zap.S().Debug("Parsing EditInstance action payload")
 
@@ -98,7 +96,6 @@ func (a *EditInstanceAction) Parse(payload interface{}) error {
 	return nil
 }
 
-// Validate implements the Action interface
 func (a *EditInstanceAction) Validate() error {
 	// If location is provided, validate that enterprise is not empty
 	if a.location != nil && a.location.Enterprise == "" {
@@ -108,7 +105,6 @@ func (a *EditInstanceAction) Validate() error {
 	return nil
 }
 
-// Execute implements the Action interface
 func (a *EditInstanceAction) Execute() (interface{}, map[string]interface{}, error) {
 	zap.S().Info("Executing EditInstance action")
 
@@ -140,12 +136,10 @@ func (a *EditInstanceAction) Execute() (interface{}, map[string]interface{}, err
 	return "Successfully updated instance location", nil, nil
 }
 
-// getUserEmail implements the Action interface
 func (a *EditInstanceAction) getUserEmail() string {
 	return a.userEmail
 }
 
-// getUuid implements the Action interface
 func (a *EditInstanceAction) getUuid() uuid.UUID {
 	return a.actionUUID
 }
