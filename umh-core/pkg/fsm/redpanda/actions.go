@@ -112,8 +112,6 @@ func (b *RedpandaInstance) initiateRedpandaStop(ctx context.Context) error {
 // its main purpose is to habdle the edge cases where the service is not yet created or not yet running
 func (b *RedpandaInstance) getServiceStatus(ctx context.Context, tick uint64) (redpanda_service.ServiceInfo, error) {
 	info, err := b.service.Status(ctx, tick)
-	b.baseFSMInstance.GetLogger().Debugf("Service status: %+v", info.S6ObservedState)
-	b.baseFSMInstance.GetLogger().Debugf("Error: %+v", err)
 	if err != nil {
 		// If there's an error getting the service status, we need to distinguish between cases
 
@@ -154,6 +152,20 @@ func (b *RedpandaInstance) getServiceStatus(ctx context.Context, tick uint64) (r
 func (b *RedpandaInstance) updateObservedState(ctx context.Context, tick uint64) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
+	}
+
+	// Skip health checks if the desired state or current state indicates stopped/stopping
+	currentState := b.baseFSMInstance.GetCurrentFSMState()
+	desiredState := b.baseFSMInstance.GetDesiredFSMState()
+	if desiredState == OperationalStateStopped || currentState == OperationalStateStopped || currentState == OperationalStateStopping {
+		// For stopped instances, just check if the S6 service exists but don't do health checks
+		// This minimal information is sufficient for reconciliation
+		exists := b.service.ServiceExists(ctx)
+		if !exists {
+			// If the service doesn't exist, nothing more to do
+			b.ObservedState = RedpandaObservedState{}
+			return nil
+		}
 	}
 
 	start := time.Now()

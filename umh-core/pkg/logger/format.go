@@ -69,6 +69,16 @@ func (e *PrettyConsoleEncoder) EncodeEntry(entry zapcore.Entry, fields []zapcore
 	// Add tab after level
 	line.AppendByte('\t')
 
+	// Format caller information if available
+	if entry.Caller.Defined {
+		line.AppendString("[")
+		line.AppendString(entry.Caller.TrimmedPath())
+		line.AppendString(":")
+		line.AppendString(fmt.Sprint(entry.Caller.Line))
+		line.AppendByte(']')
+		line.AppendByte('\t')
+	}
+
 	// Format component name if available
 	if entry.LoggerName != "" {
 		line.AppendString("[")

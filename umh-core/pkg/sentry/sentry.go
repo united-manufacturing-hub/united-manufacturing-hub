@@ -15,6 +15,7 @@ package sentry
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/Masterminds/semver/v3"
 	"github.com/getsentry/sentry-go"
@@ -101,12 +102,21 @@ func createSentryEvent(level sentry.Level, err error) *sentry.Event {
 		})
 	}
 
-	// Let Sentry use its default stack trace-based fingerprinting
-	// which is typically more effective for grouping similar errors
+	// Extract the prefix before the first colon if it exists
+	errorMessage := err.Error()
+	fingerprint := "{{ default }}"
 
-	// But let's give it some more hints
+	if parts := strings.SplitN(errorMessage, ":", 2); len(parts) > 1 {
+		// Use the part before the colon as the primary identifier
+		fingerprint = strings.TrimSpace(parts[0])
+	} else {
+		// If there's no colon, use the full error message
+		fingerprint = errorMessage
+	}
+
+	// Use the error prefix as the first fingerprint element for better grouping
 	event.Fingerprint = []string{
-		"{{ default }}",
+		fingerprint,
 		"level: " + getLevelString(level),
 	}
 
@@ -140,7 +150,7 @@ func createSentryEventWithContext(level sentry.Level, err error, context map[str
 				event.Extra[key] = v
 			}
 
-			// If the tag is called operation, add it to the fingerprint
+			// Add additional context elements to fingerprint for better grouping
 			if key == "operation" {
 				valueStr := fmt.Sprintf("operation: %v", value)
 				event.Fingerprint = append(event.Fingerprint, valueStr)

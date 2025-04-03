@@ -46,8 +46,9 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/ctxutil"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/redpanda"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/container"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/redpanda"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
@@ -101,6 +102,7 @@ func NewControlLoop() *ControlLoop {
 		benthos.NewBenthosManager(constants.DefaultManagerName),
 		container.NewContainerManager(constants.DefaultManagerName),
 		redpanda.NewRedpandaManager(constants.DefaultManagerName),
+		dataflowcomponent.NewDataFlowComponentManager(constants.DefaultManagerName),
 	}
 
 	// Create the config manager with backoff support
@@ -221,6 +223,7 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 	// Therefore we need a backoff here
 	// GetConfig returns a temporary backoff error or a permanent failure error
 	cfg, err := c.configManager.GetConfig(ctx, ticker)
+	c.logger.Debugf("Config: %v", cfg)
 	if err != nil {
 		// Handle temporary backoff errors --> we want to continue reconciling
 		if backoff.IsTemporaryBackoffError(err) {

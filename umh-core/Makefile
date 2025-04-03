@@ -247,6 +247,14 @@ test-redpanda: clean build
 		-p 8081:8080 \
 		$(IMAGE_NAME):$(TAG)
 
+test-dfc: clean build
+	@mkdir -p $(PWD)/data
+	@cp $(PWD)/examples/example-config-dataflow.yaml $(PWD)/data/config.yaml
+	docker run \
+		--name $(IMAGE_NAME) \
+		-v $(PWD)/data:/data \
+    	-e LOGGING_LEVEL=DEBUG \
+		$(IMAGE_NAME):$(TAG)
 
 pod-shell:
 	docker exec -it $(IMAGE_NAME) /bin/bash
