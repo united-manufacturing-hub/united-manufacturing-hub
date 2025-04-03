@@ -330,6 +330,10 @@ func (bs *BufferedService) ReadFile(ctx context.Context, path string) ([]byte, e
 	if st.content == nil && st.size > bs.maxFileSize {
 		return nil, os.ErrNotExist
 	}
+	// Return empty slice instead of nil if content is nil
+	if st.content == nil {
+		return []byte{}, nil
+	}
 	return st.content, nil
 }
 
