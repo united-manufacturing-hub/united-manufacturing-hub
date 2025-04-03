@@ -19,6 +19,7 @@ import (
 	"errors"
 	"math/rand"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 )
@@ -269,7 +270,15 @@ func (m *MockFileSystem) Stat(ctx context.Context, path string) (os.FileInfo, er
 	if shouldFail {
 		return nil, errors.New("simulated failure in Stat")
 	}
-	return nil, errors.New("not implemented")
+
+	// Return a mock FileInfo
+	return &memFileInfo{
+		name:  filepath.Base(path),
+		size:  0,
+		mode:  0644,
+		mtime: time.Now(),
+		dir:   true,
+	}, nil
 }
 
 // CreateFile creates a new file with the specified permissions
@@ -434,4 +443,15 @@ func (m *MockFileSystem) WithReadDirFunc(fn func(ctx context.Context, path strin
 func (m *MockFileSystem) WithExecuteCommandFunc(fn func(ctx context.Context, name string, args ...string) ([]byte, error)) *MockFileSystem {
 	m.ExecuteCommandFunc = fn
 	return m
+}
+
+// NewMockFileInfo creates a new mock FileInfo for testing
+func (m *MockFileSystem) NewMockFileInfo(name string, size int64, mode os.FileMode, modTime time.Time, isDir bool) os.FileInfo {
+	return &memFileInfo{
+		name:  name,
+		size:  size,
+		mode:  mode,
+		mtime: modTime,
+		dir:   isDir,
+	}
 }

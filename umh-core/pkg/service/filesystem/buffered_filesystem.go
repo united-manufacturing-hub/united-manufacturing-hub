@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"sync"
 	"time"
 )
@@ -22,25 +23,42 @@ type DirectoryCache struct {
 }
 
 // ReadDirectoryTree reads a directory tree from disk and returns a cache of its contents
-func ReadDirectoryTree(ctx context.Context, root string) (*DirectoryCache, error) {
+func ReadDirectoryTree(ctx context.Context, service Service, root string) (*DirectoryCache, error) {
 	dc := &DirectoryCache{
 		Files: make(map[string]*CachedFile),
 	}
 
-	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+	// First check if root exists
+	rootInfo, err := service.Stat(ctx, root)
+	if err != nil {
+		return nil, fmt.Errorf("failed to walk directory tree: %w", err)
+	}
+	if !rootInfo.IsDir() {
+		return nil, fmt.Errorf("failed to walk directory tree: root is not a directory")
+	}
+
+	// Start with root directory
+	entries, err := service.ReadDir(ctx, root)
+	if err != nil {
+		return nil, fmt.Errorf("failed to walk directory tree: %w", err)
+	}
+
+	// Process each entry recursively
+	for _, entry := range entries {
+		fullPath := filepathJoin(root, entry.Name())
+		relPath, err := filepath.Rel(root, fullPath)
 		if err != nil {
-			return err
+			return nil, fmt.Errorf("failed to get relative path: %w", err)
 		}
 
-		// Convert to relative path
-		relPath, err := filepath.Rel(root, path)
+		info, err := entry.Info()
 		if err != nil {
-			return err
+			return nil, fmt.Errorf("failed to get file info: %w", err)
 		}
 
 		// Skip root directory
 		if relPath == "." {
-			return nil
+			continue
 		}
 
 		dc.Files[relPath] = &CachedFile{
@@ -48,11 +66,17 @@ func ReadDirectoryTree(ctx context.Context, root string) (*DirectoryCache, error
 			IsDir: info.IsDir(),
 		}
 
-		return nil
-	})
-
-	if err != nil {
-		return nil, fmt.Errorf("failed to walk directory tree: %w", err)
+		// If it's a directory, recurse
+		if info.IsDir() {
+			subDc, err := ReadDirectoryTree(ctx, service, fullPath)
+			if err != nil {
+				return nil, err
+			}
+			// Add all files from subdirectory
+			for subPath, subFile := range subDc.Files {
+				dc.Files[filepathJoin(relPath, subPath)] = subFile
+			}
+		}
 	}
 
 	return dc, nil
@@ -100,6 +124,7 @@ type fileChange struct {
 	content []byte
 	perm    os.FileMode
 	removed bool
+	wasDir  bool // tracks if this was a directory before removal
 }
 
 // Check interface conformance at compile time
@@ -125,7 +150,7 @@ func NewBufferedService(base Service, rootDir string) *BufferedService {
 // It will read file contents unless they exceed maxFileSize, in which case content is blank.
 func (bs *BufferedService) SyncFromDisk(ctx context.Context) error {
 	// We'll do a fresh walk of the directory.
-	dc, err := ReadDirectoryTree(ctx, bs.rootDir)
+	dc, err := ReadDirectoryTree(ctx, bs.base, bs.rootDir)
 	if err != nil {
 		return err
 	}
@@ -162,7 +187,7 @@ func (bs *BufferedService) SyncFromDisk(ctx context.Context) error {
 		absolutePath := filepathJoin(bs.rootDir, relPath)
 		data, err := bs.base.ReadFile(ctx, absolutePath)
 		if err != nil {
-			// If we can't read, skip storing? Or keep an entry to show it's missing?
+			// If we can't read, skip this file
 			continue
 		}
 
@@ -191,32 +216,61 @@ func (bs *BufferedService) SyncToDisk(ctx context.Context) error {
 	bs.mu.Lock()
 	defer bs.mu.Unlock()
 
+	// First, handle removals in reverse order (deepest paths first)
+	var toRemove []string
 	for relPath, chg := range bs.changed {
-		// If the file is removed, we do a Remove
 		if chg.removed {
-			_ = bs.base.Remove(ctx, filepathJoin(bs.rootDir, relPath)) // ignore error
-			// Optionally remove from our in-memory 'files' map
-			delete(bs.files, relPath)
-			continue
+			toRemove = append(toRemove, relPath)
 		}
+	}
+	// Sort paths by length in descending order to remove deepest paths first
+	sort.Slice(toRemove, func(i, j int) bool {
+		return len(toRemove[i]) > len(toRemove[j])
+	})
 
-		// Otherwise, we are writing the file
-		_, exists := bs.files[relPath]
-		if !exists {
-			// If it's not in our map for some reason, skip
-			return fmt.Errorf("file not found in memory: %s", relPath)
+	for _, relPath := range toRemove {
+		fullPath := filepathJoin(bs.rootDir, relPath)
+		// Check if this was a directory in our original state
+		chg := bs.changed[relPath]
+		if chg.wasDir {
+			if err := bs.base.RemoveAll(ctx, fullPath); err != nil {
+				return fmt.Errorf("failed to remove directory: %w", err)
+			}
+		} else {
+			if err := bs.base.Remove(ctx, fullPath); err != nil {
+				return fmt.Errorf("failed to remove file: %w", err)
+			}
 		}
-
-		// Do the write
-		absolutePath := filepathJoin(bs.rootDir, relPath)
-		if err := bs.base.WriteFile(ctx, absolutePath, chg.content, chg.perm); err != nil {
-			return fmt.Errorf("failed to write file: %w", err)
-		}
-
+		// Only remove from our in-memory maps after successful removal
+		delete(bs.files, relPath)
+		delete(bs.changed, relPath)
 	}
 
-	// Clear changed set after we flush
-	bs.changed = make(map[string]*fileChange)
+	// Then handle writes and directory creation
+	for relPath, chg := range bs.changed {
+		if !chg.removed {
+			// If it's not in our map for some reason, skip
+			state, exists := bs.files[relPath]
+			if !exists {
+				return fmt.Errorf("file not found in memory: %s", relPath)
+			}
+
+			// Handle directories differently from files
+			if state.isDir {
+				fullPath := filepathJoin(bs.rootDir, relPath)
+				if err := bs.base.EnsureDirectory(ctx, fullPath); err != nil {
+					return fmt.Errorf("failed to create directory: %w", err)
+				}
+			} else {
+				// Do the write for regular files
+				absolutePath := filepathJoin(bs.rootDir, relPath)
+				if err := bs.base.WriteFile(ctx, absolutePath, chg.content, chg.perm); err != nil {
+					return fmt.Errorf("failed to write file: %w", err)
+				}
+			}
+			delete(bs.changed, relPath)
+		}
+	}
 
 	return nil
 }
@@ -270,6 +324,10 @@ func (bs *BufferedService) ReadFile(ctx context.Context, path string) ([]byte, e
 	}
 	st, ok := bs.files[relPath]
 	if !ok || st.isDir {
+		return nil, os.ErrNotExist
+	}
+	// If it's a large file (content is nil but size is set), return not exist
+	if st.content == nil && st.size > bs.maxFileSize {
 		return nil, os.ErrNotExist
 	}
 	return st.content, nil
@@ -343,9 +401,13 @@ func (bs *BufferedService) Remove(ctx context.Context, path string) error {
 		return err
 	}
 
-	// If we have a fileState, remove it. Or we can keep it until flush. Let's keep it for the modTime check, etc.
-	if st, ok := bs.files[relPath]; ok && st.isDir {
-		return fmt.Errorf("cannot remove: is directory")
+	// If we have a fileState, check if it's a directory
+	if st, ok := bs.files[relPath]; ok {
+		if st.isDir {
+			return fmt.Errorf("cannot remove: is directory")
+		}
+		// Delete from files map immediately
+		delete(bs.files, relPath)
 	}
 
 	bs.changed[relPath] = &fileChange{
@@ -364,28 +426,50 @@ func (bs *BufferedService) RemoveAll(ctx context.Context, path string) error {
 	bs.mu.Lock()
 	defer bs.mu.Unlock()
 
+	// First check if the target itself is a directory
+	targetIsDir := false
+	if st, ok := bs.files[relPath]; ok {
+		targetIsDir = st.isDir
+	}
+
+	// Mark the target and all its children for removal
 	for key := range bs.files {
 		if key == relPath || hasPrefix(key, relPath+string(os.PathSeparator)) {
-			bs.changed[key] = &fileChange{removed: true}
+			isDir := bs.files[key].isDir
+			bs.changed[key] = &fileChange{removed: true, wasDir: isDir}
+			// Also mark it as removed in the files map
+			delete(bs.files, key)
 		}
 	}
+
+	// Also mark the target itself for removal even if it wasn't in our files map
+	bs.changed[relPath] = &fileChange{removed: true, wasDir: targetIsDir}
 	return nil
 }
 
 // MkdirTemp creates a temporary directory in-memory and marks it for creation on disk.
 func (bs *BufferedService) MkdirTemp(ctx context.Context, dir, pattern string) (string, error) {
-	tempDir := dir + "/" + pattern + fmt.Sprintf("-%d", time.Now().UnixNano())
+	// First try to create the directory using the base service
+	tempDir, err := bs.base.MkdirTemp(ctx, dir, pattern)
+	if err != nil {
+		return "", err
+	}
 
 	bs.mu.Lock()
 	defer bs.mu.Unlock()
 
-	bs.files[tempDir] = &fileState{
+	relPath, err := makeRelative(bs.rootDir, tempDir)
+	if err != nil {
+		return "", err
+	}
+
+	bs.files[relPath] = &fileState{
 		isDir:    true,
 		modTime:  time.Now(),
 		fileMode: os.ModeDir | 0755,
 		size:     0,
 	}
-	bs.changed[tempDir] = &fileChange{
+	bs.changed[relPath] = &fileChange{
 		removed: false,
 		perm:    os.ModeDir | 0755,
 	}
