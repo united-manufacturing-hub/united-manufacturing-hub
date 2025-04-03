@@ -15,17 +15,14 @@
 package actions
 
 import (
+	"context"
 	"fmt"
 	"net/url"
-	"strconv"
-	"strings"
-	"sync"
-	"time"
 
-	"github.com/Ullaakut/nmap/v3"
 	"github.com/google/uuid"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/models"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
 	"go.uber.org/zap"
 )
 
@@ -77,175 +74,84 @@ func (t *TestNetworkConnectionAction) Validate() error {
 	return nil
 }
 
-// executionLock prevents nmap from running in parallel
-var executionLock sync.Mutex
-
-// Execute executes the nmap command and returns the scan result as a string.
-func (t *TestNetworkConnectionAction) Execute() (scanResult interface{}, actionContext map[string]interface{}, err error) {
-	if !SendActionReply(t.instanceUUID, t.userEmail, t.actionUUID, models.ActionExecuting, "Waiting for network scan to start...", t.outboundChannel, models.TestNetworkConnection) {
-		return scanResult, nil, fmt.Errorf("error sending action reply")
+// Execute creates an empty dataflowcomponent with name, uuid and connection field
+func (t *TestNetworkConnectionAction) Execute() (result interface{}, actionContext map[string]interface{}, err error) {
+	if !SendActionReply(t.instanceUUID, t.userEmail, t.actionUUID, models.ActionExecuting, "Creating empty dataflowcomponent...", t.outboundChannel, models.TestNetworkConnection) {
+		return nil, nil, fmt.Errorf("error sending action reply")
 	}
 
-	executionLock.Lock()
-	defer executionLock.Unlock()
+	// Generate a UUID for the dataflow component
+	componentUUID := uuid.New()
 
-	if !SendActionReply(t.instanceUUID, t.userEmail, t.actionUUID, models.ActionExecuting, "Initiating network scan. Creating nmap scanner.", t.outboundChannel, models.TestNetworkConnection) {
-		return scanResult, nil, fmt.Errorf("error sending action reply")
+	// Create a name for the dataflow component based on the connection type and target
+	componentName := fmt.Sprintf("%s-%s-%d", t.Payload.Type, t.Payload.IP, t.Payload.Port)
+
+	// Create the connection details as input configuration
+	inputConfig := map[string]interface{}{
+		"connection": map[string]interface{}{
+			"ip":   t.Payload.IP,
+			"port": t.Payload.Port,
+			"type": t.Payload.Type,
+		},
 	}
 
-	for i := 0; i < 3; i++ {
-		scanResult, err = t.scan()
-		if err == nil {
-			return scanResult, nil, nil
-		}
-		if !SendActionReply(t.instanceUUID, t.userEmail, t.actionUUID, models.ActionExecuting, fmt.Sprintf("Failed to scan network: %s. Retrying... (%d/3)", err.Error(), i), t.outboundChannel, models.TestNetworkConnection) {
-			return scanResult, nil, fmt.Errorf("error sending action reply")
-		}
-		time.Sleep(5 * time.Second)
+	// Create the empty dataflow component using the correct DataFlowComponentConfig type
+	emptyDfc := config.DataFlowComponentConfig{
+		Name:         componentName,
+		DesiredState: "stopped", // Default initial state
+		VersionUUID:  componentUUID.String(),
+		ServiceConfig: benthosserviceconfig.BenthosServiceConfig{
+			Input:       inputConfig,
+			MetricsPort: 4195,
+			LogLevel:    "INFO",
+		},
 	}
 
-	return scanResult, nil, err
+	zap.S().Infof("Created empty dataflowcomponent: %v", emptyDfc)
+
+	// Update the configuration with the new component
+	err = t.updateConfigWithNewDFC(emptyDfc)
+	if err != nil {
+		return nil, nil, fmt.Errorf("error updating configuration: %s", err.Error())
+	}
+
+	if !SendActionReply(t.instanceUUID, t.userEmail, t.actionUUID, models.ActionExecuting, "Empty dataflowcomponent created and added to config successfully", t.outboundChannel, models.TestNetworkConnection) {
+		return emptyDfc, nil, fmt.Errorf("error sending action reply")
+	}
+
+	//TODO: observe the dataflowcomponent and watch if the connection is successful
+
+	return "Successfully created empty dataflowcomponent", nil, nil
 }
 
-func (t *TestNetworkConnectionAction) scan() (scanResult interface{}, err error) {
-	ctx, cancel := tools.GetXDurationContext(30 * time.Second)
-	defer cancel()
-	var errorMessage string
+// updateConfigWithNewDFC gets the current config, adds the new DFC, and writes it back
+func (t *TestNetworkConnectionAction) updateConfigWithNewDFC(dfc config.DataFlowComponentConfig) error {
+	// Create context for config operations
+	ctx := context.Background()
 
-	var scanner *nmap.Scanner
-	if strings.HasPrefix(t.Payload.IP, "united-manufacturing-hub") {
-		// Check if the IP already has svc cluster local suffix
-		var ip string
-		if strings.HasSuffix(t.Payload.IP, ".svc.cluster.local") {
-			ip = t.Payload.IP
-		} else {
-			ip = fmt.Sprintf("%s.united-manufacturing-hub.svc.cluster.local", t.Payload.IP)
-		}
+	// Create a config manager
+	configManager := config.NewFileConfigManager()
 
-		scanner, err = nmap.NewScanner(
-			ctx,
-			nmap.WithTargets(ip),
-			nmap.WithPorts(strconv.FormatUint(uint64(t.Payload.Port), 10)),
-			nmap.WithTraceRoute(),
-			nmap.WithSkipHostDiscovery(),
-			nmap.WithDebugging(10),
-		)
-	} else {
-		scanner, err = nmap.NewScanner(
-			ctx,
-			nmap.WithTargets(t.Payload.IP),
-			nmap.WithPorts(strconv.FormatUint(uint64(t.Payload.Port), 10)),
-			nmap.WithSYNScan(),
-			nmap.WithTraceRoute(),
-			nmap.WithDebugging(10),
-		)
-	}
+	// Get current configuration
+	currentConfig, err := configManager.GetConfig(ctx, 0)
 	if err != nil {
-		errorMessage = fmt.Sprintf("Failed to create nmap scanner: %s", err.Error())
-		zap.S().Errorf(errorMessage)
-		return scanResult, fmt.Errorf("%s", errorMessage)
+		zap.S().Errorf("Failed to get current configuration: %v", err)
+		return err
 	}
 
-	if !SendActionReply(t.instanceUUID, t.userEmail, t.actionUUID, models.ActionExecuting, "Network scan in progress (Step 1/3). Please wait...", t.outboundChannel, models.TestNetworkConnection) {
-		return scanResult, fmt.Errorf("error sending action reply")
-	}
-	result, warnings, err := scanner.Run()
+	// Clone the config to avoid modifying the original
+	updatedConfig := currentConfig.Clone()
+
+	// Add the new DataFlowComponent to the configuration
+	updatedConfig.DataFlowComponents = append(updatedConfig.DataFlowComponents, dfc)
+
+	// Write the updated configuration back to filesystem
+	err = configManager.WriteConfig(ctx, updatedConfig)
 	if err != nil {
-		if warnings != nil {
-			zap.S().Errorf("Failed to run nmap scan: (Result: %+v, Warnings: %+v, Error: %v)", result, *warnings, err)
-		} else {
-			zap.S().Errorf("Failed to run nmap scan: (Result: %+v, Error: %v)", result, err)
-		}
-		err = fmt.Errorf("error executing nmap command: %s", err.Error())
-		return
-	}
-	if warnings != nil && len(*warnings) > 0 {
-		zap.S().Warnf("Nmap returned warnings: \n %v", *warnings)
+		zap.S().Errorf("Failed to write updated configuration: %v", err)
+		return err
 	}
 
-	if !SendActionReply(t.instanceUUID, t.userEmail, t.actionUUID, models.ActionExecuting, "Network scan in progress (Step 2/3). Please wait...", t.outboundChannel, models.TestNetworkConnection) {
-		return scanResult, fmt.Errorf("error sending action reply")
-	}
-
-	scanResult = generateOutput(result)
-	// zap.S().Debugf("Raw nmap scan result: \n %v", result)
-	// zap.S().Debugf("Nmap scan result: \n %s", scanResult)
-
-	if !SendActionReply(t.instanceUUID, t.userEmail, t.actionUUID, models.ActionExecuting, "Network scan in progress (Step 3/3). Please wait...", t.outboundChannel, models.TestNetworkConnection) {
-		return scanResult, fmt.Errorf("error sending action reply")
-	}
-
-	if result.Stats.Hosts.Up == 0 || len(result.Hosts) == 0 {
-		errorMessage = "Nmap result error: no hosts found"
-		zap.S().Errorf(errorMessage)
-		return scanResult, fmt.Errorf("%s", errorMessage)
-	}
-	if len(result.Hosts[0].Ports) == 0 {
-		errorMessage = "Nmap result error: no ports found"
-		zap.S().Errorf(errorMessage)
-		return scanResult, fmt.Errorf("%s", errorMessage)
-	}
-	if result.Hosts[0].Ports[0].Status() == nmap.Closed {
-		errorMessage = "Nmap result error: port is closed"
-		zap.S().Errorf(errorMessage)
-		return scanResult, fmt.Errorf("%s", errorMessage)
-	}
-	if result.Hosts[0].Ports[0].Status() == nmap.Filtered {
-		errorMessage = "Nmap result error: port is filtered"
-		zap.S().Errorf(errorMessage)
-		return scanResult, fmt.Errorf("%s", errorMessage)
-	}
-	return scanResult, nil
-}
-
-// generateOutput formats the nmap result into a string.
-func generateOutput(result *nmap.Run) string {
-	var sb strings.Builder
-	sb.WriteString(result.Stats.Finished.Summary)
-	sb.WriteString("\nCommand: ")
-	sb.WriteString(result.Args)
-	sb.WriteString("\n\n")
-	if len(result.Hosts) > 0 {
-		host := result.Hosts[0]
-		address := ""
-		if len(host.Addresses) > 0 {
-			address = host.Addresses[0].String()
-		}
-		sb.WriteString(fmt.Sprintf("Host: %s\n\n", address))
-
-		// Format the port information
-		if len(host.Ports) > 0 {
-			// sb.WriteString(fmt.Sprintf("%-9s %-8s %s\n", "PORT", "STATE", "SERVICE"))
-			sb.WriteString("PORT\t  STATE\t   SERVICE\n")
-			for _, port := range host.Ports {
-				sb.WriteString(fmt.Sprintf("%-10s%-9s%-9s\n", fmt.Sprintf("%d/%s", port.ID, port.Protocol), port.State, port.Service))
-			}
-			sb.WriteString("\n")
-		}
-
-		// Format the traceroute information
-		if len(host.Trace.Hops) > 0 {
-			sb.WriteString("TRACEROUTE\n")
-			sb.WriteString("HOP\tRTT\t\t\tADDRESS\n")
-			for i, hop := range host.Trace.Hops {
-				sb.WriteString(fmt.Sprintf("%-4d%-11s %s\n", i+1, fmt.Sprintf("%s ms", hop.RTT), hop.IPAddr))
-			}
-		}
-	}
-
-	return sb.String()
-
-	// This is the formatted output:
-
-	// Nmap done at Thu Jul 27 15:43:38 2023; 1 IP address (1 host up) scanned in 0.71 seconds
-	// Command: /usr/bin/nmap -p 49152 -sS --traceroute -oN - -oX - 192.168.178.24
-	//
-	// Host: 192.168.1.100
-	//
-	// PORT			STATE	SERVICE
-	// 49152/tcp	open	unknown
-	//
-	// TRACEROUTE
-	// HOP	RTT			ADDRESS
-	// 1	102.12 ms	192.168.178.24
+	zap.S().Infof("Successfully added new DataFlowComponent to configuration")
+	return nil
 }

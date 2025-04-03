@@ -69,8 +69,6 @@ func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePay
 			instanceUUID:    instanceUUID,
 			outboundChannel: outboundChannel,
 		}
-	case models.DeployDataFlowComponent:
-		action = NewDeployDFCAction(sender, payload.ActionUUID, instanceUUID, outboundChannel)
 	default:
 		zap.S().Errorf("Unknown action type: %s", payload.ActionType)
 		SendActionReply(instanceUUID, sender, payload.ActionUUID, models.ActionFinishedWithFailure, "Unknown action type", outboundChannel, payload.ActionType)

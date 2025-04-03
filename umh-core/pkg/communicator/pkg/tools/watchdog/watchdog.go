@@ -367,6 +367,7 @@ func (s *Watchdog) reportStateToNiceFail() {
 		case int32(HEARTBEAT_STATUS_WARNING):
 			status = "WARNING"
 		case int32(HEARTBEAT_STATUS_ERROR):
+			sentry.ReportIssuef(sentry.IssueTypeError, s.logger, fmt.Sprintf("WatchdogReport: %s, %s, %d, %d", name, status, lastHeartbeat, warningCount))
 			status = "ERROR"
 		}
 
