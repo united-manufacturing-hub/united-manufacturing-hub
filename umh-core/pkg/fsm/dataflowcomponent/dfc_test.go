@@ -109,7 +109,6 @@ var _ = Describe("DataFlowComponent FSM", func() {
 		componentConfig = dataflowcomponent.DataFlowComponentConfig{
 			Name:         "test-component",
 			DesiredState: "stopped",
-			VersionUUID:  "test-uuid-123",
 			ServiceConfig: benthosserviceconfig.BenthosServiceConfig{
 				Input: map[string]interface{}{
 					"generate": map[string]interface{}{

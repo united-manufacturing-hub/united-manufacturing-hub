@@ -23,8 +23,8 @@ import (
 func (d *DataFlowComponent) initiateAddComponentToBenthosConfig(ctx context.Context) error {
 	logger := d.baseFSMInstance.GetLogger()
 	logger.Infof("Starting Action: Adding DataFlowComponent %s to Benthos config...", d.Config.Name)
-	logger.Debugf("DataFlowComponent details: Name=%s, State=%s, UUID=%s",
-		d.Config.Name, d.Config.DesiredState, d.Config.VersionUUID)
+	logger.Debugf("DataFlowComponent details: Name=%s, State=%s",
+		d.Config.Name, d.Config.DesiredState)
 
 	logger.Debugf("Calling BenthosConfigManager.AddComponentToBenthosConfig for %s", d.Config.Name)
 	err := d.BenthosConfigManager.AddComponentToBenthosConfig(ctx, d.Config)
@@ -67,8 +67,8 @@ func (d *DataFlowComponent) initiateRemoveComponentFromBenthosConfig(ctx context
 func (d *DataFlowComponent) initiateUpdateComponentInBenthosConfig(ctx context.Context) error {
 	logger := d.baseFSMInstance.GetLogger()
 	logger.Infof("Starting Action: Updating DataFlowComponent %s in Benthos config...", d.Config.Name)
-	logger.Debugf("DataFlowComponent details: Name=%s, State=%s, UUID=%s",
-		d.Config.Name, d.Config.DesiredState, d.Config.VersionUUID)
+	logger.Debugf("DataFlowComponent details: Name=%s, State=%s",
+		d.Config.Name, d.Config.DesiredState)
 
 	logger.Debugf("Calling BenthosConfigManager.UpdateComponentInBenthosConfig for %s", d.Config.Name)
 	err := d.BenthosConfigManager.UpdateComponentInBenthosConfig(ctx, d.Config)

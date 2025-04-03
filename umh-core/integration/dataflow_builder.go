@@ -15,7 +15,6 @@
 package integration_test
 
 import (
-	"github.com/google/uuid"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
 	"gopkg.in/yaml.v3"
@@ -54,7 +53,6 @@ func (b *DataFlowComponentBuilder) AddGoldenDataFlowComponent() *DataFlowCompone
 	dataFlowComp := config.DataFlowComponentConfig{
 		Name:         "golden-data-flow",
 		DesiredState: "active",
-		VersionUUID:  uuid.New().String(),
 		ServiceConfig: benthosserviceconfig.BenthosServiceConfig{
 			MetricsPort: 0, // Auto-assign port
 			Input: map[string]interface{}{
@@ -83,7 +81,6 @@ func (b *DataFlowComponentBuilder) AddDataFlowComponent(name string, interval st
 	dataFlowComp := config.DataFlowComponentConfig{
 		Name:         name,
 		DesiredState: "active",
-		VersionUUID:  uuid.New().String(),
 		ServiceConfig: benthosserviceconfig.BenthosServiceConfig{
 			MetricsPort: 0, // Auto-assign port
 			Input: map[string]interface{}{
@@ -108,15 +105,9 @@ func (b *DataFlowComponentBuilder) AddDataFlowComponent(name string, interval st
 
 // UpdateDataFlowComponent updates the interval of an existing DataFlowComponent
 func (b *DataFlowComponentBuilder) UpdateDataFlowComponent(name string, newInterval string) *DataFlowComponentBuilder {
-	// Generate a new version UUID since we're updating the component
-	newUUID := uuid.New().String()
-
 	// Find and update the component
 	for i, comp := range b.full.DataFlowComponents {
 		if comp.Name == name {
-			// Update the UUID to trigger reconciliation
-			b.full.DataFlowComponents[i].VersionUUID = newUUID
-
 			// Update interval in the service config
 			if input, ok := comp.ServiceConfig.Input["generate"].(map[string]interface{}); ok {
 				input["interval"] = newInterval

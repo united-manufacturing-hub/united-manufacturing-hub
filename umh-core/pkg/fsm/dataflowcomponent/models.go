@@ -73,7 +73,6 @@ type DataFlowComponentConfig struct {
 	// Basic component configuration
 	Name         string `yaml:"name"`
 	DesiredState string `yaml:"desiredState"`
-	VersionUUID  string `yaml:"versionUUID"`
 
 	// Service configuration similar to BenthosServiceConfig
 	ServiceConfig benthosserviceconfig.BenthosServiceConfig `yaml:"serviceConfig"`

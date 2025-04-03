@@ -26,9 +26,6 @@ type DataFlowComponentConfig struct {
 	// DesiredState of the component (e.g., "active", "stopped").
 	DesiredState string `yaml:"desiredState" json:"desiredState"`
 
-	// VersionUUID is a unique identifier for this config version.
-	VersionUUID *string `yaml:"versionUUID" json:"versionUUID"`
-
 	// ServiceConfig contains the Benthos service configuration.
 	ServiceConfig *benthosserviceconfig.BenthosServiceConfig `yaml:"serviceConfig" json:"serviceConfig"`
 

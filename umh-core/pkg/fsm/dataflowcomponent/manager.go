@@ -17,6 +17,7 @@ package dataflowcomponent
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"sync"
 	"time"
 
@@ -65,8 +66,8 @@ func NewDataFlowComponentManager(name string) *DataFlowComponentManager {
 		func(fullConfig config.FullConfig) ([]config.DataFlowComponentConfig, error) {
 			managerLogger.Debugf("Extracting DataFlowComponent configs, found %d components", len(fullConfig.DataFlowComponents))
 			for i, comp := range fullConfig.DataFlowComponents {
-				managerLogger.Debugf("DataFlowComponent[%d]: Name=%s, DesiredState=%s, VersionUUID=%s",
-					i, comp.Name, comp.DesiredState, comp.VersionUUID)
+				managerLogger.Debugf("DataFlowComponent[%d]: Name=%s, DesiredState=%s",
+					i, comp.Name, comp.DesiredState)
 			}
 			return fullConfig.DataFlowComponents, nil
 		},
@@ -89,7 +90,6 @@ func NewDataFlowComponentManager(name string) *DataFlowComponentManager {
 			localCfg := DataFlowComponentConfig{
 				Name:          cfg.Name,
 				DesiredState:  cfg.DesiredState,
-				VersionUUID:   cfg.VersionUUID,
 				ServiceConfig: cfg.ServiceConfig,
 			}
 
@@ -109,10 +109,7 @@ func NewDataFlowComponentManager(name string) *DataFlowComponentManager {
 				return false, fmt.Errorf("instance is not a DataFlowComponent")
 			}
 
-			managerLogger.Debugf("Comparing DataFlowComponent %s versions: instance=%s, config=%s",
-				cfg.Name, dfcInstance.Config.VersionUUID, cfg.VersionUUID)
-
-			unchanged := dfcInstance.Config.VersionUUID == cfg.VersionUUID
+			unchanged := reflect.DeepEqual(dfcInstance.Config, cfg)
 			if unchanged {
 				managerLogger.Debugf("DataFlowComponent %s is unchanged", cfg.Name)
 			} else {
@@ -134,7 +131,6 @@ func NewDataFlowComponentManager(name string) *DataFlowComponentManager {
 			localCfg := DataFlowComponentConfig{
 				Name:          cfg.Name,
 				DesiredState:  cfg.DesiredState,
-				VersionUUID:   cfg.VersionUUID,
 				ServiceConfig: cfg.ServiceConfig,
 			}
 			dfcInstance.Config = localCfg

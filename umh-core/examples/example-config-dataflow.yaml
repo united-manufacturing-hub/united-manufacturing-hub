@@ -22,7 +22,6 @@ redpanda:
 dataFlowComponents:
   - name: data-flow-hello-world
     desiredState: active
-    versionUUID: 123e4567-e89b-12d3-a456-426614174000
     serviceConfig:
       input:
         generate:
@@ -34,7 +33,6 @@ dataFlowComponents:
 
   - name: data-transform-example
     desiredState: active
-    versionUUID: 223e4567-e89b-12d3-a456-426614174001
     serviceConfig:
       input:
         mqtt:

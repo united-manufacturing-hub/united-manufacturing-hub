@@ -638,7 +638,7 @@ func (s *RedpandaService) GetHealthCheckAndMetrics(ctx context.Context, tick uin
 	stateUpdateTime := time.Since(stateUpdateStart)
 
 	// Detailed timing breakdown
-	if metricsFetchTime+metricsParseTime > 5*time.Millisecond {
+	if metricsFetchTime+metricsParseTime > (constants.RedpandaUpdateObservedStateTimeout / 2) {
 		s.logger.Warnf("Metrics processing slow: fetch=%v, parse=%v, update=%v, total=%v",
 			metricsFetchTime, metricsParseTime, stateUpdateTime, time.Since(start))
 	}
