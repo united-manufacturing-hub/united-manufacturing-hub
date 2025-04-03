@@ -118,6 +118,187 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 		})
 	})
 
+	Context("with redpanda and 10 benthos random message generators", func() {
+		BeforeAll(func() {
+			By("Building a config with redpanda and 10 benthos services for random message generation")
+
+			// Create a dataflow builder
+			builder := NewDataFlowComponentBuilder()
+
+			// Enable Redpanda
+			builder.EnableRedpanda()
+
+			// Create 10 Benthos services that write random messages to Redpanda at 1 message per second
+			for i := 1; i <= 10; i++ {
+				serviceName := fmt.Sprintf("random-generator-%d", i)
+				// Add a DataFlowComponent that generates random messages and sends to Redpanda
+				builder.AddDataFlowComponent(serviceName, "1s").
+					UpdateDataFlowComponent(serviceName, "1s")
+
+				// Customize the DataFlowComponent to generate random data and write to Redpanda
+				for j, comp := range builder.full.DataFlowComponents {
+					if comp.Name == serviceName {
+						// Generate random JSON messages
+						builder.full.DataFlowComponents[j].Name = serviceName
+						builder.full.DataFlowComponents[j].ServiceConfig.Input = map[string]interface{}{
+							"generate": map[string]interface{}{
+								"mapping":  fmt.Sprintf(`root = {"id": uuid_v4(), "service": "%s"}`, serviceName),
+								"interval": "1s",
+								"count":    0, // Unlimited
+							},
+						}
+
+						// Output to Redpanda topic
+						builder.full.DataFlowComponents[j].ServiceConfig.Output = map[string]interface{}{
+							"kafka": map[string]interface{}{
+								"addresses":     []string{"localhost:9092"},
+								"topic":         "random-messages",
+								"max_in_flight": 1,
+							},
+						}
+					}
+				}
+			}
+
+			cfg := builder.BuildYAML()
+			Expect(writeConfigFile(cfg)).To(Succeed())
+			Expect(BuildAndRunContainer(cfg, "3072m")).To(Succeed()) // Increase memory for Redpanda + 10 services
+			Expect(waitForMetrics()).To(Succeed(), "Metrics endpoint should be available")
+			// Print config
+			GinkgoWriter.Printf("Config: %s\n", cfg)
+		})
+
+		AfterAll(func() {
+			PrintLogsAndStopContainer() // Stop container after test
+		})
+
+		It("should have active data flow components and redpanda running", func() {
+			// Check metrics to verify services are running
+			Eventually(func() bool {
+				resp, err := http.Get(GetMetricsURL())
+				if err != nil {
+					return false
+				}
+				defer resp.Body.Close()
+
+				body, err := io.ReadAll(resp.Body)
+				if err != nil {
+					return false
+				}
+
+				bodyStr := string(body)
+
+				// Check for Redpanda metrics
+				if !strings.Contains(bodyStr, "redpanda") {
+					return false
+				}
+
+				// Check for data flow components metrics
+				for i := 1; i <= 10; i++ {
+					serviceName := fmt.Sprintf("random-generator-%d", i)
+					if !strings.Contains(bodyStr, serviceName) {
+						return false
+					}
+				}
+
+				return true
+			}, 30*time.Second, 1*time.Second).Should(BeTrue(), "Should expose metrics for all services")
+
+			// Ensure /data/redpanda folder exists
+			Eventually(func() bool {
+				output, err := runDockerCommand("exec", getContainerName(), "ls", "-l", "/data/redpanda")
+				GinkgoWriter.Printf("Redpanda data directory: %s\n", output)
+				GinkgoWriter.Printf("Error: %v\n", err)
+				return err == nil && strings.Contains(output, "redpanda")
+			}, 10*time.Second, 1*time.Second).Should(BeTrue(), "Redpanda data directory should exist")
+
+			// Verify redpanda logs (Successfully started Redpanda!)
+			Eventually(func() bool {
+				output, err := runDockerCommand("exec", getContainerName(), "cat", "/data/logs/redpanda/current")
+				GinkgoWriter.Printf("Redpanda logs: %s\n", output)
+				return strings.Contains(output, "Successfully started Redpanda!") && err == nil
+			}, 20*time.Second, 1*time.Second).Should(BeTrue(), "Redpanda should have started successfully")
+
+			// Verify redpanda is running
+			Eventually(func() bool {
+				output, err := runDockerCommand("exec", getContainerName(), "ps", "-ef")
+				if err != nil {
+					GinkgoWriter.Printf("Error checking processes: %v\n", err)
+					return false
+				}
+				GinkgoWriter.Printf("Process list: %s\n", output)
+				return strings.Contains(output, "--redpanda-cfg")
+			}, 20*time.Second, 1*time.Second).Should(BeTrue(), "Redpanda should be running")
+
+			// Check what ports Redpanda is actually listening on
+			netstatOutput, netstatErr := runDockerCommand("exec", getContainerName(), "netstat", "-tulpn")
+			if netstatErr == nil {
+				GinkgoWriter.Printf("Netstat output: %s\n", netstatOutput)
+			} else {
+				// Try with ss if netstat isn't available
+				ssOutput, ssErr := runDockerCommand("exec", getContainerName(), "ss", "-tulpn")
+				if ssErr == nil {
+					GinkgoWriter.Printf("Socket status output: %s\n", ssOutput)
+				} else {
+					GinkgoWriter.Printf("Could not check listening ports: %v\n", netstatErr)
+				}
+			}
+			// Ensure reachability using curl (admin api)
+			Eventually(func() bool {
+				output, err := runDockerCommand("exec", getContainerName(), "curl", "-s", "-v", "http://localhost:9644/v1/brokers")
+				if err != nil {
+					GinkgoWriter.Printf("Error checking admin API: %v\n", err)
+					return false
+				}
+				GinkgoWriter.Printf("Admin API response: %s\n", output)
+				return strings.Contains(output, "HTTP/") && !strings.Contains(output, "Failed to connect")
+			}, 60*time.Second, 1*time.Second).Should(BeTrue(), "Redpanda admin API should be accessible")
+
+			// Verify Redpanda is accessible
+			Eventually(func() bool {
+				// Use Exec to check if the topic exists in Redpanda
+				output, err := runDockerCommand("exec", getContainerName(), "/opt/redpanda/libexec/rpk", "topic", "list")
+				if err != nil {
+					GinkgoWriter.Printf("Error executing rpk topic list: %v (%s)\n", err, output)
+					return false
+				}
+				GinkgoWriter.Printf("Redpanda topic list output: %s\n", output)
+
+				return strings.Contains(output, "random-messages")
+			}, 60*time.Second, 1*time.Second).Should(BeTrue(), "Redpanda should have the random-messages topic")
+
+			// Verify that benthos services are running
+			Eventually(func() bool {
+				output, err := runDockerCommand("exec", getContainerName(), "ps", "-ef")
+				if err != nil {
+					GinkgoWriter.Printf("Error checking processes: %v\n", err)
+					return false
+				}
+				GinkgoWriter.Printf("Process list: %s\n", output)
+				return strings.Contains(output, "benthos")
+			}, 20*time.Second, 1*time.Second).Should(BeTrue(), "Benthos services should be running")
+
+			// Verify that benthos logs are good
+			Eventually(func() bool {
+				output, err := runDockerCommand("exec", getContainerName(), "cat", "/data/logs/benthos-random-generator-1/current")
+				GinkgoWriter.Printf("Benthos logs: %s\n", output)
+				return strings.Contains(output, "Output type kafka is now active") && err == nil
+			}, 20*time.Second, 1*time.Second).Should(BeTrue(), "Benthos logs should be good")
+
+			// Verify messages are being produced
+			Eventually(func() int {
+				// Use Exec to count messages in the topic
+				output, err := runDockerCommand("exec", getContainerName(), "/opt/redpanda/libexec/rpk", "topic", "consume", "random-messages", "--num", "10")
+				if err != nil {
+					GinkgoWriter.Printf("Error executing rpk topic consume: %v (%s)\n", err, output)
+					return 0
+				}
+
+				return strings.Count(output, "{")
+			}, 20*time.Second, 1*time.Second).Should(BeNumerically(">", 0), "Should have messages in the random-messages topic")
+		})
+	})
+
 	Context("with multiple services (golden + a 'sleep' service)", func() {
 		BeforeAll(func() {
 			By("Building a configuration with the golden service and a sleep service")

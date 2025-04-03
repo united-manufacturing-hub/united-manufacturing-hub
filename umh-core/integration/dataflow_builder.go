@@ -17,6 +17,7 @@ package integration_test
 import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/redpandaserviceconfig"
 	"gopkg.in/yaml.v3"
 )
 
@@ -40,6 +41,22 @@ func NewDataFlowComponentBuilder() *DataFlowComponentBuilder {
 				FSMInstanceConfig: config.FSMInstanceConfig{
 					Name:            "redpanda",
 					DesiredFSMState: "stopped",
+				},
+				RedpandaServiceConfig: redpandaserviceconfig.RedpandaServiceConfig{
+					Topic: struct {
+						DefaultTopicRetentionMs    int `yaml:"defaultTopicRetentionMs"`
+						DefaultTopicRetentionBytes int `yaml:"defaultTopicRetentionBytes"`
+					}{
+						DefaultTopicRetentionMs:    604800000,
+						DefaultTopicRetentionBytes: 0,
+					},
+					Resources: struct {
+						MaxCores             int `yaml:"maxCores"`
+						MemoryPerCoreInBytes int `yaml:"memoryPerCoreInBytes"`
+					}{
+						MaxCores:             1,
+						MemoryPerCoreInBytes: 2147483648,
+					},
 				},
 			},
 		},
@@ -156,7 +173,7 @@ func (b *DataFlowComponentBuilder) CountActiveDataFlowComponents() int {
 
 // EnableRedpanda enables the Redpanda service in the configuration
 func (b *DataFlowComponentBuilder) EnableRedpanda() *DataFlowComponentBuilder {
-	b.full.Redpanda.DesiredFSMState = "running"
+	b.full.Redpanda.DesiredFSMState = "active"
 	return b
 }
 

@@ -5,3 +5,6 @@ vendor/
 !.docker-cache/s6-overlay/
 !.docker-cache/benthos/
 !.docker-cache/redpanda/
+
+tmp/
+data/
