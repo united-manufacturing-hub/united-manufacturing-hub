@@ -40,7 +40,7 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 		PrintLogsAndStopContainer()
 		CleanupDockerBuildCache()
 
-		// Only clean up tmp dirs if the test failed
+		//Keep temp dirs for debugging if the test failed
 		if !CurrentSpecReport().Failed() {
 			cleanupTmpDirs(containerName)
 		}
@@ -223,8 +223,12 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 			// Verify redpanda logs (Successfully started Redpanda!)
 			Eventually(func() bool {
 				output, err := runDockerCommand("exec", getContainerName(), "cat", "/data/logs/redpanda/current")
+				if err != nil {
+					GinkgoWriter.Printf("Error checking redpanda logs: %v\n", err)
+					return false
+				}
 				GinkgoWriter.Printf("Redpanda logs: %s\n", output)
-				return strings.Contains(output, "Successfully started Redpanda!") && err == nil
+				return strings.Contains(output, "Successfully started Redpanda!")
 			}, 20*time.Second, 1*time.Second).Should(BeTrue(), "Redpanda should have started successfully")
 
 			// Verify redpanda is running
