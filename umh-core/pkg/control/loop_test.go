@@ -169,7 +169,7 @@ var _ = Describe("ControlLoop", func() {
 
 			err := controlLoop.Reconcile(ctx, 0)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(Equal("reconcile error"))
+			Expect(err.Error()).To(Equal("manager MockFSMManager reconciliation failed: reconcile error"))
 			Expect(mockConfig.GetConfigCalled).To(BeTrue())
 			Expect(mockManager.ReconcileCalled).To(BeTrue())
 		})
