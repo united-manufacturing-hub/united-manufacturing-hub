@@ -24,7 +24,11 @@ import (
 )
 
 type FullConfig struct {
-	Agent    AgentConfig     `yaml:"agent"`    // Agent config, requires restart to take effect
+	Agent    AgentConfig    `yaml:"agent"`    // Agent config, requires restart to take effect
+	Internal InternalConfig `yaml:"internal"` // Internal config, not to be used by the user, only to be used for testing internal components
+}
+
+type InternalConfig struct {
 	Services []S6FSMConfig   `yaml:"services"` // Services to manage, can be updated while running
 	Benthos  []BenthosConfig `yaml:"benthos"`  // Benthos services to manage, can be updated while running
 	Nmap     []NmapConfig    `yaml:"nmap"`     // Nmap services to manage, can be updated while running
@@ -97,21 +101,8 @@ func (c NmapServiceConfig) Equal(other NmapServiceConfig) bool {
 
 // Clone creates a deep copy of FullConfig
 func (c FullConfig) Clone() FullConfig {
-	clone := FullConfig{
-		Agent:    c.Agent,
-		Services: make([]S6FSMConfig, len(c.Services)),
-		Benthos:  make([]BenthosConfig, len(c.Benthos)),
-		Nmap:     make([]NmapConfig, len(c.Nmap)),
-	}
-	// deep copy the location map if it exists
-	if c.Agent.Location != nil {
-		clone.Agent.Location = make(map[int]string)
-		for k, v := range c.Agent.Location {
-			clone.Agent.Location[k] = v
-		}
-	}
-	deepcopy.Copy(&clone.Services, &c.Services)
-	deepcopy.Copy(&clone.Benthos, &c.Benthos)
-	deepcopy.Copy(&clone.Nmap, &c.Nmap)
+	var clone FullConfig
+	deepcopy.Copy(&clone.Agent, &c.Agent)
+	deepcopy.Copy(&clone.Internal, &c.Internal)
 	return clone
 }
