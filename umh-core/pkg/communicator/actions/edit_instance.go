@@ -132,6 +132,8 @@ func (a *EditInstanceAction) Execute() (interface{}, map[string]interface{}, err
 		return nil, nil, fmt.Errorf("failed to update instance location: %w", err)
 	}
 
+	// we can be sure that the location is updated in the config if the error is nil
+
 	// Send the success message
 	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedSuccessfull, "Location update completed", a.outboundChannel, models.EditInstance)
 
