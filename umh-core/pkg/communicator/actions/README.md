@@ -217,57 +217,154 @@ func (a *MyActionWithWaiting) Execute() (interface{}, map[string]interface{}, er
 
 ## Unit Testing Actions
 
-Actions should be designed for testability with dependency injection. Here's an example of how to test an action:
+Actions should be designed for testability with dependency injection. UMH uses custom mock implementations rather than mocking frameworks. Here's an example of how to test an action using Ginkgo and Gomega:
 
 ```go
-func TestMyNewAction_Execute(t *testing.T) {
-    // Setup
-    mockConfigManager := mocks.NewMockConfigManager(t)
-    outboundChannel := make(chan *models.UMHMessage, 10)
-    
-    action := NewMyNewAction(
-        "test@example.com",
-        uuid.New(),
-        uuid.New(),
-        outboundChannel,
-        mockConfigManager,
+var _ = Describe("MyNewAction", func() {
+    // Variables used across tests
+    var (
+        action          *actions.MyNewAction
+        userEmail       string
+        actionUUID      uuid.UUID
+        instanceUUID    uuid.UUID
+        outboundChannel chan *models.UMHMessage
+        mockConfig      *config.MockConfigManager
     )
-    
-    // Set action fields
-    action.name = "test-name"
-    
-    // Setup expectations
-    mockConfigManager.EXPECT().
-        SomeConfigOperation(gomock.Any(), "test-name").
-        Return(nil)
-    
-    // Execute
-    result, context, err := action.Execute()
-    
-    // Assert
-    assert.NoError(t, err)
-    assert.NotNil(t, result)
-    
-    // Verify messages sent
-    assert.Equal(t, 3, len(outboundChannel)) // Confirm + Executing + Success
-    
-    // Check message content (optional)
-    msg := <-outboundChannel // Confirm message
-    assert.Equal(t, models.ActionConfirmed, getActionReplyState(msg))
-    
-    msg = <-outboundChannel // Executing message
-    assert.Equal(t, models.ActionExecuting, getActionReplyState(msg))
-    
-    msg = <-outboundChannel // Success message
-    assert.Equal(t, models.ActionFinishedSuccessfull, getActionReplyState(msg))
+
+    // Setup before each test
+    BeforeEach(func() {
+        // Initialize test variables
+        userEmail = "test@example.com"
+        actionUUID = uuid.New()
+        instanceUUID = uuid.New()
+        outboundChannel = make(chan *models.UMHMessage, 10) // Buffer to prevent blocking
+
+        // Create initial config
+        initialConfig := config.FullConfig{
+            Agent: config.AgentConfig{
+                MetricsPort: 8080,
+                CommunicatorConfig: config.CommunicatorConfig{
+                    APIURL:    "https://example.com",
+                    AuthToken: "test-token",
+                },
+            },
+        }
+
+        // Set up mock with initial config
+        mockConfig = config.NewMockConfigManager().WithConfig(initialConfig)
+        action = actions.NewMyNewAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig)
+    })
+
+    // Cleanup after each test
+    AfterEach(func() {
+        // Drain the outbound channel to prevent goroutine leaks
+        for len(outboundChannel) > 0 {
+            <-outboundChannel
+        }
+        close(outboundChannel)
+    })
+
+    Describe("Execute", func() {
+        It("should execute successfully", func() {
+            // Set up the action with required data
+            action.SetName("test-name")
+
+            // Reset tracking for this test
+            mockConfig.ResetCalls()
+
+            // Execute the action
+            result, metadata, err := action.Execute()
+            Expect(err).NotTo(HaveOccurred())
+            Expect(result).To(ContainSubstring("Successfully executed"))
+            Expect(metadata).To(BeNil())
+
+            // Verify that GetConfig was called
+            Expect(mockConfig.GetConfigCalled).To(BeTrue())
+
+            // Check that config was updated correctly
+            updatedConfig, _ := mockConfig.GetConfig(nil, 0)
+            Expect(updatedConfig.SomeConfigField).To(Equal("test-name"))
+
+            // Verify messages sent (3 messages: Confirmed + Executing + Success)
+            Expect(outboundChannel).To(HaveLen(3))
+
+            // We can also extract and check message content
+            var messages []*models.UMHMessage
+            for i := 0; i < 3; i++ {
+                select {
+                case msg := <-outboundChannel:
+                    messages = append(messages, msg)
+                case <-time.After(100 * time.Millisecond):
+                    Fail("Timed out waiting for message")
+                }
+            }
+            
+            // Verify message types (could extract and check ActionReplyState)
+            // First message should be Confirmation
+            // Second message should be Executing
+            // Third message should be Success
+        })
+
+        It("should handle config errors", func() {
+            // Set up mock to fail on GetConfig
+            mockConfig.WithConfigError(errors.New("mock GetConfig failure"))
+            
+            // Set up the action with required data
+            action.SetName("test-name")
+
+            // Execute the action - should fail
+            result, metadata, err := action.Execute()
+            Expect(err).To(HaveOccurred())
+            Expect(err.Error()).To(ContainSubstring("failed to execute action"))
+            Expect(result).To(BeNil())
+            Expect(metadata).To(BeNil())
+
+            // We should have 3 messages in the channel (Confirmed + Executing + Failure)
+            Expect(outboundChannel).To(HaveLen(3))
+        })
+        
+        It("should handle custom error cases", func() {
+            // For testing more complex failure cases, we can create custom mock wrappers
+            // similar to the writeFailingMockConfigManager in edit_instance_test.go
+            
+            customMock := &customFailingMockManager{
+                mockConfigManager: mockConfig,
+            }
+            
+            // Create new action with our custom mock
+            action = actions.NewMyNewAction(userEmail, actionUUID, instanceUUID, outboundChannel, customMock)
+            action.SetName("test-name")
+            
+            // Execute should fail due to our custom mock
+            result, metadata, err := action.Execute()
+            Expect(err).To(HaveOccurred())
+            Expect(result).To(BeNil())
+        })
+    })
+})
+
+// Example of a custom mock wrapper for testing failure cases
+type customFailingMockManager struct {
+    mockConfigManager *config.MockConfigManager
 }
 
-// Helper function to extract action reply state from UMH message
-func getActionReplyState(msg *models.UMHMessage) models.ActionReplyState {
-    // Parse message to get action reply state
-    // ...
+func (c *customFailingMockManager) GetConfig(ctx context.Context, tick uint64) (config.FullConfig, error) {
+    return c.mockConfigManager.GetConfig(ctx, tick)
 }
+
+func (c *customFailingMockManager) WriteConfig(ctx context.Context, config config.FullConfig) error {
+    return errors.New("mock failure")
+}
+
+// Implement other required methods...
 ```
+
+This testing approach focuses on:
+
+1. **State Verification**: Checking the actual changes made to the configuration.
+2. **Message Verification**: Ensuring the right messages are sent in the right order.
+3. **Error Handling**: Testing both success and failure paths with custom mock wrappers.
+4. **Ginkgo/Gomega Testing**: Using the BDD-style testing framework preferred by the UMH project.
 
 ## Best Practices
 
