@@ -20,6 +20,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -33,6 +34,7 @@ var _ = Describe("Benthos Service", func() {
 		tick        uint64
 		benthosName string
 		serviceName string
+		mockFS      *filesystem.MockFileSystem
 	)
 
 	BeforeEach(func() {
@@ -40,15 +42,16 @@ var _ = Describe("Benthos Service", func() {
 		service = NewDefaultBenthosService(benthosName, WithHTTPClient(client))
 		tick = 0
 		serviceName = service.getS6ServiceName(benthosName)
+		mockFS = filesystem.NewMockFileSystem()
 		// Add the service to the S6 manager
-		err := service.AddBenthosToS6Manager(context.Background(), &benthosserviceconfig.BenthosServiceConfig{
+		err := service.AddBenthosToS6Manager(context.Background(), mockFS, &benthosserviceconfig.BenthosServiceConfig{
 			MetricsPort: 4195,
 			LogLevel:    "info",
 		}, benthosName)
 		Expect(err).NotTo(HaveOccurred())
 
 		// Reconcile the S6 manager
-		err, _ = service.ReconcileManager(context.Background(), tick)
+		err, _ = service.ReconcileManager(context.Background(), mockFS, tick)
 		Expect(err).NotTo(HaveOccurred())
 
 		client.SetReadyStatus(200, true, true, "")
@@ -576,11 +579,13 @@ var _ = Describe("Benthos Service", func() {
 			benthosName   = "test"
 			metricsPort   = 8080
 			s6ServiceName string
+			mockFS        *filesystem.MockFileSystem
 		)
 
 		BeforeEach(func() {
 			mockClient = NewMockHTTPClient()
 			mockS6Service = s6service.NewMockService()
+			mockFS = filesystem.NewMockFileSystem()
 			service = NewDefaultBenthosService(benthosName,
 				WithHTTPClient(mockClient),
 				WithS6Service(mockS6Service),
@@ -593,14 +598,14 @@ var _ = Describe("Benthos Service", func() {
 			mockS6Service.ServiceExistsResult = true
 
 			// Add the service to the S6 manager
-			err := service.AddBenthosToS6Manager(context.Background(), &benthosserviceconfig.BenthosServiceConfig{
+			err := service.AddBenthosToS6Manager(context.Background(), mockFS, &benthosserviceconfig.BenthosServiceConfig{
 				MetricsPort: 4195,
 				LogLevel:    "info",
 			}, benthosName)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Reconcile the S6 manager
-			err, _ = service.ReconcileManager(context.Background(), tick)
+			err, _ = service.ReconcileManager(context.Background(), mockFS, tick)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -674,7 +679,7 @@ processor_batch_sent{label="0",path="root.pipeline.processors.0"} 19
 				Body:       []byte("{}"),
 			})
 
-			status1, err := service.Status(context.Background(), benthosName, metricsPort, tick)
+			status1, err := service.Status(context.Background(), mockFS, benthosName, metricsPort, tick)
 			tick++
 			Expect(err).NotTo(HaveOccurred())
 
@@ -695,7 +700,7 @@ processor_batch_sent{label="0",path="root.pipeline.processors.0"} 19
 				StatusCode: 200,
 				Body:       []byte("{}"),
 			})
-			status2, err := service.Status(context.Background(), benthosName, metricsPort, tick)
+			status2, err := service.Status(context.Background(), mockFS, benthosName, metricsPort, tick)
 			tick++
 			Expect(err).NotTo(HaveOccurred())
 
@@ -730,7 +735,7 @@ input_received{path="root.input"} 30
 				StatusCode: 200,
 				Body:       []byte("{}"),
 			})
-			status1, err := service.Status(context.Background(), benthosName, metricsPort, tick)
+			status1, err := service.Status(context.Background(), mockFS, benthosName, metricsPort, tick)
 			tick++
 			Expect(err).NotTo(HaveOccurred())
 
@@ -748,7 +753,7 @@ input_received{path="root.input"} 30
 				StatusCode: 200,
 				Body:       []byte("{}"),
 			})
-			status2, err := service.Status(context.Background(), benthosName, metricsPort, tick)
+			status2, err := service.Status(context.Background(), mockFS, benthosName, metricsPort, tick)
 			tick++
 			Expect(err).NotTo(HaveOccurred())
 
@@ -788,7 +793,7 @@ output_sent{path="root.output"} 90
 				StatusCode: 200,
 				Body:       []byte("{}"),
 			})
-			status1, err := service.Status(context.Background(), benthosName, metricsPort, tick)
+			status1, err := service.Status(context.Background(), mockFS, benthosName, metricsPort, tick)
 			tick++
 			Expect(err).NotTo(HaveOccurred())
 
@@ -806,7 +811,7 @@ output_sent{path="root.output"} 90
 				StatusCode: 200,
 				Body:       []byte("{}"),
 			})
-			status2, err := service.Status(context.Background(), benthosName, metricsPort, tick)
+			status2, err := service.Status(context.Background(), mockFS, benthosName, metricsPort, tick)
 			tick++
 			Expect(err).NotTo(HaveOccurred())
 
@@ -887,7 +892,7 @@ processor_batch_sent{label="1",path="root.pipeline.processors.1"} 18
 				Body:       []byte("{}"),
 			})
 
-			status1, err := service.Status(context.Background(), benthosName, metricsPort, tick)
+			status1, err := service.Status(context.Background(), mockFS, benthosName, metricsPort, tick)
 			tick++
 			Expect(err).NotTo(HaveOccurred())
 
@@ -914,7 +919,7 @@ processor_batch_sent{label="1",path="root.pipeline.processors.1"} 18
 				StatusCode: 200,
 				Body:       []byte("{}"),
 			})
-			status2, err := service.Status(context.Background(), benthosName, metricsPort, tick)
+			status2, err := service.Status(context.Background(), mockFS, benthosName, metricsPort, tick)
 			tick++
 			Expect(err).NotTo(HaveOccurred())
 
@@ -948,11 +953,13 @@ processor_batch_sent{label="1",path="root.pipeline.processors.1"} 18
 		var (
 			service     *BenthosService
 			benthosName string
+			mockFS      *filesystem.MockFileSystem
 		)
 
 		BeforeEach(func() {
 			benthosName = "test-benthos"
 			service = NewDefaultBenthosService(benthosName)
+			mockFS = filesystem.NewMockFileSystem()
 		})
 
 		Context("when context is cancelled", func() {
@@ -960,7 +967,7 @@ processor_batch_sent{label="1",path="root.pipeline.processors.1"} 18
 				cancelledCtx, cancel := context.WithCancel(context.Background())
 				cancel() // Cancel immediately
 
-				_, err := service.GetConfig(cancelledCtx, benthosName)
+				_, err := service.GetConfig(cancelledCtx, mockFS, benthosName)
 				Expect(err).To(Equal(context.Canceled))
 			})
 		})
@@ -975,6 +982,7 @@ processor_batch_sent{label="1",path="root.pipeline.processors.1"} 18
 			s6ServiceMock *s6service.MockService
 			initialConfig *benthosserviceconfig.BenthosServiceConfig
 			updatedConfig *benthosserviceconfig.BenthosServiceConfig
+			mockFS        *filesystem.MockFileSystem
 		)
 
 		BeforeEach(func() {
@@ -983,7 +991,7 @@ processor_batch_sent{label="1",path="root.pipeline.processors.1"} 18
 			s6ServiceMock = s6service.NewMockService()
 			benthosName = "test-benthos-service"
 			tick = 0
-
+			mockFS = filesystem.NewMockFileSystem()
 			// Set up a mock HTTP client for Benthos health and metrics endpoints
 			client.SetReadyStatus(200, true, true, "")
 			client.SetMetricsResponse(MetricsConfig{
@@ -1038,13 +1046,13 @@ processor_batch_sent{label="1",path="root.pipeline.processors.1"} 18
 
 			// Initial service creation
 			By("Adding the Benthos service to S6 manager with initial config")
-			err := service.AddBenthosToS6Manager(ctx, initialConfig, benthosName)
+			err := service.AddBenthosToS6Manager(ctx, mockFS, initialConfig, benthosName)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(s6ServiceMock.CreateCalled).To(BeFalse(), "S6 service shouldn't be created directly")
 
 			// First reconciliation - creates the service
 			By("Reconciling the manager to create the service")
-			err, _ = service.ReconcileManager(ctx, tick)
+			err, _ = service.ReconcileManager(ctx, mockFS, tick)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Set up the mock S6 service status to simulate running service
@@ -1058,7 +1066,7 @@ processor_batch_sent{label="1",path="root.pipeline.processors.1"} 18
 
 			// Start the service
 			By("Starting the Benthos service")
-			err = service.StartBenthos(ctx, benthosName)
+			err = service.StartBenthos(ctx, mockFS, benthosName)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Mock the GetConfig return values - first return initialConfig
@@ -1086,20 +1094,20 @@ processor_batch_sent{label="1",path="root.pipeline.processors.1"} 18
 
 			// Verify service is running with initial configuration
 			By("Verifying service is running with initial configuration")
-			info, err := service.Status(ctx, benthosName, initialConfig.MetricsPort, tick)
+			info, err := service.Status(ctx, mockFS, benthosName, initialConfig.MetricsPort, tick)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(info.BenthosStatus.HealthCheck.IsLive).To(BeTrue())
 			Expect(info.BenthosStatus.HealthCheck.IsReady).To(BeTrue())
 
 			// Update the service configuration
 			By("Updating the Benthos service configuration")
-			err = service.UpdateBenthosInS6Manager(ctx, updatedConfig, benthosName)
+			err = service.UpdateBenthosInS6Manager(ctx, mockFS, updatedConfig, benthosName)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Second reconciliation - detects the config change and triggers restart
 			By("Reconciling the manager to apply the configuration change")
 			tick++
-			err, _ = service.ReconcileManager(ctx, tick)
+			err, _ = service.ReconcileManager(ctx, mockFS, tick)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Change the mock to return the updated config
@@ -1135,13 +1143,13 @@ logger:
 
 			// Verify the service is running with new configuration
 			By("Verifying service is running with updated configuration")
-			info, err = service.Status(ctx, benthosName, updatedConfig.MetricsPort, tick)
+			info, err = service.Status(ctx, mockFS, benthosName, updatedConfig.MetricsPort, tick)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(info.BenthosStatus.HealthCheck.IsLive).To(BeTrue())
 			Expect(info.BenthosStatus.HealthCheck.IsReady).To(BeTrue())
 
 			// Get the config via the service and validate it reflects the updated configuration
-			cfg, err := service.GetConfig(ctx, benthosName)
+			cfg, err := service.GetConfig(ctx, mockFS, benthosName)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(cfg.Input).NotTo(BeNil(), "Config Input should not be nil")
 			Expect(cfg.Input["mqtt"]).NotTo(BeNil(), "MQTT config should not be nil")
@@ -1180,6 +1188,7 @@ logger:
 			s6ServiceName string
 			currentTime   time.Time
 			logWindow     time.Duration
+			mockFS        *filesystem.MockFileSystem
 		)
 
 		BeforeEach(func() {
@@ -1189,7 +1198,7 @@ logger:
 			benthosName = "test-instance"
 			currentTime = time.Now()
 			logWindow = 5 * time.Minute
-
+			mockFS = filesystem.NewMockFileSystem()
 			service = NewDefaultBenthosService(benthosName,
 				WithS6Service(mockS6Service),
 				WithHTTPClient(mockClient),
@@ -1201,14 +1210,14 @@ logger:
 			mockS6Service.ServiceExistsResult = true
 
 			// Add the service to the S6 manager
-			err := service.AddBenthosToS6Manager(ctx, &benthosserviceconfig.BenthosServiceConfig{
+			err := service.AddBenthosToS6Manager(ctx, mockFS, &benthosserviceconfig.BenthosServiceConfig{
 				MetricsPort: 4195,
 				LogLevel:    "info",
 			}, benthosName)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Reconcile the S6 manager
-			err, _ = service.ReconcileManager(ctx, 0)
+			err, _ = service.ReconcileManager(ctx, mockFS, 0)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -1237,7 +1246,7 @@ logger:
 			mockClient.SetReadyStatus(200, true, true, "")
 
 			// Get the service status (which includes the logs)
-			info, err := service.Status(ctx, benthosName, 4195, 1)
+			info, err := service.Status(ctx, mockFS, benthosName, 4195, 1)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Check if logs are fine - this should return false with our error logs
@@ -1348,7 +1357,7 @@ logger:
 				mockS6Service.GetLogsResult = testCase.logs
 
 				// Get status with the test logs
-				info, err := service.Status(ctx, benthosName, 4195, 1)
+				info, err := service.Status(ctx, mockFS, benthosName, 4195, 1)
 				Expect(err).NotTo(HaveOccurred())
 
 				// Check logs status
@@ -1388,7 +1397,7 @@ logger:
 			})
 
 			// Get the service status
-			info, err := service.Status(ctx, benthosName, 4195, 1)
+			info, err := service.Status(ctx, mockFS, benthosName, 4195, 1)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Check if logs are fine

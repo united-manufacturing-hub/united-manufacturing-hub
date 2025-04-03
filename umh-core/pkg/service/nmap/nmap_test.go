@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -32,6 +33,7 @@ var _ = Describe("Nmap Service", func() {
 		tick      uint64
 		nmapName  string
 		s6Service string
+		mockFS    *filesystem.MockFileSystem
 	)
 
 	BeforeEach(func() {
@@ -40,6 +42,7 @@ var _ = Describe("Nmap Service", func() {
 		service = NewDefaultNmapService(nmapName, WithS6Service(mockS6))
 		tick = 0
 		s6Service = service.getS6ServiceName(nmapName)
+		mockFS = filesystem.NewMockFileSystem()
 	})
 
 	Describe("Script Generation", func() {
@@ -197,7 +200,7 @@ done`
 				mockS6.GetS6ConfigFileResult = []byte(scriptContent)
 				mockS6.ServiceExistsResult = true
 
-				config, err := service.GetConfig(ctx, nmapName)
+				config, err := service.GetConfig(ctx, mockFS, nmapName)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(config.Target).To(Equal("test-host.local"))
 				Expect(config.Port).To(Equal(8080))
@@ -207,7 +210,7 @@ done`
 				ctx, cancel := context.WithCancel(context.Background())
 				cancel() // Cancel immediately
 
-				_, err := service.GetConfig(ctx, nmapName)
+				_, err := service.GetConfig(ctx, mockFS, nmapName)
 				Expect(err).To(Equal(context.Canceled))
 			})
 		})
@@ -376,7 +379,7 @@ done`
 			// Add and reconcile service
 			err := service.AddNmapToS6Manager(ctx, cfg, nmapName)
 			Expect(err).NotTo(HaveOccurred())
-			err, _ = service.ReconcileManager(ctx, tick)
+			err, _ = service.ReconcileManager(ctx, mockFS, tick)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -385,7 +388,7 @@ done`
 				ctx := context.Background()
 				mockS6.ServiceExistsResult = false
 
-				_, err := service.Status(ctx, "nonexistent", tick)
+				_, err := service.Status(ctx, mockFS, "nonexistent", tick)
 				Expect(err).To(Equal(ErrServiceNotExist))
 			})
 		})
@@ -402,7 +405,7 @@ done`
 			// Add and reconcile service
 			err := service.AddNmapToS6Manager(ctx, cfg, nmapName)
 			Expect(err).NotTo(HaveOccurred())
-			err, _ = service.ReconcileManager(ctx, tick)
+			err, _ = service.ReconcileManager(ctx, mockFS, tick)
 			Expect(err).NotTo(HaveOccurred())
 		})
 

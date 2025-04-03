@@ -112,15 +112,15 @@ func NewControlLoop() *ControlLoop {
 	// Create a snapshot manager
 	snapshotManager := fsm.NewSnapshotManager()
 
-	// Create a filesystem service
-	filesystemService := filesystem.NewDefaultService()
+	// Create a buffered filesystem service
+	filesystemService := filesystem.NewBufferedService(filesystem.NewDefaultService(), constants.S6BaseDir)
 
 	metrics.InitErrorCounter(metrics.ComponentControlLoop, "main")
 
 	// Now clean the S6 service directory except for the known services
 	s6Service := s6svc.NewDefaultService()
 	log.Debugf("Cleaning S6 service directory: %s", constants.S6BaseDir)
-	err := s6Service.CleanS6ServiceDirectory(context.Background(), constants.S6BaseDir)
+	err := s6Service.CleanS6ServiceDirectory(context.Background(), constants.S6BaseDir, filesystemService)
 	if err != nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, log, "Failed to clean S6 service directory: %s", err)
 
@@ -245,6 +245,16 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 		}
 	}
 
+	// If the filesystem service is buffered, we need to sync from disk
+	bufferedFs, ok := c.filesystemService.(*filesystem.BufferedService)
+	if ok {
+		err = bufferedFs.SyncFromDisk(ctx)
+		if err != nil {
+			sentry.ReportIssuef(sentry.IssueTypeError, c.logger, "Failed to sync S6 filesystem: %v", err)
+			return fmt.Errorf("failed to sync S6 filesystem: %w", err)
+		}
+	}
+
 	// Reconcile each manager with the current tick count
 	for _, manager := range c.managers {
 		// Check if we have enough time to reconcile the manager
@@ -268,7 +278,7 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 			return nil
 		}
 
-		err, reconciled := manager.Reconcile(ctx, cfg, c.currentTick)
+		err, reconciled := manager.Reconcile(ctx, cfg, c.filesystemService, c.currentTick)
 		if err != nil {
 			metrics.IncErrorCount(metrics.ComponentControlLoop, manager.GetManagerName())
 			return err
@@ -287,6 +297,11 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 		c.starvationChecker.Reconcile(ctx, cfg)
 	} else {
 		return fmt.Errorf("starvation checker is not set")
+	}
+
+	// If the filesystem service is buffered, we need to sync to disk
+	if ok {
+		err = bufferedFs.SyncToDisk(ctx)
 	}
 
 	// Create a snapshot after the entire reconciliation cycle

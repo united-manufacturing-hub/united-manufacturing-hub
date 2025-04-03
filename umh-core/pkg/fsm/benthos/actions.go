@@ -27,6 +27,7 @@ import (
 	logger "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	benthos_service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
 // The functions in this file define heavier, possibly fail-prone operations
@@ -41,10 +42,10 @@ import (
 //     setting error state and scheduling a retry/backoff.
 
 // initiateBenthosCreate attempts to add the Benthos to the S6 manager.
-func (b *BenthosInstance) initiateBenthosCreate(ctx context.Context) error {
+func (b *BenthosInstance) initiateBenthosCreate(ctx context.Context, filesystemService filesystem.Service) error {
 	b.baseFSMInstance.GetLogger().Debugf("Starting Action: Adding Benthos service %s to S6 manager ...", b.baseFSMInstance.GetID())
 
-	err := b.service.AddBenthosToS6Manager(ctx, &b.config, b.baseFSMInstance.GetID())
+	err := b.service.AddBenthosToS6Manager(ctx, filesystemService, &b.config, b.baseFSMInstance.GetID())
 	if err != nil {
 		if err == benthos_service.ErrServiceAlreadyExists {
 			b.baseFSMInstance.GetLogger().Debugf("Benthos service %s already exists in S6 manager", b.baseFSMInstance.GetID())
@@ -59,11 +60,11 @@ func (b *BenthosInstance) initiateBenthosCreate(ctx context.Context) error {
 
 // initiateBenthosRemove attempts to remove the Benthos from the S6 manager.
 // It requires the service to be stopped before removal.
-func (b *BenthosInstance) initiateBenthosRemove(ctx context.Context) error {
+func (b *BenthosInstance) initiateBenthosRemove(ctx context.Context, filesystemService filesystem.Service) error {
 	b.baseFSMInstance.GetLogger().Debugf("Starting Action: Removing Benthos service %s from S6 manager ...", b.baseFSMInstance.GetID())
 
 	// Remove the Benthos from the S6 manager
-	err := b.service.RemoveBenthosFromS6Manager(ctx, b.baseFSMInstance.GetID())
+	err := b.service.RemoveBenthosFromS6Manager(ctx, filesystemService, b.baseFSMInstance.GetID())
 	if err != nil {
 		if err == benthos_service.ErrServiceNotExist {
 			b.baseFSMInstance.GetLogger().Debugf("Benthos service %s not found in S6 manager", b.baseFSMInstance.GetID())
@@ -77,13 +78,13 @@ func (b *BenthosInstance) initiateBenthosRemove(ctx context.Context) error {
 }
 
 // initiateBenthosStart attempts to start the benthos by setting the desired state to running for the given instance
-func (b *BenthosInstance) initiateBenthosStart(ctx context.Context) error {
+func (b *BenthosInstance) initiateBenthosStart(ctx context.Context, filesystemService filesystem.Service) error {
 	b.baseFSMInstance.GetLogger().Debugf("Starting Action: Starting Benthos service %s ...", b.baseFSMInstance.GetID())
 
 	// TODO: Add pre-start validation
 
 	// Set the desired state to running for the given instance
-	err := b.service.StartBenthos(ctx, b.baseFSMInstance.GetID())
+	err := b.service.StartBenthos(ctx, filesystemService, b.baseFSMInstance.GetID())
 	if err != nil {
 		// if the service is not there yet but we attempt to start it, we need to throw an error
 		return fmt.Errorf("failed to start Benthos service %s: %w", b.baseFSMInstance.GetID(), err)
@@ -94,11 +95,11 @@ func (b *BenthosInstance) initiateBenthosStart(ctx context.Context) error {
 }
 
 // initiateBenthosStop attempts to stop the Benthos by setting the desired state to stopped for the given instance
-func (b *BenthosInstance) initiateBenthosStop(ctx context.Context) error {
+func (b *BenthosInstance) initiateBenthosStop(ctx context.Context, filesystemService filesystem.Service) error {
 	b.baseFSMInstance.GetLogger().Debugf("Starting Action: Stopping Benthos service %s ...", b.baseFSMInstance.GetID())
 
 	// Set the desired state to stopped for the given instance
-	err := b.service.StopBenthos(ctx, b.baseFSMInstance.GetID())
+	err := b.service.StopBenthos(ctx, filesystemService, b.baseFSMInstance.GetID())
 	if err != nil {
 		// if the service is not there yet but we attempt to stop it, we need to throw an error
 		return fmt.Errorf("failed to stop Benthos service %s: %w", b.baseFSMInstance.GetID(), err)
@@ -110,8 +111,8 @@ func (b *BenthosInstance) initiateBenthosStop(ctx context.Context) error {
 
 // getServiceStatus gets the status of the Benthos service
 // its main purpose is to habdle the edge cases where the service is not yet created or not yet running
-func (b *BenthosInstance) getServiceStatus(ctx context.Context, tick uint64) (benthos_service.ServiceInfo, error) {
-	info, err := b.service.Status(ctx, b.baseFSMInstance.GetID(), b.config.MetricsPort, tick)
+func (b *BenthosInstance) getServiceStatus(ctx context.Context, filesystemService filesystem.Service, tick uint64) (benthos_service.ServiceInfo, error) {
+	info, err := b.service.Status(ctx, filesystemService, b.baseFSMInstance.GetID(), b.config.MetricsPort, tick)
 	if err != nil {
 		// If there's an error getting the service status, we need to distinguish between cases
 
@@ -149,13 +150,13 @@ func (b *BenthosInstance) getServiceStatus(ctx context.Context, tick uint64) (be
 }
 
 // updateObservedState updates the observed state of the service
-func (b *BenthosInstance) updateObservedState(ctx context.Context, tick uint64) error {
+func (b *BenthosInstance) updateObservedState(ctx context.Context, filesystemService filesystem.Service, tick uint64) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
 
 	start := time.Now()
-	info, err := b.getServiceStatus(ctx, tick)
+	info, err := b.getServiceStatus(ctx, filesystemService, tick)
 	if err != nil {
 		return err
 	}
@@ -165,7 +166,7 @@ func (b *BenthosInstance) updateObservedState(ctx context.Context, tick uint64) 
 
 	// Fetch the actual Benthos config from the service
 	start = time.Now()
-	observedConfig, err := b.service.GetConfig(ctx, b.baseFSMInstance.GetID())
+	observedConfig, err := b.service.GetConfig(ctx, filesystemService, b.baseFSMInstance.GetID())
 	metrics.ObserveReconcileTime(logger.ComponentBenthosInstance, b.baseFSMInstance.GetID()+".getConfig", time.Since(start))
 	if err == nil {
 		// Only update if we successfully got the config
@@ -184,7 +185,7 @@ func (b *BenthosInstance) updateObservedState(ctx context.Context, tick uint64) 
 	// Use new ConfigsEqual function that handles Benthos defaults properly
 	if !benthosserviceconfig.ConfigsEqual(b.config, b.ObservedState.ObservedBenthosServiceConfig) {
 		// Check if the service exists before attempting to update
-		if b.service.ServiceExists(ctx, b.baseFSMInstance.GetID()) {
+		if b.service.ServiceExists(ctx, filesystemService, b.baseFSMInstance.GetID()) {
 			b.baseFSMInstance.GetLogger().Debugf("Observed Benthos config is different from desired config, updating S6 configuration")
 
 			// Use the new ConfigDiff function for better debug output
@@ -192,7 +193,7 @@ func (b *BenthosInstance) updateObservedState(ctx context.Context, tick uint64) 
 			b.baseFSMInstance.GetLogger().Debugf("Configuration differences: %s", diffStr)
 
 			// Update the config in the S6 manager
-			err := b.service.UpdateBenthosInS6Manager(ctx, &b.config, b.baseFSMInstance.GetID())
+			err := b.service.UpdateBenthosInS6Manager(ctx, filesystemService, &b.config, b.baseFSMInstance.GetID())
 			if err != nil {
 				return fmt.Errorf("failed to update Benthos service configuration: %w", err)
 			}

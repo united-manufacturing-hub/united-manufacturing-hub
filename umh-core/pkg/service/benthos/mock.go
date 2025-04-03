@@ -23,6 +23,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
 	s6_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/httpclient"
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 )
@@ -148,7 +149,7 @@ func (m *MockBenthosService) GenerateS6ConfigForBenthos(benthosConfig *benthosse
 }
 
 // GetConfig mocks getting the Benthos configuration
-func (m *MockBenthosService) GetConfig(ctx context.Context, serviceName string) (benthosserviceconfig.BenthosServiceConfig, error) {
+func (m *MockBenthosService) GetConfig(ctx context.Context, filesystemService filesystem.Service, serviceName string) (benthosserviceconfig.BenthosServiceConfig, error) {
 	m.GetConfigCalled = true
 
 	// If error is set, return it
@@ -172,7 +173,7 @@ func (m *MockBenthosService) GetConfig(ctx context.Context, serviceName string) 
 }
 
 // Status mocks getting the status of a Benthos service
-func (m *MockBenthosService) Status(ctx context.Context, serviceName string, metricsPort int, tick uint64) (ServiceInfo, error) {
+func (m *MockBenthosService) Status(ctx context.Context, filesystemService filesystem.Service, serviceName string, metricsPort int, tick uint64) (ServiceInfo, error) {
 	m.StatusCalled = true
 
 	// Check if the service exists in the ExistingServices map
@@ -249,7 +250,7 @@ func (m *MockBenthosService) HasProcessingActivity(status BenthosStatus) bool {
 }
 
 // AddBenthosToS6Manager mocks adding a Benthos instance to the S6 manager
-func (m *MockBenthosService) AddBenthosToS6Manager(ctx context.Context, cfg *benthosserviceconfig.BenthosServiceConfig, serviceName string) error {
+func (m *MockBenthosService) AddBenthosToS6Manager(ctx context.Context, filesystemService filesystem.Service, cfg *benthosserviceconfig.BenthosServiceConfig, serviceName string) error {
 	m.AddBenthosToS6ManagerCalled = true
 
 	// Check whether the service already exists
@@ -278,7 +279,7 @@ func (m *MockBenthosService) AddBenthosToS6Manager(ctx context.Context, cfg *ben
 }
 
 // RemoveBenthosFromS6Manager mocks removing a Benthos instance from the S6 manager
-func (m *MockBenthosService) RemoveBenthosFromS6Manager(ctx context.Context, serviceName string) error {
+func (m *MockBenthosService) RemoveBenthosFromS6Manager(ctx context.Context, filesystemService filesystem.Service, serviceName string) error {
 	m.RemoveBenthosFromS6ManagerCalled = true
 
 	found := false
@@ -304,7 +305,7 @@ func (m *MockBenthosService) RemoveBenthosFromS6Manager(ctx context.Context, ser
 }
 
 // StartBenthos mocks starting a Benthos instance
-func (m *MockBenthosService) StartBenthos(ctx context.Context, serviceName string) error {
+func (m *MockBenthosService) StartBenthos(ctx context.Context, filesystemService filesystem.Service, serviceName string) error {
 	m.StartBenthosCalled = true
 
 	found := false
@@ -326,7 +327,7 @@ func (m *MockBenthosService) StartBenthos(ctx context.Context, serviceName strin
 }
 
 // StopBenthos mocks stopping a Benthos instance
-func (m *MockBenthosService) StopBenthos(ctx context.Context, serviceName string) error {
+func (m *MockBenthosService) StopBenthos(ctx context.Context, filesystemService filesystem.Service, serviceName string) error {
 	m.StopBenthosCalled = true
 
 	found := false
@@ -348,7 +349,7 @@ func (m *MockBenthosService) StopBenthos(ctx context.Context, serviceName string
 }
 
 // ReconcileManager mocks reconciling the Benthos manager
-func (m *MockBenthosService) ReconcileManager(ctx context.Context, tick uint64) (error, bool) {
+func (m *MockBenthosService) ReconcileManager(ctx context.Context, filesystemService filesystem.Service, tick uint64) (error, bool) {
 	m.ReconcileManagerCalled = true
 	return m.ReconcileManagerError, m.ReconcileManagerReconciled
 }
@@ -370,7 +371,7 @@ func (m *MockBenthosService) IsMetricsErrorFree(metrics Metrics) bool {
 }
 
 // UpdateBenthosInS6Manager mocks updating a Benthos service configuration in the S6 manager
-func (m *MockBenthosService) UpdateBenthosInS6Manager(ctx context.Context, cfg *benthosserviceconfig.BenthosServiceConfig, serviceName string) error {
+func (m *MockBenthosService) UpdateBenthosInS6Manager(ctx context.Context, filesystemService filesystem.Service, cfg *benthosserviceconfig.BenthosServiceConfig, serviceName string) error {
 	m.UpdateBenthosInS6ManagerCalled = true
 
 	// Check if the service exists
@@ -394,13 +395,13 @@ func (m *MockBenthosService) UpdateBenthosInS6Manager(ctx context.Context, cfg *
 }
 
 // ServiceExists mocks checking if a Benthos service exists
-func (m *MockBenthosService) ServiceExists(ctx context.Context, serviceName string) bool {
+func (m *MockBenthosService) ServiceExists(ctx context.Context, filesystemService filesystem.Service, serviceName string) bool {
 	m.ServiceExistsCalled = true
 	return m.ServiceExistsResult
 }
 
 // ForceRemoveBenthos mocks removing a Benthos instance from the S6 manager
-func (m *MockBenthosService) ForceRemoveBenthos(ctx context.Context, benthosName string) error {
+func (m *MockBenthosService) ForceRemoveBenthos(ctx context.Context, filesystemService filesystem.Service, benthosName string) error {
 	m.ForceRemoveBenthosCalled = true
 	return m.ForceRemoveBenthosError
 }

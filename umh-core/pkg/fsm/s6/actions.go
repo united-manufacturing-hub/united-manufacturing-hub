@@ -23,6 +23,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 )
 
@@ -38,7 +39,7 @@ import (
 //     setting S6Instance.lastError and scheduling a retry/backoff.
 
 // InitiateS6Create attempts to create the S6 service directory structure.
-func (s *S6Instance) initiateS6Create(ctx context.Context) error {
+func (s *S6Instance) initiateS6Create(ctx context.Context, filesystemService filesystem.Service) error {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentS6Instance, s.baseFSMInstance.GetID()+".initiateS6Create", time.Since(start))
@@ -51,13 +52,13 @@ func (s *S6Instance) initiateS6Create(ctx context.Context) error {
 
 	if !configEmpty {
 		// Create service with custom configuration
-		err := s.service.Create(ctx, s.servicePath, s.config.S6ServiceConfig)
+		err := s.service.Create(ctx, s.servicePath, s.config.S6ServiceConfig, filesystemService)
 		if err != nil {
 			return fmt.Errorf("failed to create service with config for %s: %w", s.baseFSMInstance.GetID(), err)
 		}
 	} else {
 		// Simple creation with no configuration, useful for testing
-		err := s.service.Create(ctx, s.servicePath, s6serviceconfig.S6ServiceConfig{})
+		err := s.service.Create(ctx, s.servicePath, s6serviceconfig.S6ServiceConfig{}, filesystemService)
 		if err != nil {
 			return fmt.Errorf("failed to create service directory for %s: %w", s.baseFSMInstance.GetID(), err)
 		}
@@ -69,7 +70,7 @@ func (s *S6Instance) initiateS6Create(ctx context.Context) error {
 
 // InitiateS6Remove attempts to remove the S6 service directory structure.
 // It requires the service to be stopped before removal.
-func (s *S6Instance) initiateS6Remove(ctx context.Context) error {
+func (s *S6Instance) initiateS6Remove(ctx context.Context, filesystemService filesystem.Service) error {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentS6Instance, s.baseFSMInstance.GetID()+".initiateS6Remove", time.Since(start))
@@ -83,7 +84,7 @@ func (s *S6Instance) initiateS6Remove(ctx context.Context) error {
 	}
 
 	// Remove the service directory
-	err := s.service.Remove(ctx, s.servicePath)
+	err := s.service.Remove(ctx, s.servicePath, filesystemService)
 	if err != nil {
 		return fmt.Errorf("failed to remove service directory for %s: %w", s.baseFSMInstance.GetID(), err)
 	}
@@ -93,7 +94,7 @@ func (s *S6Instance) initiateS6Remove(ctx context.Context) error {
 }
 
 // InitiateS6Start attempts to start the S6 service.
-func (s *S6Instance) initiateS6Start(ctx context.Context) error {
+func (s *S6Instance) initiateS6Start(ctx context.Context, filesystemService filesystem.Service) error {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentS6Instance, s.baseFSMInstance.GetID()+".initiateS6Start", time.Since(start))
@@ -101,7 +102,7 @@ func (s *S6Instance) initiateS6Start(ctx context.Context) error {
 
 	s.baseFSMInstance.GetLogger().Debugf("Starting Action: Starting S6 service %s ...", s.baseFSMInstance.GetID())
 
-	err := s.service.Start(ctx, s.servicePath)
+	err := s.service.Start(ctx, s.servicePath, filesystemService)
 	if err != nil {
 		return fmt.Errorf("failed to start S6 service %s: %w", s.baseFSMInstance.GetID(), err)
 	}
@@ -111,7 +112,7 @@ func (s *S6Instance) initiateS6Start(ctx context.Context) error {
 }
 
 // InitiateS6Stop attempts to stop the S6 service.
-func (s *S6Instance) initiateS6Stop(ctx context.Context) error {
+func (s *S6Instance) initiateS6Stop(ctx context.Context, filesystemService filesystem.Service) error {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentS6Instance, s.baseFSMInstance.GetID()+".initiateS6Stop", time.Since(start))
@@ -119,7 +120,7 @@ func (s *S6Instance) initiateS6Stop(ctx context.Context) error {
 
 	s.baseFSMInstance.GetLogger().Debugf("Starting Action: Stopping S6 service %s ...", s.baseFSMInstance.GetID())
 
-	err := s.service.Stop(ctx, s.servicePath)
+	err := s.service.Stop(ctx, s.servicePath, filesystemService)
 	if err != nil {
 		return fmt.Errorf("failed to stop S6 service %s: %w", s.baseFSMInstance.GetID(), err)
 	}
@@ -129,7 +130,7 @@ func (s *S6Instance) initiateS6Stop(ctx context.Context) error {
 }
 
 // InitiateS6Restart attempts to restart the S6 service.
-func (s *S6Instance) initiateS6Restart(ctx context.Context) error {
+func (s *S6Instance) initiateS6Restart(ctx context.Context, filesystemService filesystem.Service) error {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentS6Instance, s.baseFSMInstance.GetID()+".initiateS6Restart", time.Since(start))
@@ -137,7 +138,7 @@ func (s *S6Instance) initiateS6Restart(ctx context.Context) error {
 
 	s.baseFSMInstance.GetLogger().Debugf("Starting Action: Restarting S6 service %s ...", s.baseFSMInstance.GetID())
 
-	err := s.service.Restart(ctx, s.servicePath)
+	err := s.service.Restart(ctx, s.servicePath, filesystemService)
 	if err != nil {
 		return fmt.Errorf("failed to restart S6 service %s: %w", s.baseFSMInstance.GetID(), err)
 	}
@@ -147,10 +148,10 @@ func (s *S6Instance) initiateS6Restart(ctx context.Context) error {
 }
 
 // UpdateObservedState updates the observed state of the service
-func (s *S6Instance) updateObservedState(ctx context.Context) error {
+func (s *S6Instance) updateObservedState(ctx context.Context, filesystemService filesystem.Service) error {
 
 	// Measure status time
-	info, err := s.service.Status(ctx, s.servicePath)
+	info, err := s.service.Status(ctx, s.servicePath, filesystemService)
 	if err != nil {
 		s.ObservedState.ServiceInfo.Status = s6service.ServiceUnknown
 
@@ -185,7 +186,7 @@ func (s *S6Instance) updateObservedState(ctx context.Context) error {
 	}
 
 	// Fetch the actual service config from s6
-	config, err := s.service.GetConfig(ctx, s.servicePath)
+	config, err := s.service.GetConfig(ctx, s.servicePath, filesystemService)
 	if err != nil {
 		return fmt.Errorf("failed to get S6 service config for %s: %w", s.baseFSMInstance.GetID(), err)
 	}

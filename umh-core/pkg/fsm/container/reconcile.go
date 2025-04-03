@@ -26,10 +26,11 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
 // Reconcile periodically checks if the FSM needs state transitions based on metrics
-func (c *ContainerInstance) Reconcile(ctx context.Context, tick uint64) (err error, reconciled bool) {
+func (c *ContainerInstance) Reconcile(ctx context.Context, filesystemService filesystem.Service, tick uint64) (err error, reconciled bool) {
 	start := time.Now()
 	instanceName := c.baseFSMInstance.GetID()
 	defer func() {

@@ -24,6 +24,7 @@ import (
 	public_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
 const (
@@ -113,13 +114,13 @@ func NewContainerManager(name string) *ContainerManager {
 }
 
 // Reconcile calls the base manager's Reconcile, measuring time
-func (m *ContainerManager) Reconcile(ctx context.Context, cfg config.FullConfig, tick uint64) (error, bool) {
+func (m *ContainerManager) Reconcile(ctx context.Context, cfg config.FullConfig, filesystemService filesystem.Service, tick uint64) (error, bool) {
 	start := time.Now()
 	defer func() {
 		duration := time.Since(start)
 		metrics.ObserveReconcileTime(ContainerManagerComponentName, m.GetManagerName(), duration)
 	}()
-	return m.BaseFSMManager.Reconcile(ctx, cfg, tick)
+	return m.BaseFSMManager.Reconcile(ctx, cfg, filesystemService, tick)
 }
 
 // CreateSnapshot overrides the base to add container-specific fields if desired
