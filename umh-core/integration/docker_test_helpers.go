@@ -443,10 +443,6 @@ func PrintLogsAndStopContainer() {
 	// Clean up config file
 	cleanupConfigFile()
 
-	// Only clean up tmp dirs if the test failed
-	if !CurrentSpecReport().Failed() {
-		cleanupTmpDirs(containerName)
-	}
 }
 
 func CleanupDockerBuildCache() {

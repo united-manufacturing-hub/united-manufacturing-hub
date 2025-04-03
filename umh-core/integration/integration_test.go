@@ -39,6 +39,11 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 		// Always stop container after the entire suite
 		PrintLogsAndStopContainer()
 		CleanupDockerBuildCache()
+
+		// Only clean up tmp dirs if the test failed
+		if !CurrentSpecReport().Failed() {
+			cleanupTmpDirs(containerName)
+		}
 	})
 
 	Context("with an empty config", func() {
