@@ -57,15 +57,17 @@ var _ = Describe("ConfigManager", func() {
 
 	Describe("GetConfig", func() {
 		var (
-			validYAML = `services:
-- name: service1
-  desiredState: running
-  s6ServiceConfig:
-    command: ["/bin/echo", "hello world"]
-    env:
-      KEY: value
-    configFiles:
-      file.txt: content
+			validYAML = `
+internal:
+  services:
+    - name: service1
+      desiredState: running
+      s6ServiceConfig:
+        command: ["/bin/echo", "hello world"]
+        env:
+          KEY: value
+        configFiles:
+          file.txt: content
 `
 			invalidYAML = `services: - invalid: yaml: content`
 		)
