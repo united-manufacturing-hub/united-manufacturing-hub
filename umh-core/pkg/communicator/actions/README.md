@@ -1,6 +1,6 @@
 # UMH Action System
 
-The actions package handles user-initiated operations within the UMH platform. Actions provide a standardized way to implement commands that can be triggered by users through the API.
+The actions package handles user-initiated operations within the UMH platform. Actions provide a standardized way to implement commands that can be triggered by users via the Management Console.
 
 ## Action Interface
 
