@@ -219,7 +219,7 @@ func (bs *BufferedService) SyncToDisk(ctx context.Context) error {
 	// First, handle removals in reverse order (deepest paths first)
 	var toRemove []string
 	for relPath, chg := range bs.changed {
-		if chg.removed {
+		if chg != nil && chg.removed {
 			toRemove = append(toRemove, relPath)
 		}
 	}
@@ -232,7 +232,7 @@ func (bs *BufferedService) SyncToDisk(ctx context.Context) error {
 		fullPath := filepathJoin(bs.rootDir, relPath)
 		// Check if this was a directory in our original state
 		chg := bs.changed[relPath]
-		if chg.wasDir {
+		if chg != nil && chg.wasDir {
 			if err := bs.base.RemoveAll(ctx, fullPath); err != nil {
 				return fmt.Errorf("failed to remove directory: %w", err)
 			}
@@ -248,7 +248,7 @@ func (bs *BufferedService) SyncToDisk(ctx context.Context) error {
 
 	// Then handle writes and directory creation
 	for relPath, chg := range bs.changed {
-		if !chg.removed {
+		if chg != nil && !chg.removed {
 			// If it's not in our map for some reason, skip
 			state, exists := bs.files[relPath]
 			if !exists {
@@ -435,8 +435,11 @@ func (bs *BufferedService) RemoveAll(ctx context.Context, path string) error {
 	// Mark the target and all its children for removal
 	for key := range bs.files {
 		if key == relPath || hasPrefix(key, relPath+string(os.PathSeparator)) {
-			isDir := bs.files[key].isDir
-			bs.changed[key] = &fileChange{removed: true, wasDir: isDir}
+			state, ok := bs.files[key]
+			if !ok {
+				continue
+			}
+			bs.changed[key] = &fileChange{removed: true, wasDir: state.isDir}
 			// Also mark it as removed in the files map
 			delete(bs.files, key)
 		}
