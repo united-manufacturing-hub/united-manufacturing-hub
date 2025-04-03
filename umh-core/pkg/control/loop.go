@@ -265,7 +265,7 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 		err, reconciled := manager.Reconcile(ctx, cfg, c.currentTick)
 		if err != nil {
 			metrics.IncErrorCount(metrics.ComponentControlLoop, manager.GetManagerName())
-			return err
+			return fmt.Errorf("manager %s reconciliation failed: %w", manager.GetManagerName(), err)
 		}
 
 		// If the manager was reconciled, skip the reconcilation of the next managers
@@ -299,14 +299,14 @@ func (c *ControlLoop) updateSystemSnapshot(ctx context.Context, cfg config.FullC
 	}
 
 	if c.snapshotManager == nil {
-		sentry.ReportIssuef(sentry.IssueTypeWarning, c.logger, "Cannot create system snapshot: snapshot manager is not set")
+		sentry.ReportIssuef(sentry.IssueTypeWarning, c.logger, "[updateSystemSnapshot] Cannot create system snapshot: snapshot manager is not set")
 		return
 	}
 
 	snapshot, err := fsm.GetManagerSnapshots(c.managers, c.currentTick, cfg)
 	if err != nil {
 		c.logger.Errorf("Failed to create system snapshot: %v", err)
-		sentry.ReportIssuef(sentry.IssueTypeError, c.logger, "Failed to create system snapshot: %v", err)
+		sentry.ReportIssuef(sentry.IssueTypeError, c.logger, "[updateSystemSnapshot] Failed to create system snapshot: %v", err)
 		return
 	}
 
@@ -324,7 +324,7 @@ func (c *ControlLoop) GetSystemSnapshot() *fsm.SystemSnapshot {
 	}
 
 	if c.snapshotManager == nil {
-		sentry.ReportIssuef(sentry.IssueTypeWarning, c.logger, "Cannot get system snapshot: snapshot manager is not set")
+		sentry.ReportIssuef(sentry.IssueTypeWarning, c.logger, "[GetSystemSnapshot] Cannot get system snapshot: snapshot manager is not set")
 		return nil
 	}
 	return c.snapshotManager.GetSnapshot()
