@@ -23,11 +23,11 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/encoding"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/subscriber"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/maptostruct"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"go.uber.org/zap"
 )
 
@@ -41,6 +41,7 @@ type Router struct {
 	clientConnectionsLock sync.RWMutex
 	subHandler            *subscriber.Handler
 	systemSnapshot        *fsm.SystemSnapshot
+	configManager         config.ConfigManager
 }
 
 type ClientConnection struct {
@@ -55,6 +56,7 @@ func NewRouter(dog watchdog.Iface,
 	releaseChannel config.ReleaseChannel,
 	subHandler *subscriber.Handler,
 	systemSnapshot *fsm.SystemSnapshot,
+	configManager config.ConfigManager,
 ) *Router {
 	return &Router{
 		dog:                   dog,
@@ -66,6 +68,7 @@ func NewRouter(dog watchdog.Iface,
 		clientConnectionsLock: sync.RWMutex{},
 		subHandler:            subHandler,
 		systemSnapshot:        systemSnapshot,
+		configManager:         configManager,
 	}
 }
 
@@ -138,5 +141,6 @@ func (r *Router) handleAction(messageContent models.UMHMessageContent, message *
 		r.dog,
 		traceId,
 		r.systemSnapshot,
+		r.configManager,
 	)
 }

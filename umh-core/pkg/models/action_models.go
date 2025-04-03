@@ -19,6 +19,15 @@ import (
 	"github.com/google/uuid"
 )
 
+// EditInstanceLocation holds the location information for the instance
+type EditInstanceLocationModel struct {
+	Enterprise string  `json:"enterprise"`
+	Site       *string `json:"site,omitempty"`
+	Area       *string `json:"area,omitempty"`
+	Line       *string `json:"line,omitempty"`
+	WorkCell   *string `json:"workCell,omitempty"`
+}
+
 type MessageMetadata struct {
 	TraceID uuid.UUID `json:"traceId"`
 }
