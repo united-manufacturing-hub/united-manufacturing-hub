@@ -17,10 +17,12 @@ package redpanda
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -297,6 +299,72 @@ func (s *RedpandaService) GetConfig(ctx context.Context) (redpandaserviceconfig.
 		return redpandaserviceconfig.RedpandaServiceConfig{}, ctx.Err()
 	}
 
+	// Create HTTP client if needed
+	var requestClient httpclient.HTTPClient = s.httpClient
+	if requestClient == nil {
+		requestClient = httpclient.NewDefaultHTTPClient()
+	}
+
+	// Fetch configuration from the API endpoint
+	clusterConfigEndpoint := "http://localhost:9644/v1/cluster_config"
+	resp, body, err := requestClient.GetWithBody(ctx, clusterConfigEndpoint)
+	if err != nil {
+		s.logger.Debugf("Failed to fetch cluster_config: %v", err)
+
+		// Fall back to the file-based approach if API call fails
+		return s.getConfigFromFile(ctx)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		s.logger.Debugf("Unexpected status code from cluster_config API: %d", resp.StatusCode)
+		return s.getConfigFromFile(ctx)
+	}
+
+	// Parse the JSON response
+	var redpandaConfig map[string]interface{}
+	if err := json.Unmarshal(body, &redpandaConfig); err != nil {
+		s.logger.Debugf("Error parsing cluster_config response: %v", err)
+		return s.getConfigFromFile(ctx)
+	}
+
+	result := redpandaserviceconfig.RedpandaServiceConfig{}
+
+	// Extract the values we need from the JSON
+	if value, ok := redpandaConfig["log_retention_ms"]; ok {
+		if floatVal, ok := value.(float64); ok {
+			result.Topic.DefaultTopicRetentionMs = int(floatVal)
+		} else if intVal, ok := value.(int); ok {
+			result.Topic.DefaultTopicRetentionMs = intVal
+		} else if strVal, ok := value.(string); ok {
+			if intVal, err := strconv.Atoi(strVal); err == nil {
+				result.Topic.DefaultTopicRetentionMs = intVal
+			}
+		}
+	}
+
+	if value, ok := redpandaConfig["retention_bytes"]; ok {
+		if floatVal, ok := value.(float64); ok {
+			result.Topic.DefaultTopicRetentionBytes = int(floatVal)
+		} else if intVal, ok := value.(int); ok {
+			result.Topic.DefaultTopicRetentionBytes = intVal
+		} else if strVal, ok := value.(string); ok {
+			if intVal, err := strconv.Atoi(strVal); err == nil {
+				result.Topic.DefaultTopicRetentionBytes = intVal
+			}
+		}
+	}
+
+	// Safely extract MaxCores - this might not be available from the API
+	// so we'll use a default value
+	result.Resources.MaxCores = 1
+	result.Resources.MemoryPerCoreInBytes = 2048 * 1024 * 1024 // 2GB
+
+	return redpandayaml.NormalizeRedpandaConfig(result), nil
+}
+
+// getConfigFromFile returns the Redpanda config from the S6 service file
+// This is a fallback method used when the API endpoint is not available
+func (s *RedpandaService) getConfigFromFile(ctx context.Context) (redpandaserviceconfig.RedpandaServiceConfig, error) {
 	s6ServicePath := filepath.Join(constants.S6BaseDir, constants.RedpandaServiceName)
 
 	// Request the config file from the S6 service
