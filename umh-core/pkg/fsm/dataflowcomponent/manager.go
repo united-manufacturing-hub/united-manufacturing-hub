@@ -17,6 +17,7 @@ package dataflowcomponent
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"go.uber.org/zap"
@@ -24,6 +25,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	public_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 )
@@ -35,7 +37,9 @@ const (
 // DataFlowComponentManager implements FSM management for DataFlowComponent services.
 type DataFlowComponentManager struct {
 	*public_fsm.BaseFSMManager[config.DataFlowComponentConfig]
-	logger *zap.SugaredLogger
+	logger         *zap.SugaredLogger
+	benthosManager *benthos.BenthosManager
+	mutex          sync.Mutex
 }
 
 // DataFlowComponentManagerSnapshot extends the base ManagerSnapshot with DataFlowComponent-specific information
@@ -49,6 +53,10 @@ func NewDataFlowComponentManager(name string) *DataFlowComponentManager {
 	managerName := fmt.Sprintf("%s%s", logger.ComponentDataFlowComponentManager, name)
 	managerLogger := logger.For(managerName)
 	managerLogger.Infof("Creating new DataFlowComponentManager: %s", managerName)
+
+	// Create a benthos manager that will handle the actual benthos services
+	benthosManager := benthos.NewBenthosManager(name)
+	managerLogger.Infof("Created BenthosManager for DataFlowComponentManager: %s", name)
 
 	baseManager := public_fsm.NewBaseFSMManager[config.DataFlowComponentConfig](
 		managerName,
@@ -76,11 +84,6 @@ func NewDataFlowComponentManager(name string) *DataFlowComponentManager {
 		func(cfg config.DataFlowComponentConfig) (public_fsm.FSMInstance, error) {
 			managerLogger.Infof("Creating DataFlowComponent instance for: %s", cfg.Name)
 
-			// Create a default BenthosConfigManager for now
-			configFilePath := "/data/config.yaml"
-			managerLogger.Debugf("Creating BenthosConfigManager with path: %s", configFilePath)
-			configManager := NewBenthosConfigManager(configFilePath)
-
 			// Create local DataFlowComponentConfig from config.DataFlowComponentConfig
 			managerLogger.Debugf("Creating local config for DataFlowComponent %s", cfg.Name)
 			localCfg := DataFlowComponentConfig{
@@ -91,7 +94,12 @@ func NewDataFlowComponentManager(name string) *DataFlowComponentManager {
 			}
 
 			managerLogger.Infof("Successfully created DataFlowComponent instance for: %s", cfg.Name)
-			return NewDataFlowComponent(localCfg, configManager), nil
+			// Create a new DataFlowComponent instance with the BenthosConfigManager interface impl below
+			return NewDataFlowComponent(localCfg, &benthosMgrAdapter{
+				manager:    benthosManager,
+				logger:     managerLogger.Named("BenthosAdapter"),
+				components: make(map[string]DataFlowComponentConfig),
+			}), nil
 		},
 		// Compare DataFlowComponent configs
 		func(instance public_fsm.FSMInstance, cfg config.DataFlowComponentConfig) (bool, error) {
@@ -153,6 +161,8 @@ func NewDataFlowComponentManager(name string) *DataFlowComponentManager {
 	return &DataFlowComponentManager{
 		BaseFSMManager: baseManager,
 		logger:         managerLogger,
+		benthosManager: benthosManager,
+		mutex:          sync.Mutex{},
 	}
 }
 
@@ -170,16 +180,66 @@ func (m *DataFlowComponentManager) Reconcile(ctx context.Context, cfg config.Ful
 		m.logger.Debugf("DataFlowComponentManager reconcile completed in %v", duration)
 	}()
 
+	// First run the base reconcile to update our DataFlowComponents
 	err, reconciled := m.BaseFSMManager.Reconcile(ctx, cfg, tick)
 	if err != nil {
 		m.logger.Errorf("Error during DataFlowComponentManager reconcile: %v", err)
-	} else if reconciled {
-		m.logger.Debugf("DataFlowComponentManager reconciled successfully")
-	} else {
-		m.logger.Debugf("DataFlowComponentManager reconcile had nothing to do")
+		return err, reconciled
 	}
 
-	return err, reconciled
+	// Then, generate the Benthos configs from our DataFlowComponents
+	benthosConfigs := m.generateBenthosConfigs()
+
+	// Create a new config object to pass to the BenthosManager
+	cfgForBenthos := cfg.Clone()
+	cfgForBenthos.Benthos = benthosConfigs
+
+	// Pass the modified config to the BenthosManager for reconciliation
+	err, benthosReconciled := m.benthosManager.Reconcile(ctx, cfgForBenthos, tick)
+	if err != nil {
+		m.logger.Errorf("Error during BenthosManager reconcile: %v", err)
+		return err, reconciled
+	}
+
+	return nil, reconciled || benthosReconciled
+}
+
+// generateBenthosConfigs creates Benthos configs from DataFlowComponent instances
+func (m *DataFlowComponentManager) generateBenthosConfigs() []config.BenthosConfig {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+
+	instances := m.BaseFSMManager.GetInstances()
+	benthosConfigs := make([]config.BenthosConfig, 0, len(instances))
+
+	for _, instance := range instances {
+		dfcInstance, ok := instance.(*DataFlowComponent)
+		if !ok {
+			m.logger.Warnf("Instance is not a DataFlowComponent, skipping: %v", instance)
+			continue
+		}
+
+		// Only generate Benthos configs for active components
+		if dfcInstance.GetCurrentFSMState() == OperationalStateActive ||
+			dfcInstance.GetCurrentFSMState() == OperationalStateStarting ||
+			dfcInstance.GetCurrentFSMState() == OperationalStateDegraded {
+			benthosConfigs = append(benthosConfigs, config.BenthosConfig{
+				FSMInstanceConfig: config.FSMInstanceConfig{
+					Name:            dfcInstance.Config.Name,
+					DesiredFSMState: dfcInstance.Config.DesiredState,
+				},
+				BenthosServiceConfig: dfcInstance.Config.ServiceConfig,
+			})
+		}
+	}
+
+	m.logger.Debugf("Generated %d Benthos configs from DataFlowComponent instances", len(benthosConfigs))
+	return benthosConfigs
+}
+
+// GetBenthosManager returns the benthos manager used by this DataFlowComponentManager
+func (m *DataFlowComponentManager) GetBenthosManager() *benthos.BenthosManager {
+	return m.benthosManager
 }
 
 // CreateSnapshot creates a DataFlowComponentManagerSnapshot
@@ -208,4 +268,51 @@ func (m *DataFlowComponentManager) CreateSnapshot() public_fsm.ManagerSnapshot {
 // IsObservedStateSnapshot implements the ObservedStateSnapshot interface
 func (s *DataFlowComponentManagerSnapshot) IsObservedStateSnapshot() {
 	// Marker method implementation
+}
+
+// benthosMgrAdapter adapts the BenthosManager to the BenthosConfigManager interface
+type benthosMgrAdapter struct {
+	manager    *benthos.BenthosManager
+	logger     *zap.SugaredLogger
+	mutex      sync.Mutex
+	components map[string]DataFlowComponentConfig
+}
+
+// AddComponentToBenthosConfig adds a component to the benthos config
+func (a *benthosMgrAdapter) AddComponentToBenthosConfig(ctx context.Context, component DataFlowComponentConfig) error {
+	a.mutex.Lock()
+	defer a.mutex.Unlock()
+
+	a.logger.Infof("Adding component %s to Benthos config tracking", component.Name)
+	a.components[component.Name] = component
+	return nil
+}
+
+// RemoveComponentFromBenthosConfig removes a component from the benthos config
+func (a *benthosMgrAdapter) RemoveComponentFromBenthosConfig(ctx context.Context, componentName string) error {
+	a.mutex.Lock()
+	defer a.mutex.Unlock()
+
+	a.logger.Infof("Removing component %s from Benthos config tracking", componentName)
+	delete(a.components, componentName)
+	return nil
+}
+
+// UpdateComponentInBenthosConfig updates a component in the benthos config
+func (a *benthosMgrAdapter) UpdateComponentInBenthosConfig(ctx context.Context, component DataFlowComponentConfig) error {
+	a.mutex.Lock()
+	defer a.mutex.Unlock()
+
+	a.logger.Infof("Updating component %s in Benthos config tracking", component.Name)
+	a.components[component.Name] = component
+	return nil
+}
+
+// ComponentExistsInBenthosConfig checks if a component exists in the benthos config
+func (a *benthosMgrAdapter) ComponentExistsInBenthosConfig(ctx context.Context, componentName string) (bool, error) {
+	a.mutex.Lock()
+	defer a.mutex.Unlock()
+
+	_, exists := a.components[componentName]
+	return exists, nil
 }
