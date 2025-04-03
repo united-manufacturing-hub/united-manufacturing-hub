@@ -253,6 +253,19 @@ test-dfc: clean build
 	docker run \
 		--name $(IMAGE_NAME) \
 		-v $(PWD)/data:/data \
+		-e LOGGING_LEVEL=DEBUG \
+		-p 8081:8080 \
+		$(IMAGE_NAME):$(TAG)
+
+test-connection: clean build
+	@mkdir -p $(PWD)/data
+	@cp $(PWD)/examples/example-config-connection.yaml $(PWD)/data/config.yaml
+	docker run \
+		--name $(IMAGE_NAME) \
+		-v $(PWD)/data:/data \
+		-e LOGGING_LEVEL=DEBUG \
+		-p 8081:8080 \
+		-p 4195:4195 \
 		$(IMAGE_NAME):$(TAG)
 
 pod-shell:
