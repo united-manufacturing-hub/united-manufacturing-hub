@@ -30,7 +30,9 @@ import (
 
 // ---------- Actual Ginkgo Tests ----------
 
-const DEFAULT_MEMORY = "3072m"
+// Note: Redpanda allocates 2GB of memory per core.
+// Additionally 1.5GB (or 7% of the total memory, whichever is greater) are required to be available, after this allocation to make seastar happy.
+const DEFAULT_MEMORY = "4096m"
 const DEFAULT_CPUS = 1
 
 var _ = Describe("UMH Container Integration", Ordered, Label("integration"), func() {

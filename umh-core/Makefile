@@ -41,6 +41,11 @@ S6_OVERLAY_VERSION = 3.2.0.2
 BENTHOS_UMH_VERSION = 0.6.2
 REDPANDA_VERSION = 24.3.8
 
+# Note: Redpanda allocates 2GB of memory per core.
+# Additionally 1.5GB (or 7% of the total memory, whichever is greater) are required to be available, after this allocation to make seastar happy.
+MEMORY = 4096m
+CPUS = 1
+
 # Determine version based on git
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "0.0.0-dev")
 
@@ -177,6 +182,8 @@ test-empty: clean build
 		--name $(IMAGE_NAME) \
 		-v $(PWD)/data:/data \
 		-p 8081:8080 \
+		--memory $(MEMORY) \
+		--cpus $(CPUS) \
 		$(IMAGE_NAME):$(TAG)
 
 test-clean-install: clean build
@@ -185,6 +192,8 @@ test-clean-install: clean build
 		-v $(PWD)/data:/data \
 		-e API_URL=https://management.umh.app/api \
 		-e RELEASE_CHANNEL=enterprise \
+		--memory $(MEMORY) \
+		--cpus $(CPUS) \
 		$(IMAGE_NAME):$(TAG)
 
 test-hello: clean build
@@ -195,6 +204,8 @@ test-hello: clean build
 		-v $(PWD)/data:/data \
 		-p 8081:8080 \
 		-p 4195:4195 \
+		--memory $(MEMORY) \
+		--cpus $(CPUS) \
 		$(IMAGE_NAME):$(TAG)
 
 test-comm: clean build
@@ -204,6 +215,8 @@ test-comm: clean build
 		--name $(IMAGE_NAME) \
 		-v $(PWD)/data:/data \
 		-p 8081:8080 \
+		--memory $(MEMORY) \
+		--cpus $(CPUS) \
 		$(IMAGE_NAME):$(TAG)
 
 test-broken: clean build
@@ -214,6 +227,8 @@ test-broken: clean build
 		-v $(PWD)/data:/data \
 		-p 8081:8080 \
 		-p 4195:4195 \
+		--memory $(MEMORY) \
+		--cpus $(CPUS) \
 		$(IMAGE_NAME):$(TAG)
 
 test-benthos: clean build
@@ -225,6 +240,8 @@ test-benthos: clean build
 		-e LOGGING_LEVEL=DEBUG \
 		-p 8081:8080 \
 		-p 4195:4195 \
+		--memory $(MEMORY) \
+		--cpus $(CPUS) \
 		$(IMAGE_NAME):$(TAG)
 
 test-benthos-tmp: clean build
@@ -234,6 +251,8 @@ test-benthos-tmp: clean build
 		-e LOGGING_LEVEL=DEBUG \
 		-p 8081:8080 \
 		-p 4195:4195 \
+		--memory $(MEMORY) \
+		--cpus $(CPUS) \
 		$(IMAGE_NAME):$(TAG)
 
 
@@ -245,6 +264,8 @@ test-redpanda: clean build
 		-v $(PWD)/data:/data \
 		-e LOGGING_LEVEL=DEBUG \
 		-p 8081:8080 \
+		--memory $(MEMORY) \
+		--cpus $(CPUS) \
 		$(IMAGE_NAME):$(TAG)
 
 test-dfc: clean build
@@ -253,7 +274,9 @@ test-dfc: clean build
 	docker run \
 		--name $(IMAGE_NAME) \
 		-v $(PWD)/data:/data \
-    	-e LOGGING_LEVEL=DEBUG \
+		-e LOGGING_LEVEL=DEBUG \
+		--memory $(MEMORY) \
+		--cpus $(CPUS) \
 		$(IMAGE_NAME):$(TAG)
 
 pod-shell:
