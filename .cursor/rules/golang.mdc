@@ -8,6 +8,7 @@ description: Golang
 globs: *.go
 alwaysApply: false
 ---
+# Golang Rules
 
 # Golang Rules
 
