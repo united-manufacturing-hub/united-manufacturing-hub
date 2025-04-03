@@ -35,7 +35,6 @@ type MockFileSystem struct {
 	EnsureDirectoryFunc func(ctx context.Context, path string) error
 	RemoveFunc          func(ctx context.Context, path string) error
 	RemoveAllFunc       func(ctx context.Context, path string) error
-	MkdirTempFunc       func(ctx context.Context, dir, pattern string) (string, error)
 	StatFunc            func(ctx context.Context, path string) (os.FileInfo, error)
 	CreateFileFunc      func(ctx context.Context, path string, perm os.FileMode) (*os.File, error)
 	ChmodFunc           func(ctx context.Context, path string, mode os.FileMode) error
@@ -227,29 +226,6 @@ func (m *MockFileSystem) RemoveAll(ctx context.Context, path string) error {
 	return nil
 }
 
-// MkdirTemp creates a new temporary directory
-func (m *MockFileSystem) MkdirTemp(ctx context.Context, dir, pattern string) (string, error) {
-	if m.MkdirTempFunc != nil {
-		return m.MkdirTempFunc(ctx, dir, pattern)
-	}
-
-	shouldFail, delay := m.simulateRandomBehavior("MkdirTemp")
-
-	if delay > 0 {
-		select {
-		case <-time.After(delay):
-			// Delay completed
-		case <-ctx.Done():
-			return "", ctx.Err()
-		}
-	}
-
-	if shouldFail {
-		return "", errors.New("simulated failure in MkdirTemp")
-	}
-	return "/tmp/mock-dir", nil
-}
-
 // Stat returns file info
 func (m *MockFileSystem) Stat(ctx context.Context, path string) (os.FileInfo, error) {
 	if m.StatFunc != nil {
@@ -406,12 +382,6 @@ func (m *MockFileSystem) WithRemoveFunc(fn func(ctx context.Context, path string
 // WithRemoveAllFunc sets a custom implementation for RemoveAll
 func (m *MockFileSystem) WithRemoveAllFunc(fn func(ctx context.Context, path string) error) *MockFileSystem {
 	m.RemoveAllFunc = fn
-	return m
-}
-
-// WithMkdirTempFunc sets a custom implementation for MkdirTemp
-func (m *MockFileSystem) WithMkdirTempFunc(fn func(ctx context.Context, dir, pattern string) (string, error)) *MockFileSystem {
-	m.MkdirTempFunc = fn
 	return m
 }
 

@@ -53,7 +53,7 @@ func ReadDirectoryTree(ctx context.Context, service Service, root string) (*Dire
 
 	// Process each entry recursively
 	for _, entry := range entries {
-		fullPath := filepathJoin(root, entry.Name())
+		fullPath := filepath.Join(root, entry.Name())
 		relPath, err := filepath.Rel(root, fullPath)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get relative path: %w", err)
@@ -107,7 +107,7 @@ func ReadDirectoryTree(ctx context.Context, service Service, root string) (*Dire
 			}
 			// Add all files from subdirectory
 			for subPath, subFile := range subDc.Files {
-				dc.Files[filepathJoin(relPath, subPath)] = subFile
+				dc.Files[filepath.Join(relPath, subPath)] = subFile
 			}
 		}
 	}
@@ -128,7 +128,7 @@ type BufferedService struct {
 	mu sync.Mutex
 
 	// files stores the "current in-memory snapshot."
-	// Key: full path on disk (absolute or relative, your choice).
+	// Key: absolute path on disk.
 	// Value: fileState describing content, modTime when we read it, etc.
 	files map[string]*fileState
 
@@ -136,14 +136,14 @@ type BufferedService struct {
 	// If a file is in changed[], we plan to write it out in SyncToDisk(). If removed==true, we plan to remove it.
 	changed map[string]*fileChange
 
-	// rootDir is the base directory if you want to store an absolute root for references.
-	rootDir string
+	// syncDirs is a list of directories that should be synced from disk.
+	syncDirs []string
 
 	// maxFileSize is a threshold for reading big logs. If a file is bigger, we skip it. It should not happen as logs have a 1MB limit.
 	maxFileSize int64
 
-	// FilesAndDirectoriesToIgnore is a list of files and directories that we will not read.
-	FilesAndDirectoriesToIgnore []string
+	// pathsToIgnore is a list of paths to skip during sync
+	pathsToIgnore []string
 }
 
 // fileState holds in-memory data and metadata for a single file or directory
@@ -167,16 +167,32 @@ type fileChange struct {
 var _ Service = (*BufferedService)(nil)
 
 // NewBufferedService creates a buffered service that wraps an existing filesystem service.
-// rootDir indicates the path that SyncFromDisk() will read from.
-func NewBufferedService(base Service, rootDir string, filesAndDirectoriesToIgnore []string) *BufferedService {
+// The existing API for backward compatibility - takes a single directory.
+func NewBufferedService(base Service, rootDir string, pathsToIgnore []string) *BufferedService {
+	return NewBufferedServiceWithDirs(base, []string{rootDir}, pathsToIgnore)
+}
+
+// NewBufferedServiceWithDirs creates a buffered service that wraps an existing filesystem service.
+// syncDirectories is a list of directories that will be read during SyncFromDisk().
+func NewBufferedServiceWithDirs(base Service, syncDirectories []string, pathsToIgnore []string) *BufferedService {
 	return &BufferedService{
-		base:                        base,
-		files:                       make(map[string]*fileState),
-		changed:                     make(map[string]*fileChange),
-		rootDir:                     rootDir,
-		maxFileSize:                 10 * 1024 * 1024, // 10 MB default threshold for demonstration
-		FilesAndDirectoriesToIgnore: filesAndDirectoriesToIgnore,
+		base:          base,
+		files:         make(map[string]*fileState),
+		changed:       make(map[string]*fileChange),
+		syncDirs:      syncDirectories,
+		maxFileSize:   10 * 1024 * 1024, // 10 MB default threshold for demonstration
+		pathsToIgnore: pathsToIgnore,
 	}
+}
+
+// shouldIgnorePath checks if a path should be ignored during sync
+func (bs *BufferedService) shouldIgnorePath(path string) bool {
+	for _, ignore := range bs.pathsToIgnore {
+		if strings.Contains(path, ignore) {
+			return true
+		}
+	}
+	return false
 }
 
 // =========================
@@ -187,82 +203,104 @@ func NewBufferedService(base Service, rootDir string, filesAndDirectoriesToIgnor
 // It will read file contents unless they exceed maxFileSize, in which case content is blank.
 func (bs *BufferedService) SyncFromDisk(ctx context.Context) error {
 	logger := logger.For(logger.ComponentFilesystem)
-	start := time.Now()
-	logger.Infof("SyncFromDisk started")
+	startTime := time.Now()
+	logger.Infof("SyncFromDisk started for %d directories", len(bs.syncDirs))
 	defer func() {
-		logger.Infof("SyncFromDisk took %dms", time.Since(start).Milliseconds())
+		logger.Infof("SyncFromDisk took %dms", time.Since(startTime).Milliseconds())
 	}()
 
-	// We'll do a fresh walk of the directory.
-	dc, err := ReadDirectoryTree(ctx, bs.base, bs.rootDir)
-	if err != nil {
-		return err
-	}
-
-	// We'll rebuild the entire in-memory map.
-	// This is "atomic" under a lock.
+	// Create a new map to hold synced files
 	newFiles := make(map[string]*fileState)
-	for relPath, cf := range dc.Files {
 
-		// if file or folder contains any path from the ignore list, skip it
-		shouldIgnore := false
-		for _, ignorePath := range bs.FilesAndDirectoriesToIgnore {
-			if strings.Contains(relPath, ignorePath) {
-				logger.Infof("SyncFromDisk: ignoring %s (contains %s)", relPath, ignorePath)
-				shouldIgnore = true
-				break
-			}
-		}
-		if shouldIgnore {
-			continue
-		}
+	// Sync each directory in the list
+	for _, dir := range bs.syncDirs {
+		logger.Infof("Syncing directory: %s", dir)
 
-		// Skip directories or store them as "isDir"
-		if cf.IsDir {
-			newFiles[relPath] = &fileState{
-				isDir:    true,
-				content:  nil,
-				modTime:  cf.Info.ModTime(),
-				fileMode: cf.Info.Mode(),
-				size:     0,
-			}
-			continue
-		}
-
-		// If file is bigger than maxFileSize, skip reading content
-		if cf.Info.Size() > bs.maxFileSize {
-			newFiles[relPath] = &fileState{
-				isDir:    false,
-				content:  nil, // big file => skip content
-				modTime:  cf.Info.ModTime(),
-				fileMode: cf.Info.Mode(),
-				size:     cf.Info.Size(),
-			}
-			continue
-		}
-
-		// Otherwise, read content from disk once
-		absolutePath := filepathJoin(bs.rootDir, relPath)
-
-		start2 := time.Now()
-		logger.Infof("ReadFile for %s started", absolutePath)
-		data, err := bs.base.ReadFile(ctx, absolutePath)
+		// Check if directory exists
+		info, err := bs.base.Stat(ctx, dir)
 		if err != nil {
-			// If we can't read, skip this file
-			logger.Infof("ReadFile for %s failed: %v", absolutePath, err)
-			return fmt.Errorf("failed to read file: %w", err)
+			if os.IsNotExist(err) {
+				logger.Infof("Directory doesn't exist, skipping: %s", dir)
+				continue // Skip directories that don't exist
+			}
+			return fmt.Errorf("failed to stat directory %s: %w", dir, err)
 		}
-		logger.Infof("ReadFile for %s took %dms (size: %d)", absolutePath, time.Since(start2).Milliseconds(), cf.Info.Size())
 
-		newFiles[relPath] = &fileState{
-			isDir:    false,
-			content:  data,
-			modTime:  cf.Info.ModTime(),
-			fileMode: cf.Info.Mode(),
-			size:     cf.Info.Size(),
+		if !info.IsDir() {
+			return fmt.Errorf("path is not a directory: %s", dir)
+		}
+
+		// Read the directory tree
+		dc, err := ReadDirectoryTree(ctx, bs.base, dir)
+		if err != nil {
+			return fmt.Errorf("failed to read directory tree for %s: %w", dir, err)
+		}
+
+		// Add directory itself
+		newFiles[dir] = &fileState{
+			isDir:    true,
+			content:  nil,
+			modTime:  info.ModTime(),
+			fileMode: info.Mode(),
+			size:     0,
+		}
+
+		// Process all files in this directory
+		for path, cf := range dc.Files {
+			// Get absolute path
+			absPath := filepath.Join(dir, path)
+
+			// Check if path should be ignored
+			if bs.shouldIgnorePath(absPath) {
+				logger.Infof("Ignoring path: %s", absPath)
+				continue
+			}
+
+			// Process the file or directory
+			if cf.IsDir {
+				newFiles[absPath] = &fileState{
+					isDir:    true,
+					content:  nil,
+					modTime:  cf.Info.ModTime(),
+					fileMode: cf.Info.Mode(),
+					size:     0,
+				}
+			} else {
+				// Skip large files
+				if cf.Info.Size() > bs.maxFileSize {
+					newFiles[absPath] = &fileState{
+						isDir:    false,
+						content:  nil, // big file => skip content
+						modTime:  cf.Info.ModTime(),
+						fileMode: cf.Info.Mode(),
+						size:     cf.Info.Size(),
+					}
+					continue
+				}
+
+				// Read file content
+				start2 := time.Now()
+				logger.Infof("ReadFile for %s started", absPath)
+				data, err := bs.base.ReadFile(ctx, absPath)
+				if err != nil {
+					// If we can't read, skip this file
+					logger.Infof("ReadFile for %s failed: %v", absPath, err)
+					return fmt.Errorf("failed to read file: %w", err)
+				}
+				logger.Infof("ReadFile for %s took %dms (size: %d)", absPath, time.Since(start2).Milliseconds(), cf.Info.Size())
+
+				newFiles[absPath] = &fileState{
+					isDir:    false,
+					content:  data,
+					modTime:  cf.Info.ModTime(),
+					fileMode: cf.Info.Mode(),
+					size:     cf.Info.Size(),
+				}
+			}
 		}
 	}
 
+	// Replace the in-memory state atomically
 	logger.Infof("SyncFromDisk: loaded %d files", len(newFiles))
 	bs.mu.Lock()
 	bs.files = newFiles
@@ -271,7 +309,6 @@ func (bs *BufferedService) SyncFromDisk(ctx context.Context) error {
 	bs.mu.Unlock()
 
 	logger.Infof("SyncFromDisk: done")
-
 	return nil
 }
 
@@ -284,9 +321,9 @@ func (bs *BufferedService) SyncToDisk(ctx context.Context) error {
 
 	// First, handle removals in reverse order (deepest paths first)
 	var toRemove []string
-	for relPath, chg := range bs.changed {
+	for path, chg := range bs.changed {
 		if chg != nil && chg.removed {
-			toRemove = append(toRemove, relPath)
+			toRemove = append(toRemove, path)
 		}
 	}
 	// Sort paths by length in descending order to remove deepest paths first
@@ -294,47 +331,45 @@ func (bs *BufferedService) SyncToDisk(ctx context.Context) error {
 		return len(toRemove[i]) > len(toRemove[j])
 	})
 
-	for _, relPath := range toRemove {
-		fullPath := filepathJoin(bs.rootDir, relPath)
+	for _, path := range toRemove {
+		// The path is already absolute
 		// Check if this was a directory in our original state
-		chg := bs.changed[relPath]
+		chg := bs.changed[path]
 		if chg != nil && chg.wasDir {
-			if err := bs.base.RemoveAll(ctx, fullPath); err != nil {
+			if err := bs.base.RemoveAll(ctx, path); err != nil {
 				return fmt.Errorf("failed to remove directory: %w", err)
 			}
 		} else {
-			if err := bs.base.Remove(ctx, fullPath); err != nil {
+			if err := bs.base.Remove(ctx, path); err != nil {
 				return fmt.Errorf("failed to remove file: %w", err)
 			}
 		}
 		// Only remove from our in-memory maps after successful removal
-		delete(bs.files, relPath)
-		delete(bs.changed, relPath)
+		delete(bs.files, path)
+		delete(bs.changed, path)
 	}
 
 	// Then handle writes and directory creation
-	for relPath, chg := range bs.changed {
+	for path, chg := range bs.changed {
 		if chg != nil && !chg.removed {
 			// If it's not in our map for some reason, skip
-			state, exists := bs.files[relPath]
+			state, exists := bs.files[path]
 			if !exists {
-				return fmt.Errorf("file not found in memory: %s", relPath)
+				return fmt.Errorf("file not found in memory: %s", path)
 			}
 
 			// Handle directories differently from files
 			if state.isDir {
-				fullPath := filepathJoin(bs.rootDir, relPath)
-				if err := bs.base.EnsureDirectory(ctx, fullPath); err != nil {
+				if err := bs.base.EnsureDirectory(ctx, path); err != nil {
 					return fmt.Errorf("failed to create directory: %w", err)
 				}
 			} else {
 				// Do the write for regular files
-				absolutePath := filepathJoin(bs.rootDir, relPath)
-				if err := bs.base.WriteFile(ctx, absolutePath, chg.content, chg.perm); err != nil {
+				if err := bs.base.WriteFile(ctx, path, chg.content, chg.perm); err != nil {
 					return fmt.Errorf("failed to write file: %w", err)
 				}
 			}
-			delete(bs.changed, relPath)
+			delete(bs.changed, path)
 		}
 	}
 
@@ -347,16 +382,11 @@ func (bs *BufferedService) SyncToDisk(ctx context.Context) error {
 
 // EnsureDirectory creates the directory in-memory and marks it for creation on disk.
 func (bs *BufferedService) EnsureDirectory(ctx context.Context, path string) error {
-	relPath, err := makeRelative(bs.rootDir, path)
-	if err != nil {
-		return err
-	}
-
 	bs.mu.Lock()
 	defer bs.mu.Unlock()
 
 	// If already exists, check if it is a directory.
-	if state, ok := bs.files[relPath]; ok {
+	if state, ok := bs.files[path]; ok {
 		if !state.isDir {
 			return fmt.Errorf("%s exists and is not a directory", path)
 		}
@@ -364,14 +394,14 @@ func (bs *BufferedService) EnsureDirectory(ctx context.Context, path string) err
 	}
 
 	// Create new directory entry.
-	bs.files[relPath] = &fileState{
+	bs.files[path] = &fileState{
 		isDir:    true,
 		modTime:  time.Now(),
 		fileMode: os.ModeDir | 0755,
 		size:     0,
 	}
 	// Mark as changed so that SyncToDisk can create it on disk.
-	bs.changed[relPath] = &fileChange{
+	bs.changed[path] = &fileChange{
 		removed: false,
 		perm:    os.ModeDir | 0755,
 	}
@@ -384,11 +414,7 @@ func (bs *BufferedService) ReadFile(ctx context.Context, path string) ([]byte, e
 	bs.mu.Lock()
 	defer bs.mu.Unlock()
 
-	relPath, err := makeRelative(bs.rootDir, path)
-	if err != nil {
-		return nil, err
-	}
-	st, ok := bs.files[relPath]
+	st, ok := bs.files[path]
 	if !ok || st.isDir {
 		return nil, os.ErrNotExist
 	}
@@ -408,13 +434,8 @@ func (bs *BufferedService) WriteFile(ctx context.Context, path string, data []by
 	bs.mu.Lock()
 	defer bs.mu.Unlock()
 
-	relPath, err := makeRelative(bs.rootDir, path)
-	if err != nil {
-		return err
-	}
-
 	// If there's an existing fileState, update it so subsequent ReadFile sees new content
-	st, exists := bs.files[relPath]
+	st, exists := bs.files[path]
 	if !exists {
 		st = &fileState{
 			isDir:    false,
@@ -423,7 +444,7 @@ func (bs *BufferedService) WriteFile(ctx context.Context, path string, data []by
 			fileMode: perm,
 			size:     int64(len(data)),
 		}
-		bs.files[relPath] = st
+		bs.files[path] = st
 	} else {
 		st.isDir = false
 		st.content = data
@@ -432,7 +453,7 @@ func (bs *BufferedService) WriteFile(ctx context.Context, path string, data []by
 	}
 
 	// Mark changed
-	bs.changed[relPath] = &fileChange{
+	bs.changed[path] = &fileChange{
 		content: data,
 		perm:    perm,
 		removed: false,
@@ -445,16 +466,12 @@ func (bs *BufferedService) FileExists(ctx context.Context, path string) (bool, e
 	bs.mu.Lock()
 	defer bs.mu.Unlock()
 
-	relPath, err := makeRelative(bs.rootDir, path)
-	if err != nil {
-		return false, err
-	}
-	st, ok := bs.files[relPath]
+	st, ok := bs.files[path]
 	if !ok {
 		return false, nil
 	}
 	// If it's in changed as removed, treat it as not existing
-	chg, inChanged := bs.changed[relPath]
+	chg, inChanged := bs.changed[path]
 	if inChanged && chg.removed {
 		return false, nil
 	}
@@ -466,21 +483,16 @@ func (bs *BufferedService) Remove(ctx context.Context, path string) error {
 	bs.mu.Lock()
 	defer bs.mu.Unlock()
 
-	relPath, err := makeRelative(bs.rootDir, path)
-	if err != nil {
-		return err
-	}
-
 	// If we have a fileState, check if it's a directory
-	if st, ok := bs.files[relPath]; ok {
+	if st, ok := bs.files[path]; ok {
 		if st.isDir {
 			return fmt.Errorf("cannot remove: is directory")
 		}
 		// Delete from files map immediately
-		delete(bs.files, relPath)
+		delete(bs.files, path)
 	}
 
-	bs.changed[relPath] = &fileChange{
+	bs.changed[path] = &fileChange{
 		removed: true,
 	}
 	return nil
@@ -488,23 +500,18 @@ func (bs *BufferedService) Remove(ctx context.Context, path string) error {
 
 // RemoveAll recursively marks all files and directories under the given path as removed in-memory.
 func (bs *BufferedService) RemoveAll(ctx context.Context, path string) error {
-	relPath, err := makeRelative(bs.rootDir, path)
-	if err != nil {
-		return err
-	}
-
 	bs.mu.Lock()
 	defer bs.mu.Unlock()
 
 	// First check if the target itself is a directory
 	targetIsDir := false
-	if st, ok := bs.files[relPath]; ok {
+	if st, ok := bs.files[path]; ok {
 		targetIsDir = st.isDir
 	}
 
 	// Mark the target and all its children for removal
 	for key := range bs.files {
-		if key == relPath || hasPrefix(key, relPath+string(os.PathSeparator)) {
+		if key == path || hasPrefix(key, path+string(os.PathSeparator)) {
 			state, ok := bs.files[key]
 			if !ok {
 				continue
@@ -516,32 +523,8 @@ func (bs *BufferedService) RemoveAll(ctx context.Context, path string) error {
 	}
 
 	// Also mark the target itself for removal even if it wasn't in our files map
-	bs.changed[relPath] = &fileChange{removed: true, wasDir: targetIsDir}
+	bs.changed[path] = &fileChange{removed: true, wasDir: targetIsDir}
 	return nil
-}
-
-// MkdirTemp creates a temporary directory in-memory and marks it for creation on disk.
-func (bs *BufferedService) MkdirTemp(ctx context.Context, dir, pattern string) (string, error) {
-	tempDir := filepath.Join(dir, pattern)
-	bs.mu.Lock()
-	defer bs.mu.Unlock()
-
-	relPath, err := makeRelative(bs.rootDir, tempDir)
-	if err != nil {
-		return "", err
-	}
-
-	bs.files[relPath] = &fileState{
-		isDir:    true,
-		modTime:  time.Now(),
-		fileMode: os.ModeDir | 0755,
-		size:     0,
-	}
-	bs.changed[relPath] = &fileChange{
-		removed: false,
-		perm:    os.ModeDir | 0755,
-	}
-	return tempDir, nil
 }
 
 // Stat returns an os.FileInfo-like object if it is in the in-memory map. Otherwise os.ErrNotExist.
@@ -549,19 +532,14 @@ func (bs *BufferedService) Stat(ctx context.Context, path string) (os.FileInfo, 
 	bs.mu.Lock()
 	defer bs.mu.Unlock()
 
-	relPath, err := makeRelative(bs.rootDir, path)
-	if err != nil {
-		return nil, err
-	}
-
-	st, ok := bs.files[relPath]
+	st, ok := bs.files[path]
 	if !ok {
 		return nil, os.ErrNotExist
 	}
 	if st.isDir {
 		// Return a synthetic fileInfo for a directory
 		return &memFileInfo{
-			name:  filepathBase(relPath),
+			name:  filepathBase(path),
 			size:  0,
 			mode:  st.fileMode,
 			mtime: st.modTime,
@@ -569,7 +547,7 @@ func (bs *BufferedService) Stat(ctx context.Context, path string) (os.FileInfo, 
 		}, nil
 	}
 	return &memFileInfo{
-		name:  filepathBase(relPath),
+		name:  filepathBase(path),
 		size:  st.size,
 		mode:  st.fileMode,
 		mtime: st.modTime,
@@ -580,16 +558,11 @@ func (bs *BufferedService) Stat(ctx context.Context, path string) (os.FileInfo, 
 // CreateFile creates a file in-memory and marks it for creation on disk during SyncToDisk.
 // It returns nil, nil because the actual file doesn't exist on disk yet.
 func (bs *BufferedService) CreateFile(ctx context.Context, path string, perm os.FileMode) (*os.File, error) {
-	relPath, err := makeRelative(bs.rootDir, path)
-	if err != nil {
-		return nil, err
-	}
-
 	bs.mu.Lock()
 	defer bs.mu.Unlock()
 
 	// If already exists, check if it is a file
-	if state, ok := bs.files[relPath]; ok {
+	if state, ok := bs.files[path]; ok {
 		if state.isDir {
 			return nil, fmt.Errorf("%s exists and is not a file", path)
 		}
@@ -598,7 +571,7 @@ func (bs *BufferedService) CreateFile(ctx context.Context, path string, perm os.
 	}
 
 	// Create new file entry in memory
-	bs.files[relPath] = &fileState{
+	bs.files[path] = &fileState{
 		isDir:    false,
 		content:  []byte{},
 		modTime:  time.Now(),
@@ -607,7 +580,7 @@ func (bs *BufferedService) CreateFile(ctx context.Context, path string, perm os.
 	}
 
 	// Mark as changed so that SyncToDisk will create it on disk
-	bs.changed[relPath] = &fileChange{
+	bs.changed[path] = &fileChange{
 		content: []byte{},
 		perm:    perm,
 		removed: false,
@@ -622,24 +595,19 @@ func (bs *BufferedService) Chmod(ctx context.Context, path string, mode os.FileM
 	bs.mu.Lock()
 	defer bs.mu.Unlock()
 
-	relPath, err := makeRelative(bs.rootDir, path)
-	if err != nil {
-		return err
-	}
-
-	st, ok := bs.files[relPath]
+	st, ok := bs.files[path]
 	if !ok {
 		return os.ErrNotExist
 	}
 	st.fileMode = mode
 
 	// If the file wasn't removed, mark changed
-	chg, inChg := bs.changed[relPath]
+	chg, inChg := bs.changed[path]
 	if !inChg {
 		chg = &fileChange{}
 	}
 	chg.perm = mode
-	bs.changed[relPath] = chg
+	bs.changed[path] = chg
 
 	return nil
 }
@@ -649,39 +617,36 @@ func (bs *BufferedService) ReadDir(ctx context.Context, path string) ([]os.DirEn
 	bs.mu.Lock()
 	defer bs.mu.Unlock()
 
-	relPath, err := makeRelative(bs.rootDir, path)
-	if err != nil {
-		return nil, err
-	}
-
 	// Check if it's a directory in memory
-	st, ok := bs.files[relPath]
+	st, ok := bs.files[path]
 	if !ok || !st.isDir {
 		return nil, fmt.Errorf("not a directory: %s", path)
 	}
 
 	// Gather immediate children (1 level)
 	var entries []os.DirEntry
-	prefix := relPath
-	if prefix != "" {
+	prefix := path
+	if prefix != "" && !strings.HasSuffix(prefix, string(os.PathSeparator)) {
 		prefix += string(os.PathSeparator)
 	}
+
 	for filePath, fileState := range bs.files {
 		// If it has the prefix and does not contain another separator after prefix, it's an immediate child
-		if len(filePath) > len(prefix) && hasPrefix(filePath, prefix) {
+		if filePath != path && strings.HasPrefix(filePath, prefix) {
+			// Get the relative path from the prefix
 			remainder := filePath[len(prefix):]
 			// Check if remainder has no further slash => direct child
-			if !containsSeparator(remainder) {
+			if !strings.Contains(remainder, string(os.PathSeparator)) {
 				// Check if not removed
 				if chg, inChg := bs.changed[filePath]; inChg && chg.removed {
 					continue
 				}
 				// Build a synthetic dirEntry
 				entries = append(entries, &memDirEntry{
-					name:  filepathBase(filePath),
+					name:  filepath.Base(filePath),
 					isDir: fileState.isDir,
 					info: &memFileInfo{
-						name:  filepathBase(filePath),
+						name:  filepath.Base(filePath),
 						size:  fileState.size,
 						mode:  fileState.fileMode,
 						mtime: fileState.modTime,
@@ -703,25 +668,8 @@ func (bs *BufferedService) ExecuteCommand(ctx context.Context, name string, args
 // Helpers and Mini-Types
 // ======================
 
-// If you don't have a built-in join function, define something small:
-func filepathJoin(base, rel string) string {
-	if base == "" {
-		return rel
-	}
-	return filepath.Join(base, rel)
-}
-
 func filepathBase(path string) string {
 	return filepath.Base(path)
-}
-
-// makeRelative ensures `path` is relative to `rootDir`, or returns an error if it can't.
-func makeRelative(root, path string) (string, error) {
-	rel, err := filepath.Rel(root, path)
-	if err != nil {
-		return "", err
-	}
-	return rel, nil
 }
 
 // hasPrefix is a small helper to check prefix
@@ -734,12 +682,7 @@ func hasPrefix(s, prefix string) bool {
 
 // containsSeparator checks if there's any os.PathSeparator in s
 func containsSeparator(s string) bool {
-	for i := 0; i < len(s); i++ {
-		if s[i] == os.PathSeparator {
-			return true
-		}
-	}
-	return false
+	return strings.Contains(s, string(os.PathSeparator))
 }
 
 // memFileInfo is a trivial in-memory file info

@@ -19,7 +19,6 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"path/filepath"
 	"regexp"
@@ -149,14 +148,9 @@ func (s *DefaultService) Create(ctx context.Context, servicePath string, config 
 		return fmt.Errorf("failed to check if down file exists: %w", err)
 	}
 	if !exists {
-		f, err := fsService.CreateFile(ctx, downFilePath, 0644)
+		err := fsService.WriteFile(ctx, downFilePath, []byte{}, 0644)
 		if err != nil {
 			return fmt.Errorf("failed to create down file: %w", err)
-		}
-
-		closeErr := f.Close()
-		if closeErr != nil {
-			return fmt.Errorf("failed to close down file: %w", closeErr)
 		}
 	}
 
@@ -167,23 +161,9 @@ func (s *DefaultService) Create(ctx context.Context, servicePath string, config 
 		return fmt.Errorf("failed to check if type file exists: %w", err)
 	}
 	if !exists {
-		f, err := fsService.CreateFile(ctx, typeFile, 0644)
+		err := fsService.WriteFile(ctx, typeFile, []byte("longrun"), 0644)
 		if err != nil {
 			return fmt.Errorf("failed to create type file: %w", err)
-		}
-
-		writeErr := errors.New("")
-		if _, writeErr = f.WriteString("longrun"); writeErr != nil {
-			closeErr := f.Close()
-			return errors.Join(
-				fmt.Errorf("failed to write to type file: %w", writeErr),
-				errors.New(fmt.Sprintf("additional error when closing file: %v", closeErr)),
-			)
-		}
-
-		closeErr := f.Close()
-		if closeErr != nil {
-			return fmt.Errorf("failed to close type file: %w", closeErr)
 		}
 	}
 
@@ -225,14 +205,9 @@ func (s *DefaultService) Create(ctx context.Context, servicePath string, config 
 	}
 
 	baseDepFile := filepath.Join(dependenciesDPath, "base")
-	f, err := fsService.CreateFile(ctx, baseDepFile, 0644)
+	err = fsService.WriteFile(ctx, baseDepFile, []byte{}, 0644)
 	if err != nil {
 		return fmt.Errorf("failed to create base dependency file: %w", err)
-	}
-
-	closeErr := f.Close()
-	if closeErr != nil {
-		return fmt.Errorf("failed to close base dependency file: %w", closeErr)
 	}
 
 	// Create log service directory and run script
@@ -279,22 +254,7 @@ logutil-service %s
 
 // createRunScript creates a run script for the service
 func (s *DefaultService) createS6RunScript(ctx context.Context, servicePath string, fsService filesystem.Service, command []string, env map[string]string, memoryLimit int64) error {
-
 	runScript := filepath.Join(servicePath, "run")
-	f, err := fsService.CreateFile(ctx, runScript, 0644)
-	if err != nil {
-		return fmt.Errorf("failed to create run script: %w", err)
-	}
-
-	// Use deferred close with error handling
-	defer func() {
-		closeErr := f.Close()
-		if closeErr != nil && err == nil {
-			err = fmt.Errorf("failed to close run script: %w", closeErr)
-		} else if closeErr != nil {
-			err = errors.Join(err, fmt.Errorf("additional error when closing run script: %w", closeErr))
-		}
-	}()
 
 	// Create template data
 	data := struct {
@@ -318,8 +278,8 @@ func (s *DefaultService) createS6RunScript(ctx context.Context, servicePath stri
 		return fmt.Errorf("failed to execute run script template: %w", err)
 	}
 
-	// Write the templated content to the file
-	if _, err := f.Write(buf.Bytes()); err != nil {
+	// Write the templated content directly to the file
+	if err := fsService.WriteFile(ctx, runScript, buf.Bytes(), 0644); err != nil {
 		return fmt.Errorf("failed to write run script: %w", err)
 	}
 
@@ -328,7 +288,7 @@ func (s *DefaultService) createS6RunScript(ctx context.Context, servicePath stri
 		return fmt.Errorf("failed to make run script executable: %w", err)
 	}
 
-	return err // Return the error that may have been set in the deferred close
+	return nil
 }
 
 // createConfigFiles creates config files needed by the service

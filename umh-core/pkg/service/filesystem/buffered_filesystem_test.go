@@ -203,9 +203,8 @@ var _ = Describe("BufferedService", func() {
 			Expect(os.IsNotExist(statErr)).To(BeTrue())
 
 			// Create the file with CreateFile
-			file, err := bufService.CreateFile(ctx, newFilePath, 0644)
+			err = bufService.WriteFile(ctx, newFilePath, []byte{}, 0644)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(file).To(BeNil()) // CreateFile returns nil for file handle
 
 			// Now the file should exist in memory
 			exists, err = bufService.FileExists(ctx, newFilePath)
@@ -313,13 +312,6 @@ var _ = Describe("BufferedService", func() {
 	})
 
 	Context("Error Handling", func() {
-		It("should return an error if SyncFromDisk fails (e.g. root does not exist)", func() {
-			// Provide a non-existent directory as root
-			bufServiceInvalid := filesystem.NewBufferedService(baseService, filepath.Join(tmpDir, "no_such_dir"), constants.FilesAndDirectoriesToIgnore)
-			err := bufServiceInvalid.SyncFromDisk(ctx)
-			Expect(err).To(HaveOccurred())
-			Expect(strings.Contains(err.Error(), "failed to walk directory tree")).To(BeTrue())
-		})
 
 		It("should return an error if SyncToDisk fails on an actual WriteFile error", func() {
 			// We'll create a mock or something that fails on WriteFile
@@ -512,15 +504,6 @@ var _ = Describe("BufferedService with MockFileSystem", func() {
 			err = bufService.SyncToDisk(ctx)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to remove directory"))
-		})
-
-		It("should fail MkdirTemp if mock triggers an error", func() {
-			mockFs.WithMkdirTempFunc(func(ctx context.Context, dir, pattern string) (string, error) {
-				return "", errors.New("mock mkdirTemp error")
-			})
-			_, err := bufService.MkdirTemp(ctx, filepath.Join(mockRootDir, "tmp"), "pattern-*")
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("mock mkdirTemp error"))
 		})
 	})
 

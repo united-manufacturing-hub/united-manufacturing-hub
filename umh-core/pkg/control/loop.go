@@ -113,7 +113,7 @@ func NewControlLoop() *ControlLoop {
 	snapshotManager := fsm.NewSnapshotManager()
 
 	// Create a buffered filesystem service
-	filesystemService := filesystem.NewBufferedService(filesystem.NewDefaultService(), constants.S6BaseDir, constants.FilesAndDirectoriesToIgnore)
+	filesystemService := filesystem.NewBufferedServiceWithDirs(filesystem.NewDefaultService(), []string{constants.S6BaseDir, constants.S6LogBaseDir}, constants.FilesAndDirectoriesToIgnore)
 
 	metrics.InitErrorCounter(metrics.ComponentControlLoop, "main")
 
@@ -302,6 +302,10 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 	// If the filesystem service is buffered, we need to sync to disk
 	if ok {
 		err = bufferedFs.SyncToDisk(ctx)
+		if err != nil {
+			sentry.ReportIssuef(sentry.IssueTypeError, c.logger, "Failed to sync S6 filesystem: %v", err)
+			return fmt.Errorf("failed to sync S6 filesystem: %w", err)
+		}
 	}
 
 	// Create a snapshot after the entire reconciliation cycle
