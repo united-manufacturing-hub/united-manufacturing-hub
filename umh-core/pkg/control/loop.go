@@ -113,14 +113,14 @@ func NewControlLoop() *ControlLoop {
 	snapshotManager := fsm.NewSnapshotManager()
 
 	// Create a buffered filesystem service
-	filesystemService := filesystem.NewBufferedService(filesystem.NewDefaultService(), constants.S6BaseDir)
+	filesystemService := filesystem.NewBufferedService(filesystem.NewDefaultService(), constants.S6BaseDir, constants.FilesAndDirectoriesToIgnore)
 
 	metrics.InitErrorCounter(metrics.ComponentControlLoop, "main")
 
 	// Now clean the S6 service directory except for the known services
 	s6Service := s6svc.NewDefaultService()
 	log.Debugf("Cleaning S6 service directory: %s", constants.S6BaseDir)
-	err := s6Service.CleanS6ServiceDirectory(context.Background(), constants.S6BaseDir, filesystemService)
+	err := s6Service.CleanS6ServiceDirectory(context.Background(), constants.S6BaseDir, filesystem.NewDefaultService()) // we do not use the buffered service here, because we want to clean the real filesystem
 	if err != nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, log, "Failed to clean S6 service directory: %s", err)
 

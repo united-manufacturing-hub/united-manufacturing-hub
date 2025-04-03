@@ -7,8 +7,11 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 	"time"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 )
 
 // CachedFile represents a file or directory in the filesystem
@@ -24,6 +27,12 @@ type DirectoryCache struct {
 
 // ReadDirectoryTree reads a directory tree from disk and returns a cache of its contents
 func ReadDirectoryTree(ctx context.Context, service Service, root string) (*DirectoryCache, error) {
+	start := time.Now()
+	defer func() {
+		logger := logger.For(logger.ComponentFilesystem)
+		logger.Infof("ReadDirectoryTree for %s took %dms", root, time.Since(start).Milliseconds())
+	}()
+
 	dc := &DirectoryCache{
 		Files: make(map[string]*CachedFile),
 	}
@@ -61,13 +70,38 @@ func ReadDirectoryTree(ctx context.Context, service Service, root string) (*Dire
 			continue
 		}
 
-		dc.Files[relPath] = &CachedFile{
-			Info:  info,
-			IsDir: info.IsDir(),
+		isDir := info.IsDir()
+
+		// Check if this is a symlink
+		if info.Mode()&os.ModeSymlink != 0 {
+			// Get the target of the symlink
+			target, err := os.Readlink(fullPath)
+			if err != nil {
+				return nil, fmt.Errorf("failed to read symlink %s: %w", fullPath, err)
+			}
+
+			// If the target is not absolute, make it absolute relative to the directory containing the symlink
+			if !filepath.IsAbs(target) {
+				target = filepath.Join(filepath.Dir(fullPath), target)
+			}
+
+			// Check if the target exists
+			targetInfo, err := os.Stat(target)
+			if err != nil {
+				return nil, fmt.Errorf("failed to stat symlink target %s: %w", target, err)
+			}
+
+			// Update isDir based on the symlink's target
+			isDir = targetInfo.IsDir()
 		}
 
-		// If it's a directory, recurse
-		if info.IsDir() {
+		dc.Files[relPath] = &CachedFile{
+			Info:  info,
+			IsDir: isDir,
+		}
+
+		// If it's a directory (or symlink to directory), recurse
+		if isDir {
 			subDc, err := ReadDirectoryTree(ctx, service, fullPath)
 			if err != nil {
 				return nil, err
@@ -108,6 +142,9 @@ type BufferedService struct {
 
 	// maxFileSize is a threshold for reading big logs. If a file is bigger, we skip it. It should not happen as logs have a 1MB limit.
 	maxFileSize int64
+
+	// FilesAndDirectoriesToIgnore is a list of files and directories that we will not read.
+	FilesAndDirectoriesToIgnore []string
 }
 
 // fileState holds in-memory data and metadata for a single file or directory
@@ -132,13 +169,14 @@ var _ Service = (*BufferedService)(nil)
 
 // NewBufferedService creates a buffered service that wraps an existing filesystem service.
 // rootDir indicates the path that SyncFromDisk() will read from.
-func NewBufferedService(base Service, rootDir string) *BufferedService {
+func NewBufferedService(base Service, rootDir string, filesAndDirectoriesToIgnore []string) *BufferedService {
 	return &BufferedService{
-		base:        base,
-		files:       make(map[string]*fileState),
-		changed:     make(map[string]*fileChange),
-		rootDir:     rootDir,
-		maxFileSize: 10 * 1024 * 1024, // 10 MB default threshold for demonstration
+		base:                        base,
+		files:                       make(map[string]*fileState),
+		changed:                     make(map[string]*fileChange),
+		rootDir:                     rootDir,
+		maxFileSize:                 10 * 1024 * 1024, // 10 MB default threshold for demonstration
+		FilesAndDirectoriesToIgnore: filesAndDirectoriesToIgnore,
 	}
 }
 
@@ -149,6 +187,13 @@ func NewBufferedService(base Service, rootDir string) *BufferedService {
 // SyncFromDisk loads the filesystem state into memory, ignoring anything we had before.
 // It will read file contents unless they exceed maxFileSize, in which case content is blank.
 func (bs *BufferedService) SyncFromDisk(ctx context.Context) error {
+	logger := logger.For(logger.ComponentFilesystem)
+	start := time.Now()
+	logger.Infof("SyncFromDisk started")
+	defer func() {
+		logger.Infof("SyncFromDisk took %dms", time.Since(start).Milliseconds())
+	}()
+
 	// We'll do a fresh walk of the directory.
 	dc, err := ReadDirectoryTree(ctx, bs.base, bs.rootDir)
 	if err != nil {
@@ -159,6 +204,20 @@ func (bs *BufferedService) SyncFromDisk(ctx context.Context) error {
 	// This is "atomic" under a lock.
 	newFiles := make(map[string]*fileState)
 	for relPath, cf := range dc.Files {
+
+		// if file or folder contains any path from the ignore list, skip it
+		shouldIgnore := false
+		for _, ignorePath := range bs.FilesAndDirectoriesToIgnore {
+			if strings.Contains(relPath, ignorePath) {
+				logger.Infof("SyncFromDisk: ignoring %s (contains %s)", relPath, ignorePath)
+				shouldIgnore = true
+				break
+			}
+		}
+		if shouldIgnore {
+			continue
+		}
+
 		// Skip directories or store them as "isDir"
 		if cf.IsDir {
 			newFiles[relPath] = &fileState{
@@ -185,11 +244,16 @@ func (bs *BufferedService) SyncFromDisk(ctx context.Context) error {
 
 		// Otherwise, read content from disk once
 		absolutePath := filepathJoin(bs.rootDir, relPath)
+
+		start2 := time.Now()
+		logger.Infof("ReadFile for %s started", absolutePath)
 		data, err := bs.base.ReadFile(ctx, absolutePath)
 		if err != nil {
 			// If we can't read, skip this file
-			continue
+			logger.Infof("ReadFile for %s failed: %v", absolutePath, err)
+			return fmt.Errorf("failed to read file: %w", err)
 		}
+		logger.Infof("ReadFile for %s took %dms (size: %d)", absolutePath, time.Since(start2).Milliseconds(), cf.Info.Size())
 
 		newFiles[relPath] = &fileState{
 			isDir:    false,
@@ -200,11 +264,14 @@ func (bs *BufferedService) SyncFromDisk(ctx context.Context) error {
 		}
 	}
 
+	logger.Infof("SyncFromDisk: loaded %d files", len(newFiles))
 	bs.mu.Lock()
 	bs.files = newFiles
 	// Clear any pending changes since we are reloading from disk
 	bs.changed = make(map[string]*fileChange)
 	bs.mu.Unlock()
+
+	logger.Infof("SyncFromDisk: done")
 
 	return nil
 }

@@ -11,6 +11,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
@@ -35,7 +36,7 @@ var _ = Describe("BufferedService", func() {
 		baseService = filesystem.NewDefaultService()
 
 		// Initialize the buffered service, wrapping the base service
-		bufService = filesystem.NewBufferedService(baseService, tmpDir)
+		bufService = filesystem.NewBufferedService(baseService, tmpDir, constants.FilesAndDirectoriesToIgnore)
 
 		// Create some files or directories in the tmpDir so that we can test SyncFromDisk
 		setupTestFiles(tmpDir)
@@ -81,6 +82,68 @@ var _ = Describe("BufferedService", func() {
 			// But the file should still exist on disk
 			_, err = os.Stat(largeFilePath)
 			Expect(err).NotTo(HaveOccurred())
+		})
+
+		FIt("should handle directories correctly during SyncFromDisk", func() {
+			// Create a nested directory structure similar to production
+			dirPath := filepath.Join(tmpDir, "run", "service", "umh-core")
+			err := os.MkdirAll(dirPath, 0755)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Create a file in one path
+			err = os.WriteFile(filepath.Join(dirPath, "somefile.txt"), []byte("test"), 0644)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Create a directory where a file might be expected
+			err = os.MkdirAll(filepath.Join(dirPath, "log"), 0755)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Create a new buffered service with this root
+			bufServiceTest := filesystem.NewBufferedService(baseService, filepath.Join(tmpDir, "run", "service"), constants.FilesAndDirectoriesToIgnore)
+
+			// Now try to sync from disk - this should fail because it will try to read the directory as a file
+			err = bufServiceTest.SyncFromDisk(ctx)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should handle symlinked directories correctly during SyncFromDisk", func() {
+			// Create a directory structure similar to production with symlinks
+			targetDir := filepath.Join(tmpDir, "run", "s6-rc", "servicedirs", "umh-core")
+			err := os.MkdirAll(targetDir, 0755)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Also create a log dir
+			targetLogDir := filepath.Join(tmpDir, "run", "s6-rc", "servicedirs", "umh-core-log")
+			err = os.MkdirAll(targetLogDir, 0755)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Create a sample file in the target directory
+			sampleFile := filepath.Join(targetDir, "config.json")
+			err = os.WriteFile(sampleFile, []byte("{\"test\": true}"), 0644)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Create the service directory
+			serviceDir := filepath.Join(tmpDir, "run", "service")
+			err = os.MkdirAll(serviceDir, 0755)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Create symlinks in service directory like in production
+			err = os.Symlink(targetDir, filepath.Join(serviceDir, "umh-core"))
+			Expect(err).NotTo(HaveOccurred())
+			err = os.Symlink(targetLogDir, filepath.Join(serviceDir, "umh-core-log"))
+			Expect(err).NotTo(HaveOccurred())
+
+			// Create a new buffered service with the service directory as root
+			bufServiceTest := filesystem.NewBufferedService(baseService, serviceDir, constants.FilesAndDirectoriesToIgnore)
+
+			// Now try to sync from disk - this currently fails in production
+			err = bufServiceTest.SyncFromDisk(ctx)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Verify we can read files through the symlink
+			content, err := bufServiceTest.ReadFile(ctx, filepath.Join(serviceDir, "umh-core", "config.json"))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(string(content)).To(Equal("{\"test\": true}"))
 		})
 	})
 
@@ -209,7 +272,7 @@ var _ = Describe("BufferedService", func() {
 	Context("Error Handling", func() {
 		It("should return an error if SyncFromDisk fails (e.g. root does not exist)", func() {
 			// Provide a non-existent directory as root
-			bufServiceInvalid := filesystem.NewBufferedService(baseService, filepath.Join(tmpDir, "no_such_dir"))
+			bufServiceInvalid := filesystem.NewBufferedService(baseService, filepath.Join(tmpDir, "no_such_dir"), constants.FilesAndDirectoriesToIgnore)
 			err := bufServiceInvalid.SyncFromDisk(ctx)
 			Expect(err).To(HaveOccurred())
 			Expect(strings.Contains(err.Error(), "failed to walk directory tree")).To(BeTrue())
@@ -280,7 +343,7 @@ var _ = Describe("BufferedService with MockFileSystem", func() {
 	BeforeEach(func() {
 		ctx, cancel = context.WithCancel(context.Background())
 		mockFs = filesystem.NewMockFileSystem()
-		bufService = filesystem.NewBufferedService(mockFs, mockRootDir)
+		bufService = filesystem.NewBufferedService(mockFs, mockRootDir, constants.FilesAndDirectoriesToIgnore)
 	})
 
 	AfterEach(func() {
