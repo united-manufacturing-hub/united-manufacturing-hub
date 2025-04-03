@@ -2,7 +2,6 @@ package filesystem
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -523,12 +522,7 @@ func (bs *BufferedService) RemoveAll(ctx context.Context, path string) error {
 
 // MkdirTemp creates a temporary directory in-memory and marks it for creation on disk.
 func (bs *BufferedService) MkdirTemp(ctx context.Context, dir, pattern string) (string, error) {
-	// First try to create the directory using the base service
-	tempDir, err := bs.base.MkdirTemp(ctx, dir, pattern)
-	if err != nil {
-		return "", err
-	}
-
+	tempDir := filepath.Join(dir, pattern)
 	bs.mu.Lock()
 	defer bs.mu.Unlock()
 
@@ -583,14 +577,44 @@ func (bs *BufferedService) Stat(ctx context.Context, path string) (os.FileInfo, 
 	}, nil
 }
 
-// CreateFile calls WriteFile with empty content (or you can pass through).
+// CreateFile creates a file in-memory and marks it for creation on disk during SyncToDisk.
+// It returns nil, nil because the actual file doesn't exist on disk yet.
 func (bs *BufferedService) CreateFile(ctx context.Context, path string, perm os.FileMode) (*os.File, error) {
-	err := bs.WriteFile(ctx, path, nil, perm)
+	relPath, err := makeRelative(bs.rootDir, path)
 	if err != nil {
 		return nil, err
 	}
-	// We don't actually have a real *os.File, so returning nil.
-	return nil, errors.New("BufferedService.CreateFile: not supported returning *os.File (in-memory only)")
+
+	bs.mu.Lock()
+	defer bs.mu.Unlock()
+
+	// If already exists, check if it is a file
+	if state, ok := bs.files[relPath]; ok {
+		if state.isDir {
+			return nil, fmt.Errorf("%s exists and is not a file", path)
+		}
+		// It exists and is a file, so we're good
+		return nil, nil
+	}
+
+	// Create new file entry in memory
+	bs.files[relPath] = &fileState{
+		isDir:    false,
+		content:  []byte{},
+		modTime:  time.Now(),
+		fileMode: perm,
+		size:     0,
+	}
+
+	// Mark as changed so that SyncToDisk will create it on disk
+	bs.changed[relPath] = &fileChange{
+		content: []byte{},
+		perm:    perm,
+		removed: false,
+	}
+
+	// Return nil, nil since the file isn't actually on disk yet
+	return nil, nil
 }
 
 // Chmod updates the fileMode in memory (and later flush).

@@ -84,7 +84,7 @@ var _ = Describe("BufferedService", func() {
 			Expect(err).NotTo(HaveOccurred())
 		})
 
-		FIt("should handle directories correctly during SyncFromDisk", func() {
+		It("should handle directories correctly during SyncFromDisk", func() {
 			// Create a nested directory structure similar to production
 			dirPath := filepath.Join(tmpDir, "run", "service", "umh-core")
 			err := os.MkdirAll(dirPath, 0755)
@@ -188,6 +188,49 @@ var _ = Describe("BufferedService", func() {
 			fi, statErr := os.Stat(newFilePath)
 			Expect(statErr).NotTo(HaveOccurred())
 			Expect(fi.Size()).To(Equal(int64(len("new content"))))
+		})
+
+		It("should create a file in memory via CreateFile and write it on SyncToDisk", func() {
+			newFilePath := filepath.Join(tmpDir, "created_file.txt")
+
+			// File should not exist yet
+			exists, err := bufService.FileExists(ctx, newFilePath)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(exists).To(BeFalse())
+
+			// On disk, it also doesn't exist
+			_, statErr := os.Stat(newFilePath)
+			Expect(os.IsNotExist(statErr)).To(BeTrue())
+
+			// Create the file with CreateFile
+			file, err := bufService.CreateFile(ctx, newFilePath, 0644)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(file).To(BeNil()) // CreateFile returns nil for file handle
+
+			// Now the file should exist in memory
+			exists, err = bufService.FileExists(ctx, newFilePath)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(exists).To(BeTrue())
+
+			// Get file info to verify its attributes
+			fileInfo, err := bufService.Stat(ctx, newFilePath)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(fileInfo.IsDir()).To(BeFalse())
+			Expect(fileInfo.Size()).To(Equal(int64(0))) // Empty file
+
+			// On disk, it still doesn't exist until we sync
+			_, statErr = os.Stat(newFilePath)
+			Expect(os.IsNotExist(statErr)).To(BeTrue())
+
+			// Now flush to disk
+			err = bufService.SyncToDisk(ctx)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Now it should exist on disk
+			fi, statErr := os.Stat(newFilePath)
+			Expect(statErr).NotTo(HaveOccurred())
+			Expect(fi.IsDir()).To(BeFalse())
+			Expect(fi.Size()).To(Equal(int64(0))) // Empty file
 		})
 
 		It("should mark files as removed in memory and remove them on SyncToDisk", func() {
