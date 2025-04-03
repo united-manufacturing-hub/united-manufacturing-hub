@@ -20,18 +20,18 @@ redpanda:
 
 # Example of a DataFlowComponent that uses the connection test
 dataFlowComponents:
-  - name: example-opcua-server
-    desiredState: running
+  - name: data-flow-hello-world
+    desiredState: active
     serviceConfig:
       input:
-        connection:
-          type: opcua-server
-          target: 192.168.1.100
-          port: 4840
+        generate:
+          mapping: root = "hello world from Data Flow Component!"
+          interval: 1s
+          count: 0 # Set to 0 for unlimited messages
       output:
         stdout: {}
-      metricsPort: 4195
-      logLevel: INFO
+
+
     
 # Connection test examples
 connections:
