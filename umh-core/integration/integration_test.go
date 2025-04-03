@@ -30,6 +30,9 @@ import (
 
 // ---------- Actual Ginkgo Tests ----------
 
+const DEFAULT_MEMORY = "3072m"
+const DEFAULT_CPUS = 1
+
 var _ = Describe("UMH Container Integration", Ordered, Label("integration"), func() {
 
 	AfterAll(func() {
@@ -46,7 +49,7 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 			emptyConfig := configBuilder.BuildYAML()
 
 			Expect(writeConfigFile(emptyConfig)).To(Succeed())
-			err := BuildAndRunContainer(emptyConfig, "1024m")
+			err := BuildAndRunContainer(emptyConfig, DEFAULT_MEMORY, DEFAULT_CPUS)
 			if err != nil {
 				// If container startup fails, print detailed debug info
 				fmt.Println("Container startup failed, printing debug info:")
@@ -86,7 +89,7 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 				BuildYAML()
 
 			Expect(writeConfigFile(cfg)).To(Succeed())
-			Expect(BuildAndRunContainer(cfg, "1024m")).To(Succeed())
+			Expect(BuildAndRunContainer(cfg, DEFAULT_MEMORY, DEFAULT_CPUS)).To(Succeed())
 			Expect(waitForMetrics()).To(Succeed(), "Metrics endpoint should be available with golden service config")
 		})
 
@@ -162,7 +165,7 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 
 			cfg := builder.BuildYAML()
 			Expect(writeConfigFile(cfg)).To(Succeed())
-			Expect(BuildAndRunContainer(cfg, "3072m")).To(Succeed()) // Increase memory for Redpanda + 10 services
+			Expect(BuildAndRunContainer(cfg, DEFAULT_MEMORY, DEFAULT_CPUS)).To(Succeed()) // Increase memory for Redpanda + 10 services
 			Expect(waitForMetrics()).To(Succeed(), "Metrics endpoint should be available")
 			// Print config
 			GinkgoWriter.Printf("Config: %s\n", cfg)
@@ -309,7 +312,7 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 
 			// Write the config and start the container with the new configuration.
 			Expect(writeConfigFile(cfg)).To(Succeed())
-			Expect(BuildAndRunContainer(cfg, "1024m")).To(Succeed())
+			Expect(BuildAndRunContainer(cfg, DEFAULT_MEMORY, DEFAULT_CPUS)).To(Succeed())
 			Expect(waitForMetrics()).To(Succeed(), "Metrics endpoint should be available with golden + sleep service config")
 
 			// Verify that the golden service is ready
@@ -357,7 +360,7 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 			cfg := NewBuilder().BuildYAML()
 			// Write the empty config and start the container
 			Expect(writeConfigFile(cfg)).To(Succeed())
-			Expect(BuildAndRunContainer(cfg, "1024m")).To(Succeed())
+			Expect(BuildAndRunContainer(cfg, DEFAULT_MEMORY, DEFAULT_CPUS)).To(Succeed())
 			Expect(waitForMetrics()).To(Succeed(), "Metrics endpoint should be available with empty config")
 		})
 
@@ -428,7 +431,7 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 			// Start with an empty config
 			cfg := NewBuilder().BuildYAML()
 			Expect(writeConfigFile(cfg)).To(Succeed())
-			Expect(BuildAndRunContainer(cfg, "1024m")).To(Succeed())
+			Expect(BuildAndRunContainer(cfg, DEFAULT_MEMORY, DEFAULT_CPUS)).To(Succeed())
 			Expect(waitForMetrics()).To(Succeed(), "Metrics endpoint should be available with empty config")
 		})
 
@@ -723,7 +726,7 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 			cfg := NewBuilder().BuildYAML()
 			// Write the empty config and start the container
 			Expect(writeConfigFile(cfg)).To(Succeed())
-			Expect(BuildAndRunContainer(cfg, "2048m")).To(Succeed())
+			Expect(BuildAndRunContainer(cfg, DEFAULT_MEMORY, DEFAULT_CPUS)).To(Succeed())
 			Expect(waitForMetrics()).To(Succeed(), "Metrics endpoint should be available with empty config")
 		})
 
@@ -814,7 +817,7 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 			cfg := NewBuilder().BuildYAML()
 			// Write the empty config and start the container
 			Expect(writeConfigFile(cfg)).To(Succeed())
-			Expect(BuildAndRunContainer(cfg, "1024m")).To(Succeed())
+			Expect(BuildAndRunContainer(cfg, DEFAULT_MEMORY, DEFAULT_CPUS)).To(Succeed())
 			Expect(waitForMetrics()).To(Succeed(), "Metrics endpoint should be available with empty config")
 		})
 
@@ -894,7 +897,7 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 
 			// Write the config and start the container
 			Expect(writeConfigFile(cfg)).To(Succeed())
-			Expect(BuildAndRunContainer(cfg, "1024m")).To(Succeed())
+			Expect(BuildAndRunContainer(cfg, DEFAULT_MEMORY, DEFAULT_CPUS)).To(Succeed())
 			Expect(waitForMetrics()).To(Succeed(), "Metrics endpoint should be available")
 		})
 

@@ -166,13 +166,23 @@ func writeConfigFile(yamlContent string, containerName ...string) error {
 }
 
 // BuildAndRunContainer rebuilds your Docker image, starts the container, etc.
-func BuildAndRunContainer(configYaml string, memory string) error {
+func BuildAndRunContainer(configYaml string, memory string, cpus uint) error {
 	// Get the unique container name for this test run
 	containerName := getContainerName()
+
+	if memory == "" {
+		// Fail if memory is not set
+		return fmt.Errorf("memory limit is not set")
+	}
+	if cpus == 0 {
+		// Fail if cpus are not set
+		return fmt.Errorf("cpu limit is not set")
+	}
 
 	fmt.Printf("\n=== STARTING CONTAINER BUILD AND RUN ===\n")
 	fmt.Printf("Container name: %s\n", containerName)
 	fmt.Printf("Memory limit: %s\n", memory)
+	fmt.Printf("CPU limit: %d\n", cpus)
 
 	// Generate random ports to avoid conflicts
 	// Use PID to create somewhat unique ports, but with a limited range to avoid system port limits
@@ -244,6 +254,7 @@ func BuildAndRunContainer(configYaml string, memory string) error {
 		"-p", fmt.Sprintf("%d:8080", metricsPrt), // Map host's dynamic port to container's fixed metrics port
 		"-p", fmt.Sprintf("%d:8082", goldenPrt), // Map host's dynamic port to container's golden service port
 		"--memory", memory,
+		"--cpus", fmt.Sprintf("%d", cpus),
 		"-v", fmt.Sprintf("%s:/data/redpanda", tmpRedpandaDir),
 		"-v", fmt.Sprintf("%s:/data/logs", tmpLogsDir),
 		imageName,
