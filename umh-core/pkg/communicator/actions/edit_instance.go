@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
@@ -121,7 +122,9 @@ func (a *EditInstanceAction) Execute() (interface{}, map[string]interface{}, err
 	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Updating instance location", a.outboundChannel, models.EditInstance)
 
 	// Update the location in the configuration
-	err := a.configManager.AtomicSetLocation(context.Background(), *a.location)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	err := a.configManager.AtomicSetLocation(ctx, *a.location)
 	if err != nil {
 		errorMsg := fmt.Sprintf("Failed to update instance location: %s", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errorMsg, a.outboundChannel, models.EditInstance)
