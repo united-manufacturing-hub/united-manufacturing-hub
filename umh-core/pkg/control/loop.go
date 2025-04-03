@@ -51,6 +51,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/starvationchecker"
 	"go.uber.org/zap"
@@ -75,6 +76,7 @@ type ControlLoop struct {
 	starvationChecker *starvationchecker.StarvationChecker
 	currentTick       uint64
 	snapshotManager   *fsm.SnapshotManager
+	filesystemService filesystem.Service
 }
 
 // NewControlLoop creates a new control loop with all necessary managers.
@@ -110,6 +112,9 @@ func NewControlLoop() *ControlLoop {
 	// Create a snapshot manager
 	snapshotManager := fsm.NewSnapshotManager()
 
+	// Create a filesystem service
+	filesystemService := filesystem.NewDefaultService()
+
 	metrics.InitErrorCounter(metrics.ComponentControlLoop, "main")
 
 	// Now clean the S6 service directory except for the known services
@@ -129,6 +134,7 @@ func NewControlLoop() *ControlLoop {
 		logger:            log,
 		starvationChecker: starvationChecker,
 		snapshotManager:   snapshotManager,
+		filesystemService: filesystemService,
 	}
 }
 
