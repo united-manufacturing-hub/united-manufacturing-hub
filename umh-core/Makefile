@@ -44,7 +44,7 @@ REDPANDA_VERSION = 24.3.8
 # Note: Redpanda allocates 2GB of memory per core.
 # Additionally 1.5GB (or 7% of the total memory, whichever is greater) are required to be available, after this allocation to make seastar happy.
 MEMORY = 4096m
-CPUS = 1
+CPUS = 2
 
 # Determine version based on git
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "0.0.0-dev")
