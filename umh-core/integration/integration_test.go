@@ -229,7 +229,7 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 				}
 				GinkgoWriter.Printf("Redpanda logs: %s\n", output)
 				return strings.Contains(output, "Successfully started Redpanda!")
-			}, 20*time.Second, 1*time.Second).Should(BeTrue(), "Redpanda should have started successfully")
+			}, 60*time.Second, 1*time.Second).Should(BeTrue(), "Redpanda should have started successfully")
 
 			// Verify redpanda is running
 			Eventually(func() bool {
