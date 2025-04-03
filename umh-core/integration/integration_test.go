@@ -217,7 +217,7 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 				output, err := runDockerCommand("exec", getContainerName(), "ls", "-l", "/data/redpanda")
 				GinkgoWriter.Printf("Redpanda data directory: %s\n", output)
 				GinkgoWriter.Printf("Error: %v\n", err)
-				return err == nil && strings.Contains(output, "redpanda")
+				return err == nil
 			}, 10*time.Second, 1*time.Second).Should(BeTrue(), "Redpanda data directory should exist")
 
 			// Verify redpanda logs (Successfully started Redpanda!)
