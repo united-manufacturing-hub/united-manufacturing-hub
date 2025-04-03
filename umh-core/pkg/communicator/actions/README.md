@@ -376,8 +376,4 @@ This testing approach focuses on:
 
 4. **Make Actions Testable**: Use dependency injection for external dependencies like config managers.
 
-5. **Rate Limiting**: Consider implementing rate limiting for actions that could overload the system.
-
-6. **Audit Logging**: Log all action executions for audit purposes.
-
-7. **Transaction Safety**: When possible, make config changes atomically or with rollback capability. 
+5. **Transaction Safety**: When possible, make config changes atomically or with rollback capability. 
