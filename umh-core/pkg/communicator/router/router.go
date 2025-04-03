@@ -21,6 +21,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/encoding"
@@ -39,6 +40,7 @@ type Router struct {
 	clientConnections     map[string]*ClientConnection
 	clientConnectionsLock sync.RWMutex
 	subHandler            *subscriber.Handler
+	systemSnapshot        *fsm.SystemSnapshot
 }
 
 type ClientConnection struct {
@@ -52,6 +54,7 @@ func NewRouter(dog watchdog.Iface,
 	outboundChannel chan *models.UMHMessage,
 	releaseChannel config.ReleaseChannel,
 	subHandler *subscriber.Handler,
+	systemSnapshot *fsm.SystemSnapshot,
 ) *Router {
 	return &Router{
 		dog:                   dog,
@@ -62,6 +65,7 @@ func NewRouter(dog watchdog.Iface,
 		clientConnections:     make(map[string]*ClientConnection),
 		clientConnectionsLock: sync.RWMutex{},
 		subHandler:            subHandler,
+		systemSnapshot:        systemSnapshot,
 	}
 }
 
@@ -133,5 +137,6 @@ func (r *Router) handleAction(messageContent models.UMHMessageContent, message *
 		r.releaseChannel,
 		r.dog,
 		traceId,
+		r.systemSnapshot,
 	)
 }

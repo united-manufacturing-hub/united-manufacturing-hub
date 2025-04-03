@@ -43,6 +43,7 @@ type CommunicationState struct {
 	OutboundChannel   chan *models.UMHMessage
 	Router            *router.Router
 	ReleaseChannel    config.ReleaseChannel
+	SystemSnapshot    *fsm.SystemSnapshot
 }
 
 // InitialiseAndStartPuller creates a new Puller and starts it
@@ -99,7 +100,7 @@ func (c *CommunicationState) InitialiseAndStartRouter() {
 	}
 
 	c.mu.Lock()
-	c.Router = router.NewRouter(c.Watchdog, c.InboundChannel, c.LoginResponse.UUID, c.OutboundChannel, c.ReleaseChannel, c.SubscriberHandler)
+	c.Router = router.NewRouter(c.Watchdog, c.InboundChannel, c.LoginResponse.UUID, c.OutboundChannel, c.ReleaseChannel, c.SubscriberHandler, c.SystemSnapshot)
 	c.mu.Unlock()
 	if c.Router == nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "Failed to create router")
