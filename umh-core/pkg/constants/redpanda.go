@@ -37,6 +37,7 @@ const (
 )
 
 var (
-	// Set by build process via ldflags
+	// Set by build process via ldflags using -ldflags="-X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants.RedpandaVersion=${REDPANDA_VERSION}"
+	// This injects the version at build time from the environment, eliminating the need for hard-coded values.
 	RedpandaVersion = "unknown"
 )

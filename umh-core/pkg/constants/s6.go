@@ -23,7 +23,8 @@ const (
 )
 
 var (
-	// Set by build process via ldflags
+	// Set by build process via ldflags using -ldflags="-X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants.S6OverlayVersion=${S6_OVERLAY_VERSION}"
+	// This injects the version at build time from the environment, eliminating the need for hard-coded values.
 	S6OverlayVersion = "unknown"
 )
 
