@@ -46,15 +46,7 @@ func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePay
 
 	var action Action
 	switch payload.ActionType {
-	case models.DummyAction:
-		action = &DummyAction{
-			userEmail:       sender,
-			actionUUID:      payload.ActionUUID,
-			instanceUUID:    instanceUUID,
-			outboundChannel: outboundChannel,
-			systemSnapshot:  systemSnapshot,
-			configManager:   configManager,
-		}
+
 	case models.EditInstance:
 		action = &EditInstanceAction{
 			userEmail:       sender,
