@@ -119,7 +119,7 @@ func SendActionReplyWithAdditionalContext(instanceUUID uuid.UUID, userEmail stri
 
 	err := sendActionReplyInternal(instanceUUID, userEmail, actionUUID, arstate, payload, outboundChannel, actionContext)
 	if err != nil {
-		sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "Error generating action reply: %s", err)
+		sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "Error generating action reply: %w", err)
 		return false
 	}
 	return true
