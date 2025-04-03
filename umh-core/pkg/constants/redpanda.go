@@ -26,14 +26,14 @@ const (
 )
 
 const (
-	RedpandaUpdateObservedStateTimeout = 10 * time.Millisecond
+	RedpandaUpdateObservedStateTimeout = 40 * time.Millisecond
 )
 
 const (
 	// BenthosExpectedMaxP95ExecutionTimePerInstance means that an instance will not reconcile if not 30ms are left
 	// Note: in the intergation test, we defined an alerting threshold of 80% of the max ticker time, which is 100ms
 	// So by setting this to 30 ms, we can ensure that an instance will never start if it triggers the alerting threshold
-	RedpandaExpectedMaxP95ExecutionTimePerInstance = time.Millisecond * 40 // needs to be higher than S6ExpectedMaxP95ExecutionTimePerInstance
+	RedpandaExpectedMaxP95ExecutionTimePerInstance = RedpandaUpdateObservedStateTimeout + time.Millisecond*30 // needs to be higher than S6ExpectedMaxP95ExecutionTimePerInstance
 )
 
 var (
