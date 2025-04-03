@@ -3,12 +3,6 @@ description: Golang
 globs: *.go
 alwaysApply: false
 ---
----
-description: Golang
-globs: *.go
-alwaysApply: false
----
-# Golang Rules
 
 # Golang Rules
 
@@ -17,6 +11,8 @@ alwaysApply: false
 - Do not remove existing documentation, unless they are being replaced with a better or more up to date one.
 
 ## Efficient Go
+Note: Your main objective is to write readable, working code.
+Readability first, performance second.
 ### Object Pooling
 Use sync.Pool when:
 You have short-lived, reusable objects (e.g., buffers, scratch memory, request state). Pooling avoids repeated allocations and lets you recycle memory efficiently.
