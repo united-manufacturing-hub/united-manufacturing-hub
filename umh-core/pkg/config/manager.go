@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"go.uber.org/zap"
@@ -27,6 +28,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	filesystem "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
@@ -40,6 +42,10 @@ const (
 type ConfigManager interface {
 	// GetConfig returns the current config
 	GetConfig(ctx context.Context, tick uint64) (FullConfig, error)
+	// WriteConfig writes the current config to the file
+	WriteConfig(ctx context.Context, config FullConfig) error
+	// AtomicSetLocation sets the location in the config atomically
+	AtomicSetLocation(ctx context.Context, location models.EditInstanceLocationModel) error
 }
 
 // FileConfigManager implements the ConfigManager interface by reading from a file
@@ -52,6 +58,12 @@ type FileConfigManager struct {
 
 	// logger is the logger for the config manager
 	logger *zap.SugaredLogger
+
+	// mutexReadAndWrite for full cycle read and write access to the config file
+	mutexReadAndWrite sync.Mutex
+
+	// simple mutex for read access or write access to the config file
+	mutexReadOrWrite sync.Mutex
 }
 
 // NewFileConfigManager creates a new FileConfigManager
@@ -130,6 +142,9 @@ func (m *FileConfigManager) GetConfigWithOverwritesOrCreateNew(ctx context.Conte
 
 // GetConfig returns the current config, always reading fresh from disk
 func (m *FileConfigManager) GetConfig(ctx context.Context, tick uint64) (FullConfig, error) {
+	m.mutexReadOrWrite.Lock()
+	defer m.mutexReadOrWrite.Unlock()
+
 	// Check if context is already cancelled
 	if ctx.Err() != nil {
 		return FullConfig{}, ctx.Err()
@@ -206,6 +221,9 @@ func NewFileConfigManagerWithBackoff() *FileConfigManagerWithBackoff {
 }
 
 func (m *FileConfigManager) WriteConfig(ctx context.Context, config FullConfig) error {
+	m.mutexReadOrWrite.Lock()
+	defer m.mutexReadOrWrite.Unlock()
+
 	// Check if context is already cancelled
 	if ctx.Err() != nil {
 		return ctx.Err()
@@ -298,4 +316,64 @@ func (m *FileConfigManagerWithBackoff) IsPermanentFailure() bool {
 // GetLastError returns the last error that occurred when fetching the config
 func (m *FileConfigManagerWithBackoff) GetLastError() error {
 	return m.backoffManager.GetLastError()
+}
+
+// WriteConfig delegates to the underlying FileConfigManager
+func (m *FileConfigManagerWithBackoff) WriteConfig(ctx context.Context, config FullConfig) error {
+	// Check if context is already cancelled
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+
+	return m.configManager.WriteConfig(ctx, config)
+}
+
+// AtomicSetLocation sets the location in the config atomically
+func (m *FileConfigManager) AtomicSetLocation(ctx context.Context, location models.EditInstanceLocationModel) error {
+	m.mutexReadAndWrite.Lock()
+	defer m.mutexReadAndWrite.Unlock()
+
+	// get the current config
+	config, err := m.GetConfig(ctx, 0)
+	if err != nil {
+		return fmt.Errorf("failed to get config: %w", err)
+	}
+
+	// Always create a new location map like in the mock implementation
+	config.Agent.Location = make(map[int]string)
+
+	// Location is a hierarchical structure represented as map[int]string
+	// 0: Enterprise, 1: Site, 2: Area, 3: Line, 4: WorkCell
+	config.Agent.Location[0] = location.Enterprise
+
+	// Update optional fields if they exist
+	if location.Site != nil {
+		config.Agent.Location[1] = *location.Site
+	}
+	if location.Area != nil {
+		config.Agent.Location[2] = *location.Area
+	}
+	if location.Line != nil {
+		config.Agent.Location[3] = *location.Line
+	}
+	if location.WorkCell != nil {
+		config.Agent.Location[4] = *location.WorkCell
+	}
+
+	// write the config
+	if err := m.WriteConfig(ctx, config); err != nil {
+		return fmt.Errorf("failed to write config: %w", err)
+	}
+
+	return nil
+}
+
+// AtomicSetLocation delegates to the underlying FileConfigManager
+func (m *FileConfigManagerWithBackoff) AtomicSetLocation(ctx context.Context, location models.EditInstanceLocationModel) error {
+	// Check if context is already cancelled
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+
+	return m.configManager.AtomicSetLocation(ctx, location)
 }

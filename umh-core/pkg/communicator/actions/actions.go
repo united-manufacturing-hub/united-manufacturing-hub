@@ -16,12 +16,12 @@ package actions
 
 import (
 	"github.com/google/uuid"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/encoding"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/safejson"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	"go.uber.org/zap"
 )
@@ -40,7 +40,7 @@ type Action interface {
 	getUuid() uuid.UUID
 }
 
-func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePayload, sender string, outboundChannel chan *models.UMHMessage, releaseChannel config.ReleaseChannel, dog watchdog.Iface, traceID uuid.UUID, systemSnapshot *fsm.SystemSnapshot) {
+func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePayload, sender string, outboundChannel chan *models.UMHMessage, releaseChannel config.ReleaseChannel, dog watchdog.Iface, traceID uuid.UUID, systemSnapshot *fsm.SystemSnapshot, configManager config.ConfigManager) {
 	// Start a new transaction for this action
 	zap.S().Infof("Handling action message: Type: %s, Payload: %v", payload.ActionType, payload.ActionPayload)
 
@@ -52,6 +52,8 @@ func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePay
 			actionUUID:      payload.ActionUUID,
 			instanceUUID:    instanceUUID,
 			outboundChannel: outboundChannel,
+			systemSnapshot:  systemSnapshot,
+			configManager:   configManager,
 		}
 	case models.EditInstance:
 		action = &EditInstanceAction{
@@ -59,7 +61,7 @@ func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePay
 			actionUUID:      payload.ActionUUID,
 			instanceUUID:    instanceUUID,
 			outboundChannel: outboundChannel,
-			configManager:   config.NewFileConfigManager(),
+			configManager:   configManager,
 		}
 	default:
 		zap.S().Errorf("Unknown action type: %s", payload.ActionType)
