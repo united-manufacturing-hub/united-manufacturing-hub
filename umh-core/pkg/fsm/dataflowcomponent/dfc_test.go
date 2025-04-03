@@ -48,7 +48,7 @@ func NewMockBenthosConfigManager() *MockBenthosConfigManager {
 }
 
 // AddComponentToBenthosConfig adds a component to the benthos config
-func (m *MockBenthosConfigManager) AddComponentToBenthosConfig(component dataflowcomponent.DataFlowComponentConfig) error {
+func (m *MockBenthosConfigManager) AddComponentToBenthosConfig(ctx context.Context, component dataflowcomponent.DataFlowComponentConfig) error {
 	m.addCalled = true
 	if m.shouldFailAdd {
 		return fmt.Errorf("mock error adding component")
@@ -58,7 +58,7 @@ func (m *MockBenthosConfigManager) AddComponentToBenthosConfig(component dataflo
 }
 
 // RemoveComponentFromBenthosConfig removes a component from the benthos config
-func (m *MockBenthosConfigManager) RemoveComponentFromBenthosConfig(componentName string) error {
+func (m *MockBenthosConfigManager) RemoveComponentFromBenthosConfig(ctx context.Context, componentName string) error {
 	m.removeCalled = true
 	if m.shouldFailRemove {
 		return fmt.Errorf("mock error removing component")
@@ -68,7 +68,7 @@ func (m *MockBenthosConfigManager) RemoveComponentFromBenthosConfig(componentNam
 }
 
 // UpdateComponentInBenthosConfig updates a component in the benthos config
-func (m *MockBenthosConfigManager) UpdateComponentInBenthosConfig(component dataflowcomponent.DataFlowComponentConfig) error {
+func (m *MockBenthosConfigManager) UpdateComponentInBenthosConfig(ctx context.Context, component dataflowcomponent.DataFlowComponentConfig) error {
 	m.updateCalled = true
 	if m.shouldFailUpdate {
 		return fmt.Errorf("mock error updating component")
@@ -78,7 +78,7 @@ func (m *MockBenthosConfigManager) UpdateComponentInBenthosConfig(component data
 }
 
 // ComponentExistsInBenthosConfig checks if a component exists in the benthos config
-func (m *MockBenthosConfigManager) ComponentExistsInBenthosConfig(componentName string) (bool, error) {
+func (m *MockBenthosConfigManager) ComponentExistsInBenthosConfig(ctx context.Context, componentName string) (bool, error) {
 	m.checkExistenceCalled = true
 	if m.shouldFailExistence {
 		return false, fmt.Errorf("mock error checking component existence")

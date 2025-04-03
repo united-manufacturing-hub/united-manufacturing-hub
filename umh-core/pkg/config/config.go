@@ -25,24 +25,24 @@ import (
 )
 
 type FullConfig struct {
-	Agent              AgentConfig               `yaml:"agent"`              // Agent config, requires restart to take effect
-	Services           []S6FSMConfig             `yaml:"services"`           // Services to manage, can be updated while running
-	Benthos            []BenthosConfig           `yaml:"benthos"`            // Benthos services to manage, can be updated while running
-	Nmap               []NmapConfig              `yaml:"nmap"`               // Nmap services to manage, can be updated while running
-	Redpanda           RedpandaConfig            `yaml:"redpanda"`           // Redpanda config, can be updated while running
-	DataFlowComponents []DataFlowComponentConfig `yaml:"dataflowComponents"` // DataFlowComponent services to manage
+	Agent              AgentConfig               `yaml:"agent"`                        // Agent config, requires restart to take effect
+	Services           []S6FSMConfig             `yaml:"services,omitempty"`           // Services to manage, can be updated while running
+	Benthos            []BenthosConfig           `yaml:"benthos,omitempty"`            // Benthos services to manage, can be updated while running
+	Nmap               []NmapConfig              `yaml:"nmap,omitempty"`               // Nmap services to manage, can be updated while running
+	Redpanda           RedpandaConfig            `yaml:"redpanda,omitempty"`           // Redpanda config, can be updated while running
+	DataFlowComponents []DataFlowComponentConfig `yaml:"dataFlowComponents,omitempty"` // DataFlowComponent services to manage
 }
 
 type AgentConfig struct {
 	MetricsPort        int `yaml:"metricsPort"` // Port to expose metrics on
-	CommunicatorConfig `yaml:"communicator"`
-	ReleaseChannel     ReleaseChannel `yaml:"releaseChannel"`
-	Location           map[int]string `yaml:"location"`
+	CommunicatorConfig `yaml:"communicator,omitempty"`
+	ReleaseChannel     ReleaseChannel `yaml:"releaseChannel,omitempty"`
+	Location           map[int]string `yaml:"location,omitempty"`
 }
 
 type CommunicatorConfig struct {
-	APIURL    string `yaml:"apiUrl"`
-	AuthToken string `yaml:"authToken"`
+	APIURL    string `yaml:"apiUrl,omitempty"`
+	AuthToken string `yaml:"authToken,omitempty"`
 }
 
 // FSMInstanceConfig is the config for a FSM instance
@@ -112,7 +112,7 @@ type DataFlowComponentConfig struct {
 	// Basic component configuration
 	Name         string `yaml:"name"`
 	DesiredState string `yaml:"desiredState"`
-	VersionUUID  string `yaml:"versionUUID"`
+	VersionUUID  string `yaml:"versionUUID,omitempty"`
 
 	// Service configuration similar to BenthosServiceConfig
 	ServiceConfig benthosserviceconfig.BenthosServiceConfig `yaml:"serviceConfig"`

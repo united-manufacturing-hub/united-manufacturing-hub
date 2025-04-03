@@ -484,3 +484,13 @@ func GetCurrentDir() string {
 	}
 	return strings.TrimSpace(wd)
 }
+
+// getContainerConfig retrieves the current configuration file from the container
+func getContainerConfig() (string, error) {
+	containerName := getContainerName()
+	out, err := runDockerCommand("exec", containerName, "cat", "/data/config.yaml")
+	if err != nil {
+		return "", fmt.Errorf("failed to read config from container: %w", err)
+	}
+	return string(out), nil
+}

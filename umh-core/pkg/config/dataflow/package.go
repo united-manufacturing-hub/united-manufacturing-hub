@@ -39,7 +39,7 @@ type DataFlowComponentConfig struct {
 // DataFlowConfig represents the configuration for data flow components
 type DataFlowConfig struct {
 	// DataFlowComponents is a list of data flow component configurations
-	DataFlowComponents []DataFlowComponentConfig `yaml:"dataFlowComponent" json:"dataFlowComponent"`
+	DataFlowComponents []DataFlowComponentConfig `yaml:"dataFlowComponents" json:"dataFlowComponent"`
 }
 
 // GetDataFlowComponentByName returns a data flow component configuration by name

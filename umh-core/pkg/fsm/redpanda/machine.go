@@ -163,6 +163,5 @@ func (b *RedpandaInstance) PrintState() {
 
 // GetExpectedMaxP95ExecutionTimePerInstance returns the expected max p95 execution time of the instance
 func (b *RedpandaInstance) GetExpectedMaxP95ExecutionTimePerInstance() time.Duration {
-	b.baseFSMInstance.GetLogger().Debugf("RedpandaInstance GetExpectedMaxP95ExecutionTimePerInstance called (instance: %s)", b.baseFSMInstance.GetID())
 	return constants.RedpandaExpectedMaxP95ExecutionTimePerInstance
 }

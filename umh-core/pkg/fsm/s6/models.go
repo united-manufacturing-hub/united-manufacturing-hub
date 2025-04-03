@@ -145,6 +145,5 @@ func (s *S6Instance) GetConfig() config.S6FSMConfig {
 
 // GetExpectedMaxP95ExecutionTimePerInstance returns the expected max p95 execution time of the instance
 func (s *S6Instance) GetExpectedMaxP95ExecutionTimePerInstance() time.Duration {
-	s.baseFSMInstance.GetLogger().Debugf("S6Instance GetExpectedMaxP95ExecutionTimePerInstance called (instance: %s)", s.baseFSMInstance.GetID())
 	return constants.S6ExpectedMaxP95ExecutionTimePerInstance
 }

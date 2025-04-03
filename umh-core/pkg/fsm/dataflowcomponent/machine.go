@@ -101,10 +101,3 @@ func (d *DataFlowComponent) IsStopping() bool {
 func (d *DataFlowComponent) IsStopped() bool {
 	return d.baseFSMInstance.GetCurrentFSMState() == OperationalStateStopped
 }
-
-// PrintState prints the current state of the FSM for debugging
-func (d *DataFlowComponent) PrintState() {
-	d.baseFSMInstance.GetLogger().Debugf("Current state: %s", d.baseFSMInstance.GetCurrentFSMState())
-	d.baseFSMInstance.GetLogger().Debugf("Desired state: %s", d.baseFSMInstance.GetDesiredFSMState())
-	d.baseFSMInstance.GetLogger().Debugf("Observed state: %+v", d.ObservedState)
-}

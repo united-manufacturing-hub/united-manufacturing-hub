@@ -266,6 +266,7 @@ test-connection: clean build
 		-e LOGGING_LEVEL=DEBUG \
 		-p 8081:8080 \
 		-p 4195:4195 \
+    	-e LOGGING_LEVEL=DEBUG \
 		$(IMAGE_NAME):$(TAG)
 
 pod-shell:
