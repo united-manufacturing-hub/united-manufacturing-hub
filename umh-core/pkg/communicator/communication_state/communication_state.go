@@ -110,7 +110,7 @@ func (c *CommunicationState) InitialiseAndStartRouter() {
 // InitialiseAndStartSubscriberHandler creates a new subscriber handler and starts it
 // ttl is the time until a subscriber is considered dead (if no new subscriber message is received)
 // cull is the cycle time to remove dead subscribers
-func (s *CommunicationState) InitialiseAndStartSubscriberHandler(ttl time.Duration, cull time.Duration, config *config.FullConfig, state *fsm.SystemSnapshot, systemMu *sync.Mutex) {
+func (s *CommunicationState) InitialiseAndStartSubscriberHandler(ttl time.Duration, cull time.Duration, config *config.FullConfig, state *fsm.SystemSnapshot, systemMu *sync.Mutex, configManager config.ConfigManager) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -142,6 +142,7 @@ func (s *CommunicationState) InitialiseAndStartSubscriberHandler(ttl time.Durati
 		false, // disableHardwareStatusCheck
 		state,
 		systemMu,
+		configManager,
 	)
 	if s.SubscriberHandler == nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "Failed to create subscriber handler")

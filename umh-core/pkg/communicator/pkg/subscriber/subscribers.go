@@ -43,6 +43,7 @@ type Handler struct {
 	StatusCollector            *generator.StatusCollectorType
 	disableHardwareStatusCheck bool
 	state                      *fsm.SystemSnapshot
+	configManager              config.ConfigManager
 }
 
 func NewHandler(
@@ -55,6 +56,7 @@ func NewHandler(
 	disableHardwareStatusCheck bool,
 	state *fsm.SystemSnapshot,
 	systemMu *sync.Mutex,
+	configManager config.ConfigManager,
 ) *Handler {
 	s := &Handler{}
 	s.subscribers = expiremap.NewEx[string, string](cull, ttl)
@@ -62,10 +64,12 @@ func NewHandler(
 	s.pusher = pusher
 	s.instanceUUID = instanceUUID
 	s.state = state
+	s.configManager = configManager
 	s.StatusCollector = generator.NewStatusCollector(
 		dog,
 		state,
 		systemMu,
+		configManager,
 	)
 
 	return s
