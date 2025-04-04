@@ -327,7 +327,7 @@ func (w *writeFailingMockConfigManager) GetConfig(ctx context.Context, tick uint
 	return w.mockConfigManager.GetConfig(ctx, tick)
 }
 
-func (w *writeFailingMockConfigManager) WriteConfig(ctx context.Context, config config.FullConfig) error {
+func (w *writeFailingMockConfigManager) writeConfig(ctx context.Context, config config.FullConfig) error {
 	return errors.New("mock WriteConfig failure")
 }
 
@@ -355,7 +355,7 @@ func (w *writeFailingMockConfigManager) AtomicSetLocation(ctx context.Context, l
 	}
 
 	// Write config (will fail with this mock)
-	if err := w.WriteConfig(ctx, config); err != nil {
+	if err := w.writeConfig(ctx, config); err != nil {
 		return err
 	}
 

@@ -49,8 +49,6 @@ var (
 type ConfigManager interface {
 	// GetConfig returns the current config
 	GetConfig(ctx context.Context, tick uint64) (FullConfig, error)
-	// WriteConfig writes the current config to the file
-	WriteConfig(ctx context.Context, config FullConfig) error
 	// AtomicSetLocation sets the location in the config atomically
 	AtomicSetLocation(ctx context.Context, location models.EditInstanceLocationModel) error
 }
