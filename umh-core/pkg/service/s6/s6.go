@@ -20,6 +20,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -387,8 +388,14 @@ func (s *DefaultService) Start(ctx context.Context, servicePath string, fsServic
 
 	output, err := fsService.ExecuteCommand(ctx, "s6-svc", "-u", servicePath)
 	if err != nil {
-		return fmt.Errorf("failed to start service: %w, output: %s", err, string(output))
+		// Check if error is NOT due to exit code 100
+		if exitErr, ok := err.(*exec.ExitError); !ok || exitErr.ExitCode() != 100 {
+			return fmt.Errorf("failed to start service: %w, output: %s", err, string(output))
+		}
+		// If exit code is 100, log it and continue (service is already being monitored)
+		s.logger.Debugf("S6 service %s is already being monitored (exit code 100), continuing", servicePath)
 	}
+
 	s.logger.Debugf("Started S6 service %s", servicePath)
 	return nil
 }
@@ -411,8 +418,14 @@ func (s *DefaultService) Stop(ctx context.Context, servicePath string, fsService
 
 	output, err := fsService.ExecuteCommand(ctx, "s6-svc", "-d", servicePath)
 	if err != nil {
-		return fmt.Errorf("failed to stop service: %w, output: %s", err, string(output))
+		// Check if error is NOT due to exit code 100
+		if exitErr, ok := err.(*exec.ExitError); !ok || exitErr.ExitCode() != 100 {
+			return fmt.Errorf("failed to stop service: %w, output: %s", err, string(output))
+		}
+		// If exit code is 100, log it and continue (service is already being monitored)
+		s.logger.Debugf("S6 service %s is already being monitored (exit code 100), continuing", servicePath)
 	}
+
 	s.logger.Debugf("Stopped S6 service %s", servicePath)
 	return nil
 }
@@ -435,8 +448,14 @@ func (s *DefaultService) Restart(ctx context.Context, servicePath string, fsServ
 
 	output, err := fsService.ExecuteCommand(ctx, "s6-svc", "-r", servicePath)
 	if err != nil {
-		return fmt.Errorf("failed to restart service: %w, output: %s", err, string(output))
+		// Check if error is NOT due to exit code 100
+		if exitErr, ok := err.(*exec.ExitError); !ok || exitErr.ExitCode() != 100 {
+			return fmt.Errorf("failed to restart service: %w, output: %s", err, string(output))
+		}
+		// If exit code is 100, log it and continue (service is already being monitored)
+		s.logger.Debugf("S6 service %s is already being monitored (exit code 100), continuing", servicePath)
 	}
+
 	s.logger.Debugf("Restarted S6 service %s", servicePath)
 	return nil
 }
@@ -464,15 +483,21 @@ func (s *DefaultService) Status(ctx context.Context, servicePath string, fsServi
 	// Build supervise directory path.
 	superviseDir := filepath.Join(servicePath, "supervise")
 	exists, err = fsService.FileExists(ctx, superviseDir)
-	if err != nil || !exists {
-		return info, fmt.Errorf("supervise directory doesn't exist: %w", err)
+	if err != nil {
+		return info, fmt.Errorf("failed to check if supervise directory exists: %w", err)
+	}
+	if !exists {
+		return info, ErrServiceNotExist // This is a temporary thing that can happen in bufered filesystems, when s6 did not yet have time to create the directory
 	}
 
 	// Read the status file.
 	statusFile := filepath.Join(superviseDir, S6SuperviseStatusFile)
 	exists, err = fsService.FileExists(ctx, statusFile)
-	if err != nil || !exists {
-		return info, fmt.Errorf("status file doesn't exist: %w", err)
+	if err != nil {
+		return info, fmt.Errorf("failed to check if status file exists: %w", err)
+	}
+	if !exists {
+		return info, ErrServiceNotExist // This is a temporary thing that can happen in bufered filesystems, when s6 did not yet have time to create the file
 	}
 	statusData, err := fsService.ReadFile(ctx, statusFile)
 	if err != nil {

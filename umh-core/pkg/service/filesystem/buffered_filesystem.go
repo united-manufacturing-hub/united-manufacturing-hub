@@ -204,9 +204,9 @@ func (bs *BufferedService) shouldIgnorePath(path string) bool {
 func (bs *BufferedService) SyncFromDisk(ctx context.Context) error {
 	logger := logger.For(logger.ComponentFilesystem)
 	startTime := time.Now()
-	logger.Infof("SyncFromDisk started for %d directories", len(bs.syncDirs))
+	logger.Debugf("SyncFromDisk started for %d directories", len(bs.syncDirs))
 	defer func() {
-		logger.Infof("SyncFromDisk took %dms", time.Since(startTime).Milliseconds())
+		logger.Debugf("SyncFromDisk took %dms", time.Since(startTime).Milliseconds())
 	}()
 
 	// Create a new map to hold synced files
@@ -214,13 +214,13 @@ func (bs *BufferedService) SyncFromDisk(ctx context.Context) error {
 
 	// Sync each directory in the list
 	for _, dir := range bs.syncDirs {
-		logger.Infof("Syncing directory: %s", dir)
+		logger.Debugf("Syncing directory: %s", dir)
 
 		// Check if directory exists
 		info, err := bs.base.Stat(ctx, dir)
 		if err != nil {
 			if os.IsNotExist(err) {
-				logger.Infof("Directory doesn't exist, skipping: %s", dir)
+				logger.Debugf("Directory doesn't exist, skipping: %s", dir)
 				continue // Skip directories that don't exist
 			}
 			return fmt.Errorf("failed to stat directory %s: %w", dir, err)
@@ -252,7 +252,7 @@ func (bs *BufferedService) SyncFromDisk(ctx context.Context) error {
 
 			// Check if path should be ignored
 			if bs.shouldIgnorePath(absPath) {
-				logger.Infof("Ignoring path: %s", absPath)
+				logger.Debugf("Ignoring path: %s", absPath)
 				continue
 			}
 
@@ -280,14 +280,21 @@ func (bs *BufferedService) SyncFromDisk(ctx context.Context) error {
 
 				// Read file content
 				start2 := time.Now()
-				logger.Infof("ReadFile for %s started", absPath)
+				logger.Debugf("ReadFile for %s started", absPath)
 				data, err := bs.base.ReadFile(ctx, absPath)
 				if err != nil {
-					// If we can't read, skip this file
-					logger.Infof("ReadFile for %s failed: %v", absPath, err)
-					return fmt.Errorf("failed to read file: %w", err)
+					// if the file does not exist anymore, then remove it from the map
+					// Likely just a temporary file between reading the directory and then here reading the file
+					if os.IsNotExist(err) {
+						logger.Debugf("File does not exist, removing: %s", absPath)
+						delete(newFiles, absPath)
+					} else {
+						// If we can't read, skip this file
+						logger.Debugf("ReadFile for %s failed: %v", absPath, err)
+						return fmt.Errorf("failed to read file: %w", err)
+					}
 				}
-				logger.Infof("ReadFile for %s took %dms (size: %d)", absPath, time.Since(start2).Milliseconds(), cf.Info.Size())
+				logger.Debugf("ReadFile for %s took %dms (size: %d)", absPath, time.Since(start2).Milliseconds(), cf.Info.Size())
 
 				newFiles[absPath] = &fileState{
 					isDir:    false,
@@ -301,14 +308,14 @@ func (bs *BufferedService) SyncFromDisk(ctx context.Context) error {
 	}
 
 	// Replace the in-memory state atomically
-	logger.Infof("SyncFromDisk: loaded %d files", len(newFiles))
+	logger.Debugf("SyncFromDisk: loaded %d files", len(newFiles))
 	bs.mu.Lock()
 	bs.files = newFiles
 	// Clear any pending changes since we are reloading from disk
 	bs.changed = make(map[string]*fileChange)
 	bs.mu.Unlock()
 
-	logger.Infof("SyncFromDisk: done")
+	logger.Debugf("SyncFromDisk: done")
 	return nil
 }
 
@@ -316,6 +323,13 @@ func (bs *BufferedService) SyncFromDisk(ctx context.Context) error {
 //
 // Note: this does not check if the file has changed on disk.
 func (bs *BufferedService) SyncToDisk(ctx context.Context) error {
+	start := time.Now()
+	logger := logger.For(logger.ComponentFilesystem)
+	logger.Debugf("SyncToDisk started")
+	defer func() {
+		logger.Debugf("SyncToDisk took %dms", time.Since(start).Milliseconds())
+	}()
+
 	bs.mu.Lock()
 	defer bs.mu.Unlock()
 
@@ -336,10 +350,12 @@ func (bs *BufferedService) SyncToDisk(ctx context.Context) error {
 		// Check if this was a directory in our original state
 		chg := bs.changed[path]
 		if chg != nil && chg.wasDir {
+			logger.Debugf("Removing directory: %s", path)
 			if err := bs.base.RemoveAll(ctx, path); err != nil {
 				return fmt.Errorf("failed to remove directory: %w", err)
 			}
 		} else {
+			logger.Debugf("Removing file: %s", path)
 			if err := bs.base.Remove(ctx, path); err != nil {
 				return fmt.Errorf("failed to remove file: %w", err)
 			}
@@ -354,17 +370,20 @@ func (bs *BufferedService) SyncToDisk(ctx context.Context) error {
 		if chg != nil && !chg.removed {
 			// If it's not in our map for some reason, skip
 			state, exists := bs.files[path]
+			logger.Debugf("SyncToDisk: processing path: %s", path)
 			if !exists {
 				return fmt.Errorf("file not found in memory: %s", path)
 			}
 
 			// Handle directories differently from files
 			if state.isDir {
+				logger.Debugf("SyncToDisk: creating directory: %s", path)
 				if err := bs.base.EnsureDirectory(ctx, path); err != nil {
 					return fmt.Errorf("failed to create directory: %w", err)
 				}
 			} else {
 				// Do the write for regular files
+				logger.Debugf("SyncToDisk: writing file: %s", path)
 				if err := bs.base.WriteFile(ctx, path, chg.content, chg.perm); err != nil {
 					return fmt.Errorf("failed to write file: %w", err)
 				}

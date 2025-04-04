@@ -110,6 +110,7 @@ test-hello: clean build
 		-v $(PWD)/data:/data \
 		-p 8081:8080 \
 		-p 4195:4195 \
+		-e LOGGING_LEVEL=DEBUG \
 		$(IMAGE_NAME):$(TAG)
 
 test-comm: clean build

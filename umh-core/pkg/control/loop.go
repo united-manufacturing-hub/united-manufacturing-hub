@@ -244,14 +244,21 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 			return nil
 		}
 	}
-
 	// If the filesystem service is buffered, we need to sync from disk
 	bufferedFs, ok := c.filesystemService.(*filesystem.BufferedService)
 	if ok {
+		// Step 1: Flush all pending writes to disk
+		err = bufferedFs.SyncToDisk(ctx)
+		if err != nil {
+			sentry.ReportIssuef(sentry.IssueTypeError, c.logger, "Failed to sync S6 filesystem to disk: %v", err)
+			return fmt.Errorf("failed to sync S6 filesystem to disk: %w", err)
+		}
+
+		// Step 2: Read the filesystem from disk
 		err = bufferedFs.SyncFromDisk(ctx)
 		if err != nil {
-			sentry.ReportIssuef(sentry.IssueTypeError, c.logger, "Failed to sync S6 filesystem: %v", err)
-			return fmt.Errorf("failed to sync S6 filesystem: %w", err)
+			sentry.ReportIssuef(sentry.IssueTypeError, c.logger, "Failed to sync S6 filesystem from disk: %v", err)
+			return fmt.Errorf("failed to sync S6 filesystem from disk: %w", err)
 		}
 	}
 
@@ -297,15 +304,6 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 		c.starvationChecker.Reconcile(ctx, cfg)
 	} else {
 		return fmt.Errorf("starvation checker is not set")
-	}
-
-	// If the filesystem service is buffered, we need to sync to disk
-	if ok {
-		err = bufferedFs.SyncToDisk(ctx)
-		if err != nil {
-			sentry.ReportIssuef(sentry.IssueTypeError, c.logger, "Failed to sync S6 filesystem: %v", err)
-			return fmt.Errorf("failed to sync S6 filesystem: %w", err)
-		}
 	}
 
 	// Create a snapshot after the entire reconciliation cycle
