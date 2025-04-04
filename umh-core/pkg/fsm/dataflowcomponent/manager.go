@@ -53,11 +53,11 @@ type DataFlowComponentManagerSnapshot struct {
 func NewDataFlowComponentManager(name string) *DataFlowComponentManager {
 	managerName := fmt.Sprintf("%s%s", logger.ComponentDataFlowComponentManager, name)
 	managerLogger := logger.For(managerName)
-	managerLogger.Infof("Creating new DataFlowComponentManager: %s", managerName)
+	managerLogger.Debugf("Creating new DataFlowComponentManager: %s", managerName)
 
 	// Create a benthos manager that will handle the actual benthos services
 	benthosManager := benthos.NewBenthosManager(name)
-	managerLogger.Infof("Created BenthosManager for DataFlowComponentManager: %s", name)
+	managerLogger.Debugf("Created BenthosManager for DataFlowComponentManager: %s", name)
 
 	baseManager := public_fsm.NewBaseFSMManager[config.DataFlowComponentConfig](
 		managerName,
@@ -152,7 +152,7 @@ func NewDataFlowComponentManager(name string) *DataFlowComponentManager {
 	)
 
 	metrics.InitErrorCounter(metrics.ComponentDataFlowCompManager, name)
-	managerLogger.Infof("DataFlowComponentManager created successfully: %s", managerName)
+	managerLogger.Debugf("DataFlowComponentManager created successfully: %s", managerName)
 
 	return &DataFlowComponentManager{
 		BaseFSMManager: baseManager,
@@ -279,7 +279,7 @@ func (a *benthosMgrAdapter) AddComponentToBenthosConfig(ctx context.Context, com
 	a.mutex.Lock()
 	defer a.mutex.Unlock()
 
-	a.logger.Infof("Adding component %s to Benthos config tracking", component.Name)
+	a.logger.Debugf("Adding component %s to Benthos config tracking", component.Name)
 	a.components[component.Name] = component
 	return nil
 }
@@ -289,7 +289,7 @@ func (a *benthosMgrAdapter) RemoveComponentFromBenthosConfig(ctx context.Context
 	a.mutex.Lock()
 	defer a.mutex.Unlock()
 
-	a.logger.Infof("Removing component %s from Benthos config tracking", componentName)
+	a.logger.Debugf("Removing component %s from Benthos config tracking", componentName)
 	delete(a.components, componentName)
 	return nil
 }
@@ -299,7 +299,7 @@ func (a *benthosMgrAdapter) UpdateComponentInBenthosConfig(ctx context.Context, 
 	a.mutex.Lock()
 	defer a.mutex.Unlock()
 
-	a.logger.Infof("Updating component %s in Benthos config tracking", component.Name)
+	a.logger.Debugf("Updating component %s in Benthos config tracking", component.Name)
 	a.components[component.Name] = component
 	return nil
 }

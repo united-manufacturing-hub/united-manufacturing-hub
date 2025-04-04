@@ -22,7 +22,7 @@ import (
 // initiateAddComponentToBenthosConfig adds the data flow component to the benthos config
 func (d *DataFlowComponent) initiateAddComponentToBenthosConfig(ctx context.Context) error {
 	logger := d.baseFSMInstance.GetLogger()
-	logger.Infof("Starting Action: Adding DataFlowComponent %s to Benthos config...", d.Config.Name)
+	logger.Debugf("Starting Action: Adding DataFlowComponent %s to Benthos config...", d.Config.Name)
 	logger.Debugf("DataFlowComponent details: Name=%s, State=%s",
 		d.Config.Name, d.Config.DesiredState)
 
@@ -33,7 +33,7 @@ func (d *DataFlowComponent) initiateAddComponentToBenthosConfig(ctx context.Cont
 		return fmt.Errorf("failed to add data flow component %s to benthos config: %w", d.Config.Name, err)
 	}
 
-	logger.Infof("DataFlowComponent %s successfully added to Benthos config", d.Config.Name)
+	logger.Debugf("DataFlowComponent %s successfully added to Benthos config", d.Config.Name)
 	// Update observed state to reflect the configuration exists
 	d.ObservedState.ConfigExists = true
 	d.ObservedState.LastConfigUpdateSuccessful = true
@@ -45,7 +45,7 @@ func (d *DataFlowComponent) initiateAddComponentToBenthosConfig(ctx context.Cont
 // initiateRemoveComponentFromBenthosConfig removes the data flow component from the benthos config
 func (d *DataFlowComponent) initiateRemoveComponentFromBenthosConfig(ctx context.Context) error {
 	logger := d.baseFSMInstance.GetLogger()
-	logger.Infof("Starting Action: Removing DataFlowComponent %s from Benthos config...", d.Config.Name)
+	logger.Debugf("Starting Action: Removing DataFlowComponent %s from Benthos config...", d.Config.Name)
 
 	logger.Debugf("Calling BenthosConfigManager.RemoveComponentFromBenthosConfig for %s", d.Config.Name)
 	err := d.BenthosConfigManager.RemoveComponentFromBenthosConfig(ctx, d.Config.Name)
@@ -54,7 +54,7 @@ func (d *DataFlowComponent) initiateRemoveComponentFromBenthosConfig(ctx context
 		return fmt.Errorf("failed to remove data flow component %s from benthos config: %w", d.Config.Name, err)
 	}
 
-	logger.Infof("DataFlowComponent %s successfully removed from Benthos config", d.Config.Name)
+	logger.Debugf("DataFlowComponent %s successfully removed from Benthos config", d.Config.Name)
 	// Update observed state to reflect the configuration no longer exists
 	d.ObservedState.ConfigExists = false
 	d.ObservedState.LastConfigUpdateSuccessful = true
@@ -66,7 +66,7 @@ func (d *DataFlowComponent) initiateRemoveComponentFromBenthosConfig(ctx context
 // initiateUpdateComponentInBenthosConfig updates the data flow component in the benthos config
 func (d *DataFlowComponent) initiateUpdateComponentInBenthosConfig(ctx context.Context) error {
 	logger := d.baseFSMInstance.GetLogger()
-	logger.Infof("Starting Action: Updating DataFlowComponent %s in Benthos config...", d.Config.Name)
+	logger.Debugf("Starting Action: Updating DataFlowComponent %s in Benthos config...", d.Config.Name)
 	logger.Debugf("DataFlowComponent details: Name=%s, State=%s",
 		d.Config.Name, d.Config.DesiredState)
 
@@ -77,7 +77,7 @@ func (d *DataFlowComponent) initiateUpdateComponentInBenthosConfig(ctx context.C
 		return fmt.Errorf("failed to update data flow component %s in benthos config: %w", d.Config.Name, err)
 	}
 
-	logger.Infof("DataFlowComponent %s successfully updated in Benthos config", d.Config.Name)
+	logger.Debugf("DataFlowComponent %s successfully updated in Benthos config", d.Config.Name)
 	// Update observed state to reflect the configuration exists and was updated
 	d.ObservedState.ConfigExists = true
 	d.ObservedState.LastConfigUpdateSuccessful = true
@@ -126,7 +126,7 @@ func (d *DataFlowComponent) updateObservedState(ctx context.Context) error {
 // PrintState prints the current state of the DFC
 func (d *DataFlowComponent) PrintState() {
 	logger := d.baseFSMInstance.GetLogger()
-	logger.Infof("DataFlowComponent %s: CurrentState=%s, DesiredState=%s, ConfigExists=%v, LastUpdateSuccessful=%v",
+	logger.Debugf("DataFlowComponent %s: CurrentState=%s, DesiredState=%s, ConfigExists=%v, LastUpdateSuccessful=%v",
 		d.Config.Name,
 		d.GetCurrentFSMState(),
 		d.GetDesiredFSMState(),
@@ -134,6 +134,6 @@ func (d *DataFlowComponent) PrintState() {
 		d.ObservedState.LastConfigUpdateSuccessful)
 
 	if d.ObservedState.LastError != "" {
-		logger.Infof("DataFlowComponent %s: LastError=%s", d.Config.Name, d.ObservedState.LastError)
+		logger.Debugf("DataFlowComponent %s: LastError=%s", d.Config.Name, d.ObservedState.LastError)
 	}
 }
