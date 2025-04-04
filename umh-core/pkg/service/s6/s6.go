@@ -19,6 +19,7 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"os/exec"
 	"path/filepath"
@@ -114,6 +115,10 @@ type Service interface {
 	ForceRemove(ctx context.Context, servicePath string, fsService filesystem.Service) error
 	// GetLogs gets the logs of the service
 	GetLogs(ctx context.Context, servicePath string, fsService filesystem.Service) ([]LogEntry, error)
+	// EnsureSupervision checks if the supervise directory exists for a service and notifies
+	// s6-svscan if it doesn't, to trigger supervision setup.
+	// Returns true if supervise directory exists (ready for supervision), false otherwise.
+	EnsureSupervision(ctx context.Context, servicePath string, fsService filesystem.Service) (bool, error)
 }
 
 // DefaultService is the default implementation of the S6 Service interface
@@ -197,7 +202,6 @@ func (s *DefaultService) Create(ctx context.Context, servicePath string, config 
 	// For dynamic services, it's better to:
 	// 1. Create services in their own directories under /run/service/
 	// 2. Use s6-svscanctl to notify s6 about the new service
-	// 3. Avoid modifying the special "user" directory structure
 
 	// Create a dependency on base services to prevent race conditions
 	dependenciesDPath := filepath.Join(servicePath, "dependencies.d")
@@ -234,19 +238,8 @@ logutil-service %s
 		return fmt.Errorf("failed to write log run script: %w", err)
 	}
 
-	// if the supervise directory does not exist, notify s6-svscan
-	superviseDir := filepath.Join(servicePath, "supervise")
-	exists, err = fsService.FileExists(ctx, superviseDir)
-	if err != nil {
-		return fmt.Errorf("failed to check if supervise directory exists: %w", err)
-	}
-
-	if !exists {
-		output, err := fsService.ExecuteCommand(ctx, "s6-svscanctl", "-a", constants.S6BaseDir)
-		if err != nil {
-			return fmt.Errorf("failed to notify s6-svscan: %w, output: %s", err, string(output))
-		}
-	}
+	// Notification is now handled by EnsureSupervision
+	// We don't call s6-svscanctl here anymore to avoid duplicating the logic
 
 	s.logger.Debugf("S6 service %s created with logging to %s", servicePath, logDir)
 
@@ -386,14 +379,10 @@ func (s *DefaultService) Start(ctx context.Context, servicePath string, fsServic
 		return ErrServiceNotExist
 	}
 
-	output, err := fsService.ExecuteCommand(ctx, "s6-svc", "-u", servicePath)
+	_, err = s.ExecuteS6Command(ctx, servicePath, fsService, "s6-svc", "-u", servicePath)
 	if err != nil {
-		// Check if error is NOT due to exit code 100
-		if exitErr, ok := err.(*exec.ExitError); !ok || exitErr.ExitCode() != 100 {
-			return fmt.Errorf("failed to start service: %w, output: %s", err, string(output))
-		}
-		// If exit code is 100, log it and continue (service is already being monitored)
-		s.logger.Debugf("S6 service %s is already being monitored (exit code 100), continuing", servicePath)
+		s.logger.Warnf("Failed to start service: %v", err)
+		return fmt.Errorf("failed to start service: %w", err)
 	}
 
 	s.logger.Debugf("Started S6 service %s", servicePath)
@@ -416,14 +405,10 @@ func (s *DefaultService) Stop(ctx context.Context, servicePath string, fsService
 		return ErrServiceNotExist
 	}
 
-	output, err := fsService.ExecuteCommand(ctx, "s6-svc", "-d", servicePath)
+	_, err = s.ExecuteS6Command(ctx, servicePath, fsService, "s6-svc", "-d", servicePath)
 	if err != nil {
-		// Check if error is NOT due to exit code 100
-		if exitErr, ok := err.(*exec.ExitError); !ok || exitErr.ExitCode() != 100 {
-			return fmt.Errorf("failed to stop service: %w, output: %s", err, string(output))
-		}
-		// If exit code is 100, log it and continue (service is already being monitored)
-		s.logger.Debugf("S6 service %s is already being monitored (exit code 100), continuing", servicePath)
+		s.logger.Warnf("Failed to stop service: %v", err)
+		return fmt.Errorf("failed to stop service: %w", err)
 	}
 
 	s.logger.Debugf("Stopped S6 service %s", servicePath)
@@ -446,14 +431,10 @@ func (s *DefaultService) Restart(ctx context.Context, servicePath string, fsServ
 		return ErrServiceNotExist
 	}
 
-	output, err := fsService.ExecuteCommand(ctx, "s6-svc", "-r", servicePath)
+	_, err = s.ExecuteS6Command(ctx, servicePath, fsService, "s6-svc", "-r", servicePath)
 	if err != nil {
-		// Check if error is NOT due to exit code 100
-		if exitErr, ok := err.(*exec.ExitError); !ok || exitErr.ExitCode() != 100 {
-			return fmt.Errorf("failed to restart service: %w, output: %s", err, string(output))
-		}
-		// If exit code is 100, log it and continue (service is already being monitored)
-		s.logger.Debugf("S6 service %s is already being monitored (exit code 100), continuing", servicePath)
+		s.logger.Warnf("Failed to restart service: %v", err)
+		return fmt.Errorf("failed to restart service: %w", err)
 	}
 
 	s.logger.Debugf("Restarted S6 service %s", servicePath)
@@ -1161,4 +1142,81 @@ func parseLogLine(line string) LogEntry {
 		Timestamp: timestamp,
 		Content:   parts[1],
 	}
+}
+
+// EnsureSupervision checks if the supervise directory exists for a service and notifies
+// s6-svscan if it doesn't, to trigger supervision setup.
+// Returns true if supervise directory exists (ready for supervision), false otherwise.
+func (s *DefaultService) EnsureSupervision(ctx context.Context, servicePath string, fsService filesystem.Service) (bool, error) {
+	start := time.Now()
+	defer func() {
+		metrics.ObserveReconcileTime(metrics.ComponentS6Service, servicePath+".ensureSupervision", time.Since(start))
+	}()
+
+	exists, err := s.ServiceExists(ctx, servicePath, fsService)
+	if err != nil {
+		return false, fmt.Errorf("failed to check if service exists: %w", err)
+	}
+	if !exists {
+		return false, ErrServiceNotExist
+	}
+
+	superviseDir := filepath.Join(servicePath, "supervise")
+	exists, err = fsService.FileExists(ctx, superviseDir)
+	if err != nil {
+		return false, fmt.Errorf("failed to check if supervise directory exists: %w", err)
+	}
+
+	if !exists {
+		s.logger.Debugf("Supervise directory not found for %s, notifying s6-svscan", servicePath)
+
+		_, err = s.ExecuteS6Command(ctx, servicePath, fsService, "s6-svscanctl", "-a", constants.S6BaseDir)
+		if err != nil {
+			return false, fmt.Errorf("failed to notify s6-svscan: %w", err)
+		}
+		s.logger.Debugf("Notified s6-svscan, waiting for supervise directory to be created on next reconcile")
+		return false, nil
+	}
+
+	s.logger.Debugf("Supervise directory exists for %s", servicePath)
+	return true, nil
+}
+
+// ExecuteS6Command executes an S6 command and handles its specific exit codes.
+// This function simplifies error handling by translating exit codes into appropriate errors:
+//   - Exit code 0: Success
+//   - Exit code 100: Permanent error (like command misuse), returns nil for idempotent operations
+//   - Exit code 111: Temporary error, returns ErrS6TemporaryError
+//   - Exit code 126: Permission error or similar, returns ErrS6ProgramNotExecutable
+//   - Exit code 127: Command not found, returns ErrS6ProgramNotFound
+//   - Other exit codes: Returns a descriptive error with the exit code and output
+func (s *DefaultService) ExecuteS6Command(ctx context.Context, servicePath string, fsService filesystem.Service, name string, args ...string) (string, error) {
+
+	output, err := fsService.ExecuteCommand(ctx, name, args...)
+	if err != nil {
+		// Check exit codes using errors.As to handle wrapped errors
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			switch exitErr.ExitCode() {
+			case 111:
+				s.logger.Debugf("S6 command encountered a temporary error (exit code 111) for service %s", servicePath)
+				return "", ErrS6TemporaryError
+			case 100:
+				s.logger.Debugf("S6 service %s is already being monitored (exit code 100), continuing", servicePath)
+				return "", nil
+			case 127:
+				s.logger.Debugf("S6 command could not find program (exit code 127) for service %s", servicePath)
+				return "", ErrS6ProgramNotFound
+			case 126:
+				s.logger.Debugf("S6 command could not execute program (exit code 126) for service %s", servicePath)
+				return "", ErrS6ProgramNotExecutable
+			default:
+				return "", fmt.Errorf("unknown S6 error (exit code %d) for service %s: %w, output: %s",
+					exitErr.ExitCode(), servicePath, err, string(output))
+			}
+		}
+		return "", fmt.Errorf("failed to execute s6 command (name: %s, args: %v): %w, output: %s", name, args, err, string(output))
+	}
+
+	return string(output), nil
 }

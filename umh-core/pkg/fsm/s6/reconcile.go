@@ -202,7 +202,22 @@ func (b *S6Instance) reconcileLifecycleStates(ctx context.Context, currentState 
 		}
 		return b.baseFSMInstance.SendEvent(ctx, internal_fsm.LifecycleEventCreate), true
 	case internal_fsm.LifecycleStateCreating:
-		// TODO: check if the service is created
+		// Check if the s6 service has its supervision directory set up
+		servicePath := b.servicePath
+		ready, err := b.service.EnsureSupervision(ctx, servicePath, filesystemService)
+		if err != nil {
+			b.baseFSMInstance.GetLogger().Warnf("Failed to ensure service supervision: %v", err)
+			return nil, false // Don't transition state yet, retry next reconcile
+		}
+
+		// Only transition if the supervise directory actually exists
+		if !ready {
+			b.baseFSMInstance.GetLogger().Debugf("Waiting for s6-svscan to create supervise directory")
+			return nil, false // Don't transition state yet, retry next reconcile
+		}
+
+		// If we get here, supervision is confirmed set up correctly
+		b.baseFSMInstance.GetLogger().Debugf("Service supervision confirmed, transitioning to Created state")
 		return b.baseFSMInstance.SendEvent(ctx, internal_fsm.LifecycleEventCreateDone), true
 	case internal_fsm.LifecycleStateRemoving:
 		if err := b.initiateS6Remove(ctx, filesystemService); err != nil {

@@ -16,6 +16,7 @@ package s6
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
@@ -69,6 +70,9 @@ type MockService struct {
 	// For more complex testing scenarios
 	ServiceStates    map[string]ServiceInfo
 	ExistingServices map[string]bool
+	// New fields for EnsureSupervision
+	MockExists bool
+	ErrorMode  bool
 }
 
 // NewMockService creates a new mock S6 service
@@ -199,4 +203,26 @@ func (m *MockService) GetLogs(ctx context.Context, servicePath string, filesyste
 	m.GetLogsCalled = true
 
 	return m.GetLogsResult, m.GetLogsError
+}
+
+// EnsureSupervision is a mock implementation that checks if supervise dir exists
+func (m *MockService) EnsureSupervision(ctx context.Context, servicePath string, fsService filesystem.Service) (bool, error) {
+	// Check if we should return an error
+	if m.ErrorMode {
+		return false, fmt.Errorf("mock error")
+	}
+
+	// Mock successful supervision
+	if m.MockExists {
+		return true, nil
+	}
+
+	// If first call, return false (supervision not ready yet),
+	// On subsequent calls, return true (supervision ready)
+	if !m.MockExists {
+		m.MockExists = true // Set to true for next call
+		return false, nil
+	}
+
+	return true, nil
 }
