@@ -21,12 +21,13 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/redpandaserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
+
+const baseDirForTesting = "/workspaces/united-manufacturing-hub/umh-core/data"
 
 var _ = Describe("Redpanda Service", func() {
 	var (
@@ -40,9 +41,12 @@ var _ = Describe("Redpanda Service", func() {
 		service = NewDefaultRedpandaService("redpanda", WithHTTPClient(client))
 		tick = 0
 
+		// Cleanup the data directory
+		service.filesystem.RemoveAll(context.Background(), baseDirForTesting)
+
 		// Add the service to the S6 manager
 		config := &redpandaserviceconfig.RedpandaServiceConfig{
-			BaseDir: constants.DefaultRedpandaBaseDir,
+			BaseDir: baseDirForTesting,
 		}
 		config.Topic.DefaultTopicRetentionMs = 1000000
 		config.Topic.DefaultTopicRetentionBytes = 1000000000
@@ -259,7 +263,7 @@ var _ = Describe("Redpanda Service", func() {
 		Context("with valid configuration", func() {
 			It("should generate valid YAML", func() {
 				cfg := &redpandaserviceconfig.RedpandaServiceConfig{
-					BaseDir: constants.DefaultRedpandaBaseDir,
+					BaseDir: baseDirForTesting,
 				}
 				cfg.Topic.DefaultTopicRetentionMs = 1000000
 				cfg.Topic.DefaultTopicRetentionBytes = 1000000000
@@ -304,7 +308,7 @@ var _ = Describe("Redpanda Service", func() {
 
 			// Initial config
 			config := &redpandaserviceconfig.RedpandaServiceConfig{
-				BaseDir: constants.DefaultRedpandaBaseDir,
+				BaseDir: baseDirForTesting,
 			}
 			config.Topic.DefaultTopicRetentionMs = 1000000
 			config.Topic.DefaultTopicRetentionBytes = 1000000000
@@ -354,7 +358,7 @@ var _ = Describe("Redpanda Service", func() {
 
 			// Initial config
 			initialConfig := &redpandaserviceconfig.RedpandaServiceConfig{
-				BaseDir: constants.DefaultRedpandaBaseDir,
+				BaseDir: baseDirForTesting,
 			}
 			initialConfig.Topic.DefaultTopicRetentionMs = 1000000
 			initialConfig.Topic.DefaultTopicRetentionBytes = 1000000000
@@ -367,7 +371,7 @@ var _ = Describe("Redpanda Service", func() {
 
 			// Updated config with different retention
 			updatedConfig := &redpandaserviceconfig.RedpandaServiceConfig{
-				BaseDir: constants.DefaultRedpandaBaseDir,
+				BaseDir: baseDirForTesting,
 			}
 			updatedConfig.Topic.DefaultTopicRetentionMs = 2000000
 			updatedConfig.Topic.DefaultTopicRetentionBytes = 2000000000
@@ -393,7 +397,7 @@ var _ = Describe("Redpanda Service", func() {
 			// Try to update a non-existent service
 			By("Trying to update a non-existent service")
 			err := service.UpdateRedpandaInS6Manager(ctx, &redpandaserviceconfig.RedpandaServiceConfig{
-				BaseDir: constants.DefaultRedpandaBaseDir,
+				BaseDir: baseDirForTesting,
 			})
 			Expect(err).To(Equal(ErrServiceNotExist))
 
@@ -414,14 +418,14 @@ var _ = Describe("Redpanda Service", func() {
 			// Add a service
 			By("Adding a service")
 			err := service.AddRedpandaToS6Manager(ctx, &redpandaserviceconfig.RedpandaServiceConfig{
-				BaseDir: constants.DefaultRedpandaBaseDir,
+				BaseDir: baseDirForTesting,
 			})
 			Expect(err).NotTo(HaveOccurred())
 
 			// Try to add the same service again
 			By("Trying to add the same service again")
 			err = service.AddRedpandaToS6Manager(ctx, &redpandaserviceconfig.RedpandaServiceConfig{
-				BaseDir: constants.DefaultRedpandaBaseDir,
+				BaseDir: baseDirForTesting,
 			})
 			Expect(err).To(Equal(ErrServiceAlreadyExists))
 		})
@@ -554,7 +558,7 @@ var _ = Describe("Redpanda Service", func() {
 
 			// Add the service to the S6 manager
 			err := service.AddRedpandaToS6Manager(context.Background(), &redpandaserviceconfig.RedpandaServiceConfig{
-				BaseDir: constants.DefaultRedpandaBaseDir,
+				BaseDir: baseDirForTesting,
 			})
 			Expect(err).NotTo(HaveOccurred())
 

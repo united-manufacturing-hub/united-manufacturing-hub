@@ -17,6 +17,7 @@ package redpandaserviceconfig
 import (
 	"bytes"
 	"fmt"
+	"strings"
 	"text/template"
 )
 
@@ -42,6 +43,9 @@ func (g *Generator) RenderConfig(cfg RedpandaServiceConfig) (string, error) {
 		cfg.Topic.DefaultTopicRetentionBytes = 0
 	}
 
+	// Strip trailing / from basedir (if present)
+	cfg.BaseDir = strings.TrimSuffix(cfg.BaseDir, "/")
+
 	// Resources.MaxCores & Resources.MemoryPerCoreInBytes are not used in the template, but directly passed to the redpanda binary
 
 	// Render the template
@@ -56,7 +60,7 @@ func (g *Generator) RenderConfig(cfg RedpandaServiceConfig) (string, error) {
 var simplifiedTemplate = `# Redpanda configuration file
 
 redpanda:
-  data_directory: "/data/redpanda"
+  data_directory: "{{.BaseDir}}/redpanda"
 
   seed_servers: []
 
@@ -97,5 +101,5 @@ pandaproxy: {}
 schema_registry: {}
 
 rpk:
-  coredump_dir: "/data/redpanda/coredump"
+  coredump_dir: "{{.BaseDir}}/redpanda/coredump"
 `
