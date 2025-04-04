@@ -40,11 +40,6 @@ func (instance *RedpandaInstance) registerCallbacks() {
 		instance.baseFSMInstance.GetLogger().Infof("Entering active state for %s", instance.baseFSMInstance.GetID())
 	})
 
-	// Starting phase state callbacks
-	instance.baseFSMInstance.AddCallback("enter_"+OperationalStateStartingConfigLoading, func(ctx context.Context, e *fsm.Event) {
-		instance.baseFSMInstance.GetLogger().Infof("Entering config loading state for %s", instance.baseFSMInstance.GetID())
-	})
-
 	// Running phase state callbacks
 	instance.baseFSMInstance.AddCallback("enter_"+OperationalStateIdle, func(ctx context.Context, e *fsm.Event) {
 		instance.baseFSMInstance.GetLogger().Infof("Entering idle state for %s", instance.baseFSMInstance.GetID())

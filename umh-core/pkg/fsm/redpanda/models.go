@@ -30,8 +30,7 @@ const (
 	// Starting phase states
 	// OperationalStateStarting is the state when s6 is starting the service
 	OperationalStateStarting = "starting"
-	// OperationalStateStartingConfigLoading is the state when the process itself is running but is waiting for the config to be loaded
-	OperationalStateStartingConfigLoading = "starting_config_loading"
+
 	// Running phase states
 	// OperationalStateIdle is the state when the service is running but not actively processing data
 	OperationalStateIdle = "idle"
@@ -53,9 +52,7 @@ const (
 	EventStopDone  = "stop_done"
 
 	// Starting phase events
-	EventS6Started    = "s6_started"
-	EventConfigLoaded = "config_loaded"
-	EventStartFailed  = "start_failed"
+	EventStartFailed = "start_failed"
 
 	// Running phase events
 	EventDataReceived  = "data_received"
@@ -69,7 +66,6 @@ func IsOperationalState(state string) bool {
 	switch state {
 	case OperationalStateStopped,
 		OperationalStateStarting,
-		OperationalStateStartingConfigLoading,
 		OperationalStateIdle,
 		OperationalStateActive,
 		OperationalStateDegraded,
@@ -81,12 +77,7 @@ func IsOperationalState(state string) bool {
 
 // IsStartingState returns whether the given state is a starting state
 func IsStartingState(state string) bool {
-	switch state {
-	case OperationalStateStarting,
-		OperationalStateStartingConfigLoading:
-		return true
-	}
-	return false
+	return state == OperationalStateStarting
 }
 
 // IsRunningState returns whether the given state is a running state

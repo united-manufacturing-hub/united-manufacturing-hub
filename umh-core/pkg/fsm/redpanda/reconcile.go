@@ -283,26 +283,12 @@ func (b *RedpandaInstance) reconcileStartingState(ctx context.Context, currentSt
 			return nil, false
 		}
 
-		// If redpanda is already running and config is loaded, we can go directly to Idle
-		if b.IsRedpandaConfigLoaded() {
+		// Check if "Successfully started Redpanda!" is found in logs
+		if b.IsRedpandaStarted() {
 			return b.baseFSMInstance.SendEvent(ctx, EventStartDone), true
 		}
 
-		return b.baseFSMInstance.SendEvent(ctx, EventS6Started), true
-	case OperationalStateStartingConfigLoading:
-		// Check if config has been loaded
-
-		// If the S6 is not running, go back to starting
-		if !b.IsRedpandaS6Running() {
-			return b.baseFSMInstance.SendEvent(ctx, EventStartFailed), true
-		}
-
-		// Now check whether redpanda has loaded the config
-		if !b.IsRedpandaConfigLoaded() {
-			return nil, false
-		}
-
-		return b.baseFSMInstance.SendEvent(ctx, EventConfigLoaded), true
+		return nil, false
 	default:
 		return fmt.Errorf("invalid starting state: %s", currentState), false
 	}

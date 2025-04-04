@@ -618,40 +618,17 @@ func (s *RedpandaService) GetHealthCheckAndMetrics(ctx context.Context, tick uin
 		requestClient = httpclient.NewDefaultHTTPClient()
 	}
 
-	// Check for ready state using log search (move this to a separate goroutine)
-	// We'll do this concurrently with the metrics fetch to save time
-	isReadyChan := make(chan bool, 1)
-	go func() {
-		isReady := false
-		// Only check a limited number of recent logs (checking all logs can be costly)
-		startIdx := 0
-		if len(logs) > 100 {
-			startIdx = len(logs) - 100
-		}
-
-		for i := startIdx; i < len(logs); i++ {
-			if strings.Contains(logs[i].Content, "Successfully started Redpanda!") {
-				isReady = true
-				break
-			}
-		}
-		isReadyChan <- isReady
-	}()
-
 	// Start metrics fetch
 	metricsFetchStart := time.Now()
 	resp, body, err := requestClient.GetWithBody(ctx, metricsEndpoint)
 	metricsFetchTime := time.Since(metricsFetchStart)
-
-	// Get ready state result from goroutine
-	isReady := <-isReadyChan
 
 	// Handle errors from metrics fetch
 	if err != nil {
 		return RedpandaStatus{
 			HealthCheck: HealthCheck{
 				IsLive:  false,
-				IsReady: isReady,
+				IsReady: false,
 			},
 			Metrics: Metrics{},
 			Logs:    logs,
@@ -663,7 +640,7 @@ func (s *RedpandaService) GetHealthCheckAndMetrics(ctx context.Context, tick uin
 		// Liveness is determined by a successful response
 		IsLive: resp.StatusCode == http.StatusOK,
 		// Readiness comes from logs analysis
-		IsReady: isReady,
+		IsReady: resp.StatusCode == http.StatusOK,
 		// Redpanda version is constant
 		Version: constants.RedpandaVersion,
 	}
@@ -685,7 +662,7 @@ func (s *RedpandaService) GetHealthCheckAndMetrics(ctx context.Context, tick uin
 		return RedpandaStatus{
 			HealthCheck: HealthCheck{
 				IsLive:  healthCheck.IsLive,
-				IsReady: isReady,
+				IsReady: false,
 				Version: constants.RedpandaVersion,
 			},
 			Logs: logs,

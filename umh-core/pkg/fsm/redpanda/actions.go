@@ -315,3 +315,19 @@ func (b *RedpandaInstance) IsRedpandaWithProcessingActivity() bool {
 	}
 	return b.service.HasProcessingActivity(b.ObservedState.ServiceInfo.RedpandaStatus)
 }
+
+// IsRedpandaStarted checks if "Successfully started Redpanda!" is found in logs
+// indicating that Redpanda has successfully started.
+func (b *RedpandaInstance) IsRedpandaStarted() bool {
+	if b.ObservedState.ServiceInfo.RedpandaStatus.Logs == nil {
+		return false
+	}
+
+	// Check if the success message is in the logs
+	for _, log := range b.ObservedState.ServiceInfo.RedpandaStatus.Logs {
+		if strings.Contains(log.Content, "Successfully started Redpanda!") {
+			return true
+		}
+	}
+	return false
+}
