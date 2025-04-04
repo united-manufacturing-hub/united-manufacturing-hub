@@ -363,8 +363,27 @@ func (m *FileConfigManagerWithBackoff) WriteConfig(ctx context.Context, config F
 
 // AtomicSetLocation sets the location in the config atomically
 func (m *FileConfigManager) AtomicSetLocation(ctx context.Context, location models.EditInstanceLocationModel) error {
-	m.mutexAtomicUpdate.Lock()
-	defer m.mutexAtomicUpdate.Unlock()
+	// Check if context is already cancelled
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+
+	// Try to acquire lock with context awareness
+	lockCh := make(chan struct{})
+	go func() {
+		m.mutexAtomicUpdate.Lock()
+		close(lockCh)
+	}()
+
+	// Wait for either lock acquisition or context cancellation
+	select {
+	case <-lockCh:
+		// Lock acquired successfully
+		defer m.mutexAtomicUpdate.Unlock()
+	case <-ctx.Done():
+		// Context cancelled while waiting for lock
+		return ctx.Err()
+	}
 
 	// get the current config
 	config, err := m.GetConfig(ctx, 0)
