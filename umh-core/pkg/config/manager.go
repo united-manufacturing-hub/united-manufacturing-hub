@@ -46,6 +46,8 @@ type ConfigManager interface {
 	WriteConfig(ctx context.Context, config FullConfig) error
 	// AtomicSetLocation sets the location in the config atomically
 	AtomicSetLocation(ctx context.Context, location models.EditInstanceLocationModel) error
+	// AtomicAddDataFlowComponent adds a data flow component in the config atomically
+	AtomicAddDataFlowComponent(ctx context.Context, component DataFlowComponentConfig) error
 }
 
 // FileConfigManager implements the ConfigManager interface by reading from a file
@@ -359,6 +361,28 @@ func (m *FileConfigManager) AtomicSetLocation(ctx context.Context, location mode
 	if location.WorkCell != nil {
 		config.Agent.Location[4] = *location.WorkCell
 	}
+
+	// write the config
+	if err := m.WriteConfig(ctx, config); err != nil {
+		return fmt.Errorf("failed to write config: %w", err)
+	}
+
+	return nil
+}
+
+// AtomicAddDataFlowComponent adds a data flow component in the config atomically
+func (m *FileConfigManager) AtomicAddDataFlowComponent(ctx context.Context, component DataFlowComponentConfig) error {
+	m.mutexReadAndWrite.Lock()
+	defer m.mutexReadAndWrite.Unlock()
+
+	// get the current config
+	config, err := m.GetConfig(ctx, 0)
+	if err != nil {
+		return fmt.Errorf("failed to get config: %w", err)
+	}
+
+	// add the component to the config
+	config.DataFlowComponents = append(config.DataFlowComponents, component)
 
 	// write the config
 	if err := m.WriteConfig(ctx, config); err != nil {
