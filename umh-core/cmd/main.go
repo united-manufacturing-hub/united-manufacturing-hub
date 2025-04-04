@@ -78,7 +78,7 @@ func main() {
 	}
 
 	// Load the config
-	configManager := config.NewFileConfigManager()
+	configManager := config.NewFileConfigManagerWithBackoff()
 	// this will check if the config at the given path exists and if not, it will be created with default values
 	// and then overwritten with the given config parameters (communicator, release channel, location)
 	configData, err := configManager.GetConfigWithOverwritesOrCreateNew(ctx, config.FullConfig{
@@ -108,7 +108,7 @@ func main() {
 	}()
 
 	// Start the control loop
-	controlLoop := control.NewControlLoop()
+	controlLoop := control.NewControlLoop(configManager)
 	systemSnapshot := new(fsm.SystemSnapshot)
 	systemMu := new(sync.Mutex)
 	communicationState := communication_state.CommunicationState{
