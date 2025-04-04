@@ -24,6 +24,8 @@ on:
     branches:
       - staging
       - main
+    tags:
+      - 'v*'
 
 env:
   REGISTRY: ghcr.io
@@ -111,6 +113,7 @@ jobs:
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
             type=ref,event=branch
+            type=ref,event=tag
             type=sha
 
       - name: Prepare tags with platform suffix
