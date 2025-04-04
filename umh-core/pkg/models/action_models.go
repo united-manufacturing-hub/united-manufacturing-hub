@@ -179,6 +179,28 @@ type EditMqttBrokerPayload struct {
 	UUID        uuid.UUID `json:"uuid" binding:"required"`
 }
 
+type DeployCustomDataFlowComponentPayload struct {
+	Name    string      `json:"name" binding:"required"`
+	Payload CDFCPayload `json:"payload" binding:"required"`
+	Meta    CdcfMeta    `json:"meta"`
+}
+
+type CDFCPayload struct {
+	Input    DfcDataConfig         `json:"input"`
+	Output   DfcDataConfig         `json:"output"`
+	Pipeline map[int]DfcDataConfig `json:"pipeline"`
+	Inject   DfcDataConfig         `json:"rawYAML"`
+}
+
+type DfcDataConfig struct {
+	Data string `json:"data"`
+	Type string `json:"type"`
+}
+
+type CdcfMeta struct {
+	Type string `json:"type"`
+}
+
 // EditInstanceLocationAction contains the necessary fields for setting the location of the UMH instance.
 type EditInstanceLocationAction struct {
 	Enterprise string  `json:"enterprise" binding:"required"`
