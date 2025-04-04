@@ -372,6 +372,64 @@ var _ = Describe("DataFlowComponent FSM", func() {
 			)
 			Expect(err).NotTo(HaveOccurred())
 		})
+
+		It("should directly transition from Stopping to Stopped when config doesn't exist", func() {
+			var err error
+
+			// 1. Set up active state
+			tick, err = fsmtest.WaitForInstanceState(
+				ctx, instance, dataflowcomponent.OperationalStateStopped,
+				5,
+				tick,
+			)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(instance.SetDesiredFSMState(dataflowcomponent.OperationalStateActive)).To(Succeed())
+
+			tick, err = fsmtest.WaitForInstanceState(
+				ctx, instance, dataflowcomponent.OperationalStateStarting,
+				5,
+				tick,
+			)
+			Expect(err).NotTo(HaveOccurred())
+
+			mockAdapter.SetComponentState(componentName, benthosfsm.OperationalStateActive, true)
+
+			tick, err = fsmtest.WaitForInstanceState(
+				ctx, instance, dataflowcomponent.OperationalStateActive,
+				5,
+				tick,
+			)
+			Expect(err).NotTo(HaveOccurred())
+
+			// 2. Request to stop
+			Expect(instance.SetDesiredFSMState(dataflowcomponent.OperationalStateStopped)).To(Succeed())
+
+			// 3. Wait for stopping state
+			tick, err = fsmtest.WaitForInstanceState(
+				ctx, instance, dataflowcomponent.OperationalStateStopping,
+				5,
+				tick,
+			)
+			Expect(err).NotTo(HaveOccurred())
+
+			// 4. Simulate component already removed from config
+			err = mockAdapter.RemoveComponentFromBenthosConfig(ctx, componentName)
+			Expect(err).NotTo(HaveOccurred())
+
+			// 5. Run reconcile to pick up the change
+			err, _ = instance.Reconcile(ctx, tick)
+			Expect(err).NotTo(HaveOccurred())
+			tick++
+
+			// 6. Wait for stopped state
+			tick, err = fsmtest.WaitForInstanceState(
+				ctx, instance, dataflowcomponent.OperationalStateStopped,
+				5,
+				tick,
+			)
+			Expect(err).NotTo(HaveOccurred())
+		})
 	})
 
 	// -------------------------------------------------------------------------
@@ -418,5 +476,6 @@ var _ = Describe("DataFlowComponent FSM", func() {
 			)
 			Expect(err).NotTo(HaveOccurred())
 		})
+
 	})
 })
