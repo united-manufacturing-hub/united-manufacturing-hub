@@ -159,8 +159,7 @@ var _ = Describe("Redpanda Service", func() {
 				tick++
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("connection refused"))
-				// Even with connection error, IsReady should be true if logs show successful startup
-				Expect(status.HealthCheck.IsReady).To(BeTrue())
+				Expect(status.HealthCheck.IsReady).To(BeFalse())
 			})
 		})
 
