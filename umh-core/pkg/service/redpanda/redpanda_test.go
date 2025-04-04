@@ -202,7 +202,6 @@ var _ = Describe("Redpanda Service", func() {
 				tick++
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("context deadline exceeded"))
-				// Even with context cancellation, IsReady should be true if logs show successful startup
 				Expect(status.HealthCheck.IsReady).To(BeFalse())
 			})
 		})
