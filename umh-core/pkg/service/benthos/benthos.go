@@ -1032,7 +1032,7 @@ func (s *BenthosService) ReconcileManager(ctx context.Context, tick uint64) (err
 		return ctx.Err(), false
 	}
 
-	return s.s6Manager.Reconcile(ctx, config.FullConfig{Services: s.s6ServiceConfigs}, tick)
+	return s.s6Manager.Reconcile(ctx, config.FullConfig{Internal: config.InternalConfig{Services: s.s6ServiceConfigs}}, tick)
 }
 
 // IsLogsFine analyzes Benthos logs to determine if there are any critical issues
