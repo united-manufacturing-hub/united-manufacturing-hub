@@ -377,6 +377,9 @@ func (bs *BufferedService) SyncToDisk(ctx context.Context) error {
 
 		// Now write the file
 		chg := bs.changed[path]
+		if chg == nil {
+			return fmt.Errorf("change record missing for path: %s", path)
+		}
 		if err := bs.base.WriteFile(ctx, path, chg.content, chg.perm); err != nil {
 			return fmt.Errorf("failed to write file: %w", err)
 		}
