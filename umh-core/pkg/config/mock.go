@@ -57,7 +57,7 @@ func (m *MockConfigManager) GetConfig(ctx context.Context, tick uint64) (FullCon
 }
 
 // WriteConfig implements the ConfigManager interface
-func (m *MockConfigManager) WriteConfig(ctx context.Context, cfg FullConfig) error {
+func (m *MockConfigManager) writeConfig(ctx context.Context, cfg FullConfig) error {
 	m.mutexReadOrWrite.Lock()
 	defer m.mutexReadOrWrite.Unlock()
 
@@ -117,7 +117,7 @@ func (m *MockConfigManager) AtomicSetLocation(ctx context.Context, location mode
 	}
 
 	// write the config
-	if err := m.WriteConfig(ctx, config); err != nil {
+	if err := m.writeConfig(ctx, config); err != nil {
 		return fmt.Errorf("failed to write config: %w", err)
 	}
 
