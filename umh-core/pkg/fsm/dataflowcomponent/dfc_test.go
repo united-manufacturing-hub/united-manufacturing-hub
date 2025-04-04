@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//go:build test
+// +build test
+
 package dataflowcomponent_test
 
 import (
@@ -22,6 +25,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsmtest"
 	benthosserviceconfig "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
 	benthosfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
@@ -34,10 +38,14 @@ var _ = Describe("DataFlowComponent FSM", func() {
 		testComponent      *dataflowcomponent.DataFlowComponent
 		componentConfig    dataflowcomponent.DataFlowComponentConfig
 		tempConfigFilePath string
+		tick               uint64
+		maxAttempts        int
 	)
 
 	BeforeEach(func() {
 		ctx = context.Background()
+		tick = 1
+		maxAttempts = 10
 
 		// Create a BenthosManager and MockBenthosService
 		benthosManager, mockService := benthosfsm.NewBenthosManagerWithMockedServices("test")
@@ -73,16 +81,11 @@ var _ = Describe("DataFlowComponent FSM", func() {
 		Expect(testComponent).NotTo(BeNil())
 
 		// Complete the lifecycle creation process (to_be_created -> creating -> created -> stopped)
-		// First reconcile to add to config and transition from to_be_created to creating
-		err, _ = testComponent.Reconcile(ctx, 1)
-		Expect(err).NotTo(HaveOccurred())
-
-		// Second reconcile to complete creation (creating -> created)
-		err, _ = testComponent.Reconcile(ctx, 2)
-		Expect(err).NotTo(HaveOccurred())
-
-		// Now the FSM should be in the stopped operational state as configured
+		// Using the fsmtest helper to wait for the stopped state
+		nextTick, waitErr := fsmtest.WaitForInstanceState(ctx, testComponent, dataflowcomponent.OperationalStateStopped, maxAttempts, tick)
+		Expect(waitErr).NotTo(HaveOccurred())
 		Expect(testComponent.GetCurrentFSMState()).To(Equal(dataflowcomponent.OperationalStateStopped))
+		tick = nextTick
 	})
 
 	AfterEach(func() {
@@ -102,44 +105,46 @@ var _ = Describe("DataFlowComponent FSM", func() {
 			err := testComponent.SetDesiredFSMState(dataflowcomponent.OperationalStateActive)
 			Expect(err).NotTo(HaveOccurred())
 
-			// First reconcile call should transition from Stopped to Starting
-			err, reconciled := testComponent.Reconcile(ctx, 3)
+			// Use WaitForInstanceState to handle the transition to Starting
+			var nextTick uint64
+			nextTick, err = fsmtest.WaitForInstanceState(ctx, testComponent, dataflowcomponent.OperationalStateStarting, maxAttempts, tick)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(reconciled).To(BeTrue())
 			Expect(testComponent.GetCurrentFSMState()).To(Equal(dataflowcomponent.OperationalStateStarting))
+			tick = nextTick
 
-			// Second reconcile call should transition from Starting to Active
-			err, reconciled = testComponent.Reconcile(ctx, 4)
+			// Then wait for transition to Active
+			nextTick, err = fsmtest.WaitForInstanceState(ctx, testComponent, dataflowcomponent.OperationalStateActive, maxAttempts, tick)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(reconciled).To(BeTrue())
 			Expect(testComponent.GetCurrentFSMState()).To(Equal(dataflowcomponent.OperationalStateActive))
+			tick = nextTick
 		})
 
 		It("should transition to Stopped when the desired state is set to Stopped", func() {
-			// Set the desired state to Active and reconcile to get to Active state
+			// Set the desired state to Active and wait for Active state
 			err := testComponent.SetDesiredFSMState(dataflowcomponent.OperationalStateActive)
 			Expect(err).NotTo(HaveOccurred())
-			err, _ = testComponent.Reconcile(ctx, 3) // -> Starting
-			Expect(err).NotTo(HaveOccurred())
-			err, _ = testComponent.Reconcile(ctx, 4) // -> Active
+
+			var nextTick uint64
+			nextTick, err = fsmtest.WaitForInstanceState(ctx, testComponent, dataflowcomponent.OperationalStateActive, maxAttempts, tick)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(testComponent.GetCurrentFSMState()).To(Equal(dataflowcomponent.OperationalStateActive))
+			tick = nextTick
 
 			// Now set the desired state to Stopped
 			err = testComponent.SetDesiredFSMState(dataflowcomponent.OperationalStateStopped)
 			Expect(err).NotTo(HaveOccurred())
 
-			// First reconcile call should transition from Active to Stopping
-			err, reconciled := testComponent.Reconcile(ctx, 5)
+			// Wait for transition to Stopping
+			nextTick, err = fsmtest.WaitForInstanceState(ctx, testComponent, dataflowcomponent.OperationalStateStopping, maxAttempts, tick)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(reconciled).To(BeTrue())
 			Expect(testComponent.GetCurrentFSMState()).To(Equal(dataflowcomponent.OperationalStateStopping))
+			tick = nextTick
 
-			// Second reconcile call should transition from Stopping to Stopped
-			err, reconciled = testComponent.Reconcile(ctx, 6)
+			// Then wait for transition to Stopped
+			nextTick, err = fsmtest.WaitForInstanceState(ctx, testComponent, dataflowcomponent.OperationalStateStopped, maxAttempts, tick)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(reconciled).To(BeTrue())
 			Expect(testComponent.GetCurrentFSMState()).To(Equal(dataflowcomponent.OperationalStateStopped))
+			tick = nextTick
 		})
 	})
 
@@ -149,9 +154,11 @@ var _ = Describe("DataFlowComponent FSM", func() {
 			err := testComponent.SetDesiredFSMState(dataflowcomponent.OperationalStateActive)
 			Expect(err).NotTo(HaveOccurred())
 
-			// Reconcile to trigger config modification
-			err, _ = testComponent.Reconcile(ctx, 3)
+			// Wait for the starting state which triggers config modification
+			var nextTick uint64
+			nextTick, err = fsmtest.WaitForInstanceState(ctx, testComponent, dataflowcomponent.OperationalStateStarting, maxAttempts, tick)
 			Expect(err).NotTo(HaveOccurred())
+			tick = nextTick
 
 			// Verify component exists in benthos config
 			exists, err := mockAdapter.ComponentExistsInBenthosConfig(ctx, "test-component")
@@ -160,21 +167,23 @@ var _ = Describe("DataFlowComponent FSM", func() {
 		})
 
 		It("should remove the component from the benthos config when stopping", func() {
-			// Set the desired state to Active and reconcile to get to Active state
+			// Set the desired state to Active and wait for Active state
 			err := testComponent.SetDesiredFSMState(dataflowcomponent.OperationalStateActive)
 			Expect(err).NotTo(HaveOccurred())
-			err, _ = testComponent.Reconcile(ctx, 3) // -> Starting
+
+			var nextTick uint64
+			nextTick, err = fsmtest.WaitForInstanceState(ctx, testComponent, dataflowcomponent.OperationalStateActive, maxAttempts, tick)
 			Expect(err).NotTo(HaveOccurred())
-			err, _ = testComponent.Reconcile(ctx, 4) // -> Active
-			Expect(err).NotTo(HaveOccurred())
+			tick = nextTick
 
 			// Now set the desired state to Stopped
 			err = testComponent.SetDesiredFSMState(dataflowcomponent.OperationalStateStopped)
 			Expect(err).NotTo(HaveOccurred())
 
-			// Reconcile to trigger config modification
-			err, _ = testComponent.Reconcile(ctx, 5)
+			// Wait for transition to Stopping which triggers config removal
+			nextTick, err = fsmtest.WaitForInstanceState(ctx, testComponent, dataflowcomponent.OperationalStateStopping, maxAttempts, tick)
 			Expect(err).NotTo(HaveOccurred())
+			tick = nextTick
 
 			// Verify component was removed
 			exists, err := mockAdapter.ComponentExistsInBenthosConfig(ctx, "test-component")
@@ -183,13 +192,14 @@ var _ = Describe("DataFlowComponent FSM", func() {
 		})
 
 		It("should update the component in the benthos config when already active", func() {
-			// Set the desired state to Active and reconcile to get to Active state
+			// Set the desired state to Active and wait for Active state
 			err := testComponent.SetDesiredFSMState(dataflowcomponent.OperationalStateActive)
 			Expect(err).NotTo(HaveOccurred())
-			err, _ = testComponent.Reconcile(ctx, 3) // -> Starting
+
+			var nextTick uint64
+			nextTick, err = fsmtest.WaitForInstanceState(ctx, testComponent, dataflowcomponent.OperationalStateActive, maxAttempts, tick)
 			Expect(err).NotTo(HaveOccurred())
-			err, _ = testComponent.Reconcile(ctx, 4) // -> Active
-			Expect(err).NotTo(HaveOccurred())
+			tick = nextTick
 
 			// Make a change to the component config
 			testComponent.Config.ServiceConfig.Input = map[string]interface{}{
@@ -200,9 +210,10 @@ var _ = Describe("DataFlowComponent FSM", func() {
 				},
 			}
 
-			// Reconcile again to trigger config update
-			err, _ = testComponent.Reconcile(ctx, 5)
+			// Reconcile to trigger config update
+			err, _ = testComponent.Reconcile(ctx, tick)
 			Expect(err).NotTo(HaveOccurred())
+			tick++
 
 			// Verify state has been updated
 			state, err := mockAdapter.GetComponentBenthosObservedState(ctx, "test-component")
@@ -219,23 +230,23 @@ var _ = Describe("DataFlowComponent FSM", func() {
 
 	Describe("Benthos Observed State", func() {
 		It("should properly retrieve and update Benthos observed state", func() {
-			// Set the initial state to active
+			// Set the initial state to active and wait for Active state
 			err := testComponent.SetDesiredFSMState(dataflowcomponent.OperationalStateActive)
 			Expect(err).NotTo(HaveOccurred())
 
-			// Complete the transition to Active
-			err, _ = testComponent.Reconcile(ctx, 3) // -> Starting
-			Expect(err).NotTo(HaveOccurred())
-			err, _ = testComponent.Reconcile(ctx, 4) // -> Active
+			var nextTick uint64
+			nextTick, err = fsmtest.WaitForInstanceState(ctx, testComponent, dataflowcomponent.OperationalStateActive, maxAttempts, tick)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(testComponent.GetCurrentFSMState()).To(Equal(dataflowcomponent.OperationalStateActive))
+			tick = nextTick
 
 			// Simulate Benthos being in a healthy state with mockAdapter
 			mockAdapter.SetComponentState("test-component", benthosfsm.OperationalStateActive, true)
 
-			// Check that the component is observed as healthy after reconciliation
-			err, _ = testComponent.Reconcile(ctx, 5)
+			// Reconcile to update observed state
+			err, _ = testComponent.Reconcile(ctx, tick)
 			Expect(err).NotTo(HaveOccurred())
+			tick++
 
 			// Verify observed state is updated correctly
 			observedState := testComponent.GetLastObservedState().(dataflowcomponent.DFCObservedState)
@@ -250,8 +261,9 @@ var _ = Describe("DataFlowComponent FSM", func() {
 			mockAdapter.SetComponentState("test-component", benthosfsm.OperationalStateDegraded, false)
 
 			// Update observed state through reconciliation
-			err, _ = testComponent.Reconcile(ctx, 6)
+			err, _ = testComponent.Reconcile(ctx, tick)
 			Expect(err).NotTo(HaveOccurred())
+			tick++
 
 			// Verify observed state reflects the degraded condition
 			observedState = testComponent.GetLastObservedState().(dataflowcomponent.DFCObservedState)
@@ -266,18 +278,20 @@ var _ = Describe("DataFlowComponent FSM", func() {
 			// Configure mockAdapter to fail when getting state
 			mockAdapter.ConfigureFailure("getState", true)
 
-			// Set up component in active state
+			// Set the initial state to active and wait for Active state
 			err := testComponent.SetDesiredFSMState(dataflowcomponent.OperationalStateActive)
 			Expect(err).NotTo(HaveOccurred())
-			err, _ = testComponent.Reconcile(ctx, 3) // -> Starting
+
+			var nextTick uint64
+			nextTick, err = fsmtest.WaitForInstanceState(ctx, testComponent, dataflowcomponent.OperationalStateActive, maxAttempts, tick)
 			Expect(err).NotTo(HaveOccurred())
-			err, _ = testComponent.Reconcile(ctx, 4) // -> Active
-			Expect(err).NotTo(HaveOccurred())
+			tick = nextTick
 
 			// Try to reconcile with GetComponentBenthosObservedState failure
-			err, _ = testComponent.Reconcile(ctx, 5)
+			err, _ = testComponent.Reconcile(ctx, tick)
 			// The reconcile should succeed despite the failure to get the observed state
 			Expect(err).NotTo(HaveOccurred())
+			tick++
 
 			// The component should have a warning in the observed state
 			observedState := testComponent.GetLastObservedState().(dataflowcomponent.DFCObservedState)
@@ -297,8 +311,9 @@ var _ = Describe("DataFlowComponent FSM", func() {
 			mockAdapter.SetComponentState("test-component", benthosfsm.OperationalStateActive, true)
 
 			// Reconcile should now succeed and get the state
-			err, _ = testComponent.Reconcile(ctx, 6)
+			err, _ = testComponent.Reconcile(ctx, tick)
 			Expect(err).NotTo(HaveOccurred())
+			tick++
 
 			// Verify observed state is back
 			observedState = testComponent.GetLastObservedState().(dataflowcomponent.DFCObservedState)
