@@ -21,6 +21,7 @@ import (
 
 	internal_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
+	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 )
 
 // Reconcile examines the DataFlowComponent and, in three steps:
@@ -188,6 +189,12 @@ func (d *DataFlowComponent) reconcileTransitionToActive(ctx context.Context, cur
 				// Check if we should transition to degraded if the service has no state
 				if benthosState == nil {
 					d.baseFSMInstance.GetLogger().Warnf("Service %s is not running but should be in active state, transitioning to degraded", d.Config.Name)
+					return d.baseFSMInstance.SendEvent(ctx, EventDegraded), true
+				}
+
+				// Check if the benthosState itself is degraded
+				if benthosState.ServiceInfo.S6FSMState != s6fsm.OperationalStateRunning {
+					d.baseFSMInstance.GetLogger().Warnf("Service %s is degraded but should be in active state, transitioning to degraded", d.Config.Name)
 					return d.baseFSMInstance.SendEvent(ctx, EventDegraded), true
 				}
 

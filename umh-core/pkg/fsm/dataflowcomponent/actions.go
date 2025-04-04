@@ -134,7 +134,8 @@ func (d *DataFlowComponent) updateObservedState(ctx context.Context) error {
 		benthosState, err := d.BenthosConfigManager.GetComponentBenthosObservedState(ctx, d.Config.Name)
 		if err != nil {
 			logger.Warnf("Failed to get Benthos observed state for component %s: %v", d.Config.Name, err)
-			// Don't return error here, we can continue with partial information
+			d.ObservedState.LastError = err.Error()
+			d.ObservedState.LastConfigUpdateSuccessful = false
 		} else {
 			d.ObservedState.BenthosStateMap[d.Config.Name] = benthosState
 			logger.Debugf("Updated Benthos observed state for component %s", d.Config.Name)

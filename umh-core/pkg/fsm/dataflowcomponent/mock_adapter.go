@@ -39,6 +39,9 @@ type MockBenthosManagerAdapter struct {
 	shouldFailUpdate bool
 	shouldFailRemove bool
 	shouldFailExists bool
+
+	// Permanent error simulation
+	PermanentError error
 }
 
 // NewMockBenthosManagerAdapter creates a new adapter using the provided BenthosManager and MockBenthosService
@@ -141,6 +144,10 @@ func (m *MockBenthosManagerAdapter) ComponentExistsInBenthosConfig(ctx context.C
 
 // GetComponentBenthosObservedState retrieves the observed state of a component from the mocked BenthosManager
 func (m *MockBenthosManagerAdapter) GetComponentBenthosObservedState(ctx context.Context, componentName string) (*benthosfsm.BenthosObservedState, error) {
+	if m.PermanentError != nil {
+		return nil, m.PermanentError
+	}
+
 	if m.shouldFailGet {
 		return nil, fmt.Errorf("simulated error getting observed state")
 	}

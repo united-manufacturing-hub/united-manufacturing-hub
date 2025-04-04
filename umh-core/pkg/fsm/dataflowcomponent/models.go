@@ -151,3 +151,8 @@ func (d *DataFlowComponent) GetDesiredFSMState() string {
 func (d *DataFlowComponent) GetExpectedMaxP95ExecutionTimePerInstance() time.Duration {
 	return constants.BenthosExpectedMaxP95ExecutionTimePerInstance
 }
+
+// GetError returns the last error that occurred during reconciliation
+func (d *DataFlowComponent) GetError() error {
+	return d.baseFSMInstance.GetError()
+}

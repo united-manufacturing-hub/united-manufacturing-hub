@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//go:build test
+// +build test
+
 package dataflowcomponent_test
 
 import (
@@ -21,7 +24,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-func TestDFC(t *testing.T) {
+func TestDataFlowComponent(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Data Flow Component Suite")
+	RunSpecs(t, "DataFlowComponent Suite")
 }
