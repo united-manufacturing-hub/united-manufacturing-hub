@@ -36,7 +36,11 @@ type Service interface {
 	// WriteFile writes data to a file respecting the context
 	WriteFile(ctx context.Context, path string, data []byte, perm os.FileMode) error
 
+	// PathExists checks if a file or directory exists at the given path
+	PathExists(ctx context.Context, path string) (bool, error)
+
 	// FileExists checks if a file exists
+	// Deprecated: use PathExists instead
 	FileExists(ctx context.Context, path string) (bool, error)
 
 	// Remove removes a file or directory
@@ -163,8 +167,8 @@ func (s *DefaultService) WriteFile(ctx context.Context, path string, data []byte
 	}
 }
 
-// FileExists checks if a file exists
-func (s *DefaultService) FileExists(ctx context.Context, path string) (bool, error) {
+// PathExists checks if a path (file or directory) exists
+func (s *DefaultService) PathExists(ctx context.Context, path string) (bool, error) {
 	if err := s.checkContext(ctx); err != nil {
 		return false, err
 	}
@@ -184,7 +188,7 @@ func (s *DefaultService) FileExists(ctx context.Context, path string) (bool, err
 			return
 		}
 		if err != nil {
-			resCh <- result{false, fmt.Errorf("failed to check if file exists: %w", err)}
+			resCh <- result{false, fmt.Errorf("failed to check if path exists: %w", err)}
 			return
 		}
 		resCh <- result{true, nil}
@@ -200,6 +204,12 @@ func (s *DefaultService) FileExists(ctx context.Context, path string) (bool, err
 	case <-ctx.Done():
 		return false, ctx.Err()
 	}
+}
+
+// FileExists checks if a file exists
+// Deprecated: use PathExists instead
+func (s *DefaultService) FileExists(ctx context.Context, path string) (bool, error) {
+	return s.PathExists(ctx, path)
 }
 
 // Remove removes a file or directory

@@ -31,6 +31,7 @@ type MockFileSystem struct {
 	FailedOperations    map[string]bool
 	ReadFileFunc        func(ctx context.Context, path string) ([]byte, error)
 	WriteFileFunc       func(ctx context.Context, path string, data []byte, perm os.FileMode) error
+	PathExistsFunc      func(ctx context.Context, path string) (bool, error)
 	FileExistsFunc      func(ctx context.Context, path string) (bool, error)
 	EnsureDirectoryFunc func(ctx context.Context, path string) error
 	RemoveFunc          func(ctx context.Context, path string) error
@@ -157,10 +158,44 @@ func (m *MockFileSystem) WriteFile(ctx context.Context, path string, data []byte
 	return nil
 }
 
+// PathExists checks if a path exists
+func (m *MockFileSystem) PathExists(ctx context.Context, path string) (bool, error) {
+	if m.PathExistsFunc != nil {
+		return m.PathExistsFunc(ctx, path)
+	}
+
+	// For backward compatibility, respect FileExistsFunc if set
+	if m.FileExistsFunc != nil {
+		return m.FileExistsFunc(ctx, path)
+	}
+
+	shouldFail, delay := m.simulateRandomBehavior("PathExists:" + path)
+
+	if delay > 0 {
+		select {
+		case <-time.After(delay):
+			// Delay completed
+		case <-ctx.Done():
+			return false, ctx.Err()
+		}
+	}
+
+	if shouldFail {
+		return false, errors.New("simulated failure in PathExists")
+	}
+	return true, nil
+}
+
 // FileExists checks if a file exists
+// Deprecated: use PathExists instead
 func (m *MockFileSystem) FileExists(ctx context.Context, path string) (bool, error) {
 	if m.FileExistsFunc != nil {
 		return m.FileExistsFunc(ctx, path)
+	}
+
+	// If FileExistsFunc is not set but PathExistsFunc is, use that
+	if m.PathExistsFunc != nil {
+		return m.PathExistsFunc(ctx, path)
 	}
 
 	shouldFail, delay := m.simulateRandomBehavior("FileExists:" + path)
@@ -367,9 +402,15 @@ func (m *MockFileSystem) WithWriteFileFunc(fn func(ctx context.Context, path str
 	return m
 }
 
-// WithFileExistsFunc sets a custom implementation for FileExists
+// WithFileExistsFunc sets a custom function for FileExists
 func (m *MockFileSystem) WithFileExistsFunc(fn func(ctx context.Context, path string) (bool, error)) *MockFileSystem {
 	m.FileExistsFunc = fn
+	return m
+}
+
+// WithPathExistsFunc sets a custom function for PathExists
+func (m *MockFileSystem) WithPathExistsFunc(fn func(ctx context.Context, path string) (bool, error)) *MockFileSystem {
+	m.PathExistsFunc = fn
 	return m
 }
 

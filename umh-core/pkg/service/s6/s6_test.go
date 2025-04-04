@@ -296,7 +296,7 @@ var _ = Describe("S6 Service", func() {
 		Context("when the service does not exist", func() {
 			BeforeEach(func() {
 				// Setup mock file system to return service does not exist
-				mockFS.WithFileExistsFunc(func(ctx context.Context, path string) (bool, error) {
+				mockFS.WithPathExistsFunc(func(ctx context.Context, path string) (bool, error) {
 					return false, nil
 				})
 			})
@@ -311,7 +311,7 @@ var _ = Describe("S6 Service", func() {
 		Context("when the service exists but the config file does not", func() {
 			BeforeEach(func() {
 				// Setup mock file system to return service exists but file does not
-				mockFS.WithFileExistsFunc(func(ctx context.Context, path string) (bool, error) {
+				mockFS.WithPathExistsFunc(func(ctx context.Context, path string) (bool, error) {
 					servicePath := filepath.Join(constants.S6BaseDir, "test-service")
 					// Service directory exists
 					if path == servicePath {
@@ -336,7 +336,7 @@ var _ = Describe("S6 Service", func() {
 		Context("when both service and config file exist", func() {
 			BeforeEach(func() {
 				// Setup mock file system to return both service and file exist
-				mockFS.WithFileExistsFunc(func(ctx context.Context, path string) (bool, error) {
+				mockFS.WithPathExistsFunc(func(ctx context.Context, path string) (bool, error) {
 					return true, nil
 				})
 

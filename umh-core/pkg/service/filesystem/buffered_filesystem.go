@@ -461,8 +461,8 @@ func (bs *BufferedService) WriteFile(ctx context.Context, path string, data []by
 	return nil
 }
 
-// FileExists checks the in-memory map only.
-func (bs *BufferedService) FileExists(ctx context.Context, path string) (bool, error) {
+// PathExists checks if a path (file or directory) exists in the in-memory map
+func (bs *BufferedService) PathExists(ctx context.Context, path string) (bool, error) {
 	bs.mu.Lock()
 	defer bs.mu.Unlock()
 
@@ -475,7 +475,15 @@ func (bs *BufferedService) FileExists(ctx context.Context, path string) (bool, e
 	if inChanged && chg.removed {
 		return false, nil
 	}
-	return !st.isDir, nil
+	// We have the file entry and it's not marked for removal, so it exists
+	_ = st // Using st to avoid unused variable warning
+	return true, nil
+}
+
+// FileExists checks the in-memory map only.
+// Deprecated: use PathExists instead
+func (bs *BufferedService) FileExists(ctx context.Context, path string) (bool, error) {
+	return bs.PathExists(ctx, path)
 }
 
 // Remove marks the file for removal in memory.

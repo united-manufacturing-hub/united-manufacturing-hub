@@ -654,7 +654,7 @@ func (s *DefaultService) ServiceExists(ctx context.Context, servicePath string, 
 		metrics.ObserveReconcileTime(metrics.ComponentS6Service, servicePath+".serviceExists", time.Since(start))
 	}()
 
-	exists, err := fsService.FileExists(ctx, servicePath)
+	exists, err := fsService.PathExists(ctx, servicePath)
 	if err != nil {
 		return false, fmt.Errorf("failed to check if S6 service exists: %w", err)
 	}
