@@ -60,9 +60,11 @@ var _ = Describe("EditInstance", func() {
 					1: "Old Site",
 				},
 			},
-			Services: []config.S6FSMConfig{},
-			Benthos:  []config.BenthosConfig{},
-			Nmap:     []config.NmapConfig{},
+			Internal: config.InternalConfig{
+				Services: []config.S6FSMConfig{},
+				Benthos:  []config.BenthosConfig{},
+				Nmap:     []config.NmapConfig{},
+			},
 		}
 
 		mockConfig = config.NewMockConfigManager().WithConfig(initialConfig)

@@ -15,4 +15,5 @@
 agent:
   metricsPort: 8080
 
-services: []
+internal:
+  services: []
