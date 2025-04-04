@@ -33,3 +33,16 @@ benthos:
           count: 0 # Set to 0 for unlimited messages
       output:
         stdout: {}
+
+
+dataFlowComponents:
+  - name: data-flow-hellooo-world
+    desiredState: active
+    serviceConfig:
+      input:
+        generate:
+          mapping: root = "hello world from Data Flow Component!"
+          interval: 1s
+          count: 0 # Set to 0 for unlimited messages
+      output:
+        stdout: {}
