@@ -180,16 +180,23 @@ type EditMqttBrokerPayload struct {
 }
 
 type DeployCustomDataFlowComponentPayload struct {
-	Name    string      `json:"name" binding:"required"`
-	Payload CDFCPayload `json:"payload" binding:"required"`
-	Meta    CdcfMeta    `json:"meta"`
+	Name              string                         `json:"name" binding:"required"`
+	Payload           DeployDataFlowComponentPayload `json:"payload" binding:"required"`
+	Meta              CdcfMeta                       `json:"meta"`
+	IgnoreHealthCheck bool                           `json:"ignoreHealthCheck"`
+}
+
+type DeployDataFlowComponentPayload struct {
+	CDFCPayload CDFCPayload `json:"customDataFlowComponent" binding:"required"`
 }
 
 type CDFCPayload struct {
-	Input    DfcDataConfig         `json:"input"`
-	Output   DfcDataConfig         `json:"output"`
-	Pipeline map[int]DfcDataConfig `json:"pipeline"`
-	Inject   DfcDataConfig         `json:"rawYAML"`
+	Input           DfcDataConfig            `json:"input"`
+	Output          DfcDataConfig            `json:"output"`
+	Pipeline        map[string]DfcDataConfig `json:"pipeline"`
+	Inject          DfcDataConfig            `json:"rawYAML"`
+	IgnoreErrors    bool                     `json:"ignoreErrors"`
+	BenthosImageTag string                   `json:"benthosImageTag"`
 }
 
 type DfcDataConfig struct {

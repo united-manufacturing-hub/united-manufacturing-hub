@@ -392,6 +392,10 @@ func (m *FileConfigManager) AtomicAddDataFlowComponent(ctx context.Context, comp
 	return nil
 }
 
+func (m *FileConfigManagerWithBackoff) AtomicAddDataFlowComponent(ctx context.Context, component DataFlowComponentConfig) error {
+	return m.configManager.AtomicAddDataFlowComponent(ctx, component)
+}
+
 // AtomicSetLocation delegates to the underlying FileConfigManager
 func (m *FileConfigManagerWithBackoff) AtomicSetLocation(ctx context.Context, location models.EditInstanceLocationModel) error {
 	// Check if context is already cancelled

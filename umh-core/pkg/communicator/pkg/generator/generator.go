@@ -224,6 +224,7 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 					"data-bridge",
 					"protocol-converter",
 					"custom-dfc",
+					"action-deploy-data-flow-component",
 				},
 			},
 		},
