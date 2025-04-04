@@ -32,14 +32,15 @@ func NewBuilder() *Builder {
 			Agent: config.AgentConfig{
 				MetricsPort: 8080, // Default port inside container
 			},
-			Redpanda: config.RedpandaConfig{
-				FSMInstanceConfig: config.FSMInstanceConfig{
-					Name:            "redpanda",
-					DesiredFSMState: "stopped",
-				},
 			Internal: config.InternalConfig{
 				Services: []config.S6FSMConfig{},
 				Benthos:  []config.BenthosConfig{},
+				Redpanda: config.RedpandaConfig{
+					FSMInstanceConfig: config.FSMInstanceConfig{
+						Name:            "redpanda",
+						DesiredFSMState: "stopped",
+					},
+				},
 			},
 		},
 	}
@@ -81,7 +82,7 @@ output:
 
 	// Set the Redpanda configuration for the RedpandaManagerCore to handle
 	// instead of trying to manage it as an S6 service
-	b.full.Redpanda = config.RedpandaConfig{
+	b.full.Internal.Redpanda = config.RedpandaConfig{
 		FSMInstanceConfig: config.FSMInstanceConfig{
 			Name:            "redpanda",
 			DesiredFSMState: "stopped", // Set to stopped to avoid starvation during tests

@@ -26,15 +26,15 @@ import (
 
 type FullConfig struct {
 	Agent              AgentConfig               `yaml:"agent"`                        // Agent config, requires restart to take effect
-	Redpanda           RedpandaConfig            `yaml:"redpanda,omitempty"`           // Redpanda config, can be updated while running
 	DataFlowComponents []DataFlowComponentConfig `yaml:"dataFlowComponents,omitempty"` // DataFlowComponent services to manage
-	Internal InternalConfig `yaml:"internal,omitempty""` // Internal config, not to be used by the user, only to be used for testing internal components
+	Internal           InternalConfig            `yaml:"internal,omitempty"`           // Internal config, not to be used by the user, only to be used for testing internal components
 }
 
 type InternalConfig struct {
-	Services []S6FSMConfig   `yaml:"services,omitempty""` // Services to manage, can be updated while running
-	Benthos  []BenthosConfig `yaml:"benthos,omitempty""`  // Benthos services to manage, can be updated while running
-	Nmap     []NmapConfig    `yaml:"nmap,omitempty""`     // Nmap services to manage, can be updated while running
+	Services []S6FSMConfig   `yaml:"services,omitempty"` // Services to manage, can be updated while running
+	Benthos  []BenthosConfig `yaml:"benthos,omitempty"`  // Benthos services to manage, can be updated while running
+	Nmap     []NmapConfig    `yaml:"nmap,omitempty"`     // Nmap services to manage, can be updated while running
+	Redpanda RedpandaConfig  `yaml:"redpanda,omitempty"` // Redpanda config, can be updated while running
 }
 
 type AgentConfig struct {
@@ -125,9 +125,6 @@ type DataFlowComponentConfig struct {
 func (c FullConfig) Clone() FullConfig {
 	clone := FullConfig{
 		Agent:              c.Agent,
-		Services:           make([]S6FSMConfig, len(c.Services)),
-		Benthos:            make([]BenthosConfig, len(c.Benthos)),
-		Nmap:               make([]NmapConfig, len(c.Nmap)),
 		DataFlowComponents: make([]DataFlowComponentConfig, len(c.DataFlowComponents)),
 	}
 	// deep copy the location map if it exists

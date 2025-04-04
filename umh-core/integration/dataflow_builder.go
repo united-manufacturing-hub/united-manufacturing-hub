@@ -34,31 +34,33 @@ func NewDataFlowComponentBuilder() *DataFlowComponentBuilder {
 			Agent: config.AgentConfig{
 				MetricsPort: 8080,
 			},
-			Services:           []config.S6FSMConfig{},
-			Benthos:            []config.BenthosConfig{},
-			DataFlowComponents: []config.DataFlowComponentConfig{},
-			Redpanda: config.RedpandaConfig{
-				FSMInstanceConfig: config.FSMInstanceConfig{
-					Name:            "redpanda",
-					DesiredFSMState: "stopped",
-				},
-				RedpandaServiceConfig: redpandaserviceconfig.RedpandaServiceConfig{
-					Topic: struct {
-						DefaultTopicRetentionMs    int `yaml:"defaultTopicRetentionMs"`
-						DefaultTopicRetentionBytes int `yaml:"defaultTopicRetentionBytes"`
-					}{
-						DefaultTopicRetentionMs:    604800000,
-						DefaultTopicRetentionBytes: 0,
+			Internal: config.InternalConfig{
+				Services: []config.S6FSMConfig{},
+				Benthos:  []config.BenthosConfig{},
+				Redpanda: config.RedpandaConfig{
+					FSMInstanceConfig: config.FSMInstanceConfig{
+						Name:            "redpanda",
+						DesiredFSMState: "stopped",
 					},
-					Resources: struct {
-						MaxCores             int `yaml:"maxCores"`
-						MemoryPerCoreInBytes int `yaml:"memoryPerCoreInBytes"`
-					}{
-						MaxCores:             1,
-						MemoryPerCoreInBytes: 2147483648,
+					RedpandaServiceConfig: redpandaserviceconfig.RedpandaServiceConfig{
+						Topic: struct {
+							DefaultTopicRetentionMs    int `yaml:"defaultTopicRetentionMs"`
+							DefaultTopicRetentionBytes int `yaml:"defaultTopicRetentionBytes"`
+						}{
+							DefaultTopicRetentionMs:    604800000,
+							DefaultTopicRetentionBytes: 0,
+						},
+						Resources: struct {
+							MaxCores             int `yaml:"maxCores"`
+							MemoryPerCoreInBytes int `yaml:"memoryPerCoreInBytes"`
+						}{
+							MaxCores:             1,
+							MemoryPerCoreInBytes: 2147483648,
+						},
 					},
 				},
 			},
+			DataFlowComponents: []config.DataFlowComponentConfig{},
 		},
 		activeDataFlowComps: make(map[string]bool),
 	}
@@ -173,7 +175,7 @@ func (b *DataFlowComponentBuilder) CountActiveDataFlowComponents() int {
 
 // EnableRedpanda enables the Redpanda service in the configuration
 func (b *DataFlowComponentBuilder) EnableRedpanda() *DataFlowComponentBuilder {
-	b.full.Redpanda.DesiredFSMState = "active"
+	b.full.Internal.Redpanda.DesiredFSMState = "active"
 	return b
 }
 
@@ -202,7 +204,7 @@ func (b *DataFlowComponentBuilder) AddBenthosService(name string) *DataFlowCompo
 	}
 
 	// Add to configuration
-	b.full.Benthos = append(b.full.Benthos, benthosConfig)
+	b.full.Internal.Benthos = append(b.full.Internal.Benthos, benthosConfig)
 	return b
 }
 

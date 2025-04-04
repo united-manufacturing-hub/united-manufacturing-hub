@@ -188,7 +188,7 @@ func (m *DataFlowComponentManager) Reconcile(ctx context.Context, cfg config.Ful
 
 	// Create a new config object to pass to the BenthosManager
 	cfgForBenthos := cfg.Clone()
-	cfgForBenthos.Benthos = benthosConfigs
+	cfgForBenthos.Internal.Benthos = benthosConfigs
 
 	// Pass the modified config to the BenthosManager for reconciliation
 	err, benthosReconciled := m.benthosManager.Reconcile(ctx, cfgForBenthos, tick)

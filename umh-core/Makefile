@@ -53,6 +53,7 @@ VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "0.0
 install:
 	go install go.uber.org/nilaway/cmd/nilaway@$(NILWAY_VERSION)
 	go install github.com/onsi/ginkgo/v2/ginkgo@$(GINKGO_VERSION)
+	go install github.com/evilmartians/lefthook@latest
 
 download-docker-binaries:
 	@mkdir -p .docker-cache/s6-overlay .docker-cache/benthos .docker-cache/redpanda

@@ -926,7 +926,7 @@ func (s *RedpandaService) ReconcileManager(ctx context.Context, tick uint64) (er
 		return ctx.Err(), false
 	}
 
-	return s.s6Manager.Reconcile(ctx, config.FullConfig{Services: s.s6ServiceConfigs}, tick)
+	return s.s6Manager.Reconcile(ctx, config.FullConfig{Internal: config.InternalConfig{Services: s.s6ServiceConfigs}}, tick)
 }
 
 // IsLogsFine analyzes Redpanda logs to determine if there are any critical issues
