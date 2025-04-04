@@ -34,8 +34,10 @@ func NewBenthosBuilder() *BenthosBuilder {
 			Agent: config.AgentConfig{
 				MetricsPort: 8080,
 			},
-			Services: []config.S6FSMConfig{},
-			Benthos:  []config.BenthosConfig{},
+			Internal: config.InternalConfig{
+				Services: []config.S6FSMConfig{},
+				Benthos:  []config.BenthosConfig{},
+			},
 		},
 		activeBenthos: make(map[string]bool),
 	}
@@ -65,7 +67,7 @@ func (b *BenthosBuilder) AddGoldenBenthos() *BenthosBuilder {
 	}
 
 	// Add to configuration
-	b.full.Benthos = append(b.full.Benthos, benthosConfig)
+	b.full.Internal.Benthos = append(b.full.Internal.Benthos, benthosConfig)
 	b.activeBenthos["golden-benthos"] = true
 
 	b.full.Redpanda = config.RedpandaConfig{
@@ -102,7 +104,7 @@ func (b *BenthosBuilder) AddGeneratorBenthos(name string, interval string) *Bent
 	}
 
 	// Add to configuration
-	b.full.Benthos = append(b.full.Benthos, benthosConfig)
+	b.full.Internal.Benthos = append(b.full.Internal.Benthos, benthosConfig)
 	b.activeBenthos[name] = true
 	return b
 }
@@ -110,12 +112,12 @@ func (b *BenthosBuilder) AddGeneratorBenthos(name string, interval string) *Bent
 // UpdateGeneratorBenthos updates the interval of an existing generator Benthos service
 func (b *BenthosBuilder) UpdateGeneratorBenthos(name string, newInterval string) *BenthosBuilder {
 	// Find and update the service
-	for i, benthos := range b.full.Benthos {
+	for i, benthos := range b.full.Internal.Benthos {
 		if benthos.FSMInstanceConfig.Name == name {
 			// Create updated input config with new interval
 			if input, ok := benthos.BenthosServiceConfig.Input["generate"].(map[string]interface{}); ok {
 				input["interval"] = newInterval
-				b.full.Benthos[i].BenthosServiceConfig.Input["generate"] = input
+				b.full.Internal.Benthos[i].BenthosServiceConfig.Input["generate"] = input
 			}
 			break
 		}
@@ -125,9 +127,9 @@ func (b *BenthosBuilder) UpdateGeneratorBenthos(name string, newInterval string)
 
 // StartBenthos sets a Benthos service to active state
 func (b *BenthosBuilder) StartBenthos(name string) *BenthosBuilder {
-	for i, benthos := range b.full.Benthos {
+	for i, benthos := range b.full.Internal.Benthos {
 		if benthos.FSMInstanceConfig.Name == name {
-			b.full.Benthos[i].FSMInstanceConfig.DesiredFSMState = "active"
+			b.full.Internal.Benthos[i].FSMInstanceConfig.DesiredFSMState = "active"
 			b.activeBenthos[name] = true
 			break
 		}
@@ -137,9 +139,9 @@ func (b *BenthosBuilder) StartBenthos(name string) *BenthosBuilder {
 
 // StopBenthos sets a Benthos service to inactive state
 func (b *BenthosBuilder) StopBenthos(name string) *BenthosBuilder {
-	for i, benthos := range b.full.Benthos {
+	for i, benthos := range b.full.Internal.Benthos {
 		if benthos.FSMInstanceConfig.Name == name {
-			b.full.Benthos[i].FSMInstanceConfig.DesiredFSMState = "stopped"
+			b.full.Internal.Benthos[i].FSMInstanceConfig.DesiredFSMState = "stopped"
 			b.activeBenthos[name] = false
 			break
 		}
