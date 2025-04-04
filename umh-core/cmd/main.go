@@ -158,7 +158,7 @@ func SystemSnapshotLogger(ctx context.Context, controlLoop *control.ControlLoop,
 				systemMu.Unlock()
 			}
 			if snapshot == nil {
-				sentry.ReportIssuef(sentry.IssueTypeWarning, logger, "No system snapshot available")
+				sentry.ReportIssuef(sentry.IssueTypeWarning, logger, "[SystemSnapshotLogger] No system snapshot available")
 				continue
 			}
 
@@ -204,7 +204,7 @@ func enableBackendConnection(config *config.FullConfig, state *fsm.SystemSnapsho
 
 		login := v2.NewLogin(config.Agent.CommunicatorConfig.AuthToken, false)
 		if login == nil {
-			sentry.ReportIssuef(sentry.IssueTypeError, logger, "Failed to create login object")
+			sentry.ReportIssuef(sentry.IssueTypeError, logger, "[v2.NewLogin] Failed to create login object")
 			return
 		}
 		communicationState.LoginResponse = login
