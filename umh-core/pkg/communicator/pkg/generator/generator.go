@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
+	"reflect"
 	"sync"
 	"time"
 
@@ -34,8 +35,9 @@ import (
 
 const (
 	// Manager name constants
-	containerManagerName = logger.ComponentContainerManager + "_" + constants.DefaultManagerName
-	benthosManagerName   = logger.ComponentBenthosManager + "_" + constants.DefaultManagerName
+	containerManagerName         = logger.ComponentContainerManager + "_" + constants.DefaultManagerName
+	benthosManagerName           = logger.ComponentBenthosManager + "_" + constants.DefaultManagerName
+	dataFlowComponentManagerName = logger.ComponentDataFlowComponentManager + "_" + constants.DefaultManagerName
 
 	// Instance name constants
 	coreInstanceName = "Core"
@@ -94,30 +96,42 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 		return nil
 	}
 
-	// Create container data from the container manager if available
-	var containerData models.Container
+	// Start with a base mocked status message
+	statusMessage := createMockedStatusMessage(s.state.Tick)
 
+	// Update each component with real data if available
+	s.updateContainerData(statusMessage)
+	s.updateLocationData(statusMessage)
+	s.updateDfcData(statusMessage)
+	s.updateUnifiedNamespaceData(statusMessage)
+
+	// Return the populated status message
+	return statusMessage
+}
+
+// updateContainerData updates the status message with real container data if available
+func (s *StatusCollectorType) updateContainerData(statusMessage *models.StatusMessage) {
 	if containerManager, exists := s.state.Managers[containerManagerName]; exists {
 		instances := containerManager.GetInstances()
 
 		if instance, ok := instances[coreInstanceName]; ok {
-			containerData = buildContainerDataFromSnapshot(instance, s.logger)
+			statusMessage.Core.Container = buildContainerDataFromSnapshot(instance, s.logger)
+			return
 		} else {
 			s.logger.Warn("Core instance not found in container manager",
 				zap.String("instanceName", coreInstanceName))
-			containerData = buildDefaultContainerData()
 		}
 	} else {
 		s.logger.Warn("Container manager not found in system snapshot",
 			zap.String("managerName", containerManagerName))
-
-		containerData = buildDefaultContainerData()
 	}
 
-	// Get the actual location from the system configuration
-	location := map[int]string{}
+	// Return empty container data if real data isn't available
+	statusMessage.Core.Container = models.Container{}
+}
 
-	// Try to get the location from the config manager first
+// updateLocationData updates the status message with real location data if available
+func (s *StatusCollectorType) updateLocationData(statusMessage *models.StatusMessage) {
 	if s.configManager != nil {
 		// Create a context with a short timeout for getting the config
 		ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
@@ -126,18 +140,66 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 		// Get the current config
 		cfg, err := s.configManager.GetConfig(ctx, 0)
 		if err == nil {
-			location = cfg.Agent.Location
+			statusMessage.Core.Agent.Location = cfg.Agent.Location
+			return
 		} else {
 			s.logger.Warn("Failed to get location from config manager", zap.Error(err))
 		}
 	}
 
-	// Create a mocked status message
-	statusMessage := &models.StatusMessage{
+	// Return empty location data if real data isn't available
+	statusMessage.Core.Agent.Location = map[int]string{}
+}
+
+// updateDfcData updates the status message with real DFC data if available
+func (s *StatusCollectorType) updateDfcData(statusMessage *models.StatusMessage) {
+	if dfcManager, exists := s.state.Managers[dataFlowComponentManagerName]; exists {
+		instances := dfcManager.GetInstances()
+
+		// If we have DFC instances, use them
+		if len(instances) > 0 {
+			statusMessage.Core.Dfcs = buildDfcsFromInstances(instances, s.logger)
+			return
+		} else {
+			s.logger.Debug("No DFC instances found in DFC manager")
+		}
+	} else {
+		s.logger.Warn("DataFlowComponent manager not found in system snapshot",
+			zap.String("managerName", dataFlowComponentManagerName))
+	}
+
+	// Return empty array if real data isn't available
+	statusMessage.Core.Dfcs = []models.Dfc{}
+}
+
+// updateUnifiedNamespaceData updates the status message with real unified namespace data if available
+func (s *StatusCollectorType) updateUnifiedNamespaceData(statusMessage *models.StatusMessage) {
+	if s.latestData != nil {
+		// Add real EventsTable data if available
+		if !reflect.DeepEqual(s.latestData.EventTable, models.EventsTable{}) {
+			if statusMessage.Core.UnifiedNamespace.EventsTable == nil {
+				statusMessage.Core.UnifiedNamespace.EventsTable = make(map[string]models.EventsTable)
+			}
+			statusMessage.Core.UnifiedNamespace.EventsTable["event1"] = s.latestData.EventTable
+		}
+
+		// Add real UnsTable data if available
+		if !reflect.DeepEqual(s.latestData.UnsTable, models.UnsTable{}) {
+			if statusMessage.Core.UnifiedNamespace.UnsTable == nil {
+				statusMessage.Core.UnifiedNamespace.UnsTable = make(map[string]models.UnsTable)
+			}
+			statusMessage.Core.UnifiedNamespace.UnsTable["uns1"] = s.latestData.UnsTable
+		}
+	}
+}
+
+// createMockedStatusMessage creates a base status message with mock data only for unimplemented components
+func createMockedStatusMessage(tick uint64) *models.StatusMessage {
+	return &models.StatusMessage{
 		Core: models.Core{
-			Agent: models.Agent{
+			Agent: models.Agent{ // No handler for this yet, so we keep mock data
 				Health: &models.Health{
-					Message:       fmt.Sprintf("Agent is healthy, tick: %d", s.state.Tick),
+					Message:       fmt.Sprintf("Agent is healthy, tick: %d", tick),
 					ObservedState: "running",
 					DesiredState:  "running",
 					Category:      models.Active,
@@ -149,57 +211,11 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 					P95Ms: float64(rand.Intn(91) + 10),
 					P99Ms: 22.8,
 				},
-				Location: location, // Use the actual location from config
+				Location: map[int]string{}, // Will be filled by updateLocationData
 			},
-			Container: containerData,
-			Dfcs: []models.Dfc{
-				{
-					Name: stringPtr("Data Bridge 1"),
-					UUID: "dfc-uuid-12345",
-					Type: models.DfcTypeDataBridge,
-					Health: &models.Health{
-						Message:       "DFC is operating normally",
-						ObservedState: "running",
-						DesiredState:  "running",
-						Category:      models.Active,
-					},
-					Metrics: &models.DfcMetrics{
-						AvgInputThroughputPerMinuteInMsgSec: float64(rand.Intn(91) + 10),
-					},
-					Bridge: &models.DfcBridgeInfo{
-						DataContract: "sensor-v1",
-						InputType:    "mqtt",
-						OutputType:   "kafka",
-					},
-					Connections: []models.Connection{
-						{
-							Name: "MQTT Input",
-							UUID: "conn-uuid-1",
-							Health: &models.Health{
-								Message:       "Connection is active",
-								ObservedState: "connected",
-								DesiredState:  "connected",
-								Category:      models.Active,
-							},
-							URI:           "mqtt://broker:1883",
-							LastLatencyMs: 5.2,
-						},
-						{
-							Name: "Kafka Output",
-							UUID: "conn-uuid-2",
-							Health: &models.Health{
-								Message:       "Connection is active",
-								ObservedState: "connected",
-								DesiredState:  "connected",
-								Category:      models.Active,
-							},
-							URI:           "kafka://kafka:9092",
-							LastLatencyMs: 8.1,
-						},
-					},
-				},
-			},
-			Redpanda: models.Redpanda{
+			Container: models.Container{}, // Will be filled by updateContainerData
+			Dfcs:      []models.Dfc{},     // Will be filled by updateDfcData
+			Redpanda: models.Redpanda{ // No handler for this yet, so we keep mock data
 				Health: &models.Health{
 					Message:       "Redpanda is operating normally",
 					ObservedState: "running",
@@ -209,15 +225,11 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 				AvgIncomingThroughputPerMinuteInMsgSec: 150.5,
 				AvgOutgoingThroughputPerMinuteInMsgSec: 120.3,
 			},
-			UnifiedNamespace: models.UnifiedNamespace{
-				EventsTable: map[string]models.EventsTable{
-					"event1": s.latestData.EventTable,
-				},
-				UnsTable: map[string]models.UnsTable{
-					"uns1": s.latestData.UnsTable,
-				},
+			UnifiedNamespace: models.UnifiedNamespace{ // Will be filled by updateUnifiedNamespaceData
+				EventsTable: map[string]models.EventsTable{},
+				UnsTable:    map[string]models.UnsTable{},
 			},
-			Release: models.Release{
+			Release: models.Release{ // No handler for this yet, so we keep mock data
 				Version: "1.0.0",
 				Channel: "stable",
 				SupportedFeatures: []string{
@@ -227,15 +239,13 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 				},
 			},
 		},
-		Plugins: map[string]interface{}{
+		Plugins: map[string]interface{}{ // No handler for this yet, so we keep mock data
 			"examplePlugin": map[string]interface{}{
 				"status":  "active",
 				"version": "0.1.0",
 			},
 		},
 	}
-
-	return statusMessage
 }
 
 // buildContainerDataFromSnapshot creates container data from a FSM instance snapshot
@@ -373,4 +383,109 @@ func buildDefaultContainerData() models.Container {
 // Helper function to create string pointers
 func stringPtr(s string) *string {
 	return &s
+}
+
+// DFCObservedState is a local definition to avoid importing the dataflowcomponent package
+type DFCObservedState interface {
+	IsObservedState()
+	// Adding the required fields to match the actual DFC observed state structure
+	GetConfigExists() bool
+	GetLastConfigUpdateSuccessful() bool
+	GetLastError() string
+}
+
+// buildDfcsFromInstances creates Dfc models from FSM instances
+func buildDfcsFromInstances(instances map[string]fsm.FSMInstanceSnapshot, log *zap.Logger) []models.Dfc {
+	dfcs := make([]models.Dfc, 0, len(instances))
+
+	for name, instance := range instances {
+		log.Debug("Building DFC data for instance", zap.String("name", name))
+
+		// Default DFC structure with basic data from instance
+		dfc := models.Dfc{
+			Name: stringPtr(name),
+			// Use name as UUID as a fallback if we can't extract real UUID
+			UUID: name,
+			Type: models.DfcTypeCustom, // Default to custom type
+			Health: &models.Health{
+				Message:       "DFC status available",
+				ObservedState: instance.CurrentState,
+				DesiredState:  instance.DesiredState,
+				Category:      models.Active, // Default to active
+			},
+			Metrics: &models.DfcMetrics{
+				// Default metric with random value
+				AvgInputThroughputPerMinuteInMsgSec: float64(rand.Intn(91) + 10),
+			},
+		}
+
+		// If we have observed state, extract more information
+		if instance.LastObservedState != nil {
+			// Try to cast to DataFlowComponent's observed state
+			if dfcObservedState, ok := instance.LastObservedState.(DFCObservedState); ok {
+				// Set health message based on observed state
+				if !dfcObservedState.GetLastConfigUpdateSuccessful() {
+					dfc.Health.Message = "DFC configuration update failed: " + dfcObservedState.GetLastError()
+					dfc.Health.Category = models.Degraded
+				}
+			}
+
+			// Try to access any additional metadata that might be present in the instance
+			// This is a simplified approach since FSMInstanceSnapshot doesn't have a Meta field
+			// Try to extract information from the observed state directly or use defaults
+
+			// For a real implementation, you might need to access this data differently
+			// or store it in the observed state
+
+			// Default to data bridge type for now since we can't access detailed metadata
+			dfc.Type = models.DfcTypeDataBridge
+
+			// Create simple bridge info with default values
+			dfc.Bridge = &models.DfcBridgeInfo{
+				DataContract: "unknown",
+				InputType:    "unknown",
+				OutputType:   "unknown",
+			}
+
+			// Add standard input/output connections for a bridge
+			dfc.Connections = []models.Connection{
+				{
+					Name: "Input Connection",
+					UUID: name + "-input",
+					Health: &models.Health{
+						Message:       "Connection status derived from DFC",
+						ObservedState: instance.CurrentState,
+						DesiredState:  instance.DesiredState,
+						Category:      dfc.Health.Category,
+					},
+					URI:           "unknown://input",
+					LastLatencyMs: 5.0,
+				},
+				{
+					Name: "Output Connection",
+					UUID: name + "-output",
+					Health: &models.Health{
+						Message:       "Connection status derived from DFC",
+						ObservedState: instance.CurrentState,
+						DesiredState:  instance.DesiredState,
+						Category:      dfc.Health.Category,
+					},
+					URI:           "unknown://output",
+					LastLatencyMs: 5.0,
+				},
+			}
+		}
+
+		dfcs = append(dfcs, dfc)
+	}
+
+	return dfcs
+}
+
+// getStringValueOrDefault gets a string value from a map or returns the default
+func getStringValueOrDefault(config map[string]interface{}, key, defaultValue string) string {
+	if val, ok := config[key].(string); ok && val != "" {
+		return val
+	}
+	return defaultValue
 }
