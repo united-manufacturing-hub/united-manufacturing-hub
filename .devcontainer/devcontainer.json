@@ -21,8 +21,7 @@
     "runArgs": [
         "--cap-add=SYS_PTRACE",
         "--security-opt",
-        "seccomp=unconfined",
-        "--userns=keep-id"
+        "seccomp=unconfined"
     ],
     // Configure tool-specific properties.
     "customizations": {
@@ -43,7 +42,7 @@
     // Use 'forwardPorts' to make a list of ports inside the container available locally.
     // "forwardPorts": [],
     // Use 'postCreateCommand' to run commands after the container is created.
-    "postCreateCommand": "go install github.com/onsi/ginkgo/v2/ginkgo@v2.23.3",
+    "postCreateCommand": "make install",
     // Set `remoteUser` to `root` to connect as root instead. More info: https://aka.ms/vscode-remote/containers/non-root.
     "remoteUser": "vscode",
     "containerUser": "vscode",
