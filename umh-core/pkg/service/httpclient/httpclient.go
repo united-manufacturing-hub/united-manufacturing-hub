@@ -33,12 +33,12 @@ var (
 	defaultTransport = &http.Transport{
 		Proxy: http.ProxyFromEnvironment,
 		DialContext: (&net.Dialer{
-			Timeout:   500 * time.Millisecond,
+			Timeout:   50 * time.Millisecond,
 			KeepAlive: 30 * time.Second,
 		}).DialContext,
 		MaxIdleConns:          100,
 		IdleConnTimeout:       90 * time.Second,
-		TLSHandshakeTimeout:   500 * time.Millisecond,
+		TLSHandshakeTimeout:   50 * time.Millisecond,
 		ExpectContinueTimeout: 100 * time.Millisecond,
 		MaxIdleConnsPerHost:   10,   // Increase from default 2
 		DisableCompression:    true, // For our metrics endpoint, compression is likely overkill

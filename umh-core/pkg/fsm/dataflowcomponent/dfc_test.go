@@ -24,6 +24,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	benthosserviceconfig "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
+	benthosfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
 )
 
@@ -85,6 +86,17 @@ func (m *MockBenthosConfigManager) ComponentExistsInBenthosConfig(ctx context.Co
 	}
 	_, exists := m.components[componentName]
 	return exists, nil
+}
+
+// GetComponentBenthosObservedState returns a mock BenthosObservedState for the specified component
+func (m *MockBenthosConfigManager) GetComponentBenthosObservedState(ctx context.Context, componentName string) (*benthosfsm.BenthosObservedState, error) {
+	_, exists := m.components[componentName]
+	if !exists {
+		return nil, fmt.Errorf("component %s not found", componentName)
+	}
+
+	// Return a mock BenthosObservedState
+	return &benthosfsm.BenthosObservedState{}, nil
 }
 
 var _ = Describe("DataFlowComponent FSM", func() {

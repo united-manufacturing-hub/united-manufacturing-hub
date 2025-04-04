@@ -193,6 +193,7 @@ func (m *MockRedpandaService) AddRedpandaToS6Manager(ctx context.Context, cfg *r
 		}
 
 		// Ensure coredump directory
+		// By default redpanda will generate coredumps when crashing
 		if err := m.FileSystemMock.EnsureDirectory(ctx, filepath.Join(cfg.BaseDir, "redpanda", "coredump")); err != nil {
 			return fmt.Errorf("failed to ensure %s/redpanda/coredump directory exists: %w", cfg.BaseDir, err)
 		}

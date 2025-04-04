@@ -234,7 +234,7 @@ func NewDefaultRedpandaService(redpandaName string, opts ...RedpandaServiceOptio
 		httpClient:   nil, // this is only for a mock in the tests
 		metricsState: NewRedpandaMetricsState(),
 		filesystem:   filesystem.NewDefaultService(),
-		baseDir:      "/data",
+		baseDir:      constants.DefaultRedpandaBaseDir,
 	}
 
 	// Apply options
@@ -767,8 +767,8 @@ func (s *RedpandaService) AddRedpandaToS6Manager(ctx context.Context, cfg *redpa
 // ensureRedpandaDirectories creates all necessary directories for Redpanda
 func (s *RedpandaService) ensureRedpandaDirectories(ctx context.Context, baseDir string) error {
 	if baseDir == "" {
-		s.logger.Warn("baseDir is empty, using default value /data")
-		baseDir = "/data"
+		s.logger.Warnf("baseDir is empty, using default value %s", constants.DefaultRedpandaBaseDir)
+		baseDir = constants.DefaultRedpandaBaseDir
 	}
 
 	// Ensure main data directory
@@ -777,6 +777,7 @@ func (s *RedpandaService) ensureRedpandaDirectories(ctx context.Context, baseDir
 	}
 
 	// Ensure coredump directory
+	// By default redpanda will generate coredumps when crashing
 	if err := s.filesystem.EnsureDirectory(ctx, filepath.Join(baseDir, "redpanda", "coredump")); err != nil {
 		return fmt.Errorf("failed to ensure %s/redpanda/coredump directory exists: %w", baseDir, err)
 	}
