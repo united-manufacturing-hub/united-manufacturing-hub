@@ -40,6 +40,7 @@ const (
 
 // singleton instance
 // we avoid, having more than one instance of the config manager because it can lead to race conditions
+// if we ensure, that we have only one instance, we can avoid race conditions by using mutexes in this single instance as we do here
 var (
 	instance ConfigManager
 	once     sync.Once
@@ -81,11 +82,11 @@ type FileConfigManager struct {
 	// logger is the logger for the config manager
 	logger *zap.SugaredLogger
 
-	// mutexReadAndWrite for full cycle read and write access to the config file
-	mutexReadAndWrite sync.Mutex
+	// mutexAtomicUpdate for full cycle read and write access (atomic update) to the config file
+	mutexAtomicUpdate sync.Mutex
 
 	// simple mutex for read access or write access to the config file
-	mutexReadOrWrite sync.Mutex
+	mutexReadOrWrite sync.RWMutex
 }
 
 // NewFileConfigManager creates a new FileConfigManager
@@ -166,8 +167,9 @@ func (m *FileConfigManager) GetConfigWithOverwritesOrCreateNew(ctx context.Conte
 
 // GetConfig returns the current config, always reading fresh from disk
 func (m *FileConfigManager) GetConfig(ctx context.Context, tick uint64) (FullConfig, error) {
-	m.mutexReadOrWrite.Lock()
-	defer m.mutexReadOrWrite.Unlock()
+	// we use a read lock here, because we only read the config file
+	m.mutexReadOrWrite.RLock()
+	defer m.mutexReadOrWrite.RUnlock()
 
 	// Check if context is already cancelled
 	if ctx.Err() != nil {
@@ -249,6 +251,7 @@ func (m *FileConfigManagerWithBackoff) GetConfigWithOverwritesOrCreateNew(ctx co
 }
 
 func (m *FileConfigManager) WriteConfig(ctx context.Context, config FullConfig) error {
+	// we use a write lock here, because we write the config file
 	m.mutexReadOrWrite.Lock()
 	defer m.mutexReadOrWrite.Unlock()
 
@@ -358,8 +361,8 @@ func (m *FileConfigManagerWithBackoff) WriteConfig(ctx context.Context, config F
 
 // AtomicSetLocation sets the location in the config atomically
 func (m *FileConfigManager) AtomicSetLocation(ctx context.Context, location models.EditInstanceLocationModel) error {
-	m.mutexReadAndWrite.Lock()
-	defer m.mutexReadAndWrite.Unlock()
+	m.mutexAtomicUpdate.Lock()
+	defer m.mutexAtomicUpdate.Unlock()
 
 	// get the current config
 	config, err := m.GetConfig(ctx, 0)
