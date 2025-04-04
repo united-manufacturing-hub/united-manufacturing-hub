@@ -43,6 +43,11 @@ jobs:
       - name: Install ginkgo and nilaway
         run: make install
 
+      - name: Get dependencies
+        working-directory: ./umh-core
+        run: |
+          make download-docker-binaries
+
       - name: Run unit tests
         run: make unit-test
 
@@ -66,6 +71,11 @@ jobs:
       - name: Install ginkgo and nilaway
         run: make install
 
+      - name: Get dependencies
+        working-directory: ./umh-core
+        run: |
+          make download-docker-binaries
+          
       - name: Run integration tests
         env:
           CI: true

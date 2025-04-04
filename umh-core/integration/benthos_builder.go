@@ -67,6 +67,13 @@ func (b *BenthosBuilder) AddGoldenBenthos() *BenthosBuilder {
 	// Add to configuration
 	b.full.Benthos = append(b.full.Benthos, benthosConfig)
 	b.activeBenthos["golden-benthos"] = true
+
+	b.full.Redpanda = config.RedpandaConfig{
+		FSMInstanceConfig: config.FSMInstanceConfig{
+			Name:            "redpanda",
+			DesiredFSMState: "stopped",
+		},
+	}
 	return b
 }
 

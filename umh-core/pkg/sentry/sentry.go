@@ -4,14 +4,13 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+//	http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package sentry
 
 import (
@@ -64,11 +63,10 @@ func InitSentry(appVersion string, debounceErrors bool) {
 	}
 
 	err = sentry.Init(sentry.ClientOptions{
-		// management.umh.app is not working anymore, so we use the direct DSN
-		Dsn:           "https://1e1f51c30e576ff39d2445e76dc89da7@o4507265932394496.ingest.de.sentry.io/4509039283798097",
+		Dsn:           "https://abc@staging.management.umh.app/sentry?project=umhcore",
 		Environment:   environment,
 		Release:       "umhcore@" + appVersion,
-		EnableTracing: false, // no need for tracing, it doesnt work anyway
+		EnableTracing: false,
 	})
 	if err != nil {
 		zap.S().Error("Failed to initialize Sentry: %s", err)
@@ -118,12 +116,21 @@ func createSentryEvent(level sentry.Level, err error) *sentry.Event {
 		})
 	}
 
-	// Let Sentry use its default stack trace-based fingerprinting
-	// which is typically more effective for grouping similar errors
+	// Extract the prefix before the first colon if it exists
+	errorMessage := err.Error()
+	fingerprint := "{{ default }}"
 
-	// But let's give it some more hints
+	if parts := strings.SplitN(errorMessage, ":", 2); len(parts) > 1 {
+		// Use the part before the colon as the primary identifier
+		fingerprint = strings.TrimSpace(parts[0])
+	} else {
+		// If there's no colon, use the full error message
+		fingerprint = errorMessage
+	}
+
+	// Use the error prefix as the first fingerprint element for better grouping
 	event.Fingerprint = []string{
-		"{{ default }}",
+		fingerprint,
 		"level: " + getLevelString(level),
 	}
 
@@ -157,7 +164,7 @@ func createSentryEventWithContext(level sentry.Level, err error, context map[str
 				event.Extra[key] = v
 			}
 
-			// If the tag is called operation, add it to the fingerprint
+			// Add additional context elements to fingerprint for better grouping
 			if key == "operation" {
 				valueStr := fmt.Sprintf("operation: %v", value)
 				event.Fingerprint = append(event.Fingerprint, valueStr)

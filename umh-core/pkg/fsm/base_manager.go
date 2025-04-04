@@ -327,9 +327,11 @@ func (m *BaseFSMManager[C]) Reconcile(
 				metrics.IncErrorCount(metrics.ComponentBaseFSMManager, m.managerName)
 				return fmt.Errorf("failed to get desired state: %w", err), false
 			}
+			m.logger.Debugf("desiredState: %v", desiredState)
 			err = instance.SetDesiredFSMState(desiredState)
 			if err != nil {
 				metrics.IncErrorCount(metrics.ComponentBaseFSMManager, m.managerName)
+				m.logger.Errorf("failed to set desired state: %v for instance %s", err, name)
 				return fmt.Errorf("failed to set desired state: %w", err), false
 			}
 			m.instances[name] = instance
@@ -390,6 +392,7 @@ func (m *BaseFSMManager[C]) Reconcile(
 			err := m.instances[name].SetDesiredFSMState(desiredState)
 			if err != nil {
 				metrics.IncErrorCount(metrics.ComponentBaseFSMManager, m.managerName)
+				m.logger.Errorf("failed to set desired state: %w for instance %s", err, name)
 				return fmt.Errorf("failed to set desired state: %w", err), false
 			}
 
