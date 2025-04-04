@@ -38,6 +38,13 @@ const (
 	DefaultConfigPath = "/data/config.yaml"
 )
 
+// singleton instance
+// we avoid, having more than one instance of the config manager because it can lead to race conditions
+var (
+	instance ConfigManager
+	once     sync.Once
+)
+
 // ConfigManager is the interface for config management
 type ConfigManager interface {
 	// GetConfig returns the current config
@@ -46,6 +53,23 @@ type ConfigManager interface {
 	WriteConfig(ctx context.Context, config FullConfig) error
 	// AtomicSetLocation sets the location in the config atomically
 	AtomicSetLocation(ctx context.Context, location models.EditInstanceLocationModel) error
+}
+
+// GetConfigManager returns the singleton instance of ConfigManager
+func GetConfigManager() ConfigManager {
+	once.Do(func() {
+		// Default to FileConfigManagerWithBackoff as it's the more robust implementation
+		instance = NewFileConfigManagerWithBackoff()
+	})
+	return instance
+}
+
+// SetConfigManager sets the singleton instance of ConfigManager
+// This should only be used in tests or during initialization
+func SetConfigManager(manager ConfigManager) {
+	once.Do(func() {
+		instance = manager
+	})
 }
 
 // FileConfigManager implements the ConfigManager interface by reading from a file
@@ -67,6 +91,8 @@ type FileConfigManager struct {
 }
 
 // NewFileConfigManager creates a new FileConfigManager
+// Note: This should only be used in tests or if you need a custom config manager.
+// Prefer GetConfigManager() for application use.
 func NewFileConfigManager() *FileConfigManager {
 
 	configPath := DefaultConfigPath
@@ -218,6 +244,10 @@ func NewFileConfigManagerWithBackoff() *FileConfigManagerWithBackoff {
 		backoffManager: backoffManager,
 		logger:         logger,
 	}
+}
+
+func (m *FileConfigManagerWithBackoff) GetConfigWithOverwritesOrCreateNew(ctx context.Context, config FullConfig) (FullConfig, error) {
+	return m.configManager.GetConfigWithOverwritesOrCreateNew(ctx, config)
 }
 
 func (m *FileConfigManager) WriteConfig(ctx context.Context, config FullConfig) error {
