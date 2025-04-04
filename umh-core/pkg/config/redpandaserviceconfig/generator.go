@@ -43,6 +43,10 @@ func (g *Generator) RenderConfig(cfg RedpandaServiceConfig) (string, error) {
 		cfg.Topic.DefaultTopicRetentionBytes = 0
 	}
 
+	if cfg.BaseDir == "" {
+		cfg.BaseDir = "/data"
+	}
+
 	// Strip trailing / from basedir (if present)
 	cfg.BaseDir = strings.TrimSuffix(cfg.BaseDir, "/")
 
