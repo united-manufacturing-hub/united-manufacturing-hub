@@ -15,6 +15,8 @@
 package actions
 
 import (
+	"fmt"
+
 	"github.com/google/uuid"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/encoding"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/safejson"
@@ -54,6 +56,15 @@ func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePay
 			instanceUUID:    instanceUUID,
 			outboundChannel: outboundChannel,
 			configManager:   configManager,
+		}
+	case models.DeployDataFlowComponent:
+		action = &DeployDataFlowComponentAction{
+			userEmail:       sender,
+			actionUUID:      payload.ActionUUID,
+			instanceUUID:    instanceUUID,
+			outboundChannel: outboundChannel,
+			configManager:   configManager,
+			systemSnapshot:  systemSnapshot,
 		}
 	default:
 		zap.S().Errorf("Unknown action type: %s", payload.ActionType)
@@ -172,4 +183,28 @@ func generateUMHMessage(instanceUUID uuid.UUID, userEmail string, messageType mo
 	}
 
 	return
+}
+
+// ParseActionPayload parses the raw payload into the specified type.
+func ParseActionPayload[T any](actionPayload interface{}) (T, error) {
+	var payload T
+
+	rawMap, ok := actionPayload.(map[string]interface{})
+	if !ok {
+		return payload, fmt.Errorf("could not assert ActionPayload to map[string]interface{}. Actual type: %T, Value: %v", actionPayload, actionPayload)
+	}
+
+	// Marshal the raw payload into JSON bytes
+	jsonData, err := safejson.Marshal(rawMap)
+	if err != nil {
+		return payload, fmt.Errorf("error marshaling raw payload: %w", err)
+	}
+
+	// Unmarshal the JSON bytes into the specified type
+	err = safejson.Unmarshal(jsonData, &payload)
+	if err != nil {
+		return payload, fmt.Errorf("error unmarshaling into target type: %w", err)
+	}
+
+	return payload, nil
 }
