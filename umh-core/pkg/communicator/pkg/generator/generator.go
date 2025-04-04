@@ -37,7 +37,7 @@ const (
 	// Manager name constants
 	containerManagerName         = logger.ComponentContainerManager + "_" + constants.DefaultManagerName
 	benthosManagerName           = logger.ComponentBenthosManager + "_" + constants.DefaultManagerName
-	dataFlowComponentManagerName = logger.ComponentDataFlowComponentManager + "_" + constants.DefaultManagerName
+	dataFlowComponentManagerName = logger.ComponentDataFlowComponentManager + constants.DefaultManagerName
 
 	// Instance name constants
 	coreInstanceName = "Core"
@@ -153,6 +153,11 @@ func (s *StatusCollectorType) updateLocationData(statusMessage *models.StatusMes
 
 // updateDfcData updates the status message with real DFC data if available
 func (s *StatusCollectorType) updateDfcData(statusMessage *models.StatusMessage) {
+	s.logger.Info("Updating DFC data")
+	//log all existing managers
+	for managerName, manager := range s.state.Managers {
+		s.logger.Info("Manager", zap.String("name", managerName), zap.Any("instances", manager.GetInstances()))
+	}
 	if dfcManager, exists := s.state.Managers[dataFlowComponentManagerName]; exists {
 		instances := dfcManager.GetInstances()
 
@@ -167,7 +172,7 @@ func (s *StatusCollectorType) updateDfcData(statusMessage *models.StatusMessage)
 		s.logger.Warn("DataFlowComponent manager not found in system snapshot",
 			zap.String("managerName", dataFlowComponentManagerName))
 	}
-
+	s.logger.Info("No DFC instances found in DFC manager")
 	// Return empty array if real data isn't available
 	statusMessage.Core.Dfcs = []models.Dfc{}
 }
