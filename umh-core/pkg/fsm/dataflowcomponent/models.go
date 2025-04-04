@@ -22,6 +22,7 @@ import (
 	benthosserviceconfig "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	publicfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
+	benthosfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
 )
 
 // Operational state constants (using internal_fsm compatible naming)
@@ -88,6 +89,9 @@ type DFCObservedState struct {
 
 	// Any error message from the last config update
 	LastError string
+
+	// Map of component names to their observed benthos state
+	BenthosStateMap map[string]*benthosfsm.BenthosObservedState
 }
 
 // IsObservedState implements the ObservedState interface
@@ -123,6 +127,9 @@ type BenthosConfigManager interface {
 
 	// ComponentExistsInBenthosConfig checks if a component exists in the benthos config
 	ComponentExistsInBenthosConfig(ctx context.Context, componentName string) (bool, error)
+
+	// GetComponentBenthosObservedState retrieves the observed state of a specific component in the Benthos instance
+	GetComponentBenthosObservedState(ctx context.Context, componentName string) (*benthosfsm.BenthosObservedState, error)
 }
 
 // GetLastObservedState returns the last known state of the component

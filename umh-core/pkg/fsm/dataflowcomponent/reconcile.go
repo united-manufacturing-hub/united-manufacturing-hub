@@ -165,13 +165,45 @@ func (d *DataFlowComponent) reconcileTransitionToActive(ctx context.Context, cur
 
 	case OperationalStateStarting:
 		// The component is in the process of starting, check if it's done
-		return d.baseFSMInstance.SendEvent(ctx, EventStartDone), true
+		// Check directly if the service is running
+		if d.ObservedState.ConfigExists {
+			running, _, _, err := d.BenthosConfigManager.GetServiceState(ctx, d.Config.Name)
+			if err != nil {
+				d.baseFSMInstance.GetLogger().Warnf("Failed to get service state for %s: %v", d.Config.Name, err)
+				// If we can't determine the state, we'll stay in the starting state
+				return nil, false
+			}
+
+			if running {
+				return d.baseFSMInstance.SendEvent(ctx, EventStartDone), true
+			}
+		}
+		// Otherwise, wait for the service to start
+		return nil, false
 
 	case OperationalStateActive:
 		// The component is already active, check if the config is up-to-date
 		if err := d.initiateUpdateComponentInBenthosConfig(ctx); err != nil {
 			return err, false
 		}
+
+		// Check directly if the service is running
+		running, healthStatus, _, err := d.BenthosConfigManager.GetServiceState(ctx, d.Config.Name)
+		if err != nil {
+			d.baseFSMInstance.GetLogger().Warnf("Failed to get service state for %s: %v", d.Config.Name, err)
+			// If we can't determine the state, we'll stay in the active state
+			return nil, false
+		}
+
+		// Check if we should transition to degraded if the service is not running but should be
+		if !running {
+			d.baseFSMInstance.GetLogger().Warnf("Service %s is not running but should be in active state, transitioning to degraded", d.Config.Name)
+			return d.baseFSMInstance.SendEvent(ctx, EventDegraded), true
+		}
+
+		// Log the current health status
+		d.baseFSMInstance.GetLogger().Debugf("Service %s health status: %s", d.Config.Name, healthStatus)
+
 		return nil, true
 
 	case OperationalStateDegraded:
@@ -179,8 +211,23 @@ func (d *DataFlowComponent) reconcileTransitionToActive(ctx context.Context, cur
 		if err := d.initiateUpdateComponentInBenthosConfig(ctx); err != nil {
 			return err, false
 		}
-		// For now, we'll just assume the update fixed the issue
-		return d.baseFSMInstance.SendEvent(ctx, EventRecovered), true
+
+		// Check directly if the service is running
+		running, _, _, err := d.BenthosConfigManager.GetServiceState(ctx, d.Config.Name)
+		if err != nil {
+			d.baseFSMInstance.GetLogger().Warnf("Failed to get service state for %s: %v", d.Config.Name, err)
+			// If we can't determine the state, we'll stay in the degraded state
+			return nil, false
+		}
+
+		// Check if the service is now running, which would allow recovery
+		if running {
+			d.baseFSMInstance.GetLogger().Infof("Service %s is now running, recovering from degraded state", d.Config.Name)
+			return d.baseFSMInstance.SendEvent(ctx, EventRecovered), true
+		}
+
+		// Service is still not running, remain in degraded state
+		return nil, false
 
 	case OperationalStateStopping:
 		// The component is stopping, but we want it active

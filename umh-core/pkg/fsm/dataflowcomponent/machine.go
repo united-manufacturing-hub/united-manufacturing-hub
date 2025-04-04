@@ -21,6 +21,7 @@ import (
 	"github.com/looplab/fsm"
 
 	internal_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
+	benthosfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 )
 
@@ -54,7 +55,9 @@ func NewDataFlowComponent(config DataFlowComponentConfig, benthosConfigManager B
 		baseFSMInstance:      internal_fsm.NewBaseFSMInstance(cfg, logger.For(config.Name)),
 		Config:               config,
 		BenthosConfigManager: benthosConfigManager,
-		ObservedState:        DFCObservedState{},
+		ObservedState: DFCObservedState{
+			BenthosStateMap: make(map[string]*benthosfsm.BenthosObservedState),
+		},
 	}
 
 	instance.registerCallbacks()
