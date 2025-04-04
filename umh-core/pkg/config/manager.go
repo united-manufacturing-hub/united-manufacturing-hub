@@ -41,6 +41,8 @@ const (
 // singleton instance
 // we avoid, having more than one instance of the config manager because it can lead to race conditions
 // if we ensure, that we have only one instance, we can avoid race conditions by using mutexes in this single instance as we do here
+
+// however, access from outside the package is not protected by mutexes (keep in mind e.g. when using GitOps on the config file)
 var (
 	instance ConfigManager
 	once     sync.Once
