@@ -41,3 +41,7 @@ var (
 	// This injects the version at build time from the environment, eliminating the need for hard-coded values.
 	RedpandaVersion = "unknown"
 )
+
+const (
+	DefaultRedpandaBaseDir = "/data"
+)

@@ -188,7 +188,7 @@ func (m *DataFlowComponentManager) Reconcile(ctx context.Context, cfg config.Ful
 
 	// Create a new config object to pass to the BenthosManager
 	cfgForBenthos := cfg.Clone()
-	cfgForBenthos.Benthos = benthosConfigs
+	cfgForBenthos.Internal.Benthos = benthosConfigs
 
 	// Pass the modified config to the BenthosManager for reconciliation
 	err, benthosReconciled := m.benthosManager.Reconcile(ctx, cfgForBenthos, tick)
@@ -311,4 +311,21 @@ func (a *benthosMgrAdapter) ComponentExistsInBenthosConfig(ctx context.Context, 
 
 	_, exists := a.components[componentName]
 	return exists, nil
+}
+
+// GetComponentBenthosObservedState retrieves the observed state of a specific component in the Benthos instance
+func (a *benthosMgrAdapter) GetComponentBenthosObservedState(ctx context.Context, componentName string) (*benthos.BenthosObservedState, error) {
+	a.logger.Debugf("Getting Benthos observed state for component %s", componentName)
+
+	observedState, err := a.manager.GetLastObservedState(componentName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get observed state for component %s: %w", componentName, err)
+	}
+
+	observedStateCasted, ok := observedState.(*benthos.BenthosObservedState)
+	if !ok {
+		return nil, fmt.Errorf("observed state for component %s is not a BenthosObservedState", componentName)
+	}
+
+	return observedStateCasted, nil
 }

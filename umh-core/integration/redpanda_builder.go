@@ -34,8 +34,10 @@ func NewRedpandaBuilder() *RedpandaBuilder {
 			Agent: config.AgentConfig{
 				MetricsPort: 8080,
 			},
-			Services: []config.S6FSMConfig{},
-			Redpanda: config.RedpandaConfig{},
+			Internal: config.InternalConfig{
+				Services: []config.S6FSMConfig{},
+				Redpanda: config.RedpandaConfig{},
+			},
 		},
 		activeRedpanda: make(map[string]bool),
 	}
@@ -57,21 +59,21 @@ func (b *RedpandaBuilder) AddGoldenRedpanda() *RedpandaBuilder {
 	redpandaConfig.RedpandaServiceConfig.Resources.MemoryPerCoreInBytes = 1024 * 1024 * 1024 // 1GB
 
 	// Add to configuration
-	b.full.Redpanda = redpandaConfig
+	b.full.Internal.Redpanda = redpandaConfig
 	b.activeRedpanda["golden-redpanda"] = true
 	return b
 }
 
 // StartRedpanda sets a Redpanda service to active state
 func (b *RedpandaBuilder) StartRedpanda(name string) *RedpandaBuilder {
-	b.full.Redpanda.FSMInstanceConfig.DesiredFSMState = "active"
+	b.full.Internal.Redpanda.FSMInstanceConfig.DesiredFSMState = "active"
 	b.activeRedpanda[name] = true
 	return b
 }
 
 // StopRedpanda sets a Redpanda service to inactive state
 func (b *RedpandaBuilder) StopRedpanda(name string) *RedpandaBuilder {
-	b.full.Redpanda.FSMInstanceConfig.DesiredFSMState = "stopped"
+	b.full.Internal.Redpanda.FSMInstanceConfig.DesiredFSMState = "stopped"
 	b.activeRedpanda[name] = false
 	return b
 }

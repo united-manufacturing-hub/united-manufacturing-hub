@@ -63,10 +63,10 @@ func InitSentry(appVersion string, debounceErrors bool) {
 	}
 
 	err = sentry.Init(sentry.ClientOptions{
-		Dsn:           "https://abc@staging.management.umh.app/sentry?project=umhcore",
+		Dsn:           "https://1e1f51c30e576ff39d2445e76dc89da7@o4507265932394496.ingest.de.sentry.io/4509039283798097",
 		Environment:   environment,
 		Release:       "umhcore@" + appVersion,
-		EnableTracing: false,
+		EnableTracing: false, // no need for tracing, it doesnt work anyway
 	})
 	if err != nil {
 		zap.S().Error("Failed to initialize Sentry: %s", err)

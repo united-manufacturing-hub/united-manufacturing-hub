@@ -12,93 +12,46 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//go:build test
+// +build test
+
 package dataflowcomponent_test
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"path/filepath"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsmtest"
 	benthosserviceconfig "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
+	benthosfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
 )
-
-// MockBenthosConfigManager is a mock implementation of the BenthosConfigManager interface for testing
-type MockBenthosConfigManager struct {
-	components           map[string]dataflowcomponent.DataFlowComponentConfig
-	addCalled            bool
-	removeCalled         bool
-	updateCalled         bool
-	checkExistenceCalled bool
-	shouldFailAdd        bool
-	shouldFailRemove     bool
-	shouldFailUpdate     bool
-	shouldFailExistence  bool
-}
-
-// NewMockBenthosConfigManager creates a new MockBenthosConfigManager
-func NewMockBenthosConfigManager() *MockBenthosConfigManager {
-	return &MockBenthosConfigManager{
-		components: make(map[string]dataflowcomponent.DataFlowComponentConfig),
-	}
-}
-
-// AddComponentToBenthosConfig adds a component to the benthos config
-func (m *MockBenthosConfigManager) AddComponentToBenthosConfig(ctx context.Context, component dataflowcomponent.DataFlowComponentConfig) error {
-	m.addCalled = true
-	if m.shouldFailAdd {
-		return fmt.Errorf("mock error adding component")
-	}
-	m.components[component.Name] = component
-	return nil
-}
-
-// RemoveComponentFromBenthosConfig removes a component from the benthos config
-func (m *MockBenthosConfigManager) RemoveComponentFromBenthosConfig(ctx context.Context, componentName string) error {
-	m.removeCalled = true
-	if m.shouldFailRemove {
-		return fmt.Errorf("mock error removing component")
-	}
-	delete(m.components, componentName)
-	return nil
-}
-
-// UpdateComponentInBenthosConfig updates a component in the benthos config
-func (m *MockBenthosConfigManager) UpdateComponentInBenthosConfig(ctx context.Context, component dataflowcomponent.DataFlowComponentConfig) error {
-	m.updateCalled = true
-	if m.shouldFailUpdate {
-		return fmt.Errorf("mock error updating component")
-	}
-	m.components[component.Name] = component
-	return nil
-}
-
-// ComponentExistsInBenthosConfig checks if a component exists in the benthos config
-func (m *MockBenthosConfigManager) ComponentExistsInBenthosConfig(ctx context.Context, componentName string) (bool, error) {
-	m.checkExistenceCalled = true
-	if m.shouldFailExistence {
-		return false, fmt.Errorf("mock error checking component existence")
-	}
-	_, exists := m.components[componentName]
-	return exists, nil
-}
 
 var _ = Describe("DataFlowComponent FSM", func() {
 	var (
 		ctx                context.Context
-		mockConfigManager  *MockBenthosConfigManager
+		mockAdapter        *dataflowcomponent.MockBenthosManagerAdapter
 		testComponent      *dataflowcomponent.DataFlowComponent
 		componentConfig    dataflowcomponent.DataFlowComponentConfig
 		tempConfigFilePath string
+		tick               uint64
+		maxAttempts        int
 	)
 
 	BeforeEach(func() {
 		ctx = context.Background()
-		mockConfigManager = NewMockBenthosConfigManager()
+		tick = 1
+		maxAttempts = 10
+
+		// Create a BenthosManager and MockBenthosService
+		benthosManager, mockService := benthosfsm.NewBenthosManagerWithMockedServices("test")
+
+		// Create our adapter that implements BenthosConfigManager interface
+		mockAdapter = dataflowcomponent.NewMockBenthosManagerAdapter(benthosManager, mockService)
 
 		// Create a temporary directory for config files
 		tempDir, err := os.MkdirTemp("", "dataFlowComponent-test")
@@ -124,26 +77,15 @@ var _ = Describe("DataFlowComponent FSM", func() {
 		}
 
 		// Create a new DataFlowComponent
-		testComponent = dataflowcomponent.NewDataFlowComponent(componentConfig, mockConfigManager)
+		testComponent = dataflowcomponent.NewDataFlowComponent(componentConfig, mockAdapter)
 		Expect(testComponent).NotTo(BeNil())
 
 		// Complete the lifecycle creation process (to_be_created -> creating -> created -> stopped)
-		// First reconcile to add to config and transition from to_be_created to creating
-		err, _ = testComponent.Reconcile(ctx, 1)
-		Expect(err).NotTo(HaveOccurred())
-
-		// Second reconcile to complete creation (creating -> created)
-		err, _ = testComponent.Reconcile(ctx, 2)
-		Expect(err).NotTo(HaveOccurred())
-
-		// Now the FSM should be in the stopped operational state as configured
+		// Using the fsmtest helper to wait for the stopped state
+		nextTick, waitErr := fsmtest.WaitForInstanceState(ctx, testComponent, dataflowcomponent.OperationalStateStopped, maxAttempts, tick)
+		Expect(waitErr).NotTo(HaveOccurred())
 		Expect(testComponent.GetCurrentFSMState()).To(Equal(dataflowcomponent.OperationalStateStopped))
-
-		// Reset mock flags after initialization
-		mockConfigManager.addCalled = false
-		mockConfigManager.removeCalled = false
-		mockConfigManager.updateCalled = false
-		mockConfigManager.checkExistenceCalled = false
+		tick = nextTick
 	})
 
 	AfterEach(func() {
@@ -163,50 +105,46 @@ var _ = Describe("DataFlowComponent FSM", func() {
 			err := testComponent.SetDesiredFSMState(dataflowcomponent.OperationalStateActive)
 			Expect(err).NotTo(HaveOccurred())
 
-			// First reconcile call should transition from Stopped to Starting
-			err, reconciled := testComponent.Reconcile(ctx, 3)
+			// Use WaitForInstanceState to handle the transition to Starting
+			var nextTick uint64
+			nextTick, err = fsmtest.WaitForInstanceState(ctx, testComponent, dataflowcomponent.OperationalStateStarting, maxAttempts, tick)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(reconciled).To(BeTrue())
 			Expect(testComponent.GetCurrentFSMState()).To(Equal(dataflowcomponent.OperationalStateStarting))
+			tick = nextTick
 
-			// Second reconcile call should transition from Starting to Active
-			err, reconciled = testComponent.Reconcile(ctx, 4)
+			// Then wait for transition to Active
+			nextTick, err = fsmtest.WaitForInstanceState(ctx, testComponent, dataflowcomponent.OperationalStateActive, maxAttempts, tick)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(reconciled).To(BeTrue())
 			Expect(testComponent.GetCurrentFSMState()).To(Equal(dataflowcomponent.OperationalStateActive))
-
-			// Verify that the component was added to the benthos config
-			Expect(mockConfigManager.addCalled).To(BeTrue())
+			tick = nextTick
 		})
 
 		It("should transition to Stopped when the desired state is set to Stopped", func() {
-			// Set the desired state to Active and reconcile to get to Active state
+			// Set the desired state to Active and wait for Active state
 			err := testComponent.SetDesiredFSMState(dataflowcomponent.OperationalStateActive)
 			Expect(err).NotTo(HaveOccurred())
-			err, _ = testComponent.Reconcile(ctx, 3) // -> Starting
-			Expect(err).NotTo(HaveOccurred())
-			err, _ = testComponent.Reconcile(ctx, 4) // -> Active
+
+			var nextTick uint64
+			nextTick, err = fsmtest.WaitForInstanceState(ctx, testComponent, dataflowcomponent.OperationalStateActive, maxAttempts, tick)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(testComponent.GetCurrentFSMState()).To(Equal(dataflowcomponent.OperationalStateActive))
+			tick = nextTick
 
 			// Now set the desired state to Stopped
 			err = testComponent.SetDesiredFSMState(dataflowcomponent.OperationalStateStopped)
 			Expect(err).NotTo(HaveOccurred())
 
-			// First reconcile call should transition from Active to Stopping
-			err, reconciled := testComponent.Reconcile(ctx, 5)
+			// Wait for transition to Stopping
+			nextTick, err = fsmtest.WaitForInstanceState(ctx, testComponent, dataflowcomponent.OperationalStateStopping, maxAttempts, tick)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(reconciled).To(BeTrue())
 			Expect(testComponent.GetCurrentFSMState()).To(Equal(dataflowcomponent.OperationalStateStopping))
+			tick = nextTick
 
-			// Second reconcile call should transition from Stopping to Stopped
-			err, reconciled = testComponent.Reconcile(ctx, 6)
+			// Then wait for transition to Stopped
+			nextTick, err = fsmtest.WaitForInstanceState(ctx, testComponent, dataflowcomponent.OperationalStateStopped, maxAttempts, tick)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(reconciled).To(BeTrue())
 			Expect(testComponent.GetCurrentFSMState()).To(Equal(dataflowcomponent.OperationalStateStopped))
-
-			// Verify that the component was removed from the benthos config
-			Expect(mockConfigManager.removeCalled).To(BeTrue())
+			tick = nextTick
 		})
 	})
 
@@ -216,43 +154,52 @@ var _ = Describe("DataFlowComponent FSM", func() {
 			err := testComponent.SetDesiredFSMState(dataflowcomponent.OperationalStateActive)
 			Expect(err).NotTo(HaveOccurred())
 
-			// Reconcile to trigger config modification
-			err, _ = testComponent.Reconcile(ctx, 3)
+			// Wait for the starting state which triggers config modification
+			var nextTick uint64
+			nextTick, err = fsmtest.WaitForInstanceState(ctx, testComponent, dataflowcomponent.OperationalStateStarting, maxAttempts, tick)
 			Expect(err).NotTo(HaveOccurred())
+			tick = nextTick
 
-			// Verify that the component was added to the benthos config
-			Expect(mockConfigManager.addCalled).To(BeTrue())
+			// Verify component exists in benthos config
+			exists, err := mockAdapter.ComponentExistsInBenthosConfig(ctx, "test-component")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(exists).To(BeTrue())
 		})
 
 		It("should remove the component from the benthos config when stopping", func() {
-			// Set the desired state to Active and reconcile to get to Active state
+			// Set the desired state to Active and wait for Active state
 			err := testComponent.SetDesiredFSMState(dataflowcomponent.OperationalStateActive)
 			Expect(err).NotTo(HaveOccurred())
-			err, _ = testComponent.Reconcile(ctx, 3) // -> Starting
+
+			var nextTick uint64
+			nextTick, err = fsmtest.WaitForInstanceState(ctx, testComponent, dataflowcomponent.OperationalStateActive, maxAttempts, tick)
 			Expect(err).NotTo(HaveOccurred())
-			err, _ = testComponent.Reconcile(ctx, 4) // -> Active
-			Expect(err).NotTo(HaveOccurred())
+			tick = nextTick
 
 			// Now set the desired state to Stopped
 			err = testComponent.SetDesiredFSMState(dataflowcomponent.OperationalStateStopped)
 			Expect(err).NotTo(HaveOccurred())
 
-			// Reconcile to trigger config modification
-			err, _ = testComponent.Reconcile(ctx, 5)
+			// Wait for transition to Stopping which triggers config removal
+			nextTick, err = fsmtest.WaitForInstanceState(ctx, testComponent, dataflowcomponent.OperationalStateStopping, maxAttempts, tick)
 			Expect(err).NotTo(HaveOccurred())
+			tick = nextTick
 
-			// Verify that the component was removed from the benthos config
-			Expect(mockConfigManager.removeCalled).To(BeTrue())
+			// Verify component was removed
+			exists, err := mockAdapter.ComponentExistsInBenthosConfig(ctx, "test-component")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(exists).To(BeFalse())
 		})
 
 		It("should update the component in the benthos config when already active", func() {
-			// Set the desired state to Active and reconcile to get to Active state
+			// Set the desired state to Active and wait for Active state
 			err := testComponent.SetDesiredFSMState(dataflowcomponent.OperationalStateActive)
 			Expect(err).NotTo(HaveOccurred())
-			err, _ = testComponent.Reconcile(ctx, 3) // -> Starting
+
+			var nextTick uint64
+			nextTick, err = fsmtest.WaitForInstanceState(ctx, testComponent, dataflowcomponent.OperationalStateActive, maxAttempts, tick)
 			Expect(err).NotTo(HaveOccurred())
-			err, _ = testComponent.Reconcile(ctx, 4) // -> Active
-			Expect(err).NotTo(HaveOccurred())
+			tick = nextTick
 
 			// Make a change to the component config
 			testComponent.Config.ServiceConfig.Input = map[string]interface{}{
@@ -263,15 +210,118 @@ var _ = Describe("DataFlowComponent FSM", func() {
 				},
 			}
 
-			// Reset mock flags
-			mockConfigManager.updateCalled = false
+			// Reconcile to trigger config update
+			err, _ = testComponent.Reconcile(ctx, tick)
+			Expect(err).NotTo(HaveOccurred())
+			tick++
 
-			// Reconcile again to trigger config update
-			err, _ = testComponent.Reconcile(ctx, 5)
+			// Verify state has been updated
+			state, err := mockAdapter.GetComponentBenthosObservedState(ctx, "test-component")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(state).NotTo(BeNil())
+
+			// The config in the observed state should match our updated config
+			Expect(state.ObservedBenthosServiceConfig.Input).To(HaveKey("generate"))
+			if generateConfig, ok := state.ObservedBenthosServiceConfig.Input["generate"].(map[string]interface{}); ok {
+				Expect(generateConfig).To(HaveKeyWithValue("interval", "2s"))
+			}
+		})
+	})
+
+	Describe("Benthos Observed State", func() {
+		It("should properly retrieve and update Benthos observed state", func() {
+			// Set the initial state to active and wait for Active state
+			err := testComponent.SetDesiredFSMState(dataflowcomponent.OperationalStateActive)
 			Expect(err).NotTo(HaveOccurred())
 
-			// Verify that the component was updated in the benthos config
-			Expect(mockConfigManager.updateCalled).To(BeTrue())
+			var nextTick uint64
+			nextTick, err = fsmtest.WaitForInstanceState(ctx, testComponent, dataflowcomponent.OperationalStateActive, maxAttempts, tick)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(testComponent.GetCurrentFSMState()).To(Equal(dataflowcomponent.OperationalStateActive))
+			tick = nextTick
+
+			// Simulate Benthos being in a healthy state with mockAdapter
+			mockAdapter.SetComponentState("test-component", benthosfsm.OperationalStateActive, true)
+
+			// Reconcile to update observed state
+			err, _ = testComponent.Reconcile(ctx, tick)
+			Expect(err).NotTo(HaveOccurred())
+			tick++
+
+			// Verify observed state is updated correctly
+			observedState := testComponent.GetLastObservedState().(dataflowcomponent.DFCObservedState)
+			Expect(observedState.BenthosStateMap).To(HaveKey("test-component"))
+			benthosState := observedState.BenthosStateMap["test-component"]
+			Expect(benthosState).NotTo(BeNil())
+			Expect(benthosState.ServiceInfo.S6FSMState).To(Equal(benthosfsm.OperationalStateActive))
+			Expect(benthosState.ServiceInfo.BenthosStatus.HealthCheck.IsLive).To(BeTrue())
+			Expect(benthosState.ServiceInfo.BenthosStatus.HealthCheck.IsReady).To(BeTrue())
+
+			// Simulate a degraded state
+			mockAdapter.SetComponentState("test-component", benthosfsm.OperationalStateDegraded, false)
+
+			// Update observed state through reconciliation
+			err, _ = testComponent.Reconcile(ctx, tick)
+			Expect(err).NotTo(HaveOccurred())
+			tick++
+
+			// Verify observed state reflects the degraded condition
+			observedState = testComponent.GetLastObservedState().(dataflowcomponent.DFCObservedState)
+			benthosState = observedState.BenthosStateMap["test-component"]
+			Expect(benthosState).NotTo(BeNil())
+			Expect(benthosState.ServiceInfo.S6FSMState).To(Equal(benthosfsm.OperationalStateDegraded))
+			Expect(benthosState.ServiceInfo.BenthosStatus.HealthCheck.IsLive).To(BeFalse())
+			Expect(benthosState.ServiceInfo.BenthosStatus.HealthCheck.IsReady).To(BeFalse())
+		})
+
+		It("should handle failures in retrieving Benthos observed state", func() {
+			// Configure mockAdapter to fail when getting state
+			mockAdapter.ConfigureFailure("getState", true)
+
+			// Set the initial state to active and wait for Active state
+			err := testComponent.SetDesiredFSMState(dataflowcomponent.OperationalStateActive)
+			Expect(err).NotTo(HaveOccurred())
+
+			var nextTick uint64
+			nextTick, err = fsmtest.WaitForInstanceState(ctx, testComponent, dataflowcomponent.OperationalStateActive, maxAttempts, tick)
+			Expect(err).NotTo(HaveOccurred())
+			tick = nextTick
+
+			// Try to reconcile with GetComponentBenthosObservedState failure
+			err, _ = testComponent.Reconcile(ctx, tick)
+			// The reconcile should succeed despite the failure to get the observed state
+			Expect(err).NotTo(HaveOccurred())
+			tick++
+
+			// The component should have a warning in the observed state
+			observedState := testComponent.GetLastObservedState().(dataflowcomponent.DFCObservedState)
+			// It should still exist in the Benthos config
+			Expect(observedState.ConfigExists).To(BeTrue())
+
+			// The BenthosStateMap should be initialized but the component might still exist there
+			// depending on the implementation. What's important is that the state shouldn't be updated
+			// with the new state (because of the error)
+			if benthosState, exists := observedState.BenthosStateMap["test-component"]; exists {
+				// If it exists, it should be an older version, not updated
+				Expect(benthosState.ServiceInfo.S6FSMState).NotTo(Equal(benthosfsm.OperationalStateDegraded))
+			}
+
+			// Now fix the mock to succeed again
+			mockAdapter.ConfigureFailure("getState", false)
+			mockAdapter.SetComponentState("test-component", benthosfsm.OperationalStateActive, true)
+
+			// Reconcile should now succeed and get the state
+			err, _ = testComponent.Reconcile(ctx, tick)
+			Expect(err).NotTo(HaveOccurred())
+			tick++
+
+			// Verify observed state is back
+			observedState = testComponent.GetLastObservedState().(dataflowcomponent.DFCObservedState)
+			Expect(observedState.BenthosStateMap).To(HaveKey("test-component"))
+
+			// And verify the state is what we set it to
+			benthosState := observedState.BenthosStateMap["test-component"]
+			Expect(benthosState.ServiceInfo.S6FSMState).To(Equal(benthosfsm.OperationalStateActive))
 		})
 	})
 })

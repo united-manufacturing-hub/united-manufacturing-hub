@@ -43,6 +43,7 @@ REDPANDA_VERSION = 24.3.8
 
 # Note: Redpanda allocates 2GB of memory per core.
 # Additionally 1.5GB (or 7% of the total memory, whichever is greater) are required to be available, after this allocation to make seastar happy.
+# If you change this, you need to update the integration_test.go file.
 MEMORY = 4096m
 CPUS = 2
 
@@ -52,6 +53,7 @@ VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "0.0
 install:
 	go install go.uber.org/nilaway/cmd/nilaway@$(NILWAY_VERSION)
 	go install github.com/onsi/ginkgo/v2/ginkgo@$(GINKGO_VERSION)
+	go install github.com/evilmartians/lefthook@latest
 
 download-docker-binaries:
 	@mkdir -p .docker-cache/s6-overlay .docker-cache/benthos .docker-cache/redpanda

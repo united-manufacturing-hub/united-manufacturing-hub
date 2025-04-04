@@ -32,6 +32,7 @@ import (
 
 // Note: Redpanda allocates 2GB of memory per core.
 // Additionally 1.5GB (or 7% of the total memory, whichever is greater) are required to be available, after this allocation to make seastar happy.
+// If you change this, you need to update the Makefile.
 const DEFAULT_MEMORY = "4096m"
 const DEFAULT_CPUS = 2
 

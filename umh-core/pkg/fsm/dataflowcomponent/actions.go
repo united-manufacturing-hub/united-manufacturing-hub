@@ -17,6 +17,8 @@ package dataflowcomponent
 import (
 	"context"
 	"fmt"
+
+	benthosfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
 )
 
 // initiateAddComponentToBenthosConfig adds the data flow component to the benthos config
@@ -99,6 +101,7 @@ func (d *DataFlowComponent) checkComponentExistsInBenthosConfig(ctx context.Cont
 }
 
 // updateObservedState updates the observed state of the component by checking if it exists in the benthos config
+// and retrieving Benthos observed state if it exists
 func (d *DataFlowComponent) updateObservedState(ctx context.Context) error {
 	logger := d.baseFSMInstance.GetLogger()
 	logger.Debugf("Updating observed state for DataFlowComponent %s", d.Config.Name)
@@ -120,6 +123,27 @@ func (d *DataFlowComponent) updateObservedState(ctx context.Context) error {
 		logger.Debugf("Component %s exists state unchanged: %v", d.Config.Name, exists)
 	}
 
+	// Initialize the map if it doesn't exist
+	if d.ObservedState.BenthosStateMap == nil {
+		d.ObservedState.BenthosStateMap = make(map[string]*benthosfsm.BenthosObservedState)
+	}
+
+	// Only fetch Benthos observed state if the component exists
+	if exists {
+		logger.Debugf("Fetching Benthos observed state for component %s", d.Config.Name)
+		benthosState, err := d.BenthosConfigManager.GetComponentBenthosObservedState(ctx, d.Config.Name)
+		if err != nil {
+			logger.Warnf("Failed to get Benthos observed state for component %s: %v", d.Config.Name, err)
+			// Don't return error here, we can continue with partial information
+		} else {
+			d.ObservedState.BenthosStateMap[d.Config.Name] = benthosState
+			logger.Debugf("Updated Benthos observed state for component %s", d.Config.Name)
+		}
+	} else {
+		// If the component doesn't exist, clear its entry in the map
+		delete(d.ObservedState.BenthosStateMap, d.Config.Name)
+	}
+
 	return nil
 }
 
@@ -132,6 +156,15 @@ func (d *DataFlowComponent) PrintState() {
 		d.GetDesiredFSMState(),
 		d.ObservedState.ConfigExists,
 		d.ObservedState.LastConfigUpdateSuccessful)
+
+	if d.ObservedState.BenthosStateMap != nil {
+		if state, exists := d.ObservedState.BenthosStateMap[d.Config.Name]; exists {
+			logger.Infof("DataFlowComponent %s has Benthos observed state", d.Config.Name)
+			if state != nil {
+				logger.Debugf("Benthos state map contains %d component entries", len(d.ObservedState.BenthosStateMap))
+			}
+		}
+	}
 
 	if d.ObservedState.LastError != "" {
 		logger.Debugf("DataFlowComponent %s: LastError=%s", d.Config.Name, d.ObservedState.LastError)
