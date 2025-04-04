@@ -323,58 +323,103 @@ func (bs *BufferedService) SyncToDisk(ctx context.Context) error {
 	bs.mu.Lock()
 	defer bs.mu.Unlock()
 
-	// First, handle removals in reverse order (deepest paths first)
-	var toRemove []string
-	for path, chg := range bs.changed {
-		if chg != nil && chg.removed {
-			toRemove = append(toRemove, path)
-		}
-	}
-	// Sort paths by length in descending order to remove deepest paths first
-	sort.Slice(toRemove, func(i, j int) bool {
-		return len(toRemove[i]) > len(toRemove[j])
-	})
+	// Process in the following order:
+	// 1. Create directories (shallowest first)
+	// 2. Write files (ensuring parent directories exist)
+	// 3. Remove files (deepest first)
+	// 4. Remove directories (deepest first)
 
-	for _, path := range toRemove {
-		// The path is already absolute
-		// Check if this was a directory in our original state
-		chg := bs.changed[path]
-		if chg != nil && chg.wasDir {
-			if err := bs.base.RemoveAll(ctx, path); err != nil {
-				return fmt.Errorf("failed to remove directory: %w", err)
-			}
-		} else {
-			if err := bs.base.Remove(ctx, path); err != nil {
-				return fmt.Errorf("failed to remove file: %w", err)
-			}
-		}
-		// Only remove from our in-memory maps after successful removal
-		delete(bs.files, path)
-		delete(bs.changed, path)
-	}
-
-	// Then handle writes and directory creation
+	// Step 1: Create directories (shallowest first)
+	var dirsToCreate []string
 	for path, chg := range bs.changed {
 		if chg != nil && !chg.removed {
-			// If it's not in our map for some reason, skip
 			state, exists := bs.files[path]
 			if !exists {
 				return fmt.Errorf("file not found in memory: %s", path)
 			}
-
-			// Handle directories differently from files
 			if state.isDir {
-				if err := bs.base.EnsureDirectory(ctx, path); err != nil {
-					return fmt.Errorf("failed to create directory: %w", err)
-				}
-			} else {
-				// Do the write for regular files
-				if err := bs.base.WriteFile(ctx, path, chg.content, chg.perm); err != nil {
-					return fmt.Errorf("failed to write file: %w", err)
-				}
+				dirsToCreate = append(dirsToCreate, path)
 			}
-			delete(bs.changed, path)
 		}
+	}
+	// Sort paths by length in ascending order to create shallowest paths first
+	sort.Slice(dirsToCreate, func(i, j int) bool {
+		return len(dirsToCreate[i]) < len(dirsToCreate[j])
+	})
+
+	for _, path := range dirsToCreate {
+		if err := bs.base.EnsureDirectory(ctx, path); err != nil {
+			return fmt.Errorf("failed to create directory: %w", err)
+		}
+		delete(bs.changed, path)
+	}
+
+	// Step 2: Write files (ensuring parent directories exist)
+	var filesToWrite []string
+	for path, chg := range bs.changed {
+		if chg != nil && !chg.removed {
+			state, exists := bs.files[path]
+			if !exists {
+				return fmt.Errorf("file not found in memory: %s", path)
+			}
+			if !state.isDir {
+				filesToWrite = append(filesToWrite, path)
+			}
+		}
+	}
+
+	for _, path := range filesToWrite {
+		// Ensure parent directory exists
+		parentDir := filepath.Dir(path)
+		if err := bs.base.EnsureDirectory(ctx, parentDir); err != nil {
+			return fmt.Errorf("failed to create parent directory: %w", err)
+		}
+
+		// Now write the file
+		chg := bs.changed[path]
+		if err := bs.base.WriteFile(ctx, path, chg.content, chg.perm); err != nil {
+			return fmt.Errorf("failed to write file: %w", err)
+		}
+		delete(bs.changed, path)
+	}
+
+	// Step 3 & 4: Handle removals in reverse order (deepest paths first)
+	var filesToRemove []string
+	var dirsToRemove []string
+	for path, chg := range bs.changed {
+		if chg != nil && chg.removed {
+			if chg.wasDir {
+				dirsToRemove = append(dirsToRemove, path)
+			} else {
+				filesToRemove = append(filesToRemove, path)
+			}
+		}
+	}
+
+	// Sort paths by length in descending order
+	sort.Slice(filesToRemove, func(i, j int) bool {
+		return len(filesToRemove[i]) > len(filesToRemove[j])
+	})
+	sort.Slice(dirsToRemove, func(i, j int) bool {
+		return len(dirsToRemove[i]) > len(dirsToRemove[j])
+	})
+
+	// First remove files
+	for _, path := range filesToRemove {
+		if err := bs.base.Remove(ctx, path); err != nil {
+			return fmt.Errorf("failed to remove file: %w", err)
+		}
+		delete(bs.files, path)
+		delete(bs.changed, path)
+	}
+
+	// Then remove directories
+	for _, path := range dirsToRemove {
+		if err := bs.base.RemoveAll(ctx, path); err != nil {
+			return fmt.Errorf("failed to remove directory: %w", err)
+		}
+		delete(bs.files, path)
+		delete(bs.changed, path)
 	}
 
 	return nil

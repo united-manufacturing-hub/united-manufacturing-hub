@@ -312,7 +312,6 @@ var _ = Describe("BufferedService", func() {
 	})
 
 	Context("Error Handling", func() {
-
 		It("should return an error if SyncToDisk fails on an actual WriteFile error", func() {
 			// We'll create a mock or something that fails on WriteFile
 			// Alternatively, we can rename the directory out from under it to cause an error
@@ -324,14 +323,23 @@ var _ = Describe("BufferedService", func() {
 			err = bufService.WriteFile(ctx, testFile, []byte("hello"), 0644)
 			Expect(err).NotTo(HaveOccurred())
 
-			// remove the entire tmpDir so that writing definitely fails
+			// With our new implementation, simply removing the directory won't cause an error
+			// because we automatically create parent directories
+			// Instead, let's create a file at the same path as our directory to cause a failure
 			err = os.RemoveAll(tmpDir)
 			Expect(err).NotTo(HaveOccurred())
 
-			// Now flush
+			// Create a file with the same name as the directory we need to create
+			// This will cause EnsureDirectory to fail since it can't create a directory over a file
+			err = os.MkdirAll(filepath.Dir(tmpDir), 0755)
+			Expect(err).NotTo(HaveOccurred())
+			err = os.WriteFile(tmpDir, []byte("blocking file"), 0644)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Now flush - this should fail because we can't create the directory
 			err = bufService.SyncToDisk(ctx)
 			Expect(err).To(HaveOccurred())
-			Expect(strings.Contains(err.Error(), "failed to write file")).To(BeTrue())
+			Expect(strings.Contains(err.Error(), "failed to create")).To(BeTrue())
 		})
 	})
 })
@@ -535,5 +543,204 @@ var _ = Describe("BufferedService with MockFileSystem", func() {
 			// For demonstration, let's just ensure we had at least 1 success or 1 fail if the PRNG is cooperative.
 			Expect(failCount + successCount).To(Equal(numAttempts))
 		})
+	})
+})
+
+var _ = Describe("BufferedService Directory Creation Issues", func() {
+	var (
+		tmpDir      string
+		err         error
+		ctx         context.Context
+		cancel      context.CancelFunc
+		baseService filesystem.Service
+		bufService  *filesystem.BufferedService
+	)
+
+	BeforeEach(func() {
+		ctx, cancel = context.WithCancel(context.Background())
+
+		// Create a real temp directory on disk for the underlying DefaultService to operate on.
+		tmpDir, err = os.MkdirTemp("", "buffered-service-dir-test-*")
+		Expect(err).NotTo(HaveOccurred())
+
+		// Initialize the base service (DefaultService) pointing to the real filesystem
+		baseService = filesystem.NewDefaultService()
+
+		// Initialize the buffered service, wrapping the base service
+		bufService = filesystem.NewBufferedService(baseService, tmpDir, constants.FilesAndDirectoriesToIgnore)
+	})
+
+	AfterEach(func() {
+		// Clean up
+		cancel()
+		os.RemoveAll(tmpDir)
+	})
+
+	It("should now succeed when writing files in directories that don't exist yet", func() {
+		// Create a deeply nested file path with multiple directory levels that don't exist
+		nestedFilePath := filepath.Join(tmpDir, "service", "hello-world", "dependencies.d", "base")
+
+		// Write a file into this nested path without creating the directories first
+		err = bufService.WriteFile(ctx, nestedFilePath, []byte("content"), 0644)
+		Expect(err).NotTo(HaveOccurred())
+
+		// With the fixed implementation, SyncToDisk should now succeed by automatically creating parent directories
+		err = bufService.SyncToDisk(ctx)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Verify file was written
+		content, err := os.ReadFile(nestedFilePath)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(string(content)).To(Equal("content"))
+
+		// Verify parent directories were created
+		dirInfo, err := os.Stat(filepath.Join(tmpDir, "service", "hello-world", "dependencies.d"))
+		Expect(err).NotTo(HaveOccurred())
+		Expect(dirInfo.IsDir()).To(BeTrue())
+	})
+
+	It("should now succeed with the paths from logs after the fix", func() {
+		// Exact paths from logs
+		servicePath := filepath.Join(tmpDir, "run", "service", "hello-world")
+		dependenciesPath := filepath.Join(servicePath, "dependencies.d")
+		basePath := filepath.Join(dependenciesPath, "base")
+		downPath := filepath.Join(servicePath, "down")
+
+		// Write files without creating parent directories
+		err = bufService.WriteFile(ctx, basePath, []byte("base content"), 0644)
+		Expect(err).NotTo(HaveOccurred())
+
+		err = bufService.WriteFile(ctx, downPath, []byte(""), 0644)
+		Expect(err).NotTo(HaveOccurred())
+
+		// With the fixed implementation, SyncToDisk should now succeed
+		err = bufService.SyncToDisk(ctx)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Verify files exist
+		baseContent, err := os.ReadFile(basePath)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(string(baseContent)).To(Equal("base content"))
+
+		downContent, err := os.ReadFile(downPath)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(string(downContent)).To(Equal(""))
+	})
+
+	It("should handle mix of directory removal and creation in correct order", func() {
+		// Create a directory structure on disk first
+		oldPath := filepath.Join(tmpDir, "service", "old-service")
+		err = os.MkdirAll(oldPath, 0755)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Write a file in it
+		oldFile := filepath.Join(oldPath, "config")
+		err = os.WriteFile(oldFile, []byte("old content"), 0644)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Sync to load existing structure
+		err = bufService.SyncFromDisk(ctx)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Now, in one operation:
+		// 1. Remove the old directory
+		// 2. Create a new directory
+		// 3. Write a file in the new directory
+
+		// Mark old directory for removal
+		err = bufService.RemoveAll(ctx, oldPath)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Create new structure
+		newPath := filepath.Join(tmpDir, "service", "new-service")
+		err = bufService.EnsureDirectory(ctx, newPath)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Write a file in the new directory
+		newFile := filepath.Join(newPath, "config")
+		err = bufService.WriteFile(ctx, newFile, []byte("new content"), 0644)
+		Expect(err).NotTo(HaveOccurred())
+
+		// SyncToDisk should handle correct ordering of operations
+		err = bufService.SyncToDisk(ctx)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Verify new file exists
+		content, err := os.ReadFile(newFile)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(string(content)).To(Equal("new content"))
+
+		// Verify old directory is gone
+		_, err = os.Stat(oldPath)
+		Expect(os.IsNotExist(err)).To(BeTrue())
+	})
+
+	It("should handle complex hierarchical file operations", func() {
+		// This test creates a complex scenario with multiple levels of directories and files
+		// with some being added and others removed
+
+		// First create and sync a basic structure
+		baseDir := filepath.Join(tmpDir, "complex")
+		err = os.MkdirAll(filepath.Join(baseDir, "service", "old"), 0755)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Write a few files
+		err = os.WriteFile(filepath.Join(baseDir, "service", "old", "config"), []byte("old"), 0644)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Sync from disk
+		err = bufService.SyncFromDisk(ctx)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Now perform a complex set of operations:
+		// 1. Remove old directory
+		err = bufService.RemoveAll(ctx, filepath.Join(baseDir, "service", "old"))
+		Expect(err).NotTo(HaveOccurred())
+
+		// 2. Create several nested directories
+		dir1 := filepath.Join(baseDir, "service", "new1")
+		dir2 := filepath.Join(baseDir, "service", "new2", "nested")
+		dir3 := filepath.Join(baseDir, "service", "new3", "deeply", "nested")
+
+		err = bufService.EnsureDirectory(ctx, dir1)
+		Expect(err).NotTo(HaveOccurred())
+		err = bufService.EnsureDirectory(ctx, dir2)
+		Expect(err).NotTo(HaveOccurred())
+		err = bufService.EnsureDirectory(ctx, dir3)
+		Expect(err).NotTo(HaveOccurred())
+
+		// 3. Write files in each directory
+		file1 := filepath.Join(dir1, "file1.txt")
+		file2 := filepath.Join(dir2, "file2.txt")
+		file3 := filepath.Join(dir3, "file3.txt")
+
+		err = bufService.WriteFile(ctx, file1, []byte("content1"), 0644)
+		Expect(err).NotTo(HaveOccurred())
+		err = bufService.WriteFile(ctx, file2, []byte("content2"), 0644)
+		Expect(err).NotTo(HaveOccurred())
+		err = bufService.WriteFile(ctx, file3, []byte("content3"), 0644)
+		Expect(err).NotTo(HaveOccurred())
+
+		// 4. Perform sync
+		err = bufService.SyncToDisk(ctx)
+		Expect(err).NotTo(HaveOccurred())
+
+		// 5. Verify everything was created/removed correctly
+		// Old directory should be gone
+		_, err = os.Stat(filepath.Join(baseDir, "service", "old"))
+		Expect(os.IsNotExist(err)).To(BeTrue())
+
+		// New directories and files should exist
+		content1, err := os.ReadFile(file1)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(string(content1)).To(Equal("content1"))
+
+		content2, err := os.ReadFile(file2)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(string(content2)).To(Equal("content2"))
+
+		content3, err := os.ReadFile(file3)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(string(content3)).To(Equal("content3"))
 	})
 })
