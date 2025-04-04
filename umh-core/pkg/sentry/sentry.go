@@ -16,6 +16,7 @@ package sentry
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/Masterminds/semver/v3"
 	"github.com/getsentry/sentry-go"
@@ -75,17 +76,31 @@ func InitSentry(appVersion string, debounceErrors bool) {
 	}
 }
 
+func getMeaningfulErrorTitle(err error) string {
+	message := err.Error()
+
+	// Extract the first sentence or phrase(until period, comma or a colon)
+	idx := strings.IndexAny(message, ".,:")
+	if idx > 0 {
+		message = message[:idx]
+	}
+
+	// Limit length of Sentry title
+	if len(message) > 100 {
+		message = message[:97] + "..."
+	}
+
+	return message
+}
+
 func createSentryEvent(level sentry.Level, err error) *sentry.Event {
 	event := sentry.NewEvent()
 	event.Level = level
 	event.Message = err.Error()
 
-	// Get error type name to use as exception type
-	errorTypeName := fmt.Sprintf("%T", err)
-
 	// Create exception with proper type name
 	exception := &sentry.Exception{
-		Type:       errorTypeName,
+		Type:       getMeaningfulErrorTitle(err),
 		Value:      err.Error(),
 		Module:     "", // Will be filled by stacktrace
 		Stacktrace: sentry.ExtractStacktrace(err),
