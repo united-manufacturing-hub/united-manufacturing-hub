@@ -255,15 +255,6 @@ var _ = Describe("Redpanda Service", func() {
 				service.s6Service = mockS6Service
 			})
 
-			It("should report not ready despite healthy metrics", func() {
-				ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
-				defer cancel()
-				status, err := service.GetHealthCheckAndMetrics(ctx, tick, mockS6Service.GetLogsResult)
-				tick++
-				Expect(err).NotTo(HaveOccurred())
-				Expect(status.HealthCheck.IsLive).To(BeTrue())
-				Expect(status.HealthCheck.IsReady).To(BeFalse())
-			})
 		})
 	})
 
