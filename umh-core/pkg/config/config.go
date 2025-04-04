@@ -126,6 +126,7 @@ func (c FullConfig) Clone() FullConfig {
 	clone := FullConfig{
 		Agent:              c.Agent,
 		DataFlowComponents: make([]DataFlowComponentConfig, len(c.DataFlowComponents)),
+		Internal:           InternalConfig{},
 	}
 	// deep copy the location map if it exists
 	if c.Agent.Location != nil {
