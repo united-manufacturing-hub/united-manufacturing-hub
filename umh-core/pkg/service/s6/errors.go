@@ -26,6 +26,9 @@ var (
 	// ErrInvalidStatus is returned when the status file has an invalid format
 	ErrInvalidStatus = errors.New("invalid status file format")
 
+	// ErrLogFileNotFound indicates the log file was not found
+	ErrLogFileNotFound = errors.New("log file not found")
+
 	// ErrS6TemporaryError is returned when a s6 command exits with code 111, indicating a temporary error
 	ErrS6TemporaryError = errors.New("s6 temporary error (exit code 111)")
 

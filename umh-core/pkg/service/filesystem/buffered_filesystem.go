@@ -279,6 +279,7 @@ func (bs *BufferedService) SyncFromDisk(ctx context.Context) error {
 					if os.IsNotExist(err) {
 						logger.Debugf("File does not exist, removing: %s", absPath)
 						delete(newFiles, absPath)
+						continue
 					} else {
 						// If we can't read, throw an error
 						logger.Warnf("ReadFile for %s failed: %v", absPath, err)
@@ -722,6 +723,17 @@ func (bs *BufferedService) ReadDir(ctx context.Context, path string) ([]os.DirEn
 // ExecuteCommand delegates to the base service
 func (bs *BufferedService) ExecuteCommand(ctx context.Context, name string, args ...string) ([]byte, error) {
 	return bs.base.ExecuteCommand(ctx, name, args...)
+}
+
+// GetFiles returns a copy of the in-memory files map
+func (bs *BufferedService) GetFiles() map[string]*fileState {
+	bs.mu.Lock()
+	defer bs.mu.Unlock()
+	files := make(map[string]*fileState)
+	for k, v := range bs.files {
+		files[k] = v
+	}
+	return files
 }
 
 // ======================

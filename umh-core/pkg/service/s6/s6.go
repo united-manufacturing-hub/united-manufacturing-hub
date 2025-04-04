@@ -335,8 +335,8 @@ func (s *DefaultService) Remove(ctx context.Context, servicePath string, fsServi
 
 	// Remove the service from contents.d first
 	serviceName := filepath.Base(servicePath)
-	contentsFile := filepath.Join(filepath.Dir(servicePath), "user", "contents.d", serviceName)
-	fsService.Remove(ctx, contentsFile) // Ignore errors - file might not exist
+	//contentsFile := filepath.Join(filepath.Dir(servicePath), "user", "contents.d", serviceName)
+	//fsService.Remove(ctx, contentsFile) // Ignore errors - file might not exist
 
 	// Remove the service directory
 	err = fsService.RemoveAll(ctx, servicePath)
@@ -1097,7 +1097,7 @@ func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsServ
 		return nil, fmt.Errorf("failed to check if log file exists: %w", err)
 	}
 	if !exists {
-		return nil, fmt.Errorf("log file %s does not exist", logFile)
+		return nil, ErrLogFileNotFound
 	}
 
 	// Read the log file

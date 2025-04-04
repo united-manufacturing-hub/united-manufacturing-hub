@@ -301,6 +301,8 @@ func (s *NmapService) Status(ctx context.Context, filesystemService filesystem.S
 	if err != nil {
 		if errors.Is(err, s6service.ErrServiceNotExist) {
 			return ServiceInfo{}, ErrServiceNotExist
+		} else if errors.Is(err, s6service.ErrLogFileNotFound) {
+			return ServiceInfo{}, ErrServiceNotExist
 		}
 		return ServiceInfo{}, fmt.Errorf("failed to get logs: %w", err)
 	}

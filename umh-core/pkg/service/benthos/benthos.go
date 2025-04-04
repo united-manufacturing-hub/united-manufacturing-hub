@@ -465,6 +465,9 @@ func (s *BenthosService) Status(ctx context.Context, filesystemService filesyste
 		if errors.Is(err, s6service.ErrServiceNotExist) {
 			s.logger.Debugf("Service %s does not exist, returning empty logs", s6ServiceName)
 			return ServiceInfo{}, ErrServiceNotExist
+		} else if errors.Is(err, s6service.ErrLogFileNotFound) {
+			s.logger.Debugf("Log file for service %s not found, returning empty logs", s6ServiceName)
+			return ServiceInfo{}, ErrServiceNotExist
 		} else {
 			return ServiceInfo{}, fmt.Errorf("failed to get logs: %w", err)
 		}
