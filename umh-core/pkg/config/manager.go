@@ -129,6 +129,7 @@ func (m *FileConfigManager) GetConfigWithOverwritesOrCreateNew(ctx context.Conte
 			return FullConfig{}, fmt.Errorf("failed to get config that exists: %w", err)
 		}
 
+	}
 
 	// Apply overrides
 	if configOverride.Agent.MetricsPort > 0 {
@@ -152,7 +153,7 @@ func (m *FileConfigManager) GetConfigWithOverwritesOrCreateNew(ctx context.Conte
 	}
 
 	// Persist the updated config
-	if err := m.WriteConfig(ctx, config); err != nil {
+	if err := m.writeConfig(ctx, config); err != nil {
 		return FullConfig{}, fmt.Errorf("failed to write new config: %w", err)
 	}
 
