@@ -117,9 +117,11 @@ func NewFileConfigManager() *FileConfigManager {
 	logger := logger.For(logger.ComponentConfigManager)
 
 	return &FileConfigManager{
-		configPath: configPath,
-		fsService:  filesystem.NewDefaultService(),
-		logger:     logger,
+		configPath:        configPath,
+		fsService:         filesystem.NewDefaultService(),
+		logger:            logger,
+		mutexAtomicUpdate: *ctxmutex.NewCtxMutex(),
+		mutexReadOrWrite:  *ctxrwmutex.NewCtxRWMutex(),
 	}
 }
 
