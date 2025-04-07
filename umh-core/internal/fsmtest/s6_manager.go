@@ -22,6 +22,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 )
 
@@ -77,10 +78,11 @@ func WaitForMockedManagerInstanceState(
 	ctx context.Context,
 	manager *s6.S6Manager,
 	fullConfig config.FullConfig,
+	filesystemService filesystem.Service,
 	instanceName, desiredState string,
 	maxAttempts int,
 	tick uint64,
 ) (uint64, error) {
 	// Simply call the regular function
-	return WaitForManagerInstanceState(ctx, manager, fullConfig, instanceName, desiredState, maxAttempts, tick)
+	return WaitForManagerInstanceState(ctx, manager, fullConfig, filesystemService, instanceName, desiredState, maxAttempts, tick)
 }

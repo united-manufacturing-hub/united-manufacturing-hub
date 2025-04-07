@@ -42,12 +42,14 @@ var _ = Describe("S6 Service", func() {
 		mockService *MockService
 		ctx         context.Context
 		testPath    string
+		mockFS      *filesystem.MockFileSystem
 	)
 
 	BeforeEach(func() {
 		mockService = NewMockService()
 		ctx = context.Background()
 		testPath = "/tmp/test-s6-service"
+		mockFS = filesystem.NewMockFileSystem()
 
 		// Cleanup any test directories if they exist
 		os.RemoveAll(testPath)
@@ -60,38 +62,38 @@ var _ = Describe("S6 Service", func() {
 
 	It("should track method calls in the mock implementation", func() {
 		Expect(mockService.CreateCalled).To(BeFalse())
-		mockService.Create(ctx, testPath, s6serviceconfig.S6ServiceConfig{})
+		mockService.Create(ctx, testPath, s6serviceconfig.S6ServiceConfig{}, mockFS)
 		Expect(mockService.CreateCalled).To(BeTrue())
 
 		Expect(mockService.StartCalled).To(BeFalse())
-		mockService.Start(ctx, testPath)
+		mockService.Start(ctx, testPath, mockFS)
 		Expect(mockService.StartCalled).To(BeTrue())
 
 		Expect(mockService.StopCalled).To(BeFalse())
-		mockService.Stop(ctx, testPath)
+		mockService.Stop(ctx, testPath, mockFS)
 		Expect(mockService.StopCalled).To(BeTrue())
 
 		Expect(mockService.RestartCalled).To(BeFalse())
-		mockService.Restart(ctx, testPath)
+		mockService.Restart(ctx, testPath, mockFS)
 		Expect(mockService.RestartCalled).To(BeTrue())
 
 		Expect(mockService.StatusCalled).To(BeFalse())
-		mockService.Status(ctx, testPath)
+		mockService.Status(ctx, testPath, mockFS)
 		Expect(mockService.StatusCalled).To(BeTrue())
 
 		Expect(mockService.ServiceExistsCalled).To(BeFalse())
-		mockService.ServiceExists(ctx, testPath)
+		mockService.ServiceExists(ctx, testPath, mockFS)
 		Expect(mockService.ServiceExistsCalled).To(BeTrue())
 	})
 
 	It("should manage service state in the mock implementation", func() {
 		// Service should not exist initially
-		exists, _ := mockService.ServiceExists(ctx, testPath)
+		exists, _ := mockService.ServiceExists(ctx, testPath, mockFS)
 		Expect(exists).To(BeFalse())
 
 		// Create service should make it exist
-		mockService.Create(ctx, testPath, s6serviceconfig.S6ServiceConfig{})
-		exists, _ = mockService.ServiceExists(ctx, testPath)
+		mockService.Create(ctx, testPath, s6serviceconfig.S6ServiceConfig{}, mockFS)
+		exists, _ = mockService.ServiceExists(ctx, testPath, mockFS)
 		Expect(exists).To(BeTrue())
 
 		// Set the service state to down initially
@@ -100,32 +102,32 @@ var _ = Describe("S6 Service", func() {
 		}
 
 		// Get status should return the set state
-		info, err := mockService.Status(ctx, testPath)
+		info, err := mockService.Status(ctx, testPath, mockFS)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(info.Status).To(Equal(ServiceDown))
 
 		// Start service should change state to up
-		mockService.Start(ctx, testPath)
-		info, _ = mockService.Status(ctx, testPath)
+		mockService.Start(ctx, testPath, mockFS)
+		info, _ = mockService.Status(ctx, testPath, mockFS)
 		Expect(info.Status).To(Equal(ServiceUp))
 
 		// Stop service should change state to down
-		mockService.Stop(ctx, testPath)
-		info, _ = mockService.Status(ctx, testPath)
+		mockService.Stop(ctx, testPath, mockFS)
+		info, _ = mockService.Status(ctx, testPath, mockFS)
 		Expect(info.Status).To(Equal(ServiceDown))
 
 		// Restart service should change state to up (after briefly being restarting)
-		mockService.Restart(ctx, testPath)
-		info, _ = mockService.Status(ctx, testPath)
+		mockService.Restart(ctx, testPath, mockFS)
+		info, _ = mockService.Status(ctx, testPath, mockFS)
 		Expect(info.Status).To(Equal(ServiceUp))
 
 		// Remove service should make it not exist
-		mockService.Remove(ctx, testPath)
-		exists, _ = mockService.ServiceExists(ctx, testPath)
+		mockService.Remove(ctx, testPath, mockFS)
+		exists, _ = mockService.ServiceExists(ctx, testPath, mockFS)
 		Expect(exists).To(BeFalse())
 
 		// Status should not be available after removal
-		_, err = mockService.Status(ctx, testPath)
+		_, err = mockService.Status(ctx, testPath, mockFS)
 		Expect(err).NotTo(HaveOccurred()) // No error, but...
 		info = mockService.StatusResult   // Should return the default result
 		Expect(info.Status).To(Equal(ServiceUnknown))
@@ -136,8 +138,7 @@ var _ = Describe("S6 Service", func() {
 
 		BeforeEach(func() {
 			s6Service = &DefaultService{
-				fsService: nil, // Not needed for this test
-				logger:    nil,
+				logger: nil,
 			}
 		})
 
@@ -193,8 +194,7 @@ var _ = Describe("S6 Service", func() {
 		BeforeEach(func() {
 			mockFS = filesystem.NewMockFileSystem()
 			s6Service = &DefaultService{
-				fsService: mockFS,
-				logger:    nil, // Don't need the logger for this test
+				logger: nil, // Don't need the logger for this test
 			}
 
 			// Track removed directories
@@ -252,7 +252,7 @@ var _ = Describe("S6 Service", func() {
 
 		It("should only remove non-standard directories", func() {
 			// Execute the function under test
-			err := s6Service.CleanS6ServiceDirectory(ctx, constants.S6BaseDir)
+			err := s6Service.CleanS6ServiceDirectory(ctx, constants.S6BaseDir, mockFS)
 
 			// Verify function execution
 			Expect(err).NotTo(HaveOccurred())
@@ -272,7 +272,7 @@ var _ = Describe("S6 Service", func() {
 		It("should skip files that are not directories", func() {
 			// This is verified by the mock setup - if it attempts to remove
 			// a file, the test will fail since our mock only expects directories
-			err := s6Service.CleanS6ServiceDirectory(ctx, constants.S6BaseDir)
+			err := s6Service.CleanS6ServiceDirectory(ctx, constants.S6BaseDir, mockFS)
 			Expect(err).NotTo(HaveOccurred())
 		})
 	})
@@ -288,8 +288,7 @@ var _ = Describe("S6 Service", func() {
 		BeforeEach(func() {
 			mockFS = filesystem.NewMockFileSystem()
 			s6Service = &DefaultService{
-				fsService: mockFS,
-				logger:    nil, // Not needed for this test
+				logger: nil, // Not needed for this test
 			}
 			ctx = context.Background()
 		})
@@ -297,14 +296,14 @@ var _ = Describe("S6 Service", func() {
 		Context("when the service does not exist", func() {
 			BeforeEach(func() {
 				// Setup mock file system to return service does not exist
-				mockFS.WithFileExistsFunc(func(ctx context.Context, path string) (bool, error) {
+				mockFS.WithPathExistsFunc(func(ctx context.Context, path string) (bool, error) {
 					return false, nil
 				})
 			})
 
 			It("should return ErrServiceNotExist", func() {
 				servicePath := filepath.Join(constants.S6BaseDir, "non-existent-service")
-				_, err := s6Service.GetS6ConfigFile(ctx, servicePath, "config.yaml")
+				_, err := s6Service.GetS6ConfigFile(ctx, servicePath, "config.yaml", mockFS)
 				Expect(err).To(Equal(ErrServiceNotExist))
 			})
 		})
@@ -312,7 +311,7 @@ var _ = Describe("S6 Service", func() {
 		Context("when the service exists but the config file does not", func() {
 			BeforeEach(func() {
 				// Setup mock file system to return service exists but file does not
-				mockFS.WithFileExistsFunc(func(ctx context.Context, path string) (bool, error) {
+				mockFS.WithPathExistsFunc(func(ctx context.Context, path string) (bool, error) {
 					servicePath := filepath.Join(constants.S6BaseDir, "test-service")
 					// Service directory exists
 					if path == servicePath {
@@ -328,7 +327,7 @@ var _ = Describe("S6 Service", func() {
 
 			It("should return an error indicating the file doesn't exist", func() {
 				servicePath := filepath.Join(constants.S6BaseDir, "test-service")
-				_, err := s6Service.GetS6ConfigFile(ctx, servicePath, "config.yaml")
+				_, err := s6Service.GetS6ConfigFile(ctx, servicePath, "config.yaml", mockFS)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("does not exist"))
 			})
@@ -337,7 +336,7 @@ var _ = Describe("S6 Service", func() {
 		Context("when both service and config file exist", func() {
 			BeforeEach(func() {
 				// Setup mock file system to return both service and file exist
-				mockFS.WithFileExistsFunc(func(ctx context.Context, path string) (bool, error) {
+				mockFS.WithPathExistsFunc(func(ctx context.Context, path string) (bool, error) {
 					return true, nil
 				})
 
@@ -353,7 +352,7 @@ var _ = Describe("S6 Service", func() {
 
 			It("should return the file content", func() {
 				servicePath := filepath.Join(constants.S6BaseDir, "test-service")
-				content, err := s6Service.GetS6ConfigFile(ctx, servicePath, "config.yaml")
+				content, err := s6Service.GetS6ConfigFile(ctx, servicePath, "config.yaml", mockFS)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(content).To(Equal([]byte("key: value")))
 			})
@@ -365,7 +364,7 @@ var _ = Describe("S6 Service", func() {
 				cancel() // Cancel immediately
 
 				servicePath := filepath.Join(constants.S6BaseDir, "test-service")
-				_, err := s6Service.GetS6ConfigFile(cancelledCtx, servicePath, "config.yaml")
+				_, err := s6Service.GetS6ConfigFile(cancelledCtx, servicePath, "config.yaml", mockFS)
 				Expect(err).To(Equal(context.Canceled))
 			})
 		})

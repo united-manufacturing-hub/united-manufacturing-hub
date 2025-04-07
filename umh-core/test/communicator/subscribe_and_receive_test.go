@@ -39,6 +39,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/container"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/container_monitor"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
 var _ = Describe("Subscribe and Receive Test", func() {
@@ -55,11 +56,15 @@ var _ = Describe("Subscribe and Receive Test", func() {
 		outboundChan  chan *models.UMHMessage
 		capturedMsgs  []*models.UMHMessage
 		capturedMutex sync.Mutex
+
+		mockFS *filesystem.MockFileSystem
 	)
 
 	BeforeEach(func() {
 		// Set up context with timeout
 		ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
+
+		mockFS = filesystem.NewMockFileSystem()
 
 		// Initialize test variables
 		instanceID = uuid.New()
@@ -109,7 +114,7 @@ var _ = Describe("Subscribe and Receive Test", func() {
 
 		// Initialize the manager with a reconcile call to create instances
 		dummyConfig := config.FullConfig{}
-		containerManager.Reconcile(ctx, dummyConfig, 1)
+		containerManager.Reconcile(ctx, dummyConfig, mockFS, 1)
 
 		// Create the snapshot after reconciliation
 		containerManagerSnapshot := containerManager.CreateSnapshot()

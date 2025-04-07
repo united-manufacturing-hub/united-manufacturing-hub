@@ -19,6 +19,7 @@ import (
 	"errors"
 	"math/rand"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 )
@@ -30,11 +31,11 @@ type MockFileSystem struct {
 	FailedOperations    map[string]bool
 	ReadFileFunc        func(ctx context.Context, path string) ([]byte, error)
 	WriteFileFunc       func(ctx context.Context, path string, data []byte, perm os.FileMode) error
+	PathExistsFunc      func(ctx context.Context, path string) (bool, error)
 	FileExistsFunc      func(ctx context.Context, path string) (bool, error)
 	EnsureDirectoryFunc func(ctx context.Context, path string) error
 	RemoveFunc          func(ctx context.Context, path string) error
 	RemoveAllFunc       func(ctx context.Context, path string) error
-	MkdirTempFunc       func(ctx context.Context, dir, pattern string) (string, error)
 	StatFunc            func(ctx context.Context, path string) (os.FileInfo, error)
 	CreateFileFunc      func(ctx context.Context, path string, perm os.FileMode) (*os.File, error)
 	ChmodFunc           func(ctx context.Context, path string, mode os.FileMode) error
@@ -157,10 +158,44 @@ func (m *MockFileSystem) WriteFile(ctx context.Context, path string, data []byte
 	return nil
 }
 
+// PathExists checks if a path exists
+func (m *MockFileSystem) PathExists(ctx context.Context, path string) (bool, error) {
+	if m.PathExistsFunc != nil {
+		return m.PathExistsFunc(ctx, path)
+	}
+
+	// For backward compatibility, respect FileExistsFunc if set
+	if m.FileExistsFunc != nil {
+		return m.FileExistsFunc(ctx, path)
+	}
+
+	shouldFail, delay := m.simulateRandomBehavior("PathExists:" + path)
+
+	if delay > 0 {
+		select {
+		case <-time.After(delay):
+			// Delay completed
+		case <-ctx.Done():
+			return false, ctx.Err()
+		}
+	}
+
+	if shouldFail {
+		return false, errors.New("simulated failure in PathExists")
+	}
+	return true, nil
+}
+
 // FileExists checks if a file exists
+// Deprecated: use PathExists instead
 func (m *MockFileSystem) FileExists(ctx context.Context, path string) (bool, error) {
 	if m.FileExistsFunc != nil {
 		return m.FileExistsFunc(ctx, path)
+	}
+
+	// If FileExistsFunc is not set but PathExistsFunc is, use that
+	if m.PathExistsFunc != nil {
+		return m.PathExistsFunc(ctx, path)
 	}
 
 	shouldFail, delay := m.simulateRandomBehavior("FileExists:" + path)
@@ -226,29 +261,6 @@ func (m *MockFileSystem) RemoveAll(ctx context.Context, path string) error {
 	return nil
 }
 
-// MkdirTemp creates a new temporary directory
-func (m *MockFileSystem) MkdirTemp(ctx context.Context, dir, pattern string) (string, error) {
-	if m.MkdirTempFunc != nil {
-		return m.MkdirTempFunc(ctx, dir, pattern)
-	}
-
-	shouldFail, delay := m.simulateRandomBehavior("MkdirTemp")
-
-	if delay > 0 {
-		select {
-		case <-time.After(delay):
-			// Delay completed
-		case <-ctx.Done():
-			return "", ctx.Err()
-		}
-	}
-
-	if shouldFail {
-		return "", errors.New("simulated failure in MkdirTemp")
-	}
-	return "/tmp/mock-dir", nil
-}
-
 // Stat returns file info
 func (m *MockFileSystem) Stat(ctx context.Context, path string) (os.FileInfo, error) {
 	if m.StatFunc != nil {
@@ -269,7 +281,15 @@ func (m *MockFileSystem) Stat(ctx context.Context, path string) (os.FileInfo, er
 	if shouldFail {
 		return nil, errors.New("simulated failure in Stat")
 	}
-	return nil, errors.New("not implemented")
+
+	// Return a mock FileInfo
+	return &memFileInfo{
+		name:  filepath.Base(path),
+		size:  0,
+		mode:  0644,
+		mtime: time.Now(),
+		dir:   true,
+	}, nil
 }
 
 // CreateFile creates a new file with the specified permissions
@@ -382,9 +402,15 @@ func (m *MockFileSystem) WithWriteFileFunc(fn func(ctx context.Context, path str
 	return m
 }
 
-// WithFileExistsFunc sets a custom implementation for FileExists
+// WithFileExistsFunc sets a custom function for FileExists
 func (m *MockFileSystem) WithFileExistsFunc(fn func(ctx context.Context, path string) (bool, error)) *MockFileSystem {
 	m.FileExistsFunc = fn
+	return m
+}
+
+// WithPathExistsFunc sets a custom function for PathExists
+func (m *MockFileSystem) WithPathExistsFunc(fn func(ctx context.Context, path string) (bool, error)) *MockFileSystem {
+	m.PathExistsFunc = fn
 	return m
 }
 
@@ -397,12 +423,6 @@ func (m *MockFileSystem) WithRemoveFunc(fn func(ctx context.Context, path string
 // WithRemoveAllFunc sets a custom implementation for RemoveAll
 func (m *MockFileSystem) WithRemoveAllFunc(fn func(ctx context.Context, path string) error) *MockFileSystem {
 	m.RemoveAllFunc = fn
-	return m
-}
-
-// WithMkdirTempFunc sets a custom implementation for MkdirTemp
-func (m *MockFileSystem) WithMkdirTempFunc(fn func(ctx context.Context, dir, pattern string) (string, error)) *MockFileSystem {
-	m.MkdirTempFunc = fn
 	return m
 }
 
@@ -434,4 +454,15 @@ func (m *MockFileSystem) WithReadDirFunc(fn func(ctx context.Context, path strin
 func (m *MockFileSystem) WithExecuteCommandFunc(fn func(ctx context.Context, name string, args ...string) ([]byte, error)) *MockFileSystem {
 	m.ExecuteCommandFunc = fn
 	return m
+}
+
+// NewMockFileInfo creates a new mock FileInfo for testing
+func (m *MockFileSystem) NewMockFileInfo(name string, size int64, mode os.FileMode, modTime time.Time, isDir bool) os.FileInfo {
+	return &memFileInfo{
+		name:  name,
+		size:  size,
+		mode:  mode,
+		mtime: modTime,
+		dir:   isDir,
+	}
 }

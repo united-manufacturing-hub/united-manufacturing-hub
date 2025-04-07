@@ -28,6 +28,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsmtest"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 )
 
@@ -36,12 +37,14 @@ var _ = Describe("S6Instance FSM", func() {
 		ctx         context.Context
 		testBaseDir string
 		tick        uint64
+		mockFS      filesystem.Service
 	)
 
 	BeforeEach(func() {
 		ctx = context.Background()
 		testBaseDir = constants.S6BaseDir
 		tick = 0
+		mockFS = filesystem.NewMockFileSystem()
 	})
 
 	// -------------------------------------------------------------------------
@@ -57,7 +60,7 @@ var _ = Describe("S6Instance FSM", func() {
 			Expect(instance.GetCurrentFSMState()).To(Equal(internal_fsm.LifecycleStateToBeCreated))
 
 			// 3. Transition from to_be_created => creating => stopped
-			nextTick, err := fsmtest.TestS6StateTransition(ctx, instance,
+			nextTick, err := fsmtest.TestS6StateTransition(ctx, instance, mockFS,
 				internal_fsm.LifecycleStateToBeCreated,
 				internal_fsm.LifecycleStateCreating,
 				5, tick,
@@ -66,7 +69,7 @@ var _ = Describe("S6Instance FSM", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(mockService.CreateCalled).To(BeTrue())
 
-			_, err = fsmtest.TestS6StateTransition(ctx, instance,
+			_, err = fsmtest.TestS6StateTransition(ctx, instance, mockFS,
 				internal_fsm.LifecycleStateCreating,
 				s6fsm.OperationalStateStopped,
 				5, tick,
@@ -83,7 +86,7 @@ var _ = Describe("S6Instance FSM", func() {
 			mockService.CreateError = fmt.Errorf("simulated create failure")
 
 			// 3. Verify it remains in to_be_created despite multiple reconciles
-			_, err := fsmtest.VerifyStableState(ctx, instance, internal_fsm.LifecycleStateToBeCreated, 3, tick)
+			_, err := fsmtest.VerifyStableState(ctx, instance, mockFS, internal_fsm.LifecycleStateToBeCreated, 3, tick)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(instance.GetError()).ToNot(BeNil()) // Should record the error
 
@@ -92,7 +95,7 @@ var _ = Describe("S6Instance FSM", func() {
 			mockService.CreateCalled = false
 
 			// from to_be_created => creating
-			nextTick, err := fsmtest.TestS6StateTransition(ctx, instance,
+			nextTick, err := fsmtest.TestS6StateTransition(ctx, instance, mockFS,
 				internal_fsm.LifecycleStateToBeCreated,
 				internal_fsm.LifecycleStateCreating,
 				10, tick,
@@ -102,7 +105,7 @@ var _ = Describe("S6Instance FSM", func() {
 			Expect(mockService.CreateCalled).To(BeTrue())
 
 			// from creating => stopped
-			_, err = fsmtest.TestS6StateTransition(ctx, instance,
+			_, err = fsmtest.TestS6StateTransition(ctx, instance, mockFS,
 				internal_fsm.LifecycleStateCreating,
 				s6fsm.OperationalStateStopped,
 				10, tick,
@@ -135,7 +138,7 @@ var _ = Describe("S6Instance FSM", func() {
 			instance, mockService, _ := fsmtest.SetupS6Instance(testBaseDir, "start-normal", s6fsm.OperationalStateStopped)
 
 			// from to_be_created => stopped
-			nextTick, err := fsmtest.TestS6StateTransition(ctx, instance,
+			nextTick, err := fsmtest.TestS6StateTransition(ctx, instance, mockFS,
 				internal_fsm.LifecycleStateToBeCreated,
 				s6fsm.OperationalStateStopped,
 				5, tick,
@@ -148,7 +151,7 @@ var _ = Describe("S6Instance FSM", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// from stopped => starting => running
-			_, err = fsmtest.TestS6StateTransition(ctx, instance,
+			_, err = fsmtest.TestS6StateTransition(ctx, instance, mockFS,
 				s6fsm.OperationalStateStopped,
 				s6fsm.OperationalStateRunning,
 				10, tick,
@@ -162,7 +165,7 @@ var _ = Describe("S6Instance FSM", func() {
 			instance, mockService, _ := fsmtest.SetupS6Instance(testBaseDir, "start-slow", s6fsm.OperationalStateStopped)
 
 			// from to_be_created => stopped
-			nextTick, err := fsmtest.TestS6StateTransition(ctx, instance,
+			nextTick, err := fsmtest.TestS6StateTransition(ctx, instance, mockFS,
 				internal_fsm.LifecycleStateToBeCreated,
 				s6fsm.OperationalStateStopped,
 				5, tick,
@@ -175,7 +178,7 @@ var _ = Describe("S6Instance FSM", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// from stopped => starting
-			nextTick, err = fsmtest.TestS6StateTransition(ctx, instance,
+			nextTick, err = fsmtest.TestS6StateTransition(ctx, instance, mockFS,
 				s6fsm.OperationalStateStopped,
 				s6fsm.OperationalStateStarting,
 				5, tick,
@@ -189,12 +192,12 @@ var _ = Describe("S6Instance FSM", func() {
 			}
 
 			// Verify it remains in "starting"
-			_, err = fsmtest.VerifyStableState(ctx, instance, s6fsm.OperationalStateStarting, 3, tick)
+			_, err = fsmtest.VerifyStableState(ctx, instance, mockFS, s6fsm.OperationalStateStarting, 3, tick)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Finally let the service become up => instance can go to running
 			// e.g. mockService.ServiceStates[...] = s6service.ServiceInfo{Status: s6service.ServiceUp}
-			_, err = fsmtest.TestS6StateTransition(ctx, instance,
+			_, err = fsmtest.TestS6StateTransition(ctx, instance, mockFS,
 				s6fsm.OperationalStateStarting,
 				s6fsm.OperationalStateRunning,
 				5, tick,
@@ -207,7 +210,7 @@ var _ = Describe("S6Instance FSM", func() {
 			instance, mockService, _ := fsmtest.SetupS6Instance(testBaseDir, "start-fail", s6fsm.OperationalStateStopped)
 
 			// from to_be_created => stopped
-			nextTick, err := fsmtest.TestS6StateTransition(ctx, instance,
+			nextTick, err := fsmtest.TestS6StateTransition(ctx, instance, mockFS,
 				internal_fsm.LifecycleStateToBeCreated,
 				s6fsm.OperationalStateStopped,
 				5, tick,
@@ -223,7 +226,7 @@ var _ = Describe("S6Instance FSM", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify it remains in stopped due to start error
-			nextTick, err = fsmtest.VerifyStableState(ctx, instance, s6fsm.OperationalStateStopped, 3, tick)
+			nextTick, err = fsmtest.VerifyStableState(ctx, instance, mockFS, s6fsm.OperationalStateStopped, 3, tick)
 			tick = nextTick
 			Expect(err).NotTo(HaveOccurred())
 			Expect(instance.GetError()).NotTo(BeNil()) // Should record the error
@@ -231,11 +234,11 @@ var _ = Describe("S6Instance FSM", func() {
 
 			// Fix the error
 			mockService.StartError = nil
-			fsmtest.ResetInstanceError(instance)
+			fsmtest.ResetInstanceError(instance, mockFS)
 			mockService.StartCalled = false
 
 			// from stopped => starting
-			nextTick, err = fsmtest.TestS6StateTransition(ctx, instance,
+			nextTick, err = fsmtest.TestS6StateTransition(ctx, instance, mockFS,
 				s6fsm.OperationalStateStopped,
 				s6fsm.OperationalStateStarting,
 				5, tick,
@@ -244,7 +247,7 @@ var _ = Describe("S6Instance FSM", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// from starting => running
-			_, err = fsmtest.TestS6StateTransition(ctx, instance,
+			_, err = fsmtest.TestS6StateTransition(ctx, instance, mockFS,
 				s6fsm.OperationalStateStarting,
 				s6fsm.OperationalStateRunning,
 				5, tick,
@@ -263,7 +266,7 @@ var _ = Describe("S6Instance FSM", func() {
 			instance, mockService, _ := fsmtest.SetupS6Instance(testBaseDir, "stop-normal", s6fsm.OperationalStateRunning)
 
 			// from to_be_created => running
-			nextTick, err := fsmtest.TestS6StateTransition(ctx, instance,
+			nextTick, err := fsmtest.TestS6StateTransition(ctx, instance, mockFS,
 				internal_fsm.LifecycleStateToBeCreated,
 				s6fsm.OperationalStateRunning,
 				8, tick,
@@ -272,7 +275,7 @@ var _ = Describe("S6Instance FSM", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// from running => stopped
-			_, err = fsmtest.TestS6StateTransition(ctx, instance,
+			_, err = fsmtest.TestS6StateTransition(ctx, instance, mockFS,
 				s6fsm.OperationalStateRunning,
 				s6fsm.OperationalStateStopped,
 				8, tick,
@@ -286,7 +289,7 @@ var _ = Describe("S6Instance FSM", func() {
 			instance, mockService, _ := fsmtest.SetupS6Instance(testBaseDir, "stop-slow", s6fsm.OperationalStateRunning)
 
 			// from to_be_created => running
-			nextTick, err := fsmtest.TestS6StateTransition(ctx, instance,
+			nextTick, err := fsmtest.TestS6StateTransition(ctx, instance, mockFS,
 				internal_fsm.LifecycleStateToBeCreated,
 				s6fsm.OperationalStateRunning,
 				8, tick,
@@ -298,7 +301,7 @@ var _ = Describe("S6Instance FSM", func() {
 			err = instance.SetDesiredFSMState(s6fsm.OperationalStateStopped)
 			Expect(err).NotTo(HaveOccurred())
 
-			nextTick, err = fsmtest.TestS6StateTransition(ctx, instance,
+			nextTick, err = fsmtest.TestS6StateTransition(ctx, instance, mockFS,
 				s6fsm.OperationalStateRunning,
 				s6fsm.OperationalStateStopping,
 				5, tick,
@@ -312,11 +315,11 @@ var _ = Describe("S6Instance FSM", func() {
 			}
 
 			// Verify stable in stopping
-			_, err = fsmtest.VerifyStableState(ctx, instance, s6fsm.OperationalStateStopping, 3, tick)
+			_, err = fsmtest.VerifyStableState(ctx, instance, mockFS, s6fsm.OperationalStateStopping, 3, tick)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Finally let service go down => instance => stopped
-			_, err = fsmtest.TestS6StateTransition(ctx, instance,
+			_, err = fsmtest.TestS6StateTransition(ctx, instance, mockFS,
 				s6fsm.OperationalStateStopping,
 				s6fsm.OperationalStateStopped,
 				5, tick,
@@ -329,7 +332,7 @@ var _ = Describe("S6Instance FSM", func() {
 			instance, mockService, _ := fsmtest.SetupS6Instance(testBaseDir, "stop-fail", s6fsm.OperationalStateRunning)
 
 			// from to_be_created => running
-			nextTick, err := fsmtest.TestS6StateTransition(ctx, instance,
+			nextTick, err := fsmtest.TestS6StateTransition(ctx, instance, mockFS,
 				internal_fsm.LifecycleStateToBeCreated,
 				s6fsm.OperationalStateRunning,
 				8, tick,
@@ -345,7 +348,7 @@ var _ = Describe("S6Instance FSM", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify it stays in running due to failure
-			nextTick, err = fsmtest.VerifyStableState(ctx, instance, s6fsm.OperationalStateRunning, 3, tick)
+			nextTick, err = fsmtest.VerifyStableState(ctx, instance, mockFS, s6fsm.OperationalStateRunning, 3, tick)
 			tick = nextTick
 			Expect(err).NotTo(HaveOccurred())
 			Expect(instance.GetError()).NotTo(BeNil())
@@ -353,11 +356,11 @@ var _ = Describe("S6Instance FSM", func() {
 
 			// Fix the error
 			mockService.StopError = nil
-			fsmtest.ResetInstanceError(instance)
+			fsmtest.ResetInstanceError(instance, mockFS)
 			mockService.StopCalled = false
 
 			// from running => stopping
-			nextTick, err = fsmtest.TestS6StateTransition(ctx, instance,
+			nextTick, err = fsmtest.TestS6StateTransition(ctx, instance, mockFS,
 				s6fsm.OperationalStateRunning,
 				s6fsm.OperationalStateStopping,
 				5, tick,
@@ -366,7 +369,7 @@ var _ = Describe("S6Instance FSM", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// from stopping => stopped
-			_, err = fsmtest.TestS6StateTransition(ctx, instance,
+			_, err = fsmtest.TestS6StateTransition(ctx, instance, mockFS,
 				s6fsm.OperationalStateStopping,
 				s6fsm.OperationalStateStopped,
 				5, tick,
@@ -384,7 +387,7 @@ var _ = Describe("S6Instance FSM", func() {
 			instance, mockService, _ := fsmtest.SetupS6Instance(testBaseDir, "backoff-fail", s6fsm.OperationalStateStopped)
 
 			// from to_be_created => stopped
-			nextTick, err := fsmtest.TestS6StateTransition(ctx, instance,
+			nextTick, err := fsmtest.TestS6StateTransition(ctx, instance, mockFS,
 				internal_fsm.LifecycleStateToBeCreated,
 				s6fsm.OperationalStateStopped,
 				5, tick,
@@ -400,7 +403,7 @@ var _ = Describe("S6Instance FSM", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify it remains in stopped + eventually hits backoff
-			nextTick, err = fsmtest.VerifyStableState(ctx, instance, s6fsm.OperationalStateStopped, 100, tick)
+			nextTick, err = fsmtest.VerifyStableState(ctx, instance, mockFS, s6fsm.OperationalStateStopped, 100, tick)
 			tick = nextTick
 			Expect(err).To(HaveOccurred()) // should have hit permanent failure
 			Expect(mockService.StartCalled).To(BeTrue())
@@ -408,7 +411,7 @@ var _ = Describe("S6Instance FSM", func() {
 
 			// Check backoff is active by verifying no further start calls
 			mockService.StartCalled = false
-			_, err = fsmtest.VerifyStableState(ctx, instance, s6fsm.OperationalStateStopped, 3, tick)
+			_, err = fsmtest.VerifyStableState(ctx, instance, mockFS, s6fsm.OperationalStateStopped, 3, tick)
 			Expect(err).To(HaveOccurred()) // should have hit permanent failure
 			Expect(mockService.StartCalled).To(BeFalse(), "Should not re-attempt immediately due to backoff")
 		})
@@ -417,7 +420,7 @@ var _ = Describe("S6Instance FSM", func() {
 			instance, mockService, _ := fsmtest.SetupS6Instance(testBaseDir, "backoff-reset", s6fsm.OperationalStateStopped)
 
 			// from to_be_created => stopped
-			nextTick, err := fsmtest.TestS6StateTransition(ctx, instance,
+			nextTick, err := fsmtest.TestS6StateTransition(ctx, instance, mockFS,
 				internal_fsm.LifecycleStateToBeCreated,
 				s6fsm.OperationalStateStopped,
 				5, tick,
@@ -431,7 +434,7 @@ var _ = Describe("S6Instance FSM", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// verify stable in stopped due to repeated start errors
-			nextTick, err = fsmtest.VerifyStableState(ctx, instance, s6fsm.OperationalStateStopped, 5, tick)
+			nextTick, err = fsmtest.VerifyStableState(ctx, instance, mockFS, s6fsm.OperationalStateStopped, 5, tick)
 			tick = nextTick
 			Expect(err).NotTo(HaveOccurred())
 			Expect(mockService.StartCalled).To(BeTrue())
@@ -439,17 +442,17 @@ var _ = Describe("S6Instance FSM", func() {
 
 			// confirm backoff is active
 			mockService.StartCalled = false
-			_, err = fsmtest.VerifyStableState(ctx, instance, s6fsm.OperationalStateStopped, 2, tick)
+			_, err = fsmtest.VerifyStableState(ctx, instance, mockFS, s6fsm.OperationalStateStopped, 2, tick)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(mockService.StartCalled).To(BeFalse())
 
 			// fix the error
 			mockService.StartError = nil
-			fsmtest.ResetInstanceError(instance)
+			fsmtest.ResetInstanceError(instance, mockFS)
 			mockService.StartCalled = false
 
 			// now from stopped => running
-			_, err = fsmtest.TestS6StateTransition(ctx, instance,
+			_, err = fsmtest.TestS6StateTransition(ctx, instance, mockFS,
 				s6fsm.OperationalStateStopped,
 				s6fsm.OperationalStateRunning,
 				10, tick,
