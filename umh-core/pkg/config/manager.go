@@ -164,7 +164,10 @@ func (m *FileConfigManager) GetConfigWithOverwritesOrCreateNew(ctx context.Conte
 // GetConfig returns the current config, always reading fresh from disk
 func (m *FileConfigManager) GetConfig(ctx context.Context, tick uint64) (FullConfig, error) {
 	// we use a read lock here, because we only read the config file
-	m.mutexReadOrWrite.RLock(ctx)
+	err := m.mutexReadOrWrite.RLock(ctx)
+	if err != nil {
+		return FullConfig{}, fmt.Errorf("failed to lock config file: %w", err)
+	}
 	defer m.mutexReadOrWrite.RUnlock()
 
 	// Check if context is already cancelled
@@ -262,7 +265,10 @@ func (m *FileConfigManagerWithBackoff) GetConfigWithOverwritesOrCreateNew(ctx co
 // it should not be exposed or used outside of the config manager, due to potential race conditions
 func (m *FileConfigManager) writeConfig(ctx context.Context, config FullConfig) error {
 	// we use a write lock here, because we write the config file
-	m.mutexReadOrWrite.Lock(ctx)
+	err := m.mutexReadOrWrite.Lock(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to lock config file: %w", err)
+	}
 	defer m.mutexReadOrWrite.Unlock()
 
 	// Check if context is already cancelled
@@ -371,7 +377,10 @@ func (m *FileConfigManagerWithBackoff) writeConfig(ctx context.Context, config F
 
 // AtomicSetLocation sets the location in the config atomically
 func (m *FileConfigManager) AtomicSetLocation(ctx context.Context, location models.EditInstanceLocationModel) error {
-	m.mutexAtomicUpdate.Lock(ctx)
+	err := m.mutexAtomicUpdate.Lock(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to lock config file: %w", err)
+	}
 	defer m.mutexAtomicUpdate.Unlock()
 
 	// get the current config
