@@ -173,6 +173,7 @@ func (s *DefaultService) WriteFile(ctx context.Context, path string, data []byte
 }
 
 // FileExists checks if a file exists
+// This method returns false if the file does not exist or if there is an error
 func (s *DefaultService) FileExists(ctx context.Context, path string) (bool, error) {
 	if err := s.checkContext(ctx); err != nil {
 		return false, err

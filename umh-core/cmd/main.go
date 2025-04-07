@@ -60,14 +60,17 @@ func main() {
 	if err != nil {
 		sentry.ReportIssuef(sentry.IssueTypeWarning, log, "Failed to get AUTH_TOKEN: %w", err)
 	}
+
 	apiUrl, err := env.GetAsString("API_URL", false, "")
 	if err != nil {
 		sentry.ReportIssuef(sentry.IssueTypeWarning, log, "Failed to get API_URL: %w", err)
 	}
+
 	releaseChannel, err := env.GetAsString("RELEASE_CHANNEL", false, "")
 	if err != nil {
 		sentry.ReportIssuef(sentry.IssueTypeWarning, log, "Failed to get RELEASE_CHANNEL: %w", err)
 	}
+
 	locations := make(map[int]string)
 	for i := 0; i <= 6; i++ {
 		location, err := env.GetAsString(fmt.Sprintf("LOCATION_%d", i), false, "")

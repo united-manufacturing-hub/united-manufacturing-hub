@@ -76,56 +76,55 @@ func (m *FileConfigManager) WithFileSystemService(fsService filesystem.Service) 
 
 // get config or create new with given config parameters (communicator, release channel, location)
 // if the config file does not exist, it will be created with default values and then overwritten with the given config parameters
-func (m *FileConfigManager) GetConfigWithOverwritesOrCreateNew(ctx context.Context, config FullConfig) (FullConfig, error) {
+func (m *FileConfigManager) GetConfigWithOverwritesOrCreateNew(ctx context.Context, configOverride FullConfig) (FullConfig, error) {
 	// Check if context is already cancelled
 	if ctx.Err() != nil {
 		return FullConfig{}, ctx.Err()
 	}
 
-	configReturn := FullConfig{}
+	var config FullConfig
+	// default config value
+	config.Agent.MetricsPort = 8080
 
-	// Check if the file exists
 	exists, err := m.fsService.FileExists(ctx, m.configPath)
-	if err == nil && exists {
-		configReturn, err = m.GetConfig(ctx, 0)
+	switch {
+	case err != nil:
+		m.logger.Warnf("failed to check if config file exists in %s: %v", m.configPath, err)
+	case exists:
+		config, err = m.GetConfig(ctx, 0)
 		if err != nil {
 			return FullConfig{}, fmt.Errorf("failed to get config that exists: %w", err)
 		}
-		// overwrite the config with the given config parameters
-		if config.Agent.CommunicatorConfig.APIURL != "" {
-			configReturn.Agent.CommunicatorConfig.APIURL = config.Agent.CommunicatorConfig.APIURL
-		}
-		if config.Agent.CommunicatorConfig.AuthToken != "" {
-			configReturn.Agent.CommunicatorConfig.AuthToken = config.Agent.CommunicatorConfig.AuthToken
-		}
-		if config.Agent.ReleaseChannel != "" {
-			configReturn.Agent.ReleaseChannel = config.Agent.ReleaseChannel
-		}
-		if config.Agent.Location != nil {
-			configReturn.Agent.Location = config.Agent.Location
-		}
-	} else {
-		configReturn.Agent.MetricsPort = 8080
-		// set the given config parameters
-		if config.Agent.CommunicatorConfig.APIURL != "" {
-			configReturn.Agent.CommunicatorConfig.APIURL = config.Agent.CommunicatorConfig.APIURL
-		}
-		if config.Agent.CommunicatorConfig.AuthToken != "" {
-			configReturn.Agent.CommunicatorConfig.AuthToken = config.Agent.CommunicatorConfig.AuthToken
-		}
-		if config.Agent.ReleaseChannel != "" {
-			configReturn.Agent.ReleaseChannel = config.Agent.ReleaseChannel
-		}
-		if config.Agent.Location != nil {
-			configReturn.Agent.Location = config.Agent.Location
-		}
-		// write the config to the file
-		if err := m.WriteConfig(ctx, configReturn); err != nil {
-			return FullConfig{}, fmt.Errorf("failed to write new config: %w", err)
-		}
 	}
 
-	return configReturn, nil
+	// Apply overrides
+	if configOverride.Agent.MetricsPort > 0 {
+		config.Agent.MetricsPort = configOverride.Agent.MetricsPort
+	}
+
+	if configOverride.Agent.CommunicatorConfig.APIURL != "" {
+		config.Agent.CommunicatorConfig.APIURL = configOverride.Agent.CommunicatorConfig.APIURL
+	}
+
+	if configOverride.Agent.CommunicatorConfig.AuthToken != "" {
+		config.Agent.CommunicatorConfig.AuthToken = configOverride.Agent.CommunicatorConfig.AuthToken
+	}
+
+	if configOverride.Agent.ReleaseChannel != "" {
+		config.Agent.ReleaseChannel = configOverride.Agent.ReleaseChannel
+	}
+
+	if configOverride.Agent.Location != nil {
+		config.Agent.Location = configOverride.Agent.Location
+	}
+
+	// Persist the updated config
+	if err := m.WriteConfig(ctx, config); err != nil {
+		return FullConfig{}, fmt.Errorf("failed to write new config: %w", err)
+	}
+
+	m.logger.Infof("Successfully wrote config to %s", m.configPath)
+	return config, nil
 }
 
 // GetConfig returns the current config, always reading fresh from disk
