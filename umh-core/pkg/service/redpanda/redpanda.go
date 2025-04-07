@@ -478,7 +478,7 @@ func (s *RedpandaService) Status(ctx context.Context, tick uint64) (ServiceInfo,
 
 	// Check if the lastUpdate is more then constants.RedpandaStatusUpdateIntervalTicks ticks ago
 	if redpandaStatus.UpdatedAtTick < tick-constants.RedpandaStatusUpdateIntervalTicks {
-		return ServiceInfo{}, fmt.Errorf("redpanda status update interval is more then %d ticks ago, lastUpdate: %d, currentTick: %d", constants.RedpandaStatusUpdateIntervalTicks, redpandaStatus.UpdatedAtTick, tick)
+		return ServiceInfo{}, fmt.Errorf("redpanda status update interval is more then %d ticks ago, lastUpdate: %d", constants.RedpandaStatusUpdateIntervalTicks, redpandaStatus.UpdatedAtTick)
 	}
 
 	serviceInfo := ServiceInfo{
