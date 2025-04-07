@@ -17,21 +17,22 @@ package ctxrwmutex
 import (
 	"context"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"golang.org/x/sync/semaphore"
 )
 
 // CtxRWMutex is a context aware RWMutex
 // It uses a semaphore to a) allow for multiple readers and b) allow for context cancellation (comes with the semaphore package)
-// The semaphore is initialized with a weight of 100, which means that 100 readers can read the mutex at the same time
+// The semaphore is initialized with a weight of constants.AmountReadersForConfigFile, which means that constants.AmountReadersForConfigFile readers can read the mutex at the same time
 // If the semaphore is locked by a writer, no readers can read the mutex
-// If the semaphore is locked by a reader, no writers can write the mutex but multiple (up to 100) readers can read the mutex at the same time
+// If the semaphore is locked by a reader, no writers can write the mutex but multiple (up to constants.AmountReadersForConfigFile) readers can read the mutex at the same time
 type CtxRWMutex struct {
 	sem *semaphore.Weighted
 }
 
 func NewCtxRWMutex() *CtxRWMutex {
 	return &CtxRWMutex{
-		sem: semaphore.NewWeighted(100),
+		sem: semaphore.NewWeighted(constants.AmountReadersForConfigFile),
 	}
 }
 
@@ -47,10 +48,10 @@ func (m *CtxRWMutex) RUnlock() {
 
 // Lock locks the mutex for writing
 func (m *CtxRWMutex) Lock(ctx context.Context) error {
-	return m.sem.Acquire(ctx, 100)
+	return m.sem.Acquire(ctx, constants.AmountReadersForConfigFile)
 }
 
 // Unlock unlocks the mutex for writing
 func (m *CtxRWMutex) Unlock() {
-	m.sem.Release(100)
+	m.sem.Release(constants.AmountReadersForConfigFile)
 }
