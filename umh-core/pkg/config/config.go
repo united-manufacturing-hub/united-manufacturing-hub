@@ -18,14 +18,16 @@ import (
 	"reflect"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
 
 	"github.com/tiendc/go-deepcopy"
 )
 
 type FullConfig struct {
-	Agent    AgentConfig    `yaml:"agent"`    // Agent config, requires restart to take effect
-	Internal InternalConfig `yaml:"internal"` // Internal config, not to be used by the user, only to be used for testing internal components
+	Agent    AgentConfig               `yaml:"agent"`    // Agent config, requires restart to take effect
+	DataFlow []DataFlowComponentConfig `yaml:"dataFlow"` // DataFlow components to manage, can be updated while running
+	Internal InternalConfig            `yaml:"internal"` // Internal config, not to be used by the user, only to be used for testing internal components
 }
 
 type InternalConfig struct {
@@ -77,6 +79,14 @@ type BenthosConfig struct {
 	BenthosServiceConfig benthosserviceconfig.BenthosServiceConfig `yaml:"benthosServiceConfig"`
 }
 
+// DataFlowComponentConfig contains configuration for creating a DataFlowComponent
+type DataFlowComponentConfig struct {
+	// For the FSM
+	FSMInstanceConfig `yaml:",inline"`
+
+	DataFlowComponentConfig dataflowcomponentconfig.DataFlowComponentConfig `yaml:"dataFlowComponentConfig"`
+}
+
 // NmapConfig contains configuration for creating a Nmap service
 type NmapConfig struct {
 	// For the FSM
@@ -103,6 +113,7 @@ func (c NmapServiceConfig) Equal(other NmapServiceConfig) bool {
 func (c FullConfig) Clone() FullConfig {
 	var clone FullConfig
 	deepcopy.Copy(&clone.Agent, &c.Agent)
+	deepcopy.Copy(&clone.DataFlow, &c.DataFlow)
 	deepcopy.Copy(&clone.Internal, &c.Internal)
 	return clone
 }

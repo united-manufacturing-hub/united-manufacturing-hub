@@ -34,3 +34,8 @@ const (
 	// So by setting this to 30 ms, we can ensure that an instance will never start if it triggers the alerting threshold
 	BenthosExpectedMaxP95ExecutionTimePerInstance = time.Millisecond * 40 // needs to be higher than S6ExpectedMaxP95ExecutionTimePerInstance
 )
+
+const (
+	// DefaultBenthosLogLevel is the default log level for Benthos services when none is specified
+	DefaultBenthosLogLevel = "INFO"
+)
