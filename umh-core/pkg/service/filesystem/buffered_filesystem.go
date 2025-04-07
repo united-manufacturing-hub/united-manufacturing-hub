@@ -2,10 +2,12 @@ package filesystem
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/user"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -13,8 +15,11 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 )
+
+// Note: can be enriched in the future using spf13/afero
 
 // CachedFile represents a file or directory in the filesystem
 type CachedFile struct {
@@ -148,6 +153,13 @@ type BufferedService struct {
 
 	// currentUser caches the current user info for permission checks
 	currentUser *user.User
+
+	// fileReadWorkers is the number of workers for parallel file reading
+	// If not set (zero), it will be calculated based on CPU count
+	fileReadWorkers int
+
+	// slowReadThreshold is the duration threshold to log slow file reads
+	slowReadThreshold time.Duration
 }
 
 // fileState holds in-memory data and metadata for a single file or directory
@@ -188,6 +200,15 @@ func NewBufferedServiceWithDirs(base Service, syncDirectories []string, pathsToI
 		logger.Warnf("Failed to get current user info: %v", err)
 	}
 
+	// Calculate default worker count
+	workerCount := runtime.NumCPU() * constants.FilesystemWorkerMultiplier
+	if workerCount < constants.FilesystemMinWorkers {
+		workerCount = constants.FilesystemMinWorkers
+	}
+	if workerCount > constants.FilesystemMaxWorkers {
+		workerCount = constants.FilesystemMaxWorkers
+	}
+
 	return &BufferedService{
 		base:              base,
 		files:             make(map[string]fileState),
@@ -197,6 +218,8 @@ func NewBufferedServiceWithDirs(base Service, syncDirectories []string, pathsToI
 		pathsToIgnore:     pathsToIgnore,
 		verifyPermissions: true, // Default to true for safety
 		currentUser:       currentUser,
+		fileReadWorkers:   workerCount,
+		slowReadThreshold: constants.FilesystemSlowReadThreshold,
 	}
 }
 
@@ -205,6 +228,31 @@ func (bs *BufferedService) SetVerifyPermissions(verify bool) {
 	bs.mu.Lock()
 	defer bs.mu.Unlock()
 	bs.verifyPermissions = verify
+}
+
+// SetFileReadWorkers configures the number of worker goroutines for file reading
+func (bs *BufferedService) SetFileReadWorkers(count int) {
+	bs.mu.Lock()
+	defer bs.mu.Unlock()
+
+	if count <= 0 {
+		// Calculate default based on CPU count
+		count = runtime.NumCPU() * constants.FilesystemWorkerMultiplier
+		if count < constants.FilesystemMinWorkers {
+			count = constants.FilesystemMinWorkers
+		}
+		if count > constants.FilesystemMaxWorkers {
+			count = constants.FilesystemMaxWorkers
+		}
+	}
+	bs.fileReadWorkers = count
+}
+
+// SetSlowReadThreshold configures the threshold for logging slow file reads
+func (bs *BufferedService) SetSlowReadThreshold(threshold time.Duration) {
+	bs.mu.Lock()
+	defer bs.mu.Unlock()
+	bs.slowReadThreshold = threshold
 }
 
 // getFileState gets the cached file state, or returns nil if not found
@@ -333,6 +381,7 @@ func (bs *BufferedService) SyncFromDisk(ctx context.Context) error {
 
 	// Create a new map to hold synced files
 	newFiles := make(map[string]fileState)
+	var filesMutex sync.Mutex
 
 	// Sync each directory in the list
 	for _, dir := range bs.syncDirs {
@@ -354,6 +403,7 @@ func (bs *BufferedService) SyncFromDisk(ctx context.Context) error {
 		uid, gid := getFileOwner(dir)
 
 		// Add directory itself
+		filesMutex.Lock()
 		newFiles[dir] = fileState{
 			isDir:    true,
 			content:  nil,
@@ -363,6 +413,7 @@ func (bs *BufferedService) SyncFromDisk(ctx context.Context) error {
 			uid:      uid,
 			gid:      gid,
 		}
+		filesMutex.Unlock()
 
 		// Read the directory tree
 		dc, err := ReadDirectoryTree(ctx, bs.base, dir)
@@ -370,71 +421,227 @@ func (bs *BufferedService) SyncFromDisk(ctx context.Context) error {
 			return fmt.Errorf("failed to read directory tree for %s: %w", dir, err)
 		}
 
-		// Process all files in this directory
+		// Process directories first (they're lightweight and don't need parallelization)
 		for path, cf := range dc.Files {
-			// Get absolute path
-			absPath := filepath.Join(dir, path)
+			if !cf.IsDir {
+				continue
+			}
 
-			// Check if path should be ignored
+			absPath := filepath.Join(dir, path)
 			if bs.shouldIgnorePath(absPath) {
 				continue
 			}
 
-			// Get owner and group info
 			uid, gid := getFileOwner(absPath)
-
-			// Process the file or directory
-			if cf.IsDir {
-				newFiles[absPath] = fileState{
-					isDir:    true,
-					content:  nil,
-					modTime:  cf.Info.ModTime(),
-					fileMode: cf.Info.Mode(),
-					size:     0,
-					uid:      uid,
-					gid:      gid,
-				}
-			} else {
-				// Skip large files
-				if cf.Info.Size() > bs.maxFileSize {
-					newFiles[absPath] = fileState{
-						isDir:    false,
-						content:  nil, // big file => skip content
-						modTime:  cf.Info.ModTime(),
-						fileMode: cf.Info.Mode(),
-						size:     cf.Info.Size(),
-						uid:      uid,
-						gid:      gid,
-					}
-					continue
-				}
-
-				// Read file content
-				data, err := bs.base.ReadFile(ctx, absPath)
-				if err != nil {
-					// if the file does not exist anymore, then remove it from the map
-					// Likely just a temporary file between reading the directory and then here reading the file
-					if os.IsNotExist(err) {
-						logger.Debugf("File does not exist, removing: %s", absPath)
-						delete(newFiles, absPath)
-						continue
-					} else {
-						// If we can't read, throw an error
-						logger.Warnf("ReadFile for %s failed: %v", absPath, err)
-						return fmt.Errorf("failed to read file: %w", err)
-					}
-				}
-
-				newFiles[absPath] = fileState{
-					isDir:    false,
-					content:  data,
-					modTime:  cf.Info.ModTime(),
-					fileMode: cf.Info.Mode(),
-					size:     cf.Info.Size(),
-					uid:      uid,
-					gid:      gid,
-				}
+			filesMutex.Lock()
+			newFiles[absPath] = fileState{
+				isDir:    true,
+				content:  nil,
+				modTime:  cf.Info.ModTime(),
+				fileMode: cf.Info.Mode(),
+				size:     0,
+				uid:      uid,
+				gid:      gid,
 			}
+			filesMutex.Unlock()
+		}
+
+		// Setup worker pool for file content reading
+		// Define job and result types
+		type fileReadJob struct {
+			absPath string
+			cf      *CachedFile
+		}
+
+		type fileReadResult struct {
+			absPath string
+			state   *fileState
+			err     error
+		}
+
+		// Count files to properly size channels
+		fileCount := countFiles(dc.Files)
+		if fileCount == 0 {
+			// No files to process in this directory
+			continue
+		}
+
+		// Create channels
+		jobs := make(chan fileReadJob, fileCount)
+		results := make(chan fileReadResult, fileCount)
+		errChan := make(chan error, 1)
+		var wg sync.WaitGroup
+
+		// Determine worker count
+		workerCount := bs.fileReadWorkers
+		if workerCount <= 0 {
+			// Fallback in case it wasn't initialized properly
+			workerCount = runtime.NumCPU() * 2
+		}
+		logger.Debugf("Starting %d file read workers for %d files in %s", workerCount, fileCount, dir)
+
+		// Create cancellable context for workers
+		workerCtx, cancel := context.WithCancel(ctx)
+		defer cancel() // Ensure we cancel workers on exit
+
+		// Start workers
+		for w := 0; w < workerCount; w++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+
+				for job := range jobs {
+					// Check for cancellation
+					select {
+					case <-workerCtx.Done():
+						return
+					default:
+						// Continue processing
+					}
+
+					// Skip directories (already processed)
+					if job.cf.IsDir {
+						continue
+					}
+
+					// Get file info
+					uid, gid := getFileOwner(job.absPath)
+
+					// Skip large files
+					if job.cf.Info.Size() > bs.maxFileSize {
+						results <- fileReadResult{
+							absPath: job.absPath,
+							state: &fileState{
+								isDir:    false,
+								content:  nil, // Skip content for large files
+								modTime:  job.cf.Info.ModTime(),
+								fileMode: job.cf.Info.Mode(),
+								size:     job.cf.Info.Size(),
+								uid:      uid,
+								gid:      gid,
+							},
+						}
+						continue
+					}
+
+					// Read file with timing
+					readStart := time.Now()
+					data, err := bs.base.ReadFile(workerCtx, job.absPath)
+					readDuration := time.Since(readStart)
+
+					// Log slow reads
+					if readDuration > bs.slowReadThreshold {
+						logger.Debugf("Slow file read: %s took %v", job.absPath, readDuration)
+					}
+
+					// Handle errors
+					if err != nil {
+						if os.IsNotExist(err) {
+							// File disappeared between directory listing and reading
+							results <- fileReadResult{
+								absPath: job.absPath,
+								err:     os.ErrNotExist,
+							}
+						} else {
+							// Fatal error - propagate it
+							select {
+							case errChan <- fmt.Errorf("failed to read file %s: %w", job.absPath, err):
+								cancel() // Signal other workers to stop
+							default:
+								// Another error already sent
+							}
+						}
+						continue
+					}
+
+					// Success - send result
+					results <- fileReadResult{
+						absPath: job.absPath,
+						state: &fileState{
+							isDir:    false,
+							content:  data,
+							modTime:  job.cf.Info.ModTime(),
+							fileMode: job.cf.Info.Mode(),
+							size:     job.cf.Info.Size(),
+							uid:      uid,
+							gid:      gid,
+						},
+					}
+				}
+			}()
+		}
+
+		// Start a result collector goroutine
+		var resultErr error
+		resultDone := make(chan struct{})
+
+		go func() {
+			defer close(resultDone)
+
+			// Process results as they arrive
+			for result := range results {
+				if result.err != nil {
+					if errors.Is(result.err, os.ErrNotExist) {
+						logger.Debugf("File does not exist, skipping: %s", result.absPath)
+						continue
+					}
+
+					// Set error and exit
+					resultErr = result.err
+					cancel() // Signal workers to stop
+					return
+				}
+
+				// Store result
+				filesMutex.Lock()
+				newFiles[result.absPath] = *result.state
+				filesMutex.Unlock()
+			}
+		}()
+
+		// Queue all file jobs
+		for path, cf := range dc.Files {
+			if cf.IsDir {
+				continue // Skip directories, already processed
+			}
+
+			absPath := filepath.Join(dir, path)
+			if bs.shouldIgnorePath(absPath) {
+				continue
+			}
+
+			select {
+			case jobs <- fileReadJob{absPath: absPath, cf: cf}:
+				// Job queued successfully
+			case <-ctx.Done():
+				cancel()
+				return ctx.Err()
+			}
+		}
+
+		// Close jobs channel to signal no more work
+		close(jobs)
+
+		// Wait for workers to finish
+		wg.Wait()
+
+		// Close results channel
+		close(results)
+
+		// Wait for result processor to finish
+		<-resultDone
+
+		// Check for errors from workers
+		select {
+		case err := <-errChan:
+			return err
+		default:
+			// No worker errors
+		}
+
+		// Check for errors from result processor
+		if resultErr != nil {
+			return resultErr
 		}
 	}
 
@@ -1034,4 +1241,15 @@ func getFileOwner(path string) (uid, gid int) {
 	}
 
 	return -1, -1 // Not available on this platform
+}
+
+// countFiles counts the number of regular files (not directories) in a map of CachedFile
+func countFiles(files map[string]*CachedFile) int {
+	count := 0
+	for _, cf := range files {
+		if !cf.IsDir {
+			count++
+		}
+	}
+	return count
 }
