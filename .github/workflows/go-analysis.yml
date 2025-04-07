@@ -15,12 +15,12 @@
 name: Go Code Analysis
 
 on:
-  merge_group:
   pull_request:
     branches:
       - "**"
     paths:
       - "umh-core/**"
+  merge_group:
 
 jobs:
   vet:

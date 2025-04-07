@@ -15,13 +15,12 @@
 name: Test UMH Core
 
 on:
-  merge_group:
   pull_request:
     branches:
       - "**"
     paths:
       - "umh-core/**"
-
+  merge_group:
 jobs:
   unit-tests:
     name: Unit Tests
