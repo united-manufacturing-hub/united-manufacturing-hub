@@ -26,6 +26,7 @@ import (
 // The semaphore is initialized with a weight of constants.AmountReadersForConfigFile, which means that constants.AmountReadersForConfigFile readers can read the mutex at the same time
 // If the semaphore is locked by a writer, no readers can read the mutex
 // If the semaphore is locked by a reader, no writers can write the mutex but multiple (up to constants.AmountReadersForConfigFile) readers can read the mutex at the same time
+// we only use the weighted semaphore, because it is more flexible than the sync.RWMutex and allows for context cancellation
 type CtxRWMutex struct {
 	sem *semaphore.Weighted
 }
