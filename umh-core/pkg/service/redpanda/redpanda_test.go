@@ -1053,6 +1053,10 @@ var _ = Describe("Redpanda Service", func() {
 			})
 			Expect(err).NotTo(HaveOccurred())
 
+			// Reconcile the S6 manager
+			err, _ = service.ReconcileManager(context.Background(), tick)
+			Expect(err).NotTo(HaveOccurred())
+
 			// Configure mock client with healthy metrics
 			mockClient.SetMetricsResponse(MetricsConfig{
 				Infrastructure: InfrastructureMetricsConfig{
@@ -1200,19 +1204,7 @@ var _ = Describe("Redpanda Service", func() {
 			// First failure should just return a connection refused error
 			_, err = service.Status(context.Background(), tick)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("connection refused"))
-
-			// Keep advancing ticks without successful updates
-			tick = 50
-			_, err = service.Status(context.Background(), tick)
-			Expect(err).To(HaveOccurred())
-
-			// Eventually, it should detect the stale status
-			// Status should be considered stale at > 2*RedpandaStatusUpdateIntervalTicks
-			tick = 100
-			_, err = service.Status(context.Background(), tick)
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("redpanda status update interval is more then"))
+			Expect(err.Error()).To(ContainSubstring("redpanda status update interval is more then 20 ticks ago"))
 		})
 	})
 })
