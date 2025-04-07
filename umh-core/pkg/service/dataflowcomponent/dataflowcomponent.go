@@ -30,7 +30,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/portmanager"
 
 	benthosfsmmanager "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
-	benthosfsmtype "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
 	benthosservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
 )
 
@@ -73,7 +72,7 @@ type IDataFlowComponentService interface {
 // ServiceInfo contains information about a DataFlowComponent service
 type ServiceInfo struct {
 	// BenthosObservedState contains information about the Benthos service
-	BenthosObservedState benthosfsmtype.BenthosObservedState
+	BenthosObservedState benthosfsmmanager.BenthosObservedState
 
 	// BenthosFSMState contains the current state of the Benthos FSM
 	BenthosFSMState string
