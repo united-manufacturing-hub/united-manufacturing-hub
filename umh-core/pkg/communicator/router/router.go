@@ -21,12 +21,13 @@ import (
 	"github.com/google/uuid"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/encoding"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/subscriber"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/maptostruct"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"go.uber.org/zap"
 )
 
@@ -39,6 +40,8 @@ type Router struct {
 	clientConnections     map[string]*ClientConnection
 	clientConnectionsLock sync.RWMutex
 	subHandler            *subscriber.Handler
+	systemSnapshot        *fsm.SystemSnapshot
+	configManager         config.ConfigManager
 }
 
 type ClientConnection struct {
@@ -52,6 +55,8 @@ func NewRouter(dog watchdog.Iface,
 	outboundChannel chan *models.UMHMessage,
 	releaseChannel config.ReleaseChannel,
 	subHandler *subscriber.Handler,
+	systemSnapshot *fsm.SystemSnapshot,
+	configManager config.ConfigManager,
 ) *Router {
 	return &Router{
 		dog:                   dog,
@@ -62,6 +67,8 @@ func NewRouter(dog watchdog.Iface,
 		clientConnections:     make(map[string]*ClientConnection),
 		clientConnectionsLock: sync.RWMutex{},
 		subHandler:            subHandler,
+		systemSnapshot:        systemSnapshot,
+		configManager:         configManager,
 	}
 }
 
@@ -133,5 +140,7 @@ func (r *Router) handleAction(messageContent models.UMHMessageContent, message *
 		r.releaseChannel,
 		r.dog,
 		traceId,
+		r.systemSnapshot,
+		r.configManager,
 	)
 }

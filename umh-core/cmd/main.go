@@ -25,7 +25,6 @@ import (
 
 	v2 "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/communication_state"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
@@ -33,6 +32,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	"go.uber.org/zap"
 )
@@ -81,7 +81,11 @@ func main() {
 	}
 
 	// Load the config
-	configManager := config.NewFileConfigManager()
+	configManager, err := config.NewFileConfigManagerWithBackoff()
+	if err != nil {
+		sentry.ReportIssuef(sentry.IssueTypeFatal, log, "Failed to create config manager: %w", err)
+		os.Exit(1)
+	}
 	// this will check if the config at the given path exists and if not, it will be created with default values
 	// and then overwritten with the given config parameters (communicator, release channel, location)
 	configData, err := configManager.GetConfigWithOverwritesOrCreateNew(ctx, config.FullConfig{
@@ -111,7 +115,7 @@ func main() {
 	}()
 
 	// Start the control loop
-	controlLoop := control.NewControlLoop()
+	controlLoop := control.NewControlLoop(configManager)
 	systemSnapshot := new(fsm.SystemSnapshot)
 	systemMu := new(sync.Mutex)
 	communicationState := communication_state.CommunicationState{
@@ -119,6 +123,8 @@ func main() {
 		InboundChannel:  make(chan *models.UMHMessage, 100),
 		OutboundChannel: make(chan *models.UMHMessage, 100),
 		ReleaseChannel:  configData.Agent.ReleaseChannel,
+		SystemSnapshot:  systemSnapshot,
+		ConfigManager:   configManager,
 	}
 	go SystemSnapshotLogger(ctx, controlLoop, systemSnapshot, systemMu)
 

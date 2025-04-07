@@ -21,12 +21,12 @@ import (
 	v2 "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2/pull"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2/push"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/subscriber"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/router"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	"go.uber.org/zap"
 )
@@ -43,6 +43,8 @@ type CommunicationState struct {
 	OutboundChannel   chan *models.UMHMessage
 	Router            *router.Router
 	ReleaseChannel    config.ReleaseChannel
+	SystemSnapshot    *fsm.SystemSnapshot
+	ConfigManager     config.ConfigManager
 }
 
 // InitialiseAndStartPuller creates a new Puller and starts it
@@ -99,7 +101,7 @@ func (c *CommunicationState) InitialiseAndStartRouter() {
 	}
 
 	c.mu.Lock()
-	c.Router = router.NewRouter(c.Watchdog, c.InboundChannel, c.LoginResponse.UUID, c.OutboundChannel, c.ReleaseChannel, c.SubscriberHandler)
+	c.Router = router.NewRouter(c.Watchdog, c.InboundChannel, c.LoginResponse.UUID, c.OutboundChannel, c.ReleaseChannel, c.SubscriberHandler, c.SystemSnapshot, c.ConfigManager)
 	c.mu.Unlock()
 	if c.Router == nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "Failed to create router")
