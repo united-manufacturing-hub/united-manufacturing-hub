@@ -20,6 +20,7 @@ const (
 	ComponentCore              = "Core"
 	ComponentControlLoop       = "ControlLoop"
 	ComponentStarvationChecker = "StarveCheck"
+	ComponentFilesystem        = "Filesystem"
 
 	// Manager components
 	ComponentS6Manager        = "S6Manager"
