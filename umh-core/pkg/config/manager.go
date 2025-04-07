@@ -93,6 +93,8 @@ type FileConfigManager struct {
 	logger *zap.SugaredLogger
 
 	// mutexAtomicUpdate for full cycle read and write access (atomic update) to the config file
+	// all writes to the config need to happen under this mutex via a atomic set method -> writeConfig is therefore not exposed
+	// the goal is to prevent two read/write cycles ("atomic updates") happening at the same time
 	mutexAtomicUpdate sync.Mutex
 
 	// simple mutex for read access or write access to the config file
