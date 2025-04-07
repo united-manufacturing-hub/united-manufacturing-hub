@@ -97,6 +97,8 @@ type RedpandaStatus struct {
 	MetricsState *RedpandaMetricsState
 	// Logs contains the logs of the Redpanda service
 	Logs []s6service.LogEntry
+	// UpdatedAtTick contains the tick at which the status was last updated
+	UpdatedAtTick uint64
 }
 
 // HealthCheck contains information about the health of the Redpanda service
@@ -466,11 +468,17 @@ func (s *RedpandaService) Status(ctx context.Context, tick uint64) (ServiceInfo,
 				// this S6FSMState needs to be properly refreshed here.
 				// Otherwise, the service can not transition from stopping to stopped state
 				RedpandaStatus: RedpandaStatus{
-					Logs: logs,
+					Logs:          logs,
+					UpdatedAtTick: tick,
 				},
 			}, ErrHealthCheckConnectionRefused
 		}
 		return ServiceInfo{}, fmt.Errorf("failed to get health check: %w", err)
+	}
+
+	// Check if the lastUpdate is more then constants.RedpandaStatusUpdateIntervalTicks ticks ago
+	if redpandaStatus.UpdatedAtTick < tick-constants.RedpandaStatusUpdateIntervalTicks {
+		return ServiceInfo{}, fmt.Errorf("redpanda status update interval is more then %d ticks ago, lastUpdate: %d, currentTick: %d", constants.RedpandaStatusUpdateIntervalTicks, redpandaStatus.UpdatedAtTick, tick)
 	}
 
 	serviceInfo := ServiceInfo{
@@ -593,7 +601,9 @@ func (s *RedpandaService) GetHealthCheckAndMetrics(ctx context.Context, tick uin
 	}()
 
 	if ctx.Err() != nil {
-		return RedpandaStatus{}, ctx.Err()
+		return RedpandaStatus{
+			UpdatedAtTick: tick,
+		}, ctx.Err()
 	}
 
 	// Skip health checks and metrics if the service doesn't exist yet
@@ -604,8 +614,9 @@ func (s *RedpandaService) GetHealthCheckAndMetrics(ctx context.Context, tick uin
 				IsLive:  false,
 				IsReady: false,
 			},
-			Metrics: Metrics{},
-			Logs:    []s6service.LogEntry{},
+			Metrics:       Metrics{},
+			Logs:          []s6service.LogEntry{},
+			UpdatedAtTick: tick,
 		}
 		return s.lastStatus, nil
 	}
@@ -635,8 +646,9 @@ func (s *RedpandaService) GetHealthCheckAndMetrics(ctx context.Context, tick uin
 				IsLive:  false,
 				IsReady: false,
 			},
-			Metrics: Metrics{},
-			Logs:    logs,
+			Metrics:       Metrics{},
+			Logs:          logs,
+			UpdatedAtTick: tick,
 		}
 		return s.lastStatus, fmt.Errorf("failed to check metrics endpoint: %w", err)
 	}
@@ -671,7 +683,8 @@ func (s *RedpandaService) GetHealthCheckAndMetrics(ctx context.Context, tick uin
 				IsReady: false,
 				Version: constants.RedpandaVersion,
 			},
-			Logs: logs,
+			Logs:          logs,
+			UpdatedAtTick: tick,
 		}
 		return s.lastStatus, fmt.Errorf("failed to parse metrics: %w", err)
 	}
@@ -679,9 +692,10 @@ func (s *RedpandaService) GetHealthCheckAndMetrics(ctx context.Context, tick uin
 	// Update the metrics state
 	if s.metricsState == nil {
 		s.lastStatus = RedpandaStatus{
-			HealthCheck: healthCheck,
-			Metrics:     metricsData,
-			Logs:        logs,
+			HealthCheck:   healthCheck,
+			Metrics:       metricsData,
+			Logs:          logs,
+			UpdatedAtTick: tick,
 		}
 		return s.lastStatus, fmt.Errorf("metrics state not initialized")
 	}
@@ -697,10 +711,11 @@ func (s *RedpandaService) GetHealthCheckAndMetrics(ctx context.Context, tick uin
 	}
 
 	s.lastStatus = RedpandaStatus{
-		HealthCheck:  healthCheck,
-		Metrics:      metricsData,
-		MetricsState: s.metricsState,
-		Logs:         logs,
+		HealthCheck:   healthCheck,
+		Metrics:       metricsData,
+		MetricsState:  s.metricsState,
+		Logs:          logs,
+		UpdatedAtTick: tick,
 	}
 	return s.lastStatus, nil
 }
