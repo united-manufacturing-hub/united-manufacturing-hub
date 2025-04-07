@@ -29,7 +29,7 @@ type Serializer interface {
 	// Encode encodes an object into a byte slice
 	Encode(object Object) ([]byte, error)
 	// Decode decodes a byte slice into an object
-	Decode(data []byte, objType Object) (Object, error)
+	Decode(data []byte, objType Object) error
 }
 
 // YamlSerializer is a serializer that uses yaml to encode and decode objects
@@ -55,19 +55,19 @@ func (s *YamlSerializer) Encode(object Object) ([]byte, error) {
 }
 
 // Decode decodes a byte slice into an object
-func (s *YamlSerializer) Decode(data []byte, obj Object) (Object, error) {
+func (s *YamlSerializer) Decode(data []byte, obj Object) error {
 	if obj == nil {
-		return nil, errors.New("object type cannot be nil")
+		return errors.New("object type cannot be nil")
 	}
 
 	if len(data) == 0 {
-		return nil, errors.New("data cannot be empty")
+		return errors.New("data cannot be empty")
 	}
 
 	decoder := yaml.NewDecoder(bytes.NewReader(data))
 	if err := decoder.Decode(obj); err != nil {
-		return nil, err
+		return err
 	}
 
-	return obj, nil
+	return nil
 }

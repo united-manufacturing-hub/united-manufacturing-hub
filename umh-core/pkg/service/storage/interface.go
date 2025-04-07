@@ -62,9 +62,6 @@ type Interface interface {
 	Create(ctx context.Context, key string, object Object) error
 	// Get retrieves the object from the storage layer for the given key
 	Get(ctx context.Context, key string, ignoreNotFound bool) (Object, error)
-	// List returns all the keys from the storage layer that matches the prefix
-	// For example, Useful to list all the dfc keys from th config file
-	List(ctx context.Context, prefix string) ([]Object, error)
 	// Update updates the object in the storage layer for the given key
 	Update(ctx context.Context, key string, obj Object) error
 	// GuaranteedUpdate updates the object in the storage layer for the given key
