@@ -50,7 +50,7 @@ func NewBenthosManagerWithMockedServices(name string) (*BenthosManager, *benthos
 		"/dev/null", // Prevent any real filesystem writes
 		// Extract Benthos configs from full config - same as original
 		func(fullConfig config.FullConfig) ([]config.BenthosConfig, error) {
-			return fullConfig.Benthos, nil
+			return fullConfig.Internal.Benthos, nil
 		},
 		// Get name from Benthos config - same as original
 		func(cfg config.BenthosConfig) (string, error) {

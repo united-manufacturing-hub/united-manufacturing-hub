@@ -60,14 +60,17 @@ func main() {
 	if err != nil {
 		sentry.ReportIssuef(sentry.IssueTypeWarning, log, "Failed to get AUTH_TOKEN: %w", err)
 	}
+
 	apiUrl, err := env.GetAsString("API_URL", false, "")
 	if err != nil {
 		sentry.ReportIssuef(sentry.IssueTypeWarning, log, "Failed to get API_URL: %w", err)
 	}
+
 	releaseChannel, err := env.GetAsString("RELEASE_CHANNEL", false, "")
 	if err != nil {
 		sentry.ReportIssuef(sentry.IssueTypeWarning, log, "Failed to get RELEASE_CHANNEL: %w", err)
 	}
+
 	locations := make(map[int]string)
 	for i := 0; i <= 6; i++ {
 		location, err := env.GetAsString(fmt.Sprintf("LOCATION_%d", i), false, "")
@@ -78,7 +81,11 @@ func main() {
 	}
 
 	// Load the config
-	configManager := config.NewFileConfigManager()
+	configManager, err := config.NewFileConfigManagerWithBackoff()
+	if err != nil {
+		sentry.ReportIssuef(sentry.IssueTypeFatal, log, "Failed to create config manager: %w", err)
+		os.Exit(1)
+	}
 	// this will check if the config at the given path exists and if not, it will be created with default values
 	// and then overwritten with the given config parameters (communicator, release channel, location)
 	configData, err := configManager.GetConfigWithOverwritesOrCreateNew(ctx, config.FullConfig{
@@ -108,7 +115,7 @@ func main() {
 	}()
 
 	// Start the control loop
-	controlLoop := control.NewControlLoop()
+	controlLoop := control.NewControlLoop(configManager)
 	systemSnapshot := new(fsm.SystemSnapshot)
 	systemMu := new(sync.Mutex)
 	communicationState := communication_state.CommunicationState{

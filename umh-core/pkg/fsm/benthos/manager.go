@@ -55,7 +55,7 @@ func NewBenthosManager(name string) *BenthosManager {
 		baseBenthosDir,
 		// Extract Benthos configs from full config
 		func(fullConfig config.FullConfig) ([]config.BenthosConfig, error) {
-			return fullConfig.Benthos, nil
+			return fullConfig.Internal.Benthos, nil
 		},
 		// Get name from Benthos config
 		func(cfg config.BenthosConfig) (string, error) {
@@ -180,7 +180,7 @@ func (m *BenthosManager) Reconcile(ctx context.Context, cfg config.FullConfig, t
 		metrics.ObserveReconcileTime(logger.ComponentBenthosManager, m.BaseFSMManager.GetManagerName(), duration)
 	}()
 	// Phase 1: Port Management Pre-reconciliation
-	benthosConfigs := cfg.Benthos
+	benthosConfigs := cfg.Internal.Benthos
 	instanceNames := make([]string, len(benthosConfigs))
 	for i, cfg := range benthosConfigs {
 		instanceNames[i] = cfg.Name
@@ -195,10 +195,10 @@ func (m *BenthosManager) Reconcile(ctx context.Context, cfg config.FullConfig, t
 
 	// Create a new config with allocated ports
 	cfgWithPorts := cfg.Clone() // Ensure you have a proper Clone method in config.FullConfig
-	for i, bc := range cfgWithPorts.Benthos {
+	for i, bc := range cfgWithPorts.Internal.Benthos {
 		if port, exists := m.portManager.GetPort(bc.Name); exists {
 			// Update the BenthosServiceConfig with the allocated port
-			cfgWithPorts.Benthos[i].BenthosServiceConfig.MetricsPort = port
+			cfgWithPorts.Internal.Benthos[i].BenthosServiceConfig.MetricsPort = port
 		}
 	}
 

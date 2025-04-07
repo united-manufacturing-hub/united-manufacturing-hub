@@ -58,7 +58,7 @@ var _ = Describe("S6Manager", func() {
 			emptyConfig := []config.S6FSMConfig{}
 
 			// Reconcile with empty config using a single reconciliation
-			err, _ := manager.Reconcile(ctx, config.FullConfig{Services: emptyConfig}, tick)
+			err, _ := manager.Reconcile(ctx, config.FullConfig{Internal: config.InternalConfig{Services: emptyConfig}}, tick)
 			tick++
 			Expect(err).NotTo(HaveOccurred())
 
@@ -69,7 +69,7 @@ var _ = Describe("S6Manager", func() {
 		It("should initialize service in stopped state and maintain it", func() {
 			// First setup with empty config to ensure no instances exist
 			emptyConfig := []config.S6FSMConfig{}
-			err, _ := manager.Reconcile(ctx, config.FullConfig{Services: emptyConfig}, tick)
+			err, _ := manager.Reconcile(ctx, config.FullConfig{Internal: config.InternalConfig{Services: emptyConfig}}, tick)
 			tick++
 			Expect(err).NotTo(HaveOccurred())
 			Expect(manager.GetInstances()).To(BeEmpty())
@@ -94,7 +94,7 @@ var _ = Describe("S6Manager", func() {
 
 			// Reconcile to create service and ensure it reaches stopped state
 			var nextTick uint64
-			nextTick, err = fsmtest.WaitForMockedManagerInstanceState(ctx, manager, config.FullConfig{Services: configWithStoppedService},
+			nextTick, err = fsmtest.WaitForMockedManagerInstanceState(ctx, manager, config.FullConfig{Internal: config.InternalConfig{Services: configWithStoppedService}},
 				serviceName, s6fsm.OperationalStateStopped, 10, tick)
 			tick = nextTick
 			Expect(err).NotTo(HaveOccurred())
@@ -111,7 +111,7 @@ var _ = Describe("S6Manager", func() {
 			Expect(service.GetDesiredFSMState()).To(Equal(s6fsm.OperationalStateStopped))
 
 			// Verify state remains stable over multiple reconciliation cycles
-			nextTick, err = fsmtest.WaitForMockedManagerInstanceState(ctx, manager, config.FullConfig{Services: configWithStoppedService},
+			nextTick, err = fsmtest.WaitForMockedManagerInstanceState(ctx, manager, config.FullConfig{Internal: config.InternalConfig{Services: configWithStoppedService}},
 				serviceName, s6fsm.OperationalStateStopped, 3, tick)
 			tick = nextTick
 			Expect(err).NotTo(HaveOccurred())
@@ -124,7 +124,7 @@ var _ = Describe("S6Manager", func() {
 		It("should initialize service in running state when config requests it", func() {
 			// First setup with empty config to ensure no instances exist
 			emptyConfig := []config.S6FSMConfig{}
-			err, _ := manager.Reconcile(ctx, config.FullConfig{Services: emptyConfig}, tick)
+			err, _ := manager.Reconcile(ctx, config.FullConfig{Internal: config.InternalConfig{Services: emptyConfig}}, tick)
 			tick++
 			Expect(err).NotTo(HaveOccurred())
 			Expect(manager.GetInstances()).To(BeEmpty())
@@ -149,7 +149,7 @@ var _ = Describe("S6Manager", func() {
 
 			// Reconcile to create service and wait for it to reach running state
 			var nextTick uint64
-			nextTick, err = fsmtest.WaitForMockedManagerInstanceState(ctx, manager, config.FullConfig{Services: configWithRunningService},
+			nextTick, err = fsmtest.WaitForMockedManagerInstanceState(ctx, manager, config.FullConfig{Internal: config.InternalConfig{Services: configWithRunningService}},
 				serviceName, s6fsm.OperationalStateRunning, 10, tick)
 			tick = nextTick
 			Expect(err).NotTo(HaveOccurred())
@@ -188,12 +188,12 @@ var _ = Describe("S6Manager", func() {
 			// Create and wait for the service to reach stopped state
 			var err error
 			var nextTick uint64
-			nextTick, err = fsmtest.WaitForManagerInstanceCreation(ctx, manager, config.FullConfig{Services: initialConfig},
+			nextTick, err = fsmtest.WaitForManagerInstanceCreation(ctx, manager, config.FullConfig{Internal: config.InternalConfig{Services: initialConfig}},
 				serviceName, 10, tick)
 			tick = nextTick
 			Expect(err).NotTo(HaveOccurred(), "Failed to create instance")
 
-			nextTick, err = fsmtest.WaitForMockedManagerInstanceState(ctx, manager, config.FullConfig{Services: initialConfig},
+			nextTick, err = fsmtest.WaitForMockedManagerInstanceState(ctx, manager, config.FullConfig{Internal: config.InternalConfig{Services: initialConfig}},
 				serviceName, s6fsm.OperationalStateStopped, 10, tick)
 			tick = nextTick
 			Expect(err).NotTo(HaveOccurred(), "Failed to reach stopped state")
@@ -220,7 +220,7 @@ var _ = Describe("S6Manager", func() {
 			}
 
 			// Wait for service to transition to running state
-			nextTick, err = fsmtest.WaitForMockedManagerInstanceState(ctx, manager, config.FullConfig{Services: updatedConfig},
+			nextTick, err = fsmtest.WaitForMockedManagerInstanceState(ctx, manager, config.FullConfig{Internal: config.InternalConfig{Services: updatedConfig}},
 				serviceName, s6fsm.OperationalStateRunning, 10, tick)
 			tick = nextTick
 			Expect(err).NotTo(HaveOccurred(), "Failed to transition to running state")
@@ -247,7 +247,7 @@ var _ = Describe("S6Manager", func() {
 			}
 
 			// Wait for service to transition back to stopped state
-			nextTick, err = fsmtest.WaitForMockedManagerInstanceState(ctx, manager, config.FullConfig{Services: stoppedConfig},
+			nextTick, err = fsmtest.WaitForMockedManagerInstanceState(ctx, manager, config.FullConfig{Internal: config.InternalConfig{Services: stoppedConfig}},
 				serviceName, s6fsm.OperationalStateStopped, 10, tick)
 			tick = nextTick
 			Expect(err).NotTo(HaveOccurred(), "Failed to transition back to stopped state")
@@ -281,13 +281,13 @@ var _ = Describe("S6Manager", func() {
 			// Wait for instance to be created
 			var err error
 			var nextTick uint64
-			nextTick, err = fsmtest.WaitForManagerInstanceCreation(ctx, manager, config.FullConfig{Services: runningConfig},
+			nextTick, err = fsmtest.WaitForManagerInstanceCreation(ctx, manager, config.FullConfig{Internal: config.InternalConfig{Services: runningConfig}},
 				serviceName, 10, tick)
 			tick = nextTick
 			Expect(err).NotTo(HaveOccurred(), "Failed to create instance")
 
 			// Wait for service to reach running state
-			nextTick, err = fsmtest.WaitForMockedManagerInstanceState(ctx, manager, config.FullConfig{Services: runningConfig},
+			nextTick, err = fsmtest.WaitForMockedManagerInstanceState(ctx, manager, config.FullConfig{Internal: config.InternalConfig{Services: runningConfig}},
 				serviceName, s6fsm.OperationalStateRunning, 10, tick)
 			tick = nextTick
 			Expect(err).NotTo(HaveOccurred(), "Failed to reach running state")
@@ -313,7 +313,7 @@ var _ = Describe("S6Manager", func() {
 			}
 
 			// Wait for service to reach stopped state
-			nextTick, err = fsmtest.WaitForMockedManagerInstanceState(ctx, manager, config.FullConfig{Services: stoppedConfig},
+			nextTick, err = fsmtest.WaitForMockedManagerInstanceState(ctx, manager, config.FullConfig{Internal: config.InternalConfig{Services: stoppedConfig}},
 				serviceName, s6fsm.OperationalStateStopped, 10, tick)
 			tick = nextTick
 			Expect(err).NotTo(HaveOccurred(), "Failed to transition to stopped state")
@@ -323,7 +323,7 @@ var _ = Describe("S6Manager", func() {
 
 			// Reconcile with empty config and wait for the service to be removed
 			// Using more attempts since removal might take longer
-			nextTick, err = fsmtest.WaitForManagerInstanceRemoval(ctx, manager, config.FullConfig{Services: emptyConfig},
+			nextTick, err = fsmtest.WaitForManagerInstanceRemoval(ctx, manager, config.FullConfig{Internal: config.InternalConfig{Services: emptyConfig}},
 				serviceName, 25, tick)
 			tick = nextTick
 			Expect(err).NotTo(HaveOccurred(), "Failed to remove instance")
@@ -356,7 +356,7 @@ var _ = Describe("S6Manager", func() {
 			// Wait for initial service to be created and reach stopped state
 			var err error
 			var nextTick uint64
-			nextTick, err = fsmtest.WaitForMockedManagerInstanceState(ctx, manager, config.FullConfig{Services: initialConfig},
+			nextTick, err = fsmtest.WaitForMockedManagerInstanceState(ctx, manager, config.FullConfig{Internal: config.InternalConfig{Services: initialConfig}},
 				initialServiceName, s6fsm.OperationalStateStopped, 10, tick)
 			tick = nextTick
 			Expect(err).NotTo(HaveOccurred())
@@ -377,13 +377,13 @@ var _ = Describe("S6Manager", func() {
 			})
 
 			// Wait for the new instance to be created
-			nextTick, err = fsmtest.WaitForManagerInstanceCreation(ctx, manager, config.FullConfig{Services: updatedConfig},
+			nextTick, err = fsmtest.WaitForManagerInstanceCreation(ctx, manager, config.FullConfig{Internal: config.InternalConfig{Services: updatedConfig}},
 				newServiceName, 10, tick)
 			tick = nextTick
 			Expect(err).NotTo(HaveOccurred(), "Failed to create new instance")
 
 			// Now wait for the new service to reach stopped state
-			nextTick, err = fsmtest.WaitForMockedManagerInstanceState(ctx, manager, config.FullConfig{Services: updatedConfig},
+			nextTick, err = fsmtest.WaitForMockedManagerInstanceState(ctx, manager, config.FullConfig{Internal: config.InternalConfig{Services: updatedConfig}},
 				newServiceName, s6fsm.OperationalStateStopped, 10, tick)
 			tick = nextTick
 			Expect(err).NotTo(HaveOccurred())
@@ -436,25 +436,25 @@ var _ = Describe("S6Manager", func() {
 			var nextTick uint64
 
 			// Wait for first service to be created
-			nextTick, err = fsmtest.WaitForManagerInstanceCreation(ctx, manager, config.FullConfig{Services: initialConfig},
+			nextTick, err = fsmtest.WaitForManagerInstanceCreation(ctx, manager, config.FullConfig{Internal: config.InternalConfig{Services: initialConfig}},
 				service1Name, 10, tick)
 			tick = nextTick
 			Expect(err).NotTo(HaveOccurred(), "Failed to create first instance")
 
 			// Wait for second service to be created
-			nextTick, err = fsmtest.WaitForManagerInstanceCreation(ctx, manager, config.FullConfig{Services: initialConfig},
+			nextTick, err = fsmtest.WaitForManagerInstanceCreation(ctx, manager, config.FullConfig{Internal: config.InternalConfig{Services: initialConfig}},
 				service2Name, 10, tick)
 			tick = nextTick
 			Expect(err).NotTo(HaveOccurred(), "Failed to create second instance")
 
 			// Wait for first service to reach stopped state
-			nextTick, err = fsmtest.WaitForMockedManagerInstanceState(ctx, manager, config.FullConfig{Services: initialConfig},
+			nextTick, err = fsmtest.WaitForMockedManagerInstanceState(ctx, manager, config.FullConfig{Internal: config.InternalConfig{Services: initialConfig}},
 				service1Name, s6fsm.OperationalStateStopped, 10, tick)
 			tick = nextTick
 			Expect(err).NotTo(HaveOccurred())
 
 			// Wait for second service to reach stopped state
-			nextTick, err = fsmtest.WaitForMockedManagerInstanceState(ctx, manager, config.FullConfig{Services: initialConfig},
+			nextTick, err = fsmtest.WaitForMockedManagerInstanceState(ctx, manager, config.FullConfig{Internal: config.InternalConfig{Services: initialConfig}},
 				service2Name, s6fsm.OperationalStateStopped, 10, tick)
 			tick = nextTick
 			Expect(err).NotTo(HaveOccurred())
@@ -480,7 +480,7 @@ var _ = Describe("S6Manager", func() {
 			}
 
 			// Wait for the service to be completely removed from the manager
-			nextTick, err = fsmtest.WaitForManagerInstanceRemoval(ctx, manager, config.FullConfig{Services: updatedConfig},
+			nextTick, err = fsmtest.WaitForManagerInstanceRemoval(ctx, manager, config.FullConfig{Internal: config.InternalConfig{Services: updatedConfig}},
 				service2Name, 15, tick)
 			tick = nextTick
 			Expect(err).NotTo(HaveOccurred(), "Failed waiting for instance removal")
@@ -518,12 +518,12 @@ var _ = Describe("S6Manager", func() {
 			// Create and wait for the service to reach stopped state
 			var err error
 			var nextTick uint64
-			nextTick, err = fsmtest.WaitForManagerInstanceCreation(ctx, manager, config.FullConfig{Services: serviceConfig},
+			nextTick, err = fsmtest.WaitForManagerInstanceCreation(ctx, manager, config.FullConfig{Internal: config.InternalConfig{Services: serviceConfig}},
 				serviceName, 10, tick)
 			tick = nextTick
 			Expect(err).NotTo(HaveOccurred(), "Failed to create instance")
 
-			nextTick, err = fsmtest.WaitForMockedManagerInstanceState(ctx, manager, config.FullConfig{Services: serviceConfig},
+			nextTick, err = fsmtest.WaitForMockedManagerInstanceState(ctx, manager, config.FullConfig{Internal: config.InternalConfig{Services: serviceConfig}},
 				serviceName, s6fsm.OperationalStateStopped, 10, tick)
 			tick = nextTick
 			Expect(err).NotTo(HaveOccurred(), "Failed to reach stopped state")
@@ -541,7 +541,7 @@ var _ = Describe("S6Manager", func() {
 			mockService.StatusError = fmt.Errorf("temporary error fetching service state")
 
 			// Run reconciliation a few times with the error active
-			nextTick, err = fsmtest.RunMultipleReconciliations(ctx, manager, config.FullConfig{Services: serviceConfig}, 15, tick)
+			nextTick, err = fsmtest.RunMultipleReconciliations(ctx, manager, config.FullConfig{Internal: config.InternalConfig{Services: serviceConfig}}, 15, tick)
 			tick = nextTick
 
 			// Verify the instance still exists despite errors
@@ -552,7 +552,7 @@ var _ = Describe("S6Manager", func() {
 			mockService.StatusError = nil
 
 			// Wait for the instance to recover to stopped state
-			nextTick, err = fsmtest.WaitForMockedManagerInstanceState(ctx, manager, config.FullConfig{Services: serviceConfig},
+			nextTick, err = fsmtest.WaitForMockedManagerInstanceState(ctx, manager, config.FullConfig{Internal: config.InternalConfig{Services: serviceConfig}},
 				serviceName, s6fsm.OperationalStateStopped, 10, tick)
 			tick = nextTick
 			Expect(err).NotTo(HaveOccurred(), "Failed to recover to stopped state")
@@ -583,12 +583,12 @@ var _ = Describe("S6Manager", func() {
 			// Create and wait for the service to reach stopped state
 			var err error
 			var nextTick uint64
-			nextTick, err = fsmtest.WaitForManagerInstanceCreation(ctx, manager, config.FullConfig{Services: serviceConfig},
+			nextTick, err = fsmtest.WaitForManagerInstanceCreation(ctx, manager, config.FullConfig{Internal: config.InternalConfig{Services: serviceConfig}},
 				serviceName, 10, tick)
 			tick = nextTick
 			Expect(err).NotTo(HaveOccurred(), "Failed to create instance")
 
-			nextTick, err = fsmtest.WaitForMockedManagerInstanceState(ctx, manager, config.FullConfig{Services: serviceConfig},
+			nextTick, err = fsmtest.WaitForMockedManagerInstanceState(ctx, manager, config.FullConfig{Internal: config.InternalConfig{Services: serviceConfig}},
 				serviceName, s6fsm.OperationalStateStopped, 10, tick)
 			tick = nextTick
 			Expect(err).NotTo(HaveOccurred(), "Failed to reach stopped state")
@@ -607,7 +607,7 @@ var _ = Describe("S6Manager", func() {
 			mockService.GetConfigError = fmt.Errorf("%s", permanentErrorMsg)
 
 			// Run several reconciliations to allow the error to be detected and handled
-			nextTick, err = fsmtest.RunMultipleReconciliations(ctx, manager, config.FullConfig{Services: serviceConfig}, 5, tick)
+			nextTick, err = fsmtest.RunMultipleReconciliations(ctx, manager, config.FullConfig{Internal: config.InternalConfig{Services: serviceConfig}}, 5, tick)
 			tick = nextTick
 
 			// Verify the instance has been removed due to permanent error
@@ -652,23 +652,23 @@ var _ = Describe("S6Manager", func() {
 			var nextTick uint64
 
 			// Wait for both services to be created
-			nextTick, err = fsmtest.WaitForManagerInstanceCreation(ctx, manager, config.FullConfig{Services: multiServiceConfig},
+			nextTick, err = fsmtest.WaitForManagerInstanceCreation(ctx, manager, config.FullConfig{Internal: config.InternalConfig{Services: multiServiceConfig}},
 				service1Name, 10, tick)
 			tick = nextTick
 			Expect(err).NotTo(HaveOccurred(), "Failed to create first service")
 
-			nextTick, err = fsmtest.WaitForManagerInstanceCreation(ctx, manager, config.FullConfig{Services: multiServiceConfig},
+			nextTick, err = fsmtest.WaitForManagerInstanceCreation(ctx, manager, config.FullConfig{Internal: config.InternalConfig{Services: multiServiceConfig}},
 				service2Name, 10, tick)
 			tick = nextTick
 			Expect(err).NotTo(HaveOccurred(), "Failed to create second service")
 
 			// Wait for both services to reach stopped state
-			nextTick, err = fsmtest.WaitForMockedManagerInstanceState(ctx, manager, config.FullConfig{Services: multiServiceConfig},
+			nextTick, err = fsmtest.WaitForMockedManagerInstanceState(ctx, manager, config.FullConfig{Internal: config.InternalConfig{Services: multiServiceConfig}},
 				service1Name, s6fsm.OperationalStateStopped, 10, tick)
 			tick = nextTick
 			Expect(err).NotTo(HaveOccurred(), "First service failed to reach stopped state")
 
-			nextTick, err = fsmtest.WaitForMockedManagerInstanceState(ctx, manager, config.FullConfig{Services: multiServiceConfig},
+			nextTick, err = fsmtest.WaitForMockedManagerInstanceState(ctx, manager, config.FullConfig{Internal: config.InternalConfig{Services: multiServiceConfig}},
 				service2Name, s6fsm.OperationalStateStopped, 10, tick)
 			tick = nextTick
 			Expect(err).NotTo(HaveOccurred(), "Second service failed to reach stopped state")
@@ -722,23 +722,23 @@ var _ = Describe("S6Manager", func() {
 			var nextTick uint64
 
 			// Wait for both instances to be created
-			nextTick, err = fsmtest.WaitForManagerInstanceCreation(ctx, manager, config.FullConfig{Services: multiServiceConfig},
+			nextTick, err = fsmtest.WaitForManagerInstanceCreation(ctx, manager, config.FullConfig{Internal: config.InternalConfig{Services: multiServiceConfig}},
 				stableServiceName, 10, tick)
 			tick = nextTick
 			Expect(err).NotTo(HaveOccurred(), "Failed to create stable service")
 
-			nextTick, err = fsmtest.WaitForManagerInstanceCreation(ctx, manager, config.FullConfig{Services: multiServiceConfig},
+			nextTick, err = fsmtest.WaitForManagerInstanceCreation(ctx, manager, config.FullConfig{Internal: config.InternalConfig{Services: multiServiceConfig}},
 				failingServiceName, 10, tick)
 			tick = nextTick
 			Expect(err).NotTo(HaveOccurred(), "Failed to create failing service")
 
 			// Wait for both to reach stopped state
-			nextTick, err = fsmtest.WaitForMockedManagerInstanceState(ctx, manager, config.FullConfig{Services: multiServiceConfig},
+			nextTick, err = fsmtest.WaitForMockedManagerInstanceState(ctx, manager, config.FullConfig{Internal: config.InternalConfig{Services: multiServiceConfig}},
 				stableServiceName, s6fsm.OperationalStateStopped, 10, tick)
 			tick = nextTick
 			Expect(err).NotTo(HaveOccurred(), "Stable service failed to reach stopped state")
 
-			nextTick, err = fsmtest.WaitForMockedManagerInstanceState(ctx, manager, config.FullConfig{Services: multiServiceConfig},
+			nextTick, err = fsmtest.WaitForMockedManagerInstanceState(ctx, manager, config.FullConfig{Internal: config.InternalConfig{Services: multiServiceConfig}},
 				failingServiceName, s6fsm.OperationalStateStopped, 10, tick)
 			tick = nextTick
 			Expect(err).NotTo(HaveOccurred(), "Failing service failed to reach stopped state")
@@ -762,7 +762,7 @@ var _ = Describe("S6Manager", func() {
 			mockService.GetConfigError = fmt.Errorf("%s", permanentErrorMsg)
 
 			// Run reconciliation multiple times to allow error handling
-			nextTick, err = fsmtest.RunMultipleReconciliations(ctx, manager, config.FullConfig{Services: multiServiceConfig},
+			nextTick, err = fsmtest.RunMultipleReconciliations(ctx, manager, config.FullConfig{Internal: config.InternalConfig{Services: multiServiceConfig}},
 				5, tick)
 			tick = nextTick
 

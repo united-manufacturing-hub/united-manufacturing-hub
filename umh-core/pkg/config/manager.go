@@ -25,6 +25,8 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/backoff"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/ctxmutex"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/ctxrwmutex"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
@@ -38,12 +40,20 @@ const (
 	DefaultConfigPath = "/data/config.yaml"
 )
 
+// singleton instance
+// we avoid, having more than one instance of the config manager because it can lead to race conditions
+// if we ensure, that we have only one instance, we can avoid race conditions by using mutexes in this single instance as we do here
+
+// however, access from outside the package is not protected by mutexes (keep in mind e.g. when using GitOps on the config file)
+var (
+	instance ConfigManager
+	once     sync.Once
+)
+
 // ConfigManager is the interface for config management
 type ConfigManager interface {
 	// GetConfig returns the current config
 	GetConfig(ctx context.Context, tick uint64) (FullConfig, error)
-	// WriteConfig writes the current config to the file
-	WriteConfig(ctx context.Context, config FullConfig) error
 	// AtomicSetLocation sets the location in the config atomically
 	AtomicSetLocation(ctx context.Context, location models.EditInstanceLocationModel) error
 	// AtomicAddDataFlowComponent adds a data flow component in the config atomically
@@ -61,23 +71,34 @@ type FileConfigManager struct {
 	// logger is the logger for the config manager
 	logger *zap.SugaredLogger
 
-	// mutexReadAndWrite for full cycle read and write access to the config file
-	mutexReadAndWrite sync.Mutex
+	// mutexAtomicUpdate for full cycle read and write access (atomic update) to the config file
+	// all writes to the config need to happen under this mutex via a atomic set method -> writeConfig is therefore not exposed
+	// the goal is to prevent two read/write cycles ("atomic updates") happening at the same time
+	// we use our own implementation of a context aware mutex here to avoid deadlocks
+	mutexAtomicUpdate ctxmutex.CtxMutex
 
 	// simple mutex for read access or write access to the config file
-	mutexReadOrWrite sync.Mutex
+	// it will be used by Getconfig and writeConfig
+	// this mutex will allow multiple GetConfig calls to happen in parallel
+	// it will prevent multiple reads or read/write cycles to happen at the same time
+	// we use our own implementation of a context aware mutex here to avoid deadlocks
+	mutexReadOrWrite ctxrwmutex.CtxRWMutex
 }
 
 // NewFileConfigManager creates a new FileConfigManager
+// Note: This should only be used in tests or if you need a custom config manager.
+// Prefer NewFileConfigManagerWithBackoff() for application use.
 func NewFileConfigManager() *FileConfigManager {
 
 	configPath := DefaultConfigPath
 	logger := logger.For(logger.ComponentConfigManager)
 
 	return &FileConfigManager{
-		configPath: configPath,
-		fsService:  filesystem.NewDefaultService(),
-		logger:     logger,
+		configPath:        configPath,
+		fsService:         filesystem.NewDefaultService(),
+		logger:            logger,
+		mutexAtomicUpdate: *ctxmutex.NewCtxMutex(),
+		mutexReadOrWrite:  *ctxrwmutex.NewCtxRWMutex(),
 	}
 }
 
@@ -90,62 +111,66 @@ func (m *FileConfigManager) WithFileSystemService(fsService filesystem.Service) 
 
 // get config or create new with given config parameters (communicator, release channel, location)
 // if the config file does not exist, it will be created with default values and then overwritten with the given config parameters
-func (m *FileConfigManager) GetConfigWithOverwritesOrCreateNew(ctx context.Context, config FullConfig) (FullConfig, error) {
+func (m *FileConfigManager) GetConfigWithOverwritesOrCreateNew(ctx context.Context, configOverride FullConfig) (FullConfig, error) {
 	// Check if context is already cancelled
 	if ctx.Err() != nil {
 		return FullConfig{}, ctx.Err()
 	}
 
-	configReturn := FullConfig{}
+	var config FullConfig
+	// default config value
+	config.Agent.MetricsPort = 8080
 
-	// Check if the file exists
 	exists, err := m.fsService.FileExists(ctx, m.configPath)
-	if err == nil && exists {
-		configReturn, err = m.GetConfig(ctx, 0)
+	switch {
+	case err != nil:
+		m.logger.Warnf("failed to check if config file exists in %s: %v", m.configPath, err)
+	case exists:
+		config, err = m.GetConfig(ctx, 0)
 		if err != nil {
 			return FullConfig{}, fmt.Errorf("failed to get config that exists: %w", err)
 		}
-		// overwrite the config with the given config parameters
-		if config.Agent.CommunicatorConfig.APIURL != "" {
-			configReturn.Agent.CommunicatorConfig.APIURL = config.Agent.CommunicatorConfig.APIURL
-		}
-		if config.Agent.CommunicatorConfig.AuthToken != "" {
-			configReturn.Agent.CommunicatorConfig.AuthToken = config.Agent.CommunicatorConfig.AuthToken
-		}
-		if config.Agent.ReleaseChannel != "" {
-			configReturn.Agent.ReleaseChannel = config.Agent.ReleaseChannel
-		}
-		if config.Agent.Location != nil {
-			configReturn.Agent.Location = config.Agent.Location
-		}
-	} else {
-		configReturn.Agent.MetricsPort = 8080
-		// set the given config parameters
-		if config.Agent.CommunicatorConfig.APIURL != "" {
-			configReturn.Agent.CommunicatorConfig.APIURL = config.Agent.CommunicatorConfig.APIURL
-		}
-		if config.Agent.CommunicatorConfig.AuthToken != "" {
-			configReturn.Agent.CommunicatorConfig.AuthToken = config.Agent.CommunicatorConfig.AuthToken
-		}
-		if config.Agent.ReleaseChannel != "" {
-			configReturn.Agent.ReleaseChannel = config.Agent.ReleaseChannel
-		}
-		if config.Agent.Location != nil {
-			configReturn.Agent.Location = config.Agent.Location
-		}
-		// write the config to the file
-		if err := m.WriteConfig(ctx, configReturn); err != nil {
-			return FullConfig{}, fmt.Errorf("failed to write new config: %w", err)
-		}
+
 	}
 
-	return configReturn, nil
+	// Apply overrides
+	if configOverride.Agent.MetricsPort > 0 {
+		config.Agent.MetricsPort = configOverride.Agent.MetricsPort
+	}
+
+	if configOverride.Agent.CommunicatorConfig.APIURL != "" {
+		config.Agent.CommunicatorConfig.APIURL = configOverride.Agent.CommunicatorConfig.APIURL
+	}
+
+	if configOverride.Agent.CommunicatorConfig.AuthToken != "" {
+		config.Agent.CommunicatorConfig.AuthToken = configOverride.Agent.CommunicatorConfig.AuthToken
+	}
+
+	if configOverride.Agent.ReleaseChannel != "" {
+		config.Agent.ReleaseChannel = configOverride.Agent.ReleaseChannel
+	}
+
+	if configOverride.Agent.Location != nil {
+		config.Agent.Location = configOverride.Agent.Location
+	}
+
+	// Persist the updated config
+	if err := m.writeConfig(ctx, config); err != nil {
+		return FullConfig{}, fmt.Errorf("failed to write new config: %w", err)
+	}
+
+	m.logger.Infof("Successfully wrote config to %s", m.configPath)
+	return config, nil
 }
 
 // GetConfig returns the current config, always reading fresh from disk
 func (m *FileConfigManager) GetConfig(ctx context.Context, tick uint64) (FullConfig, error) {
-	m.mutexReadOrWrite.Lock()
-	defer m.mutexReadOrWrite.Unlock()
+	// we use a read lock here, because we only read the config file
+	err := m.mutexReadOrWrite.RLock(ctx)
+	if err != nil {
+		return FullConfig{}, fmt.Errorf("failed to lock config file: %w", err)
+	}
+	defer m.mutexReadOrWrite.RUnlock()
 
 	// Check if context is already cancelled
 	if ctx.Err() != nil {
@@ -207,23 +232,45 @@ type FileConfigManagerWithBackoff struct {
 }
 
 // NewFileConfigManagerWithBackoff creates a new FileConfigManagerWithBackoff with exponential backoff
-func NewFileConfigManagerWithBackoff() *FileConfigManagerWithBackoff {
-	configManager := NewFileConfigManager()
-	logger := logger.For(logger.ComponentConfigManager)
+func NewFileConfigManagerWithBackoff() (*FileConfigManagerWithBackoff, error) {
 
-	// Create backoff manager with default settings
-	backoffConfig := backoff.DefaultConfig("ConfigManager", logger)
-	backoffManager := backoff.NewBackoffManager(backoffConfig)
+	if instance != nil {
+		return nil, fmt.Errorf("config manager already initialized, only one instance is allowed")
 
-	return &FileConfigManagerWithBackoff{
-		configManager:  configManager,
-		backoffManager: backoffManager,
-		logger:         logger,
 	}
+
+	once.Do(func() {
+		configManager := NewFileConfigManager()
+		logger := logger.For(logger.ComponentConfigManager)
+
+		// Create backoff manager with default settings
+		backoffConfig := backoff.DefaultConfig("ConfigManager", logger)
+		backoffManager := backoff.NewBackoffManager(backoffConfig)
+
+		instance = &FileConfigManagerWithBackoff{
+			configManager:  configManager,
+			backoffManager: backoffManager,
+			logger:         logger,
+		}
+	})
+
+	return instance.(*FileConfigManagerWithBackoff), nil
 }
 
-func (m *FileConfigManager) WriteConfig(ctx context.Context, config FullConfig) error {
-	m.mutexReadOrWrite.Lock()
+// GetConfigWithOverwritesOrCreateNew wraps the FileConfigManager's GetConfigWithOverwritesOrCreateNew method
+// it is used in main.go to get the config with overwrites or create a new one on startup
+func (m *FileConfigManagerWithBackoff) GetConfigWithOverwritesOrCreateNew(ctx context.Context, config FullConfig) (FullConfig, error) {
+	return m.configManager.GetConfigWithOverwritesOrCreateNew(ctx, config)
+}
+
+// writeConfig writes the config to the file
+// it should not be exposed or used outside of the config manager, due to potential race conditions
+func (m *FileConfigManager) writeConfig(ctx context.Context, config FullConfig) error {
+	// we use a write lock here, because we write the config file
+	err := m.mutexReadOrWrite.Lock(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to lock config file: %w", err)
+	}
 	defer m.mutexReadOrWrite.Unlock()
 
 	// Check if context is already cancelled
@@ -320,20 +367,13 @@ func (m *FileConfigManagerWithBackoff) GetLastError() error {
 	return m.backoffManager.GetLastError()
 }
 
-// WriteConfig delegates to the underlying FileConfigManager
-func (m *FileConfigManagerWithBackoff) WriteConfig(ctx context.Context, config FullConfig) error {
-	// Check if context is already cancelled
-	if ctx.Err() != nil {
-		return ctx.Err()
-	}
-
-	return m.configManager.WriteConfig(ctx, config)
-}
-
 // AtomicSetLocation sets the location in the config atomically
 func (m *FileConfigManager) AtomicSetLocation(ctx context.Context, location models.EditInstanceLocationModel) error {
-	m.mutexReadAndWrite.Lock()
-	defer m.mutexReadAndWrite.Unlock()
+	err := m.mutexAtomicUpdate.Lock(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to lock config file: %w", err)
+	}
+	defer m.mutexAtomicUpdate.Unlock()
 
 	// get the current config
 	config, err := m.GetConfig(ctx, 0)
@@ -363,7 +403,7 @@ func (m *FileConfigManager) AtomicSetLocation(ctx context.Context, location mode
 	}
 
 	// write the config
-	if err := m.WriteConfig(ctx, config); err != nil {
+	if err := m.writeConfig(ctx, config); err != nil {
 		return fmt.Errorf("failed to write config: %w", err)
 	}
 

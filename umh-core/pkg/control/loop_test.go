@@ -41,12 +41,12 @@ func generateDefectiveConfig() config.FullConfig {
 	defects := []func(config.FullConfig) config.FullConfig{
 		// Empty services
 		func(cfg config.FullConfig) config.FullConfig {
-			cfg.Services = []config.S6FSMConfig{}
+			cfg.Internal.Services = []config.S6FSMConfig{}
 			return cfg
 		},
 		// Service with empty name
 		func(cfg config.FullConfig) config.FullConfig {
-			cfg.Services = []config.S6FSMConfig{{
+			cfg.Internal.Services = []config.S6FSMConfig{{
 				FSMInstanceConfig: config.FSMInstanceConfig{
 					Name:            "",
 					DesiredFSMState: "running",
@@ -56,7 +56,7 @@ func generateDefectiveConfig() config.FullConfig {
 		},
 		// Service with invalid desired state
 		func(cfg config.FullConfig) config.FullConfig {
-			cfg.Services = []config.S6FSMConfig{{
+			cfg.Internal.Services = []config.S6FSMConfig{{
 				FSMInstanceConfig: config.FSMInstanceConfig{
 					Name:            "test-service",
 					DesiredFSMState: "invalid-state",
@@ -66,7 +66,7 @@ func generateDefectiveConfig() config.FullConfig {
 		},
 		// Multiple services with same name
 		func(cfg config.FullConfig) config.FullConfig {
-			cfg.Services = []config.S6FSMConfig{
+			cfg.Internal.Services = []config.S6FSMConfig{
 				{
 					FSMInstanceConfig: config.FSMInstanceConfig{
 						Name:            "duplicate-service",
@@ -125,7 +125,7 @@ var _ = Describe("ControlLoop", func() {
 
 	Describe("Creating a new control loop", func() {
 		It("should set default values", func() {
-			loop := NewControlLoop()
+			loop := NewControlLoop(mockConfig)
 			Expect(loop).NotTo(BeNil())
 			Expect(loop.tickerTime).To(Equal(constants.DefaultTickerTime))
 			Expect(loop.managers).To(HaveLen(5))
@@ -136,11 +136,13 @@ var _ = Describe("ControlLoop", func() {
 	Describe("Reconcile", func() {
 		It("should fetch config and call manager's reconcile", func() {
 			expectedConfig := config.FullConfig{
-				Services: []config.S6FSMConfig{
-					{
-						FSMInstanceConfig: config.FSMInstanceConfig{
-							Name:            "test-service",
-							DesiredFSMState: "running",
+				Internal: config.InternalConfig{
+					Services: []config.S6FSMConfig{
+						{
+							FSMInstanceConfig: config.FSMInstanceConfig{
+								Name:            "test-service",
+								DesiredFSMState: "running",
+							},
 						},
 					},
 				},

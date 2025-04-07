@@ -24,10 +24,12 @@ on:
     branches:
       - staging
       - main
+    tags:
+      - 'v*'
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
+  IMAGE_NAME: united-manufacturing-hub/umh-core
 
 jobs:
   build:
@@ -108,9 +110,10 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/umh-core
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
             type=ref,event=branch
+            type=ref,event=tag
             type=sha
 
       - name: Prepare tags with platform suffix

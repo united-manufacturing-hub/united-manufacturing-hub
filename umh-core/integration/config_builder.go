@@ -17,7 +17,6 @@ package integration_test
 
 import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/redpandaserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
 	"gopkg.in/yaml.v3"
 )
@@ -32,13 +31,9 @@ func NewBuilder() *Builder {
 			Agent: config.AgentConfig{
 				MetricsPort: 8080, // Default port inside container
 			},
-			Services: []config.S6FSMConfig{},
-			Benthos:  []config.BenthosConfig{},
-			Redpanda: config.RedpandaConfig{
-				FSMInstanceConfig: config.FSMInstanceConfig{
-					Name:            "redpanda",
-					DesiredFSMState: "stopped",
-				},
+			Internal: config.InternalConfig{
+				Services: []config.S6FSMConfig{},
+				Benthos:  []config.BenthosConfig{},
 			},
 		},
 	}
@@ -51,7 +46,7 @@ func (b *Builder) SetMetricsPort(port int) *Builder {
 }
 
 func (b *Builder) AddGoldenService() *Builder {
-	b.full.Services = append(b.full.Services, config.S6FSMConfig{
+	b.full.Internal.Services = append(b.full.Internal.Services, config.S6FSMConfig{
 		FSMInstanceConfig: config.FSMInstanceConfig{
 			Name:            "golden-service",
 			DesiredFSMState: "running",
@@ -78,21 +73,11 @@ output:
 		},
 	})
 
-	// Set the Redpanda configuration for the RedpandaManagerCore to handle
-	// instead of trying to manage it as an S6 service
-	b.full.Redpanda = config.RedpandaConfig{
-		FSMInstanceConfig: config.FSMInstanceConfig{
-			Name:            "redpanda",
-			DesiredFSMState: "stopped", // Set to stopped to avoid starvation during tests
-		},
-		RedpandaServiceConfig: redpandaserviceconfig.RedpandaServiceConfig{},
-	}
-
 	return b
 }
 
 func (b *Builder) AddService(s config.S6FSMConfig) *Builder {
-	b.full.Services = append(b.full.Services, s)
+	b.full.Internal.Services = append(b.full.Internal.Services, s)
 	return b
 }
 
@@ -102,7 +87,7 @@ func (b *Builder) BuildYAML() string {
 }
 
 func (b *Builder) AddSleepService(name string, duration string) *Builder {
-	b.full.Services = append(b.full.Services, config.S6FSMConfig{
+	b.full.Internal.Services = append(b.full.Internal.Services, config.S6FSMConfig{
 		FSMInstanceConfig: config.FSMInstanceConfig{
 			Name:            name,
 			DesiredFSMState: "running",
@@ -116,9 +101,9 @@ func (b *Builder) AddSleepService(name string, duration string) *Builder {
 
 // StopService stops a service by name
 func (b *Builder) StopService(name string) *Builder {
-	for i, s := range b.full.Services {
+	for i, s := range b.full.Internal.Services {
 		if s.FSMInstanceConfig.Name == name {
-			b.full.Services[i].FSMInstanceConfig.DesiredFSMState = "stopped"
+			b.full.Internal.Services[i].FSMInstanceConfig.DesiredFSMState = "stopped"
 			break
 		}
 	}
@@ -127,9 +112,9 @@ func (b *Builder) StopService(name string) *Builder {
 
 // StartService starts a service by name
 func (b *Builder) StartService(name string) *Builder {
-	for i, s := range b.full.Services {
+	for i, s := range b.full.Internal.Services {
 		if s.FSMInstanceConfig.Name == name {
-			b.full.Services[i].FSMInstanceConfig.DesiredFSMState = "running"
+			b.full.Internal.Services[i].FSMInstanceConfig.DesiredFSMState = "running"
 			break
 		}
 	}
