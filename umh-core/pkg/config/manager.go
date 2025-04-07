@@ -68,6 +68,14 @@ func GetConfigManager() ConfigManager {
 // SetConfigManager sets the singleton instance of ConfigManager
 // This should only be used in tests or during initialization
 func SetConfigManager(manager ConfigManager) {
+	// Check if instance is already initialized
+	if instance != nil {
+		// Instance already exists, log an error
+		loggerInstance := logger.For(logger.ComponentConfigManager)
+		loggerInstance.Error("Attempted to set ConfigManager instance that already exists. This is likely a programming error.")
+		return
+	}
+
 	once.Do(func() {
 		instance = manager
 	})
