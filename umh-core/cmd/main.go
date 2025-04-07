@@ -78,7 +78,11 @@ func main() {
 	}
 
 	// Load the config
-	configManager := config.NewFileConfigManagerWithBackoff()
+	configManager, err := config.NewFileConfigManagerWithBackoff()
+	if err != nil {
+		sentry.ReportIssuef(sentry.IssueTypeFatal, log, "Failed to create config manager: %w", err)
+		os.Exit(1)
+	}
 	// this will check if the config at the given path exists and if not, it will be created with default values
 	// and then overwritten with the given config parameters (communicator, release channel, location)
 	configData, err := configManager.GetConfigWithOverwritesOrCreateNew(ctx, config.FullConfig{

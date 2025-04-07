@@ -58,32 +58,6 @@ type ConfigManager interface {
 	AtomicSetLocation(ctx context.Context, location models.EditInstanceLocationModel) error
 }
 
-// GetConfigManager returns the singleton instance of ConfigManager
-func GetConfigManager() ConfigManager {
-	once.Do(func() {
-		// Default to FileConfigManagerWithBackoff as it's the more robust implementation
-		instance = NewFileConfigManagerWithBackoff()
-	})
-	return instance
-}
-
-// SetConfigManager sets the singleton instance of ConfigManager
-// This should only be used in tests or during initialization
-func SetConfigManager(manager ConfigManager) error {
-	// Check if instance is already initialized
-	if instance != nil {
-		// Instance already exists, log an error
-		loggerInstance := logger.For(logger.ComponentConfigManager)
-		loggerInstance.Error("Attempted to set ConfigManager instance that already exists. This is likely a programming error.")
-		return fmt.Errorf("attempted to set ConfigManager instance that already exists; instance has already been initialized")
-	}
-
-	once.Do(func() {
-		instance = manager
-	})
-	return nil
-}
-
 // FileConfigManager implements the ConfigManager interface by reading from a file
 type FileConfigManager struct {
 	// configPath is the path to the config file
@@ -111,7 +85,7 @@ type FileConfigManager struct {
 
 // NewFileConfigManager creates a new FileConfigManager
 // Note: This should only be used in tests or if you need a custom config manager.
-// Prefer GetConfigManager() for application use.
+// Prefer NewFileConfigManagerWithBackoff() for application use.
 func NewFileConfigManager() *FileConfigManager {
 
 	configPath := DefaultConfigPath
@@ -253,19 +227,29 @@ type FileConfigManagerWithBackoff struct {
 }
 
 // NewFileConfigManagerWithBackoff creates a new FileConfigManagerWithBackoff with exponential backoff
-func NewFileConfigManagerWithBackoff() *FileConfigManagerWithBackoff {
-	configManager := NewFileConfigManager()
-	logger := logger.For(logger.ComponentConfigManager)
+func NewFileConfigManagerWithBackoff() (*FileConfigManagerWithBackoff, error) {
 
-	// Create backoff manager with default settings
-	backoffConfig := backoff.DefaultConfig("ConfigManager", logger)
-	backoffManager := backoff.NewBackoffManager(backoffConfig)
+	if instance != nil {
+		return nil, fmt.Errorf("config manager already initialized, only one instance is allowed")
 
-	return &FileConfigManagerWithBackoff{
-		configManager:  configManager,
-		backoffManager: backoffManager,
-		logger:         logger,
 	}
+
+	once.Do(func() {
+		configManager := NewFileConfigManager()
+		logger := logger.For(logger.ComponentConfigManager)
+
+		// Create backoff manager with default settings
+		backoffConfig := backoff.DefaultConfig("ConfigManager", logger)
+		backoffManager := backoff.NewBackoffManager(backoffConfig)
+
+		instance = &FileConfigManagerWithBackoff{
+			configManager:  configManager,
+			backoffManager: backoffManager,
+			logger:         logger,
+		}
+	})
+
+	return instance.(*FileConfigManagerWithBackoff), nil
 }
 
 // GetConfigWithOverwritesOrCreateNew wraps the FileConfigManager's GetConfigWithOverwritesOrCreateNew method
