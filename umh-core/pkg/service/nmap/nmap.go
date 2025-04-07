@@ -520,7 +520,7 @@ func (s *NmapService) ReconcileManager(ctx context.Context, filesystemService fi
 		return ctx.Err(), false
 	}
 
-	return s.s6Manager.Reconcile(ctx, config.FullConfig{Services: s.s6ServiceConfigs}, filesystemService, tick)
+	return s.s6Manager.Reconcile(ctx, config.FullConfig{Internal: config.InternalConfig{Services: s.s6ServiceConfigs}}, filesystemService, tick)
 }
 
 // ServiceExists checks if a nmap service exists

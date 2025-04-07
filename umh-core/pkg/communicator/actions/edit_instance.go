@@ -18,57 +18,34 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
 
 	"github.com/google/uuid"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"go.uber.org/zap"
 )
 
-// editInstanceConfigManager extends config.ConfigManager with WriteConfig method
-type editInstanceConfigManager interface {
-	config.ConfigManager
-	WriteConfig(ctx context.Context, config config.FullConfig) error
-}
-
-// EditInstanceAction implements the Action interface for editing an instance's properties
 type EditInstanceAction struct {
 	userEmail       string
 	actionUUID      uuid.UUID
 	instanceUUID    uuid.UUID
 	outboundChannel chan *models.UMHMessage
-	location        *EditInstanceLocation
-	configManager   editInstanceConfigManager
+	location        *models.EditInstanceLocationModel
+	configManager   config.ConfigManager
 }
 
-// NewEditInstanceAction creates a new EditInstanceAction with default config manager
-func NewEditInstanceAction(userEmail string, actionUUID, instanceUUID uuid.UUID, outboundChannel chan *models.UMHMessage) *EditInstanceAction {
+// exposed for testing purposes
+func NewEditInstanceAction(userEmail string, actionUUID uuid.UUID, instanceUUID uuid.UUID, outboundChannel chan *models.UMHMessage, configManager config.ConfigManager) *EditInstanceAction {
 	return &EditInstanceAction{
 		userEmail:       userEmail,
 		actionUUID:      actionUUID,
 		instanceUUID:    instanceUUID,
 		outboundChannel: outboundChannel,
-		configManager:   config.NewFileConfigManager(),
+		configManager:   configManager,
 	}
 }
 
-// WithConfigManager allows setting a custom config manager for testing
-func (a *EditInstanceAction) WithConfigManager(manager editInstanceConfigManager) *EditInstanceAction {
-	a.configManager = manager
-	return a
-}
-
-// EditInstanceLocation holds the location information for the instance
-type EditInstanceLocation struct {
-	Enterprise string  `json:"enterprise"`
-	Site       *string `json:"site,omitempty"`
-	Area       *string `json:"area,omitempty"`
-	Line       *string `json:"line,omitempty"`
-	WorkCell   *string `json:"workCell,omitempty"`
-}
-
-// Parse implements the Action interface
 func (a *EditInstanceAction) Parse(payload interface{}) error {
 	zap.S().Debug("Parsing EditInstance action payload")
 
@@ -98,7 +75,7 @@ func (a *EditInstanceAction) Parse(payload interface{}) error {
 	}
 
 	// Create location object
-	location := &EditInstanceLocation{
+	location := &models.EditInstanceLocationModel{
 		Enterprise: enterprise,
 	}
 
@@ -120,7 +97,6 @@ func (a *EditInstanceAction) Parse(payload interface{}) error {
 	return nil
 }
 
-// Validate implements the Action interface
 func (a *EditInstanceAction) Validate() error {
 	// If location is provided, validate that enterprise is not empty
 	if a.location != nil && a.location.Enterprise == "" {
@@ -130,7 +106,6 @@ func (a *EditInstanceAction) Validate() error {
 	return nil
 }
 
-// Execute implements the Action interface
 func (a *EditInstanceAction) Execute() (interface{}, map[string]interface{}, error) {
 	zap.S().Info("Executing EditInstance action")
 
@@ -147,73 +122,27 @@ func (a *EditInstanceAction) Execute() (interface{}, map[string]interface{}, err
 	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Updating instance location", a.outboundChannel, models.EditInstance)
 
 	// Update the location in the configuration
-	err := a.updateLocation()
+	ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
+	defer cancel()
+	err := a.configManager.AtomicSetLocation(ctx, *a.location)
 	if err != nil {
 		errorMsg := fmt.Sprintf("Failed to update instance location: %s", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errorMsg, a.outboundChannel, models.EditInstance)
 		return nil, nil, fmt.Errorf("failed to update instance location: %w", err)
 	}
 
-	// Create success message based on the provided location
-	message := "Successfully updated instance location"
+	// we can be sure that the location is updated in the config if the error is nil
 
 	// Send the success message
 	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedSuccessfull, "Location update completed", a.outboundChannel, models.EditInstance)
 
-	return message, nil, nil
+	return "Successfully updated instance location", nil, nil
 }
 
-// updateLocation updates the location in the configuration file
-func (a *EditInstanceAction) updateLocation() error {
-	// Create a context with timeout for config operations
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	// Get the current configuration using the configManager
-	currentConfig, err := a.configManager.GetConfig(ctx, 0)
-	if err != nil {
-		return fmt.Errorf("failed to get current configuration: %w", err)
-	}
-
-	// Initialize the location map if it doesn't exist
-	if currentConfig.Agent.Location == nil {
-		currentConfig.Agent.Location = make(map[int]string)
-	}
-
-	// Update the location in the configuration
-	// Location is a hierarchical structure represented as map[int]string
-	// 0: Enterprise, 1: Site, 2: Area, 3: Line, 4: WorkCell
-	currentConfig.Agent.Location[0] = a.location.Enterprise
-
-	// Update optional fields if they exist
-	if a.location.Site != nil {
-		currentConfig.Agent.Location[1] = *a.location.Site
-	}
-	if a.location.Area != nil {
-		currentConfig.Agent.Location[2] = *a.location.Area
-	}
-	if a.location.Line != nil {
-		currentConfig.Agent.Location[3] = *a.location.Line
-	}
-	if a.location.WorkCell != nil {
-		currentConfig.Agent.Location[4] = *a.location.WorkCell
-	}
-
-	// Write the updated configuration back to disk
-	err = a.configManager.WriteConfig(ctx, currentConfig)
-	if err != nil {
-		return fmt.Errorf("failed to write updated configuration: %w", err)
-	}
-
-	return nil
-}
-
-// getUserEmail implements the Action interface
 func (a *EditInstanceAction) getUserEmail() string {
 	return a.userEmail
 }
 
-// getUuid implements the Action interface
 func (a *EditInstanceAction) getUuid() uuid.UUID {
 	return a.actionUUID
 }
@@ -221,11 +150,11 @@ func (a *EditInstanceAction) getUuid() uuid.UUID {
 // Methods added for testing purposes
 
 // GetLocation returns the location - for testing
-func (a *EditInstanceAction) GetLocation() *EditInstanceLocation {
+func (a *EditInstanceAction) GetLocation() *models.EditInstanceLocationModel {
 	return a.location
 }
 
 // SetLocation sets the location - for testing
-func (a *EditInstanceAction) SetLocation(location *EditInstanceLocation) {
+func (a *EditInstanceAction) SetLocation(location *models.EditInstanceLocationModel) {
 	a.location = location
 }

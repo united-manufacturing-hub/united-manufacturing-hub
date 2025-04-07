@@ -25,7 +25,6 @@ import (
 
 	v2 "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/communication_state"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
@@ -33,6 +32,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	"go.uber.org/zap"
 )
@@ -60,14 +60,17 @@ func main() {
 	if err != nil {
 		sentry.ReportIssuef(sentry.IssueTypeWarning, log, "Failed to get AUTH_TOKEN: %w", err)
 	}
+
 	apiUrl, err := env.GetAsString("API_URL", false, "")
 	if err != nil {
 		sentry.ReportIssuef(sentry.IssueTypeWarning, log, "Failed to get API_URL: %w", err)
 	}
+
 	releaseChannel, err := env.GetAsString("RELEASE_CHANNEL", false, "")
 	if err != nil {
 		sentry.ReportIssuef(sentry.IssueTypeWarning, log, "Failed to get RELEASE_CHANNEL: %w", err)
 	}
+
 	locations := make(map[int]string)
 	for i := 0; i <= 6; i++ {
 		location, err := env.GetAsString(fmt.Sprintf("LOCATION_%d", i), false, "")
@@ -78,7 +81,11 @@ func main() {
 	}
 
 	// Load the config
-	configManager := config.NewFileConfigManager()
+	configManager, err := config.NewFileConfigManagerWithBackoff()
+	if err != nil {
+		sentry.ReportIssuef(sentry.IssueTypeFatal, log, "Failed to create config manager: %w", err)
+		os.Exit(1)
+	}
 	// this will check if the config at the given path exists and if not, it will be created with default values
 	// and then overwritten with the given config parameters (communicator, release channel, location)
 	configData, err := configManager.GetConfigWithOverwritesOrCreateNew(ctx, config.FullConfig{
@@ -108,7 +115,7 @@ func main() {
 	}()
 
 	// Start the control loop
-	controlLoop := control.NewControlLoop()
+	controlLoop := control.NewControlLoop(configManager)
 	systemSnapshot := new(fsm.SystemSnapshot)
 	systemMu := new(sync.Mutex)
 	communicationState := communication_state.CommunicationState{
@@ -116,6 +123,8 @@ func main() {
 		InboundChannel:  make(chan *models.UMHMessage, 100),
 		OutboundChannel: make(chan *models.UMHMessage, 100),
 		ReleaseChannel:  configData.Agent.ReleaseChannel,
+		SystemSnapshot:  systemSnapshot,
+		ConfigManager:   configManager,
 	}
 	go SystemSnapshotLogger(ctx, controlLoop, systemSnapshot, systemMu)
 
@@ -156,7 +165,7 @@ func SystemSnapshotLogger(ctx context.Context, controlLoop *control.ControlLoop,
 				systemMu.Unlock()
 			}
 			if snapshot == nil {
-				sentry.ReportIssuef(sentry.IssueTypeWarning, logger, "No system snapshot available")
+				sentry.ReportIssuef(sentry.IssueTypeWarning, logger, "[SystemSnapshotLogger] No system snapshot available")
 				continue
 			}
 
@@ -202,7 +211,7 @@ func enableBackendConnection(config *config.FullConfig, state *fsm.SystemSnapsho
 
 		login := v2.NewLogin(config.Agent.CommunicatorConfig.AuthToken, false)
 		if login == nil {
-			sentry.ReportIssuef(sentry.IssueTypeError, logger, "Failed to create login object")
+			sentry.ReportIssuef(sentry.IssueTypeError, logger, "[v2.NewLogin] Failed to create login object")
 			return
 		}
 		communicationState.LoginResponse = login

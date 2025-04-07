@@ -26,9 +26,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2/error_handler"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2/http"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"go.uber.org/zap"
 )
 
@@ -173,7 +173,7 @@ func enqueueToDeadLetterChannel(deadLetterCh chan DeadLetter, messages []models.
 	case _, ok := <-deadLetterCh:
 		if !ok {
 			// Channel is closed
-			sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "Deadletter channel is closed, cannot enqueue messages!")
+			sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "[enqueueToDeadLetterChannel] Deadletter channel is closed, cannot enqueue messages!")
 			return
 		}
 	case deadLetterCh <- DeadLetter{
@@ -183,7 +183,7 @@ func enqueueToDeadLetterChannel(deadLetterCh chan DeadLetter, messages []models.
 	}:
 		// Message successfully enqueued to deadletter channel. Do nothing.
 	default:
-		sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "Deadletter channel is not open or ready to receive the re-enqueued messages from the Pusher!")
+		sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "[enqueueToDeadLetterChannel] Deadletter channel is not open or ready to receive the re-enqueued messages from the Pusher!")
 	}
 }
 

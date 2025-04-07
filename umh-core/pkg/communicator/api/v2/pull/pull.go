@@ -26,9 +26,9 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2/error_handler"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2/http"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/backend_api_structs"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/helper"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	"go.uber.org/zap"
 )
@@ -69,7 +69,7 @@ func (p *Puller) Stop() {
 		zap.S().Warnf("WARNING: Stopping puller !")
 		p.shallRun.Store(false)
 	} else {
-		sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "Stop MUST NOT be used outside tests")
+		sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "[Puller.Stop()] Stop MUST NOT be used outside tests")
 	}
 }
 

@@ -19,7 +19,7 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/expiremap/v2/pkg/expiremap"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/models"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 )
 
 func CalculateLatency(latencies *expiremap.ExpireMap[time.Time, time.Duration]) models.Latency {
@@ -73,10 +73,10 @@ func CalculateLatency(latencies *expiremap.ExpireMap[time.Time, time.Duration]) 
 	}
 
 	return models.Latency{
-		Min: float64(minimumDuration),
-		Max: float64(maximumDuration),
-		P95: float64(p95),
-		P99: float64(p99),
-		Avg: float64(avgNs),
+		MinMs: float64(minimumDuration),
+		MaxMs: float64(maximumDuration),
+		P95Ms: float64(p95),
+		P99Ms: float64(p99),
+		AvgMs: float64(avgNs),
 	}
 }
