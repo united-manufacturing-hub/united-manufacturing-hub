@@ -23,7 +23,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentconfig"
 	benthosfsmtype "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
 	benthosservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
 // MockDataFlowComponentService is a mock implementation of the IDataFlowComponentService interface for testing
@@ -121,7 +120,7 @@ func (m *MockDataFlowComponentService) GenerateBenthosConfigForDataFlowComponent
 }
 
 // GetConfig mocks getting the DataFlowComponent configuration
-func (m *MockDataFlowComponentService) GetConfig(ctx context.Context, filesystemService filesystem.Service, componentName string) (dataflowcomponentconfig.DataFlowComponentConfig, error) {
+func (m *MockDataFlowComponentService) GetConfig(ctx context.Context, componentName string) (dataflowcomponentconfig.DataFlowComponentConfig, error) {
 	m.GetConfigCalled = true
 
 	// If error is set, return it
@@ -134,7 +133,7 @@ func (m *MockDataFlowComponentService) GetConfig(ctx context.Context, filesystem
 }
 
 // Status mocks getting the status of a DataFlowComponent
-func (m *MockDataFlowComponentService) Status(ctx context.Context, filesystemService filesystem.Service, componentName string, tick uint64) (ServiceInfo, error) {
+func (m *MockDataFlowComponentService) Status(ctx context.Context, componentName string, tick uint64) (ServiceInfo, error) {
 	m.StatusCalled = true
 
 	// Check if the component exists in the ExistingComponents map
@@ -152,7 +151,7 @@ func (m *MockDataFlowComponentService) Status(ctx context.Context, filesystemSer
 }
 
 // AddDataFlowComponentToBenthosManager mocks adding a DataFlowComponent to the Benthos manager
-func (m *MockDataFlowComponentService) AddDataFlowComponentToBenthosManager(ctx context.Context, filesystemService filesystem.Service, cfg *dataflowcomponentconfig.DataFlowComponentConfig, componentName string) error {
+func (m *MockDataFlowComponentService) AddDataFlowComponentToBenthosManager(ctx context.Context, cfg *dataflowcomponentconfig.DataFlowComponentConfig, componentName string) error {
 	m.AddDataFlowComponentToBenthosManagerCalled = true
 
 	benthosName := fmt.Sprintf("dataflow-%s", componentName)
@@ -183,7 +182,7 @@ func (m *MockDataFlowComponentService) AddDataFlowComponentToBenthosManager(ctx 
 }
 
 // UpdateDataFlowComponentInBenthosManager mocks updating a DataFlowComponent in the Benthos manager
-func (m *MockDataFlowComponentService) UpdateDataFlowComponentInBenthosManager(ctx context.Context, filesystemService filesystem.Service, cfg *dataflowcomponentconfig.DataFlowComponentConfig, componentName string) error {
+func (m *MockDataFlowComponentService) UpdateDataFlowComponentInBenthosManager(ctx context.Context, cfg *dataflowcomponentconfig.DataFlowComponentConfig, componentName string) error {
 	m.UpdateDataFlowComponentInBenthosManagerCalled = true
 
 	benthosName := fmt.Sprintf("dataflow-%s", componentName)
@@ -217,7 +216,7 @@ func (m *MockDataFlowComponentService) UpdateDataFlowComponentInBenthosManager(c
 }
 
 // RemoveDataFlowComponentFromBenthosManager mocks removing a DataFlowComponent from the Benthos manager
-func (m *MockDataFlowComponentService) RemoveDataFlowComponentFromBenthosManager(ctx context.Context, filesystemService filesystem.Service, componentName string) error {
+func (m *MockDataFlowComponentService) RemoveDataFlowComponentFromBenthosManager(ctx context.Context, componentName string) error {
 	m.RemoveDataFlowComponentFromBenthosManagerCalled = true
 
 	benthosName := fmt.Sprintf("dataflow-%s", componentName)
@@ -245,7 +244,7 @@ func (m *MockDataFlowComponentService) RemoveDataFlowComponentFromBenthosManager
 }
 
 // StartDataFlowComponent mocks starting a DataFlowComponent
-func (m *MockDataFlowComponentService) StartDataFlowComponent(ctx context.Context, filesystemService filesystem.Service, componentName string) error {
+func (m *MockDataFlowComponentService) StartDataFlowComponent(ctx context.Context, componentName string) error {
 	m.StartDataFlowComponentCalled = true
 
 	benthosName := fmt.Sprintf("dataflow-%s", componentName)
@@ -269,7 +268,7 @@ func (m *MockDataFlowComponentService) StartDataFlowComponent(ctx context.Contex
 }
 
 // StopDataFlowComponent mocks stopping a DataFlowComponent
-func (m *MockDataFlowComponentService) StopDataFlowComponent(ctx context.Context, filesystemService filesystem.Service, componentName string) error {
+func (m *MockDataFlowComponentService) StopDataFlowComponent(ctx context.Context, componentName string) error {
 	m.StopDataFlowComponentCalled = true
 
 	benthosName := fmt.Sprintf("dataflow-%s", componentName)
@@ -293,19 +292,19 @@ func (m *MockDataFlowComponentService) StopDataFlowComponent(ctx context.Context
 }
 
 // ForceRemoveDataFlowComponent mocks force removing a DataFlowComponent
-func (m *MockDataFlowComponentService) ForceRemoveDataFlowComponent(ctx context.Context, filesystemService filesystem.Service, componentName string) error {
+func (m *MockDataFlowComponentService) ForceRemoveDataFlowComponent(ctx context.Context, componentName string) error {
 	m.ForceRemoveDataFlowComponentCalled = true
 	return m.ForceRemoveDataFlowComponentError
 }
 
 // ServiceExists mocks checking if a DataFlowComponent exists
-func (m *MockDataFlowComponentService) ServiceExists(ctx context.Context, filesystemService filesystem.Service, componentName string) bool {
+func (m *MockDataFlowComponentService) ServiceExists(ctx context.Context, componentName string) bool {
 	m.ServiceExistsCalled = true
 	return m.ServiceExistsResult
 }
 
 // ReconcileManager mocks reconciling the DataFlowComponent manager
-func (m *MockDataFlowComponentService) ReconcileManager(ctx context.Context, filesystemService filesystem.Service, tick uint64) (error, bool) {
+func (m *MockDataFlowComponentService) ReconcileManager(ctx context.Context, tick uint64) (error, bool) {
 	m.ReconcileManagerCalled = true
 	return m.ReconcileManagerError, m.ReconcileManagerReconciled
 }
