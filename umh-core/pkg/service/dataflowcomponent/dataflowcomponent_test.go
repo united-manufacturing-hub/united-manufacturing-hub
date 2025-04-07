@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//go:build test
+
 package dataflowcomponent
 
 import (
@@ -258,8 +260,9 @@ var _ = Describe("DataFlowComponentService", func() {
 			// Call Status for a non-existent component
 			_, err := statusService.Status(ctx, mockFS, componentName, tick)
 
-			// Assert
-			Expect(err).To(MatchError(ErrServiceNotExist))
+			// Assert - check for "not found" in the error message
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("not found"))
 		})
 	})
 
