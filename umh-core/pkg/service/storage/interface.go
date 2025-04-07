@@ -53,9 +53,9 @@ const (
 	Deleted StorageEventType = "DELETED"
 )
 
-// Interface offers a common interface for data marshalling and unmarshalling
+// KVInterface offers a common interface for Key-Value storage data marshalling and unmarshalling
 // and hides all the underlying storage related operations
-type Interface interface {
+type KVInterface interface {
 	//Versioner returns versioner for the storage type
 	Versioner() Versioner
 
@@ -66,9 +66,13 @@ type Interface interface {
 	Update(ctx context.Context, key string, obj Object) error
 	// GuaranteedUpdate updates the object in the storage layer for the given key
 	// and keeps retrying the updated until success
-	GuaranteedUpdate(ctx context.Context, key string, ignoreNotFound bool,
+	GuaranteedUpdate(
+		ctx context.Context,
+		key string,
+		ignoreNotFound bool,
 		precondition func(existingObject Object) error,
-		updateFunc func(existingObject Object) (Object, error)) error
+		updateFunc func(existingObject Object) (Object, error),
+	) error
 	// Delete deletes the object from the storage layer for the given key
 	// For Future use, when etcd storage is implemented
 	Delete(ctx context.Context, key string) error

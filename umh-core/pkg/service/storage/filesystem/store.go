@@ -38,7 +38,7 @@ type Config struct {
 	CleanupTempFiles bool
 }
 
-var _ storage.Interface = &Store{}
+var _ storage.KVInterface = &Store{}
 
 // Store implements the storage interface for the filesystem storage
 type Store struct {
@@ -191,6 +191,7 @@ func (s *Store) Get(ctx context.Context, key string, ignoreNotFound bool) (stora
 
 // GuaranteedUpdate updates the object in the storage layer for the given key
 // and keeps retrying the updated until success
+// TODO: Introduce max retries and backoff
 func (s *Store) GuaranteedUpdate(ctx context.Context, key string, ignoreNotFound bool, precondition func(existingObject storage.Object) error, updateFunc func(existingObject storage.Object) (storage.Object, error)) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
