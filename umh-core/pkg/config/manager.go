@@ -167,7 +167,7 @@ func (m *FileConfigManager) GetConfigWithOverwritesOrCreateNew(ctx context.Conte
 			configReturn.Agent.Location = config.Agent.Location
 		}
 		// write the config to the file
-		if err := m.WriteConfig(ctx, configReturn); err != nil {
+		if err := m.writeConfig(ctx, configReturn); err != nil {
 			return FullConfig{}, fmt.Errorf("failed to write new config: %w", err)
 		}
 	}
@@ -260,7 +260,7 @@ func (m *FileConfigManagerWithBackoff) GetConfigWithOverwritesOrCreateNew(ctx co
 	return m.configManager.GetConfigWithOverwritesOrCreateNew(ctx, config)
 }
 
-func (m *FileConfigManager) WriteConfig(ctx context.Context, config FullConfig) error {
+func (m *FileConfigManager) writeConfig(ctx context.Context, config FullConfig) error {
 	// we use a write lock here, because we write the config file
 	m.mutexReadOrWrite.Lock()
 	defer m.mutexReadOrWrite.Unlock()
@@ -360,13 +360,13 @@ func (m *FileConfigManagerWithBackoff) GetLastError() error {
 }
 
 // WriteConfig delegates to the underlying FileConfigManager
-func (m *FileConfigManagerWithBackoff) WriteConfig(ctx context.Context, config FullConfig) error {
+func (m *FileConfigManagerWithBackoff) writeConfig(ctx context.Context, config FullConfig) error {
 	// Check if context is already cancelled
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
 
-	return m.configManager.WriteConfig(ctx, config)
+	return m.configManager.writeConfig(ctx, config)
 }
 
 // AtomicSetLocation sets the location in the config atomically
@@ -421,7 +421,7 @@ func (m *FileConfigManager) AtomicSetLocation(ctx context.Context, location mode
 	}
 
 	// write the config
-	if err := m.WriteConfig(ctx, config); err != nil {
+	if err := m.writeConfig(ctx, config); err != nil {
 		return fmt.Errorf("failed to write config: %w", err)
 	}
 
