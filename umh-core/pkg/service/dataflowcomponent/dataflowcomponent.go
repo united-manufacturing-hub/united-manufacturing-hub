@@ -31,6 +31,7 @@ import (
 
 	benthosfsmmanager "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
 	benthosservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
 // IDataFlowComponentService is the interface for managing DataFlowComponent services
@@ -39,34 +40,34 @@ type IDataFlowComponentService interface {
 	GenerateBenthosConfigForDataFlowComponent(dataflowConfig *dataflowcomponentconfig.DataFlowComponentConfig, componentName string) (benthosserviceconfig.BenthosServiceConfig, error)
 
 	// GetConfig returns the actual DataFlowComponent config from the Benthos service
-	GetConfig(ctx context.Context, componentName string) (dataflowcomponentconfig.DataFlowComponentConfig, error)
+	GetConfig(ctx context.Context, filesystemService filesystem.Service, componentName string) (dataflowcomponentconfig.DataFlowComponentConfig, error)
 
 	// Status checks the status of a DataFlowComponent service
-	Status(ctx context.Context, componentName string, tick uint64) (ServiceInfo, error)
+	Status(ctx context.Context, filesystemService filesystem.Service, componentName string, tick uint64) (ServiceInfo, error)
 
 	// AddDataFlowComponentToBenthosManager adds a DataFlowComponent to the Benthos manager
-	AddDataFlowComponentToBenthosManager(ctx context.Context, cfg *dataflowcomponentconfig.DataFlowComponentConfig, componentName string) error
+	AddDataFlowComponentToBenthosManager(ctx context.Context, filesystemService filesystem.Service, cfg *dataflowcomponentconfig.DataFlowComponentConfig, componentName string) error
 
 	// UpdateDataFlowComponentInBenthosManager updates an existing DataFlowComponent in the Benthos manager
-	UpdateDataFlowComponentInBenthosManager(ctx context.Context, cfg *dataflowcomponentconfig.DataFlowComponentConfig, componentName string) error
+	UpdateDataFlowComponentInBenthosManager(ctx context.Context, filesystemService filesystem.Service, cfg *dataflowcomponentconfig.DataFlowComponentConfig, componentName string) error
 
 	// RemoveDataFlowComponentFromBenthosManager removes a DataFlowComponent from the Benthos manager
-	RemoveDataFlowComponentFromBenthosManager(ctx context.Context, componentName string) error
+	RemoveDataFlowComponentFromBenthosManager(ctx context.Context, filesystemService filesystem.Service, componentName string) error
 
 	// StartDataFlowComponent starts a DataFlowComponent
-	StartDataFlowComponent(ctx context.Context, componentName string) error
+	StartDataFlowComponent(ctx context.Context, filesystemService filesystem.Service, componentName string) error
 
 	// StopDataFlowComponent stops a DataFlowComponent
-	StopDataFlowComponent(ctx context.Context, componentName string) error
+	StopDataFlowComponent(ctx context.Context, filesystemService filesystem.Service, componentName string) error
 
 	// ForceRemoveDataFlowComponent removes a DataFlowComponent from the Benthos manager
-	ForceRemoveDataFlowComponent(ctx context.Context, componentName string) error
+	ForceRemoveDataFlowComponent(ctx context.Context, filesystemService filesystem.Service, componentName string) error
 
 	// ServiceExists checks if a DataFlowComponent service exists
-	ServiceExists(ctx context.Context, componentName string) bool
+	ServiceExists(ctx context.Context, filesystemService filesystem.Service, componentName string) bool
 
 	// ReconcileManager reconciles the DataFlowComponent manager with the actual state
-	ReconcileManager(ctx context.Context, tick uint64) (error, bool)
+	ReconcileManager(ctx context.Context, filesystemService filesystem.Service, tick uint64) (error, bool)
 }
 
 // ServiceInfo contains information about a DataFlowComponent service
@@ -164,7 +165,7 @@ func (s *DataFlowComponentService) GenerateBenthosConfigForDataFlowComponent(dat
 
 // GetConfig returns the actual DataFlowComponent config from the Benthos service
 // Expects benthosName (e.g. "dataflow-myservice") as defined in the UMH config
-func (s *DataFlowComponentService) GetConfig(ctx context.Context, componentName string) (dataflowcomponentconfig.DataFlowComponentConfig, error) {
+func (s *DataFlowComponentService) GetConfig(ctx context.Context, filesystemService filesystem.Service, componentName string) (dataflowcomponentconfig.DataFlowComponentConfig, error) {
 	if ctx.Err() != nil {
 		return dataflowcomponentconfig.DataFlowComponentConfig{}, ctx.Err()
 	}
@@ -172,7 +173,7 @@ func (s *DataFlowComponentService) GetConfig(ctx context.Context, componentName 
 	benthosName := s.getBenthosName(componentName)
 
 	// Get the Benthos config
-	benthosCfg, err := s.benthosService.GetConfig(ctx, benthosName)
+	benthosCfg, err := s.benthosService.GetConfig(ctx, filesystemService, benthosName)
 	if err != nil {
 		return dataflowcomponentconfig.DataFlowComponentConfig{}, fmt.Errorf("failed to get benthos config: %w", err)
 	}
@@ -183,7 +184,7 @@ func (s *DataFlowComponentService) GetConfig(ctx context.Context, componentName 
 
 // Status checks the status of a DataFlowComponent service
 // Expects benthosName (e.g. "dataflow-myservice") as defined in the UMH config
-func (s *DataFlowComponentService) Status(ctx context.Context, componentName string, tick uint64) (ServiceInfo, error) {
+func (s *DataFlowComponentService) Status(ctx context.Context, filesystemService filesystem.Service, componentName string, tick uint64) (ServiceInfo, error) {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(logger.ComponentDataFlowComponentService, componentName+".Status", time.Since(start))
@@ -198,7 +199,7 @@ func (s *DataFlowComponentService) Status(ctx context.Context, componentName str
 	// First, check if the service exists in the Benthos manager
 	// This is a crucial check that prevents "instance not found" errors
 	// during reconciliation when a service is being created or removed
-	if !s.ServiceExists(ctx, componentName) {
+	if !s.ServiceExists(ctx, filesystemService, componentName) {
 		return ServiceInfo{}, ErrServiceNotExist
 	}
 
@@ -230,7 +231,7 @@ func (s *DataFlowComponentService) Status(ctx context.Context, componentName str
 
 // AddDataFlowComponentToBenthosManager adds a DataFlowComponent to the Benthos manager
 // Expects benthosName (e.g. "dataflow-myservice") as defined in the UMH config
-func (s *DataFlowComponentService) AddDataFlowComponentToBenthosManager(ctx context.Context, cfg *dataflowcomponentconfig.DataFlowComponentConfig, componentName string) error {
+func (s *DataFlowComponentService) AddDataFlowComponentToBenthosManager(ctx context.Context, filesystemService filesystem.Service, cfg *dataflowcomponentconfig.DataFlowComponentConfig, componentName string) error {
 	if s.benthosManager == nil {
 		return errors.New("benthos manager not initialized")
 	}
@@ -272,7 +273,7 @@ func (s *DataFlowComponentService) AddDataFlowComponentToBenthosManager(ctx cont
 
 // UpdateDataFlowComponentInBenthosManager updates an existing DataFlowComponent in the Benthos manager
 // Expects benthosName (e.g. "dataflow-myservice") as defined in the UMH config
-func (s *DataFlowComponentService) UpdateDataFlowComponentInBenthosManager(ctx context.Context, cfg *dataflowcomponentconfig.DataFlowComponentConfig, componentName string) error {
+func (s *DataFlowComponentService) UpdateDataFlowComponentInBenthosManager(ctx context.Context, filesystemService filesystem.Service, cfg *dataflowcomponentconfig.DataFlowComponentConfig, componentName string) error {
 	if s.benthosManager == nil {
 		return errors.New("benthos manager not initialized")
 	}
@@ -321,7 +322,7 @@ func (s *DataFlowComponentService) UpdateDataFlowComponentInBenthosManager(ctx c
 
 // RemoveDataFlowComponentFromBenthosManager removes a DataFlowComponent from the Benthos manager
 // Expects benthosName (e.g. "dataflow-myservice") as defined in the UMH config
-func (s *DataFlowComponentService) RemoveDataFlowComponentFromBenthosManager(ctx context.Context, componentName string) error {
+func (s *DataFlowComponentService) RemoveDataFlowComponentFromBenthosManager(ctx context.Context, filesystemService filesystem.Service, componentName string) error {
 	if s.benthosManager == nil {
 		return errors.New("benthos manager not initialized")
 	}
@@ -353,7 +354,7 @@ func (s *DataFlowComponentService) RemoveDataFlowComponentFromBenthosManager(ctx
 
 // StartDataFlowComponent starts a DataFlowComponent
 // Expects benthosName (e.g. "dataflow-myservice") as defined in the UMH config
-func (s *DataFlowComponentService) StartDataFlowComponent(ctx context.Context, componentName string) error {
+func (s *DataFlowComponentService) StartDataFlowComponent(ctx context.Context, filesystemService filesystem.Service, componentName string) error {
 	if s.benthosManager == nil {
 		return errors.New("benthos manager not initialized")
 	}
@@ -383,7 +384,7 @@ func (s *DataFlowComponentService) StartDataFlowComponent(ctx context.Context, c
 
 // StopDataFlowComponent stops a DataFlowComponent
 // Expects benthosName (e.g. "dataflow-myservice") as defined in the UMH config
-func (s *DataFlowComponentService) StopDataFlowComponent(ctx context.Context, componentName string) error {
+func (s *DataFlowComponentService) StopDataFlowComponent(ctx context.Context, filesystemService filesystem.Service, componentName string) error {
 	if s.benthosManager == nil {
 		return errors.New("benthos manager not initialized")
 	}
@@ -412,7 +413,7 @@ func (s *DataFlowComponentService) StopDataFlowComponent(ctx context.Context, co
 }
 
 // ReconcileManager reconciles the DataFlowComponent manager
-func (s *DataFlowComponentService) ReconcileManager(ctx context.Context, tick uint64) (error, bool) {
+func (s *DataFlowComponentService) ReconcileManager(ctx context.Context, filesystemService filesystem.Service, tick uint64) (error, bool) {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(logger.ComponentDataFlowComponentService, "ReconcileManager", time.Since(start))
@@ -432,11 +433,11 @@ func (s *DataFlowComponentService) ReconcileManager(ctx context.Context, tick ui
 		Internal: config.InternalConfig{
 			Benthos: s.benthosConfigs,
 		},
-	}, tick)
+	}, filesystemService, tick)
 }
 
 // ServiceExists checks if a DataFlowComponent service exists
-func (s *DataFlowComponentService) ServiceExists(ctx context.Context, componentName string) bool {
+func (s *DataFlowComponentService) ServiceExists(ctx context.Context, filesystemService filesystem.Service, componentName string) bool {
 	benthosName := s.getBenthosName(componentName)
 
 	// First check our local configs
@@ -447,18 +448,18 @@ func (s *DataFlowComponentService) ServiceExists(ctx context.Context, componentN
 	}
 
 	// Then check the actual service existence
-	return s.benthosService.ServiceExists(ctx, benthosName)
+	return s.benthosService.ServiceExists(ctx, filesystemService, benthosName)
 }
 
 // ForceRemoveDataFlowComponent removes a DataFlowComponent from the Benthos manager
 // This should only be called if the DataFlowComponent is in a permanent failure state
 // and the instance itself cannot be stopped or removed
 // Expects benthosName (e.g. "dataflow-myservice") as defined in the UMH config
-func (s *DataFlowComponentService) ForceRemoveDataFlowComponent(ctx context.Context, componentName string) error {
+func (s *DataFlowComponentService) ForceRemoveDataFlowComponent(ctx context.Context, filesystemService filesystem.Service, componentName string) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
 
 	// Then force remove from Benthos manager
-	return s.benthosService.ForceRemoveBenthos(ctx, s.getBenthosName(componentName))
+	return s.benthosService.ForceRemoveBenthos(ctx, filesystemService, s.getBenthosName(componentName))
 }
