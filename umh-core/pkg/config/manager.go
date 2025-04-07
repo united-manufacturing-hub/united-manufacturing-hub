@@ -256,10 +256,14 @@ func NewFileConfigManagerWithBackoff() *FileConfigManagerWithBackoff {
 	}
 }
 
+// GetConfigWithOverwritesOrCreateNew wraps the FileConfigManager's GetConfigWithOverwritesOrCreateNew method
+// it is used in main.go to get the config with overwrites or create a new one on startup
 func (m *FileConfigManagerWithBackoff) GetConfigWithOverwritesOrCreateNew(ctx context.Context, config FullConfig) (FullConfig, error) {
 	return m.configManager.GetConfigWithOverwritesOrCreateNew(ctx, config)
 }
 
+// writeConfig writes the config to the file
+// it should not be exposed or used outside of the config manager, due to potential race conditions
 func (m *FileConfigManager) writeConfig(ctx context.Context, config FullConfig) error {
 	// we use a write lock here, because we write the config file
 	m.mutexReadOrWrite.Lock()
