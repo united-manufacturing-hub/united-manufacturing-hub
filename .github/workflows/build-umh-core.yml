@@ -15,6 +15,7 @@
 name: Build UMH Core
 
 on:
+  merge_group:
   pull_request:
     branches:
       - "**"
@@ -25,7 +26,7 @@ on:
       - staging
       - main
     tags:
-      - 'v*'
+      - "v*"
 
 env:
   REGISTRY: ghcr.io

@@ -15,6 +15,7 @@
 name: Go Code Analysis
 
 on:
+  merge_group:
   pull_request:
     branches:
       - "**"

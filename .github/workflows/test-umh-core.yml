@@ -12,10 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
 name: Test UMH Core
 
 on:
+  merge_group:
   pull_request:
     branches:
       - "**"
@@ -36,9 +36,9 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: 'umh-core/go.mod'
+          go-version-file: "umh-core/go.mod"
           cache-dependency-path: |
-             umh-core/go.sum
+            umh-core/go.sum
 
       - name: Install ginkgo and nilaway
         run: make install
@@ -59,9 +59,9 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: 'umh-core/go.mod'
+          go-version-file: "umh-core/go.mod"
           cache-dependency-path: |
-             umh-core/go.sum
+            umh-core/go.sum
 
       - name: Install ginkgo and nilaway
         run: make install
