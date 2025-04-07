@@ -189,6 +189,7 @@ type RedpandaService struct {
 	metricsState     *RedpandaMetricsState
 	filesystem       filesystem.Service // Filesystem service for file operations
 	baseDir          string
+	lastStatus       RedpandaStatus
 }
 
 // RedpandaServiceOption is a function that modifies a RedpandaService
@@ -583,6 +584,9 @@ func getLabel(m *dto.Metric, name string) string {
 
 // GetHealthCheckAndMetrics returns the health check and metrics of a Redpanda service
 func (s *RedpandaService) GetHealthCheckAndMetrics(ctx context.Context, tick uint64, logs []s6service.LogEntry) (RedpandaStatus, error) {
+	if tick%constants.RedpandaStatusUpdateIntervalTicks != 0 {
+		return s.lastStatus, nil
+	}
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(logger.ComponentRedpandaService, constants.RedpandaServiceName, time.Since(start))
@@ -595,14 +599,15 @@ func (s *RedpandaService) GetHealthCheckAndMetrics(ctx context.Context, tick uin
 	// Skip health checks and metrics if the service doesn't exist yet
 	// This avoids unnecessary errors in Status() when the service is still being created
 	if _, exists := s.s6Manager.GetInstance(constants.RedpandaServiceName); !exists {
-		return RedpandaStatus{
+		s.lastStatus = RedpandaStatus{
 			HealthCheck: HealthCheck{
 				IsLive:  false,
 				IsReady: false,
 			},
 			Metrics: Metrics{},
 			Logs:    []s6service.LogEntry{},
-		}, nil
+		}
+		return s.lastStatus, nil
 	}
 
 	baseURL := "http://localhost:9644"
@@ -625,14 +630,15 @@ func (s *RedpandaService) GetHealthCheckAndMetrics(ctx context.Context, tick uin
 
 	// Handle errors from metrics fetch
 	if err != nil {
-		return RedpandaStatus{
+		s.lastStatus = RedpandaStatus{
 			HealthCheck: HealthCheck{
 				IsLive:  false,
 				IsReady: false,
 			},
 			Metrics: Metrics{},
 			Logs:    logs,
-		}, fmt.Errorf("failed to check metrics endpoint: %w", err)
+		}
+		return s.lastStatus, fmt.Errorf("failed to check metrics endpoint: %w", err)
 	}
 
 	// Create health check structure
@@ -659,23 +665,25 @@ func (s *RedpandaService) GetHealthCheckAndMetrics(ctx context.Context, tick uin
 	metricsParseTime := time.Since(metricsParseStart)
 
 	if err != nil {
-		return RedpandaStatus{
+		s.lastStatus = RedpandaStatus{
 			HealthCheck: HealthCheck{
 				IsLive:  healthCheck.IsLive,
 				IsReady: false,
 				Version: constants.RedpandaVersion,
 			},
 			Logs: logs,
-		}, fmt.Errorf("failed to parse metrics: %w", err)
+		}
+		return s.lastStatus, fmt.Errorf("failed to parse metrics: %w", err)
 	}
 
 	// Update the metrics state
 	if s.metricsState == nil {
-		return RedpandaStatus{
+		s.lastStatus = RedpandaStatus{
 			HealthCheck: healthCheck,
 			Metrics:     metricsData,
 			Logs:        logs,
-		}, fmt.Errorf("metrics state not initialized")
+		}
+		return s.lastStatus, fmt.Errorf("metrics state not initialized")
 	}
 
 	stateUpdateStart := time.Now()
@@ -688,12 +696,13 @@ func (s *RedpandaService) GetHealthCheckAndMetrics(ctx context.Context, tick uin
 			metricsFetchTime, metricsParseTime, stateUpdateTime, time.Since(start))
 	}
 
-	return RedpandaStatus{
+	s.lastStatus = RedpandaStatus{
 		HealthCheck:  healthCheck,
 		Metrics:      metricsData,
 		MetricsState: s.metricsState,
 		Logs:         logs,
-	}, nil
+	}
+	return s.lastStatus, nil
 }
 
 // AddRedpandaToS6Manager adds a Redpanda instance to the S6 manager
