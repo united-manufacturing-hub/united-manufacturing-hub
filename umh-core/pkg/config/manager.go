@@ -365,16 +365,6 @@ func (m *FileConfigManagerWithBackoff) GetLastError() error {
 	return m.backoffManager.GetLastError()
 }
 
-// WriteConfig delegates to the underlying FileConfigManager
-func (m *FileConfigManagerWithBackoff) writeConfig(ctx context.Context, config FullConfig) error {
-	// Check if context is already cancelled
-	if ctx.Err() != nil {
-		return ctx.Err()
-	}
-
-	return m.configManager.writeConfig(ctx, config)
-}
-
 // AtomicSetLocation sets the location in the config atomically
 func (m *FileConfigManager) AtomicSetLocation(ctx context.Context, location models.EditInstanceLocationModel) error {
 	err := m.mutexAtomicUpdate.Lock(ctx)
