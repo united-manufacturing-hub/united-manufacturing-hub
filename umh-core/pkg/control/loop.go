@@ -88,7 +88,7 @@ type ControlLoop struct {
 //
 // The control loop runs at a fixed interval (defaultTickerTime) and orchestrates
 // all components according to the configuration.
-func NewControlLoop() *ControlLoop {
+func NewControlLoop(configManager config.ConfigManager) *ControlLoop {
 	// Get a component-specific logger
 	log := logger.For(logger.ComponentControlLoop)
 	if log == nil {
@@ -102,9 +102,6 @@ func NewControlLoop() *ControlLoop {
 		benthos.NewBenthosManager(constants.DefaultManagerName),
 		container.NewContainerManager(constants.DefaultManagerName),
 	}
-
-	// Create the config manager with backoff support
-	configManager := config.NewFileConfigManagerWithBackoff()
 
 	// Create a starvation checker
 	starvationChecker := starvationchecker.NewStarvationChecker(constants.StarvationThreshold)
@@ -288,7 +285,7 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 		err, reconciled := manager.Reconcile(ctx, cfg, c.filesystemService, c.currentTick)
 		if err != nil {
 			metrics.IncErrorCount(metrics.ComponentControlLoop, manager.GetManagerName())
-			return err
+			return fmt.Errorf("manager %s reconciliation failed: %w", manager.GetManagerName(), err)
 		}
 
 		// If the manager was reconciled, skip the reconcilation of the next managers
@@ -322,14 +319,14 @@ func (c *ControlLoop) updateSystemSnapshot(ctx context.Context, cfg config.FullC
 	}
 
 	if c.snapshotManager == nil {
-		sentry.ReportIssuef(sentry.IssueTypeWarning, c.logger, "Cannot create system snapshot: snapshot manager is not set")
+		sentry.ReportIssuef(sentry.IssueTypeWarning, c.logger, "[updateSystemSnapshot] Cannot create system snapshot: snapshot manager is not set")
 		return
 	}
 
 	snapshot, err := fsm.GetManagerSnapshots(c.managers, c.currentTick, cfg)
 	if err != nil {
 		c.logger.Errorf("Failed to create system snapshot: %v", err)
-		sentry.ReportIssuef(sentry.IssueTypeError, c.logger, "Failed to create system snapshot: %v", err)
+		sentry.ReportIssuef(sentry.IssueTypeError, c.logger, "[updateSystemSnapshot] Failed to create system snapshot: %v", err)
 		return
 	}
 
@@ -347,7 +344,7 @@ func (c *ControlLoop) GetSystemSnapshot() *fsm.SystemSnapshot {
 	}
 
 	if c.snapshotManager == nil {
-		sentry.ReportIssuef(sentry.IssueTypeWarning, c.logger, "Cannot get system snapshot: snapshot manager is not set")
+		sentry.ReportIssuef(sentry.IssueTypeWarning, c.logger, "[GetSystemSnapshot] Cannot get system snapshot: snapshot manager is not set")
 		return nil
 	}
 	return c.snapshotManager.GetSnapshot()

@@ -1038,7 +1038,7 @@ func (s *BenthosService) ReconcileManager(ctx context.Context, filesystemService
 		return ctx.Err(), false
 	}
 
-	return s.s6Manager.Reconcile(ctx, config.FullConfig{Services: s.s6ServiceConfigs}, filesystemService, tick)
+	return s.s6Manager.Reconcile(ctx, config.FullConfig{Internal: config.InternalConfig{Services: s.s6ServiceConfigs}}, filesystemService, tick)
 }
 
 // IsLogsFine analyzes Benthos logs to determine if there are any critical issues

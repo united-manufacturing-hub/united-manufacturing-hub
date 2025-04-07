@@ -769,7 +769,7 @@ func (s *DefaultService) GetConfig(ctx context.Context, servicePath string, fsSe
 			}
 		} else {
 			// Absolute fallback - try to look for the command we know should be there
-			sentry.ReportIssuef(sentry.IssueTypeWarning, s.logger, "Could not find command in run script for %s, searching for known paths", servicePath)
+			sentry.ReportIssuef(sentry.IssueTypeWarning, s.logger, "[s6.GetConfig] Could not find command in run script for %s, searching for known paths", servicePath)
 			cmdRegex := regexp.MustCompile(`(/[^\s]+)`)
 			cmdMatches := cmdRegex.FindAllString(scriptContent, -1)
 

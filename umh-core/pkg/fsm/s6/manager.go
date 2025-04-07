@@ -45,7 +45,7 @@ func NewS6Manager(name string) *S6Manager {
 		baseS6Dir,
 		// Extract S6 configs from full config
 		func(fullConfig config.FullConfig) ([]config.S6FSMConfig, error) {
-			return fullConfig.Services, nil
+			return fullConfig.Internal.Services, nil
 		},
 		// Get name from S6 config
 		func(cfg config.S6FSMConfig) (string, error) {
