@@ -1039,6 +1039,7 @@ func (bs *BufferedService) ReadFile(ctx context.Context, path string) ([]byte, e
 		return nil, os.ErrNotExist
 	}
 	// If it's a large file (content is nil but size is set), return not exist
+	// TODO: "Would be nice to have a distinct error here."
 	if st.content == nil && st.size > bs.maxFileSize {
 		return nil, os.ErrNotExist
 	}
