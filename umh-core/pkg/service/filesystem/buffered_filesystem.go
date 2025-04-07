@@ -303,7 +303,7 @@ func (bs *BufferedService) SyncFromDisk(ctx context.Context) error {
 	bs.mu.Lock()
 	bs.files = newFiles
 	// Clear any pending changes since we are reloading from disk
-	bs.changed = make(map[string]fileChange)
+	clear(bs.changed)
 	bs.mu.Unlock()
 
 	logger.Debugf("SyncFromDisk: done")
