@@ -72,7 +72,7 @@ func (s *S6Instance) Reconcile(ctx context.Context, filesystemService filesystem
 				if forceErr != nil {
 					s.baseFSMInstance.GetLogger().Errorf("ForceRemove failed: %v", forceErr)
 				}
-				return forceErr, false
+				return err, false
 			} else {
 				s.baseFSMInstance.GetLogger().Errorf("S6 instance %s is not in a terminal state, resetting state and removing it", s.baseFSMInstance.GetID())
 				s.baseFSMInstance.ResetState()
