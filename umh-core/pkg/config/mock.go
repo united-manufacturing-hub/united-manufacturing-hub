@@ -16,17 +16,21 @@ package config
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 )
 
 // MockConfigManager is a mock implementation of ConfigManager for testing
 type MockConfigManager struct {
-	GetConfigCalled bool
-	Config          FullConfig
-	ConfigError     error
-	ConfigDelay     time.Duration
-	mutex           sync.Mutex
+	GetConfigCalled   bool
+	Config            FullConfig
+	ConfigError       error
+	ConfigDelay       time.Duration
+	mutexReadOrWrite  sync.Mutex
+	mutexReadAndWrite sync.Mutex
 }
 
 // NewMockConfigManager creates a new MockConfigManager instance
@@ -36,8 +40,8 @@ func NewMockConfigManager() *MockConfigManager {
 
 // GetConfig implements the ConfigManager interface
 func (m *MockConfigManager) GetConfig(ctx context.Context, tick uint64) (FullConfig, error) {
-	m.mutex.Lock()
-	defer m.mutex.Unlock()
+	m.mutexReadOrWrite.Lock()
+	defer m.mutexReadOrWrite.Unlock()
 	m.GetConfigCalled = true
 
 	if m.ConfigDelay > 0 {
@@ -50,6 +54,15 @@ func (m *MockConfigManager) GetConfig(ctx context.Context, tick uint64) (FullCon
 	}
 
 	return m.Config, m.ConfigError
+}
+
+// WriteConfig implements the ConfigManager interface
+func (m *MockConfigManager) writeConfig(ctx context.Context, cfg FullConfig) error {
+	m.mutexReadOrWrite.Lock()
+	defer m.mutexReadOrWrite.Unlock()
+
+	m.Config = cfg
+	return nil
 }
 
 // WithConfig configures the mock to return the given config
@@ -72,7 +85,41 @@ func (m *MockConfigManager) WithConfigDelay(delay time.Duration) *MockConfigMana
 
 // ResetCalls clears the called flags for testing multiple calls
 func (m *MockConfigManager) ResetCalls() {
-	m.mutex.Lock()
-	defer m.mutex.Unlock()
+	m.mutexReadOrWrite.Lock()
+	defer m.mutexReadOrWrite.Unlock()
 	m.GetConfigCalled = false
+}
+
+// atomic set location
+func (m *MockConfigManager) AtomicSetLocation(ctx context.Context, location models.EditInstanceLocationModel) error {
+	m.mutexReadAndWrite.Lock()
+	defer m.mutexReadAndWrite.Unlock()
+
+	// get the current config
+	config, err := m.GetConfig(ctx, 0)
+	if err != nil {
+		return fmt.Errorf("failed to get config: %w", err)
+	}
+
+	config.Agent.Location = make(map[int]string)
+	config.Agent.Location[0] = location.Enterprise
+	if location.Site != nil {
+		config.Agent.Location[1] = *location.Site
+	}
+	if location.Area != nil {
+		config.Agent.Location[2] = *location.Area
+	}
+	if location.Line != nil {
+		config.Agent.Location[3] = *location.Line
+	}
+	if location.WorkCell != nil {
+		config.Agent.Location[4] = *location.WorkCell
+	}
+
+	// write the config
+	if err := m.writeConfig(ctx, config); err != nil {
+		return fmt.Errorf("failed to write config: %w", err)
+	}
+
+	return nil
 }

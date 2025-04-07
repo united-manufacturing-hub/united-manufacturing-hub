@@ -88,7 +88,7 @@ type ControlLoop struct {
 //
 // The control loop runs at a fixed interval (defaultTickerTime) and orchestrates
 // all components according to the configuration.
-func NewControlLoop() *ControlLoop {
+func NewControlLoop(configManager config.ConfigManager) *ControlLoop {
 	// Get a component-specific logger
 	log := logger.For(logger.ComponentControlLoop)
 	if log == nil {
@@ -104,9 +104,6 @@ func NewControlLoop() *ControlLoop {
 		redpanda.NewRedpandaManager(constants.DefaultManagerName),
 		dataflowcomponent.NewDataFlowComponentManager(constants.DefaultManagerName),
 	}
-
-	// Create the config manager with backoff support
-	configManager := config.NewFileConfigManagerWithBackoff()
 
 	// Create a starvation checker
 	starvationChecker := starvationchecker.NewStarvationChecker(constants.StarvationThreshold)
