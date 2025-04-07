@@ -98,6 +98,9 @@ type RedpandaStatus struct {
 	// Logs contains the logs of the Redpanda service
 	Logs []s6service.LogEntry
 	// UpdatedAtTick contains the tick at which the status was last updated
+	// This is used to check if the status is stale (more then constants.RedpandaStatusUpdateIntervalTicks ticks ago)
+	// We use this in redpanda, as it's metric endpoint is quite slow, and we don't want to block the main loop to often.
+	// Therefore we only update the status every constants.RedpandaStatusUpdateIntervalTicks ticks
 	UpdatedAtTick uint64
 }
 
@@ -477,8 +480,16 @@ func (s *RedpandaService) Status(ctx context.Context, tick uint64) (ServiceInfo,
 	}
 
 	// Check if the lastUpdate is more then constants.RedpandaStatusUpdateIntervalTicks ticks ago
-	if redpandaStatus.UpdatedAtTick < tick-constants.RedpandaStatusUpdateIntervalTicks {
-		return ServiceInfo{}, fmt.Errorf("redpanda status update interval is more then %d ticks ago, lastUpdate: %d", constants.RedpandaStatusUpdateIntervalTicks, redpandaStatus.UpdatedAtTick)
+	var minTick uint64
+	// Prevent integer underflow
+	if tick < constants.RedpandaStatusUpdateIntervalTicks*2 {
+		minTick = 0
+	} else {
+		minTick = tick - constants.RedpandaStatusUpdateIntervalTicks*2
+	}
+	if redpandaStatus.UpdatedAtTick < minTick {
+		s.logger.Infof("Redpanda status update interval is more then %d ticks ago, lastUpdate: %d (tick: %d) [minTick: %d]", constants.RedpandaStatusUpdateIntervalTicks*2, redpandaStatus.UpdatedAtTick, tick, minTick)
+		return ServiceInfo{}, fmt.Errorf("redpanda status update interval is more then %d ticks ago, lastUpdate: %d", constants.RedpandaStatusUpdateIntervalTicks*2, redpandaStatus.UpdatedAtTick)
 	}
 
 	serviceInfo := ServiceInfo{
@@ -593,8 +604,10 @@ func getLabel(m *dto.Metric, name string) string {
 // GetHealthCheckAndMetrics returns the health check and metrics of a Redpanda service
 func (s *RedpandaService) GetHealthCheckAndMetrics(ctx context.Context, tick uint64, logs []s6service.LogEntry) (RedpandaStatus, error) {
 	if tick%constants.RedpandaStatusUpdateIntervalTicks != 0 {
+		s.logger.Infof("Skipping health check and metrics for tick %d, as it's not a multiple of %d", tick, constants.RedpandaStatusUpdateIntervalTicks)
 		return s.lastStatus, nil
 	}
+	s.logger.Infof("Getting health check and metrics for tick %d", tick)
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(logger.ComponentRedpandaService, constants.RedpandaServiceName, time.Since(start))
