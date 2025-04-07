@@ -25,6 +25,8 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/backoff"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/ctxmutex"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/ctxrwmutex"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
@@ -95,13 +97,15 @@ type FileConfigManager struct {
 	// mutexAtomicUpdate for full cycle read and write access (atomic update) to the config file
 	// all writes to the config need to happen under this mutex via a atomic set method -> writeConfig is therefore not exposed
 	// the goal is to prevent two read/write cycles ("atomic updates") happening at the same time
-	mutexAtomicUpdate sync.Mutex
+	// we use our own implementation of a context aware mutex here to avoid deadlocks
+	mutexAtomicUpdate ctxmutex.CtxMutex
 
 	// simple mutex for read access or write access to the config file
 	// it will be used by Getconfig and writeConfig
 	// this mutex will allow multiple GetConfig calls to happen in parallel
 	// it will prevent multiple reads or read/write cycles to happen at the same time
-	mutexReadOrWrite sync.RWMutex
+	// we use our own implementation of a context aware mutex here to avoid deadlocks
+	mutexReadOrWrite ctxrwmutex.CtxRWMutex
 }
 
 // NewFileConfigManager creates a new FileConfigManager
@@ -183,7 +187,7 @@ func (m *FileConfigManager) GetConfigWithOverwritesOrCreateNew(ctx context.Conte
 // GetConfig returns the current config, always reading fresh from disk
 func (m *FileConfigManager) GetConfig(ctx context.Context, tick uint64) (FullConfig, error) {
 	// we use a read lock here, because we only read the config file
-	m.mutexReadOrWrite.RLock()
+	m.mutexReadOrWrite.RLock(ctx)
 	defer m.mutexReadOrWrite.RUnlock()
 
 	// Check if context is already cancelled
@@ -271,7 +275,7 @@ func (m *FileConfigManagerWithBackoff) GetConfigWithOverwritesOrCreateNew(ctx co
 // it should not be exposed or used outside of the config manager, due to potential race conditions
 func (m *FileConfigManager) writeConfig(ctx context.Context, config FullConfig) error {
 	// we use a write lock here, because we write the config file
-	m.mutexReadOrWrite.Lock()
+	m.mutexReadOrWrite.Lock(ctx)
 	defer m.mutexReadOrWrite.Unlock()
 
 	// Check if context is already cancelled
@@ -380,27 +384,8 @@ func (m *FileConfigManagerWithBackoff) writeConfig(ctx context.Context, config F
 
 // AtomicSetLocation sets the location in the config atomically
 func (m *FileConfigManager) AtomicSetLocation(ctx context.Context, location models.EditInstanceLocationModel) error {
-	// Check if context is already cancelled
-	if ctx.Err() != nil {
-		return ctx.Err()
-	}
-
-	// Try to acquire lock with context awareness
-	lockCh := make(chan struct{})
-	go func() {
-		m.mutexAtomicUpdate.Lock()
-		close(lockCh)
-	}()
-
-	// Wait for either lock acquisition or context cancellation
-	select {
-	case <-lockCh:
-		// Lock acquired successfully
-		defer m.mutexAtomicUpdate.Unlock()
-	case <-ctx.Done():
-		// Context cancelled while waiting for lock
-		return ctx.Err()
-	}
+	m.mutexAtomicUpdate.Lock(ctx)
+	defer m.mutexAtomicUpdate.Unlock()
 
 	// get the current config
 	config, err := m.GetConfig(ctx, 0)
