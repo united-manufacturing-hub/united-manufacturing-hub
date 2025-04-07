@@ -125,11 +125,11 @@ type BufferedService struct {
 	// files stores the "current in-memory snapshot."
 	// Key: absolute path on disk.
 	// Value: fileState describing content, modTime when we read it, etc.
-	files map[string]*fileState
+	files map[string]fileState
 
 	// changed tracks which files the reconcile loop has modified in memory.
 	// If a file is in changed[], we plan to write it out in SyncToDisk(). If removed==true, we plan to remove it.
-	changed map[string]*fileChange
+	changed map[string]fileChange
 
 	// syncDirs is a list of directories that should be synced from disk.
 	syncDirs []string
@@ -172,8 +172,8 @@ func NewBufferedService(base Service, rootDir string, pathsToIgnore []string) *B
 func NewBufferedServiceWithDirs(base Service, syncDirectories []string, pathsToIgnore []string) *BufferedService {
 	return &BufferedService{
 		base:          base,
-		files:         make(map[string]*fileState),
-		changed:       make(map[string]*fileChange),
+		files:         make(map[string]fileState),
+		changed:       make(map[string]fileChange),
 		syncDirs:      syncDirectories,
 		maxFileSize:   10 * 1024 * 1024, // 10 MB default threshold for demonstration
 		pathsToIgnore: pathsToIgnore,
@@ -205,7 +205,7 @@ func (bs *BufferedService) SyncFromDisk(ctx context.Context) error {
 	}()
 
 	// Create a new map to hold synced files
-	newFiles := make(map[string]*fileState)
+	newFiles := make(map[string]fileState)
 
 	// Sync each directory in the list
 	for _, dir := range bs.syncDirs {
@@ -231,7 +231,7 @@ func (bs *BufferedService) SyncFromDisk(ctx context.Context) error {
 		}
 
 		// Add directory itself
-		newFiles[dir] = &fileState{
+		newFiles[dir] = fileState{
 			isDir:    true,
 			content:  nil,
 			modTime:  info.ModTime(),
@@ -251,7 +251,7 @@ func (bs *BufferedService) SyncFromDisk(ctx context.Context) error {
 
 			// Process the file or directory
 			if cf.IsDir {
-				newFiles[absPath] = &fileState{
+				newFiles[absPath] = fileState{
 					isDir:    true,
 					content:  nil,
 					modTime:  cf.Info.ModTime(),
@@ -261,7 +261,7 @@ func (bs *BufferedService) SyncFromDisk(ctx context.Context) error {
 			} else {
 				// Skip large files
 				if cf.Info.Size() > bs.maxFileSize {
-					newFiles[absPath] = &fileState{
+					newFiles[absPath] = fileState{
 						isDir:    false,
 						content:  nil, // big file => skip content
 						modTime:  cf.Info.ModTime(),
@@ -287,7 +287,7 @@ func (bs *BufferedService) SyncFromDisk(ctx context.Context) error {
 					}
 				}
 
-				newFiles[absPath] = &fileState{
+				newFiles[absPath] = fileState{
 					isDir:    false,
 					content:  data,
 					modTime:  cf.Info.ModTime(),
@@ -303,7 +303,7 @@ func (bs *BufferedService) SyncFromDisk(ctx context.Context) error {
 	bs.mu.Lock()
 	bs.files = newFiles
 	// Clear any pending changes since we are reloading from disk
-	bs.changed = make(map[string]*fileChange)
+	bs.changed = make(map[string]fileChange)
 	bs.mu.Unlock()
 
 	logger.Debugf("SyncFromDisk: done")
@@ -333,7 +333,7 @@ func (bs *BufferedService) SyncToDisk(ctx context.Context) error {
 	// Step 1: Create directories (shallowest first)
 	var dirsToCreate []string
 	for path, chg := range bs.changed {
-		if chg != nil && !chg.removed {
+		if _, exists := bs.changed[path]; exists && !chg.removed {
 			state, exists := bs.files[path]
 			if !exists {
 				return fmt.Errorf("file not found in memory: %s", path)
@@ -358,7 +358,7 @@ func (bs *BufferedService) SyncToDisk(ctx context.Context) error {
 	// Step 2: Write files (ensuring parent directories exist)
 	var filesToWrite []string
 	for path, chg := range bs.changed {
-		if chg != nil && !chg.removed {
+		if _, exists := bs.changed[path]; exists && !chg.removed {
 			state, exists := bs.files[path]
 			if !exists {
 				return fmt.Errorf("file not found in memory: %s", path)
@@ -377,8 +377,8 @@ func (bs *BufferedService) SyncToDisk(ctx context.Context) error {
 		}
 
 		// Now write the file
-		chg := bs.changed[path]
-		if chg == nil {
+		chg, exists := bs.changed[path]
+		if !exists {
 			return fmt.Errorf("change record missing for path: %s", path)
 		}
 		if err := bs.base.WriteFile(ctx, path, chg.content, chg.perm); err != nil {
@@ -391,7 +391,7 @@ func (bs *BufferedService) SyncToDisk(ctx context.Context) error {
 	var filesToRemove []string
 	var dirsToRemove []string
 	for path, chg := range bs.changed {
-		if chg != nil && chg.removed {
+		if _, exists := bs.changed[path]; exists && chg.removed {
 			if chg.wasDir {
 				dirsToRemove = append(dirsToRemove, path)
 			} else {
@@ -447,14 +447,14 @@ func (bs *BufferedService) EnsureDirectory(ctx context.Context, path string) err
 	}
 
 	// Create new directory entry.
-	bs.files[path] = &fileState{
+	bs.files[path] = fileState{
 		isDir:    true,
 		modTime:  time.Now(),
 		fileMode: os.ModeDir | 0755,
 		size:     0,
 	}
 	// Mark as changed so that SyncToDisk can create it on disk.
-	bs.changed[path] = &fileChange{
+	bs.changed[path] = fileChange{
 		removed: false,
 		perm:    os.ModeDir | 0755,
 	}
@@ -490,7 +490,7 @@ func (bs *BufferedService) WriteFile(ctx context.Context, path string, data []by
 	// If there's an existing fileState, update it so subsequent ReadFile sees new content
 	st, exists := bs.files[path]
 	if !exists {
-		st = &fileState{
+		st = fileState{
 			isDir:    false,
 			content:  data,
 			modTime:  time.Time{}, // unknown until we flush
@@ -506,7 +506,7 @@ func (bs *BufferedService) WriteFile(ctx context.Context, path string, data []by
 	}
 
 	// Mark changed
-	bs.changed[path] = &fileChange{
+	bs.changed[path] = fileChange{
 		content: data,
 		perm:    perm,
 		removed: false,
@@ -553,7 +553,7 @@ func (bs *BufferedService) Remove(ctx context.Context, path string) error {
 		delete(bs.files, path)
 	}
 
-	bs.changed[path] = &fileChange{
+	bs.changed[path] = fileChange{
 		removed: true,
 	}
 	return nil
@@ -577,14 +577,14 @@ func (bs *BufferedService) RemoveAll(ctx context.Context, path string) error {
 			if !ok {
 				continue
 			}
-			bs.changed[key] = &fileChange{removed: true, wasDir: state.isDir}
+			bs.changed[key] = fileChange{removed: true, wasDir: state.isDir}
 			// Also mark it as removed in the files map
 			delete(bs.files, key)
 		}
 	}
 
 	// Also mark the target itself for removal even if it wasn't in our files map
-	bs.changed[path] = &fileChange{removed: true, wasDir: targetIsDir}
+	bs.changed[path] = fileChange{removed: true, wasDir: targetIsDir}
 	return nil
 }
 
@@ -632,7 +632,7 @@ func (bs *BufferedService) CreateFile(ctx context.Context, path string, perm os.
 	}
 
 	// Create new file entry in memory
-	bs.files[path] = &fileState{
+	bs.files[path] = fileState{
 		isDir:    false,
 		content:  []byte{},
 		modTime:  time.Now(),
@@ -641,7 +641,7 @@ func (bs *BufferedService) CreateFile(ctx context.Context, path string, perm os.
 	}
 
 	// Mark as changed so that SyncToDisk will create it on disk
-	bs.changed[path] = &fileChange{
+	bs.changed[path] = fileChange{
 		content: []byte{},
 		perm:    perm,
 		removed: false,
@@ -665,7 +665,7 @@ func (bs *BufferedService) Chmod(ctx context.Context, path string, mode os.FileM
 	// If the file wasn't removed, mark changed
 	chg, inChg := bs.changed[path]
 	if !inChg {
-		chg = &fileChange{}
+		chg = fileChange{}
 	}
 	chg.perm = mode
 	bs.changed[path] = chg
@@ -726,10 +726,10 @@ func (bs *BufferedService) ExecuteCommand(ctx context.Context, name string, args
 }
 
 // GetFiles returns a copy of the in-memory files map
-func (bs *BufferedService) GetFiles() map[string]*fileState {
+func (bs *BufferedService) GetFiles() map[string]fileState {
 	bs.mu.Lock()
 	defer bs.mu.Unlock()
-	files := make(map[string]*fileState)
+	files := make(map[string]fileState)
 	for k, v := range bs.files {
 		files[k] = v
 	}
