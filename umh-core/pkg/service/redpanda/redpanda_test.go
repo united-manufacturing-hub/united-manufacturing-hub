@@ -122,7 +122,7 @@ var _ = Describe("Redpanda Service", func() {
 				ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 				defer cancel()
 				status, err := service.GetHealthCheckAndMetrics(ctx, tick, mockS6Service.GetLogsResult)
-				tick++
+				tick += 10
 				Expect(err).NotTo(HaveOccurred())
 				Expect(status.HealthCheck.IsLive).To(BeTrue())
 				Expect(status.HealthCheck.IsReady).To(BeTrue())
@@ -165,7 +165,7 @@ var _ = Describe("Redpanda Service", func() {
 				ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 				defer cancel()
 				status, err := service.GetHealthCheckAndMetrics(ctx, tick, mockS6Service.GetLogsResult)
-				tick++
+				tick += 10
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("connection refused"))
 				Expect(status.HealthCheck.IsReady).To(BeFalse())
@@ -199,7 +199,7 @@ var _ = Describe("Redpanda Service", func() {
 				defer cancel()
 
 				status, err := service.GetHealthCheckAndMetrics(ctx, tick, mockS6Service.GetLogsResult)
-				tick++
+				tick += 10
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("context deadline exceeded"))
 				Expect(status.HealthCheck.IsReady).To(BeFalse())
@@ -258,7 +258,7 @@ var _ = Describe("Redpanda Service", func() {
 				ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 				defer cancel()
 				status, err := service.GetHealthCheckAndMetrics(ctx, tick, mockS6Service.GetLogsResult)
-				tick++
+				tick += 10
 				Expect(err).NotTo(HaveOccurred())
 				Expect(status.HealthCheck.IsLive).To(BeTrue())
 				Expect(status.HealthCheck.IsReady).To(BeTrue())
@@ -609,7 +609,7 @@ var _ = Describe("Redpanda Service", func() {
 
 			// First status check
 			status1, err := service.Status(context.Background(), tick)
-			tick++
+			tick += 10
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify initial state
@@ -626,7 +626,7 @@ var _ = Describe("Redpanda Service", func() {
 
 			// Second status check
 			status2, err := service.Status(context.Background(), tick)
-			tick++
+			tick += 10
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify new throughput values
@@ -672,7 +672,7 @@ var _ = Describe("Redpanda Service", func() {
 
 			// First status check
 			status1, err := service.Status(context.Background(), tick)
-			tick++
+			tick += 10
 			Expect(err).NotTo(HaveOccurred())
 			Expect(status1.RedpandaStatus.MetricsState.IsActive).To(BeTrue())
 
@@ -686,7 +686,7 @@ var _ = Describe("Redpanda Service", func() {
 
 			// Second status check
 			status2, err := service.Status(context.Background(), tick)
-			tick++
+			tick += 10
 			Expect(err).NotTo(HaveOccurred())
 
 			// Should detect inactivity
