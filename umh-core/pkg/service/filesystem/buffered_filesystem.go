@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -33,7 +34,56 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 )
 
-// Note: can be enriched in the future using spf13/afero
+// Package filesystem implements various filesystem service interfaces.
+//
+// BufferedFilesystem (BufferedService) is an experimental implementation intended
+// to reduce redundant I/O operations by caching filesystem reads and writes,
+// especially in scenarios like S6 log retrieval and configuration file access.
+//
+// How It Works:
+// - The buffered filesystem wraps a “real” filesystem service (e.g., DefaultService)
+//   and caches file operations for specified directories (e.g., constants.S6BaseDir,
+//   constants.S6LogBaseDir). This allows repeated file reads to be served from memory,
+//   reducing disk I/O.
+// - It is designed to support parallelized file operations by preloading directories
+//   and filtering out files that should be ignored (e.g., archived logs prefixed with "@40000000").
+//
+// How to Enable:
+// Instead of initializing the filesystem service as follows:
+//
+//     // Use the default, unbuffered filesystem service
+//     filesystemService := filesystem.NewDefaultService()
+//
+// you can opt-in for the buffered service:
+//
+//     // Create a buffered filesystem service that caches reads for S6 directories
+//     filesystemService := filesystem.NewBufferedServiceWithDirs(
+//         filesystem.NewDefaultService(),
+//         []string{constants.S6BaseDir, constants.S6LogBaseDir},
+//         constants.FilesAndDirectoriesToIgnore,
+//     )
+//
+// Limitations and Known Issues:
+// 1. Increased Complexity:
+//    - The buffering and parallelization mechanisms add significant code complexity,
+//      making maintenance and debugging more challenging.
+// 2. Performance Impact:
+//    - Initial performance tests showed higher latencies (e.g., 0.5 quantile: ~49ms,
+//      0.99 quantile: ~88ms) compared to the default implementation
+//      (e.g., 0.5 quantile: ~19ms, 0.99 quantile: ~34ms).
+// 3. Synchronization and Edge Cases:
+//    - Potential mismatches between the "virtual" buffered view and the "real" filesystem,
+//      particularly when files are modified concurrently (e.g., changes by the supervisor)
+//      or when file permissions change.
+// 4. Log Reading Bottleneck:
+//    - The primary performance bottleneck remains in reading and processing large log files.
+//      Implementing proper log rotation and incremental reading (e.g., using FIFO buffers)
+//      would further complicate the design.
+//
+// Experimental Status:
+// This implementation is experimental and subject to change. It is recommended to
+// use the default unbuffered filesystem service in production until the buffering
+// strategy is refined and its benefits are clearly demonstrated.
 
 // CachedFile represents a file or directory in the filesystem
 type CachedFile struct {
@@ -174,6 +224,10 @@ type BufferedService struct {
 
 	// slowReadThreshold is the duration threshold to log slow file reads
 	slowReadThreshold time.Duration
+
+	// appendOnlyDirs contains directories where files are append-only (like logs)
+	// For these, we'll use incremental reading instead of full re-reads
+	appendOnlyDirs []string
 }
 
 // fileState holds in-memory data and metadata for a single file or directory
@@ -183,8 +237,10 @@ type fileState struct {
 	modTime  time.Time
 	fileMode os.FileMode
 	size     int64
-	uid      int // cached user id of owner
-	gid      int // cached group id of owner
+	uid      int    // cached user id of owner
+	gid      int    // cached group id of owner
+	lastSize int64  // tracks last known size for incremental reading
+	inode    uint64 // tracks inode number to detect file replacement
 }
 
 // fileChange represents a pending user-level change: either an updated content or a removal
@@ -234,7 +290,20 @@ func NewBufferedServiceWithDirs(base Service, syncDirectories []string, pathsToI
 		currentUser:       currentUser,
 		fileReadWorkers:   workerCount,
 		slowReadThreshold: constants.FilesystemSlowReadThreshold,
+		// By default, no append-only directories
+		appendOnlyDirs: []string{},
 	}
+}
+
+// NewBufferedServiceWithDefaultAppendDirs creates a buffered service with predefined append-only directories
+// that will use incremental reading for logs or other append-only files.
+func NewBufferedServiceWithDefaultAppendDirs(base Service, syncDirectories []string, pathsToIgnore []string) *BufferedService {
+	bs := NewBufferedServiceWithDirs(base, syncDirectories, pathsToIgnore)
+
+	// By default, consider log directories as append-only
+	bs.appendOnlyDirs = []string{"/data/logs"}
+
+	return bs
 }
 
 // SetVerifyPermissions configures whether permission checks should be performed
@@ -267,6 +336,24 @@ func (bs *BufferedService) SetSlowReadThreshold(threshold time.Duration) {
 	bs.mu.Lock()
 	defer bs.mu.Unlock()
 	bs.slowReadThreshold = threshold
+}
+
+// SetAppendOnlyDirs configures directories that contain append-only files (like logs)
+// Files in these directories will be read incrementally (only new content)
+func (bs *BufferedService) SetAppendOnlyDirs(dirs []string) {
+	bs.mu.Lock()
+	defer bs.mu.Unlock()
+	bs.appendOnlyDirs = dirs
+}
+
+// isInAppendOnlyDir checks if a path is in one of the append-only directories
+func (bs *BufferedService) isInAppendOnlyDir(path string) bool {
+	for _, dir := range bs.appendOnlyDirs {
+		if strings.HasPrefix(path, dir) {
+			return true
+		}
+	}
+	return false
 }
 
 // getFileState gets the cached file state, or returns nil if not found
@@ -397,6 +484,14 @@ func (bs *BufferedService) SyncFromDisk(ctx context.Context) error {
 	newFiles := make(map[string]fileState)
 	var filesMutex sync.Mutex
 
+	// Copy existing state for incremental reads
+	existingFiles := make(map[string]fileState)
+	bs.mu.Lock()
+	for k, v := range bs.files {
+		existingFiles[k] = v
+	}
+	bs.mu.Unlock()
+
 	// Sync each directory in the list
 	for _, dir := range bs.syncDirs {
 		// Check if directory exists
@@ -492,8 +587,6 @@ func (bs *BufferedService) SyncFromDisk(ctx context.Context) error {
 			// Fallback in case it wasn't initialized properly
 			workerCount = runtime.NumCPU() * 2
 		}
-		logger.Debugf("Starting %d file read workers for %d files in %s", workerCount, fileCount, dir)
-
 		// Create cancellable context for workers
 		workerCtx, cancel := context.WithCancel(ctx)
 		defer cancel() // Ensure we cancel workers on exit
@@ -521,6 +614,9 @@ func (bs *BufferedService) SyncFromDisk(ctx context.Context) error {
 					// Get file info
 					uid, gid := getFileOwner(job.absPath)
 
+					// Get inode number to detect file rotation
+					fileInode := getFileInode(job.absPath)
+
 					// Skip large files
 					if job.cf.Info.Size() > bs.maxFileSize {
 						results <- fileReadResult{
@@ -533,14 +629,86 @@ func (bs *BufferedService) SyncFromDisk(ctx context.Context) error {
 								size:     job.cf.Info.Size(),
 								uid:      uid,
 								gid:      gid,
+								inode:    fileInode,
 							},
 						}
 						continue
 					}
 
-					// Read file with timing
+					// Check if this is an append-only file that we've seen before
+					isIncremental := false
+					var previousContent []byte
+					var previousSize int64
+					var previousInode uint64
+
+					if bs.isInAppendOnlyDir(job.absPath) {
+						if prevState, exists := existingFiles[job.absPath]; exists && !prevState.isDir {
+							previousContent = prevState.content
+							previousSize = prevState.size
+							previousInode = prevState.inode
+
+							// Only do incremental if:
+							// 1. File has same inode (it's the same file)
+							// 2. Current size is >= previous size (no log rotation occurred)
+							if previousInode == fileInode && job.cf.Info.Size() >= previousSize {
+								isIncremental = true
+							} else if previousInode != fileInode || job.cf.Info.Size() < previousSize {
+								// Log rotation detected - file replaced or truncated
+								logger.Debugf("Log rotation detected for %s (inode: %d->%d, size: %d->%d)",
+									job.absPath, previousInode, fileInode, previousSize, job.cf.Info.Size())
+								isIncremental = false
+							}
+						}
+					}
+
+					var data []byte
+					var err error
 					readStart := time.Now()
-					data, err := bs.base.ReadFile(workerCtx, job.absPath)
+
+					if isIncremental && job.cf.Info.Size() > previousSize {
+						// Incremental read - only read the new bytes
+						file, err := os.Open(job.absPath)
+						if err != nil {
+							results <- fileReadResult{
+								absPath: job.absPath,
+								err:     fmt.Errorf("failed to open file for incremental read: %w", err),
+							}
+							continue
+						}
+						defer file.Close()
+
+						// Seek to the position where we left off
+						_, err = file.Seek(previousSize, 0)
+						if err != nil {
+							results <- fileReadResult{
+								absPath: job.absPath,
+								err:     fmt.Errorf("failed to seek in file: %w", err),
+							}
+							continue
+						}
+
+						// Read the new content
+						newContent := make([]byte, job.cf.Info.Size()-previousSize)
+						_, err = file.Read(newContent)
+						if err != nil && !errors.Is(err, io.EOF) {
+							results <- fileReadResult{
+								absPath: job.absPath,
+								err:     fmt.Errorf("failed to read new content: %w", err),
+							}
+							continue
+						}
+
+						// Concatenate old and new content
+						data = append(previousContent, newContent...)
+						logger.Debugf("Incremental read: %s (%d bytes new)", job.absPath, len(newContent))
+					} else {
+						// Normal full read (either first time seeing file or log rotation happened)
+						data, err = bs.base.ReadFile(workerCtx, job.absPath)
+						if isIncremental {
+							logger.Debugf("Full read after log rotation: %s", job.absPath)
+						}
+					}
+
 					readDuration := time.Since(readStart)
 
 					// Log slow reads
@@ -579,6 +747,8 @@ func (bs *BufferedService) SyncFromDisk(ctx context.Context) error {
 							size:     job.cf.Info.Size(),
 							uid:      uid,
 							gid:      gid,
+							lastSize: job.cf.Info.Size(), // Track current size for future incremental reads
+							inode:    fileInode,          // Track inode for log rotation detection
 						},
 					}
 				}
@@ -694,13 +864,10 @@ func (bs *BufferedService) SyncToDisk(ctx context.Context) error {
 				if err := bs.checkWritePermission(path); err != nil {
 					permissionErrors[path] = err
 				}
-			} else {
-				// For removal, need parent directory write permission
-				parentDir := filepath.Dir(path)
-				if err := bs.checkDirectoryWritePermission(parentDir); err != nil {
-					permissionErrors[path] = err
-				}
 			}
+			// Skip permission checks for items marked for removal
+			// We already checked permissions during the Remove/RemoveAll operation
+			// And parent directories might have already been removed from the cache
 		}
 
 		// If any permission errors, report them
@@ -1266,4 +1433,18 @@ func countFiles(files map[string]*CachedFile) int {
 		}
 	}
 	return count
+}
+
+// getFileInode returns the inode number of a file to detect if the file has been replaced
+func getFileInode(path string) uint64 {
+	info, err := os.Stat(path)
+	if err != nil {
+		return 0
+	}
+
+	if stat, ok := info.Sys().(*syscall.Stat_t); ok {
+		return stat.Ino
+	}
+
+	return 0
 }

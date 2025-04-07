@@ -100,11 +100,6 @@ func (c *DefaultHTTPClient) createClientFromContext(ctx context.Context) (*http.
 
 // GetWithBody performs a GET request and returns the response with body
 func (c *DefaultHTTPClient) GetWithBody(ctx context.Context, url string) (*http.Response, []byte, error) {
-	start := time.Now()
-	defer func() {
-		c.logger.Debugf("Request for %s took %s", url, time.Since(start))
-	}()
-
 	// Create request with context
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {

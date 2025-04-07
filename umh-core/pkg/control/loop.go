@@ -113,7 +113,7 @@ func NewControlLoop() *ControlLoop {
 	snapshotManager := fsm.NewSnapshotManager()
 
 	// Create a buffered filesystem service
-	filesystemService := filesystem.NewBufferedServiceWithDirs(filesystem.NewDefaultService(), []string{constants.S6BaseDir, constants.S6LogBaseDir}, constants.FilesAndDirectoriesToIgnore)
+	filesystemService := filesystem.NewDefaultService()
 
 	metrics.InitErrorCounter(metrics.ComponentControlLoop, "main")
 
