@@ -9,13 +9,31 @@ This package implements the Finite State Machine (FSM) for DataFlowComponent ser
 When multiple DataFlowComponent services are created, each with its own BenthosManager, they all independently allocate ports from the same default range (9000-9999). This can lead to port conflicts when different DataFlowComponent services try to use the same ports for their Benthos instances.
 
 ### Solution
-To avoid port conflicts, implement this strategy:
+To avoid port conflicts, implement one of these strategies:
 
-#### Create a single shared PortManager instance and pass it to all DataFlowComponent services:
+#### 1. Use Different Port Ranges (Simple but not recommended for production)
+Assign different port ranges to each DataFlowComponent service.
+
+```go
+// Create first DFC service with ports 9000-9499
+dfc1 := dataflowcomponent.NewDefaultDataFlowComponentService(
+    "component1", 
+    dataflowcomponent.WithPortRange(9000, 9499),
+)
+
+// Create second DFC service with ports 9500-9999
+dfc2 := dataflowcomponent.NewDefaultDataFlowComponentService(
+    "component2", 
+    dataflowcomponent.WithPortRange(9500, 9999),
+)
+```
+
+#### 2. Use a Shared PortManager (Recommended)
+Create a single shared PortManager instance and pass it to all DataFlowComponent services:
 
 ```go
 // Create a shared port manager
-sharedPortManager, err := portmanager.NewDefaultPortManager(9000, 9999) // could also be potentially larger
+sharedPortManager, err := portmanager.NewDefaultPortManager(9000, 9999)
 if err != nil {
     // Handle error
 }

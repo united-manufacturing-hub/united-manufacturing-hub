@@ -27,6 +27,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/portmanager"
 
 	benthosfsmmanager "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
 	benthosfsmtype "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
@@ -100,6 +101,32 @@ func WithBenthosService(benthosService benthosservice.IBenthosService) DataFlowC
 func WithBenthosManager(benthosManager *benthosfsmmanager.BenthosManager) DataFlowComponentServiceOption {
 	return func(s *DataFlowComponentService) {
 		s.benthosManager = benthosManager
+	}
+}
+
+// WithPortRange sets a custom port range for the BenthosManager's PortManager
+// This helps avoid port conflicts when multiple DataFlowComponentServices are running
+func WithPortRange(minPort, maxPort int) DataFlowComponentServiceOption {
+	return func(s *DataFlowComponentService) {
+		// Create a new port manager with the specified range
+		portManager, err := portmanager.NewDefaultPortManager(minPort, maxPort)
+		if err != nil {
+			s.logger.Errorf("Failed to create port manager with range %d-%d: %v", minPort, maxPort, err)
+			return
+		}
+
+		// Set the port manager on the Benthos manager
+		s.benthosManager.WithPortManager(portManager)
+	}
+}
+
+// WithSharedPortManager sets a shared port manager across multiple DataFlowComponentServices
+// This is the recommended approach when multiple DataFlowComponentServices are running
+// to ensure proper coordination of port allocation
+func WithSharedPortManager(portManager portmanager.PortManager) DataFlowComponentServiceOption {
+	return func(s *DataFlowComponentService) {
+		// Set the shared port manager on the Benthos manager
+		s.benthosManager.WithPortManager(portManager)
 	}
 }
 
