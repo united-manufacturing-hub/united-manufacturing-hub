@@ -38,6 +38,10 @@ var _ = Describe("BufferedService", func() {
 		// Initialize the buffered service, wrapping the base service
 		bufService = filesystem.NewBufferedService(baseService, tmpDir, constants.FilesAndDirectoriesToIgnore)
 
+		// Disable permission checks by default for most tests
+		// The permission-specific tests will enable them
+		bufService.SetVerifyPermissions(false)
+
 		// Create some files or directories in the tmpDir so that we can test SyncFromDisk
 		setupTestFiles(tmpDir)
 	})
@@ -152,6 +156,9 @@ var _ = Describe("BufferedService", func() {
 			// Load from disk so we have an in-memory snapshot
 			err = bufService.SyncFromDisk(ctx)
 			Expect(err).NotTo(HaveOccurred())
+
+			// Ensure permissions are disabled for basic file operations
+			bufService.SetVerifyPermissions(false)
 		})
 
 		It("should read existing file from memory, and return not exist for unknown files", func() {
@@ -264,6 +271,9 @@ var _ = Describe("BufferedService", func() {
 		BeforeEach(func() {
 			err = bufService.SyncFromDisk(ctx)
 			Expect(err).NotTo(HaveOccurred())
+
+			// Ensure permissions are disabled for directory operations
+			bufService.SetVerifyPermissions(false)
 		})
 
 		It("should EnsureDirectory (buffered) and create on SyncToDisk", func() {
@@ -387,6 +397,9 @@ var _ = Describe("BufferedService with MockFileSystem", func() {
 		ctx, cancel = context.WithCancel(context.Background())
 		mockFs = filesystem.NewMockFileSystem()
 		bufService = filesystem.NewBufferedService(mockFs, mockRootDir, constants.FilesAndDirectoriesToIgnore)
+
+		// Disable permission checks for the mock filesystem tests
+		bufService.SetVerifyPermissions(false)
 	})
 
 	AfterEach(func() {
@@ -440,6 +453,9 @@ var _ = Describe("BufferedService with MockFileSystem", func() {
 
 			err := bufService.SyncFromDisk(ctx)
 			Expect(err).NotTo(HaveOccurred())
+
+			// Ensure permission checks are disabled for these mock tests
+			bufService.SetVerifyPermissions(false)
 		})
 
 		It("should mark file as changed, then fail on SyncToDisk if WriteFile fails", func() {
@@ -475,6 +491,9 @@ var _ = Describe("BufferedService with MockFileSystem", func() {
 
 			err := bufService.SyncFromDisk(ctx)
 			Expect(err).NotTo(HaveOccurred())
+
+			// Ensure permission checks are disabled for these mock tests
+			bufService.SetVerifyPermissions(false)
 		})
 
 		It("should fail during SyncToDisk if EnsureDirectory mock triggers an error", func() {
@@ -568,6 +587,9 @@ var _ = Describe("BufferedService Directory Creation Issues", func() {
 
 		// Initialize the buffered service, wrapping the base service
 		bufService = filesystem.NewBufferedService(baseService, tmpDir, constants.FilesAndDirectoriesToIgnore)
+
+		// Disable permission checks for directory creation tests
+		bufService.SetVerifyPermissions(false)
 	})
 
 	AfterEach(func() {
@@ -744,3 +766,176 @@ var _ = Describe("BufferedService Directory Creation Issues", func() {
 		Expect(string(content3)).To(Equal("content3"))
 	})
 })
+
+var _ = Describe("BufferedService Permission Checking", func() {
+	var (
+		tmpDir      string
+		err         error
+		ctx         context.Context
+		cancel      context.CancelFunc
+		baseService filesystem.Service
+		bufService  *filesystem.BufferedService
+	)
+
+	BeforeEach(func() {
+		ctx, cancel = context.WithCancel(context.Background())
+
+		// Create a real temp directory on disk for tests
+		tmpDir, err = os.MkdirTemp("", "buffered-service-perm-test-*")
+		Expect(err).NotTo(HaveOccurred())
+
+		// Initialize the base service
+		baseService = filesystem.NewDefaultService()
+
+		// Initialize the buffered service
+		bufService = filesystem.NewBufferedService(baseService, tmpDir, constants.FilesAndDirectoriesToIgnore)
+
+		// Initially disable permissions to set up files
+		bufService.SetVerifyPermissions(false)
+
+		// Setup a test directory structure with different permissions
+		setupTestFilesWithPermissions(tmpDir)
+
+		// Sync from disk to load file metadata and permissions
+		err = bufService.SyncFromDisk(ctx)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Now enable permission checks for tests
+		bufService.SetVerifyPermissions(true)
+	})
+
+	AfterEach(func() {
+		cancel()
+		os.RemoveAll(tmpDir)
+	})
+
+	It("should check permissions by default", func() {
+		// Try to write to a read-only file
+		readOnlyFile := filepath.Join(tmpDir, "readonly.txt")
+
+		// First make sure we have the file in our cache and can read it
+		content, err := bufService.ReadFile(ctx, readOnlyFile)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(string(content)).To(Equal("Read-only content\n"))
+
+		// Now try to write to it - this should fail due to permission check
+		err = bufService.WriteFile(ctx, readOnlyFile, []byte("Modified"), 0644)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("permission"))
+	})
+
+	It("should allow disabling permission checks for in-memory operations only", func() {
+		// Disable permission checks
+		bufService.SetVerifyPermissions(false)
+
+		// Now write to the same read-only file - should succeed in memory
+		readOnlyFile := filepath.Join(tmpDir, "readonly.txt")
+		newContent := []byte("Modified")
+		err = bufService.WriteFile(ctx, readOnlyFile, newContent, 0644)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Verify the write was recorded in memory
+		content, err := bufService.ReadFile(ctx, readOnlyFile)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(content).To(Equal(newContent))
+
+		// Make the file writable for the sync test
+		err = os.Chmod(readOnlyFile, 0644)
+		Expect(err).NotTo(HaveOccurred())
+
+		// SyncToDisk should succeed now that both our checks and OS permissions allow writing
+		err = bufService.SyncToDisk(ctx)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Restore read-only for future tests
+		err = os.Chmod(readOnlyFile, 0444)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Re-sync from disk to update our cached permission information
+		err = bufService.SyncFromDisk(ctx)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Re-enable permission checks to verify the system
+		bufService.SetVerifyPermissions(true)
+
+		// Future writes should be checked again
+		err = bufService.WriteFile(ctx, readOnlyFile, []byte("Another update"), 0644)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("permission"))
+	})
+
+	It("should check parent directory permissions when creating new files", func() {
+		// Try to create a file in a read-only directory
+		readOnlyDir := filepath.Join(tmpDir, "readonly_dir")
+		newFilePath := filepath.Join(readOnlyDir, "newfile.txt")
+
+		// This should fail the permission check
+		err = bufService.WriteFile(ctx, newFilePath, []byte("New content"), 0644)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("permission"))
+	})
+
+	It("should check permissions during SyncToDisk for buffered changes", func() {
+		// Disable permission checks to buffer some changes
+		bufService.SetVerifyPermissions(false)
+
+		// Make some changes that would violate permissions
+		readOnlyFile := filepath.Join(tmpDir, "readonly.txt")
+		err = bufService.WriteFile(ctx, readOnlyFile, []byte("Modified"), 0644)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Re-enable permission checks for SyncToDisk
+		bufService.SetVerifyPermissions(true)
+
+		// SyncToDisk should now fail
+		err = bufService.SyncToDisk(ctx)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("permission"))
+		Expect(err.Error()).To(ContainSubstring(readOnlyFile))
+	})
+})
+
+// setupTestFilesWithPermissions creates files with different permissions for testing
+func setupTestFilesWithPermissions(root string) {
+	// Create a read-only file
+	readOnlyFile := filepath.Join(root, "readonly.txt")
+	err := os.WriteFile(readOnlyFile, []byte("Read-only content\n"), 0644)
+	if err != nil {
+		panic(err)
+	}
+	// Make it read-only
+	err = os.Chmod(readOnlyFile, 0444)
+	if err != nil {
+		panic(err)
+	}
+
+	// Create a read-only directory
+	readOnlyDir := filepath.Join(root, "readonly_dir")
+	err = os.MkdirAll(readOnlyDir, 0755)
+	if err != nil {
+		panic(err)
+	}
+	// Make a file inside it for testing
+	inDirFile := filepath.Join(readOnlyDir, "existing.txt")
+	err = os.WriteFile(inDirFile, []byte("Existing file\n"), 0644)
+	if err != nil {
+		panic(err)
+	}
+	// Make the directory read-only
+	err = os.Chmod(readOnlyDir, 0555)
+	if err != nil {
+		panic(err)
+	}
+
+	// Create a writable directory/file for comparison
+	writableDir := filepath.Join(root, "writable_dir")
+	err = os.MkdirAll(writableDir, 0755)
+	if err != nil {
+		panic(err)
+	}
+	writableFile := filepath.Join(writableDir, "writable.txt")
+	err = os.WriteFile(writableFile, []byte("Writable content\n"), 0644)
+	if err != nil {
+		panic(err)
+	}
+}

@@ -4,10 +4,13 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/user"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
@@ -139,6 +142,12 @@ type BufferedService struct {
 
 	// pathsToIgnore is a list of paths to skip during sync
 	pathsToIgnore []string
+
+	// verifyPermissions determines if we should check permission information
+	verifyPermissions bool
+
+	// currentUser caches the current user info for permission checks
+	currentUser *user.User
 }
 
 // fileState holds in-memory data and metadata for a single file or directory
@@ -148,6 +157,8 @@ type fileState struct {
 	modTime  time.Time
 	fileMode os.FileMode
 	size     int64
+	uid      int // cached user id of owner
+	gid      int // cached group id of owner
 }
 
 // fileChange represents a pending user-level change: either an updated content or a removal
@@ -170,14 +181,130 @@ func NewBufferedService(base Service, rootDir string, pathsToIgnore []string) *B
 // NewBufferedServiceWithDirs creates a buffered service that wraps an existing filesystem service.
 // syncDirectories is a list of directories that will be read during SyncFromDisk().
 func NewBufferedServiceWithDirs(base Service, syncDirectories []string, pathsToIgnore []string) *BufferedService {
-	return &BufferedService{
-		base:          base,
-		files:         make(map[string]fileState),
-		changed:       make(map[string]fileChange),
-		syncDirs:      syncDirectories,
-		maxFileSize:   10 * 1024 * 1024, // 10 MB default threshold for demonstration
-		pathsToIgnore: pathsToIgnore,
+	currentUser, err := user.Current()
+	if err != nil {
+		// Log the error but continue - we'll use mode bits only for permissions
+		logger := logger.For(logger.ComponentFilesystem)
+		logger.Warnf("Failed to get current user info: %v", err)
 	}
+
+	return &BufferedService{
+		base:              base,
+		files:             make(map[string]fileState),
+		changed:           make(map[string]fileChange),
+		syncDirs:          syncDirectories,
+		maxFileSize:       10 * 1024 * 1024, // 10 MB default threshold for demonstration
+		pathsToIgnore:     pathsToIgnore,
+		verifyPermissions: true, // Default to true for safety
+		currentUser:       currentUser,
+	}
+}
+
+// SetVerifyPermissions configures whether permission checks should be performed
+func (bs *BufferedService) SetVerifyPermissions(verify bool) {
+	bs.mu.Lock()
+	defer bs.mu.Unlock()
+	bs.verifyPermissions = verify
+}
+
+// getFileState gets the cached file state, or returns nil if not found
+func (bs *BufferedService) getFileState(path string) *fileState {
+	state, ok := bs.files[path]
+	if !ok {
+		return nil
+	}
+	return &state
+}
+
+// canWriteBasedOnMode checks if the current user can write to a file based on its mode
+func (bs *BufferedService) canWriteBasedOnMode(state *fileState) bool {
+	if state == nil {
+		return false
+	}
+
+	// If we're root, we can always write
+	if bs.currentUser != nil && bs.currentUser.Uid == "0" {
+		return true
+	}
+
+	// Check if the file is writable by the owner, group, or others
+	mode := state.fileMode
+
+	// If we have uid/gid info and current user info
+	if bs.currentUser != nil {
+		uid, _ := strconv.Atoi(bs.currentUser.Uid)
+		gid, _ := strconv.Atoi(bs.currentUser.Gid)
+
+		// If we're the owner
+		if uid == state.uid {
+			return mode&0200 != 0 // Owner write permission
+		}
+
+		// Check if we're in the same group
+		if gid == state.gid {
+			return mode&0020 != 0 // Group write permission
+		}
+	}
+
+	// Check other permission
+	return mode&0002 != 0 // Others write permission
+}
+
+// checkWritePermission verifies if the current process should have write permission for a path
+// based on cached file information
+func (bs *BufferedService) checkWritePermission(path string) error {
+	if !bs.verifyPermissions {
+		return nil
+	}
+
+	// Get the file state from our cache
+	state := bs.getFileState(path)
+
+	// If the file doesn't exist in our cache, check if parent directory is writable
+	if state == nil {
+		parentDir := filepath.Dir(path)
+		return bs.checkDirectoryWritePermission(parentDir)
+	}
+
+	// Check if we can write to it based on mode
+	if !bs.canWriteBasedOnMode(state) {
+		return fmt.Errorf("insufficient permissions to write to %s", path)
+	}
+
+	return nil
+}
+
+// checkDirectoryWritePermission verifies if we can write to a directory
+// based on cached directory information
+func (bs *BufferedService) checkDirectoryWritePermission(dir string) error {
+	if !bs.verifyPermissions {
+		return nil
+	}
+
+	// Special case: if dir is empty or ".", check current working directory
+	if dir == "" || dir == "." {
+		dir = "."
+	}
+
+	// Get the directory state from our cache
+	state := bs.getFileState(dir)
+
+	// If directory not in cache, return an error
+	if state == nil {
+		return fmt.Errorf("directory not found in cache: %s", dir)
+	}
+
+	// Check if it's actually a directory
+	if !state.isDir {
+		return fmt.Errorf("path is not a directory: %s", dir)
+	}
+
+	// Check if we can write to it based on mode
+	if !bs.canWriteBasedOnMode(state) {
+		return fmt.Errorf("insufficient permissions to write to directory %s", dir)
+	}
+
+	return nil
 }
 
 // shouldIgnorePath checks if a path should be ignored during sync
@@ -209,7 +336,6 @@ func (bs *BufferedService) SyncFromDisk(ctx context.Context) error {
 
 	// Sync each directory in the list
 	for _, dir := range bs.syncDirs {
-
 		// Check if directory exists
 		info, err := bs.base.Stat(ctx, dir)
 		if err != nil {
@@ -224,11 +350,8 @@ func (bs *BufferedService) SyncFromDisk(ctx context.Context) error {
 			return fmt.Errorf("path is not a directory: %s", dir)
 		}
 
-		// Read the directory tree
-		dc, err := ReadDirectoryTree(ctx, bs.base, dir)
-		if err != nil {
-			return fmt.Errorf("failed to read directory tree for %s: %w", dir, err)
-		}
+		// Get owner and group info for the directory
+		uid, gid := getFileOwner(dir)
 
 		// Add directory itself
 		newFiles[dir] = fileState{
@@ -237,6 +360,14 @@ func (bs *BufferedService) SyncFromDisk(ctx context.Context) error {
 			modTime:  info.ModTime(),
 			fileMode: info.Mode(),
 			size:     0,
+			uid:      uid,
+			gid:      gid,
+		}
+
+		// Read the directory tree
+		dc, err := ReadDirectoryTree(ctx, bs.base, dir)
+		if err != nil {
+			return fmt.Errorf("failed to read directory tree for %s: %w", dir, err)
 		}
 
 		// Process all files in this directory
@@ -249,6 +380,9 @@ func (bs *BufferedService) SyncFromDisk(ctx context.Context) error {
 				continue
 			}
 
+			// Get owner and group info
+			uid, gid := getFileOwner(absPath)
+
 			// Process the file or directory
 			if cf.IsDir {
 				newFiles[absPath] = fileState{
@@ -257,6 +391,8 @@ func (bs *BufferedService) SyncFromDisk(ctx context.Context) error {
 					modTime:  cf.Info.ModTime(),
 					fileMode: cf.Info.Mode(),
 					size:     0,
+					uid:      uid,
+					gid:      gid,
 				}
 			} else {
 				// Skip large files
@@ -267,6 +403,8 @@ func (bs *BufferedService) SyncFromDisk(ctx context.Context) error {
 						modTime:  cf.Info.ModTime(),
 						fileMode: cf.Info.Mode(),
 						size:     cf.Info.Size(),
+						uid:      uid,
+						gid:      gid,
 					}
 					continue
 				}
@@ -293,6 +431,8 @@ func (bs *BufferedService) SyncFromDisk(ctx context.Context) error {
 					modTime:  cf.Info.ModTime(),
 					fileMode: cf.Info.Mode(),
 					size:     cf.Info.Size(),
+					uid:      uid,
+					gid:      gid,
 				}
 			}
 		}
@@ -311,8 +451,6 @@ func (bs *BufferedService) SyncFromDisk(ctx context.Context) error {
 }
 
 // SyncToDisk flushes all changed files to disk, and removes any marked for removal.
-//
-// Note: this does not check if the file has changed on disk.
 func (bs *BufferedService) SyncToDisk(ctx context.Context) error {
 	start := time.Now()
 	logger := logger.For(logger.ComponentFilesystem)
@@ -323,6 +461,37 @@ func (bs *BufferedService) SyncToDisk(ctx context.Context) error {
 
 	bs.mu.Lock()
 	defer bs.mu.Unlock()
+
+	// Check permissions before performing operations
+	if bs.verifyPermissions {
+		permissionErrors := make(map[string]error)
+
+		// Check all operations for permission issues
+		for path, chg := range bs.changed {
+			if !chg.removed {
+				// Check write permission for files/directories we're creating or modifying
+				if err := bs.checkWritePermission(path); err != nil {
+					permissionErrors[path] = err
+				}
+			} else {
+				// For removal, need parent directory write permission
+				parentDir := filepath.Dir(path)
+				if err := bs.checkDirectoryWritePermission(parentDir); err != nil {
+					permissionErrors[path] = err
+				}
+			}
+		}
+
+		// If any permission errors, report them
+		if len(permissionErrors) > 0 {
+			errStrs := make([]string, 0, len(permissionErrors))
+			for path, err := range permissionErrors {
+				errStrs = append(errStrs, fmt.Sprintf("%s: %v", path, err))
+			}
+			return fmt.Errorf("permission checks failed for %d paths: %s",
+				len(permissionErrors), strings.Join(errStrs, "; "))
+		}
+	}
 
 	// Process in the following order:
 	// 1. Create directories (shallowest first)
@@ -438,6 +607,14 @@ func (bs *BufferedService) EnsureDirectory(ctx context.Context, path string) err
 	bs.mu.Lock()
 	defer bs.mu.Unlock()
 
+	// Check permissions for the parent directory
+	if bs.verifyPermissions {
+		parentDir := filepath.Dir(path)
+		if err := bs.checkDirectoryWritePermission(parentDir); err != nil {
+			return fmt.Errorf("permission check failed: %w", err)
+		}
+	}
+
 	// If already exists, check if it is a directory.
 	if state, ok := bs.files[path]; ok {
 		if !state.isDir {
@@ -487,22 +664,40 @@ func (bs *BufferedService) WriteFile(ctx context.Context, path string, data []by
 	bs.mu.Lock()
 	defer bs.mu.Unlock()
 
+	// Check permissions
+	if bs.verifyPermissions {
+		// If file exists, check if we can write to it
+		if state, exists := bs.files[path]; exists {
+			if !bs.canWriteBasedOnMode(&state) {
+				return fmt.Errorf("insufficient permissions to write to file: %s", path)
+			}
+		} else {
+			// If file doesn't exist, check parent directory permissions
+			parentDir := filepath.Dir(path)
+			if err := bs.checkDirectoryWritePermission(parentDir); err != nil {
+				return fmt.Errorf("permission check failed: %w", err)
+			}
+		}
+	}
+
 	// If there's an existing fileState, update it so subsequent ReadFile sees new content
 	st, exists := bs.files[path]
-	if !exists {
-		st = fileState{
-			isDir:    false,
-			content:  data,
-			modTime:  time.Time{}, // unknown until we flush
-			fileMode: perm,
-			size:     int64(len(data)),
-		}
-		bs.files[path] = st
-	} else {
+	if exists {
 		st.isDir = false
 		st.content = data
 		st.fileMode = perm
 		st.size = int64(len(data))
+		// Update the map with the modified state
+		bs.files[path] = st
+	} else {
+		// Create a new file state
+		bs.files[path] = fileState{
+			isDir:    false,
+			content:  data,
+			modTime:  time.Now(),
+			fileMode: perm,
+			size:     int64(len(data)),
+		}
 	}
 
 	// Mark changed
@@ -544,6 +739,15 @@ func (bs *BufferedService) Remove(ctx context.Context, path string) error {
 	bs.mu.Lock()
 	defer bs.mu.Unlock()
 
+	// Check permissions
+	if bs.verifyPermissions {
+		// For removal, need write permission on parent directory
+		parentDir := filepath.Dir(path)
+		if err := bs.checkDirectoryWritePermission(parentDir); err != nil {
+			return fmt.Errorf("permission check failed: %w", err)
+		}
+	}
+
 	// If we have a fileState, check if it's a directory
 	if st, ok := bs.files[path]; ok {
 		if st.isDir {
@@ -563,6 +767,15 @@ func (bs *BufferedService) Remove(ctx context.Context, path string) error {
 func (bs *BufferedService) RemoveAll(ctx context.Context, path string) error {
 	bs.mu.Lock()
 	defer bs.mu.Unlock()
+
+	// Check permissions
+	if bs.verifyPermissions {
+		// For removal, need write permission on parent directory
+		parentDir := filepath.Dir(path)
+		if err := bs.checkDirectoryWritePermission(parentDir); err != nil {
+			return fmt.Errorf("permission check failed: %w", err)
+		}
+	}
 
 	// First check if the target itself is a directory
 	targetIsDir := false
@@ -622,6 +835,14 @@ func (bs *BufferedService) CreateFile(ctx context.Context, path string, perm os.
 	bs.mu.Lock()
 	defer bs.mu.Unlock()
 
+	// Check permissions
+	if bs.verifyPermissions {
+		parentDir := filepath.Dir(path)
+		if err := bs.checkDirectoryWritePermission(parentDir); err != nil {
+			return nil, fmt.Errorf("permission check failed: %w", err)
+		}
+	}
+
 	// If already exists, check if it is a file
 	if state, ok := bs.files[path]; ok {
 		if state.isDir {
@@ -655,6 +876,22 @@ func (bs *BufferedService) CreateFile(ctx context.Context, path string, perm os.
 func (bs *BufferedService) Chmod(ctx context.Context, path string, mode os.FileMode) error {
 	bs.mu.Lock()
 	defer bs.mu.Unlock()
+
+	// Check permissions - we must be the owner to change permissions
+	if bs.verifyPermissions {
+		state, ok := bs.files[path]
+		if !ok {
+			return os.ErrNotExist
+		}
+
+		// Can only change mode if we're the owner or root
+		if bs.currentUser != nil {
+			uid, _ := strconv.Atoi(bs.currentUser.Uid)
+			if uid != 0 && uid != state.uid {
+				return fmt.Errorf("insufficient permissions to change mode: not owner")
+			}
+		}
+	}
 
 	st, ok := bs.files[path]
 	if !ok {
@@ -784,3 +1021,17 @@ func (m *memDirEntry) Name() string               { return m.name }
 func (m *memDirEntry) IsDir() bool                { return m.isDir }
 func (m *memDirEntry) Type() os.FileMode          { return m.info.Mode().Type() }
 func (m *memDirEntry) Info() (os.FileInfo, error) { return m.info, nil }
+
+// getFileOwner gets the UID and GID of a file
+func getFileOwner(path string) (uid, gid int) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return -1, -1 // Couldn't determine
+	}
+
+	if stat, ok := info.Sys().(*syscall.Stat_t); ok {
+		return int(stat.Uid), int(stat.Gid)
+	}
+
+	return -1, -1 // Not available on this platform
+}
