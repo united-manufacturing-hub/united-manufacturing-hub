@@ -68,8 +68,11 @@ func (s *S6Instance) Reconcile(ctx context.Context, filesystemService filesystem
 			if s.IsRemoved() || s.GetCurrentFSMState() == OperationalStateStopped || s.GetCurrentFSMState() == OperationalStateStopping {
 				s.baseFSMInstance.GetLogger().Errorf("S6 instance %s is already in a terminal state, force removing it", s.baseFSMInstance.GetID())
 				// force delete everything from the s6 file directory
-				s.service.ForceRemove(ctx, s.servicePath, filesystemService)
-				return err, false
+				forceErr := s.service.ForceRemove(ctx, s.servicePath, filesystemService)
+				if forceErr != nil {
+					s.baseFSMInstance.GetLogger().Errorf("ForceRemove failed: %v", forceErr)
+				}
+				return forceErr, false
 			} else {
 				s.baseFSMInstance.GetLogger().Errorf("S6 instance %s is not in a terminal state, resetting state and removing it", s.baseFSMInstance.GetID())
 				s.baseFSMInstance.ResetState()

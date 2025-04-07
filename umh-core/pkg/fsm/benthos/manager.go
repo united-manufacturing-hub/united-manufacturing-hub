@@ -174,6 +174,8 @@ func (m *BenthosManager) HandleInstanceRemoved(instanceName string) {
 }
 
 // Reconcile overrides the base manager's Reconcile method to add port management
+// The filesystemService parameter allows for filesystem operations during reconciliation,
+// enabling the method to read configuration or state information from the filesystem.
 func (m *BenthosManager) Reconcile(ctx context.Context, cfg config.FullConfig, filesystemService filesystem.Service, tick uint64) (error, bool) {
 	start := time.Now()
 	defer func() {

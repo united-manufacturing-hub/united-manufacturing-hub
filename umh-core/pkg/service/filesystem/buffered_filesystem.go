@@ -472,6 +472,7 @@ func (bs *BufferedService) shouldIgnorePath(path string) bool {
 
 // SyncFromDisk loads the filesystem state into memory, ignoring anything we had before.
 // It will read file contents unless they exceed maxFileSize, in which case content is blank.
+// TODO: make this function better readable
 func (bs *BufferedService) SyncFromDisk(ctx context.Context) error {
 	logger := logger.For(logger.ComponentFilesystem)
 	startTime := time.Now()
@@ -493,6 +494,7 @@ func (bs *BufferedService) SyncFromDisk(ctx context.Context) error {
 	bs.mu.Unlock()
 
 	// Sync each directory in the list
+	// TODO: "This code could probably refactored to use some of the initial scan code"
 	for _, dir := range bs.syncDirs {
 		// Check if directory exists
 		info, err := bs.base.Stat(ctx, dir)
@@ -1102,7 +1104,7 @@ func (bs *BufferedService) PathExists(ctx context.Context, path string) (bool, e
 	bs.mu.Lock()
 	defer bs.mu.Unlock()
 
-	st, ok := bs.files[path]
+	_, ok := bs.files[path]
 	if !ok {
 		return false, nil
 	}
@@ -1112,7 +1114,6 @@ func (bs *BufferedService) PathExists(ctx context.Context, path string) (bool, e
 		return false, nil
 	}
 	// We have the file entry and it's not marked for removal, so it exists
-	_ = st // Using st to avoid unused variable warning
 	return true, nil
 }
 

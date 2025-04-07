@@ -30,6 +30,9 @@ import (
 )
 
 // Reconcile periodically checks if the FSM needs state transitions based on metrics
+// The filesystemService parameter allows for filesystem operations during reconciliation,
+// enabling the method to read configuration or state information from the filesystem.
+// Currently not used in this implementation but added for consistency with the interface.
 func (c *ContainerInstance) Reconcile(ctx context.Context, filesystemService filesystem.Service, tick uint64) (err error, reconciled bool) {
 	start := time.Now()
 	instanceName := c.baseFSMInstance.GetID()
