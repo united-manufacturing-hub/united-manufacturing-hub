@@ -98,6 +98,9 @@ type FileConfigManager struct {
 	mutexAtomicUpdate sync.Mutex
 
 	// simple mutex for read access or write access to the config file
+	// it will be used by Getconfig and writeConfig
+	// this mutex will allow multiple GetConfig calls to happen in parallel
+	// it will prevent multiple reads or read/write cycles to happen at the same time
 	mutexReadOrWrite sync.RWMutex
 }
 
