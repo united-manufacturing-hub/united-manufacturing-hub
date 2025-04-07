@@ -37,7 +37,10 @@ type Versioner interface {
 	// UpdateVersion updates the version of the object
 	UpdateVersion(object Object) error
 	// CompareResourceVersions compares resource versions of two objects
+	// Returns -1 if lhs is less than rhs, 0 if they are equal, and 1 if lhs is greater than rhs
 	CompareResourceVersions(lhs, rhs string) int
+	// ParseResourceVersion parses a string resource version to uint64
+	ParseResourceVersion(resourceVersion string) (uint64, error)
 }
 
 // StorageEventType represents the type of the storage event
