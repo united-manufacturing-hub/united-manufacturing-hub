@@ -88,13 +88,19 @@ var _ = Describe("Container FSM", func() {
 
 			err, did := inst.Reconcile(ctx, mockFS, 12)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(did).To(BeFalse())
+			Expect(did).To(BeTrue())
+			Expect(inst.GetCurrentFSMState()).To(Equal(container.OperationalStateStarting))
+
+			// next reconcile
+			err, did = inst.Reconcile(ctx, mockFS, 13)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(did).To(BeTrue())
 			Expect(inst.GetCurrentFSMState()).To(Equal(container.OperationalStateDegraded))
 		})
 
 		It("Should remain `monitoring_stopped` if desired is `stopped`", func() {
 			// do one reconcile - no state change
-			err, did := inst.Reconcile(ctx, mockFS, 13)
+			err, did := inst.Reconcile(ctx, mockFS, 14)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(did).To(BeFalse())
 			Expect(inst.GetCurrentFSMState()).To(Equal(container.OperationalStateStopped))
@@ -110,14 +116,20 @@ var _ = Describe("Container FSM", func() {
 			inst.SetDesiredFSMState(container.OperationalStateActive)
 			// cause start
 			inst.Reconcile(ctx, mockFS, 22)
+			Expect(inst.GetCurrentFSMState()).To(Equal(container.OperationalStateStarting))
+
+			// next reconcile
+			err, did := inst.Reconcile(ctx, mockFS, 23)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(did).To(BeTrue())
 			Expect(inst.GetCurrentFSMState()).To(Equal(container.OperationalStateDegraded))
 		})
 
 		It("Transitions from degraded -> active if metrics healthy", func() {
 			// currently mockSvc returns healthy => we expect a transition
-			err, did := inst.Reconcile(ctx, mockFS, 23)
+			err, did := inst.Reconcile(ctx, mockFS, 24)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(did).To(BeFalse())
+			Expect(did).To(BeTrue())
 			Expect(inst.GetCurrentFSMState()).To(Equal(container.OperationalStateActive))
 		})
 
@@ -125,7 +137,7 @@ var _ = Describe("Container FSM", func() {
 			// Let's set the mock to return critical metrics
 			mockSvc.SetupMockForDegradedState()
 
-			err, did := inst.Reconcile(ctx, mockFS, 24)
+			err, did := inst.Reconcile(ctx, mockFS, 25)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(did).To(BeFalse()) // no transition => still degraded
 			Expect(inst.GetCurrentFSMState()).To(Equal(container.OperationalStateDegraded))

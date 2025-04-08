@@ -22,8 +22,8 @@ import (
 
 // ContainerObservedStateSnapshot is a copy of the current metrics so the manager can store snapshots.
 type ContainerObservedStateSnapshot struct {
-	// For example, copy the entire *models.Container if that's your data
 	ServiceInfoSnapshot container_monitor.ServiceInfo
+	// No need for the config, as it is basically empty
 }
 
 // Ensure it satisfies fsm.ObservedStateSnapshot

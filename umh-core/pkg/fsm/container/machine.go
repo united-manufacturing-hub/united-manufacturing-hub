@@ -45,7 +45,10 @@ func NewContainerInstanceWithService(config config.ContainerConfig, service cont
 		OperationalStateBeforeRemove: OperationalStateStopped, // must be stopped before removal
 		OperationalTransitions: []fsm.EventDesc{
 			// from monitoring_stopped -> start -> degraded
-			{Name: EventStart, Src: []string{OperationalStateStopped}, Dst: OperationalStateDegraded},
+			{Name: EventStart, Src: []string{OperationalStateStopped}, Dst: OperationalStateStarting},
+
+			// from starting -> degraded,
+			{Name: EventContainerStarted, Src: []string{OperationalStateStarting}, Dst: OperationalStateDegraded},
 
 			// from active -> metrics_not_ok -> degraded
 			{Name: EventMetricsNotOK, Src: []string{OperationalStateActive}, Dst: OperationalStateDegraded},
@@ -53,9 +56,10 @@ func NewContainerInstanceWithService(config config.ContainerConfig, service cont
 			{Name: EventMetricsAllOK, Src: []string{OperationalStateDegraded}, Dst: OperationalStateActive},
 
 			// from active -> stop -> monitoring_stopped
-			{Name: EventStop, Src: []string{OperationalStateActive}, Dst: OperationalStateStopped},
-			// from degraded -> stop -> monitoring_stopped
-			{Name: EventStop, Src: []string{OperationalStateDegraded}, Dst: OperationalStateStopped},
+			{Name: EventStop, Src: []string{OperationalStateActive, OperationalStateDegraded, OperationalStateStarting}, Dst: OperationalStateStopping},
+
+			// Final transition for stopping
+			{Name: EventStopDone, Src: []string{OperationalStateStopping}, Dst: OperationalStateStopped},
 		},
 	}
 
@@ -114,6 +118,10 @@ func (c *ContainerInstance) IsRemoving() bool {
 
 func (c *ContainerInstance) IsStopped() bool {
 	return c.baseFSMInstance.GetCurrentFSMState() == OperationalStateStopped
+}
+
+func (c *ContainerInstance) IsStopping() bool {
+	return c.baseFSMInstance.GetCurrentFSMState() == OperationalStateStopping
 }
 
 // PrintState is a helper for debugging
