@@ -18,6 +18,7 @@ package dataflowcomponent
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -479,16 +480,26 @@ var _ = Describe("DataFlowComponentService", func() {
 		})
 
 		It("should handle errors from the benthos manager", func() {
-			// Need to implement a custom mock that returns an error
-			manager, _ := benthosfsmmanager.NewBenthosManagerWithMockedServices("test")
-			service.benthosManager = manager
+			// Create a custom mock that returns an error
+			mockError := errors.New("test reconcile error")
 
-			// Here we can't directly set error on the mock, so we'll just verify the behavior indirectly
+			// Create a mock BenthosManager with a custom implementation
+			// simply by creating a ServiceMock specifically for this test
+			benthosService := benthosservice.NewMockBenthosService()
+			// Configure the mock to return our error
+			benthosService.ReconcileManagerError = mockError
+
+			// Create a new service with our mocked dependencies
+			testService := NewDefaultDataFlowComponentService("test-error-service",
+				WithBenthosService(benthosService))
+
 			// Act
-			err, _ := service.ReconcileManager(ctx, mockFS, tick)
+			err, reconciled := testService.ReconcileManager(ctx, mockFS, tick)
 
 			// Assert
-			Expect(err).NotTo(HaveOccurred()) // The mock from NewBenthosManagerWithMockedServices returns no error by default
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("test reconcile error"))
+			Expect(reconciled).To(BeFalse())
 		})
 	})
 })
