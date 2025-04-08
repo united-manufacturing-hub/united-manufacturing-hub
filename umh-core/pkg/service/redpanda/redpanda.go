@@ -329,7 +329,7 @@ func (s *RedpandaService) getConfigFromFile(ctx context.Context, filesystemServi
 
 // Status checks the status of a Redpanda service
 func (s *RedpandaService) Status(ctx context.Context, filesystemService filesystem.Service, tick uint64) (ServiceInfo, error) {
-	fmt.Println("Status")
+
 	if ctx.Err() != nil {
 		return ServiceInfo{}, ctx.Err()
 	}
@@ -340,7 +340,6 @@ func (s *RedpandaService) Status(ctx context.Context, filesystemService filesyst
 	if _, exists := s.s6Manager.GetInstance(constants.RedpandaServiceName); !exists {
 		return ServiceInfo{}, ErrServiceNotExist
 	}
-	fmt.Println("Status 1")
 
 	// Let's get the status of the underlying s6 service
 	s6ServiceObservedStateRaw, err := s.s6Manager.GetLastObservedState(constants.RedpandaServiceName)
@@ -354,13 +353,11 @@ func (s *RedpandaService) Status(ctx context.Context, filesystemService filesyst
 		}
 		return ServiceInfo{}, fmt.Errorf("failed to get last observed state: %w", err)
 	}
-	fmt.Println("Status 2")
 
 	s6ServiceObservedState, ok := s6ServiceObservedStateRaw.(s6fsm.S6ObservedState)
 	if !ok {
 		return ServiceInfo{}, fmt.Errorf("observed state is not a S6ObservedState: %v", s6ServiceObservedStateRaw)
 	}
-	fmt.Printf("Status 3: %v\n", s6ServiceObservedState)
 
 	// Let's get the current FSM state of the underlying s6 FSM
 	s6FSMState, err := s.s6Manager.GetCurrentFSMState(constants.RedpandaServiceName)
@@ -373,11 +370,10 @@ func (s *RedpandaService) Status(ctx context.Context, filesystemService filesyst
 		}
 		return ServiceInfo{}, fmt.Errorf("failed to get current FSM state: %w", err)
 	}
-	fmt.Printf("Status 4.0: %v\n", s6FSMState)
 
 	// Before the service is running, there is no need to check the logs or health check (the logs wont be available yet)
 	if s6FSMState != "running" {
-		fmt.Println("Status 4.0.1")
+
 		serviceInfo := ServiceInfo{
 			S6ObservedState: s6ServiceObservedState,
 			S6FSMState:      s6FSMState,
@@ -391,21 +387,20 @@ func (s *RedpandaService) Status(ctx context.Context, filesystemService filesyst
 	s6ServicePath := filepath.Join(constants.S6BaseDir, constants.RedpandaServiceName)
 	logs, err := s.s6Service.GetLogs(ctx, s6ServicePath, filesystemService)
 	if err != nil {
-		fmt.Printf("Status 4.1: %v\n", err)
+
 		if errors.Is(err, s6service.ErrServiceNotExist) {
-			fmt.Println("Status 4.1.1")
+
 			s.logger.Debugf("Service %s does not exist, returning empty logs", constants.RedpandaServiceName)
 			return ServiceInfo{}, ErrServiceNotExist
 		} else {
-			fmt.Println("Status 4.1.2")
+
 			return ServiceInfo{}, fmt.Errorf("failed to get logs: %w", err)
 		}
 	}
-	fmt.Println("Status 5")
 
 	// Let's get the health check of the Redpanda service
 	redpandaStatus, err := s.GetHealthCheckAndMetrics(ctx, tick, logs)
-	fmt.Println("Status 6")
+
 	if err != nil {
 		if strings.Contains(err.Error(), "connection refused") {
 			return ServiceInfo{
@@ -420,7 +415,7 @@ func (s *RedpandaService) Status(ctx context.Context, filesystemService filesyst
 		}
 		return ServiceInfo{}, fmt.Errorf("failed to get health check: %w", err)
 	}
-	fmt.Println("Status 7")
+
 	serviceInfo := ServiceInfo{
 		S6ObservedState: s6ServiceObservedState,
 		S6FSMState:      s6FSMState,
@@ -434,7 +429,7 @@ func (s *RedpandaService) Status(ctx context.Context, filesystemService filesyst
 
 // GetHealthCheckAndMetrics returns the health check and metrics of a Redpanda service
 func (s *RedpandaService) GetHealthCheckAndMetrics(ctx context.Context, tick uint64, logs []s6service.LogEntry) (RedpandaStatus, error) {
-	fmt.Println("GetHealthCheckAndMetrics")
+
 	s.logger.Infof("Getting health check and metrics for tick %d", tick)
 	start := time.Now()
 	defer func() {
@@ -444,7 +439,6 @@ func (s *RedpandaService) GetHealthCheckAndMetrics(ctx context.Context, tick uin
 	if ctx.Err() != nil {
 		return RedpandaStatus{}, ctx.Err()
 	}
-	fmt.Println("GetHealthCheckAndMetrics 1")
 
 	// Skip health checks and metrics if the service doesn't exist yet
 	// This avoids unnecessary errors in Status() when the service is still being created
@@ -462,18 +456,16 @@ func (s *RedpandaService) GetHealthCheckAndMetrics(ctx context.Context, tick uin
 		}
 		return s.lastStatus, nil
 	}
-	fmt.Println("GetHealthCheckAndMetrics 2")
 
 	redpandaStatus, err := s.metricsService.Status(ctx, s.filesystem, tick)
 	if err != nil {
 		return RedpandaStatus{}, fmt.Errorf("failed to get redpanda status: %w", err)
 	}
-	fmt.Println("GetHealthCheckAndMetrics 3")
 
 	if redpandaStatus.RedpandaStatus.LastScan == nil {
 		return RedpandaStatus{}, fmt.Errorf("last scan is nil")
 	}
-	fmt.Println("GetHealthCheckAndMetrics 4")
+
 	// Create health check structure
 	healthCheck := HealthCheck{
 		// Liveness is determined by a successful response
@@ -489,7 +481,7 @@ func (s *RedpandaService) GetHealthCheckAndMetrics(ctx context.Context, tick uin
 		RedpandaMetrics: *redpandaStatus.RedpandaStatus.LastScan,
 		Logs:            logs,
 	}
-	fmt.Println("GetHealthCheckAndMetrics 5")
+
 	return s.lastStatus, nil
 }
 

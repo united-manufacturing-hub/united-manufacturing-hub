@@ -24,7 +24,6 @@ import (
 	"io"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/prometheus/common/expfmt"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
@@ -110,17 +109,11 @@ func (s *RedpandaMonitorService) GenerateS6ConfigForRedpandaMonitor() (s6service
 
 // parseRedpandaLogs parses the logs of a redpanda service and extracts metrics
 func (s *RedpandaMonitorService) parseRedpandaLogs(logs []s6service.LogEntry, tick uint64) (*RedpandaMetrics, error) {
-	beginning := time.Now()
-	defer func() {
-		fmt.Printf("parsing %d logs took %s\n", len(logs), time.Since(beginning))
-	}()
 
 	if len(logs) == 0 {
 		return nil, fmt.Errorf("no logs provided")
 	}
-	fmt.Printf("parsing %d logs\n", len(logs))
 
-	now := time.Now()
 	// Find the last log entry that contains the END_MARKER
 	endMarkerIndex := -1
 	for i := len(logs) - 1; i >= 0; i-- {
@@ -131,7 +124,7 @@ func (s *RedpandaMonitorService) parseRedpandaLogs(logs []s6service.LogEntry, ti
 	}
 
 	if endMarkerIndex == -1 {
-		fmt.Printf("no end marker found\n")
+
 		return nil, fmt.Errorf("no end marker found")
 	}
 
@@ -144,7 +137,7 @@ func (s *RedpandaMonitorService) parseRedpandaLogs(logs []s6service.LogEntry, ti
 		}
 	}
 	if startMarkerIndex == -1 {
-		fmt.Printf("no start marker found\n")
+
 		return nil, fmt.Errorf("no start marker found")
 	}
 
@@ -158,9 +151,6 @@ func (s *RedpandaMonitorService) parseRedpandaLogs(logs []s6service.LogEntry, ti
 	metricsDataBytes = bytes.ReplaceAll(metricsDataBytes, []byte(START_MARKER), []byte{})
 	metricsDataBytes = bytes.ReplaceAll(metricsDataBytes, []byte(END_MARKER), []byte{})
 
-	fmt.Printf("extracting %d bytes took %s\n", len(metricsDataBytes), time.Since(now))
-	now = time.Now()
-
 	// If the data contains "curl: (7)", we can directly abort
 	if strings.Contains(string(metricsDataBytes), "curl: (7)") {
 		return nil, fmt.Errorf("curl error: %s", string(metricsDataBytes))
@@ -172,9 +162,6 @@ func (s *RedpandaMonitorService) parseRedpandaLogs(logs []s6service.LogEntry, ti
 		return nil, fmt.Errorf("failed to decode metrics data: %w", err)
 	}
 
-	fmt.Printf("decoded %d bytes took %s\n", len(decodedMetricsDataBytes), time.Since(now))
-	now = time.Now()
-
 	// Decompress the metrics data
 	gzipReader, err := gzip.NewReader(bytes.NewReader(decodedMetricsDataBytes))
 	if err != nil {
@@ -182,22 +169,15 @@ func (s *RedpandaMonitorService) parseRedpandaLogs(logs []s6service.LogEntry, ti
 	}
 	defer gzipReader.Close()
 
-	fmt.Printf("decompressed %d bytes took %s\n", len(decodedMetricsDataBytes), time.Since(now))
-	now = time.Now()
-
 	// Parse the metrics
 	metrics, err := parseMetrics(gzipReader)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse metrics: %w", err)
 	}
 
-	fmt.Printf("parsed metrics in %s\n", time.Since(now))
-	now = time.Now()
-
 	// Update the metrics state
 	s.metricsState.UpdateFromMetrics(metrics, tick)
 
-	fmt.Printf("updated metrics state in %s\n", time.Since(now))
 	return &RedpandaMetrics{
 		Metrics:      metrics,
 		MetricsState: s.metricsState,
@@ -215,16 +195,11 @@ func parseMetrics(dataReader io.Reader) (Metrics, error) {
 			TopicPartitionMap: make(map[string]int64), // Pre-allocate map to avoid nil check later
 		},
 	}
-
-	now := time.Now()
 	// Parse the metrics text into prometheus format
 	mf, err := parser.TextToMetricFamilies(dataReader)
 	if err != nil {
 		return metrics, fmt.Errorf("failed to parse metrics: %w", err)
 	}
-
-	fmt.Printf("text to metric families in %s\n", time.Since(now))
-	now = time.Now()
 
 	// Directly extract only the metrics we need instead of iterating all metrics
 
@@ -278,8 +253,6 @@ func parseMetrics(dataReader io.Reader) (Metrics, error) {
 			}
 		}
 	}
-
-	fmt.Printf("extracted metrics in %s\n", time.Since(now))
 
 	return metrics, nil
 }
