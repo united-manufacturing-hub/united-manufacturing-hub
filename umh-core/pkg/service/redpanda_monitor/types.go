@@ -92,6 +92,20 @@ type TopicMetrics struct {
 	TopicPartitionMap map[string]int64
 }
 
+type RedpandaMetricsAndClusterConfig struct {
+	Metrics       *RedpandaMetrics
+	ClusterConfig *ClusterConfig
+}
+
+type ClusterConfig struct {
+	Topic TopicConfig
+}
+
+type TopicConfig struct {
+	DefaultTopicRetentionMs    int
+	DefaultTopicRetentionBytes int
+}
+
 type RedpandaMetrics struct {
 	// Metrics contains information about the metrics of the Redpanda service
 	Metrics Metrics
@@ -112,7 +126,7 @@ type ServiceInfo struct {
 // RedpandaMonitorStatus contains status information about the redpanda service
 type RedpandaMonitorStatus struct {
 	// LastScan contains the result of the last scan
-	LastScan *RedpandaMetrics
+	LastScan *RedpandaMetricsAndClusterConfig
 	// IsRunning indicates whether the redpanda service is running
 	IsRunning bool
 	// Logs contains the logs of the redpanda service

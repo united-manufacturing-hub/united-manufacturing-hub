@@ -92,8 +92,10 @@ func (m *MockRedpandaMonitorService) SetServiceState(flags ServiceStateFlags) {
 	if m.ServiceState == nil {
 		m.ServiceState = &ServiceInfo{
 			RedpandaStatus: RedpandaMonitorStatus{
-				LastScan: &RedpandaMetrics{
-					MetricsState: m.metricsState,
+				LastScan: &RedpandaMetricsAndClusterConfig{
+					Metrics: &RedpandaMetrics{
+						MetricsState: m.metricsState,
+					},
 				},
 			},
 		}
@@ -322,8 +324,10 @@ func (m *MockRedpandaMonitorService) SetMetricsState(isActive bool, uptimeSecond
 
 	// Update the service state if it exists
 	if m.ServiceState != nil && m.ServiceState.RedpandaStatus.LastScan != nil {
-		m.ServiceState.RedpandaStatus.LastScan.MetricsState = m.metricsState
-		m.ServiceState.RedpandaStatus.LastScan.Metrics = metrics
+		m.ServiceState.RedpandaStatus.LastScan.Metrics = &RedpandaMetrics{
+			MetricsState: m.metricsState,
+			Metrics:      metrics,
+		}
 	}
 }
 
@@ -332,8 +336,10 @@ func (m *MockRedpandaMonitorService) SetMockLogs(logs []s6service.LogEntry) {
 	if m.ServiceState == nil {
 		m.ServiceState = &ServiceInfo{
 			RedpandaStatus: RedpandaMonitorStatus{
-				LastScan: &RedpandaMetrics{
-					MetricsState: m.metricsState,
+				LastScan: &RedpandaMetricsAndClusterConfig{
+					Metrics: &RedpandaMetrics{
+						MetricsState: m.metricsState,
+					},
 				},
 			},
 		}

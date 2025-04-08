@@ -143,7 +143,7 @@ func (m *MockRedpandaService) GenerateS6ConfigForRedpanda(redpandaConfig *redpan
 }
 
 // GetConfig mocks getting the Redpanda configuration
-func (m *MockRedpandaService) GetConfig(ctx context.Context, filesystemService filesystem.Service) (redpandaserviceconfig.RedpandaServiceConfig, error) {
+func (m *MockRedpandaService) GetConfig(ctx context.Context, filesystemService filesystem.Service, tick uint64) (redpandaserviceconfig.RedpandaServiceConfig, error) {
 	m.GetConfigCalled = true
 
 	// If error is set, return it

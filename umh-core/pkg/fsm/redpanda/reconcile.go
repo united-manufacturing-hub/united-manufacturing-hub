@@ -107,7 +107,7 @@ func (b *RedpandaInstance) Reconcile(ctx context.Context, filesystemService file
 	// Step 3: Attempt to reconcile the state.
 
 	currentTime := time.Now() // this is used to check if the instance is degraded and for the log check
-	err, reconciled = b.reconcileStateTransition(ctx, filesystemService, currentTime)
+	err, reconciled = b.reconcileStateTransition(ctx, currentTime)
 	if err != nil {
 		// If the instance is removed, we don't want to return an error here, because we want to continue reconciling
 		if errors.Is(err, fsm.ErrInstanceRemoved) {
@@ -164,7 +164,7 @@ func (b *RedpandaInstance) reconcileExternalChanges(ctx context.Context, filesys
 // Any functions that fetch information are disallowed here and must be called in reconcileExternalChanges
 // and exist in ObservedState.
 // This is to ensure full testability of the FSM.
-func (b *RedpandaInstance) reconcileStateTransition(ctx context.Context, filesystemService filesystem.Service, currentTime time.Time) (err error, reconciled bool) {
+func (b *RedpandaInstance) reconcileStateTransition(ctx context.Context, currentTime time.Time) (err error, reconciled bool) {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentRedpandaInstance, b.baseFSMInstance.GetID()+".reconcileStateTransition", time.Since(start))

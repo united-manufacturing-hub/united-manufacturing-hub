@@ -19,11 +19,14 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/prometheus/common/expfmt"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
@@ -62,6 +65,7 @@ func NewRedpandaMonitorService(fs filesystem.Service) *RedpandaMonitorService {
 }
 
 const START_MARKER = "BEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGIN"
+const MID_MARKER = "MIDMIDMIDMIDMIDMIDMIDMIDMIDMIDMIDMIDMIDMIDMIDMIDMID"
 const END_MARKER = "ENDENDENDENDENDENDENDENDENDENDENDENDENDENDENDENDEND"
 
 func (s *RedpandaMonitorService) generateRedpandaScript() (string, error) {
@@ -73,10 +77,11 @@ while true; do
   echo "%s"
   curl -sSL http://localhost:9644/public_metrics | gzip -c | xxd -p
   echo "%s"
-  echo ""
+  curl -sSL http://localhost:9644/v1/cluster_config | gzip -c | xxd -p
+  echo "%s"
   sleep 1
 done
-`, START_MARKER, END_MARKER)
+`, START_MARKER, MID_MARKER, END_MARKER)
 
 	return scriptContent, nil
 }
@@ -108,7 +113,7 @@ func (s *RedpandaMonitorService) GenerateS6ConfigForRedpandaMonitor() (s6service
 // GetConfig is not implemented, as the config is static
 
 // parseRedpandaLogs parses the logs of a redpanda service and extracts metrics
-func (s *RedpandaMonitorService) parseRedpandaLogs(logs []s6service.LogEntry, tick uint64) (*RedpandaMetrics, error) {
+func (s *RedpandaMonitorService) parseRedpandaLogs(logs []s6service.LogEntry, tick uint64) (*RedpandaMetricsAndClusterConfig, error) {
 
 	if len(logs) == 0 {
 		return nil, fmt.Errorf("no logs provided")
@@ -124,7 +129,6 @@ func (s *RedpandaMonitorService) parseRedpandaLogs(logs []s6service.LogEntry, ti
 	}
 
 	if endMarkerIndex == -1 {
-
 		return nil, fmt.Errorf("no end marker found")
 	}
 
@@ -137,19 +141,78 @@ func (s *RedpandaMonitorService) parseRedpandaLogs(logs []s6service.LogEntry, ti
 		}
 	}
 	if startMarkerIndex == -1 {
-
 		return nil, fmt.Errorf("no start marker found")
 	}
 
-	// Extract the lines inbetween
-	metricsData := logs[startMarkerIndex+1 : endMarkerIndex]
+	// Inbetween both, we need to find the mid marker
+	midMarkerIndex := -1
+	for i := startMarkerIndex + 1; i < endMarkerIndex; i++ {
+		if strings.Contains(logs[i].Content, MID_MARKER) {
+			midMarkerIndex = i
+			break
+		}
+	}
+
+	if midMarkerIndex == -1 {
+		return nil, fmt.Errorf("no mid marker found")
+	}
+
+	// We need to extract the lines inbetween the start and mid marker & mid and end marker
+	// Metrics is the first part, cluster config is the second part
+	metricsData := logs[startMarkerIndex+1 : midMarkerIndex]
+	clusterConfigData := logs[midMarkerIndex+1 : endMarkerIndex]
+
 	var metricsDataBytes []byte
+	var clusterConfigDataBytes []byte
 	for _, log := range metricsData {
 		metricsDataBytes = append(metricsDataBytes, log.Content...)
 	}
-	// Remove the START_MARKER and END_MARKER
+	for _, log := range clusterConfigData {
+		clusterConfigDataBytes = append(clusterConfigDataBytes, log.Content...)
+	}
+
+	// Remove the START_MARKER, MID_MARKER and END_MARKER
 	metricsDataBytes = bytes.ReplaceAll(metricsDataBytes, []byte(START_MARKER), []byte{})
+	metricsDataBytes = bytes.ReplaceAll(metricsDataBytes, []byte(MID_MARKER), []byte{})
 	metricsDataBytes = bytes.ReplaceAll(metricsDataBytes, []byte(END_MARKER), []byte{})
+
+	clusterConfigDataBytes = bytes.ReplaceAll(clusterConfigDataBytes, []byte(START_MARKER), []byte{})
+	clusterConfigDataBytes = bytes.ReplaceAll(clusterConfigDataBytes, []byte(MID_MARKER), []byte{})
+	clusterConfigDataBytes = bytes.ReplaceAll(clusterConfigDataBytes, []byte(END_MARKER), []byte{})
+
+	var wg sync.WaitGroup
+	var metrics *RedpandaMetrics
+	var clusterConfig *ClusterConfig
+	var metricsErr, clusterConfigErr error
+
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		metrics, metricsErr = s.processMetricsDataBytes(metricsDataBytes, tick)
+	}()
+
+	go func() {
+		defer wg.Done()
+		clusterConfig, clusterConfigErr = s.processClusterConfigDataBytes(clusterConfigDataBytes, tick)
+	}()
+
+	wg.Wait()
+
+	if metricsErr != nil {
+		return nil, fmt.Errorf("failed to process metrics data: %w", metricsErr)
+	}
+
+	if clusterConfigErr != nil {
+		return nil, fmt.Errorf("failed to process cluster config data: %w", clusterConfigErr)
+	}
+
+	return &RedpandaMetricsAndClusterConfig{
+		Metrics:       metrics,
+		ClusterConfig: clusterConfig,
+	}, nil
+}
+
+func (s *RedpandaMonitorService) processMetricsDataBytes(metricsDataBytes []byte, tick uint64) (*RedpandaMetrics, error) {
 
 	// If the data contains "curl: (7)", we can directly abort
 	if strings.Contains(string(metricsDataBytes), "curl: (7)") {
@@ -182,6 +245,61 @@ func (s *RedpandaMonitorService) parseRedpandaLogs(logs []s6service.LogEntry, ti
 		Metrics:      metrics,
 		MetricsState: s.metricsState,
 	}, nil
+}
+
+func (s *RedpandaMonitorService) processClusterConfigDataBytes(clusterConfigDataBytes []byte, tick uint64) (*ClusterConfig, error) {
+
+	if strings.Contains(string(clusterConfigDataBytes), "curl: (7)") {
+		return nil, fmt.Errorf("curl error: %s", string(clusterConfigDataBytes))
+	}
+
+	// Decode the hex encoded metrics data
+	decodedMetricsDataBytes, err := hex.DecodeString(string(clusterConfigDataBytes))
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode metrics data: %w", err)
+	}
+
+	// Decompress the metrics data
+	gzipReader, err := gzip.NewReader(bytes.NewReader(decodedMetricsDataBytes))
+	if err != nil {
+		return nil, fmt.Errorf("failed to decompress metrics data: %w", err)
+	}
+	defer gzipReader.Close()
+
+	// Parse the JSON response
+	var redpandaConfig map[string]interface{}
+	if err := json.NewDecoder(gzipReader).Decode(&redpandaConfig); err != nil {
+		return nil, fmt.Errorf("failed to parse cluster config data: %w", err)
+	}
+
+	var result ClusterConfig
+
+	// Extract the values we need from the JSON
+	if value, ok := redpandaConfig["log_retention_ms"]; ok {
+		if floatVal, ok := value.(float64); ok {
+			result.Topic.DefaultTopicRetentionMs = int(floatVal)
+		} else if intVal, ok := value.(int); ok {
+			result.Topic.DefaultTopicRetentionMs = intVal
+		} else if strVal, ok := value.(string); ok {
+			if intVal, err := strconv.Atoi(strVal); err == nil {
+				result.Topic.DefaultTopicRetentionMs = intVal
+			}
+		}
+	}
+
+	if value, ok := redpandaConfig["retention_bytes"]; ok {
+		if floatVal, ok := value.(float64); ok {
+			result.Topic.DefaultTopicRetentionBytes = int(floatVal)
+		} else if intVal, ok := value.(int); ok {
+			result.Topic.DefaultTopicRetentionBytes = intVal
+		} else if strVal, ok := value.(string); ok {
+			if intVal, err := strconv.Atoi(strVal); err == nil {
+				result.Topic.DefaultTopicRetentionBytes = intVal
+			}
+		}
+	}
+
+	return &result, nil
 }
 
 // parseMetrics parses prometheus metrics into structured format

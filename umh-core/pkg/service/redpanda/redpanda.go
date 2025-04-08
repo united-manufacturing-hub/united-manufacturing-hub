@@ -16,12 +16,9 @@ package redpanda
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"net/http"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
@@ -48,7 +45,7 @@ type IRedpandaService interface {
 	// GenerateS6ConfigForRedpanda generates a S6 config for a given redpanda instance
 	GenerateS6ConfigForRedpanda(redpandaConfig *redpandaserviceconfig.RedpandaServiceConfig) (s6serviceconfig.S6ServiceConfig, error)
 	// GetConfig returns the actual Redpanda config from the S6 service
-	GetConfig(ctx context.Context, filesystemService filesystem.Service) (redpandaserviceconfig.RedpandaServiceConfig, error)
+	GetConfig(ctx context.Context, filesystemService filesystem.Service, tick uint64) (redpandaserviceconfig.RedpandaServiceConfig, error)
 	// Status checks the status of a Redpanda service
 	Status(ctx context.Context, filesystemService filesystem.Service, tick uint64) (ServiceInfo, error)
 	// AddRedpandaToS6Manager adds a Redpanda instance to the S6 manager
@@ -222,65 +219,29 @@ func (s *RedpandaService) GenerateS6ConfigForRedpanda(redpandaConfig *redpandase
 }
 
 // GetConfig returns the actual Redpanda config from the S6 service
-func (s *RedpandaService) GetConfig(ctx context.Context, filesystemService filesystem.Service) (redpandaserviceconfig.RedpandaServiceConfig, error) {
+func (s *RedpandaService) GetConfig(ctx context.Context, filesystemService filesystem.Service, tick uint64) (redpandaserviceconfig.RedpandaServiceConfig, error) {
 	if ctx.Err() != nil {
 		return redpandaserviceconfig.RedpandaServiceConfig{}, ctx.Err()
 	}
 
-	// Create HTTP client if needed
-	var requestClient httpclient.HTTPClient = s.httpClient
-	if requestClient == nil {
-		requestClient = httpclient.NewDefaultHTTPClient()
-	}
-
-	// Fetch configuration from the API endpoint
-	clusterConfigEndpoint := "http://localhost:9644/v1/cluster_config"
-	resp, body, err := requestClient.GetWithBody(ctx, clusterConfigEndpoint)
+	status, err := s.metricsService.Status(ctx, filesystemService, tick)
 	if err != nil {
-		s.logger.Debugf("Failed to fetch cluster_config: %v", err)
-
-		// Fall back to the file-based approach if API call fails
+		// Use fallback from configfile
+		s.logger.Warnf("Failed to get redpanda status, using fallback from configfile: %v", err)
 		return s.getConfigFromFile(ctx, filesystemService)
 	}
 
-	if resp.StatusCode != http.StatusOK {
-		s.logger.Debugf("Unexpected status code from cluster_config API: %d", resp.StatusCode)
+	if status.RedpandaStatus.LastScan == nil {
+		// Use fallback from configfile
+		s.logger.Warnf("Last scan is nil, using fallback from configfile")
 		return s.getConfigFromFile(ctx, filesystemService)
 	}
 
-	// Parse the JSON response
-	var redpandaConfig map[string]interface{}
-	if err := json.Unmarshal(body, &redpandaConfig); err != nil {
-		s.logger.Debugf("Error parsing cluster_config response: %v", err)
-		return s.getConfigFromFile(ctx, filesystemService)
-	}
+	lastScan := status.RedpandaStatus.LastScan
 
-	result := redpandaserviceconfig.RedpandaServiceConfig{}
-
-	// Extract the values we need from the JSON
-	if value, ok := redpandaConfig["log_retention_ms"]; ok {
-		if floatVal, ok := value.(float64); ok {
-			result.Topic.DefaultTopicRetentionMs = int(floatVal)
-		} else if intVal, ok := value.(int); ok {
-			result.Topic.DefaultTopicRetentionMs = intVal
-		} else if strVal, ok := value.(string); ok {
-			if intVal, err := strconv.Atoi(strVal); err == nil {
-				result.Topic.DefaultTopicRetentionMs = intVal
-			}
-		}
-	}
-
-	if value, ok := redpandaConfig["retention_bytes"]; ok {
-		if floatVal, ok := value.(float64); ok {
-			result.Topic.DefaultTopicRetentionBytes = int(floatVal)
-		} else if intVal, ok := value.(int); ok {
-			result.Topic.DefaultTopicRetentionBytes = intVal
-		} else if strVal, ok := value.(string); ok {
-			if intVal, err := strconv.Atoi(strVal); err == nil {
-				result.Topic.DefaultTopicRetentionBytes = intVal
-			}
-		}
-	}
+	var result redpandaserviceconfig.RedpandaServiceConfig
+	result.Topic.DefaultTopicRetentionMs = lastScan.ClusterConfig.Topic.DefaultTopicRetentionMs
+	result.Topic.DefaultTopicRetentionBytes = lastScan.ClusterConfig.Topic.DefaultTopicRetentionBytes
 
 	// Safely extract MaxCores - this might not be available from the API
 	// so we'll use a default value
@@ -478,7 +439,7 @@ func (s *RedpandaService) GetHealthCheckAndMetrics(ctx context.Context, tick uin
 
 	s.lastStatus = RedpandaStatus{
 		HealthCheck:     healthCheck,
-		RedpandaMetrics: *redpandaStatus.RedpandaStatus.LastScan,
+		RedpandaMetrics: *redpandaStatus.RedpandaStatus.LastScan.Metrics,
 		Logs:            logs,
 	}
 
