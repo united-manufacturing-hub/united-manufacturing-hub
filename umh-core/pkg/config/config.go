@@ -18,6 +18,7 @@ import (
 	"reflect"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/redpandaserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
 
@@ -25,9 +26,9 @@ import (
 )
 
 type FullConfig struct {
-	Agent              AgentConfig               `yaml:"agent"`                        // Agent config, requires restart to take effect
-	DataFlowComponents []DataFlowComponentConfig `yaml:"dataFlowComponents,omitempty"` // DataFlowComponent services to manage
-	Internal           InternalConfig            `yaml:"internal,omitempty"`           // Internal config, not to be used by the user, only to be used for testing internal components
+	Agent    AgentConfig               `yaml:"agent"`              // Agent config, requires restart to take effect
+	DataFlow []DataFlowComponentConfig `yaml:"dataFlow,omitempty"` // DataFlow components to manage, can be updated while running
+	Internal InternalConfig            `yaml:"internal,omitempty"` // Internal config, not to be used by the user, only to be used for testing internal components
 }
 
 type InternalConfig struct {
@@ -55,6 +56,12 @@ type FSMInstanceConfig struct {
 	DesiredFSMState string `yaml:"desiredState"`
 }
 
+// ContainerConfig is the config for a container instance
+type ContainerConfig struct {
+	Name            string `yaml:"name"`
+	DesiredFSMState string `yaml:"desiredState"`
+}
+
 type ReleaseChannel string
 
 const (
@@ -78,6 +85,14 @@ type BenthosConfig struct {
 
 	// For the Benthos service
 	BenthosServiceConfig benthosserviceconfig.BenthosServiceConfig `yaml:"benthosServiceConfig"`
+}
+
+// DataFlowComponentConfig contains configuration for creating a DataFlowComponent
+type DataFlowComponentConfig struct {
+	// For the FSM
+	FSMInstanceConfig `yaml:",inline"`
+
+	DataFlowComponentConfig dataflowcomponentconfig.DataFlowComponentConfig `yaml:"dataFlowComponentConfig"`
 }
 
 // NmapConfig contains configuration for creating a Nmap service
@@ -111,22 +126,12 @@ type RedpandaConfig struct {
 	RedpandaServiceConfig redpandaserviceconfig.RedpandaServiceConfig `yaml:"redpandaServiceConfig"`
 }
 
-// DataFlowComponentConfig contains configuration for a DataFlowComponent
-type DataFlowComponentConfig struct {
-	// Basic component configuration
-	Name         string `yaml:"name"`
-	DesiredState string `yaml:"desiredState"`
-
-	// Service configuration similar to BenthosServiceConfig
-	ServiceConfig benthosserviceconfig.BenthosServiceConfig `yaml:"serviceConfig"`
-}
-
 // Clone creates a deep copy of FullConfig
 func (c FullConfig) Clone() FullConfig {
 	clone := FullConfig{
-		Agent:              c.Agent,
-		DataFlowComponents: make([]DataFlowComponentConfig, len(c.DataFlowComponents)),
-		Internal:           InternalConfig{},
+		Agent:    c.Agent,
+		DataFlow: make([]DataFlowComponentConfig, len(c.DataFlow)),
+		Internal: InternalConfig{},
 	}
 	// deep copy the location map if it exists
 	if c.Agent.Location != nil {
@@ -135,7 +140,7 @@ func (c FullConfig) Clone() FullConfig {
 			clone.Agent.Location[k] = v
 		}
 	}
-	deepcopy.Copy(&clone.DataFlowComponents, &c.DataFlowComponents)
+	deepcopy.Copy(&clone.DataFlow, &c.DataFlow)
 	deepcopy.Copy(&clone.Agent, &c.Agent)
 	deepcopy.Copy(&clone.Internal, &c.Internal)
 	return clone
