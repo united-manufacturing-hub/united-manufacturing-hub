@@ -112,6 +112,7 @@ func (b *RedpandaInstance) initiateRedpandaStop(ctx context.Context) error {
 // getServiceStatus gets the status of the Redpanda service
 // its main purpose is to habdle the edge cases where the service is not yet created or not yet running
 func (b *RedpandaInstance) getServiceStatus(ctx context.Context, filesystemService filesystem.Service, tick uint64) (redpanda_service.ServiceInfo, error) {
+
 	info, err := b.service.Status(ctx, filesystemService, tick)
 	if err != nil {
 		// If there's an error getting the service status, we need to distinguish between cases
