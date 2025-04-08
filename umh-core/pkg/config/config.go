@@ -55,6 +55,12 @@ type FSMInstanceConfig struct {
 	DesiredFSMState string `yaml:"desiredState"`
 }
 
+// ContainerConfig is the config for a container instance
+type ContainerConfig struct {
+	Name            string `yaml:"name"`
+	DesiredFSMState string `yaml:"desiredState"`
+}
+
 type ReleaseChannel string
 
 const (
