@@ -40,6 +40,11 @@ func getTmpDir() string {
 	return tmpDir
 }
 
+// newTimeoutContext creates a context with a 30-second timeout
+func newTimeoutContext() (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.Background(), 30*time.Second)
+}
+
 var _ = Describe("Redpanda Service", func() {
 	var (
 		service *RedpandaService
@@ -53,7 +58,9 @@ var _ = Describe("Redpanda Service", func() {
 		mockFS = filesystem.NewMockFileSystem()
 
 		// Cleanup the data directory
-		service.filesystem.RemoveAll(context.Background(), getTmpDir())
+		ctx, cancel := newTimeoutContext()
+		defer cancel()
+		service.filesystem.RemoveAll(ctx, getTmpDir())
 
 		// Add the service to the S6 manager
 		config := &redpandaserviceconfig.RedpandaServiceConfig{
@@ -61,11 +68,15 @@ var _ = Describe("Redpanda Service", func() {
 		}
 		config.Topic.DefaultTopicRetentionMs = 1000000
 		config.Topic.DefaultTopicRetentionBytes = 1000000000
-		err := service.AddRedpandaToS6Manager(context.Background(), config)
+		ctx, cancel = newTimeoutContext()
+		defer cancel()
+		err := service.AddRedpandaToS6Manager(ctx, config)
 		Expect(err).NotTo(HaveOccurred())
 
 		// Reconcile the S6 manager
-		err, _ = service.ReconcileManager(context.Background(), mockFS, tick)
+		ctx, cancel = newTimeoutContext()
+		defer cancel()
+		err, _ = service.ReconcileManager(ctx, mockFS, tick)
 		Expect(err).NotTo(HaveOccurred())
 	})
 
@@ -111,7 +122,8 @@ var _ = Describe("Redpanda Service", func() {
 		})
 
 		It("should add, start, stop and remove a Redpanda service", func() {
-			ctx := context.Background()
+			ctx, cancel := newTimeoutContext()
+			defer cancel()
 
 			// Initial config
 			config := &redpandaserviceconfig.RedpandaServiceConfig{
@@ -158,7 +170,8 @@ var _ = Describe("Redpanda Service", func() {
 		})
 
 		It("should handle configuration updates", func() {
-			ctx := context.Background()
+			ctx, cancel := newTimeoutContext()
+			defer cancel()
 
 			// Use MockRedpandaService for this test to verify method calls
 			mockRedpandaService := NewMockRedpandaService()
@@ -199,7 +212,8 @@ var _ = Describe("Redpanda Service", func() {
 		})
 
 		It("should handle non-existent service errors", func() {
-			ctx := context.Background()
+			ctx, cancel := newTimeoutContext()
+			defer cancel()
 
 			// Try to update a non-existent service
 			By("Trying to update a non-existent service")
@@ -220,7 +234,8 @@ var _ = Describe("Redpanda Service", func() {
 		})
 
 		It("should handle already existing service errors", func() {
-			ctx := context.Background()
+			ctx, cancel := newTimeoutContext()
+			defer cancel()
 
 			// Add a service
 			By("Adding a service")
