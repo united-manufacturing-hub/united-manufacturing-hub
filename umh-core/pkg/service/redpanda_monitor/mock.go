@@ -174,8 +174,8 @@ func (m *MockRedpandaMonitorService) Status(ctx context.Context, filesystemServi
 	return m.StatusResult, m.StatusError
 }
 
-// AddRedpandaToS6Manager mocks adding a Redpanda Monitor instance to the S6 manager
-func (m *MockRedpandaMonitorService) AddRedpandaToS6Manager(ctx context.Context) error {
+// AddRedpandaMonitorToS6Manager mocks adding a Redpanda Monitor instance to the S6 manager
+func (m *MockRedpandaMonitorService) AddRedpandaMonitorToS6Manager(ctx context.Context) error {
 	m.AddRedpandaToS6ManagerCalled = true
 
 	// Check for context cancellation
@@ -208,8 +208,8 @@ func (m *MockRedpandaMonitorService) AddRedpandaToS6Manager(ctx context.Context)
 	return m.AddRedpandaToS6ManagerError
 }
 
-// RemoveRedpandaFromS6Manager mocks removing a Redpanda Monitor instance from the S6 manager
-func (m *MockRedpandaMonitorService) RemoveRedpandaFromS6Manager(ctx context.Context) error {
+// RemoveRedpandaMonitorFromS6Manager mocks removing a Redpanda Monitor instance from the S6 manager
+func (m *MockRedpandaMonitorService) RemoveRedpandaMonitorFromS6Manager(ctx context.Context) error {
 	m.RemoveRedpandaFromS6ManagerCalled = true
 
 	// Check for context cancellation
@@ -229,8 +229,8 @@ func (m *MockRedpandaMonitorService) RemoveRedpandaFromS6Manager(ctx context.Con
 	return m.RemoveRedpandaFromS6ManagerError
 }
 
-// StartRedpanda mocks starting a Redpanda Monitor instance
-func (m *MockRedpandaMonitorService) StartRedpanda(ctx context.Context) error {
+// StartRedpandaMonitor mocks starting a Redpanda Monitor instance
+func (m *MockRedpandaMonitorService) StartRedpandaMonitor(ctx context.Context) error {
 	m.StartRedpandaCalled = true
 
 	// Check for context cancellation
@@ -249,8 +249,8 @@ func (m *MockRedpandaMonitorService) StartRedpanda(ctx context.Context) error {
 	return m.StartRedpandaError
 }
 
-// StopRedpanda mocks stopping a Redpanda Monitor instance
-func (m *MockRedpandaMonitorService) StopRedpanda(ctx context.Context) error {
+// StopRedpandaMonitor mocks stopping a Redpanda Monitor instance
+func (m *MockRedpandaMonitorService) StopRedpandaMonitor(ctx context.Context) error {
 	m.StopRedpandaCalled = true
 
 	// Check for context cancellation

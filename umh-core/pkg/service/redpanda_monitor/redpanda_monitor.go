@@ -290,8 +290,8 @@ func (s *RedpandaMonitorService) Status(ctx context.Context, filesystemService f
 	}, nil
 }
 
-// AddRedpandaToS6Manager adds a redpanda instance to the S6 manager
-func (s *RedpandaMonitorService) AddRedpandaToS6Manager(ctx context.Context) error {
+// AddRedpandaMonitorToS6Manager adds a redpanda instance to the S6 manager
+func (s *RedpandaMonitorService) AddRedpandaMonitorToS6Manager(ctx context.Context) error {
 	if s.s6Manager == nil {
 		return errors.New("s6 manager not initialized")
 	}
@@ -330,8 +330,8 @@ func (s *RedpandaMonitorService) AddRedpandaToS6Manager(ctx context.Context) err
 
 //  There is no need for an UpdateRedpandaInS6Manager, as the S6 config is static
 
-// RemoveRedpandaFromS6Manager removes a redpanda instance from the S6 manager
-func (s *RedpandaMonitorService) RemoveRedpandaFromS6Manager(ctx context.Context) error {
+// RemoveRedpandaMonitorFromS6Manager removes a redpanda instance from the S6 manager
+func (s *RedpandaMonitorService) RemoveRedpandaMonitorFromS6Manager(ctx context.Context) error {
 	if s.s6Manager == nil {
 		return errors.New("s6 manager not initialized")
 	}
@@ -352,8 +352,8 @@ func (s *RedpandaMonitorService) RemoveRedpandaFromS6Manager(ctx context.Context
 	return nil
 }
 
-// StartRedpanda starts a redpanda instance
-func (s *RedpandaMonitorService) StartRedpanda(ctx context.Context) error {
+// StartRedpandaMonitor starts a redpanda instance
+func (s *RedpandaMonitorService) StartRedpandaMonitor(ctx context.Context) error {
 	if s.s6Manager == nil {
 		return errors.New("s6 manager not initialized")
 	}
@@ -371,8 +371,8 @@ func (s *RedpandaMonitorService) StartRedpanda(ctx context.Context) error {
 	return nil
 }
 
-// StopRedpanda stops a redpanda instance
-func (s *RedpandaMonitorService) StopRedpanda(ctx context.Context) error {
+// StopRedpandaMonitor stops a redpanda instance
+func (s *RedpandaMonitorService) StopRedpandaMonitor(ctx context.Context) error {
 	if s.s6Manager == nil {
 		return errors.New("s6 manager not initialized")
 	}

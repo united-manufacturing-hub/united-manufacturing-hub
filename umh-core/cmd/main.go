@@ -97,6 +97,13 @@ func main() {
 			ReleaseChannel: config.ReleaseChannel(releaseChannel),
 			Location:       locations,
 		},
+		Internal: config.InternalConfig{
+			Redpanda: config.RedpandaConfig{
+				FSMInstanceConfig: config.FSMInstanceConfig{
+					DesiredFSMState: "running",
+				},
+			},
+		},
 	})
 	if err != nil {
 		sentry.ReportIssuef(sentry.IssueTypeFatal, log, "Failed to load config: %w", err)

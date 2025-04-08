@@ -19,10 +19,10 @@ agent:
     authToken: a7caf5d82dacb972c300baf72d76326a3168141975f9e31f077aa28beced1ab7
   releaseChannel: stable
 
-redpanda:
-  desiredState: stopped
   
 internal:
+  redpanda:
+    desiredState: stopped
   benthos:
     - name: hello-world
       desiredState: active

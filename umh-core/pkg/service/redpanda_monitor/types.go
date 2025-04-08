@@ -122,10 +122,10 @@ type RedpandaMonitorStatus struct {
 type IRedpandaMonitorService interface {
 	GenerateS6ConfigForRedpandaMonitor() (s6serviceconfig.S6ServiceConfig, error)
 	Status(ctx context.Context, filesystemService filesystem.Service, tick uint64) (ServiceInfo, error)
-	AddRedpandaToS6Manager(ctx context.Context) error
-	RemoveRedpandaFromS6Manager(ctx context.Context) error
-	StartRedpanda(ctx context.Context) error
-	StopRedpanda(ctx context.Context) error
+	AddRedpandaMonitorToS6Manager(ctx context.Context) error
+	RemoveRedpandaMonitorFromS6Manager(ctx context.Context) error
+	StartRedpandaMonitor(ctx context.Context) error
+	StopRedpandaMonitor(ctx context.Context) error
 	ReconcileManager(ctx context.Context, filesystemService filesystem.Service, tick uint64) (error, bool)
 	ServiceExists(ctx context.Context, filesystemService filesystem.Service) bool
 }

@@ -51,8 +51,8 @@ type CommunicatorConfig struct {
 
 // FSMInstanceConfig is the config for a FSM instance
 type FSMInstanceConfig struct {
-	Name            string `yaml:"name"`
-	DesiredFSMState string `yaml:"desiredState"`
+	Name            string `yaml:"name,omitempty"`
+	DesiredFSMState string `yaml:"desiredState,omitempty"`
 }
 
 type ReleaseChannel string

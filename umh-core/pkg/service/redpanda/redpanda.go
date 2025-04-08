@@ -510,7 +510,7 @@ func (s *RedpandaService) AddRedpandaToS6Manager(ctx context.Context, cfg *redpa
 	s.s6ServiceConfigs = append(s.s6ServiceConfigs, s6FSMConfig)
 
 	// Also add the redpanda monitor to the S6 manager
-	if err := s.metricsService.AddRedpandaToS6Manager(ctx); err != nil {
+	if err := s.metricsService.AddRedpandaMonitorToS6Manager(ctx); err != nil {
 		if !errors.Is(err, redpanda_monitor.ErrServiceAlreadyExists) {
 			return fmt.Errorf("failed to add redpanda monitor to S6 manager: %w", err)
 		}
@@ -609,7 +609,7 @@ func (s *RedpandaService) RemoveRedpandaFromS6Manager(ctx context.Context) error
 	}
 
 	// Also remove the redpanda monitor from the S6 manager
-	if err := s.metricsService.RemoveRedpandaFromS6Manager(ctx); err != nil {
+	if err := s.metricsService.RemoveRedpandaMonitorFromS6Manager(ctx); err != nil {
 		if !errors.Is(err, redpanda_monitor.ErrServiceNotExist) {
 			return fmt.Errorf("failed to remove redpanda monitor from S6 manager: %w", err)
 		}
