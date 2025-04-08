@@ -28,7 +28,7 @@ import (
 type FullConfig struct {
 	Agent    AgentConfig               `yaml:"agent"`              // Agent config, requires restart to take effect
 	DataFlow []DataFlowComponentConfig `yaml:"dataFlow,omitempty"` // DataFlow components to manage, can be updated while running
-	Internal InternalConfig            `yaml:"internal,omitempty"`           // Internal config, not to be used by the user, only to be used for testing internal components
+	Internal InternalConfig            `yaml:"internal,omitempty"` // Internal config, not to be used by the user, only to be used for testing internal components
 }
 
 type InternalConfig struct {
@@ -126,22 +126,12 @@ type RedpandaConfig struct {
 	RedpandaServiceConfig redpandaserviceconfig.RedpandaServiceConfig `yaml:"redpandaServiceConfig"`
 }
 
-// DataFlowComponentConfig contains configuration for a DataFlowComponent
-type DataFlowComponentConfig struct {
-	// Basic component configuration
-	Name         string `yaml:"name"`
-	DesiredState string `yaml:"desiredState"`
-
-	// Service configuration similar to BenthosServiceConfig
-	ServiceConfig benthosserviceconfig.BenthosServiceConfig `yaml:"serviceConfig"`
-}
-
 // Clone creates a deep copy of FullConfig
 func (c FullConfig) Clone() FullConfig {
 	clone := FullConfig{
-		Agent:              c.Agent,
-		DataFlowComponents: make([]DataFlowComponentConfig, len(c.DataFlowComponents)),
-		Internal:           InternalConfig{},
+		Agent:    c.Agent,
+		DataFlow: make([]DataFlowComponentConfig, len(c.DataFlow)),
+		Internal: InternalConfig{},
 	}
 	// deep copy the location map if it exists
 	if c.Agent.Location != nil {
@@ -150,9 +140,8 @@ func (c FullConfig) Clone() FullConfig {
 			clone.Agent.Location[k] = v
 		}
 	}
-	deepcopy.Copy(&clone.DataFlowComponents, &c.DataFlowComponents)
-	deepcopy.Copy(&clone.Agent, &c.Agent)
 	deepcopy.Copy(&clone.DataFlow, &c.DataFlow)
+	deepcopy.Copy(&clone.Agent, &c.Agent)
 	deepcopy.Copy(&clone.Internal, &c.Internal)
 	return clone
 }
