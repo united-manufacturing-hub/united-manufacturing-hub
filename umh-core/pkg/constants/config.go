@@ -21,4 +21,9 @@ const (
 	// This short timeout (5ms) prevents configuration retrieval from blocking the reconciliation
 	// loop, assuming that most config operations are fast in-memory lookups.
 	ConfigGetConfigTimeout = time.Millisecond * 5
+
+	// AmountReadersForConfigFile defines the amount of readers that can read the config file at the same time
+	// It is more a safety net to prevent a single reader from blocking the config file
+	// The actual number does not really matter, it should be "high enough"
+	AmountReadersForConfigFile = 100
 )

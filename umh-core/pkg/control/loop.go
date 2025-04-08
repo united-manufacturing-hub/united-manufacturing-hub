@@ -47,10 +47,12 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/container"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/redpanda"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/starvationchecker"
 	"go.uber.org/zap"
@@ -75,6 +77,7 @@ type ControlLoop struct {
 	starvationChecker *starvationchecker.StarvationChecker
 	currentTick       uint64
 	snapshotManager   *fsm.SnapshotManager
+	filesystemService filesystem.Service
 }
 
 // NewControlLoop creates a new control loop with all necessary managers.
@@ -86,7 +89,7 @@ type ControlLoop struct {
 //
 // The control loop runs at a fixed interval (defaultTickerTime) and orchestrates
 // all components according to the configuration.
-func NewControlLoop() *ControlLoop {
+func NewControlLoop(configManager config.ConfigManager) *ControlLoop {
 	// Get a component-specific logger
 	log := logger.For(logger.ComponentControlLoop)
 	if log == nil {
@@ -99,10 +102,8 @@ func NewControlLoop() *ControlLoop {
 		s6.NewS6Manager(constants.DefaultManagerName),
 		benthos.NewBenthosManager(constants.DefaultManagerName),
 		container.NewContainerManager(constants.DefaultManagerName),
+		redpanda.NewRedpandaManager(constants.DefaultManagerName),
 	}
-
-	// Create the config manager with backoff support
-	configManager := config.NewFileConfigManagerWithBackoff()
 
 	// Create a starvation checker
 	starvationChecker := starvationchecker.NewStarvationChecker(constants.StarvationThreshold)
@@ -110,12 +111,15 @@ func NewControlLoop() *ControlLoop {
 	// Create a snapshot manager
 	snapshotManager := fsm.NewSnapshotManager()
 
+	// Create a buffered filesystem service
+	filesystemService := filesystem.NewDefaultService()
+
 	metrics.InitErrorCounter(metrics.ComponentControlLoop, "main")
 
 	// Now clean the S6 service directory except for the known services
 	s6Service := s6svc.NewDefaultService()
 	log.Debugf("Cleaning S6 service directory: %s", constants.S6BaseDir)
-	err := s6Service.CleanS6ServiceDirectory(context.Background(), constants.S6BaseDir)
+	err := s6Service.CleanS6ServiceDirectory(context.Background(), constants.S6BaseDir, filesystem.NewDefaultService()) // we do not use the buffered service here, because we want to clean the real filesystem
 	if err != nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, log, "Failed to clean S6 service directory: %s", err)
 
@@ -129,6 +133,7 @@ func NewControlLoop() *ControlLoop {
 		logger:            log,
 		starvationChecker: starvationChecker,
 		snapshotManager:   snapshotManager,
+		filesystemService: filesystemService,
 	}
 }
 
@@ -219,6 +224,7 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 	// Therefore we need a backoff here
 	// GetConfig returns a temporary backoff error or a permanent failure error
 	cfg, err := c.configManager.GetConfig(ctx, ticker)
+	c.logger.Debugf("Config: %v", cfg)
 	if err != nil {
 		// Handle temporary backoff errors --> we want to continue reconciling
 		if backoff.IsTemporaryBackoffError(err) {
@@ -236,6 +242,23 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 			// Handle other errors --> we want to continue reconciling
 			sentry.ReportIssuef(sentry.IssueTypeError, c.logger, "Config manager error: %v", err)
 			return nil
+		}
+	}
+	// If the filesystem service is buffered, we need to sync from disk
+	bufferedFs, ok := c.filesystemService.(*filesystem.BufferedService)
+	if ok {
+		// Step 1: Flush all pending writes to disk
+		err = bufferedFs.SyncToDisk(ctx)
+		if err != nil {
+			sentry.ReportIssuef(sentry.IssueTypeError, c.logger, "Failed to sync S6 filesystem to disk: %v", err)
+			return fmt.Errorf("failed to sync S6 filesystem to disk: %w", err)
+		}
+
+		// Step 2: Read the filesystem from disk
+		err = bufferedFs.SyncFromDisk(ctx)
+		if err != nil {
+			sentry.ReportIssuef(sentry.IssueTypeError, c.logger, "Failed to sync S6 filesystem from disk: %v", err)
+			return fmt.Errorf("failed to sync S6 filesystem from disk: %w", err)
 		}
 	}
 
@@ -262,10 +285,10 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 			return nil
 		}
 
-		err, reconciled := manager.Reconcile(ctx, cfg, c.currentTick)
+		err, reconciled := manager.Reconcile(ctx, cfg, c.filesystemService, c.currentTick)
 		if err != nil {
 			metrics.IncErrorCount(metrics.ComponentControlLoop, manager.GetManagerName())
-			return err
+			return fmt.Errorf("manager %s reconciliation failed: %w", manager.GetManagerName(), err)
 		}
 
 		// If the manager was reconciled, skip the reconcilation of the next managers
@@ -299,14 +322,14 @@ func (c *ControlLoop) updateSystemSnapshot(ctx context.Context, cfg config.FullC
 	}
 
 	if c.snapshotManager == nil {
-		sentry.ReportIssuef(sentry.IssueTypeWarning, c.logger, "Cannot create system snapshot: snapshot manager is not set")
+		sentry.ReportIssuef(sentry.IssueTypeWarning, c.logger, "[updateSystemSnapshot] Cannot create system snapshot: snapshot manager is not set")
 		return
 	}
 
 	snapshot, err := fsm.GetManagerSnapshots(c.managers, c.currentTick, cfg)
 	if err != nil {
 		c.logger.Errorf("Failed to create system snapshot: %v", err)
-		sentry.ReportIssuef(sentry.IssueTypeError, c.logger, "Failed to create system snapshot: %v", err)
+		sentry.ReportIssuef(sentry.IssueTypeError, c.logger, "[updateSystemSnapshot] Failed to create system snapshot: %v", err)
 		return
 	}
 
@@ -324,7 +347,7 @@ func (c *ControlLoop) GetSystemSnapshot() *fsm.SystemSnapshot {
 	}
 
 	if c.snapshotManager == nil {
-		sentry.ReportIssuef(sentry.IssueTypeWarning, c.logger, "Cannot get system snapshot: snapshot manager is not set")
+		sentry.ReportIssuef(sentry.IssueTypeWarning, c.logger, "[GetSystemSnapshot] Cannot get system snapshot: snapshot manager is not set")
 		return nil
 	}
 	return c.snapshotManager.GetSnapshot()

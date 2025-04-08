@@ -17,31 +17,37 @@ package actions_test
 import (
 	"context"
 	"errors"
-	"sync"
 	"time"
 
 	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 )
 
-// MockConfigManager implements the config.ConfigManager interface for testing
-type MockConfigManager struct {
-	config          config.FullConfig
-	getShouldFail   bool
-	writeShouldFail bool
-	latestConfig    config.FullConfig
-	mutex           sync.Mutex
-	writeCallCount  int
-	getCallCount    int
-}
+var _ = Describe("EditInstance", func() {
+	// Variables used across tests
+	var (
+		action          *actions.EditInstanceAction
+		userEmail       string
+		actionUUID      uuid.UUID
+		instanceUUID    uuid.UUID
+		outboundChannel chan *models.UMHMessage
+		mockConfig      *config.MockConfigManager
+	)
 
-func NewMockConfigManager() *MockConfigManager {
-	return &MockConfigManager{
-		config: config.FullConfig{
+	// Setup before each test
+	BeforeEach(func() {
+		// Initialize test variables
+		userEmail = "test@example.com"
+		actionUUID = uuid.New()
+		instanceUUID = uuid.New()
+		outboundChannel = make(chan *models.UMHMessage, 10) // Buffer to prevent blocking
+
+		// Create initial config
+		initialConfig := config.FullConfig{
 			Agent: config.AgentConfig{
 				MetricsPort: 8080,
 				CommunicatorConfig: config.CommunicatorConfig{
@@ -54,86 +60,15 @@ func NewMockConfigManager() *MockConfigManager {
 					1: "Old Site",
 				},
 			},
-			Services: []config.S6FSMConfig{},
-			Benthos:  []config.BenthosConfig{},
-			Nmap:     []config.NmapConfig{},
-		},
-	}
-}
+			Internal: config.InternalConfig{
+				Services: []config.S6FSMConfig{},
+				Benthos:  []config.BenthosConfig{},
+				Nmap:     []config.NmapConfig{},
+			},
+		}
 
-func (m *MockConfigManager) GetConfig(_ context.Context, _ uint64) (config.FullConfig, error) {
-	m.mutex.Lock()
-	defer m.mutex.Unlock()
-
-	m.getCallCount++
-
-	if m.getShouldFail {
-		return config.FullConfig{}, errors.New("mock GetConfig failure")
-	}
-	return m.config.Clone(), nil
-}
-
-func (m *MockConfigManager) WriteConfig(_ context.Context, cfg config.FullConfig) error {
-	m.mutex.Lock()
-	defer m.mutex.Unlock()
-
-	m.writeCallCount++
-
-	if m.writeShouldFail {
-		return errors.New("mock WriteConfig failure")
-	}
-
-	m.latestConfig = cfg.Clone()
-	m.config = cfg.Clone()
-	return nil
-}
-
-func (m *MockConfigManager) WithGetConfigFailure() *MockConfigManager {
-	m.getShouldFail = true
-	return m
-}
-
-func (m *MockConfigManager) WithWriteConfigFailure() *MockConfigManager {
-	m.writeShouldFail = true
-	return m
-}
-
-func (m *MockConfigManager) GetWriteCallCount() int {
-	m.mutex.Lock()
-	defer m.mutex.Unlock()
-	return m.writeCallCount
-}
-
-func (m *MockConfigManager) GetGetCallCount() int {
-	m.mutex.Lock()
-	defer m.mutex.Unlock()
-	return m.getCallCount
-}
-
-var _ = Describe("EditInstance", func() {
-	// Variables used across tests
-	var (
-		action          *actions.EditInstanceAction
-		userEmail       string
-		actionUUID      uuid.UUID
-		instanceUUID    uuid.UUID
-		outboundChannel chan *models.UMHMessage
-		mockConfig      *MockConfigManager
-	)
-
-	// Setup before each test
-	BeforeEach(func() {
-		// Initialize test variables
-		userEmail = "test@example.com"
-		actionUUID = uuid.New()
-		instanceUUID = uuid.New()
-		outboundChannel = make(chan *models.UMHMessage, 10) // Buffer to prevent blocking
-		mockConfig = NewMockConfigManager()
-
-		// Create the action instance using the new constructor
-		action = actions.NewEditInstanceAction(userEmail, actionUUID, instanceUUID, outboundChannel)
-		// Inject our mock config manager
-		action.WithConfigManager(mockConfig)
+		mockConfig = config.NewMockConfigManager().WithConfig(initialConfig)
+		action = actions.NewEditInstanceAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig)
 	})
 
 	// Cleanup after each test
@@ -210,7 +145,7 @@ var _ = Describe("EditInstance", func() {
 	Describe("Validate", func() {
 		It("should validate with valid location data", func() {
 			// Create a valid location and set it using the exported method
-			location := &actions.EditInstanceLocation{
+			location := &models.EditInstanceLocationModel{
 				Enterprise: "Test Enterprise",
 			}
 
@@ -238,6 +173,9 @@ var _ = Describe("EditInstance", func() {
 			err := action.Parse(payload)
 			Expect(err).NotTo(HaveOccurred())
 
+			// Reset tracking for this test
+			mockConfig.ResetCalls()
+
 			// Execute the action
 			result, metadata, err := action.Execute()
 			Expect(err).NotTo(HaveOccurred())
@@ -256,9 +194,8 @@ var _ = Describe("EditInstance", func() {
 			}
 			Expect(messages).To(HaveLen(2))
 
-			// No calls to config manager should be made
-			Expect(mockConfig.GetGetCallCount()).To(Equal(0))
-			Expect(mockConfig.GetWriteCallCount()).To(Equal(0))
+			// Verify that GetConfig wasn't called
+			Expect(mockConfig.GetConfigCalled).To(BeFalse())
 		})
 
 		It("should update location successfully", func() {
@@ -272,6 +209,9 @@ var _ = Describe("EditInstance", func() {
 			}
 			err := action.Parse(payload)
 			Expect(err).NotTo(HaveOccurred())
+
+			// Reset tracking
+			mockConfig.ResetCalls()
 
 			// Execute the action
 			result, metadata, err := action.Execute()
@@ -291,19 +231,21 @@ var _ = Describe("EditInstance", func() {
 			}
 			Expect(messages).To(HaveLen(3))
 
-			// Config manager should be called
-			Expect(mockConfig.GetGetCallCount()).To(Equal(1))
-			Expect(mockConfig.GetWriteCallCount()).To(Equal(1))
+			// Verify GetConfig was called
+			Expect(mockConfig.GetConfigCalled).To(BeTrue())
 
 			// Check that config was updated correctly
-			Expect(mockConfig.latestConfig.Agent.Location[0]).To(Equal("New Enterprise"))
-			Expect(mockConfig.latestConfig.Agent.Location[1]).To(Equal("New Site"))
-			Expect(mockConfig.latestConfig.Agent.Location[2]).To(Equal("New Area"))
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			updatedConfig, _ := mockConfig.GetConfig(ctx, 0)
+			Expect(updatedConfig.Agent.Location[0]).To(Equal("New Enterprise"))
+			Expect(updatedConfig.Agent.Location[1]).To(Equal("New Site"))
+			Expect(updatedConfig.Agent.Location[2]).To(Equal("New Area"))
 		})
 
 		It("should handle GetConfig failure", func() {
 			// Set up mock to fail on GetConfig
-			mockConfig.WithGetConfigFailure()
+			mockConfig.WithConfigError(errors.New("mock GetConfig failure"))
 
 			// Parse with valid location
 			payload := map[string]interface{}{
@@ -335,8 +277,17 @@ var _ = Describe("EditInstance", func() {
 		})
 
 		It("should handle WriteConfig failure", func() {
-			// Set up mock to fail on WriteConfig
-			mockConfig.WithWriteConfigFailure()
+			// First configure mock to return success on GetConfig
+			mockConfig.WithConfigError(nil)
+
+			// Then create a custom mock to fail on WriteConfig
+			// We have to use a custom wrapper since the official mock doesn't have a method to fail on WriteConfig
+			customMock := &writeFailingMockConfigManager{
+				mockConfigManager: mockConfig,
+			}
+
+			// Create new action with our custom mock
+			action = actions.NewEditInstanceAction(userEmail, actionUUID, instanceUUID, outboundChannel, customMock)
 
 			// Parse with valid location
 			payload := map[string]interface{}{
@@ -365,10 +316,50 @@ var _ = Describe("EditInstance", func() {
 				}
 			}
 			Expect(messages).To(HaveLen(3))
-
-			// Config manager should be called
-			Expect(mockConfig.GetGetCallCount()).To(Equal(1))
-			Expect(mockConfig.GetWriteCallCount()).To(Equal(1))
 		})
 	})
 })
+
+// writeFailingMockConfigManager wraps the MockConfigManager to fail on WriteConfig
+type writeFailingMockConfigManager struct {
+	mockConfigManager *config.MockConfigManager
+}
+
+func (w *writeFailingMockConfigManager) GetConfig(ctx context.Context, tick uint64) (config.FullConfig, error) {
+	return w.mockConfigManager.GetConfig(ctx, tick)
+}
+
+func (w *writeFailingMockConfigManager) writeConfig(ctx context.Context, config config.FullConfig) error {
+	return errors.New("mock WriteConfig failure")
+}
+
+func (w *writeFailingMockConfigManager) AtomicSetLocation(ctx context.Context, location models.EditInstanceLocationModel) error {
+	// Get the current config
+	config, err := w.GetConfig(ctx, 0)
+	if err != nil {
+		return err
+	}
+
+	// Update location
+	config.Agent.Location = make(map[int]string)
+	config.Agent.Location[0] = location.Enterprise
+	if location.Site != nil {
+		config.Agent.Location[1] = *location.Site
+	}
+	if location.Area != nil {
+		config.Agent.Location[2] = *location.Area
+	}
+	if location.Line != nil {
+		config.Agent.Location[3] = *location.Line
+	}
+	if location.WorkCell != nil {
+		config.Agent.Location[4] = *location.WorkCell
+	}
+
+	// Write config (will fail with this mock)
+	if err := w.writeConfig(ctx, config); err != nil {
+		return err
+	}
+
+	return nil
+}

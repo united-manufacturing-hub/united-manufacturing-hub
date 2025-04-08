@@ -22,9 +22,9 @@ import (
 	"fmt"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	benthosfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
 	benthossvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 )
 
@@ -35,9 +35,10 @@ func WaitForBenthosManagerStable(
 	ctx context.Context,
 	manager *benthosfsm.BenthosManager,
 	fullCfg config.FullConfig,
+	filesystemService filesystem.Service,
 	startTick uint64,
 ) (uint64, error) {
-	err, _ := manager.Reconcile(ctx, fullCfg, startTick)
+	err, _ := manager.Reconcile(ctx, fullCfg, filesystemService, startTick)
 	if err != nil {
 		return startTick, err
 	}
@@ -51,6 +52,7 @@ func WaitForBenthosManagerInstanceState(
 	ctx context.Context,
 	manager *benthosfsm.BenthosManager,
 	fullCfg config.FullConfig,
+	filesystemService filesystem.Service,
 	instanceName string,
 	desiredState string,
 	maxAttempts int,
@@ -58,7 +60,7 @@ func WaitForBenthosManagerInstanceState(
 ) (uint64, error) {
 	tick := startTick
 	for i := 0; i < maxAttempts; i++ {
-		err, _ := manager.Reconcile(ctx, fullCfg, tick)
+		err, _ := manager.Reconcile(ctx, fullCfg, filesystemService, tick)
 		if err != nil {
 			return tick, err
 		}
@@ -79,13 +81,14 @@ func WaitForBenthosManagerInstanceRemoval(
 	ctx context.Context,
 	manager *benthosfsm.BenthosManager,
 	fullCfg config.FullConfig,
+	filesystemService filesystem.Service,
 	instanceName string,
 	maxAttempts int,
 	startTick uint64,
 ) (uint64, error) {
 	tick := startTick
 	for i := 0; i < maxAttempts; i++ {
-		err, _ := manager.Reconcile(ctx, fullCfg, tick)
+		err, _ := manager.Reconcile(ctx, fullCfg, filesystemService, tick)
 		if err != nil {
 			return tick, err
 		}
@@ -105,13 +108,14 @@ func WaitForBenthosManagerMultiState(
 	ctx context.Context,
 	manager *benthosfsm.BenthosManager,
 	fullCfg config.FullConfig,
+	filesystemService filesystem.Service,
 	desiredMap map[string]string, // e.g. { "svc1": "idle", "svc2": "active" }
 	maxAttempts int,
 	startTick uint64,
 ) (uint64, error) {
 	tick := startTick
 	for i := 0; i < maxAttempts; i++ {
-		err, _ := manager.Reconcile(ctx, fullCfg, tick)
+		err, _ := manager.Reconcile(ctx, fullCfg, filesystemService, tick)
 		if err != nil {
 			return tick, err
 		}
@@ -144,7 +148,7 @@ func SetupServiceInManager(
 	desiredState string,
 ) {
 	// Create a properly configured instance
-	instance := benthosfsm.NewBenthosInstance(constants.S6BaseDir, CreateBenthosTestConfig(serviceName, desiredState))
+	instance := benthosfsm.NewBenthosInstance(CreateBenthosTestConfig(serviceName, desiredState))
 
 	// Add it to the manager
 	manager.BaseFSMManager.AddInstanceForTest(serviceName, instance)
@@ -224,8 +228,9 @@ func ReconcileOnceBenthosManager(
 	ctx context.Context,
 	manager *benthosfsm.BenthosManager,
 	cfg config.FullConfig,
+	filesystemService filesystem.Service,
 	tick uint64,
 ) (newTick uint64, err error, reconciled bool) {
-	err, rec := manager.Reconcile(ctx, cfg, tick)
+	err, rec := manager.Reconcile(ctx, cfg, filesystemService, tick)
 	return tick + 1, err, rec
 }

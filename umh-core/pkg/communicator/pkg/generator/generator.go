@@ -89,7 +89,7 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 	defer s.systemMu.Unlock()
 
 	if s.state == nil {
-		sentry.ReportIssuef(sentry.IssueTypeError, s.logger.Sugar(), "State is nil, using empty state")
+		sentry.ReportIssuef(sentry.IssueTypeError, s.logger.Sugar(), "[GenerateStatusMessage] State is nil, using empty state")
 		s.logger.Error("State is nil, using empty state")
 		return nil
 	}

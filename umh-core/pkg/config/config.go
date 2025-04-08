@@ -18,28 +18,35 @@ import (
 	"reflect"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/redpandaserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
 
 	"github.com/tiendc/go-deepcopy"
 )
 
 type FullConfig struct {
-	Agent    AgentConfig     `yaml:"agent"`    // Agent config, requires restart to take effect
-	Services []S6FSMConfig   `yaml:"services"` // Services to manage, can be updated while running
-	Benthos  []BenthosConfig `yaml:"benthos"`  // Benthos services to manage, can be updated while running
-	Nmap     []NmapConfig    `yaml:"nmap"`     // Nmap services to manage, can be updated while running
+	Agent              AgentConfig               `yaml:"agent"`                        // Agent config, requires restart to take effect
+	DataFlowComponents []DataFlowComponentConfig `yaml:"dataFlowComponents,omitempty"` // DataFlowComponent services to manage
+	Internal           InternalConfig            `yaml:"internal,omitempty"`           // Internal config, not to be used by the user, only to be used for testing internal components
+}
+
+type InternalConfig struct {
+	Services []S6FSMConfig   `yaml:"services,omitempty"` // Services to manage, can be updated while running
+	Benthos  []BenthosConfig `yaml:"benthos,omitempty"`  // Benthos services to manage, can be updated while running
+	Nmap     []NmapConfig    `yaml:"nmap,omitempty"`     // Nmap services to manage, can be updated while running
+	Redpanda RedpandaConfig  `yaml:"redpanda,omitempty"` // Redpanda config, can be updated while running
 }
 
 type AgentConfig struct {
 	MetricsPort        int `yaml:"metricsPort"` // Port to expose metrics on
-	CommunicatorConfig `yaml:"communicator"`
-	ReleaseChannel     ReleaseChannel `yaml:"releaseChannel"`
-	Location           map[int]string `yaml:"location"`
+	CommunicatorConfig `yaml:"communicator,omitempty"`
+	ReleaseChannel     ReleaseChannel `yaml:"releaseChannel,omitempty"`
+	Location           map[int]string `yaml:"location,omitempty"`
 }
 
 type CommunicatorConfig struct {
-	APIURL    string `yaml:"apiUrl"`
-	AuthToken string `yaml:"authToken"`
+	APIURL    string `yaml:"apiUrl,omitempty"`
+	AuthToken string `yaml:"authToken,omitempty"`
 }
 
 // FSMInstanceConfig is the config for a FSM instance
@@ -95,13 +102,31 @@ func (c NmapServiceConfig) Equal(other NmapServiceConfig) bool {
 	return reflect.DeepEqual(c, other)
 }
 
+// RedpandaConfig contains configuration for a Redpanda service
+type RedpandaConfig struct {
+	// For the FSM
+	FSMInstanceConfig `yaml:",inline"`
+
+	// For the Redpanda service
+	RedpandaServiceConfig redpandaserviceconfig.RedpandaServiceConfig `yaml:"redpandaServiceConfig"`
+}
+
+// DataFlowComponentConfig contains configuration for a DataFlowComponent
+type DataFlowComponentConfig struct {
+	// Basic component configuration
+	Name         string `yaml:"name"`
+	DesiredState string `yaml:"desiredState"`
+
+	// Service configuration similar to BenthosServiceConfig
+	ServiceConfig benthosserviceconfig.BenthosServiceConfig `yaml:"serviceConfig"`
+}
+
 // Clone creates a deep copy of FullConfig
 func (c FullConfig) Clone() FullConfig {
 	clone := FullConfig{
-		Agent:    c.Agent,
-		Services: make([]S6FSMConfig, len(c.Services)),
-		Benthos:  make([]BenthosConfig, len(c.Benthos)),
-		Nmap:     make([]NmapConfig, len(c.Nmap)),
+		Agent:              c.Agent,
+		DataFlowComponents: make([]DataFlowComponentConfig, len(c.DataFlowComponents)),
+		Internal:           InternalConfig{},
 	}
 	// deep copy the location map if it exists
 	if c.Agent.Location != nil {
@@ -110,8 +135,8 @@ func (c FullConfig) Clone() FullConfig {
 			clone.Agent.Location[k] = v
 		}
 	}
-	deepcopy.Copy(&clone.Services, &c.Services)
-	deepcopy.Copy(&clone.Benthos, &c.Benthos)
-	deepcopy.Copy(&clone.Nmap, &c.Nmap)
+	deepcopy.Copy(&clone.DataFlowComponents, &c.DataFlowComponents)
+	deepcopy.Copy(&clone.Agent, &c.Agent)
+	deepcopy.Copy(&clone.Internal, &c.Internal)
 	return clone
 }

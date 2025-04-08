@@ -15,24 +15,28 @@
 agent:
   metricsPort: 8080
 
-benthos:
-  - name: hello-world
-    desiredState: active
-    benthosServiceConfig:
-      input:
-        generate:
-          mapping: root = "hello world from Benthos!"
-          interval: 1s # Output every 2 seconds
-          count: 0 # Set to 0 for unlimited messages
-      output:
-        stdout: {}
-  - name: hello-world-2
-    desiredState: active
-    benthosServiceConfig:
-      input:
-        generate:
-          mapping: root = "hello world from Benthos 2!"
-          interval: 1s # Output every 2 seconds
-          count: 0 # Set to 0 for unlimited messages
-      output:
-        stdout: {}
+redpanda:
+  desiredState: stopped
+  
+internal:
+  benthos:
+    - name: hello-world
+      desiredState: active
+      benthosServiceConfig:
+        input:
+          generate:
+            mapping: root = "hello world from Benthos!"
+            interval: 1s # Output every 2 seconds
+            count: 0 # Set to 0 for unlimited messages
+        output:
+          stdout: {}
+    - name: hello-world-2
+      desiredState: active
+      benthosServiceConfig:
+        input:
+          generate:
+            mapping: root = "hello world from Benthos 2!"
+            interval: 1s # Output every 2 seconds
+            count: 0 # Set to 0 for unlimited messages
+        output:
+          stdout: {}

@@ -15,23 +15,27 @@
 agent:
   metricsPort: 8080
 
-services:
-  - name: hello-world
-    desiredState: running
-    s6ServiceConfig:
-      command:
-        - /usr/local/bin/benthos
-        - -c
-        - /run/service/hello-world/config/hello-world.yaml
-      env:
-        LOG_LEVEL: DEBUG
-      configFiles:
-        hello-world2.yaml: |
-          ---
-          input:
-            generate:
-              mapping: root = "hello world from Benthos!" 
-              interval: 2s # Output every 2 seconds
-              count: 0 # Set to 0 for unlimited messages
-          output:
-            stdout: {}
+redpanda:
+  desiredState: stopped
+  
+internal:
+  services:
+    - name: hello-world
+      desiredState: running
+      s6ServiceConfig:
+        command:
+          - /usr/local/bin/benthos
+          - -c
+          - /run/service/hello-world/config/hello-world.yaml
+        env:
+          LOG_LEVEL: DEBUG
+        configFiles:
+          hello-world2.yaml: |
+            ---
+            input:
+              generate:
+                mapping: root = "hello world from Benthos!" 
+                interval: 2s # Output every 2 seconds
+                count: 0 # Set to 0 for unlimited messages
+            output:
+              stdout: {}

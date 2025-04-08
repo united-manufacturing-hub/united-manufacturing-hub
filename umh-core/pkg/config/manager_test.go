@@ -57,15 +57,17 @@ var _ = Describe("ConfigManager", func() {
 
 	Describe("GetConfig", func() {
 		var (
-			validYAML = `services:
-- name: service1
-  desiredState: running
-  s6ServiceConfig:
-    command: ["/bin/echo", "hello world"]
-    env:
-      KEY: value
-    configFiles:
-      file.txt: content
+			validYAML = `
+internal:
+  services:
+    - name: service1
+      desiredState: running
+      s6ServiceConfig:
+        command: ["/bin/echo", "hello world"]
+        env:
+          KEY: value
+        configFiles:
+          file.txt: content
 `
 			invalidYAML = `services: - invalid: yaml: content`
 		)
@@ -92,12 +94,12 @@ var _ = Describe("ConfigManager", func() {
 				config, err := configManager.GetConfig(ctx, tick)
 				Expect(err).NotTo(HaveOccurred())
 
-				Expect(config.Services).To(HaveLen(1))
-				Expect(config.Services[0].Name).To(Equal("service1"))
-				Expect(config.Services[0].FSMInstanceConfig.DesiredFSMState).To(Equal("running"))
-				Expect(config.Services[0].S6ServiceConfig.Command).To(Equal([]string{"/bin/echo", "hello world"}))
-				Expect(config.Services[0].S6ServiceConfig.Env).To(HaveKeyWithValue("KEY", "value"))
-				Expect(config.Services[0].S6ServiceConfig.ConfigFiles).To(HaveKeyWithValue("file.txt", "content"))
+				Expect(config.Internal.Services).To(HaveLen(1))
+				Expect(config.Internal.Services[0].Name).To(Equal("service1"))
+				Expect(config.Internal.Services[0].FSMInstanceConfig.DesiredFSMState).To(Equal("running"))
+				Expect(config.Internal.Services[0].S6ServiceConfig.Command).To(Equal([]string{"/bin/echo", "hello world"}))
+				Expect(config.Internal.Services[0].S6ServiceConfig.Env).To(HaveKeyWithValue("KEY", "value"))
+				Expect(config.Internal.Services[0].S6ServiceConfig.ConfigFiles).To(HaveKeyWithValue("file.txt", "content"))
 			})
 		})
 
@@ -116,7 +118,7 @@ var _ = Describe("ConfigManager", func() {
 				config, err := configManager.GetConfig(ctx, tick)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("config file does not exist"))
-				Expect(config.Services).To(BeEmpty())
+				Expect(config.Internal.Services).To(BeEmpty())
 			})
 		})
 

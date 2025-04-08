@@ -35,7 +35,12 @@ const (
 
 	// DefaultInstanceName is the default name for an instance.
 	DefaultInstanceName = "Core"
-  
+
 	// DefaultMinimumRemainingTimePerManager is the default minimum remaining time for a manager.
 	DefaultMinimumRemainingTimePerManager = time.Millisecond * 50
 )
+
+// FilesAndDirectoriesToIgnore is a list of files and directories that we will not read.
+// All older archived logs begin with @40000000
+// As we retain up to 20 logs, this will otherwise lead to reading a lot of logs
+var FilesAndDirectoriesToIgnore = []string{".s6-svscan", "s6-linux-init-shutdown", "s6rc-fdholder", "s6rc-oneshot-runner", "syslogd", "syslogd-log", "/control", "/lock", "@40000000"}
