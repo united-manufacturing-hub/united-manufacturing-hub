@@ -106,7 +106,6 @@ func NewMockRedpandaService() *MockRedpandaService {
 		ServiceExistsFlag: false,
 		S6ServiceConfigs:  make([]config.S6FSMConfig, 0),
 		stateFlags:        &ServiceStateFlags{},
-		HTTPClient:        NewMockHTTPClient(),
 		S6Service:         &s6service.MockService{},
 		FileSystemMock:    filesystem.NewDefaultService(),
 	}
