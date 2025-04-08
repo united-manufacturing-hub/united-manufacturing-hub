@@ -123,3 +123,25 @@ func (m *MockConfigManager) AtomicSetLocation(ctx context.Context, location mode
 
 	return nil
 }
+
+// atomic add dataflowcomponent
+func (m *MockConfigManager) AtomicAddDataflowcomponent(ctx context.Context, dfc DataFlowComponentConfig) error {
+	m.mutexReadAndWrite.Lock()
+	defer m.mutexReadAndWrite.Unlock()
+
+	// get the current config
+	config, err := m.GetConfig(ctx, 0)
+	if err != nil {
+		return fmt.Errorf("failed to get config: %w", err)
+	}
+
+	// edit the config
+	config.DataFlow = append(config.DataFlow, dfc)
+
+	// write the config
+	if err := m.writeConfig(ctx, config); err != nil {
+		return fmt.Errorf("failed to write config: %w", err)
+	}
+
+	return nil
+}

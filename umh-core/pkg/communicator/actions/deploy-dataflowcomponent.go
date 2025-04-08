@@ -8,6 +8,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
@@ -219,14 +221,88 @@ func (a *DeployDataflowComponentAction) Execute() (interface{}, map[string]inter
 	// Send confirmation that action is starting
 	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionConfirmed, "Starting DeployDataflowComponent", a.outboundChannel, models.DeployDataFlowComponent)
 
+	// Parse the input and output configurations
+	benthosInput := make(map[string]interface{})
+	benthosOutput := make(map[string]interface{})
+
+	// First try to use the Input data
+	err := yaml.Unmarshal([]byte(a.payload.Input.Data), &benthosInput)
+	if err != nil {
+		errMsg := fmt.Sprintf("Failed to parse input data: %s", err.Error())
+		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errMsg, a.outboundChannel, models.DeployDataFlowComponent)
+		return nil, nil, fmt.Errorf("%s", errMsg)
+	}
+
+	err = yaml.Unmarshal([]byte(a.payload.Output.Data), &benthosOutput)
+	if err != nil {
+		errMsg := fmt.Sprintf("Failed to parse output data: %s", err.Error())
+		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errMsg, a.outboundChannel, models.DeployDataFlowComponent)
+		return nil, nil, fmt.Errorf("%s", errMsg)
+	}
+
+	// Convert pipeline data to Benthos pipeline configuration
+	benthosPipeline := map[string]interface{}{
+		"processors": []interface{}{},
+	}
+
+	if len(a.payload.Pipeline) > 0 {
+		// Convert each processor configuration in the pipeline
+		processors := []interface{}{}
+
+		for processorName, processor := range a.payload.Pipeline {
+			var procConfig map[string]interface{}
+			err := yaml.Unmarshal([]byte(processor.Data), &procConfig)
+			if err != nil {
+				errMsg := fmt.Sprintf("Failed to parse pipeline processor %s: %s", processorName, err.Error())
+				SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errMsg, a.outboundChannel, models.DeployDataFlowComponent)
+				return nil, nil, fmt.Errorf("%s", errMsg)
+			}
+
+			// Add processor to the list
+			processors = append(processors, procConfig)
+		}
+
+		benthosPipeline["processors"] = processors
+	}
+
+	// Create the Benthos service config
+	benthosConfig := benthosserviceconfig.BenthosServiceConfig{
+		Input:    benthosInput,
+		Output:   benthosOutput,
+		Pipeline: benthosPipeline,
+	}
+
+	// Normalize the config
+	normalizedConfig := benthosserviceconfig.NormalizeBenthosConfig(benthosConfig)
+
+	// Create the DataFlowComponentConfig
+	dfc := config.DataFlowComponentConfig{
+		FSMInstanceConfig: config.FSMInstanceConfig{
+			Name:            a.name,
+			DesiredFSMState: "running",
+		},
+		DataFlowComponentConfig: dataflowcomponentconfig.DataFlowComponentConfig{
+			BenthosConfig: dataflowcomponentconfig.BenthosConfig{
+				Input:    normalizedConfig.Input,
+				Pipeline: normalizedConfig.Pipeline,
+				Output:   normalizedConfig.Output,
+			},
+		},
+	}
+
 	// Update the location in the configuration
 	ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
 	defer cancel()
-	err := a.configManager.AtomicAddDataflowcomponent(ctx, a.payload)
+	err = a.configManager.AtomicAddDataflowcomponent(ctx, dfc)
 	if err != nil {
 		errorMsg := fmt.Sprintf("Failed to add dataflowcomponent: %s", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errorMsg, a.outboundChannel, models.DeployDataFlowComponent)
 		return nil, nil, fmt.Errorf("Failed to add dataflowcomponent: %w", err)
 	}
 
+	// Send success reply
+	successMsg := fmt.Sprintf("Successfully deployed data flow component: %s", a.name)
+	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedSuccessfull, successMsg, a.outboundChannel, models.DeployDataFlowComponent)
+
+	return nil, nil, nil
 }
