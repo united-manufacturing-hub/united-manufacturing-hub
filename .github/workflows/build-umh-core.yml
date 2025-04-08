@@ -23,7 +23,8 @@ on:
       - staging
       - main
     tags:
-      - 'v*'
+      - "v*"
+  merge_group:
 
 env:
   REGISTRY: ghcr.io
