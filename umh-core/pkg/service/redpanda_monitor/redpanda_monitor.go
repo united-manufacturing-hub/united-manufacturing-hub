@@ -72,6 +72,7 @@ func (s *RedpandaMonitorService) generateRedpandaScript() (string, error) {
 	// Build the redpanda command - curl http://localhost:9644/public_metrics
 	// Create the script content with a loop that executes redpanda every second
 	// Also let's use gzip to compress the output & hex encode it
+	// We use gzip here, to prevent the output from being rotated halfway through the logs & hex encode it to avoid issues with special characters
 	scriptContent := fmt.Sprintf(`#!/bin/sh
 while true; do
   echo "%s"
@@ -114,6 +115,14 @@ func (s *RedpandaMonitorService) GenerateS6ConfigForRedpandaMonitor() (s6service
 
 // parseRedpandaLogs parses the logs of a redpanda service and extracts metrics
 func (s *RedpandaMonitorService) parseRedpandaLogs(logs []s6service.LogEntry, tick uint64) (*RedpandaMetricsAndClusterConfig, error) {
+	/*
+		A normal log entry looks like this:
+		START_MARKER
+		Hex encoded gzip data of the metrics
+		MID_MARKER
+		Hex encoded gzip data of the cluster config
+		END_MARKER
+	*/
 
 	if len(logs) == 0 {
 		return nil, fmt.Errorf("no logs provided")
