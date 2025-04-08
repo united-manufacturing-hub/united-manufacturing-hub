@@ -31,7 +31,7 @@ const (
 
 // ContainerManager is the FSM manager for multiple container monitor instances
 type ContainerManager struct {
-	*public_fsm.BaseFSMManager[ContainerConfig]
+	*public_fsm.BaseFSMManager[config.ContainerConfig]
 }
 
 // ContainerManagerSnapshot extends the base manager snapshot to hold any container-specific info
@@ -47,36 +47,36 @@ func (c *ContainerManagerSnapshot) IsObservedStateSnapshot() {}
 func NewContainerManager(name string) *ContainerManager {
 	managerName := fmt.Sprintf("%s_%s", ContainerManagerComponentName, name)
 
-	baseMgr := public_fsm.NewBaseFSMManager[ContainerConfig](
+	baseMgr := public_fsm.NewBaseFSMManager[config.ContainerConfig](
 		managerName,
 		"/dev/null", // no actual S6 base dir needed for a pure monitor
-		// Extract ContainerConfig slice from FullConfig
-		func(fc config.FullConfig) ([]ContainerConfig, error) {
+		// Extract config.ContainerConfig slice from FullConfig
+		func(fc config.FullConfig) ([]config.ContainerConfig, error) {
 			// Always return a single config
-			var configs []ContainerConfig
-			configs = append(configs, ContainerConfig{
+			var configs []config.ContainerConfig
+			configs = append(configs, config.ContainerConfig{
 				Name:            constants.DefaultInstanceName,
-				DesiredFSMState: MonitoringStateActive,
+				DesiredFSMState: OperationalStateActive,
 			})
 			return configs, nil
 		},
 		// Get name from config
-		func(cc ContainerConfig) (string, error) {
+		func(cc config.ContainerConfig) (string, error) {
 			return cc.Name, nil
 		},
 		// Desired state from config
-		func(cc ContainerConfig) (string, error) {
+		func(cc config.ContainerConfig) (string, error) {
 			return cc.DesiredFSMState, nil
 		},
 		// Create instance
-		func(cc ContainerConfig) (public_fsm.FSMInstance, error) {
+		func(cc config.ContainerConfig) (public_fsm.FSMInstance, error) {
 			// Typically create a new container_monitor.Service or reuse shared
 			// Here let's reuse the shared:
 			inst := NewContainerInstance(cc)
 			return inst, nil
 		},
 		// Compare config => if same, no recreation needed
-		func(instance public_fsm.FSMInstance, cc ContainerConfig) (bool, error) {
+		func(instance public_fsm.FSMInstance, cc config.ContainerConfig) (bool, error) {
 			ci, ok := instance.(*ContainerInstance)
 			if !ok {
 				return false, fmt.Errorf("instance is not a ContainerInstance")
@@ -86,7 +86,7 @@ func NewContainerManager(name string) *ContainerManager {
 			return ci.config.DesiredFSMState == cc.DesiredFSMState, nil
 		},
 		// Set config if only small changes
-		func(instance public_fsm.FSMInstance, cc ContainerConfig) error {
+		func(instance public_fsm.FSMInstance, cc config.ContainerConfig) error {
 			ci, ok := instance.(*ContainerInstance)
 			if !ok {
 				return fmt.Errorf("instance is not a ContainerInstance")

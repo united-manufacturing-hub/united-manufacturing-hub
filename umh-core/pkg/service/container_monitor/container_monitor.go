@@ -34,7 +34,7 @@ import (
 )
 
 // ContainerStatus contains both raw metrics and health assessments
-type ContainerStatus struct {
+type ServiceInfo struct {
 	// Raw metrics (keeping same structure for compatibility)
 	CPU    *models.CPU    // Keep existing CPU metrics
 	Memory *models.Memory // Keep existing Memory metrics
@@ -54,7 +54,7 @@ type ContainerStatus struct {
 // Service defines the interface for container monitoring
 type Service interface {
 	// GetStatus returns container metrics with health assessments
-	GetStatus(ctx context.Context) (*ContainerStatus, error)
+	GetStatus(ctx context.Context) (*ServiceInfo, error)
 }
 
 // ContainerMonitorService implements the Service interface
@@ -91,9 +91,9 @@ func (c *ContainerMonitorService) GetFilesystemService() filesystem.Service {
 }
 
 // GetStatus collects and returns the current container metrics
-func (c *ContainerMonitorService) GetStatus(ctx context.Context) (*ContainerStatus, error) {
+func (c *ContainerMonitorService) GetStatus(ctx context.Context) (*ServiceInfo, error) {
 	// Create a new status with default health (Active)
-	status := &ContainerStatus{
+	status := &ServiceInfo{
 		CPUHealth:     models.Active,
 		MemoryHealth:  models.Active,
 		DiskHealth:    models.Active,

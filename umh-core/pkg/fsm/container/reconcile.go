@@ -127,7 +127,7 @@ func (c *ContainerInstance) Reconcile(ctx context.Context, filesystemService fil
 // printSystemState prints the full system state in a human-readable format
 func (c *ContainerInstance) printSystemState(instanceName string, tick uint64) {
 	logger := c.baseFSMInstance.GetLogger()
-	status := c.ObservedState.ContainerStatus
+	status := c.ObservedState.ServiceInfo
 
 	logger.Infof("======= Container Instance State: %s (tick: %d) =======", instanceName, tick)
 	logger.Infof("FSM States: Current=%s, Desired=%s", c.baseFSMInstance.GetCurrentFSMState(), c.baseFSMInstance.GetDesiredFSMState())
@@ -239,7 +239,7 @@ func (c *ContainerInstance) updateObservedState(ctx context.Context) error {
 		return fmt.Errorf("failed to get container metrics: %w", err)
 	}
 	// Save to observed state
-	c.ObservedState.ContainerStatus = status
+	c.ObservedState.ServiceInfo = status
 	return nil
 }
 
@@ -278,7 +278,7 @@ func (c *ContainerInstance) reconcileOperationalStates(ctx context.Context, curr
 	desired := c.GetDesiredFSMState()
 
 	// 1) If desired is "stopped" and we are not "monitoring_stopped", we should eventStop
-	if desired == MonitoringStateStopped && current != MonitoringStateStopped {
+	if desired == OperationalStateStopped && current != OperationalStateStopped {
 		err := c.monitoringStop(ctx)
 		if err != nil {
 			return err, false
@@ -287,7 +287,7 @@ func (c *ContainerInstance) reconcileOperationalStates(ctx context.Context, curr
 	}
 
 	// 2) If desired is "active" and we are "monitoring_stopped", we should do eventStart -> goes to degraded
-	if desired == MonitoringStateActive && current == MonitoringStateStopped {
+	if desired == OperationalStateActive && current == OperationalStateStopped {
 		err := c.monitoringStart(ctx)
 		if err != nil {
 			return err, false
@@ -296,16 +296,16 @@ func (c *ContainerInstance) reconcileOperationalStates(ctx context.Context, curr
 	}
 
 	// 3) If we are in "degraded" or "active" (i.e. running monitoring), check metrics
-	if current == MonitoringStateDegraded || current == MonitoringStateActive {
+	if current == OperationalStateDegraded || current == OperationalStateActive {
 		// Evaluate the container metrics from c.ObservedState
 		if c.areAllMetricsHealthy() {
 			// If currently degraded, we go to active
-			if current == MonitoringStateDegraded {
+			if current == OperationalStateDegraded {
 				return c.baseFSMInstance.SendEvent(ctx, EventMetricsAllOK), false // it is inconsitent with the control fsms, but as we actually not do anything here we can save some ticks and allow other fsms to reconcile after us
 			}
 		} else {
 			// If currently active, we degrade
-			if current == MonitoringStateActive {
+			if current == OperationalStateActive {
 				return c.baseFSMInstance.SendEvent(ctx, EventMetricsNotOK), false // it is inconsitent with the control fsms, but as we actually not do anything here we can save some ticks and allow other fsms to reconcile after us
 			}
 		}
@@ -317,7 +317,7 @@ func (c *ContainerInstance) reconcileOperationalStates(ctx context.Context, curr
 
 // areAllMetricsHealthy decides if the container health is Active
 func (c *ContainerInstance) areAllMetricsHealthy() bool {
-	status := c.ObservedState.ContainerStatus
+	status := c.ObservedState.ServiceInfo
 	if status == nil {
 		// If we have no data, let's consider it not healthy
 		return false
