@@ -23,14 +23,14 @@ import (
 
 // NewDataflowComponentInstance creates a new DataflowComponentInstance with a given ID and service path
 func NewDataflowComponentInstance() *DataflowComponentInstance {
-	return &DataflowComponentInstance{}
+	panic("not implemented")
 }
 
 // SetDesiredFSMState safely updates the desired state
 // But ensures that the desired state is a valid state and that it is also a reasonable state
 // e.g., nobody wants to have an instance in the "starting" state, that is just intermediate
 func (d *DataflowComponentInstance) SetDesiredFSMState(state string) error {
-	return nil
+	panic("not implemented")
 }
 
 // GetCurrentFSMState returns the current state of the FSM

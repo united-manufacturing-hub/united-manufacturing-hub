@@ -21,6 +21,8 @@ import (
 	dataflowcomponentsvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/dataflowcomponent"
 )
 
+// TODO: Add OperationalStates and StateTransitionEvents
+
 // DataflowComponentObservedState contains the observed runtime state of a DataflowComponent instance
 type DataflowComponentObservedState struct {
 	// ServiceInfo contains information about the S6 service

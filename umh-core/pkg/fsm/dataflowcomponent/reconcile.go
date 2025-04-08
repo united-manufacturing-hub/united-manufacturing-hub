@@ -30,5 +30,5 @@ import (
 // that fail are retried in subsequent reconcile calls after a backoff period.
 func (d *DataflowComponentInstance) Reconcile(ctx context.Context, filesystemService filesystem.Service, tick uint64) (err error, reconciled bool) {
 	// Implement reconciliation logic here
-	return nil, false
+	panic("not implemented")
 }
