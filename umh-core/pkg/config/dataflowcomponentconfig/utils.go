@@ -61,5 +61,5 @@ func NormalizeConfig(config *DataFlowComponentConfig) {
 	normalized := normalizer.NormalizeConfig(benthosConfig)
 
 	// Update the simplified config with normalized values
-	config.BenthosConfig = FromBenthosServiceConfig(normalized).BenthosConfig
+	config.BenthosConfig = FromBenthosServiceConfig(normalized)
 }

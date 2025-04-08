@@ -79,11 +79,11 @@ var _ = Describe("DataFlowComponentConfig", func() {
 			simplified := dataflowcomponentconfig.FromBenthosServiceConfig(fullConfig)
 
 			// Verify conversion
-			Expect(simplified.BenthosConfig.Input).To(Equal(fullConfig.Input))
-			Expect(simplified.BenthosConfig.Output).To(Equal(fullConfig.Output))
+			Expect(simplified.Input).To(Equal(fullConfig.Input))
+			Expect(simplified.Output).To(Equal(fullConfig.Output))
 
 			// Convert back to BenthosServiceConfig
-			convertedBack := simplified.GetBenthosServiceConfig()
+			convertedBack := simplified.ToBenthosServiceConfig()
 
 			// Verify advanced fields use defaults, not original values
 			Expect(convertedBack.MetricsPort).To(Equal(0))                             // Default, not 8080
