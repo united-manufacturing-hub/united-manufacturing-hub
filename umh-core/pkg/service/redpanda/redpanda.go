@@ -15,7 +15,6 @@
 package redpanda
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -26,7 +25,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/prometheus/common/expfmt"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/redpandaserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
@@ -35,10 +33,10 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/httpclient"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda_monitor"
 	"go.uber.org/zap"
 	"gopkg.in/yaml.v3"
 
-	dto "github.com/prometheus/client_model/go"
 	redpandayaml "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/redpandaserviceconfig"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
@@ -72,7 +70,7 @@ type IRedpandaService interface {
 	// Expects logs ([]s6service.LogEntry), currentTime (time.Time), and logWindow (time.Duration)
 	IsLogsFine(logs []s6service.LogEntry, currentTime time.Time, logWindow time.Duration) bool
 	// IsMetricsErrorFree checks if the metrics of a Redpanda service are error-free
-	IsMetricsErrorFree(metrics Metrics) bool
+	IsMetricsErrorFree(metrics redpanda_monitor.Metrics) bool
 	// HasProcessingActivity checks if a Redpanda service has processing activity
 	HasProcessingActivity(status RedpandaStatus) bool
 }
@@ -91,10 +89,6 @@ type ServiceInfo struct {
 type RedpandaStatus struct {
 	// HealthCheck contains information about the health of the Redpanda service
 	HealthCheck HealthCheck
-	// Metrics contains information about the metrics of the Redpanda service
-	Metrics Metrics
-	// MetricsState contains information about the metrics of the Redpanda service
-	MetricsState *RedpandaMetricsState
 	// Logs contains the logs of the Redpanda service
 	Logs []s6service.LogEntry
 	// UpdatedAtTick contains the tick at which the status was last updated
@@ -102,6 +96,8 @@ type RedpandaStatus struct {
 	// We use this in redpanda, as it's metric endpoint is quite slow, and we don't want to block the main loop to often.
 	// Therefore we only update the status every constants.RedpandaStatusUpdateIntervalTicks ticks
 	UpdatedAtTick uint64
+	// RedpandaMetrics contains information about the metrics of the Redpanda service
+	RedpandaMetrics redpanda_monitor.RedpandaMetrics
 }
 
 // HealthCheck contains information about the health of the Redpanda service
@@ -115,75 +111,6 @@ type HealthCheck struct {
 	Version string
 }
 
-// Metrics contains information about the metrics of the Redpanda service
-type Metrics struct {
-	Infrastructure InfrastructureMetrics
-	Cluster        ClusterMetrics
-	Throughput     ThroughputMetrics
-	Topic          TopicMetrics
-}
-
-// InfrastructureMetrics contains information about the infrastructure metrics of the Redpanda service
-type InfrastructureMetrics struct {
-	Storage StorageMetrics
-	Uptime  UptimeMetrics
-}
-
-// StorageMetrics contains information about the storage metrics of the Redpanda service
-type StorageMetrics struct {
-	// redpanda_storage_disk_free_bytes
-	// type: gauge
-	// Docs: https://docs.redpanda.com/current/reference/public-metrics-reference/#redpanda_storage_disk_free_bytes
-	FreeBytes int64
-	// redpanda_storage_disk_total_bytes
-	// type: gauge
-	// Docs: https://docs.redpanda.com/current/reference/public-metrics-reference/#redpanda_storage_disk_total_bytes
-	TotalBytes int64
-	// redpanda_storage_disk_free_space_alert (0 == false, everything else == true)
-	// type: gauge
-	FreeSpaceAlert bool
-}
-
-// UptimeMetrics contains information about the uptime metrics of the Redpanda service
-type UptimeMetrics struct {
-	// redpanda_uptime_seconds_total
-	// type: gauge
-	// Docs: https://docs.redpanda.com/current/reference/public-metrics-reference/#redpanda_uptime_seconds_total
-	Uptime int64
-}
-
-// ClusterMetrics contains information about the cluster metrics of the Redpanda service
-type ClusterMetrics struct {
-	// redpanda_cluster_topics
-	// type: gauge
-	// Docs: https://docs.redpanda.com/current/reference/public-metrics-reference/#redpanda_cluster_topics
-	Topics int64
-	// redpanda_cluster_unavailable_partitions
-	// type: gauge
-	// Docs: https://docs.redpanda.com/current/reference/public-metrics-reference/#redpanda_cluster_unavailable_partitions
-	UnavailableTopics int64
-}
-
-// ThroughputMetrics contains information about the throughput metrics of the Redpanda service
-type ThroughputMetrics struct {
-	// redpanda_kafka_request_bytes_total over all redpanda_namespace and redpanda_topic labels using redpanda_request=("produce")
-	// type: counter
-	// Docs: https://docs.redpanda.com/current/reference/public-metrics-reference/#redpanda_kafka_request_bytes_total
-	BytesIn int64
-	// redpanda_kafka_request_bytes_total over all redpanda_namespace and redpanda_topic labels using redpanda_request=("consume")
-	// type: counter
-	// Docs: https://docs.redpanda.com/current/reference/public-metrics-reference/#redpanda_kafka_request_bytes_total
-	BytesOut int64
-}
-
-// TopicMetrics contains information about the topic metrics of the Redpanda service
-type TopicMetrics struct {
-	// redpanda_kafka_partitions
-	// type: gauge
-	// Docs: https://docs.redpanda.com/current/reference/public-metrics-reference/#redpanda_kafka_partitions
-	TopicPartitionMap map[string]int64
-}
-
 // RedpandaService is the default implementation of the IRedpandaService interface
 type RedpandaService struct {
 	logger           *zap.SugaredLogger
@@ -191,10 +118,10 @@ type RedpandaService struct {
 	s6Service        s6service.Service // S6 service for direct S6 operations
 	s6ServiceConfigs []config.S6FSMConfig
 	httpClient       httpclient.HTTPClient
-	metricsState     *RedpandaMetricsState
 	filesystem       filesystem.Service // Filesystem service for file operations
 	baseDir          string
 	lastStatus       RedpandaStatus
+	metricsService   *redpanda_monitor.RedpandaMonitorService
 }
 
 // RedpandaServiceOption is a function that modifies a RedpandaService
@@ -234,13 +161,13 @@ func WithBaseDir(baseDir string) RedpandaServiceOption {
 func NewDefaultRedpandaService(redpandaName string, opts ...RedpandaServiceOption) *RedpandaService {
 	managerName := fmt.Sprintf("%s%s", logger.ComponentRedpandaService, redpandaName)
 	service := &RedpandaService{
-		logger:       logger.For(managerName),
-		s6Manager:    s6fsm.NewS6Manager(managerName),
-		s6Service:    s6service.NewDefaultService(),
-		httpClient:   nil, // this is only for a mock in the tests
-		metricsState: NewRedpandaMetricsState(),
-		filesystem:   filesystem.NewDefaultService(),
-		baseDir:      constants.DefaultRedpandaBaseDir,
+		logger:         logger.For(managerName),
+		s6Manager:      s6fsm.NewS6Manager(managerName),
+		s6Service:      s6service.NewDefaultService(),
+		httpClient:     nil, // this is only for a mock in the tests
+		filesystem:     filesystem.NewDefaultService(),
+		baseDir:        constants.DefaultRedpandaBaseDir,
+		metricsService: redpanda_monitor.NewRedpandaMonitorService(filesystem.NewDefaultService()),
 	}
 
 	// Apply options
@@ -503,104 +430,6 @@ func (s *RedpandaService) Status(ctx context.Context, filesystemService filesyst
 	return serviceInfo, nil
 }
 
-// parseMetrics parses prometheus metrics into structured format
-func parseMetrics(data []byte) (Metrics, error) {
-	var parser expfmt.TextParser
-	metrics := Metrics{
-		Infrastructure: InfrastructureMetrics{},
-		Cluster:        ClusterMetrics{},
-		Throughput:     ThroughputMetrics{},
-		Topic: TopicMetrics{
-			TopicPartitionMap: make(map[string]int64), // Pre-allocate map to avoid nil check later
-		},
-	}
-
-	// Parse the metrics text into prometheus format
-	mf, err := parser.TextToMetricFamilies(bytes.NewReader(data))
-	if err != nil {
-		return metrics, fmt.Errorf("failed to parse metrics: %w", err)
-	}
-
-	// Directly extract only the metrics we need instead of iterating all metrics
-
-	// Infrastructure metrics - Storage
-	if family, ok := mf["redpanda_storage_disk_free_bytes"]; ok && len(family.Metric) > 0 {
-		metrics.Infrastructure.Storage.FreeBytes = getMetricValue(family.Metric[0])
-	}
-
-	if family, ok := mf["redpanda_storage_disk_total_bytes"]; ok && len(family.Metric) > 0 {
-		metrics.Infrastructure.Storage.TotalBytes = getMetricValue(family.Metric[0])
-	}
-
-	if family, ok := mf["redpanda_storage_disk_free_space_alert"]; ok && len(family.Metric) > 0 {
-		// Any non-zero value indicates an alert condition
-		metrics.Infrastructure.Storage.FreeSpaceAlert = getMetricValue(family.Metric[0]) != 0
-	}
-
-	// Infrastructure metrics - Uptime
-	if family, ok := mf["redpanda_uptime_seconds_total"]; ok && len(family.Metric) > 0 {
-		metrics.Infrastructure.Uptime.Uptime = getMetricValue(family.Metric[0])
-	}
-
-	// Cluster metrics
-	if family, ok := mf["redpanda_cluster_topics"]; ok && len(family.Metric) > 0 {
-		metrics.Cluster.Topics = getMetricValue(family.Metric[0])
-	}
-
-	if family, ok := mf["redpanda_cluster_unavailable_partitions"]; ok && len(family.Metric) > 0 {
-		metrics.Cluster.UnavailableTopics = getMetricValue(family.Metric[0])
-	}
-
-	// Throughput metrics
-	if family, ok := mf["redpanda_kafka_request_bytes_total"]; ok {
-		// Process only produce/consume metrics in a single pass
-		for _, metric := range family.Metric {
-			if label := getLabel(metric, "redpanda_request"); label != "" {
-				if label == "produce" {
-					metrics.Throughput.BytesIn = getMetricValue(metric)
-				} else if label == "consume" {
-					metrics.Throughput.BytesOut = getMetricValue(metric)
-				}
-			}
-		}
-	}
-
-	// Topic metrics
-	if family, ok := mf["redpanda_kafka_partitions"]; ok {
-		for _, metric := range family.Metric {
-			if topic := getLabel(metric, "redpanda_topic"); topic != "" {
-				metrics.Topic.TopicPartitionMap[topic] = getMetricValue(metric)
-			}
-		}
-	}
-
-	return metrics, nil
-}
-
-// getMetricValue extracts numeric value from a metric
-func getMetricValue(m *dto.Metric) int64 {
-	if m.Counter != nil {
-		return int64(m.Counter.GetValue())
-	}
-	if m.Gauge != nil {
-		return int64(m.Gauge.GetValue())
-	}
-	if m.Untyped != nil {
-		return int64(m.Untyped.GetValue())
-	}
-	return 0
-}
-
-// getLabel extracts a label value from a metric
-func getLabel(m *dto.Metric, name string) string {
-	for _, label := range m.Label {
-		if label.GetName() == name {
-			return label.GetValue()
-		}
-	}
-	return ""
-}
-
 // GetHealthCheckAndMetrics returns the health check and metrics of a Redpanda service
 func (s *RedpandaService) GetHealthCheckAndMetrics(ctx context.Context, tick uint64, logs []s6service.LogEntry) (RedpandaStatus, error) {
 	if tick%constants.RedpandaStatusUpdateIntervalTicks != 0 {
@@ -627,108 +456,39 @@ func (s *RedpandaService) GetHealthCheckAndMetrics(ctx context.Context, tick uin
 				IsLive:  false,
 				IsReady: false,
 			},
-			Metrics:       Metrics{},
+			RedpandaMetrics: redpanda_monitor.RedpandaMetrics{
+				Metrics:      redpanda_monitor.Metrics{},
+				MetricsState: nil,
+			},
 			Logs:          []s6service.LogEntry{},
 			UpdatedAtTick: tick,
 		}
 		return s.lastStatus, nil
 	}
 
-	baseURL := "http://localhost:9644"
-	metricsEndpoint := baseURL + "/public_metrics"
-
-	// Create a client to use for our requests
-	// If it's a mock client (used in tests), use it directly
-	// Otherwise, create a new client with timeouts based on context
-	var requestClient httpclient.HTTPClient = s.httpClient
-
-	// Only create a default client if we're not using a mock client
-	if requestClient == nil {
-		requestClient = httpclient.NewDefaultHTTPClient()
-	}
-
-	// Start metrics fetch
-	metricsFetchStart := time.Now()
-	resp, body, err := requestClient.GetWithBody(ctx, metricsEndpoint)
-	metricsFetchTime := time.Since(metricsFetchStart)
-
-	// Handle errors from metrics fetch
+	redpandaStatus, err := s.metricsService.Status(ctx, s.filesystem, tick)
 	if err != nil {
-		s.lastStatus = RedpandaStatus{
-			HealthCheck: HealthCheck{
-				IsLive:  false,
-				IsReady: false,
-			},
-			Metrics:       Metrics{},
-			Logs:          logs,
-			UpdatedAtTick: tick,
-		}
-		return s.lastStatus, fmt.Errorf("failed to check metrics endpoint: %w", err)
+		return RedpandaStatus{}, fmt.Errorf("failed to get redpanda status: %w", err)
 	}
 
+	if redpandaStatus.RedpandaStatus.LastScan == nil {
+		return RedpandaStatus{}, fmt.Errorf("last scan is nil")
+	}
 	// Create health check structure
 	healthCheck := HealthCheck{
 		// Liveness is determined by a successful response
-		IsLive: resp.StatusCode == http.StatusOK,
-		// Readiness comes from logs analysis
-		IsReady: resp.StatusCode == http.StatusOK,
+		IsLive: redpandaStatus.RedpandaStatus.IsRunning,
+		// For now this is fine.
+		IsReady: redpandaStatus.RedpandaStatus.IsRunning,
 		// Redpanda version is constant
 		Version: constants.RedpandaVersion,
 	}
 
-	// If service is not ready, log detailed status
-	if !healthCheck.IsReady {
-		s.logger.Debugw("Service not ready",
-			"service", constants.RedpandaServiceName,
-			"status", resp.StatusCode,
-			"body", string(body))
-	}
-
-	// Parse metrics from the response body
-	metricsParseStart := time.Now()
-	metricsData, err := parseMetrics(body)
-	metricsParseTime := time.Since(metricsParseStart)
-
-	if err != nil {
-		s.lastStatus = RedpandaStatus{
-			HealthCheck: HealthCheck{
-				IsLive:  healthCheck.IsLive,
-				IsReady: false,
-				Version: constants.RedpandaVersion,
-			},
-			Logs:          logs,
-			UpdatedAtTick: tick,
-		}
-		return s.lastStatus, fmt.Errorf("failed to parse metrics: %w", err)
-	}
-
-	// Update the metrics state
-	if s.metricsState == nil {
-		s.lastStatus = RedpandaStatus{
-			HealthCheck:   healthCheck,
-			Metrics:       metricsData,
-			Logs:          logs,
-			UpdatedAtTick: tick,
-		}
-		return s.lastStatus, fmt.Errorf("metrics state not initialized")
-	}
-
-	stateUpdateStart := time.Now()
-	s.metricsState.UpdateFromMetrics(metricsData, tick)
-	stateUpdateTime := time.Since(stateUpdateStart)
-
-	// Detailed timing breakdown
-	if metricsFetchTime+metricsParseTime > (constants.RedpandaUpdateObservedStateTimeout / 2) {
-		s.logger.Warnf("Metrics processing slow: fetch=%v, parse=%v, update=%v, total=%v",
-			metricsFetchTime, metricsParseTime, stateUpdateTime, time.Since(start))
-	}
-
 	s.lastStatus = RedpandaStatus{
-		HealthCheck:   healthCheck,
-		Metrics:       metricsData,
-		MetricsState:  s.metricsState,
-		Logs:          logs,
-		UpdatedAtTick: tick,
+		HealthCheck:     healthCheck,
+		RedpandaMetrics: *redpandaStatus.RedpandaStatus.LastScan,
+		Logs:            logs,
+		UpdatedAtTick:   tick,
 	}
 	return s.lastStatus, nil
 }
@@ -972,7 +732,7 @@ func (s *RedpandaService) IsLogsFine(logs []s6service.LogEntry, currentTime time
 }
 
 // IsMetricsErrorFree checks if the metrics of a Redpanda service are error-free
-func (s *RedpandaService) IsMetricsErrorFree(metrics Metrics) bool {
+func (s *RedpandaService) IsMetricsErrorFree(metrics redpanda_monitor.Metrics) bool {
 	// Check output errors
 	if metrics.Infrastructure.Storage.FreeSpaceAlert {
 		return false
@@ -987,7 +747,7 @@ func (s *RedpandaService) IsMetricsErrorFree(metrics Metrics) bool {
 
 // HasProcessingActivity checks if a Redpanda service has processing activity
 func (s *RedpandaService) HasProcessingActivity(status RedpandaStatus) bool {
-	return status.MetricsState != nil && status.MetricsState.IsActive
+	return status.RedpandaMetrics.MetricsState != nil && status.RedpandaMetrics.MetricsState.IsActive
 }
 
 // ServiceExists checks if a Redpanda service exists

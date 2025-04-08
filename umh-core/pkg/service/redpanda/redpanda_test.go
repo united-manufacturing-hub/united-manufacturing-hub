@@ -23,6 +23,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/redpandaserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda_monitor"
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -78,6 +79,7 @@ var _ = Describe("Redpanda Service", func() {
 				// Create a fresh client to avoid interference from defaults
 				client = NewMockHTTPClient()
 				service.httpClient = client
+				service.metricsService = redpanda_monitor.NewMockRedpandaMonitorService()
 
 				// Configure mock client with healthy metrics
 				client.SetMetricsResponse(MetricsConfig{
@@ -129,16 +131,16 @@ var _ = Describe("Redpanda Service", func() {
 				Expect(err).NotTo(HaveOccurred())
 				Expect(status.HealthCheck.IsLive).To(BeTrue())
 				Expect(status.HealthCheck.IsReady).To(BeTrue())
-				Expect(status.Metrics.Infrastructure.Storage.FreeBytes).To(Equal(int64(5000000000)))
-				Expect(status.Metrics.Infrastructure.Storage.TotalBytes).To(Equal(int64(10000000000)))
-				Expect(status.Metrics.Infrastructure.Storage.FreeSpaceAlert).To(BeFalse())
-				Expect(status.Metrics.Infrastructure.Uptime.Uptime).To(Equal(int64(3600)))
-				Expect(status.Metrics.Cluster.Topics).To(Equal(int64(5)))
-				Expect(status.Metrics.Cluster.UnavailableTopics).To(Equal(int64(0)))
-				Expect(status.Metrics.Throughput.BytesIn).To(Equal(int64(1024)))
-				Expect(status.Metrics.Throughput.BytesOut).To(Equal(int64(2048)))
-				Expect(status.Metrics.Topic.TopicPartitionMap).To(HaveLen(1))
-				Expect(status.Metrics.Topic.TopicPartitionMap["test-topic"]).To(Equal(int64(3)))
+				Expect(status.RedpandaMetrics.Metrics.Infrastructure.Storage.FreeBytes).To(Equal(int64(5000000000)))
+				Expect(status.RedpandaMetrics.Metrics.Infrastructure.Storage.TotalBytes).To(Equal(int64(10000000000)))
+				Expect(status.RedpandaMetrics.Metrics.Infrastructure.Storage.FreeSpaceAlert).To(BeFalse())
+				Expect(status.RedpandaMetrics.Metrics.Infrastructure.Uptime.Uptime).To(Equal(int64(3600)))
+				Expect(status.RedpandaMetrics.Metrics.Cluster.Topics).To(Equal(int64(5)))
+				Expect(status.RedpandaMetrics.Metrics.Cluster.UnavailableTopics).To(Equal(int64(0)))
+				Expect(status.RedpandaMetrics.Metrics.Throughput.BytesIn).To(Equal(int64(1024)))
+				Expect(status.RedpandaMetrics.Metrics.Throughput.BytesOut).To(Equal(int64(2048)))
+				Expect(status.RedpandaMetrics.Metrics.Topic.TopicPartitionMap).To(HaveLen(1))
+				Expect(status.RedpandaMetrics.Metrics.Topic.TopicPartitionMap["test-topic"]).To(Equal(int64(3)))
 			})
 		})
 
@@ -450,15 +452,15 @@ var _ = Describe("Redpanda Service", func() {
 
 		Context("IsMetricsErrorFree", func() {
 			It("should return true when there are no errors", func() {
-				metrics := Metrics{
-					Infrastructure: InfrastructureMetrics{
-						Storage: StorageMetrics{
+				metrics := redpanda_monitor.Metrics{
+					Infrastructure: redpanda_monitor.InfrastructureMetrics{
+						Storage: redpanda_monitor.StorageMetrics{
 							FreeBytes:      5000000000,
 							TotalBytes:     10000000000,
 							FreeSpaceAlert: false,
 						},
 					},
-					Cluster: ClusterMetrics{
+					Cluster: redpanda_monitor.ClusterMetrics{
 						Topics:            5,
 						UnavailableTopics: 0, // No unavailable topics
 					},
@@ -467,9 +469,9 @@ var _ = Describe("Redpanda Service", func() {
 			})
 
 			It("should detect storage free space alerts", func() {
-				metrics := Metrics{
-					Infrastructure: InfrastructureMetrics{
-						Storage: StorageMetrics{
+				metrics := redpanda_monitor.Metrics{
+					Infrastructure: redpanda_monitor.InfrastructureMetrics{
+						Storage: redpanda_monitor.StorageMetrics{
 							FreeBytes:      100000,
 							TotalBytes:     10000000000,
 							FreeSpaceAlert: true, // Alert triggered
@@ -480,15 +482,15 @@ var _ = Describe("Redpanda Service", func() {
 			})
 
 			It("should detect unavailable topics", func() {
-				metrics := Metrics{
-					Infrastructure: InfrastructureMetrics{
-						Storage: StorageMetrics{
+				metrics := redpanda_monitor.Metrics{
+					Infrastructure: redpanda_monitor.InfrastructureMetrics{
+						Storage: redpanda_monitor.StorageMetrics{
 							FreeBytes:      5000000000,
 							TotalBytes:     10000000000,
 							FreeSpaceAlert: false, // No storage alert
 						},
 					},
-					Cluster: ClusterMetrics{
+					Cluster: redpanda_monitor.ClusterMetrics{
 						Topics:            10,
 						UnavailableTopics: 2, // Some topics are unavailable
 					},
@@ -497,15 +499,15 @@ var _ = Describe("Redpanda Service", func() {
 			})
 
 			It("should pass when no storage alerts and all topics available", func() {
-				metrics := Metrics{
-					Infrastructure: InfrastructureMetrics{
-						Storage: StorageMetrics{
+				metrics := redpanda_monitor.Metrics{
+					Infrastructure: redpanda_monitor.InfrastructureMetrics{
+						Storage: redpanda_monitor.StorageMetrics{
 							FreeBytes:      5000000000,
 							TotalBytes:     10000000000,
 							FreeSpaceAlert: false, // No storage alert
 						},
 					},
-					Cluster: ClusterMetrics{
+					Cluster: redpanda_monitor.ClusterMetrics{
 						Topics:            10,
 						UnavailableTopics: 0, // All topics available
 					},
@@ -516,22 +518,26 @@ var _ = Describe("Redpanda Service", func() {
 
 		Context("HasProcessingActivity", func() {
 			It("should detect processing activity", func() {
-				metricsState := NewRedpandaMetricsState()
+				metricsState := redpanda_monitor.NewRedpandaMetricsState()
 				metricsState.IsActive = true
 
 				status := RedpandaStatus{
-					MetricsState: metricsState,
+					RedpandaMetrics: redpanda_monitor.RedpandaMetrics{
+						MetricsState: metricsState,
+					},
 				}
 
 				Expect(service.HasProcessingActivity(status)).To(BeTrue())
 			})
 
 			It("should detect lack of processing activity", func() {
-				metricsState := NewRedpandaMetricsState()
+				metricsState := redpanda_monitor.NewRedpandaMetricsState()
 				metricsState.IsActive = false
 
 				status := RedpandaStatus{
-					MetricsState: metricsState,
+					RedpandaMetrics: redpanda_monitor.RedpandaMetrics{
+						MetricsState: metricsState,
+					},
 				}
 
 				Expect(service.HasProcessingActivity(status)).To(BeFalse())
@@ -539,7 +545,9 @@ var _ = Describe("Redpanda Service", func() {
 
 			It("should handle nil metrics state", func() {
 				status := RedpandaStatus{
-					MetricsState: nil,
+					RedpandaMetrics: redpanda_monitor.RedpandaMetrics{
+						MetricsState: nil,
+					},
 				}
 
 				Expect(service.HasProcessingActivity(status)).To(BeFalse())
@@ -618,12 +626,12 @@ var _ = Describe("Redpanda Service", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify initial state
-			Expect(status1.RedpandaStatus.Metrics.Throughput.BytesIn).To(Equal(int64(1000)))
-			Expect(status1.RedpandaStatus.Metrics.Throughput.BytesOut).To(Equal(int64(900)))
+			Expect(status1.RedpandaStatus.RedpandaMetrics.Metrics.Throughput.BytesIn).To(Equal(int64(1000)))
+			Expect(status1.RedpandaStatus.RedpandaMetrics.Metrics.Throughput.BytesOut).To(Equal(int64(900)))
 
 			// Initial BytesPerTick will be equal to the first value since there's no prior state
-			Expect(status1.RedpandaStatus.MetricsState.Input.BytesPerTick).To(Equal(float64(1000)))
-			Expect(status1.RedpandaStatus.MetricsState.Output.BytesPerTick).To(Equal(float64(900)))
+			Expect(status1.RedpandaStatus.RedpandaMetrics.MetricsState.Input.BytesPerTick).To(Equal(float64(1000)))
+			Expect(status1.RedpandaStatus.RedpandaMetrics.MetricsState.Output.BytesPerTick).To(Equal(float64(900)))
 
 			// Now let's test incremental ticks with specific throughput changes
 
@@ -661,16 +669,16 @@ var _ = Describe("Redpanda Service", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify new throughput values
-			Expect(status2.RedpandaStatus.Metrics.Throughput.BytesIn).To(Equal(int64(1500)))
-			Expect(status2.RedpandaStatus.Metrics.Throughput.BytesOut).To(Equal(int64(1200)))
+			Expect(status2.RedpandaStatus.RedpandaMetrics.Metrics.Throughput.BytesIn).To(Equal(int64(1500)))
+			Expect(status2.RedpandaStatus.RedpandaMetrics.Metrics.Throughput.BytesOut).To(Equal(int64(1200)))
 
 			// BytesPerTick for Input should be (1500-1000)/10 = 50.0
-			Expect(status2.RedpandaStatus.MetricsState.Input.BytesPerTick).To(BeNumerically("~", 50.0, 0.1))
+			Expect(status2.RedpandaStatus.RedpandaMetrics.MetricsState.Input.BytesPerTick).To(BeNumerically("~", 50.0, 0.1))
 			// BytesPerTick for Output should be (1200-900)/10 = 30.0
-			Expect(status2.RedpandaStatus.MetricsState.Output.BytesPerTick).To(BeNumerically("~", 30.0, 0.1))
+			Expect(status2.RedpandaStatus.RedpandaMetrics.MetricsState.Output.BytesPerTick).To(BeNumerically("~", 30.0, 0.1))
 
 			// Verify that the MetricsState reflects activity
-			Expect(status2.RedpandaStatus.MetricsState.IsActive).To(BeTrue())
+			Expect(status2.RedpandaStatus.RedpandaMetrics.MetricsState.IsActive).To(BeTrue())
 
 			// Move to tick 20 with +1000 bytes in and +600 bytes out
 			tick = 20
@@ -709,9 +717,9 @@ var _ = Describe("Redpanda Service", func() {
 			// Over 20 ticks: Input = (2500-1000)/20 = 75.0 bytes/tick
 			// But our window has specific values at ticks 0, 10, and 20
 			// Window calculation uses first and last: (2500-1000)/(20-0) = 75.0
-			Expect(status3.RedpandaStatus.MetricsState.Input.BytesPerTick).To(BeNumerically("~", 75.0, 0.1))
+			Expect(status3.RedpandaStatus.RedpandaMetrics.MetricsState.Input.BytesPerTick).To(BeNumerically("~", 75.0, 0.1))
 			// Output = (1800-900)/20 = 45.0 bytes/tick
-			Expect(status3.RedpandaStatus.MetricsState.Output.BytesPerTick).To(BeNumerically("~", 45.0, 0.1))
+			Expect(status3.RedpandaStatus.RedpandaMetrics.MetricsState.Output.BytesPerTick).To(BeNumerically("~", 45.0, 0.1))
 
 			// To test inactivity detection, we need to increment by reasonable tick amounts
 			// First jump to tick 25 (which is within the allowed staleness window of 20 ticks)
@@ -826,7 +834,7 @@ var _ = Describe("Redpanda Service", func() {
 			status1, err := service.Status(context.Background(), mockFS, tick)
 			tick += 10
 			Expect(err).NotTo(HaveOccurred())
-			Expect(status1.RedpandaStatus.MetricsState.IsActive).To(BeTrue())
+			Expect(status1.RedpandaStatus.RedpandaMetrics.MetricsState.IsActive).To(BeTrue())
 
 			// Second tick with no change in throughput
 			client.SetMetricsResponse(MetricsConfig{
@@ -842,7 +850,7 @@ var _ = Describe("Redpanda Service", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Should detect inactivity
-			Expect(status2.RedpandaStatus.MetricsState.IsActive).To(BeFalse())
+			Expect(status2.RedpandaStatus.RedpandaMetrics.MetricsState.IsActive).To(BeFalse())
 		})
 	})
 
@@ -1103,7 +1111,7 @@ var _ = Describe("Redpanda Service", func() {
 			Expect(status1.RedpandaStatus.UpdatedAtTick).To(Equal(tick))
 
 			// First metrics check directly
-			metrics1 := status1.RedpandaStatus.Metrics
+			metrics1 := status1.RedpandaStatus.RedpandaMetrics.Metrics
 			Expect(metrics1.Throughput.BytesIn).To(Equal(int64(1000)))
 
 			// Update metrics in the mock client for next call
@@ -1119,7 +1127,7 @@ var _ = Describe("Redpanda Service", func() {
 			status2, err := service.Status(context.Background(), mockFS, tick)
 			Expect(err).NotTo(HaveOccurred())
 			// Should still have the old metrics
-			Expect(status2.RedpandaStatus.Metrics.Throughput.BytesIn).To(Equal(int64(1000)))
+			Expect(status2.RedpandaStatus.RedpandaMetrics.Metrics.Throughput.BytesIn).To(Equal(int64(1000)))
 			// UpdatedAtTick should still be 0 (from first call)
 			Expect(status2.RedpandaStatus.UpdatedAtTick).To(Equal(uint64(0)))
 
@@ -1128,7 +1136,7 @@ var _ = Describe("Redpanda Service", func() {
 			status3, err := service.Status(context.Background(), mockFS, tick)
 			Expect(err).NotTo(HaveOccurred())
 			// Should have the new metrics
-			Expect(status3.RedpandaStatus.Metrics.Throughput.BytesIn).To(Equal(int64(2000)))
+			Expect(status3.RedpandaStatus.RedpandaMetrics.Metrics.Throughput.BytesIn).To(Equal(int64(2000)))
 			// UpdatedAtTick should be 10
 			Expect(status3.RedpandaStatus.UpdatedAtTick).To(Equal(uint64(10)))
 		})
@@ -1138,7 +1146,7 @@ var _ = Describe("Redpanda Service", func() {
 			status1, err := service.Status(context.Background(), mockFS, tick)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(status1.RedpandaStatus.UpdatedAtTick).To(Equal(tick))
-			Expect(status1.RedpandaStatus.Metrics.Throughput.BytesIn).To(Equal(int64(1000)))
+			Expect(status1.RedpandaStatus.RedpandaMetrics.Metrics.Throughput.BytesIn).To(Equal(int64(1000)))
 
 			// Configure mock client to fail with connection refused
 			mockClient.SetResponse("/public_metrics", MockResponse{
@@ -1184,7 +1192,7 @@ var _ = Describe("Redpanda Service", func() {
 			status3, err := service.Status(context.Background(), mockFS, tick)
 			Expect(err).NotTo(HaveOccurred())
 			// Should have the new metrics
-			Expect(status3.RedpandaStatus.Metrics.Throughput.BytesIn).To(Equal(int64(3000)))
+			Expect(status3.RedpandaStatus.RedpandaMetrics.Metrics.Throughput.BytesIn).To(Equal(int64(3000)))
 			// UpdatedAtTick should be 20
 			Expect(status3.RedpandaStatus.UpdatedAtTick).To(Equal(uint64(20)))
 		})

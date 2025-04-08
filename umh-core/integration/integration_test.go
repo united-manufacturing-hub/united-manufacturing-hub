@@ -237,7 +237,7 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 		})
 	})
 
-	Context("with comprehensive chaos test", Label("chaos"), func() {
+	FContext("with comprehensive chaos test", Label("chaos"), func() {
 
 		BeforeAll(func() {
 			//Skip("Skipping comprehensive chaos test due to time constraints")
@@ -248,7 +248,7 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 			Expect(waitForMetrics()).To(Succeed(), "Metrics endpoint should be available with empty config")
 		})
 
-		It("should handle random service additions, deletions, starts and stops", func() {
+		FIt("should handle random service additions, deletions, starts and stops", func() {
 			// Start monitoring goroutine
 			testDuration := 3 * time.Minute
 

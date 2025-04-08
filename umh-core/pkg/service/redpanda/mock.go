@@ -27,6 +27,7 @@ import (
 	s6_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/httpclient"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda_monitor"
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 )
 
@@ -337,7 +338,7 @@ func (m *MockRedpandaService) IsLogsFine(logs []s6service.LogEntry, currentTime 
 }
 
 // IsMetricsErrorFree mocks checking if metrics are error-free
-func (m *MockRedpandaService) IsMetricsErrorFree(metrics Metrics) bool {
+func (m *MockRedpandaService) IsMetricsErrorFree(metrics redpanda_monitor.Metrics) bool {
 	m.IsMetricsErrorFreeCalled = true
 	// For testing purposes, we'll consider metrics error-free
 	return !metrics.Infrastructure.Storage.FreeSpaceAlert
@@ -346,7 +347,7 @@ func (m *MockRedpandaService) IsMetricsErrorFree(metrics Metrics) bool {
 // HasProcessingActivity mocks checking if a Redpanda service has processing activity
 func (m *MockRedpandaService) HasProcessingActivity(status RedpandaStatus) bool {
 	m.HasProcessingActivityCalled = true
-	return status.MetricsState != nil && status.MetricsState.IsActive
+	return status.RedpandaMetrics.MetricsState != nil && status.RedpandaMetrics.MetricsState.IsActive
 }
 
 // ServiceExists mocks checking if a Redpanda service exists

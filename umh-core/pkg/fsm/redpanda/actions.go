@@ -295,7 +295,7 @@ func (b *RedpandaInstance) IsRedpandaLogsFine(currentTime time.Time, logWindow t
 
 // IsRedpandaMetricsErrorFree determines if the Redpanda service has no errors in the metrics
 func (b *RedpandaInstance) IsRedpandaMetricsErrorFree() bool {
-	return b.service.IsMetricsErrorFree(b.ObservedState.ServiceInfo.RedpandaStatus.Metrics)
+	return b.service.IsMetricsErrorFree(b.ObservedState.ServiceInfo.RedpandaStatus.RedpandaMetrics.Metrics)
 }
 
 // IsRedpandaDegraded determines if the Redpanda service is degraded.
@@ -311,7 +311,7 @@ func (b *RedpandaInstance) IsRedpandaDegraded(currentTime time.Time, logWindow t
 // IsRedpandaWithProcessingActivity determines if the Redpanda instance has active data processing
 // based on metrics data and possibly other observed state information
 func (b *RedpandaInstance) IsRedpandaWithProcessingActivity() bool {
-	if b.ObservedState.ServiceInfo.RedpandaStatus.MetricsState == nil {
+	if b.ObservedState.ServiceInfo.RedpandaStatus.RedpandaMetrics.MetricsState == nil {
 		return false
 	}
 	return b.service.HasProcessingActivity(b.ObservedState.ServiceInfo.RedpandaStatus)
