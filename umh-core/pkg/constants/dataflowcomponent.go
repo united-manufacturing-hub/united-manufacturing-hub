@@ -20,10 +20,5 @@ const (
 	// DataflowComponentExpectedMaxP95ExecutionTimePerInstance means that an instance will not reconcile if not 50ms are left
 	// Note: in the intergation test, we defined an alerting threshold of 80% of the max ticker time, which is 100ms
 	// So by setting this to 50 ms, we can ensure that an instance will never start if it triggers the alerting threshold
-	DataflowComponentExpectedMaxP95ExecutionTimePerInstance = time.Millisecond * 50 // needs to be higher than DataflowComponentExpectedMaxP95ExecutionTimePerInstance
-)
-
-const (
-	// DefaultDataflowComponentLogLevel is the default log level for DataflowComponent services when none is specified
-	DefaultDataflowComponentLogLevel = "INFO"
+	DataflowComponentExpectedMaxP95ExecutionTimePerInstance = time.Millisecond * 50 // needs to be higher than BenthosExpectedMaxP95ExecutionTimePerInstance
 )

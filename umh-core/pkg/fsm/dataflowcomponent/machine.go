@@ -93,7 +93,7 @@ func NewDataflowComponentInstance(
 // But ensures that the desired state is a valid state and that it is also a reasonable state
 // e.g., nobody wants to have an instance in the "starting" state, that is just intermediate
 func (d *DataflowComponentInstance) SetDesiredFSMState(state string) error {
-	return nil
+	panic("not implemented")
 }
 
 // GetCurrentFSMState returns the current state of the FSM
