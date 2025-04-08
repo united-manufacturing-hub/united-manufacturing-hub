@@ -27,6 +27,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"go.uber.org/zap"
 )
 
@@ -63,7 +64,9 @@ type FSMInstance interface {
 	// Reconcile moves the instance toward its desired state
 	// Returns an error if reconciliation fails, and a boolean indicating
 	// whether a change was made to the instance's state
-	Reconcile(ctx context.Context, tick uint64) (error, bool)
+	// The filesystemService parameter is used to read and write to the filesystem.
+	// Specifically it is used so that we only need to read in the entire file system once, and then can pass it to all the managers and instances, who can then save on I/O operations.
+	Reconcile(ctx context.Context, filesystemService filesystem.Service, tick uint64) (error, bool)
 	// Remove initiates the removal process for this instance
 	Remove(ctx context.Context) error
 	// GetLastObservedState returns the last known state of the instance
@@ -82,7 +85,9 @@ type FSMManager[C any] interface {
 	GetInstance(name string) (FSMInstance, bool)
 	// Reconcile ensures that all instances are moving toward their desired state
 	// The tick parameter provides a counter to track operation rate limiting
-	Reconcile(ctx context.Context, config config.FullConfig, tick uint64) (error, bool)
+	// The filesystemService parameter is used to read and write to the filesystem.
+	// Specifically it is used so that we only need to read in the entire file system once, and then can pass it to all the managers and instances, who can then save on I/O operations.
+	Reconcile(ctx context.Context, config config.FullConfig, filesystemService filesystem.Service, tick uint64) (error, bool)
 	// GetManagerName returns the name of this manager for logging and metrics
 	GetManagerName() string
 }
@@ -271,6 +276,7 @@ func (m *BaseFSMManager[C]) GetLastStateChange() uint64 {
 func (m *BaseFSMManager[C]) Reconcile(
 	ctx context.Context,
 	config config.FullConfig,
+	filesystemService filesystem.Service,
 	tick uint64,
 ) (error, bool) {
 	// Increment manager-specific tick counter
@@ -330,6 +336,7 @@ func (m *BaseFSMManager[C]) Reconcile(
 			err = instance.SetDesiredFSMState(desiredState)
 			if err != nil {
 				metrics.IncErrorCount(metrics.ComponentBaseFSMManager, m.managerName)
+				m.logger.Errorf("failed to set desired state: %v for instance %s", err, name)
 				return fmt.Errorf("failed to set desired state: %w", err), false
 			}
 			m.instances[name] = instance
@@ -390,6 +397,7 @@ func (m *BaseFSMManager[C]) Reconcile(
 			err := m.instances[name].SetDesiredFSMState(desiredState)
 			if err != nil {
 				metrics.IncErrorCount(metrics.ComponentBaseFSMManager, m.managerName)
+				m.logger.Errorf("failed to set desired state: %w for instance %s", err, name)
 				return fmt.Errorf("failed to set desired state: %w", err), false
 			}
 
@@ -503,7 +511,7 @@ func (m *BaseFSMManager[C]) Reconcile(
 		defer instanceCancel()
 
 		// Pass manager-specific tick to instance.Reconcile
-		err, reconciled := instance.Reconcile(instanceCtx, m.managerTick)
+		err, reconciled := instance.Reconcile(instanceCtx, filesystemService, m.managerTick)
 		reconcileTime := time.Since(reconcileStart)
 		metrics.ObserveReconcileTime(metrics.ComponentBaseFSMManager, m.managerName+".instances."+name, reconcileTime)
 

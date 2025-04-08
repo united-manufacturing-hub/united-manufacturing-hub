@@ -34,3 +34,9 @@ const (
 	// So by setting this to 30 ms, we can ensure that an instance will never start if it triggers the alerting threshold
 	BenthosExpectedMaxP95ExecutionTimePerInstance = time.Millisecond * 40 // needs to be higher than S6ExpectedMaxP95ExecutionTimePerInstance
 )
+
+var (
+	// Set by build process via ldflags using -ldflags="-X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants.BenthosVersion=${BENTHOS_VERSION}"
+	// This injects the version at build time from the environment, eliminating the need for hard-coded values.
+	BenthosVersion = "unknown"
+)
