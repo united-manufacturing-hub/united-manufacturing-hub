@@ -23,8 +23,6 @@ on:
   pull_request:
     branches:
       - "**"
-    paths:
-      - "umh-core/**"
 
 jobs:
   unit-tests:
