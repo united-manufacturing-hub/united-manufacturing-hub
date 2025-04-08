@@ -121,7 +121,7 @@ type RedpandaService struct {
 	filesystem       filesystem.Service // Filesystem service for file operations
 	baseDir          string
 	lastStatus       RedpandaStatus
-	metricsService   *redpanda_monitor.RedpandaMonitorService
+	metricsService   redpanda_monitor.IRedpandaMonitorService
 }
 
 // RedpandaServiceOption is a function that modifies a RedpandaService
