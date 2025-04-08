@@ -36,12 +36,13 @@ const (
 	ComponentRedpandaInstance = "RedpandaInstance"
 
 	// Service components
-	ComponentS6Service               = "S6Service"
-	ComponentBenthosService          = "BenthosService"
-	ComponentNmapService             = "NmapService"
-	ComponentContainerMonitorService = "ContainerMonService"
-	ComponentRedpandaMonitorService  = "RedpandaMonitorService"
-	ComponentRedpandaService         = "RedpandaService"
+	ComponentS6Service                = "S6Service"
+	ComponentBenthosService           = "BenthosService"
+	ComponentNmapService              = "NmapService"
+	ComponentContainerMonitorService  = "ContainerMonService"
+	ComponentRedpandaMonitorService   = "RedpandaMonitorService"
+	ComponentRedpandaService          = "RedpandaService"
+	ComponentDataFlowComponentService = "DFCService"
 
 	// Configuration
 	ComponentConfigManager = "ConfigManager"
