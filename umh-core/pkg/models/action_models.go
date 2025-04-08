@@ -19,6 +19,35 @@ import (
 	"github.com/google/uuid"
 )
 
+type DeployCustomDataFlowComponentPayload struct {
+	Name              string                         `json:"name" binding:"required"`
+	Payload           DeployDataFlowComponentPayload `json:"payload" binding:"required"`
+	Meta              CdcfMeta                       `json:"meta"`
+	IgnoreHealthCheck bool                           `json:"ignoreHealthCheck"`
+}
+
+type DeployDataFlowComponentPayload struct {
+	CDFCPayload CDFCPayload `json:"customDataFlowComponent" binding:"required"`
+}
+
+type CDFCPayload struct {
+	Input           DfcDataConfig            `json:"input"`
+	Output          DfcDataConfig            `json:"output"`
+	Pipeline        map[string]DfcDataConfig `json:"pipeline"`
+	Inject          DfcDataConfig            `json:"rawYAML"`
+	IgnoreErrors    bool                     `json:"ignoreErrors"`
+	BenthosImageTag string                   `json:"benthosImageTag"`
+}
+
+type DfcDataConfig struct {
+	Data string `json:"data"`
+	Type string `json:"type"`
+}
+
+type CdcfMeta struct {
+	Type string `json:"type"`
+}
+
 // EditInstanceLocation holds the location information for the instance
 type EditInstanceLocationModel struct {
 	Enterprise string  `json:"enterprise"`
