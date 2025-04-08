@@ -18,12 +18,75 @@ import (
 	"context"
 	"time"
 
+	"github.com/looplab/fsm"
+	internal_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/dataflowcomponent"
 )
 
 // NewDataflowComponentInstance creates a new DataflowComponentInstance with a given ID and service path
-func NewDataflowComponentInstance() *DataflowComponentInstance {
-	return &DataflowComponentInstance{}
+func NewDataflowComponentInstance(
+	s6BaseDir string,
+	config config.DataFlowComponentConfig,
+) *DataflowComponentInstance {
+
+	cfg := internal_fsm.BaseFSMInstanceConfig{
+		ID:                           config.Name,
+		DesiredFSMState:              OperationalStateStopped,
+		OperationalStateAfterCreate:  OperationalStateStopped,
+		OperationalStateBeforeRemove: OperationalStateStopped,
+		OperationalTransitions: []fsm.EventDesc{
+			// Basic lifecycle transitions
+			// Stopped is the initial state
+			{Name: EventStart, Src: []string{OperationalStateStopped}, Dst: OperationalStateStarting},
+
+			// Starting phase transitions
+			{Name: EventBenthosCreated, Src: []string{OperationalStateStarting}, Dst: OperationalStateStartingConfigLoading},
+			{Name: EventBenthosConfigLoaded, Src: []string{OperationalStateStartingConfigLoading}, Dst: OperationalStateStartingConfigLoading},
+			{Name: EventHealthchecksPassed, Src: []string{OperationalStateStartingWaitingForHealthchecks}, Dst: OperationalStateStartingWaitingForServiceToRemainRunning},
+			{Name: EventStartDone, Src: []string{OperationalStateStartingWaitingForServiceToRemainRunning}, Dst: OperationalStateIdle},
+			{Name: EventStop, Src: []string{OperationalStateStarting, OperationalStateStartingConfigLoading, OperationalStateStartingWaitingForHealthchecks, OperationalStateStartingWaitingForServiceToRemainRunning}, Dst: OperationalStateStopping},
+
+			// From any starting state, we can either go back to OperationalStateStarting (e.g: If there is an error)
+			{Name: EventStartFailed, Src: []string{OperationalStateStarting, OperationalStateStartingConfigLoading, OperationalStateStartingWaitingForHealthchecks, OperationalStateStartingWaitingForServiceToRemainRunning}, Dst: OperationalStateStarting},
+
+			// Running phase transitions
+			// From Idle, we can go to Active when data is processed or to Stopping
+			{Name: EventDataReceived, Src: []string{OperationalStateIdle}, Dst: OperationalStateActive},
+			{Name: EventNoDataTimeout, Src: []string{OperationalStateIdle}, Dst: OperationalStateIdle},
+			{Name: EventStop, Src: []string{OperationalStateIdle}, Dst: OperationalStateStopping},
+
+			// From Active, we can go to Idle when there's no data, to Degraded when there are issues, or to Stopping
+			{Name: EventNoDataTimeout, Src: []string{OperationalStateActive}, Dst: OperationalStateIdle},
+			{Name: EventDegraded, Src: []string{OperationalStateActive}, Dst: OperationalStateDegraded},
+			{Name: EventStop, Src: []string{OperationalStateActive}, Dst: OperationalStateStopping},
+
+			// From Degraded, we can recover to Active, go to Idle, or to Stopping
+			{Name: EventRecovered, Src: []string{OperationalStateDegraded}, Dst: OperationalStateIdle},
+			{Name: EventStop, Src: []string{OperationalStateDegraded}, Dst: OperationalStateStopping},
+
+			// Final transition for stopping
+			{Name: EventStopDone, Src: []string{OperationalStateStopping}, Dst: OperationalStateStopped},
+
+			// Add degraded transition from Idle
+			{Name: EventDegraded, Src: []string{OperationalStateIdle}, Dst: OperationalStateDegraded},
+		},
+	}
+
+	instance := &DataflowComponentInstance{
+		baseFSMInstance: internal_fsm.NewBaseFSMInstance(cfg, logger.For(config.Name)),
+		service:         dataflowcomponent.NewDefaultDataFlowComponentService(config.Name),
+		config:          config.DataFlowComponentConfig,
+		ObservedState:   DataflowComponentObservedState{},
+	}
+
+	instance.registerCallbacks()
+	metrics.InitErrorCounter(metrics.ComponentDataflowComponentInstance, config.Name)
+
+	return instance
 }
 
 // SetDesiredFSMState safely updates the desired state

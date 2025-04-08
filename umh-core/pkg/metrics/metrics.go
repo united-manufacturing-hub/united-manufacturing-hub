@@ -25,15 +25,16 @@ import (
 
 const (
 	// Component Labels
-	ComponentControlLoop      = "control_loop"
-	ComponentBaseFSMManager   = "base_fsm_manager"
-	ComponentS6Manager        = "s6_manager"
-	ComponentBenthosManager   = "benthos_manager"
-	ComponentS6Instance       = "s6_instance"
-	ComponentBenthosInstance  = "benthos_instance"
-	ComponentS6Service        = "s6_service"
-	ComponentFilesystem       = "filesystem"
-	ComponentContainerMonitor = "container_monitor"
+	ComponentControlLoop               = "control_loop"
+	ComponentBaseFSMManager            = "base_fsm_manager"
+	ComponentS6Manager                 = "s6_manager"
+	ComponentBenthosManager            = "benthos_manager"
+	ComponentS6Instance                = "s6_instance"
+	ComponentBenthosInstance           = "benthos_instance"
+	ComponentS6Service                 = "s6_service"
+	ComponentFilesystem                = "filesystem"
+	ComponentContainerMonitor          = "container_monitor"
+	ComponentDataflowComponentInstance = "dataflow_component_instance"
 )
 
 var (

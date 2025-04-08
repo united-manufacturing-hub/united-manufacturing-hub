@@ -21,6 +21,58 @@ import (
 	dataflowcomponentsvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/dataflowcomponent"
 )
 
+// Operational state constants (using internal_fsm compatible naming)
+const (
+	// OperationalStateStopped is the initial state and also the state when the service is stopped
+	OperationalStateStopped = "stopped"
+
+	// Starting phase states
+	// OperationalStateStarting is the state when s6 is starting the service
+	OperationalStateStarting = "starting"
+	// OperationalStateStartingConfigLoading is the state when the process itself is running but is waiting for the config to be loaded
+	OperationalStateStartingConfigLoading = "starting_config_loading"
+	// OperationalStateStartingWaitingForHealthchecks is the state when there was no fatal config error but is waiting for the healthchecks to pass
+	OperationalStateStartingWaitingForHealthchecks = "starting_waiting_for_healthchecks"
+	// OperationalStateStartingWaitingForServiceToRemainRunning is the state when the service is running but is waiting for the service to remain running
+	OperationalStateStartingWaitingForServiceToRemainRunning = "starting_waiting_for_service_to_remain_running"
+
+	// Running phase states
+	// OperationalStateIdle is the state when the service is running but not actively processing data
+	OperationalStateIdle = "idle"
+	// OperationalStateActive is the state when the service is running and actively processing data
+	OperationalStateActive = "active"
+	// OperationalStateDegraded is the state when the service is running but has encountered issues
+	OperationalStateDegraded = "degraded"
+
+	// OperationalStateStopping is the state when the service is in the process of stopping
+	OperationalStateStopping = "stopping"
+)
+
+// Operational event constants
+const (
+	// Basic lifecycle events
+	EventStart     = "start"
+	EventStartDone = "start_done"
+	EventStop      = "stop"
+	EventStopDone  = "stop_done"
+
+	// Starting phase events
+	EventBenthosCreated = "benthos_created"
+	// TODO: Probably we might need to add more events like BenthosConfigValidated
+	// This needs some discussion as the config validation can be part of ConfigLoaded too.
+	EventBenthosConfigLoaded = "benthos_config_loaded"
+	EventBenthosRestarting   = "benthos_restarting"
+	EventBenthosStarted      = "benthos_started"
+	EventHealthchecksPassed  = "healthchecks_passed"
+	EventStartFailed         = "start_failed"
+
+	// Running phase events
+	EventDataReceived  = "data_received"
+	EventNoDataTimeout = "no_data_timeout"
+	EventDegraded      = "degraded"
+	EventRecovered     = "recovered"
+)
+
 // DataflowComponentObservedState contains the observed runtime state of a DataflowComponent instance
 type DataflowComponentObservedState struct {
 	// ServiceInfo contains information about the S6 service
