@@ -36,7 +36,11 @@ type Service interface {
 	// WriteFile writes data to a file respecting the context
 	WriteFile(ctx context.Context, path string, data []byte, perm os.FileMode) error
 
+	// PathExists checks if a file or directory exists at the given path
+	PathExists(ctx context.Context, path string) (bool, error)
+
 	// FileExists checks if a file exists
+	// Deprecated: use PathExists instead
 	FileExists(ctx context.Context, path string) (bool, error)
 
 	// Remove removes a file or directory
@@ -45,14 +49,8 @@ type Service interface {
 	// RemoveAll removes a directory and all its contents
 	RemoveAll(ctx context.Context, path string) error
 
-	// MkdirTemp creates a new temporary directory
-	MkdirTemp(ctx context.Context, dir, pattern string) (string, error)
-
 	// Stat returns file info
 	Stat(ctx context.Context, path string) (os.FileInfo, error)
-
-	// CreateFile creates a new file with the specified permissions
-	CreateFile(ctx context.Context, path string, perm os.FileMode) (*os.File, error)
 
 	// Chmod changes the mode of the named file
 	Chmod(ctx context.Context, path string, mode os.FileMode) error
@@ -172,9 +170,8 @@ func (s *DefaultService) WriteFile(ctx context.Context, path string, data []byte
 	}
 }
 
-// FileExists checks if a file exists
-// This method returns false if the file does not exist or if there is an error
-func (s *DefaultService) FileExists(ctx context.Context, path string) (bool, error) {
+// PathExists checks if a path (file or directory) exists
+func (s *DefaultService) PathExists(ctx context.Context, path string) (bool, error) {
 	if err := s.checkContext(ctx); err != nil {
 		return false, err
 	}
@@ -194,7 +191,7 @@ func (s *DefaultService) FileExists(ctx context.Context, path string) (bool, err
 			return
 		}
 		if err != nil {
-			resCh <- result{false, fmt.Errorf("failed to check if file exists: %w", err)}
+			resCh <- result{false, fmt.Errorf("failed to check if path exists: %w", err)}
 			return
 		}
 		resCh <- result{true, nil}
@@ -210,6 +207,12 @@ func (s *DefaultService) FileExists(ctx context.Context, path string) (bool, err
 	case <-ctx.Done():
 		return false, ctx.Err()
 	}
+}
+
+// FileExists checks if a file exists
+// Deprecated: use PathExists instead
+func (s *DefaultService) FileExists(ctx context.Context, path string) (bool, error) {
+	return s.PathExists(ctx, path)
 }
 
 // Remove removes a file or directory
@@ -261,37 +264,6 @@ func (s *DefaultService) RemoveAll(ctx context.Context, path string) error {
 	}
 }
 
-// MkdirTemp creates a new temporary directory
-func (s *DefaultService) MkdirTemp(ctx context.Context, dir, pattern string) (string, error) {
-	if err := s.checkContext(ctx); err != nil {
-		return "", fmt.Errorf("failed to check context: %w", err)
-	}
-
-	// Create a channel for results
-	type result struct {
-		path string
-		err  error
-	}
-	resCh := make(chan result, 1)
-
-	// Run file operation in goroutine
-	go func() {
-		path, err := os.MkdirTemp(dir, pattern)
-		resCh <- result{path, err}
-	}()
-
-	// Wait for either completion or context cancellation
-	select {
-	case res := <-resCh:
-		if res.err != nil {
-			return "", fmt.Errorf("failed to create temporary directory: %w", res.err)
-		}
-		return res.path, nil
-	case <-ctx.Done():
-		return "", ctx.Err()
-	}
-}
-
 // Stat returns file info
 func (s *DefaultService) Stat(ctx context.Context, path string) (os.FileInfo, error) {
 	if err := s.checkContext(ctx); err != nil {
@@ -318,37 +290,6 @@ func (s *DefaultService) Stat(ctx context.Context, path string) (os.FileInfo, er
 			return nil, fmt.Errorf("failed to get file info: %w", res.err)
 		}
 		return res.info, nil
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	}
-}
-
-// CreateFile creates a new file with the specified permissions
-func (s *DefaultService) CreateFile(ctx context.Context, path string, perm os.FileMode) (*os.File, error) {
-	if err := s.checkContext(ctx); err != nil {
-		return nil, fmt.Errorf("failed to check context: %w", err)
-	}
-
-	// Create a channel for results
-	type result struct {
-		file *os.File
-		err  error
-	}
-	resCh := make(chan result, 1)
-
-	// Run file operation in goroutine
-	go func() {
-		file, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_TRUNC, perm)
-		resCh <- result{file, err}
-	}()
-
-	// Wait for either completion or context cancellation
-	select {
-	case res := <-resCh:
-		if res.err != nil {
-			return nil, fmt.Errorf("failed to create file: %w", res.err)
-		}
-		return res.file, nil
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}

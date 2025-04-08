@@ -101,10 +101,6 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 			Expect(waitForMetrics()).To(Succeed(), "Metrics endpoint should be available with golden service config")
 		})
 
-		AfterAll(func() {
-			PrintLogsAndStopContainer() // Stop container after golden config scenario
-		})
-
 		It("should have the golden service up and expose metrics", func() {
 			// Check /metrics
 			Eventually(func() bool {
@@ -150,11 +146,6 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 			GinkgoWriter.Println("Golden service is up and running")
 		})
 
-		AfterAll(func() {
-			By("Stopping container after the multiple services test")
-			PrintLogsAndStopContainer()
-		})
-
 		It("should have both services active and expose healthy metrics", func() {
 			By("Verifying the metrics endpoint contains expected metrics")
 			Eventually(func() bool {
@@ -189,11 +180,6 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 			Expect(writeConfigFile(cfg)).To(Succeed())
 			Expect(BuildAndRunContainer(cfg, DEFAULT_MEMORY, DEFAULT_CPUS)).To(Succeed())
 			Expect(waitForMetrics()).To(Succeed(), "Metrics endpoint should be available with empty config")
-		})
-
-		AfterAll(func() {
-			By("Stopping the container after the scaling test")
-			PrintLogsAndStopContainer()
 		})
 
 		It("should scale up to multiple services while maintaining healthy metrics", func() {
@@ -260,21 +246,6 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 			Expect(writeConfigFile(cfg)).To(Succeed())
 			Expect(BuildAndRunContainer(cfg, DEFAULT_MEMORY, DEFAULT_CPUS)).To(Succeed())
 			Expect(waitForMetrics()).To(Succeed(), "Metrics endpoint should be available with empty config")
-		})
-
-		AfterAll(func() {
-			// Get the docker logs and find any [WARN] and [ERROR] messages
-			out, err := runDockerCommand("logs", containerName)
-			if err != nil {
-				fmt.Printf("Failed to get container logs: %v\n", err)
-				return
-			}
-			for _, line := range strings.Split(out, "\n") {
-				if strings.Contains(line, "[WARN]") || strings.Contains(line, "[ERROR]") {
-					fmt.Printf("Container logs:\n%s\n", line)
-				}
-			}
-			PrintLogsAndStopContainer()
 		})
 
 		It("should handle random service additions, deletions, starts and stops", func() {

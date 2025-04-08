@@ -208,6 +208,7 @@ test-hello: clean build
 		-p 4195:4195 \
 		--memory $(MEMORY) \
 		--cpus $(CPUS) \
+		-e LOGGING_LEVEL=DEBUG \
 		$(IMAGE_NAME):$(TAG)
 
 test-comm: clean build

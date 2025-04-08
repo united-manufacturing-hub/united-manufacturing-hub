@@ -26,6 +26,7 @@ import (
 	benthosfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 	benthossvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 )
 
@@ -243,6 +244,7 @@ func TestBenthosStateTransition(
 	ctx context.Context,
 	instance *benthosfsm.BenthosInstance,
 	mockService *benthossvc.MockBenthosService,
+	filesystemService filesystem.Service,
 	serviceName string,
 	fromState string,
 	toState string,
@@ -267,7 +269,7 @@ func TestBenthosStateTransition(
 		}
 
 		// Perform a reconcile cycle
-		_, _ = instance.Reconcile(ctx, tick)
+		_, _ = instance.Reconcile(ctx, filesystemService, tick)
 		tick++
 	}
 
@@ -296,6 +298,7 @@ func VerifyBenthosStableState(
 	ctx context.Context,
 	instance *benthosfsm.BenthosInstance,
 	mockService *benthossvc.MockBenthosService,
+	filesystemService filesystem.Service,
 	serviceName string,
 	expectedState string,
 	numCycles int,
@@ -313,7 +316,7 @@ func VerifyBenthosStableState(
 	// Execute reconcile cycles and check state stability
 	tick := startTick
 	for i := 0; i < numCycles; i++ {
-		_, _ = instance.Reconcile(ctx, tick)
+		_, _ = instance.Reconcile(ctx, filesystemService, tick)
 		tick++
 
 		if instance.GetCurrentFSMState() != expectedState {
@@ -368,6 +371,7 @@ func StabilizeBenthosInstance(
 	ctx context.Context,
 	instance *benthosfsm.BenthosInstance,
 	mockService *benthossvc.MockBenthosService,
+	filesystemService filesystem.Service,
 	serviceName string,
 	targetState string,
 	maxAttempts int,
@@ -382,10 +386,10 @@ func StabilizeBenthosInstance(
 		currentState := instance.GetCurrentFSMState()
 		if currentState == targetState {
 			// Now verify it remains stable
-			return VerifyBenthosStableState(ctx, instance, mockService, serviceName, targetState, 3, tick)
+			return VerifyBenthosStableState(ctx, instance, mockService, filesystemService, serviceName, targetState, 3, tick)
 		}
 
-		_, _ = instance.Reconcile(ctx, tick)
+		_, _ = instance.Reconcile(ctx, filesystemService, tick)
 		tick++
 	}
 
@@ -410,6 +414,7 @@ func StabilizeBenthosInstance(
 func WaitForBenthosDesiredState(
 	ctx context.Context,
 	instance *benthosfsm.BenthosInstance,
+	filesystemService filesystem.Service,
 	startTick uint64,
 	targetState string,
 	maxAttempts int,
@@ -423,7 +428,7 @@ func WaitForBenthosDesiredState(
 		}
 
 		// Run a reconcile cycle
-		err, _ := instance.Reconcile(ctx, tick)
+		err, _ := instance.Reconcile(ctx, filesystemService, tick)
 		if err != nil {
 			return tick, err
 		}
@@ -455,6 +460,7 @@ func ReconcileBenthosUntilError(
 	ctx context.Context,
 	instance *benthosfsm.BenthosInstance,
 	mockService *benthossvc.MockBenthosService,
+	filesystemService filesystem.Service,
 	serviceName string,
 	startTick uint64,
 	maxAttempts int,
@@ -463,7 +469,7 @@ func ReconcileBenthosUntilError(
 
 	for i := 0; i < maxAttempts; i++ {
 		// Perform a reconcile cycle and capture the error and reconciled status
-		err, reconciled := instance.Reconcile(ctx, tick)
+		err, reconciled := instance.Reconcile(ctx, filesystemService, tick)
 		tick++
 
 		if err != nil {

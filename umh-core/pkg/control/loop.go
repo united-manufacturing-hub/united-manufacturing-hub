@@ -52,6 +52,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/starvationchecker"
 	"go.uber.org/zap"
@@ -76,6 +77,7 @@ type ControlLoop struct {
 	starvationChecker *starvationchecker.StarvationChecker
 	currentTick       uint64
 	snapshotManager   *fsm.SnapshotManager
+	filesystemService filesystem.Service
 }
 
 // NewControlLoop creates a new control loop with all necessary managers.
@@ -109,12 +111,15 @@ func NewControlLoop(configManager config.ConfigManager) *ControlLoop {
 	// Create a snapshot manager
 	snapshotManager := fsm.NewSnapshotManager()
 
+	// Create a buffered filesystem service
+	filesystemService := filesystem.NewDefaultService()
+
 	metrics.InitErrorCounter(metrics.ComponentControlLoop, "main")
 
 	// Now clean the S6 service directory except for the known services
 	s6Service := s6svc.NewDefaultService()
 	log.Debugf("Cleaning S6 service directory: %s", constants.S6BaseDir)
-	err := s6Service.CleanS6ServiceDirectory(context.Background(), constants.S6BaseDir)
+	err := s6Service.CleanS6ServiceDirectory(context.Background(), constants.S6BaseDir, filesystem.NewDefaultService()) // we do not use the buffered service here, because we want to clean the real filesystem
 	if err != nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, log, "Failed to clean S6 service directory: %s", err)
 
@@ -128,6 +133,7 @@ func NewControlLoop(configManager config.ConfigManager) *ControlLoop {
 		logger:            log,
 		starvationChecker: starvationChecker,
 		snapshotManager:   snapshotManager,
+		filesystemService: filesystemService,
 	}
 }
 
@@ -238,6 +244,23 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 			return nil
 		}
 	}
+	// If the filesystem service is buffered, we need to sync from disk
+	bufferedFs, ok := c.filesystemService.(*filesystem.BufferedService)
+	if ok {
+		// Step 1: Flush all pending writes to disk
+		err = bufferedFs.SyncToDisk(ctx)
+		if err != nil {
+			sentry.ReportIssuef(sentry.IssueTypeError, c.logger, "Failed to sync S6 filesystem to disk: %v", err)
+			return fmt.Errorf("failed to sync S6 filesystem to disk: %w", err)
+		}
+
+		// Step 2: Read the filesystem from disk
+		err = bufferedFs.SyncFromDisk(ctx)
+		if err != nil {
+			sentry.ReportIssuef(sentry.IssueTypeError, c.logger, "Failed to sync S6 filesystem from disk: %v", err)
+			return fmt.Errorf("failed to sync S6 filesystem from disk: %w", err)
+		}
+	}
 
 	// Reconcile each manager with the current tick count
 	for _, manager := range c.managers {
@@ -262,7 +285,7 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 			return nil
 		}
 
-		err, reconciled := manager.Reconcile(ctx, cfg, c.currentTick)
+		err, reconciled := manager.Reconcile(ctx, cfg, c.filesystemService, c.currentTick)
 		if err != nil {
 			metrics.IncErrorCount(metrics.ComponentControlLoop, manager.GetManagerName())
 			return fmt.Errorf("manager %s reconciliation failed: %w", manager.GetManagerName(), err)
