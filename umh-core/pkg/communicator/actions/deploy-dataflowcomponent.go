@@ -306,3 +306,11 @@ func (a *DeployDataflowComponentAction) Execute() (interface{}, map[string]inter
 
 	return nil, nil, nil
 }
+
+func (a *DeployDataflowComponentAction) getUserEmail() string {
+	return a.userEmail
+}
+
+func (a *DeployDataflowComponentAction) getUuid() uuid.UUID {
+	return a.actionUUID
+}
