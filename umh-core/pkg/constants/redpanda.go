@@ -46,7 +46,3 @@ var (
 const (
 	DefaultRedpandaBaseDir = "/data"
 )
-
-const (
-	RedpandaStatusUpdateIntervalTicks = 10
-)

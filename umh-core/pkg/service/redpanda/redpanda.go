@@ -91,11 +91,6 @@ type RedpandaStatus struct {
 	HealthCheck HealthCheck
 	// Logs contains the logs of the Redpanda service
 	Logs []s6service.LogEntry
-	// UpdatedAtTick contains the tick at which the status was last updated
-	// This is used to check if the status is stale (more then constants.RedpandaStatusUpdateIntervalTicks ticks ago)
-	// We use this in redpanda, as it's metric endpoint is quite slow, and we don't want to block the main loop to often.
-	// Therefore we only update the status every constants.RedpandaStatusUpdateIntervalTicks ticks
-	UpdatedAtTick uint64
 	// RedpandaMetrics contains information about the metrics of the Redpanda service
 	RedpandaMetrics redpanda_monitor.RedpandaMetrics
 }
@@ -398,25 +393,11 @@ func (s *RedpandaService) Status(ctx context.Context, filesystemService filesyst
 				// this S6FSMState needs to be properly refreshed here.
 				// Otherwise, the service can not transition from stopping to stopped state
 				RedpandaStatus: RedpandaStatus{
-					Logs:          logs,
-					UpdatedAtTick: tick,
+					Logs: logs,
 				},
 			}, ErrHealthCheckConnectionRefused
 		}
 		return ServiceInfo{}, fmt.Errorf("failed to get health check: %w", err)
-	}
-
-	// Check if the lastUpdate is more then constants.RedpandaStatusUpdateIntervalTicks ticks ago
-	var minTick uint64
-	// Prevent integer underflow
-	if tick < constants.RedpandaStatusUpdateIntervalTicks*2 {
-		minTick = 0
-	} else {
-		minTick = tick - constants.RedpandaStatusUpdateIntervalTicks*2
-	}
-	if redpandaStatus.UpdatedAtTick < minTick {
-		s.logger.Infof("Redpanda status update interval is more then %d ticks ago, lastUpdate: %d (tick: %d) [minTick: %d]", constants.RedpandaStatusUpdateIntervalTicks*2, redpandaStatus.UpdatedAtTick, tick, minTick)
-		return ServiceInfo{}, fmt.Errorf("redpanda status update interval is more then %d ticks ago, lastUpdate: %d", constants.RedpandaStatusUpdateIntervalTicks*2, redpandaStatus.UpdatedAtTick)
 	}
 
 	serviceInfo := ServiceInfo{
@@ -432,10 +413,7 @@ func (s *RedpandaService) Status(ctx context.Context, filesystemService filesyst
 
 // GetHealthCheckAndMetrics returns the health check and metrics of a Redpanda service
 func (s *RedpandaService) GetHealthCheckAndMetrics(ctx context.Context, tick uint64, logs []s6service.LogEntry) (RedpandaStatus, error) {
-	if tick%constants.RedpandaStatusUpdateIntervalTicks != 0 {
-		s.logger.Infof("Skipping health check and metrics for tick %d, as it's not a multiple of %d", tick, constants.RedpandaStatusUpdateIntervalTicks)
-		return s.lastStatus, nil
-	}
+
 	s.logger.Infof("Getting health check and metrics for tick %d", tick)
 	start := time.Now()
 	defer func() {
@@ -443,9 +421,7 @@ func (s *RedpandaService) GetHealthCheckAndMetrics(ctx context.Context, tick uin
 	}()
 
 	if ctx.Err() != nil {
-		return RedpandaStatus{
-			UpdatedAtTick: tick,
-		}, ctx.Err()
+		return RedpandaStatus{}, ctx.Err()
 	}
 
 	// Skip health checks and metrics if the service doesn't exist yet
@@ -460,8 +436,7 @@ func (s *RedpandaService) GetHealthCheckAndMetrics(ctx context.Context, tick uin
 				Metrics:      redpanda_monitor.Metrics{},
 				MetricsState: nil,
 			},
-			Logs:          []s6service.LogEntry{},
-			UpdatedAtTick: tick,
+			Logs: []s6service.LogEntry{},
 		}
 		return s.lastStatus, nil
 	}
@@ -488,7 +463,6 @@ func (s *RedpandaService) GetHealthCheckAndMetrics(ctx context.Context, tick uin
 		HealthCheck:     healthCheck,
 		RedpandaMetrics: *redpandaStatus.RedpandaStatus.LastScan,
 		Logs:            logs,
-		UpdatedAtTick:   tick,
 	}
 	return s.lastStatus, nil
 }
@@ -534,6 +508,13 @@ func (s *RedpandaService) AddRedpandaToS6Manager(ctx context.Context, cfg *redpa
 
 	// Add the S6 FSM config to the list of S6 FSM configs
 	s.s6ServiceConfigs = append(s.s6ServiceConfigs, s6FSMConfig)
+
+	// Also add the redpanda monitor to the S6 manager
+	if err := s.metricsService.AddRedpandaToS6Manager(ctx); err != nil {
+		if !errors.Is(err, redpanda_monitor.ErrServiceAlreadyExists) {
+			return fmt.Errorf("failed to add redpanda monitor to S6 manager: %w", err)
+		}
+	}
 
 	return nil
 }
@@ -627,6 +608,13 @@ func (s *RedpandaService) RemoveRedpandaFromS6Manager(ctx context.Context) error
 		return ErrServiceNotExist
 	}
 
+	// Also remove the redpanda monitor from the S6 manager
+	if err := s.metricsService.RemoveRedpandaFromS6Manager(ctx); err != nil {
+		if !errors.Is(err, redpanda_monitor.ErrServiceNotExist) {
+			return fmt.Errorf("failed to remove redpanda monitor from S6 manager: %w", err)
+		}
+	}
+
 	return nil
 }
 
@@ -701,7 +689,19 @@ func (s *RedpandaService) ReconcileManager(ctx context.Context, filesystemServic
 		return ctx.Err(), false
 	}
 
-	return s.s6Manager.Reconcile(ctx, config.FullConfig{Internal: config.InternalConfig{Services: s.s6ServiceConfigs}}, filesystemService, tick)
+	s6Err, s6Reconciled := s.s6Manager.Reconcile(ctx, config.FullConfig{Internal: config.InternalConfig{Services: s.s6ServiceConfigs}}, filesystemService, tick)
+	if s6Err != nil {
+		return s6Err, false
+	}
+
+	// Also reconcile the redpanda monitor service
+	monitorErr, monitorReconciled := s.metricsService.ReconcileManager(ctx, filesystemService, tick)
+	if monitorErr != nil {
+		return monitorErr, false
+	}
+
+	// If either was reconciled, indicate that reconciliation occurred
+	return nil, s6Reconciled || monitorReconciled
 }
 
 // IsLogsFine analyzes Redpanda logs to determine if there are any critical issues
