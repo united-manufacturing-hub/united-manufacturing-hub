@@ -25,15 +25,15 @@ import (
 )
 
 type FullConfig struct {
-	Agent    AgentConfig               `yaml:"agent,omitempty"`    // Agent config, requires restart to take effect
+	Agent    AgentConfig               `yaml:"agent"`              // Agent config, requires restart to take effect
 	DataFlow []DataFlowComponentConfig `yaml:"dataFlow,omitempty"` // DataFlow components to manage, can be updated while running
-	Internal InternalConfig            `yaml:"internal,omitempty"` // Internal config, not to be used by the user, only to be used for testing internal components
+	Internal InternalConfig            `yaml:"internal"`           // Internal config, not to be used by the user, only to be used for testing internal components
 }
 
 type InternalConfig struct {
-	Services []S6FSMConfig   `yaml:"services,omitempty"` // Services to manage, can be updated while running
-	Benthos  []BenthosConfig `yaml:"benthos,omitempty"`  // Benthos services to manage, can be updated while running
-	Nmap     []NmapConfig    `yaml:"nmap,omitempty"`     // Nmap services to manage, can be updated while running
+	Services []S6FSMConfig   `yaml:"services"` // Services to manage, can be updated while running
+	Benthos  []BenthosConfig `yaml:"benthos"`  // Benthos services to manage, can be updated while running
+	Nmap     []NmapConfig    `yaml:"nmap"`     // Nmap services to manage, can be updated while running
 }
 
 type AgentConfig struct {
@@ -44,12 +44,18 @@ type AgentConfig struct {
 }
 
 type CommunicatorConfig struct {
-	APIURL    string `yaml:"apiUrl,omitempty"`
-	AuthToken string `yaml:"authToken,omitempty"`
+	APIURL    string `yaml:"apiUrl"`
+	AuthToken string `yaml:"authToken"`
 }
 
 // FSMInstanceConfig is the config for a FSM instance
 type FSMInstanceConfig struct {
+	Name            string `yaml:"name"`
+	DesiredFSMState string `yaml:"desiredState"`
+}
+
+// ContainerConfig is the config for a container instance
+type ContainerConfig struct {
 	Name            string `yaml:"name"`
 	DesiredFSMState string `yaml:"desiredState"`
 }
