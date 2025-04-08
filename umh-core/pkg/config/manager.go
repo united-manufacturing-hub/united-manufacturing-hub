@@ -437,8 +437,6 @@ func (m *FileConfigManager) AtomicAddDataflowcomponent(ctx context.Context, dfc 
 	// edit the config
 	config.DataFlow = append(config.DataFlow, dfc)
 
-	//TODO
-
 	// write the config
 	if err := m.writeConfig(ctx, config); err != nil {
 		return fmt.Errorf("failed to write config: %w", err)
