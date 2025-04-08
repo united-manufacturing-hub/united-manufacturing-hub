@@ -18,8 +18,6 @@ on:
   pull_request:
     branches:
       - "**"
-    paths:
-      - "umh-core/**"
   push:
     branches:
       - staging
