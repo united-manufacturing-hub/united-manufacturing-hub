@@ -18,14 +18,13 @@ on:
   pull_request:
     branches:
       - "**"
-    paths:
-      - "umh-core/**"
   push:
     branches:
       - staging
       - main
     tags:
-      - 'v*'
+      - "v*"
+  merge_group:
 
 env:
   REGISTRY: ghcr.io
