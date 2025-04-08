@@ -15,7 +15,6 @@
 package container
 
 import (
-	"context"
 	"fmt"
 	"time"
 
@@ -24,7 +23,6 @@ import (
 	public_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
 const (
@@ -95,7 +93,7 @@ func NewContainerManager(name string) *ContainerManager {
 			}
 			ci.config = cc
 			// Also update desired state so the FSM can adapt
-			return ci.SetDesiredFSMState(cc.DesiredFSMState)
+			return nil
 		},
 		// Get expected max p95 execution time per instance
 		func(instance public_fsm.FSMInstance) (time.Duration, error) {
@@ -111,18 +109,6 @@ func NewContainerManager(name string) *ContainerManager {
 	return &ContainerManager{
 		BaseFSMManager: baseMgr,
 	}
-}
-
-// Reconcile calls the base manager's Reconcile, measuring time
-// The filesystemService parameter allows for filesystem operations during reconciliation,
-// enabling the method to read configuration or state information from the filesystem.
-func (m *ContainerManager) Reconcile(ctx context.Context, cfg config.FullConfig, filesystemService filesystem.Service, tick uint64) (error, bool) {
-	start := time.Now()
-	defer func() {
-		duration := time.Since(start)
-		metrics.ObserveReconcileTime(ContainerManagerComponentName, m.GetManagerName(), duration)
-	}()
-	return m.BaseFSMManager.Reconcile(ctx, cfg, filesystemService, tick)
 }
 
 // CreateSnapshot overrides the base to add container-specific fields if desired
