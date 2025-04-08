@@ -279,7 +279,7 @@ func (c *ContainerInstance) reconcileOperationalStates(ctx context.Context, curr
 
 	// 1) If desired is "stopped" and we are not "monitoring_stopped", we should eventStop
 	if desired == MonitoringStateStopped && current != MonitoringStateStopped {
-		err := c.disableMonitoring(ctx)
+		err := c.monitoringStop(ctx)
 		if err != nil {
 			return err, false
 		}
@@ -288,7 +288,7 @@ func (c *ContainerInstance) reconcileOperationalStates(ctx context.Context, curr
 
 	// 2) If desired is "active" and we are "monitoring_stopped", we should do eventStart -> goes to degraded
 	if desired == MonitoringStateActive && current == MonitoringStateStopped {
-		err := c.enableMonitoring(ctx)
+		err := c.monitoringStart(ctx)
 		if err != nil {
 			return err, false
 		}
