@@ -27,6 +27,12 @@ const (
 	// monitoring_stopped is the operational state when monitoring is disabled
 	OperationalStateStopped = "monitoring_stopped"
 
+	// monitoring_stopping is the operational state when monitoring is stopping
+	OperationalStateStopping = "monitoring_stopping"
+
+	// monitoring_starting is the operational state when monitoring is starting
+	OperationalStateStarting = "monitoring_starting"
+
 	// degraded means monitoring is running, but metrics are not OK
 	OperationalStateDegraded = "degraded"
 
@@ -39,8 +45,29 @@ const (
 func IsOperationalState(state string) bool {
 	switch state {
 	case OperationalStateStopped,
+		OperationalStateStopping,
+		OperationalStateStarting,
 		OperationalStateDegraded,
 		OperationalStateActive:
+		return true
+	}
+	return false
+}
+
+// IsStartingState returns true if the given state is a starting state
+func IsStartingState(state string) bool {
+	switch state {
+	case OperationalStateStarting:
+		return true
+	}
+	return false
+}
+
+// IsRunningState returns true if the given state is a running state
+func IsRunningState(state string) bool {
+	switch state {
+	case OperationalStateActive,
+		OperationalStateDegraded:
 		return true
 	}
 	return false
@@ -49,10 +76,12 @@ func IsOperationalState(state string) bool {
 // Operational events
 // (We also rely on the standard lifecycle events from internal_fsm.)
 const (
-	EventStart        = "start_monitoring"
-	EventStop         = "stop_monitoring"
-	EventMetricsAllOK = "metrics_all_ok"
-	EventMetricsNotOK = "metrics_not_ok"
+	EventStart            = "start_monitoring"
+	EventContainerStarted = "container_started"
+	EventStop             = "stop_monitoring"
+	EventStopDone         = "stop_monitoring_done"
+	EventMetricsAllOK     = "metrics_all_ok"
+	EventMetricsNotOK     = "metrics_not_ok"
 )
 
 // ContainerObservedState holds the last known container metrics and health status

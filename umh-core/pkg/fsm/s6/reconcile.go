@@ -65,7 +65,7 @@ func (s *S6Instance) Reconcile(ctx context.Context, filesystemService filesystem
 		if backoff.IsPermanentFailureError(err) {
 			// if it is already in stopped, stopping, removing states, and it again returns a permanent error,
 			// we need to throw it to the manager as the instance itself here cannot fix it anymore
-			if s.IsRemoved() || s.GetCurrentFSMState() == OperationalStateStopped || s.GetCurrentFSMState() == OperationalStateStopping {
+			if s.IsRemoved() || s.IsRemoving() || s.IsStopping() || s.IsStopped() {
 				s.baseFSMInstance.GetLogger().Errorf("S6 instance %s is already in a terminal state, force removing it", s.baseFSMInstance.GetID())
 				// force delete everything from the s6 file directory
 				forceErr := s.service.ForceRemove(ctx, s.servicePath, filesystemService)
