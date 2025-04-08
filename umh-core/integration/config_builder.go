@@ -17,6 +17,7 @@ package integration_test
 
 import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/redpandaserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
 	"gopkg.in/yaml.v3"
 )
@@ -34,6 +35,12 @@ func NewBuilder() *Builder {
 			Internal: config.InternalConfig{
 				Services: []config.S6FSMConfig{},
 				Benthos:  []config.BenthosConfig{},
+				Redpanda: config.RedpandaConfig{
+					FSMInstanceConfig: config.FSMInstanceConfig{
+						Name:            "redpanda",
+						DesiredFSMState: "stopped",
+					},
+				},
 			},
 		},
 	}
@@ -72,6 +79,17 @@ output:
 			},
 		},
 	})
+
+	// Set the Redpanda configuration for the RedpandaManagerCore to handle
+	// instead of trying to manage it as an S6 service
+	b.full.Internal.Redpanda = config.RedpandaConfig{
+		FSMInstanceConfig: config.FSMInstanceConfig{
+			Name:            "redpanda",
+			DesiredFSMState: "stopped", // Set to stopped to avoid starvation during tests
+		},
+		RedpandaServiceConfig: redpandaserviceconfig.RedpandaServiceConfig{},
+	}
+
 	return b
 }
 

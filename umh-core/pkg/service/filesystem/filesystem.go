@@ -60,6 +60,9 @@ type Service interface {
 
 	// ExecuteCommand executes a command with context
 	ExecuteCommand(ctx context.Context, name string, args ...string) ([]byte, error)
+
+	// Chown changes the owner and group of the named file
+	Chown(ctx context.Context, path string, user string, group string) error
 }
 
 // DefaultService is the default implementation of FileSystemService
@@ -346,6 +349,34 @@ func (s *DefaultService) ReadDir(ctx context.Context, path string) ([]os.DirEntr
 		return res.entries, nil
 	case <-ctx.Done():
 		return nil, ctx.Err()
+	}
+}
+
+// Chown changes the owner and group of the named file
+func (s *DefaultService) Chown(ctx context.Context, path string, user string, group string) error {
+	if err := s.checkContext(ctx); err != nil {
+		return fmt.Errorf("failed to check context: %w", err)
+	}
+
+	// Create a channel for results
+	errCh := make(chan error, 1)
+
+	// Run file operation in goroutine
+	go func() {
+		// Use chown command as os.Chown needs numeric user/group IDs
+		cmd := exec.Command("chown", fmt.Sprintf("%s:%s", user, group), path)
+		errCh <- cmd.Run()
+	}()
+
+	// Wait for either completion or context cancellation
+	select {
+	case err := <-errCh:
+		if err != nil {
+			return fmt.Errorf("failed to change owner of file %s to %s:%s: %w", path, user, group, err)
+		}
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
 	}
 }
 

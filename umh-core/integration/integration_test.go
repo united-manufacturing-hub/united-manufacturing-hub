@@ -16,11 +16,11 @@
 package integration_test
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"math/rand"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
@@ -30,33 +30,23 @@ import (
 
 // ---------- Actual Ginkgo Tests ----------
 
+// Note: Redpanda allocates 2GB of memory per core.
+// Additionally 1.5GB (or 7% of the total memory, whichever is greater) are required to be available, after this allocation to make seastar happy.
+// If you change this, you need to update the Makefile.
+const DEFAULT_MEMORY = "4096m"
+const DEFAULT_CPUS = 2
+
 var _ = Describe("UMH Container Integration", Ordered, Label("integration"), func() {
-
-	AfterEach(func() {
-		if CurrentSpecReport().Failed() {
-			fmt.Println("Test failed, printing container logs:")
-			printContainerLogs()
-
-			// Print the latest YAML config
-			fmt.Println("\nLatest YAML config at time of failure:")
-			configPath := getConfigFilePath()
-			config, err := os.ReadFile(configPath)
-			if err != nil {
-				fmt.Printf("Failed to read config file %s: %v\n", configPath, err)
-			} else {
-				fmt.Println(string(config))
-			}
-
-			// Save logs for debugging
-			containerNameInError := getContainerName()
-			fmt.Printf("\nTest failed. Container name: %s\n", containerNameInError)
-		}
-	})
 
 	AfterAll(func() {
 		// Always stop container after the entire suite
-		StopContainer()
+		PrintLogsAndStopContainer()
 		CleanupDockerBuildCache()
+
+		//Keep temp dirs for debugging if the test failed
+		if !CurrentSpecReport().Failed() {
+			cleanupTmpDirs(containerName)
+		}
 	})
 
 	Context("with an empty config", func() {
@@ -67,7 +57,7 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 			emptyConfig := configBuilder.BuildYAML()
 
 			Expect(writeConfigFile(emptyConfig)).To(Succeed())
-			err := BuildAndRunContainer(emptyConfig, "1024m")
+			err := BuildAndRunContainer(emptyConfig, DEFAULT_MEMORY, DEFAULT_CPUS)
 			if err != nil {
 				// If container startup fails, print detailed debug info
 				fmt.Println("Container startup failed, printing debug info:")
@@ -107,7 +97,7 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 				BuildYAML()
 
 			Expect(writeConfigFile(cfg)).To(Succeed())
-			Expect(BuildAndRunContainer(cfg, "1024m")).To(Succeed())
+			Expect(BuildAndRunContainer(cfg, DEFAULT_MEMORY, DEFAULT_CPUS)).To(Succeed())
 			Expect(waitForMetrics()).To(Succeed(), "Metrics endpoint should be available with golden service config")
 		})
 
@@ -145,7 +135,7 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 
 			// Write the config and start the container with the new configuration.
 			Expect(writeConfigFile(cfg)).To(Succeed())
-			Expect(BuildAndRunContainer(cfg, "1024m")).To(Succeed())
+			Expect(BuildAndRunContainer(cfg, DEFAULT_MEMORY, DEFAULT_CPUS)).To(Succeed())
 			Expect(waitForMetrics()).To(Succeed(), "Metrics endpoint should be available with golden + sleep service config")
 
 			// Verify that the golden service is ready
@@ -188,7 +178,7 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 			cfg := NewBuilder().BuildYAML()
 			// Write the empty config and start the container
 			Expect(writeConfigFile(cfg)).To(Succeed())
-			Expect(BuildAndRunContainer(cfg, "1024m")).To(Succeed())
+			Expect(BuildAndRunContainer(cfg, DEFAULT_MEMORY, DEFAULT_CPUS)).To(Succeed())
 			Expect(waitForMetrics()).To(Succeed(), "Metrics endpoint should be available with empty config")
 		})
 
@@ -254,7 +244,7 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 			// Start with an empty config
 			cfg := NewBuilder().BuildYAML()
 			Expect(writeConfigFile(cfg)).To(Succeed())
-			Expect(BuildAndRunContainer(cfg, "1024m")).To(Succeed())
+			Expect(BuildAndRunContainer(cfg, DEFAULT_MEMORY, DEFAULT_CPUS)).To(Succeed())
 			Expect(waitForMetrics()).To(Succeed(), "Metrics endpoint should be available with empty config")
 		})
 
@@ -534,7 +524,7 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 			cfg := NewBuilder().BuildYAML()
 			// Write the empty config and start the container
 			Expect(writeConfigFile(cfg)).To(Succeed())
-			Expect(BuildAndRunContainer(cfg, "2048m")).To(Succeed())
+			Expect(BuildAndRunContainer(cfg, DEFAULT_MEMORY, DEFAULT_CPUS)).To(Succeed())
 			Expect(waitForMetrics()).To(Succeed(), "Metrics endpoint should be available with empty config")
 		})
 
@@ -616,6 +606,78 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 			}
 
 			GinkgoWriter.Println("Benthos scaling test completed successfully")
+		})
+	})
+
+	Context("with redpanda enabled but no benthos services", Label("redpanda-only"), func() {
+		BeforeAll(func() {
+			By("Starting with an empty configuration")
+			cfg := NewBuilder().BuildYAML()
+			// Write the empty config and start the container
+			Expect(writeConfigFile(cfg)).To(Succeed())
+			Expect(BuildAndRunContainer(cfg, DEFAULT_MEMORY, DEFAULT_CPUS)).To(Succeed())
+			Expect(waitForMetrics()).To(Succeed(), "Metrics endpoint should be available with empty config")
+		})
+
+		AfterAll(func() {
+			By("Stopping the container after the redpanda-only test")
+			PrintLogsAndStopContainer()
+		})
+
+		It("should run redpanda without errors when no benthos services are configured", func() {
+			By("Adding a golden service as baseline")
+			builder := NewRedpandaBuilder()
+			builder.AddGoldenRedpanda()
+			cfg := builder.BuildYAML()
+			Expect(writeConfigFile(cfg, getContainerName())).To(Succeed())
+
+			By("Waiting for the metrics endpoint to be healthy")
+			Eventually(func() bool {
+				ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+				defer cancel()
+				req, err := http.NewRequestWithContext(ctx, "GET", GetMetricsURL(), nil)
+				if err != nil {
+					return false
+				}
+				resp, err := http.DefaultClient.Do(req)
+				if err != nil {
+					return false
+				}
+				defer resp.Body.Close()
+				return resp.StatusCode == http.StatusOK
+			}, 20*time.Second, 1*time.Second).Should(BeTrue(),
+				"Metrics endpoint should be healthy")
+
+			By("Verifying the system is stable for 30 seconds")
+			startTime := time.Now()
+			for time.Since(startTime) < 30*time.Second {
+				// Check metrics endpoint is healthy
+				checkMetricsHealthy()
+
+				// Check for any warning or error logs
+				out, err := runDockerCommand("logs", getContainerName())
+				Expect(err).NotTo(HaveOccurred(), "Should be able to retrieve container logs")
+
+				// Count warnings and errors
+				warningCount := 0
+				errorCount := 0
+				for _, line := range strings.Split(out, "\n") {
+					if strings.Contains(line, "[WARN]") {
+						warningCount++
+					}
+					if strings.Contains(line, "[ERROR]") {
+						errorCount++
+					}
+				}
+
+				GinkgoWriter.Printf("System status: Warnings: %d, Errors: %d\n", warningCount, errorCount)
+				Expect(errorCount).To(Equal(0), "There should be no errors in the logs")
+
+				// Wait before next check
+				time.Sleep(5 * time.Second)
+			}
+
+			GinkgoWriter.Println("Redpanda-only test completed successfully")
 		})
 	})
 })

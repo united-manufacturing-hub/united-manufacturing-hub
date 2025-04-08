@@ -12,16 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
 name: Test UMH Core
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: true
 
 on:
   pull_request:
     branches:
       - "**"
-    paths:
-      - "umh-core/**"
-
+  merge_group:
 jobs:
   unit-tests:
     name: Unit Tests
@@ -36,12 +37,17 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: 'umh-core/go.mod'
+          go-version-file: "umh-core/go.mod"
           cache-dependency-path: |
-             umh-core/go.sum
+            umh-core/go.sum
 
       - name: Install ginkgo and nilaway
         run: make install
+
+      - name: Get dependencies
+        working-directory: ./umh-core
+        run: |
+          make download-docker-binaries
 
       - name: Run unit tests
         run: make unit-test
@@ -59,13 +65,18 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: 'umh-core/go.mod'
+          go-version-file: "umh-core/go.mod"
           cache-dependency-path: |
-             umh-core/go.sum
+            umh-core/go.sum
 
       - name: Install ginkgo and nilaway
         run: make install
 
+      - name: Get dependencies
+        working-directory: ./umh-core
+        run: |
+          make download-docker-binaries
+          
       - name: Run integration tests
         env:
           CI: true

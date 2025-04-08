@@ -39,3 +39,9 @@ const (
 	// DefaultBenthosLogLevel is the default log level for Benthos services when none is specified
 	DefaultBenthosLogLevel = "INFO"
 )
+
+var (
+	// Set by build process via ldflags using -ldflags="-X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants.BenthosVersion=${BENTHOS_VERSION}"
+	// This injects the version at build time from the environment, eliminating the need for hard-coded values.
+	BenthosVersion = "unknown"
+)
