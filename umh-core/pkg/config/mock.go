@@ -25,12 +25,14 @@ import (
 
 // MockConfigManager is a mock implementation of ConfigManager for testing
 type MockConfigManager struct {
-	GetConfigCalled   bool
-	Config            FullConfig
-	ConfigError       error
-	ConfigDelay       time.Duration
-	mutexReadOrWrite  sync.Mutex
-	mutexReadAndWrite sync.Mutex
+	GetConfigCalled            bool
+	AddDataflowcomponentCalled bool
+	Config                     FullConfig
+	ConfigError                error
+	AddDataflowcomponentError  error
+	ConfigDelay                time.Duration
+	mutexReadOrWrite           sync.Mutex
+	mutexReadAndWrite          sync.Mutex
 }
 
 // NewMockConfigManager creates a new MockConfigManager instance
@@ -83,11 +85,18 @@ func (m *MockConfigManager) WithConfigDelay(delay time.Duration) *MockConfigMana
 	return m
 }
 
+// WithAddDataflowcomponentError configures the mock to return the given error when AtomicAddDataflowcomponent is called
+func (m *MockConfigManager) WithAddDataflowcomponentError(err error) *MockConfigManager {
+	m.AddDataflowcomponentError = err
+	return m
+}
+
 // ResetCalls clears the called flags for testing multiple calls
 func (m *MockConfigManager) ResetCalls() {
 	m.mutexReadOrWrite.Lock()
 	defer m.mutexReadOrWrite.Unlock()
 	m.GetConfigCalled = false
+	m.AddDataflowcomponentCalled = false
 }
 
 // atomic set location
@@ -128,6 +137,12 @@ func (m *MockConfigManager) AtomicSetLocation(ctx context.Context, location mode
 func (m *MockConfigManager) AtomicAddDataflowcomponent(ctx context.Context, dfc DataFlowComponentConfig) error {
 	m.mutexReadAndWrite.Lock()
 	defer m.mutexReadAndWrite.Unlock()
+
+	m.AddDataflowcomponentCalled = true
+
+	if m.AddDataflowcomponentError != nil {
+		return m.AddDataflowcomponentError
+	}
 
 	// get the current config
 	config, err := m.GetConfig(ctx, 0)
