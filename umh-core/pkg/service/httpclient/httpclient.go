@@ -28,6 +28,29 @@ import (
 	"go.uber.org/zap"
 )
 
+var (
+	// defaultTransport is a shared transport with connection pooling
+	defaultTransport = &http.Transport{
+		Proxy: http.ProxyFromEnvironment,
+		DialContext: (&net.Dialer{
+			Timeout:   50 * time.Millisecond,
+			KeepAlive: 30 * time.Second,
+		}).DialContext,
+		MaxIdleConns:          100,
+		IdleConnTimeout:       90 * time.Second,
+		TLSHandshakeTimeout:   50 * time.Millisecond,
+		ExpectContinueTimeout: 100 * time.Millisecond,
+		MaxIdleConnsPerHost:   10,   // Increase from default 2
+		DisableCompression:    true, // For our metrics endpoint, compression is likely overkill
+	}
+
+	// sharedClient is a reusable client for quick local requests
+	sharedClient = &http.Client{
+		Transport: defaultTransport,
+		Timeout:   1 * time.Second,
+	}
+)
+
 // HTTPClient interface for making HTTP requests
 type HTTPClient interface {
 	// Do executes an HTTP request and returns the response
@@ -56,6 +79,13 @@ func (c *DefaultHTTPClient) Do(req *http.Request) (*http.Response, error) {
 	// Extract context from request
 	ctx := req.Context()
 
+	// Use the shared client for local/quick requests without deadline
+	// This is much faster than creating a new client for each request
+	_, hasDeadline := ctx.Deadline()
+	if !hasDeadline && isLocalRequest(req.URL.Host) {
+		return sharedClient.Do(req)
+	}
+
 	// Get client configured for this specific context
 	client, err := c.createClientFromContext(ctx)
 	if err != nil {
@@ -64,6 +94,11 @@ func (c *DefaultHTTPClient) Do(req *http.Request) (*http.Response, error) {
 
 	// Execute the request
 	return client.Do(req)
+}
+
+// isLocalRequest checks if the host is a localhost or loopback address
+func isLocalRequest(host string) bool {
+	return host == "localhost" || host == "127.0.0.1" || host == "[::1]" || host == ""
 }
 
 // createClientFromContext creates an HTTP client with timeouts based on context deadline
@@ -81,20 +116,25 @@ func (c *DefaultHTTPClient) createClientFromContext(ctx context.Context) (*http.
 	// Use the available time for timeouts
 	timeout := remaining
 
-	// Create transport with timeouts scaled from context deadline
+	// Create a new transport with context-specific timeouts
 	transport := &http.Transport{
+		Proxy: http.ProxyFromEnvironment,
 		DialContext: (&net.Dialer{
-			Timeout: timeout / 2, // Use half the available time for connection
+			Timeout:   timeout / 2,
+			KeepAlive: 30 * time.Second,
 		}).DialContext,
-		ResponseHeaderTimeout: timeout / 2, // And half for response
-		ExpectContinueTimeout: timeout / 4,
+		MaxIdleConns:          100,
 		IdleConnTimeout:       timeout / 4,
 		TLSHandshakeTimeout:   timeout / 4,
+		ExpectContinueTimeout: timeout / 4,
+		ResponseHeaderTimeout: timeout / 2,
+		MaxIdleConnsPerHost:   10,
+		DisableCompression:    true,
 	}
 
-	// Create a new client for this specific request
 	return &http.Client{
 		Transport: transport,
+		Timeout:   timeout,
 	}, nil
 }
 

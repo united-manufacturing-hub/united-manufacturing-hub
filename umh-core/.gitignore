@@ -4,3 +4,6 @@ integration/umh-config
 
 *.test
 
+.docker-cache
+
+tmp/

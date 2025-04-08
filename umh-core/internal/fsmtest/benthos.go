@@ -23,7 +23,6 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	benthosfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 	benthossvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
@@ -218,7 +217,7 @@ func SetupBenthosInstance(serviceName string, desiredState string) (*benthosfsm.
 // This is an internal helper function used by SetupBenthosInstance
 func setUpMockBenthosInstance(cfg config.BenthosConfig, mockService *benthossvc.MockBenthosService) *benthosfsm.BenthosInstance {
 	// First create the instance normally
-	instance := benthosfsm.NewBenthosInstance(constants.S6BaseDir, cfg)
+	instance := benthosfsm.NewBenthosInstance(cfg)
 
 	// Set the mock service using the test utility method
 	instance.SetService(mockService)
@@ -351,7 +350,7 @@ func ResetBenthosInstanceError(mockService *benthossvc.MockBenthosService) {
 // working with individual instances.
 func CreateMockBenthosInstance(serviceName string, mockService benthossvc.IBenthosService, desiredState string) *benthosfsm.BenthosInstance {
 	cfg := CreateBenthosTestConfig(serviceName, desiredState)
-	return benthosfsm.NewBenthosInstance(constants.S6BaseDir, cfg)
+	return benthosfsm.NewBenthosInstance(cfg)
 }
 
 // StabilizeBenthosInstance ensures the Benthos instance reaches and remains in a stable state.
