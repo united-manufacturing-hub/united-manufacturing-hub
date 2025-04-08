@@ -128,7 +128,7 @@ func New(logLevel string, logFormat LogFormat) *zap.Logger {
 		TimeKey:        "time",
 		LevelKey:       "level",
 		NameKey:        "component",
-		CallerKey:      zapcore.OmitKey,
+		CallerKey:      "caller",
 		FunctionKey:    zapcore.OmitKey,
 		MessageKey:     "msg",
 		StacktraceKey:  "stacktrace",
@@ -171,7 +171,7 @@ func New(logLevel string, logFormat LogFormat) *zap.Logger {
 	)
 
 	// Create the logger
-	logger := zap.New(core)
+	logger := zap.New(core, zap.AddCaller())
 
 	return logger
 }

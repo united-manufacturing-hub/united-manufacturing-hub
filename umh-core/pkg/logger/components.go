@@ -23,19 +23,24 @@ const (
 	ComponentFilesystem        = "Filesystem"
 
 	// Manager components
-	ComponentS6Manager        = "S6Manager"
-	ComponentBenthosManager   = "BenthosManager"
-	ComponentContainerManager = "ContainerManager"
+	ComponentS6Manager                = "S6Manager"
+	ComponentBenthosManager           = "BenthosManager"
+	ComponentContainerManager         = "ContainerManager"
+	ComponentRedpandaManager          = "RedpandaManager"
+	ComponentDataFlowComponentManager = "DataFlowCompManager"
+
 	// FSM components
-	ComponentBaseFSM         = "BaseFSM"
-	ComponentS6Instance      = "S6Instance"
-	ComponentBenthosInstance = "BenthosInstance"
+	ComponentBaseFSM          = "BaseFSM"
+	ComponentS6Instance       = "S6Instance"
+	ComponentBenthosInstance  = "BenthosInstance"
+	ComponentRedpandaInstance = "RedpandaInstance"
 
 	// Service components
 	ComponentS6Service           = "S6Service"
 	ComponentBenthosService      = "BenthosService"
 	ComponentNmapService         = "NmapService"
 	ComponentContainerMonService = "ContainerMonService"
+	ComponentRedpandaService     = "RedpandaService"
 
 	// Configuration
 	ComponentConfigManager = "ConfigManager"

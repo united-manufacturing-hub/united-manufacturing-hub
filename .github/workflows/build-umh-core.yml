@@ -139,6 +139,20 @@ jobs:
 
           echo "NEW_TAGS=$NEW_TAGS" >> $GITHUB_OUTPUT
 
+      - name: Cache dependencies
+        id: cache-dependencies
+        uses: actions/cache@v3
+        with:
+          path: ./umh-core/.docker-cache
+          key: ${{ runner.os }}-${{ matrix.architecture }}-docker-cache-${{ hashFiles('./umh-core/Makefile') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.architecture }}-docker-cache-
+
+      - name: Get dependencies
+        working-directory: ./umh-core
+        run: |
+          make download-docker-binaries
+
       - name: Build and Push Docker Image
         uses: docker/build-push-action@v5
         with:
@@ -149,6 +163,7 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             APP_VERSION=${{ steps.set_version.outputs.APP_VERSION }}
+            TARGETARCH=${{ matrix.architecture }}
           provenance: false
 
       - name: Set Output Tags

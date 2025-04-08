@@ -31,7 +31,6 @@ import (
 
 // NewBenthosInstance creates a new BenthosInstance with the given ID and service path
 func NewBenthosInstance(
-	s6BaseDir string,
 	config config.BenthosConfig) *BenthosInstance {
 
 	cfg := internal_fsm.BaseFSMInstanceConfig{
