@@ -1,12 +1,14 @@
 package actions
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 
 	"github.com/google/uuid"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"go.uber.org/zap"
@@ -195,6 +197,7 @@ func (a *DeployDataflowComponentAction) Parse(payload interface{}) error {
 
 		a.payload = cdfcPayload
 	case "protocolConverter", "dataBridge", "streamProcessor":
+		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionConfirmed, "component type not supported", a.outboundChannel, models.DeployDataFlowComponent)
 		return fmt.Errorf("component type %s not yet supported", a.metaType)
 	default:
 		return fmt.Errorf("unsupported component type: %s", a.metaType)
@@ -202,4 +205,28 @@ func (a *DeployDataflowComponentAction) Parse(payload interface{}) error {
 
 	zap.S().Infof("Parsed DeployDataFlowComponent action payload: name=%s, type=%s", a.name, a.metaType)
 	return nil
+}
+
+func (a *DeployDataflowComponentAction) Validate() error {
+	// no validation needed anymore because here, only parsing problem can happen
+	// and they are caught in the Parse()
+	return nil
+}
+
+func (a *DeployDataflowComponentAction) Execute() (interface{}, map[string]interface{}, error) {
+	zap.S().Info("Executing DeployDataflowComponent action")
+
+	// Send confirmation that action is starting
+	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionConfirmed, "Starting DeployDataflowComponent", a.outboundChannel, models.DeployDataFlowComponent)
+
+	// Update the location in the configuration
+	ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
+	defer cancel()
+	err := a.configManager.AtomicAddDataflowcomponent(ctx, a.payload)
+	if err != nil {
+		errorMsg := fmt.Sprintf("Failed to add dataflowcomponent: %s", err)
+		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errorMsg, a.outboundChannel, models.DeployDataFlowComponent)
+		return nil, nil, fmt.Errorf("Failed to add dataflowcomponent: %w", err)
+	}
+
 }
