@@ -143,7 +143,7 @@ func (m *MockRedpandaService) GenerateS6ConfigForRedpanda(redpandaConfig *redpan
 }
 
 // GetConfig mocks getting the Redpanda configuration
-func (m *MockRedpandaService) GetConfig(ctx context.Context) (redpandaserviceconfig.RedpandaServiceConfig, error) {
+func (m *MockRedpandaService) GetConfig(ctx context.Context, filesystemService filesystem.Service) (redpandaserviceconfig.RedpandaServiceConfig, error) {
 	m.GetConfigCalled = true
 
 	// If error is set, return it
@@ -164,7 +164,7 @@ func (m *MockRedpandaService) GetConfig(ctx context.Context) (redpandaservicecon
 }
 
 // Status mocks getting the status of a Redpanda service
-func (m *MockRedpandaService) Status(ctx context.Context, tick uint64) (ServiceInfo, error) {
+func (m *MockRedpandaService) Status(ctx context.Context, filesystemService filesystem.Service, tick uint64) (ServiceInfo, error) {
 	m.StatusCalled = true
 
 	// Check if the service exists
@@ -324,7 +324,7 @@ func (m *MockRedpandaService) StopRedpanda(ctx context.Context) error {
 }
 
 // ReconcileManager mocks reconciling the Redpanda manager
-func (m *MockRedpandaService) ReconcileManager(ctx context.Context, tick uint64) (error, bool) {
+func (m *MockRedpandaService) ReconcileManager(ctx context.Context, filesystemService filesystem.Service, tick uint64) (error, bool) {
 	m.ReconcileManagerCalled = true
 	return m.ReconcileManagerError, m.ReconcileManagerReconciled
 }
@@ -350,13 +350,13 @@ func (m *MockRedpandaService) HasProcessingActivity(status RedpandaStatus) bool 
 }
 
 // ServiceExists mocks checking if a Redpanda service exists
-func (m *MockRedpandaService) ServiceExists(ctx context.Context) bool {
+func (m *MockRedpandaService) ServiceExists(ctx context.Context, filesystemService filesystem.Service) bool {
 	m.ServiceExistsCalled = true
 	return m.ServiceExistsResult
 }
 
 // ForceRemoveRedpanda mocks forcefully removing a Redpanda instance
-func (m *MockRedpandaService) ForceRemoveRedpanda(ctx context.Context) error {
+func (m *MockRedpandaService) ForceRemoveRedpanda(ctx context.Context, filesystemService filesystem.Service) error {
 	m.ForceRemoveRedpandaCalled = true
 	return m.ForceRemoveRedpandaError
 }

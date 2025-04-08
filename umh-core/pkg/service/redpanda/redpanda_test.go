@@ -22,6 +22,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/redpandaserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -43,12 +44,14 @@ var _ = Describe("Redpanda Service", func() {
 		service *RedpandaService
 		client  *MockHTTPClient
 		tick    uint64
+		mockFS  *filesystem.MockFileSystem
 	)
 
 	BeforeEach(func() {
 		client = NewMockHTTPClient()
 		service = NewDefaultRedpandaService("redpanda", WithHTTPClient(client))
 		tick = 0
+		mockFS = filesystem.NewMockFileSystem()
 
 		// Cleanup the data directory
 		service.filesystem.RemoveAll(context.Background(), getTmpDir())
@@ -63,7 +66,7 @@ var _ = Describe("Redpanda Service", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Reconcile the S6 manager
-		err, _ = service.ReconcileManager(context.Background(), tick)
+		err, _ = service.ReconcileManager(context.Background(), mockFS, tick)
 		Expect(err).NotTo(HaveOccurred())
 	})
 
@@ -335,7 +338,7 @@ var _ = Describe("Redpanda Service", func() {
 
 			// Reconcile to apply changes
 			By("Reconciling the manager")
-			err, _ = service.ReconcileManager(ctx, 0)
+			err, _ = service.ReconcileManager(ctx, mockFS, 0)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Stop the service
@@ -345,7 +348,7 @@ var _ = Describe("Redpanda Service", func() {
 
 			// Reconcile to apply changes
 			By("Reconciling the manager again")
-			err, _ = service.ReconcileManager(ctx, 1)
+			err, _ = service.ReconcileManager(ctx, mockFS, 1)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Remove the service
@@ -390,7 +393,7 @@ var _ = Describe("Redpanda Service", func() {
 
 			// Reconcile to apply changes
 			By("Reconciling the manager to apply configuration changes")
-			err, _ = mockRedpandaService.ReconcileManager(ctx, 0)
+			err, _ = mockRedpandaService.ReconcileManager(ctx, mockFS, 0)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify the configuration was updated in the S6 manager
@@ -570,7 +573,7 @@ var _ = Describe("Redpanda Service", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Reconcile the S6 manager
-			err, _ = service.ReconcileManager(context.Background(), tick)
+			err, _ = service.ReconcileManager(context.Background(), mockFS, tick)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -611,7 +614,7 @@ var _ = Describe("Redpanda Service", func() {
 			tick = 0
 
 			// First status check
-			status1, err := service.Status(context.Background(), tick)
+			status1, err := service.Status(context.Background(), mockFS, tick)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify initial state
@@ -654,7 +657,7 @@ var _ = Describe("Redpanda Service", func() {
 			})
 
 			// Second status check
-			status2, err := service.Status(context.Background(), tick)
+			status2, err := service.Status(context.Background(), mockFS, tick)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify new throughput values
@@ -699,7 +702,7 @@ var _ = Describe("Redpanda Service", func() {
 			})
 
 			// Third status check
-			status3, err := service.Status(context.Background(), tick)
+			status3, err := service.Status(context.Background(), mockFS, tick)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify the calculated throughput using the entire window
@@ -741,7 +744,7 @@ var _ = Describe("Redpanda Service", func() {
 			})
 
 			// Check at tick 25 - no status update should occur since 25 % 10 != 0
-			status4, err := service.Status(context.Background(), tick)
+			status4, err := service.Status(context.Background(), mockFS, tick)
 			Expect(err).NotTo(HaveOccurred())
 
 			// We shouldn't get a status update (should use cached status)
@@ -778,7 +781,7 @@ var _ = Describe("Redpanda Service", func() {
 			})
 
 			// Check at tick 30
-			status5, err := service.Status(context.Background(), tick)
+			status5, err := service.Status(context.Background(), mockFS, tick)
 			Expect(err).NotTo(HaveOccurred())
 
 			// UpdatedAtTick should now be 30
@@ -820,7 +823,7 @@ var _ = Describe("Redpanda Service", func() {
 			})
 
 			// First status check
-			status1, err := service.Status(context.Background(), tick)
+			status1, err := service.Status(context.Background(), mockFS, tick)
 			tick += 10
 			Expect(err).NotTo(HaveOccurred())
 			Expect(status1.RedpandaStatus.MetricsState.IsActive).To(BeTrue())
@@ -834,7 +837,7 @@ var _ = Describe("Redpanda Service", func() {
 			})
 
 			// Second status check
-			status2, err := service.Status(context.Background(), tick)
+			status2, err := service.Status(context.Background(), mockFS, tick)
 			tick += 10
 			Expect(err).NotTo(HaveOccurred())
 
@@ -1054,7 +1057,7 @@ var _ = Describe("Redpanda Service", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Reconcile the S6 manager
-			err, _ = service.ReconcileManager(context.Background(), tick)
+			err, _ = service.ReconcileManager(context.Background(), mockFS, tick)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Configure mock client with healthy metrics
@@ -1095,7 +1098,7 @@ var _ = Describe("Redpanda Service", func() {
 
 		It("should update status only at specific tick intervals", func() {
 			// First status check at tick 0 (should update)
-			status1, err := service.Status(context.Background(), tick)
+			status1, err := service.Status(context.Background(), mockFS, tick)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(status1.RedpandaStatus.UpdatedAtTick).To(Equal(tick))
 
@@ -1113,7 +1116,7 @@ var _ = Describe("Redpanda Service", func() {
 
 			// Second status check at tick 1 (should NOT update, returns cached data)
 			tick = 1
-			status2, err := service.Status(context.Background(), tick)
+			status2, err := service.Status(context.Background(), mockFS, tick)
 			Expect(err).NotTo(HaveOccurred())
 			// Should still have the old metrics
 			Expect(status2.RedpandaStatus.Metrics.Throughput.BytesIn).To(Equal(int64(1000)))
@@ -1122,7 +1125,7 @@ var _ = Describe("Redpanda Service", func() {
 
 			// Third status check at tick 10 (should update because tick % 10 == 0)
 			tick = 10
-			status3, err := service.Status(context.Background(), tick)
+			status3, err := service.Status(context.Background(), mockFS, tick)
 			Expect(err).NotTo(HaveOccurred())
 			// Should have the new metrics
 			Expect(status3.RedpandaStatus.Metrics.Throughput.BytesIn).To(Equal(int64(2000)))
@@ -1132,7 +1135,7 @@ var _ = Describe("Redpanda Service", func() {
 
 		It("should recover from failed status updates", func() {
 			// First status check succeeds
-			status1, err := service.Status(context.Background(), tick)
+			status1, err := service.Status(context.Background(), mockFS, tick)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(status1.RedpandaStatus.UpdatedAtTick).To(Equal(tick))
 			Expect(status1.RedpandaStatus.Metrics.Throughput.BytesIn).To(Equal(int64(1000)))
@@ -1145,7 +1148,7 @@ var _ = Describe("Redpanda Service", func() {
 
 			// Status check at tick 10 (should attempt update but fail)
 			tick = 10
-			_, err = service.Status(context.Background(), tick)
+			_, err = service.Status(context.Background(), mockFS, tick)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("connection refused"))
 
@@ -1178,7 +1181,7 @@ var _ = Describe("Redpanda Service", func() {
 
 			// Status check at tick 20 (should successfully update now)
 			tick = 20
-			status3, err := service.Status(context.Background(), tick)
+			status3, err := service.Status(context.Background(), mockFS, tick)
 			Expect(err).NotTo(HaveOccurred())
 			// Should have the new metrics
 			Expect(status3.RedpandaStatus.Metrics.Throughput.BytesIn).To(Equal(int64(3000)))
@@ -1188,7 +1191,7 @@ var _ = Describe("Redpanda Service", func() {
 
 		It("should detect when status is too old", func() {
 			// First status check succeeds
-			status1, err := service.Status(context.Background(), tick)
+			status1, err := service.Status(context.Background(), mockFS, tick)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(status1.RedpandaStatus.UpdatedAtTick).To(Equal(tick))
 
@@ -1202,7 +1205,7 @@ var _ = Describe("Redpanda Service", func() {
 			})
 
 			// First failure should just return a connection refused error
-			_, err = service.Status(context.Background(), tick)
+			_, err = service.Status(context.Background(), mockFS, tick)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("redpanda status update interval is more then 20 ticks ago"))
 		})

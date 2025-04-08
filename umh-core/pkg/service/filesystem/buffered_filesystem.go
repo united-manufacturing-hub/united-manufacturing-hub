@@ -41,7 +41,7 @@ import (
 // especially in scenarios like S6 log retrieval and configuration file access.
 //
 // How It Works:
-// - The buffered filesystem wraps a “real” filesystem service (e.g., DefaultService)
+// - The buffered filesystem wraps a "real" filesystem service (e.g., DefaultService)
 //   and caches file operations for specified directories (e.g., constants.S6BaseDir,
 //   constants.S6LogBaseDir). This allows repeated file reads to be served from memory,
 //   reducing disk I/O.
@@ -304,6 +304,69 @@ func NewBufferedServiceWithDefaultAppendDirs(base Service, syncDirectories []str
 	bs.appendOnlyDirs = []string{"/data/logs"}
 
 	return bs
+}
+
+// Chown changes the owner and group ids of the named file.
+func (bs *BufferedService) Chown(ctx context.Context, path string, username string, groupname string) error {
+	bs.mu.Lock()
+	defer bs.mu.Unlock()
+
+	// Check if file exists
+	st, ok := bs.files[path]
+	if !ok {
+		return os.ErrNotExist
+	}
+
+	// Convert username to uid
+	var uid int
+	if username != "" {
+		// Note: This is a call outside of the buffered service
+		// We could later cache this information
+		u, err := user.Lookup(username)
+		if err != nil {
+			return fmt.Errorf("failed to lookup user %s: %w", username, err)
+		}
+		uid, _ = strconv.Atoi(u.Uid)
+	} else {
+		uid = st.uid // Keep existing
+	}
+
+	// Convert groupname to gid
+	var gid int
+	if groupname != "" {
+		// Note: This is a call outside of the buffered service
+		// We could later cache this information
+		g, err := user.LookupGroup(groupname)
+		if err != nil {
+			return fmt.Errorf("failed to lookup group %s: %w", groupname, err)
+		}
+		gid, _ = strconv.Atoi(g.Gid)
+	} else {
+		gid = st.gid // Keep existing
+	}
+
+	// Check permissions - only root can change ownership
+	if bs.verifyPermissions && bs.currentUser != nil {
+		currentUid, _ := strconv.Atoi(bs.currentUser.Uid)
+		if currentUid != 0 {
+			return fmt.Errorf("insufficient permissions to change ownership: not root")
+		}
+	}
+
+	// Update file state in memory
+	st.uid = uid
+	st.gid = gid
+	bs.files[path] = st
+
+	// Mark as changed for SyncToDisk
+	chg, inChg := bs.changed[path]
+	if !inChg {
+		chg = fileChange{}
+	}
+	// We don't modify chg.content or chg.perm here, just mark it as changed
+	bs.changed[path] = chg
+
+	return nil
 }
 
 // SetVerifyPermissions configures whether permission checks should be performed

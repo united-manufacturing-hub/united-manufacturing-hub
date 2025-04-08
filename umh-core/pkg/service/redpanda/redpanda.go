@@ -50,9 +50,9 @@ type IRedpandaService interface {
 	// GenerateS6ConfigForRedpanda generates a S6 config for a given redpanda instance
 	GenerateS6ConfigForRedpanda(redpandaConfig *redpandaserviceconfig.RedpandaServiceConfig) (s6serviceconfig.S6ServiceConfig, error)
 	// GetConfig returns the actual Redpanda config from the S6 service
-	GetConfig(ctx context.Context) (redpandaserviceconfig.RedpandaServiceConfig, error)
+	GetConfig(ctx context.Context, filesystemService filesystem.Service) (redpandaserviceconfig.RedpandaServiceConfig, error)
 	// Status checks the status of a Redpanda service
-	Status(ctx context.Context, tick uint64) (ServiceInfo, error)
+	Status(ctx context.Context, filesystemService filesystem.Service, tick uint64) (ServiceInfo, error)
 	// AddRedpandaToS6Manager adds a Redpanda instance to the S6 manager
 	AddRedpandaToS6Manager(ctx context.Context, cfg *redpandaserviceconfig.RedpandaServiceConfig) error
 	// UpdateRedpandaInS6Manager updates an existing Redpanda instance in the S6 manager
@@ -64,10 +64,10 @@ type IRedpandaService interface {
 	// StopRedpanda stops a Redpanda instance
 	StopRedpanda(ctx context.Context) error
 	// ForceRemoveRedpanda removes a Redpanda instance from the S6 manager
-	ForceRemoveRedpanda(ctx context.Context) error
+	ForceRemoveRedpanda(ctx context.Context, filesystemService filesystem.Service) error
 	// ServiceExists checks if a Redpanda service exists
-	ServiceExists(ctx context.Context) bool
-	ReconcileManager(ctx context.Context, tick uint64) (error, bool)
+	ServiceExists(ctx context.Context, filesystemService filesystem.Service) bool
+	ReconcileManager(ctx context.Context, filesystemService filesystem.Service, tick uint64) (error, bool)
 	// IsLogsFine checks if the logs of a Redpanda service are fine
 	// Expects logs ([]s6service.LogEntry), currentTime (time.Time), and logWindow (time.Duration)
 	IsLogsFine(logs []s6service.LogEntry, currentTime time.Time, logWindow time.Duration) bool
@@ -300,7 +300,7 @@ func (s *RedpandaService) GenerateS6ConfigForRedpanda(redpandaConfig *redpandase
 }
 
 // GetConfig returns the actual Redpanda config from the S6 service
-func (s *RedpandaService) GetConfig(ctx context.Context) (redpandaserviceconfig.RedpandaServiceConfig, error) {
+func (s *RedpandaService) GetConfig(ctx context.Context, filesystemService filesystem.Service) (redpandaserviceconfig.RedpandaServiceConfig, error) {
 	if ctx.Err() != nil {
 		return redpandaserviceconfig.RedpandaServiceConfig{}, ctx.Err()
 	}
@@ -318,19 +318,19 @@ func (s *RedpandaService) GetConfig(ctx context.Context) (redpandaserviceconfig.
 		s.logger.Debugf("Failed to fetch cluster_config: %v", err)
 
 		// Fall back to the file-based approach if API call fails
-		return s.getConfigFromFile(ctx)
+		return s.getConfigFromFile(ctx, filesystemService)
 	}
 
 	if resp.StatusCode != http.StatusOK {
 		s.logger.Debugf("Unexpected status code from cluster_config API: %d", resp.StatusCode)
-		return s.getConfigFromFile(ctx)
+		return s.getConfigFromFile(ctx, filesystemService)
 	}
 
 	// Parse the JSON response
 	var redpandaConfig map[string]interface{}
 	if err := json.Unmarshal(body, &redpandaConfig); err != nil {
 		s.logger.Debugf("Error parsing cluster_config response: %v", err)
-		return s.getConfigFromFile(ctx)
+		return s.getConfigFromFile(ctx, filesystemService)
 	}
 
 	result := redpandaserviceconfig.RedpandaServiceConfig{}
@@ -370,11 +370,11 @@ func (s *RedpandaService) GetConfig(ctx context.Context) (redpandaserviceconfig.
 
 // getConfigFromFile returns the Redpanda config from the S6 service file
 // This is a fallback method used when the API endpoint is not available
-func (s *RedpandaService) getConfigFromFile(ctx context.Context) (redpandaserviceconfig.RedpandaServiceConfig, error) {
+func (s *RedpandaService) getConfigFromFile(ctx context.Context, filesystemService filesystem.Service) (redpandaserviceconfig.RedpandaServiceConfig, error) {
 	s6ServicePath := filepath.Join(constants.S6BaseDir, constants.RedpandaServiceName)
 
 	// Request the config file from the S6 service
-	yamlData, err := s.s6Service.GetS6ConfigFile(ctx, s6ServicePath, constants.RedpandaConfigFileName)
+	yamlData, err := s.s6Service.GetS6ConfigFile(ctx, s6ServicePath, constants.RedpandaConfigFileName, filesystemService)
 	if err != nil {
 		return redpandaserviceconfig.RedpandaServiceConfig{}, fmt.Errorf("failed to get redpanda config file: %w", err)
 	}
@@ -406,7 +406,7 @@ func (s *RedpandaService) getConfigFromFile(ctx context.Context) (redpandaservic
 }
 
 // Status checks the status of a Redpanda service
-func (s *RedpandaService) Status(ctx context.Context, tick uint64) (ServiceInfo, error) {
+func (s *RedpandaService) Status(ctx context.Context, filesystemService filesystem.Service, tick uint64) (ServiceInfo, error) {
 	if ctx.Err() != nil {
 		return ServiceInfo{}, ctx.Err()
 	}
@@ -450,7 +450,7 @@ func (s *RedpandaService) Status(ctx context.Context, tick uint64) (ServiceInfo,
 
 	// Let's get the logs of the Redpanda service
 	s6ServicePath := filepath.Join(constants.S6BaseDir, constants.RedpandaServiceName)
-	logs, err := s.s6Service.GetLogs(ctx, s6ServicePath)
+	logs, err := s.s6Service.GetLogs(ctx, s6ServicePath, filesystemService)
 	if err != nil {
 		if errors.Is(err, s6service.ErrServiceNotExist) {
 			s.logger.Debugf("Service %s does not exist, returning empty logs", constants.RedpandaServiceName)
@@ -932,7 +932,7 @@ func (s *RedpandaService) StopRedpanda(ctx context.Context) error {
 
 // ReconcileManager reconciles the Redpanda manager
 // This basically just calls the Reconcile method of the S6 manager, resulting in a (re)start of the Redpanda service with the latest configuration
-func (s *RedpandaService) ReconcileManager(ctx context.Context, tick uint64) (err error, reconciled bool) {
+func (s *RedpandaService) ReconcileManager(ctx context.Context, filesystemService filesystem.Service, tick uint64) (err error, reconciled bool) {
 	if s.s6Manager == nil {
 		return errors.New("s6 manager not initialized"), false
 	}
@@ -941,7 +941,7 @@ func (s *RedpandaService) ReconcileManager(ctx context.Context, tick uint64) (er
 		return ctx.Err(), false
 	}
 
-	return s.s6Manager.Reconcile(ctx, config.FullConfig{Internal: config.InternalConfig{Services: s.s6ServiceConfigs}}, tick)
+	return s.s6Manager.Reconcile(ctx, config.FullConfig{Internal: config.InternalConfig{Services: s.s6ServiceConfigs}}, filesystemService, tick)
 }
 
 // IsLogsFine analyzes Redpanda logs to determine if there are any critical issues
@@ -991,11 +991,11 @@ func (s *RedpandaService) HasProcessingActivity(status RedpandaStatus) bool {
 }
 
 // ServiceExists checks if a Redpanda service exists
-func (s *RedpandaService) ServiceExists(ctx context.Context) bool {
+func (s *RedpandaService) ServiceExists(ctx context.Context, filesystemService filesystem.Service) bool {
 	s6ServiceName := constants.RedpandaServiceName
 	s6ServicePath := filepath.Join(constants.S6BaseDir, s6ServiceName)
 
-	exists, err := s.s6Service.ServiceExists(ctx, s6ServicePath)
+	exists, err := s.s6Service.ServiceExists(ctx, s6ServicePath, filesystemService)
 	if err != nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, s.logger, "Error checking if service exists for %s: %v", s6ServiceName, err)
 		return false
@@ -1007,8 +1007,8 @@ func (s *RedpandaService) ServiceExists(ctx context.Context) bool {
 // ForceRemoveRedpanda removes a Redpanda instance from the S6 manager
 // This should only be called if the Redpanda instance is in a permanent failure state
 // and the instance itself cannot be stopped or removed
-func (s *RedpandaService) ForceRemoveRedpanda(ctx context.Context) error {
-	return s.s6Service.ForceRemove(ctx, constants.RedpandaServiceName)
+func (s *RedpandaService) ForceRemoveRedpanda(ctx context.Context, filesystemService filesystem.Service) error {
+	return s.s6Service.ForceRemove(ctx, constants.RedpandaServiceName, filesystemService)
 }
 
 func formatMemory(memory int) string {

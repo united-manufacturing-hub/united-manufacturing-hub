@@ -26,6 +26,7 @@ import (
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 	logger "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	redpanda_service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda"
 )
 
@@ -110,8 +111,8 @@ func (b *RedpandaInstance) initiateRedpandaStop(ctx context.Context) error {
 
 // getServiceStatus gets the status of the Redpanda service
 // its main purpose is to habdle the edge cases where the service is not yet created or not yet running
-func (b *RedpandaInstance) getServiceStatus(ctx context.Context, tick uint64) (redpanda_service.ServiceInfo, error) {
-	info, err := b.service.Status(ctx, tick)
+func (b *RedpandaInstance) getServiceStatus(ctx context.Context, filesystemService filesystem.Service, tick uint64) (redpanda_service.ServiceInfo, error) {
+	info, err := b.service.Status(ctx, filesystemService, tick)
 	if err != nil {
 		// If there's an error getting the service status, we need to distinguish between cases
 
@@ -149,7 +150,7 @@ func (b *RedpandaInstance) getServiceStatus(ctx context.Context, tick uint64) (r
 }
 
 // updateObservedState updates the observed state of the service
-func (b *RedpandaInstance) updateObservedState(ctx context.Context, tick uint64) error {
+func (b *RedpandaInstance) updateObservedState(ctx context.Context, filesystemService filesystem.Service, tick uint64) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
@@ -160,7 +161,7 @@ func (b *RedpandaInstance) updateObservedState(ctx context.Context, tick uint64)
 	if desiredState == OperationalStateStopped || currentState == OperationalStateStopped || currentState == OperationalStateStopping {
 		// For stopped instances, just check if the S6 service exists but don't do health checks
 		// This minimal information is sufficient for reconciliation
-		exists := b.service.ServiceExists(ctx)
+		exists := b.service.ServiceExists(ctx, filesystemService)
 		if !exists {
 			// If the service doesn't exist, nothing more to do
 			b.ObservedState = RedpandaObservedState{}
@@ -169,7 +170,7 @@ func (b *RedpandaInstance) updateObservedState(ctx context.Context, tick uint64)
 	}
 
 	start := time.Now()
-	info, err := b.getServiceStatus(ctx, tick)
+	info, err := b.getServiceStatus(ctx, filesystemService, tick)
 	if err != nil {
 		return err
 	}
@@ -179,7 +180,7 @@ func (b *RedpandaInstance) updateObservedState(ctx context.Context, tick uint64)
 
 	// Fetch the actual Redpanda config from the service
 	start = time.Now()
-	observedConfig, err := b.service.GetConfig(ctx)
+	observedConfig, err := b.service.GetConfig(ctx, filesystemService)
 	metrics.ObserveReconcileTime(logger.ComponentRedpandaInstance, b.baseFSMInstance.GetID()+".getConfig", time.Since(start))
 	if err == nil {
 		// Only update if we successfully got the config
@@ -198,7 +199,7 @@ func (b *RedpandaInstance) updateObservedState(ctx context.Context, tick uint64)
 	// Use new ConfigsEqual function that handles Redpanda defaults properly
 	if !redpandaserviceconfig.ConfigsEqual(b.config, b.ObservedState.ObservedRedpandaServiceConfig) {
 		// Check if the service exists before attempting to update
-		if b.service.ServiceExists(ctx) {
+		if b.service.ServiceExists(ctx, filesystemService) {
 			b.baseFSMInstance.GetLogger().Debugf("Observed Redpanda config is different from desired config, updating S6 configuration")
 
 			// Use the new ConfigDiff function for better debug output
