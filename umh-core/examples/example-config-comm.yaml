@@ -31,3 +31,19 @@ internal:
             count: 0 # Set to 0 for unlimited messages
         output:
           stdout: {}
+
+dataFlowComponents:
+  - name: data-flow-hellooo-world
+    desiredState: active
+    dataFlowComponentConfig:
+      benthos:
+        input:
+          generate:
+            mapping: root = "hello world from Data Flow Component!"
+            interval: 1s
+            count: 0 # Set to 0 for unlimited messages
+        pipeline:
+          processors:
+            - bloblang: root = content()
+        output:
+          stdout: {}
