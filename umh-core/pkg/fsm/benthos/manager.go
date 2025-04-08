@@ -68,7 +68,7 @@ func NewBenthosManager(name string) *BenthosManager {
 		},
 		// Create Benthos instance from config
 		func(cfg config.BenthosConfig) (public_fsm.FSMInstance, error) {
-			return NewBenthosInstance(baseBenthosDir, cfg), nil
+			return NewBenthosInstance(cfg), nil
 		},
 		// Compare Benthos configs
 		func(instance public_fsm.FSMInstance, cfg config.BenthosConfig) (bool, error) {

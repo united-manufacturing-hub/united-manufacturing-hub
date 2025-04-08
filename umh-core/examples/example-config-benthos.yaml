@@ -15,6 +15,9 @@
 agent:
   metricsPort: 8080
 
+redpanda:
+  desiredState: stopped
+  
 internal:
   benthos:
     - name: hello-world

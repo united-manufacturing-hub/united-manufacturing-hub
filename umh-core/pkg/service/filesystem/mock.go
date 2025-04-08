@@ -41,6 +41,7 @@ type MockFileSystem struct {
 	ChmodFunc           func(ctx context.Context, path string, mode os.FileMode) error
 	ReadDirFunc         func(ctx context.Context, path string) ([]os.DirEntry, error)
 	ExecuteCommandFunc  func(ctx context.Context, name string, args ...string) ([]byte, error)
+	ChownFunc           func(ctx context.Context, path string, user string, group string) error
 	mutex               sync.Mutex
 }
 
@@ -338,6 +339,29 @@ func (m *MockFileSystem) Chmod(ctx context.Context, path string, mode os.FileMod
 	return nil
 }
 
+// Chown changes the owner and group of the named file
+func (m *MockFileSystem) Chown(ctx context.Context, path string, user string, group string) error {
+	if m.ChownFunc != nil {
+		return m.ChownFunc(ctx, path, user, group)
+	}
+
+	shouldFail, delay := m.simulateRandomBehavior("Chown:" + path)
+
+	if delay > 0 {
+		select {
+		case <-time.After(delay):
+			// Delay completed
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+
+	if shouldFail {
+		return errors.New("simulated failure in Chown")
+	}
+	return nil
+}
+
 // ReadDir reads a directory, returning all its directory entries
 func (m *MockFileSystem) ReadDir(ctx context.Context, path string) ([]os.DirEntry, error) {
 	if m.ReadDirFunc != nil {
@@ -441,6 +465,12 @@ func (m *MockFileSystem) WithCreateFileFunc(fn func(ctx context.Context, path st
 // WithChmodFunc sets a custom implementation for Chmod
 func (m *MockFileSystem) WithChmodFunc(fn func(ctx context.Context, path string, mode os.FileMode) error) *MockFileSystem {
 	m.ChmodFunc = fn
+	return m
+}
+
+// WithChownFunc sets a custom implementation for Chown
+func (m *MockFileSystem) WithChownFunc(fn func(ctx context.Context, path string, user string, group string) error) *MockFileSystem {
+	m.ChownFunc = fn
 	return m
 }
 
