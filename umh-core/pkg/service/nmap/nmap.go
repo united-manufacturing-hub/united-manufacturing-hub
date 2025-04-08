@@ -29,6 +29,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 	"go.uber.org/zap"
 )
@@ -128,7 +129,7 @@ func (s *NmapService) GenerateS6ConfigForNmap(nmapConfig *config.NmapServiceConf
 }
 
 // GetConfig returns the actual nmap config from the S6 service
-func (s *NmapService) GetConfig(ctx context.Context, nmapName string) (config.NmapServiceConfig, error) {
+func (s *NmapService) GetConfig(ctx context.Context, filesystemService filesystem.Service, nmapName string) (config.NmapServiceConfig, error) {
 	if ctx.Err() != nil {
 		return config.NmapServiceConfig{}, ctx.Err()
 	}
@@ -137,7 +138,7 @@ func (s *NmapService) GetConfig(ctx context.Context, nmapName string) (config.Nm
 	s6ServicePath := filepath.Join(constants.S6BaseDir, s6ServiceName)
 
 	// Get the script file
-	scriptData, err := s.s6Service.GetS6ConfigFile(ctx, s6ServicePath, "run_nmap.sh")
+	scriptData, err := s.s6Service.GetS6ConfigFile(ctx, s6ServicePath, "run_nmap.sh", filesystemService)
 	if err != nil {
 		return config.NmapServiceConfig{}, fmt.Errorf("failed to get nmap config file for service %s: %w", s6ServiceName, err)
 	}
@@ -257,7 +258,7 @@ func (s *NmapService) parseScanLogs(logs []s6service.LogEntry, port int) *NmapSc
 }
 
 // Status checks the status of a nmap service
-func (s *NmapService) Status(ctx context.Context, nmapName string, tick uint64) (ServiceInfo, error) {
+func (s *NmapService) Status(ctx context.Context, filesystemService filesystem.Service, nmapName string, tick uint64) (ServiceInfo, error) {
 	if ctx.Err() != nil {
 		return ServiceInfo{}, ctx.Err()
 	}
@@ -296,9 +297,11 @@ func (s *NmapService) Status(ctx context.Context, nmapName string, tick uint64) 
 
 	// Get logs
 	s6ServicePath := filepath.Join(constants.S6BaseDir, s6ServiceName)
-	logs, err := s.s6Service.GetLogs(ctx, s6ServicePath)
+	logs, err := s.s6Service.GetLogs(ctx, s6ServicePath, filesystemService)
 	if err != nil {
 		if errors.Is(err, s6service.ErrServiceNotExist) {
+			return ServiceInfo{}, ErrServiceNotExist
+		} else if errors.Is(err, s6service.ErrLogFileNotFound) {
 			return ServiceInfo{}, ErrServiceNotExist
 		}
 		return ServiceInfo{}, fmt.Errorf("failed to get logs: %w", err)
@@ -308,7 +311,7 @@ func (s *NmapService) Status(ctx context.Context, nmapName string, tick uint64) 
 	var scanResult *NmapScanResult
 	if fsmState == s6fsm.OperationalStateRunning && len(logs) > 0 {
 		// Get the current config to know which port we're scanning
-		config, err := s.GetConfig(ctx, nmapName)
+		config, err := s.GetConfig(ctx, filesystemService, nmapName)
 		if err == nil {
 			// Parse logs to extract scan results
 			scanResult = s.parseScanLogs(logs, config.Port)
@@ -508,7 +511,7 @@ func (s *NmapService) StopNmap(ctx context.Context, nmapName string) error {
 }
 
 // ReconcileManager reconciles the Nmap manager
-func (s *NmapService) ReconcileManager(ctx context.Context, tick uint64) (err error, reconciled bool) {
+func (s *NmapService) ReconcileManager(ctx context.Context, filesystemService filesystem.Service, tick uint64) (err error, reconciled bool) {
 	if s.s6Manager == nil {
 		return errors.New("s6 manager not initialized"), false
 	}
@@ -517,15 +520,15 @@ func (s *NmapService) ReconcileManager(ctx context.Context, tick uint64) (err er
 		return ctx.Err(), false
 	}
 
-	return s.s6Manager.Reconcile(ctx, config.FullConfig{Internal: config.InternalConfig{Services: s.s6ServiceConfigs}}, tick)
+	return s.s6Manager.Reconcile(ctx, config.FullConfig{Internal: config.InternalConfig{Services: s.s6ServiceConfigs}}, filesystemService, tick)
 }
 
 // ServiceExists checks if a nmap service exists
-func (s *NmapService) ServiceExists(ctx context.Context, nmapName string) bool {
+func (s *NmapService) ServiceExists(ctx context.Context, filesystemService filesystem.Service, nmapName string) bool {
 	s6ServiceName := s.getS6ServiceName(nmapName)
 	s6ServicePath := filepath.Join(constants.S6BaseDir, s6ServiceName)
 
-	exists, err := s.s6Service.ServiceExists(ctx, s6ServicePath)
+	exists, err := s.s6Service.ServiceExists(ctx, s6ServicePath, filesystemService)
 	if err != nil {
 		return false
 	}

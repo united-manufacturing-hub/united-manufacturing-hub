@@ -25,6 +25,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/portmanager"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
 const (
@@ -67,7 +68,7 @@ func NewBenthosManager(name string) *BenthosManager {
 		},
 		// Create Benthos instance from config
 		func(cfg config.BenthosConfig) (public_fsm.FSMInstance, error) {
-			return NewBenthosInstance(baseBenthosDir, cfg), nil
+			return NewBenthosInstance(cfg), nil
 		},
 		// Compare Benthos configs
 		func(instance public_fsm.FSMInstance, cfg config.BenthosConfig) (bool, error) {
@@ -173,7 +174,9 @@ func (m *BenthosManager) HandleInstanceRemoved(instanceName string) {
 }
 
 // Reconcile overrides the base manager's Reconcile method to add port management
-func (m *BenthosManager) Reconcile(ctx context.Context, cfg config.FullConfig, tick uint64) (error, bool) {
+// The filesystemService parameter allows for filesystem operations during reconciliation,
+// enabling the method to read configuration or state information from the filesystem.
+func (m *BenthosManager) Reconcile(ctx context.Context, cfg config.FullConfig, filesystemService filesystem.Service, tick uint64) (error, bool) {
 	start := time.Now()
 	defer func() {
 		duration := time.Since(start)
@@ -203,7 +206,7 @@ func (m *BenthosManager) Reconcile(ctx context.Context, cfg config.FullConfig, t
 	}
 
 	// Phase 2: Base FSM Reconciliation with port-aware config
-	err, reconciled := m.BaseFSMManager.Reconcile(ctx, cfgWithPorts, tick)
+	err, reconciled := m.BaseFSMManager.Reconcile(ctx, cfgWithPorts, filesystemService, tick)
 
 	// Check if instances were removed as part of reconciliation (e.g., due to permanent errors)
 	countAfter := len(m.BaseFSMManager.GetInstances())

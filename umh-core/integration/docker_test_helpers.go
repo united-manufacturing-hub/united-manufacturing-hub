@@ -17,6 +17,7 @@ package integration_test
 import (
 	"bytes"
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/hex"
 	"fmt"
 	"os"
@@ -24,6 +25,8 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+
+	. "github.com/onsi/ginkgo/v2"
 )
 
 const (
@@ -132,16 +135,23 @@ func writeConfigFile(yamlContent string, containerName ...string) error {
 		container := containerName[0]
 		fmt.Printf("Writing config directly to container %s...\n", container)
 
-		// Escape double quotes and newlines for echo command
-		escapedConfig := strings.ReplaceAll(yamlContent, "\"", "\\\"")
-		escapedConfig = strings.ReplaceAll(escapedConfig, "$", "\\$")
+		// Base64 encode the config for safer transfer
+		encodedConfig := base64.StdEncoding.EncodeToString([]byte(yamlContent))
 
-		// Create the config file in the container
-		cmd := fmt.Sprintf("bash -c \"echo '%s' > /data/config.yaml\"", escapedConfig)
+		// Write the base64 encoded config to a temporary file in the container
+		cmd := fmt.Sprintf("echo '%s' > /data/config.yaml.b64", encodedConfig)
 		out, err := runDockerCommand("exec", container, "bash", "-c", cmd)
 		if err != nil {
-			fmt.Printf("Failed to write config to container: %v\n%s\n", err, out)
-			return fmt.Errorf("failed to write config to container: %w", err)
+			fmt.Printf("Failed to write encoded config to container: %v\n%s\n", err, out)
+			return fmt.Errorf("failed to write encoded config to container: %w", err)
+		}
+
+		// Decode the base64 file and write to the actual config file
+		decodeCmd := "base64 -d /data/config.yaml.b64 > /data/config.yaml && rm /data/config.yaml.b64"
+		out, err = runDockerCommand("exec", container, "bash", "-c", decodeCmd)
+		if err != nil {
+			fmt.Printf("Failed to decode config in container: %v\n%s\n", err, out)
+			return fmt.Errorf("failed to decode config in container: %w", err)
 		}
 
 		// Verify the config was written correctly
@@ -156,13 +166,23 @@ func writeConfigFile(yamlContent string, containerName ...string) error {
 }
 
 // BuildAndRunContainer rebuilds your Docker image, starts the container, etc.
-func BuildAndRunContainer(configYaml string, memory string) error {
+func BuildAndRunContainer(configYaml string, memory string, cpus uint) error {
 	// Get the unique container name for this test run
 	containerName := getContainerName()
+
+	if memory == "" {
+		// Fail if memory is not set
+		return fmt.Errorf("memory limit is not set")
+	}
+	if cpus == 0 {
+		// Fail if cpus are not set
+		return fmt.Errorf("cpu limit is not set")
+	}
 
 	fmt.Printf("\n=== STARTING CONTAINER BUILD AND RUN ===\n")
 	fmt.Printf("Container name: %s\n", containerName)
 	fmt.Printf("Memory limit: %s\n", memory)
+	fmt.Printf("CPU limit: %d\n", cpus)
 
 	// Generate random ports to avoid conflicts
 	// Use PID to create somewhat unique ports, but with a limited range to avoid system port limits
@@ -213,7 +233,18 @@ func BuildAndRunContainer(configYaml string, memory string) error {
 		return fmt.Errorf("failed to write local config file: %w", err)
 	}
 
-	// 4. Run container WITHOUT mounting the config file
+	// 4. Run container WITHOUT mounting the config file (but we do need to mount the /data/redpanda folder, otherwise it cannot start)
+	tmpRedpandaDir := filepath.Join(getTmpDir(), containerName, "redpanda")
+	tmpLogsDir := filepath.Join(getTmpDir(), containerName, "logs")
+
+	// Create the directories
+	if err := os.MkdirAll(tmpRedpandaDir, 0o777); err != nil {
+		return fmt.Errorf("failed to create redpanda dir: %w", err)
+	}
+	if err := os.MkdirAll(tmpLogsDir, 0o777); err != nil {
+		return fmt.Errorf("failed to create logs dir: %w", err)
+	}
+
 	fmt.Println("Starting container...")
 	out, err = runDockerCommand(
 		"run", "-d",
@@ -222,6 +253,10 @@ func BuildAndRunContainer(configYaml string, memory string) error {
 		// Map the host ports to the container's fixed ports
 		"-p", fmt.Sprintf("%d:8080", metricsPrt), // Map host's dynamic port to container's fixed metrics port
 		"-p", fmt.Sprintf("%d:8082", goldenPrt), // Map host's dynamic port to container's golden service port
+		"--memory", memory,
+		"--cpus", fmt.Sprintf("%d", cpus),
+		"-v", fmt.Sprintf("%s:/data/redpanda", tmpRedpandaDir),
+		"-v", fmt.Sprintf("%s:/data/logs", tmpLogsDir),
 		imageName,
 	)
 	if err != nil {
@@ -268,6 +303,23 @@ func cleanupConfigFile() {
 			os.Remove(dir)
 		}
 	}
+}
+
+// getTmpDir returns the temporary directory for a container
+func getTmpDir() string {
+	tmpDir := "/tmp"
+	// If we are in a devcontainer, use the workspace as tmp dir
+	if os.Getenv("REMOTE_CONTAINERS") != "" || os.Getenv("CODESPACE_NAME") != "" || os.Getenv("USER") == "vscode" {
+		tmpDir = "/workspaces/united-manufacturing-hub/umh-core/tmp"
+	}
+	return tmpDir
+}
+
+// cleanupTmpDirs cleans up the temporary directories for a container
+func cleanupTmpDirs(containerName string) {
+	filepath := filepath.Join(getTmpDir(), containerName)
+	GinkgoWriter.Printf("Cleaning up temporary directories for container %s (%s)\n", containerName, filepath)
+	os.RemoveAll(filepath)
 }
 
 // getContainerIP returns the IP address of a running container
@@ -362,9 +414,27 @@ func printContainerLogs() {
 	}
 }
 
-// StopContainer stops and removes your container
-func StopContainer() {
+// PrintLogsAndStopContainer stops and removes your container
+func PrintLogsAndStopContainer() {
 	containerName := getContainerName()
+	if CurrentSpecReport().Failed() {
+		fmt.Println("Test failed, printing container logs:")
+		printContainerLogs()
+
+		// Print the latest YAML config
+		fmt.Println("\nLatest YAML config at time of failure:")
+		configPath := getConfigFilePath()
+		config, err := os.ReadFile(configPath)
+		if err != nil {
+			fmt.Printf("Failed to read config file %s: %v\n", configPath, err)
+		} else {
+			fmt.Println(string(config))
+		}
+
+		// Save logs for debugging
+		containerNameInError := getContainerName()
+		fmt.Printf("\nTest failed. Container name: %s\n", containerNameInError)
+	}
 	// First stop the container
 	runDockerCommand("stop", containerName)
 	// Then remove it
@@ -441,6 +511,7 @@ func printContainerDebugInfo() {
 }
 
 func runDockerCommand(args ...string) (string, error) {
+	fmt.Printf("Running docker command: %v\n", args)
 	// Check if we use docker or podman
 	dockerCmd := "docker"
 	if _, err := exec.LookPath("podman"); err == nil {
@@ -462,4 +533,14 @@ func GetCurrentDir() string {
 		return "."
 	}
 	return strings.TrimSpace(wd)
+}
+
+// getContainerConfig retrieves the current configuration file from the container
+func getContainerConfig() (string, error) {
+	containerName := getContainerName()
+	out, err := runDockerCommand("exec", containerName, "cat", "/data/config.yaml")
+	if err != nil {
+		return "", fmt.Errorf("failed to read config from container: %w", err)
+	}
+	return string(out), nil
 }

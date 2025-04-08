@@ -14,12 +14,14 @@
 
 name: Test UMH Core
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: true
+
 on:
   pull_request:
     branches:
       - "**"
-    paths:
-      - "umh-core/**"
   merge_group:
 jobs:
   unit-tests:
@@ -41,6 +43,11 @@ jobs:
 
       - name: Install ginkgo and nilaway
         run: make install
+
+      - name: Get dependencies
+        working-directory: ./umh-core
+        run: |
+          make download-docker-binaries
 
       - name: Run unit tests
         run: make unit-test
@@ -65,6 +72,11 @@ jobs:
       - name: Install ginkgo and nilaway
         run: make install
 
+      - name: Get dependencies
+        working-directory: ./umh-core
+        run: |
+          make download-docker-binaries
+          
       - name: Run integration tests
         env:
           CI: true
