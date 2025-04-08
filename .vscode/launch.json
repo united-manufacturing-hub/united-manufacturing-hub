@@ -9,7 +9,8 @@
             "type": "go",
             "request": "launch",
             "mode": "test",
-            "program": "${workspaceFolder}/umh-core/test/fsm/benthos"
+            "program": "${workspaceFolder}/umh-core/test/fsm/benthos",
+            "buildFlags": "--tags=test"
         },
         {
             "name": "Debug Ginkgo Tests (service-nmap)",
@@ -31,6 +32,14 @@
             "request": "launch",
             "mode": "test",
             "program": "${workspaceFolder}/umh-core/pkg/fsm/container"
+        },
+        {
+            "name": "Debug Ginkgo Tests (service-dataflowcomponent)",
+            "type": "go",
+            "request": "launch",
+            "mode": "test",
+            "program": "${workspaceFolder}/umh-core/pkg/service/dataflowcomponent",
+            "buildFlags": "--tags=test"
         }
-    ],
+    ]
 }
