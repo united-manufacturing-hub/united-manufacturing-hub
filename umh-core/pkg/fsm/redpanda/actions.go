@@ -113,7 +113,7 @@ func (b *RedpandaInstance) initiateRedpandaStop(ctx context.Context) error {
 
 // getServiceStatus gets the status of the Redpanda service
 // its main purpose is to habdle the edge cases where the service is not yet created or not yet running
-func (b *RedpandaInstance) getServiceStatus(ctx context.Context, filesystemService filesystem.Service, tick uint64) (redpanda_service.ServiceInfo, error) {
+func (b *RedpandaInstance) GetServiceStatus(ctx context.Context, filesystemService filesystem.Service, tick uint64) (redpanda_service.ServiceInfo, error) {
 
 	info, err := b.service.Status(ctx, filesystemService, tick)
 	if err != nil {
@@ -193,7 +193,7 @@ func (b *RedpandaInstance) updateObservedState(ctx context.Context, filesystemSe
 	go func() {
 		defer wg.Done()
 		start := time.Now()
-		info, getServiceStatusErr = b.getServiceStatus(ctx, filesystemService, tick)
+		info, getServiceStatusErr = b.GetServiceStatus(ctx, filesystemService, tick)
 		b.baseFSMInstance.GetLogger().Debugf("getServiceStatus took %v", time.Since(start))
 		metrics.ObserveReconcileTime(logger.ComponentRedpandaInstance, b.baseFSMInstance.GetID()+".getServiceStatus", time.Since(start))
 	}()
@@ -372,4 +372,8 @@ func (b *RedpandaInstance) IsRedpandaStarted() bool {
 		}
 	}
 	return false
+}
+
+func (b *RedpandaInstance) GetBaseFSMInstanceForTest() *internalfsm.BaseFSMInstance {
+	return b.baseFSMInstance
 }
