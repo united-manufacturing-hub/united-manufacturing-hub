@@ -138,7 +138,18 @@ build: download-docker-binaries
 		--build-arg APP_VERSION=$(VERSION) \
 		-t $(IMAGE_NAME):$(TAG) \
 		-f Dockerfile .
-	
+
+build-debug: download-docker-binaries
+	docker buildx build \
+		--platform linux/$(TARGETARCH) \
+		--build-arg S6_OVERLAY_VERSION=$(S6_OVERLAY_VERSION) \
+		--build-arg BENTHOS_UMH_VERSION=$(BENTHOS_UMH_VERSION) \
+		--build-arg REDPANDA_VERSION=$(REDPANDA_VERSION) \
+		--build-arg APP_VERSION=$(VERSION) \
+		--build-arg DEBUG=true \
+		-t $(IMAGE_NAME):$(TAG)-debug \
+		-f Dockerfile .
+
 clean:
 	docker stop $(IMAGE_NAME) || true
 	docker rm $(IMAGE_NAME) || true
@@ -281,6 +292,20 @@ test-dfc: clean build
 		--memory $(MEMORY) \
 		--cpus $(CPUS) \
 		$(IMAGE_NAME):$(TAG)
+
+test-debug: clean build-debug
+	@mkdir -p $(PWD)/data
+	@cp $(PWD)/examples/example-config-benthos.yaml $(PWD)/data/config.yaml
+	docker run \
+		--name $(IMAGE_NAME) \
+		-v $(PWD)/data:/data \
+		-p 8081:8080 \
+		-p 4195:4195 \
+		-p 40000:40000 \
+		--memory $(MEMORY) \
+		--cpus $(CPUS) \
+		-e LOGGING_LEVEL=DEBUG \
+		$(IMAGE_NAME):$(TAG)-debug
 
 pod-shell:
 	docker exec -it $(IMAGE_NAME) /bin/bash
