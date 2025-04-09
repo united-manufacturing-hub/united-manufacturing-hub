@@ -146,6 +146,7 @@ type ServiceInfo struct {
 // RedpandaMonitorStatus contains status information about the redpanda service
 type RedpandaMonitorStatus struct {
 	// LastScan contains the result of the last scan
+	// If this is nil, we never had a successfull scan
 	LastScan *RedpandaMetricsAndClusterConfig
 	// IsRunning indicates whether the redpanda service is running
 	IsRunning bool
@@ -168,7 +169,6 @@ type IRedpandaMonitorService interface {
 var _ IRedpandaMonitorService = (*RedpandaMonitorService)(nil)
 
 type RedpandaMonitorService struct {
-	fs              filesystem.Service
 	logger          *zap.Logger
 	metricsState    *RedpandaMetricsState
 	s6Manager       *s6fsm.S6Manager
@@ -186,7 +186,7 @@ func WithS6Service(s6Service s6service.Service) RedpandaMonitorServiceOption {
 	}
 }
 
-func NewRedpandaMonitorService(fs filesystem.Service, opts ...RedpandaMonitorServiceOption) *RedpandaMonitorService {
+func NewRedpandaMonitorService(opts ...RedpandaMonitorServiceOption) *RedpandaMonitorService {
 	log := logger.New(logger.ComponentRedpandaMonitorService, logger.FormatJSON)
 	service := &RedpandaMonitorService{
 		logger:       log,
