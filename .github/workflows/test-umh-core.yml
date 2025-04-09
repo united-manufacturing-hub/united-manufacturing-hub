@@ -56,6 +56,10 @@ jobs:
     name: Integration Tests
     runs-on:
       group: eos
+    strategy:
+      matrix:
+        instance: [1, 2, 3]
+      fail-fast: true
     defaults:
       run:
         working-directory: ./umh-core
