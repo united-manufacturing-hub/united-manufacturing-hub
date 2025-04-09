@@ -53,15 +53,36 @@ type RedpandaMonitorService struct {
 	s6ServiceConfig *config.S6FSMConfig // There can only be one instance of this service (as there is also only one redpanda instance)
 }
 
-func NewRedpandaMonitorService(fs filesystem.Service) *RedpandaMonitorService {
+// RedpandaMonitorServiceOption is a function that modifies a RedpandaMonitorService
+type RedpandaMonitorServiceOption func(*RedpandaMonitorService)
+
+// WithS6Service sets a custom S6 service for the RedpandaMonitorService
+func WithS6Service(s6Service s6service.Service) RedpandaMonitorServiceOption {
+	return func(s *RedpandaMonitorService) {
+		s.s6Service = s6Service
+	}
+}
+
+// WithFilesystem sets a custom filesystem service for the RedpandaMonitorService
+func WithFilesystem(fs filesystem.Service) RedpandaMonitorServiceOption {
+	return func(s *RedpandaMonitorService) {
+		s.fs = fs
+	}
+}
+
+func NewRedpandaMonitorService(fs filesystem.Service, opts ...RedpandaMonitorServiceOption) *RedpandaMonitorService {
 	log := logger.New(logger.ComponentRedpandaMonitorService, logger.FormatJSON)
-	return &RedpandaMonitorService{
+	service := &RedpandaMonitorService{
 		fs:           fs,
 		logger:       log,
 		metricsState: NewRedpandaMetricsState(),
 		s6Manager:    s6fsm.NewS6Manager(logger.ComponentRedpandaMonitorService),
 		s6Service:    s6service.NewDefaultService(),
 	}
+	for _, opt := range opts {
+		opt(service)
+	}
+	return service
 }
 
 const START_MARKER = "BEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGIN"

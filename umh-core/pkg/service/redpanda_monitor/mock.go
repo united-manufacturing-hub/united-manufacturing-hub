@@ -285,6 +285,10 @@ func (m *MockRedpandaMonitorService) ReconcileManager(ctx context.Context, files
 		return ErrServiceNotExist, false
 	}
 
+	// After successful reconciliation, mark the service as existing
+	m.ServiceExistsResult = true
+	m.ServiceExistsFlag = true
+
 	return m.ReconcileManagerError, m.ReconcileManagerReconciled
 }
 
