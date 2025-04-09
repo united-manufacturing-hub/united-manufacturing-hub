@@ -16,6 +16,7 @@ package dataflowcomponent
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/looplab/fsm"
@@ -93,45 +94,52 @@ func NewDataflowComponentInstance(
 // But ensures that the desired state is a valid state and that it is also a reasonable state
 // e.g., nobody wants to have an instance in the "starting" state, that is just intermediate
 func (d *DataflowComponentInstance) SetDesiredFSMState(state string) error {
-	panic("not implemented")
+	if state != OperationalStateStopped &&
+		state != OperationalStateActive {
+		return fmt.Errorf("invalid desired state: %s. valid states are %s and %s",
+			state,
+			OperationalStateStopped,
+			OperationalStateActive)
+	}
+
+	d.baseFSMInstance.SetDesiredFSMState(state)
+	return nil
 }
 
 // GetCurrentFSMState returns the current state of the FSM
-func (b *DataflowComponentInstance) GetCurrentFSMState() string {
-	return b.baseFSMInstance.GetCurrentFSMState()
+func (d *DataflowComponentInstance) GetCurrentFSMState() string {
+	return d.baseFSMInstance.GetCurrentFSMState()
 }
 
 // GetDesiredFSMState returns the desired state of the FSM
-func (b *DataflowComponentInstance) GetDesiredFSMState() string {
-	return b.baseFSMInstance.GetDesiredFSMState()
+func (d *DataflowComponentInstance) GetDesiredFSMState() string {
+	return d.baseFSMInstance.GetDesiredFSMState()
 }
 
 // Remove starts the removal process, it is idempotent and can be called multiple times
 // Note: it is only removed once IsRemoved returns true
-func (b *DataflowComponentInstance) Remove(ctx context.Context) error {
-	return b.baseFSMInstance.Remove(ctx)
+func (d *DataflowComponentInstance) Remove(ctx context.Context) error {
+	return d.baseFSMInstance.Remove(ctx)
 }
 
 // IsRemoved returns true if the instance has been removed
-func (b *DataflowComponentInstance) IsRemoved() bool {
-	return b.baseFSMInstance.IsRemoved()
+func (d *DataflowComponentInstance) IsRemoved() bool {
+	return d.baseFSMInstance.IsRemoved()
 }
 
 // IsRemoving returns true if the instance is in the removing state
-func (b *DataflowComponentInstance) IsRemoving() bool {
-	return b.baseFSMInstance.IsRemoving()
+func (d *DataflowComponentInstance) IsRemoving() bool {
+	return d.baseFSMInstance.IsRemoving()
 }
 
 // IsStopping returns true if the instance is in the stopping state
-func (b *DataflowComponentInstance) IsStopping() bool {
-	// TODO: Implement logics based on OperationalStates
-	panic("unimplemented")
+func (d *DataflowComponentInstance) IsStopping() bool {
+	return d.baseFSMInstance.GetCurrentFSMState() == OperationalStateStopping
 }
 
 // IsStopped returns true if the instance is in the stopped state
-func (b *DataflowComponentInstance) IsStopped() bool {
-	// TODO: Implement logics based on OperationalStates
-	panic("unimplemented")
+func (d *DataflowComponentInstance) IsStopped() bool {
+	return d.baseFSMInstance.GetCurrentFSMState() == OperationalStateStopped
 }
 
 // PrintState prints the current state of the FSM for debugging
