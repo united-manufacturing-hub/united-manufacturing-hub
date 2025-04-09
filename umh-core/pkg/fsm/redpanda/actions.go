@@ -129,11 +129,11 @@ func (b *RedpandaInstance) getServiceStatus(ctx context.Context, filesystemServi
 			// Log the warning but don't treat it as a fatal error
 			b.baseFSMInstance.GetLogger().Debugf("Service not found, will be created during reconciliation")
 			return redpanda_service.ServiceInfo{}, nil
-		} else if errors.Is(err, redpanda_service.ErrHealthCheckConnectionRefused) {
+		} else if errors.Is(err, redpanda_service.ErrHealthCheckNoLogs) {
 			// Instead of conditional state checking, always return a ServiceInfo with failed health checks
 			// This allows the FSM to continue reconciliation and make proper state transition decisions
 			if b.baseFSMInstance.GetCurrentFSMState() != OperationalStateStopped { // no need to spam the logs if the service is already stopped
-				b.baseFSMInstance.GetLogger().Debugf("Health check refused connection for service %s, returning ServiceInfo with failed health checks", b.baseFSMInstance.GetID())
+				b.baseFSMInstance.GetLogger().Debugf("Health check had no logs to process for service %s, returning ServiceInfo with failed health checks", b.baseFSMInstance.GetID())
 			}
 			infoWithFailedHealthChecks := info
 			infoWithFailedHealthChecks.RedpandaStatus.HealthCheck.IsLive = false

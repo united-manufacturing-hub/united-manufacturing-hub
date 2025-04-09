@@ -313,7 +313,7 @@ func (s *RedpandaService) Status(ctx context.Context, filesystemService filesyst
 	// Let's get the health check of the Redpanda service
 	redpandaStatus, err := s.GetHealthCheckAndMetrics(ctx, tick, logs)
 	if err != nil {
-		if strings.Contains(err.Error(), "connection refused") {
+		if strings.Contains(err.Error(), "no logs provided") {
 			return ServiceInfo{
 				S6ObservedState: s6ServiceObservedState,
 				S6FSMState:      s6FSMState, // Note for state transitions: When a service is stopped and then reactivated,
@@ -322,8 +322,9 @@ func (s *RedpandaService) Status(ctx context.Context, filesystemService filesyst
 				RedpandaStatus: RedpandaStatus{
 					Logs: logs,
 				},
-			}, ErrHealthCheckConnectionRefused
+			}, ErrHealthCheckNoLogs
 		}
+
 		return ServiceInfo{}, fmt.Errorf("failed to get health check: %w", err)
 	}
 
