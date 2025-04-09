@@ -269,6 +269,13 @@ func (a *DeployDataflowComponentAction) Validate() error {
 				return fmt.Errorf("pipeline.processors.%s.data is not valid YAML: %v", key, err)
 			}
 		}
+
+		// Validate inject data
+		if a.payload.Inject.Type != "" && a.payload.Inject.Data != "" {
+			if err := yaml.Unmarshal([]byte(a.payload.Inject.Data), &temp); err != nil {
+				return fmt.Errorf("inject.data is not valid YAML: %v", err)
+			}
+		}
 	}
 
 	return nil
