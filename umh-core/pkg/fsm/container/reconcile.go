@@ -297,27 +297,24 @@ func (c *ContainerInstance) reconcileTransitionToActive(ctx context.Context, fil
 		metrics.ObserveReconcileTime(metrics.ComponentBenthosInstance, c.baseFSMInstance.GetID()+".reconcileTransitionToActive", time.Since(start))
 	}()
 
-	// If we're stopped, we need to start first
-	if currentState == OperationalStateStopped {
-
+	switch currentState {
+	case OperationalStateStopped:
 		// nothing to start here, just for consistency with other fsms
 		err := c.monitoringStart(ctx)
 		if err != nil {
 			return err, false
 		}
-
 		// Send event to transition from Stopped to Starting
 		return c.baseFSMInstance.SendEvent(ctx, EventStart), true
+	default:
+		// Handle starting phase states
+		if IsStartingState(currentState) {
+			return c.reconcileStartingStates(ctx, filesystemService, currentState, currentTime)
+		} else if IsRunningState(currentState) {
+			return c.reconcileRunningStates(ctx, filesystemService, currentState, currentTime)
+		}
+		return nil, false
 	}
-
-	// Handle starting phase states
-	if IsStartingState(currentState) {
-		return c.reconcileStartingStates(ctx, filesystemService, currentState, currentTime)
-	} else if IsRunningState(currentState) {
-		return c.reconcileRunningStates(ctx, filesystemService, currentState, currentTime)
-	}
-
-	return nil, false
 }
 
 // reconcileStartingStates handles the various starting phase states when transitioning to a running state
@@ -371,23 +368,21 @@ func (c *ContainerInstance) reconcileTransitionToStopped(ctx context.Context, fi
 		metrics.ObserveReconcileTime(metrics.ComponentBenthosInstance, c.baseFSMInstance.GetID()+".reconcileTransitionToStopped", time.Since(start))
 	}()
 
-	// If we're in any operational state except Stopped or Stopping, initiate stop
-	if currentState != OperationalStateStopped && currentState != OperationalStateStopping {
-		// No need to do any action to stop it, we can never actually stop the montioring here as we do the monitoring in the reconcile cycle
+	switch currentState {
+	case OperationalStateStopped:
+		// Already stopped, nothing to do
+		return nil, false
+	case OperationalStateStopping:
+		// If already stopping, verify if the instance is completely stopped
+		// no verification, always go to stopped
+		return c.baseFSMInstance.SendEvent(ctx, EventStopDone), true
+	default:
+		// For any other state, initiate stop
 		err := c.monitoringStop(ctx)
 		if err != nil {
 			return err, false
 		}
-
 		// Send event to transition to Stopping
 		return c.baseFSMInstance.SendEvent(ctx, EventStop), true
 	}
-
-	// If already stopping, verify if the instance is completely stopped
-	if currentState == OperationalStateStopping { // no verification, always go to stopped
-		// Transition from Stopping to Stopped
-		return c.baseFSMInstance.SendEvent(ctx, EventStopDone), true
-	}
-
-	return nil, false
 }
