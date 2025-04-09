@@ -121,16 +121,16 @@ func (m *MockDataFlowComponentService) GenerateBenthosConfigForDataFlowComponent
 }
 
 // GetConfig mocks getting the DataFlowComponent configuration
-func (m *MockDataFlowComponentService) GetConfig(ctx context.Context, filesystemService filesystem.Service, componentName string) (dataflowcomponentconfig.DataFlowComponentConfig, error) {
+func (m *MockDataFlowComponentService) GetConfig(ctx context.Context, filesystemService filesystem.Service, componentName string) (*dataflowcomponentconfig.DataFlowComponentConfig, error) {
 	m.GetConfigCalled = true
 
 	// If error is set, return it
 	if m.GetConfigError != nil {
-		return dataflowcomponentconfig.DataFlowComponentConfig{}, m.GetConfigError
+		return &dataflowcomponentconfig.DataFlowComponentConfig{}, m.GetConfigError
 	}
 
 	// If a result is preset, return it
-	return m.GetConfigResult, nil
+	return &m.GetConfigResult, nil
 }
 
 // Status mocks getting the status of a DataFlowComponent

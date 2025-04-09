@@ -21,6 +21,9 @@ import (
 // CompareConfigs compares two DataFlowComponentConfigs for equality
 // by converting to BenthosServiceConfig and using the existing comparison utilities
 func CompareConfigs(a, b *DataFlowComponentConfig) bool {
+	if a == nil || b == nil {
+		return false
+	}
 	benthosA := a.GetBenthosServiceConfig()
 	benthosB := b.GetBenthosServiceConfig()
 
