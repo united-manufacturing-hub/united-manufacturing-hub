@@ -31,7 +31,7 @@ import (
 )
 
 // The functions in this file define heavier, possibly fail-prone operations
-// (for example, network or file I/O) that the DataflowComponent's Benthos FSM might need to perform.
+// (for example, network or file I/O) that the DataflowComponent's Benthos manager might need to perform.
 // They are intended to be called from Reconcile.
 //
 // IMPORTANT:
@@ -63,7 +63,7 @@ func (d *DataflowComponentInstance) initiateDataflowComponentCreate(ctx context.
 func (b *DataflowComponentInstance) initiateDataflowComponentRemove(ctx context.Context, filesystemService filesystem.Service) error {
 	b.baseFSMInstance.GetLogger().Debugf("Starting Action: Removing DataflowComponent service %s from Benthos manager ...", b.baseFSMInstance.GetID())
 
-	// Remove the Benthos from the S6 manager
+	// Remove the initiateDataflowComponent from the Benthos manager
 	err := b.service.RemoveDataFlowComponentFromBenthosManager(ctx, filesystemService, b.baseFSMInstance.GetID())
 	if err != nil {
 		if err == dataflowcomponentservice.ErrServiceNotExist {
@@ -118,7 +118,7 @@ func (d *DataflowComponentInstance) updateObservedState(ctx context.Context, fil
 	start := time.Now()
 	info, err := d.getServiceStatus(ctx, filesystemService, tick)
 	if err != nil {
-		return err
+		return fmt.Errorf("error while getting service status: %w", err)
 	}
 	metrics.ObserveReconcileTime(logger.ComponentBenthosInstance, d.baseFSMInstance.GetID()+".getServiceStatus", time.Since(start))
 	// Store the raw service info
@@ -146,7 +146,7 @@ func (d *DataflowComponentInstance) updateObservedState(ctx context.Context, fil
 	if !dataflowcomponentconfig.CompareConfigs(&d.config, &d.ObservedState.ObservedDataflowComponentConfig) {
 		// Check if the service exists before attempting to update
 		if d.service.ServiceExists(ctx, filesystemService, d.baseFSMInstance.GetID()) {
-			d.baseFSMInstance.GetLogger().Debugf("Observed DataflowComponent config is different from desired config, updating Benthos configuration")
+			d.baseFSMInstance.GetLogger().Debugf("Observed DataflowComponent config is different from desired config, updating DataflowComponent configuration")
 
 			diffStr := dataflowcomponentconfig.GetConfigDiff(&d.config, &d.ObservedState.ObservedDataflowComponentConfig)
 			d.baseFSMInstance.GetLogger().Debugf("Configuration differences: %s", diffStr)

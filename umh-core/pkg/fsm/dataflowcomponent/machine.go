@@ -46,8 +46,8 @@ func NewDataflowComponentInstance(
 
 			// Starting phase transitions
 			{Name: EventBenthosCreated, Src: []string{OperationalStateStarting}, Dst: OperationalStateStartingConfigLoading},
-			{Name: EventBenthosConfigLoaded, Src: []string{OperationalStateStartingConfigLoading}, Dst: OperationalStateStartingConfigLoading},
-			{Name: EventHealthchecksPassed, Src: []string{OperationalStateStartingWaitingForHealthchecks}, Dst: OperationalStateStartingWaitingForServiceToRemainRunning},
+			{Name: EventBenthosConfigLoaded, Src: []string{OperationalStateStartingConfigLoading}, Dst: OperationalStateStartingWaitingForHealthchecks},
+			{Name: EventBenthosHealthchecksPassed, Src: []string{OperationalStateStartingWaitingForHealthchecks}, Dst: OperationalStateStartingWaitingForServiceToRemainRunning},
 			{Name: EventStartDone, Src: []string{OperationalStateStartingWaitingForServiceToRemainRunning}, Dst: OperationalStateIdle},
 			{Name: EventStop, Src: []string{OperationalStateStarting, OperationalStateStartingConfigLoading, OperationalStateStartingWaitingForHealthchecks, OperationalStateStartingWaitingForServiceToRemainRunning}, Dst: OperationalStateStopping},
 
@@ -151,5 +151,5 @@ func (b *DataflowComponentInstance) PrintState() {
 
 // GetExpectedMaxP95ExecutionTimePerInstance returns the expected max p95 execution time of the instance
 func (b *DataflowComponentInstance) GetExpectedMaxP95ExecutionTimePerInstance() time.Duration {
-	return constants.BenthosExpectedMaxP95ExecutionTimePerInstance
+	return constants.DataflowComponentExpectedMaxP95ExecutionTimePerInstance
 }

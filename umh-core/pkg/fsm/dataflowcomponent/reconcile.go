@@ -139,12 +139,12 @@ func (d *DataflowComponentInstance) Reconcile(ctx context.Context, filesystemSer
 func (d *DataflowComponentInstance) reconcileExternalChanges(ctx context.Context, filesystemService filesystem.Service, tick uint64) error {
 	start := time.Now()
 	defer func() {
-		metrics.ObserveReconcileTime(metrics.ComponentBenthosInstance, d.baseFSMInstance.GetID()+".reconcileExternalChanges", time.Since(start))
+		metrics.ObserveReconcileTime(metrics.ComponentDataflowComponentInstance, d.baseFSMInstance.GetID()+".reconcileExternalChanges", time.Since(start))
 	}()
 
 	// Fetching the observed state can sometimes take longer, but we need to ensure when reconciling a lot of instances
 	// that a single status of a single instance does not block the whole reconciliation
-	observedStateCtx, cancel := context.WithTimeout(ctx, constants.BenthosUpdateObservedStateTimeout)
+	observedStateCtx, cancel := context.WithTimeout(ctx, constants.DataflowComponentUpdateObservedStateTimeout)
 	defer cancel()
 
 	err := d.updateObservedState(observedStateCtx, filesystemService, tick)
@@ -167,12 +167,6 @@ func (d *DataflowComponentInstance) reconcileStateTransition(ctx context.Context
 
 	currentState := d.baseFSMInstance.GetCurrentFSMState()
 	desiredState := d.baseFSMInstance.GetDesiredFSMState()
-
-	// If already in the desired state, nothing to do.
-	// This is wrong, as there could be a degradation
-	// if currentState == desiredState {
-	// 	return nil, false
-	// }
 
 	// Handle lifecycle states first - these take precedence over operational states
 	if internal_fsm.IsLifecycleState(currentState) {
@@ -288,7 +282,6 @@ func (d *DataflowComponentInstance) reconcileStartingState(ctx context.Context, 
 		return d.baseFSMInstance.SendEvent(ctx, EventBenthosStarted), true
 	case OperationalStateStartingConfigLoading:
 		// Check if config has been loaded
-
 		// If the Benthos is not running, go back to starting
 		if !d.IsDataflowComponentBenthosRunning() {
 			return d.baseFSMInstance.SendEvent(ctx, EventStartFailed), true
@@ -301,7 +294,7 @@ func (d *DataflowComponentInstance) reconcileStartingState(ctx context.Context, 
 
 		return d.baseFSMInstance.SendEvent(ctx, EventBenthosConfigLoaded), true
 	case OperationalStateStartingWaitingForHealthchecks:
-		// If the Benthos is not running, go back to starting
+		// If the Benthos is not running and config loading did not happen, go back to starting
 		if !d.IsDataflowComponentBenthosRunning() || !d.IsDataflowComponentConfigLoaded() {
 			return d.baseFSMInstance.SendEvent(ctx, EventStartFailed), true
 		}
@@ -311,9 +304,9 @@ func (d *DataflowComponentInstance) reconcileStartingState(ctx context.Context, 
 			return nil, false
 		}
 
-		return d.baseFSMInstance.SendEvent(ctx, EventHealthchecksPassed), true
+		return d.baseFSMInstance.SendEvent(ctx, EventBenthosHealthchecksPassed), true
 	case OperationalStateStartingWaitingForServiceToRemainRunning:
-		// If the S6 is not running, go back to starting
+		// If the Benthos is not running, go back to starting
 		if !d.IsDataflowComponentBenthosRunning() || !d.IsDataflowComponentConfigLoaded() || !d.IsDataflowComponentHealthchecksPassed() {
 			return d.baseFSMInstance.SendEvent(ctx, EventStartFailed), true
 		}

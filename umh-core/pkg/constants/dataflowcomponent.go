@@ -24,5 +24,6 @@ const (
 )
 
 const (
-	DataflowComponentLogWindow = time.Minute * 10
+	// Used to set the context timeout for updating the observed state of a DataflowComponent instance
+	DataflowComponentUpdateObservedStateTimeout = time.Millisecond * 5
 )

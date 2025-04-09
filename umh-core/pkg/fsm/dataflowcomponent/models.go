@@ -57,14 +57,11 @@ const (
 	EventStopDone  = "stop_done"
 
 	// Starting phase events
-	EventBenthosCreated = "benthos_created"
-	// TODO: Probably we might need to add more events like BenthosConfigValidated
-	// This needs some discussion as the config validation can be part of ConfigLoaded too.
-	EventBenthosConfigLoaded = "benthos_config_loaded"
-	EventBenthosRestarting   = "benthos_restarting"
-	EventBenthosStarted      = "benthos_started"
-	EventHealthchecksPassed  = "healthchecks_passed"
-	EventStartFailed         = "start_failed"
+	EventBenthosCreated            = "benthos_created"
+	EventBenthosStarted            = "benthos_started"
+	EventBenthosConfigLoaded       = "benthos_config_loaded"
+	EventBenthosHealthchecksPassed = "benthos_healthchecks_passed"
+	EventStartFailed               = "start_failed"
 
 	// Running phase events
 	EventDataReceived  = "data_received"
@@ -112,8 +109,6 @@ func IsRunningState(state string) bool {
 	}
 	return false
 }
-
-// BenthosObservedState contains the observed runtime state of a Benthos instance
 
 // DataflowComponentObservedState contains the observed runtime state of a DataflowComponent instance
 type DataflowComponentObservedState struct {
