@@ -93,153 +93,11 @@ func (a *DeployDataflowComponentAction) Parse(payload interface{}) error {
 	// Handle different component types
 	switch a.metaType {
 	case "custom":
-		// Parse the nested custom data flow component payload
-		var customPayloadMap map[string]interface{}
-		nestedPayloadBytes, err := json.Marshal(topLevel.Payload)
+		payload, err := parseCustomDataFlowComponent(topLevel.Payload)
 		if err != nil {
-			return fmt.Errorf("failed to marshal nested payload: %v", err)
+			return err
 		}
-
-		if err := json.Unmarshal(nestedPayloadBytes, &customPayloadMap); err != nil {
-			return fmt.Errorf("failed to unmarshal nested payload: %v", err)
-		}
-
-		// Extract the customDataFlowComponent section
-		cdfc, ok := customPayloadMap["customDataFlowComponent"]
-		if !ok {
-			return errors.New("missing customDataFlowComponent in payload")
-		}
-
-		// Convert to the expected structure
-		cdfcMap, ok := cdfc.(map[string]interface{})
-		if !ok {
-			return errors.New("customDataFlowComponent is not a valid object")
-		}
-
-		// Now map the incoming structure to our expected structure
-		var cdfcPayload models.CDFCPayload
-
-		// Handle inputs -> Input
-		inputs, ok := cdfcMap["inputs"].(map[string]interface{})
-		if !ok {
-			return errors.New("missing required field inputs")
-		}
-
-		inputType, ok := inputs["type"].(string)
-		if !ok || inputType == "" {
-			return errors.New("missing required field inputs.type")
-		}
-
-		inputData, ok := inputs["data"].(string)
-		if !ok || inputData == "" {
-			return errors.New("missing required field inputs.data")
-		}
-
-		cdfcPayload.Input = models.DfcDataConfig{
-			Type: inputType,
-			Data: inputData,
-		}
-
-		// Handle outputs -> Output
-		outputs, ok := cdfcMap["outputs"].(map[string]interface{})
-		if !ok {
-			return errors.New("missing required field outputs")
-		}
-
-		outputType, ok := outputs["type"].(string)
-		if !ok || outputType == "" {
-			return errors.New("missing required field outputs.type")
-		}
-
-		outputData, ok := outputs["data"].(string)
-		if !ok || outputData == "" {
-			return errors.New("missing required field outputs.data")
-		}
-
-		cdfcPayload.Output = models.DfcDataConfig{
-			Type: outputType,
-			Data: outputData,
-		}
-
-		// Handle inject data if present
-		inject, ok := cdfcMap["inject"].(map[string]interface{})
-		if ok {
-			injectType, ok := inject["type"].(string)
-			if !ok || injectType == "" {
-				return errors.New("missing required field inject.type")
-			}
-
-			injectData, ok := inject["data"].(string)
-			if !ok || injectData == "" {
-				return errors.New("missing required field inject.data")
-			}
-
-			cdfcPayload.Inject = models.DfcDataConfig{
-				Type: injectType,
-				Data: injectData,
-			}
-
-			// Validate YAML in inject data
-			var temp map[string]interface{}
-			if err = yaml.Unmarshal([]byte(cdfcPayload.Inject.Data), &temp); err != nil {
-				return fmt.Errorf("inject.data is not valid YAML: %v", err)
-			}
-		}
-
-		// Handle pipeline
-		pipeline, ok := cdfcMap["pipeline"].(map[string]interface{})
-		if !ok {
-			return errors.New("missing required field pipeline")
-		}
-
-		processors, ok := pipeline["processors"].(map[string]interface{})
-		if !ok || len(processors) == 0 {
-			return errors.New("missing required field pipeline.processors")
-		}
-
-		cdfcPayload.Pipeline = make(map[string]models.DfcDataConfig)
-
-		// Process each processor
-		for key, proc := range processors {
-			processor, ok := proc.(map[string]interface{})
-			if !ok {
-				return fmt.Errorf("processor %s is not a valid object", key)
-			}
-
-			procType, ok := processor["type"].(string)
-			if !ok || procType == "" {
-				return fmt.Errorf("missing required field pipeline.processors.%s.type", key)
-			}
-
-			procData, ok := processor["data"].(string)
-			if !ok || procData == "" {
-				return fmt.Errorf("missing required field pipeline.processors.%s.data", key)
-			}
-
-			cdfcPayload.Pipeline[key] = models.DfcDataConfig{
-				Type: procType,
-				Data: procData,
-			}
-		}
-
-		// Validate YAML in Input and Output
-		var temp map[string]interface{}
-		if err = yaml.Unmarshal([]byte(cdfcPayload.Input.Data), &temp); err != nil {
-			return fmt.Errorf("inputs.data is not valid YAML: %v", err)
-		}
-		if err = yaml.Unmarshal([]byte(cdfcPayload.Output.Data), &temp); err != nil {
-			return fmt.Errorf("outputs.data is not valid YAML: %v", err)
-		}
-
-		// Validate pipeline processors
-		for k, v := range cdfcPayload.Pipeline {
-			// Check if processor data is valid YAML
-			if err = yaml.Unmarshal([]byte(v.Data), &temp); err != nil {
-				return fmt.Errorf("pipeline.processors.%s.data is not valid YAML: %v", k, err)
-			}
-		}
-
-		a.payload = cdfcPayload
+		a.payload = payload
 	case "protocolConverter", "dataBridge", "streamProcessor":
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionConfirmed, "component type not supported", a.outboundChannel, models.DeployDataFlowComponent)
 		return fmt.Errorf("component type %s not yet supported", a.metaType)
@@ -255,6 +113,156 @@ func (a *DeployDataflowComponentAction) Validate() error {
 	// no validation needed anymore because here, only parsing problem can happen
 	// and they are caught in the Parse()
 	return nil
+}
+
+func parseCustomDataFlowComponent(payload interface{}) (models.CDFCPayload, error) {
+	// Parse the nested custom data flow component payload
+	var customPayloadMap map[string]interface{}
+	nestedPayloadBytes, err := json.Marshal(payload)
+	if err != nil {
+		return models.CDFCPayload{}, fmt.Errorf("failed to marshal nested payload: %v", err)
+	}
+
+	if err := json.Unmarshal(nestedPayloadBytes, &customPayloadMap); err != nil {
+		return models.CDFCPayload{}, fmt.Errorf("failed to unmarshal nested payload: %v", err)
+	}
+
+	// Extract the customDataFlowComponent section
+	cdfc, ok := customPayloadMap["customDataFlowComponent"]
+	if !ok {
+		return models.CDFCPayload{}, errors.New("missing customDataFlowComponent in payload")
+	}
+
+	// Convert to the expected structure
+	cdfcMap, ok := cdfc.(map[string]interface{})
+	if !ok {
+		return models.CDFCPayload{}, errors.New("customDataFlowComponent is not a valid object")
+	}
+
+	// Now map the incoming structure to our expected structure
+	var cdfcPayload models.CDFCPayload
+
+	// Handle inputs -> Input
+	inputs, ok := cdfcMap["inputs"].(map[string]interface{})
+	if !ok {
+		return models.CDFCPayload{}, errors.New("missing required field inputs")
+	}
+
+	inputType, ok := inputs["type"].(string)
+	if !ok || inputType == "" {
+		return models.CDFCPayload{}, errors.New("missing required field inputs.type")
+	}
+
+	inputData, ok := inputs["data"].(string)
+	if !ok || inputData == "" {
+		return models.CDFCPayload{}, errors.New("missing required field inputs.data")
+	}
+
+	cdfcPayload.Input = models.DfcDataConfig{
+		Type: inputType,
+		Data: inputData,
+	}
+
+	// Handle outputs -> Output
+	outputs, ok := cdfcMap["outputs"].(map[string]interface{})
+	if !ok {
+		return models.CDFCPayload{}, errors.New("missing required field outputs")
+	}
+
+	outputType, ok := outputs["type"].(string)
+	if !ok || outputType == "" {
+		return models.CDFCPayload{}, errors.New("missing required field outputs.type")
+	}
+
+	outputData, ok := outputs["data"].(string)
+	if !ok || outputData == "" {
+		return models.CDFCPayload{}, errors.New("missing required field outputs.data")
+	}
+
+	cdfcPayload.Output = models.DfcDataConfig{
+		Type: outputType,
+		Data: outputData,
+	}
+
+	// Handle inject data if present
+	inject, ok := cdfcMap["inject"].(map[string]interface{})
+	if ok {
+		injectType, ok := inject["type"].(string)
+		if !ok || injectType == "" {
+			return models.CDFCPayload{}, errors.New("missing required field inject.type")
+		}
+
+		injectData, ok := inject["data"].(string)
+		if !ok || injectData == "" {
+			return models.CDFCPayload{}, errors.New("missing required field inject.data")
+		}
+
+		cdfcPayload.Inject = models.DfcDataConfig{
+			Type: injectType,
+			Data: injectData,
+		}
+
+		// Validate YAML in inject data
+		var temp map[string]interface{}
+		if err = yaml.Unmarshal([]byte(cdfcPayload.Inject.Data), &temp); err != nil {
+			return models.CDFCPayload{}, fmt.Errorf("inject.data is not valid YAML: %v", err)
+		}
+	}
+
+	// Handle pipeline
+	pipeline, ok := cdfcMap["pipeline"].(map[string]interface{})
+	if !ok {
+		return models.CDFCPayload{}, errors.New("missing required field pipeline")
+	}
+
+	processors, ok := pipeline["processors"].(map[string]interface{})
+	if !ok || len(processors) == 0 {
+		return models.CDFCPayload{}, errors.New("missing required field pipeline.processors")
+	}
+
+	cdfcPayload.Pipeline = make(map[string]models.DfcDataConfig)
+
+	// Process each processor
+	for key, proc := range processors {
+		processor, ok := proc.(map[string]interface{})
+		if !ok {
+			return models.CDFCPayload{}, fmt.Errorf("processor %s is not a valid object", key)
+		}
+
+		procType, ok := processor["type"].(string)
+		if !ok || procType == "" {
+			return models.CDFCPayload{}, fmt.Errorf("missing required field pipeline.processors.%s.type", key)
+		}
+
+		procData, ok := processor["data"].(string)
+		if !ok || procData == "" {
+			return models.CDFCPayload{}, fmt.Errorf("missing required field pipeline.processors.%s.data", key)
+		}
+
+		cdfcPayload.Pipeline[key] = models.DfcDataConfig{
+			Type: procType,
+			Data: procData,
+		}
+	}
+
+	// Validate YAML in Input and Output
+	var temp map[string]interface{}
+	if err = yaml.Unmarshal([]byte(cdfcPayload.Input.Data), &temp); err != nil {
+		return models.CDFCPayload{}, fmt.Errorf("inputs.data is not valid YAML: %v", err)
+	}
+	if err = yaml.Unmarshal([]byte(cdfcPayload.Output.Data), &temp); err != nil {
+		return models.CDFCPayload{}, fmt.Errorf("outputs.data is not valid YAML: %v", err)
+	}
+
+	// Validate pipeline processors
+	for k, v := range cdfcPayload.Pipeline {
+		// Check if processor data is valid YAML
+		if err = yaml.Unmarshal([]byte(v.Data), &temp); err != nil {
+			return models.CDFCPayload{}, fmt.Errorf("pipeline.processors.%s.data is not valid YAML: %v", k, err)
+		}
+	}
+
+	return cdfcPayload, nil
 }
 
 func (a *DeployDataflowComponentAction) Execute() (interface{}, map[string]interface{}, error) {
