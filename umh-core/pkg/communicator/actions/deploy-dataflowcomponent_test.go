@@ -590,7 +590,6 @@ buffer:
 			Expect(mockConfig.Config.DataFlow[0].DataFlowComponentConfig.BenthosConfig.RateLimitResources[0]["label"]).To(Equal("limiter"))
 			Expect(mockConfig.Config.DataFlow[0].DataFlowComponentConfig.BenthosConfig.Buffer).To(HaveLen(1))
 			Expect(mockConfig.Config.DataFlow[0].DataFlowComponentConfig.BenthosConfig.Buffer["memory"]).To(Equal(map[string]interface{}{}))
-
 		})
 	})
 })
