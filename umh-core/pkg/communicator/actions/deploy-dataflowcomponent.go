@@ -262,7 +262,22 @@ func parseCustomDataFlowComponent(payload interface{}) (models.CDFCPayload, erro
 		}
 	}
 
-	return cdfcPayload, nil
+		a.payload = cdfcPayload
+	case "protocolConverter", "dataBridge", "streamProcessor":
+		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionConfirmed, "component type not supported", a.outboundChannel, models.DeployDataFlowComponent)
+		return fmt.Errorf("component type %s not yet supported", a.metaType)
+	default:
+		return fmt.Errorf("unsupported component type: %s", a.metaType)
+	}
+
+	a.actionLogger.Infof("Parsed DeployDataFlowComponent action payload: name=%s, type=%s", a.name, a.metaType)
+	return nil
+}
+
+func (a *DeployDataflowComponentAction) Validate() error {
+	// no validation needed anymore because here, only parsing problem can happen
+	// and they are caught in the Parse()
+	return nil
 }
 
 func (a *DeployDataflowComponentAction) Execute() (interface{}, map[string]interface{}, error) {
