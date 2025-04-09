@@ -296,17 +296,23 @@ func (a *DeployDataflowComponentAction) Validate() error {
 			if proc.Type == "" {
 				return fmt.Errorf("missing required field pipeline.processors.%s.type", key)
 			}
-			if proc.Data == "" {
-				return fmt.Errorf("missing required field pipeline.processors.%s.data", key)
-			}
-
-			// Check processor YAML
-			if err := yaml.Unmarshal([]byte(proc.Data), &temp); err != nil {
-				return fmt.Errorf("pipeline.processors.%s.data is not valid YAML: %v", key, err)
-			}
 		}
+
+		a.payload = cdfcPayload
+	case "protocolConverter", "dataBridge", "streamProcessor":
+		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionConfirmed, "component type not supported", a.outboundChannel, models.DeployDataFlowComponent)
+		return fmt.Errorf("component type %s not yet supported", a.metaType)
+	default:
+		return fmt.Errorf("unsupported component type: %s", a.metaType)
 	}
 
+	a.actionLogger.Infof("Parsed DeployDataFlowComponent action payload: name=%s, type=%s", a.name, a.metaType)
+	return nil
+}
+
+func (a *DeployDataflowComponentAction) Validate() error {
+	// no validation needed anymore because here, only parsing problem can happen
+	// and they are caught in the Parse()
 	return nil
 }
 
