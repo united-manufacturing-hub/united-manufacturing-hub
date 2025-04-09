@@ -40,6 +40,13 @@ import (
 var appVersion = constants.DefaultAppVersion // set by the build system
 
 func main() {
+	// Global panic handler
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Println("Panic: ", r)
+		}
+	}()
+
 	// Initialize the global logger first thing
 	logger.Initialize()
 
@@ -100,7 +107,7 @@ func main() {
 		Internal: config.InternalConfig{
 			Redpanda: config.RedpandaConfig{
 				FSMInstanceConfig: config.FSMInstanceConfig{
-					DesiredFSMState: "running",
+					DesiredFSMState: "active",
 				},
 			},
 		},
@@ -141,7 +148,11 @@ func main() {
 		log.Warnf("No backend connection enabled, please set API_URL and AUTH_TOKEN")
 	}
 
-	controlLoop.Execute(ctx)
+	err = controlLoop.Execute(ctx)
+	if err != nil {
+		log.Errorf("Control loop failed: %w", err)
+		sentry.ReportIssuef(sentry.IssueTypeFatal, log, "Control loop failed: %w", err)
+	}
 
 	log.Info("umh-core completed")
 }

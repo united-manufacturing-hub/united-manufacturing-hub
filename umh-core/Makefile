@@ -139,6 +139,9 @@ build: download-docker-binaries
 		-t $(IMAGE_NAME):$(TAG) \
 		-f Dockerfile .
 
+# build-debug: launches delve inside the container.
+# This allows you to use vscode's "Connect to umh-core" feature and use breakpoints, etc inside the container.
+# To use this, modify one of the build-<type> targets to use this target instead of build.
 build-debug: download-docker-binaries
 	docker buildx build \
 		--platform linux/$(TARGETARCH) \
@@ -147,6 +150,7 @@ build-debug: download-docker-binaries
 		--build-arg REDPANDA_VERSION=$(REDPANDA_VERSION) \
 		--build-arg APP_VERSION=$(VERSION) \
 		--build-arg DEBUG=true \
+		--progress=plain \
 		-t $(IMAGE_NAME):$(TAG)-debug \
 		-f Dockerfile .
 
@@ -247,7 +251,7 @@ test-broken: clean build
 
 test-benthos: clean build
 	@mkdir -p $(PWD)/data
-	@cp $(PWD)/examples/example-config-benthos.yaml $(PWD)/data/config.yaml
+	@cp $(PWD)/examples/example-config-benthos-broken.yaml $(PWD)/data/config.yaml
 	docker run \
 		--name $(IMAGE_NAME) \
 		-v $(PWD)/data:/data \
@@ -295,7 +299,7 @@ test-dfc: clean build
 
 test-debug: clean build-debug
 	@mkdir -p $(PWD)/data
-	@cp $(PWD)/examples/example-config-benthos.yaml $(PWD)/data/config.yaml
+	@cp $(PWD)/examples/example-config-benthos-broken.yaml $(PWD)/data/config.yaml
 	docker run \
 		--name $(IMAGE_NAME) \
 		-v $(PWD)/data:/data \

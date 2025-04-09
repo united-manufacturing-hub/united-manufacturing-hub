@@ -22,10 +22,6 @@ WORKDIR /go/src/github.com/united-manufacturing-hub/united-manufacturing-hub
 # Set app version with a default value - can be overridden at build time
 ARG APP_VERSION=0.0.0-dev
 RUN apk add --no-cache gcc musl-dev
-# Install delve if DEBUG is true
-RUN if [ "$DEBUG" = "true" ]; then \
-    go install github.com/go-delve/delve/cmd/dlv@latest; \
-    fi
 # Copy go.mod first for better caching
 COPY ./go.mod ./umh-core/
 WORKDIR /go/src/github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core
@@ -100,13 +96,6 @@ RUN chmod +x /opt/redpanda/bin/redpanda
 # Cleanup all the files we don't need
 RUN rm -rf /s6-overlay /benthos /redpanda 
 
-# --- Debug Stage ---
-FROM build as debug-tools
-RUN if [ -f "$GOPATH/bin/dlv" ]; then \
-    mkdir -p /debug-tools && \
-    cp $GOPATH/bin/dlv /debug-tools/; \
-    fi
-
 # --- Final Stage ---
 FROM alpine:3.21 as runner
 # Copy everything from the downloader stage
@@ -118,9 +107,9 @@ COPY --from=build /go/bin/umh-core /usr/local/bin/umh-core
 # Handle DEBUG mode - install Go and Delve when DEBUG=true
 ARG DEBUG=false
 RUN if [ "$DEBUG" = "true" ]; then \
-    apk add --no-cache go && \
+    apk add --no-cache go && \ 
     go install github.com/go-delve/delve/cmd/dlv@latest && \
-    mv $GOPATH/bin/dlv /usr/local/bin/; \
+    find / -name "dlv"; \
     fi
 
 RUN chmod +x /usr/local/bin/umh-core && \
@@ -135,9 +124,11 @@ ARG DEBUG=false
 RUN if [ "$DEBUG" = "true" ]; then \
     # Use debug service instead of regular service
     cp -f /etc/s6-overlay/s6-rc.d/umh-core-debug/run /etc/s6-overlay/s6-rc.d/umh-core/run && \
+    rm -rf /etc/s6-overlay/s6-rc.d/umh-core-debug; \
     chmod +x /etc/s6-overlay/s6-rc.d/umh-core/run; \
     else \
     # Use regular service
+    rm -rf /etc/s6-overlay/s6-rc.d/umh-core-debug; \
     chmod +x /etc/s6-overlay/s6-rc.d/umh-core/run; \
     fi
 
