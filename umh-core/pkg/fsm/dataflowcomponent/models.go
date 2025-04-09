@@ -116,7 +116,7 @@ type DataflowComponentObservedState struct {
 	ServiceInfo dataflowcomponentsvc.ServiceInfo
 
 	// ObservedDataflowComponentConfig contains the observed DataflowComponent service config
-	ObservedDataflowComponentConfig dataflowcomponentconfig.DataFlowComponentConfig
+	ObservedDataflowComponentConfig *dataflowcomponentconfig.DataFlowComponentConfig
 }
 
 // IsObservedState implements the ObservedState interface
