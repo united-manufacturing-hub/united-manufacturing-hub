@@ -180,6 +180,11 @@ unit-test: vet nilaway
 integration-test: stop-all-pods vet nilaway
 	ginkgo -r -v --tags=test --label-filter='integration' --fail-fast ./...
 
+# Manual tests that run specific test scenarios with their own lifecycle
+# These tests require the test-manual build tag and run long-running performance tests
+test-manual: stop-all-pods vet nilaway build
+	ginkgo -r -v --tags=testmanual --timeout=2h --fail-on-pending ./test/manual/...
+
 # integration-test-ci: Runs integration tests in CI environments with proper version tagging
 # - Injects VERSION via ldflags into AppVersion for proper error identification in Sentry
 # - CI test failures SHOULD be reported to Sentry (unlike local dev failures)
