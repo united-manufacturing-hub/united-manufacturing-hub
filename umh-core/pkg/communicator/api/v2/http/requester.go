@@ -276,14 +276,20 @@ func GetRequest[R any](ctx context.Context, endpoint Endpoint, header map[string
 	}
 
 	if response.StatusCode < 200 || response.StatusCode > 399 {
-		error_handler.ReportHTTPErrors(
-			errors.New("error response code: "+response.Status),
-			response.StatusCode,
-			string(endpoint),
-			http.MethodGet,
-			nil,
-			bodyBytes,
-		)
+		// if the error is 401, we want to report it as a login error
+		if response.StatusCode == 401 {
+			// no need to report it to sentry
+			return nil, errors.New("unauthorized: Authentication failed. Either your API key is invalid or your instance has been removed. Please verify your API key or recreate the instance"), response.StatusCode
+		} else {
+			error_handler.ReportHTTPErrors(
+				errors.New("error response code: "+response.Status),
+				response.StatusCode,
+				string(endpoint),
+				http.MethodGet,
+				nil,
+				bodyBytes,
+			)
+		}
 		return nil, errors.New("error response code: " + response.Status), response.StatusCode
 	}
 
