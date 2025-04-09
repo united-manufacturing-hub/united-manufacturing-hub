@@ -107,6 +107,87 @@ var _ = Describe("DeployDataflowComponent", func() {
 			Expect(err).NotTo(HaveOccurred())
 		})
 
+		It("should parse valid custom dataflow component payload with inject data", func() {
+			// Valid payload with complete custom dataflow component information including inject data
+			payload := map[string]interface{}{
+				"name": "test-component-with-inject",
+				"meta": map[string]interface{}{
+					"type": "custom",
+				},
+				"ignoreHealthCheck": false,
+				"payload": map[string]interface{}{
+					"customDataFlowComponent": map[string]interface{}{
+						"inputs": map[string]interface{}{
+							"type": "yaml",
+							"data": "input: something\nformat: json",
+						},
+						"outputs": map[string]interface{}{
+							"type": "yaml",
+							"data": "output: something\nformat: json",
+						},
+						"inject": map[string]interface{}{
+							"type": "yaml",
+							"data": "cache_resources:\n- label: my_cache\n  memory: {}\nrate_limit_resources:\n- label: limiter\n  local: {}\nbuffer:\n  memory: {}\n",
+						},
+						"pipeline": map[string]interface{}{
+							"processors": map[string]interface{}{
+								"proc1": map[string]interface{}{
+									"type": "yaml",
+									"data": "type: mapping\nprocs: []",
+								},
+							},
+						},
+					},
+				},
+			}
+
+			// Call Parse method
+			err := action.Parse(payload)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(action.GetParsedPayload().Inject.Data).To(Equal("cache_resources:\n- label: my_cache\n  memory: {}\nrate_limit_resources:\n- label: limiter\n  local: {}\nbuffer:\n  memory: {}\n"))
+
+		})
+
+		It("should return error for invalid YAML in inject data", func() {
+			// Payload with invalid YAML in inject data
+			payload := map[string]interface{}{
+				"name": "test-component-with-bad-inject",
+				"meta": map[string]interface{}{
+					"type": "custom",
+				},
+				"ignoreHealthCheck": false,
+				"payload": map[string]interface{}{
+					"customDataFlowComponent": map[string]interface{}{
+						"inputs": map[string]interface{}{
+							"type": "yaml",
+							"data": "input: something\nformat: json",
+						},
+						"outputs": map[string]interface{}{
+							"type": "yaml",
+							"data": "output: something\nformat: json",
+						},
+						"inject": map[string]interface{}{
+							"type": "yaml",
+							"data": "cache_resources: [test: {missing: bracket}", // This is truly invalid YAML syntax
+						},
+						"pipeline": map[string]interface{}{
+							"processors": map[string]interface{}{
+								"proc1": map[string]interface{}{
+									"type": "yaml",
+									"data": "type: mapping\nprocs: []",
+								},
+							},
+						},
+					},
+				},
+			}
+
+			// Call Parse method
+			err := action.Parse(payload)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("inject.data is not valid YAML"))
+		})
+
 		It("should return error for missing name", func() {
 			// Payload with missing required name field
 			payload := map[string]interface{}{
@@ -408,6 +489,87 @@ var _ = Describe("DeployDataflowComponent", func() {
 			// For failure tests, we don't check exact content since it may be encoded
 			// We check that we received the expected number of messages,
 			// which confirms the error path was taken correctly
+		})
+
+		It("should process inject data with cache resources, rate limit resources, and buffer", func() {
+			// Setup - parse valid payload with inject data
+			payload := map[string]interface{}{
+				"name": "test-component-with-inject",
+				"meta": map[string]interface{}{
+					"type": "custom",
+				},
+				"ignoreHealthCheck": false,
+				"payload": map[string]interface{}{
+					"customDataFlowComponent": map[string]interface{}{
+						"inputs": map[string]interface{}{
+							"type": "yaml",
+							"data": "input: something\nformat: json",
+						},
+						"outputs": map[string]interface{}{
+							"type": "yaml",
+							"data": "output: something\nformat: json",
+						},
+						"inject": map[string]interface{}{
+							"type": "yaml",
+							"data": `cache_resources:
+- label: my_cache
+  memory: {}
+rate_limit_resources:
+- label: limiter
+  local: {}
+buffer:
+  memory: {}`,
+						},
+						"pipeline": map[string]interface{}{
+							"processors": map[string]interface{}{
+								"proc1": map[string]interface{}{
+									"type": "yaml",
+									"data": "type: mapping\nprocs: []",
+								},
+							},
+						},
+					},
+				},
+			}
+
+			err := action.Parse(payload)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Reset tracking for this test
+			mockConfig.ResetCalls()
+
+			// Execute the action
+			result, metadata, err := action.Execute()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result).To(BeNil())
+			Expect(metadata).To(BeNil())
+
+			// We should have messages in the channel (Confirmed, then Success)
+			var messages []*models.UMHMessage
+			for i := 0; i < 2; i++ {
+				select {
+				case msg := <-outboundChannel:
+					messages = append(messages, msg)
+				case <-time.After(100 * time.Millisecond):
+					Fail("Timed out waiting for message")
+				}
+			}
+			Expect(messages).To(HaveLen(2))
+
+			// Verify AtomicAddDataflowcomponent was called
+			Expect(mockConfig.AddDataflowcomponentCalled).To(BeTrue())
+
+			Expect(mockConfig.Config.DataFlow).To(HaveLen(1))
+			Expect(mockConfig.Config.DataFlow[0].Name).To(Equal("test-component-with-inject"))
+			Expect(mockConfig.Config.DataFlow[0].DesiredFSMState).To(Equal("running"))
+
+			Expect(mockConfig.Config.DataFlow[0].DataFlowComponentConfig.BenthosConfig.CacheResources).To(HaveLen(1))
+			Expect(mockConfig.Config.DataFlow[0].DataFlowComponentConfig.BenthosConfig.CacheResources[0]["label"]).To(Equal("my_cache"))
+			Expect(mockConfig.Config.DataFlow[0].DataFlowComponentConfig.BenthosConfig.RateLimitResources).To(HaveLen(1))
+			Expect(mockConfig.Config.DataFlow[0].DataFlowComponentConfig.BenthosConfig.RateLimitResources[0]["label"]).To(Equal("limiter"))
+			Expect(mockConfig.Config.DataFlow[0].DataFlowComponentConfig.BenthosConfig.Buffer).To(HaveLen(1))
+			Expect(mockConfig.Config.DataFlow[0].DataFlowComponentConfig.BenthosConfig.Buffer["memory"]).To(Equal(map[string]interface{}{}))
+
 		})
 	})
 })
