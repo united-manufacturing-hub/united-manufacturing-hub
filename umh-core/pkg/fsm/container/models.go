@@ -76,12 +76,12 @@ func IsRunningState(state string) bool {
 // Operational events
 // (We also rely on the standard lifecycle events from internal_fsm.)
 const (
-	EventStart            = "start_monitoring"
-	EventContainerStarted = "container_started"
-	EventStop             = "stop_monitoring"
-	EventStopDone         = "stop_monitoring_done"
-	EventMetricsAllOK     = "metrics_all_ok"
-	EventMetricsNotOK     = "metrics_not_ok"
+	EventStart        = "start_monitoring"
+	EventStartDone    = "container_started"
+	EventStop         = "stop_monitoring"
+	EventStopDone     = "stop_monitoring_done"
+	EventMetricsAllOK = "metrics_all_ok"
+	EventMetricsNotOK = "metrics_not_ok"
 )
 
 // ContainerObservedState holds the last known container metrics and health status

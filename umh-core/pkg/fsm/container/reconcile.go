@@ -329,7 +329,7 @@ func (c *ContainerInstance) reconcileStartingStates(ctx context.Context, filesys
 	case OperationalStateStarting:
 
 		// nothing to verify here, just for consistency with other fsms
-		return c.baseFSMInstance.SendEvent(ctx, EventContainerStarted), true
+		return c.baseFSMInstance.SendEvent(ctx, EventStartDone), true
 	default:
 		return fmt.Errorf("invalid starting state: %s", currentState), false
 	}

@@ -48,7 +48,7 @@ func NewContainerInstanceWithService(config config.ContainerConfig, service cont
 			{Name: EventStart, Src: []string{OperationalStateStopped}, Dst: OperationalStateStarting},
 
 			// from starting -> degraded,
-			{Name: EventContainerStarted, Src: []string{OperationalStateStarting}, Dst: OperationalStateDegraded},
+			{Name: EventStartDone, Src: []string{OperationalStateStarting}, Dst: OperationalStateDegraded},
 
 			// from active -> metrics_not_ok -> degraded
 			{Name: EventMetricsNotOK, Src: []string{OperationalStateActive}, Dst: OperationalStateDegraded},
