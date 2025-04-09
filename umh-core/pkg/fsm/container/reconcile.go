@@ -96,7 +96,7 @@ func (c *ContainerInstance) Reconcile(ctx context.Context, filesystemService fil
 	}
 
 	// Step 3: Attempt to reconcile the state.
-	err, reconciled = c.reconcileStateTransition(ctx)
+	err, reconciled = c.reconcileStateTransition(ctx, filesystemService)
 	if err != nil {
 		// If the instance is removed, we don't want to return an error here, because we want to continue reconciling
 		// Also this should not
@@ -189,7 +189,7 @@ func healthCategoryToString(category models.HealthCategory) string {
 // Any functions that fetch information are disallowed here and must be called in reconcileExternalChanges
 // and exist in ExternalState.
 // This is to ensure full testability of the FSM.
-func (c *ContainerInstance) reconcileStateTransition(ctx context.Context) (err error, reconciled bool) {
+func (c *ContainerInstance) reconcileStateTransition(ctx context.Context, filesystemService filesystem.Service) (err error, reconciled bool) {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentS6Instance, c.baseFSMInstance.GetID()+".reconcileStateTransition", time.Since(start))
@@ -205,7 +205,7 @@ func (c *ContainerInstance) reconcileStateTransition(ctx context.Context) (err e
 
 	// Handle lifecycle states first - these take precedence over operational states
 	if internal_fsm.IsLifecycleState(currentState) {
-		err, reconciled := c.reconcileLifecycleStates(ctx, currentState)
+		err, reconciled := c.reconcileLifecycleStates(ctx, filesystemService, currentState)
 		if err != nil {
 			return err, false
 		}
@@ -218,7 +218,7 @@ func (c *ContainerInstance) reconcileStateTransition(ctx context.Context) (err e
 
 	// Handle operational states
 	if IsOperationalState(currentState) {
-		err, reconciled := c.reconcileOperationalStates(ctx, currentState, desiredState)
+		err, reconciled := c.reconcileOperationalStates(ctx, filesystemService, currentState, desiredState)
 		if err != nil {
 			return err, false
 		}
@@ -244,11 +244,11 @@ func (c *ContainerInstance) updateObservedState(ctx context.Context) error {
 }
 
 // reconcileLifecycleStates handles to_be_created, creating, removing, removed
-func (c *ContainerInstance) reconcileLifecycleStates(ctx context.Context, currentState string) (error, bool) {
+func (c *ContainerInstance) reconcileLifecycleStates(ctx context.Context, filesystemService filesystem.Service, currentState string) (error, bool) {
 	switch currentState {
 	case internal_fsm.LifecycleStateToBeCreated:
 		// do creation
-		if err := c.initiateContainerCreate(ctx); err != nil {
+		if err := c.CreateInstance(ctx, filesystemService); err != nil {
 			return err, false
 		}
 		return c.baseFSMInstance.SendEvent(ctx, internal_fsm.LifecycleEventCreate), true
@@ -258,7 +258,7 @@ func (c *ContainerInstance) reconcileLifecycleStates(ctx context.Context, curren
 		return c.baseFSMInstance.SendEvent(ctx, internal_fsm.LifecycleEventCreateDone), true
 
 	case internal_fsm.LifecycleStateRemoving:
-		if err := c.initiateContainerRemove(ctx); err != nil {
+		if err := c.RemoveInstance(ctx, filesystemService); err != nil {
 			return err, false
 		}
 		return c.baseFSMInstance.SendEvent(ctx, internal_fsm.LifecycleEventRemoveDone), true
@@ -273,13 +273,13 @@ func (c *ContainerInstance) reconcileLifecycleStates(ctx context.Context, curren
 }
 
 // reconcileOperationalStates checks the desired state (active or stopped) and the observed metrics
-func (c *ContainerInstance) reconcileOperationalStates(ctx context.Context, currentState string, desiredState string) (error, bool) {
+func (c *ContainerInstance) reconcileOperationalStates(ctx context.Context, filesystemService filesystem.Service, currentState string, desiredState string) (error, bool) {
 	current := c.GetCurrentFSMState()
 	desired := c.GetDesiredFSMState()
 
 	// 1) If desired is "stopped" and we are not "monitoring_stopped", we should eventStop
 	if desired == MonitoringStateStopped && current != MonitoringStateStopped {
-		err := c.disableMonitoring(ctx)
+		err := c.StopInstance(ctx, filesystemService)
 		if err != nil {
 			return err, false
 		}
@@ -288,7 +288,7 @@ func (c *ContainerInstance) reconcileOperationalStates(ctx context.Context, curr
 
 	// 2) If desired is "active" and we are "monitoring_stopped", we should do eventStart -> goes to degraded
 	if desired == MonitoringStateActive && current == MonitoringStateStopped {
-		err := c.enableMonitoring(ctx)
+		err := c.StartInstance(ctx, filesystemService)
 		if err != nil {
 			return err, false
 		}

@@ -16,13 +16,16 @@ package fsm
 
 import (
 	"context"
+	"fmt"
 	"sync"
+	"time"
 
 	"github.com/looplab/fsm"
 	"go.uber.org/zap"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/backoff"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
 // BaseFSMInstance implements the public fsm.FSM interface
@@ -232,4 +235,165 @@ func (s *BaseFSMInstance) GetLogger() *zap.SugaredLogger {
 
 func (s *BaseFSMInstance) GetLastError() error {
 	return s.backoffManager.GetLastError()
+}
+
+// Create provides a default implementation that can be overridden
+func (s *BaseFSMInstance) Create(ctx context.Context, filesystemService filesystem.Service) error {
+	return fmt.Errorf("create action not implemented for %s", s.cfg.ID)
+}
+
+// Remove for FSMActions interface provides a default implementation that can be overridden
+// It's a separate implementation from the existing Remove method which handles removing through state transitions
+func (s *BaseFSMInstance) RemoveAction(ctx context.Context, filesystemService filesystem.Service) error {
+	return fmt.Errorf("remove action not implemented for %s", s.cfg.ID)
+}
+
+// Start provides a default implementation that can be overridden
+func (s *BaseFSMInstance) Start(ctx context.Context, filesystemService filesystem.Service) error {
+	return fmt.Errorf("start action not implemented for %s", s.cfg.ID)
+}
+
+// Stop provides a default implementation that can be overridden
+func (s *BaseFSMInstance) Stop(ctx context.Context, filesystemService filesystem.Service) error {
+	return fmt.Errorf("stop action not implemented for %s", s.cfg.ID)
+}
+
+// UpdateObservedState provides a default implementation that can be overridden
+func (s *BaseFSMInstance) UpdateObservedState(ctx context.Context, filesystemService filesystem.Service, tick uint64) error {
+	return fmt.Errorf("updateObservedState action not implemented for %s", s.cfg.ID)
+}
+
+// StandardReconcile provides a standardized reconciliation flow that specific implementations can use
+func (s *BaseFSMInstance) StandardReconcile(ctx context.Context,
+	actions struct {
+		Create              func(ctx context.Context, filesystemService filesystem.Service) error
+		Remove              func(ctx context.Context, filesystemService filesystem.Service) error
+		Start               func(ctx context.Context, filesystemService filesystem.Service) error
+		Stop                func(ctx context.Context, filesystemService filesystem.Service) error
+		UpdateObservedState func(ctx context.Context, filesystemService filesystem.Service, tick uint64) error
+	},
+	filesystemService filesystem.Service,
+	tick uint64) (error, bool) {
+
+	// Skip if we're in backoff mode
+	if s.ShouldSkipReconcileBecauseOfError(tick) {
+		return s.GetBackoffError(tick), false
+	}
+
+	// First update observed state to get current information
+	err := actions.UpdateObservedState(ctx, filesystemService, tick)
+	if err != nil {
+		s.SetError(err, tick)
+		return err, false
+	}
+
+	// Get current and desired states
+	currentState := s.GetCurrentFSMState()
+	desiredState := s.GetDesiredFSMState()
+
+	// Handle lifecycle states first (to_be_created, creating, removing, removed)
+	if IsLifecycleState(currentState) {
+		return s.handleLifecycleState(ctx, actions, filesystemService, currentState, desiredState)
+	}
+
+	// Handle operational states
+	return s.handleOperationalState(ctx, actions, filesystemService, currentState, desiredState)
+}
+
+// Helper methods for reconciliation
+func (s *BaseFSMInstance) handleLifecycleState(ctx context.Context,
+	actions struct {
+		Create              func(ctx context.Context, filesystemService filesystem.Service) error
+		Remove              func(ctx context.Context, filesystemService filesystem.Service) error
+		Start               func(ctx context.Context, filesystemService filesystem.Service) error
+		Stop                func(ctx context.Context, filesystemService filesystem.Service) error
+		UpdateObservedState func(ctx context.Context, filesystemService filesystem.Service, tick uint64) error
+	},
+	filesystemService filesystem.Service,
+	currentState, desiredState string) (error, bool) {
+
+	switch currentState {
+	case LifecycleStateToBeCreated:
+		return s.handleToBeCreated(ctx, filesystemService)
+	case LifecycleStateCreating:
+		return s.handleCreating(ctx, actions, filesystemService)
+	case LifecycleStateRemoving:
+		return s.handleRemoving(ctx, actions, filesystemService)
+	case LifecycleStateRemoved:
+		return nil, false // Nothing to do
+	default:
+		return fmt.Errorf("unknown lifecycle state: %s", currentState), false
+	}
+}
+
+// Helper methods for specific state transitions
+func (s *BaseFSMInstance) handleToBeCreated(ctx context.Context, filesystemService filesystem.Service) (error, bool) {
+	err := s.SendEvent(ctx, LifecycleEventCreate)
+	if err != nil {
+		return fmt.Errorf("failed to send create event: %w", err), false
+	}
+	return nil, true
+}
+
+func (s *BaseFSMInstance) handleCreating(ctx context.Context,
+	actions struct {
+		Create              func(ctx context.Context, filesystemService filesystem.Service) error
+		Remove              func(ctx context.Context, filesystemService filesystem.Service) error
+		Start               func(ctx context.Context, filesystemService filesystem.Service) error
+		Stop                func(ctx context.Context, filesystemService filesystem.Service) error
+		UpdateObservedState func(ctx context.Context, filesystemService filesystem.Service, tick uint64) error
+	},
+	filesystemService filesystem.Service) (error, bool) {
+
+	err := actions.Create(ctx, filesystemService)
+	if err != nil {
+		s.SetError(err, uint64(time.Now().Unix()))
+		return err, false
+	}
+
+	err = s.SendEvent(ctx, LifecycleEventCreateDone)
+	if err != nil {
+		return fmt.Errorf("failed to send create_done event: %w", err), false
+	}
+	return nil, true
+}
+
+func (s *BaseFSMInstance) handleRemoving(ctx context.Context,
+	actions struct {
+		Create              func(ctx context.Context, filesystemService filesystem.Service) error
+		Remove              func(ctx context.Context, filesystemService filesystem.Service) error
+		Start               func(ctx context.Context, filesystemService filesystem.Service) error
+		Stop                func(ctx context.Context, filesystemService filesystem.Service) error
+		UpdateObservedState func(ctx context.Context, filesystemService filesystem.Service, tick uint64) error
+	},
+	filesystemService filesystem.Service) (error, bool) {
+
+	err := actions.Remove(ctx, filesystemService)
+	if err != nil {
+		s.SetError(err, uint64(time.Now().Unix()))
+		return err, false
+	}
+
+	err = s.SendEvent(ctx, LifecycleEventRemoveDone)
+	if err != nil {
+		return fmt.Errorf("failed to send remove_done event: %w", err), false
+	}
+	return nil, true
+}
+
+// handleOperationalState manages transitions between operational states
+// This is a skeleton implementation that should be overridden by concrete implementations
+func (s *BaseFSMInstance) handleOperationalState(ctx context.Context,
+	actions struct {
+		Create              func(ctx context.Context, filesystemService filesystem.Service) error
+		Remove              func(ctx context.Context, filesystemService filesystem.Service) error
+		Start               func(ctx context.Context, filesystemService filesystem.Service) error
+		Stop                func(ctx context.Context, filesystemService filesystem.Service) error
+		UpdateObservedState func(ctx context.Context, filesystemService filesystem.Service, tick uint64) error
+	},
+	filesystemService filesystem.Service,
+	currentState, desiredState string) (error, bool) {
+
+	// This should be implemented by concrete implementations
+	return fmt.Errorf("operational state handling not implemented for %s", s.cfg.ID), false
 }
