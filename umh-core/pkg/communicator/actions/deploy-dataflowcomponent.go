@@ -237,8 +237,44 @@ func (a *DeployDataflowComponentAction) Validate() error {
 			return errors.New("missing required field outputs.data")
 		}
 
-		// Validate pipeline
-		if len(a.payload.Pipeline) == 0 {
+		cdfcPayload.Output = models.DfcDataConfig{
+			Type: outputType,
+			Data: outputData,
+		}
+
+		// Handle inject data if present
+		inject, ok := cdfcMap["inject"].(map[string]interface{})
+		if ok {
+			injectType, ok := inject["type"].(string)
+			if !ok || injectType == "" {
+				return errors.New("missing required field inject.type")
+			}
+
+			injectData, ok := inject["data"].(string)
+			if !ok || injectData == "" {
+				return errors.New("missing required field inject.data")
+			}
+
+			cdfcPayload.Inject = models.DfcDataConfig{
+				Type: injectType,
+				Data: injectData,
+			}
+
+			// Validate YAML in inject data
+			var temp map[string]interface{}
+			if err = yaml.Unmarshal([]byte(cdfcPayload.Inject.Data), &temp); err != nil {
+				return fmt.Errorf("inject.data is not valid YAML: %v", err)
+			}
+		}
+
+		// Handle pipeline
+		pipeline, ok := cdfcMap["pipeline"].(map[string]interface{})
+		if !ok {
+			return errors.New("missing required field pipeline")
+		}
+
+		processors, ok := pipeline["processors"].(map[string]interface{})
+		if !ok || len(processors) == 0 {
 			return errors.New("missing required field pipeline.processors")
 		}
 
