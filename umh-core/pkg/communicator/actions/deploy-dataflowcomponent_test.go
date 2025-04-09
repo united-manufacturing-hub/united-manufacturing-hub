@@ -573,10 +573,3 @@ buffer:
 		})
 	})
 })
-
-// Note: The MockConfigManager used in this test should implement the following methods:
-// - GetConfig
-// - AtomicAddDataflowcomponent
-// - ResetCalls
-// - WithAddDataflowcomponentError (to simulate failures)
-// - AddDataflowcomponentCalled (to track if the method was called)

@@ -420,7 +420,7 @@ func (m *FileConfigManagerWithBackoff) AtomicSetLocation(ctx context.Context, lo
 	return m.configManager.AtomicSetLocation(ctx, location)
 }
 
-// AtomicSetLocation sets the location in the config atomically
+// AtomicAddDataflowcomponent adds a dataflowcomponent to the config atomically
 func (m *FileConfigManager) AtomicAddDataflowcomponent(ctx context.Context, dfc DataFlowComponentConfig) error {
 	err := m.mutexAtomicUpdate.Lock(ctx)
 	if err != nil {
@@ -445,7 +445,7 @@ func (m *FileConfigManager) AtomicAddDataflowcomponent(ctx context.Context, dfc 
 	return nil
 }
 
-// AtomicSetLocation delegates to the underlying FileConfigManager
+// AtomicAddDataflowcomponent delegates to the underlying FileConfigManager
 func (m *FileConfigManagerWithBackoff) AtomicAddDataflowcomponent(ctx context.Context, dfc DataFlowComponentConfig) error {
 	// Check if context is already cancelled
 	if ctx.Err() != nil {
