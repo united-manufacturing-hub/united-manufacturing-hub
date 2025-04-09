@@ -25,6 +25,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
+	"go.uber.org/zap"
 )
 
 type GetDataFlowComponentAction struct {
@@ -35,6 +36,7 @@ type GetDataFlowComponentAction struct {
 	configManager   config.ConfigManager
 	systemSnapshot  *fsm.SystemSnapshot
 	uuids           []uuid.UUID
+	actionLogger    *zap.SugaredLogger
 }
 
 func (a *GetDataFlowComponentAction) Parse(payload interface{}) error {
