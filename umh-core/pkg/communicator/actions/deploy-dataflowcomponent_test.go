@@ -183,8 +183,11 @@ var _ = Describe("DeployDataflowComponent", func() {
 				},
 			}
 
-			// Call Parse method
 			err := action.Parse(payload)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Call Validate method - this should fail
+			err = action.Validate()
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("inject.data is not valid YAML"))
 		})
@@ -288,6 +291,14 @@ var _ = Describe("DeployDataflowComponent", func() {
 							"type": "yaml",
 							"data": "output: something\nformat: json",
 						},
+						"pipeline": map[string]interface{}{
+							"processors": map[string]interface{}{
+								"proc1": map[string]interface{}{
+									"type": "yaml",
+									"data": "type: mapping\nprocs: []",
+								},
+							},
+						},
 					},
 				},
 			}
@@ -322,8 +333,12 @@ var _ = Describe("DeployDataflowComponent", func() {
 				},
 			}
 
-			// Call Parse method
+			// Call Parse method - this should now succeed with structural parsing
 			err := action.Parse(payload)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Call Validate method - this should fail with field validation
+			err = action.Validate()
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("missing required field pipeline.processors"))
 		})
