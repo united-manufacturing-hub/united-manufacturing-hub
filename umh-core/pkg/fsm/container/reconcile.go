@@ -375,6 +375,9 @@ func (c *ContainerInstance) reconcileTransitionToStopped(ctx context.Context, fi
 	case OperationalStateStopping:
 		// If already stopping, verify if the instance is completely stopped
 		// no verification, always go to stopped
+		// Unlike other FSMs, we don't need to verify the stopping state for container monitoring
+		// because there's no external service or process that needs to be checked - we can
+		// immediately transition to stopped state
 		return c.baseFSMInstance.SendEvent(ctx, EventStopDone), true
 	default:
 		// For any other state, initiate stop
