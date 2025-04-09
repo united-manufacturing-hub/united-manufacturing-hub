@@ -334,6 +334,13 @@ func (s *RedpandaService) Status(ctx context.Context, filesystemService filesyst
 				},
 			}, ErrServiceNoLogFile
 		}
+		if strings.Contains(err.Error(), redpanda_monitor.ErrServiceConnectionRefused.Error()) {
+			return ServiceInfo{
+				S6ObservedState: s6ServiceObservedState,
+				S6FSMState:      s6FSMState,
+				RedpandaStatus:  redpandaStatus,
+			}, redpanda_monitor.ErrServiceConnectionRefused
+		}
 
 		return ServiceInfo{}, fmt.Errorf("failed to get health check: %w", err)
 	}
