@@ -183,8 +183,11 @@ var _ = Describe("DeployDataflowComponent", func() {
 				},
 			}
 
-			// Call Parse method
 			err := action.Parse(payload)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Call Validate method - this should fail
+			err = action.Validate()
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("inject.data is not valid YAML"))
 		})
