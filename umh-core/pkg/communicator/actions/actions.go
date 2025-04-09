@@ -21,6 +21,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	"go.uber.org/zap"
@@ -41,8 +42,13 @@ type Action interface {
 }
 
 func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePayload, sender string, outboundChannel chan *models.UMHMessage, releaseChannel config.ReleaseChannel, dog watchdog.Iface, traceID uuid.UUID, systemSnapshot *fsm.SystemSnapshot, configManager config.ConfigManager) {
+	log := logger.For(logger.ComponentCommunicatorActions)
+	if log == nil {
+		// If logger initialization failed somehow, create a no-op logger to avoid nil panics
+		log = zap.NewNop().Sugar()
+	}
 	// Start a new transaction for this action
-	zap.S().Infof("Handling action message: Type: %s, Payload: %v", payload.ActionType, payload.ActionPayload)
+	log.Infof("Handling action message: Type: %s, Payload: %v", payload.ActionType, payload.ActionPayload)
 
 	var action Action
 	switch payload.ActionType {
@@ -54,6 +60,7 @@ func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePay
 			instanceUUID:    instanceUUID,
 			outboundChannel: outboundChannel,
 			configManager:   configManager,
+			actionLogger:    log,
 		}
 	case models.DeployDataFlowComponent:
 		action = &DeployDataflowComponentAction{
@@ -63,6 +70,7 @@ func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePay
 			outboundChannel: outboundChannel,
 			configManager:   configManager,
 			systemSnapshot:  systemSnapshot,
+			actionLogger:    log,
 		}
 	default:
 		zap.S().Errorf("Unknown action type: %s", payload.ActionType)
