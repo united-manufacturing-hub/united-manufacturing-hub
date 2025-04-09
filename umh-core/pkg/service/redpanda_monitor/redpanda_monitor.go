@@ -73,12 +73,13 @@ func (s *RedpandaMonitorService) generateRedpandaScript() (string, error) {
 	// Create the script content with a loop that executes redpanda every second
 	// Also let's use gzip to compress the output & hex encode it
 	// We use gzip here, to prevent the output from being rotated halfway through the logs & hex encode it to avoid issues with special characters
+	// Max-time: https://everything.curl.dev/usingcurl/timeouts.html
 	scriptContent := fmt.Sprintf(`#!/bin/sh
 while true; do
   echo "%s"
-  curl -sSL http://localhost:9644/public_metrics | gzip -c | xxd -p
+  curl -sSL --max-time 1 http://localhost:9644/public_metrics | gzip -c | xxd -p
   echo "%s"
-  curl -sSL http://localhost:9644/v1/cluster_config | gzip -c | xxd -p
+  curl -sSL --max-time 1 http://localhost:9644/v1/cluster_config | gzip -c | xxd -p
   echo "%s"
   sleep 1
 done
@@ -223,8 +224,18 @@ func (s *RedpandaMonitorService) parseRedpandaLogs(logs []s6service.LogEntry, ti
 
 func (s *RedpandaMonitorService) processMetricsDataBytes(metricsDataBytes []byte, tick uint64) (*RedpandaMetrics, error) {
 
-	// If the data contains "curl: (7)", we can directly abort
+	// If the data contains "curl: (7)", we can directly abort (connection refused)
 	if strings.Contains(string(metricsDataBytes), "curl: (7)") {
+		return nil, fmt.Errorf("curl error: %s", string(metricsDataBytes))
+	}
+
+	// If we have an error 28, we can directly abort (timeout)
+	if strings.Contains(string(metricsDataBytes), "curl: (28)") {
+		return nil, fmt.Errorf("curl error: %s", string(metricsDataBytes))
+	}
+
+	// If we have an error 28, we can directly abort (timeout)
+	if strings.Contains(string(metricsDataBytes), "curl: (28)") {
 		return nil, fmt.Errorf("curl error: %s", string(metricsDataBytes))
 	}
 
