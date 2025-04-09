@@ -256,7 +256,18 @@ func GetRequest[R any](ctx context.Context, endpoint Endpoint, header map[string
 		if response != nil {
 			return nil, err, response.StatusCode
 		}
-		return nil, err, 0
+		// Enhance error message for connection failures
+		var enhancedErr error
+		if strings.Contains(err.Error(), "EOF") {
+			enhancedErr = fmt.Errorf("connection closed unexpectedly before receiving response: %w (possible causes: network issues, server timeout, or firewall blocking)", err)
+		} else if strings.Contains(err.Error(), "timeout") || strings.Contains(err.Error(), "deadline exceeded") {
+			enhancedErr = fmt.Errorf("request timed out: %w (possible causes: slow network, server overload, or request too large)", err)
+		} else if strings.Contains(err.Error(), "connection refused") {
+			enhancedErr = fmt.Errorf("connection refused: %w (possible causes: server down, incorrect URL, or firewall blocking)", err)
+		} else {
+			enhancedErr = fmt.Errorf("connection error: %w (no response received from server, status code 0)", err)
+		}
+		return nil, enhancedErr, 0
 	}
 	defer response.Body.Close()
 
@@ -376,7 +387,18 @@ func PostRequest[R any, T any](ctx context.Context, endpoint Endpoint, data *T, 
 		if response != nil {
 			return nil, err, response.StatusCode
 		}
-		return nil, err, 0
+		// Enhance error message for connection failures
+		var enhancedErr error
+		if strings.Contains(err.Error(), "EOF") {
+			enhancedErr = fmt.Errorf("connection closed unexpectedly before receiving response: %w (possible causes: network issues, server timeout, or firewall blocking)", err)
+		} else if strings.Contains(err.Error(), "timeout") || strings.Contains(err.Error(), "deadline exceeded") {
+			enhancedErr = fmt.Errorf("request timed out: %w (possible causes: slow network, server overload, or request too large)", err)
+		} else if strings.Contains(err.Error(), "connection refused") {
+			enhancedErr = fmt.Errorf("connection refused: %w (possible causes: server down, incorrect URL, or firewall blocking)", err)
+		} else {
+			enhancedErr = fmt.Errorf("connection error: %w (no response received from server, status code 0)", err)
+		}
+		return nil, enhancedErr, 0
 	}
 	latenciesFRB.Set(time.Now(), timeTillFirstByte)
 
