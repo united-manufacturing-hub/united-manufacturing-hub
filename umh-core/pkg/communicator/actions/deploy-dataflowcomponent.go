@@ -158,6 +158,31 @@ func (a *DeployDataflowComponentAction) Parse(payload interface{}) error {
 			Data: outputData,
 		}
 
+		// Handle inject data if present
+		inject, ok := cdfcMap["inject"].(map[string]interface{})
+		if ok {
+			injectType, ok := inject["type"].(string)
+			if !ok || injectType == "" {
+				return errors.New("missing required field inject.type")
+			}
+
+			injectData, ok := inject["data"].(string)
+			if !ok || injectData == "" {
+				return errors.New("missing required field inject.data")
+			}
+
+			cdfcPayload.Inject = models.DfcDataConfig{
+				Type: injectType,
+				Data: injectData,
+			}
+
+			// Validate YAML in inject data
+			var temp map[string]interface{}
+			if err = yaml.Unmarshal([]byte(cdfcPayload.Inject.Data), &temp); err != nil {
+				return fmt.Errorf("inject.data is not valid YAML: %v", err)
+			}
+		}
+
 		// Handle pipeline
 		pipeline, ok := cdfcMap["pipeline"].(map[string]interface{})
 		if !ok {
@@ -349,9 +374,12 @@ func (a *DeployDataflowComponentAction) Execute() (interface{}, map[string]inter
 		},
 		DataFlowComponentConfig: dataflowcomponentconfig.DataFlowComponentConfig{
 			BenthosConfig: dataflowcomponentconfig.BenthosConfig{
-				Input:    normalizedConfig.Input,
-				Pipeline: normalizedConfig.Pipeline,
-				Output:   normalizedConfig.Output,
+				Input:              normalizedConfig.Input,
+				Pipeline:           normalizedConfig.Pipeline,
+				Output:             normalizedConfig.Output,
+				CacheResources:     normalizedConfig.CacheResources,
+				RateLimitResources: normalizedConfig.RateLimitResources,
+				Buffer:             normalizedConfig.Buffer,
 			},
 		},
 	}
@@ -379,4 +407,9 @@ func (a *DeployDataflowComponentAction) getUserEmail() string {
 
 func (a *DeployDataflowComponentAction) getUuid() uuid.UUID {
 	return a.actionUUID
+}
+
+// exposed for testing purposes
+func (a *DeployDataflowComponentAction) GetParsedPayload() models.CDFCPayload {
+	return a.payload
 }
