@@ -224,7 +224,6 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 	// Therefore we need a backoff here
 	// GetConfig returns a temporary backoff error or a permanent failure error
 	cfg, err := c.configManager.GetConfig(ctx, ticker)
-	c.logger.Debugf("Config: %v", cfg)
 	if err != nil {
 		// Handle temporary backoff errors --> we want to continue reconciling
 		if backoff.IsTemporaryBackoffError(err) {

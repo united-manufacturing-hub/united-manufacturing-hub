@@ -489,7 +489,6 @@ func (m *BaseFSMManager[C]) Reconcile(
 			metrics.IncErrorCount(metrics.ComponentBaseFSMManager, m.managerName)
 			return fmt.Errorf("failed to get expected max p95 execution time: %w", err), false
 		}
-		m.logger.Debugf("instance %s expected max p95 execution time: %v", name, expectedMaxP95ExecutionTime)
 		remaining, sufficient, err := ctxutil.HasSufficientTime(ctx, expectedMaxP95ExecutionTime)
 		if err != nil {
 			if errors.Is(err, ctxutil.ErrNoDeadline) {

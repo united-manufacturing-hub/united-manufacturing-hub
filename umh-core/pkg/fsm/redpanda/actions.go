@@ -155,7 +155,7 @@ func (b *RedpandaInstance) GetServiceStatus(ctx context.Context, filesystemServi
 		}
 
 		// For other errors, log them and return
-		b.baseFSMInstance.GetLogger().Errorf("error updating observed state for %s: %s", b.baseFSMInstance.GetID(), err)
+		b.baseFSMInstance.GetLogger().Errorf("error updating observed state for %s: %s (current state: %s, desired state: %s)", b.baseFSMInstance.GetID(), err, b.baseFSMInstance.GetCurrentFSMState(), b.baseFSMInstance.GetDesiredFSMState())
 		return redpanda_service.ServiceInfo{}, err
 	}
 

@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -273,6 +274,53 @@ var _ = Describe("Redpanda Monitor Service", func() {
 			_, err := service.parseRedpandaLogs(logs, tick)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("markers found in incorrect order"))
+		})
+
+		It("should successfully parse the test_metrics.txt file", func() {
+			// Read the test_metrics.txt file
+			fileContent, err := os.ReadFile("test_metrics.txt")
+			Expect(err).NotTo(HaveOccurred())
+
+			// Convert file content to log entries
+			var logs []s6service.LogEntry
+			lines := strings.Split(string(fileContent), "\n")
+			for _, line := range lines {
+				// Skip empty lines
+				if line == "" {
+					continue
+				}
+				// Remove leading timestamp (just split on space)
+				parts := strings.SplitN(line, " ", 3)
+				log := parts[2]
+				// Trim any whitespace
+				log = strings.TrimSpace(log)
+				// Remove trailing newline
+				log = strings.TrimSuffix(log, "\n")
+				logs = append(logs, s6service.LogEntry{Content: log})
+			}
+
+			// Parse the logs
+			result, err := service.parseRedpandaLogs(logs, tick)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result).NotTo(BeNil())
+
+			// Verify some key metrics
+			Expect(result.Metrics).NotTo(BeNil())
+			Expect(result.ClusterConfig).NotTo(BeNil())
+
+			// Check if the LastUpdatedAt timestamp is set
+			Expect(result.LastUpdatedAt).NotTo(Equal(time.Time{}))
+
+			// Verify storage metrics
+			Expect(result.Metrics.Metrics.Infrastructure.Storage.TotalBytes).To(BeNumerically(">", 0))
+			Expect(result.Metrics.Metrics.Infrastructure.Storage.FreeBytes).To(BeNumerically(">", 0))
+
+			// Verify cluster metrics
+			Expect(result.Metrics.Metrics.Cluster.Topics).To(BeNumerically(">=", 0))
+
+			// Verify cluster config
+			Expect(result.ClusterConfig.Topic.DefaultTopicRetentionMs).To(BeNumerically(">", 0))
+			Expect(result.ClusterConfig.Topic.DefaultTopicRetentionBytes).To(BeNumerically(">=", 0))
 		})
 	})
 
