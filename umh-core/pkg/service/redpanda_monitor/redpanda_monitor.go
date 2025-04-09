@@ -625,7 +625,6 @@ func getLabel(m *dto.Metric, name string) string {
 
 // Status checks the status of a redpanda service
 func (s *RedpandaMonitorService) Status(ctx context.Context, filesystemService filesystem.Service, tick uint64) (ServiceInfo, error) {
-	now := time.Now()
 	if ctx.Err() != nil {
 		return ServiceInfo{}, ctx.Err()
 	}
@@ -638,9 +637,6 @@ func (s *RedpandaMonitorService) Status(ctx context.Context, filesystemService f
 	if _, exists := s.s6Manager.GetInstance(s6ServiceName); !exists {
 		return ServiceInfo{}, ErrServiceNotExist
 	}
-	s.logger.Debugf("Service %s found in S6 manager (took %v)", s6ServiceName, time.Since(now))
-	now = time.Now()
-
 	// Get S6 state
 	s6StateRaw, err := s.s6Manager.GetLastObservedState(s6ServiceName)
 	if err != nil {
@@ -649,8 +645,6 @@ func (s *RedpandaMonitorService) Status(ctx context.Context, filesystemService f
 			return ServiceInfo{}, ErrServiceNotExist
 		}
 	}
-	s.logger.Debugf("Last observed state for service %s (took %v)", s6ServiceName, time.Since(now))
-	now = time.Now()
 
 	s6State, ok := s6StateRaw.(s6fsm.S6ObservedState)
 	if !ok {
@@ -666,8 +660,6 @@ func (s *RedpandaMonitorService) Status(ctx context.Context, filesystemService f
 		}
 		return ServiceInfo{}, fmt.Errorf("failed to get current FSM state: %w", err)
 	}
-	s.logger.Debugf("Current FSM state for service %s (took %v)", s6ServiceName, time.Since(now))
-	now = time.Now()
 
 	// Get logs
 	s6ServicePath := filepath.Join(constants.S6BaseDir, s6ServiceName)
@@ -675,8 +667,6 @@ func (s *RedpandaMonitorService) Status(ctx context.Context, filesystemService f
 	if err != nil {
 		return ServiceInfo{}, fmt.Errorf("failed to get logs: %w", err)
 	}
-	s.logger.Debugf("Logs for service %s (took %v)", s6ServiceName, time.Since(now))
-	now = time.Now()
 
 	if len(logs) == 0 {
 		return ServiceInfo{}, ErrServiceNoLogFile
@@ -687,8 +677,6 @@ func (s *RedpandaMonitorService) Status(ctx context.Context, filesystemService f
 	if err != nil {
 		return ServiceInfo{}, fmt.Errorf("failed to parse metrics: %w", err)
 	}
-	s.logger.Debugf("Metrics for service %s (took %v)", s6ServiceName, time.Since(now))
-	now = time.Now()
 
 	return ServiceInfo{
 		S6ObservedState: s6State,

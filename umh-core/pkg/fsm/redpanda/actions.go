@@ -194,7 +194,6 @@ func (b *RedpandaInstance) updateObservedState(ctx context.Context, filesystemSe
 		defer wg.Done()
 		start := time.Now()
 		info, getServiceStatusErr = b.GetServiceStatus(ctx, filesystemService, tick)
-		b.baseFSMInstance.GetLogger().Debugf("getServiceStatus took %v", time.Since(start))
 		metrics.ObserveReconcileTime(logger.ComponentRedpandaInstance, b.baseFSMInstance.GetID()+".getServiceStatus", time.Since(start))
 	}()
 
@@ -205,7 +204,6 @@ func (b *RedpandaInstance) updateObservedState(ctx context.Context, filesystemSe
 		start := time.Now()
 		// This GetConfig requires the tick parameter, which will be used to calculate the metrics state
 		observedConfig, getConfigErr = b.service.GetConfig(ctx, filesystemService, tick)
-		b.baseFSMInstance.GetLogger().Debugf("getConfig took %v", time.Since(start))
 		metrics.ObserveReconcileTime(logger.ComponentRedpandaInstance, b.baseFSMInstance.GetID()+".getConfig", time.Since(start))
 	}()
 
