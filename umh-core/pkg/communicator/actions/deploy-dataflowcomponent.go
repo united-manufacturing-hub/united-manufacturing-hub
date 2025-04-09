@@ -306,7 +306,7 @@ func (a *DeployDataflowComponentAction) Validate() error {
 		return fmt.Errorf("unsupported component type: %s", a.metaType)
 	}
 
-	a.actionLogger.Infof("Parsed DeployDataFlowComponent action payload: name=%s, type=%s", a.name, a.metaType)
+	a.actionLogger.Debugf("Parsed DeployDataFlowComponent action payload: name=%s, type=%s", a.name, a.metaType)
 	return nil
 }
 
