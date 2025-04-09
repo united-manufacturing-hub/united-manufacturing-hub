@@ -52,7 +52,7 @@ var _ = Describe("Redpanda Monitor Service", func() {
 
 	BeforeEach(func() {
 		mockFS = filesystem.NewMockFileSystem()
-		service = NewRedpandaMonitorService(nil)
+		service = NewRedpandaMonitorService()
 		tick = 0
 
 		// Cleanup the data directory
@@ -91,7 +91,7 @@ var _ = Describe("Redpanda Monitor Service", func() {
 			mockS6Service = s6service.NewMockService()
 			mockFS = filesystem.NewMockFileSystem()
 			// Use the new WithS6Service option instead of setting it after creation
-			service = NewRedpandaMonitorService(nil, WithS6Service(mockS6Service))
+			service = NewRedpandaMonitorService(WithS6Service(mockS6Service))
 		})
 
 		It("should add, start, stop and remove a Redpanda Monitor service", func() {
@@ -161,7 +161,7 @@ var _ = Describe("Redpanda Monitor Service", func() {
 			mockS6 := s6service.NewMockService()
 
 			// Create a new service with the mock S6 service
-			service = NewRedpandaMonitorService(nil, WithS6Service(mockS6))
+			service = NewRedpandaMonitorService(WithS6Service(mockS6))
 
 			// Add the service first
 			err := service.AddRedpandaMonitorToS6Manager(ctx)

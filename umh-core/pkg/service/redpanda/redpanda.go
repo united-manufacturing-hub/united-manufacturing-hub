@@ -253,7 +253,6 @@ func (s *RedpandaService) GetConfig(ctx context.Context, filesystemService files
 
 // Status checks the status of a Redpanda service
 func (s *RedpandaService) Status(ctx context.Context, filesystemService filesystem.Service, tick uint64) (ServiceInfo, error) {
-
 	if ctx.Err() != nil {
 		return ServiceInfo{}, ctx.Err()
 	}
@@ -262,6 +261,7 @@ func (s *RedpandaService) Status(ctx context.Context, filesystemService filesyst
 	// This is a crucial check that prevents "instance not found" errors
 	// during reconciliation when a service is being created or removed
 	if _, exists := s.s6Manager.GetInstance(constants.RedpandaServiceName); !exists {
+		s.logger.Debugf("Service %s not found in S6 manager", constants.RedpandaServiceName)
 		return ServiceInfo{}, ErrServiceNotExist
 	}
 
@@ -295,36 +295,23 @@ func (s *RedpandaService) Status(ctx context.Context, filesystemService filesyst
 		return ServiceInfo{}, fmt.Errorf("failed to get current FSM state: %w", err)
 	}
 
-	// Before the service is running, there is no need to check the logs or health check (the logs wont be available yet)
-	if s6FSMState != "running" {
-
-		serviceInfo := ServiceInfo{
-			S6ObservedState: s6ServiceObservedState,
-			S6FSMState:      s6FSMState,
-			RedpandaStatus:  RedpandaStatus{},
-		}
-
-		return serviceInfo, nil
-	}
-
 	// Let's get the logs of the Redpanda service
 	s6ServicePath := filepath.Join(constants.S6BaseDir, constants.RedpandaServiceName)
 	logs, err := s.s6Service.GetLogs(ctx, s6ServicePath, filesystemService)
 	if err != nil {
-
 		if errors.Is(err, s6service.ErrServiceNotExist) {
-
 			s.logger.Debugf("Service %s does not exist, returning empty logs", constants.RedpandaServiceName)
 			return ServiceInfo{}, ErrServiceNotExist
+		} else if errors.Is(err, s6service.ErrLogFileNotFound) {
+			s.logger.Debugf("Log file for service %s not found, returning empty logs", constants.RedpandaServiceName)
+			return ServiceInfo{}, ErrServiceNotExist
 		} else {
-
 			return ServiceInfo{}, fmt.Errorf("failed to get logs: %w", err)
 		}
 	}
 
 	// Let's get the health check of the Redpanda service
 	redpandaStatus, err := s.GetHealthCheckAndMetrics(ctx, tick, logs)
-
 	if err != nil {
 		if strings.Contains(err.Error(), "connection refused") {
 			return ServiceInfo{
@@ -346,6 +333,9 @@ func (s *RedpandaService) Status(ctx context.Context, filesystemService filesyst
 		RedpandaStatus:  redpandaStatus,
 	}
 
+	// set the logs to the service info
+	// TODO: this is a hack to get the logs to the service info
+	// we should find a better way to do this
 	serviceInfo.RedpandaStatus.Logs = logs
 
 	return serviceInfo, nil
