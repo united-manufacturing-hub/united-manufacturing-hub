@@ -234,11 +234,6 @@ func (s *RedpandaMonitorService) processMetricsDataBytes(metricsDataBytes []byte
 		return nil, fmt.Errorf("curl error: %s", string(metricsDataBytes))
 	}
 
-	// If we have an error 28, we can directly abort (timeout)
-	if strings.Contains(string(metricsDataBytes), "curl: (28)") {
-		return nil, fmt.Errorf("curl error: %s", string(metricsDataBytes))
-	}
-
 	// Decode the hex encoded metrics data
 	decodedMetricsDataBytes, err := hex.DecodeString(string(metricsDataBytes))
 	if err != nil {
@@ -270,6 +265,11 @@ func (s *RedpandaMonitorService) processMetricsDataBytes(metricsDataBytes []byte
 func (s *RedpandaMonitorService) processClusterConfigDataBytes(clusterConfigDataBytes []byte, tick uint64) (*ClusterConfig, error) {
 
 	if strings.Contains(string(clusterConfigDataBytes), "curl: (7)") {
+		return nil, fmt.Errorf("curl error: %s", string(clusterConfigDataBytes))
+	}
+
+	// If we have an error 28, we can directly abort (timeout)
+	if strings.Contains(string(clusterConfigDataBytes), "curl: (28)") {
 		return nil, fmt.Errorf("curl error: %s", string(clusterConfigDataBytes))
 	}
 
