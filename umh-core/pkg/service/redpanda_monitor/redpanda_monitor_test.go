@@ -52,13 +52,13 @@ var _ = Describe("Redpanda Monitor Service", func() {
 
 	BeforeEach(func() {
 		mockFS = filesystem.NewMockFileSystem()
-		service = NewRedpandaMonitorService(nil, WithFilesystem(mockFS))
+		service = NewRedpandaMonitorService(nil)
 		tick = 0
 
 		// Cleanup the data directory
 		ctx, cancel := newTimeoutContext()
 		defer cancel()
-		service.fs.RemoveAll(ctx, getTmpDir())
+		mockFS.RemoveAll(ctx, getTmpDir())
 	})
 
 	Describe("GenerateS6ConfigForRedpandaMonitor", func() {
@@ -91,7 +91,7 @@ var _ = Describe("Redpanda Monitor Service", func() {
 			mockS6Service = s6service.NewMockService()
 			mockFS = filesystem.NewMockFileSystem()
 			// Use the new WithS6Service option instead of setting it after creation
-			service = NewRedpandaMonitorService(nil, WithFilesystem(mockFS), WithS6Service(mockS6Service))
+			service = NewRedpandaMonitorService(nil, WithS6Service(mockS6Service))
 		})
 
 		It("should add, start, stop and remove a Redpanda Monitor service", func() {
@@ -161,7 +161,7 @@ var _ = Describe("Redpanda Monitor Service", func() {
 			mockS6 := s6service.NewMockService()
 
 			// Create a new service with the mock S6 service
-			service = NewRedpandaMonitorService(nil, WithFilesystem(mockFS), WithS6Service(mockS6))
+			service = NewRedpandaMonitorService(nil, WithS6Service(mockS6))
 
 			// Add the service first
 			err := service.AddRedpandaMonitorToS6Manager(ctx)
@@ -205,16 +205,18 @@ var _ = Describe("Redpanda Monitor Service", func() {
 			Expect(err.Error()).To(ContainSubstring("no logs provided"))
 		})
 
-		It("should return an error if no end marker is found", func() {
+		It("should return an error if no block end marker is found", func() {
 			logs := []s6service.LogEntry{
 				{Content: fmt.Sprintf("%s\n", BLOCK_START_MARKER)},
 				{Content: "some data\n"},
 				{Content: fmt.Sprintf("%s\n", METRICS_END_MARKER)},
 				{Content: "more data\n"},
+				{Content: fmt.Sprintf("%s\n", CLUSTERCONFIG_END_MARKER)},
+				{Content: "timestamp data\n"},
 			}
 			_, err := service.parseRedpandaLogs(logs, tick)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("no end marker found"))
+			Expect(err.Error()).To(ContainSubstring("no block end marker found"))
 		})
 
 		It("should return an error if no start marker is found", func() {
@@ -222,6 +224,8 @@ var _ = Describe("Redpanda Monitor Service", func() {
 				{Content: "some data\n"},
 				{Content: fmt.Sprintf("%s\n", METRICS_END_MARKER)},
 				{Content: "more data\n"},
+				{Content: fmt.Sprintf("%s\n", CLUSTERCONFIG_END_MARKER)},
+				{Content: "timestamp data\n"},
 				{Content: fmt.Sprintf("%s\n", BLOCK_END_MARKER)},
 			}
 			_, err := service.parseRedpandaLogs(logs, tick)
@@ -229,16 +233,46 @@ var _ = Describe("Redpanda Monitor Service", func() {
 			Expect(err.Error()).To(ContainSubstring("no start marker found"))
 		})
 
-		It("should return an error if no mid marker is found", func() {
+		It("should return an error if no metrics end marker is found", func() {
 			logs := []s6service.LogEntry{
 				{Content: fmt.Sprintf("%s\n", BLOCK_START_MARKER)},
 				{Content: "some data\n"},
+				{Content: "more data\n"},
+				{Content: fmt.Sprintf("%s\n", CLUSTERCONFIG_END_MARKER)},
+				{Content: "timestamp data\n"},
+				{Content: fmt.Sprintf("%s\n", BLOCK_END_MARKER)},
+			}
+			_, err := service.parseRedpandaLogs(logs, tick)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("no metrics end marker found"))
+		})
+
+		It("should return an error if no config end marker is found", func() {
+			logs := []s6service.LogEntry{
+				{Content: fmt.Sprintf("%s\n", BLOCK_START_MARKER)},
+				{Content: "some data\n"},
+				{Content: fmt.Sprintf("%s\n", METRICS_END_MARKER)},
+				{Content: "more data\n"},
+				{Content: "timestamp data\n"},
+				{Content: fmt.Sprintf("%s\n", BLOCK_END_MARKER)},
+			}
+			_, err := service.parseRedpandaLogs(logs, tick)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("no config end marker found"))
+		})
+
+		It("should return an error if markers are in incorrect order", func() {
+			logs := []s6service.LogEntry{
+				{Content: fmt.Sprintf("%s\n", BLOCK_START_MARKER)},
+				{Content: fmt.Sprintf("%s\n", CLUSTERCONFIG_END_MARKER)}, // Wrong order
+				{Content: "some data\n"},
+				{Content: fmt.Sprintf("%s\n", METRICS_END_MARKER)},
 				{Content: "more data\n"},
 				{Content: fmt.Sprintf("%s\n", BLOCK_END_MARKER)},
 			}
 			_, err := service.parseRedpandaLogs(logs, tick)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("no mid marker found"))
+			Expect(err.Error()).To(ContainSubstring("markers found in incorrect order"))
 		})
 	})
 

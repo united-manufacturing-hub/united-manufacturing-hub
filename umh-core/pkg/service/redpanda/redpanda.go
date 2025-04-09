@@ -32,7 +32,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/httpclient"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda_monitor"
 	"go.uber.org/zap"
-	"gopkg.in/yaml.v3"
 
 	redpandayaml "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/redpandaserviceconfig"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
@@ -226,15 +225,11 @@ func (s *RedpandaService) GetConfig(ctx context.Context, filesystemService files
 
 	status, err := s.metricsService.Status(ctx, filesystemService, tick)
 	if err != nil {
-		// Use fallback from configfile
-		s.logger.Warnf("Failed to get redpanda status, using fallback from configfile: %v", err)
-		return s.getConfigFromFile(ctx, filesystemService)
+		return redpandaserviceconfig.RedpandaServiceConfig{}, fmt.Errorf("failed to get redpanda status: %w", err)
 	}
 
 	if status.RedpandaStatus.LastScan == nil {
-		// Use fallback from configfile
-		s.logger.Warnf("Last scan is nil, using fallback from configfile")
-		return s.getConfigFromFile(ctx, filesystemService)
+		return redpandaserviceconfig.RedpandaServiceConfig{}, fmt.Errorf("last scan is nil")
 	}
 
 	// Check that the last scan is not older then RedpandaMaxMetricsAndConfigAge
@@ -252,43 +247,6 @@ func (s *RedpandaService) GetConfig(ctx context.Context, filesystemService files
 	// so we'll use a default value
 	result.Resources.MaxCores = 1
 	result.Resources.MemoryPerCoreInBytes = 2048 * 1024 * 1024 // 2GB
-
-	return redpandayaml.NormalizeRedpandaConfig(result), nil
-}
-
-// getConfigFromFile returns the Redpanda config from the S6 service file
-// This is a fallback method used when the API endpoint is not available
-func (s *RedpandaService) getConfigFromFile(ctx context.Context, filesystemService filesystem.Service) (redpandaserviceconfig.RedpandaServiceConfig, error) {
-	s6ServicePath := filepath.Join(constants.S6BaseDir, constants.RedpandaServiceName)
-
-	// Request the config file from the S6 service
-	yamlData, err := s.s6Service.GetS6ConfigFile(ctx, s6ServicePath, constants.RedpandaConfigFileName, filesystemService)
-	if err != nil {
-		return redpandaserviceconfig.RedpandaServiceConfig{}, fmt.Errorf("failed to get redpanda config file: %w", err)
-	}
-
-	// Parse the YAML into a config map
-	var redpandaConfig map[string]interface{}
-	if err := yaml.Unmarshal(yamlData, &redpandaConfig); err != nil {
-		return redpandaserviceconfig.RedpandaServiceConfig{}, fmt.Errorf("error parsing redpanda config file: %w", err)
-	}
-
-	result := redpandaserviceconfig.RedpandaServiceConfig{}
-
-	// Safely extract retention_ms
-	if defaultTopicRetentionMs, ok := redpandaConfig["log_retention_ms"].(int); ok {
-		result.Topic.DefaultTopicRetentionMs = defaultTopicRetentionMs
-	}
-
-	// Safely extract retention_bytes
-	if defaultTopicRetentionBytes, ok := redpandaConfig["retention_bytes"].(int); ok {
-		result.Topic.DefaultTopicRetentionBytes = defaultTopicRetentionBytes
-	}
-
-	// Safely extract MaxCores (smp in the yaml)
-	if maxCores, ok := redpandaConfig["smp"].(int); ok {
-		result.Resources.MaxCores = maxCores
-	}
 
 	return redpandayaml.NormalizeRedpandaConfig(result), nil
 }

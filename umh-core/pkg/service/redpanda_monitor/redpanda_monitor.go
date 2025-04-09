@@ -186,17 +186,9 @@ func WithS6Service(s6Service s6service.Service) RedpandaMonitorServiceOption {
 	}
 }
 
-// WithFilesystem sets a custom filesystem service for the RedpandaMonitorService
-func WithFilesystem(fs filesystem.Service) RedpandaMonitorServiceOption {
-	return func(s *RedpandaMonitorService) {
-		s.fs = fs
-	}
-}
-
 func NewRedpandaMonitorService(fs filesystem.Service, opts ...RedpandaMonitorServiceOption) *RedpandaMonitorService {
 	log := logger.New(logger.ComponentRedpandaMonitorService, logger.FormatJSON)
 	service := &RedpandaMonitorService{
-		fs:           fs,
 		logger:       log,
 		metricsState: NewRedpandaMetricsState(),
 		s6Manager:    s6fsm.NewS6Manager(logger.ComponentRedpandaMonitorService),
