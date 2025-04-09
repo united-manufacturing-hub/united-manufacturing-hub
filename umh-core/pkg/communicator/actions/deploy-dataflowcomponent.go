@@ -400,8 +400,9 @@ func (a *DeployDataflowComponentAction) Execute() (interface{}, map[string]inter
 	defer cancel()
 	err = a.configManager.AtomicAddDataflowcomponent(ctx, dfc)
 	if err != nil {
-		errorMsg := fmt.Sprintf("failed to add dataflowcomponent: %v", err)
+		errorMsg := fmt.Sprintf("failed to add dataflowcomponent: %w", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errorMsg, a.outboundChannel, models.DeployDataFlowComponent)
+		return nil, nil, fmt.Errorf("%s", errorMsg)
 		return nil, nil, fmt.Errorf("%s", errorMsg)
 	}
 
