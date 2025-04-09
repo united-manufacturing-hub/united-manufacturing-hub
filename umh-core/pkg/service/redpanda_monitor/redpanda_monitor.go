@@ -244,8 +244,10 @@ func parseCurlError(errorString string) error {
 		"curl: (28)": fmt.Errorf("connection timed out, while attempting to fetch metrics/configuration from redpanda. This can happen if the redpanda service or the system is experiencing high load"),
 	}
 
-	if err, ok := knownErrors[errorString]; ok {
-		return err
+	for knownError, err := range knownErrors {
+		if strings.Contains(errorString, knownError) {
+			return err
+		}
 	}
 
 	return fmt.Errorf("unknown curl error: %s", errorString)
