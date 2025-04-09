@@ -149,43 +149,34 @@ func (s *RedpandaMonitorService) parseRedpandaLogs(logs []s6service.LogEntry, ti
 	if len(logs) == 0 {
 		return nil, fmt.Errorf("no logs provided")
 	}
-
-	// Find the last log entry that contains the END_MARKER
-	endMarkerIndex := -1
-	for i := len(logs) - 1; i >= 0; i-- {
-		if strings.Contains(logs[i].Content, END_MARKER) {
-			endMarkerIndex = i
-			break
-		}
-	}
-
-	if endMarkerIndex == -1 {
-		return nil, fmt.Errorf("no end marker found")
-	}
-
-	// Find the last start marker before the end marker
+	// Find the markers in a single pass through the logs
 	startMarkerIndex := -1
-	for i := endMarkerIndex - 1; i >= 0; i-- {
+	midMarkerIndex := -1
+	endMarkerIndex := -1
+
+	for i := 0; i < len(logs); i++ {
 		if strings.Contains(logs[i].Content, START_MARKER) {
 			startMarkerIndex = i
-			break
-		}
-	}
-	if startMarkerIndex == -1 {
-		return nil, fmt.Errorf("no start marker found")
-	}
-
-	// Inbetween both, we need to find the mid marker
-	midMarkerIndex := -1
-	for i := startMarkerIndex + 1; i < endMarkerIndex; i++ {
-		if strings.Contains(logs[i].Content, MID_MARKER) {
+		} else if strings.Contains(logs[i].Content, MID_MARKER) {
 			midMarkerIndex = i
-			break
+		} else if strings.Contains(logs[i].Content, END_MARKER) {
+			// We dont break here, as there might be multiple end markers
+			endMarkerIndex = i
 		}
 	}
 
+	// Verify we found all markers in the correct order
+	if startMarkerIndex == -1 {
+		return nil, fmt.Errorf("could not parse redpanda metrics/configuration: no start marker found. This can happen when the redpanda service is not running, or the logs where rotated")
+	}
 	if midMarkerIndex == -1 {
-		return nil, fmt.Errorf("no mid marker found")
+		return nil, fmt.Errorf("could not parse redpanda metrics/configuration: no mid marker found. This can happen when the redpanda service is not running, or the logs where rotated")
+	}
+	if endMarkerIndex == -1 {
+		return nil, fmt.Errorf("could not parse redpanda metrics/configuration: no end marker found. This can happen when the redpanda service is not running, or the logs where rotated")
+	}
+	if !(startMarkerIndex < midMarkerIndex && midMarkerIndex < endMarkerIndex) {
+		return nil, fmt.Errorf("could not parse redpanda metrics/configuration: markers found in incorrect order. This can happen when the redpanda service is not running, or the logs where rotated")
 	}
 
 	// We need to extract the lines inbetween the start and mid marker & mid and end marker
@@ -243,16 +234,28 @@ func (s *RedpandaMonitorService) parseRedpandaLogs(logs []s6service.LogEntry, ti
 	}, nil
 }
 
-func (s *RedpandaMonitorService) processMetricsDataBytes(metricsDataBytes []byte, tick uint64) (*RedpandaMetrics, error) {
-
-	// If the data contains "curl: (7)", we can directly abort (connection refused)
-	if strings.Contains(string(metricsDataBytes), "curl: (7)") {
-		return nil, fmt.Errorf("curl error: %s", string(metricsDataBytes))
+func parseCurlError(errorString string) error {
+	if !strings.Contains(errorString, "curl") {
+		return nil
 	}
 
-	// If we have an error 28, we can directly abort (timeout)
-	if strings.Contains(string(metricsDataBytes), "curl: (28)") {
-		return nil, fmt.Errorf("curl error: %s", string(metricsDataBytes))
+	knownErrors := map[string]error{
+		"curl: (7)":  fmt.Errorf("connection refused, while attempting to fetch metrics/configuration from redpanda. This is expected during the startup phase of the redpanda service, when the service is not yet ready to receive connections"),
+		"curl: (28)": fmt.Errorf("connection timed out, while attempting to fetch metrics/configuration from redpanda. This can happen if the redpanda service or the system is experiencing high load"),
+	}
+
+	if err, ok := knownErrors[errorString]; ok {
+		return err
+	}
+
+	return fmt.Errorf("unknown curl error: %s", errorString)
+}
+
+func (s *RedpandaMonitorService) processMetricsDataBytes(metricsDataBytes []byte, tick uint64) (*RedpandaMetrics, error) {
+
+	curlError := parseCurlError(string(metricsDataBytes))
+	if curlError != nil {
+		return nil, curlError
 	}
 
 	// Decode the hex encoded metrics data
@@ -285,13 +288,9 @@ func (s *RedpandaMonitorService) processMetricsDataBytes(metricsDataBytes []byte
 
 func (s *RedpandaMonitorService) processClusterConfigDataBytes(clusterConfigDataBytes []byte, tick uint64) (*ClusterConfig, error) {
 
-	if strings.Contains(string(clusterConfigDataBytes), "curl: (7)") {
-		return nil, fmt.Errorf("curl error: %s", string(clusterConfigDataBytes))
-	}
-
-	// If we have an error 28, we can directly abort (timeout)
-	if strings.Contains(string(clusterConfigDataBytes), "curl: (28)") {
-		return nil, fmt.Errorf("curl error: %s", string(clusterConfigDataBytes))
+	curlError := parseCurlError(string(clusterConfigDataBytes))
+	if curlError != nil {
+		return nil, curlError
 	}
 
 	// Decode the hex encoded metrics data
