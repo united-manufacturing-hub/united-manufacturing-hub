@@ -145,8 +145,8 @@ func (b *RedpandaInstance) getServiceStatus(ctx context.Context, filesystemServi
 				return info, nil
 			}
 		} else if errors.Is(err, redpanda_monitor.ErrServiceConnectionRefused) {
-			// If we are in the starting phase, we can ignore this error, as it is expected
-			if b.baseFSMInstance.GetCurrentFSMState() == OperationalStateStarting {
+			// If we are in the starting phase or stopped, ..., we can ignore this error, as it is expected
+			if !IsRunningState(b.baseFSMInstance.GetCurrentFSMState()) {
 				infoWithFailedHealthChecks := info
 				infoWithFailedHealthChecks.RedpandaStatus.HealthCheck.IsLive = false
 				infoWithFailedHealthChecks.RedpandaStatus.HealthCheck.IsReady = false
