@@ -44,7 +44,7 @@ func NewContainerInstanceWithService(config config.ContainerConfig, service cont
 		OperationalStateAfterCreate:  OperationalStateStopped, // upon creation, start in stopped
 		OperationalStateBeforeRemove: OperationalStateStopped, // must be stopped before removal
 		OperationalTransitions: []fsm.EventDesc{
-			// from monitoring_stopped -> start -> degraded
+			// from stopped -> start -> starting
 			{Name: EventStart, Src: []string{OperationalStateStopped}, Dst: OperationalStateStarting},
 
 			// from starting -> degraded,
@@ -55,7 +55,7 @@ func NewContainerInstanceWithService(config config.ContainerConfig, service cont
 			// from degraded -> metrics_all_ok -> active
 			{Name: EventMetricsAllOK, Src: []string{OperationalStateDegraded}, Dst: OperationalStateActive},
 
-			// from active -> stop -> monitoring_stopped
+			// from active/degraded/starting -> stop -> stopping
 			{Name: EventStop, Src: []string{OperationalStateActive, OperationalStateDegraded, OperationalStateStarting}, Dst: OperationalStateStopping},
 
 			// Final transition for stopping
