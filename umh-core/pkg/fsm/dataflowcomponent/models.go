@@ -73,6 +73,48 @@ const (
 	EventRecovered     = "recovered"
 )
 
+// IsOperationalState returns whether the given state is a valid operational state
+func IsOperationalState(state string) bool {
+	switch state {
+	case OperationalStateStopped,
+		OperationalStateStarting,
+		OperationalStateStartingConfigLoading,
+		OperationalStateStartingWaitingForHealthchecks,
+		OperationalStateStartingWaitingForServiceToRemainRunning,
+		OperationalStateIdle,
+		OperationalStateActive,
+		OperationalStateDegraded,
+		OperationalStateStopping:
+		return true
+	}
+	return false
+}
+
+// IsStartingState returns whether the given state is a starting state
+func IsStartingState(state string) bool {
+	switch state {
+	case OperationalStateStarting,
+		OperationalStateStartingConfigLoading,
+		OperationalStateStartingWaitingForHealthchecks,
+		OperationalStateStartingWaitingForServiceToRemainRunning:
+		return true
+	}
+	return false
+}
+
+// IsRunningState returns whether the given state is a running state
+func IsRunningState(state string) bool {
+	switch state {
+	case OperationalStateIdle,
+		OperationalStateActive,
+		OperationalStateDegraded:
+		return true
+	}
+	return false
+}
+
+// BenthosObservedState contains the observed runtime state of a Benthos instance
+
 // DataflowComponentObservedState contains the observed runtime state of a DataflowComponent instance
 type DataflowComponentObservedState struct {
 	// ServiceInfo contains information about the S6 service
