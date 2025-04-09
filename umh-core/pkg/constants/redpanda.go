@@ -46,3 +46,7 @@ var (
 const (
 	DefaultRedpandaBaseDir = "/data"
 )
+
+const (
+	RedpandaMaxMetricsAndConfigAge = 10 * time.Second
+)

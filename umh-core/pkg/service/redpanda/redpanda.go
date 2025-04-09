@@ -237,6 +237,11 @@ func (s *RedpandaService) GetConfig(ctx context.Context, filesystemService files
 		return s.getConfigFromFile(ctx, filesystemService)
 	}
 
+	// Check that the last scan is not older then RedpandaMaxMetricsAndConfigAge
+	if time.Since(status.RedpandaStatus.LastScan.LastUpdatedAt) > constants.RedpandaMaxMetricsAndConfigAge {
+		return redpandaserviceconfig.RedpandaServiceConfig{}, fmt.Errorf("last scan is older than %s", constants.RedpandaMaxMetricsAndConfigAge)
+	}
+
 	lastScan := status.RedpandaStatus.LastScan
 
 	var result redpandaserviceconfig.RedpandaServiceConfig
@@ -425,6 +430,11 @@ func (s *RedpandaService) GetHealthCheckAndMetrics(ctx context.Context, tick uin
 
 	if redpandaStatus.RedpandaStatus.LastScan == nil {
 		return RedpandaStatus{}, fmt.Errorf("last scan is nil")
+	}
+
+	// Check that the last scan is not older then RedpandaMaxMetricsAndConfigAge
+	if time.Since(redpandaStatus.RedpandaStatus.LastScan.LastUpdatedAt) > constants.RedpandaMaxMetricsAndConfigAge {
+		return RedpandaStatus{}, fmt.Errorf("last scan is older than %s", constants.RedpandaMaxMetricsAndConfigAge)
 	}
 
 	// Create health check structure
