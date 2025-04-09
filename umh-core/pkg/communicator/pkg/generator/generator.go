@@ -23,6 +23,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/container"
@@ -132,7 +133,7 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 		}
 	}
 
-	// Create a mocked status message
+	// Create a status message with real data
 	statusMessage := &models.StatusMessage{
 		Core: models.Core{
 			Agent: models.Agent{
@@ -152,53 +153,7 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 				Location: location, // Use the actual location from config
 			},
 			Container: containerData,
-			Dfcs: []models.Dfc{
-				{
-					Name: stringPtr("Data Bridge 1"),
-					UUID: "dfc-uuid-12345",
-					Type: models.DfcTypeDataBridge,
-					Health: &models.Health{
-						Message:       "DFC is operating normally",
-						ObservedState: "running",
-						DesiredState:  "running",
-						Category:      models.Active,
-					},
-					Metrics: &models.DfcMetrics{
-						AvgInputThroughputPerMinuteInMsgSec: float64(rand.Intn(91) + 10),
-					},
-					Bridge: &models.DfcBridgeInfo{
-						DataContract: "sensor-v1",
-						InputType:    "mqtt",
-						OutputType:   "kafka",
-					},
-					Connections: []models.Connection{
-						{
-							Name: "MQTT Input",
-							UUID: "conn-uuid-1",
-							Health: &models.Health{
-								Message:       "Connection is active",
-								ObservedState: "connected",
-								DesiredState:  "connected",
-								Category:      models.Active,
-							},
-							URI:           "mqtt://broker:1883",
-							LastLatencyMs: 5.2,
-						},
-						{
-							Name: "Kafka Output",
-							UUID: "conn-uuid-2",
-							Health: &models.Health{
-								Message:       "Connection is active",
-								ObservedState: "connected",
-								DesiredState:  "connected",
-								Category:      models.Active,
-							},
-							URI:           "kafka://kafka:9092",
-							LastLatencyMs: 8.1,
-						},
-					},
-				},
-			},
+			Dfcs:      getDfcsFromConfig(s.configManager, s.logger),
 			Redpanda: models.Redpanda{
 				Health: &models.Health{
 					Message:       "Redpanda is operating normally",
@@ -374,4 +329,53 @@ func buildDefaultContainerData() models.Container {
 // Helper function to create string pointers
 func stringPtr(s string) *string {
 	return &s
+}
+
+// getDfcsFromConfig retrieves the Data Flow Components from the configuration
+func getDfcsFromConfig(configManager config.ConfigManager, logger *zap.Logger) []models.Dfc {
+	if configManager == nil {
+		logger.Warn("Config manager is nil, cannot retrieve DFCs")
+		return []models.Dfc{}
+	}
+
+	// Create a context with a short timeout for getting the config
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+
+	// Get the current config
+	cfg, err := configManager.GetConfig(ctx, 0)
+	if err != nil {
+		logger.Warn("Failed to get config for DFCs", zap.Error(err))
+		return []models.Dfc{}
+	}
+
+	dfcs := make([]models.Dfc, 0, len(cfg.DataFlow))
+
+	// Convert each DataFlowComponentConfig to a Dfc model
+	for _, component := range cfg.DataFlow {
+		// Generate UUID from name
+		dfcUUID := dataflowcomponentconfig.GenerateUUIDFromName(component.FSMInstanceConfig.Name).String()
+
+		dfc := models.Dfc{
+			Name: stringPtr(component.FSMInstanceConfig.Name),
+			UUID: dfcUUID,
+			Health: &models.Health{
+				Message:       "DFC is operating normally", // Mocked as requested
+				ObservedState: "running",                   // Mocked as requested
+				DesiredState:  component.FSMInstanceConfig.DesiredFSMState,
+				Category:      models.Active,
+			},
+			Metrics: &models.DfcMetrics{
+				AvgInputThroughputPerMinuteInMsgSec: float64(rand.Intn(91) + 10), // Keeping some randomized metrics
+			},
+		}
+
+		// Process the DataFlowComponentConfig to determine type
+		// Default to custom type
+		dfc.Type = models.DfcTypeCustom
+
+		dfcs = append(dfcs, dfc)
+	}
+
+	return dfcs
 }
