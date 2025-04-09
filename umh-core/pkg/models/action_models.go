@@ -48,6 +48,10 @@ type CdcfMeta struct {
 	Type string `json:"type"`
 }
 
+type GetDFCPayload struct {
+	UUIDs []string `json:"uuids" binding:"required"`
+}
+
 // EditInstanceLocation holds the location information for the instance
 type EditInstanceLocationModel struct {
 	Enterprise string  `json:"enterprise"`
