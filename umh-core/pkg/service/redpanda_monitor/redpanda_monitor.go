@@ -27,6 +27,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/prometheus/common/expfmt"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
@@ -85,9 +86,18 @@ func NewRedpandaMonitorService(fs filesystem.Service, opts ...RedpandaMonitorSer
 	return service
 }
 
-const START_MARKER = "BEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGIN"
-const MID_MARKER = "MIDMIDMIDMIDMIDMIDMIDMIDMIDMIDMIDMIDMIDMIDMIDMIDMID"
-const END_MARKER = "ENDENDENDENDENDENDENDENDENDENDENDENDENDENDENDENDEND"
+// BLOCK_START_MARKER marks the begin of a new data block inside the logs.
+// Between it and MID_MARKER is the metrics data, between MID_MARKER and END_MARKER is the cluster config data.
+const BLOCK_START_MARKER = "BEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGIN"
+
+// METRICS_END_MARKER marks the end of the metrics data and the beginning of the cluster config data.
+const METRICS_END_MARKER = "METRICSENDMETRICSENDMETRICSENDMETRICSENDMETRICSENDMETRICSENDMETRICSENDMETRICSENDMETRICSENDMETRICSEND"
+
+// CLUSTERCONFIG_END_MARKER marks the end of the cluster config data and the beginning of the timestamp data.
+const CLUSTERCONFIG_END_MARKER = "CONFIGENDCONFIGENDCONFIGENDCONFIGENDCONFIGENDCONFIGENDCONFIGENDCONFIGENDCONFIGENDCONFIGENDCONFIGEND"
+
+// BLOCK_END_MARKER marks the end of the cluster config data.
+const BLOCK_END_MARKER = "ENDENDENDENDENDENDENDENDENDENDENDENDENDENDENDENDENDENDENDENDENDENDENDENDENDENDENDENDENDENDENDENDEND"
 
 func (s *RedpandaMonitorService) generateRedpandaScript() (string, error) {
 	// Build the redpanda command - curl http://localhost:9644/public_metrics
@@ -95,6 +105,8 @@ func (s *RedpandaMonitorService) generateRedpandaScript() (string, error) {
 	// Also let's use gzip to compress the output & hex encode it
 	// We use gzip here, to prevent the output from being rotated halfway through the logs & hex encode it to avoid issues with special characters
 	// Max-time: https://everything.curl.dev/usingcurl/timeouts.html
+	// The timestamp here is the unix nanosecond timestamp of the current time
+	// It is gathered AFTER the curl commands, preventing long curl execution times from affecting the timestamp
 	scriptContent := fmt.Sprintf(`#!/bin/sh
 while true; do
   echo "%s"
@@ -102,9 +114,11 @@ while true; do
   echo "%s"
   curl -sSL --max-time 1 http://localhost:9644/v1/cluster_config | gzip -c | xxd -p
   echo "%s"
+  date +%%s%%N
+  echo "%s"
   sleep 1
 done
-`, START_MARKER, MID_MARKER, END_MARKER)
+`, BLOCK_START_MARKER, METRICS_END_MARKER, CLUSTERCONFIG_END_MARKER, BLOCK_END_MARKER)
 
 	return scriptContent, nil
 }
@@ -139,11 +153,13 @@ func (s *RedpandaMonitorService) GenerateS6ConfigForRedpandaMonitor() (s6service
 func (s *RedpandaMonitorService) parseRedpandaLogs(logs []s6service.LogEntry, tick uint64) (*RedpandaMetricsAndClusterConfig, error) {
 	/*
 		A normal log entry looks like this:
-		START_MARKER
+		BLOCK_START_MARKER
 		Hex encoded gzip data of the metrics
-		MID_MARKER
+		METRICS_END_MARKER
 		Hex encoded gzip data of the cluster config
-		END_MARKER
+		CLUSTERCONFIG_END_MARKER
+		Timestamp data
+		BLOCK_END_MARKER
 	*/
 
 	if len(logs) == 0 {
@@ -151,17 +167,20 @@ func (s *RedpandaMonitorService) parseRedpandaLogs(logs []s6service.LogEntry, ti
 	}
 	// Find the markers in a single pass through the logs
 	startMarkerIndex := -1
-	midMarkerIndex := -1
-	endMarkerIndex := -1
+	metricsEndMarkerIndex := -1
+	configEndMarkerIndex := -1
+	blockEndMarkerIndex := -1
 
 	for i := 0; i < len(logs); i++ {
-		if strings.Contains(logs[i].Content, START_MARKER) {
+		if strings.Contains(logs[i].Content, BLOCK_START_MARKER) {
 			startMarkerIndex = i
-		} else if strings.Contains(logs[i].Content, MID_MARKER) {
-			midMarkerIndex = i
-		} else if strings.Contains(logs[i].Content, END_MARKER) {
+		} else if strings.Contains(logs[i].Content, METRICS_END_MARKER) {
+			metricsEndMarkerIndex = i
+		} else if strings.Contains(logs[i].Content, CLUSTERCONFIG_END_MARKER) {
+			configEndMarkerIndex = i
+		} else if strings.Contains(logs[i].Content, BLOCK_END_MARKER) {
 			// We dont break here, as there might be multiple end markers
-			endMarkerIndex = i
+			blockEndMarkerIndex = i
 		}
 	}
 
@@ -169,44 +188,61 @@ func (s *RedpandaMonitorService) parseRedpandaLogs(logs []s6service.LogEntry, ti
 	if startMarkerIndex == -1 {
 		return nil, fmt.Errorf("could not parse redpanda metrics/configuration: no start marker found. This can happen when the redpanda service is not running, or the logs where rotated")
 	}
-	if midMarkerIndex == -1 {
-		return nil, fmt.Errorf("could not parse redpanda metrics/configuration: no mid marker found. This can happen when the redpanda service is not running, or the logs where rotated")
+	if metricsEndMarkerIndex == -1 {
+		return nil, fmt.Errorf("could not parse redpanda metrics/configuration: no metrics end marker found. This can happen when the redpanda service is not running, or the logs where rotated")
 	}
-	if endMarkerIndex == -1 {
-		return nil, fmt.Errorf("could not parse redpanda metrics/configuration: no end marker found. This can happen when the redpanda service is not running, or the logs where rotated")
+	if configEndMarkerIndex == -1 {
+		return nil, fmt.Errorf("could not parse redpanda metrics/configuration: no config end marker found. This can happen when the redpanda service is not running, or the logs where rotated")
 	}
-	if !(startMarkerIndex < midMarkerIndex && midMarkerIndex < endMarkerIndex) {
+	if blockEndMarkerIndex == -1 {
+		return nil, fmt.Errorf("could not parse redpanda metrics/configuration: no block end marker found. This can happen when the redpanda service is not running, or the logs where rotated")
+	}
+	if !(startMarkerIndex < metricsEndMarkerIndex && metricsEndMarkerIndex < configEndMarkerIndex && configEndMarkerIndex < blockEndMarkerIndex) {
 		return nil, fmt.Errorf("could not parse redpanda metrics/configuration: markers found in incorrect order. This can happen when the redpanda service is not running, or the logs where rotated")
 	}
 
-	// We need to extract the lines inbetween the start and mid marker & mid and end marker
-	// Metrics is the first part, cluster config is the second part
-	metricsData := logs[startMarkerIndex+1 : midMarkerIndex]
-	clusterConfigData := logs[midMarkerIndex+1 : endMarkerIndex]
+	// We need to extract the lines between the markers
+	// Metrics is the first part, cluster config is the second part, timestamp is the third part
+	metricsData := logs[startMarkerIndex+1 : metricsEndMarkerIndex]
+	clusterConfigData := logs[metricsEndMarkerIndex+1 : configEndMarkerIndex]
+	timestampData := logs[configEndMarkerIndex+1 : blockEndMarkerIndex]
 
 	var metricsDataBytes []byte
 	var clusterConfigDataBytes []byte
+	var timestampDataBytes []byte
+
 	for _, log := range metricsData {
 		metricsDataBytes = append(metricsDataBytes, log.Content...)
 	}
 	for _, log := range clusterConfigData {
 		clusterConfigDataBytes = append(clusterConfigDataBytes, log.Content...)
 	}
+	for _, log := range timestampData {
+		timestampDataBytes = append(timestampDataBytes, log.Content...)
+	}
 
-	// Remove the START_MARKER, MID_MARKER and END_MARKER
-	metricsDataBytes = bytes.ReplaceAll(metricsDataBytes, []byte(START_MARKER), []byte{})
-	metricsDataBytes = bytes.ReplaceAll(metricsDataBytes, []byte(MID_MARKER), []byte{})
-	metricsDataBytes = bytes.ReplaceAll(metricsDataBytes, []byte(END_MARKER), []byte{})
+	// Remove any markers that might be in the data
+	metricsDataBytes = bytes.ReplaceAll(metricsDataBytes, []byte(BLOCK_START_MARKER), []byte{})
+	metricsDataBytes = bytes.ReplaceAll(metricsDataBytes, []byte(METRICS_END_MARKER), []byte{})
+	metricsDataBytes = bytes.ReplaceAll(metricsDataBytes, []byte(CLUSTERCONFIG_END_MARKER), []byte{})
+	metricsDataBytes = bytes.ReplaceAll(metricsDataBytes, []byte(BLOCK_END_MARKER), []byte{})
 
-	clusterConfigDataBytes = bytes.ReplaceAll(clusterConfigDataBytes, []byte(START_MARKER), []byte{})
-	clusterConfigDataBytes = bytes.ReplaceAll(clusterConfigDataBytes, []byte(MID_MARKER), []byte{})
-	clusterConfigDataBytes = bytes.ReplaceAll(clusterConfigDataBytes, []byte(END_MARKER), []byte{})
+	clusterConfigDataBytes = bytes.ReplaceAll(clusterConfigDataBytes, []byte(BLOCK_START_MARKER), []byte{})
+	clusterConfigDataBytes = bytes.ReplaceAll(clusterConfigDataBytes, []byte(METRICS_END_MARKER), []byte{})
+	clusterConfigDataBytes = bytes.ReplaceAll(clusterConfigDataBytes, []byte(CLUSTERCONFIG_END_MARKER), []byte{})
+	clusterConfigDataBytes = bytes.ReplaceAll(clusterConfigDataBytes, []byte(BLOCK_END_MARKER), []byte{})
+
+	timestampDataBytes = bytes.ReplaceAll(timestampDataBytes, []byte(BLOCK_START_MARKER), []byte{})
+	timestampDataBytes = bytes.ReplaceAll(timestampDataBytes, []byte(METRICS_END_MARKER), []byte{})
+	timestampDataBytes = bytes.ReplaceAll(timestampDataBytes, []byte(CLUSTERCONFIG_END_MARKER), []byte{})
+	timestampDataBytes = bytes.ReplaceAll(timestampDataBytes, []byte(BLOCK_END_MARKER), []byte{})
 
 	var wg sync.WaitGroup
 	var metrics *RedpandaMetrics
 	var clusterConfig *ClusterConfig
 	var metricsErr, clusterConfigErr error
 
+	// Processing the Metrics & cluster config takes ~5ms (especially the metrics parsing) each, therefore process them in parallel
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
@@ -228,9 +264,17 @@ func (s *RedpandaMonitorService) parseRedpandaLogs(logs []s6service.LogEntry, ti
 		return nil, fmt.Errorf("failed to process cluster config data: %w", clusterConfigErr)
 	}
 
+	// Parse the timestamp data from the timestampDataBytes (that we already extracted)
+	timestampNs, err := strconv.ParseUint(string(timestampDataBytes), 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse timestamp data: %w", err)
+	}
+
 	return &RedpandaMetricsAndClusterConfig{
 		Metrics:       metrics,
 		ClusterConfig: clusterConfig,
+		// time.Unix internally handles the split into seconds and nanoseconds
+		LastUpdatedAt: time.Unix(0, int64(timestampNs)),
 	}, nil
 }
 
@@ -327,6 +371,8 @@ func (s *RedpandaMonitorService) processClusterConfigDataBytes(clusterConfigData
 				result.Topic.DefaultTopicRetentionMs = intVal
 			}
 		}
+	} else {
+		return nil, fmt.Errorf("failed to parse cluster config data: no log_retention_ms found")
 	}
 
 	if value, ok := redpandaConfig["retention_bytes"]; ok {
@@ -339,6 +385,8 @@ func (s *RedpandaMonitorService) processClusterConfigDataBytes(clusterConfigData
 				result.Topic.DefaultTopicRetentionBytes = intVal
 			}
 		}
+	} else {
+		return nil, fmt.Errorf("failed to parse cluster config data: no retention_bytes found")
 	}
 
 	return &result, nil
@@ -362,56 +410,83 @@ func parseMetrics(dataReader io.Reader) (Metrics, error) {
 	}
 
 	// Directly extract only the metrics we need instead of iterating all metrics
-
 	// Infrastructure metrics - Storage
 	if family, ok := mf["redpanda_storage_disk_free_bytes"]; ok && len(family.Metric) > 0 {
 		metrics.Infrastructure.Storage.FreeBytes = getMetricValue(family.Metric[0])
+	} else {
+		return metrics, fmt.Errorf("metric redpanda_storage_disk_free_bytes not found")
 	}
 
 	if family, ok := mf["redpanda_storage_disk_total_bytes"]; ok && len(family.Metric) > 0 {
 		metrics.Infrastructure.Storage.TotalBytes = getMetricValue(family.Metric[0])
+	} else {
+		return metrics, fmt.Errorf("metric redpanda_storage_disk_total_bytes not found")
 	}
 
 	if family, ok := mf["redpanda_storage_disk_free_space_alert"]; ok && len(family.Metric) > 0 {
 		// Any non-zero value indicates an alert condition
 		metrics.Infrastructure.Storage.FreeSpaceAlert = getMetricValue(family.Metric[0]) != 0
+	} else {
+		return metrics, fmt.Errorf("metric redpanda_storage_disk_free_space_alert not found")
 	}
 
 	// Infrastructure metrics - Uptime
 	if family, ok := mf["redpanda_uptime_seconds_total"]; ok && len(family.Metric) > 0 {
 		metrics.Infrastructure.Uptime.Uptime = getMetricValue(family.Metric[0])
+	} else {
+		return metrics, fmt.Errorf("metric redpanda_uptime_seconds_total not found")
 	}
 
 	// Cluster metrics
 	if family, ok := mf["redpanda_cluster_topics"]; ok && len(family.Metric) > 0 {
 		metrics.Cluster.Topics = getMetricValue(family.Metric[0])
+	} else {
+		return metrics, fmt.Errorf("metric redpanda_cluster_topics not found")
 	}
 
 	if family, ok := mf["redpanda_cluster_unavailable_partitions"]; ok && len(family.Metric) > 0 {
 		metrics.Cluster.UnavailableTopics = getMetricValue(family.Metric[0])
+	} else {
+		return metrics, fmt.Errorf("metric redpanda_cluster_unavailable_partitions not found")
 	}
 
 	// Throughput metrics
 	if family, ok := mf["redpanda_kafka_request_bytes_total"]; ok {
 		// Process only produce/consume metrics in a single pass
+		produceFound := false
+		consumeFound := false
 		for _, metric := range family.Metric {
 			if label := getLabel(metric, "redpanda_request"); label != "" {
 				if label == "produce" {
 					metrics.Throughput.BytesIn = getMetricValue(metric)
+					produceFound = true
 				} else if label == "consume" {
 					metrics.Throughput.BytesOut = getMetricValue(metric)
+					consumeFound = true
 				}
 			}
 		}
+		if !produceFound {
+			return metrics, fmt.Errorf("metric redpanda_kafka_request_bytes_total with label redpanda_request=produce not found")
+		}
+		if !consumeFound {
+			return metrics, fmt.Errorf("metric redpanda_kafka_request_bytes_total with label redpanda_request=consume not found")
+		}
+	} else {
+		return metrics, fmt.Errorf("metric redpanda_kafka_request_bytes_total not found")
 	}
 
 	// Topic metrics
+	// If we have topics, then topic metrics should be available
 	if family, ok := mf["redpanda_kafka_partitions"]; ok {
 		for _, metric := range family.Metric {
 			if topic := getLabel(metric, "redpanda_topic"); topic != "" {
 				metrics.Topic.TopicPartitionMap[topic] = getMetricValue(metric)
 			}
 		}
+	} else if metrics.Cluster.Topics > 0 {
+		// Only fail if we have topics but can't find the partition metrics
+		return metrics, fmt.Errorf("metric redpanda_kafka_partitions not found but redpanda_cluster_topics reports %d topics", metrics.Cluster.Topics)
 	}
 
 	return metrics, nil
@@ -487,7 +562,7 @@ func (s *RedpandaMonitorService) Status(ctx context.Context, filesystemService f
 		return ServiceInfo{}, fmt.Errorf("failed to get logs: %w", err)
 	}
 
-	// Get metrics
+	// Parse the logs
 	metrics, err := s.parseRedpandaLogs(logs, tick)
 	if err != nil {
 		return ServiceInfo{}, fmt.Errorf("failed to parse metrics: %w", err)

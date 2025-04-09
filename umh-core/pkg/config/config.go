@@ -52,6 +52,7 @@ type CommunicatorConfig struct {
 
 // FSMInstanceConfig is the config for a FSM instance
 type FSMInstanceConfig struct {
+	// Name of the service, we use omitempty here, as some services like redpanda will ignore this name, therefore writing the "empty" name back to the config file will cause confusion for the users
 	Name            string `yaml:"name,omitempty"`
 	DesiredFSMState string `yaml:"desiredState,omitempty"`
 }

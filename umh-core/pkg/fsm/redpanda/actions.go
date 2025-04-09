@@ -181,6 +181,7 @@ func (b *RedpandaInstance) updateObservedState(ctx context.Context, filesystemSe
 
 	// Fetch the actual Redpanda config from the service
 	start = time.Now()
+	// This GetConfig requires the tick parameter, which will be used to calculate the metrics state
 	observedConfig, err := b.service.GetConfig(ctx, filesystemService, tick)
 	metrics.ObserveReconcileTime(logger.ComponentRedpandaInstance, b.baseFSMInstance.GetID()+".getConfig", time.Since(start))
 	if err == nil {

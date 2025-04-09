@@ -16,6 +16,7 @@ package redpanda_monitor
 
 import (
 	"context"
+	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
@@ -95,6 +96,7 @@ type TopicMetrics struct {
 type RedpandaMetricsAndClusterConfig struct {
 	Metrics       *RedpandaMetrics
 	ClusterConfig *ClusterConfig
+	LastUpdatedAt time.Time
 }
 
 type ClusterConfig struct {

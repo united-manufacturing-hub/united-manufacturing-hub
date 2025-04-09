@@ -14,8 +14,6 @@
 
 package redpanda_monitor
 
-import "sync"
-
 // ComponentThroughput tracks throughput metrics for a single component
 type ComponentThroughput struct {
 	// LastTick is the last tick when metrics were updated
@@ -65,21 +63,8 @@ func NewRedpandaMetricsState() *RedpandaMetricsState {
 
 // UpdateFromMetrics updates the metrics state based on new metrics
 func (s *RedpandaMetricsState) UpdateFromMetrics(metrics Metrics, tick uint64) {
-	// Update component throughput in parallel
-	var wg sync.WaitGroup
-	wg.Add(2)
-
-	go func() {
-		defer wg.Done()
-		s.updateComponentThroughput(&s.Input, metrics.Throughput.BytesIn, tick)
-	}()
-
-	go func() {
-		defer wg.Done()
-		s.updateComponentThroughput(&s.Output, metrics.Throughput.BytesOut, tick)
-	}()
-
-	wg.Wait()
+	s.updateComponentThroughput(&s.Input, metrics.Throughput.BytesIn, tick)
+	s.updateComponentThroughput(&s.Output, metrics.Throughput.BytesOut, tick)
 
 	// Update activity status based on input throughput
 	s.IsActive = s.Input.BytesPerTick > 0

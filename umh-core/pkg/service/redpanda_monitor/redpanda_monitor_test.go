@@ -73,9 +73,9 @@ var _ = Describe("Redpanda Monitor Service", func() {
 
 			// Verify the script content contains the necessary markers
 			script := s6Config.ConfigFiles["run_redpanda_monitor.sh"]
-			Expect(script).To(ContainSubstring(START_MARKER))
-			Expect(script).To(ContainSubstring(MID_MARKER))
-			Expect(script).To(ContainSubstring(END_MARKER))
+			Expect(script).To(ContainSubstring(BLOCK_START_MARKER))
+			Expect(script).To(ContainSubstring(METRICS_END_MARKER))
+			Expect(script).To(ContainSubstring(BLOCK_END_MARKER))
 			Expect(script).To(ContainSubstring("curl -sSL"))
 			Expect(script).To(ContainSubstring("sleep 1"))
 		})
@@ -177,11 +177,11 @@ var _ = Describe("Redpanda Monitor Service", func() {
 
 			// Set up mock logs that include our markers and some fake metrics data
 			mockLogs := []s6service.LogEntry{
-				{Content: fmt.Sprintf("%s\n", START_MARKER)},
+				{Content: fmt.Sprintf("%s\n", BLOCK_START_MARKER)},
 				{Content: "1f8b0800000000000003abcd4f2c492d2e516c0600000000ffff0300ee1f0e9e09000000\n"}, // Some hex-encoded gzipped data
-				{Content: fmt.Sprintf("%s\n", MID_MARKER)},
+				{Content: fmt.Sprintf("%s\n", METRICS_END_MARKER)},
 				{Content: "1f8b0800000000000003abcd4f2c492d2e516c0600000000ffff0300ee1f0e9e09000000\n"}, // Some hex-encoded gzipped data
-				{Content: fmt.Sprintf("%s\n", END_MARKER)},
+				{Content: fmt.Sprintf("%s\n", BLOCK_END_MARKER)},
 			}
 
 			// Set the mock logs result directly
@@ -207,9 +207,9 @@ var _ = Describe("Redpanda Monitor Service", func() {
 
 		It("should return an error if no end marker is found", func() {
 			logs := []s6service.LogEntry{
-				{Content: fmt.Sprintf("%s\n", START_MARKER)},
+				{Content: fmt.Sprintf("%s\n", BLOCK_START_MARKER)},
 				{Content: "some data\n"},
-				{Content: fmt.Sprintf("%s\n", MID_MARKER)},
+				{Content: fmt.Sprintf("%s\n", METRICS_END_MARKER)},
 				{Content: "more data\n"},
 			}
 			_, err := service.parseRedpandaLogs(logs, tick)
@@ -220,9 +220,9 @@ var _ = Describe("Redpanda Monitor Service", func() {
 		It("should return an error if no start marker is found", func() {
 			logs := []s6service.LogEntry{
 				{Content: "some data\n"},
-				{Content: fmt.Sprintf("%s\n", MID_MARKER)},
+				{Content: fmt.Sprintf("%s\n", METRICS_END_MARKER)},
 				{Content: "more data\n"},
-				{Content: fmt.Sprintf("%s\n", END_MARKER)},
+				{Content: fmt.Sprintf("%s\n", BLOCK_END_MARKER)},
 			}
 			_, err := service.parseRedpandaLogs(logs, tick)
 			Expect(err).To(HaveOccurred())
@@ -231,10 +231,10 @@ var _ = Describe("Redpanda Monitor Service", func() {
 
 		It("should return an error if no mid marker is found", func() {
 			logs := []s6service.LogEntry{
-				{Content: fmt.Sprintf("%s\n", START_MARKER)},
+				{Content: fmt.Sprintf("%s\n", BLOCK_START_MARKER)},
 				{Content: "some data\n"},
 				{Content: "more data\n"},
-				{Content: fmt.Sprintf("%s\n", END_MARKER)},
+				{Content: fmt.Sprintf("%s\n", BLOCK_END_MARKER)},
 			}
 			_, err := service.parseRedpandaLogs(logs, tick)
 			Expect(err).To(HaveOccurred())

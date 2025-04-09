@@ -18,7 +18,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"runtime/debug"
 	"time"
 
 	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
@@ -329,10 +328,7 @@ func (m *BaseFSMManager[C]) Reconcile(
 			}
 			metrics.ObserveReconcileTime(metrics.ComponentBaseFSMManager, m.managerName+".create_instance", time.Since(createStart))
 
-			m.logger.Infof("Creating instance %s", name)
-			m.logger.Infof("cfg: %v", cfg)
 			desiredState, err := m.getDesiredState(cfg)
-			m.logger.Infof("desiredState: %v", desiredState)
 			if err != nil {
 				metrics.IncErrorCount(metrics.ComponentBaseFSMManager, m.managerName)
 				return fmt.Errorf("failed to get desired state: %w", err), false
@@ -341,11 +337,9 @@ func (m *BaseFSMManager[C]) Reconcile(
 			if err != nil {
 				metrics.IncErrorCount(metrics.ComponentBaseFSMManager, m.managerName)
 				m.logger.Errorf("failed to set desired state: %v for instance %s", err, name)
-				debug.PrintStack()
 				return fmt.Errorf("failed to set desired state: %w", err), false
 			}
 			m.instances[name] = instance
-			m.logger.Infof("Created instance %s", name)
 
 			// Update last add tick using manager-specific tick
 			m.lastAddTick = m.managerTick
