@@ -30,10 +30,11 @@ const (
 	ComponentDataFlowComponentManager = "DataFlowCompManager"
 
 	// FSM components
-	ComponentBaseFSM          = "BaseFSM"
-	ComponentS6Instance       = "S6Instance"
-	ComponentBenthosInstance  = "BenthosInstance"
-	ComponentRedpandaInstance = "RedpandaInstance"
+	ComponentBaseFSM                   = "BaseFSM"
+	ComponentS6Instance                = "S6Instance"
+	ComponentBenthosInstance           = "BenthosInstance"
+	ComponentRedpandaInstance          = "RedpandaInstance"
+	ComponentDataFlowComponentInstance = "DFCInstance"
 
 	// Service components
 	ComponentS6Service                = "S6Service"
@@ -41,8 +42,8 @@ const (
 	ComponentNmapService              = "NmapService"
 	ComponentContainerMonService      = "ContainerMonService"
 	ComponentDataFlowComponentService = "DFCService"
-	ComponentRedpandaService     = "RedpandaService"
-  
+	ComponentRedpandaService          = "RedpandaService"
+
 	// Configuration
 	ComponentConfigManager = "ConfigManager"
 )
