@@ -234,6 +234,7 @@ func (s *RedpandaService) GetConfig(ctx context.Context, filesystemService files
 
 	// Check that the last scan is not older then RedpandaMaxMetricsAndConfigAge
 	if time.Since(status.RedpandaStatus.LastScan.LastUpdatedAt) > constants.RedpandaMaxMetricsAndConfigAge {
+		s.logger.Warnf("last scan is %s old, returning empty status", time.Since(status.RedpandaStatus.LastScan.LastUpdatedAt))
 		return redpandaserviceconfig.RedpandaServiceConfig{}, fmt.Errorf("last scan is older than %s", constants.RedpandaMaxMetricsAndConfigAge)
 	}
 
@@ -253,6 +254,7 @@ func (s *RedpandaService) GetConfig(ctx context.Context, filesystemService files
 
 // Status checks the status of a Redpanda service
 func (s *RedpandaService) Status(ctx context.Context, filesystemService filesystem.Service, tick uint64) (ServiceInfo, error) {
+	now := time.Now()
 	if ctx.Err() != nil {
 		return ServiceInfo{}, ctx.Err()
 	}
@@ -264,6 +266,8 @@ func (s *RedpandaService) Status(ctx context.Context, filesystemService filesyst
 		s.logger.Debugf("Service %s not found in S6 manager", constants.RedpandaServiceName)
 		return ServiceInfo{}, ErrServiceNotExist
 	}
+	s.logger.Debugf("Service %s found in S6 manager (took %v)", constants.RedpandaServiceName, time.Since(now))
+	now = time.Now()
 
 	// Let's get the status of the underlying s6 service
 	s6ServiceObservedStateRaw, err := s.s6Manager.GetLastObservedState(constants.RedpandaServiceName)
@@ -277,6 +281,8 @@ func (s *RedpandaService) Status(ctx context.Context, filesystemService filesyst
 		}
 		return ServiceInfo{}, fmt.Errorf("failed to get last observed state: %w", err)
 	}
+	s.logger.Debugf("Last observed state for service %s (took %v)", constants.RedpandaServiceName, time.Since(now))
+	now = time.Now()
 
 	s6ServiceObservedState, ok := s6ServiceObservedStateRaw.(s6fsm.S6ObservedState)
 	if !ok {
@@ -294,6 +300,8 @@ func (s *RedpandaService) Status(ctx context.Context, filesystemService filesyst
 		}
 		return ServiceInfo{}, fmt.Errorf("failed to get current FSM state: %w", err)
 	}
+	s.logger.Debugf("Current FSM state for service %s (took %v)", constants.RedpandaServiceName, time.Since(now))
+	now = time.Now()
 
 	// Let's get the logs of the Redpanda service
 	s6ServicePath := filepath.Join(constants.S6BaseDir, constants.RedpandaServiceName)
@@ -309,11 +317,13 @@ func (s *RedpandaService) Status(ctx context.Context, filesystemService filesyst
 			return ServiceInfo{}, fmt.Errorf("failed to get logs: %w", err)
 		}
 	}
+	s.logger.Debugf("Logs for service %s (took %v)", constants.RedpandaServiceName, time.Since(now))
+	now = time.Now()
 
 	// Let's get the health check of the Redpanda service
 	redpandaStatus, err := s.GetHealthCheckAndMetrics(ctx, tick, logs)
 	if err != nil {
-		if strings.Contains(err.Error(), "no logs provided") {
+		if strings.Contains(err.Error(), ErrServiceNoLogFile.Error()) {
 			return ServiceInfo{
 				S6ObservedState: s6ServiceObservedState,
 				S6FSMState:      s6FSMState, // Note for state transitions: When a service is stopped and then reactivated,
@@ -322,11 +332,12 @@ func (s *RedpandaService) Status(ctx context.Context, filesystemService filesyst
 				RedpandaStatus: RedpandaStatus{
 					Logs: logs,
 				},
-			}, ErrHealthCheckNoLogs
+			}, ErrServiceNoLogFile
 		}
 
 		return ServiceInfo{}, fmt.Errorf("failed to get health check: %w", err)
 	}
+	s.logger.Debugf("Health check for service %s (took %v)", constants.RedpandaServiceName, time.Since(now))
 
 	serviceInfo := ServiceInfo{
 		S6ObservedState: s6ServiceObservedState,
@@ -347,6 +358,7 @@ func (s *RedpandaService) GetHealthCheckAndMetrics(ctx context.Context, tick uin
 
 	s.logger.Infof("Getting health check and metrics for tick %d", tick)
 	start := time.Now()
+	now := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(logger.ComponentRedpandaService, constants.RedpandaServiceName, time.Since(start))
 	}()
@@ -371,11 +383,14 @@ func (s *RedpandaService) GetHealthCheckAndMetrics(ctx context.Context, tick uin
 		}
 		return s.lastStatus, nil
 	}
+	s.logger.Debugf("Service %s found in S6 manager (took %v)", constants.RedpandaServiceName, time.Since(now))
+	now = time.Now()
 
 	redpandaStatus, err := s.metricsService.Status(ctx, s.filesystem, tick)
 	if err != nil {
 		return RedpandaStatus{}, fmt.Errorf("failed to get redpanda status: %w", err)
 	}
+	s.logger.Debugf("Redpanda status for service %s (took %v)", constants.RedpandaServiceName, time.Since(now))
 
 	if redpandaStatus.RedpandaStatus.LastScan == nil {
 		return RedpandaStatus{}, fmt.Errorf("last scan is nil")
@@ -383,6 +398,7 @@ func (s *RedpandaService) GetHealthCheckAndMetrics(ctx context.Context, tick uin
 
 	// Check that the last scan is not older then RedpandaMaxMetricsAndConfigAge
 	if time.Since(redpandaStatus.RedpandaStatus.LastScan.LastUpdatedAt) > constants.RedpandaMaxMetricsAndConfigAge {
+		s.logger.Warnf("last scan is %s old, returning empty status", time.Since(redpandaStatus.RedpandaStatus.LastScan.LastUpdatedAt))
 		return RedpandaStatus{}, fmt.Errorf("last scan is older than %s", constants.RedpandaMaxMetricsAndConfigAge)
 	}
 

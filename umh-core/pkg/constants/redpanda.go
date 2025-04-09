@@ -26,7 +26,7 @@ const (
 )
 
 const (
-	RedpandaUpdateObservedStateTimeout = 10 * time.Millisecond
+	RedpandaUpdateObservedStateTimeout = 15 * time.Millisecond
 )
 const (
 	// RedpandaExpectedMaxP95ExecutionTimePerInstance represents the maximum expected time for a Redpanda instance
@@ -34,7 +34,7 @@ const (
 	// under the alerting threshold. The system has a 100ms max ticker time with an 80% (80ms) alerting threshold.
 	// By setting this to RedpandaUpdateObservedStateTimeout (10ms) + 30ms, we ensure that Redpanda operations
 	// complete with enough margin to avoid triggering alerts during normal operation.
-	RedpandaExpectedMaxP95ExecutionTimePerInstance = RedpandaUpdateObservedStateTimeout + time.Millisecond*30 // needs to be higher than S6ExpectedMaxP95ExecutionTimePerInstance
+	RedpandaExpectedMaxP95ExecutionTimePerInstance = RedpandaUpdateObservedStateTimeout + time.Millisecond*35 // needs to be higher than S6ExpectedMaxP95ExecutionTimePerInstance
 )
 
 var (

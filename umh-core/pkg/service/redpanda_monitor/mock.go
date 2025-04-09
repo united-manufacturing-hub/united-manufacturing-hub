@@ -305,7 +305,7 @@ func (m *MockRedpandaMonitorService) ServiceExists(ctx context.Context, filesyst
 }
 
 // SetMetricsState allows tests to directly set the metrics state
-func (m *MockRedpandaMonitorService) SetMetricsState(isActive bool, uptimeSeconds int64, freeBytes int64, totalBytes int64, freeSpaceAlert bool) {
+func (m *MockRedpandaMonitorService) SetMetricsState(isActive bool, freeBytes int64, totalBytes int64, freeSpaceAlert bool) {
 	if m.metricsState == nil {
 		m.metricsState = NewRedpandaMetricsState()
 	}
@@ -315,9 +315,6 @@ func (m *MockRedpandaMonitorService) SetMetricsState(isActive bool, uptimeSecond
 	// Create metrics to be used in service state
 	metrics := Metrics{
 		Infrastructure: InfrastructureMetrics{
-			Uptime: UptimeMetrics{
-				Uptime: uptimeSeconds,
-			},
 			Storage: StorageMetrics{
 				FreeBytes:      freeBytes,
 				TotalBytes:     totalBytes,

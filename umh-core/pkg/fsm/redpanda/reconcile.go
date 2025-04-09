@@ -57,7 +57,6 @@ func (b *RedpandaInstance) Reconcile(ctx context.Context, filesystemService file
 	}
 
 	// Step 1: If there's a lastError, see if we've waited enough.
-
 	if b.baseFSMInstance.ShouldSkipReconcileBecauseOfError(tick) {
 		err := b.baseFSMInstance.GetBackoffError(tick)
 		b.baseFSMInstance.GetLogger().Debugf("Skipping reconcile for Redpanda pipeline %s: %w", redpandaInstanceName, err)
@@ -83,7 +82,6 @@ func (b *RedpandaInstance) Reconcile(ctx context.Context, filesystemService file
 	}
 
 	// Step 2: Detect external changes.
-
 	if err := b.reconcileExternalChanges(ctx, filesystemService, tick); err != nil {
 		// If the service is not running, we don't want to return an error here, because we want to continue reconciling
 		if !errors.Is(err, redpanda_service.ErrServiceNotExist) {
@@ -105,7 +103,6 @@ func (b *RedpandaInstance) Reconcile(ctx context.Context, filesystemService file
 	}
 
 	// Step 3: Attempt to reconcile the state.
-
 	currentTime := time.Now() // this is used to check if the instance is degraded and for the log check
 	err, reconciled = b.reconcileStateTransition(ctx, currentTime)
 	if err != nil {
@@ -120,7 +117,6 @@ func (b *RedpandaInstance) Reconcile(ctx context.Context, filesystemService file
 	}
 
 	// Step 4: Reconcile the s6Manager
-
 	s6Err, s6Reconciled := b.service.ReconcileManager(ctx, filesystemService, tick)
 	if s6Err != nil {
 		b.baseFSMInstance.SetError(s6Err, tick)

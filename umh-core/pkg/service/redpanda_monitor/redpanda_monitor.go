@@ -53,7 +53,6 @@ type Metrics struct {
 // InfrastructureMetrics contains information about the infrastructure metrics of the Redpanda service
 type InfrastructureMetrics struct {
 	Storage StorageMetrics
-	Uptime  UptimeMetrics
 }
 
 // StorageMetrics contains information about the storage metrics of the Redpanda service
@@ -69,14 +68,6 @@ type StorageMetrics struct {
 	// redpanda_storage_disk_free_space_alert (0 == false, everything else == true)
 	// type: gauge
 	FreeSpaceAlert bool
-}
-
-// UptimeMetrics contains information about the uptime metrics of the Redpanda service
-type UptimeMetrics struct {
-	// redpanda_uptime_seconds_total
-	// type: gauge
-	// Docs: https://docs.redpanda.com/current/reference/public-metrics-reference/#redpanda_uptime_seconds_total
-	Uptime int64
 }
 
 // ClusterMetrics contains information about the cluster metrics of the Redpanda service
@@ -169,7 +160,7 @@ type IRedpandaMonitorService interface {
 var _ IRedpandaMonitorService = (*RedpandaMonitorService)(nil)
 
 type RedpandaMonitorService struct {
-	logger          *zap.Logger
+	logger          *zap.SugaredLogger
 	metricsState    *RedpandaMetricsState
 	s6Manager       *s6fsm.S6Manager
 	s6Service       s6service.Service
@@ -187,9 +178,9 @@ func WithS6Service(s6Service s6service.Service) RedpandaMonitorServiceOption {
 }
 
 func NewRedpandaMonitorService(opts ...RedpandaMonitorServiceOption) *RedpandaMonitorService {
-	log := logger.New(logger.ComponentRedpandaMonitorService, logger.FormatJSON)
+	managerName := fmt.Sprintf("%s%s", logger.ComponentRedpandaService, "redpanda-monitor")
 	service := &RedpandaMonitorService{
-		logger:       log,
+		logger:       logger.For(managerName),
 		metricsState: NewRedpandaMetricsState(),
 		s6Manager:    s6fsm.NewS6Manager(logger.ComponentRedpandaMonitorService),
 		s6Service:    s6service.NewDefaultService(),
@@ -221,6 +212,7 @@ func (s *RedpandaMonitorService) generateRedpandaScript() (string, error) {
 	// Max-time: https://everything.curl.dev/usingcurl/timeouts.html
 	// The timestamp here is the unix nanosecond timestamp of the current time
 	// It is gathered AFTER the curl commands, preventing long curl execution times from affecting the timestamp
+	// +%s%9N: %s is the unix timestamp in seconds with 9 decimal places for nanoseconds
 	scriptContent := fmt.Sprintf(`#!/bin/sh
 while true; do
   echo "%s"
@@ -228,7 +220,7 @@ while true; do
   echo "%s"
   curl -sSL --max-time 1 http://localhost:9644/v1/cluster_config | gzip -c | xxd -p
   echo "%s"
-  date +%%s%%N
+  date +%%s%%9N
   echo "%s"
   sleep 1
 done
@@ -378,17 +370,25 @@ func (s *RedpandaMonitorService) parseRedpandaLogs(logs []s6service.LogEntry, ti
 		return nil, fmt.Errorf("failed to process cluster config data: %w", clusterConfigErr)
 	}
 
+	timestampDataString := string(timestampDataBytes)
+	// If the system resolution is to small, we need to pad the timestamp with zeros
+	// Good: 1744199140749598341
+	// Bad: 1744199121
+	if len(timestampDataString) < 19 {
+		timestampDataString = fmt.Sprintf("%s%s", timestampDataString, strings.Repeat("0", 19-len(timestampDataString)))
+	}
+
 	// Parse the timestamp data from the timestampDataBytes (that we already extracted)
-	timestampNs, err := strconv.ParseUint(string(timestampDataBytes), 10, 64)
+	timestampNs, err := strconv.ParseUint(timestampDataString, 10, 64)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse timestamp data: %w", err)
 	}
 
+	lastUpdatedAt := time.Unix(0, int64(timestampNs))
 	return &RedpandaMetricsAndClusterConfig{
 		Metrics:       metrics,
 		ClusterConfig: clusterConfig,
-		// time.Unix internally handles the split into seconds and nanoseconds
-		LastUpdatedAt: time.Unix(0, int64(timestampNs)),
+		LastUpdatedAt: lastUpdatedAt,
 	}, nil
 }
 
@@ -398,8 +398,8 @@ func parseCurlError(errorString string) error {
 	}
 
 	knownErrors := map[string]error{
-		"curl: (7)":  fmt.Errorf("connection refused, while attempting to fetch metrics/configuration from redpanda. This is expected during the startup phase of the redpanda service, when the service is not yet ready to receive connections"),
-		"curl: (28)": fmt.Errorf("connection timed out, while attempting to fetch metrics/configuration from redpanda. This can happen if the redpanda service or the system is experiencing high load"),
+		"curl: (7)":  ErrServiceConnectionRefused,
+		"curl: (28)": ErrServiceConnectionTimedOut,
 	}
 
 	for knownError, err := range knownErrors {
@@ -544,13 +544,6 @@ func parseMetrics(dataReader io.Reader) (Metrics, error) {
 		return metrics, fmt.Errorf("metric redpanda_storage_disk_free_space_alert not found")
 	}
 
-	// Infrastructure metrics - Uptime
-	if family, ok := mf["redpanda_uptime_seconds_total"]; ok && len(family.Metric) > 0 {
-		metrics.Infrastructure.Uptime.Uptime = getMetricValue(family.Metric[0])
-	} else {
-		return metrics, fmt.Errorf("metric redpanda_uptime_seconds_total not found")
-	}
-
 	// Cluster metrics
 	if family, ok := mf["redpanda_cluster_topics"]; ok && len(family.Metric) > 0 {
 		metrics.Cluster.Topics = getMetricValue(family.Metric[0])
@@ -632,6 +625,7 @@ func getLabel(m *dto.Metric, name string) string {
 
 // Status checks the status of a redpanda service
 func (s *RedpandaMonitorService) Status(ctx context.Context, filesystemService filesystem.Service, tick uint64) (ServiceInfo, error) {
+	now := time.Now()
 	if ctx.Err() != nil {
 		return ServiceInfo{}, ctx.Err()
 	}
@@ -644,6 +638,8 @@ func (s *RedpandaMonitorService) Status(ctx context.Context, filesystemService f
 	if _, exists := s.s6Manager.GetInstance(s6ServiceName); !exists {
 		return ServiceInfo{}, ErrServiceNotExist
 	}
+	s.logger.Debugf("Service %s found in S6 manager (took %v)", s6ServiceName, time.Since(now))
+	now = time.Now()
 
 	// Get S6 state
 	s6StateRaw, err := s.s6Manager.GetLastObservedState(s6ServiceName)
@@ -653,6 +649,8 @@ func (s *RedpandaMonitorService) Status(ctx context.Context, filesystemService f
 			return ServiceInfo{}, ErrServiceNotExist
 		}
 	}
+	s.logger.Debugf("Last observed state for service %s (took %v)", s6ServiceName, time.Since(now))
+	now = time.Now()
 
 	s6State, ok := s6StateRaw.(s6fsm.S6ObservedState)
 	if !ok {
@@ -668,6 +666,8 @@ func (s *RedpandaMonitorService) Status(ctx context.Context, filesystemService f
 		}
 		return ServiceInfo{}, fmt.Errorf("failed to get current FSM state: %w", err)
 	}
+	s.logger.Debugf("Current FSM state for service %s (took %v)", s6ServiceName, time.Since(now))
+	now = time.Now()
 
 	// Get logs
 	s6ServicePath := filepath.Join(constants.S6BaseDir, s6ServiceName)
@@ -675,12 +675,20 @@ func (s *RedpandaMonitorService) Status(ctx context.Context, filesystemService f
 	if err != nil {
 		return ServiceInfo{}, fmt.Errorf("failed to get logs: %w", err)
 	}
+	s.logger.Debugf("Logs for service %s (took %v)", s6ServiceName, time.Since(now))
+	now = time.Now()
+
+	if len(logs) == 0 {
+		return ServiceInfo{}, ErrServiceNoLogFile
+	}
 
 	// Parse the logs
 	metrics, err := s.parseRedpandaLogs(logs, tick)
 	if err != nil {
 		return ServiceInfo{}, fmt.Errorf("failed to parse metrics: %w", err)
 	}
+	s.logger.Debugf("Metrics for service %s (took %v)", s6ServiceName, time.Since(now))
+	now = time.Now()
 
 	return ServiceInfo{
 		S6ObservedState: s6State,

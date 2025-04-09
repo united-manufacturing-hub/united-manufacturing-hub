@@ -22,4 +22,13 @@ var (
 
 	// ErrServiceAlreadyExists indicates the requested service already exists
 	ErrServiceAlreadyExists = errors.New("service already exists")
+
+	// ErrServiceNoLogFile indicates the health check had no logs to process
+	ErrServiceNoLogFile = errors.New("log file not found")
+
+	// ErrServiceConnectionRefused indicates the service connection was refused
+	ErrServiceConnectionRefused = errors.New("connection refused, while attempting to fetch metrics/configuration from redpanda. This is expected during the startup phase of the redpanda service, when the service is not yet ready to receive connections")
+
+	// ErrServiceConnectionTimedOut indicates the service connection timed out
+	ErrServiceConnectionTimedOut = errors.New("connection timed out, while attempting to fetch metrics/configuration from redpanda. This can happen if the redpanda service or the system is experiencing high load")
 )

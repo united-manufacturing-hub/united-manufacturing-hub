@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
@@ -28,6 +29,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	redpanda_service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda_monitor"
 )
 
 // The functions in this file define heavier, possibly fail-prone operations
@@ -129,17 +131,27 @@ func (b *RedpandaInstance) getServiceStatus(ctx context.Context, filesystemServi
 			// Log the warning but don't treat it as a fatal error
 			b.baseFSMInstance.GetLogger().Debugf("Service not found, will be created during reconciliation")
 			return redpanda_service.ServiceInfo{}, nil
-		} else if errors.Is(err, redpanda_service.ErrHealthCheckNoLogs) {
-			// Instead of conditional state checking, always return a ServiceInfo with failed health checks
-			// This allows the FSM to continue reconciliation and make proper state transition decisions
-			if b.baseFSMInstance.GetCurrentFSMState() != OperationalStateStopped { // no need to spam the logs if the service is already stopped
+		} else if errors.Is(err, redpanda_service.ErrServiceNoLogFile) {
+			// This is only an error, if readpanda is already running, otherwise there are simply no logs
+			if b.baseFSMInstance.GetCurrentFSMState() == OperationalStateActive || b.baseFSMInstance.GetCurrentFSMState() == OperationalStateIdle {
 				b.baseFSMInstance.GetLogger().Debugf("Health check had no logs to process for service %s, returning ServiceInfo with failed health checks", b.baseFSMInstance.GetID())
+				infoWithFailedHealthChecks := info
+				infoWithFailedHealthChecks.RedpandaStatus.HealthCheck.IsLive = false
+				infoWithFailedHealthChecks.RedpandaStatus.HealthCheck.IsReady = false
+				// Return ServiceInfo with health checks failed but preserve S6FSMState if available
+				return infoWithFailedHealthChecks, nil
+			} else {
+				// We have no running service, therefore we can simply return nil as error
+				return info, nil
 			}
-			infoWithFailedHealthChecks := info
-			infoWithFailedHealthChecks.RedpandaStatus.HealthCheck.IsLive = false
-			infoWithFailedHealthChecks.RedpandaStatus.HealthCheck.IsReady = false
-			// Return ServiceInfo with health checks failed but preserve S6FSMState if available
-			return infoWithFailedHealthChecks, nil
+		} else if errors.Is(err, redpanda_monitor.ErrServiceConnectionRefused) {
+			// If we are in the starting phase, we can ignore this error, as it is expected
+			if b.baseFSMInstance.GetCurrentFSMState() == OperationalStateStarting {
+				infoWithFailedHealthChecks := info
+				infoWithFailedHealthChecks.RedpandaStatus.HealthCheck.IsLive = false
+				infoWithFailedHealthChecks.RedpandaStatus.HealthCheck.IsReady = false
+				return infoWithFailedHealthChecks, nil
+			}
 		}
 
 		// For other errors, log them and return
@@ -170,31 +182,58 @@ func (b *RedpandaInstance) updateObservedState(ctx context.Context, filesystemSe
 		}
 	}
 
-	start := time.Now()
-	info, err := b.getServiceStatus(ctx, filesystemService, tick)
-	if err != nil {
-		return err
+	var info redpanda_service.ServiceInfo
+	var getServiceStatusErr error
+
+	// Both getServiceStatus and getConfig are long running operations (> 3ms)
+	// We therefore execute them in parallel and wait for both to finish
+	wg := sync.WaitGroup{}
+	wg.Add(2)
+
+	go func() {
+		defer wg.Done()
+		start := time.Now()
+		info, getServiceStatusErr = b.getServiceStatus(ctx, filesystemService, tick)
+		b.baseFSMInstance.GetLogger().Debugf("getServiceStatus took %v", time.Since(start))
+		metrics.ObserveReconcileTime(logger.ComponentRedpandaInstance, b.baseFSMInstance.GetID()+".getServiceStatus", time.Since(start))
+	}()
+
+	var observedConfig redpandaserviceconfig.RedpandaServiceConfig
+	var getConfigErr error
+	go func() {
+		defer wg.Done()
+		start := time.Now()
+		// This GetConfig requires the tick parameter, which will be used to calculate the metrics state
+		observedConfig, getConfigErr = b.service.GetConfig(ctx, filesystemService, tick)
+		b.baseFSMInstance.GetLogger().Debugf("getConfig took %v", time.Since(start))
+		metrics.ObserveReconcileTime(logger.ComponentRedpandaInstance, b.baseFSMInstance.GetID()+".getConfig", time.Since(start))
+	}()
+
+	wg.Wait()
+
+	if getServiceStatusErr != nil {
+		return getServiceStatusErr
 	}
-	metrics.ObserveReconcileTime(logger.ComponentRedpandaInstance, b.baseFSMInstance.GetID()+".getServiceStatus", time.Since(start))
+
 	// Store the raw service info
 	b.ObservedState.ServiceInfo = info
 
-	// Fetch the actual Redpanda config from the service
-	start = time.Now()
-	// This GetConfig requires the tick parameter, which will be used to calculate the metrics state
-	observedConfig, err := b.service.GetConfig(ctx, filesystemService, tick)
-	metrics.ObserveReconcileTime(logger.ComponentRedpandaInstance, b.baseFSMInstance.GetID()+".getConfig", time.Since(start))
-	if err == nil {
+	if getConfigErr == nil {
 		// Only update if we successfully got the config
 		b.ObservedState.ObservedRedpandaServiceConfig = observedConfig
 	} else {
-		if strings.Contains(err.Error(), redpanda_service.ErrServiceNotExist.Error()) {
+		if strings.Contains(getConfigErr.Error(), redpanda_service.ErrServiceNotExist.Error()) || strings.Contains(getConfigErr.Error(), redpanda_service.ErrServiceNoLogFile.Error()) {
 			// Log the error but don't fail - this might happen during creation when the config file doesn't exist yet
-			b.baseFSMInstance.GetLogger().Debugf("Service not found, will be created during reconciliation: %v", err)
+			// Note: as we use the logs of the underlying redpanda_monitor service, we need to ignore ErrServiceNoLogFile here.
+			b.baseFSMInstance.GetLogger().Debugf("Service not found, will be created during reconciliation: %v", getConfigErr)
 			return nil
-		} else {
-			return fmt.Errorf("failed to get observed Redpanda config: %w", err)
 		}
+		if strings.Contains(getConfigErr.Error(), redpanda_monitor.ErrServiceConnectionRefused.Error()) {
+			// This is expected during the startup phase of the redpanda service, when the service is not yet ready to receive connections
+			b.baseFSMInstance.GetLogger().Debugf("Service not yet ready: %v", getConfigErr)
+			return nil
+		}
+		return fmt.Errorf("failed to get observed Redpanda config: %w", getConfigErr)
 	}
 
 	// Detect a config change - but let the S6 manager handle the actual reconciliation
