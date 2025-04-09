@@ -142,7 +142,6 @@ func (c FullConfig) Clone() FullConfig {
 	}
 	deepcopy.Copy(&clone.DataFlow, &c.DataFlow)
 	deepcopy.Copy(&clone.Agent, &c.Agent)
-	deepcopy.Copy(&clone.DataFlow, &c.DataFlow)
 	deepcopy.Copy(&clone.Internal, &c.Internal)
 	return clone
 }
