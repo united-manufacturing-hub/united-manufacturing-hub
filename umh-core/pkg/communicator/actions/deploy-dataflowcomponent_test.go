@@ -22,6 +22,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/encoding"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 )
@@ -470,7 +471,7 @@ var _ = Describe("DeployDataflowComponent", func() {
 			// Execute the action - should fail
 			result, metadata, err := action.Execute()
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("Failed to add dataflowcomponent"))
+			Expect(err.Error()).To(ContainSubstring("failed to add dataflowcomponent"))
 			Expect(result).To(BeNil())
 			Expect(metadata).To(BeNil())
 
@@ -486,9 +487,17 @@ var _ = Describe("DeployDataflowComponent", func() {
 			}
 			Expect(messages).To(HaveLen(2))
 
-			// For failure tests, we don't check exact content since it may be encoded
-			// We check that we received the expected number of messages,
-			// which confirms the error path was taken correctly
+			// Properly decode the message content using the encoding package
+			decodedMessage, err := encoding.DecodeMessageFromUMHInstanceToUser(messages[1].Content)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Extract the ActionReplyPayload from the decoded message
+			actionReplyPayload, ok := decodedMessage.Payload.(map[string]interface{})
+			Expect(ok).To(BeTrue(), "Failed to cast Payload to map[string]interface{}")
+
+			actionReplyPayloadStr, ok := actionReplyPayload["actionReplyPayload"].(string)
+			Expect(ok).To(BeTrue(), "Failed to extract actionReplyPayload as string")
+			Expect(actionReplyPayloadStr).To(ContainSubstring("failed to add dataflowcomponent"))
 		})
 
 		It("should process inject data with cache resources, rate limit resources, and buffer", func() {
@@ -569,7 +578,6 @@ buffer:
 			Expect(mockConfig.Config.DataFlow[0].DataFlowComponentConfig.BenthosConfig.RateLimitResources[0]["label"]).To(Equal("limiter"))
 			Expect(mockConfig.Config.DataFlow[0].DataFlowComponentConfig.BenthosConfig.Buffer).To(HaveLen(1))
 			Expect(mockConfig.Config.DataFlow[0].DataFlowComponentConfig.BenthosConfig.Buffer["memory"]).To(Equal(map[string]interface{}{}))
-
 		})
 	})
 })
