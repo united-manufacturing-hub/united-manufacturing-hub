@@ -82,13 +82,27 @@ var _ = Describe("RedpandaInstance getServiceStatus", func() {
 		})
 
 		It("should return the error in LifecycleStateToBeCreated", func() {
+			instance.GetBaseFSMInstanceForTest().SetCurrentFSMState(internalfsm.LifecycleStateToBeCreated)
 			_, err := instance.GetServiceStatus(ctx, fsMock, 1)
 			Expect(err).To(Equal(redpanda_service.ErrServiceNotExist))
 		})
 
 		It("should return the error in LifecycleStateCreating", func() {
+			instance.GetBaseFSMInstanceForTest().SetCurrentFSMState(internalfsm.LifecycleStateCreating)
 			_, err := instance.GetServiceStatus(ctx, fsMock, 1)
 			Expect(err).To(Equal(redpanda_service.ErrServiceNotExist))
+		})
+
+		It("should not return error in LifecycleStateRemoving", func() {
+			instance.GetBaseFSMInstanceForTest().SetCurrentFSMState(internalfsm.LifecycleStateRemoving)
+			_, err := instance.GetServiceStatus(ctx, fsMock, 1)
+			Expect(err).To(BeNil())
+		})
+
+		It("should not return error in LifecycleStateRemoved", func() {
+			instance.GetBaseFSMInstanceForTest().SetCurrentFSMState(internalfsm.LifecycleStateRemoved)
+			_, err := instance.GetServiceStatus(ctx, fsMock, 1)
+			Expect(err).To(BeNil())
 		})
 
 		It("should not return error in operational states", func() {
@@ -127,6 +141,7 @@ var _ = Describe("RedpandaInstance getServiceStatus", func() {
 		})
 
 		It("should return ServiceInfo with failed health checks in Active state", func() {
+			instance.GetBaseFSMInstanceForTest().SetCurrentFSMState(redpanda.OperationalStateActive)
 			info, err := instance.GetServiceStatus(ctx, fsMock, 1)
 			Expect(err).To(BeNil())
 			Expect(info.RedpandaStatus.HealthCheck.IsLive).To(BeFalse())
@@ -134,10 +149,28 @@ var _ = Describe("RedpandaInstance getServiceStatus", func() {
 		})
 
 		It("should return ServiceInfo with failed health checks in Idle state", func() {
+			instance.GetBaseFSMInstanceForTest().SetCurrentFSMState(redpanda.OperationalStateIdle)
 			info, err := instance.GetServiceStatus(ctx, fsMock, 1)
 			Expect(err).To(BeNil())
 			Expect(info.RedpandaStatus.HealthCheck.IsLive).To(BeFalse())
 			Expect(info.RedpandaStatus.HealthCheck.IsReady).To(BeFalse())
+		})
+
+		It("should return nil error in lifecycle states", func() {
+			states := []string{
+				internalfsm.LifecycleStateToBeCreated,
+				internalfsm.LifecycleStateCreating,
+				internalfsm.LifecycleStateRemoving,
+				internalfsm.LifecycleStateRemoved,
+			}
+
+			for _, state := range states {
+				instance.GetBaseFSMInstanceForTest().SetCurrentFSMState(state)
+				info, err := instance.GetServiceStatus(ctx, fsMock, 1)
+				Expect(err).To(BeNil())
+				// ServiceInfo should be returned as-is in these states
+				Expect(info).To(Equal(redpanda_service.ServiceInfo{}))
+			}
 		})
 
 		It("should return nil error in non-running states", func() {
@@ -171,6 +204,23 @@ var _ = Describe("RedpandaInstance getServiceStatus", func() {
 						IsReady: false,
 					},
 				},
+			}
+		})
+
+		It("should return ServiceInfo with failed health checks in lifecycle states", func() {
+			lifecycleStates := []string{
+				internalfsm.LifecycleStateToBeCreated,
+				internalfsm.LifecycleStateCreating,
+				internalfsm.LifecycleStateRemoving,
+				internalfsm.LifecycleStateRemoved,
+			}
+
+			for _, state := range lifecycleStates {
+				instance.GetBaseFSMInstanceForTest().SetCurrentFSMState(state)
+				info, err := instance.GetServiceStatus(ctx, fsMock, 1)
+				Expect(err).To(BeNil())
+				Expect(info.RedpandaStatus.HealthCheck.IsLive).To(BeFalse())
+				Expect(info.RedpandaStatus.HealthCheck.IsReady).To(BeFalse())
 			}
 		})
 
@@ -215,6 +265,8 @@ var _ = Describe("RedpandaInstance getServiceStatus", func() {
 			states := []string{
 				internalfsm.LifecycleStateToBeCreated,
 				internalfsm.LifecycleStateCreating,
+				internalfsm.LifecycleStateRemoving,
+				internalfsm.LifecycleStateRemoved,
 				redpanda.OperationalStateStopped,
 				redpanda.OperationalStateStarting,
 				redpanda.OperationalStateIdle,
@@ -249,6 +301,8 @@ var _ = Describe("RedpandaInstance getServiceStatus", func() {
 			states := []string{
 				internalfsm.LifecycleStateToBeCreated,
 				internalfsm.LifecycleStateCreating,
+				internalfsm.LifecycleStateRemoving,
+				internalfsm.LifecycleStateRemoved,
 				redpanda.OperationalStateStopped,
 				redpanda.OperationalStateStarting,
 				redpanda.OperationalStateIdle,
