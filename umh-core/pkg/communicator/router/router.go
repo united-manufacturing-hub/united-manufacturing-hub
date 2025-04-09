@@ -22,6 +22,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/encoding"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/subscriber"
@@ -42,6 +43,8 @@ type Router struct {
 	subHandler            *subscriber.Handler
 	systemSnapshot        *fsm.SystemSnapshot
 	configManager         config.ConfigManager
+	actionLogger          *zap.SugaredLogger
+	routerLogger          *zap.SugaredLogger
 }
 
 type ClientConnection struct {
@@ -69,6 +72,8 @@ func NewRouter(dog watchdog.Iface,
 		subHandler:            subHandler,
 		systemSnapshot:        systemSnapshot,
 		configManager:         configManager,
+		actionLogger:          logger.For(logger.ComponentCommunicatorActions),
+		routerLogger:          logger.For(logger.ComponentCommunicatorRouter),
 	}
 }
 
@@ -82,12 +87,12 @@ func (r *Router) router() {
 	for {
 		select {
 		case message := <-r.inboundChannel:
-			zap.S().Infof("Router received message: %v", message)
+			r.routerLogger.Infof("Router received message: %v", message)
 			r.dog.ReportHeartbeatStatus(watcherUUID, watchdog.HEARTBEAT_STATUS_OK)
 			// Decode message
 			messageContent, err := encoding.DecodeMessageFromUserToUMHInstance(message.Content)
 			if err != nil {
-				zap.S().Warnf("Failed to decrypt message: %s", err.Error())
+				r.routerLogger.Warnf("Failed to decrypt message: %s", err.Error())
 				continue
 			}
 			switch messageContent.MessageType {
@@ -96,7 +101,7 @@ func (r *Router) router() {
 			case models.Action:
 				r.handleAction(messageContent, message, watcherUUID)
 			default:
-				zap.S().Warnf("Unexpected message type: %s", messageContent.MessageType)
+				r.routerLogger.Warnf("Unexpected message type: %s", messageContent.MessageType)
 				continue
 			}
 		case <-ticker.C:
@@ -108,7 +113,7 @@ func (r *Router) router() {
 func (r *Router) handleSub(message *models.UMHMessage, watcherUUID uuid.UUID) {
 	if r.subHandler == nil {
 		r.dog.ReportHeartbeatStatus(watcherUUID, watchdog.HEARTBEAT_STATUS_WARNING)
-		zap.S().Warnf("Subscribe handler not yet initialized")
+		r.routerLogger.Warnf("Subscribe handler not yet initialized")
 		return
 	}
 	r.subHandler.AddSubscriber(message.Email)
@@ -119,12 +124,12 @@ func (r *Router) handleAction(messageContent models.UMHMessageContent, message *
 
 	payloadMap, ok := messageContent.Payload.(map[string]interface{})
 	if !ok {
-		zap.S().Warnf("Warning: Could not assert payload to map[string]interface{}. Actual type: %T, Value: %v", messageContent.Payload, messageContent.Payload)
+		r.routerLogger.Warnf("Warning: Could not assert payload to map[string]interface{}. Actual type: %T, Value: %v", messageContent.Payload, messageContent.Payload)
 		return
 	}
 
 	if err := maptostruct.MapToStruct(payloadMap, &actionPayload); err != nil {
-		zap.S().Warnf("Failed to convert payload into ActionMessagePayload: %v", err)
+		r.routerLogger.Warnf("Failed to convert payload into ActionMessagePayload: %v", err)
 		return
 	}
 

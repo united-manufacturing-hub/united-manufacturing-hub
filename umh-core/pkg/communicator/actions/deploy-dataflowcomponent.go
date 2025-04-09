@@ -26,6 +26,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"go.uber.org/zap"
 	"gopkg.in/yaml.v3"
@@ -41,6 +42,7 @@ type DeployDataflowComponentAction struct {
 	payload         models.CDFCPayload
 	name            string
 	metaType        string
+	actionLogger    *zap.SugaredLogger
 }
 
 // exposed for testing purposed
@@ -51,6 +53,7 @@ func NewDeployDataflowComponentAction(userEmail string, actionUUID uuid.UUID, in
 		instanceUUID:    instanceUUID,
 		outboundChannel: outboundChannel,
 		configManager:   configManager,
+		actionLogger:    logger.For(logger.ComponentCommunicatorActions),
 	}
 }
 
@@ -244,7 +247,7 @@ func (a *DeployDataflowComponentAction) Parse(payload interface{}) error {
 		return fmt.Errorf("unsupported component type: %s", a.metaType)
 	}
 
-	zap.S().Infof("Parsed DeployDataFlowComponent action payload: name=%s, type=%s", a.name, a.metaType)
+	a.actionLogger.Infof("Parsed DeployDataFlowComponent action payload: name=%s, type=%s", a.name, a.metaType)
 	return nil
 }
 
@@ -255,7 +258,7 @@ func (a *DeployDataflowComponentAction) Validate() error {
 }
 
 func (a *DeployDataflowComponentAction) Execute() (interface{}, map[string]interface{}, error) {
-	zap.S().Info("Executing DeployDataflowComponent action")
+	a.actionLogger.Info("Executing DeployDataflowComponent action")
 
 	// Send confirmation that action is starting
 	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionConfirmed, "Starting DeployDataflowComponent", a.outboundChannel, models.DeployDataFlowComponent)
