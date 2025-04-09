@@ -48,10 +48,6 @@ type CdcfMeta struct {
 	Type string `json:"type"`
 }
 
-type GetDFCPayload struct {
-	UUIDs []string `json:"uuids" binding:"required"`
-}
-
 // EditInstanceLocation holds the location information for the instance
 type EditInstanceLocationModel struct {
 	Enterprise string  `json:"enterprise"`
@@ -356,4 +352,38 @@ type ActionReplyMessagePayload struct {
 	ActionUUID         uuid.UUID        `json:"actionUUID" binding:"required"`
 	// ActionContext is an optional field that can be used to provide additional context for the action.
 	ActionContext map[string]interface{} `json:"actionContext,omitempty"`
+}
+
+type GetDataflowcomponentResponse map[string]GetDataflowcomponentResponseContent
+
+type GetDataflowcomponentResponseContent struct {
+	// CreationTime corresponds to the JSON schema field "creationTime".
+	CreationTime float64 `json:"creationTime" yaml:"creationTime" mapstructure:"creationTime"`
+
+	// Creator corresponds to the JSON schema field "creator".
+	Creator string `json:"creator" yaml:"creator" mapstructure:"creator"`
+
+	// Meta corresponds to the JSON schema field "meta".
+	Meta CommonDataFlowComponentMeta `json:"meta" yaml:"meta" mapstructure:"meta"`
+
+	// Name corresponds to the JSON schema field "name".
+	Name string `json:"name" yaml:"name" mapstructure:"name"`
+
+	// ParentDFC corresponds to the JSON schema field "parentDFC".
+	ParentDFC interface{} `json:"parentDFC,omitempty" yaml:"parentDFC,omitempty" mapstructure:"parentDFC,omitempty"`
+
+	// Payload corresponds to the JSON schema field "payload".
+	Payload Payload `json:"payload" yaml:"payload" mapstructure:"payload"`
+}
+
+type Payload interface{}
+
+type CommonDataFlowComponentMeta struct {
+	// Key value pairs of additional metadata
+	AdditionalMetadata map[string]interface{} `json:"additionalMetadata,omitempty" yaml:"additionalMetadata,omitempty" mapstructure:"additionalMetadata,omitempty"`
+
+	// The type of the dataflow component
+	Type string `json:"type" yaml:"type" mapstructure:"type"`
+
+	AdditionalProperties interface{}
 }

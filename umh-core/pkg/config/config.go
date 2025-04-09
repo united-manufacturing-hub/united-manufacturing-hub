@@ -92,6 +92,7 @@ type DataFlowComponentConfig struct {
 	// For the FSM
 	FSMInstanceConfig `yaml:",inline"`
 
+	// For the DataFlowComponent
 	DataFlowComponentConfig dataflowcomponentconfig.DataFlowComponentConfig `yaml:"dataFlowComponentConfig"`
 }
 

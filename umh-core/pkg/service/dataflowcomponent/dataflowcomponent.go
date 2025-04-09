@@ -77,6 +77,9 @@ type ServiceInfo struct {
 
 	// BenthosFSMState contains the current state of the Benthos FSM
 	BenthosFSMState string
+
+	// add LastChanged and Author here
+
 }
 
 // DataFlowComponentService is the default implementation of the IDataFlowComponentService interface

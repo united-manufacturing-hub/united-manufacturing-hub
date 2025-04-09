@@ -15,6 +15,7 @@
 package dataflowcomponentconfig
 
 import (
+	"github.com/google/uuid"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 )
@@ -69,4 +70,9 @@ func FromBenthosServiceConfig(benthos benthosserviceconfig.BenthosServiceConfig)
 			Buffer:             benthos.Buffer,
 		},
 	}
+}
+
+// generate the uuid from the name
+func GenerateUUIDFromName(name string) uuid.UUID {
+	return uuid.NewSHA1(uuid.NameSpaceDNS, []byte(name))
 }
