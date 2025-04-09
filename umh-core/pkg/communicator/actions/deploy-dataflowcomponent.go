@@ -238,6 +238,7 @@ func (a *DeployDataflowComponentAction) Execute() (interface{}, map[string]inter
 	// Parse the input and output configurations
 	benthosInput := make(map[string]interface{})
 	benthosOutput := make(map[string]interface{})
+	benthosYamlInject := make(map[string]interface{})
 
 	// First try to use the Input data
 	err := yaml.Unmarshal([]byte(a.payload.Input.Data), &benthosInput)
@@ -247,11 +248,59 @@ func (a *DeployDataflowComponentAction) Execute() (interface{}, map[string]inter
 		return nil, nil, fmt.Errorf("%s", errMsg)
 	}
 
+	//parse the output data
 	err = yaml.Unmarshal([]byte(a.payload.Output.Data), &benthosOutput)
 	if err != nil {
 		errMsg := fmt.Sprintf("Failed to parse output data: %s", err.Error())
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errMsg, a.outboundChannel, models.DeployDataFlowComponent)
 		return nil, nil, fmt.Errorf("%s", errMsg)
+	}
+
+	//parse the inject data
+	err = yaml.Unmarshal([]byte(a.payload.Inject.Data), &benthosYamlInject)
+	if err != nil {
+		errMsg := fmt.Sprintf("Failed to parse inject data: %s", err.Error())
+		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errMsg, a.outboundChannel, models.DeployDataFlowComponent)
+		return nil, nil, fmt.Errorf("%s", errMsg)
+	}
+
+	//parse the cache resources, rate limit resources and buffer from the inject data
+	cacheResources, ok := benthosYamlInject["cache_resources"].([]interface{})
+	if !ok {
+		cacheResources = []interface{}{}
+	}
+
+	rateLimitResources, ok := benthosYamlInject["rate_limit_resources"].([]interface{})
+	if !ok {
+		rateLimitResources = []interface{}{}
+	}
+
+	buffer, ok := benthosYamlInject["buffer"].(map[string]interface{})
+	if !ok {
+		buffer = map[string]interface{}{}
+	}
+
+	benthosCacheResources := make([]map[string]interface{}, len(cacheResources))
+	for i, resource := range cacheResources {
+		resourceMap, ok := resource.(map[string]interface{})
+		if !ok {
+			return nil, nil, fmt.Errorf("cache resource %d is not a valid object", i)
+		}
+		benthosCacheResources[i] = resourceMap
+	}
+
+	benthosRateLimitResources := make([]map[string]interface{}, len(rateLimitResources))
+	for i, resource := range rateLimitResources {
+		resourceMap, ok := resource.(map[string]interface{})
+		if !ok {
+			return nil, nil, fmt.Errorf("rate limit resource %d is not a valid object", i)
+		}
+		benthosRateLimitResources[i] = resourceMap
+	}
+
+	benthosBuffer := make(map[string]interface{})
+	for key, value := range buffer {
+		benthosBuffer[key] = value
 	}
 
 	// Convert pipeline data to Benthos pipeline configuration
@@ -281,9 +330,12 @@ func (a *DeployDataflowComponentAction) Execute() (interface{}, map[string]inter
 
 	// Create the Benthos service config
 	benthosConfig := benthosserviceconfig.BenthosServiceConfig{
-		Input:    benthosInput,
-		Output:   benthosOutput,
-		Pipeline: benthosPipeline,
+		Input:              benthosInput,
+		Output:             benthosOutput,
+		Pipeline:           benthosPipeline,
+		CacheResources:     benthosCacheResources,
+		RateLimitResources: benthosRateLimitResources,
+		Buffer:             benthosBuffer,
 	}
 
 	// Normalize the config
