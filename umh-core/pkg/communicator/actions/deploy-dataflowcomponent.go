@@ -148,7 +148,7 @@ func parseCustomDataFlowComponent(payload interface{}) (models.CDFCPayload, erro
 	}
 
 	// Use ParseActionPayload to convert the raw payload to our struct
-	parsedPayload, err := ParseActionPayload[models.customDFCPayload](payload)
+	parsedPayload, err := ParseActionPayload[models.CustomDFCPayload](payload)
 	if err != nil {
 		return models.CDFCPayload{}, fmt.Errorf("failed to parse payload: %v", err)
 	}
