@@ -92,7 +92,6 @@ func NewContainerManager(name string) *ContainerManager {
 				return fmt.Errorf("instance is not a ContainerInstance")
 			}
 			ci.config = cc
-			// Also update desired state so the FSM can adapt
 			return nil
 		},
 		// Get expected max p95 execution time per instance
