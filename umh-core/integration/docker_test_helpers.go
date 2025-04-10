@@ -194,7 +194,16 @@ func buildContainer() error {
 	imageName := imageNameParts[0]
 	tag := imageNameParts[1]
 
-	exec.Command("make", "build", "IMAGE_NAME="+imageName, "TAG="+tag).Run()
+	var outmake []byte
+	cmd := exec.Command("make", "build", "IMAGE_NAME="+imageName, "TAG="+tag)
+	cmd.Dir = coreDir // Set working directory to coreDir
+	outmake, err = cmd.Output()
+	if err != nil {
+		fmt.Printf("Docker build failed: %v\n", err)
+		fmt.Printf("Build output:\n%s\n", outmake)
+		return fmt.Errorf("docker build failed: %s", err)
+	}
+	fmt.Printf("Output of make build: %s\n", outmake)
 
 	fmt.Println("Docker build successful")
 	return nil
