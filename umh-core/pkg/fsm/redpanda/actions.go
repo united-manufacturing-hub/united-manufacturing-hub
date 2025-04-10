@@ -255,7 +255,6 @@ func (r *RedpandaInstance) UpdateObservedStateOfInstance(ctx context.Context, fi
 		// The context was canceled or its deadline was exceeded before all goroutines finished.
 		// Although some goroutines might still be running in the background,
 		// they use a context (gctx) that should cause them to terminate promptly.
-		// Experiments have shown that without using this, some goroutines can still take up to 70ms to terminate.
 		return ctx.Err()
 	}
 

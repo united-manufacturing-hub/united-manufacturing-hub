@@ -196,6 +196,8 @@ var _ = Describe("Redpanda Monitor Service", func() {
 			// Try getting status - we don't need to capture the result
 			_, err = service.Status(ctx, mockFS, tick)
 			Expect(err).To(HaveOccurred())
+			// Check that this is a "failed to parse metrics" error
+			Expect(err.Error()).To(ContainSubstring("failed to parse metrics"))
 
 			// We expect an error due to the mock data not being real metrics data
 			// but at least the service should report as existing
