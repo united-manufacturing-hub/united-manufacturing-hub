@@ -104,6 +104,7 @@ func (m *DataflowComponentManager) Reconcile(ctx context.Context, cfg config.Ful
 		duration := time.Since(start)
 		metrics.ObserveReconcileTime(logger.ComponentBenthosManager, m.BaseFSMManager.GetManagerName(), duration)
 	}()
+	// TODO: Check with Jeremy if we need to override the reconcile method for edit dataflowcomponent workflow
 	return m.BaseFSMManager.Reconcile(ctx, cfg, filesystemService, tick)
 }
 
