@@ -85,7 +85,7 @@ func (s *S6Instance) Reconcile(ctx context.Context, filesystemService filesystem
 	}
 
 	// Step 2: Detect external changes.
-	if err := s.reconcileExternalChanges(ctx, filesystemService); err != nil {
+	if err := s.reconcileExternalChanges(ctx, filesystemService, tick); err != nil {
 		// If the service is not running, we don't want to return an error here, because we want to continue reconciling
 		if !errors.Is(err, s6service.ErrServiceNotExist) {
 			s.baseFSMInstance.SetError(err, tick)
@@ -127,7 +127,7 @@ func (s *S6Instance) Reconcile(ctx context.Context, filesystemService filesystem
 
 // reconcileExternalChanges checks if the S6Instance service status has changed
 // externally (e.g., if someone manually stopped or started it, or if it crashed)
-func (s *S6Instance) reconcileExternalChanges(ctx context.Context, filesystemService filesystem.Service) error {
+func (s *S6Instance) reconcileExternalChanges(ctx context.Context, filesystemService filesystem.Service, tick uint64) error {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentS6Instance, s.baseFSMInstance.GetID()+".reconcileExternalChanges", time.Since(start))
@@ -135,7 +135,7 @@ func (s *S6Instance) reconcileExternalChanges(ctx context.Context, filesystemSer
 
 	observedStateCtx, cancel := context.WithTimeout(ctx, constants.S6UpdateObservedStateTimeout)
 	defer cancel()
-	err := s.updateObservedState(observedStateCtx, filesystemService)
+	err := s.UpdateObservedStateOfInstance(observedStateCtx, filesystemService, tick)
 	if err != nil {
 		return fmt.Errorf("failed to update observed state: %w", err)
 	}
@@ -200,7 +200,7 @@ func (s *S6Instance) reconcileLifecycleStates(ctx context.Context, filesystemSer
 	// Independent what the desired state is, we always need to reconcile the lifecycle states first
 	switch currentState {
 	case internal_fsm.LifecycleStateToBeCreated:
-		if err := s.initiateS6Create(ctx, filesystemService); err != nil {
+		if err := s.CreateInstance(ctx, filesystemService); err != nil {
 			return err, true
 		}
 		return s.baseFSMInstance.SendEvent(ctx, internal_fsm.LifecycleEventCreate), true
@@ -223,7 +223,7 @@ func (s *S6Instance) reconcileLifecycleStates(ctx context.Context, filesystemSer
 		s.baseFSMInstance.GetLogger().Debugf("Service supervision confirmed, transitioning to Created state")
 		return s.baseFSMInstance.SendEvent(ctx, internal_fsm.LifecycleEventCreateDone), true
 	case internal_fsm.LifecycleStateRemoving:
-		if err := s.initiateS6Remove(ctx, filesystemService); err != nil {
+		if err := s.RemoveInstance(ctx, filesystemService); err != nil {
 			return err, true
 		}
 		return s.baseFSMInstance.SendEvent(ctx, internal_fsm.LifecycleEventRemoveDone), true
@@ -262,7 +262,7 @@ func (s *S6Instance) reconcileTransitionToRunning(ctx context.Context, filesyste
 
 	if currentState == OperationalStateStopped {
 		// Attempt to initiate start
-		if err := s.initiateS6Start(ctx, filesystemService); err != nil {
+		if err := s.StartInstance(ctx, filesystemService); err != nil {
 			return err, true
 		}
 		// Send event to transition from Stopped/Failed to Starting
@@ -293,7 +293,7 @@ func (s *S6Instance) reconcileTransitionToStopped(ctx context.Context, filesyste
 
 	if currentState == OperationalStateRunning || currentState == OperationalStateStarting {
 		// Attempt to initiate a stop
-		if err := s.initiateS6Stop(ctx, filesystemService); err != nil {
+		if err := s.StopInstance(ctx, filesystemService); err != nil {
 			return err, true
 		}
 		// Send event to transition to Stopping

@@ -147,7 +147,7 @@ func (b *BenthosInstance) reconcileExternalChanges(ctx context.Context, filesyst
 	observedStateCtx, cancel := context.WithTimeout(ctx, constants.BenthosUpdateObservedStateTimeout)
 	defer cancel()
 
-	err := b.updateObservedState(observedStateCtx, filesystemService, tick)
+	err := b.UpdateObservedStateOfInstance(observedStateCtx, filesystemService, tick)
 	if err != nil {
 		return fmt.Errorf("failed to update observed state: %w", err)
 	}
@@ -205,7 +205,7 @@ func (b *BenthosInstance) reconcileLifecycleStates(ctx context.Context, filesyst
 	// Independent what the desired state is, we always need to reconcile the lifecycle states first
 	switch currentState {
 	case internal_fsm.LifecycleStateToBeCreated:
-		if err := b.initiateBenthosCreate(ctx, filesystemService); err != nil {
+		if err := b.CreateInstance(ctx, filesystemService); err != nil {
 			return err, false
 		}
 		return b.baseFSMInstance.SendEvent(ctx, internal_fsm.LifecycleEventCreate), true
@@ -214,7 +214,7 @@ func (b *BenthosInstance) reconcileLifecycleStates(ctx context.Context, filesyst
 		// For now, we'll assume it's created immediately after initiating creation
 		return b.baseFSMInstance.SendEvent(ctx, internal_fsm.LifecycleEventCreateDone), true
 	case internal_fsm.LifecycleStateRemoving:
-		if err := b.initiateBenthosRemove(ctx, filesystemService); err != nil {
+		if err := b.RemoveInstance(ctx, filesystemService); err != nil {
 			return err, false
 		}
 		return b.baseFSMInstance.SendEvent(ctx, internal_fsm.LifecycleEventRemoveDone), true
@@ -254,7 +254,7 @@ func (b *BenthosInstance) reconcileTransitionToActive(ctx context.Context, files
 	// If we're stopped, we need to start first
 	if currentState == OperationalStateStopped {
 		// Attempt to initiate start
-		if err := b.initiateBenthosStart(ctx, filesystemService); err != nil {
+		if err := b.StartInstance(ctx, filesystemService); err != nil {
 			return err, false
 		}
 		// Send event to transition from Stopped to Starting
@@ -375,7 +375,7 @@ func (b *BenthosInstance) reconcileTransitionToStopped(ctx context.Context, file
 	// If we're in any operational state except Stopped or Stopping, initiate stop
 	if currentState != OperationalStateStopped && currentState != OperationalStateStopping {
 		// Attempt to initiate a stop
-		if err := b.initiateBenthosStop(ctx, filesystemService); err != nil {
+		if err := b.StopInstance(ctx, filesystemService); err != nil {
 			return err, false
 		}
 		// Send event to transition to Stopping
