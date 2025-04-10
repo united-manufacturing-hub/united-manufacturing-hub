@@ -186,19 +186,16 @@ func buildContainer() error {
 
 	fmt.Printf("Core directory: %s\n", coreDir)
 	fmt.Printf("Dockerfile path: %s\n", dockerfilePath)
-	// Use Docker Buildx for more efficient builds
-	// -t: Tag the image with the specified name
-	// --load: Load the image into Docker's local image store
-	// --no-cache: Build without using the cache [Since we already check above if the image exists]
-	// -f: Specify the Dockerfile path
-	// Last argument is the build context (directory containing source files)
-	out, err = runDockerCommand("buildx", "build", "-t", getImageName(),
-		"--load", "--no-cache", "-f", dockerfilePath, coreDir)
-	if err != nil {
-		fmt.Printf("Docker build failed: %v\n", err)
-		fmt.Printf("Build output:\n%s\n", out)
-		return fmt.Errorf("docker build failed: %s", out)
-	}
+
+	// Let's just use make build with our own tag
+	fullImageName := getImageName()
+	// Split in name and tag
+	imageNameParts := strings.Split(fullImageName, ":")
+	imageName := imageNameParts[0]
+	tag := imageNameParts[1]
+
+	exec.Command("make", "build", "IMAGE_NAME="+imageName, "TAG="+tag).Run()
+
 	fmt.Println("Docker build successful")
 	return nil
 }

@@ -136,6 +136,7 @@ build: download-docker-binaries
 		--build-arg BENTHOS_UMH_VERSION=$(BENTHOS_UMH_VERSION) \
 		--build-arg REDPANDA_VERSION=$(REDPANDA_VERSION) \
 		--build-arg APP_VERSION=$(VERSION) \
+		--build-arg TARGETARCH=$(TARGETARCH) \
 		-t $(IMAGE_NAME):$(TAG) \
 		--progress=plain \
 		-f Dockerfile .
