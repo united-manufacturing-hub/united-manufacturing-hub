@@ -1,4 +1,3 @@
-vendor/
 
 # Cache everything except the specific files we need
 .docker-cache/*

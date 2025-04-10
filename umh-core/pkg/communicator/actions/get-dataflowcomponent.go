@@ -16,6 +16,7 @@ package actions
 
 import (
 	"context"
+	"fmt"
 	"slices"
 
 	"github.com/google/uuid"
@@ -25,6 +26,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"go.uber.org/zap"
+	"gopkg.in/yaml.v3"
 )
 
 type GetDataFlowComponentAction struct {
@@ -79,6 +81,99 @@ func (a *GetDataFlowComponentAction) Execute() (interface{}, map[string]interfac
 	a.actionLogger.Info("Building the response")
 	response := models.GetDataflowcomponentResponse{}
 	for _, component := range dataFlowComponents {
+		// build the payload
+		dfc_payload := models.CommonDataFlowComponentCDFCProperties{}
+		dfc_payload.BenthosImageTag = &models.CommonDataFlowComponentBenthosImageTagConfig{
+			Tag: nil,
+		}
+		dfc_payload.IgnoreErrors = nil
+		//fill the inputs, outputs, pipeline and rawYAML
+		// Convert the BenthosConfig input to CommonDataFlowComponentInputConfig
+		inputData, err := yaml.Marshal(component.DataFlowComponentConfig.BenthosConfig.Input)
+		if err != nil {
+			a.actionLogger.Warnf("Failed to marshal input data: %v", err)
+		}
+		dfc_payload.Inputs = models.CommonDataFlowComponentInputConfig{
+			Data: string(inputData),
+			Type: "benthos", // Default type for benthos inputs
+		}
+
+		// Convert the BenthosConfig output to CommonDataFlowComponentOutputConfig
+		outputData, err := yaml.Marshal(component.DataFlowComponentConfig.BenthosConfig.Output)
+		if err != nil {
+			a.actionLogger.Warnf("Failed to marshal output data: %v", err)
+		}
+		dfc_payload.Outputs = models.CommonDataFlowComponentOutputConfig{
+			Data: string(outputData),
+			Type: "benthos", // Default type for benthos outputs
+		}
+
+		// Convert the BenthosConfig pipeline to CommonDataFlowComponentPipelineConfig
+		processors := models.CommonDataFlowComponentPipelineConfigProcessors{}
+
+		// Extract processors from the pipeline if they exist
+		if pipeline, ok := component.DataFlowComponentConfig.BenthosConfig.Pipeline["processors"].([]interface{}); ok {
+			for i, proc := range pipeline {
+				procData, err := yaml.Marshal(proc)
+				if err != nil {
+					a.actionLogger.Warnf("Failed to marshal processor data: %v", err)
+					continue
+				}
+				// Use index as processor name if not specified
+				procName := fmt.Sprintf("processor_%d", i)
+				processors[procName] = struct {
+					Data string `json:"data" yaml:"data" mapstructure:"data"`
+					Type string `json:"type" yaml:"type" mapstructure:"type"`
+				}{
+					Data: string(procData),
+					Type: "bloblang", // Default type for benthos processors
+				}
+			}
+		}
+
+		// Set threads value if present in the pipeline
+		var threads *int
+		if threadsVal, ok := component.DataFlowComponentConfig.BenthosConfig.Pipeline["threads"]; ok {
+			if t, ok := threadsVal.(int); ok {
+				threads = &t
+			}
+		}
+
+		dfc_payload.Pipeline = models.CommonDataFlowComponentPipelineConfig{
+			Processors: processors,
+			Threads:    threads,
+		}
+
+		// Create RawYAML from the cache_resources, rate_limit_resources, and buffer
+		rawYAMLMap := map[string]interface{}{}
+
+		// Add cache resources if present
+		if len(component.DataFlowComponentConfig.BenthosConfig.CacheResources) > 0 {
+			rawYAMLMap["cache_resources"] = component.DataFlowComponentConfig.BenthosConfig.CacheResources
+		}
+
+		// Add rate limit resources if present
+		if len(component.DataFlowComponentConfig.BenthosConfig.RateLimitResources) > 0 {
+			rawYAMLMap["rate_limit_resources"] = component.DataFlowComponentConfig.BenthosConfig.RateLimitResources
+		}
+
+		// Add buffer if present
+		if len(component.DataFlowComponentConfig.BenthosConfig.Buffer) > 0 {
+			rawYAMLMap["buffer"] = component.DataFlowComponentConfig.BenthosConfig.Buffer
+		}
+
+		// Only create rawYAML if we have any data
+		if len(rawYAMLMap) > 0 {
+			rawYAMLData, err := yaml.Marshal(rawYAMLMap)
+			if err != nil {
+				a.actionLogger.Warnf("Failed to marshal rawYAML data: %v", err)
+			} else {
+				dfc_payload.RawYAML = &models.CommonDataFlowComponentRawYamlConfig{
+					Data: string(rawYAMLData),
+				}
+			}
+		}
+
 		response[dataflowcomponentconfig.GenerateUUIDFromName(component.FSMInstanceConfig.Name).String()] = models.GetDataflowcomponentResponseContent{
 			CreationTime: 0,
 			Creator:      "",
@@ -87,7 +182,7 @@ func (a *GetDataFlowComponentAction) Execute() (interface{}, map[string]interfac
 			},
 			Name:      component.FSMInstanceConfig.Name,
 			ParentDFC: nil,
-			Payload:   component.DataFlowComponentConfig,
+			Payload:   dfc_payload,
 		}
 	}
 
@@ -95,7 +190,7 @@ func (a *GetDataFlowComponentAction) Execute() (interface{}, map[string]interfac
 	//SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedSuccessfull, response, a.outboundChannel, models.GetDataFlowComponent)
 
 	a.actionLogger.Info("Response built, returning, response: ", response)
-	return "ewdwdwdwdwdwd", nil, nil
+	return response, nil, nil
 }
 
 func (a *GetDataFlowComponentAction) getUserEmail() string {

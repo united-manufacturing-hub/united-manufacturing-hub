@@ -236,14 +236,14 @@ test-hello: clean build
 		-e LOGGING_LEVEL=DEBUG \
 		$(IMAGE_NAME):$(TAG)
 
-test-comm: clean build-debug
+test-comm: clean build
 	@mkdir -p $(PWD)/data
 	@cp $(PWD)/examples/example-config-comm.yaml $(PWD)/data/config.yaml
 	docker run \
 		--name $(IMAGE_NAME) \
 		-v $(PWD)/data:/data \
 		-p 8081:8080 \
-		-p 40000:40000 \
+		-p 4195:4195 \
 		--memory $(MEMORY) \
 		--cpus $(CPUS) \
 		$(IMAGE_NAME):$(TAG)
