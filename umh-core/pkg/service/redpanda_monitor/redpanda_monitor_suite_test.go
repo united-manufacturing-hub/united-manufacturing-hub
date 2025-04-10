@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package redpanda_monitor
+package redpanda_monitor_test
 
 import (
 	"testing"

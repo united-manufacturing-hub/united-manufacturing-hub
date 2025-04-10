@@ -375,6 +375,7 @@ func (s *RedpandaService) GetHealthCheckAndMetrics(ctx context.Context, tick uin
 		return RedpandaStatus{}, fmt.Errorf("failed to get redpanda status: %w", err)
 	}
 
+	// If this is nil, we have not yet tried to scan for metrics and config, or there has been an error (but that one will be cached in the above Status() return)
 	if redpandaStatus.RedpandaStatus.LastScan == nil {
 		return RedpandaStatus{}, fmt.Errorf("last scan is nil")
 	}

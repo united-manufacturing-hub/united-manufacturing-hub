@@ -26,8 +26,9 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
+
+	"golang.org/x/sync/errgroup"
 
 	"github.com/prometheus/common/expfmt"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
@@ -229,7 +230,7 @@ done
 	return scriptContent, nil
 }
 
-func (s *RedpandaMonitorService) getS6ServiceName() string {
+func (s *RedpandaMonitorService) GetS6ServiceName() string {
 	return "redpanda-monitor"
 }
 
@@ -242,7 +243,7 @@ func (s *RedpandaMonitorService) GenerateS6ConfigForRedpandaMonitor() (s6service
 	s6Config := s6serviceconfig.S6ServiceConfig{
 		Command: []string{
 			"/bin/sh",
-			fmt.Sprintf("%s/%s/config/run_redpanda_monitor.sh", constants.S6BaseDir, s.getS6ServiceName()),
+			fmt.Sprintf("%s/%s/config/run_redpanda_monitor.sh", constants.S6BaseDir, s.GetS6ServiceName()),
 		},
 		Env: map[string]string{},
 		ConfigFiles: map[string]string{
@@ -255,8 +256,8 @@ func (s *RedpandaMonitorService) GenerateS6ConfigForRedpandaMonitor() (s6service
 
 // GetConfig is not implemented, as the config is static
 
-// parseRedpandaLogs parses the logs of a redpanda service and extracts metrics
-func (s *RedpandaMonitorService) parseRedpandaLogs(logs []s6service.LogEntry, tick uint64) (*RedpandaMetricsAndClusterConfig, error) {
+// ParseRedpandaLogs parses the logs of a redpanda service and extracts metrics
+func (s *RedpandaMonitorService) ParseRedpandaLogs(ctx context.Context, logs []s6service.LogEntry, tick uint64) (*RedpandaMetricsAndClusterConfig, error) {
 	/*
 		A normal log entry looks like this:
 		BLOCK_START_MARKER
@@ -343,31 +344,53 @@ func (s *RedpandaMonitorService) parseRedpandaLogs(logs []s6service.LogEntry, ti
 	timestampDataBytes = bytes.ReplaceAll(timestampDataBytes, []byte(CLUSTERCONFIG_END_MARKER), []byte{})
 	timestampDataBytes = bytes.ReplaceAll(timestampDataBytes, []byte(BLOCK_END_MARKER), []byte{})
 
-	var wg sync.WaitGroup
 	var metrics *RedpandaMetrics
 	var clusterConfig *ClusterConfig
-	var metricsErr, clusterConfigErr error
-
 	// Processing the Metrics & cluster config takes ~5ms (especially the metrics parsing) each, therefore process them in parallel
-	wg.Add(2)
+
+	ctx8, cancel8 := context.WithTimeout(ctx, 8*time.Millisecond)
+	defer cancel8()
+	g, _ := errgroup.WithContext(ctx8)
+
+	g.Go(func() error {
+		var err error
+		metrics, err = s.processMetricsDataBytes(metricsDataBytes, tick)
+		return err
+	})
+
+	g.Go(func() error {
+		var err error
+		clusterConfig, err = s.processClusterConfigDataBytes(clusterConfigDataBytes, tick)
+		return err
+	})
+
+	// Create a buffered channel to receive the result from g.Wait().
+	// The channel is buffered so that the goroutine sending on it doesn't block.
+	errc := make(chan error, 1)
+
+	// Run g.Wait() in a separate goroutine.
+	// This allows us to use a select statement to return early if the context is canceled.
 	go func() {
-		defer wg.Done()
-		metrics, metricsErr = s.processMetricsDataBytes(metricsDataBytes, tick)
+		// g.Wait() blocks until all goroutines launched with g.Go() have returned.
+		// It returns the first non-nil error, if any.
+		errc <- g.Wait()
 	}()
 
-	go func() {
-		defer wg.Done()
-		clusterConfig, clusterConfigErr = s.processClusterConfigDataBytes(clusterConfigDataBytes, tick)
-	}()
-
-	wg.Wait()
-
-	if metricsErr != nil {
-		return nil, fmt.Errorf("failed to process metrics data: %w", metricsErr)
-	}
-
-	if clusterConfigErr != nil {
-		return nil, fmt.Errorf("failed to process cluster config data: %w", clusterConfigErr)
+	// Use a select statement to wait for either the g.Wait() result or the context's cancellation.
+	select {
+	case err := <-errc:
+		// g.Wait() has finished, so check if any goroutine returned an error.
+		if err != nil {
+			// If there was an error in any sub-call, return that error.
+			return nil, err
+		}
+		// If err is nil, all goroutines completed successfully.
+	case <-ctx.Done():
+		// The context was canceled or its deadline was exceeded before all goroutines finished.
+		// Although some goroutines might still be running in the background,
+		// they use a context (gctx) that should cause them to terminate promptly.
+		// Experiments have shown that without using this, some goroutines can still take up to 70ms to terminate.
+		return nil, ctx.Err()
 	}
 
 	timestampDataString := string(timestampDataBytes)
@@ -432,7 +455,7 @@ func (s *RedpandaMonitorService) processMetricsDataBytes(metricsDataBytes []byte
 	defer gzipReader.Close()
 
 	// Parse the metrics
-	metrics, err := parseMetrics(gzipReader)
+	metrics, err := ParseMetrics(gzipReader)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse metrics: %w", err)
 	}
@@ -484,6 +507,8 @@ func (s *RedpandaMonitorService) processClusterConfigDataBytes(clusterConfigData
 			if intVal, err := strconv.Atoi(strVal); err == nil {
 				result.Topic.DefaultTopicRetentionMs = intVal
 			}
+		} else {
+			return nil, fmt.Errorf("failed to parse cluster config data: log_retention_ms is not a number")
 		}
 	} else {
 		return nil, fmt.Errorf("failed to parse cluster config data: no log_retention_ms found")
@@ -498,6 +523,8 @@ func (s *RedpandaMonitorService) processClusterConfigDataBytes(clusterConfigData
 			if intVal, err := strconv.Atoi(strVal); err == nil {
 				result.Topic.DefaultTopicRetentionBytes = intVal
 			}
+		} else {
+			return nil, fmt.Errorf("failed to parse cluster config data: retention_bytes is not a number")
 		}
 	} else {
 		return nil, fmt.Errorf("failed to parse cluster config data: no retention_bytes found")
@@ -506,8 +533,8 @@ func (s *RedpandaMonitorService) processClusterConfigDataBytes(clusterConfigData
 	return &result, nil
 }
 
-// parseMetrics parses prometheus metrics into structured format
-func parseMetrics(dataReader io.Reader) (Metrics, error) {
+// ParseMetrics parses prometheus metrics into structured format
+func ParseMetrics(dataReader io.Reader) (Metrics, error) {
 	var parser expfmt.TextParser
 	metrics := Metrics{
 		Infrastructure: InfrastructureMetrics{},
@@ -629,7 +656,7 @@ func (s *RedpandaMonitorService) Status(ctx context.Context, filesystemService f
 		return ServiceInfo{}, ctx.Err()
 	}
 
-	s6ServiceName := s.getS6ServiceName()
+	s6ServiceName := s.GetS6ServiceName()
 
 	// First, check if the service exists in the S6 manager
 	// This is a crucial check that prevents "instance not found" errors
@@ -673,7 +700,7 @@ func (s *RedpandaMonitorService) Status(ctx context.Context, filesystemService f
 	}
 
 	// Parse the logs
-	metrics, err := s.parseRedpandaLogs(logs, tick)
+	metrics, err := s.ParseRedpandaLogs(ctx, logs, tick)
 	if err != nil {
 		return ServiceInfo{}, fmt.Errorf("failed to parse metrics: %w", err)
 	}
@@ -699,7 +726,7 @@ func (s *RedpandaMonitorService) AddRedpandaMonitorToS6Manager(ctx context.Conte
 		return ctx.Err()
 	}
 
-	s6ServiceName := s.getS6ServiceName()
+	s6ServiceName := s.GetS6ServiceName()
 
 	// Check whether s6ServiceConfigs already contains an entry for this instance
 	if s.s6ServiceConfig != nil {
@@ -816,7 +843,7 @@ func (s *RedpandaMonitorService) ServiceExists(ctx context.Context, filesystemSe
 		return false
 	}
 
-	exists, err := s.s6Service.ServiceExists(ctx, filepath.Join(constants.S6BaseDir, s.getS6ServiceName()), filesystemService)
+	exists, err := s.s6Service.ServiceExists(ctx, filepath.Join(constants.S6BaseDir, s.GetS6ServiceName()), filesystemService)
 	if err != nil {
 		return false
 	}
