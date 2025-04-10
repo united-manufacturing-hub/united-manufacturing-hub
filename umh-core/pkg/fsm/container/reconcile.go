@@ -301,7 +301,7 @@ func (c *ContainerInstance) reconcileTransitionToActive(ctx context.Context, fil
 	// If we're stopped, we need to start first
 	case currentState == OperationalStateStopped:
 		// nothing to start here, just for consistency with other fsms
-		err := c.InstanceStart(ctx)
+		err := c.StartInstance(ctx, filesystemService)
 		if err != nil {
 			return err, false
 		}
@@ -380,7 +380,7 @@ func (c *ContainerInstance) reconcileTransitionToStopped(ctx context.Context, fi
 		return c.baseFSMInstance.SendEvent(ctx, EventStopDone), true
 	default:
 		// For any other state, initiate stop
-		err := c.monitoringStop(ctx)
+		err := c.StopInstance(ctx, filesystemService)
 		if err != nil {
 			return err, false
 		}

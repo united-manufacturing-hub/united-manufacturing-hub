@@ -147,7 +147,7 @@ func (r *RedpandaInstance) reconcileExternalChanges(ctx context.Context, filesys
 	observedStateCtx, cancel := context.WithTimeout(ctx, constants.RedpandaUpdateObservedStateTimeout)
 	defer cancel()
 
-	err := b.UpdateObservedStateOfInstance(observedStateCtx, filesystemService, tick)
+	err := r.UpdateObservedStateOfInstance(observedStateCtx, filesystemService, tick)
 	if err != nil {
 		return fmt.Errorf("failed to update observed state: %w", err)
 	}
