@@ -137,7 +137,6 @@ build: download-docker-binaries
 		--build-arg REDPANDA_VERSION=$(REDPANDA_VERSION) \
 		--build-arg APP_VERSION=$(VERSION) \
 		--build-arg TARGETARCH=$(TARGETARCH) \
-		--build-arg TARGETARCH=$(TARGETARCH) \
 		-t $(IMAGE_NAME):$(TAG) \
 		--progress=plain \
 		-f Dockerfile .

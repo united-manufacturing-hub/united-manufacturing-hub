@@ -58,7 +58,6 @@ func (c *ContainerInstance) Reconcile(ctx context.Context, filesystemService fil
 			// If permanent, we want to remove the instance or at least stop it
 			// For now, let's just remove it from the manager:
 			if c.IsRemoved() || c.IsRemoving() || c.IsStopping() || c.IsStopped() {
-			if c.IsRemoved() || c.IsRemoving() || c.IsStopping() || c.IsStopped() {
 				c.baseFSMInstance.GetLogger().Errorf("Permanent error on container monitor %s but it is already in a terminal/removing state", instanceName)
 				return backErr, false
 			} else {
