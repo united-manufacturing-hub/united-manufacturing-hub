@@ -139,13 +139,17 @@ build: download-docker-binaries
 		-t $(IMAGE_NAME):$(TAG) \
 		-f Dockerfile .
 	
+stop-all-containers:
+	docker stop $(docker ps -a -q) || true
+	docker rm $(docker ps -a -q) || true
+
 clean:
 	docker stop $(IMAGE_NAME) || true
 	docker rm $(IMAGE_NAME) || true
 	docker rmi $(IMAGE_NAME):$(TAG) || true
 
 # Clean up Docker build cache and unused objects for CI environments
-cleanup-ci: clean
+cleanup-ci: clean stop-all-containers
 	docker builder prune -f
 	docker system prune -f --volumes
 
