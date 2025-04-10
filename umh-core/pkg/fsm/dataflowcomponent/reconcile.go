@@ -276,9 +276,15 @@ func (d *DataflowComponentInstance) reconcileStartingState(ctx context.Context, 
 	case OperationalStateStarting:
 		// First we need to ensure the Benthos service is started
 		if !d.IsDataflowComponentBenthosRunning() {
-			return nil, false
+			return d.baseFSMInstance.SendEvent(ctx, EventStartFailed), true
 		}
 		return d.baseFSMInstance.SendEvent(ctx, EventStartDone), true
+	case OperationalStateStartingFailed:
+		// When the state is Starting failed, look for benthos config changes. If yes Set the event as EventConfigChanged
+		// EventConfigChanged would initiate DFC stop
+		if d.IsDataflowComponentBenthosConfigChanged(ctx, filesystemService) {
+			return d.baseFSMInstance.SendEvent(ctx, EventConfigChanged), true
+		}
 	default:
 		return fmt.Errorf("invalid starting state: %s", currentState), false
 	}
