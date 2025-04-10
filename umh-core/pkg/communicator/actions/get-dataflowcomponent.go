@@ -16,7 +16,6 @@ package actions
 
 import (
 	"context"
-	"errors"
 	"slices"
 
 	"github.com/google/uuid"
@@ -35,28 +34,15 @@ type GetDataFlowComponentAction struct {
 	outboundChannel chan *models.UMHMessage
 	configManager   config.ConfigManager
 	systemSnapshot  *fsm.SystemSnapshot
-	uuids           []uuid.UUID
+	payload         models.GetDataflowcomponentRequestSchemaJson
 	actionLogger    *zap.SugaredLogger
 }
 
-func (a *GetDataFlowComponentAction) Parse(payload interface{}) error {
-	// Convert the payload to a map
-	payloadMap, ok := payload.(map[string]interface{})
-	if !ok {
-		SendActionReply(a.actionUUID, a.getUserEmail(), a.getUuid(), models.ActionFinishedWithFailure, "invalid payload format, expected map", a.outboundChannel, models.GetDataFlowComponent)
-		return errors.New("invalid payload format, expected map")
-	}
-
-	// Extract the uuids field
-	uuids, ok := payloadMap["versionUUIDs"].([]uuid.UUID)
-	if !ok {
-		SendActionReply(a.actionUUID, a.getUserEmail(), a.getUuid(), models.ActionFinishedWithFailure, "invalid uuids format, expected array of UUIDs", a.outboundChannel, models.GetDataFlowComponent)
-		return errors.New("invalid uuids format, expected array of UUIDs")
-	}
-
-	a.uuids = uuids
-
-	return nil
+func (a *GetDataFlowComponentAction) Parse(payload interface{}) (err error) {
+	a.actionLogger.Info("Parsing the payload")
+	a.payload, err = ParseActionPayload[models.GetDataflowcomponentRequestSchemaJson](payload)
+	a.actionLogger.Info("Payload parsed, uuids: ", a.payload.VersionUUIDs)
+	return err
 }
 
 // validation step is empty here
@@ -65,9 +51,11 @@ func (a *GetDataFlowComponentAction) Validate() error {
 }
 
 func (a *GetDataFlowComponentAction) Execute() (interface{}, map[string]interface{}, error) {
-	SendActionReply(a.actionUUID, a.getUserEmail(), a.getUuid(), models.ActionExecuting, "Checking the config to get the DataFlowComponent", a.outboundChannel, models.GetDataFlowComponent)
+	a.actionLogger.Info("Executing the action")
+	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "getting the dataflowcomponent", a.outboundChannel, models.GetDataFlowComponent)
 
 	// Get the config
+	a.actionLogger.Info("Getting the config")
 	ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
 	defer cancel()
 	curConfig, err := a.configManager.GetConfig(ctx, a.systemSnapshot.Tick)
@@ -76,14 +64,19 @@ func (a *GetDataFlowComponentAction) Execute() (interface{}, map[string]interfac
 	}
 
 	// Get the DataFlowComponent
+	a.actionLogger.Info("Getting the DataFlowComponent")
 	dataFlowComponents := []config.DataFlowComponentConfig{}
 	for _, component := range curConfig.DataFlow {
-		if slices.Contains(a.uuids, dataflowcomponentconfig.GenerateUUIDFromName(component.Name)) {
+		cur_uuid := dataflowcomponentconfig.GenerateUUIDFromName(component.Name).String()
+		a.actionLogger.Info("Checking if ", cur_uuid, " is in ", a.payload.VersionUUIDs)
+		if slices.Contains(a.payload.VersionUUIDs, cur_uuid) {
+			a.actionLogger.Info("Adding ", component.Name, " to the response")
 			dataFlowComponents = append(dataFlowComponents, component)
 		}
 	}
 
 	// build the response
+	a.actionLogger.Info("Building the response")
 	response := models.GetDataflowcomponentResponse{}
 	for _, component := range dataFlowComponents {
 		response[dataflowcomponentconfig.GenerateUUIDFromName(component.FSMInstanceConfig.Name).String()] = models.GetDataflowcomponentResponseContent{
@@ -98,7 +91,11 @@ func (a *GetDataFlowComponentAction) Execute() (interface{}, map[string]interfac
 		}
 	}
 
-	return response, nil, nil
+	// Send the success message
+	//SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedSuccessfull, response, a.outboundChannel, models.GetDataFlowComponent)
+
+	a.actionLogger.Info("Response built, returning, response: ", response)
+	return "ewdwdwdwdwdwd", nil, nil
 }
 
 func (a *GetDataFlowComponentAction) getUserEmail() string {

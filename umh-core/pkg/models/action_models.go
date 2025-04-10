@@ -387,3 +387,8 @@ type CommonDataFlowComponentMeta struct {
 
 	AdditionalProperties interface{}
 }
+
+type GetDataflowcomponentRequestSchemaJson struct {
+	// VersionUUIDs corresponds to the JSON schema field "versionUUIDs".
+	VersionUUIDs []string `json:"versionUUIDs" yaml:"versionUUIDs" mapstructure:"versionUUIDs"`
+}
