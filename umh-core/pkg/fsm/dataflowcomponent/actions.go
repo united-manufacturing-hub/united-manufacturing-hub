@@ -175,7 +175,7 @@ func (d *DataflowComponentInstance) updateObservedState(ctx context.Context, fil
 	if !dataflowcomponentconfig.ConfigsEqual(&d.config, d.ObservedState.ObservedDataflowComponentConfig) {
 		// Check if the service exists before attempting to update
 		if d.service.ServiceExists(ctx, filesystemService, d.baseFSMInstance.GetID()) {
-			d.baseFSMInstance.GetLogger().Debugf("Observed DataflowComponent config is different from desired config, updating DataflowComponent configuration")
+			d.baseFSMInstance.GetLogger().Debugf("Observed DataflowComponent config is different from desired config, updating Benthos configuration")
 
 			diffStr := dataflowcomponentconfig.ConfigDiff(&d.config, d.ObservedState.ObservedDataflowComponentConfig)
 			d.baseFSMInstance.GetLogger().Debugf("Configuration differences: %s", diffStr)
