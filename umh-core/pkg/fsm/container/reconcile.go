@@ -297,8 +297,9 @@ func (c *ContainerInstance) reconcileTransitionToActive(ctx context.Context, fil
 		metrics.ObserveReconcileTime(metrics.ComponentContainerMonitor, c.baseFSMInstance.GetID()+".reconcileTransitionToActive", time.Since(start))
 	}()
 
-	switch currentState {
-	case OperationalStateStopped:
+	switch {
+	// If we're stopped, we need to start first
+	case currentState == OperationalStateStopped:
 		// nothing to start here, just for consistency with other fsms
 		err := c.monitoringStart(ctx)
 		if err != nil {
@@ -306,14 +307,12 @@ func (c *ContainerInstance) reconcileTransitionToActive(ctx context.Context, fil
 		}
 		// Send event to transition from Stopped to Starting
 		return c.baseFSMInstance.SendEvent(ctx, EventStart), true
+	case IsStartingState(currentState):
+		return c.reconcileStartingStates(ctx, filesystemService, currentState, currentTime)
+	case IsRunningState(currentState):
+		return c.reconcileRunningStates(ctx, filesystemService, currentState, currentTime)
 	default:
-		// Handle starting phase states
-		if IsStartingState(currentState) {
-			return c.reconcileStartingStates(ctx, filesystemService, currentState, currentTime)
-		} else if IsRunningState(currentState) {
-			return c.reconcileRunningStates(ctx, filesystemService, currentState, currentTime)
-		}
-		return nil, false
+		return fmt.Errorf("invalid current state: %s", currentState), false
 	}
 }
 

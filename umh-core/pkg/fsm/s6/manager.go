@@ -103,7 +103,7 @@ func (m *S6Manager) CreateSnapshot() public_fsm.ManagerSnapshot {
 	baseSnap := m.BaseFSMManager.CreateSnapshot()
 	baseSnapshot, ok := baseSnap.(*public_fsm.BaseManagerSnapshot)
 	if !ok {
-		logger.For(logger.ComponentS6Manager).Errorf("Could not cast manager snapshot to BaseManagerSnapshot.")
+		logger.For(logger.ComponentS6Manager).Errorf("Could not create manager snapshot to BaseManagerSnapshot.")
 		return baseSnap
 	}
 	snap := &S6ManagerSnapshot{

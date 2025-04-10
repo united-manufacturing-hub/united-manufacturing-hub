@@ -33,7 +33,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
-// ContainerStatus contains both raw metrics and health assessments
+// ServiceInfo contains both raw metrics and health assessments
 type ServiceInfo struct {
 	// Raw metrics (keeping same structure for compatibility)
 	CPU    *models.CPU    // Keep existing CPU metrics

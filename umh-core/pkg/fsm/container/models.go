@@ -77,9 +77,9 @@ func IsRunningState(state string) bool {
 // (We also rely on the standard lifecycle events from internal_fsm.)
 const (
 	EventStart        = "start_monitoring"
-	EventStartDone    = "monitoring_started"
+	EventStartDone    = "start_monitoring_done"
 	EventStop         = "stop_monitoring"
-	EventStopDone     = "monitoring_stopped"
+	EventStopDone     = "stop_monitoring_done"
 	EventMetricsAllOK = "metrics_all_ok"
 	EventMetricsNotOK = "metrics_not_ok"
 )
