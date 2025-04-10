@@ -17,7 +17,6 @@ package integration_test
 import (
 	"bytes"
 	"crypto/rand"
-	"encoding/base64"
 	"encoding/hex"
 	"fmt"
 	"os"
@@ -25,13 +24,13 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 )
 
 const (
 	containerBaseName = "umh-core"
-	imageName         = "umh-core:latest"
 )
 
 var (
@@ -48,6 +47,17 @@ var (
 	configFilePath string
 	configOnce     sync.Once
 )
+
+var imageNameOnce sync.Once
+var imageName string
+
+func getImageName() string {
+	imageNameOnce.Do(func() {
+		imageName = fmt.Sprintf("umh-core:latest-%s", time.Now().Format("20060102150405"))
+		fmt.Printf("Using image name: %s\n", imageName)
+	})
+	return imageName
+}
 
 // getContainerName returns a unique container name for this test run
 func getContainerName() string {
@@ -135,33 +145,67 @@ func writeConfigFile(yamlContent string, containerName ...string) error {
 		container := containerName[0]
 		fmt.Printf("Writing config directly to container %s...\n", container)
 
-		// Base64 encode the config for safer transfer
-		encodedConfig := base64.StdEncoding.EncodeToString([]byte(yamlContent))
-
-		// Write the base64 encoded config to a temporary file in the container
-		cmd := fmt.Sprintf("echo '%s' > /data/config.yaml.b64", encodedConfig)
-		out, err := runDockerCommand("exec", container, "bash", "-c", cmd)
-		if err != nil {
-			fmt.Printf("Failed to write encoded config to container: %v\n%s\n", err, out)
-			return fmt.Errorf("failed to write encoded config to container: %w", err)
+		// Create a temporary file with the actual config content
+		tmpFile := configPath + ".tmp"
+		if err := os.WriteFile(tmpFile, []byte(yamlContent), 0o666); err != nil {
+			return fmt.Errorf("failed to write temp config file: %w", err)
 		}
+		defer os.Remove(tmpFile) // Clean up temp file when done
 
-		// Decode the base64 file and write to the actual config file
-		decodeCmd := "base64 -d /data/config.yaml.b64 > /data/config.yaml && rm /data/config.yaml.b64"
-		out, err = runDockerCommand("exec", container, "bash", "-c", decodeCmd)
+		// Copy the file directly to the container
+		out, err := runDockerCommand("cp", tmpFile, container+":/data/config.yaml")
 		if err != nil {
-			fmt.Printf("Failed to decode config in container: %v\n%s\n", err, out)
-			return fmt.Errorf("failed to decode config in container: %w", err)
-		}
-
-		// Verify the config was written correctly
-		out, err = runDockerCommand("exec", container, "cat", "/data/config.yaml")
-		if err != nil {
-			fmt.Printf("Failed to verify config in container: %v\n", err)
-			return fmt.Errorf("failed to verify config in container: %w", err)
+			fmt.Printf("Failed to copy config to container: %v\n%s\n", err, out)
+			return fmt.Errorf("failed to copy config to container: %w", err)
 		}
 	}
 
+	return nil
+}
+
+func buildContainer() error {
+	fmt.Println("Building Docker image...")
+	// Check if this image already exists
+	out, err := runDockerCommand("images", "-q", getImageName())
+	var exists bool
+	if err != nil {
+		fmt.Printf("Failed to check if image exists: %v\n", err)
+		// If we fail for any reason, assume the image does not exist
+		exists = false
+	}
+	if out != "" {
+		exists = true
+	}
+	if exists {
+		fmt.Printf("Image %s already exists, skipping build\n", getImageName())
+		return nil
+	}
+
+	coreDir := filepath.Dir(GetCurrentDir())
+	dockerfilePath := filepath.Join(coreDir, "Dockerfile")
+
+	fmt.Printf("Core directory: %s\n", coreDir)
+	fmt.Printf("Dockerfile path: %s\n", dockerfilePath)
+
+	// Let's just use make build with our own tag
+	fullImageName := getImageName()
+	// Split in name and tag
+	imageNameParts := strings.Split(fullImageName, ":")
+	imageName := imageNameParts[0]
+	tag := imageNameParts[1]
+
+	var outmake []byte
+	cmd := exec.Command("make", "build", "IMAGE_NAME="+imageName, "TAG="+tag)
+	cmd.Dir = coreDir // Set working directory to coreDir
+	outmake, err = cmd.Output()
+	if err != nil {
+		fmt.Printf("Docker build failed: %v\n", err)
+		fmt.Printf("Build output:\n%s\n", outmake)
+		return fmt.Errorf("docker build failed: %s", err)
+	}
+	fmt.Printf("Output of make build: %s\n", outmake)
+
+	fmt.Println("Docker build successful")
 	return nil
 }
 
@@ -212,32 +256,15 @@ func BuildAndRunContainer(configYaml string, memory string, cpus uint) error {
 	}
 
 	// 2. Build image
-	fmt.Println("Building Docker image...")
-	coreDir := filepath.Dir(GetCurrentDir())
-	dockerfilePath := filepath.Join(coreDir, "Dockerfile")
-
-	fmt.Printf("Core directory: %s\n", coreDir)
-	fmt.Printf("Dockerfile path: %s\n", dockerfilePath)
-
-	out, err = runDockerCommand("build", "-t", imageName, "-f", dockerfilePath, coreDir)
-	if err != nil {
-		fmt.Printf("Docker build failed: %v\n", err)
-		fmt.Printf("Build output:\n%s\n", out)
-		return fmt.Errorf("Docker build failed: %s", out)
-	}
-	fmt.Println("Docker build successful")
-
-	// 3. First just write the config to the local file
-	fmt.Println("Writing local config file...")
-	if err := writeConfigFile(configYaml); err != nil {
-		return fmt.Errorf("failed to write local config file: %w", err)
+	if err := buildContainer(); err != nil {
+		return err
 	}
 
-	// 4. Run container WITHOUT mounting the config file (but we do need to mount the /data/redpanda folder, otherwise it cannot start)
+	// 3. Run container WITHOUT mounting the config file (but we do need to mount the /data/redpanda folder, otherwise it cannot start)
 	tmpRedpandaDir := filepath.Join(getTmpDir(), containerName, "redpanda")
 	tmpLogsDir := filepath.Join(getTmpDir(), containerName, "logs")
 
-	// Create the directories
+	// 4. Create the directories
 	if err := os.MkdirAll(tmpRedpandaDir, 0o777); err != nil {
 		return fmt.Errorf("failed to create redpanda dir: %w", err)
 	}
@@ -245,9 +272,10 @@ func BuildAndRunContainer(configYaml string, memory string, cpus uint) error {
 		return fmt.Errorf("failed to create logs dir: %w", err)
 	}
 
-	fmt.Println("Starting container...")
+	// 5. Create the container WITHOUT starting it
+	fmt.Println("Creating container (without starting it)...")
 	out, err = runDockerCommand(
-		"run", "-d",
+		"create",
 		"--name", containerName,
 		"-e", "LOGGING_LEVEL=debug",
 		// Map the host ports to the container's fixed ports
@@ -257,21 +285,33 @@ func BuildAndRunContainer(configYaml string, memory string, cpus uint) error {
 		"--cpus", fmt.Sprintf("%d", cpus),
 		"-v", fmt.Sprintf("%s:/data/redpanda", tmpRedpandaDir),
 		"-v", fmt.Sprintf("%s:/data/logs", tmpLogsDir),
-		imageName,
+		getImageName(),
 	)
 	if err != nil {
-		fmt.Printf("Container start failed: %v\n", err)
-		fmt.Printf("Container run output:\n%s\n", out)
-		return fmt.Errorf("could not run container: %s", out)
+		fmt.Printf("Container creation failed: %v\n", err)
+		fmt.Printf("Container create output:\n%s\n", out)
+		return fmt.Errorf("could not create container: %s", out)
 	}
-	fmt.Printf("Container started with ID: %s\n", strings.TrimSpace(out))
+	fmt.Printf("Container created with ID: %s\n", strings.TrimSpace(out))
 
-	// 5. Now write the config directly to the container
-	if err := writeConfigFile(configYaml, containerName); err != nil {
+	// 6. Copy the config file to the container BEFORE starting it
+	fmt.Println("Copying config file to container...")
+	err = writeConfigFile(configYaml, containerName)
+	if err != nil {
 		return fmt.Errorf("failed to write config to container: %w", err)
 	}
 
-	// 6. Verify the container is actually running
+	// 7. Start the container
+	fmt.Println("Starting the container...")
+	out, err = runDockerCommand("start", containerName)
+	if err != nil {
+		fmt.Printf("Container start failed: %v\n", err)
+		fmt.Printf("Container start output:\n%s\n", out)
+		return fmt.Errorf("could not start container: %s", out)
+	}
+	fmt.Println("Container started successfully")
+
+	// 8. Verify the container is actually running
 	out, err = runDockerCommand("inspect", "--format", "{{.State.Status}}", containerName)
 	if err != nil {
 		fmt.Printf("Failed to inspect container: %v\n", err)
@@ -285,7 +325,7 @@ func BuildAndRunContainer(configYaml string, memory string, cpus uint) error {
 		}
 	}
 
-	// 7. Wait for the container to be healthy
+	// 9. Wait for the container to be healthy
 	fmt.Println("Waiting for metrics endpoint to become available...")
 	return waitForMetrics()
 }
