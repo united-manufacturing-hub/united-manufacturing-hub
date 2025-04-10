@@ -15,6 +15,7 @@
 package dataflowcomponent
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -23,6 +24,7 @@ import (
 	public_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
 const (
@@ -91,4 +93,41 @@ func NewDataflowComponentManager(name string) *DataflowComponentManager {
 	return &DataflowComponentManager{
 		BaseFSMManager: *baseManager,
 	}
+}
+
+// Reconcile calls the base manager's Reconcile method
+// The filesystemService parameter allows for filesystem operations during reconciliation,
+// enabling the method to read configuration or state information from the filesystem.
+func (m *DataflowComponentManager) Reconcile(ctx context.Context, cfg config.FullConfig, filesystemService filesystem.Service, tick uint64) (error, bool) {
+	start := time.Now()
+	defer func() {
+		duration := time.Since(start)
+		metrics.ObserveReconcileTime(logger.ComponentBenthosManager, m.BaseFSMManager.GetManagerName(), duration)
+	}()
+	return m.BaseFSMManager.Reconcile(ctx, cfg, filesystemService, tick)
+}
+
+// CreateSnapshot overrides the base CreateSnapshot to include DataflowComponentManager-specific information
+func (m *DataflowComponentManager) CreateSnapshot() public_fsm.ManagerSnapshot {
+	// Get base snapshot from parent
+	baseSnapshot := m.BaseFSMManager.CreateSnapshot()
+
+	// We need to convert the interface to the concrete type
+	baseManagerSnapshot, ok := baseSnapshot.(*public_fsm.BaseManagerSnapshot)
+	if !ok {
+		logger.For(logger.ComponentBenthosManager).Errorf(
+			"Failed to convert base snapshot to BaseManagerSnapshot, using generic snapshot")
+		return baseSnapshot
+	}
+
+	// Create DataflowComponentManager-specific snapshot
+	snap := &DataflowComponentSnapshot{
+		BaseManagerSnapshot: baseManagerSnapshot,
+	}
+	return snap
+}
+
+// IsObservedStateSnapshot implements the fsm.ObservedStateSnapshot interface
+func (s *DataflowComponentSnapshot) IsObservedStateSnapshot() {
+	// Marker method implementation
 }
