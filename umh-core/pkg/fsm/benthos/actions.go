@@ -41,8 +41,8 @@ import (
 //   - If an error occurs, the Reconcile function must handle
 //     setting error state and scheduling a retry/backoff.
 
-// initiateBenthosCreate attempts to add the Benthos to the S6 manager.
-func (b *BenthosInstance) initiateBenthosCreate(ctx context.Context, filesystemService filesystem.Service) error {
+// CreateInstance attempts to add the Benthos to the S6 manager.
+func (b *BenthosInstance) CreateInstance(ctx context.Context, filesystemService filesystem.Service) error {
 	b.baseFSMInstance.GetLogger().Debugf("Starting Action: Adding Benthos service %s to S6 manager ...", b.baseFSMInstance.GetID())
 
 	err := b.service.AddBenthosToS6Manager(ctx, filesystemService, &b.config, b.baseFSMInstance.GetID())
@@ -58,9 +58,9 @@ func (b *BenthosInstance) initiateBenthosCreate(ctx context.Context, filesystemS
 	return nil
 }
 
-// initiateBenthosRemove attempts to remove the Benthos from the S6 manager.
+// RemoveInstance attempts to remove the Benthos from the S6 manager.
 // It requires the service to be stopped before removal.
-func (b *BenthosInstance) initiateBenthosRemove(ctx context.Context, filesystemService filesystem.Service) error {
+func (b *BenthosInstance) RemoveInstance(ctx context.Context, filesystemService filesystem.Service) error {
 	b.baseFSMInstance.GetLogger().Debugf("Starting Action: Removing Benthos service %s from S6 manager ...", b.baseFSMInstance.GetID())
 
 	// Remove the Benthos from the S6 manager
@@ -77,8 +77,8 @@ func (b *BenthosInstance) initiateBenthosRemove(ctx context.Context, filesystemS
 	return nil
 }
 
-// initiateBenthosStart attempts to start the benthos by setting the desired state to running for the given instance
-func (b *BenthosInstance) initiateBenthosStart(ctx context.Context, filesystemService filesystem.Service) error {
+// StartInstance attempts to start the benthos by setting the desired state to running for the given instance
+func (b *BenthosInstance) StartInstance(ctx context.Context, filesystemService filesystem.Service) error {
 	b.baseFSMInstance.GetLogger().Debugf("Starting Action: Starting Benthos service %s ...", b.baseFSMInstance.GetID())
 
 	// TODO: Add pre-start validation
@@ -94,8 +94,8 @@ func (b *BenthosInstance) initiateBenthosStart(ctx context.Context, filesystemSe
 	return nil
 }
 
-// initiateBenthosStop attempts to stop the Benthos by setting the desired state to stopped for the given instance
-func (b *BenthosInstance) initiateBenthosStop(ctx context.Context, filesystemService filesystem.Service) error {
+// StopInstance attempts to stop the Benthos by setting the desired state to stopped for the given instance
+func (b *BenthosInstance) StopInstance(ctx context.Context, filesystemService filesystem.Service) error {
 	b.baseFSMInstance.GetLogger().Debugf("Starting Action: Stopping Benthos service %s ...", b.baseFSMInstance.GetID())
 
 	// Set the desired state to stopped for the given instance
@@ -149,8 +149,8 @@ func (b *BenthosInstance) getServiceStatus(ctx context.Context, filesystemServic
 	return info, nil
 }
 
-// updateObservedState updates the observed state of the service
-func (b *BenthosInstance) updateObservedState(ctx context.Context, filesystemService filesystem.Service, tick uint64) error {
+// UpdateObservedStateOfInstance updates the observed state of the service
+func (b *BenthosInstance) UpdateObservedStateOfInstance(ctx context.Context, filesystemService filesystem.Service, tick uint64) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}

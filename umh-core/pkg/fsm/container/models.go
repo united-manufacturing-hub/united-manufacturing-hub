@@ -15,7 +15,8 @@
 package container
 
 import (
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
+	internal_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	publicfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/container_monitor"
 )
@@ -24,50 +25,95 @@ import (
 // to the lifecycle states from internal_fsm.
 const (
 	// monitoring_stopped is the operational state when monitoring is disabled
-	MonitoringStateStopped = "monitoring_stopped"
+	OperationalStateStopped = "monitoring_stopped"
+
+	// monitoring_stopping is the operational state when monitoring is stopping
+	OperationalStateStopping = "monitoring_stopping"
+
+	// monitoring_starting is the operational state when monitoring is starting
+	OperationalStateStarting = "monitoring_starting"
 
 	// degraded means monitoring is running, but metrics are not OK
-	MonitoringStateDegraded = "degraded"
+	OperationalStateDegraded = "degraded"
 
 	// active means monitoring is running, and metrics are OK
-	MonitoringStateActive = "active"
-)
-
-// Operational events
-// (We also rely on the standard lifecycle events from internal_fsm.)
-const (
-	EventStart        = "start_monitoring"
-	EventStop         = "stop_monitoring"
-	EventMetricsAllOK = "metrics_all_ok"
-	EventMetricsNotOK = "metrics_not_ok"
+	OperationalStateActive = "active"
 )
 
 // IsOperationalState returns true if the given state is one of the three
 // container monitor states. (Note that the instance might be in lifecycle states too.)
 func IsOperationalState(state string) bool {
 	switch state {
-	case MonitoringStateStopped,
-		MonitoringStateDegraded,
-		MonitoringStateActive:
+	case OperationalStateStopped,
+		OperationalStateStopping,
+		OperationalStateStarting,
+		OperationalStateDegraded,
+		OperationalStateActive:
 		return true
 	}
 	return false
 }
 
+// IsStartingState returns true if the given state is a starting state
+func IsStartingState(state string) bool {
+	switch state {
+	case OperationalStateStarting:
+		return true
+	}
+	return false
+}
+
+// IsRunningState returns true if the given state is a running state
+func IsRunningState(state string) bool {
+	switch state {
+	case OperationalStateActive,
+		OperationalStateDegraded:
+		return true
+	}
+	return false
+}
+
+// Operational events
+// (We also rely on the standard lifecycle events from internal_fsm.)
+const (
+	EventStart        = "start_monitoring"
+	EventStartDone    = "start_monitoring_done"
+	EventStop         = "stop_monitoring"
+	EventStopDone     = "stop_monitoring_done"
+	EventMetricsAllOK = "metrics_all_ok"
+	EventMetricsNotOK = "metrics_not_ok"
+)
+
 // ContainerObservedState holds the last known container metrics and health status
 type ContainerObservedState struct {
 	// We store the container data from container_monitor.GetStatus
-	ContainerStatus *container_monitor.ContainerStatus
+	ServiceInfo *container_monitor.ServiceInfo
+
+	// Normally this would have also have an ObservedContainerConfig, but we don't need it here
 }
 
 // Ensure it implements the ObservedState interface
 func (c ContainerObservedState) IsObservedState() {}
 
 // ContainerMonitorInstance implements fsm.FSMInstance
-// (See machine.go for the struct definition.)
-type ContainerMonitorInstance interface {
-	fsm.FSMInstance
-	// Additional Container-monitor–specific methods here if needed
+// If ContainerInstance does not implement the FSMInstance interface, this will
+// be detected at compile time
+var _ publicfsm.FSMInstance = (*ContainerInstance)(nil)
+
+// ContainerInstance holds the FSM instance and references to the container monitor service.
+type ContainerInstance struct {
+	// This embeds the "BaseFSMInstance" which handles lifecycle states,
+	// desired state, removal, etc.
+	baseFSMInstance *internal_fsm.BaseFSMInstance
+
+	// ObservedState: last known container metrics, updated in reconcile
+	ObservedState ContainerObservedState
+
+	// The container monitor service used to gather metrics
+	monitorService container_monitor.Service
+
+	// Possibly store config needed for the container monitor
+	config config.ContainerConfig
 }
 
 // GetLastObservedState returns the last known observed data
