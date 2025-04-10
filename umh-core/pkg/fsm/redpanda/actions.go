@@ -43,8 +43,8 @@ import (
 //   - If an error occurs, the Reconcile function must handle
 //     setting error state and scheduling a retry/backoff.
 
-// initiateRedpandaCreate attempts to add the Redpanda to the S6 manager.
-func (b *RedpandaInstance) initiateRedpandaCreate(ctx context.Context) error {
+// CreateInstance attempts to add the Redpanda to the S6 manager.
+func (b *RedpandaInstance) CreateInstance(ctx context.Context, filesystemService filesystem.Service) error {
 	b.baseFSMInstance.GetLogger().Debugf("Starting Action: Adding Redpanda service %s to S6 manager ...", b.baseFSMInstance.GetID())
 
 	err := b.service.AddRedpandaToS6Manager(ctx, &b.config)
@@ -60,9 +60,9 @@ func (b *RedpandaInstance) initiateRedpandaCreate(ctx context.Context) error {
 	return nil
 }
 
-// initiateRedpandaRemove attempts to remove the Redpanda from the S6 manager.
+// RemoveInstance attempts to remove the Redpanda from the S6 manager.
 // It requires the service to be stopped before removal.
-func (b *RedpandaInstance) initiateRedpandaRemove(ctx context.Context) error {
+func (b *RedpandaInstance) RemoveInstance(ctx context.Context, filesystemService filesystem.Service) error {
 	b.baseFSMInstance.GetLogger().Debugf("Starting Action: Removing Redpanda service %s from S6 manager ...", b.baseFSMInstance.GetID())
 
 	// Remove the Redpanda from the S6 manager
@@ -79,8 +79,8 @@ func (b *RedpandaInstance) initiateRedpandaRemove(ctx context.Context) error {
 	return nil
 }
 
-// initiateRedpandaStart attempts to start the redpanda by setting the desired state to running for the given instance
-func (b *RedpandaInstance) initiateRedpandaStart(ctx context.Context) error {
+// StartInstance attempts to start the redpanda by setting the desired state to running for the given instance
+func (b *RedpandaInstance) StartInstance(ctx context.Context, filesystemService filesystem.Service) error {
 	b.baseFSMInstance.GetLogger().Debugf("Starting Action: Starting Redpanda service %s ...", b.baseFSMInstance.GetID())
 
 	// TODO: Add pre-start validation
@@ -96,8 +96,8 @@ func (b *RedpandaInstance) initiateRedpandaStart(ctx context.Context) error {
 	return nil
 }
 
-// initiateRedpandaStop attempts to stop the Redpanda by setting the desired state to stopped for the given instance
-func (b *RedpandaInstance) initiateRedpandaStop(ctx context.Context) error {
+// StopInstance attempts to stop the Redpanda by setting the desired state to stopped for the given instance
+func (b *RedpandaInstance) StopInstance(ctx context.Context, filesystemService filesystem.Service) error {
 	b.baseFSMInstance.GetLogger().Debugf("Starting Action: Stopping Redpanda service %s ...", b.baseFSMInstance.GetID())
 
 	// Set the desired state to stopped for the given instance
@@ -162,8 +162,8 @@ func (b *RedpandaInstance) GetServiceStatus(ctx context.Context, filesystemServi
 	return info, nil
 }
 
-// updateObservedState updates the observed state of the service
-func (b *RedpandaInstance) updateObservedState(ctx context.Context, filesystemService filesystem.Service, tick uint64) error {
+// UpdateObservedStateOfInstance updates the observed state of the service
+func (b *RedpandaInstance) UpdateObservedStateOfInstance(ctx context.Context, filesystemService filesystem.Service, tick uint64) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}

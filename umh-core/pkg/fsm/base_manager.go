@@ -74,6 +74,9 @@ type FSMInstance interface {
 	GetLastObservedState() ObservedState
 	// GetExpectedMaxP95ExecutionTimePerInstance returns the expected max p95 execution time of the instance
 	GetExpectedMaxP95ExecutionTimePerInstance() time.Duration
+
+	// FSMInstanceActions defines the actions that can be performed on an FSM instance
+	FSMInstanceActions
 }
 
 // FSMManager defines the interface for managing multiple FSM instances.

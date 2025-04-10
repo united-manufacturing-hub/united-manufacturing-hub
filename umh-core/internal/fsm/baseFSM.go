@@ -16,6 +16,7 @@ package fsm
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
 	"github.com/looplab/fsm"
@@ -23,6 +24,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/backoff"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
 // BaseFSMInstance implements the public fsm.FSM interface
@@ -232,4 +234,30 @@ func (s *BaseFSMInstance) GetLogger() *zap.SugaredLogger {
 
 func (s *BaseFSMInstance) GetLastError() error {
 	return s.backoffManager.GetLastError()
+}
+
+// Create provides a default implementation that can be overridden
+func (s *BaseFSMInstance) Create(ctx context.Context, filesystemService filesystem.Service) error {
+	return fmt.Errorf("create action not implemented for %s", s.cfg.ID)
+}
+
+// Remove for FSMActions interface provides a default implementation that can be overridden
+// It's a separate implementation from the existing Remove method which handles removing through state transitions
+func (s *BaseFSMInstance) RemoveAction(ctx context.Context, filesystemService filesystem.Service) error {
+	return fmt.Errorf("remove action not implemented for %s", s.cfg.ID)
+}
+
+// Start provides a default implementation that can be overridden
+func (s *BaseFSMInstance) Start(ctx context.Context, filesystemService filesystem.Service) error {
+	return fmt.Errorf("start action not implemented for %s", s.cfg.ID)
+}
+
+// Stop provides a default implementation that can be overridden
+func (s *BaseFSMInstance) Stop(ctx context.Context, filesystemService filesystem.Service) error {
+	return fmt.Errorf("stop action not implemented for %s", s.cfg.ID)
+}
+
+// UpdateObservedState provides a default implementation that can be overridden
+func (s *BaseFSMInstance) UpdateObservedState(ctx context.Context, filesystemService filesystem.Service, tick uint64) error {
+	return fmt.Errorf("updateObservedState action not implemented for %s", s.cfg.ID)
 }
