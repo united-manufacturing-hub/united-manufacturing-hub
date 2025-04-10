@@ -18,6 +18,8 @@ on:
     branches:
       - main
       - staging
+  merge_group:
+    
 jobs:
   license-eye-header:
     name: License Eye Header

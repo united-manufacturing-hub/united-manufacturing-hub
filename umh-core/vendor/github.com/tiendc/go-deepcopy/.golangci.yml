@@ -1,0 +1,73 @@
+linters-settings:
+  funlen:
+    lines: 120
+    statements: 80
+  gci:
+    sections:
+      - standard
+      - default
+      - prefix(github.com/tiendc/go-deepcopy)
+  gocyclo:
+    min-complexity: 20
+  goimports:
+    local-prefixes: github.com/golangci/golangci-lint
+  lll:
+    line-length: 120
+  misspell:
+    locale: US
+
+linters:
+  enable:
+    - bodyclose
+    - contextcheck
+    - dogsled
+    - errcheck
+    - errname
+    - errorlint
+    - exhaustive
+    - copyloopvar
+    - forbidigo
+    - forcetypeassert
+    - funlen
+    - gci
+    - gocognit
+    - goconst
+    - gocritic
+    - gocyclo
+    - err113
+    - gofmt
+    - goimports
+    - mnd
+    - gosec
+    - gosimple
+    - govet
+    - ineffassign
+    - lll
+    - misspell
+    - nakedret
+    - nestif
+    - nilerr
+    - rowserrcheck
+    - staticcheck
+    - stylecheck
+    - typecheck
+    - unconvert
+    - unparam
+    - unused
+    - whitespace
+
+issues:
+  exclude-rules:
+    - path: _test\.go
+      linters:
+        - funlen
+        - contextcheck
+        - staticcheck
+        - gocyclo
+        - gocognit
+        - err113
+        - forcetypeassert
+        - wrapcheck
+        - gomnd
+        - errorlint
+        - unused
