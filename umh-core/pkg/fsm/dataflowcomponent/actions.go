@@ -193,7 +193,7 @@ func (d *DataflowComponentInstance) updateObservedState(ctx context.Context, fil
 	return nil
 }
 
-// IsDataflowComponentBenthosRunning determines if the DataflowComponent's Benthos FSM is in running state.
+// IsDataflowComponentBenthosActive determines if the DataflowComponent's Benthos FSM is in running state.
 // Architecture Decision: We intentionally rely only on the FSM state, not the underlying
 // service implementation details. This maintains a clean separation of concerns where:
 // 1. The FSM is the source of truth for service state
@@ -201,7 +201,7 @@ func (d *DataflowComponentInstance) updateObservedState(ctx context.Context, fil
 // 3. Implementation details of how Benthos determines running state are encapsulated away
 //
 // Note: This function requires the BenthosFSMState to be updated in the ObservedState.
-func (d *DataflowComponentInstance) IsDataflowComponentBenthosRunning() bool {
+func (d *DataflowComponentInstance) IsDataflowComponentBenthosActive() bool {
 	return d.ObservedState.ServiceInfo.BenthosFSMState == benthosfsm.OperationalStateActive
 }
 
@@ -236,7 +236,7 @@ func (d *DataflowComponentInstance) IsDataflowComponentHealthchecksPassed() bool
 // These check everything that is checked during the starting phase
 // But it means that it once worked, and then degraded
 func (d *DataflowComponentInstance) IsDataflowComponentDegraded() bool {
-	if d.IsDataflowComponentBenthosRunning() && d.IsDataflowComponentConfigLoaded() && d.IsDataflowComponentHealthchecksPassed() {
+	if d.IsDataflowComponentBenthosActive() && d.IsDataflowComponentConfigLoaded() && d.IsDataflowComponentHealthchecksPassed() {
 		return false
 	}
 	return true

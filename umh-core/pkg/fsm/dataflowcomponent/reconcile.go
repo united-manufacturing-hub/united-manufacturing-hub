@@ -275,7 +275,7 @@ func (d *DataflowComponentInstance) reconcileStartingState(ctx context.Context, 
 	switch currentState {
 	case OperationalStateStarting:
 		// First we need to ensure the Benthos service is started
-		if !d.IsDataflowComponentBenthosRunning() {
+		if !d.IsDataflowComponentBenthosActive() {
 			return nil, false
 		}
 
@@ -283,7 +283,7 @@ func (d *DataflowComponentInstance) reconcileStartingState(ctx context.Context, 
 	case OperationalStateStartingConfigLoading:
 		// Check if config has been loaded
 		// If the Benthos is not running, go back to starting
-		if !d.IsDataflowComponentBenthosRunning() {
+		if !d.IsDataflowComponentBenthosActive() {
 			return d.baseFSMInstance.SendEvent(ctx, EventStartFailed), true
 		}
 
@@ -295,7 +295,7 @@ func (d *DataflowComponentInstance) reconcileStartingState(ctx context.Context, 
 		return d.baseFSMInstance.SendEvent(ctx, EventBenthosConfigLoaded), true
 	case OperationalStateStartingWaitingForHealthchecks:
 		// If the Benthos is not running and config loading did not happen, go back to starting
-		if !d.IsDataflowComponentBenthosRunning() || !d.IsDataflowComponentConfigLoaded() {
+		if !d.IsDataflowComponentBenthosActive() || !d.IsDataflowComponentConfigLoaded() {
 			return d.baseFSMInstance.SendEvent(ctx, EventStartFailed), true
 		}
 
@@ -307,7 +307,7 @@ func (d *DataflowComponentInstance) reconcileStartingState(ctx context.Context, 
 		return d.baseFSMInstance.SendEvent(ctx, EventBenthosHealthchecksPassed), true
 	case OperationalStateStartingWaitingForServiceToRemainRunning:
 		// If the Benthos is not running, go back to starting
-		if !d.IsDataflowComponentBenthosRunning() || !d.IsDataflowComponentConfigLoaded() || !d.IsDataflowComponentHealthchecksPassed() {
+		if !d.IsDataflowComponentBenthosActive() || !d.IsDataflowComponentConfigLoaded() || !d.IsDataflowComponentHealthchecksPassed() {
 			return d.baseFSMInstance.SendEvent(ctx, EventStartFailed), true
 		}
 
