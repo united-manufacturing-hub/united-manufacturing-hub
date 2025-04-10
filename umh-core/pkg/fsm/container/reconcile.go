@@ -248,7 +248,7 @@ func (c *ContainerInstance) reconcileLifecycleStates(ctx context.Context, filesy
 	switch currentState {
 	case internal_fsm.LifecycleStateToBeCreated:
 		// do creation
-		if err := c.initiateContainerCreate(ctx); err != nil {
+		if err := c.CreateInstance(ctx, filesystemService); err != nil {
 			return err, false
 		}
 		return c.baseFSMInstance.SendEvent(ctx, internal_fsm.LifecycleEventCreate), true
@@ -258,7 +258,7 @@ func (c *ContainerInstance) reconcileLifecycleStates(ctx context.Context, filesy
 		return c.baseFSMInstance.SendEvent(ctx, internal_fsm.LifecycleEventCreateDone), true
 
 	case internal_fsm.LifecycleStateRemoving:
-		if err := c.initiateContainerRemove(ctx); err != nil {
+		if err := c.RemoveInstance(ctx, filesystemService); err != nil {
 			return err, false
 		}
 		return c.baseFSMInstance.SendEvent(ctx, internal_fsm.LifecycleEventRemoveDone), true
@@ -301,7 +301,7 @@ func (c *ContainerInstance) reconcileTransitionToActive(ctx context.Context, fil
 	// If we're stopped, we need to start first
 	case currentState == OperationalStateStopped:
 		// nothing to start here, just for consistency with other fsms
-		err := c.monitoringStart(ctx)
+		err := c.StartInstance(ctx, filesystemService)
 		if err != nil {
 			return err, false
 		}
@@ -380,7 +380,7 @@ func (c *ContainerInstance) reconcileTransitionToStopped(ctx context.Context, fi
 		return c.baseFSMInstance.SendEvent(ctx, EventStopDone), true
 	default:
 		// For any other state, initiate stop
-		err := c.monitoringStop(ctx)
+		err := c.StopInstance(ctx, filesystemService)
 		if err != nil {
 			return err, false
 		}
