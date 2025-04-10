@@ -154,6 +154,11 @@ func (m *FileConfigManager) GetConfigWithOverwritesOrCreateNew(ctx context.Conte
 		config.Agent.Location = configOverride.Agent.Location
 	}
 
+	// Enforce that redpanda has a desired state
+	if config.Internal.Redpanda.DesiredFSMState == "" {
+		config.Internal.Redpanda.DesiredFSMState = configOverride.Internal.Redpanda.DesiredFSMState
+	}
+
 	// Persist the updated config
 	if err := m.writeConfig(ctx, config); err != nil {
 		return FullConfig{}, fmt.Errorf("failed to write new config: %w", err)
