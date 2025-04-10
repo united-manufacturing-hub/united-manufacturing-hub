@@ -81,7 +81,7 @@ func (b *BenthosInstance) Reconcile(ctx context.Context, filesystemService files
 	}
 
 	// Step 2: Detect external changes.
-	if err := b.reconcileExternalChanges(ctx, filesystemService, tick); err != nil {
+	if err := b.reconcileExternalChanges(ctx, filesystemService, tick, start); err != nil {
 		// If the service is not running, we don't want to return an error here, because we want to continue reconciling
 		if !errors.Is(err, benthos_service.ErrServiceNotExist) {
 			b.baseFSMInstance.SetError(err, tick)
@@ -136,7 +136,7 @@ func (b *BenthosInstance) Reconcile(ctx context.Context, filesystemService files
 
 // reconcileExternalChanges checks if the BenthosInstance service status has changed
 // externally (e.g., if someone manually stopped or started it, or if it crashed)
-func (b *BenthosInstance) reconcileExternalChanges(ctx context.Context, filesystemService filesystem.Service, tick uint64) error {
+func (b *BenthosInstance) reconcileExternalChanges(ctx context.Context, filesystemService filesystem.Service, tick uint64, loopStartTime time.Time) error {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentBenthosInstance, b.baseFSMInstance.GetID()+".reconcileExternalChanges", time.Since(start))
@@ -147,7 +147,7 @@ func (b *BenthosInstance) reconcileExternalChanges(ctx context.Context, filesyst
 	observedStateCtx, cancel := context.WithTimeout(ctx, constants.BenthosUpdateObservedStateTimeout)
 	defer cancel()
 
-	err := b.UpdateObservedStateOfInstance(observedStateCtx, filesystemService, tick, start)
+	err := b.UpdateObservedStateOfInstance(observedStateCtx, filesystemService, tick, loopStartTime)
 	if err != nil {
 		return fmt.Errorf("failed to update observed state: %w", err)
 	}
