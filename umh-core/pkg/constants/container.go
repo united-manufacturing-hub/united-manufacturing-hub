@@ -24,7 +24,7 @@ const (
 )
 
 // ContainerMonitorUpdateObservedStateTimeout is the timeout for updating the observed state
-const ContainerMonitorUpdateObservedStateTimeout = 5 * time.Second
+const ContainerMonitorUpdateObservedStateTimeout = 5 * time.Millisecond
 
 // Health assessment thresholds
 const (
