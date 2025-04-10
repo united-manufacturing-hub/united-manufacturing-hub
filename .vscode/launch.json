@@ -57,6 +57,14 @@
             "mode": "test",
             "program": "${workspaceFolder}/umh-core/pkg/service/redpanda",
             "buildFlags": "--tags=test"
+        },
+        {
+            "name": "Debug Ginkgo Tests (service-redpanda_monitor)",
+            "type": "go",
+            "request": "launch",
+            "mode": "test",
+            "program": "${workspaceFolder}/umh-core/pkg/service/redpanda_monitor",
+            "buildFlags": "--tags=test"
         }
     ]
 }

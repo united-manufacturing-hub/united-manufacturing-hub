@@ -441,8 +441,12 @@ func (s *RedpandaMonitorService) processMetricsDataBytes(metricsDataBytes []byte
 		return nil, curlError
 	}
 
+	metricsDataString := string(metricsDataBytes)
+	// Strip any newlines
+	metricsDataString = strings.ReplaceAll(metricsDataString, "\n", "")
+
 	// Decode the hex encoded metrics data
-	decodedMetricsDataBytes, err := hex.DecodeString(string(metricsDataBytes))
+	decodedMetricsDataBytes, err := hex.DecodeString(metricsDataString)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode metrics data: %w", err)
 	}
@@ -476,8 +480,12 @@ func (s *RedpandaMonitorService) processClusterConfigDataBytes(clusterConfigData
 		return nil, curlError
 	}
 
+	clusterConfigDataString := string(clusterConfigDataBytes)
+	// Strip any newlines
+	clusterConfigDataString = strings.ReplaceAll(clusterConfigDataString, "\n", "")
+
 	// Decode the hex encoded metrics data
-	decodedMetricsDataBytes, err := hex.DecodeString(string(clusterConfigDataBytes))
+	decodedMetricsDataBytes, err := hex.DecodeString(clusterConfigDataString)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode metrics data: %w", err)
 	}
@@ -508,7 +516,7 @@ func (s *RedpandaMonitorService) processClusterConfigDataBytes(clusterConfigData
 				result.Topic.DefaultTopicRetentionMs = intVal
 			}
 		} else {
-			return nil, fmt.Errorf("failed to parse cluster config data: log_retention_ms is not a number")
+			return nil, fmt.Errorf("failed to parse cluster config data: log_retention_ms is not a number: %v", value)
 		}
 	} else {
 		return nil, fmt.Errorf("failed to parse cluster config data: no log_retention_ms found")
@@ -523,8 +531,12 @@ func (s *RedpandaMonitorService) processClusterConfigDataBytes(clusterConfigData
 			if intVal, err := strconv.Atoi(strVal); err == nil {
 				result.Topic.DefaultTopicRetentionBytes = intVal
 			}
+			// It can also be null, if not set, which we can handle by returning 0
+			// See generator.go, where 0 == null
+		} else if value == nil {
+			result.Topic.DefaultTopicRetentionBytes = 0
 		} else {
-			return nil, fmt.Errorf("failed to parse cluster config data: retention_bytes is not a number")
+			return nil, fmt.Errorf("failed to parse cluster config data: retention_bytes is not a number: %v", value)
 		}
 	} else {
 		return nil, fmt.Errorf("failed to parse cluster config data: no retention_bytes found")

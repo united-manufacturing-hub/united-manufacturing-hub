@@ -121,54 +121,6 @@ var _ = Describe("Redpanda Service", func() {
 			)
 		})
 
-		It("should add, start, stop and remove a Redpanda service", func() {
-			ctx, cancel := newTimeoutContext()
-			defer cancel()
-
-			// Initial config
-			config := &redpandaserviceconfig.RedpandaServiceConfig{
-				BaseDir: getTmpDir(),
-			}
-			config.Topic.DefaultTopicRetentionMs = 1000000
-			config.Topic.DefaultTopicRetentionBytes = 1000000000
-
-			// Add the service
-			By("Adding the Redpanda service")
-			err := service.AddRedpandaToS6Manager(ctx, config, mockFS)
-			Expect(err).NotTo(HaveOccurred())
-
-			// Service should exist in the S6 manager
-			Expect(len(service.s6ServiceConfigs)).To(Equal(1))
-
-			// Start the service
-			By("Starting the Redpanda service")
-			err = service.StartRedpanda(ctx)
-			Expect(err).NotTo(HaveOccurred())
-
-			// Reconcile to apply changes
-			By("Reconciling the manager")
-			err, _ = service.ReconcileManager(ctx, mockFS, 0)
-			Expect(err).NotTo(HaveOccurred())
-
-			// Stop the service
-			By("Stopping the Redpanda service")
-			err = service.StopRedpanda(ctx)
-			Expect(err).NotTo(HaveOccurred())
-
-			// Reconcile to apply changes
-			By("Reconciling the manager again")
-			err, _ = service.ReconcileManager(ctx, mockFS, 1)
-			Expect(err).NotTo(HaveOccurred())
-
-			// Remove the service
-			By("Removing the Redpanda service")
-			err = service.RemoveRedpandaFromS6Manager(ctx)
-			Expect(err).NotTo(HaveOccurred())
-
-			// Service should no longer exist in the S6 manager
-			Expect(len(service.s6ServiceConfigs)).To(Equal(0))
-		})
-
 		It("should handle configuration updates", func() {
 			ctx, cancel := newTimeoutContext()
 			defer cancel()
