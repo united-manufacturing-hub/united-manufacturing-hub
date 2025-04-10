@@ -19,10 +19,18 @@ agent:
     authToken: a7caf5d82dacb972c300baf72d76326a3168141975f9e31f077aa28beced1ab7
   releaseChannel: stable
 
-redpanda:
-  desiredState: stopped
-  
+dataFlow:
+  - name: hello-world
+    desiredState: active
+    benthosServiceConfig:
+      input:
+        generate:
+          mapping: root = "hello world from Benthos!"
+          interval: 1s # Output every 2 seconds
+          count: 0 # Set to 0 for unlimited messages
 internal:
+  redpanda:
+    desiredState: stopped
   benthos:
     - name: hello-world
       desiredState: active
