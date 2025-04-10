@@ -239,10 +239,8 @@ func (r *Request) ParamPresent(key string) *Request {
 // PathParam matches if a given path parameter key is present in the URL.
 //
 // The value is representative of the restful resource the key defines, e.g.
-//
-//	// /users/123/name
-//	r.PathParam("users", "123")
-//
+//   // /users/123/name
+//   r.PathParam("users", "123")
 // would match.
 func (r *Request) PathParam(key, val string) *Request {
 	r.PathParams[key] = val

@@ -1,4 +1,3 @@
-//go:build arm
 // +build arm
 
 package ole
