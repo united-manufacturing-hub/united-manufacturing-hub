@@ -97,6 +97,13 @@ func main() {
 			ReleaseChannel: config.ReleaseChannel(releaseChannel),
 			Location:       locations,
 		},
+		Internal: config.InternalConfig{
+			Redpanda: config.RedpandaConfig{
+				FSMInstanceConfig: config.FSMInstanceConfig{
+					DesiredFSMState: "active",
+				},
+			},
+		},
 	})
 	if err != nil {
 		sentry.ReportIssuef(sentry.IssueTypeFatal, log, "Failed to load config: %w", err)
@@ -134,7 +141,11 @@ func main() {
 		log.Warnf("No backend connection enabled, please set API_URL and AUTH_TOKEN")
 	}
 
-	controlLoop.Execute(ctx)
+	err = controlLoop.Execute(ctx)
+	if err != nil {
+		log.Errorf("Control loop failed: %w", err)
+		sentry.ReportIssuef(sentry.IssueTypeFatal, log, "Control loop failed: %w", err)
+	}
 
 	log.Info("umh-core completed")
 }
