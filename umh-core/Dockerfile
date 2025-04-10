@@ -16,6 +16,7 @@ FROM golang:1.24-alpine as build
 ARG S6_OVERLAY_VERSION=3.2.0.2
 ARG BENTHOS_UMH_VERSION=0.6.2
 ARG REDPANDA_VERSION=24.3.8
+ARG DEBUG=false
 WORKDIR /go/src/github.com/united-manufacturing-hub/united-manufacturing-hub
 
 # Set app version with a default value - can be overridden at build time
@@ -26,13 +27,23 @@ COPY ./go.mod ./umh-core/
 WORKDIR /go/src/github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core
 RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 go build \
+RUN if [ "$DEBUG" = "true" ]; then \
+    CGO_ENABLED=0 go build \
+    -gcflags="all=-N -l" \
+    -ldflags "-X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants.S6OverlayVersion=${S6_OVERLAY_VERSION} \
+    -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants.BenthosVersion=${BENTHOS_UMH_VERSION} \
+    -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants.RedpandaVersion=${REDPANDA_VERSION} \
+    -X main.appVersion=${APP_VERSION}" \
+    -o /go/bin/umh-core cmd/main.go; \
+    else \
+    CGO_ENABLED=0 go build \
     -ldflags "-s -w \
     -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants.S6OverlayVersion=${S6_OVERLAY_VERSION} \
     -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants.BenthosVersion=${BENTHOS_UMH_VERSION} \
     -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants.RedpandaVersion=${REDPANDA_VERSION} \
     -X main.appVersion=${APP_VERSION}" \
-    -o /go/bin/umh-core cmd/main.go
+    -o /go/bin/umh-core cmd/main.go; \
+    fi
 
 # --- Cache Stage ---
 FROM scratch as cache
@@ -48,6 +59,7 @@ RUN apk add --no-cache bash curl jq tzdata ca-certificates xz bc
 ARG S6_OVERLAY_VERSION=3.2.0.2
 ARG BENTHOS_UMH_VERSION=0.6.2
 ARG REDPANDA_VERSION=24.3.8
+ARG DLV_VERSION=1.24.1
 ARG TARGETARCH=amd64
 
 # Copy cached files from cache stage
@@ -89,14 +101,40 @@ RUN rm -rf /s6-overlay /benthos /redpanda
 FROM alpine:3.21 as runner
 # Copy everything from the downloader stage
 COPY --from=downloader / /
+
 # Copy built application
 COPY --from=build /go/bin/umh-core /usr/local/bin/umh-core
+
+# Handle DEBUG mode - install Go and Delve when DEBUG=true
+# Delve is a debugger for Go (https://github.com/go-delve/delve/)
+# We can use it for remote debugging of the UMH Core
+ARG DEBUG=false
+RUN if [ "$DEBUG" = "true" ]; then \
+    apk add --no-cache go && \ 
+    go install github.com/go-delve/delve/cmd/dlv@${DLV_VERSION} && \
+    find / -name "dlv"; \
+    fi
+
 RUN chmod +x /usr/local/bin/umh-core && \
     ls -la /usr/local/bin/umh-core && \
     test -x /usr/local/bin/umh-core || (echo "Binary not executable" && exit 1)
+
 # Copy s6 service configuration
 COPY ./s6-base/s6-rc.d /etc/s6-overlay/s6-rc.d/
-RUN chmod +x /etc/s6-overlay/s6-rc.d/umh-core/run
+
+# Use either standard or debug service based on DEBUG flag
+ARG DEBUG=false
+RUN if [ "$DEBUG" = "true" ]; then \
+    # Use debug service instead of regular service
+    cp -f /etc/s6-overlay/s6-rc.d/umh-core-debug/run /etc/s6-overlay/s6-rc.d/umh-core/run && \
+    rm -rf /etc/s6-overlay/s6-rc.d/umh-core-debug; \
+    chmod +x /etc/s6-overlay/s6-rc.d/umh-core/run; \
+    else \
+    # Use regular service
+    rm -rf /etc/s6-overlay/s6-rc.d/umh-core-debug; \
+    chmod +x /etc/s6-overlay/s6-rc.d/umh-core/run; \
+    fi
+
 # Set environment variables and volume
 # S6_SYNC_DISKS=1: Sync the disks to ensure that the data is persisted, this is needed for the redpanda service
 ENV S6_KEEP_ENV=1 \
@@ -106,5 +144,6 @@ ENV S6_KEEP_ENV=1 \
     S6_SYNC_DISKS=1 \
     S6_LOGGING_SCRIPT="n20 s1000000 T"
 VOLUME ["/data"]
+
 ENTRYPOINT ["/init"]
 CMD []
