@@ -86,3 +86,9 @@ jobs:
           CI: true
           VERSION: ${{ github.ref_name }}
         run: make integration-test-ci
+
+      - name: Stop containers & cleanup
+        if: always()
+        working-directory: ./umh-core
+        run: |
+          make cleanup-ci
