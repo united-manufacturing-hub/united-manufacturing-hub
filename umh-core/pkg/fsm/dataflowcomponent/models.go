@@ -23,18 +23,16 @@ import (
 
 // Operational state constants (using internal_fsm compatible naming)
 const (
+	// OperationalStateStopping is the state when the service is in the process of stopping
+	OperationalStateStopping = "stopping"
 	// OperationalStateStopped is the initial state and also the state when the service is stopped
 	OperationalStateStopped = "stopped"
 
 	// Starting phase states
-	// OperationalStateStarting is the state when s6 is starting the service
+	// OperationalStateStarting is the state when benthos starts
 	OperationalStateStarting = "starting"
-	// OperationalStateStartingConfigLoading is the state when the process itself is running but is waiting for the config to be loaded
-	OperationalStateStartingConfigLoading = "starting_config_loading"
-	// OperationalStateStartingWaitingForHealthchecks is the state when there was no fatal config error but is waiting for the healthchecks to pass
-	OperationalStateStartingWaitingForHealthchecks = "starting_waiting_for_healthchecks"
-	// OperationalStateStartingWaitingForServiceToRemainRunning is the state when the service is running but is waiting for the service to remain running
-	OperationalStateStartingWaitingForServiceToRemainRunning = "starting_waiting_for_service_to_remain_running"
+	// OperationalStateStartingFailed is the state when benthos failed to start
+	OperationalStateStartingFailed = "starting_failed"
 
 	// Running phase states
 	// OperationalStateIdle is the state when the service is running but not actively processing data
@@ -43,31 +41,23 @@ const (
 	OperationalStateActive = "active"
 	// OperationalStateDegraded is the state when the service is running but has encountered issues
 	OperationalStateDegraded = "degraded"
-
-	// OperationalStateStopping is the state when the service is in the process of stopping
-	OperationalStateStopping = "stopping"
 )
 
 // Operational event constants
 const (
 	// Basic lifecycle events
-	EventStart     = "start"
-	EventStartDone = "start_done"
-	EventStop      = "stop"
-	EventStopDone  = "stop_done"
-
-	// Starting phase events
-	EventBenthosCreated            = "benthos_created"
-	EventBenthosStarted            = "benthos_started"
-	EventBenthosConfigLoaded       = "benthos_config_loaded"
-	EventBenthosHealthchecksPassed = "benthos_healthchecks_passed"
-	EventStartFailed               = "start_failed"
+	EventStart         = "start"
+	EventStartDone     = "start_done"
+	EventStop          = "stop"
+	EventStopDone      = "stop_done"
+	EventStartFailed   = "start_failed"
+	EventConfigChanged = "config_changed"
 
 	// Running phase events
-	EventDataReceived  = "data_received"
-	EventNoDataTimeout = "no_data_timeout"
-	EventDegraded      = "degraded"
-	EventRecovered     = "recovered"
+	EventBenthosDataReceived   = "benthos_data_received"
+	EventBenthosNoDataRecieved = "benthos_no_data_recieved"
+	EventBenthosNotRunning     = "benthos_not_running"
+	EventBenthosRecovered      = "benthos_recovered"
 )
 
 // IsOperationalState returns whether the given state is a valid operational state
@@ -75,9 +65,7 @@ func IsOperationalState(state string) bool {
 	switch state {
 	case OperationalStateStopped,
 		OperationalStateStarting,
-		OperationalStateStartingConfigLoading,
-		OperationalStateStartingWaitingForHealthchecks,
-		OperationalStateStartingWaitingForServiceToRemainRunning,
+		OperationalStateStartingFailed,
 		OperationalStateIdle,
 		OperationalStateActive,
 		OperationalStateDegraded,
@@ -89,14 +77,7 @@ func IsOperationalState(state string) bool {
 
 // IsStartingState returns whether the given state is a starting state
 func IsStartingState(state string) bool {
-	switch state {
-	case OperationalStateStarting,
-		OperationalStateStartingConfigLoading,
-		OperationalStateStartingWaitingForHealthchecks,
-		OperationalStateStartingWaitingForServiceToRemainRunning:
-		return true
-	}
-	return false
+	return state == OperationalStateStarting
 }
 
 // IsRunningState returns whether the given state is a running state

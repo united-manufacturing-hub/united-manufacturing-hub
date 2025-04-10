@@ -42,38 +42,42 @@ func NewDataflowComponentInstance(
 		OperationalTransitions: []fsm.EventDesc{
 			// Basic lifecycle transitions
 			// Stopped is the initial state
+			// stopped -> starting
 			{Name: EventStart, Src: []string{OperationalStateStopped}, Dst: OperationalStateStarting},
 
-			// Starting phase transitions
-			{Name: EventBenthosCreated, Src: []string{OperationalStateStarting}, Dst: OperationalStateStartingConfigLoading},
-			{Name: EventBenthosConfigLoaded, Src: []string{OperationalStateStartingConfigLoading}, Dst: OperationalStateStartingWaitingForHealthchecks},
-			{Name: EventBenthosHealthchecksPassed, Src: []string{OperationalStateStartingWaitingForHealthchecks}, Dst: OperationalStateStartingWaitingForServiceToRemainRunning},
-			{Name: EventStartDone, Src: []string{OperationalStateStartingWaitingForServiceToRemainRunning}, Dst: OperationalStateIdle},
-			{Name: EventStop, Src: []string{OperationalStateStarting, OperationalStateStartingConfigLoading, OperationalStateStartingWaitingForHealthchecks, OperationalStateStartingWaitingForServiceToRemainRunning}, Dst: OperationalStateStopping},
+			// starting -> idle
+			{Name: EventStartDone, Src: []string{OperationalStateStarting}, Dst: OperationalStateIdle},
 
-			// From any starting state, we can either go back to OperationalStateStarting (e.g: If there is an error)
-			{Name: EventStartFailed, Src: []string{OperationalStateStarting, OperationalStateStartingConfigLoading, OperationalStateStartingWaitingForHealthchecks, OperationalStateStartingWaitingForServiceToRemainRunning}, Dst: OperationalStateStarting},
+			// idle -> active
+			{Name: EventBenthosDataReceived, Src: []string{OperationalStateIdle}, Dst: OperationalStateActive},
 
-			// Running phase transitions
-			// From Idle, we can go to Active when data is processed or to Stopping
-			{Name: EventDataReceived, Src: []string{OperationalStateIdle}, Dst: OperationalStateActive},
-			{Name: EventNoDataTimeout, Src: []string{OperationalStateIdle}, Dst: OperationalStateIdle},
-			{Name: EventStop, Src: []string{OperationalStateIdle}, Dst: OperationalStateStopping},
+			//	active/idle -> degraded
+			{Name: EventBenthosNotRunning, Src: []string{OperationalStateActive, OperationalStateIdle}, Dst: OperationalStateDegraded},
 
-			// From Active, we can go to Idle when there's no data, to Degraded when there are issues, or to Stopping
-			{Name: EventNoDataTimeout, Src: []string{OperationalStateActive}, Dst: OperationalStateIdle},
-			{Name: EventDegraded, Src: []string{OperationalStateActive}, Dst: OperationalStateDegraded},
-			{Name: EventStop, Src: []string{OperationalStateActive}, Dst: OperationalStateStopping},
+			// active -> idle
+			{Name: EventBenthosNoDataRecieved, Src: []string{OperationalStateActive}, Dst: OperationalStateIdle},
 
-			// From Degraded, we can recover to Active, go to Idle, or to Stopping
-			{Name: EventRecovered, Src: []string{OperationalStateDegraded}, Dst: OperationalStateIdle},
-			{Name: EventStop, Src: []string{OperationalStateDegraded}, Dst: OperationalStateStopping},
+			// degraded -> idle
+			{Name: EventBenthosRecovered, Src: []string{OperationalStateDegraded}, Dst: OperationalStateIdle},
 
-			// Final transition for stopping
+			// starting -> startingFailed
+			{Name: EventStartFailed, Src: []string{OperationalStateStarting}, Dst: OperationalStateStartingFailed},
+
+			// everywhere to stopping
+			{
+				Name: EventStop,
+				Src: []string{
+					OperationalStateStarting,
+					OperationalStateStartingFailed,
+					OperationalStateIdle,
+					OperationalStateActive,
+					OperationalStateDegraded,
+				},
+				Dst: OperationalStateStopping,
+			},
+
+			// stopping to stopped
 			{Name: EventStopDone, Src: []string{OperationalStateStopping}, Dst: OperationalStateStopped},
-
-			// Add degraded transition from Idle
-			{Name: EventDegraded, Src: []string{OperationalStateIdle}, Dst: OperationalStateDegraded},
 		},
 	}
 

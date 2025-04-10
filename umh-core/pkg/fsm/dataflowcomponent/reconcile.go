@@ -278,39 +278,6 @@ func (d *DataflowComponentInstance) reconcileStartingState(ctx context.Context, 
 		if !d.IsDataflowComponentBenthosRunning() {
 			return nil, false
 		}
-
-		return d.baseFSMInstance.SendEvent(ctx, EventBenthosStarted), true
-	case OperationalStateStartingConfigLoading:
-		// Check if config has been loaded
-		// If the Benthos is not running, go back to starting
-		if !d.IsDataflowComponentBenthosRunning() {
-			return d.baseFSMInstance.SendEvent(ctx, EventStartFailed), true
-		}
-
-		// Now check whether benthos has loaded the config
-		if !d.IsDataflowComponentConfigLoaded() {
-			return nil, false
-		}
-
-		return d.baseFSMInstance.SendEvent(ctx, EventBenthosConfigLoaded), true
-	case OperationalStateStartingWaitingForHealthchecks:
-		// If the Benthos is not running and config loading did not happen, go back to starting
-		if !d.IsDataflowComponentBenthosRunning() || !d.IsDataflowComponentConfigLoaded() {
-			return d.baseFSMInstance.SendEvent(ctx, EventStartFailed), true
-		}
-
-		// Check if healthchecks have passed
-		if !d.IsDataflowComponentHealthchecksPassed() {
-			return nil, false
-		}
-
-		return d.baseFSMInstance.SendEvent(ctx, EventBenthosHealthchecksPassed), true
-	case OperationalStateStartingWaitingForServiceToRemainRunning:
-		// If the Benthos is not running, go back to starting
-		if !d.IsDataflowComponentBenthosRunning() || !d.IsDataflowComponentConfigLoaded() || !d.IsDataflowComponentHealthchecksPassed() {
-			return d.baseFSMInstance.SendEvent(ctx, EventStartFailed), true
-		}
-
 		return d.baseFSMInstance.SendEvent(ctx, EventStartDone), true
 	default:
 		return fmt.Errorf("invalid starting state: %s", currentState), false
@@ -328,23 +295,23 @@ func (d *DataflowComponentInstance) reconcileRunningState(ctx context.Context, f
 	case OperationalStateActive:
 		// If we're in Active, we need to check whether it is degraded
 		if d.IsDataflowComponentDegraded() {
-			return d.baseFSMInstance.SendEvent(ctx, EventDegraded), true
+			return d.baseFSMInstance.SendEvent(ctx, EventBenthosNotRunning), true
 		} else if !d.IsDataflowComponentWithProcessingActivity() { // if there is no activity, we move to Idle
-			return d.baseFSMInstance.SendEvent(ctx, EventNoDataTimeout), true
+			return d.baseFSMInstance.SendEvent(ctx, EventBenthosNoDataRecieved), true
 		}
 		return nil, false
 	case OperationalStateIdle:
 		// If we're in Idle, we need to check whether it is degraded
 		if d.IsDataflowComponentDegraded() {
-			return d.baseFSMInstance.SendEvent(ctx, EventDegraded), true
+			return d.baseFSMInstance.SendEvent(ctx, EventBenthosNotRunning), true
 		} else if d.IsDataflowComponentWithProcessingActivity() { // if there is activity, we move to Active
-			return d.baseFSMInstance.SendEvent(ctx, EventDataReceived), true
+			return d.baseFSMInstance.SendEvent(ctx, EventBenthosDataReceived), true
 		}
 		return nil, false
 	case OperationalStateDegraded:
 		// If we're in Degraded, we need to recover to move to Idle
 		if !d.IsDataflowComponentDegraded() {
-			return d.baseFSMInstance.SendEvent(ctx, EventRecovered), true
+			return d.baseFSMInstance.SendEvent(ctx, EventBenthosRecovered), true
 		}
 		return nil, false
 	default:

@@ -214,32 +214,11 @@ func (d *DataflowComponentInstance) IsDataflowComponentBenthosStopped() bool {
 	return d.ObservedState.ServiceInfo.BenthosFSMState == benthosfsm.OperationalStateStopped
 }
 
-// IsDataflowComponentConfigLoaded determines if the DataflowComponent service has successfully loaded its configuration.
-// Implementation: We check if the service has been running for at least 5 seconds without crashing.
-// This works because DataflowComponent's Benthos performs config validation at startup and immediately panics
-// if there are any configuration errors, causing the service to restart.
-// Therefore, if the service stays up for >= 5 seconds, we can be confident the config is valid.
-func (d *DataflowComponentInstance) IsDataflowComponentConfigLoaded() bool {
-	currentUptime := d.ObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.S6ObservedState.ServiceInfo.Uptime
-	return currentUptime >= 5
-}
-
-// IsDataflowComponentHealthchecksPassed determines if the DataflowComponent service has passed its healthchecks.
-func (d *DataflowComponentInstance) IsDataflowComponentHealthchecksPassed() bool {
-	benthosObservedState := d.ObservedState.ServiceInfo.BenthosObservedState
-
-	return benthosObservedState.ServiceInfo.BenthosStatus.HealthCheck.IsLive &&
-		benthosObservedState.ServiceInfo.BenthosStatus.HealthCheck.IsReady
-}
-
 // IsDataflowComponentDegraded determines if the DataflowComponent service is degraded.
 // These check everything that is checked during the starting phase
 // But it means that it once worked, and then degraded
 func (d *DataflowComponentInstance) IsDataflowComponentDegraded() bool {
-	if d.IsDataflowComponentBenthosRunning() && d.IsDataflowComponentConfigLoaded() && d.IsDataflowComponentHealthchecksPassed() {
-		return false
-	}
-	return true
+	return !d.IsDataflowComponentBenthosRunning()
 }
 
 // IsDataflowComponentWithProcessingActivity determines if the Benthos instance has active data processing
