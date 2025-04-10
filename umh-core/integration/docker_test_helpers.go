@@ -147,13 +147,6 @@ func writeConfigFile(yamlContent string, containerName ...string) error {
 			fmt.Printf("Failed to copy config to container: %v\n%s\n", err, out)
 			return fmt.Errorf("failed to copy config to container: %w", err)
 		}
-
-		// Verify the config was written correctly
-		out, err = runDockerCommand("exec", container, "cat", "/data/config.yaml")
-		if err != nil {
-			fmt.Printf("Failed to verify config in container: %v\n", err)
-			return fmt.Errorf("failed to verify config in container: %w", err)
-		}
 	}
 
 	return nil
@@ -221,17 +214,11 @@ func BuildAndRunContainer(configYaml string, memory string, cpus uint) error {
 	}
 	fmt.Println("Docker build successful")
 
-	// 3. First just write the config to the local file
-	fmt.Println("Writing local config file...")
-	if err := writeConfigFile(configYaml); err != nil {
-		return fmt.Errorf("failed to write local config file: %w", err)
-	}
-
-	// 4. Run container WITHOUT mounting the config file (but we do need to mount the /data/redpanda folder, otherwise it cannot start)
+	// 3. Run container WITHOUT mounting the config file (but we do need to mount the /data/redpanda folder, otherwise it cannot start)
 	tmpRedpandaDir := filepath.Join(getTmpDir(), containerName, "redpanda")
 	tmpLogsDir := filepath.Join(getTmpDir(), containerName, "logs")
 
-	// Create the directories
+	// 4. Create the directories
 	if err := os.MkdirAll(tmpRedpandaDir, 0o777); err != nil {
 		return fmt.Errorf("failed to create redpanda dir: %w", err)
 	}
@@ -239,9 +226,10 @@ func BuildAndRunContainer(configYaml string, memory string, cpus uint) error {
 		return fmt.Errorf("failed to create logs dir: %w", err)
 	}
 
-	fmt.Println("Starting container...")
+	// 5. Create the container WITHOUT starting it
+	fmt.Println("Creating container (without starting it)...")
 	out, err = runDockerCommand(
-		"run", "-d",
+		"create",
 		"--name", containerName,
 		"-e", "LOGGING_LEVEL=debug",
 		// Map the host ports to the container's fixed ports
@@ -254,18 +242,30 @@ func BuildAndRunContainer(configYaml string, memory string, cpus uint) error {
 		imageName,
 	)
 	if err != nil {
-		fmt.Printf("Container start failed: %v\n", err)
-		fmt.Printf("Container run output:\n%s\n", out)
-		return fmt.Errorf("could not run container: %s", out)
+		fmt.Printf("Container creation failed: %v\n", err)
+		fmt.Printf("Container create output:\n%s\n", out)
+		return fmt.Errorf("could not create container: %s", out)
 	}
-	fmt.Printf("Container started with ID: %s\n", strings.TrimSpace(out))
+	fmt.Printf("Container created with ID: %s\n", strings.TrimSpace(out))
 
-	// 5. Now write the config directly to the container
-	if err := writeConfigFile(configYaml, containerName); err != nil {
+	// 6. Copy the config file to the container BEFORE starting it
+	fmt.Println("Copying config file to container...")
+	err = writeConfigFile(configYaml, containerName)
+	if err != nil {
 		return fmt.Errorf("failed to write config to container: %w", err)
 	}
 
-	// 6. Verify the container is actually running
+	// 7. Start the container
+	fmt.Println("Starting the container...")
+	out, err = runDockerCommand("start", containerName)
+	if err != nil {
+		fmt.Printf("Container start failed: %v\n", err)
+		fmt.Printf("Container start output:\n%s\n", out)
+		return fmt.Errorf("could not start container: %s", out)
+	}
+	fmt.Println("Container started successfully")
+
+	// 8. Verify the container is actually running
 	out, err = runDockerCommand("inspect", "--format", "{{.State.Status}}", containerName)
 	if err != nil {
 		fmt.Printf("Failed to inspect container: %v\n", err)
@@ -279,7 +279,7 @@ func BuildAndRunContainer(configYaml string, memory string, cpus uint) error {
 		}
 	}
 
-	// 7. Wait for the container to be healthy
+	// 9. Wait for the container to be healthy
 	fmt.Println("Waiting for metrics endpoint to become available...")
 	return waitForMetrics()
 }
