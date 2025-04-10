@@ -31,7 +31,7 @@ type MockService struct {
 	GetHealthError error
 
 	// Results for each method
-	GetStatusResult *ContainerStatus
+	GetStatusResult *ServiceInfo
 	GetHealthResult *models.Health
 
 	// For more complex testing scenarios
@@ -55,7 +55,7 @@ func NewMockService() *MockService {
 }
 
 // GetStatus is a mock implementation of Service.GetStatus
-func (m *MockService) GetStatus(ctx context.Context) (*ContainerStatus, error) {
+func (m *MockService) GetStatus(ctx context.Context) (*ServiceInfo, error) {
 	m.GetStatusCalled = true
 
 	if m.GetStatusError != nil {
@@ -79,8 +79,8 @@ func (m *MockService) GetHealth(ctx context.Context) (*models.Health, error) {
 }
 
 // CreateDefaultContainerStatus returns a default container status with healthy metrics for testing
-func CreateDefaultContainerStatus() *ContainerStatus {
-	return &ContainerStatus{
+func CreateDefaultContainerStatus() *ServiceInfo {
+	return &ServiceInfo{
 		CPU: &models.CPU{
 			TotalUsageMCpu: 350.0,
 			CoreCount:      4,
@@ -103,8 +103,8 @@ func CreateDefaultContainerStatus() *ContainerStatus {
 }
 
 // CreateDegradedContainerStatus creates a container status with degraded health
-func CreateDegradedContainerStatus() *ContainerStatus {
-	return &ContainerStatus{
+func CreateDegradedContainerStatus() *ServiceInfo {
+	return &ServiceInfo{
 		CPU: &models.CPU{
 			TotalUsageMCpu: 950.0,
 			CoreCount:      4,
