@@ -37,15 +37,14 @@ import (
 // This function is intended to be called repeatedly (e.g. in a periodic control loop).
 // Over multiple calls, it converges the actual state to the desired state. Transitions
 // that fail are retried in subsequent reconcile calls after a backoff period.
-func (b *RedpandaInstance) Reconcile(ctx context.Context, filesystemService filesystem.Service, tick uint64) (err error, reconciled bool) {
-
+func (r *RedpandaInstance) Reconcile(ctx context.Context, filesystemService filesystem.Service, tick uint64) (err error, reconciled bool) {
 	start := time.Now()
-	redpandaInstanceName := b.baseFSMInstance.GetID()
+	redpandaInstanceName := r.baseFSMInstance.GetID()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentRedpandaInstance, redpandaInstanceName, time.Since(start))
 		if err != nil {
-			b.baseFSMInstance.GetLogger().Errorf("error reconciling Redpanda instance %s: %w", redpandaInstanceName, err)
-			b.PrintState()
+			r.baseFSMInstance.GetLogger().Errorf("error reconciling Redpanda instance %s: %w", redpandaInstanceName, err)
+			r.PrintState()
 			// Add metrics for error
 			metrics.IncErrorCount(metrics.ComponentRedpandaInstance, redpandaInstanceName)
 		}
@@ -57,24 +56,24 @@ func (b *RedpandaInstance) Reconcile(ctx context.Context, filesystemService file
 	}
 
 	// Step 1: If there's a lastError, see if we've waited enough.
-	if b.baseFSMInstance.ShouldSkipReconcileBecauseOfError(tick) {
-		err := b.baseFSMInstance.GetBackoffError(tick)
-		b.baseFSMInstance.GetLogger().Debugf("Skipping reconcile for Redpanda pipeline %s: %w", redpandaInstanceName, err)
+	if r.baseFSMInstance.ShouldSkipReconcileBecauseOfError(tick) {
+		err := r.baseFSMInstance.GetBackoffError(tick)
+		r.baseFSMInstance.GetLogger().Debugf("Skipping reconcile for Redpanda pipeline %s: %w", redpandaInstanceName, err)
 
 		// if it is a permanent error, start the removal process and reset the error (so that we can reconcile towards a stopped / removed state)
 		if backoff.IsPermanentFailureError(err) {
 
 			// if it is already in stopped, stopping, removing states, and it again returns a permanent error,
 			// we need to throw it to the manager as the instance itself here cannot fix it anymore
-			if b.IsRemoved() || b.IsRemoving() || b.IsStopping() || b.IsStopped() {
-				b.baseFSMInstance.GetLogger().Errorf("Redpanda instance %s is already in a terminal state, force removing it", redpandaInstanceName)
+			if r.IsRemoved() || r.IsRemoving() || r.IsStopping() || r.IsStopped() {
+				r.baseFSMInstance.GetLogger().Errorf("Redpanda instance %s is already in a terminal state, force removing it", redpandaInstanceName)
 				// force delete everything from the s6 file directory
-				b.service.ForceRemoveRedpanda(ctx, filesystemService)
+				r.service.ForceRemoveRedpanda(ctx, filesystemService)
 				return err, false
 			} else {
-				b.baseFSMInstance.GetLogger().Errorf("Redpanda instance %s is not in a terminal state, resetting state and removing it", redpandaInstanceName)
-				b.baseFSMInstance.ResetState()
-				b.Remove(ctx)
+				r.baseFSMInstance.GetLogger().Errorf("Redpanda instance %s is not in a terminal state, resetting state and removing it", redpandaInstanceName)
+				r.baseFSMInstance.ResetState()
+				r.Remove(ctx)
 				return nil, false // let's try to at least reconcile towards a stopped / removed state
 			}
 		}
@@ -82,11 +81,11 @@ func (b *RedpandaInstance) Reconcile(ctx context.Context, filesystemService file
 	}
 
 	// Step 2: Detect external changes.
-	if err := b.reconcileExternalChanges(ctx, filesystemService, tick); err != nil {
+	if err := r.reconcileExternalChanges(ctx, filesystemService, tick); err != nil {
 		// If the service is not running, we don't want to return an error here, because we want to continue reconciling
 		if !errors.Is(err, redpanda_service.ErrServiceNotExist) {
-			b.baseFSMInstance.SetError(err, tick)
-			b.baseFSMInstance.GetLogger().Errorf("error reconciling external changes: %s", err)
+			r.baseFSMInstance.SetError(err, tick)
+			r.baseFSMInstance.GetLogger().Errorf("error reconciling external changes: %s", err)
 
 			if errors.Is(err, context.DeadlineExceeded) {
 				// Healthchecks occasionally take longer (sometimes up to 70ms),
@@ -104,23 +103,23 @@ func (b *RedpandaInstance) Reconcile(ctx context.Context, filesystemService file
 
 	// Step 3: Attempt to reconcile the state.
 	currentTime := time.Now() // this is used to check if the instance is degraded and for the log check
-	err, reconciled = b.reconcileStateTransition(ctx, currentTime)
+	err, reconciled = r.reconcileStateTransition(ctx, filesystemService, currentTime)
 	if err != nil {
 		// If the instance is removed, we don't want to return an error here, because we want to continue reconciling
 		if errors.Is(err, fsm.ErrInstanceRemoved) {
 			return nil, false
 		}
 
-		b.baseFSMInstance.SetError(err, tick)
-		b.baseFSMInstance.GetLogger().Errorf("error reconciling state: %s", err)
+		r.baseFSMInstance.SetError(err, tick)
+		r.baseFSMInstance.GetLogger().Errorf("error reconciling state: %s", err)
 		return nil, false // We don't want to return an error here, because we want to continue reconciling
 	}
 
-	// Step 4: Reconcile the s6Manager
-	s6Err, s6Reconciled := b.service.ReconcileManager(ctx, filesystemService, tick)
+	// Reconcile the s6Manager
+	s6Err, s6Reconciled := r.service.ReconcileManager(ctx, filesystemService, tick)
 	if s6Err != nil {
-		b.baseFSMInstance.SetError(s6Err, tick)
-		b.baseFSMInstance.GetLogger().Errorf("error reconciling s6Manager: %s", s6Err)
+		r.baseFSMInstance.SetError(s6Err, tick)
+		r.baseFSMInstance.GetLogger().Errorf("error reconciling s6Manager: %s", s6Err)
 		return nil, false
 	}
 
@@ -130,17 +129,17 @@ func (b *RedpandaInstance) Reconcile(ctx context.Context, filesystemService file
 	reconciled = reconciled || s6Reconciled
 
 	// It went all right, so clear the error
-	b.baseFSMInstance.ResetState()
+	r.baseFSMInstance.ResetState()
 
 	return nil, reconciled
 }
 
 // reconcileExternalChanges checks if the RedpandaInstance service status has changed
 // externally (e.g., if someone manually stopped or started it, or if it crashed)
-func (b *RedpandaInstance) reconcileExternalChanges(ctx context.Context, filesystemService filesystem.Service, tick uint64) error {
+func (r *RedpandaInstance) reconcileExternalChanges(ctx context.Context, filesystemService filesystem.Service, tick uint64) error {
 	start := time.Now()
 	defer func() {
-		metrics.ObserveReconcileTime(metrics.ComponentRedpandaInstance, b.baseFSMInstance.GetID()+".reconcileExternalChanges", time.Since(start))
+		metrics.ObserveReconcileTime(metrics.ComponentRedpandaInstance, r.baseFSMInstance.GetID()+".reconcileExternalChanges", time.Since(start))
 	}()
 
 	// Fetching the observed state can sometimes take longer, but we need to ensure when reconciling a lot of instances
@@ -148,7 +147,7 @@ func (b *RedpandaInstance) reconcileExternalChanges(ctx context.Context, filesys
 	observedStateCtx, cancel := context.WithTimeout(ctx, constants.RedpandaUpdateObservedStateTimeout)
 	defer cancel()
 
-	err := b.updateObservedState(observedStateCtx, filesystemService, tick)
+	err := r.updateObservedState(observedStateCtx, filesystemService, tick)
 	if err != nil {
 		return fmt.Errorf("failed to update observed state: %w", err)
 	}
@@ -160,18 +159,18 @@ func (b *RedpandaInstance) reconcileExternalChanges(ctx context.Context, filesys
 // Any functions that fetch information are disallowed here and must be called in reconcileExternalChanges
 // and exist in ObservedState.
 // This is to ensure full testability of the FSM.
-func (b *RedpandaInstance) reconcileStateTransition(ctx context.Context, currentTime time.Time) (err error, reconciled bool) {
+func (r *RedpandaInstance) reconcileStateTransition(ctx context.Context, filesystemService filesystem.Service, currentTime time.Time) (err error, reconciled bool) {
 	start := time.Now()
 	defer func() {
-		metrics.ObserveReconcileTime(metrics.ComponentRedpandaInstance, b.baseFSMInstance.GetID()+".reconcileStateTransition", time.Since(start))
+		metrics.ObserveReconcileTime(metrics.ComponentRedpandaInstance, r.baseFSMInstance.GetID()+".reconcileStateTransition", time.Since(start))
 	}()
 
-	currentState := b.baseFSMInstance.GetCurrentFSMState()
-	desiredState := b.baseFSMInstance.GetDesiredFSMState()
+	currentState := r.baseFSMInstance.GetCurrentFSMState()
+	desiredState := r.baseFSMInstance.GetDesiredFSMState()
 
 	// Handle lifecycle states first - these take precedence over operational states
 	if internal_fsm.IsLifecycleState(currentState) {
-		err, reconciled := b.reconcileLifecycleStates(ctx, currentState)
+		err, reconciled := r.reconcileLifecycleStates(ctx, filesystemService, currentState)
 		if err != nil {
 			return err, false
 		}
@@ -185,7 +184,7 @@ func (b *RedpandaInstance) reconcileStateTransition(ctx context.Context, current
 
 	// Handle operational states
 	if IsOperationalState(currentState) {
-		err, reconciled := b.reconcileOperationalStates(ctx, currentState, desiredState, currentTime)
+		err, reconciled := r.reconcileOperationalStates(ctx, filesystemService, currentState, desiredState, currentTime)
 		if err != nil {
 			return err, false
 		}
@@ -196,28 +195,28 @@ func (b *RedpandaInstance) reconcileStateTransition(ctx context.Context, current
 }
 
 // reconcileLifecycleStates handles states related to instance lifecycle (creating/removing)
-func (b *RedpandaInstance) reconcileLifecycleStates(ctx context.Context, currentState string) (err error, reconciled bool) {
+func (r *RedpandaInstance) reconcileLifecycleStates(ctx context.Context, filesystemService filesystem.Service, currentState string) (err error, reconciled bool) {
 	start := time.Now()
 	defer func() {
-		metrics.ObserveReconcileTime(metrics.ComponentRedpandaInstance, b.baseFSMInstance.GetID()+".reconcileLifecycleStates", time.Since(start))
+		metrics.ObserveReconcileTime(metrics.ComponentRedpandaInstance, r.baseFSMInstance.GetID()+".reconcileLifecycleStates", time.Since(start))
 	}()
 
 	// Independent what the desired state is, we always need to reconcile the lifecycle states first
 	switch currentState {
 	case internal_fsm.LifecycleStateToBeCreated:
-		if err := b.initiateRedpandaCreate(ctx); err != nil {
+		if err := r.initiateRedpandaCreate(ctx); err != nil {
 			return err, false
 		}
-		return b.baseFSMInstance.SendEvent(ctx, internal_fsm.LifecycleEventCreate), true
+		return r.baseFSMInstance.SendEvent(ctx, internal_fsm.LifecycleEventCreate), true
 	case internal_fsm.LifecycleStateCreating:
 		// Check if the service is created
 		// For now, we'll assume it's created immediately after initiating creation
-		return b.baseFSMInstance.SendEvent(ctx, internal_fsm.LifecycleEventCreateDone), true
+		return r.baseFSMInstance.SendEvent(ctx, internal_fsm.LifecycleEventCreateDone), true
 	case internal_fsm.LifecycleStateRemoving:
-		if err := b.initiateRedpandaRemove(ctx); err != nil {
+		if err := r.initiateRedpandaRemove(ctx); err != nil {
 			return err, false
 		}
-		return b.baseFSMInstance.SendEvent(ctx, internal_fsm.LifecycleEventRemoveDone), true
+		return r.baseFSMInstance.SendEvent(ctx, internal_fsm.LifecycleEventRemoveDone), true
 	case internal_fsm.LifecycleStateRemoved:
 		return fsm.ErrInstanceRemoved, true
 	default:
@@ -227,17 +226,17 @@ func (b *RedpandaInstance) reconcileLifecycleStates(ctx context.Context, current
 }
 
 // reconcileOperationalStates handles states related to instance operations (starting/stopping)
-func (b *RedpandaInstance) reconcileOperationalStates(ctx context.Context, currentState string, desiredState string, currentTime time.Time) (err error, reconciled bool) {
+func (r *RedpandaInstance) reconcileOperationalStates(ctx context.Context, filesystemService filesystem.Service, currentState string, desiredState string, currentTime time.Time) (err error, reconciled bool) {
 	start := time.Now()
 	defer func() {
-		metrics.ObserveReconcileTime(metrics.ComponentRedpandaInstance, b.baseFSMInstance.GetID()+".reconcileOperationalStates", time.Since(start))
+		metrics.ObserveReconcileTime(metrics.ComponentRedpandaInstance, r.baseFSMInstance.GetID()+".reconcileOperationalStates", time.Since(start))
 	}()
 
 	switch desiredState {
 	case OperationalStateActive:
-		return b.reconcileTransitionToActive(ctx, currentState, currentTime)
+		return r.reconcileTransitionToActive(ctx, filesystemService, currentState, currentTime)
 	case OperationalStateStopped:
-		return b.reconcileTransitionToStopped(ctx, currentState)
+		return r.reconcileTransitionToStopped(ctx, filesystemService, currentState)
 	default:
 		return fmt.Errorf("invalid desired state: %s", desiredState), false
 	}
@@ -245,49 +244,49 @@ func (b *RedpandaInstance) reconcileOperationalStates(ctx context.Context, curre
 
 // reconcileTransitionToActive handles transitions when the desired state is Active.
 // It deals with moving from various states to the Active state.
-func (b *RedpandaInstance) reconcileTransitionToActive(ctx context.Context, currentState string, currentTime time.Time) (err error, reconciled bool) {
+func (r *RedpandaInstance) reconcileTransitionToActive(ctx context.Context, filesystemService filesystem.Service, currentState string, currentTime time.Time) (err error, reconciled bool) {
 	start := time.Now()
 	defer func() {
-		metrics.ObserveReconcileTime(metrics.ComponentRedpandaInstance, b.baseFSMInstance.GetID()+".reconcileTransitionToActive", time.Since(start))
+		metrics.ObserveReconcileTime(metrics.ComponentRedpandaInstance, r.baseFSMInstance.GetID()+".reconcileTransitionToActive", time.Since(start))
 	}()
 
 	// If we're stopped, we need to start first
 	if currentState == OperationalStateStopped {
 		// Attempt to initiate start
-		if err := b.initiateRedpandaStart(ctx); err != nil {
+		if err := r.initiateRedpandaStart(ctx); err != nil {
 			return err, false
 		}
 		// Send event to transition from Stopped to Starting
-		return b.baseFSMInstance.SendEvent(ctx, EventStart), true
+		return r.baseFSMInstance.SendEvent(ctx, EventStart), true
 	}
 
 	// Handle starting phase states
 	if IsStartingState(currentState) {
-		return b.reconcileStartingState(ctx, currentState, currentTime)
+		return r.reconcileStartingStates(ctx, filesystemService, currentState, currentTime)
 	} else if IsRunningState(currentState) {
-		return b.reconcileRunningState(ctx, currentState, currentTime)
+		return r.reconcileRunningStates(ctx, filesystemService, currentState, currentTime)
 	}
 
 	return nil, false
 }
 
-// reconcileStartingState handles the various starting phase states when transitioning to Active.
-func (b *RedpandaInstance) reconcileStartingState(ctx context.Context, currentState string, currentTime time.Time) (err error, reconciled bool) {
+// reconcileStartingStates handles the various starting phase states when transitioning to Active.
+func (r *RedpandaInstance) reconcileStartingStates(ctx context.Context, filesystemService filesystem.Service, currentState string, currentTime time.Time) (err error, reconciled bool) {
 	start := time.Now()
 	defer func() {
-		metrics.ObserveReconcileTime(metrics.ComponentRedpandaInstance, b.baseFSMInstance.GetID()+".reconcileStartingState", time.Since(start))
+		metrics.ObserveReconcileTime(metrics.ComponentRedpandaInstance, r.baseFSMInstance.GetID()+".reconcileStartingState", time.Since(start))
 	}()
 
 	switch currentState {
 	case OperationalStateStarting:
 		// First we need to ensure the S6 service is started
-		if !b.IsRedpandaS6Running() {
+		if !r.IsRedpandaS6Running() {
 			return nil, false
 		}
 
 		// Check if "Successfully started Redpanda!" is found in logs
-		if b.IsRedpandaStarted() {
-			return b.baseFSMInstance.SendEvent(ctx, EventStartDone), true
+		if r.IsRedpandaStarted() {
+			return r.baseFSMInstance.SendEvent(ctx, EventStartDone), true
 		}
 
 		return nil, false
@@ -296,34 +295,34 @@ func (b *RedpandaInstance) reconcileStartingState(ctx context.Context, currentSt
 	}
 }
 
-// reconcileRunningState handles the various running states when transitioning to Active.
-func (b *RedpandaInstance) reconcileRunningState(ctx context.Context, currentState string, currentTime time.Time) (err error, reconciled bool) {
+// reconcileRunningStates handles the various running states when transitioning to Active.
+func (r *RedpandaInstance) reconcileRunningStates(ctx context.Context, filesystemService filesystem.Service, currentState string, currentTime time.Time) (err error, reconciled bool) {
 	start := time.Now()
 	defer func() {
-		metrics.ObserveReconcileTime(metrics.ComponentRedpandaInstance, b.baseFSMInstance.GetID()+".reconcileRunningState", time.Since(start))
+		metrics.ObserveReconcileTime(metrics.ComponentRedpandaInstance, r.baseFSMInstance.GetID()+".reconcileRunningState", time.Since(start))
 	}()
 
 	switch currentState {
 	case OperationalStateActive:
 		// If we're in Active, we need to check whether it is degraded
-		if b.IsRedpandaDegraded(currentTime, constants.RedpandaLogWindow) {
-			return b.baseFSMInstance.SendEvent(ctx, EventDegraded), true
-		} else if !b.IsRedpandaWithProcessingActivity() { // if there is no activity, we move to Idle
-			return b.baseFSMInstance.SendEvent(ctx, EventNoDataTimeout), true
+		if r.IsRedpandaDegraded(currentTime, constants.RedpandaLogWindow) {
+			return r.baseFSMInstance.SendEvent(ctx, EventDegraded), true
+		} else if !r.IsRedpandaWithProcessingActivity() { // if there is no activity, we move to Idle
+			return r.baseFSMInstance.SendEvent(ctx, EventNoDataTimeout), true
 		}
 		return nil, false
 	case OperationalStateIdle:
 		// If we're in Idle, we need to check whether it is degraded
-		if b.IsRedpandaDegraded(currentTime, constants.RedpandaLogWindow) {
-			return b.baseFSMInstance.SendEvent(ctx, EventDegraded), true
-		} else if b.IsRedpandaWithProcessingActivity() { // if there is activity, we move to Active
-			return b.baseFSMInstance.SendEvent(ctx, EventDataReceived), true
+		if r.IsRedpandaDegraded(currentTime, constants.RedpandaLogWindow) {
+			return r.baseFSMInstance.SendEvent(ctx, EventDegraded), true
+		} else if r.IsRedpandaWithProcessingActivity() { // if there is activity, we move to Active
+			return r.baseFSMInstance.SendEvent(ctx, EventDataReceived), true
 		}
 		return nil, false
 	case OperationalStateDegraded:
 		// If we're in Degraded, we need to recover to move to Idle
-		if !b.IsRedpandaDegraded(currentTime, constants.RedpandaLogWindow) {
-			return b.baseFSMInstance.SendEvent(ctx, EventRecovered), true
+		if !r.IsRedpandaDegraded(currentTime, constants.RedpandaLogWindow) {
+			return r.baseFSMInstance.SendEvent(ctx, EventRecovered), true
 		}
 		return nil, false
 	default:
@@ -333,26 +332,26 @@ func (b *RedpandaInstance) reconcileRunningState(ctx context.Context, currentSta
 
 // reconcileTransitionToStopped handles transitions when the desired state is Stopped.
 // It deals with moving from any operational state to Stopping and then to Stopped.
-func (b *RedpandaInstance) reconcileTransitionToStopped(ctx context.Context, currentState string) (err error, reconciled bool) {
+func (r *RedpandaInstance) reconcileTransitionToStopped(ctx context.Context, filesystemService filesystem.Service, currentState string) (err error, reconciled bool) {
 	start := time.Now()
 	defer func() {
-		metrics.ObserveReconcileTime(metrics.ComponentRedpandaInstance, b.baseFSMInstance.GetID()+".reconcileTransitionToStopped", time.Since(start))
+		metrics.ObserveReconcileTime(metrics.ComponentRedpandaInstance, r.baseFSMInstance.GetID()+".reconcileTransitionToStopped", time.Since(start))
 	}()
 
 	// If we're in any operational state except Stopped or Stopping, initiate stop
 	if currentState != OperationalStateStopped && currentState != OperationalStateStopping {
 		// Attempt to initiate a stop
-		if err := b.initiateRedpandaStop(ctx); err != nil {
+		if err := r.initiateRedpandaStop(ctx); err != nil {
 			return err, false
 		}
 		// Send event to transition to Stopping
-		return b.baseFSMInstance.SendEvent(ctx, EventStop), true
+		return r.baseFSMInstance.SendEvent(ctx, EventStop), true
 	}
 
 	// If already stopping, verify if the instance is completely stopped
-	if currentState == OperationalStateStopping && b.IsRedpandaS6Stopped() {
+	if currentState == OperationalStateStopping && r.IsRedpandaS6Stopped() {
 		// Transition from Stopping to Stopped
-		return b.baseFSMInstance.SendEvent(ctx, EventStopDone), true
+		return r.baseFSMInstance.SendEvent(ctx, EventStopDone), true
 	}
 
 	return nil, false

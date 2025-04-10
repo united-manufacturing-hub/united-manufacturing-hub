@@ -16,6 +16,8 @@ package container
 
 import (
 	"context"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 )
 
 // In Benthos, actions.go contained idempotent operations (like starting/stopping a service).
@@ -41,16 +43,28 @@ func (c *ContainerInstance) initiateContainerRemove(ctx context.Context) error {
 // optionally, we might have something like "enableMonitoring" / "disableMonitoring" if
 // you want actual side effects. For now, do no-ops or just logs.
 
-// enableMonitoring is called when the container monitoring should be enabled.
+// monitoringStart is called when the container monitoring should be enabled.
 // Currently this is a no-op as the monitoring service runs independently.
-func (c *ContainerInstance) enableMonitoring(ctx context.Context) error {
+func (c *ContainerInstance) monitoringStart(ctx context.Context) error {
 	c.baseFSMInstance.GetLogger().Infof("Enabling monitoring for %s (no-op)", c.baseFSMInstance.GetID())
 	return nil
 }
 
-// disableMonitoring is called when the container monitoring should be disabled.
+// monitoringStop is called when the container monitoring should be disabled.
 // Currently this is a no-op as the monitoring service runs independently.
-func (c *ContainerInstance) disableMonitoring(ctx context.Context) error {
+func (c *ContainerInstance) monitoringStop(ctx context.Context) error {
 	c.baseFSMInstance.GetLogger().Infof("Disabling monitoring for %s (no-op)", c.baseFSMInstance.GetID())
 	return nil
+}
+
+// areAllMetricsHealthy decides if the container health is Active
+func (c *ContainerInstance) areAllMetricsHealthy() bool {
+	status := c.ObservedState.ServiceInfo
+	if status == nil {
+		// If we have no data, let's consider it not healthy
+		return false
+	}
+
+	// Only consider container healthy if the overall health category is Active
+	return status.OverallHealth == models.Active
 }
