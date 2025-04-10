@@ -24,13 +24,13 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 )
 
 const (
 	containerBaseName = "umh-core"
-	imageName         = "umh-core:latest"
 )
 
 var (
@@ -47,6 +47,17 @@ var (
 	configFilePath string
 	configOnce     sync.Once
 )
+
+var imageNameOnce sync.Once
+var imageName string
+
+func getImageName() string {
+	imageNameOnce.Do(func() {
+		imageName = fmt.Sprintf("umh-core:latest-%s", time.Now().Format("20060102150405"))
+		fmt.Printf("Using image name: %s\n", imageName)
+	})
+	return imageName
+}
 
 // getContainerName returns a unique container name for this test run
 func getContainerName() string {
@@ -152,6 +163,46 @@ func writeConfigFile(yamlContent string, containerName ...string) error {
 	return nil
 }
 
+func buildContainer() error {
+	fmt.Println("Building Docker image...")
+	// Check if this image already exists
+	out, err := runDockerCommand("images", "-q", getImageName())
+	var exists bool
+	if err != nil {
+		fmt.Printf("Failed to check if image exists: %v\n", err)
+		// If we fail for any reason, assume the image does not exist
+		exists = false
+	}
+	if out != "" {
+		exists = true
+	}
+	if exists {
+		fmt.Printf("Image %s already exists, skipping build\n", getImageName())
+		return nil
+	}
+
+	coreDir := filepath.Dir(GetCurrentDir())
+	dockerfilePath := filepath.Join(coreDir, "Dockerfile")
+
+	fmt.Printf("Core directory: %s\n", coreDir)
+	fmt.Printf("Dockerfile path: %s\n", dockerfilePath)
+	// Use Docker Buildx for more efficient builds
+	// -t: Tag the image with the specified name
+	// --load: Load the image into Docker's local image store
+	// --no-cache: Build without using the cache [Since we already check above if the image exists]
+	// -f: Specify the Dockerfile path
+	// Last argument is the build context (directory containing source files)
+	out, err = runDockerCommand("buildx", "build", "-t", getImageName(),
+		"--load", "--no-cache", "-f", dockerfilePath, coreDir)
+	if err != nil {
+		fmt.Printf("Docker build failed: %v\n", err)
+		fmt.Printf("Build output:\n%s\n", out)
+		return fmt.Errorf("docker build failed: %s", out)
+	}
+	fmt.Println("Docker build successful")
+	return nil
+}
+
 // BuildAndRunContainer rebuilds your Docker image, starts the container, etc.
 func BuildAndRunContainer(configYaml string, memory string, cpus uint) error {
 	// Get the unique container name for this test run
@@ -199,20 +250,9 @@ func BuildAndRunContainer(configYaml string, memory string, cpus uint) error {
 	}
 
 	// 2. Build image
-	fmt.Println("Building Docker image...")
-	coreDir := filepath.Dir(GetCurrentDir())
-	dockerfilePath := filepath.Join(coreDir, "Dockerfile")
-
-	fmt.Printf("Core directory: %s\n", coreDir)
-	fmt.Printf("Dockerfile path: %s\n", dockerfilePath)
-
-	out, err = runDockerCommand("build", "-t", imageName, "-f", dockerfilePath, coreDir)
-	if err != nil {
-		fmt.Printf("Docker build failed: %v\n", err)
-		fmt.Printf("Build output:\n%s\n", out)
-		return fmt.Errorf("Docker build failed: %s", out)
+	if err := buildContainer(); err != nil {
+		return err
 	}
-	fmt.Println("Docker build successful")
 
 	// 3. Run container WITHOUT mounting the config file (but we do need to mount the /data/redpanda folder, otherwise it cannot start)
 	tmpRedpandaDir := filepath.Join(getTmpDir(), containerName, "redpanda")
@@ -239,7 +279,7 @@ func BuildAndRunContainer(configYaml string, memory string, cpus uint) error {
 		"--cpus", fmt.Sprintf("%d", cpus),
 		"-v", fmt.Sprintf("%s:/data/redpanda", tmpRedpandaDir),
 		"-v", fmt.Sprintf("%s:/data/logs", tmpLogsDir),
-		imageName,
+		getImageName(),
 	)
 	if err != nil {
 		fmt.Printf("Container creation failed: %v\n", err)
