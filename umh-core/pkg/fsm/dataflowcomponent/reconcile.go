@@ -26,6 +26,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	dataflowcomponentservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/dataflowcomponent"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
@@ -275,7 +276,7 @@ func (d *DataflowComponentInstance) reconcileStartingState(ctx context.Context, 
 	switch currentState {
 	case OperationalStateStarting:
 		// First we need to ensure the Benthos service is started
-		if !d.IsDataflowComponentBenthosRunning() {
+		if !d.IsDataflowComponentBenthosActive() {
 			return nil, false
 		}
 		return d.baseFSMInstance.SendEvent(ctx, EventStartDone), true

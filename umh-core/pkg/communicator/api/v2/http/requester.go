@@ -208,6 +208,18 @@ func processLatencyHeaders(response *http.Response, timeTillFirstByte time.Durat
 	latenciesReal.Set(now, timeTillFirstByte-elapsedTime)
 }
 
+// enhanceConnectionError adds detailed context to common connection errors
+func enhanceConnectionError(err error) error {
+	if strings.Contains(err.Error(), "EOF") {
+		return fmt.Errorf("connection closed unexpectedly before receiving response: %w (possible causes: network issues, server timeout, or firewall blocking)", err)
+	} else if strings.Contains(err.Error(), "timeout") || strings.Contains(err.Error(), "deadline exceeded") {
+		return fmt.Errorf("request timed out: %w (possible causes: slow network, server overload, or request too large)", err)
+	} else if strings.Contains(err.Error(), "connection refused") {
+		return fmt.Errorf("connection refused: %w (possible causes: server down, incorrect URL, or firewall blocking)", err)
+	}
+	return fmt.Errorf("connection error: %w (no response received from server, status code 0)", err)
+}
+
 // GetRequest does a GET request to the given endpoint, with optional header and cookies
 func GetRequest[R any](ctx context.Context, endpoint Endpoint, header map[string]string, cookies *map[string]string, insecureTLS bool) (*R, error, int) {
 	// Set up context with default 30 second timeout if none provided
@@ -256,7 +268,8 @@ func GetRequest[R any](ctx context.Context, endpoint Endpoint, header map[string
 		if response != nil {
 			return nil, err, response.StatusCode
 		}
-		return nil, err, 0
+		// Enhance error message for connection failures
+		return nil, enhanceConnectionError(err), 0
 	}
 	defer response.Body.Close()
 
@@ -276,14 +289,20 @@ func GetRequest[R any](ctx context.Context, endpoint Endpoint, header map[string
 	}
 
 	if response.StatusCode < 200 || response.StatusCode > 399 {
-		error_handler.ReportHTTPErrors(
-			errors.New("error response code: "+response.Status),
-			response.StatusCode,
-			string(endpoint),
-			http.MethodGet,
-			nil,
-			bodyBytes,
-		)
+		// if the error is 401, we want to report it as a login error
+		if response.StatusCode == 401 {
+			// no need to report it to sentry
+			return nil, errors.New("unauthorized: Authentication failed. Either your API key is invalid or your instance has been removed. Please verify your API key or recreate the instance"), response.StatusCode
+		} else {
+			error_handler.ReportHTTPErrors(
+				errors.New("error response code: "+response.Status),
+				response.StatusCode,
+				string(endpoint),
+				http.MethodGet,
+				nil,
+				bodyBytes,
+			)
+		}
 		return nil, errors.New("error response code: " + response.Status), response.StatusCode
 	}
 
@@ -370,7 +389,8 @@ func PostRequest[R any, T any](ctx context.Context, endpoint Endpoint, data *T, 
 		if response != nil {
 			return nil, err, response.StatusCode
 		}
-		return nil, err, 0
+		// Enhance error message for connection failures
+		return nil, enhanceConnectionError(err), 0
 	}
 	latenciesFRB.Set(time.Now(), timeTillFirstByte)
 

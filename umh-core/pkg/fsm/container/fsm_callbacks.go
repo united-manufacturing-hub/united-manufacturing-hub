@@ -24,15 +24,15 @@ import (
 // registerCallbacks sets up logging or side effects on entering states if desired.
 func (c *ContainerInstance) registerCallbacks() {
 	// Operational state callbacks
-	c.baseFSMInstance.AddCallback("enter_"+MonitoringStateStopped, func(ctx context.Context, e *fsm.Event) {
+	c.baseFSMInstance.AddCallback("enter_"+OperationalStateStopped, func(ctx context.Context, e *fsm.Event) {
 		c.baseFSMInstance.GetLogger().Infof("Container %s entered state: monitoring_stopped", c.baseFSMInstance.GetID())
 	})
 
-	c.baseFSMInstance.AddCallback("enter_"+MonitoringStateDegraded, func(ctx context.Context, e *fsm.Event) {
+	c.baseFSMInstance.AddCallback("enter_"+OperationalStateDegraded, func(ctx context.Context, e *fsm.Event) {
 		c.baseFSMInstance.GetLogger().Warnf("Container %s entered state: degraded", c.baseFSMInstance.GetID())
 	})
 
-	c.baseFSMInstance.AddCallback("enter_"+MonitoringStateActive, func(ctx context.Context, e *fsm.Event) {
+	c.baseFSMInstance.AddCallback("enter_"+OperationalStateActive, func(ctx context.Context, e *fsm.Event) {
 		c.baseFSMInstance.GetLogger().Infof("Container %s entered state: active", c.baseFSMInstance.GetID())
 	})
 
