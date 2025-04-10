@@ -417,6 +417,10 @@ type GetDataflowcomponentRequestSchemaJson struct {
 	VersionUUIDs []string `json:"versionUUIDs" yaml:"versionUUIDs" mapstructure:"versionUUIDs"`
 }
 
+type CommonDataFlowComponentCDFCPropertiesPayload struct {
+	CDFCProperties CommonDataFlowComponentCDFCProperties `json:"customDataFlowComponent" yaml:"customDataFlowComponent" mapstructure:"customDataFlowComponent"`
+}
+
 type CommonDataFlowComponentCDFCProperties struct {
 	// BenthosImageTag corresponds to the JSON schema field "benthosImageTag".
 	BenthosImageTag *CommonDataFlowComponentBenthosImageTagConfig `json:"benthosImageTag,omitempty" yaml:"benthosImageTag,omitempty" mapstructure:"benthosImageTag,omitempty"`

@@ -82,18 +82,19 @@ func (a *GetDataFlowComponentAction) Execute() (interface{}, map[string]interfac
 	response := models.GetDataflowcomponentResponse{}
 	for _, component := range dataFlowComponents {
 		// build the payload
-		dfc_payload := models.CommonDataFlowComponentCDFCProperties{}
-		dfc_payload.BenthosImageTag = &models.CommonDataFlowComponentBenthosImageTagConfig{
-			Tag: nil,
+		dfc_payload := models.CommonDataFlowComponentCDFCPropertiesPayload{}
+		tagValue := "not-used"
+		dfc_payload.CDFCProperties.BenthosImageTag = &models.CommonDataFlowComponentBenthosImageTagConfig{
+			Tag: &tagValue,
 		}
-		dfc_payload.IgnoreErrors = nil
+		dfc_payload.CDFCProperties.IgnoreErrors = nil
 		//fill the inputs, outputs, pipeline and rawYAML
 		// Convert the BenthosConfig input to CommonDataFlowComponentInputConfig
 		inputData, err := yaml.Marshal(component.DataFlowComponentConfig.BenthosConfig.Input)
 		if err != nil {
 			a.actionLogger.Warnf("Failed to marshal input data: %v", err)
 		}
-		dfc_payload.Inputs = models.CommonDataFlowComponentInputConfig{
+		dfc_payload.CDFCProperties.Inputs = models.CommonDataFlowComponentInputConfig{
 			Data: string(inputData),
 			Type: "benthos", // Default type for benthos inputs
 		}
@@ -103,7 +104,7 @@ func (a *GetDataFlowComponentAction) Execute() (interface{}, map[string]interfac
 		if err != nil {
 			a.actionLogger.Warnf("Failed to marshal output data: %v", err)
 		}
-		dfc_payload.Outputs = models.CommonDataFlowComponentOutputConfig{
+		dfc_payload.CDFCProperties.Outputs = models.CommonDataFlowComponentOutputConfig{
 			Data: string(outputData),
 			Type: "benthos", // Default type for benthos outputs
 		}
@@ -139,7 +140,7 @@ func (a *GetDataFlowComponentAction) Execute() (interface{}, map[string]interfac
 			}
 		}
 
-		dfc_payload.Pipeline = models.CommonDataFlowComponentPipelineConfig{
+		dfc_payload.CDFCProperties.Pipeline = models.CommonDataFlowComponentPipelineConfig{
 			Processors: processors,
 			Threads:    threads,
 		}
@@ -168,7 +169,7 @@ func (a *GetDataFlowComponentAction) Execute() (interface{}, map[string]interfac
 			if err != nil {
 				a.actionLogger.Warnf("Failed to marshal rawYAML data: %v", err)
 			} else {
-				dfc_payload.RawYAML = &models.CommonDataFlowComponentRawYamlConfig{
+				dfc_payload.CDFCProperties.RawYAML = &models.CommonDataFlowComponentRawYamlConfig{
 					Data: string(rawYAMLData),
 				}
 			}

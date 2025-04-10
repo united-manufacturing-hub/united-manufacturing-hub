@@ -116,8 +116,7 @@ func (p *Pusher) push() {
 			payload := backend_api_structs.PushPayload{
 				UMHMessages: messages,
 			}
-			reply, err, status := http.PostRequest[any, backend_api_structs.PushPayload](context.Background(), http.PushEndpoint, &payload, nil, &cookies, p.insecureTLS)
-			zap.S().Info("Reply: ", reply)
+			_, err, status := http.PostRequest[any, backend_api_structs.PushPayload](context.Background(), http.PushEndpoint, &payload, nil, &cookies, p.insecureTLS)
 			if err != nil {
 				error_handler.ReportHTTPErrors(err, status, string(http.PushEndpoint), "POST", &payload, nil)
 				p.dog.ReportHeartbeatStatus(p.watcherUUID, watchdog.HEARTBEAT_STATUS_WARNING)
