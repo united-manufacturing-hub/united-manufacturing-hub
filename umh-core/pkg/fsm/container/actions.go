@@ -17,6 +17,7 @@ package container
 import (
 	"context"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
@@ -44,19 +45,26 @@ func (c *ContainerInstance) RemoveInstance(ctx context.Context, filesystemServic
 // optionally, we might have something like "enableMonitoring" / "disableMonitoring" if
 // you want actual side effects. For now, do no-ops or just logs.
 
-// monitoringStart is called when the container monitoring should be enabled.
+// StartInstance is called when the container monitoring should be enabled.
 // Currently this is a no-op as the monitoring service runs independently.
-func (c *ContainerInstance) monitoringStart(ctx context.Context) error {
+func (c *ContainerInstance) StartInstance(ctx context.Context, filesystemService filesystem.Service) error {
 	c.baseFSMInstance.GetLogger().Infof("Enabling monitoring for %s (no-op)", c.baseFSMInstance.GetID())
 	return nil
 }
 
-// monitoringStop is called when the container monitoring should be disabled.
+// StopInstance is called when the container monitoring should be disabled.
 // Currently this is a no-op as the monitoring service runs independently.
-func (c *ContainerInstance) monitoringStop(ctx context.Context) error {
+func (c *ContainerInstance) StopInstance(ctx context.Context, filesystemService filesystem.Service) error {
 	c.baseFSMInstance.GetLogger().Infof("Disabling monitoring for %s (no-op)", c.baseFSMInstance.GetID())
 	return nil
 }
+
+// UpdateObservedStateOfInstance is called when the FSM transitions to updating.
+// For container monitoring, this is a no-op as we don't need to update any resources.
+func (c *ContainerInstance) UpdateObservedStateOfInstance(ctx context.Context, filesystemService filesystem.Service, tick uint64) error {
+	c.baseFSMInstance.GetLogger().Debugf("Updating observed state for %s (no-op)", c.baseFSMInstance.GetID())
+	return nil
+  }
 
 // areAllMetricsHealthy decides if the container health is Active
 func (c *ContainerInstance) areAllMetricsHealthy() bool {

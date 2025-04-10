@@ -147,7 +147,7 @@ func (r *RedpandaInstance) reconcileExternalChanges(ctx context.Context, filesys
 	observedStateCtx, cancel := context.WithTimeout(ctx, constants.RedpandaUpdateObservedStateTimeout)
 	defer cancel()
 
-	err := r.updateObservedState(observedStateCtx, filesystemService, tick)
+	err := r.UpdateObservedStateOfInstance(observedStateCtx, filesystemService, tick)
 	if err != nil {
 		return fmt.Errorf("failed to update observed state: %w", err)
 	}
@@ -204,7 +204,7 @@ func (r *RedpandaInstance) reconcileLifecycleStates(ctx context.Context, filesys
 	// Independent what the desired state is, we always need to reconcile the lifecycle states first
 	switch currentState {
 	case internal_fsm.LifecycleStateToBeCreated:
-		if err := r.initiateRedpandaCreate(ctx); err != nil {
+		if err := r.CreateInstance(ctx, filesystemService); err != nil {
 			return err, false
 		}
 		return r.baseFSMInstance.SendEvent(ctx, internal_fsm.LifecycleEventCreate), true
@@ -213,7 +213,7 @@ func (r *RedpandaInstance) reconcileLifecycleStates(ctx context.Context, filesys
 		// For now, we'll assume it's created immediately after initiating creation
 		return r.baseFSMInstance.SendEvent(ctx, internal_fsm.LifecycleEventCreateDone), true
 	case internal_fsm.LifecycleStateRemoving:
-		if err := r.initiateRedpandaRemove(ctx); err != nil {
+		if err := r.RemoveInstance(ctx, filesystemService); err != nil {
 			return err, false
 		}
 		return r.baseFSMInstance.SendEvent(ctx, internal_fsm.LifecycleEventRemoveDone), true
@@ -253,7 +253,7 @@ func (r *RedpandaInstance) reconcileTransitionToActive(ctx context.Context, file
 	// If we're stopped, we need to start first
 	if currentState == OperationalStateStopped {
 		// Attempt to initiate start
-		if err := r.initiateRedpandaStart(ctx); err != nil {
+		if err := r.StartInstance(ctx, filesystemService); err != nil {
 			return err, false
 		}
 		// Send event to transition from Stopped to Starting
@@ -341,7 +341,7 @@ func (r *RedpandaInstance) reconcileTransitionToStopped(ctx context.Context, fil
 	// If we're in any operational state except Stopped or Stopping, initiate stop
 	if currentState != OperationalStateStopped && currentState != OperationalStateStopping {
 		// Attempt to initiate a stop
-		if err := r.initiateRedpandaStop(ctx); err != nil {
+		if err := r.StopInstance(ctx, filesystemService); err != nil {
 			return err, false
 		}
 		// Send event to transition to Stopping
