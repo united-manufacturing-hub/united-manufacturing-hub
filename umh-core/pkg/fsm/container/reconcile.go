@@ -51,13 +51,13 @@ func (c *ContainerInstance) Reconcile(ctx context.Context, filesystemService fil
 		return ctx.Err(), false
 	}
 
-	// 2) Check if we should skip due to a recent error with backoff
+	// Step 1: If there's a lastError, see if we've waited enough.
 	if c.baseFSMInstance.ShouldSkipReconcileBecauseOfError(tick) {
 		backErr := c.baseFSMInstance.GetBackoffError(tick)
 		if backoff.IsPermanentFailureError(backErr) {
 			// If permanent, we want to remove the instance or at least stop it
 			// For now, let's just remove it from the manager:
-			if c.IsRemoved() || c.IsRemoving() || c.IsStopped() {
+			if c.IsRemoved() || c.IsRemoving() || c.IsStopping() || c.IsStopped() {
 				c.baseFSMInstance.GetLogger().Errorf("Permanent error on container monitor %s but it is already in a terminal/removing state", instanceName)
 				return backErr, false
 			} else {
@@ -127,7 +127,7 @@ func (c *ContainerInstance) Reconcile(ctx context.Context, filesystemService fil
 // printSystemState prints the full system state in a human-readable format
 func (c *ContainerInstance) printSystemState(instanceName string, tick uint64) {
 	logger := c.baseFSMInstance.GetLogger()
-	status := c.ObservedState.ContainerStatus
+	status := c.ObservedState.ServiceInfo
 
 	logger.Infof("======= Container Instance State: %s (tick: %d) =======", instanceName, tick)
 	logger.Infof("FSM States: Current=%s, Desired=%s", c.baseFSMInstance.GetCurrentFSMState(), c.baseFSMInstance.GetDesiredFSMState())
@@ -192,7 +192,7 @@ func healthCategoryToString(category models.HealthCategory) string {
 func (c *ContainerInstance) reconcileStateTransition(ctx context.Context, filesystemService filesystem.Service) (err error, reconciled bool) {
 	start := time.Now()
 	defer func() {
-		metrics.ObserveReconcileTime(metrics.ComponentS6Instance, c.baseFSMInstance.GetID()+".reconcileStateTransition", time.Since(start))
+		metrics.ObserveReconcileTime(metrics.ComponentContainerMonitor, c.baseFSMInstance.GetID()+".reconcileStateTransition", time.Since(start))
 	}()
 
 	currentState := c.baseFSMInstance.GetCurrentFSMState()
@@ -218,7 +218,7 @@ func (c *ContainerInstance) reconcileStateTransition(ctx context.Context, filesy
 
 	// Handle operational states
 	if IsOperationalState(currentState) {
-		err, reconciled := c.reconcileOperationalStates(ctx, filesystemService, currentState, desiredState)
+		err, reconciled := c.reconcileOperationalStates(ctx, filesystemService, currentState, desiredState, time.Now())
 		if err != nil {
 			return err, false
 		}
@@ -239,7 +239,7 @@ func (c *ContainerInstance) updateObservedState(ctx context.Context) error {
 		return fmt.Errorf("failed to get container metrics: %w", err)
 	}
 	// Save to observed state
-	c.ObservedState.ContainerStatus = status
+	c.ObservedState.ServiceInfo = status
 	return nil
 }
 
@@ -272,57 +272,119 @@ func (c *ContainerInstance) reconcileLifecycleStates(ctx context.Context, filesy
 	}
 }
 
-// reconcileOperationalStates checks the desired state (active or stopped) and the observed metrics
-func (c *ContainerInstance) reconcileOperationalStates(ctx context.Context, filesystemService filesystem.Service, currentState string, desiredState string) (error, bool) {
-	current := c.GetCurrentFSMState()
-	desired := c.GetDesiredFSMState()
+// reconcileOperationalStates handles states related to instance operations (starting/stopping)
+func (c *ContainerInstance) reconcileOperationalStates(ctx context.Context, filesystemService filesystem.Service, currentState string, desiredState string, currentTime time.Time) (err error, reconciled bool) {
+	start := time.Now()
+	defer func() {
+		metrics.ObserveReconcileTime(metrics.ComponentContainerMonitor, c.baseFSMInstance.GetID()+".reconcileOperationalStates", time.Since(start))
+	}()
 
-	// 1) If desired is "stopped" and we are not "monitoring_stopped", we should eventStop
-	if desired == MonitoringStateStopped && current != MonitoringStateStopped {
-		err := c.StopInstance(ctx, filesystemService)
-		if err != nil {
-			return err, false
-		}
-		return c.baseFSMInstance.SendEvent(ctx, EventStop), false // it is inconsitent with the control fsms, but as we actually not do anything here we can save some ticks and allow other fsms to reconcile after us
+	switch desiredState {
+	case OperationalStateActive:
+		return c.reconcileTransitionToActive(ctx, filesystemService, currentState, currentTime)
+	case OperationalStateStopped:
+		return c.reconcileTransitionToStopped(ctx, filesystemService, currentState)
+	default:
+		return fmt.Errorf("invalid desired state: %s", desiredState), false
 	}
-
-	// 2) If desired is "active" and we are "monitoring_stopped", we should do eventStart -> goes to degraded
-	if desired == MonitoringStateActive && current == MonitoringStateStopped {
-		err := c.StartInstance(ctx, filesystemService)
-		if err != nil {
-			return err, false
-		}
-		return c.baseFSMInstance.SendEvent(ctx, EventStart), false // it is inconsitent with the control fsms, but as we actually not do anything here we can save some ticks and allow other fsms to reconcile after us
-	}
-
-	// 3) If we are in "degraded" or "active" (i.e. running monitoring), check metrics
-	if current == MonitoringStateDegraded || current == MonitoringStateActive {
-		// Evaluate the container metrics from c.ObservedState
-		if c.areAllMetricsHealthy() {
-			// If currently degraded, we go to active
-			if current == MonitoringStateDegraded {
-				return c.baseFSMInstance.SendEvent(ctx, EventMetricsAllOK), false // it is inconsitent with the control fsms, but as we actually not do anything here we can save some ticks and allow other fsms to reconcile after us
-			}
-		} else {
-			// If currently active, we degrade
-			if current == MonitoringStateActive {
-				return c.baseFSMInstance.SendEvent(ctx, EventMetricsNotOK), false // it is inconsitent with the control fsms, but as we actually not do anything here we can save some ticks and allow other fsms to reconcile after us
-			}
-		}
-	}
-
-	// no changes
-	return nil, false
 }
 
-// areAllMetricsHealthy decides if the container health is Active
-func (c *ContainerInstance) areAllMetricsHealthy() bool {
-	status := c.ObservedState.ContainerStatus
-	if status == nil {
-		// If we have no data, let's consider it not healthy
-		return false
-	}
+// reconcileTransitionToActive handles transitions when the desired state is Active.
+// It deals with moving from various states to the Active state.
+func (c *ContainerInstance) reconcileTransitionToActive(ctx context.Context, filesystemService filesystem.Service, currentState string, currentTime time.Time) (err error, reconciled bool) {
+	start := time.Now()
+	defer func() {
+		metrics.ObserveReconcileTime(metrics.ComponentContainerMonitor, c.baseFSMInstance.GetID()+".reconcileTransitionToActive", time.Since(start))
+	}()
 
-	// Only consider container healthy if the overall health category is Active
-	return status.OverallHealth == models.Active
+	switch {
+	// If we're stopped, we need to start first
+	case currentState == OperationalStateStopped:
+		// nothing to start here, just for consistency with other fsms
+		err := c.InstanceStart(ctx)
+		if err != nil {
+			return err, false
+		}
+		// Send event to transition from Stopped to Starting
+		return c.baseFSMInstance.SendEvent(ctx, EventStart), true
+	case IsStartingState(currentState):
+		return c.reconcileStartingStates(ctx, filesystemService, currentState, currentTime)
+	case IsRunningState(currentState):
+		return c.reconcileRunningStates(ctx, filesystemService, currentState, currentTime)
+	default:
+		return fmt.Errorf("invalid current state: %s", currentState), false
+	}
+}
+
+// reconcileStartingStates handles the various starting phase states when transitioning to a running state
+// no big startup process here
+func (c *ContainerInstance) reconcileStartingStates(ctx context.Context, filesystemService filesystem.Service, currentState string, currentTime time.Time) (err error, reconciled bool) {
+	start := time.Now()
+	defer func() {
+		metrics.ObserveReconcileTime(metrics.ComponentContainerMonitor, c.baseFSMInstance.GetID()+".reconcileStartingStates", time.Since(start))
+	}()
+
+	switch currentState {
+	case OperationalStateStarting:
+
+		// nothing to verify here, just for consistency with other fsms
+		return c.baseFSMInstance.SendEvent(ctx, EventStartDone), true
+	default:
+		return fmt.Errorf("invalid starting state: %s", currentState), false
+	}
+}
+
+// reconcileRunningStates handles the various running states when transitioning to Active.
+func (c *ContainerInstance) reconcileRunningStates(ctx context.Context, filesystemService filesystem.Service, currentState string, currentTime time.Time) (err error, reconciled bool) {
+	start := time.Now()
+	defer func() {
+		metrics.ObserveReconcileTime(metrics.ComponentContainerMonitor, c.baseFSMInstance.GetID()+".reconcileRunningStates", time.Since(start))
+	}()
+
+	switch currentState {
+	case OperationalStateActive:
+		// If we're in Active, we need to check whether it is degraded
+		if !c.areAllMetricsHealthy() {
+			return c.baseFSMInstance.SendEvent(ctx, EventMetricsNotOK), true
+		}
+		return nil, false
+	case OperationalStateDegraded:
+		// If we're in Degraded, we need to recover to move to Active
+		if c.areAllMetricsHealthy() {
+			return c.baseFSMInstance.SendEvent(ctx, EventMetricsAllOK), true
+		}
+		return nil, false
+	default:
+		return fmt.Errorf("invalid running state: %s", currentState), false
+	}
+}
+
+// reconcileTransitionToStopped handles transitions when the desired state is Stopped.
+// It deals with moving from any operational state to Stopping and then to Stopped.
+func (c *ContainerInstance) reconcileTransitionToStopped(ctx context.Context, filesystemService filesystem.Service, currentState string) (err error, reconciled bool) {
+	start := time.Now()
+	defer func() {
+		metrics.ObserveReconcileTime(metrics.ComponentContainerMonitor, c.baseFSMInstance.GetID()+".reconcileTransitionToStopped", time.Since(start))
+	}()
+
+	switch currentState {
+	case OperationalStateStopped:
+		// Already stopped, nothing to do
+		return nil, false
+	case OperationalStateStopping:
+		// If already stopping, verify if the instance is completely stopped
+		// no verification, always go to stopped
+		// Unlike other FSMs, we don't need to verify the stopping state for container monitoring
+		// because there's no external service or process that needs to be checked - we can
+		// immediately transition to stopped state
+		return c.baseFSMInstance.SendEvent(ctx, EventStopDone), true
+	default:
+		// For any other state, initiate stop
+		err := c.monitoringStop(ctx)
+		if err != nil {
+			return err, false
+		}
+		// Send event to transition to Stopping
+		return c.baseFSMInstance.SendEvent(ctx, EventStop), true
+	}
 }

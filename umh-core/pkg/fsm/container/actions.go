@@ -18,6 +18,7 @@ import (
 	"context"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 )
 
 // In Benthos, actions.go contained idempotent operations (like starting/stopping a service).
@@ -62,4 +63,16 @@ func (c *ContainerInstance) StopInstance(ctx context.Context, filesystemService 
 func (c *ContainerInstance) UpdateObservedStateOfInstance(ctx context.Context, filesystemService filesystem.Service, tick uint64) error {
 	c.baseFSMInstance.GetLogger().Debugf("Updating observed state for %s (no-op)", c.baseFSMInstance.GetID())
 	return nil
+  }
+
+// areAllMetricsHealthy decides if the container health is Active
+func (c *ContainerInstance) areAllMetricsHealthy() bool {
+	status := c.ObservedState.ServiceInfo
+	if status == nil {
+		// If we have no data, let's consider it not healthy
+		return false
+	}
+
+	// Only consider container healthy if the overall health category is Active
+	return status.OverallHealth == models.Active
 }

@@ -263,16 +263,16 @@ func (b *BenthosInstance) reconcileTransitionToActive(ctx context.Context, files
 
 	// Handle starting phase states
 	if IsStartingState(currentState) {
-		return b.reconcileStartingState(ctx, filesystemService, currentState, currentTime)
+		return b.reconcileStartingStates(ctx, filesystemService, currentState, currentTime)
 	} else if IsRunningState(currentState) {
-		return b.reconcileRunningState(ctx, filesystemService, currentState, currentTime)
+		return b.reconcileRunningStates(ctx, filesystemService, currentState, currentTime)
 	}
 
 	return nil, false
 }
 
-// reconcileStartingState handles the various starting phase states when transitioning to Active.
-func (b *BenthosInstance) reconcileStartingState(ctx context.Context, filesystemService filesystem.Service, currentState string, currentTime time.Time) (err error, reconciled bool) {
+// reconcileStartingStates handles the various starting phase states when transitioning to Active.
+func (b *BenthosInstance) reconcileStartingStates(ctx context.Context, filesystemService filesystem.Service, currentState string, currentTime time.Time) (err error, reconciled bool) {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentBenthosInstance, b.baseFSMInstance.GetID()+".reconcileStartingState", time.Since(start))
@@ -329,8 +329,8 @@ func (b *BenthosInstance) reconcileStartingState(ctx context.Context, filesystem
 	}
 }
 
-// reconcileRunningState handles the various running states when transitioning to Active.
-func (b *BenthosInstance) reconcileRunningState(ctx context.Context, filesystemService filesystem.Service, currentState string, currentTime time.Time) (err error, reconciled bool) {
+// reconcileRunningStates handles the various running states when transitioning to Active.
+func (b *BenthosInstance) reconcileRunningStates(ctx context.Context, filesystemService filesystem.Service, currentState string, currentTime time.Time) (err error, reconciled bool) {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentBenthosInstance, b.baseFSMInstance.GetID()+".reconcileRunningState", time.Since(start))

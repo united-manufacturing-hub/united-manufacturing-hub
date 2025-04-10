@@ -22,8 +22,8 @@ import (
 
 // ContainerObservedStateSnapshot is a copy of the current metrics so the manager can store snapshots.
 type ContainerObservedStateSnapshot struct {
-	// For example, copy the entire *models.Container if that's your data
-	ContainerStatusSnapshot container_monitor.ContainerStatus
+	ServiceInfoSnapshot container_monitor.ServiceInfo
+	// No need for the config, as it is basically empty
 }
 
 // Ensure it satisfies fsm.ObservedStateSnapshot
@@ -32,8 +32,8 @@ func (c *ContainerObservedStateSnapshot) IsObservedStateSnapshot() {}
 // CreateObservedStateSnapshot is called by the manager to record the state
 func (c *ContainerInstance) CreateObservedStateSnapshot() fsm.ObservedStateSnapshot {
 	snapshot := &ContainerObservedStateSnapshot{}
-	if c.ObservedState.ContainerStatus != nil {
-		deepcopy.Copy(&snapshot.ContainerStatusSnapshot, c.ObservedState.ContainerStatus)
+	if c.ObservedState.ServiceInfo != nil {
+		deepcopy.Copy(&snapshot.ServiceInfoSnapshot, c.ObservedState.ServiceInfo)
 	}
 	return snapshot
 }
