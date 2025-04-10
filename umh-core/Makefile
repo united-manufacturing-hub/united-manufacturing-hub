@@ -138,7 +138,6 @@ build: download-docker-binaries
 		--build-arg APP_VERSION=$(VERSION) \
 		-t $(IMAGE_NAME):$(TAG) \
 		-f Dockerfile .
-
 # build-debug: launches delve inside the container.
 # This allows you to use vscode's "Connect to umh-core" feature and use breakpoints, etc inside the container.
 # To use this, modify one of the build-<type> targets to use this target instead of build.
@@ -153,6 +152,10 @@ build-debug: download-docker-binaries
 		--progress=plain \
 		-t $(IMAGE_NAME):$(TAG)-debug \
 		-f Dockerfile .
+    
+stop-all-containers:
+	docker stop $(docker ps -a -q) || true
+	docker rm $(docker ps -a -q) || true
 
 clean:
 	docker stop $(IMAGE_NAME) || true
@@ -160,7 +163,7 @@ clean:
 	docker rmi $(IMAGE_NAME):$(TAG) || true
 
 # Clean up Docker build cache and unused objects for CI environments
-cleanup-ci: clean
+cleanup-ci: clean stop-all-containers
 	docker builder prune -f
 	docker system prune -f --volumes
 
