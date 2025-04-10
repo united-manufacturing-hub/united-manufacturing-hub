@@ -111,28 +111,6 @@ func (a *DeployDataflowComponentAction) Parse(payload interface{}) error {
 
 func parseCustomDataFlowComponent(payload interface{}) (models.CDFCPayload, error) {
 	// Define our intermediate struct to parse the nested payload
-	type customDFCPayload struct {
-		CustomDataFlowComponent struct {
-			Inputs struct {
-				Type string `json:"type"`
-				Data string `json:"data"`
-			} `json:"inputs"`
-			Outputs struct {
-				Type string `json:"type"`
-				Data string `json:"data"`
-			} `json:"outputs"`
-			Inject struct {
-				Type string `json:"type"`
-				Data string `json:"data"`
-			} `json:"inject"`
-			Pipeline struct {
-				Processors map[string]struct {
-					Type string `json:"type"`
-					Data string `json:"data"`
-				} `json:"processors"`
-			} `json:"pipeline"`
-		} `json:"customDataFlowComponent"`
-	}
 
 	// Parse the nested custom data flow component payload
 	var customPayloadMap map[string]interface{}
@@ -170,7 +148,7 @@ func parseCustomDataFlowComponent(payload interface{}) (models.CDFCPayload, erro
 	}
 
 	// Use ParseActionPayload to convert the raw payload to our struct
-	parsedPayload, err := ParseActionPayload[customDFCPayload](payload)
+	parsedPayload, err := ParseActionPayload[models.CustomDFCPayload](payload)
 	if err != nil {
 		return models.CDFCPayload{}, fmt.Errorf("failed to parse payload: %v", err)
 	}
@@ -267,6 +245,13 @@ func (a *DeployDataflowComponentAction) Validate() error {
 			// Check processor YAML
 			if err := yaml.Unmarshal([]byte(proc.Data), &temp); err != nil {
 				return fmt.Errorf("pipeline.processors.%s.data is not valid YAML: %v", key, err)
+			}
+		}
+
+		// Validate inject data
+		if a.payload.Inject.Type != "" && a.payload.Inject.Data != "" {
+			if err := yaml.Unmarshal([]byte(a.payload.Inject.Data), &temp); err != nil {
+				return fmt.Errorf("inject.data is not valid YAML: %v", err)
 			}
 		}
 	}

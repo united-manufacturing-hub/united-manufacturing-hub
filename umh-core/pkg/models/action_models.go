@@ -354,6 +354,30 @@ type ActionReplyMessagePayload struct {
 	ActionContext map[string]interface{} `json:"actionContext,omitempty"`
 }
 
+// this is the structure of the action that the frontend sends in the first place
+type CustomDFCPayload struct {
+	CustomDataFlowComponent struct {
+		Inputs struct {
+			Type string `json:"type"`
+			Data string `json:"data"`
+		} `json:"inputs"`
+		Outputs struct {
+			Type string `json:"type"`
+			Data string `json:"data"`
+		} `json:"outputs"`
+		Inject struct {
+			Type string `json:"type"`
+			Data string `json:"data"`
+		} `json:"inject"`
+		Pipeline struct {
+			Processors map[string]struct {
+				Type string `json:"type"`
+				Data string `json:"data"`
+			} `json:"processors"`
+		} `json:"pipeline"`
+	} `json:"customDataFlowComponent"`
+}
+
 type GetDataflowcomponentResponse map[string]GetDataflowcomponentResponseContent
 
 type GetDataflowcomponentResponseContent struct {

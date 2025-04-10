@@ -204,7 +204,7 @@ func buildContainerDataFromSnapshot(instance fsm.FSMInstanceSnapshot, log *zap.L
 	if instance.LastObservedState != nil {
 		// Try to cast to the right type
 		if snapshot, ok := instance.LastObservedState.(*container.ContainerObservedStateSnapshot); ok {
-			status := snapshot.ContainerStatusSnapshot
+			status := snapshot.ServiceInfoSnapshot
 
 			// Create health status
 			containerData.Health = &models.Health{
