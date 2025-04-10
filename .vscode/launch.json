@@ -5,6 +5,15 @@
     "version": "0.2.0",
     "configurations": [
         {
+            // This connects to delve inside the umh-core container
+            "name": "Connect to umh-core",
+            "type": "go",
+            "request": "attach",
+            "mode": "remote",
+            "host": "localhost",
+            "port": 40000
+        },
+        {
             "name": "Debug Ginkgo Tests (test-fsm-benthos)",
             "type": "go",
             "request": "launch",
@@ -39,6 +48,14 @@
             "request": "launch",
             "mode": "test",
             "program": "${workspaceFolder}/umh-core/pkg/service/dataflowcomponent",
+            "buildFlags": "--tags=test"
+        },
+        {
+            "name": "Debug Ginkgo Tests (service-redpanda)",
+            "type": "go",
+            "request": "launch",
+            "mode": "test",
+            "program": "${workspaceFolder}/umh-core/pkg/service/redpanda",
             "buildFlags": "--tags=test"
         }
     ]
