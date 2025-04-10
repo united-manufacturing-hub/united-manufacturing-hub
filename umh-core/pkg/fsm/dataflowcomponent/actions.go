@@ -143,12 +143,12 @@ func (d *DataflowComponentInstance) updateObservedState(ctx context.Context, fil
 
 	// Detect a config change - but let the Benthos manager handle the actual reconciliation
 	// Use new ConfigsEqual function that handles Benthos defaults properly
-	if !dataflowcomponentconfig.CompareConfigs(&d.config, d.ObservedState.ObservedDataflowComponentConfig) {
+	if !dataflowcomponentconfig.ConfigsEqual(&d.config, d.ObservedState.ObservedDataflowComponentConfig) {
 		// Check if the service exists before attempting to update
 		if d.service.ServiceExists(ctx, filesystemService, d.baseFSMInstance.GetID()) {
 			d.baseFSMInstance.GetLogger().Debugf("Observed DataflowComponent config is different from desired config, updating DataflowComponent configuration")
 
-			diffStr := dataflowcomponentconfig.GetConfigDiff(&d.config, d.ObservedState.ObservedDataflowComponentConfig)
+			diffStr := dataflowcomponentconfig.ConfigDiff(&d.config, d.ObservedState.ObservedDataflowComponentConfig)
 			d.baseFSMInstance.GetLogger().Debugf("Configuration differences: %s", diffStr)
 
 			// Update the config in the Benthos manager
