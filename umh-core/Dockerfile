@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # --- Build Stage ---
-FROM golang:1.24-alpine as build
+FROM golang:1.24.1-alpine as build
 ARG S6_OVERLAY_VERSION=3.2.0.2
 ARG BENTHOS_UMH_VERSION=0.6.2
 ARG REDPANDA_VERSION=24.3.8
@@ -24,9 +24,10 @@ RUN apk add --no-cache gcc musl-dev
 # Copy go.mod first for better caching
 COPY ./go.mod ./umh-core/
 WORKDIR /go/src/github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core
-RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 go build \
+RUN echo "GOOS: ${GOOS:-$(go env GOOS)}, GOARCH: ${GOARCH:-$(go env GOARCH)}"
+RUN echo "Go version: $(go version)"
+RUN CGO_ENABLED=0 go build -mod=vendor \
     -ldflags "-s -w \
     -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants.S6OverlayVersion=${S6_OVERLAY_VERSION} \
     -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants.BenthosVersion=${BENTHOS_UMH_VERSION} \
