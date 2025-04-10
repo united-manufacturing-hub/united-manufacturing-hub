@@ -243,7 +243,7 @@ func (d *DataflowComponentInstance) IsDataflowComponentBenthosStopped() bool {
 // These check everything that is checked during the starting phase
 // But it means that it once worked, and then degraded
 func (d *DataflowComponentInstance) IsDataflowComponentDegraded() bool {
-	return !d.IsDataflowComponentBenthosRunning()
+	return !d.IsDataflowComponentBenthosActive()
 }
 
 // IsDataflowComponentWithProcessingActivity determines if the Benthos instance has active data processing
