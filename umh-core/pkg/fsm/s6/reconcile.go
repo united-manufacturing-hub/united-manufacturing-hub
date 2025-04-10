@@ -135,7 +135,7 @@ func (s *S6Instance) reconcileExternalChanges(ctx context.Context, filesystemSer
 
 	observedStateCtx, cancel := context.WithTimeout(ctx, constants.S6UpdateObservedStateTimeout)
 	defer cancel()
-	err := s.UpdateObservedStateOfInstance(observedStateCtx, filesystemService, tick)
+	err := s.UpdateObservedStateOfInstance(observedStateCtx, filesystemService, tick, start)
 	if err != nil {
 		return fmt.Errorf("failed to update observed state: %w", err)
 	}

@@ -107,7 +107,6 @@ func NewMockRedpandaService() *MockRedpandaService {
 		S6ServiceConfigs:  make([]config.S6FSMConfig, 0),
 		stateFlags:        &ServiceStateFlags{},
 		S6Service:         &s6service.MockService{},
-		FileSystemMock:    filesystem.NewDefaultService(),
 	}
 }
 
@@ -143,7 +142,7 @@ func (m *MockRedpandaService) GenerateS6ConfigForRedpanda(redpandaConfig *redpan
 }
 
 // GetConfig mocks getting the Redpanda configuration
-func (m *MockRedpandaService) GetConfig(ctx context.Context, filesystemService filesystem.Service, tick uint64) (redpandaserviceconfig.RedpandaServiceConfig, error) {
+func (m *MockRedpandaService) GetConfig(ctx context.Context, filesystemService filesystem.Service, tick uint64, loopStartTime time.Time) (redpandaserviceconfig.RedpandaServiceConfig, error) {
 	m.GetConfigCalled = true
 
 	// If error is set, return it
@@ -164,7 +163,7 @@ func (m *MockRedpandaService) GetConfig(ctx context.Context, filesystemService f
 }
 
 // Status mocks getting the status of a Redpanda service
-func (m *MockRedpandaService) Status(ctx context.Context, filesystemService filesystem.Service, tick uint64) (ServiceInfo, error) {
+func (m *MockRedpandaService) Status(ctx context.Context, filesystemService filesystem.Service, tick uint64, loopStartTime time.Time) (ServiceInfo, error) {
 	m.StatusCalled = true
 
 	// Check if the service exists
@@ -182,19 +181,19 @@ func (m *MockRedpandaService) Status(ctx context.Context, filesystemService file
 }
 
 // AddRedpandaToS6Manager mocks adding a Redpanda instance to the S6 manager
-func (m *MockRedpandaService) AddRedpandaToS6Manager(ctx context.Context, cfg *redpandaserviceconfig.RedpandaServiceConfig) error {
+func (m *MockRedpandaService) AddRedpandaToS6Manager(ctx context.Context, cfg *redpandaserviceconfig.RedpandaServiceConfig, filesystemService filesystem.Service) error {
 	m.AddRedpandaToS6ManagerCalled = true
 
 	// Ensure the required directories exist if filesystem mock is set
 	if m.FileSystemMock != nil {
 		// Ensure main data directory
-		if err := m.FileSystemMock.EnsureDirectory(ctx, filepath.Join(cfg.BaseDir, "redpanda")); err != nil {
+		if err := filesystemService.EnsureDirectory(ctx, filepath.Join(cfg.BaseDir, "redpanda")); err != nil {
 			return fmt.Errorf("failed to ensure %s/redpanda directory exists: %w", cfg.BaseDir, err)
 		}
 
 		// Ensure coredump directory
 		// By default redpanda will generate coredumps when crashing
-		if err := m.FileSystemMock.EnsureDirectory(ctx, filepath.Join(cfg.BaseDir, "redpanda", "coredump")); err != nil {
+		if err := filesystemService.EnsureDirectory(ctx, filepath.Join(cfg.BaseDir, "redpanda", "coredump")); err != nil {
 			return fmt.Errorf("failed to ensure %s/redpanda/coredump directory exists: %w", cfg.BaseDir, err)
 		}
 	}

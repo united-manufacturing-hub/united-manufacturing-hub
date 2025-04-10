@@ -130,7 +130,7 @@ func (s *S6Instance) StopInstance(ctx context.Context, filesystemService filesys
 }
 
 // UpdateObservedStateOfInstance updates the observed state of the service
-func (s *S6Instance) UpdateObservedStateOfInstance(ctx context.Context, filesystemService filesystem.Service, tick uint64) error {
+func (s *S6Instance) UpdateObservedStateOfInstance(ctx context.Context, filesystemService filesystem.Service, tick uint64, loopStartTime time.Time) error {
 
 	// Measure status time
 	info, err := s.service.Status(ctx, s.servicePath, filesystemService)

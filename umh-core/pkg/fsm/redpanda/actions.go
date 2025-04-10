@@ -48,7 +48,7 @@ import (
 func (r *RedpandaInstance) CreateInstance(ctx context.Context, filesystemService filesystem.Service) error {
 	r.baseFSMInstance.GetLogger().Debugf("Starting Action: Adding Redpanda service %s to S6 manager ...", r.baseFSMInstance.GetID())
 
-	err := r.service.AddRedpandaToS6Manager(ctx, &r.config)
+	err := r.service.AddRedpandaToS6Manager(ctx, &r.config, filesystemService)
 	if err != nil {
 		if err == redpanda_service.ErrServiceAlreadyExists {
 			r.baseFSMInstance.GetLogger().Debugf("Redpanda service %s already exists in S6 manager", r.baseFSMInstance.GetID())
@@ -114,9 +114,9 @@ func (r *RedpandaInstance) StopInstance(ctx context.Context, filesystemService f
 
 // getServiceStatus gets the status of the Redpanda service
 // its main purpose is to habdle the edge cases where the service is not yet created or not yet running
-func (r *RedpandaInstance) GetServiceStatus(ctx context.Context, filesystemService filesystem.Service, tick uint64) (redpanda_service.ServiceInfo, error) {
+func (r *RedpandaInstance) GetServiceStatus(ctx context.Context, filesystemService filesystem.Service, tick uint64, loopStartTime time.Time) (redpanda_service.ServiceInfo, error) {
 
-	info, err := r.service.Status(ctx, filesystemService, tick)
+	info, err := r.service.Status(ctx, filesystemService, tick, loopStartTime)
 	if err != nil {
 		// If there's an error getting the service status, we need to distinguish between cases
 
@@ -165,7 +165,7 @@ func (r *RedpandaInstance) GetServiceStatus(ctx context.Context, filesystemServi
 }
 
 // UpdateObservedStateOfInstance updates the observed state of the service
-func (r *RedpandaInstance) UpdateObservedStateOfInstance(ctx context.Context, filesystemService filesystem.Service, tick uint64) error {
+func (r *RedpandaInstance) UpdateObservedStateOfInstance(ctx context.Context, filesystemService filesystem.Service, tick uint64, loopStartTime time.Time) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
@@ -191,7 +191,7 @@ func (r *RedpandaInstance) UpdateObservedStateOfInstance(ctx context.Context, fi
 
 	g.Go(func() error {
 		start := time.Now()
-		info, err := r.GetServiceStatus(gctx, filesystemService, tick)
+		info, err := r.GetServiceStatus(gctx, filesystemService, tick, loopStartTime)
 		metrics.ObserveReconcileTime(logger.ComponentRedpandaInstance, r.baseFSMInstance.GetID()+".getServiceStatus", time.Since(start))
 		if err == nil {
 			// Store the raw service info
@@ -205,7 +205,7 @@ func (r *RedpandaInstance) UpdateObservedStateOfInstance(ctx context.Context, fi
 	g.Go(func() error {
 		start := time.Now()
 		// This GetConfig requires the tick parameter, which will be used to calculate the metrics state
-		observedConfig, err := r.service.GetConfig(gctx, filesystemService, tick)
+		observedConfig, err := r.service.GetConfig(gctx, filesystemService, tick, loopStartTime)
 		metrics.ObserveReconcileTime(logger.ComponentRedpandaInstance, r.baseFSMInstance.GetID()+".getConfig", time.Since(start))
 
 		if err == nil {

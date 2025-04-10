@@ -60,7 +60,7 @@ var _ = Describe("Redpanda Service", func() {
 		// Cleanup the data directory
 		ctx, cancel := newTimeoutContext()
 		defer cancel()
-		service.filesystem.RemoveAll(ctx, getTmpDir())
+		mockFS.RemoveAll(ctx, getTmpDir())
 
 		// Add the service to the S6 manager
 		config := &redpandaserviceconfig.RedpandaServiceConfig{
@@ -70,7 +70,7 @@ var _ = Describe("Redpanda Service", func() {
 		config.Topic.DefaultTopicRetentionBytes = 1000000000
 		ctx, cancel = newTimeoutContext()
 		defer cancel()
-		err := service.AddRedpandaToS6Manager(ctx, config)
+		err := service.AddRedpandaToS6Manager(ctx, config, mockFS)
 		Expect(err).NotTo(HaveOccurred())
 
 		// Reconcile the S6 manager
@@ -134,7 +134,7 @@ var _ = Describe("Redpanda Service", func() {
 
 			// Add the service
 			By("Adding the Redpanda service")
-			err := service.AddRedpandaToS6Manager(ctx, config)
+			err := service.AddRedpandaToS6Manager(ctx, config, mockFS)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Service should exist in the S6 manager
@@ -185,7 +185,7 @@ var _ = Describe("Redpanda Service", func() {
 
 			// Add the service with initial config
 			By("Adding the Redpanda service with initial config")
-			err := mockRedpandaService.AddRedpandaToS6Manager(ctx, initialConfig)
+			err := mockRedpandaService.AddRedpandaToS6Manager(ctx, initialConfig, mockFS)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(mockRedpandaService.AddRedpandaToS6ManagerCalled).To(BeTrue())
 
@@ -241,14 +241,14 @@ var _ = Describe("Redpanda Service", func() {
 			By("Adding a service")
 			err := service.AddRedpandaToS6Manager(ctx, &redpandaserviceconfig.RedpandaServiceConfig{
 				BaseDir: getTmpDir(),
-			})
+			}, mockFS)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Try to add the same service again
 			By("Trying to add the same service again")
 			err = service.AddRedpandaToS6Manager(ctx, &redpandaserviceconfig.RedpandaServiceConfig{
 				BaseDir: getTmpDir(),
-			})
+			}, mockFS)
 			Expect(err).To(Equal(ErrServiceAlreadyExists))
 		})
 	})

@@ -44,11 +44,11 @@ type IRedpandaService interface {
 	// GenerateS6ConfigForRedpanda generates a S6 config for a given redpanda instance
 	GenerateS6ConfigForRedpanda(redpandaConfig *redpandaserviceconfig.RedpandaServiceConfig) (s6serviceconfig.S6ServiceConfig, error)
 	// GetConfig returns the actual Redpanda config from the S6 service
-	GetConfig(ctx context.Context, filesystemService filesystem.Service, tick uint64) (redpandaserviceconfig.RedpandaServiceConfig, error)
+	GetConfig(ctx context.Context, filesystemService filesystem.Service, tick uint64, loopStartTime time.Time) (redpandaserviceconfig.RedpandaServiceConfig, error)
 	// Status checks the status of a Redpanda service
-	Status(ctx context.Context, filesystemService filesystem.Service, tick uint64) (ServiceInfo, error)
+	Status(ctx context.Context, filesystemService filesystem.Service, tick uint64, loopStartTime time.Time) (ServiceInfo, error)
 	// AddRedpandaToS6Manager adds a Redpanda instance to the S6 manager
-	AddRedpandaToS6Manager(ctx context.Context, cfg *redpandaserviceconfig.RedpandaServiceConfig) error
+	AddRedpandaToS6Manager(ctx context.Context, cfg *redpandaserviceconfig.RedpandaServiceConfig, filesystemService filesystem.Service) error
 	// UpdateRedpandaInS6Manager updates an existing Redpanda instance in the S6 manager
 	UpdateRedpandaInS6Manager(ctx context.Context, cfg *redpandaserviceconfig.RedpandaServiceConfig) error
 	// RemoveRedpandaFromS6Manager removes a Redpanda instance from the S6 manager
@@ -109,7 +109,6 @@ type RedpandaService struct {
 	s6Service        s6service.Service // S6 service for direct S6 operations
 	s6ServiceConfigs []config.S6FSMConfig
 	httpClient       httpclient.HTTPClient
-	filesystem       filesystem.Service // Filesystem service for file operations
 	baseDir          string
 	lastStatus       RedpandaStatus
 	metricsService   redpanda_monitor.IRedpandaMonitorService
@@ -133,13 +132,6 @@ func WithS6Service(s6Service s6service.Service) RedpandaServiceOption {
 	}
 }
 
-// WithFilesystem sets a custom filesystem service for the RedpandaService
-func WithFilesystem(fs filesystem.Service) RedpandaServiceOption {
-	return func(s *RedpandaService) {
-		s.filesystem = fs
-	}
-}
-
 // WithBaseDir sets the base directory for the RedpandaService
 func WithBaseDir(baseDir string) RedpandaServiceOption {
 	return func(s *RedpandaService) {
@@ -156,7 +148,6 @@ func NewDefaultRedpandaService(redpandaName string, opts ...RedpandaServiceOptio
 		s6Manager:      s6fsm.NewS6Manager(managerName),
 		s6Service:      s6service.NewDefaultService(),
 		httpClient:     nil, // this is only for a mock in the tests
-		filesystem:     filesystem.NewDefaultService(),
 		baseDir:        constants.DefaultRedpandaBaseDir,
 		metricsService: redpanda_monitor.NewRedpandaMonitorService(),
 	}
@@ -218,7 +209,7 @@ func (s *RedpandaService) GenerateS6ConfigForRedpanda(redpandaConfig *redpandase
 }
 
 // GetConfig returns the actual Redpanda config from the S6 service
-func (s *RedpandaService) GetConfig(ctx context.Context, filesystemService filesystem.Service, tick uint64) (redpandaserviceconfig.RedpandaServiceConfig, error) {
+func (s *RedpandaService) GetConfig(ctx context.Context, filesystemService filesystem.Service, tick uint64, loopStartTime time.Time) (redpandaserviceconfig.RedpandaServiceConfig, error) {
 	if ctx.Err() != nil {
 		return redpandaserviceconfig.RedpandaServiceConfig{}, ctx.Err()
 	}
@@ -228,13 +219,14 @@ func (s *RedpandaService) GetConfig(ctx context.Context, filesystemService files
 		return redpandaserviceconfig.RedpandaServiceConfig{}, fmt.Errorf("failed to get redpanda status: %w", err)
 	}
 
+	// If this is nil, we have not yet tried to scan for metrics and config, or there has been an error (but that one will be cached in the above Status() return)
 	if status.RedpandaStatus.LastScan == nil {
 		return redpandaserviceconfig.RedpandaServiceConfig{}, fmt.Errorf("last scan is nil")
 	}
 
 	// Check that the last scan is not older then RedpandaMaxMetricsAndConfigAge
-	if time.Since(status.RedpandaStatus.LastScan.LastUpdatedAt) > constants.RedpandaMaxMetricsAndConfigAge {
-		s.logger.Warnf("last scan is %s old, returning empty status", time.Since(status.RedpandaStatus.LastScan.LastUpdatedAt))
+	if loopStartTime.Sub(status.RedpandaStatus.LastScan.LastUpdatedAt) > constants.RedpandaMaxMetricsAndConfigAge {
+		s.logger.Warnf("last scan is %s old, returning empty status", loopStartTime.Sub(status.RedpandaStatus.LastScan.LastUpdatedAt))
 		return redpandaserviceconfig.RedpandaServiceConfig{}, fmt.Errorf("last scan is older than %s", constants.RedpandaMaxMetricsAndConfigAge)
 	}
 
@@ -253,7 +245,7 @@ func (s *RedpandaService) GetConfig(ctx context.Context, filesystemService files
 }
 
 // Status checks the status of a Redpanda service
-func (s *RedpandaService) Status(ctx context.Context, filesystemService filesystem.Service, tick uint64) (ServiceInfo, error) {
+func (s *RedpandaService) Status(ctx context.Context, filesystemService filesystem.Service, tick uint64, loopStartTime time.Time) (ServiceInfo, error) {
 	if ctx.Err() != nil {
 		return ServiceInfo{}, ctx.Err()
 	}
@@ -310,7 +302,7 @@ func (s *RedpandaService) Status(ctx context.Context, filesystemService filesyst
 		}
 	}
 	// Let's get the health check of the Redpanda service
-	redpandaStatus, err := s.GetHealthCheckAndMetrics(ctx, tick, logs)
+	redpandaStatus, err := s.GetHealthCheckAndMetrics(ctx, tick, logs, filesystemService, loopStartTime)
 	if err != nil {
 		if strings.Contains(err.Error(), ErrServiceNoLogFile.Error()) {
 			return ServiceInfo{
@@ -349,7 +341,7 @@ func (s *RedpandaService) Status(ctx context.Context, filesystemService filesyst
 }
 
 // GetHealthCheckAndMetrics returns the health check and metrics of a Redpanda service
-func (s *RedpandaService) GetHealthCheckAndMetrics(ctx context.Context, tick uint64, logs []s6service.LogEntry) (RedpandaStatus, error) {
+func (s *RedpandaService) GetHealthCheckAndMetrics(ctx context.Context, tick uint64, logs []s6service.LogEntry, filesystemService filesystem.Service, loopStartTime time.Time) (RedpandaStatus, error) {
 
 	s.logger.Infof("Getting health check and metrics for tick %d", tick)
 	start := time.Now()
@@ -378,7 +370,7 @@ func (s *RedpandaService) GetHealthCheckAndMetrics(ctx context.Context, tick uin
 		return s.lastStatus, nil
 	}
 
-	redpandaStatus, err := s.metricsService.Status(ctx, s.filesystem, tick)
+	redpandaStatus, err := s.metricsService.Status(ctx, filesystemService, tick)
 	if err != nil {
 		return RedpandaStatus{}, fmt.Errorf("failed to get redpanda status: %w", err)
 	}
@@ -388,8 +380,8 @@ func (s *RedpandaService) GetHealthCheckAndMetrics(ctx context.Context, tick uin
 	}
 
 	// Check that the last scan is not older then RedpandaMaxMetricsAndConfigAge
-	if time.Since(redpandaStatus.RedpandaStatus.LastScan.LastUpdatedAt) > constants.RedpandaMaxMetricsAndConfigAge {
-		s.logger.Warnf("last scan is %s old, returning empty status", time.Since(redpandaStatus.RedpandaStatus.LastScan.LastUpdatedAt))
+	if loopStartTime.Sub(redpandaStatus.RedpandaStatus.LastScan.LastUpdatedAt) > constants.RedpandaMaxMetricsAndConfigAge {
+		s.logger.Warnf("last scan is %s old, returning empty status", loopStartTime.Sub(redpandaStatus.RedpandaStatus.LastScan.LastUpdatedAt))
 		return RedpandaStatus{}, fmt.Errorf("last scan is older than %s", constants.RedpandaMaxMetricsAndConfigAge)
 	}
 
@@ -413,7 +405,7 @@ func (s *RedpandaService) GetHealthCheckAndMetrics(ctx context.Context, tick uin
 }
 
 // AddRedpandaToS6Manager adds a Redpanda instance to the S6 manager
-func (s *RedpandaService) AddRedpandaToS6Manager(ctx context.Context, cfg *redpandaserviceconfig.RedpandaServiceConfig) error {
+func (s *RedpandaService) AddRedpandaToS6Manager(ctx context.Context, cfg *redpandaserviceconfig.RedpandaServiceConfig, filesystemService filesystem.Service) error {
 	if s.s6Manager == nil {
 		return errors.New("s6 manager not initialized")
 	}
@@ -423,7 +415,7 @@ func (s *RedpandaService) AddRedpandaToS6Manager(ctx context.Context, cfg *redpa
 	}
 
 	// Ensure the required directories exist
-	if err := s.ensureRedpandaDirectories(ctx, cfg.BaseDir); err != nil {
+	if err := s.ensureRedpandaDirectories(ctx, cfg.BaseDir, filesystemService); err != nil {
 		return err
 	}
 
@@ -466,20 +458,20 @@ func (s *RedpandaService) AddRedpandaToS6Manager(ctx context.Context, cfg *redpa
 }
 
 // ensureRedpandaDirectories creates all necessary directories for Redpanda
-func (s *RedpandaService) ensureRedpandaDirectories(ctx context.Context, baseDir string) error {
+func (s *RedpandaService) ensureRedpandaDirectories(ctx context.Context, baseDir string, filesystemService filesystem.Service) error {
 	if baseDir == "" {
 		s.logger.Warnf("baseDir is empty, using default value %s", constants.DefaultRedpandaBaseDir)
 		baseDir = constants.DefaultRedpandaBaseDir
 	}
 
 	// Ensure main data directory
-	if err := s.filesystem.EnsureDirectory(ctx, filepath.Join(baseDir, "redpanda")); err != nil {
+	if err := filesystemService.EnsureDirectory(ctx, filepath.Join(baseDir, "redpanda")); err != nil {
 		return fmt.Errorf("failed to ensure %s/redpanda directory exists: %w", baseDir, err)
 	}
 
 	// Ensure coredump directory
 	// By default redpanda will generate coredumps when crashing
-	if err := s.filesystem.EnsureDirectory(ctx, filepath.Join(baseDir, "redpanda", "coredump")); err != nil {
+	if err := filesystemService.EnsureDirectory(ctx, filepath.Join(baseDir, "redpanda", "coredump")); err != nil {
 		return fmt.Errorf("failed to ensure %s/redpanda/coredump directory exists: %w", baseDir, err)
 	}
 

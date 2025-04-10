@@ -147,7 +147,7 @@ func (b *BenthosInstance) reconcileExternalChanges(ctx context.Context, filesyst
 	observedStateCtx, cancel := context.WithTimeout(ctx, constants.BenthosUpdateObservedStateTimeout)
 	defer cancel()
 
-	err := b.UpdateObservedStateOfInstance(observedStateCtx, filesystemService, tick)
+	err := b.UpdateObservedStateOfInstance(observedStateCtx, filesystemService, tick, start)
 	if err != nil {
 		return fmt.Errorf("failed to update observed state: %w", err)
 	}
