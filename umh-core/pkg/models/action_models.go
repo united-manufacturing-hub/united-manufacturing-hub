@@ -355,7 +355,7 @@ type ActionReplyMessagePayload struct {
 }
 
 // this is the structure of the action that the frontend sends in the first place
-type customDFCPayload struct {
+type CustomDFCPayload struct {
 	CustomDataFlowComponent struct {
 		Inputs struct {
 			Type string `json:"type"`
