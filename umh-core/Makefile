@@ -137,6 +137,7 @@ build: download-docker-binaries
 		--build-arg REDPANDA_VERSION=$(REDPANDA_VERSION) \
 		--build-arg APP_VERSION=$(VERSION) \
 		-t $(IMAGE_NAME):$(TAG) \
+		--progress=plain \
 		-f Dockerfile .
 	
 stop-all-containers:
