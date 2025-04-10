@@ -113,7 +113,7 @@ var (
 )
 
 // RecordContainerStatus updates Prometheus metrics based on the new ContainerStatus type
-func RecordContainerStatus(status *ContainerStatus, instanceName string) {
+func RecordContainerStatus(status *ServiceInfo, instanceName string) {
 	if status == nil {
 		return
 	}

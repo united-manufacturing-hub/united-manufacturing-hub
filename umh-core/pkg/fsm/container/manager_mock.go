@@ -28,37 +28,37 @@ import (
 func NewContainerManagerWithMockedService(name string, mockSvc container_monitor.MockService) *ContainerManager {
 	managerName := fmt.Sprintf("%s_mock_%s", ContainerManagerComponentName, name)
 
-	baseMgr := public_fsm.NewBaseFSMManager[ContainerConfig](
+	baseMgr := public_fsm.NewBaseFSMManager[config.ContainerConfig](
 		managerName,
 		"/dev/null",
 		// For the mock, we'll just pretend to parse from FullConfig
-		func(fc config.FullConfig) ([]ContainerConfig, error) {
+		func(fc config.FullConfig) ([]config.ContainerConfig, error) {
 			// In a real test, you'd define fc.Container with test data
-			return []ContainerConfig{
+			return []config.ContainerConfig{
 				{
 					Name:            "Core",
 					DesiredFSMState: "active",
 				},
 			}, nil
 		},
-		func(cc ContainerConfig) (string, error) {
+		func(cc config.ContainerConfig) (string, error) {
 			return cc.Name, nil
 		},
-		func(cc ContainerConfig) (string, error) {
+		func(cc config.ContainerConfig) (string, error) {
 			return cc.DesiredFSMState, nil
 		},
-		func(cc ContainerConfig) (public_fsm.FSMInstance, error) {
+		func(cc config.ContainerConfig) (public_fsm.FSMInstance, error) {
 			inst := NewContainerInstanceWithService(cc, &mockSvc)
 			return inst, nil
 		},
-		func(instance public_fsm.FSMInstance, cc ContainerConfig) (bool, error) {
+		func(instance public_fsm.FSMInstance, cc config.ContainerConfig) (bool, error) {
 			ci, ok := instance.(*ContainerInstance)
 			if !ok {
 				return false, fmt.Errorf("instance not a ContainerInstance")
 			}
 			return ci.config.DesiredFSMState == cc.DesiredFSMState, nil
 		},
-		func(instance public_fsm.FSMInstance, cc ContainerConfig) error {
+		func(instance public_fsm.FSMInstance, cc config.ContainerConfig) error {
 			ci, ok := instance.(*ContainerInstance)
 			if !ok {
 				return fmt.Errorf("instance not a ContainerInstance")
