@@ -21,6 +21,7 @@ import (
 
 	"github.com/looplab/fsm"
 	internal_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
@@ -28,58 +29,37 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
-// ContainerConfig is the portion of your FullConfig for container monitoring.
-type ContainerConfig struct {
-	Name            string `json:"name"`            // name of the container instance
-	DesiredFSMState string `json:"desiredFSMState"` // e.g. "active" or "stopped"
-}
-
-// ContainerInstance holds the FSM instance and references to the container monitor service.
-type ContainerInstance struct {
-	// This embeds the "BaseFSMInstance" which handles lifecycle states,
-	// desired state, removal, etc.
-	baseFSMInstance *internal_fsm.BaseFSMInstance
-
-	// ObservedState: last known container metrics, updated in reconcile
-	ObservedState ContainerObservedState
-
-	// The container monitor service used to gather metrics
-	monitorService container_monitor.Service
-
-	// Possibly store config needed for the container monitor
-	config ContainerConfig
-}
-
-// Verify at compile time that we implement fsm.FSMInstance
-var _ ContainerMonitorInstance = (*ContainerInstance)(nil)
-
 // NewContainerInstance creates a new ContainerInstance with the standard transitions.
-func NewContainerInstance(config ContainerConfig) *ContainerInstance {
+func NewContainerInstance(config config.ContainerConfig) *ContainerInstance {
 	return NewContainerInstanceWithService(config, container_monitor.NewContainerMonitorService(filesystem.NewDefaultService()))
 }
 
 // NewContainerInstanceWithService creates a new ContainerInstance with a custom monitor service.
-func NewContainerInstanceWithService(config ContainerConfig, service container_monitor.Service) *ContainerInstance {
+func NewContainerInstanceWithService(config config.ContainerConfig, service container_monitor.Service) *ContainerInstance {
 	// Build the config for the base FSM
 	fsmCfg := internal_fsm.BaseFSMInstanceConfig{
 		ID: config.Name,
 		// The user has said they only allow "active" or "stopped" as desired states
-		DesiredFSMState:              config.DesiredFSMState, // "active" or "stopped"
-		OperationalStateAfterCreate:  MonitoringStateStopped, // upon creation, start in stopped
-		OperationalStateBeforeRemove: MonitoringStateStopped, // must be stopped before removal
+		DesiredFSMState:              config.DesiredFSMState,  // "active" or "stopped"
+		OperationalStateAfterCreate:  OperationalStateStopped, // upon creation, start in stopped
+		OperationalStateBeforeRemove: OperationalStateStopped, // must be stopped before removal
 		OperationalTransitions: []fsm.EventDesc{
-			// from monitoring_stopped -> start -> degraded
-			{Name: EventStart, Src: []string{MonitoringStateStopped}, Dst: MonitoringStateDegraded},
+			// from stopped -> start -> starting
+			{Name: EventStart, Src: []string{OperationalStateStopped}, Dst: OperationalStateStarting},
+
+			// from starting -> degraded,
+			{Name: EventStartDone, Src: []string{OperationalStateStarting}, Dst: OperationalStateDegraded},
 
 			// from active -> metrics_not_ok -> degraded
-			{Name: EventMetricsNotOK, Src: []string{MonitoringStateActive}, Dst: MonitoringStateDegraded},
+			{Name: EventMetricsNotOK, Src: []string{OperationalStateActive}, Dst: OperationalStateDegraded},
 			// from degraded -> metrics_all_ok -> active
-			{Name: EventMetricsAllOK, Src: []string{MonitoringStateDegraded}, Dst: MonitoringStateActive},
+			{Name: EventMetricsAllOK, Src: []string{OperationalStateDegraded}, Dst: OperationalStateActive},
 
-			// from active -> stop -> monitoring_stopped
-			{Name: EventStop, Src: []string{MonitoringStateActive}, Dst: MonitoringStateStopped},
-			// from degraded -> stop -> monitoring_stopped
-			{Name: EventStop, Src: []string{MonitoringStateDegraded}, Dst: MonitoringStateStopped},
+			// from active/degraded/starting -> stop -> stopping
+			{Name: EventStop, Src: []string{OperationalStateActive, OperationalStateDegraded, OperationalStateStarting}, Dst: OperationalStateStopping},
+
+			// Final transition for stopping
+			{Name: EventStopDone, Src: []string{OperationalStateStopping}, Dst: OperationalStateStopped},
 		},
 	}
 
@@ -105,9 +85,9 @@ func NewContainerInstanceWithService(config ContainerConfig, service container_m
 // SetDesiredFSMState is how external code updates the desired state at runtime
 func (c *ContainerInstance) SetDesiredFSMState(state string) error {
 	// We only allow "active" or "stopped"
-	if state != MonitoringStateActive && state != MonitoringStateStopped {
+	if state != OperationalStateActive && state != OperationalStateStopped {
 		return fmt.Errorf("invalid desired state: %s (only '%s' or '%s' allowed)",
-			state, MonitoringStateActive, MonitoringStateStopped)
+			state, OperationalStateActive, OperationalStateStopped)
 	}
 	c.baseFSMInstance.SetDesiredFSMState(state)
 	return nil
@@ -137,7 +117,11 @@ func (c *ContainerInstance) IsRemoving() bool {
 }
 
 func (c *ContainerInstance) IsStopped() bool {
-	return c.baseFSMInstance.GetCurrentFSMState() == MonitoringStateStopped
+	return c.baseFSMInstance.GetCurrentFSMState() == OperationalStateStopped
+}
+
+func (c *ContainerInstance) IsStopping() bool {
+	return c.baseFSMInstance.GetCurrentFSMState() == OperationalStateStopping
 }
 
 // PrintState is a helper for debugging

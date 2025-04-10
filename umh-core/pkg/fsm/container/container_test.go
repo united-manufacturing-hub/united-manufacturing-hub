@@ -20,6 +20,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/container"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/container_monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
@@ -45,9 +46,9 @@ var _ = Describe("Container FSM", func() {
 
 		mockFS = filesystem.NewMockFileSystem()
 
-		cfg := container.ContainerConfig{
+		cfg := config.ContainerConfig{
 			Name:            "test-container",
-			DesiredFSMState: container.MonitoringStateStopped,
+			DesiredFSMState: container.OperationalStateStopped,
 		}
 		inst = container.NewContainerInstanceWithService(cfg, mockSvc)
 	})
@@ -69,7 +70,7 @@ var _ = Describe("Container FSM", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(did).To(BeTrue())
 			// now we should be in operational state 'monitoring_stopped'
-			Expect(inst.GetCurrentFSMState()).To(Equal(container.MonitoringStateStopped))
+			Expect(inst.GetCurrentFSMState()).To(Equal(container.OperationalStateStopped))
 		})
 	})
 
@@ -78,25 +79,31 @@ var _ = Describe("Container FSM", func() {
 			// Ensure we've walked from to_be_created -> creating -> monitoring_stopped
 			inst.Reconcile(ctx, mockFS, 10)
 			inst.Reconcile(ctx, mockFS, 11)
-			Expect(inst.GetCurrentFSMState()).To(Equal(container.MonitoringStateStopped))
+			Expect(inst.GetCurrentFSMState()).To(Equal(container.OperationalStateStopped))
 		})
 
 		It("Should go from `monitoring_stopped` to `degraded` on start", func() {
 			// set desired state to active
-			inst.SetDesiredFSMState(container.MonitoringStateActive)
+			inst.SetDesiredFSMState(container.OperationalStateActive)
 
 			err, did := inst.Reconcile(ctx, mockFS, 12)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(did).To(BeFalse())
-			Expect(inst.GetCurrentFSMState()).To(Equal(container.MonitoringStateDegraded))
+			Expect(did).To(BeTrue())
+			Expect(inst.GetCurrentFSMState()).To(Equal(container.OperationalStateStarting))
+
+			// next reconcile
+			err, did = inst.Reconcile(ctx, mockFS, 13)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(did).To(BeTrue())
+			Expect(inst.GetCurrentFSMState()).To(Equal(container.OperationalStateDegraded))
 		})
 
 		It("Should remain `monitoring_stopped` if desired is `stopped`", func() {
 			// do one reconcile - no state change
-			err, did := inst.Reconcile(ctx, mockFS, 13)
+			err, did := inst.Reconcile(ctx, mockFS, 14)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(did).To(BeFalse())
-			Expect(inst.GetCurrentFSMState()).To(Equal(container.MonitoringStateStopped))
+			Expect(inst.GetCurrentFSMState()).To(Equal(container.OperationalStateStopped))
 		})
 	})
 
@@ -106,28 +113,34 @@ var _ = Describe("Container FSM", func() {
 			inst.Reconcile(ctx, mockFS, 20)
 			inst.Reconcile(ctx, mockFS, 21)
 			// set desired = active
-			inst.SetDesiredFSMState(container.MonitoringStateActive)
+			inst.SetDesiredFSMState(container.OperationalStateActive)
 			// cause start
 			inst.Reconcile(ctx, mockFS, 22)
-			Expect(inst.GetCurrentFSMState()).To(Equal(container.MonitoringStateDegraded))
+			Expect(inst.GetCurrentFSMState()).To(Equal(container.OperationalStateStarting))
+
+			// next reconcile
+			err, did := inst.Reconcile(ctx, mockFS, 23)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(did).To(BeTrue())
+			Expect(inst.GetCurrentFSMState()).To(Equal(container.OperationalStateDegraded))
 		})
 
 		It("Transitions from degraded -> active if metrics healthy", func() {
 			// currently mockSvc returns healthy => we expect a transition
-			err, did := inst.Reconcile(ctx, mockFS, 23)
+			err, did := inst.Reconcile(ctx, mockFS, 24)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(did).To(BeFalse())
-			Expect(inst.GetCurrentFSMState()).To(Equal(container.MonitoringStateActive))
+			Expect(did).To(BeTrue())
+			Expect(inst.GetCurrentFSMState()).To(Equal(container.OperationalStateActive))
 		})
 
 		It("Remains degraded if metrics are not healthy", func() {
 			// Let's set the mock to return critical metrics
 			mockSvc.SetupMockForDegradedState()
 
-			err, did := inst.Reconcile(ctx, mockFS, 24)
+			err, did := inst.Reconcile(ctx, mockFS, 25)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(did).To(BeFalse()) // no transition => still degraded
-			Expect(inst.GetCurrentFSMState()).To(Equal(container.MonitoringStateDegraded))
+			Expect(inst.GetCurrentFSMState()).To(Equal(container.OperationalStateDegraded))
 		})
 	})
 })
