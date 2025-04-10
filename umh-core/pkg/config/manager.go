@@ -221,6 +221,8 @@ func (m *FileConfigManager) GetConfig(ctx context.Context, tick uint64) (FullCon
 	}
 
 	// If the config is empty, return an error
+	// Note: sometimes it can happen that due to a filesystem error or maybe in the tests due to docker cp, the file is empty
+	// In this case we want to return an error, which is then ignored by the control loop and will retry in the next cycle
 	if reflect.DeepEqual(config, FullConfig{}) {
 		return FullConfig{}, fmt.Errorf("config file is empty: %s", m.configPath)
 	}
