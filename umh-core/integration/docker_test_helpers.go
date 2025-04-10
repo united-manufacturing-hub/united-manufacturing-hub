@@ -17,7 +17,6 @@ package integration_test
 import (
 	"bytes"
 	"crypto/rand"
-	"encoding/base64"
 	"encoding/hex"
 	"fmt"
 	"os"
@@ -135,23 +134,18 @@ func writeConfigFile(yamlContent string, containerName ...string) error {
 		container := containerName[0]
 		fmt.Printf("Writing config directly to container %s...\n", container)
 
-		// Base64 encode the config for safer transfer
-		encodedConfig := base64.StdEncoding.EncodeToString([]byte(yamlContent))
-
-		// Write the base64 encoded config to a temporary file in the container
-		cmd := fmt.Sprintf("echo '%s' > /data/config.yaml.b64", encodedConfig)
-		out, err := runDockerCommand("exec", container, "bash", "-c", cmd)
-		if err != nil {
-			fmt.Printf("Failed to write encoded config to container: %v\n%s\n", err, out)
-			return fmt.Errorf("failed to write encoded config to container: %w", err)
+		// Create a temporary file with the actual config content
+		tmpFile := configPath + ".tmp"
+		if err := os.WriteFile(tmpFile, []byte(yamlContent), 0o666); err != nil {
+			return fmt.Errorf("failed to write temp config file: %w", err)
 		}
+		defer os.Remove(tmpFile) // Clean up temp file when done
 
-		// Decode the base64 file and write to the actual config file
-		decodeCmd := "base64 -d /data/config.yaml.b64 > /data/config.yaml && rm /data/config.yaml.b64"
-		out, err = runDockerCommand("exec", container, "bash", "-c", decodeCmd)
+		// Copy the file directly to the container
+		out, err := runDockerCommand("cp", tmpFile, container+":/data/config.yaml")
 		if err != nil {
-			fmt.Printf("Failed to decode config in container: %v\n%s\n", err, out)
-			return fmt.Errorf("failed to decode config in container: %w", err)
+			fmt.Printf("Failed to copy config to container: %v\n%s\n", err, out)
+			return fmt.Errorf("failed to copy config to container: %w", err)
 		}
 
 		// Verify the config was written correctly
