@@ -148,7 +148,7 @@ func (d *DataflowComponentInstance) reconcileExternalChanges(ctx context.Context
 	observedStateCtx, cancel := context.WithTimeout(ctx, constants.DataflowComponentUpdateObservedStateTimeout)
 	defer cancel()
 
-	err := d.updateObservedState(observedStateCtx, filesystemService, tick)
+	err := d.UpdateObservedStateOfInstance(observedStateCtx, filesystemService, tick)
 	if err != nil {
 		return fmt.Errorf("failed to update observed state: %w", err)
 	}
@@ -200,7 +200,7 @@ func (d *DataflowComponentInstance) reconcileLifecycleStates(ctx context.Context
 	// Independent what the desired state is, we always need to reconcile the lifecycle states first
 	switch currentState {
 	case internal_fsm.LifecycleStateToBeCreated:
-		if err := d.initiateDataflowComponentCreate(ctx, filesystemService); err != nil {
+		if err := d.CreateInstance(ctx, filesystemService); err != nil {
 			return err, false
 		}
 		return d.baseFSMInstance.SendEvent(ctx, internal_fsm.LifecycleEventCreate), true
@@ -209,7 +209,7 @@ func (d *DataflowComponentInstance) reconcileLifecycleStates(ctx context.Context
 		// For now, we'll assume it's created immediately after initiating creation
 		return d.baseFSMInstance.SendEvent(ctx, internal_fsm.LifecycleEventCreateDone), true
 	case internal_fsm.LifecycleStateRemoving:
-		if err := d.initiateDataflowComponentRemove(ctx, filesystemService); err != nil {
+		if err := d.RemoveInstance(ctx, filesystemService); err != nil {
 			return err, false
 		}
 		return d.baseFSMInstance.SendEvent(ctx, internal_fsm.LifecycleEventRemoveDone), true
@@ -249,7 +249,7 @@ func (d *DataflowComponentInstance) reconcileTransitionToActive(ctx context.Cont
 	// If we're stopped, we need to start first
 	if currentState == OperationalStateStopped {
 		// Attempt to initiate start
-		if err := d.initiateDataflowComponentStart(ctx, filesystemService); err != nil {
+		if err := d.StartInstance(ctx, filesystemService); err != nil {
 			return err, false
 		}
 		// Send event to transition from Stopped to Starting
@@ -276,7 +276,7 @@ func (d *DataflowComponentInstance) reconcileStartingState(ctx context.Context, 
 	switch currentState {
 	case OperationalStateStarting:
 		// First we need to ensure the Benthos service is started
-		if !d.IsDataflowComponentBenthosRunning() {
+		if !d.IsDataflowComponentBenthosActive() {
 			return d.baseFSMInstance.SendEvent(ctx, EventStartFailed), true
 		}
 		return d.baseFSMInstance.SendEvent(ctx, EventStartDone), true
@@ -289,6 +289,7 @@ func (d *DataflowComponentInstance) reconcileStartingState(ctx context.Context, 
 	default:
 		return fmt.Errorf("invalid starting state: %s", currentState), false
 	}
+	return nil, false
 }
 
 // reconcileRunningState handles the various running states when transitioning to Active.
@@ -337,7 +338,7 @@ func (b *DataflowComponentInstance) reconcileTransitionToStopped(ctx context.Con
 	// If we're in any operational state except Stopped or Stopping, initiate stop
 	if currentState != OperationalStateStopped && currentState != OperationalStateStopping {
 		// Attempt to initiate a stop
-		if err := b.initiateDataflowComponentStop(ctx, filesystemService); err != nil {
+		if err := b.StopInstance(ctx, filesystemService); err != nil {
 			return err, false
 		}
 		// Send event to transition to Stopping

@@ -41,8 +41,8 @@ import (
 //   - If an error occurs, the Reconcile function must handle
 //     setting error state and scheduling a retry/backoff.
 
-// initiateDataflowComponentCreate attempts to add the DataflowComponent to the Benthos manager.
-func (d *DataflowComponentInstance) initiateDataflowComponentCreate(ctx context.Context, filesystemService filesystem.Service) error {
+// CreateInstance attempts to add the DataflowComponent to the Benthos manager.
+func (d *DataflowComponentInstance) CreateInstance(ctx context.Context, filesystemService filesystem.Service) error {
 	d.baseFSMInstance.GetLogger().Debugf("Starting Action: Adding DataflowComponent service %s to Benthos manager ...", d.baseFSMInstance.GetID())
 
 	err := d.service.AddDataFlowComponentToBenthosManager(ctx, filesystemService, &d.config, d.baseFSMInstance.GetID())
@@ -58,9 +58,9 @@ func (d *DataflowComponentInstance) initiateDataflowComponentCreate(ctx context.
 	return nil
 }
 
-// initiateDataflowComponentRemove attempts to remove the DataflowComponent from the Benthos manager.
+// RemoveInstance attempts to remove the DataflowComponent from the Benthos manager.
 // It requires the service to be stopped before removal.
-func (b *DataflowComponentInstance) initiateDataflowComponentRemove(ctx context.Context, filesystemService filesystem.Service) error {
+func (b *DataflowComponentInstance) RemoveInstance(ctx context.Context, filesystemService filesystem.Service) error {
 	b.baseFSMInstance.GetLogger().Debugf("Starting Action: Removing DataflowComponent service %s from Benthos manager ...", b.baseFSMInstance.GetID())
 
 	// Remove the initiateDataflowComponent from the Benthos manager
@@ -77,8 +77,8 @@ func (b *DataflowComponentInstance) initiateDataflowComponentRemove(ctx context.
 	return nil
 }
 
-// initiateDataflowComponentStart to start the DataflowComponent by setting the desired state to running for the given instance
-func (d *DataflowComponentInstance) initiateDataflowComponentStart(ctx context.Context, filesystemService filesystem.Service) error {
+// StartInstance to start the DataflowComponent by setting the desired state to running for the given instance
+func (d *DataflowComponentInstance) StartInstance(ctx context.Context, filesystemService filesystem.Service) error {
 	d.baseFSMInstance.GetLogger().Debugf("Starting Action: Starting DataflowComponent service %s ...", d.baseFSMInstance.GetID())
 
 	// TODO: Add pre-start validation
@@ -94,8 +94,8 @@ func (d *DataflowComponentInstance) initiateDataflowComponentStart(ctx context.C
 	return nil
 }
 
-// initiateDataflowComponentStop attempts to stop the DataflowComponent by setting the desired state to stopped for the given instance
-func (d *DataflowComponentInstance) initiateDataflowComponentStop(ctx context.Context, filesystemService filesystem.Service) error {
+// StopInstance attempts to stop the DataflowComponent by setting the desired state to stopped for the given instance
+func (d *DataflowComponentInstance) StopInstance(ctx context.Context, filesystemService filesystem.Service) error {
 	d.baseFSMInstance.GetLogger().Debugf("Starting Action: Stopping DataflowComponent service %s ...", d.baseFSMInstance.GetID())
 
 	// Set the desired state to stopped for the given instance
@@ -138,8 +138,8 @@ func (d *DataflowComponentInstance) getServiceStatus(ctx context.Context, filesy
 	return info, nil
 }
 
-// updateObservedState updates the observed state of the service
-func (d *DataflowComponentInstance) updateObservedState(ctx context.Context, filesystemService filesystem.Service, tick uint64) error {
+// UpdateObservedStateOfInstance updates the observed state of the service
+func (d *DataflowComponentInstance) UpdateObservedStateOfInstance(ctx context.Context, filesystemService filesystem.Service, tick uint64) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
@@ -191,35 +191,6 @@ func (d *DataflowComponentInstance) updateObservedState(ctx context.Context, fil
 	}
 
 	return nil
-}
-
-// getServiceStatus gets the status of the DataflowComponent service
-// its main purpose is to handle the edge cases where the service is not yet created or not yet running
-func (d *DataflowComponentInstance) getServiceStatus(ctx context.Context, filesystemService filesystem.Service, tick uint64) (dataflowcomponentservice.ServiceInfo, error) {
-	info, err := d.service.Status(ctx, filesystemService, d.baseFSMInstance.GetID(), tick)
-	if err != nil {
-		// If there's an error getting the service status, we need to distinguish between cases
-
-		if errors.Is(err, dataflowcomponentservice.ErrServiceNotExist) {
-			// If the service is being created, we don't want to count this as an error
-			// The instance is likely in Creating or ToBeCreated state, so service doesn't exist yet
-			// This will be handled in the reconcileStateTransition where the service gets created
-			if d.baseFSMInstance.GetCurrentFSMState() == internalfsm.LifecycleStateCreating ||
-				d.baseFSMInstance.GetCurrentFSMState() == internalfsm.LifecycleStateToBeCreated {
-				return dataflowcomponentservice.ServiceInfo{}, dataflowcomponentservice.ErrServiceNotExist
-			}
-
-			// Log the warning but don't treat it as a fatal error
-			d.baseFSMInstance.GetLogger().Debugf("Service not found, will be created during reconciliation")
-			return dataflowcomponentservice.ServiceInfo{}, nil
-		}
-
-		// For other errors, log them and return
-		d.baseFSMInstance.GetLogger().Errorf("error updating observed state for %s: %s", d.baseFSMInstance.GetID(), err)
-		return dataflowcomponentservice.ServiceInfo{}, err
-	}
-
-	return info, nil
 }
 
 // IsDataflowComponentBenthosConfigChanged determines if the DataflowComponent's Benthos config has been changed or edited from the currently available config
