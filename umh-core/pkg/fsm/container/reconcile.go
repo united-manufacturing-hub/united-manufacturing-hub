@@ -58,6 +58,7 @@ func (c *ContainerInstance) Reconcile(ctx context.Context, filesystemService fil
 			// If permanent, we want to remove the instance or at least stop it
 			// For now, let's just remove it from the manager:
 			if c.IsRemoved() || c.IsRemoving() || c.IsStopping() || c.IsStopped() {
+			if c.IsRemoved() || c.IsRemoving() || c.IsStopping() || c.IsStopped() {
 				c.baseFSMInstance.GetLogger().Errorf("Permanent error on container monitor %s but it is already in a terminal/removing state", instanceName)
 				return backErr, false
 			} else {
@@ -301,7 +302,7 @@ func (c *ContainerInstance) reconcileTransitionToActive(ctx context.Context, fil
 	// If we're stopped, we need to start first
 	case currentState == OperationalStateStopped:
 		// nothing to start here, just for consistency with other fsms
-		err := c.StartInstance(ctx, filesystemService)
+		err := c.monitoringStart(ctx)
 		if err != nil {
 			return err, false
 		}
@@ -380,7 +381,7 @@ func (c *ContainerInstance) reconcileTransitionToStopped(ctx context.Context, fi
 		return c.baseFSMInstance.SendEvent(ctx, EventStopDone), true
 	default:
 		// For any other state, initiate stop
-		err := c.StopInstance(ctx, filesystemService)
+		err := c.monitoringStop(ctx)
 		if err != nil {
 			return err, false
 		}

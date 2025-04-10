@@ -200,7 +200,7 @@ func (s *S6Instance) reconcileLifecycleStates(ctx context.Context, filesystemSer
 	// Independent what the desired state is, we always need to reconcile the lifecycle states first
 	switch currentState {
 	case internal_fsm.LifecycleStateToBeCreated:
-		if err := s.CreateInstance(ctx, filesystemService); err != nil {
+		if err := s.initiateS6Create(ctx, filesystemService); err != nil {
 			return err, true
 		}
 		return s.baseFSMInstance.SendEvent(ctx, internal_fsm.LifecycleEventCreate), true
@@ -223,7 +223,7 @@ func (s *S6Instance) reconcileLifecycleStates(ctx context.Context, filesystemSer
 		s.baseFSMInstance.GetLogger().Debugf("Service supervision confirmed, transitioning to Created state")
 		return s.baseFSMInstance.SendEvent(ctx, internal_fsm.LifecycleEventCreateDone), true
 	case internal_fsm.LifecycleStateRemoving:
-		if err := s.RemoveInstance(ctx, filesystemService); err != nil {
+		if err := s.initiateS6Remove(ctx, filesystemService); err != nil {
 			return err, true
 		}
 		return s.baseFSMInstance.SendEvent(ctx, internal_fsm.LifecycleEventRemoveDone), true
