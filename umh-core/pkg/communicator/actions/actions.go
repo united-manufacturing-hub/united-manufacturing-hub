@@ -111,23 +111,9 @@ func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePay
 		return
 	}
 
-	// Send the action result to the outbound channel
-	outboundChannel <- &models.UMHMessage{
-		Content: string(safejson.MustMarshal(models.UMHMessageContent{
-			MessageType: models.ActionReply,
-			Payload: models.ActionReplyMessagePayload{
-				ActionReplyState:   models.ActionFinishedSuccessfull,
-				ActionReplyPayload: result,
-				ActionUUID:         payload.ActionUUID,
-				ActionContext:      metadata,
-			},
-		})),
-		Email:        sender,
-		InstanceUUID: instanceUUID,
-		Metadata: &models.MessageMetadata{
-			TraceID: traceID,
-		},
-	}
+	zap.S().Info("Action executed, sending reply: ", result)
+
+	SendActionReplyWithAdditionalContext(instanceUUID, sender, payload.ActionUUID, models.ActionFinishedSuccessfull, result, outboundChannel, payload.ActionType, metadata)
 }
 
 // SendActionReply sends an action reply with the given state and payload

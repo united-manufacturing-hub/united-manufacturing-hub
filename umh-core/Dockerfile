@@ -29,7 +29,7 @@ COPY . .
 RUN echo "GOOS: ${GOOS:-$(go env GOOS)}, GOARCH: ${GOARCH:-$(go env GOARCH)}"
 RUN echo "Go version: $(go version)"
 RUN if [ "$DEBUG" = "true" ]; then \
-    CGO_ENABLED=0 go build \
+    CGO_ENABLED=0 go build -mod=vendor \
     -gcflags="all=-N -l" \
     -ldflags "-X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants.S6OverlayVersion=${S6_OVERLAY_VERSION} \
     -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants.BenthosVersion=${BENTHOS_UMH_VERSION} \

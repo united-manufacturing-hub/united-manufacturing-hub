@@ -411,3 +411,71 @@ type CommonDataFlowComponentMeta struct {
 
 	AdditionalProperties interface{}
 }
+
+type GetDataflowcomponentRequestSchemaJson struct {
+	// VersionUUIDs corresponds to the JSON schema field "versionUUIDs".
+	VersionUUIDs []string `json:"versionUUIDs" yaml:"versionUUIDs" mapstructure:"versionUUIDs"`
+}
+
+type CommonDataFlowComponentCDFCProperties struct {
+	// BenthosImageTag corresponds to the JSON schema field "benthosImageTag".
+	BenthosImageTag *CommonDataFlowComponentBenthosImageTagConfig `json:"benthosImageTag,omitempty" yaml:"benthosImageTag,omitempty" mapstructure:"benthosImageTag,omitempty"`
+
+	// this is only here to make the json schema happy
+	IgnoreErrors *bool `json:"ignoreErrors,omitempty" yaml:"ignoreErrors,omitempty" mapstructure:"ignoreErrors,omitempty"`
+
+	// Inputs corresponds to the JSON schema field "inputs".
+	Inputs CommonDataFlowComponentInputConfig `json:"inputs" yaml:"inputs" mapstructure:"inputs"`
+
+	// Outputs corresponds to the JSON schema field "outputs".
+	Outputs CommonDataFlowComponentOutputConfig `json:"outputs" yaml:"outputs" mapstructure:"outputs"`
+
+	// Pipeline corresponds to the JSON schema field "pipeline".
+	Pipeline CommonDataFlowComponentPipelineConfig `json:"pipeline" yaml:"pipeline" mapstructure:"pipeline"`
+
+	// RawYAML corresponds to the JSON schema field "rawYAML".
+	RawYAML *CommonDataFlowComponentRawYamlConfig `json:"rawYAML,omitempty" yaml:"rawYAML,omitempty" mapstructure:"rawYAML,omitempty"`
+}
+
+type CommonDataFlowComponentBenthosImageTagConfig struct {
+	// this is only here to make the json schema happy
+	Tag *string `json:"tag,omitempty" yaml:"tag,omitempty" mapstructure:"tag,omitempty"`
+}
+
+type CommonDataFlowComponentInputConfig struct {
+	// This is the YAML data for the input
+	Data string `json:"data" yaml:"data" mapstructure:"data"`
+
+	// This can for example be mqtt
+	Type string `json:"type" yaml:"type" mapstructure:"type"`
+}
+
+type CommonDataFlowComponentOutputConfig struct {
+	// This is the YAML data for the output
+	Data string `json:"data" yaml:"data" mapstructure:"data"`
+
+	// This can for example be kafka
+	Type string `json:"type" yaml:"type" mapstructure:"type"`
+}
+
+type CommonDataFlowComponentPipelineConfig struct {
+	// Processors corresponds to the JSON schema field "processors".
+	Processors CommonDataFlowComponentPipelineConfigProcessors `json:"processors" yaml:"processors" mapstructure:"processors"`
+
+	// If unset, defaults to -1, see also
+	// https://docs.redpanda.com/redpanda-connect/configuration/processing_pipelines/
+	Threads *int `json:"threads,omitempty" yaml:"threads,omitempty" mapstructure:"threads,omitempty"`
+}
+
+type CommonDataFlowComponentPipelineConfigProcessors map[string]struct {
+	// This is the YAML data for the processor
+	Data string `json:"data" yaml:"data" mapstructure:"data"`
+
+	// This can for example be bloblang
+	Type string `json:"type" yaml:"type" mapstructure:"type"`
+}
+
+type CommonDataFlowComponentRawYamlConfig struct {
+	// This is the raw yaml data
+	Data string `json:"data" yaml:"data" mapstructure:"data"`
+}

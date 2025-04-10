@@ -26,6 +26,7 @@ TARGETARCH := $(shell go env GOARCH)
 S6_OVERLAY_VERSION = 3.2.0.2
 BENTHOS_UMH_VERSION = 0.6.2
 REDPANDA_VERSION = 24.3.8
+DLV_VERSION = v1.24.1
 
 # Note: Redpanda allocates 2GB of memory per core.
 # Additionally 1.5GB (or 7% of the total memory, whichever is greater) are required to be available, after this allocation to make seastar happy.
@@ -138,6 +139,25 @@ build-debug: download-docker-binaries
 		--build-arg BENTHOS_UMH_VERSION=$(BENTHOS_UMH_VERSION) \
 		--build-arg REDPANDA_VERSION=$(REDPANDA_VERSION) \
 		--build-arg APP_VERSION=$(VERSION) \
+		--build-arg TARGETARCH=$(TARGETARCH) \
+		--build-arg DLV_VERSION=$(DLV_VERSION) \
+		--build-arg DEBUG=true \
+		--progress=plain \
+		-t $(IMAGE_NAME):$(TAG) \
+		--progress=plain \
+		-f Dockerfile .
+    
+# build-debug: launches delve inside the container.
+# This allows you to use vscode's "Connect to umh-core" feature and use breakpoints, etc inside the container.
+# To use this, modify one of the build-<type> targets to use this target instead of build.
+# You also need to add -p 40000:40000 to the docker run command to expose the Delve port.
+build-debug: download-docker-binaries
+	docker buildx build \
+		--platform linux/$(TARGETARCH) \
+		--build-arg S6_OVERLAY_VERSION=$(S6_OVERLAY_VERSION) \
+		--build-arg BENTHOS_UMH_VERSION=$(BENTHOS_UMH_VERSION) \
+		--build-arg REDPANDA_VERSION=$(REDPANDA_VERSION) \
+		--build-arg APP_VERSION=$(VERSION) \
 		--build-arg DEBUG=true \
 		--progress=plain \
 		-t $(IMAGE_NAME):$(TAG)-debug \
@@ -226,6 +246,7 @@ test-comm: clean build
 		--name $(IMAGE_NAME) \
 		-v $(PWD)/data:/data \
 		-p 8081:8080 \
+		-p 4195:4195 \
 		--memory $(MEMORY) \
 		--cpus $(CPUS) \
 		$(IMAGE_NAME):$(TAG)
