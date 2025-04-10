@@ -156,7 +156,7 @@ build-debug: download-docker-binaries
 		--progress=plain \
 		-t $(IMAGE_NAME):$(TAG)-debug \
 		-f Dockerfile .
-    
+	
 stop-all-containers:
 	docker stop $(docker ps -a -q) || true
 	docker rm $(docker ps -a -q) || true
