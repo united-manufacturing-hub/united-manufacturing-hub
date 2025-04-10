@@ -22,6 +22,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"go.uber.org/zap"
 )
@@ -33,6 +34,7 @@ type EditInstanceAction struct {
 	outboundChannel chan *models.UMHMessage
 	location        *models.EditInstanceLocationModel
 	configManager   config.ConfigManager
+	actionLogger    *zap.SugaredLogger
 }
 
 // exposed for testing purposes
@@ -43,11 +45,12 @@ func NewEditInstanceAction(userEmail string, actionUUID uuid.UUID, instanceUUID 
 		instanceUUID:    instanceUUID,
 		outboundChannel: outboundChannel,
 		configManager:   configManager,
+		actionLogger:    logger.For(logger.ComponentCommunicatorActions),
 	}
 }
 
 func (a *EditInstanceAction) Parse(payload interface{}) error {
-	zap.S().Debug("Parsing EditInstance action payload")
+	a.actionLogger.Debug("Parsing EditInstance action payload")
 
 	// Convert the payload to a map
 	payloadMap, ok := payload.(map[string]interface{})
@@ -107,7 +110,7 @@ func (a *EditInstanceAction) Validate() error {
 }
 
 func (a *EditInstanceAction) Execute() (interface{}, map[string]interface{}, error) {
-	zap.S().Info("Executing EditInstance action")
+	a.actionLogger.Info("Executing EditInstance action")
 
 	// Send confirmation that action is starting
 	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionConfirmed, "Starting EditInstance action", a.outboundChannel, models.EditInstance)
