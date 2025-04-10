@@ -18,9 +18,7 @@ on:
   pull_request:
     branches:
       - "**"
-    paths:
-      - "umh-core/**"
-
+  merge_group:
 jobs:
   vet:
     name: Go Vet

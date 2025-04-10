@@ -110,7 +110,7 @@ func (b *BenthosInstance) initiateBenthosStop(ctx context.Context, filesystemSer
 }
 
 // getServiceStatus gets the status of the Benthos service
-// its main purpose is to habdle the edge cases where the service is not yet created or not yet running
+// its main purpose is to handle the edge cases where the service is not yet created or not yet running
 func (b *BenthosInstance) getServiceStatus(ctx context.Context, filesystemService filesystem.Service, tick uint64) (benthos_service.ServiceInfo, error) {
 	info, err := b.service.Status(ctx, filesystemService, b.baseFSMInstance.GetID(), b.config.MetricsPort, tick)
 	if err != nil {
