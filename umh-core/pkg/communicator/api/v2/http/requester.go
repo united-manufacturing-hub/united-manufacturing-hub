@@ -208,6 +208,18 @@ func processLatencyHeaders(response *http.Response, timeTillFirstByte time.Durat
 	latenciesReal.Set(now, timeTillFirstByte-elapsedTime)
 }
 
+// enhanceConnectionError adds detailed context to common connection errors
+func enhanceConnectionError(err error) error {
+	if strings.Contains(err.Error(), "EOF") {
+		return fmt.Errorf("connection closed unexpectedly before receiving response: %w (possible causes: network issues, server timeout, or firewall blocking)", err)
+	} else if strings.Contains(err.Error(), "timeout") || strings.Contains(err.Error(), "deadline exceeded") {
+		return fmt.Errorf("request timed out: %w (possible causes: slow network, server overload, or request too large)", err)
+	} else if strings.Contains(err.Error(), "connection refused") {
+		return fmt.Errorf("connection refused: %w (possible causes: server down, incorrect URL, or firewall blocking)", err)
+	}
+	return fmt.Errorf("connection error: %w (no response received from server, status code 0)", err)
+}
+
 // GetRequest does a GET request to the given endpoint, with optional header and cookies
 func GetRequest[R any](ctx context.Context, endpoint Endpoint, header map[string]string, cookies *map[string]string, insecureTLS bool) (*R, error, int) {
 	// Set up context with default 30 second timeout if none provided
@@ -257,17 +269,7 @@ func GetRequest[R any](ctx context.Context, endpoint Endpoint, header map[string
 			return nil, err, response.StatusCode
 		}
 		// Enhance error message for connection failures
-		var enhancedErr error
-		if strings.Contains(err.Error(), "EOF") {
-			enhancedErr = fmt.Errorf("connection closed unexpectedly before receiving response: %w (possible causes: network issues, server timeout, or firewall blocking)", err)
-		} else if strings.Contains(err.Error(), "timeout") || strings.Contains(err.Error(), "deadline exceeded") {
-			enhancedErr = fmt.Errorf("request timed out: %w (possible causes: slow network, server overload, or request too large)", err)
-		} else if strings.Contains(err.Error(), "connection refused") {
-			enhancedErr = fmt.Errorf("connection refused: %w (possible causes: server down, incorrect URL, or firewall blocking)", err)
-		} else {
-			enhancedErr = fmt.Errorf("connection error: %w (no response received from server, status code 0)", err)
-		}
-		return nil, enhancedErr, 0
+		return nil, enhanceConnectionError(err), 0
 	}
 	defer response.Body.Close()
 
@@ -388,17 +390,7 @@ func PostRequest[R any, T any](ctx context.Context, endpoint Endpoint, data *T, 
 			return nil, err, response.StatusCode
 		}
 		// Enhance error message for connection failures
-		var enhancedErr error
-		if strings.Contains(err.Error(), "EOF") {
-			enhancedErr = fmt.Errorf("connection closed unexpectedly before receiving response: %w (possible causes: network issues, server timeout, or firewall blocking)", err)
-		} else if strings.Contains(err.Error(), "timeout") || strings.Contains(err.Error(), "deadline exceeded") {
-			enhancedErr = fmt.Errorf("request timed out: %w (possible causes: slow network, server overload, or request too large)", err)
-		} else if strings.Contains(err.Error(), "connection refused") {
-			enhancedErr = fmt.Errorf("connection refused: %w (possible causes: server down, incorrect URL, or firewall blocking)", err)
-		} else {
-			enhancedErr = fmt.Errorf("connection error: %w (no response received from server, status code 0)", err)
-		}
-		return nil, enhancedErr, 0
+		return nil, enhanceConnectionError(err), 0
 	}
 	latenciesFRB.Set(time.Now(), timeTillFirstByte)
 
