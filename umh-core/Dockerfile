@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # --- Build Stage ---
-FROM golang:1.24-alpine as build
+FROM golang:1.24.1-alpine as build
 ARG S6_OVERLAY_VERSION=3.2.0.2
 ARG BENTHOS_UMH_VERSION=0.6.2
 ARG REDPANDA_VERSION=24.3.8
@@ -25,7 +25,6 @@ RUN apk add --no-cache gcc musl-dev
 # Copy go.mod first for better caching
 COPY ./go.mod ./umh-core/
 WORKDIR /go/src/github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core
-RUN go mod download
 COPY . .
 RUN echo "GOOS: ${GOOS:-$(go env GOOS)}, GOARCH: ${GOARCH:-$(go env GOARCH)}"
 RUN echo "Go version: $(go version)"
@@ -61,7 +60,7 @@ RUN apk add --no-cache bash curl jq tzdata ca-certificates xz bc
 ARG S6_OVERLAY_VERSION=3.2.0.2
 ARG BENTHOS_UMH_VERSION=0.6.2
 ARG REDPANDA_VERSION=24.3.8
-ARG DLV_VERSION=1.24.1
+ARG DLV_VERSION=v1.24.1
 ARG TARGETARCH=amd64
 
 # Copy cached files from cache stage
@@ -111,8 +110,9 @@ COPY --from=build /go/bin/umh-core /usr/local/bin/umh-core
 # Delve is a debugger for Go (https://github.com/go-delve/delve/)
 # We can use it for remote debugging of the UMH Core
 ARG DEBUG=false
+ARG DLV_VERSION=v1.24.1
 RUN if [ "$DEBUG" = "true" ]; then \
-    apk add --no-cache go && \ 
+    apk add --no-cache go git && \ 
     go install github.com/go-delve/delve/cmd/dlv@${DLV_VERSION} && \
     find / -name "dlv"; \
     fi

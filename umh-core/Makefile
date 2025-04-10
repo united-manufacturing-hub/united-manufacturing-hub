@@ -40,6 +40,7 @@ TARGETARCH := $(shell go env GOARCH)
 S6_OVERLAY_VERSION = 3.2.0.2
 BENTHOS_UMH_VERSION = 0.6.2
 REDPANDA_VERSION = 24.3.8
+DLV_VERSION = v1.24.1
 
 # Note: Redpanda allocates 2GB of memory per core.
 # Additionally 1.5GB (or 7% of the total memory, whichever is greater) are required to be available, after this allocation to make seastar happy.
@@ -136,7 +137,9 @@ build: download-docker-binaries
 		--build-arg BENTHOS_UMH_VERSION=$(BENTHOS_UMH_VERSION) \
 		--build-arg REDPANDA_VERSION=$(REDPANDA_VERSION) \
 		--build-arg APP_VERSION=$(VERSION) \
+		--build-arg TARGETARCH=$(TARGETARCH) \
 		-t $(IMAGE_NAME):$(TAG) \
+		--progress=plain \
 		-f Dockerfile .
     
 # build-debug: launches delve inside the container.
@@ -150,9 +153,11 @@ build-debug: download-docker-binaries
 		--build-arg BENTHOS_UMH_VERSION=$(BENTHOS_UMH_VERSION) \
 		--build-arg REDPANDA_VERSION=$(REDPANDA_VERSION) \
 		--build-arg APP_VERSION=$(VERSION) \
+		--build-arg TARGETARCH=$(TARGETARCH) \
+		--build-arg DLV_VERSION=$(DLV_VERSION) \
 		--build-arg DEBUG=true \
 		--progress=plain \
-		-t $(IMAGE_NAME):$(TAG)-debug \
+		-t $(IMAGE_NAME):$(TAG) \
 		-f Dockerfile .
     
 stop-all-containers:
@@ -165,7 +170,7 @@ clean:
 	docker rmi $(IMAGE_NAME):$(TAG) || true
 
 # Clean up Docker build cache and unused objects for CI environments
-cleanup-ci: clean
+cleanup-ci: clean stop-all-containers
 	docker builder prune -f
 	docker system prune -f --volumes
 
@@ -231,13 +236,14 @@ test-hello: clean build
 		-e LOGGING_LEVEL=DEBUG \
 		$(IMAGE_NAME):$(TAG)
 
-test-comm: clean build
+test-comm: clean build-debug
 	@mkdir -p $(PWD)/data
 	@cp $(PWD)/examples/example-config-comm.yaml $(PWD)/data/config.yaml
 	docker run \
 		--name $(IMAGE_NAME) \
 		-v $(PWD)/data:/data \
 		-p 8081:8080 \
+		-p 40000:40000 \
 		--memory $(MEMORY) \
 		--cpus $(CPUS) \
 		$(IMAGE_NAME):$(TAG)
