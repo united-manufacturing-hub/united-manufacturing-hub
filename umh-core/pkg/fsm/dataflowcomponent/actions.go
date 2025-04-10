@@ -149,7 +149,7 @@ func (d *DataflowComponentInstance) updateObservedState(ctx context.Context, fil
 	if err != nil {
 		return fmt.Errorf("error while getting service status: %w", err)
 	}
-	metrics.ObserveReconcileTime(logger.ComponentBenthosInstance, d.baseFSMInstance.GetID()+".getServiceStatus", time.Since(start))
+	metrics.ObserveReconcileTime(logger.ComponentDataFlowComponentInstance, d.baseFSMInstance.GetID()+".getServiceStatus", time.Since(start))
 	// Store the raw service info
 	d.ObservedState.ServiceInfo = info
 
