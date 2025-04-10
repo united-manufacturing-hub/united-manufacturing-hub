@@ -43,7 +43,11 @@ const (
 	ComponentRedpandaMonitorService   = "RedpandaMonitorService"
 	ComponentRedpandaService          = "RedpandaService"
 	ComponentDataFlowComponentService = "DFCService"
-
+  
 	// Configuration
 	ComponentConfigManager = "ConfigManager"
+
+	// Communicator components
+	ComponentCommunicatorRouter  = "CommunicatorRouter"
+	ComponentCommunicatorActions = "CommunicatorActions"
 )
