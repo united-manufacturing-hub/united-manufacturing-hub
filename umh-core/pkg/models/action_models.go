@@ -19,6 +19,35 @@ import (
 	"github.com/google/uuid"
 )
 
+type DeployCustomDataFlowComponentPayload struct {
+	Name              string                         `json:"name" binding:"required"`
+	Payload           DeployDataFlowComponentPayload `json:"payload" binding:"required"`
+	Meta              CdcfMeta                       `json:"meta"`
+	IgnoreHealthCheck bool                           `json:"ignoreHealthCheck"`
+}
+
+type DeployDataFlowComponentPayload struct {
+	CDFCPayload CDFCPayload `json:"customDataFlowComponent" binding:"required"`
+}
+
+type CDFCPayload struct {
+	Input           DfcDataConfig            `json:"input"`
+	Output          DfcDataConfig            `json:"output"`
+	Pipeline        map[string]DfcDataConfig `json:"pipeline"`
+	Inject          DfcDataConfig            `json:"rawYAML"`
+	IgnoreErrors    bool                     `json:"ignoreErrors"`
+	BenthosImageTag string                   `json:"benthosImageTag"`
+}
+
+type DfcDataConfig struct {
+	Data string `json:"data"`
+	Type string `json:"type"`
+}
+
+type CdcfMeta struct {
+	Type string `json:"type"`
+}
+
 // EditInstanceLocation holds the location information for the instance
 type EditInstanceLocationModel struct {
 	Enterprise string  `json:"enterprise"`
@@ -323,4 +352,28 @@ type ActionReplyMessagePayload struct {
 	ActionUUID         uuid.UUID        `json:"actionUUID" binding:"required"`
 	// ActionContext is an optional field that can be used to provide additional context for the action.
 	ActionContext map[string]interface{} `json:"actionContext,omitempty"`
+}
+
+// this is the structure of the action that the frontend sends in the first place
+type CustomDFCPayload struct {
+	CustomDataFlowComponent struct {
+		Inputs struct {
+			Type string `json:"type"`
+			Data string `json:"data"`
+		} `json:"inputs"`
+		Outputs struct {
+			Type string `json:"type"`
+			Data string `json:"data"`
+		} `json:"outputs"`
+		Inject struct {
+			Type string `json:"type"`
+			Data string `json:"data"`
+		} `json:"inject"`
+		Pipeline struct {
+			Processors map[string]struct {
+				Type string `json:"type"`
+				Data string `json:"data"`
+			} `json:"processors"`
+		} `json:"pipeline"`
+	} `json:"customDataFlowComponent"`
 }

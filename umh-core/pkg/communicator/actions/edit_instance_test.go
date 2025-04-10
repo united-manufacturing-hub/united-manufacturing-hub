@@ -363,3 +363,21 @@ func (w *writeFailingMockConfigManager) AtomicSetLocation(ctx context.Context, l
 
 	return nil
 }
+
+func (w *writeFailingMockConfigManager) AtomicAddDataflowcomponent(ctx context.Context, dfc config.DataFlowComponentConfig) error {
+	// Get the current config
+	config, err := w.GetConfig(ctx, 0)
+	if err != nil {
+		return err
+	}
+
+	// do not append anything
+
+	// Write config (will fail with this mock)
+	if err := w.writeConfig(ctx, config); err != nil {
+		return err
+	}
+
+	return nil
+
+}
