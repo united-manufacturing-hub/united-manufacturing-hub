@@ -109,6 +109,35 @@ func (d *DataflowComponentInstance) initiateDataflowComponentStop(ctx context.Co
 	return nil
 }
 
+// getServiceStatus gets the status of the DataflowComponent service
+// its main purpose is to handle the edge cases where the service is not yet created or not yet running
+func (d *DataflowComponentInstance) getServiceStatus(ctx context.Context, filesystemService filesystem.Service, tick uint64) (dataflowcomponentservice.ServiceInfo, error) {
+	info, err := d.service.Status(ctx, filesystemService, d.baseFSMInstance.GetID(), tick)
+	if err != nil {
+		// If there's an error getting the service status, we need to distinguish between cases
+
+		if errors.Is(err, dataflowcomponentservice.ErrServiceNotExist) {
+			// If the service is being created, we don't want to count this as an error
+			// The instance is likely in Creating or ToBeCreated state, so service doesn't exist yet
+			// This will be handled in the reconcileStateTransition where the service gets created
+			if d.baseFSMInstance.GetCurrentFSMState() == internalfsm.LifecycleStateCreating ||
+				d.baseFSMInstance.GetCurrentFSMState() == internalfsm.LifecycleStateToBeCreated {
+				return dataflowcomponentservice.ServiceInfo{}, dataflowcomponentservice.ErrServiceNotExist
+			}
+
+			// Log the warning but don't treat it as a fatal error
+			d.baseFSMInstance.GetLogger().Debugf("Service not found, will be created during reconciliation")
+			return dataflowcomponentservice.ServiceInfo{}, nil
+		}
+
+		// For other errors, log them and return
+		d.baseFSMInstance.GetLogger().Errorf("error updating observed state for %s: %s", d.baseFSMInstance.GetID(), err)
+		return dataflowcomponentservice.ServiceInfo{}, err
+	}
+
+	return info, nil
+}
+
 // updateObservedState updates the observed state of the service
 func (d *DataflowComponentInstance) updateObservedState(ctx context.Context, filesystemService filesystem.Service, tick uint64) error {
 	if ctx.Err() != nil {
@@ -120,7 +149,7 @@ func (d *DataflowComponentInstance) updateObservedState(ctx context.Context, fil
 	if err != nil {
 		return fmt.Errorf("error while getting service status: %w", err)
 	}
-	metrics.ObserveReconcileTime(logger.ComponentBenthosInstance, d.baseFSMInstance.GetID()+".getServiceStatus", time.Since(start))
+	metrics.ObserveReconcileTime(logger.ComponentDataFlowComponentInstance, d.baseFSMInstance.GetID()+".getServiceStatus", time.Since(start))
 	// Store the raw service info
 	d.ObservedState.ServiceInfo = info
 
@@ -146,7 +175,7 @@ func (d *DataflowComponentInstance) updateObservedState(ctx context.Context, fil
 	if !dataflowcomponentconfig.ConfigsEqual(&d.config, d.ObservedState.ObservedDataflowComponentConfig) {
 		// Check if the service exists before attempting to update
 		if d.service.ServiceExists(ctx, filesystemService, d.baseFSMInstance.GetID()) {
-			d.baseFSMInstance.GetLogger().Debugf("Observed DataflowComponent config is different from desired config, updating DataflowComponent configuration")
+			d.baseFSMInstance.GetLogger().Debugf("Observed DataflowComponent config is different from desired config, updating Benthos configuration")
 
 			diffStr := dataflowcomponentconfig.ConfigDiff(&d.config, d.ObservedState.ObservedDataflowComponentConfig)
 			d.baseFSMInstance.GetLogger().Debugf("Configuration differences: %s", diffStr)
@@ -226,7 +255,7 @@ func (d *DataflowComponentInstance) IsDataflowComponentBenthosConfigChanged(ctx 
 // 3. Implementation details of how Benthos determines running state are encapsulated away
 //
 // Note: This function requires the BenthosFSMState to be updated in the ObservedState.
-func (d *DataflowComponentInstance) IsDataflowComponentBenthosRunning() bool {
+func (d *DataflowComponentInstance) IsDataflowComponentBenthosActive() bool {
 	return d.ObservedState.ServiceInfo.BenthosFSMState == benthosfsm.OperationalStateActive
 }
 

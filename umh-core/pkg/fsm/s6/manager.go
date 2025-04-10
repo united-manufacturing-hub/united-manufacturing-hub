@@ -34,6 +34,11 @@ type S6Manager struct {
 	*public_fsm.BaseFSMManager[config.S6FSMConfig]
 }
 
+// S6ManagerSnapshot extends the base manager snapshot to hold any s6-specific info
+type S6ManagerSnapshot struct {
+	*public_fsm.BaseManagerSnapshot
+}
+
 // NewS6Manager creates a new S6Manager
 // The name is used to identify the manager in logs, as other components that leverage s6 will sue their own instance of this manager
 func NewS6Manager(name string) *S6Manager {
@@ -91,4 +96,18 @@ func NewS6Manager(name string) *S6Manager {
 	return &S6Manager{
 		BaseFSMManager: baseManager,
 	}
+}
+
+// CreateSnapshot overrides the base to add s6-specific fields if desired
+func (m *S6Manager) CreateSnapshot() public_fsm.ManagerSnapshot {
+	baseSnap := m.BaseFSMManager.CreateSnapshot()
+	baseSnapshot, ok := baseSnap.(*public_fsm.BaseManagerSnapshot)
+	if !ok {
+		logger.For(logger.ComponentS6Manager).Errorf("Could not create manager snapshot to BaseManagerSnapshot.")
+		return baseSnap
+	}
+	snap := &S6ManagerSnapshot{
+		BaseManagerSnapshot: baseSnapshot,
+	}
+	return snap
 }

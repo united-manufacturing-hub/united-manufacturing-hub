@@ -109,6 +109,18 @@ func (s *S6Instance) IsRemoved() bool {
 	return s.baseFSMInstance.IsRemoved()
 }
 
+func (s *S6Instance) IsRemoving() bool {
+	return s.baseFSMInstance.IsRemoving()
+}
+
+func (s *S6Instance) IsStopping() bool {
+	return s.baseFSMInstance.GetCurrentFSMState() == OperationalStateStopping
+}
+
+func (s *S6Instance) IsStopped() bool {
+	return s.baseFSMInstance.GetCurrentFSMState() == OperationalStateStopped
+}
+
 func (s *S6Instance) PrintState() {
 	s.baseFSMInstance.GetLogger().Debugf("Current state: %s", s.baseFSMInstance.GetCurrentFSMState())
 	s.baseFSMInstance.GetLogger().Debugf("Desired state: %s", s.baseFSMInstance.GetDesiredFSMState())

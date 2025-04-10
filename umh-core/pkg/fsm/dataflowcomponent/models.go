@@ -60,6 +60,7 @@ const (
 	EventBenthosRecovered      = "benthos_recovered"
 )
 
+
 // IsOperationalState returns whether the given state is a valid operational state
 func IsOperationalState(state string) bool {
 	switch state {

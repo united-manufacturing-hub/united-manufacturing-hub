@@ -38,11 +38,11 @@ import (
 //   - If an error occurs, the Reconcile function must handle
 //     setting S6Instance.lastError and scheduling a retry/backoff.
 
-// InitiateS6Create attempts to create the S6 service directory structure.
-func (s *S6Instance) initiateS6Create(ctx context.Context, filesystemService filesystem.Service) error {
+// CreateInstance attempts to create the S6 service directory structure.
+func (s *S6Instance) CreateInstance(ctx context.Context, filesystemService filesystem.Service) error {
 	start := time.Now()
 	defer func() {
-		metrics.ObserveReconcileTime(metrics.ComponentS6Instance, s.baseFSMInstance.GetID()+".initiateS6Create", time.Since(start))
+		metrics.ObserveReconcileTime(metrics.ComponentS6Instance, s.baseFSMInstance.GetID()+".CreateInstance", time.Since(start))
 	}()
 
 	s.baseFSMInstance.GetLogger().Debugf("Starting Action: Creating S6 service %s ...", s.baseFSMInstance.GetID())
@@ -68,12 +68,12 @@ func (s *S6Instance) initiateS6Create(ctx context.Context, filesystemService fil
 	return nil
 }
 
-// InitiateS6Remove attempts to remove the S6 service directory structure.
+// RemoveInstance attempts to remove the S6 service directory structure.
 // It requires the service to be stopped before removal.
-func (s *S6Instance) initiateS6Remove(ctx context.Context, filesystemService filesystem.Service) error {
+func (s *S6Instance) RemoveInstance(ctx context.Context, filesystemService filesystem.Service) error {
 	start := time.Now()
 	defer func() {
-		metrics.ObserveReconcileTime(metrics.ComponentS6Instance, s.baseFSMInstance.GetID()+".initiateS6Remove", time.Since(start))
+		metrics.ObserveReconcileTime(metrics.ComponentS6Instance, s.baseFSMInstance.GetID()+".RemoveInstance", time.Since(start))
 	}()
 
 	s.baseFSMInstance.GetLogger().Debugf("Starting Action: Removing S6 service %s ...", s.baseFSMInstance.GetID())
@@ -93,11 +93,11 @@ func (s *S6Instance) initiateS6Remove(ctx context.Context, filesystemService fil
 	return nil
 }
 
-// InitiateS6Start attempts to start the S6 service.
-func (s *S6Instance) initiateS6Start(ctx context.Context, filesystemService filesystem.Service) error {
+// StartInstance attempts to start the S6 service.
+func (s *S6Instance) StartInstance(ctx context.Context, filesystemService filesystem.Service) error {
 	start := time.Now()
 	defer func() {
-		metrics.ObserveReconcileTime(metrics.ComponentS6Instance, s.baseFSMInstance.GetID()+".initiateS6Start", time.Since(start))
+		metrics.ObserveReconcileTime(metrics.ComponentS6Instance, s.baseFSMInstance.GetID()+".StartInstance", time.Since(start))
 	}()
 
 	s.baseFSMInstance.GetLogger().Debugf("Starting Action: Starting S6 service %s ...", s.baseFSMInstance.GetID())
@@ -111,11 +111,11 @@ func (s *S6Instance) initiateS6Start(ctx context.Context, filesystemService file
 	return nil
 }
 
-// InitiateS6Stop attempts to stop the S6 service.
-func (s *S6Instance) initiateS6Stop(ctx context.Context, filesystemService filesystem.Service) error {
+// StopInstance attempts to stop the S6 service.
+func (s *S6Instance) StopInstance(ctx context.Context, filesystemService filesystem.Service) error {
 	start := time.Now()
 	defer func() {
-		metrics.ObserveReconcileTime(metrics.ComponentS6Instance, s.baseFSMInstance.GetID()+".initiateS6Stop", time.Since(start))
+		metrics.ObserveReconcileTime(metrics.ComponentS6Instance, s.baseFSMInstance.GetID()+".StopInstance", time.Since(start))
 	}()
 
 	s.baseFSMInstance.GetLogger().Debugf("Starting Action: Stopping S6 service %s ...", s.baseFSMInstance.GetID())
@@ -129,26 +129,8 @@ func (s *S6Instance) initiateS6Stop(ctx context.Context, filesystemService files
 	return nil
 }
 
-// InitiateS6Restart attempts to restart the S6 service.
-func (s *S6Instance) initiateS6Restart(ctx context.Context, filesystemService filesystem.Service) error {
-	start := time.Now()
-	defer func() {
-		metrics.ObserveReconcileTime(metrics.ComponentS6Instance, s.baseFSMInstance.GetID()+".initiateS6Restart", time.Since(start))
-	}()
-
-	s.baseFSMInstance.GetLogger().Debugf("Starting Action: Restarting S6 service %s ...", s.baseFSMInstance.GetID())
-
-	err := s.service.Restart(ctx, s.servicePath, filesystemService)
-	if err != nil {
-		return fmt.Errorf("failed to restart S6 service %s: %w", s.baseFSMInstance.GetID(), err)
-	}
-
-	s.baseFSMInstance.GetLogger().Debugf("S6 service %s restart command executed", s.baseFSMInstance.GetID())
-	return nil
-}
-
-// UpdateObservedState updates the observed state of the service
-func (s *S6Instance) updateObservedState(ctx context.Context, filesystemService filesystem.Service) error {
+// UpdateObservedStateOfInstance updates the observed state of the service
+func (s *S6Instance) UpdateObservedStateOfInstance(ctx context.Context, filesystemService filesystem.Service, tick uint64) error {
 
 	// Measure status time
 	info, err := s.service.Status(ctx, s.servicePath, filesystemService)
