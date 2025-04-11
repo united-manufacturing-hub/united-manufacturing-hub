@@ -27,6 +27,10 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 )
 
+// DeployDataflowComponent tests verify the behavior of the DeployDataflowComponentAction.
+// This test suite ensures the action correctly handles different component types,
+// validates configuration, and properly deploys valid components to the system.
+// It tests both the success path and various error conditions.
 var _ = Describe("DeployDataflowComponent", func() {
 	// Variables used across tests
 	var (
@@ -427,9 +431,10 @@ var _ = Describe("DeployDataflowComponent", func() {
 			Expect(result).To(ContainSubstring("Successfully deployed data flow component"))
 			Expect(metadata).To(BeNil())
 
-			// We should have messages in the channel (Confirmed, then Success)
+			// Only expect the Confirmed message in the channel
+			// Success message is sent by HandleActionMessage, not by Execute
 			var messages []*models.UMHMessage
-			for i := 0; i < 2; i++ {
+			for i := 0; i < 1; i++ {
 				select {
 				case msg := <-outboundChannel:
 					messages = append(messages, msg)
@@ -437,11 +442,12 @@ var _ = Describe("DeployDataflowComponent", func() {
 					Fail("Timed out waiting for message")
 				}
 			}
-			Expect(messages).To(HaveLen(2))
+			Expect(messages).To(HaveLen(1))
 
 			// Verify AtomicAddDataflowcomponent was called
 			Expect(mockConfig.AddDataflowcomponentCalled).To(BeTrue())
 
+			// Verify expected configuration changes
 			Expect(mockConfig.Config.DataFlow).To(HaveLen(1))
 			Expect(mockConfig.Config.DataFlow[0].Name).To(Equal("test-component"))
 			Expect(mockConfig.Config.DataFlow[0].DesiredFSMState).To(Equal("running"))
@@ -490,7 +496,7 @@ var _ = Describe("DeployDataflowComponent", func() {
 			Expect(result).To(BeNil())
 			Expect(metadata).To(BeNil())
 
-			// We should have failure messages in the channel
+			// Expect Confirmed and Failure messages
 			var messages []*models.UMHMessage
 			for i := 0; i < 2; i++ {
 				select {
@@ -502,7 +508,7 @@ var _ = Describe("DeployDataflowComponent", func() {
 			}
 			Expect(messages).To(HaveLen(2))
 
-			// Properly decode the message content using the encoding package
+			// Verify the failure message content
 			decodedMessage, err := encoding.DecodeMessageFromUMHInstanceToUser(messages[1].Content)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -568,9 +574,10 @@ buffer:
 			Expect(result).To(ContainSubstring("Successfully deployed data flow component"))
 			Expect(metadata).To(BeNil())
 
-			// We should have messages in the channel (Confirmed, then Success)
+			// Only expect the Confirmed message in the channel
+			// Success message is sent by HandleActionMessage, not by Execute
 			var messages []*models.UMHMessage
-			for i := 0; i < 2; i++ {
+			for i := 0; i < 1; i++ {
 				select {
 				case msg := <-outboundChannel:
 					messages = append(messages, msg)
@@ -578,15 +585,17 @@ buffer:
 					Fail("Timed out waiting for message")
 				}
 			}
-			Expect(messages).To(HaveLen(2))
+			Expect(messages).To(HaveLen(1))
 
 			// Verify AtomicAddDataflowcomponent was called
 			Expect(mockConfig.AddDataflowcomponentCalled).To(BeTrue())
 
+			// Verify the component was added with correct configuration
 			Expect(mockConfig.Config.DataFlow).To(HaveLen(1))
 			Expect(mockConfig.Config.DataFlow[0].Name).To(Equal("test-component-with-inject"))
 			Expect(mockConfig.Config.DataFlow[0].DesiredFSMState).To(Equal("running"))
 
+			// Verify inject configuration was properly processed
 			Expect(mockConfig.Config.DataFlow[0].DataFlowComponentConfig.BenthosConfig.CacheResources).To(HaveLen(1))
 			Expect(mockConfig.Config.DataFlow[0].DataFlowComponentConfig.BenthosConfig.CacheResources[0]["label"]).To(Equal("my_cache"))
 			Expect(mockConfig.Config.DataFlow[0].DataFlowComponentConfig.BenthosConfig.RateLimitResources).To(HaveLen(1))

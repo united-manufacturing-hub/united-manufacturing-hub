@@ -28,20 +28,36 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 )
 
+// Action is the interface that all action types must implement.
+// It defines the core lifecycle methods for parsing, validating, and executing actions.
 type Action interface {
 	// Parse parses the ActionMessagePayload into the corresponding action type.
+	// It should extract and validate all required fields from the raw payload.
 	Parse(interface{}) error
-	// Validate validates the action payload, returns an error if something is wrong
+
+	// Validate validates the action payload, returns an error if something is wrong.
+	// This should perform deeper validation than Parse, checking business rules and constraints.
 	Validate() error
-	// Execute executes the action, returns the result as an interface and an error if something went wrong
+
+	// Execute executes the action, returns the result as an interface and an error if something went wrong.
+	// It must send ActionConfirmed and ActionExecuting messages for progress updates.
+	// It must send ActionFinishedWithFailure messages if an error occurs.
 	// It must not send the final successfull action reply, as it is done by the caller.
 	Execute() (interface{}, map[string]interface{}, error)
+
 	// getUserEmail returns the user email of the action
 	getUserEmail() string
+
 	// getUuid returns the UUID of the action
 	getUuid() uuid.UUID
 }
 
+// HandleActionMessage is the main entry point for processing action messages.
+// It identifies the action type, creates the appropriate action implementation,
+// and processes it through the Parse->Validate->Execute flow.
+//
+// After execution, it handles sending the success reply if the action completed successfully.
+// Error handling for each step is done within this function.
 func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePayload, sender string, outboundChannel chan *models.UMHMessage, releaseChannel config.ReleaseChannel, dog watchdog.Iface, traceID uuid.UUID, systemSnapshot *fsm.SystemSnapshot, configManager config.ConfigManager) {
 	log := logger.For(logger.ComponentCommunicatorActions)
 	if log == nil {
@@ -116,14 +132,21 @@ func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePay
 	SendActionReplyWithAdditionalContext(instanceUUID, sender, payload.ActionUUID, models.ActionFinishedSuccessfull, result, outboundChannel, payload.ActionType, metadata)
 }
 
-// SendActionReply sends an action reply with the given state and payload
-// and returns false if an error occurred
+// SendActionReply sends an action reply with the given state and payload.
+// It is a convenience wrapper around SendActionReplyWithAdditionalContext that doesn't include additional context.
+// It returns false if an error occurred during message generation or sending.
+//
 // Deprecated: Use SendActionReplyV2 instead. This function accepts payload of type interface{} which is discouraged for further usage.
 func SendActionReply(instanceUUID uuid.UUID, userEmail string, actionUUID uuid.UUID, arstate models.ActionReplyState, payload interface{}, outboundChannel chan *models.UMHMessage, action models.ActionType) bool {
 	return SendActionReplyWithAdditionalContext(instanceUUID, userEmail, actionUUID, arstate, payload, outboundChannel, action, nil)
 }
 
-// SendActionReplyWithAdditionalContext is the same as SendActionReply but with additional context
+// SendActionReplyWithAdditionalContext sends an action reply with added context metadata.
+// It is used for all user-facing communication about action progress and results.
+// The actionContext parameter allows passing additional structured data with the reply.
+//
+// This is the primary method for sending action status messages to users, and is
+// used for confirmation, progress updates, success, and failure notifications.
 func SendActionReplyWithAdditionalContext(instanceUUID uuid.UUID, userEmail string, actionUUID uuid.UUID, arstate models.ActionReplyState, payload interface{}, outboundChannel chan *models.UMHMessage, action models.ActionType, actionContext map[string]interface{}) bool {
 	// zap.S().Debugf("SendingActionReply [InstanceUUID: %s, UserEmail: %s, ActionUUID: %s, ActionReplyState: %s, Payload: %v]", instanceUUID, userEmail, actionUUID, arstate, payload)
 
@@ -135,9 +158,10 @@ func SendActionReplyWithAdditionalContext(instanceUUID uuid.UUID, userEmail stri
 	return true
 }
 
-// sendActionReplyInternal sends an action reply with the given state and payload
-// This function is only meant to be called within the actions.go file !
-// Use SendActionReply instead (or SendActionReplyWithAdditionalContext if you need to pass additional context)
+// sendActionReplyInternal is the internal implementation for SendActionReply.
+// It handles the actual process of creating and sending UMH messages.
+// This function is only meant to be called within the actions.go file!
+// Use SendActionReply instead (or SendActionReplyWithAdditionalContext if you need to pass additional context).
 func sendActionReplyInternal(instanceUUID uuid.UUID, userEmail string, actionUUID uuid.UUID, arstate models.ActionReplyState, payload interface{}, outboundChannel chan *models.UMHMessage, actionContext map[string]interface{}) error {
 	var err error
 	var umhMessage models.UMHMessage
@@ -164,11 +188,12 @@ func sendActionReplyInternal(instanceUUID uuid.UUID, userEmail string, actionUUI
 	return nil
 }
 
-// generateUMHMessage generates a UMHMessage with the given user email, message type and payload.
-// There is no check for matching message type and payload, so make sure that the payload is
-// compatible with the message type.
+// generateUMHMessage creates a UMHMessage with the specified parameters.
+// It handles the encryption of message content before adding it to the UMHMessage.
 //
-// The message content gets encrypted before it is added to the UMHMessage
+// There is no check for matching message type and payload, so ensure the payload
+// is compatible with the message type. The content is encrypted using the
+// encoding package before being added to the message.
 func generateUMHMessage(instanceUUID uuid.UUID, userEmail string, messageType models.MessageType, payload any) (umhMessage models.UMHMessage, err error) {
 	messageContent := models.UMHMessageContent{
 		MessageType: messageType,
@@ -189,7 +214,15 @@ func generateUMHMessage(instanceUUID uuid.UUID, userEmail string, messageType mo
 	return
 }
 
-// ParseActionPayload parses the raw payload into the specified type.
+// ParseActionPayload is a generic helper function that converts raw payload data into a typed struct.
+// It handles the conversion from interface{} -> map -> JSON -> typed struct safely.
+//
+// This function is particularly useful for parsing nested structures within action payloads,
+// and provides consistent error handling for payload parsing.
+//
+// Example usage:
+//
+//	myPayload, err := ParseActionPayload[MyCustomStruct](actionPayload)
 func ParseActionPayload[T any](actionPayload interface{}) (T, error) {
 	var payload T
 

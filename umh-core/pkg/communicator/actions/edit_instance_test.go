@@ -27,6 +27,9 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 )
 
+// EditInstance tests verify the behavior of the EditInstanceAction.
+// This test suite ensures that the action correctly handles location updates,
+// validates input, and properly reports errors in various scenarios.
 var _ = Describe("EditInstance", func() {
 	// Variables used across tests
 	var (
@@ -46,7 +49,7 @@ var _ = Describe("EditInstance", func() {
 		instanceUUID = uuid.New()
 		outboundChannel = make(chan *models.UMHMessage, 10) // Buffer to prevent blocking
 
-		// Create initial config
+		// Create initial config with existing location data
 		initialConfig := config.FullConfig{
 			Agent: config.AgentConfig{
 				MetricsPort: 8080,
@@ -219,7 +222,7 @@ var _ = Describe("EditInstance", func() {
 			Expect(result).To(ContainSubstring("Successfully updated"))
 			Expect(metadata).To(BeNil())
 
-			// We should have 2 messages in the channel (Confirmed + Executing) (Success is not sent here)
+			// Verify correct message sequence - note that success is not sent by Execute
 			var messages []*models.UMHMessage
 			for i := 0; i < 2; i++ {
 				select {
@@ -263,7 +266,7 @@ var _ = Describe("EditInstance", func() {
 			Expect(result).To(BeNil())
 			Expect(metadata).To(BeNil())
 
-			// We should have 3 messages in the channel (Confirmed + Executing + Failure)
+			// Verify all expected messages: Confirmed + Executing + Failure
 			var messages []*models.UMHMessage
 			for i := 0; i < 3; i++ {
 				select {
@@ -281,7 +284,6 @@ var _ = Describe("EditInstance", func() {
 			mockConfig.WithConfigError(nil)
 
 			// Then create a custom mock to fail on WriteConfig
-			// We have to use a custom wrapper since the official mock doesn't have a method to fail on WriteConfig
 			customMock := &writeFailingMockConfigManager{
 				mockConfigManager: mockConfig,
 			}
@@ -305,7 +307,7 @@ var _ = Describe("EditInstance", func() {
 			Expect(result).To(BeNil())
 			Expect(metadata).To(BeNil())
 
-			// We should have 3 messages in the channel (Confirmed + Executing + Failure)
+			// Verify all expected messages: Confirmed + Executing + Failure
 			var messages []*models.UMHMessage
 			for i := 0; i < 3; i++ {
 				select {
@@ -320,19 +322,26 @@ var _ = Describe("EditInstance", func() {
 	})
 })
 
-// writeFailingMockConfigManager wraps the MockConfigManager to fail on WriteConfig
+// writeFailingMockConfigManager is a custom mock that specifically tests the
+// failure case of writing config changes back to storage.
+//
+// It wraps the standard MockConfigManager but forces writeConfig calls to fail,
+// allowing tests to verify proper error handling when persistence operations fail.
 type writeFailingMockConfigManager struct {
 	mockConfigManager *config.MockConfigManager
 }
 
+// GetConfig passes through to the underlying mock implementation
 func (w *writeFailingMockConfigManager) GetConfig(ctx context.Context, tick uint64) (config.FullConfig, error) {
 	return w.mockConfigManager.GetConfig(ctx, tick)
 }
 
+// writeConfig always returns an error to simulate write failures
 func (w *writeFailingMockConfigManager) writeConfig(ctx context.Context, config config.FullConfig) error {
 	return errors.New("mock WriteConfig failure")
 }
 
+// AtomicSetLocation implements the location update operation but forces the write to fail
 func (w *writeFailingMockConfigManager) AtomicSetLocation(ctx context.Context, location models.EditInstanceLocationModel) error {
 	// Get the current config
 	config, err := w.GetConfig(ctx, 0)
@@ -364,6 +373,7 @@ func (w *writeFailingMockConfigManager) AtomicSetLocation(ctx context.Context, l
 	return nil
 }
 
+// AtomicAddDataflowcomponent implements the required interface method but ensures the write fails
 func (w *writeFailingMockConfigManager) AtomicAddDataflowcomponent(ctx context.Context, dfc config.DataFlowComponentConfig) error {
 	// Get the current config
 	config, err := w.GetConfig(ctx, 0)
@@ -379,5 +389,4 @@ func (w *writeFailingMockConfigManager) AtomicAddDataflowcomponent(ctx context.C
 	}
 
 	return nil
-
 }
