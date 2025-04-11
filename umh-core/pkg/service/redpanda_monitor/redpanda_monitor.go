@@ -920,6 +920,7 @@ func ParseValue(value interface{}) (uint64, error) {
 		if v < 0 {
 			return 0, fmt.Errorf("value is negative")
 		}
+		result = uint64(v)
 	case int64:
 		// If v is negative, return 0, with "value is negative"
 		if v < 0 {
