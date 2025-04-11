@@ -246,21 +246,20 @@ func (d *DataflowComponentInstance) reconcileTransitionToActive(ctx context.Cont
 		metrics.ObserveReconcileTime(metrics.ComponentDataflowComponentInstance, d.baseFSMInstance.GetID()+".reconcileTransitionToActive", time.Since(start))
 	}()
 
-	// If we're stopped, we need to start first
-	if currentState == OperationalStateStopped {
-		// Attempt to initiate start
+	switch currentState {
+	case OperationalStateStopped:
 		if err := d.StartInstance(ctx, filesystemService); err != nil {
 			return err, false
 		}
 		// Send event to transition from Stopped to Starting
 		return d.baseFSMInstance.SendEvent(ctx, EventStart), true
-	}
 
-	// Handle starting phase states
-	if IsStartingState(currentState) {
+	case OperationalStateStarting, OperationalStateStartingFailed:
 		return d.reconcileStartingState(ctx, filesystemService, currentState, currentTime)
-	} else if IsRunningState(currentState) {
+
+	case OperationalStateIdle, OperationalStateActive, OperationalStateDegraded:
 		return d.reconcileRunningState(ctx, filesystemService, currentState, currentTime)
+
 	}
 
 	return nil, false
