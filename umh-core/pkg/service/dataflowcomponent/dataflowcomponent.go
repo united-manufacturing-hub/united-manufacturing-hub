@@ -40,7 +40,7 @@ type IDataFlowComponentService interface {
 	GenerateBenthosConfigForDataFlowComponent(dataflowConfig *dataflowcomponentconfig.DataFlowComponentConfig, componentName string) (benthosserviceconfig.BenthosServiceConfig, error)
 
 	// GetConfig returns the actual DataFlowComponent config from the Benthos service
-	GetConfig(ctx context.Context, filesystemService filesystem.Service, componentName string) (*dataflowcomponentconfig.DataFlowComponentConfig, error)
+	GetConfig(ctx context.Context, filesystemService filesystem.Service, componentName string) (dataflowcomponentconfig.DataFlowComponentConfig, error)
 
 	// Status checks the status of a DataFlowComponent service
 	Status(ctx context.Context, filesystemService filesystem.Service, componentName string, tick uint64) (ServiceInfo, error)
@@ -165,9 +165,9 @@ func (s *DataFlowComponentService) GenerateBenthosConfigForDataFlowComponent(dat
 
 // GetConfig returns the actual DataFlowComponent config from the Benthos service
 // Expects benthosName (e.g. "dataflow-myservice") as defined in the UMH config
-func (s *DataFlowComponentService) GetConfig(ctx context.Context, filesystemService filesystem.Service, componentName string) (*dataflowcomponentconfig.DataFlowComponentConfig, error) {
+func (s *DataFlowComponentService) GetConfig(ctx context.Context, filesystemService filesystem.Service, componentName string) (dataflowcomponentconfig.DataFlowComponentConfig, error) {
 	if ctx.Err() != nil {
-		return nil, ctx.Err()
+		return dataflowcomponentconfig.DataFlowComponentConfig{}, ctx.Err()
 	}
 
 	benthosName := s.getBenthosName(componentName)
@@ -175,7 +175,7 @@ func (s *DataFlowComponentService) GetConfig(ctx context.Context, filesystemServ
 	// Get the Benthos config
 	benthosCfg, err := s.benthosService.GetConfig(ctx, filesystemService, benthosName)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get benthos config: %w", err)
+		return dataflowcomponentconfig.DataFlowComponentConfig{}, fmt.Errorf("failed to get benthos config: %w", err)
 	}
 
 	// Convert Benthos config to DataFlowComponent config

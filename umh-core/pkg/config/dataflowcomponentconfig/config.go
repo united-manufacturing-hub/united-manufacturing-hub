@@ -58,8 +58,8 @@ func (c *DataFlowComponentConfig) GetBenthosServiceConfig() benthosserviceconfig
 
 // FromBenthosServiceConfig creates a DataFlowComponentConfig from a BenthosServiceConfig,
 // ignoring advanced configuration fields
-func FromBenthosServiceConfig(benthos benthosserviceconfig.BenthosServiceConfig) *DataFlowComponentConfig {
-	return &DataFlowComponentConfig{
+func FromBenthosServiceConfig(benthos benthosserviceconfig.BenthosServiceConfig) DataFlowComponentConfig {
+	return DataFlowComponentConfig{
 		BenthosConfig: BenthosConfig{
 			Input:              benthos.Input,
 			Pipeline:           benthos.Pipeline,
