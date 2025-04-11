@@ -371,6 +371,6 @@ func (s *Watchdog) reportStateToNiceFail() {
 		}
 
 		// Log to the console instead of reporting to Sentry
-		s.logger.Debugf("WatchdogReport: %s, %s, %d, %d", name, status, lastHeartbeat, warningCount)
+		//s.logger.Debugf("WatchdogReport: %s, %s, %d, %d", name, status, lastHeartbeat, warningCount)
 	}
 }
