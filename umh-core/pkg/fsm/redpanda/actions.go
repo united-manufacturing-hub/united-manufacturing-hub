@@ -215,13 +215,13 @@ func (r *RedpandaInstance) UpdateObservedStateOfInstance(ctx context.Context, fi
 			observedStateMu.Unlock()
 			return nil
 		} else {
-			if strings.Contains(err.Error(), redpanda_service.ErrServiceNotExist.Error()) || strings.Contains(err.Error(), redpanda_service.ErrServiceNoLogFile.Error()) {
+			if errors.Is(err, redpanda_service.ErrServiceNotExist) || errors.Is(err, redpanda_service.ErrServiceNoLogFile) {
 				// Log the error but don't fail - this might happen during creation when the config file doesn't exist yet
 				// Note: as we use the logs of the underlying redpanda_monitor service, we need to ignore ErrServiceNoLogFile here.
 				r.baseFSMInstance.GetLogger().Debugf("Service not found, will be created during reconciliation: %v", err)
 				return nil
 			}
-			if strings.Contains(err.Error(), redpanda_monitor.ErrServiceConnectionRefused.Error()) {
+			if errors.Is(err, redpanda_monitor.ErrServiceConnectionRefused) {
 				// This is expected during the startup phase of the redpanda service, when the service is not yet ready to receive connections
 				r.baseFSMInstance.GetLogger().Debugf("Service not yet ready: %v", err)
 				return nil

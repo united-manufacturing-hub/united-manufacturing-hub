@@ -351,4 +351,53 @@ var _ = Describe("Redpanda Monitor Service", func() {
 		Expect(m).To(Equal(mShould))
 	})
 
+	It("should parse the test_metrics", func() {
+		// 1. Load the test_metrics.txt file (from current dir)
+		metricsData, err := os.ReadFile("test_metrics.txt")
+		Expect(err).NotTo(HaveOccurred())
+
+		// 2. Parse it line by line into s6service.LogEntry
+		lines := strings.Split(string(metricsData), "\n")
+		var logEntries []s6service.LogEntry
+
+		for _, line := range lines {
+			if len(line) > 0 {
+				// Remove timestamps at the beginning of the line
+				parts := strings.SplitN(line, "  ", 2)
+				if len(parts) == 2 {
+					// Use the content part (after the timestamp)
+					logEntries = append(logEntries, s6service.LogEntry{Content: parts[1]})
+				} else {
+					// For lines without timestamps (like the marker lines)
+					logEntries = append(logEntries, s6service.LogEntry{Content: line})
+				}
+			}
+		}
+
+		// 3. Parse it into metrics
+		redpandaMetricsConfig, err := service.ParseRedpandaLogs(ctx, logEntries, tick)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(redpandaMetricsConfig).NotTo(BeNil())
+
+		// 4. Verify the metrics are parsed correctly
+		metricsResult := redpandaMetricsConfig.Metrics.Metrics
+
+		// Verify storage metrics
+		// Note: this value is different from the other test, as the metrics are different
+		Expect(metricsResult.Infrastructure.Storage.FreeBytes).To(Equal(int64(258896789504)))
+		Expect(metricsResult.Infrastructure.Storage.TotalBytes).To(Equal(int64(494384795648)))
+		Expect(metricsResult.Infrastructure.Storage.FreeSpaceAlert).To(BeFalse())
+
+		// Verify cluster metrics
+		Expect(metricsResult.Cluster.Topics).To(Equal(int64(0)))
+		Expect(metricsResult.Cluster.UnavailableTopics).To(Equal(int64(0)))
+
+		// Verify throughput metrics
+		Expect(metricsResult.Throughput.BytesIn).To(Equal(int64(0)))
+		Expect(metricsResult.Throughput.BytesOut).To(Equal(int64(0)))
+
+		// Verify topic metrics
+		Expect(metricsResult.Topic.TopicPartitionMap).To(HaveLen(0))
+	})
+
 })
