@@ -178,6 +178,13 @@ func WithS6Service(s6Service s6service.Service) RedpandaMonitorServiceOption {
 	}
 }
 
+// WithS6Manager sets a custom S6 manager for the RedpandaMonitorService
+func WithS6Manager(s6Manager *s6fsm.S6Manager) RedpandaMonitorServiceOption {
+	return func(s *RedpandaMonitorService) {
+		s.s6Manager = s6Manager
+	}
+}
+
 func NewRedpandaMonitorService(opts ...RedpandaMonitorServiceOption) *RedpandaMonitorService {
 	managerName := fmt.Sprintf("%s%s", logger.ComponentRedpandaService, "redpanda-monitor")
 	service := &RedpandaMonitorService{
@@ -194,7 +201,7 @@ func NewRedpandaMonitorService(opts ...RedpandaMonitorServiceOption) *RedpandaMo
 
 // BLOCK_START_MARKER marks the begin of a new data block inside the logs.
 // Between it and MID_MARKER is the metrics data, between MID_MARKER and END_MARKER is the cluster config data.
-const BLOCK_START_MARKER = "BEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGIN"
+const BLOCK_START_MARKER = "BEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGIN"
 
 // METRICS_END_MARKER marks the end of the metrics data and the beginning of the cluster config data.
 const METRICS_END_MARKER = "METRICSENDMETRICSENDMETRICSENDMETRICSENDMETRICSENDMETRICSENDMETRICSENDMETRICSENDMETRICSENDMETRICSEND"

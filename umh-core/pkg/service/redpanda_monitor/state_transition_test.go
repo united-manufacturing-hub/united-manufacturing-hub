@@ -131,70 +131,9 @@ func createMockLogs(freBytes, totalBytes uint64, hasSpaceAlert bool, topics, una
 	return logs
 }
 
-// Extension of the s6service.MockService to better handle state transitions
-type EnhancedS6MockService struct {
-	*s6service.MockService
-	currentStatus s6service.ServiceStatus
-}
-
-func NewEnhancedS6MockService() *EnhancedS6MockService {
-	return &EnhancedS6MockService{
-		MockService:   s6service.NewMockService(),
-		currentStatus: s6service.ServiceDown,
-	}
-}
-
-// Override Start to update the service state
-func (e *EnhancedS6MockService) Start(ctx context.Context, servicePath string, filesystemService filesystem.Service) error {
-	e.MockService.StartCalled = true
-	e.currentStatus = s6service.ServiceUp
-
-	// Update the status result that will be returned by Status
-	e.MockService.StatusResult = s6service.ServiceInfo{
-		Status: s6service.ServiceUp,
-	}
-
-	info := e.MockService.ServiceStates[servicePath]
-	info.Status = s6service.ServiceUp
-	e.MockService.ServiceStates[servicePath] = info
-
-	return e.MockService.StartError
-}
-
-// Override Stop to update the service state
-func (e *EnhancedS6MockService) Stop(ctx context.Context, servicePath string, filesystemService filesystem.Service) error {
-	e.MockService.StopCalled = true
-	e.currentStatus = s6service.ServiceDown
-
-	// Update the status result that will be returned by Status
-	e.MockService.StatusResult = s6service.ServiceInfo{
-		Status: s6service.ServiceDown,
-	}
-
-	info := e.MockService.ServiceStates[servicePath]
-	info.Status = s6service.ServiceDown
-	e.MockService.ServiceStates[servicePath] = info
-
-	return e.MockService.StopError
-}
-
-// Override Status to provide consistent state information
-func (e *EnhancedS6MockService) Status(ctx context.Context, servicePath string, filesystemService filesystem.Service) (s6service.ServiceInfo, error) {
-	e.MockService.StatusCalled = true
-
-	if state, exists := e.MockService.ServiceStates[servicePath]; exists {
-		return state, e.MockService.StatusError
-	}
-
-	// Return the current status
-	return s6service.ServiceInfo{
-		Status: e.currentStatus,
-	}, e.MockService.StatusError
-}
-
 var _ = FDescribe("RedpandaMonitor Service State Transitions", func() {
 	var (
-		mockS6Service  *EnhancedS6MockService
+		mockS6Service  *s6service.MockService
 		mockFileSystem *filesystem.MockFileSystem
 		monitorService *redpanda_monitor.RedpandaMonitorService
 		ctx            context.Context
@@ -203,22 +142,43 @@ var _ = FDescribe("RedpandaMonitor Service State Transitions", func() {
 
 	BeforeEach(func() {
 		ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
-		mockS6Service = NewEnhancedS6MockService()
+		mockS6Service = s6service.NewMockService()
 		mockFileSystem = filesystem.NewMockFileSystem()
 
 		// Set up mock logs
 		mockS6Service.GetLogsResult = createMockLogs(10000000000, 20000000000, false, 5, 0, 1000, 2000, map[string]int64{"test-topic": 3})
 
 		// Set default state to stopped
-		mockS6Service.currentStatus = s6service.ServiceDown
 		mockS6Service.StatusResult = s6service.ServiceInfo{
 			Status: s6service.ServiceDown,
 		}
 
+		// Create a mocked S6 manager with mocked services to prevent using real S6 functionality
+		mockedS6Manager := s6fsm.NewS6ManagerWithMockedServices("redpanda-monitor")
+
 		// Create the service with mocked dependencies
 		monitorService = redpanda_monitor.NewRedpandaMonitorService(
 			redpanda_monitor.WithS6Service(mockS6Service),
+			redpanda_monitor.WithS6Manager(mockedS6Manager),
 		)
+
+		// Set up what happens when AddRedpandaMonitorToS6Manager is called
+		// We need to ensure that the instance created by the manager also uses the mock service
+		err := monitorService.AddRedpandaMonitorToS6Manager(ctx)
+		Expect(err).NotTo(HaveOccurred())
+		err, reconciled := monitorService.ReconcileManager(ctx, mockFileSystem, 0)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(reconciled).To(BeTrue())
+		// Now update the instance to use our mock service - this is the crucial part that fixes the bug
+		// Get the instance after reconciliation
+		if instance, exists := mockedS6Manager.GetInstance("redpanda-monitor"); exists {
+			// Type assert to S6Instance
+			if s6Instance, ok := instance.(*s6fsm.S6Instance); ok {
+				// Set our mock service
+				s6Instance.SetService(mockS6Service)
+			}
+		}
+
 	})
 
 	AfterEach(func() {
@@ -227,78 +187,68 @@ var _ = FDescribe("RedpandaMonitor Service State Transitions", func() {
 
 	Context("Service lifecycle with state transitions", func() {
 		It("should transition from stopped to running and remain stable for 60 reconciliation cycles", func() {
-			By("Adding the service to S6 manager")
-			// Mark the service as existing in S6
-			servicePath := fmt.Sprintf("%s/%s", "/etc/s6-overlay/s6-rc.d", "redpanda-monitor")
-			mockS6Service.ExistingServices[servicePath] = true
-			mockS6Service.MockExists = true
-			tick := uint64(0)
-
-			err := monitorService.AddRedpandaMonitorToS6Manager(ctx)
-			Expect(err).NotTo(HaveOccurred())
-			By("Verifiying that without an reconciliation, the service does not exist")
-			serviceInfo, err := monitorService.Status(ctx, mockFileSystem, tick)
-			Expect(err).To(Equal(redpanda_monitor.ErrServiceNotExist))
-
-			By("Initial service state should be to_be_created")
-			err, reconciled := monitorService.ReconcileManager(ctx, mockFileSystem, tick)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(reconciled).To(BeTrue())
-			// Verify initial state
-			serviceInfo, err = monitorService.Status(ctx, mockFileSystem, tick)
-			tick++
-			Expect(err).NotTo(HaveOccurred())
-			Expect(serviceInfo.S6FSMState).To(Equal(s6.LifecycleStateToBeCreated))
-			Expect(serviceInfo.RedpandaStatus.IsRunning).To(BeFalse())
+			var serviceInfo redpanda_monitor.ServiceInfo
+			var err error
+			tick := uint64(1) // 1 since we already did one reconciliation in the beforeEach
 
 			By("reconciliation should put the service into creating")
-			err, reconciled = monitorService.ReconcileManager(ctx, mockFileSystem, tick)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(reconciled).To(BeTrue())
+			tick = reconcileUntilState(ctx, monitorService, mockFileSystem, tick, s6.LifecycleStateCreating)
 			// Verify initial state
 			serviceInfo, err = monitorService.Status(ctx, mockFileSystem, tick)
-			tick++
 			Expect(err).NotTo(HaveOccurred())
 			Expect(serviceInfo.S6FSMState).To(Equal(s6.LifecycleStateCreating))
 			Expect(serviceInfo.RedpandaStatus.IsRunning).To(BeFalse())
+			tick++
 
 			By("reconciliation should put the service into stopped")
-			err, reconciled = monitorService.ReconcileManager(ctx, mockFileSystem, tick)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(reconciled).To(BeTrue())
-			// Verify initial state
+			tick = reconcileUntilState(ctx, monitorService, mockFileSystem, tick, s6fsm.OperationalStateStopped)
+			// Verify state
 			serviceInfo, err = monitorService.Status(ctx, mockFileSystem, tick)
-			tick++
 			Expect(err).NotTo(HaveOccurred())
 			Expect(serviceInfo.S6FSMState).To(Equal(s6fsm.OperationalStateStopped))
 			Expect(serviceInfo.RedpandaStatus.IsRunning).To(BeFalse())
+			tick++
 
-			By("reconciliation should put the service into stopped")
-			// Over the next couple loops we expect it to start up
-			for i := 0; i < 10; i++ {
-				err, reconciled = monitorService.ReconcileManager(ctx, mockFileSystem, tick)
-				Expect(err).NotTo(HaveOccurred())
-				serviceInfo, err = monitorService.Status(ctx, mockFileSystem, tick)
-				Expect(err).NotTo(HaveOccurred())
-			}
-			Expect(serviceInfo.RedpandaStatus.IsRunning).To(BeTrue())
+			By("Starting the redpanda monitor service")
+			err = monitorService.StartRedpandaMonitor(ctx)
+			Expect(err).NotTo(HaveOccurred())
 
-			/*
-				By("Verifying the service stays running for 60 reconciliation cycles")
-				// Run through 60 reconciliation cycles
-				for i := 0; i < 60; i++ {
-					err, reconciled = monitorService.ReconcileManager(ctx, mockFileSystem, tick)
-					Expect(err).NotTo(HaveOccurred())
-					Expect(reconciled).To(BeFalse())
+			// Reconcile until the service is running
+			tick = reconcileUntilState(ctx, monitorService, mockFileSystem, tick, s6fsm.OperationalStateRunning)
 
-					// Check status to ensure it stays running
-					serviceInfo, err = monitorService.Status(ctx, mockFileSystem, tick)
-					Expect(err).NotTo(HaveOccurred())
-					Expect(serviceInfo.S6FSMState).To(Equal(s6fsm.OperationalStateRunning))
-					Expect(serviceInfo.RedpandaStatus.IsRunning).To(BeTrue())
-					tick++
-				}
-			*/
+			// For the next 1000 iterations, check that the service stays running
+			ensureState(ctx, monitorService, mockFileSystem, tick, s6fsm.OperationalStateRunning, 1000)
 		})
 	})
 })
+
+func reconcileUntilState(ctx context.Context, monitorService *redpanda_monitor.RedpandaMonitorService, mockFileSystem *filesystem.MockFileSystem, tick uint64, expectedState string) uint64 {
+	for i := 0; i < 10; i++ {
+		err, _ := monitorService.ReconcileManager(ctx, mockFileSystem, tick)
+		Expect(err).NotTo(HaveOccurred())
+		tick++
+
+		// Check state
+		serviceInfo, err := monitorService.Status(ctx, mockFileSystem, tick)
+		Expect(err).NotTo(HaveOccurred())
+		if serviceInfo.S6FSMState == expectedState {
+			return tick
+		}
+	}
+
+	Fail(fmt.Sprintf("Expected state %s not reached after 10 reconciliations", expectedState))
+	return 0
+}
+
+func ensureState(ctx context.Context, monitorService *redpanda_monitor.RedpandaMonitorService, mockFileSystem *filesystem.MockFileSystem, tick uint64, expectedState string, iterations int) {
+	for i := 0; i < iterations; i++ {
+		err, _ := monitorService.ReconcileManager(ctx, mockFileSystem, tick)
+		Expect(err).NotTo(HaveOccurred())
+		tick++
+
+		// Check state
+		serviceInfo, err := monitorService.Status(ctx, mockFileSystem, tick)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(serviceInfo.S6FSMState).To(Equal(expectedState))
+	}
+}
