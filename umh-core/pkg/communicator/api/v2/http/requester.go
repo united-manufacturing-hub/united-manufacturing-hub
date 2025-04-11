@@ -31,7 +31,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2/error_handler"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/latency"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/safejson"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"go.uber.org/zap"
 )
@@ -82,10 +81,6 @@ func GetClient(insecureTLS bool) *http.Client {
 		return insecureHTTPClient
 	}
 	return secureHTTPClient
-}
-
-func GetBaseUrl(cfg config.FullConfig) string {
-	return cfg.Agent.APIURL
 }
 
 // LatestExternalIp is the latest external IP address

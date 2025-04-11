@@ -83,7 +83,6 @@ func (p *Puller) pull() {
 	for p.shallRun.Load() {
 		select {
 		case <-ticker.C:
-			p.logger.Debugf("Pulling messages")
 
 			p.dog.ReportHeartbeatStatus(watcherUUID, watchdog.HEARTBEAT_STATUS_OK)
 			var cookies = map[string]string{
@@ -96,6 +95,7 @@ func (p *Puller) pull() {
 					time.Sleep(1 * time.Second)
 					continue
 				}
+				p.logger.Errorf("Error pulling messages: %v", err)
 				continue
 			}
 			error_handler.ResetErrorCounter()

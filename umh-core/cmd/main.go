@@ -21,8 +21,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/env"
-
 	v2 "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/communication_state"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
@@ -55,56 +53,18 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// get the environment variables
-	authToken, err := env.GetAsString("AUTH_TOKEN", false, "")
-	if err != nil {
-		sentry.ReportIssuef(sentry.IssueTypeWarning, log, "Failed to get AUTH_TOKEN: %w", err)
-	}
-
-	apiUrl, err := env.GetAsString("API_URL", false, "")
-	if err != nil {
-		sentry.ReportIssuef(sentry.IssueTypeWarning, log, "Failed to get API_URL: %w", err)
-	}
-
-	releaseChannel, err := env.GetAsString("RELEASE_CHANNEL", false, "")
-	if err != nil {
-		sentry.ReportIssuef(sentry.IssueTypeWarning, log, "Failed to get RELEASE_CHANNEL: %w", err)
-	}
-
-	locations := make(map[int]string)
-	for i := 0; i <= 6; i++ {
-		location, err := env.GetAsString(fmt.Sprintf("LOCATION_%d", i), false, "")
-		if err != nil {
-			sentry.ReportIssuef(sentry.IssueTypeWarning, log, "Failed to get LOCATION_%d: %w", i, err)
-		}
-		locations[i] = location
-	}
-
 	// Load the config
 	configManager, err := config.NewFileConfigManagerWithBackoff()
 	if err != nil {
 		sentry.ReportIssuef(sentry.IssueTypeFatal, log, "Failed to create config manager: %w", err)
 		os.Exit(1)
 	}
-	// this will check if the config at the given path exists and if not, it will be created with default values
-	// and then overwritten with the given config parameters (communicator, release channel, location)
-	configData, err := configManager.GetConfigWithOverwritesOrCreateNew(ctx, config.FullConfig{
-		Agent: config.AgentConfig{
-			CommunicatorConfig: config.CommunicatorConfig{
-				APIURL:    apiUrl,
-				AuthToken: authToken,
-			},
-			ReleaseChannel: config.ReleaseChannel(releaseChannel),
-			Location:       locations,
-		},
-		Internal: config.InternalConfig{
-			Redpanda: config.RedpandaConfig{
-				FSMInstanceConfig: config.FSMInstanceConfig{
-					DesiredFSMState: "active",
-				},
-			},
-		},
-	})
+
+	// Load or create configuration with environment variable overrides
+	// This loads the config file if it exists, applies any environment variables as overrides,
+	// and persists the result back to the config file. See detailed docs in config.LoadConfigWithEnvOverrides.
+	configData, err := config.LoadConfigWithEnvOverrides(ctx, configManager, log)
+
 	if err != nil {
 		sentry.ReportIssuef(sentry.IssueTypeFatal, log, "Failed to load config: %w", err)
 		os.Exit(1)
@@ -132,7 +92,7 @@ func main() {
 		ReleaseChannel:  configData.Agent.ReleaseChannel,
 		SystemSnapshot:  systemSnapshot,
 		ConfigManager:   configManager,
-		ApiUrl:          apiUrl,
+		ApiUrl:          configData.Agent.CommunicatorConfig.APIURL,
 		Logger:          logger.For(logger.ComponentCommunicator),
 	}
 	go SystemSnapshotLogger(ctx, controlLoop, systemSnapshot, systemMu)
