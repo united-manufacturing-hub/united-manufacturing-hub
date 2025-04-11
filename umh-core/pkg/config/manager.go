@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"reflect"
 	"sync"
 	"time"
 
@@ -56,6 +57,8 @@ type ConfigManager interface {
 	GetConfig(ctx context.Context, tick uint64) (FullConfig, error)
 	// AtomicSetLocation sets the location in the config atomically
 	AtomicSetLocation(ctx context.Context, location models.EditInstanceLocationModel) error
+	// AtomicAddDataflowcomponent adds a dataflowcomponent to the config atomically
+	AtomicAddDataflowcomponent(ctx context.Context, dfc DataFlowComponentConfig) error
 }
 
 // FileConfigManager implements the ConfigManager interface by reading from a file
@@ -217,6 +220,13 @@ func (m *FileConfigManager) GetConfig(ctx context.Context, tick uint64) (FullCon
 	var config FullConfig
 	if err := yaml.Unmarshal(data, &config); err != nil {
 		return FullConfig{}, fmt.Errorf("failed to parse config file: %w", err)
+	}
+
+	// If the config is empty, return an error
+	// Note: sometimes it can happen that due to a filesystem error or maybe in the tests due to docker cp, the file is empty
+	// In this case we want to return an error, which is then ignored by the control loop and will retry in the next cycle
+	if reflect.DeepEqual(config, FullConfig{}) {
+		return FullConfig{}, fmt.Errorf("config file is empty: %s", m.configPath)
 	}
 
 	return config, nil
@@ -421,4 +431,39 @@ func (m *FileConfigManagerWithBackoff) AtomicSetLocation(ctx context.Context, lo
 	}
 
 	return m.configManager.AtomicSetLocation(ctx, location)
+}
+
+// AtomicAddDataflowcomponent adds a dataflowcomponent to the config atomically
+func (m *FileConfigManager) AtomicAddDataflowcomponent(ctx context.Context, dfc DataFlowComponentConfig) error {
+	err := m.mutexAtomicUpdate.Lock(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to lock config file: %w", err)
+	}
+	defer m.mutexAtomicUpdate.Unlock()
+
+	// get the current config
+	config, err := m.GetConfig(ctx, 0)
+	if err != nil {
+		return fmt.Errorf("failed to get config: %w", err)
+	}
+
+	// edit the config
+	config.DataFlow = append(config.DataFlow, dfc)
+
+	// write the config
+	if err := m.writeConfig(ctx, config); err != nil {
+		return fmt.Errorf("failed to write config: %w", err)
+	}
+
+	return nil
+}
+
+// AtomicAddDataflowcomponent delegates to the underlying FileConfigManager
+func (m *FileConfigManagerWithBackoff) AtomicAddDataflowcomponent(ctx context.Context, dfc DataFlowComponentConfig) error {
+	// Check if context is already cancelled
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+
+	return m.configManager.AtomicAddDataflowcomponent(ctx, dfc)
 }
