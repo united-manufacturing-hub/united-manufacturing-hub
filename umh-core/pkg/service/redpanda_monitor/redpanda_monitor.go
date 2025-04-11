@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -114,8 +115,8 @@ type ClusterConfig struct {
 }
 
 type TopicConfig struct {
-	DefaultTopicRetentionMs    int
-	DefaultTopicRetentionBytes int
+	DefaultTopicRetentionMs    int64
+	DefaultTopicRetentionBytes int64
 }
 
 type RedpandaMetrics struct {
@@ -541,36 +542,18 @@ func (s *RedpandaMonitorService) processClusterConfigDataBytes(clusterConfigData
 
 	// Extract the values we need from the JSON
 	if value, ok := redpandaConfig["log_retention_ms"]; ok {
-		if floatVal, ok := value.(float64); ok {
-			result.Topic.DefaultTopicRetentionMs = int(floatVal)
-		} else if intVal, ok := value.(int); ok {
-			result.Topic.DefaultTopicRetentionMs = intVal
-		} else if strVal, ok := value.(string); ok {
-			if intVal, err := strconv.Atoi(strVal); err == nil {
-				result.Topic.DefaultTopicRetentionMs = intVal
-			}
-		} else {
-			return nil, fmt.Errorf("failed to parse cluster config data: log_retention_ms is not a number: %v", value)
+		result.Topic.DefaultTopicRetentionMs, err = ParseRedpandaIntegerlikeValue(value)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse cluster config data: log_retention_ms is not a number: %w", err)
 		}
 	} else {
 		return nil, fmt.Errorf("failed to parse cluster config data: no log_retention_ms found")
 	}
 
 	if value, ok := redpandaConfig["retention_bytes"]; ok {
-		if floatVal, ok := value.(float64); ok {
-			result.Topic.DefaultTopicRetentionBytes = int(floatVal)
-		} else if intVal, ok := value.(int); ok {
-			result.Topic.DefaultTopicRetentionBytes = intVal
-		} else if strVal, ok := value.(string); ok {
-			if intVal, err := strconv.Atoi(strVal); err == nil {
-				result.Topic.DefaultTopicRetentionBytes = intVal
-			}
-			// It can also be null, if not set, which we can handle by returning 0
-			// See generator.go, where 0 == null
-		} else if value == nil {
-			result.Topic.DefaultTopicRetentionBytes = 0
-		} else {
-			return nil, fmt.Errorf("failed to parse cluster config data: retention_bytes is not a number: %v", value)
+		result.Topic.DefaultTopicRetentionBytes, err = ParseRedpandaIntegerlikeValue(value)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse cluster config data: retention_bytes is not a number: %w", err)
 		}
 	} else {
 		return nil, fmt.Errorf("failed to parse cluster config data: no retention_bytes found")
@@ -896,4 +879,75 @@ func (s *RedpandaMonitorService) ServiceExists(ctx context.Context, filesystemSe
 	}
 
 	return exists
+}
+
+func ParseRedpandaIntegerlikeValue(value interface{}) (int64, error) {
+	// This can be a very large value (18446744073709552000) if set to -1 via the config.
+	// We need to handle this, by saying that everything larger then 9223372036854775807 (max int64) is -1
+	v, err := ParseValue(value)
+	if err != nil {
+		// If "value is nil", return -1, nil, as redpanda for "some" values returns nil instead of a high value :/
+		if strings.Contains(err.Error(), "value is nil") || strings.Contains(err.Error(), "value is negative") {
+			return -1, nil
+		}
+		return -1, err
+	}
+	if v > math.MaxInt64 {
+		return -1, nil
+	}
+	// We can now safely cast to int64, as we checked above
+	return int64(v), nil
+}
+
+func ParseValue(value interface{}) (uint64, error) {
+	var result uint64
+
+	switch v := value.(type) {
+	case uint64:
+		result = v
+	case float64:
+		// If the float has a fractional part, return 0, with "value has a fractional part"
+		if v != float64(int64(v)) {
+			return 0, fmt.Errorf("value has a fractional part")
+		}
+		// If v is negative, return 0, with "value is negative"
+		if v < 0 {
+			return 0, fmt.Errorf("value is negative")
+		}
+		result = uint64(v)
+	case int:
+		// If v is negative, return 0, with "value is negative"
+		if v < 0 {
+			return 0, fmt.Errorf("value is negative")
+		}
+	case int64:
+		// If v is negative, return 0, with "value is negative"
+		if v < 0 {
+			return 0, fmt.Errorf("value is negative")
+		}
+		result = uint64(v)
+	case string:
+		// Try to parse the string as a number
+		parsed, err := strconv.ParseUint(v, 10, 64)
+		if err != nil {
+			// Try to parse the string as a float
+			parsedFloat, err := strconv.ParseFloat(v, 64)
+			if err != nil {
+				return 0, fmt.Errorf("failed to parse string value as uint64: %w", err)
+			}
+			// If v is negative, return 0, with "value is negative"
+			if parsedFloat < 0 {
+				return 0, fmt.Errorf("value is negative")
+			}
+			result = uint64(parsedFloat)
+		} else {
+			result = parsed
+		}
+	case nil:
+		return 0, fmt.Errorf("value is nil")
+	default:
+		return 0, fmt.Errorf("unsupported value type for conversion to uint64: %T", value)
+	}
+
+	return result, nil
 }

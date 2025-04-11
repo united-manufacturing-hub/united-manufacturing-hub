@@ -21,6 +21,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"strings"
 	"time"
@@ -400,4 +401,157 @@ var _ = Describe("Redpanda Monitor Service", func() {
 		Expect(metricsResult.Topic.TopicPartitionMap).To(HaveLen(0))
 	})
 
+	Describe("parseRedpandaIntegerlikeValue and parseValue", func() {
+		Context("parseValue function", func() {
+			It("should parse uint64 values correctly", func() {
+				input := uint64(42)
+				result, err := redpanda_monitor.ParseValue(input)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(result).To(Equal(uint64(42)))
+			})
+
+			It("should parse positive float64 values correctly", func() {
+				input := float64(42.5)
+				_, err := redpanda_monitor.ParseValue(input)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("value has a fractional part"))
+			})
+
+			It("should return error for negative float64 values", func() {
+				input := float64(-42.5)
+				_, err := redpanda_monitor.ParseValue(input)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("value has a fractional part"))
+			})
+
+			It("should parse positive int values correctly", func() {
+				input := int(42)
+				result, err := redpanda_monitor.ParseValue(input)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(result).To(Equal(uint64(42)))
+			})
+
+			It("should return error for negative int values", func() {
+				input := int(-42)
+				_, err := redpanda_monitor.ParseValue(input)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("value is negative"))
+			})
+
+			It("should parse positive int64 values correctly", func() {
+				input := int64(42)
+				result, err := redpanda_monitor.ParseValue(input)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(result).To(Equal(uint64(42)))
+			})
+
+			It("should return error for negative int64 values", func() {
+				input := int64(-42)
+				_, err := redpanda_monitor.ParseValue(input)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("value is negative"))
+			})
+
+			It("should parse string uint values correctly", func() {
+				input := "42"
+				result, err := redpanda_monitor.ParseValue(input)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(result).To(Equal(uint64(42)))
+			})
+
+			It("should parse string float values correctly", func() {
+				input := "42.5"
+				result, err := redpanda_monitor.ParseValue(input)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(result).To(Equal(uint64(42)))
+			})
+
+			It("should return error for unparseable string values", func() {
+				input := "not-a-number"
+				_, err := redpanda_monitor.ParseValue(input)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("failed to parse string value"))
+			})
+
+			It("should return error for negative string values", func() {
+				input := "-42"
+				_, err := redpanda_monitor.ParseValue(input)
+				Expect(err).To(HaveOccurred())
+				// First it will fail to parse as uint, then try as float and detect negative
+				Expect(err.Error()).To(ContainSubstring("value is negative"))
+			})
+
+			It("should return error for nil values", func() {
+				var input interface{} = nil
+				_, err := redpanda_monitor.ParseValue(input)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("value is nil"))
+			})
+
+			It("should return error for unsupported types", func() {
+				input := struct{ name string }{"test"}
+				_, err := redpanda_monitor.ParseValue(input)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("unsupported value type"))
+			})
+
+			It("should handle very large numbers", func() {
+				input := "18446744073709551615" // Max uint64 value
+				result, err := redpanda_monitor.ParseValue(input)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(result).To(Equal(uint64(18446744073709551615)))
+			})
+		})
+
+		Context("parseRedpandaIntegerlikeValue function", func() {
+			It("should parse regular values correctly", func() {
+				input := int64(42)
+				result, err := redpanda_monitor.ParseRedpandaIntegerlikeValue(input)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(result).To(Equal(int64(42)))
+			})
+
+			It("should convert values larger than MaxInt64 to -1", func() {
+				input := uint64(math.MaxInt64 + 1)
+				result, err := redpanda_monitor.ParseRedpandaIntegerlikeValue(input)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(result).To(Equal(int64(-1)))
+			})
+
+			It("should convert large string values to -1", func() {
+				input := "18446744073709552000" // Larger than MaxInt64
+				result, err := redpanda_monitor.ParseRedpandaIntegerlikeValue(input)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(result).To(Equal(int64(-1)))
+			})
+
+			It("should convert nil values to -1", func() {
+				var input interface{} = nil
+				result, err := redpanda_monitor.ParseRedpandaIntegerlikeValue(input)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(result).To(Equal(int64(-1)))
+			})
+
+			It("should convert negative values to -1", func() {
+				input := int64(-1)
+				result, err := redpanda_monitor.ParseRedpandaIntegerlikeValue(input)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(result).To(Equal(int64(-1)))
+			})
+
+			It("should handle values at MaxInt64 boundary correctly", func() {
+				input := int64(math.MaxInt64)
+				result, err := redpanda_monitor.ParseRedpandaIntegerlikeValue(input)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(result).To(Equal(int64(math.MaxInt64)))
+			})
+
+			It("should return error for unsupported types", func() {
+				input := struct{ name string }{"test"}
+				_, err := redpanda_monitor.ParseRedpandaIntegerlikeValue(input)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("unsupported value type"))
+			})
+		})
+	})
 })
