@@ -34,7 +34,7 @@ type Action interface {
 	// Validate validates the action payload, returns an error if something is wrong
 	Validate() error
 	// Execute executes the action, returns the result as an interface and an error if something went wrong
-	// It must not send the final action reply, as it is done by the caller.
+	// It must not send the final successfull action reply, as it is done by the caller.
 	Execute() (interface{}, map[string]interface{}, error)
 	// getUserEmail returns the user email of the action
 	getUserEmail() string

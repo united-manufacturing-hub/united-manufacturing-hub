@@ -424,7 +424,7 @@ var _ = Describe("DeployDataflowComponent", func() {
 			// Execute the action
 			result, metadata, err := action.Execute()
 			Expect(err).NotTo(HaveOccurred())
-			Expect(result).To(BeNil())
+			Expect(result).To(ContainSubstring("Successfully deployed data flow component"))
 			Expect(metadata).To(BeNil())
 
 			// We should have messages in the channel (Confirmed, then Success)
@@ -565,7 +565,7 @@ buffer:
 			// Execute the action
 			result, metadata, err := action.Execute()
 			Expect(err).NotTo(HaveOccurred())
-			Expect(result).To(BeNil())
+			Expect(result).To(ContainSubstring("Successfully deployed data flow component"))
 			Expect(metadata).To(BeNil())
 
 			// We should have messages in the channel (Confirmed, then Success)

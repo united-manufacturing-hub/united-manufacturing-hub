@@ -219,9 +219,9 @@ var _ = Describe("EditInstance", func() {
 			Expect(result).To(ContainSubstring("Successfully updated"))
 			Expect(metadata).To(BeNil())
 
-			// We should have 3 messages in the channel (Confirmed + Executing + Success)
+			// We should have 2 messages in the channel (Confirmed + Executing) (Success is not sent here)
 			var messages []*models.UMHMessage
-			for i := 0; i < 3; i++ {
+			for i := 0; i < 2; i++ {
 				select {
 				case msg := <-outboundChannel:
 					messages = append(messages, msg)
@@ -229,7 +229,7 @@ var _ = Describe("EditInstance", func() {
 					Fail("Timed out waiting for message")
 				}
 			}
-			Expect(messages).To(HaveLen(3))
+			Expect(messages).To(HaveLen(2))
 
 			// Verify GetConfig was called
 			Expect(mockConfig.GetConfigCalled).To(BeTrue())

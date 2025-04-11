@@ -110,7 +110,7 @@ func (a *EditInstanceAction) Validate() error {
 }
 
 func (a *EditInstanceAction) Execute() (interface{}, map[string]interface{}, error) {
-	a.actionLogger.Info("Executing EditInstance action")
+	a.actionLogger.Debug("Executing EditInstance action")
 
 	// Send confirmation that action is starting
 	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionConfirmed, "Starting EditInstance action", a.outboundChannel, models.EditInstance)
