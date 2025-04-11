@@ -403,7 +403,7 @@ func (a *DeployDataflowComponentAction) Execute() (interface{}, map[string]inter
 	successMsg := fmt.Sprintf("Successfully deployed data flow component: %s", a.name)
 	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedSuccessfull, successMsg, a.outboundChannel, models.DeployDataFlowComponent)
 
-	return nil, nil, nil
+	return successMsg, nil, nil
 }
 
 func (a *DeployDataflowComponentAction) getUserEmail() string {
