@@ -131,7 +131,7 @@ func createMockLogs(freBytes, totalBytes uint64, hasSpaceAlert bool, topics, una
 	return logs
 }
 
-var _ = FDescribe("RedpandaMonitor Service State Transitions", func() {
+var _ = Describe("RedpandaMonitor Service State Transitions", func() {
 	var (
 		mockS6Service  *s6service.MockService
 		mockFileSystem *filesystem.MockFileSystem
