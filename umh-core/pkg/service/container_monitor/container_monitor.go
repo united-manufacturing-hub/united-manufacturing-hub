@@ -339,8 +339,7 @@ func (c *ContainerMonitorService) getDiskMetrics(ctx context.Context) (*models.D
 			usedBytes = correctedUsed
 			totalBytes = correctedTotal
 		} else {
-			c.logger.Warnf("Failed to get macOS-adjusted disk metrics: %v", err)
-			return nil, err
+			return nil, fmt.Errorf("failed to get macOS-adjusted disk metrics: %w", err)
 		}
 	}
 
@@ -374,11 +373,14 @@ func (c *ContainerMonitorService) getDiskMetrics(ctx context.Context) (*models.D
 // getMacOSAdjustedDiskMetrics retrieves adjusted disk metrics using unix.Statfs.
 // It uses stat.Frsize when available, since on Docker Desktop for macOS the reported
 // Bsize is often 1024× larger than the actual block size.
+// We use unix.Statfs directly instead of relying on gopsutil's disk.Usage because:
+// 1. It gives us direct access to the Frsize field which is crucial for proper block size calculation
+// 2. gopsutil doesn't handle the Docker Desktop for macOS edge case correctly
 func (c *ContainerMonitorService) getMacOSAdjustedDiskMetrics() (usedBytes, totalBytes uint64, err error) {
 	var stat unix.Statfs_t
 	err = unix.Statfs(c.dataPath, &stat)
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, fmt.Errorf("failed to stat filesystem at %s: %w", c.dataPath, err)
 	}
 
 	// Use Frsize if available; it represents the fundamental block size for macOS.
