@@ -168,6 +168,8 @@ clean:
 
 # Clean up Docker build cache and unused objects for CI environments
 cleanup-ci: clean stop-all-containers
+	docker stop $(docker ps -a -q) || true
+	docker rm $(docker ps -a -q) || true
 	docker builder prune -f
 	docker system prune -f --volumes
 
