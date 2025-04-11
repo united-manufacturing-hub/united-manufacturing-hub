@@ -191,11 +191,6 @@ func (d *DataflowComponentInstance) UpdateObservedStateOfInstance(ctx context.Co
 	return nil
 }
 
-// IsDataflowComponentBenthosConfigChanged determines if the DataflowComponent's Benthos config has been changed or edited from the currently available config
-func (d *DataflowComponentInstance) IsDataflowComponentBenthosConfigChanged() bool {
-	return !dataflowcomponentconfig.ConfigsEqual(&d.config, d.ObservedState.ObservedDataflowComponentConfig)
-}
-
 // IsDataflowComponentBenthosRunning determines if the DataflowComponent's Benthos FSM is in running state.
 // Architecture Decision: We intentionally rely only on the FSM state, not the underlying
 // service implementation details. This maintains a clean separation of concerns where:
@@ -204,20 +199,35 @@ func (d *DataflowComponentInstance) IsDataflowComponentBenthosConfigChanged() bo
 // 3. Implementation details of how Benthos determines running state are encapsulated away
 //
 // Note: This function requires the BenthosFSMState to be updated in the ObservedState.
-func (d *DataflowComponentInstance) IsDataflowComponentBenthosActive() bool {
-	return d.ObservedState.ServiceInfo.BenthosFSMState == benthosfsm.OperationalStateActive
+func (d *DataflowComponentInstance) IsDataflowComponentBenthosRunning() bool {
+	switch d.ObservedState.ServiceInfo.BenthosFSMState {
+	// Consider Active and Idle as running states
+	case benthosfsm.OperationalStateActive, benthosfsm.OperationalStateIdle:
+		return true
+	}
+	return false
 }
 
-// IsDataflowComponentBenthosDegraded determines if the Dataflowcomponent's Benthos FSM is in the degraded state.
-// Note: This function requires the BenthosFSMState to be updated in the ObservedState.
-func (d *DataflowComponentInstance) IsDataflowComponentBenthosDegraded() bool {
-	return d.ObservedState.ServiceInfo.BenthosFSMState == benthosfsm.OperationalStateDegraded
+// HasBenthosStartupGracePeriodExpired determines if a non-running Benthos has exceeded its grace period
+// Returns true if the grace period has expired or false if still within the grace period
+// Only meaningful to call when IsBenthosRunning() returns false
+func (d *DataflowComponentInstance) HasBenthosStartupGracePeriodExpired(gracePeriod time.Duration) bool {
+	if d.ObservedState.NonRunningBenthosTimestamp.IsZero() {
+		// First observation of a non-running Benthos, start the timer
+		d.ObservedState.NonRunningBenthosTimestamp = time.Now()
+		return false
+	}
+
+	return time.Since(d.ObservedState.NonRunningBenthosTimestamp) > gracePeriod
 }
 
-// IsDataflowComponentBenthosStopped determines if the DataflowComponent's Benthos FSM is in stopped state.
-// We follow the same architectural principle as IsDataflowComponentBenthosRunning - relying solely
-// on the FSM state to maintain clean separation of concerns.
-//
+// ResetBenthosStartupGraceTimer explicitly resets the grace period timer
+// Call this when Benthos transitions back to running state
+func (d *DataflowComponentInstance) ResetBenthosStartupGraceTimer() {
+	d.ObservedState.NonRunningBenthosTimestamp = time.Time{}
+}
+
+// IsDataflowComponentBenthosStopped determines if the Dataflowcomponent's Benthos FSM is in the stopped state.
 // Note: This function requires the BenthosFSMState to be updated in the ObservedState.
 func (d *DataflowComponentInstance) IsDataflowComponentBenthosStopped() bool {
 	return d.ObservedState.ServiceInfo.BenthosFSMState == benthosfsm.OperationalStateStopped
@@ -227,7 +237,7 @@ func (d *DataflowComponentInstance) IsDataflowComponentBenthosStopped() bool {
 // These check everything that is checked during the starting phase
 // But it means that it once worked, and then degraded
 func (d *DataflowComponentInstance) IsDataflowComponentDegraded() bool {
-	return d.IsDataflowComponentBenthosDegraded()
+	return d.ObservedState.ServiceInfo.BenthosFSMState == benthosfsm.OperationalStateDegraded
 }
 
 // IsDataflowComponentWithProcessingActivity determines if the Benthos instance has active data processing

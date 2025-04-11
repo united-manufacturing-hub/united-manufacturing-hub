@@ -274,17 +274,22 @@ func (d *DataflowComponentInstance) reconcileStartingState(ctx context.Context, 
 
 	switch currentState {
 	case OperationalStateStarting:
-		// First we need to ensure the Benthos service is started
-		if !d.IsDataflowComponentBenthosActive() {
+		// First check if the undelying benthos is running
+		if d.IsDataflowComponentBenthosRunning() {
+			d.ResetBenthosStartupGraceTimer()
+			return d.baseFSMInstance.SendEvent(ctx, EventStartDone), true
+		}
+		// Benthos is not running, check if we've exceeded grace period
+		if d.HasBenthosStartupGracePeriodExpired(constants.WaitTimeBeforeMarkingStartFailed) {
+			// Grace period expired and Benthos still not running - mark as failed
 			return d.baseFSMInstance.SendEvent(ctx, EventStartFailed), true
 		}
-		return d.baseFSMInstance.SendEvent(ctx, EventStartDone), true
+		// Still within grace period, continue waiting until the next reconcile
 	case OperationalStateStartingFailed:
-		// When the state is Starting failed, look for benthos config changes. If yes Set the event as EventConfigChanged
-		// EventConfigChanged would initiate DFC stop
-		if d.IsDataflowComponentBenthosConfigChanged() {
-			return d.baseFSMInstance.SendEvent(ctx, EventConfigChanged), true
-		}
+	// Do not do anything here.
+	// The only way to get out of this state is to be removed and recreated by the manager when there is a config change.
+	// When the config is changed, the Manager will jump-in to recreate the DFC
+	// So, let's be stuck in this state for sometime
 	default:
 		return fmt.Errorf("invalid starting state: %s", currentState), false
 	}
@@ -328,26 +333,27 @@ func (d *DataflowComponentInstance) reconcileRunningState(ctx context.Context, f
 
 // reconcileTransitionToStopped handles transitions when the desired state is Stopped.
 // It deals with moving from any operational state to Stopping and then to Stopped.
-func (b *DataflowComponentInstance) reconcileTransitionToStopped(ctx context.Context, filesystemService filesystem.Service, currentState string) (err error, reconciled bool) {
+func (d *DataflowComponentInstance) reconcileTransitionToStopped(ctx context.Context, filesystemService filesystem.Service, currentState string) (err error, reconciled bool) {
 	start := time.Now()
 	defer func() {
-		metrics.ObserveReconcileTime(metrics.ComponentDataflowComponentInstance, b.baseFSMInstance.GetID()+".reconcileTransitionToStopped", time.Since(start))
+		metrics.ObserveReconcileTime(metrics.ComponentDataflowComponentInstance, d.baseFSMInstance.GetID()+".reconcileTransitionToStopped", time.Since(start))
 	}()
 
-	// If we're in any operational state except Stopped or Stopping, initiate stop
-	if currentState != OperationalStateStopped && currentState != OperationalStateStopping {
-		// Attempt to initiate a stop
-		if err := b.StopInstance(ctx, filesystemService); err != nil {
+	switch currentState {
+	case OperationalStateStopped:
+		// Already stopped, nothing to do more
+		return nil, false
+	case OperationalStateStopping:
+		if d.IsDataflowComponentBenthosStopped() {
+			// Transition from Stopping to Stopped
+			return d.baseFSMInstance.SendEvent(ctx, EventStopDone), true
+		}
+	default:
+		if err := d.StopInstance(ctx, filesystemService); err != nil {
 			return err, false
 		}
 		// Send event to transition to Stopping
-		return b.baseFSMInstance.SendEvent(ctx, EventStop), true
-	}
-
-	// If already stopping, verify if the instance is completely stopped
-	if currentState == OperationalStateStopping && b.IsDataflowComponentBenthosStopped() {
-		// Transition from Stopping to Stopped
-		return b.baseFSMInstance.SendEvent(ctx, EventStopDone), true
+		return d.baseFSMInstance.SendEvent(ctx, EventStop), true
 	}
 
 	return nil, false

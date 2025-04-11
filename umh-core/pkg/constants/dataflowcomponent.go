@@ -23,8 +23,13 @@ const (
 	DataflowComponentExpectedMaxP95ExecutionTimePerInstance = time.Millisecond * 50 // needs to be higher than BenthosExpectedMaxP95ExecutionTimePerInstance
 )
 
-
 const (
 	// Used to set the context timeout for updating the observed state of a DataflowComponent instance
 	DataflowComponentUpdateObservedStateTimeout = time.Millisecond * 5
+)
+
+const (
+	// WaitTimeBeforeMarkingStartFailed is the time before marking a DataflowComponent instance as Startfailed if the underlying benthos has not started and stable
+	// Default value is 5 seconds
+	WaitTimeBeforeMarkingStartFailed = time.Second * 5
 )

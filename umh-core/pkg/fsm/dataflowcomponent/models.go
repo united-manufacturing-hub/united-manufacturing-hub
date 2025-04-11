@@ -15,6 +15,8 @@
 package dataflowcomponent
 
 import (
+	"time"
+
 	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
 	dataflowcomponentconfig "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentconfig"
 	publicfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
@@ -82,6 +84,8 @@ type DataflowComponentObservedState struct {
 
 	// ObservedDataflowComponentConfig contains the observed DataflowComponent service config
 	ObservedDataflowComponentConfig *dataflowcomponentconfig.DataFlowComponentConfig
+	// NonRunningBenthosTimestamp is the first observed time when the underlying benthos was not in a valid runnning state
+	NonRunningBenthosTimestamp time.Time
 }
 
 // IsObservedState implements the ObservedState interface
