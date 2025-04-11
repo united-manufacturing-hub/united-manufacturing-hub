@@ -54,16 +54,16 @@ func (c *CommunicationState) InitialiseAndStartPuller() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.LoginResponse == nil {
-		sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "LoginResponse is nil, cannot start puller")
+		sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "LoginResponse is nil, cannot start puller")
 		return
 	}
 	if c.Watchdog == nil {
-		sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "Watchdog is nil, cannot start puller")
+		sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "Watchdog is nil, cannot start puller")
 		return
 	}
 	c.Puller = pull.NewPuller(c.LoginResponse.JWT, c.Watchdog, c.InboundChannel, c.InsecureTLS, c.ApiUrl, c.Logger)
 	if c.Puller == nil {
-		sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "Failed to create puller")
+		sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "Failed to create puller")
 	}
 	c.Puller.Start()
 }
@@ -73,16 +73,16 @@ func (c *CommunicationState) InitialiseAndStartPusher() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.LoginResponse == nil {
-		sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "LoginResponse is nil, cannot start pusher")
+		sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "LoginResponse is nil, cannot start pusher")
 		return
 	}
 	if c.Watchdog == nil {
-		sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "Watchdog is nil, cannot start pusher")
+		sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "Watchdog is nil, cannot start pusher")
 		return
 	}
 	c.Pusher = push.NewPusher(c.LoginResponse.UUID, c.LoginResponse.JWT, c.Watchdog, c.OutboundChannel, push.DefaultDeadLetterChanBuffer(), push.DefaultBackoffPolicy(), c.InsecureTLS, c.ApiUrl, c.Logger)
 	if c.Pusher == nil {
-		sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "Failed to create pusher")
+		sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "Failed to create pusher")
 	}
 	c.Pusher.Start()
 }
@@ -90,23 +90,23 @@ func (c *CommunicationState) InitialiseAndStartPusher() {
 // InitialiseAndStartRouter creates a new Router and starts it
 func (c *CommunicationState) InitialiseAndStartRouter() {
 	if c.Puller == nil {
-		sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "Puller is nil, cannot start router")
+		sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "Puller is nil, cannot start router")
 		return
 	}
 	if c.Pusher == nil {
-		sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "Pusher is nil, cannot start router")
+		sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "Pusher is nil, cannot start router")
 		return
 	}
 	if c.LoginResponse == nil {
-		sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "LoginResponse is nil, cannot start router")
+		sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "LoginResponse is nil, cannot start router")
 		return
 	}
 
 	c.mu.Lock()
-	c.Router = router.NewRouter(c.Watchdog, c.InboundChannel, c.LoginResponse.UUID, c.OutboundChannel, c.ReleaseChannel, c.SubscriberHandler, c.SystemSnapshot, c.ConfigManager)
+	c.Router = router.NewRouter(c.Watchdog, c.InboundChannel, c.LoginResponse.UUID, c.OutboundChannel, c.ReleaseChannel, c.SubscriberHandler, c.SystemSnapshot, c.ConfigManager, c.Logger)
 	c.mu.Unlock()
 	if c.Router == nil {
-		sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "Failed to create router")
+		sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "Failed to create router")
 	}
 	c.Router.Start()
 }
@@ -119,20 +119,20 @@ func (s *CommunicationState) InitialiseAndStartSubscriberHandler(ttl time.Durati
 	defer s.mu.Unlock()
 
 	if s.Watchdog == nil {
-		sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "Watchdog is nil, cannot start subscriber handler")
+		sentry.ReportIssuef(sentry.IssueTypeError, s.Logger, "Watchdog is nil, cannot start subscriber handler")
 		return
 	}
 
 	if s.Pusher == nil {
-		sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "Pusher is nil, cannot start subscriber handler")
+		sentry.ReportIssuef(sentry.IssueTypeError, s.Logger, "Pusher is nil, cannot start subscriber handler")
 		return
 	}
 	if s.LoginResponse == nil {
-		sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "LoginResponse is nil, cannot start subscriber handler")
+		sentry.ReportIssuef(sentry.IssueTypeError, s.Logger, "LoginResponse is nil, cannot start subscriber handler")
 		return
 	}
 	if config == nil {
-		sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "Config is nil, cannot start subscriber handler")
+		sentry.ReportIssuef(sentry.IssueTypeError, s.Logger, "Config is nil, cannot start subscriber handler")
 		return
 	}
 
@@ -147,9 +147,10 @@ func (s *CommunicationState) InitialiseAndStartSubscriberHandler(ttl time.Durati
 		state,
 		systemMu,
 		configManager,
+		s.Logger,
 	)
 	if s.SubscriberHandler == nil {
-		sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "Failed to create subscriber handler")
+		sentry.ReportIssuef(sentry.IssueTypeError, s.Logger, "Failed to create subscriber handler")
 	}
 	s.SubscriberHandler.StartNotifier()
 }

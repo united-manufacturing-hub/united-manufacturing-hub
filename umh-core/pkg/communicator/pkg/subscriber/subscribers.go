@@ -44,6 +44,7 @@ type Handler struct {
 	disableHardwareStatusCheck bool
 	state                      *fsm.SystemSnapshot
 	configManager              config.ConfigManager
+	logger                     *zap.SugaredLogger
 }
 
 func NewHandler(
@@ -57,6 +58,7 @@ func NewHandler(
 	state *fsm.SystemSnapshot,
 	systemMu *sync.Mutex,
 	configManager config.ConfigManager,
+	logger *zap.SugaredLogger,
 ) *Handler {
 	s := &Handler{}
 	s.subscribers = expiremap.NewEx[string, string](cull, ttl)
@@ -65,11 +67,13 @@ func NewHandler(
 	s.instanceUUID = instanceUUID
 	s.state = state
 	s.configManager = configManager
+	s.logger = logger
 	s.StatusCollector = generator.NewStatusCollector(
 		dog,
 		state,
 		systemMu,
 		configManager,
+		logger,
 	)
 
 	return s
@@ -80,8 +84,6 @@ func (s *Handler) StartNotifier() {
 }
 
 func (s *Handler) AddSubscriber(identifier string) {
-
-	// zap.S().Debugf("Adding subscriber %s", identifier)
 	s.subscribers.Set(identifier, identifier)
 	s.dog.SetHasSubscribers(true)
 }
@@ -114,7 +116,6 @@ func (s *Handler) notifySubscribers() {
 func (s *Handler) notify() {
 	s.dog.SetHasSubscribers(s.subscribers.Length() > 0)
 	if s.subscribers.Length() == 0 {
-		//		zap.S().Debugf("No subscribers")
 		return
 	}
 
@@ -122,11 +123,11 @@ func (s *Handler) notify() {
 	statusMessage := s.StatusCollector.GenerateStatusMessage()
 	if ctx.Err() != nil {
 		// It is expected that the first 1-2 times this might fail, due to the systems starting up
-		zap.S().Warnf("Failed to generate status message: %s", ctx.Err().Error())
+		s.logger.Warnf("Failed to generate status message: %s", ctx.Err().Error())
 		return
 	}
 	if statusMessage == nil {
-		zap.S().Warnf("Failed to generate status message")
+		s.logger.Warnf("Failed to generate status message")
 		return
 	}
 
@@ -138,7 +139,7 @@ func (s *Handler) notify() {
 			Payload:     statusMessage,
 		})
 		if err != nil {
-			zap.S().Warnf("Failed to encrypt message for subscriber %s", key)
+			s.logger.Warnf("Failed to encrypt message for subscriber %s", key)
 			return true
 		}
 		s.pusher.Push(models.UMHMessage{
@@ -146,10 +147,9 @@ func (s *Handler) notify() {
 			Email:        key,
 			InstanceUUID: s.instanceUUID,
 		})
-		// zap.S().Debugf("Notified subscriber %s", key)
 		notified++
 		return true
 	})
-	zap.S().Debugf("Notified %d subscribers", notified)
+	s.logger.Debugf("Notified %d subscribers", notified)
 	cncl()
 }

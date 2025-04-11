@@ -249,6 +249,7 @@ test-comm: clean build
 		--memory $(MEMORY) \
 		--cpus $(CPUS) \
 		-e AUTH_TOKEN=$(AUTH_TOKEN) \
+		-e LOCATION_0=$(LOCATION_0) \
 		-e LOGGING_LEVEL=DEBUG \
 		$(IMAGE_NAME):$(TAG)
 

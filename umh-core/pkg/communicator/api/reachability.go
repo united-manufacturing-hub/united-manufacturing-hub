@@ -24,7 +24,6 @@ import (
 
 // CheckIfAPIIsReachable checks if the management.umh.app/api endpoint is reachable
 func CheckIfAPIIsReachable(insecureTLS bool, apiURL string, logger *zap.SugaredLogger) bool {
-	// zap.S().Debugf("Checking reachability of API at %s", http2.GetBaseUrl())
 	baseUrl := apiURL
 
 	// Copy the default transport to avoid modifying it (and then modify the copy)

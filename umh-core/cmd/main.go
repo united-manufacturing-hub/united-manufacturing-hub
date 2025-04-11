@@ -126,19 +126,19 @@ func main() {
 	systemSnapshot := new(fsm.SystemSnapshot)
 	systemMu := new(sync.Mutex)
 	communicationState := communication_state.CommunicationState{
-		Watchdog:        watchdog.NewWatchdog(ctx, time.NewTicker(time.Second*10), true),
+		Watchdog:        watchdog.NewWatchdog(ctx, time.NewTicker(time.Second*10), true, logger.For(logger.ComponentCommunicator)),
 		InboundChannel:  make(chan *models.UMHMessage, 100),
 		OutboundChannel: make(chan *models.UMHMessage, 100),
 		ReleaseChannel:  configData.Agent.ReleaseChannel,
 		SystemSnapshot:  systemSnapshot,
 		ConfigManager:   configManager,
 		ApiUrl:          apiUrl,
-		Logger:          logger.For("communication_state"),
+		Logger:          logger.For(logger.ComponentCommunicator),
 	}
 	go SystemSnapshotLogger(ctx, controlLoop, systemSnapshot, systemMu)
 
 	if configData.Agent.CommunicatorConfig.APIURL != "" && configData.Agent.CommunicatorConfig.AuthToken != "" {
-		enableBackendConnection(&configData, systemSnapshot, &communicationState, systemMu, controlLoop)
+		enableBackendConnection(&configData, systemSnapshot, &communicationState, systemMu, controlLoop, communicationState.Logger)
 	} else {
 		log.Warnf("No backend connection enabled, please set API_URL and AUTH_TOKEN")
 	}
@@ -206,11 +206,7 @@ func SystemSnapshotLogger(ctx context.Context, controlLoop *control.ControlLoop,
 	}
 }
 
-func enableBackendConnection(config *config.FullConfig, state *fsm.SystemSnapshot, communicationState *communication_state.CommunicationState, systemMu *sync.Mutex, controlLoop *control.ControlLoop) {
-	logger := logger.For("enableBackendConnection")
-	if logger == nil {
-		logger = zap.NewNop().Sugar()
-	}
+func enableBackendConnection(config *config.FullConfig, state *fsm.SystemSnapshot, communicationState *communication_state.CommunicationState, systemMu *sync.Mutex, controlLoop *control.ControlLoop, logger *zap.SugaredLogger) {
 
 	logger.Info("Enabling backend connection")
 	// directly log the config to console, not to the logger

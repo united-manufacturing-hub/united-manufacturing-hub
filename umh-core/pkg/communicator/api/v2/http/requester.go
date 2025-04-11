@@ -183,16 +183,16 @@ func processCookies(response *http.Response, cookies *map[string]string) {
 }
 
 // processLatencyHeaders handles X-Response-Time header processing and latency calculations
-func processLatencyHeaders(response *http.Response, timeTillFirstByte time.Duration) {
+func processLatencyHeaders(response *http.Response, timeTillFirstByte time.Duration, logger *zap.SugaredLogger) {
 	xResponseTime := response.Header.Get("X-Response-Time")
 	if xResponseTime == "" {
-		zap.S().Warn("X-Response-Time header not found")
+		logger.Warn("X-Response-Time header not found")
 		return
 	}
 
 	elapsedTime, err := time.ParseDuration(xResponseTime + "ns")
 	if err != nil {
-		zap.S().Warnf("Failed to parse X-Response-Time header: %s", xResponseTime)
+		logger.Warnf("Failed to parse X-Response-Time header: %s", xResponseTime)
 		return
 	}
 
@@ -273,7 +273,7 @@ func GetRequest[R any](ctx context.Context, endpoint Endpoint, header map[string
 	latenciesTLS.Set(now, timings.tls)
 	latenciesConn.Set(now, timings.conn)
 
-	processLatencyHeaders(response, timings.firstByte)
+	processLatencyHeaders(response, timings.firstByte, logger)
 
 	// Read and process response
 	bodyBytes, err := io.ReadAll(response.Body)

@@ -59,11 +59,7 @@ type Action interface {
 // After execution, it handles sending the success reply if the action completed successfully.
 // Error handling for each step is done within this function.
 func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePayload, sender string, outboundChannel chan *models.UMHMessage, releaseChannel config.ReleaseChannel, dog watchdog.Iface, traceID uuid.UUID, systemSnapshot *fsm.SystemSnapshot, configManager config.ConfigManager) {
-	log := logger.For(logger.ComponentCommunicatorActions)
-	if log == nil {
-		sentry.ReportIssuef(sentry.IssueTypeError, logger.For(logger.ComponentCommunicatorActions), "Logger initialization failed during action handling")
-		return
-	}
+	log := logger.For(logger.ComponentCommunicator)
 
 	// Start a new transaction for this action
 	log.Debugf("Handling action message: Type: %s, Payload: %v", payload.ActionType, payload.ActionPayload)
@@ -148,11 +144,9 @@ func SendActionReply(instanceUUID uuid.UUID, userEmail string, actionUUID uuid.U
 // This is the primary method for sending action status messages to users, and is
 // used for confirmation, progress updates, success, and failure notifications.
 func SendActionReplyWithAdditionalContext(instanceUUID uuid.UUID, userEmail string, actionUUID uuid.UUID, arstate models.ActionReplyState, payload interface{}, outboundChannel chan *models.UMHMessage, action models.ActionType, actionContext map[string]interface{}) bool {
-	// zap.S().Debugf("SendingActionReply [InstanceUUID: %s, UserEmail: %s, ActionUUID: %s, ActionReplyState: %s, Payload: %v]", instanceUUID, userEmail, actionUUID, arstate, payload)
-
 	err := sendActionReplyInternal(instanceUUID, userEmail, actionUUID, arstate, payload, outboundChannel, actionContext)
 	if err != nil {
-		sentry.ReportIssuef(sentry.IssueTypeError, logger.For(logger.ComponentCommunicatorActions), "Error generating action reply: %w", err)
+		sentry.ReportIssuef(sentry.IssueTypeError, logger.For(logger.ComponentCommunicator), "Error generating action reply: %w", err)
 		return false
 	}
 	return true
@@ -180,7 +174,7 @@ func sendActionReplyInternal(instanceUUID uuid.UUID, userEmail string, actionUUI
 		})
 	}
 	if err != nil {
-		sentry.ReportIssuef(sentry.IssueTypeError, logger.For(logger.ComponentCommunicatorActions), "Error generating umh message: %v", err)
+		sentry.ReportIssuef(sentry.IssueTypeError, logger.For(logger.ComponentCommunicator), "Error generating umh message: %v", err)
 		return err
 	}
 	outboundChannel <- &umhMessage

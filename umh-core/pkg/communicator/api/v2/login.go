@@ -29,7 +29,6 @@ import (
 
 // login logs in to the API and returns a JWT token, UUID & the instance name
 func login(token string, insecureTLS bool, apiURL string, logger *zap.SugaredLogger) (*LoginResponse, error) {
-	//	zap.S().Debugf("Attempting to login with: %s", token)
 	var cookieMap map[string]string
 	cookieMap = make(map[string]string)
 	request, err, status := http.PostRequest[backend_api_structs.InstanceLoginResponse, any](context.Background(), http.LoginEndpoint, nil, map[string]string{

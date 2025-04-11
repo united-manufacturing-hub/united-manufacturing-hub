@@ -22,7 +22,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/encoding"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/subscriber"
@@ -60,6 +59,7 @@ func NewRouter(dog watchdog.Iface,
 	subHandler *subscriber.Handler,
 	systemSnapshot *fsm.SystemSnapshot,
 	configManager config.ConfigManager,
+	logger *zap.SugaredLogger,
 ) *Router {
 	return &Router{
 		dog:                   dog,
@@ -72,8 +72,8 @@ func NewRouter(dog watchdog.Iface,
 		subHandler:            subHandler,
 		systemSnapshot:        systemSnapshot,
 		configManager:         configManager,
-		actionLogger:          logger.For(logger.ComponentCommunicatorActions),
-		routerLogger:          logger.For(logger.ComponentCommunicatorRouter),
+		actionLogger:          logger,
+		routerLogger:          logger,
 	}
 }
 

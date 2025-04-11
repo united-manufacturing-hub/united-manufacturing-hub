@@ -128,7 +128,7 @@ var _ = Describe("Subscribe and Receive Test", func() {
 		systemSnapshot.Managers["ContainerManager_Core"] = containerManagerSnapshot
 
 		// Initialize watchdog
-		dog = watchdog.NewWatchdog(ctx, time.NewTicker(1*time.Second), false)
+		dog = watchdog.NewWatchdog(ctx, time.NewTicker(1*time.Second), false, logger.For(logger.ComponentCommunicator))
 
 		// Create login response
 		login = &v2.LoginResponse{
@@ -186,6 +186,7 @@ var _ = Describe("Subscribe and Receive Test", func() {
 			systemSnapshot,
 			systemMu,
 			config.NewMockConfigManager(),
+			logger.For(logger.ComponentCommunicator),
 		)
 		subHandler.StartNotifier()
 

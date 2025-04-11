@@ -47,6 +47,5 @@ const (
 	ComponentConfigManager = "ConfigManager"
 
 	// Communicator components
-	ComponentCommunicatorRouter  = "CommunicatorRouter"
-	ComponentCommunicatorActions = "CommunicatorActions"
+	ComponentCommunicator = "Communicator"
 )

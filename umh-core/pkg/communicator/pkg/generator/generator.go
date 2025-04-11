@@ -46,7 +46,7 @@ type StatusCollectorType struct {
 	dog           watchdog.Iface
 	state         *fsm.SystemSnapshot
 	systemMu      *sync.Mutex
-	logger        *zap.Logger
+	logger        *zap.SugaredLogger
 	configManager config.ConfigManager
 }
 
@@ -62,9 +62,8 @@ func NewStatusCollector(
 	state *fsm.SystemSnapshot,
 	systemMu *sync.Mutex,
 	configManager config.ConfigManager,
+	logger *zap.SugaredLogger,
 ) *StatusCollectorType {
-
-	logger := logger.New("generator.NewStatusCollector", logger.FormatJSON)
 
 	latestData := &LatestData{}
 
@@ -89,7 +88,7 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 	defer s.systemMu.Unlock()
 
 	if s.state == nil {
-		sentry.ReportIssuef(sentry.IssueTypeError, s.logger.Sugar(), "[GenerateStatusMessage] State is nil, using empty state")
+		sentry.ReportIssuef(sentry.IssueTypeError, s.logger, "[GenerateStatusMessage] State is nil, using empty state")
 		s.logger.Error("State is nil, using empty state")
 		return nil
 	}
@@ -240,7 +239,7 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 }
 
 // buildContainerDataFromSnapshot creates container data from a FSM instance snapshot
-func buildContainerDataFromSnapshot(instance fsm.FSMInstanceSnapshot, log *zap.Logger) models.Container {
+func buildContainerDataFromSnapshot(instance fsm.FSMInstanceSnapshot, log *zap.SugaredLogger) models.Container {
 	// Try to get observed state from instance
 	containerData := buildDefaultContainerData()
 

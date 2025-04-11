@@ -58,7 +58,7 @@ func NewDeployDataflowComponentAction(userEmail string, actionUUID uuid.UUID, in
 		instanceUUID:    instanceUUID,
 		outboundChannel: outboundChannel,
 		configManager:   configManager,
-		actionLogger:    logger.For(logger.ComponentCommunicatorActions),
+		actionLogger:    logger.For(logger.ComponentCommunicator),
 	}
 }
 
