@@ -555,6 +555,13 @@ func ParseMetrics(dataReader io.Reader) (Metrics, error) {
 			TopicPartitionMap: make(map[string]int64), // Pre-allocate map to avoid nil check later
 		},
 	}
+	// For debugging, read the dataReader into a string
+	data, err := io.ReadAll(dataReader)
+	if err != nil {
+		return metrics, fmt.Errorf("failed to read metrics data: %w", err)
+	}
+	dataReader = bytes.NewReader(data)
+
 	// Parse the metrics text into prometheus format
 	mf, err := parser.TextToMetricFamilies(dataReader)
 	if err != nil {

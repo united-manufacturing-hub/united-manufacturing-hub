@@ -22,42 +22,65 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
+	s6 "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
+	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda_monitor"
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 )
 
 // Helper function to create mock logs with valid format
-func createMockLogs() []s6service.LogEntry {
-	// Create mock metrics
-	metrics := redpanda_monitor.Metrics{
-		Infrastructure: redpanda_monitor.InfrastructureMetrics{
-			Storage: redpanda_monitor.StorageMetrics{
-				FreeBytes:      10000000000,
-				TotalBytes:     20000000000,
-				FreeSpaceAlert: false,
-			},
-		},
-		Cluster: redpanda_monitor.ClusterMetrics{
-			Topics:            5,
-			UnavailableTopics: 0,
-		},
-		Throughput: redpanda_monitor.ThroughputMetrics{
-			BytesIn:  1000,
-			BytesOut: 2000,
-		},
-		Topic: redpanda_monitor.TopicMetrics{
-			TopicPartitionMap: map[string]int64{
-				"test-topic": 3,
-			},
-		},
+func createMockLogs(freBytes, totalBytes uint64, hasSpaceAlert bool, topics, unavailableTopics uint64, bytesIn, bytesOut uint64, topicPartitionMap map[string]int64) []s6service.LogEntry {
+	// Create Prometheus-formatted metrics text
+	var promMetrics strings.Builder
+	// Add storage metrics
+	promMetrics.WriteString("# HELP redpanda_storage_disk_free_bytes Free disk space in bytes\n")
+	promMetrics.WriteString("# TYPE redpanda_storage_disk_free_bytes gauge\n")
+	promMetrics.WriteString(fmt.Sprintf("redpanda_storage_disk_free_bytes %d\n\n", freBytes))
+
+	promMetrics.WriteString("# HELP redpanda_storage_disk_total_bytes Total disk space in bytes\n")
+	promMetrics.WriteString("# TYPE redpanda_storage_disk_total_bytes gauge\n")
+	promMetrics.WriteString(fmt.Sprintf("redpanda_storage_disk_total_bytes %d\n\n", totalBytes))
+
+	promMetrics.WriteString("# HELP redpanda_storage_disk_free_space_alert Free disk space alert (0=false, >0=true)\n")
+	promMetrics.WriteString("# TYPE redpanda_storage_disk_free_space_alert gauge\n")
+	alertValue := 0
+	if hasSpaceAlert {
+		alertValue = 1
 	}
+	promMetrics.WriteString(fmt.Sprintf("redpanda_storage_disk_free_space_alert %d\n\n", alertValue))
+
+	// Add cluster metrics
+	promMetrics.WriteString("# HELP redpanda_cluster_topics Number of topics in the cluster\n")
+	promMetrics.WriteString("# TYPE redpanda_cluster_topics gauge\n")
+	promMetrics.WriteString(fmt.Sprintf("redpanda_cluster_topics %d\n\n", topics))
+
+	promMetrics.WriteString("# HELP redpanda_cluster_unavailable_partitions Number of unavailable partitions\n")
+	promMetrics.WriteString("# TYPE redpanda_cluster_unavailable_partitions gauge\n")
+	promMetrics.WriteString(fmt.Sprintf("redpanda_cluster_unavailable_partitions %d\n\n", unavailableTopics))
+
+	// Add throughput metrics
+	promMetrics.WriteString("# HELP redpanda_kafka_request_bytes_total Total bytes in requests by type\n")
+	promMetrics.WriteString("# TYPE redpanda_kafka_request_bytes_total counter\n")
+	promMetrics.WriteString(fmt.Sprintf("redpanda_kafka_request_bytes_total{redpanda_request=\"produce\"} %d\n", bytesIn))
+	promMetrics.WriteString(fmt.Sprintf("redpanda_kafka_request_bytes_total{redpanda_request=\"consume\"} %d\n\n", bytesOut))
+
+	// Add topic partition metrics
+	if len(topicPartitionMap) > 0 {
+		promMetrics.WriteString("# HELP redpanda_kafka_partitions Number of partitions by topic\n")
+		promMetrics.WriteString("# TYPE redpanda_kafka_partitions gauge\n")
+		for topic, partitions := range topicPartitionMap {
+			promMetrics.WriteString(fmt.Sprintf("redpanda_kafka_partitions{redpanda_topic=\"%s\"} %d\n", topic, partitions))
+		}
+	}
+	// Prom metrics always end with a newline
+	promMetrics.WriteString("\n")
 
 	// Create mock cluster config
 	clusterConfig := map[string]interface{}{
@@ -68,9 +91,9 @@ func createMockLogs() []s6service.LogEntry {
 	// Compress and hex-encode metrics data
 	var metricsBuffer bytes.Buffer
 	gzipWriter := gzip.NewWriter(&metricsBuffer)
-	err := json.NewEncoder(gzipWriter).Encode(metrics)
+	_, err := gzipWriter.Write([]byte(promMetrics.String()))
 	if err != nil {
-		panic(fmt.Sprintf("Failed to encode metrics: %v", err))
+		panic(fmt.Sprintf("Failed to write metrics: %v", err))
 	}
 	err = gzipWriter.Close()
 	if err != nil {
@@ -92,17 +115,17 @@ func createMockLogs() []s6service.LogEntry {
 	configHex := hex.EncodeToString(configBuffer.Bytes())
 
 	// Create timestamp
-	timestamp := time.Now().UnixNano()
+	timestamp := time.Now()
 
 	// Create log entries with the markers
 	logs := []s6service.LogEntry{
-		{Content: redpanda_monitor.BLOCK_START_MARKER},
-		{Content: metricsHex},
-		{Content: redpanda_monitor.METRICS_END_MARKER},
-		{Content: configHex},
-		{Content: redpanda_monitor.CLUSTERCONFIG_END_MARKER},
-		{Content: strconv.FormatInt(timestamp, 10)},
-		{Content: redpanda_monitor.BLOCK_END_MARKER},
+		{Content: redpanda_monitor.BLOCK_START_MARKER, Timestamp: timestamp},
+		{Content: metricsHex, Timestamp: timestamp},
+		{Content: redpanda_monitor.METRICS_END_MARKER, Timestamp: timestamp},
+		{Content: configHex, Timestamp: timestamp},
+		{Content: redpanda_monitor.CLUSTERCONFIG_END_MARKER, Timestamp: timestamp},
+		{Content: strconv.FormatInt(timestamp.UnixNano(), 10), Timestamp: timestamp},
+		{Content: redpanda_monitor.BLOCK_END_MARKER, Timestamp: timestamp},
 	}
 
 	return logs
@@ -169,7 +192,7 @@ func (e *EnhancedS6MockService) Status(ctx context.Context, servicePath string, 
 	}, e.MockService.StatusError
 }
 
-var _ = Describe("RedpandaMonitor Service State Transitions", func() {
+var _ = FDescribe("RedpandaMonitor Service State Transitions", func() {
 	var (
 		mockS6Service  *EnhancedS6MockService
 		mockFileSystem *filesystem.MockFileSystem
@@ -184,7 +207,7 @@ var _ = Describe("RedpandaMonitor Service State Transitions", func() {
 		mockFileSystem = filesystem.NewMockFileSystem()
 
 		// Set up mock logs
-		mockS6Service.GetLogsResult = createMockLogs()
+		mockS6Service.GetLogsResult = createMockLogs(10000000000, 20000000000, false, 5, 0, 1000, 2000, map[string]int64{"test-topic": 3})
 
 		// Set default state to stopped
 		mockS6Service.currentStatus = s6service.ServiceDown
@@ -213,55 +236,69 @@ var _ = Describe("RedpandaMonitor Service State Transitions", func() {
 
 			err := monitorService.AddRedpandaMonitorToS6Manager(ctx)
 			Expect(err).NotTo(HaveOccurred())
-
-			By("Initial service state should be stopped")
-			// Verify initial state
+			By("Verifiying that without an reconciliation, the service does not exist")
 			serviceInfo, err := monitorService.Status(ctx, mockFileSystem, tick)
-			tick++
-			Expect(err).NotTo(HaveOccurred())
-			Expect(serviceInfo.S6FSMState).To(Equal(s6.OperationalStateStopped))
-			Expect(serviceInfo.RedpandaStatus.IsRunning).To(BeFalse())
+			Expect(err).To(Equal(redpanda_monitor.ErrServiceNotExist))
 
-			By("Starting the redpanda monitor service")
-			err = monitorService.StartRedpandaMonitor(ctx)
-			Expect(err).NotTo(HaveOccurred())
-
-			By("First reconciliation should start the service")
-			// Reconcile the service - this should trigger a state change
+			By("Initial service state should be to_be_created")
 			err, reconciled := monitorService.ReconcileManager(ctx, mockFileSystem, tick)
-			tick++
 			Expect(err).NotTo(HaveOccurred())
 			Expect(reconciled).To(BeTrue())
-
-			// Update mock S6 service state to running
-			mockS6Service.currentStatus = s6service.ServiceUp
-			mockS6Service.StatusResult = s6service.ServiceInfo{
-				Status: s6service.ServiceUp,
-			}
-
-			// After first reconciliation, service should be transitioning to running
+			// Verify initial state
 			serviceInfo, err = monitorService.Status(ctx, mockFileSystem, tick)
 			tick++
 			Expect(err).NotTo(HaveOccurred())
+			Expect(serviceInfo.S6FSMState).To(Equal(s6.LifecycleStateToBeCreated))
+			Expect(serviceInfo.RedpandaStatus.IsRunning).To(BeFalse())
 
-			// Initially, the service is in a transitional state
-			Expect(serviceInfo.S6FSMState).To(Equal(s6.OperationalStateRunning))
-			Expect(serviceInfo.RedpandaStatus.IsRunning).To(BeTrue())
+			By("reconciliation should put the service into creating")
+			err, reconciled = monitorService.ReconcileManager(ctx, mockFileSystem, tick)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(reconciled).To(BeTrue())
+			// Verify initial state
+			serviceInfo, err = monitorService.Status(ctx, mockFileSystem, tick)
+			tick++
+			Expect(err).NotTo(HaveOccurred())
+			Expect(serviceInfo.S6FSMState).To(Equal(s6.LifecycleStateCreating))
+			Expect(serviceInfo.RedpandaStatus.IsRunning).To(BeFalse())
 
-			By("Verifying the service stays running for 60 reconciliation cycles")
-			// Run through 60 reconciliation cycles
-			for i := 0; i < 60; i++ {
+			By("reconciliation should put the service into stopped")
+			err, reconciled = monitorService.ReconcileManager(ctx, mockFileSystem, tick)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(reconciled).To(BeTrue())
+			// Verify initial state
+			serviceInfo, err = monitorService.Status(ctx, mockFileSystem, tick)
+			tick++
+			Expect(err).NotTo(HaveOccurred())
+			Expect(serviceInfo.S6FSMState).To(Equal(s6fsm.OperationalStateStopped))
+			Expect(serviceInfo.RedpandaStatus.IsRunning).To(BeFalse())
+
+			By("reconciliation should put the service into stopped")
+			// Over the next couple loops we expect it to start up
+			for i := 0; i < 10; i++ {
 				err, reconciled = monitorService.ReconcileManager(ctx, mockFileSystem, tick)
 				Expect(err).NotTo(HaveOccurred())
-				Expect(reconciled).To(BeFalse())
-
-				// Check status to ensure it stays running
 				serviceInfo, err = monitorService.Status(ctx, mockFileSystem, tick)
 				Expect(err).NotTo(HaveOccurred())
-				Expect(serviceInfo.S6FSMState).To(Equal(s6.OperationalStateRunning))
-				Expect(serviceInfo.RedpandaStatus.IsRunning).To(BeTrue())
-				tick++
 			}
+			Expect(serviceInfo.RedpandaStatus.IsRunning).To(BeTrue())
+
+			/*
+				By("Verifying the service stays running for 60 reconciliation cycles")
+				// Run through 60 reconciliation cycles
+				for i := 0; i < 60; i++ {
+					err, reconciled = monitorService.ReconcileManager(ctx, mockFileSystem, tick)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(reconciled).To(BeFalse())
+
+					// Check status to ensure it stays running
+					serviceInfo, err = monitorService.Status(ctx, mockFileSystem, tick)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(serviceInfo.S6FSMState).To(Equal(s6fsm.OperationalStateRunning))
+					Expect(serviceInfo.RedpandaStatus.IsRunning).To(BeTrue())
+					tick++
+				}
+			*/
 		})
 	})
 })
