@@ -15,11 +15,7 @@
 package generator
 
 import (
-	"context"
-	"fmt"
-	"math/rand"
 	"sync"
-	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
@@ -113,126 +109,56 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 		containerData = buildDefaultContainerData()
 	}
 
-	// Get the actual location from the system configuration
-	location := map[int]string{}
-
-	// Try to get the location from the config manager first
-	if s.configManager != nil {
-		// Create a context with a short timeout for getting the config
-		ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
-		defer cancel()
-
-		// Get the current config
-		cfg, err := s.configManager.GetConfig(ctx, 0)
-		if err == nil {
-			location = cfg.Agent.Location
-		} else {
-			s.logger.Warn("Failed to get location from config manager", zap.Error(err))
-		}
-	}
-
-	// Create a mocked status message
+	// Create the status message
 	statusMessage := &models.StatusMessage{
 		Core: models.Core{
 			Agent: models.Agent{
 				Health: &models.Health{
-					Message:       fmt.Sprintf("Agent is healthy, tick: %d", s.state.Tick),
-					ObservedState: "running",
+					Message:       "agent monitoring is not implemented yet",
+					ObservedState: "n/a",
 					DesiredState:  "running",
-					Category:      models.Active,
+					Category:      models.Neutral,
 				},
-				Latency: &models.Latency{
-					AvgMs: 10.5,
-					MaxMs: 25.0,
-					MinMs: 5.0,
-					P95Ms: float64(rand.Intn(91) + 10),
-					P99Ms: 22.8,
-				},
-				Location: location, // Use the actual location from config
+				Latency:  &models.Latency{},
+				Location: map[int]string{}, // TODO: fetch from observed state
 			},
 			Container: containerData,
-			Dfcs: []models.Dfc{
-				{
-					Name: stringPtr("Data Bridge 1"),
-					UUID: "dfc-uuid-12345",
-					Type: models.DfcTypeDataBridge,
-					Health: &models.Health{
-						Message:       "DFC is operating normally",
-						ObservedState: "running",
-						DesiredState:  "running",
-						Category:      models.Active,
-					},
-					Metrics: &models.DfcMetrics{
-						AvgInputThroughputPerMinuteInMsgSec: float64(rand.Intn(91) + 10),
-					},
-					Bridge: &models.DfcBridgeInfo{
-						DataContract: "sensor-v1",
-						InputType:    "mqtt",
-						OutputType:   "kafka",
-					},
-					Connections: []models.Connection{
-						{
-							Name: "MQTT Input",
-							UUID: "conn-uuid-1",
-							Health: &models.Health{
-								Message:       "Connection is active",
-								ObservedState: "connected",
-								DesiredState:  "connected",
-								Category:      models.Active,
-							},
-							URI:           "mqtt://broker:1883",
-							LastLatencyMs: 5.2,
-						},
-						{
-							Name: "Kafka Output",
-							UUID: "conn-uuid-2",
-							Health: &models.Health{
-								Message:       "Connection is active",
-								ObservedState: "connected",
-								DesiredState:  "connected",
-								Category:      models.Active,
-							},
-							URI:           "kafka://kafka:9092",
-							LastLatencyMs: 8.1,
-						},
-					},
-				},
-			},
+			Dfcs:      []models.Dfc{},
 			Redpanda: models.Redpanda{
 				Health: &models.Health{
-					Message:       "Redpanda is operating normally",
-					ObservedState: "running",
+					Message:       "redpanda monitoring is not implemented yet",
+					ObservedState: "n/a",
 					DesiredState:  "running",
-					Category:      models.Active,
+					Category:      models.Neutral,
 				},
-				AvgIncomingThroughputPerMinuteInMsgSec: 150.5,
-				AvgOutgoingThroughputPerMinuteInMsgSec: 120.3,
+				AvgIncomingThroughputPerMinuteInMsgSec: 0,
+				AvgOutgoingThroughputPerMinuteInMsgSec: 0,
 			},
-			UnifiedNamespace: models.UnifiedNamespace{
-				EventsTable: map[string]models.EventsTable{
-					"event1": s.latestData.EventTable,
-				},
-				UnsTable: map[string]models.UnsTable{
-					"uns1": s.latestData.UnsTable,
-				},
-			},
+			UnifiedNamespace: models.UnifiedNamespace{},
 			Release: models.Release{
-				Version: "1.0.0",
-				Channel: "stable",
+				Health: &models.Health{
+					Message:       "release monitoring is not implemented yet",
+					ObservedState: "n/a",
+					DesiredState:  "running",
+					Category:      models.Neutral,
+				},
+				Version: "n/a",
+				Channel: "n/a",
 				SupportedFeatures: []string{
-					"data-bridge",
-					"protocol-converter",
 					"custom-dfc",
 					"action-deploy-data-flow-component",
 				},
 			},
 		},
-		Plugins: map[string]interface{}{
-			"examplePlugin": map[string]interface{}{
-				"status":  "active",
-				"version": "0.1.0",
-			},
-		},
+	}
+
+	// Derive and set core health from other healths
+	//TODO: set core health from other healths
+	statusMessage.Core.Health = &models.Health{
+		Message:       "core monitoring is not implemented yet",
+		ObservedState: "running",
+		DesiredState:  "running",
+		Category:      models.Active,
 	}
 
 	return statusMessage
