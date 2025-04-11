@@ -61,7 +61,7 @@ func (r *RedpandaBuilder) AddGoldenRedpanda() *RedpandaBuilder {
 	redpandaConfig.RedpandaServiceConfig.Topic.DefaultTopicRetentionMs = 0
 	redpandaConfig.RedpandaServiceConfig.Topic.DefaultTopicRetentionBytes = 0
 	redpandaConfig.RedpandaServiceConfig.Resources.MaxCores = 1
-	redpandaConfig.RedpandaServiceConfig.Resources.MemoryPerCoreInBytes = 1024 * 1024 * 1024 // 1GB
+	redpandaConfig.RedpandaServiceConfig.Resources.MemoryPerCoreInBytes = 1024 * 1024 * 1024 * 2 // 2GB
 
 	// Add to configuration
 	r.full.Internal.Redpanda = redpandaConfig
