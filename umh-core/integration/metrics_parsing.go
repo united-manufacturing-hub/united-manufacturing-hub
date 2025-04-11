@@ -34,7 +34,6 @@ import (
 	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
 )
 
 // parseMetricValue scans the metrics body for a line that starts with `metricName`
@@ -120,20 +119,26 @@ func printAllReconcileDurations(metricsBody string, thresholdMs float64) {
 	}
 }
 
-// checkWhetherMetricsHealthy checks that the metrics are healthy
-func checkWhetherMetricsHealthy(body string) {
+// checkWhetherMetricsHealthy checks that the metrics are healthy and returns an error if they are not
+func checkWhetherMetricsHealthy(body string) error {
 	// 1) Check memory usage: go_memstats_alloc_bytes
 	alloc, found := parseMetricValue(body, "go_memstats_alloc_bytes")
-	Expect(found).To(BeTrue(), "Expected to find go_memstats_alloc_bytes in metrics")
-	Expect(alloc).To(BeNumerically("<", maxAllocBytes),
-		"Heap allocation (alloc_bytes=%.2f) should be below %d bytes", alloc, maxAllocBytes)
+	if !found {
+		return fmt.Errorf("expected to find go_memstats_alloc_bytes in metrics")
+	}
+	if alloc >= maxAllocBytes {
+		return fmt.Errorf("heap allocation (alloc_bytes=%.2f) should be below %d bytes", alloc, maxAllocBytes)
+	}
 	GinkgoWriter.Printf("✓ Memory: %.2f MB (limit: %.2f MB)\n", alloc/1024/1024, float64(maxAllocBytes)/1024/1024)
 
 	// 2) Check total starved time: umh_core_reconcile_starved_total_seconds
 	starved, found := parseMetricValue(body, "umh_core_reconcile_starved_total_seconds")
-	Expect(found).To(BeTrue(), "Expected to find umh_core_reconcile_starved_total_seconds")
-	Expect(starved).To(BeNumerically("==", float64(maxStarvedSeconds)),
-		"Expected starved seconds (%.2f) to be == %.2f", starved, float64(maxStarvedSeconds))
+	if !found {
+		return fmt.Errorf("expected to find umh_core_reconcile_starved_total_seconds")
+	}
+	if starved != float64(maxStarvedSeconds) {
+		return fmt.Errorf("expected starved seconds (%.2f) to be == %.2f", starved, float64(maxStarvedSeconds))
+	}
 	GinkgoWriter.Printf("✓ Starved seconds: %.2f (limit: %d)\n", starved, maxStarvedSeconds)
 
 	// 3) Check error counters: umh_core_errors_total
@@ -148,12 +153,10 @@ func checkWhetherMetricsHealthy(body string) {
 			valStr := fields[len(fields)-1]
 			val, err := strconv.ParseFloat(valStr, 64)
 			if err == nil {
-				//GinkgoWriter.Printf("Checking error metric: %s = %.0f (limit: %d)\n", line, val, maxErrorCount)
 				if val > float64(maxErrorCount) {
 					errorFound = true
+					return fmt.Errorf("error counter (%.0f) exceeded %d: %s", val, maxErrorCount, line)
 				}
-				Expect(val).To(BeNumerically("<=", float64(maxErrorCount)),
-					"Error counter (%.0f) exceeded %d: %s", val, maxErrorCount, line)
 			}
 		}
 	}
@@ -180,9 +183,14 @@ func checkWhetherMetricsHealthy(body string) {
 	// Still enforce the 99th percentile threshold
 	recon99, found := parseSummaryQuantile(body,
 		"umh_core_reconcile_duration_milliseconds", "0.99", "control_loop", "main")
-	Expect(found).To(BeTrue(), "Expected to find 0.99 quantile for control_loop's reconcile time")
-	Expect(recon99).To(BeNumerically("<=", maxReconcileTime99th),
-		"99th percentile reconcile time (%.2f ms) exceeded %.1f ms", recon99, maxReconcileTime99th)
+	if !found {
+		return fmt.Errorf("expected to find 0.99 quantile for control_loop's reconcile time")
+	}
+	if recon99 > maxReconcileTime99th {
+		return fmt.Errorf("99th percentile reconcile time (%.2f ms) exceeded %.1f ms", recon99, maxReconcileTime99th)
+	}
+
+	return nil
 }
 
 // parseFloat is a small helper to parse a string to float64

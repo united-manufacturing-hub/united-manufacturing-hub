@@ -181,14 +181,15 @@ nilaway:
 
 test: vet nilaway
 	go test -v -tags=test ./...
-
 unit-test: vet nilaway
-	ginkgo -r -v --tags=test --label-filter='!integration' --fail-fast ./...
+	ginkgo -r -v --tags=test --label-filter='!integration && !redpanda-extended' --fail-fast ./...
 
 
 integration-test: stop-all-pods vet nilaway
 	ginkgo -r -v --tags=test --label-filter='integration' --fail-fast ./...
 
+redpanda-extended-test: stop-all-pods vet nilaway
+	ginkgo -r -v --tags=test --label-filter='redpanda-extended' --fail-fast ./...
 
 # integration-test-ci: Runs integration tests in CI environments with proper version tagging
 # - Injects VERSION via ldflags into AppVersion for proper error identification in Sentry
