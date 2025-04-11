@@ -52,7 +52,7 @@ func NewDataflowComponentInstance(
 			{Name: EventBenthosDataReceived, Src: []string{OperationalStateIdle}, Dst: OperationalStateActive},
 
 			//	active/idle -> degraded
-			{Name: EventBenthosNotRunning, Src: []string{OperationalStateActive, OperationalStateIdle}, Dst: OperationalStateDegraded},
+			{Name: EventBenthosDegraded, Src: []string{OperationalStateActive, OperationalStateIdle}, Dst: OperationalStateDegraded},
 
 			// active -> idle
 			{Name: EventBenthosNoDataRecieved, Src: []string{OperationalStateActive}, Dst: OperationalStateIdle},

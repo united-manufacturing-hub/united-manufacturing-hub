@@ -56,10 +56,9 @@ const (
 	// Running phase events
 	EventBenthosDataReceived   = "benthos_data_received"
 	EventBenthosNoDataRecieved = "benthos_no_data_recieved"
-	EventBenthosNotRunning     = "benthos_not_running"
+	EventBenthosDegraded       = "benthos_degraded"
 	EventBenthosRecovered      = "benthos_recovered"
 )
-
 
 // IsOperationalState returns whether the given state is a valid operational state
 func IsOperationalState(state string) bool {
