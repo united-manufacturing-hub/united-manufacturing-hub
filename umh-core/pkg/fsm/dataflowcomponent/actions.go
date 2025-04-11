@@ -170,8 +170,6 @@ func (d *DataflowComponentInstance) UpdateObservedStateOfInstance(ctx context.Co
 		}
 	}
 
-	// Detect a config change - but let the Benthos manager handle the actual reconciliation
-	// Use new ConfigsEqual function that handles Benthos defaults properly
 	if !dataflowcomponentconfig.ConfigsEqual(&d.config, d.ObservedState.ObservedDataflowComponentConfig) {
 		// Check if the service exists before attempting to update
 		if d.service.ServiceExists(ctx, filesystemService, d.baseFSMInstance.GetID()) {
@@ -194,27 +192,7 @@ func (d *DataflowComponentInstance) UpdateObservedStateOfInstance(ctx context.Co
 }
 
 // IsDataflowComponentBenthosConfigChanged determines if the DataflowComponent's Benthos config has been changed or edited from the currently available config
-func (d *DataflowComponentInstance) IsDataflowComponentBenthosConfigChanged(ctx context.Context, filesystemService filesystem.Service) bool {
-	if ctx.Err() != nil {
-		// if context error is observed, assume config did not change and return false
-		// Config change can be observed in the next reconciliation
-		return false
-	}
-
-	start := time.Now()
-	observedConfig, err := d.service.GetConfig(ctx, filesystemService, d.baseFSMInstance.GetID())
-	metrics.ObserveReconcileTime(logger.ComponentDataFlowComponentInstance, d.baseFSMInstance.GetID()+".getConfig", time.Since(start))
-	if err != nil {
-		d.baseFSMInstance.GetLogger().Debugf("Service config not found, while checking for benthos config change: %v", err)
-		// Set it to false as if config did not change
-		// This will be rechecked in the next reconciliation
-		return false
-	}
-	// Only update if we successfully got the config
-	d.ObservedState.ObservedDataflowComponentConfig = observedConfig
-
-	// Detect a config change - but let the Benthos manager handle the actual reconciliation
-	// Use new ConfigsEqual function that handles Benthos defaults properly
+func (d *DataflowComponentInstance) IsDataflowComponentBenthosConfigChanged() bool {
 	return !dataflowcomponentconfig.ConfigsEqual(&d.config, d.ObservedState.ObservedDataflowComponentConfig)
 }
 

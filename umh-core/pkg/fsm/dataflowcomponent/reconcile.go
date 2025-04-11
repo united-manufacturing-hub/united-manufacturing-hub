@@ -283,7 +283,7 @@ func (d *DataflowComponentInstance) reconcileStartingState(ctx context.Context, 
 	case OperationalStateStartingFailed:
 		// When the state is Starting failed, look for benthos config changes. If yes Set the event as EventConfigChanged
 		// EventConfigChanged would initiate DFC stop
-		if d.IsDataflowComponentBenthosConfigChanged(ctx, filesystemService) {
+		if d.IsDataflowComponentBenthosConfigChanged() {
 			return d.baseFSMInstance.SendEvent(ctx, EventConfigChanged), true
 		}
 	default:
