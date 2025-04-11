@@ -244,7 +244,6 @@ var _ = Describe("Container Monitor Service", func() {
 			// Use the real filesystem implementation instead of mocks
 			realFS := filesystem.NewDefaultService()
 			realService := container_monitor.NewContainerMonitorService(realFS)
-			realService.SetDataPath("/workspaces/united-manufacturing-hub")
 
 			container, err := realService.GetStatus(ctx)
 			Expect(err).ToNot(HaveOccurred())
