@@ -29,7 +29,7 @@ func (instance *DataflowComponentInstance) registerCallbacks() {
 	})
 
 	instance.baseFSMInstance.AddCallback("enter_"+OperationalStateStartingFailed, func(ctx context.Context, e *fsm.Event) {
-		instance.baseFSMInstance.GetLogger().Infof("Entering starting state for %s", instance.baseFSMInstance.GetID())
+		instance.baseFSMInstance.GetLogger().Errorf("Entering starting-failed state for %s", instance.baseFSMInstance.GetID())
 	})
 
 	instance.baseFSMInstance.AddCallback("enter_"+OperationalStateStopping, func(ctx context.Context, e *fsm.Event) {
