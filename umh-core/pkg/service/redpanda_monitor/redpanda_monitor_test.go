@@ -224,7 +224,7 @@ var _ = Describe("Redpanda Monitor Service", func() {
 			}
 			_, err := service.ParseRedpandaLogs(ctx, logs, tick)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("no block end marker found"))
+			Expect(err.Error()).To(ContainSubstring("could not parse redpanda metrics/configuration: no sections found. This can happen when the redpanda service is not running, or the logs where rotate"))
 		})
 
 		It("should return an error if no start marker is found", func() {
@@ -238,7 +238,7 @@ var _ = Describe("Redpanda Monitor Service", func() {
 			}
 			_, err := service.ParseRedpandaLogs(ctx, logs, tick)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("no start marker found"))
+			Expect(err.Error()).To(ContainSubstring("could not parse redpanda metrics/configuration: no sections found. This can happen when the redpanda service is not running, or the logs where rotate"))
 		})
 
 		It("should return an error if no metrics end marker is found", func() {
@@ -252,7 +252,7 @@ var _ = Describe("Redpanda Monitor Service", func() {
 			}
 			_, err := service.ParseRedpandaLogs(ctx, logs, tick)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("no metrics end marker found"))
+			Expect(err.Error()).To(ContainSubstring("could not parse redpanda metrics/configuration: no sections found. This can happen when the redpanda service is not running, or the logs where rotate"))
 		})
 
 		It("should return an error if no config end marker is found", func() {
@@ -266,7 +266,7 @@ var _ = Describe("Redpanda Monitor Service", func() {
 			}
 			_, err := service.ParseRedpandaLogs(ctx, logs, tick)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("no config end marker found"))
+			Expect(err.Error()).To(ContainSubstring("could not parse redpanda metrics/configuration: no sections found. This can happen when the redpanda service is not running, or the logs where rotate"))
 		})
 
 		It("should return an error if markers are in incorrect order", func() {
@@ -280,7 +280,7 @@ var _ = Describe("Redpanda Monitor Service", func() {
 			}
 			_, err := service.ParseRedpandaLogs(ctx, logs, tick)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("markers found in incorrect order"))
+			Expect(err.Error()).To(ContainSubstring("could not parse redpanda metrics/configuration: no sections found. This can happen when the redpanda service is not running, or the logs where rotate"))
 		})
 
 	})

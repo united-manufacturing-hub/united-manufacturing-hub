@@ -303,8 +303,16 @@ func (s *RedpandaMonitorService) ParseRedpandaLogs(ctx context.Context, logs []s
 		if strings.Contains(logs[i].Content, BLOCK_START_MARKER) {
 			currentSection.StartMarkerIndex = i
 		} else if strings.Contains(logs[i].Content, METRICS_END_MARKER) {
+			// Dont even try to find an end marker, if we dont have a start marker
+			if currentSection.StartMarkerIndex == -1 {
+				continue
+			}
 			currentSection.MetricsEndMarkerIndex = i
 		} else if strings.Contains(logs[i].Content, CLUSTERCONFIG_END_MARKER) {
+			// Dont even try to find an end marker, if we dont have a start marker
+			if currentSection.StartMarkerIndex == -1 {
+				continue
+			}
 			currentSection.ClusterConfigEndMarkerIndex = i
 		} else if strings.Contains(logs[i].Content, BLOCK_END_MARKER) {
 			// We dont break here, as there might be multiple end markers
@@ -312,7 +320,10 @@ func (s *RedpandaMonitorService) ParseRedpandaLogs(ctx context.Context, logs []s
 
 			// If we have all sections add it to the list, otherwise discard !
 			if currentSection.StartMarkerIndex != -1 && currentSection.MetricsEndMarkerIndex != -1 && currentSection.ClusterConfigEndMarkerIndex != -1 && currentSection.BlockEndMarkerIndex != -1 {
-				sections = append(sections, currentSection)
+				// Check if the order makes sense, otherwise discard
+				if currentSection.StartMarkerIndex < currentSection.MetricsEndMarkerIndex && currentSection.MetricsEndMarkerIndex < currentSection.ClusterConfigEndMarkerIndex && currentSection.ClusterConfigEndMarkerIndex < currentSection.BlockEndMarkerIndex {
+					sections = append(sections, currentSection)
+				}
 			}
 
 			// Reset the current section
