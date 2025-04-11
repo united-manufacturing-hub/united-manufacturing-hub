@@ -346,6 +346,40 @@ var _ = Describe("DeployDataflowComponent", func() {
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("missing required field pipeline.processors"))
 		})
+
+		It("should reject flattened payload structure without customDataFlowComponent", func() {
+			// Payload with flattened structure (incorrect format)
+			payload := map[string]interface{}{
+				"name": "test-component",
+				"meta": map[string]interface{}{
+					"type": "custom",
+				},
+				"payload": map[string]interface{}{
+					// Direct inputs without customDataFlowComponent wrapper
+					"inputs": map[string]interface{}{
+						"type": "yaml",
+						"data": "input: something\nformat: json",
+					},
+					"outputs": map[string]interface{}{
+						"type": "yaml",
+						"data": "output: something\nformat: json",
+					},
+					"pipeline": map[string]interface{}{
+						"processors": map[string]interface{}{
+							"proc1": map[string]interface{}{
+								"type": "yaml",
+								"data": "type: mapping\nprocs: []",
+							},
+						},
+					},
+				},
+			}
+
+			// Call Parse method - should fail with appropriate error
+			err := action.Parse(payload)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("missing customDataFlowComponent in payload"))
+		})
 	})
 
 	Describe("Validate", func() {
