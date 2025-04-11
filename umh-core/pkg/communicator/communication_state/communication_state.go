@@ -45,6 +45,8 @@ type CommunicationState struct {
 	ReleaseChannel    config.ReleaseChannel
 	SystemSnapshot    *fsm.SystemSnapshot
 	ConfigManager     config.ConfigManager
+	ApiUrl            string
+	Logger            *zap.SugaredLogger
 }
 
 // InitialiseAndStartPuller creates a new Puller and starts it
@@ -59,7 +61,7 @@ func (c *CommunicationState) InitialiseAndStartPuller() {
 		sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "Watchdog is nil, cannot start puller")
 		return
 	}
-	c.Puller = pull.NewPuller(c.LoginResponse.JWT, c.Watchdog, c.InboundChannel, c.InsecureTLS)
+	c.Puller = pull.NewPuller(c.LoginResponse.JWT, c.Watchdog, c.InboundChannel, c.InsecureTLS, c.ApiUrl, c.Logger)
 	if c.Puller == nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "Failed to create puller")
 	}
@@ -78,7 +80,7 @@ func (c *CommunicationState) InitialiseAndStartPusher() {
 		sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "Watchdog is nil, cannot start pusher")
 		return
 	}
-	c.Pusher = push.NewPusher(c.LoginResponse.UUID, c.LoginResponse.JWT, c.Watchdog, c.OutboundChannel, push.DefaultDeadLetterChanBuffer(), push.DefaultBackoffPolicy(), c.InsecureTLS)
+	c.Pusher = push.NewPusher(c.LoginResponse.UUID, c.LoginResponse.JWT, c.Watchdog, c.OutboundChannel, push.DefaultDeadLetterChanBuffer(), push.DefaultBackoffPolicy(), c.InsecureTLS, c.ApiUrl, c.Logger)
 	if c.Pusher == nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "Failed to create pusher")
 	}

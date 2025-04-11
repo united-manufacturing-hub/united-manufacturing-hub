@@ -37,9 +37,11 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/container"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/container_monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	"go.uber.org/zap"
 )
 
 var _ = Describe("Subscribe and Receive Test", func() {
@@ -58,6 +60,8 @@ var _ = Describe("Subscribe and Receive Test", func() {
 		capturedMutex sync.Mutex
 
 		mockFS *filesystem.MockFileSystem
+		apiUrl string
+		log    *zap.SugaredLogger
 	)
 
 	BeforeEach(func() {
@@ -75,6 +79,9 @@ var _ = Describe("Subscribe and Receive Test", func() {
 		outboundChan = make(chan *models.UMHMessage, 100)
 		capturedMsgs = []*models.UMHMessage{}
 		capturedMutex = sync.Mutex{}
+
+		apiUrl = "https://management.umh.app/api"
+		log = logger.For("subscribe_and_receive_test")
 
 		// Set up a goroutine to consume and capture the outbound messages
 		go func() {
@@ -149,6 +156,8 @@ var _ = Describe("Subscribe and Receive Test", func() {
 			push.DefaultDeadLetterChanBuffer(),
 			push.DefaultBackoffPolicy(),
 			false,
+			apiUrl,
+			log,
 		)
 		state.Pusher.Start()
 
@@ -158,6 +167,8 @@ var _ = Describe("Subscribe and Receive Test", func() {
 			dog,
 			state.InboundChannel,
 			false,
+			apiUrl,
+			log,
 		)
 
 		// Initialize subscriber handler

@@ -132,6 +132,8 @@ func main() {
 		ReleaseChannel:  configData.Agent.ReleaseChannel,
 		SystemSnapshot:  systemSnapshot,
 		ConfigManager:   configManager,
+		ApiUrl:          apiUrl,
+		Logger:          logger.For("communication_state"),
 	}
 	go SystemSnapshotLogger(ctx, controlLoop, systemSnapshot, systemMu)
 
@@ -220,7 +222,7 @@ func enableBackendConnection(config *config.FullConfig, state *fsm.SystemSnapsho
 	if config.Agent.CommunicatorConfig.APIURL != "" && config.Agent.CommunicatorConfig.AuthToken != "" {
 		// This can temporarely deactivated, e.g., during integration tests where just the mgmtcompanion-config is changed directly
 
-		login := v2.NewLogin(config.Agent.CommunicatorConfig.AuthToken, false)
+		login := v2.NewLogin(config.Agent.CommunicatorConfig.AuthToken, false, config.Agent.CommunicatorConfig.APIURL, logger)
 		if login == nil {
 			sentry.ReportIssuef(sentry.IssueTypeError, logger, "[v2.NewLogin] Failed to create login object")
 			return
