@@ -55,17 +55,17 @@ func monitorHealth() {
 func failOnMetricsHealthIssue() {
 	data, err := getMetricsHealth()
 	Expect(err).NotTo(HaveOccurred(), "Metrics endpoint should be healthy")
-	err = checkWhetherMetricsHealthy(string(data))
+	err = checkWhetherMetricsHealthy(string(data), true, true)
 	Expect(err).NotTo(HaveOccurred(), "Metrics should be healthy")
 }
 
 // reportOnMetricsHealthIssue is similar to failOnMetricsHealthIssue, but it returns an error instead of failing the test, allowing the caller to handle it
-func reportOnMetricsHealthIssue() error {
+func reportOnMetricsHealthIssue(enforceP99ReconcileTime bool, enforceP95ReconcileTime bool) error {
 	data, err := getMetricsHealth()
 	if err != nil {
 		return fmt.Errorf("failed to get metrics: %w", err)
 	}
-	err = checkWhetherMetricsHealthy(string(data))
+	err = checkWhetherMetricsHealthy(string(data), enforceP99ReconcileTime, enforceP95ReconcileTime)
 	if err != nil {
 		return fmt.Errorf("metrics are not healthy: %w", err)
 	}

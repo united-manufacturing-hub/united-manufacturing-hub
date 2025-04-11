@@ -101,7 +101,7 @@ func (b *RedpandaBuilder) AddBenthosProducer(name string, productionInterval str
 			MetricsPort: 0, // Auto-assign port
 			Input: map[string]interface{}{
 				"generate": map[string]interface{}{
-					"mapping":  fmt.Sprintf(`root = {"producer": "%s", "counter": count()}`, name),
+					"mapping":  fmt.Sprintf(`root = "Hello %s"`, name),
 					"interval": productionInterval,
 					"count":    0, // Unlimited
 				},

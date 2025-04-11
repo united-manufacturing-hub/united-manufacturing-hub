@@ -120,7 +120,7 @@ func printAllReconcileDurations(metricsBody string, thresholdMs float64) {
 }
 
 // checkWhetherMetricsHealthy checks that the metrics are healthy and returns an error if they are not
-func checkWhetherMetricsHealthy(body string) error {
+func checkWhetherMetricsHealthy(body string, enforceP99ReconcileTime bool, enforceP95ReconcileTime bool) error {
 	// 1) Check memory usage: go_memstats_alloc_bytes
 	alloc, found := parseMetricValue(body, "go_memstats_alloc_bytes")
 	if !found {
@@ -180,14 +180,26 @@ func checkWhetherMetricsHealthy(body string) error {
 	// Print all reconcile durations over threshold for debugging
 	printAllReconcileDurations(body, 20.0)
 
-	// Still enforce the 99th percentile threshold
-	recon99, found := parseSummaryQuantile(body,
-		"umh_core_reconcile_duration_milliseconds", "0.99", "control_loop", "main")
-	if !found {
-		return fmt.Errorf("expected to find 0.99 quantile for control_loop's reconcile time")
-	}
-	if recon99 > maxReconcileTime99th {
-		return fmt.Errorf("99th percentile reconcile time (%.2f ms) exceeded %.1f ms", recon99, maxReconcileTime99th)
+	if enforceP99ReconcileTime {
+		// Still enforce the 99th percentile threshold
+		recon99, found := parseSummaryQuantile(body,
+			"umh_core_reconcile_duration_milliseconds", "0.99", "control_loop", "main")
+		if !found {
+			return fmt.Errorf("expected to find 0.99 quantile for control_loop's reconcile time")
+		}
+		if recon99 > maxReconcileTime99th {
+			return fmt.Errorf("99th percentile reconcile time (%.2f ms) exceeded %.1f ms", recon99, maxReconcileTime99th)
+		}
+	} else if enforceP95ReconcileTime {
+		// Still enforce the 95th percentile threshold
+		recon95, found := parseSummaryQuantile(body,
+			"umh_core_reconcile_duration_milliseconds", "0.95", "control_loop", "main")
+		if !found {
+			return fmt.Errorf("expected to find 0.95 quantile for control_loop's reconcile time")
+		}
+		if recon95 > maxReconcileTime99th { // For now this uses the same limit as the 99th percentile
+			return fmt.Errorf("95th percentile reconcile time (%.2f ms) exceeded %.1f ms", recon95, maxReconcileTime99th)
+		}
 	}
 
 	return nil

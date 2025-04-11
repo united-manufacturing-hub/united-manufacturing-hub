@@ -120,7 +120,7 @@ umh_core_reconcile_starved_total_seconds 3`
 			// Original metrics have s6_instance with golden-service having 3 errors
 			// which exceeds maxErrorCount (0)
 			failures := InterceptGomegaFailures(func() {
-				err := checkWhetherMetricsHealthy(testMetrics)
+				err := checkWhetherMetricsHealthy(testMetrics, true, true)
 				Expect(err).NotTo(HaveOccurred(), "Should not have detected errors")
 			})
 			Expect(failures).NotTo(BeEmpty(), "Should have detected errors")
@@ -142,7 +142,7 @@ umh_core_reconcile_starved_total_seconds 3`
 				"umh_core_errors_total{component=\"s6_instance\",instance=\"golden-service\"} 0")
 
 			failures := InterceptGomegaFailures(func() {
-				err := checkWhetherMetricsHealthy(noErrorMetrics)
+				err := checkWhetherMetricsHealthy(noErrorMetrics, true, true)
 				Expect(err).NotTo(HaveOccurred(), "Should not have detected errors")
 			})
 			Expect(failures).NotTo(BeEmpty(), "Should have detected starved seconds violation")
@@ -166,7 +166,7 @@ umh_core_reconcile_starved_total_seconds 3`
 				"umh_core_reconcile_starved_total_seconds 0")
 
 			failures := InterceptGomegaFailures(func() {
-				err := checkWhetherMetricsHealthy(healthyMetrics)
+				err := checkWhetherMetricsHealthy(healthyMetrics, true, true)
 				Expect(err).NotTo(HaveOccurred(), "Should not have detected errors")
 			})
 			Expect(failures).To(BeEmpty(), "Should not have any failures with healthy metrics")
@@ -184,7 +184,7 @@ umh_core_reconcile_starved_total_seconds 3`
 				"umh_core_reconcile_duration_milliseconds{component=\"control_loop\",instance=\"main\",quantile=\"0.99\"} "+strconv.FormatFloat(maxReconcileTime99th+1, 'f', -1, 64))
 
 			failures := InterceptGomegaFailures(func() {
-				err := checkWhetherMetricsHealthy(highReconcileMetrics)
+				err := checkWhetherMetricsHealthy(highReconcileMetrics, true, true)
 				Expect(err).NotTo(HaveOccurred(), "Should not have detected errors")
 			})
 			Expect(failures).NotTo(BeEmpty(), "Should have detected high reconcile time")

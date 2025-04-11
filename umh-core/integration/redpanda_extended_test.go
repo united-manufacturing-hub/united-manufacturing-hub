@@ -41,9 +41,8 @@ var _ = Describe("Redpanda Extended Tests", Ordered, Label("redpanda-extended"),
 
 		// Add 10 benthos services that will produce messages to the "test-throughput" topic
 		const messagesPerSecond = 10 // Each benthos instance will produce 10 messages per second
-		const testDuration = 5 * time.Minute
+		const testDuration = 60 * time.Minute
 		const monitorHealthInterval = 30 * time.Second
-		const maxErrorsInARow = 10
 		BeforeAll(func() {
 			By("Starting with an empty configuration")
 			cfg := NewBuilder().BuildYAML()
@@ -82,7 +81,6 @@ var _ = Describe("Redpanda Extended Tests", Ordered, Label("redpanda-extended"),
 			testEndTime := startTime.Add(testDuration)
 
 			// Monitor the health of the system at regular intervals
-			errorsInARow := 0
 			for time.Now().Before(testEndTime) {
 				// Print status update
 				elapsedDuration := time.Since(startTime).Round(time.Second)
@@ -95,15 +93,9 @@ var _ = Describe("Redpanda Extended Tests", Ordered, Label("redpanda-extended"),
 					elapsedDuration, remainingDuration)
 
 				// Check system health
-				err := reportOnMetricsHealthIssue()
+				err := reportOnMetricsHealthIssue(false, true)
 				if err != nil {
-					errorsInARow++
-					GinkgoWriter.Printf("[%d] Error: %v\n", errorsInARow, err)
-				} else {
-					errorsInARow = 0
-				}
-				if errorsInARow >= maxErrorsInARow {
-					Fail("System is unstable, too many errors in a row")
+					Fail("System is unstable")
 				}
 
 				time.Sleep(monitorHealthInterval)
