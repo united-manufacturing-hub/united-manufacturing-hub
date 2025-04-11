@@ -48,7 +48,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/container"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/redpanda"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
@@ -103,7 +102,7 @@ func NewControlLoop(configManager config.ConfigManager) *ControlLoop {
 		s6.NewS6Manager(constants.DefaultManagerName),
 		benthos.NewBenthosManager(constants.DefaultManagerName),
 		container.NewContainerManager(constants.DefaultManagerName),
-		redpanda.NewRedpandaManager(constants.DefaultManagerName),
+		// redpanda.NewRedpandaManager(constants.DefaultManagerName),
 		dataflowcomponent.NewDataflowComponentManager(constants.DefaultManagerName),
 	}
 
