@@ -189,6 +189,7 @@ unit-test: vet nilaway
 integration-test: stop-all-pods vet nilaway
 	ginkgo -r -v --tags=test --label-filter='integration' --fail-fast ./...
 
+
 # integration-test-ci: Runs integration tests in CI environments with proper version tagging
 # - Injects VERSION via ldflags into AppVersion for proper error identification in Sentry
 # - CI test failures SHOULD be reported to Sentry (unlike local dev failures)

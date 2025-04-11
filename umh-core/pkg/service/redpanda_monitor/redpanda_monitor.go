@@ -263,6 +263,13 @@ func (s *RedpandaMonitorService) GenerateS6ConfigForRedpandaMonitor() (s6service
 
 // GetConfig is not implemented, as the config is static
 
+type Section struct {
+	StartMarkerIndex            int
+	MetricsEndMarkerIndex       int
+	ClusterConfigEndMarkerIndex int
+	BlockEndMarkerIndex         int
+}
+
 // ParseRedpandaLogs parses the logs of a redpanda service and extracts metrics
 func (s *RedpandaMonitorService) ParseRedpandaLogs(ctx context.Context, logs []s6service.LogEntry, tick uint64) (*RedpandaMetricsAndClusterConfig, error) {
 	/*
@@ -280,46 +287,56 @@ func (s *RedpandaMonitorService) ParseRedpandaLogs(ctx context.Context, logs []s
 		return nil, fmt.Errorf("no logs provided")
 	}
 	// Find the markers in a single pass through the logs
-	startMarkerIndex := -1
-	metricsEndMarkerIndex := -1
-	configEndMarkerIndex := -1
-	blockEndMarkerIndex := -1
+	sections := make([]Section, 0)
 
+	currentSection := Section{
+		StartMarkerIndex:            -1,
+		MetricsEndMarkerIndex:       -1,
+		ClusterConfigEndMarkerIndex: -1,
+		BlockEndMarkerIndex:         -1,
+	}
+
+	// This implementation scans the logs in a single pass, which is more efficient than scanning for each marker separately
+	// If the there are multiple sections, we will have multiple entries in the sections list
+	// This ensures that we always have a valid section, even if the markers of later sections are missing (e.g the end marker for example was not yet written)
 	for i := 0; i < len(logs); i++ {
 		if strings.Contains(logs[i].Content, BLOCK_START_MARKER) {
-			startMarkerIndex = i
+			currentSection.StartMarkerIndex = i
 		} else if strings.Contains(logs[i].Content, METRICS_END_MARKER) {
-			metricsEndMarkerIndex = i
+			currentSection.MetricsEndMarkerIndex = i
 		} else if strings.Contains(logs[i].Content, CLUSTERCONFIG_END_MARKER) {
-			configEndMarkerIndex = i
+			currentSection.ClusterConfigEndMarkerIndex = i
 		} else if strings.Contains(logs[i].Content, BLOCK_END_MARKER) {
 			// We dont break here, as there might be multiple end markers
-			blockEndMarkerIndex = i
+			currentSection.BlockEndMarkerIndex = i
+
+			// If we have all sections add it to the list, otherwise discard !
+			if currentSection.StartMarkerIndex != -1 && currentSection.MetricsEndMarkerIndex != -1 && currentSection.ClusterConfigEndMarkerIndex != -1 && currentSection.BlockEndMarkerIndex != -1 {
+				sections = append(sections, currentSection)
+			}
+
+			// Reset the current section
+			currentSection = Section{
+				StartMarkerIndex:            -1,
+				MetricsEndMarkerIndex:       -1,
+				ClusterConfigEndMarkerIndex: -1,
+				BlockEndMarkerIndex:         -1,
+			}
 		}
 	}
 
-	// Verify we found all markers in the correct order
-	if startMarkerIndex == -1 {
-		return nil, fmt.Errorf("could not parse redpanda metrics/configuration: no start marker found. This can happen when the redpanda service is not running, or the logs where rotated")
+	if len(sections) == 0 {
+		return nil, fmt.Errorf("could not parse redpanda metrics/configuration: no sections found. This can happen when the redpanda service is not running, or the logs where rotated")
 	}
-	if metricsEndMarkerIndex == -1 {
-		return nil, fmt.Errorf("could not parse redpanda metrics/configuration: no metrics end marker found. This can happen when the redpanda service is not running, or the logs where rotated")
-	}
-	if configEndMarkerIndex == -1 {
-		return nil, fmt.Errorf("could not parse redpanda metrics/configuration: no config end marker found. This can happen when the redpanda service is not running, or the logs where rotated")
-	}
-	if blockEndMarkerIndex == -1 {
-		return nil, fmt.Errorf("could not parse redpanda metrics/configuration: no block end marker found. This can happen when the redpanda service is not running, or the logs where rotated")
-	}
-	if !(startMarkerIndex < metricsEndMarkerIndex && metricsEndMarkerIndex < configEndMarkerIndex && configEndMarkerIndex < blockEndMarkerIndex) {
-		return nil, fmt.Errorf("could not parse redpanda metrics/configuration: markers found in incorrect order. This can happen when the redpanda service is not running, or the logs where rotated")
-	}
+
+	// Find the latest section that is fully constructed (e.g the latest entry in the list)
+	actualSection := sections[len(sections)-1]
 
 	// We need to extract the lines between the markers
 	// Metrics is the first part, cluster config is the second part, timestamp is the third part
-	metricsData := logs[startMarkerIndex+1 : metricsEndMarkerIndex]
-	clusterConfigData := logs[metricsEndMarkerIndex+1 : configEndMarkerIndex]
-	timestampData := logs[configEndMarkerIndex+1 : blockEndMarkerIndex]
+	metricsData := logs[actualSection.StartMarkerIndex+1 : actualSection.MetricsEndMarkerIndex]
+	clusterConfigData := logs[actualSection.MetricsEndMarkerIndex+1 : actualSection.ClusterConfigEndMarkerIndex]
+	timestampData := logs[actualSection.ClusterConfigEndMarkerIndex+1 : actualSection.BlockEndMarkerIndex]
 
 	var metricsDataBytes []byte
 	var clusterConfigDataBytes []byte
