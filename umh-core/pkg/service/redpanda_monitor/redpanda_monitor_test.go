@@ -511,32 +511,32 @@ var _ = Describe("Redpanda Monitor Service", func() {
 				Expect(result).To(Equal(int64(42)))
 			})
 
-			It("should convert values larger than MaxInt64 to -1", func() {
+			It("should convert values larger than MaxInt64 to 0", func() {
 				input := uint64(math.MaxInt64 + 1)
 				result, err := redpanda_monitor.ParseRedpandaIntegerlikeValue(input)
 				Expect(err).NotTo(HaveOccurred())
-				Expect(result).To(Equal(int64(-1)))
+				Expect(result).To(Equal(int64(0)))
 			})
 
-			It("should convert large string values to -1", func() {
+			It("should convert large string values to 0", func() {
 				input := "18446744073709552000" // Larger than MaxInt64
 				result, err := redpanda_monitor.ParseRedpandaIntegerlikeValue(input)
 				Expect(err).NotTo(HaveOccurred())
-				Expect(result).To(Equal(int64(-1)))
+				Expect(result).To(Equal(int64(0)))
 			})
 
-			It("should convert nil values to -1", func() {
+			It("should convert nil values to 0", func() {
 				var input interface{} = nil
 				result, err := redpanda_monitor.ParseRedpandaIntegerlikeValue(input)
 				Expect(err).NotTo(HaveOccurred())
-				Expect(result).To(Equal(int64(-1)))
+				Expect(result).To(Equal(int64(0)))
 			})
 
-			It("should convert negative values to -1", func() {
+			It("should convert negative values to 0", func() {
 				input := int64(-1)
 				result, err := redpanda_monitor.ParseRedpandaIntegerlikeValue(input)
 				Expect(err).NotTo(HaveOccurred())
-				Expect(result).To(Equal(int64(-1)))
+				Expect(result).To(Equal(int64(0)))
 			})
 
 			It("should handle values at MaxInt64 boundary correctly", func() {
