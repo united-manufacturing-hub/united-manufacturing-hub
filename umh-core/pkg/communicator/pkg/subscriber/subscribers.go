@@ -133,7 +133,6 @@ func (s *Handler) notify() {
 
 	notified := 0
 	s.subscribers.Range(func(key string, value string) bool {
-
 		message, err := encoding.EncodeMessageFromUMHInstanceToUser(models.UMHMessageContent{
 			MessageType: models.Status,
 			Payload:     statusMessage,

@@ -20,7 +20,7 @@ agent:
   releaseChannel: stable
 
 dataFlow:
-  - name: hello-world
+  - name: hello-world-dfc
     desiredState: active
     benthosServiceConfig:
       input:
@@ -28,12 +28,14 @@ dataFlow:
           mapping: root = "hello world from Benthos!"
           interval: 1s # Output every 2 seconds
           count: 0 # Set to 0 for unlimited messages
+      output:
+          stdout: {}
   
 internal:
   redpanda:
     desiredState: stopped
   benthos:
-    - name: hello-world
+    - name: hello-world-benthos
       desiredState: active
       benthosServiceConfig:
         input:

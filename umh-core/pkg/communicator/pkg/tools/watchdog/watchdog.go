@@ -346,10 +346,12 @@ func (s *Watchdog) SetHasSubscribers(has bool) {
 func (s *Watchdog) reportStateToNiceFail() {
 	// We collect the state of all registered subscribers (name, lastReportedStatus, timeSinceLastReport, warningCount)
 	// This is useful for debugging, as it allows us to see the state of all registered subscribers at the time of the panic
-	// Disabled it, as it is quite spammy
+
+	s.registeredHeartbeatsMutex.Lock()
+	defer s.registeredHeartbeatsMutex.Unlock()
+
 	/*
-		s.registeredHeartbeatsMutex.Lock()
-		defer s.registeredHeartbeatsMutex.Unlock()
+		heartbeatReports := make([]string, 0, len(s.registeredHeartbeats))
 		for name, hb := range s.registeredHeartbeats {
 			if hb == nil {
 				// Skip nil heartbeats
@@ -370,8 +372,13 @@ func (s *Watchdog) reportStateToNiceFail() {
 				status = "ERROR"
 			}
 
-			// Log to the console instead of reporting to Sentry
-			s.logger.Debugf("WatchdogReport: %s, %s, %d, %d", name, status, lastHeartbeat, warningCount)
+			// Format each heartbeat as a string
+			heartbeatReports = append(heartbeatReports, fmt.Sprintf("%s[%s, %d, %d]", name, status, lastHeartbeat, warningCount))
+		}
+
+		// Log all heartbeats in a single debug statement if any exist
+		if len(heartbeatReports) > 0 {
+			s.logger.Debugf("WatchdogReport: %s", strings.Join(heartbeatReports, "; "))
 		}
 	*/
 }

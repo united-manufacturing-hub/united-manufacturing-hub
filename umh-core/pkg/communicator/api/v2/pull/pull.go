@@ -83,6 +83,7 @@ func (p *Puller) pull() {
 	for p.shallRun.Load() {
 		select {
 		case <-ticker.C:
+			p.logger.Debugf("Pulling messages")
 
 			p.dog.ReportHeartbeatStatus(watcherUUID, watchdog.HEARTBEAT_STATUS_OK)
 			var cookies = map[string]string{

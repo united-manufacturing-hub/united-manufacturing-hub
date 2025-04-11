@@ -233,5 +233,8 @@ func enableBackendConnection(config *config.FullConfig, state *fsm.SystemSnapsho
 		communicationState.InitialiseAndStartPusher()
 		communicationState.InitialiseAndStartSubscriberHandler(time.Minute*5, time.Minute, config, state, systemMu, configManager)
 		communicationState.InitialiseAndStartRouter()
+
 	}
+
+	logger.Info("Backend connection enabled")
 }
