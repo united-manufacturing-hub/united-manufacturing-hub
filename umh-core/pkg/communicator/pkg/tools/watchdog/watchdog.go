@@ -348,29 +348,32 @@ func (s *Watchdog) SetHasSubscribers(has bool) {
 func (s *Watchdog) reportStateToNiceFail() {
 	// We collect the state of all registered subscribers (name, lastReportedStatus, timeSinceLastReport, warningCount)
 	// This is useful for debugging, as it allows us to see the state of all registered subscribers at the time of the panic
-	s.registeredHeartbeatsMutex.Lock()
-	defer s.registeredHeartbeatsMutex.Unlock()
-	for name, hb := range s.registeredHeartbeats {
-		if hb == nil {
-			// Skip nil heartbeats
-			continue
+	// Disabled it, as it is quite spammy
+	/*
+		s.registeredHeartbeatsMutex.Lock()
+		defer s.registeredHeartbeatsMutex.Unlock()
+		for name, hb := range s.registeredHeartbeats {
+			if hb == nil {
+				// Skip nil heartbeats
+				continue
+			}
+
+			lastReportedStatus := hb.lastReportedStatus.Load()
+			lastHeartbeat := hb.lastHeatbeatTime.Load()
+			warningCount := hb.warningCount.Load()
+
+			var status string
+			switch lastReportedStatus {
+			case int32(HEARTBEAT_STATUS_OK):
+				status = "OK"
+			case int32(HEARTBEAT_STATUS_WARNING):
+				status = "WARNING"
+			case int32(HEARTBEAT_STATUS_ERROR):
+				status = "ERROR"
+			}
+
+			// Log to the console instead of reporting to Sentry
+			s.logger.Debugf("WatchdogReport: %s, %s, %d, %d", name, status, lastHeartbeat, warningCount)
 		}
-
-		lastReportedStatus := hb.lastReportedStatus.Load()
-		lastHeartbeat := hb.lastHeatbeatTime.Load()
-		warningCount := hb.warningCount.Load()
-
-		var status string
-		switch lastReportedStatus {
-		case int32(HEARTBEAT_STATUS_OK):
-			status = "OK"
-		case int32(HEARTBEAT_STATUS_WARNING):
-			status = "WARNING"
-		case int32(HEARTBEAT_STATUS_ERROR):
-			status = "ERROR"
-		}
-
-		// Log to the console instead of reporting to Sentry
-		s.logger.Debugf("WatchdogReport: %s, %s, %d, %d", name, status, lastHeartbeat, warningCount)
-	}
+	*/
 }

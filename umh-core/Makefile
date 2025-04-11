@@ -248,6 +248,8 @@ test-comm: clean build
 		-p 4195:4195 \
 		--memory $(MEMORY) \
 		--cpus $(CPUS) \
+		-e AUTH_TOKEN=$(AUTH_TOKEN) \
+		-e LOGGING_LEVEL=DEBUG \
 		$(IMAGE_NAME):$(TAG)
 
 test-broken: clean build
