@@ -882,7 +882,7 @@ func (s *RedpandaMonitorService) ServiceExists(ctx context.Context, filesystemSe
 }
 
 func ParseRedpandaIntegerlikeValue(value interface{}) (int64, error) {
-	// This can be a very large value (18446744073709552000) if set to -1 via the config.
+	// This can be a very large value (18446744073709552000 or 18446744073709551615) if set to -1 via the config.
 	// We need to handle this, by saying that everything larger then 9223372036854775807 (max int64) is -1
 	v, err := ParseValue(value)
 	if err != nil {
@@ -906,14 +906,11 @@ func ParseValue(value interface{}) (uint64, error) {
 	case uint64:
 		result = v
 	case float64:
-		// If the float has a fractional part, return 0, with "value has a fractional part"
-		if v != float64(int64(v)) {
-			return 0, fmt.Errorf("value has a fractional part")
-		}
 		// If v is negative, return 0, with "value is negative"
 		if v < 0 {
 			return 0, fmt.Errorf("value is negative")
 		}
+		// We remove fractional parts, as redpanda uses integer values only
 		result = uint64(v)
 	case int:
 		// If v is negative, return 0, with "value is negative"

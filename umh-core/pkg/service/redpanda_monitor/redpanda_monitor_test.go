@@ -412,16 +412,16 @@ var _ = Describe("Redpanda Monitor Service", func() {
 
 			It("should parse positive float64 values correctly", func() {
 				input := float64(42.5)
-				_, err := redpanda_monitor.ParseValue(input)
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("value has a fractional part"))
+				result, err := redpanda_monitor.ParseValue(input)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(result).To(Equal(uint64(42)))
 			})
 
 			It("should return error for negative float64 values", func() {
 				input := float64(-42.5)
 				_, err := redpanda_monitor.ParseValue(input)
 				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("value has a fractional part"))
+				Expect(err.Error()).To(ContainSubstring("value is negative"))
 			})
 
 			It("should parse positive int values correctly", func() {
