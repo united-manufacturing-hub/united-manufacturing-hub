@@ -210,8 +210,7 @@ var _ = Describe("RedpandaMonitor Service State Transitions", func() {
 			tick++
 
 			By("Starting the redpanda monitor service")
-			err = monitorService.StartRedpandaMonitor(ctx)
-			Expect(err).NotTo(HaveOccurred())
+			// Add implicitly sets the desired state to running, no manualy start is required here
 
 			// Reconcile until the service is running
 			tick = reconcileUntilState(ctx, monitorService, mockFileSystem, tick, s6fsm.OperationalStateRunning)
@@ -229,8 +228,7 @@ var _ = Describe("RedpandaMonitor Service State Transitions", func() {
 			tick = reconcileUntilState(ctx, monitorService, mockFileSystem, tick, s6.LifecycleStateCreating)
 			tick = reconcileUntilState(ctx, monitorService, mockFileSystem, tick, s6fsm.OperationalStateStopped)
 
-			err = monitorService.StartRedpandaMonitor(ctx)
-			Expect(err).NotTo(HaveOccurred())
+			// Add implicitly sets the desired state to running, no manualy start is required here
 			tick = reconcileUntilState(ctx, monitorService, mockFileSystem, tick, s6fsm.OperationalStateRunning)
 
 			// Verify service is running
@@ -263,8 +261,7 @@ var _ = Describe("RedpandaMonitor Service State Transitions", func() {
 			tick = reconcileUntilState(ctx, monitorService, mockFileSystem, tick, s6.LifecycleStateCreating)
 			tick = reconcileUntilState(ctx, monitorService, mockFileSystem, tick, s6fsm.OperationalStateStopped)
 
-			err = monitorService.StartRedpandaMonitor(ctx)
-			Expect(err).NotTo(HaveOccurred())
+			// Add implicitly sets the desired state to running, no manualy start is required here
 			tick = reconcileUntilState(ctx, monitorService, mockFileSystem, tick, s6fsm.OperationalStateRunning)
 
 			By("Stopping the service")
