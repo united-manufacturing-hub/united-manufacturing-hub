@@ -882,18 +882,19 @@ func (s *RedpandaMonitorService) ServiceExists(ctx context.Context, filesystemSe
 }
 
 func ParseRedpandaIntegerlikeValue(value interface{}) (int64, error) {
-	// This can be a very large value (18446744073709552000 or 18446744073709551615) if set to -1 via the config.
-	// We need to handle this, by saying that everything larger then 9223372036854775807 (max int64) is -1
+	// This can be a very large value (18446744073709552000 or 18446744073709551615) if set to 0 via the config.
+	// We need to handle this, by saying that everything larger then 9223372036854775807 (max int64) is 0
+	// Our generate handles 0 correctly (either as -1 or null, depending on the value)
 	v, err := ParseValue(value)
 	if err != nil {
-		// If "value is nil", return -1, nil, as redpanda for "some" values returns nil instead of a high value :/
+		// If "value is nil", return 0, nil, as redpanda for "some" values returns nil instead of a high value :/
 		if strings.Contains(err.Error(), "value is nil") || strings.Contains(err.Error(), "value is negative") {
-			return -1, nil
+			return 0, nil
 		}
-		return -1, err
+		return 0, err
 	}
 	if v > math.MaxInt64 {
-		return -1, nil
+		return 0, nil
 	}
 	// We can now safely cast to int64, as we checked above
 	return int64(v), nil
