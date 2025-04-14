@@ -102,7 +102,7 @@ var _ = Describe("Redpanda Extended Tests", Ordered, Label("redpanda-extended"),
 				if err != nil {
 					Fail(fmt.Sprintf("System is unstable: %v", err))
 				}
-				newOffset, err := checkRPK(testTopic, lastLoopOffset, lastLoopTimestamp, lossTolerance, messagesPerSecond)
+				newOffset, err := checkRPK(testTopic, lastLoopOffset, lastLoopTimestamp, lossTolerance, messagesPerSecond, startTime)
 				if err != nil {
 					Fail(fmt.Sprintf("RPK check failed: %v", err))
 				}
@@ -112,7 +112,7 @@ var _ = Describe("Redpanda Extended Tests", Ordered, Label("redpanda-extended"),
 			}
 
 			By("Verifying message count with rpk")
-			messageCount, err := checkRPK(testTopic, lastLoopOffset, lastLoopTimestamp, lossTolerance, messagesPerSecond)
+			messageCount, err := checkRPK(testTopic, lastLoopOffset, lastLoopTimestamp, lossTolerance, messagesPerSecond, startTime)
 			if err != nil {
 				Fail(fmt.Sprintf("RPK check failed: %v", err))
 			}
@@ -146,7 +146,7 @@ var _ = Describe("Redpanda Extended Tests", Ordered, Label("redpanda-extended"),
 	})
 })
 
-func checkRPK(topic string, lastLoopOffset int, lastLoopTimestamp time.Time, lossToleranceWarning float64, messagesPerSecond int) (newOffset int, err error) {
+func checkRPK(topic string, lastLoopOffset int, lastLoopTimestamp time.Time, lossToleranceWarning float64, messagesPerSecond int, startTime time.Time) (newOffset int, err error) {
 	// Fetch the latest Messages and validate that:
 	// 1) The timestamp is within reason (+-1m)
 	// 2) The offsets are increasing (e.g the last offset of the batch is higher then the current one)
@@ -204,6 +204,11 @@ func checkRPK(topic string, lastLoopOffset int, lastLoopTimestamp time.Time, los
 			GinkgoWriter.Printf("✅ Msg per sec: %f (%.2f%% of expected %d)\n", msgPerSec, msgPerSec/float64(messagesPerSecond)*100, messagesPerSecond)
 		}
 	}
+
+	// Also calculate the msg per sec based on the total time
+	totalTime := time.Since(startTime)
+	msgPerSecTotal := float64(newOffset-lastLoopOffset) / totalTime.Seconds()
+	GinkgoWriter.Printf("✅ Msg per sec total: %f (%.2f%% of expected %d)\n", msgPerSecTotal, msgPerSecTotal/float64(messagesPerSecond)*100, messagesPerSecond)
 
 	return newOffset, nil
 }
