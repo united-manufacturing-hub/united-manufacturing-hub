@@ -17,6 +17,7 @@ package integration_test
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -81,6 +82,7 @@ var _ = Describe("Redpanda Extended Tests", Ordered, Label("redpanda-extended"),
 			testEndTime := startTime.Add(testDuration)
 
 			// Monitor the health of the system at regular intervals
+			lastOffset := -1
 			for time.Now().Before(testEndTime) {
 				// Print status update
 				elapsedDuration := time.Since(startTime).Round(time.Second)
@@ -95,7 +97,35 @@ var _ = Describe("Redpanda Extended Tests", Ordered, Label("redpanda-extended"),
 				// Check system health
 				err := reportOnMetricsHealthIssue(false, true)
 				if err != nil {
-					Fail("System is unstable")
+					Fail(fmt.Sprintf("System is unstable: %v", err))
+				}
+
+				// Fetch the latest Messages and validate that:
+				// 1) The timestamp is within reason (+-1m)
+				// 2) The offsets are increasing (e.g the last offset of the batch is higher then the current one)
+
+				messages, err := getRPKSample(testTopic)
+				Expect(err).NotTo(HaveOccurred(), "Should be able to fetch messages with rpk")
+
+				var currentOffset int
+				var lastTimestamp int64
+				if len(messages) > 0 {
+					currentOffset = int(messages[len(messages)-1].Offset)
+					lastTimestamp = messages[len(messages)-1].Timestamp
+				} else {
+					Fail("No messages received")
+				}
+
+				if currentOffset <= lastOffset {
+					Fail(fmt.Sprintf("Offset is not increasing: %d <= %d", currentOffset, lastOffset))
+				}
+
+				if lastTimestamp < time.Now().Add(-1*time.Minute).UnixNano() {
+					Fail(fmt.Sprintf("Timestamp is too old: %d < %d", lastTimestamp, time.Now().Add(-1*time.Minute).UnixNano()))
+				}
+
+				if lastTimestamp > time.Now().UnixNano() {
+					Fail(fmt.Sprintf("Timestamp is in the future: %d > %d", lastTimestamp, time.Now().UnixNano()))
 				}
 
 				time.Sleep(monitorHealthInterval)
@@ -145,3 +175,63 @@ var _ = Describe("Redpanda Extended Tests", Ordered, Label("redpanda-extended"),
 		})
 	})
 })
+
+type Message struct {
+	Timestamp int64
+	Topic     string
+	Offset    int64
+}
+
+// getRPKSample connects to the redpanda cluster, and returns the last 10 messages from the given topic
+func getRPKSample(topic string) ([]Message, error) {
+	out, err := runDockerCommand("exec", getContainerName(), "/opt/redpanda/bin/rpk", "topic", "consume", topic, "--offset", "-10", "-n", "10", "--format", "%d:%t:%o\n")
+	if err != nil {
+		return nil, err
+	}
+	/*
+		ddc913c11978:/# /opt/redpanda/bin/rpk topic consume hello-world-topic --offset -10 -n 10 --format "%d:%t:%o\n"
+		1744631802928:hello-world-topic:661
+		1744631802943:hello-world-topic:662
+		1744631803929:hello-world-topic:663
+		1744631803946:hello-world-topic:664
+		1744631804933:hello-world-topic:665
+		1744631804949:hello-world-topic:666
+		1744631805938:hello-world-topic:667
+		1744631805949:hello-world-topic:668
+		1744631806940:hello-world-topic:669
+		1744631806950:hello-world-topic:670
+	*/
+
+	// Parse the output
+	lines := strings.Split(out, "\n")
+
+	messages := make([]Message, 0, len(lines))
+	for _, line := range lines {
+		if line == "" {
+			continue
+		}
+
+		splits := strings.Split(line, ":")
+		if len(splits) != 3 {
+			return nil, fmt.Errorf("invalid line: %s", line)
+		}
+
+		timestamp, err := strconv.ParseInt(splits[0], 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("invalid timestamp: %s", splits[0])
+		}
+
+		offset, err := strconv.ParseInt(splits[2], 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("invalid offset: %s", splits[2])
+		}
+
+		messages = append(messages, Message{
+			Timestamp: timestamp,
+			Topic:     splits[1],
+			Offset:    offset,
+		})
+	}
+
+	return messages, nil
+}
