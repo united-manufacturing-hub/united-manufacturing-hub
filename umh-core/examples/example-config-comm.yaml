@@ -26,9 +26,9 @@ dataFlow:
       benthos:
         input:
           generate:
-          mapping: root = "hello world from Benthos!"
-          interval: 1s # Output every 2 seconds
-          count: 0 # Set to 0 for unlimited messages
+            mapping: root = "hello world from Benthos!"
+            interval: 1s # Output every 2 seconds
+            count: 0 # Set to 0 for unlimited messages
         pipeline:
           processors:
             - bloblang: root = content()
