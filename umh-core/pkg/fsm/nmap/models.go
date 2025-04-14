@@ -43,9 +43,9 @@ const (
 	OperationalStateOpen = "open"
 	// unfiltered means nmap is running and it shows port unfiltered
 	OperationalStateUnfiltered = "unfiltered"
-	// unfiltered means nmap is running and it shows port unfiltered
+	// unfiltered means nmap is running and it shows port open|filtered
 	OperationalStateOpenFiltered = "open_filtered"
-	// unfiltered means nmap is running and it shows port unfiltered
+	// unfiltered means nmap is running and it shows port closed|filtered
 	OperationalStateClosedFiltered = "closed_filtered"
 
 	// stopping is the operational state when nmap is stopping

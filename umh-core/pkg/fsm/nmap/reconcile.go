@@ -143,7 +143,7 @@ func (n *NmapInstance) Reconcile(ctx context.Context, filesystemService filesyst
 	return nil, reconciled
 }
 
-// reconcileExternalChanges checks if the S6Instance service status has changed
+// reconcileExternalChanges checks if the Nmap service status has changed
 // externally (e.g., if someone manually stopped or started it, or if it crashed)
 func (n *NmapInstance) reconcileExternalChanges(ctx context.Context, filesystemService filesystem.Service, tick uint64) error {
 	start := time.Now()
