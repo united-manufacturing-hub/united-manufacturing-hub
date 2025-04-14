@@ -169,7 +169,6 @@ var _ = Describe("RedpandaMonitor Service State Transitions", func() {
 		err, reconciled := monitorService.ReconcileManager(ctx, mockFileSystem, 0)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(reconciled).To(BeTrue())
-		// Now update the instance to use our mock service - this is the crucial part that fixes the bug
 		// Get the instance after reconciliation
 		if instance, exists := mockedS6Manager.GetInstance("redpanda-monitor"); exists {
 			// Type assert to S6Instance
