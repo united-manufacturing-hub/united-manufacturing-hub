@@ -24,7 +24,6 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptrace"
-	"os"
 	"strings"
 	"time"
 
@@ -82,17 +81,6 @@ func GetClient(insecureTLS bool) *http.Client {
 		return insecureHTTPClient
 	}
 	return secureHTTPClient
-}
-
-func GetBaseUrl() string {
-	// get from API_URL env
-	baseUrl, found := os.LookupEnv("API_URL")
-	if !found {
-		zap.S().Debug("API_URL env not found")
-		baseUrl = "https://management.umh.app/api"
-	}
-	// zap.S().Debugf("API_URL: %s", baseUrl)
-	return baseUrl
 }
 
 // LatestExternalIp is the latest external IP address
@@ -190,16 +178,16 @@ func processCookies(response *http.Response, cookies *map[string]string) {
 }
 
 // processLatencyHeaders handles X-Response-Time header processing and latency calculations
-func processLatencyHeaders(response *http.Response, timeTillFirstByte time.Duration) {
+func processLatencyHeaders(response *http.Response, timeTillFirstByte time.Duration, logger *zap.SugaredLogger) {
 	xResponseTime := response.Header.Get("X-Response-Time")
 	if xResponseTime == "" {
-		zap.S().Warn("X-Response-Time header not found")
+		logger.Warn("X-Response-Time header not found")
 		return
 	}
 
 	elapsedTime, err := time.ParseDuration(xResponseTime + "ns")
 	if err != nil {
-		zap.S().Warnf("Failed to parse X-Response-Time header: %s", xResponseTime)
+		logger.Warnf("Failed to parse X-Response-Time header: %s", xResponseTime)
 		return
 	}
 
@@ -221,7 +209,7 @@ func enhanceConnectionError(err error) error {
 }
 
 // GetRequest does a GET request to the given endpoint, with optional header and cookies
-func GetRequest[R any](ctx context.Context, endpoint Endpoint, header map[string]string, cookies *map[string]string, insecureTLS bool) (*R, error, int) {
+func GetRequest[R any](ctx context.Context, endpoint Endpoint, header map[string]string, cookies *map[string]string, insecureTLS bool, apiURL string, logger *zap.SugaredLogger) (*R, error, int) {
 	// Set up context with default 30 second timeout if none provided
 	if ctx == nil {
 		var cancel context.CancelFunc
@@ -229,7 +217,7 @@ func GetRequest[R any](ctx context.Context, endpoint Endpoint, header map[string
 		defer cancel()
 	}
 
-	url := GetBaseUrl() + string(endpoint)
+	url := apiURL + string(endpoint)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err, 0
@@ -280,7 +268,7 @@ func GetRequest[R any](ctx context.Context, endpoint Endpoint, header map[string
 	latenciesTLS.Set(now, timings.tls)
 	latenciesConn.Set(now, timings.conn)
 
-	processLatencyHeaders(response, timings.firstByte)
+	processLatencyHeaders(response, timings.firstByte, logger)
 
 	// Read and process response
 	bodyBytes, err := io.ReadAll(response.Body)
@@ -327,7 +315,7 @@ func GetRequest[R any](ctx context.Context, endpoint Endpoint, header map[string
 
 // PostRequest does a POST request to the given endpoint, with optional header and cookies
 // Note: Cookies will be updated with the response cookies, if not nil
-func PostRequest[R any, T any](ctx context.Context, endpoint Endpoint, data *T, header map[string]string, cookies *map[string]string, insecureTLS bool) (*R, error, int) {
+func PostRequest[R any, T any](ctx context.Context, endpoint Endpoint, data *T, header map[string]string, cookies *map[string]string, insecureTLS bool, apiURL string, logger *zap.SugaredLogger) (*R, error, int) {
 	// Set up context with default 30 second timeout if none provided
 	if ctx == nil {
 		var cancel context.CancelFunc
@@ -335,7 +323,7 @@ func PostRequest[R any, T any](ctx context.Context, endpoint Endpoint, data *T, 
 		defer cancel()
 	}
 
-	url := GetBaseUrl() + string(endpoint)
+	url := apiURL + string(endpoint)
 
 	// Marshal the data into JSON format
 	body, err := safejson.Marshal(data)
