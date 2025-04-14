@@ -72,7 +72,6 @@ func login(token string, insecureTLS bool, apiURL string, logger *zap.SugaredLog
 }
 
 func NewLogin(authToken string, insecureTLS bool, apiURL string, logger *zap.SugaredLogger) *LoginResponse {
-	logger.Debug("Initial login attempt")
 	var credentials *LoginResponse
 	bo := tools.NewBackoff(1*time.Second, 1*time.Second, 60*time.Second, tools.BackoffPolicyLinear)
 	var loggedIn bool
@@ -82,7 +81,6 @@ func NewLogin(authToken string, insecureTLS bool, apiURL string, logger *zap.Sug
 		if err != nil {
 			logger.Warnf("Failed to login: %s", err)
 			bo.IncrementAndSleep()
-			logger.Debug("Retrying login attempt")
 		} else {
 			loggedIn = true
 		}
@@ -91,7 +89,7 @@ func NewLogin(authToken string, insecureTLS bool, apiURL string, logger *zap.Sug
 		logger.Error("Login successful but credentials are nil")
 		return nil
 	}
-	logger.Debugf("SetLoginResponse successful: %s", credentials)
+	logger.Infof("Successfully logged in as %s", credentials.Name)
 	return credentials
 }
 

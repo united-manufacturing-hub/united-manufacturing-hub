@@ -149,6 +149,5 @@ func (s *Handler) notify() {
 		notified++
 		return true
 	})
-	s.logger.Debugf("Notified %d subscribers", notified)
 	cncl()
 }
