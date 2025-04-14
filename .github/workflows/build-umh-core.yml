@@ -171,10 +171,12 @@ jobs:
         run: |
           # Get the base tags from meta
           TAGS="${{ steps.meta.outputs.tags }}"
-          IFS=$'\n' read -d '' -ra TAG_ARRAY <<< "$TAGS"
           
-          # For each tag, build and push with platform suffix
-          for TAG in "${TAG_ARRAY[@]}"; do
+          # Convert newlines to spaces and handle as a space-separated list
+          TAGS_SPACE=$(echo "$TAGS" | tr '\n' ' ')
+          
+          # Process each tag
+          for TAG in $TAGS_SPACE; do
             # Get the tag part without the registry
             TAG_PART=$(echo "$TAG" | sed "s|$REGISTRY/$IMAGE_NAME:||")
             
