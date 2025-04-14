@@ -99,16 +99,6 @@ func setupMockS6Logs(mockS6Service *s6service.MockService) {
 	mockS6Service.GetLogsResult = mockLogs
 }
 
-// Helper function to check service state
-func checkServiceState(ctx context.Context, service *redpanda_monitor.RedpandaMonitorService, mockFS *filesystem.MockFileSystem, expectedState string) (redpanda_monitor.ServiceInfo, error) {
-	serviceInfo, err := service.Status(ctx, mockFS, 0)
-	if err != nil {
-		return serviceInfo, err
-	}
-
-	return serviceInfo, nil
-}
-
 var _ = Describe("Redpanda Monitor Service", func() {
 	var (
 		service *redpanda_monitor.RedpandaMonitorService
@@ -399,6 +389,218 @@ var _ = Describe("Redpanda Monitor Service", func() {
 
 		// Verify topic metrics
 		Expect(metricsResult.Topic.TopicPartitionMap).To(HaveLen(0))
+	})
+
+	Describe("RedpandaMetricsState", func() {
+		It("should calculate throughput metrics correctly", func() {
+			// Create a new metrics state
+			state := redpanda_monitor.NewRedpandaMetricsState()
+
+			// Create test metrics with known values
+			metrics := redpanda_monitor.Metrics{
+				Throughput: redpanda_monitor.ThroughputMetrics{
+					BytesIn:  100,
+					BytesOut: 50,
+				},
+			}
+
+			// Initial update (tick 1)
+			state.UpdateFromMetrics(metrics, 1)
+
+			// Verify initial values - first update should set bytes per tick to the initial count
+			Expect(state.Input.BytesPerTick).To(Equal(float64(100)))
+			Expect(state.Output.BytesPerTick).To(Equal(float64(50)))
+			Expect(state.IsActive).To(BeTrue())
+
+			// Update with increased values (tick 2)
+			metrics.Throughput.BytesIn = 200  // +100 from last tick
+			metrics.Throughput.BytesOut = 150 // +100 from last tick
+			state.UpdateFromMetrics(metrics, 2)
+
+			// Verify average calculation over window
+			// (200-100)/(2-1) = 100 bytes per tick for input
+			// (150-50)/(2-1) = 100 bytes per tick for output
+			Expect(state.Input.BytesPerTick).To(Equal(float64(100)))
+			Expect(state.Output.BytesPerTick).To(Equal(float64(100)))
+			Expect(state.IsActive).To(BeTrue())
+
+			// Update with smaller increase (tick 3)
+			metrics.Throughput.BytesIn = 250  // +50 from last tick
+			metrics.Throughput.BytesOut = 200 // +50 from last tick
+			state.UpdateFromMetrics(metrics, 3)
+
+			// Verify average calculation over window
+			// (250-100)/(3-1) = 75 bytes per tick for input
+			// (200-50)/(3-1) = 75 bytes per tick for output
+			Expect(state.Input.BytesPerTick).To(Equal(float64(75)))
+			Expect(state.Output.BytesPerTick).To(Equal(float64(75)))
+
+			// Simulate a counter reset (tick 4)
+			metrics.Throughput.BytesIn = 50  // Less than previous, simulating a reset
+			metrics.Throughput.BytesOut = 25 // Less than previous, simulating a reset
+			state.UpdateFromMetrics(metrics, 4)
+
+			// Verify window is reset after counter reset
+			Expect(state.Input.BytesPerTick).To(Equal(float64(50)))
+			Expect(state.Output.BytesPerTick).To(Equal(float64(25)))
+
+			// Update after reset (tick 5)
+			metrics.Throughput.BytesIn = 150  // +100 from last tick
+			metrics.Throughput.BytesOut = 125 // +100 from last tick
+			state.UpdateFromMetrics(metrics, 5)
+
+			// Verify new average calculation after reset
+			// (150-50)/(5-4) = 100 bytes per tick for input
+			// (125-25)/(5-4) = 100 bytes per tick for output
+			Expect(state.Input.BytesPerTick).To(Equal(float64(100)))
+			Expect(state.Output.BytesPerTick).To(Equal(float64(100)))
+
+			// Test inactive state (tick 6)
+			metrics.Throughput.BytesIn = 150  // No change, 0 throughput
+			metrics.Throughput.BytesOut = 125 // No change, 0 throughput
+			state.UpdateFromMetrics(metrics, 6)
+
+			// Verify inactive detection
+			// (150-50)/(6-4) = 50 bytes per tick for input
+			// (125-25)/(6-4) = 50 bytes per tick for output
+			Expect(state.Input.BytesPerTick).To(Equal(float64(50)))
+			Expect(state.IsActive).To(BeTrue()) // IsActive is true as long as BytesPerTick > 0
+		})
+
+		It("should handle edge cases correctly", func() {
+			state := redpanda_monitor.NewRedpandaMetricsState()
+			metrics := redpanda_monitor.Metrics{
+				Throughput: redpanda_monitor.ThroughputMetrics{
+					BytesIn:  100,
+					BytesOut: 50,
+				},
+			}
+
+			// Test same tick values - should not cause division by zero
+			state.UpdateFromMetrics(metrics, 1)
+			state.UpdateFromMetrics(metrics, 1)                    // Same tick
+			Expect(state.Input.BytesPerTick).To(Equal(float64(0))) // When tick values are the same, BytesPerTick is set to 0
+
+			// Test window size limit
+			// First, create enough entries to fill the window and then some
+			for i := uint64(2); i < redpanda_monitor.ThroughputWindowSize+10; i++ {
+				metrics.Throughput.BytesIn = 100 + int64(i*10)
+				state.UpdateFromMetrics(metrics, i)
+			}
+
+			// Verify the window size is capped
+			Expect(len(state.Input.Window)).To(BeNumerically("<=", redpanda_monitor.ThroughputWindowSize))
+
+			// Test extreme values
+			state = redpanda_monitor.NewRedpandaMetricsState() // Reset state
+
+			// Test with max int64 value
+			maxInt64 := int64(9223372036854775807)
+			metrics.Throughput.BytesIn = maxInt64
+			state.UpdateFromMetrics(metrics, 1)
+			Expect(state.Input.BytesPerTick).To(Equal(float64(maxInt64)))
+
+			// Test with tick wraparound (while unlikely, it's an edge case)
+			metrics.Throughput.BytesIn = maxInt64 - 100
+			state.UpdateFromMetrics(metrics, 0) // Lower tick value
+
+			// This should be treated as a reset since the tick value is lower
+			Expect(len(state.Input.Window)).To(Equal(1))
+			Expect(state.Input.BytesPerTick).To(Equal(float64(maxInt64 - 100)))
+		})
+
+		It("should correctly track activity status (input only)", func() {
+			state := redpanda_monitor.NewRedpandaMetricsState()
+
+			// New state should be inactive
+			Expect(state.IsActive).To(BeFalse())
+
+			// Manually set BytesPerTick and verify IsActive follows it
+			state.UpdateFromMetrics(redpanda_monitor.Metrics{
+				Throughput: redpanda_monitor.ThroughputMetrics{
+					BytesIn: 0,
+				},
+			}, 1)
+			Expect(state.IsActive).To(BeFalse())
+
+			state.UpdateFromMetrics(redpanda_monitor.Metrics{
+				Throughput: redpanda_monitor.ThroughputMetrics{
+					BytesIn: 100,
+				},
+			}, 2)
+			Expect(state.IsActive).To(BeTrue())
+
+			state.UpdateFromMetrics(redpanda_monitor.Metrics{
+				Throughput: redpanda_monitor.ThroughputMetrics{
+					BytesIn: 0,
+				},
+			}, 3)
+			Expect(state.IsActive).To(BeFalse())
+
+			// Verify that BytesPerTick is calculated from metrics
+			metrics := redpanda_monitor.Metrics{
+				Throughput: redpanda_monitor.ThroughputMetrics{
+					BytesIn: 200,
+				},
+			}
+			state.UpdateFromMetrics(metrics, 4)
+			// First update after reset (or beginning) sets BytesPerTick to count value
+			Expect(state.Input.BytesPerTick).To(Equal(float64(200)))
+			Expect(state.IsActive).To(BeTrue())
+		})
+		It("should correctly track activity status (output only)", func() {
+			state := redpanda_monitor.NewRedpandaMetricsState()
+
+			// New state should be inactive
+			Expect(state.IsActive).To(BeFalse())
+
+			// Manually set BytesPerTick and verify IsActive follows it
+			state.UpdateFromMetrics(redpanda_monitor.Metrics{
+				Throughput: redpanda_monitor.ThroughputMetrics{
+					BytesOut: 0,
+				},
+			}, 1)
+			Expect(state.IsActive).To(BeFalse())
+
+			state.UpdateFromMetrics(redpanda_monitor.Metrics{
+				Throughput: redpanda_monitor.ThroughputMetrics{
+					BytesOut: 100,
+				},
+			}, 2)
+			Expect(state.IsActive).To(BeTrue())
+
+			state.UpdateFromMetrics(redpanda_monitor.Metrics{
+				Throughput: redpanda_monitor.ThroughputMetrics{
+					BytesOut: 0,
+				},
+			}, 3)
+			Expect(state.IsActive).To(BeFalse())
+
+			// Verify that BytesPerTick is calculated from metrics
+			metrics := redpanda_monitor.Metrics{
+				Throughput: redpanda_monitor.ThroughputMetrics{
+					BytesOut: 200,
+				},
+			}
+			state.UpdateFromMetrics(metrics, 4)
+			// First update after reset (or beginning) sets BytesPerTick to count value
+			Expect(state.Output.BytesPerTick).To(Equal(float64(200)))
+			Expect(state.IsActive).To(BeTrue())
+		})
+		It("should correctly track activity status (input and output)", func() {
+			state := redpanda_monitor.NewRedpandaMetricsState()
+
+			// New state should be inactive
+			Expect(state.IsActive).To(BeFalse())
+
+			state.UpdateFromMetrics(redpanda_monitor.Metrics{
+				Throughput: redpanda_monitor.ThroughputMetrics{
+					BytesIn:  100,
+					BytesOut: 100,
+				},
+			}, 1)
+			Expect(state.IsActive).To(BeTrue())
+		})
 	})
 
 	Describe("parseRedpandaIntegerlikeValue and parseValue", func() {

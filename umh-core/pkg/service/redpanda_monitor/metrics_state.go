@@ -67,7 +67,7 @@ func (s *RedpandaMetricsState) UpdateFromMetrics(metrics Metrics, tick uint64) {
 	s.updateComponentThroughput(&s.Output, metrics.Throughput.BytesOut, tick)
 
 	// Update activity status based on input throughput
-	s.IsActive = s.Input.BytesPerTick > 0
+	s.IsActive = s.Input.BytesPerTick > 0 || s.Output.BytesPerTick > 0
 
 	// Update last tick
 	s.LastTick = tick
