@@ -60,6 +60,8 @@ func buildDataFlowComponentDataFromSnapshot(instance fsm.FSMInstanceSnapshot, lo
 		// Try to cast to the right type
 		observedState := instance.LastObservedState.(*dataflowcomponent.DataflowComponentObservedStateSnapshot)
 		dfcData.DataFlowComponentConfig = observedState.Config
+		dfcData.FSMInstanceConfig.Name = instance.ID
+		dfcData.FSMInstanceConfig.DesiredFSMState = instance.DesiredState
 
 	} else {
 		log.Warn("No observed state found for dataflowcomponent", zap.String("instanceID", instance.ID))
