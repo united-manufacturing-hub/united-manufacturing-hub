@@ -20,20 +20,21 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2/http"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/helper"
+	"go.uber.org/zap"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 )
 
 var _ = Describe("Requester", func() {
-	BeforeEach(func() {
-		By("setting the DEMO_MODE environment variable")
-		// Set DEMO_MODE to true in order to use the fake kube clientset in this suite
-		// instead of a real one
-		helper.Setenv("DEMO_MODE", "true")
 
-		By("setting the API_URL environment variable")
-		// Set API_URL to the production API URL in order for the gock library to correctly
-		// intercept the requests to the production API done by the code under test
-		helper.Setenv("API_URL", "https://management.umh.app/api")
+	var log *zap.SugaredLogger
+
+	// Set API_URL to the production API URL in order for the gock library to correctly
+	// intercept the requests to the production API done by the code under test
+	const apiUrl = "https://management.umh.app/api"
+
+	BeforeEach(func() {
+		log = logger.For("RequesterTest")
 	})
 
 	// The tests in this context are ported from the old requester_test.go file
@@ -56,14 +57,14 @@ var _ = Describe("Requester", func() {
 
 		Context("GetRequest", func() {
 			It("should return error for non 200 response", func() {
-				_, err, _ := http.GetRequest[any](context.Background(), http.LoginEndpoint, header, &cookies, false)
+				_, err, _ := http.GetRequest[any](context.Background(), http.LoginEndpoint, header, &cookies, false, apiUrl, log)
 				Expect(err).To(HaveOccurred())
 			})
 		})
 
 		Context("PostRequest", func() {
 			It("should return error for non 200 response", func() {
-				_, err, _ := http.PostRequest[any](context.Background(), http.LoginEndpoint, &data, header, &cookies, false)
+				_, err, _ := http.PostRequest[any](context.Background(), http.LoginEndpoint, &data, header, &cookies, false, apiUrl, log)
 				Expect(err).To(HaveOccurred())
 			})
 		})

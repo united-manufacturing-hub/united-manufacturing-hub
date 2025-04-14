@@ -41,6 +41,9 @@ S6_OVERLAY_VERSION = 3.2.0.2
 BENTHOS_UMH_VERSION = 0.6.2
 REDPANDA_VERSION = 24.3.8
 
+# Debug values
+DLV_VERSION = v1.24.1
+
 # Note: Redpanda allocates 2GB of memory per core.
 # Additionally 1.5GB (or 7% of the total memory, whichever is greater) are required to be available, after this allocation to make seastar happy.
 # If you change this, you need to update the integration_test.go file.
@@ -139,6 +142,7 @@ build: download-docker-binaries
 		--build-arg TARGETARCH=$(TARGETARCH) \
 		-t $(IMAGE_NAME):$(TAG) \
 		--progress=plain \
+		--load \
 		-f Dockerfile .
     
 # build-debug: launches delve inside the container.
@@ -152,6 +156,8 @@ build-debug: download-docker-binaries
 		--build-arg BENTHOS_UMH_VERSION=$(BENTHOS_UMH_VERSION) \
 		--build-arg REDPANDA_VERSION=$(REDPANDA_VERSION) \
 		--build-arg APP_VERSION=$(VERSION) \
+		--build-arg TARGETARCH=$(TARGETARCH) \
+		--build-arg DLV_VERSION=$(DLV_VERSION) \
 		--build-arg DEBUG=true \
 		--progress=plain \
 		-t $(IMAGE_NAME):$(TAG)-debug \
@@ -243,8 +249,12 @@ test-comm: clean build
 		--name $(IMAGE_NAME) \
 		-v $(PWD)/data:/data \
 		-p 8081:8080 \
+		-p 4195:4195 \
 		--memory $(MEMORY) \
 		--cpus $(CPUS) \
+		-e AUTH_TOKEN=$(AUTH_TOKEN) \
+		-e LOCATION_0=$(LOCATION_0) \
+		-e LOGGING_LEVEL=DEBUG \
 		$(IMAGE_NAME):$(TAG)
 
 test-broken: clean build
@@ -318,3 +328,33 @@ stop-all-pods:
 	docker ps -q --filter "name=$(IMAGE_NAME)*" | xargs -r docker stop
 	# Remove all pods starting with $(IMAGE_NAME) (also show stopped pods)
 	docker ps -a -q --filter "name=$(IMAGE_NAME)*" | xargs -r docker rm
+
+push:
+	@echo "Pushing $(IMAGE_NAME):$(TAG) to registry"
+	@if [ -z "$(REGISTRY)" ]; then \
+		echo "Error: REGISTRY environment variable is not set"; \
+		exit 1; \
+	fi
+	docker tag $(IMAGE_NAME):$(TAG) $(REGISTRY)/$(IMAGE_NAME):$(TAG)
+	docker push $(REGISTRY)/$(IMAGE_NAME):$(TAG)
+
+# Push with platform-specific tag (used in CI)
+push-platform:
+	@echo "Pushing $(IMAGE_NAME):$(TAG) for $(TARGETARCH) to registry"
+	@if [ -z "$(REGISTRY)" ]; then \
+		echo "Error: REGISTRY environment variable is not set"; \
+		exit 1; \
+	fi
+	@if [ -z "$(TAG)" ]; then \
+		echo "Error: TAG environment variable is not set"; \
+		exit 1; \
+	fi
+	@PLATFORM_SHORT="$(TARGETARCH)"; \
+	PLATFORM_TAG="$(TAG)-$${PLATFORM_SHORT}"; \
+	echo "Tagging $(IMAGE_NAME):$(TAG) as $(REGISTRY)/$(IMAGE_NAME):$${PLATFORM_TAG}"; \
+	docker tag $(IMAGE_NAME):$(TAG) $(REGISTRY)/$(IMAGE_NAME):$${PLATFORM_TAG}; \
+	echo "Pushing $(REGISTRY)/$(IMAGE_NAME):$${PLATFORM_TAG}"; \
+	docker push $(REGISTRY)/$(IMAGE_NAME):$${PLATFORM_TAG}
+
+# Build and push in one command (for CI)
+build-push: build push-platform

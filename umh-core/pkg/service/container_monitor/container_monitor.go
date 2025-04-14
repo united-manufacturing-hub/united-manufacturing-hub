@@ -31,6 +31,8 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+
+	"golang.org/x/sys/unix"
 )
 
 // ServiceInfo contains both raw metrics and health assessments
@@ -60,7 +62,7 @@ type Service interface {
 // ContainerMonitorService implements the Service interface
 type ContainerMonitorService struct {
 	fs              filesystem.Service
-	logger          *zap.Logger
+	logger          *zap.SugaredLogger
 	instanceName    string
 	lastCollectedAt time.Time
 	hwid            string
@@ -75,7 +77,7 @@ func NewContainerMonitorService(fs filesystem.Service) *ContainerMonitorService 
 
 // NewContainerMonitorServiceWithPath creates a new container monitor service with a custom data path
 func NewContainerMonitorServiceWithPath(fs filesystem.Service, dataPath string) *ContainerMonitorService {
-	log := logger.New(logger.ComponentContainerMonitorService, logger.FormatJSON)
+	log := logger.For(logger.ComponentContainerMonitorService)
 
 	return &ContainerMonitorService{
 		fs:           fs,
@@ -88,6 +90,11 @@ func NewContainerMonitorServiceWithPath(fs filesystem.Service, dataPath string) 
 // GetFilesystemService returns the filesystem service - used for testing only
 func (c *ContainerMonitorService) GetFilesystemService() filesystem.Service {
 	return c.fs
+}
+
+// SetDataPath changes the data path - used for testing only
+func (c *ContainerMonitorService) SetDataPath(path string) {
+	c.dataPath = path
 }
 
 // GetStatus collects and returns the current container metrics
@@ -305,9 +312,15 @@ func (c *ContainerMonitorService) getMemoryMetrics(ctx context.Context) (*models
 	return memStat, nil
 }
 
+// oneTB represents one terabyte in bytes.
+const oneTB uint64 = 1024 * 1024 * 1024 * 1024
+
 // getDiskMetrics collects disk usage metrics using gopsutil for the data path.
-// This will reflect the usage of the filesystem mounted at the data path.
+// It applies a special handling for Docker Desktop on macOS, where the underlying
+// Linux VM (using LinuxKit) may report an unrealistic disk size (e.g. > 10TB) due to
+// block size translation issues.
 func (c *ContainerMonitorService) getDiskMetrics(ctx context.Context) (*models.Disk, error) {
+	// Start with gopsutil as the default approach for consistency.
 	usageStat, err := disk.UsageWithContext(ctx, c.dataPath)
 	if err != nil {
 		return nil, err
@@ -316,7 +329,21 @@ func (c *ContainerMonitorService) getDiskMetrics(ctx context.Context) (*models.D
 	usedBytes := usageStat.Used
 	totalBytes := usageStat.Total
 
-	// Default to Active health
+	// If the total reported size is greater than 10TB and we are on Docker Desktop on macOS,
+	// then it is likely we are observing the known block-size inflation issue.
+	if IsDockerDesktopMac() && totalBytes > 10*oneTB {
+
+		// Use the macOS-adjusted approach as a fallback.
+		correctedUsed, correctedTotal, err := c.getMacOSAdjustedDiskMetrics()
+		if err == nil {
+			usedBytes = correctedUsed
+			totalBytes = correctedTotal
+		} else {
+			return nil, fmt.Errorf("failed to get macOS-adjusted disk metrics: %w", err)
+		}
+	}
+
+	// Determine health status based on disk usage thresholds.
 	category := models.Active
 	message := "Disk utilization normal"
 
@@ -325,7 +352,7 @@ func (c *ContainerMonitorService) getDiskMetrics(ctx context.Context) (*models.D
 		category = models.Degraded
 		message = "Disk utilization critical"
 	} else if diskPercent >= constants.DiskMediumThresholdPercent {
-		// Still Active but with a warning message
+		// Still Active but with a warning message.
 		message = "Disk utilization warning"
 	}
 
@@ -341,6 +368,32 @@ func (c *ContainerMonitorService) getDiskMetrics(ctx context.Context) (*models.D
 	}
 
 	return diskStat, nil
+}
+
+// getMacOSAdjustedDiskMetrics retrieves adjusted disk metrics using unix.Statfs.
+// It uses stat.Frsize when available, since on Docker Desktop for macOS the reported
+// Bsize is often 1024× larger than the actual block size.
+// We use unix.Statfs directly instead of relying on gopsutil's disk.Usage because:
+// 1. It gives us direct access to the Frsize field which is crucial for proper block size calculation
+// 2. gopsutil doesn't handle the Docker Desktop for macOS edge case correctly
+func (c *ContainerMonitorService) getMacOSAdjustedDiskMetrics() (usedBytes, totalBytes uint64, err error) {
+	var stat unix.Statfs_t
+	err = unix.Statfs(c.dataPath, &stat)
+	if err != nil {
+		return 0, 0, fmt.Errorf("failed to stat filesystem at %s: %w", c.dataPath, err)
+	}
+
+	// Use Frsize if available; it represents the fundamental block size for macOS.
+	bSize := uint64(stat.Bsize)
+	if stat.Frsize > 0 {
+		bSize = uint64(stat.Frsize)
+	}
+
+	// Compute total and used bytes based on the corrected block size.
+	totalBytes = stat.Blocks * bSize
+	usedBytes = (stat.Blocks - stat.Bfree) * bSize
+
+	return usedBytes, totalBytes, nil
 }
 
 // getHWID gets the hardware ID from system
