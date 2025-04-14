@@ -37,21 +37,16 @@ func (n *NmapInstance) CreateInstance(ctx context.Context, filesystemService fil
 		metrics.ObserveReconcileTime(metrics.ComponentNmapInstance, n.baseFSMInstance.GetID()+".initiateS6Create", time.Since(start))
 	}()
 
-	n.baseFSMInstance.GetLogger().Debugf("Starting Action: Adding Benthos service %s to S6 manager ...", n.baseFSMInstance.GetID())
+	n.baseFSMInstance.GetLogger().Debugf("Starting Action: Adding Nmap service %s to S6 manager ...", n.baseFSMInstance.GetID())
 
-	// Check if we have a config with command or other settings
-	configEmpty := n.config.NmapServiceConfig.Port == 0 && n.config.NmapServiceConfig.Target == ""
-
-	if !configEmpty {
-		// Create service with custom configuration
-		err := n.monitorService.AddNmapToS6Manager(ctx, &n.config.NmapServiceConfig, n.baseFSMInstance.GetID())
-		if err != nil {
-			if err == nmap_service.ErrServiceAlreadyExists {
-				n.baseFSMInstance.GetLogger().Debugf("Nmap service %s already exists in S6 manager", n.baseFSMInstance.GetID())
-				return nil // do not throw an error, as each action is expected to be idempotent
-			}
-			return fmt.Errorf("failed to create service with config for %s: %w", n.baseFSMInstance.GetID(), err)
+	err := n.monitorService.AddNmapToS6Manager(ctx, &n.config.NmapServiceConfig, n.baseFSMInstance.GetID())
+	// Create service with custom configuration
+	if err != nil {
+		if err == nmap_service.ErrServiceAlreadyExists {
+			n.baseFSMInstance.GetLogger().Debugf("Nmap service %s already exists in S6 manager", n.baseFSMInstance.GetID())
+			return nil // do not throw an error, as each action is expected to be idempotent
 		}
+		return fmt.Errorf("failed to create service with config for %s: %w", n.baseFSMInstance.GetID(), err)
 
 	}
 
