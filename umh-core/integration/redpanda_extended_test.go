@@ -67,7 +67,7 @@ var _ = Describe("Redpanda Extended Tests", Ordered, Label("redpanda-extended"),
 			testTopic := "test-throughput"
 
 			for i := 0; i < 10; i++ {
-				builder.AddBenthosProducer(fmt.Sprintf("benthos-%d", i), fmt.Sprintf("%ds", 1+i%3), testTopic)
+				builder.AddBenthosProducer(fmt.Sprintf("benthos-%d", i), "1s", testTopic)
 			}
 
 			// Apply configuration
@@ -120,13 +120,14 @@ var _ = Describe("Redpanda Extended Tests", Ordered, Label("redpanda-extended"),
 			totalSeconds := int(testDuration.Seconds())
 			expectedMessagesPerSecond := 10 * messagesPerSecond // 10 producers * 10 messages per second
 			expectedMessages := totalSeconds * expectedMessagesPerSecond
-			minimumExpectedMessages := int(float64(expectedMessages) * 0.8) // Allow for 20% message loss
+			const lossTolerance = 0.05 // Allow for 5% message loss
+			minimumExpectedMessages := int(float64(expectedMessages) * (1 - lossTolerance))
 
 			GinkgoWriter.Printf("\n=== Message Count Results ===\n")
 			GinkgoWriter.Printf("Test duration: %v (%d seconds)\n", testDuration, totalSeconds)
 			GinkgoWriter.Printf("Producers: 10, each sending %d messages per second\n", messagesPerSecond)
 			GinkgoWriter.Printf("Expected messages: %d\n", expectedMessages)
-			GinkgoWriter.Printf("Minimum expected messages (80%%): %d\n", minimumExpectedMessages)
+			GinkgoWriter.Printf("Minimum expected messages (%d%%): %d\n", 100-int(lossTolerance*100), minimumExpectedMessages)
 			GinkgoWriter.Printf("Actual messages received: %d\n", messageCount)
 
 			if messageCount >= minimumExpectedMessages {
@@ -139,8 +140,8 @@ var _ = Describe("Redpanda Extended Tests", Ordered, Label("redpanda-extended"),
 
 			// Assert that we received at least the minimum expected messages
 			Expect(messageCount).To(BeNumerically(">=", minimumExpectedMessages),
-				fmt.Sprintf("Should receive at least %d messages (80%% of expected %d)",
-					minimumExpectedMessages, expectedMessages))
+				fmt.Sprintf("Should receive at least %d messages (%d%% of expected %d)",
+					minimumExpectedMessages, 100-int(lossTolerance*100), expectedMessages))
 		})
 	})
 })
@@ -160,7 +161,7 @@ func checkRPK(topic string, lastLoopOffset int, lastLoopTimestamp time.Time) (ne
 		newOffset = int(messages[len(messages)-1].Offset)
 		lastTimestamp = messages[len(messages)-1].Timestamp
 	} else {
-		Fail("No messages received")
+		Fail("❌ No messages received")
 	}
 
 	// 1. Check timestamp
@@ -170,13 +171,14 @@ func checkRPK(topic string, lastLoopOffset int, lastLoopTimestamp time.Time) (ne
 	// Redpanda logs in UTC, so we need to convert to local time
 	lastTime = lastTime.UTC()
 	currentNow := time.Now().UTC()
+	timeDifference := lastTime.Sub(currentNow)
 	if lastTime.Before(currentNow.Add(-1 * time.Minute)) {
-		Fail(fmt.Sprintf("Timestamp is too old: %s (%dms)", lastTime, lastTime.Sub(currentNow).Milliseconds()))
+		Fail(fmt.Sprintf("❌ Timestamp is too old: %s (%dms)", lastTime, lastTime.Sub(currentNow).Milliseconds()))
 	} else if lastTime.After(currentNow.Add(1 * time.Minute)) {
-		Fail(fmt.Sprintf("Timestamp is too new: %s (%dms)", lastTime, lastTime.Sub(currentNow).Milliseconds()))
+		Fail(fmt.Sprintf("❌ Timestamp is too new: %s (%dms)", lastTime, lastTime.Sub(currentNow).Milliseconds()))
 	}
 
-	GinkgoWriter.Printf("✅ Timestamp is within reason: %s\n", lastTime)
+	GinkgoWriter.Printf("✅ Timestamp is within reason: %s (time difference: %s)\n", lastTime, timeDifference)
 
 	// 2. Check offset
 	if newOffset <= lastLoopOffset {
@@ -190,10 +192,13 @@ func checkRPK(topic string, lastLoopOffset int, lastLoopTimestamp time.Time) (ne
 	msgPerSec := float64(newOffset-lastLoopOffset) / elapsedTime.Seconds()
 
 	if msgPerSec <= 0 {
-		Fail("Msg per sec is not positive")
+		Fail("❌ Msg per sec is not positive")
 	}
-
-	GinkgoWriter.Printf("✅ Msg per sec: %f\n", msgPerSec)
+	if msgPerSec < 9 {
+		Fail(fmt.Sprintf("❌ Msg per sec is too low: %f\n", msgPerSec))
+	} else {
+		GinkgoWriter.Printf("✅ Msg per sec: %f\n", msgPerSec)
+	}
 
 	return newOffset, nil
 }

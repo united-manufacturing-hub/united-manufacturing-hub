@@ -29,9 +29,9 @@
     "workspaceFolder": "/workspaces/united-manufacturing-hub",
     "workspaceMount": "source=${localWorkspaceFolder},target=/workspaces/united-manufacturing-hub,type=bind,consistency=cached",
     "mounts": [
-        // Mount data and tmp directories as tmpfs to avoid disk I/O, which is quite slow inside devcontainers
-        "type=tmpfs,target=/workspaces/united-manufacturing-hub/umh-core/data,tmpfs-size=512m",
-        "type=tmpfs,target=/workspaces/united-manufacturing-hub/umh-core/tmp,tmpfs-size=512m"
+        // https://code.visualstudio.com/remote/advancedcontainers/improve-performance#_use-a-targeted-named-volume
+        "source=${localWorkspaceFolderBasename}-data,target=${containerWorkspaceFolder}/umh-core/data,type=volume",
+        "source=${localWorkspaceFolderBasename}-tmp,target=${containerWorkspaceFolder}/umh-core/tmp,type=volume"
     ],
     // Configure tool-specific properties.
     "customizations": {
