@@ -16,6 +16,7 @@
 package integration_test
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"strings"
@@ -120,12 +121,15 @@ var _ = Describe("Redpanda Extended Tests", Ordered, Label("redpanda-extended"),
 					Fail(fmt.Sprintf("Offset is not increasing: %d <= %d", currentOffset, lastOffset))
 				}
 
-				if lastTimestamp < time.Now().Add(-1*time.Minute).UnixNano() {
-					Fail(fmt.Sprintf("Timestamp is too old: %d < %d", lastTimestamp, time.Now().Add(-1*time.Minute).UnixNano()))
-				}
-
-				if lastTimestamp > time.Now().UnixNano() {
-					Fail(fmt.Sprintf("Timestamp is in the future: %d > %d", lastTimestamp, time.Now().UnixNano()))
+				// Parse lastTimestamp from unix milli
+				lastTime := time.UnixMilli(lastTimestamp)
+				// Redpanda logs in UTC, so we need to convert to local time
+				lastTime = lastTime.UTC()
+				currentNow := time.Now().UTC()
+				if lastTime.Before(currentNow.Add(-1 * time.Minute)) {
+					Fail(fmt.Sprintf("Timestamp is too old: %s (%dms)", lastTime, lastTime.Sub(currentNow).Milliseconds()))
+				} else if lastTime.After(currentNow.Add(1 * time.Minute)) {
+					Fail(fmt.Sprintf("Timestamp is too new: %s (%dms)", lastTime, lastTime.Sub(currentNow).Milliseconds()))
 				}
 
 				time.Sleep(monitorHealthInterval)
@@ -137,15 +141,11 @@ var _ = Describe("Redpanda Extended Tests", Ordered, Label("redpanda-extended"),
 			Expect(err).NotTo(HaveOccurred(), "Should be able to list topics with rpk")
 			GinkgoWriter.Printf("Available topics:\n%s\n", out)
 
-			// Count the messages by using rpk to consume all messages and pipe through wc -l
-			out, err = runDockerCommand("exec", getContainerName(), "bash", "-c",
-				fmt.Sprintf("/opt/redpanda/bin/rpk topic consume %s --offset earliest -n -1 2>/dev/null | wc -l", testTopic))
-			Expect(err).NotTo(HaveOccurred(), "Should be able to count messages with rpk")
-
-			// Parse message count
-			messageCount := 0
-			_, err = fmt.Sscanf(strings.TrimSpace(out), "%d", &messageCount)
-			Expect(err).NotTo(HaveOccurred(), "Should be able to parse message count")
+			// Consume the last 10 messages
+			messages, err := getRPKSample(testTopic)
+			Expect(err).NotTo(HaveOccurred(), "Should be able to fetch messages with rpk")
+			// From the last messasage, get it's offset as messageCount (this works, since we always spawn a fresh redpanda instance for this test)
+			messageCount := int(messages[len(messages)-1].Offset)
 
 			// Calculate expected message count with a tolerance of 20% loss
 			totalSeconds := int(testDuration.Seconds())
@@ -184,7 +184,9 @@ type Message struct {
 
 // getRPKSample connects to the redpanda cluster, and returns the last 10 messages from the given topic
 func getRPKSample(topic string) ([]Message, error) {
-	out, err := runDockerCommand("exec", getContainerName(), "/opt/redpanda/bin/rpk", "topic", "consume", topic, "--offset", "-10", "-n", "10", "--format", "%d:%t:%o\n")
+	ctx, cncl := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cncl()
+	out, err := runDockerCommandWithCtx(ctx, "exec", getContainerName(), "/opt/redpanda/bin/rpk", "topic", "consume", topic, "--offset", "-10", "-n", "10", "--format", "%d:%t:%o\n")
 	if err != nil {
 		return nil, err
 	}
