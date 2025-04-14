@@ -91,6 +91,11 @@ jobs:
         run: |
           make download-docker-binaries
           
+      - name: Stop containers & cleanup
+        working-directory: ./umh-core
+        run: |
+          make cleanup-ci
+
       - name: Run integration tests
         env:
           CI: true
