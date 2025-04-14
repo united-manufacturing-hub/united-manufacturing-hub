@@ -132,6 +132,13 @@ func WithS6Service(s6Service s6service.Service) RedpandaServiceOption {
 	}
 }
 
+// WithS6Manager sets a custom S6 manager for the RedpandaService
+func WithS6Manager(s6Manager *s6fsm.S6Manager) RedpandaServiceOption {
+	return func(s *RedpandaService) {
+		s.s6Manager = s6Manager
+	}
+}
+
 // WithBaseDir sets the base directory for the RedpandaService
 func WithBaseDir(baseDir string) RedpandaServiceOption {
 	return func(s *RedpandaService) {
