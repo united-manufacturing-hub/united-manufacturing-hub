@@ -87,7 +87,6 @@ func (r *Router) router() {
 	for {
 		select {
 		case message := <-r.inboundChannel:
-			r.routerLogger.Infof("Router received message: %v", message)
 			r.dog.ReportHeartbeatStatus(watcherUUID, watchdog.HEARTBEAT_STATUS_OK)
 			// Decode message
 			messageContent, err := encoding.DecodeMessageFromUserToUMHInstance(message.Content)
