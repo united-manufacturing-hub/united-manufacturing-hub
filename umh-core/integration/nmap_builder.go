@@ -26,7 +26,7 @@ type NmapBuilder struct {
 	activeNmap map[string]bool
 }
 
-// NewBenthosBuilder creates a new builder for Benthos configurations
+// NewNmapBuilder creates a new builder for Benthos configurations
 func NewNmapBuilder() *NmapBuilder {
 	return &NmapBuilder{
 		full: config.FullConfig{
@@ -93,7 +93,7 @@ func (b *NmapBuilder) StopNmap(name string) *NmapBuilder {
 	return b
 }
 
-// CountActiveBenthos returns the number of active Benthos services
+// CountActiveNmap returns the number of active Benthos services
 func (b *NmapBuilder) CountActiveNmap() int {
 	count := 0
 	for _, isActive := range b.activeNmap {

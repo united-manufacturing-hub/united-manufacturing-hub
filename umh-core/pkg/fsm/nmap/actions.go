@@ -50,7 +50,7 @@ func (n *NmapInstance) CreateInstance(ctx context.Context, filesystemService fil
 
 	}
 
-	n.baseFSMInstance.GetLogger().Debugf("S6 service %s directory structure created", n.baseFSMInstance.GetID())
+	n.baseFSMInstance.GetLogger().Debugf("Nmap service %s added to S6 manager", n.baseFSMInstance.GetID())
 	return nil
 }
 
@@ -71,16 +71,16 @@ func (n *NmapInstance) RemoveInstance(ctx context.Context, filesystemService fil
 			n.baseFSMInstance.GetLogger().Debugf("Nmap service %s not found in S6 manager", n.baseFSMInstance.GetID())
 			return nil // do not throw an error, as each action is expected to be idempotent
 		}
-		return fmt.Errorf("failed to remove service for %s: %w", n.baseFSMInstance.GetID(), err)
+		return fmt.Errorf("failed to remove Nmap service %s from S6 manager: %w", n.baseFSMInstance.GetID(), err)
 	}
 
-	n.baseFSMInstance.GetLogger().Debugf("S6 service %s removed", n.baseFSMInstance.GetID())
+	n.baseFSMInstance.GetLogger().Debugf("Nmap service %s removed from S6 manager", n.baseFSMInstance.GetID())
 	return nil
 }
 
 // StartInstance attempts to start the Nmap by setting the desired state to running for the given instance
 func (n *NmapInstance) StartInstance(ctx context.Context, filesystemService filesystem.Service) error {
-	n.baseFSMInstance.GetLogger().Infof("Enabling monitoring for %s (no-op)", n.baseFSMInstance.GetID())
+	n.baseFSMInstance.GetLogger().Infof("Enabling monitoring for Nmap: %s (no-op)", n.baseFSMInstance.GetID())
 
 	err := n.monitorService.StartNmap(ctx, n.baseFSMInstance.GetID())
 	if err != nil {
