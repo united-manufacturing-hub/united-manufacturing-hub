@@ -442,7 +442,18 @@ func printContainerLogs() {
 		fmt.Printf("%s\n", out)
 	}
 
-	// 4. List all available log files for reference
+	// 4. Golden Benthos logs
+	fmt.Printf("\n=== GOLDEN BENTHOS INTERNAL LOGS ===\n")
+	out, err = runDockerCommand("exec", containerName, "cat", "/data/logs/golden-benthos/current")
+	if err != nil {
+		fmt.Printf("Failed to get Benthos internal logs: %v\n", err)
+	} else if out == "" {
+		fmt.Printf("Benthos internal logs are empty or not found\n")
+	} else {
+		fmt.Printf("%s\n", out)
+	}
+
+	// 5. List all available log files for reference
 	fmt.Printf("\n=== AVAILABLE LOG FILES ===\n")
 	out, err = runDockerCommand("exec", containerName, "find", "/data/logs", "-type", "f")
 	if err != nil {
