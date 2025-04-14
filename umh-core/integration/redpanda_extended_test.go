@@ -205,11 +205,6 @@ func checkRPK(topic string, lastLoopOffset int, lastLoopTimestamp time.Time, los
 		}
 	}
 
-	// Also calculate the msg per sec based on the total time
-	totalTime := time.Since(startTime)
-	msgPerSecTotal := float64(newOffset-lastLoopOffset) / totalTime.Seconds()
-	GinkgoWriter.Printf("✅ Msg per sec total: %f (%.2f%% of expected %d)\n", msgPerSecTotal, msgPerSecTotal/float64(messagesPerSecond)*100, messagesPerSecond)
-
 	return newOffset, nil
 }
 
