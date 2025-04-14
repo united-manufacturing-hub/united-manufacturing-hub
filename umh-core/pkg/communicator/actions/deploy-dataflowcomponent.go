@@ -412,7 +412,7 @@ func (a *DeployDataflowComponentAction) Execute() (interface{}, map[string]inter
 	dfc := config.DataFlowComponentConfig{
 		FSMInstanceConfig: config.FSMInstanceConfig{
 			Name:            a.name,
-			DesiredFSMState: "running",
+			DesiredFSMState: "active",
 		},
 		DataFlowComponentConfig: dataflowcomponentconfig.DataFlowComponentConfig{
 			BenthosConfig: dataflowcomponentconfig.BenthosConfig{
