@@ -15,13 +15,16 @@
 package generator
 
 import (
+	"fmt"
 	"sync"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/container"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
@@ -30,8 +33,9 @@ import (
 
 const (
 	// Manager name constants
-	containerManagerName = logger.ComponentContainerManager + "_" + constants.DefaultManagerName
-	benthosManagerName   = logger.ComponentBenthosManager + "_" + constants.DefaultManagerName
+	containerManagerName         = logger.ComponentContainerManager + "_" + constants.DefaultManagerName
+	benthosManagerName           = logger.ComponentBenthosManager + "_" + constants.DefaultManagerName
+	dataflowcomponentManagerName = logger.ComponentDataFlowComponentManager + constants.DefaultManagerName
 
 	// Instance name constants
 	coreInstanceName = "Core"
@@ -75,21 +79,7 @@ func NewStatusCollector(
 	return collector
 }
 
-func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
-	s.latestData.mu.RLock()
-	defer s.latestData.mu.RUnlock()
-
-	// Lock state for reading and hold it until we're done accessing state data
-	s.systemMu.Lock()
-	defer s.systemMu.Unlock()
-
-	if s.state == nil {
-		sentry.ReportIssuef(sentry.IssueTypeError, s.logger, "[GenerateStatusMessage] State is nil, using empty state")
-		s.logger.Error("State is nil, using empty state")
-		return nil
-	}
-
-	// Create container data from the container manager if available
+func (s *StatusCollectorType) getContainerData() models.Container {
 	var containerData models.Container
 
 	if containerManager, exists := s.state.Managers[containerManagerName]; exists {
@@ -109,6 +99,55 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 		containerData = buildDefaultContainerData()
 	}
 
+	return containerData
+}
+
+func (s *StatusCollectorType) getDataFlowComponentData() ([]models.Dfc, error) {
+	var dfcData []models.Dfc
+
+	if dataflowcomponentManager, exists := s.state.Managers[dataflowcomponentManagerName]; exists {
+		instances := dataflowcomponentManager.GetInstances()
+
+		for _, instance := range instances {
+			dfc, err := buildDataFlowComponentDataFromSnapshot(instance, s.logger)
+			if err != nil {
+				s.logger.Error("Error building dataflowcomponent data", zap.Error(err))
+				continue
+			}
+			dfcData = append(dfcData, dfc)
+		}
+	} else {
+		s.logger.Warn("Dataflowcomponent manager not found in system snapshot",
+			zap.String("managerName", dataflowcomponentManagerName), "all managers: ", s.state.Managers)
+		return nil, fmt.Errorf("dataflowcomponent manager not found in system snapshot")
+	}
+
+	return dfcData, nil
+}
+
+func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
+	s.latestData.mu.RLock()
+	defer s.latestData.mu.RUnlock()
+
+	// Lock state for reading and hold it until we're done accessing state data
+	s.systemMu.Lock()
+	defer s.systemMu.Unlock()
+
+	if s.state == nil {
+		sentry.ReportIssuef(sentry.IssueTypeError, s.logger, "[GenerateStatusMessage] State is nil, using empty state")
+		s.logger.Error("State is nil, using empty state")
+		return nil
+	}
+
+	// Create container data from the container manager if available
+	containerData := s.getContainerData()
+
+	// Create dataflowcomponent data from the dataflowcomponent manager if available
+	dfcData, err := s.getDataFlowComponentData()
+	if err != nil {
+		s.logger.Error("Error getting dataflowcomponent data", zap.Error(err))
+	}
+
 	// Create the status message
 	statusMessage := &models.StatusMessage{
 		Core: models.Core{
@@ -123,7 +162,7 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 				Location: map[int]string{}, // TODO: fetch from observed state
 			},
 			Container: containerData,
-			Dfcs:      []models.Dfc{},
+			Dfcs:      dfcData,
 			Redpanda: models.Redpanda{
 				Health: &models.Health{
 					Message:       "redpanda monitoring is not implemented yet",
@@ -236,6 +275,41 @@ func buildContainerDataFromSnapshot(instance fsm.FSMInstanceSnapshot, log *zap.S
 	}
 
 	return containerData
+}
+
+func buildDataFlowComponentDataFromSnapshot(instance fsm.FSMInstanceSnapshot, log *zap.SugaredLogger) (models.Dfc, error) {
+	dfcData := models.Dfc{}
+
+	// Check if we have actual observedState
+	if instance.LastObservedState != nil {
+		// Try to cast to the right type
+
+		// Create health status based on instance.CurrentState
+		extractHealthStatus := func(state string) models.HealthCategory {
+			if state == dataflowcomponent.OperationalStateActive {
+				return models.Active
+			} else if state == dataflowcomponent.OperationalStateDegraded {
+				return models.Degraded
+			}
+			return models.Neutral
+		}
+
+		dfcData.Health = &models.Health{
+			Message:       getHealthMessage(extractHealthStatus(instance.CurrentState)),
+			ObservedState: instance.CurrentState,
+			DesiredState:  instance.DesiredState,
+			Category:      extractHealthStatus(instance.CurrentState),
+		}
+
+		dfcData.Type = "custom" // this is a custom DFC; protocol converters will have a separate fsm
+		dfcData.UUID = dataflowcomponentconfig.GenerateUUIDFromName(instance.ID).String()
+		dfcData.Name = &instance.ID
+	} else {
+		log.Warn("no observed state found for dataflowcomponent", zap.String("instanceID", instance.ID))
+		return models.Dfc{}, fmt.Errorf("no observed state found for dataflowcomponent")
+	}
+
+	return dfcData, nil
 }
 
 // getHealthMessage returns an appropriate message based on health category
