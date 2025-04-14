@@ -83,7 +83,8 @@ var _ = Describe("Redpanda Extended Tests", Ordered, Label("redpanda-extended"),
 			testEndTime := startTime.Add(testDuration)
 
 			// Monitor the health of the system at regular intervals
-			lastOffset := -1
+			lastLoopOffset := -1
+			lastLoopTimestamp := time.Now()
 			for time.Now().Before(testEndTime) {
 				// Print status update
 				elapsedDuration := time.Since(startTime).Round(time.Second)
@@ -100,52 +101,20 @@ var _ = Describe("Redpanda Extended Tests", Ordered, Label("redpanda-extended"),
 				if err != nil {
 					Fail(fmt.Sprintf("System is unstable: %v", err))
 				}
-
-				// Fetch the latest Messages and validate that:
-				// 1) The timestamp is within reason (+-1m)
-				// 2) The offsets are increasing (e.g the last offset of the batch is higher then the current one)
-
-				messages, err := getRPKSample(testTopic)
-				Expect(err).NotTo(HaveOccurred(), "Should be able to fetch messages with rpk")
-
-				var currentOffset int
-				var lastTimestamp int64
-				if len(messages) > 0 {
-					currentOffset = int(messages[len(messages)-1].Offset)
-					lastTimestamp = messages[len(messages)-1].Timestamp
-				} else {
-					Fail("No messages received")
+				newOffset, err := checkRPK(testTopic, lastLoopOffset, lastLoopTimestamp)
+				if err != nil {
+					Fail(fmt.Sprintf("RPK check failed: %v", err))
 				}
-
-				if currentOffset <= lastOffset {
-					Fail(fmt.Sprintf("Offset is not increasing: %d <= %d", currentOffset, lastOffset))
-				}
-
-				// Parse lastTimestamp from unix milli
-				lastTime := time.UnixMilli(lastTimestamp)
-				// Redpanda logs in UTC, so we need to convert to local time
-				lastTime = lastTime.UTC()
-				currentNow := time.Now().UTC()
-				if lastTime.Before(currentNow.Add(-1 * time.Minute)) {
-					Fail(fmt.Sprintf("Timestamp is too old: %s (%dms)", lastTime, lastTime.Sub(currentNow).Milliseconds()))
-				} else if lastTime.After(currentNow.Add(1 * time.Minute)) {
-					Fail(fmt.Sprintf("Timestamp is too new: %s (%dms)", lastTime, lastTime.Sub(currentNow).Milliseconds()))
-				}
-
+				lastLoopOffset = newOffset
+				lastLoopTimestamp = time.Now()
 				time.Sleep(monitorHealthInterval)
 			}
 
 			By("Verifying message count with rpk")
-			// First check if the topic exists
-			out, err := runDockerCommand("exec", getContainerName(), "/opt/redpanda/bin/rpk", "topic", "list")
-			Expect(err).NotTo(HaveOccurred(), "Should be able to list topics with rpk")
-			GinkgoWriter.Printf("Available topics:\n%s\n", out)
-
-			// Consume the last 10 messages
-			messages, err := getRPKSample(testTopic)
-			Expect(err).NotTo(HaveOccurred(), "Should be able to fetch messages with rpk")
-			// From the last messasage, get it's offset as messageCount (this works, since we always spawn a fresh redpanda instance for this test)
-			messageCount := int(messages[len(messages)-1].Offset)
+			messageCount, err := checkRPK(testTopic, lastLoopOffset, lastLoopTimestamp)
+			if err != nil {
+				Fail(fmt.Sprintf("RPK check failed: %v", err))
+			}
 
 			// Calculate expected message count with a tolerance of 20% loss
 			totalSeconds := int(testDuration.Seconds())
@@ -175,6 +144,59 @@ var _ = Describe("Redpanda Extended Tests", Ordered, Label("redpanda-extended"),
 		})
 	})
 })
+
+func checkRPK(topic string, lastLoopOffset int, lastLoopTimestamp time.Time) (newOffset int, err error) {
+	// Fetch the latest Messages and validate that:
+	// 1) The timestamp is within reason (+-1m)
+	// 2) The offsets are increasing (e.g the last offset of the batch is higher then the current one)
+
+	messages, err := getRPKSample(topic)
+	if err != nil {
+		return 0, err
+	}
+
+	var lastTimestamp int64
+	if len(messages) > 0 {
+		newOffset = int(messages[len(messages)-1].Offset)
+		lastTimestamp = messages[len(messages)-1].Timestamp
+	} else {
+		Fail("No messages received")
+	}
+
+	// 1. Check timestamp
+
+	// Parse lastTimestamp from unix milli
+	lastTime := time.UnixMilli(lastTimestamp)
+	// Redpanda logs in UTC, so we need to convert to local time
+	lastTime = lastTime.UTC()
+	currentNow := time.Now().UTC()
+	if lastTime.Before(currentNow.Add(-1 * time.Minute)) {
+		Fail(fmt.Sprintf("Timestamp is too old: %s (%dms)", lastTime, lastTime.Sub(currentNow).Milliseconds()))
+	} else if lastTime.After(currentNow.Add(1 * time.Minute)) {
+		Fail(fmt.Sprintf("Timestamp is too new: %s (%dms)", lastTime, lastTime.Sub(currentNow).Milliseconds()))
+	}
+
+	GinkgoWriter.Printf("✅ Timestamp is within reason: %s\n", lastTime)
+
+	// 2. Check offset
+	if newOffset <= lastLoopOffset {
+		Fail(fmt.Sprintf("Offset is not increasing: %d <= %d", newOffset, lastLoopOffset))
+	}
+
+	GinkgoWriter.Printf("✅ Offset is increasing: %d > %d\n", newOffset, lastLoopOffset)
+
+	// 3. Calculate msg per sec based on now and lastlooptimestamp
+	elapsedTime := time.Since(lastLoopTimestamp)
+	msgPerSec := float64(newOffset-lastLoopOffset) / elapsedTime.Seconds()
+
+	if msgPerSec <= 0 {
+		Fail("Msg per sec is not positive")
+	}
+
+	GinkgoWriter.Printf("✅ Msg per sec: %f\n", msgPerSec)
+
+	return newOffset, nil
+}
 
 type Message struct {
 	Timestamp int64

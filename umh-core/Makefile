@@ -173,6 +173,12 @@ cleanup-ci: clean stop-all-containers
 	docker builder prune -f
 	docker system prune -f --volumes
 
+cleanup-tmp:
+	rm -rf ./tmp/*
+
+cleanup-data:
+	rm -rf ./data/*
+
 vet:
 	go vet -tags=test ./...
 

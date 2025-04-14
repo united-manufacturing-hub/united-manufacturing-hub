@@ -21,7 +21,17 @@
     "runArgs": [
         "--cap-add=SYS_PTRACE",
         "--security-opt",
-        "seccomp=unconfined"
+        "seccomp=unconfined",
+        // CPU shares of 1024 is default, 2048 ensures more system resources are allocated to the devcontainer
+        "--cpu-shares=2048"
+    ],
+    // Mount the umh-core directory from the local machine to the devcontainer
+    "workspaceFolder": "/workspaces/united-manufacturing-hub",
+    "workspaceMount": "source=${localWorkspaceFolder},target=/workspaces/united-manufacturing-hub,type=bind,consistency=cached",
+    "mounts": [
+        // Mount data and tmp directories as tmpfs to avoid disk I/O, which is quite slow inside devcontainers
+        "type=tmpfs,target=/workspaces/united-manufacturing-hub/umh-core/data,tmpfs-size=512m",
+        "type=tmpfs,target=/workspaces/united-manufacturing-hub/umh-core/tmp,tmpfs-size=512m"
     ],
     // Configure tool-specific properties.
     "customizations": {
