@@ -142,6 +142,7 @@ build: download-docker-binaries
 		--build-arg TARGETARCH=$(TARGETARCH) \
 		-t $(IMAGE_NAME):$(TAG) \
 		--progress=plain \
+		--load \
 		-f Dockerfile .
     
 # build-debug: launches delve inside the container.
@@ -326,3 +327,33 @@ stop-all-pods:
 	docker ps -q --filter "name=$(IMAGE_NAME)*" | xargs -r docker stop
 	# Remove all pods starting with $(IMAGE_NAME) (also show stopped pods)
 	docker ps -a -q --filter "name=$(IMAGE_NAME)*" | xargs -r docker rm
+
+push:
+	@echo "Pushing $(IMAGE_NAME):$(TAG) to registry"
+	@if [ -z "$(REGISTRY)" ]; then \
+		echo "Error: REGISTRY environment variable is not set"; \
+		exit 1; \
+	fi
+	docker tag $(IMAGE_NAME):$(TAG) $(REGISTRY)/$(IMAGE_NAME):$(TAG)
+	docker push $(REGISTRY)/$(IMAGE_NAME):$(TAG)
+
+# Push with platform-specific tag (used in CI)
+push-platform:
+	@echo "Pushing $(IMAGE_NAME):$(TAG) for $(TARGETARCH) to registry"
+	@if [ -z "$(REGISTRY)" ]; then \
+		echo "Error: REGISTRY environment variable is not set"; \
+		exit 1; \
+	fi
+	@if [ -z "$(TAG)" ]; then \
+		echo "Error: TAG environment variable is not set"; \
+		exit 1; \
+	fi
+	@PLATFORM_SHORT="$(TARGETARCH)"; \
+	PLATFORM_TAG="$(TAG)-$${PLATFORM_SHORT}"; \
+	echo "Tagging $(IMAGE_NAME):$(TAG) as $(REGISTRY)/$(IMAGE_NAME):$${PLATFORM_TAG}"; \
+	docker tag $(IMAGE_NAME):$(TAG) $(REGISTRY)/$(IMAGE_NAME):$${PLATFORM_TAG}; \
+	echo "Pushing $(REGISTRY)/$(IMAGE_NAME):$${PLATFORM_TAG}"; \
+	docker push $(REGISTRY)/$(IMAGE_NAME):$${PLATFORM_TAG}
+
+# Build and push in one command (for CI)
+build-push: build push-platform

@@ -163,17 +163,44 @@ jobs:
           make download-docker-binaries
 
       - name: Build and Push Docker Image
-        uses: docker/build-push-action@v5
-        with:
-          context: ./umh-core
-          push: true
-          platforms: linux/${{ matrix.architecture }}
-          tags: ${{ steps.prepare_tags.outputs.NEW_TAGS }}
-          labels: ${{ steps.meta.outputs.labels }}
-          build-args: |
-            APP_VERSION=${{ steps.set_version.outputs.APP_VERSION }}
-            TARGETARCH=${{ matrix.architecture }}
-          provenance: false
+        working-directory: ./umh-core
+        env:
+          REGISTRY: ${{ env.REGISTRY }}
+          IMAGE_NAME: ${{ env.IMAGE_NAME }}
+          TARGETARCH: ${{ matrix.architecture }}
+        run: |
+          # Get the base tags from meta
+          TAGS="${{ steps.meta.outputs.tags }}"
+          
+          # Convert newlines to spaces and handle as a space-separated list
+          TAGS_SPACE=$(echo "$TAGS" | tr '\n' ' ')
+          
+          # Process each tag
+          for TAG in $TAGS_SPACE; do
+            # Get the tag part without the registry/repo prefix
+            TAG_PART=$(echo "$TAG" | sed "s|$REGISTRY/$IMAGE_NAME:||")
+            
+            echo "Building and pushing for tag: $TAG_PART"
+            
+            # Build the image (and tag it with the REGISTRY path)
+            make build TARGETARCH=${{ matrix.architecture }} TAG=$TAG_PART APP_VERSION=${{ steps.set_version.outputs.APP_VERSION }}
+            
+            # After build, explicitly tag with the full repository path
+            LOCAL_IMAGE_NAME="umh-core:$TAG_PART"
+            FULL_REPO_IMAGE="$REGISTRY/$IMAGE_NAME:$TAG_PART"
+            echo "Explicitly tagging $LOCAL_IMAGE_NAME as $FULL_REPO_IMAGE"
+            docker tag $LOCAL_IMAGE_NAME $FULL_REPO_IMAGE
+            
+            # Also tag with platform-specific tag directly
+            PLATFORM_TAG="${TAG_PART}-${{ matrix.architecture }}"
+            FULL_PLATFORM_REPO_IMAGE="$REGISTRY/$IMAGE_NAME:$PLATFORM_TAG"
+            echo "Tagging with platform suffix: $FULL_PLATFORM_REPO_IMAGE"
+            docker tag $LOCAL_IMAGE_NAME $FULL_PLATFORM_REPO_IMAGE
+            
+            # Push the platform-specific tag
+            echo "Pushing $FULL_PLATFORM_REPO_IMAGE"
+            docker push $FULL_PLATFORM_REPO_IMAGE
+          done
 
       - name: Set Output Tags
         id: output-tags
