@@ -172,8 +172,10 @@ clean:
 	docker rm $(IMAGE_NAME) || true
 	docker rmi $(IMAGE_NAME):$(TAG) || true
 
-# Clean up Docker build cache and unused objects for CI environments
+# Clean up Docker build cache and unused objects for CI environments & stop all containers
 cleanup-ci: clean stop-all-containers
+	docker stop $(docker ps -a -q) || true
+	docker rm $(docker ps -a -q) || true
 	docker builder prune -f
 	docker system prune -f --volumes
 
