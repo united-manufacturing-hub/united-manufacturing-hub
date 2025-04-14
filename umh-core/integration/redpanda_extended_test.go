@@ -45,6 +45,7 @@ var _ = Describe("Redpanda Extended Tests", Ordered, Label("redpanda-extended"),
 		const messagesPerSecond = 10 // Each benthos instance will produce 10 messages per second
 		const testDuration = 60 * time.Minute
 		const monitorHealthInterval = 30 * time.Second
+		const lossTolerance = 0.05 // Allow for 5% message loss
 		BeforeAll(func() {
 			By("Starting with an empty configuration")
 			cfg := NewBuilder().BuildYAML()
@@ -101,7 +102,7 @@ var _ = Describe("Redpanda Extended Tests", Ordered, Label("redpanda-extended"),
 				if err != nil {
 					Fail(fmt.Sprintf("System is unstable: %v", err))
 				}
-				newOffset, err := checkRPK(testTopic, lastLoopOffset, lastLoopTimestamp)
+				newOffset, err := checkRPK(testTopic, lastLoopOffset, lastLoopTimestamp, lossTolerance, messagesPerSecond)
 				if err != nil {
 					Fail(fmt.Sprintf("RPK check failed: %v", err))
 				}
@@ -111,7 +112,7 @@ var _ = Describe("Redpanda Extended Tests", Ordered, Label("redpanda-extended"),
 			}
 
 			By("Verifying message count with rpk")
-			messageCount, err := checkRPK(testTopic, lastLoopOffset, lastLoopTimestamp)
+			messageCount, err := checkRPK(testTopic, lastLoopOffset, lastLoopTimestamp, lossTolerance, messagesPerSecond)
 			if err != nil {
 				Fail(fmt.Sprintf("RPK check failed: %v", err))
 			}
@@ -120,7 +121,6 @@ var _ = Describe("Redpanda Extended Tests", Ordered, Label("redpanda-extended"),
 			totalSeconds := int(testDuration.Seconds())
 			expectedMessagesPerSecond := 10 * messagesPerSecond // 10 producers * 10 messages per second
 			expectedMessages := totalSeconds * expectedMessagesPerSecond
-			const lossTolerance = 0.05 // Allow for 5% message loss
 			minimumExpectedMessages := int(float64(expectedMessages) * (1 - lossTolerance))
 
 			GinkgoWriter.Printf("\n=== Message Count Results ===\n")
@@ -146,7 +146,7 @@ var _ = Describe("Redpanda Extended Tests", Ordered, Label("redpanda-extended"),
 	})
 })
 
-func checkRPK(topic string, lastLoopOffset int, lastLoopTimestamp time.Time) (newOffset int, err error) {
+func checkRPK(topic string, lastLoopOffset int, lastLoopTimestamp time.Time, lossToleranceWarning float64, messagesPerSecond int) (newOffset int, err error) {
 	// Fetch the latest Messages and validate that:
 	// 1) The timestamp is within reason (+-1m)
 	// 2) The offsets are increasing (e.g the last offset of the batch is higher then the current one)
@@ -197,7 +197,12 @@ func checkRPK(topic string, lastLoopOffset int, lastLoopTimestamp time.Time) (ne
 	if msgPerSec < 9 {
 		Fail(fmt.Sprintf("❌ Msg per sec is too low: %f\n", msgPerSec))
 	} else {
-		GinkgoWriter.Printf("✅ Msg per sec: %f\n", msgPerSec)
+		// Let's warn (but not fail) if we are below the loss tolerance (use a nice warning signal)
+		if msgPerSec < float64(messagesPerSecond)*(1-lossToleranceWarning) {
+			GinkgoWriter.Printf("⚠️ Msg per sec is below the loss tolerance: %f\n", msgPerSec)
+		} else {
+			GinkgoWriter.Printf("✅ Msg per sec: %f\n", msgPerSec)
+		}
 	}
 
 	return newOffset, nil

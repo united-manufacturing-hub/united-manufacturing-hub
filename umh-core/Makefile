@@ -51,8 +51,8 @@ CPUS = 2
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "0.0.0-dev")
 
 install:
-	sudo chown vscode:vscode data
-	sudo chown vscode:vscode tmp
+	sudo chown vscode:vscode data || true
+	sudo chown vscode:vscode tmp || true
 	go install go.uber.org/nilaway/cmd/nilaway@$(NILWAY_VERSION)
 	go install github.com/onsi/ginkgo/v2/ginkgo@$(GINKGO_VERSION)
 	go install github.com/evilmartians/lefthook@latest
