@@ -163,17 +163,29 @@ jobs:
           make download-docker-binaries
 
       - name: Build and Push Docker Image
-        uses: docker/build-push-action@v5
-        with:
-          context: ./umh-core
-          push: true
-          platforms: linux/${{ matrix.architecture }}
-          tags: ${{ steps.prepare_tags.outputs.NEW_TAGS }}
-          labels: ${{ steps.meta.outputs.labels }}
-          build-args: |
-            APP_VERSION=${{ steps.set_version.outputs.APP_VERSION }}
-            TARGETARCH=${{ matrix.architecture }}
-          provenance: false
+        working-directory: ./umh-core
+        env:
+          REGISTRY: ${{ env.REGISTRY }}
+          IMAGE_NAME: ${{ env.IMAGE_NAME }}
+          TARGETARCH: ${{ matrix.architecture }}
+        run: |
+          # Get the base tags from meta
+          TAGS="${{ steps.meta.outputs.tags }}"
+          IFS=$'\n' read -d '' -ra TAG_ARRAY <<< "$TAGS"
+          
+          # For each tag, build and push with platform suffix
+          for TAG in "${TAG_ARRAY[@]}"; do
+            # Get the tag part without the registry
+            TAG_PART=$(echo "$TAG" | sed "s|$REGISTRY/$IMAGE_NAME:||")
+            
+            echo "Building and pushing for tag: $TAG_PART"
+            
+            # Build the image 
+            make build TARGETARCH=${{ matrix.architecture }} TAG=$TAG_PART APP_VERSION=${{ steps.set_version.outputs.APP_VERSION }}
+            
+            # Push with platform-specific tag
+            make push-platform REGISTRY=$REGISTRY TAG=$TAG_PART
+          done
 
       - name: Set Output Tags
         id: output-tags
