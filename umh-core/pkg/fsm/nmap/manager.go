@@ -25,6 +25,10 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 )
 
+const (
+	baseNmapDir = constants.S6BaseDir
+)
+
 // NmapManager is the FSM manager for multiple nmap monitor instances
 type NmapManager struct {
 	*public_fsm.BaseFSMManager[config.NmapConfig]
@@ -45,48 +49,40 @@ func NewNmapManager(name string) *NmapManager {
 
 	baseMgr := public_fsm.NewBaseFSMManager[config.NmapConfig](
 		managerName,
-		"/dev/null", // no actual S6 base dir needed for a pure monitor
+		baseNmapDir,
 		// Extract NmapConfig slice from FullConfig
 		func(fc config.FullConfig) ([]config.NmapConfig, error) {
-			// Always return a single config
-			var configs []config.NmapConfig
-			configs = append(configs, config.NmapConfig{
-				FSMInstanceConfig: config.FSMInstanceConfig{
-					Name:            constants.DefaultInstanceName,
-					DesiredFSMState: OperationalStateOpen,
-				},
-			})
-			return configs, nil
+			return fc.Internal.Nmap, nil
 		},
 		// Get name from config
-		func(nn config.NmapConfig) (string, error) {
-			return nn.Name, nil
+		func(cfg config.NmapConfig) (string, error) {
+			return cfg.Name, nil
 		},
 		// Desired state from config
-		func(nn config.NmapConfig) (string, error) {
-			return nn.DesiredFSMState, nil
+		func(cfg config.NmapConfig) (string, error) {
+			return cfg.DesiredFSMState, nil
 		},
 		// Create instance
-		func(nn config.NmapConfig) (public_fsm.FSMInstance, error) {
-			inst := NewNmapInstance(nn)
+		func(cfg config.NmapConfig) (public_fsm.FSMInstance, error) {
+			inst := NewNmapInstance(cfg)
 			return inst, nil
 		},
 		// Compare config => if same, no recreation needed
-		func(instance public_fsm.FSMInstance, nn config.NmapConfig) (bool, error) {
+		func(instance public_fsm.FSMInstance, cfg config.NmapConfig) (bool, error) {
 			ni, ok := instance.(*NmapInstance)
 			if !ok {
 				return false, fmt.Errorf("instance is not a NmapInstance")
 			}
 			// If same config => return true, else false
-			return ni.config.NmapServiceConfig.Equal(nn.NmapServiceConfig), nil
+			return ni.config.NmapServiceConfig.Equal(cfg.NmapServiceConfig), nil
 		},
 		// Set config if only small changes
-		func(instance public_fsm.FSMInstance, nn config.NmapConfig) error {
+		func(instance public_fsm.FSMInstance, cfg config.NmapConfig) error {
 			ni, ok := instance.(*NmapInstance)
 			if !ok {
 				return fmt.Errorf("instance is not a NmapInstance")
 			}
-			ni.config = nn
+			ni.config = cfg
 			return nil
 		},
 		// Get expected max p95 execution time per instance

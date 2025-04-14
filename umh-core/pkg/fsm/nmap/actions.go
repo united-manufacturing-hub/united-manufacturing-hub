@@ -26,9 +26,16 @@ import (
 	nmap_service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/nmap"
 )
 
-// In Benthos, actions.go contained idempotent operations (like starting/stopping a service).
-// For the nmap monitor, we technically don't "start/stop" nmap itself—we're only
-// enabling or disabling the monitoring. We'll keep placeholder actions for consistency.
+// The functions in this file define heavier, possibly fail-prone operations
+// (for example, network or file I/O) that the Benthos FSM might need to perform.
+// They are intended to be called from Reconcile.
+//
+// IMPORTANT:
+//   - Each action is expected to be idempotent, since it may be retried
+//     multiple times due to transient failures.
+//   - Each action takes a context.Context and can return an error if the operation fails.
+//   - If an error occurs, the Reconcile function must handle
+//     setting error state and scheduling a retry/backoff.
 
 // CreateInstance is called when the FSM transitions from to_be_created -> creating.
 func (n *NmapInstance) CreateInstance(ctx context.Context, filesystemService filesystem.Service) error {
@@ -62,7 +69,7 @@ func (n *NmapInstance) RemoveInstance(ctx context.Context, filesystemService fil
 		metrics.ObserveReconcileTime(metrics.ComponentNmapInstance, n.baseFSMInstance.GetID()+".initiateS6Remove", time.Since(start))
 	}()
 
-	n.baseFSMInstance.GetLogger().Debugf("Starting Action: Removing S6 service %s ...", n.baseFSMInstance.GetID())
+	n.baseFSMInstance.GetLogger().Debugf("Starting Action: Removing Nmap service %s from S6 manager ...", n.baseFSMInstance.GetID())
 
 	// Initiate the removal cycle
 	err := n.monitorService.RemoveNmapFromS6Manager(ctx, n.baseFSMInstance.GetID())
@@ -80,7 +87,7 @@ func (n *NmapInstance) RemoveInstance(ctx context.Context, filesystemService fil
 
 // StartInstance attempts to start the Nmap by setting the desired state to running for the given instance
 func (n *NmapInstance) StartInstance(ctx context.Context, filesystemService filesystem.Service) error {
-	n.baseFSMInstance.GetLogger().Infof("Enabling monitoring for Nmap: %s (no-op)", n.baseFSMInstance.GetID())
+	n.baseFSMInstance.GetLogger().Infof("Starting Action: Starting Nmap service %s ...", n.baseFSMInstance.GetID())
 
 	err := n.monitorService.StartNmap(ctx, n.baseFSMInstance.GetID())
 	if err != nil {
@@ -94,7 +101,7 @@ func (n *NmapInstance) StartInstance(ctx context.Context, filesystemService file
 
 // StopInstance attempts to stop the Nmap by setting the desired state to stopped for the given instance
 func (n *NmapInstance) StopInstance(ctx context.Context, filesystemService filesystem.Service) error {
-	n.baseFSMInstance.GetLogger().Infof("Disabling monitoring for %s (no-op)", n.baseFSMInstance.GetID())
+	n.baseFSMInstance.GetLogger().Infof("Starting Action: Stopping Nmap service %s ...", n.baseFSMInstance.GetID())
 	// Set the desired state to stopped for the given instance
 	err := n.monitorService.StopNmap(ctx, n.baseFSMInstance.GetID())
 	if err != nil {
@@ -121,6 +128,10 @@ func (n *NmapInstance) UpdateObservedStateOfInstance(ctx context.Context, filesy
 
 	// Stores the raw service info
 	n.ObservedState.ServiceInfo = svcInfo
+
+	if n.ObservedState.LastStateChange == 0 {
+		n.ObservedState.LastStateChange = time.Now().Unix()
+	}
 
 	// Fetch the actual Nmap config from the service
 	start = time.Now()

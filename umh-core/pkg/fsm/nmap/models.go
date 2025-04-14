@@ -34,6 +34,7 @@ const (
 	OperationalStateDegraded = "degraded"
 
 	// Running phase states
+	// See nmap-states here: https://nmap.org/book/man-port-scanning-basics.html
 	// active means nmap is running and it shows port filtered
 	OperationalStateFiltered = "filtered"
 	// active means nmap is running and it shows port down
@@ -137,13 +138,13 @@ type NmapInstance struct {
 	// desired state, removal, etc.
 	baseFSMInstance *internal_fsm.BaseFSMInstance
 
-	// ObservedState: last known container metrics, updated in reconcile
+	// ObservedState: last known nmap metrics, updated in reconcile
 	ObservedState NmapObservedState
 
-	// The nmap monitor service used to gather metrics
+	// The nmap service used to gather metrics
 	monitorService nmap_service.INmapService
 
-	// Possibly store config needed for the container monitor
+	// Possibly store config needed for nmap monitoring
 	config config.NmapConfig
 }
 

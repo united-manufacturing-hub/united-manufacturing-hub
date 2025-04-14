@@ -256,6 +256,12 @@ func (s *NmapService) parseScanLogs(logs []s6service.LogEntry, port int) *NmapSc
 		}
 	}
 
+	// Extract errors if occured (case-insensitive)
+	errorRegex := regexp.MustCompile(`(?im)^.*error.*$`)
+	if matches := errorRegex.FindString(scanOutput); matches != "" {
+		result.Error = matches
+	}
+
 	return result
 }
 

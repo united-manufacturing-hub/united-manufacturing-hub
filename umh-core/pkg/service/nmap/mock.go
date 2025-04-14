@@ -439,20 +439,11 @@ func (m *MockNmapService) SetNmapError(serviceName string, latencyMs float64) {
 		}
 	}
 
-	// Set the logs to include an error message.
-	logs := []s6service.LogEntry{
-		{
-			Timestamp: now,
-			// Lowercase "error" to match the check in isNmapHealthy.
-			Content: "error: simulated nmap failure",
-		},
-	}
-
 	// Update the last scan with the latency and the error logs.
 	info := m.ServiceStates[serviceName]
 	if info.NmapStatus.LastScan != nil {
 		info.NmapStatus.LastScan.PortResult.LatencyMs = latencyMs
-		info.NmapStatus.Logs = logs
+		info.NmapStatus.LastScan.Error = "error: simulated nmap failure"
 	}
 
 	m.StatusResult = *info

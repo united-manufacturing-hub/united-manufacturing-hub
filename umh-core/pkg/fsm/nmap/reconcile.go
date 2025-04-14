@@ -443,15 +443,16 @@ func (n *NmapInstance) reconcileRunningStates(ctx context.Context, filesystemSer
 func (n *NmapInstance) isNmapHealthy() bool {
 	status := n.ObservedState.ServiceInfo.NmapStatus
 
+	// If there is no LastScan and no Logs we consider Nmap to be unhealthy
 	if status.LastScan == nil && len(status.Logs) == 0 {
 		return false
 	}
 
-	for _, log := range status.Logs {
-		if strings.Contains(log.Content, "error") {
-			return false
-		}
+	// If there occured any error in the LastScan during parseScanLogs
+	if status.LastScan.Error != "" {
+		return false
 	}
+
 	// Only consider nmap healthy if the overall health status is running
 	return n.IsNmapRunning() == true
 }
