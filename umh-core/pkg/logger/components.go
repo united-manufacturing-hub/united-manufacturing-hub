@@ -42,7 +42,7 @@ const (
 	ComponentContainerMonService      = "ContainerMonService"
 	ComponentDataFlowComponentService = "DFCService"
 	ComponentRedpandaService          = "RedpandaService"
-
+	ComponentAgentMonitorService      = "AgentMonitorService"
 	// Configuration
 	ComponentConfigManager = "ConfigManager"
 
