@@ -139,6 +139,7 @@ build: download-docker-binaries
 		--build-arg TARGETARCH=$(TARGETARCH) \
 		-t $(IMAGE_NAME):$(TAG) \
 		--progress=plain \
+		--load \
 		-f Dockerfile .
     
 # build-debug: launches delve inside the container.
