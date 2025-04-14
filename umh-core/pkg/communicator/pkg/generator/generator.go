@@ -25,20 +25,9 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/container"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	"go.uber.org/zap"
-)
-
-const (
-	// Manager name constants
-	containerManagerName         = logger.ComponentContainerManager + "_" + constants.DefaultManagerName
-	benthosManagerName           = logger.ComponentBenthosManager + "_" + constants.DefaultManagerName
-	dataflowcomponentManagerName = logger.ComponentDataFlowComponentManager + constants.DefaultManagerName
-
-	// Instance name constants
-	coreInstanceName = "Core"
 )
 
 type StatusCollectorType struct {
@@ -82,19 +71,19 @@ func NewStatusCollector(
 func (s *StatusCollectorType) getContainerData() models.Container {
 	var containerData models.Container
 
-	if containerManager, exists := s.state.Managers[containerManagerName]; exists {
+	if containerManager, exists := s.state.Managers[constants.ContainerManagerName]; exists {
 		instances := containerManager.GetInstances()
 
-		if instance, ok := instances[coreInstanceName]; ok {
+		if instance, ok := instances[constants.CoreInstanceName]; ok {
 			containerData = buildContainerDataFromSnapshot(instance, s.logger)
 		} else {
 			s.logger.Warn("Core instance not found in container manager",
-				zap.String("instanceName", coreInstanceName))
+				zap.String("instanceName", constants.CoreInstanceName))
 			containerData = buildDefaultContainerData()
 		}
 	} else {
 		s.logger.Warn("Container manager not found in system snapshot",
-			zap.String("managerName", containerManagerName))
+			zap.String("managerName", constants.ContainerManagerName))
 
 		containerData = buildDefaultContainerData()
 	}
@@ -105,7 +94,7 @@ func (s *StatusCollectorType) getContainerData() models.Container {
 func (s *StatusCollectorType) getDataFlowComponentData() ([]models.Dfc, error) {
 	var dfcData []models.Dfc
 
-	if dataflowcomponentManager, exists := s.state.Managers[dataflowcomponentManagerName]; exists {
+	if dataflowcomponentManager, exists := s.state.Managers[constants.DataflowcomponentManagerName]; exists {
 		instances := dataflowcomponentManager.GetInstances()
 
 		for _, instance := range instances {
@@ -118,7 +107,7 @@ func (s *StatusCollectorType) getDataFlowComponentData() ([]models.Dfc, error) {
 		}
 	} else {
 		s.logger.Warn("Dataflowcomponent manager not found in system snapshot",
-			zap.String("managerName", dataflowcomponentManagerName), "all managers: ", s.state.Managers)
+			zap.String("managerName", constants.DataflowcomponentManagerName), "all managers: ", s.state.Managers)
 		return nil, fmt.Errorf("dataflowcomponent manager not found in system snapshot")
 	}
 
@@ -186,6 +175,7 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 				SupportedFeatures: []string{
 					"custom-dfc",
 					"action-deploy-data-flow-component",
+					"action-get-data-flow-component",
 				},
 			},
 		},
