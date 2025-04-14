@@ -1,4 +1,4 @@
-# Copyright 2023 UMH Systems GmbH
+# Copyright 2025 UMH Systems GmbH
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,11 +18,14 @@ on:
     branches:
       - main
       - staging
+  merge_group:
+    
 jobs:
   license-eye-header:
     name: License Eye Header
-    runs-on: 
+    runs-on:
       group: large-runners
     steps:
-      - uses: apache/skywalking-eyes@v0.6.0
+      - uses: actions/checkout@v4
+      - uses: apache/skywalking-eyes@v0.7.0
         name: License Eye Header

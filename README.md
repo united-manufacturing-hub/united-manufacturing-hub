@@ -1,41 +1,89 @@
-<!-- PROJECT LOGO -->
 # United Manufacturing Hub
 
-[![License: Apache 2.0](https://img.shields.io/badge/License-Apache2.0-blue.svg)](https://www.apache.org/licenses/LICENSE-2.0)
-[![Go Report Card](https://goreportcard.com/badge/github.com/united-manufacturing-hub/united-manufacturing-hub)](https://goreportcard.com/report/github.com/united-manufacturing-hub/united-manufacturing-hub)
-![Website](https://img.shields.io/website?up_message=online&url=https%3A%2F%2Fwww.united-manufacturing-hub.com)
-[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Funited-manufacturing-hub%2Funited-manufacturing-hub.svg?type=shield)](https://app.fossa.com/projects/git%2Bgithub.com%2Funited-manufacturing-hub%2Funited-manufacturing-hub?ref=badge_shield)
+The **United Manufacturing Hub** (UMH) is an open-source solution for ingesting, contextualizing, and storing factory data. It helps you quickly build a _Unified Namespace_ for your production lines—laying the foundation for advanced analytics, real-time monitoring, and digital transformations.
 
-<!-- <img src="docs/static/images/Otto.svg" height="150"> -->
+This repository contains:
+- **UMH Core** (in the `umh-core` folder) – our new, lightweight single-container approach.
+- **Helm Chart** (in `deployment/united-manufacturing-hub`) – the classic Kubernetes installation method for a full-stack, scalable setup.
 
-The United Manufacturing Hub is an Open-Source [Helm chart for Kubernetes](https://helm.sh/), which combines state-of -the-art IT / OT tools & technologies and brings them into the hands of the engineer.
+---
 
-## What can you do with it?
+## UMH Core
 
-1. **Extract data from the shopfloor** via [Node-RED](https://learn.umh.app/know/industrial-internet-of-things/tools/#node-red), [sensorconnect](https://umh.docs.umh.app/docs/architecture/microservices/core/sensorconnect/) and [barcodereader](https://umh.docs.umh.app/docs/architecture/microservices/community/barcodereader/)
-2. **Contextualize and standardize data** using [Node-RED](https://learn.umh.app/know/industrial-internet-of-things/tools/#node-red) and our [pre-defined datamodel](https://umh.docs.umh.app/docs/architecture/microservices/community/barcodereader/) (which is compliant with multiple standards)
-3. **Exchange and store data** using [MQTT](https://learn.umh.app/know/industrial-internet-of-things/techniques/mqtt/), [Kafka](https://learn.umh.app/know/industrial-internet-of-things/techniques/kafka/) and  TimescaleDB / PostgreSQL,
-4. **Visualize data** using [Grafana](https://learn.umh.app/know/industrial-internet-of-things/tools/#grafana) and [factoryinsight](https://umh.docs.umh.app/docs/architecture/microservices/core/factoryinsight/)
+**UMH Core** is a standalone Docker-based solution that bundles the essential services—such as Redpanda (Kafka-compatible broker), Benthos (for data flows), and management/orchestration—into a single container. It allows you to:
 
-## Get started
+- **Deploy a Unified Namespace** on any machine running Docker (no Kubernetes required).
+- **Orchestrate protocol converters and data flows** via Benthos-based pipelines.
+- **Integrate with [management.umh.app](https://management.umh.app) for remote monitoring and management**, including real-time logs and system health.
 
-- [Get started by installing the United Manufacturing Hub](https://learn.umh.app/getstarted/)
-- [Visit our learning platform](https://www.umh.app) learn all about common IT, OT and IIoT concepts such as the [*Unified Namespace*](https://learn.umh.app/know/industrial-internet-of-things/techniques/unified-namespace/) and associated common open source tools such as Node-RED, Grafana and the United Manufacturing Hub.
+### Quick Start
 
-<!-- LICENSE -->
+```bash
+docker run -d \
+  --name umh-core \
+  -v umh_data:/data \
+  ghcr.io/united-manufacturing-hub/umh-core:latest
+```
+- Connect to the cloud console:  
+  1. Go to [management.umh.app](https://management.umh.app)  
+  2. Follow the **Add Instance** steps to add a new UMH Core instance
+
+For more details on using UMH Core, see [our website](https://www.umh.app) or sign in to [management.umh.app](https://management.umh.app).
+
+---
+
+## Helm Chart (UMH Classic)
+
+The **Helm chart** in `deployment/united-manufacturing-hub` provides the original, full-stack “UMH Classic” deployment for Kubernetes. It includes:
+
+- **TimescaleDB** for time-series historian functionality  
+- **Node-RED** for flow-based data ingestion and quick device connections  
+- **Grafana** dashboards, connectors, and other optional services  
+
+> **Use the Helm chart if** you need a comprehensive, Kubernetes-based environment with built-in storage, visualization, and enterprise-scale orchestration.  
+
+To install:
+1. Go to [management.umh.app](https://management.umh.app)  
+2. Follow the **Add Instance** steps to add a new UMH Classic instance
+
+For more details, refer to the chart’s [README](deployment/united-manufacturing-hub/README.md) or visit our [documentation](https://umh.docs.umh.app/docs/).
+
+---
+
+## Unified Namespace Overview
+
+A **Unified Namespace** centralizes all plant-floor data in one logical location. With UMH, you can:
+
+- Publish real-time telemetry (e.g., from PLCs, sensors) in a standardized structure  
+- Subscribe any consumer (dashboards, analytics tools, custom apps) to the same data  
+- Easily unify or correlate data across machines and sites
+
+To learn more about the Unified Namespace concept, see the ["The Rise of the Unified Namespace"](https://learn.umh.app/lesson/chapter-2-the-rise-of-the-unified-namespace/) article on our Learning Portal.
+
+---
+
+## Further Resources
+
+- **Website:** [umh.app](https://www.umh.app)  
+  Explore product overviews, enterprise offerings, and the UMH roadmap.
+- **Management Console:** [management.umh.app](https://management.umh.app)  
+  Connect UMH Core instances for cloud-based monitoring, configuration, and upgrades.
+- **Docs (Legacy & Advanced Guides):** [umh.docs.umh.app](https://umh.docs.umh.app/docs/)  
+  Deeper info on Helm installations, timeseries historian usage, advanced config, etc.
+- **Featured Articles & Tutorials:** [learn.umh.app/featured](https://learn.umh.app/featured/)  
+
+---
+
+## Contributing
+
+Pull requests, issues, and community involvement are welcome! See our [CONTRIBUTING.md](./CONTRIBUTING.md) and [CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md) for guidelines.
+
+---
+
 ## License
 
-All source code is distributed under the APACHE LICENSE, VERSION 2.0. See [`LICENSE`](LICENSE) for more information. All other components (e.g. trademarks, images, logos, documentation, publications), especially those in the `/docs` folder, are property of the respective owner.
+This project is licensed under the [Apache 2.0 License](./LICENSE). Please see [CONTRIBUTOR_LICENSE_AGREEMENT_INDIVIDUAL.md](./CONTRIBUTOR_LICENSE_AGREEMENT_INDIVIDUAL.md) and [CONTRIBUTOR_LICENSE_AGREEMENT_ENTITY.md](./CONTRIBUTOR_LICENSE_AGREEMENT_ENTITY.md) for contributor requirements.
 
-## About our current version 0.x.x.
-Our current release, has been deployed and tested at a number of industrial sites worldwide and has proven to be stable in a variety of environments. While we have not yet reached a final version 1.0.0, this is typical for infrastructure projects that require extensive year-long testing and evaluation before a release. We are confident in the stability and reliability of our current release, which has been thoroughly tested over the past few years. As an open-source project, we welcome community involvement and feedback in the ongoing development and refinement of our software. We are committed to ensuring that our software is reliable and ready for deployment in industrial settings.
+---
 
-## Development
-
-To get started with development, please refer to our [development guide](https://umh.docs.umh.app/docs/development/contribute/getting-started/).
-
-<!-- CONTACT -->
-## Contact
-
-[UMH Systems GmbH](https://www.umh.app)
-
+*© 2025 United Manufacturing Hub. All rights reserved.*

@@ -1,0 +1,8 @@
+# Cache everything except the specific files we need
+.docker-cache/*
+!.docker-cache/s6-overlay/
+!.docker-cache/benthos/
+!.docker-cache/redpanda/
+
+tmp/
+data/
