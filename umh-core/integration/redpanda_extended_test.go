@@ -118,7 +118,7 @@ var _ = Describe("Redpanda Extended Tests", Ordered, Label("redpanda-extended"),
 			}
 
 			// Calculate expected message count with a tolerance of 20% loss
-			totalSeconds := int(testDuration.Seconds())
+			totalSeconds := int(time.Since(startTime).Seconds())
 			expectedMessagesPerSecond := 10 * messagesPerSecond // 10 producers * 10 messages per second
 			expectedMessages := totalSeconds * expectedMessagesPerSecond
 			minimumExpectedMessages := int(float64(expectedMessages) * (1 - lossTolerance))
@@ -140,7 +140,7 @@ var _ = Describe("Redpanda Extended Tests", Ordered, Label("redpanda-extended"),
 
 			// Assert that we received at least the minimum expected messages
 			Expect(messageCount).To(BeNumerically(">=", minimumExpectedMessages),
-				fmt.Sprintf("Should receive at least %d messages (%d%% of expected %d)",
+				fmt.Sprintf("Should receive at least %d messages (%d percent of expected %d)",
 					minimumExpectedMessages, 100-int(lossTolerance*100), expectedMessages))
 		})
 	})
