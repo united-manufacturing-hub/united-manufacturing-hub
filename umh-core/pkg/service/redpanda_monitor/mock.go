@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
@@ -70,7 +71,6 @@ var _ IRedpandaMonitorService = (*MockRedpandaMonitorService)(nil)
 // ServiceStateFlags contains all the state flags needed for FSM testing
 type ServiceStateFlags struct {
 	IsRunning       bool
-	IsConfigLoaded  bool
 	IsMetricsActive bool
 	S6FSMState      string
 }
@@ -169,6 +169,13 @@ func (m *MockRedpandaMonitorService) Status(ctx context.Context, filesystemServi
 
 	// If we have a state already stored, return it
 	if m.ServiceState != nil {
+		now := time.Now()
+		m.ServiceState.RedpandaStatus.LastScan = &RedpandaMetricsAndClusterConfig{
+			Metrics: &RedpandaMetrics{
+				MetricsState: m.metricsState,
+			},
+			LastUpdatedAt: now,
+		}
 		return *m.ServiceState, m.StatusError
 	}
 

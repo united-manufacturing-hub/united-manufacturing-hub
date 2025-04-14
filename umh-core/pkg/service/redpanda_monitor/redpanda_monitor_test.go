@@ -267,12 +267,10 @@ var _ = Describe("Redpanda Monitor Service", func() {
 			// Test setting service state
 			mockService.SetServiceState(redpanda_monitor.ServiceStateFlags{
 				IsRunning:       true,
-				IsConfigLoaded:  true,
 				IsMetricsActive: true,
 			})
 			state := mockService.GetServiceState()
 			Expect(state.IsRunning).To(BeTrue())
-			Expect(state.IsConfigLoaded).To(BeTrue())
 			Expect(state.IsMetricsActive).To(BeTrue())
 		})
 	})

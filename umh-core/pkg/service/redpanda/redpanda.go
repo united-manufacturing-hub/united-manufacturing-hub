@@ -146,6 +146,13 @@ func WithBaseDir(baseDir string) RedpandaServiceOption {
 	}
 }
 
+// WithMonitorService sets a custom monitor service for the RedpandaService
+func WithMonitorService(monitorService redpanda_monitor.IRedpandaMonitorService) RedpandaServiceOption {
+	return func(s *RedpandaService) {
+		s.metricsService = monitorService
+	}
+}
+
 // NewDefaultRedpandaService creates a new default Redpanda service
 // name is the name of the Redpanda service as defined in the UMH config
 func NewDefaultRedpandaService(redpandaName string, opts ...RedpandaServiceOption) *RedpandaService {
