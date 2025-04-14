@@ -68,7 +68,7 @@ var _ = Describe("Redpanda Extended Tests", Ordered, Label("redpanda-extended"),
 			testTopic := "test-throughput"
 
 			for i := 0; i < 10; i++ {
-				builder.AddBenthosProducer(fmt.Sprintf("benthos-%d", i), "1s", testTopic)
+				builder.AddBenthosProducer(fmt.Sprintf("benthos-%d", i), "100ms", testTopic)
 			}
 
 			// Apply configuration
