@@ -106,8 +106,6 @@ func (p *Puller) pull() {
 
 			for _, message := range (*incomingMessages).UMHMessages {
 
-				p.logger.Debugf("Received message: %v", message)
-
 				insertionTimeout := time.After(10 * time.Second)
 				select {
 				case p.inboundMessageChannel <- &models.UMHMessage{
@@ -140,6 +138,7 @@ type UserCertificateResponse struct {
 }
 
 // GetUserCertificate retrieves a user certificate from the backend
+// This function is only for testing purposes
 func GetUserCertificate(ctx context.Context, userEmail string, cookies *map[string]string, insecureTLS bool, apiURL string, logger *zap.SugaredLogger) (*UserCertificateResponse, error) {
 	// URL encode the email
 	encodedEmail := url.QueryEscape(userEmail)
