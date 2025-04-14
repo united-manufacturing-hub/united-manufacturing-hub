@@ -106,6 +106,7 @@ func (c *AgentMonitorService) GetStatus(ctx context.Context, cfg config.FullConf
 	}
 
 	// Get the Latency
+	// TODO: get latency from the communication module
 
 	// Get the Agent Logs
 	logs, err := c.GetAgentLogs(ctx)
@@ -117,6 +118,7 @@ func (c *AgentMonitorService) GetStatus(ctx context.Context, cfg config.FullConf
 	}
 
 	// Get the Agent Metrics
+	// TODO: get its own metrics either by calling its own metrics endpoint of accessing the struct from the metrics package directly
 
 	// Get the Release Info
 	release, err := c.getReleaseInfo(cfg)
