@@ -201,7 +201,7 @@ func checkRPK(topic string, lastLoopOffset int, lastLoopTimestamp time.Time, los
 		if msgPerSec < float64(messagesPerSecond)*(1-lossToleranceWarning) {
 			GinkgoWriter.Printf("⚠️ Msg per sec is below the loss tolerance: %f\n", msgPerSec)
 		} else {
-			GinkgoWriter.Printf("✅ Msg per sec: %f\n", msgPerSec)
+			GinkgoWriter.Printf("✅ Msg per sec: %f (%.2f%% of expected %d)\n", msgPerSec, msgPerSec/float64(messagesPerSecond)*100, messagesPerSecond)
 		}
 	}
 
