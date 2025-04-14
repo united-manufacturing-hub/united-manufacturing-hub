@@ -52,6 +52,7 @@ func newTimeoutContext() (context.Context, context.CancelFunc) {
 }
 
 func getMetricsReader() *bytes.Reader {
+	// metrics references the redpanda_monitor_data_test.go file
 	// Remove all newlines in string
 	mX := strings.ReplaceAll(metrics, "\n", "")
 	// Hex decode metrics
@@ -65,38 +66,6 @@ func getMetricsReader() *bytes.Reader {
 	Expect(err).NotTo(HaveOccurred())
 	dataReader := bytes.NewReader(data)
 	return dataReader
-}
-
-// Helper function to set up mock logs for service status checks
-func setupMockS6Logs(mockS6Service *s6service.MockService) {
-
-	mockLogs := []s6service.LogEntry{
-		{Content: redpanda_monitor.BLOCK_START_MARKER},
-	}
-
-	// Add metrics line by line
-	for _, line := range strings.Split(metrics, "\n") {
-		mockLogs = append(mockLogs, s6service.LogEntry{Content: line})
-	}
-
-	// Add metrics end marker
-	mockLogs = append(mockLogs, s6service.LogEntry{Content: redpanda_monitor.METRICS_END_MARKER})
-
-	// Add config line by line
-	for _, line := range strings.Split(config, "\n") {
-		mockLogs = append(mockLogs, s6service.LogEntry{Content: line})
-	}
-
-	// Add config end marker
-	mockLogs = append(mockLogs, s6service.LogEntry{Content: redpanda_monitor.CLUSTERCONFIG_END_MARKER})
-
-	// Add timestamp line (unix nanoseconds since epoch)
-	mockLogs = append(mockLogs, s6service.LogEntry{Content: fmt.Sprintf("%d", time.Now().UnixNano())})
-
-	// Add block end marker
-	mockLogs = append(mockLogs, s6service.LogEntry{Content: redpanda_monitor.BLOCK_END_MARKER})
-
-	mockS6Service.GetLogsResult = mockLogs
 }
 
 var _ = Describe("Redpanda Monitor Service", func() {
