@@ -18,7 +18,6 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
-	"time"
 
 	"go.uber.org/zap"
 
@@ -40,6 +39,11 @@ type ServiceInfo struct {
 	AgentMetrics map[string]interface{} `json:"agentMetrics,omitempty"`
 	// Release: Channel, Version, Supported Feature
 	Release *models.Release `json:"release"`
+
+	// Healths
+	OverallHealth models.HealthCategory `json:"overallHealth"`
+	LatencyHealth models.HealthCategory `json:"latencyHealth"`
+	ReleaseHealth models.HealthCategory `json:"releaseHealth"`
 }
 
 // Service defines the interface for agent monitoring
@@ -51,11 +55,10 @@ type Service interface {
 
 // AgentMonitorService implements the Service interface
 type AgentMonitorService struct {
-	fs              filesystem.Service
-	s6Service       s6.Service
-	logger          *zap.SugaredLogger
-	instanceName    string
-	lastCollectedAt time.Time
+	fs           filesystem.Service
+	s6Service    s6.Service
+	logger       *zap.SugaredLogger
+	instanceName string
 }
 
 // NewAgentMonitorService creates a new agent monitor service instance

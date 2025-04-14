@@ -40,6 +40,7 @@ const (
 	ComponentFilesystem                = "filesystem"
 	ComponentContainerMonitor          = "container_monitor"
 	ComponentDataflowComponentInstance = "dataflow_component_instance"
+	ComponentAgentMonitor              = "agent_monitor"
 )
 
 var (
