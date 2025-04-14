@@ -3,10 +3,9 @@
 # By default, Jeremy is Codeowner for everything
 *       @JeremyTheocharis
 
-# Ferdinand is responsible for the Go code
-/golang/ @Scarjit
+# Ferdinand & Athavan are responsible for the Go code
+/umh-core/ @Scarjit @kanapuli
 /deployment/ @Scarjit
-/tools/ @Scarjit
 
 # Remaining files are owned by Jeremy
 AUTHORS @JeremyTheocharis

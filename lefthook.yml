@@ -1,0 +1,52 @@
+# Copyright 2025 UMH Systems GmbH
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# EXAMPLE USAGE:
+#
+#   Refer for explanation to following link:
+#   https://lefthook.dev/configuration/
+#
+
+pre-push:
+  parallel: true
+  jobs:
+    # Nilaway is to heavy for pre-commit, so we run it in pre-push
+    - name: nilaway
+      glob: "**/*.go"
+      root: "umh-core"
+      run: |
+        go install go.uber.org/nilaway/cmd/nilaway@latest
+        nilaway -include-pkgs="github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core" ./...
+
+pre-commit:
+  parallel: true
+  jobs:
+    - name: govet-backend
+      glob: "**/*.go"
+      root: "umh-core"
+      run: |
+        go vet ./...
+
+    - name: gofmt
+      glob: "**/*.go"
+      root: "umh-core"
+      run: |
+        gofmt -w {staged_files}
+        git update-index --again
+
+    - name: fix-license-header
+      glob: "**/*.go"
+      run: |
+        docker run -it --rm -v $(pwd):/github/workspace apache/skywalking-eyes header fix
+        git update-index --again

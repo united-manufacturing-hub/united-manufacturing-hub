@@ -1,0 +1,248 @@
+# Copyright 2025 UMH Systems GmbH
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+name: Build UMH Core
+
+on:
+  pull_request:
+    branches:
+      - "**"
+  push:
+    branches:
+      - staging
+      - main
+    tags:
+      - "v*"
+  merge_group:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: united-manufacturing-hub/umh-core
+
+jobs:
+  build:
+    name: Build and Push
+    permissions:
+      contents: read
+      packages: write
+    timeout-minutes: 60
+    strategy:
+      matrix:
+        architecture: ["amd64", "arm64"]
+    runs-on:
+      group: ${{ matrix.architecture == 'arm64' && 'arc-runners-small' || 'arc-runners-build' }}
+    outputs:
+      tags: ${{ steps.meta.outputs.tags }}
+      BASE_TAGS: ${{ steps.output-tags.outputs.BASE_TAGS }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check if Docker daemon is running
+        id: check_docker
+        run: |
+          SECONDS=0
+          TIMEOUT=120
+          while ! docker info >/dev/null 2>&1; do
+            if [ $SECONDS -ge $TIMEOUT ]; then
+              echo "Docker daemon is not running after ${TIMEOUT} seconds, exiting..."
+              docker info
+              exit 1
+            fi
+            echo "Waiting for Docker daemon to start..."
+            sleep 1
+          done
+          echo "Docker daemon is running."
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        env:
+          GITHUB_USER: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          registry: ghcr.io
+          username: $GITHUB_USER
+          password: ${{ secrets.GITHUB_TOKEN }}
+          
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        env:
+          DOCKER_READ_ONLY_PAT: ${{ secrets.DOCKER_READ_ONLY_PAT }}
+          DOCKER_READ_ONLY_USER: ${{ secrets.DOCKER_READ_ONLY_USER }}
+        with:
+          registry: docker.io
+          username: ${{ secrets.DOCKER_READ_ONLY_USER }}
+          password: ${{ secrets.DOCKER_READ_ONLY_PAT }}
+
+      - name: Setup QEMU
+        uses: docker/setup-qemu-action@v3
+        with:
+          image: management.umh.app/oci/tonistiigi/binfmt:latest
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Set PLATFORM_SHORT
+        id: platform_short
+        shell: bash
+        run: |
+          PLATFORM_SHORT="${{ matrix.architecture }}"
+          PLATFORM_SHORT="${PLATFORM_SHORT//\//-}"
+          echo "PLATFORM_SHORT=${PLATFORM_SHORT}" >> $GITHUB_OUTPUT
+
+      - name: Determine app version
+        id: set_version
+        run: |
+          # Check if this is a tag build
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            # If it's a tag, use the tag name as version
+            VERSION="${{ github.ref_name }}"
+          else
+            # For branch builds, use a dev version with the SHA
+            VERSION="0.0.0-dev-${{ github.sha }}"
+          fi
+          echo "APP_VERSION=${VERSION}" >> $GITHUB_OUTPUT
+          echo "Setting APP_VERSION to ${VERSION}"
+
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=tag
+            type=sha
+
+      - name: Prepare tags with platform suffix
+        id: prepare_tags
+        run: |
+          TAGS="${{ steps.meta.outputs.tags }}"
+          PLATFORM_SUFFIX="-${{ steps.platform_short.outputs.PLATFORM_SHORT }}"
+
+          # Replace newlines with commas
+          TAGS_CLEAN=$(echo "$TAGS" | tr '\n' ',' | sed 's/,$//')
+
+          # Split tags into an array
+          IFS=',' read -ra TAG_ARRAY <<< "$TAGS_CLEAN"
+
+          # Append platform suffix to each tag
+          for TAG in "${TAG_ARRAY[@]}"; do
+            TAG_WITH_SUFFIX="${TAG}${PLATFORM_SUFFIX}"
+            NEW_TAGS_ARRAY+=("$TAG_WITH_SUFFIX")
+          done
+
+          # Join the new tags into a comma-separated string
+          NEW_TAGS=$(IFS=','; echo "${NEW_TAGS_ARRAY[*]}")
+
+          echo "NEW_TAGS=$NEW_TAGS" >> $GITHUB_OUTPUT
+
+      - name: Cache dependencies
+        id: cache-dependencies
+        uses: actions/cache@v4
+        with:
+          path: ./umh-core/.docker-cache
+          key: ${{ runner.os }}-${{ matrix.architecture }}-docker-cache-${{ hashFiles('./umh-core/Makefile') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.architecture }}-docker-cache-
+
+      - name: Get dependencies
+        working-directory: ./umh-core
+        run: |
+          make download-docker-binaries
+
+      - name: Build and Push Docker Image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./umh-core
+          push: true
+          platforms: linux/${{ matrix.architecture }}
+          tags: ${{ steps.prepare_tags.outputs.NEW_TAGS }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            APP_VERSION=${{ steps.set_version.outputs.APP_VERSION }}
+            TARGETARCH=${{ matrix.architecture }}
+          provenance: false
+
+      - name: Set Output Tags
+        id: output-tags
+        run: |
+          echo "BASE_TAGS<<EOF" >> $GITHUB_OUTPUT
+          echo "${{ steps.meta.outputs.tags }}" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+  create-manifests:
+    needs: build
+    if: needs.build.outputs.tags != ''
+    permissions:
+      contents: read
+      packages: write
+    runs-on:
+      group: arc-runners-small
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        env:
+          GITHUB_USER: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          registry: ghcr.io
+          username: $GITHUB_USER
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Create multiarch manifests
+        run: |
+          set -euxo pipefail
+
+          TAGS="${{ needs.build.outputs.BASE_TAGS }}"
+
+          IFS=$'\n' readarray -t TAG_ARRAY <<< "$TAGS"
+
+          ARCHITECTURES=("amd64" "arm64")
+
+          for TAG in "${TAG_ARRAY[@]}"; do
+            echo "Processing tag $TAG"
+            PLATFORM_TAGS=""
+            for ARCH in "${ARCHITECTURES[@]}"; do
+              PLATFORM_SHORT="${ARCH//\//-}"
+              PLATFORM_TAG="${TAG}-${PLATFORM_SHORT}"
+              PLATFORM_TAGS="${PLATFORM_TAGS} ${PLATFORM_TAG}"
+            done
+            
+            echo "Checking availability of images for $TAG"
+            MISSING_IMAGES=0
+            for IMAGE in ${PLATFORM_TAGS}; do
+              echo "Checking image: $IMAGE"
+              if ! docker buildx imagetools inspect "$IMAGE" >/dev/null 2>&1; then
+                echo "Image not found: $IMAGE"
+                MISSING_IMAGES=1
+              else
+                echo "Image exists: $IMAGE"
+              fi
+            done
+            
+            if [ $MISSING_IMAGES -ne 0 ]; then
+              echo "One or more images are missing for $TAG. Skipping manifest creation."
+              continue
+            fi
+            
+            echo "Creating manifest for $TAG from $PLATFORM_TAGS"
+            docker buildx imagetools create -t "${TAG}" ${PLATFORM_TAGS}
+          done
