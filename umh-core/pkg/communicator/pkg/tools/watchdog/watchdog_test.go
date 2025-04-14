@@ -24,6 +24,7 @@ import (
 	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 )
 
 var _ = Describe("Watchdog", func() {
@@ -36,7 +37,6 @@ var _ = Describe("Watchdog", func() {
 	var dogCnclAtomic atomic.Value
 
 	BeforeEach(func() {
-		// zap.S().Debuff("Started BeforeEach")
 		panickingUUIDs = make(map[uuid.UUID]bool)
 		panickingUUIDsLock = sync.Mutex{}
 		otherpanic.Store(false)
@@ -46,7 +46,6 @@ var _ = Describe("Watchdog", func() {
 		go func() {
 			defer func() {
 				if r := recover(); r != nil {
-					// zap.S().Debuff("Recovered from panic: %v", r)
 					// Extract witch test caused the panic
 					// Heartbeat too old test-2 (cd41ec9f-b168-4b58-a41c-4e582b6a2122)
 					// We want to get the uuid
@@ -63,7 +62,7 @@ var _ = Describe("Watchdog", func() {
 					}
 				}
 			}()
-			wd := NewWatchdog(ctx, time.NewTicker(1*time.Second), false)
+			wd := NewWatchdog(ctx, time.NewTicker(1*time.Second), false, logger.For(logger.ComponentCommunicator))
 			dog.Store(wd)
 			wd.Start()
 		}()
