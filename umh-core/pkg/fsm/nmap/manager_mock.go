@@ -19,7 +19,6 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	public_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	nmap_service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/nmap"
@@ -34,14 +33,7 @@ func NewNmapManagerWithMockedService(name string) *NmapManager {
 		// For the mock, we'll just pretend to parse from FullConfig
 		func(fc config.FullConfig) ([]config.NmapConfig, error) {
 			// In a real test, you'd define fc.Nmap with test data
-			return []config.NmapConfig{
-				{
-					FSMInstanceConfig: config.FSMInstanceConfig{
-						Name:            constants.DefaultInstanceName,
-						DesiredFSMState: OperationalStateOpen,
-					},
-				},
-			}, nil
+			return fc.Internal.Nmap, nil
 		},
 		func(nc config.NmapConfig) (string, error) {
 			return nc.Name, nil

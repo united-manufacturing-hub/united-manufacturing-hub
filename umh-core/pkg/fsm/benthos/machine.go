@@ -22,6 +22,7 @@ import (
 	"github.com/looplab/fsm"
 
 	internal_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/backoff"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
@@ -76,8 +77,11 @@ func NewBenthosInstance(
 		},
 	}
 
+	logger := logger.For(config.Name)
+	backoffConfig := backoff.DefaultConfig(cfg.ID, logger)
+
 	instance := &BenthosInstance{
-		baseFSMInstance: internal_fsm.NewBaseFSMInstance(cfg, logger.For(config.Name)),
+		baseFSMInstance: internal_fsm.NewBaseFSMInstance(cfg, backoffConfig, logger),
 		service:         benthos_service.NewDefaultBenthosService(config.Name),
 		config:          config.BenthosServiceConfig,
 		ObservedState:   BenthosObservedState{},

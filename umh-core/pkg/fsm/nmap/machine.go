@@ -22,6 +22,7 @@ import (
 
 	"github.com/looplab/fsm"
 	internal_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/backoff"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
@@ -188,8 +189,13 @@ func NewNmapInstanceWithService(config config.NmapConfig, service nmap_service.I
 		},
 	}
 
+	logger := logger.For(config.Name)
+
 	// Construct the base instance
-	baseFSM := internal_fsm.NewBaseFSMInstance(fsmCfg, logger.For(config.Name))
+	// Adjust the Backoff-Configuration regarding to the FSM's needs
+	// We allow 20 retries which result in 2 Nmap-Executions here.
+	backoffConfig := backoff.NewBackoffConfig(fsmCfg.ID, 1, 600, 20, logger)
+	baseFSM := internal_fsm.NewBaseFSMInstance(fsmCfg, backoffConfig, logger)
 
 	// Create our instance
 	instance := &NmapInstance{

@@ -327,6 +327,9 @@ func (s *NmapService) Status(ctx context.Context, filesystemService filesystem.S
 			s.logger.Warnw("Failed to get config", "error", err)
 		}
 	}
+	if scanResult == nil {
+		return ServiceInfo{}, ErrScanFailed
+	}
 
 	return ServiceInfo{
 		S6ObservedState: s6State,

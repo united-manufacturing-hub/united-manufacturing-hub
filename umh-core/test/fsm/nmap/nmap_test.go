@@ -286,6 +286,9 @@ var _ = Describe("Nmap FSM", func() {
 				"closed|filtered", "open|filtered", uint64(166)),
 		)
 		AfterEach(func() {
+			if inst.IsRemoved() {
+				return
+			}
 
 			err := inst.SetDesiredFSMState(nmap.OperationalStateStopped)
 			Expect(err).NotTo(HaveOccurred())
@@ -307,5 +310,57 @@ var _ = Describe("Nmap FSM", func() {
 			Expect(did).To(BeTrue())
 			Expect(inst.GetCurrentFSMState()).To(Equal(nmap.OperationalStateDegraded))
 		})
+	})
+
+	Context("When monitoring is running", func() {
+		BeforeEach(func() {
+			// Advance the instance to an operational state.
+			inst.Reconcile(ctx, mockFS, 200)
+			inst.Reconcile(ctx, mockFS, 201)
+			err := inst.SetDesiredFSMState(nmap.OperationalStateOpen)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Reconcile to trigger the start sequence: from stopped -> starting -> degraded.
+			err, did := inst.Reconcile(ctx, mockFS, 202)
+			Expect(did).To(BeTrue())
+			Expect(inst.GetCurrentFSMState()).To(Equal(nmap.OperationalStateStarting))
+
+			err, did = inst.Reconcile(ctx, mockFS, 203)
+			Expect(did).To(BeTrue())
+			Expect(inst.GetCurrentFSMState()).To(Equal(nmap.OperationalStateDegraded))
+		})
+		It("should permanently fail after 20 repeated ErrScanFailed", func() {
+			// First, we move the instance from creation through the operational setup.
+			// (Assuming instance is already in a 'degraded' state ready for monitoring.)
+			err, did := inst.Reconcile(ctx, mockFS, 204)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(did).To(BeTrue())
+			Expect(inst.GetCurrentFSMState()).To(Equal(nmap.OperationalStateDegraded))
+
+			mockSvc.SetServicePortState("testing", "open", 10.0)
+
+			err, did = inst.Reconcile(ctx, mockFS, 205)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(did).To(BeTrue())
+			Expect(inst.GetCurrentFSMState()).To(Equal(nmap.OperationalStateOpen))
+
+			var tick uint64 = 206
+			mockSvc.ShouldErrScanFailed = true
+
+			for i := uint64(1); i <= 20; i++ {
+				inst.Reconcile(ctx, mockFS, tick)
+				tick++
+
+				// for temporary errors we expect the instance to not be removed
+				if i <= 20 {
+					Expect(inst.IsRemoved()).To(BeFalse(), "Iteration %d: instance should not be removed yet", i)
+				} else {
+					// after > 20 retries the backoffManager should remove the instance
+					Expect(inst.IsRemoved()).To(BeTrue(), "Iteration %d: instance should be removed due to permanent failure", i)
+					Expect(mockSvc.ForceRemoveNmapCalled).To(BeTrue(), "ForceRemoveNmap should have been called on permanent failure")
+				}
+			}
+		})
+
 	})
 })

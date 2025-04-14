@@ -56,6 +56,7 @@ type MockNmapService struct {
 	ReconcileError       error
 	ForceRemoveNmapError error
 	ExistsError          bool // if true, ServiceExists returns false
+	ShouldErrScanFailed  bool
 
 	// For more complex testing scenarios
 	ServiceStates    map[string]*ServiceInfo
@@ -121,7 +122,21 @@ func (m *MockNmapService) Status(ctx context.Context, filesystemService filesyst
 		return ServiceInfo{}, ErrServiceNotExist
 	}
 
+	scanResult := parseScanLogs(m.ShouldErrScanFailed)
+	if scanResult == nil {
+		return ServiceInfo{}, ErrScanFailed
+	}
+
 	return m.StatusResult, nil
+}
+
+func parseScanLogs(shouldErr bool) *NmapScanResult {
+	if shouldErr {
+		return nil
+	}
+	return &NmapScanResult{
+		Timestamp: time.Now(),
+	}
 }
 
 // AddNmapToS6Manager mocks adding a service

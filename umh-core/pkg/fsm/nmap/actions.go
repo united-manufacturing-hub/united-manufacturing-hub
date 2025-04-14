@@ -16,6 +16,7 @@ package nmap
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -122,6 +123,9 @@ func (n *NmapInstance) UpdateObservedStateOfInstance(ctx context.Context, filesy
 	start := time.Now()
 	svcInfo, err := n.monitorService.Status(ctx, filesystemService, n.config.Name, tick)
 	if err != nil {
+		if errors.Is(err, nmap_service.ErrScanFailed) {
+			return err
+		}
 		return fmt.Errorf("failed to get nmap metrics: %w", err)
 	}
 	metrics.ObserveReconcileTime(logger.ComponentNmapInstance, n.baseFSMInstance.GetID()+".getServiceStatus", time.Since(start))

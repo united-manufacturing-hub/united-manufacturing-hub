@@ -87,6 +87,15 @@ func (n *NmapInstance) Reconcile(ctx context.Context, filesystemService filesyst
 		if !errors.Is(err, nmap_service.ErrServiceNotExist) {
 			n.baseFSMInstance.SetError(err, tick)
 			n.baseFSMInstance.GetLogger().Errorf("error reconciling external changes: %s", err)
+
+			// We want to return the error here, to stop reconciling since this would
+			// lead the fsm going into degraded. But Nmap-scans are triggered once per second
+			// and each tick is 100ms, therefore it could fail, because it doesn't get
+			// complete logs from which it parses.
+			if errors.Is(err, nmap_service.ErrScanFailed) {
+				return err, false
+			}
+
 			return nil, false // We don't want to return an error here, because we want to continue reconciling
 		}
 		err = nil // The service does not exist, which is fine as this happens in the reconcileStateTransition}
@@ -146,6 +155,9 @@ func (n *NmapInstance) reconcileExternalChanges(ctx context.Context, filesystemS
 	defer cancel()
 	err := n.UpdateObservedStateOfInstance(observedStateCtx, filesystemService, tick)
 	if err != nil {
+		if errors.Is(err, nmap_service.ErrScanFailed) {
+			return err
+		}
 		return fmt.Errorf("failed to update observed state: %w", err)
 	}
 	return nil
