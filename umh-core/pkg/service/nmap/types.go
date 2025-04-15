@@ -35,7 +35,7 @@ type INmapService interface {
 	// GenerateS6ConfigForNmap generates a S6 config for a given nmap instance
 	GenerateS6ConfigForNmap(nmapConfig *nmapserviceconfig.NmapServiceConfig, s6ServiceName string) (s6serviceconfig.S6ServiceConfig, error)
 	// GetConfig returns the actual nmap config from the S6 service
-	GetConfig(ctx context.Context, nmapName string) (nmapserviceconfig.NmapServiceConfig, error)
+	GetConfig(ctx context.Context, filesystemService filesystem.Service, nmapName string) (nmapserviceconfig.NmapServiceConfig, error)
 	// Status checks the status of a nmap service
 	Status(ctx context.Context, filesystemService filesystem.Service, nmapName string, tick uint64) (ServiceInfo, error)
 	// AddNmapToS6Manager adds a nmap instance to the S6 manager

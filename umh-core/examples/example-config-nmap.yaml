@@ -21,7 +21,7 @@ internal:
     desiredState: stopped
   nmap:
     - name: hello-world
-      desiredState: active
+      desiredState: open
       nmapServiceConfig:
         target: "127.0.0.1"
         port: 443

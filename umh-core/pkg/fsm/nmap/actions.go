@@ -120,9 +120,21 @@ func (n *NmapInstance) UpdateObservedStateOfInstance(ctx context.Context, filesy
 		return ctx.Err()
 	}
 
+	currentState := n.baseFSMInstance.GetCurrentFSMState()
+	desiredState := n.baseFSMInstance.GetDesiredFSMState()
+	// If both desired and current state are stopped, we can return immediately
+	// There wont be any logs, metrics, etc. to check
+	if desiredState == OperationalStateStopped && currentState == OperationalStateStopped {
+		return nil
+	}
+
 	start := time.Now()
 	svcInfo, err := n.monitorService.Status(ctx, filesystemService, n.config.Name, tick)
 	if err != nil {
+		// We want to return this specific error here, because we need to check
+		// whether the execution of Nmap failed multiple times in a row and set this
+		// as a permanent Error. This also might happen, because we read the nmap
+		// metrics from logs, which can be inconsistent in some ticks.
 		if errors.Is(err, nmap_service.ErrScanFailed) {
 			return err
 		}

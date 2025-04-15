@@ -92,7 +92,7 @@ func (m *MockNmapService) GenerateS6ConfigForNmap(nmapConfig *nmapserviceconfig.
 }
 
 // GetConfig returns the mock config
-func (m *MockNmapService) GetConfig(ctx context.Context, nmapName string) (nmapserviceconfig.NmapServiceConfig, error) {
+func (m *MockNmapService) GetConfig(ctx context.Context, filesystemService filesystem.Service, nmapName string) (nmapserviceconfig.NmapServiceConfig, error) {
 	if ctx.Err() != nil {
 		return nmapserviceconfig.NmapServiceConfig{}, ctx.Err()
 	}

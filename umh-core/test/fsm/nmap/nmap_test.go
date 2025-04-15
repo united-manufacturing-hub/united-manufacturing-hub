@@ -20,12 +20,13 @@ package nmap_test
 
 import (
 	"context"
-	"fmt"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/nmapserviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/nmap"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	nmap_service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/nmap"
@@ -57,7 +58,7 @@ var _ = Describe("Nmap FSM", func() {
 				Name:            "testing",
 				DesiredFSMState: nmap.OperationalStateStopped,
 			},
-			NmapServiceConfig: config.NmapServiceConfig{
+			NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
 				Target: "127.0.0.1",
 				Port:   443,
 			},
@@ -74,14 +75,14 @@ var _ = Describe("Nmap FSM", func() {
 	Context("When newly created", func() {
 		It("should initially transition from creation to operational stopped", func() {
 			// On the first reconcile, the instance should process creation steps.
-			err, did := inst.Reconcile(ctx, mockFS, 1)
+			err, did := inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 1}, mockFS)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(did).To(BeTrue())
 			// Assuming the FSM goes to a "creating" state during the creation phase.
 			Expect(inst.GetCurrentFSMState()).To(Equal("creating"))
 
 			// On the next reconcile, the instance should complete creation and be operational in the stopped state.
-			err, did = inst.Reconcile(ctx, mockFS, 2)
+			err, did = inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 2}, mockFS)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(did).To(BeTrue())
 			Expect(inst.GetCurrentFSMState()).To(Equal(nmap.OperationalStateStopped))
@@ -91,8 +92,8 @@ var _ = Describe("Nmap FSM", func() {
 	Context("Lifecycle transitions", func() {
 		BeforeEach(func() {
 			// Advance the instance to an operational state.
-			inst.Reconcile(ctx, mockFS, 10)
-			inst.Reconcile(ctx, mockFS, 11)
+			inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 10}, mockFS)
+			inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 11}, mockFS)
 			Expect(inst.GetCurrentFSMState()).To(Equal(nmap.OperationalStateStopped))
 		})
 
@@ -102,7 +103,7 @@ var _ = Describe("Nmap FSM", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Reconcile to trigger the start sequence.
-			err, did := inst.Reconcile(ctx, mockFS, 12)
+			err, did := inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 12}, mockFS)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(did).To(BeTrue())
 			Expect(inst.GetCurrentFSMState()).To(Equal(nmap.OperationalStateStarting))
@@ -110,17 +111,17 @@ var _ = Describe("Nmap FSM", func() {
 			err = inst.SetDesiredFSMState(nmap.OperationalStateStopped)
 			Expect(err).NotTo(HaveOccurred())
 
-			err, did = inst.Reconcile(ctx, mockFS, 13)
+			err, did = inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 13}, mockFS)
 			Expect(did).To(BeTrue())
 			Expect(inst.GetCurrentFSMState()).To(Equal(nmap.OperationalStateStopping))
 
-			err, did = inst.Reconcile(ctx, mockFS, 14)
+			err, did = inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 14}, mockFS)
 			Expect(did).To(BeTrue())
 			Expect(inst.GetCurrentFSMState()).To(Equal(nmap.OperationalStateStopped))
 		})
 
 		It("should remain stopped when desired state is stopped", func() {
-			err, did := inst.Reconcile(ctx, mockFS, 15)
+			err, did := inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 15}, mockFS)
 			Expect(err).NotTo(HaveOccurred())
 			// NOTE: did == true since s6 was reconciled
 			Expect(did).To(BeTrue())
@@ -131,17 +132,17 @@ var _ = Describe("Nmap FSM", func() {
 	Context("When monitoring is running", func() {
 		BeforeEach(func() {
 			// Advance the instance to an operational state.
-			inst.Reconcile(ctx, mockFS, 20)
-			inst.Reconcile(ctx, mockFS, 21)
+			inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 20}, mockFS)
+			inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 21}, mockFS)
 			err := inst.SetDesiredFSMState(nmap.OperationalStateOpen)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Reconcile to trigger the start sequence: from stopped -> starting -> degraded.
-			err, did := inst.Reconcile(ctx, mockFS, 22)
+			err, did := inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 22}, mockFS)
 			Expect(did).To(BeTrue())
 			Expect(inst.GetCurrentFSMState()).To(Equal(nmap.OperationalStateStarting))
 
-			err, did = inst.Reconcile(ctx, mockFS, 23)
+			err, did = inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 23}, mockFS)
 			Expect(did).To(BeTrue())
 			Expect(inst.GetCurrentFSMState()).To(Equal(nmap.OperationalStateDegraded))
 		})
@@ -151,13 +152,13 @@ var _ = Describe("Nmap FSM", func() {
 				mockSvc.SetServicePortState("testing", portFromState, 10.0)
 
 				// A reconcile call should detect the port state and trigger EventPortOpen.
-				err, did := inst.Reconcile(ctx, mockFS, tick)
+				err, did := inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: tick}, mockFS)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(did).To(BeTrue())
 				Expect(inst.GetCurrentFSMState()).To(Equal(fromState))
 
 				// Another reconcile call should check that it remains in the state
-				err, did = inst.Reconcile(ctx, mockFS, tick+1)
+				err, did = inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: tick + 1}, mockFS)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(did).To(BeTrue())
 				Expect(inst.GetCurrentFSMState()).To(Equal(fromState))
@@ -166,20 +167,20 @@ var _ = Describe("Nmap FSM", func() {
 				mockSvc.SetServicePortState("testing", portToState, 10.0)
 
 				// A reconcile call should detect the port state and trigger EventPortOpen.
-				err, did = inst.Reconcile(ctx, mockFS, tick+2)
+				err, did = inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: tick + 2}, mockFS)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(did).To(BeTrue())
 				Expect(inst.GetCurrentFSMState()).To(Equal(toState))
 
 				// Another reconcile call should check that it remains in the state
-				err, did = inst.Reconcile(ctx, mockFS, tick+3)
+				err, did = inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: tick + 3}, mockFS)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(did).To(BeTrue())
 				Expect(inst.GetCurrentFSMState()).To(Equal(toState))
 
 				mockSvc.SetNmapError("testing", 10.0)
 
-				err, did = inst.Reconcile(ctx, mockFS, tick+4)
+				err, did = inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: tick + 4}, mockFS)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(did).To(BeTrue())
 				Expect(inst.GetCurrentFSMState()).To(Equal(nmap.OperationalStateDegraded))
@@ -294,17 +295,17 @@ var _ = Describe("Nmap FSM", func() {
 			err := inst.SetDesiredFSMState(nmap.OperationalStateStopped)
 			Expect(err).NotTo(HaveOccurred())
 
-			err, did := inst.Reconcile(ctx, mockFS, 27)
+			err, did := inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 27}, mockFS)
 			Expect(did).To(BeTrue())
 			Expect(inst.GetCurrentFSMState()).To(Equal(nmap.OperationalStateStopping))
 
-			err, did = inst.Reconcile(ctx, mockFS, 28)
+			err, did = inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 28}, mockFS)
 			Expect(did).To(BeTrue())
 			Expect(inst.GetCurrentFSMState()).To(Equal(nmap.OperationalStateStopped))
 		})
 
 		It("stays degraded", func() {
-			err, did := inst.Reconcile(ctx, mockFS, 25)
+			err, did := inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 25}, mockFS)
 			Expect(err).NotTo(HaveOccurred())
 			// No port event should occur; the state remains degraded.
 			// NOTE: did == true since s6 got reconciled
@@ -315,28 +316,28 @@ var _ = Describe("Nmap FSM", func() {
 
 	Context("When monitoring is running", func() {
 		BeforeEach(func() {
-			inst.Reconcile(ctx, mockFS, 200)
-			inst.Reconcile(ctx, mockFS, 201)
+			inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 200}, mockFS)
+			inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 201}, mockFS)
 			err := inst.SetDesiredFSMState(nmap.OperationalStateOpen)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Reconcile to trigger the start sequence: from stopped -> starting -> degraded.
-			err, did := inst.Reconcile(ctx, mockFS, 202)
+			err, did := inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 202}, mockFS)
 			Expect(did).To(BeTrue())
 			Expect(inst.GetCurrentFSMState()).To(Equal(nmap.OperationalStateStarting))
 
-			err, did = inst.Reconcile(ctx, mockFS, 203)
+			err, did = inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 203}, mockFS)
 			Expect(did).To(BeTrue())
 			Expect(inst.GetCurrentFSMState()).To(Equal(nmap.OperationalStateDegraded))
 		})
 		It("should permanently fail after 3 repeated ErrScanFailed", func() {
-			err, did := inst.Reconcile(ctx, mockFS, 204)
+			err, did := inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 204}, mockFS)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(did).To(BeTrue())
 			Expect(inst.GetCurrentFSMState()).To(Equal(nmap.OperationalStateDegraded))
 
 			mockSvc.SetServicePortState("testing", "open", 10.0)
-			err, did = inst.Reconcile(ctx, mockFS, 205)
+			err, did = inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 205}, mockFS)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(did).To(BeTrue())
 			Expect(inst.GetCurrentFSMState()).To(Equal(nmap.OperationalStateOpen))
@@ -347,33 +348,28 @@ var _ = Describe("Nmap FSM", func() {
 			mockSvc.ShouldErrScanFailed = true
 
 			// 1st error
-			inst.Reconcile(ctx, mockFS, 206)
+			inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 206}, mockFS)
 			for t := uint64(207); t < 216; t++ {
-				inst.Reconcile(ctx, mockFS, t)
-				By(fmt.Sprintf("Processing tick %d", t))
+				inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: t}, mockFS)
 				Expect(inst.IsRemoved()).To(BeFalse(), "Tick %d: instance should not be removed yet", t)
 				Expect(inst.GetDesiredFSMState()).To(Equal(nmap.OperationalStateOpen))
 			}
 
 			// 2nd error
-			inst.Reconcile(ctx, mockFS, 216)
+			inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 216}, mockFS)
 			for t := uint64(217); t < 229; t++ {
-				inst.Reconcile(ctx, mockFS, t)
-				By(fmt.Sprintf("Processing tick %d", t))
+				inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: t}, mockFS)
 				Expect(inst.IsRemoved()).To(BeFalse(), "Tick %d: instance should still not be removed", t)
 				Expect(inst.GetDesiredFSMState()).To(Equal(nmap.OperationalStateOpen))
 			}
 
 			// 3rd error
-			By(fmt.Sprintf("Processing tick %d", 230))
-			inst.Reconcile(ctx, mockFS, 230)
+			inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 230}, mockFS)
 			Expect(inst.GetDesiredFSMState()).To(Equal(nmap.OperationalStateOpen))
 
-			By(fmt.Sprintf("Processing tick %d", 231))
-			inst.Reconcile(ctx, mockFS, 231)
+			inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 231}, mockFS)
 
-			By(fmt.Sprintf("Processing tick %d", 232))
-			inst.Reconcile(ctx, mockFS, 232)
+			inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 232}, mockFS)
 			Expect(mockSvc.ForceRemoveNmapCalled).To(BeTrue())
 		})
 	})

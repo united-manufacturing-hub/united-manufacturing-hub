@@ -17,6 +17,7 @@ package nmap
 import (
 	internal_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/nmapserviceconfig"
 	publicfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	nmap_service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/nmap"
 )
@@ -123,7 +124,7 @@ type NmapObservedState struct {
 	// We store the nmap data from nmap_monitor.GetStatus
 	ServiceInfo nmap_service.ServiceInfo
 	// ObservedNmapServiceConfig contains the observed Nmap service config
-	ObservedNmapServiceConfig config.NmapServiceConfig
+	ObservedNmapServiceConfig nmapserviceconfig.NmapServiceConfig
 }
 
 // Ensure it implements the ObservedState interface

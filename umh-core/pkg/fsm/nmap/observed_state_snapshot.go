@@ -17,6 +17,7 @@ package nmap
 import (
 	"github.com/tiendc/go-deepcopy"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/nmapserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	nmap_service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/nmap"
 )
@@ -27,7 +28,7 @@ type NmapObservedStateSnapshot struct {
 	// LastStateChange is not needed for Nmap but impl for consistency
 	LastStateChange           int64
 	ServiceInfo               nmap_service.ServiceInfo
-	ObservedNmapServiceConfig config.NmapServiceConfig
+	ObservedNmapServiceConfig nmapserviceconfig.NmapServiceConfig
 }
 
 // Ensure it satisfies fsm.ObservedStateSnapshot

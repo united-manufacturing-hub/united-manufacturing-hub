@@ -38,7 +38,7 @@ import (
 // This function is intended to be called repeatedly (e.g. in a periodic control loop).
 // Over multiple calls, it converges the actual state to the desired state. Transitions
 // that fail are retried in subsequent reconcile calls after a backoff period.
-func (n *NmapInstance) Reconcile(ctx context.Context, filesystemService filesystem.Service, tick uint64) (err error, reconciled bool) {
+func (n *NmapInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot, filesystemService filesystem.Service) (err error, reconciled bool) {
 	start := time.Now()
 	instanceName := n.baseFSMInstance.GetID()
 	defer func() {
@@ -57,8 +57,8 @@ func (n *NmapInstance) Reconcile(ctx context.Context, filesystemService filesyst
 	}
 
 	// Step 1: If there's a lastError, see if we've waited enough.
-	if n.baseFSMInstance.ShouldSkipReconcileBecauseOfError(tick) {
-		backErr := n.baseFSMInstance.GetBackoffError(tick)
+	if n.baseFSMInstance.ShouldSkipReconcileBecauseOfError(snapshot.Tick) {
+		backErr := n.baseFSMInstance.GetBackoffError(snapshot.Tick)
 		if backoff.IsPermanentFailureError(backErr) {
 			// If permanent, we want to remove the instance or at least stop it
 			// For now, let's just remove it from the manager:
@@ -80,8 +80,10 @@ func (n *NmapInstance) Reconcile(ctx context.Context, filesystemService filesyst
 					n.baseFSMInstance.GetLogger().Errorf("error removing Nmap instance %s: %v", instanceName, err)
 					forceErr := n.monitorService.ForceRemoveNmap(ctx, filesystemService, instanceName)
 					if forceErr != nil {
+						// If even the force removing doesn't work the base-manager should delete the instance
+						// due to a permanent error.
 						n.baseFSMInstance.GetLogger().Errorf("error force removing Nmap instance %s: %v", instanceName, forceErr)
-						return forceErr, false
+						return fmt.Errorf("failed to force remove the nmap instance: %s : %w", backoff.PermanentFailureError, forceErr), false
 					}
 				}
 				return nil, false
@@ -92,10 +94,10 @@ func (n *NmapInstance) Reconcile(ctx context.Context, filesystemService filesyst
 	}
 
 	// Step 2: Detect external changes.
-	if err := n.reconcileExternalChanges(ctx, filesystemService, tick, start); err != nil {
+	if err := n.reconcileExternalChanges(ctx, filesystemService, snapshot.Tick, start); err != nil {
 		// If the service is not running, we don't want to return an error here, because we want to continue reconciling
 		if !errors.Is(err, nmap_service.ErrServiceNotExist) {
-			n.baseFSMInstance.SetError(err, tick)
+			n.baseFSMInstance.SetError(err, snapshot.Tick)
 			n.baseFSMInstance.GetLogger().Errorf("error reconciling external changes: %s", err)
 
 			// We want to return the error here, to stop reconciling since this would
@@ -116,24 +118,15 @@ func (n *NmapInstance) Reconcile(ctx context.Context, filesystemService filesyst
 			return nil, false
 		}
 
-		if errors.Is(err, context.DeadlineExceeded) {
-			// Updating the observed state can sometimes take longer,
-			// resulting in context.DeadlineExceeded errors. In this case, we want to
-			// mark the reconciliation as complete for this tick since we've likely
-			// already consumed significant time. We return reconciled=true to prevent
-			// further reconciliation attempts in the current tick.
-			return nil, true // We don't want to return an error here, as this can happen in normal operations
-		}
-
-		n.baseFSMInstance.SetError(err, tick)
+		n.baseFSMInstance.SetError(err, snapshot.Tick)
 		n.baseFSMInstance.GetLogger().Errorf("error reconciling state: %s", err)
 		return nil, false // We don't want to return an error here, because we want to continue reconciling
 	}
 
 	// Reconcile the s6Manager
-	s6Err, s6Reconciled := n.monitorService.ReconcileManager(ctx, filesystemService, tick)
+	s6Err, s6Reconciled := n.monitorService.ReconcileManager(ctx, filesystemService, snapshot.Tick)
 	if s6Err != nil {
-		n.baseFSMInstance.SetError(s6Err, tick)
+		n.baseFSMInstance.SetError(s6Err, snapshot.Tick)
 		n.baseFSMInstance.GetLogger().Errorf("error reconciling s6Manager: %s", s6Err)
 		return nil, false
 	}

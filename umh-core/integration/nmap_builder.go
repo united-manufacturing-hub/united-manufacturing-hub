@@ -16,6 +16,7 @@ package integration_test
 
 import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/nmapserviceconfig"
 	"gopkg.in/yaml.v3"
 )
 
@@ -50,7 +51,7 @@ func (b *NmapBuilder) AddGoldenNmap() *NmapBuilder {
 			Name:            "golden-nmap",
 			DesiredFSMState: "port_open",
 		},
-		NmapServiceConfig: config.NmapServiceConfig{
+		NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
 			Target: "0.0.0.0",
 			Port:   443,
 		},
