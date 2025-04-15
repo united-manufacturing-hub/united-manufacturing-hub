@@ -20,6 +20,7 @@ package nmap_test
 
 import (
 	"context"
+	"fmt"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -314,7 +315,6 @@ var _ = Describe("Nmap FSM", func() {
 
 	Context("When monitoring is running", func() {
 		BeforeEach(func() {
-			// Advance the instance to an operational state.
 			inst.Reconcile(ctx, mockFS, 200)
 			inst.Reconcile(ctx, mockFS, 201)
 			err := inst.SetDesiredFSMState(nmap.OperationalStateOpen)
@@ -329,38 +329,52 @@ var _ = Describe("Nmap FSM", func() {
 			Expect(did).To(BeTrue())
 			Expect(inst.GetCurrentFSMState()).To(Equal(nmap.OperationalStateDegraded))
 		})
-		It("should permanently fail after 20 repeated ErrScanFailed", func() {
-			// First, we move the instance from creation through the operational setup.
-			// (Assuming instance is already in a 'degraded' state ready for monitoring.)
+		It("should permanently fail after 3 repeated ErrScanFailed", func() {
 			err, did := inst.Reconcile(ctx, mockFS, 204)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(did).To(BeTrue())
 			Expect(inst.GetCurrentFSMState()).To(Equal(nmap.OperationalStateDegraded))
 
 			mockSvc.SetServicePortState("testing", "open", 10.0)
-
 			err, did = inst.Reconcile(ctx, mockFS, 205)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(did).To(BeTrue())
 			Expect(inst.GetCurrentFSMState()).To(Equal(nmap.OperationalStateOpen))
 
-			var tick uint64 = 206
+			//  - InitialInterval = 10 ticks: 1st error at tick 206 causes skip until 216.
+			//  - MaxInterval = 20 ticks: 2nd error at tick 216 causes skip until 230.
+			//  - on the 3rd error (at tick >= 230), permanent failure is triggered.
 			mockSvc.ShouldErrScanFailed = true
 
-			for i := uint64(1); i <= 20; i++ {
-				inst.Reconcile(ctx, mockFS, tick)
-				tick++
-
-				// for temporary errors we expect the instance to not be removed
-				if i <= 20 {
-					Expect(inst.IsRemoved()).To(BeFalse(), "Iteration %d: instance should not be removed yet", i)
-				} else {
-					// after > 20 retries the backoffManager should remove the instance
-					Expect(inst.IsRemoved()).To(BeTrue(), "Iteration %d: instance should be removed due to permanent failure", i)
-					Expect(mockSvc.ForceRemoveNmapCalled).To(BeTrue(), "ForceRemoveNmap should have been called on permanent failure")
-				}
+			// 1st error
+			inst.Reconcile(ctx, mockFS, 206)
+			for t := uint64(207); t < 216; t++ {
+				inst.Reconcile(ctx, mockFS, t)
+				By(fmt.Sprintf("Processing tick %d", t))
+				Expect(inst.IsRemoved()).To(BeFalse(), "Tick %d: instance should not be removed yet", t)
+				Expect(inst.GetDesiredFSMState()).To(Equal(nmap.OperationalStateOpen))
 			}
-		})
 
+			// 2nd error
+			inst.Reconcile(ctx, mockFS, 216)
+			for t := uint64(217); t < 229; t++ {
+				inst.Reconcile(ctx, mockFS, t)
+				By(fmt.Sprintf("Processing tick %d", t))
+				Expect(inst.IsRemoved()).To(BeFalse(), "Tick %d: instance should still not be removed", t)
+				Expect(inst.GetDesiredFSMState()).To(Equal(nmap.OperationalStateOpen))
+			}
+
+			// 3rd error
+			By(fmt.Sprintf("Processing tick %d", 230))
+			inst.Reconcile(ctx, mockFS, 230)
+			Expect(inst.GetDesiredFSMState()).To(Equal(nmap.OperationalStateOpen))
+
+			By(fmt.Sprintf("Processing tick %d", 231))
+			inst.Reconcile(ctx, mockFS, 231)
+
+			By(fmt.Sprintf("Processing tick %d", 232))
+			inst.Reconcile(ctx, mockFS, 232)
+			Expect(mockSvc.ForceRemoveNmapCalled).To(BeTrue())
+		})
 	})
 })

@@ -28,7 +28,7 @@ import (
 )
 
 // The functions in this file define heavier, possibly fail-prone operations
-// (for example, network or file I/O) that the Benthos FSM might need to perform.
+// (for example, network or file I/O) that the Nmap FSM might need to perform.
 // They are intended to be called from Reconcile.
 //
 // IMPORTANT:
@@ -115,7 +115,7 @@ func (n *NmapInstance) StopInstance(ctx context.Context, filesystemService files
 }
 
 // UpdateObservedStateOfInstance updates the observed state of the service
-func (n *NmapInstance) UpdateObservedStateOfInstance(ctx context.Context, filesystemService filesystem.Service, tick uint64) error {
+func (n *NmapInstance) UpdateObservedStateOfInstance(ctx context.Context, filesystemService filesystem.Service, tick uint64, loopTime time.Time) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}

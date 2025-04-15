@@ -73,7 +73,17 @@ func (n *NmapInstance) Reconcile(ctx context.Context, filesystemService filesyst
 			} else {
 				n.baseFSMInstance.GetLogger().Errorf("Permanent error on nmap monitor %s => removing it", instanceName)
 				n.baseFSMInstance.ResetState() // clear the error
-				_ = n.Remove(ctx)              // attempt removal
+				err = n.Remove(ctx)            // attempt removal
+				if err != nil {
+					// If removing doesn't work because the fsm is not in the OperationalStateBeforeRemove
+					// we will force it to remove.
+					n.baseFSMInstance.GetLogger().Errorf("error removing Nmap instance %s: %v", instanceName, err)
+					forceErr := n.monitorService.ForceRemoveNmap(ctx, filesystemService, instanceName)
+					if forceErr != nil {
+						n.baseFSMInstance.GetLogger().Errorf("error force removing Nmap instance %s: %v", instanceName, forceErr)
+						return forceErr, false
+					}
+				}
 				return nil, false
 			}
 		}
@@ -82,7 +92,7 @@ func (n *NmapInstance) Reconcile(ctx context.Context, filesystemService filesyst
 	}
 
 	// Step 2: Detect external changes.
-	if err := n.reconcileExternalChanges(ctx, filesystemService, tick); err != nil {
+	if err := n.reconcileExternalChanges(ctx, filesystemService, tick, start); err != nil {
 		// If the service is not running, we don't want to return an error here, because we want to continue reconciling
 		if !errors.Is(err, nmap_service.ErrServiceNotExist) {
 			n.baseFSMInstance.SetError(err, tick)
@@ -92,10 +102,6 @@ func (n *NmapInstance) Reconcile(ctx context.Context, filesystemService filesyst
 			// lead the fsm going into degraded. But Nmap-scans are triggered once per second
 			// and each tick is 100ms, therefore it could fail, because it doesn't get
 			// complete logs from which it parses.
-			if errors.Is(err, nmap_service.ErrScanFailed) {
-				return err, false
-			}
-
 			return nil, false // We don't want to return an error here, because we want to continue reconciling
 		}
 		err = nil // The service does not exist, which is fine as this happens in the reconcileStateTransition}
@@ -145,7 +151,7 @@ func (n *NmapInstance) Reconcile(ctx context.Context, filesystemService filesyst
 
 // reconcileExternalChanges checks if the Nmap service status has changed
 // externally (e.g., if someone manually stopped or started it, or if it crashed)
-func (n *NmapInstance) reconcileExternalChanges(ctx context.Context, filesystemService filesystem.Service, tick uint64) error {
+func (n *NmapInstance) reconcileExternalChanges(ctx context.Context, filesystemService filesystem.Service, tick uint64, loopStartTime time.Time) error {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentNmapInstance, n.baseFSMInstance.GetID()+".reconcileExternalChanges", time.Since(start))
@@ -153,7 +159,7 @@ func (n *NmapInstance) reconcileExternalChanges(ctx context.Context, filesystemS
 
 	observedStateCtx, cancel := context.WithTimeout(ctx, constants.S6UpdateObservedStateTimeout)
 	defer cancel()
-	err := n.UpdateObservedStateOfInstance(observedStateCtx, filesystemService, tick)
+	err := n.UpdateObservedStateOfInstance(observedStateCtx, filesystemService, tick, loopStartTime)
 	if err != nil {
 		if errors.Is(err, nmap_service.ErrScanFailed) {
 			return err
@@ -309,7 +315,7 @@ func (n *NmapInstance) reconcileTransitionToStopped(ctx context.Context, current
 func (n *NmapInstance) reconcileStartingStates(ctx context.Context, filesystemService filesystem.Service, currentState string, currentTime time.Time) (err error, reconciled bool) {
 	start := time.Now()
 	defer func() {
-		metrics.ObserveReconcileTime(metrics.ComponentNmapInstance, n.baseFSMInstance.GetID()+".reconcileStartingState", time.Since(start))
+		metrics.ObserveReconcileTime(metrics.ComponentNmapInstance, n.baseFSMInstance.GetID()+".reconcileStartingStates", time.Since(start))
 	}()
 
 	switch currentState {
@@ -324,7 +330,7 @@ func (n *NmapInstance) reconcileStartingStates(ctx context.Context, filesystemSe
 func (n *NmapInstance) reconcileRunningStates(ctx context.Context, filesystemService filesystem.Service, currentState string, currentTime time.Time) (err error, reconciled bool) {
 	start := time.Now()
 	defer func() {
-		metrics.ObserveReconcileTime(metrics.ComponentNmapInstance, n.baseFSMInstance.GetID()+".reconcileRunningState", time.Since(start))
+		metrics.ObserveReconcileTime(metrics.ComponentNmapInstance, n.baseFSMInstance.GetID()+".reconcileRunningStates", time.Since(start))
 	}()
 
 	switch currentState {

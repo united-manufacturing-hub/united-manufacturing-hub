@@ -40,7 +40,7 @@ func NewNmapInstanceWithService(config config.NmapConfig, service nmap_service.I
 	// Build the config for the base FSM
 	fsmCfg := internal_fsm.BaseFSMInstanceConfig{
 		ID: config.Name,
-		// The user can set "open/closed/filtered/degraded" or "stopped" as desired states
+		// The user can set "open" or "stopped" as desired states
 		// but it's supposed to be "open" since you want an opened port here.
 		DesiredFSMState:              config.DesiredFSMState,  // should be "open"
 		OperationalStateAfterCreate:  OperationalStateStopped, // upon creation, start in stopped
@@ -193,8 +193,11 @@ func NewNmapInstanceWithService(config config.NmapConfig, service nmap_service.I
 
 	// Construct the base instance
 	// Adjust the Backoff-Configuration regarding to the FSM's needs
-	// We allow 20 retries which result in 2 Nmap-Executions here.
-	backoffConfig := backoff.NewBackoffConfig(fsmCfg.ID, 1, 600, 20, logger)
+	// We set this to:
+	// InitialInterval: 10 (ticks) -> 1 second
+	// MaxInterval: 40 (ticks) -> 4 seconds
+	// MaxRetries: 2  -> fails for 3rd error
+	backoffConfig := backoff.NewBackoffConfig(fsmCfg.ID, 10, 20, 2, logger)
 	baseFSM := internal_fsm.NewBaseFSMInstance(fsmCfg, backoffConfig, logger)
 
 	// Create our instance
