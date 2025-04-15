@@ -90,7 +90,7 @@ type FSMManager[C any] interface {
 	// The tick parameter provides a counter to track operation rate limiting
 	// The filesystemService parameter is used to read and write to the filesystem.
 	// Specifically it is used so that we only need to read in the entire file system once, and then can pass it to all the managers and instances, who can then save on I/O operations.
-	Reconcile(ctx context.Context, config config.FullConfig, filesystemService filesystem.Service, tick uint64) (error, bool)
+	Reconcile(ctx context.Context, snapshot *SystemSnapshot, filesystemService filesystem.Service, tick uint64) (error, bool)
 	// GetManagerName returns the name of this manager for logging and metrics
 	GetManagerName() string
 }
@@ -278,7 +278,7 @@ func (m *BaseFSMManager[C]) GetLastStateChange() uint64 {
 //     run another manager and instead should wait for the next tick
 func (m *BaseFSMManager[C]) Reconcile(
 	ctx context.Context,
-	config config.FullConfig,
+	snapshot *SystemSnapshot,
 	filesystemService filesystem.Service,
 	tick uint64,
 ) (error, bool) {
@@ -299,7 +299,7 @@ func (m *BaseFSMManager[C]) Reconcile(
 
 	// Step 1: Extract the specific configs from the full config
 	extractStart := time.Now()
-	desiredState, err := m.extractConfigs(config)
+	desiredState, err := m.extractConfigs(snapshot.CurrentConfig)
 	if err != nil {
 		metrics.IncErrorCount(metrics.ComponentBaseFSMManager, m.managerName)
 		return fmt.Errorf("failed to extract configs: %w", err), false

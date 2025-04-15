@@ -26,6 +26,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsmtest"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	benthosfsmmanager "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
 	benthosfsmtype "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
 	benthosservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
@@ -198,6 +199,11 @@ var _ = Describe("DataFlowComponentService", func() {
 				},
 			}
 
+			// Create a snapshot from the full config
+			snapshot := &fsm.SystemSnapshot{
+				CurrentConfig: fullCfg,
+			}
+
 			// Configure benthos service for proper transitions
 			// First configure for creating -> created -> stopped
 			fsmtest.ConfigureBenthosManagerForState(mockBenthosService, benthosName, benthosfsmtype.OperationalStateStopped)
@@ -206,7 +212,7 @@ var _ = Describe("DataFlowComponentService", func() {
 			newTick, err := fsmtest.WaitForBenthosManagerInstanceState(
 				ctx,
 				manager,
-				fullCfg,
+				snapshot,
 				filesystem.NewMockFileSystem(),
 				benthosName,
 				benthosfsmtype.OperationalStateStopped,
@@ -223,7 +229,7 @@ var _ = Describe("DataFlowComponentService", func() {
 			newTick, err = fsmtest.WaitForBenthosManagerInstanceState(
 				ctx,
 				manager,
-				fullCfg,
+				snapshot,
 				filesystem.NewMockFileSystem(),
 				benthosName,
 				benthosfsmtype.OperationalStateActive,

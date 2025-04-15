@@ -31,6 +31,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/redpandaserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
@@ -941,7 +942,13 @@ func (s *RedpandaService) ReconcileManager(ctx context.Context, filesystemServic
 		return ctx.Err(), false
 	}
 
-	return s.s6Manager.Reconcile(ctx, config.FullConfig{Internal: config.InternalConfig{Services: s.s6ServiceConfigs}}, filesystemService, tick)
+	// Create a snapshot from the full config
+	// Note: therefore, the S6 manager will not have access to the full observed state
+	snapshot := &fsm.SystemSnapshot{
+		CurrentConfig: config.FullConfig{Internal: config.InternalConfig{Services: s.s6ServiceConfigs}},
+	}
+
+	return s.s6Manager.Reconcile(ctx, snapshot, filesystemService, tick)
 }
 
 // IsLogsFine analyzes Redpanda logs to determine if there are any critical issues

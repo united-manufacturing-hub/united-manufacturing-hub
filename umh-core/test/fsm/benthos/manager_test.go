@@ -28,6 +28,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsmtest"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/backoff"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	benthosfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/portmanager"
 	benthossvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
@@ -72,7 +73,7 @@ var _ = Describe("BenthosManager", func() {
 
 			// Single call to a helper that wraps Reconcile
 			newTick, err := fsmtest.WaitForBenthosManagerStable(
-				ctx, manager, emptyConfig, mockFS, tick,
+				ctx, manager, &fsm.SystemSnapshot{CurrentConfig: emptyConfig}, mockFS, tick,
 			)
 			tick = newTick
 			Expect(err).NotTo(HaveOccurred())
@@ -96,7 +97,7 @@ var _ = Describe("BenthosManager", func() {
 			newTick, err := fsmtest.WaitForBenthosManagerInstanceState(
 				ctx,
 				manager,
-				cfg,
+				&fsm.SystemSnapshot{CurrentConfig: cfg},
 				mockFS,
 				serviceName,
 				benthosfsm.OperationalStateStopped,
@@ -131,7 +132,7 @@ var _ = Describe("BenthosManager", func() {
 			newTick, err := fsmtest.WaitForBenthosManagerInstanceState(
 				ctx,
 				manager,
-				cfg,
+				&fsm.SystemSnapshot{CurrentConfig: cfg},
 				mockFS,
 				serviceName,
 				benthosfsm.OperationalStateIdle, // or OperationalStateActive, whichever is stable
@@ -162,7 +163,7 @@ var _ = Describe("BenthosManager", func() {
 			fsmtest.ConfigureBenthosManagerForState(mockService, serviceName, benthosfsm.OperationalStateIdle)
 
 			// 1) Wait for idle
-			newTick, err := fsmtest.WaitForBenthosManagerInstanceState(ctx, manager, fullCfg,
+			newTick, err := fsmtest.WaitForBenthosManagerInstanceState(ctx, manager, &fsm.SystemSnapshot{CurrentConfig: fullCfg},
 				mockFS,
 				serviceName,
 				benthosfsm.OperationalStateIdle,
@@ -176,7 +177,7 @@ var _ = Describe("BenthosManager", func() {
 			fsmtest.ConfigureBenthosManagerForState(mockService, serviceName, benthosfsm.OperationalStateDegraded)
 
 			// Wait for state transition
-			newTick, err = fsmtest.WaitForBenthosManagerInstanceState(ctx, manager, fullCfg,
+			newTick, err = fsmtest.WaitForBenthosManagerInstanceState(ctx, manager, &fsm.SystemSnapshot{CurrentConfig: fullCfg},
 				mockFS,
 				serviceName,
 				benthosfsm.OperationalStateDegraded,
@@ -194,7 +195,7 @@ var _ = Describe("BenthosManager", func() {
 			newTick, err = fsmtest.WaitForBenthosManagerInstanceRemoval(
 				ctx,
 				manager,
-				emptyConfig,
+				&fsm.SystemSnapshot{CurrentConfig: emptyConfig},
 				mockFS,
 				serviceName,
 				30, // More attempts for removal
@@ -221,7 +222,7 @@ var _ = Describe("BenthosManager", func() {
 			fsmtest.ConfigureBenthosManagerForState(mockService, serviceName, benthosfsm.OperationalStateIdle)
 
 			// Wait for idle or active
-			newTick, err := fsmtest.WaitForBenthosManagerInstanceState(ctx, manager, activeCfg,
+			newTick, err := fsmtest.WaitForBenthosManagerInstanceState(ctx, manager, &fsm.SystemSnapshot{CurrentConfig: activeCfg},
 				mockFS,
 				serviceName,
 				benthosfsm.OperationalStateIdle,
@@ -243,7 +244,7 @@ var _ = Describe("BenthosManager", func() {
 				},
 			}
 
-			newTick, err = fsmtest.WaitForBenthosManagerInstanceState(ctx, manager, stoppedCfg,
+			newTick, err = fsmtest.WaitForBenthosManagerInstanceState(ctx, manager, &fsm.SystemSnapshot{CurrentConfig: stoppedCfg},
 				mockFS,
 				serviceName,
 				benthosfsm.OperationalStateStopped,
@@ -257,7 +258,7 @@ var _ = Describe("BenthosManager", func() {
 			fsmtest.ConfigureBenthosManagerForState(mockService, serviceName, benthosfsm.OperationalStateIdle)
 
 			// Switch config back to active
-			newTick, err = fsmtest.WaitForBenthosManagerInstanceState(ctx, manager, activeCfg,
+			newTick, err = fsmtest.WaitForBenthosManagerInstanceState(ctx, manager, &fsm.SystemSnapshot{CurrentConfig: activeCfg},
 				mockFS,
 				serviceName,
 				benthosfsm.OperationalStateIdle,
@@ -293,7 +294,7 @@ var _ = Describe("BenthosManager", func() {
 			newTick, err := fsmtest.WaitForBenthosManagerMultiState(
 				ctx,
 				manager,
-				fullCfg,
+				&fsm.SystemSnapshot{CurrentConfig: fullCfg},
 				mockFS,
 				map[string]string{
 					svc1: benthosfsm.OperationalStateIdle,
@@ -338,7 +339,7 @@ var _ = Describe("BenthosManager", func() {
 			fsmtest.ConfigureBenthosManagerForState(mockService, serviceName, benthosfsm.OperationalStateStarting)
 
 			// Initial reconcile to create the instance (using helper instead of direct call)
-			newTick, err := fsmtest.WaitForBenthosManagerStable(ctx, manager, fullCfg, mockFS, tick)
+			newTick, err := fsmtest.WaitForBenthosManagerStable(ctx, manager, &fsm.SystemSnapshot{CurrentConfig: fullCfg}, mockFS, tick)
 			Expect(err).NotTo(HaveOccurred())
 			tick = newTick
 
@@ -346,7 +347,7 @@ var _ = Describe("BenthosManager", func() {
 			fsmtest.ConfigureBenthosManagerForState(mockService, serviceName, benthosfsm.OperationalStateIdle)
 
 			// Eventually, it should try again and go to idle
-			newTick, err = fsmtest.WaitForBenthosManagerInstanceState(ctx, manager, fullCfg,
+			newTick, err = fsmtest.WaitForBenthosManagerInstanceState(ctx, manager, &fsm.SystemSnapshot{CurrentConfig: fullCfg},
 				mockFS,
 				serviceName,
 				benthosfsm.OperationalStateIdle,
@@ -371,7 +372,7 @@ var _ = Describe("BenthosManager", func() {
 			fsmtest.ConfigureBenthosManagerForState(mockService, serviceName, benthosfsm.OperationalStateIdle)
 
 			// Wait for idle
-			newTick, err := fsmtest.WaitForBenthosManagerInstanceState(ctx, manager, fullCfg,
+			newTick, err := fsmtest.WaitForBenthosManagerInstanceState(ctx, manager, &fsm.SystemSnapshot{CurrentConfig: fullCfg},
 				mockFS,
 				serviceName,
 				benthosfsm.OperationalStateIdle,
@@ -394,7 +395,7 @@ var _ = Describe("BenthosManager", func() {
 			}
 
 			// Wait for stopped
-			newTick, err = fsmtest.WaitForBenthosManagerInstanceState(ctx, manager, stoppedCfg,
+			newTick, err = fsmtest.WaitForBenthosManagerInstanceState(ctx, manager, &fsm.SystemSnapshot{CurrentConfig: stoppedCfg},
 				mockFS,
 				serviceName,
 				benthosfsm.OperationalStateStopped,
@@ -411,7 +412,7 @@ var _ = Describe("BenthosManager", func() {
 			newTick, err = fsmtest.WaitForBenthosManagerInstanceRemoval(
 				ctx,
 				manager,
-				config.FullConfig{Internal: config.InternalConfig{Benthos: []config.BenthosConfig{}}},
+				&fsm.SystemSnapshot{CurrentConfig: config.FullConfig{Internal: config.InternalConfig{Benthos: []config.BenthosConfig{}}}},
 				mockFS,
 				serviceName,
 				15,
@@ -447,12 +448,12 @@ var _ = Describe("BenthosManager", func() {
 			fsmtest.ConfigureBenthosManagerForState(mockService, serviceName, benthosfsm.OperationalStateStopped)
 
 			// Initial reconcile to create the instance
-			newTick, err := fsmtest.WaitForBenthosManagerStable(ctx, manager, fullCfg, mockFS, tick)
+			newTick, err := fsmtest.WaitForBenthosManagerStable(ctx, manager, &fsm.SystemSnapshot{CurrentConfig: fullCfg}, mockFS, tick)
 			Expect(err).NotTo(HaveOccurred())
 			tick = newTick
 
 			// The manager tries to reconcile, but the service isn't found initially
-			newTick, err = fsmtest.WaitForBenthosManagerInstanceState(ctx, manager, fullCfg,
+			newTick, err = fsmtest.WaitForBenthosManagerInstanceState(ctx, manager, &fsm.SystemSnapshot{CurrentConfig: fullCfg},
 				mockFS,
 				serviceName,
 				benthosfsm.OperationalStateStopped,
@@ -489,7 +490,7 @@ var _ = Describe("BenthosManager", func() {
 			newTick, err, reconciled := fsmtest.ReconcileOnceBenthosManager(
 				ctx,
 				manager,
-				fullCfg,
+				&fsm.SystemSnapshot{CurrentConfig: fullCfg},
 				mockFS,
 				tick,
 			)
@@ -532,7 +533,7 @@ var _ = Describe("BenthosManager", func() {
 			newTick, err, reconciled := fsmtest.ReconcileOnceBenthosManager(
 				ctx,
 				manager,
-				fullCfg,
+				&fsm.SystemSnapshot{CurrentConfig: fullCfg},
 				mockFS,
 				tick,
 			)
@@ -564,7 +565,7 @@ var _ = Describe("BenthosManager", func() {
 			newTick, err, reconciled := fsmtest.ReconcileOnceBenthosManager(
 				ctx,
 				manager,
-				fullCfg,
+				&fsm.SystemSnapshot{CurrentConfig: fullCfg},
 				mockFS,
 				tick,
 			)

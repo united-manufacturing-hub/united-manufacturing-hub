@@ -25,6 +25,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/portmanager"
@@ -429,9 +430,11 @@ func (s *DataFlowComponentService) ReconcileManager(ctx context.Context, filesys
 
 	// Reconcile the Benthos manager with our configs
 	// The Benthos manager will handle the reconciliation with the S6 manager
-	return s.benthosManager.Reconcile(ctx, config.FullConfig{
-		Internal: config.InternalConfig{
-			Benthos: s.benthosConfigs,
+	return s.benthosManager.Reconcile(ctx, &fsm.SystemSnapshot{
+		CurrentConfig: config.FullConfig{
+			Internal: config.InternalConfig{
+				Benthos: s.benthosConfigs,
+			},
 		},
 	}, filesystemService, tick)
 }
