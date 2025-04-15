@@ -28,14 +28,14 @@ import (
 
 // InstanceReconciler is an interface for any FSM instance that can be reconciled
 type InstanceReconciler interface {
-	Reconcile(ctx context.Context, filesystemService filesystem.Service, tick uint64) (error, bool)
+	Reconcile(ctx context.Context, snapshot *fsm.SystemSnapshot, filesystemService filesystem.Service) (error, bool)
 	GetCurrentFSMState() string
 	GetDesiredFSMState() string
 }
 
 // ManagerReconciler is an interface for any FSM manager that can be reconciled
 type ManagerReconciler interface {
-	Reconcile(ctx context.Context, snapshot *fsm.SystemSnapshot, filesystemService filesystem.Service, tick uint64) (error, bool)
+	Reconcile(ctx context.Context, snapshot *fsm.SystemSnapshot, filesystemService filesystem.Service) (error, bool)
 	GetInstance(id string) (fsm.FSMInstance, bool)
 }
 
@@ -44,7 +44,7 @@ func WaitForInstanceState(ctx context.Context, instance InstanceReconciler, file
 	tick := startTick
 
 	for i := 0; i < maxAttempts; i++ {
-		err, _ := instance.Reconcile(ctx, filesystemService, tick)
+		err, _ := instance.Reconcile(ctx, &fsm.SystemSnapshot{Tick: tick}, filesystemService)
 		if err != nil {
 			return tick, fmt.Errorf("error during reconcile: %w", err)
 		}
@@ -63,12 +63,12 @@ func WaitForInstanceState(ctx context.Context, instance InstanceReconciler, file
 // WaitForManagerInstanceState repeatedly calls Reconcile on a manager until the specified instance
 // reaches the desired state or times out
 func WaitForManagerInstanceState(ctx context.Context, manager ManagerReconciler, snapshot *fsm.SystemSnapshot, filesystemService filesystem.Service,
-	instanceID string, desiredState string, maxAttempts int, startTick uint64) (uint64, error) {
+	instanceID string, desiredState string, maxAttempts int) (uint64, error) {
 
-	tick := startTick
+	tick := snapshot.Tick
 
 	for i := 0; i < maxAttempts; i++ {
-		err, _ := manager.Reconcile(ctx, snapshot, filesystemService, tick)
+		err, _ := manager.Reconcile(ctx, snapshot, filesystemService)
 		if err != nil {
 			return tick, fmt.Errorf("error during manager reconcile: %w", err)
 		}
@@ -102,13 +102,13 @@ func WaitForManagerInstanceState(ctx context.Context, manager ManagerReconciler,
 // WaitForManagerState repeatedly calls Reconcile on a manager until all its instances
 // reach the desired state or maxAttempts is exceeded
 func WaitForManagerState(ctx context.Context, manager ManagerReconciler, snapshot *fsm.SystemSnapshot, filesystemService filesystem.Service,
-	desiredState string, maxAttempts int, startTick uint64, printDetails bool) (uint64, error) {
+	desiredState string, maxAttempts int, printDetails bool) (uint64, error) {
 
-	tick := startTick
+	tick := snapshot.Tick
 	var lastErr error
 
 	for i := 0; i < maxAttempts; i++ {
-		lastErr, _ = manager.Reconcile(ctx, snapshot, filesystemService, tick)
+		lastErr, _ = manager.Reconcile(ctx, snapshot, filesystemService)
 		if lastErr != nil {
 			return tick, lastErr
 		}
@@ -198,12 +198,11 @@ func WaitForManagerInstanceCreation(
 	filesystemService filesystem.Service,
 	instanceID string,
 	maxAttempts int,
-	startTick uint64,
 ) (uint64, error) {
-	tick := startTick
+	tick := snapshot.Tick
 
 	for i := 0; i < maxAttempts; i++ {
-		err, _ := manager.Reconcile(ctx, snapshot, filesystemService, tick)
+		err, _ := manager.Reconcile(ctx, snapshot, filesystemService)
 		if err != nil {
 			return tick, fmt.Errorf("error during manager reconcile: %w", err)
 		}
@@ -229,12 +228,11 @@ func WaitForManagerInstanceRemoval(
 	filesystemService filesystem.Service,
 	instanceID string,
 	maxAttempts int,
-	startTick uint64,
 ) (uint64, error) {
-	tick := startTick
+	tick := snapshot.Tick
 
 	for i := 0; i < maxAttempts; i++ {
-		err, _ := manager.Reconcile(ctx, snapshot, filesystemService, tick)
+		err, _ := manager.Reconcile(ctx, snapshot, filesystemService)
 		if err != nil {
 			return tick, fmt.Errorf("error during manager reconcile: %w", err)
 		}
@@ -258,12 +256,11 @@ func RunMultipleReconciliations(
 	snapshot *fsm.SystemSnapshot,
 	filesystemService filesystem.Service,
 	numReconciliations int,
-	startTick uint64,
 ) (uint64, error) {
-	tick := startTick
+	tick := snapshot.Tick
 
 	for i := 0; i < numReconciliations; i++ {
-		err, _ := manager.Reconcile(ctx, snapshot, filesystemService, tick)
+		err, _ := manager.Reconcile(ctx, snapshot, filesystemService)
 		if err != nil {
 			return tick, fmt.Errorf("error during manager reconcile (attempt %d): %w", i+1, err)
 		}

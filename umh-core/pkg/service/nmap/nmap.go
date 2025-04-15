@@ -524,9 +524,10 @@ func (s *NmapService) ReconcileManager(ctx context.Context, filesystemService fi
 	// Create a snapshot from the full config
 	snapshot := &fsm.SystemSnapshot{
 		CurrentConfig: config.FullConfig{Internal: config.InternalConfig{Services: s.s6ServiceConfigs}},
+		Tick:          tick,
 	}
 
-	return s.s6Manager.Reconcile(ctx, snapshot, filesystemService, tick)
+	return s.s6Manager.Reconcile(ctx, snapshot, filesystemService)
 }
 
 // ServiceExists checks if a nmap service exists

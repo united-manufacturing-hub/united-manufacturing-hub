@@ -308,7 +308,7 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 			return nil
 		}
 
-		err, reconciled := manager.Reconcile(ctx, newSnapshot, c.filesystemService, c.currentTick)
+		err, reconciled := manager.Reconcile(ctx, newSnapshot, c.filesystemService)
 		if err != nil {
 			metrics.IncErrorCount(metrics.ComponentControlLoop, manager.GetManagerName())
 			return fmt.Errorf("manager %s reconciliation failed: %w", manager.GetManagerName(), err)

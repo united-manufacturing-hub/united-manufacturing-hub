@@ -436,7 +436,8 @@ func (s *DataFlowComponentService) ReconcileManager(ctx context.Context, filesys
 				Benthos: s.benthosConfigs,
 			},
 		},
-	}, filesystemService, tick)
+		Tick: tick,
+	}, filesystemService)
 }
 
 // ServiceExists checks if a DataFlowComponent service exists

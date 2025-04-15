@@ -199,11 +199,6 @@ var _ = Describe("DataFlowComponentService", func() {
 				},
 			}
 
-			// Create a snapshot from the full config
-			snapshot := &fsm.SystemSnapshot{
-				CurrentConfig: fullCfg,
-			}
-
 			// Configure benthos service for proper transitions
 			// First configure for creating -> created -> stopped
 			fsmtest.ConfigureBenthosManagerForState(mockBenthosService, benthosName, benthosfsmtype.OperationalStateStopped)
@@ -211,13 +206,12 @@ var _ = Describe("DataFlowComponentService", func() {
 			// Wait for the instance to be created and reach stopped state
 			newTick, err := fsmtest.WaitForBenthosManagerInstanceState(
 				ctx,
+				&fsm.SystemSnapshot{CurrentConfig: fullCfg, Tick: tick},
 				manager,
-				snapshot,
 				filesystem.NewMockFileSystem(),
 				benthosName,
 				benthosfsmtype.OperationalStateStopped,
 				10,
-				tick,
 			)
 			Expect(err).NotTo(HaveOccurred())
 			tick = newTick
@@ -228,13 +222,12 @@ var _ = Describe("DataFlowComponentService", func() {
 			// Wait for the instance to reach running state
 			newTick, err = fsmtest.WaitForBenthosManagerInstanceState(
 				ctx,
+				&fsm.SystemSnapshot{CurrentConfig: fullCfg, Tick: tick},
 				manager,
-				snapshot,
 				filesystem.NewMockFileSystem(),
 				benthosName,
 				benthosfsmtype.OperationalStateActive,
 				15,
-				tick,
 			)
 			Expect(err).NotTo(HaveOccurred())
 			tick = newTick

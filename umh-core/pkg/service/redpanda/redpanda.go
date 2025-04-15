@@ -946,9 +946,10 @@ func (s *RedpandaService) ReconcileManager(ctx context.Context, filesystemServic
 	// Note: therefore, the S6 manager will not have access to the full observed state
 	snapshot := &fsm.SystemSnapshot{
 		CurrentConfig: config.FullConfig{Internal: config.InternalConfig{Services: s.s6ServiceConfigs}},
+		Tick:          tick,
 	}
 
-	return s.s6Manager.Reconcile(ctx, snapshot, filesystemService, tick)
+	return s.s6Manager.Reconcile(ctx, snapshot, filesystemService)
 }
 
 // IsLogsFine analyzes Redpanda logs to determine if there are any critical issues

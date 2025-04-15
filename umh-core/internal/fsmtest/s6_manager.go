@@ -81,8 +81,7 @@ func WaitForMockedManagerInstanceState(
 	filesystemService filesystem.Service,
 	instanceName, desiredState string,
 	maxAttempts int,
-	tick uint64,
 ) (uint64, error) {
 	// Simply call the regular function
-	return WaitForManagerInstanceState(ctx, manager, snapshot, filesystemService, instanceName, desiredState, maxAttempts, tick)
+	return WaitForManagerInstanceState(ctx, manager, snapshot, filesystemService, instanceName, desiredState, maxAttempts)
 }

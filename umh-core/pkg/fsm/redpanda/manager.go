@@ -105,7 +105,7 @@ func NewRedpandaManager(name string) *RedpandaManager {
 	}
 }
 
-func (m *RedpandaManager) Reconcile(ctx context.Context, snapshot *fsm.SystemSnapshot, filesystemService filesystem.Service, tick uint64) (error, bool) {
+func (m *RedpandaManager) Reconcile(ctx context.Context, snapshot *fsm.SystemSnapshot, filesystemService filesystem.Service) (error, bool) {
 	start := time.Now()
 	defer func() {
 		duration := time.Since(start)
@@ -113,7 +113,7 @@ func (m *RedpandaManager) Reconcile(ctx context.Context, snapshot *fsm.SystemSna
 	}()
 
 	// We do not need to manage ports for Redpanda, therefore we can directly reconcile
-	return m.BaseFSMManager.Reconcile(ctx, snapshot, filesystemService, tick)
+	return m.BaseFSMManager.Reconcile(ctx, snapshot, filesystemService)
 }
 
 func (m *RedpandaManager) CreateSnapshot() public_fsm.ManagerSnapshot {
