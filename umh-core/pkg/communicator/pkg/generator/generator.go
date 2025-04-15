@@ -21,6 +21,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/agent_monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/container"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
@@ -32,9 +33,11 @@ const (
 	// Manager name constants
 	containerManagerName = logger.ComponentContainerManager + "_" + constants.DefaultManagerName
 	benthosManagerName   = logger.ComponentBenthosManager + "_" + constants.DefaultManagerName
+	agentManagerName     = logger.ComponentAgentManager + "_" + constants.DefaultManagerName
 
 	// Instance name constants
-	coreInstanceName = "Core"
+	coreInstanceName  = "Core"
+	agentInstanceName = "agent"
 )
 
 type StatusCollectorType struct {
@@ -109,6 +112,24 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 		containerData = buildDefaultContainerData()
 	}
 
+	// extract agent data from the agent manager if available
+	var agentData models.Agent
+
+	if agentManager, exists := s.state.Managers[agentManagerName]; exists {
+		instances := agentManager.GetInstances()
+
+		s.logger.Info("Agent manager instances",
+			zap.Any("instances", instances))
+
+		if instance, ok := instances[agentInstanceName]; ok {
+			agentData = buildAgentDataFromSnapshot(instance, s.logger)
+		} else {
+			s.logger.Warn("Agent instance not found in agent manager",
+				zap.String("instanceName", agentInstanceName),
+				zap.Any("instances", instances))
+		}
+	}
+
 	// Create the status message
 	statusMessage := &models.StatusMessage{
 		Core: models.Core{
@@ -120,7 +141,7 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 					Category:      models.Neutral,
 				},
 				Latency:  &models.Latency{},
-				Location: map[int]string{}, // TODO: fetch from observed state
+				Location: agentData.Location, // TODO: fetch from observed state
 			},
 			Container: containerData,
 			Dfcs:      []models.Dfc{},
@@ -299,4 +320,25 @@ func buildDefaultContainerData() models.Container {
 // Helper function to create string pointers
 func stringPtr(s string) *string {
 	return &s
+}
+
+// buildAgentDataFromSnapshot creates agent data from a FSM instance snapshot
+func buildAgentDataFromSnapshot(instance fsm.FSMInstanceSnapshot, log *zap.SugaredLogger) models.Agent {
+	agentData := models.Agent{}
+
+	// Check if we have actual observedState
+	if instance.LastObservedState != nil {
+		// Try to cast to the right type
+		if snapshot, ok := instance.LastObservedState.(*agent_monitor.AgentObservedStateSnapshot); ok {
+			agentData = models.Agent{
+				Location: snapshot.ServiceInfoSnapshot.Location,
+			}
+		} else {
+			log.Warn("Agent observed state is not of expected type")
+		}
+	} else {
+		log.Warn("Agent instance has no observed state")
+	}
+
+	return agentData
 }
