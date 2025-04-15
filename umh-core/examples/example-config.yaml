@@ -15,9 +15,10 @@
 agent:
   metricsPort: 8080
 
+  
 internal:
   redpanda:
-    desiredState: stopped    
+    desiredState: stopped
   services:
     - name: hello-world
       desiredState: running

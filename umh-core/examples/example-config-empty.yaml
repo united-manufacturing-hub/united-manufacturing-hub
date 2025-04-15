@@ -17,6 +17,6 @@ agent:
 
   
 internal:
-  services: []
   redpanda:
     desiredState: stopped
+  services: []
