@@ -80,23 +80,6 @@ func (a *GetDataFlowComponentAction) Execute() (interface{}, map[string]interfac
 	// Get the DataFlowComponent
 	a.actionLogger.Debugf("Getting the DataFlowComponent")
 
-	// Get the config
-	// a.actionLogger.Info("Getting the config")
-	// ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
-	// defer cancel()
-	// curConfig, err := a.configManager.GetConfig(ctx, a.systemSnapshot.Tick)
-	// if err != nil {
-	// 	return nil, nil, err
-	// }
-	// for _, component := range curConfig.DataFlow {
-	// 	cur_uuid := dataflowcomponentconfig.GenerateUUIDFromName(component.Name).String()
-	// 	a.actionLogger.Info("Checking if ", cur_uuid, " is in ", a.payload.VersionUUIDs)
-	// 	if slices.Contains(a.payload.VersionUUIDs, cur_uuid) {
-	// 		a.actionLogger.Info("Adding ", component.Name, " to the response")
-	// 		dataFlowComponents = append(dataFlowComponents, component)
-	// 	}
-	// }
-
 	if dataflowcomponentManager, exists := a.systemSnapshot.Managers[constants.DataflowcomponentManagerName]; exists {
 		a.actionLogger.Debugf("Dataflowcomponent manager found, getting the dataflowcomponent")
 		instances := dataflowcomponentManager.GetInstances()
