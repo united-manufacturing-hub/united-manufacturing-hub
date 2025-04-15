@@ -155,11 +155,6 @@ func SystemSnapshotLogger(ctx context.Context, controlLoop *control.ControlLoop,
 				for instanceName, instance := range instances {
 					logger.Infof("Instance: %s, current state: %s, desired state: %s",
 						instanceName, instance.CurrentState, instance.DesiredState)
-
-					// Log observed state if available
-					if instance.LastObservedState != nil {
-						logger.Debugf("Observed state: %v", instance.LastObservedState)
-					}
 				}
 			}
 		}
