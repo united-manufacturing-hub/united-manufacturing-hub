@@ -16,21 +16,24 @@ agent:
   metricsPort: 8080
   communicator:
     apiUrl: https://management.umh.app/api
-    authToken: a7caf5d82dacb972c300baf72d76326a3168141975f9e31f077aa28beced1ab7
+    authToken: aa7d294e57f5811cbbaecf33932200fbdb446b172d5a6b448595d8b5733dfe7b
   releaseChannel: stable
 
-redpanda:
-  desiredState: stopped
-  
-internal:
-  benthos:
-    - name: hello-world
-      desiredState: active
-      benthosServiceConfig:
+dataFlow:
+  - name: hello-world-dfc
+    desiredState: active
+    dataFlowComponentConfig:
+      benthos:
         input:
           generate:
-            mapping: root = "hello world from Benthos!"
+            mapping: root = "hello world from Benthos from DFC fsm!"
             interval: 1s # Output every 2 seconds
             count: 0 # Set to 0 for unlimited messages
+        pipeline:
+          processors:
+            - bloblang: root = content()
         output:
-          stdout: {}
+            stdout: {}  
+internal:
+  redpanda:
+    desiredState: stopped

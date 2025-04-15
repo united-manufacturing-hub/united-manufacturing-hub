@@ -5,6 +5,19 @@
     "version": "0.2.0",
     "configurations": [
         {
+            // This starts the umh-core main.go
+            "name": "Start umh-core",
+            "type": "go",
+            "request": "launch",
+            "mode": "debug",
+            "program": "${workspaceFolder}/umh-core/cmd/main.go",
+            "env": {
+                "AUTH_TOKEN": "aa7d294e57f5811cbbaecf33932200fbdb446b172d5a6b448595d8b5733dfe7b",
+                "API_URL": "https://management.umh.app/api",
+                "RELEASE_CHANNEL": "stable"
+            }
+        },
+        {
             // This connects to delve inside the umh-core container
             "name": "Connect to umh-core",
             "type": "go",
