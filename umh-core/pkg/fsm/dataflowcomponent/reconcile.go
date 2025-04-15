@@ -25,7 +25,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
-	dataflowcomponentservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/dataflowcomponent"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
@@ -82,25 +81,26 @@ func (d *DataflowComponentInstance) Reconcile(ctx context.Context, filesystemSer
 	}
 
 	// Step 2: Detect external changes.
-	if err := d.reconcileExternalChanges(ctx, filesystemService, tick); err != nil {
-		// If the service is not running, we don't want to return an error here, because we want to continue reconciling
-		if !errors.Is(err, dataflowcomponentservice.ErrServiceNotExist) {
-			d.baseFSMInstance.SetError(err, tick)
-			d.baseFSMInstance.GetLogger().Errorf("error reconciling external changes: %s", err)
-
-			if errors.Is(err, context.DeadlineExceeded) {
-				// Healthchecks occasionally take longer (sometimes up to 70ms),
-				// resulting in context.DeadlineExceeded errors. In this case, we want to
-				// mark the reconciliation as complete for this tick since we've likely
-				// already consumed significant time. We return reconciled=true to prevent
-				// further reconciliation attempts in the current tick.
-				return nil, true // We don't want to return an error here, as this can happen in normal operations
-			}
-			return nil, false // We don't want to return an error here, because we want to continue reconciling
-		}
-
-		err = nil // The service does not exist, which is fine as this happens in the reconcileStateTransition
-	}
+	_ = d.reconcileExternalChanges(ctx, filesystemService, tick)
+	// if err := d.reconcileExternalChanges(ctx, filesystemService, tick); err != nil {
+	// 	// If the service is not running, we don't want to return an error here, because we want to continue reconciling
+	// 	if !errors.Is(err, dataflowcomponentservice.ErrServiceNotExist) {
+	// 		d.baseFSMInstance.SetError(err, tick)
+	// 		d.baseFSMInstance.GetLogger().Errorf("error reconciling external changes: %s", err)
+	//
+	// 		if errors.Is(err, context.DeadlineExceeded) {
+	// 			// Healthchecks occasionally take longer (sometimes up to 70ms),
+	// 			// resulting in context.DeadlineExceeded errors. In this case, we want to
+	// 			// mark the reconciliation as complete for this tick since we've likely
+	// 			// already consumed significant time. We return reconciled=true to prevent
+	// 			// further reconciliation attempts in the current tick.
+	// 			return nil, true // We don't want to return an error here, as this can happen in normal operations
+	// 		}
+	// 		return nil, false // We don't want to return an error here, because we want to continue reconciling
+	// 	}
+	//
+	// 	err = nil // The service does not exist, which is fine as this happens in the reconcileStateTransition
+	// }
 
 	// Step 3: Attempt to reconcile the state.
 	currentTime := time.Now() // this is used to check if the instance is degraded and for the log check
