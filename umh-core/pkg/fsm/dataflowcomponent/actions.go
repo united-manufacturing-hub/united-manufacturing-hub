@@ -132,7 +132,11 @@ func (d *DataflowComponentInstance) getServiceStatus(ctx context.Context, filesy
 
 		// For other errors, log them and return
 		d.baseFSMInstance.GetLogger().Errorf("error updating observed state for %s: %s", d.baseFSMInstance.GetID(), err)
-		return dataflowcomponentservice.ServiceInfo{}, err
+		infoWithFailedHealthChecks := info
+		infoWithFailedHealthChecks.BenthosObservedState.ServiceInfo.BenthosStatus.HealthCheck.IsLive = false
+		infoWithFailedHealthChecks.BenthosObservedState.ServiceInfo.BenthosStatus.HealthCheck.IsReady = false
+		// return the info with healthchecks failed
+		return infoWithFailedHealthChecks, err
 	}
 
 	return info, nil
