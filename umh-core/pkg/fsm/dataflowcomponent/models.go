@@ -48,12 +48,11 @@ const (
 // Operational event constants
 const (
 	// Basic lifecycle events
-	EventStart         = "start"
-	EventStartDone     = "start_done"
-	EventStop          = "stop"
-	EventStopDone      = "stop_done"
-	EventStartFailed   = "start_failed"
-	EventConfigChanged = "config_changed"
+	EventStart       = "start"
+	EventStartDone   = "start_done"
+	EventStop        = "stop"
+	EventStopDone    = "stop_done"
+	EventStartFailed = "start_failed"
 
 	// Running phase events
 	EventBenthosDataReceived   = "benthos_data_received"
