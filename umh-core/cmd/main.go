@@ -27,6 +27,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/control"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/agent_monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
@@ -156,7 +157,16 @@ func SystemSnapshotLogger(ctx context.Context, controlLoop *control.ControlLoop,
 
 					// Log observed state if available
 					if instance.LastObservedState != nil {
-						logger.Debugf("Observed state: %v", instance.LastObservedState)
+						if instanceName == "agent" {
+							// remove the logs from the observed state because they spam the console otherwise
+							observedState := instance.LastObservedState.(*agent_monitor.AgentObservedStateSnapshot)
+							serviceInfo := observedState.ServiceInfoSnapshot
+							serviceInfo.AgentLogs = nil
+							observedState.ServiceInfoSnapshot = serviceInfo
+							logger.Debugf("Observed state: %v", observedState)
+						} else {
+							logger.Debugf("Observed state: %v", instance.LastObservedState)
+						}
 					}
 				}
 			}
