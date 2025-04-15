@@ -17,7 +17,7 @@ package constants
 import "time"
 
 // AgentMonitorUpdateObservedStateTimeout is the timeout for updating the observed state
-const AgentMonitorUpdateObservedStateTimeout = 5 * time.Millisecond
+const AgentMonitorUpdateObservedStateTimeout = 15 * time.Millisecond
 
 // AgentExpectedMaxP95ExecutionTimePerInstance means that an instance will not reconcile if not 30ms are left
 // Note: in the intergation test, we defined an alerting threshold of 80% of the max ticker time, which is 100ms
