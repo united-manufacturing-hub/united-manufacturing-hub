@@ -522,7 +522,7 @@ func (s *NmapService) ReconcileManager(ctx context.Context, filesystemService fi
 	}
 
 	// Create a snapshot from the full config
-	snapshot := &fsm.SystemSnapshot{
+	snapshot := fsm.SystemSnapshot{
 		CurrentConfig: config.FullConfig{Internal: config.InternalConfig{Services: s.s6ServiceConfigs}},
 		Tick:          tick,
 	}

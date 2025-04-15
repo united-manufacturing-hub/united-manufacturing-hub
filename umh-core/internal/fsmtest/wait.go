@@ -28,14 +28,14 @@ import (
 
 // InstanceReconciler is an interface for any FSM instance that can be reconciled
 type InstanceReconciler interface {
-	Reconcile(ctx context.Context, snapshot *fsm.SystemSnapshot, filesystemService filesystem.Service) (error, bool)
+	Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot, filesystemService filesystem.Service) (error, bool)
 	GetCurrentFSMState() string
 	GetDesiredFSMState() string
 }
 
 // ManagerReconciler is an interface for any FSM manager that can be reconciled
 type ManagerReconciler interface {
-	Reconcile(ctx context.Context, snapshot *fsm.SystemSnapshot, filesystemService filesystem.Service) (error, bool)
+	Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot, filesystemService filesystem.Service) (error, bool)
 	GetInstance(id string) (fsm.FSMInstance, bool)
 }
 
@@ -44,7 +44,7 @@ func WaitForInstanceState(ctx context.Context, instance InstanceReconciler, file
 	tick := startTick
 
 	for i := 0; i < maxAttempts; i++ {
-		err, _ := instance.Reconcile(ctx, &fsm.SystemSnapshot{Tick: tick}, filesystemService)
+		err, _ := instance.Reconcile(ctx, fsm.SystemSnapshot{Tick: tick}, filesystemService)
 		if err != nil {
 			return tick, fmt.Errorf("error during reconcile: %w", err)
 		}
@@ -62,7 +62,7 @@ func WaitForInstanceState(ctx context.Context, instance InstanceReconciler, file
 
 // WaitForManagerInstanceState repeatedly calls Reconcile on a manager until the specified instance
 // reaches the desired state or times out
-func WaitForManagerInstanceState(ctx context.Context, manager ManagerReconciler, snapshot *fsm.SystemSnapshot, filesystemService filesystem.Service,
+func WaitForManagerInstanceState(ctx context.Context, manager ManagerReconciler, snapshot fsm.SystemSnapshot, filesystemService filesystem.Service,
 	instanceID string, desiredState string, maxAttempts int) (uint64, error) {
 
 	tick := snapshot.Tick
@@ -101,7 +101,7 @@ func WaitForManagerInstanceState(ctx context.Context, manager ManagerReconciler,
 
 // WaitForManagerState repeatedly calls Reconcile on a manager until all its instances
 // reach the desired state or maxAttempts is exceeded
-func WaitForManagerState(ctx context.Context, manager ManagerReconciler, snapshot *fsm.SystemSnapshot, filesystemService filesystem.Service,
+func WaitForManagerState(ctx context.Context, manager ManagerReconciler, snapshot fsm.SystemSnapshot, filesystemService filesystem.Service,
 	desiredState string, maxAttempts int, printDetails bool) (uint64, error) {
 
 	tick := snapshot.Tick
@@ -194,7 +194,7 @@ func getInstancesMap(manager ManagerReconciler) map[string]bool {
 func WaitForManagerInstanceCreation(
 	ctx context.Context,
 	manager ManagerReconciler,
-	snapshot *fsm.SystemSnapshot,
+	snapshot fsm.SystemSnapshot,
 	filesystemService filesystem.Service,
 	instanceID string,
 	maxAttempts int,
@@ -224,7 +224,7 @@ func WaitForManagerInstanceCreation(
 func WaitForManagerInstanceRemoval(
 	ctx context.Context,
 	manager ManagerReconciler,
-	snapshot *fsm.SystemSnapshot,
+	snapshot fsm.SystemSnapshot,
 	filesystemService filesystem.Service,
 	instanceID string,
 	maxAttempts int,
@@ -253,7 +253,7 @@ func WaitForManagerInstanceRemoval(
 func RunMultipleReconciliations(
 	ctx context.Context,
 	manager ManagerReconciler,
-	snapshot *fsm.SystemSnapshot,
+	snapshot fsm.SystemSnapshot,
 	filesystemService filesystem.Service,
 	numReconciliations int,
 ) (uint64, error) {

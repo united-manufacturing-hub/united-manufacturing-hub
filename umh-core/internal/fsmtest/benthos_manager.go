@@ -33,7 +33,7 @@ import (
 // where we just want to do one pass. Then we might call it multiple times if needed.
 func WaitForBenthosManagerStable(
 	ctx context.Context,
-	snapshot *fsm.SystemSnapshot,
+	snapshot fsm.SystemSnapshot,
 	manager *benthosfsm.BenthosManager,
 
 	filesystemService filesystem.Service,
@@ -50,7 +50,7 @@ func WaitForBenthosManagerStable(
 // we see the specified 'desiredState' or we hit maxAttempts.
 func WaitForBenthosManagerInstanceState(
 	ctx context.Context,
-	snapshot *fsm.SystemSnapshot,
+	snapshot fsm.SystemSnapshot,
 	manager *benthosfsm.BenthosManager,
 
 	filesystemService filesystem.Service,
@@ -79,7 +79,7 @@ func WaitForBenthosManagerInstanceState(
 // from the manager's instance map.
 func WaitForBenthosManagerInstanceRemoval(
 	ctx context.Context,
-	snapshot *fsm.SystemSnapshot,
+	snapshot fsm.SystemSnapshot,
 	manager *benthosfsm.BenthosManager,
 
 	filesystemService filesystem.Service,
@@ -106,7 +106,7 @@ func WaitForBenthosManagerInstanceRemoval(
 // e.g. map[serviceName]desiredState = ...
 func WaitForBenthosManagerMultiState(
 	ctx context.Context,
-	snapshot *fsm.SystemSnapshot,
+	snapshot fsm.SystemSnapshot,
 	manager *benthosfsm.BenthosManager,
 
 	filesystemService filesystem.Service,
@@ -226,7 +226,7 @@ func ConfigureBenthosManagerForState(
 // manager's 'reconciled' bool.
 func ReconcileOnceBenthosManager(
 	ctx context.Context,
-	snapshot *fsm.SystemSnapshot,
+	snapshot fsm.SystemSnapshot,
 	manager *benthosfsm.BenthosManager,
 
 	filesystemService filesystem.Service,

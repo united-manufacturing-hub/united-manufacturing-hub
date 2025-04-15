@@ -66,7 +66,7 @@ type FSMInstance interface {
 	// whether a change was made to the instance's state
 	// The filesystemService parameter is used to read and write to the filesystem.
 	// Specifically it is used so that we only need to read in the entire file system once, and then can pass it to all the managers and instances, who can then save on I/O operations.
-	Reconcile(ctx context.Context, snapshot *SystemSnapshot, filesystemService filesystem.Service) (error, bool)
+	Reconcile(ctx context.Context, snapshot SystemSnapshot, filesystemService filesystem.Service) (error, bool)
 	// Remove initiates the removal process for this instance
 	Remove(ctx context.Context) error
 	// GetLastObservedState returns the last known state of the instance
@@ -90,7 +90,7 @@ type FSMManager[C any] interface {
 	// The tick parameter provides a counter to track operation rate limiting
 	// The filesystemService parameter is used to read and write to the filesystem.
 	// Specifically it is used so that we only need to read in the entire file system once, and then can pass it to all the managers and instances, who can then save on I/O operations.
-	Reconcile(ctx context.Context, snapshot *SystemSnapshot, filesystemService filesystem.Service) (error, bool)
+	Reconcile(ctx context.Context, snapshot SystemSnapshot, filesystemService filesystem.Service) (error, bool)
 	// GetManagerName returns the name of this manager for logging and metrics
 	GetManagerName() string
 }
@@ -278,7 +278,7 @@ func (m *BaseFSMManager[C]) GetLastStateChange() uint64 {
 //     run another manager and instead should wait for the next tick
 func (m *BaseFSMManager[C]) Reconcile(
 	ctx context.Context,
-	snapshot *SystemSnapshot,
+	snapshot SystemSnapshot,
 	filesystemService filesystem.Service,
 ) (error, bool) {
 	// Increment manager-specific tick counter

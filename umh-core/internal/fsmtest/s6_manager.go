@@ -77,7 +77,7 @@ func ConfigureS6MockServiceState(s6Instance *s6.S6Instance, state string) {
 func WaitForMockedManagerInstanceState(
 	ctx context.Context,
 	manager *s6.S6Manager,
-	snapshot *fsm.SystemSnapshot,
+	snapshot fsm.SystemSnapshot,
 	filesystemService filesystem.Service,
 	instanceName, desiredState string,
 	maxAttempts int,

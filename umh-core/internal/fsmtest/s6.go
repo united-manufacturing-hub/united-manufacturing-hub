@@ -174,7 +174,7 @@ func SetupS6InstanceWithState(
 //   - error: Any error that occurred during reconciliation
 func waitForInstanceState(
 	ctx context.Context,
-	snapshot *fsm.SystemSnapshot,
+	snapshot fsm.SystemSnapshot,
 	instance *s6fsm.S6Instance,
 	filesystemService filesystem.Service,
 	targetState string,
@@ -204,7 +204,7 @@ func waitForInstanceState(
 //
 // Parameters:
 //   - instance: The S6Instance to reset error state for
-func ResetInstanceError(instance *s6fsm.S6Instance, snapshot *fsm.SystemSnapshot, filesystemService filesystem.Service) {
+func ResetInstanceError(instance *s6fsm.S6Instance, snapshot fsm.SystemSnapshot, filesystemService filesystem.Service) {
 	// Force a reconcile cycle with empty errors by simulating
 	// a successful operation cycle. We rely on the fact that
 	// each instance.Reconcile call will reset the error state
@@ -243,7 +243,7 @@ func ResetInstanceError(instance *s6fsm.S6Instance, snapshot *fsm.SystemSnapshot
 //   - error: Any error that occurred during stabilization
 func StabilizeS6Instance(
 	ctx context.Context,
-	snapshot *fsm.SystemSnapshot,
+	snapshot fsm.SystemSnapshot,
 	instance *s6fsm.S6Instance,
 	filesystemService filesystem.Service,
 	targetState string,
@@ -282,7 +282,7 @@ func StabilizeS6Instance(
 //   - error: Any error that occurred during the process
 func TestS6StateTransition(
 	ctx context.Context,
-	snapshot *fsm.SystemSnapshot,
+	snapshot fsm.SystemSnapshot,
 	instance *s6fsm.S6Instance,
 	filesystemService filesystem.Service,
 	fromState string,
@@ -360,7 +360,7 @@ func SetupS6Instance(
 func VerifyStableState(
 
 	ctx context.Context,
-	snapshot *fsm.SystemSnapshot,
+	snapshot fsm.SystemSnapshot,
 	instance *s6fsm.S6Instance,
 	filesystemService filesystem.Service,
 	expectedState string,

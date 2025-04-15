@@ -1041,7 +1041,7 @@ func (s *BenthosService) ReconcileManager(ctx context.Context, filesystemService
 
 	// Create a new snapshot with the current S6 service configs
 	// Note: therefore, the S6 manager will not have access to the full observed state
-	snapshot := &fsm.SystemSnapshot{
+	snapshot := fsm.SystemSnapshot{
 		CurrentConfig: config.FullConfig{Internal: config.InternalConfig{Services: s.s6ServiceConfigs}},
 		Tick:          tick,
 	}

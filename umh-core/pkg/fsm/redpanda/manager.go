@@ -105,7 +105,7 @@ func NewRedpandaManager(name string) *RedpandaManager {
 	}
 }
 
-func (m *RedpandaManager) Reconcile(ctx context.Context, snapshot *fsm.SystemSnapshot, filesystemService filesystem.Service) (error, bool) {
+func (m *RedpandaManager) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot, filesystemService filesystem.Service) (error, bool) {
 	start := time.Now()
 	defer func() {
 		duration := time.Since(start)

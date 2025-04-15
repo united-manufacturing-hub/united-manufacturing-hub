@@ -430,7 +430,7 @@ func (s *DataFlowComponentService) ReconcileManager(ctx context.Context, filesys
 
 	// Reconcile the Benthos manager with our configs
 	// The Benthos manager will handle the reconciliation with the S6 manager
-	return s.benthosManager.Reconcile(ctx, &fsm.SystemSnapshot{
+	return s.benthosManager.Reconcile(ctx, fsm.SystemSnapshot{
 		CurrentConfig: config.FullConfig{
 			Internal: config.InternalConfig{
 				Benthos: s.benthosConfigs,

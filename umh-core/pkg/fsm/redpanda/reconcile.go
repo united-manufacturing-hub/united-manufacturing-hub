@@ -37,7 +37,7 @@ import (
 // This function is intended to be called repeatedly (e.g. in a periodic control loop).
 // Over multiple calls, it converges the actual state to the desired state. Transitions
 // that fail are retried in subsequent reconcile calls after a backoff period.
-func (r *RedpandaInstance) Reconcile(ctx context.Context, snapshot *fsm.SystemSnapshot, filesystemService filesystem.Service) (err error, reconciled bool) {
+func (r *RedpandaInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot, filesystemService filesystem.Service) (err error, reconciled bool) {
 	start := time.Now()
 	redpandaInstanceName := r.baseFSMInstance.GetID()
 	defer func() {

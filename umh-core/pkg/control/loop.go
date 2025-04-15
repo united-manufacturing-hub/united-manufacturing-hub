@@ -223,21 +223,23 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 
 	// 1) Retrieve or create the "previous" snapshot
 	prevSnapshot := c.snapshotManager.GetSnapshot()
-	var newSnapshot *fsm.SystemSnapshot
+	var newSnapshot fsm.SystemSnapshot
 
 	// If there is no previous snapshot, create a new one
 	// Note: should fetching the config in step 2 fail, the snapshot will not be updated
 	// Hence, once we have a snapshot, we will always have a config
 	if prevSnapshot == nil {
 		// If none existed, create an empty one
-		newSnapshot = &fsm.SystemSnapshot{
+		newSnapshot = fsm.SystemSnapshot{
 			Managers:     make(map[string]fsm.ManagerSnapshot),
 			SnapshotTime: time.Now(),
 			Tick:         ticker,
 		}
 	} else {
 		// the new snapshot is a deep copy of the previous snapshot
-		deepcopy.Copy(&newSnapshot, &prevSnapshot)
+		deepcopy.Copy(newSnapshot, prevSnapshot)
+		newSnapshot.Tick = ticker
+		newSnapshot.SnapshotTime = time.Now()
 	}
 
 	// 2) Get the config, this can fail for example through filesystem errors

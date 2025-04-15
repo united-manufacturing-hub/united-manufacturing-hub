@@ -944,7 +944,7 @@ func (s *RedpandaService) ReconcileManager(ctx context.Context, filesystemServic
 
 	// Create a snapshot from the full config
 	// Note: therefore, the S6 manager will not have access to the full observed state
-	snapshot := &fsm.SystemSnapshot{
+	snapshot := fsm.SystemSnapshot{
 		CurrentConfig: config.FullConfig{Internal: config.InternalConfig{Services: s.s6ServiceConfigs}},
 		Tick:          tick,
 	}

@@ -270,7 +270,7 @@ func TestBenthosStateTransition(
 		}
 
 		// Perform a reconcile cycle
-		_, _ = instance.Reconcile(ctx, &fsm.SystemSnapshot{Tick: tick}, filesystemService)
+		_, _ = instance.Reconcile(ctx, fsm.SystemSnapshot{Tick: tick}, filesystemService)
 		tick++
 	}
 
@@ -297,7 +297,7 @@ func TestBenthosStateTransition(
 //   - error: Any error that occurred during verification
 func VerifyBenthosStableState(
 	ctx context.Context,
-	snapshot *fsm.SystemSnapshot,
+	snapshot fsm.SystemSnapshot,
 	instance *benthosfsm.BenthosInstance,
 	mockService *benthossvc.MockBenthosService,
 	filesystemService filesystem.Service,
@@ -370,7 +370,7 @@ func CreateMockBenthosInstance(serviceName string, mockService benthossvc.IBenth
 //   - error: Any error that occurred during stabilization
 func StabilizeBenthosInstance(
 	ctx context.Context,
-	snapshot *fsm.SystemSnapshot,
+	snapshot fsm.SystemSnapshot,
 	instance *benthosfsm.BenthosInstance,
 	mockService *benthossvc.MockBenthosService,
 	filesystemService filesystem.Service,
@@ -414,7 +414,7 @@ func StabilizeBenthosInstance(
 //   - error: Any error that occurred during waiting
 func WaitForBenthosDesiredState(
 	ctx context.Context,
-	snapshot *fsm.SystemSnapshot,
+	snapshot fsm.SystemSnapshot,
 	instance *benthosfsm.BenthosInstance,
 	filesystemService filesystem.Service,
 	targetState string,
@@ -459,7 +459,7 @@ func WaitForBenthosDesiredState(
 //   - bool: Whether reconciliation was successful (false if an error was encountered)
 func ReconcileBenthosUntilError(
 	ctx context.Context,
-	snapshot *fsm.SystemSnapshot,
+	snapshot fsm.SystemSnapshot,
 	instance *benthosfsm.BenthosInstance,
 	mockService *benthossvc.MockBenthosService,
 	filesystemService filesystem.Service,

@@ -206,7 +206,7 @@ var _ = Describe("DataFlowComponentService", func() {
 			// Wait for the instance to be created and reach stopped state
 			newTick, err := fsmtest.WaitForBenthosManagerInstanceState(
 				ctx,
-				&fsm.SystemSnapshot{CurrentConfig: fullCfg, Tick: tick},
+				fsm.SystemSnapshot{CurrentConfig: fullCfg, Tick: tick},
 				manager,
 				filesystem.NewMockFileSystem(),
 				benthosName,
@@ -222,7 +222,7 @@ var _ = Describe("DataFlowComponentService", func() {
 			// Wait for the instance to reach running state
 			newTick, err = fsmtest.WaitForBenthosManagerInstanceState(
 				ctx,
-				&fsm.SystemSnapshot{CurrentConfig: fullCfg, Tick: tick},
+				fsm.SystemSnapshot{CurrentConfig: fullCfg, Tick: tick},
 				manager,
 				filesystem.NewMockFileSystem(),
 				benthosName,

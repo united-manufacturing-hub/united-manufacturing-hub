@@ -33,7 +33,7 @@ import (
 // The filesystemService parameter allows for filesystem operations during reconciliation,
 // enabling the method to read configuration or state information from the filesystem.
 // Currently not used in this implementation but added for consistency with the interface.
-func (c *ContainerInstance) Reconcile(ctx context.Context, snapshot *fsm.SystemSnapshot, filesystemService filesystem.Service) (err error, reconciled bool) {
+func (c *ContainerInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot, filesystemService filesystem.Service) (err error, reconciled bool) {
 	start := time.Now()
 	instanceName := c.baseFSMInstance.GetID()
 	defer func() {
