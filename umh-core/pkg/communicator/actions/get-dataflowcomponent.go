@@ -78,7 +78,7 @@ func (a *GetDataFlowComponentAction) Execute() (interface{}, map[string]interfac
 
 	dataFlowComponents := []config.DataFlowComponentConfig{}
 	// Get the DataFlowComponent
-	a.actionLogger.Info("Getting the DataFlowComponent")
+	a.actionLogger.Debugf("Getting the DataFlowComponent")
 
 	// Get the config
 	// a.actionLogger.Info("Getting the config")
@@ -98,7 +98,7 @@ func (a *GetDataFlowComponentAction) Execute() (interface{}, map[string]interfac
 	// }
 
 	if dataflowcomponentManager, exists := a.systemSnapshot.Managers[constants.DataflowcomponentManagerName]; exists {
-		a.actionLogger.Info("Dataflowcomponent manager found, getting the dataflowcomponent")
+		a.actionLogger.Debugf("Dataflowcomponent manager found, getting the dataflowcomponent")
 		instances := dataflowcomponentManager.GetInstances()
 		for _, instance := range instances {
 			dfc, err := buildDataFlowComponentDataFromSnapshot(instance, a.actionLogger)
@@ -108,7 +108,7 @@ func (a *GetDataFlowComponentAction) Execute() (interface{}, map[string]interfac
 			}
 			currentUUID := dataflowcomponentconfig.GenerateUUIDFromName(instance.ID).String()
 			if slices.Contains(a.payload.VersionUUIDs, currentUUID) {
-				a.actionLogger.Info("Adding ", instance.ID, " to the response")
+				a.actionLogger.Debugf("Adding %s to the response", instance.ID)
 				dataFlowComponents = append(dataFlowComponents, dfc)
 			}
 
