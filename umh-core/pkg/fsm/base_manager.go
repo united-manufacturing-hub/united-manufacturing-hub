@@ -454,8 +454,9 @@ func (m *BaseFSMManager[C]) Reconcile(
 
 			// Using manager-specific ticks for rate limiting
 			if m.managerTick-m.lastRemoveTick < TicksBeforeNextRemove {
-				m.logger.Debugf("Rate limiting: Skipping removal of instance %s (waiting %d more ticks)",
-					instanceName, TicksBeforeNextRemove-(m.managerTick-m.lastRemoveTick))
+				// Currently uncommented to prevent log spam (the integration tests will create a lot of services)
+				// m.logger.Debugf("Rate limiting: Skipping removal of instance %s (waiting %d more ticks)",
+				// 	instanceName, TicksBeforeNextRemove-(m.managerTick-m.lastRemoveTick))
 				continue // Skip this removal for now, will be removed on a future tick
 			}
 
