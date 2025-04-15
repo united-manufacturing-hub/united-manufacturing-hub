@@ -150,7 +150,7 @@ func (b *BenthosInstance) getServiceStatus(ctx context.Context, filesystemServic
 }
 
 // UpdateObservedStateOfInstance updates the observed state of the service
-func (b *BenthosInstance) UpdateObservedStateOfInstance(ctx context.Context, filesystemService filesystem.Service, tick uint64) error {
+func (b *BenthosInstance) UpdateObservedStateOfInstance(ctx context.Context, filesystemService filesystem.Service, tick uint64, loopStartTime time.Time) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
