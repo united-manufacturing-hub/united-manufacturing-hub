@@ -36,7 +36,7 @@ import (
 )
 
 // Helper function to create mock logs with valid format
-func createMonitorMockLogs(freBytes, totalBytes uint64, hasSpaceAlert bool, topics, unavailableTopics uint64, bytesIn, bytesOut uint64, topicPartitionMap map[string]int64) []s6service.LogEntry {
+func createMonitorMockLogs(freBytes, totalBytes uint64, hasSpaceAlert bool, topics, unavailableTopics uint64, bytesIn, bytesOut uint64, topicPartitionMap map[string]int64) ([]s6service.LogEntry, error) {
 	// Create Prometheus-formatted metrics text
 	var promMetrics strings.Builder
 	// Add storage metrics
@@ -93,11 +93,11 @@ func createMonitorMockLogs(freBytes, totalBytes uint64, hasSpaceAlert bool, topi
 	gzipWriter := gzip.NewWriter(&metricsBuffer)
 	_, err := gzipWriter.Write([]byte(promMetrics.String()))
 	if err != nil {
-		panic(fmt.Sprintf("Failed to write metrics: %v", err))
+		return nil, fmt.Errorf("failed to write metrics: %w", err)
 	}
 	err = gzipWriter.Close()
 	if err != nil {
-		panic(fmt.Sprintf("Failed to close gzip writer: %v", err))
+		return nil, fmt.Errorf("failed to close gzip writer: %w", err)
 	}
 	metricsHex := hex.EncodeToString(metricsBuffer.Bytes())
 
@@ -106,11 +106,11 @@ func createMonitorMockLogs(freBytes, totalBytes uint64, hasSpaceAlert bool, topi
 	gzipWriter = gzip.NewWriter(&configBuffer)
 	err = json.NewEncoder(gzipWriter).Encode(clusterConfig)
 	if err != nil {
-		panic(fmt.Sprintf("Failed to encode cluster config: %v", err))
+		return nil, fmt.Errorf("failed to encode cluster config: %w", err)
 	}
 	err = gzipWriter.Close()
 	if err != nil {
-		panic(fmt.Sprintf("Failed to close gzip writer: %v", err))
+		return nil, fmt.Errorf("failed to close gzip writer: %w", err)
 	}
 	configHex := hex.EncodeToString(configBuffer.Bytes())
 
@@ -128,7 +128,7 @@ func createMonitorMockLogs(freBytes, totalBytes uint64, hasSpaceAlert bool, topi
 		{Content: redpanda_monitor.BLOCK_END_MARKER, Timestamp: timestamp},
 	}
 
-	return logs
+	return logs, nil
 }
 
 var _ = Describe("RedpandaMonitor Service State Transitions", func() {
@@ -146,7 +146,9 @@ var _ = Describe("RedpandaMonitor Service State Transitions", func() {
 		mockFileSystem = filesystem.NewMockFileSystem()
 
 		// Set up mock logs
-		mockS6Service.GetLogsResult = createMonitorMockLogs(10000000000, 20000000000, false, 5, 0, 1000, 2000, map[string]int64{"test-topic": 3})
+		logs, err := createMonitorMockLogs(10000000000, 20000000000, false, 5, 0, 1000, 2000, map[string]int64{"test-topic": 3})
+		Expect(err).NotTo(HaveOccurred())
+		mockS6Service.GetLogsResult = logs
 
 		// Set default state to stopped
 		mockS6Service.StatusResult = s6service.ServiceInfo{
@@ -164,7 +166,7 @@ var _ = Describe("RedpandaMonitor Service State Transitions", func() {
 
 		// Set up what happens when AddRedpandaMonitorToS6Manager is called
 		// We need to ensure that the instance created by the manager also uses the mock service
-		err := monitorService.AddRedpandaMonitorToS6Manager(ctx)
+		err = monitorService.AddRedpandaMonitorToS6Manager(ctx)
 		Expect(err).NotTo(HaveOccurred())
 		err, reconciled := monitorService.ReconcileManager(ctx, mockFileSystem, 0)
 		Expect(err).NotTo(HaveOccurred())
