@@ -16,6 +16,7 @@ package actions
 
 import (
 	"fmt"
+	"slices"
 
 	"github.com/google/uuid"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
@@ -105,7 +106,12 @@ func (a *GetDataFlowComponentAction) Execute() (interface{}, map[string]interfac
 				a.actionLogger.Warnf("Failed to build dataflowcomponent data: %v", err)
 				continue
 			}
-			dataFlowComponents = append(dataFlowComponents, dfc)
+			currentUUID := dataflowcomponentconfig.GenerateUUIDFromName(instance.ID).String()
+			if slices.Contains(a.payload.VersionUUIDs, currentUUID) {
+				a.actionLogger.Info("Adding ", instance.ID, " to the response")
+				dataFlowComponents = append(dataFlowComponents, dfc)
+			}
+
 		}
 	}
 
