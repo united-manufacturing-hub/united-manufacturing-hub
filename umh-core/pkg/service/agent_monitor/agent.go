@@ -102,10 +102,18 @@ func (c *AgentMonitorService) GetStatus(ctx context.Context, cfg config.FullConf
 		Release:      &models.Release{},
 	}
 
+	status.OverallHealth = models.Active
+
 	// Get the location from the config
 	location := cfg.Agent.Location
 	if location != nil {
 		status.Location = location
+	} else {
+		c.logger.Warn("No location found set in the config, using fallback 'Unknown location")
+		location = map[int]string{}
+		location[0] = "Unknown location" // fallback
+		status.Location = location
+		status.OverallHealth = models.Degraded
 	}
 
 	// Get the Latency
@@ -115,6 +123,7 @@ func (c *AgentMonitorService) GetStatus(ctx context.Context, cfg config.FullConf
 	logs, err := c.GetAgentLogs(ctx)
 	if err != nil {
 		c.logger.Warnf("Failed to get agent logs: %v", err)
+		status.OverallHealth = models.Degraded
 		return nil, err
 	} else {
 		status.AgentLogs = logs
@@ -126,6 +135,8 @@ func (c *AgentMonitorService) GetStatus(ctx context.Context, cfg config.FullConf
 	// Get the Release Info
 	release, err := c.getReleaseInfo(cfg)
 	if err != nil {
+		c.logger.Warnf("Failed to get release info: %v", err)
+		status.OverallHealth = models.Degraded
 		return nil, err
 	}
 	status.Release = release
