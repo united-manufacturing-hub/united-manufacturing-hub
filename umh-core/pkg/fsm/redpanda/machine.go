@@ -94,7 +94,7 @@ func NewRedpandaInstance(
 // SetDesiredFSMState safely updates the desired state
 // But ensures that the desired state is a valid state and that it is also a reasonable state
 // e.g., nobody wants to have an instance in the "starting" state, that is just intermediate
-func (b *RedpandaInstance) SetDesiredFSMState(state string) error {
+func (r *RedpandaInstance) SetDesiredFSMState(state string) error {
 	// For Redpanda, we only allow setting Stopped or Active as desired states
 	if state != OperationalStateStopped &&
 		state != OperationalStateActive {
@@ -104,51 +104,51 @@ func (b *RedpandaInstance) SetDesiredFSMState(state string) error {
 			OperationalStateActive)
 	}
 
-	b.baseFSMInstance.SetDesiredFSMState(state)
+	r.baseFSMInstance.SetDesiredFSMState(state)
 	return nil
 }
 
 // GetCurrentFSMState returns the current state of the FSM
-func (b *RedpandaInstance) GetCurrentFSMState() string {
-	return b.baseFSMInstance.GetCurrentFSMState()
+func (r *RedpandaInstance) GetCurrentFSMState() string {
+	return r.baseFSMInstance.GetCurrentFSMState()
 }
 
 // GetDesiredFSMState returns the desired state of the FSM
-func (b *RedpandaInstance) GetDesiredFSMState() string {
-	return b.baseFSMInstance.GetDesiredFSMState()
+func (r *RedpandaInstance) GetDesiredFSMState() string {
+	return r.baseFSMInstance.GetDesiredFSMState()
 }
 
 // Remove starts the removal process, it is idempotent and can be called multiple times
 // Note: it is only removed once IsRemoved returns true
-func (b *RedpandaInstance) Remove(ctx context.Context) error {
-	return b.baseFSMInstance.Remove(ctx)
+func (r *RedpandaInstance) Remove(ctx context.Context) error {
+	return r.baseFSMInstance.Remove(ctx)
 }
 
 // IsRemoved returns true if the instance has been removed
-func (b *RedpandaInstance) IsRemoved() bool {
-	return b.baseFSMInstance.IsRemoved()
+func (r *RedpandaInstance) IsRemoved() bool {
+	return r.baseFSMInstance.IsRemoved()
 }
 
 // IsRemoving returns true if the instance is in the removing state
-func (b *RedpandaInstance) IsRemoving() bool {
-	return b.baseFSMInstance.IsRemoving()
+func (r *RedpandaInstance) IsRemoving() bool {
+	return r.baseFSMInstance.IsRemoving()
 }
 
 // IsStopping returns true if the instance is in the stopping state
-func (b *RedpandaInstance) IsStopping() bool {
-	return b.baseFSMInstance.GetCurrentFSMState() == OperationalStateStopping
+func (r *RedpandaInstance) IsStopping() bool {
+	return r.baseFSMInstance.GetCurrentFSMState() == OperationalStateStopping
 }
 
 // IsStopped returns true if the instance is in the stopped state
-func (b *RedpandaInstance) IsStopped() bool {
-	return b.baseFSMInstance.GetCurrentFSMState() == OperationalStateStopped
+func (r *RedpandaInstance) IsStopped() bool {
+	return r.baseFSMInstance.GetCurrentFSMState() == OperationalStateStopped
 }
 
 // PrintState prints the current state of the FSM for debugging
-func (b *RedpandaInstance) PrintState() {
-	b.baseFSMInstance.GetLogger().Debugf("Current state: %s", b.baseFSMInstance.GetCurrentFSMState())
-	b.baseFSMInstance.GetLogger().Debugf("Desired state: %s", b.baseFSMInstance.GetDesiredFSMState())
-	b.baseFSMInstance.GetLogger().Debugf("Observed state: %+v", b.ObservedState)
+func (r *RedpandaInstance) PrintState() {
+	r.baseFSMInstance.GetLogger().Debugf("Current state: %s", r.baseFSMInstance.GetCurrentFSMState())
+	r.baseFSMInstance.GetLogger().Debugf("Desired state: %s", r.baseFSMInstance.GetDesiredFSMState())
+	r.baseFSMInstance.GetLogger().Debugf("Observed state: %+v", r.ObservedState)
 }
 
 // TODO: Add Redpanda-specific health check methods
@@ -158,6 +158,6 @@ func (b *RedpandaInstance) PrintState() {
 // - HasErrors() - Checks if Redpanda is reporting errors
 
 // GetExpectedMaxP95ExecutionTimePerInstance returns the expected max p95 execution time of the instance
-func (b *RedpandaInstance) GetExpectedMaxP95ExecutionTimePerInstance() time.Duration {
+func (r *RedpandaInstance) GetExpectedMaxP95ExecutionTimePerInstance() time.Duration {
 	return constants.RedpandaExpectedMaxP95ExecutionTimePerInstance
 }

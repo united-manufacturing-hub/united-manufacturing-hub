@@ -16,6 +16,7 @@ package dataflowcomponent
 
 import (
 	"context"
+	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
@@ -55,7 +56,7 @@ func (d *DataflowComponentInstance) StopInstance(ctx context.Context, filesystem
 
 // UpdateObservedStateOfInstance is called when the FSM transitions to updating.
 // For container monitoring, this is a no-op as we don't need to update any resources.
-func (d *DataflowComponentInstance) UpdateObservedStateOfInstance(ctx context.Context, filesystemService filesystem.Service, tick uint64) error {
+func (d *DataflowComponentInstance) UpdateObservedStateOfInstance(ctx context.Context, filesystemService filesystem.Service, tick uint64, loopStartTime time.Time) error {
 	d.baseFSMInstance.GetLogger().Debugf("Updating observed state for %s (no-op)", d.baseFSMInstance.GetID())
 	return nil
 }
