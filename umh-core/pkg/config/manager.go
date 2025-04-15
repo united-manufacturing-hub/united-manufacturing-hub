@@ -15,6 +15,7 @@
 package config
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"path/filepath"
@@ -216,9 +217,8 @@ func (m *FileConfigManager) GetConfig(ctx context.Context, tick uint64) (FullCon
 		return FullConfig{}, fmt.Errorf("failed to read config file: %w", err)
 	}
 
-	// Parse the YAML
-	var config FullConfig
-	if err := yaml.Unmarshal(data, &config); err != nil {
+	config, err := parseConfig(data)
+	if err != nil {
 		return FullConfig{}, fmt.Errorf("failed to parse config file: %w", err)
 	}
 
@@ -230,6 +230,21 @@ func (m *FileConfigManager) GetConfig(ctx context.Context, tick uint64) (FullCon
 	}
 
 	return config, nil
+}
+
+func parseConfig(data []byte) (FullConfig, error) {
+	var node yaml.Node
+	if err := yaml.Unmarshal(data, &node); err != nil {
+		return FullConfig{}, fmt.Errorf("failed to parse config file: %w", err)
+	}
+	var cfg FullConfig
+
+	decoder := yaml.NewDecoder(bytes.NewReader(data))
+	decoder.KnownFields(true)
+	if err := decoder.Decode(&cfg); err != nil {
+		return FullConfig{}, fmt.Errorf("failed to decode config file: %w", err)
+	}
+	return cfg, nil
 }
 
 // FileConfigManagerWithBackoff wraps a FileConfigManager and implements backoff for GetConfig errors

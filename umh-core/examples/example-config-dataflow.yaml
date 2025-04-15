@@ -17,24 +17,26 @@ agent:
 
 
 # Data Flow Components
-dataFlowComponents:
+dataFlow:
   - name: data-flow-hello-world
     desiredState: active
-    serviceConfig:
-      input:
-        generate:
-          mapping: root = "hello world from Data Flow Component!"
-          interval: 1s
-          count: 0 # Set to 0 for unlimited messages
-      output:
-        stdout: {}
+    dataFlowComponentConfig:
+      benthos:
+        input:
+          generate:
+            mapping: root = "hello world from Data Flow Component!"
+            interval: 1s
+            count: 0 # Set to 0 for unlimited messages
+        output:
+          stdout: {}
 
   - name: data-transform-example
     desiredState: active
-    serviceConfig:
-      input:
-        mqtt:
-          topics:
+    dataFlowComponentConfig:
+      benthos:
+        input:
+          mqtt:
+            topics:
             - sensors/temperature
           qos: 1
           client_id: benthos_consumer

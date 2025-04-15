@@ -15,6 +15,7 @@
 agent:
   metricsPort: 8080
 
+  
 internal:
   redpanda:
     desiredState: stopped    
