@@ -35,6 +35,9 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/shirou/gopsutil/v3/cpu"
+	"github.com/shirou/gopsutil/v3/mem"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
@@ -49,6 +52,36 @@ func monitorHealth() {
 	checkGoldenServiceWithFailure()
 	GinkgoWriter.Println("✅ Golden service is running")
 
+	// 3) Check and print system information (CPU, Memory, etc.)
+	printSystemInformation()
+}
+func printSystemInformation() {
+	// Get CPU information
+	cpuPercent, err := cpu.Percent(time.Second, false)
+	if err != nil {
+		GinkgoWriter.Printf("Failed to get CPU usage: %v\n", err)
+	} else {
+		GinkgoWriter.Printf("CPU usage: %.2f%%\n", cpuPercent[0])
+	}
+
+	// Get CPU core count
+	cpuCounts, err := cpu.Counts(true)
+	if err != nil {
+		GinkgoWriter.Printf("Failed to get CPU count: %v\n", err)
+	} else {
+		GinkgoWriter.Printf("CPU cores: %d\n", cpuCounts)
+	}
+
+	// Get memory information
+	vmStat, err := mem.VirtualMemory()
+	if err != nil {
+		GinkgoWriter.Printf("Failed to get memory usage: %v\n", err)
+	} else {
+		GinkgoWriter.Printf("Memory usage: %.2f%% (Used: %d MB, Total: %d MB)\n",
+			vmStat.UsedPercent,
+			vmStat.Used/1024/1024,
+			vmStat.Total/1024/1024)
+	}
 }
 
 // failOnMetricsHealthIssue expects the metrics to be healthy, otherwise it fails the test
@@ -103,12 +136,12 @@ func checkGoldenService() (int, error) {
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, "POST", GetGoldenServiceURL(), bytes.NewBuffer([]byte(`{"message": "test"}`)))
 	if err != nil {
-		return 0, fmt.Errorf("failed to create request: %w\n", err)
+		return 0, fmt.Errorf("failed to create request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	checkResp, e := http.DefaultClient.Do(req)
 	if e != nil {
-		return 0, fmt.Errorf("failed to send request: %w\n", e)
+		return 0, fmt.Errorf("failed to send request: %w", e)
 	}
 	defer checkResp.Body.Close()
 

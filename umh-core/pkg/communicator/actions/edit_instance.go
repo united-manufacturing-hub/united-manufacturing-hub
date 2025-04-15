@@ -27,6 +27,8 @@ import (
 	"go.uber.org/zap"
 )
 
+// EditInstanceAction implements the Action interface for editing instance properties.
+// Currently, it supports updating the location hierarchy (enterprise, site, area, line, workCell).
 type EditInstanceAction struct {
 	userEmail       string
 	actionUUID      uuid.UUID
@@ -37,7 +39,10 @@ type EditInstanceAction struct {
 	actionLogger    *zap.SugaredLogger
 }
 
-// exposed for testing purposes
+// NewEditInstanceAction creates a new EditInstanceAction with the provided parameters.
+// This constructor is primarily used for testing purposes to enable dependency injection.
+// It initializes the action with the necessary fields but doesn't populate the location field
+// which must be done via Parse or SetLocation.
 func NewEditInstanceAction(userEmail string, actionUUID uuid.UUID, instanceUUID uuid.UUID, outboundChannel chan *models.UMHMessage, configManager config.ConfigManager) *EditInstanceAction {
 	return &EditInstanceAction{
 		userEmail:       userEmail,
@@ -45,10 +50,16 @@ func NewEditInstanceAction(userEmail string, actionUUID uuid.UUID, instanceUUID 
 		instanceUUID:    instanceUUID,
 		outboundChannel: outboundChannel,
 		configManager:   configManager,
-		actionLogger:    logger.For(logger.ComponentCommunicatorActions),
+		actionLogger:    logger.For(logger.ComponentCommunicator),
 	}
 }
 
+// Parse implements the Action interface by extracting location information from the payload.
+// It accepts a location structure containing enterprise (required) and optional site,
+// area, line, and workCell fields.
+//
+// The function handles the case where no location is provided by leaving the location field nil,
+// which is valid and indicates no location change is requested.
 func (a *EditInstanceAction) Parse(payload interface{}) error {
 	a.actionLogger.Debug("Parsing EditInstance action payload")
 
@@ -100,6 +111,11 @@ func (a *EditInstanceAction) Parse(payload interface{}) error {
 	return nil
 }
 
+// Validate implements the Action interface by checking if the parsed data meets
+// the business requirements. For EditInstanceAction, it verifies that if a location
+// is provided, the enterprise field is not empty.
+//
+// If the location field is nil (no location update requested), validation passes.
 func (a *EditInstanceAction) Validate() error {
 	// If location is provided, validate that enterprise is not empty
 	if a.location != nil && a.location.Enterprise == "" {
@@ -109,8 +125,18 @@ func (a *EditInstanceAction) Validate() error {
 	return nil
 }
 
+// Execute implements the Action interface by performing the actual instance update.
+// It follows the standard pattern for actions:
+// 1. Sends ActionConfirmed to indicate the action is starting
+// 2. Sends ActionExecuting with progress updates
+// 3. Performs the configuration update using the configManager
+// 4. Sends ActionFinishedWithFailure if an error occurs
+// 5. Returns a success message (not sending ActionFinishedSuccessfull as that's done by the caller)
+//
+// For EditInstanceAction, if no location update is requested (location is nil),
+// it returns early with a message indicating no changes were made.
 func (a *EditInstanceAction) Execute() (interface{}, map[string]interface{}, error) {
-	a.actionLogger.Info("Executing EditInstance action")
+	a.actionLogger.Debug("Executing EditInstance action")
 
 	// Send confirmation that action is starting
 	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionConfirmed, "Starting EditInstance action", a.outboundChannel, models.EditInstance)
@@ -136,16 +162,17 @@ func (a *EditInstanceAction) Execute() (interface{}, map[string]interface{}, err
 
 	// we can be sure that the location is updated in the config if the error is nil
 
-	// Send the success message
-	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedSuccessfull, "Location update completed", a.outboundChannel, models.EditInstance)
+	// TODO: check against observedState as well
 
 	return "Successfully updated instance location", nil, nil
 }
 
+// getUserEmail implements the Action interface by returning the user email associated with this action.
 func (a *EditInstanceAction) getUserEmail() string {
 	return a.userEmail
 }
 
+// getUuid implements the Action interface by returning the UUID of this action.
 func (a *EditInstanceAction) getUuid() uuid.UUID {
 	return a.actionUUID
 }

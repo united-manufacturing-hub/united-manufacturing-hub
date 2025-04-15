@@ -41,6 +41,9 @@ S6_OVERLAY_VERSION = 3.2.0.2
 BENTHOS_UMH_VERSION = 0.6.2
 REDPANDA_VERSION = 24.3.8
 
+# Debug values
+DLV_VERSION = v1.24.1
+
 # Note: Redpanda allocates 2GB of memory per core.
 # Additionally 1.5GB (or 7% of the total memory, whichever is greater) are required to be available, after this allocation to make seastar happy.
 # If you change this, you need to update the integration_test.go file.
@@ -141,6 +144,7 @@ build: download-docker-binaries
 		--build-arg TARGETARCH=$(TARGETARCH) \
 		-t $(IMAGE_NAME):$(TAG) \
 		--progress=plain \
+		--load \
 		-f Dockerfile .
     
 # build-debug: launches delve inside the container.
@@ -154,26 +158,31 @@ build-debug: download-docker-binaries
 		--build-arg BENTHOS_UMH_VERSION=$(BENTHOS_UMH_VERSION) \
 		--build-arg REDPANDA_VERSION=$(REDPANDA_VERSION) \
 		--build-arg APP_VERSION=$(VERSION) \
+		--build-arg TARGETARCH=$(TARGETARCH) \
+		--build-arg DLV_VERSION=$(DLV_VERSION) \
 		--build-arg DEBUG=true \
 		--progress=plain \
 		-t $(IMAGE_NAME):$(TAG)-debug \
 		-f Dockerfile .
     
-stop-all-containers:
-	docker stop $(docker ps -a -q) || true
-	docker rm $(docker ps -a -q) || true
-
-clean:
+stop-and-remove-umh-core-latest:
 	docker stop $(IMAGE_NAME) || true
 	docker rm $(IMAGE_NAME) || true
 	docker rmi $(IMAGE_NAME):$(TAG) || true
 
 # Clean up Docker build cache and unused objects for CI environments & stop all containers
-cleanup-ci: clean stop-all-containers
-	docker stop $(docker ps -a -q) || true
-	docker rm $(docker ps -a -q) || true
-	docker builder prune -f
-	docker system prune -f --volumes
+cleanup-ci:
+	echo "Cleaning up Docker build cache and unused objects for CI environments & stop all containers"
+	echo "Running containers:"
+	docker ps -a || true
+	echo "Stopping all containers"
+	docker ps -a -q | xargs -r docker stop || true
+	echo "Removing all containers"
+	docker ps -a -q | xargs -r docker rm || true
+	echo "Pruning Docker build cache"
+	docker builder prune -f || true
+	echo "Pruning Docker system"
+	docker system prune -f --volumes || true
 
 cleanup-tmp:
 	rm -rf ./tmp/*
@@ -211,7 +220,7 @@ update-go-dependencies:
 	go mod tidy
 	go mod vendor
 
-test-empty: clean build
+test-empty: stop-and-remove-umh-core-latest build
 	@mkdir -p $(PWD)/data
 	@cp $(PWD)/examples/example-config-empty.yaml $(PWD)/data/config.yaml
 	docker run \
@@ -222,7 +231,7 @@ test-empty: clean build
 		--cpus $(CPUS) \
 		$(IMAGE_NAME):$(TAG)
 
-test-clean-install: clean build
+test-clean-install: stop-and-remove-umh-core-latest build
 	docker run \
 		--name $(IMAGE_NAME) \
 		-v $(PWD)/data:/data \
@@ -232,7 +241,7 @@ test-clean-install: clean build
 		--cpus $(CPUS) \
 		$(IMAGE_NAME):$(TAG)
 
-test-hello: clean build
+test-hello: stop-and-remove-umh-core-latest build
 	@mkdir -p $(PWD)/data
 	@cp $(PWD)/examples/example-config.yaml $(PWD)/data/config.yaml
 	docker run \
@@ -245,18 +254,22 @@ test-hello: clean build
 		-e LOGGING_LEVEL=DEBUG \
 		$(IMAGE_NAME):$(TAG)
 
-test-comm: clean build
+test-comm: stop-and-remove-umh-core-latest build
 	@mkdir -p $(PWD)/data
 	@cp $(PWD)/examples/example-config-comm.yaml $(PWD)/data/config.yaml
 	docker run \
 		--name $(IMAGE_NAME) \
 		-v $(PWD)/data:/data \
 		-p 8081:8080 \
+		-p 4195:4195 \
 		--memory $(MEMORY) \
 		--cpus $(CPUS) \
+		-e AUTH_TOKEN=$(AUTH_TOKEN) \
+		-e LOCATION_0=$(LOCATION_0) \
+		-e LOGGING_LEVEL=DEBUG \
 		$(IMAGE_NAME):$(TAG)
 
-test-broken: clean build
+test-broken: stop-and-remove-umh-core-latest build
 	@mkdir -p $(PWD)/data
 	@cp $(PWD)/examples/example-config-broken.yaml $(PWD)/data/config.yaml
 	docker run \
@@ -268,7 +281,7 @@ test-broken: clean build
 		--cpus $(CPUS) \
 		$(IMAGE_NAME):$(TAG)
 
-test-benthos: clean build
+test-benthos: stop-and-remove-umh-core-latest build
 	@mkdir -p $(PWD)/data
 	@cp $(PWD)/examples/example-config-benthos.yaml $(PWD)/data/config.yaml
 	docker run \
@@ -282,7 +295,7 @@ test-benthos: clean build
 		$(IMAGE_NAME):$(TAG)
 
 
-test-redpanda: clean build
+test-redpanda: stop-and-remove-umh-core-latest build
 	@mkdir -p $(PWD)/data
 	@cp $(PWD)/examples/example-config-redpanda.yaml $(PWD)/data/config.yaml
 	docker run \
@@ -294,7 +307,7 @@ test-redpanda: clean build
 		--cpus $(CPUS) \
 		$(IMAGE_NAME):$(TAG)
 
-test-dfc: clean build
+test-dfc: stop-and-remove-umh-core-latest build
 	@mkdir -p $(PWD)/data
 	@cp $(PWD)/examples/example-config-dataflow.yaml $(PWD)/data/config.yaml
 	docker run \
@@ -305,7 +318,7 @@ test-dfc: clean build
 		--cpus $(CPUS) \
 		$(IMAGE_NAME):$(TAG)
 
-test-debug: clean build-debug
+test-debug: stop-and-remove-umh-core-latest build-debug
 	@mkdir -p $(PWD)/data
 	@cp $(PWD)/examples/example-config-benthos-broken.yaml $(PWD)/data/config.yaml
 	docker run \
@@ -327,3 +340,33 @@ stop-all-pods:
 	docker ps -q --filter "name=$(IMAGE_NAME)*" | xargs -r docker stop
 	# Remove all pods starting with $(IMAGE_NAME) (also show stopped pods)
 	docker ps -a -q --filter "name=$(IMAGE_NAME)*" | xargs -r docker rm
+
+push:
+	@echo "Pushing $(IMAGE_NAME):$(TAG) to registry"
+	@if [ -z "$(REGISTRY)" ]; then \
+		echo "Error: REGISTRY environment variable is not set"; \
+		exit 1; \
+	fi
+	docker tag $(IMAGE_NAME):$(TAG) $(REGISTRY)/$(IMAGE_NAME):$(TAG)
+	docker push $(REGISTRY)/$(IMAGE_NAME):$(TAG)
+
+# Push with platform-specific tag (used in CI)
+push-platform:
+	@echo "Pushing $(IMAGE_NAME):$(TAG) for $(TARGETARCH) to registry"
+	@if [ -z "$(REGISTRY)" ]; then \
+		echo "Error: REGISTRY environment variable is not set"; \
+		exit 1; \
+	fi
+	@if [ -z "$(TAG)" ]; then \
+		echo "Error: TAG environment variable is not set"; \
+		exit 1; \
+	fi
+	@PLATFORM_SHORT="$(TARGETARCH)"; \
+	PLATFORM_TAG="$(TAG)-$${PLATFORM_SHORT}"; \
+	echo "Tagging $(IMAGE_NAME):$(TAG) as $(REGISTRY)/$(IMAGE_NAME):$${PLATFORM_TAG}"; \
+	docker tag $(IMAGE_NAME):$(TAG) $(REGISTRY)/$(IMAGE_NAME):$${PLATFORM_TAG}; \
+	echo "Pushing $(REGISTRY)/$(IMAGE_NAME):$${PLATFORM_TAG}"; \
+	docker push $(REGISTRY)/$(IMAGE_NAME):$${PLATFORM_TAG}
+
+# Build and push in one command (for CI)
+build-push: build push-platform

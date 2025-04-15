@@ -18,11 +18,13 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/looplab/fsm"
 	"go.uber.org/zap"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/backoff"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
@@ -171,8 +173,35 @@ func (s *BaseFSMInstance) SetCurrentFSMState(state string) {
 	s.fsm.SetState(state)
 }
 
-// SendEvent sends an event to the FSM and returns whether the event was processed
+// SendEvent sends an event to the FSM and returns whether the event was processed.
+//
+// Problem: Context expiration during FSM transitions can lead to deadlocks:
+// - When a context expires mid-transition, the FSM's internal transition state remains set
+// - This causes future events to fail with "event X inappropriate because previous transition did not complete"
+// - After multiple retries, the backoff manager marks the instance as permanently failed
+// - The entire instance then gets unnecessarily removed from the system
+//
+// Solution: This method implements protective measures to prevent deadlocks:
+// 1. Rejects event sending if the context is already cancelled
+// 2. Refuses to start transitions when insufficient time remains before a deadline
+//
+// By ensuring transitions only start with sufficient context lifetime, we avoid the
+// cascade of failures that would otherwise occur when a transition is interrupted.
 func (s *BaseFSMInstance) SendEvent(ctx context.Context, eventName string, args ...interface{}) error {
+
+	// Context protection: We verify two distinct conditions before proceeding:
+	// 1. Context must not be cancelled - An already expired context will lead to immediate failure
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	// 2. Context must have sufficient time remaining - Context expiration during a transition
+	//    is worse than failing to start, as it leaves the FSM in an inconsistent state
+	if deadline, ok := ctx.Deadline(); ok {
+		if time.Until(deadline) < constants.ExpectedMaxP95ExecutionTimePerEvent {
+			return fmt.Errorf("context deadline exceeded")
+		}
+	}
+
 	return s.fsm.Event(ctx, eventName, args...)
 }
 

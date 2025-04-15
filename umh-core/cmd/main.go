@@ -21,8 +21,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/env"
-
 	v2 "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/communication_state"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
@@ -55,56 +53,18 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// get the environment variables
-	authToken, err := env.GetAsString("AUTH_TOKEN", false, "")
-	if err != nil {
-		sentry.ReportIssuef(sentry.IssueTypeWarning, log, "Failed to get AUTH_TOKEN: %w", err)
-	}
-
-	apiUrl, err := env.GetAsString("API_URL", false, "")
-	if err != nil {
-		sentry.ReportIssuef(sentry.IssueTypeWarning, log, "Failed to get API_URL: %w", err)
-	}
-
-	releaseChannel, err := env.GetAsString("RELEASE_CHANNEL", false, "")
-	if err != nil {
-		sentry.ReportIssuef(sentry.IssueTypeWarning, log, "Failed to get RELEASE_CHANNEL: %w", err)
-	}
-
-	locations := make(map[int]string)
-	for i := 0; i <= 6; i++ {
-		location, err := env.GetAsString(fmt.Sprintf("LOCATION_%d", i), false, "")
-		if err != nil {
-			sentry.ReportIssuef(sentry.IssueTypeWarning, log, "Failed to get LOCATION_%d: %w", i, err)
-		}
-		locations[i] = location
-	}
-
 	// Load the config
 	configManager, err := config.NewFileConfigManagerWithBackoff()
 	if err != nil {
 		sentry.ReportIssuef(sentry.IssueTypeFatal, log, "Failed to create config manager: %w", err)
 		os.Exit(1)
 	}
-	// this will check if the config at the given path exists and if not, it will be created with default values
-	// and then overwritten with the given config parameters (communicator, release channel, location)
-	configData, err := configManager.GetConfigWithOverwritesOrCreateNew(ctx, config.FullConfig{
-		Agent: config.AgentConfig{
-			CommunicatorConfig: config.CommunicatorConfig{
-				APIURL:    apiUrl,
-				AuthToken: authToken,
-			},
-			ReleaseChannel: config.ReleaseChannel(releaseChannel),
-			Location:       locations,
-		},
-		Internal: config.InternalConfig{
-			Redpanda: config.RedpandaConfig{
-				FSMInstanceConfig: config.FSMInstanceConfig{
-					DesiredFSMState: "active",
-				},
-			},
-		},
-	})
+
+	// Load or create configuration with environment variable overrides
+	// This loads the config file if it exists, applies any environment variables as overrides,
+	// and persists the result back to the config file. See detailed docs in config.LoadConfigWithEnvOverrides.
+	configData, err := config.LoadConfigWithEnvOverrides(ctx, configManager, log)
+
 	if err != nil {
 		sentry.ReportIssuef(sentry.IssueTypeFatal, log, "Failed to load config: %w", err)
 		os.Exit(1)
@@ -126,17 +86,19 @@ func main() {
 	systemSnapshot := new(fsm.SystemSnapshot)
 	systemMu := new(sync.Mutex)
 	communicationState := communication_state.CommunicationState{
-		Watchdog:        watchdog.NewWatchdog(ctx, time.NewTicker(time.Second*10), true),
+		Watchdog:        watchdog.NewWatchdog(ctx, time.NewTicker(time.Second*10), true, logger.For(logger.ComponentCommunicator)),
 		InboundChannel:  make(chan *models.UMHMessage, 100),
 		OutboundChannel: make(chan *models.UMHMessage, 100),
 		ReleaseChannel:  configData.Agent.ReleaseChannel,
 		SystemSnapshot:  systemSnapshot,
 		ConfigManager:   configManager,
+		ApiUrl:          configData.Agent.CommunicatorConfig.APIURL,
+		Logger:          logger.For(logger.ComponentCommunicator),
 	}
 	go SystemSnapshotLogger(ctx, controlLoop, systemSnapshot, systemMu)
 
 	if configData.Agent.CommunicatorConfig.APIURL != "" && configData.Agent.CommunicatorConfig.AuthToken != "" {
-		enableBackendConnection(&configData, systemSnapshot, &communicationState, systemMu, controlLoop)
+		enableBackendConnection(&configData, systemSnapshot, &communicationState, systemMu, controlLoop, communicationState.Logger)
 	} else {
 		log.Warnf("No backend connection enabled, please set API_URL and AUTH_TOKEN")
 	}
@@ -193,22 +155,13 @@ func SystemSnapshotLogger(ctx context.Context, controlLoop *control.ControlLoop,
 				for instanceName, instance := range instances {
 					logger.Infof("Instance: %s, current state: %s, desired state: %s",
 						instanceName, instance.CurrentState, instance.DesiredState)
-
-					// Log observed state if available
-					if instance.LastObservedState != nil {
-						logger.Debugf("Observed state: %v", instance.LastObservedState)
-					}
 				}
 			}
 		}
 	}
 }
 
-func enableBackendConnection(config *config.FullConfig, state *fsm.SystemSnapshot, communicationState *communication_state.CommunicationState, systemMu *sync.Mutex, controlLoop *control.ControlLoop) {
-	logger := logger.For("enableBackendConnection")
-	if logger == nil {
-		logger = zap.NewNop().Sugar()
-	}
+func enableBackendConnection(config *config.FullConfig, state *fsm.SystemSnapshot, communicationState *communication_state.CommunicationState, systemMu *sync.Mutex, controlLoop *control.ControlLoop, logger *zap.SugaredLogger) {
 
 	logger.Info("Enabling backend connection")
 	// directly log the config to console, not to the logger
@@ -220,7 +173,7 @@ func enableBackendConnection(config *config.FullConfig, state *fsm.SystemSnapsho
 	if config.Agent.CommunicatorConfig.APIURL != "" && config.Agent.CommunicatorConfig.AuthToken != "" {
 		// This can temporarely deactivated, e.g., during integration tests where just the mgmtcompanion-config is changed directly
 
-		login := v2.NewLogin(config.Agent.CommunicatorConfig.AuthToken, false)
+		login := v2.NewLogin(config.Agent.CommunicatorConfig.AuthToken, false, config.Agent.CommunicatorConfig.APIURL, logger)
 		if login == nil {
 			sentry.ReportIssuef(sentry.IssueTypeError, logger, "[v2.NewLogin] Failed to create login object")
 			return
@@ -235,5 +188,8 @@ func enableBackendConnection(config *config.FullConfig, state *fsm.SystemSnapsho
 		communicationState.InitialiseAndStartPusher()
 		communicationState.InitialiseAndStartSubscriberHandler(time.Minute*5, time.Minute, config, state, systemMu, configManager)
 		communicationState.InitialiseAndStartRouter()
+
 	}
+
+	logger.Info("Backend connection enabled")
 }

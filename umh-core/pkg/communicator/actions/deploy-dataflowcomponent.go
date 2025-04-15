@@ -32,6 +32,8 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// DeployDataflowComponentAction implements the Action interface for deploying
+// dataflow components to the UMH instance.
 type DeployDataflowComponentAction struct {
 	userEmail       string
 	actionUUID      uuid.UUID
@@ -45,7 +47,10 @@ type DeployDataflowComponentAction struct {
 	actionLogger    *zap.SugaredLogger
 }
 
-// exposed for testing purposed
+// NewDeployDataflowComponentAction creates a new DeployDataflowComponentAction with the provided parameters.
+// This constructor is primarily used for testing to enable dependency injection, though it can be used
+// in production code as well. It initializes the action with the necessary fields but doesn't
+// populate the payload, name, or metaType fields which must be done via Parse.
 func NewDeployDataflowComponentAction(userEmail string, actionUUID uuid.UUID, instanceUUID uuid.UUID, outboundChannel chan *models.UMHMessage, configManager config.ConfigManager) *DeployDataflowComponentAction {
 	return &DeployDataflowComponentAction{
 		userEmail:       userEmail,
@@ -53,10 +58,18 @@ func NewDeployDataflowComponentAction(userEmail string, actionUUID uuid.UUID, in
 		instanceUUID:    instanceUUID,
 		outboundChannel: outboundChannel,
 		configManager:   configManager,
-		actionLogger:    logger.For(logger.ComponentCommunicatorActions),
+		actionLogger:    logger.For(logger.ComponentCommunicator),
 	}
 }
 
+// Parse implements the Action interface by extracting dataflow component configuration from the payload.
+// It handles the top-level structure parsing first to extract name and component type,
+// then delegates to specialized parsing functions based on the component type.
+//
+// Currently supported types:
+// - "custom": Custom dataflow components with Benthos configuration
+//
+// The function returns appropriate errors for missing required fields or unsupported component types.
 func (a *DeployDataflowComponentAction) Parse(payload interface{}) error {
 	// First parse the top level structure
 	type TopLevelPayload struct {
@@ -109,6 +122,11 @@ func (a *DeployDataflowComponentAction) Parse(payload interface{}) error {
 	return nil
 }
 
+// parseCustomDataFlowComponent is a helper function that parses the custom dataflow component
+// payload structure. It extracts the inputs, outputs, pipeline, and optional inject configurations.
+//
+// The function performs structure validation to ensure required sections exist, but delegates
+// detailed validation to the Validate method.
 func parseCustomDataFlowComponent(payload interface{}) (models.CDFCPayload, error) {
 	// Define our intermediate struct to parse the nested payload
 
@@ -187,6 +205,13 @@ func parseCustomDataFlowComponent(payload interface{}) (models.CDFCPayload, erro
 	return cdfcPayload, nil
 }
 
+// Validate implements the Action interface by performing deeper validation of the parsed payload.
+// For custom dataflow components, it validates:
+// 1. Required fields exist (name, metaType, input/output configuration, pipeline)
+// 2. All YAML content is valid by attempting to parse it
+//
+// The function returns detailed error messages for any validation failures, indicating
+// exactly which field or YAML section is invalid.
 func (a *DeployDataflowComponentAction) Validate() error {
 	// Validate name and metatype were properly parsed
 	if a.name == "" {
@@ -259,6 +284,18 @@ func (a *DeployDataflowComponentAction) Validate() error {
 	return nil
 }
 
+// Execute implements the Action interface by performing the actual deployment of the dataflow component.
+// It follows the standard pattern for actions:
+// 1. Sends ActionConfirmed to indicate the action is starting
+// 2. Parses and normalizes all the configuration data
+// 3. Creates a DataFlowComponentConfig and adds it to the system configuration
+// 4. Sends ActionFinishedWithFailure if any error occurs
+// 5. Returns a success message (not sending ActionFinishedSuccessfull as that's done by the caller)
+//
+// The function handles custom dataflow components by:
+// - Converting YAML strings into structured configuration
+// - Normalizing the Benthos configuration
+// - Adding the component to the configuration with a desired state of "running"
 func (a *DeployDataflowComponentAction) Execute() (interface{}, map[string]interface{}, error) {
 	a.actionLogger.Info("Executing DeployDataflowComponent action")
 
@@ -399,22 +436,25 @@ func (a *DeployDataflowComponentAction) Execute() (interface{}, map[string]inter
 		return nil, nil, fmt.Errorf("%s", errorMsg)
 	}
 
-	// Send success reply
-	successMsg := fmt.Sprintf("Successfully deployed data flow component: %s", a.name)
-	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedSuccessfull, successMsg, a.outboundChannel, models.DeployDataFlowComponent)
+	// TODO: check against observedState as well
 
-	return nil, nil, nil
+	// return success message, but do not send it as this is done by the caller
+	successMsg := fmt.Sprintf("Successfully deployed data flow component: %s", a.name)
+
+	return successMsg, nil, nil
 }
 
+// getUserEmail implements the Action interface by returning the user email associated with this action.
 func (a *DeployDataflowComponentAction) getUserEmail() string {
 	return a.userEmail
 }
 
+// getUuid implements the Action interface by returning the UUID of this action.
 func (a *DeployDataflowComponentAction) getUuid() uuid.UUID {
 	return a.actionUUID
 }
 
-// exposed for testing purposes
+// GetParsedPayload returns the parsed CDFCPayload - exposed primarily for testing purposes.
 func (a *DeployDataflowComponentAction) GetParsedPayload() models.CDFCPayload {
 	return a.payload
 }

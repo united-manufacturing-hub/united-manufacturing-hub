@@ -92,7 +92,7 @@ type Watchdog struct {
 }
 
 // NewWatchdog creates a new Watchdog
-func NewWatchdog(ctx context.Context, ticker *time.Ticker, warningsAreErrors bool) *Watchdog {
+func NewWatchdog(ctx context.Context, ticker *time.Ticker, warningsAreErrors bool, logger *zap.SugaredLogger) *Watchdog {
 	w := Watchdog{
 		registeredHeartbeats:      make(map[string]*Heartbeat),
 		registeredHeartbeatsMutex: sync.Mutex{},
@@ -104,7 +104,7 @@ func NewWatchdog(ctx context.Context, ticker *time.Ticker, warningsAreErrors boo
 		ticker:            ticker,
 		watchdogID:        uuid.New(),
 		warningsAreErrors: atomic.Bool{},
-		logger:            zap.S(),
+		logger:            logger,
 	}
 	if warningsAreErrors {
 		w.warningsAreErrors.Store(true)
@@ -120,14 +120,14 @@ func (s *Watchdog) Start() {
 			{
 				name := s.getHeartbeatNameByUUID(uniqueIdentifier)
 				s.reportStateToNiceFail()
-				sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "Heartbeat errored: [%s] %s (%s)", s.watchdogID, name, uniqueIdentifier)
+				sentry.ReportIssuef(sentry.IssueTypeError, s.logger, "Heartbeat errored: [%s] %s (%s)", s.watchdogID, name, uniqueIdentifier)
 				panic(fmt.Sprintf("Heartbeat errored: [%s] %s (%s)", s.watchdogID, name, uniqueIdentifier))
 			}
 		case <-s.ticker.C:
 			{
 				s.reportStateToNiceFail()
 				now := time.Now()
-				zap.S().Infof("Checking heartbeats: [%s] at %s", s.watchdogID, now)
+				s.logger.Debugf("Checking heartbeats: [%s] at %s", s.watchdogID, now)
 				s.registeredHeartbeatsMutex.Lock()
 
 				// Check all heartbeats and collect the overdue ones
@@ -140,7 +140,7 @@ func (s *Watchdog) Start() {
 				for name, hb := range s.registeredHeartbeats {
 					lastHeartbeat := now.UTC().Unix() - hb.lastHeatbeatTime.Load()
 					if lastHeartbeat < 0 {
-						zap.S().Warnf("Time went backwards: [%s] ", s.watchdogID)
+						s.logger.Warnf("Time went backwards: [%s] ", s.watchdogID)
 					}
 					onlyIfHasSub := hb.onlyIfSubscribers
 					hasSubs := s.hasSubscribers.Load()
@@ -163,7 +163,7 @@ func (s *Watchdog) Start() {
 							delete(s.registeredHeartbeats, name)
 							break
 						} else {
-							zap.S().Infof("Heartbeat: [%s] %s (%s) would fail, but no subscribers are present", s.watchdogID, name, hb.uniqueIdentifier)
+							s.logger.Infof("Heartbeat: [%s] %s (%s) would fail, but no subscribers are present", s.watchdogID, name, hb.uniqueIdentifier)
 						}
 					}
 				}
@@ -173,7 +173,6 @@ func (s *Watchdog) Start() {
 
 				// If we found an overdue heartbeat, panic
 				if overdueHeartbeat != nil {
-					// zap.S().Debuff("[%s] Heartbeat %s (%s) from %s:%d has failed", s.watchdogID, overdueHeartbeat.name, overdueHeartbeat.hb.uniqueIdentifier, overdueHeartbeat.hb.file, overdueHeartbeat.hb.line)
 					errorMsg := fmt.Sprintf("Heartbeat too old: [%s] %s (%s) [Lifetime heartbeats: %d] (%d seconds overdue)",
 						s.watchdogID, overdueHeartbeat.name, overdueHeartbeat.hb.uniqueIdentifier,
 						overdueHeartbeat.hb.heartbeatsReceived.Load(), overdueHeartbeat.secondsOverdue)
@@ -181,12 +180,12 @@ func (s *Watchdog) Start() {
 					panic(errorMsg)
 				}
 
-				zap.S().Infof("Heartbeats are ok: [%s] ", s.watchdogID)
+				s.logger.Debugf("Heartbeats are ok: [%s] ", s.watchdogID)
 			}
 		case <-s.ctx.Done():
 			{
 				s.reportStateToNiceFail()
-				sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "Watchdog context done: [%s] ", s.watchdogID)
+				sentry.ReportIssuef(sentry.IssueTypeError, s.logger, "Watchdog context done: [%s] ", s.watchdogID)
 			}
 		}
 	}
@@ -225,7 +224,7 @@ func (s *Watchdog) RegisterHeartbeat(name string, warningsUntilFailure uint64, t
 	uniqueIdentifier := uuid.New()
 	_, file, line, ok := runtime.Caller(1)
 
-	zap.S().Infof("[%s] Registering heartbeat %s (%s)", s.watchdogID, name, uniqueIdentifier)
+	s.logger.Infof("[%s] Registering heartbeat %s (%s)", s.watchdogID, name, uniqueIdentifier)
 	hb := Heartbeat{
 		uniqueIdentifier:     uniqueIdentifier,
 		warningsUntilFailure: warningsUntilFailure,
@@ -237,17 +236,17 @@ func (s *Watchdog) RegisterHeartbeat(name string, warningsUntilFailure uint64, t
 		hb.file = file
 		hb.line = line
 	} else {
-		zap.S().Warnf("[%s] Unable to get caller file and line for heartbeat %s", s.watchdogID, name)
+		s.logger.Warnf("[%s] Unable to get caller file and line for heartbeat %s", s.watchdogID, name)
 	}
 	s.registeredHeartbeatsMutex.Lock()
 	if v, ok := s.registeredHeartbeats[name]; ok {
 		s.registeredHeartbeatsMutex.Unlock()
-		zap.S().Errorf("[%s] Heartbeat already registered: %s (%s)", s.watchdogID, name, v.uniqueIdentifier)
-		sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "Heartbeat already registered: %s", name)
+		s.logger.Errorf("[%s] Heartbeat already registered: %s (%s)", s.watchdogID, name, v.uniqueIdentifier)
+		sentry.ReportIssuef(sentry.IssueTypeError, s.logger, "Heartbeat already registered: %s", name)
 		panic(fmt.Sprintf("Heartbeat already registered: %s (%s)", name, v.uniqueIdentifier))
 	}
 	s.registeredHeartbeats[name] = &hb
-	zap.S().Infof("[%s] Registered heartbeat %s (%s)", s.watchdogID, name, uniqueIdentifier)
+	s.logger.Infof("[%s] Registered heartbeat %s (%s)", s.watchdogID, name, uniqueIdentifier)
 	s.registeredHeartbeatsMutex.Unlock()
 	return uniqueIdentifier
 }
@@ -255,18 +254,18 @@ func (s *Watchdog) RegisterHeartbeat(name string, warningsUntilFailure uint64, t
 // UnregisterHeartbeat unregisters a heartbeat
 // Call this when the goroutine is doing a normal exit
 func (s *Watchdog) UnregisterHeartbeat(uniqueIdentifier uuid.UUID) {
-	zap.S().Infof("[%s] Unregistering heartbeat %s", s.watchdogID, uniqueIdentifier)
+	s.logger.Infof("[%s] Unregistering heartbeat %s", s.watchdogID, uniqueIdentifier)
 	// Find the heartbeat
 	name := s.getHeartbeatNameByUUID(uniqueIdentifier)
 	if name == "" {
-		zap.S().Warnf("[%s] Unregister heartbeat called with unknown identifier: %s", s.watchdogID, uniqueIdentifier)
+		s.logger.Warnf("[%s] Unregister heartbeat called with unknown identifier: %s", s.watchdogID, uniqueIdentifier)
 		return
 	}
 
 	s.registeredHeartbeatsMutex.Lock()
 	delete(s.registeredHeartbeats, name)
 	s.registeredHeartbeatsMutex.Unlock()
-	zap.S().Infof("[%s] Unregistered heartbeat %s", s.watchdogID, uniqueIdentifier)
+	s.logger.Infof("[%s] Unregistered heartbeat %s", s.watchdogID, uniqueIdentifier)
 }
 
 // ReportHeartbeatStatus reports the status of a heartbeat
@@ -276,7 +275,7 @@ func (s *Watchdog) ReportHeartbeatStatus(uniqueIdentifier uuid.UUID, status Hear
 	name := s.getHeartbeatNameByUUID(uniqueIdentifier)
 
 	if name == "" {
-		sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "Report heartbeat called with unknown identifier: %s", uniqueIdentifier)
+		sentry.ReportIssuef(sentry.IssueTypeError, s.logger, "Report heartbeat called with unknown identifier: %s", uniqueIdentifier)
 		return
 	}
 
@@ -286,7 +285,7 @@ func (s *Watchdog) ReportHeartbeatStatus(uniqueIdentifier uuid.UUID, status Hear
 	if hb == nil {
 		// If the heartbeat doesn't exist, unlock and return
 		s.registeredHeartbeatsMutex.Unlock()
-		sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "Report heartbeat called with now invalid name: %s (UUID: %s)", name, uniqueIdentifier)
+		sentry.ReportIssuef(sentry.IssueTypeError, s.logger, "Report heartbeat called with now invalid name: %s (UUID: %s)", name, uniqueIdentifier)
 		return
 	}
 
@@ -298,9 +297,8 @@ func (s *Watchdog) ReportHeartbeatStatus(uniqueIdentifier uuid.UUID, status Hear
 	hasSubs := s.hasSubscribers.Load()
 	if status == HEARTBEAT_STATUS_WARNING {
 		warnings = hb.warningCount.Add(1)
-		// zap.S().Debuff("[%s] Heartbeat %s (%s) send a warning (%d/%d)", s.watchdogID, name, uniqueIdentifier, warnings, hb.warningsUntilFailure)
 		if s.warningsAreErrors.Load() {
-			zap.S().Errorf("[%s] Heartbeat %s (%s) send a warning (%d/%d) and warnings are errors", s.watchdogID, name, uniqueIdentifier, warnings, hb.warningsUntilFailure)
+			s.logger.Errorf("[%s] Heartbeat %s (%s) send a warning (%d/%d) and warnings are errors", s.watchdogID, name, uniqueIdentifier, warnings, hb.warningsUntilFailure)
 			s.badHeartbeatChan <- uniqueIdentifier
 		}
 	} else if status == HEARTBEAT_STATUS_OK {
@@ -308,14 +306,14 @@ func (s *Watchdog) ReportHeartbeatStatus(uniqueIdentifier uuid.UUID, status Hear
 	}
 	// warningsUntilFailure == 0 disables this check
 	if warnings >= uint32(hb.warningsUntilFailure) && hb.warningsUntilFailure != 0 && ((onlyIfHasSub && hasSubs) || !onlyIfHasSub) {
-		zap.S().Errorf("[%s] Heartbeat %s (%s) send to many consecutive warnings (%d/%d)", s.watchdogID, name, uniqueIdentifier, warnings, hb.warningsUntilFailure)
-		sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "Heartbeat too many warnings: %s send to many consecutive warnings (%d/%d)", name, warnings, hb.warningsUntilFailure)
+		s.logger.Errorf("[%s] Heartbeat %s (%s) send to many consecutive warnings (%d/%d)", s.watchdogID, name, uniqueIdentifier, warnings, hb.warningsUntilFailure)
+		sentry.ReportIssuef(sentry.IssueTypeError, s.logger, "Heartbeat too many warnings: %s send to many consecutive warnings (%d/%d)", name, warnings, hb.warningsUntilFailure)
 		s.badHeartbeatChan <- uniqueIdentifier
 	}
 	s.registeredHeartbeatsMutex.Unlock()
 	if status == HEARTBEAT_STATUS_ERROR {
-		zap.S().Errorf("[%s] Heartbeat %s (%s) reported an error", s.watchdogID, name, uniqueIdentifier)
-		sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "Heartbeat reported error: %s", name)
+		s.logger.Errorf("[%s] Heartbeat %s (%s) reported an error", s.watchdogID, name, uniqueIdentifier)
+		sentry.ReportIssuef(sentry.IssueTypeError, s.logger, "Heartbeat reported error: %s", name)
 		s.badHeartbeatChan <- uniqueIdentifier
 	}
 	s.reportStateToNiceFail()
@@ -350,27 +348,34 @@ func (s *Watchdog) reportStateToNiceFail() {
 	// This is useful for debugging, as it allows us to see the state of all registered subscribers at the time of the panic
 	s.registeredHeartbeatsMutex.Lock()
 	defer s.registeredHeartbeatsMutex.Unlock()
-	for name, hb := range s.registeredHeartbeats {
-		if hb == nil {
-			// Skip nil heartbeats
-			continue
+
+	/*
+		heartbeatReports := make([]string, 0, len(s.registeredHeartbeats))
+		for name, hb := range s.registeredHeartbeats {
+			if hb == nil {
+				// Skip nil heartbeats
+				continue
+			}
+			lastReportedStatus := hb.lastReportedStatus.Load()
+			lastHeartbeat := hb.lastHeatbeatTime.Load()
+			warningCount := hb.warningCount.Load()
+
+			var status string
+			switch lastReportedStatus {
+			case int32(HEARTBEAT_STATUS_OK):
+				status = "OK"
+			case int32(HEARTBEAT_STATUS_WARNING):
+				status = "WARNING"
+			case int32(HEARTBEAT_STATUS_ERROR):
+				status = "ERROR"
+			}
+			// Format each heartbeat as a string
+			heartbeatReports = append(heartbeatReports, fmt.Sprintf("%s[%s, %d, %d]", name, status, lastHeartbeat, warningCount))
 		}
 
-		lastReportedStatus := hb.lastReportedStatus.Load()
-		lastHeartbeat := hb.lastHeatbeatTime.Load()
-		warningCount := hb.warningCount.Load()
-
-		var status string
-		switch lastReportedStatus {
-		case int32(HEARTBEAT_STATUS_OK):
-			status = "OK"
-		case int32(HEARTBEAT_STATUS_WARNING):
-			status = "WARNING"
-		case int32(HEARTBEAT_STATUS_ERROR):
-			status = "ERROR"
+		// Log all heartbeats in a single debug statement if any exist
+		if len(heartbeatReports) > 0 {
+			s.logger.Debugf("WatchdogReport: %s", strings.Join(heartbeatReports, "; "))
 		}
-
-		// Log to the console instead of reporting to Sentry
-		s.logger.Debugf("WatchdogReport: %s, %s, %d, %d", name, status, lastHeartbeat, warningCount)
-	}
+	*/
 }
