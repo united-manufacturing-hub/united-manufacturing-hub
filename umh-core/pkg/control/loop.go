@@ -45,6 +45,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/ctxutil"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/agent_monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/container"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
@@ -101,6 +102,7 @@ func NewControlLoop(configManager config.ConfigManager) *ControlLoop {
 		s6.NewS6Manager(constants.DefaultManagerName),
 		benthos.NewBenthosManager(constants.DefaultManagerName),
 		container.NewContainerManager(constants.DefaultManagerName),
+		agent_monitor.NewAgentManager(constants.DefaultManagerName),
 		//redpanda.NewRedpandaManager(constants.DefaultManagerName),
 	}
 
