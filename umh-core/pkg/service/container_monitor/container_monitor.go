@@ -77,7 +77,7 @@ func NewContainerMonitorService(fs filesystem.Service) *ContainerMonitorService 
 
 // NewContainerMonitorServiceWithPath creates a new container monitor service with a custom data path
 func NewContainerMonitorServiceWithPath(fs filesystem.Service, dataPath string) *ContainerMonitorService {
-	log := logger.For(logger.ComponentContainerMonService)
+	log := logger.For(logger.ComponentContainerMonitorService)
 
 	return &ContainerMonitorService{
 		fs:           fs,

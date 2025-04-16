@@ -15,28 +15,29 @@
 agent:
   metricsPort: 8080
 
-redpanda:
-  desiredState: active
-  redpandaServiceConfig:
-    # Note: Any change in here, will result in a restart of the Redpanda service
-    topic:
-      # Note: The below settings only apply to newly created topics
-      # this corresponds to log_retention_ms (See also: https://docs.redpanda.com/current/manage/cluster-maintenance/disk-utilization/)
-      defaultTopicRetentionMs: 604800000
+internal:
+  redpanda:
+    desiredState: active
+    redpandaServiceConfig:
+      # Note: Any change in here, will result in a restart of the Redpanda service
+      topic:
+        # Note: The below settings only apply to newly created topics
+        # this corresponds to log_retention_ms (See also: https://docs.redpanda.com/current/manage/cluster-maintenance/disk-utilization/)
+        defaultTopicRetentionMs: 604800000
 
-      # this corresponds to retention_bytes (See also: https://docs.redpanda.com/current/manage/cluster-maintenance/disk-utilization/)
-      defaultTopicRetentionBytes: 0
+        # this corresponds to retention_bytes (See also: https://docs.redpanda.com/current/manage/cluster-maintenance/disk-utilization/)
+        defaultTopicRetentionBytes: 0
 
-    resources:
-      # this corresponds to --smp from scylladb/seastar
-      # See also:
-      # - https://docs.redpanda.com/current/manage/kubernetes/k-manage-resources/#cpu
-      # By default Redpanda will use 1 core per 1000 partitions
-      maxCores: 1
+      resources:
+        # this corresponds to --smp from scylladb/seastar
+        # See also:
+        # - https://docs.redpanda.com/current/manage/kubernetes/k-manage-resources/#cpu
+        # By default Redpanda will use 1 core per 1000 partitions
+        maxCores: 1
 
-      # this corresponds to --memory from scylladb/seastar
-      # See also:
-      # - https://docs.redpanda.com/current/manage/kubernetes/k-manage-resources/#memory
-      # By default Redpanda will use 4MB per partition, resulting in a theoretical maximum of 500 usable partitions per core
-      # Setting this to lower then 2GB leads to startup issues!
-      memoryPerCoreInBytes: 2147483648 # 2GB
+        # this corresponds to --memory from scylladb/seastar
+        # See also:
+        # - https://docs.redpanda.com/current/manage/kubernetes/k-manage-resources/#memory
+        # By default Redpanda will use 4MB per partition, resulting in a theoretical maximum of 500 usable partitions per core
+        # Setting this to lower then 2GB leads to startup issues!
+        memoryPerCoreInBytes: 2147483648 # 2GB

@@ -231,4 +231,162 @@ internal:
 			})
 		})
 	})
+
+	Describe("parseConfig", func() {
+		Context("with various YAML inputs", func() {
+			It("should parse valid YAML correctly", func() {
+				validYAML := `
+internal:
+  services:
+    - name: service1
+      desiredState: running
+  redpanda:
+    desiredState: running
+agent:
+  metricsPort: 8080
+  location:
+    0: Enterprise
+    1: Site
+`
+				config, err := parseConfig([]byte(validYAML))
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(config.Internal.Services).To(HaveLen(1))
+				Expect(config.Internal.Services[0].Name).To(Equal("service1"))
+				Expect(config.Internal.Services[0].FSMInstanceConfig.DesiredFSMState).To(Equal("running"))
+				Expect(config.Internal.Redpanda.DesiredFSMState).To(Equal("running"))
+				Expect(config.Agent.MetricsPort).To(Equal(8080))
+				Expect(config.Agent.Location).To(HaveLen(2))
+				Expect(config.Agent.Location[0]).To(Equal("Enterprise"))
+				Expect(config.Agent.Location[1]).To(Equal("Site"))
+			})
+
+			It("should handle empty input", func() {
+				config, err := parseConfig([]byte{})
+				Expect(err).To(HaveOccurred())
+				Expect(config).To(Equal(FullConfig{}))
+			})
+
+			It("should handle empty but valid YAML", func() {
+				emptyYAML := "---\n"
+				config, err := parseConfig([]byte(emptyYAML))
+				Expect(err).ToNot(HaveOccurred())
+				Expect(config).To(Equal(FullConfig{}))
+			})
+
+			It("should return error for malformed YAML", func() {
+				malformedYAML := `
+internal: {
+  services: [
+    { name: service1, desiredState: running,
+`
+				_, err := parseConfig([]byte(malformedYAML))
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("failed to parse config file"))
+			})
+
+			It("should return error for YAML with unknown fields when KnownFields is true", func() {
+				yamlWithUnknownFields := `
+internal:
+  services:
+    - name: service1
+      desiredState: running
+      unknownField: value
+  unknownSection:
+    key: value
+`
+				_, err := parseConfig([]byte(yamlWithUnknownFields))
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("failed to decode config file"))
+			})
+
+			It("should handle null values in YAML", func() {
+				yamlWithNulls := `
+internal:
+  services:
+    - name: service1
+      desiredState: running
+      s6ServiceConfig:
+        command: null
+        env: null
+        configFiles: null
+agent:
+  location: null
+`
+				config, err := parseConfig([]byte(yamlWithNulls))
+				Expect(err).NotTo(HaveOccurred())
+				Expect(config.Internal.Services).To(HaveLen(1))
+				Expect(config.Internal.Services[0].Name).To(Equal("service1"))
+				Expect(config.Internal.Services[0].FSMInstanceConfig.DesiredFSMState).To(Equal("running"))
+				Expect(config.Internal.Services[0].S6ServiceConfig.Command).To(BeNil())
+				Expect(config.Internal.Services[0].S6ServiceConfig.Env).To(BeNil())
+				Expect(config.Internal.Services[0].S6ServiceConfig.ConfigFiles).To(BeNil())
+				Expect(config.Agent.Location).To(BeNil())
+			})
+
+			It("should handle nested complex structures", func() {
+				complexYAML := `
+internal:
+  services:
+    - name: service1
+      desiredState: running
+      s6ServiceConfig:
+        command: ["/bin/sh", "-c", "echo 'complex command with spaces'"]
+        env:
+          COMPLEX_KEY: "value with spaces and \"quotes\""
+          ANOTHER_KEY: 'single quoted value'
+        configFiles:
+          "file with spaces.txt": "content with multiple\nlines\nand \"quotes\""
+`
+				config, err := parseConfig([]byte(complexYAML))
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(config.Internal.Services).To(HaveLen(1))
+				Expect(config.Internal.Services[0].S6ServiceConfig.Command).To(HaveLen(3))
+				Expect(config.Internal.Services[0].S6ServiceConfig.Command[2]).To(Equal("echo 'complex command with spaces'"))
+				Expect(config.Internal.Services[0].S6ServiceConfig.Env).To(HaveKeyWithValue("COMPLEX_KEY", "value with spaces and \"quotes\""))
+				Expect(config.Internal.Services[0].S6ServiceConfig.Env).To(HaveKeyWithValue("ANOTHER_KEY", "single quoted value"))
+				Expect(config.Internal.Services[0].S6ServiceConfig.ConfigFiles).To(HaveKeyWithValue("file with spaces.txt", "content with multiple\nlines\nand \"quotes\""))
+			})
+		})
+
+		Context("with example YAML files from umh-core/examples", func() {
+			var (
+				// FileSystem service for reading example files
+				fsService filesystem.Service
+				ctx       context.Context
+				cancel    context.CancelFunc
+			)
+
+			BeforeEach(func() {
+				// Use the real filesystem for this test with a timeout context
+				fsService = filesystem.NewDefaultService()
+				ctx, cancel = context.WithTimeout(context.Background(), 1*time.Second)
+			})
+
+			AfterEach(func() {
+				cancel()
+			})
+
+			It("should parse all example .yaml files", func() {
+				// List all files in the examples directory
+				files, err := fsService.ReadDir(ctx, "../../examples")
+				Expect(err).NotTo(HaveOccurred())
+
+				for _, file := range files {
+					// Skip non-YAML files
+					if filepath.Ext(file.Name()) != ".yaml" {
+						continue
+					}
+
+					By(fmt.Sprintf("Parsing %s", file.Name()))
+					data, err := fsService.ReadFile(ctx, filepath.Join("../../examples", file.Name()))
+					Expect(err).NotTo(HaveOccurred())
+
+					_, err = parseConfig(data)
+					Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to parse %s", file.Name()))
+				}
+			})
+		})
+	})
 })

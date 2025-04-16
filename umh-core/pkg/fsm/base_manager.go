@@ -343,7 +343,6 @@ func (m *BaseFSMManager[C]) Reconcile(
 				return fmt.Errorf("failed to set desired state: %w", err), false
 			}
 			m.instances[name] = instance
-			m.logger.Infof("Created instance %s", name)
 
 			// Update last add tick using manager-specific tick
 			m.lastAddTick = m.managerTick
@@ -454,8 +453,9 @@ func (m *BaseFSMManager[C]) Reconcile(
 
 			// Using manager-specific ticks for rate limiting
 			if m.managerTick-m.lastRemoveTick < TicksBeforeNextRemove {
-				m.logger.Debugf("Rate limiting: Skipping removal of instance %s (waiting %d more ticks)",
-					instanceName, TicksBeforeNextRemove-(m.managerTick-m.lastRemoveTick))
+				// Currently uncommented to prevent log spam (the integration tests will create a lot of services)
+				// m.logger.Debugf("Rate limiting: Skipping removal of instance %s (waiting %d more ticks)",
+				// 	instanceName, TicksBeforeNextRemove-(m.managerTick-m.lastRemoveTick))
 				continue // Skip this removal for now, will be removed on a future tick
 			}
 
@@ -493,7 +493,6 @@ func (m *BaseFSMManager[C]) Reconcile(
 			metrics.IncErrorCount(metrics.ComponentBaseFSMManager, m.managerName)
 			return fmt.Errorf("failed to get expected max p95 execution time: %w", err), false
 		}
-
 		remaining, sufficient, err := ctxutil.HasSufficientTime(ctx, expectedMaxP95ExecutionTime)
 		if err != nil {
 			if errors.Is(err, ctxutil.ErrNoDeadline) {
@@ -546,6 +545,7 @@ func (m *BaseFSMManager[C]) Reconcile(
 			)
 			return fmt.Errorf("error reconciling instance: %w", err), false
 		}
+
 		if reconciled {
 			return nil, true
 		}

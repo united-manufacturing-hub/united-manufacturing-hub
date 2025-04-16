@@ -192,7 +192,6 @@ func (d *DataflowComponentInstance) UpdateObservedStateOfInstance(ctx context.Co
 			d.baseFSMInstance.GetLogger().Debugf("Config differences detected but service does not exist yet, skipping update")
 		}
 	}
-
 	return nil
 }
 

@@ -12,22 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package redpandaserviceconfig
+package constants
 
-import (
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
+import "time"
+
+const (
+	ExpectedMaxP95ExecutionTimePerEvent = 1 * time.Millisecond
 )
-
-var _ = Describe("Redpanda YAML Normalizer", func() {
-	Describe("NormalizeConfig", func() {
-		It("should set default values for empty config", func() {
-			config := RedpandaServiceConfig{}
-			normalizer := NewNormalizer()
-
-			normalizedConfig := normalizer.NormalizeConfig(config)
-			Expect(normalizedConfig.Topic.DefaultTopicRetentionMs).To(Equal(int64(0)))
-			Expect(normalizedConfig.Topic.DefaultTopicRetentionBytes).To(Equal(int64(0)))
-		})
-	})
-})
