@@ -23,6 +23,7 @@ import (
 
 	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	benthosfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
@@ -231,4 +232,20 @@ func (d *DataflowComponentInstance) IsDataflowComponentWithProcessingActivity() 
 	benthosStatus := d.ObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus
 
 	return benthosStatus.MetricsState != nil && benthosStatus.MetricsState.IsActive
+}
+
+func (d *DataflowComponentInstance) IsStartupGracePeriodExpired(currentTime time.Time, state string) bool {
+
+	// Get the time when the DataflowComponentInstance entered the given state
+	stateEntryTime, err := d.GetStateEntryTime(state)
+	if err != nil {
+		// If the stateEntryntime for the Starting state is not set, use a conservative  approach and assume we just entered the state
+		stateEntryTime = currentTime
+	}
+
+	// Check if we have exceeded the grace period since entering the Starting state
+	if currentTime.Sub(stateEntryTime) > constants.WaitTimeBeforeMarkingStartFailed {
+		return true
+	}
+	return false
 }
