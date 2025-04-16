@@ -96,7 +96,7 @@ func NewDataflowComponentInstance(
 // e.g., nobody wants to have an instance in the "starting" state, that is just intermediate
 func (d *DataflowComponentInstance) SetDesiredFSMState(state string) error {
 	sentry.ReportFSMFatal(d.baseFSMInstance.GetLogger(), d.baseFSMInstance.GetID(), "DataflowComponentInstance", "SetDesiredFSMState", fmt.Errorf("not implemented"))
-	return nil
+	panic("not implemented")
 }
 
 // GetCurrentFSMState returns the current state of the FSM
@@ -128,13 +128,13 @@ func (b *DataflowComponentInstance) IsRemoving() bool {
 // IsStopping returns true if the instance is in the stopping state
 func (b *DataflowComponentInstance) IsStopping() bool {
 	sentry.ReportFSMFatal(b.baseFSMInstance.GetLogger(), b.baseFSMInstance.GetID(), "DataflowComponentInstance", "IsStopping", fmt.Errorf("not implemented"))
-	panic("unimplemented")
+	panic("not implemented")
 }
 
 // IsStopped returns true if the instance is in the stopped state
 func (b *DataflowComponentInstance) IsStopped() bool {
 	sentry.ReportFSMFatal(b.baseFSMInstance.GetLogger(), b.baseFSMInstance.GetID(), "DataflowComponentInstance", "IsStopped", fmt.Errorf("not implemented"))
-	panic("unimplemented")
+	panic("not implemented")
 }
 
 // PrintState prints the current state of the FSM for debugging

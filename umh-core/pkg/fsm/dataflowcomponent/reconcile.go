@@ -33,5 +33,5 @@ import (
 // that fail are retried in subsequent reconcile calls after a backoff period.
 func (d *DataflowComponentInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot, filesystemService filesystem.Service) (err error, reconciled bool) {
 	sentry.ReportFSMFatal(d.baseFSMInstance.GetLogger(), d.baseFSMInstance.GetID(), "DataflowComponentInstance", "Reconcile", fmt.Errorf("not implemented"))
-	panic("unimplemented")
+	panic("not implemented")
 }
