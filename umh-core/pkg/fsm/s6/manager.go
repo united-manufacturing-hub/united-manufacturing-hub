@@ -23,6 +23,7 @@ import (
 	public_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/snapshot"
 )
 
 const (
@@ -36,7 +37,7 @@ type S6Manager struct {
 
 // S6ManagerSnapshot extends the base manager snapshot to hold any s6-specific info
 type S6ManagerSnapshot struct {
-	*public_fsm.BaseManagerSnapshot
+	*snapshot.BaseManagerSnapshot
 }
 
 // NewS6Manager creates a new S6Manager
@@ -99,9 +100,9 @@ func NewS6Manager(name string) *S6Manager {
 }
 
 // CreateSnapshot overrides the base to add s6-specific fields if desired
-func (m *S6Manager) CreateSnapshot() public_fsm.ManagerSnapshot {
+func (m *S6Manager) CreateSnapshot() snapshot.ManagerSnapshot {
 	baseSnap := m.BaseFSMManager.CreateSnapshot()
-	baseSnapshot, ok := baseSnap.(*public_fsm.BaseManagerSnapshot)
+	baseSnapshot, ok := baseSnap.(*snapshot.BaseManagerSnapshot)
 	if !ok {
 		logger.For(logger.ComponentS6Manager).Errorf("Could not create manager snapshot to BaseManagerSnapshot.")
 		return baseSnap

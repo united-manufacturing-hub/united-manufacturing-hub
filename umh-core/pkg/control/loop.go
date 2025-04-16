@@ -56,6 +56,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/snapshot"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/starvationchecker"
 	"go.uber.org/zap"
 )
@@ -78,7 +79,7 @@ type ControlLoop struct {
 	logger            *zap.SugaredLogger
 	starvationChecker *starvationchecker.StarvationChecker
 	currentTick       uint64
-	snapshotManager   *fsm.SnapshotManager
+	snapshotManager   *snapshot.SnapshotManager
 	filesystemService filesystem.Service
 }
 
@@ -111,7 +112,7 @@ func NewControlLoop(configManager config.ConfigManager) *ControlLoop {
 	starvationChecker := starvationchecker.NewStarvationChecker(constants.StarvationThreshold)
 
 	// Create a snapshot manager
-	snapshotManager := fsm.NewSnapshotManager()
+	snapshotManager := snapshot.NewSnapshotManager()
 
 	// Create a buffered filesystem service
 	filesystemService := filesystem.NewDefaultService()
@@ -224,15 +225,15 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 
 	// 1) Retrieve or create the "previous" snapshot
 	prevSnapshot := c.snapshotManager.GetSnapshot()
-	var newSnapshot fsm.SystemSnapshot
+	var newSnapshot snapshot.SystemSnapshot
 
 	// If there is no previous snapshot, create a new one
 	// Note: should fetching the config in step 2 fail, the snapshot will not be updated
 	// Hence, once we have a snapshot, we will always have a config
 	if prevSnapshot == nil {
 		// If none existed, create an empty one
-		newSnapshot = fsm.SystemSnapshot{
-			Managers:     make(map[string]fsm.ManagerSnapshot),
+		newSnapshot = snapshot.SystemSnapshot{
+			Managers:     make(map[string]snapshot.ManagerSnapshot),
 			SnapshotTime: time.Now(),
 			Tick:         ticker,
 		}
@@ -365,7 +366,7 @@ func (c *ControlLoop) updateSystemSnapshot(ctx context.Context, cfg config.FullC
 
 // GetSystemSnapshot returns the current snapshot of the system state
 // This is thread-safe and can be called from any goroutine
-func (c *ControlLoop) GetSystemSnapshot() *fsm.SystemSnapshot {
+func (c *ControlLoop) GetSystemSnapshot() *snapshot.SystemSnapshot {
 	// Check if logger is nil to prevent panic
 	if c.logger == nil {
 		// If logger is nil, initialize it with a default logger

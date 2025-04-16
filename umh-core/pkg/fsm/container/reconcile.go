@@ -27,13 +27,14 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/snapshot"
 )
 
 // Reconcile periodically checks if the FSM needs state transitions based on metrics
 // The filesystemService parameter allows for filesystem operations during reconciliation,
 // enabling the method to read configuration or state information from the filesystem.
 // Currently not used in this implementation but added for consistency with the interface.
-func (c *ContainerInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot, filesystemService filesystem.Service) (err error, reconciled bool) {
+func (c *ContainerInstance) Reconcile(ctx context.Context, currentSnapshot snapshot.SystemSnapshot, filesystemService filesystem.Service) (err error, reconciled bool) {
 	start := time.Now()
 	instanceName := c.baseFSMInstance.GetID()
 	defer func() {
@@ -52,8 +53,8 @@ func (c *ContainerInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSn
 	}
 
 	// Step 1: If there's a lastError, see if we've waited enough.
-	if c.baseFSMInstance.ShouldSkipReconcileBecauseOfError(snapshot.Tick) {
-		backErr := c.baseFSMInstance.GetBackoffError(snapshot.Tick)
+	if c.baseFSMInstance.ShouldSkipReconcileBecauseOfError(currentSnapshot.Tick) {
+		backErr := c.baseFSMInstance.GetBackoffError(currentSnapshot.Tick)
 		if backoff.IsPermanentFailureError(backErr) {
 			// If permanent, we want to remove the instance or at least stop it
 			// For now, let's just remove it from the manager:
@@ -86,13 +87,13 @@ func (c *ContainerInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSn
 		}
 
 		// For other errors, set the error for backoff
-		c.baseFSMInstance.SetError(err, snapshot.Tick)
+		c.baseFSMInstance.SetError(err, currentSnapshot.Tick)
 		return nil, false
 	}
 
 	// Print system state every 10 ticks
-	if snapshot.Tick%10 == 0 {
-		c.printSystemState(instanceName, snapshot.Tick)
+	if currentSnapshot.Tick%10 == 0 {
+		c.printSystemState(instanceName, currentSnapshot.Tick)
 	}
 
 	// Step 3: Attempt to reconcile the state.
@@ -113,7 +114,7 @@ func (c *ContainerInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSn
 			return nil, true // We don't want to return an error here, as this can happen in normal operations
 		}
 
-		c.baseFSMInstance.SetError(err, snapshot.Tick)
+		c.baseFSMInstance.SetError(err, currentSnapshot.Tick)
 		c.baseFSMInstance.GetLogger().Errorf("error reconciling state: %s", err)
 		return nil, false // We don't want to return an error here, because we want to continue reconciling
 	}

@@ -25,9 +25,9 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/snapshot"
 	"go.uber.org/zap"
 	"gopkg.in/yaml.v3"
 )
@@ -40,7 +40,7 @@ type DeployDataflowComponentAction struct {
 	instanceUUID    uuid.UUID
 	outboundChannel chan *models.UMHMessage
 	configManager   config.ConfigManager
-	systemSnapshot  *fsm.SystemSnapshot
+	systemSnapshot  *snapshot.SystemSnapshot
 	payload         models.CDFCPayload
 	name            string
 	metaType        string

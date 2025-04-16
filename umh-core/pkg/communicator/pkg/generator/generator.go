@@ -20,11 +20,11 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/container"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/snapshot"
 	"go.uber.org/zap"
 )
 
@@ -40,7 +40,7 @@ const (
 type StatusCollectorType struct {
 	latestData    *LatestData
 	dog           watchdog.Iface
-	state         *fsm.SystemSnapshot
+	state         *snapshot.SystemSnapshot
 	systemMu      *sync.Mutex
 	logger        *zap.SugaredLogger
 	configManager config.ConfigManager
@@ -55,7 +55,7 @@ type LatestData struct {
 
 func NewStatusCollector(
 	dog watchdog.Iface,
-	state *fsm.SystemSnapshot,
+	state *snapshot.SystemSnapshot,
 	systemMu *sync.Mutex,
 	configManager config.ConfigManager,
 	logger *zap.SugaredLogger,
@@ -165,7 +165,7 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 }
 
 // buildContainerDataFromSnapshot creates container data from a FSM instance snapshot
-func buildContainerDataFromSnapshot(instance fsm.FSMInstanceSnapshot, log *zap.SugaredLogger) models.Container {
+func buildContainerDataFromSnapshot(instance snapshot.FSMInstanceSnapshot, log *zap.SugaredLogger) models.Container {
 	// Try to get observed state from instance
 	containerData := buildDefaultContainerData()
 

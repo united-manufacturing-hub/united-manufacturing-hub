@@ -27,6 +27,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	redpanda_service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/snapshot"
 )
 
 // Reconcile examines the RedpandaInstance and, in three steps:
@@ -37,7 +38,7 @@ import (
 // This function is intended to be called repeatedly (e.g. in a periodic control loop).
 // Over multiple calls, it converges the actual state to the desired state. Transitions
 // that fail are retried in subsequent reconcile calls after a backoff period.
-func (r *RedpandaInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot, filesystemService filesystem.Service) (err error, reconciled bool) {
+func (r *RedpandaInstance) Reconcile(ctx context.Context, currentSnapshot snapshot.SystemSnapshot, filesystemService filesystem.Service) (err error, reconciled bool) {
 	start := time.Now()
 	redpandaInstanceName := r.baseFSMInstance.GetID()
 	defer func() {
@@ -56,8 +57,8 @@ func (r *RedpandaInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSna
 	}
 
 	// Step 1: If there's a lastError, see if we've waited enough.
-	if r.baseFSMInstance.ShouldSkipReconcileBecauseOfError(snapshot.Tick) {
-		err := r.baseFSMInstance.GetBackoffError(snapshot.Tick)
+	if r.baseFSMInstance.ShouldSkipReconcileBecauseOfError(currentSnapshot.Tick) {
+		err := r.baseFSMInstance.GetBackoffError(currentSnapshot.Tick)
 		r.baseFSMInstance.GetLogger().Debugf("Skipping reconcile for Redpanda pipeline %s: %w", redpandaInstanceName, err)
 
 		// if it is a permanent error, start the removal process and reset the error (so that we can reconcile towards a stopped / removed state)
@@ -81,10 +82,10 @@ func (r *RedpandaInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSna
 	}
 
 	// Step 2: Detect external changes.
-	if err := r.reconcileExternalChanges(ctx, filesystemService, snapshot.Tick, start); err != nil {
+	if err := r.reconcileExternalChanges(ctx, filesystemService, currentSnapshot.Tick, start); err != nil {
 		// If the service is not running, we don't want to return an error here, because we want to continue reconciling
 		if !errors.Is(err, redpanda_service.ErrServiceNotExist) {
-			r.baseFSMInstance.SetError(err, snapshot.Tick)
+			r.baseFSMInstance.SetError(err, currentSnapshot.Tick)
 			r.baseFSMInstance.GetLogger().Errorf("error reconciling external changes: %s", err)
 
 			if errors.Is(err, context.DeadlineExceeded) {
@@ -110,15 +111,15 @@ func (r *RedpandaInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSna
 			return nil, false
 		}
 
-		r.baseFSMInstance.SetError(err, snapshot.Tick)
+		r.baseFSMInstance.SetError(err, currentSnapshot.Tick)
 		r.baseFSMInstance.GetLogger().Errorf("error reconciling state: %s", err)
 		return nil, false // We don't want to return an error here, because we want to continue reconciling
 	}
 
 	// Reconcile the s6Manager
-	s6Err, s6Reconciled := r.service.ReconcileManager(ctx, filesystemService, snapshot.Tick)
+	s6Err, s6Reconciled := r.service.ReconcileManager(ctx, filesystemService, currentSnapshot.Tick)
 	if s6Err != nil {
-		r.baseFSMInstance.SetError(s6Err, snapshot.Tick)
+		r.baseFSMInstance.SetError(s6Err, currentSnapshot.Tick)
 		r.baseFSMInstance.GetLogger().Errorf("error reconciling s6Manager: %s", s6Err)
 		return nil, false
 	}

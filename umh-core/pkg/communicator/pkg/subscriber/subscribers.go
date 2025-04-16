@@ -19,6 +19,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2/push"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/encoding"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/snapshot"
 
 	"github.com/google/uuid"
 
@@ -30,7 +31,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"go.uber.org/zap"
 )
@@ -42,7 +42,7 @@ type Handler struct {
 	instanceUUID               uuid.UUID
 	StatusCollector            *generator.StatusCollectorType
 	disableHardwareStatusCheck bool
-	state                      *fsm.SystemSnapshot
+	state                      *snapshot.SystemSnapshot
 	configManager              config.ConfigManager
 	logger                     *zap.SugaredLogger
 }
@@ -55,7 +55,7 @@ func NewHandler(
 	cull time.Duration,
 	releaseChannel config.ReleaseChannel,
 	disableHardwareStatusCheck bool,
-	state *fsm.SystemSnapshot,
+	state *snapshot.SystemSnapshot,
 	systemMu *sync.Mutex,
 	configManager config.ConfigManager,
 	logger *zap.SugaredLogger,

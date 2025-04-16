@@ -21,11 +21,11 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	benthosfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
 	benthossvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/snapshot"
 )
 
 // WaitForBenthosManagerStable is a simple helper that calls manager.Reconcile once
@@ -33,24 +33,24 @@ import (
 // where we just want to do one pass. Then we might call it multiple times if needed.
 func WaitForBenthosManagerStable(
 	ctx context.Context,
-	snapshot fsm.SystemSnapshot,
+	currentSnapshot snapshot.SystemSnapshot,
 	manager *benthosfsm.BenthosManager,
 
 	filesystemService filesystem.Service,
 ) (uint64, error) {
-	err, _ := manager.Reconcile(ctx, snapshot, filesystemService)
+	err, _ := manager.Reconcile(ctx, currentSnapshot, filesystemService)
 	if err != nil {
-		return snapshot.Tick, err
+		return currentSnapshot.Tick, err
 	}
 	// We might do more checks if needed, e.g. manager has zero instances?
-	return snapshot.Tick + 1, nil
+	return currentSnapshot.Tick + 1, nil
 }
 
 // WaitForBenthosManagerInstanceState repeatedly calls manager.Reconcile until
 // we see the specified 'desiredState' or we hit maxAttempts.
 func WaitForBenthosManagerInstanceState(
 	ctx context.Context,
-	snapshot fsm.SystemSnapshot,
+	currentSnapshot snapshot.SystemSnapshot,
 	manager *benthosfsm.BenthosManager,
 
 	filesystemService filesystem.Service,
@@ -58,9 +58,9 @@ func WaitForBenthosManagerInstanceState(
 	desiredState string,
 	maxAttempts int,
 ) (uint64, error) {
-	tick := snapshot.Tick
+	tick := currentSnapshot.Tick
 	for i := 0; i < maxAttempts; i++ {
-		err, _ := manager.Reconcile(ctx, snapshot, filesystemService)
+		err, _ := manager.Reconcile(ctx, currentSnapshot, filesystemService)
 		if err != nil {
 			return tick, err
 		}
@@ -79,16 +79,16 @@ func WaitForBenthosManagerInstanceState(
 // from the manager's instance map.
 func WaitForBenthosManagerInstanceRemoval(
 	ctx context.Context,
-	snapshot fsm.SystemSnapshot,
+	currentSnapshot snapshot.SystemSnapshot,
 	manager *benthosfsm.BenthosManager,
 
 	filesystemService filesystem.Service,
 	instanceName string,
 	maxAttempts int,
 ) (uint64, error) {
-	tick := snapshot.Tick
+	tick := currentSnapshot.Tick
 	for i := 0; i < maxAttempts; i++ {
-		err, _ := manager.Reconcile(ctx, snapshot, filesystemService)
+		err, _ := manager.Reconcile(ctx, currentSnapshot, filesystemService)
 		if err != nil {
 			return tick, err
 		}
@@ -106,16 +106,16 @@ func WaitForBenthosManagerInstanceRemoval(
 // e.g. map[serviceName]desiredState = ...
 func WaitForBenthosManagerMultiState(
 	ctx context.Context,
-	snapshot fsm.SystemSnapshot,
+	currentSnapshot snapshot.SystemSnapshot,
 	manager *benthosfsm.BenthosManager,
 
 	filesystemService filesystem.Service,
 	desiredMap map[string]string, // e.g. { "svc1": "idle", "svc2": "active" }
 	maxAttempts int,
 ) (uint64, error) {
-	tick := snapshot.Tick
+	tick := currentSnapshot.Tick
 	for i := 0; i < maxAttempts; i++ {
-		err, _ := manager.Reconcile(ctx, snapshot, filesystemService)
+		err, _ := manager.Reconcile(ctx, currentSnapshot, filesystemService)
 		if err != nil {
 			return tick, err
 		}
@@ -226,11 +226,11 @@ func ConfigureBenthosManagerForState(
 // manager's 'reconciled' bool.
 func ReconcileOnceBenthosManager(
 	ctx context.Context,
-	snapshot fsm.SystemSnapshot,
+	currentSnapshot snapshot.SystemSnapshot,
 	manager *benthosfsm.BenthosManager,
 
 	filesystemService filesystem.Service,
 ) (newTick uint64, err error, reconciled bool) {
-	err, rec := manager.Reconcile(ctx, snapshot, filesystemService)
-	return snapshot.Tick + 1, err, rec
+	err, rec := manager.Reconcile(ctx, currentSnapshot, filesystemService)
+	return currentSnapshot.Tick + 1, err, rec
 }

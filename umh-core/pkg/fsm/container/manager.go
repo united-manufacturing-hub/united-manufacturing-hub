@@ -23,6 +23,7 @@ import (
 	public_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/snapshot"
 )
 
 const (
@@ -36,7 +37,7 @@ type ContainerManager struct {
 
 // ContainerManagerSnapshot extends the base manager snapshot to hold any container-specific info
 type ContainerManagerSnapshot struct {
-	*public_fsm.BaseManagerSnapshot
+	*snapshot.BaseManagerSnapshot
 }
 
 // Ensure it satisfies fsm.ObservedStateSnapshot
@@ -111,9 +112,9 @@ func NewContainerManager(name string) *ContainerManager {
 }
 
 // CreateSnapshot overrides the base to add container-specific fields if desired
-func (m *ContainerManager) CreateSnapshot() public_fsm.ManagerSnapshot {
+func (m *ContainerManager) CreateSnapshot() snapshot.ManagerSnapshot {
 	baseSnap := m.BaseFSMManager.CreateSnapshot()
-	baseSnapshot, ok := baseSnap.(*public_fsm.BaseManagerSnapshot)
+	baseSnapshot, ok := baseSnap.(*snapshot.BaseManagerSnapshot)
 	if !ok {
 		logger.For(ContainerManagerComponentName).Errorf("Could not cast manager snapshot to BaseManagerSnapshot.")
 		return baseSnap

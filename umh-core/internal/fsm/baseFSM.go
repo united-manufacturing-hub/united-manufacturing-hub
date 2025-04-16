@@ -47,6 +47,9 @@ type BaseFSMInstance struct {
 
 	// logger is the logger for the FSM
 	logger *zap.SugaredLogger
+
+	// FSMInstanceActions defines the actions that can be performed on an FSM instance
+	FSMInstanceActions
 }
 
 type BaseFSMInstanceConfig struct {

@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/snapshot"
 )
 
 // MockFSMManager is a mock implementation of FSMManager for testing
@@ -38,7 +39,7 @@ func NewMockFSMManager() *MockFSMManager {
 // Reconcile implements the FSMManager interface
 // The filesystemService parameter is not used in this mock implementation,
 // but is included to match the interface signature.
-func (m *MockFSMManager) Reconcile(ctx context.Context, snapshot SystemSnapshot, filesystemService filesystem.Service) (error, bool) {
+func (m *MockFSMManager) Reconcile(ctx context.Context, currentSnapshot snapshot.SystemSnapshot, filesystemService filesystem.Service) (error, bool) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 	m.ReconcileCalled = true

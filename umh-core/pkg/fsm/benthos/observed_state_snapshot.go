@@ -17,8 +17,8 @@ package benthos
 import (
 	"github.com/tiendc/go-deepcopy"
 	benthosserviceconfig "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/snapshot"
 )
 
 // BenthosObservedStateSnapshot is a deep-copyable snapshot of BenthosObservedState
@@ -33,7 +33,7 @@ func (s *BenthosObservedStateSnapshot) IsObservedStateSnapshot() {
 }
 
 // CreateObservedStateSnapshot implements the fsm.ObservedStateConverter interface for BenthosInstance
-func (b *BenthosInstance) CreateObservedStateSnapshot() fsm.ObservedStateSnapshot {
+func (b *BenthosInstance) CreateObservedStateSnapshot() snapshot.ObservedStateSnapshot {
 	// Create a deep copy of the observed state
 	snapshot := &BenthosObservedStateSnapshot{}
 

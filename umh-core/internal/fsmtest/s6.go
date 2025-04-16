@@ -25,10 +25,10 @@ import (
 	internal_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/snapshot"
 )
 
 // Common test states
@@ -174,13 +174,13 @@ func SetupS6InstanceWithState(
 //   - error: Any error that occurred during reconciliation
 func waitForInstanceState(
 	ctx context.Context,
-	snapshot fsm.SystemSnapshot,
+	currentSnapshot snapshot.SystemSnapshot,
 	instance *s6fsm.S6Instance,
 	filesystemService filesystem.Service,
 	targetState string,
 	maxAttempts int,
 ) (uint64, error) {
-	var tick = snapshot.Tick
+	var tick = currentSnapshot.Tick
 	var currentState string
 
 	for i := 0; i < maxAttempts; i++ {
@@ -190,7 +190,7 @@ func waitForInstanceState(
 		}
 
 		// Call Reconcile to progress the state
-		_, _ = instance.Reconcile(ctx, snapshot, filesystemService)
+		_, _ = instance.Reconcile(ctx, currentSnapshot, filesystemService)
 		tick++
 	}
 
@@ -204,7 +204,7 @@ func waitForInstanceState(
 //
 // Parameters:
 //   - instance: The S6Instance to reset error state for
-func ResetInstanceError(instance *s6fsm.S6Instance, snapshot fsm.SystemSnapshot, filesystemService filesystem.Service) {
+func ResetInstanceError(instance *s6fsm.S6Instance, currentSnapshot snapshot.SystemSnapshot, filesystemService filesystem.Service) {
 	// Force a reconcile cycle with empty errors by simulating
 	// a successful operation cycle. We rely on the fact that
 	// each instance.Reconcile call will reset the error state
@@ -223,7 +223,7 @@ func ResetInstanceError(instance *s6fsm.S6Instance, snapshot fsm.SystemSnapshot,
 	// Force a reconcile with ctx.Done to just reset internal state
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // Immediately cancel to avoid actual operations
-	instance.Reconcile(ctx, snapshot, filesystemService)
+	instance.Reconcile(ctx, currentSnapshot, filesystemService)
 }
 
 // StabilizeS6Instance is a simplified helper that configures the service and waits for an S6 instance
@@ -243,7 +243,7 @@ func ResetInstanceError(instance *s6fsm.S6Instance, snapshot fsm.SystemSnapshot,
 //   - error: Any error that occurred during stabilization
 func StabilizeS6Instance(
 	ctx context.Context,
-	snapshot fsm.SystemSnapshot,
+	currentSnapshot snapshot.SystemSnapshot,
 	instance *s6fsm.S6Instance,
 	filesystemService filesystem.Service,
 	targetState string,
@@ -252,7 +252,7 @@ func StabilizeS6Instance(
 	// Get the mock service and service path from the instance
 	mockService, ok := instance.GetService().(*s6service.MockService)
 	if !ok {
-		return snapshot.Tick, fmt.Errorf("instance doesn't use a MockService")
+		return currentSnapshot.Tick, fmt.Errorf("instance doesn't use a MockService")
 	}
 
 	servicePath := instance.GetServicePath()
@@ -261,7 +261,7 @@ func StabilizeS6Instance(
 	ConfigureServiceForState(mockService, servicePath, targetState)
 
 	// Wait for the instance to reach the target state
-	return waitForInstanceState(ctx, snapshot, instance, filesystemService, targetState, maxAttempts)
+	return waitForInstanceState(ctx, currentSnapshot, instance, filesystemService, targetState, maxAttempts)
 }
 
 // TestS6StateTransition tests a transition between two states using reconciliation.
@@ -282,7 +282,7 @@ func StabilizeS6Instance(
 //   - error: Any error that occurred during the process
 func TestS6StateTransition(
 	ctx context.Context,
-	snapshot fsm.SystemSnapshot,
+	currentSnapshot snapshot.SystemSnapshot,
 	instance *s6fsm.S6Instance,
 	filesystemService filesystem.Service,
 	fromState string,
@@ -293,23 +293,23 @@ func TestS6StateTransition(
 	// Configure initial state
 	err := ConfigureS6State(instance, fromState)
 	if err != nil {
-		return snapshot.Tick, err
+		return currentSnapshot.Tick, err
 	}
 
 	// Setup the desired state if it's an operational state and skipSetupDesiredState is not true
 	skipDesired := len(skipSetupDesiredState) > 0 && skipSetupDesiredState[0]
 	if !skipDesired && (toState == s6fsm.OperationalStateRunning || toState == s6fsm.OperationalStateStopped) {
 		if err := instance.SetDesiredFSMState(toState); err != nil {
-			return snapshot.Tick, err
+			return currentSnapshot.Tick, err
 		}
 	}
 
 	// Run initial reconcile to trigger transition
-	_, _ = instance.Reconcile(ctx, snapshot, filesystemService)
-	snapshot.Tick++
+	_, _ = instance.Reconcile(ctx, currentSnapshot, filesystemService)
+	currentSnapshot.Tick++
 
 	// Now stabilize to the target state
-	return StabilizeS6Instance(ctx, snapshot, instance, filesystemService, toState, maxAttempts)
+	return StabilizeS6Instance(ctx, currentSnapshot, instance, filesystemService, toState, maxAttempts)
 }
 
 // SetupS6Instance creates a new S6Instance with a mock service
@@ -360,7 +360,7 @@ func SetupS6Instance(
 func VerifyStableState(
 
 	ctx context.Context,
-	snapshot fsm.SystemSnapshot,
+	currentSnapshot snapshot.SystemSnapshot,
 	instance *s6fsm.S6Instance,
 	filesystemService filesystem.Service,
 	expectedState string,
@@ -370,25 +370,25 @@ func VerifyStableState(
 
 	// Verify starting state
 	if currentState := instance.GetCurrentFSMState(); currentState != expectedState {
-		return snapshot.Tick, fmt.Errorf("instance not in expected state: got %s, want %s",
+		return currentSnapshot.Tick, fmt.Errorf("instance not in expected state: got %s, want %s",
 			currentState, expectedState)
 	}
 
 	// Perform specified number of reconciliations
 	for i := 0; i < reconcileCount; i++ {
 		// Reconcile and advance tick
-		err, _ := instance.Reconcile(ctx, snapshot, filesystemService)
+		err, _ := instance.Reconcile(ctx, currentSnapshot, filesystemService)
 		if err != nil {
-			return snapshot.Tick, fmt.Errorf("reconcile failed at tick %d: %w", snapshot.Tick, err)
+			return currentSnapshot.Tick, fmt.Errorf("reconcile failed at tick %d: %w", currentSnapshot.Tick, err)
 		}
-		snapshot.Tick++
+		currentSnapshot.Tick++
 
 		// Verify state hasn't changed
 		if currentState := instance.GetCurrentFSMState(); currentState != expectedState {
-			return snapshot.Tick, fmt.Errorf("unexpected state transition from %s to %s at tick %d",
-				expectedState, currentState, snapshot.Tick)
+			return currentSnapshot.Tick, fmt.Errorf("unexpected state transition from %s to %s at tick %d",
+				expectedState, currentState, currentSnapshot.Tick)
 		}
 	}
 
-	return snapshot.Tick, nil
+	return currentSnapshot.Tick, nil
 }

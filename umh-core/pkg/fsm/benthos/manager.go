@@ -27,6 +27,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/portmanager"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/snapshot"
 )
 
 const (
@@ -44,7 +45,7 @@ type BenthosManager struct {
 // BenthosManagerSnapshot extends the base ManagerSnapshot with Benthos-specific information
 type BenthosManagerSnapshot struct {
 	// Embed the BaseManagerSnapshot to inherit its methods
-	*public_fsm.BaseManagerSnapshot
+	*snapshot.BaseManagerSnapshot
 	// Add Benthos-specific fields
 	PortAllocations map[string]int // Maps instance name to port
 }
@@ -177,14 +178,14 @@ func (m *BenthosManager) HandleInstanceRemoved(instanceName string) {
 // Reconcile overrides the base manager's Reconcile method to add port management
 // The filesystemService parameter allows for filesystem operations during reconciliation,
 // enabling the method to read configuration or state information from the filesystem.
-func (m *BenthosManager) Reconcile(ctx context.Context, snapshot public_fsm.SystemSnapshot, filesystemService filesystem.Service) (error, bool) {
+func (m *BenthosManager) Reconcile(ctx context.Context, currentSnapshot snapshot.SystemSnapshot, filesystemService filesystem.Service) (error, bool) {
 	start := time.Now()
 	defer func() {
 		duration := time.Since(start)
 		metrics.ObserveReconcileTime(logger.ComponentBenthosManager, m.BaseFSMManager.GetManagerName(), duration)
 	}()
 	// Phase 1: Port Management Pre-reconciliation
-	benthosConfigs := snapshot.CurrentConfig.Internal.Benthos
+	benthosConfigs := currentSnapshot.CurrentConfig.Internal.Benthos
 	instanceNames := make([]string, len(benthosConfigs))
 	for i, cfg := range benthosConfigs {
 		instanceNames[i] = cfg.Name
@@ -198,7 +199,7 @@ func (m *BenthosManager) Reconcile(ctx context.Context, snapshot public_fsm.Syst
 	countBefore := len(m.BaseFSMManager.GetInstances())
 
 	// Create a new config based on the current config with allocated ports
-	cfgWithPorts := snapshot.CurrentConfig.Clone()
+	cfgWithPorts := currentSnapshot.CurrentConfig.Clone()
 	for i, bc := range cfgWithPorts.Internal.Benthos {
 		if port, exists := m.portManager.GetPort(bc.Name); exists {
 			// Update the BenthosServiceConfig with the allocated port
@@ -206,8 +207,8 @@ func (m *BenthosManager) Reconcile(ctx context.Context, snapshot public_fsm.Syst
 		}
 	}
 
-	var snapshotWithPorts public_fsm.SystemSnapshot
-	deepcopy.Copy(&snapshotWithPorts, snapshot)
+	var snapshotWithPorts snapshot.SystemSnapshot
+	deepcopy.Copy(&snapshotWithPorts, currentSnapshot)
 	snapshotWithPorts.CurrentConfig = cfgWithPorts
 
 	// Phase 2: Base FSM Reconciliation with port-aware config
@@ -230,12 +231,12 @@ func (m *BenthosManager) Reconcile(ctx context.Context, snapshot public_fsm.Syst
 }
 
 // CreateSnapshot overrides the base CreateSnapshot to include Benthos-specific information
-func (m *BenthosManager) CreateSnapshot() public_fsm.ManagerSnapshot {
+func (m *BenthosManager) CreateSnapshot() snapshot.ManagerSnapshot {
 	// Get base snapshot from parent
 	baseSnapshot := m.BaseFSMManager.CreateSnapshot()
 
 	// We need to convert the interface to the concrete type
-	baseManagerSnapshot, ok := baseSnapshot.(*public_fsm.BaseManagerSnapshot)
+	baseManagerSnapshot, ok := baseSnapshot.(*snapshot.BaseManagerSnapshot)
 	if !ok {
 		logger.For(logger.ComponentBenthosManager).Errorf(
 			"Failed to convert base snapshot to BaseManagerSnapshot, using generic snapshot")

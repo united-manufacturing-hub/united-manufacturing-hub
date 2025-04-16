@@ -21,7 +21,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/snapshot"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/encoding"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/subscriber"
@@ -40,7 +40,7 @@ type Router struct {
 	clientConnections     map[string]*ClientConnection
 	clientConnectionsLock sync.RWMutex
 	subHandler            *subscriber.Handler
-	systemSnapshot        *fsm.SystemSnapshot
+	systemSnapshot        *snapshot.SystemSnapshot
 	configManager         config.ConfigManager
 	actionLogger          *zap.SugaredLogger
 	routerLogger          *zap.SugaredLogger
@@ -57,7 +57,7 @@ func NewRouter(dog watchdog.Iface,
 	outboundChannel chan *models.UMHMessage,
 	releaseChannel config.ReleaseChannel,
 	subHandler *subscriber.Handler,
-	systemSnapshot *fsm.SystemSnapshot,
+	systemSnapshot *snapshot.SystemSnapshot,
 	configManager config.ConfigManager,
 	logger *zap.SugaredLogger,
 ) *Router {

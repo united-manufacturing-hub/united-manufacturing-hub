@@ -27,6 +27,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	benthos_service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/snapshot"
 )
 
 // Reconcile examines the BenthosInstance and, in three steps:
@@ -37,7 +38,7 @@ import (
 // This function is intended to be called repeatedly (e.g. in a periodic control loop).
 // Over multiple calls, it converges the actual state to the desired state. Transitions
 // that fail are retried in subsequent reconcile calls after a backoff period.
-func (b *BenthosInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot, filesystemService filesystem.Service) (err error, reconciled bool) {
+func (b *BenthosInstance) Reconcile(ctx context.Context, currentSnapshot snapshot.SystemSnapshot, filesystemService filesystem.Service) (err error, reconciled bool) {
 	start := time.Now()
 	benthosInstanceName := b.baseFSMInstance.GetID()
 	defer func() {
@@ -56,8 +57,8 @@ func (b *BenthosInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnap
 	}
 
 	// Step 1: If there's a lastError, see if we've waited enough.
-	if b.baseFSMInstance.ShouldSkipReconcileBecauseOfError(snapshot.Tick) {
-		err := b.baseFSMInstance.GetBackoffError(snapshot.Tick)
+	if b.baseFSMInstance.ShouldSkipReconcileBecauseOfError(currentSnapshot.Tick) {
+		err := b.baseFSMInstance.GetBackoffError(currentSnapshot.Tick)
 		b.baseFSMInstance.GetLogger().Debugf("Skipping reconcile for Benthos pipeline %s: %v", benthosInstanceName, err)
 
 		// if it is a permanent error, start the removal process and reset the error (so that we can reconcile towards a stopped / removed state)
@@ -81,10 +82,10 @@ func (b *BenthosInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnap
 	}
 
 	// Step 2: Detect external changes.
-	if err := b.reconcileExternalChanges(ctx, filesystemService, snapshot.Tick, start); err != nil {
+	if err := b.reconcileExternalChanges(ctx, filesystemService, currentSnapshot.Tick, start); err != nil {
 		// If the service is not running, we don't want to return an error here, because we want to continue reconciling
 		if !errors.Is(err, benthos_service.ErrServiceNotExist) {
-			b.baseFSMInstance.SetError(err, snapshot.Tick)
+			b.baseFSMInstance.SetError(err, currentSnapshot.Tick)
 			b.baseFSMInstance.GetLogger().Errorf("error reconciling external changes: %s", err)
 
 			if errors.Is(err, context.DeadlineExceeded) {
@@ -110,15 +111,15 @@ func (b *BenthosInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnap
 			return nil, false
 		}
 
-		b.baseFSMInstance.SetError(err, snapshot.Tick)
+		b.baseFSMInstance.SetError(err, currentSnapshot.Tick)
 		b.baseFSMInstance.GetLogger().Errorf("error reconciling state: %s", err)
 		return nil, false // We don't want to return an error here, because we want to continue reconciling
 	}
 
 	// Reconcile the s6Manager
-	s6Err, s6Reconciled := b.service.ReconcileManager(ctx, filesystemService, snapshot.Tick)
+	s6Err, s6Reconciled := b.service.ReconcileManager(ctx, filesystemService, currentSnapshot.Tick)
 	if s6Err != nil {
-		b.baseFSMInstance.SetError(s6Err, snapshot.Tick)
+		b.baseFSMInstance.SetError(s6Err, currentSnapshot.Tick)
 		b.baseFSMInstance.GetLogger().Errorf("error reconciling s6Manager: %s", s6Err)
 		return nil, false
 	}

@@ -35,12 +35,12 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/subscriber"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/container"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/container_monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/snapshot"
 	"go.uber.org/zap"
 )
 
@@ -109,8 +109,8 @@ var _ = Describe("Subscribe and Receive Test", func() {
 		mocks.MockLogin()
 
 		// Setup the system snapshot with a ContainerManager
-		systemSnapshot := &fsm.SystemSnapshot{
-			Managers:     make(map[string]fsm.ManagerSnapshot),
+		systemSnapshot := &snapshot.SystemSnapshot{
+			Managers:     make(map[string]snapshot.ManagerSnapshot),
 			SnapshotTime: time.Now(),
 		}
 
@@ -121,7 +121,7 @@ var _ = Describe("Subscribe and Receive Test", func() {
 
 		// Initialize the manager with a reconcile call to create instances
 		dummyConfig := config.FullConfig{}
-		containerManager.Reconcile(ctx, fsm.SystemSnapshot{CurrentConfig: dummyConfig, Tick: 1}, mockFS)
+		containerManager.Reconcile(ctx, snapshot.SystemSnapshot{CurrentConfig: dummyConfig, Tick: 1}, mockFS)
 
 		// Create the snapshot after reconciliation
 		containerManagerSnapshot := containerManager.CreateSnapshot()

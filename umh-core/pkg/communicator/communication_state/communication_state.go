@@ -25,9 +25,9 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/router"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/snapshot"
 	"go.uber.org/zap"
 )
 
@@ -43,7 +43,7 @@ type CommunicationState struct {
 	OutboundChannel   chan *models.UMHMessage
 	Router            *router.Router
 	ReleaseChannel    config.ReleaseChannel
-	SystemSnapshot    *fsm.SystemSnapshot
+	SystemSnapshot    *snapshot.SystemSnapshot
 	ConfigManager     config.ConfigManager
 	ApiUrl            string
 	Logger            *zap.SugaredLogger
@@ -114,7 +114,7 @@ func (c *CommunicationState) InitialiseAndStartRouter() {
 // InitialiseAndStartSubscriberHandler creates a new subscriber handler and starts it
 // ttl is the time until a subscriber is considered dead (if no new subscriber message is received)
 // cull is the cycle time to remove dead subscribers
-func (s *CommunicationState) InitialiseAndStartSubscriberHandler(ttl time.Duration, cull time.Duration, config *config.FullConfig, state *fsm.SystemSnapshot, systemMu *sync.Mutex, configManager config.ConfigManager) {
+func (s *CommunicationState) InitialiseAndStartSubscriberHandler(ttl time.Duration, cull time.Duration, config *config.FullConfig, state *snapshot.SystemSnapshot, systemMu *sync.Mutex, configManager config.ConfigManager) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 

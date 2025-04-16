@@ -21,11 +21,11 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	public_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/snapshot"
 )
 
 const (
@@ -40,7 +40,7 @@ type RedpandaManager struct {
 // RedpandaManagerSnapshot extends the base ManagerSnapshot with Redpanda-specific information
 type RedpandaManagerSnapshot struct {
 	// Embed the BaseManagerSnapshot to inherit its methods
-	*public_fsm.BaseManagerSnapshot
+	*snapshot.BaseManagerSnapshot
 }
 
 func NewRedpandaManager(name string) *RedpandaManager {
@@ -105,7 +105,7 @@ func NewRedpandaManager(name string) *RedpandaManager {
 	}
 }
 
-func (m *RedpandaManager) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot, filesystemService filesystem.Service) (error, bool) {
+func (m *RedpandaManager) Reconcile(ctx context.Context, currentSnapshot snapshot.SystemSnapshot, filesystemService filesystem.Service) (error, bool) {
 	start := time.Now()
 	defer func() {
 		duration := time.Since(start)
@@ -113,15 +113,15 @@ func (m *RedpandaManager) Reconcile(ctx context.Context, snapshot fsm.SystemSnap
 	}()
 
 	// We do not need to manage ports for Redpanda, therefore we can directly reconcile
-	return m.BaseFSMManager.Reconcile(ctx, snapshot, filesystemService)
+	return m.BaseFSMManager.Reconcile(ctx, currentSnapshot, filesystemService)
 }
 
-func (m *RedpandaManager) CreateSnapshot() public_fsm.ManagerSnapshot {
+func (m *RedpandaManager) CreateSnapshot() snapshot.ManagerSnapshot {
 	// Get base snapshot from parent
 	baseSnapshot := m.BaseFSMManager.CreateSnapshot()
 
 	// We need to convert the interface to the concrete type
-	baseManagerSnapshot, ok := baseSnapshot.(*public_fsm.BaseManagerSnapshot)
+	baseManagerSnapshot, ok := baseSnapshot.(*snapshot.BaseManagerSnapshot)
 	if !ok {
 		logger.For(logger.ComponentRedpandaManager).Errorf(
 			"Failed to convert base snapshot to BaseManagerSnapshot, using generic snapshot")

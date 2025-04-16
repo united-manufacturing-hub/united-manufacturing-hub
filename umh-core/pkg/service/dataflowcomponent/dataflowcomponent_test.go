@@ -26,12 +26,12 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsmtest"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentconfig"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	benthosfsmmanager "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
 	benthosfsmtype "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
 	benthosservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/snapshot"
 )
 
 var _ = Describe("DataFlowComponentService", func() {
@@ -206,7 +206,7 @@ var _ = Describe("DataFlowComponentService", func() {
 			// Wait for the instance to be created and reach stopped state
 			newTick, err := fsmtest.WaitForBenthosManagerInstanceState(
 				ctx,
-				fsm.SystemSnapshot{CurrentConfig: fullCfg, Tick: tick},
+				snapshot.SystemSnapshot{CurrentConfig: fullCfg, Tick: tick},
 				manager,
 				filesystem.NewMockFileSystem(),
 				benthosName,
@@ -222,7 +222,7 @@ var _ = Describe("DataFlowComponentService", func() {
 			// Wait for the instance to reach running state
 			newTick, err = fsmtest.WaitForBenthosManagerInstanceState(
 				ctx,
-				fsm.SystemSnapshot{CurrentConfig: fullCfg, Tick: tick},
+				snapshot.SystemSnapshot{CurrentConfig: fullCfg, Tick: tick},
 				manager,
 				filesystem.NewMockFileSystem(),
 				benthosName,

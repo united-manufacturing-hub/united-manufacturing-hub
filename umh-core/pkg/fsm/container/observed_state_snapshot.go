@@ -16,8 +16,8 @@ package container
 
 import (
 	"github.com/tiendc/go-deepcopy"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/container_monitor"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/snapshot"
 )
 
 // ContainerObservedStateSnapshot is a copy of the current metrics so the manager can store snapshots.
@@ -30,7 +30,7 @@ type ContainerObservedStateSnapshot struct {
 func (c *ContainerObservedStateSnapshot) IsObservedStateSnapshot() {}
 
 // CreateObservedStateSnapshot is called by the manager to record the state
-func (c *ContainerInstance) CreateObservedStateSnapshot() fsm.ObservedStateSnapshot {
+func (c *ContainerInstance) CreateObservedStateSnapshot() snapshot.ObservedStateSnapshot {
 	snapshot := &ContainerObservedStateSnapshot{}
 	if c.ObservedState.ServiceInfo != nil {
 		deepcopy.Copy(&snapshot.ServiceInfoSnapshot, c.ObservedState.ServiceInfo)

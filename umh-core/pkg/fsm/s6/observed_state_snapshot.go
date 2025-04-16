@@ -18,8 +18,8 @@ import (
 	"github.com/tiendc/go-deepcopy"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/snapshot"
 )
 
 // S6ObservedStateSnapshot is a deep-copyable snapshot of S6ObservedState
@@ -36,7 +36,7 @@ func (s *S6ObservedStateSnapshot) IsObservedStateSnapshot() {
 }
 
 // S6InstanceConverter implements the fsm.ObservedStateConverter interface for S6Instance
-func (s *S6Instance) CreateObservedStateSnapshot() fsm.ObservedStateSnapshot {
+func (s *S6Instance) CreateObservedStateSnapshot() snapshot.ObservedStateSnapshot {
 	// Create a deep copy of the observed state
 	snapshot := &S6ObservedStateSnapshot{
 		LastStateChange: s.ObservedState.LastStateChange,
