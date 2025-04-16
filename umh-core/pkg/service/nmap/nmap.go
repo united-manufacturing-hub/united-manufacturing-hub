@@ -256,6 +256,12 @@ func (s *NmapService) parseScanLogs(logs []s6service.LogEntry, port int) *NmapSc
 		}
 	}
 
+	// Extract errors if occured (case-insensitive)
+	errorRegex := regexp.MustCompile(`(?im)^.*error.*$`)
+	if matches := errorRegex.FindString(scanOutput); matches != "" {
+		result.Error = matches
+	}
+
 	return result
 }
 
@@ -321,11 +327,14 @@ func (s *NmapService) Status(ctx context.Context, filesystemService filesystem.S
 			s.logger.Warnw("Failed to get config", "error", err)
 		}
 	}
+	if scanResult == nil {
+		return ServiceInfo{}, ErrScanFailed
+	}
 
 	return ServiceInfo{
 		S6ObservedState: s6State,
 		S6FSMState:      fsmState,
-		NmapStatus: NmapStatus{
+		NmapStatus: NmapServiceInfo{
 			LastScan:  scanResult,
 			IsRunning: fsmState == s6fsm.OperationalStateRunning,
 			Logs:      logs,
@@ -542,4 +551,17 @@ func (s *NmapService) ServiceExists(ctx context.Context, filesystemService files
 	}
 
 	return exists
+}
+
+// ForceRemoveNmap removes a Nmap instance from the S6 manager
+// This should only be called if the Nmap instance is in a permanent failure state
+// and the instance itself cannot be stopped or removed
+// Expects nmapName (e.g. "myservice") as defined in the UMH config
+func (s *NmapService) ForceRemoveNmap(
+	ctx context.Context,
+	filesystemService filesystem.Service,
+	nmapName string,
+) error {
+
+	return s.s6Service.ForceRemove(ctx, s.getS6ServiceName(nmapName), filesystemService)
 }
