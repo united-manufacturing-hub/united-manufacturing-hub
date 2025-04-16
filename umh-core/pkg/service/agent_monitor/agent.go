@@ -100,19 +100,6 @@ func WithFilesystemService(fs filesystem.Service) AgentMonitorServiceOption {
 	}
 }
 
-// NewAgentMonitorWithS6Service creates a new agent monitor service with a provided S6 service
-// This is useful for testing with mocked services
-func NewAgentMonitorWithS6Service(fs filesystem.Service, s6Service s6.Service) *AgentMonitorService {
-	log := logger.For(logger.ComponentAgentMonitorService)
-
-	return &AgentMonitorService{
-		fs:           fs,
-		s6Service:    s6Service,
-		logger:       log,
-		instanceName: "Core", // Single container instance name
-	}
-}
-
 // GetFilesystemService returns the filesystem service - used for testing only
 func (c *AgentMonitorService) GetFilesystemService() filesystem.Service {
 	return c.fs
