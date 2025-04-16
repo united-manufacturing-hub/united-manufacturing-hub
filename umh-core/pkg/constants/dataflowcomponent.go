@@ -30,6 +30,7 @@ const (
 
 const (
 	// WaitTimeBeforeMarkingStartFailed is the time before marking a DataflowComponent instance as Startfailed if the underlying benthos has not started and stable
-	// Default value is 5 seconds
-	WaitTimeBeforeMarkingStartFailed = time.Second * 5
+	// Benthos takes some time to start usually and we give an enough buffer time of 15 seconds
+	// Default value is 15 seconds
+	WaitTimeBeforeMarkingStartFailed = time.Second * 15
 )
