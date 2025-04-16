@@ -31,6 +31,16 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/version"
 )
 
+// IAgentMonitorService defines the interface for the agent monitor service
+type IAgentMonitorService interface {
+	// GetStatus returns the status of the agent, this is the main feature of this service
+	GetStatus(ctx context.Context, cfg config.FullConfig) (*ServiceInfo, error)
+	// GetAgentLogs retrieves the logs for the umh-core service from the log file
+	GetAgentLogs(ctx context.Context) ([]s6.LogEntry, error)
+	// GetFilesystemService returns the filesystem service - used for testing only
+	GetFilesystemService() filesystem.Service
+}
+
 // ServiceInfo contains both raw metrics and health assessments
 type ServiceInfo struct {
 	// General: Location, Latency, Agent Logs, Agent Metrics
