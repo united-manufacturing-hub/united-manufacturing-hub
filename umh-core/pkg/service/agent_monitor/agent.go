@@ -69,14 +69,34 @@ type AgentMonitorService struct {
 }
 
 // NewAgentMonitorService creates a new agent monitor service instance
-func NewAgentMonitorService(fs filesystem.Service) *AgentMonitorService {
+func NewAgentMonitorService(opts ...AgentMonitorServiceOption) *AgentMonitorService {
 	log := logger.For(logger.ComponentAgentMonitorService)
 
-	return &AgentMonitorService{
-		fs:           fs,
-		s6Service:    s6.NewDefaultService(),
+	service := &AgentMonitorService{
 		logger:       log,
 		instanceName: "Core", // Single container instance name
+	}
+
+	// Apply options
+	for _, opt := range opts {
+		opt(service)
+	}
+
+	return service
+}
+
+type AgentMonitorServiceOption func(*AgentMonitorService)
+
+// WithS6Service sets a custom S6 service for the AgentMonitorService
+func WithS6Service(s6Service s6.Service) AgentMonitorServiceOption {
+	return func(s *AgentMonitorService) {
+		s.s6Service = s6Service
+	}
+}
+
+func WithFilesystemService(fs filesystem.Service) AgentMonitorServiceOption {
+	return func(s *AgentMonitorService) {
+		s.fs = fs
 	}
 }
 

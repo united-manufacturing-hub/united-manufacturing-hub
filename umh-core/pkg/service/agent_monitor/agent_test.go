@@ -89,13 +89,13 @@ var _ = Describe("Agent Monitor Service", func() {
 
 	Describe("Constructor functions", func() {
 		It("should create a new agent monitor service with default S6 service", func() {
-			service = agent_monitor.NewAgentMonitorService(mockFS)
+			service = agent_monitor.NewAgentMonitorService(agent_monitor.WithFilesystemService(mockFS))
 			Expect(service).NotTo(BeNil())
 			Expect(service.GetFilesystemService()).To(Equal(mockFS))
 		})
 
 		It("should create a new agent monitor service with provided S6 service", func() {
-			service = agent_monitor.NewAgentMonitorWithS6Service(mockFS, mockS6)
+			service = agent_monitor.NewAgentMonitorService(agent_monitor.WithFilesystemService(mockFS), agent_monitor.WithS6Service(mockS6))
 			Expect(service).NotTo(BeNil())
 			Expect(service.GetFilesystemService()).To(Equal(mockFS))
 		})
@@ -103,7 +103,7 @@ var _ = Describe("Agent Monitor Service", func() {
 
 	Describe("GetStatus", func() {
 		BeforeEach(func() {
-			service = agent_monitor.NewAgentMonitorWithS6Service(mockFS, mockS6)
+			service = agent_monitor.NewAgentMonitorService(agent_monitor.WithFilesystemService(mockFS), agent_monitor.WithS6Service(mockS6))
 		})
 
 		Context("when everything works correctly", func() {
@@ -182,7 +182,7 @@ var _ = Describe("Agent Monitor Service", func() {
 
 	Describe("GetAgentLogs", func() {
 		BeforeEach(func() {
-			service = agent_monitor.NewAgentMonitorWithS6Service(mockFS, mockS6)
+			service = agent_monitor.NewAgentMonitorService(agent_monitor.WithFilesystemService(mockFS), agent_monitor.WithS6Service(mockS6))
 		})
 
 		Context("when logs are available", func() {
@@ -235,7 +235,7 @@ var _ = Describe("Agent Monitor Service", func() {
 
 	Describe("getReleaseInfo", func() {
 		BeforeEach(func() {
-			service = agent_monitor.NewAgentMonitorWithS6Service(mockFS, mockS6)
+			service = agent_monitor.NewAgentMonitorService(agent_monitor.WithFilesystemService(mockFS), agent_monitor.WithS6Service(mockS6))
 		})
 
 		It("should return release info with channel from config", func() {
@@ -276,7 +276,7 @@ var _ = Describe("Agent Monitor Service", func() {
 			}
 
 			// Create a new service with our custom mock
-			service = agent_monitor.NewAgentMonitorWithS6Service(mockFS, customMockS6)
+			service = agent_monitor.NewAgentMonitorService(agent_monitor.WithFilesystemService(mockFS), agent_monitor.WithS6Service(customMockS6))
 
 			// Call the method under test
 			_, err := service.GetAgentLogs(ctx)
