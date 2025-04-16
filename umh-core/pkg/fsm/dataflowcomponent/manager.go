@@ -69,7 +69,7 @@ func NewDataflowComponentManager(name string) *DataflowComponentManager {
 			if !ok {
 				return false, fmt.Errorf("instance is not a DataflowComponentInstance")
 			}
-			return dataflowComponentInstance.config.GetBenthosServiceConfig().Equal(cfg.DataFlowComponentConfig.GetBenthosServiceConfig()), nil
+			return dataflowComponentInstance.config.Equal(cfg.DataFlowComponentConfig), nil
 		},
 		// Set DataflowComponent config
 		func(instance public_fsm.FSMInstance, cfg config.DataFlowComponentConfig) error {
