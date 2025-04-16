@@ -155,6 +155,13 @@ func (b *BenthosInstance) UpdateObservedStateOfInstance(ctx context.Context, fil
 		return ctx.Err()
 	}
 
+	currentState := b.baseFSMInstance.GetCurrentFSMState()
+	desiredState := b.baseFSMInstance.GetDesiredFSMState()
+
+	if currentState == OperationalStateStopped && desiredState == OperationalStateStopped {
+		return nil
+	}
+
 	start := time.Now()
 	info, err := b.getServiceStatus(ctx, filesystemService, tick)
 	if err != nil {

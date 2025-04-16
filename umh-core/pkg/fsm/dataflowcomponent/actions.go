@@ -57,6 +57,19 @@ func (d *DataflowComponentInstance) StopInstance(ctx context.Context, filesystem
 // UpdateObservedStateOfInstance is called when the FSM transitions to updating.
 // For container monitoring, this is a no-op as we don't need to update any resources.
 func (d *DataflowComponentInstance) UpdateObservedStateOfInstance(ctx context.Context, filesystemService filesystem.Service, tick uint64, loopStartTime time.Time) error {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+
+	// Skip health checks if the desired state or current state indicates stopped/stopping
+	currentState := d.baseFSMInstance.GetCurrentFSMState()
+	desiredState := d.baseFSMInstance.GetDesiredFSMState()
+	// If both desired and current state are stopped, we can return immediately
+	// There wont be any logs, metrics, etc. to check
+	if desiredState == OperationalStateStopped && currentState == OperationalStateStopped {
+		return nil
+	}
+
 	d.baseFSMInstance.GetLogger().Debugf("Updating observed state for %s (no-op)", d.baseFSMInstance.GetID())
 	return nil
 }
