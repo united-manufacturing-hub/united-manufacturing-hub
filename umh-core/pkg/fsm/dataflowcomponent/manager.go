@@ -98,13 +98,13 @@ func NewDataflowComponentManager(name string) *DataflowComponentManager {
 // Reconcile calls the base manager's Reconcile method
 // The filesystemService parameter allows for filesystem operations during reconciliation,
 // enabling the method to read configuration or state information from the filesystem.
-func (m *DataflowComponentManager) Reconcile(ctx context.Context, cfg config.FullConfig, filesystemService filesystem.Service, tick uint64) (error, bool) {
+func (m *DataflowComponentManager) Reconcile(ctx context.Context, snapshot public_fsm.SystemSnapshot, filesystemService filesystem.Service) (error, bool) {
 	start := time.Now()
 	defer func() {
 		duration := time.Since(start)
 		metrics.ObserveReconcileTime(logger.ComponentBenthosManager, m.BaseFSMManager.GetManagerName(), duration)
 	}()
-	return m.BaseFSMManager.Reconcile(ctx, cfg, filesystemService, tick)
+	return m.BaseFSMManager.Reconcile(ctx, snapshot, filesystemService)
 }
 
 // CreateSnapshot overrides the base CreateSnapshot to include DataflowComponentManager-specific information
