@@ -14,48 +14,30 @@
 
 package dataflowcomponentconfig
 
-// Normalizer handles the normalization of Dataflowcomponent configurations
-type Normalizer struct{}
+import "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
+
+// Normalizer handles the normalization of DataflowComponent configurations
+// by leveraging benthosserviceconfig.Normalizer
+type Normalizer struct {
+	benthosNormalizer *benthosserviceconfig.Normalizer
+}
 
 // NewNormalizer creates a new configuration normalizer for DataflowComponent
 func NewNormalizer() *Normalizer {
-	return &Normalizer{}
+	return &Normalizer{
+		benthosNormalizer: benthosserviceconfig.NewNormalizer(),
+	}
 }
 
 // NormalizeConfig applies DataflowComponent defaults to a structured config
+// by converting to BenthosServiceConfig, normalizing, and converting back
 func (n *Normalizer) NormalizeConfig(cfg DataFlowComponentConfig) DataFlowComponentConfig {
-	// Right now dataflowcomponentConfig only has the BenthosConfig. In future
-	// if a new field is added to dataflowComponentConfig, it should be normalizedBenthos by this method
-	normalized := cfg
-	normalizedBenthos := cfg.BenthosConfig
+	// Convert to BenthosServiceConfig
+	benthosCfg := cfg.GetBenthosServiceConfig()
 
-	// Ensure Input map exists
-	if normalizedBenthos.Input == nil {
-		normalizedBenthos.Input = make(map[string]interface{})
-	}
+	// Use BenthosServiceConfig normalizer
+	normalizedBenthos := n.benthosNormalizer.NormalizeConfig(benthosCfg)
 
-	// Ensure Output map exists
-	if normalizedBenthos.Output == nil {
-		normalizedBenthos.Output = make(map[string]interface{})
-	}
-
-	// Ensure Pipeline map exists with processors
-	if normalizedBenthos.Pipeline == nil {
-		normalizedBenthos.Pipeline = map[string]interface{}{
-			"processors": []interface{}{},
-		}
-	} else if _, exists := normalizedBenthos.Pipeline["processors"]; !exists {
-		normalizedBenthos.Pipeline["processors"] = []interface{}{}
-	}
-
-	// Set default buffer if missing
-	if normalizedBenthos.Buffer == nil || len(normalizedBenthos.Buffer) == 0 {
-		normalizedBenthos.Buffer = map[string]interface{}{
-			"none": map[string]interface{}{},
-		}
-	}
-
-	normalized.BenthosConfig = normalizedBenthos
-
-	return normalized
+	// Convert back to DataFlowComponentConfig
+	return FromBenthosServiceConfig(normalizedBenthos)
 }
