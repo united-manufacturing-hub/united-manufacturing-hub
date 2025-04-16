@@ -57,7 +57,7 @@ const (
 
 	// Running phase events
 	EventBenthosDataReceived   = "benthos_data_received"
-	EventBenthosNoDataRecieved = "benthos_no_data_recieved"
+	EventBenthosNoDataReceived = "benthos_no_data_recieved"
 	EventBenthosDegraded       = "benthos_degraded"
 	EventBenthosRecovered      = "benthos_recovered"
 )

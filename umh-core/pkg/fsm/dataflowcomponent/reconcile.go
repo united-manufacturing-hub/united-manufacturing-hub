@@ -309,7 +309,7 @@ func (d *DataflowComponentInstance) reconcileRunningState(ctx context.Context, f
 		if d.IsDataflowComponentDegraded() {
 			return d.baseFSMInstance.SendEvent(ctx, EventBenthosDegraded), true
 		} else if !d.IsDataflowComponentWithProcessingActivity() { // if there is no activity, we move to Idle
-			return d.baseFSMInstance.SendEvent(ctx, EventBenthosNoDataRecieved), true
+			return d.baseFSMInstance.SendEvent(ctx, EventBenthosNoDataReceived), true
 		}
 		return nil, false
 	case OperationalStateIdle:
