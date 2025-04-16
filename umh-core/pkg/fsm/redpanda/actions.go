@@ -183,6 +183,11 @@ func (r *RedpandaInstance) UpdateObservedStateOfInstance(ctx context.Context, fi
 			return nil
 		}
 	}
+	// If both desired and current state are stopped, we can return immediately
+	// There wont be any logs, metrics, etc. to check
+	if desiredState == OperationalStateStopped && currentState == OperationalStateStopped {
+		return nil
+	}
 
 	// Start an errgroup with the **same context** so if one sub-task
 	// fails or the context is canceled, all sub-tasks are signaled to stop.
