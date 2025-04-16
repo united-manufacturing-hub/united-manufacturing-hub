@@ -16,21 +16,20 @@ package nmapserviceconfig
 
 import (
 	"fmt"
-	"text/template"
 
 	"gopkg.in/yaml.v3"
 )
 
 // Generator handles the generation of Nmap YAML configurations
+// Currently BoilerPlate-Code
 type Generator struct {
-	tmpl *template.Template
 }
 
 // NewGenerator creates a new YAML generator for Nmap configurations
+// Currently BoilerPlate-Code
+
 func NewGenerator() *Generator {
-	return &Generator{
-		tmpl: template.Must(template.New("benthos").Parse(simplifiedTemplate)),
-	}
+	return &Generator{}
 }
 
 // RenderConfig generates a Nmap YAML configuration from a NmapServiceConfig
