@@ -66,7 +66,6 @@ func (c *ContainerInstance) UpdateObservedStateOfInstance(ctx context.Context, f
 		return ctx.Err()
 	}
 
-	// Skip health checks if the desired state or current state indicates stopped/stopping
 	currentState := c.baseFSMInstance.GetCurrentFSMState()
 	desiredState := c.baseFSMInstance.GetDesiredFSMState()
 	// If both desired and current state are stopped, we can return immediately

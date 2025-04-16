@@ -61,7 +61,6 @@ func (d *DataflowComponentInstance) UpdateObservedStateOfInstance(ctx context.Co
 		return ctx.Err()
 	}
 
-	// Skip health checks if the desired state or current state indicates stopped/stopping
 	currentState := d.baseFSMInstance.GetCurrentFSMState()
 	desiredState := d.baseFSMInstance.GetDesiredFSMState()
 	// If both desired and current state are stopped, we can return immediately
