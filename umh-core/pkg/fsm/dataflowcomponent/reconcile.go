@@ -276,12 +276,19 @@ func (d *DataflowComponentInstance) reconcileStartingState(ctx context.Context, 
 	case OperationalStateStarting:
 		// First check if the undelying benthos is running
 		if d.IsDataflowComponentBenthosRunning() {
-			d.ResetBenthosStartupGraceTimer()
 			return d.baseFSMInstance.SendEvent(ctx, EventStartDone), true
 		}
-		// Benthos is not running, check if we've exceeded grace period
-		if d.HasBenthosStartupGracePeriodExpired(constants.WaitTimeBeforeMarkingStartFailed) {
-			// Grace period expired and Benthos still not running - mark as failed
+
+		// Get the time when the DataflowComponentInstance entered the Starting state
+		stateEntryTime, err := d.GetStateEntryTime(currentState)
+		if err != nil {
+			// If we can't determine when the state was entered, use a conservative  approach and
+			// assume we just entered the state
+			stateEntryTime = currentTime
+		}
+
+		// Check if we have exceeded the grace period since entering the Starting state
+		if currentTime.Sub(stateEntryTime) > constants.WaitTimeBeforeMarkingStartFailed {
 			return d.baseFSMInstance.SendEvent(ctx, EventStartFailed), true
 		}
 		// Still within grace period, continue waiting until the next reconcile

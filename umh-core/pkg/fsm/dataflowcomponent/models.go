@@ -15,6 +15,7 @@
 package dataflowcomponent
 
 import (
+	"fmt"
 	"time"
 
 	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
@@ -83,8 +84,6 @@ type DataflowComponentObservedState struct {
 
 	// ObservedDataflowComponentConfig contains the observed DataflowComponent service config
 	ObservedDataflowComponentConfig dataflowcomponentconfig.DataFlowComponentConfig
-	// NonRunningBenthosTimestamp is the first observed time when the underlying benthos was not in a valid runnning state
-	NonRunningBenthosTimestamp time.Time
 }
 
 // IsObservedState implements the ObservedState interface
@@ -112,6 +111,10 @@ type DataflowComponentInstance struct {
 
 	// config contains all the configuration for this service
 	config dataflowcomponentconfig.DataFlowComponentConfig
+
+	// stateEntryTime is the time when the current state was entered
+	// stateEntryTime will be recorded for each state transition like OperationalStateStarting -> OperationalStateIdle using FSMCallbacks
+	stateEntryTime map[string]time.Time
 }
 
 // GetLastObservedState returns the last known state of the instance
@@ -129,4 +132,14 @@ func (d *DataflowComponentInstance) SetService(service dataflowcomponentsvc.IDat
 // This is a testing-only utility to access the private service field
 func (d *DataflowComponentInstance) GetConfig() dataflowcomponentconfig.DataFlowComponentConfig {
 	return d.config
+}
+
+// GetStateEntryTime returns the time when the given state was entered
+// Returns an error if the state is not found
+func (d *DataflowComponentInstance) GetStateEntryTime(state string) (time.Time, error) {
+	timestamp, ok := d.stateEntryTime[state]
+	if !ok {
+		return time.Time{}, fmt.Errorf("no entry timestamp for state: %s", state)
+	}
+	return timestamp, nil
 }

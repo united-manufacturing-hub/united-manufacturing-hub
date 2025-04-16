@@ -212,25 +212,6 @@ func (d *DataflowComponentInstance) IsDataflowComponentBenthosRunning() bool {
 	return false
 }
 
-// HasBenthosStartupGracePeriodExpired determines if a non-running Benthos has exceeded its grace period
-// Returns true if the grace period has expired or false if still within the grace period
-// Only meaningful to call when IsBenthosRunning() returns false
-func (d *DataflowComponentInstance) HasBenthosStartupGracePeriodExpired(gracePeriod time.Duration) bool {
-	if d.ObservedState.NonRunningBenthosTimestamp.IsZero() {
-		// First observation of a non-running Benthos, start the timer
-		d.ObservedState.NonRunningBenthosTimestamp = time.Now()
-		return false
-	}
-
-	return time.Since(d.ObservedState.NonRunningBenthosTimestamp) > gracePeriod
-}
-
-// ResetBenthosStartupGraceTimer explicitly resets the grace period timer
-// Call this when Benthos transitions back to running state
-func (d *DataflowComponentInstance) ResetBenthosStartupGraceTimer() {
-	d.ObservedState.NonRunningBenthosTimestamp = time.Time{}
-}
-
 // IsDataflowComponentBenthosStopped determines if the Dataflowcomponent's Benthos FSM is in the stopped state.
 // Note: This function requires the BenthosFSMState to be updated in the ObservedState.
 func (d *DataflowComponentInstance) IsDataflowComponentBenthosStopped() bool {
