@@ -108,7 +108,7 @@ var _ = Describe("Agent Monitor Service", func() {
 
 		Context("when everything works correctly", func() {
 			It("should return the agent status with all expected fields", func() {
-				status, err := service.GetStatus(ctx, mockCfg)
+				status, err := service.Status(ctx, mockCfg)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(status).NotTo(BeNil())
 
@@ -139,7 +139,7 @@ var _ = Describe("Agent Monitor Service", func() {
 				configWithNilLoc := mockCfg
 				configWithNilLoc.Agent.Location = nil
 
-				status, err := service.GetStatus(ctx, configWithNilLoc)
+				status, err := service.Status(ctx, configWithNilLoc)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(status).NotTo(BeNil())
 				Expect(status.Location).To(BeEmpty())
@@ -152,7 +152,7 @@ var _ = Describe("Agent Monitor Service", func() {
 			})
 
 			It("should return an error", func() {
-				status, err := service.GetStatus(ctx, mockCfg)
+				status, err := service.Status(ctx, mockCfg)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to retrieve logs"))
 				Expect(status).To(BeNil())
@@ -170,7 +170,7 @@ var _ = Describe("Agent Monitor Service", func() {
 				cancel()
 
 				// Call the function under test
-				status, err := service.GetStatus(canceledCtx, mockCfg)
+				status, err := service.Status(canceledCtx, mockCfg)
 
 				// Verify the error is correctly propagated
 				Expect(err).To(HaveOccurred())
@@ -240,7 +240,7 @@ var _ = Describe("Agent Monitor Service", func() {
 
 		It("should return release info with channel from config", func() {
 			// Since getReleaseInfo is an unexported method, test it implicitly through GetStatus
-			status, err := service.GetStatus(ctx, mockCfg)
+			status, err := service.Status(ctx, mockCfg)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(status.Release).NotTo(BeNil())
 			Expect(status.Release.Channel).To(Equal("stable"))
@@ -248,13 +248,13 @@ var _ = Describe("Agent Monitor Service", func() {
 			// We could also test with a different release channel
 			alternativeCfg := mockCfg
 			alternativeCfg.Agent.ReleaseChannel = "testing"
-			status, err = service.GetStatus(ctx, alternativeCfg)
+			status, err = service.Status(ctx, alternativeCfg)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(status.Release.Channel).To(Equal("testing"))
 		})
 
 		It("should include version information", func() {
-			status, err := service.GetStatus(ctx, mockCfg)
+			status, err := service.Status(ctx, mockCfg)
 			Expect(err).NotTo(HaveOccurred())
 
 			// The actual version values come from the version package,

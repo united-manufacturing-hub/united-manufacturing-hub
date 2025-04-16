@@ -118,8 +118,8 @@ func (c *AgentMonitorService) GetFilesystemService() filesystem.Service {
 	return c.fs
 }
 
-// GetStatus collects and returns the current agent status
-func (c *AgentMonitorService) GetStatus(ctx context.Context, cfg config.FullConfig) (*ServiceInfo, error) {
+// Status collects and returns the current agent status
+func (c *AgentMonitorService) Status(ctx context.Context, cfg config.FullConfig) (*ServiceInfo, error) {
 	// Create a new status with default health (Active)
 	status := &ServiceInfo{
 		Location:     map[int]string{},
