@@ -40,10 +40,11 @@ const (
 	ComponentS6Service                = "S6Service"
 	ComponentBenthosService           = "BenthosService"
 	ComponentNmapService              = "NmapService"
-	ComponentContainerMonService      = "ContainerMonService"
-	ComponentDataFlowComponentService = "DFCService"
+	ComponentContainerMonitorService  = "ContainerMonitorService"
+	ComponentRedpandaMonitorService   = "RedpandaMonitorService"
 	ComponentRedpandaService          = "RedpandaService"
 	ComponentAgentMonitorService      = "AgentMonitorService"
+	ComponentDataFlowComponentService = "DFCService"
 	// Configuration
 	ComponentConfigManager = "ConfigManager"
 

@@ -89,13 +89,17 @@ var _ = Describe("Agent Monitor Service", func() {
 
 	Describe("Constructor functions", func() {
 		It("should create a new agent monitor service with default S6 service", func() {
-			service = agent_monitor.NewAgentMonitorService(mockFS)
+
+			service = agent_monitor.NewAgentMonitorService(agent_monitor.WithFilesystemService(mockFS))
+
 			Expect(service).NotTo(BeNil())
 			Expect(service.GetFilesystemService()).To(Equal(mockFS))
 		})
 
 		It("should create a new agent monitor service with provided S6 service", func() {
-			service = agent_monitor.NewAgentMonitorWithS6Service(mockFS, mockS6)
+
+			service = agent_monitor.NewAgentMonitorService(agent_monitor.WithFilesystemService(mockFS), agent_monitor.WithS6Service(mockS6))
+
 			Expect(service).NotTo(BeNil())
 			Expect(service.GetFilesystemService()).To(Equal(mockFS))
 		})
@@ -103,12 +107,14 @@ var _ = Describe("Agent Monitor Service", func() {
 
 	Describe("GetStatus", func() {
 		BeforeEach(func() {
-			service = agent_monitor.NewAgentMonitorWithS6Service(mockFS, mockS6)
+			service = agent_monitor.NewAgentMonitorService(agent_monitor.WithFilesystemService(mockFS), agent_monitor.WithS6Service(mockS6))
+
 		})
 
 		Context("when everything works correctly", func() {
 			It("should return the agent status with all expected fields", func() {
-				status, err := service.GetStatus(ctx, mockCfg)
+				status, err := service.Status(ctx, mockCfg)
+
 				Expect(err).NotTo(HaveOccurred())
 				Expect(status).NotTo(BeNil())
 
@@ -139,7 +145,9 @@ var _ = Describe("Agent Monitor Service", func() {
 				configWithNilLoc := mockCfg
 				configWithNilLoc.Agent.Location = nil
 
-				status, err := service.GetStatus(ctx, configWithNilLoc)
+
+				status, err := service.Status(ctx, configWithNilLoc)
+
 				Expect(err).NotTo(HaveOccurred())
 				Expect(status).NotTo(BeNil())
 				Expect(status.Location).To(BeEmpty())
@@ -152,7 +160,9 @@ var _ = Describe("Agent Monitor Service", func() {
 			})
 
 			It("should return an error", func() {
-				status, err := service.GetStatus(ctx, mockCfg)
+
+				status, err := service.Status(ctx, mockCfg)
+
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to retrieve logs"))
 				Expect(status).To(BeNil())
@@ -170,7 +180,9 @@ var _ = Describe("Agent Monitor Service", func() {
 				cancel()
 
 				// Call the function under test
-				status, err := service.GetStatus(canceledCtx, mockCfg)
+
+				status, err := service.Status(canceledCtx, mockCfg)
+
 
 				// Verify the error is correctly propagated
 				Expect(err).To(HaveOccurred())
@@ -182,7 +194,9 @@ var _ = Describe("Agent Monitor Service", func() {
 
 	Describe("GetAgentLogs", func() {
 		BeforeEach(func() {
-			service = agent_monitor.NewAgentMonitorWithS6Service(mockFS, mockS6)
+
+			service = agent_monitor.NewAgentMonitorService(agent_monitor.WithFilesystemService(mockFS), agent_monitor.WithS6Service(mockS6))
+
 		})
 
 		Context("when logs are available", func() {
@@ -235,12 +249,16 @@ var _ = Describe("Agent Monitor Service", func() {
 
 	Describe("getReleaseInfo", func() {
 		BeforeEach(func() {
-			service = agent_monitor.NewAgentMonitorWithS6Service(mockFS, mockS6)
+
+			service = agent_monitor.NewAgentMonitorService(agent_monitor.WithFilesystemService(mockFS), agent_monitor.WithS6Service(mockS6))
+
 		})
 
 		It("should return release info with channel from config", func() {
 			// Since getReleaseInfo is an unexported method, test it implicitly through GetStatus
-			status, err := service.GetStatus(ctx, mockCfg)
+
+			status, err := service.Status(ctx, mockCfg)
+
 			Expect(err).NotTo(HaveOccurred())
 			Expect(status.Release).NotTo(BeNil())
 			Expect(status.Release.Channel).To(Equal("stable"))
@@ -248,13 +266,17 @@ var _ = Describe("Agent Monitor Service", func() {
 			// We could also test with a different release channel
 			alternativeCfg := mockCfg
 			alternativeCfg.Agent.ReleaseChannel = "testing"
-			status, err = service.GetStatus(ctx, alternativeCfg)
+
+			status, err = service.Status(ctx, alternativeCfg)
+
 			Expect(err).NotTo(HaveOccurred())
 			Expect(status.Release.Channel).To(Equal("testing"))
 		})
 
 		It("should include version information", func() {
-			status, err := service.GetStatus(ctx, mockCfg)
+
+			status, err := service.Status(ctx, mockCfg)
+
 			Expect(err).NotTo(HaveOccurred())
 
 			// The actual version values come from the version package,
@@ -276,7 +298,9 @@ var _ = Describe("Agent Monitor Service", func() {
 			}
 
 			// Create a new service with our custom mock
-			service = agent_monitor.NewAgentMonitorWithS6Service(mockFS, customMockS6)
+
+			service = agent_monitor.NewAgentMonitorService(agent_monitor.WithFilesystemService(mockFS), agent_monitor.WithS6Service(customMockS6))
+
 
 			// Call the method under test
 			_, err := service.GetAgentLogs(ctx)

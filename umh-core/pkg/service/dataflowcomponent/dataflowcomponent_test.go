@@ -26,6 +26,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsmtest"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	benthosfsmmanager "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
 	benthosfsmtype "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
 	benthosservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
@@ -205,13 +206,12 @@ var _ = Describe("DataFlowComponentService", func() {
 			// Wait for the instance to be created and reach stopped state
 			newTick, err := fsmtest.WaitForBenthosManagerInstanceState(
 				ctx,
+				fsm.SystemSnapshot{CurrentConfig: fullCfg, Tick: tick},
 				manager,
-				fullCfg,
 				filesystem.NewMockFileSystem(),
 				benthosName,
 				benthosfsmtype.OperationalStateStopped,
 				10,
-				tick,
 			)
 			Expect(err).NotTo(HaveOccurred())
 			tick = newTick
@@ -222,13 +222,12 @@ var _ = Describe("DataFlowComponentService", func() {
 			// Wait for the instance to reach running state
 			newTick, err = fsmtest.WaitForBenthosManagerInstanceState(
 				ctx,
+				fsm.SystemSnapshot{CurrentConfig: fullCfg, Tick: tick},
 				manager,
-				fullCfg,
 				filesystem.NewMockFileSystem(),
 				benthosName,
 				benthosfsmtype.OperationalStateActive,
 				15,
-				tick,
 			)
 			Expect(err).NotTo(HaveOccurred())
 			tick = newTick

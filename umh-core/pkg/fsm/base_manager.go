@@ -66,7 +66,7 @@ type FSMInstance interface {
 	// whether a change was made to the instance's state
 	// The filesystemService parameter is used to read and write to the filesystem.
 	// Specifically it is used so that we only need to read in the entire file system once, and then can pass it to all the managers and instances, who can then save on I/O operations.
-	Reconcile(ctx context.Context, filesystemService filesystem.Service, tick uint64) (error, bool)
+	Reconcile(ctx context.Context, snapshot SystemSnapshot, filesystemService filesystem.Service) (error, bool)
 	// Remove initiates the removal process for this instance
 	Remove(ctx context.Context) error
 	// GetLastObservedState returns the last known state of the instance
@@ -90,7 +90,7 @@ type FSMManager[C any] interface {
 	// The tick parameter provides a counter to track operation rate limiting
 	// The filesystemService parameter is used to read and write to the filesystem.
 	// Specifically it is used so that we only need to read in the entire file system once, and then can pass it to all the managers and instances, who can then save on I/O operations.
-	Reconcile(ctx context.Context, config config.FullConfig, filesystemService filesystem.Service, tick uint64) (error, bool)
+	Reconcile(ctx context.Context, snapshot SystemSnapshot, filesystemService filesystem.Service) (error, bool)
 	// GetManagerName returns the name of this manager for logging and metrics
 	GetManagerName() string
 }
@@ -278,9 +278,8 @@ func (m *BaseFSMManager[C]) GetLastStateChange() uint64 {
 //     run another manager and instead should wait for the next tick
 func (m *BaseFSMManager[C]) Reconcile(
 	ctx context.Context,
-	config config.FullConfig,
+	snapshot SystemSnapshot,
 	filesystemService filesystem.Service,
-	tick uint64,
 ) (error, bool) {
 	// Increment manager-specific tick counter
 	m.managerTick++
@@ -299,7 +298,7 @@ func (m *BaseFSMManager[C]) Reconcile(
 
 	// Step 1: Extract the specific configs from the full config
 	extractStart := time.Now()
-	desiredState, err := m.extractConfigs(config)
+	desiredState, err := m.extractConfigs(snapshot.CurrentConfig)
 	if err != nil {
 		metrics.IncErrorCount(metrics.ComponentBaseFSMManager, m.managerName)
 		return fmt.Errorf("failed to extract configs: %w", err), false
@@ -343,7 +342,6 @@ func (m *BaseFSMManager[C]) Reconcile(
 				return fmt.Errorf("failed to set desired state: %w", err), false
 			}
 			m.instances[name] = instance
-			m.logger.Infof("Created instance %s", name)
 
 			// Update last add tick using manager-specific tick
 			m.lastAddTick = m.managerTick
@@ -454,8 +452,9 @@ func (m *BaseFSMManager[C]) Reconcile(
 
 			// Using manager-specific ticks for rate limiting
 			if m.managerTick-m.lastRemoveTick < TicksBeforeNextRemove {
-				m.logger.Debugf("Rate limiting: Skipping removal of instance %s (waiting %d more ticks)",
-					instanceName, TicksBeforeNextRemove-(m.managerTick-m.lastRemoveTick))
+				// Currently uncommented to prevent log spam (the integration tests will create a lot of services)
+				// m.logger.Debugf("Rate limiting: Skipping removal of instance %s (waiting %d more ticks)",
+				// 	instanceName, TicksBeforeNextRemove-(m.managerTick-m.lastRemoveTick))
 				continue // Skip this removal for now, will be removed on a future tick
 			}
 
@@ -493,7 +492,6 @@ func (m *BaseFSMManager[C]) Reconcile(
 			metrics.IncErrorCount(metrics.ComponentBaseFSMManager, m.managerName)
 			return fmt.Errorf("failed to get expected max p95 execution time: %w", err), false
 		}
-
 		remaining, sufficient, err := ctxutil.HasSufficientTime(ctx, expectedMaxP95ExecutionTime)
 		if err != nil {
 			if errors.Is(err, ctxutil.ErrNoDeadline) {
@@ -514,7 +512,9 @@ func (m *BaseFSMManager[C]) Reconcile(
 		defer instanceCancel()
 
 		// Pass manager-specific tick to instance.Reconcile
-		err, reconciled := instance.Reconcile(instanceCtx, filesystemService, m.managerTick)
+		// Update the snapshot tick to the manager tick
+		snapshot.Tick = m.managerTick
+		err, reconciled := instance.Reconcile(instanceCtx, snapshot, filesystemService)
 		reconcileTime := time.Since(reconcileStart)
 		metrics.ObserveReconcileTime(metrics.ComponentBaseFSMManager, m.managerName+".instances."+name, reconcileTime)
 
@@ -546,6 +546,7 @@ func (m *BaseFSMManager[C]) Reconcile(
 			)
 			return fmt.Errorf("error reconciling instance: %w", err), false
 		}
+
 		if reconciled {
 			return nil, true
 		}

@@ -127,18 +127,18 @@ type RedpandaInstance struct {
 }
 
 // GetLastObservedState returns the last known state of the instance
-func (b *RedpandaInstance) GetLastObservedState() publicfsm.ObservedState {
-	return b.ObservedState
+func (r *RedpandaInstance) GetLastObservedState() publicfsm.ObservedState {
+	return r.ObservedState
 }
 
 // SetService sets the Redpanda service implementation
 // This is a testing-only utility to access the private field
-func (b *RedpandaInstance) SetService(service redpandasvc.IRedpandaService) {
-	b.service = service
+func (r *RedpandaInstance) SetService(service redpandasvc.IRedpandaService) {
+	r.service = service
 }
 
 // GetConfig returns the RedpandaServiceConfig of the instance
 // This is a testing-only utility to access the private field
-func (b *RedpandaInstance) GetConfig() redpandaserviceconfig.RedpandaServiceConfig {
-	return b.config
+func (r *RedpandaInstance) GetConfig() redpandaserviceconfig.RedpandaServiceConfig {
+	return r.config
 }

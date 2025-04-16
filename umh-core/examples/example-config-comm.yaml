@@ -27,17 +27,18 @@ agent:
         5: "Example Location 5"
         6: "Example Location 6"
 
-# dataFlow:
-#   - name: hello-world-dfc
-#     desiredState: active
-#     benthosServiceConfig:
-#       input:
-#         generate:
-#           mapping: root = "hello world from Benthos!"
-#           interval: 1s # Output every 2 seconds
-#           count: 0 # Set to 0 for unlimited messages
-#       output:
-#           stdout: {}
+dataFlow:
+  - name: hello-world-dfc
+    desiredState: active
+    dataFlowComponentConfig:
+      benthos:
+        input:
+          generate:
+            mapping: root = "hello world from Benthos!"
+            interval: 1s # Output every 2 seconds
+            count: 0 # Set to 0 for unlimited messages
+        output:
+            stdout: {}
   
 internal:
   redpanda:

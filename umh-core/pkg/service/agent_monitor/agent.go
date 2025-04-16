@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"time"
 
 	"go.uber.org/zap"
 
@@ -30,6 +31,16 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/version"
 )
 
+// IAgentMonitorService defines the interface for the agent monitor service
+type IAgentMonitorService interface {
+	// GetStatus returns the status of the agent, this is the main feature of this service
+	Status(ctx context.Context, cfg config.FullConfig) (*ServiceInfo, error)
+	// GetAgentLogs retrieves the logs for the umh-core service from the log file
+	GetAgentLogs(ctx context.Context) ([]s6.LogEntry, error)
+	// GetFilesystemService returns the filesystem service - used for testing only
+	GetFilesystemService() filesystem.Service
+}
+
 // ServiceInfo contains both raw metrics and health assessments
 type ServiceInfo struct {
 	// General: Location, Latency, Agent Logs, Agent Metrics
@@ -39,50 +50,47 @@ type ServiceInfo struct {
 	AgentMetrics map[string]interface{} `json:"agentMetrics,omitempty"`
 	// Release: Channel, Version, Supported Feature
 	Release *models.Release `json:"release"`
-
-	// Healths
-	OverallHealth models.HealthCategory `json:"overallHealth"`
-	LatencyHealth models.HealthCategory `json:"latencyHealth"`
-	ReleaseHealth models.HealthCategory `json:"releaseHealth"`
-}
-
-// Service defines the interface for agent monitoring
-type Service interface {
-	// GetStatus returns the status of the agent itself
-	// It requires the full config to get the location and release info
-	GetStatus(ctx context.Context, cfg config.FullConfig) (*ServiceInfo, error)
 }
 
 // AgentMonitorService implements the Service interface
 type AgentMonitorService struct {
-	fs           filesystem.Service
-	s6Service    s6.Service
-	logger       *zap.SugaredLogger
-	instanceName string
+
+	fs              filesystem.Service
+	s6Service       s6.Service
+	logger          *zap.SugaredLogger
+	instanceName    string
+	lastCollectedAt time.Time
 }
 
 // NewAgentMonitorService creates a new agent monitor service instance
-func NewAgentMonitorService(fs filesystem.Service) *AgentMonitorService {
+func NewAgentMonitorService(opts ...AgentMonitorServiceOption) *AgentMonitorService {
 	log := logger.For(logger.ComponentAgentMonitorService)
 
-	return &AgentMonitorService{
-		fs:           fs,
-		s6Service:    s6.NewDefaultService(),
+	service := &AgentMonitorService{
 		logger:       log,
 		instanceName: "Core", // Single container instance name
 	}
+
+	// Apply options
+	for _, opt := range opts {
+		opt(service)
+	}
+
+	return service
 }
 
-// NewAgentMonitorWithS6Service creates a new agent monitor service with a provided S6 service
-// This is useful for testing with mocked services
-func NewAgentMonitorWithS6Service(fs filesystem.Service, s6Service s6.Service) *AgentMonitorService {
-	log := logger.For(logger.ComponentAgentMonitorService)
+type AgentMonitorServiceOption func(*AgentMonitorService)
 
-	return &AgentMonitorService{
-		fs:           fs,
-		s6Service:    s6Service,
-		logger:       log,
-		instanceName: "Core", // Single container instance name
+// WithS6Service sets a custom S6 service for the AgentMonitorService
+func WithS6Service(s6Service s6.Service) AgentMonitorServiceOption {
+	return func(s *AgentMonitorService) {
+		s.s6Service = s6Service
+	}
+}
+
+func WithFilesystemService(fs filesystem.Service) AgentMonitorServiceOption {
+	return func(s *AgentMonitorService) {
+		s.fs = fs
 	}
 }
 
@@ -91,8 +99,9 @@ func (c *AgentMonitorService) GetFilesystemService() filesystem.Service {
 	return c.fs
 }
 
-// GetStatus collects and returns the current agent status
-func (c *AgentMonitorService) GetStatus(ctx context.Context, cfg config.FullConfig) (*ServiceInfo, error) {
+// Status collects and returns the current agent status
+func (c *AgentMonitorService) Status(ctx context.Context, cfg config.FullConfig) (*ServiceInfo, error) {
+
 	// Create a new status with default health (Active)
 	status := &ServiceInfo{
 		Location:     map[int]string{},
@@ -115,6 +124,11 @@ func (c *AgentMonitorService) GetStatus(ctx context.Context, cfg config.FullConf
 		status.Location = location
 		status.OverallHealth = models.Degraded
 	}
+
+	}
+
+	// Update last collected timestamp
+	c.lastCollectedAt = time.Now()
 
 	// Get the Latency
 	// TODO: get latency from the communication module
@@ -163,6 +177,10 @@ func (c *AgentMonitorService) GetAgentLogs(ctx context.Context) ([]s6.LogEntry, 
 	// Path to the umh-core service
 	servicePath := filepath.Join(constants.S6BaseDir, "umh-core")
 
+	// Check if s6Service is initialized
+	if c.s6Service == nil {
+		return nil, fmt.Errorf("s6 service not initialized")
+	}
 	// Use the S6 service to get logs
 	entries, err := c.s6Service.GetLogs(ctx, servicePath, c.fs)
 	if err != nil {
