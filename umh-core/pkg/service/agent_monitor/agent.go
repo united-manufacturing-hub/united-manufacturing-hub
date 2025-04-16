@@ -34,7 +34,7 @@ import (
 // IAgentMonitorService defines the interface for the agent monitor service
 type IAgentMonitorService interface {
 	// GetStatus returns the status of the agent, this is the main feature of this service
-	GetStatus(ctx context.Context, cfg config.FullConfig) (*ServiceInfo, error)
+	Status(ctx context.Context, cfg config.FullConfig) (*ServiceInfo, error)
 	// GetAgentLogs retrieves the logs for the umh-core service from the log file
 	GetAgentLogs(ctx context.Context) ([]s6.LogEntry, error)
 	// GetFilesystemService returns the filesystem service - used for testing only
@@ -50,13 +50,6 @@ type ServiceInfo struct {
 	AgentMetrics map[string]interface{} `json:"agentMetrics,omitempty"`
 	// Release: Channel, Version, Supported Feature
 	Release *models.Release `json:"release"`
-}
-
-// Service defines the interface for agent monitoring
-type Service interface {
-	// GetStatus returns the status of the agent itself
-	// It requires the full config to get the location and release info
-	GetStatus(ctx context.Context, cfg config.FullConfig) (*ServiceInfo, error)
 }
 
 // AgentMonitorService implements the Service interface
