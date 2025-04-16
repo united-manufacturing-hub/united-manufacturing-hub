@@ -18,7 +18,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	internal_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
@@ -26,6 +25,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	dataflowcomponentservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/dataflowcomponent"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
@@ -97,20 +97,18 @@ func (d *DataflowComponentInstance) Reconcile(ctx context.Context, snapshot fsm.
 		// already consumed significant time. We return reconciled=true to prevent
 		// further reconciliation attempts in the current tick.
 		return nil, true // We don't want to return an error here, as this can happen in normal operations
-	default:
+	case errors.Is(err, s6.ErrServiceNotExist):
 		// Consider a special case for DFC FSM here
 		// While creating for the first time, reconcileExternalChanges function will throw an error such as
-		// s6 config file not found in the path since DFC fsm is relying on BenthosFSM and Benthos in turn relies on S6 fsm
+		// s6 service not found in the path since DFC fsm is relying on BenthosFSM and Benthos in turn relies on S6 fsm
 		// Inorder for DFC fsm to start, benthosManager.Reconcile should be called and this is called at the end of the function
 		// So set the err to nil in this case
 		// An example error: "failed to update observed state: failed to get observed DataflowComponent config: failed to get benthos config: failed to get benthos config file for service benthos-dataflow-hello-world-dfc: service does not exist"
-		if strings.Contains(err.Error(), "service does not exist") {
-			err = nil
-		} else {
-			d.baseFSMInstance.SetError(err, snapshot.Tick)
-			d.baseFSMInstance.GetLogger().Errorf("error while reconciling external changes for dataflowcomponent fsm: %v", err)
-			return nil, false // We don't want to return an error here, because we want to continue reconciling
-		}
+		err = nil
+	default:
+		d.baseFSMInstance.SetError(err, snapshot.Tick)
+		d.baseFSMInstance.GetLogger().Errorf("error while reconciling external changes for dataflowcomponent fsm: %v", err)
+		return nil, false // We don't want to return an error here, because we want to continue reconciling
 	}
 
 	// Step 3: Attempt to reconcile the state.

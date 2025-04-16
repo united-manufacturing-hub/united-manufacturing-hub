@@ -205,7 +205,7 @@ func (d *DataflowComponentInstance) UpdateObservedStateOfInstance(ctx context.Co
 // Note: This function requires the BenthosFSMState to be updated in the ObservedState.
 func (d *DataflowComponentInstance) IsDataflowComponentBenthosRunning() bool {
 	switch d.ObservedState.ServiceInfo.BenthosFSMState {
-	// Consider Active and Idle as running states
+	// Consider Active , Degraded and Idle as running states
 	case benthosfsm.OperationalStateActive, benthosfsm.OperationalStateIdle, benthosfsm.OperationalStateDegraded:
 		return true
 	}

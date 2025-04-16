@@ -102,7 +102,7 @@ func (m *DataflowComponentManager) Reconcile(ctx context.Context, snapshot publi
 	start := time.Now()
 	defer func() {
 		duration := time.Since(start)
-		metrics.ObserveReconcileTime(logger.ComponentBenthosManager, m.BaseFSMManager.GetManagerName(), duration)
+		metrics.ObserveReconcileTime(logger.ComponentDataFlowComponentManager, m.BaseFSMManager.GetManagerName(), duration)
 	}()
 	return m.BaseFSMManager.Reconcile(ctx, snapshot, filesystemService)
 }
@@ -115,7 +115,7 @@ func (m *DataflowComponentManager) CreateSnapshot() public_fsm.ManagerSnapshot {
 	// We need to convert the interface to the concrete type
 	baseManagerSnapshot, ok := baseSnapshot.(*public_fsm.BaseManagerSnapshot)
 	if !ok {
-		logger.For(logger.ComponentBenthosManager).Errorf(
+		logger.For(logger.ComponentDataFlowComponentManager).Errorf(
 			"Failed to convert base snapshot to BaseManagerSnapshot, using generic snapshot")
 		return baseSnapshot
 	}
