@@ -24,12 +24,10 @@ import (
 	internal_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/backoff"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	dataflowcomponentservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/dataflowcomponent"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
@@ -41,7 +39,7 @@ import (
 // This function is intended to be called repeatedly (e.g. in a periodic control loop).
 // Over multiple calls, it converges the actual state to the desired state. Transitions
 // that fail are retried in subsequent reconcile calls after a backoff period.
-func (d *DataflowComponentInstance) Reconcile(ctx context.Context, filesystemService filesystem.Service, tick uint64) (err error, reconciled bool) {
+func (d *DataflowComponentInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot, filesystemService filesystem.Service) (err error, reconciled bool) {
 	start := time.Now()
 	dataflowComponentInstanceName := d.baseFSMInstance.GetID()
 	defer func() {
@@ -60,8 +58,8 @@ func (d *DataflowComponentInstance) Reconcile(ctx context.Context, filesystemSer
 	}
 
 	// Step 1: If there's a lastError, see if we've waited enough.
-	if d.baseFSMInstance.ShouldSkipReconcileBecauseOfError(tick) {
-		err := d.baseFSMInstance.GetBackoffError(tick)
+	if d.baseFSMInstance.ShouldSkipReconcileBecauseOfError(snapshot.Tick) {
+		err := d.baseFSMInstance.GetBackoffError(snapshot.Tick)
 		d.baseFSMInstance.GetLogger().Debugf("Skipping reconcile for Dataflowcomponent pipeline %s: %v", dataflowComponentInstanceName, err)
 
 		// if it is a permanent error, start the removal process and reset the error (so that we can reconcile towards a stopped / removed state)
@@ -85,7 +83,7 @@ func (d *DataflowComponentInstance) Reconcile(ctx context.Context, filesystemSer
 	}
 
 	// Step 2: Detect external changes.
-	err = d.reconcileExternalChanges(ctx, filesystemService, tick)
+	err = d.reconcileExternalChanges(ctx, filesystemService, snapshot.Tick)
 	switch {
 	case err == nil:
 	// All good. Do nothing and continue to reconcile
@@ -109,7 +107,7 @@ func (d *DataflowComponentInstance) Reconcile(ctx context.Context, filesystemSer
 		if strings.Contains(err.Error(), "service does not exist") {
 			err = nil
 		} else {
-			d.baseFSMInstance.SetError(err, tick)
+			d.baseFSMInstance.SetError(err, snapshot.Tick)
 			d.baseFSMInstance.GetLogger().Errorf("error while reconciling external changes for dataflowcomponent fsm: %v", err)
 			return nil, false // We don't want to return an error here, because we want to continue reconciling
 		}
@@ -124,15 +122,15 @@ func (d *DataflowComponentInstance) Reconcile(ctx context.Context, filesystemSer
 			return nil, false
 		}
 
-		d.baseFSMInstance.SetError(err, tick)
+		d.baseFSMInstance.SetError(err, snapshot.Tick)
 		d.baseFSMInstance.GetLogger().Errorf("error reconciling state: %s", err)
 		return nil, false // We don't want to return an error here, because we want to continue reconciling
 	}
 
 	// Reconcile the benthosManager
-	benthosErr, benthosReconciled := d.service.ReconcileManager(ctx, filesystemService, tick)
+	benthosErr, benthosReconciled := d.service.ReconcileManager(ctx, filesystemService, snapshot.Tick)
 	if benthosErr != nil {
-		d.baseFSMInstance.SetError(benthosErr, tick)
+		d.baseFSMInstance.SetError(benthosErr, snapshot.Tick)
 		d.baseFSMInstance.GetLogger().Errorf("error reconciling benthosManager: %s", benthosErr)
 		return nil, false
 	}
