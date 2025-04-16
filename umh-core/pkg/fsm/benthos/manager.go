@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/tiendc/go-deepcopy"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	public_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
@@ -176,14 +177,14 @@ func (m *BenthosManager) HandleInstanceRemoved(instanceName string) {
 // Reconcile overrides the base manager's Reconcile method to add port management
 // The filesystemService parameter allows for filesystem operations during reconciliation,
 // enabling the method to read configuration or state information from the filesystem.
-func (m *BenthosManager) Reconcile(ctx context.Context, cfg config.FullConfig, filesystemService filesystem.Service, tick uint64) (error, bool) {
+func (m *BenthosManager) Reconcile(ctx context.Context, snapshot public_fsm.SystemSnapshot, filesystemService filesystem.Service) (error, bool) {
 	start := time.Now()
 	defer func() {
 		duration := time.Since(start)
 		metrics.ObserveReconcileTime(logger.ComponentBenthosManager, m.BaseFSMManager.GetManagerName(), duration)
 	}()
 	// Phase 1: Port Management Pre-reconciliation
-	benthosConfigs := cfg.Internal.Benthos
+	benthosConfigs := snapshot.CurrentConfig.Internal.Benthos
 	instanceNames := make([]string, len(benthosConfigs))
 	for i, cfg := range benthosConfigs {
 		instanceNames[i] = cfg.Name
@@ -196,8 +197,8 @@ func (m *BenthosManager) Reconcile(ctx context.Context, cfg config.FullConfig, f
 	// Save the instance count before reconciliation to detect removals
 	countBefore := len(m.BaseFSMManager.GetInstances())
 
-	// Create a new config with allocated ports
-	cfgWithPorts := cfg.Clone() // Ensure you have a proper Clone method in config.FullConfig
+	// Create a new config based on the current config with allocated ports
+	cfgWithPorts := snapshot.CurrentConfig.Clone()
 	for i, bc := range cfgWithPorts.Internal.Benthos {
 		if port, exists := m.portManager.GetPort(bc.Name); exists {
 			// Update the BenthosServiceConfig with the allocated port
@@ -205,8 +206,12 @@ func (m *BenthosManager) Reconcile(ctx context.Context, cfg config.FullConfig, f
 		}
 	}
 
+	var snapshotWithPorts public_fsm.SystemSnapshot
+	deepcopy.Copy(&snapshotWithPorts, snapshot)
+	snapshotWithPorts.CurrentConfig = cfgWithPorts
+
 	// Phase 2: Base FSM Reconciliation with port-aware config
-	err, reconciled := m.BaseFSMManager.Reconcile(ctx, cfgWithPorts, filesystemService, tick)
+	err, reconciled := m.BaseFSMManager.Reconcile(ctx, snapshotWithPorts, filesystemService)
 
 	// Check if instances were removed as part of reconciliation (e.g., due to permanent errors)
 	countAfter := len(m.BaseFSMManager.GetInstances())
