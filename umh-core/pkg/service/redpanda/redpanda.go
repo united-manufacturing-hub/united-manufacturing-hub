@@ -651,12 +651,12 @@ func (s *RedpandaService) ReconcileManager(ctx context.Context, filesystemServic
 	}
 
 	s6Err, s6Reconciled := s.s6Manager.Reconcile(ctx, snapshot, filesystemService)
-  if s6Err != nil {
+	if s6Err != nil {
 		return s6Err, false
 	}
 
 	// Also reconcile the redpanda monitor service
-	monitorErr, monitorReconciled := s.metricsService.ReconcileManager(ctx, snapshot, filesystemService)
+	monitorErr, monitorReconciled := s.metricsService.ReconcileManager(ctx, filesystemService, tick)
 	if monitorErr != nil {
 		return monitorErr, false
 	}

@@ -39,27 +39,6 @@ type ManagerReconciler interface {
 	GetInstance(id string) (fsm.FSMInstance, bool)
 }
 
-// WaitForInstanceState repeatedly calls Reconcile on an instance until it reaches the desired state or times out
-func WaitForInstanceState(ctx context.Context, instance InstanceReconciler, filesystemService filesystem.Service, desiredState string, maxAttempts int, startTick uint64) (uint64, error) {
-	tick := startTick
-
-	for i := 0; i < maxAttempts; i++ {
-		err, _ := instance.Reconcile(ctx, fsm.SystemSnapshot{Tick: tick}, filesystemService)
-		if err != nil {
-			return tick, fmt.Errorf("error during reconcile: %w", err)
-		}
-		tick++
-
-		currentState := instance.GetCurrentFSMState()
-		if currentState == desiredState {
-			return tick, nil
-		}
-	}
-
-	return tick, fmt.Errorf("failed to reach state %s after %d attempts, current state: %s",
-		desiredState, maxAttempts, instance.GetCurrentFSMState())
-}
-
 // WaitForManagerInstanceState repeatedly calls Reconcile on a manager until the specified instance
 // reaches the desired state or times out
 func WaitForManagerInstanceState(ctx context.Context, manager ManagerReconciler, snapshot fsm.SystemSnapshot, filesystemService filesystem.Service,

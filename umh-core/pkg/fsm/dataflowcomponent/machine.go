@@ -16,6 +16,7 @@ package dataflowcomponent
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/looplab/fsm"
@@ -24,6 +25,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/dataflowcomponent"
 )
 
@@ -93,7 +95,8 @@ func NewDataflowComponentInstance(
 // But ensures that the desired state is a valid state and that it is also a reasonable state
 // e.g., nobody wants to have an instance in the "starting" state, that is just intermediate
 func (d *DataflowComponentInstance) SetDesiredFSMState(state string) error {
-	panic("not implemented")
+	sentry.ReportFSMFatal(d.baseFSMInstance.GetLogger(), d.baseFSMInstance.GetID(), "DataflowComponentInstance", "SetDesiredFSMState", fmt.Errorf("not implemented"))
+	return nil
 }
 
 // GetCurrentFSMState returns the current state of the FSM
@@ -124,13 +127,13 @@ func (b *DataflowComponentInstance) IsRemoving() bool {
 
 // IsStopping returns true if the instance is in the stopping state
 func (b *DataflowComponentInstance) IsStopping() bool {
-	// TODO: Implement logics based on OperationalStates
+	sentry.ReportFSMFatal(b.baseFSMInstance.GetLogger(), b.baseFSMInstance.GetID(), "DataflowComponentInstance", "IsStopping", fmt.Errorf("not implemented"))
 	panic("unimplemented")
 }
 
 // IsStopped returns true if the instance is in the stopped state
 func (b *DataflowComponentInstance) IsStopped() bool {
-	// TODO: Implement logics based on OperationalStates
+	sentry.ReportFSMFatal(b.baseFSMInstance.GetLogger(), b.baseFSMInstance.GetID(), "DataflowComponentInstance", "IsStopped", fmt.Errorf("not implemented"))
 	panic("unimplemented")
 }
 
