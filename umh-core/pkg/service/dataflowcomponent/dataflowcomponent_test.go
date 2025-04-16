@@ -391,11 +391,11 @@ var _ = Describe("DataFlowComponentService", func() {
 		It("should return error when trying to start/stop non-existent component", func() {
 			// Try to start a non-existent component
 			err := service.StartDataFlowComponent(ctx, mockFS, "non-existent")
-			Expect(err).To(MatchError(ErrServiceNotExist))
+			Expect(err).To(MatchError(ErrServiceNotExists))
 
 			// Try to stop a non-existent component
 			err = service.StopDataFlowComponent(ctx, mockFS, "non-existent")
-			Expect(err).To(MatchError(ErrServiceNotExist))
+			Expect(err).To(MatchError(ErrServiceNotExists))
 		})
 	})
 
@@ -444,7 +444,7 @@ var _ = Describe("DataFlowComponentService", func() {
 			err := service.RemoveDataFlowComponentFromBenthosManager(ctx, mockFS, "non-existent")
 
 			// Assert
-			Expect(err).To(MatchError(ErrServiceNotExist))
+			Expect(err).To(MatchError(ErrServiceNotExists))
 		})
 	})
 
