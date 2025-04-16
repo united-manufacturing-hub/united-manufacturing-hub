@@ -25,24 +25,22 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/communication_state"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/control"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/version"
 	"go.uber.org/zap"
 )
-
-var appVersion = constants.DefaultAppVersion // set by the build system
 
 func main() {
 	// Initialize the global logger first thing
 	logger.Initialize()
 
 	// Initialize Sentry
-	sentry.InitSentry(appVersion, true)
+	sentry.InitSentry(version.GetAppVersion(), true)
 
 	// Get a logger for the main component
 	log := logger.For(logger.ComponentCore)
@@ -85,6 +83,8 @@ func main() {
 	controlLoop := control.NewControlLoop(configManager)
 	systemSnapshot := new(fsm.SystemSnapshot)
 	systemMu := new(sync.Mutex)
+
+	// Initialize the communication state
 	communicationState := communication_state.CommunicationState{
 		Watchdog:        watchdog.NewWatchdog(ctx, time.NewTicker(time.Second*10), true, logger.For(logger.ComponentCommunicator)),
 		InboundChannel:  make(chan *models.UMHMessage, 100),
@@ -95,7 +95,6 @@ func main() {
 		ApiUrl:          configData.Agent.CommunicatorConfig.APIURL,
 		Logger:          logger.For(logger.ComponentCommunicator),
 	}
-	go SystemSnapshotLogger(ctx, controlLoop, systemSnapshot, systemMu)
 
 	if configData.Agent.CommunicatorConfig.APIURL != "" && configData.Agent.CommunicatorConfig.AuthToken != "" {
 		enableBackendConnection(&configData, systemSnapshot, &communicationState, systemMu, controlLoop, communicationState.Logger)
@@ -103,6 +102,10 @@ func main() {
 		log.Warnf("No backend connection enabled, please set API_URL and AUTH_TOKEN")
 	}
 
+	// Start the system snapshot logger
+	go SystemSnapshotLogger(ctx, controlLoop, systemSnapshot, systemMu)
+
+	// Start the control loop
 	err = controlLoop.Execute(ctx)
 	if err != nil {
 		log.Errorf("Control loop failed: %w", err)
