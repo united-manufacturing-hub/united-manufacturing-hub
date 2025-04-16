@@ -122,6 +122,9 @@ func (c *AgentMonitorService) Status(ctx context.Context, cfg config.FullConfig)
 		status.Location = location
 	}
 
+	// Update last collected timestamp
+	c.lastCollectedAt = time.Now()
+
 	// Get the Latency
 	// TODO: get latency from the communication module
 
