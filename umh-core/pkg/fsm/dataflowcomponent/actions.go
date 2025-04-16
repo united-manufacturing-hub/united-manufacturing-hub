@@ -67,7 +67,7 @@ func (b *DataflowComponentInstance) RemoveInstance(ctx context.Context, filesyst
 	// Remove the initiateDataflowComponent from the Benthos manager
 	err := b.service.RemoveDataFlowComponentFromBenthosManager(ctx, filesystemService, b.baseFSMInstance.GetID())
 	if err != nil {
-		if err == dataflowcomponentservice.ErrServiceNotExist {
+		if err == dataflowcomponentservice.ErrServiceNotExists {
 			b.baseFSMInstance.GetLogger().Debugf("DataflowComponent service %s not found in Benthos manager", b.baseFSMInstance.GetID())
 			return nil // do not throw an error, as each action is expected to be idempotent
 		}
@@ -117,13 +117,13 @@ func (d *DataflowComponentInstance) getServiceStatus(ctx context.Context, filesy
 	if err != nil {
 		// If there's an error getting the service status, we need to distinguish between cases
 
-		if errors.Is(err, dataflowcomponentservice.ErrServiceNotExist) {
+		if errors.Is(err, dataflowcomponentservice.ErrServiceNotExists) {
 			// If the service is being created, we don't want to count this as an error
 			// The instance is likely in Creating or ToBeCreated state, so service doesn't exist yet
 			// This will be handled in the reconcileStateTransition where the service gets created
 			if d.baseFSMInstance.GetCurrentFSMState() == internalfsm.LifecycleStateCreating ||
 				d.baseFSMInstance.GetCurrentFSMState() == internalfsm.LifecycleStateToBeCreated {
-				return dataflowcomponentservice.ServiceInfo{}, dataflowcomponentservice.ErrServiceNotExist
+				return dataflowcomponentservice.ServiceInfo{}, dataflowcomponentservice.ErrServiceNotExists
 			}
 
 			// Log the warning but don't treat it as a fatal error
@@ -166,7 +166,7 @@ func (d *DataflowComponentInstance) UpdateObservedStateOfInstance(ctx context.Co
 		// Only update if we successfully got the config
 		d.ObservedState.ObservedDataflowComponentConfig = observedConfig
 	} else {
-		if strings.Contains(err.Error(), dataflowcomponentservice.ErrServiceNotExist.Error()) {
+		if strings.Contains(err.Error(), dataflowcomponentservice.ErrServiceNotExists.Error()) {
 			// Log the error but don't fail - this might happen during creation when the config file doesn't exist yet
 			d.baseFSMInstance.GetLogger().Debugf("Service not found, will be created during reconciliation: %v", err)
 			return nil

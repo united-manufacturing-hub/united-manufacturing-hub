@@ -139,7 +139,7 @@ func (m *MockDataFlowComponentService) Status(ctx context.Context, filesystemSer
 
 	// Check if the component exists in the ExistingComponents map
 	if exists, ok := m.ExistingComponents[componentName]; !ok || !exists {
-		return ServiceInfo{}, ErrServiceNotExist
+		return ServiceInfo{}, ErrServiceNotExists
 	}
 
 	// If we have a state already stored, return it
@@ -200,7 +200,7 @@ func (m *MockDataFlowComponentService) UpdateDataFlowComponentInBenthosManager(c
 	}
 
 	if !found {
-		return ErrServiceNotExist
+		return ErrServiceNotExists
 	}
 
 	// Update the BenthosConfig
@@ -234,7 +234,7 @@ func (m *MockDataFlowComponentService) RemoveDataFlowComponentFromBenthosManager
 	}
 
 	if !found {
-		return ErrServiceNotExist
+		return ErrServiceNotExists
 	}
 
 	// Remove the component from the list of existing components
@@ -262,7 +262,7 @@ func (m *MockDataFlowComponentService) StartDataFlowComponent(ctx context.Contex
 	}
 
 	if !found {
-		return ErrServiceNotExist
+		return ErrServiceNotExists
 	}
 
 	return m.StartDataFlowComponentError
@@ -286,7 +286,7 @@ func (m *MockDataFlowComponentService) StopDataFlowComponent(ctx context.Context
 	}
 
 	if !found {
-		return ErrServiceNotExist
+		return ErrServiceNotExists
 	}
 
 	return m.StopDataFlowComponentError
