@@ -15,10 +15,9 @@
 package config
 
 import (
-	"reflect"
-
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/nmapserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/redpandaserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
 
@@ -108,20 +107,7 @@ type NmapConfig struct {
 	FSMInstanceConfig `yaml:",inline"`
 
 	// For the Nmap service
-	NmapServiceConfig NmapServiceConfig `yaml:"nmapServiceConfig"`
-}
-
-// NmapServiceConfig represents the configuration for a Nmap service
-type NmapServiceConfig struct {
-	// Target to scan (hostname or IP)
-	Target string `yaml:"target"`
-	// Port to scan (single port number)
-	Port int `yaml:"port"`
-}
-
-// Equal checks if two NmapServiceConfigs are equal
-func (c NmapServiceConfig) Equal(other NmapServiceConfig) bool {
-	return reflect.DeepEqual(c, other)
+	NmapServiceConfig nmapserviceconfig.NmapServiceConfig `yaml:"nmapServiceConfig"`
 }
 
 // RedpandaConfig contains configuration for a Redpanda service

@@ -18,7 +18,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/nmapserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
@@ -32,15 +32,15 @@ const (
 // INmapService defines the interface for managing nmap scan services
 type INmapService interface {
 	// GenerateS6ConfigForNmap generates a S6 config for a given nmap instance
-	GenerateS6ConfigForNmap(nmapConfig *config.NmapServiceConfig, s6ServiceName string) (s6serviceconfig.S6ServiceConfig, error)
+	GenerateS6ConfigForNmap(nmapConfig *nmapserviceconfig.NmapServiceConfig, s6ServiceName string) (s6serviceconfig.S6ServiceConfig, error)
 	// GetConfig returns the actual nmap config from the S6 service
-	GetConfig(ctx context.Context, nmapName string) (config.NmapServiceConfig, error)
+	GetConfig(ctx context.Context, nmapName string) (nmapserviceconfig.NmapServiceConfig, error)
 	// Status checks the status of a nmap service
 	Status(ctx context.Context, nmapName string, tick uint64) (ServiceInfo, error)
 	// AddNmapToS6Manager adds a nmap instance to the S6 manager
-	AddNmapToS6Manager(ctx context.Context, cfg *config.NmapServiceConfig, nmapName string) error
+	AddNmapToS6Manager(ctx context.Context, cfg *nmapserviceconfig.NmapServiceConfig, nmapName string) error
 	// UpdateNmapInS6Manager updates an existing nmap instance in the S6 manager
-	UpdateNmapInS6Manager(ctx context.Context, cfg *config.NmapServiceConfig, nmapName string) error
+	UpdateNmapInS6Manager(ctx context.Context, cfg *nmapserviceconfig.NmapServiceConfig, nmapName string) error
 	// RemoveNmapFromS6Manager removes a nmap instance from the S6 manager
 	RemoveNmapFromS6Manager(ctx context.Context, nmapName string) error
 	// StartNmap starts a nmap instance
