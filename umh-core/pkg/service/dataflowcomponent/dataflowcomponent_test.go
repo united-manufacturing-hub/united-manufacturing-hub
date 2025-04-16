@@ -329,7 +329,7 @@ var _ = Describe("DataFlowComponentService", func() {
 			err := service.UpdateDataFlowComponentInBenthosManager(ctx, mockFS, updatedCfg, "non-existent")
 
 			// Assert
-			Expect(err).To(MatchError(ErrServiceNotExist))
+			Expect(err).To(MatchError(ErrServiceNotExists))
 		})
 	})
 
