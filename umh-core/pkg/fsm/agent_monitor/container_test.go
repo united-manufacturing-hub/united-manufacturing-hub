@@ -21,6 +21,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/agent_monitor"
 	agentmonitorsvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/agent_monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
@@ -40,7 +41,7 @@ var _ = Describe("Agent FSM", func() {
 	BeforeEach(func() {
 		ctx, cancel = context.WithCancel(context.Background())
 
-		mockSvc = agentmonitorsvc.NewMockService()
+		mockSvc = agentmonitorsvc.NewMockService(mockFS)
 		// By default, let's set it up for healthy
 		mockSvc.SetupMockForHealthyState()
 
@@ -60,13 +61,13 @@ var _ = Describe("Agent FSM", func() {
 	Context("When newly created", func() {
 		It("Should initially be in lifecycle state `to_be_created` -> then `creating` -> `agent_monitoring_stopped`", func() {
 			// On first reconcile, it should handle creation
-			err, did := inst.Reconcile(ctx, mockFS, 1)
+			err, did := inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 1}, mockFS)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(did).To(BeTrue())
 			Expect(inst.GetCurrentFSMState()).To(Equal("creating"))
 
 			// next reconcile
-			err, did = inst.Reconcile(ctx, mockFS, 2)
+			err, did = inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 2}, mockFS)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(did).To(BeTrue())
 			// now we should be in operational state 'agent_monitoring_stopped'
@@ -77,8 +78,8 @@ var _ = Describe("Agent FSM", func() {
 	Context("Lifecycle transitions", func() {
 		BeforeEach(func() {
 			// Ensure we've walked from to_be_created -> creating -> agent_monitoring_stopped
-			inst.Reconcile(ctx, mockFS, 10)
-			inst.Reconcile(ctx, mockFS, 11)
+			inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 10}, mockFS)
+			inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 11}, mockFS)
 			Expect(inst.GetCurrentFSMState()).To(Equal(agent_monitor.OperationalStateStopped))
 		})
 
@@ -86,13 +87,13 @@ var _ = Describe("Agent FSM", func() {
 			// set desired state to active
 			inst.SetDesiredFSMState(agent_monitor.OperationalStateActive)
 
-			err, did := inst.Reconcile(ctx, mockFS, 12)
+			err, did := inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 12}, mockFS)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(did).To(BeTrue())
 			Expect(inst.GetCurrentFSMState()).To(Equal(agent_monitor.OperationalStateStarting))
 
 			// next reconcile
-			err, did = inst.Reconcile(ctx, mockFS, 13)
+			err, did = inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 13}, mockFS)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(did).To(BeTrue())
 			Expect(inst.GetCurrentFSMState()).To(Equal(agent_monitor.OperationalStateDegraded))
@@ -100,7 +101,7 @@ var _ = Describe("Agent FSM", func() {
 
 		It("Should remain `agent_monitoring_stopped` if desired is `stopped`", func() {
 			// do one reconcile - no state change
-			err, did := inst.Reconcile(ctx, mockFS, 14)
+			err, did := inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 14}, mockFS)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(did).To(BeFalse())
 			Expect(inst.GetCurrentFSMState()).To(Equal(agent_monitor.OperationalStateStopped))
@@ -110,16 +111,16 @@ var _ = Describe("Agent FSM", func() {
 	Context("When monitoring is running", func() {
 		BeforeEach(func() {
 			// get to agent_monitoring_stopped
-			inst.Reconcile(ctx, mockFS, 20)
-			inst.Reconcile(ctx, mockFS, 21)
+			inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 20}, mockFS)
+			inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 21}, mockFS)
 			// set desired = active
 			inst.SetDesiredFSMState(agent_monitor.OperationalStateActive)
 			// cause start
-			inst.Reconcile(ctx, mockFS, 22)
+			inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 22}, mockFS)
 			Expect(inst.GetCurrentFSMState()).To(Equal(agent_monitor.OperationalStateStarting))
 
 			// next reconcile
-			err, did := inst.Reconcile(ctx, mockFS, 23)
+			err, did := inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 23}, mockFS)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(did).To(BeTrue())
 			Expect(inst.GetCurrentFSMState()).To(Equal(agent_monitor.OperationalStateDegraded))
@@ -127,7 +128,7 @@ var _ = Describe("Agent FSM", func() {
 
 		It("Transitions from degraded -> active if metrics healthy", func() {
 			// currently mockSvc returns healthy => we expect a transition
-			err, did := inst.Reconcile(ctx, mockFS, 24)
+			err, did := inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 24}, mockFS)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(did).To(BeTrue())
 			Expect(inst.GetCurrentFSMState()).To(Equal(agent_monitor.OperationalStateActive))
@@ -137,7 +138,7 @@ var _ = Describe("Agent FSM", func() {
 			// Let's set the mock to return critical metrics
 			mockSvc.SetupMockForDegradedState()
 
-			err, did := inst.Reconcile(ctx, mockFS, 25)
+			err, did := inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 25}, mockFS)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(did).To(BeFalse()) // no transition => still degraded
 			Expect(inst.GetCurrentFSMState()).To(Equal(agent_monitor.OperationalStateDegraded))

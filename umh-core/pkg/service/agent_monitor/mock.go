@@ -18,8 +18,9 @@ import (
 	"context"
 	"time"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 )
 
@@ -36,20 +37,22 @@ type MockService struct {
 
 	// For more complex testing scenarios
 	healthState models.HealthCategory
+	fs          filesystem.Service
 }
 
 // NewMockService creates a new mock service instance
-func NewMockService() *MockService {
+func NewMockService(fs filesystem.Service) *MockService {
 	return &MockService{
 		// Default to Active health
 		healthState: models.Active,
 		// Initialize with default healthy status
 		GetStatusResult: CreateDefaultAgentStatus(),
+		fs:              fs,
 	}
 }
 
-// GetStatus is a mock implementation of Service.GetStatus
-func (m *MockService) GetStatus(ctx context.Context, cfg config.FullConfig) (*ServiceInfo, error) {
+// Status is a mock implementation of Service.Status
+func (m *MockService) Status(ctx context.Context, snapshot fsm.SystemSnapshot) (*ServiceInfo, error) {
 	m.GetStatusCalled = true
 
 	if m.GetStatusError != nil {
@@ -117,4 +120,8 @@ func (m *MockService) SetupMockForDegradedState() {
 // SetupMockForError configures the mock to return errors
 func (m *MockService) SetupMockForError(err error) {
 	m.GetStatusError = err
+}
+
+func (m *MockService) GetFilesystemService() filesystem.Service {
+	return m.fs
 }

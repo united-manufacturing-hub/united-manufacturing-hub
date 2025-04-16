@@ -22,7 +22,6 @@ import (
 
 	internal_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/backoff"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
@@ -34,7 +33,7 @@ import (
 // The filesystemService parameter allows for filesystem operations during reconciliation,
 // enabling the method to read configuration or state information from the filesystem.
 // Currently not used in this implementation but added for consistency with the interface.
-func (a *AgentInstance) Reconcile(ctx context.Context, filesystemService filesystem.Service, tick uint64) (err error, reconciled bool) {
+func (a *AgentInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot, filesystemService filesystem.Service) (err error, reconciled bool) {
 	start := time.Now()
 	instanceName := a.baseFSMInstance.GetID()
 	defer func() {
@@ -53,8 +52,8 @@ func (a *AgentInstance) Reconcile(ctx context.Context, filesystemService filesys
 	}
 
 	// Step 1: If there's a lastError, see if we've waited enough.
-	if a.baseFSMInstance.ShouldSkipReconcileBecauseOfError(tick) {
-		backErr := a.baseFSMInstance.GetBackoffError(tick)
+	if a.baseFSMInstance.ShouldSkipReconcileBecauseOfError(snapshot.Tick) {
+		backErr := a.baseFSMInstance.GetBackoffError(snapshot.Tick)
 		if backoff.IsPermanentFailureError(backErr) {
 			// If permanent, we want to remove the instance or at least stop it
 			// For now, let's just remove it from the manager:
@@ -76,7 +75,7 @@ func (a *AgentInstance) Reconcile(ctx context.Context, filesystemService filesys
 	updateCtx, cancel := context.WithTimeout(ctx, constants.AgentMonitorUpdateObservedStateTimeout)
 	defer cancel()
 
-	if err := a.updateObservedState(updateCtx); err != nil {
+	if err := a.updateObservedState(updateCtx, snapshot); err != nil {
 		if errors.Is(err, context.DeadlineExceeded) {
 			// Updating the observed state can sometimes take longer,
 			// resulting in context.DeadlineExceeded errors. In this case, we want to
@@ -87,13 +86,13 @@ func (a *AgentInstance) Reconcile(ctx context.Context, filesystemService filesys
 		}
 
 		// For other errors, set the error for backoff
-		a.baseFSMInstance.SetError(err, tick)
+		a.baseFSMInstance.SetError(err, snapshot.Tick)
 		return nil, false
 	}
 
 	// Print system state every 10 ticks
-	if tick%10 == 0 {
-		a.printSystemState(instanceName, tick)
+	if snapshot.Tick%10 == 0 {
+		a.printSystemState(instanceName, snapshot.Tick)
 	}
 
 	// Step 3: Attempt to reconcile the state.
@@ -114,7 +113,7 @@ func (a *AgentInstance) Reconcile(ctx context.Context, filesystemService filesys
 			return nil, true // We don't want to return an error here, as this can happen in normal operations
 		}
 
-		a.baseFSMInstance.SetError(err, tick)
+		a.baseFSMInstance.SetError(err, snapshot.Tick)
 		a.baseFSMInstance.GetLogger().Errorf("error reconciling state: %s", err)
 		return nil, false // We don't want to return an error here, because we want to continue reconciling
 	}
@@ -222,8 +221,9 @@ func (a *AgentInstance) reconcileStateTransition(ctx context.Context, filesystem
 }
 
 // updateObservedState queries agent_monitor.Service for new metrics
-func (a *AgentInstance) updateObservedState(ctx context.Context) error {
-	status, err := a.monitorService.GetStatus(ctx, config.FullConfig{}) // TODO: where to get the config? it needs to be passed somehow from the manager
+func (a *AgentInstance) updateObservedState(ctx context.Context, snapshot fsm.SystemSnapshot) error {
+	// get the config from the config manager
+	status, err := a.monitorService.Status(ctx, snapshot) // TODO: where to get the config? it needs to be passed somehow from the manager
 	if err != nil {
 		return fmt.Errorf("failed to get agent metrics: %w", err)
 	}

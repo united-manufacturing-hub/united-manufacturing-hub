@@ -31,11 +31,11 @@ import (
 
 // NewAgentInstance creates a new AgentInstance with the standard transitions.
 func NewAgentInstance(config config.AgentMonitorConfig) *AgentInstance {
-	return NewAgentInstanceWithService(config, agent_monitor.NewAgentMonitorService(filesystem.NewDefaultService()))
+	return NewAgentInstanceWithService(config, agent_monitor.NewAgentMonitorService(agent_monitor.WithFilesystemService(filesystem.NewDefaultService())))
 }
 
 // NewAgentInstanceWithService creates a new AgentInstance with a custom monitor service.
-func NewAgentInstanceWithService(config config.AgentMonitorConfig, service agent_monitor.Service) *AgentInstance {
+func NewAgentInstanceWithService(config config.AgentMonitorConfig, service agent_monitor.IAgentMonitorService) *AgentInstance {
 	// Build the config for the base FSM
 	fsmCfg := internal_fsm.BaseFSMInstanceConfig{
 		ID: config.Name,

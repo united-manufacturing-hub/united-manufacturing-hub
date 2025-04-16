@@ -110,7 +110,7 @@ type AgentInstance struct {
 	ObservedState AgentObservedState
 
 	// The agent monitor service used to gather metrics
-	monitorService agent_monitor.Service
+	monitorService agent_monitor.IAgentMonitorService
 
 	// Possibly store config needed for the agent monitor
 	config config.AgentMonitorConfig

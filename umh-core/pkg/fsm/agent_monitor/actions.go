@@ -16,6 +16,7 @@ package agent_monitor
 
 import (
 	"context"
+	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
@@ -60,7 +61,7 @@ func (a *AgentInstance) StopInstance(ctx context.Context, filesystemService file
 
 // UpdateObservedStateOfInstance is called when the FSM transitions to updating.
 // For agent monitoring, this is a no-op as we don't need to update any resources.
-func (a *AgentInstance) UpdateObservedStateOfInstance(ctx context.Context, filesystemService filesystem.Service, tick uint64) error {
+func (a *AgentInstance) UpdateObservedStateOfInstance(ctx context.Context, filesystemService filesystem.Service, tick uint64, loopStartTime time.Time) error {
 	a.baseFSMInstance.GetLogger().Debugf("Updating observed state for %s (no-op)", a.baseFSMInstance.GetID())
 	return nil
 }
