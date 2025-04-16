@@ -611,8 +611,6 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 
 	Context("with redpanda enabled but no benthos services", Label("redpanda-only"), func() {
 		BeforeAll(func() {
-			Skip("Skipping redpanda tests")
-
 			By("Starting with an empty configuration")
 			cfg := NewBuilder().BuildYAML()
 			// Write the empty config and start the container
