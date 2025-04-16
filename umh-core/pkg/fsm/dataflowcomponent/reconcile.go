@@ -148,7 +148,7 @@ func (d *DataflowComponentInstance) reconcileExternalChanges(ctx context.Context
 	observedStateCtx, cancel := context.WithTimeout(ctx, constants.DataflowComponentUpdateObservedStateTimeout)
 	defer cancel()
 
-	err := d.UpdateObservedStateOfInstance(observedStateCtx, filesystemService, tick)
+	err := d.UpdateObservedStateOfInstance(observedStateCtx, filesystemService, tick, start)
 	if err != nil {
 		return fmt.Errorf("failed to update observed state: %w", err)
 	}

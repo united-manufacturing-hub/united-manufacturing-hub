@@ -144,7 +144,7 @@ func (d *DataflowComponentInstance) getServiceStatus(ctx context.Context, filesy
 }
 
 // UpdateObservedStateOfInstance updates the observed state of the service
-func (d *DataflowComponentInstance) UpdateObservedStateOfInstance(ctx context.Context, filesystemService filesystem.Service, tick uint64) error {
+func (d *DataflowComponentInstance) UpdateObservedStateOfInstance(ctx context.Context, filesystemService filesystem.Service, tick uint64, loopStartTime time.Time) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
