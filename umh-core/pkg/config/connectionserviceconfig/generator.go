@@ -44,7 +44,7 @@ func (g *Generator) RenderConfig(cfg ConnectionServiceConfig) (string, error) {
 	// Marshal to YAML
 	yamlBytes, err := yaml.Marshal(normalizedMap)
 	if err != nil {
-		return "", fmt.Errorf("failed to marshal Benthos config: %w", err)
+		return "", fmt.Errorf("failed to marshal Connection config: %w", err)
 	}
 
 	yamlStr := string(yamlBytes)
@@ -90,5 +90,5 @@ type templateData struct {
 var simplifiedTemplate = `
 nmap:
   target: {{.Target}}
-	port: {{.Port}}
+  port: {{.Port}}
 `

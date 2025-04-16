@@ -46,7 +46,6 @@ func (g *Generator) RenderConfig(cfg NmapServiceConfig) (string, error) {
 		return "", fmt.Errorf("failed to marshal Nmap config: %w", err)
 	}
 
-	// Fix the indentation for http and logger sections to match the expected format
 	yamlStr := string(yamlBytes)
 
 	return yamlStr, nil

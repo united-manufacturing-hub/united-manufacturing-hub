@@ -33,16 +33,10 @@ func (c ConnectionServiceConfig) Equal(other ConnectionServiceConfig) bool {
 }
 
 // RenderConnectionYAML is a package-level function for easy YAML generation
-func RenderConnectionYAML(nmap any) (string, error) {
+func RenderConnectionYAML(nmap nmapserviceconfig.NmapServiceConfig) (string, error) {
 	// Create a config object from the individual components
 	cfg := ConnectionServiceConfig{
-		NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{},
-	}
-
-	if nmap != nil {
-		if nmapMap, ok := nmap.(nmapserviceconfig.NmapServiceConfig); ok {
-			cfg.NmapServiceConfig = nmapMap
-		}
+		NmapServiceConfig: nmap,
 	}
 
 	// Use the generator to render the YAML

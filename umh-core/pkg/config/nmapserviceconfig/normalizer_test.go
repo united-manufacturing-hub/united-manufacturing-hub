@@ -44,7 +44,7 @@ var _ = Describe("Nmap YAML Normalizer", func() {
 			config := NmapServiceConfig{}
 
 			// Use package-level function
-			normalizedConfig1 := NormalizeBenthosConfig(config)
+			normalizedConfig1 := NormalizeNmapConfig(config)
 
 			// Use normalizer directly
 			normalizer := NewNormalizer()

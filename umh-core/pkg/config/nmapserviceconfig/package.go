@@ -46,7 +46,7 @@ func RenderNmapYAML(target string, port int) (string, error) {
 }
 
 // NormalizeNmapConfig is a package-level function for easy config normalization
-func NormalizeBenthosConfig(cfg NmapServiceConfig) NmapServiceConfig {
+func NormalizeNmapConfig(cfg NmapServiceConfig) NmapServiceConfig {
 	return defaultNormalizer.NormalizeConfig(cfg)
 }
 
