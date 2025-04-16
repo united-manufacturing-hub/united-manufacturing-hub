@@ -256,7 +256,6 @@ test-comm: stop-and-remove-umh-core-latest build
 		--memory $(MEMORY) \
 		--cpus $(CPUS) \
 		-e AUTH_TOKEN=$(AUTH_TOKEN) \
-		-e LOCATION_0=$(LOCATION_0) \
 		-e LOGGING_LEVEL=DEBUG \
 		$(IMAGE_NAME):$(TAG)
 

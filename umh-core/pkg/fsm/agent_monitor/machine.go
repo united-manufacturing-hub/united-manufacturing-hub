@@ -27,11 +27,12 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/agent_monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 )
 
 // NewAgentInstance creates a new AgentInstance with the standard transitions.
 func NewAgentInstance(config config.AgentMonitorConfig) *AgentInstance {
-	return NewAgentInstanceWithService(config, agent_monitor.NewAgentMonitorService(agent_monitor.WithFilesystemService(filesystem.NewDefaultService())))
+	return NewAgentInstanceWithService(config, agent_monitor.NewAgentMonitorService(agent_monitor.WithFilesystemService(filesystem.NewDefaultService()), agent_monitor.WithS6Service(s6.NewDefaultService())))
 }
 
 // NewAgentInstanceWithService creates a new AgentInstance with a custom monitor service.
