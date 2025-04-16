@@ -21,6 +21,7 @@ import (
 
 	"github.com/looplab/fsm"
 	internal_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/backoff"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
@@ -78,8 +79,11 @@ func NewDataflowComponentInstance(
 		},
 	}
 
+	logger := logger.For(config.Name)
+	backoffConfig := backoff.DefaultConfig(cfg.ID, logger)
+
 	instance := &DataflowComponentInstance{
-		baseFSMInstance: internal_fsm.NewBaseFSMInstance(cfg, logger.For(config.Name)),
+		baseFSMInstance: internal_fsm.NewBaseFSMInstance(cfg, backoffConfig, logger),
 		service:         dataflowcomponent.NewDefaultDataFlowComponentService(config.Name),
 		config:          config.DataFlowComponentConfig,
 		ObservedState:   DataflowComponentObservedState{},

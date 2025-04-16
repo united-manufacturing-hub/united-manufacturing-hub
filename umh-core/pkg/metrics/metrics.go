@@ -27,21 +27,27 @@ import (
 
 const (
 	// Component Labels
-	ComponentControlLoop               = "control_loop"
-	ComponentBaseFSMManager            = "base_fsm_manager"
-	ComponentS6Manager                 = "s6_manager"
-	ComponentBenthosManager            = "benthos_manager"
-	ComponentRedpandaManager           = "redpanda_manager"
-	ComponentDataFlowCompManager       = "dataflow_component_manager"
+	ComponentControlLoop = "control_loop"
+	// Manager
+	ComponentBaseFSMManager      = "base_fsm_manager"
+	ComponentS6Manager           = "s6_manager"
+	ComponentBenthosManager      = "benthos_manager"
+	ComponentRedpandaManager     = "redpanda_manager"
+	ComponentNmapManager         = "nmap_manager"
+	ComponentDataFlowCompManager = "dataflow_component_manager"
+	// Instances
 	ComponentS6Instance                = "s6_instance"
 	ComponentBenthosInstance           = "benthos_instance"
 	ComponentRedpandaInstance          = "redpanda_instance"
-	ComponentS6Service                 = "s6_service"
-	ComponentBenthosService            = "benthos_service"
-	ComponentRedpandaService           = "redpanda_service"
-	ComponentFilesystem                = "filesystem"
-	ComponentContainerMonitor          = "container_monitor"
+	ComponentNmapInstance              = "nmap_instance"
 	ComponentDataflowComponentInstance = "dataflow_component_instance"
+	// Services
+	ComponentS6Service        = "s6_service"
+	ComponentBenthosService   = "benthos_service"
+	ComponentRedpandaService  = "redpanda_service"
+	ComponentNmapService      = "nmap_service"
+	ComponentFilesystem       = "filesystem"
+	ComponentContainerMonitor = "container_monitor"
 )
 
 var (
