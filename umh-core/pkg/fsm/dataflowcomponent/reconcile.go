@@ -279,18 +279,11 @@ func (d *DataflowComponentInstance) reconcileStartingState(ctx context.Context, 
 			return d.baseFSMInstance.SendEvent(ctx, EventStartDone), true
 		}
 
-		// Get the time when the DataflowComponentInstance entered the Starting state
-		stateEntryTime, err := d.GetStateEntryTime(currentState)
-		if err != nil {
-			// If we can't determine when the state was entered, use a conservative  approach and
-			// assume we just entered the state
-			stateEntryTime = currentTime
-		}
-
 		// Check if we have exceeded the grace period since entering the Starting state
-		if currentTime.Sub(stateEntryTime) > constants.WaitTimeBeforeMarkingStartFailed {
+		if d.IsStartupGracePeriodExpired(currentTime, currentState) {
 			return d.baseFSMInstance.SendEvent(ctx, EventStartFailed), true
 		}
+
 		// Still within grace period, continue waiting until the next reconcile
 	case OperationalStateStartingFailed:
 	// Do not do anything here.
