@@ -86,6 +86,7 @@ func NewDataflowComponentInstance(
 		service:         dataflowcomponent.NewDefaultDataFlowComponentService(config.Name),
 		config:          config.DataFlowComponentConfig,
 		ObservedState:   DataflowComponentObservedState{},
+		stateEntryTime:  make(map[string]time.Time),
 	}
 
 	instance.registerCallbacks()

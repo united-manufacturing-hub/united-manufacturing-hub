@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	internal_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
@@ -82,24 +83,34 @@ func (d *DataflowComponentInstance) Reconcile(ctx context.Context, filesystemSer
 	}
 
 	// Step 2: Detect external changes.
-	if err := d.reconcileExternalChanges(ctx, filesystemService, tick); err != nil {
-		// If the service is not running, we don't want to return an error here, because we want to continue reconciling
-		if !errors.Is(err, dataflowcomponentservice.ErrServiceNotExist) {
+	err = d.reconcileExternalChanges(ctx, filesystemService, tick)
+	switch {
+	case err == nil:
+	// All good. Do nothing and continue to reconcile
+	case errors.Is(err, dataflowcomponentservice.ErrServiceNotExists):
+		// If service doesn't exists, it will be created in the next reconcile loop. So set the error to nil
+		err = nil
+	case errors.Is(err, context.DeadlineExceeded):
+		// Healthchecks occasionally take longer (sometimes up to 70ms),
+		// resulting in context.DeadlineExceeded errors. In this case, we want to
+		// mark the reconciliation as complete for this tick since we've likely
+		// already consumed significant time. We return reconciled=true to prevent
+		// further reconciliation attempts in the current tick.
+		return nil, true // We don't want to return an error here, as this can happen in normal operations
+	default:
+		// Consider a special case for DFC FSM here
+		// While creating for the first time, reconcileExternalChanges function will throw an error such as
+		// s6 config file not found in the path since DFC fsm is relying on BenthosFSM and Benthos in turn relies on S6 fsm
+		// Inorder for DFC fsm to start, benthosManager.Reconcile should be called and this is called at the end of the function
+		// So set the err to nil in this case
+		// An example error: "failed to update observed state: failed to get observed DataflowComponent config: failed to get benthos config: failed to get benthos config file for service benthos-dataflow-hello-world-dfc: service does not exist"
+		if strings.Contains(err.Error(), "service does not exist") {
+			err = nil
+		} else {
 			d.baseFSMInstance.SetError(err, tick)
-			d.baseFSMInstance.GetLogger().Errorf("error reconciling external changes: %s", err)
-
-			if errors.Is(err, context.DeadlineExceeded) {
-				// Healthchecks occasionally take longer (sometimes up to 70ms),
-				// resulting in context.DeadlineExceeded errors. In this case, we want to
-				// mark the reconciliation as complete for this tick since we've likely
-				// already consumed significant time. We return reconciled=true to prevent
-				// further reconciliation attempts in the current tick.
-				return nil, true // We don't want to return an error here, as this can happen in normal operations
-			}
+			d.baseFSMInstance.GetLogger().Errorf("error while reconciling external changes for dataflowcomponent fsm: %v", err)
 			return nil, false // We don't want to return an error here, because we want to continue reconciling
 		}
-
-		err = nil // The service does not exist, which is fine as this happens in the reconcileStateTransition
 	}
 
 	// Step 3: Attempt to reconcile the state.
