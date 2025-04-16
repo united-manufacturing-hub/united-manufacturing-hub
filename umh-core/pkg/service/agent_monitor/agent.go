@@ -169,6 +169,11 @@ func (c *AgentMonitorService) GetAgentLogs(ctx context.Context) ([]s6.LogEntry, 
 	// Path to the umh-core service
 	servicePath := filepath.Join(constants.S6BaseDir, "umh-core")
 
+	// Check if s6Service is initialized
+	if c.s6Service == nil {
+		return nil, fmt.Errorf("s6 service not initialized")
+	}
+
 	// Use the S6 service to get logs
 	entries, err := c.s6Service.GetLogs(ctx, servicePath, c.fs)
 	if err != nil {
