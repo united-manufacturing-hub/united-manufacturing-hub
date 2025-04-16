@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/nmapserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 )
@@ -26,7 +27,7 @@ import (
 // MockNmapService is a mock implementation of the INmapService interface for testing
 type MockNmapService struct {
 	// Configs keeps track of registered services
-	Configs map[string]*config.NmapServiceConfig
+	Configs map[string]*nmapserviceconfig.NmapServiceConfig
 
 	// StateMap keeps track of desired states
 	StateMap map[string]string
@@ -35,7 +36,7 @@ type MockNmapService struct {
 	StatusResult ServiceInfo
 
 	// GetConfig response to return
-	GetConfigResult config.NmapServiceConfig
+	GetConfigResult nmapserviceconfig.NmapServiceConfig
 
 	// Error to return for various operations
 	GenerateConfigError error
@@ -61,7 +62,7 @@ var _ INmapService = (*MockNmapService)(nil)
 // NewMockNmapService creates a new mock nmap service
 func NewMockNmapService() *MockNmapService {
 	return &MockNmapService{
-		Configs:          make(map[string]*config.NmapServiceConfig),
+		Configs:          make(map[string]*nmapserviceconfig.NmapServiceConfig),
 		StateMap:         make(map[string]string),
 		ServiceStates:    make(map[string]*ServiceInfo),
 		ExistingServices: make(map[string]bool),
@@ -69,7 +70,7 @@ func NewMockNmapService() *MockNmapService {
 }
 
 // GenerateS6ConfigForNmap generates a mock S6 config
-func (m *MockNmapService) GenerateS6ConfigForNmap(nmapConfig *config.NmapServiceConfig, s6ServiceName string) (s6serviceconfig.S6ServiceConfig, error) {
+func (m *MockNmapService) GenerateS6ConfigForNmap(nmapConfig *nmapserviceconfig.NmapServiceConfig, s6ServiceName string) (s6serviceconfig.S6ServiceConfig, error) {
 	if m.GenerateConfigError != nil {
 		return s6serviceconfig.S6ServiceConfig{}, m.GenerateConfigError
 	}
@@ -83,13 +84,13 @@ func (m *MockNmapService) GenerateS6ConfigForNmap(nmapConfig *config.NmapService
 }
 
 // GetConfig returns the mock config
-func (m *MockNmapService) GetConfig(ctx context.Context, nmapName string) (config.NmapServiceConfig, error) {
+func (m *MockNmapService) GetConfig(ctx context.Context, nmapName string) (nmapserviceconfig.NmapServiceConfig, error) {
 	if ctx.Err() != nil {
-		return config.NmapServiceConfig{}, ctx.Err()
+		return nmapserviceconfig.NmapServiceConfig{}, ctx.Err()
 	}
 
 	if m.GetConfigError != nil {
-		return config.NmapServiceConfig{}, m.GetConfigError
+		return nmapserviceconfig.NmapServiceConfig{}, m.GetConfigError
 	}
 
 	if cfg, exists := m.Configs[nmapName]; exists {
@@ -117,7 +118,7 @@ func (m *MockNmapService) Status(ctx context.Context, nmapName string, tick uint
 }
 
 // AddNmapToS6Manager mocks adding a service
-func (m *MockNmapService) AddNmapToS6Manager(ctx context.Context, cfg *config.NmapServiceConfig, nmapName string) error {
+func (m *MockNmapService) AddNmapToS6Manager(ctx context.Context, cfg *nmapserviceconfig.NmapServiceConfig, nmapName string) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
@@ -152,7 +153,7 @@ func (m *MockNmapService) AddNmapToS6Manager(ctx context.Context, cfg *config.Nm
 }
 
 // UpdateNmapInS6Manager mocks updating a service
-func (m *MockNmapService) UpdateNmapInS6Manager(ctx context.Context, cfg *config.NmapServiceConfig, nmapName string) error {
+func (m *MockNmapService) UpdateNmapInS6Manager(ctx context.Context, cfg *nmapserviceconfig.NmapServiceConfig, nmapName string) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
