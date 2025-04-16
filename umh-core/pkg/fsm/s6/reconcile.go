@@ -37,7 +37,7 @@ import (
 // This function is intended to be called repeatedly (e.g. in a periodic control loop).
 // Over multiple calls, it converges the actual state to the desired state. Transitions
 // that fail are retried in subsequent reconcile calls after a backoff period.
-func (s *S6Instance) Reconcile(ctx context.Context, filesystemService filesystem.Service, tick uint64) (err error, reconciled bool) {
+func (s *S6Instance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot, filesystemService filesystem.Service) (err error, reconciled bool) {
 	start := time.Now()
 	s6InstanceName := s.baseFSMInstance.GetID()
 	defer func() {
@@ -57,8 +57,8 @@ func (s *S6Instance) Reconcile(ctx context.Context, filesystemService filesystem
 	}
 
 	// Step 1: If there's a lastError, see if we've waited enough.
-	if s.baseFSMInstance.ShouldSkipReconcileBecauseOfError(tick) {
-		err := s.baseFSMInstance.GetBackoffError(tick)
+	if s.baseFSMInstance.ShouldSkipReconcileBecauseOfError(snapshot.Tick) {
+		err := s.baseFSMInstance.GetBackoffError(snapshot.Tick)
 		s.baseFSMInstance.GetLogger().Debugf("Skipping reconcile for S6 service %s: %s", s.baseFSMInstance.GetID(), err)
 
 		// if it is a permanent error, start the removal process and reset the error (so that we can reconcile towards a stopped / removed state)
@@ -85,10 +85,10 @@ func (s *S6Instance) Reconcile(ctx context.Context, filesystemService filesystem
 	}
 
 	// Step 2: Detect external changes.
-	if err := s.reconcileExternalChanges(ctx, filesystemService, tick); err != nil {
+	if err := s.reconcileExternalChanges(ctx, filesystemService, snapshot.Tick, start); err != nil {
 		// If the service is not running, we don't want to return an error here, because we want to continue reconciling
 		if !errors.Is(err, s6service.ErrServiceNotExist) {
-			s.baseFSMInstance.SetError(err, tick)
+			s.baseFSMInstance.SetError(err, snapshot.Tick)
 			s.baseFSMInstance.GetLogger().Errorf("error reconciling external changes: %s", err)
 			return nil, false // We don't want to return an error here, because we want to continue reconciling
 		}
@@ -114,7 +114,7 @@ func (s *S6Instance) Reconcile(ctx context.Context, filesystemService filesystem
 			return nil, true // We don't want to return an error here, as this can happen in normal operations
 		}
 
-		s.baseFSMInstance.SetError(err, tick)
+		s.baseFSMInstance.SetError(err, snapshot.Tick)
 		s.baseFSMInstance.GetLogger().Errorf("error reconciling state: %s", err)
 		return nil, false // We don't want to return an error here, because we want to continue reconciling
 	}
@@ -127,7 +127,7 @@ func (s *S6Instance) Reconcile(ctx context.Context, filesystemService filesystem
 
 // reconcileExternalChanges checks if the S6Instance service status has changed
 // externally (e.g., if someone manually stopped or started it, or if it crashed)
-func (s *S6Instance) reconcileExternalChanges(ctx context.Context, filesystemService filesystem.Service, tick uint64) error {
+func (s *S6Instance) reconcileExternalChanges(ctx context.Context, filesystemService filesystem.Service, tick uint64, loopStartTime time.Time) error {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentS6Instance, s.baseFSMInstance.GetID()+".reconcileExternalChanges", time.Since(start))
@@ -135,7 +135,7 @@ func (s *S6Instance) reconcileExternalChanges(ctx context.Context, filesystemSer
 
 	observedStateCtx, cancel := context.WithTimeout(ctx, constants.S6UpdateObservedStateTimeout)
 	defer cancel()
-	err := s.UpdateObservedStateOfInstance(observedStateCtx, filesystemService, tick)
+	err := s.UpdateObservedStateOfInstance(observedStateCtx, filesystemService, tick, loopStartTime)
 	if err != nil {
 		return fmt.Errorf("failed to update observed state: %w", err)
 	}

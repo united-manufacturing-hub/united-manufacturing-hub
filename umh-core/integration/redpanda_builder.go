@@ -44,7 +44,7 @@ func NewRedpandaBuilder() *RedpandaBuilder {
 }
 
 // AddGoldenRedpanda adds a Redpanda service that serves HTTP requests on port 8082
-func (b *RedpandaBuilder) AddGoldenRedpanda() *RedpandaBuilder {
+func (r *RedpandaBuilder) AddGoldenRedpanda() *RedpandaBuilder {
 	// Create Redpanda config with an HTTP server input
 	redpandaConfig := config.RedpandaConfig{
 		FSMInstanceConfig: config.FSMInstanceConfig{
@@ -59,27 +59,27 @@ func (b *RedpandaBuilder) AddGoldenRedpanda() *RedpandaBuilder {
 	redpandaConfig.RedpandaServiceConfig.Resources.MemoryPerCoreInBytes = 1024 * 1024 * 1024 // 1GB
 
 	// Add to configuration
-	b.full.Internal.Redpanda = redpandaConfig
-	b.activeRedpanda["golden-redpanda"] = true
-	return b
+	r.full.Internal.Redpanda = redpandaConfig
+	r.activeRedpanda["golden-redpanda"] = true
+	return r
 }
 
 // StartRedpanda sets a Redpanda service to active state
-func (b *RedpandaBuilder) StartRedpanda(name string) *RedpandaBuilder {
-	b.full.Internal.Redpanda.FSMInstanceConfig.DesiredFSMState = "active"
-	b.activeRedpanda[name] = true
-	return b
+func (r *RedpandaBuilder) StartRedpanda(name string) *RedpandaBuilder {
+	r.full.Internal.Redpanda.FSMInstanceConfig.DesiredFSMState = "active"
+	r.activeRedpanda[name] = true
+	return r
 }
 
 // StopRedpanda sets a Redpanda service to inactive state
-func (b *RedpandaBuilder) StopRedpanda(name string) *RedpandaBuilder {
-	b.full.Internal.Redpanda.FSMInstanceConfig.DesiredFSMState = "stopped"
-	b.activeRedpanda[name] = false
-	return b
+func (r *RedpandaBuilder) StopRedpanda(name string) *RedpandaBuilder {
+	r.full.Internal.Redpanda.FSMInstanceConfig.DesiredFSMState = "stopped"
+	r.activeRedpanda[name] = false
+	return r
 }
 
 // BuildYAML converts the configuration to YAML format
-func (b *RedpandaBuilder) BuildYAML() string {
-	out, _ := yaml.Marshal(b.full)
+func (r *RedpandaBuilder) BuildYAML() string {
+	out, _ := yaml.Marshal(r.full)
 	return string(out)
 }

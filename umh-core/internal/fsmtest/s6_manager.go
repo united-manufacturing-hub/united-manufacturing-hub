@@ -20,7 +20,7 @@ package fsmtest
 import (
 	"context"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
@@ -77,12 +77,11 @@ func ConfigureS6MockServiceState(s6Instance *s6.S6Instance, state string) {
 func WaitForMockedManagerInstanceState(
 	ctx context.Context,
 	manager *s6.S6Manager,
-	fullConfig config.FullConfig,
+	snapshot fsm.SystemSnapshot,
 	filesystemService filesystem.Service,
 	instanceName, desiredState string,
 	maxAttempts int,
-	tick uint64,
 ) (uint64, error) {
 	// Simply call the regular function
-	return WaitForManagerInstanceState(ctx, manager, fullConfig, filesystemService, instanceName, desiredState, maxAttempts, tick)
+	return WaitForManagerInstanceState(ctx, manager, snapshot, filesystemService, instanceName, desiredState, maxAttempts)
 }

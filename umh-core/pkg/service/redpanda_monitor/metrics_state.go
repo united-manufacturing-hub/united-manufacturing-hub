@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package redpanda
+package redpanda_monitor
 
 // ComponentThroughput tracks throughput metrics for a single component
 type ComponentThroughput struct {
@@ -63,12 +63,11 @@ func NewRedpandaMetricsState() *RedpandaMetricsState {
 
 // UpdateFromMetrics updates the metrics state based on new metrics
 func (s *RedpandaMetricsState) UpdateFromMetrics(metrics Metrics, tick uint64) {
-	// Update component throughput
 	s.updateComponentThroughput(&s.Input, metrics.Throughput.BytesIn, tick)
 	s.updateComponentThroughput(&s.Output, metrics.Throughput.BytesOut, tick)
 
 	// Update activity status based on input throughput
-	s.IsActive = s.Input.BytesPerTick > 0
+	s.IsActive = s.Input.BytesPerTick > 0 || s.Output.BytesPerTick > 0
 
 	// Update last tick
 	s.LastTick = tick

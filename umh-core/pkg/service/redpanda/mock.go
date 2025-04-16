@@ -27,6 +27,7 @@ import (
 	s6_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/httpclient"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda_monitor"
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 )
 
@@ -105,9 +106,7 @@ func NewMockRedpandaService() *MockRedpandaService {
 		ServiceExistsFlag: false,
 		S6ServiceConfigs:  make([]config.S6FSMConfig, 0),
 		stateFlags:        &ServiceStateFlags{},
-		HTTPClient:        NewMockHTTPClient(),
 		S6Service:         &s6service.MockService{},
-		FileSystemMock:    filesystem.NewDefaultService(),
 	}
 }
 
@@ -143,7 +142,7 @@ func (m *MockRedpandaService) GenerateS6ConfigForRedpanda(redpandaConfig *redpan
 }
 
 // GetConfig mocks getting the Redpanda configuration
-func (m *MockRedpandaService) GetConfig(ctx context.Context, filesystemService filesystem.Service) (redpandaserviceconfig.RedpandaServiceConfig, error) {
+func (m *MockRedpandaService) GetConfig(ctx context.Context, filesystemService filesystem.Service, tick uint64, loopStartTime time.Time) (redpandaserviceconfig.RedpandaServiceConfig, error) {
 	m.GetConfigCalled = true
 
 	// If error is set, return it
@@ -164,7 +163,7 @@ func (m *MockRedpandaService) GetConfig(ctx context.Context, filesystemService f
 }
 
 // Status mocks getting the status of a Redpanda service
-func (m *MockRedpandaService) Status(ctx context.Context, filesystemService filesystem.Service, tick uint64) (ServiceInfo, error) {
+func (m *MockRedpandaService) Status(ctx context.Context, filesystemService filesystem.Service, tick uint64, loopStartTime time.Time) (ServiceInfo, error) {
 	m.StatusCalled = true
 
 	// Check if the service exists
@@ -182,19 +181,19 @@ func (m *MockRedpandaService) Status(ctx context.Context, filesystemService file
 }
 
 // AddRedpandaToS6Manager mocks adding a Redpanda instance to the S6 manager
-func (m *MockRedpandaService) AddRedpandaToS6Manager(ctx context.Context, cfg *redpandaserviceconfig.RedpandaServiceConfig) error {
+func (m *MockRedpandaService) AddRedpandaToS6Manager(ctx context.Context, cfg *redpandaserviceconfig.RedpandaServiceConfig, filesystemService filesystem.Service) error {
 	m.AddRedpandaToS6ManagerCalled = true
 
 	// Ensure the required directories exist if filesystem mock is set
 	if m.FileSystemMock != nil {
 		// Ensure main data directory
-		if err := m.FileSystemMock.EnsureDirectory(ctx, filepath.Join(cfg.BaseDir, "redpanda")); err != nil {
+		if err := filesystemService.EnsureDirectory(ctx, filepath.Join(cfg.BaseDir, "redpanda")); err != nil {
 			return fmt.Errorf("failed to ensure %s/redpanda directory exists: %w", cfg.BaseDir, err)
 		}
 
 		// Ensure coredump directory
 		// By default redpanda will generate coredumps when crashing
-		if err := m.FileSystemMock.EnsureDirectory(ctx, filepath.Join(cfg.BaseDir, "redpanda", "coredump")); err != nil {
+		if err := filesystemService.EnsureDirectory(ctx, filepath.Join(cfg.BaseDir, "redpanda", "coredump")); err != nil {
 			return fmt.Errorf("failed to ensure %s/redpanda/coredump directory exists: %w", cfg.BaseDir, err)
 		}
 	}
@@ -337,7 +336,7 @@ func (m *MockRedpandaService) IsLogsFine(logs []s6service.LogEntry, currentTime 
 }
 
 // IsMetricsErrorFree mocks checking if metrics are error-free
-func (m *MockRedpandaService) IsMetricsErrorFree(metrics Metrics) bool {
+func (m *MockRedpandaService) IsMetricsErrorFree(metrics redpanda_monitor.Metrics) bool {
 	m.IsMetricsErrorFreeCalled = true
 	// For testing purposes, we'll consider metrics error-free
 	return !metrics.Infrastructure.Storage.FreeSpaceAlert
@@ -346,7 +345,7 @@ func (m *MockRedpandaService) IsMetricsErrorFree(metrics Metrics) bool {
 // HasProcessingActivity mocks checking if a Redpanda service has processing activity
 func (m *MockRedpandaService) HasProcessingActivity(status RedpandaStatus) bool {
 	m.HasProcessingActivityCalled = true
-	return status.MetricsState != nil && status.MetricsState.IsActive
+	return status.RedpandaMetrics.MetricsState != nil && status.RedpandaMetrics.MetricsState.IsActive
 }
 
 // ServiceExists mocks checking if a Redpanda service exists

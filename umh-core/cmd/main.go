@@ -83,6 +83,8 @@ func main() {
 	controlLoop := control.NewControlLoop(configManager)
 	systemSnapshot := new(fsm.SystemSnapshot)
 	systemMu := new(sync.Mutex)
+
+	// Initialize the communication state
 	communicationState := communication_state.CommunicationState{
 		Watchdog:        watchdog.NewWatchdog(ctx, time.NewTicker(time.Second*10), true, logger.For(logger.ComponentCommunicator)),
 		InboundChannel:  make(chan *models.UMHMessage, 100),
@@ -93,7 +95,6 @@ func main() {
 		ApiUrl:          configData.Agent.CommunicatorConfig.APIURL,
 		Logger:          logger.For(logger.ComponentCommunicator),
 	}
-	go SystemSnapshotLogger(ctx, controlLoop, systemSnapshot, systemMu)
 
 	if configData.Agent.CommunicatorConfig.APIURL != "" && configData.Agent.CommunicatorConfig.AuthToken != "" {
 		enableBackendConnection(&configData, systemSnapshot, &communicationState, systemMu, controlLoop, communicationState.Logger)
@@ -101,6 +102,10 @@ func main() {
 		log.Warnf("No backend connection enabled, please set API_URL and AUTH_TOKEN")
 	}
 
+	// Start the system snapshot logger
+	go SystemSnapshotLogger(ctx, controlLoop, systemSnapshot, systemMu)
+
+	// Start the control loop
 	err = controlLoop.Execute(ctx)
 	if err != nil {
 		log.Errorf("Control loop failed: %w", err)
@@ -153,11 +158,6 @@ func SystemSnapshotLogger(ctx context.Context, controlLoop *control.ControlLoop,
 				for instanceName, instance := range instances {
 					logger.Infof("Instance: %s, current state: %s, desired state: %s",
 						instanceName, instance.CurrentState, instance.DesiredState)
-
-					// Log observed state if available
-					if instance.LastObservedState != nil {
-						logger.Debugf("Observed state: %v", instance.LastObservedState)
-					}
 				}
 			}
 		}

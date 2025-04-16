@@ -15,30 +15,25 @@
 package redpanda
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"net/http"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
-	"github.com/prometheus/common/expfmt"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/redpandaserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/httpclient"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda_monitor"
 	"go.uber.org/zap"
-	"gopkg.in/yaml.v3"
 
-	dto "github.com/prometheus/client_model/go"
 	redpandayaml "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/redpandaserviceconfig"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
@@ -50,11 +45,11 @@ type IRedpandaService interface {
 	// GenerateS6ConfigForRedpanda generates a S6 config for a given redpanda instance
 	GenerateS6ConfigForRedpanda(redpandaConfig *redpandaserviceconfig.RedpandaServiceConfig) (s6serviceconfig.S6ServiceConfig, error)
 	// GetConfig returns the actual Redpanda config from the S6 service
-	GetConfig(ctx context.Context, filesystemService filesystem.Service) (redpandaserviceconfig.RedpandaServiceConfig, error)
+	GetConfig(ctx context.Context, filesystemService filesystem.Service, tick uint64, loopStartTime time.Time) (redpandaserviceconfig.RedpandaServiceConfig, error)
 	// Status checks the status of a Redpanda service
-	Status(ctx context.Context, filesystemService filesystem.Service, tick uint64) (ServiceInfo, error)
+	Status(ctx context.Context, filesystemService filesystem.Service, tick uint64, loopStartTime time.Time) (ServiceInfo, error)
 	// AddRedpandaToS6Manager adds a Redpanda instance to the S6 manager
-	AddRedpandaToS6Manager(ctx context.Context, cfg *redpandaserviceconfig.RedpandaServiceConfig) error
+	AddRedpandaToS6Manager(ctx context.Context, cfg *redpandaserviceconfig.RedpandaServiceConfig, filesystemService filesystem.Service) error
 	// UpdateRedpandaInS6Manager updates an existing Redpanda instance in the S6 manager
 	UpdateRedpandaInS6Manager(ctx context.Context, cfg *redpandaserviceconfig.RedpandaServiceConfig) error
 	// RemoveRedpandaFromS6Manager removes a Redpanda instance from the S6 manager
@@ -72,7 +67,7 @@ type IRedpandaService interface {
 	// Expects logs ([]s6service.LogEntry), currentTime (time.Time), and logWindow (time.Duration)
 	IsLogsFine(logs []s6service.LogEntry, currentTime time.Time, logWindow time.Duration) bool
 	// IsMetricsErrorFree checks if the metrics of a Redpanda service are error-free
-	IsMetricsErrorFree(metrics Metrics) bool
+	IsMetricsErrorFree(metrics redpanda_monitor.Metrics) bool
 	// HasProcessingActivity checks if a Redpanda service has processing activity
 	HasProcessingActivity(status RedpandaStatus) bool
 }
@@ -91,17 +86,10 @@ type ServiceInfo struct {
 type RedpandaStatus struct {
 	// HealthCheck contains information about the health of the Redpanda service
 	HealthCheck HealthCheck
-	// Metrics contains information about the metrics of the Redpanda service
-	Metrics Metrics
-	// MetricsState contains information about the metrics of the Redpanda service
-	MetricsState *RedpandaMetricsState
 	// Logs contains the logs of the Redpanda service
 	Logs []s6service.LogEntry
-	// UpdatedAtTick contains the tick at which the status was last updated
-	// This is used to check if the status is stale (more then constants.RedpandaStatusUpdateIntervalTicks ticks ago)
-	// We use this in redpanda, as it's metric endpoint is quite slow, and we don't want to block the main loop to often.
-	// Therefore we only update the status every constants.RedpandaStatusUpdateIntervalTicks ticks
-	UpdatedAtTick uint64
+	// RedpandaMetrics contains information about the metrics of the Redpanda service
+	RedpandaMetrics redpanda_monitor.RedpandaMetrics
 }
 
 // HealthCheck contains information about the health of the Redpanda service
@@ -115,75 +103,6 @@ type HealthCheck struct {
 	Version string
 }
 
-// Metrics contains information about the metrics of the Redpanda service
-type Metrics struct {
-	Infrastructure InfrastructureMetrics
-	Cluster        ClusterMetrics
-	Throughput     ThroughputMetrics
-	Topic          TopicMetrics
-}
-
-// InfrastructureMetrics contains information about the infrastructure metrics of the Redpanda service
-type InfrastructureMetrics struct {
-	Storage StorageMetrics
-	Uptime  UptimeMetrics
-}
-
-// StorageMetrics contains information about the storage metrics of the Redpanda service
-type StorageMetrics struct {
-	// redpanda_storage_disk_free_bytes
-	// type: gauge
-	// Docs: https://docs.redpanda.com/current/reference/public-metrics-reference/#redpanda_storage_disk_free_bytes
-	FreeBytes int64
-	// redpanda_storage_disk_total_bytes
-	// type: gauge
-	// Docs: https://docs.redpanda.com/current/reference/public-metrics-reference/#redpanda_storage_disk_total_bytes
-	TotalBytes int64
-	// redpanda_storage_disk_free_space_alert (0 == false, everything else == true)
-	// type: gauge
-	FreeSpaceAlert bool
-}
-
-// UptimeMetrics contains information about the uptime metrics of the Redpanda service
-type UptimeMetrics struct {
-	// redpanda_uptime_seconds_total
-	// type: gauge
-	// Docs: https://docs.redpanda.com/current/reference/public-metrics-reference/#redpanda_uptime_seconds_total
-	Uptime int64
-}
-
-// ClusterMetrics contains information about the cluster metrics of the Redpanda service
-type ClusterMetrics struct {
-	// redpanda_cluster_topics
-	// type: gauge
-	// Docs: https://docs.redpanda.com/current/reference/public-metrics-reference/#redpanda_cluster_topics
-	Topics int64
-	// redpanda_cluster_unavailable_partitions
-	// type: gauge
-	// Docs: https://docs.redpanda.com/current/reference/public-metrics-reference/#redpanda_cluster_unavailable_partitions
-	UnavailableTopics int64
-}
-
-// ThroughputMetrics contains information about the throughput metrics of the Redpanda service
-type ThroughputMetrics struct {
-	// redpanda_kafka_request_bytes_total over all redpanda_namespace and redpanda_topic labels using redpanda_request=("produce")
-	// type: counter
-	// Docs: https://docs.redpanda.com/current/reference/public-metrics-reference/#redpanda_kafka_request_bytes_total
-	BytesIn int64
-	// redpanda_kafka_request_bytes_total over all redpanda_namespace and redpanda_topic labels using redpanda_request=("consume")
-	// type: counter
-	// Docs: https://docs.redpanda.com/current/reference/public-metrics-reference/#redpanda_kafka_request_bytes_total
-	BytesOut int64
-}
-
-// TopicMetrics contains information about the topic metrics of the Redpanda service
-type TopicMetrics struct {
-	// redpanda_kafka_partitions
-	// type: gauge
-	// Docs: https://docs.redpanda.com/current/reference/public-metrics-reference/#redpanda_kafka_partitions
-	TopicPartitionMap map[string]int64
-}
-
 // RedpandaService is the default implementation of the IRedpandaService interface
 type RedpandaService struct {
 	logger           *zap.SugaredLogger
@@ -191,10 +110,9 @@ type RedpandaService struct {
 	s6Service        s6service.Service // S6 service for direct S6 operations
 	s6ServiceConfigs []config.S6FSMConfig
 	httpClient       httpclient.HTTPClient
-	metricsState     *RedpandaMetricsState
-	filesystem       filesystem.Service // Filesystem service for file operations
 	baseDir          string
 	lastStatus       RedpandaStatus
+	metricsService   redpanda_monitor.IRedpandaMonitorService
 }
 
 // RedpandaServiceOption is a function that modifies a RedpandaService
@@ -215,10 +133,10 @@ func WithS6Service(s6Service s6service.Service) RedpandaServiceOption {
 	}
 }
 
-// WithFilesystem sets a custom filesystem service for the RedpandaService
-func WithFilesystem(fs filesystem.Service) RedpandaServiceOption {
+// WithS6Manager sets a custom S6 manager for the RedpandaService
+func WithS6Manager(s6Manager *s6fsm.S6Manager) RedpandaServiceOption {
 	return func(s *RedpandaService) {
-		s.filesystem = fs
+		s.s6Manager = s6Manager
 	}
 }
 
@@ -229,18 +147,24 @@ func WithBaseDir(baseDir string) RedpandaServiceOption {
 	}
 }
 
+// WithMonitorService sets a custom monitor service for the RedpandaService
+func WithMonitorService(monitorService redpanda_monitor.IRedpandaMonitorService) RedpandaServiceOption {
+	return func(s *RedpandaService) {
+		s.metricsService = monitorService
+	}
+}
+
 // NewDefaultRedpandaService creates a new default Redpanda service
 // name is the name of the Redpanda service as defined in the UMH config
 func NewDefaultRedpandaService(redpandaName string, opts ...RedpandaServiceOption) *RedpandaService {
 	managerName := fmt.Sprintf("%s%s", logger.ComponentRedpandaService, redpandaName)
 	service := &RedpandaService{
-		logger:       logger.For(managerName),
-		s6Manager:    s6fsm.NewS6Manager(managerName),
-		s6Service:    s6service.NewDefaultService(),
-		httpClient:   nil, // this is only for a mock in the tests
-		metricsState: NewRedpandaMetricsState(),
-		filesystem:   filesystem.NewDefaultService(),
-		baseDir:      constants.DefaultRedpandaBaseDir,
+		logger:         logger.For(managerName),
+		s6Manager:      s6fsm.NewS6Manager(managerName),
+		s6Service:      s6service.NewDefaultService(),
+		httpClient:     nil, // this is only for a mock in the tests
+		baseDir:        constants.DefaultRedpandaBaseDir,
+		metricsService: redpanda_monitor.NewRedpandaMonitorService(),
 	}
 
 	// Apply options
@@ -300,65 +224,32 @@ func (s *RedpandaService) GenerateS6ConfigForRedpanda(redpandaConfig *redpandase
 }
 
 // GetConfig returns the actual Redpanda config from the S6 service
-func (s *RedpandaService) GetConfig(ctx context.Context, filesystemService filesystem.Service) (redpandaserviceconfig.RedpandaServiceConfig, error) {
+func (s *RedpandaService) GetConfig(ctx context.Context, filesystemService filesystem.Service, tick uint64, loopStartTime time.Time) (redpandaserviceconfig.RedpandaServiceConfig, error) {
 	if ctx.Err() != nil {
 		return redpandaserviceconfig.RedpandaServiceConfig{}, ctx.Err()
 	}
 
-	// Create HTTP client if needed
-	var requestClient httpclient.HTTPClient = s.httpClient
-	if requestClient == nil {
-		requestClient = httpclient.NewDefaultHTTPClient()
-	}
-
-	// Fetch configuration from the API endpoint
-	clusterConfigEndpoint := "http://localhost:9644/v1/cluster_config"
-	resp, body, err := requestClient.GetWithBody(ctx, clusterConfigEndpoint)
+	status, err := s.metricsService.Status(ctx, filesystemService, tick)
 	if err != nil {
-		s.logger.Debugf("Failed to fetch cluster_config: %v", err)
-
-		// Fall back to the file-based approach if API call fails
-		return s.getConfigFromFile(ctx, filesystemService)
+		return redpandaserviceconfig.RedpandaServiceConfig{}, fmt.Errorf("failed to get redpanda status: %w", err)
 	}
 
-	if resp.StatusCode != http.StatusOK {
-		s.logger.Debugf("Unexpected status code from cluster_config API: %d", resp.StatusCode)
-		return s.getConfigFromFile(ctx, filesystemService)
+	// If this is nil, we have not yet tried to scan for metrics and config, or there has been an error (but that one will be cached in the above Status() return)
+	if status.RedpandaStatus.LastScan == nil {
+		return redpandaserviceconfig.RedpandaServiceConfig{}, fmt.Errorf("last scan is nil")
 	}
 
-	// Parse the JSON response
-	var redpandaConfig map[string]interface{}
-	if err := json.Unmarshal(body, &redpandaConfig); err != nil {
-		s.logger.Debugf("Error parsing cluster_config response: %v", err)
-		return s.getConfigFromFile(ctx, filesystemService)
+	// Check that the last scan is not older then RedpandaMaxMetricsAndConfigAge
+	if loopStartTime.Sub(status.RedpandaStatus.LastScan.LastUpdatedAt) > constants.RedpandaMaxMetricsAndConfigAge {
+		s.logger.Warnf("last scan is %s old, returning empty status", loopStartTime.Sub(status.RedpandaStatus.LastScan.LastUpdatedAt))
+		return redpandaserviceconfig.RedpandaServiceConfig{}, fmt.Errorf("last scan is older than %s", constants.RedpandaMaxMetricsAndConfigAge)
 	}
 
-	result := redpandaserviceconfig.RedpandaServiceConfig{}
+	lastScan := status.RedpandaStatus.LastScan
 
-	// Extract the values we need from the JSON
-	if value, ok := redpandaConfig["log_retention_ms"]; ok {
-		if floatVal, ok := value.(float64); ok {
-			result.Topic.DefaultTopicRetentionMs = int(floatVal)
-		} else if intVal, ok := value.(int); ok {
-			result.Topic.DefaultTopicRetentionMs = intVal
-		} else if strVal, ok := value.(string); ok {
-			if intVal, err := strconv.Atoi(strVal); err == nil {
-				result.Topic.DefaultTopicRetentionMs = intVal
-			}
-		}
-	}
-
-	if value, ok := redpandaConfig["retention_bytes"]; ok {
-		if floatVal, ok := value.(float64); ok {
-			result.Topic.DefaultTopicRetentionBytes = int(floatVal)
-		} else if intVal, ok := value.(int); ok {
-			result.Topic.DefaultTopicRetentionBytes = intVal
-		} else if strVal, ok := value.(string); ok {
-			if intVal, err := strconv.Atoi(strVal); err == nil {
-				result.Topic.DefaultTopicRetentionBytes = intVal
-			}
-		}
-	}
+	var result redpandaserviceconfig.RedpandaServiceConfig
+	result.Topic.DefaultTopicRetentionMs = lastScan.ClusterConfig.Topic.DefaultTopicRetentionMs
+	result.Topic.DefaultTopicRetentionBytes = lastScan.ClusterConfig.Topic.DefaultTopicRetentionBytes
 
 	// Safely extract MaxCores - this might not be available from the API
 	// so we'll use a default value
@@ -368,45 +259,8 @@ func (s *RedpandaService) GetConfig(ctx context.Context, filesystemService files
 	return redpandayaml.NormalizeRedpandaConfig(result), nil
 }
 
-// getConfigFromFile returns the Redpanda config from the S6 service file
-// This is a fallback method used when the API endpoint is not available
-func (s *RedpandaService) getConfigFromFile(ctx context.Context, filesystemService filesystem.Service) (redpandaserviceconfig.RedpandaServiceConfig, error) {
-	s6ServicePath := filepath.Join(constants.S6BaseDir, constants.RedpandaServiceName)
-
-	// Request the config file from the S6 service
-	yamlData, err := s.s6Service.GetS6ConfigFile(ctx, s6ServicePath, constants.RedpandaConfigFileName, filesystemService)
-	if err != nil {
-		return redpandaserviceconfig.RedpandaServiceConfig{}, fmt.Errorf("failed to get redpanda config file: %w", err)
-	}
-
-	// Parse the YAML into a config map
-	var redpandaConfig map[string]interface{}
-	if err := yaml.Unmarshal(yamlData, &redpandaConfig); err != nil {
-		return redpandaserviceconfig.RedpandaServiceConfig{}, fmt.Errorf("error parsing redpanda config file: %w", err)
-	}
-
-	result := redpandaserviceconfig.RedpandaServiceConfig{}
-
-	// Safely extract retention_ms
-	if defaultTopicRetentionMs, ok := redpandaConfig["log_retention_ms"].(int); ok {
-		result.Topic.DefaultTopicRetentionMs = defaultTopicRetentionMs
-	}
-
-	// Safely extract retention_bytes
-	if defaultTopicRetentionBytes, ok := redpandaConfig["retention_bytes"].(int); ok {
-		result.Topic.DefaultTopicRetentionBytes = defaultTopicRetentionBytes
-	}
-
-	// Safely extract MaxCores (smp in the yaml)
-	if maxCores, ok := redpandaConfig["smp"].(int); ok {
-		result.Resources.MaxCores = maxCores
-	}
-
-	return redpandayaml.NormalizeRedpandaConfig(result), nil
-}
-
 // Status checks the status of a Redpanda service
-func (s *RedpandaService) Status(ctx context.Context, filesystemService filesystem.Service, tick uint64) (ServiceInfo, error) {
+func (s *RedpandaService) Status(ctx context.Context, filesystemService filesystem.Service, tick uint64, loopStartTime time.Time) (ServiceInfo, error) {
 	if ctx.Err() != nil {
 		return ServiceInfo{}, ctx.Err()
 	}
@@ -415,6 +269,7 @@ func (s *RedpandaService) Status(ctx context.Context, filesystemService filesyst
 	// This is a crucial check that prevents "instance not found" errors
 	// during reconciliation when a service is being created or removed
 	if _, exists := s.s6Manager.GetInstance(constants.RedpandaServiceName); !exists {
+		s.logger.Debugf("Service %s not found in S6 manager", constants.RedpandaServiceName)
 		return ServiceInfo{}, ErrServiceNotExist
 	}
 
@@ -430,7 +285,6 @@ func (s *RedpandaService) Status(ctx context.Context, filesystemService filesyst
 		}
 		return ServiceInfo{}, fmt.Errorf("failed to get last observed state: %w", err)
 	}
-
 	s6ServiceObservedState, ok := s6ServiceObservedStateRaw.(s6fsm.S6ObservedState)
 	if !ok {
 		return ServiceInfo{}, fmt.Errorf("observed state is not a S6ObservedState: %v", s6ServiceObservedStateRaw)
@@ -455,41 +309,36 @@ func (s *RedpandaService) Status(ctx context.Context, filesystemService filesyst
 		if errors.Is(err, s6service.ErrServiceNotExist) {
 			s.logger.Debugf("Service %s does not exist, returning empty logs", constants.RedpandaServiceName)
 			return ServiceInfo{}, ErrServiceNotExist
+		} else if errors.Is(err, s6service.ErrLogFileNotFound) {
+			s.logger.Debugf("Log file for service %s not found, returning empty logs", constants.RedpandaServiceName)
+			return ServiceInfo{}, ErrServiceNotExist
 		} else {
 			return ServiceInfo{}, fmt.Errorf("failed to get logs: %w", err)
 		}
 	}
-
 	// Let's get the health check of the Redpanda service
-	redpandaStatus, err := s.GetHealthCheckAndMetrics(ctx, tick, logs)
-
+	redpandaStatus, err := s.GetHealthCheckAndMetrics(ctx, tick, logs, filesystemService, loopStartTime)
 	if err != nil {
-		if strings.Contains(err.Error(), "connection refused") {
+		if strings.Contains(err.Error(), ErrServiceNoLogFile.Error()) {
 			return ServiceInfo{
 				S6ObservedState: s6ServiceObservedState,
 				S6FSMState:      s6FSMState, // Note for state transitions: When a service is stopped and then reactivated,
 				// this S6FSMState needs to be properly refreshed here.
 				// Otherwise, the service can not transition from stopping to stopped state
 				RedpandaStatus: RedpandaStatus{
-					Logs:          logs,
-					UpdatedAtTick: tick,
+					Logs: logs,
 				},
-			}, ErrHealthCheckConnectionRefused
+			}, ErrServiceNoLogFile
 		}
-		return ServiceInfo{}, fmt.Errorf("failed to get health check: %w", err)
-	}
+		if strings.Contains(err.Error(), redpanda_monitor.ErrServiceConnectionRefused.Error()) {
+			return ServiceInfo{
+				S6ObservedState: s6ServiceObservedState,
+				S6FSMState:      s6FSMState,
+				RedpandaStatus:  redpandaStatus,
+			}, redpanda_monitor.ErrServiceConnectionRefused
+		}
 
-	// Check if the lastUpdate is more then constants.RedpandaStatusUpdateIntervalTicks ticks ago
-	var minTick uint64
-	// Prevent integer underflow
-	if tick < constants.RedpandaStatusUpdateIntervalTicks*2 {
-		minTick = 0
-	} else {
-		minTick = tick - constants.RedpandaStatusUpdateIntervalTicks*2
-	}
-	if redpandaStatus.UpdatedAtTick < minTick {
-		s.logger.Infof("Redpanda status update interval is more then %d ticks ago, lastUpdate: %d (tick: %d) [minTick: %d]", constants.RedpandaStatusUpdateIntervalTicks*2, redpandaStatus.UpdatedAtTick, tick, minTick)
-		return ServiceInfo{}, fmt.Errorf("redpanda status update interval is more then %d ticks ago, lastUpdate: %d", constants.RedpandaStatusUpdateIntervalTicks*2, redpandaStatus.UpdatedAtTick)
+		return ServiceInfo{}, fmt.Errorf("failed to get health check: %w", err)
 	}
 
 	serviceInfo := ServiceInfo{
@@ -498,115 +347,17 @@ func (s *RedpandaService) Status(ctx context.Context, filesystemService filesyst
 		RedpandaStatus:  redpandaStatus,
 	}
 
+	// set the logs to the service info
+	// TODO: this is a hack to get the logs to the service info
+	// we should find a better way to do this
 	serviceInfo.RedpandaStatus.Logs = logs
 
 	return serviceInfo, nil
 }
 
-// parseMetrics parses prometheus metrics into structured format
-func parseMetrics(data []byte) (Metrics, error) {
-	var parser expfmt.TextParser
-	metrics := Metrics{
-		Infrastructure: InfrastructureMetrics{},
-		Cluster:        ClusterMetrics{},
-		Throughput:     ThroughputMetrics{},
-		Topic: TopicMetrics{
-			TopicPartitionMap: make(map[string]int64), // Pre-allocate map to avoid nil check later
-		},
-	}
-
-	// Parse the metrics text into prometheus format
-	mf, err := parser.TextToMetricFamilies(bytes.NewReader(data))
-	if err != nil {
-		return metrics, fmt.Errorf("failed to parse metrics: %w", err)
-	}
-
-	// Directly extract only the metrics we need instead of iterating all metrics
-
-	// Infrastructure metrics - Storage
-	if family, ok := mf["redpanda_storage_disk_free_bytes"]; ok && len(family.Metric) > 0 {
-		metrics.Infrastructure.Storage.FreeBytes = getMetricValue(family.Metric[0])
-	}
-
-	if family, ok := mf["redpanda_storage_disk_total_bytes"]; ok && len(family.Metric) > 0 {
-		metrics.Infrastructure.Storage.TotalBytes = getMetricValue(family.Metric[0])
-	}
-
-	if family, ok := mf["redpanda_storage_disk_free_space_alert"]; ok && len(family.Metric) > 0 {
-		// Any non-zero value indicates an alert condition
-		metrics.Infrastructure.Storage.FreeSpaceAlert = getMetricValue(family.Metric[0]) != 0
-	}
-
-	// Infrastructure metrics - Uptime
-	if family, ok := mf["redpanda_uptime_seconds_total"]; ok && len(family.Metric) > 0 {
-		metrics.Infrastructure.Uptime.Uptime = getMetricValue(family.Metric[0])
-	}
-
-	// Cluster metrics
-	if family, ok := mf["redpanda_cluster_topics"]; ok && len(family.Metric) > 0 {
-		metrics.Cluster.Topics = getMetricValue(family.Metric[0])
-	}
-
-	if family, ok := mf["redpanda_cluster_unavailable_partitions"]; ok && len(family.Metric) > 0 {
-		metrics.Cluster.UnavailableTopics = getMetricValue(family.Metric[0])
-	}
-
-	// Throughput metrics
-	if family, ok := mf["redpanda_kafka_request_bytes_total"]; ok {
-		// Process only produce/consume metrics in a single pass
-		for _, metric := range family.Metric {
-			if label := getLabel(metric, "redpanda_request"); label != "" {
-				if label == "produce" {
-					metrics.Throughput.BytesIn = getMetricValue(metric)
-				} else if label == "consume" {
-					metrics.Throughput.BytesOut = getMetricValue(metric)
-				}
-			}
-		}
-	}
-
-	// Topic metrics
-	if family, ok := mf["redpanda_kafka_partitions"]; ok {
-		for _, metric := range family.Metric {
-			if topic := getLabel(metric, "redpanda_topic"); topic != "" {
-				metrics.Topic.TopicPartitionMap[topic] = getMetricValue(metric)
-			}
-		}
-	}
-
-	return metrics, nil
-}
-
-// getMetricValue extracts numeric value from a metric
-func getMetricValue(m *dto.Metric) int64 {
-	if m.Counter != nil {
-		return int64(m.Counter.GetValue())
-	}
-	if m.Gauge != nil {
-		return int64(m.Gauge.GetValue())
-	}
-	if m.Untyped != nil {
-		return int64(m.Untyped.GetValue())
-	}
-	return 0
-}
-
-// getLabel extracts a label value from a metric
-func getLabel(m *dto.Metric, name string) string {
-	for _, label := range m.Label {
-		if label.GetName() == name {
-			return label.GetValue()
-		}
-	}
-	return ""
-}
-
 // GetHealthCheckAndMetrics returns the health check and metrics of a Redpanda service
-func (s *RedpandaService) GetHealthCheckAndMetrics(ctx context.Context, tick uint64, logs []s6service.LogEntry) (RedpandaStatus, error) {
-	if tick%constants.RedpandaStatusUpdateIntervalTicks != 0 {
-		s.logger.Infof("Skipping health check and metrics for tick %d, as it's not a multiple of %d", tick, constants.RedpandaStatusUpdateIntervalTicks)
-		return s.lastStatus, nil
-	}
+func (s *RedpandaService) GetHealthCheckAndMetrics(ctx context.Context, tick uint64, logs []s6service.LogEntry, filesystemService filesystem.Service, loopStartTime time.Time) (RedpandaStatus, error) {
+
 	s.logger.Infof("Getting health check and metrics for tick %d", tick)
 	start := time.Now()
 	defer func() {
@@ -614,9 +365,7 @@ func (s *RedpandaService) GetHealthCheckAndMetrics(ctx context.Context, tick uin
 	}()
 
 	if ctx.Err() != nil {
-		return RedpandaStatus{
-			UpdatedAtTick: tick,
-		}, ctx.Err()
+		return RedpandaStatus{}, ctx.Err()
 	}
 
 	// Skip health checks and metrics if the service doesn't exist yet
@@ -627,114 +376,52 @@ func (s *RedpandaService) GetHealthCheckAndMetrics(ctx context.Context, tick uin
 				IsLive:  false,
 				IsReady: false,
 			},
-			Metrics:       Metrics{},
-			Logs:          []s6service.LogEntry{},
-			UpdatedAtTick: tick,
+			RedpandaMetrics: redpanda_monitor.RedpandaMetrics{
+				Metrics:      redpanda_monitor.Metrics{},
+				MetricsState: nil,
+			},
+			Logs: []s6service.LogEntry{},
 		}
 		return s.lastStatus, nil
 	}
 
-	baseURL := "http://localhost:9644"
-	metricsEndpoint := baseURL + "/public_metrics"
-
-	// Create a client to use for our requests
-	// If it's a mock client (used in tests), use it directly
-	// Otherwise, create a new client with timeouts based on context
-	var requestClient httpclient.HTTPClient = s.httpClient
-
-	// Only create a default client if we're not using a mock client
-	if requestClient == nil {
-		requestClient = httpclient.NewDefaultHTTPClient()
+	redpandaStatus, err := s.metricsService.Status(ctx, filesystemService, tick)
+	if err != nil {
+		return RedpandaStatus{}, fmt.Errorf("failed to get redpanda status: %w", err)
 	}
 
-	// Start metrics fetch
-	metricsFetchStart := time.Now()
-	resp, body, err := requestClient.GetWithBody(ctx, metricsEndpoint)
-	metricsFetchTime := time.Since(metricsFetchStart)
+	// If this is nil, we have not yet tried to scan for metrics and config, or there has been an error (but that one will be cached in the above Status() return)
+	if redpandaStatus.RedpandaStatus.LastScan == nil {
+		return RedpandaStatus{}, fmt.Errorf("last scan is nil")
+	}
 
-	// Handle errors from metrics fetch
-	if err != nil {
-		s.lastStatus = RedpandaStatus{
-			HealthCheck: HealthCheck{
-				IsLive:  false,
-				IsReady: false,
-			},
-			Metrics:       Metrics{},
-			Logs:          logs,
-			UpdatedAtTick: tick,
-		}
-		return s.lastStatus, fmt.Errorf("failed to check metrics endpoint: %w", err)
+	// Check that the last scan is not older then RedpandaMaxMetricsAndConfigAge
+	if loopStartTime.Sub(redpandaStatus.RedpandaStatus.LastScan.LastUpdatedAt) > constants.RedpandaMaxMetricsAndConfigAge {
+		s.logger.Warnf("last scan is %s old, returning empty status", loopStartTime.Sub(redpandaStatus.RedpandaStatus.LastScan.LastUpdatedAt))
+		return RedpandaStatus{}, fmt.Errorf("last scan is older than %s", constants.RedpandaMaxMetricsAndConfigAge)
 	}
 
 	// Create health check structure
 	healthCheck := HealthCheck{
 		// Liveness is determined by a successful response
-		IsLive: resp.StatusCode == http.StatusOK,
-		// Readiness comes from logs analysis
-		IsReady: resp.StatusCode == http.StatusOK,
+		IsLive: redpandaStatus.RedpandaStatus.IsRunning,
+		// IsReady is the same as IsLive, as there is no distinct logic for a redpanda monitor services readiness
+		IsReady: redpandaStatus.RedpandaStatus.IsRunning,
 		// Redpanda version is constant
 		Version: constants.RedpandaVersion,
 	}
 
-	// If service is not ready, log detailed status
-	if !healthCheck.IsReady {
-		s.logger.Debugw("Service not ready",
-			"service", constants.RedpandaServiceName,
-			"status", resp.StatusCode,
-			"body", string(body))
-	}
-
-	// Parse metrics from the response body
-	metricsParseStart := time.Now()
-	metricsData, err := parseMetrics(body)
-	metricsParseTime := time.Since(metricsParseStart)
-
-	if err != nil {
-		s.lastStatus = RedpandaStatus{
-			HealthCheck: HealthCheck{
-				IsLive:  healthCheck.IsLive,
-				IsReady: false,
-				Version: constants.RedpandaVersion,
-			},
-			Logs:          logs,
-			UpdatedAtTick: tick,
-		}
-		return s.lastStatus, fmt.Errorf("failed to parse metrics: %w", err)
-	}
-
-	// Update the metrics state
-	if s.metricsState == nil {
-		s.lastStatus = RedpandaStatus{
-			HealthCheck:   healthCheck,
-			Metrics:       metricsData,
-			Logs:          logs,
-			UpdatedAtTick: tick,
-		}
-		return s.lastStatus, fmt.Errorf("metrics state not initialized")
-	}
-
-	stateUpdateStart := time.Now()
-	s.metricsState.UpdateFromMetrics(metricsData, tick)
-	stateUpdateTime := time.Since(stateUpdateStart)
-
-	// Detailed timing breakdown
-	if metricsFetchTime+metricsParseTime > (constants.RedpandaUpdateObservedStateTimeout / 2) {
-		s.logger.Warnf("Metrics processing slow: fetch=%v, parse=%v, update=%v, total=%v",
-			metricsFetchTime, metricsParseTime, stateUpdateTime, time.Since(start))
-	}
-
 	s.lastStatus = RedpandaStatus{
-		HealthCheck:   healthCheck,
-		Metrics:       metricsData,
-		MetricsState:  s.metricsState,
-		Logs:          logs,
-		UpdatedAtTick: tick,
+		HealthCheck:     healthCheck,
+		RedpandaMetrics: *redpandaStatus.RedpandaStatus.LastScan.Metrics,
+		Logs:            logs,
 	}
+
 	return s.lastStatus, nil
 }
 
 // AddRedpandaToS6Manager adds a Redpanda instance to the S6 manager
-func (s *RedpandaService) AddRedpandaToS6Manager(ctx context.Context, cfg *redpandaserviceconfig.RedpandaServiceConfig) error {
+func (s *RedpandaService) AddRedpandaToS6Manager(ctx context.Context, cfg *redpandaserviceconfig.RedpandaServiceConfig, filesystemService filesystem.Service) error {
 	if s.s6Manager == nil {
 		return errors.New("s6 manager not initialized")
 	}
@@ -744,7 +431,7 @@ func (s *RedpandaService) AddRedpandaToS6Manager(ctx context.Context, cfg *redpa
 	}
 
 	// Ensure the required directories exist
-	if err := s.ensureRedpandaDirectories(ctx, cfg.BaseDir); err != nil {
+	if err := s.ensureRedpandaDirectories(ctx, cfg.BaseDir, filesystemService); err != nil {
 		return err
 	}
 
@@ -775,24 +462,32 @@ func (s *RedpandaService) AddRedpandaToS6Manager(ctx context.Context, cfg *redpa
 	// Add the S6 FSM config to the list of S6 FSM configs
 	s.s6ServiceConfigs = append(s.s6ServiceConfigs, s6FSMConfig)
 
+	// Also add the redpanda monitor to the S6 manager
+	// This function is idempotent, so it's safe to call it multiple times
+	if err := s.metricsService.AddRedpandaMonitorToS6Manager(ctx); err != nil {
+		if !errors.Is(err, redpanda_monitor.ErrServiceAlreadyExists) {
+			return fmt.Errorf("failed to add redpanda monitor to S6 manager: %w", err)
+		}
+	}
+
 	return nil
 }
 
 // ensureRedpandaDirectories creates all necessary directories for Redpanda
-func (s *RedpandaService) ensureRedpandaDirectories(ctx context.Context, baseDir string) error {
+func (s *RedpandaService) ensureRedpandaDirectories(ctx context.Context, baseDir string, filesystemService filesystem.Service) error {
 	if baseDir == "" {
 		s.logger.Warnf("baseDir is empty, using default value %s", constants.DefaultRedpandaBaseDir)
 		baseDir = constants.DefaultRedpandaBaseDir
 	}
 
 	// Ensure main data directory
-	if err := s.filesystem.EnsureDirectory(ctx, filepath.Join(baseDir, "redpanda")); err != nil {
+	if err := filesystemService.EnsureDirectory(ctx, filepath.Join(baseDir, "redpanda")); err != nil {
 		return fmt.Errorf("failed to ensure %s/redpanda directory exists: %w", baseDir, err)
 	}
 
 	// Ensure coredump directory
 	// By default redpanda will generate coredumps when crashing
-	if err := s.filesystem.EnsureDirectory(ctx, filepath.Join(baseDir, "redpanda", "coredump")); err != nil {
+	if err := filesystemService.EnsureDirectory(ctx, filepath.Join(baseDir, "redpanda", "coredump")); err != nil {
 		return fmt.Errorf("failed to ensure %s/redpanda/coredump directory exists: %w", baseDir, err)
 	}
 
@@ -865,6 +560,13 @@ func (s *RedpandaService) RemoveRedpandaFromS6Manager(ctx context.Context) error
 
 	if !found {
 		return ErrServiceNotExist
+	}
+
+	// Also remove the redpanda monitor from the S6 manager
+	if err := s.metricsService.RemoveRedpandaMonitorFromS6Manager(ctx); err != nil {
+		if !errors.Is(err, redpanda_monitor.ErrServiceNotExist) {
+			return fmt.Errorf("failed to remove redpanda monitor from S6 manager: %w", err)
+		}
 	}
 
 	return nil
@@ -941,7 +643,26 @@ func (s *RedpandaService) ReconcileManager(ctx context.Context, filesystemServic
 		return ctx.Err(), false
 	}
 
-	return s.s6Manager.Reconcile(ctx, config.FullConfig{Internal: config.InternalConfig{Services: s.s6ServiceConfigs}}, filesystemService, tick)
+	// Create a snapshot from the full config
+	// Note: therefore, the S6 manager will not have access to the full observed state
+	snapshot := fsm.SystemSnapshot{
+		CurrentConfig: config.FullConfig{Internal: config.InternalConfig{Services: s.s6ServiceConfigs}},
+		Tick:          tick,
+	}
+
+	s6Err, s6Reconciled := s.s6Manager.Reconcile(ctx, snapshot, filesystemService)
+	if s6Err != nil {
+		return s6Err, false
+	}
+
+	// Also reconcile the redpanda monitor service
+	monitorErr, monitorReconciled := s.metricsService.ReconcileManager(ctx, filesystemService, tick)
+	if monitorErr != nil {
+		return monitorErr, false
+	}
+
+	// If either was reconciled, indicate that reconciliation occurred
+	return nil, s6Reconciled || monitorReconciled
 }
 
 // IsLogsFine analyzes Redpanda logs to determine if there are any critical issues
@@ -972,7 +693,7 @@ func (s *RedpandaService) IsLogsFine(logs []s6service.LogEntry, currentTime time
 }
 
 // IsMetricsErrorFree checks if the metrics of a Redpanda service are error-free
-func (s *RedpandaService) IsMetricsErrorFree(metrics Metrics) bool {
+func (s *RedpandaService) IsMetricsErrorFree(metrics redpanda_monitor.Metrics) bool {
 	// Check output errors
 	if metrics.Infrastructure.Storage.FreeSpaceAlert {
 		return false
@@ -987,7 +708,7 @@ func (s *RedpandaService) IsMetricsErrorFree(metrics Metrics) bool {
 
 // HasProcessingActivity checks if a Redpanda service has processing activity
 func (s *RedpandaService) HasProcessingActivity(status RedpandaStatus) bool {
-	return status.MetricsState != nil && status.MetricsState.IsActive
+	return status.RedpandaMetrics.MetricsState != nil && status.RedpandaMetrics.MetricsState.IsActive
 }
 
 // ServiceExists checks if a Redpanda service exists
