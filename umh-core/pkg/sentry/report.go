@@ -80,6 +80,16 @@ func ReportFSMError(log *zap.SugaredLogger, instanceID string, fsmType string, o
 	ReportIssueWithContext(err, IssueTypeError, log, context)
 }
 
+// ReportFSMFatal reports an FSM-related fatal error with proper context
+func ReportFSMFatal(log *zap.SugaredLogger, instanceID string, fsmType string, operation string, err error) {
+	context := map[string]interface{}{
+		"instance_id": instanceID,
+		"fsm_type":    fsmType,
+		"operation":   operation,
+	}
+	ReportIssueWithContext(err, IssueTypeFatal, log, context)
+}
+
 // ReportFSMErrorf formats an FSM-related error message and reports it with proper context
 func ReportFSMErrorf(log *zap.SugaredLogger, instanceID string, fsmType string, operation string, template string, args ...interface{}) {
 	context := map[string]interface{}{

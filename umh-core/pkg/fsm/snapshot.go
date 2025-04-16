@@ -86,10 +86,11 @@ func (s *BaseManagerSnapshot) GetManagerTick() uint64 {
 
 // SystemSnapshot contains a thread-safe snapshot of the entire system state
 type SystemSnapshot struct {
-	Managers     map[string]ManagerSnapshot
-	SnapshotTime time.Time
-	ConfigHash   string
-	Tick         uint64
+	CurrentConfig config.FullConfig
+	Managers      map[string]ManagerSnapshot
+	SnapshotTime  time.Time
+	ConfigHash    string
+	Tick          uint64
 }
 
 // SnapshotManager manages thread-safe creation, storage, and retrieval of system snapshots
@@ -203,29 +204,27 @@ func getManagerSnapshot(manager FSMManager[any]) ManagerSnapshot {
 
 	// Get instances and their states
 	instances := manager.GetInstances()
-	if instances != nil {
-		for name, instance := range instances {
-			if instance == nil {
-				continue // Skip nil instances
-			}
-
-			instanceSnapshot := FSMInstanceSnapshot{
-				ID:           name,
-				CurrentState: instance.GetCurrentFSMState(),
-				DesiredState: instance.GetDesiredFSMState(),
-				// Other fields would be populated if we could access them
-			}
-
-			// Add observed state if available
-			if observedState := instance.GetLastObservedState(); observedState != nil {
-				// Check if instance implements ObservedStateConverter
-				if converter, ok := instance.(ObservedStateConverter); ok {
-					instanceSnapshot.LastObservedState = converter.CreateObservedStateSnapshot()
-				}
-			}
-
-			snapshot.Instances[name] = instanceSnapshot
+	for name, instance := range instances {
+		if instance == nil {
+			continue // Skip nil instances
 		}
+
+		instanceSnapshot := FSMInstanceSnapshot{
+			ID:           name,
+			CurrentState: instance.GetCurrentFSMState(),
+			DesiredState: instance.GetDesiredFSMState(),
+			// Other fields would be populated if we could access them
+		}
+
+		// Add observed state if available
+		if observedState := instance.GetLastObservedState(); observedState != nil {
+			// Check if instance implements ObservedStateConverter
+			if converter, ok := instance.(ObservedStateConverter); ok {
+				instanceSnapshot.LastObservedState = converter.CreateObservedStateSnapshot()
+			}
+		}
+
+		snapshot.Instances[name] = instanceSnapshot
 	}
 
 	return snapshot
