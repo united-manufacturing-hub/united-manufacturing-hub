@@ -284,6 +284,13 @@ func buildDataFlowComponentDataFromSnapshot(instance fsm.FSMInstanceSnapshot, lo
 			return models.Neutral
 		}
 
+		// get the metrics from the instance
+		serviceInfo := instance.LastObservedState.(*dataflowcomponent.DataflowComponentObservedStateSnapshot).ServiceInfo
+		inputThroughput := int64(0)
+		if serviceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.MetricsState.Input.LastCount > 0 {
+			inputThroughput = int64(serviceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.MetricsState.Input.MessagesPerTick / constants.DefaultTickerTime.Seconds())
+		}
+
 		dfcData.Health = &models.Health{
 			Message:       getHealthMessage(extractHealthStatus(instance.CurrentState)),
 			ObservedState: instance.CurrentState,
@@ -293,6 +300,9 @@ func buildDataFlowComponentDataFromSnapshot(instance fsm.FSMInstanceSnapshot, lo
 
 		dfcData.Type = "custom" // this is a custom DFC; protocol converters will have a separate fsm
 		dfcData.UUID = dataflowcomponentconfig.GenerateUUIDFromName(instance.ID).String()
+		dfcData.Metrics = &models.DfcMetrics{
+			AvgInputThroughputPerMinuteInMsgSec: float64(inputThroughput),
+		}
 		dfcData.Name = &instance.ID
 	} else {
 		log.Warn("no observed state found for dataflowcomponent", zap.String("instanceID", instance.ID))
