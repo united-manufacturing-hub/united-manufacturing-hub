@@ -633,10 +633,11 @@ func ParseMetrics(dataReader io.Reader) (Metrics, error) {
 		consumeFound := false
 		for _, metric := range family.Metric {
 			if label := getLabel(metric, "redpanda_request"); label != "" {
-				if label == "produce" {
+				switch label {
+				case "produce":
 					metrics.Throughput.BytesIn = getMetricValue(metric)
 					produceFound = true
-				} else if label == "consume" {
+				case "consume":
 					metrics.Throughput.BytesOut = getMetricValue(metric)
 					consumeFound = true
 				}

@@ -92,11 +92,11 @@ func main() {
 		ReleaseChannel:  configData.Agent.ReleaseChannel,
 		SystemSnapshot:  systemSnapshot,
 		ConfigManager:   configManager,
-		ApiUrl:          configData.Agent.CommunicatorConfig.APIURL,
+		ApiUrl:          configData.Agent.APIURL,
 		Logger:          logger.For(logger.ComponentCommunicator),
 	}
 
-	if configData.Agent.CommunicatorConfig.APIURL != "" && configData.Agent.CommunicatorConfig.AuthToken != "" {
+	if configData.Agent.APIURL != "" && configData.Agent.AuthToken != "" {
 		enableBackendConnection(&configData, systemSnapshot, &communicationState, systemMu, controlLoop, communicationState.Logger)
 	} else {
 		log.Warnf("No backend connection enabled, please set API_URL and AUTH_TOKEN")
@@ -173,10 +173,10 @@ func enableBackendConnection(config *config.FullConfig, state *fsm.SystemSnapsho
 		return
 	}
 
-	if config.Agent.CommunicatorConfig.APIURL != "" && config.Agent.CommunicatorConfig.AuthToken != "" {
+	if config.Agent.APIURL != "" && config.Agent.AuthToken != "" {
 		// This can temporarely deactivated, e.g., during integration tests where just the mgmtcompanion-config is changed directly
 
-		login := v2.NewLogin(config.Agent.CommunicatorConfig.AuthToken, false, config.Agent.CommunicatorConfig.APIURL, logger)
+		login := v2.NewLogin(config.Agent.AuthToken, false, config.Agent.APIURL, logger)
 		if login == nil {
 			sentry.ReportIssuef(sentry.IssueTypeError, logger, "[v2.NewLogin] Failed to create login object")
 			return

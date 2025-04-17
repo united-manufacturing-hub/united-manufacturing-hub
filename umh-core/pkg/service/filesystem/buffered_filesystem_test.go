@@ -417,7 +417,7 @@ var _ = Describe("BufferedService with MockFileSystem", func() {
 		cancel      context.CancelFunc
 		mockFs      *filesystem.MockFileSystem
 		bufService  *filesystem.BufferedService
-		mockRootDir string = "/mock-root"
+		mockRootDir = "/mock-root"
 	)
 
 	BeforeEach(func() {

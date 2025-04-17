@@ -41,7 +41,7 @@ type Handler struct {
 	pusher                     *push.Pusher
 	instanceUUID               uuid.UUID
 	StatusCollector            *generator.StatusCollectorType
-	disableHardwareStatusCheck bool
+	disableHardwareStatusCheck bool // nolint:unused // will be used in the future
 	state                      *fsm.SystemSnapshot
 	configManager              config.ConfigManager
 	logger                     *zap.SugaredLogger

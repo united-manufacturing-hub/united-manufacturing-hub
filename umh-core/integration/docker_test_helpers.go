@@ -26,7 +26,7 @@ import (
 	"sync"
 	"time"
 
-	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/ginkgo/v2" // nolint: staticcheck // Ginkgo is designed to be used with dot imports
 )
 
 const (
@@ -379,50 +379,6 @@ func cleanupTmpDirs(containerName string) {
 	}
 }
 
-// getContainerIP returns the IP address of a running container
-func getContainerIP(container string) (string, error) {
-	// First try the traditional IPAddress field
-	out, err := runDockerCommand("inspect", "--format", "{{.NetworkSettings.IPAddress}}", container)
-	if err != nil {
-		return "", fmt.Errorf("failed to get container IP: %w", err)
-	}
-
-	// Trim whitespace
-	ip := strings.TrimSpace(out)
-
-	// If we got an empty IP, try to get it from the networks
-	if ip == "" {
-		// Try to get from bridge network (common default)
-		out, err = runDockerCommand("inspect", "--format", "{{.NetworkSettings.Networks.bridge.IPAddress}}", container)
-		if err == nil {
-			ip = strings.TrimSpace(out)
-		}
-	}
-
-	// If still empty, try "networks" plural for Docker Compose setups
-	if ip == "" {
-		out, err = runDockerCommand("inspect", "--format", "{{range $net, $conf := .NetworkSettings.Networks}}{{$conf.IPAddress}} {{end}}", container)
-		if err == nil {
-			// This might return multiple IPs, take the first non-empty one
-			for _, possibleIP := range strings.Fields(out) {
-				if possibleIP != "" {
-					ip = possibleIP
-					break
-				}
-			}
-		}
-	}
-
-	// If we still don't have an IP, log a warning
-	if ip == "" {
-		fmt.Printf("WARNING: Could not determine container IP for %s. Will use localhost instead.\n", container)
-	} else {
-		fmt.Printf("Found container IP for %s: %s\n", container, ip)
-	}
-
-	return ip, nil
-}
-
 // printContainerLogs prints the logs from the container
 func printContainerLogs() {
 	containerName := getContainerName()
@@ -616,14 +572,4 @@ func GetCurrentDir() string {
 		return "."
 	}
 	return strings.TrimSpace(wd)
-}
-
-// getContainerConfig retrieves the current configuration file from the container
-func getContainerConfig() (string, error) {
-	containerName := getContainerName()
-	out, err := runDockerCommand("exec", containerName, "cat", "/data/config.yaml")
-	if err != nil {
-		return "", fmt.Errorf("failed to read config from container: %w", err)
-	}
-	return string(out), nil
 }

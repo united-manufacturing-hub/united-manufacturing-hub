@@ -66,14 +66,14 @@ func (r *RedpandaBuilder) AddGoldenRedpanda() *RedpandaBuilder {
 
 // StartRedpanda sets a Redpanda service to active state
 func (r *RedpandaBuilder) StartRedpanda(name string) *RedpandaBuilder {
-	r.full.Internal.Redpanda.FSMInstanceConfig.DesiredFSMState = "active"
+	r.full.Internal.Redpanda.DesiredFSMState = "active"
 	r.activeRedpanda[name] = true
 	return r
 }
 
 // StopRedpanda sets a Redpanda service to inactive state
 func (r *RedpandaBuilder) StopRedpanda(name string) *RedpandaBuilder {
-	r.full.Internal.Redpanda.FSMInstanceConfig.DesiredFSMState = "stopped"
+	r.full.Internal.Redpanda.DesiredFSMState = "stopped"
 	r.activeRedpanda[name] = false
 	return r
 }

@@ -181,7 +181,7 @@ func (m *BenthosManager) Reconcile(ctx context.Context, snapshot public_fsm.Syst
 	start := time.Now()
 	defer func() {
 		duration := time.Since(start)
-		metrics.ObserveReconcileTime(logger.ComponentBenthosManager, m.BaseFSMManager.GetManagerName(), duration)
+		metrics.ObserveReconcileTime(logger.ComponentBenthosManager, m.GetManagerName(), duration)
 	}()
 	// Phase 1: Port Management Pre-reconciliation
 	benthosConfigs := snapshot.CurrentConfig.Internal.Benthos
@@ -195,7 +195,7 @@ func (m *BenthosManager) Reconcile(ctx context.Context, snapshot public_fsm.Syst
 	}
 
 	// Save the instance count before reconciliation to detect removals
-	countBefore := len(m.BaseFSMManager.GetInstances())
+	countBefore := len(m.GetInstances())
 
 	// Create a new config based on the current config with allocated ports
 	cfgWithPorts := snapshot.CurrentConfig.Clone()
@@ -217,7 +217,7 @@ func (m *BenthosManager) Reconcile(ctx context.Context, snapshot public_fsm.Syst
 	err, reconciled := m.BaseFSMManager.Reconcile(ctx, snapshotWithPorts, filesystemService)
 
 	// Check if instances were removed as part of reconciliation (e.g., due to permanent errors)
-	countAfter := len(m.BaseFSMManager.GetInstances())
+	countAfter := len(m.GetInstances())
 	instancesWereRemoved := countBefore > countAfter
 
 	if err != nil {

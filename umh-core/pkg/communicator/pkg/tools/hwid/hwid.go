@@ -75,6 +75,4 @@ func generateNewHWID(hwidPath string) {
 		zap.S().Warnf("Failed to write HWID to file: %s", err)
 		return
 	}
-
-	return
 }

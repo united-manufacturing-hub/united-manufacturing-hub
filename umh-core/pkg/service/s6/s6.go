@@ -540,7 +540,7 @@ func (s *DefaultService) Status(ctx context.Context, servicePath string, fsServi
 		info.Status = ServiceDown
 		// Interpret wstat as a wait status.
 		// We convert to syscall.WaitStatus so that we can check if the process exited normally.
-		var ws syscall.WaitStatus = syscall.WaitStatus(wstat)
+		var ws = syscall.WaitStatus(wstat)
 		if ws.Exited() {
 			info.ExitCode = ws.ExitStatus()
 		} else if ws.Signaled() {

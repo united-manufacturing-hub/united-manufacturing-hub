@@ -106,6 +106,7 @@ func (n *NmapInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapsho
 			// complete logs from which it parses.
 			return nil, false // We don't want to return an error here, because we want to continue reconciling
 		}
+		//nolint:ineffassign // This is intentionally modifying the named return value accessed in defer
 		err = nil // The service does not exist, which is fine as this happens in the reconcileStateTransition}
 	}
 
@@ -465,7 +466,7 @@ func (n *NmapInstance) isNmapHealthy() bool {
 	}
 
 	// Only consider nmap healthy if the overall health status is running
-	return n.IsNmapRunning() == true
+	return n.IsNmapRunning()
 }
 
 // checkPortState checks on the port state and if it differs to the currentState

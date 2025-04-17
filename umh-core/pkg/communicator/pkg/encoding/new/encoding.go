@@ -50,7 +50,8 @@ var (
 	// Add a new buffer pool for base64 operations
 	base64BufferPool = sync.Pool{
 		New: func() interface{} {
-			return make([]byte, 0, 1024) // Pre-allocate with reasonable size
+			buf := make([]byte, 0, 1024) // Pre-allocate with reasonable size
+			return &buf
 		},
 	}
 
@@ -63,12 +64,16 @@ var (
 )
 
 func getBase64Buffer() []byte {
-	return base64BufferPool.Get().([]byte)
+	bufPtr := base64BufferPool.Get().(*[]byte)
+	return *bufPtr
 }
 
 func putBase64Buffer(buf []byte) {
 	if cap(buf) <= 32*1024 { // Only reuse reasonably sized buffers
-		base64BufferPool.Put(buf[:0])
+		// Store a pointer to the slice to avoid allocations
+		b := &buf
+		*b = (*b)[:0]
+		base64BufferPool.Put(b)
 	}
 }
 

@@ -295,8 +295,3 @@ func buildDefaultContainerData() models.Container {
 		Architecture: models.ArchitectureAmd64,
 	}
 }
-
-// Helper function to create string pointers
-func stringPtr(s string) *string {
-	return &s
-}

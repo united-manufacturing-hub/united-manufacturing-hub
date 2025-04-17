@@ -33,8 +33,8 @@ import (
 	"strconv"
 	"strings"
 
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
+	. "github.com/onsi/ginkgo/v2" // nolint: staticcheck // Ginkgo is designed to be used with dot imports
+	. "github.com/onsi/gomega"    // nolint: staticcheck // Gomega is designed to be used with dot imports
 )
 
 // parseMetricValue scans the metrics body for a line that starts with `metricName`
@@ -183,9 +183,4 @@ func checkWhetherMetricsHealthy(body string) {
 	Expect(found).To(BeTrue(), "Expected to find 0.99 quantile for control_loop's reconcile time")
 	Expect(recon99).To(BeNumerically("<=", maxReconcileTime99th),
 		"99th percentile reconcile time (%.2f ms) exceeded %.1f ms", recon99, maxReconcileTime99th)
-}
-
-// parseFloat is a small helper to parse a string to float64
-func parseFloat(s string) (float64, error) {
-	return strconv.ParseFloat(s, 64)
 }

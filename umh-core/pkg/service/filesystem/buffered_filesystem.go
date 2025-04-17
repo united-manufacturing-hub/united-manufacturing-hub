@@ -750,6 +750,10 @@ func (bs *BufferedService) SyncFromDisk(ctx context.Context) error {
 						// Seek to the position where we left off
 						_, err = file.Seek(previousSize, 0)
 						if err != nil {
+							closeErr := file.Close()
+							if closeErr != nil {
+								sentry.ReportIssuef(sentry.IssueTypeError, logger, "failed to close file for incremental read: %v", closeErr)
+							}
 							results <- fileReadResult{
 								absPath: job.absPath,
 								err:     fmt.Errorf("failed to seek in file: %w", err),
@@ -761,11 +765,21 @@ func (bs *BufferedService) SyncFromDisk(ctx context.Context) error {
 						newContent := make([]byte, job.cf.Info.Size()-previousSize)
 						_, err = file.Read(newContent)
 						if err != nil && !errors.Is(err, io.EOF) {
+							closeErr := file.Close()
+							if closeErr != nil {
+								sentry.ReportIssuef(sentry.IssueTypeError, logger, "failed to close file for incremental read: %v", closeErr)
+							}
 							results <- fileReadResult{
 								absPath: job.absPath,
 								err:     fmt.Errorf("failed to read new content: %w", err),
 							}
 							continue
+						}
+
+						// Close the file after we're done with it
+						closeErr := file.Close()
+						if closeErr != nil {
+							sentry.ReportIssuef(sentry.IssueTypeError, logger, "failed to close file for incremental read: %v", closeErr)
 						}
 
 						// Concatenate old and new content
@@ -1445,11 +1459,6 @@ func hasPrefix(s, prefix string) bool {
 		return false
 	}
 	return s[:len(prefix)] == prefix
-}
-
-// containsSeparator checks if there's any os.PathSeparator in s
-func containsSeparator(s string) bool {
-	return strings.Contains(s, string(os.PathSeparator))
 }
 
 // memFileInfo is a trivial in-memory file info

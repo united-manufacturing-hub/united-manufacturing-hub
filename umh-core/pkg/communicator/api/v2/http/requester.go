@@ -224,10 +224,8 @@ func GetRequest[R any](ctx context.Context, endpoint Endpoint, header map[string
 	}
 
 	// Set headers
-	if header != nil {
-		for k, v := range header {
-			req.Header.Set(k, v)
-		}
+	for k, v := range header {
+		req.Header.Set(k, v)
 	}
 
 	// Set cookies
@@ -356,10 +354,8 @@ func PostRequest[R any, T any](ctx context.Context, endpoint Endpoint, data *T, 
 	req.Header.Set("Content-Type", "application/json")
 
 	// Add any provided headers
-	if header != nil {
-		for k, v := range header {
-			req.Header.Set(k, v)
-		}
+	for k, v := range header {
+		req.Header.Set(k, v)
 	}
 
 	// Add any provided cookies

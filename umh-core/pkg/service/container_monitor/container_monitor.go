@@ -66,8 +66,8 @@ type ContainerMonitorService struct {
 	instanceName    string
 	lastCollectedAt time.Time
 	hwid            string
-	architecture    models.ContainerArchitecture
-	dataPath        string // Path to check for disk metrics and HWID file
+	architecture    models.ContainerArchitecture // nolint:unused // will be used in the future
+	dataPath        string                       // Path to check for disk metrics and HWID file
 }
 
 // NewContainerMonitorService creates a new container monitor service instance

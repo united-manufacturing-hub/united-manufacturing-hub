@@ -414,11 +414,3 @@ func (c *ControlLoop) Stop(ctx context.Context) error {
 	ctx.Done()
 	return nil
 }
-
-// isEmptyConfig checks if a FullConfig is effectively empty without direct struct comparison
-func isEmptyConfig(cfg config.FullConfig) bool {
-	// Check if important config sections are empty
-	return len(cfg.Internal.Services) == 0 &&
-		len(cfg.Internal.Benthos) == 0 &&
-		len(cfg.DataFlow) == 0
-}

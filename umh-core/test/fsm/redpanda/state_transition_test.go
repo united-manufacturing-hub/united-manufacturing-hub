@@ -440,7 +440,7 @@ var _ = Describe("RedpandaService State Transitions", func() {
 				},
 			}
 
-			tick = reconcileRedpandaUntilState(ctx, redpandaService, mockFileSystem, tick, s6fsm.OperationalStateRunning)
+			_ = reconcileRedpandaUntilState(ctx, redpandaService, mockFileSystem, tick, s6fsm.OperationalStateRunning)
 
 			By("Removing the Redpanda service")
 			err = redpandaService.RemoveRedpandaFromS6Manager(ctx)

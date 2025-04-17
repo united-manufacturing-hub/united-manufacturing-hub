@@ -38,8 +38,8 @@ import (
 	"github.com/shirou/gopsutil/v3/cpu"
 	"github.com/shirou/gopsutil/v3/mem"
 
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
+	. "github.com/onsi/ginkgo/v2" // nolint: staticcheck // Ginkgo is designed to be used with dot imports
+	. "github.com/onsi/gomega"    // nolint: staticcheck // Gomega is designed to be used with dot imports
 )
 
 // monitorHealth checks the metrics and golden service.
