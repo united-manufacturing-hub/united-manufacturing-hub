@@ -467,78 +467,6 @@ func (c *ConnectionService) RemoveConnection(
 	return nil
 }
 
-// StartConnection begins the monitoring of a connection.
-// This initiates periodic scanning of the target using Nmap.
-//
-// Returns an error if the connection doesn't exist or start fails.
-func (c *ConnectionService) StartConnection(
-	ctx context.Context,
-	fs filesystem.Service,
-	connName string,
-) error {
-	if ctx.Err() != nil {
-		return ctx.Err()
-	}
-
-	// Check if the service exists
-	instance, exists := c.nmapManager.GetInstance(connName)
-	if !exists {
-		return ErrServiceNotExist
-	}
-
-	// Get the instance to check current desired state
-	nmapInstance, ok := instance.(*nmapfsm.NmapInstance)
-	if !ok {
-		return fmt.Errorf("instance is not a NmapInstance")
-	}
-
-	// Fast path: if already in desired state, do nothing
-	currentDesiredState := nmapInstance.GetDesiredFSMState()
-	if currentDesiredState == nmapfsm.OperationalStateOpen {
-		// Already in desired state, no need to log or update
-		return nil
-	}
-
-	c.logger.Infof("Starting connection %s", connName)
-	return nmapInstance.SetDesiredFSMState(nmapfsm.OperationalStateOpen)
-}
-
-// StopConnection stops the monitoring of a connection.
-// This halts scanning but retains the configuration for later restart.
-//
-// Returns an error if the connection doesn't exist or stop fails.
-func (c *ConnectionService) StopConnection(
-	ctx context.Context,
-	fs filesystem.Service,
-	connName string,
-) error {
-	if ctx.Err() != nil {
-		return ctx.Err()
-	}
-
-	// Check if the service exists
-	instance, exists := c.nmapManager.GetInstance(connName)
-	if !exists {
-		return ErrServiceNotExist
-	}
-
-	// Get the instance to check current desired state
-	nmapInstance, ok := instance.(*nmapfsm.NmapInstance)
-	if !ok {
-		return fmt.Errorf("instance is not a NmapInstance")
-	}
-
-	// Fast path: if already in desired state, do nothing
-	currentDesiredState := nmapInstance.GetDesiredFSMState()
-	if currentDesiredState == nmapfsm.OperationalStateStopped {
-		// Already in desired state, no need to log or update
-		return nil
-	}
-
-	c.logger.Infof("Stopping connection %s", connName)
-	return nmapInstance.SetDesiredFSMState(nmapfsm.OperationalStateStopped)
-}
-
 // ServiceExists checks if a connection with the given name exists.
 // Used by the FSM to determine appropriate transitions.
 //
@@ -676,4 +604,17 @@ func portState(s nmap.ServiceInfo) string {
 		return "unknown"
 	}
 	return s.NmapStatus.LastScan.PortResult.State
+}
+
+// GetRecentScansCount returns the number of recent scan results for a connection
+func (s *ConnectionService) GetRecentScansCount(name string) int {
+	return len(s.recentScans[name])
+}
+
+// GetRecentScanAtIndex returns the scan at the specified index for a connection
+func (s *ConnectionService) GetRecentScanAtIndex(name string, index int) (*nmap.ServiceInfo, bool) {
+	if scans, ok := s.recentScans[name]; ok && len(scans) > index {
+		return &scans[index], true
+	}
+	return nil, false
 }
