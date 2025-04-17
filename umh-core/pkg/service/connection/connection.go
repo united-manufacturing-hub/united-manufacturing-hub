@@ -93,7 +93,7 @@ type IConnectionService interface {
 	// Call StartConnection to begin active monitoring.
 	//
 	// Returns an error if the connection already exists or if registration fails.
-	AddConnection(ctx context.Context, fs filesystem.Service, cfg connectionserviceconfig.ConnectionServiceConfig, connName string) error
+	AddConnection(ctx context.Context, fs filesystem.Service, cfg *connectionserviceconfig.ConnectionServiceConfig, connName string) error
 
 	// UpdateConnection modifies an existing connection configuration.
 	// This can be used to change the target hostname, port, or protocol.
@@ -102,7 +102,7 @@ type IConnectionService interface {
 	// monitor cycle and does not restart the monitoring process.
 	//
 	// Returns an error if the connection doesn't exist or if update fails.
-	UpdateConnection(ctx context.Context, fs filesystem.Service, cfg connectionserviceconfig.ConnectionServiceConfig, connName string) error
+	UpdateConnection(ctx context.Context, fs filesystem.Service, cfg *connectionserviceconfig.ConnectionServiceConfig, connName string) error
 
 	// RemoveConnection deletes a connection configuration.
 	// This stops monitoring the connection and removes all configuration.
@@ -264,16 +264,20 @@ func (c *ConnectionService) Status(
 	info.IsFlaky = c.isConnectionFlaky(connName)
 
 	// ----- LastChange handling -----
-	c.recentMu.Lock()
+	c.recentMu.RLock()
 	prev, exists := c.prevInfo[connName]
 	stateChanged := !exists || prev.IsReachable != info.IsReachable || prev.IsFlaky != info.IsFlaky
+	c.recentMu.RUnlock()
+
+	// Only take write lock if we're about to modify the map
 	if stateChanged {
+		c.recentMu.Lock()
 		info.LastChange = tick
 		c.prevInfo[connName] = info
+		c.recentMu.Unlock()
 	} else {
 		info.LastChange = prev.LastChange
 	}
-	c.recentMu.Unlock()
 
 	return info, nil
 }
@@ -284,7 +288,7 @@ func (c *ConnectionService) Status(
 func (c *ConnectionService) AddConnection(
 	ctx context.Context,
 	fs filesystem.Service,
-	cfg connectionserviceconfig.ConnectionServiceConfig,
+	cfg *connectionserviceconfig.ConnectionServiceConfig,
 	connName string,
 ) error {
 	c.logger.Infof("Adding connection %s", connName)
@@ -294,7 +298,7 @@ func (c *ConnectionService) AddConnection(
 	}
 
 	// Convert our connection config to Nmap config
-	nmapConfig := c.convertToNmapConfig(cfg)
+	nmapConfig := c.convertToNmapConfig(*cfg)
 
 	// Delegate to Nmap service
 	return c.nmapService.AddNmapToS6Manager(ctx, &nmapConfig, connName)
@@ -306,7 +310,7 @@ func (c *ConnectionService) AddConnection(
 func (c *ConnectionService) UpdateConnection(
 	ctx context.Context,
 	fs filesystem.Service,
-	cfg connectionserviceconfig.ConnectionServiceConfig,
+	cfg *connectionserviceconfig.ConnectionServiceConfig,
 	connName string,
 ) error {
 	c.logger.Infof("Updating connection %s", connName)
@@ -316,10 +320,14 @@ func (c *ConnectionService) UpdateConnection(
 	}
 
 	// Convert our connection config to Nmap config
-	nmapConfig := c.convertToNmapConfig(cfg)
+	nmapConfig := c.convertToNmapConfig(*cfg)
 
 	// Delegate to Nmap service
-	return c.nmapService.UpdateNmapInS6Manager(ctx, &nmapConfig, connName)
+	err := c.nmapService.UpdateNmapInS6Manager(ctx, &nmapConfig, connName)
+	if err != nil {
+		return fmt.Errorf("update nmap %s: %w", connName, err)
+	}
+	return nil
 }
 
 // RemoveConnection deletes a connection configuration.
@@ -338,6 +346,9 @@ func (c *ConnectionService) RemoveConnection(
 
 	// Delegate to Nmap service
 	err := c.nmapService.RemoveNmapFromS6Manager(ctx, connName)
+	if err != nil {
+		return fmt.Errorf("remove nmap %s: %w", connName, err)
+	}
 
 	// Clean up in-memory state
 	c.recentMu.Lock()
@@ -345,7 +356,7 @@ func (c *ConnectionService) RemoveConnection(
 	delete(c.prevInfo, connName)
 	c.recentMu.Unlock()
 
-	return err
+	return nil
 }
 
 // StartConnection begins the monitoring of a connection.
@@ -363,7 +374,11 @@ func (c *ConnectionService) StartConnection(
 	}
 
 	// Delegate to Nmap service
-	return c.nmapService.StartNmap(ctx, connName)
+	err := c.nmapService.StartNmap(ctx, connName)
+	if err != nil {
+		return fmt.Errorf("start nmap %s: %w", connName, err)
+	}
+	return nil
 }
 
 // StopConnection stops the monitoring of a connection.
@@ -381,7 +396,11 @@ func (c *ConnectionService) StopConnection(
 	}
 
 	// Delegate to Nmap service
-	return c.nmapService.StopNmap(ctx, connName)
+	err := c.nmapService.StopNmap(ctx, connName)
+	if err != nil {
+		return fmt.Errorf("stop nmap %s: %w", connName, err)
+	}
+	return nil
 }
 
 // ServiceExists checks if a connection with the given name exists.
@@ -434,17 +453,11 @@ func (c *ConnectionService) ReconcileManager(
 func (c *ConnectionService) convertToNmapConfig(
 	cfg connectionserviceconfig.ConnectionServiceConfig,
 ) nmapserviceconfig.NmapServiceConfig {
-	return nmapserviceconfig.NmapServiceConfig{
-		Target: cfg.NmapServiceConfig.Target,
-		Port:   int(cfg.NmapServiceConfig.Port),
-		// Protocol is not directly mapped in NmapServiceConfig
-		// but could be used to influence scan type
-	}
+	return cfg.NmapServiceConfig
 }
 
 // updateRecentScans adds a new scan result to the history for flakiness detection.
-// It maintains a slice of recent scan results for each connection,
-// discarding the oldest result when the buffer reaches capacity.
+// If len(scans) == maxRecentScans (not >=) we drop the oldest element before appending.
 //
 // This history is used by isConnectionFlaky to detect unstable connections
 // that alternate between different port states.
