@@ -21,6 +21,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentconfig"
+	benthosfsmmanager "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
 	benthosfsmtype "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
 	benthosservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
@@ -75,8 +76,9 @@ var _ IDataFlowComponentService = (*MockDataFlowComponentService)(nil)
 
 // ComponentStateFlags contains all the state flags needed for FSM testing
 type ComponentStateFlags struct {
-	IsBenthosRunning bool
-	BenthosFSMState  string
+	IsBenthosRunning                 bool
+	BenthosFSMState                  string
+	IsBenthosProcessingMetricsActive bool
 }
 
 // NewMockDataFlowComponentService creates a new mock DataFlowComponent service
@@ -92,11 +94,24 @@ func NewMockDataFlowComponentService() *MockDataFlowComponentService {
 
 // SetComponentState sets all state flags for a component at once
 func (m *MockDataFlowComponentService) SetComponentState(componentName string, flags ComponentStateFlags) {
+	observedState := &benthosfsmmanager.BenthosObservedState{
+		ServiceInfo: benthosservice.ServiceInfo{
+			BenthosStatus: benthosservice.BenthosStatus{
+				MetricsState: &benthosservice.BenthosMetricsState{
+					IsActive: flags.IsBenthosProcessingMetricsActive,
+				},
+			},
+		},
+	}
 	// Ensure ServiceInfo exists for this component
 	if _, exists := m.ComponentStates[componentName]; !exists {
 		m.ComponentStates[componentName] = &ServiceInfo{
-			BenthosFSMState: flags.BenthosFSMState,
+			BenthosFSMState:      flags.BenthosFSMState,
+			BenthosObservedState: *observedState,
 		}
+	} else {
+		m.ComponentStates[componentName].BenthosObservedState = *observedState
+		m.ComponentStates[componentName].BenthosFSMState = flags.BenthosFSMState
 	}
 
 	// Store the flags

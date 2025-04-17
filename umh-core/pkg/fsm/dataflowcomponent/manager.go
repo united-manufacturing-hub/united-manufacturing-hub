@@ -34,7 +34,7 @@ const (
 
 // DataflowComponentManager implements the FSM management for DataflowComponent services
 type DataflowComponentManager struct {
-	public_fsm.BaseFSMManager[config.DataFlowComponentConfig]
+	*public_fsm.BaseFSMManager[config.DataFlowComponentConfig]
 }
 
 // DataFlowComponentSnapshot extends the base ManagerSnapshot with Dataflowcomponent specific information
@@ -92,7 +92,7 @@ func NewDataflowComponentManager(name string, archiveStorage storage.ArchiveStor
 	)
 	metrics.InitErrorCounter(metrics.ComponentDataFlowCompManager, name)
 	return &DataflowComponentManager{
-		BaseFSMManager: *baseManager,
+		BaseFSMManager: baseManager,
 	}
 }
 

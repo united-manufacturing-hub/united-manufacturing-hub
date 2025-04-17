@@ -1,6 +1,3 @@
-//go:build test
-// +build test
-
 /*
  *   Copyright (c) 2025 UMH Systems GmbH
  *   All rights reserved.
@@ -28,7 +25,6 @@ import (
 	dataflowcomponentfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
 	dataflowcomponentsvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/dataflowcomponent"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
-	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/storage"
 )
 
@@ -61,6 +57,7 @@ func WaitForDataflowComponentManagerInstanceState(
 	maxAttempts int,
 ) (uint64, error) {
 	tick := snapshot.Tick
+	currentState := ""
 	for i := 0; i < maxAttempts; i++ {
 		err, _ := manager.Reconcile(ctx, snapshot, filesystemService)
 		if err != nil {
@@ -68,13 +65,14 @@ func WaitForDataflowComponentManagerInstanceState(
 		}
 		tick++
 
-		inst, found := manager.GetInstance(instanceName)
-		if found && inst.GetCurrentFSMState() == desiredState {
+		inst, found := manager.GetInstance(fmt.Sprintf("dataflow-%s", instanceName))
+		currentState = inst.GetCurrentFSMState()
+		if found && currentState == desiredState {
 			return tick, nil
 		}
 	}
-	return tick, fmt.Errorf("instance %s did not reach state %s after %d attempts",
-		instanceName, desiredState, maxAttempts)
+	return tick, fmt.Errorf("instance %s did not reach state %s after %d attempts. Current state: %s",
+		instanceName, desiredState, maxAttempts, currentState)
 }
 
 // WaitForDataflowComponentManagerInstanceRemoval waits until the given serviceName is removed
@@ -123,7 +121,7 @@ func WaitForDataflowComponentManagerMultiState(
 
 		allMatched := true
 		for comp, desired := range desiredMap {
-			inst, found := manager.GetInstance(comp)
+			inst, found := manager.GetInstance(fmt.Sprintf("dataflow-%s", comp))
 			if !found || inst.GetCurrentFSMState() != desired {
 				allMatched = false
 				break
@@ -161,34 +159,9 @@ func SetupServiceInDataflowComponentManager(
 
 // CreateMockDataflowComponentManager creates a DataflowComponent manager with a mock service for testing
 func CreateMockDataflowComponentManager(name string) (*dataflowcomponentfsm.DataflowComponentManager, *dataflowcomponentsvc.MockDataFlowComponentService) {
-	// Create a new manager instance
-	archiveStorage := storage.NewArchiveEventStorage(100)
-	manager := dataflowcomponentfsm.NewDataflowComponentManager(name, archiveStorage)
+	mockManager, mockService := dataflowcomponentfsm.NewDataflowComponentManagerWithMockedServices(name)
 
-	// Create a mock service
-	mockService := dataflowcomponentsvc.NewMockDataFlowComponentService()
-
-	// Configure the mock S6 service
-	s6MockService := mockService.BenthosService.(*dataflowcomponentsvc.MockDataFlowComponentService).BenthosService.S6Service.(*s6svc.MockService)
-
-	// Configure default responses to prevent real filesystem operations
-	s6MockService.CreateError = nil
-	s6MockService.RemoveError = nil
-	s6MockService.StartError = nil
-	s6MockService.StopError = nil
-	s6MockService.ForceRemoveError = nil
-
-	// Set up the mock to say services exist after creation
-	s6MockService.ServiceExistsResult = true
-
-	// Configure default successful statuses
-	s6MockService.StatusResult = s6svc.ServiceInfo{
-		Status: s6svc.ServiceUp,
-		Pid:    12345, // Fake PID
-		Uptime: 60,    // Fake uptime in seconds
-	}
-
-	return manager, mockService
+	return mockManager, mockService
 }
 
 // ConfigureDataflowComponentManagerForState sets up the mock service in a DataflowComponentManager to facilitate

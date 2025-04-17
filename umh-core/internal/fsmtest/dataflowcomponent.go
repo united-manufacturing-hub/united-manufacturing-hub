@@ -99,40 +99,46 @@ func TransitionToDataflowComponentState(mockService *dataflowcomponentsvc.MockDa
 	switch state {
 	case dataflowcomponentfsm.OperationalStateStopped:
 		SetupDataflowComponentServiceState(mockService, serviceName, dataflowcomponentsvc.ComponentStateFlags{
-			IsBenthosRunning: false,
-			BenthosFSMState:  benthosfsmtype.OperationalStateStopped,
+			IsBenthosRunning:                 false,
+			BenthosFSMState:                  benthosfsmtype.OperationalStateStopped,
+			IsBenthosProcessingMetricsActive: false,
 		})
 	case dataflowcomponentfsm.OperationalStateStarting:
 		SetupDataflowComponentServiceState(mockService, serviceName, dataflowcomponentsvc.ComponentStateFlags{
-			IsBenthosRunning: false,
-			BenthosFSMState:  benthosfsmtype.OperationalStateStarting,
+			IsBenthosRunning:                 false,
+			BenthosFSMState:                  benthosfsmtype.OperationalStateStarting,
+			IsBenthosProcessingMetricsActive: false,
 		})
 	case dataflowcomponentfsm.OperationalStateIdle:
 		SetupDataflowComponentServiceState(mockService, serviceName, dataflowcomponentsvc.ComponentStateFlags{
-			IsBenthosRunning: true,
-			BenthosFSMState:  benthosfsmtype.OperationalStateIdle,
+			IsBenthosRunning:                 true,
+			BenthosFSMState:                  benthosfsmtype.OperationalStateIdle,
+			IsBenthosProcessingMetricsActive: false,
 		})
 	case dataflowcomponentfsm.OperationalStateActive:
 		SetupDataflowComponentServiceState(mockService, serviceName, dataflowcomponentsvc.ComponentStateFlags{
-			IsBenthosRunning: true,
-			BenthosFSMState:  benthosfsmtype.OperationalStateActive,
+			IsBenthosRunning:                 true,
+			BenthosFSMState:                  benthosfsmtype.OperationalStateActive,
+			IsBenthosProcessingMetricsActive: true,
 		})
 	case dataflowcomponentfsm.OperationalStateDegraded:
 		SetupDataflowComponentServiceState(mockService, serviceName, dataflowcomponentsvc.ComponentStateFlags{
-			IsBenthosRunning: true,
-			BenthosFSMState:  benthosfsmtype.OperationalStateDegraded,
+			IsBenthosRunning:                 true,
+			BenthosFSMState:                  benthosfsmtype.OperationalStateDegraded,
+			IsBenthosProcessingMetricsActive: false,
 		})
 	case dataflowcomponentfsm.OperationalStateStopping:
 		SetupDataflowComponentServiceState(mockService, serviceName, dataflowcomponentsvc.ComponentStateFlags{
-			IsBenthosRunning: false,
-			BenthosFSMState:  benthosfsmtype.OperationalStateStopping,
+			IsBenthosRunning:                 false,
+			BenthosFSMState:                  benthosfsmtype.OperationalStateStopping,
+			IsBenthosProcessingMetricsActive: false,
 		})
 	}
 }
 
 // SetupDataflowComponentInstance creates and configures a DataflowComponent instance for testing.
 // Returns the instance, the mock service, and the config used to create it.
-func SetupDataflowComponentInstance(serviceName string, desiredState string) (*dataflowcomponentfsm.DataflowComponentInstance, *dataflowcomponentsvc.MockDataFlowComponentService, config.DataFlowComponentConfig) {
+func SetupDataflowComponentInstance(serviceName string, desiredState string, archiveStorage storage.ArchiveStorer) (*dataflowcomponentfsm.DataflowComponentInstance, *dataflowcomponentsvc.MockDataFlowComponentService, config.DataFlowComponentConfig) {
 	// Create test config
 	cfg := CreateDataflowComponentTestConfig(serviceName, desiredState)
 
@@ -150,7 +156,6 @@ func SetupDataflowComponentInstance(serviceName string, desiredState string) (*d
 	mockService.ComponentStates[serviceName] = &dataflowcomponentsvc.ServiceInfo{}
 
 	// Create new instance
-	archiveStorage := storage.NewArchiveEventStorage(100)
 	instance := setUpMockDataflowComponentInstance(cfg, mockService, archiveStorage)
 
 	return instance, mockService, cfg
@@ -168,7 +173,6 @@ func setUpMockDataflowComponentInstance(
 
 	// Set the mock service
 	instance.SetService(mockService)
-
 	return instance
 }
 
