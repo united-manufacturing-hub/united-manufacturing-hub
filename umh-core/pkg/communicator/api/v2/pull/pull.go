@@ -87,7 +87,7 @@ func (p *Puller) pull() {
 		var cookies = map[string]string{
 			"token": p.jwt.Load().(string),
 		}
-		incomingMessages, err, _ := http.GetRequest[backend_api_structs.PullPayload](context.Background(), http.PullEndpoint, nil, &cookies, p.insecureTLS, p.apiURL, p.logger)
+		incomingMessages, _, err := http.GetRequest[backend_api_structs.PullPayload](context.Background(), http.PullEndpoint, nil, &cookies, p.insecureTLS, p.apiURL, p.logger)
 		if err != nil {
 			// Ignore context canceled errors
 			if errors.Is(err, context.Canceled) {
@@ -148,7 +148,7 @@ func GetUserCertificate(ctx context.Context, userEmail string, cookies *map[stri
 	logger.Debugf("Getting user certificate. Endpoint:  %s", endpoint)
 
 	// Make the request
-	response, err, statusCode := http.GetRequest[UserCertificateResponse](ctx, endpoint, nil, cookies, insecureTLS, apiURL, logger)
+	response, statusCode, err := http.GetRequest[UserCertificateResponse](ctx, endpoint, nil, cookies, insecureTLS, apiURL, logger)
 	if err != nil {
 		if statusCode == http2.StatusNoContent {
 			// User does not have a certificate

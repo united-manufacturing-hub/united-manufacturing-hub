@@ -184,7 +184,11 @@ func (s *S6Instance) UpdateObservedStateOfInstance(ctx context.Context, filesyst
 	if !reflect.DeepEqual(s.ObservedState.ObservedS6ServiceConfig, s.config.S6ServiceConfig) {
 		s.baseFSMInstance.GetLogger().Debugf("Observed config is different from desired config, triggering a re-create")
 		s.logConfigDifferences(s.config.S6ServiceConfig, s.ObservedState.ObservedS6ServiceConfig)
-		s.baseFSMInstance.Remove(ctx)
+		err := s.baseFSMInstance.Remove(ctx)
+		if err != nil {
+			s.baseFSMInstance.GetLogger().Errorf("error removing S6 instance %s: %v", s.baseFSMInstance.GetID(), err)
+			return err
+		}
 	}
 
 	return nil

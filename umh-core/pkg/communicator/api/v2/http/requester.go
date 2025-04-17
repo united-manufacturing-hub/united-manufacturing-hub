@@ -209,7 +209,7 @@ func enhanceConnectionError(err error) error {
 }
 
 // GetRequest does a GET request to the given endpoint, with optional header and cookies
-func GetRequest[R any](ctx context.Context, endpoint Endpoint, header map[string]string, cookies *map[string]string, insecureTLS bool, apiURL string, logger *zap.SugaredLogger) (result *R, responseErr error, statusCode int) {
+func GetRequest[R any](ctx context.Context, endpoint Endpoint, header map[string]string, cookies *map[string]string, insecureTLS bool, apiURL string, logger *zap.SugaredLogger) (result *R, statusCode int, responseErr error) {
 	// Set up context with default 30 second timeout if none provided
 	if ctx == nil {
 		var cancel context.CancelFunc
@@ -220,7 +220,7 @@ func GetRequest[R any](ctx context.Context, endpoint Endpoint, header map[string
 	url := apiURL + string(endpoint)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		return nil, err, 0
+		return nil, 0, err
 	}
 
 	// Set headers
@@ -252,10 +252,10 @@ func GetRequest[R any](ctx context.Context, endpoint Endpoint, header map[string
 	response, err := GetClient(insecureTLS).Do(req.WithContext(httptrace.WithClientTrace(req.Context(), trace)))
 	if err != nil {
 		if response != nil {
-			return nil, err, response.StatusCode
+			return nil, response.StatusCode, err
 		}
 		// Enhance error message for connection failures
-		return nil, enhanceConnectionError(err), 0
+		return nil, 0, enhanceConnectionError(err)
 	}
 	defer func() {
 		if err := response.Body.Close(); err != nil {
@@ -281,14 +281,14 @@ func GetRequest[R any](ctx context.Context, endpoint Endpoint, header map[string
 	// Read and process response
 	bodyBytes, err := io.ReadAll(response.Body)
 	if err != nil {
-		return nil, err, response.StatusCode
+		return nil, response.StatusCode, err
 	}
 
 	if response.StatusCode < 200 || response.StatusCode > 399 {
 		// if the error is 401, we want to report it as a login error
 		if response.StatusCode == 401 {
 			// no need to report it to sentry
-			return nil, errors.New("unauthorized: Authentication failed. Either your API key is invalid or your instance has been removed. Please verify your API key or recreate the instance"), response.StatusCode
+			return nil, response.StatusCode, errors.New("unauthorized: Authentication failed. Either your API key is invalid or your instance has been removed. Please verify your API key or recreate the instance")
 		} else {
 			error_handler.ReportHTTPErrors(
 				errors.New("error response code: "+response.Status),
@@ -299,16 +299,16 @@ func GetRequest[R any](ctx context.Context, endpoint Endpoint, header map[string
 				bodyBytes,
 			)
 		}
-		return nil, errors.New("error response code: " + response.Status), response.StatusCode
+		return nil, response.StatusCode, errors.New("error response code: " + response.Status)
 	}
 
 	if len(bodyBytes) == 0 {
-		return nil, nil, response.StatusCode
+		return nil, response.StatusCode, nil
 	}
 
 	var typedResult R
 	if err := safejson.Unmarshal(bodyBytes, &typedResult); err != nil {
-		return nil, err, response.StatusCode
+		return nil, response.StatusCode, err
 	}
 
 	processCookies(response, cookies)
@@ -325,7 +325,7 @@ func GetRequest[R any](ctx context.Context, endpoint Endpoint, header map[string
 
 // PostRequest does a POST request to the given endpoint, with optional header and cookies
 // Note: Cookies will be updated with the response cookies, if not nil
-func PostRequest[R any, T any](ctx context.Context, endpoint Endpoint, data *T, header map[string]string, cookies *map[string]string, insecureTLS bool, apiURL string, logger *zap.SugaredLogger) (result *R, responseErr error, statusCode int) {
+func PostRequest[R any, T any](ctx context.Context, endpoint Endpoint, data *T, header map[string]string, cookies *map[string]string, insecureTLS bool, apiURL string, logger *zap.SugaredLogger) (result *R, statusCode int, responseErr error) {
 	// Set up context with default 30 second timeout if none provided
 	if ctx == nil {
 		var cancel context.CancelFunc
@@ -338,7 +338,7 @@ func PostRequest[R any, T any](ctx context.Context, endpoint Endpoint, data *T, 
 	// Marshal the data into JSON format
 	body, err := safejson.Marshal(data)
 	if err != nil {
-		return nil, err, 0
+		return nil, 0, err
 	}
 
 	// Create a reader from the body
@@ -347,7 +347,7 @@ func PostRequest[R any, T any](ctx context.Context, endpoint Endpoint, data *T, 
 	// Create a new HTTP request with context
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bodyReader)
 	if err != nil {
-		return nil, err, 0
+		return nil, 0, err
 	}
 
 	// Set content type to application/json
@@ -383,10 +383,10 @@ func PostRequest[R any, T any](ctx context.Context, endpoint Endpoint, data *T, 
 	response, err := GetClient(insecureTLS).Do(req.WithContext(httptrace.WithClientTrace(req.Context(), trace)))
 	if err != nil {
 		if response != nil {
-			return nil, err, response.StatusCode
+			return nil, response.StatusCode, err
 		}
 		// Enhance error message for connection failures
-		return nil, enhanceConnectionError(err), 0
+		return nil, 0, enhanceConnectionError(err)
 	}
 	latenciesFRB.Set(time.Now(), timeTillFirstByte)
 
@@ -405,7 +405,7 @@ func PostRequest[R any, T any](ctx context.Context, endpoint Endpoint, data *T, 
 
 	bodyBytes, err := io.ReadAll(response.Body)
 	if err != nil {
-		return nil, err, response.StatusCode
+		return nil, response.StatusCode, err
 	}
 
 	// Check if the response was successful (status code 2XX-3XX)
@@ -424,26 +424,26 @@ func PostRequest[R any, T any](ctx context.Context, endpoint Endpoint, data *T, 
 			var parseResult R
 			err = safejson.Unmarshal(bodyBytes, &parseResult)
 			if err != nil {
-				return nil, err, response.StatusCode
+				return nil, response.StatusCode, err
 			}
 
 			if strings.Contains(fmt.Sprint(parseResult), "channel is full") {
-				return nil, nil, response.StatusCode
+				return nil, response.StatusCode, nil
 			}
 		}
-		return nil, errors.New("error response code: " + response.Status), response.StatusCode
+		return nil, response.StatusCode, errors.New("error response code: " + response.Status)
 	}
 
 	// If response body is empty
 	if len(bodyBytes) == 0 {
-		return nil, nil, response.StatusCode
+		return nil, response.StatusCode, nil
 	}
 
 	// Unmarshal response body
 	var typedResult R
 	err = safejson.Unmarshal(bodyBytes, &typedResult)
 	if err != nil {
-		return nil, err, response.StatusCode
+		return nil, response.StatusCode, err
 	}
 
 	processCookies(response, cookies)

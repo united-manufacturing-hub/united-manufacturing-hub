@@ -101,15 +101,13 @@ func (s *Handler) GetSubscribers() []string {
 func (s *Handler) notifySubscribers() {
 	watcherUUID := s.dog.RegisterHeartbeat("notifySubscribers", 0, 600, true)
 	var timer = time.NewTicker(time.Second)
-	for {
-		select {
-		case <-timer.C:
-			s.dog.ReportHeartbeatStatus(watcherUUID, watchdog.HEARTBEAT_STATUS_OK)
-			s.notify()
-			// Cycle the notification at the same speed as the pusher will push
-			// This prevents large message queues from building up
-			timer.Reset(1 * time.Second)
-		}
+	defer timer.Stop()
+
+	for range timer.C {
+		s.dog.ReportHeartbeatStatus(watcherUUID, watchdog.HEARTBEAT_STATUS_OK)
+		s.notify()
+		// The ticker will automatically fire at 1 second intervals
+		// This prevents large message queues from building up
 	}
 }
 

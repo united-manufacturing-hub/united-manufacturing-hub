@@ -68,7 +68,11 @@ func (r *RedpandaInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSna
 			if r.IsRemoved() || r.IsRemoving() || r.IsStopping() || r.IsStopped() {
 				r.baseFSMInstance.GetLogger().Errorf("Redpanda instance %s is already in a terminal state, force removing it", redpandaInstanceName)
 				// force delete everything from the s6 file directory
-				r.service.ForceRemoveRedpanda(ctx, filesystemService)
+				forceErr := r.service.ForceRemoveRedpanda(ctx, filesystemService)
+				if forceErr != nil {
+					r.baseFSMInstance.GetLogger().Errorf("error force removing Redpanda instance %s: %v", redpandaInstanceName, forceErr)
+					return fmt.Errorf("failed to force remove the redpanda instance: %s : %w", backoff.PermanentFailureError, forceErr), false
+				}
 				return err, false
 			} else {
 				r.baseFSMInstance.GetLogger().Errorf("Redpanda instance %s is not in a terminal state, resetting state and removing it", redpandaInstanceName)
