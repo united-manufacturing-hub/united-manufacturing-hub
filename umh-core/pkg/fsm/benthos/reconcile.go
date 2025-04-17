@@ -73,7 +73,19 @@ func (b *BenthosInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnap
 			} else {
 				b.baseFSMInstance.GetLogger().Errorf("Benthos instance %s is not in a terminal state, resetting state and removing it", benthosInstanceName)
 				b.baseFSMInstance.ResetState()
-				b.Remove(ctx)
+				err = b.Remove(ctx)
+				if err != nil {
+					// If removing doesn't work because the fsm is not in the OperationalStateBeforeRemove
+					// we will force it to remove.
+					b.baseFSMInstance.GetLogger().Errorf("error removing Benthos instance %s: %v", benthosInstanceName, err)
+					forceErr := b.service.ForceRemoveBenthos(ctx, filesystemService, benthosInstanceName)
+					if forceErr != nil {
+						// If even the force removing doesn't work the base-manager should delete the instance
+						// due to a permanent error.
+						b.baseFSMInstance.GetLogger().Errorf("error force removing Benthos instance %s: %v", benthosInstanceName, forceErr)
+						return fmt.Errorf("failed to force remove the benthos instance: %s : %w", backoff.PermanentFailureError, forceErr), false
+					}
+				}
 				return nil, false // let's try to at least reconcile towards a stopped / removed state
 			}
 		}
