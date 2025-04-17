@@ -286,7 +286,13 @@ func buildDataFlowComponentDataFromSnapshot(instance fsm.FSMInstanceSnapshot, lo
 		}
 
 		// get the metrics from the instance
-		serviceInfo := instance.LastObservedState.(*dataflowcomponent.DataflowComponentObservedStateSnapshot).ServiceInfo
+		observed, ok := instance.LastObservedState.(*dataflowcomponent.DataflowComponentObservedStateSnapshot)
+		if !ok {
+			err := fmt.Errorf("observed state %T does not match DataflowComponentObservedStateSnapshot", instance.LastObservedState)
+			log.Error(err)
+			return models.Dfc{}, err
+		}
+		serviceInfo := observed.ServiceInfo
 		inputThroughput := int64(0)
 		if serviceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.MetricsState.Input.LastCount > 0 {
 			inputThroughput = int64(serviceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.MetricsState.Input.MessagesPerTick / constants.DefaultTickerTime.Seconds())
