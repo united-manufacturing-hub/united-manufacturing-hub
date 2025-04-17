@@ -64,10 +64,10 @@ func (n *NmapInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapsho
 			// For now, let's just remove it from the manager:
 			if n.IsRemoved() || n.IsRemoving() || n.IsStopped() || n.IsStopping() {
 				n.baseFSMInstance.GetLogger().Errorf("Permanent error on nmap monitor %s but it is already in a terminal/removing state", instanceName)
-				err := n.monitorService.ForceRemoveNmap(ctx, filesystemService, instanceName)
-				if err != nil {
+				forceErr := n.monitorService.ForceRemoveNmap(ctx, filesystemService, instanceName)
+				if forceErr != nil {
 					n.baseFSMInstance.GetLogger().Debugf("Remove from Manager failed: %v", err)
-					return err, false
+					return fmt.Errorf("failed to force remove the nmap instance: %s : %w", backoff.PermanentFailureError, forceErr), false
 				}
 				return backErr, false
 			} else {

@@ -465,7 +465,10 @@ func (m *BaseFSMManager[C]) Reconcile(
 
 			// Otherwise, we need to remove the instance
 			m.logger.Debugf("instance %s is in state %s, starting the removing process", instanceName, instance.GetCurrentFSMState())
-			instance.Remove(ctx)
+			err := instance.Remove(ctx)
+			if err != nil {
+				return err, false
+			}
 
 			// Update last remove tick using manager-specific tick
 			m.lastRemoveTick = m.managerTick

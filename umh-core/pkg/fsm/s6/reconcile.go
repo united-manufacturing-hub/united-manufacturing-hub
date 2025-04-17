@@ -70,7 +70,10 @@ func (s *S6Instance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot,
 				// force delete everything from the s6 file directory
 				forceErr := s.service.ForceRemove(ctx, s.servicePath, filesystemService)
 				if forceErr != nil {
-					s.baseFSMInstance.GetLogger().Errorf("ForceRemove failed: %v", forceErr)
+					// If even the force removing doesn't work the base-manager should delete the instance
+					// due to a permanent error.
+					s.baseFSMInstance.GetLogger().Errorf("error force removing S6 instance %s: %v", s6InstanceName, forceErr)
+					return fmt.Errorf("failed to force remove the S6 instance: %s : %w", backoff.PermanentFailureError, forceErr), false
 				}
 				return err, false
 			} else {
