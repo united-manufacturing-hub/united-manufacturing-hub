@@ -150,14 +150,14 @@ func (m *MockConnectionService) Status(
 func (m *MockConnectionService) AddConnection(
 	ctx context.Context,
 	fs filesystem.Service,
-	cfg connectionserviceconfig.ConnectionServiceConfig,
+	cfg *connectionserviceconfig.ConnectionServiceConfig,
 	connName string,
 ) error {
 	m.mock.Lock()
 	defer m.mock.Unlock()
 
 	m.serviceExists[connName] = true
-	m.serviceConfig[connName] = cfg
+	m.serviceConfig[connName] = *cfg
 
 	// Initialize default states
 	if _, exists := m.serviceIsRunning[connName]; !exists {
@@ -178,7 +178,7 @@ func (m *MockConnectionService) AddConnection(
 func (m *MockConnectionService) UpdateConnection(
 	ctx context.Context,
 	fs filesystem.Service,
-	cfg connectionserviceconfig.ConnectionServiceConfig,
+	cfg *connectionserviceconfig.ConnectionServiceConfig,
 	connName string,
 ) error {
 	m.mock.Lock()
@@ -188,7 +188,7 @@ func (m *MockConnectionService) UpdateConnection(
 		m.serviceExists[connName] = true
 	}
 
-	m.serviceConfig[connName] = cfg
+	m.serviceConfig[connName] = *cfg
 	return nil
 }
 
@@ -253,8 +253,8 @@ func (m *MockConnectionService) ServiceExists(
 	return m.serviceExists[connName]
 }
 
-// ReconcileManager returns mock reconcile results.
-// Returns the values set with SetReconcileResults.
+// ReconcileManager mocks the reconciliation of all connections.
+// Returns the error and boolean set by SetReconcileResults.
 func (m *MockConnectionService) ReconcileManager(
 	ctx context.Context,
 	fs filesystem.Service,

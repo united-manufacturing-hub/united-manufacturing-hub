@@ -39,7 +39,9 @@ var _ = Describe("Connection Service", func() {
 
 	BeforeEach(func() {
 		mockNmap = nmap.NewMockNmapService()
-		connService = connection.NewDefaultConnectionService(connection.WithNmapService(mockNmap))
+		connService = connection.NewConnectionServiceForTesting(
+			connection.WithNmapService(mockNmap),
+		)
 		ctx = context.Background()
 		tick = uint64(1)
 	})
@@ -128,13 +130,13 @@ var _ = Describe("Connection Service", func() {
 	Describe("AddConnection", func() {
 		var (
 			connName string
-			cfg      connectionserviceconfig.ConnectionServiceConfig
+			cfg      *connectionserviceconfig.ConnectionServiceConfig
 			addErr   error
 		)
 
 		BeforeEach(func() {
 			connName = "test-connection"
-			cfg = connectionserviceconfig.ConnectionServiceConfig{
+			cfg = &connectionserviceconfig.ConnectionServiceConfig{
 				NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
 					Target: "localhost",
 					Port:   8080,
@@ -171,7 +173,7 @@ var _ = Describe("Connection Service", func() {
 	Describe("UpdateConnection", func() {
 		var (
 			connName  string
-			cfg       connectionserviceconfig.ConnectionServiceConfig
+			cfg       *connectionserviceconfig.ConnectionServiceConfig
 			updateErr error
 		)
 
@@ -185,7 +187,7 @@ var _ = Describe("Connection Service", func() {
 			}
 
 			// Updated config
-			cfg = connectionserviceconfig.ConnectionServiceConfig{
+			cfg = &connectionserviceconfig.ConnectionServiceConfig{
 				NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
 					Target: "example.com",
 					Port:   9090,
@@ -213,7 +215,7 @@ var _ = Describe("Connection Service", func() {
 
 			It("should return the error", func() {
 				Expect(updateErr).To(HaveOccurred())
-				Expect(updateErr.Error()).To(Equal("update error"))
+				Expect(updateErr.Error()).To(ContainSubstring("update error"))
 			})
 		})
 	})
@@ -250,7 +252,7 @@ var _ = Describe("Connection Service", func() {
 
 			It("should return the error", func() {
 				Expect(removeErr).To(HaveOccurred())
-				Expect(removeErr.Error()).To(Equal("remove error"))
+				Expect(removeErr.Error()).To(ContainSubstring("remove error"))
 			})
 		})
 	})
@@ -289,7 +291,7 @@ var _ = Describe("Connection Service", func() {
 
 				It("should return the error", func() {
 					Expect(startErr).To(HaveOccurred())
-					Expect(startErr.Error()).To(Equal("start error"))
+					Expect(startErr.Error()).To(ContainSubstring("start error"))
 				})
 			})
 		})
@@ -315,7 +317,7 @@ var _ = Describe("Connection Service", func() {
 
 				It("should return the error", func() {
 					Expect(stopErr).To(HaveOccurred())
-					Expect(stopErr.Error()).To(Equal("stop error"))
+					Expect(stopErr.Error()).To(ContainSubstring("stop error"))
 				})
 			})
 		})
