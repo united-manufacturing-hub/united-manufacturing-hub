@@ -41,11 +41,11 @@ var _ = Describe("Agent FSM", func() {
 	BeforeEach(func() {
 		ctx, cancel = context.WithCancel(context.Background())
 
+		mockFS = filesystem.NewMockFileSystem()
+
 		mockSvc = agentmonitorsvc.NewMockService(mockFS)
 		// By default, let's set it up for healthy
 		mockSvc.SetupMockForHealthyState()
-
-		mockFS = filesystem.NewMockFileSystem()
 
 		cfg := config.AgentMonitorConfig{
 			Name:            "test-agent",
