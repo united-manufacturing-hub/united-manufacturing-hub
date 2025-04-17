@@ -59,7 +59,13 @@ func buildDataFlowComponentDataFromSnapshot(instance fsm.FSMInstanceSnapshot, lo
 
 	if instance.LastObservedState != nil {
 		// Try to cast to the right type
-		observedState := instance.LastObservedState.(*dataflowcomponent.DataflowComponentObservedStateSnapshot)
+		observedState, ok := instance.LastObservedState.(*dataflowcomponent.DataflowComponentObservedStateSnapshot)
+		if !ok {
+			log.Error("Observed state is of unexpected type",
+				zap.String("instanceID", instance.ID),
+			)
+			return config.DataFlowComponentConfig{}, fmt.Errorf("invalid observed state type for dataflowcomponent %s", instance.ID)
+		}
 		dfcData.DataFlowComponentConfig = observedState.Config
 		dfcData.FSMInstanceConfig.Name = instance.ID
 		dfcData.FSMInstanceConfig.DesiredFSMState = instance.DesiredState
