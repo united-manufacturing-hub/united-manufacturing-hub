@@ -114,6 +114,7 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 
 	// extract agent data from the agent manager if available
 	var agentData models.Agent
+	var releaseChannel string
 
 	if agentManager, exists := s.state.Managers[agentManagerName]; exists {
 		instances := agentManager.GetInstances()
@@ -122,11 +123,13 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 			zap.Any("instances", instances))
 
 		if instance, ok := instances[agentInstanceName]; ok {
-			agentData = buildAgentDataFromSnapshot(instance, s.logger)
+			agentData, releaseChannel = buildAgentDataFromSnapshot(instance, s.logger)
 		} else {
 			s.logger.Warn("Agent instance not found in agent manager",
 				zap.String("instanceName", agentInstanceName),
 				zap.Any("instances", instances))
+			agentData = models.Agent{}
+			releaseChannel = "n/a"
 		}
 	}
 
@@ -134,12 +137,7 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 	statusMessage := &models.StatusMessage{
 		Core: models.Core{
 			Agent: models.Agent{
-				Health: &models.Health{
-					Message:       "agent monitoring is not implemented yet",
-					ObservedState: "n/a",
-					DesiredState:  "running",
-					Category:      models.Neutral,
-				},
+				Health:   agentData.Health,
 				Latency:  &models.Latency{},
 				Location: agentData.Location,
 			},
@@ -164,7 +162,7 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 					Category:      models.Neutral,
 				},
 				Version: "n/a",
-				Channel: "n/a",
+				Channel: releaseChannel,
 				SupportedFeatures: []string{
 					"custom-dfc",
 					"action-deploy-data-flow-component",
@@ -323,9 +321,9 @@ func stringPtr(s string) *string {
 }
 
 // buildAgentDataFromSnapshot creates agent data from a FSM instance snapshot
-func buildAgentDataFromSnapshot(instance fsm.FSMInstanceSnapshot, log *zap.SugaredLogger) models.Agent {
+func buildAgentDataFromSnapshot(instance fsm.FSMInstanceSnapshot, log *zap.SugaredLogger) (models.Agent, string) {
 	agentData := models.Agent{}
-
+	releaseChannel := "n/a"
 	// Check if we have actual observedState
 	if instance.LastObservedState != nil {
 		// Try to cast to the right type
@@ -341,6 +339,14 @@ func buildAgentDataFromSnapshot(instance fsm.FSMInstanceSnapshot, log *zap.Sugar
 					Location: snapshot.ServiceInfoSnapshot.Location,
 				}
 			}
+			// build the health status
+			agentData.Health = &models.Health{
+				Message:       getHealthMessage(snapshot.ServiceInfoSnapshot.OverallHealth),
+				ObservedState: instance.CurrentState,
+				DesiredState:  instance.DesiredState,
+				Category:      snapshot.ServiceInfoSnapshot.OverallHealth,
+			}
+			releaseChannel = snapshot.ServiceInfoSnapshot.Release.Channel
 		} else {
 			log.Warn("Agent observed state is not of expected type")
 		}
@@ -348,5 +354,5 @@ func buildAgentDataFromSnapshot(instance fsm.FSMInstanceSnapshot, log *zap.Sugar
 		log.Warn("Agent instance has no observed state")
 	}
 
-	return agentData
+	return agentData, releaseChannel
 }
