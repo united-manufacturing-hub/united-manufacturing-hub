@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Package connection provides network monitoring and connectivity management.
+// This file contains a mock implementation for testing.
 package connection
 
 import (
@@ -22,20 +24,33 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
-// MockConnectionService provides a mock implementation of IConnectionService for testing
+// MockConnectionService provides a mock implementation of IConnectionService for testing.
+// It allows for configuring specific test scenarios by setting predefined responses
+// and tracking method calls.
+//
+// Usage examples:
+//
+//	// Create and configure the mock
+//	mockService := NewMockConnectionService()
+//	mockService.SetServiceExists("test-conn", true)
+//	mockService.SetServiceIsReachable("test-conn", false)
+//
+//	// Test your code that uses IConnectionService
+//	status, err := myComponent.DoSomethingWithConnection(mockService, "test-conn")
 type MockConnectionService struct {
-	mock               sync.Mutex
-	serviceExists      map[string]bool
-	serviceInfo        map[string]ServiceInfo
-	serviceIsRunning   map[string]bool
-	serviceConfig      map[string]connectionconfig.ConnectionServiceConfig
-	serviceIsReachable map[string]bool
-	serviceIsFlaky     map[string]bool
-	reconcileError     error
-	reconcileResult    bool
+	mock               sync.Mutex                                          // Protects concurrent access to mock state
+	serviceExists      map[string]bool                                     // Tracks which services exist
+	serviceInfo        map[string]ServiceInfo                              // Predefined ServiceInfo responses
+	serviceIsRunning   map[string]bool                                     // Individual status flags
+	serviceConfig      map[string]connectionconfig.ConnectionServiceConfig // Configs for services
+	serviceIsReachable map[string]bool                                     // Reachability flags
+	serviceIsFlaky     map[string]bool                                     // Flakiness flags
+	reconcileError     error                                               // Error to return from ReconcileManager
+	reconcileResult    bool                                                // Result to return from ReconcileManager
 }
 
 // NewMockConnectionService creates a new mock connection service
+// with initialized internal maps.
 func NewMockConnectionService() *MockConnectionService {
 	return &MockConnectionService{
 		serviceExists:      make(map[string]bool),
@@ -47,42 +62,51 @@ func NewMockConnectionService() *MockConnectionService {
 	}
 }
 
-// SetServiceExists allows setting whether a service exists for testing
+// SetServiceExists allows setting whether a service exists for testing.
+// This affects the response of the ServiceExists method.
 func (m *MockConnectionService) SetServiceExists(connName string, exists bool) {
 	m.mock.Lock()
 	defer m.mock.Unlock()
 	m.serviceExists[connName] = exists
 }
 
-// SetServiceInfo allows setting a complete ServiceInfo struct for testing
+// SetServiceInfo allows setting a complete ServiceInfo struct for testing.
+// This will be returned directly by the Status method.
 func (m *MockConnectionService) SetServiceInfo(connName string, info ServiceInfo) {
 	m.mock.Lock()
 	defer m.mock.Unlock()
 	m.serviceInfo[connName] = info
 }
 
-// SetServiceIsRunning allows setting the running state for testing
+// SetServiceIsRunning allows setting the running state for testing.
+// This affects the IsRunning field in the ServiceInfo returned by Status
+// when no complete ServiceInfo has been predefined.
 func (m *MockConnectionService) SetServiceIsRunning(connName string, isRunning bool) {
 	m.mock.Lock()
 	defer m.mock.Unlock()
 	m.serviceIsRunning[connName] = isRunning
 }
 
-// SetServiceIsReachable allows setting the reachable state for testing
+// SetServiceIsReachable allows setting the reachable state for testing.
+// This affects the IsReachable field in the ServiceInfo returned by Status
+// when no complete ServiceInfo has been predefined.
 func (m *MockConnectionService) SetServiceIsReachable(connName string, isReachable bool) {
 	m.mock.Lock()
 	defer m.mock.Unlock()
 	m.serviceIsReachable[connName] = isReachable
 }
 
-// SetServiceIsFlaky allows setting the flaky state for testing
+// SetServiceIsFlaky allows setting the flaky state for testing.
+// This affects the IsFlaky field in the ServiceInfo returned by Status
+// when no complete ServiceInfo has been predefined.
 func (m *MockConnectionService) SetServiceIsFlaky(connName string, isFlaky bool) {
 	m.mock.Lock()
 	defer m.mock.Unlock()
 	m.serviceIsFlaky[connName] = isFlaky
 }
 
-// SetReconcileResults allows setting the reconcile results for testing
+// SetReconcileResults allows setting the reconcile results for testing.
+// These values will be returned by the ReconcileManager method.
 func (m *MockConnectionService) SetReconcileResults(err error, result bool) {
 	m.mock.Lock()
 	defer m.mock.Unlock()
@@ -90,7 +114,9 @@ func (m *MockConnectionService) SetReconcileResults(err error, result bool) {
 	m.reconcileResult = result
 }
 
-// Status returns mocked information about the connection health
+// Status returns mocked information about the connection health.
+// If a complete ServiceInfo has been set via SetServiceInfo, it returns that.
+// Otherwise, it constructs one from the individual flags.
 func (m *MockConnectionService) Status(
 	ctx context.Context,
 	fs filesystem.Service,
@@ -119,7 +145,8 @@ func (m *MockConnectionService) Status(
 	}, nil
 }
 
-// AddConnection registers a mock connection
+// AddConnection registers a mock connection.
+// It marks the service as existing and stores the configuration.
 func (m *MockConnectionService) AddConnection(
 	ctx context.Context,
 	fs filesystem.Service,
@@ -146,7 +173,8 @@ func (m *MockConnectionService) AddConnection(
 	return nil
 }
 
-// UpdateConnection updates a mock connection
+// UpdateConnection updates a mock connection.
+// It creates the service if it doesn't exist and updates its configuration.
 func (m *MockConnectionService) UpdateConnection(
 	ctx context.Context,
 	fs filesystem.Service,
@@ -164,7 +192,8 @@ func (m *MockConnectionService) UpdateConnection(
 	return nil
 }
 
-// RemoveConnection removes a mock connection
+// RemoveConnection removes a mock connection.
+// It deletes all stored data for the connection.
 func (m *MockConnectionService) RemoveConnection(
 	ctx context.Context,
 	fs filesystem.Service,
@@ -183,7 +212,8 @@ func (m *MockConnectionService) RemoveConnection(
 	return nil
 }
 
-// StartConnection starts a mock connection
+// StartConnection starts a mock connection.
+// It sets the running state to true.
 func (m *MockConnectionService) StartConnection(
 	ctx context.Context,
 	fs filesystem.Service,
@@ -196,7 +226,8 @@ func (m *MockConnectionService) StartConnection(
 	return nil
 }
 
-// StopConnection stops a mock connection
+// StopConnection stops a mock connection.
+// It sets the running state to false.
 func (m *MockConnectionService) StopConnection(
 	ctx context.Context,
 	fs filesystem.Service,
@@ -209,7 +240,8 @@ func (m *MockConnectionService) StopConnection(
 	return nil
 }
 
-// ServiceExists checks if a mock connection exists
+// ServiceExists checks if a mock connection exists.
+// Returns the value previously set with SetServiceExists.
 func (m *MockConnectionService) ServiceExists(
 	ctx context.Context,
 	fs filesystem.Service,
@@ -221,7 +253,8 @@ func (m *MockConnectionService) ServiceExists(
 	return m.serviceExists[connName]
 }
 
-// ReconcileManager returns mock reconcile results
+// ReconcileManager returns mock reconcile results.
+// Returns the values set with SetReconcileResults.
 func (m *MockConnectionService) ReconcileManager(
 	ctx context.Context,
 	fs filesystem.Service,
