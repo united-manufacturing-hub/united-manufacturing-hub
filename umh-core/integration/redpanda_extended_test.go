@@ -118,7 +118,7 @@ var _ = Describe("Redpanda Extended Tests", Ordered, Label("redpanda-extended"),
 				Fail(fmt.Sprintf("RPK check failed: %v", err))
 			}
 
-			// Calculate expected message count with a tolerance of 20% loss
+			// Calculate expected message count the given loss tolerance
 			totalSeconds := int(time.Since(startTime).Seconds())
 			expectedMessagesPerSecond := producers * messagesPerSecond // 10 producers * 10 messages per second
 			expectedMessages := totalSeconds * expectedMessagesPerSecond
