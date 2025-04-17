@@ -21,6 +21,7 @@ import (
 
 	"github.com/looplab/fsm"
 	internal_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/backoff"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
@@ -65,7 +66,7 @@ func NewAgentInstanceWithService(config config.AgentMonitorConfig, service agent
 	}
 
 	// Construct the base instance
-	baseFSM := internal_fsm.NewBaseFSMInstance(fsmCfg, logger.For(config.Name))
+	baseFSM := internal_fsm.NewBaseFSMInstance(fsmCfg, backoff.DefaultConfig(metrics.ComponentAgentMonitor, logger.For(config.Name)), logger.For(config.Name))
 
 	// Create our instance
 	instance := &AgentInstance{
