@@ -167,3 +167,581 @@ var _ = Describe("Connection.Status (table‑driven)", func() {
 		Entry(statusCases[3].description, statusCases[3]),
 	)
 })
+
+// Common test scaffold for all connection tests
+func newConnTestEnv(testName string) (
+	ctx context.Context, cancel context.CancelFunc,
+	mgr *nmapfsm.NmapManager,
+	mockSvc *nmap.MockNmapService,
+	connSvc *connection.ConnectionService,
+	tick uint64,
+) {
+	mgr, mockSvc = nmapfsm.NewNmapManagerWithMockedService(testName + "-mgr")
+	connSvc = connection.NewDefaultConnectionService(
+		testName+"-svc", connection.WithNmapManager(mgr))
+
+	ctx, cancel = context.WithTimeout(context.Background(), 30*time.Minute)
+	return ctx, cancel, mgr, mockSvc, connSvc, 1
+}
+
+// Helper to reconcile N times
+func reconcileN(ctx context.Context, svc *connection.ConnectionService, startTick *uint64, n int) {
+	for i := 0; i < n; i++ {
+		err, _ := svc.ReconcileManager(ctx, nil, *startTick)
+		Expect(err).NotTo(HaveOccurred())
+		*startTick++
+	}
+}
+
+/* ---------- Add Connection tests ---------------------------------------- */
+
+var _ = Describe("Connection.AddConnection", func() {
+	var (
+		ctx             context.Context
+		cancel          context.CancelFunc
+		mockMgr         *nmapfsm.NmapManager
+		mockNmapService *nmap.MockNmapService
+		connSvc         *connection.ConnectionService
+		tick            uint64
+		connName        string
+		connConfig      *connectionserviceconfig.ConnectionServiceConfig
+		addErr          error
+	)
+
+	BeforeEach(func() {
+		ctx, cancel, mockMgr, mockNmapService, connSvc, tick = newConnTestEnv("add-conn")
+		connName = "test-conn"
+		connConfig = &connectionserviceconfig.ConnectionServiceConfig{
+			NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
+				Target: targetHost,
+				Port:   targetPort,
+			},
+		}
+		addErr = nil
+	})
+
+	AfterEach(func() { cancel() })
+
+	Context("with valid config", func() {
+		JustBeforeEach(func() {
+			mockNmapService.SetServicePortState(connName, "open", 10.0)
+			addErr = connSvc.AddConnection(ctx, nil, connConfig, connName)
+			reconcileN(ctx, connSvc, &tick, 10)
+		})
+
+		It("adds the connection successfully", func() {
+			Expect(addErr).NotTo(HaveOccurred())
+
+			// Verify the connection exists
+			exists := connSvc.ServiceExists(ctx, nil, connName)
+			Expect(exists).To(BeTrue())
+
+			// Verify FSM state after reconciliation
+			state, err := mockMgr.GetCurrentFSMState(connName)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(state).To(Equal(nmapfsm.OperationalStateOpen), "Connection should be in Open state after reconciliation")
+		})
+
+		It("rejects duplicate additions", func() {
+			// Try to add the same connection again
+			err := connSvc.AddConnection(ctx, nil, connConfig, connName)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("already exists"))
+		})
+	})
+})
+
+/* ---------- Update Connection tests ------------------------------------- */
+
+var _ = Describe("Connection.UpdateConnection", func() {
+	var (
+		ctx        context.Context
+		cancel     context.CancelFunc
+		mockMgr    *nmapfsm.NmapManager
+		connSvc    *connection.ConnectionService
+		tick       uint64
+		connName   string
+		connConfig *connectionserviceconfig.ConnectionServiceConfig
+		updateErr  error
+	)
+
+	BeforeEach(func() {
+		ctx, cancel, mockMgr, _, connSvc, tick = newConnTestEnv("update-conn")
+		connName = "update-test-conn"
+		connConfig = &connectionserviceconfig.ConnectionServiceConfig{
+			NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
+				Target: targetHost,
+				Port:   targetPort,
+			},
+		}
+
+		// First add the connection
+		Expect(connSvc.AddConnection(ctx, nil, connConfig, connName)).To(Succeed())
+		reconcileN(ctx, connSvc, &tick, 10)
+
+		// Verify it was added properly
+		state, err := mockMgr.GetCurrentFSMState(connName)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(state).To(Equal(nmapfsm.OperationalStateDegraded))
+
+		updateErr = nil
+	})
+
+	AfterEach(func() { cancel() })
+
+	Context("with valid updated config", func() {
+		BeforeEach(func() {
+			// Update the config
+			connConfig.NmapServiceConfig.Port = 503
+		})
+
+		JustBeforeEach(func() {
+			updateErr = connSvc.UpdateConnection(ctx, nil, connConfig, connName)
+			reconcileN(ctx, connSvc, &tick, 10)
+		})
+
+		It("updates the connection successfully", func() {
+			Expect(updateErr).NotTo(HaveOccurred())
+
+			// Verify the connection still exists
+			exists := connSvc.ServiceExists(ctx, nil, connName)
+			Expect(exists).To(BeTrue())
+
+			// The manager should have the updated config
+			reconcileN(ctx, connSvc, &tick, 10)
+			state, err := mockMgr.GetLastObservedState(connName)
+			Expect(err).NotTo(HaveOccurred())
+
+			nmapState, ok := state.(nmapfsm.NmapObservedState)
+			Expect(ok).To(BeTrue(), "Expected NmapObservedState type")
+			Expect(nmapState.ObservedNmapServiceConfig.Port).To(Equal(503))
+		})
+	})
+
+	Context("for non-existent connection", func() {
+		JustBeforeEach(func() {
+			updateErr = connSvc.UpdateConnection(ctx, nil, connConfig, "non-existent-conn")
+		})
+
+		It("returns an error", func() {
+			Expect(updateErr).To(HaveOccurred())
+			Expect(updateErr.Error()).To(ContainSubstring("does not exist"))
+		})
+	})
+})
+
+/* ---------- Remove Connection tests ------------------------------------- */
+
+var _ = Describe("Connection.RemoveConnection", func() {
+	var (
+		ctx        context.Context
+		cancel     context.CancelFunc
+		mockMgr    *nmapfsm.NmapManager
+		connSvc    *connection.ConnectionService
+		tick       uint64
+		connName   string
+		connConfig *connectionserviceconfig.ConnectionServiceConfig
+		removeErr  error
+	)
+
+	BeforeEach(func() {
+		ctx, cancel, mockMgr, _, connSvc, tick = newConnTestEnv("remove-conn")
+		connName = "remove-test-conn"
+		connConfig = &connectionserviceconfig.ConnectionServiceConfig{
+			NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
+				Target: targetHost,
+				Port:   targetPort,
+			},
+		}
+
+		// First add the connection
+		Expect(connSvc.AddConnection(ctx, nil, connConfig, connName)).To(Succeed())
+		reconcileN(ctx, connSvc, &tick, 10)
+
+		// Verify it was added properly
+		state, err := mockMgr.GetCurrentFSMState(connName)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(state).To(Equal(nmapfsm.OperationalStateDegraded))
+
+		removeErr = nil
+	})
+
+	AfterEach(func() { cancel() })
+
+	Context("for existing connection", func() {
+		JustBeforeEach(func() {
+			removeErr = connSvc.RemoveConnection(ctx, nil, connName)
+			reconcileN(ctx, connSvc, &tick, 15) // Need more reconciles for removal
+		})
+
+		It("removes the connection successfully", func() {
+			Expect(removeErr).NotTo(HaveOccurred())
+
+			// Verify the connection no longer exists
+			exists := connSvc.ServiceExists(ctx, nil, connName)
+			Expect(exists).To(BeFalse())
+		})
+	})
+
+	Context("for non-existent connection", func() {
+		JustBeforeEach(func() {
+			removeErr = connSvc.RemoveConnection(ctx, nil, "non-existent-conn")
+		})
+
+		It("returns an error", func() {
+			Expect(removeErr).To(HaveOccurred())
+			Expect(removeErr.Error()).To(ContainSubstring("does not exist"))
+		})
+	})
+})
+
+/* ---------- ServiceExists tests ----------------------------------------- */
+
+var _ = Describe("Connection.ServiceExists", func() {
+	var (
+		ctx             context.Context
+		cancel          context.CancelFunc
+		mockNmapService *nmap.MockNmapService
+		connSvc         *connection.ConnectionService
+		tick            uint64
+	)
+
+	BeforeEach(func() {
+		ctx, cancel, _, mockNmapService, connSvc, tick = newConnTestEnv("exists-conn")
+	})
+
+	AfterEach(func() { cancel() })
+
+	Context("with existing connection", func() {
+		const connName = "exists-test-conn"
+
+		BeforeEach(func() {
+			cfg := &connectionserviceconfig.ConnectionServiceConfig{
+				NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
+					Target: targetHost,
+					Port:   targetPort,
+				},
+			}
+			Expect(connSvc.AddConnection(ctx, nil, cfg, connName)).To(Succeed())
+			reconcileN(ctx, connSvc, &tick, 10)
+		})
+
+		It("returns true", func() {
+			exists := connSvc.ServiceExists(ctx, nil, connName)
+			Expect(exists).To(BeTrue())
+		})
+	})
+
+	Context("with non-existent connection", func() {
+		It("returns false", func() {
+			exists := connSvc.ServiceExists(ctx, nil, "non-existent-conn")
+			Expect(exists).To(BeFalse())
+		})
+	})
+
+	// Error injection test
+	Context("when service check fails", func() {
+		BeforeEach(func() {
+			mockNmapService.ExistsError = true
+		})
+
+		It("propagates the error", func() {
+			exists := connSvc.ServiceExists(ctx, nil, "any-conn")
+			Expect(exists).To(BeFalse())
+		})
+	})
+})
+
+/* ---------- ReconcileManager tests -------------------------------------- */
+
+var _ = Describe("Connection.ReconcileManager", func() {
+	var (
+		ctx     context.Context
+		cancel  context.CancelFunc
+		mockMgr *nmapfsm.NmapManager
+		connSvc *connection.ConnectionService
+		tick    uint64
+	)
+
+	BeforeEach(func() {
+		ctx, cancel, mockMgr, _, connSvc, tick = newConnTestEnv("reconcile-conn")
+	})
+
+	AfterEach(func() { cancel() })
+
+	Context("with existing connection", func() {
+		const connName = "reconcile-test-conn"
+
+		BeforeEach(func() {
+			cfg := &connectionserviceconfig.ConnectionServiceConfig{
+				NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
+					Target: targetHost,
+					Port:   targetPort,
+				},
+			}
+			Expect(connSvc.AddConnection(ctx, nil, cfg, connName)).To(Succeed())
+		})
+
+		It("reconciles successfully", func() {
+			// First reconcile call
+			err, did := connSvc.ReconcileManager(ctx, nil, tick)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(did).To(BeTrue(), "First reconcile should do something")
+			tick++
+
+			// Second reconcile call
+			err, _ = connSvc.ReconcileManager(ctx, nil, tick)
+			Expect(err).NotTo(HaveOccurred())
+			tick++
+
+			// Third reconcile call
+			err, _ = connSvc.ReconcileManager(ctx, nil, tick)
+			Expect(err).NotTo(HaveOccurred())
+			tick++
+
+			// Verify connection is in expected state after reconciliation
+			state, err := mockMgr.GetCurrentFSMState(connName)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(state).To(Equal(nmapfsm.OperationalStateStopped))
+		})
+	})
+})
+
+/* ---------- Flaky detection tests --------------------------------------- */
+
+var _ = Describe("Connection.FlakyDetection", func() {
+	var (
+		ctx             context.Context
+		cancel          context.CancelFunc
+		mockNmapService *nmap.MockNmapService
+		connSvc         *connection.ConnectionService
+		tick            uint64
+		connName        string
+	)
+
+	BeforeEach(func() {
+		ctx, cancel, _, mockNmapService, connSvc, tick = newConnTestEnv("flaky-conn")
+		connName = "flaky-test-conn"
+
+		// Add a connection for testing
+		cfg := &connectionserviceconfig.ConnectionServiceConfig{
+			NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
+				Target: targetHost,
+				Port:   targetPort,
+			},
+		}
+		Expect(connSvc.AddConnection(ctx, nil, cfg, connName)).To(Succeed())
+		reconcileN(ctx, connSvc, &tick, 10)
+	})
+
+	AfterEach(func() { cancel() })
+
+	Context("with stable connection history", func() {
+		BeforeEach(func() {
+			// Plant consistent "open" state in the history
+			for i := 0; i < 5; i++ {
+				mockNmapService.SetServicePortState(connName, "open", 10.0)
+			}
+		})
+
+		It("reports not flaky", func() {
+			info, err := connSvc.Status(ctx, nil, connName, tick)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(info.IsFlaky).To(BeFalse(), "Connection with stable history should not be flaky")
+		})
+	})
+
+	Context("with mixed connection history", func() {
+		BeforeEach(func() {
+			// Plant mixed state history (alternating open/closed)
+			mockNmapService.SetServicePortState(connName, "open", 10.0)
+			reconcileN(ctx, connSvc, &tick, 1)
+			_, err := connSvc.Status(ctx, nil, connName, tick)
+			Expect(err).NotTo(HaveOccurred())
+			tick++
+			mockNmapService.SetServicePortState(connName, "closed", 10.0)
+			reconcileN(ctx, connSvc, &tick, 1)
+			_, err = connSvc.Status(ctx, nil, connName, tick)
+			Expect(err).NotTo(HaveOccurred())
+			tick++
+			mockNmapService.SetServicePortState(connName, "open", 10.0)
+			reconcileN(ctx, connSvc, &tick, 1)
+			_, err = connSvc.Status(ctx, nil, connName, tick)
+			Expect(err).NotTo(HaveOccurred())
+			tick++
+			mockNmapService.SetServicePortState(connName, "closed", 10.0)
+			reconcileN(ctx, connSvc, &tick, 1)
+			_, err = connSvc.Status(ctx, nil, connName, tick)
+			Expect(err).NotTo(HaveOccurred())
+			tick++
+			mockNmapService.SetServicePortState(connName, "open", 10.0)
+			reconcileN(ctx, connSvc, &tick, 1)
+			_, err = connSvc.Status(ctx, nil, connName, tick)
+			Expect(err).NotTo(HaveOccurred())
+			tick++
+		})
+
+		It("reports flaky", func() {
+			info, err := connSvc.Status(ctx, nil, connName, tick)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(info.IsFlaky).To(BeTrue(), "Connection with mixed history should be flaky")
+		})
+	})
+})
+
+/* ---------- History size trimming tests --------------------------------- */
+
+var _ = Describe("Connection.HistorySizeTrimming", func() {
+	var (
+		ctx             context.Context
+		cancel          context.CancelFunc
+		mockMgr         *nmapfsm.NmapManager
+		mockNmapService *nmap.MockNmapService
+		connSvc         *connection.ConnectionService
+		tick            uint64
+		connName        string
+	)
+
+	const maxHistorySize = 3
+
+	BeforeEach(func() {
+		ctx, cancel, mockMgr, mockNmapService, connSvc, tick = newConnTestEnv("history-conn")
+		mockMgr, mockNmapService = nmapfsm.NewNmapManagerWithMockedService("history-mgr")
+
+		// Create service with limited history size
+		connSvc = connection.NewDefaultConnectionService(
+			"history-svc",
+			connection.WithNmapManager(mockMgr),
+			connection.WithMaxRecentScans(maxHistorySize),
+		)
+
+		tick = 1
+		connName = "history-test-conn"
+
+		// Add a connection for testing
+		cfg := &connectionserviceconfig.ConnectionServiceConfig{
+			NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
+				Target: targetHost,
+				Port:   targetPort,
+			},
+		}
+		Expect(connSvc.AddConnection(ctx, nil, cfg, connName)).To(Succeed())
+		reconcileN(ctx, connSvc, &tick, 10)
+	})
+
+	AfterEach(func() { cancel() })
+
+	It("maintains limited history size", func() {
+		// Add 5 scan results (more than maxHistorySize)
+		mockNmapService.SetServicePortState(connName, "open", 10.0)
+		reconcileN(ctx, connSvc, &tick, 1)
+		_, err := connSvc.Status(ctx, nil, connName, tick)
+		Expect(err).NotTo(HaveOccurred())
+		tick++
+		mockNmapService.SetServicePortState(connName, "open", 20.0)
+		reconcileN(ctx, connSvc, &tick, 1)
+		_, err = connSvc.Status(ctx, nil, connName, tick)
+		Expect(err).NotTo(HaveOccurred())
+		tick++
+		mockNmapService.SetServicePortState(connName, "open", 30.0)
+		reconcileN(ctx, connSvc, &tick, 1)
+		_, err = connSvc.Status(ctx, nil, connName, tick)
+		Expect(err).NotTo(HaveOccurred())
+		tick++
+		mockNmapService.SetServicePortState(connName, "open", 40.0)
+		reconcileN(ctx, connSvc, &tick, 1)
+		_, err = connSvc.Status(ctx, nil, connName, tick)
+		Expect(err).NotTo(HaveOccurred())
+		tick++
+		mockNmapService.SetServicePortState(connName, "open", 50.0)
+		reconcileN(ctx, connSvc, &tick, 1)
+		_, err = connSvc.Status(ctx, nil, connName, tick)
+		Expect(err).NotTo(HaveOccurred())
+		tick++
+
+		Expect(connSvc.GetRecentScansCount(connName)).To(Equal(maxHistorySize),
+			"History should be limited to maxHistorySize")
+
+		// The most recent scans should be kept (highest time values)
+		scan, ok := connSvc.GetRecentScanAtIndex(connName, 0)
+		Expect(ok).To(BeTrue())
+		Expect(scan.NmapStatus.LastScan.PortResult.LatencyMs).To(BeNumerically(">=", 30.0),
+			"Only the most recent scans should be kept")
+	})
+})
+
+/* ---------- LastChange semantics tests ---------------------------------- */
+
+var _ = Describe("Connection.LastChangeSemantics", func() {
+	var (
+		ctx             context.Context
+		cancel          context.CancelFunc
+		mockNmapService *nmap.MockNmapService
+		connSvc         *connection.ConnectionService
+		tick            uint64
+		connName        string
+	)
+
+	BeforeEach(func() {
+		ctx, cancel, _, mockNmapService, connSvc, tick = newConnTestEnv("lastchange-conn")
+		connName = "lastchange-test-conn"
+
+		// Add a connection for testing
+		cfg := &connectionserviceconfig.ConnectionServiceConfig{
+			NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
+				Target: targetHost,
+				Port:   targetPort,
+			},
+		}
+		Expect(connSvc.AddConnection(ctx, nil, cfg, connName)).To(Succeed())
+		reconcileN(ctx, connSvc, &tick, 3)
+
+		// Ensure we're in open state initially
+		mockNmapService.SetServicePortState(connName, "open", 10.0)
+		reconcileN(ctx, connSvc, &tick, 1)
+		info, err := connSvc.Status(ctx, nil, connName, tick)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(info.PortStateOpen).To(BeTrue())
+	})
+
+	AfterEach(func() { cancel() })
+
+	It("updates LastChange only on actual state transitions", func() {
+		reconcileN(ctx, connSvc, &tick, 1)
+		tick++
+
+		// Initial state capture
+		initialInfo, err := connSvc.Status(ctx, nil, connName, tick)
+		Expect(err).NotTo(HaveOccurred())
+		initialLastChange := initialInfo.LastChange
+
+		// Change the state to closed
+		mockNmapService.SetServicePortState(connName, "closed", 20.0)
+		reconcileN(ctx, connSvc, &tick, 1)
+		tick++
+
+		// Check status after state change
+		afterChangeInfo, err := connSvc.Status(ctx, nil, connName, tick)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(afterChangeInfo.PortStateOpen).To(BeFalse(), "Port state should have changed")
+		Expect(afterChangeInfo.LastChange).To(Equal(tick),
+			"LastChange should be updated on state transition")
+		Expect(afterChangeInfo.LastChange).To(BeNumerically(">", initialLastChange),
+			"New LastChange should be greater than initial")
+
+		// Record the timestamp after change
+		stateChangeTimestamp := afterChangeInfo.LastChange
+
+		// Update with the same state (closed)
+		mockNmapService.SetServicePortState(connName, "closed", 30.0)
+		reconcileN(ctx, connSvc, &tick, 1)
+		tick++
+
+		// Check status after same-state update
+		afterSameInfo, err := connSvc.Status(ctx, nil, connName, tick)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(afterSameInfo.PortStateOpen).To(BeFalse(), "Port should still be closed")
+		Expect(afterSameInfo.LastChange).To(Equal(stateChangeTimestamp),
+			"LastChange should not update when state didn't change")
+	})
+})

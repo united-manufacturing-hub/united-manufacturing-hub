@@ -53,7 +53,7 @@ func NewNmapManagerWithMockedService(name string) (*NmapManager, *nmap_service.M
 			if !ok {
 				return false, fmt.Errorf("instance not a NmapInstance")
 			}
-			return ni.config.DesiredFSMState == nc.DesiredFSMState, nil
+			return ni.config.NmapServiceConfig.Equal(nc.NmapServiceConfig), nil
 		},
 		func(instance public_fsm.FSMInstance, nc config.NmapConfig) error {
 			ni, ok := instance.(*NmapInstance)
