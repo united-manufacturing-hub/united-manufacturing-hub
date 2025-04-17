@@ -24,6 +24,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"go.uber.org/zap"
 	"gopkg.in/yaml.v3"
@@ -38,6 +39,22 @@ type GetDataFlowComponentAction struct {
 	systemSnapshot  *fsm.SystemSnapshot
 	payload         models.GetDataflowcomponentRequestSchemaJson
 	actionLogger    *zap.SugaredLogger
+}
+
+// NewGetDataFlowComponentAction creates a new GetDataFlowComponentAction with the provided parameters.
+// This constructor is primarily used for testing to enable dependency injection, though it can be used
+// in production code as well. It initializes the action with the necessary fields but doesn't
+// populate the payload field which must be done via Parse.
+func NewGetDataFlowComponentAction(userEmail string, actionUUID uuid.UUID, instanceUUID uuid.UUID, outboundChannel chan *models.UMHMessage, configManager config.ConfigManager, systemSnapshot *fsm.SystemSnapshot) *GetDataFlowComponentAction {
+	return &GetDataFlowComponentAction{
+		userEmail:       userEmail,
+		actionUUID:      actionUUID,
+		instanceUUID:    instanceUUID,
+		outboundChannel: outboundChannel,
+		configManager:   configManager,
+		systemSnapshot:  systemSnapshot,
+		actionLogger:    logger.For(logger.ComponentCommunicator),
+	}
 }
 
 func (a *GetDataFlowComponentAction) Parse(payload interface{}) (err error) {
@@ -227,4 +244,9 @@ func (a *GetDataFlowComponentAction) getUserEmail() string {
 
 func (a *GetDataFlowComponentAction) getUuid() uuid.UUID {
 	return a.actionUUID
+}
+
+// GetParsedVersionUUIDs returns the parsed request version UUIDs - exposed primarily for testing purposes.
+func (a *GetDataFlowComponentAction) GetParsedVersionUUIDs() models.GetDataflowcomponentRequestSchemaJson {
+	return a.payload
 }
