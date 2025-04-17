@@ -56,7 +56,9 @@ var _ = Describe("BaseFSMInstance", func() {
 			},
 		}
 
-		fsmInstance = NewBaseFSMInstance(config, logger.Sugar())
+		logger := logger.Sugar()
+		backoffConfig := backoff.DefaultConfig(config.ID, logger)
+		fsmInstance = NewBaseFSMInstance(config, backoffConfig, logger)
 
 		tick = 0
 	})
@@ -91,12 +93,13 @@ var _ = Describe("BaseFSMInstance", func() {
 				OperationalStateBeforeRemove: "stopped",
 			}
 
-			specialInstance := NewBaseFSMInstance(config, logger.Sugar())
-
+			logger := logger.Sugar()
+			backoffConfig := backoff.NewBackoffConfig(config.ID, 1, 600, 2, logger)
+			specialInstance := NewBaseFSMInstance(config, backoffConfig, logger)
 			// Replace the default backoffManager with one that has fewer retries for testing
-			backoffConfig := backoff.DefaultConfig(specialInstance.cfg.ID, logger.Sugar())
-			backoffConfig.MaxRetries = 2 // Only allow 2 retries
-			specialInstance.backoffManager = backoff.NewBackoffManager(backoffConfig)
+			//	backoffConfig := backoff.DefaultConfig(specialInstance.cfg.ID, logger.Sugar())
+			//	backoffConfig.MaxRetries = 2 // Only allow 2 retries
+			//	specialInstance.backoffManager = backoff.NewBackoffManager(backoffConfig)
 
 			testErr := errors.New("test error")
 

@@ -1,0 +1,78 @@
+// Copyright 2025 UMH Systems GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package nmap
+
+import (
+	"fmt"
+	"time"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	public_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
+	nmap_service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/nmap"
+)
+
+func NewNmapManagerWithMockedService(name string) *NmapManager {
+	managerName := fmt.Sprintf("%s_mock_%s", logger.ComponentNmapManager, name)
+
+	baseMgr := public_fsm.NewBaseFSMManager[config.NmapConfig](
+		managerName,
+		"/dev/null",
+		// For the mock, we'll just pretend to parse from FullConfig
+		func(fc config.FullConfig) ([]config.NmapConfig, error) {
+			// In a real test, you'd define fc.Nmap with test data
+			return fc.Internal.Nmap, nil
+		},
+		func(nc config.NmapConfig) (string, error) {
+			return nc.Name, nil
+		},
+		func(nc config.NmapConfig) (string, error) {
+			return nc.DesiredFSMState, nil
+		},
+		func(nc config.NmapConfig) (public_fsm.FSMInstance, error) {
+			mockSnc := nmap_service.NewMockNmapService()
+
+			inst := NewNmapInstanceWithService(nc, mockSnc)
+			return inst, nil
+		},
+		func(instance public_fsm.FSMInstance, nc config.NmapConfig) (bool, error) {
+			ni, ok := instance.(*NmapInstance)
+			if !ok {
+				return false, fmt.Errorf("instance not a NmapInstance")
+			}
+			return ni.config.DesiredFSMState == nc.DesiredFSMState, nil
+		},
+		func(instance public_fsm.FSMInstance, nc config.NmapConfig) error {
+			ni, ok := instance.(*NmapInstance)
+			if !ok {
+				return fmt.Errorf("instance not a NmapInstance")
+			}
+			ni.config = nc
+			return nil
+		},
+		func(instance public_fsm.FSMInstance) (time.Duration, error) {
+			ni, ok := instance.(*NmapInstance)
+			if !ok {
+				return 0, fmt.Errorf("instance not a NmapInstance")
+			}
+			return ni.GetExpectedMaxP95ExecutionTimePerInstance(), nil
+		},
+	)
+
+	logger.For(managerName).Info("Created NmapManager with mocked service.")
+	return &NmapManager{
+		BaseFSMManager: baseMgr,
+	}
+}
