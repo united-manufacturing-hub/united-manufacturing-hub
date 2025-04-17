@@ -14,19 +14,6 @@
 
 package constants
 
-import "time"
-
-const (
-	// ConnectionExpectedMaxP95ExecutionTimePerInstance means that an instance will not reconcile if not enough time is left
-	// Note: in the integration test, we defined an alerting threshold of 80% of the max ticker time, which is 100ms
-	// So by setting this appropriately, we can ensure that an instance will never start if it triggers the alerting threshold
-	ConnectionExpectedMaxP95ExecutionTimePerInstance = time.Millisecond * 20
-)
-
-const (
-	ConnectionUpdateObservedStateTimeout = time.Millisecond * 2
-)
-
 const (
 	MaxRecentScans = 60 // The amount of recent scans to keep for flicker detection, if there was at least one scan in the last 60 ticks that was down, the connection is considered degraded
 )
