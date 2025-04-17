@@ -78,14 +78,17 @@ var _ = Describe("Container FSM", func() {
 	Context("Lifecycle transitions", func() {
 		BeforeEach(func() {
 			// Ensure we've walked from to_be_created -> creating -> monitoring_stopped
-			inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 10}, mockFS)
-			inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 11}, mockFS)
+			err, _ := inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 10}, mockFS)
+			Expect(err).ToNot(HaveOccurred())
+			err, _ = inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 11}, mockFS)
+			Expect(err).ToNot(HaveOccurred())
 			Expect(inst.GetCurrentFSMState()).To(Equal(container.OperationalStateStopped))
 		})
 
 		It("Should go from `monitoring_stopped` to `degraded` on start", func() {
 			// set desired state to active
-			inst.SetDesiredFSMState(container.OperationalStateActive)
+			err := inst.SetDesiredFSMState(container.OperationalStateActive)
+			Expect(err).ToNot(HaveOccurred())
 
 			err, did := inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 12}, mockFS)
 			Expect(err).ToNot(HaveOccurred())
@@ -111,16 +114,21 @@ var _ = Describe("Container FSM", func() {
 	Context("When monitoring is running", func() {
 		BeforeEach(func() {
 			// get to monitoring_stopped
-			inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 20}, mockFS)
-			inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 21}, mockFS)
+			err, _ := inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 20}, mockFS)
+			Expect(err).ToNot(HaveOccurred())
+			err, _ = inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 21}, mockFS)
+			Expect(err).ToNot(HaveOccurred())
 			// set desired = active
-			inst.SetDesiredFSMState(container.OperationalStateActive)
+			err = inst.SetDesiredFSMState(container.OperationalStateActive)
+			Expect(err).ToNot(HaveOccurred())
 			// cause start
-			inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 22}, mockFS)
+			err, did := inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 22}, mockFS)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(did).To(BeTrue())
 			Expect(inst.GetCurrentFSMState()).To(Equal(container.OperationalStateStarting))
 
 			// next reconcile
-			err, did := inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 23}, mockFS)
+			err, did = inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 23}, mockFS)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(did).To(BeTrue())
 			Expect(inst.GetCurrentFSMState()).To(Equal(container.OperationalStateDegraded))

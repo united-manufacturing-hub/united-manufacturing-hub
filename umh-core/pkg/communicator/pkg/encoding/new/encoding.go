@@ -130,7 +130,10 @@ func Decompress(message []byte) ([]byte, error) {
 	b := getDecompressBuffer()
 	defer putDecompressBuffer(b)
 
-	decoder.Reset(bytes.NewReader(message))
+	err := decoder.Reset(bytes.NewReader(message))
+	if err != nil {
+		return nil, err
+	}
 
 	if _, err := io.Copy(b, decoder); err != nil {
 		return nil, err

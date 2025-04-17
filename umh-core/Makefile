@@ -57,6 +57,7 @@ install:
 	go install go.uber.org/nilaway/cmd/nilaway@$(NILWAY_VERSION)
 	go install github.com/onsi/ginkgo/v2/ginkgo@$(GINKGO_VERSION)
 	go install github.com/evilmartians/lefthook@latest
+	go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
 
 download-docker-binaries:
 	@mkdir -p .docker-cache/s6-overlay .docker-cache/benthos .docker-cache/redpanda
@@ -185,17 +186,20 @@ cleanup-ci:
 vet:
 	go vet -tags=test ./...
 
+lint:
+	golangci-lint run ./...
+
 nilaway:
 	nilaway -include-pkgs="github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core" -tags=test ./...
 
-test: vet nilaway
+test: vet nilaway lint
 	go test -v -tags=test ./...
 
-unit-test: vet nilaway
+unit-test: vet nilaway lint
 	ginkgo -r -v --tags=test --label-filter='!integration' --fail-fast ./...
 
 
-integration-test: stop-all-pods vet nilaway
+integration-test: stop-all-pods vet nilaway lint
 	ginkgo -r -v --tags=test --label-filter='integration' --fail-fast ./...
 
 
@@ -203,7 +207,7 @@ integration-test: stop-all-pods vet nilaway
 # - Injects VERSION via ldflags into AppVersion for proper error identification in Sentry
 # - CI test failures SHOULD be reported to Sentry (unlike local dev failures)
 # - Helps identify flaky tests by consistently tracking failures in CI pipelines
-integration-test-ci: vet nilaway
+integration-test-ci: vet nilaway lint
 	VERSION=$(VERSION) ginkgo -r -v --tags=test --label-filter='integration' --fail-fast -ldflags="-X 'github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/version.AppVersion=$(VERSION)'" ./...
 
 update-go-dependencies:

@@ -38,9 +38,16 @@ func (b *BenthosInstance) CreateObservedStateSnapshot() fsm.ObservedStateSnapsho
 	snapshot := &BenthosObservedStateSnapshot{}
 
 	// Deep copy config
-	deepcopy.Copy(&snapshot.Config, &b.config)
+	err := deepcopy.Copy(&snapshot.Config, &b.config)
+	if err != nil {
+		return nil
+	}
 
 	// Deep copy service info
-	deepcopy.Copy(&snapshot.ServiceInfo, &b.ObservedState.ServiceInfo)
+	err = deepcopy.Copy(&snapshot.ServiceInfo, &b.ObservedState.ServiceInfo)
+	if err != nil {
+		return nil
+	}
+
 	return snapshot
 }

@@ -52,37 +52,45 @@ var _ = Describe("S6 Service", func() {
 		mockFS = filesystem.NewMockFileSystem()
 
 		// Cleanup any test directories if they exist
-		os.RemoveAll(testPath)
+		err := mockFS.RemoveAll(ctx, testPath)
+		Expect(err).NotTo(HaveOccurred())
 	})
 
 	AfterEach(func() {
 		// Cleanup
-		os.RemoveAll(testPath)
+		err := mockFS.RemoveAll(ctx, testPath)
+		Expect(err).NotTo(HaveOccurred())
 	})
 
 	It("should track method calls in the mock implementation", func() {
 		Expect(mockService.CreateCalled).To(BeFalse())
-		mockService.Create(ctx, testPath, s6serviceconfig.S6ServiceConfig{}, mockFS)
+		err := mockService.Create(ctx, testPath, s6serviceconfig.S6ServiceConfig{}, mockFS)
+		Expect(err).NotTo(HaveOccurred())
 		Expect(mockService.CreateCalled).To(BeTrue())
 
 		Expect(mockService.StartCalled).To(BeFalse())
-		mockService.Start(ctx, testPath, mockFS)
+		err = mockService.Start(ctx, testPath, mockFS)
+		Expect(err).NotTo(HaveOccurred())
 		Expect(mockService.StartCalled).To(BeTrue())
 
 		Expect(mockService.StopCalled).To(BeFalse())
-		mockService.Stop(ctx, testPath, mockFS)
+		err = mockService.Stop(ctx, testPath, mockFS)
+		Expect(err).NotTo(HaveOccurred())
 		Expect(mockService.StopCalled).To(BeTrue())
 
 		Expect(mockService.RestartCalled).To(BeFalse())
-		mockService.Restart(ctx, testPath, mockFS)
+		err = mockService.Restart(ctx, testPath, mockFS)
+		Expect(err).NotTo(HaveOccurred())
 		Expect(mockService.RestartCalled).To(BeTrue())
 
 		Expect(mockService.StatusCalled).To(BeFalse())
-		mockService.Status(ctx, testPath, mockFS)
+		_, err = mockService.Status(ctx, testPath, mockFS)
+		Expect(err).NotTo(HaveOccurred())
 		Expect(mockService.StatusCalled).To(BeTrue())
 
 		Expect(mockService.ServiceExistsCalled).To(BeFalse())
-		mockService.ServiceExists(ctx, testPath, mockFS)
+		exists, _ := mockService.ServiceExists(ctx, testPath, mockFS)
+		Expect(exists).To(BeTrue())
 		Expect(mockService.ServiceExistsCalled).To(BeTrue())
 	})
 
@@ -92,7 +100,8 @@ var _ = Describe("S6 Service", func() {
 		Expect(exists).To(BeFalse())
 
 		// Create service should make it exist
-		mockService.Create(ctx, testPath, s6serviceconfig.S6ServiceConfig{}, mockFS)
+		err := mockService.Create(ctx, testPath, s6serviceconfig.S6ServiceConfig{}, mockFS)
+		Expect(err).NotTo(HaveOccurred())
 		exists, _ = mockService.ServiceExists(ctx, testPath, mockFS)
 		Expect(exists).To(BeTrue())
 
@@ -107,22 +116,26 @@ var _ = Describe("S6 Service", func() {
 		Expect(info.Status).To(Equal(ServiceDown))
 
 		// Start service should change state to up
-		mockService.Start(ctx, testPath, mockFS)
+		err = mockService.Start(ctx, testPath, mockFS)
+		Expect(err).NotTo(HaveOccurred())
 		info, _ = mockService.Status(ctx, testPath, mockFS)
 		Expect(info.Status).To(Equal(ServiceUp))
 
 		// Stop service should change state to down
-		mockService.Stop(ctx, testPath, mockFS)
+		err = mockService.Stop(ctx, testPath, mockFS)
+		Expect(err).NotTo(HaveOccurred())
 		info, _ = mockService.Status(ctx, testPath, mockFS)
 		Expect(info.Status).To(Equal(ServiceDown))
 
 		// Restart service should change state to up (after briefly being restarting)
-		mockService.Restart(ctx, testPath, mockFS)
+		err = mockService.Restart(ctx, testPath, mockFS)
+		Expect(err).NotTo(HaveOccurred())
 		info, _ = mockService.Status(ctx, testPath, mockFS)
 		Expect(info.Status).To(Equal(ServiceUp))
 
 		// Remove service should make it not exist
-		mockService.Remove(ctx, testPath, mockFS)
+		err = mockService.Remove(ctx, testPath, mockFS)
+		Expect(err).NotTo(HaveOccurred())
 		exists, _ = mockService.ServiceExists(ctx, testPath, mockFS)
 		Expect(exists).To(BeFalse())
 

@@ -116,7 +116,8 @@ var _ = Describe("ZSTD", func() {
 
 		// Base64 encode the string to be able to test against frontend
 		encodedData := base64.StdEncoding.EncodeToString([]byte(compressedData))
-		GinkgoWriter.Write([]byte(encodedData))
+		_, err = GinkgoWriter.Write([]byte(encodedData))
+		Expect(err).To(BeNil())
 
 		decompressedData, err := new.Decompress(compressedData)
 		Expect(err).To(BeNil())
@@ -871,7 +872,11 @@ var _ = Describe("PPROF tests", func() {
 		defer runtime.GC()
 		cpuFile, err := os.Create("cpu-compression.prof")
 		Expect(err).NotTo(HaveOccurred())
-		defer cpuFile.Close()
+		defer func() {
+			if err := cpuFile.Close(); err != nil {
+				Fail(fmt.Sprintf("Error closing CPU profile file: %v\n", err))
+			}
+		}()
 
 		err = pprof.StartCPUProfile(cpuFile)
 		Expect(err).NotTo(HaveOccurred())
@@ -895,7 +900,11 @@ var _ = Describe("PPROF tests", func() {
 		defer runtime.GC()
 		cpuFile, err := os.Create("cpu-decompression.prof")
 		Expect(err).NotTo(HaveOccurred())
-		defer cpuFile.Close()
+		defer func() {
+			if err := cpuFile.Close(); err != nil {
+				Fail(fmt.Sprintf("Error closing CPU profile file: %v\n", err))
+			}
+		}()
 
 		err = pprof.StartCPUProfile(cpuFile)
 		Expect(err).NotTo(HaveOccurred())

@@ -32,6 +32,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 )
 
 // Package filesystem implements various filesystem service interfaces.
@@ -740,7 +741,11 @@ func (bs *BufferedService) SyncFromDisk(ctx context.Context) error {
 							}
 							continue
 						}
-						defer file.Close()
+						defer func() {
+							if err != nil {
+								sentry.ReportIssuef(sentry.IssueTypeError, logger, "failed to close file for incremental read: %v", err)
+							}
+						}()
 
 						// Seek to the position where we left off
 						_, err = file.Seek(previousSize, 0)

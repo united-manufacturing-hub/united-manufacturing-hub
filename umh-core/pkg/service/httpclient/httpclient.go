@@ -25,6 +25,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/ctxutil"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	"go.uber.org/zap"
 )
 
@@ -151,7 +152,12 @@ func (c *DefaultHTTPClient) GetWithBody(ctx context.Context, url string) (*http.
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to execute request for %s: %w", url, err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		err := resp.Body.Close()
+		if err != nil {
+			sentry.ReportIssuef(sentry.IssueTypeError, c.logger, "failed to close response body: %v", err)
+		}
+	}()
 
 	// Read response body
 	body, err := io.ReadAll(resp.Body)

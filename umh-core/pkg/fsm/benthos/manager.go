@@ -207,7 +207,10 @@ func (m *BenthosManager) Reconcile(ctx context.Context, snapshot public_fsm.Syst
 	}
 
 	var snapshotWithPorts public_fsm.SystemSnapshot
-	deepcopy.Copy(&snapshotWithPorts, snapshot)
+	err := deepcopy.Copy(&snapshotWithPorts, snapshot)
+	if err != nil {
+		return fmt.Errorf("failed to copy snapshot: %w", err), false
+	}
 	snapshotWithPorts.CurrentConfig = cfgWithPorts
 
 	// Phase 2: Base FSM Reconciliation with port-aware config

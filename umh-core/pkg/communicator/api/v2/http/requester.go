@@ -209,7 +209,7 @@ func enhanceConnectionError(err error) error {
 }
 
 // GetRequest does a GET request to the given endpoint, with optional header and cookies
-func GetRequest[R any](ctx context.Context, endpoint Endpoint, header map[string]string, cookies *map[string]string, insecureTLS bool, apiURL string, logger *zap.SugaredLogger) (*R, error, int) {
+func GetRequest[R any](ctx context.Context, endpoint Endpoint, header map[string]string, cookies *map[string]string, insecureTLS bool, apiURL string, logger *zap.SugaredLogger) (result *R, responseErr error, statusCode int) {
 	// Set up context with default 30 second timeout if none provided
 	if ctx == nil {
 		var cancel context.CancelFunc
@@ -259,7 +259,17 @@ func GetRequest[R any](ctx context.Context, endpoint Endpoint, header map[string
 		// Enhance error message for connection failures
 		return nil, enhanceConnectionError(err), 0
 	}
-	defer response.Body.Close()
+	defer func() {
+		if err := response.Body.Close(); err != nil {
+			if responseErr != nil {
+				// If we already have an error, just log this one
+				logger.Errorf("Error closing response body: %v", err)
+			} else {
+				// No previous error, so return this one
+				responseErr = fmt.Errorf("error closing response body: %w", err)
+			}
+		}
+	}()
 
 	// Record latencies
 	now := time.Now()
@@ -298,8 +308,8 @@ func GetRequest[R any](ctx context.Context, endpoint Endpoint, header map[string
 		return nil, nil, response.StatusCode
 	}
 
-	var result R
-	if err := safejson.Unmarshal(bodyBytes, &result); err != nil {
+	var typedResult R
+	if err := safejson.Unmarshal(bodyBytes, &typedResult); err != nil {
 		return nil, err, response.StatusCode
 	}
 
@@ -310,12 +320,14 @@ func GetRequest[R any](ctx context.Context, endpoint Endpoint, header map[string
 		LatestExternalIp = ip
 	}
 
-	return &result, nil, response.StatusCode
+	statusCode = response.StatusCode
+	result = &typedResult
+	return
 }
 
 // PostRequest does a POST request to the given endpoint, with optional header and cookies
 // Note: Cookies will be updated with the response cookies, if not nil
-func PostRequest[R any, T any](ctx context.Context, endpoint Endpoint, data *T, header map[string]string, cookies *map[string]string, insecureTLS bool, apiURL string, logger *zap.SugaredLogger) (*R, error, int) {
+func PostRequest[R any, T any](ctx context.Context, endpoint Endpoint, data *T, header map[string]string, cookies *map[string]string, insecureTLS bool, apiURL string, logger *zap.SugaredLogger) (result *R, responseErr error, statusCode int) {
 	// Set up context with default 30 second timeout if none provided
 	if ctx == nil {
 		var cancel context.CancelFunc
@@ -383,7 +395,17 @@ func PostRequest[R any, T any](ctx context.Context, endpoint Endpoint, data *T, 
 	latenciesFRB.Set(time.Now(), timeTillFirstByte)
 
 	// Read response body
-	defer response.Body.Close()
+	defer func() {
+		if err := response.Body.Close(); err != nil {
+			if responseErr != nil {
+				// If we already have an error, just log this one
+				logger.Errorf("Error closing response body: %v", err)
+			} else {
+				// No previous error, so return this one
+				responseErr = fmt.Errorf("error closing response body: %w", err)
+			}
+		}
+	}()
 
 	bodyBytes, err := io.ReadAll(response.Body)
 	if err != nil {
@@ -422,13 +444,15 @@ func PostRequest[R any, T any](ctx context.Context, endpoint Endpoint, data *T, 
 	}
 
 	// Unmarshal response body
-	var result R
-	err = safejson.Unmarshal(bodyBytes, &result)
+	var typedResult R
+	err = safejson.Unmarshal(bodyBytes, &typedResult)
 	if err != nil {
 		return nil, err, response.StatusCode
 	}
 
 	processCookies(response, cookies)
 
-	return &result, nil, response.StatusCode
+	statusCode = response.StatusCode
+	result = &typedResult
+	return
 }

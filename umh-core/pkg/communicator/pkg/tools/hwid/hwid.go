@@ -64,7 +64,11 @@ func generateNewHWID(hwidPath string) {
 		return
 	}
 
-	defer file.Close()
+	defer func() {
+		if err := file.Close(); err != nil {
+			zap.S().Warnf("Failed to close HWID file: %s", err)
+		}
+	}()
 
 	_, err = file.WriteString(hash)
 	if err != nil {

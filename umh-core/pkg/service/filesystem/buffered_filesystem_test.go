@@ -26,6 +26,8 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
@@ -63,7 +65,8 @@ var _ = Describe("BufferedService", func() {
 	AfterEach(func() {
 		// Clean up
 		cancel()
-		os.RemoveAll(tmpDir)
+		err := os.RemoveAll(tmpDir)
+		Expect(err).NotTo(HaveOccurred())
 	})
 
 	Context("SyncFromDisk", func() {
@@ -375,23 +378,33 @@ var _ = Describe("BufferedService", func() {
 func setupTestFiles(root string) {
 	// Create a sample file
 	samplePath := filepath.Join(root, "sample.txt")
-	os.WriteFile(samplePath, []byte("Hello, world!\n"), 0644)
+	err := os.WriteFile(samplePath, []byte("Hello, world!\n"), 0644)
+	Expect(err).NotTo(HaveOccurred())
 
 	// Create nested directories
 	nestedDir := filepath.Join(root, "nested")
-	os.MkdirAll(nestedDir, 0755)
+	err = os.MkdirAll(nestedDir, 0755)
+	Expect(err).NotTo(HaveOccurred())
 
 	// Create a nested file
 	nestedFile := filepath.Join(nestedDir, "sample2.txt")
-	os.WriteFile(nestedFile, []byte("Nested file\n"), 0644)
+	err = os.WriteFile(nestedFile, []byte("Nested file\n"), 0644)
+	Expect(err).NotTo(HaveOccurred())
 }
 
 func createLargeFile(path string, sizeBytes int64) {
-	f, _ := os.Create(path)
-	defer f.Close()
+	f, err := os.Create(path)
+	Expect(err).NotTo(HaveOccurred())
+	defer func() {
+		err := f.Close()
+		if err != nil {
+			sentry.ReportIssuef(sentry.IssueTypeError, logger.For(logger.ComponentFilesystem), "failed to close file: %v", err)
+		}
+	}()
 
 	// Just write N zeroes
-	f.Truncate(sizeBytes)
+	err = f.Truncate(sizeBytes)
+	Expect(err).NotTo(HaveOccurred())
 }
 
 // ----------------------------------------------------------
@@ -609,7 +622,8 @@ var _ = Describe("BufferedService Directory Creation Issues", func() {
 	AfterEach(func() {
 		// Clean up
 		cancel()
-		os.RemoveAll(tmpDir)
+		err := os.RemoveAll(tmpDir)
+		Expect(err).NotTo(HaveOccurred())
 	})
 
 	It("should now succeed when writing files in directories that don't exist yet", func() {
@@ -820,7 +834,8 @@ var _ = Describe("BufferedService Permission Checking", func() {
 
 	AfterEach(func() {
 		cancel()
-		os.RemoveAll(tmpDir)
+		err := os.RemoveAll(tmpDir)
+		Expect(err).NotTo(HaveOccurred())
 	})
 
 	It("should check permissions by default", func() {

@@ -43,13 +43,25 @@ func (s *S6Instance) CreateObservedStateSnapshot() fsm.ObservedStateSnapshot {
 	}
 
 	// Deep copy config
-	deepcopy.Copy(&snapshot.Config, &s.config)
+	err := deepcopy.Copy(&snapshot.Config, &s.config)
+	if err != nil {
+		s.baseFSMInstance.GetLogger().Error("failed to deep copy config", "error", err)
+		return nil
+	}
 
 	// Deep copy service info
-	deepcopy.Copy(&snapshot.ServiceInfo, &s.ObservedState.ServiceInfo)
+	err = deepcopy.Copy(&snapshot.ServiceInfo, &s.ObservedState.ServiceInfo)
+	if err != nil {
+		s.baseFSMInstance.GetLogger().Error("failed to deep copy service info", "error", err)
+		return nil
+	}
 
 	// Deep copy observed config
-	deepcopy.Copy(&snapshot.ObservedS6ServiceConfig, &s.ObservedState.ObservedS6ServiceConfig)
+	err = deepcopy.Copy(&snapshot.ObservedS6ServiceConfig, &s.ObservedState.ObservedS6ServiceConfig)
+	if err != nil {
+		s.baseFSMInstance.GetLogger().Error("failed to deep copy observed config", "error", err)
+		return nil
+	}
 
 	return snapshot
 }

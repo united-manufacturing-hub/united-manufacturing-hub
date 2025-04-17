@@ -95,7 +95,11 @@ func checkMetricsHealthy() {
 	if err != nil {
 		Fail(fmt.Errorf("failed to get metrics: %w", err).Error())
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			Fail(fmt.Sprintf("Error closing response body: %v\n", err))
+		}
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		Fail(fmt.Sprintf("Metrics endpoint returned non-200: %v", resp.StatusCode))
@@ -122,7 +126,11 @@ func checkGoldenService() (int, error) {
 	if e != nil {
 		return 0, fmt.Errorf("failed to send request: %w", e)
 	}
-	defer checkResp.Body.Close()
+	defer func() {
+		if err := checkResp.Body.Close(); err != nil {
+			Fail(fmt.Sprintf("Error closing response body: %v\n", err))
+		}
+	}()
 
 	return checkResp.StatusCode, nil
 }
@@ -206,7 +214,11 @@ func waitForMetrics() error {
 			}
 			return lastError
 		}
-		defer resp.Body.Close()
+		defer func() {
+			if err := resp.Body.Close(); err != nil {
+				Fail(fmt.Sprintf("Error closing response body: %v\n", err))
+			}
+		}()
 
 		if resp.StatusCode != http.StatusOK {
 			lastError = fmt.Errorf("metrics endpoint returned status %d", resp.StatusCode)
