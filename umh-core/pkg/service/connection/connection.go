@@ -264,10 +264,14 @@ func (c *ConnectionService) Status(
 	info.IsFlaky = c.isConnectionFlaky(connName)
 
 	// ----- LastChange handling -----
-	c.recentMu.RLock()
-	prev, exists := c.prevInfo[connName]
+	prev, exists := func() (ServiceInfo, bool) {
+		c.recentMu.RLock()
+		defer c.recentMu.RUnlock()
+		prev, exists := c.prevInfo[connName]
+		return prev, exists
+	}()
+
 	stateChanged := !exists || prev.IsReachable != info.IsReachable || prev.IsFlaky != info.IsFlaky
-	c.recentMu.RUnlock()
 
 	// Only take write lock if we're about to modify the map
 	if stateChanged {
@@ -412,13 +416,11 @@ func (c *ConnectionService) ServiceExists(
 	fs filesystem.Service,
 	connName string,
 ) bool {
-	exists := c.nmapService.ServiceExists(ctx, fs, connName)
-	c.logger.Debugf("Connection %s exists: %v", connName, exists)
-
 	if ctx.Err() != nil {
 		return false
 	}
 
+	exists := c.nmapService.ServiceExists(ctx, fs, connName)
 	return exists
 }
 
