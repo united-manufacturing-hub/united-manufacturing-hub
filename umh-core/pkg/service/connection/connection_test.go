@@ -556,10 +556,12 @@ var _ = Describe("Connection Service", func() {
 			BeforeEach(func() {
 				// First create a flaky connection pattern
 				mockNmap.SetServicePortState(connName, "open", 20.0)
-				connService.Status(ctx, nil, connName, tick)
+				_, err := connService.Status(ctx, nil, connName, tick)
+				Expect(err).NotTo(HaveOccurred())
 
 				mockNmap.SetServicePortState(connName, "closed", 100.0)
-				connService.Status(ctx, nil, connName, tick)
+				_, err = connService.Status(ctx, nil, connName, tick)
+				Expect(err).NotTo(HaveOccurred())
 
 				mockNmap.SetServicePortState(connName, "open", 25.0)
 				info, err := connService.Status(ctx, nil, connName, tick)
@@ -569,7 +571,8 @@ var _ = Describe("Connection Service", func() {
 				// Then stabilize with several consistent "open" states
 				for i := 0; i < constants.MaxRecentScans; i++ {
 					mockNmap.SetServicePortState(connName, "open", 20.0+float64(i))
-					connService.Status(ctx, nil, connName, tick)
+					_, err := connService.Status(ctx, nil, connName, tick)
+					Expect(err).NotTo(HaveOccurred())
 				}
 			})
 
@@ -621,13 +624,16 @@ var _ = Describe("Connection Service", func() {
 			BeforeEach(func() {
 				// Create a pattern with open, closed, and filtered states
 				mockNmap.SetServicePortState(connName, "open", 20.0)
-				connService.Status(ctx, nil, connName, tick)
+				_, err := connService.Status(ctx, nil, connName, tick)
+				Expect(err).NotTo(HaveOccurred())
 
 				mockNmap.SetServicePortState(connName, "closed", 100.0)
-				connService.Status(ctx, nil, connName, tick)
+				_, err = connService.Status(ctx, nil, connName, tick)
+				Expect(err).NotTo(HaveOccurred())
 
 				mockNmap.SetServicePortState(connName, "filtered", 80.0)
-				connService.Status(ctx, nil, connName, tick)
+				_, err = connService.Status(ctx, nil, connName, tick)
+				Expect(err).NotTo(HaveOccurred())
 			})
 
 			JustBeforeEach(func() {
