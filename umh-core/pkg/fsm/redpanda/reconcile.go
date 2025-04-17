@@ -85,7 +85,7 @@ func (r *RedpandaInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSna
 	if err := r.reconcileExternalChanges(ctx, filesystemService, snapshot.Tick, start); err != nil {
 		// If the service is not running, we don't want to return an error here, because we want to continue reconciling
 		if !errors.Is(err, redpanda_service.ErrServiceNotExist) {
-			r.baseFSMInstance.SetError(err, tick)
+			r.baseFSMInstance.SetError(err, snapshot.Tick)
 			// We expect that the logrotation will sometimes throw "could not parse redpanda metrics/configuration: no sections found. This can happen when the redpanda service is not running, or the logs where rotated"
 			// This is not an error, so we don't want to return an error here
 			if strings.Contains(err.Error(), "could not parse redpanda metrics/configuration: no sections found") {
