@@ -91,6 +91,22 @@ func DefaultConfig(componentName string, logger *zap.SugaredLogger) Config {
 	}
 }
 
+// NewBackoffConfig returns a Config with given values
+func NewBackoffConfig(
+	componentName string,
+	initInterval uint64,
+	maxInterval uint64,
+	maxRetries uint64,
+	logger *zap.SugaredLogger,
+) Config {
+	return Config{
+		InitialInterval: initInterval,
+		MaxInterval:     maxInterval,
+		MaxRetries:      maxRetries,
+		Logger:          logger,
+	}
+}
+
 // NewBackoffManager creates a new BackoffManager with the given config
 func NewBackoffManager(config Config) *BackoffManager {
 	// Create exponential backoff with the provided settings
