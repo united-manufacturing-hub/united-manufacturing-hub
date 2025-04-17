@@ -63,7 +63,13 @@ func (c *ContainerInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSn
 			} else {
 				c.baseFSMInstance.GetLogger().Errorf("Permanent error on container monitor %s => removing it", instanceName)
 				c.baseFSMInstance.ResetState() // clear the error
-				_ = c.Remove(ctx)              // attempt removal
+				err = c.Remove(ctx)            // attempt removal
+				if err != nil {
+					c.baseFSMInstance.GetLogger().Errorf("error removing Container instance %s: %v", instanceName, err)
+					// If  removing doesn't work the base-manager should delete the instance
+					// due to a permanent error.
+					return fmt.Errorf("failed to remove the container instance: %s : %w", backoff.PermanentFailureError, err), false
+				}
 				return nil, false
 			}
 		}

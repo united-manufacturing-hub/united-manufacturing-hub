@@ -76,7 +76,19 @@ func (s *S6Instance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot,
 			} else {
 				s.baseFSMInstance.GetLogger().Errorf("S6 instance %s is not in a terminal state, resetting state and removing it", s.baseFSMInstance.GetID())
 				s.baseFSMInstance.ResetState()
-				s.Remove(ctx)
+				err = s.Remove(ctx)
+				if err != nil {
+					// If removing doesn't work because the fsm is not in the OperationalStateBeforeRemove
+					// we will force it to remove.
+					s.baseFSMInstance.GetLogger().Errorf("error removing S6 instance %s: %v", s6InstanceName, err)
+					forceErr := s.service.ForceRemove(ctx, s.servicePath, filesystemService)
+					if forceErr != nil {
+						// If even the force removing doesn't work the base-manager should delete the instance
+						// due to a permanent error.
+						s.baseFSMInstance.GetLogger().Errorf("error force removing S6 instance %s: %v", s6InstanceName, forceErr)
+						return fmt.Errorf("failed to force remove the S6 instance: %s : %w", backoff.PermanentFailureError, forceErr), false
+					}
+				}
 				return nil, false // let's try to at least reconcile towards a stopped / removed state
 			}
 		}

@@ -16,10 +16,12 @@ package container_test
 
 import (
 	"context"
+	"fmt"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/backoff"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/container"
@@ -142,6 +144,27 @@ var _ = Describe("Container FSM", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(did).To(BeFalse()) // no transition => still degraded
 			Expect(inst.GetCurrentFSMState()).To(Equal(container.OperationalStateDegraded))
+		})
+
+		It("throw permanent Error when it fails to remove because not in transit state", func() {
+			// currently mockSvc returns healthy => we expect a transition
+			err, did := inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 26}, mockFS)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(did).To(BeTrue())
+			Expect(inst.GetCurrentFSMState()).To(Equal(container.OperationalStateActive))
+
+			mockSvc.SetupMockForError(fmt.Errorf("permanent failure: %s", backoff.PermanentFailureError))
+
+			err, did = inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 27}, mockFS)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(did).To(BeFalse())
+			Expect(inst.GetCurrentFSMState()).To(Equal(container.OperationalStateActive))
+
+			err, did = inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 27}, mockFS)
+			Expect(err).To(HaveOccurred())
+			Expect(did).To(BeFalse())
+			Expect(inst.GetCurrentFSMState()).To(Equal(container.OperationalStateActive))
+
 		})
 	})
 })
