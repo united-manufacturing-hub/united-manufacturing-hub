@@ -365,21 +365,19 @@ build-push: build push-platform
 # Run a disk speed test via iozone3
 disk-speed-test:
 	if ! command -v iozone &> /dev/null; then \
-		echo "Downloading iozone"; \
-		sudo apt-get update; \
-		sudo apt-get install -y iozone3; \
+		echo "iozone is not installed on this machine. Please install it and try again."; \
+	else \
+		iozone -i0 -i1 -i2 -r4k -s1G -t1 -F $(PWD)/iozone.log -e -c; \
+		rm -f $(PWD)/iozone.log || true; \
 	fi
-	iozone -i0 -i1 -i2 -r4k -s1G -t1 -F $(PWD)/iozone.log -e -c
-	rm -f $(PWD)/iozone.log || true
 
 # Run a cpu speed test via sysbench
 cpu-speed-test:
 	if ! command -v sysbench &> /dev/null; then \
-		echo "Downloading sysbench"; \
-		sudo apt-get update; \
-		sudo apt-get install -y sysbench; \
+		echo "sysbench is not installed on this machine. Please install it and try again."; \
+	else \
+		sysbench --threads=1 cpu run --cpu-max-prime=50000; \
 	fi
-	sysbench --threads=1 cpu run --cpu-max-prime=50000 
 
 speed-test:
 	make disk-speed-test
