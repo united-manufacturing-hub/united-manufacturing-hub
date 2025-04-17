@@ -107,7 +107,8 @@ func (s *StatusCollectorType) getDataFlowComponentData() ([]models.Dfc, error) {
 		}
 	} else {
 		s.logger.Warn("Dataflowcomponent manager not found in system snapshot",
-			zap.String("managerName", constants.DataflowcomponentManagerName), "all managers: ", s.state.Managers)
+			zap.String("managerName", constants.DataflowcomponentManagerName),
+			zap.Any("allManagers", s.state.Managers))
 		return nil, fmt.Errorf("dataflowcomponent manager not found in system snapshot")
 	}
 
