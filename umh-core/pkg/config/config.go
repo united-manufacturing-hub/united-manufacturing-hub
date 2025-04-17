@@ -16,6 +16,7 @@ package config
 
 import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/connectionconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/nmapserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/redpandaserviceconfig"
@@ -31,10 +32,11 @@ type FullConfig struct {
 }
 
 type InternalConfig struct {
-	Services []S6FSMConfig   `yaml:"services,omitempty"` // Services to manage, can be updated while running
-	Benthos  []BenthosConfig `yaml:"benthos,omitempty"`  // Benthos services to manage, can be updated while running
-	Nmap     []NmapConfig    `yaml:"nmap,omitempty"`     // Nmap services to manage, can be updated while running
-	Redpanda RedpandaConfig  `yaml:"redpanda,omitempty"` // Redpanda config, can be updated while running
+	Services   []S6FSMConfig      `yaml:"services,omitempty"`   // Services to manage, can be updated while running
+	Benthos    []BenthosConfig    `yaml:"benthos,omitempty"`    // Benthos services to manage, can be updated while running
+	Nmap       []NmapConfig       `yaml:"nmap,omitempty"`       // Nmap services to manage, can be updated while running
+	Redpanda   RedpandaConfig     `yaml:"redpanda,omitempty"`   // Redpanda config, can be updated while running
+	Connection []ConnectionConfig `yaml:"connection,omitempty"` // Connection services to manage, can be updated while running
 }
 
 type AgentConfig struct {
@@ -111,6 +113,15 @@ type RedpandaConfig struct {
 
 	// For the Redpanda service
 	RedpandaServiceConfig redpandaserviceconfig.RedpandaServiceConfig `yaml:"redpandaServiceConfig"`
+}
+
+// ConnectionConfig contains configuration for creating a Connection service
+type ConnectionConfig struct {
+	// For the FSM
+	FSMInstanceConfig `yaml:",inline"`
+
+	// For the Connection service
+	ConnectionServiceConfig connectionconfig.ConnectionServiceConfig `yaml:"connectionServiceConfig"`
 }
 
 // Clone creates a deep copy of FullConfig
