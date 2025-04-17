@@ -19,6 +19,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	publicfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/container_monitor"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/storage"
 )
 
 // These are the container-monitor operational states, in addition
@@ -114,6 +115,9 @@ type ContainerInstance struct {
 
 	// Possibly store config needed for the container monitor
 	config config.ContainerConfig
+
+	// archiveStorage is the storage for the archive of state transitions
+	archiveStorage storage.ArchiveStorer
 }
 
 // GetLastObservedState returns the last known observed data

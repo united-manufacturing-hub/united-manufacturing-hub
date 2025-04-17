@@ -26,13 +26,14 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/dataflowcomponent"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/storage"
 )
 
 // NewDataflowComponentInstance creates a new DataflowComponentInstance with a given ID and service path
 func NewDataflowComponentInstance(
 	s6BaseDir string,
 	config config.DataFlowComponentConfig,
-) *DataflowComponentInstance {
+	archiveStorage storage.ArchiveStorer) *DataflowComponentInstance {
 
 	cfg := internal_fsm.BaseFSMInstanceConfig{
 		ID:                           config.Name,
@@ -83,10 +84,10 @@ func NewDataflowComponentInstance(
 
 	instance := &DataflowComponentInstance{
 		baseFSMInstance: internal_fsm.NewBaseFSMInstance(cfg, logger.For(config.Name)),
-		service:         dataflowcomponent.NewDefaultDataFlowComponentService(config.Name),
+		service:         dataflowcomponent.NewDefaultDataFlowComponentService(config.Name, archiveStorage),
 		config:          config.DataFlowComponentConfig,
 		ObservedState:   DataflowComponentObservedState{},
-		stateEntryTime:  make(map[string]time.Time),
+		archiveStorage:  archiveStorage,
 	}
 
 	instance.registerCallbacks()

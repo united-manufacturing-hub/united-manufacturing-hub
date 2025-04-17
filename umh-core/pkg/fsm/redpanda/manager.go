@@ -26,6 +26,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/storage"
 )
 
 const (
@@ -43,7 +44,7 @@ type RedpandaManagerSnapshot struct {
 	*public_fsm.BaseManagerSnapshot
 }
 
-func NewRedpandaManager(name string) *RedpandaManager {
+func NewRedpandaManager(name string, archiveStorage storage.ArchiveStorer) *RedpandaManager {
 	managerName := fmt.Sprintf("%s%s", logger.ComponentRedpandaManager, name)
 
 	baseManager := public_fsm.NewBaseFSMManager[config.RedpandaConfig](
@@ -69,7 +70,7 @@ func NewRedpandaManager(name string) *RedpandaManager {
 		},
 		// Create Redpanda instance from config
 		func(cfg config.RedpandaConfig) (public_fsm.FSMInstance, error) {
-			return NewRedpandaInstance(cfg), nil
+			return NewRedpandaInstance(cfg, archiveStorage), nil
 		},
 		// Compare Redpanda configs
 		func(instance public_fsm.FSMInstance, cfg config.RedpandaConfig) (bool, error) {

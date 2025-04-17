@@ -32,17 +32,19 @@ import (
 	benthosservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/storage"
 )
 
 var _ = Describe("DataFlowComponentService", func() {
 	var (
-		service       *DataFlowComponentService
-		mockBenthos   *benthosservice.MockBenthosService
-		ctx           context.Context
-		tick          uint64
-		componentName string
-		cancelFunc    context.CancelFunc
-		mockFS        *filesystem.MockFileSystem
+		service        *DataFlowComponentService
+		mockBenthos    *benthosservice.MockBenthosService
+		ctx            context.Context
+		tick           uint64
+		componentName  string
+		cancelFunc     context.CancelFunc
+		mockFS         *filesystem.MockFileSystem
+		archiveStorage storage.ArchiveStorer
 	)
 
 	BeforeEach(func() {
@@ -54,7 +56,7 @@ var _ = Describe("DataFlowComponentService", func() {
 		mockBenthos = benthosservice.NewMockBenthosService()
 
 		// Set up a real service with mocked dependencies
-		service = NewDefaultDataFlowComponentService(componentName,
+		service = NewDefaultDataFlowComponentService(componentName, archiveStorage,
 			WithBenthosService(mockBenthos))
 		mockFS = filesystem.NewMockFileSystem()
 	})
@@ -172,7 +174,7 @@ var _ = Describe("DataFlowComponentService", func() {
 			manager, mockBenthosService = benthosfsmmanager.NewBenthosManagerWithMockedServices("test")
 
 			// Create service with our official mock benthos manager
-			statusService = NewDefaultDataFlowComponentService(componentName,
+			statusService = NewDefaultDataFlowComponentService(componentName, archiveStorage,
 				WithBenthosService(mockBenthosService),
 				WithBenthosManager(manager))
 
@@ -486,7 +488,7 @@ var _ = Describe("DataFlowComponentService", func() {
 			mockManager, mockBenthosService := benthosfsmmanager.NewBenthosManagerWithMockedServices("test-error")
 
 			// Create a service with our mocked manager
-			testService := NewDefaultDataFlowComponentService("test-error-service",
+			testService := NewDefaultDataFlowComponentService("test-error-service", archiveStorage,
 				WithBenthosService(mockBenthosService),
 				WithBenthosManager(mockManager))
 

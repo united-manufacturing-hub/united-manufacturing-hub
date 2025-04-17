@@ -22,6 +22,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/storage"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -29,17 +30,19 @@ import (
 
 var _ = Describe("Benthos Service", func() {
 	var (
-		service     *BenthosService
-		client      *MockHTTPClient
-		tick        uint64
-		benthosName string
-		serviceName string
-		mockFS      *filesystem.MockFileSystem
+		service        *BenthosService
+		client         *MockHTTPClient
+		tick           uint64
+		benthosName    string
+		serviceName    string
+		mockFS         *filesystem.MockFileSystem
+		archiveStorage storage.ArchiveStorer
 	)
 
 	BeforeEach(func() {
 		client = NewMockHTTPClient()
-		service = NewDefaultBenthosService(benthosName, WithHTTPClient(client))
+		archiveStorage = storage.NewArchiveEventStorage(100)
+		service = NewDefaultBenthosService(benthosName, archiveStorage, WithHTTPClient(client))
 		tick = 0
 		serviceName = service.getS6ServiceName(benthosName)
 		mockFS = filesystem.NewMockFileSystem()
@@ -304,7 +307,7 @@ var _ = Describe("Benthos Service", func() {
 		)
 
 		BeforeEach(func() {
-			service = NewDefaultBenthosService("test")
+			service = NewDefaultBenthosService("test", archiveStorage)
 			currentTime = time.Now()
 			logWindow = 5 * time.Minute
 		})
@@ -486,7 +489,7 @@ var _ = Describe("Benthos Service", func() {
 		var service *BenthosService
 
 		BeforeEach(func() {
-			service = NewDefaultBenthosService("test")
+			service = NewDefaultBenthosService("test", archiveStorage)
 		})
 
 		Context("IsMetricsErrorFree", func() {
@@ -586,7 +589,7 @@ var _ = Describe("Benthos Service", func() {
 			mockClient = NewMockHTTPClient()
 			mockS6Service = s6service.NewMockService()
 			mockFS = filesystem.NewMockFileSystem()
-			service = NewDefaultBenthosService(benthosName,
+			service = NewDefaultBenthosService(benthosName, archiveStorage,
 				WithHTTPClient(mockClient),
 				WithS6Service(mockS6Service),
 			)
@@ -958,7 +961,7 @@ processor_batch_sent{label="1",path="root.pipeline.processors.1"} 18
 
 		BeforeEach(func() {
 			benthosName = "test-benthos"
-			service = NewDefaultBenthosService(benthosName)
+			service = NewDefaultBenthosService(benthosName, archiveStorage)
 			mockFS = filesystem.NewMockFileSystem()
 		})
 
@@ -1006,7 +1009,7 @@ processor_batch_sent{label="1",path="root.pipeline.processors.1"} 18
 			})
 
 			// Create service with mocks
-			service = NewDefaultBenthosService(benthosName,
+			service = NewDefaultBenthosService(benthosName, archiveStorage,
 				WithHTTPClient(client),
 				WithS6Service(s6ServiceMock))
 
@@ -1199,7 +1202,7 @@ logger:
 			currentTime = time.Now()
 			logWindow = 5 * time.Minute
 			mockFS = filesystem.NewMockFileSystem()
-			service = NewDefaultBenthosService(benthosName,
+			service = NewDefaultBenthosService(benthosName, archiveStorage,
 				WithS6Service(mockS6Service),
 				WithHTTPClient(mockClient),
 			)

@@ -23,6 +23,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	publicfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/storage"
 )
 
 // Operational state constants represent the runtime states of a service
@@ -101,6 +102,9 @@ type S6Instance struct {
 
 	// config contains all the configuration for this service
 	config config.S6FSMConfig
+
+	// archiveStorage is the storage for the archive of state transitions
+	archiveStorage storage.ArchiveStorer
 }
 
 // GetError returns a structured error with backoff information

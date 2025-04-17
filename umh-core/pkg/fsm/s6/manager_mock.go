@@ -24,6 +24,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/storage"
 )
 
 // NewS6ManagerWithMockedServices creates an S6Manager with fully mocked instances
@@ -31,6 +32,8 @@ import (
 // real S6 interactions.
 func NewS6ManagerWithMockedServices(name string) *S6Manager {
 	managerName := fmt.Sprintf("%s%s", logger.ComponentS6Manager, name)
+
+	archiveStorage := storage.NewArchiveEventStorage(100)
 
 	baseManager := public_fsm.NewBaseFSMManager[config.S6FSMConfig](
 		managerName,
@@ -50,7 +53,7 @@ func NewS6ManagerWithMockedServices(name string) *S6Manager {
 		// Create S6 instance from config - with mock service
 		func(cfg config.S6FSMConfig) (public_fsm.FSMInstance, error) {
 			// Create instance with mock service
-			instance, err := NewS6Instance("/dev/null", cfg)
+			instance, err := NewS6Instance("/dev/null", cfg, archiveStorage)
 			if err != nil {
 				return nil, err
 			}

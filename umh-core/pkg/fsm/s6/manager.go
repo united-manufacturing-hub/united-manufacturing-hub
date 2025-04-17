@@ -23,6 +23,7 @@ import (
 	public_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/storage"
 )
 
 const (
@@ -41,7 +42,7 @@ type S6ManagerSnapshot struct {
 
 // NewS6Manager creates a new S6Manager
 // The name is used to identify the manager in logs, as other components that leverage s6 will sue their own instance of this manager
-func NewS6Manager(name string) *S6Manager {
+func NewS6Manager(name string, archiveStorage storage.ArchiveStorer) *S6Manager {
 
 	managerName := fmt.Sprintf("%s%s", logger.ComponentS6Manager, name)
 
@@ -62,7 +63,7 @@ func NewS6Manager(name string) *S6Manager {
 		},
 		// Create S6 instance from config
 		func(cfg config.S6FSMConfig) (public_fsm.FSMInstance, error) {
-			return NewS6Instance(baseS6Dir, cfg)
+			return NewS6Instance(baseS6Dir, cfg, archiveStorage)
 		},
 		// Compare S6 configs
 		func(instance public_fsm.FSMInstance, cfg config.S6FSMConfig) (bool, error) {

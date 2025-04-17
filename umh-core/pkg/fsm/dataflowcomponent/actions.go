@@ -18,7 +18,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
@@ -29,6 +28,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	dataflowcomponentservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/dataflowcomponent"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/storage"
 )
 
 // The functions in this file define heavier, possibly fail-prone operations
@@ -166,7 +166,7 @@ func (d *DataflowComponentInstance) UpdateObservedStateOfInstance(ctx context.Co
 		// Only update if we successfully got the config
 		d.ObservedState.ObservedDataflowComponentConfig = observedConfig
 	} else {
-		if strings.Contains(err.Error(), dataflowcomponentservice.ErrServiceNotExists.Error()) {
+		if errors.Is(err, dataflowcomponentservice.ErrServiceNotExists) {
 			// Log the error but don't fail - this might happen during creation when the config file doesn't exist yet
 			d.baseFSMInstance.GetLogger().Debugf("Service not found, will be created during reconciliation: %v", err)
 			return nil
@@ -233,18 +233,30 @@ func (d *DataflowComponentInstance) IsDataflowComponentWithProcessingActivity() 
 	return benthosStatus.MetricsState != nil && benthosStatus.MetricsState.IsActive
 }
 
-func (d *DataflowComponentInstance) IsStartupGracePeriodExpired(currentTime time.Time, state string) bool {
+// DataflowComponentBenthosFailureStates returns the states that are considered failure states for the DataflowComponent's Benthos FSM
+func (d *DataflowComponentInstance) DataflowComponentBenthosFailureStates() []string {
+	return []string{
+		benthosfsm.OperationalStateStopped,
+		benthosfsm.OperationalStateStopping,
+	}
+}
 
-	// Get the time when the DataflowComponentInstance entered the given state
-	stateEntryTime, err := d.GetStateEntryTime(state)
+func (d *DataflowComponentInstance) IsFailedStateEventObserved(ctx context.Context) bool {
+	// Query for any data points with the specified failed state
+	options := storage.QueryOptions{
+		Limit:     1,                                                           // We only need to know if any exist, so limit to 1
+		StartTime: time.Now().Add(-constants.WaitTimeBeforeMarkingStartFailed), // Get only the recent events to avoid old stale events
+		SortDesc:  true,                                                        // recent events first
+		States:    d.DataflowComponentBenthosFailureStates(),
+	}
+
+	dataPoints, err := d.archiveStorage.GetDataPoints(ctx, d.baseFSMInstance.GetID(), options)
 	if err != nil {
-		// If the stateEntryntime for the Starting state is not set, use a conservative  approach and assume we just entered the state
-		stateEntryTime = currentTime
+		d.baseFSMInstance.GetLogger().Warnf("Failed to query state history: %v", err)
+		return false // Default to false if we can't query
 	}
 
-	// Check if we have exceeded the grace period since entering the Starting state
-	if currentTime.Sub(stateEntryTime) > constants.WaitTimeBeforeMarkingStartFailed {
-		return true
-	}
-	return false
+	d.baseFSMInstance.GetLogger().Debugf("Found %d data points with failed states. Data points: %v", len(dataPoints), dataPoints)
+	// If we found any data points with this state, return true
+	return len(dataPoints) > 0
 }

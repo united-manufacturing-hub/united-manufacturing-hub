@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/looplab/fsm"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/storage"
 )
 
 // registerCallbacks registers common callbacks for state transitions
@@ -27,38 +28,79 @@ func (instance *DataflowComponentInstance) registerCallbacks() {
 	// Basic operational state callbacks
 	instance.baseFSMInstance.AddCallback("enter_"+OperationalStateStarting, func(ctx context.Context, e *fsm.Event) {
 		instance.baseFSMInstance.GetLogger().Infof("Entering starting state for %s", instance.baseFSMInstance.GetID())
-		instance.stateEntryTime[OperationalStateStarting] = time.Now()
+		instance.archiveStorage.StoreDataPoint(ctx, storage.DataPoint{
+			Record: storage.Record{
+				State:       OperationalStateStarting,
+				SourceEvent: e.Event,
+			},
+			Time: time.Now(),
+		})
 	})
 
 	instance.baseFSMInstance.AddCallback("enter_"+OperationalStateStartingFailed, func(ctx context.Context, e *fsm.Event) {
 		instance.baseFSMInstance.GetLogger().Errorf("Entering starting-failed state for %s", instance.baseFSMInstance.GetID())
-		instance.stateEntryTime[OperationalStateStartingFailed] = time.Now()
+		instance.archiveStorage.StoreDataPoint(ctx, storage.DataPoint{
+			Record: storage.Record{
+				State:       OperationalStateStartingFailed,
+				SourceEvent: e.Event,
+			},
+			Time: time.Now(),
+		})
 	})
 
 	instance.baseFSMInstance.AddCallback("enter_"+OperationalStateStopping, func(ctx context.Context, e *fsm.Event) {
 		instance.baseFSMInstance.GetLogger().Infof("Entering stopping state for %s", instance.baseFSMInstance.GetID())
-		instance.stateEntryTime[OperationalStateStopping] = time.Now()
+		instance.archiveStorage.StoreDataPoint(ctx, storage.DataPoint{
+			Record: storage.Record{
+				State:       OperationalStateStopping,
+				SourceEvent: e.Event,
+			},
+			Time: time.Now(),
+		})
 	})
 
 	instance.baseFSMInstance.AddCallback("enter_"+OperationalStateStopped, func(ctx context.Context, e *fsm.Event) {
 		instance.baseFSMInstance.GetLogger().Infof("Entering stopped state for %s", instance.baseFSMInstance.GetID())
-		instance.stateEntryTime[OperationalStateStopped] = time.Now()
+		instance.archiveStorage.StoreDataPoint(ctx, storage.DataPoint{
+			Record: storage.Record{
+				State:       OperationalStateStopped,
+				SourceEvent: e.Event,
+			},
+			Time: time.Now(),
+		})
 	})
 
 	instance.baseFSMInstance.AddCallback("enter_"+OperationalStateActive, func(ctx context.Context, e *fsm.Event) {
 		instance.baseFSMInstance.GetLogger().Infof("Entering active state for %s", instance.baseFSMInstance.GetID())
-		instance.stateEntryTime[OperationalStateActive] = time.Now()
+		instance.archiveStorage.StoreDataPoint(ctx, storage.DataPoint{
+			Record: storage.Record{
+				State:       OperationalStateActive,
+				SourceEvent: e.Event,
+			},
+			Time: time.Now(),
+		})
 	})
 
 	// Running phase state callbacks
 	instance.baseFSMInstance.AddCallback("enter_"+OperationalStateIdle, func(ctx context.Context, e *fsm.Event) {
 		instance.baseFSMInstance.GetLogger().Infof("Entering idle state for %s", instance.baseFSMInstance.GetID())
-		instance.stateEntryTime[OperationalStateIdle] = time.Now()
+		instance.archiveStorage.StoreDataPoint(ctx, storage.DataPoint{
+			Record: storage.Record{
+				State:       OperationalStateIdle,
+				SourceEvent: e.Event,
+			},
+			Time: time.Now(),
+		})
 	})
 
 	instance.baseFSMInstance.AddCallback("enter_"+OperationalStateDegraded, func(ctx context.Context, e *fsm.Event) {
 		instance.baseFSMInstance.GetLogger().Warnf("Entering degraded state for %s", instance.baseFSMInstance.GetID())
-		instance.stateEntryTime[OperationalStateDegraded] = time.Now()
-		// Additional logic for handling degraded state could be added here
+		instance.archiveStorage.StoreDataPoint(ctx, storage.DataPoint{
+			Record: storage.Record{
+				State:       OperationalStateDegraded,
+				SourceEvent: e.Event,
+			},
+			Time: time.Now(),
+		})
 	})
 }

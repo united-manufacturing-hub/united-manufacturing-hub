@@ -25,6 +25,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/container"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/container_monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/storage"
 )
 
 var _ = Describe("Container FSM", func() {
@@ -47,11 +48,13 @@ var _ = Describe("Container FSM", func() {
 
 		mockFS = filesystem.NewMockFileSystem()
 
+		archiveStorage := storage.NewArchiveEventStorage(100)
+
 		cfg := config.ContainerConfig{
 			Name:            "test-container",
 			DesiredFSMState: container.OperationalStateStopped,
 		}
-		inst = container.NewContainerInstanceWithService(cfg, mockSvc)
+		inst = container.NewContainerInstanceWithService(cfg, mockSvc, archiveStorage)
 	})
 
 	AfterEach(func() {

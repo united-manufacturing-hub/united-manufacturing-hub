@@ -22,11 +22,14 @@ import (
 	public_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/container_monitor"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/storage"
 )
 
 // NewContainerManagerWithMockedService creates a ContainerManager that uses a mock container_monitor.Service
 func NewContainerManagerWithMockedService(name string, mockSvc container_monitor.MockService) *ContainerManager {
 	managerName := fmt.Sprintf("%s_mock_%s", ContainerManagerComponentName, name)
+
+	archiveStorage := storage.NewArchiveEventStorage(100)
 
 	baseMgr := public_fsm.NewBaseFSMManager[config.ContainerConfig](
 		managerName,
@@ -48,7 +51,7 @@ func NewContainerManagerWithMockedService(name string, mockSvc container_monitor
 			return cc.DesiredFSMState, nil
 		},
 		func(cc config.ContainerConfig) (public_fsm.FSMInstance, error) {
-			inst := NewContainerInstanceWithService(cc, &mockSvc)
+			inst := NewContainerInstanceWithService(cc, &mockSvc, archiveStorage)
 			return inst, nil
 		},
 		func(instance public_fsm.FSMInstance, cc config.ContainerConfig) (bool, error) {

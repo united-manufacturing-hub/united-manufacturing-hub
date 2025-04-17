@@ -33,6 +33,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda_monitor"
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/storage"
 )
 
 // Helper function to create mock logs with valid format
@@ -138,6 +139,7 @@ var _ = Describe("RedpandaMonitor Service State Transitions", func() {
 		monitorService *redpanda_monitor.RedpandaMonitorService
 		ctx            context.Context
 		cancel         context.CancelFunc
+		archiveStorage storage.ArchiveStorer
 	)
 
 	BeforeEach(func() {
@@ -159,7 +161,9 @@ var _ = Describe("RedpandaMonitor Service State Transitions", func() {
 		mockedS6Manager := s6fsm.NewS6ManagerWithMockedServices("redpanda-monitor")
 
 		// Create the service with mocked dependencies
+		archiveStorage = storage.NewArchiveEventStorage(100)
 		monitorService = redpanda_monitor.NewRedpandaMonitorService(
+			archiveStorage,
 			redpanda_monitor.WithS6Service(mockS6Service),
 			redpanda_monitor.WithS6Manager(mockedS6Manager),
 		)
