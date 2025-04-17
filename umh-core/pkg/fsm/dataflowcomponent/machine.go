@@ -25,7 +25,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/dataflowcomponent"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/storage"
 )
@@ -101,8 +100,16 @@ func NewDataflowComponentInstance(
 // But ensures that the desired state is a valid state and that it is also a reasonable state
 // e.g., nobody wants to have an instance in the "starting" state, that is just intermediate
 func (d *DataflowComponentInstance) SetDesiredFSMState(state string) error {
-	sentry.ReportFSMFatal(d.baseFSMInstance.GetLogger(), d.baseFSMInstance.GetID(), "DataflowComponentInstance", "SetDesiredFSMState", fmt.Errorf("not implemented"))
-	panic("not implemented")
+	if state != OperationalStateStopped &&
+		state != OperationalStateActive {
+		return fmt.Errorf("invalid desired state: %s. valid states are %s and %s",
+			state,
+			OperationalStateStopped,
+			OperationalStateActive)
+	}
+
+	d.baseFSMInstance.SetDesiredFSMState(state)
+	return nil
 }
 
 // GetCurrentFSMState returns the current state of the FSM
@@ -132,15 +139,13 @@ func (d *DataflowComponentInstance) IsRemoving() bool {
 }
 
 // IsStopping returns true if the instance is in the stopping state
-func (b *DataflowComponentInstance) IsStopping() bool {
-	sentry.ReportFSMFatal(b.baseFSMInstance.GetLogger(), b.baseFSMInstance.GetID(), "DataflowComponentInstance", "IsStopping", fmt.Errorf("not implemented"))
-	panic("not implemented")
+func (d *DataflowComponentInstance) IsStopping() bool {
+	return d.baseFSMInstance.GetCurrentFSMState() == OperationalStateStopping
 }
 
 // IsStopped returns true if the instance is in the stopped state
-func (b *DataflowComponentInstance) IsStopped() bool {
-	sentry.ReportFSMFatal(b.baseFSMInstance.GetLogger(), b.baseFSMInstance.GetID(), "DataflowComponentInstance", "IsStopped", fmt.Errorf("not implemented"))
-	panic("not implemented")
+func (d *DataflowComponentInstance) IsStopped() bool {
+	return d.baseFSMInstance.GetCurrentFSMState() == OperationalStateStopped
 }
 
 // PrintState prints the current state of the FSM for debugging
