@@ -463,6 +463,20 @@ func printContainerLogs() {
 	} else {
 		fmt.Printf("%s\n", out)
 	}
+
+	// 6. Copy out ALL logs to a tmp dir (cia docker cp)
+	// The path is not randomized, so we can easily find in the github actions
+	tmpDir := filepath.Join(getTmpDir(), "logs")
+	err = os.MkdirAll(tmpDir, 0o777)
+	if err != nil {
+		fmt.Printf("Failed to create tmp dir: %v\n", err)
+	} else {
+		out, err = runDockerCommand("cp", "-r", "/data/logs", tmpDir)
+		if err != nil {
+			fmt.Printf("Failed to copy out logs: %v\n", err)
+		}
+		fmt.Printf("Copied logs to %s\n", tmpDir)
+	}
 }
 
 // PrintLogsAndStopContainer stops and removes your container
