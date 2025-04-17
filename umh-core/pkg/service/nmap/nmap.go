@@ -25,8 +25,10 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/nmapserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
@@ -72,7 +74,7 @@ func NewDefaultNmapService(nmapName string, opts ...NmapServiceOption) *NmapServ
 }
 
 // generateNmapScript generates a shell script to run nmap periodically
-func (s *NmapService) generateNmapScript(config *config.NmapServiceConfig) (string, error) {
+func (s *NmapService) generateNmapScript(config *nmapserviceconfig.NmapServiceConfig) (string, error) {
 	if config == nil {
 		return "", fmt.Errorf("config is nil")
 	}
@@ -108,7 +110,7 @@ func (s *NmapService) getS6ServiceName(nmapName string) string {
 }
 
 // GenerateS6ConfigForNmap creates a S6 config for a given nmap instance
-func (s *NmapService) GenerateS6ConfigForNmap(nmapConfig *config.NmapServiceConfig, s6ServiceName string) (s6serviceconfig.S6ServiceConfig, error) {
+func (s *NmapService) GenerateS6ConfigForNmap(nmapConfig *nmapserviceconfig.NmapServiceConfig, s6ServiceName string) (s6serviceconfig.S6ServiceConfig, error) {
 	scriptContent, err := s.generateNmapScript(nmapConfig)
 	if err != nil {
 		return s6serviceconfig.S6ServiceConfig{}, err
@@ -129,9 +131,9 @@ func (s *NmapService) GenerateS6ConfigForNmap(nmapConfig *config.NmapServiceConf
 }
 
 // GetConfig returns the actual nmap config from the S6 service
-func (s *NmapService) GetConfig(ctx context.Context, filesystemService filesystem.Service, nmapName string) (config.NmapServiceConfig, error) {
+func (s *NmapService) GetConfig(ctx context.Context, filesystemService filesystem.Service, nmapName string) (nmapserviceconfig.NmapServiceConfig, error) {
 	if ctx.Err() != nil {
-		return config.NmapServiceConfig{}, ctx.Err()
+		return nmapserviceconfig.NmapServiceConfig{}, ctx.Err()
 	}
 
 	s6ServiceName := s.getS6ServiceName(nmapName)
@@ -140,11 +142,11 @@ func (s *NmapService) GetConfig(ctx context.Context, filesystemService filesyste
 	// Get the script file
 	scriptData, err := s.s6Service.GetS6ConfigFile(ctx, s6ServicePath, "run_nmap.sh", filesystemService)
 	if err != nil {
-		return config.NmapServiceConfig{}, fmt.Errorf("failed to get nmap config file for service %s: %w", s6ServiceName, err)
+		return nmapserviceconfig.NmapServiceConfig{}, fmt.Errorf("failed to get nmap config file for service %s: %w", s6ServiceName, err)
 	}
 
 	// Parse the script to extract configuration
-	result := config.NmapServiceConfig{}
+	result := nmapserviceconfig.NmapServiceConfig{}
 
 	// Extract target
 	targetRegex := regexp.MustCompile(`nmap -n -Pn -p \d+ ([^ ]+) -v`)
@@ -254,6 +256,12 @@ func (s *NmapService) parseScanLogs(logs []s6service.LogEntry, port int) *NmapSc
 		}
 	}
 
+	// Extract errors if occured (case-insensitive)
+	errorRegex := regexp.MustCompile(`(?im)^.*error.*$`)
+	if matches := errorRegex.FindString(scanOutput); matches != "" {
+		result.Error = matches
+	}
+
 	return result
 }
 
@@ -319,11 +327,14 @@ func (s *NmapService) Status(ctx context.Context, filesystemService filesystem.S
 			s.logger.Warnw("Failed to get config", "error", err)
 		}
 	}
+	if scanResult == nil {
+		return ServiceInfo{}, ErrScanFailed
+	}
 
 	return ServiceInfo{
 		S6ObservedState: s6State,
 		S6FSMState:      fsmState,
-		NmapStatus: NmapStatus{
+		NmapStatus: NmapServiceInfo{
 			LastScan:  scanResult,
 			IsRunning: fsmState == s6fsm.OperationalStateRunning,
 			Logs:      logs,
@@ -332,7 +343,7 @@ func (s *NmapService) Status(ctx context.Context, filesystemService filesystem.S
 }
 
 // AddNmapToS6Manager adds a nmap instance to the S6 manager
-func (s *NmapService) AddNmapToS6Manager(ctx context.Context, cfg *config.NmapServiceConfig, nmapName string) error {
+func (s *NmapService) AddNmapToS6Manager(ctx context.Context, cfg *nmapserviceconfig.NmapServiceConfig, nmapName string) error {
 	if s.s6Manager == nil {
 		return errors.New("s6 manager not initialized")
 	}
@@ -372,7 +383,7 @@ func (s *NmapService) AddNmapToS6Manager(ctx context.Context, cfg *config.NmapSe
 }
 
 // UpdateNmapInS6Manager updates an existing nmap instance in the S6 manager
-func (s *NmapService) UpdateNmapInS6Manager(ctx context.Context, cfg *config.NmapServiceConfig, nmapName string) error {
+func (s *NmapService) UpdateNmapInS6Manager(ctx context.Context, cfg *nmapserviceconfig.NmapServiceConfig, nmapName string) error {
 	if s.s6Manager == nil {
 		return errors.New("s6 manager not initialized")
 	}
@@ -520,7 +531,13 @@ func (s *NmapService) ReconcileManager(ctx context.Context, filesystemService fi
 		return ctx.Err(), false
 	}
 
-	return s.s6Manager.Reconcile(ctx, config.FullConfig{Internal: config.InternalConfig{Services: s.s6ServiceConfigs}}, filesystemService, tick)
+	// Create a snapshot from the full config
+	snapshot := fsm.SystemSnapshot{
+		CurrentConfig: config.FullConfig{Internal: config.InternalConfig{Services: s.s6ServiceConfigs}},
+		Tick:          tick,
+	}
+
+	return s.s6Manager.Reconcile(ctx, snapshot, filesystemService)
 }
 
 // ServiceExists checks if a nmap service exists
@@ -534,4 +551,17 @@ func (s *NmapService) ServiceExists(ctx context.Context, filesystemService files
 	}
 
 	return exists
+}
+
+// ForceRemoveNmap removes a Nmap instance from the S6 manager
+// This should only be called if the Nmap instance is in a permanent failure state
+// and the instance itself cannot be stopped or removed
+// Expects nmapName (e.g. "myservice") as defined in the UMH config
+func (s *NmapService) ForceRemoveNmap(
+	ctx context.Context,
+	filesystemService filesystem.Service,
+	nmapName string,
+) error {
+
+	return s.s6Service.ForceRemove(ctx, s.getS6ServiceName(nmapName), filesystemService)
 }

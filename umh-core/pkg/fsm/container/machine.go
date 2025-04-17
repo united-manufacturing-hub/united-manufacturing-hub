@@ -21,6 +21,7 @@ import (
 
 	"github.com/looplab/fsm"
 	internal_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/backoff"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
@@ -64,7 +65,9 @@ func NewContainerInstanceWithService(config config.ContainerConfig, service cont
 	}
 
 	// Construct the base instance
-	baseFSM := internal_fsm.NewBaseFSMInstance(fsmCfg, logger.For(config.Name))
+	logger := logger.For(config.Name)
+	backoffConfig := backoff.DefaultConfig(fsmCfg.ID, logger)
+	baseFSM := internal_fsm.NewBaseFSMInstance(fsmCfg, backoffConfig, logger)
 
 	// Create our instance
 	instance := &ContainerInstance{

@@ -18,7 +18,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/nmapserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 
@@ -48,7 +48,7 @@ var _ = Describe("Nmap Service", func() {
 	Describe("Script Generation", func() {
 		Context("with valid config", func() {
 			It("should generate a valid shell script", func() {
-				config := &config.NmapServiceConfig{
+				config := &nmapserviceconfig.NmapServiceConfig{
 					Target: "localhost",
 					Port:   80,
 				}
@@ -79,7 +79,7 @@ var _ = Describe("Nmap Service", func() {
 		Context("when adding a new service", func() {
 			It("should add the service to S6 manager", func() {
 				ctx := context.Background()
-				cfg := &config.NmapServiceConfig{
+				cfg := &nmapserviceconfig.NmapServiceConfig{
 					Target: "example.com",
 					Port:   443,
 				}
@@ -94,7 +94,7 @@ var _ = Describe("Nmap Service", func() {
 
 			It("should return error when service already exists", func() {
 				ctx := context.Background()
-				cfg := &config.NmapServiceConfig{
+				cfg := &nmapserviceconfig.NmapServiceConfig{
 					Target: "example.com",
 					Port:   443,
 				}
@@ -112,7 +112,7 @@ var _ = Describe("Nmap Service", func() {
 		Context("when updating a service", func() {
 			BeforeEach(func() {
 				ctx := context.Background()
-				cfg := &config.NmapServiceConfig{
+				cfg := &nmapserviceconfig.NmapServiceConfig{
 					Target: "example.com",
 					Port:   443,
 				}
@@ -123,7 +123,7 @@ var _ = Describe("Nmap Service", func() {
 
 			It("should update the service config", func() {
 				ctx := context.Background()
-				updatedCfg := &config.NmapServiceConfig{
+				updatedCfg := &nmapserviceconfig.NmapServiceConfig{
 					Target: "example.com",
 					Port:   8080, // Changed port
 				}
@@ -139,7 +139,7 @@ var _ = Describe("Nmap Service", func() {
 
 			It("should return error when service doesn't exist", func() {
 				ctx := context.Background()
-				updatedCfg := &config.NmapServiceConfig{
+				updatedCfg := &nmapserviceconfig.NmapServiceConfig{
 					Target: "example.com",
 					Port:   8080,
 				}
@@ -152,7 +152,7 @@ var _ = Describe("Nmap Service", func() {
 		Context("when removing a service", func() {
 			BeforeEach(func() {
 				ctx := context.Background()
-				cfg := &config.NmapServiceConfig{
+				cfg := &nmapserviceconfig.NmapServiceConfig{
 					Target: "example.com",
 					Port:   443,
 				}
@@ -371,7 +371,7 @@ done`
 	Describe("Service Status", func() {
 		BeforeEach(func() {
 			ctx := context.Background()
-			cfg := &config.NmapServiceConfig{
+			cfg := &nmapserviceconfig.NmapServiceConfig{
 				Target: "example.com",
 				Port:   443,
 			}
@@ -397,7 +397,7 @@ done`
 	Describe("Service Control", func() {
 		BeforeEach(func() {
 			ctx := context.Background()
-			cfg := &config.NmapServiceConfig{
+			cfg := &nmapserviceconfig.NmapServiceConfig{
 				Target: "example.com",
 				Port:   443,
 			}

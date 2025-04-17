@@ -22,6 +22,7 @@ import (
 	"github.com/looplab/fsm"
 
 	internal_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/backoff"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
@@ -72,8 +73,11 @@ func NewRedpandaInstance(
 		},
 	}
 
+	logger := logger.For(config.Name)
+	backoffConfig := backoff.DefaultConfig(cfg.ID, logger)
+
 	instance := &RedpandaInstance{
-		baseFSMInstance: internal_fsm.NewBaseFSMInstance(cfg, logger.For(config.Name)),
+		baseFSMInstance: internal_fsm.NewBaseFSMInstance(cfg, backoffConfig, logger),
 		service:         redpanda_service.NewDefaultRedpandaService(config.Name),
 		config:          config.RedpandaServiceConfig,
 		ObservedState:   RedpandaObservedState{},
