@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/ctxutil"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/errorhandling"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"go.uber.org/zap"
 )
@@ -106,7 +107,7 @@ func (c *DefaultHTTPClient) createClientFromContext(ctx context.Context) (*http.
 	// Verify context has deadline and sufficient time
 	remaining, _, err := ctxutil.HasSufficientTime(ctx, time.Millisecond) // Just need a minimal required time
 	if err != nil {
-		if errors.Is(err, ctxutil.ErrNoDeadline) {
+		if errors.Is(err, errorhandling.ErrNoDeadline) {
 			return nil, fmt.Errorf("no deadline set in context")
 		}
 		// For other errors, we still want to create a client with whatever time remains

@@ -24,6 +24,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/backoff"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/ctxutil"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/errorhandling"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
@@ -467,7 +468,7 @@ func (m *BaseFSMManager[C]) Reconcile(
 		}
 		remaining, sufficient, err := ctxutil.HasSufficientTime(ctx, expectedMaxP95ExecutionTime)
 		if err != nil {
-			if errors.Is(err, ctxutil.ErrNoDeadline) {
+			if errors.Is(err, errorhandling.ErrNoDeadline) {
 				return fmt.Errorf("no deadline set in context"), false
 			}
 			// For any other error, log and abort reconciliation

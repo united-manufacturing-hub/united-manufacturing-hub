@@ -16,16 +16,9 @@ package ctxutil
 
 import (
 	"context"
-	"errors"
 	"time"
-)
 
-var (
-	// ErrNoDeadline indicates the context doesn't have a deadline
-	ErrNoDeadline = errors.New("context has no deadline")
-
-	// ErrInsufficientTime indicates not enough time remains before deadline
-	ErrInsufficientTime = errors.New("insufficient time remaining before deadline")
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/errorhandling"
 )
 
 // HasSufficientTime checks if context has enough remaining time
@@ -36,7 +29,7 @@ var (
 func HasSufficientTime(ctx context.Context, requiredTime time.Duration) (remaining time.Duration, sufficient bool, err error) {
 	deadline, ok := ctx.Deadline()
 	if !ok {
-		return 0, false, ErrNoDeadline
+		return 0, false, errorhandling.ErrNoDeadline
 	}
 
 	remaining = time.Until(deadline)

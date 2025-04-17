@@ -23,7 +23,7 @@ import (
 	internal_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/backoff"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/errorhandling"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
@@ -101,7 +101,7 @@ func (c *ContainerInstance) Reconcile(ctx context.Context, currentSnapshot snaps
 	if err != nil {
 		// If the instance is removed, we don't want to return an error here, because we want to continue reconciling
 		// Also this should not
-		if errors.Is(err, fsm.ErrInstanceRemoved) {
+		if errors.Is(err, errorhandling.ErrInstanceRemoved) {
 			return nil, false
 		}
 
@@ -266,7 +266,7 @@ func (c *ContainerInstance) reconcileLifecycleStates(ctx context.Context, filesy
 
 	case internal_fsm.LifecycleStateRemoved:
 		// The manager will clean this up eventually
-		return fsm.ErrInstanceRemoved, true
+		return errorhandling.ErrInstanceRemoved, true
 
 	default:
 		return nil, false

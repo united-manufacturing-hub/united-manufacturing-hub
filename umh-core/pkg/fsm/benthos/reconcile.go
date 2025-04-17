@@ -23,7 +23,7 @@ import (
 	internal_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/backoff"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/errorhandling"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	benthos_service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
@@ -107,7 +107,7 @@ func (b *BenthosInstance) Reconcile(ctx context.Context, currentSnapshot snapsho
 	err, reconciled = b.reconcileStateTransition(ctx, filesystemService, currentTime)
 	if err != nil {
 		// If the instance is removed, we don't want to return an error here, because we want to continue reconciling
-		if errors.Is(err, fsm.ErrInstanceRemoved) {
+		if errors.Is(err, errorhandling.ErrInstanceRemoved) {
 			return nil, false
 		}
 
@@ -220,7 +220,7 @@ func (b *BenthosInstance) reconcileLifecycleStates(ctx context.Context, filesyst
 		}
 		return b.baseFSMInstance.SendEvent(ctx, internal_fsm.LifecycleEventRemoveDone), true
 	case internal_fsm.LifecycleStateRemoved:
-		return fsm.ErrInstanceRemoved, true
+		return errorhandling.ErrInstanceRemoved, true
 	default:
 		// If we are not in a lifecycle state, just continue
 		return nil, false

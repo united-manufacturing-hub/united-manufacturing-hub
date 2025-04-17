@@ -27,9 +27,11 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/snapshot"
 )
 
-// BaseFSMInstance implements the public fsm.FSM interface
+// BaseFSMInstance implements the shared logic for all FSM-based services.
+// Concrete managers (e.g., Benthos, Redpanda) embed or wrap this to handle their domain logic.
 type BaseFSMInstance struct {
 	cfg BaseFSMInstanceConfig
 
@@ -39,19 +41,30 @@ type BaseFSMInstance struct {
 	// fsm is the finite state machine that manages instance state
 	fsm *fsm.FSM
 
-	// Callbacks for state transitions
+	// Registered "enter_state" callbacks, purely for logging or minor side-effects.
 	callbacks map[string]fsm.Callback
 
-	// backoffManager is the backoff manager for handling error retries and permanent failures
+	// Handles exponential backoff for repeated transient errors,
+	// culminating in a "permanent failure" if max retries are exceeded.
 	backoffManager *backoff.BackoffManager
 
 	// logger is the logger for the FSM
 	logger *zap.SugaredLogger
 
-	// FSMInstanceActions defines the actions that can be performed on an FSM instance
+	// Each concrete instance must provide these actions
 	FSMInstanceActions
+
+	// Each concrete manager must provide these reconcile methods
+	FSMInstanceReconcile
 }
 
+// BaseFSMInstanceManagerInterface is the interface that each concrete manager must implement
+// We are not using the FSMInstanceManagerInterface here because we want to avoid a circular dependency
+type BaseFSMInstanceManagerInterface interface {
+	Reconcile(ctx context.Context, currentSnapshot snapshot.SystemSnapshot, filesystemService filesystem.Service) (err error, reconciled bool)
+}
+
+// BaseFSMInstanceConfig holds parameters for setting up the base FSM.
 type BaseFSMInstanceConfig struct {
 	ID              string
 	DesiredFSMState string
@@ -62,12 +75,32 @@ type BaseFSMInstanceConfig struct {
 	OperationalStateAfterCreate string
 	// OperationalStateBeforeRemove is the operational state before the remove event
 	// The lifecycle state removing is only allowed from this state
+	// This is usually "stopped"
 	OperationalStateBeforeRemove string
+	// OperationalStateBeforeStopping is the operational state before OperationalStateBeforeRemove
+	// This is usually "stopping"
+	// If there is no equivalent here, then it can be left empty
+	OperationalStateBeforeBeforeRemove string
+
 	// OperationalTransitions are the transitions that are allowed in the operational state
 	OperationalTransitions []fsm.EventDesc
+
+	// Timeouts
+
+	UpdateObservedStateTimeout time.Duration
+
+	// If you want to specify certain states in which certain errors are "ignored" or "permanent," you can do so:
+	// IgnoreErrorsInStates is a map of states telling in what state which errors are ignored
+	IgnoreErrorsInStates map[string][]error
+	// PermanentErrorsInStates is a map of states telling in what state which errors are considered permanent
+	PermanentErrorsInStates map[string][]error
+
+	// ManagersToReconcile is a list of managers that should be reconciled
+	ManagersToReconcile []BaseFSMInstanceManagerInterface
 }
 
-// NewBaseFSMInstance creates a new FSM instance
+// NewBaseFSMInstance sets up a new FSM with the standard lifecycle transitions plus
+// your operational transitions.
 func NewBaseFSMInstance(cfg BaseFSMInstanceConfig, logger *zap.SugaredLogger) *BaseFSMInstance {
 
 	baseInstance := &BaseFSMInstance{
@@ -76,11 +109,11 @@ func NewBaseFSMInstance(cfg BaseFSMInstanceConfig, logger *zap.SugaredLogger) *B
 		logger:    logger,
 	}
 
-	// Initialize backoff manager with appropriate configuration
+	// Create a default backoff manager (exponential) with limited retries.
 	backoffConfig := backoff.DefaultConfig(cfg.ID, logger)
 	baseInstance.backoffManager = backoff.NewBackoffManager(backoffConfig)
 
-	// Combine lifecycle and operational transitions
+	// Lifecycle transitions + user-supplied operational transitions
 	events := []fsm.EventDesc{
 		// Lifecycle transitions
 		{Name: LifecycleEventCreate, Src: []string{LifecycleStateToBeCreated}, Dst: LifecycleStateCreating},
@@ -213,8 +246,8 @@ func (s *BaseFSMInstance) ClearError() {
 	s.backoffManager.Reset()
 }
 
-// Remove starts the removal process, it is idempotent and can be called multiple times
-// Note: it is only removed once IsRemoved returns true
+// Remove attempts a normal removal via the lifecycle. If we see a permanent error
+// or if removal fails, we can do a forced removal (skipping graceful steps).
 func (s *BaseFSMInstance) Remove(ctx context.Context) error {
 	// Set the desired state to the state before remove
 	s.SetDesiredFSMState(s.cfg.OperationalStateBeforeRemove)
@@ -229,6 +262,16 @@ func (s *BaseFSMInstance) IsRemoved() bool {
 // IsRemoving returns true if the instance is in the removing state
 func (s *BaseFSMInstance) IsRemoving() bool {
 	return s.fsm.Current() == LifecycleStateRemoving
+}
+
+// IsStopping returns true if the FSM is in a stopping state
+func (s *BaseFSMInstance) IsStopping() bool {
+	return s.fsm.Current() == s.cfg.OperationalStateBeforeBeforeRemove
+}
+
+// IsStopped returns true if the FSM is in a stopped state
+func (s *BaseFSMInstance) IsStopped() bool {
+	return s.fsm.Current() == s.cfg.OperationalStateBeforeRemove
 }
 
 // ShouldSkipReconcileBecauseOfError returns true if the reconcile should be skipped

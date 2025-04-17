@@ -34,6 +34,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/errorhandling"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
@@ -847,7 +848,7 @@ func (s *BenthosService) GetHealthCheckAndMetrics(ctx context.Context, s6Service
 // Expects benthosName (e.g. "myservice") as defined in the UMH config
 func (s *BenthosService) AddBenthosToS6Manager(ctx context.Context, filesystemService filesystem.Service, cfg *benthosserviceconfig.BenthosServiceConfig, benthosName string) error {
 	if s.s6Manager == nil {
-		return errors.New("s6 manager not initialized")
+		return errorhandling.ErrS6ManagerNotInitialized
 	}
 
 	if ctx.Err() != nil {
@@ -889,7 +890,7 @@ func (s *BenthosService) AddBenthosToS6Manager(ctx context.Context, filesystemSe
 // Expects benthosName (e.g. "myservice") as defined in the UMH config
 func (s *BenthosService) UpdateBenthosInS6Manager(ctx context.Context, filesystemService filesystem.Service, cfg *benthosserviceconfig.BenthosServiceConfig, benthosName string) error {
 	if s.s6Manager == nil {
-		return errors.New("s6 manager not initialized")
+		return errorhandling.ErrS6ManagerNotInitialized
 	}
 
 	if ctx.Err() != nil {
@@ -938,7 +939,7 @@ func (s *BenthosService) UpdateBenthosInS6Manager(ctx context.Context, filesyste
 // Expects benthosName (e.g. "myservice") as defined in the UMH config
 func (s *BenthosService) RemoveBenthosFromS6Manager(ctx context.Context, filesystemService filesystem.Service, benthosName string) error {
 	if s.s6Manager == nil {
-		return errors.New("s6 manager not initialized")
+		return errorhandling.ErrS6ManagerNotInitialized
 	}
 
 	if ctx.Err() != nil {
@@ -971,7 +972,7 @@ func (s *BenthosService) RemoveBenthosFromS6Manager(ctx context.Context, filesys
 // Expects benthosName (e.g. "myservice") as defined in the UMH config
 func (s *BenthosService) StartBenthos(ctx context.Context, filesystemService filesystem.Service, benthosName string) error {
 	if s.s6Manager == nil {
-		return errors.New("s6 manager not initialized")
+		return errorhandling.ErrS6ManagerNotInitialized
 	}
 
 	if ctx.Err() != nil {
@@ -1002,7 +1003,7 @@ func (s *BenthosService) StartBenthos(ctx context.Context, filesystemService fil
 // Expects benthosName (e.g. "myservice") as defined in the UMH config
 func (s *BenthosService) StopBenthos(ctx context.Context, filesystemService filesystem.Service, benthosName string) error {
 	if s.s6Manager == nil {
-		return errors.New("s6 manager not initialized")
+		return errorhandling.ErrS6ManagerNotInitialized
 	}
 
 	if ctx.Err() != nil {
@@ -1032,7 +1033,7 @@ func (s *BenthosService) StopBenthos(ctx context.Context, filesystemService file
 // ReconcileManager reconciles the Benthos manager
 func (s *BenthosService) ReconcileManager(ctx context.Context, filesystemService filesystem.Service, tick uint64) (err error, reconciled bool) {
 	if s.s6Manager == nil {
-		return errors.New("s6 manager not initialized"), false
+		return errorhandling.ErrS6ManagerNotInitialized, false
 	}
 
 	if ctx.Err() != nil {

@@ -42,6 +42,7 @@ const (
 	ComponentFilesystem                = "filesystem"
 	ComponentContainerMonitor          = "container_monitor"
 	ComponentDataflowComponentInstance = "dataflow_component_instance"
+	ComponentBaseFSMInstance           = "base_fsm_instance"
 )
 
 var (

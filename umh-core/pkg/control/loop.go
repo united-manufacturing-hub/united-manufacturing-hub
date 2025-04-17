@@ -46,6 +46,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/ctxutil"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/errorhandling"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/container"
@@ -294,11 +295,11 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 		// Check if we have enough time to reconcile the manager
 		remaining, sufficient, err := ctxutil.HasSufficientTime(ctx, constants.DefaultMinimumRemainingTimePerManager)
 		if err != nil {
-			if errors.Is(err, ctxutil.ErrNoDeadline) {
+			if errors.Is(err, errorhandling.ErrNoDeadline) {
 				return fmt.Errorf("context has no deadline")
 			}
 			// For ErrInsufficientTime, skip reconciliation
-			if errors.Is(err, ctxutil.ErrInsufficientTime) {
+			if errors.Is(err, errorhandling.ErrInsufficientTime) {
 				c.logger.Warnf("Skipping reconcile cycle due to remaining time: %v", remaining)
 				return nil
 			}

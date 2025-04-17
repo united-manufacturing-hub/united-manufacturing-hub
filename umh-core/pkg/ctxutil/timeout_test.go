@@ -22,6 +22,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/ctxutil"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/errorhandling"
 )
 
 var _ = Describe("HasSufficientTime", func() {
@@ -35,7 +36,7 @@ var _ = Describe("HasSufficientTime", func() {
 		remaining, sufficient, err := ctxutil.HasSufficientTime(ctx, time.Millisecond*10)
 
 		Expect(sufficient).To(BeFalse(), "Expected insufficient time for context without deadline")
-		Expect(err).To(MatchError(ctxutil.ErrNoDeadline))
+		Expect(err).To(MatchError(errorhandling.ErrNoDeadline))
 		Expect(remaining).To(Equal(time.Duration(0)))
 	})
 

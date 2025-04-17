@@ -23,4 +23,31 @@ type FSMInstanceActions interface {
 
 	// UpdateObservedStateOfInstance updates the observed state of the instance
 	UpdateObservedStateOfInstance(ctx context.Context, filesystemService filesystem.Service, tick uint64, loopStartTime time.Time) error
+
+	// ForceRemoveInstance forces the removal of a managed instance
+	ForceRemoveInstance(ctx context.Context, filesystemService filesystem.Service) error
+}
+
+// FSMInstanceChecks defines the standard checks that all FSM instances should implement
+type FSMInstanceChecks interface {
+	// IsRemoving returns true if the instance is in the removing state
+	// A default implementation is provided by the baseFSMInstance
+	IsRemoving() bool
+
+	// IsRemoved returns true if the instance is in the removed state
+	// A default implementation is provided by the baseFSMInstance
+	IsRemoved() bool
+
+	// IsStopping returns true if the instance is in the stopping state
+	// No default implementation is provided by the baseFSMInstance
+	IsStopping() bool
+
+	// IsStopped returns true if the instance is in the stopped state
+	// No default implementation is provided by the baseFSMInstance
+	IsStopped() bool
+}
+
+// FSMInstanceReconcile defines the standard reconcile logics that all FSM instances should implement
+type FSMInstanceReconcile interface {
+	ReconcileOperationalStates(ctx context.Context, currentState string, desiredState string, filesystemService filesystem.Service, currentTime time.Time) (err error, reconciled bool)
 }
