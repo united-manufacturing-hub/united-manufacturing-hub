@@ -29,6 +29,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda_monitor"
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/storage"
 )
 
 var _ = Describe("RedpandaService State Transitions", func() {
@@ -40,6 +41,7 @@ var _ = Describe("RedpandaService State Transitions", func() {
 		ctx                context.Context
 		cancel             context.CancelFunc
 		redpandaConfig     *redpandaserviceconfig.RedpandaServiceConfig
+		archiveStorage     storage.ArchiveStorer
 	)
 
 	BeforeEach(func() {
@@ -121,6 +123,7 @@ var _ = Describe("RedpandaService State Transitions", func() {
 		// Create the service with mocked dependencies
 		redpandaService = redpanda.NewDefaultRedpandaService(
 			"test-redpanda",
+			archiveStorage,
 			redpanda.WithS6Service(mockS6Service),
 			redpanda.WithS6Manager(mockedS6Manager),
 			redpanda.WithMonitorService(mockMonitorService),

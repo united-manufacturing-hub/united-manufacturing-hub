@@ -21,6 +21,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/storage"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -28,18 +29,20 @@ import (
 
 var _ = Describe("Nmap Service", func() {
 	var (
-		service   *NmapService
-		mockS6    *s6service.MockService
-		tick      uint64
-		nmapName  string
-		s6Service string
-		mockFS    *filesystem.MockFileSystem
+		service        *NmapService
+		mockS6         *s6service.MockService
+		tick           uint64
+		nmapName       string
+		s6Service      string
+		mockFS         *filesystem.MockFileSystem
+		archiveStorage storage.ArchiveStorer
 	)
 
 	BeforeEach(func() {
 		mockS6 = s6service.NewMockService()
 		nmapName = "test-scan"
-		service = NewDefaultNmapService(nmapName, WithS6Service(mockS6))
+		archiveStorage = storage.NewArchiveEventStorage(100)
+		service = NewDefaultNmapService(nmapName, archiveStorage, WithS6Service(mockS6))
 		tick = 0
 		s6Service = service.getS6ServiceName(nmapName)
 		mockFS = filesystem.NewMockFileSystem()

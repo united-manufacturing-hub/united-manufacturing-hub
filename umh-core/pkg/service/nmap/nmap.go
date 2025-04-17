@@ -32,6 +32,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/storage"
 	"go.uber.org/zap"
 )
 
@@ -55,11 +56,11 @@ func WithS6Service(s6Service s6service.Service) NmapServiceOption {
 }
 
 // NewDefaultNmapService creates a new default Nmap service manager
-func NewDefaultNmapService(nmapName string, opts ...NmapServiceOption) *NmapService {
+func NewDefaultNmapService(nmapName string, archiveStorage storage.ArchiveStorer, opts ...NmapServiceOption) *NmapService {
 	managerName := fmt.Sprintf("%s%s", logger.ComponentNmapService, nmapName)
 	service := &NmapService{
 		logger:         logger.For(managerName),
-		s6Manager:      s6fsm.NewS6Manager(managerName),
+		s6Manager:      s6fsm.NewS6Manager(managerName, archiveStorage),
 		s6Service:      s6service.NewDefaultService(),
 		lastScanResult: nil,
 	}

@@ -289,7 +289,7 @@ func (d *DataflowComponentInstance) reconcileStartingState(ctx context.Context, 
 		}
 
 		// Check if we have exceeded the grace period since entering the Starting state
-		if d.IsStartupGracePeriodExpired(currentTime, currentState) {
+		if d.IsFailedStateEventObserved(ctx) {
 			return d.baseFSMInstance.SendEvent(ctx, EventStartFailed), true
 		}
 

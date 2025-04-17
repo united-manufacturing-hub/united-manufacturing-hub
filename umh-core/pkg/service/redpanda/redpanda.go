@@ -32,6 +32,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/httpclient"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda_monitor"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/storage"
 	"go.uber.org/zap"
 
 	redpandayaml "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/redpandaserviceconfig"
@@ -156,15 +157,15 @@ func WithMonitorService(monitorService redpanda_monitor.IRedpandaMonitorService)
 
 // NewDefaultRedpandaService creates a new default Redpanda service
 // name is the name of the Redpanda service as defined in the UMH config
-func NewDefaultRedpandaService(redpandaName string, opts ...RedpandaServiceOption) *RedpandaService {
+func NewDefaultRedpandaService(redpandaName string, archiveStorage storage.ArchiveStorer, opts ...RedpandaServiceOption) *RedpandaService {
 	managerName := fmt.Sprintf("%s%s", logger.ComponentRedpandaService, redpandaName)
 	service := &RedpandaService{
 		logger:         logger.For(managerName),
-		s6Manager:      s6fsm.NewS6Manager(managerName),
+		s6Manager:      s6fsm.NewS6Manager(managerName, archiveStorage),
 		s6Service:      s6service.NewDefaultService(),
 		httpClient:     nil, // this is only for a mock in the tests
 		baseDir:        constants.DefaultRedpandaBaseDir,
-		metricsService: redpanda_monitor.NewRedpandaMonitorService(),
+		metricsService: redpanda_monitor.NewRedpandaMonitorService(archiveStorage),
 	}
 
 	// Apply options

@@ -29,6 +29,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	redpanda_service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda"
 	redpanda_monitor "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda_monitor"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/storage"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -36,10 +37,11 @@ import (
 
 var _ = Describe("RedpandaInstance getServiceStatus", func() {
 	var (
-		instance    *redpanda.RedpandaInstance
-		mockService *redpanda_service.MockRedpandaService
-		fsMock      filesystem.Service
-		ctx         context.Context
+		instance       *redpanda.RedpandaInstance
+		mockService    *redpanda_service.MockRedpandaService
+		fsMock         filesystem.Service
+		ctx            context.Context
+		archiveStorage storage.ArchiveStorer
 	)
 
 	BeforeEach(func() {
@@ -53,7 +55,8 @@ var _ = Describe("RedpandaInstance getServiceStatus", func() {
 			},
 			RedpandaServiceConfig: redpandaserviceconfig.RedpandaServiceConfig{},
 		}
-		instance = redpanda.NewRedpandaInstance(cfg)
+		archiveStorage = storage.NewArchiveEventStorage(100)
+		instance = redpanda.NewRedpandaInstance(cfg, archiveStorage)
 
 		// Create and inject a mock service
 		mockService = redpanda_service.NewMockRedpandaService()

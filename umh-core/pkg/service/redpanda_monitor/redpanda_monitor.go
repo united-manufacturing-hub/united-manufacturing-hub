@@ -38,6 +38,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/storage"
 
 	dto "github.com/prometheus/client_model/go"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
@@ -187,12 +188,12 @@ func WithS6Manager(s6Manager *s6fsm.S6Manager) RedpandaMonitorServiceOption {
 	}
 }
 
-func NewRedpandaMonitorService(opts ...RedpandaMonitorServiceOption) *RedpandaMonitorService {
+func NewRedpandaMonitorService(archiveStorage storage.ArchiveStorer, opts ...RedpandaMonitorServiceOption) *RedpandaMonitorService {
 	managerName := fmt.Sprintf("%s%s", logger.ComponentRedpandaService, "redpanda-monitor")
 	service := &RedpandaMonitorService{
 		logger:       logger.For(managerName),
 		metricsState: NewRedpandaMetricsState(),
-		s6Manager:    s6fsm.NewS6Manager(logger.ComponentRedpandaMonitorService),
+		s6Manager:    s6fsm.NewS6Manager(logger.ComponentRedpandaMonitorService, archiveStorage),
 		s6Service:    s6service.NewDefaultService(),
 	}
 	for _, opt := range opts {

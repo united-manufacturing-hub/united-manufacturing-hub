@@ -33,6 +33,7 @@ import (
 	benthosfsmmanager "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
 	benthosservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/storage"
 )
 
 // IDataFlowComponentService is the interface for managing DataFlowComponent services
@@ -86,6 +87,7 @@ type DataFlowComponentService struct {
 	benthosManager *benthosfsmmanager.BenthosManager
 	benthosService benthosservice.IBenthosService
 	benthosConfigs []config.BenthosConfig
+	archiveStorage storage.ArchiveStorer
 }
 
 // DataFlowComponentServiceOption is a function that modifies a DataFlowComponentService
@@ -131,13 +133,20 @@ func WithSharedPortManager(portManager portmanager.PortManager) DataFlowComponen
 	}
 }
 
+// WithArchiveStorage sets a custom archive storage for the DataFlowComponentService
+func WithArchiveStorage(archiveStorage storage.ArchiveStorer) DataFlowComponentServiceOption {
+	return func(s *DataFlowComponentService) {
+		s.archiveStorage = archiveStorage
+	}
+}
+
 // NewDefaultDataFlowComponentService creates a new default DataFlowComponent service
-func NewDefaultDataFlowComponentService(componentName string, opts ...DataFlowComponentServiceOption) *DataFlowComponentService {
+func NewDefaultDataFlowComponentService(componentName string, archiveStorage storage.ArchiveStorer, opts ...DataFlowComponentServiceOption) *DataFlowComponentService {
 	managerName := fmt.Sprintf("%s%s", logger.ComponentDataFlowComponentService, componentName)
 	service := &DataFlowComponentService{
 		logger:         logger.For(managerName),
-		benthosManager: benthosfsmmanager.NewBenthosManager(managerName),
-		benthosService: benthosservice.NewDefaultBenthosService(componentName),
+		benthosManager: benthosfsmmanager.NewBenthosManager(managerName, archiveStorage),
+		benthosService: benthosservice.NewDefaultBenthosService(componentName, archiveStorage),
 		benthosConfigs: []config.BenthosConfig{},
 	}
 

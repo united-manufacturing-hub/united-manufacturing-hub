@@ -27,11 +27,13 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	benthos_service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/storage"
 )
 
 // NewBenthosInstance creates a new BenthosInstance with the given ID and service path
 func NewBenthosInstance(
-	config config.BenthosConfig) *BenthosInstance {
+	config config.BenthosConfig,
+	archiveStorage storage.ArchiveStorer) *BenthosInstance {
 
 	cfg := internal_fsm.BaseFSMInstanceConfig{
 		ID:                           config.Name,
@@ -78,8 +80,9 @@ func NewBenthosInstance(
 
 	instance := &BenthosInstance{
 		baseFSMInstance: internal_fsm.NewBaseFSMInstance(cfg, logger.For(config.Name)),
-		service:         benthos_service.NewDefaultBenthosService(config.Name),
+		service:         benthos_service.NewDefaultBenthosService(config.Name, archiveStorage),
 		config:          config.BenthosServiceConfig,
+		archiveStorage:  archiveStorage,
 		ObservedState:   BenthosObservedState{},
 	}
 

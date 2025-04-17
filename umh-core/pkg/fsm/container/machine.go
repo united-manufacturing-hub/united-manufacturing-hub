@@ -27,15 +27,16 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/container_monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/storage"
 )
 
 // NewContainerInstance creates a new ContainerInstance with the standard transitions.
-func NewContainerInstance(config config.ContainerConfig) *ContainerInstance {
-	return NewContainerInstanceWithService(config, container_monitor.NewContainerMonitorService(filesystem.NewDefaultService()))
+func NewContainerInstance(config config.ContainerConfig, archiveStorage storage.ArchiveStorer) *ContainerInstance {
+	return NewContainerInstanceWithService(config, container_monitor.NewContainerMonitorService(filesystem.NewDefaultService()), archiveStorage)
 }
 
 // NewContainerInstanceWithService creates a new ContainerInstance with a custom monitor service.
-func NewContainerInstanceWithService(config config.ContainerConfig, service container_monitor.Service) *ContainerInstance {
+func NewContainerInstanceWithService(config config.ContainerConfig, service container_monitor.Service, archiveStorage storage.ArchiveStorer) *ContainerInstance {
 	// Build the config for the base FSM
 	fsmCfg := internal_fsm.BaseFSMInstanceConfig{
 		ID: config.Name,
@@ -71,6 +72,7 @@ func NewContainerInstanceWithService(config config.ContainerConfig, service cont
 		baseFSMInstance: baseFSM,
 		monitorService:  service,
 		config:          config,
+		archiveStorage:  archiveStorage,
 	}
 
 	// Register any state-entry callbacks
