@@ -330,8 +330,16 @@ func buildAgentDataFromSnapshot(instance fsm.FSMInstanceSnapshot, log *zap.Sugar
 	if instance.LastObservedState != nil {
 		// Try to cast to the right type
 		if snapshot, ok := instance.LastObservedState.(*agent_monitor.AgentObservedStateSnapshot); ok {
-			agentData = models.Agent{
-				Location: snapshot.ServiceInfoSnapshot.Location,
+			// Ensure all fields are valid before accessing
+			if snapshot.ServiceInfoSnapshot.Location == nil {
+				log.Warn("Agent location data is nil")
+				agentData = models.Agent{
+					Location: map[int]string{0: "Unknown location"},
+				}
+			} else {
+				agentData = models.Agent{
+					Location: snapshot.ServiceInfoSnapshot.Location,
+				}
 			}
 		} else {
 			log.Warn("Agent observed state is not of expected type")
