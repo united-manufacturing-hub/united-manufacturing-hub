@@ -96,6 +96,12 @@ jobs:
         run: |
           make cleanup-ci
 
+      - name: Speed test
+        working-directory: ./umh-core
+        run: |
+          echo "Running speed test"
+          make speed-test
+
       - name: Run integration tests
         env:
           CI: true
