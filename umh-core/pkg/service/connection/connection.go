@@ -434,13 +434,33 @@ func (c *ConnectionService) updateRecentScans(connName string, scan nmap.Service
 		c.recentScans[connName] = make([]nmap.ServiceInfo, 0, c.maxRecentScans)
 	}
 
+	// Create a deep copy of the scan info to prevent shared pointers
+	scanCopy := nmap.ServiceInfo{
+		S6FSMState: scan.S6FSMState,
+	}
+
+	// Deep copy the NmapStatus
+	if scan.NmapStatus.LastScan != nil {
+		scanCopy.NmapStatus.IsRunning = scan.NmapStatus.IsRunning
+		scanCopy.NmapStatus.LastScan = &nmap.NmapScanResult{
+			Timestamp: scan.NmapStatus.LastScan.Timestamp,
+			Error:     scan.NmapStatus.LastScan.Error,
+			PortResult: nmap.PortResult{
+				Port:      scan.NmapStatus.LastScan.PortResult.Port,
+				State:     scan.NmapStatus.LastScan.PortResult.State,
+				LatencyMs: scan.NmapStatus.LastScan.PortResult.LatencyMs,
+			},
+			Metrics: scan.NmapStatus.LastScan.Metrics,
+		}
+	}
+
 	// Add the new scan (keeping only the most recent ones)
 	scans := c.recentScans[connName]
 	if len(scans) >= c.maxRecentScans {
 		// Remove oldest scan
 		scans = scans[1:]
 	}
-	scans = append(scans, scan)
+	scans = append(scans, scanCopy)
 	c.recentScans[connName] = scans
 }
 
