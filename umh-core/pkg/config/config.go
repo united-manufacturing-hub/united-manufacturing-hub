@@ -16,7 +16,7 @@ package config
 
 import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/connectionconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/connectionserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/nmapserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/redpandaserviceconfig"
@@ -121,7 +121,7 @@ type ConnectionConfig struct {
 	FSMInstanceConfig `yaml:",inline"`
 
 	// For the Connection service
-	ConnectionServiceConfig connectionconfig.ConnectionServiceConfig `yaml:"connectionServiceConfig"`
+	ConnectionServiceConfig connectionserviceconfig.ConnectionServiceConfig `yaml:"connectionServiceConfig"`
 }
 
 // Clone creates a deep copy of FullConfig

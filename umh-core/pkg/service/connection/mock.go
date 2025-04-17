@@ -20,7 +20,7 @@ import (
 	"context"
 	"sync"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/connectionconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/connectionserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
@@ -38,15 +38,15 @@ import (
 //	// Test your code that uses IConnectionService
 //	status, err := myComponent.DoSomethingWithConnection(mockService, "test-conn")
 type MockConnectionService struct {
-	mock               sync.Mutex                                          // Protects concurrent access to mock state
-	serviceExists      map[string]bool                                     // Tracks which services exist
-	serviceInfo        map[string]ServiceInfo                              // Predefined ServiceInfo responses
-	serviceIsRunning   map[string]bool                                     // Individual status flags
-	serviceConfig      map[string]connectionconfig.ConnectionServiceConfig // Configs for services
-	serviceIsReachable map[string]bool                                     // Reachability flags
-	serviceIsFlaky     map[string]bool                                     // Flakiness flags
-	reconcileError     error                                               // Error to return from ReconcileManager
-	reconcileResult    bool                                                // Result to return from ReconcileManager
+	mock               sync.Mutex                                                 // Protects concurrent access to mock state
+	serviceExists      map[string]bool                                            // Tracks which services exist
+	serviceInfo        map[string]ServiceInfo                                     // Predefined ServiceInfo responses
+	serviceIsRunning   map[string]bool                                            // Individual status flags
+	serviceConfig      map[string]connectionserviceconfig.ConnectionServiceConfig // Configs for services
+	serviceIsReachable map[string]bool                                            // Reachability flags
+	serviceIsFlaky     map[string]bool                                            // Flakiness flags
+	reconcileError     error                                                      // Error to return from ReconcileManager
+	reconcileResult    bool                                                       // Result to return from ReconcileManager
 }
 
 // NewMockConnectionService creates a new mock connection service
@@ -56,7 +56,7 @@ func NewMockConnectionService() *MockConnectionService {
 		serviceExists:      make(map[string]bool),
 		serviceInfo:        make(map[string]ServiceInfo),
 		serviceIsRunning:   make(map[string]bool),
-		serviceConfig:      make(map[string]connectionconfig.ConnectionServiceConfig),
+		serviceConfig:      make(map[string]connectionserviceconfig.ConnectionServiceConfig),
 		serviceIsReachable: make(map[string]bool),
 		serviceIsFlaky:     make(map[string]bool),
 	}
@@ -150,14 +150,14 @@ func (m *MockConnectionService) Status(
 func (m *MockConnectionService) AddConnection(
 	ctx context.Context,
 	fs filesystem.Service,
-	cfg *connectionconfig.ConnectionServiceConfig,
+	cfg connectionserviceconfig.ConnectionServiceConfig,
 	connName string,
 ) error {
 	m.mock.Lock()
 	defer m.mock.Unlock()
 
 	m.serviceExists[connName] = true
-	m.serviceConfig[connName] = *cfg
+	m.serviceConfig[connName] = cfg
 
 	// Initialize default states
 	if _, exists := m.serviceIsRunning[connName]; !exists {
@@ -178,7 +178,7 @@ func (m *MockConnectionService) AddConnection(
 func (m *MockConnectionService) UpdateConnection(
 	ctx context.Context,
 	fs filesystem.Service,
-	cfg *connectionconfig.ConnectionServiceConfig,
+	cfg connectionserviceconfig.ConnectionServiceConfig,
 	connName string,
 ) error {
 	m.mock.Lock()
@@ -188,7 +188,7 @@ func (m *MockConnectionService) UpdateConnection(
 		m.serviceExists[connName] = true
 	}
 
-	m.serviceConfig[connName] = *cfg
+	m.serviceConfig[connName] = cfg
 	return nil
 }
 

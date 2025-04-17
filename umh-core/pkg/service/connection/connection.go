@@ -25,8 +25,9 @@ package connection
 import (
 	"context"
 	"fmt"
+	"sync"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/connectionconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/connectionserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/nmapserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
@@ -92,7 +93,7 @@ type IConnectionService interface {
 	// Call StartConnection to begin active monitoring.
 	//
 	// Returns an error if the connection already exists or if registration fails.
-	AddConnection(ctx context.Context, fs filesystem.Service, cfg *connectionconfig.ConnectionServiceConfig, connName string) error
+	AddConnection(ctx context.Context, fs filesystem.Service, cfg connectionserviceconfig.ConnectionServiceConfig, connName string) error
 
 	// UpdateConnection modifies an existing connection configuration.
 	// This can be used to change the target hostname, port, or protocol.
@@ -101,7 +102,7 @@ type IConnectionService interface {
 	// monitor cycle and does not restart the monitoring process.
 	//
 	// Returns an error if the connection doesn't exist or if update fails.
-	UpdateConnection(ctx context.Context, fs filesystem.Service, cfg *connectionconfig.ConnectionServiceConfig, connName string) error
+	UpdateConnection(ctx context.Context, fs filesystem.Service, cfg connectionserviceconfig.ConnectionServiceConfig, connName string) error
 
 	// RemoveConnection deletes a connection configuration.
 	// This stops monitoring the connection and removes all configuration.
@@ -145,6 +146,9 @@ type ConnectionService struct {
 	// The underlying Nmap service used for network probing
 	nmapService nmap.INmapService
 
+	// Mutex to protect concurrent access to recentScans and prevInfo
+	recentMu sync.RWMutex
+
 	// Cache of recent scan results used for flicker detection
 	// Map key is the connection name, value is a slice of recent scan results
 	recentScans map[string][]nmap.ServiceInfo
@@ -152,6 +156,9 @@ type ConnectionService struct {
 	// Maximum number of recent scans to keep in history per connection
 	// Used for flakiness detection
 	maxRecentScans int
+
+	// Previous connection state info per connection
+	prevInfo map[string]ServiceInfo // keyed by connection name
 }
 
 // ConnectionServiceOption is a function that configures a ConnectionService.
@@ -170,7 +177,9 @@ func WithNmapService(nmapService nmap.INmapService) ConnectionServiceOption {
 // WithMaxRecentScans allows setting a custom recent scans limit for testing
 func WithMaxRecentScans(maxScans int) ConnectionServiceOption {
 	return func(c *ConnectionService) {
-		c.maxRecentScans = maxScans
+		if maxScans > 0 {
+			c.maxRecentScans = maxScans
+		}
 	}
 }
 
@@ -191,6 +200,7 @@ func NewDefaultConnectionService(opts ...ConnectionServiceOption) *ConnectionSer
 		logger:         logger.For(logger.ComponentConnectionService),
 		recentScans:    make(map[string][]nmap.ServiceInfo),
 		maxRecentScans: constants.MaxRecentScans, // Keep last scan results for flicker detection
+		prevInfo:       make(map[string]ServiceInfo),
 	}
 
 	// Apply options
@@ -212,14 +222,6 @@ func NewConnectionServiceForTesting(opts ...ConnectionServiceOption) *Connection
 	return NewDefaultConnectionService(opts...)
 }
 
-// GetRecentScansForTesting provides access to the internal recentScans state for testing purposes
-func (c *ConnectionService) GetRecentScansForTesting(connName string) []nmap.ServiceInfo {
-	if scans, exists := c.recentScans[connName]; exists {
-		return scans
-	}
-	return nil
-}
-
 // Status returns information about the connection health for the specified connection.
 // It queries the underlying Nmap service and then enhances the result with
 // additional context like flakiness detection based on historical data.
@@ -232,8 +234,6 @@ func (c *ConnectionService) Status(
 	connName string,
 	tick uint64,
 ) (ServiceInfo, error) {
-	c.logger.Debugf("Checking status for connection %s at tick %d", connName, tick)
-
 	if ctx.Err() != nil {
 		return ServiceInfo{}, ctx.Err()
 	}
@@ -249,8 +249,7 @@ func (c *ConnectionService) Status(
 
 	// Convert the Nmap status to ServiceInfo
 	info := ServiceInfo{
-		IsRunning:  nmapStatus.S6FSMState == "running" && nmapStatus.NmapStatus.IsRunning,
-		LastChange: tick, // This should ideally come from Nmap status
+		IsRunning: nmapStatus.S6FSMState == "running" && nmapStatus.NmapStatus.IsRunning,
 	}
 
 	// Check if we have scan results
@@ -264,6 +263,18 @@ func (c *ConnectionService) Status(
 	// Check for flakiness in recent scans
 	info.IsFlaky = c.isConnectionFlaky(connName)
 
+	// ----- LastChange handling -----
+	c.recentMu.Lock()
+	prev, exists := c.prevInfo[connName]
+	stateChanged := !exists || prev.IsReachable != info.IsReachable || prev.IsFlaky != info.IsFlaky
+	if stateChanged {
+		info.LastChange = tick
+		c.prevInfo[connName] = info
+	} else {
+		info.LastChange = prev.LastChange
+	}
+	c.recentMu.Unlock()
+
 	return info, nil
 }
 
@@ -273,7 +284,7 @@ func (c *ConnectionService) Status(
 func (c *ConnectionService) AddConnection(
 	ctx context.Context,
 	fs filesystem.Service,
-	cfg *connectionconfig.ConnectionServiceConfig,
+	cfg connectionserviceconfig.ConnectionServiceConfig,
 	connName string,
 ) error {
 	c.logger.Infof("Adding connection %s", connName)
@@ -295,7 +306,7 @@ func (c *ConnectionService) AddConnection(
 func (c *ConnectionService) UpdateConnection(
 	ctx context.Context,
 	fs filesystem.Service,
-	cfg *connectionconfig.ConnectionServiceConfig,
+	cfg connectionserviceconfig.ConnectionServiceConfig,
 	connName string,
 ) error {
 	c.logger.Infof("Updating connection %s", connName)
@@ -326,7 +337,15 @@ func (c *ConnectionService) RemoveConnection(
 	}
 
 	// Delegate to Nmap service
-	return c.nmapService.RemoveNmapFromS6Manager(ctx, connName)
+	err := c.nmapService.RemoveNmapFromS6Manager(ctx, connName)
+
+	// Clean up in-memory state
+	c.recentMu.Lock()
+	delete(c.recentScans, connName)
+	delete(c.prevInfo, connName)
+	c.recentMu.Unlock()
+
+	return err
 }
 
 // StartConnection begins the monitoring of a connection.
@@ -366,8 +385,9 @@ func (c *ConnectionService) StopConnection(
 }
 
 // ServiceExists checks if a connection with the given name exists.
-// It delegates to the Nmap service to check if the underlying
-// configuration exists.
+// Used by the FSM to determine appropriate transitions.
+//
+// Returns true if the connection exists, false otherwise.
 func (c *ConnectionService) ServiceExists(
 	ctx context.Context,
 	fs filesystem.Service,
@@ -412,23 +432,28 @@ func (c *ConnectionService) ReconcileManager(
 // connectivity aspects, while the Nmap service has more detailed configuration
 // options specific to network scanning.
 func (c *ConnectionService) convertToNmapConfig(
-	cfg *connectionconfig.ConnectionServiceConfig,
+	cfg connectionserviceconfig.ConnectionServiceConfig,
 ) nmapserviceconfig.NmapServiceConfig {
 	return nmapserviceconfig.NmapServiceConfig{
-		Target: cfg.Hostname,
-		Port:   int(cfg.Port),
+		Target: cfg.NmapServiceConfig.Target,
+		Port:   int(cfg.NmapServiceConfig.Port),
 		// Protocol is not directly mapped in NmapServiceConfig
 		// but could be used to influence scan type
 	}
 }
 
 // updateRecentScans adds a new scan result to the history for flakiness detection.
-// It maintains a circular buffer of recent scan results for each connection,
-// discarding the oldest result when the buffer is full.
+// It maintains a slice of recent scan results for each connection,
+// discarding the oldest result when the buffer reaches capacity.
 //
 // This history is used by isConnectionFlaky to detect unstable connections
-// that alternate between up and down states.
+// that alternate between different port states.
 func (c *ConnectionService) updateRecentScans(connName string, scan nmap.ServiceInfo) {
+	// TODO(perf): replace slice with constant-size ring-buffer O(1) append
+
+	c.recentMu.Lock()
+	defer c.recentMu.Unlock()
+
 	// Initialize if this is the first scan for this connection
 	if _, exists := c.recentScans[connName]; !exists {
 		c.recentScans[connName] = make([]nmap.ServiceInfo, 0, c.maxRecentScans)
@@ -468,43 +493,32 @@ func (c *ConnectionService) updateRecentScans(connName string, scan nmap.Service
 // A connection is considered flaky if it has shown different port states
 // in the recent history window (default: last 5 scans).
 //
-// The algorithm looks for:
-// - Mix of open and closed states
-// - Mix of open and filtered states
-// - Mix of closed and filtered states
-//
 // At least 3 samples are required to make this determination, to avoid
 // false positives from normal temporary network conditions.
 func (c *ConnectionService) isConnectionFlaky(connName string) bool {
+	c.recentMu.RLock()
 	scans, exists := c.recentScans[connName]
+	c.recentMu.RUnlock()
+
 	if !exists || len(scans) < 3 {
 		// Need at least 3 samples to determine flakiness
 		return false
 	}
 
-	// Check for changes in port state in last scans
-	hasOpen := false
-	hasClosed := false
-	hasFiltered := false
-
-	for _, scan := range scans {
-		if scan.NmapStatus.LastScan == nil {
-			continue
-		}
-
-		state := scan.NmapStatus.LastScan.PortResult.State
-		switch state {
-		case "open":
-			hasOpen = true
-		case "closed":
-			hasClosed = true
-		case "filtered", "open|filtered", "closed|filtered":
-			hasFiltered = true
+	firstState := portState(scans[0])
+	for _, s := range scans[1:] {
+		if portState(s) != firstState {
+			// At least one different state – connection is flaky
+			return true
 		}
 	}
+	return false
+}
 
-	// If we have mixed states, we consider it flaky
-	return (hasOpen && hasClosed) ||
-		(hasOpen && hasFiltered) ||
-		(hasClosed && hasFiltered)
+// portState extracts the port state from a scan result for flakiness detection
+func portState(s nmap.ServiceInfo) string {
+	if s.NmapStatus.LastScan == nil {
+		return "unknown"
+	}
+	return s.NmapStatus.LastScan.PortResult.State
 }
