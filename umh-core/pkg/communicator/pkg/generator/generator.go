@@ -141,7 +141,7 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 					Category:      models.Neutral,
 				},
 				Latency:  &models.Latency{},
-				Location: agentData.Location, // TODO: fetch from observed state
+				Location: agentData.Location,
 			},
 			Container: containerData,
 			Dfcs:      []models.Dfc{},
