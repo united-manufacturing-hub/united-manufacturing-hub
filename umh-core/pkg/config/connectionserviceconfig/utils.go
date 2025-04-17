@@ -12,25 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package nmap
+package connectionserviceconfig
 
 import (
-	"errors"
-	"fmt"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/nmapserviceconfig"
 )
 
-var (
-	// ErrServiceNotExist indicates the requested service does not exist
-	ErrServiceNotExist = errors.New("service does not exist")
+// GetNmapServiceConfig converts the component config to a full NmapServiceConfig
+func (c *ConnectionServiceConfig) GetNmapServiceConfig() nmapserviceconfig.NmapServiceConfig {
+	return c.NmapServiceConfig
+}
 
-	// ErrServiceAlreadyExists indicates the requested service already exists
-	ErrServiceAlreadyExists = errors.New("service already exists")
-
-	// ErrScanFailed indicates a scan operation failed
-	ErrScanFailed = errors.New("nmap scan failed")
-)
-
-// WrapMetricsError wraps an error with additional context
-func WrapMetricsError(baseErr error, message string) error {
-	return fmt.Errorf("%s: %w", message, baseErr)
+// FromNmapServiceConfig creates a ConnectionServiceConfig from a NmapServiceConfig,
+func FromNmapServiceConfig(nmap nmapserviceconfig.NmapServiceConfig) ConnectionServiceConfig {
+	return ConnectionServiceConfig{
+		NmapServiceConfig: nmap,
+	}
 }
