@@ -682,7 +682,7 @@ var _ = Describe("Connection Service", func() {
 			})
 
 			JustBeforeEach(func() {
-				info, statusErr = limitedService.Status(ctx, nil, connName, tick)
+				_, statusErr = limitedService.Status(ctx, nil, connName, tick)
 				// this will add 1 more item to the history of the latest service port state (which is filtered)
 			})
 
