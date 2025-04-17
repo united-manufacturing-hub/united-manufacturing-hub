@@ -24,8 +24,11 @@ import (
 	nmap_service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/nmap"
 )
 
-func NewNmapManagerWithMockedService(name string) *NmapManager {
+func NewNmapManagerWithMockedService(name string) (*NmapManager, *nmap_service.MockNmapService) {
 	managerName := fmt.Sprintf("%s_mock_%s", logger.ComponentNmapManager, name)
+
+	// Create a single shared mock service that will be used by all instances
+	mockService := nmap_service.NewMockNmapService()
 
 	baseMgr := public_fsm.NewBaseFSMManager[config.NmapConfig](
 		managerName,
@@ -42,9 +45,7 @@ func NewNmapManagerWithMockedService(name string) *NmapManager {
 			return nc.DesiredFSMState, nil
 		},
 		func(nc config.NmapConfig) (public_fsm.FSMInstance, error) {
-			mockSnc := nmap_service.NewMockNmapService()
-
-			inst := NewNmapInstanceWithService(nc, mockSnc)
+			inst := NewNmapInstanceWithService(nc, mockService)
 			return inst, nil
 		},
 		func(instance public_fsm.FSMInstance, nc config.NmapConfig) (bool, error) {
@@ -74,5 +75,5 @@ func NewNmapManagerWithMockedService(name string) *NmapManager {
 	logger.For(managerName).Info("Created NmapManager with mocked service.")
 	return &NmapManager{
 		BaseFSMManager: baseMgr,
-	}
+	}, mockService
 }

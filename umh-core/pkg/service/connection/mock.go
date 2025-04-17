@@ -41,7 +41,7 @@ type MockConnectionService struct {
 	mock               sync.Mutex                                                 // Protects concurrent access to mock state
 	serviceExists      map[string]bool                                            // Tracks which services exist
 	serviceInfo        map[string]ServiceInfo                                     // Predefined ServiceInfo responses
-	serviceIsRunning   map[string]bool                                            // Individual status flags
+	serviceIsHealthy   map[string]bool                                            // Individual status flags
 	serviceConfig      map[string]connectionserviceconfig.ConnectionServiceConfig // Configs for services
 	serviceIsReachable map[string]bool                                            // Reachability flags
 	serviceIsFlaky     map[string]bool                                            // Flakiness flags
@@ -55,7 +55,7 @@ func NewMockConnectionService() *MockConnectionService {
 	return &MockConnectionService{
 		serviceExists:      make(map[string]bool),
 		serviceInfo:        make(map[string]ServiceInfo),
-		serviceIsRunning:   make(map[string]bool),
+		serviceIsHealthy:   make(map[string]bool),
 		serviceConfig:      make(map[string]connectionserviceconfig.ConnectionServiceConfig),
 		serviceIsReachable: make(map[string]bool),
 		serviceIsFlaky:     make(map[string]bool),
@@ -81,10 +81,10 @@ func (m *MockConnectionService) SetServiceInfo(connName string, info ServiceInfo
 // SetServiceIsRunning allows setting the running state for testing.
 // This affects the IsRunning field in the ServiceInfo returned by Status
 // when no complete ServiceInfo has been predefined.
-func (m *MockConnectionService) SetServiceIsRunning(connName string, isRunning bool) {
+func (m *MockConnectionService) SetServiceIsHealthy(connName string, isHealthy bool) {
 	m.mock.Lock()
 	defer m.mock.Unlock()
-	m.serviceIsRunning[connName] = isRunning
+	m.serviceIsHealthy[connName] = isHealthy
 }
 
 // SetServiceIsReachable allows setting the reachable state for testing.
@@ -132,12 +132,12 @@ func (m *MockConnectionService) Status(
 	}
 
 	// Otherwise construct one from the individual flags
-	isRunning := m.serviceIsRunning[connName]
+	isHealthy := m.serviceIsHealthy[connName]
 	isReachable := m.serviceIsReachable[connName]
 	isFlaky := m.serviceIsFlaky[connName]
 
 	return ServiceInfo{
-		IsRunning:     isRunning,
+		IsHealthy:     isHealthy,
 		PortStateOpen: isReachable, // For simplicity, port state is aligned with reachability
 		IsReachable:   isReachable,
 		IsFlaky:       isFlaky,
@@ -160,8 +160,8 @@ func (m *MockConnectionService) AddConnection(
 	m.serviceConfig[connName] = *cfg
 
 	// Initialize default states
-	if _, exists := m.serviceIsRunning[connName]; !exists {
-		m.serviceIsRunning[connName] = false
+	if _, exists := m.serviceIsHealthy[connName]; !exists {
+		m.serviceIsHealthy[connName] = false
 	}
 	if _, exists := m.serviceIsReachable[connName]; !exists {
 		m.serviceIsReachable[connName] = false
@@ -204,7 +204,7 @@ func (m *MockConnectionService) RemoveConnection(
 
 	delete(m.serviceExists, connName)
 	delete(m.serviceConfig, connName)
-	delete(m.serviceIsRunning, connName)
+	delete(m.serviceIsHealthy, connName)
 	delete(m.serviceIsReachable, connName)
 	delete(m.serviceIsFlaky, connName)
 	delete(m.serviceInfo, connName)
@@ -222,7 +222,7 @@ func (m *MockConnectionService) StartConnection(
 	m.mock.Lock()
 	defer m.mock.Unlock()
 
-	m.serviceIsRunning[connName] = true
+	m.serviceIsHealthy[connName] = true
 	return nil
 }
 
@@ -236,7 +236,7 @@ func (m *MockConnectionService) StopConnection(
 	m.mock.Lock()
 	defer m.mock.Unlock()
 
-	m.serviceIsRunning[connName] = false
+	m.serviceIsHealthy[connName] = false
 	return nil
 }
 
