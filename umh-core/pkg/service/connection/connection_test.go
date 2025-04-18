@@ -42,7 +42,7 @@ func addConnAndReachState(
 	name string,
 	targetFSMState string,
 	mockSvc *nmap.MockNmapService,
-	tick uint64,
+	tick *uint64,
 ) {
 	cfg := &connectionserviceconfig.ConnectionServiceConfig{
 		NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
@@ -54,8 +54,8 @@ func addConnAndReachState(
 	Expect(svc.AddConnection(ctx, nil, cfg, name)).To(Succeed())
 
 	// Create the instance
-	err, _ := svc.ReconcileManager(ctx, nil, tick)
-	tick++
+	err, _ := svc.ReconcileManager(ctx, nil, *tick)
+	(*tick)++
 	Expect(err).NotTo(HaveOccurred())
 
 	currentState, err := mgr.GetCurrentFSMState(name)
@@ -70,9 +70,9 @@ func addConnAndReachState(
 			Fail(fmt.Sprintf("Failed to reach target state %s after %d attempts, current state: %s",
 				targetFSMState, maxAttempts, currentState))
 		}
-		err, _ := svc.ReconcileManager(ctx, nil, tick)
+		err, _ := svc.ReconcileManager(ctx, nil, *tick)
 		Expect(err).NotTo(HaveOccurred())
-		tick++
+		(*tick)++
 		attempts++
 
 		// Update current state for next iteration check
@@ -150,7 +150,7 @@ var _ = Describe("Connection.Status (table‑driven)", func() {
 			mockNmapService.SetServicePortState(connName, c.scanState, 10.0)
 
 			// 2. create connection and drive FSM to required state
-			addConnAndReachState(ctx, connSvc, mockMgr, connName, c.fsmState, mockNmapService, tick)
+			addConnAndReachState(ctx, connSvc, mockMgr, connName, c.fsmState, mockNmapService, &tick)
 
 			// 3. call Status
 			info, err := connSvc.Status(ctx, nil, connName, tick)
