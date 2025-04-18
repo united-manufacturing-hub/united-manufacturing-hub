@@ -25,10 +25,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 )
 
-const (
-	AgentManagerComponentName = "AgentManager"
-)
-
 // AgentManager is the FSM manager for the agent monitor instance
 type AgentManager struct {
 	*public_fsm.BaseFSMManager[config.AgentMonitorConfig]
@@ -44,7 +40,7 @@ func (a *AgentManagerSnapshot) IsObservedStateSnapshot() {}
 
 // NewAgentManager constructs a manager.
 func NewAgentManager(name string) *AgentManager {
-	managerName := fmt.Sprintf("%s_%s", AgentManagerComponentName, name)
+	managerName := fmt.Sprintf("%s_%s", logger.AgentManagerComponentName, name)
 
 	baseMgr := public_fsm.NewBaseFSMManager[config.AgentMonitorConfig](
 		managerName,
@@ -100,7 +96,7 @@ func NewAgentManager(name string) *AgentManager {
 			return ai.GetExpectedMaxP95ExecutionTimePerInstance(), nil
 		},
 	)
-	metrics.InitErrorCounter(AgentManagerComponentName, name)
+	metrics.InitErrorCounter(logger.AgentManagerComponentName, name)
 
 	return &AgentManager{
 		BaseFSMManager: baseMgr,
@@ -112,7 +108,7 @@ func (m *AgentManager) CreateSnapshot() public_fsm.ManagerSnapshot {
 	baseSnap := m.BaseFSMManager.CreateSnapshot()
 	baseSnapshot, ok := baseSnap.(*public_fsm.BaseManagerSnapshot)
 	if !ok {
-		logger.For(AgentManagerComponentName).Errorf("Could not cast manager snapshot to BaseManagerSnapshot.")
+		logger.For(logger.AgentManagerComponentName).Errorf("Could not cast manager snapshot to BaseManagerSnapshot.")
 		return baseSnap
 	}
 	snap := &AgentManagerSnapshot{

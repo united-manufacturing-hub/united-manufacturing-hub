@@ -26,7 +26,7 @@ import (
 
 // NewAgentManagerWithMockedService creates an AgentManager that uses a mock agent_monitor.Service
 func NewAgentManagerWithMockedService(name string, mockSvc agent_monitor.MockService) *AgentManager {
-	managerName := fmt.Sprintf("%s_mock_%s", AgentManagerComponentName, name)
+	managerName := fmt.Sprintf("%s_mock_%s", logger.AgentManagerComponentName, name)
 
 	baseMgr := public_fsm.NewBaseFSMManager[config.AgentMonitorConfig](
 		managerName,
