@@ -57,7 +57,7 @@ func NewAgentManager(name string) *AgentManager {
 		},
 		// Get name from config
 		func(fc config.AgentMonitorConfig) (string, error) {
-			return "agent", nil
+			return logger.AgentInstanceComponentName, nil
 		},
 		// Desired state from config
 		func(fc config.AgentMonitorConfig) (string, error) {

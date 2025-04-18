@@ -52,7 +52,8 @@ const (
 	ComponentConfigManager = "ConfigManager"
 
 	//Agent
-	AgentManagerComponentName = "AgentManager"
+	AgentManagerComponentName  = "AgentManager"
+	AgentInstanceComponentName = "agent"
 
 	// Communicator components
 	ComponentCommunicator = "Communicator"

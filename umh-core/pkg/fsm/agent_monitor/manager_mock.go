@@ -42,7 +42,7 @@ func NewAgentManagerWithMockedService(name string, mockSvc agent_monitor.MockSer
 			}, nil
 		},
 		func(fc config.AgentMonitorConfig) (string, error) {
-			return "agent", nil
+			return logger.AgentInstanceComponentName, nil
 		},
 		func(fc config.AgentMonitorConfig) (string, error) {
 			return fc.DesiredFSMState, nil
