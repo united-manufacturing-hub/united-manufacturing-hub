@@ -161,16 +161,8 @@ func SystemSnapshotLogger(ctx context.Context, controlLoop *control.ControlLoop,
 						instanceName, instance.CurrentState, instance.DesiredState)
 					// Log observed state if available
 					if instance.LastObservedState != nil {
-						if instanceName == logger.AgentInstanceComponentName {
-							// remove the logs from the observed state because they spam the console otherwise
-							observedState := instance.LastObservedState.(*agent_monitor.AgentObservedStateSnapshot)
-							serviceInfo := observedState.ServiceInfoSnapshot
-							serviceInfo.AgentLogs = nil
-							observedState.ServiceInfoSnapshot = serviceInfo
-							snap_logger.Debugf("Observed state: %v", observedState)
-						} else {
-							snap_logger.Debugf("Observed state: %v", instance.LastObservedState)
-						}
+						sanitizedState := sanitizeObservedState(instance.LastObservedState)
+						snap_logger.Debugf("Observed state: %v", sanitizedState)
 					}
 				}
 			}
@@ -209,4 +201,16 @@ func enableBackendConnection(config *config.FullConfig, state *fsm.SystemSnapsho
 	}
 
 	logger.Info("Backend connection enabled")
+}
+
+func sanitizeObservedState(state interface{}) interface{} {
+	switch v := state.(type) {
+	case *agent_monitor.AgentObservedStateSnapshot:
+		// Create a sanitized log-friendly copy of the observed state
+		sanitizedState := *v
+		sanitizedState.ServiceInfoSnapshot.AgentLogs = nil
+		return sanitizedState
+	default:
+		return state
+	}
 }
