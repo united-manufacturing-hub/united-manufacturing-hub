@@ -119,7 +119,7 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 	if agentManager, exists := s.state.Managers[agentManagerName]; exists {
 		instances := agentManager.GetInstances()
 
-		s.logger.Info("Agent manager instances",
+		s.logger.Debug("Agent manager instances",
 			zap.Any("instances", instances))
 
 		if instance, ok := instances[agentInstanceName]; ok {
