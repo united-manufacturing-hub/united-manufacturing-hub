@@ -128,6 +128,7 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 			s.logger.Warn("Agent instance not found in agent manager",
 				zap.String("instanceName", agentInstanceName),
 				zap.Any("instances", instances))
+			sentry.ReportIssuef(sentry.IssueTypeError, s.logger, "[GenerateStatusMessage] Agent instance not found in agent manager")
 			agentData = models.Agent{}
 			releaseChannel = "n/a"
 		}
@@ -349,6 +350,7 @@ func buildAgentDataFromSnapshot(instance fsm.FSMInstanceSnapshot, log *zap.Sugar
 			releaseChannel = snapshot.ServiceInfoSnapshot.Release.Channel
 		} else {
 			log.Warn("Agent observed state is not of expected type")
+			sentry.ReportIssuef(sentry.IssueTypeError, log, "[buildAgentDataFromSnapshot] Agent observed state is not of expected type")
 		}
 	} else {
 		log.Warn("Agent instance has no observed state")
