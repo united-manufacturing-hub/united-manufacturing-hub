@@ -153,7 +153,10 @@ func (m *FileConfigManager) GetConfigWithOverwritesOrCreateNew(ctx context.Conte
 	}
 
 	if configOverride.Agent.Location != nil {
-		config.Agent.Location = configOverride.Agent.Location
+		location := configOverride.Agent.Location
+		if location[0] != "" {
+			config.Agent.Location = location
+		}
 	}
 
 	// Enforce that redpanda has a desired state
