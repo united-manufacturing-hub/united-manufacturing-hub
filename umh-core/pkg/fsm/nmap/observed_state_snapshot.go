@@ -49,7 +49,7 @@ func (n *NmapInstance) CreateObservedStateSnapshot() fsm.ObservedStateSnapshot {
 	}
 
 	// Deep copy service info
-	err = deepcopy.Copy(&snapshot.ServiceInfo, n.ObservedState.ServiceInfo)
+	err = deepcopy.Copy(&snapshot.ServiceInfo, &n.ObservedState.ServiceInfo)
 	if err != nil {
 		sentry.ReportFSMError(n.baseFSMInstance.GetLogger(), n.baseFSMInstance.GetID(), "nmap", "CreateObservedStateSnapshot", err)
 		return nil

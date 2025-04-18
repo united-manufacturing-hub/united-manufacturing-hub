@@ -33,7 +33,7 @@ func (c *ContainerObservedStateSnapshot) IsObservedStateSnapshot() {}
 func (c *ContainerInstance) CreateObservedStateSnapshot() fsm.ObservedStateSnapshot {
 	snapshot := &ContainerObservedStateSnapshot{}
 	if c.ObservedState.ServiceInfo != nil {
-		err := deepcopy.Copy(&snapshot.ServiceInfoSnapshot, c.ObservedState.ServiceInfo)
+		err := deepcopy.Copy(&snapshot.ServiceInfoSnapshot, &c.ObservedState.ServiceInfo)
 		if err != nil {
 			c.baseFSMInstance.GetLogger().Error("failed to deep copy service info", "error", err)
 			return nil

@@ -349,6 +349,7 @@ var _ = Describe("PortManager", func() {
 			// Concurrent allocations
 			for i := 0; i < numGoroutines; i++ {
 				go func(id int) {
+					defer GinkgoRecover()
 					defer wg.Done()
 					instance := fmt.Sprintf("new-instance-%d", id)
 					_, err := pm.AllocatePort(instance) // Ignore errors, we might run out of ports
@@ -359,11 +360,18 @@ var _ = Describe("PortManager", func() {
 			// Concurrent reservations
 			for i := 0; i < numGoroutines; i++ {
 				go func(id int) {
+					defer GinkgoRecover()
 					defer wg.Done()
 					instance := fmt.Sprintf("reserve-instance-%d", id)
 					port := 8000 + id%1000                // Ensure we stay in range
 					err := pm.ReservePort(instance, port) // Ignore errors, some might fail
-					Expect(err).NotTo(HaveOccurred())
+					if err != nil {
+						// Error is expected - should be "port already in use" or "instance already has port"
+						Expect(err.Error()).To(Or(
+							ContainSubstring("already in use"),
+							ContainSubstring("already has port"),
+						))
+					}
 				}(i)
 			}
 
@@ -372,7 +380,7 @@ var _ = Describe("PortManager", func() {
 				go func(id int) {
 					defer wg.Done()
 					err := pm.ReleasePort(instances[id]) // Release pre-allocated instances
-					Expect(err).NotTo(HaveOccurred())
+					Expect(err).NotTo(HaveOccurred())    // These should always succeed
 				}(i)
 			}
 

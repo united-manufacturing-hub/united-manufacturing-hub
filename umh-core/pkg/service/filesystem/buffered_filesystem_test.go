@@ -17,6 +17,7 @@ package filesystem_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -63,8 +64,18 @@ var _ = Describe("BufferedService", func() {
 	})
 
 	AfterEach(func() {
-		// Clean up
 		cancel()
+
+		// Make read-only directories writable before removal
+		readOnlyDir := filepath.Join(tmpDir, "readonly_dir")
+		if _, err := os.Stat(readOnlyDir); err == nil {
+			err = os.Chmod(readOnlyDir, 0755)
+			if err != nil {
+				// Log instead of failing - we're in cleanup
+				fmt.Println("Warning: Failed to chmod directory:", err)
+			}
+		}
+
 		err := os.RemoveAll(tmpDir)
 		Expect(err).NotTo(HaveOccurred())
 	})
@@ -622,6 +633,17 @@ var _ = Describe("BufferedService Directory Creation Issues", func() {
 	AfterEach(func() {
 		// Clean up
 		cancel()
+
+		// Make read-only directories writable before removal
+		readOnlyDir := filepath.Join(tmpDir, "readonly_dir")
+		if _, err := os.Stat(readOnlyDir); err == nil {
+			err = os.Chmod(readOnlyDir, 0755)
+			if err != nil {
+				// Log instead of failing - we're in cleanup
+				fmt.Println("Warning: Failed to chmod directory:", err)
+			}
+		}
+
 		err := os.RemoveAll(tmpDir)
 		Expect(err).NotTo(HaveOccurred())
 	})
@@ -834,6 +856,17 @@ var _ = Describe("BufferedService Permission Checking", func() {
 
 	AfterEach(func() {
 		cancel()
+
+		// Make read-only directories writable before removal
+		readOnlyDir := filepath.Join(tmpDir, "readonly_dir")
+		if _, err := os.Stat(readOnlyDir); err == nil {
+			err = os.Chmod(readOnlyDir, 0755)
+			if err != nil {
+				// Log instead of failing - we're in cleanup
+				fmt.Println("Warning: Failed to chmod directory:", err)
+			}
+		}
+
 		err := os.RemoveAll(tmpDir)
 		Expect(err).NotTo(HaveOccurred())
 	})
