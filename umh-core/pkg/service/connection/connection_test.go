@@ -605,10 +605,11 @@ var _ = Describe("Connection.HistorySizeTrimming", func() {
 	const maxHistorySize = 3
 
 	BeforeEach(func() {
-		ctx, cancel, mockMgr, mockNmapService, connSvc, tick = newConnTestEnv("history-conn")
-		mockMgr, mockNmapService = nmapfsm.NewNmapManagerWithMockedService("history-mgr")
+		// Get the initial test environment
+		ctx, cancel, mockMgr, mockNmapService, _, tick = newConnTestEnv("history-conn")
 
-		// Create service with limited history size
+		// Create a new service with custom history size limit but reuse the existing manager
+		// We don't use the default connSvc from newConnTestEnv because we need to customize it
 		connSvc = connection.NewDefaultConnectionService(
 			"history-svc",
 			connection.WithNmapManager(mockMgr),
