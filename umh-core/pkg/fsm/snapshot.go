@@ -54,14 +54,14 @@ type ManagerSnapshot interface {
 
 // BaseManagerSnapshot contains the basic immutable state common to all manager types
 type BaseManagerSnapshot struct {
-	Name            string
-	Instances       map[string]FSMInstanceSnapshot
-	ManagerTick     uint64
-	LastAddTick     uint64
-	LastUpdateTick  uint64
-	LastRemoveTick  uint64
-	LastStateChange uint64
-	SnapshotTime    time.Time
+	Name           string
+	Instances      map[string]FSMInstanceSnapshot
+	ManagerTick    uint64
+	NextAddTick    uint64
+	NextUpdateTick uint64
+	NextRemoveTick uint64
+	NextStateTick  uint64
+	SnapshotTime   time.Time
 }
 
 // GetName returns the name of the manager
@@ -196,10 +196,10 @@ func getManagerSnapshot(manager FSMManager[any]) ManagerSnapshot {
 	baseManager, ok := manager.(*BaseFSMManager[any])
 	if ok {
 		snapshot.ManagerTick = baseManager.GetManagerTick()
-		snapshot.LastAddTick = baseManager.GetLastAddTick()
-		snapshot.LastUpdateTick = baseManager.GetLastUpdateTick()
-		snapshot.LastRemoveTick = baseManager.GetLastRemoveTick()
-		snapshot.LastStateChange = baseManager.GetLastStateChange()
+		snapshot.NextAddTick = baseManager.GetNextAddTick()
+		snapshot.NextUpdateTick = baseManager.GetNextUpdateTick()
+		snapshot.NextRemoveTick = baseManager.GetNextRemoveTick()
+		snapshot.NextStateTick = baseManager.GetNextStateTick()
 	}
 
 	// Get instances and their states
