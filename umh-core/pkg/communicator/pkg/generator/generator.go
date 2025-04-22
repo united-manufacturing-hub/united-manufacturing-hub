@@ -21,6 +21,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/agent_monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/container"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
@@ -32,9 +33,11 @@ const (
 	// Manager name constants
 	containerManagerName = logger.ComponentContainerManager + "_" + constants.DefaultManagerName
 	benthosManagerName   = logger.ComponentBenthosManager + "_" + constants.DefaultManagerName
+	agentManagerName     = logger.ComponentAgentManager + "_" + constants.DefaultManagerName
 
 	// Instance name constants
-	coreInstanceName = "Core"
+	coreInstanceName  = "Core"
+	agentInstanceName = "agent"
 )
 
 type StatusCollectorType struct {
@@ -109,18 +112,35 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 		containerData = buildDefaultContainerData()
 	}
 
+	// extract agent data from the agent manager if available
+	var agentData models.Agent
+	var releaseChannel string
+
+	if agentManager, exists := s.state.Managers[agentManagerName]; exists {
+		instances := agentManager.GetInstances()
+
+		s.logger.Debug("Agent manager instances",
+			zap.Any("instances", instances))
+
+		if instance, ok := instances[agentInstanceName]; ok {
+			agentData, releaseChannel = buildAgentDataFromSnapshot(instance, s.logger)
+		} else {
+			s.logger.Warn("Agent instance not found in agent manager",
+				zap.String("instanceName", agentInstanceName),
+				zap.Any("instances", instances))
+			sentry.ReportIssuef(sentry.IssueTypeError, s.logger, "[GenerateStatusMessage] Agent instance not found in agent manager")
+			agentData = models.Agent{}
+			releaseChannel = "n/a"
+		}
+	}
+
 	// Create the status message
 	statusMessage := &models.StatusMessage{
 		Core: models.Core{
 			Agent: models.Agent{
-				Health: &models.Health{
-					Message:       "agent monitoring is not implemented yet",
-					ObservedState: "n/a",
-					DesiredState:  "running",
-					Category:      models.Neutral,
-				},
+				Health:   agentData.Health,
 				Latency:  &models.Latency{},
-				Location: map[int]string{}, // TODO: fetch from observed state
+				Location: agentData.Location,
 			},
 			Container: containerData,
 			Dfcs:      []models.Dfc{},
@@ -143,7 +163,7 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 					Category:      models.Neutral,
 				},
 				Version: "n/a",
-				Channel: "n/a",
+				Channel: releaseChannel,
 				SupportedFeatures: []string{
 					"custom-dfc",
 					"action-deploy-data-flow-component",
@@ -299,4 +319,42 @@ func buildDefaultContainerData() models.Container {
 // Helper function to create string pointers
 func stringPtr(s string) *string {
 	return &s
+}
+
+// buildAgentDataFromSnapshot creates agent data from a FSM instance snapshot
+func buildAgentDataFromSnapshot(instance fsm.FSMInstanceSnapshot, log *zap.SugaredLogger) (models.Agent, string) {
+	agentData := models.Agent{}
+	releaseChannel := "n/a"
+	// Check if we have actual observedState
+	if instance.LastObservedState != nil {
+		// Try to cast to the right type
+		if snapshot, ok := instance.LastObservedState.(*agent_monitor.AgentObservedStateSnapshot); ok {
+			// Ensure all fields are valid before accessing
+			if snapshot.ServiceInfoSnapshot.Location == nil {
+				log.Warn("Agent location data is nil")
+				agentData = models.Agent{
+					Location: map[int]string{0: "Unknown location"},
+				}
+			} else {
+				agentData = models.Agent{
+					Location: snapshot.ServiceInfoSnapshot.Location,
+				}
+			}
+			// build the health status
+			agentData.Health = &models.Health{
+				Message:       getHealthMessage(snapshot.ServiceInfoSnapshot.OverallHealth),
+				ObservedState: instance.CurrentState,
+				DesiredState:  instance.DesiredState,
+				Category:      snapshot.ServiceInfoSnapshot.OverallHealth,
+			}
+			releaseChannel = snapshot.ServiceInfoSnapshot.Release.Channel
+		} else {
+			log.Warn("Agent observed state is not of expected type")
+			sentry.ReportIssuef(sentry.IssueTypeError, log, "[buildAgentDataFromSnapshot] Agent observed state is not of expected type")
+		}
+	} else {
+		log.Warn("Agent instance has no observed state")
+	}
+
+	return agentData, releaseChannel
 }
