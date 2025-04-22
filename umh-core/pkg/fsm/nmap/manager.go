@@ -23,6 +23,7 @@ import (
 	public_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/storage"
 )
 
 const (
@@ -32,6 +33,7 @@ const (
 // NmapManager is the FSM manager for multiple nmap monitor instances
 type NmapManager struct {
 	*public_fsm.BaseFSMManager[config.NmapConfig]
+	archiveStorage storage.ArchiveStoreCloser
 }
 
 // NmapManagerSnapshot extends the base manager snapshot to hold any nmap-specific info
@@ -44,7 +46,7 @@ func (n *NmapManagerSnapshot) IsObservedStateSnapshot() {}
 
 // NewNmapManager constructs a manager.
 // You might keep `sharedMonitorService` if you want one global service instance.
-func NewNmapManager(name string) *NmapManager {
+func NewNmapManager(name string, archiveStorage storage.ArchiveStoreCloser) *NmapManager {
 	managerName := fmt.Sprintf("%s_%s", logger.ComponentNmapManager, name)
 
 	baseMgr := public_fsm.NewBaseFSMManager[config.NmapConfig](
@@ -64,7 +66,7 @@ func NewNmapManager(name string) *NmapManager {
 		},
 		// Create instance
 		func(cfg config.NmapConfig) (public_fsm.FSMInstance, error) {
-			inst := NewNmapInstance(cfg)
+			inst := NewNmapInstance(cfg, archiveStorage)
 			return inst, nil
 		},
 		// Compare config => if same, no recreation needed
@@ -98,6 +100,7 @@ func NewNmapManager(name string) *NmapManager {
 
 	return &NmapManager{
 		BaseFSMManager: baseMgr,
+		archiveStorage: archiveStorage,
 	}
 }
 

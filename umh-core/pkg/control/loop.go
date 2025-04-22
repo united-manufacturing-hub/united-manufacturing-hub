@@ -111,7 +111,7 @@ func NewControlLoop(configManager config.ConfigManager) *ControlLoop {
 		benthos.NewBenthosManager(constants.DefaultManagerName, archiveStorage),
 		container.NewContainerManager(constants.DefaultManagerName, archiveStorage),
 		redpanda.NewRedpandaManager(constants.DefaultManagerName, archiveStorage),
-    nmap.NewNmapManager(constants.DefaultManagerName,archiveStorage),
+    	nmap.NewNmapManager(constants.DefaultManagerName,archiveStorage),
 		dataflowcomponent.NewDataflowComponentManager(constants.DefaultManagerName, archiveStorage),
 	}
 
