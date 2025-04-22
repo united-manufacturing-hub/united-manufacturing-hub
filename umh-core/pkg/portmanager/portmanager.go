@@ -107,15 +107,19 @@ func InitDefaultPortManager(minPort, maxPort int) (*DefaultPortManager, error) {
 	// Check if already initialized with different parameters
 	defaultPortManagerMutex.RLock()
 	defer defaultPortManagerMutex.RUnlock()
+	inst := defaultPortManagerInstance
+	if inst == nil {
+		return nil, fmt.Errorf("port manager failed to initialize previously; call InitDefaultPortManager again with valid parameters")
+	}
 
-	if defaultPortManagerInstance.minPort != minPort || defaultPortManagerInstance.maxPort != maxPort {
+	if inst.minPort != minPort || inst.maxPort != maxPort {
 		return defaultPortManagerInstance, fmt.Errorf(
 			"port manager already initialized with different range (%d-%d)",
-			defaultPortManagerInstance.minPort, defaultPortManagerInstance.maxPort,
+			inst.minPort, inst.maxPort,
 		)
 	}
 
-	return defaultPortManagerInstance, nil
+	return inst, nil
 }
 
 // NewDefaultPortManager creates a new DefaultPortManager with the given port range.
