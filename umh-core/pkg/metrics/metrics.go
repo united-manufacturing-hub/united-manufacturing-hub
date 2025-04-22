@@ -41,6 +41,8 @@ const (
 	ComponentRedpandaInstance          = "redpanda_instance"
 	ComponentNmapInstance              = "nmap_instance"
 	ComponentDataflowComponentInstance = "dataflow_component_instance"
+	ComponentAgentMonitor              = "agent_monitor"
+
 	// Services
 	ComponentS6Service        = "s6_service"
 	ComponentBenthosService   = "benthos_service"

@@ -25,6 +25,7 @@ const (
 	// Manager components
 	ComponentS6Manager                = "S6Manager"
 	ComponentBenthosManager           = "BenthosManager"
+	ComponentAgentManager             = "AgentManager"
 	ComponentContainerManager         = "ContainerManager"
 	ComponentRedpandaManager          = "RedpandaManager"
 	ComponentDataFlowComponentManager = "DataFlowCompManager"
@@ -48,8 +49,13 @@ const (
 	ComponentRedpandaService          = "RedpandaService"
 	ComponentAgentMonitorService      = "AgentMonitorService"
 	ComponentDataFlowComponentService = "DFCService"
+
 	// Configuration
 	ComponentConfigManager = "ConfigManager"
+
+	//Agent
+	AgentManagerComponentName  = "AgentManager"
+	AgentInstanceComponentName = "agent"
 
 	// Communicator components
 	ComponentCommunicator = "Communicator"
