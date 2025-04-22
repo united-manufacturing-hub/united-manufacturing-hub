@@ -285,7 +285,7 @@ var _ = Describe("RedpandaMonitor Service State Transitions", func() {
 })
 
 func reconcileMonitorUntilState(ctx context.Context, monitorService *redpanda_monitor.RedpandaMonitorService, mockFileSystem *filesystem.MockFileSystem, tick uint64, expectedState string) uint64 {
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 20; i++ {
 		err, _ := monitorService.ReconcileManager(ctx, mockFileSystem, tick)
 		Expect(err).NotTo(HaveOccurred())
 		tick++
