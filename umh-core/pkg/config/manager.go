@@ -26,7 +26,9 @@ import (
 	"go.uber.org/zap"
 	"gopkg.in/yaml.v3"
 
+	"github.com/google/uuid"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/backoff"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/ctxutil/ctxmutex"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/ctxutil/ctxrwmutex"
@@ -60,6 +62,8 @@ type ConfigManager interface {
 	AtomicSetLocation(ctx context.Context, location models.EditInstanceLocationModel) error
 	// AtomicAddDataflowcomponent adds a dataflowcomponent to the config atomically
 	AtomicAddDataflowcomponent(ctx context.Context, dfc DataFlowComponentConfig) error
+	// AtomicDeleteDataflowcomponent deletes a dataflowcomponent from the config atomically
+	AtomicDeleteDataflowcomponent(ctx context.Context, componentUUID uuid.UUID) error
 }
 
 // FileConfigManager implements the ConfigManager interface by reading from a file
@@ -484,4 +488,56 @@ func (m *FileConfigManagerWithBackoff) AtomicAddDataflowcomponent(ctx context.Co
 	}
 
 	return m.configManager.AtomicAddDataflowcomponent(ctx, dfc)
+}
+
+// AtomicDeleteDataflowcomponent deletes a dataflowcomponent from the config atomically
+func (m *FileConfigManager) AtomicDeleteDataflowcomponent(ctx context.Context, componentUUID uuid.UUID) error {
+	err := m.mutexAtomicUpdate.Lock(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to lock config file: %w", err)
+	}
+	defer m.mutexAtomicUpdate.Unlock()
+
+	// get the current config
+	config, err := m.GetConfig(ctx, 0)
+	if err != nil {
+		return fmt.Errorf("failed to get config: %w", err)
+	}
+
+	// Find and remove the component with matching UUID
+	found := false
+	filteredComponents := make([]DataFlowComponentConfig, 0, len(config.DataFlow))
+
+	for _, component := range config.DataFlow {
+		componentID := dataflowcomponentconfig.GenerateUUIDFromName(component.Name)
+		if componentID != componentUUID {
+			filteredComponents = append(filteredComponents, component)
+		} else {
+			found = true
+		}
+	}
+
+	if !found {
+		return fmt.Errorf("dataflow component with UUID %s not found", componentUUID)
+	}
+
+	// Update config with filtered components
+	config.DataFlow = filteredComponents
+
+	// write the config
+	if err := m.writeConfig(ctx, config); err != nil {
+		return fmt.Errorf("failed to write config: %w", err)
+	}
+
+	return nil
+}
+
+// AtomicDeleteDataflowcomponent delegates to the underlying FileConfigManager
+func (m *FileConfigManagerWithBackoff) AtomicDeleteDataflowcomponent(ctx context.Context, componentUUID uuid.UUID) error {
+	// Check if context is already cancelled
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+
+	return m.configManager.AtomicDeleteDataflowcomponent(ctx, componentUUID)
 }
