@@ -148,7 +148,7 @@ func (d *DataflowComponentInstance) UpdateObservedStateOfInstance(ctx context.Co
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
-
+  
 	start := time.Now()
 	info, err := d.getServiceStatus(ctx, filesystemService, tick)
 	if err != nil {
@@ -157,6 +157,14 @@ func (d *DataflowComponentInstance) UpdateObservedStateOfInstance(ctx context.Co
 	metrics.ObserveReconcileTime(logger.ComponentDataFlowComponentInstance, d.baseFSMInstance.GetID()+".getServiceStatus", time.Since(start))
 	// Store the raw service info
 	d.ObservedState.ServiceInfo = info
+  
+  currentState := d.baseFSMInstance.GetCurrentFSMState()
+	desiredState := d.baseFSMInstance.GetDesiredFSMState()
+	// If both desired and current state are stopped, we can return immediately
+	// There wont be any logs, metrics, etc. to check
+	if desiredState == OperationalStateStopped && currentState == OperationalStateStopped {
+		return nil
+	}
 
 	// Fetch the actual Benthos config from the service
 	start = time.Now()
@@ -192,6 +200,7 @@ func (d *DataflowComponentInstance) UpdateObservedStateOfInstance(ctx context.Co
 			d.baseFSMInstance.GetLogger().Debugf("Config differences detected but service does not exist yet, skipping update")
 		}
 	}
+
 	return nil
 }
 

@@ -65,7 +65,7 @@ type BaseFSMInstanceConfig struct {
 }
 
 // NewBaseFSMInstance creates a new FSM instance
-func NewBaseFSMInstance(cfg BaseFSMInstanceConfig, logger *zap.SugaredLogger) *BaseFSMInstance {
+func NewBaseFSMInstance(cfg BaseFSMInstanceConfig, backoffConfig backoff.Config, logger *zap.SugaredLogger) *BaseFSMInstance {
 
 	baseInstance := &BaseFSMInstance{
 		cfg:       cfg,
@@ -74,7 +74,6 @@ func NewBaseFSMInstance(cfg BaseFSMInstanceConfig, logger *zap.SugaredLogger) *B
 	}
 
 	// Initialize backoff manager with appropriate configuration
-	backoffConfig := backoff.DefaultConfig(cfg.ID, logger)
 	baseInstance.backoffManager = backoff.NewBackoffManager(backoffConfig)
 
 	// Combine lifecycle and operational transitions

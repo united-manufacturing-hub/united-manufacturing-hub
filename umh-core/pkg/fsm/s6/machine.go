@@ -22,6 +22,7 @@ import (
 	"github.com/looplab/fsm"
 
 	internal_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/backoff"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
@@ -51,8 +52,11 @@ func NewS6Instance(
 		},
 	}
 
+	logger := logger.For(config.Name)
+	backoffConfig := backoff.DefaultConfig(cfg.ID, logger)
+
 	instance := &S6Instance{
-		baseFSMInstance: internal_fsm.NewBaseFSMInstance(cfg, logger.For(config.Name)),
+		baseFSMInstance: internal_fsm.NewBaseFSMInstance(cfg, backoffConfig, logger),
 		servicePath:     filepath.Join(s6BaseDir, config.Name),
 		config:          config,
 		service:         s6service.NewDefaultService(),
