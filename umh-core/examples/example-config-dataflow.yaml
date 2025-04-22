@@ -15,9 +15,6 @@
 agent:
   metricsPort: 8080
 
-internal:
-  redpanda:
-    desiredState: stopped
 
 # Data Flow Components
 dataFlow:
@@ -67,3 +64,7 @@ dataFlow:
             url: redis://redis:6379
             stream: processed_temperature
             max_length: 1000 
+
+internal:
+  redpanda:
+    desiredState: stopped

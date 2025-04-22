@@ -114,20 +114,16 @@ umh_core_reconcile_starved_total_seconds 3`
 	})
 
 	Describe("checkWhetherMetricsHealthy", Label("integration"), func() {
-		// Since checkWhetherMetricsHealthy uses Gomega assertions internally, we'll
-		// test it in a way that captures the failures
 		It("should fail when error count exceeds max", func() {
 			// Original metrics have s6_instance with golden-service having 3 errors
 			// which exceeds maxErrorCount (0)
-			failures := InterceptGomegaFailures(func() {
-				checkWhetherMetricsHealthy(testMetrics)
-			})
-			Expect(failures).NotTo(BeEmpty(), "Should have detected errors")
+			metricsErrors := checkWhetherMetricsHealthy(testMetrics, true, true)
+			Expect(metricsErrors).NotTo(BeEmpty(), "Should have detected errors")
 
 			// Check that we caught the golden-service error specifically
 			foundGoldenServiceError := false
-			for _, failure := range failures {
-				if strings.Contains(failure, "golden-service") && strings.Contains(failure, "3") {
+			for _, failure := range metricsErrors {
+				if strings.Contains(failure.Error(), "golden-service") && strings.Contains(failure.Error(), "3") {
 					foundGoldenServiceError = true
 					break
 				}
@@ -140,15 +136,13 @@ umh_core_reconcile_starved_total_seconds 3`
 			noErrorMetrics := strings.ReplaceAll(testMetrics, "umh_core_errors_total{component=\"s6_instance\",instance=\"golden-service\"} 3",
 				"umh_core_errors_total{component=\"s6_instance\",instance=\"golden-service\"} 0")
 
-			failures := InterceptGomegaFailures(func() {
-				checkWhetherMetricsHealthy(noErrorMetrics)
-			})
-			Expect(failures).NotTo(BeEmpty(), "Should have detected starved seconds violation")
+			metricsErrors := checkWhetherMetricsHealthy(noErrorMetrics, true, true)
+			Expect(metricsErrors).NotTo(BeEmpty(), "Should have detected starved seconds violation")
 
 			// Check that we caught the starved seconds issue
 			foundStarvedSecondsError := false
-			for _, failure := range failures {
-				if strings.Contains(failure, "starved seconds") {
+			for _, failure := range metricsErrors {
+				if strings.Contains(failure.Error(), "starved seconds") {
 					foundStarvedSecondsError = true
 					break
 				}
@@ -163,10 +157,8 @@ umh_core_reconcile_starved_total_seconds 3`
 			healthyMetrics = strings.ReplaceAll(healthyMetrics, "umh_core_reconcile_starved_total_seconds 3",
 				"umh_core_reconcile_starved_total_seconds 0")
 
-			failures := InterceptGomegaFailures(func() {
-				checkWhetherMetricsHealthy(healthyMetrics)
-			})
-			Expect(failures).To(BeEmpty(), "Should not have any failures with healthy metrics")
+			metricsErrors := checkWhetherMetricsHealthy(healthyMetrics, true, true)
+			Expect(metricsErrors).To(BeEmpty(), "Should not have any failures with healthy metrics")
 		})
 
 		It("should fail when p99 reconcile time exceeds max", func() {
@@ -180,15 +172,13 @@ umh_core_reconcile_starved_total_seconds 3`
 				"umh_core_reconcile_duration_milliseconds{component=\"control_loop\",instance=\"main\",quantile=\"0.99\"} 16",
 				"umh_core_reconcile_duration_milliseconds{component=\"control_loop\",instance=\"main\",quantile=\"0.99\"} "+strconv.FormatFloat(maxReconcileTime99th+1, 'f', -1, 64))
 
-			failures := InterceptGomegaFailures(func() {
-				checkWhetherMetricsHealthy(highReconcileMetrics)
-			})
-			Expect(failures).NotTo(BeEmpty(), "Should have detected high reconcile time")
+			metricsErrors := checkWhetherMetricsHealthy(highReconcileMetrics, true, true)
+			Expect(metricsErrors).NotTo(BeEmpty(), "Should have detected high reconcile time")
 
 			// Check that we caught the reconcile time issue
 			foundReconcileTimeError := false
-			for _, failure := range failures {
-				if strings.Contains(failure, "reconcile time") && strings.Contains(failure, strconv.FormatFloat(maxReconcileTime99th, 'f', -1, 64)) {
+			for _, failure := range metricsErrors {
+				if strings.Contains(failure.Error(), "reconcile time") && strings.Contains(failure.Error(), strconv.FormatFloat(maxReconcileTime99th, 'f', -1, 64)) {
 					foundReconcileTimeError = true
 					break
 				}
