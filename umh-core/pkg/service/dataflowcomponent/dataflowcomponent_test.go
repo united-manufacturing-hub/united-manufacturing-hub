@@ -12,23 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build test
-// +build test
-
 package dataflowcomponent
 
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	fsmtest "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsmtest"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
-	benthosfsmmanager "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
 	benthosfsmtype "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
 	benthosservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
@@ -151,7 +147,7 @@ var _ = Describe("DataFlowComponentService", func() {
 	Describe("Status", func() {
 		var (
 			cfg                *dataflowcomponentconfig.DataFlowComponentConfig
-			manager            *benthosfsmmanager.BenthosManager
+			manager            *benthosfsmtype.BenthosManager
 			mockBenthosService *benthosservice.MockBenthosService
 			statusService      *DataFlowComponentService
 			benthosName        string
@@ -172,7 +168,7 @@ var _ = Describe("DataFlowComponentService", func() {
 			}
 
 			// Use the official mock manager from the FSM package
-			manager, mockBenthosService = benthosfsmmanager.NewBenthosManagerWithMockedServices("test")
+			manager, mockBenthosService = benthosfsmtype.NewBenthosManagerWithMockedServices("test")
 
 			// Create service with our official mock benthos manager
 			statusService = NewDefaultDataFlowComponentService(componentName, archiveStorage,
@@ -204,10 +200,10 @@ var _ = Describe("DataFlowComponentService", func() {
 
 			// Configure benthos service for proper transitions
 			// First configure for creating -> created -> stopped
-			fsmtest.ConfigureBenthosManagerForState(mockBenthosService, benthosName, benthosfsmtype.OperationalStateStopped)
+			ConfigureBenthosManagerForState(mockBenthosService, benthosName, benthosfsmtype.OperationalStateStopped)
 
 			// Wait for the instance to be created and reach stopped state
-			newTick, err := fsmtest.WaitForBenthosManagerInstanceState(
+			newTick, err := WaitForBenthosManagerInstanceState(
 				ctx,
 				fsm.SystemSnapshot{CurrentConfig: fullCfg, Tick: tick},
 				manager,
@@ -220,10 +216,10 @@ var _ = Describe("DataFlowComponentService", func() {
 			tick = newTick
 
 			// Now configure for transition to starting -> running
-			fsmtest.ConfigureBenthosManagerForState(mockBenthosService, benthosName, benthosfsmtype.OperationalStateActive)
+			ConfigureBenthosManagerForState(mockBenthosService, benthosName, benthosfsmtype.OperationalStateActive)
 
 			// Wait for the instance to reach running state
-			newTick, err = fsmtest.WaitForBenthosManagerInstanceState(
+			newTick, err = WaitForBenthosManagerInstanceState(
 				ctx,
 				fsm.SystemSnapshot{CurrentConfig: fullCfg, Tick: tick},
 				manager,
@@ -466,7 +462,7 @@ var _ = Describe("DataFlowComponentService", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Use the real mock from the FSM package
-			manager, _ := benthosfsmmanager.NewBenthosManagerWithMockedServices("test")
+			manager, _ := benthosfsmtype.NewBenthosManagerWithMockedServices("test")
 			service.benthosManager = manager
 
 			// Configure the mock to return true for reconciled
@@ -486,7 +482,7 @@ var _ = Describe("DataFlowComponentService", func() {
 			mockError := errors.New("test reconcile error")
 
 			// Create a real manager with mocked services
-			mockManager, mockBenthosService := benthosfsmmanager.NewBenthosManagerWithMockedServices("test-error")
+			mockManager, mockBenthosService := benthosfsmtype.NewBenthosManagerWithMockedServices("test-error")
 
 			// Create a service with our mocked manager
 			testService := NewDefaultDataFlowComponentService("test-error-service", archiveStorage,
@@ -532,3 +528,58 @@ var _ = Describe("DataFlowComponentService", func() {
 		})
 	})
 })
+
+// ConfigureBenthosManagerForState configures mock service for proper transitions
+func ConfigureBenthosManagerForState(mockService *benthosservice.MockBenthosService, serviceName string, state string) {
+	// Duplicate implementation from fsmtest package
+	if mockService.ServiceStates == nil {
+		mockService.ServiceStates = make(map[string]*benthosservice.ServiceInfo)
+	}
+	if mockService.ExistingServices == nil {
+		mockService.ExistingServices = make(map[string]bool)
+	}
+	mockService.ExistingServices[serviceName] = true
+
+	// Set appropriate service states based on target state
+	switch state {
+	case benthosfsmtype.OperationalStateStopped:
+		mockService.SetServiceState(serviceName, benthosservice.ServiceStateFlags{
+			IsS6Running: true,
+			S6FSMState:  "running",
+		})
+	case benthosfsmtype.OperationalStateActive:
+		mockService.SetServiceState(serviceName, benthosservice.ServiceStateFlags{
+			IsS6Running:          true,
+			S6FSMState:           "running",
+			IsConfigLoaded:       true,
+			IsHealthchecksPassed: true,
+		})
+	}
+}
+
+// WaitForBenthosManagerInstanceState waits for instance to reach desired state
+func WaitForBenthosManagerInstanceState(
+	ctx context.Context,
+	snapshot fsm.SystemSnapshot,
+	manager *benthosfsmtype.BenthosManager,
+	filesystemService filesystem.Service,
+	instanceName string,
+	expectedState string,
+	maxAttempts int,
+) (uint64, error) {
+	// Duplicate implementation from fsmtest package
+	tick := snapshot.Tick
+	for i := 0; i < maxAttempts; i++ {
+		err, _ := manager.Reconcile(ctx, snapshot, filesystemService)
+		if err != nil {
+			return tick, err
+		}
+		tick++
+
+		instance, found := manager.GetInstance(instanceName)
+		if found && instance.GetCurrentFSMState() == expectedState {
+			return tick, nil
+		}
+	}
+	return tick, fmt.Errorf("instance didn't reach expected state: %s", expectedState)
+}

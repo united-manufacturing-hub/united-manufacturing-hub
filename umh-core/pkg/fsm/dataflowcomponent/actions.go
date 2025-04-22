@@ -48,7 +48,7 @@ func (d *DataflowComponentInstance) CreateInstance(ctx context.Context, filesyst
 
 	err := d.service.AddDataFlowComponentToBenthosManager(ctx, filesystemService, &d.config, d.baseFSMInstance.GetID())
 	if err != nil {
-		if err == dataflowcomponentservice.ErrServiceAlreadyExists {
+		if errors.Is(err, dataflowcomponentservice.ErrServiceAlreadyExists) {
 			d.baseFSMInstance.GetLogger().Debugf("DataflowComponent service %s already exists in Benthos manager", d.baseFSMInstance.GetID())
 			return nil // do not throw an error, as each action is expected to be idempotent
 		}
@@ -148,7 +148,7 @@ func (d *DataflowComponentInstance) UpdateObservedStateOfInstance(ctx context.Co
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
-  
+
 	start := time.Now()
 	info, err := d.getServiceStatus(ctx, filesystemService, tick)
 	if err != nil {
@@ -157,8 +157,8 @@ func (d *DataflowComponentInstance) UpdateObservedStateOfInstance(ctx context.Co
 	metrics.ObserveReconcileTime(logger.ComponentDataFlowComponentInstance, d.baseFSMInstance.GetID()+".getServiceStatus", time.Since(start))
 	// Store the raw service info
 	d.ObservedState.ServiceInfo = info
-  
-  currentState := d.baseFSMInstance.GetCurrentFSMState()
+
+	currentState := d.baseFSMInstance.GetCurrentFSMState()
 	desiredState := d.baseFSMInstance.GetDesiredFSMState()
 	// If both desired and current state are stopped, we can return immediately
 	// There wont be any logs, metrics, etc. to check
