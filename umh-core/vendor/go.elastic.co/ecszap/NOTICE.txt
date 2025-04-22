@@ -61,15 +61,6 @@ THE SOFTWARE.
 --------------------------------------------------------------------
 
 
-Dependency: github.com/magefile/mage
-Version: v1.9.0
-License type: Apache-2.0
-https://github.com/magefile/mage/blob/324c6690ed410efc1d9b597e477c46d42cbeb340/LICENSE:
---------------------------------------------------------------------
-Apache License 2.0
-
-
---------------------------------------------------------------------
 Dependency: github.com/pkg/errors
 Version: v0.9.1
 License type (autodetected): BSD-2-Clause
