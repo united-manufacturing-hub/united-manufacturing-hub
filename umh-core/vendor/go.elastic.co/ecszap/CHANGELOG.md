@@ -3,8 +3,12 @@ Changelog for ecszap
 
 ## unreleased
 
+## 1.0.2
+* Updated zap to v1.24.0 [pull#50](https://github.com/elastic/ecs-logging-go-zap/pull/50)
+* Added "log.origin.function" to caller [pull#52](https://github.com/elastic/ecs-logging-go-zap/pull/52)
+
 ## 1.0.1
-* Updated zap to v1.21.1 [pull#42](https://github.com/elastic/ecs-logging-go-zap/pull/42)
+* Updated zap to v1.21.0 [pull#42](https://github.com/elastic/ecs-logging-go-zap/pull/42)
 
 ## 1.0.0
 
