@@ -16,6 +16,7 @@ package integration_test
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
@@ -583,13 +584,17 @@ func printContainerDebugInfo() {
 }
 
 func runDockerCommand(args ...string) (string, error) {
+	return runDockerCommandWithCtx(context.Background(), args...)
+}
+
+func runDockerCommandWithCtx(ctx context.Context, args ...string) (string, error) {
 	fmt.Printf("Running docker command: %v\n", args)
 	// Check if we use docker or podman
 	dockerCmd := "docker"
 	if _, err := exec.LookPath("podman"); err == nil {
 		dockerCmd = "podman"
 	}
-	cmd := exec.Command(dockerCmd, args...)
+	cmd := exec.CommandContext(ctx, dockerCmd, args...)
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	cmd.Stderr = &out
