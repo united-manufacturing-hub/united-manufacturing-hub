@@ -26,6 +26,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	benthosfsmtype "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
+	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 	benthosservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
@@ -530,31 +531,142 @@ var _ = Describe("DataFlowComponentService", func() {
 })
 
 // ConfigureBenthosManagerForState configures mock service for proper transitions
-func ConfigureBenthosManagerForState(mockService *benthosservice.MockBenthosService, serviceName string, state string) {
-	// Duplicate implementation from fsmtest package
-	if mockService.ServiceStates == nil {
-		mockService.ServiceStates = make(map[string]*benthosservice.ServiceInfo)
-	}
+func ConfigureBenthosManagerForState(mockService *benthosservice.MockBenthosService, serviceName string, targetState string) {
+	// Make sure the service exists in the mock
 	if mockService.ExistingServices == nil {
 		mockService.ExistingServices = make(map[string]bool)
 	}
 	mockService.ExistingServices[serviceName] = true
 
-	// Set appropriate service states based on target state
-	switch state {
+	// Make sure service state is initialized
+	if mockService.ServiceStates == nil {
+		mockService.ServiceStates = make(map[string]*benthosservice.ServiceInfo)
+	}
+	if mockService.ServiceStates[serviceName] == nil {
+		mockService.ServiceStates[serviceName] = &benthosservice.ServiceInfo{}
+	}
+
+	// Configure the service for the target state
+	TransitionToBenthosState(mockService, serviceName, targetState)
+
+}
+
+func TransitionToBenthosState(mockService *benthosservice.MockBenthosService, serviceName string, targetState string) {
+	switch targetState {
 	case benthosfsmtype.OperationalStateStopped:
-		mockService.SetServiceState(serviceName, benthosservice.ServiceStateFlags{
-			IsS6Running: true,
-			S6FSMState:  "running",
+		SetupBenthosServiceState(mockService, serviceName, benthosservice.ServiceStateFlags{
+			IsS6Running:          false,
+			S6FSMState:           s6fsm.OperationalStateStopped,
+			IsConfigLoaded:       false,
+			IsHealthchecksPassed: false,
+		})
+	case benthosfsmtype.OperationalStateStarting:
+		SetupBenthosServiceState(mockService, serviceName, benthosservice.ServiceStateFlags{
+			IsS6Running:          false,
+			S6FSMState:           s6fsm.OperationalStateStopped,
+			IsConfigLoaded:       false,
+			IsHealthchecksPassed: false,
+		})
+	case benthosfsmtype.OperationalStateStartingConfigLoading:
+		SetupBenthosServiceState(mockService, serviceName, benthosservice.ServiceStateFlags{
+			IsS6Running:          true,
+			S6FSMState:           s6fsm.OperationalStateRunning,
+			IsConfigLoaded:       false,
+			IsHealthchecksPassed: false,
+		})
+	case benthosfsmtype.OperationalStateIdle:
+		SetupBenthosServiceState(mockService, serviceName, benthosservice.ServiceStateFlags{
+			IsS6Running:            true,
+			S6FSMState:             s6fsm.OperationalStateRunning,
+			IsConfigLoaded:         true,
+			IsHealthchecksPassed:   true,
+			IsRunningWithoutErrors: true,
 		})
 	case benthosfsmtype.OperationalStateActive:
-		mockService.SetServiceState(serviceName, benthosservice.ServiceStateFlags{
-			IsS6Running:          true,
-			S6FSMState:           "running",
-			IsConfigLoaded:       true,
-			IsHealthchecksPassed: true,
+		SetupBenthosServiceState(mockService, serviceName, benthosservice.ServiceStateFlags{
+			IsS6Running:            true,
+			S6FSMState:             s6fsm.OperationalStateRunning,
+			IsConfigLoaded:         true,
+			IsHealthchecksPassed:   true,
+			IsRunningWithoutErrors: true,
+			HasProcessingActivity:  true,
+		})
+	case benthosfsmtype.OperationalStateDegraded:
+		SetupBenthosServiceState(mockService, serviceName, benthosservice.ServiceStateFlags{
+			IsS6Running:            true,
+			S6FSMState:             s6fsm.OperationalStateRunning,
+			IsConfigLoaded:         true,
+			IsHealthchecksPassed:   false,
+			IsRunningWithoutErrors: false,
+			HasProcessingActivity:  true,
+		})
+	case benthosfsmtype.OperationalStateStopping:
+		SetupBenthosServiceState(mockService, serviceName, benthosservice.ServiceStateFlags{
+			IsS6Running:          false,
+			S6FSMState:           s6fsm.OperationalStateStopping,
+			IsConfigLoaded:       false,
+			IsHealthchecksPassed: false,
 		})
 	}
+}
+
+func SetupBenthosServiceState(
+	mockService *benthosservice.MockBenthosService,
+	serviceName string,
+	flags benthosservice.ServiceStateFlags,
+) {
+	// Ensure service exists in mock
+	mockService.ExistingServices[serviceName] = true
+
+	// Create service info if it doesn't exist
+	if mockService.ServiceStates[serviceName] == nil {
+		mockService.ServiceStates[serviceName] = &benthosservice.ServiceInfo{}
+	}
+
+	// Set S6 FSM state
+	if flags.S6FSMState != "" {
+		mockService.ServiceStates[serviceName].S6FSMState = flags.S6FSMState
+	}
+
+	// Update S6 observed state
+	if flags.IsS6Running {
+		mockService.ServiceStates[serviceName].S6ObservedState.ServiceInfo = s6svc.ServiceInfo{
+			Status: s6svc.ServiceUp,
+			Uptime: 10, // Set uptime to 10s to simulate config loaded
+			Pid:    1234,
+		}
+	} else {
+		mockService.ServiceStates[serviceName].S6ObservedState.ServiceInfo = s6svc.ServiceInfo{
+			Status: s6svc.ServiceDown,
+		}
+	}
+
+	// Update health check status
+	if flags.IsHealthchecksPassed {
+		mockService.ServiceStates[serviceName].BenthosStatus.HealthCheck = benthosservice.HealthCheck{
+			IsLive:  true,
+			IsReady: true,
+		}
+	} else {
+		mockService.ServiceStates[serviceName].BenthosStatus.HealthCheck = benthosservice.HealthCheck{
+			IsLive:  false,
+			IsReady: false,
+		}
+	}
+
+	// Setup metrics state if needed
+	if flags.HasProcessingActivity {
+		mockService.ServiceStates[serviceName].BenthosStatus.MetricsState = &benthosservice.BenthosMetricsState{
+			IsActive: true,
+		}
+	} else if mockService.ServiceStates[serviceName].BenthosStatus.MetricsState == nil {
+		mockService.ServiceStates[serviceName].BenthosStatus.MetricsState = &benthosservice.BenthosMetricsState{
+			IsActive: false,
+		}
+	}
+
+	// Store the service state flags directly
+	mockService.SetServiceState(serviceName, flags)
 }
 
 // WaitForBenthosManagerInstanceState waits for instance to reach desired state
