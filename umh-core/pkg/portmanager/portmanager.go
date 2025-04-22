@@ -376,3 +376,11 @@ func (pm *DefaultPortManager) PostReconcile(ctx context.Context) error {
 	// when instances are removed via ReleasePort
 	return nil
 }
+
+// ResetDefaultPortManager resets the singleton instance for testing purposes
+func ResetDefaultPortManager() {
+	defaultPortManagerMutex.Lock()
+	defer defaultPortManagerMutex.Unlock()
+	defaultPortManagerInstance = nil
+	defaultPortManagerOnce = sync.Once{}
+}
