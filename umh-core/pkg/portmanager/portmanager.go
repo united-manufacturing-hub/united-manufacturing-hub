@@ -67,8 +67,80 @@ type DefaultPortManager struct {
 	nextPort int
 }
 
-// NewDefaultPortManager creates a new DefaultPortManager with the given port range
+// Global singleton instance of DefaultPortManager
+var (
+	defaultPortManagerInstance *DefaultPortManager
+	defaultPortManagerOnce     sync.Once
+	defaultPortManagerMutex    sync.RWMutex
+)
+
+// GetDefaultPortManager returns the singleton instance of DefaultPortManager.
+// If the instance hasn't been initialized yet, it returns nil.
+func GetDefaultPortManager() *DefaultPortManager {
+	defaultPortManagerMutex.RLock()
+	defer defaultPortManagerMutex.RUnlock()
+	return defaultPortManagerInstance
+}
+
+// InitDefaultPortManager initializes the singleton DefaultPortManager with the given port range.
+// It ensures the DefaultPortManager is initialized only once.
+// Returns error if initialization fails or if it was already initialized with different parameters.
+func InitDefaultPortManager(minPort, maxPort int) (*DefaultPortManager, error) {
+	var initErr error
+
+	defaultPortManagerOnce.Do(func() {
+		defaultPortManagerMutex.Lock()
+		defer defaultPortManagerMutex.Unlock()
+
+		manager, err := newDefaultPortManager(minPort, maxPort)
+		if err != nil {
+			initErr = err
+			return
+		}
+		defaultPortManagerInstance = manager
+	})
+
+	if initErr != nil {
+		return nil, initErr
+	}
+
+	// Check if already initialized with different parameters
+	defaultPortManagerMutex.RLock()
+	defer defaultPortManagerMutex.RUnlock()
+
+	if defaultPortManagerInstance.minPort != minPort || defaultPortManagerInstance.maxPort != maxPort {
+		return defaultPortManagerInstance, fmt.Errorf(
+			"port manager already initialized with different range (%d-%d)",
+			defaultPortManagerInstance.minPort, defaultPortManagerInstance.maxPort,
+		)
+	}
+
+	return defaultPortManagerInstance, nil
+}
+
+// NewDefaultPortManager creates a new DefaultPortManager with the given port range.
+// If a singleton instance already exists, it returns that instance.
+// Otherwise, it creates and initializes the singleton instance.
 func NewDefaultPortManager(minPort, maxPort int) (*DefaultPortManager, error) {
+	// Check if singleton already exists
+	if existing := GetDefaultPortManager(); existing != nil {
+		// Return the existing instance along with a warning if parameters don't match
+		if existing.minPort != minPort || existing.maxPort != maxPort {
+			return existing, fmt.Errorf(
+				"warning: using existing port manager with different range (%d-%d) than requested (%d-%d)",
+				existing.minPort, existing.maxPort, minPort, maxPort,
+			)
+		}
+		return existing, nil
+	}
+
+	// Initialize singleton if it doesn't exist
+	return InitDefaultPortManager(minPort, maxPort)
+}
+
+// newDefaultPortManager is an internal function that creates a new DefaultPortManager instance
+// without using the singleton pattern. This is used by InitDefaultPortManager.
+func newDefaultPortManager(minPort, maxPort int) (*DefaultPortManager, error) {
 	if minPort <= 0 || maxPort <= 0 {
 		return nil, fmt.Errorf("port range must be positive")
 	}
