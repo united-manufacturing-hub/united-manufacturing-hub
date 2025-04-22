@@ -126,7 +126,21 @@ func InitDefaultPortManager(minPort, maxPort int) (*DefaultPortManager, error) {
 // If a singleton instance already exists, it returns that instance.
 // Otherwise, it creates and initializes the singleton instance.
 func NewDefaultPortManager(minPort, maxPort int) (*DefaultPortManager, error) {
-	// Check if singleton already exists
+	// First validate inputs before checking the singleton
+	if minPort <= 0 || maxPort <= 0 {
+		return nil, fmt.Errorf("port range must be positive")
+	}
+	if minPort >= maxPort {
+		return nil, fmt.Errorf("minPort must be less than maxPort")
+	}
+	if minPort < 1024 {
+		return nil, fmt.Errorf("minPort must be at least 1024 (non-privileged)")
+	}
+	if maxPort > 65535 {
+		return nil, fmt.Errorf("maxPort must be at most 65535")
+	}
+
+	// Only check existing singleton if inputs are valid
 	if existing := GetDefaultPortManager(); existing != nil {
 		// Return the existing instance along with a warning if parameters don't match
 		if existing.minPort != minPort || existing.maxPort != maxPort {
