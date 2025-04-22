@@ -170,9 +170,10 @@ func (r *RedpandaInstance) UpdateObservedStateOfInstance(ctx context.Context, fi
 		return ctx.Err()
 	}
 
-	// Skip health checks if the desired state or current state indicates stopped/stopping
 	currentState := r.baseFSMInstance.GetCurrentFSMState()
 	desiredState := r.baseFSMInstance.GetDesiredFSMState()
+
+	// Skip health checks if the desired state or current state indicates stopped/stopping
 	if desiredState == OperationalStateStopped || currentState == OperationalStateStopped || currentState == OperationalStateStopping {
 		// For stopped instances, just check if the S6 service exists but don't do health checks
 		// This minimal information is sufficient for reconciliation
@@ -182,6 +183,12 @@ func (r *RedpandaInstance) UpdateObservedStateOfInstance(ctx context.Context, fi
 			r.ObservedState = RedpandaObservedState{}
 			return nil
 		}
+	}
+
+	// If both desired and current state are stopped, we can return immediately
+	// There wont be any logs, metrics, etc. to check
+	if desiredState == OperationalStateStopped && currentState == OperationalStateStopped {
+		return nil
 	}
 
 	// Start an errgroup with the **same context** so if one sub-task
