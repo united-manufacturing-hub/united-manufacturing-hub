@@ -111,7 +111,7 @@ func NewControlLoop(configManager config.ConfigManager) *ControlLoop {
 		benthos.NewBenthosManager(constants.DefaultManagerName, archiveStorage),
 		container.NewContainerManager(constants.DefaultManagerName, archiveStorage),
 		redpanda.NewRedpandaManager(constants.DefaultManagerName, archiveStorage),
-    	nmap.NewNmapManager(constants.DefaultManagerName,archiveStorage),
+		nmap.NewNmapManager(constants.DefaultManagerName, archiveStorage),
 		dataflowcomponent.NewDataflowComponentManager(constants.DefaultManagerName, archiveStorage),
 	}
 
@@ -410,8 +410,10 @@ func (c *ControlLoop) Stop(ctx context.Context) error {
 		return fmt.Errorf("starvation checker is not set")
 	}
 
-	if err := c.archiveStorage.Close(); err != nil {
-		return fmt.Errorf("failed to close archive storage: %w", err)
+	if c.archiveStorage != nil {
+		if err := c.archiveStorage.Close(); err != nil {
+			return fmt.Errorf("failed to close archive storage: %w", err)
+		}
 	}
 
 	// Signal the control loop to stop
