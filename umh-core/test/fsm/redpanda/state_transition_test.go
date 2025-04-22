@@ -49,6 +49,7 @@ var _ = Describe("RedpandaService State Transitions", func() {
 		mockS6Service = s6service.NewMockService()
 		mockFileSystem = filesystem.NewMockFileSystem()
 		mockMonitorService = redpanda_monitor.NewMockRedpandaMonitorService()
+		archiveStorage = storage.NewArchiveEventStorage(100)
 
 		// Set up mock logs for S6 service
 		mockS6Service.GetLogsResult = createRedpandaMockLogs()

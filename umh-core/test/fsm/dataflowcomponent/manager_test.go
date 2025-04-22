@@ -27,14 +27,8 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
-	dataflowcomponentfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
 	dataflowcomponentsvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/dataflowcomponent"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
-)
-
-// Make the constants available directly
-const (
-	OperationalStateStopped = "stopped"
 )
 
 // Following the CursorRules, we never call manager.Reconcile(...) directly in loops.
@@ -42,7 +36,7 @@ const (
 
 var _ = Describe("DataflowComponentManager", func() {
 	var (
-		manager     *dataflowcomponentfsm.DataflowComponentManager
+		manager     *dataflowcomponent.DataflowComponentManager
 		mockService *dataflowcomponentsvc.MockDataFlowComponentService
 		ctx         context.Context
 		tick        uint64
@@ -86,12 +80,12 @@ var _ = Describe("DataflowComponentManager", func() {
 			componentName := "test-stopped-component"
 			cfg := config.FullConfig{
 				DataFlow: []config.DataFlowComponentConfig{
-					fsmtest.CreateDataflowComponentTestConfig(componentName, OperationalStateStopped),
+					fsmtest.CreateDataflowComponentTestConfig(componentName, dataflowcomponent.OperationalStateStopped),
 				},
 			}
 
 			// Configure the mock service to allow transition to Stopped
-			fsmtest.ConfigureDataflowComponentManagerForState(mockService, componentName, OperationalStateStopped)
+			fsmtest.ConfigureDataflowComponentManagerForState(mockService, componentName, dataflowcomponent.OperationalStateStopped)
 
 			// Wait for instance creation and stable 'Stopped' state
 			newTick, err := fsmtest.WaitForDataflowComponentManagerInstanceState(
@@ -100,7 +94,7 @@ var _ = Describe("DataflowComponentManager", func() {
 				manager,
 				mockFS,
 				componentName,
-				OperationalStateStopped,
+				dataflowcomponent.OperationalStateStopped,
 				10,
 			)
 			tick = newTick
@@ -109,7 +103,7 @@ var _ = Describe("DataflowComponentManager", func() {
 			// Double-check the manager state
 			inst, exists := manager.GetInstance(fmt.Sprintf("dataflow-%s", componentName))
 			Expect(exists).To(BeTrue())
-			Expect(inst.GetCurrentFSMState()).To(Equal(OperationalStateStopped))
+			Expect(inst.GetCurrentFSMState()).To(Equal(dataflowcomponent.OperationalStateStopped))
 		})
 
 		It("should create a service in active state and reach idle or active", func() {
@@ -280,7 +274,7 @@ var _ = Describe("DataflowComponentManager", func() {
 
 			inst2, exists := manager.GetInstance(fmt.Sprintf("dataflow-%s", comp2Name))
 			Expect(exists).To(BeTrue())
-			Expect(inst2.GetCurrentFSMState()).To(Equal(OperationalStateStopped))
+			Expect(inst2.GetCurrentFSMState()).To(Equal(dataflowcomponent.OperationalStateStopped))
 		})
 	})
 

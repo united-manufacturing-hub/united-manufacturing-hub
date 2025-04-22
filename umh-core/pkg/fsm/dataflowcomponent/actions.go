@@ -250,13 +250,18 @@ func (d *DataflowComponentInstance) IsFailedStateEventObserved(ctx context.Conte
 		States:    d.DataflowComponentBenthosFailureStates(),
 	}
 
+	if d.archiveStorage == nil {
+		d.baseFSMInstance.GetLogger().Warnf("archiveStorage is not initialized- skippling failed-state detection")
+		return false
+	}
+
 	dataPoints, err := d.archiveStorage.GetDataPoints(ctx, d.baseFSMInstance.GetID(), options)
 	if err != nil {
 		d.baseFSMInstance.GetLogger().Warnf("Failed to query state history: %v", err)
 		return false // Default to false if we can't query
 	}
 
-	d.baseFSMInstance.GetLogger().Debugf("Found %d data points with failed states. Data points: %v", len(dataPoints), dataPoints)
+	d.baseFSMInstance.GetLogger().Infof("Found %d data points with failed states. Data points: %v", len(dataPoints), dataPoints)
 	// If we found any data points with this state, return true
 	return len(dataPoints) > 0
 }

@@ -17,7 +17,7 @@ package storage
 
 import (
 	"context"
-	"errors"
+	"fmt"
 	"sort"
 	"sync"
 	"time"
@@ -117,7 +117,7 @@ func (a *ArchiveEventStorage) StoreDataPoint(ctx context.Context, dataPoint Data
 		return ctx.Err()
 	default:
 		// Queue is full
-		return errors.New("storage queue is full, try again later")
+		return fmt.Errorf("archive storage queue saturated (size=%d), event dropped", cap(a.dataPointQueue))
 	}
 }
 
@@ -189,5 +189,13 @@ func filterByStates(dataPoints []DataPoint, states []string) []DataPoint {
 
 func (a *ArchiveEventStorage) Close() error {
 	close(a.done)
+	// gracfully drain the queue
+	for len(a.dataPointQueue) > 0 {
+		dp := <-a.dataPointQueue
+		a.mu.Lock()
+		a.dataPoints[dp.Record.ID] = append(a.dataPoints[dp.Record.ID], dp)
+		a.mu.Unlock()
+
+	}
 	return nil
 }

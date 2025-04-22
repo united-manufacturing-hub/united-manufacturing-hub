@@ -66,9 +66,11 @@ func WaitForDataflowComponentManagerInstanceState(
 		tick++
 
 		inst, found := manager.GetInstance(fmt.Sprintf("dataflow-%s", instanceName))
-		currentState = inst.GetCurrentFSMState()
-		if found && currentState == desiredState {
-			return tick, nil
+		if found {
+			currentState = inst.GetCurrentFSMState()
+			if currentState == desiredState {
+				return tick, nil
+			}
 		}
 	}
 	return tick, fmt.Errorf("instance %s did not reach state %s after %d attempts. Current state: %s",
