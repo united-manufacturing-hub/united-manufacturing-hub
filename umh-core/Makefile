@@ -59,7 +59,7 @@ install:
 	go install go.uber.org/nilaway/cmd/nilaway@$(NILWAY_VERSION)
 	go install github.com/onsi/ginkgo/v2/ginkgo@$(GINKGO_VERSION)
 	go install github.com/evilmartians/lefthook@latest
-	go install github.com/golangci/golangci-lint/cmd/golangci-lint@v2.54.0
+	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.1.2
 
 download-docker-binaries:
 	@mkdir -p .docker-cache/s6-overlay .docker-cache/benthos .docker-cache/redpanda
