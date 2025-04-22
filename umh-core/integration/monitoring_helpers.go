@@ -45,7 +45,7 @@ import (
 // monitorHealth checks the metrics and golden service.
 func monitorHealth() {
 	// 1) Check metrics
-	checkMetricsHealthy()
+	failOnMetricsHealthIssue()
 	GinkgoWriter.Println("✅ Metrics are healthy")
 
 	// 2) Check Golden service
@@ -84,16 +84,37 @@ func printSystemInformation() {
 	}
 }
 
-func checkMetricsHealthy() {
+// failOnMetricsHealthIssue expects the metrics to be healthy, otherwise it fails the test
+func failOnMetricsHealthIssue() {
+	data, err := getMetricsHealth()
+	Expect(err).NotTo(HaveOccurred(), "Metrics endpoint should be healthy")
+	metricsErrors := checkWhetherMetricsHealthy(string(data), true, true)
+	Expect(metricsErrors).To(BeEmpty(), "Metrics should be healthy")
+}
+
+// reportOnMetricsHealthIssue is similar to failOnMetricsHealthIssue, but it returns an error instead of failing the test, allowing the caller to handle it
+func reportOnMetricsHealthIssue(enforceP99ReconcileTime bool, enforceP95ReconcileTime bool) error {
+	data, err := getMetricsHealth()
+	if err != nil {
+		return fmt.Errorf("failed to get metrics: %w", err)
+	}
+	metricsErrors := checkWhetherMetricsHealthy(string(data), enforceP99ReconcileTime, enforceP95ReconcileTime)
+	if len(metricsErrors) > 0 {
+		return fmt.Errorf("metrics are not healthy: %v", metricsErrors)
+	}
+	return nil
+}
+
+func getMetricsHealth() ([]byte, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, "GET", GetMetricsURL(), nil)
 	if err != nil {
-		Fail(fmt.Errorf("failed to create request: %w", err).Error())
+		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		Fail(fmt.Errorf("failed to get metrics: %w", err).Error())
+		return nil, fmt.Errorf("failed to get metrics: %w", err)
 	}
 	defer func() {
 		if err := resp.Body.Close(); err != nil {
@@ -102,15 +123,15 @@ func checkMetricsHealthy() {
 	}()
 
 	if resp.StatusCode != http.StatusOK {
-		Fail(fmt.Sprintf("Metrics endpoint returned non-200: %v", resp.StatusCode))
+		return nil, fmt.Errorf("metrics endpoint returned non-200: %v", resp.StatusCode)
 	}
 
 	data, err := io.ReadAll(resp.Body)
 	if err != nil {
-		Fail(fmt.Errorf("failed to read metrics: %w", err).Error())
+		return nil, fmt.Errorf("failed to read metrics: %w", err)
 	}
 
-	checkWhetherMetricsHealthy(string(data))
+	return data, nil
 }
 
 // checkGoldenService sends a test request to the golden service and checks that it returns a 200 status code

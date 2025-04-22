@@ -38,6 +38,13 @@ const (
 
 	// DefaultMinimumRemainingTimePerManager is the default minimum remaining time for a manager.
 	DefaultMinimumRemainingTimePerManager = time.Millisecond * 50
+
+	// maximum times in a row the same manager may return (reconciled = true)
+	// before we put it into a cooling‑off period
+	StarvationLimit = 3
+
+	// number of control‑loop ticks a manager stays in cooldown
+	CoolDownTicks = 5
 )
 
 // FilesAndDirectoriesToIgnore is a list of files and directories that we will not read.

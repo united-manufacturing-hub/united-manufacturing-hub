@@ -54,6 +54,8 @@ CPUS = 2
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "0.0.0-dev")
 
 install:
+	sudo chown vscode:vscode data || true
+	sudo chown vscode:vscode tmp || true
 	go install go.uber.org/nilaway/cmd/nilaway@$(NILWAY_VERSION)
 	go install github.com/onsi/ginkgo/v2/ginkgo@$(GINKGO_VERSION)
 	go install github.com/evilmartians/lefthook@latest
@@ -183,6 +185,12 @@ cleanup-ci:
 	echo "Pruning Docker system"
 	docker system prune -f --volumes || true
 
+cleanup-tmp:
+	rm -rf ./tmp/*
+
+cleanup-data:
+	rm -rf ./data/*
+
 vet:
 	go vet -tags=test ./...
 
@@ -196,11 +204,14 @@ test: vet nilaway lint
 	go test -v -tags=test ./...
 
 unit-test: vet nilaway lint
-	ginkgo -r -v --tags=test --label-filter='!integration' --fail-fast ./...
+	ginkgo -r -v --tags=test --label-filter='!integration && !redpanda-extended' --fail-fast ./...
 
 
 integration-test: stop-all-pods vet nilaway lint
 	ginkgo -r -v --tags=test --label-filter='integration' --fail-fast ./...
+
+redpanda-extended-test: stop-all-pods vet nilaway
+	ginkgo -r -v --tags=test --label-filter='redpanda-extended' --fail-fast --timeout=1.5h ./...
 
 
 # integration-test-ci: Runs integration tests in CI environments with proper version tagging
