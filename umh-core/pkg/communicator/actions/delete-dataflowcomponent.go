@@ -41,11 +41,6 @@ type DeleteDataflowComponentAction struct {
 	actionLogger    *zap.SugaredLogger
 }
 
-// DeleteDFCPayload contains the UUID of the component to delete
-type DeleteDFCPayload struct {
-	UUID string `json:"uuid"`
-}
-
 // NewDeleteDataflowComponentAction creates a new DeleteDataflowComponentAction with the provided parameters.
 // This constructor is primarily used for testing to enable dependency injection, though it can be used
 // in production code as well. It initializes the action with the necessary fields but doesn't
@@ -65,7 +60,7 @@ func NewDeleteDataflowComponentAction(userEmail string, actionUUID uuid.UUID, in
 // It parses the UUID string into a valid UUID object for later use.
 func (a *DeleteDataflowComponentAction) Parse(payload interface{}) error {
 	// Parse the payload to get the UUID
-	parsedPayload, err := ParseActionPayload[DeleteDFCPayload](payload)
+	parsedPayload, err := ParseActionPayload[models.DeleteDFCPayload](payload)
 	if err != nil {
 		return fmt.Errorf("failed to parse payload: %v", err)
 	}

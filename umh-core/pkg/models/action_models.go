@@ -377,3 +377,8 @@ type CustomDFCPayload struct {
 		} `json:"pipeline"`
 	} `json:"customDataFlowComponent"`
 }
+
+// DeleteDFCPayload contains the UUID of the component to delete
+type DeleteDFCPayload struct {
+	UUID string `json:"uuid"`
+}
