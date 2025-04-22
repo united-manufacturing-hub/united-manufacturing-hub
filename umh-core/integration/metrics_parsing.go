@@ -21,7 +21,6 @@ import (
 	"strings"
 
 	. "github.com/onsi/ginkgo/v2" // nolint: staticcheck // Ginkgo is designed to be used with dot imports
-	. "github.com/onsi/gomega"    // nolint: staticcheck // Gomega is designed to be used with dot imports
 )
 
 // parseMetricValue scans the metrics body for a line that starts with `metricName`

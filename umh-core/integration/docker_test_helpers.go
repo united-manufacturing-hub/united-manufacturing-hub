@@ -444,7 +444,10 @@ func printContainerLogs() {
 
 	// If the dir exists, remove it
 	if _, err := os.Stat(tmpDir); err == nil {
-		os.RemoveAll(tmpDir)
+		err = os.RemoveAll(tmpDir)
+		if err != nil {
+			fmt.Printf("Failed to remove tmp dir: %v\n", err)
+		}
 	}
 	// Create the dir
 	err = os.MkdirAll(tmpDir, 0o777)
