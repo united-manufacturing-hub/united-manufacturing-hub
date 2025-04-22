@@ -48,7 +48,7 @@ func (d *DataflowComponentInstance) CreateInstance(ctx context.Context, filesyst
 
 	err := d.service.AddDataFlowComponentToBenthosManager(ctx, filesystemService, &d.config, d.baseFSMInstance.GetID())
 	if err != nil {
-		if err == dataflowcomponentservice.ErrServiceAlreadyExists {
+		if errors.Is(err, dataflowcomponentservice.ErrServiceAlreadyExists) {
 			d.baseFSMInstance.GetLogger().Debugf("DataflowComponent service %s already exists in Benthos manager", d.baseFSMInstance.GetID())
 			return nil // do not throw an error, as each action is expected to be idempotent
 		}
@@ -158,6 +158,14 @@ func (d *DataflowComponentInstance) UpdateObservedStateOfInstance(ctx context.Co
 	// Store the raw service info
 	d.ObservedState.ServiceInfo = info
 
+	currentState := d.baseFSMInstance.GetCurrentFSMState()
+	desiredState := d.baseFSMInstance.GetDesiredFSMState()
+	// If both desired and current state are stopped, we can return immediately
+	// There wont be any logs, metrics, etc. to check
+	if desiredState == OperationalStateStopped && currentState == OperationalStateStopped {
+		return nil
+	}
+
 	// Fetch the actual Benthos config from the service
 	start = time.Now()
 	observedConfig, err := d.service.GetConfig(ctx, filesystemService, d.baseFSMInstance.GetID())
@@ -192,6 +200,7 @@ func (d *DataflowComponentInstance) UpdateObservedStateOfInstance(ctx context.Co
 			d.baseFSMInstance.GetLogger().Debugf("Config differences detected but service does not exist yet, skipping update")
 		}
 	}
+
 	return nil
 }
 
@@ -250,13 +259,18 @@ func (d *DataflowComponentInstance) IsFailedStateEventObserved(ctx context.Conte
 		States:    d.DataflowComponentBenthosFailureStates(),
 	}
 
+	if d.archiveStorage == nil {
+		d.baseFSMInstance.GetLogger().Warnf("archiveStorage is not initialized- skippling failed-state detection")
+		return false
+	}
+
 	dataPoints, err := d.archiveStorage.GetDataPoints(ctx, d.baseFSMInstance.GetID(), options)
 	if err != nil {
 		d.baseFSMInstance.GetLogger().Warnf("Failed to query state history: %v", err)
 		return false // Default to false if we can't query
 	}
 
-	d.baseFSMInstance.GetLogger().Debugf("Found %d data points with failed states. Data points: %v", len(dataPoints), dataPoints)
+	d.baseFSMInstance.GetLogger().Infof("Found %d data points with failed states. Data points: %v", len(dataPoints), dataPoints)
 	// If we found any data points with this state, return true
 	return len(dataPoints) > 0
 }

@@ -14,7 +14,10 @@
 
 package nmap
 
-import "errors"
+import (
+	"errors"
+	"fmt"
+)
 
 var (
 	// ErrServiceNotExist indicates the requested service does not exist
@@ -26,3 +29,8 @@ var (
 	// ErrScanFailed indicates a scan operation failed
 	ErrScanFailed = errors.New("nmap scan failed")
 )
+
+// WrapMetricsError wraps an error with additional context
+func WrapMetricsError(baseErr error, message string) error {
+	return fmt.Errorf("%s: %w", message, baseErr)
+}
