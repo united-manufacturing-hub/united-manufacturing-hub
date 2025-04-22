@@ -24,6 +24,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
@@ -34,9 +35,7 @@ import (
 // IAgentMonitorService defines the interface for the agent monitor service
 type IAgentMonitorService interface {
 	// GetStatus returns the status of the agent, this is the main feature of this service
-	Status(ctx context.Context, cfg config.FullConfig) (*ServiceInfo, error)
-	// GetAgentLogs retrieves the logs for the umh-core service from the log file
-	GetAgentLogs(ctx context.Context) ([]s6.LogEntry, error)
+	Status(ctx context.Context, systemSnapshot fsm.SystemSnapshot) (*ServiceInfo, error)
 	// GetFilesystemService returns the filesystem service - used for testing only
 	GetFilesystemService() filesystem.Service
 }
@@ -50,6 +49,11 @@ type ServiceInfo struct {
 	AgentMetrics map[string]interface{} `json:"agentMetrics,omitempty"`
 	// Release: Channel, Version, Supported Feature
 	Release *models.Release `json:"release"`
+
+	// Health: Overall, Latency, Release
+	OverallHealth models.HealthCategory `json:"overallHealth"`
+	LatencyHealth models.HealthCategory `json:"latencyHealth"`
+	ReleaseHealth models.HealthCategory `json:"releaseHealth"`
 }
 
 // AgentMonitorService implements the Service interface
@@ -99,7 +103,8 @@ func (c *AgentMonitorService) GetFilesystemService() filesystem.Service {
 }
 
 // Status collects and returns the current agent status
-func (c *AgentMonitorService) Status(ctx context.Context, cfg config.FullConfig) (*ServiceInfo, error) {
+func (c *AgentMonitorService) Status(ctx context.Context, systemSnapshot fsm.SystemSnapshot) (*ServiceInfo, error) {
+
 	// Create a new status with default health (Active)
 	status := &ServiceInfo{
 		Location:     map[int]string{},
@@ -109,10 +114,18 @@ func (c *AgentMonitorService) Status(ctx context.Context, cfg config.FullConfig)
 		Release:      &models.Release{},
 	}
 
+	status.OverallHealth = models.Active
+
 	// Get the location from the config
-	location := cfg.Agent.Location
+	location := systemSnapshot.CurrentConfig.Agent.Location
 	if location != nil {
 		status.Location = location
+	} else {
+		c.logger.Warn("No location found set in the config, using fallback 'Unknown location")
+		location = map[int]string{}
+		location[0] = "Unknown location" // fallback
+		status.Location = location
+		status.OverallHealth = models.Degraded
 	}
 
 	// Update last collected timestamp
@@ -122,9 +135,10 @@ func (c *AgentMonitorService) Status(ctx context.Context, cfg config.FullConfig)
 	// TODO: get latency from the communication module
 
 	// Get the Agent Logs
-	logs, err := c.GetAgentLogs(ctx)
+	logs, err := c.getAgentLogs(ctx)
 	if err != nil {
 		c.logger.Warnf("Failed to get agent logs: %v", err)
+		status.OverallHealth = models.Degraded
 		return nil, err
 	} else {
 		status.AgentLogs = logs
@@ -134,8 +148,10 @@ func (c *AgentMonitorService) Status(ctx context.Context, cfg config.FullConfig)
 	// TODO: get its own metrics either by calling its own metrics endpoint of accessing the struct from the metrics package directly
 
 	// Get the Release Info
-	release, err := c.getReleaseInfo(cfg)
+	release, err := c.getReleaseInfo(systemSnapshot.CurrentConfig)
 	if err != nil {
+		c.logger.Warnf("Failed to get release info: %v", err)
+		status.OverallHealth = models.Degraded
 		return nil, err
 	}
 	status.Release = release
@@ -157,8 +173,8 @@ func (c *AgentMonitorService) getReleaseInfo(cfg config.FullConfig) (*models.Rel
 	return release, nil
 }
 
-// GetAgentLogs retrieves the logs for the umh-core service from the log file
-func (c *AgentMonitorService) GetAgentLogs(ctx context.Context) ([]s6.LogEntry, error) {
+// getAgentLogs retrieves the logs for the umh-core service from the log file
+func (c *AgentMonitorService) getAgentLogs(ctx context.Context) ([]s6.LogEntry, error) {
 	// Path to the umh-core service
 	servicePath := filepath.Join(constants.S6BaseDir, "umh-core")
 
@@ -166,7 +182,6 @@ func (c *AgentMonitorService) GetAgentLogs(ctx context.Context) ([]s6.LogEntry, 
 	if c.s6Service == nil {
 		return nil, fmt.Errorf("s6 service not initialized")
 	}
-
 	// Use the S6 service to get logs
 	entries, err := c.s6Service.GetLogs(ctx, servicePath, c.fs)
 	if err != nil {

@@ -18,6 +18,14 @@ agent:
     apiUrl: https://management.umh.app/api
     authToken: a7caf5d82dacb972c300baf72d76326a3168141975f9e31f077aa28beced1ab7
   releaseChannel: stable
+  location:
+      0: Example Location 0
+      1: Example Location 1
+      2: Example Location 2
+      3: Example Location 3
+      4: Example Location 4
+      5: Example Location 5
+      6: Example Location 6
 
 dataFlow:
   - name: hello-world-dfc
@@ -26,7 +34,7 @@ dataFlow:
       benthos:
         input:
           generate:
-            mapping: root = "hello world from Benthos!"
+            mapping: root = "hello world from DFC!"
             interval: 1s # Output every 2 seconds
             count: 0 # Set to 0 for unlimited messages
         output:
