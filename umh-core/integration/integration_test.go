@@ -652,7 +652,7 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 			startTime := time.Now()
 			for time.Since(startTime) < 30*time.Second {
 				// Check metrics endpoint is healthy
-				checkMetricsHealthy()
+				failOnMetricsHealthIssue()
 
 				// Check for any warning or error logs
 				out, err := runDockerCommand("logs", getContainerName())
@@ -680,6 +680,7 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 			GinkgoWriter.Println("Redpanda-only test completed successfully")
 		})
 	})
+
 })
 
 // Helper functions for the chaos test
