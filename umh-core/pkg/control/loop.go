@@ -47,6 +47,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/ctxutil"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/agent_monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/container"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
@@ -111,6 +112,7 @@ func NewControlLoop(configManager config.ConfigManager) *ControlLoop {
 		benthos.NewBenthosManager(constants.DefaultManagerName, archiveStorage),
 		container.NewContainerManager(constants.DefaultManagerName, archiveStorage),
 		redpanda.NewRedpandaManager(constants.DefaultManagerName, archiveStorage),
+		agent_monitor.NewAgentManager(constants.DefaultManagerName),
 		nmap.NewNmapManager(constants.DefaultManagerName, archiveStorage),
 		dataflowcomponent.NewDataflowComponentManager(constants.DefaultManagerName, archiveStorage),
 	}
@@ -410,8 +412,10 @@ func (c *ControlLoop) Stop(ctx context.Context) error {
 		return fmt.Errorf("starvation checker is not set")
 	}
 
-	if err := c.archiveStorage.Close(); err != nil {
-		return fmt.Errorf("failed to close archive storage: %w", err)
+	if c.archiveStorage != nil {
+		if err := c.archiveStorage.Close(); err != nil {
+			return fmt.Errorf("failed to close archive storage: %w", err)
+		}
 	}
 
 	// Signal the control loop to stop
