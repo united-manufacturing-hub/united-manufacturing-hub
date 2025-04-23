@@ -27,6 +27,7 @@ import (
 	dataflowcomponentservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/dataflowcomponent"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
+	benthos_service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
@@ -84,7 +85,7 @@ func (d *DataflowComponentInstance) Reconcile(ctx context.Context, snapshot fsm.
 	// Step 2: Detect external changes.
 	if err := d.reconcileExternalChanges(ctx, filesystemService, snapshot.Tick); err != nil {
 		// If the service is not running, we don't want to return an error here, because we want to continue reconciling
-		if !errors.Is(err, dataflowcomponentservice.ErrServiceNotExists) {
+		if !errors.Is(err, dataflowcomponentservice.ErrServiceNotExists) && !errors.Is(err, benthos_service.ErrServiceNotExist) {
 			d.baseFSMInstance.SetError(err, snapshot.Tick)
 			d.baseFSMInstance.GetLogger().Errorf("error reconciling external changes: %s", err)
 
