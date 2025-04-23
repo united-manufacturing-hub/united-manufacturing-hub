@@ -45,6 +45,9 @@ type ManagerSnapshot interface {
 	// GetName returns the name of the manager
 	GetName() string
 	// GetInstances returns the snapshots of all instances
+	// Warning: treat the returned snapshots as read-only and do not modify them. If you do that within the core loop, you will change the state of the system
+	// If you do it in the communicator, it is "fine" as the communicator got only a deep copy of the snapshot
+	// The pointers are needed to avoid unexported fields when doing deep copies
 	GetInstances() map[string]*FSMInstanceSnapshot
 	// GetSnapshotTime returns the time the snapshot was created
 	GetSnapshotTime() time.Time
@@ -70,6 +73,10 @@ func (s *BaseManagerSnapshot) GetName() string {
 }
 
 // GetInstances returns the snapshots of all instances
+// Warning: treat the returned snapshots as read-only and do not modify them
+// Warning: treat the returned snapshots as read-only and do not modify them. If you do that within the core loop, you will change the state of the system
+// If you do it in the communicator, it is "fine" as the communicator got only a deep copy of the snapshot
+// The pointers are needed to avoid unexported fields when doing deep copies
 func (s *BaseManagerSnapshot) GetInstances() map[string]*FSMInstanceSnapshot {
 	return s.Instances
 }
