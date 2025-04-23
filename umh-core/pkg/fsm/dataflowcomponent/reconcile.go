@@ -25,7 +25,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	dataflowcomponentservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/dataflowcomponent"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
@@ -83,32 +82,24 @@ func (d *DataflowComponentInstance) Reconcile(ctx context.Context, snapshot fsm.
 	}
 
 	// Step 2: Detect external changes.
-	err = d.reconcileExternalChanges(ctx, filesystemService, snapshot.Tick)
-	switch {
-	case err == nil:
-	// All good. Do nothing and continue to reconcile
-	case errors.Is(err, dataflowcomponentservice.ErrServiceNotExists):
-		// If service doesn't exists, it will be created in the next reconcile loop. So set the error to nil
-		err = nil
-	case errors.Is(err, context.DeadlineExceeded):
-		// Healthchecks occasionally take longer (sometimes up to 70ms),
-		// resulting in context.DeadlineExceeded errors. In this case, we want to
-		// mark the reconciliation as complete for this tick since we've likely
-		// already consumed significant time. We return reconciled=true to prevent
-		// further reconciliation attempts in the current tick.
-		return nil, true // We don't want to return an error here, as this can happen in normal operations
-	case errors.Is(err, s6.ErrServiceNotExist):
-		// Consider a special case for DFC FSM here
-		// While creating for the first time, reconcileExternalChanges function will throw an error such as
-		// s6 service not found in the path since DFC fsm is relying on BenthosFSM and Benthos in turn relies on S6 fsm
-		// Inorder for DFC fsm to start, benthosManager.Reconcile should be called and this is called at the end of the function
-		// So set the err to nil in this case
-		// An example error: "failed to update observed state: failed to get observed DataflowComponent config: failed to get benthos config: failed to get benthos config file for service benthos-dataflow-hello-world-dfc: service does not exist"
-		err = nil
-	default:
-		d.baseFSMInstance.SetError(err, snapshot.Tick)
-		d.baseFSMInstance.GetLogger().Errorf("error while reconciling external changes for dataflowcomponent fsm: %v", err)
-		return nil, false // We don't want to return an error here, because we want to continue reconciling
+	if err := d.reconcileExternalChanges(ctx, filesystemService, snapshot.Tick); err != nil {
+		// If the service is not running, we don't want to return an error here, because we want to continue reconciling
+		if !errors.Is(err, dataflowcomponentservice.ErrServiceNotExists) {
+			d.baseFSMInstance.SetError(err, snapshot.Tick)
+			d.baseFSMInstance.GetLogger().Errorf("error reconciling external changes: %s", err)
+
+			if errors.Is(err, context.DeadlineExceeded) {
+				// Healthchecks occasionally take longer (sometimes up to 70ms),
+				// resulting in context.DeadlineExceeded errors. In this case, we want to
+				// mark the reconciliation as complete for this tick since we've likely
+				// already consumed significant time. We return reconciled=true to prevent
+				// further reconciliation attempts in the current tick.
+				return nil, true // We don't want to return an error here, as this can happen in normal operations
+			}
+			return nil, false // We don't want to return an error here, because we want to continue reconciling
+		}
+
+		err = nil // The service does not exist, which is fine as this happens in the reconcileStateTransition
 	}
 
 	// Step 3: Attempt to reconcile the state.
@@ -255,27 +246,28 @@ func (d *DataflowComponentInstance) reconcileTransitionToActive(ctx context.Cont
 		metrics.ObserveReconcileTime(metrics.ComponentDataflowComponentInstance, d.baseFSMInstance.GetID()+".reconcileTransitionToActive", time.Since(start))
 	}()
 
-	switch currentState {
-	case OperationalStateStopped:
+	// If we're stopped, we need to start first
+	if currentState == OperationalStateStopped {
+		// Attempt to initiate start
 		if err := d.StartInstance(ctx, filesystemService); err != nil {
 			return err, false
 		}
 		// Send event to transition from Stopped to Starting
 		return d.baseFSMInstance.SendEvent(ctx, EventStart), true
+	}
 
-	case OperationalStateStarting, OperationalStateStartingFailed:
-		return d.reconcileStartingState(ctx, filesystemService, currentState, currentTime)
-
-	case OperationalStateIdle, OperationalStateActive, OperationalStateDegraded:
+	// Handle starting phase states
+	if IsStartingState(currentState) {
+		return d.reconcileStartingStates(ctx, filesystemService, currentState, currentTime)
+	} else if IsRunningState(currentState) {
 		return d.reconcileRunningState(ctx, filesystemService, currentState, currentTime)
-
 	}
 
 	return nil, false
 }
 
-// reconcileStartingState handles the various starting phase states when transitioning to Active.
-func (d *DataflowComponentInstance) reconcileStartingState(ctx context.Context, filesystemService filesystem.Service, currentState string, currentTime time.Time) (err error, reconciled bool) {
+// reconcileStartingStates handles the various starting phase states when transitioning to Active.
+func (d *DataflowComponentInstance) reconcileStartingStates(ctx context.Context, filesystemService filesystem.Service, currentState string, currentTime time.Time) (err error, reconciled bool) {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentDataflowComponentInstance, d.baseFSMInstance.GetID()+".reconcileStartingState", time.Since(start))
