@@ -729,7 +729,9 @@ func (s *RedpandaService) ServiceExists(ctx context.Context, filesystemService f
 // This should only be called if the Redpanda instance is in a permanent failure state
 // and the instance itself cannot be stopped or removed
 func (s *RedpandaService) ForceRemoveRedpanda(ctx context.Context, filesystemService filesystem.Service) error {
-	return s.s6Service.ForceRemove(ctx, constants.RedpandaServiceName, filesystemService)
+	s6ServiceName := constants.RedpandaServiceName
+	s6ServicePath := filepath.Join(constants.S6BaseDir, s6ServiceName)
+	return s.s6Service.ForceRemove(ctx, s6ServicePath, filesystemService)
 }
 
 func formatMemory(memory int) string {
