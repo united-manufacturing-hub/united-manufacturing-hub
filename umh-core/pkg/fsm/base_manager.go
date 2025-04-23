@@ -586,7 +586,7 @@ func (m *BaseFSMManager[C]) GetCurrentFSMState(serviceName string) (string, erro
 func (m *BaseFSMManager[C]) CreateSnapshot() ManagerSnapshot {
 	snapshot := &BaseManagerSnapshot{
 		Name:           m.managerName,
-		Instances:      make(map[string]FSMInstanceSnapshot),
+		Instances:      make(map[string]*FSMInstanceSnapshot),
 		ManagerTick:    m.managerTick,
 		NextAddTick:    m.nextAddTick,
 		NextUpdateTick: m.nextUpdateTick,
@@ -611,7 +611,7 @@ func (m *BaseFSMManager[C]) CreateSnapshot() ManagerSnapshot {
 			}
 		}
 
-		snapshot.Instances[name] = instanceSnapshot
+		snapshot.Instances[name] = &instanceSnapshot
 	}
 
 	return snapshot

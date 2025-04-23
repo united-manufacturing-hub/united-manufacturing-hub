@@ -130,7 +130,9 @@ func writeConfigFile(yamlContent string, containerName ...string) error {
 	// Always remove any existing file first
 	err := os.Remove(configPath)
 	if err != nil {
-		return fmt.Errorf("failed to remove existing config file: %w", err)
+		if !os.IsNotExist(err) { // Ignore if the file does not exist
+			return fmt.Errorf("failed to remove existing config file: %w", err)
+		}
 	}
 
 	// Ensure the directory exists with wide permissions

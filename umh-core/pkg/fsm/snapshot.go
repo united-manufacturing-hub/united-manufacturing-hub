@@ -45,7 +45,7 @@ type ManagerSnapshot interface {
 	// GetName returns the name of the manager
 	GetName() string
 	// GetInstances returns the snapshots of all instances
-	GetInstances() map[string]FSMInstanceSnapshot
+	GetInstances() map[string]*FSMInstanceSnapshot
 	// GetSnapshotTime returns the time the snapshot was created
 	GetSnapshotTime() time.Time
 	// GetManagerTick returns the current manager-specific tick
@@ -55,7 +55,7 @@ type ManagerSnapshot interface {
 // BaseManagerSnapshot contains the basic immutable state common to all manager types
 type BaseManagerSnapshot struct {
 	Name           string
-	Instances      map[string]FSMInstanceSnapshot
+	Instances      map[string]*FSMInstanceSnapshot // this needs to be a pointer to avoid unexported fields when doing deep copies
 	ManagerTick    uint64
 	NextAddTick    uint64
 	NextUpdateTick uint64
@@ -70,7 +70,7 @@ func (s *BaseManagerSnapshot) GetName() string {
 }
 
 // GetInstances returns the snapshots of all instances
-func (s *BaseManagerSnapshot) GetInstances() map[string]FSMInstanceSnapshot {
+func (s *BaseManagerSnapshot) GetInstances() map[string]*FSMInstanceSnapshot {
 	return s.Instances
 }
 
@@ -188,7 +188,7 @@ func getManagerSnapshot(manager FSMManager[any]) ManagerSnapshot {
 	// Create base snapshot with required fields
 	snapshot := &BaseManagerSnapshot{
 		Name:         manager.GetManagerName(),
-		Instances:    make(map[string]FSMInstanceSnapshot),
+		Instances:    make(map[string]*FSMInstanceSnapshot),
 		SnapshotTime: time.Now(),
 	}
 
@@ -224,7 +224,7 @@ func getManagerSnapshot(manager FSMManager[any]) ManagerSnapshot {
 			}
 		}
 
-		snapshot.Instances[name] = instanceSnapshot
+		snapshot.Instances[name] = &instanceSnapshot
 	}
 
 	return snapshot
