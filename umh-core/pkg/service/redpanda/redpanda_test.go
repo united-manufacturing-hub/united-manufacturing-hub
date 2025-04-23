@@ -27,7 +27,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda_monitor"
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/storage"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -50,15 +49,13 @@ func newTimeoutContext() (context.Context, context.CancelFunc) {
 
 var _ = Describe("Redpanda Service", func() {
 	var (
-		service        *RedpandaService
-		tick           uint64
-		mockFS         *filesystem.MockFileSystem
-		archiveStorage storage.ArchiveStorer
+		service *RedpandaService
+		tick    uint64
+		mockFS  *filesystem.MockFileSystem
 	)
 
 	BeforeEach(func() {
-		archiveStorage = storage.NewArchiveEventStorage(100)
-		service = NewDefaultRedpandaService("redpanda", archiveStorage)
+		service = NewDefaultRedpandaService("redpanda")
 		tick = 0
 		mockFS = filesystem.NewMockFileSystem()
 
@@ -121,7 +118,7 @@ var _ = Describe("Redpanda Service", func() {
 
 		BeforeEach(func() {
 			mockS6Service = s6service.NewMockService()
-			service = NewDefaultRedpandaService("redpanda", archiveStorage,
+			service = NewDefaultRedpandaService("redpanda",
 				WithS6Service(mockS6Service),
 			)
 		})
@@ -214,7 +211,7 @@ var _ = Describe("Redpanda Service", func() {
 		var service *RedpandaService
 
 		BeforeEach(func() {
-			service = NewDefaultRedpandaService("redpanda", archiveStorage)
+			service = NewDefaultRedpandaService("redpanda")
 		})
 
 		Context("IsMetricsErrorFree", func() {
@@ -330,7 +327,7 @@ var _ = Describe("Redpanda Service", func() {
 		)
 
 		BeforeEach(func() {
-			service = NewDefaultRedpandaService("redpanda", archiveStorage)
+			service = NewDefaultRedpandaService("redpanda")
 			currentTime = time.Now()
 			logWindow = 5 * time.Minute
 		})
@@ -518,7 +515,7 @@ var _ = Describe("Redpanda Service", func() {
 		BeforeEach(func() {
 			mockS6Service = s6service.NewMockService()
 			mockFS = filesystem.NewMockFileSystem()
-			service = NewDefaultRedpandaService("redpanda", archiveStorage, WithS6Service(mockS6Service))
+			service = NewDefaultRedpandaService("redpanda", WithS6Service(mockS6Service))
 		})
 
 		It("should call S6 ForceRemove with the correct service path", func() {

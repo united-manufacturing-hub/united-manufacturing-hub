@@ -28,12 +28,11 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	nmap_service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/nmap"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/storage"
 )
 
 // NewNmapInstance creates a new NmapInstance with the standard transitions.
-func NewNmapInstance(config config.NmapConfig, archiveStorage storage.ArchiveStorer) *NmapInstance {
-	return NewNmapInstanceWithService(config, nmap_service.NewDefaultNmapService(config.Name, archiveStorage))
+func NewNmapInstance(config config.NmapConfig) *NmapInstance {
+	return NewNmapInstanceWithService(config, nmap_service.NewDefaultNmapService(config.Name))
 }
 
 // NewNmapInstanceWithService creates a new NmapInstance with a custom monitor service.

@@ -33,7 +33,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda_monitor"
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/storage"
 )
 
 // getTmpDir returns the temporary directory for a container
@@ -71,18 +70,16 @@ func getMetricsReader() *bytes.Reader {
 
 var _ = Describe("Redpanda Monitor Service", func() {
 	var (
-		service        *redpanda_monitor.RedpandaMonitorService
-		tick           uint64
-		mockFS         *filesystem.MockFileSystem
-		ctx            context.Context
-		cancel         context.CancelFunc
-		archiveStorage storage.ArchiveStorer
+		service *redpanda_monitor.RedpandaMonitorService
+		tick    uint64
+		mockFS  *filesystem.MockFileSystem
+		ctx     context.Context
+		cancel  context.CancelFunc
 	)
 
 	BeforeEach(func() {
 		mockFS = filesystem.NewMockFileSystem()
-		archiveStorage = storage.NewArchiveEventStorage(100)
-		service = redpanda_monitor.NewRedpandaMonitorService(archiveStorage)
+		service = redpanda_monitor.NewRedpandaMonitorService()
 		tick = 0
 
 		// Cleanup the data directory
@@ -130,7 +127,7 @@ var _ = Describe("Redpanda Monitor Service", func() {
 			mockS6 := s6service.NewMockService()
 
 			// Create a new service with the mock S6 service
-			service = redpanda_monitor.NewRedpandaMonitorService(archiveStorage, redpanda_monitor.WithS6Service(mockS6))
+			service = redpanda_monitor.NewRedpandaMonitorService(redpanda_monitor.WithS6Service(mockS6))
 
 			// Add the service first
 			err := service.AddRedpandaMonitorToS6Manager(ctx)

@@ -26,7 +26,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/portmanager"
 	benthossvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
 	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/storage"
 )
 
 // NewBenthosManagerWithMockedServices creates a BenthosManager with fully mocked services
@@ -37,8 +36,6 @@ func NewBenthosManagerWithMockedServices(name string) (*BenthosManager, *benthos
 
 	// Create a single shared mock service that will be used by all instances
 	mockService := benthossvc.NewMockBenthosService()
-
-	archiveStorage := storage.NewArchiveEventStorage(100)
 
 	// Initialize state maps if they don't exist
 	if mockService.ExistingServices == nil {
@@ -66,7 +63,7 @@ func NewBenthosManagerWithMockedServices(name string) (*BenthosManager, *benthos
 		// Create Benthos instance from config - with mock service
 		func(cfg config.BenthosConfig) (public_fsm.FSMInstance, error) {
 			// Create an instance with the basic config
-			instance := NewBenthosInstance(cfg, archiveStorage)
+			instance := NewBenthosInstance(cfg)
 
 			// Create a mock S6 service and attach it to the Benthos mock
 			s6MockService := s6svc.NewMockService()

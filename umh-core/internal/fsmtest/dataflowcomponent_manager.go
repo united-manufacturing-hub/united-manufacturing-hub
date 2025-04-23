@@ -25,7 +25,6 @@ import (
 	dataflowcomponentfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
 	dataflowcomponentsvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/dataflowcomponent"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/storage"
 )
 
 // WaitForDataflowComponentManagerStable is a simple helper that calls manager.Reconcile once
@@ -143,9 +142,8 @@ func SetupServiceInDataflowComponentManager(
 	componentName string,
 	desiredState string,
 ) {
-	archiveStorage := storage.NewArchiveEventStorage(100)
 	// Create a properly configured instance
-	instance := dataflowcomponentfsm.NewDataflowComponentInstance("", CreateDataflowComponentTestConfig(componentName, desiredState), archiveStorage)
+	instance := dataflowcomponentfsm.NewDataflowComponentInstance("", CreateDataflowComponentTestConfig(componentName, desiredState))
 
 	// Add it to the manager
 	manager.BaseFSMManager.AddInstanceForTest(componentName, instance)

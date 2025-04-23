@@ -22,13 +22,11 @@ import (
 
 	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentconfig"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	benthosfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	dataflowcomponentservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/dataflowcomponent"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/storage"
 )
 
 // The functions in this file define heavier, possibly fail-prone operations
@@ -242,35 +240,71 @@ func (d *DataflowComponentInstance) IsDataflowComponentWithProcessingActivity() 
 	return benthosStatus.MetricsState != nil && benthosStatus.MetricsState.IsActive
 }
 
-// DataflowComponentBenthosFailureStates returns the states that are considered failure states for the DataflowComponent's Benthos FSM
-func (d *DataflowComponentInstance) DataflowComponentBenthosFailureStates() []string {
-	return []string{
-		benthosfsm.OperationalStateStopped,
-		benthosfsm.OperationalStateStopping,
-	}
+// IsStartingPeriodGracePeriodExceeded returns true when the difference
+// between `currentTime` (supplied by Reconcile for easier testing) and the
+// timestamp of the **latest** EventStart/OperationalStateStarting record
+// in the archive exceeds `constants.WaitTimeBeforeMarkingStartFailed`.
+//
+// Why archive lookup instead of a timer?
+//   - Unit tests can inject an arbitrary `currentTime` without monkey-
+//     patching `time.Now()`.
+//   - Persistence across restarts guarantees that the grace-period is not
+//     reset accidentally.
+//
+// Behaviour:
+//   - If the archive has *no* Starting event yet, we treat the grace period
+//     as **not** exceeded (return false) – Reconcile will wait for the next
+//     tick.
+//   - Any unexpected error results in a conservative **false** because we
+//     prefer to wait rather than fail spuriously.
+func (d *DataflowComponentInstance) IsStartingPeriodGracePeriodExceeded(ctx context.Context, currentTime time.Time) bool {
+	// TODO
+	return false
 }
 
-func (d *DataflowComponentInstance) IsFailedStateEventObserved(ctx context.Context) bool {
-	// Query for any data points with the specified failed state
-	options := storage.QueryOptions{
-		Limit:     1,                                                           // We only need to know if any exist, so limit to 1
-		StartTime: time.Now().Add(-constants.WaitTimeBeforeMarkingStartFailed), // Get only the recent events to avoid old stale events
-		SortDesc:  true,                                                        // recent events first
-		States:    d.DataflowComponentBenthosFailureStates(),
-	}
+// DidDFCAlreadyFailedBefore reports whether **any** permanent-failure event
+// for this DataflowComponent (currently `OperationalStateStartingFailed`)
+// has ever been written to the archive.
+//
+// Business rules:
+//  1. Starting is considered an *irrecoverable* failure – the instance
+//     must be deleted/recreated by an operator or by the manager after a
+//     config change.  The FSM must therefore *never* leave
+//     `StartingFailed` automatically.
+//  2. To make the decision idempotent and testable we query the persistent
+//     `ArchiveEventStorage` instead of using an in-memory flag.
+//  3. The archive is assumed to be durable across process restarts;
+//     if it is not, this function must return `false`, effectively
+//     disabling the feature.
+func (d *DataflowComponentInstance) DidDFCAlreadyFailedBefore(ctx context.Context) bool {
+	// TODO: Implement this
+	// TODO: make sure that the archive storage is persistent
+	/*
+		// Query for any data points with the specified failed state
+		options := storage.QueryOptions{
+			Limit:     1,                                                           // We only need to know if any exist, so limit to 1
+			StartTime: time.Now().Add(-constants.WaitTimeBeforeMarkingStartFailed), // Get only the recent events to avoid old stale events
+			SortDesc:  true,                                                        // recent events first
+			States:    d.DataflowComponentBenthosFailureStates(),
+		}
 
-	if d.archiveStorage == nil {
-		d.baseFSMInstance.GetLogger().Warnf("archiveStorage is not initialized- skippling failed-state detection")
-		return false
-	}
 
-	dataPoints, err := d.archiveStorage.GetDataPoints(ctx, d.baseFSMInstance.GetID(), options)
-	if err != nil {
-		d.baseFSMInstance.GetLogger().Warnf("Failed to query state history: %v", err)
-		return false // Default to false if we can't query
-	}
 
-	d.baseFSMInstance.GetLogger().Infof("Found %d data points with failed states. Data points: %v", len(dataPoints), dataPoints)
-	// If we found any data points with this state, return true
-	return len(dataPoints) > 0
+
+			if d.archiveStorage == nil {
+				d.baseFSMInstance.GetLogger().Warnf("archiveStorage is not initialized- skippling failed-state detection")
+				return false
+			}
+
+			dataPoints, err := d.archiveStorage.GetDataPoints(ctx, d.baseFSMInstance.GetID(), options)
+			if err != nil {
+				d.baseFSMInstance.GetLogger().Warnf("Failed to query state history: %v", err)
+				return false // Default to false if we can't query
+			}
+
+			d.baseFSMInstance.GetLogger().Infof("Found %d data points with failed states. Data points: %v", len(dataPoints), dataPoints)
+			// If we found any data points with this state, return true
+			return len(dataPoints) > 0
+	*/
+	return false
 }

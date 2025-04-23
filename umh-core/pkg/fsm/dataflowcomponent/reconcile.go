@@ -283,17 +283,26 @@ func (d *DataflowComponentInstance) reconcileStartingState(ctx context.Context, 
 
 	switch currentState {
 	case OperationalStateStarting:
-		// First check if the undelying benthos is running
+		// 1. Has the instance *ever* failed to start before?
+		//    ──► yes:  transition permanently to StartingFailed.
+		if d.DidDFCAlreadyFailedBefore(ctx) {
+			return d.baseFSMInstance.SendEvent(ctx, EventStartFailed), true
+		}
+
+		// 2. Is Benthos already up (race-condition where the service was started
+		//    outside the FSM or recovered very quickly)?
+		//    ──► yes:  mark start successful (StartDone) and proceed.
 		if d.IsDataflowComponentBenthosRunning() {
 			return d.baseFSMInstance.SendEvent(ctx, EventStartDone), true
 		}
 
-		// Check if we have exceeded the grace period since entering the Starting state
-		if d.IsFailedStateEventObserved(ctx) {
+		// 3. Have we waited longer than the grace period without a successful start?
+		//    ──► yes:  declare the start attempt failed.
+		if d.IsStartingPeriodGracePeriodExceeded(ctx, currentTime) {
 			return d.baseFSMInstance.SendEvent(ctx, EventStartFailed), true
 		}
 
-		// Still within grace period, continue waiting until the next reconcile
+		// 4. Otherwise remain in OperationalStateStarting and try again on next tick.
 	case OperationalStateStartingFailed:
 	// Do not do anything here.
 	// The only way to get out of this state is to be removed and recreated by the manager when there is a config change.

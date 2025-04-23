@@ -27,7 +27,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/portmanager"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/storage"
 )
 
 const (
@@ -50,7 +49,7 @@ type BenthosManagerSnapshot struct {
 	PortAllocations map[string]int // Maps instance name to port
 }
 
-func NewBenthosManager(name string, archiveStorage storage.ArchiveStorer) *BenthosManager {
+func NewBenthosManager(name string) *BenthosManager {
 	managerName := fmt.Sprintf("%s%s", logger.ComponentBenthosManager, name)
 
 	baseManager := public_fsm.NewBaseFSMManager[config.BenthosConfig](
@@ -70,7 +69,7 @@ func NewBenthosManager(name string, archiveStorage storage.ArchiveStorer) *Benth
 		},
 		// Create Benthos instance from config
 		func(cfg config.BenthosConfig) (public_fsm.FSMInstance, error) {
-			return NewBenthosInstance(cfg, archiveStorage), nil
+			return NewBenthosInstance(cfg), nil
 		},
 		// Compare Benthos configs
 		func(instance public_fsm.FSMInstance, cfg config.BenthosConfig) (bool, error) {

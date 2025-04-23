@@ -19,7 +19,6 @@ import (
 	dataflowcomponentconfig "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentconfig"
 	publicfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	dataflowcomponentsvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/dataflowcomponent"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/storage"
 )
 
 // Operational state constants (using internal_fsm compatible naming)
@@ -109,9 +108,6 @@ type DataflowComponentInstance struct {
 
 	// config contains all the configuration for this service
 	config dataflowcomponentconfig.DataFlowComponentConfig
-
-	// archiveStorage is the storage for the archive of state transitions
-	archiveStorage storage.ArchiveStorer
 }
 
 // GetLastObservedState returns the last known state of the instance

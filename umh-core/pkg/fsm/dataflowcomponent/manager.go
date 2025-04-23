@@ -25,7 +25,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/storage"
 )
 
 const (
@@ -43,7 +42,7 @@ type DataflowComponentSnapshot struct {
 	*public_fsm.BaseManagerSnapshot
 }
 
-func NewDataflowComponentManager(name string, archiveStorage storage.ArchiveStorer) *DataflowComponentManager {
+func NewDataflowComponentManager(name string) *DataflowComponentManager {
 	managerName := fmt.Sprintf("%s%s", logger.ComponentDataFlowComponentManager, name)
 	baseManager := public_fsm.NewBaseFSMManager[config.DataFlowComponentConfig](
 		managerName,
@@ -62,7 +61,7 @@ func NewDataflowComponentManager(name string, archiveStorage storage.ArchiveStor
 		},
 		// Create Dataflowcomponent instance from config
 		func(cfg config.DataFlowComponentConfig) (public_fsm.FSMInstance, error) {
-			return NewDataflowComponentInstance(baseDataflowComponentDir, cfg, archiveStorage), nil
+			return NewDataflowComponentInstance(baseDataflowComponentDir, cfg), nil
 		},
 		// Compare Dataflowcomponent configs
 		func(instance public_fsm.FSMInstance, cfg config.DataFlowComponentConfig) (bool, error) {

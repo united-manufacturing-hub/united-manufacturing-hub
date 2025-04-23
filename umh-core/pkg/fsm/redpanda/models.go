@@ -20,7 +20,6 @@ import (
 	publicfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 
 	redpandasvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/storage"
 )
 
 // Operational state constants (using internal_fsm compatible naming)
@@ -125,9 +124,6 @@ type RedpandaInstance struct {
 
 	// config contains all the configuration for this service
 	config redpandaserviceconfig.RedpandaServiceConfig
-
-	// archiveStorage is the storage for the archive of state transitions
-	archiveStorage storage.ArchiveStorer
 }
 
 // GetLastObservedState returns the last known state of the instance

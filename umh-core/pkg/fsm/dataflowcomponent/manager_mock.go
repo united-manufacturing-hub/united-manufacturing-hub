@@ -23,7 +23,6 @@ import (
 	benthossvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
 	dataflowcomponentsvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/dataflowcomponent"
 	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/storage"
 )
 
 func NewDataflowComponentManagerWithMockedServices(name string) (*DataflowComponentManager, *dataflowcomponentsvc.MockDataFlowComponentService) {
@@ -51,7 +50,6 @@ func NewDataflowComponentManagerWithMockedServices(name string) (*DataflowCompon
 		Uptime: 60,    // Fake uptime in seconds
 	}
 	// Create a new manager instance
-	archiveStorage := storage.NewArchiveEventStorage(100)
 	// Lets create a mock manager here
 	mockFSMManager := public_fsm.NewBaseFSMManager[config.DataFlowComponentConfig](
 		name,
@@ -68,7 +66,7 @@ func NewDataflowComponentManagerWithMockedServices(name string) (*DataflowCompon
 		},
 		// Create Dataflowcomponent instance from config
 		func(cfg config.DataFlowComponentConfig) (public_fsm.FSMInstance, error) {
-			instance := NewDataflowComponentInstance("/dev/null", cfg, archiveStorage)
+			instance := NewDataflowComponentInstance("/dev/null", cfg)
 			benthosMockService := benthossvc.NewMockBenthosService()
 			s6MockService := s6svc.NewMockService()
 			s6MockService.ServiceExistsResult = true
