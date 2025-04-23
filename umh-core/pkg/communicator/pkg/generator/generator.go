@@ -316,11 +316,6 @@ func buildDefaultContainerData() models.Container {
 	}
 }
 
-// Helper function to create string pointers
-func stringPtr(s string) *string {
-	return &s
-}
-
 // buildAgentDataFromSnapshot creates agent data from a FSM instance snapshot
 func buildAgentDataFromSnapshot(instance fsm.FSMInstanceSnapshot, log *zap.SugaredLogger) (models.Agent, string) {
 	agentData := models.Agent{}
