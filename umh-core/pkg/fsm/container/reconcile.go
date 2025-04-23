@@ -55,23 +55,28 @@ func (c *ContainerInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSn
 	if c.baseFSMInstance.ShouldSkipReconcileBecauseOfError(snapshot.Tick) {
 		backErr := c.baseFSMInstance.GetBackoffError(snapshot.Tick)
 		if backoff.IsPermanentFailureError(backErr) {
-			// If permanent, we want to remove the instance or at least stop it
-			// For now, let's just remove it from the manager:
-			if c.IsRemoved() || c.IsRemoving() || c.IsStopping() || c.IsStopped() {
-				c.baseFSMInstance.GetLogger().Errorf("Permanent error on container monitor %s but it is already in a terminal/removing state", instanceName)
-				return backErr, false
-			} else {
-				c.baseFSMInstance.GetLogger().Errorf("Permanent error on container monitor %s => removing it", instanceName)
-				c.baseFSMInstance.ResetState() // clear the error
-				err = c.Remove(ctx)            // attempt removal
-				if err != nil {
-					c.baseFSMInstance.GetLogger().Errorf("error removing Container instance %s: %v", instanceName, err)
-					// If  removing doesn't work the base-manager should delete the instance
-					// due to a permanent error.
-					return fmt.Errorf("failed to remove the container instance: %s : %w", backoff.PermanentFailureError, err), false
-				}
-				return nil, false
-			}
+			// For permanent errors, we need special handling based on the instance's current state:
+			// 1. If already in a shutdown state (removed, removing, stopping, stopped), try force removal
+			// 2. If not in a shutdown state, attempt normal removal first, then force if needed
+			return c.baseFSMInstance.HandlePermanentError(
+				ctx,
+				backErr,
+				func() bool {
+					// Determine if we're already in a shutdown state where normal removal isn't possible
+					// and force removal is required
+					return c.IsRemoved() || c.IsRemoving() || c.IsStopping() || c.IsStopped() || c.WantsToBeStopped()
+				},
+				func(ctx context.Context) error {
+					// Normal removal through state transition
+					return c.Remove(ctx)
+				},
+				func(ctx context.Context) error {
+					// Container implementation doesn't have a ForceRemove method
+					// Instead, we signal permanent failure so the manager can clean it up
+					// This acts as the last resort when normal removal isn't possible
+					return fmt.Errorf("%s : %w", backoff.PermanentFailureError, backErr)
+				},
+			)
 		}
 		c.baseFSMInstance.GetLogger().Debugf("Skipping reconcile for container monitor %s: %v", instanceName, backErr)
 		return nil, false

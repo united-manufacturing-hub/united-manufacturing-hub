@@ -518,13 +518,9 @@ var _ = Describe("S6Instance FSM", func() {
 			// Create a permanent error that will be encountered during reconcile
 			mockService.StatusError = fmt.Errorf("%s: test permanent error", backoff.PermanentFailureError)
 
-			recErr, reconciled := instance.Reconcile(ctx, snapshot, mockFS)
-			Expect(recErr).To(BeNil())
-			Expect(reconciled).To(BeFalse())
-
-			recErr, reconciled = instance.Reconcile(ctx, snapshot, mockFS)
-			Expect(recErr).To(BeNil())
-			Expect(reconciled).To(BeFalse())
+			recErr, reconciled := fsmtest.ReconcileS6UntilError(ctx, fsm.SystemSnapshot{Tick: tick}, instance, mockFS, 100)
+			Expect(recErr).To(HaveOccurred())
+			Expect(reconciled).To(BeTrue())
 
 			Expect(mockService.ForceRemoveCalled).To(BeTrue())
 

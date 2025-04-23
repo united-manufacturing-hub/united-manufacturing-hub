@@ -1220,7 +1220,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 			// Now we should get the error
 			Expect(recErr).To(HaveOccurred())
 			Expect(recErr.Error()).To(ContainSubstring(backoff.PermanentFailureError))
-			Expect(reconciled).To(BeFalse(), "Should not have reconciled during error handling")
+			Expect(reconciled).To(BeTrue(), "Should have reconciled during error handling")
 
 			// Verify force removal was attempted
 			Expect(mockService.ForceRemoveBenthosCalled).To(BeTrue())
@@ -1285,17 +1285,15 @@ var _ = Describe("BenthosInstance FSM", func() {
 			var recErr error
 			var reconciled bool
 			tick, recErr, reconciled = fsmtest.ReconcileBenthosUntilError(
-				ctx, fsm.SystemSnapshot{Tick: tick}, instance, mockService, mockFS, serviceName, 5,
+				ctx, fsm.SystemSnapshot{Tick: tick}, instance, mockService, mockFS, serviceName, 20,
 			)
 
 			// Verify force removal was attempted
 			Expect(mockService.ForceRemoveBenthosCalled).To(BeTrue())
 
 			// Now we should get the error
-			Expect(recErr).NotTo(HaveOccurred())
-			// This is true because of the handling of ReconcileBenthosUntilError
-			// When calling forceRemove and it succeeds, it returns nil (err)
-			// Therefore we get true here
+			Expect(recErr).To(HaveOccurred())
+			Expect(recErr.Error()).To(ContainSubstring(backoff.PermanentFailureError))
 			Expect(reconciled).To(BeTrue())
 
 			// Clear error for other tests
