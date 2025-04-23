@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
@@ -174,7 +175,7 @@ func (d *DataflowComponentInstance) UpdateObservedStateOfInstance(ctx context.Co
 		// Only update if we successfully got the config
 		d.ObservedState.ObservedDataflowComponentConfig = observedConfig
 	} else {
-		if errors.Is(err, dataflowcomponentservice.ErrServiceNotExists) {
+		if strings.Contains(err.Error(), dataflowcomponentservice.ErrServiceNotExists.Error()) {
 			// Log the error but don't fail - this might happen during creation when the config file doesn't exist yet
 			d.baseFSMInstance.GetLogger().Debugf("Service not found, will be created during reconciliation: %v", err)
 			return nil

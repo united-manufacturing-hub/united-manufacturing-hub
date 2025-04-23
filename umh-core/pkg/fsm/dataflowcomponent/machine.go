@@ -95,6 +95,7 @@ func NewDataflowComponentInstance(
 	}
 
 	instance.registerCallbacks()
+
 	metrics.InitErrorCounter(metrics.ComponentDataflowComponentInstance, config.Name)
 
 	return instance
