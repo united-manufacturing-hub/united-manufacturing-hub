@@ -121,17 +121,17 @@ func SystemSnapshotLogger(ctx context.Context, controlLoop *control.ControlLoop,
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 
-	logger := logger.For("SnapshotLogger")
-	if logger == nil {
-		logger = zap.NewNop().Sugar()
+	snap_logger := logger.For("SnapshotLogger")
+	if snap_logger == nil {
+		snap_logger = zap.NewNop().Sugar()
 	}
 
-	logger.Info("Starting system snapshot logger")
+	snap_logger.Info("Starting system snapshot logger")
 
 	for {
 		select {
 		case <-ctx.Done():
-			logger.Info("Stopping system snapshot logger")
+			snap_logger.Info("Stopping system snapshot logger")
 			return
 		case <-ticker.C:
 			snapshot := controlLoop.GetSystemSnapshot()
@@ -141,22 +141,22 @@ func SystemSnapshotLogger(ctx context.Context, controlLoop *control.ControlLoop,
 				systemMu.Unlock()
 			}
 			if snapshot == nil {
-				sentry.ReportIssuef(sentry.IssueTypeWarning, logger, "[SystemSnapshotLogger] No system snapshot available")
+				sentry.ReportIssuef(sentry.IssueTypeWarning, snap_logger, "[SystemSnapshotLogger] No system snapshot available")
 				continue
 			}
 
-			logger.Infof("System snapshot at tick %d, managers: %d",
+			snap_logger.Infof("System snapshot at tick %d, managers: %d",
 				snapshot.Tick, len(snapshot.Managers))
 
 			// Log manager information
 			for managerName, manager := range snapshot.Managers {
 				instances := manager.GetInstances()
-				logger.Infof("Manager: %s, instances: %d, tick: %d",
+				snap_logger.Infof("Manager: %s, instances: %d, tick: %d",
 					managerName, len(instances), manager.GetManagerTick())
 
 				// Log instance information
 				for instanceName, instance := range instances {
-					logger.Infof("Instance: %s, current state: %s, desired state: %s",
+					snap_logger.Infof("Instance: %s, current state: %s, desired state: %s",
 						instanceName, instance.CurrentState, instance.DesiredState)
 				}
 			}

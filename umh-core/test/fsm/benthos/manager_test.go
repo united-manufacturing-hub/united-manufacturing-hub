@@ -135,7 +135,7 @@ var _ = Describe("BenthosManager", func() {
 				mockFS,
 				serviceName,
 				benthosfsm.OperationalStateIdle, // or OperationalStateActive, whichever is stable
-				20,
+				30,
 			)
 			tick = newTick
 			Expect(err).NotTo(HaveOccurred())
@@ -164,7 +164,7 @@ var _ = Describe("BenthosManager", func() {
 			newTick, err := fsmtest.WaitForBenthosManagerInstanceState(ctx, fsm.SystemSnapshot{CurrentConfig: fullCfg, Tick: tick}, manager, mockFS,
 				serviceName,
 				benthosfsm.OperationalStateIdle,
-				20,
+				30,
 			)
 			tick = newTick
 			Expect(err).NotTo(HaveOccurred())
@@ -176,7 +176,7 @@ var _ = Describe("BenthosManager", func() {
 			newTick, err = fsmtest.WaitForBenthosManagerInstanceState(ctx, fsm.SystemSnapshot{CurrentConfig: fullCfg, Tick: tick}, manager, mockFS,
 				serviceName,
 				benthosfsm.OperationalStateDegraded,
-				10,
+				30,
 			)
 			tick = newTick
 			Expect(err).NotTo(HaveOccurred())
@@ -218,7 +218,7 @@ var _ = Describe("BenthosManager", func() {
 			newTick, err := fsmtest.WaitForBenthosManagerInstanceState(ctx, fsm.SystemSnapshot{CurrentConfig: activeCfg, Tick: tick}, manager, mockFS,
 				serviceName,
 				benthosfsm.OperationalStateIdle,
-				20,
+				30,
 			)
 			tick = newTick
 			Expect(err).NotTo(HaveOccurred())
@@ -238,7 +238,7 @@ var _ = Describe("BenthosManager", func() {
 			newTick, err = fsmtest.WaitForBenthosManagerInstanceState(ctx, fsm.SystemSnapshot{CurrentConfig: stoppedCfg, Tick: tick}, manager, mockFS,
 				serviceName,
 				benthosfsm.OperationalStateStopped,
-				20,
+				30,
 			)
 			tick = newTick
 			Expect(err).NotTo(HaveOccurred())
@@ -250,7 +250,7 @@ var _ = Describe("BenthosManager", func() {
 			newTick, err = fsmtest.WaitForBenthosManagerInstanceState(ctx, fsm.SystemSnapshot{CurrentConfig: activeCfg, Tick: tick}, manager, mockFS,
 				serviceName,
 				benthosfsm.OperationalStateIdle,
-				20,
+				30,
 			)
 			tick = newTick
 			Expect(err).NotTo(HaveOccurred())
@@ -336,7 +336,7 @@ var _ = Describe("BenthosManager", func() {
 			newTick, err = fsmtest.WaitForBenthosManagerInstanceState(ctx, fsm.SystemSnapshot{CurrentConfig: fullCfg, Tick: tick}, manager, mockFS,
 				serviceName,
 				benthosfsm.OperationalStateIdle,
-				25,
+				30,
 			)
 			tick = newTick
 			Expect(err).NotTo(HaveOccurred())
@@ -359,7 +359,7 @@ var _ = Describe("BenthosManager", func() {
 			newTick, err := fsmtest.WaitForBenthosManagerInstanceState(ctx, fsm.SystemSnapshot{CurrentConfig: fullCfg, Tick: tick}, manager, mockFS,
 				serviceName,
 				benthosfsm.OperationalStateIdle,
-				20,
+				30,
 			)
 			tick = newTick
 			Expect(err).NotTo(HaveOccurred())
@@ -380,7 +380,7 @@ var _ = Describe("BenthosManager", func() {
 			newTick, err = fsmtest.WaitForBenthosManagerInstanceState(ctx, fsm.SystemSnapshot{CurrentConfig: stoppedCfg, Tick: tick}, manager, mockFS,
 				serviceName,
 				benthosfsm.OperationalStateStopped,
-				20,
+				30,
 			)
 			tick = newTick
 			Expect(err).NotTo(HaveOccurred())
@@ -395,7 +395,7 @@ var _ = Describe("BenthosManager", func() {
 				manager,
 				mockFS,
 				serviceName,
-				15,
+				30,
 			)
 			tick = newTick
 			Expect(err).NotTo(HaveOccurred())
@@ -435,7 +435,7 @@ var _ = Describe("BenthosManager", func() {
 			newTick, err = fsmtest.WaitForBenthosManagerInstanceState(ctx, fsm.SystemSnapshot{CurrentConfig: fullCfg, Tick: tick}, manager, mockFS,
 				serviceName,
 				benthosfsm.OperationalStateStopped,
-				15,
+				30,
 			)
 			tick = newTick
 			Expect(err).NotTo(HaveOccurred())

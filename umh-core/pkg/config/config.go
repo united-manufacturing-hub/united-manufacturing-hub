@@ -64,6 +64,12 @@ type ContainerConfig struct {
 	DesiredFSMState string `yaml:"desiredState"`
 }
 
+// AgentMonitorConfig is the config for an agent monitor instance
+type AgentMonitorConfig struct {
+	Name            string `yaml:"name"`
+	DesiredFSMState string `yaml:"desiredState"`
+}
+
 type ReleaseChannel string
 
 const (
