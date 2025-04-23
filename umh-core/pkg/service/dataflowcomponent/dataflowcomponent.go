@@ -444,13 +444,6 @@ func (s *DataFlowComponentService) ReconcileManager(ctx context.Context, filesys
 func (s *DataFlowComponentService) ServiceExists(ctx context.Context, filesystemService filesystem.Service, componentName string) bool {
 	benthosName := s.getBenthosName(componentName)
 
-	// First check our local configs
-	for _, config := range s.benthosConfigs {
-		if config.Name == benthosName {
-			return true
-		}
-	}
-
 	// Then check the actual service existence
 	return s.benthosService.ServiceExists(ctx, filesystemService, benthosName)
 }

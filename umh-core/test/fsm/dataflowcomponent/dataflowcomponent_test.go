@@ -27,6 +27,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
 	dataflowcomponentsvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/dataflowcomponent"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsmtest"
@@ -803,6 +804,33 @@ var _ = Describe("DataFlowComponent FSM", func() {
 			mockService.StatusError = nil // cleanup for other tests
 		})
 
+	})
+
+	Context("Error Handling", func() {
+		It("should handle S6 service not exist error correctly", func() {
+			var err error
+
+			// Setup to Creating state
+			tick, err = fsmtest.TestDataflowComponentStateTransition(
+				ctx, instance, mockService, mockFS, componentName,
+				fsm.LifecycleStateToBeCreated,
+				fsm.LifecycleStateCreating, 5, tick)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Force the exact error message from the logs with proper error wrapping
+			mockService.StatusError = fmt.Errorf("failed to get benthos config: failed to get benthos config file for service benthos-dataflow-%s: %w", componentName, s6.ErrServiceNotExist)
+
+			// Attempt to reconcile - this should not set an FSM error if errors are correctly identified
+			snapshot := pkgfsm.SystemSnapshot{Tick: tick}
+			err, _ = instance.Reconcile(ctx, snapshot, mockFS)
+			Expect(err).To(BeNil()) // Should not propagate an error
+
+			// The instance should not have an error set
+			Expect(instance.GetLastError()).To(BeNil())
+
+			// Clean up the mock for other tests
+			mockService.StatusError = nil
+		})
 	})
 
 })
