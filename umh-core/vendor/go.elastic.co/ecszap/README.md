@@ -1,3 +1,5 @@
+[![Build Status](https://github.com/elastic/ecs-logging-go-zap/actions/workflows/test.yml/badge.svg)](https://github.com/elastic/ecs-logging-go-zap/actions/workflows/test.yml)
+
 # Elastic Common Schema (ECS) support for uber-go/zap logger
 
 Use this library for automatically adding a minimal set of ECS fields to your logs, when using [uber-go/zap](https://github.com/uber-go/zap).
@@ -14,7 +16,7 @@ go test ./...
 ## Contribute
 Create a Pull Request from your own fork.
 
-Run `mage` to update and format you changes before submitting.
+Run `./lint.sh` to update and format you changes before submitting.
 
 Add new dependencies to the NOTICE.txt.
 
