@@ -29,7 +29,6 @@ import (
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/storage"
 )
 
 // Common test states
@@ -325,13 +324,11 @@ func SetupS6Instance(
 	// Create config
 	instanceConfig := CreateS6TestConfig(name, desiredState)
 
-	archiveStorage := storage.NewArchiveEventStorage(100)
 	// Create instance
 	instance, err := s6fsm.NewS6InstanceWithService(
 		baseDir,
 		instanceConfig,
 		mockService,
-		archiveStorage,
 	)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to create S6Instance: %v", err))

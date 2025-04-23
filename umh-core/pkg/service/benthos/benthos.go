@@ -39,7 +39,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/httpclient"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/storage"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 
@@ -232,11 +231,11 @@ func WithS6Service(s6Service s6service.Service) BenthosServiceOption {
 
 // NewDefaultBenthosService creates a new default Benthos service
 // name is the name of the Benthos service as defined in the UMH config
-func NewDefaultBenthosService(benthosName string, archiveStorage storage.ArchiveStorer, opts ...BenthosServiceOption) *BenthosService {
+func NewDefaultBenthosService(benthosName string, opts ...BenthosServiceOption) *BenthosService {
 	managerName := fmt.Sprintf("%s%s", logger.ComponentBenthosService, benthosName)
 	service := &BenthosService{
 		logger:       logger.For(managerName),
-		s6Manager:    s6fsm.NewS6Manager(managerName, archiveStorage),
+		s6Manager:    s6fsm.NewS6Manager(managerName),
 		s6Service:    s6service.NewDefaultService(),
 		httpClient:   nil, // this is only for a mock in the tests
 		metricsState: NewBenthosMetricsState(),

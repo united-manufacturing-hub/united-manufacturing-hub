@@ -26,7 +26,6 @@ import (
 	benthossvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/storage"
 )
 
 // WaitForBenthosManagerStable is a simple helper that calls manager.Reconcile once
@@ -148,9 +147,8 @@ func SetupServiceInManager(
 	serviceName string,
 	desiredState string,
 ) {
-	archiveStorage := storage.NewArchiveEventStorage(100)
 	// Create a properly configured instance
-	instance := benthosfsm.NewBenthosInstance(CreateBenthosTestConfig(serviceName, desiredState), archiveStorage)
+	instance := benthosfsm.NewBenthosInstance(CreateBenthosTestConfig(serviceName, desiredState))
 
 	// Add it to the manager
 	manager.BaseFSMManager.AddInstanceForTest(serviceName, instance)

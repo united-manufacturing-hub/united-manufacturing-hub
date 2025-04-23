@@ -24,7 +24,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/storage"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -32,20 +31,18 @@ import (
 
 var _ = Describe("Nmap Service", func() {
 	var (
-		service        *NmapService
-		mockS6         *s6service.MockService
-		tick           uint64
-		nmapName       string
-		s6Service      string
-		mockFS         *filesystem.MockFileSystem
-		archiveStorage storage.ArchiveStorer
+		service   *NmapService
+		mockS6    *s6service.MockService
+		tick      uint64
+		nmapName  string
+		s6Service string
+		mockFS    *filesystem.MockFileSystem
 	)
 
 	BeforeEach(func() {
 		mockS6 = s6service.NewMockService()
 		nmapName = "test-scan"
-		archiveStorage = storage.NewArchiveEventStorage(100)
-		service = NewDefaultNmapService(nmapName, archiveStorage, WithS6Service(mockS6))
+		service = NewDefaultNmapService(nmapName, WithS6Service(mockS6))
 		tick = 0
 		s6Service = service.getS6ServiceName(nmapName)
 		mockFS = filesystem.NewMockFileSystem()
@@ -458,7 +455,7 @@ done`
 			mockS6Service = s6service.NewMockService()
 			mockFS = filesystem.NewMockFileSystem()
 			nmapName = "test-nmap"
-			service = NewDefaultNmapService(nmapName, archiveStorage, WithS6Service(mockS6Service))
+			service = NewDefaultNmapService(nmapName, WithS6Service(mockS6Service))
 		})
 
 		It("should call S6 ForceRemove with the correct service path", func() {

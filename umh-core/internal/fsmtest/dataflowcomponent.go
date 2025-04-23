@@ -28,7 +28,6 @@ import (
 	dataflowcomponentfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
 	dataflowcomponentsvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/dataflowcomponent"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/storage"
 )
 
 // CreateDataflowComponentTestConfig creates a standard DataflowComponent config for testing
@@ -138,7 +137,7 @@ func TransitionToDataflowComponentState(mockService *dataflowcomponentsvc.MockDa
 
 // SetupDataflowComponentInstance creates and configures a DataflowComponent instance for testing.
 // Returns the instance, the mock service, and the config used to create it.
-func SetupDataflowComponentInstance(serviceName string, desiredState string, archiveStorage storage.ArchiveStorer) (*dataflowcomponentfsm.DataflowComponentInstance, *dataflowcomponentsvc.MockDataFlowComponentService, config.DataFlowComponentConfig) {
+func SetupDataflowComponentInstance(serviceName string, desiredState string) (*dataflowcomponentfsm.DataflowComponentInstance, *dataflowcomponentsvc.MockDataFlowComponentService, config.DataFlowComponentConfig) {
 	// Create test config
 	cfg := CreateDataflowComponentTestConfig(serviceName, desiredState)
 
@@ -156,7 +155,7 @@ func SetupDataflowComponentInstance(serviceName string, desiredState string, arc
 	mockService.ComponentStates[serviceName] = &dataflowcomponentsvc.ServiceInfo{}
 
 	// Create new instance
-	instance := setUpMockDataflowComponentInstance(cfg, mockService, archiveStorage)
+	instance := setUpMockDataflowComponentInstance(cfg, mockService)
 
 	return instance, mockService, cfg
 }
@@ -166,10 +165,9 @@ func SetupDataflowComponentInstance(serviceName string, desiredState string, arc
 func setUpMockDataflowComponentInstance(
 	cfg config.DataFlowComponentConfig,
 	mockService *dataflowcomponentsvc.MockDataFlowComponentService,
-	archiveStorage storage.ArchiveStorer,
 ) *dataflowcomponentfsm.DataflowComponentInstance {
 	// Create the instance
-	instance := dataflowcomponentfsm.NewDataflowComponentInstance("", cfg, archiveStorage)
+	instance := dataflowcomponentfsm.NewDataflowComponentInstance("", cfg)
 
 	// Set the mock service
 	instance.SetService(mockService)
@@ -305,8 +303,7 @@ func CreateMockDataflowComponentInstance(
 	desiredState string,
 ) *dataflowcomponentfsm.DataflowComponentInstance {
 	cfg := CreateDataflowComponentTestConfig(serviceName, desiredState)
-	archiveStorage := storage.NewArchiveEventStorage(100)
-	instance := dataflowcomponentfsm.NewDataflowComponentInstance("", cfg, archiveStorage)
+	instance := dataflowcomponentfsm.NewDataflowComponentInstance("", cfg)
 	instance.SetService(mockService)
 	return instance
 }

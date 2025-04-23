@@ -59,7 +59,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/starvationchecker"
 	"go.uber.org/zap"
 )
@@ -84,7 +83,6 @@ type ControlLoop struct {
 	currentTick       uint64
 	snapshotManager   *fsm.SnapshotManager
 	filesystemService filesystem.Service
-	archiveStorage    storage.ArchiveStoreCloser
 }
 
 // NewControlLoop creates a new control loop with all necessary managers.
@@ -104,17 +102,15 @@ func NewControlLoop(configManager config.ConfigManager) *ControlLoop {
 		log = zap.NewNop().Sugar()
 	}
 
-	archiveStorage := storage.NewArchiveEventStorage(1000)
-
 	// Create the managers
 	managers := []fsm.FSMManager[any]{
-		s6.NewS6Manager(constants.DefaultManagerName, archiveStorage),
-		benthos.NewBenthosManager(constants.DefaultManagerName, archiveStorage),
-		container.NewContainerManager(constants.DefaultManagerName, archiveStorage),
-		redpanda.NewRedpandaManager(constants.DefaultManagerName, archiveStorage),
+		s6.NewS6Manager(constants.DefaultManagerName),
+		benthos.NewBenthosManager(constants.DefaultManagerName),
+		container.NewContainerManager(constants.DefaultManagerName),
+		redpanda.NewRedpandaManager(constants.DefaultManagerName),
 		agent_monitor.NewAgentManager(constants.DefaultManagerName),
-		nmap.NewNmapManager(constants.DefaultManagerName, archiveStorage),
-		dataflowcomponent.NewDataflowComponentManager(constants.DefaultManagerName, archiveStorage),
+		nmap.NewNmapManager(constants.DefaultManagerName),
+		dataflowcomponent.NewDataflowComponentManager(constants.DefaultManagerName),
 	}
 
 	// Create a starvation checker
@@ -146,7 +142,6 @@ func NewControlLoop(configManager config.ConfigManager) *ControlLoop {
 		starvationChecker: starvationChecker,
 		snapshotManager:   snapshotManager,
 		filesystemService: filesystemService,
-		archiveStorage:    archiveStorage,
 	}
 }
 
@@ -410,12 +405,6 @@ func (c *ControlLoop) Stop(ctx context.Context) error {
 		c.starvationChecker.Stop()
 	} else {
 		return fmt.Errorf("starvation checker is not set")
-	}
-
-	if c.archiveStorage != nil {
-		if err := c.archiveStorage.Close(); err != nil {
-			return fmt.Errorf("failed to close archive storage: %w", err)
-		}
 	}
 
 	// Signal the control loop to stop

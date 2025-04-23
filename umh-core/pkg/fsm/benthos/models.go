@@ -19,7 +19,6 @@ import (
 	benthosserviceconfig "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
 	publicfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	benthossvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/storage"
 )
 
 // Operational state constants (using internal_fsm compatible naming)
@@ -143,9 +142,6 @@ type BenthosInstance struct {
 
 	// config contains all the configuration for this service
 	config benthosserviceconfig.BenthosServiceConfig
-
-	// archiveStorage is the storage for the archive of state transitions
-	archiveStorage storage.ArchiveStorer
 }
 
 // GetLastObservedState returns the last known state of the instance

@@ -28,13 +28,11 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	redpanda_service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/storage"
 )
 
 // NewRedpandaInstance creates a new RedpandaInstance with the given ID and service path
 func NewRedpandaInstance(
-	config config.RedpandaConfig,
-	archiveStorage storage.ArchiveStorer) *RedpandaInstance {
+	config config.RedpandaConfig) *RedpandaInstance {
 
 	cfg := internal_fsm.BaseFSMInstanceConfig{
 		ID:                           config.Name,
@@ -80,10 +78,9 @@ func NewRedpandaInstance(
 
 	instance := &RedpandaInstance{
 		baseFSMInstance: internal_fsm.NewBaseFSMInstance(cfg, backoffConfig, logger),
-		service:         redpanda_service.NewDefaultRedpandaService(config.Name, archiveStorage),
+		service:         redpanda_service.NewDefaultRedpandaService(config.Name),
 		config:          config.RedpandaServiceConfig,
 		ObservedState:   RedpandaObservedState{},
-		archiveStorage:  archiveStorage,
 	}
 
 	// Note: We intentionally do NOT initialize the S6 service here.
