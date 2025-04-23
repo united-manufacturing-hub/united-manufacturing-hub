@@ -112,7 +112,6 @@ func (b DataflowComponentObservedState) IsObservedState() {}
 // be detected at compile time
 var _ publicfsm.FSMInstance = (*DataflowComponentInstance)(nil)
 
-// BenthosInstance is a state-machine managed instance of a Benthos service
 // DataflowComponentInstance is a state-machine managed instance of a DataflowComponent service.
 type DataflowComponentInstance struct {
 	baseFSMInstance *internalfsm.BaseFSMInstance
@@ -146,4 +145,10 @@ func (d *DataflowComponentInstance) SetService(service dataflowcomponentsvc.IDat
 // This is a testing-only utility to access the private service field
 func (d *DataflowComponentInstance) GetConfig() dataflowcomponentconfig.DataFlowComponentConfig {
 	return d.config
+}
+
+// GetLastError returns the last error of the instance
+// This is a testing-only utility to access the private baseFSMInstance field
+func (d *DataflowComponentInstance) GetLastError() error {
+	return d.baseFSMInstance.GetLastError()
 }
