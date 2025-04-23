@@ -563,6 +563,7 @@ func (s *NmapService) ForceRemoveNmap(
 	filesystemService filesystem.Service,
 	nmapName string,
 ) error {
-
-	return s.s6Service.ForceRemove(ctx, s.getS6ServiceName(nmapName), filesystemService)
+	s6ServiceName := s.getS6ServiceName(nmapName)
+	s6ServicePath := filepath.Join(constants.S6BaseDir, s6ServiceName)
+	return s.s6Service.ForceRemove(ctx, s6ServicePath, filesystemService)
 }

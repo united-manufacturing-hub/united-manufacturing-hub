@@ -75,6 +75,27 @@ func IsOperationalState(state string) bool {
 	return false
 }
 
+// IsStartingState returns whether the given state is a starting state
+func IsStartingState(state string) bool {
+	switch state {
+	case OperationalStateStarting,
+		OperationalStateStartingFailed:
+		return true
+	}
+	return false
+}
+
+// IsRunningState returns whether the given state is a running state
+func IsRunningState(state string) bool {
+	switch state {
+	case OperationalStateIdle,
+		OperationalStateActive,
+		OperationalStateDegraded:
+		return true
+	}
+	return false
+}
+
 // DataflowComponentObservedState contains the observed runtime state of a DataflowComponent instance
 type DataflowComponentObservedState struct {
 	// ServiceInfo contains information about the S6 service
