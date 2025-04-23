@@ -20,18 +20,16 @@ package dataflowcomponent_test
 import (
 	"context"
 
-	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm" // for LifecycleStateToBeCreated, etc.
+	benthosfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
+	dataflowcomponentsvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/dataflowcomponent"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsmtest"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsmtest"
-	benthosfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
-	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
-	benthossvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
-	dataflowcomponentsvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/dataflowcomponent"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
-	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 )
 
 var _ = Describe("DataFlowComponent FSM", func() {
@@ -58,12 +56,32 @@ var _ = Describe("DataFlowComponent FSM", func() {
 			var err error
 
 			// Setup to Stopped state
-			tick, err = setupToStoppedState(ctx, instance, mockService, mockFS, componentName, tick)
+			// ToBeCreated → Creating
+			tick, err = fsmtest.TestDataflowComponentStateTransition(
+				ctx, instance, mockService, mockFS, componentName,
+				fsm.LifecycleStateToBeCreated,
+				fsm.LifecycleStateCreating, 5, tick)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Creating → Stopped
+			tick, err = fsmtest.TestDataflowComponentStateTransition(
+				ctx, instance, mockService, mockFS, componentName,
+				fsm.LifecycleStateCreating,
+				dataflowcomponent.OperationalStateStopped, 5, tick)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(mockService.AddDataFlowComponentToBenthosManagerCalled).To(BeTrue())
 
+			// Set desired state to Active
+			Expect(instance.SetDesiredFSMState(dataflowcomponent.OperationalStateActive)).To(Succeed())
+
 			// Transition from Stopped to Starting
-			tick, err = transitionToStartingState(ctx, instance, mockService, mockFS, componentName, tick)
+			fsmtest.TransitionToDataflowComponentState(mockService, componentName, dataflowcomponent.OperationalStateStarting)
+
+			// Execute transition: Stopped → Starting
+			tick, err = fsmtest.TestDataflowComponentStateTransition(
+				ctx, instance, mockService, mockFS, componentName,
+				dataflowcomponent.OperationalStateStopped,
+				dataflowcomponent.OperationalStateStarting, 5, tick)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(mockService.StartDataFlowComponentCalled).To(BeTrue())
 		})
@@ -72,19 +90,40 @@ var _ = Describe("DataFlowComponent FSM", func() {
 			var err error
 
 			// Setup to Stopped state
-			tick, err = setupToStoppedState(ctx, instance, mockService, mockFS, componentName, tick)
+			// ToBeCreated → Creating
+			tick, err = fsmtest.TestDataflowComponentStateTransition(
+				ctx, instance, mockService, mockFS, componentName,
+				fsm.LifecycleStateToBeCreated,
+				fsm.LifecycleStateCreating, 5, tick)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Creating → Stopped
+			tick, err = fsmtest.TestDataflowComponentStateTransition(
+				ctx, instance, mockService, mockFS, componentName,
+				fsm.LifecycleStateCreating,
+				dataflowcomponent.OperationalStateStopped, 5, tick)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(mockService.AddDataFlowComponentToBenthosManagerCalled).To(BeTrue())
 
+			// Set desired state to Active
+			Expect(instance.SetDesiredFSMState(dataflowcomponent.OperationalStateActive)).To(Succeed())
+
 			// Transition from Stopped to Starting
-			tick, err = transitionToStartingState(ctx, instance, mockService, mockFS, componentName, tick)
+			fsmtest.TransitionToDataflowComponentState(mockService, componentName, dataflowcomponent.OperationalStateStarting)
+
+			// Execute transition: Stopped → Starting
+			tick, err = fsmtest.TestDataflowComponentStateTransition(
+				ctx,
+				instance,
+				mockService,
+				mockFS,
+				componentName,
+				dataflowcomponent.OperationalStateStopped,
+				dataflowcomponent.OperationalStateStarting, 5, tick)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Set the mock flags for an idle state
-			mockService.SetComponentState(componentName, dataflowcomponentsvc.ComponentStateFlags{
-				IsBenthosRunning: true,
-				BenthosFSMState:  benthosfsm.OperationalStateIdle,
-			})
+			fsmtest.TransitionToDataflowComponentState(mockService, componentName, dataflowcomponent.OperationalStateIdle)
 
 			// Execute transition: Starting -> Idle
 			tick, err = fsmtest.TestDataflowComponentStateTransition(
@@ -105,20 +144,30 @@ var _ = Describe("DataFlowComponent FSM", func() {
 			var err error
 
 			// Setup to Stopped state
-			tick, err = setupToStoppedState(ctx, instance, mockService, mockFS, componentName, tick)
+			// ToBeCreated → Creating
+			tick, err = fsmtest.TestDataflowComponentStateTransition(
+				ctx, instance, mockService, mockFS, componentName,
+				fsm.LifecycleStateToBeCreated,
+				fsm.LifecycleStateCreating, 5, tick)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Creating → Stopped
+			tick, err = fsmtest.TestDataflowComponentStateTransition(
+				ctx, instance, mockService, mockFS, componentName,
+				fsm.LifecycleStateCreating,
+				dataflowcomponent.OperationalStateStopped, 5, tick)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(mockService.AddDataFlowComponentToBenthosManagerCalled).To(BeTrue())
 
-			// Transition from Stopped to Starting
-			tick, err = transitionToStartingState(ctx, instance, mockService, mockFS, componentName, tick)
-			Expect(err).NotTo(HaveOccurred())
+			// Set desired state to Active
+			Expect(instance.SetDesiredFSMState(dataflowcomponent.OperationalStateActive)).To(Succeed())
 
-			// Set the mock flags for an idle state
-			mockService.SetComponentState(componentName, dataflowcomponentsvc.ComponentStateFlags{
-				IsBenthosRunning:                 true,
-				BenthosFSMState:                  benthosfsm.OperationalStateIdle,
-				IsBenthosProcessingMetricsActive: false,
-			})
+			// Execute transition: Stopped → Starting
+			tick, err = fsmtest.TestDataflowComponentStateTransition(
+				ctx, instance, mockService, mockFS, componentName,
+				dataflowcomponent.OperationalStateStopped,
+				dataflowcomponent.OperationalStateStarting, 5, tick)
+			Expect(err).NotTo(HaveOccurred())
 
 			// Execute transition: Starting -> Idle
 			tick, err = fsmtest.TestDataflowComponentStateTransition(
@@ -134,12 +183,6 @@ var _ = Describe("DataFlowComponent FSM", func() {
 			)
 			Expect(err).NotTo(HaveOccurred())
 
-			// Set the mock flags for an active state
-			mockService.SetComponentState(componentName, dataflowcomponentsvc.ComponentStateFlags{
-				IsBenthosRunning:                 true,
-				BenthosFSMState:                  benthosfsm.OperationalStateActive,
-				IsBenthosProcessingMetricsActive: true,
-			})
 			// Execute transition: Idle -> Active
 			tick, err = fsmtest.TestDataflowComponentStateTransition(
 				ctx,
@@ -158,20 +201,30 @@ var _ = Describe("DataFlowComponent FSM", func() {
 			var err error
 
 			// Setup to Stopped state
-			tick, err = setupToStoppedState(ctx, instance, mockService, mockFS, componentName, tick)
+			// ToBeCreated → Creating
+			tick, err = fsmtest.TestDataflowComponentStateTransition(
+				ctx, instance, mockService, mockFS, componentName,
+				fsm.LifecycleStateToBeCreated,
+				fsm.LifecycleStateCreating, 5, tick)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Creating → Stopped
+			tick, err = fsmtest.TestDataflowComponentStateTransition(
+				ctx, instance, mockService, mockFS, componentName,
+				fsm.LifecycleStateCreating,
+				dataflowcomponent.OperationalStateStopped, 5, tick)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(mockService.AddDataFlowComponentToBenthosManagerCalled).To(BeTrue())
 
-			// Transition from Stopped to Starting
-			tick, err = transitionToStartingState(ctx, instance, mockService, mockFS, componentName, tick)
-			Expect(err).NotTo(HaveOccurred())
+			// Set desired state to Active
+			Expect(instance.SetDesiredFSMState(dataflowcomponent.OperationalStateActive)).To(Succeed())
 
-			// Set the mock flags for an idle state
-			mockService.SetComponentState(componentName, dataflowcomponentsvc.ComponentStateFlags{
-				IsBenthosRunning:                 true,
-				BenthosFSMState:                  benthosfsm.OperationalStateIdle,
-				IsBenthosProcessingMetricsActive: false,
-			})
+			// Execute transition: Stopped → Starting
+			tick, err = fsmtest.TestDataflowComponentStateTransition(
+				ctx, instance, mockService, mockFS, componentName,
+				dataflowcomponent.OperationalStateStopped,
+				dataflowcomponent.OperationalStateStarting, 5, tick)
+			Expect(err).NotTo(HaveOccurred())
 
 			// Execute transition: Starting -> Idle
 			tick, err = fsmtest.TestDataflowComponentStateTransition(
@@ -187,12 +240,6 @@ var _ = Describe("DataFlowComponent FSM", func() {
 			)
 			Expect(err).NotTo(HaveOccurred())
 
-			// Set the mock flags for an active state
-			mockService.SetComponentState(componentName, dataflowcomponentsvc.ComponentStateFlags{
-				IsBenthosRunning:                 true,
-				BenthosFSMState:                  benthosfsm.OperationalStateActive,
-				IsBenthosProcessingMetricsActive: true,
-			})
 			// Execute transition: Idle -> Active
 			tick, err = fsmtest.TestDataflowComponentStateTransition(
 				ctx,
@@ -206,13 +253,6 @@ var _ = Describe("DataFlowComponent FSM", func() {
 				tick,
 			)
 			Expect(err).NotTo(HaveOccurred())
-
-			// Set the mock flags for an idle state
-			mockService.SetComponentState(componentName, dataflowcomponentsvc.ComponentStateFlags{
-				IsBenthosRunning:                 true,
-				BenthosFSMState:                  benthosfsm.OperationalStateIdle,
-				IsBenthosProcessingMetricsActive: false,
-			})
 
 			// Execute transition: Active -> Idle
 			tick, err = fsmtest.TestDataflowComponentStateTransition(
@@ -233,20 +273,30 @@ var _ = Describe("DataFlowComponent FSM", func() {
 			var err error
 
 			// Setup to Stopped state
-			tick, err = setupToStoppedState(ctx, instance, mockService, mockFS, componentName, tick)
+			// ToBeCreated → Creating
+			tick, err = fsmtest.TestDataflowComponentStateTransition(
+				ctx, instance, mockService, mockFS, componentName,
+				fsm.LifecycleStateToBeCreated,
+				fsm.LifecycleStateCreating, 5, tick)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Creating → Stopped
+			tick, err = fsmtest.TestDataflowComponentStateTransition(
+				ctx, instance, mockService, mockFS, componentName,
+				fsm.LifecycleStateCreating,
+				dataflowcomponent.OperationalStateStopped, 5, tick)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(mockService.AddDataFlowComponentToBenthosManagerCalled).To(BeTrue())
 
-			// Transition from Stopped to Starting
-			tick, err = transitionToStartingState(ctx, instance, mockService, mockFS, componentName, tick)
-			Expect(err).NotTo(HaveOccurred())
+			// Set desired state to Active
+			Expect(instance.SetDesiredFSMState(dataflowcomponent.OperationalStateActive)).To(Succeed())
 
-			// Set the mock flags for an idle state
-			mockService.SetComponentState(componentName, dataflowcomponentsvc.ComponentStateFlags{
-				IsBenthosRunning:                 true,
-				BenthosFSMState:                  benthosfsm.OperationalStateIdle,
-				IsBenthosProcessingMetricsActive: false,
-			})
+			// Execute transition: Stopped → Starting
+			tick, err = fsmtest.TestDataflowComponentStateTransition(
+				ctx, instance, mockService, mockFS, componentName,
+				dataflowcomponent.OperationalStateStopped,
+				dataflowcomponent.OperationalStateStarting, 5, tick)
+			Expect(err).NotTo(HaveOccurred())
 
 			// Execute transition: Starting -> Idle
 			tick, err = fsmtest.TestDataflowComponentStateTransition(
@@ -262,66 +312,6 @@ var _ = Describe("DataFlowComponent FSM", func() {
 			)
 			Expect(err).NotTo(HaveOccurred())
 
-			// Set the mock flags for an degraded state
-			mockService.SetComponentState(componentName, dataflowcomponentsvc.ComponentStateFlags{
-				IsBenthosRunning:                 true,
-				BenthosFSMState:                  benthosfsm.OperationalStateDegraded,
-				IsBenthosProcessingMetricsActive: false,
-			})
-			// Execute transition: Idle -> Degraded
-			tick, err = fsmtest.TestDataflowComponentStateTransition(
-				ctx,
-				instance,
-				mockService,
-				mockFS,
-				componentName,
-				dataflowcomponent.OperationalStateIdle,
-				dataflowcomponent.OperationalStateDegraded,
-				5,
-				tick,
-			)
-			Expect(err).NotTo(HaveOccurred())
-		})
-
-		It("should transition from degraded to idle", func() {
-			var err error
-
-			// Setup to Stopped state
-			tick, err = setupToStoppedState(ctx, instance, mockService, mockFS, componentName, tick)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(mockService.AddDataFlowComponentToBenthosManagerCalled).To(BeTrue())
-
-			// Transition from Stopped to Starting
-			tick, err = transitionToStartingState(ctx, instance, mockService, mockFS, componentName, tick)
-			Expect(err).NotTo(HaveOccurred())
-
-			// Set the mock flags for an idle state
-			mockService.SetComponentState(componentName, dataflowcomponentsvc.ComponentStateFlags{
-				IsBenthosRunning:                 true,
-				BenthosFSMState:                  benthosfsm.OperationalStateIdle,
-				IsBenthosProcessingMetricsActive: false,
-			})
-
-			// Execute transition: Starting -> Idle
-			tick, err = fsmtest.TestDataflowComponentStateTransition(
-				ctx,
-				instance,
-				mockService,
-				mockFS,
-				componentName,
-				dataflowcomponent.OperationalStateStarting,
-				dataflowcomponent.OperationalStateIdle,
-				5,
-				tick,
-			)
-			Expect(err).NotTo(HaveOccurred())
-
-			// Set the mock flags for an degraded state
-			mockService.SetComponentState(componentName, dataflowcomponentsvc.ComponentStateFlags{
-				IsBenthosRunning:                 true,
-				BenthosFSMState:                  benthosfsm.OperationalStateDegraded,
-				IsBenthosProcessingMetricsActive: false,
-			})
 			// Execute transition: Idle -> Degraded
 			tick, err = fsmtest.TestDataflowComponentStateTransition(
 				ctx,
@@ -336,12 +326,6 @@ var _ = Describe("DataFlowComponent FSM", func() {
 			)
 			Expect(err).NotTo(HaveOccurred())
 
-			// Set the mock flags for an idle state
-			mockService.SetComponentState(componentName, dataflowcomponentsvc.ComponentStateFlags{
-				IsBenthosRunning:                 true,
-				BenthosFSMState:                  benthosfsm.OperationalStateIdle,
-				IsBenthosProcessingMetricsActive: true,
-			})
 			// Execute transition: Degraded -> Idle
 			tick, err = fsmtest.TestDataflowComponentStateTransition(
 				ctx,
@@ -361,16 +345,29 @@ var _ = Describe("DataFlowComponent FSM", func() {
 	Context("Transition to Failed State", func() {
 		It("should transition from starting to starting failed", func() {
 			Skip("TODO: Implement this")
-
 			var err error
 
 			// Setup to Stopped state
-			tick, err = setupToStoppedState(ctx, instance, mockService, mockFS, componentName, tick)
+			// ToBeCreated → Creating
+			tick, err = fsmtest.TestDataflowComponentStateTransition(
+				ctx, instance, mockService, mockFS, componentName,
+				fsm.LifecycleStateToBeCreated,
+				fsm.LifecycleStateCreating, 5, tick)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Creating → Stopped
+			tick, err = fsmtest.TestDataflowComponentStateTransition(
+				ctx, instance, mockService, mockFS, componentName,
+				fsm.LifecycleStateCreating,
+				dataflowcomponent.OperationalStateStopped, 5, tick)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(mockService.AddDataFlowComponentToBenthosManagerCalled).To(BeTrue())
 
+			// Set desired state to Active
+			Expect(instance.SetDesiredFSMState(dataflowcomponent.OperationalStateActive)).To(Succeed())
+
 			// Transition from Stopped to Starting
-			tick, err = transitionToStartingState(ctx, instance, mockService, mockFS, componentName, tick)
+			fsmtest.TransitionToDataflowComponentState(mockService, componentName, dataflowcomponent.OperationalStateStarting)
 			Expect(err).NotTo(HaveOccurred())
 
 			// set the mock flags for a starting failed state
@@ -410,7 +407,17 @@ var _ = Describe("DataFlowComponent FSM", func() {
 
 			// Setup to Active state
 			// 1. First get to Stopped state
-			tick, err = setupToStoppedState(ctx, instance, mockService, mockFS, componentName, tick)
+			tick, err = fsmtest.TestDataflowComponentStateTransition(
+				ctx, instance, mockService, mockFS, componentName,
+				fsm.LifecycleStateToBeCreated,
+				fsm.LifecycleStateCreating, 5, tick)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Creating → Stopped
+			tick, err = fsmtest.TestDataflowComponentStateTransition(
+				ctx, instance, mockService, mockFS, componentName,
+				fsm.LifecycleStateCreating,
+				dataflowcomponent.OperationalStateStopped, 5, tick)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(mockService.AddDataFlowComponentToBenthosManagerCalled).To(BeTrue())
 
@@ -418,16 +425,12 @@ var _ = Describe("DataFlowComponent FSM", func() {
 			// Set desired state to Active
 			Expect(instance.SetDesiredFSMState(dataflowcomponent.OperationalStateActive)).To(Succeed())
 
-			// Transition from Stopped to Starting
-			tick, err = transitionToStartingState(ctx, instance, mockService, mockFS, componentName, tick)
+			// Execute transition: Stopped → Starting
+			tick, err = fsmtest.TestDataflowComponentStateTransition(
+				ctx, instance, mockService, mockFS, componentName,
+				dataflowcomponent.OperationalStateStopped,
+				dataflowcomponent.OperationalStateStarting, 5, tick)
 			Expect(err).NotTo(HaveOccurred())
-
-			// Set the mock flags for an idle state
-			mockService.SetComponentState(componentName, dataflowcomponentsvc.ComponentStateFlags{
-				IsBenthosRunning:                 true,
-				BenthosFSMState:                  benthosfsm.OperationalStateIdle,
-				IsBenthosProcessingMetricsActive: false,
-			})
 
 			// Execute transition: Starting -> Idle
 			tick, err = fsmtest.TestDataflowComponentStateTransition(
@@ -442,13 +445,6 @@ var _ = Describe("DataFlowComponent FSM", func() {
 				tick,
 			)
 			Expect(err).NotTo(HaveOccurred())
-
-			// Set the mock flags for an active state
-			mockService.SetComponentState(componentName, dataflowcomponentsvc.ComponentStateFlags{
-				IsBenthosRunning:                 true,
-				BenthosFSMState:                  benthosfsm.OperationalStateActive,
-				IsBenthosProcessingMetricsActive: true,
-			})
 
 			// Execute transition: Idle -> Active
 			tick, err = fsmtest.TestDataflowComponentStateTransition(
@@ -482,12 +478,6 @@ var _ = Describe("DataFlowComponent FSM", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(mockService.StopDataFlowComponentCalled).To(BeTrue())
 
-			// Simulate Benthos stopping
-			mockService.SetComponentState(componentName, dataflowcomponentsvc.ComponentStateFlags{
-				IsBenthosRunning: false,
-				BenthosFSMState:  benthosfsm.OperationalStateStopped,
-			})
-
 			// Execute transition: Stopping -> Stopped
 			tick, err = fsmtest.TestDataflowComponentStateTransition(
 				ctx,
@@ -508,21 +498,29 @@ var _ = Describe("DataFlowComponent FSM", func() {
 
 			// Setup to Degraded state
 			// 1. First get to Stopped state
-			tick, err = setupToStoppedState(ctx, instance, mockService, mockFS, componentName, tick)
+			tick, err = fsmtest.TestDataflowComponentStateTransition(
+				ctx, instance, mockService, mockFS, componentName,
+				fsm.LifecycleStateToBeCreated,
+				fsm.LifecycleStateCreating, 5, tick)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Creating → Stopped
+			tick, err = fsmtest.TestDataflowComponentStateTransition(
+				ctx, instance, mockService, mockFS, componentName,
+				fsm.LifecycleStateCreating,
+				dataflowcomponent.OperationalStateStopped, 5, tick)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(mockService.AddDataFlowComponentToBenthosManagerCalled).To(BeTrue())
 
 			// 2. Transition from Stopped to Starting
 			Expect(instance.SetDesiredFSMState(dataflowcomponent.OperationalStateActive)).To(Succeed())
-			tick, err = transitionToStartingState(ctx, instance, mockService, mockFS, componentName, tick)
-			Expect(err).NotTo(HaveOccurred())
 
-			// Set the mock flags for an idle state
-			mockService.SetComponentState(componentName, dataflowcomponentsvc.ComponentStateFlags{
-				IsBenthosRunning:                 true,
-				BenthosFSMState:                  benthosfsm.OperationalStateIdle,
-				IsBenthosProcessingMetricsActive: false,
-			})
+			// Execute transition: Stopped → Starting
+			tick, err = fsmtest.TestDataflowComponentStateTransition(
+				ctx, instance, mockService, mockFS, componentName,
+				dataflowcomponent.OperationalStateStopped,
+				dataflowcomponent.OperationalStateStarting, 5, tick)
+			Expect(err).NotTo(HaveOccurred())
 
 			// Execute transition: Starting -> Idle
 			tick, err = fsmtest.TestDataflowComponentStateTransition(
@@ -537,13 +535,6 @@ var _ = Describe("DataFlowComponent FSM", func() {
 				tick,
 			)
 			Expect(err).NotTo(HaveOccurred())
-
-			// Set the mock flags for degraded state
-			mockService.SetComponentState(componentName, dataflowcomponentsvc.ComponentStateFlags{
-				IsBenthosRunning:                 true,
-				BenthosFSMState:                  benthosfsm.OperationalStateDegraded,
-				IsBenthosProcessingMetricsActive: false,
-			})
 
 			// Execute transition: Idle -> Degraded
 			tick, err = fsmtest.TestDataflowComponentStateTransition(
@@ -603,21 +594,29 @@ var _ = Describe("DataFlowComponent FSM", func() {
 
 			// Setup to Idle state
 			// 1. First get to Stopped state
-			tick, err = setupToStoppedState(ctx, instance, mockService, mockFS, componentName, tick)
+			tick, err = fsmtest.TestDataflowComponentStateTransition(
+				ctx, instance, mockService, mockFS, componentName,
+				fsm.LifecycleStateToBeCreated,
+				fsm.LifecycleStateCreating, 5, tick)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Creating → Stopped
+			tick, err = fsmtest.TestDataflowComponentStateTransition(
+				ctx, instance, mockService, mockFS, componentName,
+				fsm.LifecycleStateCreating,
+				dataflowcomponent.OperationalStateStopped, 5, tick)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(mockService.AddDataFlowComponentToBenthosManagerCalled).To(BeTrue())
 
 			// 2. Set desired state to Active and transition from Stopped to Starting
 			Expect(instance.SetDesiredFSMState(dataflowcomponent.OperationalStateActive)).To(Succeed())
-			tick, err = transitionToStartingState(ctx, instance, mockService, mockFS, componentName, tick)
-			Expect(err).NotTo(HaveOccurred())
 
-			// Set the mock flags for an idle state
-			mockService.SetComponentState(componentName, dataflowcomponentsvc.ComponentStateFlags{
-				IsBenthosRunning:                 true,
-				BenthosFSMState:                  benthosfsm.OperationalStateIdle,
-				IsBenthosProcessingMetricsActive: false,
-			})
+			// Execute transition: Stopped → Starting
+			tick, err = fsmtest.TestDataflowComponentStateTransition(
+				ctx, instance, mockService, mockFS, componentName,
+				dataflowcomponent.OperationalStateStopped,
+				dataflowcomponent.OperationalStateStarting, 5, tick)
+			Expect(err).NotTo(HaveOccurred())
 
 			// Execute transition: Starting -> Idle
 			tick, err = fsmtest.TestDataflowComponentStateTransition(
@@ -651,12 +650,6 @@ var _ = Describe("DataFlowComponent FSM", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(mockService.StopDataFlowComponentCalled).To(BeTrue())
 
-			// Simulate Benthos stopping
-			mockService.SetComponentState(componentName, dataflowcomponentsvc.ComponentStateFlags{
-				IsBenthosRunning: false,
-				BenthosFSMState:  benthosfsm.OperationalStateStopped,
-			})
-
 			// Execute transition: Stopping -> Stopped
 			tick, err = fsmtest.TestDataflowComponentStateTransition(
 				ctx,
@@ -674,95 +667,3 @@ var _ = Describe("DataFlowComponent FSM", func() {
 	})
 
 })
-
-// Helper function to bring the DataflowComponent to Stopped state
-func setupToStoppedState(
-	ctx context.Context,
-	instance *dataflowcomponent.DataflowComponentInstance,
-	mockService *dataflowcomponentsvc.MockDataFlowComponentService,
-	mockFS *filesystem.MockFileSystem,
-	componentName string,
-	tick uint64,
-) (uint64, error) {
-	var err error
-
-	// Step 1: ToBeCreated -> Creating
-	tick, err = fsmtest.TestDataflowComponentStateTransition(
-		ctx,
-		instance,
-		mockService,
-		mockFS,
-		componentName,
-		internalfsm.LifecycleStateToBeCreated,
-		internalfsm.LifecycleStateCreating,
-		5,
-		tick,
-	)
-	if err != nil {
-		return tick, err
-	}
-
-	// Setup mock service state
-	mockService.ComponentStates[componentName] = &dataflowcomponentsvc.ServiceInfo{
-		BenthosFSMState: benthosfsm.OperationalStateStopped,
-		BenthosObservedState: benthosfsm.BenthosObservedState{
-			ServiceInfo: benthossvc.ServiceInfo{
-				S6ObservedState: s6fsm.S6ObservedState{
-					ServiceInfo: s6svc.ServiceInfo{
-						Status: s6svc.ServiceDown,
-						Uptime: 60,
-					},
-				},
-			},
-		},
-	}
-	mockService.ExistingComponents[componentName] = true
-
-	// Step 2: Creating -> Stopped
-	tick, err = fsmtest.TestDataflowComponentStateTransition(
-		ctx,
-		instance,
-		mockService,
-		mockFS,
-		componentName,
-		internalfsm.LifecycleStateCreating,
-		dataflowcomponent.OperationalStateStopped,
-		5,
-		tick,
-	)
-
-	return tick, err
-}
-
-// Helper function to prepare for and execute transition to Starting state
-func transitionToStartingState(
-	ctx context.Context,
-	instance *dataflowcomponent.DataflowComponentInstance,
-	mockService *dataflowcomponentsvc.MockDataFlowComponentService,
-	mockFS *filesystem.MockFileSystem,
-	componentName string,
-	tick uint64,
-) (uint64, error) {
-	// Set desired state to Active
-	if err := instance.SetDesiredFSMState(dataflowcomponent.OperationalStateActive); err != nil {
-		return tick, err
-	}
-
-	// Set up initial component state
-	mockService.SetComponentState(componentName, dataflowcomponentsvc.ComponentStateFlags{
-		IsBenthosRunning: false,
-	})
-
-	// Execute transition: Stopped -> Starting
-	return fsmtest.TestDataflowComponentStateTransition(
-		ctx,
-		instance,
-		mockService,
-		mockFS,
-		componentName,
-		dataflowcomponent.OperationalStateStopped,
-		dataflowcomponent.OperationalStateStarting,
-		5,
-		tick,
-	)
-}
