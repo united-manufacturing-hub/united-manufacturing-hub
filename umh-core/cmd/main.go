@@ -27,7 +27,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/control"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/agent_monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
@@ -159,11 +158,6 @@ func SystemSnapshotLogger(ctx context.Context, controlLoop *control.ControlLoop,
 				for instanceName, instance := range instances {
 					snap_logger.Infof("Instance: %s, current state: %s, desired state: %s",
 						instanceName, instance.CurrentState, instance.DesiredState)
-					// Log observed state if available
-					if instance.LastObservedState != nil {
-						sanitizedState := sanitizeObservedState(instance.LastObservedState)
-						snap_logger.Debugf("Observed state: %v", sanitizedState)
-					}
 				}
 			}
 		}
@@ -201,16 +195,4 @@ func enableBackendConnection(config *config.FullConfig, state *fsm.SystemSnapsho
 	}
 
 	logger.Info("Backend connection enabled")
-}
-
-func sanitizeObservedState(state interface{}) interface{} {
-	switch v := state.(type) {
-	case *agent_monitor.AgentObservedStateSnapshot:
-		// Create a sanitized log-friendly copy of the observed state
-		sanitizedState := *v
-		sanitizedState.ServiceInfoSnapshot.AgentLogs = nil
-		return sanitizedState
-	default:
-		return state
-	}
 }
