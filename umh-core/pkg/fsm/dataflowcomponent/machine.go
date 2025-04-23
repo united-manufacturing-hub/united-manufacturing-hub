@@ -151,13 +151,13 @@ func (d *DataflowComponentInstance) IsStopped() bool {
 }
 
 // PrintState prints the current state of the FSM for debugging
-func (b *DataflowComponentInstance) PrintState() {
-	b.baseFSMInstance.GetLogger().Debugf("Current state: %s", b.baseFSMInstance.GetCurrentFSMState())
-	b.baseFSMInstance.GetLogger().Debugf("Desired state: %s", b.baseFSMInstance.GetDesiredFSMState())
-	b.baseFSMInstance.GetLogger().Debugf("Observed state: %+v", b.ObservedState)
+func (d *DataflowComponentInstance) PrintState() {
+	d.baseFSMInstance.GetLogger().Debugf("Current state: %s", d.baseFSMInstance.GetCurrentFSMState())
+	d.baseFSMInstance.GetLogger().Debugf("Desired state: %s", d.baseFSMInstance.GetDesiredFSMState())
+	d.baseFSMInstance.GetLogger().Debugf("Observed state: %+v", d.ObservedState)
 }
 
 // GetExpectedMaxP95ExecutionTimePerInstance returns the expected max p95 execution time of the instance
-func (b *DataflowComponentInstance) GetExpectedMaxP95ExecutionTimePerInstance() time.Duration {
+func (d *DataflowComponentInstance) GetExpectedMaxP95ExecutionTimePerInstance() time.Duration {
 	return constants.DataflowComponentExpectedMaxP95ExecutionTimePerInstance
 }
