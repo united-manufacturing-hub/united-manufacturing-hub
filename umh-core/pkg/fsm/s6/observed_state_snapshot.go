@@ -19,6 +19,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 )
 
@@ -45,21 +46,21 @@ func (s *S6Instance) CreateObservedStateSnapshot() fsm.ObservedStateSnapshot {
 	// Deep copy config
 	err := deepcopy.Copy(&snapshot.Config, &s.config)
 	if err != nil {
-		s.baseFSMInstance.GetLogger().Error("failed to deep copy config", "error", err)
+		sentry.ReportIssuef(sentry.IssueTypeError, s.baseFSMInstance.GetLogger(), "failed to deep copy config: %v", err)
 		return nil
 	}
 
 	// Deep copy service info
 	err = deepcopy.Copy(&snapshot.ServiceInfo, &s.ObservedState.ServiceInfo)
 	if err != nil {
-		s.baseFSMInstance.GetLogger().Error("failed to deep copy service info", "error", err)
+		sentry.ReportIssuef(sentry.IssueTypeError, s.baseFSMInstance.GetLogger(), "failed to deep copy service info: %v", err)
 		return nil
 	}
 
 	// Deep copy observed config
 	err = deepcopy.Copy(&snapshot.ObservedS6ServiceConfig, &s.ObservedState.ObservedS6ServiceConfig)
 	if err != nil {
-		s.baseFSMInstance.GetLogger().Error("failed to deep copy observed config", "error", err)
+		sentry.ReportIssuef(sentry.IssueTypeError, s.baseFSMInstance.GetLogger(), "failed to deep copy observed config: %v", err)
 		return nil
 	}
 
