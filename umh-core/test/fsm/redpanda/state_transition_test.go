@@ -24,6 +24,7 @@ import (
 
 	s6 "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/redpandaserviceconfig"
+	redpanda_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/redpanda"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda"
@@ -149,7 +150,7 @@ var _ = Describe("RedpandaService State Transitions", func() {
 
 			// Verify state
 			serviceInfo, err = redpandaService.Status(ctx, mockFileSystem, tick, time.Now())
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).To(Equal(redpanda.ErrRedpandaMonitorNotRunning))
 			Expect(serviceInfo.S6FSMState).To(Equal(s6fsm.OperationalStateStopped))
 
 			By("Starting the redpanda service")
@@ -268,7 +269,7 @@ var _ = Describe("RedpandaService State Transitions", func() {
 
 			// Verify state
 			serviceInfo, err = redpandaService.Status(ctx, mockFileSystem, tick, time.Now())
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).To(Equal(redpanda.ErrRedpandaMonitorNotRunning))
 			Expect(serviceInfo.S6FSMState).To(Equal(s6fsm.OperationalStateStopped))
 
 			By("Starting the redpanda service")
@@ -414,7 +415,7 @@ var _ = Describe("RedpandaService State Transitions", func() {
 
 			// Verify service is stopped
 			serviceInfo, err = redpandaService.Status(ctx, mockFileSystem, tick, time.Now())
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).To(Equal(redpanda.ErrRedpandaMonitorNotRunning))
 			Expect(serviceInfo.S6FSMState).To(Equal(s6fsm.OperationalStateStopped))
 		})
 
@@ -708,7 +709,17 @@ func reconcileRedpandaUntilState(ctx context.Context, redpandaService *redpanda.
 		// Check state
 		serviceInfo, err = redpandaService.Status(ctx, mockFileSystem, tick, time.Now())
 		GinkgoWriter.Printf("current state: %s, expected state: %s\n", serviceInfo.S6FSMState, expectedState)
-		if err == nil && serviceInfo.S6FSMState == expectedState {
+
+		shallSkipErrorCheck := (err == nil || (!redpanda_fsm.IsRunningState(serviceInfo.S6FSMState) && err.Error() == "redpanda monitor service is not running"))
+
+		if err != nil {
+			GinkgoWriter.Printf("error: %v (shallSkipErrorCheck: %t)\n", err, shallSkipErrorCheck)
+		}
+
+		// If we're looking for the stopped state, we can ignore ErrRedpandaMonitorNotRunning
+		// as it's expected that the monitor is not running when the service is stopped
+		if serviceInfo.S6FSMState == expectedState && shallSkipErrorCheck {
+			GinkgoWriter.Printf("expected state '%s' reached after %d reconciliations (current state: %s)\n", expectedState, tick, serviceInfo.S6FSMState)
 			return tick
 		}
 	}
