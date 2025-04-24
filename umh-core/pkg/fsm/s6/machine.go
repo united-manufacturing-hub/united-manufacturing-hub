@@ -125,6 +125,11 @@ func (s *S6Instance) IsStopped() bool {
 	return s.baseFSMInstance.GetCurrentFSMState() == OperationalStateStopped
 }
 
+// WantsToBeStopped returns true if the instance wants to be stopped
+func (s *S6Instance) WantsToBeStopped() bool {
+	return s.baseFSMInstance.GetDesiredFSMState() == OperationalStateStopped
+}
+
 func (s *S6Instance) PrintState() {
 	s.baseFSMInstance.GetLogger().Debugf("Current state: %s", s.baseFSMInstance.GetCurrentFSMState())
 	s.baseFSMInstance.GetLogger().Debugf("Desired state: %s", s.baseFSMInstance.GetDesiredFSMState())

@@ -19,6 +19,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/nmapserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	nmap_service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/nmap"
 )
 
@@ -41,13 +42,25 @@ func (n *NmapInstance) CreateObservedStateSnapshot() fsm.ObservedStateSnapshot {
 	}
 
 	// Deep copy config
-	deepcopy.Copy(&snapshot.Config, &n.config)
+	err := deepcopy.Copy(&snapshot.Config, &n.config)
+	if err != nil {
+		sentry.ReportFSMError(n.baseFSMInstance.GetLogger(), n.baseFSMInstance.GetID(), "nmap", "CreateObservedStateSnapshot", err)
+		return nil
+	}
 
 	// Deep copy service info
-	deepcopy.Copy(&snapshot.ServiceInfo, n.ObservedState.ServiceInfo)
+	err = deepcopy.Copy(&snapshot.ServiceInfo, &n.ObservedState.ServiceInfo)
+	if err != nil {
+		sentry.ReportFSMError(n.baseFSMInstance.GetLogger(), n.baseFSMInstance.GetID(), "nmap", "CreateObservedStateSnapshot", err)
+		return nil
+	}
 
 	// Deep copy observed config
-	deepcopy.Copy(&snapshot.ObservedNmapServiceConfig, &n.ObservedState.ObservedNmapServiceConfig)
+	err = deepcopy.Copy(&snapshot.ObservedNmapServiceConfig, &n.ObservedState.ObservedNmapServiceConfig)
+	if err != nil {
+		sentry.ReportFSMError(n.baseFSMInstance.GetLogger(), n.baseFSMInstance.GetID(), "nmap", "CreateObservedStateSnapshot", err)
+		return nil
+	}
 
 	return snapshot
 }

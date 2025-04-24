@@ -127,6 +127,11 @@ func (c *ContainerInstance) IsStopping() bool {
 	return c.baseFSMInstance.GetCurrentFSMState() == OperationalStateStopping
 }
 
+// WantsToBeStopped returns true if the instance wants to be stopped
+func (c *ContainerInstance) WantsToBeStopped() bool {
+	return c.baseFSMInstance.GetDesiredFSMState() == OperationalStateStopped
+}
+
 // PrintState is a helper for debugging
 func (c *ContainerInstance) PrintState() {
 	c.baseFSMInstance.GetLogger().Infof("ContainerInstance %s - Current state: %s, Desired: %s",

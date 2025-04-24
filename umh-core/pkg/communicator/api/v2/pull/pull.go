@@ -81,43 +81,41 @@ func (p *Puller) pull() {
 	watcherUUID := p.dog.RegisterHeartbeat("pull", 10, 600, false)
 	var ticker = time.NewTicker(10 * time.Millisecond)
 	for p.shallRun.Load() {
-		select {
-		case <-ticker.C:
+		<-ticker.C
 
-			p.dog.ReportHeartbeatStatus(watcherUUID, watchdog.HEARTBEAT_STATUS_OK)
-			var cookies = map[string]string{
-				"token": p.jwt.Load().(string),
-			}
-			incomingMessages, err, _ := http.GetRequest[backend_api_structs.PullPayload](context.Background(), http.PullEndpoint, nil, &cookies, p.insecureTLS, p.apiURL, p.logger)
-			if err != nil {
-				// Ignore context canceled errors
-				if errors.Is(err, context.Canceled) {
-					time.Sleep(1 * time.Second)
-					continue
-				}
-				p.logger.Errorf("Error pulling messages: %v", err)
-				continue
-			}
-			error_handler.ResetErrorCounter()
-			if incomingMessages == nil || incomingMessages.UMHMessages == nil || len((*incomingMessages).UMHMessages) == 0 {
+		p.dog.ReportHeartbeatStatus(watcherUUID, watchdog.HEARTBEAT_STATUS_OK)
+		var cookies = map[string]string{
+			"token": p.jwt.Load().(string),
+		}
+		incomingMessages, _, err := http.GetRequest[backend_api_structs.PullPayload](context.Background(), http.PullEndpoint, nil, &cookies, p.insecureTLS, p.apiURL, p.logger)
+		if err != nil {
+			// Ignore context canceled errors
+			if errors.Is(err, context.Canceled) {
 				time.Sleep(1 * time.Second)
 				continue
 			}
+			p.logger.Errorf("Error pulling messages: %v", err)
+			continue
+		}
+		error_handler.ResetErrorCounter()
+		if incomingMessages == nil || incomingMessages.UMHMessages == nil || len((*incomingMessages).UMHMessages) == 0 {
+			time.Sleep(1 * time.Second)
+			continue
+		}
 
-			for _, message := range (*incomingMessages).UMHMessages {
+		for _, message := range (*incomingMessages).UMHMessages {
 
-				insertionTimeout := time.After(10 * time.Second)
-				select {
-				case p.inboundMessageChannel <- &models.UMHMessage{
-					Email:        message.Email,
-					Content:      message.Content,
-					InstanceUUID: message.InstanceUUID,
-					Metadata:     message.Metadata,
-				}:
-				case <-insertionTimeout:
-					p.logger.Warnf("Inbound message channel is full !")
-					p.dog.ReportHeartbeatStatus(watcherUUID, watchdog.HEARTBEAT_STATUS_WARNING)
-				}
+			insertionTimeout := time.After(10 * time.Second)
+			select {
+			case p.inboundMessageChannel <- &models.UMHMessage{
+				Email:        message.Email,
+				Content:      message.Content,
+				InstanceUUID: message.InstanceUUID,
+				Metadata:     message.Metadata,
+			}:
+			case <-insertionTimeout:
+				p.logger.Warnf("Inbound message channel is full !")
+				p.dog.ReportHeartbeatStatus(watcherUUID, watchdog.HEARTBEAT_STATUS_WARNING)
 			}
 		}
 	}
@@ -150,7 +148,7 @@ func GetUserCertificate(ctx context.Context, userEmail string, cookies *map[stri
 	logger.Debugf("Getting user certificate. Endpoint:  %s", endpoint)
 
 	// Make the request
-	response, err, statusCode := http.GetRequest[UserCertificateResponse](ctx, endpoint, nil, cookies, insecureTLS, apiURL, logger)
+	response, statusCode, err := http.GetRequest[UserCertificateResponse](ctx, endpoint, nil, cookies, insecureTLS, apiURL, logger)
 	if err != nil {
 		if statusCode == http2.StatusNoContent {
 			// User does not have a certificate

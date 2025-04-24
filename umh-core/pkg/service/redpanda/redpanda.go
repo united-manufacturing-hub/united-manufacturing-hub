@@ -34,7 +34,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda_monitor"
 	"go.uber.org/zap"
 
-	redpandayaml "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/redpandaserviceconfig"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
@@ -181,7 +180,7 @@ func (s *RedpandaService) generateRedpandaYaml(config *redpandaserviceconfig.Red
 		return "", fmt.Errorf("config is nil")
 	}
 
-	return redpandayaml.RenderRedpandaYAML(config.Topic.DefaultTopicRetentionMs, config.Topic.DefaultTopicRetentionBytes)
+	return redpandaserviceconfig.RenderRedpandaYAML(config.Topic.DefaultTopicRetentionMs, config.Topic.DefaultTopicRetentionBytes)
 }
 
 // generateS6ConfigForRedpanda creates a S6 config for a given redpanda instance
@@ -256,7 +255,7 @@ func (s *RedpandaService) GetConfig(ctx context.Context, filesystemService files
 	result.Resources.MaxCores = 1
 	result.Resources.MemoryPerCoreInBytes = 2048 * 1024 * 1024 // 2GB
 
-	return redpandayaml.NormalizeRedpandaConfig(result), nil
+	return redpandaserviceconfig.NormalizeRedpandaConfig(result), nil
 }
 
 // Status checks the status of a Redpanda service

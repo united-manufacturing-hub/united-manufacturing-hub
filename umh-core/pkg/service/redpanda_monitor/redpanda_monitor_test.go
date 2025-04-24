@@ -84,7 +84,8 @@ var _ = Describe("Redpanda Monitor Service", func() {
 
 		// Cleanup the data directory
 		ctx, cancel = newTimeoutContext()
-		mockFS.RemoveAll(ctx, getTmpDir())
+		err := mockFS.RemoveAll(ctx, getTmpDir())
+		Expect(err).NotTo(HaveOccurred())
 	})
 	AfterEach(func() {
 		cancel()

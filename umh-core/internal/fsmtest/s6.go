@@ -392,3 +392,31 @@ func VerifyStableState(
 
 	return snapshot.Tick, nil
 }
+
+// ReconcileS6UntilError performs reconciliation until an error occurs or maximum attempts are reached.
+// This is useful for testing error handling scenarios where we expect an error to occur during reconciliation.
+//
+// Parameters:
+//   - ctx: Context for cancellation
+//   - snapshot: System snapshot containing the current tick
+//   - instance: The S6Instance to reconcile
+//   - filesystemService: The filesystem service to use for reconciliation
+//   - maxAttempts: Maximum number of reconcile cycles to attempt
+//
+// Returns:
+//   - error: The error encountered during reconciliation (nil if no error occurred after maxAttempts)
+//   - bool: Whether reconciliation was successful (false if an error was encountered)
+func ReconcileS6UntilError(ctx context.Context, snapshot fsm.SystemSnapshot, instance *s6fsm.S6Instance, filesystemService filesystem.Service, maxAttempts int) (error, bool) {
+	for i := 0; i < maxAttempts; i++ {
+		err, reconciled := instance.Reconcile(ctx, snapshot, filesystemService)
+		snapshot.Tick++
+
+		if err != nil {
+			// Error found, return it along with the reconciled status
+			return err, reconciled
+		}
+	}
+
+	// No error found after maxAttempts
+	return nil, true
+}

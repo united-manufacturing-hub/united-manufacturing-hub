@@ -52,7 +52,8 @@ var _ = Describe("Container Monitor Service", func() {
 
 	AfterEach(func() {
 		// Clean up the temporary directory
-		os.RemoveAll(testDataPath)
+		err := os.RemoveAll(testDataPath)
+		Expect(err).NotTo(HaveOccurred())
 	})
 
 	Context("GetStatus", func() {

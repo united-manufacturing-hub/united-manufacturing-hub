@@ -29,6 +29,12 @@ pre-push:
         go install go.uber.org/nilaway/cmd/nilaway@latest
         nilaway -include-pkgs="github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core" ./...
 
+    - name: golangci-lint
+      glob: "**/*.go"
+      root: "umh-core"
+      run: |
+        golangci-lint run ./...
+
 pre-commit:
   parallel: true
   jobs:
@@ -50,3 +56,5 @@ pre-commit:
       run: |
         docker run -it --rm -v $(pwd):/github/workspace apache/skywalking-eyes header fix
         git update-index --again
+
+        
