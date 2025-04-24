@@ -70,7 +70,11 @@ func (d *DataflowComponentInstance) Reconcile(ctx context.Context, snapshot fsm.
 			if d.IsRemoved() || d.IsRemoving() || d.IsStopping() || d.IsStopped() {
 				d.baseFSMInstance.GetLogger().Errorf("DataflowComponent instance %s is already in a terminal state, force removing it", dataflowComponentInstanceName)
 				// force delete everything from the s6 file directory
-				d.service.ForceRemoveDataFlowComponent(ctx, filesystemService, dataflowComponentInstanceName)
+				forceRemoveErr := d.service.ForceRemoveDataFlowComponent(ctx, filesystemService, dataflowComponentInstanceName)
+				if forceRemoveErr != nil {
+					d.baseFSMInstance.GetLogger().Errorf("error force removing DataflowComponent instance %s: %v", dataflowComponentInstanceName, forceRemoveErr)
+					return fmt.Errorf("failed to force remove the DataflowComponent instance: %s : %w", backoff.PermanentFailureError, forceRemoveErr), false
+				}
 				return err, false
 			} else {
 				d.baseFSMInstance.GetLogger().Errorf("DataflowComponent instance %s is not in a terminal state, resetting state and removing it", dataflowComponentInstanceName)
