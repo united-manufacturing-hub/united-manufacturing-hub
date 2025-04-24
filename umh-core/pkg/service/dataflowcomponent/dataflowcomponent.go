@@ -201,7 +201,7 @@ func (s *DataFlowComponentService) Status(ctx context.Context, filesystemService
 	// This is a crucial check that prevents "instance not found" errors
 	// during reconciliation when a service is being created or removed
 	if !s.ServiceExists(ctx, filesystemService, componentName) {
-		return ServiceInfo{}, ErrServiceNotExist
+		return ServiceInfo{}, ErrServiceNotExists
 	}
 
 	// Let's get the status of the underlying benthos service
@@ -297,7 +297,7 @@ func (s *DataFlowComponentService) UpdateDataFlowComponentInBenthosManager(ctx c
 	}
 
 	if !found {
-		return ErrServiceNotExist
+		return ErrServiceNotExists
 	}
 
 	// Generate Benthos config from DataFlowComponent config
@@ -347,7 +347,7 @@ func (s *DataFlowComponentService) RemoveDataFlowComponentFromBenthosManager(ctx
 	}
 
 	if !found {
-		return ErrServiceNotExist
+		return ErrServiceNotExists
 	}
 
 	return nil
@@ -377,7 +377,7 @@ func (s *DataFlowComponentService) StartDataFlowComponent(ctx context.Context, f
 	}
 
 	if !found {
-		return ErrServiceNotExist
+		return ErrServiceNotExists
 	}
 
 	return nil
@@ -407,7 +407,7 @@ func (s *DataFlowComponentService) StopDataFlowComponent(ctx context.Context, fi
 	}
 
 	if !found {
-		return ErrServiceNotExist
+		return ErrServiceNotExists
 	}
 
 	return nil
@@ -443,13 +443,6 @@ func (s *DataFlowComponentService) ReconcileManager(ctx context.Context, filesys
 // ServiceExists checks if a DataFlowComponent service exists
 func (s *DataFlowComponentService) ServiceExists(ctx context.Context, filesystemService filesystem.Service, componentName string) bool {
 	benthosName := s.getBenthosName(componentName)
-
-	// First check our local configs
-	for _, config := range s.benthosConfigs {
-		if config.Name == benthosName {
-			return true
-		}
-	}
 
 	// Then check the actual service existence
 	return s.benthosService.ServiceExists(ctx, filesystemService, benthosName)
