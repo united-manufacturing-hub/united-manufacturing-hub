@@ -145,19 +145,25 @@ func (b *BenthosInstance) getServiceStatus(ctx context.Context, filesystemServic
 
 		} else if errors.Is(err, benthos_service.ErrHealthCheckConnectionRefused) {
 			// If we are in the starting phase or stopped, ..., we can ignore this error, as it is expected
-			if !IsRunningState(b.baseFSMInstance.GetCurrentFSMState()) {
+			if IsRunningState(b.baseFSMInstance.GetCurrentFSMState()) {
 				infoWithFailedHealthChecks := info
 				infoWithFailedHealthChecks.BenthosStatus.HealthCheck.IsLive = false
 				infoWithFailedHealthChecks.BenthosStatus.HealthCheck.IsReady = false
 				return infoWithFailedHealthChecks, nil
+			} else {
+				// If we are not running, we need to return an error
+				return info, nil
 			}
 		} else if errors.Is(err, benthos_service.ErrBenthosMonitorNotRunning) {
 			// If the benthos monitor is not running, and we are in the starting phase or stopped, ..., we can ignore this error, as it is expected
-			if !IsRunningState(b.baseFSMInstance.GetCurrentFSMState()) {
+			if IsRunningState(b.baseFSMInstance.GetCurrentFSMState()) {
 				infoWithFailedHealthChecks := info
 				infoWithFailedHealthChecks.BenthosStatus.HealthCheck.IsLive = false
 				infoWithFailedHealthChecks.BenthosStatus.HealthCheck.IsReady = false
 				return infoWithFailedHealthChecks, nil
+			} else {
+				// If we are not running, we need to return an error
+				return info, nil
 			}
 		}
 

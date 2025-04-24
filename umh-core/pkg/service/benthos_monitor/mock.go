@@ -16,7 +16,6 @@ package benthos_monitor
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
@@ -40,7 +39,7 @@ type MockBenthosMonitorService struct {
 	StopBenthosCalled                       bool
 	ReconcileManagerCalled                  bool
 	ServiceExistsCalled                     bool
-
+	ForceRemoveBenthosMonitorCalled         bool
 	// Return values for each method
 	GenerateS6ConfigForBenthosMonitorResult s6serviceconfig.S6ServiceConfig
 	GenerateS6ConfigForBenthosMonitorError  error
@@ -49,13 +48,14 @@ type MockBenthosMonitorService struct {
 	AddBenthosToS6ManagerError              error
 	UpdateBenthosMonitorInS6ManagerError    error
 	RemoveBenthosFromS6ManagerError         error
+	ForceRemoveBenthosMonitorError          error
 	StartBenthosError                       error
 	StopBenthosError                        error
 	ReconcileManagerError                   error
 	ReconcileManagerReconciled              bool
 	ServiceExistsResult                     bool
 	UpdateLastPort                          uint16
-
+	LastScanTime                            time.Time
 	// For more complex testing scenarios
 	ServiceState      *ServiceInfo
 	ServiceExistsFlag bool
@@ -157,7 +157,8 @@ func (m *MockBenthosMonitorService) SetBenthosMonitorRunning() {
 	if m.ServiceState == nil {
 		m.ServiceState = &ServiceInfo{
 			BenthosStatus: BenthosMonitorStatus{
-				LastScan: &BenthosMetricsScan{},
+				LastScan:  &BenthosMetricsScan{},
+				IsRunning: true,
 			},
 		}
 	}
@@ -169,7 +170,8 @@ func (m *MockBenthosMonitorService) SetBenthosMonitorStopped() {
 	if m.ServiceState == nil {
 		m.ServiceState = &ServiceInfo{
 			BenthosStatus: BenthosMonitorStatus{
-				LastScan: &BenthosMetricsScan{},
+				LastScan:  &BenthosMetricsScan{},
+				IsRunning: false,
 			},
 		}
 	}
@@ -200,6 +202,16 @@ func (m *MockBenthosMonitorService) SetMetricsResponse(metrics Metrics) {
 	m.ServiceState.BenthosStatus.LastScan.BenthosMetrics = &BenthosMetrics{
 		Metrics: metrics,
 	}
+}
+
+// SetOutdatedLastScan sets the last scan to outdated
+func (m *MockBenthosMonitorService) SetOutdatedLastScan(currentTime time.Time) {
+	m.LastScanTime = currentTime.Add(-1 * time.Hour)
+}
+
+// SetGoodLastScan sets the last scan to good
+func (m *MockBenthosMonitorService) SetGoodLastScan(currentTime time.Time) {
+	m.LastScanTime = currentTime
 }
 
 // GenerateS6ConfigForBenthosMonitor mocks generating S6 config for Benthos monitor
@@ -242,17 +254,16 @@ func (m *MockBenthosMonitorService) Status(ctx context.Context, filesystemServic
 
 	// Check if the service exists
 	if !m.ServiceExistsFlag {
-		return ServiceInfo{}, errors.New("service 'benthos-monitor' not found")
+		return ServiceInfo{}, ErrServiceNotExist
 	}
 
 	// If we have a state already stored, return it
 	if m.ServiceState != nil {
-		now := time.Now()
 		m.ServiceState.BenthosStatus.LastScan = &BenthosMetricsScan{
 			MetricsState:   m.metricsState,
 			HealthCheck:    m.ServiceState.BenthosStatus.LastScan.HealthCheck,
 			BenthosMetrics: m.ServiceState.BenthosStatus.LastScan.BenthosMetrics,
-			LastUpdatedAt:  now,
+			LastUpdatedAt:  m.LastScanTime,
 		}
 		return *m.ServiceState, m.StatusError
 	}
@@ -425,9 +436,19 @@ func (m *MockBenthosMonitorService) SetMetricsState(isActive bool) {
 
 	m.metricsState.IsActive = isActive
 
-	// Update the service state if it exists
+	// Update the service state if it existsSetMetricsState
 	if m.ServiceState != nil && m.ServiceState.BenthosStatus.LastScan != nil {
 		m.ServiceState.BenthosStatus.LastScan.MetricsState = m.metricsState
+		m.ServiceState.BenthosStatus.LastScan.BenthosMetrics = &BenthosMetrics{
+			Metrics: Metrics{
+				Input: InputMetrics{
+					ConnectionUp: 1,
+				},
+				Output: OutputMetrics{
+					ConnectionUp: 1,
+				},
+			},
+		}
 	}
 }
 
@@ -444,4 +465,11 @@ func (m *MockBenthosMonitorService) SetMockLogs(logs []s6service.LogEntry) {
 	}
 
 	m.ServiceState.BenthosStatus.Logs = logs
+}
+
+// ForceRemoveBenthosMonitor mocks force removing a Benthos Monitor instance
+func (m *MockBenthosMonitorService) ForceRemoveBenthosMonitor(ctx context.Context, filesystemService filesystem.Service) error {
+	m.ForceRemoveBenthosMonitorCalled = true
+
+	return m.ForceRemoveBenthosMonitorError
 }

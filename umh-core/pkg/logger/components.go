@@ -25,6 +25,7 @@ const (
 	// Manager components
 	ComponentS6Manager                = "S6Manager"
 	ComponentBenthosManager           = "BenthosManager"
+	ComponentBenthosMonitorManager    = "BenthosMonitorManager"
 	ComponentAgentManager             = "AgentManager"
 	ComponentContainerManager         = "ContainerManager"
 	ComponentRedpandaManager          = "RedpandaManager"

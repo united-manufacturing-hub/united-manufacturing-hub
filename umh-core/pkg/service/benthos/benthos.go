@@ -457,49 +457,7 @@ func (s *BenthosService) GetHealthCheckAndMetrics(ctx context.Context, filesyste
 		return s.lastStatus, nil
 	}
 
-	// Let's get the health check of the Benthos service
-	benthosMonitorServiceInfo, err := s.metricsService.Status(ctx, filesystemService, tick)
-	if err != nil {
-		// If the health check failed because of a connection refused error,
-		// we return a special error that can be used to trigger a state transition
-		// to the stopped state
-		if errors.Is(err, benthos_monitor.ErrServiceConnectionRefused) || errors.Is(err, benthos_monitor.ErrServiceNoLogFile) {
-			return BenthosStatus{}, ErrHealthCheckConnectionRefused
-		}
-		return BenthosStatus{}, fmt.Errorf("failed to get health check: %w", err)
-	}
-
-	if benthosMonitorServiceInfo.S6FSMState != s6fsm.OperationalStateRunning {
-		return BenthosStatus{}, ErrBenthosMonitorNotRunning
-	}
-
-	// If this is nil, we have not yet tried to scan for metrics and config, or there has been an error (but that one will be cached in the above Status() return)
-	if benthosMonitorServiceInfo.BenthosStatus.LastScan == nil {
-		return BenthosStatus{}, fmt.Errorf("last scan is nil")
-	}
-
-	// Check that the last scan is not older then RedpandaMaxMetricsAndConfigAge
-	if loopStartTime.Sub(benthosMonitorServiceInfo.BenthosStatus.LastScan.LastUpdatedAt) > constants.BenthosMaxMetricsAndConfigAge {
-		s.logger.Warnf("last scan is %s old, returning empty status", loopStartTime.Sub(benthosMonitorServiceInfo.BenthosStatus.LastScan.LastUpdatedAt))
-		return BenthosStatus{}, fmt.Errorf("last scan is older than %s", constants.BenthosMaxMetricsAndConfigAge)
-	}
-
-	healthCheck := benthos_monitor.HealthCheck{
-		IsLive:  benthosMonitorServiceInfo.BenthosStatus.LastScan.HealthCheck.IsLive,
-		IsReady: benthosMonitorServiceInfo.BenthosStatus.LastScan.HealthCheck.IsReady,
-		Version: benthosMonitorServiceInfo.BenthosStatus.LastScan.HealthCheck.Version,
-	}
-
-	if benthosMonitorServiceInfo.BenthosStatus.LastScan.BenthosMetrics == nil {
-		return BenthosStatus{}, fmt.Errorf("benthos metrics are nil")
-	}
-
-	s.lastStatus = BenthosStatus{
-		HealthCheck:    healthCheck,
-		BenthosMetrics: *benthosMonitorServiceInfo.BenthosStatus.LastScan.BenthosMetrics,
-		BenthosLogs:    logs,
-	}
-
+	// TODO:
 	// if everything is fine, set the status to the service info
 	return s.lastStatus, nil
 

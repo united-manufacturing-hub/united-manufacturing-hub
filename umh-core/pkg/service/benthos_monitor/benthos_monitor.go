@@ -174,6 +174,7 @@ type IBenthosMonitorService interface {
 	Status(ctx context.Context, filesystemService filesystem.Service, tick uint64) (ServiceInfo, error)
 	AddBenthosMonitorToS6Manager(ctx context.Context, port uint16) error
 	RemoveBenthosMonitorFromS6Manager(ctx context.Context) error
+	ForceRemoveBenthosMonitor(ctx context.Context, filesystemService filesystem.Service) error
 	UpdateBenthosMonitorInS6Manager(ctx context.Context, port uint16) error
 	StartBenthosMonitor(ctx context.Context) error
 	StopBenthosMonitor(ctx context.Context) error
@@ -1169,4 +1170,14 @@ func (s *BenthosMonitorService) ServiceExists(ctx context.Context, filesystemSer
 	}
 
 	return exists
+}
+
+// ForceRemoveBenthosMonitor removes a Benthos monitor from the S6 manager
+// This should only be called if the Benthos monitor is in a permanent failure state
+// and the instance itself cannot be stopped or removed
+// Expects benthosName (e.g. "myservice") as defined in the UMH config
+func (s *BenthosMonitorService) ForceRemoveBenthosMonitor(ctx context.Context, filesystemService filesystem.Service) error {
+	s6ServiceName := s.GetS6ServiceName()
+	s6ServicePath := filepath.Join(constants.S6BaseDir, s6ServiceName)
+	return s.s6Service.ForceRemove(ctx, s6ServicePath, filesystemService)
 }
