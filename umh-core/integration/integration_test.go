@@ -37,6 +37,12 @@ const DEFAULT_MEMORY = "4096m"
 const DEFAULT_CPUS = 2
 
 var _ = Describe("UMH Container Integration", Ordered, Label("integration"), func() {
+	BeforeAll(func() {
+		// Cleanup any running umh-core containers
+		cleanupAllUMHCoreContainers()
+		// Cleanup tmp/logs dir
+		cleanupTmpDir()
+	})
 
 	AfterAll(func() {
 		// Always stop container after the entire suite

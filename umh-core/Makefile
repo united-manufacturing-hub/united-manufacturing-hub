@@ -205,6 +205,20 @@ unit-test: vet nilaway
 integration-test: stop-all-pods vet nilaway
 	ginkgo -r -v --tags=test --label-filter='integration' --fail-fast ./...
 
+integration-test-until-failure: stop-all-pods vet nilaway
+	@echo "Running integration tests until failure..."
+	@counter=0; \
+	while true; do \
+		counter=$$((counter+1)); \
+		echo "Test run #$$counter"; \
+		make integration-test; \
+		if [ $$? -ne 0 ]; then \
+			echo "Test failed after $$counter runs"; \
+			break; \
+		fi; \
+		echo "Test run #$$counter completed successfully"; \
+	done
+
 redpanda-extended-test: stop-all-pods vet nilaway
 	ginkgo -r -v --tags=test --label-filter='redpanda-extended' --fail-fast --timeout=1.5h ./...
 

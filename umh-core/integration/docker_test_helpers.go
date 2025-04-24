@@ -76,6 +76,31 @@ func getContainerName() string {
 	return containerName
 }
 
+func cleanupAllUMHCoreContainers() {
+	// 1. Get all containers
+	out, err := runDockerCommand("ps", "-a", "--format", "{{.ID}} {{.Names}}")
+	if err != nil {
+		fmt.Printf("Failed to get all containers: %v\n", err)
+		return
+	}
+	containers := strings.Split(out, "\n")
+	// Skip the header line
+	containers = containers[1:]
+	for _, container := range containers {
+		containerParts := strings.Split(container, " ")
+		if len(containerParts) < 2 {
+			continue
+		}
+		containerID := containerParts[0]
+		containerName := containerParts[1]
+		if strings.HasPrefix(containerName, containerBaseName+"-") {
+			fmt.Printf("Stopping and removing container %s (%s)\n", containerName, containerID)
+			runDockerCommand("stop", containerName)
+			runDockerCommand("rm", "-f", containerName)
+		}
+	}
+}
+
 // getConfigFilePath returns a unique config file path for this test run
 func getConfigFilePath() string {
 	configOnce.Do(func() {
@@ -363,6 +388,12 @@ func cleanupTmpDirs(containerName string) {
 	os.RemoveAll(filepath)
 }
 
+func cleanupTmpDir() {
+	filepath := filepath.Join(getTmpDir(), "logs")
+	GinkgoWriter.Printf("Cleaning up temporary directory %s\n", filepath)
+	os.RemoveAll(filepath)
+}
+
 // getContainerIP returns the IP address of a running container
 func getContainerIP(container string) (string, error) {
 	// First try the traditional IPAddress field
@@ -507,11 +538,14 @@ func PrintLogsAndStopContainer() {
 		// Save logs for debugging
 		containerNameInError := getContainerName()
 		fmt.Printf("\nTest failed. Container name: %s\n", containerNameInError)
+	} else {
+		// Only stop the container if the test was successful
+		// Otherwise, we keep it around for debugging
+		// First stop the container
+		runDockerCommand("stop", containerName)
+		// Then remove it
+		runDockerCommand("rm", "-f", containerName)
 	}
-	// First stop the container
-	runDockerCommand("stop", containerName)
-	// Then remove it
-	runDockerCommand("rm", "-f", containerName)
 
 	// Clean up config file
 	cleanupConfigFile()
