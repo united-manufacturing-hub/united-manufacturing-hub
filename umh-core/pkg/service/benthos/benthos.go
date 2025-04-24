@@ -396,6 +396,14 @@ func (s *BenthosService) Status(ctx context.Context, filesystemService filesyste
 			}, ErrHealthCheckConnectionRefused
 		}
 
+		if strings.Contains(err.Error(), ErrBenthosMonitorNotRunning.Error()) {
+			return ServiceInfo{
+				S6ObservedState: s6ServiceObservedState,
+				S6FSMState:      s6FSMState,
+				BenthosStatus:   benthosStatus,
+			}, ErrBenthosMonitorNotRunning
+		}
+
 		return ServiceInfo{}, fmt.Errorf("failed to get health check: %w", err)
 	}
 
@@ -452,6 +460,10 @@ func (s *BenthosService) GetHealthCheckAndMetrics(ctx context.Context, filesyste
 			return BenthosStatus{}, ErrHealthCheckConnectionRefused
 		}
 		return BenthosStatus{}, fmt.Errorf("failed to get health check: %w", err)
+	}
+
+	if benthosMonitorServiceInfo.S6FSMState != s6fsm.OperationalStateRunning {
+		return BenthosStatus{}, ErrBenthosMonitorNotRunning
 	}
 
 	// If this is nil, we have not yet tried to scan for metrics and config, or there has been an error (but that one will be cached in the above Status() return)

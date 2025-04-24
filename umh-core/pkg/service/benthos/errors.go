@@ -28,4 +28,7 @@ var (
 
 	// ErrServiceNoLogFile indicates the health check had no logs to process
 	ErrServiceNoLogFile = errors.New("log file not found")
+
+	// ErrBenthosMonitorNotRunning indicates the benthos monitor is not running
+	ErrBenthosMonitorNotRunning = errors.New("benthos monitor is not running")
 )
