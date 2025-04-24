@@ -15,6 +15,8 @@
 package integration_test
 
 import (
+	"fmt"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentconfig"
 	"gopkg.in/yaml.v3"
@@ -179,5 +181,4 @@ func (b *DataFlowComponentBuilder) BuildYAML() string {
 		panic(fmt.Errorf("failed to marshal DataFlowComponent config: %w", err))
 	}
 	return string(out)
-}
 }
