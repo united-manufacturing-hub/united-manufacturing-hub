@@ -70,36 +70,39 @@ func NewEditDataflowComponentAction(userEmail string, actionUUID uuid.UUID, inst
 //
 // The function returns appropriate errors for missing required fields or unsupported component types.
 func (a *EditDataflowComponentAction) Parse(payload interface{}) error {
-	// Parse the edit request payload
-	var editRequest models.EditDataflowcomponentRequestSchemaJson
+	//First parse the top level structure
+	type TopLevelPayload struct {
+		Name string `json:"name"`
+		Meta struct {
+			Type string `json:"type"`
+		} `json:"meta"`
+		Payload interface{} `json:"payload"`
+		UUID    string      `json:"uuid"`
+	}
+
+	// Parse the top level payload
+	var topLevel TopLevelPayload
 	payloadBytes, err := json.Marshal(payload)
 	if err != nil {
 		return fmt.Errorf("failed to marshal payload: %v", err)
 	}
 
-	if err := json.Unmarshal(payloadBytes, &editRequest); err != nil {
-		return fmt.Errorf("failed to unmarshal edit dataflow component payload: %v", err)
+	if err := json.Unmarshal(payloadBytes, &topLevel); err != nil {
+		return fmt.Errorf("failed to unmarshal top level payload: %v", err)
 	}
 
-	// Parse and validate UUID
-	if editRequest.UUID == "" {
-		return errors.New("missing required field UUID")
-	}
-
-	componentUUID, err := uuid.Parse(editRequest.UUID)
-	if err != nil {
-		return fmt.Errorf("invalid UUID format: %v", err)
-	}
-	a.componentUUID = componentUUID
-
-	// Extract other fields
-	a.name = editRequest.Name
+	a.name = topLevel.Name
 	if a.name == "" {
 		return errors.New("missing required field Name")
 	}
 
+	a.componentUUID, err = uuid.Parse(topLevel.UUID)
+	if err != nil {
+		return fmt.Errorf("invalid UUID format: %v", err)
+	}
+
 	// Store the meta type
-	a.metaType = editRequest.Meta.Type
+	a.metaType = topLevel.Meta.Type
 	if a.metaType == "" {
 		return errors.New("missing required field Meta.Type")
 	}
@@ -107,7 +110,7 @@ func (a *EditDataflowComponentAction) Parse(payload interface{}) error {
 	// Handle different component types
 	switch a.metaType {
 	case "custom":
-		payload, err := parseCustomDataFlowComponent(editRequest.Payload)
+		payload, err := parseCustomDataFlowComponent(topLevel.Payload)
 		if err != nil {
 			return err
 		}
@@ -148,18 +151,18 @@ func (a *EditDataflowComponentAction) Validate() error {
 	// For custom type, validate the payload structure
 	if a.metaType == "custom" {
 		// Validate input fields
-		if a.payload.Input.Type == "" {
+		if a.payload.Inputs.Type == "" {
 			return errors.New("missing required field inputs.type")
 		}
-		if a.payload.Input.Data == "" {
+		if a.payload.Inputs.Data == "" {
 			return errors.New("missing required field inputs.data")
 		}
 
 		// Validate output fields
-		if a.payload.Output.Type == "" {
+		if a.payload.Outputs.Type == "" {
 			return errors.New("missing required field outputs.type")
 		}
-		if a.payload.Output.Data == "" {
+		if a.payload.Outputs.Data == "" {
 			return errors.New("missing required field outputs.data")
 		}
 
@@ -172,12 +175,12 @@ func (a *EditDataflowComponentAction) Validate() error {
 		var temp map[string]interface{}
 
 		// Validate Input YAML
-		if err := yaml.Unmarshal([]byte(a.payload.Input.Data), &temp); err != nil {
+		if err := yaml.Unmarshal([]byte(a.payload.Inputs.Data), &temp); err != nil {
 			return fmt.Errorf("inputs.data is not valid YAML: %v", err)
 		}
 
 		// Validate Output YAML
-		if err := yaml.Unmarshal([]byte(a.payload.Output.Data), &temp); err != nil {
+		if err := yaml.Unmarshal([]byte(a.payload.Outputs.Data), &temp); err != nil {
 			return fmt.Errorf("outputs.data is not valid YAML: %v", err)
 		}
 
@@ -231,7 +234,7 @@ func (a *EditDataflowComponentAction) Execute() (interface{}, map[string]interfa
 	benthosYamlInject := make(map[string]interface{})
 
 	// First try to use the Input data
-	err := yaml.Unmarshal([]byte(a.payload.Input.Data), &benthosInput)
+	err := yaml.Unmarshal([]byte(a.payload.Inputs.Data), &benthosInput)
 	if err != nil {
 		errMsg := fmt.Sprintf("Failed to parse input data: %s", err.Error())
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errMsg, a.outboundChannel, models.EditDataFlowComponent)
@@ -239,7 +242,7 @@ func (a *EditDataflowComponentAction) Execute() (interface{}, map[string]interfa
 	}
 
 	//parse the output data
-	err = yaml.Unmarshal([]byte(a.payload.Output.Data), &benthosOutput)
+	err = yaml.Unmarshal([]byte(a.payload.Outputs.Data), &benthosOutput)
 	if err != nil {
 		errMsg := fmt.Sprintf("Failed to parse output data: %s", err.Error())
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errMsg, a.outboundChannel, models.EditDataFlowComponent)

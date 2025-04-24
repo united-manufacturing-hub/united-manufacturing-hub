@@ -175,11 +175,11 @@ func parseCustomDataFlowComponent(payload interface{}) (models.CDFCPayload, erro
 
 	// Create our return model
 	cdfcPayload := models.CDFCPayload{
-		Input: models.DfcDataConfig{
+		Inputs: models.DfcDataConfig{
 			Type: cdfcParsed.Inputs.Type,
 			Data: cdfcParsed.Inputs.Data,
 		},
-		Output: models.DfcDataConfig{
+		Outputs: models.DfcDataConfig{
 			Type: cdfcParsed.Outputs.Type,
 			Data: cdfcParsed.Outputs.Data,
 		},
@@ -225,18 +225,18 @@ func (a *DeployDataflowComponentAction) Validate() error {
 	// For custom type, validate the payload structure
 	if a.metaType == "custom" {
 		// Validate input fields
-		if a.payload.Input.Type == "" {
+		if a.payload.Inputs.Type == "" {
 			return errors.New("missing required field inputs.type")
 		}
-		if a.payload.Input.Data == "" {
+		if a.payload.Inputs.Data == "" {
 			return errors.New("missing required field inputs.data")
 		}
 
 		// Validate output fields
-		if a.payload.Output.Type == "" {
+		if a.payload.Outputs.Type == "" {
 			return errors.New("missing required field outputs.type")
 		}
-		if a.payload.Output.Data == "" {
+		if a.payload.Outputs.Data == "" {
 			return errors.New("missing required field outputs.data")
 		}
 
@@ -249,12 +249,12 @@ func (a *DeployDataflowComponentAction) Validate() error {
 		var temp map[string]interface{}
 
 		// Validate Input YAML
-		if err := yaml.Unmarshal([]byte(a.payload.Input.Data), &temp); err != nil {
+		if err := yaml.Unmarshal([]byte(a.payload.Inputs.Data), &temp); err != nil {
 			return fmt.Errorf("inputs.data is not valid YAML: %v", err)
 		}
 
 		// Validate Output YAML
-		if err := yaml.Unmarshal([]byte(a.payload.Output.Data), &temp); err != nil {
+		if err := yaml.Unmarshal([]byte(a.payload.Outputs.Data), &temp); err != nil {
 			return fmt.Errorf("outputs.data is not valid YAML: %v", err)
 		}
 
@@ -308,7 +308,7 @@ func (a *DeployDataflowComponentAction) Execute() (interface{}, map[string]inter
 	benthosYamlInject := make(map[string]interface{})
 
 	// First try to use the Input data
-	err := yaml.Unmarshal([]byte(a.payload.Input.Data), &benthosInput)
+	err := yaml.Unmarshal([]byte(a.payload.Inputs.Data), &benthosInput)
 	if err != nil {
 		errMsg := fmt.Sprintf("Failed to parse input data: %s", err.Error())
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errMsg, a.outboundChannel, models.DeployDataFlowComponent)
@@ -316,7 +316,7 @@ func (a *DeployDataflowComponentAction) Execute() (interface{}, map[string]inter
 	}
 
 	//parse the output data
-	err = yaml.Unmarshal([]byte(a.payload.Output.Data), &benthosOutput)
+	err = yaml.Unmarshal([]byte(a.payload.Outputs.Data), &benthosOutput)
 	if err != nil {
 		errMsg := fmt.Sprintf("Failed to parse output data: %s", err.Error())
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errMsg, a.outboundChannel, models.DeployDataFlowComponent)
