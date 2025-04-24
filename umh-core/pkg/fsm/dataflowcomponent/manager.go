@@ -102,7 +102,7 @@ func (m *DataflowComponentManager) Reconcile(ctx context.Context, snapshot publi
 	start := time.Now()
 	defer func() {
 		duration := time.Since(start)
-		metrics.ObserveReconcileTime(logger.ComponentDataFlowComponentManager, m.BaseFSMManager.GetManagerName(), duration)
+		metrics.ObserveReconcileTime(logger.ComponentDataFlowComponentManager, m.GetManagerName(), duration)
 	}()
 	return m.BaseFSMManager.Reconcile(ctx, snapshot, filesystemService)
 }

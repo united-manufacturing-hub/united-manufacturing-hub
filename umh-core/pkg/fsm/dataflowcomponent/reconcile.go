@@ -79,7 +79,11 @@ func (d *DataflowComponentInstance) Reconcile(ctx context.Context, snapshot fsm.
 			} else {
 				d.baseFSMInstance.GetLogger().Errorf("DataflowComponent instance %s is not in a terminal state, resetting state and removing it", dataflowComponentInstanceName)
 				d.baseFSMInstance.ResetState()
-				d.Remove(ctx)
+				err := d.RemoveInstance(ctx, filesystemService)
+				if err != nil {
+					d.baseFSMInstance.GetLogger().Errorf("error removing DataflowComponent instance %s: %v", dataflowComponentInstanceName, err)
+					return fmt.Errorf("failed to remove the DataflowComponent instance: %s : %w", backoff.PermanentFailureError, err), false
+				}
 				return nil, false // let's try to at least reconcile towards a stopped / removed state
 			}
 		}
@@ -112,6 +116,7 @@ func (d *DataflowComponentInstance) Reconcile(ctx context.Context, snapshot fsm.
 			return nil, false // We don't want to return an error here, because we want to continue reconciling
 		}
 
+		//nolint:ineffassign // This is intentionally modifying the named return value accessed in defer
 		err = nil // The service does not exist, which is fine as this happens in the reconcileStateTransition
 	}
 
