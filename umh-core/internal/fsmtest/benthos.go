@@ -88,18 +88,12 @@ func SetupBenthosServiceState(
 
 	// Update health check status
 	if flags.IsHealthchecksPassed {
-		if mockService.ServiceStates[serviceName].BenthosStatus.BenthosMonitorStatus.LastScan == nil {
-			mockService.ServiceStates[serviceName].BenthosStatus.BenthosMonitorStatus.LastScan = &benthos_monitor.BenthosMetricsScan{}
-		}
-		mockService.ServiceStates[serviceName].BenthosStatus.BenthosMonitorStatus.LastScan.HealthCheck = benthos_monitor.HealthCheck{
+		mockService.ServiceStates[serviceName].BenthosStatus.HealthCheck = benthos_monitor.HealthCheck{
 			IsLive:  true,
 			IsReady: true,
 		}
 	} else {
-		if mockService.ServiceStates[serviceName].BenthosStatus.BenthosMonitorStatus.LastScan == nil {
-			mockService.ServiceStates[serviceName].BenthosStatus.BenthosMonitorStatus.LastScan = &benthos_monitor.BenthosMetricsScan{}
-		}
-		mockService.ServiceStates[serviceName].BenthosStatus.BenthosMonitorStatus.LastScan.HealthCheck = benthos_monitor.HealthCheck{
+		mockService.ServiceStates[serviceName].BenthosStatus.HealthCheck = benthos_monitor.HealthCheck{
 			IsLive:  false,
 			IsReady: false,
 		}
@@ -107,11 +101,11 @@ func SetupBenthosServiceState(
 
 	// Setup metrics state if needed
 	if flags.HasProcessingActivity {
-		mockService.ServiceStates[serviceName].BenthosStatus.BenthosMonitorStatus.LastScan.MetricsState = &benthos_monitor.BenthosMetricsState{
+		mockService.ServiceStates[serviceName].BenthosStatus.BenthosMetrics.MetricsState = &benthos_monitor.BenthosMetricsState{
 			IsActive: true,
 		}
-	} else if mockService.ServiceStates[serviceName].BenthosStatus.BenthosMonitorStatus.LastScan.MetricsState == nil {
-		mockService.ServiceStates[serviceName].BenthosStatus.BenthosMonitorStatus.LastScan.MetricsState = &benthos_monitor.BenthosMetricsState{
+	} else if mockService.ServiceStates[serviceName].BenthosStatus.BenthosMetrics.MetricsState == nil {
+		mockService.ServiceStates[serviceName].BenthosStatus.BenthosMetrics.MetricsState = &benthos_monitor.BenthosMetricsState{
 			IsActive: false,
 		}
 	}

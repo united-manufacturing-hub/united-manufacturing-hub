@@ -246,7 +246,7 @@ func (m *MockBenthosService) IsBenthosS6Stopped(serviceName string) bool {
 
 func (m *MockBenthosService) HasProcessingActivity(status BenthosStatus) bool {
 	m.HasProcessingActivityCalled = true
-	return status.BenthosMonitorStatus.LastScan != nil && status.BenthosMonitorStatus.LastScan.MetricsState != nil && status.BenthosMonitorStatus.LastScan.MetricsState.IsActive
+	return status.BenthosMetrics.MetricsState.IsActive
 }
 
 // AddBenthosToS6Manager mocks adding a Benthos instance to the S6 manager

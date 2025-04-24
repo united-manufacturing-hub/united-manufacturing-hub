@@ -89,9 +89,9 @@ var _ = Describe("BenthosInstance FSM", func() {
 					ServiceInfo: s6svc.ServiceInfo{Status: s6svc.ServiceDown, Uptime: 5},
 				},
 				BenthosStatus: benthossvc.BenthosStatus{
-					BenthosMonitorStatus: benthos_monitor.BenthosMonitorStatus{
-						LastScan: &benthos_monitor.BenthosMetricsScan{
-							HealthCheck: benthos_monitor.HealthCheck{IsLive: false, IsReady: false},
+					BenthosMetrics: benthos_monitor.BenthosMetrics{
+						MetricsState: &benthos_monitor.BenthosMetricsState{
+							IsActive: false,
 						},
 					},
 				},

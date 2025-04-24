@@ -43,7 +43,7 @@ var _ = Describe("MetricsState", Label("metrics_state"), func() {
 
 	Context("UpdateFromMetrics", func() {
 		It("should handle first update as baseline", func() {
-			metrics := benthos_monitor.BenthosMetrics{
+			metrics := benthos_monitor.Metrics{
 				Input: benthos_monitor.InputMetrics{
 					Received: 100,
 				},
@@ -68,7 +68,7 @@ var _ = Describe("MetricsState", Label("metrics_state"), func() {
 
 		It("should handle counter reset", func() {
 			// First update
-			state.UpdateFromMetrics(benthos_monitor.BenthosMetrics{
+			state.UpdateFromMetrics(benthos_monitor.Metrics{
 				Input: benthos_monitor.InputMetrics{
 					Received: 100,
 				},
@@ -76,7 +76,7 @@ var _ = Describe("MetricsState", Label("metrics_state"), func() {
 			tick++
 
 			// Second update to establish throughput
-			state.UpdateFromMetrics(benthos_monitor.BenthosMetrics{
+			state.UpdateFromMetrics(benthos_monitor.Metrics{
 				Input: benthos_monitor.InputMetrics{
 					Received: 150,
 				},
@@ -84,7 +84,7 @@ var _ = Describe("MetricsState", Label("metrics_state"), func() {
 			tick++
 
 			// Counter reset (new count lower than last count)
-			state.UpdateFromMetrics(benthos_monitor.BenthosMetrics{
+			state.UpdateFromMetrics(benthos_monitor.Metrics{
 				Input: benthos_monitor.InputMetrics{
 					Received: 50, // Reset to lower value
 				},
@@ -98,7 +98,7 @@ var _ = Describe("MetricsState", Label("metrics_state"), func() {
 
 		It("should calculate rates correctly over multiple ticks", func() {
 			// First update at tick 0
-			state.UpdateFromMetrics(benthos_monitor.BenthosMetrics{
+			state.UpdateFromMetrics(benthos_monitor.Metrics{
 				Input: benthos_monitor.InputMetrics{
 					Received: 100,
 				},
@@ -110,7 +110,7 @@ var _ = Describe("MetricsState", Label("metrics_state"), func() {
 			tick++
 
 			// Second update at tick 1
-			state.UpdateFromMetrics(benthos_monitor.BenthosMetrics{
+			state.UpdateFromMetrics(benthos_monitor.Metrics{
 				Input: benthos_monitor.InputMetrics{
 					Received: 160, // +60 over 1 tick = 60 per tick
 				},
@@ -127,7 +127,7 @@ var _ = Describe("MetricsState", Label("metrics_state"), func() {
 		})
 
 		It("should handle processor metrics", func() {
-			metrics := benthos_monitor.BenthosMetrics{
+			metrics := benthos_monitor.Metrics{
 				Process: benthos_monitor.ProcessMetrics{
 					Processors: map[string]benthos_monitor.ProcessorMetrics{
 						"proc1": {
@@ -153,12 +153,12 @@ var _ = Describe("MetricsState", Label("metrics_state"), func() {
 
 		It("should update activity status correctly", func() {
 			// No activity
-			state.UpdateFromMetrics(benthos_monitor.BenthosMetrics{}, tick)
+			state.UpdateFromMetrics(benthos_monitor.Metrics{}, tick)
 			tick++
 			Expect(state.IsActive).To(BeFalse())
 
 			// First input update
-			state.UpdateFromMetrics(benthos_monitor.BenthosMetrics{
+			state.UpdateFromMetrics(benthos_monitor.Metrics{
 				Input: benthos_monitor.InputMetrics{
 					Received: 100,
 				},
@@ -167,7 +167,7 @@ var _ = Describe("MetricsState", Label("metrics_state"), func() {
 			Expect(state.IsActive).To(BeTrue()) // Active since we have throughput
 
 			// Second update shows activity
-			state.UpdateFromMetrics(benthos_monitor.BenthosMetrics{
+			state.UpdateFromMetrics(benthos_monitor.Metrics{
 				Input: benthos_monitor.InputMetrics{
 					Received: 200,
 				},
@@ -176,7 +176,7 @@ var _ = Describe("MetricsState", Label("metrics_state"), func() {
 			Expect(state.IsActive).To(BeTrue()) // Still active since we have throughput
 
 			// No new input activity (same count)
-			state.UpdateFromMetrics(benthos_monitor.BenthosMetrics{
+			state.UpdateFromMetrics(benthos_monitor.Metrics{
 				Input: benthos_monitor.InputMetrics{
 					Received: 200, // Same as last tick
 				},
@@ -186,13 +186,13 @@ var _ = Describe("MetricsState", Label("metrics_state"), func() {
 
 			// No new input activity for a while
 			for i := uint64(0); i < benthos_monitor.ThroughputWindowSize+1; i++ {
-				state.UpdateFromMetrics(benthos_monitor.BenthosMetrics{Input: benthos_monitor.InputMetrics{Received: 200}}, tick)
+				state.UpdateFromMetrics(benthos_monitor.Metrics{Input: benthos_monitor.InputMetrics{Received: 200}}, tick)
 				tick++
 			}
 			Expect(state.IsActive).To(BeFalse()) // Not active as we had no throughput for a while
 
 			// New input activity
-			state.UpdateFromMetrics(benthos_monitor.BenthosMetrics{
+			state.UpdateFromMetrics(benthos_monitor.Metrics{
 				Input: benthos_monitor.InputMetrics{
 					Received: 300, // New messages
 				},

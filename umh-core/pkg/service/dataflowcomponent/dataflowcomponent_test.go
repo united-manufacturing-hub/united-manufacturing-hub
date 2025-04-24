@@ -232,8 +232,8 @@ var _ = Describe("DataFlowComponentService", func() {
 			Expect(err).NotTo(HaveOccurred())
 			tick = newTick
 
-			mockBenthosService.ServiceStates[benthosName].BenthosStatus.BenthosMonitorStatus.LastScan.BenthosMetrics.Input.Received = 10
-			mockBenthosService.ServiceStates[benthosName].BenthosStatus.BenthosMonitorStatus.LastScan.BenthosMetrics.Output.Sent = 10
+			mockBenthosService.ServiceStates[benthosName].BenthosStatus.BenthosMetrics.Metrics.Input.Received = 10
+			mockBenthosService.ServiceStates[benthosName].BenthosStatus.BenthosMetrics.Metrics.Output.Sent = 10
 
 			// Reconcile once to ensure that serviceInfo is used to update the observed state
 			_, reconciled := statusService.ReconcileManager(ctx, mockFS, tick)
@@ -246,10 +246,10 @@ var _ = Describe("DataFlowComponentService", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(status.BenthosFSMState).To(Equal(benthosfsmtype.OperationalStateActive))
 			Expect(status.BenthosObservedState.ServiceInfo.S6ObservedState.ServiceInfo.Status).To(Equal(s6svc.ServiceUp))
-			Expect(status.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMonitorStatus.LastScan.HealthCheck.IsLive).To(BeTrue())
-			Expect(status.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMonitorStatus.LastScan.HealthCheck.IsReady).To(BeTrue())
-			Expect(status.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMonitorStatus.LastScan.BenthosMetrics.Input.Received).To(Equal(int64(10)))
-			Expect(status.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMonitorStatus.LastScan.BenthosMetrics.Output.Sent).To(Equal(int64(10)))
+			Expect(status.BenthosObservedState.ServiceInfo.BenthosStatus.HealthCheck.IsLive).To(BeTrue())
+			Expect(status.BenthosObservedState.ServiceInfo.BenthosStatus.HealthCheck.IsReady).To(BeTrue())
+			Expect(status.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.Metrics.Input.Received).To(Equal(int64(10)))
+			Expect(status.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.Metrics.Output.Sent).To(Equal(int64(10)))
 		})
 
 		It("should return error for non-existent component", func() {

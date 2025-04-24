@@ -42,8 +42,8 @@ import (
 	"go.uber.org/zap"
 )
 
-// BenthosMetrics contains information about the metrics of the Benthos service
-type BenthosMetrics struct {
+// Metrics contains information about the metrics of the Benthos service
+type Metrics struct {
 	Input   InputMetrics   `json:"input,omitempty"`
 	Output  OutputMetrics  `json:"output,omitempty"`
 	Process ProcessMetrics `json:"process,omitempty"`
@@ -128,6 +128,14 @@ type connStatus struct {
 	Error     string `json:"error,omitempty"`
 }
 
+// BenthosMetrics contains information about the metrics of the Benthos service
+type BenthosMetrics struct {
+	// Metrics contains the metrics of the Benthos service
+	Metrics Metrics
+	// LastUpdatedAt contains the last time the metrics were updated
+	MetricsState *BenthosMetricsState
+}
+
 // ServiceInfo contains information about a benthos service
 type ServiceInfo struct {
 	// S6ObservedState contains information about the S6 benthos_monitor service
@@ -143,7 +151,7 @@ type BenthosMetricsScan struct {
 	// HealthCheck contains information about the health of the Benthos service
 	HealthCheck HealthCheck
 	// Metrics contains information about the metrics of the Benthos service
-	BenthosMetrics BenthosMetrics
+	BenthosMetrics *BenthosMetrics
 	// MetricsState contains information about the metrics of the Benthos service
 	MetricsState *BenthosMetricsState
 	// LastUpdatedAt contains the last time the metrics were updated
@@ -464,7 +472,7 @@ func (s *BenthosMonitorService) ParseBenthosLogs(ctx context.Context, logs []s6s
 	timestampDataBytes = bytes.ReplaceAll(timestampDataBytes, []byte(METRICS_END_MARKER), []byte{})
 	timestampDataBytes = bytes.ReplaceAll(timestampDataBytes, []byte(BLOCK_END_MARKER), []byte{})
 
-	var metrics BenthosMetrics
+	var metrics *BenthosMetrics
 	var healthCheck HealthCheck
 
 	// Step 1: Process Liveness from /ping endpoint
@@ -491,13 +499,10 @@ func (s *BenthosMonitorService) ParseBenthosLogs(ctx context.Context, logs []s6s
 	healthCheck.Version = versionResp.Version
 
 	// Step 4: Process the Metrics and update the metrics state
-	metrics, err = s.ProcessMetricsData(metricsDataBytes)
+	metrics, err = s.ProcessMetricsData(metricsDataBytes, tick)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse metrics: %w", err)
 	}
-
-	// Give it to the metrics state
-	s.metricsState.UpdateFromMetrics(metrics, tick)
 
 	timestampDataString := string(timestampDataBytes)
 	// If the system resolution is to small, we need to pad the timestamp with zeros
@@ -695,11 +700,11 @@ func ParseVersionData(dataReader io.Reader) (versionResponse, error) {
 
 // ProcessMetricsData processes the metrics data and returns the metrics response
 // It returns an error if there is an error parsing the metrics data
-func (s *BenthosMonitorService) ProcessMetricsData(metricsDataBytes []byte) (BenthosMetrics, error) {
+func (s *BenthosMonitorService) ProcessMetricsData(metricsDataBytes []byte, tick uint64) (*BenthosMetrics, error) {
 
 	curlError := parseCurlError(string(metricsDataBytes))
 	if curlError != nil {
-		return BenthosMetrics{}, curlError
+		return nil, curlError
 	}
 
 	metricsDataString := string(metricsDataBytes)
@@ -709,47 +714,53 @@ func (s *BenthosMonitorService) ProcessMetricsData(metricsDataBytes []byte) (Ben
 	// Decode the hex encoded ping data
 	decodedMetricsDataBytes, err := hex.DecodeString(metricsDataString)
 	if err != nil {
-		return BenthosMetrics{}, fmt.Errorf("failed to decode metrics data: %w", err)
+		return nil, fmt.Errorf("failed to decode metrics data: %w", err)
 	}
 
 	// Decompress the ping data
 	gzipReader, err := gzip.NewReader(bytes.NewReader(decodedMetricsDataBytes))
 	if err != nil {
-		return BenthosMetrics{}, fmt.Errorf("failed to decompress metrics data: %w", err)
+		return nil, fmt.Errorf("failed to decompress metrics data: %w", err)
 	}
 	defer gzipReader.Close()
 
 	// Parse the ping data
 	metrics, err := ParseMetricsData(gzipReader)
 	if err != nil {
-		return BenthosMetrics{}, fmt.Errorf("failed to parse metrics data: %w", err)
+		return nil, fmt.Errorf("failed to parse metrics data: %w", err)
 	}
 
-	return metrics, nil
+	// Update the metrics state
+	s.metricsState.UpdateFromMetrics(metrics, tick)
+
+	return &BenthosMetrics{
+		Metrics:      metrics,
+		MetricsState: s.metricsState,
+	}, nil
 }
 
 // ParseMetricsData parses the metrics data and returns the metrics response
-func ParseMetricsData(dataReader io.Reader) (BenthosMetrics, error) {
+func ParseMetricsData(dataReader io.Reader) (Metrics, error) {
 	data, err := io.ReadAll(dataReader)
 	if err != nil {
-		return BenthosMetrics{}, fmt.Errorf("failed to read metrics data: %w", err)
+		return Metrics{}, fmt.Errorf("failed to read metrics data: %w", err)
 	}
 
 	metrics, err := ParseMetricsFromBytes(data)
 	if err != nil {
-		return BenthosMetrics{}, fmt.Errorf("failed to parse metrics data: %w", err)
+		return Metrics{}, fmt.Errorf("failed to parse metrics data: %w", err)
 	}
 
 	return metrics, nil
 }
 
 // ParseMetricsFromBytes parses prometheus metrics into structured format
-func ParseMetricsFromBytes(data []byte) (BenthosMetrics, error) {
+func ParseMetricsFromBytes(data []byte) (Metrics, error) {
 	var parser expfmt.TextParser
-	metrics := BenthosMetrics{
-		Process: ProcessMetrics{
-			Processors: make(map[string]ProcessorMetrics),
-		},
+	metrics := Metrics{
+		Input:   InputMetrics{},
+		Output:  OutputMetrics{},
+		Process: ProcessMetrics{},
 	}
 
 	// Parse the metrics text into prometheus format

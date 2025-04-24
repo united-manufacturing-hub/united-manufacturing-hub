@@ -30,6 +30,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos_monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"go.uber.org/zap"
@@ -96,9 +97,10 @@ type ServiceInfo struct {
 }
 
 type BenthosStatus struct {
-	// BenthosMonitorStatus contains information about the status of the Benthos service
-	// that was gathered by the benthos-monitor service
-	BenthosMonitorStatus benthos_monitor.BenthosMonitorStatus
+	// HealthCheck contains information about the health of the Benthos service
+	HealthCheck benthos_monitor.HealthCheck
+	// BenthosMetrics contains information about the metrics of the Benthos service
+	BenthosMetrics benthos_monitor.BenthosMetrics
 	// BenthosLogs contains the logs of the Benthos service
 	BenthosLogs []s6service.LogEntry
 }
@@ -110,6 +112,7 @@ type BenthosService struct {
 	s6Service        s6service.Service // S6 service for direct S6 operations
 	s6ServiceConfigs []config.S6FSMConfig
 	metricsService   benthos_monitor.IBenthosMonitorService
+	lastStatus       BenthosStatus
 }
 
 // BenthosServiceOption is a function that modifies a BenthosService
@@ -373,16 +376,71 @@ func (s *BenthosService) Status(ctx context.Context, filesystemService filesyste
 		}
 	}
 
+	benthosStatus, err := s.GetHealthCheckAndMetrics(ctx, filesystemService, tick, loopStartTime, benthosName, logs)
+	if err != nil {
+		if strings.Contains(err.Error(), benthos_monitor.ErrServiceNoLogFile.Error()) {
+			return ServiceInfo{
+				S6ObservedState: s6ServiceObservedState,
+				S6FSMState:      s6FSMState, // Note for state transitions: When a service is stopped and then reactivated,
+				// this S6FSMState needs to be properly refreshed here.
+				// Otherwise, the service can not transition from stopping to stopped state
+				BenthosStatus: BenthosStatus{
+					BenthosLogs: logs,
+				},
+			}, benthos_monitor.ErrServiceNoLogFile
+		}
+		if strings.Contains(err.Error(), benthos_monitor.ErrServiceConnectionRefused.Error()) {
+			return ServiceInfo{
+				S6ObservedState: s6ServiceObservedState,
+				S6FSMState:      s6FSMState,
+				BenthosStatus:   benthosStatus,
+			}, benthos_monitor.ErrServiceConnectionRefused
+		}
+
+		return ServiceInfo{}, fmt.Errorf("failed to get health check: %w", err)
+	}
+
 	serviceInfo := ServiceInfo{
 		S6ObservedState: s6ServiceObservedState,
-		S6FSMState:      s6FSMState, // Note for state transitions: When a service is stopped and then reactivated,
-		// this S6FSMState needs to be properly refreshed here.
-		// Otherwise, the service can not transition from stopping to stopped state
-		BenthosStatus: BenthosStatus{
-			BenthosLogs: logs, // set the logs to the service info
-			// TODO: this is a hack to get the logs to the service info
-			// we should find a better way to do this
-		},
+		S6FSMState:      s6FSMState,
+		BenthosStatus:   benthosStatus,
+	}
+
+	// set the logs to the service info
+	// TODO: this is a hack to get the logs to the service info
+	// we should find a better way to do this
+	serviceInfo.BenthosStatus.BenthosLogs = logs
+
+	return serviceInfo, nil
+}
+
+func (s *BenthosService) GetHealthCheckAndMetrics(ctx context.Context, filesystemService filesystem.Service, tick uint64, loopStartTime time.Time, benthosName string, logs []s6service.LogEntry) (BenthosStatus, error) {
+
+	s.logger.Infof("Getting health check and metrics for tick %d", tick)
+	start := time.Now()
+	defer func() {
+		metrics.ObserveReconcileTime(logger.ComponentBenthosService, metrics.ComponentBenthosService, time.Since(start))
+	}()
+
+	if ctx.Err() != nil {
+		return BenthosStatus{}, ctx.Err()
+	}
+
+	// Skip health checks and metrics if the service doesn't exist yet
+	// This avoids unnecessary errors in Status() when the service is still being created
+	if _, exists := s.s6Manager.GetInstance(s.getS6ServiceName(benthosName)); !exists {
+		s.lastStatus = BenthosStatus{
+			HealthCheck: benthos_monitor.HealthCheck{
+				IsLive:  false,
+				IsReady: false,
+			},
+			BenthosMetrics: benthos_monitor.BenthosMetrics{
+				Metrics:      benthos_monitor.Metrics{},
+				MetricsState: nil,
+			},
+			BenthosLogs: []s6service.LogEntry{},
+		}
+		return s.lastStatus, nil
 	}
 
 	// Let's get the health check of the Benthos service
@@ -391,27 +449,42 @@ func (s *BenthosService) Status(ctx context.Context, filesystemService filesyste
 		// If the health check failed because of a connection refused error,
 		// we return a special error that can be used to trigger a state transition
 		// to the stopped state
-		if errors.Is(err, benthos_monitor.ErrServiceConnectionRefused) {
-			return serviceInfo, ErrHealthCheckConnectionRefused
+		if errors.Is(err, benthos_monitor.ErrServiceConnectionRefused) || errors.Is(err, benthos_monitor.ErrServiceNoLogFile) {
+			return BenthosStatus{}, ErrHealthCheckConnectionRefused
 		}
-		return serviceInfo, fmt.Errorf("failed to get health check: %w", err)
+		return BenthosStatus{}, fmt.Errorf("failed to get health check: %w", err)
 	}
 
 	// If this is nil, we have not yet tried to scan for metrics and config, or there has been an error (but that one will be cached in the above Status() return)
 	if benthosMonitorServiceInfo.BenthosStatus.LastScan == nil {
-		return serviceInfo, fmt.Errorf("last scan is nil")
+		return BenthosStatus{}, fmt.Errorf("last scan is nil")
 	}
 
 	// Check that the last scan is not older then RedpandaMaxMetricsAndConfigAge
 	if loopStartTime.Sub(benthosMonitorServiceInfo.BenthosStatus.LastScan.LastUpdatedAt) > constants.BenthosMaxMetricsAndConfigAge {
 		s.logger.Warnf("last scan is %s old, returning empty status", loopStartTime.Sub(benthosMonitorServiceInfo.BenthosStatus.LastScan.LastUpdatedAt))
-		return serviceInfo, fmt.Errorf("last scan is older than %s", constants.BenthosMaxMetricsAndConfigAge)
+		return BenthosStatus{}, fmt.Errorf("last scan is older than %s", constants.BenthosMaxMetricsAndConfigAge)
+	}
+
+	healthCheck := benthos_monitor.HealthCheck{
+		IsLive:  benthosMonitorServiceInfo.BenthosStatus.LastScan.HealthCheck.IsLive,
+		IsReady: benthosMonitorServiceInfo.BenthosStatus.LastScan.HealthCheck.IsReady,
+		Version: benthosMonitorServiceInfo.BenthosStatus.LastScan.HealthCheck.Version,
+	}
+
+	if benthosMonitorServiceInfo.BenthosStatus.LastScan.BenthosMetrics == nil {
+		return BenthosStatus{}, fmt.Errorf("benthos metrics are nil")
+	}
+
+	s.lastStatus = BenthosStatus{
+		HealthCheck:    healthCheck,
+		BenthosMetrics: *benthosMonitorServiceInfo.BenthosStatus.LastScan.BenthosMetrics,
+		BenthosLogs:    logs,
 	}
 
 	// if everything is fine, set the status to the service info
-	serviceInfo.BenthosStatus.BenthosMonitorStatus = benthosMonitorServiceInfo.BenthosStatus
+	return s.lastStatus, nil
 
-	return serviceInfo, nil
 }
 
 // AddBenthosToS6Manager adds a Benthos instance to the S6 manager
@@ -723,12 +796,12 @@ func (s *BenthosService) IsLogsFine(logs []s6service.LogEntry, currentTime time.
 // IsMetricsErrorFree checks if there are any errors in the Benthos metrics
 func (s *BenthosService) IsMetricsErrorFree(metrics benthos_monitor.BenthosMetrics) bool {
 	// Check output errors
-	if metrics.Output.Error > 0 {
+	if metrics.Metrics.Output.Error > 0 {
 		return false
 	}
 
 	// Check processor errors
-	for _, proc := range metrics.Process.Processors {
+	for _, proc := range metrics.Metrics.Process.Processors {
 		if proc.Error > 0 {
 			return false
 		}
@@ -739,11 +812,8 @@ func (s *BenthosService) IsMetricsErrorFree(metrics benthos_monitor.BenthosMetri
 
 // HasProcessingActivity checks if the Benthos instance has active data processing based on metrics state
 func (s *BenthosService) HasProcessingActivity(status BenthosStatus) bool {
-	if status.BenthosMonitorStatus.LastScan == nil || status.BenthosMonitorStatus.LastScan.MetricsState == nil {
-		return false
-	}
 
-	return status.BenthosMonitorStatus.LastScan.MetricsState.IsActive
+	return status.BenthosMetrics.MetricsState.IsActive
 }
 
 // ServiceExists checks if a Benthos service exists in the S6 manager

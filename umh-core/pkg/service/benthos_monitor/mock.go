@@ -164,8 +164,10 @@ func (m *MockBenthosMonitorService) SetLiveStatus(isLive bool) {
 }
 
 // SetMetricsResponse sets the metrics response of the Benthos Monitor service
-func (m *MockBenthosMonitorService) SetMetricsResponse(metrics BenthosMetrics) {
-	m.ServiceState.BenthosStatus.LastScan.BenthosMetrics = metrics
+func (m *MockBenthosMonitorService) SetMetricsResponse(metrics Metrics) {
+	m.ServiceState.BenthosStatus.LastScan.BenthosMetrics = &BenthosMetrics{
+		Metrics: metrics,
+	}
 }
 
 // GenerateS6ConfigForBenthosMonitor mocks generating S6 config for Benthos monitor

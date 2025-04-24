@@ -55,7 +55,7 @@ var _ = Describe("Benthos Service", func() {
 
 		benthosMonitorMockService.SetReadyStatus(true, true, "")
 
-		benthosMonitorMockService.SetMetricsResponse(benthos_monitor.BenthosMetrics{
+		benthosMonitorMockService.SetMetricsResponse(benthos_monitor.Metrics{
 			Input: benthos_monitor.InputMetrics{
 				Received:     10,
 				ConnectionUp: 1,
@@ -105,7 +105,7 @@ var _ = Describe("Benthos Service", func() {
 		Context("with valid metrics port", func() {
 			BeforeEach(func() {
 				benthosMonitorMockService.SetReadyStatus(true, true, "")
-				benthosMonitorMockService.SetMetricsResponse(benthos_monitor.BenthosMetrics{
+				benthosMonitorMockService.SetMetricsResponse(benthos_monitor.Metrics{
 					Input: benthos_monitor.InputMetrics{
 						Received:     10,
 						ConnectionUp: 1,
@@ -159,12 +159,12 @@ var _ = Describe("Benthos Service", func() {
 				tick++
 				Expect(err).NotTo(HaveOccurred())
 				Expect(status.BenthosStatus.LastScan.HealthCheck.IsReady).To(BeTrue())
-				Expect(status.BenthosStatus.LastScan.BenthosMetrics.Input.Received).To(Equal(int64(10)))
-				Expect(status.BenthosStatus.LastScan.BenthosMetrics.Input.ConnectionUp).To(Equal(int64(1)))
-				Expect(status.BenthosStatus.LastScan.BenthosMetrics.Output.Sent).To(Equal(int64(8)))
-				Expect(status.BenthosStatus.LastScan.BenthosMetrics.Output.BatchSent).To(Equal(int64(2)))
-				Expect(status.BenthosStatus.LastScan.BenthosMetrics.Process.Processors).To(HaveLen(1))
-				proc := status.BenthosStatus.LastScan.BenthosMetrics.Process.Processors["/pipeline/processors/0"]
+				Expect(status.BenthosStatus.LastScan.BenthosMetrics.Metrics.Input.Received).To(Equal(int64(10)))
+				Expect(status.BenthosStatus.LastScan.BenthosMetrics.Metrics.Input.ConnectionUp).To(Equal(int64(1)))
+				Expect(status.BenthosStatus.LastScan.BenthosMetrics.Metrics.Output.Sent).To(Equal(int64(8)))
+				Expect(status.BenthosStatus.LastScan.BenthosMetrics.Metrics.Output.BatchSent).To(Equal(int64(2)))
+				Expect(status.BenthosStatus.LastScan.BenthosMetrics.Metrics.Process.Processors).To(HaveLen(1))
+				proc := status.BenthosStatus.LastScan.BenthosMetrics.Metrics.Process.Processors["/pipeline/processors/0"]
 				Expect(proc.Label).To(Equal("0"))
 				Expect(proc.Received).To(Equal(int64(5)))
 				Expect(proc.BatchReceived).To(Equal(int64(1)))
@@ -450,28 +450,30 @@ var _ = Describe("Benthos Service", func() {
 		Context("IsMetricsErrorFree", func() {
 			It("should return true when there are no errors", func() {
 				metrics := benthos_monitor.BenthosMetrics{
-					Input: benthos_monitor.InputMetrics{
-						ConnectionFailed: 5,
-						ConnectionLost:   1,
-						ConnectionUp:     1,
-						Received:         100,
-					},
-					Output: benthos_monitor.OutputMetrics{
-						Error:            0,
-						ConnectionFailed: 3,
-						ConnectionLost:   0,
-						ConnectionUp:     1,
-						Sent:             90,
-						BatchSent:        10,
-					},
-					Process: benthos_monitor.ProcessMetrics{
-						Processors: map[string]benthos_monitor.ProcessorMetrics{
-							"proc1": {
-								Error:         0,
-								Received:      100,
-								Sent:          100,
-								BatchReceived: 10,
-								BatchSent:     10,
+					Metrics: benthos_monitor.Metrics{
+						Input: benthos_monitor.InputMetrics{
+							ConnectionFailed: 5,
+							ConnectionLost:   1,
+							ConnectionUp:     1,
+							Received:         100,
+						},
+						Output: benthos_monitor.OutputMetrics{
+							Error:            0,
+							ConnectionFailed: 3,
+							ConnectionLost:   0,
+							ConnectionUp:     1,
+							Sent:             90,
+							BatchSent:        10,
+						},
+						Process: benthos_monitor.ProcessMetrics{
+							Processors: map[string]benthos_monitor.ProcessorMetrics{
+								"proc1": {
+									Error:         0,
+									Received:      100,
+									Sent:          100,
+									BatchReceived: 10,
+									BatchSent:     10,
+								},
 							},
 						},
 					},
@@ -481,8 +483,10 @@ var _ = Describe("Benthos Service", func() {
 
 			It("should detect output errors", func() {
 				metrics := benthos_monitor.BenthosMetrics{
-					Output: benthos_monitor.OutputMetrics{
-						Error: 1,
+					Metrics: benthos_monitor.Metrics{
+						Output: benthos_monitor.OutputMetrics{
+							Error: 1,
+						},
 					},
 				}
 				Expect(service.IsMetricsErrorFree(metrics)).To(BeFalse())
@@ -490,11 +494,13 @@ var _ = Describe("Benthos Service", func() {
 
 			It("should ignore connection failures", func() {
 				metrics := benthos_monitor.BenthosMetrics{
-					Input: benthos_monitor.InputMetrics{
-						ConnectionFailed: 1,
-					},
-					Output: benthos_monitor.OutputMetrics{
-						ConnectionFailed: 1,
+					Metrics: benthos_monitor.Metrics{
+						Input: benthos_monitor.InputMetrics{
+							ConnectionFailed: 1,
+						},
+						Output: benthos_monitor.OutputMetrics{
+							ConnectionFailed: 1,
+						},
 					},
 				}
 				Expect(service.IsMetricsErrorFree(metrics)).To(BeTrue())
@@ -502,10 +508,12 @@ var _ = Describe("Benthos Service", func() {
 
 			It("should detect processor errors", func() {
 				metrics := benthos_monitor.BenthosMetrics{
-					Process: benthos_monitor.ProcessMetrics{
-						Processors: map[string]benthos_monitor.ProcessorMetrics{
-							"proc1": {
-								Error: 1,
+					Metrics: benthos_monitor.Metrics{
+						Process: benthos_monitor.ProcessMetrics{
+							Processors: map[string]benthos_monitor.ProcessorMetrics{
+								"proc1": {
+									Error: 1,
+								},
 							},
 						},
 					},
@@ -515,11 +523,13 @@ var _ = Describe("Benthos Service", func() {
 
 			It("should detect errors in any processor", func() {
 				metrics := benthos_monitor.BenthosMetrics{
-					Process: benthos_monitor.ProcessMetrics{
-						Processors: map[string]benthos_monitor.ProcessorMetrics{
-							"proc1": {Error: 0},
-							"proc2": {Error: 1},
-							"proc3": {Error: 0},
+					Metrics: benthos_monitor.Metrics{
+						Process: benthos_monitor.ProcessMetrics{
+							Processors: map[string]benthos_monitor.ProcessorMetrics{
+								"proc1": {Error: 0},
+								"proc2": {Error: 1},
+								"proc3": {Error: 0},
+							},
 						},
 					},
 				}
@@ -575,7 +585,7 @@ var _ = Describe("Benthos Service", func() {
 			// Set up a mock HTTP client for Benthos health and metrics endpoints
 			benthosMonitorMockService.SetReadyStatus(true, true, "")
 			benthosMonitorMockService.SetLiveStatus(true)
-			benthosMonitorMockService.SetMetricsResponse(benthos_monitor.BenthosMetrics{
+			benthosMonitorMockService.SetMetricsResponse(benthos_monitor.Metrics{
 				Input: benthos_monitor.InputMetrics{
 					Received:     10,
 					ConnectionUp: 1,
@@ -677,8 +687,8 @@ var _ = Describe("Benthos Service", func() {
 			By("Verifying service is running with initial configuration")
 			info, err := service.Status(ctx, mockFS, benthosName, initialConfig.MetricsPort, tick, time.Now())
 			Expect(err).NotTo(HaveOccurred())
-			Expect(info.BenthosStatus.BenthosMonitorStatus.LastScan.HealthCheck.IsLive).To(BeTrue())
-			Expect(info.BenthosStatus.BenthosMonitorStatus.LastScan.HealthCheck.IsReady).To(BeTrue())
+			Expect(info.BenthosStatus.HealthCheck.IsLive).To(BeTrue())
+			Expect(info.BenthosStatus.HealthCheck.IsReady).To(BeTrue())
 
 			// Update the service configuration
 			By("Updating the Benthos service configuration")
@@ -726,8 +736,8 @@ logger:
 			By("Verifying service is running with updated configuration")
 			info, err = service.Status(ctx, mockFS, benthosName, updatedConfig.MetricsPort, tick, time.Now())
 			Expect(err).NotTo(HaveOccurred())
-			Expect(info.BenthosStatus.BenthosMonitorStatus.LastScan.HealthCheck.IsLive).To(BeTrue())
-			Expect(info.BenthosStatus.BenthosMonitorStatus.LastScan.HealthCheck.IsReady).To(BeTrue())
+			Expect(info.BenthosStatus.HealthCheck.IsLive).To(BeTrue())
+			Expect(info.BenthosStatus.HealthCheck.IsReady).To(BeTrue())
 
 			// Get the config via the service and validate it reflects the updated configuration
 			cfg, err := service.GetConfig(ctx, mockFS, benthosName)
@@ -778,6 +788,14 @@ logger:
 			benthosMonitorMockService = benthos_monitor.NewMockBenthosMonitorService()
 			benthosMonitorMockService.SetLiveStatus(true)
 			benthosMonitorMockService.SetReadyStatus(true, true, "")
+			benthosMonitorMockService.SetMetricsResponse(benthos_monitor.Metrics{
+				Input: benthos_monitor.InputMetrics{
+					Received: 100,
+				},
+				Output: benthos_monitor.OutputMetrics{
+					Sent: 100,
+				},
+			})
 			benthosName = "test-instance"
 			currentTime = time.Now()
 			logWindow = 5 * time.Minute
@@ -824,9 +842,6 @@ logger:
 				Uptime:   60, // Running for a minute
 				ExitCode: 0,
 			}
-
-			// Configure the client to return healthy responses
-			benthosMonitorMockService.SetReadyStatus(true, true, "")
 
 			// Get the service status (which includes the logs)
 			info, err := service.Status(ctx, mockFS, benthosName, 4195, 1, time.Now())
@@ -969,7 +984,7 @@ logger:
 			benthosMonitorMockService.SetReadyStatus(true, true, "")
 
 			// Set up metrics with no errors
-			benthosMonitorMockService.SetMetricsResponse(benthos_monitor.BenthosMetrics{
+			benthosMonitorMockService.SetMetricsResponse(benthos_monitor.Metrics{
 				Input: benthos_monitor.InputMetrics{
 					Received: 100,
 				},

@@ -70,7 +70,7 @@ func NewBenthosMetricsState() *BenthosMetricsState {
 }
 
 // UpdateFromMetrics updates the metrics state based on new metrics
-func (s *BenthosMetricsState) UpdateFromMetrics(metrics BenthosMetrics, tick uint64) {
+func (s *BenthosMetricsState) UpdateFromMetrics(metrics Metrics, tick uint64) {
 	// Update component throughput
 	s.updateComponentThroughput(&s.Input, metrics.Input.Received, 0, tick)
 	s.updateComponentThroughput(&s.Output, metrics.Output.Sent, metrics.Output.BatchSent, tick)
