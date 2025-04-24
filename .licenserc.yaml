@@ -52,5 +52,6 @@ header:
     - ".devcontainer/devcontainer.json"
     - ".vscode/**"
     - "umh-core/pkg/service/redpanda_monitor/test_metrics.txt"
+    - "umh-core/pkg/service/benthos_monitor/test_metrics.txt"
 
   comment: on-failure
