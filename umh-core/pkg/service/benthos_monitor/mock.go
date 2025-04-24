@@ -151,6 +151,30 @@ func (m *MockBenthosMonitorService) SetReadyStatus(inputConnected bool, outputCo
 	}
 }
 
+// SetBenthosMonitorRunning sets the Benthos Monitor service to running
+func (m *MockBenthosMonitorService) SetBenthosMonitorRunning() {
+	if m.ServiceState == nil {
+		m.ServiceState = &ServiceInfo{
+			BenthosStatus: BenthosMonitorStatus{
+				LastScan: &BenthosMetricsScan{},
+			},
+		}
+	}
+	m.ServiceState.S6FSMState = s6fsm.OperationalStateRunning
+}
+
+// SetBenthosMonitorStopped sets the Benthos Monitor service to stopped
+func (m *MockBenthosMonitorService) SetBenthosMonitorStopped() {
+	if m.ServiceState == nil {
+		m.ServiceState = &ServiceInfo{
+			BenthosStatus: BenthosMonitorStatus{
+				LastScan: &BenthosMetricsScan{},
+			},
+		}
+	}
+	m.ServiceState.S6FSMState = s6fsm.OperationalStateStopped
+}
+
 // SetLiveStatus sets the live status of the Benthos Monitor service
 func (m *MockBenthosMonitorService) SetLiveStatus(isLive bool) {
 	if m.ServiceState == nil {

@@ -598,6 +598,7 @@ var _ = Describe("Benthos Service", func() {
 					ConnectionUp: 1,
 				},
 			})
+			benthosMonitorMockService.SetBenthosMonitorRunning()
 
 			// Create service with mocks
 			service = NewDefaultBenthosService(benthosName,
@@ -799,6 +800,7 @@ logger:
 					Sent: 100,
 				},
 			})
+			benthosMonitorMockService.SetBenthosMonitorRunning()
 			benthosName = "test-instance"
 			currentTime = time.Now()
 			logWindow = 5 * time.Minute
