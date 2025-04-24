@@ -36,6 +36,7 @@ import (
 	benthos_monitor "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos_monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
 var _ = Describe("BenthosInstance FSM", func() {
@@ -46,7 +47,8 @@ var _ = Describe("BenthosInstance FSM", func() {
 		ctx         context.Context
 		tick        uint64
 
-		mockFS *filesystem.MockFileSystem
+		mockFS          *filesystem.MockFileSystem
+		mockSvcRegistry *serviceregistry.Registry
 	)
 
 	BeforeEach(func() {
@@ -59,7 +61,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 		inst, ms, _ := fsmtest.SetupBenthosInstance(serviceName, benthosfsm.OperationalStateStopped)
 		instance = inst
 		mockService = ms
-		mockFS = filesystem.NewMockFileSystem()
+		mockSvcRegistry = serviceregistry.NewMockRegistry()
 	})
 
 	// -------------------------------------------------------------------------
@@ -959,7 +961,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 			//      - no external error returned (err == nil)
 			//      - reconciled == false
 			//      - instance remains in to_be_created
-			err, reconciled := instance.Reconcile(ctx, fsm.SystemSnapshot{Tick: tick}, mockFS)
+			err, reconciled := instance.Reconcile(ctx, fsm.SystemSnapshot{Tick: tick}, mockSvcRegistry)
 			tick++
 			Expect(err).NotTo(HaveOccurred())
 			Expect(reconciled).To(BeFalse())
@@ -976,14 +978,14 @@ var _ = Describe("BenthosInstance FSM", func() {
 			mockService.ExistingServices[serviceName] = true
 
 			// 7) Next reconcile => now we succeed => instance transitions to "creating"
-			err, reconciled = instance.Reconcile(ctx, fsm.SystemSnapshot{Tick: tick}, mockFS)
+			err, reconciled = instance.Reconcile(ctx, fsm.SystemSnapshot{Tick: tick}, mockSvcRegistry)
 			tick++
 			Expect(err).NotTo(HaveOccurred())
 			Expect(reconciled).To(BeTrue())
 			Expect(instance.GetCurrentFSMState()).To(Equal(internalfsm.LifecycleStateCreating))
 
 			// 8) Another reconcile => we complete creation => "stopped"
-			err, reconciled = instance.Reconcile(ctx, fsm.SystemSnapshot{Tick: tick}, mockFS)
+			err, reconciled = instance.Reconcile(ctx, fsm.SystemSnapshot{Tick: tick}, mockSvcRegistry)
 			tick++
 			Expect(err).NotTo(HaveOccurred())
 			Expect(reconciled).To(BeTrue())

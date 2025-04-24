@@ -28,6 +28,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	nmap_service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/nmap"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
 // Reconcile examines the NmapInstance and, in three steps:
@@ -38,7 +39,7 @@ import (
 // This function is intended to be called repeatedly (e.g. in a periodic control loop).
 // Over multiple calls, it converges the actual state to the desired state. Transitions
 // that fail are retried in subsequent reconcile calls after a backoff period.
-func (n *NmapInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot, filesystemService filesystem.Service) (err error, reconciled bool) {
+func (n *NmapInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot, services serviceregistry.Provider) (err error, reconciled bool) {
 	start := time.Now()
 	instanceName := n.baseFSMInstance.GetID()
 	defer func() {
@@ -78,7 +79,7 @@ func (n *NmapInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapsho
 				func(ctx context.Context) error {
 					// Force removal as a last resort when normal state transitions can't work
 					// This directly removes files and resources
-					return n.monitorService.ForceRemoveNmap(ctx, filesystemService, instanceName)
+					return n.monitorService.ForceRemoveNmap(ctx, services.GetFileSystem(), instanceName)
 				},
 			)
 		}
@@ -87,7 +88,7 @@ func (n *NmapInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapsho
 	}
 
 	// Step 2: Detect external changes.
-	if err = n.reconcileExternalChanges(ctx, filesystemService, snapshot.Tick, start); err != nil {
+	if err := n.reconcileExternalChanges(ctx, services.GetFileSystem(), snapshot.Tick, start); err != nil {
 		// If the service is not running, we don't want to return an error here, because we want to continue reconciling
 		if !errors.Is(err, nmap_service.ErrServiceNotExist) {
 			n.baseFSMInstance.SetError(err, snapshot.Tick)
@@ -104,7 +105,7 @@ func (n *NmapInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapsho
 
 	// Step 3: Attempt to reconcile the state.
 	currentTime := time.Now()
-	err, reconciled = n.reconcileStateTransition(ctx, filesystemService, currentTime)
+	err, reconciled = n.reconcileStateTransition(ctx, services.GetFileSystem(), currentTime)
 	if err != nil {
 		// If the instance is removed, we don't want to return an error here, because we want to continue reconciling
 		if errors.Is(err, fsm.ErrInstanceRemoved) {
@@ -117,7 +118,7 @@ func (n *NmapInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapsho
 	}
 
 	// Reconcile the s6Manager
-	s6Err, s6Reconciled := n.monitorService.ReconcileManager(ctx, filesystemService, snapshot.Tick)
+	s6Err, s6Reconciled := n.monitorService.ReconcileManager(ctx, services.GetFileSystem(), snapshot.Tick)
 	if s6Err != nil {
 		n.baseFSMInstance.SetError(s6Err, snapshot.Tick)
 		n.baseFSMInstance.GetLogger().Errorf("error reconciling s6Manager: %s", s6Err)
