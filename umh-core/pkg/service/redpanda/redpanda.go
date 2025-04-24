@@ -606,6 +606,11 @@ func (s *RedpandaService) StartRedpanda(ctx context.Context) error {
 		return ErrServiceNotExist
 	}
 
+	// This also needs to start the redpanda monitor service
+	if err := s.metricsService.StartRedpandaMonitor(ctx); err != nil {
+		return fmt.Errorf("failed to start redpanda monitor: %w", err)
+	}
+
 	return nil
 }
 
@@ -634,6 +639,11 @@ func (s *RedpandaService) StopRedpanda(ctx context.Context) error {
 
 	if !found {
 		return ErrServiceNotExist
+	}
+
+	// This also needs to stop the redpanda monitor service
+	if err := s.metricsService.StopRedpandaMonitor(ctx); err != nil {
+		return fmt.Errorf("failed to stop redpanda monitor: %w", err)
 	}
 
 	return nil
