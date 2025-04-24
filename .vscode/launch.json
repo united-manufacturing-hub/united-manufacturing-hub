@@ -30,6 +30,15 @@
             "buildFlags": "--tags=test"
         },
         {
+            "name": "Debug Ginkgo Tests (test-fsm-nmap)",
+            "type": "go",
+            "request": "launch",
+            "mode": "test",
+            "program": "${workspaceFolder}/umh-core/test/fsm/nmap",
+            "buildFlags": "--tags=test"
+        },
+
+        {
             "name": "Debug Ginkgo Tests (service-nmap)",
             "type": "go",
             "request": "launch",

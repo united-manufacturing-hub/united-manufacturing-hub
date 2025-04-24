@@ -110,15 +110,6 @@ func timeEncoder(t time.Time, enc zapcore.PrimitiveArrayEncoder) {
 	enc.AppendString(t.Format("2006-01-02 15:04:05 MST"))
 }
 
-// customConsoleEncoder creates a custom console encoder with more readable output
-func customConsoleEncoder(config zapcore.EncoderConfig) zapcore.Encoder {
-	// Create a console encoder with our config
-	consoleEncoder := zapcore.NewConsoleEncoder(config)
-
-	// Return a wrapped encoder with custom formatting
-	return consoleEncoder
-}
-
 // New creates a new zap logger with the specified log level and format
 func New(logLevel string, logFormat LogFormat) *zap.Logger {
 	level := getLogLevel(LogLevel(logLevel))

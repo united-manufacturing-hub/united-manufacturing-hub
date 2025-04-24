@@ -18,7 +18,6 @@ import (
 	"fmt"
 	"text/template"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/nmapserviceconfig"
 	"gopkg.in/yaml.v3"
 )
 
@@ -79,11 +78,6 @@ func (g *Generator) configToMap(cfg ConnectionServiceConfig) map[string]any {
 // normalizeConfig does not need to adjust anything here
 func normalizeConfig(raw map[string]any) map[string]any {
 	return raw
-}
-
-// templateData represents the data structure expected by the simplified Connection YAML template
-type templateData struct {
-	NmapServiceConfig *nmapserviceconfig.NmapServiceConfig
 }
 
 // simplifiedTemplate is a much simpler template that just places pre-rendered YAML blocks

@@ -152,6 +152,11 @@ func (b *BenthosInstance) IsStopped() bool {
 	return b.baseFSMInstance.GetCurrentFSMState() == OperationalStateStopped
 }
 
+// WantsToBeStopped returns true if the instance wants to be stopped
+func (b *BenthosInstance) WantsToBeStopped() bool {
+	return b.baseFSMInstance.GetDesiredFSMState() == OperationalStateStopped
+}
+
 // PrintState prints the current state of the FSM for debugging
 func (b *BenthosInstance) PrintState() {
 	b.baseFSMInstance.GetLogger().Debugf("Current state: %s", b.baseFSMInstance.GetCurrentFSMState())

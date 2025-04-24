@@ -119,8 +119,8 @@ func (b *Builder) AddSleepService(name string, duration string) *Builder {
 // StopService stops a service by name
 func (b *Builder) StopService(name string) *Builder {
 	for i, s := range b.full.Internal.Services {
-		if s.FSMInstanceConfig.Name == name {
-			b.full.Internal.Services[i].FSMInstanceConfig.DesiredFSMState = "stopped"
+		if s.Name == name {
+			b.full.Internal.Services[i].DesiredFSMState = "stopped"
 			break
 		}
 	}
@@ -130,8 +130,8 @@ func (b *Builder) StopService(name string) *Builder {
 // StartService starts a service by name
 func (b *Builder) StartService(name string) *Builder {
 	for i, s := range b.full.Internal.Services {
-		if s.FSMInstanceConfig.Name == name {
-			b.full.Internal.Services[i].FSMInstanceConfig.DesiredFSMState = "running"
+		if s.Name == name {
+			b.full.Internal.Services[i].DesiredFSMState = "running"
 			break
 		}
 	}

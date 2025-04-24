@@ -63,11 +63,11 @@ func (g *Generator) configToMap(cfg BenthosServiceConfig) map[string]interface{}
 	configMap := make(map[string]interface{})
 
 	// Add all sections
-	if cfg.Input != nil && len(cfg.Input) > 0 {
+	if len(cfg.Input) > 0 {
 		configMap["input"] = cfg.Input
 	}
 
-	if cfg.Output != nil && len(cfg.Output) > 0 {
+	if len(cfg.Output) > 0 {
 		configMap["output"] = cfg.Output
 	}
 
@@ -79,7 +79,7 @@ func (g *Generator) configToMap(cfg BenthosServiceConfig) map[string]interface{}
 		}
 	}
 
-	if cfg.Buffer != nil && len(cfg.Buffer) > 0 {
+	if len(cfg.Buffer) > 0 {
 		configMap["buffer"] = cfg.Buffer
 	} else {
 		configMap["buffer"] = map[string]interface{}{
@@ -183,18 +183,6 @@ func normalizeConfig(raw map[string]interface{}) map[string]interface{} {
 	}
 
 	return normalized
-}
-
-// templateData represents the data structure expected by the simplified Benthos YAML template
-type templateData struct {
-	Input              string
-	Output             string
-	Pipeline           string
-	CacheResources     string
-	RateLimitResources string
-	Buffer             string
-	MetricsPort        int
-	LogLevel           string
 }
 
 // simplifiedTemplate is a much simpler template that just places pre-rendered YAML blocks
