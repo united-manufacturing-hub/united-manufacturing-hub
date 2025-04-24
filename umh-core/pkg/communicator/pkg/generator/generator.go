@@ -300,12 +300,14 @@ func buildDataFlowComponentDataFromSnapshot(instance fsm.FSMInstanceSnapshot, lo
 
 		// Create health status based on instance.CurrentState
 		extractHealthStatus := func(state string) models.HealthCategory {
-			if state == dataflowcomponent.OperationalStateActive {
+			switch state {
+			case dataflowcomponent.OperationalStateActive:
 				return models.Active
-			} else if state == dataflowcomponent.OperationalStateDegraded {
+			case dataflowcomponent.OperationalStateDegraded:
 				return models.Degraded
+			default:
+				return models.Neutral
 			}
-			return models.Neutral
 		}
 
 		// get the metrics from the instance
