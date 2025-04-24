@@ -27,6 +27,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda_monitor"
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -49,20 +50,19 @@ func newTimeoutContext() (context.Context, context.CancelFunc) {
 
 var _ = Describe("Redpanda Service", func() {
 	var (
-		service *RedpandaService
-		tick    uint64
-		mockFS  *filesystem.MockFileSystem
+		service         *RedpandaService
+		tick            uint64
+		mockSvcRegistry *serviceregistry.Registry
 	)
 
 	BeforeEach(func() {
 		service = NewDefaultRedpandaService("redpanda")
 		tick = 0
-		mockFS = filesystem.NewMockFileSystem()
 
 		// Cleanup the data directory
 		ctx, cancel := newTimeoutContext()
 		defer cancel()
-		err := mockFS.RemoveAll(ctx, getTmpDir())
+		err := mockSvcRegistry.GetFileSystem().RemoveAll(ctx, getTmpDir())
 		Expect(err).NotTo(HaveOccurred())
 
 		// Add the service to the S6 manager
@@ -73,13 +73,13 @@ var _ = Describe("Redpanda Service", func() {
 		config.Topic.DefaultTopicRetentionBytes = 1000000000
 		ctx, cancel = newTimeoutContext()
 		defer cancel()
-		err = service.AddRedpandaToS6Manager(ctx, config, mockFS)
+		err = service.AddRedpandaToS6Manager(ctx, config, mockSvcRegistry.GetFileSystem())
 		Expect(err).NotTo(HaveOccurred())
 
 		// Reconcile the S6 manager
 		ctx, cancel = newTimeoutContext()
 		defer cancel()
-		err, _ = service.ReconcileManager(ctx, mockFS, tick)
+		err, _ = service.ReconcileManager(ctx, mockSvcRegistry, tick)
 		Expect(err).NotTo(HaveOccurred())
 	})
 
@@ -140,7 +140,7 @@ var _ = Describe("Redpanda Service", func() {
 
 			// Add the service with initial config
 			By("Adding the Redpanda service with initial config")
-			err := mockRedpandaService.AddRedpandaToS6Manager(ctx, initialConfig, mockFS)
+			err := mockRedpandaService.AddRedpandaToS6Manager(ctx, initialConfig, mockSvcRegistry.GetFileSystem())
 			Expect(err).NotTo(HaveOccurred())
 			Expect(mockRedpandaService.AddRedpandaToS6ManagerCalled).To(BeTrue())
 
@@ -158,7 +158,7 @@ var _ = Describe("Redpanda Service", func() {
 
 			// Reconcile to apply changes
 			By("Reconciling the manager to apply configuration changes")
-			err, _ = mockRedpandaService.ReconcileManager(ctx, mockFS, 0)
+			err, _ = mockRedpandaService.ReconcileManager(ctx, mockSvcRegistry, 0)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify the configuration was updated in the S6 manager
@@ -196,14 +196,14 @@ var _ = Describe("Redpanda Service", func() {
 			By("Adding a service")
 			err := service.AddRedpandaToS6Manager(ctx, &redpandaserviceconfig.RedpandaServiceConfig{
 				BaseDir: getTmpDir(),
-			}, mockFS)
+			}, mockSvcRegistry.GetFileSystem())
 			Expect(err).NotTo(HaveOccurred())
 
 			// Try to add the same service again
 			By("Trying to add the same service again")
 			err = service.AddRedpandaToS6Manager(ctx, &redpandaserviceconfig.RedpandaServiceConfig{
 				BaseDir: getTmpDir(),
-			}, mockFS)
+			}, mockSvcRegistry.GetFileSystem())
 			Expect(err).To(Equal(ErrServiceAlreadyExists))
 		})
 	})

@@ -77,7 +77,7 @@ type IBenthosService interface {
 	ServiceExists(ctx context.Context, filesystemService filesystem.Service, benthosName string) bool
 	// ReconcileManager reconciles the Benthos manager
 	// Expects tick (uint64) as the current tick
-	ReconcileManager(ctx context.Context, filesystemService filesystem.Service, tick uint64) (error, bool)
+	ReconcileManager(ctx context.Context, services serviceregistry.Provider, tick uint64) (error, bool)
 	// IsLogsFine checks if the logs of a Benthos service are fine
 	// Expects logs ([]s6service.LogEntry), currentTime (time.Time), and logWindow (time.Duration)
 	IsLogsFine(logs []s6service.LogEntry, currentTime time.Time, logWindow time.Duration) bool

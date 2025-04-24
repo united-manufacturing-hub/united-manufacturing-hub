@@ -117,7 +117,7 @@ func (b *BenthosInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnap
 	}
 
 	// Reconcile the s6Manager
-	s6Err, s6Reconciled := b.service.ReconcileManager(ctx, services.GetFileSystem(), snapshot.Tick)
+	s6Err, s6Reconciled := b.service.ReconcileManager(ctx, services, snapshot.Tick)
 	if s6Err != nil {
 		b.baseFSMInstance.SetError(s6Err, snapshot.Tick)
 		b.baseFSMInstance.GetLogger().Errorf("error reconciling s6Manager: %s", s6Err)

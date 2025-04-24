@@ -27,6 +27,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/httpclient"
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
 // MockBenthosService is a mock implementation of the IBenthosService interface for testing
@@ -349,7 +350,7 @@ func (m *MockBenthosService) StopBenthos(ctx context.Context, filesystemService 
 }
 
 // ReconcileManager mocks reconciling the Benthos manager
-func (m *MockBenthosService) ReconcileManager(ctx context.Context, filesystemService filesystem.Service, tick uint64) (error, bool) {
+func (m *MockBenthosService) ReconcileManager(ctx context.Context, services serviceregistry.Provider, tick uint64) (error, bool) {
 	m.ReconcileManagerCalled = true
 	return m.ReconcileManagerError, m.ReconcileManagerReconciled
 }

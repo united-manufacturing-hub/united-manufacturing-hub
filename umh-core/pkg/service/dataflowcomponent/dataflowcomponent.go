@@ -29,6 +29,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/portmanager"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 
 	benthosfsmmanager "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
 	benthosservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
@@ -68,7 +69,7 @@ type IDataFlowComponentService interface {
 	ServiceExists(ctx context.Context, filesystemService filesystem.Service, componentName string) bool
 
 	// ReconcileManager reconciles the DataFlowComponent manager with the actual state
-	ReconcileManager(ctx context.Context, filesystemService filesystem.Service, tick uint64) (error, bool)
+	ReconcileManager(ctx context.Context, services serviceregistry.Provider, tick uint64) (error, bool)
 }
 
 // ServiceInfo contains information about a DataFlowComponent service
@@ -414,7 +415,7 @@ func (s *DataFlowComponentService) StopDataFlowComponent(ctx context.Context, fi
 }
 
 // ReconcileManager reconciles the DataFlowComponent manager
-func (s *DataFlowComponentService) ReconcileManager(ctx context.Context, filesystemService filesystem.Service, tick uint64) (error, bool) {
+func (s *DataFlowComponentService) ReconcileManager(ctx context.Context, services serviceregistry.Provider, tick uint64) (error, bool) {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(logger.ComponentDataFlowComponentService, "ReconcileManager", time.Since(start))
@@ -437,7 +438,7 @@ func (s *DataFlowComponentService) ReconcileManager(ctx context.Context, filesys
 			},
 		},
 		Tick: tick,
-	}, filesystemService)
+	}, services)
 }
 
 // ServiceExists checks if a DataFlowComponent service exists
