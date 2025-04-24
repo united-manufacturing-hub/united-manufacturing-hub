@@ -21,7 +21,6 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	public_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
@@ -105,11 +104,11 @@ func NewRedpandaManager(name string) *RedpandaManager {
 	}
 }
 
-func (m *RedpandaManager) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot, filesystemService filesystem.Service) (error, bool) {
+func (m *RedpandaManager) Reconcile(ctx context.Context, snapshot public_fsm.SystemSnapshot, filesystemService filesystem.Service) (error, bool) {
 	start := time.Now()
 	defer func() {
 		duration := time.Since(start)
-		metrics.ObserveReconcileTime(logger.ComponentRedpandaManager, m.BaseFSMManager.GetManagerName(), duration)
+		metrics.ObserveReconcileTime(logger.ComponentRedpandaManager, m.GetManagerName(), duration)
 	}()
 
 	// We do not need to manage ports for Redpanda, therefore we can directly reconcile

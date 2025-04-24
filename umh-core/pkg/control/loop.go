@@ -244,7 +244,11 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 		}
 	} else {
 		// the new snapshot is a deep copy of the previous snapshot
-		deepcopy.Copy(newSnapshot, prevSnapshot)
+		err := deepcopy.Copy(&newSnapshot, prevSnapshot)
+		if err != nil {
+			sentry.ReportIssuef(sentry.IssueTypeError, c.logger, "Failed to deep copy snapshot: %v", err)
+			return fmt.Errorf("failed to deep copy snapshot: %w", err)
+		}
 		newSnapshot.Tick = ticker
 		newSnapshot.SnapshotTime = time.Now()
 	}
@@ -333,7 +337,10 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 
 	if c.starvationChecker != nil {
 		// Check for starvation
-		c.starvationChecker.Reconcile(ctx, cfg)
+		err, _ := c.starvationChecker.Reconcile(ctx, cfg)
+		if err != nil {
+			return fmt.Errorf("starvation checker reconciliation failed: %w", err)
+		}
 	} else {
 		return fmt.Errorf("starvation checker is not set")
 	}
@@ -410,12 +417,4 @@ func (c *ControlLoop) Stop(ctx context.Context) error {
 	// Signal the control loop to stop
 	ctx.Done()
 	return nil
-}
-
-// isEmptyConfig checks if a FullConfig is effectively empty without direct struct comparison
-func isEmptyConfig(cfg config.FullConfig) bool {
-	// Check if important config sections are empty
-	return len(cfg.Internal.Services) == 0 &&
-		len(cfg.Internal.Benthos) == 0 &&
-		len(cfg.DataFlow) == 0
 }

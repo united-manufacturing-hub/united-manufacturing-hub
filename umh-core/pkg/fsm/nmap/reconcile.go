@@ -60,34 +60,27 @@ func (n *NmapInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapsho
 	if n.baseFSMInstance.ShouldSkipReconcileBecauseOfError(snapshot.Tick) {
 		backErr := n.baseFSMInstance.GetBackoffError(snapshot.Tick)
 		if backoff.IsPermanentFailureError(backErr) {
-			// If permanent, we want to remove the instance or at least stop it
-			// For now, let's just remove it from the manager:
-			if n.IsRemoved() || n.IsRemoving() || n.IsStopped() || n.IsStopping() {
-				n.baseFSMInstance.GetLogger().Errorf("Permanent error on nmap monitor %s but it is already in a terminal/removing state", instanceName)
-				err := n.monitorService.ForceRemoveNmap(ctx, filesystemService, instanceName)
-				if err != nil {
-					n.baseFSMInstance.GetLogger().Debugf("Remove from Manager failed: %v", err)
-					return err, false
-				}
-				return backErr, false
-			} else {
-				n.baseFSMInstance.GetLogger().Errorf("Permanent error on nmap monitor %s => removing it", instanceName)
-				n.baseFSMInstance.ResetState() // clear the error
-				err = n.Remove(ctx)            // attempt removal
-				if err != nil {
-					// If removing doesn't work because the fsm is not in the OperationalStateBeforeRemove
-					// we will force it to remove.
-					n.baseFSMInstance.GetLogger().Errorf("error removing Nmap instance %s: %v", instanceName, err)
-					forceErr := n.monitorService.ForceRemoveNmap(ctx, filesystemService, instanceName)
-					if forceErr != nil {
-						// If even the force removing doesn't work the base-manager should delete the instance
-						// due to a permanent error.
-						n.baseFSMInstance.GetLogger().Errorf("error force removing Nmap instance %s: %v", instanceName, forceErr)
-						return fmt.Errorf("failed to force remove the nmap instance: %s : %w", backoff.PermanentFailureError, forceErr), false
-					}
-				}
-				return nil, false
-			}
+			// For permanent errors, we need special handling based on the instance's current state:
+			// 1. If already in a shutdown state (removed, removing, stopping, stopped), try force removal
+			// 2. If not in a shutdown state, attempt normal removal first, then force if needed
+			return n.baseFSMInstance.HandlePermanentError(
+				ctx,
+				backErr,
+				func() bool {
+					// Determine if we're already in a shutdown state where normal removal isn't possible
+					// and force removal is required
+					return n.IsRemoved() || n.IsRemoving() || n.IsStopped() || n.IsStopping() || n.WantsToBeStopped()
+				},
+				func(ctx context.Context) error {
+					// Normal removal through state transition
+					return n.Remove(ctx)
+				},
+				func(ctx context.Context) error {
+					// Force removal as a last resort when normal state transitions can't work
+					// This directly removes files and resources
+					return n.monitorService.ForceRemoveNmap(ctx, filesystemService, instanceName)
+				},
+			)
 		}
 		n.baseFSMInstance.GetLogger().Debugf("Skipping reconcile for nmap monitor %s: %v", instanceName, backErr)
 		return nil, false
@@ -106,6 +99,7 @@ func (n *NmapInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapsho
 			// complete logs from which it parses.
 			return nil, false // We don't want to return an error here, because we want to continue reconciling
 		}
+		//nolint:ineffassign // This is intentionally modifying the named return value accessed in defer
 		err = nil // The service does not exist, which is fine as this happens in the reconcileStateTransition}
 	}
 
@@ -465,7 +459,7 @@ func (n *NmapInstance) isNmapHealthy() bool {
 	}
 
 	// Only consider nmap healthy if the overall health status is running
-	return n.IsNmapRunning() == true
+	return n.IsNmapRunning()
 }
 
 // checkPortState checks on the port state and if it differs to the currentState

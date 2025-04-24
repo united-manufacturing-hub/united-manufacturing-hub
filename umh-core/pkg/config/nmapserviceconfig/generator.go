@@ -70,15 +70,3 @@ func (g *Generator) configToMap(cfg NmapServiceConfig) map[string]any {
 func normalizeConfig(raw map[string]any) map[string]any {
 	return raw
 }
-
-// templateData represents the data structure expected by the simplified Nmap YAML template
-type templateData struct {
-	Target string
-	Port   int
-}
-
-// simplifiedTemplate is a much simpler template that just places pre-rendered YAML blocks
-var simplifiedTemplate = `target:{{.Target}}
-
-port:{{.Port}}
-`

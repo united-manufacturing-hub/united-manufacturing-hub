@@ -260,6 +260,11 @@ func (n *NmapInstance) IsStopping() bool {
 	return n.baseFSMInstance.GetCurrentFSMState() == OperationalStateStopping
 }
 
+// WantsToBeStopped returns true if the instance wants to be stopped
+func (n *NmapInstance) WantsToBeStopped() bool {
+	return n.baseFSMInstance.GetDesiredFSMState() == OperationalStateStopped
+}
+
 // PrintState is a helper for debugging
 func (n *NmapInstance) PrintState() {
 	n.baseFSMInstance.GetLogger().Infof("NmapInstance %s - Current state: %s, Desired: %s",

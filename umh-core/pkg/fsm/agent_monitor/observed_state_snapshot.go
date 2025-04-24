@@ -17,6 +17,7 @@ package agent_monitor
 import (
 	"github.com/tiendc/go-deepcopy"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/agent_monitor"
 )
 
@@ -33,7 +34,10 @@ func (a *AgentObservedStateSnapshot) IsObservedStateSnapshot() {}
 func (a *AgentInstance) CreateObservedStateSnapshot() fsm.ObservedStateSnapshot {
 	snapshot := &AgentObservedStateSnapshot{}
 	if a.ObservedState.ServiceInfo != nil {
-		deepcopy.Copy(&snapshot.ServiceInfoSnapshot, a.ObservedState.ServiceInfo)
+		err := deepcopy.Copy(&snapshot.ServiceInfoSnapshot, a.ObservedState.ServiceInfo)
+		if err != nil {
+			sentry.ReportIssue(err, sentry.IssueTypeError, a.baseFSMInstance.GetLogger())
+		}
 	}
 	return snapshot
 }

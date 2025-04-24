@@ -47,7 +47,7 @@ func (n *Normalizer) NormalizeConfig(cfg BenthosServiceConfig) BenthosServiceCon
 	}
 
 	// Set default buffer if missing
-	if normalized.Buffer == nil || len(normalized.Buffer) == 0 {
+	if len(normalized.Buffer) == 0 {
 		normalized.Buffer = map[string]interface{}{
 			"none": map[string]interface{}{},
 		}

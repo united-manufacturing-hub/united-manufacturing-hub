@@ -32,6 +32,8 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
+	"go.uber.org/zap"
 )
 
 // Package filesystem implements various filesystem service interfaces.
@@ -732,40 +734,15 @@ func (bs *BufferedService) SyncFromDisk(ctx context.Context) error {
 
 					if isIncremental && job.cf.Info.Size() > previousSize {
 						// Incremental read - only read the new bytes
-						file, err := os.Open(job.absPath)
+						data, err = bs.readFileIncrementally(job.absPath, previousSize, previousContent, logger)
 						if err != nil {
 							results <- fileReadResult{
 								absPath: job.absPath,
-								err:     fmt.Errorf("failed to open file for incremental read: %w", err),
+								err:     err,
 							}
 							continue
 						}
-						defer file.Close()
-
-						// Seek to the position where we left off
-						_, err = file.Seek(previousSize, 0)
-						if err != nil {
-							results <- fileReadResult{
-								absPath: job.absPath,
-								err:     fmt.Errorf("failed to seek in file: %w", err),
-							}
-							continue
-						}
-
-						// Read the new content
-						newContent := make([]byte, job.cf.Info.Size()-previousSize)
-						_, err = file.Read(newContent)
-						if err != nil && !errors.Is(err, io.EOF) {
-							results <- fileReadResult{
-								absPath: job.absPath,
-								err:     fmt.Errorf("failed to read new content: %w", err),
-							}
-							continue
-						}
-
-						// Concatenate old and new content
-						data = append(previousContent, newContent...)
-						logger.Debugf("Incremental read: %s (%d bytes new)", job.absPath, len(newContent))
+						logger.Debugf("Incremental read: %s (%d bytes new)", job.absPath, len(data)-len(previousContent))
 					} else {
 						// Normal full read (either first time seeing file or log rotation happened)
 						data, err = bs.base.ReadFile(workerCtx, job.absPath)
@@ -1442,11 +1419,6 @@ func hasPrefix(s, prefix string) bool {
 	return s[:len(prefix)] == prefix
 }
 
-// containsSeparator checks if there's any os.PathSeparator in s
-func containsSeparator(s string) bool {
-	return strings.Contains(s, string(os.PathSeparator))
-}
-
 // memFileInfo is a trivial in-memory file info
 type memFileInfo struct {
 	name  string
@@ -1512,4 +1484,40 @@ func getFileInode(path string) uint64 {
 	}
 
 	return 0
+}
+
+// readFileIncrementally reads only the new content from a file starting at the previousSize position.
+func (bs *BufferedService) readFileIncrementally(absPath string, previousSize int64, previousContent []byte, logger *zap.SugaredLogger) ([]byte, error) {
+	file, err := os.Open(absPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open file for incremental read: %w", err)
+	}
+	defer func() {
+		closeErr := file.Close()
+		if closeErr != nil {
+			sentry.ReportIssuef(sentry.IssueTypeError, logger, "failed to close file for incremental read: %v", closeErr)
+		}
+	}()
+
+	// Seek to the position where we left off
+	_, err = file.Seek(previousSize, 0)
+	if err != nil {
+		return nil, fmt.Errorf("failed to seek in file: %w", err)
+	}
+
+	// Get the current file info to determine how much to read
+	fileInfo, err := file.Stat()
+	if err != nil {
+		return nil, fmt.Errorf("failed to stat file: %w", err)
+	}
+
+	// Read the new content
+	newContent := make([]byte, fileInfo.Size()-previousSize)
+	_, err = file.Read(newContent)
+	if err != nil && !errors.Is(err, io.EOF) {
+		return nil, fmt.Errorf("failed to read new content: %w", err)
+	}
+
+	// Concatenate old and new content
+	return append(previousContent, newContent...), nil
 }

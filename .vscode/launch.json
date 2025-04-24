@@ -30,14 +30,6 @@
             "buildFlags": "--tags=test"
         },
         {
-            "name": "Debug Ginkgo Tests (test-fsm-dataflowcomponent)",
-            "type": "go",
-            "request": "launch",
-            "mode": "test",
-            "program": "${workspaceFolder}/umh-core/test/fsm/dataflowcomponent",
-            "buildFlags": "--tags=test"
-        },
-        {
             "name": "Debug Ginkgo Tests (service-nmap)",
             "type": "go",
             "request": "launch",

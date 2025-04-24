@@ -62,7 +62,8 @@ var _ = Describe("Redpanda Service", func() {
 		// Cleanup the data directory
 		ctx, cancel := newTimeoutContext()
 		defer cancel()
-		mockFS.RemoveAll(ctx, getTmpDir())
+		err := mockFS.RemoveAll(ctx, getTmpDir())
+		Expect(err).NotTo(HaveOccurred())
 
 		// Add the service to the S6 manager
 		config := &redpandaserviceconfig.RedpandaServiceConfig{
@@ -72,7 +73,7 @@ var _ = Describe("Redpanda Service", func() {
 		config.Topic.DefaultTopicRetentionBytes = 1000000000
 		ctx, cancel = newTimeoutContext()
 		defer cancel()
-		err := service.AddRedpandaToS6Manager(ctx, config, mockFS)
+		err = service.AddRedpandaToS6Manager(ctx, config, mockFS)
 		Expect(err).NotTo(HaveOccurred())
 
 		// Reconcile the S6 manager
