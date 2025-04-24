@@ -34,6 +34,7 @@ type MockBenthosMonitorService struct {
 	GenerateS6ConfigForBenthosMonitorCalled bool
 	StatusCalled                            bool
 	AddBenthosToS6ManagerCalled             bool
+	UpdateBenthosMonitorInS6ManagerCalled   bool
 	RemoveBenthosFromS6ManagerCalled        bool
 	StartBenthosCalled                      bool
 	StopBenthosCalled                       bool
@@ -46,6 +47,7 @@ type MockBenthosMonitorService struct {
 	StatusResult                            ServiceInfo
 	StatusError                             error
 	AddBenthosToS6ManagerError              error
+	UpdateBenthosMonitorInS6ManagerError    error
 	RemoveBenthosFromS6ManagerError         error
 	StartBenthosError                       error
 	StopBenthosError                        error
@@ -120,6 +122,38 @@ func (m *MockBenthosMonitorService) SetServiceState(flags ServiceStateFlags) {
 // GetServiceState gets the state flags
 func (m *MockBenthosMonitorService) GetServiceState() *ServiceStateFlags {
 	return m.stateFlags
+}
+
+// SetReadyStatus sets the ready status of the Benthos Monitor service
+func (m *MockBenthosMonitorService) SetReadyStatus(inputConnected bool, outputConnected bool, errorMsg string) {
+	if m.ServiceState == nil {
+		m.ServiceState = &ServiceInfo{
+			BenthosStatus: BenthosMonitorStatus{
+				LastScan: &BenthosMetricsScan{},
+			},
+		}
+	}
+	m.ServiceState.BenthosStatus.LastScan.HealthCheck.IsReady = true
+	m.ServiceState.BenthosStatus.LastScan.HealthCheck.ReadyError = errorMsg
+	m.ServiceState.BenthosStatus.LastScan.HealthCheck.ConnectionStatuses = []connStatus{
+		{
+			Label:     "",
+			Path:      "input",
+			Connected: inputConnected,
+			Error:     errorMsg,
+		},
+		{
+			Label:     "",
+			Path:      "output",
+			Connected: outputConnected,
+			Error:     errorMsg,
+		},
+	}
+}
+
+// SetMetricsResponse sets the metrics response of the Benthos Monitor service
+func (m *MockBenthosMonitorService) SetMetricsResponse(metrics BenthosMetrics) {
+	m.ServiceState.BenthosStatus.LastScan.BenthosMetrics = metrics
 }
 
 // GenerateS6ConfigForBenthosMonitor mocks generating S6 config for Benthos monitor
@@ -211,6 +245,29 @@ func (m *MockBenthosMonitorService) AddBenthosMonitorToS6Manager(ctx context.Con
 	m.S6ServiceConfig = &s6FSMConfig
 
 	return m.AddBenthosToS6ManagerError
+}
+
+// UpdateBenthosMonitorInS6Manager mocks updating a Benthos Monitor instance in the S6 manager
+func (m *MockBenthosMonitorService) UpdateBenthosMonitorInS6Manager(ctx context.Context, port uint16) error {
+	m.UpdateBenthosMonitorInS6ManagerCalled = true
+
+	// Check for context cancellation
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+
+	// Check whether the service exists
+	if m.S6ServiceConfig == nil {
+		return ErrServiceNotExist
+	}
+
+	// Remove the old instance
+	if err := m.RemoveBenthosMonitorFromS6Manager(ctx); err != nil {
+		return fmt.Errorf("failed to remove old benthos monitor: %w", err)
+	}
+
+	// Add the new instance
+	return m.AddBenthosMonitorToS6Manager(ctx, port)
 }
 
 // RemoveBenthosMonitorFromS6Manager mocks removing a Benthos Monitor instance from the S6 manager

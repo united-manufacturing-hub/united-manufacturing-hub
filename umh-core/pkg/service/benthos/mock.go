@@ -23,6 +23,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
 	s6_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos_monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/httpclient"
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
@@ -106,7 +107,6 @@ func NewMockBenthosService() *MockBenthosService {
 		ExistingServices: make(map[string]bool),
 		S6ServiceConfigs: make([]config.S6FSMConfig, 0),
 		stateFlags:       make(map[string]*ServiceStateFlags),
-		HTTPClient:       NewMockHTTPClient(),
 		S6Service:        &s6service.MockService{},
 	}
 }
@@ -173,7 +173,7 @@ func (m *MockBenthosService) GetConfig(ctx context.Context, filesystemService fi
 }
 
 // Status mocks getting the status of a Benthos service
-func (m *MockBenthosService) Status(ctx context.Context, filesystemService filesystem.Service, serviceName string, metricsPort int, tick uint64) (ServiceInfo, error) {
+func (m *MockBenthosService) Status(ctx context.Context, filesystemService filesystem.Service, serviceName string, metricsPort int, tick uint64, loopStartTime time.Time) (ServiceInfo, error) {
 	m.StatusCalled = true
 
 	// Check if the service exists in the ExistingServices map
@@ -246,7 +246,7 @@ func (m *MockBenthosService) IsBenthosS6Stopped(serviceName string) bool {
 
 func (m *MockBenthosService) HasProcessingActivity(status BenthosStatus) bool {
 	m.HasProcessingActivityCalled = true
-	return status.MetricsState != nil && status.MetricsState.IsActive
+	return status.BenthosMonitorStatus.LastScan != nil && status.BenthosMonitorStatus.LastScan.MetricsState != nil && status.BenthosMonitorStatus.LastScan.MetricsState.IsActive
 }
 
 // AddBenthosToS6Manager mocks adding a Benthos instance to the S6 manager
@@ -363,7 +363,7 @@ func (m *MockBenthosService) IsLogsFine(logs []s6service.LogEntry, currentTime t
 }
 
 // IsMetricsErrorFree mocks checking if metrics are error-free
-func (m *MockBenthosService) IsMetricsErrorFree(metrics Metrics) bool {
+func (m *MockBenthosService) IsMetricsErrorFree(metrics benthos_monitor.BenthosMetrics) bool {
 	m.IsMetricsErrorFreeCalled = true
 	// For testing purposes, we'll consider metrics error-free
 	// This can be enhanced based on testing needs

@@ -165,6 +165,7 @@ type IBenthosMonitorService interface {
 	Status(ctx context.Context, filesystemService filesystem.Service, tick uint64) (ServiceInfo, error)
 	AddBenthosMonitorToS6Manager(ctx context.Context, port uint16) error
 	RemoveBenthosMonitorFromS6Manager(ctx context.Context) error
+	UpdateBenthosMonitorInS6Manager(ctx context.Context, port uint16) error
 	StartBenthosMonitor(ctx context.Context) error
 	StopBenthosMonitor(ctx context.Context) error
 	ReconcileManager(ctx context.Context, filesystemService filesystem.Service, tick uint64) (error, bool)
@@ -1017,7 +1018,29 @@ func (s *BenthosMonitorService) AddBenthosMonitorToS6Manager(ctx context.Context
 	return nil
 }
 
-//  There is no need for an UpdateRedpandaInS6Manager, as the S6 config is static
+// UpdateBenthosMonitorInS6Manager updates the benthos monitor in the S6 manager
+// It will do it by removing the old instance and adding a new one
+func (s *BenthosMonitorService) UpdateBenthosMonitorInS6Manager(ctx context.Context, port uint16) error {
+	if s.s6Manager == nil {
+		return errors.New("s6 manager not initialized")
+	}
+
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+
+	if s.s6ServiceConfig == nil {
+		return ErrServiceNotExist
+	}
+
+	// Remove the old instance
+	if err := s.RemoveBenthosMonitorFromS6Manager(ctx); err != nil {
+		return fmt.Errorf("failed to remove old benthos monitor: %w", err)
+	}
+
+	// Add the new instance
+	return s.AddBenthosMonitorToS6Manager(ctx, port)
+}
 
 // RemoveBenthosMonitorFromS6Manager removes a benthos instance from the S6 manager
 func (s *BenthosMonitorService) RemoveBenthosMonitorFromS6Manager(ctx context.Context) error {

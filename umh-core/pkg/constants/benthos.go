@@ -45,3 +45,7 @@ var (
 	// This injects the version at build time from the environment, eliminating the need for hard-coded values.
 	BenthosVersion = "unknown"
 )
+
+const (
+	BenthosMaxMetricsAndConfigAge = time.Second * 5
+)
