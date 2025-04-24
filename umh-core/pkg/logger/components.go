@@ -32,11 +32,13 @@ const (
 	ComponentNmapManager              = "NmapCompManager"
 
 	// FSM components
-	ComponentBaseFSM          = "BaseFSM"
-	ComponentS6Instance       = "S6Instance"
-	ComponentBenthosInstance  = "BenthosInstance"
-	ComponentRedpandaInstance = "RedpandaInstance"
+	ComponentBaseFSM                   = "BaseFSM"
+	ComponentS6Instance                = "S6Instance"
+	ComponentBenthosInstance           = "BenthosInstance"
+	ComponentRedpandaInstance          = "RedpandaInstance"
 	ComponentNmapInstance     = "NmapInstance"
+	ComponentDataFlowComponentInstance = "DFCInstance"
+
 
 	// Service components
 	ComponentS6Service                = "S6Service"
