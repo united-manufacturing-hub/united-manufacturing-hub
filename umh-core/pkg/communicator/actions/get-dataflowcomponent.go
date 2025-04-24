@@ -107,7 +107,7 @@ func (a *GetDataFlowComponentAction) Execute() (interface{}, map[string]interfac
 		a.actionLogger.Debugf("Dataflowcomponent manager found, getting the dataflowcomponent")
 		instances := dataflowcomponentManager.GetInstances()
 		for _, instance := range instances {
-			dfc, err := buildDataFlowComponentDataFromSnapshot(instance, a.actionLogger)
+			dfc, err := buildDataFlowComponentDataFromSnapshot(*instance, a.actionLogger)
 			if err != nil {
 				a.actionLogger.Warnf("Failed to build dataflowcomponent data: %v", err)
 				continue

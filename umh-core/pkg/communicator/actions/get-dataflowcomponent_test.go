@@ -334,8 +334,8 @@ var _ = Describe("GetDataFlowComponent", func() {
 			// Since we can't directly call the unexported function, we'll test its behavior through Execute
 			// Get a system snapshot with our test instance
 			managerSnapshot := &mockManagerSnapshot{
-				instances: map[string]fsm.FSMInstanceSnapshot{
-					"test-component-build": testInstance,
+				instances: map[string]*fsm.FSMInstanceSnapshot{
+					"test-component-build": &testInstance,
 				},
 			}
 
@@ -397,8 +397,8 @@ var _ = Describe("GetDataFlowComponent", func() {
 
 			// Access the buildDataFlowComponentDataFromSnapshot through Execute
 			managerSnapshot := &mockManagerSnapshot{
-				instances: map[string]fsm.FSMInstanceSnapshot{
-					"invalid-type-component": invalidInstance,
+				instances: map[string]*fsm.FSMInstanceSnapshot{
+					"invalid-type-component": &invalidInstance,
 				},
 			}
 
@@ -532,9 +532,10 @@ func createManagerSnapshot() fsm.ManagerSnapshot {
 	}
 
 	// Convert slice to map required by ManagerSnapshot interface
-	instances := make(map[string]fsm.FSMInstanceSnapshot)
-	for _, instance := range instancesSlice {
-		instances[instance.ID] = instance
+	instances := make(map[string]*fsm.FSMInstanceSnapshot)
+	for i := range instancesSlice {
+		instance := instancesSlice[i]
+		instances[instance.ID] = &instance
 	}
 
 	return &mockManagerSnapshot{
@@ -555,9 +556,10 @@ func createMockSystemSnapshotWithMissingState() *fsm.SystemSnapshot {
 	}
 
 	// Convert slice to map
-	instances := make(map[string]fsm.FSMInstanceSnapshot)
-	for _, instance := range instanceSlice {
-		instances[instance.ID] = instance
+	instances := make(map[string]*fsm.FSMInstanceSnapshot)
+	for i := range instanceSlice {
+		instance := instanceSlice[i]
+		instances[instance.ID] = &instance
 	}
 
 	managerSnapshot := &mockManagerSnapshot{
@@ -574,14 +576,14 @@ func createMockSystemSnapshotWithMissingState() *fsm.SystemSnapshot {
 
 // mockManagerSnapshot is a simple implementation of ManagerSnapshot interface for testing
 type mockManagerSnapshot struct {
-	instances map[string]fsm.FSMInstanceSnapshot
+	instances map[string]*fsm.FSMInstanceSnapshot
 }
 
 func (m *mockManagerSnapshot) GetName() string {
 	return constants.DataflowcomponentManagerName
 }
 
-func (m *mockManagerSnapshot) GetInstances() map[string]fsm.FSMInstanceSnapshot {
+func (m *mockManagerSnapshot) GetInstances() map[string]*fsm.FSMInstanceSnapshot {
 	return m.instances
 }
 
