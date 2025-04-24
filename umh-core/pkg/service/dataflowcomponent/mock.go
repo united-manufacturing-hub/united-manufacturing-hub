@@ -21,7 +21,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentconfig"
-	benthosfsmtype "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
+	benthosfsmmanager "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
 	benthosservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
@@ -75,8 +75,9 @@ var _ IDataFlowComponentService = (*MockDataFlowComponentService)(nil)
 
 // ComponentStateFlags contains all the state flags needed for FSM testing
 type ComponentStateFlags struct {
-	IsBenthosRunning bool
-	BenthosFSMState  string
+	IsBenthosRunning                 bool
+	BenthosFSMState                  string
+	IsBenthosProcessingMetricsActive bool
 }
 
 // NewMockDataFlowComponentService creates a new mock DataFlowComponent service
@@ -92,11 +93,24 @@ func NewMockDataFlowComponentService() *MockDataFlowComponentService {
 
 // SetComponentState sets all state flags for a component at once
 func (m *MockDataFlowComponentService) SetComponentState(componentName string, flags ComponentStateFlags) {
+	observedState := &benthosfsmmanager.BenthosObservedState{
+		ServiceInfo: benthosservice.ServiceInfo{
+			BenthosStatus: benthosservice.BenthosStatus{
+				MetricsState: &benthosservice.BenthosMetricsState{
+					IsActive: flags.IsBenthosProcessingMetricsActive,
+				},
+			},
+		},
+	}
 	// Ensure ServiceInfo exists for this component
 	if _, exists := m.ComponentStates[componentName]; !exists {
 		m.ComponentStates[componentName] = &ServiceInfo{
-			BenthosFSMState: flags.BenthosFSMState,
+			BenthosFSMState:      flags.BenthosFSMState,
+			BenthosObservedState: *observedState,
 		}
+	} else {
+		m.ComponentStates[componentName].BenthosObservedState = *observedState
+		m.ComponentStates[componentName].BenthosFSMState = flags.BenthosFSMState
 	}
 
 	// Store the flags
@@ -139,7 +153,7 @@ func (m *MockDataFlowComponentService) Status(ctx context.Context, filesystemSer
 
 	// Check if the component exists in the ExistingComponents map
 	if exists, ok := m.ExistingComponents[componentName]; !ok || !exists {
-		return ServiceInfo{}, ErrServiceNotExist
+		return ServiceInfo{}, ErrServiceNotExists
 	}
 
 	// If we have a state already stored, return it
@@ -171,7 +185,7 @@ func (m *MockDataFlowComponentService) AddDataFlowComponentToBenthosManager(ctx 
 	benthosConfig := config.BenthosConfig{
 		FSMInstanceConfig: config.FSMInstanceConfig{
 			Name:            benthosName,
-			DesiredFSMState: benthosfsmtype.OperationalStateActive,
+			DesiredFSMState: benthosfsmmanager.OperationalStateActive,
 		},
 		BenthosServiceConfig: m.GenerateBenthosConfigForDataFlowComponentResult,
 	}
@@ -200,7 +214,7 @@ func (m *MockDataFlowComponentService) UpdateDataFlowComponentInBenthosManager(c
 	}
 
 	if !found {
-		return ErrServiceNotExist
+		return ErrServiceNotExists
 	}
 
 	// Update the BenthosConfig
@@ -234,7 +248,7 @@ func (m *MockDataFlowComponentService) RemoveDataFlowComponentFromBenthosManager
 	}
 
 	if !found {
-		return ErrServiceNotExist
+		return ErrServiceNotExists
 	}
 
 	// Remove the component from the list of existing components
@@ -255,14 +269,14 @@ func (m *MockDataFlowComponentService) StartDataFlowComponent(ctx context.Contex
 	// Set the desired state to active for the given component
 	for i, benthosConfig := range m.BenthosConfigs {
 		if benthosConfig.Name == benthosName {
-			m.BenthosConfigs[i].DesiredFSMState = benthosfsmtype.OperationalStateActive
+			m.BenthosConfigs[i].DesiredFSMState = benthosfsmmanager.OperationalStateActive
 			found = true
 			break
 		}
 	}
 
 	if !found {
-		return ErrServiceNotExist
+		return ErrServiceNotExists
 	}
 
 	return m.StartDataFlowComponentError
@@ -279,14 +293,14 @@ func (m *MockDataFlowComponentService) StopDataFlowComponent(ctx context.Context
 	// Set the desired state to stopped for the given component
 	for i, benthosConfig := range m.BenthosConfigs {
 		if benthosConfig.Name == benthosName {
-			m.BenthosConfigs[i].DesiredFSMState = benthosfsmtype.OperationalStateStopped
+			m.BenthosConfigs[i].DesiredFSMState = benthosfsmmanager.OperationalStateStopped
 			found = true
 			break
 		}
 	}
 
 	if !found {
-		return ErrServiceNotExist
+		return ErrServiceNotExists
 	}
 
 	return m.StopDataFlowComponentError

@@ -23,18 +23,16 @@ import (
 
 // Operational state constants (using internal_fsm compatible naming)
 const (
+	// OperationalStateStopping is the state when the service is in the process of stopping
+	OperationalStateStopping = "stopping"
 	// OperationalStateStopped is the initial state and also the state when the service is stopped
 	OperationalStateStopped = "stopped"
 
 	// Starting phase states
-	// OperationalStateStarting is the state when s6 is starting the service
+	// OperationalStateStarting is the state when benthos starts
 	OperationalStateStarting = "starting"
-	// OperationalStateStartingConfigLoading is the state when the process itself is running but is waiting for the config to be loaded
-	OperationalStateStartingConfigLoading = "starting_config_loading"
-	// OperationalStateStartingWaitingForHealthchecks is the state when there was no fatal config error but is waiting for the healthchecks to pass
-	OperationalStateStartingWaitingForHealthchecks = "starting_waiting_for_healthchecks"
-	// OperationalStateStartingWaitingForServiceToRemainRunning is the state when the service is running but is waiting for the service to remain running
-	OperationalStateStartingWaitingForServiceToRemainRunning = "starting_waiting_for_service_to_remain_running"
+	// OperationalStateStartingFailed is the state when benthos failed to start
+	OperationalStateStartingFailed = "starting_failed"
 
 	// Running phase states
 	// OperationalStateIdle is the state when the service is running but not actively processing data
@@ -43,35 +41,59 @@ const (
 	OperationalStateActive = "active"
 	// OperationalStateDegraded is the state when the service is running but has encountered issues
 	OperationalStateDegraded = "degraded"
-
-	// OperationalStateStopping is the state when the service is in the process of stopping
-	OperationalStateStopping = "stopping"
 )
 
 // Operational event constants
 const (
 	// Basic lifecycle events
-	EventStart     = "start"
-	EventStartDone = "start_done"
-	EventStop      = "stop"
-	EventStopDone  = "stop_done"
-
-	// Starting phase events
-	EventBenthosCreated = "benthos_created"
-	// TODO: Probably we might need to add more events like BenthosConfigValidated
-	// This needs some discussion as the config validation can be part of ConfigLoaded too.
-	EventBenthosConfigLoaded = "benthos_config_loaded"
-	EventBenthosRestarting   = "benthos_restarting"
-	EventBenthosStarted      = "benthos_started"
-	EventHealthchecksPassed  = "healthchecks_passed"
-	EventStartFailed         = "start_failed"
+	EventStart       = "start"
+	EventStartDone   = "start_done"
+	EventStop        = "stop"
+	EventStopDone    = "stop_done"
+	EventStartFailed = "start_failed"
 
 	// Running phase events
-	EventDataReceived  = "data_received"
-	EventNoDataTimeout = "no_data_timeout"
-	EventDegraded      = "degraded"
-	EventRecovered     = "recovered"
+	EventBenthosDataReceived   = "benthos_data_received"
+	EventBenthosNoDataReceived = "benthos_no_data_received"
+	EventBenthosDegraded       = "benthos_degraded"
+	EventBenthosRecovered      = "benthos_recovered"
 )
+
+// IsOperationalState returns whether the given state is a valid operational state
+func IsOperationalState(state string) bool {
+	switch state {
+	case OperationalStateStopped,
+		OperationalStateStarting,
+		OperationalStateStartingFailed,
+		OperationalStateIdle,
+		OperationalStateActive,
+		OperationalStateDegraded,
+		OperationalStateStopping:
+		return true
+	}
+	return false
+}
+
+// IsStartingState returns whether the given state is a starting state
+func IsStartingState(state string) bool {
+	switch state {
+	case OperationalStateStarting,
+		OperationalStateStartingFailed:
+		return true
+	}
+	return false
+}
+
+// IsRunningState returns whether the given state is a running state
+func IsRunningState(state string) bool {
+	switch state {
+	case OperationalStateIdle,
+		OperationalStateActive,
+		OperationalStateDegraded:
+		return true
+	}
+	return false
+}
 
 // DataflowComponentObservedState contains the observed runtime state of a DataflowComponent instance
 type DataflowComponentObservedState struct {
@@ -90,7 +112,6 @@ func (b DataflowComponentObservedState) IsObservedState() {}
 // be detected at compile time
 var _ publicfsm.FSMInstance = (*DataflowComponentInstance)(nil)
 
-// BenthosInstance is a state-machine managed instance of a Benthos service
 // DataflowComponentInstance is a state-machine managed instance of a DataflowComponent service.
 type DataflowComponentInstance struct {
 	baseFSMInstance *internalfsm.BaseFSMInstance
@@ -124,4 +145,10 @@ func (d *DataflowComponentInstance) SetService(service dataflowcomponentsvc.IDat
 // This is a testing-only utility to access the private service field
 func (d *DataflowComponentInstance) GetConfig() dataflowcomponentconfig.DataFlowComponentConfig {
 	return d.config
+}
+
+// GetLastError returns the last error of the instance
+// This is a testing-only utility to access the private baseFSMInstance field
+func (d *DataflowComponentInstance) GetLastError() error {
+	return d.baseFSMInstance.GetLastError()
 }

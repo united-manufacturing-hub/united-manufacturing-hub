@@ -37,6 +37,8 @@ func reportFatal(err error, log *zap.SugaredLogger) {
 		log.Error("Failed to flush Sentry events")
 	}
 
+	// sleep for 3 seconds to not spam sentry and to s6 prevent locking issues
+	time.Sleep(time.Second * 3)
 	log.Panic("Fatal error")
 }
 
