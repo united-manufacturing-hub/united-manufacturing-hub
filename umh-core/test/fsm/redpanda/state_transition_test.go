@@ -210,6 +210,100 @@ var _ = Describe("RedpandaService State Transitions", func() {
 			ensureRedpandaState(ctx, redpandaService, mockFileSystem, tick, s6fsm.OperationalStateRunning, 10)
 		})
 
+		It("should transition from stopped to running, even if stale metrics are present", func() {
+			var serviceInfo redpanda.ServiceInfo
+			var err error
+			tick := uint64(0)
+
+			// Update monitor service to indicate running state
+			metricsState := redpanda_monitor.NewRedpandaMetricsState()
+			metricsState.IsActive = true
+
+			monitorMetrics := &redpanda_monitor.RedpandaMetrics{
+				Metrics: redpanda_monitor.Metrics{
+					Infrastructure: redpanda_monitor.InfrastructureMetrics{
+						Storage: redpanda_monitor.StorageMetrics{
+							FreeBytes:      10000000000,
+							TotalBytes:     20000000000,
+							FreeSpaceAlert: false,
+						},
+					},
+					Cluster: redpanda_monitor.ClusterMetrics{
+						Topics:            5,
+						UnavailableTopics: 0,
+					},
+					Throughput: redpanda_monitor.ThroughputMetrics{
+						BytesIn:  1000,
+						BytesOut: 2000,
+					},
+				},
+				MetricsState: metricsState,
+			}
+
+			By("Adding Redpanda to S6 manager")
+			err = redpandaService.AddRedpandaToS6Manager(ctx, redpandaConfig, mockFileSystem)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Reconciling the service to create it")
+			tick = reconcileRedpandaUntilState(ctx, redpandaService, mockFileSystem, tick, s6.LifecycleStateCreating)
+
+			mockMonitorService.StatusResult = redpanda_monitor.ServiceInfo{
+				S6FSMState: s6fsm.OperationalStateStopped,
+				RedpandaStatus: redpanda_monitor.RedpandaMonitorStatus{
+					IsRunning: true,
+					LastScan: &redpanda_monitor.RedpandaMetricsAndClusterConfig{
+						Metrics: monitorMetrics,
+						ClusterConfig: &redpanda_monitor.ClusterConfig{
+							Topic: redpanda_monitor.TopicConfig{
+								DefaultTopicRetentionMs:    1000000,
+								DefaultTopicRetentionBytes: 1000000000,
+							},
+						},
+						LastUpdatedAt: time.Now().Add(-30 * time.Second),
+					},
+				},
+			}
+			By("Reconciling until the service is stopped")
+			tick = reconcileRedpandaUntilState(ctx, redpandaService, mockFileSystem, tick, s6fsm.OperationalStateStopped)
+
+			// Verify state
+			serviceInfo, err = redpandaService.Status(ctx, mockFileSystem, tick, time.Now())
+			Expect(err).NotTo(HaveOccurred())
+			Expect(serviceInfo.S6FSMState).To(Equal(s6fsm.OperationalStateStopped))
+
+			By("Starting the redpanda service")
+			err = redpandaService.StartRedpanda(ctx)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Update mock services to simulate running state
+			mockS6Service.StatusResult = s6service.ServiceInfo{
+				Status: s6service.ServiceUp,
+			}
+
+			mockMonitorService.StatusResult = redpanda_monitor.ServiceInfo{
+				S6FSMState: s6fsm.OperationalStateRunning,
+				RedpandaStatus: redpanda_monitor.RedpandaMonitorStatus{
+					IsRunning: true,
+					LastScan: &redpanda_monitor.RedpandaMetricsAndClusterConfig{
+						Metrics: monitorMetrics,
+						ClusterConfig: &redpanda_monitor.ClusterConfig{
+							Topic: redpanda_monitor.TopicConfig{
+								DefaultTopicRetentionMs:    1000000,
+								DefaultTopicRetentionBytes: 1000000000,
+							},
+						},
+						LastUpdatedAt: time.Now(),
+					},
+				},
+			}
+
+			By("Reconciling until the service is running")
+			tick = reconcileRedpandaUntilState(ctx, redpandaService, mockFileSystem, tick, s6fsm.OperationalStateRunning)
+
+			By("Checking the service is running")
+			ensureRedpandaState(ctx, redpandaService, mockFileSystem, tick, s6fsm.OperationalStateRunning, 10)
+		})
+
 		It("should transition from running to stopped when requested", func() {
 			var serviceInfo redpanda.ServiceInfo
 			var err error

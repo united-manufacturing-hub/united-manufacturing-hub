@@ -300,6 +300,15 @@ func (s *RedpandaService) Status(ctx context.Context, filesystemService filesyst
 		}
 		return ServiceInfo{}, fmt.Errorf("failed to get current FSM state: %w", err)
 	}
+
+	// If the current state is stopped, we are unable to get the logs/metrics, therefore we must return an empty status
+	if s6FSMState == s6fsm.OperationalStateStopped {
+		return ServiceInfo{
+			S6ObservedState: s6ServiceObservedState,
+			S6FSMState:      s6FSMState,
+			RedpandaStatus:  RedpandaStatus{},
+		}, nil
+	}
 	// Let's get the logs of the Redpanda service
 	s6ServicePath := filepath.Join(constants.S6BaseDir, constants.RedpandaServiceName)
 	logs, err := s.s6Service.GetLogs(ctx, s6ServicePath, filesystemService)
