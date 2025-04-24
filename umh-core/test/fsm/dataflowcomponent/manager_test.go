@@ -173,13 +173,17 @@ var _ = Describe("DataflowComponentManager", func() {
 
 			// Wait for removal
 			emptyCfg := config.FullConfig{DataFlow: []config.DataFlowComponentConfig{}}
-			newTick, err = fsmtest.WaitForDataflowComponentManagerInstanceState(ctx, fsm.SystemSnapshot{
-				CurrentConfig: emptyCfg,
-				Tick:          tick,
-			}, manager, mockFS, serviceName, dataflowcomponent.OperationalStateStopped, 20)
+			newTick, err = fsmtest.WaitForDataflowComponentManagerInstanceRemoval(
+				ctx,
+				fsm.SystemSnapshot{CurrentConfig: emptyCfg, Tick: tick},
+				manager,
+				mockFS,
+				fmt.Sprintf("dataflow-%s", serviceName),
+				20,
+			)
 			tick = newTick
 			Expect(err).NotTo(HaveOccurred())
-			Expect(manager.GetInstances()).NotTo(HaveKey(serviceName))
+			Expect(manager.GetInstances()).NotTo(HaveKey(fmt.Sprintf("dataflow-%s", serviceName)))
 
 		})
 
