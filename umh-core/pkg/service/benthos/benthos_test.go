@@ -49,7 +49,7 @@ var _ = Describe("Benthos Service", func() {
 		}, benthosName)
 		Expect(err).NotTo(HaveOccurred())
 
-		// Reconcile the S6 manager
+		// Reconcile the S6 and benthos monitor manager
 		err, _ = service.ReconcileManager(context.Background(), mockFS, tick)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -569,10 +569,12 @@ var _ = Describe("Benthos Service", func() {
 			// Setup mocks
 			benthosMonitorMockService = benthos_monitor.NewMockBenthosMonitorService()
 			service = NewDefaultBenthosService(benthosName, WithMonitorService(benthosMonitorMockService))
+			s6ServiceMock = s6service.NewMockService()
 			tick = 0
 			mockFS = filesystem.NewMockFileSystem()
 			// Set up a mock HTTP client for Benthos health and metrics endpoints
 			benthosMonitorMockService.SetReadyStatus(true, true, "")
+			benthosMonitorMockService.SetLiveStatus(true)
 			benthosMonitorMockService.SetMetricsResponse(benthos_monitor.BenthosMetrics{
 				Input: benthos_monitor.InputMetrics{
 					Received:     10,
@@ -774,6 +776,8 @@ logger:
 			ctx = context.Background()
 			mockS6Service = s6service.NewMockService()
 			benthosMonitorMockService = benthos_monitor.NewMockBenthosMonitorService()
+			benthosMonitorMockService.SetLiveStatus(true)
+			benthosMonitorMockService.SetReadyStatus(true, true, "")
 			benthosName = "test-instance"
 			currentTime = time.Now()
 			logWindow = 5 * time.Minute

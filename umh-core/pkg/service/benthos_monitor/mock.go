@@ -151,6 +151,18 @@ func (m *MockBenthosMonitorService) SetReadyStatus(inputConnected bool, outputCo
 	}
 }
 
+// SetLiveStatus sets the live status of the Benthos Monitor service
+func (m *MockBenthosMonitorService) SetLiveStatus(isLive bool) {
+	if m.ServiceState == nil {
+		m.ServiceState = &ServiceInfo{
+			BenthosStatus: BenthosMonitorStatus{
+				LastScan: &BenthosMetricsScan{},
+			},
+		}
+	}
+	m.ServiceState.BenthosStatus.LastScan.HealthCheck.IsLive = isLive
+}
+
 // SetMetricsResponse sets the metrics response of the Benthos Monitor service
 func (m *MockBenthosMonitorService) SetMetricsResponse(metrics BenthosMetrics) {
 	m.ServiceState.BenthosStatus.LastScan.BenthosMetrics = metrics
@@ -203,8 +215,10 @@ func (m *MockBenthosMonitorService) Status(ctx context.Context, filesystemServic
 	if m.ServiceState != nil {
 		now := time.Now()
 		m.ServiceState.BenthosStatus.LastScan = &BenthosMetricsScan{
-			MetricsState:  m.metricsState,
-			LastUpdatedAt: now,
+			MetricsState:   m.metricsState,
+			HealthCheck:    m.ServiceState.BenthosStatus.LastScan.HealthCheck,
+			BenthosMetrics: m.ServiceState.BenthosStatus.LastScan.BenthosMetrics,
+			LastUpdatedAt:  now,
 		}
 		return *m.ServiceState, m.StatusError
 	}
