@@ -70,29 +70,27 @@ func (a *GetDataFlowComponentAction) Validate() error {
 }
 
 func buildDataFlowComponentDataFromSnapshot(instance fsm.FSMInstanceSnapshot, log *zap.SugaredLogger) (config.DataFlowComponentConfig, error) {
-	dfcData := config.DataFlowComponentConfig{}
+    dfcData := config.DataFlowComponentConfig{}
 
-	log.Info("Building dataflowcomponent data from snapshot", zap.String("instanceID", instance.ID))
+    log.Infow("Building dataflowcomponent data from snapshot", "instanceID", instance.ID)
 
-	if instance.LastObservedState != nil {
-		// Try to cast to the right type
-		observedState, ok := instance.LastObservedState.(*dataflowcomponent.DataflowComponentObservedStateSnapshot)
-		if !ok {
-			log.Error("Observed state is of unexpected type",
-				zap.String("instanceID", instance.ID),
-			)
-			return config.DataFlowComponentConfig{}, fmt.Errorf("invalid observed state type for dataflowcomponent %s", instance.ID)
-		}
-		dfcData.DataFlowComponentConfig = observedState.Config
-		dfcData.Name = instance.ID
-		dfcData.DesiredFSMState = instance.DesiredState
+    if instance.LastObservedState != nil {
+        // Try to cast to the right type
+        observedState, ok := instance.LastObservedState.(*dataflowcomponent.DataflowComponentObservedStateSnapshot)
+        if !ok {
+            log.Errorw("Observed state is of unexpected type", "instanceID", instance.ID)
+            return config.DataFlowComponentConfig{}, fmt.Errorf("invalid observed state type for dataflowcomponent %s", instance.ID)
+        }
+        dfcData.DataFlowComponentConfig = observedState.Config
+        dfcData.Name = instance.ID
+        dfcData.DesiredFSMState = instance.DesiredState
 
-	} else {
-		log.Warn("No observed state found for dataflowcomponent", zap.String("instanceID", instance.ID))
-		return config.DataFlowComponentConfig{}, fmt.Errorf("no observed state found for dataflowcomponent")
-	}
+    } else {
+        log.Warnw("No observed state found for dataflowcomponent", "instanceID", instance.ID)
+        return config.DataFlowComponentConfig{}, fmt.Errorf("no observed state found for dataflowcomponent")
+    }
 
-	return dfcData, nil
+    return dfcData, nil
 }
 
 func (a *GetDataFlowComponentAction) Execute() (interface{}, map[string]interface{}, error) {
