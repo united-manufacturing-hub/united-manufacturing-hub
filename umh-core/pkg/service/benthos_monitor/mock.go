@@ -54,6 +54,7 @@ type MockBenthosMonitorService struct {
 	ReconcileManagerError                   error
 	ReconcileManagerReconciled              bool
 	ServiceExistsResult                     bool
+	UpdateLastPort                          uint16
 
 	// For more complex testing scenarios
 	ServiceState      *ServiceInfo
@@ -299,6 +300,7 @@ func (m *MockBenthosMonitorService) AddBenthosMonitorToS6Manager(ctx context.Con
 // UpdateBenthosMonitorInS6Manager mocks updating a Benthos Monitor instance in the S6 manager
 func (m *MockBenthosMonitorService) UpdateBenthosMonitorInS6Manager(ctx context.Context, port uint16) error {
 	m.UpdateBenthosMonitorInS6ManagerCalled = true
+	m.UpdateLastPort = port
 
 	// Check for context cancellation
 	if ctx.Err() != nil {

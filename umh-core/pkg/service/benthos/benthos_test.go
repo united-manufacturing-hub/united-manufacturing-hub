@@ -23,6 +23,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
+	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos_monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
@@ -1058,4 +1059,78 @@ logger:
 			Expect(err).To(MatchError(mockError))
 		})
 	})
+
+	Describe("Benthos ⇄ Benthos-monitor coordination", func() {
+		var (
+			service                   *BenthosService
+			mockS6Manager             *s6fsm.S6Manager
+			tick                      uint64
+			benthosName               string
+			mockFS                    *filesystem.MockFileSystem
+			benthosMonitorMockService *benthos_monitor.MockBenthosMonitorService
+			ctx                       context.Context
+			cancel                    context.CancelFunc
+		)
+
+		BeforeEach(func() {
+			benthosName = "test-benthos"
+			ctx, cancel = context.WithDeadline(context.Background(), time.Now().Add(100*time.Minute))
+			benthosMonitorMockService = benthos_monitor.NewMockBenthosMonitorService()
+			mockS6Manager = s6fsm.NewS6ManagerWithMockedServices(benthosName)
+			service = NewDefaultBenthosService(benthosName, WithMonitorService(benthosMonitorMockService), WithS6Manager(mockS6Manager))
+			tick = 0
+
+			mockFS = filesystem.NewMockFileSystem()
+			// Add the service to the S6 manager
+			err := service.AddBenthosToS6Manager(ctx, mockFS, &benthosserviceconfig.BenthosServiceConfig{
+				MetricsPort: 4195,
+				LogLevel:    "info",
+			}, benthosName)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Reconcile the S6 and benthos monitor manager
+			err, _ = service.ReconcileManager(ctx, mockFS, tick)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(benthosMonitorMockService.ReconcileManagerCalled).To(BeTrue())
+			Expect(benthosMonitorMockService.S6ServiceConfig.DesiredFSMState).To(Equal(s6fsm.OperationalStateRunning))
+			Expect(benthosMonitorMockService.AddBenthosToS6ManagerCalled).To(BeTrue())
+
+			for i := 0; i < 10; i++ {
+				err, _ = service.ReconcileManager(ctx, mockFS, tick)
+				Expect(err).NotTo(HaveOccurred())
+				tick++
+			}
+		})
+
+		AfterEach(func() {
+			cancel()
+		})
+
+		When("the instance is stopped and started again", func() {
+			It("stops and restarts the monitor too", func() {
+				err := service.StopBenthos(ctx, mockFS, benthosName)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(benthosMonitorMockService.StopBenthosCalled).To(BeTrue())
+
+				err = service.StartBenthos(ctx, mockFS, benthosName)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(benthosMonitorMockService.StartBenthosCalled).To(BeTrue())
+			})
+		})
+
+		When("the Benthos config changes", func() {
+			It("regenerates the monitor’s S6 script", func() {
+				err := service.UpdateBenthosInS6Manager(ctx, mockFS, &benthosserviceconfig.BenthosServiceConfig{
+					MetricsPort: 9123,
+					LogLevel:    "info",
+				}, benthosName)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(benthosMonitorMockService.UpdateBenthosMonitorInS6ManagerCalled).To(BeTrue())
+
+				// Expect that the metrics port was updated
+				Expect(benthosMonitorMockService.UpdateLastPort).To(Equal(uint16(9123)))
+			})
+		})
+	})
+
 })

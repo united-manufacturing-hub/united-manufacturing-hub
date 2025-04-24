@@ -131,6 +131,13 @@ func WithMonitorService(monitorService benthos_monitor.IBenthosMonitorService) B
 	}
 }
 
+// WithS6Manager sets a custom S6 manager for the BenthosService
+func WithS6Manager(s6Manager *s6fsm.S6Manager) BenthosServiceOption {
+	return func(s *BenthosService) {
+		s.s6Manager = s6Manager
+	}
+}
+
 // NewDefaultBenthosService creates a new default Benthos service
 // name is the name of the Benthos service as defined in the UMH config
 func NewDefaultBenthosService(benthosName string, opts ...BenthosServiceOption) *BenthosService {
