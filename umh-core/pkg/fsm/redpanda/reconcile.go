@@ -28,6 +28,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	redpanda_service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
 // Reconcile examines the RedpandaInstance and, in three steps:
@@ -38,7 +39,7 @@ import (
 // This function is intended to be called repeatedly (e.g. in a periodic control loop).
 // Over multiple calls, it converges the actual state to the desired state. Transitions
 // that fail are retried in subsequent reconcile calls after a backoff period.
-func (r *RedpandaInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot, filesystemService filesystem.Service) (err error, reconciled bool) {
+func (r *RedpandaInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot, services serviceregistry.Provider) (err error, reconciled bool) {
 	start := time.Now()
 	redpandaInstanceName := r.baseFSMInstance.GetID()
 	defer func() {
@@ -81,7 +82,7 @@ func (r *RedpandaInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSna
 				func(ctx context.Context) error {
 					// Force removal when other approaches fail - bypasses state transitions
 					// and directly deletes files and resources
-					return r.service.ForceRemoveRedpanda(ctx, filesystemService)
+					return r.service.ForceRemoveRedpanda(ctx, services.GetFileSystem())
 				},
 			)
 		}
@@ -89,7 +90,7 @@ func (r *RedpandaInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSna
 	}
 
 	// Step 2: Detect external changes.
-	if err = r.reconcileExternalChanges(ctx, filesystemService, snapshot.Tick, start); err != nil {
+	if err := r.reconcileExternalChanges(ctx, services.GetFileSystem(), snapshot.Tick, start); err != nil {
 		// If the service is not running, we don't want to return an error here, because we want to continue reconciling
 		if !errors.Is(err, redpanda_service.ErrServiceNotExist) {
 			r.baseFSMInstance.SetError(err, snapshot.Tick)
@@ -117,7 +118,7 @@ func (r *RedpandaInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSna
 
 	// Step 3: Attempt to reconcile the state.
 	currentTime := time.Now() // this is used to check if the instance is degraded and for the log check
-	err, reconciled = r.reconcileStateTransition(ctx, filesystemService, currentTime)
+	err, reconciled = r.reconcileStateTransition(ctx, services.GetFileSystem(), currentTime)
 	if err != nil {
 		// If the instance is removed, we don't want to return an error here, because we want to continue reconciling
 		if errors.Is(err, fsm.ErrInstanceRemoved) {
@@ -130,7 +131,7 @@ func (r *RedpandaInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSna
 	}
 
 	// Reconcile the s6Manager
-	s6Err, s6Reconciled := r.service.ReconcileManager(ctx, filesystemService, snapshot.Tick)
+	s6Err, s6Reconciled := r.service.ReconcileManager(ctx, services.GetFileSystem(), snapshot.Tick)
 	if s6Err != nil {
 		r.baseFSMInstance.SetError(s6Err, snapshot.Tick)
 		r.baseFSMInstance.GetLogger().Errorf("error reconciling s6Manager: %s", s6Err)
