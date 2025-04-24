@@ -38,7 +38,6 @@ import (
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 	"gopkg.in/yaml.v3"
 
-	benthosyaml "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 )
 
@@ -161,7 +160,7 @@ func (s *BenthosService) generateBenthosYaml(config *benthosserviceconfig.Bentho
 		config.LogLevel = "INFO"
 	}
 
-	return benthosyaml.RenderBenthosYAML(
+	return benthosserviceconfig.RenderBenthosYAML(
 		config.Input,
 		config.Output,
 		config.Pipeline,
@@ -277,7 +276,7 @@ func (s *BenthosService) GetConfig(ctx context.Context, filesystemService filesy
 	}
 
 	// Normalize the config to ensure consistent defaults
-	return benthosyaml.NormalizeBenthosConfig(result), nil
+	return benthosserviceconfig.NormalizeBenthosConfig(result), nil
 }
 
 // extractMetricsPort safely extracts the metrics port from the config map
@@ -834,5 +833,7 @@ func (s *BenthosService) ServiceExists(ctx context.Context, filesystemService fi
 // and the instance itself cannot be stopped or removed
 // Expects benthosName (e.g. "myservice") as defined in the UMH config
 func (s *BenthosService) ForceRemoveBenthos(ctx context.Context, filesystemService filesystem.Service, benthosName string) error {
-	return s.s6Service.ForceRemove(ctx, s.getS6ServiceName(benthosName), filesystemService)
+	s6ServiceName := s.getS6ServiceName(benthosName)
+	s6ServicePath := filepath.Join(constants.S6BaseDir, s6ServiceName)
+	return s.s6Service.ForceRemove(ctx, s6ServicePath, filesystemService)
 }

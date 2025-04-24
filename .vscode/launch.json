@@ -30,6 +30,14 @@
             "buildFlags": "--tags=test"
         },
         {
+            "name": "Debug Ginkgo Tests (test-fsm-nmap)",
+            "type": "go",
+            "request": "launch",
+            "mode": "test",
+            "program": "${workspaceFolder}/umh-core/test/fsm/nmap",
+            "buildFlags": "--tags=test"
+        },
+        {
             "name": "Debug Ginkgo Tests (service-nmap)",
             "type": "go",
             "request": "launch",
@@ -80,6 +88,30 @@
             "mode": "test",
             "program": "${workspaceFolder}/umh-core/pkg/service/redpanda_monitor",
             "buildFlags": "--tags=test"
+        },
+        {
+            "name": "Debug DataflowComponent Scaling Test",
+            "type": "go",
+            "request": "launch",
+            "mode": "test",
+            "program": "${workspaceFolder}/umh-core/integration",
+            "args": [
+                "-ginkgo.v",
+                "-ginkgo.focus=with dataflowcomponent scaling test"
+            ],
+            "showLog": true
+        },
+        {
+            "name": "Debug Benthos Scaling Test",
+            "type": "go",
+            "request": "launch",
+            "mode": "test",
+            "program": "${workspaceFolder}/umh-core/integration",
+            "args": [
+                "-ginkgo.v",
+                "-ginkgo.focus=with benthos scaling test"
+            ],
+            "showLog": true
         }
     ]
 }

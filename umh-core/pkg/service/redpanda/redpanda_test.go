@@ -18,10 +18,12 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/redpandaserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda_monitor"
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
@@ -60,7 +62,8 @@ var _ = Describe("Redpanda Service", func() {
 		// Cleanup the data directory
 		ctx, cancel := newTimeoutContext()
 		defer cancel()
-		mockFS.RemoveAll(ctx, getTmpDir())
+		err := mockFS.RemoveAll(ctx, getTmpDir())
+		Expect(err).NotTo(HaveOccurred())
 
 		// Add the service to the S6 manager
 		config := &redpandaserviceconfig.RedpandaServiceConfig{
@@ -70,7 +73,7 @@ var _ = Describe("Redpanda Service", func() {
 		config.Topic.DefaultTopicRetentionBytes = 1000000000
 		ctx, cancel = newTimeoutContext()
 		defer cancel()
-		err := service.AddRedpandaToS6Manager(ctx, config, mockFS)
+		err = service.AddRedpandaToS6Manager(ctx, config, mockFS)
 		Expect(err).NotTo(HaveOccurred())
 
 		// Reconcile the S6 manager
@@ -500,6 +503,53 @@ var _ = Describe("Redpanda Service", func() {
 				// With 10 minute window, error is detected
 				Expect(service.IsLogsFine(logs, currentTime, 10*time.Minute)).To(BeFalse())
 			})
+		})
+	})
+
+	Describe("ForceRemoveRedpanda", func() {
+		var (
+			service       *RedpandaService
+			mockS6Service *s6service.MockService
+			mockFS        *filesystem.MockFileSystem
+		)
+
+		BeforeEach(func() {
+			mockS6Service = s6service.NewMockService()
+			mockFS = filesystem.NewMockFileSystem()
+			service = NewDefaultRedpandaService("redpanda", WithS6Service(mockS6Service))
+		})
+
+		It("should call S6 ForceRemove with the correct service path", func() {
+			ctx, cancel := newTimeoutContext()
+			defer cancel()
+
+			// Call ForceRemoveRedpanda
+			err := service.ForceRemoveRedpanda(ctx, mockFS)
+
+			// Verify no error
+			Expect(err).NotTo(HaveOccurred())
+
+			// Verify S6Service ForceRemove was called
+			Expect(mockS6Service.ForceRemoveCalled).To(BeTrue())
+
+			// Verify the path is correct
+			expectedS6ServicePath := filepath.Join(constants.S6BaseDir, constants.RedpandaServiceName)
+			Expect(mockS6Service.ForceRemovePath).To(Equal(expectedS6ServicePath))
+		})
+
+		It("should propagate errors from S6 service", func() {
+			ctx, cancel := newTimeoutContext()
+			defer cancel()
+
+			// Set up mock to return an error
+			mockError := fmt.Errorf("mock force remove error")
+			mockS6Service.ForceRemoveError = mockError
+
+			// Call ForceRemoveRedpanda
+			err := service.ForceRemoveRedpanda(ctx, mockFS)
+
+			// Verify error is propagated
+			Expect(err).To(MatchError(mockError))
 		})
 	})
 })

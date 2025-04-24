@@ -16,10 +16,13 @@ package benthos
 
 import (
 	"context"
+	"fmt"
+	"path/filepath"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos_monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
@@ -1007,6 +1010,50 @@ logger:
 			// we'll directly check `IsLogsFine` since it's part of the "bad" assessment
 			isBad := !isLogsFine
 			Expect(isBad).To(BeTrue(), "Instance with error logs should be considered bad")
+		})
+	})
+
+	Describe("ForceRemoveBenthos", func() {
+		var (
+			service       *BenthosService
+			mockS6Service *s6service.MockService
+			mockFS        *filesystem.MockFileSystem
+			benthosName   string
+		)
+
+		BeforeEach(func() {
+			mockS6Service = s6service.NewMockService()
+			mockFS = filesystem.NewMockFileSystem()
+			benthosName = "test-benthos"
+			service = NewDefaultBenthosService(benthosName, WithS6Service(mockS6Service))
+		})
+
+		It("should call S6 ForceRemove with the correct service path", func() {
+			// Call ForceRemoveBenthos
+			err := service.ForceRemoveBenthos(context.Background(), mockFS, benthosName)
+
+			// Verify no error
+			Expect(err).NotTo(HaveOccurred())
+
+			// Verify S6Service ForceRemove was called
+			Expect(mockS6Service.ForceRemoveCalled).To(BeTrue())
+
+			// Verify the path is correct
+			expectedS6ServiceName := service.getS6ServiceName(benthosName)
+			expectedS6ServicePath := filepath.Join(constants.S6BaseDir, expectedS6ServiceName)
+			Expect(mockS6Service.ForceRemovePath).To(Equal(expectedS6ServicePath))
+		})
+
+		It("should propagate errors from S6 service", func() {
+			// Set up mock to return an error
+			mockError := fmt.Errorf("mock force remove error")
+			mockS6Service.ForceRemoveError = mockError
+
+			// Call ForceRemoveBenthos
+			err := service.ForceRemoveBenthos(context.Background(), mockFS, benthosName)
+
+			// Verify error is propagated
+			Expect(err).To(MatchError(mockError))
 		})
 	})
 })

@@ -113,7 +113,7 @@ func (b *BenthosBuilder) AddGeneratorBenthos(name string, interval string) *Bent
 func (b *BenthosBuilder) UpdateGeneratorBenthos(name string, newInterval string) *BenthosBuilder {
 	// Find and update the service
 	for i, benthos := range b.full.Internal.Benthos {
-		if benthos.FSMInstanceConfig.Name == name {
+		if benthos.Name == name {
 			// Create updated input config with new interval
 			if input, ok := benthos.BenthosServiceConfig.Input["generate"].(map[string]interface{}); ok {
 				input["interval"] = newInterval
@@ -128,8 +128,8 @@ func (b *BenthosBuilder) UpdateGeneratorBenthos(name string, newInterval string)
 // StartBenthos sets a Benthos service to active state
 func (b *BenthosBuilder) StartBenthos(name string) *BenthosBuilder {
 	for i, benthos := range b.full.Internal.Benthos {
-		if benthos.FSMInstanceConfig.Name == name {
-			b.full.Internal.Benthos[i].FSMInstanceConfig.DesiredFSMState = "active"
+		if benthos.Name == name {
+			b.full.Internal.Benthos[i].DesiredFSMState = "active"
 			b.activeBenthos[name] = true
 			break
 		}
@@ -140,8 +140,8 @@ func (b *BenthosBuilder) StartBenthos(name string) *BenthosBuilder {
 // StopBenthos sets a Benthos service to inactive state
 func (b *BenthosBuilder) StopBenthos(name string) *BenthosBuilder {
 	for i, benthos := range b.full.Internal.Benthos {
-		if benthos.FSMInstanceConfig.Name == name {
-			b.full.Internal.Benthos[i].FSMInstanceConfig.DesiredFSMState = "stopped"
+		if benthos.Name == name {
+			b.full.Internal.Benthos[i].DesiredFSMState = "stopped"
 			b.activeBenthos[name] = false
 			break
 		}

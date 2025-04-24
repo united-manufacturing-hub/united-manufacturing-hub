@@ -26,15 +26,13 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/dataflowcomponent"
 )
 
 // NewDataflowComponentInstance creates a new DataflowComponentInstance with a given ID and service path
 func NewDataflowComponentInstance(
 	s6BaseDir string,
-	config config.DataFlowComponentConfig,
-) *DataflowComponentInstance {
+	config config.DataFlowComponentConfig) *DataflowComponentInstance {
 
 	cfg := internal_fsm.BaseFSMInstanceConfig{
 		ID:                           config.Name,
@@ -44,38 +42,42 @@ func NewDataflowComponentInstance(
 		OperationalTransitions: []fsm.EventDesc{
 			// Basic lifecycle transitions
 			// Stopped is the initial state
+			// stopped -> starting
 			{Name: EventStart, Src: []string{OperationalStateStopped}, Dst: OperationalStateStarting},
 
-			// Starting phase transitions
-			{Name: EventBenthosCreated, Src: []string{OperationalStateStarting}, Dst: OperationalStateStartingConfigLoading},
-			{Name: EventBenthosConfigLoaded, Src: []string{OperationalStateStartingConfigLoading}, Dst: OperationalStateStartingConfigLoading},
-			{Name: EventHealthchecksPassed, Src: []string{OperationalStateStartingWaitingForHealthchecks}, Dst: OperationalStateStartingWaitingForServiceToRemainRunning},
-			{Name: EventStartDone, Src: []string{OperationalStateStartingWaitingForServiceToRemainRunning}, Dst: OperationalStateIdle},
-			{Name: EventStop, Src: []string{OperationalStateStarting, OperationalStateStartingConfigLoading, OperationalStateStartingWaitingForHealthchecks, OperationalStateStartingWaitingForServiceToRemainRunning}, Dst: OperationalStateStopping},
+			// starting -> idle
+			{Name: EventStartDone, Src: []string{OperationalStateStarting}, Dst: OperationalStateIdle},
 
-			// From any starting state, we can either go back to OperationalStateStarting (e.g: If there is an error)
-			{Name: EventStartFailed, Src: []string{OperationalStateStarting, OperationalStateStartingConfigLoading, OperationalStateStartingWaitingForHealthchecks, OperationalStateStartingWaitingForServiceToRemainRunning}, Dst: OperationalStateStarting},
+			// idle -> active
+			{Name: EventBenthosDataReceived, Src: []string{OperationalStateIdle}, Dst: OperationalStateActive},
 
-			// Running phase transitions
-			// From Idle, we can go to Active when data is processed or to Stopping
-			{Name: EventDataReceived, Src: []string{OperationalStateIdle}, Dst: OperationalStateActive},
-			{Name: EventNoDataTimeout, Src: []string{OperationalStateIdle}, Dst: OperationalStateIdle},
-			{Name: EventStop, Src: []string{OperationalStateIdle}, Dst: OperationalStateStopping},
+			//	active/idle -> degraded
+			{Name: EventBenthosDegraded, Src: []string{OperationalStateActive, OperationalStateIdle}, Dst: OperationalStateDegraded},
 
-			// From Active, we can go to Idle when there's no data, to Degraded when there are issues, or to Stopping
-			{Name: EventNoDataTimeout, Src: []string{OperationalStateActive}, Dst: OperationalStateIdle},
-			{Name: EventDegraded, Src: []string{OperationalStateActive}, Dst: OperationalStateDegraded},
-			{Name: EventStop, Src: []string{OperationalStateActive}, Dst: OperationalStateStopping},
+			// active -> idle
+			{Name: EventBenthosNoDataReceived, Src: []string{OperationalStateActive}, Dst: OperationalStateIdle},
 
-			// From Degraded, we can recover to Active, go to Idle, or to Stopping
-			{Name: EventRecovered, Src: []string{OperationalStateDegraded}, Dst: OperationalStateIdle},
-			{Name: EventStop, Src: []string{OperationalStateDegraded}, Dst: OperationalStateStopping},
+			// degraded -> idle
+			{Name: EventBenthosRecovered, Src: []string{OperationalStateDegraded}, Dst: OperationalStateIdle},
 
-			// Final transition for stopping
+			// starting -> startingFailed
+			{Name: EventStartFailed, Src: []string{OperationalStateStarting}, Dst: OperationalStateStartingFailed},
+
+			// everywhere to stopping
+			{
+				Name: EventStop,
+				Src: []string{
+					OperationalStateStarting,
+					OperationalStateStartingFailed,
+					OperationalStateIdle,
+					OperationalStateActive,
+					OperationalStateDegraded,
+				},
+				Dst: OperationalStateStopping,
+			},
+
+			// stopping to stopped
 			{Name: EventStopDone, Src: []string{OperationalStateStopping}, Dst: OperationalStateStopped},
-
-			// Add degraded transition from Idle
-			{Name: EventDegraded, Src: []string{OperationalStateIdle}, Dst: OperationalStateDegraded},
 		},
 	}
 
@@ -90,6 +92,7 @@ func NewDataflowComponentInstance(
 	}
 
 	instance.registerCallbacks()
+
 	metrics.InitErrorCounter(metrics.ComponentDataflowComponentInstance, config.Name)
 
 	return instance
@@ -99,56 +102,62 @@ func NewDataflowComponentInstance(
 // But ensures that the desired state is a valid state and that it is also a reasonable state
 // e.g., nobody wants to have an instance in the "starting" state, that is just intermediate
 func (d *DataflowComponentInstance) SetDesiredFSMState(state string) error {
-	sentry.ReportFSMFatal(d.baseFSMInstance.GetLogger(), d.baseFSMInstance.GetID(), "DataflowComponentInstance", "SetDesiredFSMState", fmt.Errorf("not implemented"))
-	panic("not implemented")
+	if state != OperationalStateStopped &&
+		state != OperationalStateActive {
+		return fmt.Errorf("invalid desired state: %s. valid states are %s and %s",
+			state,
+			OperationalStateStopped,
+			OperationalStateActive)
+	}
+
+	d.baseFSMInstance.SetDesiredFSMState(state)
+	return nil
 }
 
 // GetCurrentFSMState returns the current state of the FSM
-func (b *DataflowComponentInstance) GetCurrentFSMState() string {
-	return b.baseFSMInstance.GetCurrentFSMState()
+func (d *DataflowComponentInstance) GetCurrentFSMState() string {
+	return d.baseFSMInstance.GetCurrentFSMState()
 }
 
 // GetDesiredFSMState returns the desired state of the FSM
-func (b *DataflowComponentInstance) GetDesiredFSMState() string {
-	return b.baseFSMInstance.GetDesiredFSMState()
+func (d *DataflowComponentInstance) GetDesiredFSMState() string {
+	return d.baseFSMInstance.GetDesiredFSMState()
 }
 
 // Remove starts the removal process, it is idempotent and can be called multiple times
 // Note: it is only removed once IsRemoved returns true
-func (b *DataflowComponentInstance) Remove(ctx context.Context) error {
-	return b.baseFSMInstance.Remove(ctx)
+func (d *DataflowComponentInstance) Remove(ctx context.Context) error {
+	return d.baseFSMInstance.Remove(ctx)
 }
 
 // IsRemoved returns true if the instance has been removed
-func (b *DataflowComponentInstance) IsRemoved() bool {
-	return b.baseFSMInstance.IsRemoved()
+func (d *DataflowComponentInstance) IsRemoved() bool {
+	return d.baseFSMInstance.IsRemoved()
 }
 
 // IsRemoving returns true if the instance is in the removing state
-func (b *DataflowComponentInstance) IsRemoving() bool {
-	return b.baseFSMInstance.IsRemoving()
+func (d *DataflowComponentInstance) IsRemoving() bool {
+	return d.baseFSMInstance.IsRemoving()
 }
 
 // IsStopping returns true if the instance is in the stopping state
-func (b *DataflowComponentInstance) IsStopping() bool {
-	sentry.ReportFSMFatal(b.baseFSMInstance.GetLogger(), b.baseFSMInstance.GetID(), "DataflowComponentInstance", "IsStopping", fmt.Errorf("not implemented"))
-	panic("not implemented")
+func (d *DataflowComponentInstance) IsStopping() bool {
+	return d.baseFSMInstance.GetCurrentFSMState() == OperationalStateStopping
 }
 
 // IsStopped returns true if the instance is in the stopped state
-func (b *DataflowComponentInstance) IsStopped() bool {
-	sentry.ReportFSMFatal(b.baseFSMInstance.GetLogger(), b.baseFSMInstance.GetID(), "DataflowComponentInstance", "IsStopped", fmt.Errorf("not implemented"))
-	panic("not implemented")
+func (d *DataflowComponentInstance) IsStopped() bool {
+	return d.baseFSMInstance.GetCurrentFSMState() == OperationalStateStopped
 }
 
 // PrintState prints the current state of the FSM for debugging
-func (b *DataflowComponentInstance) PrintState() {
-	b.baseFSMInstance.GetLogger().Debugf("Current state: %s", b.baseFSMInstance.GetCurrentFSMState())
-	b.baseFSMInstance.GetLogger().Debugf("Desired state: %s", b.baseFSMInstance.GetDesiredFSMState())
-	b.baseFSMInstance.GetLogger().Debugf("Observed state: %+v", b.ObservedState)
+func (d *DataflowComponentInstance) PrintState() {
+	d.baseFSMInstance.GetLogger().Debugf("Current state: %s", d.baseFSMInstance.GetCurrentFSMState())
+	d.baseFSMInstance.GetLogger().Debugf("Desired state: %s", d.baseFSMInstance.GetDesiredFSMState())
+	d.baseFSMInstance.GetLogger().Debugf("Observed state: %+v", d.ObservedState)
 }
 
 // GetExpectedMaxP95ExecutionTimePerInstance returns the expected max p95 execution time of the instance
-func (b *DataflowComponentInstance) GetExpectedMaxP95ExecutionTimePerInstance() time.Duration {
-	return constants.BenthosExpectedMaxP95ExecutionTimePerInstance
+func (d *DataflowComponentInstance) GetExpectedMaxP95ExecutionTimePerInstance() time.Duration {
+	return constants.DataflowComponentExpectedMaxP95ExecutionTimePerInstance
 }

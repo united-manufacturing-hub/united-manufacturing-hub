@@ -71,14 +71,14 @@ func (r *RedpandaBuilder) AddGoldenRedpanda() *RedpandaBuilder {
 
 // StartRedpanda sets a Redpanda service to active state
 func (r *RedpandaBuilder) StartRedpanda(name string) *RedpandaBuilder {
-	r.full.Internal.Redpanda.FSMInstanceConfig.DesiredFSMState = "active"
+	r.full.Internal.Redpanda.DesiredFSMState = "active"
 	r.activeRedpanda[name] = true
 	return r
 }
 
 // StopRedpanda sets a Redpanda service to inactive state
 func (r *RedpandaBuilder) StopRedpanda(name string) *RedpandaBuilder {
-	r.full.Internal.Redpanda.FSMInstanceConfig.DesiredFSMState = "stopped"
+	r.full.Internal.Redpanda.DesiredFSMState = "stopped"
 	r.activeRedpanda[name] = false
 	return r
 }
@@ -139,8 +139,8 @@ func (b *RedpandaBuilder) AddBenthosProducer(name string, productionInterval str
 // StartBenthos sets a Benthos service to active state
 func (b *RedpandaBuilder) StartBenthos(name string) *RedpandaBuilder {
 	for i, benthos := range b.full.Internal.Benthos {
-		if benthos.FSMInstanceConfig.Name == name {
-			b.full.Internal.Benthos[i].FSMInstanceConfig.DesiredFSMState = "active"
+		if benthos.Name == name {
+			b.full.Internal.Benthos[i].DesiredFSMState = "active"
 			b.activeBenthos[name] = true
 			break
 		}
@@ -151,8 +151,8 @@ func (b *RedpandaBuilder) StartBenthos(name string) *RedpandaBuilder {
 // StopBenthos sets a Benthos service to inactive state
 func (b *RedpandaBuilder) StopBenthos(name string) *RedpandaBuilder {
 	for i, benthos := range b.full.Internal.Benthos {
-		if benthos.FSMInstanceConfig.Name == name {
-			b.full.Internal.Benthos[i].FSMInstanceConfig.DesiredFSMState = "stopped"
+		if benthos.Name == name {
+			b.full.Internal.Benthos[i].DesiredFSMState = "stopped"
 			b.activeBenthos[name] = false
 			break
 		}
@@ -174,7 +174,7 @@ func (b *RedpandaBuilder) CountActiveBenthos() int {
 // UpdateBenthosProducer updates the configuration of an existing Benthos producer
 func (b *RedpandaBuilder) UpdateBenthosProducer(name string, productionInterval string) *RedpandaBuilder {
 	for i, benthos := range b.full.Internal.Benthos {
-		if benthos.FSMInstanceConfig.Name == name {
+		if benthos.Name == name {
 			// Update the interval in the input configuration
 			if input, ok := benthos.BenthosServiceConfig.Input["generate"].(map[string]interface{}); ok {
 				input["interval"] = productionInterval

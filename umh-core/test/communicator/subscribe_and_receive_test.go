@@ -121,7 +121,8 @@ var _ = Describe("Subscribe and Receive Test", func() {
 
 		// Initialize the manager with a reconcile call to create instances
 		dummyConfig := config.FullConfig{}
-		containerManager.Reconcile(ctx, fsm.SystemSnapshot{CurrentConfig: dummyConfig, Tick: 1}, mockFS)
+		err, _ := containerManager.Reconcile(ctx, fsm.SystemSnapshot{CurrentConfig: dummyConfig, Tick: 1}, mockFS)
+		Expect(err).NotTo(HaveOccurred())
 
 		// Create the snapshot after reconciliation
 		containerManagerSnapshot := containerManager.CreateSnapshot()

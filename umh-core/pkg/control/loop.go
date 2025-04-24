@@ -50,6 +50,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/agent_monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/container"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/nmap"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/redpanda"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
@@ -106,9 +107,10 @@ func NewControlLoop(configManager config.ConfigManager) *ControlLoop {
 		s6.NewS6Manager(constants.DefaultManagerName),
 		benthos.NewBenthosManager(constants.DefaultManagerName),
 		container.NewContainerManager(constants.DefaultManagerName),
-		agent_monitor.NewAgentManager(constants.DefaultManagerName),
 		redpanda.NewRedpandaManager(constants.DefaultManagerName),
+		agent_monitor.NewAgentManager(constants.DefaultManagerName),
 		nmap.NewNmapManager(constants.DefaultManagerName),
+		dataflowcomponent.NewDataflowComponentManager(constants.DefaultManagerName),
 	}
 
 	// Create a starvation checker
@@ -242,7 +244,11 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 		}
 	} else {
 		// the new snapshot is a deep copy of the previous snapshot
-		deepcopy.Copy(newSnapshot, prevSnapshot)
+		err := deepcopy.Copy(&newSnapshot, prevSnapshot)
+		if err != nil {
+			sentry.ReportIssuef(sentry.IssueTypeError, c.logger, "Failed to deep copy snapshot: %v", err)
+			return fmt.Errorf("failed to deep copy snapshot: %w", err)
+		}
 		newSnapshot.Tick = ticker
 		newSnapshot.SnapshotTime = time.Now()
 	}
@@ -331,7 +337,10 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 
 	if c.starvationChecker != nil {
 		// Check for starvation
-		c.starvationChecker.Reconcile(ctx, cfg)
+		err, _ := c.starvationChecker.Reconcile(ctx, cfg)
+		if err != nil {
+			return fmt.Errorf("starvation checker reconciliation failed: %w", err)
+		}
 	} else {
 		return fmt.Errorf("starvation checker is not set")
 	}
@@ -408,12 +417,4 @@ func (c *ControlLoop) Stop(ctx context.Context) error {
 	// Signal the control loop to stop
 	ctx.Done()
 	return nil
-}
-
-// isEmptyConfig checks if a FullConfig is effectively empty without direct struct comparison
-func isEmptyConfig(cfg config.FullConfig) bool {
-	// Check if important config sections are empty
-	return len(cfg.Internal.Services) == 0 &&
-		len(cfg.Internal.Benthos) == 0 &&
-		len(cfg.DataFlow) == 0
 }
