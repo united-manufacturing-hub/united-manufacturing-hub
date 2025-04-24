@@ -1146,5 +1146,7 @@ func (s *BenthosService) ServiceExists(ctx context.Context, filesystemService fi
 // and the instance itself cannot be stopped or removed
 // Expects benthosName (e.g. "myservice") as defined in the UMH config
 func (s *BenthosService) ForceRemoveBenthos(ctx context.Context, filesystemService filesystem.Service, benthosName string) error {
-	return s.s6Service.ForceRemove(ctx, s.getS6ServiceName(benthosName), filesystemService)
+	s6ServiceName := s.getS6ServiceName(benthosName)
+	s6ServicePath := filepath.Join(constants.S6BaseDir, s6ServiceName)
+	return s.s6Service.ForceRemove(ctx, s6ServicePath, filesystemService)
 }

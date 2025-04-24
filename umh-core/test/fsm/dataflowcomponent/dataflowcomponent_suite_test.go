@@ -12,14 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package dataflowcomponent
+package dataflowcomponent_test
 
-import "errors"
+import (
+	"testing"
 
-// Custom errors for DataFlowComponent service
-var (
-	// ErrServiceNotExists is returned when a dataflow component does not exist
-	ErrServiceNotExists = errors.New("dataflow component does not exist")
-	// ErrServiceAlreadyExists is returned when a dataflow component already exists
-	ErrServiceAlreadyExists = errors.New("dataflow component already exists")
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 )
+
+func TestDataflowComponent(t *testing.T) {
+	RegisterFailHandler(Fail)
+	RunSpecs(t, "DataflowComponent Test Suite")
+}

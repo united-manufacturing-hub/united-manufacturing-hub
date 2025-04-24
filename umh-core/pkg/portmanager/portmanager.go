@@ -67,8 +67,98 @@ type DefaultPortManager struct {
 	nextPort int
 }
 
-// NewDefaultPortManager creates a new DefaultPortManager with the given port range
+// Global singleton instance of DefaultPortManager
+var (
+	defaultPortManagerInstance *DefaultPortManager
+	defaultPortManagerOnce     sync.Once
+	defaultPortManagerMutex    sync.RWMutex
+)
+
+// GetDefaultPortManager returns the singleton instance of DefaultPortManager.
+// If the instance hasn't been initialized yet, it returns nil.
+func GetDefaultPortManager() *DefaultPortManager {
+	defaultPortManagerMutex.RLock()
+	defer defaultPortManagerMutex.RUnlock()
+	return defaultPortManagerInstance
+}
+
+// initDefaultPortManager initializes the singleton DefaultPortManager with the given port range.
+// It ensures the DefaultPortManager is initialized only once.
+// Returns error if initialization fails or if it was already initialized with different parameters.
+func initDefaultPortManager(minPort, maxPort int) (*DefaultPortManager, error) {
+	var initErr error
+
+	defaultPortManagerOnce.Do(func() {
+		defaultPortManagerMutex.Lock()
+		defer defaultPortManagerMutex.Unlock()
+
+		manager, err := newDefaultPortManager(minPort, maxPort)
+		if err != nil {
+			initErr = err
+			return
+		}
+		defaultPortManagerInstance = manager
+	})
+
+	if initErr != nil {
+		return nil, initErr
+	}
+
+	// Check if already initialized with different parameters
+	defaultPortManagerMutex.RLock()
+	defer defaultPortManagerMutex.RUnlock()
+	inst := defaultPortManagerInstance
+	if inst == nil {
+		return nil, fmt.Errorf("port manager failed to initialize previously; call InitDefaultPortManager again with valid parameters")
+	}
+
+	if inst.minPort != minPort || inst.maxPort != maxPort {
+		return defaultPortManagerInstance, fmt.Errorf(
+			"port manager already initialized with different range (%d-%d)",
+			inst.minPort, inst.maxPort,
+		)
+	}
+
+	return inst, nil
+}
+
+// NewDefaultPortManager creates a new DefaultPortManager with the given port range.
+// If a singleton instance already exists, it returns that instance.
+// Otherwise, it creates and initializes the singleton instance.
 func NewDefaultPortManager(minPort, maxPort int) (*DefaultPortManager, error) {
+	// First validate inputs before checking the singleton
+	if minPort <= 0 || maxPort <= 0 {
+		return nil, fmt.Errorf("port range must be positive")
+	}
+	if minPort >= maxPort {
+		return nil, fmt.Errorf("minPort must be less than maxPort")
+	}
+	if minPort < 1024 {
+		return nil, fmt.Errorf("minPort must be at least 1024 (non-privileged)")
+	}
+	if maxPort > 65535 {
+		return nil, fmt.Errorf("maxPort must be at most 65535")
+	}
+
+	// Only check existing singleton if inputs are valid
+	if existing := GetDefaultPortManager(); existing != nil {
+		// Return the existing instance along with a warning if parameters don't match
+		if existing.minPort != minPort || existing.maxPort != maxPort {
+			return existing, fmt.Errorf(
+				"warning: using existing port manager with different range (%d-%d) than requested (%d-%d)",
+				existing.minPort, existing.maxPort, minPort, maxPort,
+			)
+		}
+		return existing, nil
+	}
+
+	// Initialize singleton if it doesn't exist
+	return initDefaultPortManager(minPort, maxPort)
+}
+
+// newDefaultPortManager is an internal function that creates a new DefaultPortManager instance
+// without using the singleton pattern. This is used by InitDefaultPortManager.
+func newDefaultPortManager(minPort, maxPort int) (*DefaultPortManager, error) {
 	if minPort <= 0 || maxPort <= 0 {
 		return nil, fmt.Errorf("port range must be positive")
 	}
@@ -285,4 +375,12 @@ func (pm *DefaultPortManager) PostReconcile(ctx context.Context) error {
 	// No cleanup needed for DefaultPortManager as ports are released explicitly
 	// when instances are removed via ReleasePort
 	return nil
+}
+
+// ResetDefaultPortManager resets the singleton instance for testing purposes
+func ResetDefaultPortManager() {
+	defaultPortManagerMutex.Lock()
+	defer defaultPortManagerMutex.Unlock()
+	defaultPortManagerInstance = nil
+	defaultPortManagerOnce = sync.Once{}
 }

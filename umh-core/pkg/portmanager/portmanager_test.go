@@ -30,6 +30,11 @@ func TestPortManager(t *testing.T) {
 }
 
 var _ = Describe("PortManager", func() {
+	BeforeEach(func() {
+		// Reset the singleton before each test
+		ResetDefaultPortManager()
+	})
+
 	Describe("NewDefaultPortManager", func() {
 		DescribeTable("initialization scenarios",
 			func(minPort, maxPort int, shouldSucceed bool) {

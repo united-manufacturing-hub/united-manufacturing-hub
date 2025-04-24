@@ -36,6 +36,10 @@ type DataFlowComponentConfig struct {
 	BenthosConfig BenthosConfig `yaml:"benthos"`
 }
 
+func (d DataFlowComponentConfig) Equal(other DataFlowComponentConfig) bool {
+	return NewComparator().ConfigsEqual(d, other)
+}
+
 // ToBenthosServiceConfig converts the simplified BenthosConfig to a full BenthosServiceConfig
 // with default advanced configuration
 func (bc *BenthosConfig) ToBenthosServiceConfig() benthosserviceconfig.BenthosServiceConfig {
