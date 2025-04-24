@@ -82,10 +82,10 @@ func GetDefaultPortManager() *DefaultPortManager {
 	return defaultPortManagerInstance
 }
 
-// InitDefaultPortManager initializes the singleton DefaultPortManager with the given port range.
+// initDefaultPortManager initializes the singleton DefaultPortManager with the given port range.
 // It ensures the DefaultPortManager is initialized only once.
 // Returns error if initialization fails or if it was already initialized with different parameters.
-func InitDefaultPortManager(minPort, maxPort int) (*DefaultPortManager, error) {
+func initDefaultPortManager(minPort, maxPort int) (*DefaultPortManager, error) {
 	var initErr error
 
 	defaultPortManagerOnce.Do(func() {
@@ -153,7 +153,7 @@ func NewDefaultPortManager(minPort, maxPort int) (*DefaultPortManager, error) {
 	}
 
 	// Initialize singleton if it doesn't exist
-	return InitDefaultPortManager(minPort, maxPort)
+	return initDefaultPortManager(minPort, maxPort)
 }
 
 // newDefaultPortManager is an internal function that creates a new DefaultPortManager instance

@@ -18,6 +18,7 @@ import (
 	"github.com/tiendc/go-deepcopy"
 	dataflowcomponentconfig "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/dataflowcomponent"
 )
 
@@ -38,9 +39,18 @@ func (d *DataflowComponentInstance) CreateObservedStateSnapshot() fsm.ObservedSt
 	snapshot := &DataflowComponentObservedStateSnapshot{}
 
 	// Deep copy config
-	deepcopy.Copy(&snapshot.Config, &d.config)
+	err := deepcopy.Copy(&snapshot.Config, &d.config)
+	if err != nil {
+		sentry.ReportIssuef(sentry.IssueTypeError, d.baseFSMInstance.GetLogger(), "failed to deep copy config: %v", err)
+		return nil
+	}
 
 	// Deep copy service info
-	deepcopy.Copy(&snapshot.ServiceInfo, &d.ObservedState.ServiceInfo)
+	err = deepcopy.Copy(&snapshot.ServiceInfo, &d.ObservedState.ServiceInfo)
+	if err != nil {
+		sentry.ReportIssuef(sentry.IssueTypeError, d.baseFSMInstance.GetLogger(), "failed to deep copy service info: %v", err)
+		return nil
+	}
+
 	return snapshot
 }

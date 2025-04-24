@@ -33,6 +33,9 @@ func ConfigsEqual(a, b *DataFlowComponentConfig) bool {
 
 // ConfigDiff returns a human-readable string describing differences between configs
 func ConfigDiff(a, b *DataFlowComponentConfig) string {
+	if a == nil || b == nil {
+		return ""
+	}
 	benthosA := a.GetBenthosServiceConfig()
 	benthosB := b.GetBenthosServiceConfig()
 

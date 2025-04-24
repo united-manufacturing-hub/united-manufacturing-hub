@@ -737,7 +737,11 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 				if err != nil {
 					return false
 				}
-				defer resp.Body.Close()
+				defer func() {
+					if err := resp.Body.Close(); err != nil {
+						Fail(fmt.Sprintf("Error closing response body: %v\n", err))
+					}
+				}()
 				return resp.StatusCode == http.StatusOK
 			}, 20*time.Second, 1*time.Second).Should(BeTrue(),
 				"Metrics endpoint should be healthy")

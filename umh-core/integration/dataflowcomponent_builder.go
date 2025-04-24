@@ -15,6 +15,8 @@
 package integration_test
 
 import (
+	"fmt"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentconfig"
 	"gopkg.in/yaml.v3"
@@ -125,7 +127,7 @@ func (b *DataFlowComponentBuilder) AddGeneratorDataFlowComponent(name string, in
 func (b *DataFlowComponentBuilder) UpdateGeneratorDataFlowComponent(name string, newInterval string) *DataFlowComponentBuilder {
 	// Find and update the service
 	for i, component := range b.full.DataFlow {
-		if component.FSMInstanceConfig.Name == name {
+		if component.Name == name {
 			// Create updated input config with new interval
 			if input, ok := component.DataFlowComponentConfig.BenthosConfig.Input["generate"].(map[string]interface{}); ok {
 				input["interval"] = newInterval
@@ -140,8 +142,8 @@ func (b *DataFlowComponentBuilder) UpdateGeneratorDataFlowComponent(name string,
 // StartDataFlowComponent sets a DataFlowComponent to active state
 func (b *DataFlowComponentBuilder) StartDataFlowComponent(name string) *DataFlowComponentBuilder {
 	for i, component := range b.full.DataFlow {
-		if component.FSMInstanceConfig.Name == name {
-			b.full.DataFlow[i].FSMInstanceConfig.DesiredFSMState = "active"
+		if component.Name == name {
+			b.full.DataFlow[i].DesiredFSMState = "active"
 			b.activeComponents[name] = true
 			break
 		}
@@ -152,8 +154,8 @@ func (b *DataFlowComponentBuilder) StartDataFlowComponent(name string) *DataFlow
 // StopDataFlowComponent sets a DataFlowComponent to stopped state
 func (b *DataFlowComponentBuilder) StopDataFlowComponent(name string) *DataFlowComponentBuilder {
 	for i, component := range b.full.DataFlow {
-		if component.FSMInstanceConfig.Name == name {
-			b.full.DataFlow[i].FSMInstanceConfig.DesiredFSMState = "stopped"
+		if component.Name == name {
+			b.full.DataFlow[i].DesiredFSMState = "stopped"
 			b.activeComponents[name] = false
 			break
 		}
@@ -174,6 +176,9 @@ func (b *DataFlowComponentBuilder) CountActiveDataFlowComponents() int {
 
 // BuildYAML converts the configuration to YAML format
 func (b *DataFlowComponentBuilder) BuildYAML() string {
-	out, _ := yaml.Marshal(b.full)
+	out, err := yaml.Marshal(b.full)
+	if err != nil {
+		panic(fmt.Errorf("failed to marshal DataFlowComponent config: %w", err))
+	}
 	return string(out)
 }

@@ -22,7 +22,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentconfig"
 	benthosfsmmanager "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
-	benthosfsmtype "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
 	benthosservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
@@ -186,7 +185,7 @@ func (m *MockDataFlowComponentService) AddDataFlowComponentToBenthosManager(ctx 
 	benthosConfig := config.BenthosConfig{
 		FSMInstanceConfig: config.FSMInstanceConfig{
 			Name:            benthosName,
-			DesiredFSMState: benthosfsmtype.OperationalStateActive,
+			DesiredFSMState: benthosfsmmanager.OperationalStateActive,
 		},
 		BenthosServiceConfig: m.GenerateBenthosConfigForDataFlowComponentResult,
 	}
@@ -270,7 +269,7 @@ func (m *MockDataFlowComponentService) StartDataFlowComponent(ctx context.Contex
 	// Set the desired state to active for the given component
 	for i, benthosConfig := range m.BenthosConfigs {
 		if benthosConfig.Name == benthosName {
-			m.BenthosConfigs[i].DesiredFSMState = benthosfsmtype.OperationalStateActive
+			m.BenthosConfigs[i].DesiredFSMState = benthosfsmmanager.OperationalStateActive
 			found = true
 			break
 		}
@@ -294,7 +293,7 @@ func (m *MockDataFlowComponentService) StopDataFlowComponent(ctx context.Context
 	// Set the desired state to stopped for the given component
 	for i, benthosConfig := range m.BenthosConfigs {
 		if benthosConfig.Name == benthosName {
-			m.BenthosConfigs[i].DesiredFSMState = benthosfsmtype.OperationalStateStopped
+			m.BenthosConfigs[i].DesiredFSMState = benthosfsmmanager.OperationalStateStopped
 			found = true
 			break
 		}

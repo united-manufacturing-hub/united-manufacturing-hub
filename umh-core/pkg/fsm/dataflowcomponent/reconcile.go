@@ -64,20 +64,27 @@ func (d *DataflowComponentInstance) Reconcile(ctx context.Context, snapshot fsm.
 
 		// if it is a permanent error, start the removal process and reset the error (so that we can reconcile towards a stopped / removed state)
 		if backoff.IsPermanentFailureError(err) {
-
-			// if it is already in stopped, stopping, removing states, and it again returns a permanent error,
-			// we need to throw it to the manager as the instance itself here cannot fix it anymore
-			if d.IsRemoved() || d.IsRemoving() || d.IsStopping() || d.IsStopped() {
-				d.baseFSMInstance.GetLogger().Errorf("DataflowComponent instance %s is already in a terminal state, force removing it", dataflowComponentInstanceName)
-				// force delete everything from the s6 file directory
-				d.service.ForceRemoveDataFlowComponent(ctx, filesystemService, dataflowComponentInstanceName)
-				return err, false
-			} else {
-				d.baseFSMInstance.GetLogger().Errorf("DataflowComponent instance %s is not in a terminal state, resetting state and removing it", dataflowComponentInstanceName)
-				d.baseFSMInstance.ResetState()
-				d.Remove(ctx)
-				return nil, false // let's try to at least reconcile towards a stopped / removed state
-			}
+			// For permanent errors, we need special handling based on the instance's current state:
+			// 1. If already in a shutdown state (removed, removing, stopping, stopped), try force removal
+			// 2. If not in a shutdown state, attempt normal removal first, then force if needed
+			return d.baseFSMInstance.HandlePermanentError(
+				ctx,
+				err,
+				func() bool {
+					// Determine if we're already in a shutdown state where normal removal isn't possible
+					// and force removal is required
+					return d.IsRemoved() || d.IsRemoving() || d.IsStopping() || d.IsStopped()
+				},
+				func(ctx context.Context) error {
+					// Normal removal through state transition
+					return d.RemoveInstance(ctx, filesystemService)
+				},
+				func(ctx context.Context) error {
+					// Force removal when other approaches fail - bypasses state transitions
+					// and directly deletes files and resources
+					return d.service.ForceRemoveDataFlowComponent(ctx, filesystemService, dataflowComponentInstanceName)
+				},
+			)
 		}
 		return nil, false
 	}
@@ -108,6 +115,7 @@ func (d *DataflowComponentInstance) Reconcile(ctx context.Context, snapshot fsm.
 			return nil, false // We don't want to return an error here, because we want to continue reconciling
 		}
 
+		//nolint:ineffassign // This is intentionally modifying the named return value accessed in defer
 		err = nil // The service does not exist, which is fine as this happens in the reconcileStateTransition
 	}
 
@@ -240,7 +248,7 @@ func (d *DataflowComponentInstance) reconcileOperationalStates(ctx context.Conte
 	switch desiredState {
 	case OperationalStateActive:
 		return d.reconcileTransitionToActive(ctx, filesystemService, currentState, currentTime)
-	case OperationalStateStopped, OperationalStateStopping:
+	case OperationalStateStopped:
 		return d.reconcileTransitionToStopped(ctx, filesystemService, currentState)
 	default:
 		return fmt.Errorf("invalid desired state: %s", desiredState), false

@@ -798,7 +798,7 @@ var _ = Describe("DataFlowComponent FSM", func() {
 
 			Expect(recErr).To(HaveOccurred())
 			Expect(recErr.Error()).To(ContainSubstring(backoff.PermanentFailureError))
-			Expect(reconciled).To(BeFalse())
+			Expect(reconciled).To(BeTrue())
 			Expect(mockService.ForceRemoveDataFlowComponentCalled).To(BeTrue())
 
 			mockService.StatusError = nil // cleanup for other tests
