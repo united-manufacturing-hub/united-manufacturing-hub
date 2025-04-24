@@ -65,7 +65,8 @@ var _ = Describe("Benthos Monitor Service", func() {
 
 		// Cleanup the data directory
 		ctx, cancel = newTimeoutContext()
-		mockFS.RemoveAll(ctx, getTmpDir())
+		err := mockFS.RemoveAll(ctx, getTmpDir())
+		Expect(err).NotTo(HaveOccurred())
 	})
 	AfterEach(func() {
 		cancel()
@@ -136,7 +137,7 @@ var _ = Describe("Benthos Monitor Service", func() {
 				{Content: fmt.Sprintf("%s\n", benthos_monitor.VERSION_END)},
 				{Content: metricsResponse + "XXXXXXXXXX\n"}, // Some hex-encoded gzipped data from the /metrics endpoint, + some random data that should result in a failure
 				{Content: fmt.Sprintf("%s\n", benthos_monitor.METRICS_END_MARKER)},
-				{Content: fmt.Sprintf("1745502164\n")}, // Some  timestamp
+				{Content: "1745502164\n"}, // Some  timestamp
 				{Content: fmt.Sprintf("%s\n", benthos_monitor.BLOCK_END_MARKER)},
 			}
 			// Set the mock logs result directly

@@ -34,6 +34,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 
 	dto "github.com/prometheus/client_model/go"
@@ -570,7 +571,11 @@ func (s *BenthosMonitorService) ProcessPingData(pingDataBytes []byte) (bool, err
 	if err != nil {
 		return false, fmt.Errorf("failed to decompress ping data: %w", err)
 	}
-	defer gzipReader.Close()
+	defer func() {
+		if err := gzipReader.Close(); err != nil {
+			sentry.ReportIssue(fmt.Errorf("failed to close gzip reader: %w", err), sentry.IssueTypeError, s.logger)
+		}
+	}()
 
 	// Parse the ping data
 	isLive, err := ParsePingData(gzipReader)
@@ -620,7 +625,11 @@ func (s *BenthosMonitorService) ProcessReadyData(readyDataBytes []byte) (bool, r
 	if err != nil {
 		return false, readyResponse{}, fmt.Errorf("failed to decompress ready data: %w", err)
 	}
-	defer gzipReader.Close()
+	defer func() {
+		if err := gzipReader.Close(); err != nil {
+			sentry.ReportIssue(fmt.Errorf("failed to close gzip reader: %w", err), sentry.IssueTypeError, s.logger)
+		}
+	}()
 
 	// Parse the ping data
 	isReady, readyResp, err := ParseReadyData(gzipReader)
@@ -672,7 +681,11 @@ func (s *BenthosMonitorService) ProcessVersionData(versionDataBytes []byte) (ver
 	if err != nil {
 		return versionResponse{}, fmt.Errorf("failed to decompress version data: %w", err)
 	}
-	defer gzipReader.Close()
+	defer func() {
+		if err := gzipReader.Close(); err != nil {
+			sentry.ReportIssue(fmt.Errorf("failed to close gzip reader: %w", err), sentry.IssueTypeError, s.logger)
+		}
+	}()
 
 	// Parse the ping data
 	versionResp, err := ParseVersionData(gzipReader)
@@ -722,7 +735,11 @@ func (s *BenthosMonitorService) ProcessMetricsData(metricsDataBytes []byte, tick
 	if err != nil {
 		return nil, fmt.Errorf("failed to decompress metrics data: %w", err)
 	}
-	defer gzipReader.Close()
+	defer func() {
+		if err := gzipReader.Close(); err != nil {
+			sentry.ReportIssue(fmt.Errorf("failed to close gzip reader: %w", err), sentry.IssueTypeError, s.logger)
+		}
+	}()
 
 	// Parse the ping data
 	metrics, err := ParseMetricsData(gzipReader)
@@ -795,59 +812,59 @@ func ParseMetricsFromBytes(data []byte) (Metrics, error) {
 
 	// Process each metric family
 	for name, family := range mf {
-		switch {
+		switch name {
 		// Input metrics
-		case name == "input_connection_failed":
+		case "input_connection_failed":
 			if len(family.Metric) > 0 {
 				metrics.Input.ConnectionFailed = int64(getValue(family.Metric[0]))
 			}
-		case name == "input_connection_lost":
+		case "input_connection_lost":
 			if len(family.Metric) > 0 {
 				metrics.Input.ConnectionLost = int64(getValue(family.Metric[0]))
 			}
-		case name == "input_connection_up":
+		case "input_connection_up":
 			if len(family.Metric) > 0 {
 				metrics.Input.ConnectionUp = int64(getValue(family.Metric[0]))
 			}
-		case name == "input_received":
+		case "input_received":
 			if len(family.Metric) > 0 {
 				metrics.Input.Received = int64(getValue(family.Metric[0]))
 			}
-		case name == "input_latency_ns":
+		case "input_latency_ns":
 			updateLatencyFromFamily(&metrics.Input.LatencyNS, family)
 
 		// Output metrics
-		case name == "output_batch_sent":
+		case "output_batch_sent":
 			if len(family.Metric) > 0 {
 				metrics.Output.BatchSent = int64(getValue(family.Metric[0]))
 			}
-		case name == "output_connection_failed":
+		case "output_connection_failed":
 			if len(family.Metric) > 0 {
 				metrics.Output.ConnectionFailed = int64(getValue(family.Metric[0]))
 			}
-		case name == "output_connection_lost":
+		case "output_connection_lost":
 			if len(family.Metric) > 0 {
 				metrics.Output.ConnectionLost = int64(getValue(family.Metric[0]))
 			}
-		case name == "output_connection_up":
+		case "output_connection_up":
 			if len(family.Metric) > 0 {
 				metrics.Output.ConnectionUp = int64(getValue(family.Metric[0]))
 			}
-		case name == "output_error":
+		case "output_error":
 			if len(family.Metric) > 0 {
 				metrics.Output.Error = int64(getValue(family.Metric[0]))
 			}
-		case name == "output_sent":
+		case "output_sent":
 			if len(family.Metric) > 0 {
 				metrics.Output.Sent = int64(getValue(family.Metric[0]))
 			}
-		case name == "output_latency_ns":
+		case "output_latency_ns":
 			updateLatencyFromFamily(&metrics.Output.LatencyNS, family)
 
 		// Process metrics
-		case name == "processor_received", name == "processor_batch_received",
-			name == "processor_sent", name == "processor_batch_sent",
-			name == "processor_error", name == "processor_latency_ns":
+		case "processor_received", "processor_batch_received",
+			"processor_sent", "processor_batch_sent",
+			"processor_error", "processor_latency_ns":
 			for _, metric := range family.Metric {
 				path := getLabel(metric, "path")
 				if path == "" {
