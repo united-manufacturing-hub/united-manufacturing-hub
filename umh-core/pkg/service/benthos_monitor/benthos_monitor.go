@@ -775,9 +775,11 @@ func ParseMetricsData(dataReader io.Reader) (Metrics, error) {
 func ParseMetricsFromBytes(data []byte) (Metrics, error) {
 	var parser expfmt.TextParser
 	metrics := Metrics{
-		Input:   InputMetrics{},
-		Output:  OutputMetrics{},
-		Process: ProcessMetrics{},
+		Input:  InputMetrics{},
+		Output: OutputMetrics{},
+		Process: ProcessMetrics{
+			Processors: make(map[string]ProcessorMetrics),
+		},
 	}
 
 	// Parse the metrics text into prometheus format
@@ -964,6 +966,7 @@ func (s *BenthosMonitorService) Status(ctx context.Context, filesystemService fi
 			strings.Contains(err.Error(), "not found") {
 			return ServiceInfo{}, ErrServiceNotExist
 		}
+		return ServiceInfo{}, fmt.Errorf("failed to get S6 state: %w", err)
 	}
 
 	s6State, ok := s6StateRaw.(s6fsm.S6ObservedState)

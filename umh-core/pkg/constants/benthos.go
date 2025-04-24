@@ -47,5 +47,5 @@ var (
 )
 
 const (
-	BenthosMaxMetricsAndConfigAge = time.Second * 5
+	BenthosMaxMetricsAndConfigAge = time.Second * 10
 )

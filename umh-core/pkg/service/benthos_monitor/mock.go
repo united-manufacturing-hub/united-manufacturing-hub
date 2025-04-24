@@ -133,7 +133,7 @@ func (m *MockBenthosMonitorService) SetReadyStatus(inputConnected bool, outputCo
 			},
 		}
 	}
-	m.ServiceState.BenthosStatus.LastScan.HealthCheck.IsReady = true
+	m.ServiceState.BenthosStatus.LastScan.HealthCheck.IsReady = inputConnected && outputConnected && errorMsg == ""
 	m.ServiceState.BenthosStatus.LastScan.HealthCheck.ReadyError = errorMsg
 	m.ServiceState.BenthosStatus.LastScan.HealthCheck.ConnectionStatuses = []connStatus{
 		{
@@ -245,6 +245,8 @@ func (m *MockBenthosMonitorService) AddBenthosMonitorToS6Manager(ctx context.Con
 
 	// Mark service as existing
 	m.ServiceExistsFlag = true
+	// keep the accessor in sync
+	m.ServiceExistsResult = true
 
 	// Create an S6FSMConfig for this service
 	s6ServiceName := "benthos-monitor"
@@ -302,6 +304,8 @@ func (m *MockBenthosMonitorService) RemoveBenthosMonitorFromS6Manager(ctx contex
 
 	// Mark service as not existing
 	m.ServiceExistsFlag = false
+	// keep the accessor in sync
+	m.ServiceExistsResult = false
 	m.S6ServiceConfig = nil
 
 	return m.RemoveBenthosFromS6ManagerError

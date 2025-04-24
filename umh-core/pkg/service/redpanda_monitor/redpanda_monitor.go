@@ -714,6 +714,7 @@ func (s *RedpandaMonitorService) Status(ctx context.Context, filesystemService f
 			strings.Contains(err.Error(), "not found") {
 			return ServiceInfo{}, ErrServiceNotExist
 		}
+		return ServiceInfo{}, fmt.Errorf("failed to get S6 state: %w", err)
 	}
 
 	s6State, ok := s6StateRaw.(s6fsm.S6ObservedState)

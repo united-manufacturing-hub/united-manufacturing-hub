@@ -811,6 +811,9 @@ func (s *BenthosService) IsMetricsErrorFree(metrics benthos_monitor.BenthosMetri
 
 // HasProcessingActivity checks if the Benthos instance has active data processing based on metrics state
 func (s *BenthosService) HasProcessingActivity(status BenthosStatus) bool {
+	if status.BenthosMetrics.MetricsState == nil {
+		return false
+	}
 
 	return status.BenthosMetrics.MetricsState.IsActive
 }
