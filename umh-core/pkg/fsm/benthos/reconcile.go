@@ -323,11 +323,13 @@ func (b *BenthosInstance) reconcileStartingStates(ctx context.Context, filesyste
 	case OperationalStateStartingWaitingForServiceToRemainRunning:
 		// If the S6 is not running, go back to starting
 		if !b.IsBenthosS6Running() || !b.IsBenthosConfigLoaded() || !b.IsBenthosHealthchecksPassed() {
+			b.baseFSMInstance.GetLogger().Debugf("benthos is not running, config is not loaded or healthchecks have not passed")
 			return b.baseFSMInstance.SendEvent(ctx, EventStartFailed), true
 		}
 
 		// Check if service has been running stably for some time
 		if !b.IsBenthosRunningForSomeTimeWithoutErrors(currentTime, constants.BenthosLogWindow) {
+			b.baseFSMInstance.GetLogger().Debugf("benthos is not running stably for some time without errors")
 			return nil, false
 		}
 

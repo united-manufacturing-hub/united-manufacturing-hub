@@ -283,11 +283,13 @@ func (b *BenthosInstance) IsBenthosRunningForSomeTimeWithoutErrors(currentTime t
 
 	// Check if there are any issues in the Benthos logs
 	if !b.IsBenthosLogsFine(currentTime, logWindow) {
+		b.baseFSMInstance.GetLogger().Debugf("benthos logs are not fine")
 		return false
 	}
 
 	// Check if there are any errors in the Benthos metrics
 	if !b.IsBenthosMetricsErrorFree() {
+		b.baseFSMInstance.GetLogger().Debugf("benthos metrics are not error free")
 		return false
 	}
 

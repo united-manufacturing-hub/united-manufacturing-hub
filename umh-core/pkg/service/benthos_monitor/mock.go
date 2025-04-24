@@ -77,7 +77,7 @@ type ServiceStateFlags struct {
 	S6FSMState      string
 }
 
-// NewMockRedpandaMonitorService creates a new mock Redpanda monitor service
+// NewMockBenthosMonitorService creates a new mock Benthos monitor service
 func NewMockBenthosMonitorService() *MockBenthosMonitorService {
 	return &MockBenthosMonitorService{
 		ServiceState:      nil,
@@ -165,6 +165,13 @@ func (m *MockBenthosMonitorService) SetLiveStatus(isLive bool) {
 
 // SetMetricsResponse sets the metrics response of the Benthos Monitor service
 func (m *MockBenthosMonitorService) SetMetricsResponse(metrics Metrics) {
+	if m.ServiceState == nil {
+		m.ServiceState = &ServiceInfo{
+			BenthosStatus: BenthosMonitorStatus{
+				LastScan: &BenthosMetricsScan{},
+			},
+		}
+	}
 	m.ServiceState.BenthosStatus.LastScan.BenthosMetrics = &BenthosMetrics{
 		Metrics: metrics,
 	}

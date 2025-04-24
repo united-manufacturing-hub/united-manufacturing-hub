@@ -378,6 +378,25 @@ type CustomDFCPayload struct {
 	} `json:"customDataFlowComponent"`
 }
 
+// DeleteDFCPayload contains the UUID of the component to delete
+type DeleteDFCPayload struct {
+	UUID string `json:"uuid"`
+}
+
+type EditDataflowcomponentRequestSchemaJson struct {
+	BasedOnUuid string `json:"basedOnUuid" yaml:"basedOnUuid" mapstructure:"basedOnUuid"`
+
+	IgnoreHealthCheck *bool `json:"ignoreHealthCheck,omitempty" yaml:"ignoreHealthCheck,omitempty" mapstructure:"ignoreHealthCheck,omitempty"`
+
+	Meta CdcfMeta `json:"meta" yaml:"meta" mapstructure:"meta"`
+
+	Name string `json:"name" yaml:"name" mapstructure:"name"`
+
+	Payload DeployDataFlowComponentPayload `json:"payload" yaml:"payload" mapstructure:"payload"`
+
+	UUID string `json:"uuid" yaml:"uuid" mapstructure:"uuid"`
+}
+
 type GetDataflowcomponentResponse map[string]GetDataflowcomponentResponseContent
 
 type GetDataflowcomponentResponseContent struct {
