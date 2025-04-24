@@ -737,6 +737,7 @@ func ensureRedpandaState(ctx context.Context, redpandaService *redpanda.Redpanda
 
 		// Check state
 		serviceInfo, err := redpandaService.Status(ctx, mockFileSystem, tick, time.Now())
+
 		Expect(err).NotTo(HaveOccurred())
 		Expect(serviceInfo.S6FSMState).To(Equal(expectedState))
 	}
