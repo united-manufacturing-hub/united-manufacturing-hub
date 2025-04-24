@@ -28,30 +28,30 @@ import (
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 )
 
-// MockRedpandaMonitorService is a mock implementation of the IRedpandaMonitorService interface for testing
-type MockRedpandaMonitorService struct {
+// MockBenthosMonitorService is a mock implementation of the IBenthosMonitorService interface for testing
+type MockBenthosMonitorService struct {
 	// Tracks calls to methods
-	GenerateS6ConfigForRedpandaMonitorCalled bool
-	StatusCalled                             bool
-	AddRedpandaToS6ManagerCalled             bool
-	RemoveRedpandaFromS6ManagerCalled        bool
-	StartRedpandaCalled                      bool
-	StopRedpandaCalled                       bool
-	ReconcileManagerCalled                   bool
-	ServiceExistsCalled                      bool
+	GenerateS6ConfigForBenthosMonitorCalled bool
+	StatusCalled                            bool
+	AddBenthosToS6ManagerCalled             bool
+	RemoveBenthosFromS6ManagerCalled        bool
+	StartBenthosCalled                      bool
+	StopBenthosCalled                       bool
+	ReconcileManagerCalled                  bool
+	ServiceExistsCalled                     bool
 
 	// Return values for each method
-	GenerateS6ConfigForRedpandaMonitorResult s6serviceconfig.S6ServiceConfig
-	GenerateS6ConfigForRedpandaMonitorError  error
-	StatusResult                             ServiceInfo
-	StatusError                              error
-	AddRedpandaToS6ManagerError              error
-	RemoveRedpandaFromS6ManagerError         error
-	StartRedpandaError                       error
-	StopRedpandaError                        error
-	ReconcileManagerError                    error
-	ReconcileManagerReconciled               bool
-	ServiceExistsResult                      bool
+	GenerateS6ConfigForBenthosMonitorResult s6serviceconfig.S6ServiceConfig
+	GenerateS6ConfigForBenthosMonitorError  error
+	StatusResult                            ServiceInfo
+	StatusError                             error
+	AddBenthosToS6ManagerError              error
+	RemoveBenthosFromS6ManagerError         error
+	StartBenthosError                       error
+	StopBenthosError                        error
+	ReconcileManagerError                   error
+	ReconcileManagerReconciled              bool
+	ServiceExistsResult                     bool
 
 	// For more complex testing scenarios
 	ServiceState      *ServiceInfo
@@ -62,11 +62,11 @@ type MockRedpandaMonitorService struct {
 	stateFlags *ServiceStateFlags
 
 	// Mock metrics state
-	metricsState *RedpandaMetricsState
+	metricsState *BenthosMetricsState
 }
 
-// Ensure MockRedpandaMonitorService implements IRedpandaMonitorService
-var _ IRedpandaMonitorService = (*MockRedpandaMonitorService)(nil)
+// Ensure MockBenthosMonitorService implements IBenthosMonitorService
+var _ IBenthosMonitorService = (*MockBenthosMonitorService)(nil)
 
 // ServiceStateFlags contains all the state flags needed for FSM testing
 type ServiceStateFlags struct {
@@ -76,26 +76,24 @@ type ServiceStateFlags struct {
 }
 
 // NewMockRedpandaMonitorService creates a new mock Redpanda monitor service
-func NewMockRedpandaMonitorService() *MockRedpandaMonitorService {
-	return &MockRedpandaMonitorService{
+func NewMockBenthosMonitorService() *MockBenthosMonitorService {
+	return &MockBenthosMonitorService{
 		ServiceState:      nil,
 		ServiceExistsFlag: false,
 		S6ServiceConfig:   nil,
 		stateFlags:        &ServiceStateFlags{},
-		metricsState:      NewRedpandaMetricsState(),
+		metricsState:      NewBenthosMetricsState(),
 	}
 }
 
 // SetServiceState sets all state flags at once
-func (m *MockRedpandaMonitorService) SetServiceState(flags ServiceStateFlags) {
+func (m *MockBenthosMonitorService) SetServiceState(flags ServiceStateFlags) {
 	// Initialize ServiceInfo if not exists
 	if m.ServiceState == nil {
 		m.ServiceState = &ServiceInfo{
-			RedpandaStatus: RedpandaMonitorStatus{
-				LastScan: &RedpandaMetricsAndClusterConfig{
-					Metrics: &RedpandaMetrics{
-						MetricsState: m.metricsState,
-					},
+			BenthosStatus: BenthosMonitorStatus{
+				LastScan: &BenthosMetricsScan{
+					MetricsState: m.metricsState,
 				},
 			},
 		}
@@ -120,41 +118,41 @@ func (m *MockRedpandaMonitorService) SetServiceState(flags ServiceStateFlags) {
 }
 
 // GetServiceState gets the state flags
-func (m *MockRedpandaMonitorService) GetServiceState() *ServiceStateFlags {
+func (m *MockBenthosMonitorService) GetServiceState() *ServiceStateFlags {
 	return m.stateFlags
 }
 
-// GenerateS6ConfigForRedpandaMonitor mocks generating S6 config for Redpanda monitor
-func (m *MockRedpandaMonitorService) GenerateS6ConfigForRedpandaMonitor() (s6serviceconfig.S6ServiceConfig, error) {
-	m.GenerateS6ConfigForRedpandaMonitorCalled = true
+// GenerateS6ConfigForBenthosMonitor mocks generating S6 config for Benthos monitor
+func (m *MockBenthosMonitorService) GenerateS6ConfigForBenthosMonitor(s6ServiceName string, port uint16) (s6serviceconfig.S6ServiceConfig, error) {
+	m.GenerateS6ConfigForBenthosMonitorCalled = true
 
 	// If error is set, return it
-	if m.GenerateS6ConfigForRedpandaMonitorError != nil {
-		return s6serviceconfig.S6ServiceConfig{}, m.GenerateS6ConfigForRedpandaMonitorError
+	if m.GenerateS6ConfigForBenthosMonitorError != nil {
+		return s6serviceconfig.S6ServiceConfig{}, m.GenerateS6ConfigForBenthosMonitorError
 	}
 
 	// If a result is preset, return it
-	if len(m.GenerateS6ConfigForRedpandaMonitorResult.Command) > 0 {
-		return m.GenerateS6ConfigForRedpandaMonitorResult, nil
+	if len(m.GenerateS6ConfigForBenthosMonitorResult.Command) > 0 {
+		return m.GenerateS6ConfigForBenthosMonitorResult, nil
 	}
 
 	// Return a default config
 	s6Config := s6serviceconfig.S6ServiceConfig{
 		Command: []string{
 			"/bin/sh",
-			fmt.Sprintf("%s/%s/config/run_redpanda_monitor.sh", constants.S6BaseDir, "redpanda-monitor-mock"),
+			fmt.Sprintf("%s/%s/config/run_benthos_monitor.sh", constants.S6BaseDir, s6ServiceName),
 		},
 		Env: map[string]string{},
 		ConfigFiles: map[string]string{
-			"run_redpanda_monitor.sh": "mocked script content",
+			"run_benthos_monitor.sh": "mocked script content",
 		},
 	}
 
 	return s6Config, nil
 }
 
-// Status mocks getting the status of a Redpanda Monitor service
-func (m *MockRedpandaMonitorService) Status(ctx context.Context, filesystemService filesystem.Service, tick uint64) (ServiceInfo, error) {
+// Status mocks getting the status of a Benthos Monitor service
+func (m *MockBenthosMonitorService) Status(ctx context.Context, filesystemService filesystem.Service, tick uint64) (ServiceInfo, error) {
 	m.StatusCalled = true
 
 	// Check for context cancellation
@@ -164,16 +162,14 @@ func (m *MockRedpandaMonitorService) Status(ctx context.Context, filesystemServi
 
 	// Check if the service exists
 	if !m.ServiceExistsFlag {
-		return ServiceInfo{}, errors.New("service 'redpanda-monitor' not found")
+		return ServiceInfo{}, errors.New("service 'benthos-monitor' not found")
 	}
 
 	// If we have a state already stored, return it
 	if m.ServiceState != nil {
 		now := time.Now()
-		m.ServiceState.RedpandaStatus.LastScan = &RedpandaMetricsAndClusterConfig{
-			Metrics: &RedpandaMetrics{
-				MetricsState: m.metricsState,
-			},
+		m.ServiceState.BenthosStatus.LastScan = &BenthosMetricsScan{
+			MetricsState:  m.metricsState,
 			LastUpdatedAt: now,
 		}
 		return *m.ServiceState, m.StatusError
@@ -183,9 +179,9 @@ func (m *MockRedpandaMonitorService) Status(ctx context.Context, filesystemServi
 	return m.StatusResult, m.StatusError
 }
 
-// AddRedpandaMonitorToS6Manager mocks adding a Redpanda Monitor instance to the S6 manager
-func (m *MockRedpandaMonitorService) AddRedpandaMonitorToS6Manager(ctx context.Context) error {
-	m.AddRedpandaToS6ManagerCalled = true
+// AddBenthosMonitorToS6Manager mocks adding a Benthos Monitor instance to the S6 manager
+func (m *MockBenthosMonitorService) AddBenthosMonitorToS6Manager(ctx context.Context, port uint16) error {
+	m.AddBenthosToS6ManagerCalled = true
 
 	// Check for context cancellation
 	if ctx.Err() != nil {
@@ -201,8 +197,8 @@ func (m *MockRedpandaMonitorService) AddRedpandaMonitorToS6Manager(ctx context.C
 	m.ServiceExistsFlag = true
 
 	// Create an S6FSMConfig for this service
-	s6ServiceName := "redpanda-monitor"
-	s6Config, _ := m.GenerateS6ConfigForRedpandaMonitor()
+	s6ServiceName := "benthos-monitor"
+	s6Config, _ := m.GenerateS6ConfigForBenthosMonitor(s6ServiceName, port)
 	s6FSMConfig := config.S6FSMConfig{
 		FSMInstanceConfig: config.FSMInstanceConfig{
 			Name:            s6ServiceName,
@@ -214,12 +210,12 @@ func (m *MockRedpandaMonitorService) AddRedpandaMonitorToS6Manager(ctx context.C
 	// Store the S6FSMConfig
 	m.S6ServiceConfig = &s6FSMConfig
 
-	return m.AddRedpandaToS6ManagerError
+	return m.AddBenthosToS6ManagerError
 }
 
-// RemoveRedpandaMonitorFromS6Manager mocks removing a Redpanda Monitor instance from the S6 manager
-func (m *MockRedpandaMonitorService) RemoveRedpandaMonitorFromS6Manager(ctx context.Context) error {
-	m.RemoveRedpandaFromS6ManagerCalled = true
+// RemoveBenthosMonitorFromS6Manager mocks removing a Benthos Monitor instance from the S6 manager
+func (m *MockBenthosMonitorService) RemoveBenthosMonitorFromS6Manager(ctx context.Context) error {
+	m.RemoveBenthosFromS6ManagerCalled = true
 
 	// Check for context cancellation
 	if ctx.Err() != nil {
@@ -235,12 +231,12 @@ func (m *MockRedpandaMonitorService) RemoveRedpandaMonitorFromS6Manager(ctx cont
 	m.ServiceExistsFlag = false
 	m.S6ServiceConfig = nil
 
-	return m.RemoveRedpandaFromS6ManagerError
+	return m.RemoveBenthosFromS6ManagerError
 }
 
-// StartRedpandaMonitor mocks starting a Redpanda Monitor instance
-func (m *MockRedpandaMonitorService) StartRedpandaMonitor(ctx context.Context) error {
-	m.StartRedpandaCalled = true
+// StartBenthosMonitor mocks starting a Benthos Monitor instance
+func (m *MockBenthosMonitorService) StartBenthosMonitor(ctx context.Context) error {
+	m.StartBenthosCalled = true
 
 	// Check for context cancellation
 	if ctx.Err() != nil {
@@ -255,12 +251,12 @@ func (m *MockRedpandaMonitorService) StartRedpandaMonitor(ctx context.Context) e
 	// Set the desired state to running
 	m.S6ServiceConfig.DesiredFSMState = s6fsm.OperationalStateRunning
 
-	return m.StartRedpandaError
+	return m.StartBenthosError
 }
 
-// StopRedpandaMonitor mocks stopping a Redpanda Monitor instance
-func (m *MockRedpandaMonitorService) StopRedpandaMonitor(ctx context.Context) error {
-	m.StopRedpandaCalled = true
+// StopBenthosMonitor mocks stopping a Benthos Monitor instance
+func (m *MockBenthosMonitorService) StopBenthosMonitor(ctx context.Context) error {
+	m.StopBenthosCalled = true
 
 	// Check for context cancellation
 	if ctx.Err() != nil {
@@ -275,11 +271,11 @@ func (m *MockRedpandaMonitorService) StopRedpandaMonitor(ctx context.Context) er
 	// Set the desired state to stopped
 	m.S6ServiceConfig.DesiredFSMState = s6fsm.OperationalStateStopped
 
-	return m.StopRedpandaError
+	return m.StopBenthosError
 }
 
-// ReconcileManager mocks reconciling the Redpanda Monitor manager
-func (m *MockRedpandaMonitorService) ReconcileManager(ctx context.Context, filesystemService filesystem.Service, tick uint64) (error, bool) {
+// ReconcileManager mocks reconciling the Benthos Monitor manager
+func (m *MockBenthosMonitorService) ReconcileManager(ctx context.Context, filesystemService filesystem.Service, tick uint64) (error, bool) {
 	m.ReconcileManagerCalled = true
 
 	// Check for context cancellation
@@ -299,8 +295,8 @@ func (m *MockRedpandaMonitorService) ReconcileManager(ctx context.Context, files
 	return m.ReconcileManagerError, m.ReconcileManagerReconciled
 }
 
-// ServiceExists mocks checking if a Redpanda Monitor service exists
-func (m *MockRedpandaMonitorService) ServiceExists(ctx context.Context, filesystemService filesystem.Service) bool {
+// ServiceExists mocks checking if a Benthos Monitor service exists
+func (m *MockBenthosMonitorService) ServiceExists(ctx context.Context, filesystemService filesystem.Service) bool {
 	m.ServiceExistsCalled = true
 
 	// Check for context cancellation
@@ -312,46 +308,30 @@ func (m *MockRedpandaMonitorService) ServiceExists(ctx context.Context, filesyst
 }
 
 // SetMetricsState allows tests to directly set the metrics state
-func (m *MockRedpandaMonitorService) SetMetricsState(isActive bool, freeBytes int64, totalBytes int64, freeSpaceAlert bool) {
+func (m *MockBenthosMonitorService) SetMetricsState(isActive bool) {
 	if m.metricsState == nil {
-		m.metricsState = NewRedpandaMetricsState()
+		m.metricsState = NewBenthosMetricsState()
 	}
 
 	m.metricsState.IsActive = isActive
 
-	// Create metrics to be used in service state
-	metrics := Metrics{
-		Infrastructure: InfrastructureMetrics{
-			Storage: StorageMetrics{
-				FreeBytes:      freeBytes,
-				TotalBytes:     totalBytes,
-				FreeSpaceAlert: freeSpaceAlert,
-			},
-		},
-	}
-
 	// Update the service state if it exists
-	if m.ServiceState != nil && m.ServiceState.RedpandaStatus.LastScan != nil {
-		m.ServiceState.RedpandaStatus.LastScan.Metrics = &RedpandaMetrics{
-			MetricsState: m.metricsState,
-			Metrics:      metrics,
-		}
+	if m.ServiceState != nil && m.ServiceState.BenthosStatus.LastScan != nil {
+		m.ServiceState.BenthosStatus.LastScan.MetricsState = m.metricsState
 	}
 }
 
 // SetMockLogs allows tests to set the mock logs for the service
-func (m *MockRedpandaMonitorService) SetMockLogs(logs []s6service.LogEntry) {
+func (m *MockBenthosMonitorService) SetMockLogs(logs []s6service.LogEntry) {
 	if m.ServiceState == nil {
 		m.ServiceState = &ServiceInfo{
-			RedpandaStatus: RedpandaMonitorStatus{
-				LastScan: &RedpandaMetricsAndClusterConfig{
-					Metrics: &RedpandaMetrics{
-						MetricsState: m.metricsState,
-					},
+			BenthosStatus: BenthosMonitorStatus{
+				LastScan: &BenthosMetricsScan{
+					MetricsState: m.metricsState,
 				},
 			},
 		}
 	}
 
-	m.ServiceState.RedpandaStatus.Logs = logs
+	m.ServiceState.BenthosStatus.Logs = logs
 }

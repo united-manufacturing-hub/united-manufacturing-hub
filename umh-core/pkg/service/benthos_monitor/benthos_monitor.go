@@ -394,7 +394,7 @@ func (s *BenthosMonitorService) ParseBenthosLogs(ctx context.Context, logs []s6s
 
 	// We need to extract the lines between the markers
 	// Ping is the first part, ready is the second part, version is the third part, metrics is the fourth part
-	pingData := logs[actualSection.BlockEndMarkerIndex+1 : actualSection.PingEndMarkerIndex]
+	pingData := logs[actualSection.StartMarkerIndex+1 : actualSection.PingEndMarkerIndex]
 	readyData := logs[actualSection.PingEndMarkerIndex+1 : actualSection.ReadyEndMarkerIndex]
 	versionData := logs[actualSection.ReadyEndMarkerIndex+1 : actualSection.VersionEndMarkerIndex]
 	metricsData := logs[actualSection.VersionEndMarkerIndex+1 : actualSection.MetricsEndMarkerIndex]

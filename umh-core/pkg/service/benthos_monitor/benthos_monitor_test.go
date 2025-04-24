@@ -15,12 +15,8 @@
 package benthos_monitor_test
 
 import (
-	"bytes"
-	"compress/gzip"
 	"context"
-	"encoding/hex"
 	"fmt"
-	"io"
 	"os"
 	"strings"
 	"time"
@@ -52,60 +48,6 @@ func newTimeoutContext() (context.Context, context.CancelFunc) {
 
 const curlError = "curl: (7) Failed to connect to localhost port 9123 after 0 ms: Could not connect to server"
 
-// getReadyReader returns a reader for the static ready data from the benthos_monitor_data_test.go file
-func getReadyReader() *bytes.Reader {
-	// ready references the benthos_monitor_data_test.go file
-	// Remove all newlines in string
-	rX := strings.ReplaceAll(readyResponse, "\n", "")
-	// Hex decode ready
-	readyBytes, err := hex.DecodeString(rX)
-	Expect(err).NotTo(HaveOccurred())
-	// Gzip reader
-	gzipReader, err := gzip.NewReader(bytes.NewReader(readyBytes))
-	Expect(err).NotTo(HaveOccurred())
-	// Read all
-	data, err := io.ReadAll(gzipReader)
-	Expect(err).NotTo(HaveOccurred())
-	dataReader := bytes.NewReader(data)
-	return dataReader
-}
-
-// getVersionReader returns a reader for the static version data from the benthos_monitor_data_test.go file
-func getVersionReader() *bytes.Reader {
-	// version references the benthos_monitor_data_test.go file
-	// Remove all newlines in string
-	vX := strings.ReplaceAll(versionResponse, "\n", "")
-	// Hex decode version
-	versionBytes, err := hex.DecodeString(vX)
-	Expect(err).NotTo(HaveOccurred())
-	// Gzip reader
-	gzipReader, err := gzip.NewReader(bytes.NewReader(versionBytes))
-	Expect(err).NotTo(HaveOccurred())
-	// Read all
-	data, err := io.ReadAll(gzipReader)
-	Expect(err).NotTo(HaveOccurred())
-	dataReader := bytes.NewReader(data)
-	return dataReader
-}
-
-// getMetricsReader returns a reader for the static metrics data from the benthos_monitor_data_test.go file
-func getMetricsReader() *bytes.Reader {
-	// metrics references the benthos_monitor_data_test.go file
-	// Remove all newlines in string
-	mX := strings.ReplaceAll(metricsResponse, "\n", "")
-	// Hex decode metrics
-	metricsBytes, err := hex.DecodeString(mX)
-	Expect(err).NotTo(HaveOccurred())
-	// Gzip reader
-	gzipReader, err := gzip.NewReader(bytes.NewReader(metricsBytes))
-	Expect(err).NotTo(HaveOccurred())
-	// Read all
-	data, err := io.ReadAll(gzipReader)
-	Expect(err).NotTo(HaveOccurred())
-	dataReader := bytes.NewReader(data)
-	return dataReader
-}
-
 var _ = Describe("Benthos Monitor Service", func() {
 	var (
 		service     *benthos_monitor.BenthosMonitorService
@@ -131,7 +73,7 @@ var _ = Describe("Benthos Monitor Service", func() {
 
 	Describe("GenerateS6ConfigForBenthosMonitor", func() {
 		It("should generate valid S6 configuration", func() {
-			s6Config, err := service.GenerateS6ConfigForBenthosMonitor()
+			s6Config, err := service.GenerateS6ConfigForBenthosMonitor(serviceName, 8080)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify the config contains the expected command and script
@@ -360,10 +302,10 @@ var _ = Describe("Benthos Monitor Service", func() {
 			// Call AddRedpandaMonitorToS6Manager and check if called flag is set
 			err := mockService.AddBenthosMonitorToS6Manager(ctx, 8080)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(mockService.AddBenthosMonitorToS6ManagerCalled).To(BeTrue())
+			Expect(mockService.AddBenthosToS6ManagerCalled).To(BeTrue())
 
 			// Generate config and verify it has expected content
-			config, err := mockService.GenerateS6ConfigForBenthosMonitor()
+			config, err := mockService.GenerateS6ConfigForBenthosMonitor(serviceName, 8080)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(mockService.GenerateS6ConfigForBenthosMonitorCalled).To(BeTrue())
 			Expect(config.ConfigFiles).To(HaveKey("run_benthos_monitor.sh"))
@@ -436,23 +378,25 @@ var _ = Describe("Benthos Monitor Service", func() {
 		})
 	})
 
-	Describe("Can parse the metrics", func() {
-		It("should return an error if no metrics are provided", func() {
-			logs := []s6service.LogEntry{}
-			_, err := service.ParseBenthosLogs(ctx, logs, tick)
+	Describe("ProcessMetricsData", func() {
+		It("should return an error if no metrics data is provided", func() {
+			_, err := service.ProcessMetricsData(nil)
 			Expect(err).To(HaveOccurred())
 		})
-	})
-	It("should parse the metrics", func() {
 
-		m, err := benthos_monitor.ParseMetrics(getMetricsReader())
-		Expect(err).NotTo(HaveOccurred())
-		mShould := benthos_monitor.BenthosMetrics{
-			Input:   benthos_monitor.InputMetrics{},
-			Output:  benthos_monitor.OutputMetrics{},
-			Process: benthos_monitor.ProcessMetrics{},
-		}
-		Expect(m).To(Equal(mShould))
+		It("should parse the static ping data", func() {
+			metrics, err := service.ProcessMetricsData([]byte(metricsResponse))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(metrics.Input.ConnectionUp).To(Equal(int64(1)))
+			Expect(metrics.Input.Received).To(Equal(int64(7)))
+			Expect(metrics.Output.ConnectionUp).To(Equal(int64(1)))
+			Expect(metrics.Output.Sent).To(Equal(int64(7)))
+		})
+
+		It("should return an error if the ping data is a curl error", func() {
+			_, err := service.ProcessMetricsData([]byte(curlError))
+			Expect(err).To(HaveOccurred())
+		})
 	})
 
 	It("should parse the test_metrics", func() {
@@ -483,12 +427,7 @@ var _ = Describe("Benthos Monitor Service", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(benthosMetricsConfig).NotTo(BeNil())
 
-		// 4. Verify the metrics are parsed correctly
-		// metricsResult := benthosMetricsConfig.BenthosMetrics
-
-		// Verify storage metrics
-		// Note: this value is different from the other test, as the metrics are different
-
-		// TODO: add a test for the metrics
+		// Here we simply check that it took the last element in the log entries
+		Expect(benthosMetricsConfig.LastUpdatedAt.Unix()).To(Equal(int64(1745502180)))
 	})
 })
