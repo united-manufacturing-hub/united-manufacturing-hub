@@ -386,14 +386,14 @@ func (s *BenthosService) Status(ctx context.Context, filesystemService filesyste
 				BenthosStatus: BenthosStatus{
 					BenthosLogs: logs,
 				},
-			}, benthos_monitor.ErrServiceNoLogFile
+			}, ErrServiceNoLogFile
 		}
-		if strings.Contains(err.Error(), benthos_monitor.ErrServiceConnectionRefused.Error()) {
+		if strings.Contains(err.Error(), ErrHealthCheckConnectionRefused.Error()) {
 			return ServiceInfo{
 				S6ObservedState: s6ServiceObservedState,
 				S6FSMState:      s6FSMState,
 				BenthosStatus:   benthosStatus,
-			}, benthos_monitor.ErrServiceConnectionRefused
+			}, ErrHealthCheckConnectionRefused
 		}
 
 		return ServiceInfo{}, fmt.Errorf("failed to get health check: %w", err)
@@ -415,10 +415,10 @@ func (s *BenthosService) Status(ctx context.Context, filesystemService filesyste
 
 func (s *BenthosService) GetHealthCheckAndMetrics(ctx context.Context, filesystemService filesystem.Service, tick uint64, loopStartTime time.Time, benthosName string, logs []s6service.LogEntry) (BenthosStatus, error) {
 
-	s.logger.Infof("Getting health check and metrics for tick %d", tick)
+	s.logger.Debugf("Getting health check and metrics for tick %d", tick)
 	start := time.Now()
 	defer func() {
-		metrics.ObserveReconcileTime(logger.ComponentBenthosService, metrics.ComponentBenthosService, time.Since(start))
+		metrics.ObserveReconcileTime(logger.ComponentBenthosService, metrics.ComponentBenthosService+"_get_health_check_and_metrics", time.Since(start))
 	}()
 
 	if ctx.Err() != nil {

@@ -27,7 +27,6 @@ import (
 	logger "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	benthos_service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos_monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
@@ -129,7 +128,7 @@ func (b *BenthosInstance) getServiceStatus(ctx context.Context, filesystemServic
 			// Log the warning but don't treat it as a fatal error
 			b.baseFSMInstance.GetLogger().Debugf("Service not found, will be created during reconciliation")
 			return benthos_service.ServiceInfo{}, nil
-		} else if errors.Is(err, benthos_monitor.ErrServiceNoLogFile) {
+		} else if errors.Is(err, benthos_service.ErrServiceNoLogFile) {
 			// This is only an error, if benthos is already running, otherwise there are simply no logs
 			// This includes degraded states, as he can only go from active/idle to degraded, and therefore there should be logs
 			if IsRunningState(b.baseFSMInstance.GetCurrentFSMState()) {
