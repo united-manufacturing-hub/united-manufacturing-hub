@@ -16,18 +16,12 @@ package sentry
 
 import (
 	"runtime/debug"
-	"strings"
 	"sync"
 	"time"
 
 	"github.com/getsentry/sentry-go"
 	"go.uber.org/zap"
 )
-
-func getDash(inp string) string {
-	// Generate enough = to fill the length of inp
-	return strings.Repeat("=", len(inp))
-}
 
 // reportFatal sends a fatal error to Sentry, including a stack trace and a message
 // Afterwards it will report the error to the logger and panic

@@ -26,6 +26,7 @@ import (
 
 	internal_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsmtest"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/backoff"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
@@ -478,6 +479,50 @@ var _ = Describe("S6Instance FSM", func() {
 			)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(mockService.StartCalled).To(BeTrue())
+
+		})
+
+		It("should call forceRemoval when not in a terminal state", func() {
+			instance, mockService, _ := fsmtest.SetupS6Instance(testBaseDir, "backoff-notTerminal", s6fsm.OperationalStateStopped)
+
+			// from to_be_created => stopped
+			snapshot := fsm.SystemSnapshot{Tick: tick}
+			tick, err := fsmtest.TestS6StateTransition(ctx, snapshot, instance, mockFS,
+				internal_fsm.LifecycleStateToBeCreated,
+				s6fsm.OperationalStateStopped,
+				5,
+			)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Force start error
+			//mockService.StartError = fmt.Errorf("failing start")
+			err = instance.SetDesiredFSMState(s6fsm.OperationalStateRunning)
+			Expect(err).NotTo(HaveOccurred())
+
+			snapshot = fsm.SystemSnapshot{Tick: tick}
+			tick, err = fsmtest.TestS6StateTransition(ctx, snapshot, instance, mockFS,
+				s6fsm.OperationalStateStopped,
+				s6fsm.OperationalStateStarting,
+				5,
+			)
+			Expect(err).NotTo(HaveOccurred())
+
+			snapshot = fsm.SystemSnapshot{Tick: tick}
+			tick, err = fsmtest.TestS6StateTransition(ctx, snapshot, instance, mockFS,
+				s6fsm.OperationalStateStarting,
+				s6fsm.OperationalStateRunning,
+				5,
+			)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Create a permanent error that will be encountered during reconcile
+			mockService.StatusError = fmt.Errorf("%s: test permanent error", backoff.PermanentFailureError)
+
+			recErr, reconciled := fsmtest.ReconcileS6UntilError(ctx, fsm.SystemSnapshot{Tick: tick}, instance, mockFS, 100)
+			Expect(recErr).To(HaveOccurred())
+			Expect(reconciled).To(BeTrue())
+
+			Expect(mockService.ForceRemoveCalled).To(BeTrue())
 
 		})
 	})

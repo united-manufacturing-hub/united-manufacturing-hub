@@ -1220,10 +1220,81 @@ var _ = Describe("BenthosInstance FSM", func() {
 			// Now we should get the error
 			Expect(recErr).To(HaveOccurred())
 			Expect(recErr.Error()).To(ContainSubstring(backoff.PermanentFailureError))
-			Expect(reconciled).To(BeFalse(), "Should not have reconciled during error handling")
+			Expect(reconciled).To(BeTrue(), "Should have reconciled during error handling")
 
 			// Verify force removal was attempted
 			Expect(mockService.ForceRemoveBenthosCalled).To(BeTrue())
+
+			// Clear error for other tests
+			mockService.RemoveBenthosFromS6ManagerError = nil
+		})
+		It("should attempt forced removal when not in a terminal state with a permanent error", func() {
+			// 1) Get to stopped state using proper transitions
+			var err error
+
+			// First progress to creating state
+			tick, err = fsmtest.TestBenthosStateTransition(
+				ctx, instance, mockService, mockFS, serviceName,
+				internalfsm.LifecycleStateToBeCreated,
+				internalfsm.LifecycleStateCreating,
+				5,
+				tick,
+			)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Setup service in stopped state
+			mockService.ServiceStates[serviceName] = &benthossvc.ServiceInfo{S6FSMState: s6fsm.OperationalStateStopped}
+			mockService.ExistingServices[serviceName] = true
+
+			// Progress to stopped state
+			tick, err = fsmtest.TestBenthosStateTransition(
+				ctx, instance, mockService, mockFS, serviceName,
+				internalfsm.LifecycleStateCreating,
+				benthosfsm.OperationalStateStopped,
+				5,
+				tick,
+			)
+			Expect(err).NotTo(HaveOccurred())
+
+			instance.SetDesiredFSMState(benthosfsm.OperationalStateActive)
+
+			// Progress to starting state
+			tick, err = fsmtest.TestBenthosStateTransition(
+				ctx, instance, mockService, mockFS, serviceName,
+				benthosfsm.OperationalStateStopped,
+				benthosfsm.OperationalStateStarting,
+				5,
+				tick,
+			)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Progress to config loading state
+			tick, err = fsmtest.TestBenthosStateTransition(
+				ctx, instance, mockService, mockFS, serviceName,
+				benthosfsm.OperationalStateStarting,
+				benthosfsm.OperationalStateStartingConfigLoading,
+				5,
+				tick,
+			)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Create a permanent error that will be encountered during reconcile
+			mockService.StatusError = fmt.Errorf("%s: test permanent error", backoff.PermanentFailureError)
+
+			// Use the helper function to reconcile until error
+			var recErr error
+			var reconciled bool
+			tick, recErr, reconciled = fsmtest.ReconcileBenthosUntilError(
+				ctx, fsm.SystemSnapshot{Tick: tick}, instance, mockService, mockFS, serviceName, 20,
+			)
+
+			// Verify force removal was attempted
+			Expect(mockService.ForceRemoveBenthosCalled).To(BeTrue())
+
+			// Now we should get the error
+			Expect(recErr).To(HaveOccurred())
+			Expect(recErr.Error()).To(ContainSubstring(backoff.PermanentFailureError))
+			Expect(reconciled).To(BeTrue())
 
 			// Clear error for other tests
 			mockService.RemoveBenthosFromS6ManagerError = nil

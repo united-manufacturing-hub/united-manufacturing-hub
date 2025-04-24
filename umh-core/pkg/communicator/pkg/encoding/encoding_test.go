@@ -116,7 +116,8 @@ var _ = Describe("ZSTD", func() {
 
 		// Base64 encode the string to be able to test against frontend
 		encodedData := base64.StdEncoding.EncodeToString([]byte(compressedData))
-		GinkgoWriter.Write([]byte(encodedData))
+		_, err = GinkgoWriter.Write([]byte(encodedData))
+		Expect(err).To(BeNil())
 
 		decompressedData, err := new.Decompress(compressedData)
 		Expect(err).To(BeNil())
@@ -278,12 +279,12 @@ var _ = Describe("Performance Comparison", Serial, Label("measurement"), func() 
 			experiment.RecordValue("Speed Improvement %", improvement)
 
 			// Add detailed statistics
-			By(fmt.Sprintf("Performance Statistics:"))
-			By(fmt.Sprintf("New Implementation:"))
+			By("Performance Statistics:")
+			By("New Implementation:")
 			By(fmt.Sprintf("  Median: %v", medianNew))
 			By(fmt.Sprintf("  Mean: %v", newStats.DurationFor(gmeasure.StatMean)))
 			By(fmt.Sprintf("  StdDev: %v", newStats.DurationFor(gmeasure.StatStdDev)))
-			By(fmt.Sprintf("Old Implementation:"))
+			By("Old Implementation:")
 			By(fmt.Sprintf("  Median: %v", medianOld))
 			By(fmt.Sprintf("  Mean: %v", oldStats.DurationFor(gmeasure.StatMean)))
 			By(fmt.Sprintf("  StdDev: %v", oldStats.DurationFor(gmeasure.StatStdDev)))
@@ -326,14 +327,14 @@ var _ = Describe("Performance Comparison", Serial, Label("measurement"), func() 
 			experiment.RecordValue("old-bytes", float64(oldBytes))
 
 			// Print detailed allocation statistics
-			By(fmt.Sprintf("Memory Usage Statistics:"))
-			By(fmt.Sprintf("New Implementation:"))
+			By("Memory Usage Statistics:")
+			By("New Implementation:")
 			By(fmt.Sprintf("  Allocations: %d", newAllocs))
 			By(fmt.Sprintf("  Bytes: %.2f KB", float64(newBytes)/1024))
-			By(fmt.Sprintf("Old Implementation:"))
+			By("Old Implementation:")
 			By(fmt.Sprintf("  Allocations: %d", oldAllocs))
 			By(fmt.Sprintf("  Bytes: %.2f KB", float64(oldBytes)/1024))
-			By(fmt.Sprintf("Improvement:"))
+			By("Improvement:")
 			By(fmt.Sprintf("  Allocations: %.2f%%", (1-float64(newAllocs)/float64(oldAllocs))*100))
 			By(fmt.Sprintf("  Memory: %.2f%%", (1-float64(newBytes)/float64(oldBytes))*100))
 
@@ -426,12 +427,13 @@ var _ = Describe("Performance Comparison", Serial, Label("measurement"), func() 
 				experiment.RecordValue(fmt.Sprintf("%s-decode-improvement-%%", size), improvement)
 
 				// Print detailed statistics for this size
-				By(fmt.Sprintf("Performance Statistics (%s):", size))
-				By(fmt.Sprintf("New Implementation:"))
+				By("Performance Statistics:")
+				By(fmt.Sprintf("%s Implementation:", size))
+				By("New Implementation:")
 				By(fmt.Sprintf("  Median: %v", medianNew))
 				By(fmt.Sprintf("  Mean: %v", newStats.DurationFor(gmeasure.StatMean)))
 				By(fmt.Sprintf("  StdDev: %v", newStats.DurationFor(gmeasure.StatStdDev)))
-				By(fmt.Sprintf("Old Implementation:"))
+				By("Old Implementation:")
 				By(fmt.Sprintf("  Median: %v", medianOld))
 				By(fmt.Sprintf("  Mean: %v", oldStats.DurationFor(gmeasure.StatMean)))
 				By(fmt.Sprintf("  StdDev: %v", oldStats.DurationFor(gmeasure.StatStdDev)))
@@ -475,14 +477,14 @@ var _ = Describe("Performance Comparison", Serial, Label("measurement"), func() 
 			experiment.RecordValue("old-decode-bytes", float64(oldBytes))
 
 			// Print detailed allocation statistics
-			By(fmt.Sprintf("Memory Usage Statistics (Decoding):"))
-			By(fmt.Sprintf("New Implementation:"))
+			By("Memory Usage Statistics (Decoding):")
+			By("New Implementation:")
 			By(fmt.Sprintf("  Allocations: %d", newAllocs))
 			By(fmt.Sprintf("  Bytes: %.2f KB", float64(newBytes)/1024))
-			By(fmt.Sprintf("Old Implementation:"))
+			By("Old Implementation:")
 			By(fmt.Sprintf("  Allocations: %d", oldAllocs))
 			By(fmt.Sprintf("  Bytes: %.2f KB", float64(oldBytes)/1024))
-			By(fmt.Sprintf("Improvement:"))
+			By("Improvement:")
 			By(fmt.Sprintf("  Allocations: %.2f%%", (1-float64(newAllocs)/float64(oldAllocs))*100))
 			By(fmt.Sprintf("  Memory: %.2f%%", (1-float64(newBytes)/float64(oldBytes))*100))
 
@@ -871,7 +873,11 @@ var _ = Describe("PPROF tests", func() {
 		defer runtime.GC()
 		cpuFile, err := os.Create("cpu-compression.prof")
 		Expect(err).NotTo(HaveOccurred())
-		defer cpuFile.Close()
+		defer func() {
+			if err := cpuFile.Close(); err != nil {
+				Fail(fmt.Sprintf("Error closing CPU profile file: %v\n", err))
+			}
+		}()
 
 		err = pprof.StartCPUProfile(cpuFile)
 		Expect(err).NotTo(HaveOccurred())
@@ -895,7 +901,11 @@ var _ = Describe("PPROF tests", func() {
 		defer runtime.GC()
 		cpuFile, err := os.Create("cpu-decompression.prof")
 		Expect(err).NotTo(HaveOccurred())
-		defer cpuFile.Close()
+		defer func() {
+			if err := cpuFile.Close(); err != nil {
+				Fail(fmt.Sprintf("Error closing CPU profile file: %v\n", err))
+			}
+		}()
 
 		err = pprof.StartCPUProfile(cpuFile)
 		Expect(err).NotTo(HaveOccurred())

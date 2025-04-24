@@ -148,6 +148,11 @@ func (r *RedpandaInstance) IsStopped() bool {
 	return r.baseFSMInstance.GetCurrentFSMState() == OperationalStateStopped
 }
 
+// WantsToBeStopped returns true if the instance wants to be stopped
+func (r *RedpandaInstance) WantsToBeStopped() bool {
+	return r.baseFSMInstance.GetDesiredFSMState() == OperationalStateStopped
+}
+
 // PrintState prints the current state of the FSM for debugging
 func (r *RedpandaInstance) PrintState() {
 	r.baseFSMInstance.GetLogger().Debugf("Current state: %s", r.baseFSMInstance.GetCurrentFSMState())

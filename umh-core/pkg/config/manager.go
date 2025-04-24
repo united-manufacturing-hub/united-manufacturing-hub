@@ -140,12 +140,12 @@ func (m *FileConfigManager) GetConfigWithOverwritesOrCreateNew(ctx context.Conte
 		config.Agent.MetricsPort = configOverride.Agent.MetricsPort
 	}
 
-	if configOverride.Agent.CommunicatorConfig.APIURL != "" {
-		config.Agent.CommunicatorConfig.APIURL = configOverride.Agent.CommunicatorConfig.APIURL
+	if configOverride.Agent.APIURL != "" {
+		config.Agent.APIURL = configOverride.Agent.APIURL
 	}
 
-	if configOverride.Agent.CommunicatorConfig.AuthToken != "" {
-		config.Agent.CommunicatorConfig.AuthToken = configOverride.Agent.CommunicatorConfig.AuthToken
+	if configOverride.Agent.AuthToken != "" {
+		config.Agent.AuthToken = configOverride.Agent.AuthToken
 	}
 
 	if configOverride.Agent.ReleaseChannel != "" {

@@ -37,6 +37,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 
 	dto "github.com/prometheus/client_model/go"
@@ -492,7 +493,12 @@ func (s *RedpandaMonitorService) processMetricsDataBytes(metricsDataBytes []byte
 	if err != nil {
 		return nil, fmt.Errorf("failed to decompress metrics data: %w", err)
 	}
-	defer gzipReader.Close()
+	defer func() {
+		err := gzipReader.Close()
+		if err != nil {
+			sentry.ReportIssuef(sentry.IssueTypeError, s.logger, "failed to close gzip reader: %v", err)
+		}
+	}()
 
 	// Parse the metrics
 	metrics, err := ParseMetrics(gzipReader)
@@ -531,7 +537,12 @@ func (s *RedpandaMonitorService) processClusterConfigDataBytes(clusterConfigData
 	if err != nil {
 		return nil, fmt.Errorf("failed to decompress metrics data: %w", err)
 	}
-	defer gzipReader.Close()
+	defer func() {
+		err := gzipReader.Close()
+		if err != nil {
+			sentry.ReportIssuef(sentry.IssueTypeError, s.logger, "failed to close gzip reader: %v", err)
+		}
+	}()
 
 	// Parse the JSON response
 	var redpandaConfig map[string]interface{}
@@ -622,10 +633,11 @@ func ParseMetrics(dataReader io.Reader) (Metrics, error) {
 		consumeFound := false
 		for _, metric := range family.Metric {
 			if label := getLabel(metric, "redpanda_request"); label != "" {
-				if label == "produce" {
+				switch label {
+				case "produce":
 					metrics.Throughput.BytesIn = getMetricValue(metric)
 					produceFound = true
-				} else if label == "consume" {
+				case "consume":
 					metrics.Throughput.BytesOut = getMetricValue(metric)
 					consumeFound = true
 				}

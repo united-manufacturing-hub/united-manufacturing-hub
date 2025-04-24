@@ -463,7 +463,10 @@ func (m *BaseFSMManager[C]) Reconcile(
 
 			// Otherwise, we need to remove the instance
 			m.logger.Debugf("instance %s is in state %s, starting the removing process", instanceName, instance.GetCurrentFSMState())
-			instance.Remove(ctx)
+			err := instance.Remove(ctx)
+			if err != nil {
+				return err, false
+			}
 
 			// Update last remove tick using manager-specific tick
 			m.nextRemoveTick = m.schedule(constants.TicksBeforeNextRemove)
@@ -583,7 +586,7 @@ func (m *BaseFSMManager[C]) GetCurrentFSMState(serviceName string) (string, erro
 func (m *BaseFSMManager[C]) CreateSnapshot() ManagerSnapshot {
 	snapshot := &BaseManagerSnapshot{
 		Name:           m.managerName,
-		Instances:      make(map[string]FSMInstanceSnapshot),
+		Instances:      make(map[string]*FSMInstanceSnapshot),
 		ManagerTick:    m.managerTick,
 		NextAddTick:    m.nextAddTick,
 		NextUpdateTick: m.nextUpdateTick,
@@ -608,7 +611,7 @@ func (m *BaseFSMManager[C]) CreateSnapshot() ManagerSnapshot {
 			}
 		}
 
-		snapshot.Instances[name] = instanceSnapshot
+		snapshot.Instances[name] = &instanceSnapshot
 	}
 
 	return snapshot
