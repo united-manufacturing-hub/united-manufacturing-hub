@@ -19,6 +19,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/nmapserviceconfig"
 	publicfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/nmap"
 	nmap_service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/nmap"
 )
 
@@ -163,4 +164,10 @@ const (
 // GetLastObservedState returns the last known observed data
 func (n *NmapInstance) GetLastObservedState() publicfsm.ObservedState {
 	return n.ObservedState
+}
+
+// SetService sets the Nmap service implementation
+// This is a testing-only utility to access the private field
+func (n *NmapInstance) SetService(service nmap.INmapService) {
+	n.monitorService = service
 }

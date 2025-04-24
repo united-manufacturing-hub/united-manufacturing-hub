@@ -22,19 +22,19 @@ import (
 	"fmt"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
-	benthosfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
-	benthossvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
+	nmapfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/nmap"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/nmap"
 	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 )
 
-// WaitForBenthosManagerStable is a simple helper that calls manager.Reconcile once
+// WaitForNmapManagerStable is a simple helper that calls manager.Reconcile once
 // and checks if there was an error. It's used for scenarios like an empty config
 // where we just want to do one pass. Then we might call it multiple times if needed.
-func WaitForBenthosManagerStable(
+func WaitForNmapManagerStable(
 	ctx context.Context,
 	snapshot fsm.SystemSnapshot,
-	manager *benthosfsm.BenthosManager,
+	manager *nmapfsm.NmapManager,
 
 	filesystemService filesystem.Service,
 ) (uint64, error) {
@@ -46,13 +46,12 @@ func WaitForBenthosManagerStable(
 	return snapshot.Tick + 1, nil
 }
 
-// WaitForBenthosManagerInstanceState repeatedly calls manager.Reconcile until
+// WaitForNmapManagerInstanceState repeatedly calls manager.Reconcile until
 // we see the specified 'desiredState' or we hit maxAttempts.
-func WaitForBenthosManagerInstanceState(
+func WaitForNmapManagerInstanceState(
 	ctx context.Context,
 	snapshot fsm.SystemSnapshot,
-	manager *benthosfsm.BenthosManager,
-
+	manager *nmapfsm.NmapManager,
 	filesystemService filesystem.Service,
 	instanceName string,
 	desiredState string,
@@ -75,13 +74,12 @@ func WaitForBenthosManagerInstanceState(
 		instanceName, desiredState, maxAttempts)
 }
 
-// WaitForBenthosManagerInstanceRemoval waits until the given serviceName is removed
+// WaitForNmapManagerInstanceRemoval waits until the given serviceName is removed
 // from the manager's instance map.
-func WaitForBenthosManagerInstanceRemoval(
+func WaitForNmapManagerInstanceRemoval(
 	ctx context.Context,
 	snapshot fsm.SystemSnapshot,
-	manager *benthosfsm.BenthosManager,
-
+	manager *nmapfsm.NmapManager,
 	filesystemService filesystem.Service,
 	instanceName string,
 	maxAttempts int,
@@ -102,13 +100,12 @@ func WaitForBenthosManagerInstanceRemoval(
 	return tick, fmt.Errorf("instance %s not removed after %d attempts", instanceName, maxAttempts)
 }
 
-// WaitForBenthosManagerMultiState can check multiple instances at once:
+// WaitForNmapManagerMultiState can check multiple instances at once:
 // e.g. map[serviceName]desiredState = ...
-func WaitForBenthosManagerMultiState(
+func WaitForNmapManagerMultiState(
 	ctx context.Context,
 	snapshot fsm.SystemSnapshot,
-	manager *benthosfsm.BenthosManager,
-
+	manager *nmapfsm.NmapManager,
 	filesystemService filesystem.Service,
 	desiredMap map[string]string, // e.g. { "svc1": "idle", "svc2": "active" }
 	maxAttempts int,
@@ -136,19 +133,19 @@ func WaitForBenthosManagerMultiState(
 	return tick, fmt.Errorf("not all instances reached desired states after %d attempts", maxAttempts)
 }
 
-// SetupBenthosServiceInManager adds a service to the manager and configures it with the mock service.
+// SetupNmapServiceInManager adds a service to the manager and configures it with the mock service.
 // It creates an instance automatically and adds it to the manager.
 // Note: Since this cannot directly set the service field in the instance after creation,
 // the instance in the manager will be using the default service, not the mock service.
 // Tests should rely on the manager.Reconcile method instead, which uses the manager's own service.
-func SetupBenthosServiceInManager(
-	manager *benthosfsm.BenthosManager,
-	mockService *benthossvc.MockBenthosService,
+func SetupNmapServiceInManager(
+	manager *nmapfsm.NmapManager,
+	mockService *nmap.MockNmapService,
 	serviceName string,
 	desiredState string,
 ) {
 	// Create a properly configured instance
-	instance := benthosfsm.NewBenthosInstance(CreateBenthosTestConfig(serviceName, desiredState))
+	instance := nmapfsm.NewNmapInstance(CreateNmapTestConfig(serviceName, desiredState))
 
 	// Add it to the manager
 	manager.BaseFSMManager.AddInstanceForTest(serviceName, instance)
@@ -158,14 +155,14 @@ func SetupBenthosServiceInManager(
 
 	// Ensure we have a service info initialized
 	if mockService.ServiceStates[serviceName] == nil {
-		mockService.ServiceStates[serviceName] = &benthossvc.ServiceInfo{}
+		mockService.ServiceStates[serviceName] = &nmap.ServiceInfo{}
 	}
 }
 
-// CreateMockBenthosManager creates a Benthos manager with a mock service for testing
-func CreateMockBenthosManager(name string) (*benthosfsm.BenthosManager, *benthossvc.MockBenthosService) {
+// CreateMockNmapManager creates a Benthos manager with a mock service for testing
+func CreateMockNmapManager(name string) (*nmapfsm.NmapManager, *nmap.MockNmapService) {
 	// Use the specialized constructor that sets up fully mocked services
-	manager, mockService := benthosfsm.NewBenthosManagerWithMockedServices(name)
+	manager, mockService := nmapfsm.NewNmapManagerWithMockedService(name)
 
 	// Set up the mock service to prevent real filesystem operations
 	s6MockService := mockService.S6Service.(*s6svc.MockService)
@@ -190,7 +187,7 @@ func CreateMockBenthosManager(name string) (*benthosfsm.BenthosManager, *benthos
 	return manager, mockService
 }
 
-// ConfigureBenthosManagerForState sets up the mock service in a BenthosManager to facilitate
+// ConfigureNmapManagerForState sets up the mock service in a BenthosManager to facilitate
 // a state transition for a specific instance. This should be called before starting
 // reconciliation if you want to ensure state transitions happen correctly.
 //
@@ -198,8 +195,8 @@ func CreateMockBenthosManager(name string) (*benthosfsm.BenthosManager, *benthos
 //   - mockService: The mock service from the manager
 //   - serviceName: The name of the service to configure
 //   - targetState: The desired state to configure the service for
-func ConfigureBenthosManagerForState(
-	mockService *benthossvc.MockBenthosService,
+func ConfigureNmapManagerForState(
+	mockService *nmap.MockNmapService,
 	serviceName string,
 	targetState string,
 ) {
@@ -211,23 +208,23 @@ func ConfigureBenthosManagerForState(
 
 	// Make sure service state is initialized
 	if mockService.ServiceStates == nil {
-		mockService.ServiceStates = make(map[string]*benthossvc.ServiceInfo)
+		mockService.ServiceStates = make(map[string]*nmap.ServiceInfo)
 	}
 	if mockService.ServiceStates[serviceName] == nil {
-		mockService.ServiceStates[serviceName] = &benthossvc.ServiceInfo{}
+		mockService.ServiceStates[serviceName] = &nmap.ServiceInfo{}
 	}
 
 	// Configure the service for the target state
-	TransitionToBenthosState(mockService, serviceName, targetState)
+	TransitionToNmapState(mockService, serviceName, targetState)
 }
 
-// ReconcileOnceBenthosManager calls manager.Reconcile(...) exactly once,
+// ReconcileOnceNmapManager calls manager.Reconcile(...) exactly once,
 // increments 'tick' by 1, and returns the new tick plus any error & the
 // manager's 'reconciled' bool.
-func ReconcileOnceBenthosManager(
+func ReconcileOnceNmapManager(
 	ctx context.Context,
 	snapshot fsm.SystemSnapshot,
-	manager *benthosfsm.BenthosManager,
+	manager *nmapfsm.NmapManager,
 
 	filesystemService filesystem.Service,
 ) (newTick uint64, err error, reconciled bool) {

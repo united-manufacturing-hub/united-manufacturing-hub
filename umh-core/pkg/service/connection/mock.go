@@ -18,10 +18,14 @@ package connection
 
 import (
 	"context"
-	"sync"
+	"fmt"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/connectionserviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/nmapserviceconfig"
+	nmapfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/nmap"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/nmap"
 )
 
 // MockConnectionService provides a mock implementation of IConnectionService for testing.
@@ -38,230 +42,285 @@ import (
 //	// Test your code that uses IConnectionService
 //	status, err := myComponent.DoSomethingWithConnection(mockService, "test-conn")
 type MockConnectionService struct {
-	mock               sync.Mutex                                                 // Protects concurrent access to mock state
-	serviceExists      map[string]bool                                            // Tracks which services exist
-	serviceInfo        map[string]ServiceInfo                                     // Predefined ServiceInfo responses
-	serviceIsHealthy   map[string]bool                                            // Individual status flags
-	serviceConfig      map[string]connectionserviceconfig.ConnectionServiceConfig // Configs for services
-	serviceIsReachable map[string]bool                                            // Reachability flags
-	serviceIsFlaky     map[string]bool                                            // Flakiness flags
-	reconcileError     error                                                      // Error to return from ReconcileManager
-	reconcileResult    bool                                                       // Result to return from ReconcileManager
+	// Tracks calls to methods
+	GenerateNmapConfigForConnectionCalled bool
+	GetConfigCalled                       bool
+	StatusCalled                          bool
+	AddConnectionCalled                   bool
+	UpdateConectionCalled                 bool
+	RemoveConnectionCalled                bool
+	StartConnectionCalled                 bool
+	StopConnectionCalled                  bool
+	ForceRemoveConnectionCalled           bool
+	ServiceExistsCalled                   bool
+	ReconcileManagerCalled                bool
+
+	// Return values for each method
+	GenerateNmapConfigForConnectionResult nmapserviceconfig.NmapServiceConfig
+	GenerateNmapConfigConnectionError     error
+	GetConfigResult                       connectionserviceconfig.ConnectionServiceConfig
+	GetConfigError                        error
+	StatusResult                          ServiceInfo
+	StatusError                           error
+	AddConnectionError                    error
+	UpdateConnectionError                 error
+	RemoveConnectionError                 error
+	StartConnectionError                  error
+	StopConnectionError                   error
+	ForceRemoveConnectionError            error
+	ServiceExistsResult                   bool
+	ReconcileManagerError                 error
+	ReconcileManagerReconciled            bool
+
+	// For more complex testing scenarios
+	ConnectionStates    map[string]*ServiceInfo
+	ExistingConnections map[string]bool
+	NmapConfigs         []config.NmapConfig
+
+	// State control for FSM testing
+	stateFlags map[string]*ConnectionStateFlags
+
+	// Nmap service mock
+	NmapService nmap.INmapService
+}
+
+var _ IConnectionService = (*MockConnectionService)(nil)
+
+// ConnectionStateFlags contains all the state flags needed for FSM testing
+type ConnectionStateFlags struct {
+	IsNmapRunning bool
+	NmapFSMState  string
 }
 
 // NewMockConnectionService creates a new mock connection service
 // with initialized internal maps.
 func NewMockConnectionService() *MockConnectionService {
 	return &MockConnectionService{
-		serviceExists:      make(map[string]bool),
-		serviceInfo:        make(map[string]ServiceInfo),
-		serviceIsHealthy:   make(map[string]bool),
-		serviceConfig:      make(map[string]connectionserviceconfig.ConnectionServiceConfig),
-		serviceIsReachable: make(map[string]bool),
-		serviceIsFlaky:     make(map[string]bool),
+		ConnectionStates:    make(map[string]*ServiceInfo),
+		ExistingConnections: make(map[string]bool),
+		NmapConfigs:         make([]config.NmapConfig, 0),
+		stateFlags:          make(map[string]*ConnectionStateFlags),
+		NmapService:         nmap.NewMockNmapService(),
 	}
 }
 
-// SetServiceExists allows setting whether a service exists for testing.
-// This affects the response of the ServiceExists method.
-func (m *MockConnectionService) SetServiceExists(connName string, exists bool) {
-	m.mock.Lock()
-	defer m.mock.Unlock()
-	m.serviceExists[connName] = exists
-}
-
-// SetServiceInfo allows setting a complete ServiceInfo struct for testing.
-// This will be returned directly by the Status method.
-func (m *MockConnectionService) SetServiceInfo(connName string, info ServiceInfo) {
-	m.mock.Lock()
-	defer m.mock.Unlock()
-	m.serviceInfo[connName] = info
-}
-
-// SetServiceIsRunning allows setting the running state for testing.
-// This affects the IsRunning field in the ServiceInfo returned by Status
-// when no complete ServiceInfo has been predefined.
-func (m *MockConnectionService) SetServiceIsHealthy(connName string, isHealthy bool) {
-	m.mock.Lock()
-	defer m.mock.Unlock()
-	m.serviceIsHealthy[connName] = isHealthy
-}
-
-// SetServiceIsReachable allows setting the reachable state for testing.
-// This affects the IsReachable field in the ServiceInfo returned by Status
-// when no complete ServiceInfo has been predefined.
-func (m *MockConnectionService) SetServiceIsReachable(connName string, isReachable bool) {
-	m.mock.Lock()
-	defer m.mock.Unlock()
-	m.serviceIsReachable[connName] = isReachable
-}
-
-// SetServiceIsFlaky allows setting the flaky state for testing.
-// This affects the IsFlaky field in the ServiceInfo returned by Status
-// when no complete ServiceInfo has been predefined.
-func (m *MockConnectionService) SetServiceIsFlaky(connName string, isFlaky bool) {
-	m.mock.Lock()
-	defer m.mock.Unlock()
-	m.serviceIsFlaky[connName] = isFlaky
-}
-
-// SetReconcileResults allows setting the reconcile results for testing.
-// These values will be returned by the ReconcileManager method.
-func (m *MockConnectionService) SetReconcileResults(err error, result bool) {
-	m.mock.Lock()
-	defer m.mock.Unlock()
-	m.reconcileError = err
-	m.reconcileResult = result
-}
-
-// Status returns mocked information about the connection health.
-// If a complete ServiceInfo has been set via SetServiceInfo, it returns that.
-// Otherwise, it constructs one from the individual flags.
-func (m *MockConnectionService) Status(
-	ctx context.Context,
-	fs filesystem.Service,
-	connName string,
-	tick uint64,
-) (ServiceInfo, error) {
-	m.mock.Lock()
-	defer m.mock.Unlock()
-
-	// If we have a preconfigured service info, return that
-	if info, exists := m.serviceInfo[connName]; exists {
-		return info, nil
+// SetComponentState sets all state flags for a component at once
+func (m *MockConnectionService) SetConnectionState(connectionState string, flags ConnectionStateFlags) {
+	// Ensure ServiceInfo exists for this component
+	if _, exists := m.ConnectionStates[connectionState]; !exists {
+		m.ConnectionStates[connectionState] = &ServiceInfo{
+			NmapFSMState: flags.NmapFSMState,
+		}
 	}
 
-	// Otherwise construct one from the individual flags
-	isHealthy := m.serviceIsHealthy[connName]
-	isReachable := m.serviceIsReachable[connName]
-	isFlaky := m.serviceIsFlaky[connName]
-
-	return ServiceInfo{
-		IsHealthy:     isHealthy,
-		PortStateOpen: isReachable, // For simplicity, port state is aligned with reachability
-		IsReachable:   isReachable,
-		IsFlaky:       isFlaky,
-		LastChange:    tick,
-	}, nil
+	// Store the flags
+	m.stateFlags[connectionState] = &flags
 }
 
-// AddConnection registers a mock connection.
-// It marks the service as existing and stores the configuration.
-func (m *MockConnectionService) AddConnection(
-	ctx context.Context,
-	fs filesystem.Service,
-	cfg *connectionserviceconfig.ConnectionServiceConfig,
-	connName string,
-) error {
-	m.mock.Lock()
-	defer m.mock.Unlock()
-
-	m.serviceExists[connName] = true
-	m.serviceConfig[connName] = *cfg
-
-	// Initialize default states
-	if _, exists := m.serviceIsHealthy[connName]; !exists {
-		m.serviceIsHealthy[connName] = false
+// GetComponentState gets the state flags for a component
+func (m *MockConnectionService) GetConnectionState(connectionName string) *ConnectionStateFlags {
+	if flags, exists := m.stateFlags[connectionName]; exists {
+		return flags
 	}
-	if _, exists := m.serviceIsReachable[connName]; !exists {
-		m.serviceIsReachable[connName] = false
-	}
-	if _, exists := m.serviceIsFlaky[connName]; !exists {
-		m.serviceIsFlaky[connName] = false
+	// Initialize with default flags if not exists
+	flags := &ConnectionStateFlags{}
+	m.stateFlags[connectionName] = flags
+	return flags
+}
+
+// GenerateNmapConfigForConnection mocks generating Nmap config for a Connection
+func (m *MockConnectionService) GenerateNmapConfigForConnection(connectionConfig *connectionserviceconfig.ConnectionServiceConfig, connectionName string) (nmapserviceconfig.NmapServiceConfig, error) {
+	m.GenerateNmapConfigForConnectionCalled = true
+	return m.GenerateNmapConfigForConnectionResult, m.GenerateNmapConfigConnectionError
+}
+
+// GetConfig mocks getting the Connection configuration
+func (m *MockConnectionService) GetConfig(ctx context.Context, filesystemService filesystem.Service, connectionName string) (connectionserviceconfig.ConnectionServiceConfig, error) {
+	m.GetConfigCalled = true
+
+	// If error is set, return it
+	if m.GetConfigError != nil {
+		return connectionserviceconfig.ConnectionServiceConfig{}, m.GetConfigError
 	}
 
-	return nil
+	// If a result is preset, return it
+	return m.GetConfigResult, nil
 }
 
-// UpdateConnection updates a mock connection.
-// It creates the service if it doesn't exist and updates its configuration.
-func (m *MockConnectionService) UpdateConnection(
-	ctx context.Context,
-	fs filesystem.Service,
-	cfg *connectionserviceconfig.ConnectionServiceConfig,
-	connName string,
-) error {
-	m.mock.Lock()
-	defer m.mock.Unlock()
+// Status mocks getting the status of a Connection
+func (m *MockConnectionService) Status(ctx context.Context, filesystemService filesystem.Service, connectionName string, tick uint64) (ServiceInfo, error) {
+	m.StatusCalled = true
 
-	if _, exists := m.serviceExists[connName]; !exists {
-		m.serviceExists[connName] = true
+	// Check if the connection exists in the ExistingConnections map
+	if exists, ok := m.ExistingConnections[connectionName]; !ok || !exists {
+		return ServiceInfo{}, ErrServiceNotExist
 	}
 
-	m.serviceConfig[connName] = *cfg
-	return nil
+	// If we have a state already stored, return it
+	if state, exists := m.ConnectionStates[connectionName]; exists {
+		return *state, m.StatusError
+	}
+
+	// If no state is stored, return the default mock result
+	return m.StatusResult, m.StatusError
 }
 
-// RemoveConnection removes a mock connection.
-// It deletes all stored data for the connection.
-func (m *MockConnectionService) RemoveConnection(
-	ctx context.Context,
-	fs filesystem.Service,
-	connName string,
-) error {
-	m.mock.Lock()
-	defer m.mock.Unlock()
+// AddConnectionToNmapManager mocks adding a DataFlowComponent to the Benthos manager
+func (m *MockConnectionService) AddConnectionToNmapManager(ctx context.Context, filesystemService filesystem.Service, cfg *connectionserviceconfig.ConnectionServiceConfig, connectionName string) error {
+	m.AddConnectionCalled = true
 
-	delete(m.serviceExists, connName)
-	delete(m.serviceConfig, connName)
-	delete(m.serviceIsHealthy, connName)
-	delete(m.serviceIsReachable, connName)
-	delete(m.serviceIsFlaky, connName)
-	delete(m.serviceInfo, connName)
+	nmapName := fmt.Sprintf("connection-%s", connectionName)
 
-	return nil
+	// Check whether the component already exists
+	for _, nmapConfig := range m.NmapConfigs {
+		if nmapConfig.Name == nmapName {
+			return ErrServiceAlreadyExists
+		}
+	}
+
+	// Add the component to the list of existing components
+	m.ExistingConnections[connectionName] = true
+
+	// Create a BenthosConfig for this component
+	fmt.Println(nmapName)
+	nmapConfig := config.NmapConfig{
+		FSMInstanceConfig: config.FSMInstanceConfig{
+			Name:            nmapName,
+			DesiredFSMState: nmapfsm.OperationalStateOpen,
+		},
+		NmapServiceConfig: m.GenerateNmapConfigForConnectionResult,
+	}
+
+	// Add the BenthosConfig to the list of BenthosConfigs
+	m.NmapConfigs = append(m.NmapConfigs, nmapConfig)
+
+	return m.AddConnectionError
 }
 
-// StartConnection starts a mock connection.
-// It sets the running state to true.
-func (m *MockConnectionService) StartConnection(
-	ctx context.Context,
-	fs filesystem.Service,
-	connName string,
-) error {
-	m.mock.Lock()
-	defer m.mock.Unlock()
+// UpdateConnectionInNmapManager mocks updating a Connection in the Nmap manager
+func (m *MockConnectionService) UpdateConnectionInNmapManager(ctx context.Context, filesystemService filesystem.Service, cfg *connectionserviceconfig.ConnectionServiceConfig, connectionName string) error {
+	m.UpdateConectionCalled = true
 
-	m.serviceIsHealthy[connName] = true
-	return nil
+	nmapName := fmt.Sprintf("connection-%s", connectionName)
+
+	// Check if the component exists
+	found := false
+	index := -1
+	for i, nmapConfig := range m.NmapConfigs {
+		if nmapConfig.Name == nmapName {
+			found = true
+			index = i
+			break
+		}
+	}
+
+	if !found {
+		return ErrServiceNotExist
+	}
+
+	// Update the BenthosConfig
+	currentDesiredState := m.NmapConfigs[index].DesiredFSMState
+	m.NmapConfigs[index] = config.NmapConfig{
+		FSMInstanceConfig: config.FSMInstanceConfig{
+			Name:            nmapName,
+			DesiredFSMState: currentDesiredState,
+		},
+		NmapServiceConfig: m.GenerateNmapConfigForConnectionResult,
+	}
+
+	return m.UpdateConnectionError
 }
 
-// StopConnection stops a mock connection.
-// It sets the running state to false.
-func (m *MockConnectionService) StopConnection(
-	ctx context.Context,
-	fs filesystem.Service,
-	connName string,
-) error {
-	m.mock.Lock()
-	defer m.mock.Unlock()
+// RemoveConnectionFromNmapManager mocks removing a Connection from the Nmap manager
+func (m *MockConnectionService) RemoveConnectionFromNmapManager(ctx context.Context, filesystemService filesystem.Service, connectionName string) error {
+	m.RemoveConnectionCalled = true
 
-	m.serviceIsHealthy[connName] = false
-	return nil
+	nmapName := fmt.Sprintf("connection-%s", connectionName)
+
+	found := false
+
+	// Remove the NmapConfig from the list of NmapConfigs
+	for i, nmapConfig := range m.NmapConfigs {
+		if nmapConfig.Name == nmapName {
+			m.NmapConfigs = append(m.NmapConfigs[:i], m.NmapConfigs[i+1:]...)
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		return ErrServiceNotExist
+	}
+
+	// Remove the connection from the list of existing connections
+	delete(m.ExistingConnections, connectionName)
+	delete(m.ConnectionStates, connectionName)
+
+	return m.RemoveConnectionError
 }
 
-// ServiceExists checks if a mock connection exists.
-// Returns the value previously set with SetServiceExists.
-func (m *MockConnectionService) ServiceExists(
-	ctx context.Context,
-	fs filesystem.Service,
-	connName string,
-) bool {
-	m.mock.Lock()
-	defer m.mock.Unlock()
+// StartDataFlowComponent mocks starting a Connection
+func (m *MockConnectionService) StartConnection(ctx context.Context, filesystemService filesystem.Service, connectionName string) error {
+	m.StartConnectionCalled = true
 
-	return m.serviceExists[connName]
+	nmapName := fmt.Sprintf("connection-%s", connectionName)
+
+	found := false
+
+	// Set the desired state to active for the given component
+	for i, nmapConfig := range m.NmapConfigs {
+		if nmapConfig.Name == nmapName {
+			m.NmapConfigs[i].DesiredFSMState = nmapfsm.OperationalStateOpen
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		return ErrServiceNotExist
+	}
+
+	return m.StartConnectionError
 }
 
-// ReconcileManager mocks the reconciliation of all connections.
-// Returns the error and boolean set by SetReconcileResults.
-func (m *MockConnectionService) ReconcileManager(
-	ctx context.Context,
-	fs filesystem.Service,
-	tick uint64,
-) (error, bool) {
-	m.mock.Lock()
-	defer m.mock.Unlock()
+// StopConnection mocks stopping a Connection
+func (m *MockConnectionService) StopConnection(ctx context.Context, filesystemService filesystem.Service, connectionName string) error {
+	m.StopConnectionCalled = true
 
-	return m.reconcileError, m.reconcileResult
+	nmapName := fmt.Sprintf("connection-%s", connectionName)
+
+	found := false
+
+	// Set the desired state to stopped for the given component
+	for i, nmapConfig := range m.NmapConfigs {
+		if nmapConfig.Name == nmapName {
+			m.NmapConfigs[i].DesiredFSMState = nmapfsm.OperationalStateStopped
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		return ErrServiceNotExist
+	}
+
+	return m.StopConnectionError
+}
+
+// ForceRemoveConnection mocks force removing a Connection
+func (m *MockConnectionService) ForceRemoveConnection(ctx context.Context, filesystemService filesystem.Service, connectionName string) error {
+	m.ForceRemoveConnectionCalled = true
+	return m.ForceRemoveConnectionError
+}
+
+// ServiceExists mocks checking if a DataFlowComponent exists
+func (m *MockConnectionService) ServiceExists(ctx context.Context, filesystemService filesystem.Service, connectionName string) bool {
+	m.ServiceExistsCalled = true
+	return m.ServiceExistsResult
+}
+
+// ReconcileManager mocks reconciling the DataFlowComponent manager
+func (m *MockConnectionService) ReconcileManager(ctx context.Context, filesystemService filesystem.Service, tick uint64) (error, bool) {
+	m.ReconcileManagerCalled = true
+	return m.ReconcileManagerError, m.ReconcileManagerReconciled
 }
