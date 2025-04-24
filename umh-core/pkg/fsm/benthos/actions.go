@@ -111,8 +111,8 @@ func (b *BenthosInstance) StopInstance(ctx context.Context, filesystemService fi
 
 // getServiceStatus gets the status of the Benthos service
 // its main purpose is to handle the edge cases where the service is not yet created or not yet running
-func (b *BenthosInstance) getServiceStatus(ctx context.Context, filesystemService filesystem.Service, tick uint64) (benthos_service.ServiceInfo, error) {
-	info, err := b.service.Status(ctx, filesystemService, b.baseFSMInstance.GetID(), b.config.MetricsPort, tick)
+func (b *BenthosInstance) getServiceStatus(ctx context.Context, filesystemService filesystem.Service, tick uint64, loopStartTime time.Time) (benthos_service.ServiceInfo, error) {
+	info, err := b.service.Status(ctx, filesystemService, b.baseFSMInstance.GetID(), b.config.MetricsPort, tick, loopStartTime)
 	if err != nil {
 		// If there's an error getting the service status, we need to distinguish between cases
 
@@ -135,8 +135,12 @@ func (b *BenthosInstance) getServiceStatus(ctx context.Context, filesystemServic
 				b.baseFSMInstance.GetLogger().Debugf("Health check refused connection for service %s, returning ServiceInfo with failed health checks", b.baseFSMInstance.GetID())
 			}
 			infoWithFailedHealthChecks := info
-			infoWithFailedHealthChecks.BenthosStatus.HealthCheck.IsLive = false
-			infoWithFailedHealthChecks.BenthosStatus.HealthCheck.IsReady = false
+			if infoWithFailedHealthChecks.BenthosStatus.BenthosMonitorStatus.LastScan != nil {
+				infoWithFailedHealthChecks.BenthosStatus.BenthosMonitorStatus.LastScan.HealthCheck.IsLive = false
+				infoWithFailedHealthChecks.BenthosStatus.BenthosMonitorStatus.LastScan.HealthCheck.IsReady = false
+			} else {
+				return benthos_service.ServiceInfo{}, fmt.Errorf("health check refused connection for service %s, but no last scan found", b.baseFSMInstance.GetID())
+			}
 			// Return ServiceInfo with health checks failed but preserve S6FSMState if available
 			return infoWithFailedHealthChecks, nil
 		}
@@ -156,7 +160,7 @@ func (b *BenthosInstance) UpdateObservedStateOfInstance(ctx context.Context, fil
 	}
 
 	start := time.Now()
-	info, err := b.getServiceStatus(ctx, filesystemService, tick)
+	info, err := b.getServiceStatus(ctx, filesystemService, tick, loopStartTime)
 	if err != nil {
 		return err
 	}
@@ -246,8 +250,11 @@ func (b *BenthosInstance) IsBenthosConfigLoaded() bool {
 
 // IsBenthosHealthchecksPassed determines if the Benthos service has passed its healthchecks.
 func (b *BenthosInstance) IsBenthosHealthchecksPassed() bool {
-	return b.ObservedState.ServiceInfo.BenthosStatus.HealthCheck.IsLive &&
-		b.ObservedState.ServiceInfo.BenthosStatus.HealthCheck.IsReady
+	if b.ObservedState.ServiceInfo.BenthosStatus.BenthosMonitorStatus.LastScan == nil {
+		return false
+	}
+	return b.ObservedState.ServiceInfo.BenthosStatus.BenthosMonitorStatus.LastScan.HealthCheck.IsLive &&
+		b.ObservedState.ServiceInfo.BenthosStatus.BenthosMonitorStatus.LastScan.HealthCheck.IsReady
 }
 
 // AnyRestartsSinceCreation determines if the Benthos service has restarted since its creation.
@@ -284,12 +291,12 @@ func (b *BenthosInstance) IsBenthosRunningForSomeTimeWithoutErrors(currentTime t
 
 // IsBenthosLogsFine determines if there are any issues in the Benthos logs
 func (b *BenthosInstance) IsBenthosLogsFine(currentTime time.Time, logWindow time.Duration) bool {
-	return b.service.IsLogsFine(b.ObservedState.ServiceInfo.BenthosStatus.Logs, currentTime, logWindow)
+	return b.service.IsLogsFine(b.ObservedState.ServiceInfo.BenthosStatus.BenthosLogs, currentTime, logWindow)
 }
 
 // IsBenthosMetricsErrorFree determines if the Benthos service has no errors in the metrics
 func (b *BenthosInstance) IsBenthosMetricsErrorFree() bool {
-	return b.service.IsMetricsErrorFree(b.ObservedState.ServiceInfo.BenthosStatus.Metrics)
+	return b.service.IsMetricsErrorFree(b.ObservedState.ServiceInfo.BenthosStatus.BenthosMonitorStatus.LastScan.BenthosMetrics)
 }
 
 // IsBenthosDegraded determines if the Benthos service is degraded.
@@ -305,7 +312,7 @@ func (b *BenthosInstance) IsBenthosDegraded(currentTime time.Time, logWindow tim
 // IsBenthosWithProcessingActivity determines if the Benthos instance has active data processing
 // based on metrics data and possibly other observed state information
 func (b *BenthosInstance) IsBenthosWithProcessingActivity() bool {
-	if b.ObservedState.ServiceInfo.BenthosStatus.MetricsState == nil {
+	if b.ObservedState.ServiceInfo.BenthosStatus.BenthosMonitorStatus.LastScan == nil {
 		return false
 	}
 	return b.service.HasProcessingActivity(b.ObservedState.ServiceInfo.BenthosStatus)

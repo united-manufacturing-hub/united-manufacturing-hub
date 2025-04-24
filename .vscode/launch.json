@@ -37,6 +37,13 @@
             "program": "${workspaceFolder}/umh-core/pkg/service/nmap"
         },
         {
+            "name": "Debug Ginkgo Tests (service-benthos)",
+            "type": "go",
+            "request": "launch",
+            "mode": "test",
+            "program": "${workspaceFolder}/umh-core/pkg/service/benthos"
+        },
+        {
             "name": "Debug Ginkgo Tests (service-container-monitor)",
             "type": "go",
             "request": "launch",
