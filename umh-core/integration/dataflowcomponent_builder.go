@@ -174,6 +174,10 @@ func (b *DataFlowComponentBuilder) CountActiveDataFlowComponents() int {
 
 // BuildYAML converts the configuration to YAML format
 func (b *DataFlowComponentBuilder) BuildYAML() string {
-	out, _ := yaml.Marshal(b.full)
+	out, err := yaml.Marshal(b.full)
+	if err != nil {
+		panic(fmt.Errorf("failed to marshal DataFlowComponent config: %w", err))
+	}
 	return string(out)
+}
 }
