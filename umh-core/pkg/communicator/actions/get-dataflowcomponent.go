@@ -84,8 +84,8 @@ func buildDataFlowComponentDataFromSnapshot(instance fsm.FSMInstanceSnapshot, lo
 			return config.DataFlowComponentConfig{}, fmt.Errorf("invalid observed state type for dataflowcomponent %s", instance.ID)
 		}
 		dfcData.DataFlowComponentConfig = observedState.Config
-		dfcData.FSMInstanceConfig.Name = instance.ID
-		dfcData.FSMInstanceConfig.DesiredFSMState = instance.DesiredState
+		dfcData.Name = instance.ID
+		dfcData.DesiredFSMState = instance.DesiredState
 
 	} else {
 		log.Warn("No observed state found for dataflowcomponent", zap.String("instanceID", instance.ID))
@@ -225,7 +225,7 @@ func (a *GetDataFlowComponentAction) Execute() (interface{}, map[string]interfac
 			Meta: models.CommonDataFlowComponentMeta{
 				Type: "custom",
 			},
-			Name:      component.FSMInstanceConfig.Name,
+			Name:      component.Name,
 			ParentDFC: nil,
 			Payload:   dfc_payload,
 		}
