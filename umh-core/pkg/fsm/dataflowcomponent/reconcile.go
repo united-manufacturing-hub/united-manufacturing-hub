@@ -240,7 +240,7 @@ func (d *DataflowComponentInstance) reconcileOperationalStates(ctx context.Conte
 	switch desiredState {
 	case OperationalStateActive:
 		return d.reconcileTransitionToActive(ctx, filesystemService, currentState, currentTime)
-	case OperationalStateStopped, OperationalStateStopping:
+	case OperationalStateStopped:
 		return d.reconcileTransitionToStopped(ctx, filesystemService, currentState)
 	default:
 		return fmt.Errorf("invalid desired state: %s", desiredState), false
