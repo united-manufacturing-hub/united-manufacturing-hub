@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package benthos
+package benthos_monitor
 
 // ComponentThroughput tracks throughput metrics for a single component
 type ComponentThroughput struct {
@@ -70,7 +70,7 @@ func NewBenthosMetricsState() *BenthosMetricsState {
 }
 
 // UpdateFromMetrics updates the metrics state based on new metrics
-func (s *BenthosMetricsState) UpdateFromMetrics(metrics Metrics, tick uint64) {
+func (s *BenthosMetricsState) UpdateFromMetrics(metrics BenthosMetrics, tick uint64) {
 	// Update component throughput
 	s.updateComponentThroughput(&s.Input, metrics.Input.Received, 0, tick)
 	s.updateComponentThroughput(&s.Output, metrics.Output.Sent, metrics.Output.BatchSent, tick)

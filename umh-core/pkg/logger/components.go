@@ -41,6 +41,7 @@ const (
 	// Service components
 	ComponentS6Service                = "S6Service"
 	ComponentBenthosService           = "BenthosService"
+	ComponentBenthosMonitorService    = "BenthosMonitorService"
 	ComponentNmapService              = "NmapService"
 	ComponentContainerMonitorService  = "ContainerMonitorService"
 	ComponentRedpandaMonitorService   = "RedpandaMonitorService"

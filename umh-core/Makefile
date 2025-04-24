@@ -318,6 +318,16 @@ test-dfc: stop-and-remove-umh-core-latest build
 		--cpus $(CPUS) \
 		$(IMAGE_NAME):$(TAG)
 
+test-benthos-monitor: 
+	@mkdir -p $(PWD)/data
+	@cp $(PWD)/examples/example-config-benthos-monitor.yaml $(PWD)/data/config.yaml
+	docker run \
+		--name umh-core-staging \
+		-v $(PWD)/data:/data \
+		--memory $(MEMORY) \
+		--cpus $(CPUS) \
+		ghcr.io/united-manufacturing-hub/united-manufacturing-hub/umh-core:staging
+
 test-debug: stop-and-remove-umh-core-latest build-debug
 	@mkdir -p $(PWD)/data
 	@cp $(PWD)/examples/example-config-benthos-broken.yaml $(PWD)/data/config.yaml

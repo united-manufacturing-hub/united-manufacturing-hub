@@ -15,7 +15,6 @@
 package benthos
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -28,8 +27,6 @@ import (
 	"sync"
 	"time"
 
-	dto "github.com/prometheus/client_model/go"
-	"github.com/prometheus/common/expfmt"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
@@ -37,6 +34,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos_monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/httpclient"
 	"go.uber.org/zap"
@@ -88,9 +86,9 @@ type IBenthosService interface {
 	// Expects logs ([]s6service.LogEntry), currentTime (time.Time), and logWindow (time.Duration)
 	IsLogsFine(logs []s6service.LogEntry, currentTime time.Time, logWindow time.Duration) bool
 	// IsMetricsErrorFree checks if the metrics of a Benthos service are error-free
-	IsMetricsErrorFree(metrics Metrics) bool
+	IsMetricsErrorFree(metrics benthos_monitor.Metrics) bool
 	// HasProcessingActivity checks if a Benthos service has processing activity
-	HasProcessingActivity(status BenthosStatus) bool
+	HasProcessingActivity(status benthos_monitor.BenthosStatus) bool
 }
 
 // ServiceInfo contains information about a Benthos service
@@ -103,102 +101,12 @@ type ServiceInfo struct {
 	BenthosStatus BenthosStatus
 }
 
-// BenthosStatus contains information about the status of the Benthos service
 type BenthosStatus struct {
-	// HealthCheck contains information about the health of the Benthos service
-	HealthCheck HealthCheck
-	// Metrics contains information about the metrics of the Benthos service
-	Metrics Metrics
-	// MetricsState contains information about the metrics of the Benthos service
-	MetricsState *BenthosMetricsState
-	// Logs contains the logs of the Benthos service
-	Logs []s6service.LogEntry
-}
-
-// Metrics contains information about the metrics of the Benthos service
-type Metrics struct {
-	Input   InputMetrics   `json:"input,omitempty"`
-	Output  OutputMetrics  `json:"output,omitempty"`
-	Process ProcessMetrics `json:"process,omitempty"`
-}
-
-// InputMetrics contains input-specific metrics
-type InputMetrics struct {
-	ConnectionFailed int64   `json:"connection_failed"`
-	ConnectionLost   int64   `json:"connection_lost"`
-	ConnectionUp     int64   `json:"connection_up"`
-	LatencyNS        Latency `json:"latency_ns"`
-	Received         int64   `json:"received"`
-}
-
-// OutputMetrics contains output-specific metrics
-type OutputMetrics struct {
-	BatchSent        int64   `json:"batch_sent"`
-	ConnectionFailed int64   `json:"connection_failed"`
-	ConnectionLost   int64   `json:"connection_lost"`
-	ConnectionUp     int64   `json:"connection_up"`
-	Error            int64   `json:"error"`
-	LatencyNS        Latency `json:"latency_ns"`
-	Sent             int64   `json:"sent"`
-}
-
-// ProcessMetrics contains processor-specific metrics
-type ProcessMetrics struct {
-	Processors map[string]ProcessorMetrics `json:"processors"` // key is the processor path (e.g. "root.pipeline.processors.0")
-}
-
-// ProcessorMetrics contains metrics for a single processor
-type ProcessorMetrics struct {
-	Label         string  `json:"label"`
-	Received      int64   `json:"received"`
-	BatchReceived int64   `json:"batch_received"`
-	Sent          int64   `json:"sent"`
-	BatchSent     int64   `json:"batch_sent"`
-	Error         int64   `json:"error"`
-	LatencyNS     Latency `json:"latency_ns"`
-}
-
-// Latency contains latency metrics
-type Latency struct {
-	P50   float64 `json:"p50"`   // 50th percentile
-	P90   float64 `json:"p90"`   // 90th percentile
-	P99   float64 `json:"p99"`   // 99th percentile
-	Sum   float64 `json:"sum"`   // Total sum
-	Count int64   `json:"count"` // Number of samples
-}
-
-// HealthCheck contains information about the health of the Benthos service
-// https://docs.redpanda.com/redpanda-connect/guides/monitoring/
-type HealthCheck struct {
-	// IsLive is true if the Benthos service is live
-	IsLive bool
-	// IsReady is true if the Benthos service is ready to process data
-	IsReady bool
-	// Version contains the version of the Benthos service
-	Version string
-	// ReadyError contains any error message from the ready check
-	ReadyError string `json:"ready_error,omitempty"`
-	// ConnectionStatuses contains the detailed connection status of inputs and outputs
-	ConnectionStatuses []connStatus `json:"connection_statuses,omitempty"`
-}
-
-// versionResponse represents the JSON structure returned by the /version endpoint
-type versionResponse struct {
-	Version string `json:"version"`
-	Built   string `json:"built"`
-}
-
-// readyResponse represents the JSON structure returned by the /ready endpoint
-type readyResponse struct {
-	Error    string       `json:"error,omitempty"`
-	Statuses []connStatus `json:"statuses"`
-}
-
-type connStatus struct {
-	Label     string `json:"label"`
-	Path      string `json:"path"`
-	Connected bool   `json:"connected"`
-	Error     string `json:"error,omitempty"`
+	// BenthosMonitorStatus contains information about the status of the Benthos service
+	// that was gathered by the benthos-monitor service
+	BenthosMonitorStatus benthos_monitor.BenthosMonitorStatus
+	// BenthosLogs contains the logs of the Benthos service
+	BenthosLogs []s6service.LogEntry
 }
 
 // BenthosService is the default implementation of the IBenthosService interface
@@ -208,7 +116,7 @@ type BenthosService struct {
 	s6Service        s6service.Service // S6 service for direct S6 operations
 	s6ServiceConfigs []config.S6FSMConfig
 	httpClient       httpclient.HTTPClient
-	metricsState     *BenthosMetricsState
+	metricsState     *benthos_monitor.BenthosMetricsState
 }
 
 // BenthosServiceOption is a function that modifies a BenthosService
@@ -234,11 +142,10 @@ func WithS6Service(s6Service s6service.Service) BenthosServiceOption {
 func NewDefaultBenthosService(benthosName string, opts ...BenthosServiceOption) *BenthosService {
 	managerName := fmt.Sprintf("%s%s", logger.ComponentBenthosService, benthosName)
 	service := &BenthosService{
-		logger:       logger.For(managerName),
-		s6Manager:    s6fsm.NewS6Manager(managerName),
-		s6Service:    s6service.NewDefaultService(),
-		httpClient:   nil, // this is only for a mock in the tests
-		metricsState: NewBenthosMetricsState(),
+		logger:     logger.For(managerName),
+		s6Manager:  s6fsm.NewS6Manager(managerName),
+		s6Service:  s6service.NewDefaultService(),
+		httpClient: nil, // this is only for a mock in the tests
 	}
 
 	// Apply options
@@ -483,7 +390,7 @@ func (s *BenthosService) Status(ctx context.Context, filesystemService filesyste
 				S6FSMState:      s6FSMState, // Note for state transitions: When a service is stopped and then reactivated,
 				// this S6FSMState needs to be properly refreshed here.
 				// Otherwise, the service can not transition from stopping to stopped state
-				BenthosStatus: BenthosStatus{
+				BenthosStatus: benthos_monitor.BenthosStatus{
 					Logs: logs,
 				},
 			}, ErrHealthCheckConnectionRefused
@@ -503,178 +410,6 @@ func (s *BenthosService) Status(ctx context.Context, filesystemService filesyste
 	serviceInfo.BenthosStatus.Logs = logs
 
 	return serviceInfo, nil
-}
-
-// parseMetrics parses prometheus metrics into structured format
-func parseMetrics(data []byte) (Metrics, error) {
-	var parser expfmt.TextParser
-	metrics := Metrics{
-		Process: ProcessMetrics{
-			Processors: make(map[string]ProcessorMetrics),
-		},
-	}
-
-	// Parse the metrics text into prometheus format
-	mf, err := parser.TextToMetricFamilies(bytes.NewReader(data))
-	if err != nil {
-		return metrics, fmt.Errorf("failed to parse metrics: %w", err)
-	}
-
-	// Helper function to get metric value
-	getValue := func(m *dto.Metric) float64 {
-		if m.Counter != nil {
-			return m.Counter.GetValue()
-		}
-		if m.Gauge != nil {
-			return m.Gauge.GetValue()
-		}
-		if m.Untyped != nil {
-			return m.Untyped.GetValue()
-		}
-		return 0
-	}
-
-	// Helper function to get label value
-	getLabel := func(m *dto.Metric, name string) string {
-		for _, label := range m.Label {
-			if label.GetName() == name {
-				return label.GetValue()
-			}
-		}
-		return ""
-	}
-
-	// Process each metric family
-	for name, family := range mf {
-		switch {
-		// Input metrics
-		case name == "input_connection_failed":
-			if len(family.Metric) > 0 {
-				metrics.Input.ConnectionFailed = int64(getValue(family.Metric[0]))
-			}
-		case name == "input_connection_lost":
-			if len(family.Metric) > 0 {
-				metrics.Input.ConnectionLost = int64(getValue(family.Metric[0]))
-			}
-		case name == "input_connection_up":
-			if len(family.Metric) > 0 {
-				metrics.Input.ConnectionUp = int64(getValue(family.Metric[0]))
-			}
-		case name == "input_received":
-			if len(family.Metric) > 0 {
-				metrics.Input.Received = int64(getValue(family.Metric[0]))
-			}
-		case name == "input_latency_ns":
-			updateLatencyFromFamily(&metrics.Input.LatencyNS, family)
-
-		// Output metrics
-		case name == "output_batch_sent":
-			if len(family.Metric) > 0 {
-				metrics.Output.BatchSent = int64(getValue(family.Metric[0]))
-			}
-		case name == "output_connection_failed":
-			if len(family.Metric) > 0 {
-				metrics.Output.ConnectionFailed = int64(getValue(family.Metric[0]))
-			}
-		case name == "output_connection_lost":
-			if len(family.Metric) > 0 {
-				metrics.Output.ConnectionLost = int64(getValue(family.Metric[0]))
-			}
-		case name == "output_connection_up":
-			if len(family.Metric) > 0 {
-				metrics.Output.ConnectionUp = int64(getValue(family.Metric[0]))
-			}
-		case name == "output_error":
-			if len(family.Metric) > 0 {
-				metrics.Output.Error = int64(getValue(family.Metric[0]))
-			}
-		case name == "output_sent":
-			if len(family.Metric) > 0 {
-				metrics.Output.Sent = int64(getValue(family.Metric[0]))
-			}
-		case name == "output_latency_ns":
-			updateLatencyFromFamily(&metrics.Output.LatencyNS, family)
-
-		// Process metrics
-		case name == "processor_received", name == "processor_batch_received",
-			name == "processor_sent", name == "processor_batch_sent",
-			name == "processor_error", name == "processor_latency_ns":
-			for _, metric := range family.Metric {
-				path := getLabel(metric, "path")
-				if path == "" {
-					continue
-				}
-
-				// Initialize processor metrics if not exists
-				if _, exists := metrics.Process.Processors[path]; !exists {
-					metrics.Process.Processors[path] = ProcessorMetrics{
-						Label: getLabel(metric, "label"),
-					}
-				}
-
-				proc := metrics.Process.Processors[path]
-				switch name {
-				case "processor_received":
-					proc.Received = int64(getValue(metric))
-				case "processor_batch_received":
-					proc.BatchReceived = int64(getValue(metric))
-				case "processor_sent":
-					proc.Sent = int64(getValue(metric))
-				case "processor_batch_sent":
-					proc.BatchSent = int64(getValue(metric))
-				case "processor_error":
-					proc.Error = int64(getValue(metric))
-				case "processor_latency_ns":
-					updateLatencyFromMetric(&proc.LatencyNS, metric)
-				}
-				metrics.Process.Processors[path] = proc
-			}
-		}
-	}
-
-	return metrics, nil
-}
-
-func updateLatencyFromFamily(latency *Latency, family *dto.MetricFamily) {
-	for _, metric := range family.Metric {
-		if metric.Summary == nil {
-			continue
-		}
-
-		latency.Sum = metric.Summary.GetSampleSum()
-		latency.Count = int64(metric.Summary.GetSampleCount())
-
-		for _, quantile := range metric.Summary.Quantile {
-			switch quantile.GetQuantile() {
-			case 0.5:
-				latency.P50 = quantile.GetValue()
-			case 0.9:
-				latency.P90 = quantile.GetValue()
-			case 0.99:
-				latency.P99 = quantile.GetValue()
-			}
-		}
-	}
-}
-
-func updateLatencyFromMetric(latency *Latency, metric *dto.Metric) {
-	if metric.Summary == nil {
-		return
-	}
-
-	latency.Sum = metric.Summary.GetSampleSum()
-	latency.Count = int64(metric.Summary.GetSampleCount())
-
-	for _, quantile := range metric.Summary.Quantile {
-		switch quantile.GetQuantile() {
-		case 0.5:
-			latency.P50 = quantile.GetValue()
-		case 0.9:
-			latency.P90 = quantile.GetValue()
-		case 0.99:
-			latency.P99 = quantile.GetValue()
-		}
-	}
 }
 
 // GetHealthCheckAndMetrics returns the health check and metrics of a Benthos service
