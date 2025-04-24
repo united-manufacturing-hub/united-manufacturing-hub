@@ -1050,7 +1050,8 @@ func (s *BenthosMonitorService) AddBenthosMonitorToS6Manager(ctx context.Context
 }
 
 // UpdateBenthosMonitorInS6Manager updates the benthos monitor in the S6 manager
-// It will do it by removing the old instance and adding a new one
+// It will do it by re-generating the S6 config for the benthos instance
+// and letting the S6 manager reconcile the instance
 func (s *BenthosMonitorService) UpdateBenthosMonitorInS6Manager(ctx context.Context, port uint16) error {
 	if s.s6Manager == nil {
 		return errors.New("s6 manager not initialized")
@@ -1064,13 +1065,15 @@ func (s *BenthosMonitorService) UpdateBenthosMonitorInS6Manager(ctx context.Cont
 		return ErrServiceNotExist
 	}
 
-	// Remove the old instance
-	if err := s.RemoveBenthosMonitorFromS6Manager(ctx); err != nil {
-		return fmt.Errorf("failed to remove old benthos monitor: %w", err)
+	// Generate the S6 config for this instance
+	s6Config, err := s.GenerateS6ConfigForBenthosMonitor(s.benthosName, port)
+	if err != nil {
+		return fmt.Errorf("failed to generate S6 config for BenthosMonitor service %s: %w", s.benthosName, err)
 	}
 
-	// Add the new instance
-	return s.AddBenthosMonitorToS6Manager(ctx, port)
+	s.s6ServiceConfig.S6ServiceConfig = s6Config
+
+	return nil
 }
 
 // RemoveBenthosMonitorFromS6Manager removes a benthos instance from the S6 manager

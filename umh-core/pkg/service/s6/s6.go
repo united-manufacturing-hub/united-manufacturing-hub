@@ -1073,7 +1073,26 @@ func (s *DefaultService) ForceRemove(ctx context.Context, servicePath string, fs
 		return ctx.Err()
 	}
 
-	return fsService.RemoveAll(ctx, servicePath)
+	err := fsService.RemoveAll(ctx, servicePath)
+	if err != nil {
+		return fmt.Errorf("failed to remove service: %w", err)
+	}
+
+	// Clean up logs directory (best effort - don't block removal if this fails)
+	serviceName := filepath.Base(servicePath)
+	logDir := filepath.Join(constants.S6LogBaseDir, serviceName)
+	if logErr := fsService.RemoveAll(ctx, logDir); logErr != nil && s.logger != nil {
+		sentry.ReportServiceErrorf(
+			s.logger,
+			serviceName,
+			"s6",
+			"cleanup_logs",
+			"Failed to clean up log directory: %v",
+			logErr,
+		)
+	}
+
+	return nil
 }
 
 // GetStructuredLogs gets the logs of the service as structured LogEntry objects
