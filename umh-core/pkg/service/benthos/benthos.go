@@ -33,6 +33,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos_monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	"go.uber.org/zap"
 
 	benthos_monitor_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos_monitor"
@@ -724,7 +725,7 @@ func (s *BenthosService) StopBenthos(ctx context.Context, filesystemService file
 }
 
 // ReconcileManager reconciles the Benthos manager
-func (s *BenthosService) ReconcileManager(ctx context.Context, filesystemService filesystem.Service, tick uint64) (err error, reconciled bool) {
+func (s *BenthosService) ReconcileManager(ctx context.Context, services serviceregistry.Provider, tick uint64) (err error, reconciled bool) {
 	if s.s6Manager == nil {
 		return errors.New("s6 manager not initialized"), false
 	}
@@ -740,7 +741,7 @@ func (s *BenthosService) ReconcileManager(ctx context.Context, filesystemService
 		Tick:          tick,
 	}
 
-	s6Err, s6Reconciled := s.s6Manager.Reconcile(ctx, s6Snapshot, filesystemService)
+	s6Err, s6Reconciled := s.s6Manager.Reconcile(ctx, s6Snapshot, services)
 	if s6Err != nil {
 		return fmt.Errorf("failed to reconcile S6 manager: %w", s6Err), false
 	}
@@ -752,7 +753,7 @@ func (s *BenthosService) ReconcileManager(ctx context.Context, filesystemService
 		Tick:          tick,
 	}
 
-	monitorErr, monitorReconciled := s.benthosMonitorManager.Reconcile(ctx, benthosMonitorSnapshot, filesystemService)
+	monitorErr, monitorReconciled := s.benthosMonitorManager.Reconcile(ctx, benthosMonitorSnapshot, services)
 	if monitorErr != nil {
 		return fmt.Errorf("failed to reconcile benthos monitor: %w", monitorErr), false
 	}
