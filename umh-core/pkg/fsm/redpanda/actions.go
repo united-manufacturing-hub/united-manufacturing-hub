@@ -191,14 +191,6 @@ func (r *RedpandaInstance) UpdateObservedStateOfInstance(ctx context.Context, fi
 		return nil
 	}
 
-	// ADDED: Special case for transitioning from stopped to active
-	// When we're trying to start Redpanda, we don't need fresh metrics
-	// because the service hasn't started yet to produce them
-	if currentState == OperationalStateStopped && desiredState == OperationalStateActive {
-		// We only need minimal state info to start the service
-		return nil
-	}
-
 	// Start an errgroup with the **same context** so if one sub-task
 	// fails or the context is canceled, all sub-tasks are signaled to stop.
 	g, gctx := errgroup.WithContext(ctx)
