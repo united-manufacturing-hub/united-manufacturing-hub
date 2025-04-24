@@ -319,7 +319,7 @@ func buildDataFlowComponentDataFromSnapshot(instance fsm.FSMInstanceSnapshot, lo
 		}
 		serviceInfo := observed.ServiceInfo
 		inputThroughput := int64(0)
-		if serviceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.MetricsState.Input.LastCount > 0 {
+		if serviceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.MetricsState != nil && serviceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.MetricsState.Input.LastCount > 0 {
 			inputThroughput = int64(serviceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.MetricsState.Input.MessagesPerTick / constants.DefaultTickerTime.Seconds())
 		}
 
