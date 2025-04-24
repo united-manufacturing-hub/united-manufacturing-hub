@@ -81,29 +81,6 @@ func NewStatusCollector(
 	return collector
 }
 
-func (s *StatusCollectorType) getContainerData() models.Container {
-	var containerData models.Container
-
-	if containerManager, exists := s.state.Managers[constants.ContainerManagerName]; exists {
-		instances := containerManager.GetInstances()
-
-		if instance, ok := instances[constants.CoreInstanceName]; ok {
-			containerData = buildContainerDataFromSnapshot(instance, s.logger)
-		} else {
-			s.logger.Warn("Core instance not found in container manager",
-				zap.String("instanceName", constants.CoreInstanceName))
-			containerData = buildDefaultContainerData()
-		}
-	} else {
-		s.logger.Warn("Container manager not found in system snapshot",
-			zap.String("managerName", constants.ContainerManagerName))
-
-		containerData = buildDefaultContainerData()
-	}
-
-	return containerData
-}
-
 func (s *StatusCollectorType) getDataFlowComponentData() ([]models.Dfc, error) {
 	var dfcData []models.Dfc
 
@@ -111,7 +88,7 @@ func (s *StatusCollectorType) getDataFlowComponentData() ([]models.Dfc, error) {
 		instances := dataflowcomponentManager.GetInstances()
 
 		for _, instance := range instances {
-			dfc, err := buildDataFlowComponentDataFromSnapshot(instance, s.logger)
+			dfc, err := buildDataFlowComponentDataFromSnapshot(*instance, s.logger)
 			if err != nil {
 				s.logger.Error("Error building dataflowcomponent data", zap.Error(err))
 				continue
