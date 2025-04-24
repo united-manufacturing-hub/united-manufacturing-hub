@@ -57,9 +57,6 @@ func (bc *BenthosConfig) ToBenthosServiceConfig() benthosserviceconfig.BenthosSe
 
 // GetBenthosServiceConfig converts the component config to a full BenthosServiceConfig
 func (c *DataFlowComponentConfig) GetBenthosServiceConfig() benthosserviceconfig.BenthosServiceConfig {
-	if c == nil {
-		return benthosserviceconfig.BenthosServiceConfig{}
-	}
 	return c.BenthosConfig.ToBenthosServiceConfig()
 }
 
