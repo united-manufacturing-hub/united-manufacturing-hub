@@ -229,7 +229,10 @@ func (m *MockHTTPClient) SetMetricsResponse(config MetricsConfig) {
 
 	var buf bytes.Buffer
 	for _, mf := range metrics {
-		expfmt.MetricFamilyToText(&buf, mf)
+		_, err := expfmt.MetricFamilyToText(&buf, mf)
+		if err != nil {
+			panic(fmt.Sprintf("Failed to marshal metrics: %v", err))
+		}
 	}
 
 	m.ResponseMap["/metrics"] = MockResponse{
@@ -381,7 +384,10 @@ func (m *MockHTTPClient) GetWithBody(ctx context.Context, urlString string) (*ht
 	if err != nil {
 		return resp, nil, fmt.Errorf("failed to read response body for %s: %w", urlString, err)
 	}
-	resp.Body.Close()
+	err = resp.Body.Close()
+	if err != nil {
+		return resp, nil, fmt.Errorf("failed to close response body for %s: %w", urlString, err)
+	}
 
 	// Recreate the response with a fresh body for the caller
 	resp.Body = io.NopCloser(bytes.NewReader(body))

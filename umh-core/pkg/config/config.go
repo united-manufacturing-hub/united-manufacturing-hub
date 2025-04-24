@@ -133,8 +133,17 @@ func (c FullConfig) Clone() FullConfig {
 			clone.Agent.Location[k] = v
 		}
 	}
-	deepcopy.Copy(&clone.Agent, &c.Agent)
-	deepcopy.Copy(&clone.DataFlow, &c.DataFlow)
-	deepcopy.Copy(&clone.Internal, &c.Internal)
+	err := deepcopy.Copy(&clone.Agent, &c.Agent)
+	if err != nil {
+		return FullConfig{}
+	}
+	err = deepcopy.Copy(&clone.DataFlow, &c.DataFlow)
+	if err != nil {
+		return FullConfig{}
+	}
+	err = deepcopy.Copy(&clone.Internal, &c.Internal)
+	if err != nil {
+		return FullConfig{}
+	}
 	return clone
 }

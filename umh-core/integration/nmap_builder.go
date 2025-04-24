@@ -73,8 +73,8 @@ func (b *NmapBuilder) AddGoldenNmap() *NmapBuilder {
 // StartNmap sets a Nmap service to active state
 func (b *NmapBuilder) StartNmap(name string) *NmapBuilder {
 	for i, nmap := range b.full.Internal.Nmap {
-		if nmap.FSMInstanceConfig.Name == name {
-			b.full.Internal.Nmap[i].FSMInstanceConfig.DesiredFSMState = "active"
+		if nmap.Name == name {
+			b.full.Internal.Nmap[i].DesiredFSMState = "active"
 			b.activeNmap[name] = true
 			break
 		}
@@ -85,8 +85,8 @@ func (b *NmapBuilder) StartNmap(name string) *NmapBuilder {
 // StopNmap sets a Nmap service to stopped state
 func (b *NmapBuilder) StopNmap(name string) *NmapBuilder {
 	for i, nmap := range b.full.Internal.Nmap {
-		if nmap.FSMInstanceConfig.Name == name {
-			b.full.Internal.Nmap[i].FSMInstanceConfig.DesiredFSMState = "stopped"
+		if nmap.Name == name {
+			b.full.Internal.Nmap[i].DesiredFSMState = "stopped"
 			b.activeNmap[name] = false
 			break
 		}

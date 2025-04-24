@@ -38,8 +38,8 @@ import (
 	"github.com/shirou/gopsutil/v3/cpu"
 	"github.com/shirou/gopsutil/v3/mem"
 
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
+	. "github.com/onsi/ginkgo/v2" // nolint: staticcheck // Ginkgo is designed to be used with dot imports
+	. "github.com/onsi/gomega"    // nolint: staticcheck // Gomega is designed to be used with dot imports
 )
 
 // monitorHealth checks the metrics and golden service.
@@ -116,7 +116,11 @@ func getMetricsHealth() ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to get metrics: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			Fail(fmt.Sprintf("Error closing response body: %v\n", err))
+		}
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("metrics endpoint returned non-200: %v", resp.StatusCode)
@@ -143,7 +147,11 @@ func checkGoldenService() (int, error) {
 	if e != nil {
 		return 0, fmt.Errorf("failed to send request: %w", e)
 	}
-	defer checkResp.Body.Close()
+	defer func() {
+		if err := checkResp.Body.Close(); err != nil {
+			Fail(fmt.Sprintf("Error closing response body: %v\n", err))
+		}
+	}()
 
 	return checkResp.StatusCode, nil
 }
@@ -227,7 +235,11 @@ func waitForMetrics() error {
 			}
 			return lastError
 		}
-		defer resp.Body.Close()
+		defer func() {
+			if err := resp.Body.Close(); err != nil {
+				Fail(fmt.Sprintf("Error closing response body: %v\n", err))
+			}
+		}()
 
 		if resp.StatusCode != http.StatusOK {
 			lastError = fmt.Errorf("metrics endpoint returned status %d", resp.StatusCode)

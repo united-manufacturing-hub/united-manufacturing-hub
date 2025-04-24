@@ -149,7 +149,7 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 		instances := containerManager.GetInstances()
 
 		if instance, ok := instances[coreInstanceName]; ok {
-			containerData = buildContainerDataFromSnapshot(instance, s.logger)
+			containerData = buildContainerDataFromSnapshot(*instance, s.logger)
 		} else {
 			s.logger.Warn("Core instance not found in container manager",
 				zap.String("instanceName", coreInstanceName))
@@ -178,7 +178,7 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 			zap.Any("instances", instances))
 
 		if instance, ok := instances[agentInstanceName]; ok {
-			agentData, releaseChannel = buildAgentDataFromSnapshot(instance, s.logger)
+			agentData, releaseChannel = buildAgentDataFromSnapshot(*instance, s.logger)
 		} else {
 			s.logger.Warn("Agent instance not found in agent manager",
 				zap.String("instanceName", agentInstanceName),
@@ -421,11 +421,6 @@ func buildDefaultContainerData() models.Container {
 		Hwid:         "unknown",
 		Architecture: models.ArchitectureAmd64,
 	}
-}
-
-// Helper function to create string pointers
-func stringPtr(s string) *string {
-	return &s
 }
 
 // buildAgentDataFromSnapshot creates agent data from a FSM instance snapshot

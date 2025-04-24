@@ -295,14 +295,19 @@ func (s *Watchdog) ReportHeartbeatStatus(uniqueIdentifier uuid.UUID, status Hear
 	var warnings uint32
 	onlyIfHasSub := hb.onlyIfSubscribers
 	hasSubs := s.hasSubscribers.Load()
-	if status == HEARTBEAT_STATUS_WARNING {
+	switch status {
+	case HEARTBEAT_STATUS_WARNING:
 		warnings = hb.warningCount.Add(1)
 		if s.warningsAreErrors.Load() {
 			s.logger.Errorf("[%s] Heartbeat %s (%s) send a warning (%d/%d) and warnings are errors", s.watchdogID, name, uniqueIdentifier, warnings, hb.warningsUntilFailure)
 			s.badHeartbeatChan <- uniqueIdentifier
 		}
-	} else if status == HEARTBEAT_STATUS_OK {
+	case HEARTBEAT_STATUS_OK:
 		hb.warningCount.Store(0)
+	case HEARTBEAT_STATUS_ERROR:
+		s.logger.Errorf("[%s] Heartbeat %s (%s) reported an error", s.watchdogID, name, uniqueIdentifier)
+		sentry.ReportIssuef(sentry.IssueTypeError, s.logger, "Heartbeat reported error: %s", name)
+		s.badHeartbeatChan <- uniqueIdentifier
 	}
 	// warningsUntilFailure == 0 disables this check
 	if warnings >= uint32(hb.warningsUntilFailure) && hb.warningsUntilFailure != 0 && ((onlyIfHasSub && hasSubs) || !onlyIfHasSub) {
@@ -311,11 +316,6 @@ func (s *Watchdog) ReportHeartbeatStatus(uniqueIdentifier uuid.UUID, status Hear
 		s.badHeartbeatChan <- uniqueIdentifier
 	}
 	s.registeredHeartbeatsMutex.Unlock()
-	if status == HEARTBEAT_STATUS_ERROR {
-		s.logger.Errorf("[%s] Heartbeat %s (%s) reported an error", s.watchdogID, name, uniqueIdentifier)
-		sentry.ReportIssuef(sentry.IssueTypeError, s.logger, "Heartbeat reported error: %s", name)
-		s.badHeartbeatChan <- uniqueIdentifier
-	}
 	s.reportStateToNiceFail()
 }
 

@@ -369,7 +369,14 @@ var _ = Describe("Nmap FSM", func() {
 
 			inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 231}, mockFS)
 
+			// Should now move the instance to stopped because of the permanent failure and attempt a normal removal
 			inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 232}, mockFS)
+			Expect(inst.GetDesiredFSMState()).To(Equal(nmap.OperationalStateStopped))
+
+			// The normal removal will also fail as we cannot get the observed state, so we move at one point to a force removal
+			for t := uint64(233); t < 263; t++ {
+				inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: t}, mockFS)
+			}
 			Expect(mockSvc.ForceRemoveNmapCalled).To(BeTrue())
 		})
 	})
