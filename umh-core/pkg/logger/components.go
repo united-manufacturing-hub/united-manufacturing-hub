@@ -36,9 +36,8 @@ const (
 	ComponentS6Instance                = "S6Instance"
 	ComponentBenthosInstance           = "BenthosInstance"
 	ComponentRedpandaInstance          = "RedpandaInstance"
-	ComponentNmapInstance     = "NmapInstance"
+	ComponentNmapInstance              = "NmapInstance"
 	ComponentDataFlowComponentInstance = "DFCInstance"
-
 
 	// Service components
 	ComponentS6Service                = "S6Service"

@@ -484,7 +484,7 @@ var _ = Describe("DeployDataflowComponent", func() {
 			// Verify expected configuration changes
 			Expect(mockConfig.Config.DataFlow).To(HaveLen(1))
 			Expect(mockConfig.Config.DataFlow[0].Name).To(Equal("test-component"))
-			Expect(mockConfig.Config.DataFlow[0].DesiredFSMState).To(Equal("running"))
+			Expect(mockConfig.Config.DataFlow[0].DesiredFSMState).To(Equal("active"))
 		})
 
 		It("should handle AtomicAddDataflowcomponent failure", func() {
@@ -627,7 +627,7 @@ buffer:
 			// Verify the component was added with correct configuration
 			Expect(mockConfig.Config.DataFlow).To(HaveLen(1))
 			Expect(mockConfig.Config.DataFlow[0].Name).To(Equal("test-component-with-inject"))
-			Expect(mockConfig.Config.DataFlow[0].DesiredFSMState).To(Equal("running"))
+			Expect(mockConfig.Config.DataFlow[0].DesiredFSMState).To(Equal("active"))
 
 			// Verify inject configuration was properly processed
 			Expect(mockConfig.Config.DataFlow[0].DataFlowComponentConfig.BenthosConfig.CacheResources).To(HaveLen(1))
