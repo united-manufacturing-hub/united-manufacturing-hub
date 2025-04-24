@@ -96,16 +96,16 @@ func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePay
 			systemSnapshot:  systemSnapshot,
 			actionLogger:    log,
 		}
-	//case models.GetDataFlowComponent:
-	//	action = &GetDataFlowComponentAction{
-	//		userEmail:       sender,
-	//		actionUUID:      payload.ActionUUID,
-	//		instanceUUID:    instanceUUID,
-	//		outboundChannel: outboundChannel,
-	//		configManager:   configManager,
-	//		systemSnapshot:  systemSnapshot,
-	//		actionLogger:    log,
-	//	}
+	case models.GetDataFlowComponent:
+		action = &GetDataFlowComponentAction{
+			userEmail:       sender,
+			actionUUID:      payload.ActionUUID,
+			instanceUUID:    instanceUUID,
+			outboundChannel: outboundChannel,
+			configManager:   configManager,
+			systemSnapshot:  systemSnapshot,
+			actionLogger:    log,
+		}
 	default:
 		log.Errorf("Unknown action type: %s", payload.ActionType)
 		SendActionReply(instanceUUID, sender, payload.ActionUUID, models.ActionFinishedWithFailure, "Unknown action type", outboundChannel, payload.ActionType)

@@ -15,14 +15,17 @@
 package generator
 
 import (
+	"fmt"
 	"sync"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/agent_monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/container"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
@@ -78,6 +81,30 @@ func NewStatusCollector(
 	return collector
 }
 
+func (s *StatusCollectorType) getDataFlowComponentData() ([]models.Dfc, error) {
+	var dfcData []models.Dfc
+
+	if dataflowcomponentManager, exists := s.state.Managers[constants.DataflowcomponentManagerName]; exists {
+		instances := dataflowcomponentManager.GetInstances()
+
+		for _, instance := range instances {
+			dfc, err := buildDataFlowComponentDataFromSnapshot(*instance, s.logger)
+			if err != nil {
+				s.logger.Error("Error building dataflowcomponent data", zap.Error(err))
+				continue
+			}
+			dfcData = append(dfcData, dfc)
+		}
+	} else {
+		s.logger.Warn("Dataflowcomponent manager not found in system snapshot",
+			zap.String("managerName", constants.DataflowcomponentManagerName),
+			zap.Any("allManagers", s.state.Managers))
+		return nil, fmt.Errorf("dataflowcomponent manager not found in system snapshot")
+	}
+
+	return dfcData, nil
+}
+
 func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 	s.latestData.mu.RLock()
 	defer s.latestData.mu.RUnlock()
@@ -112,6 +139,11 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 		containerData = buildDefaultContainerData()
 	}
 
+	dfcData, err := s.getDataFlowComponentData()
+	if err != nil {
+		s.logger.Error("Error getting dataflowcomponent data", zap.Error(err))
+	}
+
 	// extract agent data from the agent manager if available
 	var agentData models.Agent
 	var releaseChannel string
@@ -143,7 +175,7 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 				Location: agentData.Location,
 			},
 			Container: containerData,
-			Dfcs:      []models.Dfc{},
+			Dfcs:      dfcData,
 			Redpanda: models.Redpanda{
 				Health: &models.Health{
 					Message:       "redpanda monitoring is not implemented yet",
@@ -167,6 +199,7 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 				SupportedFeatures: []string{
 					"custom-dfc",
 					"action-deploy-data-flow-component",
+					"action-get-data-flow-component",
 				},
 			},
 		},
@@ -256,6 +289,59 @@ func buildContainerDataFromSnapshot(instance fsm.FSMInstanceSnapshot, log *zap.S
 	}
 
 	return containerData
+}
+
+func buildDataFlowComponentDataFromSnapshot(instance fsm.FSMInstanceSnapshot, log *zap.SugaredLogger) (models.Dfc, error) {
+	dfcData := models.Dfc{}
+
+	// Check if we have actual observedState
+	if instance.LastObservedState != nil {
+		// Try to cast to the right type
+
+		// Create health status based on instance.CurrentState
+		extractHealthStatus := func(state string) models.HealthCategory {
+			switch state {
+			case dataflowcomponent.OperationalStateActive:
+				return models.Active
+			case dataflowcomponent.OperationalStateDegraded:
+				return models.Degraded
+			default:
+				return models.Neutral
+			}
+		}
+
+		// get the metrics from the instance
+		observed, ok := instance.LastObservedState.(*dataflowcomponent.DataflowComponentObservedStateSnapshot)
+		if !ok {
+			err := fmt.Errorf("observed state %T does not match DataflowComponentObservedStateSnapshot", instance.LastObservedState)
+			log.Error(err)
+			return models.Dfc{}, err
+		}
+		serviceInfo := observed.ServiceInfo
+		inputThroughput := int64(0)
+		if serviceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.MetricsState.Input.LastCount > 0 {
+			inputThroughput = int64(serviceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.MetricsState.Input.MessagesPerTick / constants.DefaultTickerTime.Seconds())
+		}
+
+		dfcData.Health = &models.Health{
+			Message:       getHealthMessage(extractHealthStatus(instance.CurrentState)),
+			ObservedState: instance.CurrentState,
+			DesiredState:  instance.DesiredState,
+			Category:      extractHealthStatus(instance.CurrentState),
+		}
+
+		dfcData.Type = "custom" // this is a custom DFC; protocol converters will have a separate fsm
+		dfcData.UUID = dataflowcomponentconfig.GenerateUUIDFromName(instance.ID).String()
+		dfcData.Metrics = &models.DfcMetrics{
+			AvgInputThroughputPerMinuteInMsgSec: float64(inputThroughput),
+		}
+		dfcData.Name = &instance.ID
+	} else {
+		log.Warn("no observed state found for dataflowcomponent", zap.String("instanceID", instance.ID))
+		return models.Dfc{}, fmt.Errorf("no observed state found for dataflowcomponent")
+	}
+
+	return dfcData, nil
 }
 
 // getHealthMessage returns an appropriate message based on health category
