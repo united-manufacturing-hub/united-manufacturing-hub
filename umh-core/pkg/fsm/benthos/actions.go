@@ -154,7 +154,10 @@ func (b *BenthosInstance) getServiceStatus(ctx context.Context, filesystemServic
 		} else if errors.Is(err, benthos_service.ErrBenthosMonitorNotRunning) {
 			// If the benthos monitor is not running, and we are in the starting phase or stopped, ..., we can ignore this error, as it is expected
 			if !IsRunningState(b.baseFSMInstance.GetCurrentFSMState()) {
-				return info, nil
+				infoWithFailedHealthChecks := info
+				infoWithFailedHealthChecks.BenthosStatus.HealthCheck.IsLive = false
+				infoWithFailedHealthChecks.BenthosStatus.HealthCheck.IsReady = false
+				return infoWithFailedHealthChecks, nil
 			}
 		}
 
