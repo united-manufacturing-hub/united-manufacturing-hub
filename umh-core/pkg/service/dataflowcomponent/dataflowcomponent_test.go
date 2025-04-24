@@ -258,9 +258,9 @@ var _ = Describe("DataFlowComponentService", func() {
 			// Call Status for a non-existent component
 			_, err := statusService.Status(ctx, mockFS, componentName, tick)
 
-			// Assert - check for "not found" in the error message
+			// Assert - check for "does not exist" in the error message
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("not found"))
+			Expect(err.Error()).To(ContainSubstring("does not exist"))
 		})
 	})
 
