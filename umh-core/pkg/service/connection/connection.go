@@ -12,6 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Package connection provides a service for managing and monitoring network
+// connectivity to remote assets using Nmap as the underlying probe mechanism.
+//
+// # Key Concepts
+//
+// - Connections has a health indicators (flaky)
+// - Flakiness detection requires multiple samples over time
+//
+// # Thread Safety
+//
+// The ConnectionService is designed to be accessed by a single goroutine.
+// All operations that modify the configuration (Add/Update/Remove) should be
+// followed by a call to ReconcileManager to apply the changes.
+
 package connection
 
 import (
@@ -23,6 +37,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/connectionserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/nmapserviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	nmapfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/nmap"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
@@ -43,50 +58,113 @@ type IConnectionService interface {
 	GetConfig(ctx context.Context, filesystemService filesystem.Service, connectionName string) (connectionserviceconfig.ConnectionServiceConfig, error)
 
 	// Status returns information about the connection health for the specified connection.
+	// The connName corresponds to the name defined in the configuration.
+	// The tick parameter is used for reconciliation timing and to timestamp the result.
+	//
+	// Returns a ServiceInfo struct containing multiple indicators:
+	// - IsFlaky: if the connection has been unstable in recent history
+	// - NmapObservedState: the observed state of nmap
+	// - NmapFSMState: the current state of the nmap fsm
+	//
+	// Errors:
+	// - If the connection doesn't exist
+	// - If there's an underlying Nmap error
+	// - If the context is canceled
 	Status(ctx context.Context, fs filesystem.Service, connName string, tick uint64) (ServiceInfo, error)
 
-	// AddConnection registers a new connection in the Nmap service.
+	// AddConnectionToNmapManager registers a new connection in the Nmap Manager.
+	// The connName is a unique identifier used to reference this connection.
+	// The cfg parameter specifies the target hostname, port, and protocol.
+	//
+	// This method initializes the monitoring but does not start it automatically.
+	// Call StartConnection to begin active monitoring.
+	//
+	// Note: This method only stores the config in a local slice and does not
+	// immediately activate the connection. Call ReconcileManager after this
+	// to apply the changes.
+	//
+	// Returns an error if the connection already exists or if registration fails.
 	AddConnectionToNmapManager(ctx context.Context, fs filesystem.Service, cfg *connectionserviceconfig.ConnectionServiceConfig, connName string) error
 
-	// UpdateConnection modifies an existing connection configuration.
+	// UpdateConnectionInNmapManager modifies an existing connection configuration.
+	// This can be used to change the target hostname, port, or protocol.
+	//
+	// The service must exist already. The update takes effect on the next
+	// monitor cycle and does not restart the monitoring process.
+	//
+	// Note: This method only updates the config in a local slice and does not
+	// immediately apply the changes. Call ReconcileManager after this
+	// to apply the changes.
+	//
+	// Returns an error if the connection doesn't exist or if update fails.
 	UpdateConnectionInNmapManager(ctx context.Context, fs filesystem.Service, cfg *connectionserviceconfig.ConnectionServiceConfig, connName string) error
 
-	// RemoveConnection deletes a connection configuration.
+	// RemoveConnectionFromNmapManager deletes a connection configuration.
+	// This stops monitoring the connection and removes all configuration.
+	//
+	// Note: This method only removes the config from a local slice and does not
+	// immediately apply the changes. Call ReconcileManager after this
+	// to apply the changes.
+	//
+	// Returns an error if the connection doesn't exist or removal fails.
 	RemoveConnectionFromNmapManager(ctx context.Context, fs filesystem.Service, connName string) error
 
 	// StartConnection begins the monitoring of a connection.
+	// This initiates periodic scanning of the target using Nmap.
+	//
+	// Returns an error if the connection doesn't exist or start fails.
 	StartConnection(ctx context.Context, fs filesystem.Service, connName string) error
 
 	// StopConnection stops the monitoring of a connection.
+	// This halts scanning but retains the configuration for later restart.
+	//
+	// Returns an error if the connection doesn't exist or stop fails.
 	StopConnection(ctx context.Context, fs filesystem.Service, connName string) error
 
 	// ForceRemoveConnection removes a Connection instance
 	ForceRemoveConnection(ctx context.Context, fs filesystem.Service, connName string) error
 
 	// ServiceExists checks if a connection with the given name exists.
+	// Used by the FSM to determine appropriate transitions.
+	//
+	// Returns true if the connection exists, false otherwise.
 	ServiceExists(ctx context.Context, fs filesystem.Service, connName string) bool
 
 	// ReconcileManager synchronizes all connections on each tick.
+	// This is typically called in a loop by the FSM system.
+	//
+	// Returns an error and a boolean indicating if reconciliation occurred.
+	// The boolean is false if reconciliation was skipped (e.g., due to an error).
 	ReconcileManager(ctx context.Context, fs filesystem.Service, tick uint64) (error, bool)
 }
 
-// ServiceInfo contains information about a Connection service
+// ServiceInfo holds information about the connection's health status.
+// It uses separate boolean flags for different health aspects instead of
+// a single status value, making it easier to check specific conditions.
 type ServiceInfo struct {
-	// NmapObservedState contains information about the Benthos service
+	// NmapObservedState contains information about the Nmap service
 	NmapObservedState nmapfsm.NmapObservedState
-	// NmapFSMState contains the current state of the Benthos FSM
+	// NmapFSMState contains the current state of the Nmap FSM
 	NmapFSMState string
-	// IsHealthy is true only when the connection‑monitoring probe
-	// is in a steady, reliable state (Nmap FSM = "open").
-	IsHealthy bool
+	// IsFlaky indicates intermittent connectivity based on recent scan history.
+	// A connection is considered flaky if it alternates between open/closed states
+	// within the recent history window (default: last 60 scans).
+	IsFlaky bool
+	// LastChange stores the tick when the status last changed.
+	// This timestamp uses the FSM tick counter rather than wall clock time
+	// to ensure consistency with the FSM reconciliation system.
+	LastChange uint64
 }
 
-// ConnectionService is the default implementation of the IConnectionService interface
+// ConnectionService implements IConnectionService using Nmap as the underlying
+// connectivity probe mechanism. It maintains a history of recent states to detect
+// flaky connections and provides a higher-level abstraction over raw Nmap results.
 type ConnectionService struct {
-	logger      *zap.SugaredLogger
-	nmapManager *nmapfsm.NmapManager
-	nmapService nmap.INmapService
-	nmapConfigs []config.NmapConfig
+	logger           *zap.SugaredLogger
+	nmapManager      *nmapfsm.NmapManager
+	nmapService      nmap.INmapService
+	nmapConfigs      []config.NmapConfig
+	recentNmapStates map[string][]string
 }
 
 // ConnectionServiceOption is a function that configures a ConnectionService.
@@ -103,13 +181,24 @@ func WithNmapManager(mgr *nmapfsm.NmapManager) ConnectionServiceOption {
 
 // NewDefaultConnectionService creates a new ConnectionService with default options.
 // It initializes the logger, recent scans cache, and sets default values.
+//
+// Options can be passed to customize behavior:
+// - WithNmapService: Set a custom service
+// - WithNmapmanager: Set a custom manager
+//
+// Example:
+//
+//	service := NewDefaultConnectionService("my-connection-service")
+//	// or with custom max recent scans
+//	service := NewDefaultConnectionService("my-connection-service", WithMaxRecentScans(10))
 func NewDefaultConnectionService(connectionName string, opts ...ConnectionServiceOption) *ConnectionService {
 	managerName := fmt.Sprintf("%s%s", logger.ComponentConnectionService, connectionName)
 	service := &ConnectionService{
-		logger:      logger.For(managerName),
-		nmapManager: nmapfsm.NewNmapManager(managerName),
-		nmapService: nmap.NewDefaultNmapService(connectionName),
-		nmapConfigs: []config.NmapConfig{},
+		logger:           logger.For(managerName),
+		nmapManager:      nmapfsm.NewNmapManager(managerName),
+		nmapService:      nmap.NewDefaultNmapService(connectionName),
+		nmapConfigs:      []config.NmapConfig{},
+		recentNmapStates: make(map[string][]string),
 	}
 
 	// Apply options
@@ -120,7 +209,7 @@ func NewDefaultConnectionService(connectionName string, opts ...ConnectionServic
 	return service
 }
 
-// getBenthosName converts a connectionName to its Nmap service name
+// getNmapName converts a connectionName to its Nmap service name
 func (c *ConnectionService) getNmapName(connectionName string) string {
 	return fmt.Sprintf("connection-%s", connectionName)
 }
@@ -160,28 +249,33 @@ func (c *ConnectionService) GetConfig(
 // Status returns information about the connection health for the specified connection.
 // It queries the underlying Nmap service and then enhances the result with
 // additional context like flakiness detection based on historical data.
+//
+// The tick parameter is used both for timestamping the result and as part of
+// the FSM reconciliation system's timing mechanism.
 func (c *ConnectionService) Status(
 	ctx context.Context,
 	fs filesystem.Service,
 	connName string,
 	tick uint64,
 ) (ServiceInfo, error) {
+	start := time.Now()
+	defer func() {
+		metrics.ObserveReconcileTime(logger.ComponentConnectionService, connName+".Status", time.Since(start))
+	}()
+
 	if ctx.Err() != nil {
 		return ServiceInfo{}, ctx.Err()
 	}
-
-	// First, check if the service exists in the nmap manager
-	instance, exists := c.nmapManager.GetInstance(connName)
-	if !exists {
-		c.logger.Debugf("Service %s not found in Nmap manager", connName)
+	if !c.ServiceExists(ctx, fs, connName) {
 		return ServiceInfo{}, ErrServiceNotExist
 	}
-	nmapInstanceState := instance.GetCurrentFSMState()
+
+	nmapName := c.getNmapName(connName)
 
 	// Get status from Nmap service
-	nmapStatus, err := c.nmapManager.GetLastObservedState(connName)
+	nmapStatus, err := c.nmapManager.GetLastObservedState(nmapName)
 	if err != nil {
-		return ServiceInfo{}, fmt.Errorf("failed to get nmap status for connection %s: %w", connName, err)
+		return ServiceInfo{}, fmt.Errorf("failed to get nmap observed state: %w", err)
 	}
 
 	nmapStatusObservedState, ok := nmapStatus.(nmapfsm.NmapObservedState)
@@ -189,28 +283,33 @@ func (c *ConnectionService) Status(
 		return ServiceInfo{}, fmt.Errorf("nmap status for connection %s is not a NmapObservedState", connName)
 	}
 
-	nmapFSMState, err := c.nmapManager.GetCurrentFSMState(connName)
+	nmapFSMState, err := c.nmapManager.GetCurrentFSMState(nmapName)
 	if err != nil {
 		return ServiceInfo{}, fmt.Errorf("failed to get nmap FSM state: %w", err)
 	}
 
-	IsHealthy := false
-	// if it is any other state other than running (such as stopped, starting, degraded, etc.)
-	// it is not healthy
-	if nmapfsm.IsRunningState(nmapInstanceState) && nmapInstanceState != nmapfsm.OperationalStateDegraded {
-		IsHealthy = true
-	}
+	c.updateRecentScans(connName, nmapFSMState)
 
 	return ServiceInfo{
 		NmapObservedState: nmapStatusObservedState,
 		NmapFSMState:      nmapFSMState,
-		IsHealthy:         IsHealthy,
+		IsFlaky:           c.isConnectionFlaky(connName),
+		LastChange:        tick,
 	}, nil
 }
 
-// AddConnectionToNmapManager registers a new connection in the Nmap service.
+// AddConnection registers a new connection in the Nmap service.
 // The connName is a unique identifier used to reference this connection.
 // The cfg parameter specifies the target hostname, port, and protocol.
+//
+// This method initializes the monitoring but does not start it automatically.
+// Call StartConnection to begin active monitoring.
+//
+// Note: This method only stores the config in a local slice and does not
+// immediately activate the connection. Call ReconcileManager after this
+// to apply the changes.
+//
+// Returns an error if the connection already exists or if registration fails.
 func (c *ConnectionService) AddConnectionToNmapManager(
 	ctx context.Context,
 	fs filesystem.Service,
@@ -227,7 +326,6 @@ func (c *ConnectionService) AddConnectionToNmapManager(
 	}
 
 	nmapName := c.getNmapName(connectionName)
-	fmt.Println(nmapName)
 
 	// Check if the connection already exists in our configs
 	for _, existingConfig := range c.nmapConfigs {
@@ -259,6 +357,15 @@ func (c *ConnectionService) AddConnectionToNmapManager(
 
 // UpdateConnectionInNmapManager modifies an existing connection configuration.
 // This can be used to change the target hostname, port, or protocol.
+//
+// The service must exist already. The update takes effect on the next
+// monitor cycle and does not restart the monitoring process.
+//
+// Note: This method only updates the config in a local slice and does not
+// immediately apply the changes. Call ReconcileManager after this
+// to apply the changes.
+//
+// Returns an error if the connection doesn't exist or if update fails.
 func (c *ConnectionService) UpdateConnectionInNmapManager(
 	ctx context.Context,
 	fs filesystem.Service,
@@ -300,7 +407,7 @@ func (c *ConnectionService) UpdateConnectionInNmapManager(
 	currentDesiredState := c.nmapConfigs[index].DesiredFSMState
 	c.nmapConfigs[index] = config.NmapConfig{
 		FSMInstanceConfig: config.FSMInstanceConfig{
-			Name:            connectionName,
+			Name:            nmapName,
 			DesiredFSMState: currentDesiredState,
 		},
 		NmapServiceConfig: nmapCfg,
@@ -311,6 +418,12 @@ func (c *ConnectionService) UpdateConnectionInNmapManager(
 
 // RemoveConnectionFromNmapManager deletes a connection configuration.
 // This stops monitoring the connection and removes all configuration.
+//
+// Note: This method only removes the config from a local slice and does not
+// immediately apply the changes. Call ReconcileManager after this
+// to apply the changes.
+//
+// Returns an error if the connection doesn't exist or removal fails.
 func (c *ConnectionService) RemoveConnectionFromNmapManager(
 	ctx context.Context,
 	fs filesystem.Service,
@@ -419,6 +532,8 @@ func (c *ConnectionService) StopConnection(
 // It delegates to the Nmap service's reconciliation function,
 // which ensures that the actual state matches the desired state
 // for all services.
+//
+// This should be called periodically by a control loop.
 func (c *ConnectionService) ReconcileManager(
 	ctx context.Context,
 	fs filesystem.Service,
@@ -448,7 +563,10 @@ func (c *ConnectionService) ReconcileManager(
 	}, fs)
 }
 
-// ServiceExists checks if a connection service with the given name exists.
+// ServiceExists checks if a connection with the given name exists.
+// Used by the FSM to determine appropriate transitions.
+//
+// Returns true if the connection exists, false otherwise.
 func (c *ConnectionService) ServiceExists(
 	ctx context.Context,
 	fs filesystem.Service,
@@ -457,15 +575,7 @@ func (c *ConnectionService) ServiceExists(
 	if ctx.Err() != nil {
 		return false
 	}
-
 	nmapName := c.getNmapName(connectionName)
-
-	// check for already existing configs
-	for _, config := range c.nmapConfigs {
-		if config.Name == nmapName {
-			return true
-		}
-	}
 
 	// Check if the actual service exists
 	return c.nmapService.ServiceExists(ctx, fs, nmapName)
@@ -473,11 +583,86 @@ func (c *ConnectionService) ServiceExists(
 
 // ForceRemoveConnection removes a Connection from the Nmap manager
 // Expects nmapName (e.g. "connection-myservice") as defined in the UMH config
-func (c *ConnectionService) ForceRemoveDataFlowComponent(ctx context.Context, filesystemService filesystem.Service, connectionName string) error {
+func (c *ConnectionService) ForceRemoveConnection(ctx context.Context, filesystemService filesystem.Service, connectionName string) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
 
 	// force remove from Nmap manager
 	return c.nmapService.ForceRemoveNmap(ctx, filesystemService, c.getNmapName(connectionName))
+}
+
+// updateRecentScans adds a new scan result to the history for flakiness detection.
+// If len(scans) == maxRecentScans (not >=) we drop the oldest element before appending.
+//
+// This history is used by isConnectionFlaky to detect unstable connections
+// that alternate between different port states.
+func (c *ConnectionService) updateRecentScans(connName string, state string) {
+	// TODO(perf): replace slice with constant-size ring-buffer for O(1) append
+	// Consider using container/ring or a simple array with head index
+
+	// Initialize if this is the first scan for this connection
+	if _, exists := c.recentNmapStates[connName]; !exists {
+		c.recentNmapStates[connName] = make([]string, 0, constants.MaxRecentStates)
+	}
+
+	// Add the new scan (keeping only the most recent ones)
+	states := c.recentNmapStates[connName]
+	if len(states) >= constants.MaxRecentStates {
+		// Remove oldest scan
+		states = states[1:]
+	}
+
+	if state != "" {
+		states = append(states, state)
+	}
+
+	c.recentNmapStates[connName] = states
+}
+
+// isConnectionFlaky determines if a connection is flaky based on recent scan history.
+// A connection is considered flaky if it has shown different port states
+// in the recent history window (default: last 5 scans).
+//
+// At least 3 samples are required to make this determination, to avoid
+// false positives from normal temporary network conditions.
+//
+// Note: if the FSM is not running we store the synthetic "unknown" state;
+// it anchors the flakiness window without marking the connection flaky.
+func (c *ConnectionService) isConnectionFlaky(connName string) bool {
+	scans, exists := c.recentNmapStates[connName]
+
+	if !exists || len(scans) < 3 {
+		// Need at least 3 samples to determine flakiness
+		return false
+	}
+
+	firstState := scans[0]
+	secondState := scans[1]
+
+	// if those states are equal everything is right
+	if firstState == secondState {
+		return false
+	}
+
+	// if not we check if theres a second difference, which we then consider flaky
+	for _, state := range scans[2:] {
+		if state != secondState {
+			return true
+		}
+	}
+	return false
+}
+
+// GetRecentStatesCount returns the number of recent scan results for a connection
+func (s *ConnectionService) GetRecentStatesCount(name string) int {
+	return len(s.recentNmapStates[name])
+}
+
+// GetRecentStatesAtIndex returns the scan at the specified index for a connection
+func (s *ConnectionService) GetRecentStatesAtIndex(name string, index int) (*string, bool) {
+	if states, ok := s.recentNmapStates[name]; ok && len(states) > index {
+		return &states[index], true
+	}
+	return nil, false
 }

@@ -69,6 +69,10 @@ func WaitForNmapManagerInstanceState(
 		if found && inst.GetCurrentFSMState() == desiredState {
 			return tick, nil
 		}
+		if found {
+			fmt.Printf("currentState: %s\n", inst.GetCurrentFSMState())
+			fmt.Printf(" found instance: %s\n", instanceName)
+		}
 	}
 	return tick, fmt.Errorf("instance %s did not reach state %s after %d attempts",
 		instanceName, desiredState, maxAttempts)
@@ -148,7 +152,7 @@ func SetupNmapServiceInManager(
 	instance := nmapfsm.NewNmapInstance(CreateNmapTestConfig(serviceName, desiredState))
 
 	// Add it to the manager
-	manager.BaseFSMManager.AddInstanceForTest(serviceName, instance)
+	manager.AddInstanceForTest(serviceName, instance)
 
 	// Make sure the service exists in the mock service
 	mockService.ExistingServices[serviceName] = true

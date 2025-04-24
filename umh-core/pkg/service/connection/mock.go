@@ -76,6 +76,7 @@ type MockConnectionService struct {
 	ConnectionStates    map[string]*ServiceInfo
 	ExistingConnections map[string]bool
 	NmapConfigs         []config.NmapConfig
+	RecentNmapStates    map[string][]string
 
 	// State control for FSM testing
 	stateFlags map[string]*ConnectionStateFlags
@@ -158,6 +159,7 @@ func (m *MockConnectionService) Status(ctx context.Context, filesystemService fi
 
 	// If we have a state already stored, return it
 	if state, exists := m.ConnectionStates[connectionName]; exists {
+		state.IsFlaky = m.isConnectionFlaky(connectionName)
 		return *state, m.StatusError
 	}
 
@@ -165,7 +167,7 @@ func (m *MockConnectionService) Status(ctx context.Context, filesystemService fi
 	return m.StatusResult, m.StatusError
 }
 
-// AddConnectionToNmapManager mocks adding a DataFlowComponent to the Benthos manager
+// AddConnectionToNmapManager mocks adding a Connection to the Nmap manager
 func (m *MockConnectionService) AddConnectionToNmapManager(ctx context.Context, filesystemService filesystem.Service, cfg *connectionserviceconfig.ConnectionServiceConfig, connectionName string) error {
 	m.AddConnectionCalled = true
 
@@ -181,8 +183,7 @@ func (m *MockConnectionService) AddConnectionToNmapManager(ctx context.Context, 
 	// Add the component to the list of existing components
 	m.ExistingConnections[connectionName] = true
 
-	// Create a BenthosConfig for this component
-	fmt.Println(nmapName)
+	// Create a NmapConfig for this component
 	nmapConfig := config.NmapConfig{
 		FSMInstanceConfig: config.FSMInstanceConfig{
 			Name:            nmapName,
@@ -191,7 +192,7 @@ func (m *MockConnectionService) AddConnectionToNmapManager(ctx context.Context, 
 		NmapServiceConfig: m.GenerateNmapConfigForConnectionResult,
 	}
 
-	// Add the BenthosConfig to the list of BenthosConfigs
+	// Add the NmapConfig to the list of NmapConfigs
 	m.NmapConfigs = append(m.NmapConfigs, nmapConfig)
 
 	return m.AddConnectionError
@@ -323,4 +324,29 @@ func (m *MockConnectionService) ServiceExists(ctx context.Context, filesystemSer
 func (m *MockConnectionService) ReconcileManager(ctx context.Context, filesystemService filesystem.Service, tick uint64) (error, bool) {
 	m.ReconcileManagerCalled = true
 	return m.ReconcileManagerError, m.ReconcileManagerReconciled
+}
+
+func (c *MockConnectionService) isConnectionFlaky(connName string) bool {
+	scans, exists := c.RecentNmapStates[connName]
+
+	if !exists || len(scans) < 3 {
+		// Need at least 3 samples to determine flakiness
+		return false
+	}
+
+	firstState := scans[0]
+	secondState := scans[1]
+
+	// if those states are equal everything is right
+	if firstState == secondState {
+		return false
+	}
+
+	// if not we check if theres a second difference, which we then consider flaky
+	for _, state := range scans[2:] {
+		if state != secondState {
+			return true
+		}
+	}
+	return false
 }

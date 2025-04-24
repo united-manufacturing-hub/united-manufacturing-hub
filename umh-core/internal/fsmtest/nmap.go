@@ -96,7 +96,7 @@ func SetupNmapServiceState(
 	mockService.SetServiceState(serviceName, flags)
 }
 
-// ConfigureNmapServiceConfig configures the mock service with a default Benthos config
+// ConfigureNmapServiceConfig configures the mock service with a default Nmap config
 func ConfigureNmapServiceConfig(mockService *nmap.MockNmapService) {
 	mockService.GetConfigResult = nmapserviceconfig.NmapServiceConfig{
 		Target: "localhost",
@@ -116,8 +116,10 @@ func TransitionToNmapState(mockService *nmap.MockNmapService, serviceName string
 	case nmapfsm.OperationalStateDegraded:
 		SetupNmapServiceState(mockService, serviceName, nmap.ServiceStateFlags{
 			IsS6Running: true,
-			IsRunning:   true,
+			IsRunning:   false,
 			S6FSMState:  s6fsm.OperationalStateRunning,
+			IsDegraded:  true,
+			PortState:   "",
 		})
 	case nmapfsm.OperationalStateOpen:
 		SetupNmapServiceState(mockService, serviceName, nmap.ServiceStateFlags{
@@ -160,6 +162,12 @@ func TransitionToNmapState(mockService *nmap.MockNmapService, serviceName string
 			IsRunning:   true,
 			S6FSMState:  s6fsm.OperationalStateRunning,
 			PortState:   string(nmapfsm.PortStateClosedFiltered),
+		})
+	case nmapfsm.OperationalStateStopping:
+		SetupNmapServiceState(mockService, serviceName, nmap.ServiceStateFlags{
+			IsS6Running: false,
+			IsRunning:   false,
+			S6FSMState:  s6fsm.OperationalStateStopping,
 		})
 	}
 }
@@ -241,7 +249,7 @@ func TestNmapStateTransition(
 		fromState, toState, maxAttempts, instance.GetCurrentFSMState())
 }
 
-// VerifyBenthosStableState ensures that an instance remains in the same state
+// VerifyNmapStableState ensures that an instance remains in the same state
 // over multiple reconciliation cycles.
 func VerifyNmapStableState(
 	ctx context.Context,
@@ -278,7 +286,7 @@ func VerifyNmapStableState(
 	return tick, nil
 }
 
-// ResetNmapInstanceError resets the error and backoff state of a BenthosInstance.
+// ResetNmapInstanceError resets the error and backoff state of a NmapInstance.
 func ResetNmapInstanceError(mockService *nmap.MockNmapService) {
 	mockService.AddServiceError = nil
 	mockService.StartServiceError = nil
@@ -288,7 +296,7 @@ func ResetNmapInstanceError(mockService *nmap.MockNmapService) {
 	mockService.ForceRemoveNmapError = nil
 }
 
-// CreateMockNmapInstance creates a Benthos instance for testing.
+// CreateMockNmapInstance creates a Nmap instance for testing.
 // Note: This creates a standard instance without replacing the service component.
 // In actual tests, the pattern is to use the manager's functionality rather than
 // working with individual instances.
@@ -297,7 +305,7 @@ func CreateMockNmapInstance(serviceName string, mockService nmap.INmapService, d
 	return nmapfsm.NewNmapInstance(cfg)
 }
 
-// StabilizeNmapInstance ensures the Benthos instance reaches and remains in a stable state.
+// StabilizeNmapInstance ensures the Nmap instance reaches and remains in a stable state.
 func StabilizeNmapInstance(
 	ctx context.Context,
 	snapshot fsm.SystemSnapshot,
@@ -329,7 +337,7 @@ func StabilizeNmapInstance(
 		targetState, maxAttempts, instance.GetCurrentFSMState())
 }
 
-// WaitForBenthosDesiredState waits for an instance's desired state to reach a target value.
+// WaitForNmapDesiredState waits for an instance's desired state to reach a target value.
 // This is useful for testing error handling scenarios where the instance changes its own desired state.
 func WaitForNmapDesiredState(
 	ctx context.Context,
@@ -361,7 +369,7 @@ func WaitForNmapDesiredState(
 		targetState, maxAttempts, instance.GetDesiredFSMState())
 }
 
-// ReconcileBenthosUntilError performs reconciliation until an error occurs or maximum attempts are reached.
+// ReconcileNmapUntilError performs reconciliation until an error occurs or maximum attempts are reached.
 // This is useful for testing error handling scenarios where we expect an error to occur during reconciliation.
 func ReconcileNmapUntilError(
 	ctx context.Context,

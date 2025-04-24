@@ -465,7 +465,6 @@ func (n *NmapInstance) isNmapHealthy() bool {
 // it returns true and the corresponding event
 func (n *NmapInstance) checkPortState(currentState string) (bool, string) {
 	if n.ObservedState.ServiceInfo.NmapStatus.LastScan == nil {
-
 		return false, ""
 	}
 

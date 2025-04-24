@@ -108,6 +108,16 @@ func (m *MockNmapService) SetServiceState(serviceName string, flags ServiceState
 		m.ServiceStates[serviceName].S6FSMState = s6fsm.OperationalStateStopped
 	}
 
+	if flags.PortState != "" {
+		m.ServiceStates[serviceName].NmapStatus.LastScan = &NmapScanResult{
+			PortResult: PortResult{
+				State: flags.PortState,
+			},
+		}
+	} else {
+		m.ServiceStates[serviceName].NmapStatus.LastScan = &NmapScanResult{}
+	}
+
 	// Store the flags
 	m.stateFlags[serviceName] = &flags
 }
@@ -168,15 +178,10 @@ func (m *MockNmapService) GetConfig(ctx context.Context, filesystemService files
 
 // Status returns the mock status
 func (m *MockNmapService) Status(ctx context.Context, filesystemService filesystem.Service, nmapName string, tick uint64) (ServiceInfo, error) {
-	if ctx.Err() != nil {
-		return ServiceInfo{}, ctx.Err()
-	}
+	m.StatusCalled = true
 
-	if m.StatusError != nil {
-		return ServiceInfo{}, m.StatusError
-	}
-
-	if _, exists := m.Configs[nmapName]; !exists {
+	// Check if the service exists in the ExistingServices map
+	if exists, ok := m.ExistingServices[nmapName]; !ok || !exists {
 		return ServiceInfo{}, ErrServiceNotExist
 	}
 
@@ -184,15 +189,12 @@ func (m *MockNmapService) Status(ctx context.Context, filesystemService filesyst
 	if scanResult == nil {
 		return ServiceInfo{}, ErrScanFailed
 	}
-
-	// Return the service-specific state instead of the global StatusResult
-	s6ServiceName := "nmap-" + nmapName
-	if info, exists := m.ServiceStates[s6ServiceName]; exists {
-		return *info, nil
+	// If we have a state already stored, return it
+	if state, exists := m.ServiceStates[nmapName]; exists {
+		return *state, m.StatusError
 	}
-
-	// If there's no service-specific state, fall back to StatusResult
-	return m.StatusResult, nil
+	// If no state is stored, return the default mock result
+	return m.StatusResult, m.StatusError
 }
 
 func parseScanLogs(shouldErr bool) *NmapScanResult {
@@ -206,6 +208,7 @@ func parseScanLogs(shouldErr bool) *NmapScanResult {
 
 // AddNmapToS6Manager mocks adding a service
 func (m *MockNmapService) AddNmapToS6Manager(ctx context.Context, cfg *nmapserviceconfig.NmapServiceConfig, nmapName string) error {
+	m.AddNmapToS6ManagerCalled = true
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
@@ -312,6 +315,7 @@ func (m *MockNmapService) ForceRemoveNmap(ctx context.Context, filesystemService
 
 // StartNmap mocks starting a service
 func (m *MockNmapService) StartNmap(ctx context.Context, nmapName string) error {
+	m.StartNmapCalled = true
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
@@ -378,12 +382,9 @@ func (m *MockNmapService) ReconcileManager(ctx context.Context, filesystemServic
 
 // ServiceExists mocks checking if a service exists
 func (m *MockNmapService) ServiceExists(ctx context.Context, filesystemService filesystem.Service, nmapName string) bool {
-	if m.ServiceExistsError {
-		return false
-	}
 
-	_, exists := m.Configs[nmapName]
-	return exists
+	m.ServiceExistsCalled = true
+	return m.ServiceExistsResult
 }
 
 // SetStatusInfo sets a mock status for a given service
@@ -489,6 +490,7 @@ func (m *MockNmapService) SetServicePortState(serviceName string, state string, 
 		info.NmapStatus.LastScan.PortResult.LatencyMs = latencyMs
 		info.NmapStatus.Logs = logs
 	}
+	fmt.Println("Set Service Port State called")
 	m.StatusResult = *info
 }
 

@@ -15,5 +15,5 @@
 package constants
 
 const (
-	MaxRecentScans = 60 // The amount of recent scans to keep for flicker detection, if there was at least one scan in the last 60 ticks that was down, the connection is considered degraded
+	MaxRecentStates = 5 // The amount of recent states to keep for flicker detection, if there were at least 2 states in the last 5 states that were differing, the connection is considered degraded
 )
