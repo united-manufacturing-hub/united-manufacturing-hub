@@ -221,6 +221,8 @@ func getRPKSample(topic string) ([]Message, error) {
 	defer cncl()
 	out, err := runDockerCommandWithCtx(ctx, "exec", getContainerName(), "/opt/redpanda/bin/rpk", "topic", "consume", topic, "--offset", "-10", "-n", "10", "--format", "%d:%t:%o\n")
 	if err != nil {
+		GinkgoWriter.Printf("❌ Error consuming topic: %v\n", err)
+		GinkgoWriter.Printf("❌ Output: %s\n", out)
 		return nil, err
 	}
 	/*
