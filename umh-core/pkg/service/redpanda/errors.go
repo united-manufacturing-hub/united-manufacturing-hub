@@ -25,4 +25,7 @@ var (
 
 	// ErrServiceNoLogFile indicates the health check had no logs to process
 	ErrServiceNoLogFile = errors.New("log file not found")
+
+	// ErrRedpandaMonitorNotRunning indicates the redpanda monitor service is not running
+	ErrRedpandaMonitorNotRunning = errors.New("redpanda monitor service is not running")
 )
