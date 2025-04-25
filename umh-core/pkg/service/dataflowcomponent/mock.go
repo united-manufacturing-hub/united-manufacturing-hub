@@ -23,6 +23,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentconfig"
 	benthosfsmmanager "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
 	benthosservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos_monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
@@ -96,8 +97,10 @@ func (m *MockDataFlowComponentService) SetComponentState(componentName string, f
 	observedState := &benthosfsmmanager.BenthosObservedState{
 		ServiceInfo: benthosservice.ServiceInfo{
 			BenthosStatus: benthosservice.BenthosStatus{
-				MetricsState: &benthosservice.BenthosMetricsState{
-					IsActive: flags.IsBenthosProcessingMetricsActive,
+				BenthosMetrics: benthos_monitor.BenthosMetrics{
+					MetricsState: &benthos_monitor.BenthosMetricsState{
+						IsActive: flags.IsBenthosProcessingMetricsActive,
+					},
 				},
 			},
 		},

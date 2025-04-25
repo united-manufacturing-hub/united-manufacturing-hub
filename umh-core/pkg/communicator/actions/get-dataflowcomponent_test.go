@@ -310,7 +310,7 @@ var _ = Describe("GetDataFlowComponent", func() {
 			testInstance = fsm.FSMInstanceSnapshot{
 				ID:           "test-component-build",
 				DesiredState: "active",
-				CurrentState: "running",
+				CurrentState: "active",
 				LastObservedState: &dataflowcomponent.DataflowComponentObservedStateSnapshot{
 					Config: dataflowcomponentconfig.DataFlowComponentConfig{
 						BenthosConfig: dataflowcomponentconfig.BenthosConfig{
@@ -391,7 +391,7 @@ var _ = Describe("GetDataFlowComponent", func() {
 			invalidInstance := fsm.FSMInstanceSnapshot{
 				ID:                "invalid-type-component",
 				DesiredState:      "active",
-				CurrentState:      "running",
+				CurrentState:      "active",
 				LastObservedState: &mockObservedState{}, // Not a DataflowComponentObservedStateSnapshot
 			}
 
@@ -457,7 +457,7 @@ func createManagerSnapshot() fsm.ManagerSnapshot {
 		{
 			ID:           "test-component-1",
 			DesiredState: "active",
-			CurrentState: "running",
+			CurrentState: "active",
 			LastObservedState: &dataflowcomponent.DataflowComponentObservedStateSnapshot{
 				Config: dataflowcomponentconfig.DataFlowComponentConfig{
 					BenthosConfig: dataflowcomponentconfig.BenthosConfig{
@@ -502,7 +502,7 @@ func createManagerSnapshot() fsm.ManagerSnapshot {
 		{
 			ID:           "test-component-2",
 			DesiredState: "active",
-			CurrentState: "running",
+			CurrentState: "active",
 			LastObservedState: &dataflowcomponent.DataflowComponentObservedStateSnapshot{
 				Config: dataflowcomponentconfig.DataFlowComponentConfig{
 					BenthosConfig: dataflowcomponentconfig.BenthosConfig{
@@ -550,7 +550,7 @@ func createMockSystemSnapshotWithMissingState() *fsm.SystemSnapshot {
 		{
 			ID:                "test-component-missing-state",
 			DesiredState:      "active",
-			CurrentState:      "running",
+			CurrentState:      "active",
 			LastObservedState: nil, // No observed state
 		},
 	}

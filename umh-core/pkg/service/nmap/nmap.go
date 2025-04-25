@@ -159,7 +159,7 @@ func (s *NmapService) GetConfig(ctx context.Context, filesystemService filesyste
 	if matches := portRegex.FindStringSubmatch(string(scriptData)); len(matches) > 1 {
 		port, err := strconv.Atoi(matches[1])
 		if err == nil {
-			result.Port = port
+			result.Port = uint16(port)
 		}
 	}
 
@@ -167,7 +167,7 @@ func (s *NmapService) GetConfig(ctx context.Context, filesystemService filesyste
 }
 
 // parseScanLogs parses the logs of an nmap service and extracts scan results
-func (s *NmapService) parseScanLogs(logs []s6service.LogEntry, port int) *NmapScanResult {
+func (s *NmapService) parseScanLogs(logs []s6service.LogEntry, port uint16) *NmapScanResult {
 	if len(logs) == 0 {
 		return nil
 	}
@@ -208,7 +208,7 @@ func (s *NmapService) parseScanLogs(logs []s6service.LogEntry, port int) *NmapSc
 	result := &NmapScanResult{
 		RawOutput: scanOutput,
 		PortResult: PortResult{
-			Port: port,
+			Port: uint16(port),
 		},
 		Metrics: ScanMetrics{},
 	}
@@ -232,7 +232,7 @@ func (s *NmapService) parseScanLogs(logs []s6service.LogEntry, port int) *NmapSc
 	}
 
 	// Extract port state
-	portStateRegex := regexp.MustCompile(`(?i)` + strconv.Itoa(port) + `/tcp\s+(\w+)`)
+	portStateRegex := regexp.MustCompile(`(?i)` + strconv.Itoa(int(port)) + `/tcp\s+(\w+)`)
 	if matches := portStateRegex.FindStringSubmatch(scanOutput); len(matches) > 1 {
 		result.PortResult.State = matches[1]
 	} else {
