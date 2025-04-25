@@ -85,7 +85,7 @@ func (b *BenthosMonitorInstance) Reconcile(ctx context.Context, snapshot fsm.Sys
 	}
 
 	// Step 2: Detect external changes.
-	if err := b.reconcileExternalChanges(ctx, filesystemService, snapshot.Tick, start); err != nil {
+	if err = b.reconcileExternalChanges(ctx, filesystemService, snapshot.Tick, start); err != nil {
 
 		// I am using strings.Contains as i cannot get it working with errors.Is
 		isExpectedError := strings.Contains(err.Error(), benthos_monitor_service.ErrServiceNotExist.Error()) ||
@@ -108,7 +108,6 @@ func (b *BenthosMonitorInstance) Reconcile(ctx context.Context, snapshot fsm.Sys
 			return nil, false // We don't want to return an error here, because we want to continue reconciling
 		}
 
-		//nolint:ineffassign // This is intentionally modifying the named return value accessed in defer
 		err = nil // The service does not exist or has troubles fetching the observed state (which will cause the service to be in degraded state)
 	}
 

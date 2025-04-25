@@ -87,7 +87,7 @@ func (n *NmapInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapsho
 	}
 
 	// Step 2: Detect external changes.
-	if err := n.reconcileExternalChanges(ctx, filesystemService, snapshot.Tick, start); err != nil {
+	if err = n.reconcileExternalChanges(ctx, filesystemService, snapshot.Tick, start); err != nil {
 		// If the service is not running, we don't want to return an error here, because we want to continue reconciling
 		if !errors.Is(err, nmap_service.ErrServiceNotExist) {
 			n.baseFSMInstance.SetError(err, snapshot.Tick)
@@ -99,7 +99,6 @@ func (n *NmapInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapsho
 			// complete logs from which it parses.
 			return nil, false // We don't want to return an error here, because we want to continue reconciling
 		}
-		//nolint:ineffassign // This is intentionally modifying the named return value accessed in defer
 		err = nil // The service does not exist, which is fine as this happens in the reconcileStateTransition}
 	}
 
