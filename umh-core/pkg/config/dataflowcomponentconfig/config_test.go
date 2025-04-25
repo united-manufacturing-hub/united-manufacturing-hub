@@ -55,7 +55,7 @@ var _ = Describe("DataFlowComponentConfig", func() {
 			Expect(fullConfig.Input).To(Equal(benthos.Input))
 			Expect(fullConfig.Pipeline).To(Equal(benthos.Pipeline))
 			Expect(fullConfig.Output).To(Equal(benthos.Output))
-			Expect(fullConfig.MetricsPort).To(Equal(0))                             // Default value
+			Expect(fullConfig.MetricsPort).To(Equal(uint16(0)))                     // Default value
 			Expect(fullConfig.LogLevel).To(Equal(constants.DefaultBenthosLogLevel)) // Default value
 		})
 
@@ -86,7 +86,7 @@ var _ = Describe("DataFlowComponentConfig", func() {
 			convertedBack := simplified.GetBenthosServiceConfig()
 
 			// Verify advanced fields use defaults, not original values
-			Expect(convertedBack.MetricsPort).To(Equal(0))                             // Default, not 8080
+			Expect(convertedBack.MetricsPort).To(Equal(uint16(0)))                     // Default, not 8080
 			Expect(convertedBack.LogLevel).To(Equal(constants.DefaultBenthosLogLevel)) // Default, not DEBUG
 		})
 	})

@@ -25,7 +25,7 @@ var _ = Describe("Nmap YAML Normalizer", func() {
 		It("should preserve existing values", func() {
 			config := NmapServiceConfig{
 				Target: "127.0.0.1",
-				Port:   443,
+				Port:   uint16(443),
 			}
 
 			normalizer := NewNormalizer()
@@ -34,7 +34,7 @@ var _ = Describe("Nmap YAML Normalizer", func() {
 			normalizedPort := normalizedConfig.Port
 
 			Expect(normalizedTarget).To(Equal("127.0.0.1"))
-			Expect(normalizedPort).To(Equal(443))
+			Expect(normalizedPort).To(Equal(uint16(443)))
 		})
 	})
 

@@ -20,6 +20,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
+	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 )
 
 // BenthosObservedStateSnapshot is a deep-copyable snapshot of BenthosObservedState
@@ -43,6 +44,11 @@ func (b *BenthosInstance) CreateObservedStateSnapshot() fsm.ObservedStateSnapsho
 	if err != nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, b.baseFSMInstance.GetLogger(), "failed to deep copy config: %v", err)
 		return nil
+	}
+
+	// Initialize BenthosLogs to empty slice if nil to prevent "slice index out of range" panic
+	if b.ObservedState.ServiceInfo.BenthosStatus.BenthosLogs == nil {
+		b.ObservedState.ServiceInfo.BenthosStatus.BenthosLogs = []s6service.LogEntry{}
 	}
 
 	// Deep copy service info

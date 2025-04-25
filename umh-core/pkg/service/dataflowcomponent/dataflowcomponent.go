@@ -107,7 +107,7 @@ func WithBenthosManager(benthosManager *benthosfsmmanager.BenthosManager) DataFl
 
 // WithPortRange sets a custom port range for the BenthosManager's PortManager
 // This helps avoid port conflicts when multiple DataFlowComponentServices are running
-func WithPortRange(minPort, maxPort int) DataFlowComponentServiceOption {
+func WithPortRange(minPort, maxPort uint16) DataFlowComponentServiceOption {
 	return func(s *DataFlowComponentService) {
 		// Create a new port manager with the specified range
 		portManager, err := portmanager.NewDefaultPortManager(minPort, maxPort)

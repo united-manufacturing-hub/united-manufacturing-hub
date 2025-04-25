@@ -31,10 +31,11 @@ type FullConfig struct {
 }
 
 type InternalConfig struct {
-	Services []S6FSMConfig   `yaml:"services,omitempty"` // Services to manage, can be updated while running
-	Benthos  []BenthosConfig `yaml:"benthos,omitempty"`  // Benthos services to manage, can be updated while running
-	Nmap     []NmapConfig    `yaml:"nmap,omitempty"`     // Nmap services to manage, can be updated while running
-	Redpanda RedpandaConfig  `yaml:"redpanda,omitempty"` // Redpanda config, can be updated while running
+	Services       []S6FSMConfig          `yaml:"services,omitempty"`       // Services to manage, can be updated while running
+	Benthos        []BenthosConfig        `yaml:"benthos,omitempty"`        // Benthos services to manage, can be updated while running
+	Nmap           []NmapConfig           `yaml:"nmap,omitempty"`           // Nmap services to manage, can be updated while running
+	Redpanda       RedpandaConfig         `yaml:"redpanda,omitempty"`       // Redpanda config, can be updated while running
+	BenthosMonitor []BenthosMonitorConfig `yaml:"benthosMonitor,omitempty"` // BenthosMonitor config, can be updated while running
 }
 
 type AgentConfig struct {
@@ -82,6 +83,14 @@ type S6FSMConfig struct {
 	FSMInstanceConfig `yaml:",inline"`
 
 	S6ServiceConfig s6serviceconfig.S6ServiceConfig `yaml:"s6ServiceConfig"`
+}
+
+// BenthosMonitorConfig contains configuration for creating a benthos monitor
+type BenthosMonitorConfig struct {
+	// For the FSM
+	FSMInstanceConfig `yaml:",inline"`
+
+	MetricsPort uint16 `yaml:"metricsPort"` // Port to expose metrics on
 }
 
 // BenthosConfig contains configuration for creating a Benthos service

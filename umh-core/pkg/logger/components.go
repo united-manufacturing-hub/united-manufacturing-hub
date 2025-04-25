@@ -25,6 +25,7 @@ const (
 	// Manager components
 	ComponentS6Manager                = "S6Manager"
 	ComponentBenthosManager           = "BenthosManager"
+	ComponentBenthosMonitorManager    = "BenthosMonitorManager"
 	ComponentAgentManager             = "AgentManager"
 	ComponentContainerManager         = "ContainerManager"
 	ComponentRedpandaManager          = "RedpandaManager"
@@ -35,6 +36,7 @@ const (
 	ComponentBaseFSM                   = "BaseFSM"
 	ComponentS6Instance                = "S6Instance"
 	ComponentBenthosInstance           = "BenthosInstance"
+	ComponentBenthosMonitorInstance    = "BenthosMonitorInstance"
 	ComponentRedpandaInstance          = "RedpandaInstance"
 	ComponentNmapInstance              = "NmapInstance"
 	ComponentDataFlowComponentInstance = "DFCInstance"
@@ -42,6 +44,7 @@ const (
 	// Service components
 	ComponentS6Service                = "S6Service"
 	ComponentBenthosService           = "BenthosService"
+	ComponentBenthosMonitorService    = "BenthosMonitorService"
 	ComponentNmapService              = "NmapService"
 	ComponentContainerMonitorService  = "ContainerMonitorService"
 	ComponentRedpandaMonitorService   = "RedpandaMonitorService"
