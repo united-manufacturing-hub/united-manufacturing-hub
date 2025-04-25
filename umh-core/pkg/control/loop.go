@@ -437,12 +437,10 @@ func (c *ControlLoop) Stop(ctx context.Context) error {
 
 // logManagerTimes logs the execution times of all managers that were executed before skipping
 func (c *ControlLoop) logManagerTimes(remaining time.Duration, executedManagers []string) {
-	details := make([]string, 0, len(c.managerTimes))
 	var totalTime time.Duration
 
 	for _, managerName := range executedManagers {
 		if execTime, ok := c.managerTimes[managerName]; ok {
-			details = append(details, fmt.Sprintf("%s: %v", managerName, execTime))
 			totalTime += execTime
 		}
 	}
