@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
@@ -26,8 +27,10 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 	"go.uber.org/zap"
 	"gopkg.in/yaml.v3"
 )
@@ -437,6 +440,12 @@ func (a *DeployDataflowComponentAction) Execute() (interface{}, map[string]inter
 	}
 
 	// TODO: check against observedState as well
+	err = a.waitForComponentToBeActive()
+	if err != nil {
+		errorMsg := fmt.Sprintf("failed to wait for dataflowcomponent to be active: %v", err)
+		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errorMsg, a.outboundChannel, models.DeployDataFlowComponent)
+		return nil, nil, fmt.Errorf("%s", errorMsg)
+	}
 
 	// return success message, but do not send it as this is done by the caller
 	successMsg := fmt.Sprintf("Successfully deployed data flow component: %s", a.name)
@@ -457,4 +466,60 @@ func (a *DeployDataflowComponentAction) getUuid() uuid.UUID {
 // GetParsedPayload returns the parsed CDFCPayload - exposed primarily for testing purposes.
 func (a *DeployDataflowComponentAction) GetParsedPayload() models.CDFCPayload {
 	return a.payload
+}
+
+func (a *DeployDataflowComponentAction) waitForComponentToBeActive() error {
+	// checks the system snapshot
+	// 1. waits for the instance to appear in the system snapshot
+	// 2. takes the logs of the instance and sends them to the user in 1-second intervals
+	// 3. waits for the instance to be in state "active"
+	// 4. takes the residual logs of the instance and sends them to the user
+	// 5. returns nil
+
+	// we use those two variables below to store the incoming logs and send them to the user
+	// logs is always updated with all existing logs
+	// lastLogs is updated with the logs that have been sent to the user
+	// this way we avoid sending the same log twice
+	var logs []s6.LogEntry
+	var lastLogs []s6.LogEntry
+
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+	timeout := time.After(constants.DataflowComponentWaitForActiveTimeout)
+	for {
+		select {
+		case <-timeout:
+			return fmt.Errorf("dataflowcomponent %s did not become active in time. Consider removing it again", a.name)
+		case <-ticker.C:
+
+			if dataflowcomponentManager, exists := a.systemSnapshot.Managers[constants.DataflowcomponentManagerName]; exists {
+				instances := dataflowcomponentManager.GetInstances()
+				for _, instance := range instances {
+					// cast the instance LastObservedState to a dataflowcomponent instance
+					curName := instance.ID
+					if curName != a.name {
+						continue
+					}
+					dfcSnapshot, ok := instance.LastObservedState.(*dataflowcomponent.DataflowComponentObservedStateSnapshot)
+					if !ok {
+						continue
+					}
+					if instance.CurrentState == "active" {
+						return nil
+					} else {
+						// send the benthos logs to the user
+						logs = dfcSnapshot.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.Logs
+						// only send the logs that have not been sent yet
+						if len(logs) > len(lastLogs) {
+							for _, log := range logs[len(lastLogs):] {
+								SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, log.Content, a.outboundChannel, models.DeployDataFlowComponent)
+							}
+							lastLogs = logs
+						}
+					}
+				}
+			}
+		}
+	}
+
 }

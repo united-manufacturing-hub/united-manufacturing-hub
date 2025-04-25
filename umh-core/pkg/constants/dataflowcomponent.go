@@ -34,3 +34,8 @@ const (
 	// Default value is 15 seconds
 	WaitTimeBeforeMarkingStartFailed = time.Second * 15
 )
+
+const (
+	// Time to wait for a dataflowcomponent to be active in the action
+	DataflowComponentWaitForActiveTimeout = time.Second * 10
+)
