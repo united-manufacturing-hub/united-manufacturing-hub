@@ -62,7 +62,7 @@ type IRedpandaService interface {
 	ForceRemoveRedpanda(ctx context.Context, filesystemService filesystem.Service) error
 	// ServiceExists checks if a Redpanda service exists
 	ServiceExists(ctx context.Context, filesystemService filesystem.Service) bool
-	ReconcileManager(ctx context.Context, filesystemService filesystem.Service, tick uint64) (error, bool)
+	ReconcileManager(ctx context.Context, services serviceregistry.Provider, tick uint64) (error, bool)
 	// IsLogsFine checks if the logs of a Redpanda service are fine
 	// Expects logs ([]s6service.LogEntry), currentTime (time.Time), and logWindow (time.Duration)
 	IsLogsFine(logs []s6service.LogEntry, currentTime time.Time, logWindow time.Duration) bool
