@@ -210,6 +210,11 @@ benchmark:
 	@echo "Running benchmarks..."
 	go test -bench=. -benchmem ./...
 
+benchmark-config:
+	@echo "Running config package benchmarks..."
+	cd pkg/config && go test -bench=. -benchmem
+
+# More specific benchmarks can be added as needed
 benchmark-s6:
 	@echo "Running S6 benchmarks..."
 	cd pkg/service/s6 && go test -bench=. -benchmem
