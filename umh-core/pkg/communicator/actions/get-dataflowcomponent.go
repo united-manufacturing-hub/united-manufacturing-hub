@@ -97,19 +97,6 @@ func (a *GetDataFlowComponentAction) Execute() (interface{}, map[string]interfac
 	a.actionLogger.Info("Executing the action")
 
 	numUUIDs := len(a.payload.VersionUUIDs)
-	if numUUIDs == 0 {
-		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
-			"No component UUIDs specified in request. Will return empty response.",
-			a.outboundChannel, models.GetDataFlowComponent)
-	} else if numUUIDs == 1 {
-		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
-			fmt.Sprintf("Retrieving configuration for 1 dataflow component (UUID: %s)...",
-				a.payload.VersionUUIDs[0]), a.outboundChannel, models.GetDataFlowComponent)
-	} else {
-		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
-			fmt.Sprintf("Retrieving configuration for %d dataflow components...", numUUIDs),
-			a.outboundChannel, models.GetDataFlowComponent)
-	}
 
 	dataFlowComponents := []config.DataFlowComponentConfig{}
 	// Get the DataFlowComponent
