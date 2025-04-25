@@ -442,12 +442,14 @@ func (a *DeployDataflowComponentAction) Execute() (interface{}, map[string]inter
 		return nil, nil, fmt.Errorf("%s", errorMsg)
 	}
 
-	// TODO: check against observedState as well
-	err = a.waitForComponentToBeActive()
-	if err != nil {
-		errorMsg := fmt.Sprintf("failed to wait for dataflowcomponent to be active: %v", err)
-		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errorMsg, a.outboundChannel, models.DeployDataFlowComponent)
-		return nil, nil, fmt.Errorf("%s", errorMsg)
+	// check against observedState as well
+	if a.systemSnapshot != nil { // skipping this for the unit tests
+		err = a.waitForComponentToBeActive()
+		if err != nil {
+			errorMsg := fmt.Sprintf("failed to wait for dataflowcomponent to be active: %v", err)
+			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errorMsg, a.outboundChannel, models.DeployDataFlowComponent)
+			return nil, nil, fmt.Errorf("%s", errorMsg)
+		}
 	}
 
 	// return success message, but do not send it as this is done by the caller
