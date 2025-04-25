@@ -29,13 +29,15 @@ var (
 	once     sync.Once
 )
 
-func NewRegistry(minPort, maxPort int) (*Registry, error) {
+func NewRegistry() (*Registry, error) {
 
 	//  Initialize the registry only once
 	// Since the registry contains services like portmanager which should be initialized only once and shared between services
 	// we need to make sure that the registry is initialized only once
 	var err error
 	once.Do(func() {
+		minPort := 9000
+		maxPort := 9999
 		pm, portErr := portmanager.NewDefaultPortManager(minPort, maxPort)
 		if portErr != nil {
 			err = fmt.Errorf("failed to create port manager: %w", portErr)

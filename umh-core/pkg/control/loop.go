@@ -121,12 +121,9 @@ func NewControlLoop(configManager config.ConfigManager) *ControlLoop {
 	// Create a snapshot manager
 	snapshotManager := fsm.NewSnapshotManager()
 
-	// Create a buffered filesystem service
-	// Todo: Get the min and max port
-	servicesRegistry, err := serviceregistry.NewRegistry(9000, 9900)
+	servicesRegistry, err := serviceregistry.NewRegistry()
 	if err != nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, log, "Failed to create service registry: %s", err)
-		return nil
 	}
 
 	metrics.InitErrorCounter(metrics.ComponentControlLoop, "main")
