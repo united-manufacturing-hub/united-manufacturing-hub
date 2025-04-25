@@ -47,7 +47,7 @@ func ExtractOriginalError(err error) error {
 	}
 
 	// Keep unwrapping until we can't unwrap anymore
-	var unwrapped error = err
+	var unwrapped = err
 	for {
 		// Try to unwrap further
 		next := errors.Unwrap(unwrapped)

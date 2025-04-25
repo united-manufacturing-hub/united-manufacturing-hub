@@ -35,45 +35,103 @@ import (
 	"net/http"
 	"time"
 
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
+	"github.com/shirou/gopsutil/v3/cpu"
+	"github.com/shirou/gopsutil/v3/mem"
+
+	. "github.com/onsi/ginkgo/v2" // nolint: staticcheck // Ginkgo is designed to be used with dot imports
+	. "github.com/onsi/gomega"    // nolint: staticcheck // Gomega is designed to be used with dot imports
 )
 
 // monitorHealth checks the metrics and golden service.
 func monitorHealth() {
 	// 1) Check metrics
-	checkMetricsHealthy()
+	failOnMetricsHealthIssue()
 	GinkgoWriter.Println("✅ Metrics are healthy")
 
 	// 2) Check Golden service
 	checkGoldenServiceWithFailure()
 	GinkgoWriter.Println("✅ Golden service is running")
 
+	// 3) Check and print system information (CPU, Memory, etc.)
+	printSystemInformation()
+}
+func printSystemInformation() {
+	// Get CPU information
+	cpuPercent, err := cpu.Percent(time.Second, false)
+	if err != nil {
+		GinkgoWriter.Printf("Failed to get CPU usage: %v\n", err)
+	} else {
+		GinkgoWriter.Printf("CPU usage: %.2f%%\n", cpuPercent[0])
+	}
+
+	// Get CPU core count
+	cpuCounts, err := cpu.Counts(true)
+	if err != nil {
+		GinkgoWriter.Printf("Failed to get CPU count: %v\n", err)
+	} else {
+		GinkgoWriter.Printf("CPU cores: %d\n", cpuCounts)
+	}
+
+	// Get memory information
+	vmStat, err := mem.VirtualMemory()
+	if err != nil {
+		GinkgoWriter.Printf("Failed to get memory usage: %v\n", err)
+	} else {
+		GinkgoWriter.Printf("Memory usage: %.2f%% (Used: %d MB, Total: %d MB)\n",
+			vmStat.UsedPercent,
+			vmStat.Used/1024/1024,
+			vmStat.Total/1024/1024)
+	}
 }
 
-func checkMetricsHealthy() {
+// failOnMetricsHealthIssue expects the metrics to be healthy, otherwise it fails the test
+func failOnMetricsHealthIssue() {
+	data, err := getMetricsHealth()
+	Expect(err).NotTo(HaveOccurred(), "Metrics endpoint should be healthy")
+	metricsErrors := checkWhetherMetricsHealthy(string(data), true, true)
+	Expect(metricsErrors).To(BeEmpty(), "Metrics should be healthy")
+}
+
+// reportOnMetricsHealthIssue is similar to failOnMetricsHealthIssue, but it returns an error instead of failing the test, allowing the caller to handle it
+func reportOnMetricsHealthIssue(enforceP99ReconcileTime bool, enforceP95ReconcileTime bool) error {
+	data, err := getMetricsHealth()
+	if err != nil {
+		return fmt.Errorf("failed to get metrics: %w", err)
+	}
+	metricsErrors := checkWhetherMetricsHealthy(string(data), enforceP99ReconcileTime, enforceP95ReconcileTime)
+	if len(metricsErrors) > 0 {
+		return fmt.Errorf("metrics are not healthy: %v", metricsErrors)
+	}
+	return nil
+}
+
+func getMetricsHealth() ([]byte, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, "GET", GetMetricsURL(), nil)
 	if err != nil {
-		Fail(fmt.Errorf("failed to create request: %w\n", err).Error())
+		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		Fail(fmt.Errorf("failed to get metrics: %w\n", err).Error())
+		return nil, fmt.Errorf("failed to get metrics: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			Fail(fmt.Sprintf("Error closing response body: %v\n", err))
+		}
+	}()
 
 	if resp.StatusCode != http.StatusOK {
-		Fail(fmt.Sprintf("Metrics endpoint returned non-200: %v", resp.StatusCode))
+		return nil, fmt.Errorf("metrics endpoint returned non-200: %v", resp.StatusCode)
 	}
 
 	data, err := io.ReadAll(resp.Body)
 	if err != nil {
-		Fail(fmt.Errorf("failed to read metrics: %w\n", err).Error())
+		return nil, fmt.Errorf("failed to read metrics: %w", err)
 	}
 
-	checkWhetherMetricsHealthy(string(data))
+	return data, nil
 }
 
 // checkGoldenService sends a test request to the golden service and checks that it returns a 200 status code
@@ -82,14 +140,18 @@ func checkGoldenService() (int, error) {
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, "POST", GetGoldenServiceURL(), bytes.NewBuffer([]byte(`{"message": "test"}`)))
 	if err != nil {
-		return 0, fmt.Errorf("failed to create request: %w\n", err)
+		return 0, fmt.Errorf("failed to create request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	checkResp, e := http.DefaultClient.Do(req)
 	if e != nil {
-		return 0, fmt.Errorf("failed to send request: %w\n", e)
+		return 0, fmt.Errorf("failed to send request: %w", e)
 	}
-	defer checkResp.Body.Close()
+	defer func() {
+		if err := checkResp.Body.Close(); err != nil {
+			Fail(fmt.Sprintf("Error closing response body: %v\n", err))
+		}
+	}()
 
 	return checkResp.StatusCode, nil
 }
@@ -173,7 +235,11 @@ func waitForMetrics() error {
 			}
 			return lastError
 		}
-		defer resp.Body.Close()
+		defer func() {
+			if err := resp.Body.Close(); err != nil {
+				Fail(fmt.Sprintf("Error closing response body: %v\n", err))
+			}
+		}()
 
 		if resp.StatusCode != http.StatusOK {
 			lastError = fmt.Errorf("metrics endpoint returned status %d", resp.StatusCode)

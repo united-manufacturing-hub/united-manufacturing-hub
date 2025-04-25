@@ -52,7 +52,8 @@ var _ = Describe("Container Monitor Service", func() {
 
 	AfterEach(func() {
 		// Clean up the temporary directory
-		os.RemoveAll(testDataPath)
+		err := os.RemoveAll(testDataPath)
+		Expect(err).NotTo(HaveOccurred())
 	})
 
 	Context("GetStatus", func() {
@@ -244,6 +245,7 @@ var _ = Describe("Container Monitor Service", func() {
 			// Use the real filesystem implementation instead of mocks
 			realFS := filesystem.NewDefaultService()
 			realService := container_monitor.NewContainerMonitorService(realFS)
+			realService.SetDataPath("/workspaces/united-manufacturing-hub")
 
 			container, err := realService.GetStatus(ctx)
 			Expect(err).ToNot(HaveOccurred())

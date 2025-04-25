@@ -41,6 +41,9 @@ S6_OVERLAY_VERSION = 3.2.0.2
 BENTHOS_UMH_VERSION = 0.6.2
 REDPANDA_VERSION = 24.3.8
 
+# Debug values
+DLV_VERSION = v1.24.2
+
 # Note: Redpanda allocates 2GB of memory per core.
 # Additionally 1.5GB (or 7% of the total memory, whichever is greater) are required to be available, after this allocation to make seastar happy.
 # If you change this, you need to update the integration_test.go file.
@@ -51,9 +54,12 @@ CPUS = 2
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "0.0.0-dev")
 
 install:
+	sudo chown vscode:vscode data || true
+	sudo chown vscode:vscode tmp || true
 	go install go.uber.org/nilaway/cmd/nilaway@$(NILWAY_VERSION)
 	go install github.com/onsi/ginkgo/v2/ginkgo@$(GINKGO_VERSION)
 	go install github.com/evilmartians/lefthook@latest
+	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.1.2
 
 download-docker-binaries:
 	@mkdir -p .docker-cache/s6-overlay .docker-cache/benthos .docker-cache/redpanda
@@ -139,6 +145,7 @@ build: download-docker-binaries
 		--build-arg TARGETARCH=$(TARGETARCH) \
 		-t $(IMAGE_NAME):$(TAG) \
 		--progress=plain \
+		--load \
 		-f Dockerfile .
     
 # build-debug: launches delve inside the container.
@@ -152,48 +159,66 @@ build-debug: download-docker-binaries
 		--build-arg BENTHOS_UMH_VERSION=$(BENTHOS_UMH_VERSION) \
 		--build-arg REDPANDA_VERSION=$(REDPANDA_VERSION) \
 		--build-arg APP_VERSION=$(VERSION) \
+		--build-arg TARGETARCH=$(TARGETARCH) \
+		--build-arg DLV_VERSION=$(DLV_VERSION) \
 		--build-arg DEBUG=true \
 		--progress=plain \
 		-t $(IMAGE_NAME):$(TAG)-debug \
 		-f Dockerfile .
     
-stop-all-containers:
-	docker stop $(docker ps -a -q) || true
-	docker rm $(docker ps -a -q) || true
-
-clean:
+stop-and-remove-umh-core-latest:
 	docker stop $(IMAGE_NAME) || true
 	docker rm $(IMAGE_NAME) || true
 	docker rmi $(IMAGE_NAME):$(TAG) || true
 
 # Clean up Docker build cache and unused objects for CI environments & stop all containers
-cleanup-ci: clean stop-all-containers
-	docker stop $(docker ps -a -q) || true
-	docker rm $(docker ps -a -q) || true
-	docker builder prune -f
-	docker system prune -f --volumes
+cleanup-ci:
+	echo "Cleaning up Docker build cache and unused objects for CI environments & stop all containers"
+	echo "Running containers:"
+	docker ps -a || true
+	echo "Stopping all containers"
+	docker ps -a -q | xargs -r docker stop || true
+	echo "Removing all containers"
+	docker ps -a -q | xargs -r docker rm || true
+	echo "Pruning Docker build cache"
+	docker builder prune -f || true
+	echo "Pruning Docker system"
+	docker system prune -f --volumes || true
+
+cleanup-tmp:
+	rm -rf ./tmp/*
+
+cleanup-data:
+	rm -rf ./data/*
 
 vet:
 	go vet -tags=test ./...
 
+lint:
+	golangci-lint run ./...
+
 nilaway:
 	nilaway -include-pkgs="github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core" -tags=test ./...
 
-test: vet nilaway
+test: vet nilaway lint
 	go test -v -tags=test ./...
 
-unit-test: vet nilaway
-	ginkgo -r -v --tags=test --label-filter='!integration' --fail-fast ./...
+unit-test: vet nilaway lint
+	ginkgo -r -v --tags=test --label-filter='!integration && !redpanda-extended' --fail-fast ./...
 
 
-integration-test: stop-all-pods vet nilaway
+integration-test: stop-all-pods vet nilaway lint
 	ginkgo -r -v --tags=test --label-filter='integration' --fail-fast ./...
+
+redpanda-extended-test: stop-all-pods vet nilaway
+	ginkgo -r -v --tags=test --label-filter='redpanda-extended' --fail-fast --timeout=1.5h ./...
+
 
 # integration-test-ci: Runs integration tests in CI environments with proper version tagging
 # - Injects VERSION via ldflags into AppVersion for proper error identification in Sentry
 # - CI test failures SHOULD be reported to Sentry (unlike local dev failures)
 # - Helps identify flaky tests by consistently tracking failures in CI pipelines
-integration-test-ci: vet nilaway
+integration-test-ci: vet nilaway lint
 	VERSION=$(VERSION) ginkgo -r -v --tags=test --label-filter='integration' --fail-fast -ldflags="-X 'github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/version.AppVersion=$(VERSION)'" ./...
 
 update-go-dependencies:
@@ -201,7 +226,7 @@ update-go-dependencies:
 	go mod tidy
 	go mod vendor
 
-test-empty: clean build
+test-empty: stop-and-remove-umh-core-latest build
 	@mkdir -p $(PWD)/data
 	@cp $(PWD)/examples/example-config-empty.yaml $(PWD)/data/config.yaml
 	docker run \
@@ -212,7 +237,7 @@ test-empty: clean build
 		--cpus $(CPUS) \
 		$(IMAGE_NAME):$(TAG)
 
-test-clean-install: clean build
+test-clean-install: stop-and-remove-umh-core-latest build
 	docker run \
 		--name $(IMAGE_NAME) \
 		-v $(PWD)/data:/data \
@@ -222,7 +247,7 @@ test-clean-install: clean build
 		--cpus $(CPUS) \
 		$(IMAGE_NAME):$(TAG)
 
-test-hello: clean build
+test-hello: stop-and-remove-umh-core-latest build
 	@mkdir -p $(PWD)/data
 	@cp $(PWD)/examples/example-config.yaml $(PWD)/data/config.yaml
 	docker run \
@@ -235,18 +260,21 @@ test-hello: clean build
 		-e LOGGING_LEVEL=DEBUG \
 		$(IMAGE_NAME):$(TAG)
 
-test-comm: clean build
+test-comm: stop-and-remove-umh-core-latest build
 	@mkdir -p $(PWD)/data
 	@cp $(PWD)/examples/example-config-comm.yaml $(PWD)/data/config.yaml
 	docker run \
 		--name $(IMAGE_NAME) \
 		-v $(PWD)/data:/data \
 		-p 8081:8080 \
+		-p 4195:4195 \
 		--memory $(MEMORY) \
 		--cpus $(CPUS) \
+		-e AUTH_TOKEN=$(AUTH_TOKEN) \
+		-e LOGGING_LEVEL=DEBUG \
 		$(IMAGE_NAME):$(TAG)
 
-test-broken: clean build
+test-broken: stop-and-remove-umh-core-latest build
 	@mkdir -p $(PWD)/data
 	@cp $(PWD)/examples/example-config-broken.yaml $(PWD)/data/config.yaml
 	docker run \
@@ -258,7 +286,7 @@ test-broken: clean build
 		--cpus $(CPUS) \
 		$(IMAGE_NAME):$(TAG)
 
-test-benthos: clean build
+test-benthos: stop-and-remove-umh-core-latest build
 	@mkdir -p $(PWD)/data
 	@cp $(PWD)/examples/example-config-benthos.yaml $(PWD)/data/config.yaml
 	docker run \
@@ -272,7 +300,7 @@ test-benthos: clean build
 		$(IMAGE_NAME):$(TAG)
 
 
-test-redpanda: clean build
+test-redpanda: stop-and-remove-umh-core-latest build
 	@mkdir -p $(PWD)/data
 	@cp $(PWD)/examples/example-config-redpanda.yaml $(PWD)/data/config.yaml
 	docker run \
@@ -284,7 +312,7 @@ test-redpanda: clean build
 		--cpus $(CPUS) \
 		$(IMAGE_NAME):$(TAG)
 
-test-dfc: clean build
+test-dfc: stop-and-remove-umh-core-latest build
 	@mkdir -p $(PWD)/data
 	@cp $(PWD)/examples/example-config-dataflow.yaml $(PWD)/data/config.yaml
 	docker run \
@@ -295,7 +323,7 @@ test-dfc: clean build
 		--cpus $(CPUS) \
 		$(IMAGE_NAME):$(TAG)
 
-test-debug: clean build-debug
+test-debug: stop-and-remove-umh-core-latest build-debug
 	@mkdir -p $(PWD)/data
 	@cp $(PWD)/examples/example-config-benthos-broken.yaml $(PWD)/data/config.yaml
 	docker run \
@@ -317,3 +345,33 @@ stop-all-pods:
 	docker ps -q --filter "name=$(IMAGE_NAME)*" | xargs -r docker stop
 	# Remove all pods starting with $(IMAGE_NAME) (also show stopped pods)
 	docker ps -a -q --filter "name=$(IMAGE_NAME)*" | xargs -r docker rm
+
+push:
+	@echo "Pushing $(IMAGE_NAME):$(TAG) to registry"
+	@if [ -z "$(REGISTRY)" ]; then \
+		echo "Error: REGISTRY environment variable is not set"; \
+		exit 1; \
+	fi
+	docker tag $(IMAGE_NAME):$(TAG) $(REGISTRY)/$(IMAGE_NAME):$(TAG)
+	docker push $(REGISTRY)/$(IMAGE_NAME):$(TAG)
+
+# Push with platform-specific tag (used in CI)
+push-platform:
+	@echo "Pushing $(IMAGE_NAME):$(TAG) for $(TARGETARCH) to registry"
+	@if [ -z "$(REGISTRY)" ]; then \
+		echo "Error: REGISTRY environment variable is not set"; \
+		exit 1; \
+	fi
+	@if [ -z "$(TAG)" ]; then \
+		echo "Error: TAG environment variable is not set"; \
+		exit 1; \
+	fi
+	@PLATFORM_SHORT="$(TARGETARCH)"; \
+	PLATFORM_TAG="$(TAG)-$${PLATFORM_SHORT}"; \
+	echo "Tagging $(IMAGE_NAME):$(TAG) as $(REGISTRY)/$(IMAGE_NAME):$${PLATFORM_TAG}"; \
+	docker tag $(IMAGE_NAME):$(TAG) $(REGISTRY)/$(IMAGE_NAME):$${PLATFORM_TAG}; \
+	echo "Pushing $(REGISTRY)/$(IMAGE_NAME):$${PLATFORM_TAG}"; \
+	docker push $(REGISTRY)/$(IMAGE_NAME):$${PLATFORM_TAG}
+
+# Build and push in one command (for CI)
+build-push: build push-platform

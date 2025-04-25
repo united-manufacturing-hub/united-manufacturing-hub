@@ -18,11 +18,14 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/redpandaserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda_monitor"
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -39,22 +42,28 @@ func getTmpDir() string {
 	return tmpDir
 }
 
+// newTimeoutContext creates a context with a 30-second timeout
+func newTimeoutContext() (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.Background(), 30*time.Second)
+}
+
 var _ = Describe("Redpanda Service", func() {
 	var (
 		service *RedpandaService
-		client  *MockHTTPClient
 		tick    uint64
 		mockFS  *filesystem.MockFileSystem
 	)
 
 	BeforeEach(func() {
-		client = NewMockHTTPClient()
-		service = NewDefaultRedpandaService("redpanda", WithHTTPClient(client))
+		service = NewDefaultRedpandaService("redpanda")
 		tick = 0
 		mockFS = filesystem.NewMockFileSystem()
 
 		// Cleanup the data directory
-		service.filesystem.RemoveAll(context.Background(), getTmpDir())
+		ctx, cancel := newTimeoutContext()
+		defer cancel()
+		err := mockFS.RemoveAll(ctx, getTmpDir())
+		Expect(err).NotTo(HaveOccurred())
 
 		// Add the service to the S6 manager
 		config := &redpandaserviceconfig.RedpandaServiceConfig{
@@ -62,211 +71,16 @@ var _ = Describe("Redpanda Service", func() {
 		}
 		config.Topic.DefaultTopicRetentionMs = 1000000
 		config.Topic.DefaultTopicRetentionBytes = 1000000000
-		err := service.AddRedpandaToS6Manager(context.Background(), config)
+		ctx, cancel = newTimeoutContext()
+		defer cancel()
+		err = service.AddRedpandaToS6Manager(ctx, config, mockFS)
 		Expect(err).NotTo(HaveOccurred())
 
 		// Reconcile the S6 manager
-		err, _ = service.ReconcileManager(context.Background(), mockFS, tick)
+		ctx, cancel = newTimeoutContext()
+		defer cancel()
+		err, _ = service.ReconcileManager(ctx, mockFS, tick)
 		Expect(err).NotTo(HaveOccurred())
-	})
-
-	Describe("GetHealthCheckAndMetrics", func() {
-		var mockS6Service *s6service.MockService
-
-		Context("with valid metrics endpoint", func() {
-			BeforeEach(func() {
-				// Create a fresh client to avoid interference from defaults
-				client = NewMockHTTPClient()
-				service.httpClient = client
-
-				// Configure mock client with healthy metrics
-				client.SetMetricsResponse(MetricsConfig{
-					Infrastructure: InfrastructureMetricsConfig{
-						Storage: StorageMetricsConfig{
-							FreeBytes:      5000000000,
-							TotalBytes:     10000000000,
-							FreeSpaceAlert: false, // Explicitly set to false
-						},
-						Uptime: UptimeMetricsConfig{
-							Uptime: 3600, // 1 hour in seconds
-						},
-					},
-					Cluster: ClusterMetricsConfig{
-						Topics:            5,
-						UnavailableTopics: 0,
-					},
-					Throughput: ThroughputMetricsConfig{
-						BytesIn:  1024,
-						BytesOut: 2048,
-					},
-					Topic: TopicMetricsConfig{
-						TopicPartitionMap: map[string]int64{
-							"test-topic": 3,
-						},
-					},
-				})
-
-				// Setup mock S6 service to return logs with successful startup message
-				mockS6Service = s6service.NewMockService()
-				mockS6Service.GetLogsResult = []s6service.LogEntry{
-					{
-						Timestamp: time.Now().Add(-1 * time.Minute),
-						Content:   "INFO Starting Redpanda",
-					},
-					{
-						Timestamp: time.Now().Add(-30 * time.Second),
-						Content:   "Successfully started Redpanda!",
-					},
-				}
-				service.s6Service = mockS6Service
-			})
-
-			It("should return health check and metrics", func() {
-				ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
-				defer cancel()
-				status, err := service.GetHealthCheckAndMetrics(ctx, tick, mockS6Service.GetLogsResult)
-				tick += 10
-				Expect(err).NotTo(HaveOccurred())
-				Expect(status.HealthCheck.IsLive).To(BeTrue())
-				Expect(status.HealthCheck.IsReady).To(BeTrue())
-				Expect(status.Metrics.Infrastructure.Storage.FreeBytes).To(Equal(int64(5000000000)))
-				Expect(status.Metrics.Infrastructure.Storage.TotalBytes).To(Equal(int64(10000000000)))
-				Expect(status.Metrics.Infrastructure.Storage.FreeSpaceAlert).To(BeFalse())
-				Expect(status.Metrics.Infrastructure.Uptime.Uptime).To(Equal(int64(3600)))
-				Expect(status.Metrics.Cluster.Topics).To(Equal(int64(5)))
-				Expect(status.Metrics.Cluster.UnavailableTopics).To(Equal(int64(0)))
-				Expect(status.Metrics.Throughput.BytesIn).To(Equal(int64(1024)))
-				Expect(status.Metrics.Throughput.BytesOut).To(Equal(int64(2048)))
-				Expect(status.Metrics.Topic.TopicPartitionMap).To(HaveLen(1))
-				Expect(status.Metrics.Topic.TopicPartitionMap["test-topic"]).To(Equal(int64(3)))
-			})
-		})
-
-		Context("with connection issues", func() {
-			BeforeEach(func() {
-				client.SetResponse("/public_metrics", MockResponse{
-					StatusCode: 500,
-					Body:       []byte("connection refused"),
-				})
-
-				// Setup mock S6 service to return logs with successful startup message
-				mockS6Service = s6service.NewMockService()
-				mockS6Service.GetLogsResult = []s6service.LogEntry{
-					{
-						Timestamp: time.Now().Add(-1 * time.Minute),
-						Content:   "INFO Starting Redpanda",
-					},
-					{
-						Timestamp: time.Now().Add(-30 * time.Second),
-						Content:   "Successfully started Redpanda!",
-					},
-				}
-				service.s6Service = mockS6Service
-			})
-
-			It("should return error", func() {
-				ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
-				defer cancel()
-				status, err := service.GetHealthCheckAndMetrics(ctx, tick, mockS6Service.GetLogsResult)
-				tick += 10
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("connection refused"))
-				Expect(status.HealthCheck.IsReady).To(BeFalse())
-			})
-		})
-
-		Context("with context cancellation", func() {
-			BeforeEach(func() {
-				client.SetResponse("/public_metrics", MockResponse{
-					StatusCode: 200,
-					Delay:      100 * time.Millisecond,
-				})
-
-				// Setup mock S6 service to return logs with successful startup message
-				mockS6Service = s6service.NewMockService()
-				mockS6Service.GetLogsResult = []s6service.LogEntry{
-					{
-						Timestamp: time.Now().Add(-1 * time.Minute),
-						Content:   "INFO Starting Redpanda",
-					},
-					{
-						Timestamp: time.Now().Add(-30 * time.Second),
-						Content:   "Successfully started Redpanda!",
-					},
-				}
-				service.s6Service = mockS6Service
-			})
-
-			It("should return error when context is cancelled", func() {
-				ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
-				defer cancel()
-
-				status, err := service.GetHealthCheckAndMetrics(ctx, tick, mockS6Service.GetLogsResult)
-				tick += 10
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("context deadline exceeded"))
-				Expect(status.HealthCheck.IsReady).To(BeFalse())
-			})
-		})
-
-		Context("without successful startup message in logs", func() {
-			BeforeEach(func() {
-				// Create a fresh client to avoid interference from defaults
-				client = NewMockHTTPClient()
-				service.httpClient = client
-
-				// Configure mock client with healthy metrics
-				client.SetMetricsResponse(MetricsConfig{
-					Infrastructure: InfrastructureMetricsConfig{
-						Storage: StorageMetricsConfig{
-							FreeBytes:      5000000000,
-							TotalBytes:     10000000000,
-							FreeSpaceAlert: false,
-						},
-						Uptime: UptimeMetricsConfig{
-							Uptime: 3600,
-						},
-					},
-					Cluster: ClusterMetricsConfig{
-						Topics:            5,
-						UnavailableTopics: 0,
-					},
-					Throughput: ThroughputMetricsConfig{
-						BytesIn:  1024,
-						BytesOut: 2048,
-					},
-					Topic: TopicMetricsConfig{
-						TopicPartitionMap: map[string]int64{
-							"test-topic": 3,
-						},
-					},
-				})
-
-				// Setup mock S6 service to return logs WITHOUT successful startup message
-				mockS6Service = s6service.NewMockService()
-				mockS6Service.GetLogsResult = []s6service.LogEntry{
-					{
-						Timestamp: time.Now().Add(-1 * time.Minute),
-						Content:   "INFO Starting Redpanda",
-					},
-					{
-						Timestamp: time.Now().Add(-30 * time.Second),
-						Content:   "INFO Initializing resources",
-					},
-				}
-				service.s6Service = mockS6Service
-			})
-
-			It("should report ready with healthy metrics", func() {
-				ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
-				defer cancel()
-				status, err := service.GetHealthCheckAndMetrics(ctx, tick, mockS6Service.GetLogsResult)
-				tick += 10
-				Expect(err).NotTo(HaveOccurred())
-				Expect(status.HealthCheck.IsLive).To(BeTrue())
-				Expect(status.HealthCheck.IsReady).To(BeTrue())
-			})
-		})
 	})
 
 	Describe("GenerateS6ConfigForRedpanda", func() {
@@ -300,68 +114,19 @@ var _ = Describe("Redpanda Service", func() {
 	Describe("Lifecycle Management", func() {
 		var (
 			service       *RedpandaService
-			mockClient    *MockHTTPClient
 			mockS6Service *s6service.MockService
 		)
 
 		BeforeEach(func() {
-			mockClient = NewMockHTTPClient()
 			mockS6Service = s6service.NewMockService()
 			service = NewDefaultRedpandaService("redpanda",
-				WithHTTPClient(mockClient),
 				WithS6Service(mockS6Service),
 			)
 		})
 
-		It("should add, start, stop and remove a Redpanda service", func() {
-			ctx := context.Background()
-
-			// Initial config
-			config := &redpandaserviceconfig.RedpandaServiceConfig{
-				BaseDir: getTmpDir(),
-			}
-			config.Topic.DefaultTopicRetentionMs = 1000000
-			config.Topic.DefaultTopicRetentionBytes = 1000000000
-
-			// Add the service
-			By("Adding the Redpanda service")
-			err := service.AddRedpandaToS6Manager(ctx, config)
-			Expect(err).NotTo(HaveOccurred())
-
-			// Service should exist in the S6 manager
-			Expect(len(service.s6ServiceConfigs)).To(Equal(1))
-
-			// Start the service
-			By("Starting the Redpanda service")
-			err = service.StartRedpanda(ctx)
-			Expect(err).NotTo(HaveOccurred())
-
-			// Reconcile to apply changes
-			By("Reconciling the manager")
-			err, _ = service.ReconcileManager(ctx, mockFS, 0)
-			Expect(err).NotTo(HaveOccurred())
-
-			// Stop the service
-			By("Stopping the Redpanda service")
-			err = service.StopRedpanda(ctx)
-			Expect(err).NotTo(HaveOccurred())
-
-			// Reconcile to apply changes
-			By("Reconciling the manager again")
-			err, _ = service.ReconcileManager(ctx, mockFS, 1)
-			Expect(err).NotTo(HaveOccurred())
-
-			// Remove the service
-			By("Removing the Redpanda service")
-			err = service.RemoveRedpandaFromS6Manager(ctx)
-			Expect(err).NotTo(HaveOccurred())
-
-			// Service should no longer exist in the S6 manager
-			Expect(len(service.s6ServiceConfigs)).To(Equal(0))
-		})
-
 		It("should handle configuration updates", func() {
-			ctx := context.Background()
+			ctx, cancel := newTimeoutContext()
+			defer cancel()
 
 			// Use MockRedpandaService for this test to verify method calls
 			mockRedpandaService := NewMockRedpandaService()
@@ -375,7 +140,7 @@ var _ = Describe("Redpanda Service", func() {
 
 			// Add the service with initial config
 			By("Adding the Redpanda service with initial config")
-			err := mockRedpandaService.AddRedpandaToS6Manager(ctx, initialConfig)
+			err := mockRedpandaService.AddRedpandaToS6Manager(ctx, initialConfig, mockFS)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(mockRedpandaService.AddRedpandaToS6ManagerCalled).To(BeTrue())
 
@@ -402,7 +167,8 @@ var _ = Describe("Redpanda Service", func() {
 		})
 
 		It("should handle non-existent service errors", func() {
-			ctx := context.Background()
+			ctx, cancel := newTimeoutContext()
+			defer cancel()
 
 			// Try to update a non-existent service
 			By("Trying to update a non-existent service")
@@ -423,20 +189,21 @@ var _ = Describe("Redpanda Service", func() {
 		})
 
 		It("should handle already existing service errors", func() {
-			ctx := context.Background()
+			ctx, cancel := newTimeoutContext()
+			defer cancel()
 
 			// Add a service
 			By("Adding a service")
 			err := service.AddRedpandaToS6Manager(ctx, &redpandaserviceconfig.RedpandaServiceConfig{
 				BaseDir: getTmpDir(),
-			})
+			}, mockFS)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Try to add the same service again
 			By("Trying to add the same service again")
 			err = service.AddRedpandaToS6Manager(ctx, &redpandaserviceconfig.RedpandaServiceConfig{
 				BaseDir: getTmpDir(),
-			})
+			}, mockFS)
 			Expect(err).To(Equal(ErrServiceAlreadyExists))
 		})
 	})
@@ -450,15 +217,15 @@ var _ = Describe("Redpanda Service", func() {
 
 		Context("IsMetricsErrorFree", func() {
 			It("should return true when there are no errors", func() {
-				metrics := Metrics{
-					Infrastructure: InfrastructureMetrics{
-						Storage: StorageMetrics{
+				metrics := redpanda_monitor.Metrics{
+					Infrastructure: redpanda_monitor.InfrastructureMetrics{
+						Storage: redpanda_monitor.StorageMetrics{
 							FreeBytes:      5000000000,
 							TotalBytes:     10000000000,
 							FreeSpaceAlert: false,
 						},
 					},
-					Cluster: ClusterMetrics{
+					Cluster: redpanda_monitor.ClusterMetrics{
 						Topics:            5,
 						UnavailableTopics: 0, // No unavailable topics
 					},
@@ -467,9 +234,9 @@ var _ = Describe("Redpanda Service", func() {
 			})
 
 			It("should detect storage free space alerts", func() {
-				metrics := Metrics{
-					Infrastructure: InfrastructureMetrics{
-						Storage: StorageMetrics{
+				metrics := redpanda_monitor.Metrics{
+					Infrastructure: redpanda_monitor.InfrastructureMetrics{
+						Storage: redpanda_monitor.StorageMetrics{
 							FreeBytes:      100000,
 							TotalBytes:     10000000000,
 							FreeSpaceAlert: true, // Alert triggered
@@ -480,15 +247,15 @@ var _ = Describe("Redpanda Service", func() {
 			})
 
 			It("should detect unavailable topics", func() {
-				metrics := Metrics{
-					Infrastructure: InfrastructureMetrics{
-						Storage: StorageMetrics{
+				metrics := redpanda_monitor.Metrics{
+					Infrastructure: redpanda_monitor.InfrastructureMetrics{
+						Storage: redpanda_monitor.StorageMetrics{
 							FreeBytes:      5000000000,
 							TotalBytes:     10000000000,
 							FreeSpaceAlert: false, // No storage alert
 						},
 					},
-					Cluster: ClusterMetrics{
+					Cluster: redpanda_monitor.ClusterMetrics{
 						Topics:            10,
 						UnavailableTopics: 2, // Some topics are unavailable
 					},
@@ -497,15 +264,15 @@ var _ = Describe("Redpanda Service", func() {
 			})
 
 			It("should pass when no storage alerts and all topics available", func() {
-				metrics := Metrics{
-					Infrastructure: InfrastructureMetrics{
-						Storage: StorageMetrics{
+				metrics := redpanda_monitor.Metrics{
+					Infrastructure: redpanda_monitor.InfrastructureMetrics{
+						Storage: redpanda_monitor.StorageMetrics{
 							FreeBytes:      5000000000,
 							TotalBytes:     10000000000,
 							FreeSpaceAlert: false, // No storage alert
 						},
 					},
-					Cluster: ClusterMetrics{
+					Cluster: redpanda_monitor.ClusterMetrics{
 						Topics:            10,
 						UnavailableTopics: 0, // All topics available
 					},
@@ -516,22 +283,26 @@ var _ = Describe("Redpanda Service", func() {
 
 		Context("HasProcessingActivity", func() {
 			It("should detect processing activity", func() {
-				metricsState := NewRedpandaMetricsState()
+				metricsState := redpanda_monitor.NewRedpandaMetricsState()
 				metricsState.IsActive = true
 
 				status := RedpandaStatus{
-					MetricsState: metricsState,
+					RedpandaMetrics: redpanda_monitor.RedpandaMetrics{
+						MetricsState: metricsState,
+					},
 				}
 
 				Expect(service.HasProcessingActivity(status)).To(BeTrue())
 			})
 
 			It("should detect lack of processing activity", func() {
-				metricsState := NewRedpandaMetricsState()
+				metricsState := redpanda_monitor.NewRedpandaMetricsState()
 				metricsState.IsActive = false
 
 				status := RedpandaStatus{
-					MetricsState: metricsState,
+					RedpandaMetrics: redpanda_monitor.RedpandaMetrics{
+						MetricsState: metricsState,
+					},
 				}
 
 				Expect(service.HasProcessingActivity(status)).To(BeFalse())
@@ -539,310 +310,13 @@ var _ = Describe("Redpanda Service", func() {
 
 			It("should handle nil metrics state", func() {
 				status := RedpandaStatus{
-					MetricsState: nil,
+					RedpandaMetrics: redpanda_monitor.RedpandaMetrics{
+						MetricsState: nil,
+					},
 				}
 
 				Expect(service.HasProcessingActivity(status)).To(BeFalse())
 			})
-		})
-	})
-
-	Context("Tick-based throughput tracking", Label("tick_based_throughput_tracking"), func() {
-		var (
-			service       *RedpandaService
-			mockClient    *MockHTTPClient
-			mockS6Service *s6service.MockService
-			tick          uint64
-		)
-
-		BeforeEach(func() {
-			mockClient = NewMockHTTPClient()
-			mockS6Service = s6service.NewMockService()
-			service = NewDefaultRedpandaService("redpanda",
-				WithHTTPClient(mockClient),
-				WithS6Service(mockS6Service),
-			)
-			tick = 0
-
-			mockS6Service.ServiceExistsResult = true
-
-			// Add the service to the S6 manager
-			err := service.AddRedpandaToS6Manager(context.Background(), &redpandaserviceconfig.RedpandaServiceConfig{
-				BaseDir: getTmpDir(),
-			})
-			Expect(err).NotTo(HaveOccurred())
-
-			// Reconcile the S6 manager
-			err, _ = service.ReconcileManager(context.Background(), mockFS, tick)
-			Expect(err).NotTo(HaveOccurred())
-		})
-
-		It("should calculate throughput based on ticks", func() {
-			// Create a fresh client to avoid default value conflicts
-			client := NewMockHTTPClient()
-			service.httpClient = client
-
-			// Set up metrics for first tick with some throughput
-			client.SetMetricsResponse(MetricsConfig{
-				Throughput: ThroughputMetricsConfig{
-					BytesIn:  1000,
-					BytesOut: 900,
-				},
-				// Add required metrics to prevent nil errors
-				Infrastructure: InfrastructureMetricsConfig{
-					Storage: StorageMetricsConfig{
-						FreeBytes:      5000000000,
-						TotalBytes:     10000000000,
-						FreeSpaceAlert: false,
-					},
-					Uptime: UptimeMetricsConfig{
-						Uptime: 3600,
-					},
-				},
-				Cluster: ClusterMetricsConfig{
-					Topics:            5,
-					UnavailableTopics: 0,
-				},
-				Topic: TopicMetricsConfig{
-					TopicPartitionMap: map[string]int64{
-						"test-topic": 3,
-					},
-				},
-			})
-
-			// Initialize with tick 0
-			tick = 0
-
-			// First status check
-			status1, err := service.Status(context.Background(), mockFS, tick)
-			Expect(err).NotTo(HaveOccurred())
-
-			// Verify initial state
-			Expect(status1.RedpandaStatus.Metrics.Throughput.BytesIn).To(Equal(int64(1000)))
-			Expect(status1.RedpandaStatus.Metrics.Throughput.BytesOut).To(Equal(int64(900)))
-
-			// Initial BytesPerTick will be equal to the first value since there's no prior state
-			Expect(status1.RedpandaStatus.MetricsState.Input.BytesPerTick).To(Equal(float64(1000)))
-			Expect(status1.RedpandaStatus.MetricsState.Output.BytesPerTick).To(Equal(float64(900)))
-
-			// Now let's test incremental ticks with specific throughput changes
-
-			// Move to tick 10 with +500 bytes in and +300 bytes out
-			tick = 10
-			client.SetMetricsResponse(MetricsConfig{
-				Throughput: ThroughputMetricsConfig{
-					BytesIn:  1500, // +500 from 1000
-					BytesOut: 1200, // +300 from 900
-				},
-				// Need to include all required metrics to avoid nil errors
-				Infrastructure: InfrastructureMetricsConfig{
-					Storage: StorageMetricsConfig{
-						FreeBytes:      5000000000,
-						TotalBytes:     10000000000,
-						FreeSpaceAlert: false,
-					},
-					Uptime: UptimeMetricsConfig{
-						Uptime: 3600,
-					},
-				},
-				Cluster: ClusterMetricsConfig{
-					Topics:            5,
-					UnavailableTopics: 0,
-				},
-				Topic: TopicMetricsConfig{
-					TopicPartitionMap: map[string]int64{
-						"test-topic": 3,
-					},
-				},
-			})
-
-			// Second status check
-			status2, err := service.Status(context.Background(), mockFS, tick)
-			Expect(err).NotTo(HaveOccurred())
-
-			// Verify new throughput values
-			Expect(status2.RedpandaStatus.Metrics.Throughput.BytesIn).To(Equal(int64(1500)))
-			Expect(status2.RedpandaStatus.Metrics.Throughput.BytesOut).To(Equal(int64(1200)))
-
-			// BytesPerTick for Input should be (1500-1000)/10 = 50.0
-			Expect(status2.RedpandaStatus.MetricsState.Input.BytesPerTick).To(BeNumerically("~", 50.0, 0.1))
-			// BytesPerTick for Output should be (1200-900)/10 = 30.0
-			Expect(status2.RedpandaStatus.MetricsState.Output.BytesPerTick).To(BeNumerically("~", 30.0, 0.1))
-
-			// Verify that the MetricsState reflects activity
-			Expect(status2.RedpandaStatus.MetricsState.IsActive).To(BeTrue())
-
-			// Move to tick 20 with +1000 bytes in and +600 bytes out
-			tick = 20
-			client.SetMetricsResponse(MetricsConfig{
-				Throughput: ThroughputMetricsConfig{
-					BytesIn:  2500, // +1000 from 1500
-					BytesOut: 1800, // +600 from 1200
-				},
-				// Include all required metrics again
-				Infrastructure: InfrastructureMetricsConfig{
-					Storage: StorageMetricsConfig{
-						FreeBytes:      5000000000,
-						TotalBytes:     10000000000,
-						FreeSpaceAlert: false,
-					},
-					Uptime: UptimeMetricsConfig{
-						Uptime: 3600,
-					},
-				},
-				Cluster: ClusterMetricsConfig{
-					Topics:            5,
-					UnavailableTopics: 0,
-				},
-				Topic: TopicMetricsConfig{
-					TopicPartitionMap: map[string]int64{
-						"test-topic": 3,
-					},
-				},
-			})
-
-			// Third status check
-			status3, err := service.Status(context.Background(), mockFS, tick)
-			Expect(err).NotTo(HaveOccurred())
-
-			// Verify the calculated throughput using the entire window
-			// Over 20 ticks: Input = (2500-1000)/20 = 75.0 bytes/tick
-			// But our window has specific values at ticks 0, 10, and 20
-			// Window calculation uses first and last: (2500-1000)/(20-0) = 75.0
-			Expect(status3.RedpandaStatus.MetricsState.Input.BytesPerTick).To(BeNumerically("~", 75.0, 0.1))
-			// Output = (1800-900)/20 = 45.0 bytes/tick
-			Expect(status3.RedpandaStatus.MetricsState.Output.BytesPerTick).To(BeNumerically("~", 45.0, 0.1))
-
-			// To test inactivity detection, we need to increment by reasonable tick amounts
-			// First jump to tick 25 (which is within the allowed staleness window of 20 ticks)
-			tick = 25
-			client.SetMetricsResponse(MetricsConfig{
-				Throughput: ThroughputMetricsConfig{
-					BytesIn:  2500, // No change from previous
-					BytesOut: 1800, // No change from previous
-				},
-				// Include all required metrics
-				Infrastructure: InfrastructureMetricsConfig{
-					Storage: StorageMetricsConfig{
-						FreeBytes:      5000000000,
-						TotalBytes:     10000000000,
-						FreeSpaceAlert: false,
-					},
-					Uptime: UptimeMetricsConfig{
-						Uptime: 3600,
-					},
-				},
-				Cluster: ClusterMetricsConfig{
-					Topics:            5,
-					UnavailableTopics: 0,
-				},
-				Topic: TopicMetricsConfig{
-					TopicPartitionMap: map[string]int64{
-						"test-topic": 3,
-					},
-				},
-			})
-
-			// Check at tick 25 - no status update should occur since 25 % 10 != 0
-			status4, err := service.Status(context.Background(), mockFS, tick)
-			Expect(err).NotTo(HaveOccurred())
-
-			// We shouldn't get a status update (should use cached status)
-			// UpdatedAtTick should still be 20
-			Expect(status4.RedpandaStatus.UpdatedAtTick).To(Equal(uint64(20)))
-
-			// Now move to tick 30 (which is a multiple of 10, so status update occurs)
-			tick = 30
-			client.SetMetricsResponse(MetricsConfig{
-				Throughput: ThroughputMetricsConfig{
-					BytesIn:  2500, // No change from previous
-					BytesOut: 1800, // No change from previous
-				},
-				// Include all required metrics
-				Infrastructure: InfrastructureMetricsConfig{
-					Storage: StorageMetricsConfig{
-						FreeBytes:      5000000000,
-						TotalBytes:     10000000000,
-						FreeSpaceAlert: false,
-					},
-					Uptime: UptimeMetricsConfig{
-						Uptime: 3600,
-					},
-				},
-				Cluster: ClusterMetricsConfig{
-					Topics:            5,
-					UnavailableTopics: 0,
-				},
-				Topic: TopicMetricsConfig{
-					TopicPartitionMap: map[string]int64{
-						"test-topic": 3,
-					},
-				},
-			})
-
-			// Check at tick 30
-			status5, err := service.Status(context.Background(), mockFS, tick)
-			Expect(err).NotTo(HaveOccurred())
-
-			// UpdatedAtTick should now be 30
-			Expect(status5.RedpandaStatus.UpdatedAtTick).To(Equal(uint64(30)))
-
-		})
-
-		It("should detect inactivity", func() {
-			// Create a fresh client to avoid default value conflicts
-			client := NewMockHTTPClient()
-			service.httpClient = client
-
-			// First tick with some activity
-			client.SetMetricsResponse(MetricsConfig{
-				Throughput: ThroughputMetricsConfig{
-					BytesIn:  1000,
-					BytesOut: 900,
-				},
-				// Add required metrics to prevent nil errors
-				Infrastructure: InfrastructureMetricsConfig{
-					Storage: StorageMetricsConfig{
-						FreeBytes:      5000000000,
-						TotalBytes:     10000000000,
-						FreeSpaceAlert: false,
-					},
-					Uptime: UptimeMetricsConfig{
-						Uptime: 3600,
-					},
-				},
-				Cluster: ClusterMetricsConfig{
-					Topics:            5,
-					UnavailableTopics: 0,
-				},
-				Topic: TopicMetricsConfig{
-					TopicPartitionMap: map[string]int64{
-						"test-topic": 3,
-					},
-				},
-			})
-
-			// First status check
-			status1, err := service.Status(context.Background(), mockFS, tick)
-			tick += 10
-			Expect(err).NotTo(HaveOccurred())
-			Expect(status1.RedpandaStatus.MetricsState.IsActive).To(BeTrue())
-
-			// Second tick with no change in throughput
-			client.SetMetricsResponse(MetricsConfig{
-				Throughput: ThroughputMetricsConfig{
-					BytesIn:  1000, // No change
-					BytesOut: 900,  // No change
-				},
-			})
-
-			// Second status check
-			status2, err := service.Status(context.Background(), mockFS, tick)
-			tick += 10
-			Expect(err).NotTo(HaveOccurred())
-
-			// Should detect inactivity
-			Expect(status2.RedpandaStatus.MetricsState.IsActive).To(BeFalse())
 		})
 	})
 
@@ -1032,182 +506,50 @@ var _ = Describe("Redpanda Service", func() {
 		})
 	})
 
-	Context("Tick-based status updates and failure recovery", Label("tick_based_status_updates"), func() {
+	Describe("ForceRemoveRedpanda", func() {
 		var (
 			service       *RedpandaService
-			mockClient    *MockHTTPClient
 			mockS6Service *s6service.MockService
-			tick          uint64
+			mockFS        *filesystem.MockFileSystem
 		)
 
 		BeforeEach(func() {
-			mockClient = NewMockHTTPClient()
 			mockS6Service = s6service.NewMockService()
-			mockS6Service.ServiceExistsResult = true
-			service = NewDefaultRedpandaService("redpanda",
-				WithHTTPClient(mockClient),
-				WithS6Service(mockS6Service),
-			)
-			tick = 0
-
-			// Add the service to the S6 manager
-			err := service.AddRedpandaToS6Manager(context.Background(), &redpandaserviceconfig.RedpandaServiceConfig{
-				BaseDir: getTmpDir(),
-			})
-			Expect(err).NotTo(HaveOccurred())
-
-			// Reconcile the S6 manager
-			err, _ = service.ReconcileManager(context.Background(), mockFS, tick)
-			Expect(err).NotTo(HaveOccurred())
-
-			// Configure mock client with healthy metrics
-			mockClient.SetMetricsResponse(MetricsConfig{
-				Infrastructure: InfrastructureMetricsConfig{
-					Storage: StorageMetricsConfig{
-						FreeBytes:      5000000000,
-						TotalBytes:     10000000000,
-						FreeSpaceAlert: false,
-					},
-					Uptime: UptimeMetricsConfig{
-						Uptime: 3600,
-					},
-				},
-				Cluster: ClusterMetricsConfig{
-					Topics:            5,
-					UnavailableTopics: 0,
-				},
-				Throughput: ThroughputMetricsConfig{
-					BytesIn:  1000,
-					BytesOut: 900,
-				},
-				Topic: TopicMetricsConfig{
-					TopicPartitionMap: map[string]int64{
-						"test-topic": 3,
-					},
-				},
-			})
-
-			// Setup mock S6 service to return logs with successful startup message
-			mockS6Service.GetLogsResult = []s6service.LogEntry{
-				{
-					Timestamp: time.Now().Add(-1 * time.Minute),
-					Content:   "Successfully started Redpanda!",
-				},
-			}
+			mockFS = filesystem.NewMockFileSystem()
+			service = NewDefaultRedpandaService("redpanda", WithS6Service(mockS6Service))
 		})
 
-		It("should update status only at specific tick intervals", func() {
-			// First status check at tick 0 (should update)
-			status1, err := service.Status(context.Background(), mockFS, tick)
+		It("should call S6 ForceRemove with the correct service path", func() {
+			ctx, cancel := newTimeoutContext()
+			defer cancel()
+
+			// Call ForceRemoveRedpanda
+			err := service.ForceRemoveRedpanda(ctx, mockFS)
+
+			// Verify no error
 			Expect(err).NotTo(HaveOccurred())
-			Expect(status1.RedpandaStatus.UpdatedAtTick).To(Equal(tick))
 
-			// First metrics check directly
-			metrics1 := status1.RedpandaStatus.Metrics
-			Expect(metrics1.Throughput.BytesIn).To(Equal(int64(1000)))
+			// Verify S6Service ForceRemove was called
+			Expect(mockS6Service.ForceRemoveCalled).To(BeTrue())
 
-			// Update metrics in the mock client for next call
-			mockClient.SetMetricsResponse(MetricsConfig{
-				Throughput: ThroughputMetricsConfig{
-					BytesIn:  2000, // +1000
-					BytesOut: 1800, // +900
-				},
-			})
-
-			// Second status check at tick 1 (should NOT update, returns cached data)
-			tick = 1
-			status2, err := service.Status(context.Background(), mockFS, tick)
-			Expect(err).NotTo(HaveOccurred())
-			// Should still have the old metrics
-			Expect(status2.RedpandaStatus.Metrics.Throughput.BytesIn).To(Equal(int64(1000)))
-			// UpdatedAtTick should still be 0 (from first call)
-			Expect(status2.RedpandaStatus.UpdatedAtTick).To(Equal(uint64(0)))
-
-			// Third status check at tick 10 (should update because tick % 10 == 0)
-			tick = 10
-			status3, err := service.Status(context.Background(), mockFS, tick)
-			Expect(err).NotTo(HaveOccurred())
-			// Should have the new metrics
-			Expect(status3.RedpandaStatus.Metrics.Throughput.BytesIn).To(Equal(int64(2000)))
-			// UpdatedAtTick should be 10
-			Expect(status3.RedpandaStatus.UpdatedAtTick).To(Equal(uint64(10)))
+			// Verify the path is correct
+			expectedS6ServicePath := filepath.Join(constants.S6BaseDir, constants.RedpandaServiceName)
+			Expect(mockS6Service.ForceRemovePath).To(Equal(expectedS6ServicePath))
 		})
 
-		It("should recover from failed status updates", func() {
-			// First status check succeeds
-			status1, err := service.Status(context.Background(), mockFS, tick)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(status1.RedpandaStatus.UpdatedAtTick).To(Equal(tick))
-			Expect(status1.RedpandaStatus.Metrics.Throughput.BytesIn).To(Equal(int64(1000)))
+		It("should propagate errors from S6 service", func() {
+			ctx, cancel := newTimeoutContext()
+			defer cancel()
 
-			// Configure mock client to fail with connection refused
-			mockClient.SetResponse("/public_metrics", MockResponse{
-				StatusCode: 500,
-				Body:       []byte("connection refused"),
-			})
+			// Set up mock to return an error
+			mockError := fmt.Errorf("mock force remove error")
+			mockS6Service.ForceRemoveError = mockError
 
-			// Status check at tick 10 (should attempt update but fail)
-			tick = 10
-			_, err = service.Status(context.Background(), mockFS, tick)
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("connection refused"))
+			// Call ForceRemoveRedpanda
+			err := service.ForceRemoveRedpanda(ctx, mockFS)
 
-			// Fix mock client to work again with new metrics
-			mockClient.SetMetricsResponse(MetricsConfig{
-				Infrastructure: InfrastructureMetricsConfig{
-					Storage: StorageMetricsConfig{
-						FreeBytes:      6000000000,
-						TotalBytes:     10000000000,
-						FreeSpaceAlert: false,
-					},
-					Uptime: UptimeMetricsConfig{
-						Uptime: 4200,
-					},
-				},
-				Cluster: ClusterMetricsConfig{
-					Topics:            5,
-					UnavailableTopics: 0,
-				},
-				Throughput: ThroughputMetricsConfig{
-					BytesIn:  3000,
-					BytesOut: 2700,
-				},
-				Topic: TopicMetricsConfig{
-					TopicPartitionMap: map[string]int64{
-						"test-topic": 3,
-					},
-				},
-			})
-
-			// Status check at tick 20 (should successfully update now)
-			tick = 20
-			status3, err := service.Status(context.Background(), mockFS, tick)
-			Expect(err).NotTo(HaveOccurred())
-			// Should have the new metrics
-			Expect(status3.RedpandaStatus.Metrics.Throughput.BytesIn).To(Equal(int64(3000)))
-			// UpdatedAtTick should be 20
-			Expect(status3.RedpandaStatus.UpdatedAtTick).To(Equal(uint64(20)))
-		})
-
-		It("should detect when status is too old", func() {
-			// First status check succeeds
-			status1, err := service.Status(context.Background(), mockFS, tick)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(status1.RedpandaStatus.UpdatedAtTick).To(Equal(tick))
-
-			// Jump ahead more than 2 * RedpandaStatusUpdateIntervalTicks
-			tick = 25 // Greater than 2*10 ticks
-
-			// Configure mock client to always fail
-			mockClient.SetResponse("/public_metrics", MockResponse{
-				StatusCode: 500,
-				Body:       []byte("connection refused"),
-			})
-
-			// First failure should just return a connection refused error
-			_, err = service.Status(context.Background(), mockFS, tick)
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("redpanda status update interval is more then 20 ticks ago"))
+			// Verify error is propagated
+			Expect(err).To(MatchError(mockError))
 		})
 	})
 })

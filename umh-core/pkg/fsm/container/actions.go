@@ -16,9 +16,10 @@ package container
 
 import (
 	"context"
+	"time"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
 // In Benthos, actions.go contained idempotent operations (like starting/stopping a service).
@@ -60,10 +61,22 @@ func (c *ContainerInstance) StopInstance(ctx context.Context, filesystemService 
 
 // UpdateObservedStateOfInstance is called when the FSM transitions to updating.
 // For container monitoring, this is a no-op as we don't need to update any resources.
-func (c *ContainerInstance) UpdateObservedStateOfInstance(ctx context.Context, filesystemService filesystem.Service, tick uint64) error {
+func (c *ContainerInstance) UpdateObservedStateOfInstance(ctx context.Context, filesystemService filesystem.Service, tick uint64, loopStartTime time.Time) error {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+
+	currentState := c.baseFSMInstance.GetCurrentFSMState()
+	desiredState := c.baseFSMInstance.GetDesiredFSMState()
+	// If both desired and current state are stopped, we can return immediately
+	// There wont be any logs, metrics, etc. to check
+	if desiredState == OperationalStateStopped && currentState == OperationalStateStopped {
+		return nil
+	}
+
 	c.baseFSMInstance.GetLogger().Debugf("Updating observed state for %s (no-op)", c.baseFSMInstance.GetID())
 	return nil
-  }
+}
 
 // areAllMetricsHealthy decides if the container health is Active
 func (c *ContainerInstance) areAllMetricsHealthy() bool {

@@ -15,52 +15,56 @@
 agent:
   metricsPort: 8080
 
-redpanda:
-  desiredState: stopped
 
 # Data Flow Components
-dataFlowComponents:
+dataFlow:
   - name: data-flow-hello-world
     desiredState: active
-    serviceConfig:
-      input:
-        generate:
-          mapping: root = "hello world from Data Flow Component!"
-          interval: 1s
-          count: 0 # Set to 0 for unlimited messages
-      output:
-        stdout: {}
+    dataFlowComponentConfig:
+      benthos:
+        input:
+          generate:
+            mapping: root = "hello world from Data Flow Component!"
+            interval: 1s
+            count: 0 # Set to 0 for unlimited messages
+        output:
+          stdout: {}
 
   - name: data-transform-example
     desiredState: active
-    serviceConfig:
-      input:
-        mqtt:
-          topics:
+    dataFlowComponentConfig:
+      benthos:
+        input:
+          mqtt:
+            topics:
             - sensors/temperature
           qos: 1
           client_id: benthos_consumer
           urls:
             - tcp://mqtt-broker:1883
-      pipeline:
-        processors:
-          - mapping: |
-              let temperature = this.value
-              let warning = if temperature > 30 {
-                "High temperature warning!"
-              } else {
-                ""
-              }
-              root = {
-                "original_value": temperature,
-                "celsius": temperature,
-                "fahrenheit": temperature * 1.8 + 32,
-                "kelvin": temperature + 273.15,
-                "timestamp": timestamp_unix(),
-                "warning": warning
-              }
-      output:
-        redis_streams:
-          url: redis://redis:6379
-          stream: processed_temperature
-          max_length: 1000 
+        pipeline:
+          processors:
+            - mapping: |
+                let temperature = this.value
+                let warning = if temperature > 30 {
+                  "High temperature warning!"
+                } else {
+                  ""
+                }
+                root = {
+                  "original_value": temperature,
+                  "celsius": temperature,
+                  "fahrenheit": temperature * 1.8 + 32,
+                  "kelvin": temperature + 273.15,
+                  "timestamp": timestamp_unix(),
+                  "warning": warning
+                }
+        output:
+          redis_streams:
+            url: redis://redis:6379
+            stream: processed_temperature
+            max_length: 1000 
+
+internal:
+  redpanda:
+    desiredState: stopped

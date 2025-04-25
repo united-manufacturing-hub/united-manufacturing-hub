@@ -15,17 +15,17 @@
 package generator
 
 import (
-	"context"
 	"fmt"
-	"math/rand"
 	"sync"
-	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/agent_monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/container"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
@@ -36,9 +36,11 @@ const (
 	// Manager name constants
 	containerManagerName = logger.ComponentContainerManager + "_" + constants.DefaultManagerName
 	benthosManagerName   = logger.ComponentBenthosManager + "_" + constants.DefaultManagerName
+	agentManagerName     = logger.ComponentAgentManager + "_" + constants.DefaultManagerName
 
 	// Instance name constants
-	coreInstanceName = "Core"
+	coreInstanceName  = "Core"
+	agentInstanceName = "agent"
 )
 
 type StatusCollectorType struct {
@@ -46,7 +48,7 @@ type StatusCollectorType struct {
 	dog           watchdog.Iface
 	state         *fsm.SystemSnapshot
 	systemMu      *sync.Mutex
-	logger        *zap.Logger
+	logger        *zap.SugaredLogger
 	configManager config.ConfigManager
 }
 
@@ -62,9 +64,8 @@ func NewStatusCollector(
 	state *fsm.SystemSnapshot,
 	systemMu *sync.Mutex,
 	configManager config.ConfigManager,
+	logger *zap.SugaredLogger,
 ) *StatusCollectorType {
-
-	logger := logger.New("generator.NewStatusCollector", logger.FormatJSON)
 
 	latestData := &LatestData{}
 
@@ -80,6 +81,30 @@ func NewStatusCollector(
 	return collector
 }
 
+func (s *StatusCollectorType) getDataFlowComponentData() ([]models.Dfc, error) {
+	var dfcData []models.Dfc
+
+	if dataflowcomponentManager, exists := s.state.Managers[constants.DataflowcomponentManagerName]; exists {
+		instances := dataflowcomponentManager.GetInstances()
+
+		for _, instance := range instances {
+			dfc, err := buildDataFlowComponentDataFromSnapshot(*instance, s.logger)
+			if err != nil {
+				s.logger.Error("Error building dataflowcomponent data", zap.Error(err))
+				continue
+			}
+			dfcData = append(dfcData, dfc)
+		}
+	} else {
+		s.logger.Warn("Dataflowcomponent manager not found in system snapshot",
+			zap.String("managerName", constants.DataflowcomponentManagerName),
+			zap.Any("allManagers", s.state.Managers))
+		return nil, fmt.Errorf("dataflowcomponent manager not found in system snapshot")
+	}
+
+	return dfcData, nil
+}
+
 func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 	s.latestData.mu.RLock()
 	defer s.latestData.mu.RUnlock()
@@ -89,7 +114,7 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 	defer s.systemMu.Unlock()
 
 	if s.state == nil {
-		sentry.ReportIssuef(sentry.IssueTypeError, s.logger.Sugar(), "[GenerateStatusMessage] State is nil, using empty state")
+		sentry.ReportIssuef(sentry.IssueTypeError, s.logger, "[GenerateStatusMessage] State is nil, using empty state")
 		s.logger.Error("State is nil, using empty state")
 		return nil
 	}
@@ -101,7 +126,7 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 		instances := containerManager.GetInstances()
 
 		if instance, ok := instances[coreInstanceName]; ok {
-			containerData = buildContainerDataFromSnapshot(instance, s.logger)
+			containerData = buildContainerDataFromSnapshot(*instance, s.logger)
 		} else {
 			s.logger.Warn("Core instance not found in container manager",
 				zap.String("instanceName", coreInstanceName))
@@ -114,133 +139,88 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 		containerData = buildDefaultContainerData()
 	}
 
-	// Get the actual location from the system configuration
-	location := map[int]string{}
+	dfcData, err := s.getDataFlowComponentData()
+	if err != nil {
+		s.logger.Error("Error getting dataflowcomponent data", zap.Error(err))
+	}
 
-	// Try to get the location from the config manager first
-	if s.configManager != nil {
-		// Create a context with a short timeout for getting the config
-		ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
-		defer cancel()
+	// extract agent data from the agent manager if available
+	var agentData models.Agent
+	var releaseChannel string
 
-		// Get the current config
-		cfg, err := s.configManager.GetConfig(ctx, 0)
-		if err == nil {
-			location = cfg.Agent.Location
+	if agentManager, exists := s.state.Managers[agentManagerName]; exists {
+		instances := agentManager.GetInstances()
+
+		s.logger.Debug("Agent manager instances",
+			zap.Any("instances", instances))
+
+		if instance, ok := instances[agentInstanceName]; ok {
+			agentData, releaseChannel = buildAgentDataFromSnapshot(*instance, s.logger)
 		} else {
-			s.logger.Warn("Failed to get location from config manager", zap.Error(err))
+			s.logger.Warn("Agent instance not found in agent manager",
+				zap.String("instanceName", agentInstanceName),
+				zap.Any("instances", instances))
+			sentry.ReportIssuef(sentry.IssueTypeError, s.logger, "[GenerateStatusMessage] Agent instance not found in agent manager")
+			agentData = models.Agent{}
+			releaseChannel = "n/a"
 		}
 	}
 
-	// Create a mocked status message
+	// Create the status message
 	statusMessage := &models.StatusMessage{
 		Core: models.Core{
 			Agent: models.Agent{
-				Health: &models.Health{
-					Message:       fmt.Sprintf("Agent is healthy, tick: %d", s.state.Tick),
-					ObservedState: "running",
-					DesiredState:  "running",
-					Category:      models.Active,
-				},
-				Latency: &models.Latency{
-					AvgMs: 10.5,
-					MaxMs: 25.0,
-					MinMs: 5.0,
-					P95Ms: float64(rand.Intn(91) + 10),
-					P99Ms: 22.8,
-				},
-				Location: location, // Use the actual location from config
+				Health:   agentData.Health,
+				Latency:  &models.Latency{},
+				Location: agentData.Location,
 			},
 			Container: containerData,
-			Dfcs: []models.Dfc{
-				{
-					Name: stringPtr("Data Bridge 1"),
-					UUID: "dfc-uuid-12345",
-					Type: models.DfcTypeDataBridge,
-					Health: &models.Health{
-						Message:       "DFC is operating normally",
-						ObservedState: "running",
-						DesiredState:  "running",
-						Category:      models.Active,
-					},
-					Metrics: &models.DfcMetrics{
-						AvgInputThroughputPerMinuteInMsgSec: float64(rand.Intn(91) + 10),
-					},
-					Bridge: &models.DfcBridgeInfo{
-						DataContract: "sensor-v1",
-						InputType:    "mqtt",
-						OutputType:   "kafka",
-					},
-					Connections: []models.Connection{
-						{
-							Name: "MQTT Input",
-							UUID: "conn-uuid-1",
-							Health: &models.Health{
-								Message:       "Connection is active",
-								ObservedState: "connected",
-								DesiredState:  "connected",
-								Category:      models.Active,
-							},
-							URI:           "mqtt://broker:1883",
-							LastLatencyMs: 5.2,
-						},
-						{
-							Name: "Kafka Output",
-							UUID: "conn-uuid-2",
-							Health: &models.Health{
-								Message:       "Connection is active",
-								ObservedState: "connected",
-								DesiredState:  "connected",
-								Category:      models.Active,
-							},
-							URI:           "kafka://kafka:9092",
-							LastLatencyMs: 8.1,
-						},
-					},
-				},
-			},
+			Dfcs:      dfcData,
 			Redpanda: models.Redpanda{
 				Health: &models.Health{
-					Message:       "Redpanda is operating normally",
-					ObservedState: "running",
+					Message:       "redpanda monitoring is not implemented yet",
+					ObservedState: "n/a",
 					DesiredState:  "running",
-					Category:      models.Active,
+					Category:      models.Neutral,
 				},
-				AvgIncomingThroughputPerMinuteInMsgSec: 150.5,
-				AvgOutgoingThroughputPerMinuteInMsgSec: 120.3,
+				AvgIncomingThroughputPerMinuteInMsgSec: 0,
+				AvgOutgoingThroughputPerMinuteInMsgSec: 0,
 			},
-			UnifiedNamespace: models.UnifiedNamespace{
-				EventsTable: map[string]models.EventsTable{
-					"event1": s.latestData.EventTable,
-				},
-				UnsTable: map[string]models.UnsTable{
-					"uns1": s.latestData.UnsTable,
-				},
-			},
+			UnifiedNamespace: models.UnifiedNamespace{},
 			Release: models.Release{
-				Version: "1.0.0",
-				Channel: "stable",
+				Health: &models.Health{
+					Message:       "release monitoring is not implemented yet",
+					ObservedState: "n/a",
+					DesiredState:  "running",
+					Category:      models.Neutral,
+				},
+				Version: "n/a",
+				Channel: releaseChannel,
 				SupportedFeatures: []string{
-					"data-bridge",
-					"protocol-converter",
 					"custom-dfc",
 					"action-deploy-data-flow-component",
+					"action-get-data-flow-component",
+					"action-delete-data-flow-component",
+					"action-edit-data-flow-component",
 				},
 			},
 		},
-		Plugins: map[string]interface{}{
-			"examplePlugin": map[string]interface{}{
-				"status":  "active",
-				"version": "0.1.0",
-			},
-		},
+	}
+
+	// Derive and set core health from other healths
+	//TODO: set core health from other healths
+	statusMessage.Core.Health = &models.Health{
+		Message:       "core monitoring is not implemented yet",
+		ObservedState: "running",
+		DesiredState:  "running",
+		Category:      models.Active,
 	}
 
 	return statusMessage
 }
 
 // buildContainerDataFromSnapshot creates container data from a FSM instance snapshot
-func buildContainerDataFromSnapshot(instance fsm.FSMInstanceSnapshot, log *zap.Logger) models.Container {
+func buildContainerDataFromSnapshot(instance fsm.FSMInstanceSnapshot, log *zap.SugaredLogger) models.Container {
 	// Try to get observed state from instance
 	containerData := buildDefaultContainerData()
 
@@ -313,6 +293,59 @@ func buildContainerDataFromSnapshot(instance fsm.FSMInstanceSnapshot, log *zap.L
 	return containerData
 }
 
+func buildDataFlowComponentDataFromSnapshot(instance fsm.FSMInstanceSnapshot, log *zap.SugaredLogger) (models.Dfc, error) {
+	dfcData := models.Dfc{}
+
+	// Check if we have actual observedState
+	if instance.LastObservedState != nil {
+		// Try to cast to the right type
+
+		// Create health status based on instance.CurrentState
+		extractHealthStatus := func(state string) models.HealthCategory {
+			switch state {
+			case dataflowcomponent.OperationalStateActive:
+				return models.Active
+			case dataflowcomponent.OperationalStateDegraded:
+				return models.Degraded
+			default:
+				return models.Neutral
+			}
+		}
+
+		// get the metrics from the instance
+		observed, ok := instance.LastObservedState.(*dataflowcomponent.DataflowComponentObservedStateSnapshot)
+		if !ok {
+			err := fmt.Errorf("observed state %T does not match DataflowComponentObservedStateSnapshot", instance.LastObservedState)
+			log.Error(err)
+			return models.Dfc{}, err
+		}
+		serviceInfo := observed.ServiceInfo
+		inputThroughput := int64(0)
+		if serviceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.MetricsState != nil && serviceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.MetricsState.Input.LastCount > 0 {
+			inputThroughput = int64(serviceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.MetricsState.Input.MessagesPerTick / constants.DefaultTickerTime.Seconds())
+		}
+
+		dfcData.Health = &models.Health{
+			Message:       getHealthMessage(extractHealthStatus(instance.CurrentState)),
+			ObservedState: instance.CurrentState,
+			DesiredState:  instance.DesiredState,
+			Category:      extractHealthStatus(instance.CurrentState),
+		}
+
+		dfcData.Type = "custom" // this is a custom DFC; protocol converters will have a separate fsm
+		dfcData.UUID = dataflowcomponentconfig.GenerateUUIDFromName(instance.ID).String()
+		dfcData.Metrics = &models.DfcMetrics{
+			AvgInputThroughputPerMinuteInMsgSec: float64(inputThroughput),
+		}
+		dfcData.Name = &instance.ID
+	} else {
+		log.Warn("no observed state found for dataflowcomponent", zap.String("instanceID", instance.ID))
+		return models.Dfc{}, fmt.Errorf("no observed state found for dataflowcomponent")
+	}
+
+	return dfcData, nil
+}
+
 // getHealthMessage returns an appropriate message based on health category
 func getHealthMessage(health models.HealthCategory) string {
 	switch health {
@@ -371,7 +404,40 @@ func buildDefaultContainerData() models.Container {
 	}
 }
 
-// Helper function to create string pointers
-func stringPtr(s string) *string {
-	return &s
+// buildAgentDataFromSnapshot creates agent data from a FSM instance snapshot
+func buildAgentDataFromSnapshot(instance fsm.FSMInstanceSnapshot, log *zap.SugaredLogger) (models.Agent, string) {
+	agentData := models.Agent{}
+	releaseChannel := "n/a"
+	// Check if we have actual observedState
+	if instance.LastObservedState != nil {
+		// Try to cast to the right type
+		if snapshot, ok := instance.LastObservedState.(*agent_monitor.AgentObservedStateSnapshot); ok {
+			// Ensure all fields are valid before accessing
+			if snapshot.ServiceInfoSnapshot.Location == nil {
+				log.Warn("Agent location data is nil")
+				agentData = models.Agent{
+					Location: map[int]string{0: "Unknown location"},
+				}
+			} else {
+				agentData = models.Agent{
+					Location: snapshot.ServiceInfoSnapshot.Location,
+				}
+			}
+			// build the health status
+			agentData.Health = &models.Health{
+				Message:       getHealthMessage(snapshot.ServiceInfoSnapshot.OverallHealth),
+				ObservedState: instance.CurrentState,
+				DesiredState:  instance.DesiredState,
+				Category:      snapshot.ServiceInfoSnapshot.OverallHealth,
+			}
+			releaseChannel = snapshot.ServiceInfoSnapshot.Release.Channel
+		} else {
+			log.Warn("Agent observed state is not of expected type")
+			sentry.ReportIssuef(sentry.IssueTypeError, log, "[buildAgentDataFromSnapshot] Agent observed state is not of expected type")
+		}
+	} else {
+		log.Warn("Agent instance has no observed state")
+	}
+
+	return agentData, releaseChannel
 }

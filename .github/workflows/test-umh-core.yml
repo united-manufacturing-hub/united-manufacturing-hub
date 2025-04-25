@@ -91,11 +91,24 @@ jobs:
         run: |
           make download-docker-binaries
           
+      - name: Stop containers & cleanup
+        working-directory: ./umh-core
+        run: |
+          make cleanup-ci
+
       - name: Run integration tests
         env:
           CI: true
           VERSION: ${{ github.ref_name }}
         run: make integration-test-ci
+
+      - name: Upload logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: logs-${{ strategy.matrix.instance }}
+          path: /tmp/logs
+          retention-days: 1
 
       - name: Stop containers & cleanup
         if: always()

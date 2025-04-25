@@ -141,7 +141,7 @@ func (c *Comparator) ConfigDiff(desired, observed BenthosServiceConfig) string {
 	// Compare Buffer sections
 	if !reflect.DeepEqual(normDesired.Buffer, normObserved.Buffer) {
 		// Skip comparing if both are effectively "none" buffer
-		if !(isNoneBuffer(normDesired.Buffer) && isNoneBuffer(normObserved.Buffer)) {
+		if !isNoneBuffer(normDesired.Buffer) || !isNoneBuffer(normObserved.Buffer) {
 			diff.WriteString("Buffer config differences:\n")
 			compareMapKeys(normDesired.Buffer, normObserved.Buffer, "Buffer", &diff)
 		}
@@ -212,16 +212,16 @@ func compareMapKeys(desired, observed map[string]interface{}, prefix string, dif
 	// Check keys in desired that don't exist or are different in observed
 	for k, v := range desired {
 		if observedVal, ok := observed[k]; !ok {
-			diff.WriteString(fmt.Sprintf("  - %s.%s: exists in desired but missing in observed\n", prefix, k))
+			fmt.Fprintf(diff, "  - %s.%s: exists in desired but missing in observed\n", prefix, k)
 		} else if !reflect.DeepEqual(v, observedVal) {
-			diff.WriteString(fmt.Sprintf("  - %s.%s differs\n", prefix, k))
+			fmt.Fprintf(diff, "  - %s.%s differs\n", prefix, k)
 		}
 	}
 
 	// Check for keys in observed that don't exist in desired
 	for k := range observed {
 		if _, ok := desired[k]; !ok {
-			diff.WriteString(fmt.Sprintf("  - %s.%s: exists in observed but missing in desired\n", prefix, k))
+			fmt.Fprintf(diff, "  - %s.%s: exists in observed but missing in desired\n", prefix, k)
 		}
 	}
 }

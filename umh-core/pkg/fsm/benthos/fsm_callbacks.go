@@ -60,6 +60,5 @@ func (instance *BenthosInstance) registerCallbacks() {
 
 	instance.baseFSMInstance.AddCallback("enter_"+OperationalStateDegraded, func(ctx context.Context, e *fsm.Event) {
 		instance.baseFSMInstance.GetLogger().Warnf("Entering degraded state for %s", instance.baseFSMInstance.GetID())
-		// Additional logic for handling degraded state could be added here
 	})
 }

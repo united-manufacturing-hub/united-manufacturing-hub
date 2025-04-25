@@ -41,9 +41,10 @@ type Handler struct {
 	pusher                     *push.Pusher
 	instanceUUID               uuid.UUID
 	StatusCollector            *generator.StatusCollectorType
-	disableHardwareStatusCheck bool
+	disableHardwareStatusCheck bool // nolint:unused // will be used in the future
 	state                      *fsm.SystemSnapshot
 	configManager              config.ConfigManager
+	logger                     *zap.SugaredLogger
 }
 
 func NewHandler(
@@ -57,6 +58,7 @@ func NewHandler(
 	state *fsm.SystemSnapshot,
 	systemMu *sync.Mutex,
 	configManager config.ConfigManager,
+	logger *zap.SugaredLogger,
 ) *Handler {
 	s := &Handler{}
 	s.subscribers = expiremap.NewEx[string, string](cull, ttl)
@@ -65,11 +67,13 @@ func NewHandler(
 	s.instanceUUID = instanceUUID
 	s.state = state
 	s.configManager = configManager
+	s.logger = logger
 	s.StatusCollector = generator.NewStatusCollector(
 		dog,
 		state,
 		systemMu,
 		configManager,
+		logger,
 	)
 
 	return s
@@ -80,8 +84,6 @@ func (s *Handler) StartNotifier() {
 }
 
 func (s *Handler) AddSubscriber(identifier string) {
-
-	// zap.S().Debugf("Adding subscriber %s", identifier)
 	s.subscribers.Set(identifier, identifier)
 	s.dog.SetHasSubscribers(true)
 }
@@ -99,22 +101,19 @@ func (s *Handler) GetSubscribers() []string {
 func (s *Handler) notifySubscribers() {
 	watcherUUID := s.dog.RegisterHeartbeat("notifySubscribers", 0, 600, true)
 	var timer = time.NewTicker(time.Second)
-	for {
-		select {
-		case <-timer.C:
-			s.dog.ReportHeartbeatStatus(watcherUUID, watchdog.HEARTBEAT_STATUS_OK)
-			s.notify()
-			// Cycle the notification at the same speed as the pusher will push
-			// This prevents large message queues from building up
-			timer.Reset(1 * time.Second)
-		}
+	defer timer.Stop()
+
+	for range timer.C {
+		s.dog.ReportHeartbeatStatus(watcherUUID, watchdog.HEARTBEAT_STATUS_OK)
+		s.notify()
+		// The ticker will automatically fire at 1 second intervals
+		// This prevents large message queues from building up
 	}
 }
 
 func (s *Handler) notify() {
 	s.dog.SetHasSubscribers(s.subscribers.Length() > 0)
 	if s.subscribers.Length() == 0 {
-		//		zap.S().Debugf("No subscribers")
 		return
 	}
 
@@ -122,23 +121,22 @@ func (s *Handler) notify() {
 	statusMessage := s.StatusCollector.GenerateStatusMessage()
 	if ctx.Err() != nil {
 		// It is expected that the first 1-2 times this might fail, due to the systems starting up
-		zap.S().Warnf("Failed to generate status message: %s", ctx.Err().Error())
+		s.logger.Warnf("Failed to generate status message: %s", ctx.Err().Error())
 		return
 	}
 	if statusMessage == nil {
-		zap.S().Warnf("Failed to generate status message")
+		s.logger.Warnf("Failed to generate status message")
 		return
 	}
 
 	notified := 0
 	s.subscribers.Range(func(key string, value string) bool {
-
 		message, err := encoding.EncodeMessageFromUMHInstanceToUser(models.UMHMessageContent{
 			MessageType: models.Status,
 			Payload:     statusMessage,
 		})
 		if err != nil {
-			zap.S().Warnf("Failed to encrypt message for subscriber %s", key)
+			s.logger.Warnf("Failed to encrypt message for subscriber %s", key)
 			return true
 		}
 		s.pusher.Push(models.UMHMessage{
@@ -146,10 +144,8 @@ func (s *Handler) notify() {
 			Email:        key,
 			InstanceUUID: s.instanceUUID,
 		})
-		// zap.S().Debugf("Notified subscriber %s", key)
 		notified++
 		return true
 	})
-	zap.S().Debugf("Notified %d subscribers", notified)
 	cncl()
 }

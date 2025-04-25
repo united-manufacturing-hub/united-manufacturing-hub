@@ -17,8 +17,11 @@ package encoding_old
 import (
 	"encoding/base64"
 	"encoding/hex"
+	"fmt"
 	"io"
 	"strings"
+
+	"errors"
 
 	"github.com/klauspost/compress/zstd"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/safejson"
@@ -36,12 +39,15 @@ func Compress(message string) (string, error) {
 func c(in io.Reader, out io.Writer) error {
 	enc, err := zstd.NewWriter(out)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to create zstd writer: %w", err)
 	}
 	_, err = io.Copy(enc, in)
 	if err != nil {
-		enc.Close()
-		return err
+		closeErr := enc.Close()
+		if closeErr != nil {
+			return fmt.Errorf("failed to copy and close: %w", errors.Join(err, closeErr))
+		}
+		return fmt.Errorf("failed to copy message: %w", err)
 	}
 	return enc.Close()
 }

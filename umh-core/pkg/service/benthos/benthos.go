@@ -34,6 +34,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
@@ -44,7 +45,6 @@ import (
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 	"gopkg.in/yaml.v3"
 
-	benthosyaml "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 )
 
@@ -258,7 +258,7 @@ func (s *BenthosService) generateBenthosYaml(config *benthosserviceconfig.Bentho
 		config.LogLevel = "INFO"
 	}
 
-	return benthosyaml.RenderBenthosYAML(
+	return benthosserviceconfig.RenderBenthosYAML(
 		config.Input,
 		config.Output,
 		config.Pipeline,
@@ -374,7 +374,7 @@ func (s *BenthosService) GetConfig(ctx context.Context, filesystemService filesy
 	}
 
 	// Normalize the config to ensure consistent defaults
-	return benthosyaml.NormalizeBenthosConfig(result), nil
+	return benthosserviceconfig.NormalizeBenthosConfig(result), nil
 }
 
 // extractMetricsPort safely extracts the metrics port from the config map
@@ -545,59 +545,59 @@ func parseMetrics(data []byte) (Metrics, error) {
 
 	// Process each metric family
 	for name, family := range mf {
-		switch {
+		switch name {
 		// Input metrics
-		case name == "input_connection_failed":
+		case "input_connection_failed":
 			if len(family.Metric) > 0 {
 				metrics.Input.ConnectionFailed = int64(getValue(family.Metric[0]))
 			}
-		case name == "input_connection_lost":
+		case "input_connection_lost":
 			if len(family.Metric) > 0 {
 				metrics.Input.ConnectionLost = int64(getValue(family.Metric[0]))
 			}
-		case name == "input_connection_up":
+		case "input_connection_up":
 			if len(family.Metric) > 0 {
 				metrics.Input.ConnectionUp = int64(getValue(family.Metric[0]))
 			}
-		case name == "input_received":
+		case "input_received":
 			if len(family.Metric) > 0 {
 				metrics.Input.Received = int64(getValue(family.Metric[0]))
 			}
-		case name == "input_latency_ns":
+		case "input_latency_ns":
 			updateLatencyFromFamily(&metrics.Input.LatencyNS, family)
 
 		// Output metrics
-		case name == "output_batch_sent":
+		case "output_batch_sent":
 			if len(family.Metric) > 0 {
 				metrics.Output.BatchSent = int64(getValue(family.Metric[0]))
 			}
-		case name == "output_connection_failed":
+		case "output_connection_failed":
 			if len(family.Metric) > 0 {
 				metrics.Output.ConnectionFailed = int64(getValue(family.Metric[0]))
 			}
-		case name == "output_connection_lost":
+		case "output_connection_lost":
 			if len(family.Metric) > 0 {
 				metrics.Output.ConnectionLost = int64(getValue(family.Metric[0]))
 			}
-		case name == "output_connection_up":
+		case "output_connection_up":
 			if len(family.Metric) > 0 {
 				metrics.Output.ConnectionUp = int64(getValue(family.Metric[0]))
 			}
-		case name == "output_error":
+		case "output_error":
 			if len(family.Metric) > 0 {
 				metrics.Output.Error = int64(getValue(family.Metric[0]))
 			}
-		case name == "output_sent":
+		case "output_sent":
 			if len(family.Metric) > 0 {
 				metrics.Output.Sent = int64(getValue(family.Metric[0]))
 			}
-		case name == "output_latency_ns":
+		case "output_latency_ns":
 			updateLatencyFromFamily(&metrics.Output.LatencyNS, family)
 
 		// Process metrics
-		case name == "processor_received", name == "processor_batch_received",
-			name == "processor_sent", name == "processor_batch_sent",
-			name == "processor_error", name == "processor_latency_ns":
+		case "processor_received", "processor_batch_received",
+			"processor_sent", "processor_batch_sent",
+			"processor_error", "processor_latency_ns":
 			for _, metric := range family.Metric {
 				path := getLabel(metric, "path")
 				if path == "" {
@@ -710,7 +710,7 @@ func (s *BenthosService) GetHealthCheckAndMetrics(ctx context.Context, s6Service
 	// Create a client to use for our requests
 	// If it's a mock client (used in tests), use it directly
 	// Otherwise, create a new client with timeouts based on context
-	var requestClient httpclient.HTTPClient = s.httpClient
+	var requestClient = s.httpClient
 
 	// Only create a default client if we're not using a mock client
 	if requestClient == nil {
@@ -1038,7 +1038,14 @@ func (s *BenthosService) ReconcileManager(ctx context.Context, filesystemService
 		return ctx.Err(), false
 	}
 
-	return s.s6Manager.Reconcile(ctx, config.FullConfig{Internal: config.InternalConfig{Services: s.s6ServiceConfigs}}, filesystemService, tick)
+	// Create a new snapshot with the current S6 service configs
+	// Note: therefore, the S6 manager will not have access to the full observed state
+	snapshot := fsm.SystemSnapshot{
+		CurrentConfig: config.FullConfig{Internal: config.InternalConfig{Services: s.s6ServiceConfigs}},
+		Tick:          tick,
+	}
+
+	return s.s6Manager.Reconcile(ctx, snapshot, filesystemService)
 }
 
 // IsLogsFine analyzes Benthos logs to determine if there are any critical issues
@@ -1139,5 +1146,7 @@ func (s *BenthosService) ServiceExists(ctx context.Context, filesystemService fi
 // and the instance itself cannot be stopped or removed
 // Expects benthosName (e.g. "myservice") as defined in the UMH config
 func (s *BenthosService) ForceRemoveBenthos(ctx context.Context, filesystemService filesystem.Service, benthosName string) error {
-	return s.s6Service.ForceRemove(ctx, s.getS6ServiceName(benthosName), filesystemService)
+	s6ServiceName := s.getS6ServiceName(benthosName)
+	s6ServicePath := filepath.Join(constants.S6BaseDir, s6ServiceName)
+	return s.s6Service.ForceRemove(ctx, s6ServicePath, filesystemService)
 }
