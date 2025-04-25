@@ -41,6 +41,7 @@ import (
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 	"go.uber.org/zap"
+	"golang.org/x/sync/errgroup"
 )
 
 // Metrics contains information about the metrics of the Benthos service
@@ -231,7 +232,7 @@ func NewBenthosMonitorService(benthosName string, opts ...BenthosMonitorServiceO
 const BLOCK_START_MARKER = "BEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGIN"
 
 // PING_END_MARKER marks the end of the /ping endpoint data.
-const PING_END_MARKER = "PINGENDPINGENDPINGENDPINGENDPINGENDPINGENDPINGENDPINGENDPINGENDPINGENDPINGENDPINGENDPINGENDPINGENDPINGENDPINGENDPINGEND"
+const PING_END_MARKER = "PINGENDPINGENDPINGENDPINGENDPINGENDPINGENDPINGENDPINGENDPINGENDPINGENDPINGENDPINGENDPINGENDPINGENDPINGENDPINGEND"
 
 // READY_END marks the end of the /ready endpoint data.
 const READY_END = "CONFIGENDCONFIGENDCONFIGENDCONFIGENDCONFIGENDCONFIGENDCONFIGENDCONFIGENDCONFIGENDCONFIGENDCONFIGEND"
@@ -476,35 +477,81 @@ func (s *BenthosMonitorService) ParseBenthosLogs(ctx context.Context, logs []s6s
 
 	var metrics *BenthosMetrics
 	var healthCheck HealthCheck
+	var isLive bool
+	var readyResp readyResponse
+	var isReady bool
+	var versionResp versionResponse
+
+	// Process all data in parallel using errgroup
+	ctx8, cancel8 := context.WithTimeout(ctx, 8*time.Millisecond)
+	defer cancel8()
+	g, _ := errgroup.WithContext(ctx8)
 
 	// Step 1: Process Liveness from /ping endpoint
-	livenessResp, err := s.ProcessPingData(pingDataBytes)
-	if err != nil {
-		return nil, fmt.Errorf("failed to process ping data: %w", err)
-	}
-	healthCheck.IsLive = livenessResp
+	g.Go(func() error {
+		var err error
+		isLive, err = s.ProcessPingData(pingDataBytes)
+		if err != nil {
+			return fmt.Errorf("failed to process ping data: %w", err)
+		}
+		return nil
+	})
 
 	// Step 2: Process Readiness from /ready endpoint
-	isReady, readyResp, err := s.ProcessReadyData(readyDataBytes)
-	if err != nil {
-		return nil, fmt.Errorf("failed to process ready data: %w", err)
+	g.Go(func() error {
+		var err error
+		isReady, readyResp, err = s.ProcessReadyData(readyDataBytes)
+		if err != nil {
+			return fmt.Errorf("failed to process ready data: %w", err)
+		}
+		return nil
+	})
+
+	// Step 3: Process Version from /version endpoint
+	g.Go(func() error {
+		var err error
+		versionResp, err = s.ProcessVersionData(versionDataBytes)
+		if err != nil {
+			return fmt.Errorf("failed to process version data: %w", err)
+		}
+		return nil
+	})
+
+	// Step 4: Process the Metrics and update the metrics state
+	g.Go(func() error {
+		var err error
+		metrics, err = s.ProcessMetricsData(metricsDataBytes, tick)
+		if err != nil {
+			return fmt.Errorf("failed to parse metrics: %w", err)
+		}
+		return nil
+	})
+
+	// Create a buffered channel to receive the result from g.Wait()
+	errc := make(chan error, 1)
+
+	// Run g.Wait() in a separate goroutine
+	go func() {
+		errc <- g.Wait()
+	}()
+
+	// Use a select statement to wait for either the g.Wait() result or the context's cancellation
+	select {
+	case err := <-errc:
+		if err != nil {
+			return nil, err
+		}
+		// All goroutines completed successfully
+	case <-ctx.Done():
+		return nil, ctx.Err()
 	}
+
+	// Update healthCheck with the results from the parallel operations
+	healthCheck.IsLive = isLive
 	healthCheck.IsReady = isReady
 	healthCheck.ReadyError = readyResp.Error
 	healthCheck.ConnectionStatuses = readyResp.Statuses
-
-	// Step 3: Process Version from /version endpoint
-	versionResp, err := s.ProcessVersionData(versionDataBytes)
-	if err != nil {
-		return nil, fmt.Errorf("failed to process version data: %w", err)
-	}
 	healthCheck.Version = versionResp.Version
-
-	// Step 4: Process the Metrics and update the metrics state
-	metrics, err = s.ProcessMetricsData(metricsDataBytes, tick)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse metrics: %w", err)
-	}
 
 	timestampDataString := string(timestampDataBytes)
 	// If the system resolution is to small, we need to pad the timestamp with zeros
