@@ -526,7 +526,7 @@ var _ = Describe("Benthos Service", func() {
 			mockFS = filesystem.NewMockFileSystem()
 			mockS6Manager = s6fsm.NewS6ManagerWithMockedServices(benthosName)
 
-			benthosMonitorManager = benthos_monitor_fsm.NewBenthosMonitorManagerWithMockedService(benthosName, *benthosMonitorMockService)
+			benthosMonitorManager = benthos_monitor_fsm.NewBenthosMonitorManagerWithMockedService("benthos-"+benthosName, *benthosMonitorMockService)
 			service = NewDefaultBenthosService(benthosName,
 				WithMonitorManager(benthosMonitorManager),
 				WithS6Service(mockS6Service),
@@ -749,7 +749,7 @@ logger:
 			mockFS = filesystem.NewMockFileSystem()
 			mockS6Manager = s6fsm.NewS6ManagerWithMockedServices(benthosName)
 
-			benthosMonitorManager = benthos_monitor_fsm.NewBenthosMonitorManagerWithMockedService(benthosName, *benthosMonitorMockService)
+			benthosMonitorManager = benthos_monitor_fsm.NewBenthosMonitorManagerWithMockedService("benthos-"+benthosName, *benthosMonitorMockService)
 			service = NewDefaultBenthosService(benthosName,
 				WithMonitorManager(benthosMonitorManager),
 				WithS6Service(mockS6Service),

@@ -299,6 +299,18 @@ test-benthos: stop-and-remove-umh-core-latest build
 		--cpus $(CPUS) \
 		$(IMAGE_NAME):$(TAG)
 
+test-benthos-single: stop-and-remove-umh-core-latest build
+	@mkdir -p $(PWD)/data
+	@cp $(PWD)/examples/example-config-benthos-single.yaml $(PWD)/data/config.yaml
+	docker run \
+		--name $(IMAGE_NAME) \
+		-v $(PWD)/data:/data \
+		-e LOGGING_LEVEL=DEBUG \
+		-p 8081:8080 \
+		-p 4195:4195 \
+		--memory $(MEMORY) \
+		--cpus $(CPUS) \
+		$(IMAGE_NAME):$(TAG)
 
 test-redpanda: stop-and-remove-umh-core-latest build
 	@mkdir -p $(PWD)/data

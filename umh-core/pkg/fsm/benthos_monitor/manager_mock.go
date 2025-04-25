@@ -36,8 +36,11 @@ func NewBenthosMonitorManagerWithMockedService(name string, mockSvc benthos_moni
 			// In a real test, you'd define test data
 			return []config.BenthosMonitorConfig{
 				{
-					Name:            name,
-					DesiredFSMState: OperationalStateActive,
+					FSMInstanceConfig: config.FSMInstanceConfig{
+						Name:            name,
+						DesiredFSMState: OperationalStateActive,
+					},
+					MetricsPort: 8080,
 				},
 			}, nil
 		},

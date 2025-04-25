@@ -433,9 +433,10 @@ func (s *BenthosService) GetHealthCheckAndMetrics(ctx context.Context, filesyste
 	}
 
 	// Get the last observed state of the benthos monitor
-	lastObservedState, err := s.benthosMonitorManager.GetLastObservedState(benthosName)
+	s6ServiceName := s.getS6ServiceName(benthosName)
+	lastObservedState, err := s.benthosMonitorManager.GetLastObservedState(s6ServiceName)
 	if err != nil {
-		return BenthosStatus{}, fmt.Errorf("failed to get last observed state: %w", err)
+		return BenthosStatus{}, fmt.Errorf("failed to get last observed state in GetHealthCheckAndMetrics: %w", err)
 	}
 
 	if lastObservedState == nil {
@@ -510,9 +511,11 @@ func (s *BenthosService) AddBenthosToS6Manager(ctx context.Context, filesystemSe
 
 	// Now do it the same with the benthos monitor
 	benthosMonitorConfig := config.BenthosMonitorConfig{
-		Name:            s6ServiceName,
-		DesiredFSMState: benthos_monitor_fsm.OperationalStateActive,
-		MetricsPort:     cfg.MetricsPort,
+		FSMInstanceConfig: config.FSMInstanceConfig{
+			Name:            s6ServiceName,
+			DesiredFSMState: benthos_monitor_fsm.OperationalStateActive,
+		},
+		MetricsPort: cfg.MetricsPort,
 	}
 
 	s.benthosMonitorConfigs = append(s.benthosMonitorConfigs, benthosMonitorConfig)
@@ -566,9 +569,11 @@ func (s *BenthosService) UpdateBenthosInS6Manager(ctx context.Context, filesyste
 
 	// Now update the benthos monitor config
 	s.benthosMonitorConfigs[index] = config.BenthosMonitorConfig{
-		Name:            s6ServiceName,
-		DesiredFSMState: currentDesiredState,
-		MetricsPort:     cfg.MetricsPort,
+		FSMInstanceConfig: config.FSMInstanceConfig{
+			Name:            s6ServiceName,
+			DesiredFSMState: currentDesiredState,
+		},
+		MetricsPort: cfg.MetricsPort,
 	}
 
 	// The next reconciliation of the S6 manager will detect the config change

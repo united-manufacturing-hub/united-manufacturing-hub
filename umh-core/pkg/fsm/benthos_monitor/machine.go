@@ -32,7 +32,7 @@ import (
 
 // NewBenthosMonitorInstance creates a new BenthosMonitorInstance with the standard transitions.
 func NewBenthosMonitorInstance(config config.BenthosMonitorConfig) *BenthosMonitorInstance {
-	return NewBenthosMonitorInstanceWithService(config, benthos_monitor.NewBenthosMonitorService("monitor-"+config.Name,
+	return NewBenthosMonitorInstanceWithService(config, benthos_monitor.NewBenthosMonitorService(config.Name,
 		benthos_monitor.WithS6Service(s6.NewDefaultService()),
 	))
 }

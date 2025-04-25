@@ -45,12 +45,6 @@ type AgentConfig struct {
 	Location           map[int]string `yaml:"location,omitempty"`
 }
 
-type BenthosMonitorConfig struct {
-	Name            string `yaml:"name,omitempty"`
-	DesiredFSMState string `yaml:"desiredState,omitempty"`
-	MetricsPort     int    `yaml:"metricsPort"` // Port to expose metrics on
-}
-
 type CommunicatorConfig struct {
 	APIURL    string `yaml:"apiUrl,omitempty"`
 	AuthToken string `yaml:"authToken,omitempty"`
@@ -89,6 +83,14 @@ type S6FSMConfig struct {
 	FSMInstanceConfig `yaml:",inline"`
 
 	S6ServiceConfig s6serviceconfig.S6ServiceConfig `yaml:"s6ServiceConfig"`
+}
+
+// BenthosMonitorConfig contains configuration for creating a benthos monitor
+type BenthosMonitorConfig struct {
+	// For the FSM
+	FSMInstanceConfig `yaml:",inline"`
+
+	MetricsPort int `yaml:"metricsPort"` // Port to expose metrics on
 }
 
 // BenthosConfig contains configuration for creating a Benthos service

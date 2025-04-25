@@ -55,9 +55,11 @@ var _ = Describe("BenthosMonitor FSM", func() {
 
 		// Create a NmapConfig.
 		cfg := config.BenthosMonitorConfig{
-			Name:            "monitor-benthos-testing",
-			DesiredFSMState: benthos_monitor.OperationalStateStopped,
-			MetricsPort:     8080,
+			FSMInstanceConfig: config.FSMInstanceConfig{
+				Name:            "monitor-benthos-testing",
+				DesiredFSMState: benthos_monitor.OperationalStateStopped,
+			},
+			MetricsPort: 8080,
 		}
 
 		// Create an instance using NewNmapInstanceWithService.
