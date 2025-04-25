@@ -314,7 +314,11 @@ func readLogLines(filePath string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer file.Close()
+	defer func() {
+		if closeErr := file.Close(); closeErr != nil {
+			err = closeErr
+		}
+	}()
 
 	var lines []string
 	scanner := bufio.NewScanner(file)
