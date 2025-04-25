@@ -568,10 +568,14 @@ func (s *BenthosService) UpdateBenthosInS6Manager(ctx context.Context, filesyste
 	}
 
 	// Now update the benthos monitor config
+	benthosMonitorDesiredState := benthos_monitor_fsm.OperationalStateActive
+	if currentDesiredState == s6fsm.OperationalStateStopped {
+		benthosMonitorDesiredState = benthos_monitor_fsm.OperationalStateStopped
+	}
 	s.benthosMonitorConfigs[index] = config.BenthosMonitorConfig{
 		FSMInstanceConfig: config.FSMInstanceConfig{
 			Name:            s6ServiceName,
-			DesiredFSMState: currentDesiredState,
+			DesiredFSMState: benthosMonitorDesiredState,
 		},
 		MetricsPort: cfg.MetricsPort,
 	}
