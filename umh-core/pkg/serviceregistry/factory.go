@@ -17,19 +17,34 @@
 package serviceregistry
 
 import (
+	"fmt"
+	"sync"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/portmanager"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
-func NewRegistry(minPort, maxPort int) (*Registry, error) {
-	fs := filesystem.NewDefaultService()
+var (
+	instance Registry
+	once     sync.Once
+)
 
-	pm, err := portmanager.NewDefaultPortManager(minPort, maxPort)
-	if err != nil {
-		return nil, err
-	}
-	return &Registry{
-		PortManager: pm,
-		FileSystem:  fs,
-	}, nil
+func NewRegistry(minPort, maxPort int) (*Registry, error) {
+
+	//  Initialize the registry only once
+	// Since the registry contains services like portmanager which should be initialized only once and shared between services
+	// we need to make sure that the registry is initialized only once
+	var err error
+	once.Do(func() {
+		pm, portErr := portmanager.NewDefaultPortManager(minPort, maxPort)
+		if portErr != nil {
+			err = fmt.Errorf("failed to create port manager: %w", portErr)
+		}
+		fs := filesystem.NewDefaultService()
+		instance = Registry{
+			PortManager: pm,
+			FileSystem:  fs,
+		}
+	})
+	return &instance, err
 }
