@@ -393,6 +393,7 @@ var _ = Describe("GetDataFlowComponent", func() {
 				DesiredState:      "active",
 				CurrentState:      "active",
 				LastObservedState: &actions.MockObservedState{}, // Not a DataflowComponentObservedStateSnapshot
+
 			}
 
 			// Access the buildDataFlowComponentDataFromSnapshot through Execute
