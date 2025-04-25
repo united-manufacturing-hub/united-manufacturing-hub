@@ -70,27 +70,27 @@ func (a *GetDataFlowComponentAction) Validate() error {
 }
 
 func buildDataFlowComponentDataFromSnapshot(instance fsm.FSMInstanceSnapshot, log *zap.SugaredLogger) (config.DataFlowComponentConfig, error) {
-    dfcData := config.DataFlowComponentConfig{}
+	dfcData := config.DataFlowComponentConfig{}
 
-    log.Infow("Building dataflowcomponent data from snapshot", "instanceID", instance.ID)
+	log.Infow("Building dataflowcomponent data from snapshot", "instanceID", instance.ID)
 
-    if instance.LastObservedState != nil {
-        // Try to cast to the right type
-        observedState, ok := instance.LastObservedState.(*dataflowcomponent.DataflowComponentObservedStateSnapshot)
-        if !ok {
-            log.Errorw("Observed state is of unexpected type", "instanceID", instance.ID)
-            return config.DataFlowComponentConfig{}, fmt.Errorf("invalid observed state type for dataflowcomponent %s", instance.ID)
-        }
-        dfcData.DataFlowComponentConfig = observedState.Config
-        dfcData.Name = instance.ID
-        dfcData.DesiredFSMState = instance.DesiredState
+	if instance.LastObservedState != nil {
+		// Try to cast to the right type
+		observedState, ok := instance.LastObservedState.(*dataflowcomponent.DataflowComponentObservedStateSnapshot)
+		if !ok {
+			log.Errorw("Observed state is of unexpected type", "instanceID", instance.ID)
+			return config.DataFlowComponentConfig{}, fmt.Errorf("invalid observed state type for dataflowcomponent %s", instance.ID)
+		}
+		dfcData.DataFlowComponentConfig = observedState.Config
+		dfcData.Name = instance.ID
+		dfcData.DesiredFSMState = instance.DesiredState
 
-    } else {
-        log.Warnw("No observed state found for dataflowcomponent", "instanceID", instance.ID)
-        return config.DataFlowComponentConfig{}, fmt.Errorf("no observed state found for dataflowcomponent")
-    }
+	} else {
+		log.Warnw("No observed state found for dataflowcomponent", "instanceID", instance.ID)
+		return config.DataFlowComponentConfig{}, fmt.Errorf("no observed state found for dataflowcomponent")
+	}
 
-    return dfcData, nil
+	return dfcData, nil
 }
 
 func (a *GetDataFlowComponentAction) Execute() (interface{}, map[string]interface{}, error) {
@@ -125,7 +125,7 @@ func (a *GetDataFlowComponentAction) Execute() (interface{}, map[string]interfac
 	for _, component := range dataFlowComponents {
 		// build the payload
 		dfc_payload := models.CommonDataFlowComponentCDFCPropertiesPayload{}
-		tagValue := "not-used"
+		tagValue := "" // the benthos image tag is not used anymore in UMH Core
 		dfc_payload.CDFCProperties.BenthosImageTag = &models.CommonDataFlowComponentBenthosImageTagConfig{
 			Tag: &tagValue,
 		}
