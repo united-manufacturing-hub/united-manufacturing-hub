@@ -408,3 +408,21 @@ func (w *writeFailingMockConfigManager) AtomicDeleteDataflowcomponent(ctx contex
 
 	return nil
 }
+
+// AtomicEditDataflowcomponent implements the required interface method but ensures the write fails
+func (w *writeFailingMockConfigManager) AtomicEditDataflowcomponent(ctx context.Context, componentUUID uuid.UUID, dfc config.DataFlowComponentConfig) error {
+	// Get the current config
+	config, err := w.GetConfig(ctx, 0)
+	if err != nil {
+		return err
+	}
+
+	// do not edit anything
+
+	// Write config (will fail with this mock)
+	if err := w.writeConfig(ctx, config); err != nil {
+		return err
+	}
+
+	return nil
+}

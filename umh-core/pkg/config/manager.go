@@ -64,6 +64,8 @@ type ConfigManager interface {
 	AtomicAddDataflowcomponent(ctx context.Context, dfc DataFlowComponentConfig) error
 	// AtomicDeleteDataflowcomponent deletes a dataflowcomponent from the config atomically
 	AtomicDeleteDataflowcomponent(ctx context.Context, componentUUID uuid.UUID) error
+	// AtomicEditDataflowcomponent edits a dataflowcomponent in the config atomically
+	AtomicEditDataflowcomponent(ctx context.Context, componentUUID uuid.UUID, dfc DataFlowComponentConfig) error
 }
 
 // FileConfigManager implements the ConfigManager interface by reading from a file
@@ -469,6 +471,13 @@ func (m *FileConfigManager) AtomicAddDataflowcomponent(ctx context.Context, dfc 
 		return fmt.Errorf("failed to get config: %w", err)
 	}
 
+	// check for duplicate name before add
+	for _, cmp := range config.DataFlow {
+		if cmp.Name == dfc.Name {
+			return fmt.Errorf("another dataflow component with name %q already exists – choose a unique name", dfc.Name)
+		}
+	}
+
 	// edit the config
 	config.DataFlow = append(config.DataFlow, dfc)
 
@@ -540,4 +549,59 @@ func (m *FileConfigManagerWithBackoff) AtomicDeleteDataflowcomponent(ctx context
 	}
 
 	return m.configManager.AtomicDeleteDataflowcomponent(ctx, componentUUID)
+}
+
+// AtomicEditDataflowcomponent edits a dataflowcomponent in the config atomically
+func (m *FileConfigManager) AtomicEditDataflowcomponent(ctx context.Context, componentUUID uuid.UUID, dfc DataFlowComponentConfig) error {
+	err := m.mutexAtomicUpdate.Lock(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to lock config file: %w", err)
+	}
+	defer m.mutexAtomicUpdate.Unlock()
+
+	// get the current config
+	config, err := m.GetConfig(ctx, 0)
+	if err != nil {
+		return fmt.Errorf("failed to get config: %w", err)
+	}
+
+	// Find the component with matching UUID
+	found := false
+	for i, component := range config.DataFlow {
+		componentID := dataflowcomponentconfig.GenerateUUIDFromName(component.Name)
+		if componentID == componentUUID {
+			// Found the component to edit, update it
+			config.DataFlow[i] = dfc
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		return fmt.Errorf("dataflow component with UUID %s not found", componentUUID)
+	}
+
+	// check for duplicate name after edit
+	for _, cmp := range config.DataFlow {
+		if cmp.Name == dfc.Name && dataflowcomponentconfig.GenerateUUIDFromName(cmp.Name) != componentUUID {
+			return fmt.Errorf("another dataflow component with name %q already exists – choose a unique name", dfc.Name)
+		}
+	}
+
+	// write the config
+	if err := m.writeConfig(ctx, config); err != nil {
+		return fmt.Errorf("failed to write config: %w", err)
+	}
+
+	return nil
+}
+
+// AtomicEditDataflowcomponent delegates to the underlying FileConfigManager
+func (m *FileConfigManagerWithBackoff) AtomicEditDataflowcomponent(ctx context.Context, componentUUID uuid.UUID, dfc DataFlowComponentConfig) error {
+	// Check if context is already cancelled
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+
+	return m.configManager.AtomicEditDataflowcomponent(ctx, componentUUID, dfc)
 }
