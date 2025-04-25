@@ -18,9 +18,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
@@ -116,6 +118,14 @@ func (a *DeleteDataflowComponentAction) Execute() (interface{}, map[string]inter
 		return nil, nil, fmt.Errorf("%s", errorMsg)
 	}
 
+	// wait for the component to be removed
+	err = a.waitForComponentToBeRemoved()
+	if err != nil {
+		errorMsg := fmt.Sprintf("failed to wait for dataflowcomponent to be removed: %v", err)
+		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errorMsg, a.outboundChannel, models.DeleteDataFlowComponent)
+		return nil, nil, fmt.Errorf("%s", errorMsg)
+	}
+
 	// return success message, but do not send it as this is done by the caller
 	successMsg := fmt.Sprintf("Successfully deleted data flow component with UUID: %s", a.componentUUID)
 
@@ -135,4 +145,28 @@ func (a *DeleteDataflowComponentAction) getUuid() uuid.UUID {
 // GetComponentUUID returns the UUID of the component to be deleted - exposed primarily for testing purposes.
 func (a *DeleteDataflowComponentAction) GetComponentUUID() uuid.UUID {
 	return a.componentUUID
+}
+
+func (a *DeleteDataflowComponentAction) waitForComponentToBeRemoved() error {
+	//check the system snapshot and waits for the instance to be removed
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+	timeout := time.After(constants.DataflowComponentWaitForActiveTimeout)
+	for {
+		select {
+		case <-timeout:
+			return fmt.Errorf("dataflowcomponent %s was not removed in time", a.componentUUID)
+		case <-ticker.C:
+			if dataflowcomponentManager, exists := a.systemSnapshot.Managers[constants.DataflowcomponentManagerName]; exists {
+				instances := dataflowcomponentManager.GetInstances()
+				for _, instance := range instances {
+					if dataflowcomponentconfig.GenerateUUIDFromName(instance.ID) == a.componentUUID {
+						// component is still there, so we need to wait longer
+						continue
+					}
+					return nil
+				}
+			}
+		}
+	}
 }
