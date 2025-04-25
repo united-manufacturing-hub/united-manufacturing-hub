@@ -116,7 +116,7 @@ func (a *EditDataflowComponentAction) Parse(payload interface{}) error {
 		}
 		a.payload = payload
 	case "protocolConverter", "dataBridge", "streamProcessor":
-		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionConfirmed, "component type not supported", a.outboundChannel, models.EditDataFlowComponent)
+		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, "component type not supported", a.outboundChannel, models.EditDataFlowComponent)
 		return fmt.Errorf("component type %s not yet supported", a.metaType)
 	default:
 		return fmt.Errorf("unsupported component type: %s", a.metaType)
