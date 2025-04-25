@@ -297,7 +297,7 @@ jobs:
 
             if [[ "$CHANNEL" == "nightly" ]]; then
               # Pre-release, simply update the channel
-              curl --max-time 30 -X POST $base_url/v2/webhook/versions/umh-core/update \
+              curl --max-time 30 --retry 3 -X POST $base_url/v2/webhook/versions/umh-core/update \
               -H "X-Webhook-Secret: ${{ secrets.UMH_MC_WEBHOOK_SECRET }}" \
               -H "Content-Type: application/json" \
               -d "{\"channel\":\"${CHANNEL}\",\"version\":\"${VERSION}\"}"
@@ -311,13 +311,13 @@ jobs:
 
               if [[ "$VERSION" == "$NIGHTLY_BASE_VERSION" ]]; then
                 # Promote nightly to stable
-                curl --max-time 30 -X POST $base_url/v2/webhook/versions/umh-core/update \
+                curl --max-time 30 --retry 3 -X POST $base_url/v2/webhook/versions/umh-core/update \
                 -H "X-Webhook-Secret: ${{ secrets.UMH_MC_WEBHOOK_SECRET }}" \
                 -H "Content-Type: application/json" \
                 -d "{\"channel\":\"stable\",\"version\":\"${VERSION}\",\"isPromotion\":true,\"promotedFrom\":\"nightly\"}"
               else
                 # New stable release without promotion
-                curl --max-time 30 -X POST $base_url/v2/webhook/versions/umh-core/update \
+                curl --max-time 30 --retry 3 -X POST $base_url/v2/webhook/versions/umh-core/update \
                 -H "X-Webhook-Secret: ${{ secrets.UMH_MC_WEBHOOK_SECRET }}" \
                 -H "Content-Type: application/json" \
                 -d "{\"channel\":\"stable\",\"version\":\"${VERSION}\"}"
