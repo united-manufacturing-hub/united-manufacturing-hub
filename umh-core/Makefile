@@ -213,6 +213,9 @@ integration-test: stop-all-pods vet nilaway lint
 redpanda-extended-test: stop-all-pods vet nilaway
 	ginkgo -r -v --tags=test --label-filter='redpanda-extended' --fail-fast --timeout=1.5h ./...
 
+redpanda-quick-test: stop-all-pods vet nilaway lint
+	ginkgo -r -v --tags=test --label-filter='redpanda-quick' --fail-fast --timeout=5m ./...
+
 
 # integration-test-ci: Runs integration tests in CI environments with proper version tagging
 # - Injects VERSION via ldflags into AppVersion for proper error identification in Sentry
