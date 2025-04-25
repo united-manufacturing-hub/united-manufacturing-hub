@@ -34,7 +34,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/portmanager"
 	benthossvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
 	benthos_monitor "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos_monitor"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
@@ -47,7 +46,6 @@ var _ = Describe("BenthosInstance FSM", func() {
 		ctx         context.Context
 		tick        uint64
 
-		mockFS          *filesystem.MockFileSystem
 		mockSvcRegistry *serviceregistry.Registry
 	)
 
@@ -75,7 +73,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 
 			// from "to_be_created" => "creating"
 			tick, err = fsmtest.TestBenthosStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockSvcRegistry, serviceName,
 				internalfsm.LifecycleStateToBeCreated,
 				internalfsm.LifecycleStateCreating,
 				5, // attempts
@@ -102,7 +100,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 
 			// from "creating" => "stopped"
 			tick, err = fsmtest.TestBenthosStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockSvcRegistry, serviceName,
 				internalfsm.LifecycleStateCreating,
 				benthosfsm.OperationalStateStopped,
 				5,
@@ -120,7 +118,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 			})
 
 			tick, err = fsmtest.TestBenthosStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockSvcRegistry, serviceName,
 				benthosfsm.OperationalStateStopped,
 				benthosfsm.OperationalStateStarting,
 				5,
@@ -140,7 +138,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 
 			// Step 1: from to_be_created => creating => stopped
 			tick, err = fsmtest.TestBenthosStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockSvcRegistry, serviceName,
 				internalfsm.LifecycleStateToBeCreated,
 				internalfsm.LifecycleStateCreating,
 				3,
@@ -154,7 +152,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 			mockService.ExistingServices[serviceName] = true
 
 			tick, err = fsmtest.TestBenthosStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockSvcRegistry, serviceName,
 				internalfsm.LifecycleStateCreating,
 				benthosfsm.OperationalStateStopped,
 				5,
@@ -165,7 +163,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 			// Step 2: from stopped => starting => configLoading
 			Expect(instance.SetDesiredFSMState(benthosfsm.OperationalStateActive)).To(Succeed())
 			tick, err = fsmtest.TestBenthosStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockSvcRegistry, serviceName,
 				benthosfsm.OperationalStateStopped,
 				benthosfsm.OperationalStateStarting,
 				5,
@@ -182,7 +180,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 			})
 
 			tick, err = fsmtest.TestBenthosStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockSvcRegistry, serviceName,
 				benthosfsm.OperationalStateStarting,
 				benthosfsm.OperationalStateStartingConfigLoading,
 				5,
@@ -201,7 +199,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 
 			// Step 1: to_be_created => creating => stopped
 			tick, err = fsmtest.TestBenthosStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockSvcRegistry, serviceName,
 				internalfsm.LifecycleStateToBeCreated,
 				internalfsm.LifecycleStateCreating,
 				5,
@@ -213,7 +211,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 			mockService.ExistingServices[serviceName] = true
 
 			tick, err = fsmtest.TestBenthosStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockSvcRegistry, serviceName,
 				internalfsm.LifecycleStateCreating,
 				benthosfsm.OperationalStateStopped,
 				5,
@@ -226,7 +224,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 
 			// from stopped => starting
 			tick, err = fsmtest.TestBenthosStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockSvcRegistry, serviceName,
 				benthosfsm.OperationalStateStopped,
 				benthosfsm.OperationalStateStarting,
 				5,
@@ -242,7 +240,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				IsHealthchecksPassed: true,
 			})
 			tick, err = fsmtest.TestBenthosStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockSvcRegistry, serviceName,
 				benthosfsm.OperationalStateStarting,
 				benthosfsm.OperationalStateStartingConfigLoading,
 				5,
@@ -260,7 +258,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				IsRunningWithoutErrors: true,
 			})
 			tick, err = fsmtest.TestBenthosStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockSvcRegistry, serviceName,
 				benthosfsm.OperationalStateStartingConfigLoading,
 				benthosfsm.OperationalStateIdle,
 				10,
@@ -281,7 +279,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 
 			// Step 1: to_be_created => creating => stopped
 			tick, err = fsmtest.TestBenthosStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockSvcRegistry, serviceName,
 				internalfsm.LifecycleStateToBeCreated,
 				internalfsm.LifecycleStateCreating,
 				5,
@@ -293,7 +291,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 			mockService.ExistingServices[serviceName] = true
 
 			tick, err = fsmtest.TestBenthosStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockSvcRegistry, serviceName,
 				internalfsm.LifecycleStateCreating,
 				benthosfsm.OperationalStateStopped,
 				5,
@@ -306,7 +304,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 
 			// from stopped => starting
 			tick, err = fsmtest.TestBenthosStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockSvcRegistry, serviceName,
 				benthosfsm.OperationalStateStopped,
 				benthosfsm.OperationalStateStarting,
 				5,
@@ -322,7 +320,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				IsHealthchecksPassed: true,
 			})
 			tick, err = fsmtest.TestBenthosStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockSvcRegistry, serviceName,
 				benthosfsm.OperationalStateStarting,
 				benthosfsm.OperationalStateStartingConfigLoading,
 				5,
@@ -339,7 +337,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				IsRunningWithoutErrors: true,
 			})
 			tick, err = fsmtest.TestBenthosStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockSvcRegistry, serviceName,
 				benthosfsm.OperationalStateStartingConfigLoading,
 				benthosfsm.OperationalStateIdle,
 				10,
@@ -358,7 +356,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 			})
 
 			tick, err = fsmtest.TestBenthosStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockSvcRegistry, serviceName,
 				benthosfsm.OperationalStateIdle,
 				benthosfsm.OperationalStateActive,
 				5,
@@ -371,7 +369,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 			// Step 1: to_be_created => creating => stopped
 			var err error
 			tick, err = fsmtest.TestBenthosStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockSvcRegistry, serviceName,
 				internalfsm.LifecycleStateToBeCreated,
 				internalfsm.LifecycleStateCreating,
 				5,
@@ -383,7 +381,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 			mockService.ExistingServices[serviceName] = true
 
 			tick, err = fsmtest.TestBenthosStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockSvcRegistry, serviceName,
 				internalfsm.LifecycleStateCreating,
 				benthosfsm.OperationalStateStopped,
 				5,
@@ -396,7 +394,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 
 			// from stopped => starting
 			tick, err = fsmtest.TestBenthosStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockSvcRegistry, serviceName,
 				benthosfsm.OperationalStateStopped,
 				benthosfsm.OperationalStateStarting,
 				5,
@@ -412,7 +410,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				IsHealthchecksPassed: true,
 			})
 			tick, err = fsmtest.TestBenthosStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockSvcRegistry, serviceName,
 				benthosfsm.OperationalStateStarting,
 				benthosfsm.OperationalStateStartingConfigLoading,
 				5,
@@ -429,7 +427,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				IsRunningWithoutErrors: true,
 			})
 			tick, err = fsmtest.TestBenthosStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockSvcRegistry, serviceName,
 				benthosfsm.OperationalStateStartingConfigLoading,
 				benthosfsm.OperationalStateIdle,
 				10,
@@ -446,7 +444,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				HasProcessingActivity:  true,
 			})
 			tick, err = fsmtest.TestBenthosStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockSvcRegistry, serviceName,
 				benthosfsm.OperationalStateIdle,
 				benthosfsm.OperationalStateActive,
 				5,
@@ -463,7 +461,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				HasProcessingActivity:  true,
 			})
 			tick, err = fsmtest.TestBenthosStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockSvcRegistry, serviceName,
 				benthosfsm.OperationalStateActive,
 				benthosfsm.OperationalStateDegraded,
 				10,
@@ -476,7 +474,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 			// Step 1: to_be_created => creating => stopped
 			var err error
 			tick, err = fsmtest.TestBenthosStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockSvcRegistry, serviceName,
 				internalfsm.LifecycleStateToBeCreated,
 				internalfsm.LifecycleStateCreating,
 				5,
@@ -488,7 +486,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 			mockService.ExistingServices[serviceName] = true
 
 			tick, err = fsmtest.TestBenthosStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockSvcRegistry, serviceName,
 				internalfsm.LifecycleStateCreating,
 				benthosfsm.OperationalStateStopped,
 				5,
@@ -501,7 +499,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 
 			// from stopped => starting
 			tick, err = fsmtest.TestBenthosStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockSvcRegistry, serviceName,
 				benthosfsm.OperationalStateStopped,
 				benthosfsm.OperationalStateStarting,
 				5,
@@ -517,7 +515,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				IsHealthchecksPassed: true,
 			})
 			tick, err = fsmtest.TestBenthosStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockSvcRegistry, serviceName,
 				benthosfsm.OperationalStateStarting,
 				benthosfsm.OperationalStateStartingConfigLoading,
 				5,
@@ -534,7 +532,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				IsRunningWithoutErrors: true,
 			})
 			tick, err = fsmtest.TestBenthosStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockSvcRegistry, serviceName,
 				benthosfsm.OperationalStateStartingConfigLoading,
 				benthosfsm.OperationalStateIdle,
 				10,
@@ -551,7 +549,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				HasProcessingActivity:  true,
 			})
 			tick, err = fsmtest.TestBenthosStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockSvcRegistry, serviceName,
 				benthosfsm.OperationalStateIdle,
 				benthosfsm.OperationalStateActive,
 				5,
@@ -568,7 +566,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				HasProcessingActivity:  true,
 			})
 			tick, err = fsmtest.TestBenthosStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockSvcRegistry, serviceName,
 				benthosfsm.OperationalStateActive,
 				benthosfsm.OperationalStateDegraded,
 				10,
@@ -586,7 +584,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 			})
 
 			tick, err = fsmtest.TestBenthosStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockSvcRegistry, serviceName,
 				benthosfsm.OperationalStateDegraded,
 				benthosfsm.OperationalStateIdle,
 				10,
@@ -602,7 +600,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				IsHealthchecksPassed:  true,
 			})
 			tick, err = fsmtest.TestBenthosStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockSvcRegistry, serviceName,
 				benthosfsm.OperationalStateIdle,
 				benthosfsm.OperationalStateActive,
 				5,
@@ -620,7 +618,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 			// Step 1: to_be_created => creating => stopped
 			var err error
 			tick, err = fsmtest.TestBenthosStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockSvcRegistry, serviceName,
 				internalfsm.LifecycleStateToBeCreated,
 				internalfsm.LifecycleStateCreating,
 				5,
@@ -632,7 +630,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 			mockService.ExistingServices[serviceName] = true
 
 			tick, err = fsmtest.TestBenthosStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockSvcRegistry, serviceName,
 				internalfsm.LifecycleStateCreating,
 				benthosfsm.OperationalStateStopped,
 				5,
@@ -661,7 +659,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				IsHealthchecksPassed: true,
 			})
 			tick, err = fsmtest.TestBenthosStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockSvcRegistry, serviceName,
 				benthosfsm.OperationalStateStarting,
 				benthosfsm.OperationalStateStartingConfigLoading,
 				5,
@@ -678,7 +676,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				IsRunningWithoutErrors: true,
 			})
 			tick, err = fsmtest.TestBenthosStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockSvcRegistry, serviceName,
 				benthosfsm.OperationalStateStartingConfigLoading,
 				benthosfsm.OperationalStateIdle,
 				10,
@@ -696,7 +694,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				HasProcessingActivity:  true,
 			})
 			tick, err = fsmtest.TestBenthosStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockSvcRegistry, serviceName,
 				benthosfsm.OperationalStateIdle,
 				benthosfsm.OperationalStateActive,
 				5,
@@ -709,7 +707,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 
 			// from active => stopping
 			tick, err = fsmtest.TestBenthosStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockSvcRegistry, serviceName,
 				benthosfsm.OperationalStateActive,
 				benthosfsm.OperationalStateStopping,
 				10,
@@ -724,7 +722,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 			})
 
 			tick, err = fsmtest.TestBenthosStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockSvcRegistry, serviceName,
 				benthosfsm.OperationalStateStopping,
 				benthosfsm.OperationalStateStopped,
 				5,
@@ -737,7 +735,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 			// Step 1: to_be_created => creating => stopped
 			var err error
 			tick, err = fsmtest.TestBenthosStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockSvcRegistry, serviceName,
 				internalfsm.LifecycleStateToBeCreated,
 				internalfsm.LifecycleStateCreating,
 				5,
@@ -749,7 +747,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 			mockService.ExistingServices[serviceName] = true
 
 			tick, err = fsmtest.TestBenthosStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockSvcRegistry, serviceName,
 				internalfsm.LifecycleStateCreating,
 				benthosfsm.OperationalStateStopped,
 				5,
@@ -762,7 +760,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 
 			// from stopped => starting
 			tick, err = fsmtest.TestBenthosStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockSvcRegistry, serviceName,
 				benthosfsm.OperationalStateStopped,
 				benthosfsm.OperationalStateStarting,
 				5,
@@ -778,7 +776,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				IsHealthchecksPassed: true,
 			})
 			tick, err = fsmtest.TestBenthosStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockSvcRegistry, serviceName,
 				benthosfsm.OperationalStateStarting,
 				benthosfsm.OperationalStateStartingConfigLoading,
 				5,
@@ -795,7 +793,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				IsRunningWithoutErrors: true,
 			})
 			tick, err = fsmtest.TestBenthosStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockSvcRegistry, serviceName,
 				benthosfsm.OperationalStateStartingConfigLoading,
 				benthosfsm.OperationalStateIdle,
 				10,
@@ -812,7 +810,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				HasProcessingActivity:  true,
 			})
 			tick, err = fsmtest.TestBenthosStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockSvcRegistry, serviceName,
 				benthosfsm.OperationalStateIdle,
 				benthosfsm.OperationalStateActive,
 				5,
@@ -829,7 +827,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				HasProcessingActivity:  true,
 			})
 			tick, err = fsmtest.TestBenthosStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockSvcRegistry, serviceName,
 				benthosfsm.OperationalStateActive,
 				benthosfsm.OperationalStateDegraded,
 				10,
@@ -841,7 +839,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 			Expect(instance.SetDesiredFSMState(benthosfsm.OperationalStateStopped)).To(Succeed())
 
 			tick, err = fsmtest.TestBenthosStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockSvcRegistry, serviceName,
 				benthosfsm.OperationalStateDegraded,
 				benthosfsm.OperationalStateStopping,
 				10,
@@ -855,7 +853,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				S6FSMState:  s6fsm.OperationalStateStopped,
 			})
 			tick, err = fsmtest.TestBenthosStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockSvcRegistry, serviceName,
 				benthosfsm.OperationalStateStopping,
 				benthosfsm.OperationalStateStopped,
 				5,
@@ -874,7 +872,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 
 			// from to_be_created => creating
 			tick, err = fsmtest.TestBenthosStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockSvcRegistry, serviceName,
 				internalfsm.LifecycleStateToBeCreated,
 				internalfsm.LifecycleStateCreating,
 				5,
@@ -890,7 +888,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 
 			// from creating => stopped
 			tick, err = fsmtest.TestBenthosStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockSvcRegistry, serviceName,
 				internalfsm.LifecycleStateCreating,
 				benthosfsm.OperationalStateStopped,
 				5,
@@ -901,7 +899,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 			// set desired => active => from stopped => starting
 			Expect(instance.SetDesiredFSMState(benthosfsm.OperationalStateActive)).To(Succeed())
 			tick, err = fsmtest.TestBenthosStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockSvcRegistry, serviceName,
 				benthosfsm.OperationalStateStopped,
 				benthosfsm.OperationalStateStarting,
 				5,
@@ -915,7 +913,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				S6FSMState:  s6fsm.OperationalStateRunning,
 			})
 			tick, err = fsmtest.TestBenthosStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockSvcRegistry, serviceName,
 				benthosfsm.OperationalStateStarting,
 				benthosfsm.OperationalStateStartingConfigLoading,
 				5,
@@ -929,7 +927,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				S6FSMState:  s6fsm.OperationalStateStopped,
 			})
 			tick, err = fsmtest.TestBenthosStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockSvcRegistry, serviceName,
 				benthosfsm.OperationalStateStartingConfigLoading,
 				benthosfsm.OperationalStateStarting,
 				5,
@@ -997,7 +995,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 			// Step A: to_be_created => creating => stopped
 			var err error
 			tick, err = fsmtest.TestBenthosStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockSvcRegistry, serviceName,
 				internalfsm.LifecycleStateToBeCreated,
 				internalfsm.LifecycleStateCreating,
 				5,
@@ -1011,7 +1009,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 			mockService.ExistingServices[serviceName] = true
 
 			tick, err = fsmtest.TestBenthosStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockSvcRegistry, serviceName,
 				internalfsm.LifecycleStateCreating,
 				benthosfsm.OperationalStateStopped,
 				5,
@@ -1028,7 +1026,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 
 			//  B2) from "stopped => starting"
 			tick, err = fsmtest.TestBenthosStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockSvcRegistry, serviceName,
 				benthosfsm.OperationalStateStopped,
 				benthosfsm.OperationalStateStarting,
 				5,
@@ -1044,7 +1042,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				IsHealthchecksPassed: true,
 			})
 			tick, err = fsmtest.TestBenthosStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockSvcRegistry, serviceName,
 				benthosfsm.OperationalStateStarting,
 				benthosfsm.OperationalStateStartingConfigLoading,
 				5,
@@ -1061,7 +1059,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				IsRunningWithoutErrors: true,
 			})
 			tick, err = fsmtest.TestBenthosStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockSvcRegistry, serviceName,
 				benthosfsm.OperationalStateStartingConfigLoading,
 				benthosfsm.OperationalStateIdle,
 				10,
@@ -1078,7 +1076,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				HasProcessingActivity:  true,
 			})
 			tick, err = fsmtest.TestBenthosStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockSvcRegistry, serviceName,
 				benthosfsm.OperationalStateIdle,
 				benthosfsm.OperationalStateActive,
 				5,
@@ -1092,7 +1090,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				S6FSMState:  s6fsm.OperationalStateStopped,
 			})
 			tick, err = fsmtest.TestBenthosStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockSvcRegistry, serviceName,
 				benthosfsm.OperationalStateActive,
 				benthosfsm.OperationalStateDegraded,
 				5,
@@ -1108,7 +1106,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 				IsHealthchecksPassed: true,
 			})
 			tick, err = fsmtest.TestBenthosStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockSvcRegistry, serviceName,
 				benthosfsm.OperationalStateDegraded,
 				benthosfsm.OperationalStateIdle,
 				10,
@@ -1123,7 +1121,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 
 			// First get to stopped state
 			tick, err = fsmtest.TestBenthosStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockSvcRegistry, serviceName,
 				internalfsm.LifecycleStateToBeCreated,
 				internalfsm.LifecycleStateCreating,
 				5,
@@ -1135,7 +1133,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 			mockService.ExistingServices[serviceName] = true
 
 			tick, err = fsmtest.TestBenthosStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockSvcRegistry, serviceName,
 				internalfsm.LifecycleStateCreating,
 				benthosfsm.OperationalStateStopped,
 				5,
@@ -1158,7 +1156,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 
 			// Transition through states to active
 			tick, err = fsmtest.TestBenthosStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockSvcRegistry, serviceName,
 				benthosfsm.OperationalStateStopped,
 				benthosfsm.OperationalStateActive,
 				15, // Allow more attempts for multiple transitions
@@ -1175,7 +1173,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 
 			// Wait for the FSM to detect the error and change desired state to stopped
 			tick, err = fsmtest.WaitForBenthosDesiredState(
-				ctx, fsm.SystemSnapshot{Tick: tick}, instance, mockFS, benthosfsm.OperationalStateStopped, 10,
+				ctx, fsm.SystemSnapshot{Tick: tick}, instance, mockSvcRegistry, benthosfsm.OperationalStateStopped, 10,
 			)
 			Expect(err).NotTo(HaveOccurred(), "Instance should change desired state to stopped after permanent error")
 
@@ -1189,7 +1187,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 
 			// First progress to creating state
 			tick, err = fsmtest.TestBenthosStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockSvcRegistry, serviceName,
 				internalfsm.LifecycleStateToBeCreated,
 				internalfsm.LifecycleStateCreating,
 				5,
@@ -1203,7 +1201,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 
 			// Progress to stopped state
 			tick, err = fsmtest.TestBenthosStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockSvcRegistry, serviceName,
 				internalfsm.LifecycleStateCreating,
 				benthosfsm.OperationalStateStopped,
 				5,
@@ -1221,7 +1219,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 			var recErr error
 			var reconciled bool
 			tick, recErr, reconciled = fsmtest.ReconcileBenthosUntilError(
-				ctx, fsm.SystemSnapshot{Tick: tick}, instance, mockService, mockFS, serviceName, 5,
+				ctx, fsm.SystemSnapshot{Tick: tick}, instance, mockService, mockSvcRegistry, serviceName, 5,
 			)
 
 			// Now we should get the error
@@ -1241,7 +1239,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 
 			// First progress to creating state
 			tick, err = fsmtest.TestBenthosStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockSvcRegistry, serviceName,
 				internalfsm.LifecycleStateToBeCreated,
 				internalfsm.LifecycleStateCreating,
 				5,
@@ -1255,7 +1253,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 
 			// Progress to stopped state
 			tick, err = fsmtest.TestBenthosStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockSvcRegistry, serviceName,
 				internalfsm.LifecycleStateCreating,
 				benthosfsm.OperationalStateStopped,
 				5,
@@ -1267,7 +1265,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 
 			// Progress to starting state
 			tick, err = fsmtest.TestBenthosStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockSvcRegistry, serviceName,
 				benthosfsm.OperationalStateStopped,
 				benthosfsm.OperationalStateStarting,
 				5,
@@ -1277,7 +1275,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 
 			// Progress to config loading state
 			tick, err = fsmtest.TestBenthosStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockSvcRegistry, serviceName,
 				benthosfsm.OperationalStateStarting,
 				benthosfsm.OperationalStateStartingConfigLoading,
 				5,
@@ -1292,7 +1290,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 			var recErr error
 			var reconciled bool
 			tick, recErr, reconciled = fsmtest.ReconcileBenthosUntilError(
-				ctx, fsm.SystemSnapshot{Tick: tick}, instance, mockService, mockFS, serviceName, 20,
+				ctx, fsm.SystemSnapshot{Tick: tick}, instance, mockService, mockSvcRegistry, serviceName, 20,
 			)
 
 			// Verify force removal was attempted

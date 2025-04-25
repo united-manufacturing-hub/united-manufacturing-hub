@@ -24,7 +24,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	dataflowcomponentfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
 	dataflowcomponentsvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/dataflowcomponent"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
 // WaitForDataflowComponentManagerStable is a simple helper that calls manager.Reconcile once
@@ -34,9 +34,10 @@ func WaitForDataflowComponentManagerStable(
 	ctx context.Context,
 	snapshot fsm.SystemSnapshot,
 	manager *dataflowcomponentfsm.DataflowComponentManager,
-	filesystemService filesystem.Service,
+	services serviceregistry.Provider,
 ) (uint64, error) {
-	err, _ := manager.Reconcile(ctx, snapshot, filesystemService)
+	err, _ := manager.Reconcile(ctx, snapshot, services)
+
 	if err != nil {
 		return snapshot.Tick, err
 	}
@@ -50,7 +51,7 @@ func WaitForDataflowComponentManagerInstanceState(
 	ctx context.Context,
 	snapshot fsm.SystemSnapshot,
 	manager *dataflowcomponentfsm.DataflowComponentManager,
-	filesystemService filesystem.Service,
+	services serviceregistry.Provider,
 	instanceName string,
 	desiredState string,
 	maxAttempts int,
@@ -58,7 +59,7 @@ func WaitForDataflowComponentManagerInstanceState(
 	tick := snapshot.Tick
 	currentState := ""
 	for i := 0; i < maxAttempts; i++ {
-		err, _ := manager.Reconcile(ctx, snapshot, filesystemService)
+		err, _ := manager.Reconcile(ctx, snapshot, services)
 		if err != nil {
 			return tick, err
 		}
@@ -82,13 +83,13 @@ func WaitForDataflowComponentManagerInstanceRemoval(
 	ctx context.Context,
 	snapshot fsm.SystemSnapshot,
 	manager *dataflowcomponentfsm.DataflowComponentManager,
-	filesystemService filesystem.Service,
+	services serviceregistry.Provider,
 	instanceName string,
 	maxAttempts int,
 ) (uint64, error) {
 	tick := snapshot.Tick
 	for i := 0; i < maxAttempts; i++ {
-		err, _ := manager.Reconcile(ctx, snapshot, filesystemService)
+		err, _ := manager.Reconcile(ctx, snapshot, services)
 		if err != nil {
 			return tick, err
 		}
@@ -108,13 +109,13 @@ func WaitForDataflowComponentManagerMultiState(
 	ctx context.Context,
 	snapshot fsm.SystemSnapshot,
 	manager *dataflowcomponentfsm.DataflowComponentManager,
-	filesystemService filesystem.Service,
+	services serviceregistry.Provider,
 	desiredMap map[string]string, // e.g. { "comp1": "idle", "comp2": "active" }
 	maxAttempts int,
 ) (uint64, error) {
 	tick := snapshot.Tick
 	for i := 0; i < maxAttempts; i++ {
-		err, _ := manager.Reconcile(ctx, snapshot, filesystemService)
+		err, _ := manager.Reconcile(ctx, snapshot, services)
 		if err != nil {
 			return tick, err
 		}
@@ -201,8 +202,8 @@ func ReconcileOnceDataflowComponentManager(
 	ctx context.Context,
 	snapshot fsm.SystemSnapshot,
 	manager *dataflowcomponentfsm.DataflowComponentManager,
-	filesystemService filesystem.Service,
+	services serviceregistry.Provider,
 ) (newTick uint64, err error, reconciled bool) {
-	err, rec := manager.Reconcile(ctx, snapshot, filesystemService)
+	err, rec := manager.Reconcile(ctx, snapshot, services)
 	return snapshot.Tick + 1, err, rec
 }

@@ -27,7 +27,7 @@ import (
 	benthosfsmtype "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
 	dataflowcomponentfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
 	dataflowcomponentsvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/dataflowcomponent"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
 // CreateDataflowComponentTestConfig creates a standard DataflowComponent config for testing
@@ -194,7 +194,7 @@ func TestDataflowComponentStateTransition(
 	ctx context.Context,
 	instance *dataflowcomponentfsm.DataflowComponentInstance,
 	mockService *dataflowcomponentsvc.MockDataFlowComponentService,
-	filesystemService filesystem.Service,
+	services serviceregistry.Provider,
 	serviceName string,
 	fromState string,
 	toState string,
@@ -219,7 +219,7 @@ func TestDataflowComponentStateTransition(
 		}
 
 		// Perform a reconcile cycle
-		_, _ = instance.Reconcile(ctx, fsm.SystemSnapshot{Tick: tick}, filesystemService)
+		_, _ = instance.Reconcile(ctx, fsm.SystemSnapshot{Tick: tick}, services)
 		tick++
 	}
 
@@ -250,7 +250,7 @@ func VerifyDataflowComponentStableState(
 	snapshot fsm.SystemSnapshot,
 	instance *dataflowcomponentfsm.DataflowComponentInstance,
 	mockService *dataflowcomponentsvc.MockDataFlowComponentService,
-	filesystemService filesystem.Service,
+	services serviceregistry.Provider,
 	serviceName string,
 	expectedState string,
 	numCycles int,
@@ -267,7 +267,7 @@ func VerifyDataflowComponentStableState(
 	// Execute reconcile cycles and check state stability
 	tick := snapshot.Tick
 	for i := 0; i < numCycles; i++ {
-		_, _ = instance.Reconcile(ctx, snapshot, filesystemService)
+		_, _ = instance.Reconcile(ctx, snapshot, services)
 		tick++
 
 		if instance.GetCurrentFSMState() != expectedState {
@@ -328,7 +328,7 @@ func StabilizeDataflowComponentInstance(
 	snapshot fsm.SystemSnapshot,
 	instance *dataflowcomponentfsm.DataflowComponentInstance,
 	mockService *dataflowcomponentsvc.MockDataFlowComponentService,
-	filesystemService filesystem.Service,
+	services serviceregistry.Provider,
 	serviceName string,
 	targetState string,
 	maxAttempts int,
@@ -342,10 +342,10 @@ func StabilizeDataflowComponentInstance(
 		currentState := instance.GetCurrentFSMState()
 		if currentState == targetState {
 			// Now verify it remains stable
-			return VerifyDataflowComponentStableState(ctx, snapshot, instance, mockService, filesystemService, serviceName, targetState, 3)
+			return VerifyDataflowComponentStableState(ctx, snapshot, instance, mockService, services, serviceName, targetState, 3)
 		}
 
-		_, _ = instance.Reconcile(ctx, snapshot, filesystemService)
+		_, _ = instance.Reconcile(ctx, snapshot, services)
 		tick++
 	}
 
@@ -372,7 +372,7 @@ func WaitForDataflowComponentDesiredState(
 	ctx context.Context,
 	snapshot fsm.SystemSnapshot,
 	instance *dataflowcomponentfsm.DataflowComponentInstance,
-	filesystemService filesystem.Service,
+	services serviceregistry.Provider,
 	targetState string,
 	maxAttempts int,
 ) (uint64, error) {
@@ -385,7 +385,7 @@ func WaitForDataflowComponentDesiredState(
 		}
 
 		// Run a reconcile cycle
-		err, _ := instance.Reconcile(ctx, snapshot, filesystemService)
+		err, _ := instance.Reconcile(ctx, snapshot, services)
 		if err != nil {
 			return tick, err
 		}
@@ -419,7 +419,7 @@ func ReconcileDataflowComponentUntilError(
 	snapshot fsm.SystemSnapshot,
 	instance *dataflowcomponentfsm.DataflowComponentInstance,
 	mockService *dataflowcomponentsvc.MockDataFlowComponentService,
-	filesystemService filesystem.Service,
+	services serviceregistry.Provider,
 	serviceName string,
 	maxAttempts int,
 ) (uint64, error, bool) {
@@ -427,7 +427,7 @@ func ReconcileDataflowComponentUntilError(
 
 	for i := 0; i < maxAttempts; i++ {
 		// Perform a reconcile cycle and capture the error and reconciled status
-		err, reconciled := instance.Reconcile(ctx, snapshot, filesystemService)
+		err, reconciled := instance.Reconcile(ctx, snapshot, services)
 		tick++
 
 		if err != nil {
