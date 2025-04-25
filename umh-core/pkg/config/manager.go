@@ -226,9 +226,19 @@ func (m *FileConfigManager) GetConfig(ctx context.Context, tick uint64) (FullCon
 		return FullConfig{}, fmt.Errorf("failed to read config file: %w", err)
 	}
 
+	// Check if context is already cancelled
+	if ctx.Err() != nil {
+		return FullConfig{}, ctx.Err()
+	}
+
 	config, err := parseConfig(data)
 	if err != nil {
 		return FullConfig{}, fmt.Errorf("failed to parse config file: %w", err)
+	}
+
+	// Check if context is already cancelled
+	if ctx.Err() != nil {
+		return FullConfig{}, ctx.Err()
 	}
 
 	// If the config is empty, return an error
