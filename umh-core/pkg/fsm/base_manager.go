@@ -484,6 +484,7 @@ func (m *BaseFSMManager[C]) Reconcile(
 
 	// Reconcile instances
 	g, _ := errgroup.WithContext(ctx)
+	hasReconciled := false
 	for name, instance := range m.instances {
 		g.Go(func() error {
 			err, reconciled := m.reconcileInstance(ctx, instance, snapshot, filesystemService, name)
@@ -491,22 +492,41 @@ func (m *BaseFSMManager[C]) Reconcile(
 				return err
 			}
 			if reconciled {
-				return nil
+				hasReconciled = true
 			}
 			return nil
 		})
 	}
+
+	// Create a buffered channel to receive the result from g.Wait().
+	// The channel is buffered so that the goroutine sending on it doesn't block.
 	errc := make(chan error, 1)
+
+	// Run g.Wait() in a separate goroutine.
+	// This allows us to use a select statement to return early if the context is canceled.
 	go func() {
+		// g.Wait() blocks until all goroutines launched with g.Go() have returned.
+		// It returns the first non-nil error, if any.
 		errc <- g.Wait()
 	}()
 
+	// Use a select statement to wait for either the g.Wait() result or the context's cancellation.
 	select {
 	case err := <-errc:
-		return err, false
+		// g.Wait() has finished, so check if any goroutine returned an error.
+		if err != nil {
+			// If there was an error in any sub-call, return that error.
+			return err, false
+		}
+		// If err is nil, all goroutines completed successfully.
 	case <-ctx.Done():
+		// The context was canceled or its deadline was exceeded before all goroutines finished.
+		// Although some goroutines might still be running in the background,
+		// they use a context (gctx) that should cause them to terminate promptly.
 		return ctx.Err(), false
 	}
+
+	return nil, hasReconciled
 }
 
 func (m *BaseFSMManager[C]) reconcileInstance(ctx context.Context, instance FSMInstance, snapshot SystemSnapshot, filesystemService filesystem.Service, name string) (error, bool) {
