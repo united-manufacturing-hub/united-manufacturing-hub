@@ -1117,9 +1117,10 @@ func (s *BenthosMonitorService) UpdateBenthosMonitorInS6Manager(ctx context.Cont
 	}
 
 	// Generate the S6 config for this instance
-	s6Config, err := s.GenerateS6ConfigForBenthosMonitor(s.benthosName, port)
+	s6ServiceName := s.GetS6ServiceName()
+	s6Config, err := s.GenerateS6ConfigForBenthosMonitor(s6ServiceName, port)
 	if err != nil {
-		return fmt.Errorf("failed to generate S6 config for BenthosMonitor service %s: %w", s.benthosName, err)
+		return fmt.Errorf("failed to generate S6 config for BenthosMonitor service %s: %w", s6ServiceName, err)
 	}
 
 	s.s6ServiceConfig.S6ServiceConfig = s6Config
