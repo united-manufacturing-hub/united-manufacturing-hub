@@ -89,7 +89,7 @@ func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePay
 
 	case models.DeleteDataFlowComponent:
 		action = &DeleteDataflowComponentAction{
-      userEmail:       sender,
+			userEmail:       sender,
 			actionUUID:      payload.ActionUUID,
 			instanceUUID:    instanceUUID,
 			outboundChannel: outboundChannel,
@@ -106,6 +106,15 @@ func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePay
 			outboundChannel: outboundChannel,
 			configManager:   configManager,
 			systemSnapshot:  systemSnapshot,
+			actionLogger:    log,
+		}
+	case models.EditDataFlowComponent:
+		action = &EditDataflowComponentAction{
+			userEmail:       sender,
+			actionUUID:      payload.ActionUUID,
+			instanceUUID:    instanceUUID,
+			outboundChannel: outboundChannel,
+			configManager:   configManager,
 			actionLogger:    log,
 		}
 
