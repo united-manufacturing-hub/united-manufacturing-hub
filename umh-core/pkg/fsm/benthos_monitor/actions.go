@@ -108,7 +108,7 @@ func (b *BenthosMonitorInstance) UpdateObservedStateOfInstance(ctx context.Conte
 	if err != nil {
 		return err
 	}
-	metrics.ObserveReconcileTime(logger.ComponentBenthosInstance, b.baseFSMInstance.GetID()+".getServiceStatus", time.Since(start))
+	metrics.ObserveReconcileTime(logger.ComponentBenthosMonitorInstance, b.baseFSMInstance.GetID()+".getServiceStatus", time.Since(start))
 
 	// Store the raw service info
 	b.ObservedState.ServiceInfo = &info

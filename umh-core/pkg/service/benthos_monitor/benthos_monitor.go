@@ -553,7 +553,7 @@ func (s *BenthosMonitorService) ParseBenthosLogs(ctx context.Context, logs []s6s
 	healthCheck.ConnectionStatuses = readyResp.Statuses
 	healthCheck.Version = versionResp.Version
 
-	timestampDataString := string(timestampDataBytes)
+	timestampDataString := strings.TrimSpace(string(timestampDataBytes))
 	// If the system resolution is to small, we need to pad the timestamp with zeros
 	// Good: 1744199140749598341
 	// Bad: 1744199121

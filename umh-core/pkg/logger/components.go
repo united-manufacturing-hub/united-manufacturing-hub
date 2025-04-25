@@ -36,6 +36,7 @@ const (
 	ComponentBaseFSM                   = "BaseFSM"
 	ComponentS6Instance                = "S6Instance"
 	ComponentBenthosInstance           = "BenthosInstance"
+	ComponentBenthosMonitorInstance    = "BenthosMonitorInstance"
 	ComponentRedpandaInstance          = "RedpandaInstance"
 	ComponentNmapInstance              = "NmapInstance"
 	ComponentDataFlowComponentInstance = "DFCInstance"
