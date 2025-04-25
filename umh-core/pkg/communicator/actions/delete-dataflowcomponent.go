@@ -159,15 +159,17 @@ func (a *DeleteDataflowComponentAction) waitForComponentToBeRemoved() error {
 		case <-timeout:
 			return fmt.Errorf("dataflowcomponent %s was not removed in time", a.componentUUID)
 		case <-ticker.C:
-			if dataflowcomponentManager, exists := a.systemSnapshot.Managers[constants.DataflowcomponentManagerName]; exists {
-				instances := dataflowcomponentManager.GetInstances()
-				for _, instance := range instances {
-					if dataflowcomponentconfig.GenerateUUIDFromName(instance.ID) == a.componentUUID {
-						// component is still there, so we need to wait longer
-						continue
+			removed := true
+			if mgr, ok := a.systemSnapshot.Managers[constants.DataflowcomponentManagerName]; ok {
+				for _, inst := range mgr.GetInstances() {
+					if dataflowcomponentconfig.GenerateUUIDFromName(inst.ID) == a.componentUUID {
+						removed = false
+						break
 					}
-					return nil
 				}
+			}
+			if removed {
+				return nil
 			}
 		}
 	}
