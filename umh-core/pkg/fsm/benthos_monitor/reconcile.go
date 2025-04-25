@@ -38,7 +38,7 @@ func (b *BenthosMonitorInstance) Reconcile(ctx context.Context, snapshot fsm.Sys
 	start := time.Now()
 	instanceName := b.baseFSMInstance.GetID()
 	defer func() {
-		metrics.ObserveReconcileTime(metrics.ComponentAgentMonitor, instanceName, time.Since(start))
+		metrics.ObserveReconcileTime(metrics.ComponentBenthosMonitor, instanceName, time.Since(start))
 		if err != nil {
 			b.baseFSMInstance.GetLogger().Errorf("error reconciling benthos monitor instance %s: %s", instanceName, err)
 			b.PrintState()
