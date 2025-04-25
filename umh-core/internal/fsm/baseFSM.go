@@ -18,11 +18,13 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/looplab/fsm"
 	"go.uber.org/zap"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/backoff"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
@@ -63,7 +65,7 @@ type BaseFSMInstanceConfig struct {
 }
 
 // NewBaseFSMInstance creates a new FSM instance
-func NewBaseFSMInstance(cfg BaseFSMInstanceConfig, logger *zap.SugaredLogger) *BaseFSMInstance {
+func NewBaseFSMInstance(cfg BaseFSMInstanceConfig, backoffConfig backoff.Config, logger *zap.SugaredLogger) *BaseFSMInstance {
 
 	baseInstance := &BaseFSMInstance{
 		cfg:       cfg,
@@ -72,7 +74,6 @@ func NewBaseFSMInstance(cfg BaseFSMInstanceConfig, logger *zap.SugaredLogger) *B
 	}
 
 	// Initialize backoff manager with appropriate configuration
-	backoffConfig := backoff.DefaultConfig(cfg.ID, logger)
 	baseInstance.backoffManager = backoff.NewBackoffManager(backoffConfig)
 
 	// Combine lifecycle and operational transitions
@@ -171,8 +172,35 @@ func (s *BaseFSMInstance) SetCurrentFSMState(state string) {
 	s.fsm.SetState(state)
 }
 
-// SendEvent sends an event to the FSM and returns whether the event was processed
+// SendEvent sends an event to the FSM and returns whether the event was processed.
+//
+// Problem: Context expiration during FSM transitions can lead to deadlocks:
+// - When a context expires mid-transition, the FSM's internal transition state remains set
+// - This causes future events to fail with "event X inappropriate because previous transition did not complete"
+// - After multiple retries, the backoff manager marks the instance as permanently failed
+// - The entire instance then gets unnecessarily removed from the system
+//
+// Solution: This method implements protective measures to prevent deadlocks:
+// 1. Rejects event sending if the context is already cancelled
+// 2. Refuses to start transitions when insufficient time remains before a deadline
+//
+// By ensuring transitions only start with sufficient context lifetime, we avoid the
+// cascade of failures that would otherwise occur when a transition is interrupted.
 func (s *BaseFSMInstance) SendEvent(ctx context.Context, eventName string, args ...interface{}) error {
+
+	// Context protection: We verify two distinct conditions before proceeding:
+	// 1. Context must not be cancelled - An already expired context will lead to immediate failure
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	// 2. Context must have sufficient time remaining - Context expiration during a transition
+	//    is worse than failing to start, as it leaves the FSM in an inconsistent state
+	if deadline, ok := ctx.Deadline(); ok {
+		if time.Until(deadline) < constants.ExpectedMaxP95ExecutionTimePerEvent {
+			return fmt.Errorf("context deadline exceeded")
+		}
+	}
+
 	return s.fsm.Event(ctx, eventName, args...)
 }
 
@@ -181,12 +209,49 @@ func (s *BaseFSMInstance) ClearError() {
 	s.backoffManager.Reset()
 }
 
-// Remove starts the removal process, it is idempotent and can be called multiple times
-// Note: it is only removed once IsRemoved returns true
+// Remove starts the graceful-removal sequence.
+//
+//  1. Always point the desired state at <OperationalStateBeforeRemove> (usually "stopped").
+//  2. If – and only if – the current FSM state already *is* that state (→
+//     the service has finished stopping) fire the "remove" transition.
+//  3. If we are already removing / removed, do nothing.
+//
+// This lets the manager call Remove() every tick without having to
+// micromanage intermediate states.
 func (s *BaseFSMInstance) Remove(ctx context.Context) error {
-	// Set the desired state to the state before remove
-	s.SetDesiredFSMState(s.cfg.OperationalStateBeforeRemove)
-	return s.SendEvent(ctx, LifecycleEventRemove)
+	// (1) Already done or in progress?
+	if s.IsRemoved() || s.IsRemoving() {
+		return nil
+	}
+
+	preRemove := s.cfg.OperationalStateBeforeRemove // usually "stopped"
+	s.SetDesiredFSMState(preRemove)                 // converge towards it
+
+	// (2) Are we *already* in <preRemove>?   fire the remove transition
+	if s.GetCurrentFSMState() == preRemove && s.fsm.Can(LifecycleEventRemove) {
+		return s.SendEvent(ctx, LifecycleEventRemove)
+	}
+
+	// (3) Not there yet – arm a one-shot callback that will fire the
+	//     event the moment we enter <preRemove>.
+	const cb = "auto_remove_once"
+	if _, ok := s.callbacks[cb]; !ok {
+		s.AddCallback("enter_"+preRemove, func(ctx context.Context, e *fsm.Event) {
+			err := s.SendEvent(ctx, LifecycleEventRemove)
+			if err != nil {
+				// ── Wrap as *permanent* to force immediate escalation ─────────
+				perr := fmt.Errorf("%s: remove transition failed: %v",
+					backoff.PermanentFailureError, err)
+
+				// Record it; tick value is irrelevant here (we pass 0)
+				s.SetError(perr, 0)
+				sentry.ReportFSMErrorf(s.logger, s.cfg.ID, "BaseFSM", "permanent_failure", "auto-remove of %s failed: %v", s.cfg.ID, err)
+			}
+			delete(s.callbacks, cb) // detach – run only once
+		})
+	}
+
+	return nil
 }
 
 // IsRemoved returns true if the instance has been removed
@@ -260,4 +325,71 @@ func (s *BaseFSMInstance) Stop(ctx context.Context, filesystemService filesystem
 // UpdateObservedState provides a default implementation that can be overridden
 func (s *BaseFSMInstance) UpdateObservedState(ctx context.Context, filesystemService filesystem.Service, tick uint64) error {
 	return fmt.Errorf("updateObservedState action not implemented for %s", s.cfg.ID)
+}
+
+// HandlePermanentError handles the case where a permanent error has occurred during reconciliation.
+// It centralizes the error handling logic that was previously duplicated across FSM implementations.
+//
+// The function implements the following workflow:
+//  1. If the FSM is in a shutdown state (e.g., stopped, stopping, removing, removed)
+//     and can't recover normally, it attempts to forcefully remove the instance.
+//  2. If the FSM is not in a shutdown state, it resets the error state and
+//     attempts a normal removal first. If that fails, it tries force removal.
+//
+// Parameters:
+//   - ctx: The context for the operation
+//   - err: The permanent error that triggered this handling
+//   - isInShutdownState: Function that returns true if the FSM instance is already in a shutdown state
+//     (typically checks if it's removed, removing, stopped, or stopping) where normal recovery isn't possible
+//   - normalRemove: Function that performs a graceful removal of the instance through proper state transitions
+//   - forceRemove: Function that performs a forceful removal when graceful removal fails, bypassing state transitions
+//
+// Returns:
+// - The original error (or nil if handled) and whether reconciliation should continue
+func (s *BaseFSMInstance) HandlePermanentError(
+	ctx context.Context,
+	err error,
+	isInShutdownState func() bool,
+	normalRemove func(ctx context.Context) error,
+	forceRemove func(ctx context.Context) error,
+) (error, bool) {
+	instanceID := s.GetID()
+	logger := s.GetLogger()
+
+	// If it's already in a shutdown state (stopped, stopping, removing, removed)
+	// we can't expect it to transition normally, so force remove it
+	if isInShutdownState() {
+		logger.Errorf("%s instance %s is already in a shutdown state, force removing it", s.cfg.ID, instanceID)
+
+		// Force delete everything - this is the last resort when the instance
+		// is already in a state where normal removal isn't possible
+		forceErr := forceRemove(ctx)
+		if forceErr != nil {
+			// If even the force removing doesn't work, the base-manager should delete the instance
+			// due to a permanent error
+			logger.Errorf("error force removing %s instance %s: %v", s.cfg.ID, instanceID, forceErr)
+			return fmt.Errorf("failed to force remove the %s instance: %s : %w", s.cfg.ID, backoff.PermanentFailureError, forceErr), false
+		}
+		return err, true
+	} else {
+		// Not in a shutdown state yet, so try normal removal first
+		logger.Errorf("%s instance %s is not in a shutdown state, resetting state and removing it", s.cfg.ID, instanceID)
+		s.ResetState()
+
+		// Attempt normal removal through the state transition system
+		removeErr := normalRemove(ctx)
+		if removeErr != nil {
+			// If removing doesn't work because the FSM isn't in the correct state,
+			// try force removal as a last resort
+			logger.Errorf("error removing %s instance %s: %v", s.cfg.ID, instanceID, removeErr)
+			forceErr := forceRemove(ctx)
+			if forceErr != nil {
+				// If even the force removing doesn't work, the base-manager should delete the instance
+				// due to a permanent error
+				logger.Errorf("error force removing %s instance %s: %v", s.cfg.ID, instanceID, forceErr)
+				return fmt.Errorf("failed to force remove the %s instance: %s : %w", s.cfg.ID, backoff.PermanentFailureError, forceErr), false
+			}
+		}
+		return nil, false // Let's try to at least reconcile towards a stopped/removed state
+	}
 }

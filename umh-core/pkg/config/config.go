@@ -15,10 +15,9 @@
 package config
 
 import (
-	"reflect"
-
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/nmapserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/redpandaserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
 
@@ -52,12 +51,19 @@ type CommunicatorConfig struct {
 
 // FSMInstanceConfig is the config for a FSM instance
 type FSMInstanceConfig struct {
-	Name            string `yaml:"name"`
-	DesiredFSMState string `yaml:"desiredState"`
+	// Name of the service, we use omitempty here, as some services like redpanda will ignore this name, therefore writing the "empty" name back to the config file will cause confusion for the users
+	Name            string `yaml:"name,omitempty"`
+	DesiredFSMState string `yaml:"desiredState,omitempty"`
 }
 
 // ContainerConfig is the config for a container instance
 type ContainerConfig struct {
+	Name            string `yaml:"name"`
+	DesiredFSMState string `yaml:"desiredState"`
+}
+
+// AgentMonitorConfig is the config for an agent monitor instance
+type AgentMonitorConfig struct {
 	Name            string `yaml:"name"`
 	DesiredFSMState string `yaml:"desiredState"`
 }
@@ -101,20 +107,7 @@ type NmapConfig struct {
 	FSMInstanceConfig `yaml:",inline"`
 
 	// For the Nmap service
-	NmapServiceConfig NmapServiceConfig `yaml:"nmapServiceConfig"`
-}
-
-// NmapServiceConfig represents the configuration for a Nmap service
-type NmapServiceConfig struct {
-	// Target to scan (hostname or IP)
-	Target string `yaml:"target"`
-	// Port to scan (single port number)
-	Port int `yaml:"port"`
-}
-
-// Equal checks if two NmapServiceConfigs are equal
-func (c NmapServiceConfig) Equal(other NmapServiceConfig) bool {
-	return reflect.DeepEqual(c, other)
+	NmapServiceConfig nmapserviceconfig.NmapServiceConfig `yaml:"nmapServiceConfig"`
 }
 
 // RedpandaConfig contains configuration for a Redpanda service
@@ -140,8 +133,17 @@ func (c FullConfig) Clone() FullConfig {
 			clone.Agent.Location[k] = v
 		}
 	}
-	deepcopy.Copy(&clone.Agent, &c.Agent)
-	deepcopy.Copy(&clone.DataFlow, &c.DataFlow)
-	deepcopy.Copy(&clone.Internal, &c.Internal)
+	err := deepcopy.Copy(&clone.Agent, &c.Agent)
+	if err != nil {
+		return FullConfig{}
+	}
+	err = deepcopy.Copy(&clone.DataFlow, &c.DataFlow)
+	if err != nil {
+		return FullConfig{}
+	}
+	err = deepcopy.Copy(&clone.Internal, &c.Internal)
+	if err != nil {
+		return FullConfig{}
+	}
 	return clone
 }

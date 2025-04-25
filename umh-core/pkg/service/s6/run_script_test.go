@@ -72,12 +72,12 @@ var _ = Describe("S6 Run Script", func() {
 
 			// Create mock filesystem entries
 			mockFS.WithFileExistsFunc(func(_ context.Context, path string) (bool, error) {
-				switch {
-				case path == servicePath:
+				switch path {
+				case servicePath:
 					return true, nil
-				case path == configPath:
+				case configPath:
 					return true, nil
-				case path == runScriptPath:
+				case runScriptPath:
 					return true, nil
 				default:
 					// Check if it's one of our config files

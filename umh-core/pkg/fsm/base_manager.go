@@ -18,27 +18,19 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/rand/v2"
 	"time"
 
 	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/backoff"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/ctxutil"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"go.uber.org/zap"
-)
-
-// Constants for rate limiting. This is needed so that after a new instance is created,
-// the manager does not start doing it for other instances. Instead, it will give time
-// for the new instance to be created and go through its state before adding new work
-const (
-	TicksBeforeNextAdd    = 10 // Wait 10 ticks before adding another instance
-	TicksBeforeNextUpdate = 10 // Wait 10 ticks before updating another instance
-	TicksBeforeNextRemove = 10 // Wait 10 ticks before removing another instance
-	TicksBeforeNextState  = 10 // Wait 10 ticks before changing instance state
 )
 
 // Rate limiting is implemented using manager-specific ticks (managerTick) instead of global ticks.
@@ -66,7 +58,7 @@ type FSMInstance interface {
 	// whether a change was made to the instance's state
 	// The filesystemService parameter is used to read and write to the filesystem.
 	// Specifically it is used so that we only need to read in the entire file system once, and then can pass it to all the managers and instances, who can then save on I/O operations.
-	Reconcile(ctx context.Context, filesystemService filesystem.Service, tick uint64) (error, bool)
+	Reconcile(ctx context.Context, snapshot SystemSnapshot, filesystemService filesystem.Service) (error, bool)
 	// Remove initiates the removal process for this instance
 	Remove(ctx context.Context) error
 	// GetLastObservedState returns the last known state of the instance
@@ -90,7 +82,7 @@ type FSMManager[C any] interface {
 	// The tick parameter provides a counter to track operation rate limiting
 	// The filesystemService parameter is used to read and write to the filesystem.
 	// Specifically it is used so that we only need to read in the entire file system once, and then can pass it to all the managers and instances, who can then save on I/O operations.
-	Reconcile(ctx context.Context, config config.FullConfig, filesystemService filesystem.Service, tick uint64) (error, bool)
+	Reconcile(ctx context.Context, snapshot SystemSnapshot, filesystemService filesystem.Service) (error, bool)
 	// GetManagerName returns the name of this manager for logging and metrics
 	GetManagerName() string
 }
@@ -125,10 +117,10 @@ type BaseFSMManager[C any] struct {
 	managerTick uint64
 
 	// Tick tracking for rate limiting (relative to managerTick)
-	lastAddTick     uint64 // Last manager tick when an instance was added
-	lastUpdateTick  uint64 // Last manager tick when an instance configuration was updated
-	lastRemoveTick  uint64 // Last manager tick when an instance was removed
-	lastStateChange uint64 // Last manager tick when an instance state was changed
+	nextAddTick    uint64 // Earliest tick on which another instance may be added
+	nextUpdateTick uint64 // Earliest tick an instance config may be updated again
+	nextRemoveTick uint64 // Earliest tick another instance may begin removal
+	nextStateTick  uint64 // Earliest tick another desired‑state change may happen
 
 	// These methods are implemented by each concrete manager
 	extractConfigs                            func(config config.FullConfig) ([]C, error)
@@ -171,10 +163,10 @@ func NewBaseFSMManager[C any](
 		logger:          logger.For(managerName),
 		managerName:     managerName,
 		managerTick:     0,
-		lastAddTick:     0,
-		lastUpdateTick:  0,
-		lastRemoveTick:  0,
-		lastStateChange: 0,
+		nextAddTick:     0,
+		nextUpdateTick:  0,
+		nextRemoveTick:  0,
+		nextStateTick:   0,
 		extractConfigs:  extractConfigs,
 		getName:         getName,
 		getDesiredState: getDesiredState,
@@ -230,24 +222,24 @@ func (m *BaseFSMManager[C]) GetManagerTick() uint64 {
 	return m.managerTick
 }
 
-// GetLastAddTick returns the last tick when an instance was added
-func (m *BaseFSMManager[C]) GetLastAddTick() uint64 {
-	return m.lastAddTick
+// GetNextAddTick returns the earliest tick on which another instance may be added
+func (m *BaseFSMManager[C]) GetNextAddTick() uint64 {
+	return m.nextAddTick
 }
 
-// GetLastUpdateTick returns the last tick when an instance was updated
-func (m *BaseFSMManager[C]) GetLastUpdateTick() uint64 {
-	return m.lastUpdateTick
+// GetNextUpdateTick returns the earliest tick on which an instance config may be updated again
+func (m *BaseFSMManager[C]) GetNextUpdateTick() uint64 {
+	return m.nextUpdateTick
 }
 
-// GetLastRemoveTick returns the last tick when an instance was removed
-func (m *BaseFSMManager[C]) GetLastRemoveTick() uint64 {
-	return m.lastRemoveTick
+// GetNextRemoveTick returns the earliest tick on which another instance may begin removal
+func (m *BaseFSMManager[C]) GetNextRemoveTick() uint64 {
+	return m.nextRemoveTick
 }
 
-// GetLastStateChange returns the last tick when an instance state was changed
-func (m *BaseFSMManager[C]) GetLastStateChange() uint64 {
-	return m.lastStateChange
+// GetNextStateTick returns the earliest tick on which another desired‑state change may happen
+func (m *BaseFSMManager[C]) GetNextStateTick() uint64 {
+	return m.nextStateTick
 }
 
 // Reconcile implements the core FSM management algorithm that powers the control loop.
@@ -278,9 +270,8 @@ func (m *BaseFSMManager[C]) GetLastStateChange() uint64 {
 //     run another manager and instead should wait for the next tick
 func (m *BaseFSMManager[C]) Reconcile(
 	ctx context.Context,
-	config config.FullConfig,
+	snapshot SystemSnapshot,
 	filesystemService filesystem.Service,
-	tick uint64,
 ) (error, bool) {
 	// Increment manager-specific tick counter
 	m.managerTick++
@@ -299,7 +290,7 @@ func (m *BaseFSMManager[C]) Reconcile(
 
 	// Step 1: Extract the specific configs from the full config
 	extractStart := time.Now()
-	desiredState, err := m.extractConfigs(config)
+	desiredState, err := m.extractConfigs(snapshot.CurrentConfig)
 	if err != nil {
 		metrics.IncErrorCount(metrics.ComponentBaseFSMManager, m.managerName)
 		return fmt.Errorf("failed to extract configs: %w", err), false
@@ -317,9 +308,11 @@ func (m *BaseFSMManager[C]) Reconcile(
 		// If the instance does not exist, create it and set it to the desired state
 		if _, ok := m.instances[name]; !ok {
 			// Using manager-specific ticks for rate limiting
-			if m.lastAddTick > 0 && m.managerTick-m.lastAddTick < TicksBeforeNextAdd {
-				m.logger.Debugf("Rate limiting: Skipping creation of instance %s (waiting %d more ticks)",
-					name, TicksBeforeNextAdd-(m.managerTick-m.lastAddTick))
+			if m.managerTick < m.nextAddTick {
+				m.logger.Debugf(
+					"Rate limiting: Skipping creation of %s (next add @%d, now %d)",
+					name, m.nextAddTick, m.managerTick,
+				)
 				continue // Skip this instance for now, will be created on a future tick
 			}
 
@@ -343,10 +336,9 @@ func (m *BaseFSMManager[C]) Reconcile(
 				return fmt.Errorf("failed to set desired state: %w", err), false
 			}
 			m.instances[name] = instance
-			m.logger.Infof("Created instance %s", name)
 
 			// Update last add tick using manager-specific tick
-			m.lastAddTick = m.managerTick
+			m.nextAddTick = m.schedule(constants.TicksBeforeNextAdd)
 			return nil, true
 		}
 
@@ -361,9 +353,11 @@ func (m *BaseFSMManager[C]) Reconcile(
 
 		if !equal {
 			// Using manager-specific ticks for rate limiting
-			if m.lastUpdateTick > 0 && m.managerTick-m.lastUpdateTick < TicksBeforeNextUpdate {
-				m.logger.Debugf("Rate limiting: Skipping update of instance %s (waiting %d more ticks)",
-					name, TicksBeforeNextUpdate-(m.managerTick-m.lastUpdateTick))
+			if m.managerTick < m.nextUpdateTick {
+				m.logger.Debugf(
+					"Rate limiting: Skipping update of %s (next update @%d, now %d)",
+					name, m.nextUpdateTick, m.managerTick,
+				)
 				continue // Skip this update for now, will be updated on a future tick
 			}
 
@@ -377,7 +371,7 @@ func (m *BaseFSMManager[C]) Reconcile(
 
 			m.logger.Infof("Updated config of instance %s", name)
 			// Update last update tick using manager-specific tick
-			m.lastUpdateTick = m.managerTick
+			m.nextUpdateTick = m.schedule(constants.TicksBeforeNextUpdate)
 			return nil, true
 		}
 
@@ -389,9 +383,11 @@ func (m *BaseFSMManager[C]) Reconcile(
 		}
 		if m.instances[name].GetDesiredFSMState() != desiredState {
 			// Using manager-specific ticks for rate limiting
-			if m.lastStateChange > 0 && m.managerTick-m.lastStateChange < TicksBeforeNextState {
-				m.logger.Debugf("Rate limiting: Skipping state change of instance %s (waiting %d more ticks)",
-					name, TicksBeforeNextState-(m.managerTick-m.lastStateChange))
+			if m.managerTick < m.nextStateTick {
+				m.logger.Debugf(
+					"Rate limiting: Skipping state change of %s (next state @%d, now %d)",
+					name, m.nextStateTick, m.managerTick,
+				)
 				continue // Skip this state change for now, will be updated on a future tick
 			}
 
@@ -405,7 +401,7 @@ func (m *BaseFSMManager[C]) Reconcile(
 			}
 
 			// Update last state change tick using manager-specific tick
-			m.lastStateChange = m.managerTick
+			m.nextStateTick = m.schedule(constants.TicksBeforeNextState)
 			return nil, true
 		}
 	}
@@ -453,9 +449,10 @@ func (m *BaseFSMManager[C]) Reconcile(
 			}
 
 			// Using manager-specific ticks for rate limiting
-			if m.managerTick-m.lastRemoveTick < TicksBeforeNextRemove {
-				m.logger.Debugf("Rate limiting: Skipping removal of instance %s (waiting %d more ticks)",
-					instanceName, TicksBeforeNextRemove-(m.managerTick-m.lastRemoveTick))
+			if m.managerTick < m.nextRemoveTick {
+				// Currently uncommented to prevent log spam (the integration tests will create a lot of services)
+				// m.logger.Debugf("Rate limiting: Skipping removal of instance %s (waiting %d more ticks)",
+				// 	instanceName, TicksBeforeNextRemove-(m.managerTick-m.lastRemoveTick))
 				continue // Skip this removal for now, will be removed on a future tick
 			}
 
@@ -466,10 +463,13 @@ func (m *BaseFSMManager[C]) Reconcile(
 
 			// Otherwise, we need to remove the instance
 			m.logger.Debugf("instance %s is in state %s, starting the removing process", instanceName, instance.GetCurrentFSMState())
-			instance.Remove(ctx)
+			err := instance.Remove(ctx)
+			if err != nil {
+				return err, false
+			}
 
 			// Update last remove tick using manager-specific tick
-			m.lastRemoveTick = m.managerTick
+			m.nextRemoveTick = m.schedule(constants.TicksBeforeNextRemove)
 			return nil, true
 		}
 	}
@@ -493,7 +493,6 @@ func (m *BaseFSMManager[C]) Reconcile(
 			metrics.IncErrorCount(metrics.ComponentBaseFSMManager, m.managerName)
 			return fmt.Errorf("failed to get expected max p95 execution time: %w", err), false
 		}
-
 		remaining, sufficient, err := ctxutil.HasSufficientTime(ctx, expectedMaxP95ExecutionTime)
 		if err != nil {
 			if errors.Is(err, ctxutil.ErrNoDeadline) {
@@ -514,7 +513,9 @@ func (m *BaseFSMManager[C]) Reconcile(
 		defer instanceCancel()
 
 		// Pass manager-specific tick to instance.Reconcile
-		err, reconciled := instance.Reconcile(instanceCtx, filesystemService, m.managerTick)
+		// Update the snapshot tick to the manager tick
+		snapshot.Tick = m.managerTick
+		err, reconciled := instance.Reconcile(instanceCtx, snapshot, filesystemService)
 		reconcileTime := time.Since(reconcileStart)
 		metrics.ObserveReconcileTime(metrics.ComponentBaseFSMManager, m.managerName+".instances."+name, reconcileTime)
 
@@ -546,6 +547,7 @@ func (m *BaseFSMManager[C]) Reconcile(
 			)
 			return fmt.Errorf("error reconciling instance: %w", err), false
 		}
+
 		if reconciled {
 			return nil, true
 		}
@@ -583,14 +585,14 @@ func (m *BaseFSMManager[C]) GetCurrentFSMState(serviceName string) (string, erro
 // CreateSnapshot creates a ManagerSnapshot from the current manager state
 func (m *BaseFSMManager[C]) CreateSnapshot() ManagerSnapshot {
 	snapshot := &BaseManagerSnapshot{
-		Name:            m.managerName,
-		Instances:       make(map[string]FSMInstanceSnapshot),
-		ManagerTick:     m.managerTick,
-		LastAddTick:     m.lastAddTick,
-		LastUpdateTick:  m.lastUpdateTick,
-		LastRemoveTick:  m.lastRemoveTick,
-		LastStateChange: m.lastStateChange,
-		SnapshotTime:    time.Now(),
+		Name:           m.managerName,
+		Instances:      make(map[string]*FSMInstanceSnapshot),
+		ManagerTick:    m.managerTick,
+		NextAddTick:    m.nextAddTick,
+		NextUpdateTick: m.nextUpdateTick,
+		NextRemoveTick: m.nextRemoveTick,
+		NextStateTick:  m.nextStateTick,
+		SnapshotTime:   time.Now(),
 	}
 
 	for name, instance := range m.instances {
@@ -609,7 +611,7 @@ func (m *BaseFSMManager[C]) CreateSnapshot() ManagerSnapshot {
 			}
 		}
 
-		snapshot.Instances[name] = instanceSnapshot
+		snapshot.Instances[name] = &instanceSnapshot
 	}
 
 	return snapshot
@@ -618,4 +620,39 @@ func (m *BaseFSMManager[C]) CreateSnapshot() ManagerSnapshot {
 // ObservedStateConverter is an interface for objects that can convert their observed state to a snapshot
 type ObservedStateConverter interface {
 	CreateObservedStateSnapshot() ObservedStateSnapshot
+}
+
+// schedule returns the *absolute* control‑loop tick on (or after) which the
+// next rate‑limited operation may be executed.
+//
+// The delay that is added on top of the current manager tick is
+//
+//	δ = base * (1 ± JitterFraction)
+//
+// Where `base` is the deterministic cooldown (e.g. TicksBeforeNextAdd)
+// and `constants.JitterFraction` ‑ a value in the open unit interval (0 < j < 1) ‑
+// controls how much randomness is introduced:
+//
+//   - j = 0.25  →  delay is uniformly distributed in [0.75 · base, 1.25 · base]
+//     With `base == 10` this means 7 – 13 ticks.
+//
+//   - j = 0      →  no jitter at all (always exactly `base` ticks)
+//
+//   - j → 1    →  almost full spread, up to 0–2 · base.
+//
+// The jitter is *symmetric*: on average the mean delay stays equal to `base`,
+// the random spread only prevents many managers from waking up on the very
+// same tick and thus evens out load spikes.
+//
+// Example
+//
+//	// constants.JitterFraction = 0.25
+//	next := m.schedule(10)   // 10 ticks ± 25 %  →  7 … 13
+func (m *BaseFSMManager[C]) schedule(base uint64) uint64 {
+	// Pick a random factor in [1‑j, 1+j]
+	factor := 1 + (rand.Float64()*2-1)*constants.JitterFraction
+	delta := float64(base) * factor
+
+	// Round to nearest integer tick and add to the current manager tick
+	return m.managerTick + uint64(delta+0.5)
 }

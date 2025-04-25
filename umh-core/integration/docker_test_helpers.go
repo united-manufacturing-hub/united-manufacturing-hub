@@ -16,6 +16,7 @@ package integration_test
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
@@ -26,7 +27,7 @@ import (
 	"sync"
 	"time"
 
-	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/ginkgo/v2" // nolint: staticcheck // Ginkgo is designed to be used with dot imports
 )
 
 const (
@@ -127,7 +128,12 @@ func writeConfigFile(yamlContent string, containerName ...string) error {
 	configPath := getConfigFilePath()
 
 	// Always remove any existing file first
-	os.Remove(configPath)
+	err := os.Remove(configPath)
+	if err != nil {
+		if !os.IsNotExist(err) { // Ignore if the file does not exist
+			return fmt.Errorf("failed to remove existing config file: %w", err)
+		}
+	}
 
 	// Ensure the directory exists with wide permissions
 	dir := filepath.Dir(configPath)
@@ -150,12 +156,17 @@ func writeConfigFile(yamlContent string, containerName ...string) error {
 		if err := os.WriteFile(tmpFile, []byte(yamlContent), 0o666); err != nil {
 			return fmt.Errorf("failed to write temp config file: %w", err)
 		}
-		defer os.Remove(tmpFile) // Clean up temp file when done
+		defer func() {
+			err := os.Remove(tmpFile)
+			if err != nil {
+				GinkgoWriter.Printf("Failed to remove temp config file: %v\n", err)
+			}
+		}()
 
 		// Copy the file directly to the container
 		out, err := runDockerCommand("cp", tmpFile, container+":/data/config.yaml")
 		if err != nil {
-			fmt.Printf("Failed to copy config to container: %v\n%s\n", err, out)
+			GinkgoWriter.Printf("Failed to copy config to container: %v\n%s\n", err, out)
 			return fmt.Errorf("failed to copy config to container: %w", err)
 		}
 	}
@@ -164,12 +175,12 @@ func writeConfigFile(yamlContent string, containerName ...string) error {
 }
 
 func buildContainer() error {
-	fmt.Println("Building Docker image...")
+	GinkgoWriter.Println("Building Docker image...")
 	// Check if this image already exists
 	out, err := runDockerCommand("images", "-q", getImageName())
 	var exists bool
 	if err != nil {
-		fmt.Printf("Failed to check if image exists: %v\n", err)
+		GinkgoWriter.Printf("Failed to check if image exists: %v\n", err)
 		// If we fail for any reason, assume the image does not exist
 		exists = false
 	}
@@ -177,15 +188,15 @@ func buildContainer() error {
 		exists = true
 	}
 	if exists {
-		fmt.Printf("Image %s already exists, skipping build\n", getImageName())
+		GinkgoWriter.Printf("Image %s already exists, skipping build\n", getImageName())
 		return nil
 	}
 
 	coreDir := filepath.Dir(GetCurrentDir())
 	dockerfilePath := filepath.Join(coreDir, "Dockerfile")
 
-	fmt.Printf("Core directory: %s\n", coreDir)
-	fmt.Printf("Dockerfile path: %s\n", dockerfilePath)
+	GinkgoWriter.Printf("Core directory: %s\n", coreDir)
+	GinkgoWriter.Printf("Dockerfile path: %s\n", dockerfilePath)
 
 	// Let's just use make build with our own tag
 	fullImageName := getImageName()
@@ -203,9 +214,9 @@ func buildContainer() error {
 		fmt.Printf("Build output:\n%s\n", outmake)
 		return fmt.Errorf("docker build failed: %s", err)
 	}
-	fmt.Printf("Output of make build: %s\n", outmake)
+	GinkgoWriter.Printf("Output of make build: %s\n", outmake)
 
-	fmt.Println("Docker build successful")
+	GinkgoWriter.Println("Docker build successful")
 	return nil
 }
 
@@ -223,19 +234,19 @@ func BuildAndRunContainer(configYaml string, memory string, cpus uint) error {
 		return fmt.Errorf("cpu limit is not set")
 	}
 
-	fmt.Printf("\n=== STARTING CONTAINER BUILD AND RUN ===\n")
-	fmt.Printf("Container name: %s\n", containerName)
-	fmt.Printf("Memory limit: %s\n", memory)
-	fmt.Printf("CPU limit: %d\n", cpus)
+	GinkgoWriter.Printf("\n=== STARTING CONTAINER BUILD AND RUN ===\n")
+	GinkgoWriter.Printf("Container name: %s\n", containerName)
+	GinkgoWriter.Printf("Memory limit: %s\n", memory)
+	GinkgoWriter.Printf("CPU limit: %d\n", cpus)
 
 	// Generate random ports to avoid conflicts
 	// Use PID to create somewhat unique ports, but with a limited range to avoid system port limits
 	metricsPrt := 8081 + (os.Getpid() % 1000) // Base port 8081 + offset based on PID
 	goldenPrt := 8082 + (os.Getpid() % 1000)  // Base port 8082 + offset based on PID
 
-	fmt.Printf("Port mappings - Host:Container\n")
-	fmt.Printf("- Metrics: %d:8080\n", metricsPrt)
-	fmt.Printf("- Golden: %d:8082\n", goldenPrt)
+	GinkgoWriter.Printf("Port mappings - Host:Container\n")
+	GinkgoWriter.Printf("- Metrics: %d:8080\n", metricsPrt)
+	GinkgoWriter.Printf("- Golden: %d:8082\n", goldenPrt)
 
 	// Store these ports for later use
 	portMu.Lock()
@@ -244,15 +255,15 @@ func BuildAndRunContainer(configYaml string, memory string, cpus uint) error {
 	portMu.Unlock()
 
 	// 1. Stop/Remove the old container if any
-	fmt.Println("Cleaning up any previous containers with the same name...")
+	GinkgoWriter.Println("Cleaning up any previous containers with the same name...")
 	out, err := runDockerCommand("rm", "-f", containerName) // ignoring error
 	if err != nil {
-		fmt.Printf("Note: Container removal returned: %v, output: %s (this may be normal)\n", err, out)
+		GinkgoWriter.Printf("Note: Container removal returned: %v, output: %s (this may be normal)\n", err, out)
 	}
 
 	out, err = runDockerCommand("stop", containerName) // ignoring error
 	if err != nil {
-		fmt.Printf("Note: Container stop returned: %v, output: %s (this may be normal)\n", err, out)
+		GinkgoWriter.Printf("Note: Container stop returned: %v, output: %s (this may be normal)\n", err, out)
 	}
 
 	// 2. Build image
@@ -273,7 +284,7 @@ func BuildAndRunContainer(configYaml string, memory string, cpus uint) error {
 	}
 
 	// 5. Create the container WITHOUT starting it
-	fmt.Println("Creating container (without starting it)...")
+	GinkgoWriter.Println("Creating container (without starting it)...")
 	out, err = runDockerCommand(
 		"create",
 		"--name", containerName,
@@ -288,45 +299,45 @@ func BuildAndRunContainer(configYaml string, memory string, cpus uint) error {
 		getImageName(),
 	)
 	if err != nil {
-		fmt.Printf("Container creation failed: %v\n", err)
-		fmt.Printf("Container create output:\n%s\n", out)
+		GinkgoWriter.Printf("Container creation failed: %v\n", err)
+		GinkgoWriter.Printf("Container create output:\n%s\n", out)
 		return fmt.Errorf("could not create container: %s", out)
 	}
-	fmt.Printf("Container created with ID: %s\n", strings.TrimSpace(out))
+	GinkgoWriter.Printf("Container created with ID: %s\n", strings.TrimSpace(out))
 
 	// 6. Copy the config file to the container BEFORE starting it
-	fmt.Println("Copying config file to container...")
+	GinkgoWriter.Println("Copying config file to container...")
 	err = writeConfigFile(configYaml, containerName)
 	if err != nil {
 		return fmt.Errorf("failed to write config to container: %w", err)
 	}
 
 	// 7. Start the container
-	fmt.Println("Starting the container...")
+	GinkgoWriter.Println("Starting the container...")
 	out, err = runDockerCommand("start", containerName)
 	if err != nil {
-		fmt.Printf("Container start failed: %v\n", err)
-		fmt.Printf("Container start output:\n%s\n", out)
+		GinkgoWriter.Printf("Container start failed: %v\n", err)
+		GinkgoWriter.Printf("Container start output:\n%s\n", out)
 		return fmt.Errorf("could not start container: %s", out)
 	}
-	fmt.Println("Container started successfully")
+	GinkgoWriter.Println("Container started successfully")
 
 	// 8. Verify the container is actually running
 	out, err = runDockerCommand("inspect", "--format", "{{.State.Status}}", containerName)
 	if err != nil {
-		fmt.Printf("Failed to inspect container: %v\n", err)
+		GinkgoWriter.Printf("Failed to inspect container: %v\n", err)
 	} else {
 		containerState := strings.TrimSpace(out)
-		fmt.Printf("Container state: %s\n", containerState)
+		GinkgoWriter.Printf("Container state: %s\n", containerState)
 		if containerState != "running" {
-			fmt.Println("WARNING: Container is not in running state!")
+			GinkgoWriter.Println("WARNING: Container is not in running state!")
 			printContainerDebugInfo()
 			return fmt.Errorf("container is in %s state, not running", containerState)
 		}
 	}
 
 	// 9. Wait for the container to be healthy
-	fmt.Println("Waiting for metrics endpoint to become available...")
+	GinkgoWriter.Println("Waiting for metrics endpoint to become available...")
 	return waitForMetrics()
 }
 
@@ -334,13 +345,19 @@ func BuildAndRunContainer(configYaml string, memory string, cpus uint) error {
 func cleanupConfigFile() {
 	if configFilePath != "" {
 		// Just attempt to remove it, ignoring errors
-		os.Remove(configFilePath)
+		err := os.Remove(configFilePath)
+		if err != nil {
+			GinkgoWriter.Printf("Failed to remove config file: %v\n", err)
+		}
 
 		// Try to clean up the umh-config directory if it exists
 		dir := filepath.Dir(configFilePath)
 		if strings.HasSuffix(dir, "umh-config") {
 			// This will only succeed if the directory is empty
-			os.Remove(dir)
+			err := os.Remove(dir)
+			if err != nil {
+				GinkgoWriter.Printf("Failed to remove umh-config directory: %v\n", err)
+			}
 		}
 	}
 }
@@ -359,51 +376,10 @@ func getTmpDir() string {
 func cleanupTmpDirs(containerName string) {
 	filepath := filepath.Join(getTmpDir(), containerName)
 	GinkgoWriter.Printf("Cleaning up temporary directories for container %s (%s)\n", containerName, filepath)
-	os.RemoveAll(filepath)
-}
-
-// getContainerIP returns the IP address of a running container
-func getContainerIP(container string) (string, error) {
-	// First try the traditional IPAddress field
-	out, err := runDockerCommand("inspect", "--format", "{{.NetworkSettings.IPAddress}}", container)
+	err := os.RemoveAll(filepath)
 	if err != nil {
-		return "", fmt.Errorf("failed to get container IP: %w", err)
+		GinkgoWriter.Printf("Failed to remove temporary directories: %v\n", err)
 	}
-
-	// Trim whitespace
-	ip := strings.TrimSpace(out)
-
-	// If we got an empty IP, try to get it from the networks
-	if ip == "" {
-		// Try to get from bridge network (common default)
-		out, err = runDockerCommand("inspect", "--format", "{{.NetworkSettings.Networks.bridge.IPAddress}}", container)
-		if err == nil {
-			ip = strings.TrimSpace(out)
-		}
-	}
-
-	// If still empty, try "networks" plural for Docker Compose setups
-	if ip == "" {
-		out, err = runDockerCommand("inspect", "--format", "{{range $net, $conf := .NetworkSettings.Networks}}{{$conf.IPAddress}} {{end}}", container)
-		if err == nil {
-			// This might return multiple IPs, take the first non-empty one
-			for _, possibleIP := range strings.Fields(out) {
-				if possibleIP != "" {
-					ip = possibleIP
-					break
-				}
-			}
-		}
-	}
-
-	// If we still don't have an IP, log a warning
-	if ip == "" {
-		fmt.Printf("WARNING: Could not determine container IP for %s. Will use localhost instead.\n", container)
-	} else {
-		fmt.Printf("Found container IP for %s: %s\n", container, ip)
-	}
-
-	return ip, nil
 }
 
 // printContainerLogs prints the logs from the container
@@ -442,7 +418,18 @@ func printContainerLogs() {
 		fmt.Printf("%s\n", out)
 	}
 
-	// 4. List all available log files for reference
+	// 4. Golden Benthos logs
+	fmt.Printf("\n=== GOLDEN BENTHOS INTERNAL LOGS ===\n")
+	out, err = runDockerCommand("exec", containerName, "cat", "/data/logs/golden-benthos/current")
+	if err != nil {
+		fmt.Printf("Failed to get Benthos internal logs: %v\n", err)
+	} else if out == "" {
+		fmt.Printf("Benthos internal logs are empty or not found\n")
+	} else {
+		fmt.Printf("%s\n", out)
+	}
+
+	// 5. List all available log files for reference
 	fmt.Printf("\n=== AVAILABLE LOG FILES ===\n")
 	out, err = runDockerCommand("exec", containerName, "find", "/data/logs", "-type", "f")
 	if err != nil {
@@ -451,6 +438,30 @@ func printContainerLogs() {
 		fmt.Printf("No log files found in /data/logs\n")
 	} else {
 		fmt.Printf("%s\n", out)
+	}
+
+	// 6. Copy out ALL logs to a tmp dir (cia docker cp)
+	// The path is not randomized, so we can easily find in the GitHub Actions workflow
+	tmpDir := filepath.Join(getTmpDir(), "logs")
+
+	// If the dir exists, remove it
+	if _, err := os.Stat(tmpDir); err == nil {
+		err = os.RemoveAll(tmpDir)
+		if err != nil {
+			fmt.Printf("Failed to remove tmp dir: %v\n", err)
+		}
+	}
+	// Create the dir
+	err = os.MkdirAll(tmpDir, 0o777)
+	if err != nil {
+		fmt.Printf("Failed to create tmp dir: %v\n", err)
+	} else {
+		containerName := getContainerName()
+		_, err = runDockerCommand("cp", containerName+":/data/logs", tmpDir)
+		if err != nil {
+			fmt.Printf("Failed to copy out logs: %v\n", err)
+		}
+		fmt.Printf("Copied logs to %s\n", tmpDir)
 	}
 }
 
@@ -476,10 +487,17 @@ func PrintLogsAndStopContainer() {
 		fmt.Printf("\nTest failed. Container name: %s\n", containerNameInError)
 	}
 	// First stop the container
-	runDockerCommand("stop", containerName)
+	out, err := runDockerCommand("stop", containerName)
+	if err != nil {
+		GinkgoWriter.Printf("Failed to stop container: %v\n", err)
+		GinkgoWriter.Printf("Stop container output:\n%s\n", out)
+	}
 	// Then remove it
-	runDockerCommand("rm", "-f", containerName)
-
+	out, err = runDockerCommand("rm", "-f", containerName)
+	if err != nil {
+		GinkgoWriter.Printf("Failed to remove container: %v\n", err)
+		GinkgoWriter.Printf("Remove container output:\n%s\n", out)
+	}
 	// Clean up config file
 	cleanupConfigFile()
 
@@ -489,9 +507,17 @@ func CleanupDockerBuildCache() {
 	// If running in CI environment, also clean up Docker build cache
 	if os.Getenv("CI") == "true" {
 		fmt.Println("Running in CI environment, cleaning up Docker build cache...")
-		runDockerCommand("builder", "prune", "-f")
+		out, err := runDockerCommand("builder", "prune", "-f")
+		if err != nil {
+			GinkgoWriter.Printf("Failed to prune Docker builder cache: %v\n", err)
+			GinkgoWriter.Printf("Prune builder cache output:\n%s\n", out)
+		}
 		// Only prune non-running containers/images to avoid conflicts with other tests
-		runDockerCommand("system", "prune", "-f")
+		out, err = runDockerCommand("system", "prune", "-f")
+		if err != nil {
+			GinkgoWriter.Printf("Failed to prune Docker system: %v\n", err)
+			GinkgoWriter.Printf("Prune system output:\n%s\n", out)
+		}
 	}
 }
 
@@ -551,13 +577,17 @@ func printContainerDebugInfo() {
 }
 
 func runDockerCommand(args ...string) (string, error) {
+	return runDockerCommandWithCtx(context.Background(), args...)
+}
+
+func runDockerCommandWithCtx(ctx context.Context, args ...string) (string, error) {
 	fmt.Printf("Running docker command: %v\n", args)
 	// Check if we use docker or podman
 	dockerCmd := "docker"
 	if _, err := exec.LookPath("podman"); err == nil {
 		dockerCmd = "podman"
 	}
-	cmd := exec.Command(dockerCmd, args...)
+	cmd := exec.CommandContext(ctx, dockerCmd, args...)
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	cmd.Stderr = &out
@@ -573,14 +603,4 @@ func GetCurrentDir() string {
 		return "."
 	}
 	return strings.TrimSpace(wd)
-}
-
-// getContainerConfig retrieves the current configuration file from the container
-func getContainerConfig() (string, error) {
-	containerName := getContainerName()
-	out, err := runDockerCommand("exec", containerName, "cat", "/data/config.yaml")
-	if err != nil {
-		return "", fmt.Errorf("failed to read config from container: %w", err)
-	}
-	return string(out), nil
 }

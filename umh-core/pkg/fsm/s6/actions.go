@@ -16,6 +16,7 @@ package s6
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
 	"time"
@@ -86,6 +87,11 @@ func (s *S6Instance) RemoveInstance(ctx context.Context, filesystemService files
 	// Remove the service directory
 	err := s.service.Remove(ctx, s.servicePath, filesystemService)
 	if err != nil {
+		// If the service doesn't exist, consider removal successful
+		if errors.Is(err, s6service.ErrServiceNotExist) {
+			s.baseFSMInstance.GetLogger().Debugf("S6 service %s already removed", s.baseFSMInstance.GetID())
+			return nil
+		}
 		return fmt.Errorf("failed to remove service directory for %s: %w", s.baseFSMInstance.GetID(), err)
 	}
 
@@ -130,7 +136,12 @@ func (s *S6Instance) StopInstance(ctx context.Context, filesystemService filesys
 }
 
 // UpdateObservedStateOfInstance updates the observed state of the service
-func (s *S6Instance) UpdateObservedStateOfInstance(ctx context.Context, filesystemService filesystem.Service, tick uint64) error {
+func (s *S6Instance) UpdateObservedStateOfInstance(ctx context.Context, filesystemService filesystem.Service, tick uint64, loopStartTime time.Time) error {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+
+	// If both desired and current state are stopped, we do not return immediately, as we still need to check for permanent errors
 
 	// Measure status time
 	info, err := s.service.Status(ctx, s.servicePath, filesystemService)
@@ -178,7 +189,11 @@ func (s *S6Instance) UpdateObservedStateOfInstance(ctx context.Context, filesyst
 	if !reflect.DeepEqual(s.ObservedState.ObservedS6ServiceConfig, s.config.S6ServiceConfig) {
 		s.baseFSMInstance.GetLogger().Debugf("Observed config is different from desired config, triggering a re-create")
 		s.logConfigDifferences(s.config.S6ServiceConfig, s.ObservedState.ObservedS6ServiceConfig)
-		s.baseFSMInstance.Remove(ctx)
+		err := s.baseFSMInstance.Remove(ctx)
+		if err != nil {
+			s.baseFSMInstance.GetLogger().Errorf("error removing S6 instance %s: %v", s.baseFSMInstance.GetID(), err)
+			return err
+		}
 	}
 
 	return nil

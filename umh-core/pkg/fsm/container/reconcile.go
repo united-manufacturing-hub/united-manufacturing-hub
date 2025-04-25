@@ -33,7 +33,7 @@ import (
 // The filesystemService parameter allows for filesystem operations during reconciliation,
 // enabling the method to read configuration or state information from the filesystem.
 // Currently not used in this implementation but added for consistency with the interface.
-func (c *ContainerInstance) Reconcile(ctx context.Context, filesystemService filesystem.Service, tick uint64) (err error, reconciled bool) {
+func (c *ContainerInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot, filesystemService filesystem.Service) (err error, reconciled bool) {
 	start := time.Now()
 	instanceName := c.baseFSMInstance.GetID()
 	defer func() {
@@ -52,20 +52,31 @@ func (c *ContainerInstance) Reconcile(ctx context.Context, filesystemService fil
 	}
 
 	// Step 1: If there's a lastError, see if we've waited enough.
-	if c.baseFSMInstance.ShouldSkipReconcileBecauseOfError(tick) {
-		backErr := c.baseFSMInstance.GetBackoffError(tick)
+	if c.baseFSMInstance.ShouldSkipReconcileBecauseOfError(snapshot.Tick) {
+		backErr := c.baseFSMInstance.GetBackoffError(snapshot.Tick)
 		if backoff.IsPermanentFailureError(backErr) {
-			// If permanent, we want to remove the instance or at least stop it
-			// For now, let's just remove it from the manager:
-			if c.IsRemoved() || c.IsRemoving() || c.IsStopping() || c.IsStopped() {
-				c.baseFSMInstance.GetLogger().Errorf("Permanent error on container monitor %s but it is already in a terminal/removing state", instanceName)
-				return backErr, false
-			} else {
-				c.baseFSMInstance.GetLogger().Errorf("Permanent error on container monitor %s => removing it", instanceName)
-				c.baseFSMInstance.ResetState() // clear the error
-				_ = c.Remove(ctx)              // attempt removal
-				return nil, false
-			}
+			// For permanent errors, we need special handling based on the instance's current state:
+			// 1. If already in a shutdown state (removed, removing, stopping, stopped), try force removal
+			// 2. If not in a shutdown state, attempt normal removal first, then force if needed
+			return c.baseFSMInstance.HandlePermanentError(
+				ctx,
+				backErr,
+				func() bool {
+					// Determine if we're already in a shutdown state where normal removal isn't possible
+					// and force removal is required
+					return c.IsRemoved() || c.IsRemoving() || c.IsStopping() || c.IsStopped() || c.WantsToBeStopped()
+				},
+				func(ctx context.Context) error {
+					// Normal removal through state transition
+					return c.Remove(ctx)
+				},
+				func(ctx context.Context) error {
+					// Container implementation doesn't have a ForceRemove method
+					// Instead, we signal permanent failure so the manager can clean it up
+					// This acts as the last resort when normal removal isn't possible
+					return fmt.Errorf("%s : %w", backoff.PermanentFailureError, backErr)
+				},
+			)
 		}
 		c.baseFSMInstance.GetLogger().Debugf("Skipping reconcile for container monitor %s: %v", instanceName, backErr)
 		return nil, false
@@ -86,13 +97,13 @@ func (c *ContainerInstance) Reconcile(ctx context.Context, filesystemService fil
 		}
 
 		// For other errors, set the error for backoff
-		c.baseFSMInstance.SetError(err, tick)
+		c.baseFSMInstance.SetError(err, snapshot.Tick)
 		return nil, false
 	}
 
 	// Print system state every 10 ticks
-	if tick%10 == 0 {
-		c.printSystemState(instanceName, tick)
+	if snapshot.Tick%10 == 0 {
+		c.printSystemState(instanceName, snapshot.Tick)
 	}
 
 	// Step 3: Attempt to reconcile the state.
@@ -113,7 +124,7 @@ func (c *ContainerInstance) Reconcile(ctx context.Context, filesystemService fil
 			return nil, true // We don't want to return an error here, as this can happen in normal operations
 		}
 
-		c.baseFSMInstance.SetError(err, tick)
+		c.baseFSMInstance.SetError(err, snapshot.Tick)
 		c.baseFSMInstance.GetLogger().Errorf("error reconciling state: %s", err)
 		return nil, false // We don't want to return an error here, because we want to continue reconciling
 	}

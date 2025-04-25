@@ -17,6 +17,7 @@ package container
 import (
 	"github.com/tiendc/go-deepcopy"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/container_monitor"
 )
 
@@ -33,7 +34,11 @@ func (c *ContainerObservedStateSnapshot) IsObservedStateSnapshot() {}
 func (c *ContainerInstance) CreateObservedStateSnapshot() fsm.ObservedStateSnapshot {
 	snapshot := &ContainerObservedStateSnapshot{}
 	if c.ObservedState.ServiceInfo != nil {
-		deepcopy.Copy(&snapshot.ServiceInfoSnapshot, c.ObservedState.ServiceInfo)
+		err := deepcopy.Copy(&snapshot.ServiceInfoSnapshot, &c.ObservedState.ServiceInfo)
+		if err != nil {
+			sentry.ReportIssuef(sentry.IssueTypeError, c.baseFSMInstance.GetLogger(), "failed to deep copy service info: %v", err)
+			return nil
+		}
 	}
 	return snapshot
 }

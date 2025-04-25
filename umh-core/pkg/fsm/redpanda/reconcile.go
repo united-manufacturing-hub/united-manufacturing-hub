@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	internal_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
@@ -37,7 +38,7 @@ import (
 // This function is intended to be called repeatedly (e.g. in a periodic control loop).
 // Over multiple calls, it converges the actual state to the desired state. Transitions
 // that fail are retried in subsequent reconcile calls after a backoff period.
-func (r *RedpandaInstance) Reconcile(ctx context.Context, filesystemService filesystem.Service, tick uint64) (err error, reconciled bool) {
+func (r *RedpandaInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot, filesystemService filesystem.Service) (err error, reconciled bool) {
 	start := time.Now()
 	redpandaInstanceName := r.baseFSMInstance.GetID()
 	defer func() {
@@ -56,35 +57,48 @@ func (r *RedpandaInstance) Reconcile(ctx context.Context, filesystemService file
 	}
 
 	// Step 1: If there's a lastError, see if we've waited enough.
-	if r.baseFSMInstance.ShouldSkipReconcileBecauseOfError(tick) {
-		err := r.baseFSMInstance.GetBackoffError(tick)
+	if r.baseFSMInstance.ShouldSkipReconcileBecauseOfError(snapshot.Tick) {
+		err := r.baseFSMInstance.GetBackoffError(snapshot.Tick)
 		r.baseFSMInstance.GetLogger().Debugf("Skipping reconcile for Redpanda pipeline %s: %w", redpandaInstanceName, err)
 
 		// if it is a permanent error, start the removal process and reset the error (so that we can reconcile towards a stopped / removed state)
 		if backoff.IsPermanentFailureError(err) {
-
-			// if it is already in stopped, stopping, removing states, and it again returns a permanent error,
-			// we need to throw it to the manager as the instance itself here cannot fix it anymore
-			if r.IsRemoved() || r.IsRemoving() || r.IsStopping() || r.IsStopped() {
-				r.baseFSMInstance.GetLogger().Errorf("Redpanda instance %s is already in a terminal state, force removing it", redpandaInstanceName)
-				// force delete everything from the s6 file directory
-				r.service.ForceRemoveRedpanda(ctx, filesystemService)
-				return err, false
-			} else {
-				r.baseFSMInstance.GetLogger().Errorf("Redpanda instance %s is not in a terminal state, resetting state and removing it", redpandaInstanceName)
-				r.baseFSMInstance.ResetState()
-				r.Remove(ctx)
-				return nil, false // let's try to at least reconcile towards a stopped / removed state
-			}
+			// For permanent errors, we need special handling based on the instance's current state:
+			// 1. If already in a shutdown state (removed, removing, stopping, stopped), try force removal
+			// 2. If not in a shutdown state, attempt normal removal first, then force if needed
+			return r.baseFSMInstance.HandlePermanentError(
+				ctx,
+				err,
+				func() bool {
+					// Determine if we're already in a shutdown state where normal removal isn't possible
+					// and force removal is required
+					return r.IsRemoved() || r.IsRemoving() || r.IsStopping() || r.IsStopped() || r.WantsToBeStopped()
+				},
+				func(ctx context.Context) error {
+					// Normal removal through state transition
+					return r.Remove(ctx)
+				},
+				func(ctx context.Context) error {
+					// Force removal when other approaches fail - bypasses state transitions
+					// and directly deletes files and resources
+					return r.service.ForceRemoveRedpanda(ctx, filesystemService)
+				},
+			)
 		}
 		return nil, false
 	}
 
 	// Step 2: Detect external changes.
-	if err := r.reconcileExternalChanges(ctx, filesystemService, tick); err != nil {
+	if err := r.reconcileExternalChanges(ctx, filesystemService, snapshot.Tick, start); err != nil {
 		// If the service is not running, we don't want to return an error here, because we want to continue reconciling
 		if !errors.Is(err, redpanda_service.ErrServiceNotExist) {
-			r.baseFSMInstance.SetError(err, tick)
+			r.baseFSMInstance.SetError(err, snapshot.Tick)
+			// We expect that the logrotation will sometimes throw "could not parse redpanda metrics/configuration: no sections found. This can happen when the redpanda service is not running, or the logs where rotated"
+			// This is not an error, so we don't want to return an error here
+			if strings.Contains(err.Error(), "could not parse redpanda metrics/configuration: no sections found") {
+				r.baseFSMInstance.GetLogger().Debugf("ignoring error reconciling external changes: %s", err)
+				return nil, false
+			}
 			r.baseFSMInstance.GetLogger().Errorf("error reconciling external changes: %s", err)
 
 			if errors.Is(err, context.DeadlineExceeded) {
@@ -98,6 +112,7 @@ func (r *RedpandaInstance) Reconcile(ctx context.Context, filesystemService file
 			return nil, false // We don't want to return an error here, because we want to continue reconciling
 		}
 
+		//nolint:ineffassign // This is intentionally modifying the named return value accessed in defer
 		err = nil // The service does not exist, which is fine as this happens in the reconcileStateTransition
 	}
 
@@ -110,15 +125,15 @@ func (r *RedpandaInstance) Reconcile(ctx context.Context, filesystemService file
 			return nil, false
 		}
 
-		r.baseFSMInstance.SetError(err, tick)
+		r.baseFSMInstance.SetError(err, snapshot.Tick)
 		r.baseFSMInstance.GetLogger().Errorf("error reconciling state: %s", err)
 		return nil, false // We don't want to return an error here, because we want to continue reconciling
 	}
 
 	// Reconcile the s6Manager
-	s6Err, s6Reconciled := r.service.ReconcileManager(ctx, filesystemService, tick)
+	s6Err, s6Reconciled := r.service.ReconcileManager(ctx, filesystemService, snapshot.Tick)
 	if s6Err != nil {
-		r.baseFSMInstance.SetError(s6Err, tick)
+		r.baseFSMInstance.SetError(s6Err, snapshot.Tick)
 		r.baseFSMInstance.GetLogger().Errorf("error reconciling s6Manager: %s", s6Err)
 		return nil, false
 	}
@@ -136,7 +151,7 @@ func (r *RedpandaInstance) Reconcile(ctx context.Context, filesystemService file
 
 // reconcileExternalChanges checks if the RedpandaInstance service status has changed
 // externally (e.g., if someone manually stopped or started it, or if it crashed)
-func (r *RedpandaInstance) reconcileExternalChanges(ctx context.Context, filesystemService filesystem.Service, tick uint64) error {
+func (r *RedpandaInstance) reconcileExternalChanges(ctx context.Context, filesystemService filesystem.Service, tick uint64, loopStartTime time.Time) error {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentRedpandaInstance, r.baseFSMInstance.GetID()+".reconcileExternalChanges", time.Since(start))
@@ -147,7 +162,7 @@ func (r *RedpandaInstance) reconcileExternalChanges(ctx context.Context, filesys
 	observedStateCtx, cancel := context.WithTimeout(ctx, constants.RedpandaUpdateObservedStateTimeout)
 	defer cancel()
 
-	err := r.UpdateObservedStateOfInstance(observedStateCtx, filesystemService, tick)
+	err := r.UpdateObservedStateOfInstance(observedStateCtx, filesystemService, tick, loopStartTime)
 	if err != nil {
 		return fmt.Errorf("failed to update observed state: %w", err)
 	}

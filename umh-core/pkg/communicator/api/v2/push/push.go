@@ -56,9 +56,11 @@ type Pusher struct {
 	watcherUUID            uuid.UUID
 	backoff                *tools.Backoff
 	insecureTLS            bool
+	apiURL                 string
+	logger                 *zap.SugaredLogger
 }
 
-func NewPusher(instanceUUID uuid.UUID, jwt string, dog watchdog.Iface, outboundChannel chan *models.UMHMessage, deadletterCh chan DeadLetter, backoff *tools.Backoff, insecureTLS bool) *Pusher {
+func NewPusher(instanceUUID uuid.UUID, jwt string, dog watchdog.Iface, outboundChannel chan *models.UMHMessage, deadletterCh chan DeadLetter, backoff *tools.Backoff, insecureTLS bool, apiURL string, logger *zap.SugaredLogger) *Pusher {
 	p := Pusher{
 		instanceUUID:           instanceUUID,
 		outboundMessageChannel: outboundChannel,
@@ -67,6 +69,8 @@ func NewPusher(instanceUUID uuid.UUID, jwt string, dog watchdog.Iface, outboundC
 		dog:                    dog,
 		backoff:                backoff,
 		insecureTLS:            insecureTLS,
+		apiURL:                 apiURL,
+		logger:                 logger,
 	}
 	p.jwt.Store(jwt)
 	return &p
@@ -81,7 +85,7 @@ func (p *Pusher) Start() {
 
 func (p *Pusher) Push(message models.UMHMessage) {
 	if len(p.outboundMessageChannel) == cap(p.outboundMessageChannel) {
-		zap.S().Warnf("Outbound message channel is full !")
+		p.logger.Warnf("Outbound message channel is full !")
 		if p.watcherUUID != uuid.Nil {
 			p.dog.ReportHeartbeatStatus(p.watcherUUID, watchdog.HEARTBEAT_STATUS_WARNING)
 		}
@@ -91,7 +95,6 @@ func (p *Pusher) Push(message models.UMHMessage) {
 		Content:      message.Content,
 		Email:        message.Email,
 	}
-	// zap.S().Debugf("Pushed message: %d", len(p.outboundMessageChannel))
 }
 
 func (p *Pusher) push() {
@@ -116,7 +119,7 @@ func (p *Pusher) push() {
 			payload := backend_api_structs.PushPayload{
 				UMHMessages: messages,
 			}
-			_, err, status := http.PostRequest[any, backend_api_structs.PushPayload](context.Background(), http.PushEndpoint, &payload, nil, &cookies, p.insecureTLS)
+			_, status, err := http.PostRequest[any, backend_api_structs.PushPayload](context.Background(), http.PushEndpoint, &payload, nil, &cookies, p.insecureTLS, p.apiURL, p.logger)
 			if err != nil {
 				error_handler.ReportHTTPErrors(err, status, string(http.PushEndpoint), "POST", &payload, nil)
 				p.dog.ReportHeartbeatStatus(p.watcherUUID, watchdog.HEARTBEAT_STATUS_WARNING)
@@ -130,7 +133,7 @@ func (p *Pusher) push() {
 					continue
 				}
 				// In case of an error, push the message back to the deadletter channel.
-				go enqueueToDeadLetterChannel(p.deadletterCh, messages, cookies, 0)
+				go enqueueToDeadLetterChannel(p.deadletterCh, messages, cookies, 0, p.logger)
 				boPostRequest.IncrementAndSleep()
 
 				continue
@@ -154,26 +157,26 @@ func (p *Pusher) push() {
 				continue
 			}
 			d.retryAttempts++
-			_, err, _ := http.PostRequest[any, backend_api_structs.PushPayload](nil, http.PushEndpoint, &backend_api_structs.PushPayload{UMHMessages: d.messages}, nil, &d.cookies, p.insecureTLS)
+			_, _, err := http.PostRequest[any, backend_api_structs.PushPayload](context.Background(), http.PushEndpoint, &backend_api_structs.PushPayload{UMHMessages: d.messages}, nil, &d.cookies, p.insecureTLS, p.apiURL, p.logger)
 			if err != nil {
 				p.dog.ReportHeartbeatStatus(p.watcherUUID, watchdog.HEARTBEAT_STATUS_WARNING)
 				boPostRequest.IncrementAndSleep()
 				// In case of an error, push the message back to the deadletter channel.
-				go enqueueToDeadLetterChannel(p.deadletterCh, d.messages, d.cookies, d.retryAttempts)
+				go enqueueToDeadLetterChannel(p.deadletterCh, d.messages, d.cookies, d.retryAttempts, p.logger)
 			}
 			boPostRequest.Reset()
 		}
 	}
 }
 
-func enqueueToDeadLetterChannel(deadLetterCh chan DeadLetter, messages []models.UMHMessage, cookies map[string]string, retryAttempt int) {
-	zap.S().Debugf("Enqueueing to deadletter channel to push messages: %v with retry attempts: %d", messages, retryAttempt)
+func enqueueToDeadLetterChannel(deadLetterCh chan DeadLetter, messages []models.UMHMessage, cookies map[string]string, retryAttempt int, logger *zap.SugaredLogger) {
+	logger.Debugf("Enqueueing to deadletter channel to push messages: %v with retry attempts: %d", messages, retryAttempt)
 
 	select {
 	case _, ok := <-deadLetterCh:
 		if !ok {
 			// Channel is closed
-			sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "[enqueueToDeadLetterChannel] Deadletter channel is closed, cannot enqueue messages!")
+			sentry.ReportIssuef(sentry.IssueTypeError, logger, "[enqueueToDeadLetterChannel] Deadletter channel is closed, cannot enqueue messages!")
 			return
 		}
 	case deadLetterCh <- DeadLetter{
@@ -183,7 +186,7 @@ func enqueueToDeadLetterChannel(deadLetterCh chan DeadLetter, messages []models.
 	}:
 		// Message successfully enqueued to deadletter channel. Do nothing.
 	default:
-		sentry.ReportIssuef(sentry.IssueTypeError, zap.S(), "[enqueueToDeadLetterChannel] Deadletter channel is not open or ready to receive the re-enqueued messages from the Pusher!")
+		sentry.ReportIssuef(sentry.IssueTypeError, logger, "[enqueueToDeadLetterChannel] Deadletter channel is not open or ready to receive the re-enqueued messages from the Pusher!")
 	}
 }
 

@@ -18,9 +18,12 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
 )
 
-// CompareConfigs compares two DataFlowComponentConfigs for equality
+// ConfigsEqual compares two DataFlowComponentConfigs for equality
 // by converting to BenthosServiceConfig and using the existing comparison utilities
-func CompareConfigs(a, b *DataFlowComponentConfig) bool {
+func ConfigsEqual(a, b *DataFlowComponentConfig) bool {
+	if a == nil || b == nil {
+		return false
+	}
 	benthosA := a.GetBenthosServiceConfig()
 	benthosB := b.GetBenthosServiceConfig()
 
@@ -28,8 +31,11 @@ func CompareConfigs(a, b *DataFlowComponentConfig) bool {
 	return comparator.ConfigsEqual(benthosA, benthosB)
 }
 
-// GetConfigDiff returns a human-readable string describing differences between configs
-func GetConfigDiff(a, b *DataFlowComponentConfig) string {
+// ConfigDiff returns a human-readable string describing differences between configs
+func ConfigDiff(a, b *DataFlowComponentConfig) string {
+	if a == nil || b == nil {
+		return ""
+	}
 	benthosA := a.GetBenthosServiceConfig()
 	benthosB := b.GetBenthosServiceConfig()
 

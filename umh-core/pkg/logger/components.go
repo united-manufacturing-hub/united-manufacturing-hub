@@ -25,28 +25,37 @@ const (
 	// Manager components
 	ComponentS6Manager                = "S6Manager"
 	ComponentBenthosManager           = "BenthosManager"
+	ComponentAgentManager             = "AgentManager"
 	ComponentContainerManager         = "ContainerManager"
 	ComponentRedpandaManager          = "RedpandaManager"
 	ComponentDataFlowComponentManager = "DataFlowCompManager"
+	ComponentNmapManager              = "NmapCompManager"
 
 	// FSM components
-	ComponentBaseFSM          = "BaseFSM"
-	ComponentS6Instance       = "S6Instance"
-	ComponentBenthosInstance  = "BenthosInstance"
-	ComponentRedpandaInstance = "RedpandaInstance"
+	ComponentBaseFSM                   = "BaseFSM"
+	ComponentS6Instance                = "S6Instance"
+	ComponentBenthosInstance           = "BenthosInstance"
+	ComponentRedpandaInstance          = "RedpandaInstance"
+	ComponentNmapInstance              = "NmapInstance"
+	ComponentDataFlowComponentInstance = "DFCInstance"
 
 	// Service components
 	ComponentS6Service                = "S6Service"
 	ComponentBenthosService           = "BenthosService"
 	ComponentNmapService              = "NmapService"
-	ComponentContainerMonService      = "ContainerMonService"
-	ComponentDataFlowComponentService = "DFCService"
+	ComponentContainerMonitorService  = "ContainerMonitorService"
+	ComponentRedpandaMonitorService   = "RedpandaMonitorService"
 	ComponentRedpandaService          = "RedpandaService"
+	ComponentAgentMonitorService      = "AgentMonitorService"
+	ComponentDataFlowComponentService = "DFCService"
 
 	// Configuration
 	ComponentConfigManager = "ConfigManager"
 
+	//Agent
+	AgentManagerComponentName  = "AgentManager"
+	AgentInstanceComponentName = "agent"
+
 	// Communicator components
-	ComponentCommunicatorRouter  = "CommunicatorRouter"
-	ComponentCommunicatorActions = "CommunicatorActions"
+	ComponentCommunicator = "Communicator"
 )

@@ -28,6 +28,7 @@ import (
 	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm" // for LifecycleStateToBeCreated, etc.
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsmtest"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/backoff"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	benthosfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/portmanager"
@@ -953,7 +954,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 			//      - no external error returned (err == nil)
 			//      - reconciled == false
 			//      - instance remains in to_be_created
-			err, reconciled := instance.Reconcile(ctx, mockFS, tick)
+			err, reconciled := instance.Reconcile(ctx, fsm.SystemSnapshot{Tick: tick}, mockFS)
 			tick++
 			Expect(err).NotTo(HaveOccurred())
 			Expect(reconciled).To(BeFalse())
@@ -970,14 +971,14 @@ var _ = Describe("BenthosInstance FSM", func() {
 			mockService.ExistingServices[serviceName] = true
 
 			// 7) Next reconcile => now we succeed => instance transitions to "creating"
-			err, reconciled = instance.Reconcile(ctx, mockFS, tick)
+			err, reconciled = instance.Reconcile(ctx, fsm.SystemSnapshot{Tick: tick}, mockFS)
 			tick++
 			Expect(err).NotTo(HaveOccurred())
 			Expect(reconciled).To(BeTrue())
 			Expect(instance.GetCurrentFSMState()).To(Equal(internalfsm.LifecycleStateCreating))
 
 			// 8) Another reconcile => we complete creation => "stopped"
-			err, reconciled = instance.Reconcile(ctx, mockFS, tick)
+			err, reconciled = instance.Reconcile(ctx, fsm.SystemSnapshot{Tick: tick}, mockFS)
 			tick++
 			Expect(err).NotTo(HaveOccurred())
 			Expect(reconciled).To(BeTrue())
@@ -1167,7 +1168,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 
 			// Wait for the FSM to detect the error and change desired state to stopped
 			tick, err = fsmtest.WaitForBenthosDesiredState(
-				ctx, instance, mockFS, tick, benthosfsm.OperationalStateStopped, 10,
+				ctx, fsm.SystemSnapshot{Tick: tick}, instance, mockFS, benthosfsm.OperationalStateStopped, 10,
 			)
 			Expect(err).NotTo(HaveOccurred(), "Instance should change desired state to stopped after permanent error")
 
@@ -1213,16 +1214,87 @@ var _ = Describe("BenthosInstance FSM", func() {
 			var recErr error
 			var reconciled bool
 			tick, recErr, reconciled = fsmtest.ReconcileBenthosUntilError(
-				ctx, instance, mockService, mockFS, serviceName, tick, 5,
+				ctx, fsm.SystemSnapshot{Tick: tick}, instance, mockService, mockFS, serviceName, 5,
 			)
 
 			// Now we should get the error
 			Expect(recErr).To(HaveOccurred())
 			Expect(recErr.Error()).To(ContainSubstring(backoff.PermanentFailureError))
-			Expect(reconciled).To(BeFalse(), "Should not have reconciled during error handling")
+			Expect(reconciled).To(BeTrue(), "Should have reconciled during error handling")
 
 			// Verify force removal was attempted
 			Expect(mockService.ForceRemoveBenthosCalled).To(BeTrue())
+
+			// Clear error for other tests
+			mockService.RemoveBenthosFromS6ManagerError = nil
+		})
+		It("should attempt forced removal when not in a terminal state with a permanent error", func() {
+			// 1) Get to stopped state using proper transitions
+			var err error
+
+			// First progress to creating state
+			tick, err = fsmtest.TestBenthosStateTransition(
+				ctx, instance, mockService, mockFS, serviceName,
+				internalfsm.LifecycleStateToBeCreated,
+				internalfsm.LifecycleStateCreating,
+				5,
+				tick,
+			)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Setup service in stopped state
+			mockService.ServiceStates[serviceName] = &benthossvc.ServiceInfo{S6FSMState: s6fsm.OperationalStateStopped}
+			mockService.ExistingServices[serviceName] = true
+
+			// Progress to stopped state
+			tick, err = fsmtest.TestBenthosStateTransition(
+				ctx, instance, mockService, mockFS, serviceName,
+				internalfsm.LifecycleStateCreating,
+				benthosfsm.OperationalStateStopped,
+				5,
+				tick,
+			)
+			Expect(err).NotTo(HaveOccurred())
+
+			instance.SetDesiredFSMState(benthosfsm.OperationalStateActive)
+
+			// Progress to starting state
+			tick, err = fsmtest.TestBenthosStateTransition(
+				ctx, instance, mockService, mockFS, serviceName,
+				benthosfsm.OperationalStateStopped,
+				benthosfsm.OperationalStateStarting,
+				5,
+				tick,
+			)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Progress to config loading state
+			tick, err = fsmtest.TestBenthosStateTransition(
+				ctx, instance, mockService, mockFS, serviceName,
+				benthosfsm.OperationalStateStarting,
+				benthosfsm.OperationalStateStartingConfigLoading,
+				5,
+				tick,
+			)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Create a permanent error that will be encountered during reconcile
+			mockService.StatusError = fmt.Errorf("%s: test permanent error", backoff.PermanentFailureError)
+
+			// Use the helper function to reconcile until error
+			var recErr error
+			var reconciled bool
+			tick, recErr, reconciled = fsmtest.ReconcileBenthosUntilError(
+				ctx, fsm.SystemSnapshot{Tick: tick}, instance, mockService, mockFS, serviceName, 20,
+			)
+
+			// Verify force removal was attempted
+			Expect(mockService.ForceRemoveBenthosCalled).To(BeTrue())
+
+			// Now we should get the error
+			Expect(recErr).To(HaveOccurred())
+			Expect(recErr.Error()).To(ContainSubstring(backoff.PermanentFailureError))
+			Expect(reconciled).To(BeTrue())
 
 			// Clear error for other tests
 			mockService.RemoveBenthosFromS6ManagerError = nil

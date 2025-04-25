@@ -40,13 +40,19 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/tiendc/go-deepcopy"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/backoff"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/ctxutil"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/agent_monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/container"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/nmap"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/redpanda"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
@@ -101,7 +107,10 @@ func NewControlLoop(configManager config.ConfigManager) *ControlLoop {
 		s6.NewS6Manager(constants.DefaultManagerName),
 		benthos.NewBenthosManager(constants.DefaultManagerName),
 		container.NewContainerManager(constants.DefaultManagerName),
-		//redpanda.NewRedpandaManager(constants.DefaultManagerName),
+		redpanda.NewRedpandaManager(constants.DefaultManagerName),
+		agent_monitor.NewAgentManager(constants.DefaultManagerName),
+		nmap.NewNmapManager(constants.DefaultManagerName),
+		dataflowcomponent.NewDataflowComponentManager(constants.DefaultManagerName),
 	}
 
 	// Create a starvation checker
@@ -219,11 +228,35 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 		return ctx.Err()
 	}
 
-	// Get the config, this can fail for example through filesystem errors
+	// 1) Retrieve or create the "previous" snapshot
+	prevSnapshot := c.snapshotManager.GetSnapshot()
+	var newSnapshot fsm.SystemSnapshot
+
+	// If there is no previous snapshot, create a new one
+	// Note: should fetching the config in step 2 fail, the snapshot will not be updated
+	// Hence, once we have a snapshot, we will always have a config
+	if prevSnapshot == nil {
+		// If none existed, create an empty one
+		newSnapshot = fsm.SystemSnapshot{
+			Managers:     make(map[string]fsm.ManagerSnapshot),
+			SnapshotTime: time.Now(),
+			Tick:         ticker,
+		}
+	} else {
+		// the new snapshot is a deep copy of the previous snapshot
+		err := deepcopy.Copy(&newSnapshot, prevSnapshot)
+		if err != nil {
+			sentry.ReportIssuef(sentry.IssueTypeError, c.logger, "Failed to deep copy snapshot: %v", err)
+			return fmt.Errorf("failed to deep copy snapshot: %w", err)
+		}
+		newSnapshot.Tick = ticker
+		newSnapshot.SnapshotTime = time.Now()
+	}
+
+	// 2) Get the config, this can fail for example through filesystem errors
 	// Therefore we need a backoff here
 	// GetConfig returns a temporary backoff error or a permanent failure error
 	cfg, err := c.configManager.GetConfig(ctx, ticker)
-	c.logger.Debugf("Config: %v", cfg)
 	if err != nil {
 		// Handle temporary backoff errors --> we want to continue reconciling
 		if backoff.IsTemporaryBackoffError(err) {
@@ -243,7 +276,11 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 			return nil
 		}
 	}
-	// If the filesystem service is buffered, we need to sync from disk
+
+	// 3) Place the newly fetched config into the snapshot
+	newSnapshot.CurrentConfig = cfg
+
+	// 4) If your filesystem service is a buffered FS, sync once per loop:
 	bufferedFs, ok := c.filesystemService.(*filesystem.BufferedService)
 	if ok {
 		// Step 1: Flush all pending writes to disk
@@ -261,7 +298,7 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 		}
 	}
 
-	// Reconcile each manager with the current tick count
+	// 5) Reconcile each manager with the current tick count and passing in the newSnapshot
 	for _, manager := range c.managers {
 		// Check if we have enough time to reconcile the manager
 		remaining, sufficient, err := ctxutil.HasSufficientTime(ctx, constants.DefaultMinimumRemainingTimePerManager)
@@ -284,7 +321,7 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 			return nil
 		}
 
-		err, reconciled := manager.Reconcile(ctx, cfg, c.filesystemService, c.currentTick)
+		err, reconciled := manager.Reconcile(ctx, newSnapshot, c.filesystemService)
 		if err != nil {
 			metrics.IncErrorCount(metrics.ComponentControlLoop, manager.GetManagerName())
 			return fmt.Errorf("manager %s reconciliation failed: %w", manager.GetManagerName(), err)
@@ -300,12 +337,15 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 
 	if c.starvationChecker != nil {
 		// Check for starvation
-		c.starvationChecker.Reconcile(ctx, cfg)
+		err, _ := c.starvationChecker.Reconcile(ctx, cfg)
+		if err != nil {
+			return fmt.Errorf("starvation checker reconciliation failed: %w", err)
+		}
 	} else {
 		return fmt.Errorf("starvation checker is not set")
 	}
 
-	// Create a snapshot after the entire reconciliation cycle
+	// 6) Finally, persist the updated snapshot
 	c.updateSystemSnapshot(ctx, cfg)
 
 	// Return nil if no errors occurred

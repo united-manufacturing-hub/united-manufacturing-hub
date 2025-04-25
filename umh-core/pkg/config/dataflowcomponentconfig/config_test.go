@@ -122,7 +122,7 @@ var _ = Describe("DataFlowComponentConfig", func() {
 				},
 			}
 
-			Expect(dataflowcomponentconfig.CompareConfigs(configA, configB)).To(BeTrue())
+			Expect(dataflowcomponentconfig.ConfigsEqual(configA, configB)).To(BeTrue())
 		})
 
 		It("should correctly compare different configs", func() {
@@ -149,8 +149,8 @@ var _ = Describe("DataFlowComponentConfig", func() {
 				},
 			}
 
-			Expect(dataflowcomponentconfig.CompareConfigs(configA, configB)).To(BeFalse())
-			diff := dataflowcomponentconfig.GetConfigDiff(configA, configB)
+			Expect(dataflowcomponentconfig.ConfigsEqual(configA, configB)).To(BeFalse())
+			diff := dataflowcomponentconfig.ConfigDiff(configA, configB)
 			Expect(diff).To(ContainSubstring("Input config differences"))
 		})
 

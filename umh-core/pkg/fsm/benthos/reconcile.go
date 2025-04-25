@@ -37,7 +37,7 @@ import (
 // This function is intended to be called repeatedly (e.g. in a periodic control loop).
 // Over multiple calls, it converges the actual state to the desired state. Transitions
 // that fail are retried in subsequent reconcile calls after a backoff period.
-func (b *BenthosInstance) Reconcile(ctx context.Context, filesystemService filesystem.Service, tick uint64) (err error, reconciled bool) {
+func (b *BenthosInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot, filesystemService filesystem.Service) (err error, reconciled bool) {
 	start := time.Now()
 	benthosInstanceName := b.baseFSMInstance.GetID()
 	defer func() {
@@ -56,35 +56,42 @@ func (b *BenthosInstance) Reconcile(ctx context.Context, filesystemService files
 	}
 
 	// Step 1: If there's a lastError, see if we've waited enough.
-	if b.baseFSMInstance.ShouldSkipReconcileBecauseOfError(tick) {
-		err := b.baseFSMInstance.GetBackoffError(tick)
+	if b.baseFSMInstance.ShouldSkipReconcileBecauseOfError(snapshot.Tick) {
+		err := b.baseFSMInstance.GetBackoffError(snapshot.Tick)
 		b.baseFSMInstance.GetLogger().Debugf("Skipping reconcile for Benthos pipeline %s: %v", benthosInstanceName, err)
 
 		// if it is a permanent error, start the removal process and reset the error (so that we can reconcile towards a stopped / removed state)
 		if backoff.IsPermanentFailureError(err) {
-
-			// if it is already in stopped, stopping, removing states, and it again returns a permanent error,
-			// we need to throw it to the manager as the instance itself here cannot fix it anymore
-			if b.IsRemoved() || b.IsRemoving() || b.IsStopping() || b.IsStopped() {
-				b.baseFSMInstance.GetLogger().Errorf("Benthos instance %s is already in a terminal state, force removing it", benthosInstanceName)
-				// force delete everything from the s6 file directory
-				b.service.ForceRemoveBenthos(ctx, filesystemService, benthosInstanceName)
-				return err, false
-			} else {
-				b.baseFSMInstance.GetLogger().Errorf("Benthos instance %s is not in a terminal state, resetting state and removing it", benthosInstanceName)
-				b.baseFSMInstance.ResetState()
-				b.Remove(ctx)
-				return nil, false // let's try to at least reconcile towards a stopped / removed state
-			}
+			// For permanent errors, we need special handling based on the instance's current state:
+			// 1. If already in a shutdown state (removed, removing, stopping, stopped), try force removal
+			// 2. If not in a shutdown state, attempt normal removal first, then force if needed
+			return b.baseFSMInstance.HandlePermanentError(
+				ctx,
+				err,
+				func() bool {
+					// Determine if we're already in a shutdown state where normal removal isn't possible
+					// and force removal is required
+					return b.IsRemoved() || b.IsRemoving() || b.IsStopping() || b.IsStopped() || b.WantsToBeStopped()
+				},
+				func(ctx context.Context) error {
+					// Normal removal through state transition
+					return b.Remove(ctx)
+				},
+				func(ctx context.Context) error {
+					// Force removal when other approaches fail - bypasses state transitions
+					// and directly deletes files and resources
+					return b.service.ForceRemoveBenthos(ctx, filesystemService, benthosInstanceName)
+				},
+			)
 		}
 		return nil, false
 	}
 
 	// Step 2: Detect external changes.
-	if err := b.reconcileExternalChanges(ctx, filesystemService, tick); err != nil {
+	if err := b.reconcileExternalChanges(ctx, filesystemService, snapshot.Tick, start); err != nil {
 		// If the service is not running, we don't want to return an error here, because we want to continue reconciling
 		if !errors.Is(err, benthos_service.ErrServiceNotExist) {
-			b.baseFSMInstance.SetError(err, tick)
+			b.baseFSMInstance.SetError(err, snapshot.Tick)
 			b.baseFSMInstance.GetLogger().Errorf("error reconciling external changes: %s", err)
 
 			if errors.Is(err, context.DeadlineExceeded) {
@@ -98,6 +105,7 @@ func (b *BenthosInstance) Reconcile(ctx context.Context, filesystemService files
 			return nil, false // We don't want to return an error here, because we want to continue reconciling
 		}
 
+		//nolint:ineffassign // This is intentionally modifying the named return value accessed in defer
 		err = nil // The service does not exist, which is fine as this happens in the reconcileStateTransition
 	}
 
@@ -110,15 +118,15 @@ func (b *BenthosInstance) Reconcile(ctx context.Context, filesystemService files
 			return nil, false
 		}
 
-		b.baseFSMInstance.SetError(err, tick)
+		b.baseFSMInstance.SetError(err, snapshot.Tick)
 		b.baseFSMInstance.GetLogger().Errorf("error reconciling state: %s", err)
 		return nil, false // We don't want to return an error here, because we want to continue reconciling
 	}
 
 	// Reconcile the s6Manager
-	s6Err, s6Reconciled := b.service.ReconcileManager(ctx, filesystemService, tick)
+	s6Err, s6Reconciled := b.service.ReconcileManager(ctx, filesystemService, snapshot.Tick)
 	if s6Err != nil {
-		b.baseFSMInstance.SetError(s6Err, tick)
+		b.baseFSMInstance.SetError(s6Err, snapshot.Tick)
 		b.baseFSMInstance.GetLogger().Errorf("error reconciling s6Manager: %s", s6Err)
 		return nil, false
 	}
@@ -136,7 +144,7 @@ func (b *BenthosInstance) Reconcile(ctx context.Context, filesystemService files
 
 // reconcileExternalChanges checks if the BenthosInstance service status has changed
 // externally (e.g., if someone manually stopped or started it, or if it crashed)
-func (b *BenthosInstance) reconcileExternalChanges(ctx context.Context, filesystemService filesystem.Service, tick uint64) error {
+func (b *BenthosInstance) reconcileExternalChanges(ctx context.Context, filesystemService filesystem.Service, tick uint64, loopStartTime time.Time) error {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentBenthosInstance, b.baseFSMInstance.GetID()+".reconcileExternalChanges", time.Since(start))
@@ -147,7 +155,7 @@ func (b *BenthosInstance) reconcileExternalChanges(ctx context.Context, filesyst
 	observedStateCtx, cancel := context.WithTimeout(ctx, constants.BenthosUpdateObservedStateTimeout)
 	defer cancel()
 
-	err := b.UpdateObservedStateOfInstance(observedStateCtx, filesystemService, tick)
+	err := b.UpdateObservedStateOfInstance(observedStateCtx, filesystemService, tick, loopStartTime)
 	if err != nil {
 		return fmt.Errorf("failed to update observed state: %w", err)
 	}

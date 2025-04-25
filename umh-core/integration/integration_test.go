@@ -73,7 +73,11 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 				if err != nil {
 					return false
 				}
-				defer resp.Body.Close()
+				defer func() {
+					if err := resp.Body.Close(); err != nil {
+						Fail(fmt.Sprintf("Error closing response body: %v\n", err))
+					}
+				}()
 
 				if resp.StatusCode != http.StatusOK {
 					return false
@@ -108,7 +112,11 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 				if err != nil {
 					return false
 				}
-				defer resp.Body.Close()
+				defer func() {
+					if err := resp.Body.Close(); err != nil {
+						Fail(fmt.Sprintf("Error closing response body: %v\n", err))
+					}
+				}()
 
 				body, err := io.ReadAll(resp.Body)
 				if err != nil {
@@ -153,7 +161,11 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 				if err != nil {
 					return false
 				}
-				defer resp.Body.Close()
+				defer func() {
+					if err := resp.Body.Close(); err != nil {
+						Fail(fmt.Sprintf("Error closing response body: %v\n", err))
+					}
+				}()
 
 				body, err := io.ReadAll(resp.Body)
 				if err != nil {
@@ -611,8 +623,6 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 
 	Context("with redpanda enabled but no benthos services", Label("redpanda-only"), func() {
 		BeforeAll(func() {
-			Skip("Skipping redpanda tests")
-
 			By("Starting with an empty configuration")
 			cfg := NewBuilder().BuildYAML()
 			// Write the empty config and start the container
@@ -645,7 +655,11 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 				if err != nil {
 					return false
 				}
-				defer resp.Body.Close()
+				defer func() {
+					if err := resp.Body.Close(); err != nil {
+						Fail(fmt.Sprintf("Error closing response body: %v\n", err))
+					}
+				}()
 				return resp.StatusCode == http.StatusOK
 			}, 20*time.Second, 1*time.Second).Should(BeTrue(),
 				"Metrics endpoint should be healthy")
@@ -654,7 +668,7 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 			startTime := time.Now()
 			for time.Since(startTime) < 30*time.Second {
 				// Check metrics endpoint is healthy
-				checkMetricsHealthy()
+				failOnMetricsHealthIssue()
 
 				// Check for any warning or error logs
 				out, err := runDockerCommand("logs", getContainerName())
@@ -682,6 +696,120 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 			GinkgoWriter.Println("Redpanda-only test completed successfully")
 		})
 	})
+
+	Context("with dataflowcomponent scaling test", Label("dataflowcomponent-scaling"), func() {
+		BeforeAll(func() {
+			By("Starting with an empty configuration")
+			cfg := NewBuilder().BuildYAML()
+			// Write the empty config and start the container
+			Expect(writeConfigFile(cfg)).To(Succeed())
+			Expect(BuildAndRunContainer(cfg, DEFAULT_MEMORY, DEFAULT_CPUS)).To(Succeed())
+			Expect(waitForMetrics()).To(Succeed(), "Metrics endpoint should be available with empty config")
+
+		})
+
+		AfterAll(func() {
+			By("Stopping the container after the dataflowcomponent scaling test")
+		})
+
+		It("should scale up to multiple dataflow components while maintaining stability", func() {
+			By("Adding the golden dataflow component as a baseline")
+			builder := NewDataFlowComponentBuilder()
+			builder.AddGoldenDataFlowComponent()
+			cfg := builder.BuildYAML()
+			Expect(writeConfigFile(cfg, getContainerName())).To(Succeed())
+
+			By("Waiting for the golden service to become responsive")
+			Eventually(func() int {
+				return checkGoldenServiceStatusOnly()
+			}, 20*time.Second, 1*time.Second).Should(Equal(200),
+				"Golden service should respond with 200 OK")
+
+			By("Waiting for the metrics endpoint to be healthy")
+			Eventually(func() bool {
+				ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+				defer cancel()
+				req, err := http.NewRequestWithContext(ctx, "GET", GetMetricsURL(), nil)
+				if err != nil {
+					return false
+				}
+				resp, err := http.DefaultClient.Do(req)
+				if err != nil {
+					return false
+				}
+				defer func() {
+					if err := resp.Body.Close(); err != nil {
+						Fail(fmt.Sprintf("Error closing response body: %v\n", err))
+					}
+				}()
+				return resp.StatusCode == http.StatusOK
+			}, 20*time.Second, 1*time.Second).Should(BeTrue(),
+				"Metrics endpoint should be healthy")
+
+			By("Scaling up by adding 10 dataflow generator components")
+			// Add 10 dataflow components to the configuration
+			for i := 0; i < 10; i++ {
+				componentName := fmt.Sprintf("dataflow-%d", i)
+				builder.AddGeneratorDataFlowComponent(componentName, fmt.Sprintf("%ds", 1+i%3)) // Varying intervals
+				cfg = builder.BuildYAML()
+				GinkgoWriter.Printf("Added dataflow component %s\n", componentName)
+				Expect(writeConfigFile(cfg, getContainerName())).To(Succeed())
+
+				// Allow time for component to start before adding the next one
+				time.Sleep(1 * time.Second)
+
+				// Check health periodically
+				monitorHealth()
+			}
+
+			By("Simulating random stop/start/update actions on dataflow components")
+			// Create a deterministic random number generator for reproducibility
+			r := rand.New(rand.NewSource(42))
+			for i := 0; i < 50; i++ {
+				// Pick a random dataflow component index (0-9)
+				randomIndex := r.Intn(10)
+				randomComponentName := fmt.Sprintf("dataflow-%d", randomIndex)
+
+				// Randomly decide operation: start, stop, or update
+				opType := r.Intn(3)
+				switch opType {
+				case 0: // Start
+					GinkgoWriter.Printf("Starting dataflow component %s\n", randomComponentName)
+					builder.StartDataFlowComponent(randomComponentName)
+				case 1: // Stop
+					GinkgoWriter.Printf("Stopping dataflow component %s\n", randomComponentName)
+					builder.StopDataFlowComponent(randomComponentName)
+				case 2: // Update config
+					newInterval := fmt.Sprintf("%ds", 1+r.Intn(5))
+					GinkgoWriter.Printf("Updating dataflow component %s with new interval %s\n", randomComponentName, newInterval)
+					builder.UpdateGeneratorDataFlowComponent(randomComponentName, newInterval)
+				}
+
+				// Apply the updated configuration
+				Expect(writeConfigFile(builder.BuildYAML(), getContainerName())).To(Succeed())
+
+				// Random delay between operations
+				delay := time.Duration(1000+r.Intn(2000)) * time.Millisecond
+				time.Sleep(delay)
+
+				// Check the health of the system
+				monitorHealth()
+
+				// Every 10 operations, print a status update
+				if i%10 == 0 {
+					activeCount := builder.CountActiveDataFlowComponents()
+					GinkgoWriter.Printf("\n=== DataFlowComponent Scaling Test Status ===\n"+
+						"Actions completed: %d\n"+
+						"Total dataflow components: %d\n"+
+						"Active dataflow components: %d\n",
+						i+1, 11, activeCount) // 11 includes golden component
+				}
+			}
+
+			GinkgoWriter.Println("DataFlowComponent scaling test completed successfully")
+		})
+	})
+
 })
 
 // Helper functions for the chaos test

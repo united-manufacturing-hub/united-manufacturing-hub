@@ -15,8 +15,10 @@
 package fsm
 
 import (
+	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/looplab/fsm"
 	. "github.com/onsi/ginkgo/v2"
@@ -54,7 +56,9 @@ var _ = Describe("BaseFSMInstance", func() {
 			},
 		}
 
-		fsmInstance = NewBaseFSMInstance(config, logger.Sugar())
+		logger := logger.Sugar()
+		backoffConfig := backoff.DefaultConfig(config.ID, logger)
+		fsmInstance = NewBaseFSMInstance(config, backoffConfig, logger)
 
 		tick = 0
 	})
@@ -89,12 +93,13 @@ var _ = Describe("BaseFSMInstance", func() {
 				OperationalStateBeforeRemove: "stopped",
 			}
 
-			specialInstance := NewBaseFSMInstance(config, logger.Sugar())
-
+			logger := logger.Sugar()
+			backoffConfig := backoff.NewBackoffConfig(config.ID, 1, 600, 2, logger)
+			specialInstance := NewBaseFSMInstance(config, backoffConfig, logger)
 			// Replace the default backoffManager with one that has fewer retries for testing
-			backoffConfig := backoff.DefaultConfig(specialInstance.cfg.ID, logger.Sugar())
-			backoffConfig.MaxRetries = 2 // Only allow 2 retries
-			specialInstance.backoffManager = backoff.NewBackoffManager(backoffConfig)
+			//	backoffConfig := backoff.DefaultConfig(specialInstance.cfg.ID, logger.Sugar())
+			//	backoffConfig.MaxRetries = 2 // Only allow 2 retries
+			//	specialInstance.backoffManager = backoff.NewBackoffManager(backoffConfig)
 
 			testErr := errors.New("test error")
 
@@ -160,6 +165,54 @@ var _ = Describe("BaseFSMInstance", func() {
 			// Set a new desired state
 			fsmInstance.SetDesiredFSMState("stopped")
 			Expect(fsmInstance.GetDesiredFSMState()).To(Equal("stopped"))
+		})
+	})
+
+	Context("when using SendEvent with different context states", func() {
+		It("should reject events when context is already cancelled", func() {
+			// Create a cancelled context
+			ctx, cancel := context.WithCancel(context.Background())
+			cancel() // Cancel immediately
+
+			// Attempt to send an event
+			err := fsmInstance.SendEvent(ctx, "start")
+
+			// Should return the context's error
+			Expect(err).To(MatchError(context.Canceled))
+		})
+
+		It("should reject events when deadline is too close", func() {
+			// Create a context with a very short deadline (1ms)
+			shortDeadline := time.Millisecond
+			ctx, cancel := context.WithTimeout(context.Background(), shortDeadline)
+			defer cancel()
+
+			// Wait to ensure we're very close to the deadline
+			time.Sleep(shortDeadline / 2)
+
+			// Attempt to send an event
+			err := fsmInstance.SendEvent(ctx, "start")
+
+			// Should return context deadline exceeded
+			Expect(err).To(MatchError("context deadline exceeded"))
+		})
+
+		It("should accept events with sufficient deadline time remaining", func() {
+			// Create a context with plenty of time
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+
+			// Set state to a valid source state for our transition
+			fsmInstance.SetCurrentFSMState("stopped")
+
+			// Send the event - should succeed because we have a valid transition and sufficient context time
+			err := fsmInstance.SendEvent(ctx, "start")
+
+			// There should be no error since we have a valid transition and plenty of time
+			Expect(err).To(BeNil())
+
+			// Verify transition occurred
+			Expect(fsmInstance.GetCurrentFSMState()).To(Equal("running"))
 		})
 	})
 })

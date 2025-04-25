@@ -28,39 +28,37 @@ import (
 )
 
 // login logs in to the API and returns a JWT token, UUID & the instance name
-func login(token string, insecureTLS bool) (*LoginResponse, error) {
-	//	zap.S().Debugf("Attempting to login with: %s", token)
-	var cookieMap map[string]string
-	cookieMap = make(map[string]string)
-	request, err, status := http.PostRequest[backend_api_structs.InstanceLoginResponse, any](context.Background(), http.LoginEndpoint, nil, map[string]string{
+func login(token string, insecureTLS bool, apiURL string, logger *zap.SugaredLogger) (*LoginResponse, error) {
+	var cookieMap = make(map[string]string)
+	request, status, err := http.PostRequest[backend_api_structs.InstanceLoginResponse, any](context.Background(), http.LoginEndpoint, nil, map[string]string{
 		"Authorization": fmt.Sprint("Bearer ", LoginHash(token)),
-	}, &cookieMap, insecureTLS)
+	}, &cookieMap, insecureTLS, apiURL, logger)
 	if err != nil {
-		zap.S().Warnf("Failed to login (Status %d): %s", status, err)
+		logger.Warnf("Failed to login (Status %d): %s", status, err)
 		return nil, err
 	}
 	if cookieMap == nil {
-		zap.S().Warnf("No cookie returned")
+		logger.Warnf("No cookie returned")
 		return nil, fmt.Errorf("no cookie returned")
 	}
 	if cookie, ok := cookieMap["token"]; !ok || cookie == "" {
-		zap.S().Warnf("No token cookie returned")
+		logger.Warnf("No token cookie returned")
 		return nil, fmt.Errorf("no token cookie returned")
 	}
 	if cookieMap["token"] == "" {
-		zap.S().Warnf("Token cookie is empty")
+		logger.Warnf("Token cookie is empty")
 		return nil, fmt.Errorf("token cookie is empty")
 	}
 
 	if request == nil {
-		zap.S().Warnf("No request returned")
+		logger.Warnf("No request returned")
 		return nil, fmt.Errorf("no request returned")
 	}
 
 	// Parse UUID
 	uuid, err := uuid.Parse(request.UUID)
 	if err != nil {
-		zap.S().Warnf("Failed to parse UUID: %s", err)
+		logger.Warnf("Failed to parse UUID: %s", err)
 		return nil, fmt.Errorf("failed to parse UUID")
 	}
 
@@ -72,27 +70,25 @@ func login(token string, insecureTLS bool) (*LoginResponse, error) {
 	return &LoginResponse, nil
 }
 
-func NewLogin(authToken string, insecureTLS bool) *LoginResponse {
-	zap.S().Debug("Initial login attempt")
+func NewLogin(authToken string, insecureTLS bool, apiURL string, logger *zap.SugaredLogger) *LoginResponse {
 	var credentials *LoginResponse
 	bo := tools.NewBackoff(1*time.Second, 1*time.Second, 60*time.Second, tools.BackoffPolicyLinear)
 	var loggedIn bool
 	for !loggedIn {
 		var err error
-		credentials, err = login(authToken, insecureTLS)
+		credentials, err = login(authToken, insecureTLS, apiURL, logger)
 		if err != nil {
-			zap.S().Warnf("Failed to login: %s", err)
+			logger.Warnf("Failed to login: %s", err)
 			bo.IncrementAndSleep()
-			zap.S().Debug("Retrying login attempt")
 		} else {
 			loggedIn = true
 		}
 	}
 	if credentials == nil {
-		zap.S().Error("Login successful but credentials are nil")
+		logger.Error("Login successful but credentials are nil")
 		return nil
 	}
-	zap.S().Debugf("SetLoginResponse successful: %s", credentials)
+	logger.Infof("Successfully logged in as %s", credentials.Name)
 	return credentials
 }
 

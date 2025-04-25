@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
@@ -26,26 +27,34 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 	"go.uber.org/zap"
 	"gopkg.in/yaml.v3"
 )
 
+// DeployDataflowComponentAction implements the Action interface for deploying
+// dataflow components to the UMH instance.
 type DeployDataflowComponentAction struct {
-	userEmail       string
-	actionUUID      uuid.UUID
-	instanceUUID    uuid.UUID
-	outboundChannel chan *models.UMHMessage
-	configManager   config.ConfigManager
-	systemSnapshot  *fsm.SystemSnapshot
-	payload         models.CDFCPayload
-	name            string
-	metaType        string
-	actionLogger    *zap.SugaredLogger
+	userEmail         string
+	actionUUID        uuid.UUID
+	instanceUUID      uuid.UUID
+	outboundChannel   chan *models.UMHMessage
+	configManager     config.ConfigManager
+	systemSnapshot    *fsm.SystemSnapshot
+	payload           models.CDFCPayload
+	name              string
+	metaType          string
+	actionLogger      *zap.SugaredLogger
+	ignoreHealthCheck bool
 }
 
-// exposed for testing purposed
+// NewDeployDataflowComponentAction creates a new DeployDataflowComponentAction with the provided parameters.
+// This constructor is primarily used for testing to enable dependency injection, though it can be used
+// in production code as well. It initializes the action with the necessary fields but doesn't
+// populate the payload, name, or metaType fields which must be done via Parse.
 func NewDeployDataflowComponentAction(userEmail string, actionUUID uuid.UUID, instanceUUID uuid.UUID, outboundChannel chan *models.UMHMessage, configManager config.ConfigManager) *DeployDataflowComponentAction {
 	return &DeployDataflowComponentAction{
 		userEmail:       userEmail,
@@ -53,10 +62,18 @@ func NewDeployDataflowComponentAction(userEmail string, actionUUID uuid.UUID, in
 		instanceUUID:    instanceUUID,
 		outboundChannel: outboundChannel,
 		configManager:   configManager,
-		actionLogger:    logger.For(logger.ComponentCommunicatorActions),
+		actionLogger:    logger.For(logger.ComponentCommunicator),
 	}
 }
 
+// Parse implements the Action interface by extracting dataflow component configuration from the payload.
+// It handles the top-level structure parsing first to extract name and component type,
+// then delegates to specialized parsing functions based on the component type.
+//
+// Currently supported types:
+// - "custom": Custom dataflow components with Benthos configuration
+//
+// The function returns appropriate errors for missing required fields or unsupported component types.
 func (a *DeployDataflowComponentAction) Parse(payload interface{}) error {
 	// First parse the top level structure
 	type TopLevelPayload struct {
@@ -90,6 +107,8 @@ func (a *DeployDataflowComponentAction) Parse(payload interface{}) error {
 		return errors.New("missing required field Meta.Type")
 	}
 
+	a.ignoreHealthCheck = topLevel.IgnoreHealthCheck
+
 	// Handle different component types
 	switch a.metaType {
 	case "custom":
@@ -109,6 +128,11 @@ func (a *DeployDataflowComponentAction) Parse(payload interface{}) error {
 	return nil
 }
 
+// parseCustomDataFlowComponent is a helper function that parses the custom dataflow component
+// payload structure. It extracts the inputs, outputs, pipeline, and optional inject configurations.
+//
+// The function performs structure validation to ensure required sections exist, but delegates
+// detailed validation to the Validate method.
 func parseCustomDataFlowComponent(payload interface{}) (models.CDFCPayload, error) {
 	// Define our intermediate struct to parse the nested payload
 
@@ -157,11 +181,11 @@ func parseCustomDataFlowComponent(payload interface{}) (models.CDFCPayload, erro
 
 	// Create our return model
 	cdfcPayload := models.CDFCPayload{
-		Input: models.DfcDataConfig{
+		Inputs: models.DfcDataConfig{
 			Type: cdfcParsed.Inputs.Type,
 			Data: cdfcParsed.Inputs.Data,
 		},
-		Output: models.DfcDataConfig{
+		Outputs: models.DfcDataConfig{
 			Type: cdfcParsed.Outputs.Type,
 			Data: cdfcParsed.Outputs.Data,
 		},
@@ -187,6 +211,13 @@ func parseCustomDataFlowComponent(payload interface{}) (models.CDFCPayload, erro
 	return cdfcPayload, nil
 }
 
+// Validate implements the Action interface by performing deeper validation of the parsed payload.
+// For custom dataflow components, it validates:
+// 1. Required fields exist (name, metaType, input/output configuration, pipeline)
+// 2. All YAML content is valid by attempting to parse it
+//
+// The function returns detailed error messages for any validation failures, indicating
+// exactly which field or YAML section is invalid.
 func (a *DeployDataflowComponentAction) Validate() error {
 	// Validate name and metatype were properly parsed
 	if a.name == "" {
@@ -200,18 +231,18 @@ func (a *DeployDataflowComponentAction) Validate() error {
 	// For custom type, validate the payload structure
 	if a.metaType == "custom" {
 		// Validate input fields
-		if a.payload.Input.Type == "" {
+		if a.payload.Inputs.Type == "" {
 			return errors.New("missing required field inputs.type")
 		}
-		if a.payload.Input.Data == "" {
+		if a.payload.Inputs.Data == "" {
 			return errors.New("missing required field inputs.data")
 		}
 
 		// Validate output fields
-		if a.payload.Output.Type == "" {
+		if a.payload.Outputs.Type == "" {
 			return errors.New("missing required field outputs.type")
 		}
-		if a.payload.Output.Data == "" {
+		if a.payload.Outputs.Data == "" {
 			return errors.New("missing required field outputs.data")
 		}
 
@@ -224,12 +255,12 @@ func (a *DeployDataflowComponentAction) Validate() error {
 		var temp map[string]interface{}
 
 		// Validate Input YAML
-		if err := yaml.Unmarshal([]byte(a.payload.Input.Data), &temp); err != nil {
+		if err := yaml.Unmarshal([]byte(a.payload.Inputs.Data), &temp); err != nil {
 			return fmt.Errorf("inputs.data is not valid YAML: %v", err)
 		}
 
 		// Validate Output YAML
-		if err := yaml.Unmarshal([]byte(a.payload.Output.Data), &temp); err != nil {
+		if err := yaml.Unmarshal([]byte(a.payload.Outputs.Data), &temp); err != nil {
 			return fmt.Errorf("outputs.data is not valid YAML: %v", err)
 		}
 
@@ -259,6 +290,18 @@ func (a *DeployDataflowComponentAction) Validate() error {
 	return nil
 }
 
+// Execute implements the Action interface by performing the actual deployment of the dataflow component.
+// It follows the standard pattern for actions:
+// 1. Sends ActionConfirmed to indicate the action is starting
+// 2. Parses and normalizes all the configuration data
+// 3. Creates a DataFlowComponentConfig and adds it to the system configuration
+// 4. Sends ActionFinishedWithFailure if any error occurs
+// 5. Returns a success message (not sending ActionFinishedSuccessfull as that's done by the caller)
+//
+// The function handles custom dataflow components by:
+// - Converting YAML strings into structured configuration
+// - Normalizing the Benthos configuration
+// - Adding the component to the configuration with a desired state of "active"
 func (a *DeployDataflowComponentAction) Execute() (interface{}, map[string]interface{}, error) {
 	a.actionLogger.Info("Executing DeployDataflowComponent action")
 
@@ -271,7 +314,7 @@ func (a *DeployDataflowComponentAction) Execute() (interface{}, map[string]inter
 	benthosYamlInject := make(map[string]interface{})
 
 	// First try to use the Input data
-	err := yaml.Unmarshal([]byte(a.payload.Input.Data), &benthosInput)
+	err := yaml.Unmarshal([]byte(a.payload.Inputs.Data), &benthosInput)
 	if err != nil {
 		errMsg := fmt.Sprintf("Failed to parse input data: %s", err.Error())
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errMsg, a.outboundChannel, models.DeployDataFlowComponent)
@@ -279,7 +322,7 @@ func (a *DeployDataflowComponentAction) Execute() (interface{}, map[string]inter
 	}
 
 	//parse the output data
-	err = yaml.Unmarshal([]byte(a.payload.Output.Data), &benthosOutput)
+	err = yaml.Unmarshal([]byte(a.payload.Outputs.Data), &benthosOutput)
 	if err != nil {
 		errMsg := fmt.Sprintf("Failed to parse output data: %s", err.Error())
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errMsg, a.outboundChannel, models.DeployDataFlowComponent)
@@ -375,7 +418,7 @@ func (a *DeployDataflowComponentAction) Execute() (interface{}, map[string]inter
 	dfc := config.DataFlowComponentConfig{
 		FSMInstanceConfig: config.FSMInstanceConfig{
 			Name:            a.name,
-			DesiredFSMState: "running",
+			DesiredFSMState: "active",
 		},
 		DataFlowComponentConfig: dataflowcomponentconfig.DataFlowComponentConfig{
 			BenthosConfig: dataflowcomponentconfig.BenthosConfig{
@@ -399,22 +442,100 @@ func (a *DeployDataflowComponentAction) Execute() (interface{}, map[string]inter
 		return nil, nil, fmt.Errorf("%s", errorMsg)
 	}
 
-	// Send success reply
-	successMsg := fmt.Sprintf("Successfully deployed data flow component: %s", a.name)
-	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedSuccessfull, successMsg, a.outboundChannel, models.DeployDataFlowComponent)
+	// check against observedState as well
+	if a.systemSnapshot != nil { // skipping this for the unit tests
+		err = a.waitForComponentToBeActive()
+		if err != nil {
+			errorMsg := fmt.Sprintf("failed to wait for dataflowcomponent to be active: %v", err)
+			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errorMsg, a.outboundChannel, models.DeployDataFlowComponent)
+			return nil, nil, fmt.Errorf("%s", errorMsg)
+		}
+	}
 
-	return nil, nil, nil
+	// return success message, but do not send it as this is done by the caller
+	successMsg := fmt.Sprintf("Successfully deployed data flow component: %s", a.name)
+
+	return successMsg, nil, nil
 }
 
+// getUserEmail implements the Action interface by returning the user email associated with this action.
 func (a *DeployDataflowComponentAction) getUserEmail() string {
 	return a.userEmail
 }
 
+// getUuid implements the Action interface by returning the UUID of this action.
 func (a *DeployDataflowComponentAction) getUuid() uuid.UUID {
 	return a.actionUUID
 }
 
-// exposed for testing purposes
+// GetParsedPayload returns the parsed CDFCPayload - exposed primarily for testing purposes.
 func (a *DeployDataflowComponentAction) GetParsedPayload() models.CDFCPayload {
 	return a.payload
+}
+
+func (a *DeployDataflowComponentAction) waitForComponentToBeActive() error {
+	// checks the system snapshot
+	// 1. waits for the instance to appear in the system snapshot
+	// 2. takes the logs of the instance and sends them to the user in 1-second intervals
+	// 3. waits for the instance to be in state "active"
+	// 4. takes the residual logs of the instance and sends them to the user
+	// 5. returns nil
+
+	// we use those two variables below to store the incoming logs and send them to the user
+	// logs is always updated with all existing logs
+	// lastLogs is updated with the logs that have been sent to the user
+	// this way we avoid sending the same log twice
+	var logs []s6.LogEntry
+	var lastLogs []s6.LogEntry
+
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+	timeout := time.After(constants.DataflowComponentWaitForActiveTimeout)
+	for {
+		select {
+		case <-timeout:
+			if !a.ignoreHealthCheck {
+				SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Dataflow component did not become active in time. Removing...", a.outboundChannel, models.DeployDataFlowComponent)
+				ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
+				defer cancel()
+				err := a.configManager.AtomicDeleteDataflowcomponent(ctx, dataflowcomponentconfig.GenerateUUIDFromName(a.name))
+				if err != nil {
+					a.actionLogger.Errorf("failed to remove dataflowcomponent %s: %v", a.name, err)
+				}
+				return fmt.Errorf("dataflowcomponent %s was removed because it did not become active in time", a.name)
+			}
+			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Dataflow component did not become active in time. Consider removing it.", a.outboundChannel, models.DeployDataFlowComponent)
+			return nil
+		case <-ticker.C:
+
+			if dataflowcomponentManager, exists := a.systemSnapshot.Managers[constants.DataflowcomponentManagerName]; exists {
+				instances := dataflowcomponentManager.GetInstances()
+				for _, instance := range instances {
+					// cast the instance LastObservedState to a dataflowcomponent instance
+					curName := instance.ID
+					if curName != a.name {
+						continue
+					}
+					dfcSnapshot, ok := instance.LastObservedState.(*dataflowcomponent.DataflowComponentObservedStateSnapshot)
+					if !ok {
+						continue
+					}
+					if instance.CurrentState == "active" {
+						return nil
+					} else {
+						// send the benthos logs to the user
+						logs = dfcSnapshot.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.Logs
+						// only send the logs that have not been sent yet
+						if len(logs) > len(lastLogs) {
+							for _, log := range logs[len(lastLogs):] {
+								SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, log.Content, a.outboundChannel, models.DeployDataFlowComponent)
+							}
+							lastLogs = logs
+						}
+					}
+				}
+			}
+		}
+	}
+
 }

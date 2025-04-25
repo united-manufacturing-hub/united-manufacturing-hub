@@ -18,6 +18,7 @@ import (
 	"github.com/tiendc/go-deepcopy"
 	benthosserviceconfig "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
 )
 
@@ -38,9 +39,18 @@ func (b *BenthosInstance) CreateObservedStateSnapshot() fsm.ObservedStateSnapsho
 	snapshot := &BenthosObservedStateSnapshot{}
 
 	// Deep copy config
-	deepcopy.Copy(&snapshot.Config, &b.config)
+	err := deepcopy.Copy(&snapshot.Config, &b.config)
+	if err != nil {
+		sentry.ReportIssuef(sentry.IssueTypeError, b.baseFSMInstance.GetLogger(), "failed to deep copy config: %v", err)
+		return nil
+	}
 
 	// Deep copy service info
-	deepcopy.Copy(&snapshot.ServiceInfo, &b.ObservedState.ServiceInfo)
+	err = deepcopy.Copy(&snapshot.ServiceInfo, &b.ObservedState.ServiceInfo)
+	if err != nil {
+		sentry.ReportIssuef(sentry.IssueTypeError, b.baseFSMInstance.GetLogger(), "failed to deep copy service info: %v", err)
+		return nil
+	}
+
 	return snapshot
 }

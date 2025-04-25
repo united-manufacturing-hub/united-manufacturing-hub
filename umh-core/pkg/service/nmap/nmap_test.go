@@ -16,9 +16,12 @@ package nmap
 
 import (
 	"context"
+	"fmt"
+	"path/filepath"
 	"time"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/nmapserviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 
@@ -48,7 +51,7 @@ var _ = Describe("Nmap Service", func() {
 	Describe("Script Generation", func() {
 		Context("with valid config", func() {
 			It("should generate a valid shell script", func() {
-				config := &config.NmapServiceConfig{
+				config := &nmapserviceconfig.NmapServiceConfig{
 					Target: "localhost",
 					Port:   80,
 				}
@@ -79,7 +82,7 @@ var _ = Describe("Nmap Service", func() {
 		Context("when adding a new service", func() {
 			It("should add the service to S6 manager", func() {
 				ctx := context.Background()
-				cfg := &config.NmapServiceConfig{
+				cfg := &nmapserviceconfig.NmapServiceConfig{
 					Target: "example.com",
 					Port:   443,
 				}
@@ -94,7 +97,7 @@ var _ = Describe("Nmap Service", func() {
 
 			It("should return error when service already exists", func() {
 				ctx := context.Background()
-				cfg := &config.NmapServiceConfig{
+				cfg := &nmapserviceconfig.NmapServiceConfig{
 					Target: "example.com",
 					Port:   443,
 				}
@@ -112,7 +115,7 @@ var _ = Describe("Nmap Service", func() {
 		Context("when updating a service", func() {
 			BeforeEach(func() {
 				ctx := context.Background()
-				cfg := &config.NmapServiceConfig{
+				cfg := &nmapserviceconfig.NmapServiceConfig{
 					Target: "example.com",
 					Port:   443,
 				}
@@ -123,7 +126,7 @@ var _ = Describe("Nmap Service", func() {
 
 			It("should update the service config", func() {
 				ctx := context.Background()
-				updatedCfg := &config.NmapServiceConfig{
+				updatedCfg := &nmapserviceconfig.NmapServiceConfig{
 					Target: "example.com",
 					Port:   8080, // Changed port
 				}
@@ -139,7 +142,7 @@ var _ = Describe("Nmap Service", func() {
 
 			It("should return error when service doesn't exist", func() {
 				ctx := context.Background()
-				updatedCfg := &config.NmapServiceConfig{
+				updatedCfg := &nmapserviceconfig.NmapServiceConfig{
 					Target: "example.com",
 					Port:   8080,
 				}
@@ -152,7 +155,7 @@ var _ = Describe("Nmap Service", func() {
 		Context("when removing a service", func() {
 			BeforeEach(func() {
 				ctx := context.Background()
-				cfg := &config.NmapServiceConfig{
+				cfg := &nmapserviceconfig.NmapServiceConfig{
 					Target: "example.com",
 					Port:   443,
 				}
@@ -371,7 +374,7 @@ done`
 	Describe("Service Status", func() {
 		BeforeEach(func() {
 			ctx := context.Background()
-			cfg := &config.NmapServiceConfig{
+			cfg := &nmapserviceconfig.NmapServiceConfig{
 				Target: "example.com",
 				Port:   443,
 			}
@@ -397,7 +400,7 @@ done`
 	Describe("Service Control", func() {
 		BeforeEach(func() {
 			ctx := context.Background()
-			cfg := &config.NmapServiceConfig{
+			cfg := &nmapserviceconfig.NmapServiceConfig{
 				Target: "example.com",
 				Port:   443,
 			}
@@ -437,6 +440,54 @@ done`
 				Expect(err).NotTo(HaveOccurred())
 				Expect(service.s6ServiceConfigs[0].DesiredFSMState).To(Equal("stopped"))
 			})
+		})
+	})
+
+	Describe("ForceRemoveNmap", func() {
+		var (
+			service       *NmapService
+			mockS6Service *s6service.MockService
+			mockFS        *filesystem.MockFileSystem
+			nmapName      string
+		)
+
+		BeforeEach(func() {
+			mockS6Service = s6service.NewMockService()
+			mockFS = filesystem.NewMockFileSystem()
+			nmapName = "test-nmap"
+			service = NewDefaultNmapService(nmapName, WithS6Service(mockS6Service))
+		})
+
+		It("should call S6 ForceRemove with the correct service path", func() {
+			ctx := context.Background()
+
+			// Call ForceRemoveNmap
+			err := service.ForceRemoveNmap(ctx, mockFS, nmapName)
+
+			// Verify no error
+			Expect(err).NotTo(HaveOccurred())
+
+			// Verify S6Service ForceRemove was called
+			Expect(mockS6Service.ForceRemoveCalled).To(BeTrue())
+
+			// Verify the path is correct
+			expectedS6ServiceName := service.getS6ServiceName(nmapName)
+			expectedS6ServicePath := filepath.Join(constants.S6BaseDir, expectedS6ServiceName)
+			Expect(mockS6Service.ForceRemovePath).To(Equal(expectedS6ServicePath))
+		})
+
+		It("should propagate errors from S6 service", func() {
+			ctx := context.Background()
+
+			// Set up mock to return an error
+			mockError := fmt.Errorf("mock force remove error")
+			mockS6Service.ForceRemoveError = mockError
+
+			// Call ForceRemoveNmap
+			err := service.ForceRemoveNmap(ctx, mockFS, nmapName)
+
+			// Verify error is propagated
+			Expect(err).To(MatchError(mockError))
 		})
 	})
 })
