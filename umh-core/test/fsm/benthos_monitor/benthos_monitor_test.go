@@ -1,4 +1,4 @@
-// nmap_fsm_test.go
+// benthos_monitor_fsm_test.go
 // Copyright 2025 UMH Systems GmbH
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -33,6 +33,11 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
+// This test suite validates the Benthos monitoring FSM, which was implemented as
+// an alternative to traditional health checks. The monitor approach was chosen because
+// health checks frequently time out when Benthos to long to respond.
+// The monitor tracks Benthos's status through log parsing and metrics collection
+// rather than direct health check calls.
 var _ = Describe("BenthosMonitor FSM", func() {
 	var (
 		ctx    context.Context
@@ -53,7 +58,7 @@ var _ = Describe("BenthosMonitor FSM", func() {
 		// Create a mock filesystem service.
 		mockFS = filesystem.NewMockFileSystem()
 
-		// Create a NmapConfig.
+		// Create a BenthosMonitorConfig.
 		cfg := config.BenthosMonitorConfig{
 			FSMInstanceConfig: config.FSMInstanceConfig{
 				Name:            "monitor-benthos-testing",
@@ -62,7 +67,7 @@ var _ = Describe("BenthosMonitor FSM", func() {
 			MetricsPort: 8080,
 		}
 
-		// Create an instance using NewNmapInstanceWithService.
+		// Create an instance using NewBenthosMonitorInstanceWithService.
 		inst = benthos_monitor.NewBenthosMonitorInstanceWithService(cfg, mockSvc)
 	})
 
