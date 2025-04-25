@@ -31,10 +31,10 @@ type DeployDataFlowComponentPayload struct {
 }
 
 type CDFCPayload struct {
-	Input           DfcDataConfig            `json:"input"`
-	Output          DfcDataConfig            `json:"output"`
+	Inputs          DfcDataConfig            `json:"inputs"`
+	Outputs         DfcDataConfig            `json:"outputs"`
 	Pipeline        map[string]DfcDataConfig `json:"pipeline"`
-	Inject          DfcDataConfig            `json:"rawYAML"`
+	Inject          DfcDataConfig            `json:"inject"`
 	IgnoreErrors    bool                     `json:"ignoreErrors"`
 	BenthosImageTag string                   `json:"benthosImageTag"`
 }

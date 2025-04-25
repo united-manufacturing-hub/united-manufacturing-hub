@@ -200,6 +200,8 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 					"custom-dfc",
 					"action-deploy-data-flow-component",
 					"action-get-data-flow-component",
+					"action-delete-data-flow-component",
+					"action-edit-data-flow-component",
 				},
 			},
 		},

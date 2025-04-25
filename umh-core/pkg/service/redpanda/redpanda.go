@@ -336,6 +336,14 @@ func (s *RedpandaService) Status(ctx context.Context, filesystemService filesyst
 			}, redpanda_monitor.ErrServiceConnectionRefused
 		}
 
+		if strings.Contains(err.Error(), ErrRedpandaMonitorNotRunning.Error()) {
+			return ServiceInfo{
+				S6ObservedState: s6ServiceObservedState,
+				S6FSMState:      s6FSMState,
+				RedpandaStatus:  redpandaStatus,
+			}, ErrRedpandaMonitorNotRunning
+		}
+
 		return ServiceInfo{}, fmt.Errorf("failed to get health check: %w", err)
 	}
 
@@ -386,6 +394,10 @@ func (s *RedpandaService) GetHealthCheckAndMetrics(ctx context.Context, tick uin
 	redpandaStatus, err := s.metricsService.Status(ctx, filesystemService, tick)
 	if err != nil {
 		return RedpandaStatus{}, fmt.Errorf("failed to get redpanda status: %w", err)
+	}
+
+	if redpandaStatus.S6FSMState != s6fsm.OperationalStateRunning {
+		return RedpandaStatus{}, ErrRedpandaMonitorNotRunning
 	}
 
 	// If this is nil, we have not yet tried to scan for metrics and config, or there has been an error (but that one will be cached in the above Status() return)
@@ -597,6 +609,11 @@ func (s *RedpandaService) StartRedpanda(ctx context.Context) error {
 		return ErrServiceNotExist
 	}
 
+	// This also needs to start the redpanda monitor service
+	if err := s.metricsService.StartRedpandaMonitor(ctx); err != nil {
+		return fmt.Errorf("failed to start redpanda monitor: %w", err)
+	}
+
 	return nil
 }
 
@@ -625,6 +642,11 @@ func (s *RedpandaService) StopRedpanda(ctx context.Context) error {
 
 	if !found {
 		return ErrServiceNotExist
+	}
+
+	// This also needs to stop the redpanda monitor service
+	if err := s.metricsService.StopRedpandaMonitor(ctx); err != nil {
+		return fmt.Errorf("failed to stop redpanda monitor: %w", err)
 	}
 
 	return nil

@@ -154,6 +154,11 @@ func (r *RedpandaInstance) GetServiceStatus(ctx context.Context, filesystemServi
 				infoWithFailedHealthChecks.RedpandaStatus.HealthCheck.IsReady = false
 				return infoWithFailedHealthChecks, nil
 			}
+		} else if errors.Is(err, redpanda_service.ErrRedpandaMonitorNotRunning) {
+			// If the metrics service is not running, we are unable to get the logs/metrics, therefore we must return an empty status
+			if !IsRunningState(r.baseFSMInstance.GetCurrentFSMState()) {
+				return info, nil
+			}
 		}
 
 		// For other errors, log them and return
