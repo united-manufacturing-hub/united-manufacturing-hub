@@ -285,6 +285,21 @@ func BuildAndRunContainer(configYaml string, memory string, cpus uint) error {
 
 	// 5. Create the container WITHOUT starting it
 	GinkgoWriter.Println("Creating container (without starting it)...")
+
+	// ----------------------------------------
+	//  Configure CFS bandwidth for the test
+	// ----------------------------------------
+
+	// Length of one CFS “accounting window” (cpu.cfs_period_us).
+	// 20 000 µs = 20 ms  →  the longest time the container can be throttled
+	// if it burns its entire quota in one burst.
+	cpuPeriod := uint(20_000) // 20 ms
+
+	// Total CPU-time the container may consume inside **one** period
+	// (cpu.cfs_quota_us).  quota = cpus × period, so if ‘cpus’ is 2 you
+	// grant 40 ms every 20 ms → an average of 2 fully-loaded logical cores.
+	cpuQuota := uint(cpus) * cpuPeriod
+
 	out, err = runDockerCommand(
 		"create",
 		"--name", containerName,
@@ -293,7 +308,8 @@ func BuildAndRunContainer(configYaml string, memory string, cpus uint) error {
 		"-p", fmt.Sprintf("%d:8080", metricsPrt), // Map host's dynamic port to container's fixed metrics port
 		"-p", fmt.Sprintf("%d:8082", goldenPrt), // Map host's dynamic port to container's golden service port
 		"--memory", memory,
-		"--cpus", fmt.Sprintf("%d", cpus),
+		"--cpu-period", fmt.Sprintf("%d", cpuPeriod), // 20 ms CFS window
+		"--cpu-quota", fmt.Sprintf("%d", cpuQuota), // e.g. 40 ms budget ⇒ 2 vCPUs
 		"-v", fmt.Sprintf("%s:/data/redpanda", tmpRedpandaDir),
 		"-v", fmt.Sprintf("%s:/data/logs", tmpLogsDir),
 		getImageName(),
