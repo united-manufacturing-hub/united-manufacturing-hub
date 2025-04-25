@@ -221,14 +221,28 @@ func (m *FileConfigManager) GetConfig(ctx context.Context, tick uint64) (FullCon
 	}
 
 	// Read the file
-	data, err := m.fsService.ReadFile(ctx, m.configPath)
+	// Allow half of the timeout for the read operation
+	readFileCtx, cancel := context.WithTimeout(ctx, constants.ConfigGetConfigTimeout/2)
+	defer cancel()
+	data, err := m.fsService.ReadFile(readFileCtx, m.configPath)
 	if err != nil {
 		return FullConfig{}, fmt.Errorf("failed to read config file: %w", err)
+	}
+	// This ensures that there is at least half of the timeout left for the parse operation
+
+	// Check if context is already cancelled
+	if ctx.Err() != nil {
+		return FullConfig{}, ctx.Err()
 	}
 
 	config, err := parseConfig(data)
 	if err != nil {
 		return FullConfig{}, fmt.Errorf("failed to parse config file: %w", err)
+	}
+
+	// Check if context is already cancelled
+	if ctx.Err() != nil {
+		return FullConfig{}, ctx.Err()
 	}
 
 	// If the config is empty, return an error
@@ -327,8 +341,8 @@ func (m *FileConfigManager) writeConfig(ctx context.Context, config FullConfig) 
 		return fmt.Errorf("failed to marshal config: %w", err)
 	}
 
-	// Write the file
-	if err := m.fsService.WriteFile(ctx, m.configPath, data, 0644); err != nil {
+	// Write the file (give everybody read & write access)
+	if err := m.fsService.WriteFile(ctx, m.configPath, data, 0666); err != nil {
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
 

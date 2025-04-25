@@ -35,7 +35,7 @@ var _ = Describe("Benthos YAML Normalizer", func() {
 			Expect(normalizedInput).NotTo(BeNil())
 			Expect(normalizedOutput).NotTo(BeNil())
 			Expect(normalizedPipeline).NotTo(BeNil())
-			Expect(normalizedMetricsPort).To(Equal(4195))
+			Expect(normalizedMetricsPort).To(Equal(uint16(4195)))
 			Expect(normalizedLogLevel).To(Equal("INFO"))
 		})
 
@@ -60,7 +60,7 @@ var _ = Describe("Benthos YAML Normalizer", func() {
 						},
 					},
 				},
-				MetricsPort: 8000,
+				MetricsPort: uint16(8000),
 				LogLevel:    "DEBUG",
 			}
 
@@ -72,7 +72,7 @@ var _ = Describe("Benthos YAML Normalizer", func() {
 			normalizedMetricsPort := normalizedConfig.MetricsPort
 			normalizedLogLevel := normalizedConfig.LogLevel
 
-			Expect(normalizedMetricsPort).To(Equal(8000))
+			Expect(normalizedMetricsPort).To(Equal(uint16(8000)))
 			Expect(normalizedLogLevel).To(Equal("DEBUG"))
 
 			// Check input preserved

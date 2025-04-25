@@ -14,7 +14,12 @@
 
 package s6
 
-import "regexp"
+import (
+	"fmt"
+	"regexp"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
+)
 
 // runScriptTemplate is the template for the S6 run script
 const runScriptTemplate = `#!/command/execlineb -P
@@ -47,5 +52,34 @@ var runScriptParser = regexp.MustCompile(`(?m)fdmove -c 2 1(?:\s+(.+)|$)`)
 // envVarParser is a regexp to extract environment variables from the run script
 var envVarParser = regexp.MustCompile(`export\s+(\w+)\s+(.+)`)
 
+// logFilesizeParser is a dedicated regexp to extract log filesize value from the log run script
+// It specifically matches the pattern "export S6_LOGGING_SCRIPT "n20 s1024 T"" and captures the filesize
+var logFilesizeParser = regexp.MustCompile(`export\s+S6_LOGGING_SCRIPT\s+"n\d+\s+s(\d+)\s+T"`)
+
 // memoryLimitParser is a regexp to extract the memory limit from the run script
 var memoryLimitParser = regexp.MustCompile(`s6-softlimit -m\s+(\d+)`)
+
+func getLogRunScript(config s6serviceconfig.S6ServiceConfig, logDir string) (string, error) {
+	// Create logutil-service command line, see also https://skarnet.org/software/s6/s6-log.html
+	// logutil-service is a wrapper around s6_log and reads from the S6_LOGGING_SCRIPT environment variable
+	// We overwrite the default S6_LOGGING_SCRIPT with our own if config.LogFilesize is set
+	logutilServiceCmd := ""
+	logutilEnv := ""
+	if config.LogFilesize > 0 {
+		// n20 is currently hardcoded to match the default defined in the Dockerfile
+		// using the same export method as in runScriptTemplate for env variables
+		logutilEnv = fmt.Sprintf("export S6_LOGGING_SCRIPT \"n%d s%d T\"", 20, config.LogFilesize)
+	}
+	logutilServiceCmd = fmt.Sprintf("logutil-service %s", logDir)
+
+	// Create log run script
+	logRunContent := fmt.Sprintf(`#!/command/execlineb -P
+fdmove -c 2 1
+foreground { mkdir -p %s }
+foreground { chown -R nobody:nobody %s }
+%s
+%s
+`, logDir, logDir, logutilEnv, logutilServiceCmd)
+
+	return logRunContent, nil
+}

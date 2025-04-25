@@ -73,19 +73,19 @@ var _ = Describe("Nmap YAML Generator", func() {
 		It("should produce the same output as the Generator", func() {
 			// Setup test config
 			target := "127.0.0.1"
-			port := 443
+			port := uint16(443)
 
 			// Use package-level function
 			yamlStr1, err := RenderNmapYAML(
 				target,
-				port,
+				uint16(port),
 			)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Use Generator directly
 			cfg := NmapServiceConfig{
 				Target: target,
-				Port:   port,
+				Port:   uint16(port),
 			}
 			generator := NewGenerator()
 			yamlStr2, err := generator.RenderConfig(cfg)

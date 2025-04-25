@@ -206,7 +206,7 @@ done`
 				config, err := service.GetConfig(ctx, mockFS, nmapName)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(config.Target).To(Equal("test-host.local"))
-				Expect(config.Port).To(Equal(8080))
+				Expect(config.Port).To(Equal(uint16(8080)))
 			})
 
 			It("should return error on context cancellation", func() {
@@ -291,7 +291,7 @@ done`
 
 				result := service.parseScanLogs(logs, 80)
 				Expect(result).NotTo(BeNil())
-				Expect(result.PortResult.Port).To(Equal(80))
+				Expect(result.PortResult.Port).To(Equal(uint16(80)))
 				Expect(result.PortResult.State).To(Equal("open"))
 				Expect(result.Metrics.ScanDuration).To(Equal(0.102345))
 				Expect(result.Timestamp.Format(time.RFC3339)).To(Equal("2023-04-01T12:34:56Z"))
@@ -343,7 +343,7 @@ done`
 
 				result := service.parseScanLogs(logs, 81)
 				Expect(result).NotTo(BeNil())
-				Expect(result.PortResult.Port).To(Equal(81))
+				Expect(result.PortResult.Port).To(Equal(uint16(81)))
 				Expect(result.PortResult.State).To(Equal("closed"))
 			})
 

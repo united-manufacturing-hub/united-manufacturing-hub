@@ -26,6 +26,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
@@ -104,6 +105,10 @@ func (c *AgentMonitorService) GetFilesystemService() filesystem.Service {
 
 // Status collects and returns the current agent status
 func (c *AgentMonitorService) Status(ctx context.Context, systemSnapshot fsm.SystemSnapshot) (*ServiceInfo, error) {
+	start := time.Now()
+	defer func() {
+		metrics.ObserveReconcileTime(metrics.ComponentAgentMonitor, c.instanceName+".status", time.Since(start))
+	}()
 
 	// Create a new status with default health (Active)
 	status := &ServiceInfo{

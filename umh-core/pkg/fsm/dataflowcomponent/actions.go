@@ -238,7 +238,7 @@ func (d *DataflowComponentInstance) IsDataflowComponentDegraded() bool {
 func (d *DataflowComponentInstance) IsDataflowComponentWithProcessingActivity() bool {
 	benthosStatus := d.ObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus
 
-	return benthosStatus.MetricsState != nil && benthosStatus.MetricsState.IsActive
+	return benthosStatus.BenthosMetrics.MetricsState != nil && benthosStatus.BenthosMetrics.MetricsState.IsActive
 }
 
 // IsStartingPeriodGracePeriodExceeded returns true when the difference

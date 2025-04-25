@@ -33,6 +33,7 @@ import (
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/portmanager"
 	benthossvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
+	benthos_monitor "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos_monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 )
@@ -88,7 +89,11 @@ var _ = Describe("BenthosInstance FSM", func() {
 					ServiceInfo: s6svc.ServiceInfo{Status: s6svc.ServiceDown, Uptime: 5},
 				},
 				BenthosStatus: benthossvc.BenthosStatus{
-					HealthCheck: benthossvc.HealthCheck{IsLive: false, IsReady: false},
+					BenthosMetrics: benthos_monitor.BenthosMetrics{
+						MetricsState: &benthos_monitor.BenthosMetricsState{
+							IsActive: false,
+						},
+					},
 				},
 			}
 			mockService.ExistingServices[serviceName] = true

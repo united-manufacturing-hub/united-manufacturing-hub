@@ -26,16 +26,16 @@ var ErrPortInUse = fmt.Errorf("port is already in use by another service")
 // MockPortManager is a mock implementation of PortManager for testing
 type MockPortManager struct {
 	sync.Mutex
-	Ports               map[string]int
-	AllocatedPorts      map[int]string
-	ReservedPorts       map[int]bool
+	Ports               map[string]uint16
+	AllocatedPorts      map[uint16]string
+	ReservedPorts       map[uint16]bool
 	AllocatePortCalled  bool
 	ReleasePortCalled   bool
 	GetPortCalled       bool
 	ReservePortCalled   bool
 	PreReconcileCalled  bool
 	PostReconcileCalled bool
-	AllocatePortResult  int
+	AllocatePortResult  uint16
 	AllocatePortError   error
 	ReleasePortError    error
 	ReservePortError    error
@@ -49,14 +49,14 @@ var _ PortManager = (*MockPortManager)(nil)
 // NewMockPortManager creates a new MockPortManager
 func NewMockPortManager() *MockPortManager {
 	return &MockPortManager{
-		Ports:          make(map[string]int),
-		AllocatedPorts: make(map[int]string),
-		ReservedPorts:  make(map[int]bool),
+		Ports:          make(map[string]uint16),
+		AllocatedPorts: make(map[uint16]string),
+		ReservedPorts:  make(map[uint16]bool),
 	}
 }
 
 // AllocatePort allocates a port for the given service
-func (m *MockPortManager) AllocatePort(serviceName string) (int, error) {
+func (m *MockPortManager) AllocatePort(serviceName string) (uint16, error) {
 	m.Lock()
 	defer m.Unlock()
 
@@ -79,7 +79,7 @@ func (m *MockPortManager) AllocatePort(serviceName string) (int, error) {
 	}
 
 	// Otherwise allocate a new port (simple implementation for testing)
-	port := 9000 + len(m.Ports)
+	port := uint16(9000 + len(m.Ports))
 	m.Ports[serviceName] = port
 	m.AllocatedPorts[port] = serviceName
 	return port, nil
@@ -105,7 +105,7 @@ func (m *MockPortManager) ReleasePort(serviceName string) error {
 }
 
 // GetPort returns the port for the given service
-func (m *MockPortManager) GetPort(serviceName string) (int, bool) {
+func (m *MockPortManager) GetPort(serviceName string) (uint16, bool) {
 	m.Lock()
 	defer m.Unlock()
 
@@ -116,7 +116,7 @@ func (m *MockPortManager) GetPort(serviceName string) (int, bool) {
 }
 
 // ReservePort reserves a specific port for the given service
-func (m *MockPortManager) ReservePort(serviceName string, port int) error {
+func (m *MockPortManager) ReservePort(serviceName string, port uint16) error {
 	m.Lock()
 	defer m.Unlock()
 
@@ -154,7 +154,7 @@ func (m *MockPortManager) PreReconcile(ctx context.Context, instanceNames []stri
 	for _, name := range instanceNames {
 		if _, exists := m.Ports[name]; !exists {
 			// Simple allocation logic matching AllocatePort's behavior
-			port := 9000 + len(m.Ports)
+			port := uint16(9000 + len(m.Ports))
 			m.Ports[name] = port
 			m.AllocatedPorts[port] = name
 		}
