@@ -1053,8 +1053,9 @@ func (s *BenthosMonitorService) Status(ctx context.Context, filesystemService fi
 		S6ObservedState: s6State,
 		S6FSMState:      fsmState,
 		BenthosStatus: BenthosMonitorStatus{
-			LastScan: metrics,
-			Logs:     logs,
+			LastScan:  metrics,
+			IsRunning: fsmState == s6fsm.OperationalStateRunning,
+			Logs:      logs,
 		},
 	}, nil
 }
