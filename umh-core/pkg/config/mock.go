@@ -30,10 +30,12 @@ type MockConfigManager struct {
 	GetConfigCalled               bool
 	AddDataflowcomponentCalled    bool
 	DeleteDataflowcomponentCalled bool
+	EditDataflowcomponentCalled   bool
 	Config                        FullConfig
 	ConfigError                   error
 	AddDataflowcomponentError     error
 	DeleteDataflowcomponentError  error
+	EditDataflowcomponentError    error
 	ConfigDelay                   time.Duration
 	mutexReadOrWrite              sync.Mutex
 	mutexReadAndWrite             sync.Mutex
@@ -101,6 +103,12 @@ func (m *MockConfigManager) WithDeleteDataflowcomponentError(err error) *MockCon
 	return m
 }
 
+// WithEditDataflowcomponentError configures the mock to return the given error when AtomicEditDataflowcomponent is called
+func (m *MockConfigManager) WithEditDataflowcomponentError(err error) *MockConfigManager {
+	m.EditDataflowcomponentError = err
+	return m
+}
+
 // ResetCalls clears the called flags for testing multiple calls
 func (m *MockConfigManager) ResetCalls() {
 	m.mutexReadOrWrite.Lock()
@@ -108,6 +116,7 @@ func (m *MockConfigManager) ResetCalls() {
 	m.GetConfigCalled = false
 	m.AddDataflowcomponentCalled = false
 	m.DeleteDataflowcomponentCalled = false
+	m.EditDataflowcomponentCalled = false
 }
 
 // atomic set location
@@ -208,6 +217,47 @@ func (m *MockConfigManager) AtomicDeleteDataflowcomponent(ctx context.Context, c
 
 	// Update config with filtered components
 	config.DataFlow = filteredComponents
+
+	// write the config
+	if err := m.writeConfig(ctx, config); err != nil {
+		return fmt.Errorf("failed to write config: %w", err)
+	}
+
+	return nil
+}
+
+// AtomicEditDataflowcomponent implements the ConfigManager interface
+func (m *MockConfigManager) AtomicEditDataflowcomponent(ctx context.Context, componentUUID uuid.UUID, dfc DataFlowComponentConfig) error {
+	m.mutexReadAndWrite.Lock()
+	defer m.mutexReadAndWrite.Unlock()
+
+	m.EditDataflowcomponentCalled = true
+
+	if m.EditDataflowcomponentError != nil {
+		return m.EditDataflowcomponentError
+	}
+
+	// get the current config
+	config, err := m.GetConfig(ctx, 0)
+	if err != nil {
+		return fmt.Errorf("failed to get config: %w", err)
+	}
+
+	// Find the component with matching UUID
+	found := false
+	for i, component := range config.DataFlow {
+		componentID := dataflowcomponentconfig.GenerateUUIDFromName(component.Name)
+		if componentID == componentUUID {
+			// Found the component to edit, update it
+			config.DataFlow[i] = dfc
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		return fmt.Errorf("dataflow component with UUID %s not found", componentUUID)
+	}
 
 	// write the config
 	if err := m.writeConfig(ctx, config); err != nil {
