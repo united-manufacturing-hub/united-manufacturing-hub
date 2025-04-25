@@ -83,6 +83,7 @@ type ControlLoop struct {
 	currentTick       uint64
 	snapshotManager   *fsm.SnapshotManager
 	filesystemService filesystem.Service
+	managerTimes      map[string]time.Duration // Tracks execution time for each manager
 }
 
 // NewControlLoop creates a new control loop with all necessary managers.
@@ -142,6 +143,7 @@ func NewControlLoop(configManager config.ConfigManager) *ControlLoop {
 		starvationChecker: starvationChecker,
 		snapshotManager:   snapshotManager,
 		filesystemService: filesystemService,
+		managerTimes:      make(map[string]time.Duration),
 	}
 }
 
@@ -299,7 +301,16 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 	}
 
 	// 5) Reconcile each manager with the current tick count and passing in the newSnapshot
+	// Reset manager times for this reconciliation cycle
+	c.managerTimes = make(map[string]time.Duration)
+
+	// Track executed managers for logging purposes
+	var executedManagers []string
+
 	for _, manager := range c.managers {
+		managerName := manager.GetManagerName()
+		executedManagers = append(executedManagers, managerName)
+
 		// Check if we have enough time to reconcile the manager
 		remaining, sufficient, err := ctxutil.HasSufficientTime(ctx, constants.DefaultMinimumRemainingTimePerManager)
 		if err != nil {
@@ -308,7 +319,7 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 			}
 			// For ErrInsufficientTime, skip reconciliation
 			if errors.Is(err, ctxutil.ErrInsufficientTime) {
-				c.logger.Warnf("Skipping reconcile cycle due to remaining time: %v", remaining)
+				c.logManagerTimes(remaining, executedManagers)
 				return nil
 			}
 			// Any other unexpected error
@@ -317,14 +328,19 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 
 		// If sufficient is true but err is nil, we're good to proceed
 		if !sufficient {
-			c.logger.Warnf("Skipping reconcile cycle due to remaining time: %v", remaining)
+			c.logManagerTimes(remaining, executedManagers)
 			return nil
 		}
 
+		// Record manager execution time
+		managerStart := time.Now()
 		err, reconciled := manager.Reconcile(ctx, newSnapshot, c.filesystemService)
+		executionTime := time.Since(managerStart)
+		c.managerTimes[managerName] = executionTime
+
 		if err != nil {
-			metrics.IncErrorCount(metrics.ComponentControlLoop, manager.GetManagerName())
-			return fmt.Errorf("manager %s reconciliation failed: %w", manager.GetManagerName(), err)
+			metrics.IncErrorCount(metrics.ComponentControlLoop, managerName)
+			return fmt.Errorf("manager %s reconciliation failed: %w", managerName, err)
 		}
 
 		// If the manager was reconciled, skip the reconcilation of the next managers
@@ -417,4 +433,23 @@ func (c *ControlLoop) Stop(ctx context.Context) error {
 	// Signal the control loop to stop
 	ctx.Done()
 	return nil
+}
+
+// logManagerTimes logs the execution times of all managers that were executed before skipping
+func (c *ControlLoop) logManagerTimes(remaining time.Duration, executedManagers []string) {
+	details := make([]string, 0, len(c.managerTimes))
+	var totalTime time.Duration
+
+	for _, managerName := range executedManagers {
+		if execTime, ok := c.managerTimes[managerName]; ok {
+			details = append(details, fmt.Sprintf("%s: %v", managerName, execTime))
+			totalTime += execTime
+		}
+	}
+
+	c.logger.Warnf("Skipping reconcile cycle due to remaining time: %v", remaining)
+	for _, managerName := range executedManagers {
+		c.logger.Warnf("Manager %s took %v", managerName, c.managerTimes[managerName])
+	}
+	c.logger.Warnf("Total time: %v", totalTime)
 }
