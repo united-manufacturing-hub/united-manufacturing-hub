@@ -369,6 +369,7 @@ func (a *EditDataflowComponentAction) Execute() (interface{}, map[string]interfa
 	// Update the component in the configuration
 	ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
 	defer cancel()
+	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Editing dataflowcomponent", a.outboundChannel, models.EditDataFlowComponent)
 	a.oldConfig, err = a.configManager.AtomicEditDataflowcomponent(ctx, a.componentUUID, dfc)
 	if err != nil {
 		errorMsg := fmt.Sprintf("failed to edit dataflowcomponent: %v", err)
@@ -378,6 +379,7 @@ func (a *EditDataflowComponentAction) Execute() (interface{}, map[string]interfa
 
 	// check against observedState as well
 	if a.systemSnapshot != nil { // skipping this for the unit tests
+		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Waiting for dataflowcomponent to be active", a.outboundChannel, models.EditDataFlowComponent)
 		err = a.waitForComponentToBeActive()
 		if err != nil {
 			errorMsg := fmt.Sprintf("failed to wait for dataflowcomponent to be active: %v", err)

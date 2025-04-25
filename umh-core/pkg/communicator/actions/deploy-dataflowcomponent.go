@@ -432,6 +432,7 @@ func (a *DeployDataflowComponentAction) Execute() (interface{}, map[string]inter
 		},
 	}
 
+	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Adding dataflowcomponent to configuration", a.outboundChannel, models.DeployDataFlowComponent)
 	// Update the location in the configuration
 	ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
 	defer cancel()
@@ -441,9 +442,9 @@ func (a *DeployDataflowComponentAction) Execute() (interface{}, map[string]inter
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errorMsg, a.outboundChannel, models.DeployDataFlowComponent)
 		return nil, nil, fmt.Errorf("%s", errorMsg)
 	}
-
 	// check against observedState as well
 	if a.systemSnapshot != nil { // skipping this for the unit tests
+		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Waiting for dataflowcomponent to be active", a.outboundChannel, models.DeployDataFlowComponent)
 		err = a.waitForComponentToBeActive()
 		if err != nil {
 			errorMsg := fmt.Sprintf("failed to wait for dataflowcomponent to be active: %v", err)
@@ -507,6 +508,7 @@ func (a *DeployDataflowComponentAction) waitForComponentToBeActive() error {
 			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Dataflow component did not become active in time. Consider removing it.", a.outboundChannel, models.DeployDataFlowComponent)
 			return nil
 		case <-ticker.C:
+			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Checking if dataflowcomponent is active", a.outboundChannel, models.DeployDataFlowComponent)
 
 			if dataflowcomponentManager, exists := a.systemSnapshot.Managers[constants.DataflowcomponentManagerName]; exists {
 				instances := dataflowcomponentManager.GetInstances()
@@ -521,6 +523,7 @@ func (a *DeployDataflowComponentAction) waitForComponentToBeActive() error {
 						continue
 					}
 					if instance.CurrentState == "active" {
+						SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Dataflow component is active", a.outboundChannel, models.DeployDataFlowComponent)
 						return nil
 					} else {
 						// send the benthos logs to the user

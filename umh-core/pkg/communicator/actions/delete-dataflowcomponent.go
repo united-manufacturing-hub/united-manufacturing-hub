@@ -111,6 +111,7 @@ func (a *DeleteDataflowComponentAction) Execute() (interface{}, map[string]inter
 	ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
 	defer cancel()
 
+	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Deleting dataflow component", a.outboundChannel, models.DeleteDataFlowComponent)
 	err := a.configManager.AtomicDeleteDataflowcomponent(ctx, a.componentUUID)
 	if err != nil {
 		errorMsg := fmt.Sprintf("failed to delete dataflow component: %v", err)
@@ -120,6 +121,7 @@ func (a *DeleteDataflowComponentAction) Execute() (interface{}, map[string]inter
 
 	// wait for the component to be removed
 	if a.systemSnapshot != nil { // skipping this for the unit tests
+		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Waiting for dataflowcomponent to be removed", a.outboundChannel, models.DeleteDataFlowComponent)
 		err = a.waitForComponentToBeRemoved()
 		if err != nil {
 			errorMsg := fmt.Sprintf("failed to wait for dataflowcomponent to be removed: %v", err)
@@ -159,6 +161,7 @@ func (a *DeleteDataflowComponentAction) waitForComponentToBeRemoved() error {
 		case <-timeout:
 			return fmt.Errorf("dataflowcomponent %s was not removed in time", a.componentUUID)
 		case <-ticker.C:
+			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Checking if dataflowcomponent was removed", a.outboundChannel, models.DeleteDataFlowComponent)
 			removed := true
 			if mgr, ok := a.systemSnapshot.Managers[constants.DataflowcomponentManagerName]; ok {
 				for _, inst := range mgr.GetInstances() {
