@@ -327,8 +327,8 @@ func (m *FileConfigManager) writeConfig(ctx context.Context, config FullConfig) 
 		return fmt.Errorf("failed to marshal config: %w", err)
 	}
 
-	// Write the file
-	if err := m.fsService.WriteFile(ctx, m.configPath, data, 0644); err != nil {
+	// Write the file (give everybody read & write access)
+	if err := m.fsService.WriteFile(ctx, m.configPath, data, 0666); err != nil {
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
 

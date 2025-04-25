@@ -1104,6 +1104,11 @@ func (s *DefaultService) ForceRemove(ctx context.Context, servicePath string, fs
 
 // GetStructuredLogs gets the logs of the service as structured LogEntry objects
 func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsService filesystem.Service) ([]LogEntry, error) {
+	start := time.Now()
+	defer func() {
+		metrics.ObserveReconcileTime(metrics.ComponentS6Service, servicePath+".getLogs", time.Since(start))
+	}()
+
 	serviceName := filepath.Base(servicePath)
 
 	// Check if the service exists first
@@ -1147,7 +1152,6 @@ func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsServ
 			entries = append(entries, entry)
 		}
 	}
-
 	return entries, nil
 }
 
