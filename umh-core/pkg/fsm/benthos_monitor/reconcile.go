@@ -85,19 +85,23 @@ func (b *BenthosMonitorInstance) Reconcile(ctx context.Context, snapshot fsm.Sys
 
 	// Step 2: Detect external changes.
 	if err := b.reconcileExternalChanges(ctx, filesystemService, snapshot.Tick, start); err != nil {
-		// If the service is not running, we don't want to return an error here, because we want to continue reconciling
-		if !errors.Is(err, benthos_monitor_service.ErrServiceNotExist) {
+
+		if errors.Is(err, benthos_monitor_service.ErrServiceNotExist) {
+			// If the service is not running, we don't want to return an error here, because we want to continue reconciling
+			//nolint:ineffassign // This is intentionally modifying the named return value accessed in defer
+			err = nil // The service does not exist, which is fine as this happens in the reconcileStateTransition}
+
+		} else if errors.Is(err, benthos_monitor_service.ErrServiceNoLogFile) || errors.Is(err, benthos_monitor_service.ErrServiceConnectionRefused) || errors.Is(err, benthos_monitor_service.ErrServiceConnectionTimedOut) {
+			// This is an expected error, it will cause the fsm to go into degraded
+			// and we will continue reconciling
+
+			//nolint:ineffassign // This is intentionally modifying the named return value accessed in defer
+			err = nil // The service does not exist, which is fine as this happens in the reconcileStateTransition}
+		} else {
 			b.baseFSMInstance.SetError(err, snapshot.Tick)
 			b.baseFSMInstance.GetLogger().Errorf("error reconciling external changes: %s", err)
-
-			// We want to return the error here, to stop reconciling since this would
-			// lead the fsm going into degraded. But Nmap-scans are triggered once per second
-			// and each tick is 100ms, therefore it could fail, because it doesn't get
-			// complete logs from which it parses.
-			return nil, false // We don't want to return an error here, because we want to continue reconciling
+			return nil, false
 		}
-		//nolint:ineffassign // This is intentionally modifying the named return value accessed in defer
-		err = nil // The service does not exist, which is fine as this happens in the reconcileStateTransition}
 	}
 
 	// Step 3: Attempt to reconcile the state.

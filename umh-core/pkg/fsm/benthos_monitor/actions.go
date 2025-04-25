@@ -116,6 +116,10 @@ func (b *BenthosMonitorInstance) UpdateObservedStateOfInstance(ctx context.Conte
 
 // isMonitorHealthy checks if the last scan was successful and the service is running.
 func (b *BenthosMonitorInstance) isMonitorHealthy(loopStartTime time.Time) bool {
+	if b.ObservedState.ServiceInfo == nil {
+		return false
+	}
+
 	if b.ObservedState.ServiceInfo.BenthosStatus.LastScan == nil {
 		return false
 	}

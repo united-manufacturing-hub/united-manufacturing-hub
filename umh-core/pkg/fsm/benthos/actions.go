@@ -165,6 +165,12 @@ func (b *BenthosInstance) getServiceStatus(ctx context.Context, filesystemServic
 				// If we are not running, we need to return an error
 				return info, nil
 			}
+		} else if errors.Is(err, benthos_service.ErrLastObservedStateNil) {
+			// If the last observed state is nil, we can ignore this error
+			infoWithFailedHealthChecks := info
+			infoWithFailedHealthChecks.BenthosStatus.HealthCheck.IsLive = false
+			infoWithFailedHealthChecks.BenthosStatus.HealthCheck.IsReady = false
+			return infoWithFailedHealthChecks, nil
 		}
 
 		// For other errors, log them and return

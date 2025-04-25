@@ -31,4 +31,7 @@ var (
 
 	// ErrBenthosMonitorNotRunning indicates the benthos monitor is not running
 	ErrBenthosMonitorNotRunning = errors.New("benthos monitor is not running")
+
+	// ErrLastObservedStateNil indicates the last observed state is nil
+	ErrLastObservedStateNil = errors.New("last observed state is nil")
 )

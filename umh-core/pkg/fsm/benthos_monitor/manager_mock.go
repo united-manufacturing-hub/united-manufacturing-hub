@@ -36,19 +36,19 @@ func NewBenthosMonitorManagerWithMockedService(name string, mockSvc benthos_moni
 			// In a real test, you'd define test data
 			return []config.BenthosMonitorConfig{
 				{
-					Name:            "test-benthos-monitor",
+					Name:            name,
 					DesiredFSMState: OperationalStateActive,
 				},
 			}, nil
 		},
 		func(fc config.BenthosMonitorConfig) (string, error) {
-			return logger.ComponentBenthosMonitorManager, nil
+			return fc.Name, nil
 		},
 		func(fc config.BenthosMonitorConfig) (string, error) {
 			return fc.DesiredFSMState, nil
 		},
 		func(fc config.BenthosMonitorConfig) (public_fsm.FSMInstance, error) {
-			inst := NewBenthosMonitorInstance(fc)
+			inst := NewBenthosMonitorInstanceWithService(fc, &mockSvc)
 			return inst, nil
 		},
 		func(instance public_fsm.FSMInstance, fc config.BenthosMonitorConfig) (bool, error) {

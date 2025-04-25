@@ -19,7 +19,6 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	public_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
@@ -50,14 +49,14 @@ func NewBenthosMonitorManager(name string) *BenthosMonitorManager {
 			// Always return a single config
 			var configs []config.BenthosMonitorConfig
 			configs = append(configs, config.BenthosMonitorConfig{
-				Name:            constants.DefaultInstanceName,
+				Name:            name,
 				DesiredFSMState: OperationalStateActive,
 			})
 			return configs, nil
 		},
 		// Get name from config
 		func(fc config.BenthosMonitorConfig) (string, error) {
-			return logger.ComponentBenthosMonitorManager, nil
+			return fc.Name, nil
 		},
 		// Desired state from config
 		func(fc config.BenthosMonitorConfig) (string, error) {
