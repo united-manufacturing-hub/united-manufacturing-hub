@@ -23,6 +23,7 @@ import (
 	benthossvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
 	dataflowcomponentsvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/dataflowcomponent"
 	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
 func NewDataflowComponentManagerWithMockedServices(name string) (*DataflowComponentManager, *dataflowcomponentsvc.MockDataFlowComponentService) {
@@ -32,6 +33,7 @@ func NewDataflowComponentManagerWithMockedServices(name string) (*DataflowCompon
 	// Configure the mock S6 service
 	mockBenthosService := mockSvc.BenthosService.(*benthossvc.MockBenthosService)
 	s6MockService := mockBenthosService.S6Service.(*s6svc.MockService)
+	mockSvcRegistry := serviceregistry.NewMockRegistry()
 
 	// Configure default responses to prevent real filesystem operations
 	s6MockService.CreateError = nil
@@ -66,7 +68,7 @@ func NewDataflowComponentManagerWithMockedServices(name string) (*DataflowCompon
 		},
 		// Create Dataflowcomponent instance from config
 		func(cfg config.DataFlowComponentConfig) (public_fsm.FSMInstance, error) {
-			instance := NewDataflowComponentInstance("/dev/null", cfg)
+			instance := NewDataflowComponentInstance("/dev/null", cfg, mockSvcRegistry.GetPortManager())
 			benthosMockService := benthossvc.NewMockBenthosService()
 			s6MockService := s6svc.NewMockService()
 			s6MockService.ServiceExistsResult = true

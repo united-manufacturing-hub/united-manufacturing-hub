@@ -49,7 +49,7 @@ type BenthosManagerSnapshot struct {
 	PortAllocations map[string]uint16 // Maps instance name to port
 }
 
-func NewBenthosManager(name string) *BenthosManager {
+func NewBenthosManager(name string, portManager portmanager.PortManager) *BenthosManager {
 	managerName := fmt.Sprintf("%s%s", logger.ComponentBenthosManager, name)
 
 	baseManager := public_fsm.NewBaseFSMManager[config.BenthosConfig](
@@ -98,17 +98,6 @@ func NewBenthosManager(name string) *BenthosManager {
 		},
 	)
 	metrics.InitErrorCounter(metrics.ComponentBenthosManager, name)
-
-	// Initialize port manager with default range (9000-9999)
-	var portManager portmanager.PortManager
-	defaultPortManager, err := portmanager.NewDefaultPortManager(9000, 9999)
-	if err != nil {
-		// Log error but continue with a mock port manager as fallback
-		logger.For(managerName).Errorf("Failed to initialize port manager: %v. Using mock port manager instead.", err)
-		portManager = portmanager.NewMockPortManager()
-	} else {
-		portManager = defaultPortManager
-	}
 
 	return &BenthosManager{
 		BaseFSMManager: baseManager,

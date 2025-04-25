@@ -24,6 +24,7 @@ import (
 	public_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/portmanager"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
@@ -42,7 +43,7 @@ type DataflowComponentSnapshot struct {
 	*public_fsm.BaseManagerSnapshot
 }
 
-func NewDataflowComponentManager(name string) *DataflowComponentManager {
+func NewDataflowComponentManager(name string, portManager portmanager.PortManager) *DataflowComponentManager {
 	managerName := fmt.Sprintf("%s%s", logger.ComponentDataFlowComponentManager, name)
 	baseManager := public_fsm.NewBaseFSMManager[config.DataFlowComponentConfig](
 		managerName,
@@ -61,7 +62,7 @@ func NewDataflowComponentManager(name string) *DataflowComponentManager {
 		},
 		// Create Dataflowcomponent instance from config
 		func(cfg config.DataFlowComponentConfig) (public_fsm.FSMInstance, error) {
-			return NewDataflowComponentInstance(baseDataflowComponentDir, cfg), nil
+			return NewDataflowComponentInstance(baseDataflowComponentDir, cfg, portManager), nil
 		},
 		// Compare Dataflowcomponent configs
 		func(instance public_fsm.FSMInstance, cfg config.DataFlowComponentConfig) (bool, error) {

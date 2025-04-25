@@ -135,7 +135,6 @@ func NewBenthosManagerWithMockedServices(name string) (*BenthosManager, *benthos
 
 	// Use a mock port manager to avoid real port allocation
 	portManager := portmanager.NewMockPortManager()
-
 	manager := &BenthosManager{
 		BaseFSMManager: baseManager,
 		portManager:    portManager,

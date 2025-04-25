@@ -104,15 +104,21 @@ func NewControlLoop(configManager config.ConfigManager) *ControlLoop {
 		log = zap.NewNop().Sugar()
 	}
 
+	// Create the service registry. The service registry will contain all services like filesystem, and portmanager
+	servicesRegistry, err := serviceregistry.NewRegistry()
+	if err != nil {
+		sentry.ReportIssuef(sentry.IssueTypeError, log, "Failed to create service registry: %s", err)
+	}
+
 	// Create the managers
 	managers := []fsm.FSMManager[any]{
 		s6.NewS6Manager(constants.DefaultManagerName),
-		benthos.NewBenthosManager(constants.DefaultManagerName),
+		benthos.NewBenthosManager(constants.DefaultManagerName, servicesRegistry.GetPortManager()), // Benthos manager needs the port manager in addition, since it needs to allocate ports
 		container.NewContainerManager(constants.DefaultManagerName),
 		redpanda.NewRedpandaManager(constants.DefaultManagerName),
 		agent_monitor.NewAgentManager(constants.DefaultManagerName),
 		nmap.NewNmapManager(constants.DefaultManagerName),
-		dataflowcomponent.NewDataflowComponentManager(constants.DefaultManagerName),
+		dataflowcomponent.NewDataflowComponentManager(constants.DefaultManagerName, servicesRegistry.GetPortManager()),
 	}
 
 	// Create a starvation checker
@@ -120,11 +126,6 @@ func NewControlLoop(configManager config.ConfigManager) *ControlLoop {
 
 	// Create a snapshot manager
 	snapshotManager := fsm.NewSnapshotManager()
-
-	servicesRegistry, err := serviceregistry.NewRegistry()
-	if err != nil {
-		sentry.ReportIssuef(sentry.IssueTypeError, log, "Failed to create service registry: %s", err)
-	}
 
 	metrics.InitErrorCounter(metrics.ComponentControlLoop, "main")
 

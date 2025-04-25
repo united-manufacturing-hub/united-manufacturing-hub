@@ -142,9 +142,10 @@ func SetupServiceInDataflowComponentManager(
 	mockService *dataflowcomponentsvc.MockDataFlowComponentService,
 	componentName string,
 	desiredState string,
+	services serviceregistry.Provider,
 ) {
 	// Create a properly configured instance
-	instance := dataflowcomponentfsm.NewDataflowComponentInstance("", CreateDataflowComponentTestConfig(componentName, desiredState))
+	instance := dataflowcomponentfsm.NewDataflowComponentInstance("", CreateDataflowComponentTestConfig(componentName, desiredState), services.GetPortManager())
 
 	// Add it to the manager
 	manager.BaseFSMManager.AddInstanceForTest(componentName, instance)

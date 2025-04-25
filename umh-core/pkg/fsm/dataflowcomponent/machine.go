@@ -26,13 +26,16 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/portmanager"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/dataflowcomponent"
 )
 
 // NewDataflowComponentInstance creates a new DataflowComponentInstance with a given ID and service path
 func NewDataflowComponentInstance(
 	s6BaseDir string,
-	config config.DataFlowComponentConfig) *DataflowComponentInstance {
+	config config.DataFlowComponentConfig,
+	portManager portmanager.PortManager,
+) *DataflowComponentInstance {
 
 	cfg := internal_fsm.BaseFSMInstanceConfig{
 		ID:                           config.Name,
@@ -86,8 +89,8 @@ func NewDataflowComponentInstance(
 
 	instance := &DataflowComponentInstance{
 		baseFSMInstance: internal_fsm.NewBaseFSMInstance(cfg, backoffConfig, logger),
-		service:         dataflowcomponent.NewDefaultDataFlowComponentService(config.Name),
-		config:          config.DataFlowComponentServiceConfig,
+		service:         dataflowcomponent.NewDefaultDataFlowComponentService(config.Name, dataflowcomponent.WithSharedPortManager(portManager)),
+		config:          config.DataFlowComponentConfig,
 		ObservedState:   DataflowComponentObservedState{},
 	}
 

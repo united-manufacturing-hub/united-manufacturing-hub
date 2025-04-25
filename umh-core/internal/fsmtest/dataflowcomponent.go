@@ -154,8 +154,11 @@ func SetupDataflowComponentInstance(serviceName string, desiredState string) (*d
 	// Add default service info
 	mockService.ComponentStates[serviceName] = &dataflowcomponentsvc.ServiceInfo{}
 
+	// Add mock service registry
+	mockSvcRegistry := serviceregistry.NewMockRegistry()
+
 	// Create new instance
-	instance := setUpMockDataflowComponentInstance(cfg, mockService)
+	instance := setUpMockDataflowComponentInstance(cfg, mockService, mockSvcRegistry)
 
 	return instance, mockService, cfg
 }
@@ -165,9 +168,10 @@ func SetupDataflowComponentInstance(serviceName string, desiredState string) (*d
 func setUpMockDataflowComponentInstance(
 	cfg config.DataFlowComponentConfig,
 	mockService *dataflowcomponentsvc.MockDataFlowComponentService,
+	mockSvcRegistry *serviceregistry.Registry,
 ) *dataflowcomponentfsm.DataflowComponentInstance {
 	// Create the instance
-	instance := dataflowcomponentfsm.NewDataflowComponentInstance("", cfg)
+	instance := dataflowcomponentfsm.NewDataflowComponentInstance("", cfg, mockSvcRegistry.GetPortManager())
 
 	// Set the mock service
 	instance.SetService(mockService)
@@ -301,9 +305,10 @@ func CreateMockDataflowComponentInstance(
 	serviceName string,
 	mockService dataflowcomponentsvc.IDataFlowComponentService,
 	desiredState string,
+	services serviceregistry.Provider,
 ) *dataflowcomponentfsm.DataflowComponentInstance {
 	cfg := CreateDataflowComponentTestConfig(serviceName, desiredState)
-	instance := dataflowcomponentfsm.NewDataflowComponentInstance("", cfg)
+	instance := dataflowcomponentfsm.NewDataflowComponentInstance("", cfg, services.GetPortManager())
 	instance.SetService(mockService)
 	return instance
 }

@@ -134,10 +134,11 @@ func WithSharedPortManager(portManager portmanager.PortManager) DataFlowComponen
 
 // NewDefaultDataFlowComponentService creates a new default DataFlowComponent service
 func NewDefaultDataFlowComponentService(componentName string, opts ...DataFlowComponentServiceOption) *DataFlowComponentService {
+
 	managerName := fmt.Sprintf("%s%s", logger.ComponentDataFlowComponentService, componentName)
 	service := &DataFlowComponentService{
 		logger:         logger.For(managerName),
-		benthosManager: benthosfsmmanager.NewBenthosManager(managerName),
+		benthosManager: benthosfsmmanager.NewBenthosManager(managerName, nil), // The port manager is assigned later using the WithSharedPortManager option
 		benthosService: benthosservice.NewDefaultBenthosService(componentName),
 		benthosConfigs: []config.BenthosConfig{},
 	}
@@ -145,6 +146,17 @@ func NewDefaultDataFlowComponentService(componentName string, opts ...DataFlowCo
 	// Apply options
 	for _, opt := range opts {
 		opt(service)
+	}
+
+	if service.benthosManager != nil && service.benthosManager.GetPortManager() == nil {
+		// The port manager is not set. Initalize service registry and get the port manager
+		// The service registry contains the shared instance of the port manager. So it is safe to use it here
+		servicesRegistry, err := serviceregistry.NewRegistry()
+		if err != nil {
+			service.logger.Errorf("Failed to create service registry: %s", err)
+			return nil
+		}
+		service.benthosManager.WithPortManager(servicesRegistry.GetPortManager())
 	}
 
 	return service
