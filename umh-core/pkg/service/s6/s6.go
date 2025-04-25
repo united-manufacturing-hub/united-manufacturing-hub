@@ -226,21 +226,15 @@ func (s *DefaultService) Create(ctx context.Context, servicePath string, config 
 	}
 
 	// Create logutil-service command line, see also https://skarnet.org/software/s6/s6-log.html
-	logutilServiceCmd := "logutil-service"
-	if config.LogFilesize > 0 {
-		logutilServiceCmd = fmt.Sprintf("%s -b s%d", logutilServiceCmd, config.LogFilesize)
+	// logutil-service is a wrapper around s6_log and reads from the S6_LOGGING_SCRIPT environment variable
+	// We overwrite the default S6_LOGGING_SCRIPT with our own if config.LogFilesize is set
+	logRunContent, err := getLogRunScript(config, logDir)
+	if err != nil {
+		return fmt.Errorf("failed to get log run script: %w", err)
 	}
-	logutilServiceCmd = fmt.Sprintf("%s %s", logutilServiceCmd, logDir)
 
 	// Create log run script
 	logRunPath := filepath.Join(logServicePath, "run")
-	logRunContent := fmt.Sprintf(`#!/command/execlineb -P
-fdmove -c 2 1
-foreground { mkdir -p %s }
-foreground { chown -R nobody:nobody %s }
-%s
-`, logDir, logDir, logutilServiceCmd)
-
 	if err := fsService.WriteFile(ctx, logRunPath, []byte(logRunContent), 0755); err != nil {
 		return fmt.Errorf("failed to write log run script: %w", err)
 	}
@@ -694,6 +688,7 @@ func (s *DefaultService) GetConfig(ctx context.Context, servicePath string, fsSe
 		ConfigFiles: make(map[string]string),
 		Env:         make(map[string]string),
 		MemoryLimit: 0,
+		LogFilesize: 0,
 	}
 
 	// Fetch run script
@@ -841,6 +836,38 @@ func (s *DefaultService) GetConfig(ctx context.Context, servicePath string, fsSe
 		}
 
 		observedS6ServiceConfig.ConfigFiles[entry.Name()] = string(content)
+	}
+
+	// Extract LogFilesize using regex
+	// Fetch run script
+	logServicePath := filepath.Join(servicePath, "log")
+	logScript := filepath.Join(logServicePath, "run")
+	exists, err = fsService.FileExists(ctx, logScript)
+	if err != nil {
+		return s6serviceconfig.S6ServiceConfig{}, fmt.Errorf("failed to check if log run§ script exists: %w", err)
+	}
+	if !exists {
+		return s6serviceconfig.S6ServiceConfig{}, fmt.Errorf("log run script not found")
+	}
+
+	logScriptContentRaw, err := fsService.ReadFile(ctx, logScript)
+	if err != nil {
+		return s6serviceconfig.S6ServiceConfig{}, fmt.Errorf("failed to read log run script: %w", err)
+	}
+
+	// Parse the run script content
+	logScriptContent := string(logScriptContentRaw)
+
+	// Extract log filesize using the dedicated log filesize parser
+	logSizeMatches := logFilesizeParser.FindStringSubmatch(logScriptContent)
+	if len(logSizeMatches) >= 2 {
+		observedS6ServiceConfig.LogFilesize, err = strconv.ParseInt(logSizeMatches[1], 10, 64)
+		if err != nil {
+			return s6serviceconfig.S6ServiceConfig{}, fmt.Errorf("failed to parse log filesize: %w", err)
+		}
+	} else {
+		// If no match found, default to 0
+		observedS6ServiceConfig.LogFilesize = 0
 	}
 
 	return observedS6ServiceConfig, nil
