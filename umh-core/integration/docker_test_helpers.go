@@ -296,7 +296,6 @@ func BuildAndRunContainer(configYaml string, memory string, cpus uint) error {
 		"--cpus", fmt.Sprintf("%d", cpus),
 		"-v", fmt.Sprintf("%s:/data/redpanda", tmpRedpandaDir),
 		"-v", fmt.Sprintf("%s:/data/logs", tmpLogsDir),
-		// "--cap-add=sys_nice", // do not use this by default
 		getImageName(),
 	)
 	if err != nil {
