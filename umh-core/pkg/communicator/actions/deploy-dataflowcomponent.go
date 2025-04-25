@@ -524,7 +524,7 @@ func (a *DeployDataflowComponentAction) waitForComponentToBeActive() error {
 						return nil
 					} else {
 						// send the benthos logs to the user
-						logs = dfcSnapshot.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.Logs
+						logs = dfcSnapshot.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosLogs
 						// only send the logs that have not been sent yet
 						if len(logs) > len(lastLogs) {
 							for _, log := range logs[len(lastLogs):] {
