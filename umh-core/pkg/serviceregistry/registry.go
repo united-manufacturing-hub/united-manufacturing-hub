@@ -37,10 +37,12 @@ var _ Provider = (*Registry)(nil)
 
 // GetFileSystem returns the filesystem service
 func (r *Registry) GetFileSystem() filesystem.Service {
+	//nolint:nilaway
 	return r.FileSystem
 }
 
 // GetPortManager returns the port manager service
 func (r *Registry) GetPortManager() portmanager.PortManager {
+	//nolint:nilaway
 	return r.PortManager
 }

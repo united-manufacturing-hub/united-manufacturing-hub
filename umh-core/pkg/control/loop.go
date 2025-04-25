@@ -106,8 +106,8 @@ func NewControlLoop(configManager config.ConfigManager) *ControlLoop {
 
 	// Create the service registry. The service registry will contain all services like filesystem, and portmanager
 	servicesRegistry, err := serviceregistry.NewRegistry()
-	if err != nil {
-		sentry.ReportIssuef(sentry.IssueTypeError, log, "Failed to create service registry: %s", err)
+	if err != nil || servicesRegistry == nil {
+		sentry.ReportIssuef(sentry.IssueTypeFatal, log, "Failed to create service registry: %s", err)
 	}
 
 	// Create the managers
