@@ -221,7 +221,7 @@ func (a *EditDataflowComponentAction) Validate() error {
 // The function handles custom dataflow components by:
 // - Converting YAML strings into structured configuration
 // - Normalizing the Benthos configuration
-// - Updating the component in the configuration with a desired state of "running"
+// - Updating the component in the configuration with a desired state of "active"
 func (a *EditDataflowComponentAction) Execute() (interface{}, map[string]interface{}, error) {
 	a.actionLogger.Info("Executing EditDataflowComponent action")
 
@@ -340,7 +340,7 @@ func (a *EditDataflowComponentAction) Execute() (interface{}, map[string]interfa
 	dfc := config.DataFlowComponentConfig{
 		FSMInstanceConfig: config.FSMInstanceConfig{
 			Name:            a.name,
-			DesiredFSMState: "running",
+			DesiredFSMState: "active",
 		},
 		DataFlowComponentConfig: dataflowcomponentconfig.DataFlowComponentConfig{
 			BenthosConfig: dataflowcomponentconfig.BenthosConfig{

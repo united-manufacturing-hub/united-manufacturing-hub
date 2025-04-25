@@ -108,6 +108,15 @@ func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePay
 			systemSnapshot:  systemSnapshot,
 			actionLogger:    log,
 		}
+	case models.EditDataFlowComponent:
+		action = &EditDataflowComponentAction{
+			userEmail:       sender,
+			actionUUID:      payload.ActionUUID,
+			instanceUUID:    instanceUUID,
+			outboundChannel: outboundChannel,
+			configManager:   configManager,
+			actionLogger:    log,
+		}
 
 	default:
 		log.Errorf("Unknown action type: %s", payload.ActionType)
