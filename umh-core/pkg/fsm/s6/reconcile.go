@@ -64,22 +64,27 @@ func (s *S6Instance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot,
 
 		// if it is a permanent error, start the removal process and reset the error (so that we can reconcile towards a stopped / removed state)
 		if backoff.IsPermanentFailureError(err) {
-			// if it is already in stopped, stopping, removing states, and it again returns a permanent error,
-			// we need to throw it to the manager as the instance itself here cannot fix it anymore
-			if s.IsRemoved() || s.IsRemoving() || s.IsStopping() || s.IsStopped() {
-				s.baseFSMInstance.GetLogger().Errorf("S6 instance %s is already in a terminal state, force removing it", s.baseFSMInstance.GetID())
-				// force delete everything from the s6 file directory
-				forceErr := s.service.ForceRemove(ctx, s.servicePath, services.GetFileSystem())
-				if forceErr != nil {
-					s.baseFSMInstance.GetLogger().Errorf("ForceRemove failed: %v", forceErr)
-				}
-				return err, false
-			} else {
-				s.baseFSMInstance.GetLogger().Errorf("S6 instance %s is not in a terminal state, resetting state and removing it", s.baseFSMInstance.GetID())
-				s.baseFSMInstance.ResetState()
-				s.Remove(ctx)
-				return nil, false // let's try to at least reconcile towards a stopped / removed state
-			}
+			// For permanent errors, we need special handling based on the instance's current state:
+			// 1. If already in a shutdown state (removed, removing, stopping, stopped), try force removal
+			// 2. If not in a shutdown state, attempt normal removal first, then force if needed
+			return s.baseFSMInstance.HandlePermanentError(
+				ctx,
+				err,
+				func() bool {
+					// Determine if we're already in a shutdown state where normal removal isn't possible
+					// and force removal is required
+					return s.IsRemoved() || s.IsRemoving() || s.IsStopping() || s.IsStopped() || s.WantsToBeStopped()
+				},
+				func(ctx context.Context) error {
+					// Normal removal through state transition
+					return s.Remove(ctx)
+				},
+				func(ctx context.Context) error {
+					// Force removal as a last resort when normal state transitions can't work
+					// This directly removes the s6 service directory from the filesystem
+					return s.service.ForceRemove(ctx, s.servicePath, services.GetFileSystem())
+				},
+			)
 		}
 
 		return nil, false

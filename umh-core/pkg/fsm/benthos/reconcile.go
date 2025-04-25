@@ -63,20 +63,27 @@ func (b *BenthosInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnap
 
 		// if it is a permanent error, start the removal process and reset the error (so that we can reconcile towards a stopped / removed state)
 		if backoff.IsPermanentFailureError(err) {
-
-			// if it is already in stopped, stopping, removing states, and it again returns a permanent error,
-			// we need to throw it to the manager as the instance itself here cannot fix it anymore
-			if b.IsRemoved() || b.IsRemoving() || b.IsStopping() || b.IsStopped() {
-				b.baseFSMInstance.GetLogger().Errorf("Benthos instance %s is already in a terminal state, force removing it", benthosInstanceName)
-				// force delete everything from the s6 file directory
-				b.service.ForceRemoveBenthos(ctx, services.GetFileSystem(), benthosInstanceName)
-				return err, false
-			} else {
-				b.baseFSMInstance.GetLogger().Errorf("Benthos instance %s is not in a terminal state, resetting state and removing it", benthosInstanceName)
-				b.baseFSMInstance.ResetState()
-				b.Remove(ctx)
-				return nil, false // let's try to at least reconcile towards a stopped / removed state
-			}
+			// For permanent errors, we need special handling based on the instance's current state:
+			// 1. If already in a shutdown state (removed, removing, stopping, stopped), try force removal
+			// 2. If not in a shutdown state, attempt normal removal first, then force if needed
+			return b.baseFSMInstance.HandlePermanentError(
+				ctx,
+				err,
+				func() bool {
+					// Determine if we're already in a shutdown state where normal removal isn't possible
+					// and force removal is required
+					return b.IsRemoved() || b.IsRemoving() || b.IsStopping() || b.IsStopped() || b.WantsToBeStopped()
+				},
+				func(ctx context.Context) error {
+					// Normal removal through state transition
+					return b.Remove(ctx)
+				},
+				func(ctx context.Context) error {
+					// Force removal when other approaches fail - bypasses state transitions
+					// and directly deletes files and resources
+					return b.service.ForceRemoveBenthos(ctx, services.GetFileSystem(), benthosInstanceName)
+				},
+			)
 		}
 		return nil, false
 	}
