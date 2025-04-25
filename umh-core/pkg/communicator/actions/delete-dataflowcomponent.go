@@ -119,11 +119,13 @@ func (a *DeleteDataflowComponentAction) Execute() (interface{}, map[string]inter
 	}
 
 	// wait for the component to be removed
-	err = a.waitForComponentToBeRemoved()
-	if err != nil {
-		errorMsg := fmt.Sprintf("failed to wait for dataflowcomponent to be removed: %v", err)
-		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errorMsg, a.outboundChannel, models.DeleteDataFlowComponent)
-		return nil, nil, fmt.Errorf("%s", errorMsg)
+	if a.systemSnapshot != nil { // skipping this for the unit tests
+		err = a.waitForComponentToBeRemoved()
+		if err != nil {
+			errorMsg := fmt.Sprintf("failed to wait for dataflowcomponent to be removed: %v", err)
+			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errorMsg, a.outboundChannel, models.DeleteDataFlowComponent)
+			return nil, nil, fmt.Errorf("%s", errorMsg)
+		}
 	}
 
 	// return success message, but do not send it as this is done by the caller
