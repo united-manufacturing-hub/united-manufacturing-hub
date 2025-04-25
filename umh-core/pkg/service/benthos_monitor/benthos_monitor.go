@@ -1022,6 +1022,8 @@ func (s *BenthosMonitorService) AddBenthosMonitorToS6Manager(ctx context.Context
 		return ctx.Err()
 	}
 
+	s.logger.Debugf("Adding benthos monitor to S6 manager with port %d", port)
+
 	s6ServiceName := s.GetS6ServiceName()
 
 	// Check whether s6ServiceConfigs already contains an entry for this instance

@@ -30,6 +30,7 @@ import (
 func (b *BenthosMonitorInstance) CreateInstance(ctx context.Context, filesystemService filesystem.Service) error {
 	b.baseFSMInstance.GetLogger().Debugf("Starting Action: Adding Benthos Monitor service %s to S6 manager ...", b.baseFSMInstance.GetID())
 
+	b.baseFSMInstance.GetLogger().Debugf("Adding Benthos Monitor service %s to S6 manager with port %d", b.baseFSMInstance.GetID(), b.config.MetricsPort)
 	err := b.monitorService.AddBenthosMonitorToS6Manager(ctx, uint16(b.config.MetricsPort))
 	if err != nil {
 		if err == benthos_monitor_service.ErrServiceAlreadyExists {

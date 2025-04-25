@@ -387,37 +387,6 @@ func (s *BenthosService) Status(ctx context.Context, filesystemService filesyste
 
 	benthosStatus, err := s.GetHealthCheckAndMetrics(ctx, filesystemService, tick, loopStartTime, benthosName, logs)
 	if err != nil {
-		if strings.Contains(err.Error(), benthos_monitor.ErrServiceNoLogFile.Error()) {
-			return ServiceInfo{
-				S6ObservedState: s6ServiceObservedState,
-				S6FSMState:      s6FSMState, // Note for state transitions: When a service is stopped and then reactivated,
-				// this S6FSMState needs to be properly refreshed here.
-				// Otherwise, the service can not transition from stopping to stopped state
-				BenthosStatus: BenthosStatus{
-					BenthosLogs: logs,
-				},
-			}, ErrServiceNoLogFile
-		}
-		if strings.Contains(err.Error(), ErrHealthCheckConnectionRefused.Error()) {
-			return ServiceInfo{
-				S6ObservedState: s6ServiceObservedState,
-				S6FSMState:      s6FSMState,
-				BenthosStatus: BenthosStatus{
-					BenthosLogs: logs,
-				},
-			}, ErrHealthCheckConnectionRefused
-		}
-
-		if strings.Contains(err.Error(), ErrBenthosMonitorNotRunning.Error()) {
-			return ServiceInfo{
-				S6ObservedState: s6ServiceObservedState,
-				S6FSMState:      s6FSMState,
-				BenthosStatus: BenthosStatus{
-					BenthosLogs: logs,
-				},
-			}, ErrBenthosMonitorNotRunning
-		}
-
 		if strings.Contains(err.Error(), ErrLastObservedStateNil.Error()) {
 			return ServiceInfo{
 				S6ObservedState: s6ServiceObservedState,
@@ -508,6 +477,8 @@ func (s *BenthosService) AddBenthosToS6Manager(ctx context.Context, filesystemSe
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
+
+	s.logger.Debugf("Adding benthos to S6 manager with port: %d", cfg.MetricsPort)
 
 	s6ServiceName := s.getS6ServiceName(benthosName)
 
@@ -688,6 +659,10 @@ func (s *BenthosService) StartBenthos(ctx context.Context, filesystemService fil
 		}
 	}
 
+	if !found {
+		return ErrServiceNotExist
+	}
+
 	return nil
 }
 
@@ -728,6 +703,10 @@ func (s *BenthosService) StopBenthos(ctx context.Context, filesystemService file
 		}
 	}
 
+	if !found {
+		return ErrServiceNotExist
+	}
+
 	return nil
 }
 
@@ -743,18 +722,24 @@ func (s *BenthosService) ReconcileManager(ctx context.Context, filesystemService
 
 	// Create a new snapshot with the current S6 service configs
 	// Note: therefore, the S6 manager will not have access to the full observed state
-	snapshot := fsm.SystemSnapshot{
+	s6Snapshot := fsm.SystemSnapshot{
 		CurrentConfig: config.FullConfig{Internal: config.InternalConfig{Services: s.s6ServiceConfigs}},
 		Tick:          tick,
 	}
 
-	s6Err, s6Reconciled := s.s6Manager.Reconcile(ctx, snapshot, filesystemService)
+	s6Err, s6Reconciled := s.s6Manager.Reconcile(ctx, s6Snapshot, filesystemService)
 	if s6Err != nil {
 		return fmt.Errorf("failed to reconcile S6 manager: %w", s6Err), false
 	}
 
 	// Also reconcile the benthos monitor
-	monitorErr, monitorReconciled := s.benthosMonitorManager.Reconcile(ctx, snapshot, filesystemService)
+
+	benthosMonitorSnapshot := fsm.SystemSnapshot{
+		CurrentConfig: config.FullConfig{Internal: config.InternalConfig{BenthosMonitor: s.benthosMonitorConfigs}},
+		Tick:          tick,
+	}
+
+	monitorErr, monitorReconciled := s.benthosMonitorManager.Reconcile(ctx, benthosMonitorSnapshot, filesystemService)
 	if monitorErr != nil {
 		return fmt.Errorf("failed to reconcile benthos monitor: %w", monitorErr), false
 	}

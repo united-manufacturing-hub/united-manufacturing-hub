@@ -128,43 +128,6 @@ func (b *BenthosInstance) getServiceStatus(ctx context.Context, filesystemServic
 			// Log the warning but don't treat it as a fatal error
 			b.baseFSMInstance.GetLogger().Debugf("Service not found, will be created during reconciliation")
 			return benthos_service.ServiceInfo{}, nil
-		} else if errors.Is(err, benthos_service.ErrServiceNoLogFile) {
-			// This is only an error, if benthos is already running, otherwise there are simply no logs
-			// This includes degraded states, as he can only go from active/idle to degraded, and therefore there should be logs
-			if IsRunningState(b.baseFSMInstance.GetCurrentFSMState()) {
-				b.baseFSMInstance.GetLogger().Debugf("Health check had no logs to process for service %s, returning ServiceInfo with failed health checks", b.baseFSMInstance.GetID())
-				infoWithFailedHealthChecks := info
-				infoWithFailedHealthChecks.BenthosStatus.HealthCheck.IsLive = false
-				infoWithFailedHealthChecks.BenthosStatus.HealthCheck.IsReady = false
-				// Return ServiceInfo with health checks failed but preserve S6FSMState if available
-				return infoWithFailedHealthChecks, nil
-			} else {
-				// We have no running service, therefore we can simply return nil as error
-				return info, nil
-			}
-
-		} else if errors.Is(err, benthos_service.ErrHealthCheckConnectionRefused) {
-			// If we are in the starting phase or stopped, ..., we can ignore this error, as it is expected
-			if IsRunningState(b.baseFSMInstance.GetCurrentFSMState()) {
-				infoWithFailedHealthChecks := info
-				infoWithFailedHealthChecks.BenthosStatus.HealthCheck.IsLive = false
-				infoWithFailedHealthChecks.BenthosStatus.HealthCheck.IsReady = false
-				return infoWithFailedHealthChecks, nil
-			} else {
-				// If we are not running, we need to return an error
-				return info, nil
-			}
-		} else if errors.Is(err, benthos_service.ErrBenthosMonitorNotRunning) {
-			// If the benthos monitor is not running, and we are in the starting phase or stopped, ..., we can ignore this error, as it is expected
-			if IsRunningState(b.baseFSMInstance.GetCurrentFSMState()) {
-				infoWithFailedHealthChecks := info
-				infoWithFailedHealthChecks.BenthosStatus.HealthCheck.IsLive = false
-				infoWithFailedHealthChecks.BenthosStatus.HealthCheck.IsReady = false
-				return infoWithFailedHealthChecks, nil
-			} else {
-				// If we are not running, we need to return an error
-				return info, nil
-			}
 		} else if errors.Is(err, benthos_service.ErrLastObservedStateNil) {
 			// If the last observed state is nil, we can ignore this error
 			infoWithFailedHealthChecks := info

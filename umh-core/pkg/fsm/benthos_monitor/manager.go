@@ -46,13 +46,7 @@ func NewBenthosMonitorManager(name string) *BenthosMonitorManager {
 		"/dev/null", // no actual S6 base dir needed for a pure monitor
 		// Extract config.FullConfig slice from FullConfig
 		func(fc config.FullConfig) ([]config.BenthosMonitorConfig, error) {
-			// Always return a single config
-			var configs []config.BenthosMonitorConfig
-			configs = append(configs, config.BenthosMonitorConfig{
-				Name:            name,
-				DesiredFSMState: OperationalStateActive,
-			})
-			return configs, nil
+			return fc.Internal.BenthosMonitor, nil
 		},
 		// Get name from config
 		func(fc config.BenthosMonitorConfig) (string, error) {
@@ -75,7 +69,7 @@ func NewBenthosMonitorManager(name string) *BenthosMonitorManager {
 			}
 			// If same config => return true, else false
 			// Minimal check:
-			return bi.config.DesiredFSMState == fc.DesiredFSMState, nil
+			return bi.config.DesiredFSMState == fc.DesiredFSMState && bi.config.MetricsPort == fc.MetricsPort, nil
 		},
 		// Set config if only small changes
 		func(instance public_fsm.FSMInstance, fc config.BenthosMonitorConfig) error {

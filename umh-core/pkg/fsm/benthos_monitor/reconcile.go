@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	internal_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
@@ -86,22 +87,29 @@ func (b *BenthosMonitorInstance) Reconcile(ctx context.Context, snapshot fsm.Sys
 	// Step 2: Detect external changes.
 	if err := b.reconcileExternalChanges(ctx, filesystemService, snapshot.Tick, start); err != nil {
 
-		if errors.Is(err, benthos_monitor_service.ErrServiceNotExist) {
-			// If the service is not running, we don't want to return an error here, because we want to continue reconciling
-			//nolint:ineffassign // This is intentionally modifying the named return value accessed in defer
-			err = nil // The service does not exist, which is fine as this happens in the reconcileStateTransition}
+		// I am using strings.Contains as i cannot get it working with errors.Is
+		isExpectedError := strings.Contains(err.Error(), benthos_monitor_service.ErrServiceNotExist.Error()) ||
+			strings.Contains(err.Error(), benthos_monitor_service.ErrServiceNoLogFile.Error()) ||
+			strings.Contains(err.Error(), benthos_monitor_service.ErrServiceConnectionRefused.Error()) ||
+			strings.Contains(err.Error(), benthos_monitor_service.ErrServiceConnectionTimedOut.Error())
 
-		} else if errors.Is(err, benthos_monitor_service.ErrServiceNoLogFile) || errors.Is(err, benthos_monitor_service.ErrServiceConnectionRefused) || errors.Is(err, benthos_monitor_service.ErrServiceConnectionTimedOut) {
-			// This is an expected error, it will cause the fsm to go into degraded
-			// and we will continue reconciling
-
-			//nolint:ineffassign // This is intentionally modifying the named return value accessed in defer
-			err = nil // The service does not exist, which is fine as this happens in the reconcileStateTransition}
-		} else {
+		if !isExpectedError {
 			b.baseFSMInstance.SetError(err, snapshot.Tick)
 			b.baseFSMInstance.GetLogger().Errorf("error reconciling external changes: %s", err)
-			return nil, false
+
+			if errors.Is(err, context.DeadlineExceeded) {
+				// Healthchecks occasionally take longer (sometimes up to 70ms),
+				// resulting in context.DeadlineExceeded errors. In this case, we want to
+				// mark the reconciliation as complete for this tick since we've likely
+				// already consumed significant time. We return reconciled=true to prevent
+				// further reconciliation attempts in the current tick.
+				return nil, true // We don't want to return an error here, as this can happen in normal operations
+			}
+			return nil, false // We don't want to return an error here, because we want to continue reconciling
 		}
+
+		//nolint:ineffassign // This is intentionally modifying the named return value accessed in defer
+		err = nil // The service does not exist or has troubles fetching the observed state (which will cause the service to be in degraded state)
 	}
 
 	// Step 3: Attempt to reconcile the state.
