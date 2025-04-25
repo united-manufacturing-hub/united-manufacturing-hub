@@ -295,7 +295,7 @@ func (s *BenthosMonitorService) GenerateS6ConfigForBenthosMonitor(s6ServiceName 
 		ConfigFiles: map[string]string{
 			"run_benthos_monitor.sh": scriptContent,
 		},
-		LogFilesize: 16384, // 16kB maximum log file size. Each monitoring tick must read and parse the entire log file (which can take >8ms for parsing and up to 20ms for reading). A simple Benthos input/output generates ~5KB of logs for two executions, so 16KB provides adequate space while minimizing performance impact.
+		LogFilesize: 65536, // 64kB maximum log file size. Each monitoring tick must read and parse the entire log file (which can take >8ms for parsing and up to 20ms for reading). A simple Benthos input/output generates ~5KB of logs for two executions, so 64KB provides adequate space while minimizing performance impact.
 	}
 
 	return s6Config, nil
@@ -399,7 +399,7 @@ func (s *BenthosMonitorService) ParseBenthosLogs(ctx context.Context, logs []s6s
 	}
 
 	if len(sections) == 0 {
-		return nil, fmt.Errorf("could not parse benthos metrics/configuration: no sections found. This can happen when the benthos service is not running, or the logs where rotated")
+		return nil, ErrServiceNoSectionsFound
 	}
 
 	// Find the latest section that is fully constructed (e.g the latest entry in the list)

@@ -91,7 +91,8 @@ func (b *BenthosMonitorInstance) Reconcile(ctx context.Context, snapshot fsm.Sys
 		isExpectedError := strings.Contains(err.Error(), benthos_monitor_service.ErrServiceNotExist.Error()) ||
 			strings.Contains(err.Error(), benthos_monitor_service.ErrServiceNoLogFile.Error()) ||
 			strings.Contains(err.Error(), benthos_monitor_service.ErrServiceConnectionRefused.Error()) ||
-			strings.Contains(err.Error(), benthos_monitor_service.ErrServiceConnectionTimedOut.Error())
+			strings.Contains(err.Error(), benthos_monitor_service.ErrServiceConnectionTimedOut.Error()) ||
+			strings.Contains(err.Error(), benthos_monitor_service.ErrServiceNoSectionsFound.Error())
 
 		if !isExpectedError {
 			b.baseFSMInstance.SetError(err, snapshot.Tick)
