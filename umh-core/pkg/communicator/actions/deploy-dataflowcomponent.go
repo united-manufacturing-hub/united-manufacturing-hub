@@ -38,16 +38,17 @@ import (
 // DeployDataflowComponentAction implements the Action interface for deploying
 // dataflow components to the UMH instance.
 type DeployDataflowComponentAction struct {
-	userEmail       string
-	actionUUID      uuid.UUID
-	instanceUUID    uuid.UUID
-	outboundChannel chan *models.UMHMessage
-	configManager   config.ConfigManager
-	systemSnapshot  *fsm.SystemSnapshot
-	payload         models.CDFCPayload
-	name            string
-	metaType        string
-	actionLogger    *zap.SugaredLogger
+	userEmail         string
+	actionUUID        uuid.UUID
+	instanceUUID      uuid.UUID
+	outboundChannel   chan *models.UMHMessage
+	configManager     config.ConfigManager
+	systemSnapshot    *fsm.SystemSnapshot
+	payload           models.CDFCPayload
+	name              string
+	metaType          string
+	actionLogger      *zap.SugaredLogger
+	ignoreHealthCheck bool
 }
 
 // NewDeployDataflowComponentAction creates a new DeployDataflowComponentAction with the provided parameters.
@@ -105,6 +106,8 @@ func (a *DeployDataflowComponentAction) Parse(payload interface{}) error {
 	if a.metaType == "" {
 		return errors.New("missing required field Meta.Type")
 	}
+
+	a.ignoreHealthCheck = topLevel.IgnoreHealthCheck
 
 	// Handle different component types
 	switch a.metaType {
@@ -489,7 +492,18 @@ func (a *DeployDataflowComponentAction) waitForComponentToBeActive() error {
 	for {
 		select {
 		case <-timeout:
-			return fmt.Errorf("dataflowcomponent %s did not become active in time. Consider removing it again", a.name)
+			if !a.ignoreHealthCheck {
+				SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Dataflow component did not become active in time. Removing...", a.outboundChannel, models.DeployDataFlowComponent)
+				ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
+				defer cancel()
+				err := a.configManager.AtomicDeleteDataflowcomponent(ctx, dataflowcomponentconfig.GenerateUUIDFromName(a.name))
+				if err != nil {
+					a.actionLogger.Errorf("failed to remove dataflowcomponent %s: %v", a.name, err)
+				}
+				return fmt.Errorf("dataflowcomponent %s was removed because it did not become active in time", a.name)
+			}
+			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Dataflow component did not become active in time. Consider removing it.", a.outboundChannel, models.DeployDataFlowComponent)
+			return nil
 		case <-ticker.C:
 
 			if dataflowcomponentManager, exists := a.systemSnapshot.Managers[constants.DataflowcomponentManagerName]; exists {
