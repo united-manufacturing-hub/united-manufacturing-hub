@@ -471,6 +471,13 @@ func (m *FileConfigManager) AtomicAddDataflowcomponent(ctx context.Context, dfc 
 		return fmt.Errorf("failed to get config: %w", err)
 	}
 
+	// check for duplicate name before add
+	for _, cmp := range config.DataFlow {
+		if cmp.Name == dfc.Name {
+			return fmt.Errorf("another dataflow component with name %q already exists – choose a unique name", dfc.Name)
+		}
+	}
+
 	// edit the config
 	config.DataFlow = append(config.DataFlow, dfc)
 
