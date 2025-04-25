@@ -643,7 +643,7 @@ var _ = Describe("BenthosInstance FSM", func() {
 
 			// from stopped => starting
 			tick, err = fsmtest.TestBenthosStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockSvcRegistry, serviceName,
 				benthosfsm.OperationalStateStopped,
 				benthosfsm.OperationalStateStarting,
 				5,
