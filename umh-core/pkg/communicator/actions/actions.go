@@ -116,6 +116,7 @@ func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePay
 			outboundChannel: outboundChannel,
 			configManager:   configManager,
 			actionLogger:    log,
+			systemSnapshot:  systemSnapshot,
 		}
 
 	default:

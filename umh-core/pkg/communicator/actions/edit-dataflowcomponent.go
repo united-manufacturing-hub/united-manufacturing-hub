@@ -19,12 +19,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"go.uber.org/zap"
@@ -34,16 +37,20 @@ import (
 // EditDataflowComponentAction implements the Action interface for editing
 // existing dataflow components in the UMH instance.
 type EditDataflowComponentAction struct {
-	userEmail       string
-	actionUUID      uuid.UUID
-	instanceUUID    uuid.UUID
-	outboundChannel chan *models.UMHMessage
-	configManager   config.ConfigManager
-	payload         models.CDFCPayload
-	name            string
-	metaType        string
-	componentUUID   uuid.UUID
-	actionLogger    *zap.SugaredLogger
+	userEmail         string
+	actionUUID        uuid.UUID
+	instanceUUID      uuid.UUID
+	outboundChannel   chan *models.UMHMessage
+	configManager     config.ConfigManager
+	payload           models.CDFCPayload
+	name              string
+	metaType          string
+	componentUUID     uuid.UUID
+	systemSnapshot    *fsm.SystemSnapshot
+	ignoreHealthCheck bool
+	actionLogger      *zap.SugaredLogger
+	dfc               config.DataFlowComponentConfig
+	oldConfig         config.DataFlowComponentConfig
 }
 
 // NewEditDataflowComponentAction creates a new EditDataflowComponentAction with the provided parameters.
@@ -76,8 +83,9 @@ func (a *EditDataflowComponentAction) Parse(payload interface{}) error {
 		Meta struct {
 			Type string `json:"type"`
 		} `json:"meta"`
-		Payload interface{} `json:"payload"`
-		UUID    string      `json:"uuid"`
+		Payload           interface{} `json:"payload"`
+		UUID              string      `json:"uuid"`
+		IgnoreHealthCheck bool        `json:"ignoreHealthCheck"`
 	}
 
 	// Parse the top level payload
@@ -106,6 +114,8 @@ func (a *EditDataflowComponentAction) Parse(payload interface{}) error {
 	if a.metaType == "" {
 		return errors.New("missing required field Meta.Type")
 	}
+
+	a.ignoreHealthCheck = topLevel.IgnoreHealthCheck
 
 	// Handle different component types
 	switch a.metaType {
@@ -354,14 +364,26 @@ func (a *EditDataflowComponentAction) Execute() (interface{}, map[string]interfa
 		},
 	}
 
+	a.dfc = dfc
+
 	// Update the component in the configuration
 	ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
 	defer cancel()
-	err = a.configManager.AtomicEditDataflowcomponent(ctx, a.componentUUID, dfc)
+	a.oldConfig, err = a.configManager.AtomicEditDataflowcomponent(ctx, a.componentUUID, dfc)
 	if err != nil {
 		errorMsg := fmt.Sprintf("failed to edit dataflowcomponent: %v", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errorMsg, a.outboundChannel, models.EditDataFlowComponent)
 		return nil, nil, fmt.Errorf("%s", errorMsg)
+	}
+
+	// check against observedState as well
+	if a.systemSnapshot != nil { // skipping this for the unit tests
+		err = a.waitForComponentToBeActive()
+		if err != nil {
+			errorMsg := fmt.Sprintf("failed to wait for dataflowcomponent to be active: %v", err)
+			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errorMsg, a.outboundChannel, models.EditDataFlowComponent)
+			return nil, nil, fmt.Errorf("%s", errorMsg)
+		}
 	}
 
 	// return success message, but do not send it as this is done by the caller
@@ -388,4 +410,54 @@ func (a *EditDataflowComponentAction) GetParsedPayload() models.CDFCPayload {
 // GetComponentUUID returns the UUID of the component being edited - exposed primarily for testing purposes.
 func (a *EditDataflowComponentAction) GetComponentUUID() uuid.UUID {
 	return a.componentUUID
+}
+
+func (a *EditDataflowComponentAction) waitForComponentToBeActive() error {
+	// checks the system snapshot
+	// 1. waits for the component to appear in the system snapshot (relevant for changed name)
+	// 2. waits for the component to be active
+	// 3. waits for the component to have the correct config
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+	timeout := time.After(constants.DataflowComponentWaitForActiveTimeout)
+	for {
+		select {
+		case <-timeout:
+			if !a.ignoreHealthCheck {
+				SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Dataflow component did not become active in time. Rolling back to old config...", a.outboundChannel, models.DeployDataFlowComponent)
+				ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
+				defer cancel()
+				_, err := a.configManager.AtomicEditDataflowcomponent(ctx, a.componentUUID, a.oldConfig)
+				if err != nil {
+					a.actionLogger.Errorf("failed to roll back dataflowcomponent %s: %v", a.name, err)
+				}
+				return fmt.Errorf("dataflowcomponent %s was not active in time and was rolled back to the old config", a.name)
+			}
+			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Dataflow component did not become active in time. Consider removing it.", a.outboundChannel, models.DeployDataFlowComponent)
+			return nil
+		case <-ticker.C:
+			if dataflowcomponentManager, exists := a.systemSnapshot.Managers[constants.DataflowcomponentManagerName]; exists {
+				instances := dataflowcomponentManager.GetInstances()
+				for _, instance := range instances {
+					if dataflowcomponentconfig.GenerateUUIDFromName(instance.ID) == a.componentUUID {
+						dfcSnapshot, ok := instance.LastObservedState.(*dataflowcomponent.DataflowComponentObservedStateSnapshot)
+						if !ok {
+							continue
+						}
+						if instance.CurrentState != "active" {
+							SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Dataflow component is not active yet. Current state: "+instance.CurrentState+". Waiting...", a.outboundChannel, models.DeployDataFlowComponent)
+						} else {
+							SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Dataflow component is active.", a.outboundChannel, models.DeployDataFlowComponent)
+						}
+						// check if the config is correct
+						if !dataflowcomponentconfig.NewComparator().ConfigsEqual(dfcSnapshot.Config, a.dfc.DataFlowComponentConfig) {
+							SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Dataflow component has incorrect config. Waiting...", a.outboundChannel, models.DeployDataFlowComponent)
+						} else {
+							return nil
+						}
+					}
+				}
+			}
+		}
+	}
 }
