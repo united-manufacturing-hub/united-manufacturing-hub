@@ -68,7 +68,7 @@ var _ = Describe("EditDataflowComponent", func() {
 				{
 					FSMInstanceConfig: config.FSMInstanceConfig{
 						Name:            componentName,
-						DesiredFSMState: "running",
+						DesiredFSMState: "active",
 					},
 					DataFlowComponentConfig: dataflowcomponentconfig.DataFlowComponentConfig{
 						BenthosConfig: dataflowcomponentconfig.BenthosConfig{
@@ -439,7 +439,7 @@ var _ = Describe("EditDataflowComponent", func() {
 			// Verify expected configuration changes
 			Expect(mockConfig.Config.DataFlow).To(HaveLen(1))
 			Expect(mockConfig.Config.DataFlow[0].Name).To(Equal("test-component-updated"))
-			Expect(mockConfig.Config.DataFlow[0].DesiredFSMState).To(Equal("running"))
+			Expect(mockConfig.Config.DataFlow[0].DesiredFSMState).To(Equal("active"))
 
 			// Verify the component was updated with the new configuration
 			// Checking input configuration was updated
