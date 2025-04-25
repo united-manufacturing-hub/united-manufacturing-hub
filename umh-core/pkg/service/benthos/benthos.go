@@ -658,6 +658,8 @@ func (s *BenthosService) StartBenthos(ctx context.Context, filesystemService fil
 	if !found {
 		return ErrServiceNotExist
 	}
+	// Reset found
+	found = false
 
 	// Also start the benthos monitor
 	for i, benthosMonitorConfig := range s.benthosMonitorConfigs {
@@ -702,6 +704,8 @@ func (s *BenthosService) StopBenthos(ctx context.Context, filesystemService file
 	if !found {
 		return ErrServiceNotExist
 	}
+	// Reset found
+	found = false
 
 	// Also stop the benthos monitor
 	for i, benthosMonitorConfig := range s.benthosMonitorConfigs {

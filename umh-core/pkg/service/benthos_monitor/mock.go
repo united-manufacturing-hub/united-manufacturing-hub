@@ -215,7 +215,7 @@ func (m *MockBenthosMonitorService) SetGoodLastScan(currentTime time.Time) {
 }
 
 // GenerateS6ConfigForBenthosMonitor mocks generating S6 config for Benthos monitor
-func (m *MockBenthosMonitorService) GenerateS6ConfigForBenthosMonitor(s6ServiceName string, port uint16) (s6serviceconfig.S6ServiceConfig, error) {
+func (m *MockBenthosMonitorService) GenerateS6ConfigForBenthosMonitor(s6ServiceName string, _ uint16) (s6serviceconfig.S6ServiceConfig, error) {
 	m.GenerateS6ConfigForBenthosMonitorCalled = true
 
 	// If error is set, return it
