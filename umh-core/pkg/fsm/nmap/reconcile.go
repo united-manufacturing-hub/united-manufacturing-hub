@@ -118,7 +118,7 @@ func (n *NmapInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapsho
 	}
 
 	// Reconcile the s6Manager
-	s6Err, s6Reconciled := n.monitorService.ReconcileManager(ctx, services.GetFileSystem(), snapshot.Tick)
+	s6Err, s6Reconciled := n.monitorService.ReconcileManager(ctx, services, snapshot.Tick)
 	if s6Err != nil {
 		n.baseFSMInstance.SetError(s6Err, snapshot.Tick)
 		n.baseFSMInstance.GetLogger().Errorf("error reconciling s6Manager: %s", s6Err)

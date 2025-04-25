@@ -23,6 +23,7 @@ import (
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
 const (
@@ -53,7 +54,7 @@ type INmapService interface {
 	// ServiceExists checks if a nmap service exists
 	ServiceExists(ctx context.Context, filsystemService filesystem.Service, nmapName string) bool
 	// ReconcileManager reconciles the nmap manager
-	ReconcileManager(ctx context.Context, filesystemService filesystem.Service, tick uint64) (error, bool)
+	ReconcileManager(ctx context.Context, services serviceregistry.Provider, tick uint64) (error, bool)
 }
 
 // NmapScanResult contains the results of an nmap scan

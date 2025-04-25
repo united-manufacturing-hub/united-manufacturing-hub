@@ -25,6 +25,7 @@ import (
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
 // MockNmapService is a mock implementation of the INmapService interface for testing
@@ -371,7 +372,7 @@ func (m *MockNmapService) StopNmap(ctx context.Context, nmapName string) error {
 }
 
 // ReconcileManager mocks reconciling the manager
-func (m *MockNmapService) ReconcileManager(ctx context.Context, filesystemService filesystem.Service, tick uint64) (error, bool) {
+func (m *MockNmapService) ReconcileManager(ctx context.Context, services serviceregistry.Provider, tick uint64) (error, bool) {
 	if ctx.Err() != nil {
 		return ctx.Err(), false
 	}
