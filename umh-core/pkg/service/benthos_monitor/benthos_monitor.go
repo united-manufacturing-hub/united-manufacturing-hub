@@ -295,6 +295,7 @@ func (s *BenthosMonitorService) GenerateS6ConfigForBenthosMonitor(s6ServiceName 
 		ConfigFiles: map[string]string{
 			"run_benthos_monitor.sh": scriptContent,
 		},
+		LogFilesize: 16384, // 16kB maximum log file size. Each monitoring tick must read and parse the entire log file (which can take >8ms for parsing and up to 20ms for reading). A simple Benthos input/output generates ~5KB of logs for two executions, so 16KB provides adequate space while minimizing performance impact.
 	}
 
 	return s6Config, nil

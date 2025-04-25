@@ -225,14 +225,21 @@ func (s *DefaultService) Create(ctx context.Context, servicePath string, config 
 		return fmt.Errorf("failed to create log service directory: %w", err)
 	}
 
+	// Create logutil-service command line, see also https://skarnet.org/software/s6/s6-log.html
+	logutilServiceCmd := "logutil-service"
+	if config.LogFilesize > 0 {
+		logutilServiceCmd = fmt.Sprintf("%s -b s%d", logutilServiceCmd, config.LogFilesize)
+	}
+	logutilServiceCmd = fmt.Sprintf("%s %s", logutilServiceCmd, logDir)
+
 	// Create log run script
 	logRunPath := filepath.Join(logServicePath, "run")
 	logRunContent := fmt.Sprintf(`#!/command/execlineb -P
 fdmove -c 2 1
 foreground { mkdir -p %s }
 foreground { chown -R nobody:nobody %s }
-logutil-service %s
-`, logDir, logDir, logDir)
+%s
+`, logDir, logDir, logutilServiceCmd)
 
 	if err := fsService.WriteFile(ctx, logRunPath, []byte(logRunContent), 0755); err != nil {
 		return fmt.Errorf("failed to write log run script: %w", err)
