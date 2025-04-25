@@ -206,6 +206,18 @@ test: vet nilaway lint
 unit-test: vet nilaway lint
 	ginkgo -r -v --tags=test --label-filter='!integration && !redpanda-extended' --fail-fast ./...
 
+benchmark: 
+	@echo "Running benchmarks..."
+	go test -bench=. -benchmem ./...
+
+benchmark-s6:
+	@echo "Running S6 benchmarks..."
+	cd pkg/service/s6 && go test -bench=. -benchmem
+
+# More specific benchmarks can be added as needed
+benchmark-s6-parse-log:
+	@echo "Running S6 parseLogLine benchmarks..."
+	cd pkg/service/s6 && go test -bench=ParseLogLine -benchmem
 
 integration-test: stop-all-pods vet nilaway lint
 	ginkgo -r -v --tags=test --label-filter='integration' --fail-fast ./...

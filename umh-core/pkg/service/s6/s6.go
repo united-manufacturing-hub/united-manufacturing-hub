@@ -1184,20 +1184,35 @@ func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsServ
 
 // parseLogLine parses a log line from S6 format and returns a LogEntry
 func parseLogLine(line string) LogEntry {
-	// S6 log format with T flag: YYYY-MM-DD HH:MM:SS.NNNNNNNNN  content
-	parts := strings.SplitN(line, "  ", 2)
-	if len(parts) != 2 {
+	// Quick check for empty strings or too short lines
+	if len(line) < 29 { // Minimum length for "YYYY-MM-DD HH:MM:SS  content"
 		return LogEntry{Content: line}
 	}
 
-	timestamp, err := time.Parse("2006-01-02 15:04:05.999999999", parts[0])
+	// Check if we have the double space separator
+	sepIdx := strings.Index(line, "  ")
+	if sepIdx == -1 || sepIdx > 28 {
+		return LogEntry{Content: line}
+	}
+
+	// Extract timestamp part
+	timestampStr := line[:sepIdx]
+
+	// Extract content part (after the double space)
+	content := ""
+	if sepIdx+2 < len(line) {
+		content = line[sepIdx+2:]
+	}
+
+	// Try to parse the timestamp
+	timestamp, err := time.Parse("2006-01-02 15:04:05.999999999", timestampStr)
 	if err != nil {
 		return LogEntry{Content: line}
 	}
 
 	return LogEntry{
 		Timestamp: timestamp,
-		Content:   parts[1],
+		Content:   content,
 	}
 }
 
