@@ -173,7 +173,7 @@ func (m *MockBenthosService) GetConfig(ctx context.Context, filesystemService fi
 }
 
 // Status mocks getting the status of a Benthos service
-func (m *MockBenthosService) Status(ctx context.Context, filesystemService filesystem.Service, serviceName string, metricsPort int, tick uint64, loopStartTime time.Time) (ServiceInfo, error) {
+func (m *MockBenthosService) Status(ctx context.Context, filesystemService filesystem.Service, serviceName string, metricsPort uint16, tick uint64, loopStartTime time.Time) (ServiceInfo, error) {
 	m.StatusCalled = true
 
 	// Check if the service exists in the ExistingServices map

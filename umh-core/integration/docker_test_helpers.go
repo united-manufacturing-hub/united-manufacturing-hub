@@ -40,8 +40,8 @@ var (
 	containerOnce sync.Once
 
 	// Store port mappings for each container
-	metricsPort int
-	goldenPort  int
+	metricsPort uint16
+	goldenPort  uint16
 	portMu      sync.Mutex
 
 	// Test-specific config file path
@@ -250,8 +250,8 @@ func BuildAndRunContainer(configYaml string, memory string, cpus uint) error {
 
 	// Store these ports for later use
 	portMu.Lock()
-	metricsPort = metricsPrt
-	goldenPort = goldenPrt
+	metricsPort = uint16(metricsPrt)
+	goldenPort = uint16(goldenPrt)
 	portMu.Unlock()
 
 	// 1. Stop/Remove the old container if any

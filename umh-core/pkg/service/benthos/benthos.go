@@ -52,7 +52,7 @@ type IBenthosService interface {
 	GetConfig(ctx context.Context, filesystemService filesystem.Service, benthosName string) (benthosserviceconfig.BenthosServiceConfig, error)
 	// Status checks the status of a Benthos service
 	// Expects benthosName (e.g. "myservice") as defined in the UMH config
-	Status(ctx context.Context, filesystemService filesystem.Service, benthosName string, metricsPort int, tick uint64, loopStartTime time.Time) (ServiceInfo, error)
+	Status(ctx context.Context, filesystemService filesystem.Service, benthosName string, metricsPort uint16, tick uint64, loopStartTime time.Time) (ServiceInfo, error)
 	// AddBenthosToS6Manager adds a Benthos instance to the S6 manager
 	// Expects benthosName (e.g. "myservice") as defined in the UMH config
 	AddBenthosToS6Manager(ctx context.Context, filesystemService filesystem.Service, cfg *benthosserviceconfig.BenthosServiceConfig, benthosName string) error
@@ -291,7 +291,7 @@ func (s *BenthosService) GetConfig(ctx context.Context, filesystemService filesy
 
 // extractMetricsPort safely extracts the metrics port from the config map
 // Returns 0 if any part of the path is missing or invalid
-func (s *BenthosService) extractMetricsPort(config map[string]interface{}) int {
+func (s *BenthosService) extractMetricsPort(config map[string]interface{}) uint16 {
 	// Check each level of nesting
 	metrics, ok := config["metrics"].(map[string]interface{})
 	if !ok {
@@ -315,17 +315,17 @@ func (s *BenthosService) extractMetricsPort(config map[string]interface{}) int {
 	}
 
 	portStr := parts[len(parts)-1]
-	port, err := strconv.Atoi(portStr)
+	port, err := strconv.ParseUint(portStr, 10, 16)
 	if err != nil {
 		return 0
 	}
-
-	return port
+	// This cast is safe because we know the port is a valid uint16
+	return uint16(port)
 }
 
 // Status checks the status of a Benthos service and returns ServiceInfo
 // Expects benthosName (e.g. "myservice") as defined in the UMH config
-func (s *BenthosService) Status(ctx context.Context, filesystemService filesystem.Service, benthosName string, metricsPort int, tick uint64, loopStartTime time.Time) (ServiceInfo, error) {
+func (s *BenthosService) Status(ctx context.Context, filesystemService filesystem.Service, benthosName string, metricsPort uint16, tick uint64, loopStartTime time.Time) (ServiceInfo, error) {
 	if ctx.Err() != nil {
 		return ServiceInfo{}, ctx.Err()
 	}

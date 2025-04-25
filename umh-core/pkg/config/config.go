@@ -90,7 +90,7 @@ type BenthosMonitorConfig struct {
 	// For the FSM
 	FSMInstanceConfig `yaml:",inline"`
 
-	MetricsPort int `yaml:"metricsPort"` // Port to expose metrics on
+	MetricsPort uint16 `yaml:"metricsPort"` // Port to expose metrics on
 }
 
 // BenthosConfig contains configuration for creating a Benthos service

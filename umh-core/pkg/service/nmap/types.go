@@ -73,7 +73,7 @@ type NmapScanResult struct {
 // PortResult contains the result for a specific port
 type PortResult struct {
 	// Port number
-	Port int `json:"port"`
+	Port uint16 `json:"port"`
 	// State (open/closed/filtered)
 	State string `json:"state"`
 	// Latency in milliseconds
