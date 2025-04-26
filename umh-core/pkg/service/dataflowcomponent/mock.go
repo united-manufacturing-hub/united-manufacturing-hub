@@ -20,7 +20,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	benthosfsmmanager "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
 	benthosservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos_monitor"
@@ -45,7 +45,7 @@ type MockDataFlowComponentService struct {
 	// Return values for each method
 	GenerateBenthosConfigForDataFlowComponentResult benthosserviceconfig.BenthosServiceConfig
 	GenerateBenthosConfigForDataFlowComponentError  error
-	GetConfigResult                                 dataflowcomponentconfig.DataFlowComponentConfig
+	GetConfigResult                                 dataflowcomponentserviceconfig.DataflowComponentServiceConfig
 	GetConfigError                                  error
 	StatusResult                                    ServiceInfo
 	StatusError                                     error
@@ -132,18 +132,18 @@ func (m *MockDataFlowComponentService) GetComponentState(componentName string) *
 }
 
 // GenerateBenthosConfigForDataFlowComponent mocks generating Benthos config for a DataFlowComponent
-func (m *MockDataFlowComponentService) GenerateBenthosConfigForDataFlowComponent(dataflowConfig *dataflowcomponentconfig.DataFlowComponentConfig, componentName string) (benthosserviceconfig.BenthosServiceConfig, error) {
+func (m *MockDataFlowComponentService) GenerateBenthosConfigForDataFlowComponent(dataflowConfig *dataflowcomponentserviceconfig.DataflowComponentServiceConfig, componentName string) (benthosserviceconfig.BenthosServiceConfig, error) {
 	m.GenerateBenthosConfigForDataFlowComponentCalled = true
 	return m.GenerateBenthosConfigForDataFlowComponentResult, m.GenerateBenthosConfigForDataFlowComponentError
 }
 
 // GetConfig mocks getting the DataFlowComponent configuration
-func (m *MockDataFlowComponentService) GetConfig(ctx context.Context, filesystemService filesystem.Service, componentName string) (dataflowcomponentconfig.DataFlowComponentConfig, error) {
+func (m *MockDataFlowComponentService) GetConfig(ctx context.Context, filesystemService filesystem.Service, componentName string) (dataflowcomponentserviceconfig.DataflowComponentServiceConfig, error) {
 	m.GetConfigCalled = true
 
 	// If error is set, return it
 	if m.GetConfigError != nil {
-		return dataflowcomponentconfig.DataFlowComponentConfig{}, m.GetConfigError
+		return dataflowcomponentserviceconfig.DataflowComponentServiceConfig{}, m.GetConfigError
 	}
 
 	// If a result is preset, return it
@@ -169,7 +169,7 @@ func (m *MockDataFlowComponentService) Status(ctx context.Context, filesystemSer
 }
 
 // AddDataFlowComponentToBenthosManager mocks adding a DataFlowComponent to the Benthos manager
-func (m *MockDataFlowComponentService) AddDataFlowComponentToBenthosManager(ctx context.Context, filesystemService filesystem.Service, cfg *dataflowcomponentconfig.DataFlowComponentConfig, componentName string) error {
+func (m *MockDataFlowComponentService) AddDataFlowComponentToBenthosManager(ctx context.Context, filesystemService filesystem.Service, cfg *dataflowcomponentserviceconfig.DataflowComponentServiceConfig, componentName string) error {
 	m.AddDataFlowComponentToBenthosManagerCalled = true
 
 	benthosName := fmt.Sprintf("dataflow-%s", componentName)
@@ -200,7 +200,7 @@ func (m *MockDataFlowComponentService) AddDataFlowComponentToBenthosManager(ctx 
 }
 
 // UpdateDataFlowComponentInBenthosManager mocks updating a DataFlowComponent in the Benthos manager
-func (m *MockDataFlowComponentService) UpdateDataFlowComponentInBenthosManager(ctx context.Context, filesystemService filesystem.Service, cfg *dataflowcomponentconfig.DataFlowComponentConfig, componentName string) error {
+func (m *MockDataFlowComponentService) UpdateDataFlowComponentInBenthosManager(ctx context.Context, filesystemService filesystem.Service, cfg *dataflowcomponentserviceconfig.DataflowComponentServiceConfig, componentName string) error {
 	m.UpdateDataFlowComponentInBenthosManagerCalled = true
 
 	benthosName := fmt.Sprintf("dataflow-%s", componentName)

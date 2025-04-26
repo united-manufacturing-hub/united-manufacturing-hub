@@ -16,29 +16,26 @@ package connectionserviceconfig
 
 import (
 	"fmt"
-	"text/template"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/nmapserviceconfig"
 	"gopkg.in/yaml.v3"
 )
 
 // Generator handles the generation of Nmap YAML configurations
 type Generator struct {
-	tmpl *template.Template
 }
 
 // NewGenerator creates a new YAML generator for Benthos configurations
 func NewGenerator() *Generator {
-	return &Generator{
-		tmpl: template.Must(template.New("connection").Parse(simplifiedTemplate)),
-	}
+	return &Generator{}
 }
 
 // RenderConfig generates a Connection YAML configuration from a ConnectionServiceConfig
 func (g *Generator) RenderConfig(cfg ConnectionServiceConfig) (string, error) {
 
 	// Convert the config to a normalized map
-	configMap := g.configToMap(cfg)
-	normalizedMap := normalizeConfig(configMap)
+	configMap := g.ConfigToMap(cfg)
+	normalizedMap := NormalizeConfig(configMap)
 
 	// Marshal to YAML
 	yamlBytes, err := yaml.Marshal(normalizedMap)
@@ -51,38 +48,24 @@ func (g *Generator) RenderConfig(cfg ConnectionServiceConfig) (string, error) {
 	return yamlStr, nil
 }
 
-// configToMap converts a ConnectionServiceConfig to a raw map for YAML generation
-func (g *Generator) configToMap(cfg ConnectionServiceConfig) map[string]any {
+// ConfigToMap converts a ConnectionServiceConfig to a raw map for YAML generation
+func (g *Generator) ConfigToMap(cfg ConnectionServiceConfig) map[string]any {
+	// use generator to create a valid nmapConfigMap
+	generator := nmapserviceconfig.NewGenerator()
+	nmapConfigMap := generator.ConfigToMap(cfg.NmapServiceConfig)
+
 	configMap := make(map[string]any)
-
-	// Add all sections
-	if cfg.NmapServiceConfig.Target != "" && len(cfg.NmapServiceConfig.Target) > 0 {
-		configMap["target"] = cfg.NmapServiceConfig.Target
-	}
-
-	if cfg.NmapServiceConfig.Port != 0 {
-		configMap["port"] = cfg.NmapServiceConfig.Port
-	}
-
 	// We need indent this since it should look like this:
 	// connection:
 	//    nmap:
 	//      target: "127.0.0.1"
 	//      port: 443
-	connectionConfigMap := make(map[string]any)
-	connectionConfigMap["nmap"] = configMap
+	configMap["nmap"] = nmapConfigMap
 
-	return connectionConfigMap
+	return configMap
 }
 
-// normalizeConfig does not need to adjust anything here
-func normalizeConfig(raw map[string]any) map[string]any {
+// NormalizeConfig does not need to adjust anything here
+func NormalizeConfig(raw map[string]any) map[string]any {
 	return raw
 }
-
-// simplifiedTemplate is a much simpler template that just places pre-rendered YAML blocks
-var simplifiedTemplate = `
-nmap:
-  target: {{.Target}}
-  port: {{.Port}}
-`
