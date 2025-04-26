@@ -498,7 +498,7 @@ func (a *DeployDataflowComponentAction) waitForComponentToBeActive() error {
 				SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Dataflow component did not become active in time. Removing...", a.outboundChannel, models.DeployDataFlowComponent)
 				ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
 				defer cancel()
-				err := a.configManager.AtomicDeleteDataflowcomponent(ctx, dataflowcomponentconfig.GenerateUUIDFromName(a.name))
+				err := a.configManager.AtomicDeleteDataflowcomponent(ctx, dataflowcomponentserviceconfig.GenerateUUIDFromName(a.name))
 				if err != nil {
 					a.actionLogger.Errorf("failed to remove dataflowcomponent %s: %v", a.name, err)
 				}

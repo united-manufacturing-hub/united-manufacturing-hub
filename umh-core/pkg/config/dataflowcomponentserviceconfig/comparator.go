@@ -18,14 +18,11 @@ import "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pk
 
 // Comparator handles the comparison of DFC configurations
 type Comparator struct {
-	normalizer *Normalizer
 }
 
 // NewComparator creates a new configuration comparator for DFC's
 func NewComparator() *Comparator {
-	return &Comparator{
-		normalizer: NewNormalizer(),
-	}
+	return &Comparator{}
 }
 
 // ConfigsEqual compares two DataFlowComponentConfigs for equality

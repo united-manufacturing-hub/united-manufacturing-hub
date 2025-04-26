@@ -439,7 +439,7 @@ func (a *EditDataflowComponentAction) waitForComponentToBeActive() error {
 			if dataflowcomponentManager, exists := a.systemSnapshot.Managers[constants.DataflowcomponentManagerName]; exists {
 				instances := dataflowcomponentManager.GetInstances()
 				for _, instance := range instances {
-					if dataflowcomponentconfig.GenerateUUIDFromName(instance.ID) == a.componentUUID {
+					if dataflowcomponentserviceconfig.GenerateUUIDFromName(instance.ID) == a.componentUUID {
 						dfcSnapshot, ok := instance.LastObservedState.(*dataflowcomponent.DataflowComponentObservedStateSnapshot)
 						if !ok {
 							continue
@@ -450,7 +450,7 @@ func (a *EditDataflowComponentAction) waitForComponentToBeActive() error {
 							SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Dataflow component is active.", a.outboundChannel, models.EditDataFlowComponent)
 						}
 						// check if the config is correct
-						if !dataflowcomponentconfig.NewComparator().ConfigsEqual(dfcSnapshot.Config, a.dfc.DataFlowComponentConfig) {
+						if !dataflowcomponentserviceconfig.NewComparator().ConfigsEqual(&dfcSnapshot.Config, &a.dfc.DataFlowComponentServiceConfig) {
 							SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Dataflow component has incorrect config. Waiting...", a.outboundChannel, models.EditDataFlowComponent)
 						} else {
 							return nil
