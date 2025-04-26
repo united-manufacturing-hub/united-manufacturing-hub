@@ -127,6 +127,13 @@ func (m *MockNmapService) Status(ctx context.Context, filesystemService filesyst
 		return ServiceInfo{}, ErrScanFailed
 	}
 
+	// Return the service-specific state instead of the global StatusResult
+	s6ServiceName := "nmap-" + nmapName
+	if info, exists := m.ServiceStates[s6ServiceName]; exists {
+		return *info, nil
+	}
+
+	// If there's no service-specific state, fall back to StatusResult
 	return m.StatusResult, nil
 }
 
