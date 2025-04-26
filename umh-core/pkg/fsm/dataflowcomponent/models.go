@@ -16,7 +16,7 @@ package dataflowcomponent
 
 import (
 	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
-	dataflowcomponentconfig "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentconfig"
+	dataflowcomponentconfig "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	publicfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	dataflowcomponentsvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/dataflowcomponent"
 )
@@ -101,7 +101,7 @@ type DataflowComponentObservedState struct {
 	ServiceInfo dataflowcomponentsvc.ServiceInfo
 
 	// ObservedDataflowComponentConfig contains the observed DataflowComponent service config
-	ObservedDataflowComponentConfig dataflowcomponentconfig.DataFlowComponentConfig
+	ObservedDataflowComponentConfig dataflowcomponentconfig.DataflowComponentServiceConfig
 }
 
 // IsObservedState implements the ObservedState interface
@@ -127,7 +127,7 @@ type DataflowComponentInstance struct {
 	service dataflowcomponentsvc.IDataFlowComponentService
 
 	// config contains all the configuration for this service
-	config dataflowcomponentconfig.DataFlowComponentConfig
+	config dataflowcomponentconfig.DataflowComponentServiceConfig
 }
 
 // GetLastObservedState returns the last known state of the instance
@@ -143,7 +143,7 @@ func (d *DataflowComponentInstance) SetService(service dataflowcomponentsvc.IDat
 
 // GetConfig returns the DataflowComponentServiceConfig for this service
 // This is a testing-only utility to access the private service field
-func (d *DataflowComponentInstance) GetConfig() dataflowcomponentconfig.DataFlowComponentConfig {
+func (d *DataflowComponentInstance) GetConfig() dataflowcomponentconfig.DataflowComponentServiceConfig {
 	return d.config
 }
 

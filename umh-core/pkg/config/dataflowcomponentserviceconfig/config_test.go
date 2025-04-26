@@ -12,14 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package dataflowcomponentconfig_test
+package dataflowcomponentserviceconfig_test
 
 import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 )
 
@@ -27,7 +27,7 @@ var _ = Describe("DataFlowComponentConfig", func() {
 	Context("Conversion between BenthosConfig and BenthosServiceConfig", func() {
 		It("should convert BenthosConfig to BenthosServiceConfig with default advanced settings", func() {
 			// Create a simple BenthosConfig
-			benthos := dataflowcomponentconfig.BenthosConfig{
+			benthos := dataflowcomponentserviceconfig.BenthosConfig{
 				Input: map[string]interface{}{
 					"kafka": map[string]interface{}{
 						"addresses": []string{"localhost:9092"},
@@ -76,7 +76,7 @@ var _ = Describe("DataFlowComponentConfig", func() {
 			}
 
 			// Convert to simplified BenthosConfig
-			simplified := dataflowcomponentconfig.FromBenthosServiceConfig(fullConfig)
+			simplified := dataflowcomponentserviceconfig.FromBenthosServiceConfig(fullConfig)
 
 			// Verify conversion
 			Expect(simplified.BenthosConfig.Input).To(Equal(fullConfig.Input))
@@ -94,8 +94,8 @@ var _ = Describe("DataFlowComponentConfig", func() {
 	Context("Utility functions", func() {
 		It("should correctly compare identical configs", func() {
 			// Create two identical configs
-			configA := &dataflowcomponentconfig.DataFlowComponentConfig{
-				BenthosConfig: dataflowcomponentconfig.BenthosConfig{
+			configA := &dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+				BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 					Input: map[string]interface{}{
 						"kafka": map[string]interface{}{
 							"addresses": []string{"localhost:9092"},
@@ -108,8 +108,8 @@ var _ = Describe("DataFlowComponentConfig", func() {
 				},
 			}
 
-			configB := &dataflowcomponentconfig.DataFlowComponentConfig{
-				BenthosConfig: dataflowcomponentconfig.BenthosConfig{
+			configB := &dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+				BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 					Input: map[string]interface{}{
 						"kafka": map[string]interface{}{
 							"addresses": []string{"localhost:9092"},
@@ -122,13 +122,13 @@ var _ = Describe("DataFlowComponentConfig", func() {
 				},
 			}
 
-			Expect(dataflowcomponentconfig.ConfigsEqual(configA, configB)).To(BeTrue())
+			Expect(dataflowcomponentserviceconfig.ConfigsEqual(configA, configB)).To(BeTrue())
 		})
 
 		It("should correctly compare different configs", func() {
 			// Create two different configs
-			configA := &dataflowcomponentconfig.DataFlowComponentConfig{
-				BenthosConfig: dataflowcomponentconfig.BenthosConfig{
+			configA := &dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+				BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 					Input: map[string]interface{}{
 						"kafka": map[string]interface{}{
 							"addresses": []string{"localhost:9092"},
@@ -138,8 +138,8 @@ var _ = Describe("DataFlowComponentConfig", func() {
 				},
 			}
 
-			configB := &dataflowcomponentconfig.DataFlowComponentConfig{
-				BenthosConfig: dataflowcomponentconfig.BenthosConfig{
+			configB := &dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+				BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 					Input: map[string]interface{}{
 						"kafka": map[string]interface{}{
 							"addresses": []string{"localhost:9092"},
@@ -149,14 +149,14 @@ var _ = Describe("DataFlowComponentConfig", func() {
 				},
 			}
 
-			Expect(dataflowcomponentconfig.ConfigsEqual(configA, configB)).To(BeFalse())
-			diff := dataflowcomponentconfig.ConfigDiff(configA, configB)
+			Expect(dataflowcomponentserviceconfig.ConfigsEqual(configA, configB)).To(BeFalse())
+			diff := dataflowcomponentserviceconfig.ConfigDiff(configA, configB)
 			Expect(diff).To(ContainSubstring("Input config differences"))
 		})
 
 		It("should normalize config correctly", func() {
-			config := &dataflowcomponentconfig.DataFlowComponentConfig{
-				BenthosConfig: dataflowcomponentconfig.BenthosConfig{
+			config := &dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+				BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 					Input: map[string]interface{}{
 						"kafka": map[string]interface{}{
 							"addresses": []string{"localhost:9092"},
@@ -168,7 +168,8 @@ var _ = Describe("DataFlowComponentConfig", func() {
 			}
 
 			// Normalize the config
-			dataflowcomponentconfig.NormalizeConfig(config)
+			normalizer := dataflowcomponentserviceconfig.NewNormalizer()
+			normalizer.NormalizeConfig(config)
 
 			// Output and pipeline should have been added
 			Expect(config.BenthosConfig.Output).NotTo(BeNil())
@@ -176,8 +177,8 @@ var _ = Describe("DataFlowComponentConfig", func() {
 		})
 
 		It("should generate valid YAML", func() {
-			config := &dataflowcomponentconfig.DataFlowComponentConfig{
-				BenthosConfig: dataflowcomponentconfig.BenthosConfig{
+			config := &dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+				BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 					Input: map[string]interface{}{
 						"kafka": map[string]interface{}{
 							"addresses": []string{"localhost:9092"},
@@ -190,7 +191,7 @@ var _ = Describe("DataFlowComponentConfig", func() {
 				},
 			}
 
-			yaml, err := dataflowcomponentconfig.GenerateYAML(config)
+			yaml, err := dataflowcomponentserviceconfig.RenderDataFlowComponentYAML(config.GetBenthosServiceConfig())
 			Expect(err).NotTo(HaveOccurred())
 			Expect(string(yaml)).To(ContainSubstring("kafka"))
 			Expect(string(yaml)).To(ContainSubstring("test-topic"))
