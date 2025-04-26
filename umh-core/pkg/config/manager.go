@@ -28,7 +28,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/backoff"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/ctxutil/ctxmutex"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/ctxutil/ctxrwmutex"
@@ -532,7 +532,7 @@ func (m *FileConfigManager) AtomicDeleteDataflowcomponent(ctx context.Context, c
 	filteredComponents := make([]DataFlowComponentConfig, 0, len(config.DataFlow))
 
 	for _, component := range config.DataFlow {
-		componentID := dataflowcomponentconfig.GenerateUUIDFromName(component.Name)
+		componentID := dataflowcomponentserviceconfig.GenerateUUIDFromName(component.Name)
 		if componentID != componentUUID {
 			filteredComponents = append(filteredComponents, component)
 		} else {
@@ -584,7 +584,7 @@ func (m *FileConfigManager) AtomicEditDataflowcomponent(ctx context.Context, com
 	// Find the component with matching UUID
 	found := false
 	for i, component := range config.DataFlow {
-		componentID := dataflowcomponentconfig.GenerateUUIDFromName(component.Name)
+		componentID := dataflowcomponentserviceconfig.GenerateUUIDFromName(component.Name)
 		if componentID == componentUUID {
 			// Found the component to edit, update it
 			oldConfig = config.DataFlow[i]
@@ -600,7 +600,7 @@ func (m *FileConfigManager) AtomicEditDataflowcomponent(ctx context.Context, com
 
 	// check for duplicate name after edit
 	for _, cmp := range config.DataFlow {
-		if cmp.Name == dfc.Name && dataflowcomponentconfig.GenerateUUIDFromName(cmp.Name) != componentUUID {
+		if cmp.Name == dfc.Name && dataflowcomponentserviceconfig.GenerateUUIDFromName(cmp.Name) != componentUUID {
 			return DataFlowComponentConfig{}, fmt.Errorf("another dataflow component with name %q already exists – choose a unique name", dfc.Name)
 		}
 	}

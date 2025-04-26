@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package dataflowcomponentconfig
+package dataflowcomponentserviceconfig
 
 import (
 	"github.com/google/uuid"
@@ -20,24 +20,9 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 )
 
-// BenthosConfig contains only the essential Benthos configuration fields
-// that should be exposed to DataFlowComponent users
-type BenthosConfig struct {
-	Input              map[string]interface{}   `yaml:"input"`
-	Pipeline           map[string]interface{}   `yaml:"pipeline"`
-	Output             map[string]interface{}   `yaml:"output"`
-	CacheResources     []map[string]interface{} `yaml:"cache_resources,omitempty"`
-	RateLimitResources []map[string]interface{} `yaml:"rate_limit_resources,omitempty"`
-	Buffer             map[string]interface{}   `yaml:"buffer,omitempty"`
-}
-
-// DataFlowComponentConfig represents the configuration for a DataFlowComponent
-type DataFlowComponentConfig struct {
-	BenthosConfig BenthosConfig `yaml:"benthos"`
-}
-
-func (d DataFlowComponentConfig) Equal(other DataFlowComponentConfig) bool {
-	return NewComparator().ConfigsEqual(d, other)
+// GetBenthosServiceConfig converts the component config to a full BenthosServiceConfig
+func (c *DataflowComponentServiceConfig) GetBenthosServiceConfig() benthosserviceconfig.BenthosServiceConfig {
+	return c.BenthosConfig.ToBenthosServiceConfig()
 }
 
 // ToBenthosServiceConfig converts the simplified BenthosConfig to a full BenthosServiceConfig
@@ -56,18 +41,10 @@ func (bc *BenthosConfig) ToBenthosServiceConfig() benthosserviceconfig.BenthosSe
 	}
 }
 
-// GetBenthosServiceConfig converts the component config to a full BenthosServiceConfig
-func (c *DataFlowComponentConfig) GetBenthosServiceConfig() benthosserviceconfig.BenthosServiceConfig {
-	if c == nil {
-		return benthosserviceconfig.BenthosServiceConfig{}
-	}
-	return c.BenthosConfig.ToBenthosServiceConfig()
-}
-
 // FromBenthosServiceConfig creates a DataFlowComponentConfig from a BenthosServiceConfig,
 // ignoring advanced configuration fields
-func FromBenthosServiceConfig(benthos benthosserviceconfig.BenthosServiceConfig) DataFlowComponentConfig {
-	return DataFlowComponentConfig{
+func FromBenthosServiceConfig(benthos benthosserviceconfig.BenthosServiceConfig) DataflowComponentServiceConfig {
+	return DataflowComponentServiceConfig{
 		BenthosConfig: BenthosConfig{
 			Input:              benthos.Input,
 			Pipeline:           benthos.Pipeline,

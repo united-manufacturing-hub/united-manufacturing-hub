@@ -24,7 +24,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
@@ -352,8 +352,8 @@ func (a *EditDataflowComponentAction) Execute() (interface{}, map[string]interfa
 			Name:            a.name,
 			DesiredFSMState: "active",
 		},
-		DataFlowComponentConfig: dataflowcomponentconfig.DataFlowComponentConfig{
-			BenthosConfig: dataflowcomponentconfig.BenthosConfig{
+		DataFlowComponentServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+			BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 				Input:              normalizedConfig.Input,
 				Pipeline:           normalizedConfig.Pipeline,
 				Output:             normalizedConfig.Output,
@@ -439,7 +439,7 @@ func (a *EditDataflowComponentAction) waitForComponentToBeActive() error {
 			if dataflowcomponentManager, exists := a.systemSnapshot.Managers[constants.DataflowcomponentManagerName]; exists {
 				instances := dataflowcomponentManager.GetInstances()
 				for _, instance := range instances {
-					if dataflowcomponentconfig.GenerateUUIDFromName(instance.ID) == a.componentUUID {
+					if dataflowcomponentserviceconfig.GenerateUUIDFromName(instance.ID) == a.componentUUID {
 						dfcSnapshot, ok := instance.LastObservedState.(*dataflowcomponent.DataflowComponentObservedStateSnapshot)
 						if !ok {
 							continue
@@ -450,7 +450,7 @@ func (a *EditDataflowComponentAction) waitForComponentToBeActive() error {
 							SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Dataflow component is active.", a.outboundChannel, models.EditDataFlowComponent)
 						}
 						// check if the config is correct
-						if !dataflowcomponentconfig.NewComparator().ConfigsEqual(dfcSnapshot.Config, a.dfc.DataFlowComponentConfig) {
+						if !dataflowcomponentserviceconfig.NewComparator().ConfigsEqual(&dfcSnapshot.Config, &a.dfc.DataFlowComponentServiceConfig) {
 							SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Dataflow component has incorrect config. Waiting...", a.outboundChannel, models.EditDataFlowComponent)
 						} else {
 							return nil
