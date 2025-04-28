@@ -224,12 +224,17 @@ benchmark-s6-parse-log:
 	@echo "Running S6 parseLogLine benchmarks..."
 	cd pkg/service/s6 && go test -bench=ParseLogLine -benchmem
 
-integration-test: stop-all-pods vet nilaway lint
+# Meta target to setup the environment for the tests
+pre-test: stop-all-pods vet nilaway lint
+
+integration-test: pre-test dfc-restart-test
 	ginkgo -r -v --tags=test --label-filter='integration' --fail-fast ./...
 
-redpanda-extended-test: stop-all-pods vet nilaway
+redpanda-extended-test: pre-test
 	ginkgo -r -v --tags=test --label-filter='redpanda-extended' --fail-fast --timeout=1.5h ./...
 
+dfc-restart-test: pre-test
+	ginkgo -r -v --tags=test --label-filter='dfc-restart' --fail-fast ./...
 
 # integration-test-ci: Runs integration tests in CI environments with proper version tagging
 # - Injects VERSION via ldflags into AppVersion for proper error identification in Sentry
@@ -414,6 +419,3 @@ push-platform:
 
 # Build and push in one command (for CI)
 build-push: build push-platform
-
-dfc-restart-test: stop-all-pods vet nilaway lint
-	ginkgo -r -v --tags=test --label-filter='dfc-restart' --fail-fast ./...
