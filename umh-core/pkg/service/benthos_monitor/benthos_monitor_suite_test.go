@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package dataflowcomponentconfig_test
+package benthos_monitor_test
 
 import (
 	"testing"
@@ -21,7 +21,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-func TestDataFlowComponentConfig(t *testing.T) {
+func TestBenthosMonitor(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "DataFlowComponentConfig Suite")
+	RunSpecs(t, "Benthos Monitor Suite")
 }

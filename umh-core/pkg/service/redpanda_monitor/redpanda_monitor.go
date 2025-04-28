@@ -130,9 +130,9 @@ type RedpandaMetrics struct {
 
 // ServiceInfo contains information about a redpanda service
 type ServiceInfo struct {
-	// S6ObservedState contains information about the S6 service
+	// S6ObservedState contains information about the S6 redpanda_monitor service
 	S6ObservedState s6fsm.S6ObservedState
-	// S6FSMState contains the current state of the S6 FSM
+	// S6FSMState contains the current state of the S6 FSM of the redpanda_monitor service
 	S6FSMState string
 	// RedpandaStatus contains information about the status of the redpanda service
 	RedpandaStatus RedpandaMonitorStatus
@@ -143,9 +143,9 @@ type RedpandaMonitorStatus struct {
 	// LastScan contains the result of the last scan
 	// If this is nil, we never had a successfull scan
 	LastScan *RedpandaMetricsAndClusterConfig
-	// IsRunning indicates whether the redpanda service is running
+	// IsRunning indicates whether the redpanda_monitor service is running
 	IsRunning bool
-	// Logs contains the logs of the redpanda service
+	// Logs contains the logs of the redpanda_monitor service
 	Logs []s6service.LogEntry
 }
 
@@ -430,7 +430,7 @@ func (s *RedpandaMonitorService) ParseRedpandaLogs(ctx context.Context, logs []s
 		return nil, ctx.Err()
 	}
 
-	timestampDataString := string(timestampDataBytes)
+	timestampDataString := strings.TrimSpace(string(timestampDataBytes))
 	// If the system resolution is to small, we need to pad the timestamp with zeros
 	// Good: 1744199140749598341
 	// Bad: 1744199121
@@ -714,6 +714,7 @@ func (s *RedpandaMonitorService) Status(ctx context.Context, filesystemService f
 			strings.Contains(err.Error(), "not found") {
 			return ServiceInfo{}, ErrServiceNotExist
 		}
+		return ServiceInfo{}, fmt.Errorf("failed to get S6 state: %w", err)
 	}
 
 	s6State, ok := s6StateRaw.(s6fsm.S6ObservedState)

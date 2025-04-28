@@ -21,7 +21,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 )
 
@@ -203,7 +203,7 @@ func (m *MockConfigManager) AtomicDeleteDataflowcomponent(ctx context.Context, c
 	filteredComponents := make([]DataFlowComponentConfig, 0, len(config.DataFlow))
 
 	for _, component := range config.DataFlow {
-		componentID := dataflowcomponentconfig.GenerateUUIDFromName(component.Name)
+		componentID := dataflowcomponentserviceconfig.GenerateUUIDFromName(component.Name)
 		if componentID != componentUUID {
 			filteredComponents = append(filteredComponents, component)
 		} else {
@@ -227,28 +227,30 @@ func (m *MockConfigManager) AtomicDeleteDataflowcomponent(ctx context.Context, c
 }
 
 // AtomicEditDataflowcomponent implements the ConfigManager interface
-func (m *MockConfigManager) AtomicEditDataflowcomponent(ctx context.Context, componentUUID uuid.UUID, dfc DataFlowComponentConfig) error {
+func (m *MockConfigManager) AtomicEditDataflowcomponent(ctx context.Context, componentUUID uuid.UUID, dfc DataFlowComponentConfig) (DataFlowComponentConfig, error) {
 	m.mutexReadAndWrite.Lock()
 	defer m.mutexReadAndWrite.Unlock()
 
 	m.EditDataflowcomponentCalled = true
 
 	if m.EditDataflowcomponentError != nil {
-		return m.EditDataflowcomponentError
+		return DataFlowComponentConfig{}, m.EditDataflowcomponentError
 	}
 
 	// get the current config
 	config, err := m.GetConfig(ctx, 0)
 	if err != nil {
-		return fmt.Errorf("failed to get config: %w", err)
+		return DataFlowComponentConfig{}, fmt.Errorf("failed to get config: %w", err)
 	}
 
 	// Find the component with matching UUID
 	found := false
+	var oldConfig DataFlowComponentConfig
 	for i, component := range config.DataFlow {
-		componentID := dataflowcomponentconfig.GenerateUUIDFromName(component.Name)
+		componentID := dataflowcomponentserviceconfig.GenerateUUIDFromName(component.Name)
 		if componentID == componentUUID {
 			// Found the component to edit, update it
+			oldConfig = component
 			config.DataFlow[i] = dfc
 			found = true
 			break
@@ -256,13 +258,13 @@ func (m *MockConfigManager) AtomicEditDataflowcomponent(ctx context.Context, com
 	}
 
 	if !found {
-		return fmt.Errorf("dataflow component with UUID %s not found", componentUUID)
+		return DataFlowComponentConfig{}, fmt.Errorf("dataflow component with UUID %s not found", componentUUID)
 	}
 
 	// write the config
 	if err := m.writeConfig(ctx, config); err != nil {
-		return fmt.Errorf("failed to write config: %w", err)
+		return DataFlowComponentConfig{}, fmt.Errorf("failed to write config: %w", err)
 	}
 
-	return nil
+	return oldConfig, nil
 }

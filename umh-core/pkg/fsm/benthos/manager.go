@@ -46,7 +46,7 @@ type BenthosManagerSnapshot struct {
 	// Embed the BaseManagerSnapshot to inherit its methods
 	*public_fsm.BaseManagerSnapshot
 	// Add Benthos-specific fields
-	PortAllocations map[string]int // Maps instance name to port
+	PortAllocations map[string]uint16 // Maps instance name to port
 }
 
 func NewBenthosManager(name string) *BenthosManager {
@@ -248,13 +248,13 @@ func (m *BenthosManager) CreateSnapshot() public_fsm.ManagerSnapshot {
 	// Create Benthos-specific snapshot
 	benthosSnapshot := &BenthosManagerSnapshot{
 		BaseManagerSnapshot: baseManagerSnapshot,
-		PortAllocations:     make(map[string]int),
+		PortAllocations:     make(map[string]uint16),
 	}
 
 	// Add port allocations
 	for name := range baseManagerSnapshot.GetInstances() {
 		if port, exists := m.portManager.GetPort(name); exists {
-			benthosSnapshot.PortAllocations[name] = port
+			benthosSnapshot.PortAllocations[name] = uint16(port)
 		}
 	}
 

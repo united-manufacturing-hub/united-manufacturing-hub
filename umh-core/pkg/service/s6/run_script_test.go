@@ -39,6 +39,8 @@ var _ = Describe("S6 Run Script", func() {
 		servicePath   string
 		configPath    string
 		runScriptPath string
+		logDir        string
+		logScriptPath string
 		logger        *zap.SugaredLogger
 	)
 
@@ -54,6 +56,8 @@ var _ = Describe("S6 Run Script", func() {
 		servicePath = constants.S6BaseDir + "/test-service"
 		runScriptPath = filepath.Join(servicePath, "run")
 		configPath = filepath.Join(servicePath, "config")
+		logDir = filepath.Join(servicePath, "log")
+		logScriptPath = filepath.Join(logDir, "run")
 	})
 
 	Context("with template-based configuration", func() {
@@ -78,6 +82,8 @@ var _ = Describe("S6 Run Script", func() {
 				case configPath:
 					return true, nil
 				case runScriptPath:
+					return true, nil
+				case logScriptPath:
 					return true, nil
 				default:
 					// Check if it's one of our config files
@@ -107,10 +113,17 @@ var _ = Describe("S6 Run Script", func() {
 			})
 			Expect(err).NotTo(HaveOccurred())
 
+			// generate the log run script
+			logScriptContent, err := getLogRunScript(originalConfig, logDir)
+			Expect(err).NotTo(HaveOccurred())
+
 			// Set up the mocks to return our generated run script
 			mockFS.WithReadFileFunc(func(_ context.Context, path string) ([]byte, error) {
 				if path == runScriptPath {
 					return buf.Bytes(), nil
+				}
+				if path == logScriptPath {
+					return []byte(logScriptContent), nil
 				}
 				for fileName, content := range originalConfig.ConfigFiles {
 					filePath := filepath.Join(configPath, fileName)
@@ -139,6 +152,109 @@ var _ = Describe("S6 Run Script", func() {
 				Expect(readConfig.Env).To(HaveKey(key))
 				Expect(readConfig.Env[key]).To(Equal(val))
 			}
+
+			Expect(readConfig.LogFilesize).To(Equal(originalConfig.LogFilesize))
+
+			// We may need to adjust expectations on config files since we're skipping
+			// ReadDir mocking. We can rely on our custom FileExists to surface our files.
+		})
+
+		It("should correctly read back the same configuration that was written, even if log filesize is set", func() {
+			// Setup the config to write
+			originalConfig := s6serviceconfig.S6ServiceConfig{
+				Command: []string{"/usr/local/bin/benthos", "-c", "/config/benthos.yaml"},
+				Env: map[string]string{
+					"LOG_LEVEL": "DEBUG",
+					"ENV_VAR":   "test value with spaces",
+				},
+				ConfigFiles: map[string]string{
+					"benthos.yaml": "---\ninput:\n  generate: {}\noutput:\n  stdout: {}\n",
+				},
+				LogFilesize: 1024,
+			}
+
+			// Create mock filesystem entries
+			mockFS.WithFileExistsFunc(func(_ context.Context, path string) (bool, error) {
+				switch path {
+				case servicePath:
+					return true, nil
+				case configPath:
+					return true, nil
+				case runScriptPath:
+					return true, nil
+				case logScriptPath:
+					return true, nil
+				default:
+					// Check if it's one of our config files
+					for fileName := range originalConfig.ConfigFiles {
+						filePath := filepath.Join(configPath, fileName)
+						if path == filePath {
+							return true, nil
+						}
+					}
+					return false, nil
+				}
+			})
+
+			// Mock reading the run script by generating it from the template
+			tmpl, err := template.New("runscript").Parse(runScriptTemplate)
+			Expect(err).NotTo(HaveOccurred())
+
+			var buf bytes.Buffer
+			err = tmpl.Execute(&buf, struct {
+				Command     []string
+				Env         map[string]string
+				MemoryLimit int64
+			}{
+				Command:     originalConfig.Command,
+				Env:         originalConfig.Env,
+				MemoryLimit: originalConfig.MemoryLimit,
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			// generate the log run script
+			logScriptContent, err := getLogRunScript(originalConfig, logDir)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Set up the mocks to return our generated run script
+			mockFS.WithReadFileFunc(func(_ context.Context, path string) ([]byte, error) {
+				if path == runScriptPath {
+					return buf.Bytes(), nil
+				}
+
+				if path == logScriptPath {
+					return []byte(logScriptContent), nil
+				}
+
+				for fileName, content := range originalConfig.ConfigFiles {
+					filePath := filepath.Join(configPath, fileName)
+					if path == filePath {
+						return []byte(content), nil
+					}
+				}
+				return []byte{}, os.ErrNotExist
+			})
+
+			// Skip mocking ReadDir for now - we'll implement a solution where our GetConfig
+			// doesn't need to use ReadDir by relying on file existence checks
+
+			// Get the config using service
+			readConfig, err := s6Service.GetConfig(ctx, servicePath, mockFS)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Verify the round-trip results match
+			Expect(readConfig.Command).To(HaveLen(len(originalConfig.Command)))
+			for i, cmd := range originalConfig.Command {
+				Expect(readConfig.Command[i]).To(Equal(cmd))
+			}
+
+			Expect(readConfig.Env).To(HaveLen(len(originalConfig.Env)))
+			for key, val := range originalConfig.Env {
+				Expect(readConfig.Env).To(HaveKey(key))
+				Expect(readConfig.Env[key]).To(Equal(val))
+			}
+
+			Expect(readConfig.LogFilesize).To(Equal(originalConfig.LogFilesize))
 
 			// We may need to adjust expectations on config files since we're skipping
 			// ReadDir mocking. We can rely on our custom FileExists to surface our files.

@@ -31,7 +31,7 @@ type BenthosServiceConfig struct {
 	Buffer             map[string]interface{}   `yaml:"buffer,omitempty"`
 
 	// Advanced configuration
-	MetricsPort int    `yaml:"metrics_port"`
+	MetricsPort uint16 `yaml:"metrics_port"`
 	LogLevel    string `yaml:"log_level,omitempty"`
 }
 
@@ -41,7 +41,7 @@ func (c BenthosServiceConfig) Equal(other BenthosServiceConfig) bool {
 }
 
 // RenderBenthosYAML is a package-level function for easy YAML generation
-func RenderBenthosYAML(input, output, pipeline, cacheResources, rateLimitResources, buffer interface{}, metricsPort int, logLevel string) (string, error) {
+func RenderBenthosYAML(input, output, pipeline, cacheResources, rateLimitResources, buffer interface{}, metricsPort uint16, logLevel string) (string, error) {
 	// Create a config object from the individual components
 	cfg := BenthosServiceConfig{
 		MetricsPort: metricsPort,

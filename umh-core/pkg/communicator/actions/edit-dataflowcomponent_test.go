@@ -24,7 +24,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/encoding"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 )
 
@@ -52,7 +52,7 @@ var _ = Describe("EditDataflowComponent", func() {
 		instanceUUID = uuid.New()
 		outboundChannel = make(chan *models.UMHMessage, 10) // Buffer to prevent blocking
 		componentName = "test-component"
-		componentUUID = dataflowcomponentconfig.GenerateUUIDFromName(componentName)
+		componentUUID = dataflowcomponentserviceconfig.GenerateUUIDFromName(componentName)
 
 		// Create initial config with one data flow component
 		initialConfig := config.FullConfig{
@@ -70,8 +70,8 @@ var _ = Describe("EditDataflowComponent", func() {
 						Name:            componentName,
 						DesiredFSMState: "active",
 					},
-					DataFlowComponentConfig: dataflowcomponentconfig.DataFlowComponentConfig{
-						BenthosConfig: dataflowcomponentconfig.BenthosConfig{
+					DataFlowComponentServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 							Input: map[string]interface{}{
 								"type": "http_server",
 								"http_server": map[string]interface{}{
@@ -443,7 +443,7 @@ var _ = Describe("EditDataflowComponent", func() {
 
 			// Verify the component was updated with the new configuration
 			// Checking input configuration was updated
-			inputConfig := mockConfig.Config.DataFlow[0].DataFlowComponentConfig.BenthosConfig.Input
+			inputConfig := mockConfig.Config.DataFlow[0].DataFlowComponentServiceConfig.BenthosConfig.Input
 			Expect(inputConfig["type"]).To(Equal("http_server"))
 
 			httpServerConfig, ok := inputConfig["http_server"].(map[string]interface{})
@@ -509,12 +509,12 @@ buffer:
 			Expect(mockConfig.EditDataflowcomponentCalled).To(BeTrue())
 
 			// Verify the component was updated with the new configuration including inject data
-			Expect(mockConfig.Config.DataFlow[0].DataFlowComponentConfig.BenthosConfig.CacheResources).To(HaveLen(1))
-			Expect(mockConfig.Config.DataFlow[0].DataFlowComponentConfig.BenthosConfig.CacheResources[0]["label"]).To(Equal("my_cache"))
-			Expect(mockConfig.Config.DataFlow[0].DataFlowComponentConfig.BenthosConfig.RateLimitResources).To(HaveLen(1))
-			Expect(mockConfig.Config.DataFlow[0].DataFlowComponentConfig.BenthosConfig.RateLimitResources[0]["label"]).To(Equal("limiter"))
-			Expect(mockConfig.Config.DataFlow[0].DataFlowComponentConfig.BenthosConfig.Buffer).To(HaveLen(1))
-			Expect(mockConfig.Config.DataFlow[0].DataFlowComponentConfig.BenthosConfig.Buffer["memory"]).To(Equal(map[string]interface{}{}))
+			Expect(mockConfig.Config.DataFlow[0].DataFlowComponentServiceConfig.BenthosConfig.CacheResources).To(HaveLen(1))
+			Expect(mockConfig.Config.DataFlow[0].DataFlowComponentServiceConfig.BenthosConfig.CacheResources[0]["label"]).To(Equal("my_cache"))
+			Expect(mockConfig.Config.DataFlow[0].DataFlowComponentServiceConfig.BenthosConfig.RateLimitResources).To(HaveLen(1))
+			Expect(mockConfig.Config.DataFlow[0].DataFlowComponentServiceConfig.BenthosConfig.RateLimitResources[0]["label"]).To(Equal("limiter"))
+			Expect(mockConfig.Config.DataFlow[0].DataFlowComponentServiceConfig.BenthosConfig.Buffer).To(HaveLen(1))
+			Expect(mockConfig.Config.DataFlow[0].DataFlowComponentServiceConfig.BenthosConfig.Buffer["memory"]).To(Equal(map[string]interface{}{}))
 		})
 
 		It("should handle AtomicEditDataflowcomponent failure", func() {

@@ -28,7 +28,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/backoff"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/ctxutil/ctxmutex"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/ctxutil/ctxrwmutex"
@@ -65,7 +65,7 @@ type ConfigManager interface {
 	// AtomicDeleteDataflowcomponent deletes a dataflowcomponent from the config atomically
 	AtomicDeleteDataflowcomponent(ctx context.Context, componentUUID uuid.UUID) error
 	// AtomicEditDataflowcomponent edits a dataflowcomponent in the config atomically
-	AtomicEditDataflowcomponent(ctx context.Context, componentUUID uuid.UUID, dfc DataFlowComponentConfig) error
+	AtomicEditDataflowcomponent(ctx context.Context, componentUUID uuid.UUID, dfc DataFlowComponentConfig) (DataFlowComponentConfig, error)
 }
 
 // FileConfigManager implements the ConfigManager interface by reading from a file
@@ -221,14 +221,28 @@ func (m *FileConfigManager) GetConfig(ctx context.Context, tick uint64) (FullCon
 	}
 
 	// Read the file
-	data, err := m.fsService.ReadFile(ctx, m.configPath)
+	// Allow half of the timeout for the read operation
+	readFileCtx, cancel := context.WithTimeout(ctx, constants.ConfigGetConfigTimeout/2)
+	defer cancel()
+	data, err := m.fsService.ReadFile(readFileCtx, m.configPath)
 	if err != nil {
 		return FullConfig{}, fmt.Errorf("failed to read config file: %w", err)
+	}
+	// This ensures that there is at least half of the timeout left for the parse operation
+
+	// Check if context is already cancelled
+	if ctx.Err() != nil {
+		return FullConfig{}, ctx.Err()
 	}
 
 	config, err := parseConfig(data)
 	if err != nil {
 		return FullConfig{}, fmt.Errorf("failed to parse config file: %w", err)
+	}
+
+	// Check if context is already cancelled
+	if ctx.Err() != nil {
+		return FullConfig{}, ctx.Err()
 	}
 
 	// If the config is empty, return an error
@@ -327,8 +341,8 @@ func (m *FileConfigManager) writeConfig(ctx context.Context, config FullConfig) 
 		return fmt.Errorf("failed to marshal config: %w", err)
 	}
 
-	// Write the file
-	if err := m.fsService.WriteFile(ctx, m.configPath, data, 0644); err != nil {
+	// Write the file (give everybody read & write access)
+	if err := m.fsService.WriteFile(ctx, m.configPath, data, 0666); err != nil {
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
 
@@ -518,7 +532,7 @@ func (m *FileConfigManager) AtomicDeleteDataflowcomponent(ctx context.Context, c
 	filteredComponents := make([]DataFlowComponentConfig, 0, len(config.DataFlow))
 
 	for _, component := range config.DataFlow {
-		componentID := dataflowcomponentconfig.GenerateUUIDFromName(component.Name)
+		componentID := dataflowcomponentserviceconfig.GenerateUUIDFromName(component.Name)
 		if componentID != componentUUID {
 			filteredComponents = append(filteredComponents, component)
 		} else {
@@ -552,25 +566,28 @@ func (m *FileConfigManagerWithBackoff) AtomicDeleteDataflowcomponent(ctx context
 }
 
 // AtomicEditDataflowcomponent edits a dataflowcomponent in the config atomically
-func (m *FileConfigManager) AtomicEditDataflowcomponent(ctx context.Context, componentUUID uuid.UUID, dfc DataFlowComponentConfig) error {
+func (m *FileConfigManager) AtomicEditDataflowcomponent(ctx context.Context, componentUUID uuid.UUID, dfc DataFlowComponentConfig) (DataFlowComponentConfig, error) {
 	err := m.mutexAtomicUpdate.Lock(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to lock config file: %w", err)
+		return DataFlowComponentConfig{}, fmt.Errorf("failed to lock config file: %w", err)
 	}
 	defer m.mutexAtomicUpdate.Unlock()
 
 	// get the current config
 	config, err := m.GetConfig(ctx, 0)
 	if err != nil {
-		return fmt.Errorf("failed to get config: %w", err)
+		return DataFlowComponentConfig{}, fmt.Errorf("failed to get config: %w", err)
 	}
+
+	oldConfig := DataFlowComponentConfig{}
 
 	// Find the component with matching UUID
 	found := false
 	for i, component := range config.DataFlow {
-		componentID := dataflowcomponentconfig.GenerateUUIDFromName(component.Name)
+		componentID := dataflowcomponentserviceconfig.GenerateUUIDFromName(component.Name)
 		if componentID == componentUUID {
 			// Found the component to edit, update it
+			oldConfig = config.DataFlow[i]
 			config.DataFlow[i] = dfc
 			found = true
 			break
@@ -578,29 +595,29 @@ func (m *FileConfigManager) AtomicEditDataflowcomponent(ctx context.Context, com
 	}
 
 	if !found {
-		return fmt.Errorf("dataflow component with UUID %s not found", componentUUID)
+		return DataFlowComponentConfig{}, fmt.Errorf("dataflow component with UUID %s not found", componentUUID)
 	}
 
 	// check for duplicate name after edit
 	for _, cmp := range config.DataFlow {
-		if cmp.Name == dfc.Name && dataflowcomponentconfig.GenerateUUIDFromName(cmp.Name) != componentUUID {
-			return fmt.Errorf("another dataflow component with name %q already exists – choose a unique name", dfc.Name)
+		if cmp.Name == dfc.Name && dataflowcomponentserviceconfig.GenerateUUIDFromName(cmp.Name) != componentUUID {
+			return DataFlowComponentConfig{}, fmt.Errorf("another dataflow component with name %q already exists – choose a unique name", dfc.Name)
 		}
 	}
 
 	// write the config
 	if err := m.writeConfig(ctx, config); err != nil {
-		return fmt.Errorf("failed to write config: %w", err)
+		return DataFlowComponentConfig{}, fmt.Errorf("failed to write config: %w", err)
 	}
 
-	return nil
+	return oldConfig, nil
 }
 
 // AtomicEditDataflowcomponent delegates to the underlying FileConfigManager
-func (m *FileConfigManagerWithBackoff) AtomicEditDataflowcomponent(ctx context.Context, componentUUID uuid.UUID, dfc DataFlowComponentConfig) error {
+func (m *FileConfigManagerWithBackoff) AtomicEditDataflowcomponent(ctx context.Context, componentUUID uuid.UUID, dfc DataFlowComponentConfig) (DataFlowComponentConfig, error) {
 	// Check if context is already cancelled
 	if ctx.Err() != nil {
-		return ctx.Err()
+		return DataFlowComponentConfig{}, ctx.Err()
 	}
 
 	return m.configManager.AtomicEditDataflowcomponent(ctx, componentUUID, dfc)

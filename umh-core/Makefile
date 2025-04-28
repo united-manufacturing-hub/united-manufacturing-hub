@@ -206,6 +206,23 @@ test: vet nilaway lint
 unit-test: vet nilaway lint
 	ginkgo -r -v --tags=test --label-filter='!integration && !redpanda-extended && !redpanda-quick' --fail-fast ./...
 
+benchmark: 
+	@echo "Running benchmarks..."
+	go test -bench=. -benchmem ./...
+
+benchmark-config:
+	@echo "Running config package benchmarks..."
+	cd pkg/config && go test -bench=. -benchmem
+
+# More specific benchmarks can be added as needed
+benchmark-s6:
+	@echo "Running S6 benchmarks..."
+	cd pkg/service/s6 && go test -bench=. -benchmem
+
+# More specific benchmarks can be added as needed
+benchmark-s6-parse-log:
+	@echo "Running S6 parseLogLine benchmarks..."
+	cd pkg/service/s6 && go test -bench=ParseLogLine -benchmem
 
 integration-test: stop-all-pods vet nilaway lint
 	ginkgo -r -v --tags=test --label-filter='integration' --fail-fast ./...
@@ -302,6 +319,18 @@ test-benthos: stop-and-remove-umh-core-latest build
 		--cpus $(CPUS) \
 		$(IMAGE_NAME):$(TAG)
 
+test-benthos-single: stop-and-remove-umh-core-latest build
+	@mkdir -p $(PWD)/data
+	@cp $(PWD)/examples/example-config-benthos-single.yaml $(PWD)/data/config.yaml
+	docker run \
+		--name $(IMAGE_NAME) \
+		-v $(PWD)/data:/data \
+		-e LOGGING_LEVEL=DEBUG \
+		-p 8081:8080 \
+		-p 4195:4195 \
+		--memory $(MEMORY) \
+		--cpus $(CPUS) \
+		$(IMAGE_NAME):$(TAG)
 
 test-redpanda: stop-and-remove-umh-core-latest build
 	@mkdir -p $(PWD)/data
@@ -325,6 +354,16 @@ test-dfc: stop-and-remove-umh-core-latest build
 		--memory $(MEMORY) \
 		--cpus $(CPUS) \
 		$(IMAGE_NAME):$(TAG)
+
+test-benthos-monitor: 
+	@mkdir -p $(PWD)/data
+	@cp $(PWD)/examples/example-config-benthos-monitor.yaml $(PWD)/data/config.yaml
+	docker run \
+		--name umh-core-staging \
+		-v $(PWD)/data:/data \
+		--memory $(MEMORY) \
+		--cpus $(CPUS) \
+		ghcr.io/united-manufacturing-hub/united-manufacturing-hub/umh-core:staging
 
 test-debug: stop-and-remove-umh-core-latest build-debug
 	@mkdir -p $(PWD)/data

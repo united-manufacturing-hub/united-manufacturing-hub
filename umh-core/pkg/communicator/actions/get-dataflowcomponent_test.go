@@ -23,7 +23,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
@@ -165,7 +165,7 @@ var _ = Describe("GetDataFlowComponent", func() {
 		It("should retrieve components that match the requested UUIDs", func() {
 			// Parse with valid UUIDs that match test components
 			testComponentID := "test-component-1"
-			testComponentUUID := dataflowcomponentconfig.GenerateUUIDFromName(testComponentID).String()
+			testComponentUUID := dataflowcomponentserviceconfig.GenerateUUIDFromName(testComponentID).String()
 
 			payload := map[string]interface{}{
 				"versionUUIDs": []interface{}{
@@ -278,7 +278,7 @@ var _ = Describe("GetDataFlowComponent", func() {
 
 			// Parse with UUID that matches the component with missing state
 			testComponentID := "test-component-missing-state"
-			testComponentUUID := dataflowcomponentconfig.GenerateUUIDFromName(testComponentID).String()
+			testComponentUUID := dataflowcomponentserviceconfig.GenerateUUIDFromName(testComponentID).String()
 
 			payload := map[string]interface{}{
 				"versionUUIDs": []interface{}{
@@ -310,10 +310,10 @@ var _ = Describe("GetDataFlowComponent", func() {
 			testInstance = fsm.FSMInstanceSnapshot{
 				ID:           "test-component-build",
 				DesiredState: "active",
-				CurrentState: "running",
+				CurrentState: "active",
 				LastObservedState: &dataflowcomponent.DataflowComponentObservedStateSnapshot{
-					Config: dataflowcomponentconfig.DataFlowComponentConfig{
-						BenthosConfig: dataflowcomponentconfig.BenthosConfig{
+					Config: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 							Input: map[string]interface{}{
 								"test": "input",
 							},
@@ -356,7 +356,7 @@ var _ = Describe("GetDataFlowComponent", func() {
 			)
 
 			// Parse with the UUID of our test component
-			testUUID := dataflowcomponentconfig.GenerateUUIDFromName("test-component-build").String()
+			testUUID := dataflowcomponentserviceconfig.GenerateUUIDFromName("test-component-build").String()
 			payload := map[string]interface{}{
 				"versionUUIDs": []interface{}{testUUID},
 			}
@@ -391,7 +391,7 @@ var _ = Describe("GetDataFlowComponent", func() {
 			invalidInstance := fsm.FSMInstanceSnapshot{
 				ID:                "invalid-type-component",
 				DesiredState:      "active",
-				CurrentState:      "running",
+				CurrentState:      "active",
 				LastObservedState: &mockObservedState{}, // Not a DataflowComponentObservedStateSnapshot
 			}
 
@@ -419,7 +419,7 @@ var _ = Describe("GetDataFlowComponent", func() {
 			)
 
 			// Parse with the UUID of our invalid component
-			testUUID := dataflowcomponentconfig.GenerateUUIDFromName("invalid-type-component").String()
+			testUUID := dataflowcomponentserviceconfig.GenerateUUIDFromName("invalid-type-component").String()
 			payload := map[string]interface{}{
 				"versionUUIDs": []interface{}{testUUID},
 			}
@@ -457,10 +457,10 @@ func createManagerSnapshot() fsm.ManagerSnapshot {
 		{
 			ID:           "test-component-1",
 			DesiredState: "active",
-			CurrentState: "running",
+			CurrentState: "active",
 			LastObservedState: &dataflowcomponent.DataflowComponentObservedStateSnapshot{
-				Config: dataflowcomponentconfig.DataFlowComponentConfig{
-					BenthosConfig: dataflowcomponentconfig.BenthosConfig{
+				Config: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+					BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 						Input: map[string]interface{}{
 							"kafka": map[string]interface{}{
 								"addresses": []string{"localhost:9092"},
@@ -502,10 +502,10 @@ func createManagerSnapshot() fsm.ManagerSnapshot {
 		{
 			ID:           "test-component-2",
 			DesiredState: "active",
-			CurrentState: "running",
+			CurrentState: "active",
 			LastObservedState: &dataflowcomponent.DataflowComponentObservedStateSnapshot{
-				Config: dataflowcomponentconfig.DataFlowComponentConfig{
-					BenthosConfig: dataflowcomponentconfig.BenthosConfig{
+				Config: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+					BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 						Input: map[string]interface{}{
 							"file": map[string]interface{}{
 								"paths": []string{"/tmp/input.txt"},
@@ -550,7 +550,7 @@ func createMockSystemSnapshotWithMissingState() *fsm.SystemSnapshot {
 		{
 			ID:                "test-component-missing-state",
 			DesiredState:      "active",
-			CurrentState:      "running",
+			CurrentState:      "active",
 			LastObservedState: nil, // No observed state
 		},
 	}
