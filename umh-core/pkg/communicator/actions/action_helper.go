@@ -17,7 +17,7 @@ package actions
 import (
 	"time"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
@@ -45,8 +45,8 @@ func CreateManagerSnapshot(additionalInstances ...fsm.FSMInstanceSnapshot) fsm.M
 			DesiredState: "active",
 			CurrentState: "active",
 			LastObservedState: &dataflowcomponent.DataflowComponentObservedStateSnapshot{
-				Config: dataflowcomponentconfig.DataFlowComponentConfig{
-					BenthosConfig: dataflowcomponentconfig.BenthosConfig{
+				Config: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+					BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 						Input: map[string]interface{}{
 							"kafka": map[string]interface{}{
 								"addresses": []string{"localhost:9092"},
@@ -90,8 +90,8 @@ func CreateManagerSnapshot(additionalInstances ...fsm.FSMInstanceSnapshot) fsm.M
 			DesiredState: "active",
 			CurrentState: "active",
 			LastObservedState: &dataflowcomponent.DataflowComponentObservedStateSnapshot{
-				Config: dataflowcomponentconfig.DataFlowComponentConfig{
-					BenthosConfig: dataflowcomponentconfig.BenthosConfig{
+				Config: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+					BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 						Input: map[string]interface{}{
 							"file": map[string]interface{}{
 								"paths": []string{"/tmp/input.txt"},
