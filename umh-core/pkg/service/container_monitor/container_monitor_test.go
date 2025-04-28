@@ -260,7 +260,7 @@ var _ = Describe("Container Monitor Service", func() {
 			if container.CPU != nil {
 				GinkgoWriter.Printf("Core Count: %d\n", container.CPU.CoreCount)
 				GinkgoWriter.Printf("Total Usage (mCPU): %.2f\n", container.CPU.TotalUsageMCpu)
-				GinkgoWriter.Printf("Usage Per Core: %.2f%%\n", container.CPU.TotalUsageMCpu/float64(container.CPU.CoreCount)/10.0)
+				GinkgoWriter.Printf("Usage Per Core: %.2f%%\n", (container.CPU.TotalUsageMCpu/1000.0)/float64(container.CPU.CoreCount)*100.0)
 			} else {
 				GinkgoWriter.Printf("CPU metrics unavailable\n")
 			}
