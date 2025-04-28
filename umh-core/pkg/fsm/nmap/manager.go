@@ -74,7 +74,8 @@ func NewNmapManager(name string) *NmapManager {
 				return false, fmt.Errorf("instance is not a NmapInstance")
 			}
 			// If same config => return true, else false
-			return ni.config.NmapServiceConfig.Equal(cfg.NmapServiceConfig), nil
+			return ni.config.FSMInstanceConfig == cfg.FSMInstanceConfig &&
+				ni.config.NmapServiceConfig.Equal(cfg.NmapServiceConfig), nil
 		},
 		// Set config if only small changes
 		func(instance public_fsm.FSMInstance, cfg config.NmapConfig) error {
