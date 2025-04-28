@@ -182,7 +182,10 @@ func (s *BenthosService) generateBenthosYaml(config *benthosserviceconfig.Bentho
 	)
 }
 
-// getS6ServiceName converts a benthosName (e.g. "myservice") to its S6 service name (e.g. "benthos-myservice")
+// GetS6ServiceName converts a logical Benthos name ("my-pipe") into the
+// canonical S6 service name ("benthos-my-pipe").
+//
+// It is exported ONLY because tests and other packages need the mapping
 func (s *BenthosService) GetS6ServiceName(benthosName string) string {
 	return fmt.Sprintf("benthos-%s", benthosName)
 }
@@ -589,6 +592,23 @@ func (s *BenthosService) UpdateBenthosInS6Manager(ctx context.Context, filesyste
 	return nil
 }
 
+// RemoveBenthosFromS6Manager drives the *gradual* teardown of a Benthos
+// service and its monitor:
+//
+//  1. Delete the entry from `s6ServiceConfigs` and `benthosMonitorConfigs`
+//     → at the next reconcile cycle the child managers will move the
+//     respective S6 FSMs to *removing*.
+//  2. Return ErrRemovalPending until **both** child instances have
+//     completely vanished from their managers.
+//  3. Once neither instance exists anymore, return nil.
+//
+// The method is **idempotent** and **non-blocking**; callers are supposed
+// to invoke it every cycle while the parent FSM is in the removing state.
+//
+// Notice that we *do not* try to stop the underlying S6 service ourselves –
+// that is entirely the responsibility of the S6-manager + S6-FSM that own
+// the child instance.  We only manipulate *desired* config and observe the
+// effect.
 func (s *BenthosService) RemoveBenthosFromS6Manager(
 	ctx context.Context,
 	fs filesystem.Service,
@@ -608,7 +628,8 @@ func (s *BenthosService) RemoveBenthosFromS6Manager(
 	// ------------------------------------------------------------------
 	s6Name := s.GetS6ServiceName(benthosName)
 
-	// helper trims the slice in place (idempotent if already gone)
+	// Helper that deletes exactly one element *without* reallocating when the
+	// element is already missing – keeps the call idempotent and allocation-free.
 	sliceRemoveByName := func(arr []config.S6FSMConfig, name string) []config.S6FSMConfig {
 		for i, cfg := range arr {
 			if cfg.Name == name {

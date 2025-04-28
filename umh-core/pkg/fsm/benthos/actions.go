@@ -58,8 +58,17 @@ func (b *BenthosInstance) CreateInstance(ctx context.Context, filesystemService 
 	return nil
 }
 
-// RemoveInstance attempts to remove the Benthos from the S6 manager.
-// It requires the service to be stopped before removal.
+// RemoveInstance is executed while the Benthos FSM sits in the *removing*
+// state.  The helper it calls (`RemoveBenthosFromS6Manager`) returns three
+// kinds of answers:
+//
+//   - nil                    – all artefacts are gone  →  fire remove_done
+//   - ErrServiceNotExist     – never created / already cleaned up
+//     → success, idempotent
+//   - ErrRemovalPending      – child S6-FSM is still deleting; *not* an error
+//     → stay in removing and try again next tick
+//   - everything else        – real failure  → bubble up so the back-off
+//     decorator can suspend operations.
 func (b *BenthosInstance) RemoveInstance(
 	ctx context.Context,
 	fs filesystem.Service,

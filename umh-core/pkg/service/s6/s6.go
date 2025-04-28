@@ -315,26 +315,21 @@ func (s *DefaultService) createS6ConfigFiles(ctx context.Context, servicePath st
 	return nil
 }
 
-// Remove deletes **all** artefacts that the `Create` step produced for an
-// S6 long-run service and returns `nil` **only if nothing is left**.
+// Remove deletes every artefact that `Create` produced:
 //
-// The reconcile loop invokes `Remove()` every cycle tick while the FSM is in
-// the *removing* state.  Therefore the function must be:
+//   - <servicePath>             (the long-run service directory)
+//   - <servicePath>/log         (nested logger service)
+//   - <logBase>/<name>          (rotated log directory)
 //
-//   - **Fast / non-blocking** – no waits or polls.
-//   - **Idempotent** – safe to call when the service has never existed,
-//     is already half-deleted, or was fully cleaned up in a previous tick.
-//   - **Precise** – success means “every artefact is gone”, otherwise an
-//     error is returned so the next loop iteration can retry or escalate.
+// The method is called once per reconcile *tick* while the S6-FSM is in the
+// *removing* state, therefore it must:
 //
-// Artefacts to remove
-// -------------------
-//  1. `<servicePath>`                     – main service directory
-//     └── log/                        – logger service (nested)
-//  2. `constants.S6LogBaseDir/<name>`     – rotated log files created by s6-log
+//  1. **Return quickly** – never wait or poll.
+//  2. **Be idempotent**  – safe to call when directories are half-gone.
+//  3. **Return nil only when nothing is left.**
 //
-// Nothing else is created outside these locations, so the absence of both
-// paths is a definitive signal that removal is complete.
+// Any remaining file or I/O error leads to a non-nil return so the FSM keeps
+// trying (or escalates after the back-off threshold).
 func (s *DefaultService) Remove(ctx context.Context, servicePath string, fsService filesystem.Service) error {
 	start := time.Now()
 	defer func() {

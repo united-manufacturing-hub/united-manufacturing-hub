@@ -1129,7 +1129,19 @@ func (s *BenthosMonitorService) UpdateBenthosMonitorInS6Manager(ctx context.Cont
 	return nil
 }
 
-// RemoveBenthosMonitorFromS6Manager removes a benthos instance from the S6 manager
+// RemoveBenthosMonitorFromS6Manager is the monitor counterpart of
+// RemoveBenthosFromS6Manager.
+//
+// Implementation is kept **symmetrical** on purpose so both removal paths
+// behave identically.  Any change in semantics here most likely has to be
+// done in the main Benthos method as well.
+//
+// Returns:
+//
+//   - nil                    – monitor config + instance are gone
+//   - ErrServiceNotExist     – never created / already gone
+//   - ErrRemovalPending      – child S6-instance still busy
+//   - other error            – unrecoverable I/O problem
 func (s *BenthosMonitorService) RemoveBenthosMonitorFromS6Manager(ctx context.Context) error {
 	if s.s6Manager == nil {
 		return errors.New("s6 manager not initialized")
