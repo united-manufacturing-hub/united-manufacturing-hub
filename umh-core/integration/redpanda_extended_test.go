@@ -196,7 +196,7 @@ func checkRPK(topic string, lastLoopOffset int, lastLoopTimestamp time.Time, los
 		Fail("❌ Msg per sec is not positive")
 	}
 	if msgPerSec < float64(messagesPerSecond)*0.9 {
-		Fail(fmt.Sprintf("❌ Msg per sec is too low: %f\n", msgPerSec))
+		Fail(fmt.Sprintf("❌ Msg per sec is too low: %f (expected %d)\n", msgPerSec, messagesPerSecond))
 	} else {
 		// Let's warn (but not fail) if we are below the loss tolerance (use a nice warning signal)
 		if msgPerSec < float64(messagesPerSecond)*(1-lossToleranceWarning) {

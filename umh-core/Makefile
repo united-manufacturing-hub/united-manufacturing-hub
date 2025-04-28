@@ -414,3 +414,6 @@ push-platform:
 
 # Build and push in one command (for CI)
 build-push: build push-platform
+
+dfc-restart-test: stop-all-pods vet nilaway lint
+	ginkgo -r -v --tags=test --label-filter='dfc-restart' --fail-fast ./...
