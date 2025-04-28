@@ -34,6 +34,27 @@ var _ = Describe("DataFlowComponent Restart Integration Test", Ordered, Label("d
 		lossTolerance     = 0.10 // 10% message loss allowed
 	)
 
+	type restartMode string
+	const (
+		gracefulRestart restartMode = "graceful"
+		killRestart     restartMode = "kill"
+	)
+
+	restartActions := map[restartMode]func(){
+		gracefulRestart: func() {
+			By("Stopping the container (graceful)")
+			out, err := runDockerCommand("stop", getContainerName())
+			GinkgoWriter.Printf("Stopped container: %s\n", out)
+			Expect(err).ToNot(HaveOccurred())
+		},
+		killRestart: func() {
+			By("Killing the container (SIGKILL)")
+			out, err := runDockerCommand("kill", getContainerName())
+			GinkgoWriter.Printf("Killed container: %s\n", out)
+			Expect(err).ToNot(HaveOccurred())
+		},
+	}
+
 	var lastOffset = -1
 	var lastTimestamp time.Time
 
@@ -58,72 +79,69 @@ var _ = Describe("DataFlowComponent Restart Integration Test", Ordered, Label("d
 		}
 	})
 
-	It("should produce messages, survive a restart, and produce messages again", func() {
-		By("Waiting for services to stabilize")
-		// Allow time for redpanda and benthos services to start
-		time.Sleep(30 * time.Second)
+	DescribeTable("should produce messages, survive a restart, and produce messages again",
+		func(mode restartMode) {
+			By("Waiting for services to stabilize")
+			time.Sleep(30 * time.Second)
 
-		By("Waiting for messages to be produced before restart")
-		startTime := time.Now()
-		lastTimestamp = time.Now()
-		for time.Since(startTime) < testDuration {
-			newOffset, err := checkRPK(topicName, lastOffset, lastTimestamp, lossTolerance, messagesPerSecond)
-			Expect(err).ToNot(HaveOccurred())
-			lastOffset = newOffset
+			By("Waiting for messages to be produced before restart")
+			startTime := time.Now()
 			lastTimestamp = time.Now()
-			time.Sleep(2 * time.Second)
-		}
-
-		By("Stopping the container")
-		out, err := runDockerCommand("stop", getContainerName())
-		GinkgoWriter.Printf("Stopped container: %s\n", out)
-		Expect(err).ToNot(HaveOccurred())
-
-		By("Validating that the container is stopped (via docker ps)")
-		out, err = runDockerCommand("ps", "-a", "--format", "{{.Names}} {{.ID}} {{.Status}}")
-		GinkgoWriter.Printf("Docker ps: %s\n", out)
-		Expect(err).ToNot(HaveOccurred())
-		// Extract line with our container name, and check for "Exited" in the status column
-		lines := strings.Split(out, "\n")
-		var containerLine string
-		for _, line := range lines {
-			if strings.Contains(line, getContainerName()) {
-				containerLine = line
-				break
+			for time.Since(startTime) < testDuration {
+				newOffset, err := checkRPK(topicName, lastOffset, lastTimestamp, lossTolerance, messagesPerSecond)
+				Expect(err).ToNot(HaveOccurred())
+				lastOffset = newOffset
+				lastTimestamp = time.Now()
+				time.Sleep(2 * time.Second)
 			}
-		}
-		Expect(containerLine).To(ContainSubstring("Exited"))
 
-		By(fmt.Sprintf("Waiting %s before restart", containerDownWait))
-		for i := 0; i < int(containerDownWait/time.Second); i++ {
-			time.Sleep(time.Second)
-			GinkgoWriter.Printf("Waiting until we can restart: %d seconds\n", i)
-		}
+			restartActions[mode]()
 
-		By("Starting the container again")
-		out, err = runDockerCommand("start", getContainerName())
-		GinkgoWriter.Printf("Started container: %s\n", out)
-		Expect(err).ToNot(HaveOccurred())
-
-		By(fmt.Sprintf("Waiting %s for container to become healthy", postRestartWait))
-		time.Sleep(postRestartWait)
-		// Optionally, wait for metrics endpoint
-		Eventually(func() bool {
-			resp, err := httpGetWithTimeout(GetMetricsURL(), 1*time.Second)
-			return err == nil && resp == 200
-		}, 20*time.Second, 1*time.Second).Should(BeTrue(), "Metrics endpoint should be healthy after restart")
-
-		By("Validating messages are being produced again after restart")
-		// Reset lastTimestamp to now, but keep lastOffset
-		lastTimestamp = time.Now()
-		for i := 0; i < 5; i++ {
-			newOffset, err := checkRPK(topicName, lastOffset, lastTimestamp, lossTolerance, messagesPerSecond)
+			By("Validating that the container is stopped (via docker ps)")
+			out, err := runDockerCommand("ps", "-a", "--format", "{{.Names}} {{.ID}} {{.Status}}")
+			GinkgoWriter.Printf("Docker ps: %s\n", out)
 			Expect(err).ToNot(HaveOccurred())
-			lastOffset = newOffset
+			lines := strings.Split(out, "\n")
+			var containerLine string
+			for _, line := range lines {
+				if strings.Contains(line, getContainerName()) {
+					containerLine = line
+					break
+				}
+			}
+			Expect(containerLine).To(ContainSubstring("Exited"))
+
+			By(fmt.Sprintf("Waiting %s before restart", containerDownWait))
+			for i := 0; i < int(containerDownWait/time.Second); i++ {
+				time.Sleep(time.Second)
+				GinkgoWriter.Printf("Waiting until we can restart: %d seconds\n", i)
+			}
+
+			By("Starting the container again")
+			out, err = runDockerCommand("start", getContainerName())
+			GinkgoWriter.Printf("Started container: %s\n", out)
+			Expect(err).ToNot(HaveOccurred())
+
+			By(fmt.Sprintf("Waiting %s for container to become healthy", postRestartWait))
+			time.Sleep(postRestartWait)
+			Eventually(func() bool {
+				resp, err := httpGetWithTimeout(GetMetricsURL(), 1*time.Second)
+				return err == nil && resp == 200
+			}, 20*time.Second, 1*time.Second).Should(BeTrue(), "Metrics endpoint should be healthy after restart")
+
+			By("Validating messages are being produced again after restart")
 			lastTimestamp = time.Now()
-			time.Sleep(2 * time.Second)
-		}
-	})
+			for i := 0; i < 5; i++ {
+				newOffset, err := checkRPK(topicName, lastOffset, lastTimestamp, lossTolerance, messagesPerSecond)
+				Expect(err).ToNot(HaveOccurred())
+				lastOffset = newOffset
+				lastTimestamp = time.Now()
+				time.Sleep(2 * time.Second)
+			}
+		},
+		Entry("graceful restart (docker stop/start)", gracefulRestart),
+		Entry("kill restart (docker kill/start)", killRestart),
+	)
 })
 
 // httpGetWithTimeout is a helper for Eventually to check endpoint health
