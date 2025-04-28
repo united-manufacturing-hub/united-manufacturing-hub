@@ -64,7 +64,6 @@ var _ = Describe("RedpandaMonitor FSM", func() {
 				Name:            "monitor-redpanda-testing",
 				DesiredFSMState: redpanda_monitor.OperationalStateStopped,
 			},
-			MetricsPort: 8080,
 		}
 
 		// Create an instance using NewRedpandaMonitorInstanceWithService.
