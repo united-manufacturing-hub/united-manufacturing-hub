@@ -216,12 +216,10 @@ func (c *ContainerMonitorService) GetHealth(ctx context.Context) (*models.Health
 // By default, this retrieves host-level usage unless gopsutil is configured
 // to read from container cgroup data. See notes below for cgroup-limited usage.
 func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CPU, error) {
-	usageMCores, coreCount, err := c.getRawCPUMetrics(ctx)
+	usageMCores, coreCount, usagePercent, err := c.getRawCPUMetrics(ctx)
 	if err != nil {
 		return nil, err
 	}
-
-	usagePercent := usageMCores / float64(coreCount) * 100.0
 
 	// Default to Active health
 	category := models.Active
@@ -249,29 +247,28 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 	return cpuStat, nil
 }
 
-func (c *ContainerMonitorService) getRawCPUMetrics(ctx context.Context) (usageMCores float64, coreCount int, err error) {
+func (c *ContainerMonitorService) getRawCPUMetrics(ctx context.Context) (usageMCores float64, coreCount int, usagePercent float64, err error) {
 	// Fetching from cgroup is incredibly difficult, so we fallback to host-level usage
 
 	// -- FALLBACK: host-level usage with cpu.Percent() --
 	// Gather CPU usage over a short interval (0 => immediate snapshot).
 	// Optionally you could do time.Sleep and call cpu.Percent again for a delta.
-	usagePercent, err := cpu.PercentWithContext(ctx, 0, false)
+	usagePercentages, err := cpu.PercentWithContext(ctx, 0, false)
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, 0, err
 	}
-	var cpuUsagePercent float64
-	if len(usagePercent) > 0 {
-		cpuUsagePercent = usagePercent[0]
+	if len(usagePercentages) > 0 {
+		usagePercent = usagePercentages[0]
 	}
 
 	// Convert usage percent to mCPU (i.e. 1000 mCPU = 1 core).
 	// For example, if usage is 50% on a system with 4 cores,
 	// the container is effectively using 2 cores => 2000 mCPU.
 	coreCount = runtime.NumCPU()
-	usageCores := (cpuUsagePercent / 100.0) * float64(coreCount)
+	usageCores := (usagePercent / 100.0) * float64(coreCount)
 	usageMCores = usageCores * 1000
 
-	return usageMCores, coreCount, nil
+	return usageMCores, coreCount, usagePercent, nil
 }
 
 // getMemoryMetrics collects memory metrics using gopsutil.
