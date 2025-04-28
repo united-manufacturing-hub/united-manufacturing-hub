@@ -35,37 +35,103 @@ type MockNmapService struct {
 	// StateMap keeps track of desired states
 	StateMap map[string]string
 
-	// Status response to return
-	StatusResult ServiceInfo
-
-	// GetConfig response to return
-	GetConfigResult nmapserviceconfig.NmapServiceConfig
-
 	// Tracks called methods
-	ForceRemoveNmapCalled bool
+	GenerateS6ConfigForNmapCalled bool
+	GetConfigCalled               bool
+	StatusCalled                  bool
+	AddNmapToS6ManagerCalled      bool
+	UpdateNmapInS6ManagerCalled   bool
+	RemoveNmapFromS6ManagerCalled bool
+	StartNmapCalled               bool
+	StopNmapCalled                bool
+	ReconcileManagerCalled        bool
+	ServiceExistsCalled           bool
+	ForceRemoveNmapCalled         bool
 
 	// Error to return for various operations
-	GenerateConfigError  error
-	GetConfigError       error
-	StatusError          error
-	AddServiceError      error
-	UpdateServiceError   error
-	RemoveServiceError   error
-	StartServiceError    error
-	StopServiceError     error
-	ReconcileError       error
-	ForceRemoveNmapError error
-	ExistsError          bool // if true, ServiceExists returns false
-	ShouldErrScanFailed  bool
+	GenerateS6ConfigForNmapError  error
+	GenerateS6ConfigForNmapResult error
+	GetConfigError                error
+	GetConfigResult               nmapserviceconfig.NmapServiceConfig
+	StatusError                   error
+	StatusResult                  ServiceInfo
+	AddServiceError               error
+	UpdateServiceError            error
+	RemoveServiceError            error
+	StartServiceError             error
+	StopServiceError              error
+	ReconcileManagerError         error
+	ReconcileManagerReconciled    bool
+	ForceRemoveNmapError          error
+	ServiceExistsError            bool // if true, ServiceExists returns false
+	ServiceExistsResult           bool
+	ShouldErrScanFailed           bool
 
 	// For more complex testing scenarios
 	ServiceStates    map[string]*ServiceInfo
 	ExistingServices map[string]bool
 	S6ServiceConfigs []config.S6FSMConfig
+
+	// State control for FSM testing
+	stateFlags map[string]*ServiceStateFlags
+
+	// S6 service mock
+	S6Service s6service.Service
 }
 
 // Ensure MockNmapService implements INmapService
 var _ INmapService = (*MockNmapService)(nil)
+
+// ServiceStateFlags contains all the state flags needed for FSM testing
+type ServiceStateFlags struct {
+	IsS6Running bool
+	IsRunning   bool
+	IsDegraded  bool
+	IsS6Stopped bool
+	PortState   string
+	S6FSMState  string
+}
+
+// SetServiceState sets all state flags for a service at once
+func (m *MockNmapService) SetServiceState(serviceName string, flags ServiceStateFlags) {
+	// Ensure ServiceInfo exists for this service
+	if _, exists := m.ServiceStates[serviceName]; !exists {
+		m.ServiceStates[serviceName] = &ServiceInfo{
+			NmapStatus: NmapServiceInfo{},
+		}
+	}
+
+	// Update S6FSMState based on IsS6Running
+	if flags.IsS6Running {
+		m.ServiceStates[serviceName].S6FSMState = s6fsm.OperationalStateRunning
+	} else {
+		m.ServiceStates[serviceName].S6FSMState = s6fsm.OperationalStateStopped
+	}
+
+	if flags.PortState != "" {
+		m.ServiceStates[serviceName].NmapStatus.LastScan = &NmapScanResult{
+			PortResult: PortResult{
+				State: flags.PortState,
+			},
+		}
+	} else {
+		m.ServiceStates[serviceName].NmapStatus.LastScan = &NmapScanResult{}
+	}
+
+	// Store the flags
+	m.stateFlags[serviceName] = &flags
+}
+
+// GetServiceState gets the state flags for a service
+func (m *MockNmapService) GetServiceState(serviceName string) *ServiceStateFlags {
+	if flags, exists := m.stateFlags[serviceName]; exists {
+		return flags
+	}
+	// Initialize with default flags if not exists
+	flags := &ServiceStateFlags{}
+	m.stateFlags[serviceName] = flags
+	return flags
+}
 
 // NewMockNmapService creates a new mock nmap service
 func NewMockNmapService() *MockNmapService {
@@ -74,13 +140,15 @@ func NewMockNmapService() *MockNmapService {
 		StateMap:         make(map[string]string),
 		ServiceStates:    make(map[string]*ServiceInfo),
 		ExistingServices: make(map[string]bool),
+		stateFlags:       make(map[string]*ServiceStateFlags),
+		S6Service:        &s6service.MockService{},
 	}
 }
 
 // GenerateS6ConfigForNmap generates a mock S6 config
 func (m *MockNmapService) GenerateS6ConfigForNmap(nmapConfig *nmapserviceconfig.NmapServiceConfig, s6ServiceName string) (s6serviceconfig.S6ServiceConfig, error) {
-	if m.GenerateConfigError != nil {
-		return s6serviceconfig.S6ServiceConfig{}, m.GenerateConfigError
+	if m.GenerateS6ConfigForNmapError != nil {
+		return s6serviceconfig.S6ServiceConfig{}, m.GenerateS6ConfigForNmapError
 	}
 
 	return s6serviceconfig.S6ServiceConfig{
@@ -110,15 +178,10 @@ func (m *MockNmapService) GetConfig(ctx context.Context, filesystemService files
 
 // Status returns the mock status
 func (m *MockNmapService) Status(ctx context.Context, filesystemService filesystem.Service, nmapName string, tick uint64) (ServiceInfo, error) {
-	if ctx.Err() != nil {
-		return ServiceInfo{}, ctx.Err()
-	}
+	m.StatusCalled = true
 
-	if m.StatusError != nil {
-		return ServiceInfo{}, m.StatusError
-	}
-
-	if _, exists := m.Configs[nmapName]; !exists {
+	// Check if the service exists in the ExistingServices map
+	if exists, ok := m.ExistingServices[nmapName]; !ok || !exists {
 		return ServiceInfo{}, ErrServiceNotExist
 	}
 
@@ -126,8 +189,12 @@ func (m *MockNmapService) Status(ctx context.Context, filesystemService filesyst
 	if scanResult == nil {
 		return ServiceInfo{}, ErrScanFailed
 	}
-
-	return m.StatusResult, nil
+	// If we have a state already stored, return it
+	if state, exists := m.ServiceStates[nmapName]; exists {
+		return *state, m.StatusError
+	}
+	// If no state is stored, return the default mock result
+	return m.StatusResult, m.StatusError
 }
 
 func parseScanLogs(shouldErr bool) *NmapScanResult {
@@ -141,6 +208,7 @@ func parseScanLogs(shouldErr bool) *NmapScanResult {
 
 // AddNmapToS6Manager mocks adding a service
 func (m *MockNmapService) AddNmapToS6Manager(ctx context.Context, cfg *nmapserviceconfig.NmapServiceConfig, nmapName string) error {
+	m.AddNmapToS6ManagerCalled = true
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
@@ -247,6 +315,7 @@ func (m *MockNmapService) ForceRemoveNmap(ctx context.Context, filesystemService
 
 // StartNmap mocks starting a service
 func (m *MockNmapService) StartNmap(ctx context.Context, nmapName string) error {
+	m.StartNmapCalled = true
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
@@ -306,22 +375,16 @@ func (m *MockNmapService) ReconcileManager(ctx context.Context, filesystemServic
 	if ctx.Err() != nil {
 		return ctx.Err(), false
 	}
+	m.ReconcileManagerCalled = true
 
-	if m.ReconcileError != nil {
-		return m.ReconcileError, false
-	}
-
-	return nil, true
+	return m.ReconcileManagerError, m.ReconcileManagerReconciled
 }
 
 // ServiceExists mocks checking if a service exists
 func (m *MockNmapService) ServiceExists(ctx context.Context, filesystemService filesystem.Service, nmapName string) bool {
-	if m.ExistsError {
-		return false
-	}
 
-	_, exists := m.Configs[nmapName]
-	return exists
+	m.ServiceExistsCalled = true
+	return m.ServiceExistsResult
 }
 
 // SetStatusInfo sets a mock status for a given service
@@ -427,6 +490,7 @@ func (m *MockNmapService) SetServicePortState(serviceName string, state string, 
 		info.NmapStatus.LastScan.PortResult.LatencyMs = latencyMs
 		info.NmapStatus.Logs = logs
 	}
+	fmt.Println("Set Service Port State called")
 	m.StatusResult = *info
 }
 

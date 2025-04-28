@@ -25,7 +25,7 @@ type NmapServiceConfig struct {
 	// Target to scan (hostname or IP)
 	Target string `yaml:"target"`
 	// Port to scan (single port number)
-	Port int `yaml:"port"`
+	Port uint16 `yaml:"port"`
 }
 
 // Equal checks if two BenthosServiceConfigs are equal
@@ -34,7 +34,7 @@ func (c NmapServiceConfig) Equal(other NmapServiceConfig) bool {
 }
 
 // RenderNmapYAML is a package-level function for easy YAML generation
-func RenderNmapYAML(target string, port int) (string, error) {
+func RenderNmapYAML(target string, port uint16) (string, error) {
 	// Create a config object from the individual components
 	cfg := NmapServiceConfig{
 		Target: target,

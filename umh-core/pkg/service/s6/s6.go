@@ -225,15 +225,16 @@ func (s *DefaultService) Create(ctx context.Context, servicePath string, config 
 		return fmt.Errorf("failed to create log service directory: %w", err)
 	}
 
+	// Create logutil-service command line, see also https://skarnet.org/software/s6/s6-log.html
+	// logutil-service is a wrapper around s6_log and reads from the S6_LOGGING_SCRIPT environment variable
+	// We overwrite the default S6_LOGGING_SCRIPT with our own if config.LogFilesize is set
+	logRunContent, err := getLogRunScript(config, logDir)
+	if err != nil {
+		return fmt.Errorf("failed to get log run script: %w", err)
+	}
+
 	// Create log run script
 	logRunPath := filepath.Join(logServicePath, "run")
-	logRunContent := fmt.Sprintf(`#!/command/execlineb -P
-fdmove -c 2 1
-foreground { mkdir -p %s }
-foreground { chown -R nobody:nobody %s }
-logutil-service %s
-`, logDir, logDir, logDir)
-
 	if err := fsService.WriteFile(ctx, logRunPath, []byte(logRunContent), 0755); err != nil {
 		return fmt.Errorf("failed to write log run script: %w", err)
 	}
@@ -687,6 +688,7 @@ func (s *DefaultService) GetConfig(ctx context.Context, servicePath string, fsSe
 		ConfigFiles: make(map[string]string),
 		Env:         make(map[string]string),
 		MemoryLimit: 0,
+		LogFilesize: 0,
 	}
 
 	// Fetch run script
@@ -834,6 +836,38 @@ func (s *DefaultService) GetConfig(ctx context.Context, servicePath string, fsSe
 		}
 
 		observedS6ServiceConfig.ConfigFiles[entry.Name()] = string(content)
+	}
+
+	// Extract LogFilesize using regex
+	// Fetch run script
+	logServicePath := filepath.Join(servicePath, "log")
+	logScript := filepath.Join(logServicePath, "run")
+	exists, err = fsService.FileExists(ctx, logScript)
+	if err != nil {
+		return s6serviceconfig.S6ServiceConfig{}, fmt.Errorf("failed to check if log run§ script exists: %w", err)
+	}
+	if !exists {
+		return s6serviceconfig.S6ServiceConfig{}, fmt.Errorf("log run script not found")
+	}
+
+	logScriptContentRaw, err := fsService.ReadFile(ctx, logScript)
+	if err != nil {
+		return s6serviceconfig.S6ServiceConfig{}, fmt.Errorf("failed to read log run script: %w", err)
+	}
+
+	// Parse the run script content
+	logScriptContent := string(logScriptContentRaw)
+
+	// Extract log filesize using the dedicated log filesize parser
+	logSizeMatches := logFilesizeParser.FindStringSubmatch(logScriptContent)
+	if len(logSizeMatches) >= 2 {
+		observedS6ServiceConfig.LogFilesize, err = strconv.ParseInt(logSizeMatches[1], 10, 64)
+		if err != nil {
+			return s6serviceconfig.S6ServiceConfig{}, fmt.Errorf("failed to parse log filesize: %w", err)
+		}
+	} else {
+		// If no match found, default to 0
+		observedS6ServiceConfig.LogFilesize = 0
 	}
 
 	return observedS6ServiceConfig, nil
@@ -1073,11 +1107,35 @@ func (s *DefaultService) ForceRemove(ctx context.Context, servicePath string, fs
 		return ctx.Err()
 	}
 
-	return fsService.RemoveAll(ctx, servicePath)
+	err := fsService.RemoveAll(ctx, servicePath)
+	if err != nil {
+		return fmt.Errorf("failed to remove service: %w", err)
+	}
+
+	// Clean up logs directory (best effort - don't block removal if this fails)
+	serviceName := filepath.Base(servicePath)
+	logDir := filepath.Join(constants.S6LogBaseDir, serviceName)
+	if logErr := fsService.RemoveAll(ctx, logDir); logErr != nil && s.logger != nil {
+		sentry.ReportServiceErrorf(
+			s.logger,
+			serviceName,
+			"s6",
+			"cleanup_logs",
+			"Failed to clean up log directory: %v",
+			logErr,
+		)
+	}
+
+	return nil
 }
 
 // GetStructuredLogs gets the logs of the service as structured LogEntry objects
 func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsService filesystem.Service) ([]LogEntry, error) {
+	start := time.Now()
+	defer func() {
+		metrics.ObserveReconcileTime(metrics.ComponentS6Service, servicePath+".getLogs", time.Since(start))
+	}()
+
 	serviceName := filepath.Base(servicePath)
 
 	// Check if the service exists first
@@ -1121,26 +1179,40 @@ func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsServ
 			entries = append(entries, entry)
 		}
 	}
-
 	return entries, nil
 }
 
 // parseLogLine parses a log line from S6 format and returns a LogEntry
 func parseLogLine(line string) LogEntry {
-	// S6 log format with T flag: YYYY-MM-DD HH:MM:SS.NNNNNNNNN  content
-	parts := strings.SplitN(line, "  ", 2)
-	if len(parts) != 2 {
+	// Quick check for empty strings or too short lines
+	if len(line) < 29 { // Minimum length for "YYYY-MM-DD HH:MM:SS  content"
 		return LogEntry{Content: line}
 	}
 
-	timestamp, err := time.Parse("2006-01-02 15:04:05.999999999", parts[0])
+	// Check if we have the double space separator
+	sepIdx := strings.Index(line, "  ")
+	if sepIdx == -1 || sepIdx > 28 {
+		return LogEntry{Content: line}
+	}
+
+	// Extract timestamp part
+	timestampStr := line[:sepIdx]
+
+	// Extract content part (after the double space)
+	content := ""
+	if sepIdx+2 < len(line) {
+		content = line[sepIdx+2:]
+	}
+
+	// Try to parse the timestamp
+	timestamp, err := time.Parse("2006-01-02 15:04:05.999999999", timestampStr)
 	if err != nil {
 		return LogEntry{Content: line}
 	}
 
 	return LogEntry{
 		Timestamp: timestamp,
-		Content:   parts[1],
+		Content:   content,
 	}
 }
 

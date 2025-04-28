@@ -37,7 +37,7 @@ var _ = Describe("Connection YAML Normalizer", func() {
 			normalizedPort := normalizedConfig.NmapServiceConfig.Port
 
 			Expect(normalizedTarget).To(Equal("127.0.0.1"))
-			Expect(normalizedPort).To(Equal(443))
+			Expect(normalizedPort).To(Equal(uint16(443)))
 		})
 	})
 

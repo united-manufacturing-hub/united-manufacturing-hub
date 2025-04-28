@@ -22,7 +22,7 @@ import (
 	"time"
 
 	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	benthosfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
@@ -182,12 +182,12 @@ func (d *DataflowComponentInstance) UpdateObservedStateOfInstance(ctx context.Co
 		}
 	}
 
-	if !dataflowcomponentconfig.ConfigsEqual(&d.config, &d.ObservedState.ObservedDataflowComponentConfig) {
+	if !dataflowcomponentserviceconfig.ConfigsEqual(&d.config, &d.ObservedState.ObservedDataflowComponentConfig) {
 		// Check if the service exists before attempting to update
 		if d.service.ServiceExists(ctx, filesystemService, d.baseFSMInstance.GetID()) {
 			d.baseFSMInstance.GetLogger().Debugf("Observed DataflowComponent config is different from desired config, updating Benthos configuration")
 
-			diffStr := dataflowcomponentconfig.ConfigDiff(&d.config, &d.ObservedState.ObservedDataflowComponentConfig)
+			diffStr := dataflowcomponentserviceconfig.ConfigDiff(&d.config, &d.ObservedState.ObservedDataflowComponentConfig)
 			d.baseFSMInstance.GetLogger().Debugf("Configuration differences: %s", diffStr)
 
 			// Update the config in the Benthos manager
@@ -238,7 +238,7 @@ func (d *DataflowComponentInstance) IsDataflowComponentDegraded() bool {
 func (d *DataflowComponentInstance) IsDataflowComponentWithProcessingActivity() bool {
 	benthosStatus := d.ObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus
 
-	return benthosStatus.MetricsState != nil && benthosStatus.MetricsState.IsActive
+	return benthosStatus.BenthosMetrics.MetricsState != nil && benthosStatus.BenthosMetrics.MetricsState.IsActive
 }
 
 // IsStartingPeriodGracePeriodExceeded returns true when the difference

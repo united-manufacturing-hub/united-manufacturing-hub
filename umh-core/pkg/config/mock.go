@@ -21,7 +21,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 )
 
@@ -203,7 +203,7 @@ func (m *MockConfigManager) AtomicDeleteDataflowcomponent(ctx context.Context, c
 	filteredComponents := make([]DataFlowComponentConfig, 0, len(config.DataFlow))
 
 	for _, component := range config.DataFlow {
-		componentID := dataflowcomponentconfig.GenerateUUIDFromName(component.Name)
+		componentID := dataflowcomponentserviceconfig.GenerateUUIDFromName(component.Name)
 		if componentID != componentUUID {
 			filteredComponents = append(filteredComponents, component)
 		} else {
@@ -247,7 +247,7 @@ func (m *MockConfigManager) AtomicEditDataflowcomponent(ctx context.Context, com
 	found := false
 	var oldConfig DataFlowComponentConfig
 	for i, component := range config.DataFlow {
-		componentID := dataflowcomponentconfig.GenerateUUIDFromName(component.Name)
+		componentID := dataflowcomponentserviceconfig.GenerateUUIDFromName(component.Name)
 		if componentID == componentUUID {
 			// Found the component to edit, update it
 			oldConfig = component

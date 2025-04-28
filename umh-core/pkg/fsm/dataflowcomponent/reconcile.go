@@ -90,7 +90,7 @@ func (d *DataflowComponentInstance) Reconcile(ctx context.Context, snapshot fsm.
 	}
 
 	// Step 2: Detect external changes.
-	if err := d.reconcileExternalChanges(ctx, filesystemService, snapshot.Tick); err != nil {
+	if err = d.reconcileExternalChanges(ctx, filesystemService, snapshot.Tick); err != nil {
 		// If the service is not running, we don't want to return an error here, because we want to continue reconciling
 		if !errors.Is(err, dataflowcomponentservice.ErrServiceNotExists) && !errors.Is(err, s6.ErrServiceNotExist) {
 			// errors.Is(err, s6.ErrServiceNotExist)
@@ -115,7 +115,6 @@ func (d *DataflowComponentInstance) Reconcile(ctx context.Context, snapshot fsm.
 			return nil, false // We don't want to return an error here, because we want to continue reconciling
 		}
 
-		//nolint:ineffassign // This is intentionally modifying the named return value accessed in defer
 		err = nil // The service does not exist, which is fine as this happens in the reconcileStateTransition
 	}
 

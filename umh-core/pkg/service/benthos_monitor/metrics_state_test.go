@@ -12,23 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package benthos_test
+package benthos_monitor_test
 
 import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos_monitor"
 )
 
 var _ = Describe("MetricsState", Label("metrics_state"), func() {
 	var (
-		state *benthos.BenthosMetricsState
+		state *benthos_monitor.BenthosMetricsState
 		tick  uint64
 	)
 
 	BeforeEach(func() {
-		state = benthos.NewBenthosMetricsState()
+		state = benthos_monitor.NewBenthosMetricsState()
 		tick = 0
 	})
 
@@ -43,11 +43,11 @@ var _ = Describe("MetricsState", Label("metrics_state"), func() {
 
 	Context("UpdateFromMetrics", func() {
 		It("should handle first update as baseline", func() {
-			metrics := benthos.Metrics{
-				Input: benthos.InputMetrics{
+			metrics := benthos_monitor.Metrics{
+				Input: benthos_monitor.InputMetrics{
 					Received: 100,
 				},
-				Output: benthos.OutputMetrics{
+				Output: benthos_monitor.OutputMetrics{
 					Sent:      90,
 					BatchSent: 10,
 				},
@@ -68,24 +68,24 @@ var _ = Describe("MetricsState", Label("metrics_state"), func() {
 
 		It("should handle counter reset", func() {
 			// First update
-			state.UpdateFromMetrics(benthos.Metrics{
-				Input: benthos.InputMetrics{
+			state.UpdateFromMetrics(benthos_monitor.Metrics{
+				Input: benthos_monitor.InputMetrics{
 					Received: 100,
 				},
 			}, tick)
 			tick++
 
 			// Second update to establish throughput
-			state.UpdateFromMetrics(benthos.Metrics{
-				Input: benthos.InputMetrics{
+			state.UpdateFromMetrics(benthos_monitor.Metrics{
+				Input: benthos_monitor.InputMetrics{
 					Received: 150,
 				},
 			}, tick)
 			tick++
 
 			// Counter reset (new count lower than last count)
-			state.UpdateFromMetrics(benthos.Metrics{
-				Input: benthos.InputMetrics{
+			state.UpdateFromMetrics(benthos_monitor.Metrics{
+				Input: benthos_monitor.InputMetrics{
 					Received: 50, // Reset to lower value
 				},
 			}, tick)
@@ -98,11 +98,11 @@ var _ = Describe("MetricsState", Label("metrics_state"), func() {
 
 		It("should calculate rates correctly over multiple ticks", func() {
 			// First update at tick 0
-			state.UpdateFromMetrics(benthos.Metrics{
-				Input: benthos.InputMetrics{
+			state.UpdateFromMetrics(benthos_monitor.Metrics{
+				Input: benthos_monitor.InputMetrics{
 					Received: 100,
 				},
-				Output: benthos.OutputMetrics{
+				Output: benthos_monitor.OutputMetrics{
 					Sent:      90,
 					BatchSent: 10,
 				},
@@ -110,11 +110,11 @@ var _ = Describe("MetricsState", Label("metrics_state"), func() {
 			tick++
 
 			// Second update at tick 1
-			state.UpdateFromMetrics(benthos.Metrics{
-				Input: benthos.InputMetrics{
+			state.UpdateFromMetrics(benthos_monitor.Metrics{
+				Input: benthos_monitor.InputMetrics{
 					Received: 160, // +60 over 1 tick = 60 per tick
 				},
-				Output: benthos.OutputMetrics{
+				Output: benthos_monitor.OutputMetrics{
 					Sent:      140, // +50 over 1 tick = 50 per tick
 					BatchSent: 20,  // +10 over 1 tick = 10 per tick
 				},
@@ -127,9 +127,9 @@ var _ = Describe("MetricsState", Label("metrics_state"), func() {
 		})
 
 		It("should handle processor metrics", func() {
-			metrics := benthos.Metrics{
-				Process: benthos.ProcessMetrics{
-					Processors: map[string]benthos.ProcessorMetrics{
+			metrics := benthos_monitor.Metrics{
+				Process: benthos_monitor.ProcessMetrics{
+					Processors: map[string]benthos_monitor.ProcessorMetrics{
 						"proc1": {
 							Sent:      100,
 							BatchSent: 10,
@@ -153,13 +153,13 @@ var _ = Describe("MetricsState", Label("metrics_state"), func() {
 
 		It("should update activity status correctly", func() {
 			// No activity
-			state.UpdateFromMetrics(benthos.Metrics{}, tick)
+			state.UpdateFromMetrics(benthos_monitor.Metrics{}, tick)
 			tick++
 			Expect(state.IsActive).To(BeFalse())
 
 			// First input update
-			state.UpdateFromMetrics(benthos.Metrics{
-				Input: benthos.InputMetrics{
+			state.UpdateFromMetrics(benthos_monitor.Metrics{
+				Input: benthos_monitor.InputMetrics{
 					Received: 100,
 				},
 			}, tick)
@@ -167,8 +167,8 @@ var _ = Describe("MetricsState", Label("metrics_state"), func() {
 			Expect(state.IsActive).To(BeTrue()) // Active since we have throughput
 
 			// Second update shows activity
-			state.UpdateFromMetrics(benthos.Metrics{
-				Input: benthos.InputMetrics{
+			state.UpdateFromMetrics(benthos_monitor.Metrics{
+				Input: benthos_monitor.InputMetrics{
 					Received: 200,
 				},
 			}, tick)
@@ -176,8 +176,8 @@ var _ = Describe("MetricsState", Label("metrics_state"), func() {
 			Expect(state.IsActive).To(BeTrue()) // Still active since we have throughput
 
 			// No new input activity (same count)
-			state.UpdateFromMetrics(benthos.Metrics{
-				Input: benthos.InputMetrics{
+			state.UpdateFromMetrics(benthos_monitor.Metrics{
+				Input: benthos_monitor.InputMetrics{
 					Received: 200, // Same as last tick
 				},
 			}, tick)
@@ -185,15 +185,15 @@ var _ = Describe("MetricsState", Label("metrics_state"), func() {
 			Expect(state.IsActive).To(BeTrue()) // Still active as we had throughput previously
 
 			// No new input activity for a while
-			for i := uint64(0); i < benthos.ThroughputWindowSize+1; i++ {
-				state.UpdateFromMetrics(benthos.Metrics{Input: benthos.InputMetrics{Received: 200}}, tick)
+			for i := uint64(0); i < benthos_monitor.ThroughputWindowSize+1; i++ {
+				state.UpdateFromMetrics(benthos_monitor.Metrics{Input: benthos_monitor.InputMetrics{Received: 200}}, tick)
 				tick++
 			}
 			Expect(state.IsActive).To(BeFalse()) // Not active as we had no throughput for a while
 
 			// New input activity
-			state.UpdateFromMetrics(benthos.Metrics{
-				Input: benthos.InputMetrics{
+			state.UpdateFromMetrics(benthos_monitor.Metrics{
+				Input: benthos_monitor.InputMetrics{
 					Received: 300, // New messages
 				},
 			}, tick)

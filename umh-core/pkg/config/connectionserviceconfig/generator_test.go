@@ -83,7 +83,7 @@ var _ = Describe("Nmap YAML Generator", func() {
 			port := 443
 			nmapConfig := nmapserviceconfig.NmapServiceConfig{
 				Target: target,
-				Port:   port,
+				Port:   uint16(port),
 			}
 
 			// Use package-level function
@@ -96,7 +96,7 @@ var _ = Describe("Nmap YAML Generator", func() {
 			cfg := ConnectionServiceConfig{
 				NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
 					Target: target,
-					Port:   port,
+					Port:   uint16(port),
 				},
 			}
 			generator := NewGenerator()

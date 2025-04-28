@@ -24,13 +24,13 @@ var _ = Describe("Connection YAML Comparator", func() {
 	Describe("ConfigsEqual", func() {
 		It("should consider identical configs equal", func() {
 
-			config1 := ConnectionServiceConfig{
+			config1 := &ConnectionServiceConfig{
 				NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
 					Target: "127.0.0.1",
 					Port:   443,
 				},
 			}
-			config2 := ConnectionServiceConfig{
+			config2 := &ConnectionServiceConfig{
 				NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
 					Target: "127.0.0.1",
 					Port:   443,
@@ -44,13 +44,13 @@ var _ = Describe("Connection YAML Comparator", func() {
 		})
 
 		It("should consider configs with different targets not equal", func() {
-			config1 := ConnectionServiceConfig{
+			config1 := &ConnectionServiceConfig{
 				NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
 					Target: "127.0.0.1",
 					Port:   443,
 				},
 			}
-			config2 := ConnectionServiceConfig{
+			config2 := &ConnectionServiceConfig{
 				NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
 					Target: "127.0.0.2",
 					Port:   443,
@@ -68,13 +68,13 @@ var _ = Describe("Connection YAML Comparator", func() {
 		})
 
 		It("should consider configs with different ports not equal", func() {
-			config1 := ConnectionServiceConfig{
+			config1 := &ConnectionServiceConfig{
 				NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
 					Target: "127.0.0.1",
 					Port:   443,
 				},
 			}
-			config2 := ConnectionServiceConfig{
+			config2 := &ConnectionServiceConfig{
 				NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
 					Target: "127.0.0.1",
 					Port:   444,
@@ -95,13 +95,13 @@ var _ = Describe("Connection YAML Comparator", func() {
 	// Test package-level functions
 	Describe("Package-level functions", func() {
 		It("ConfigsEqual should use default comparator", func() {
-			config1 := ConnectionServiceConfig{
+			config1 := &ConnectionServiceConfig{
 				NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
 					Target: "127.0.0.1",
 					Port:   443,
 				},
 			}
-			config2 := ConnectionServiceConfig{
+			config2 := &ConnectionServiceConfig{
 				NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
 					Target: "127.0.0.1",
 					Port:   443,
@@ -119,13 +119,13 @@ var _ = Describe("Connection YAML Comparator", func() {
 		})
 
 		It("ConfigDiff should use default comparator", func() {
-			config1 := ConnectionServiceConfig{
+			config1 := &ConnectionServiceConfig{
 				NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
 					Target: "127.0.0.1",
 					Port:   443,
 				},
 			}
-			config2 := ConnectionServiceConfig{
+			config2 := &ConnectionServiceConfig{
 				NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
 					Target: "127.0.0.1",
 					Port:   443,

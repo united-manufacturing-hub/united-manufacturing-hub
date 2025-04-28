@@ -22,7 +22,7 @@ import (
 	"fmt"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	benthosfsmtype "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
 	dataflowcomponentfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
@@ -37,8 +37,8 @@ func CreateDataflowComponentTestConfig(name string, desiredState string) config.
 			Name:            name,
 			DesiredFSMState: desiredState,
 		},
-		DataFlowComponentConfig: dataflowcomponentconfig.DataFlowComponentConfig{
-			BenthosConfig: dataflowcomponentconfig.BenthosConfig{
+		DataFlowComponentServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+			BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 				Input: map[string]interface{}{
 					"generate": map[string]interface{}{
 						"mapping":  "root = {\"message\":\"hello world\"}",
@@ -78,8 +78,8 @@ func SetupDataflowComponentServiceState(
 
 // ConfigureDataflowComponentServiceConfig configures the mock service with a default DataflowComponent config
 func ConfigureDataflowComponentServiceConfig(mockService *dataflowcomponentsvc.MockDataFlowComponentService) {
-	mockService.GetConfigResult = dataflowcomponentconfig.DataFlowComponentConfig{
-		BenthosConfig: dataflowcomponentconfig.BenthosConfig{
+	mockService.GetConfigResult = dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+		BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 			Input: map[string]interface{}{
 				"generate": map[string]interface{}{
 					"mapping":  "root = {\"message\":\"hello world\"}",

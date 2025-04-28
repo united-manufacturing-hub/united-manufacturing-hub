@@ -36,7 +36,7 @@ func NewGenerator() *Generator {
 func (g *Generator) RenderConfig(cfg NmapServiceConfig) (string, error) {
 
 	// Convert the config to a normalized map
-	configMap := g.configToMap(cfg)
+	configMap := g.ConfigToMap(cfg)
 	normalizedMap := normalizeConfig(configMap)
 
 	// Marshal to YAML
@@ -50,8 +50,8 @@ func (g *Generator) RenderConfig(cfg NmapServiceConfig) (string, error) {
 	return yamlStr, nil
 }
 
-// configToMap converts a NmapServiceConfig to a raw map for YAML generation
-func (g *Generator) configToMap(cfg NmapServiceConfig) map[string]any {
+// ConfigToMap converts a NmapServiceConfig to a raw map for YAML generation
+func (g *Generator) ConfigToMap(cfg NmapServiceConfig) map[string]any {
 	configMap := make(map[string]any)
 
 	// Add all sections

@@ -16,7 +16,8 @@ package config
 
 import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/connectionserviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/nmapserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/redpandaserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
@@ -31,10 +32,12 @@ type FullConfig struct {
 }
 
 type InternalConfig struct {
-	Services []S6FSMConfig   `yaml:"services,omitempty"` // Services to manage, can be updated while running
-	Benthos  []BenthosConfig `yaml:"benthos,omitempty"`  // Benthos services to manage, can be updated while running
-	Nmap     []NmapConfig    `yaml:"nmap,omitempty"`     // Nmap services to manage, can be updated while running
-	Redpanda RedpandaConfig  `yaml:"redpanda,omitempty"` // Redpanda config, can be updated while running
+	Services       []S6FSMConfig          `yaml:"services,omitempty"`       // Services to manage, can be updated while running
+	Benthos        []BenthosConfig        `yaml:"benthos,omitempty"`        // Benthos services to manage, can be updated while running
+	Nmap           []NmapConfig           `yaml:"nmap,omitempty"`           // Nmap services to manage, can be updated while running
+	Redpanda       RedpandaConfig         `yaml:"redpanda,omitempty"`       // Redpanda config, can be updated while running
+	BenthosMonitor []BenthosMonitorConfig `yaml:"benthosMonitor,omitempty"` // BenthosMonitor config, can be updated while running
+	Connection     []ConnectionConfig     `yaml:"connection,omitempty"`     // Connection services to manage, can be updated while running
 }
 
 type AgentConfig struct {
@@ -84,6 +87,14 @@ type S6FSMConfig struct {
 	S6ServiceConfig s6serviceconfig.S6ServiceConfig `yaml:"s6ServiceConfig"`
 }
 
+// BenthosMonitorConfig contains configuration for creating a benthos monitor
+type BenthosMonitorConfig struct {
+	// For the FSM
+	FSMInstanceConfig `yaml:",inline"`
+
+	MetricsPort uint16 `yaml:"metricsPort"` // Port to expose metrics on
+}
+
 // BenthosConfig contains configuration for creating a Benthos service
 type BenthosConfig struct {
 	// For the FSM
@@ -98,7 +109,7 @@ type DataFlowComponentConfig struct {
 	// For the FSM
 	FSMInstanceConfig `yaml:",inline"`
 
-	DataFlowComponentConfig dataflowcomponentconfig.DataFlowComponentConfig `yaml:"dataFlowComponentConfig"`
+	DataFlowComponentServiceConfig dataflowcomponentserviceconfig.DataflowComponentServiceConfig `yaml:"dataFlowComponentConfig"`
 }
 
 // NmapConfig contains configuration for creating a Nmap service
@@ -117,6 +128,15 @@ type RedpandaConfig struct {
 
 	// For the Redpanda service
 	RedpandaServiceConfig redpandaserviceconfig.RedpandaServiceConfig `yaml:"redpandaServiceConfig"`
+}
+
+// ConnectionConfig contains configuration for creating a Connection service
+type ConnectionConfig struct {
+	// For the FSM
+	FSMInstanceConfig `yaml:",inline"`
+
+	// For the Connection service
+	ConnectionServiceConfig connectionserviceconfig.ConnectionServiceConfig `yaml:"connectionServiceConfig"`
 }
 
 // Clone creates a deep copy of FullConfig
