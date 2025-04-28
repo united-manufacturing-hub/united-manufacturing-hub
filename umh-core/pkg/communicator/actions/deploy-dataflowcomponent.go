@@ -445,16 +445,17 @@ func (a *DeployDataflowComponentAction) Execute() (interface{}, map[string]inter
 
 	// check against observedState as well
 	if a.systemSnapshot != nil { // skipping this for the unit tests
+		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Configuration updated. Waiting for dataflow component '"+a.name+"' to start and become active...", a.outboundChannel, models.DeployDataFlowComponent)
 		err = a.waitForComponentToBeActive()
 		if err != nil {
-			errorMsg := fmt.Sprintf("failed to wait for dataflowcomponent to be active: %v", err)
+			errorMsg := fmt.Sprintf("Failed to wait for dataflow component to be active: %v", err)
 			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errorMsg, a.outboundChannel, models.DeployDataFlowComponent)
 			return nil, nil, fmt.Errorf("%s", errorMsg)
 		}
 	}
 
 	// return success message, but do not send it as this is done by the caller
-	successMsg := fmt.Sprintf("Successfully deployed data flow component: %s", a.name)
+	successMsg := fmt.Sprintf("Successfully deployed dataflow component: %s", a.name)
 
 	return successMsg, nil, nil
 }
@@ -492,49 +493,86 @@ func (a *DeployDataflowComponentAction) waitForComponentToBeActive() error {
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 	timeout := time.After(constants.DataflowComponentWaitForActiveTimeout)
+	startTime := time.Now()
+	timeoutDuration := constants.DataflowComponentWaitForActiveTimeout
 	for {
 		select {
 		case <-timeout:
 			if !a.ignoreHealthCheck {
-				SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Dataflow component did not become active in time. Removing...", a.outboundChannel, models.DeployDataFlowComponent)
+				SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
+					"Timeout reached. Dataflow component did not become active in time. Removing component...",
+					a.outboundChannel, models.DeployDataFlowComponent)
 				ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
 				defer cancel()
 				err := a.configManager.AtomicDeleteDataflowcomponent(ctx, dataflowcomponentserviceconfig.GenerateUUIDFromName(a.name))
 				if err != nil {
 					a.actionLogger.Errorf("failed to remove dataflowcomponent %s: %v", a.name, err)
 				}
-				return fmt.Errorf("dataflowcomponent %s was removed because it did not become active in time", a.name)
+				return fmt.Errorf("dataflow component '%s' was removed because it did not become active within the timeout period", a.name)
 			}
-			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Dataflow component did not become active in time. Consider removing it.", a.outboundChannel, models.DeployDataFlowComponent)
+			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
+				"Timeout reached. Dataflow component did not become active in time. You may want to check logs and remove it if needed.",
+				a.outboundChannel, models.DeployDataFlowComponent)
 			return nil
 		case <-ticker.C:
+			elapsed := time.Since(startTime)
+			remaining := timeoutDuration - elapsed
+			remainingSeconds := int(remaining.Seconds())
 
+			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
+				fmt.Sprintf("Checking if dataflow component '%s' is active (%ds remaining)...",
+					a.name, remainingSeconds), a.outboundChannel, models.DeployDataFlowComponent)
 			if dataflowcomponentManager, exists := a.systemSnapshot.Managers[constants.DataflowcomponentManagerName]; exists {
 				instances := dataflowcomponentManager.GetInstances()
+				found := false
 				for _, instance := range instances {
 					// cast the instance LastObservedState to a dataflowcomponent instance
 					curName := instance.ID
 					if curName != a.name {
 						continue
 					}
+					found = true
 					dfcSnapshot, ok := instance.LastObservedState.(*dataflowcomponent.DataflowComponentObservedStateSnapshot)
 					if !ok {
+						SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
+							fmt.Sprintf("Waiting for dataflow component state information (%ds remaining)...",
+								remainingSeconds), a.outboundChannel, models.DeployDataFlowComponent)
 						continue
 					}
 					if instance.CurrentState == "active" {
+						SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
+							"Dataflow component is now active! Deployment complete.",
+							a.outboundChannel, models.DeployDataFlowComponent)
 						return nil
 					} else {
+						stateMsg := fmt.Sprintf("Dataflow component is in state '%s' (waiting for 'active', %ds remaining)...",
+							instance.CurrentState, remainingSeconds)
+						SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
+							stateMsg, a.outboundChannel, models.DeployDataFlowComponent)
 						// send the benthos logs to the user
 						logs = dfcSnapshot.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosLogs
 						// only send the logs that have not been sent yet
 						if len(logs) > len(lastLogs) {
 							for _, log := range logs[len(lastLogs):] {
-								SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, log.Content, a.outboundChannel, models.DeployDataFlowComponent)
+								logTime := log.Timestamp.Format("15:04:05")
+								SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
+									fmt.Sprintf("[%s] %s", logTime, log.Content),
+									a.outboundChannel, models.DeployDataFlowComponent)
 							}
 							lastLogs = logs
 						}
 					}
 				}
+				if !found {
+					SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
+						fmt.Sprintf("Waiting for dataflow component to appear in system (%ds remaining)...",
+							remainingSeconds), a.outboundChannel, models.DeployDataFlowComponent)
+				}
+
+			} else {
+				SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
+					fmt.Sprintf("Waiting for dataflow component manager to initialize (%ds remaining)...",
+						remainingSeconds), a.outboundChannel, models.DeployDataFlowComponent)
 			}
 		}
 	}

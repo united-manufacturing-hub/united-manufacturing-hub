@@ -236,7 +236,7 @@ func (a *EditDataflowComponentAction) Execute() (interface{}, map[string]interfa
 	a.actionLogger.Info("Executing EditDataflowComponent action")
 
 	// Send confirmation that action is starting
-	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionConfirmed, "Starting EditDataflowComponent", a.outboundChannel, models.EditDataFlowComponent)
+	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionConfirmed, "Starting edit of dataflow component: "+a.name, a.outboundChannel, models.EditDataFlowComponent)
 
 	// Parse the input and output configurations
 	benthosInput := make(map[string]interface{})
@@ -369,25 +369,27 @@ func (a *EditDataflowComponentAction) Execute() (interface{}, map[string]interfa
 	// Update the component in the configuration
 	ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
 	defer cancel()
+	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Updating dataflow component '"+a.name+"' configuration...", a.outboundChannel, models.EditDataFlowComponent)
 	a.oldConfig, err = a.configManager.AtomicEditDataflowcomponent(ctx, a.componentUUID, dfc)
 	if err != nil {
-		errorMsg := fmt.Sprintf("failed to edit dataflowcomponent: %v", err)
+		errorMsg := fmt.Sprintf("Failed to edit dataflow component: %v", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errorMsg, a.outboundChannel, models.EditDataFlowComponent)
 		return nil, nil, fmt.Errorf("%s", errorMsg)
 	}
 
 	// check against observedState as well
 	if a.systemSnapshot != nil { // skipping this for the unit tests
+		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Configuration updated. Waiting for dataflow component '"+a.name+"' to become active...", a.outboundChannel, models.EditDataFlowComponent)
 		err = a.waitForComponentToBeActive()
 		if err != nil {
-			errorMsg := fmt.Sprintf("failed to wait for dataflowcomponent to be active: %v", err)
+			errorMsg := fmt.Sprintf("Failed to wait for dataflow component to be active: %v", err)
 			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errorMsg, a.outboundChannel, models.EditDataFlowComponent)
 			return nil, nil, fmt.Errorf("%s", errorMsg)
 		}
 	}
 
 	// return success message, but do not send it as this is done by the caller
-	successMsg := fmt.Sprintf("Successfully edited data flow component: %s", a.name)
+	successMsg := fmt.Sprintf("Successfully edited dataflow component: %s", a.name)
 
 	return successMsg, nil, nil
 }
@@ -420,11 +422,14 @@ func (a *EditDataflowComponentAction) waitForComponentToBeActive() error {
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 	timeout := time.After(constants.DataflowComponentWaitForActiveTimeout)
+	startTime := time.Now()
+	timeoutDuration := constants.DataflowComponentWaitForActiveTimeout
+
 	for {
 		select {
 		case <-timeout:
 			if !a.ignoreHealthCheck {
-				SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Dataflow component did not become active in time. Rolling back to old config...", a.outboundChannel, models.EditDataFlowComponent)
+				SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Timeout reached. Dataflow component did not become active in time. Rolling back to previous configuration...", a.outboundChannel, models.EditDataFlowComponent)
 				ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
 				defer cancel()
 				_, err := a.configManager.AtomicEditDataflowcomponent(ctx, a.componentUUID, a.oldConfig)
@@ -433,30 +438,53 @@ func (a *EditDataflowComponentAction) waitForComponentToBeActive() error {
 				}
 				return fmt.Errorf("dataflowcomponent %s was not active in time and was rolled back to the old config", a.name)
 			}
-			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Dataflow component did not become active in time. Consider removing it.", a.outboundChannel, models.EditDataFlowComponent)
+			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Timeout reached. Dataflow component did not become active in time. Consider removing it or checking logs for errors.", a.outboundChannel, models.EditDataFlowComponent)
 			return nil
 		case <-ticker.C:
+			elapsed := time.Since(startTime)
+			remaining := timeoutDuration - elapsed
+			remainingSeconds := int(remaining.Seconds())
 			if dataflowcomponentManager, exists := a.systemSnapshot.Managers[constants.DataflowcomponentManagerName]; exists {
 				instances := dataflowcomponentManager.GetInstances()
+				found := false
 				for _, instance := range instances {
 					if dataflowcomponentserviceconfig.GenerateUUIDFromName(instance.ID) == a.componentUUID {
+						found = true
 						dfcSnapshot, ok := instance.LastObservedState.(*dataflowcomponent.DataflowComponentObservedStateSnapshot)
 						if !ok {
+							SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
+								fmt.Sprintf("Waiting for dataflow component state info (%ds remaining)...", remainingSeconds), a.outboundChannel, models.EditDataFlowComponent)
 							continue
 						}
+
 						if instance.CurrentState != "active" {
-							SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Dataflow component is not active yet. Current state: "+instance.CurrentState+". Waiting...", a.outboundChannel, models.EditDataFlowComponent)
+							SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
+								fmt.Sprintf("Dataflow component is in state '%s' (waiting for 'active', %ds remaining)...",
+									instance.CurrentState, remainingSeconds), a.outboundChannel, models.EditDataFlowComponent)
 						} else {
 							SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Dataflow component is active.", a.outboundChannel, models.EditDataFlowComponent)
 						}
 						// check if the config is correct
 						if !dataflowcomponentserviceconfig.NewComparator().ConfigsEqual(&dfcSnapshot.Config, &a.dfc.DataFlowComponentServiceConfig) {
-							SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Dataflow component has incorrect config. Waiting...", a.outboundChannel, models.EditDataFlowComponent)
+							SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
+								fmt.Sprintf("Dataflow component is active but config changes haven't applied yet (%ds remaining)...",
+									remainingSeconds), a.outboundChannel, models.EditDataFlowComponent)
 						} else {
+							SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
+								"Dataflow component is active with correct configuration. Edit complete.", a.outboundChannel, models.EditDataFlowComponent)
 							return nil
 						}
 					}
 				}
+				if !found {
+					SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
+						fmt.Sprintf("Waiting for dataflow component to appear in system (%ds remaining)...",
+							remainingSeconds), a.outboundChannel, models.EditDataFlowComponent)
+				}
+			} else {
+				SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
+					fmt.Sprintf("Waiting for dataflow component manager (%ds remaining)...",
+						remainingSeconds), a.outboundChannel, models.EditDataFlowComponent)
 			}
 		}
 	}

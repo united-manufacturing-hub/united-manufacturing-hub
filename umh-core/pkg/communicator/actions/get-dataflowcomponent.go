@@ -95,7 +95,7 @@ func buildDataFlowComponentDataFromSnapshot(instance fsm.FSMInstanceSnapshot, lo
 
 func (a *GetDataFlowComponentAction) Execute() (interface{}, map[string]interface{}, error) {
 	a.actionLogger.Info("Executing the action")
-	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "getting the dataflowcomponent", a.outboundChannel, models.GetDataFlowComponent)
+	numUUIDs := len(a.payload.VersionUUIDs)
 
 	dataFlowComponents := []config.DataFlowComponentConfig{}
 	// Get the DataFlowComponent
@@ -104,23 +104,41 @@ func (a *GetDataFlowComponentAction) Execute() (interface{}, map[string]interfac
 	if dataflowcomponentManager, exists := a.systemSnapshot.Managers[constants.DataflowcomponentManagerName]; exists {
 		a.actionLogger.Debugf("Dataflowcomponent manager found, getting the dataflowcomponent")
 		instances := dataflowcomponentManager.GetInstances()
+		foundComponents := 0
 		for _, instance := range instances {
-			dfc, err := buildDataFlowComponentDataFromSnapshot(*instance, a.actionLogger)
-			if err != nil {
-				a.actionLogger.Warnf("Failed to build dataflowcomponent data: %v", err)
-				continue
-			}
 			currentUUID := dataflowcomponentserviceconfig.GenerateUUIDFromName(instance.ID).String()
 			if slices.Contains(a.payload.VersionUUIDs, currentUUID) {
 				a.actionLogger.Debugf("Adding %s to the response", instance.ID)
+				dfc, err := buildDataFlowComponentDataFromSnapshot(*instance, a.actionLogger)
+				if err != nil {
+					a.actionLogger.Warnf("Failed to build dataflowcomponent data: %v", err)
+					SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
+						fmt.Sprintf("Warning: Failed to retrieve data for component '%s': %v",
+							instance.ID, err), a.outboundChannel, models.GetDataFlowComponent)
+					continue
+				}
 				dataFlowComponents = append(dataFlowComponents, dfc)
+				foundComponents++
 			}
 
 		}
+		if foundComponents < numUUIDs {
+			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
+				fmt.Sprintf("Found %d of %d requested components. Some components might not exist in the system.",
+					foundComponents, numUUIDs), a.outboundChannel, models.GetDataFlowComponent)
+		} else {
+			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
+				"Dataflow component manager not found. No components will be returned.",
+				a.outboundChannel, models.GetDataFlowComponent)
+		}
+
 	}
 
 	// build the response
 	a.actionLogger.Info("Building the response")
+	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
+		fmt.Sprintf("Processing configurations for %d dataflow components...",
+			len(dataFlowComponents)), a.outboundChannel, models.GetDataFlowComponent)
 	response := models.GetDataflowcomponentResponse{}
 	for _, component := range dataFlowComponents {
 		// build the payload
