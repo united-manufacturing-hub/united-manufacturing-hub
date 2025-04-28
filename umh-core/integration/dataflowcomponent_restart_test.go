@@ -24,7 +24,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var _ = Describe("DataFlowComponent Restart Integration Test", Ordered, Label("dfc-restart"), func() {
+var _ = Describe("DataFlowComponent Restart Integration Test", Ordered, Label("integration"), func() {
 	const (
 		topicName         = "dfc-restart-test-topic"
 		messagesPerSecond = 5
