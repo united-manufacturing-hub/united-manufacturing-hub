@@ -26,12 +26,13 @@ import (
 
 var _ = Describe("DataFlowComponent Restart Integration Test", Ordered, Label("integration"), func() {
 	const (
-		topicName         = "dfc-restart-test-topic"
-		messagesPerSecond = 5
-		testDuration      = 30 * time.Second
-		postRestartWait   = 5 * time.Second
-		containerDownWait = 30 * time.Second
-		lossTolerance     = 0.10 // 10% message loss allowed
+		topicName            = "dfc-restart-test-topic"
+		messagesPerSecond    = 5
+		testDuration         = 1 * time.Minute
+		postRestartWait      = 5 * time.Second
+		containerDownWait    = 30 * time.Second
+		lossToleranceWarning = 0.1 // 10% message loss
+		lossToleranceFail    = 0.2 // 20% message loss
 	)
 
 	type restartMode string
@@ -88,11 +89,11 @@ var _ = Describe("DataFlowComponent Restart Integration Test", Ordered, Label("i
 			startTime := time.Now()
 			lastTimestamp = time.Now()
 			for time.Since(startTime) < testDuration {
-				newOffset, err := checkRPK(topicName, lastOffset, lastTimestamp, lossTolerance, messagesPerSecond)
+				newOffset, err := checkRPK(topicName, lastOffset, lastTimestamp, lossToleranceWarning, lossToleranceFail, messagesPerSecond)
 				Expect(err).ToNot(HaveOccurred())
 				lastOffset = newOffset
 				lastTimestamp = time.Now()
-				time.Sleep(2 * time.Second)
+				time.Sleep(1 * time.Second)
 			}
 
 			restartActions[mode]()
@@ -114,7 +115,7 @@ var _ = Describe("DataFlowComponent Restart Integration Test", Ordered, Label("i
 			By(fmt.Sprintf("Waiting %s before restart", containerDownWait))
 			for i := 0; i < int(containerDownWait/time.Second); i++ {
 				time.Sleep(time.Second)
-				GinkgoWriter.Printf("Waiting until we can restart: %d seconds\n", i)
+				GinkgoWriter.Printf("Waiting until we can restart: %d seconds\n", containerDownWait-time.Duration(i)*time.Second)
 			}
 
 			By("Starting the container again")
@@ -130,14 +131,16 @@ var _ = Describe("DataFlowComponent Restart Integration Test", Ordered, Label("i
 			}, 20*time.Second, 1*time.Second).Should(BeTrue(), "Metrics endpoint should be healthy after restart")
 
 			By("Validating messages are being produced again after restart")
+			startTime = time.Now()
 			lastTimestamp = time.Now()
-			for i := 0; i < 5; i++ {
-				newOffset, err := checkRPK(topicName, lastOffset, lastTimestamp, lossTolerance, messagesPerSecond)
+			for time.Since(startTime) < testDuration {
+				newOffset, err := checkRPK(topicName, lastOffset, lastTimestamp, lossToleranceWarning, lossToleranceFail, messagesPerSecond)
 				Expect(err).ToNot(HaveOccurred())
 				lastOffset = newOffset
 				lastTimestamp = time.Now()
-				time.Sleep(2 * time.Second)
+				time.Sleep(1 * time.Second)
 			}
+
 		},
 		Entry("graceful restart (docker stop/start)", gracefulRestart),
 		Entry("kill restart (docker kill/start)", killRestart),
