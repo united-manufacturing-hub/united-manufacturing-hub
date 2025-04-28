@@ -306,7 +306,7 @@ func (a *DeployDataflowComponentAction) Execute() (interface{}, map[string]inter
 	a.actionLogger.Info("Executing DeployDataflowComponent action")
 
 	// Send confirmation that action is starting
-	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionConfirmed, "Starting DeployDataflowComponent", a.outboundChannel, models.DeployDataFlowComponent)
+	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionConfirmed, "Starting deployment of dataflow component: "+a.name, a.outboundChannel, models.DeployDataFlowComponent)
 
 	// Parse the input and output configurations
 	benthosInput := make(map[string]interface{})
@@ -432,12 +432,13 @@ func (a *DeployDataflowComponentAction) Execute() (interface{}, map[string]inter
 		},
 	}
 
+	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Adding dataflow component '"+a.name+"' to configuration...", a.outboundChannel, models.DeployDataFlowComponent)
 	// Update the location in the configuration
 	ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
 	defer cancel()
 	err = a.configManager.AtomicAddDataflowcomponent(ctx, dfc)
 	if err != nil {
-		errorMsg := fmt.Sprintf("failed to add dataflowcomponent: %v", err)
+		errorMsg := fmt.Sprintf("Failed to add dataflow component: %v", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errorMsg, a.outboundChannel, models.DeployDataFlowComponent)
 		return nil, nil, fmt.Errorf("%s", errorMsg)
 	}

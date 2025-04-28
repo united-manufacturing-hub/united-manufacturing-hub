@@ -125,6 +125,7 @@ func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePay
 		return
 	}
 
+	SendActionReply(instanceUUID, sender, payload.ActionUUID, models.ActionExecuting, "Parsing action payload", outboundChannel, payload.ActionType)
 	// Parse the action payload
 	err := action.Parse(payload.ActionPayload)
 	if err != nil {
@@ -132,6 +133,7 @@ func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePay
 		return
 	}
 
+	SendActionReply(instanceUUID, sender, payload.ActionUUID, models.ActionExecuting, "Validating action payload", outboundChannel, payload.ActionType)
 	// Validate the action payload
 	err = action.Validate()
 	if err != nil {
@@ -139,6 +141,7 @@ func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePay
 		return
 	}
 
+	SendActionReply(instanceUUID, sender, payload.ActionUUID, models.ActionExecuting, "Executing action", outboundChannel, payload.ActionType)
 	// Execute the action
 	result, metadata, err := action.Execute()
 	if err != nil {

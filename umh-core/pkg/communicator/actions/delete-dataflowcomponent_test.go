@@ -155,7 +155,7 @@ var _ = Describe("DeleteDataflowComponent", func() {
 			// Execute the action
 			result, metadata, err := action.Execute()
 			Expect(err).NotTo(HaveOccurred())
-			Expect(result).To(ContainSubstring("Successfully deleted data flow component"))
+			Expect(result).To(ContainSubstring("Successfully deleted dataflow component with UUID: " + componentUUID.String()))
 			Expect(metadata).To(BeNil())
 
 			// Verify DeleteDataflowcomponentCalled was called
@@ -180,7 +180,7 @@ var _ = Describe("DeleteDataflowComponent", func() {
 			// Execute the action - should fail
 			result, metadata, err := action.Execute()
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("failed to delete dataflow component"))
+			Expect(err.Error()).To(ContainSubstring("Failed to delete dataflow component: mock delete dataflow component failure"))
 			Expect(result).To(BeNil())
 			Expect(metadata).To(BeNil())
 
@@ -206,7 +206,7 @@ var _ = Describe("DeleteDataflowComponent", func() {
 
 			actionReplyPayloadStr, ok := actionReplyPayload["actionReplyPayload"].(string)
 			Expect(ok).To(BeTrue(), "Failed to extract actionReplyPayload as string")
-			Expect(actionReplyPayloadStr).To(ContainSubstring("failed to delete dataflow component"))
+			Expect(actionReplyPayloadStr).To(ContainSubstring("Removing dataflow component from configuration..."))
 		})
 
 		It("should return error when component not found", func() {
