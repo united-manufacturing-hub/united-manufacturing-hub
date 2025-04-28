@@ -29,6 +29,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	s6 "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda_monitor"
@@ -156,7 +157,7 @@ var _ = Describe("RedpandaMonitor Service State Transitions", func() {
 		}
 
 		// Create a mocked S6 manager with mocked services to prevent using real S6 functionality
-		mockedS6Manager := s6fsm.NewS6ManagerWithMockedServices("redpanda-monitor")
+		mockedS6Manager := s6fsm.NewS6ManagerWithMockedServices(constants.RedpandaMonitorServiceName)
 
 		// Create the service with mocked dependencies
 		monitorService = redpanda_monitor.NewRedpandaMonitorService(
@@ -172,7 +173,7 @@ var _ = Describe("RedpandaMonitor Service State Transitions", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(reconciled).To(BeTrue())
 		// Get the instance after reconciliation
-		if instance, exists := mockedS6Manager.GetInstance("redpanda-monitor"); exists {
+		if instance, exists := mockedS6Manager.GetInstance(constants.RedpandaMonitorServiceName); exists {
 			// Type assert to S6Instance
 			if s6Instance, ok := instance.(*s6fsm.S6Instance); ok {
 				// Set our mock service

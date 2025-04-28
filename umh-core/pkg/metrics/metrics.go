@@ -44,6 +44,7 @@ const (
 	ComponentDataflowComponentInstance = "dataflow_component_instance"
 	ComponentAgentMonitor              = "agent_monitor"
 	ComponentBenthosMonitor            = "benthos_monitor"
+	ComponentRedpandaMonitor           = "redpanda_monitor"
 	// Services
 	ComponentS6Service        = "s6_service"
 	ComponentBenthosService   = "benthos_service"

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package benthos_monitor_test
+package redpanda_monitor_test
 
 import (
 	"testing"
@@ -23,5 +23,5 @@ import (
 
 func TestAgentFSM(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Agent FSM Suite")
+	RunSpecs(t, "Redpanda Monitor FSM Suite")
 }

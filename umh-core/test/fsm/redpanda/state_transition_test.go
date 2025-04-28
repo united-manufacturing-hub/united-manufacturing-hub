@@ -64,7 +64,7 @@ var _ = Describe("RedpandaService State Transitions", func() {
 		mockMonitorService.ServiceExistsResult = true
 
 		// Initialize metrics and metrics state for the monitor
-		mockMonitorService.SetMetricsState(false, 10000000000, 20000000000, false)
+		mockMonitorService.SetMetricsState(false)
 
 		// Setup mock monitor's Status response with valid LastScan
 		monitorMetrics := &redpanda_monitor.RedpandaMetrics{
@@ -94,8 +94,8 @@ var _ = Describe("RedpandaService State Transitions", func() {
 			S6FSMState: s6fsm.OperationalStateStopped,
 			RedpandaStatus: redpanda_monitor.RedpandaMonitorStatus{
 				IsRunning: false,
-				LastScan: &redpanda_monitor.RedpandaMetricsAndClusterConfig{
-					Metrics: monitorMetrics,
+				LastScan: &redpanda_monitor.RedpandaMetricsScan{
+					RedpandaMetrics: monitorMetrics,
 					ClusterConfig: &redpanda_monitor.ClusterConfig{
 						Topic: redpanda_monitor.TopicConfig{
 							DefaultTopicRetentionMs:    1000000,
@@ -191,8 +191,8 @@ var _ = Describe("RedpandaService State Transitions", func() {
 				S6FSMState: s6fsm.OperationalStateRunning,
 				RedpandaStatus: redpanda_monitor.RedpandaMonitorStatus{
 					IsRunning: true,
-					LastScan: &redpanda_monitor.RedpandaMetricsAndClusterConfig{
-						Metrics: monitorMetrics,
+					LastScan: &redpanda_monitor.RedpandaMetricsScan{
+						RedpandaMetrics: monitorMetrics,
 						ClusterConfig: &redpanda_monitor.ClusterConfig{
 							Topic: redpanda_monitor.TopicConfig{
 								DefaultTopicRetentionMs:    1000000,
@@ -252,8 +252,8 @@ var _ = Describe("RedpandaService State Transitions", func() {
 				S6FSMState: s6fsm.OperationalStateStopped,
 				RedpandaStatus: redpanda_monitor.RedpandaMonitorStatus{
 					IsRunning: true,
-					LastScan: &redpanda_monitor.RedpandaMetricsAndClusterConfig{
-						Metrics: monitorMetrics,
+					LastScan: &redpanda_monitor.RedpandaMetricsScan{
+						RedpandaMetrics: monitorMetrics,
 						ClusterConfig: &redpanda_monitor.ClusterConfig{
 							Topic: redpanda_monitor.TopicConfig{
 								DefaultTopicRetentionMs:    1000000,
@@ -285,8 +285,8 @@ var _ = Describe("RedpandaService State Transitions", func() {
 				S6FSMState: s6fsm.OperationalStateRunning,
 				RedpandaStatus: redpanda_monitor.RedpandaMonitorStatus{
 					IsRunning: true,
-					LastScan: &redpanda_monitor.RedpandaMetricsAndClusterConfig{
-						Metrics: monitorMetrics,
+					LastScan: &redpanda_monitor.RedpandaMetricsScan{
+						RedpandaMetrics: monitorMetrics,
 						ClusterConfig: &redpanda_monitor.ClusterConfig{
 							Topic: redpanda_monitor.TopicConfig{
 								DefaultTopicRetentionMs:    1000000,
@@ -354,8 +354,8 @@ var _ = Describe("RedpandaService State Transitions", func() {
 				S6FSMState: s6fsm.OperationalStateRunning,
 				RedpandaStatus: redpanda_monitor.RedpandaMonitorStatus{
 					IsRunning: true,
-					LastScan: &redpanda_monitor.RedpandaMetricsAndClusterConfig{
-						Metrics: monitorMetrics,
+					LastScan: &redpanda_monitor.RedpandaMetricsScan{
+						RedpandaMetrics: monitorMetrics,
 						ClusterConfig: &redpanda_monitor.ClusterConfig{
 							Topic: redpanda_monitor.TopicConfig{
 								DefaultTopicRetentionMs:    1000000,
@@ -386,8 +386,8 @@ var _ = Describe("RedpandaService State Transitions", func() {
 				S6FSMState: s6fsm.OperationalStateStopped,
 				RedpandaStatus: redpanda_monitor.RedpandaMonitorStatus{
 					IsRunning: false,
-					LastScan: &redpanda_monitor.RedpandaMetricsAndClusterConfig{
-						Metrics: &redpanda_monitor.RedpandaMetrics{
+					LastScan: &redpanda_monitor.RedpandaMetricsScan{
+						RedpandaMetrics: &redpanda_monitor.RedpandaMetrics{
 							Metrics: redpanda_monitor.Metrics{
 								Infrastructure: redpanda_monitor.InfrastructureMetrics{
 									Storage: redpanda_monitor.StorageMetrics{
@@ -467,8 +467,8 @@ var _ = Describe("RedpandaService State Transitions", func() {
 				S6FSMState: s6fsm.OperationalStateRunning,
 				RedpandaStatus: redpanda_monitor.RedpandaMonitorStatus{
 					IsRunning: true,
-					LastScan: &redpanda_monitor.RedpandaMetricsAndClusterConfig{
-						Metrics: monitorMetrics,
+					LastScan: &redpanda_monitor.RedpandaMetricsScan{
+						RedpandaMetrics: monitorMetrics,
 						ClusterConfig: &redpanda_monitor.ClusterConfig{
 							Topic: redpanda_monitor.TopicConfig{
 								DefaultTopicRetentionMs:    1000000,
@@ -517,8 +517,8 @@ var _ = Describe("RedpandaService State Transitions", func() {
 				S6FSMState: s6fsm.OperationalStateStopped,
 				RedpandaStatus: redpanda_monitor.RedpandaMonitorStatus{
 					IsRunning: false,
-					LastScan: &redpanda_monitor.RedpandaMetricsAndClusterConfig{
-						Metrics: &redpanda_monitor.RedpandaMetrics{
+					LastScan: &redpanda_monitor.RedpandaMetricsScan{
+						RedpandaMetrics: &redpanda_monitor.RedpandaMetrics{
 							Metrics: redpanda_monitor.Metrics{
 								Infrastructure: redpanda_monitor.InfrastructureMetrics{
 									Storage: redpanda_monitor.StorageMetrics{
@@ -562,8 +562,8 @@ var _ = Describe("RedpandaService State Transitions", func() {
 				S6FSMState: s6fsm.OperationalStateRunning,
 				RedpandaStatus: redpanda_monitor.RedpandaMonitorStatus{
 					IsRunning: true,
-					LastScan: &redpanda_monitor.RedpandaMetricsAndClusterConfig{
-						Metrics: &redpanda_monitor.RedpandaMetrics{
+					LastScan: &redpanda_monitor.RedpandaMetricsScan{
+						RedpandaMetrics: &redpanda_monitor.RedpandaMetrics{
 							Metrics: redpanda_monitor.Metrics{
 								Infrastructure: redpanda_monitor.InfrastructureMetrics{
 									Storage: redpanda_monitor.StorageMetrics{
@@ -634,8 +634,8 @@ var _ = Describe("RedpandaService State Transitions", func() {
 				S6FSMState: s6fsm.OperationalStateRunning,
 				RedpandaStatus: redpanda_monitor.RedpandaMonitorStatus{
 					IsRunning: true,
-					LastScan: &redpanda_monitor.RedpandaMetricsAndClusterConfig{
-						Metrics: &redpanda_monitor.RedpandaMetrics{
+					LastScan: &redpanda_monitor.RedpandaMetricsScan{
+						RedpandaMetrics: &redpanda_monitor.RedpandaMetrics{
 							Metrics: redpanda_monitor.Metrics{
 								Infrastructure: redpanda_monitor.InfrastructureMetrics{
 									Storage: redpanda_monitor.StorageMetrics{

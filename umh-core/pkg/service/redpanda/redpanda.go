@@ -423,7 +423,7 @@ func (s *RedpandaService) GetHealthCheckAndMetrics(ctx context.Context, tick uin
 
 	s.lastStatus = RedpandaStatus{
 		HealthCheck:     healthCheck,
-		RedpandaMetrics: *redpandaStatus.RedpandaStatus.LastScan.Metrics,
+		RedpandaMetrics: *redpandaStatus.RedpandaStatus.LastScan.RedpandaMetrics,
 		Logs:            logs,
 	}
 
