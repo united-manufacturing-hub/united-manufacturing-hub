@@ -221,6 +221,10 @@ func (b *BenthosInstance) reconcileLifecycleStates(ctx context.Context, filesyst
 		return b.baseFSMInstance.SendEvent(ctx, internal_fsm.LifecycleEventCreateDone), true
 	case internal_fsm.LifecycleStateRemoving:
 		if err := b.RemoveInstance(ctx, filesystemService); err != nil {
+			// If the removal is still pending, we don't want to return an error here, because we want to continue reconciling
+			if errors.Is(err, benthos_service.ErrRemovalPending) {
+				return nil, false
+			}
 			return err, false
 		}
 		return b.baseFSMInstance.SendEvent(ctx, internal_fsm.LifecycleEventRemoveDone), true

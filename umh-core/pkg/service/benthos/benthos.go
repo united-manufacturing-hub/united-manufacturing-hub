@@ -585,49 +585,61 @@ func (s *BenthosService) UpdateBenthosInS6Manager(ctx context.Context, filesyste
 	return nil
 }
 
-// RemoveBenthosFromS6Manager removes a Benthos instance from the S6 manager
-// Expects benthosName (e.g. "myservice") as defined in the UMH config
-func (s *BenthosService) RemoveBenthosFromS6Manager(ctx context.Context, filesystemService filesystem.Service, benthosName string) error {
+func (s *BenthosService) RemoveBenthosFromS6Manager(
+	ctx context.Context,
+	fs filesystem.Service,
+	benthosName string,
+) error {
 	if s.s6Manager == nil {
 		return errors.New("s6 manager not initialized")
 	}
-
-	if ctx.Err() != nil {
+	if ctx.Err() != nil { // context already cancelled / timed-out
 		return ctx.Err()
 	}
 
-	s6ServiceName := s.getS6ServiceName(benthosName)
+	s.logger.Infof("Removing benthos from S6 manager with name: %s", benthosName)
 
-	found := false
+	// ------------------------------------------------------------------
+	// 1) Delete the *desired* config entry so the S6-manager will stop it
+	// ------------------------------------------------------------------
+	s6Name := s.getS6ServiceName(benthosName)
 
-	// Remove the S6 FSM config from the list of S6 FSM configs
-	// so that the S6 manager will stop the service
-	// The S6 manager itself will handle a graceful shutdown of the udnerlying S6 service
-	for i, s6Config := range s.s6ServiceConfigs {
-		if s6Config.Name == s6ServiceName {
-			s.s6ServiceConfigs = append(s.s6ServiceConfigs[:i], s.s6ServiceConfigs[i+1:]...)
-			found = true
-			break
+	// helper trims the slice in place (idempotent if already gone)
+	sliceRemoveByName := func(arr []config.S6FSMConfig, name string) []config.S6FSMConfig {
+		for i, cfg := range arr {
+			if cfg.Name == name {
+				return append(arr[:i], arr[i+1:]...)
+			}
 		}
+		return arr
 	}
 
-	if !found {
-		return ErrServiceNotExist
-	}
-
-	// Also remove the benthos monitor from the S6 manager
-	for i, benthosMonitorConfig := range s.benthosMonitorConfigs {
-		if benthosMonitorConfig.Name == s6ServiceName {
-			s.benthosMonitorConfigs = append(s.benthosMonitorConfigs[:i], s.benthosMonitorConfigs[i+1:]...)
-			found = true
-			break
+	// helper for BenthosMonitorConfig slices
+	sliceRemoveMonitorByName := func(arr []config.BenthosMonitorConfig, name string) []config.BenthosMonitorConfig {
+		for i, cfg := range arr {
+			if cfg.Name == name {
+				return append(arr[:i], arr[i+1:]...)
+			}
 		}
+		return arr
 	}
 
-	if !found {
-		return ErrServiceNotExist
+	s.s6ServiceConfigs = sliceRemoveByName(s.s6ServiceConfigs, s6Name)
+	s.benthosMonitorConfigs = sliceRemoveMonitorByName(s.benthosMonitorConfigs, s6Name)
+
+	// ------------------------------------------------------------------
+	// 2) Are the instances already gone?
+	// ------------------------------------------------------------------
+	if inst, ok := s.s6Manager.GetInstance(s6Name); ok {
+		return fmt.Errorf("%w: S6 instance state=%s",
+			ErrRemovalPending, inst.GetCurrentFSMState())
+	}
+	if inst, ok := s.benthosMonitorManager.GetInstance(s6Name); ok {
+		return fmt.Errorf("%w: monitor instance state=%s",
+			ErrRemovalPending, inst.GetCurrentFSMState())
 	}
 
+	// Everything really removed ➜ success, idempotent
 	return nil
 }
 

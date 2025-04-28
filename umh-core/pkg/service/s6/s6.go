@@ -1134,31 +1134,136 @@ func (s *DefaultService) GetS6ConfigFile(ctx context.Context, servicePath string
 	return content, nil
 }
 
-// ForceRemove removes a service from the S6 manager
-func (s *DefaultService) ForceRemove(ctx context.Context, servicePath string, fsService filesystem.Service) error {
+// ForceRemove tears down an S6 long-run service **unconditionally**.
+//
+// It is the “nuclear option” the manager calls after several failed
+// graceful removals.  The function must therefore:
+//
+//   - **Be idempotent & non-blocking** – safe to invoke every 100 ms;
+//     never waits or polls.
+//   - **Erase every artefact** the service could have left behind.
+//   - **Return nil only when nothing remains.**
+//
+// Removal sequence
+// ----------------
+//  1. Best-effort **stop** the daemon *and* its logger with `s6-svc -d`.
+//     This is fast and harmless even if they are already down.
+//  2. **SIGTERM any lingering `s6-supervise` processes** (main + logger)
+//     by reading `<servicedir>/supervise/pid`.  Without this step a still-
+//     running supervisor could re-create the `supervise/` directory after
+//     we delete the tree.
+//  3. **Delete the two artefact trees**
+//     <servicePath>                       (includes …/log subdir)
+//     <logsBase>/<serviceName>            (rotated log files)
+//  4. **Double-check** that both paths are truly gone and that no I/O
+//     errors occurred; otherwise return an error so the caller retries.
+func (s *DefaultService) ForceRemove(
+	ctx context.Context,
+	servicePath string,
+	fsService filesystem.Service,
+) error {
+	start := time.Now()
+	defer func() {
+		metrics.ObserveReconcileTime(
+			metrics.ComponentS6Service,
+			servicePath+".forceRemove",
+			time.Since(start))
+	}()
+
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
 
-	err := fsService.RemoveAll(ctx, servicePath)
-	if err != nil {
-		return fmt.Errorf("failed to remove service: %w", err)
+	//--------------------------------------------------------------------
+	// 1. Best-effort graceful stop (idempotent, non-blocking)
+	//--------------------------------------------------------------------
+	mainErr := s.Stop(ctx, servicePath, fsService)                         // main
+	loggerErr := s.Stop(ctx, filepath.Join(servicePath, "log"), fsService) // logger
+
+	//--------------------------------------------------------------------
+	// 2. SIGTERM lingering s6-supervise processes to avoid resurrection
+	//--------------------------------------------------------------------
+	killSupervise := func(dir string) error {
+		pidFile := filepath.Join(dir, "supervise", "pid")
+		data, err := fsService.ReadFile(ctx, pidFile)
+		if err != nil || len(data) == 0 {
+			return nil // no supervisor ⇒ nothing to kill
+		}
+		if pid, err := strconv.Atoi(strings.TrimSpace(string(data))); err == nil && pid > 0 {
+			// Best effort: ignore EPERM/ESRCH etc.
+			err = syscall.Kill(pid, syscall.SIGTERM)
+			if err != nil {
+				return fmt.Errorf("failed to kill supervisor for service %s: %w", dir, err)
+			}
+		}
+		return nil
+	}
+	killSuperviseMainErr := killSupervise(servicePath)
+	killSuperviseLoggerErr := killSupervise(filepath.Join(servicePath, "log"))
+
+	//--------------------------------------------------------------------
+	// 3. Delete artefact trees
+	//--------------------------------------------------------------------
+	srvErr := fsService.RemoveAll(ctx, servicePath)
+
+	svcName := filepath.Base(servicePath)
+	logDir := filepath.Join(constants.S6LogBaseDir, svcName)
+	logErr := fsService.RemoveAll(ctx, logDir)
+
+	//--------------------------------------------------------------------
+	// 4. Verification – declare success *only* if nothing is left
+	//--------------------------------------------------------------------
+	svcLeft, pathExistsMainErr := fsService.PathExists(ctx, servicePath)
+	logLeft, pathExistsLoggerErr := fsService.PathExists(ctx, logDir)
+
+	if srvErr != nil || logErr != nil || svcLeft || logLeft {
+		var parts []string
+		if srvErr != nil {
+			parts = append(parts, fmt.Sprintf("serviceDir: %v", srvErr))
+		}
+		if logErr != nil {
+			parts = append(parts, fmt.Sprintf("logDir: %v", logErr))
+		}
+		if svcLeft || pathExistsMainErr != nil {
+			parts = append(parts, "serviceDir still exists")
+		}
+		if logLeft || pathExistsLoggerErr != nil {
+			parts = append(parts, "logDir still exists")
+		}
+
+		if mainErr != nil {
+			parts = append(parts, fmt.Sprintf("stopping service: %v", mainErr))
+		}
+
+		if loggerErr != nil {
+			parts = append(parts, fmt.Sprintf("stopping logger for service: %v", loggerErr))
+		}
+
+		if killSuperviseMainErr != nil {
+			parts = append(parts, fmt.Sprintf("killing supervisor for service: %v", killSuperviseMainErr))
+		}
+
+		if killSuperviseLoggerErr != nil {
+			parts = append(parts, fmt.Sprintf("killing supervisor for logger: %v", killSuperviseLoggerErr))
+		}
+
+		if pathExistsMainErr != nil {
+			parts = append(parts, fmt.Sprintf("checking if service exists: %v", pathExistsMainErr))
+		}
+
+		if pathExistsLoggerErr != nil {
+			parts = append(parts, fmt.Sprintf("checking if logger exists: %v", pathExistsLoggerErr))
+		}
+
+		aggregatedErr := fmt.Errorf("s6.ForceRemove incomplete for %q: %s",
+			servicePath, strings.Join(parts, "; "))
+
+		sentry.ReportIssuef(sentry.IssueTypeWarning, s.logger, "%s", aggregatedErr.Error())
+
+		return aggregatedErr
 	}
 
-	// Clean up logs directory (best effort - don't block removal if this fails)
-	serviceName := filepath.Base(servicePath)
-	logDir := filepath.Join(constants.S6LogBaseDir, serviceName)
-	if logErr := fsService.RemoveAll(ctx, logDir); logErr != nil && s.logger != nil {
-		sentry.ReportServiceErrorf(
-			s.logger,
-			serviceName,
-			"s6",
-			"cleanup_logs",
-			"Failed to clean up log directory: %v",
-			logErr,
-		)
-	}
-
+	s.logger.Infof("Force-removed S6 service %s and its logs", servicePath)
 	return nil
 }
 

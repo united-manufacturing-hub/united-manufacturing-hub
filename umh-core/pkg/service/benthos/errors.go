@@ -34,4 +34,9 @@ var (
 
 	// ErrLastObservedStateNil indicates the last observed state is nil
 	ErrLastObservedStateNil = errors.New("last observed state is nil")
+
+	// ErrRemovalPending is returned by RemoveBenthosFromS6Manager while the
+	// S6 manager is still busy shutting the service down.  Callers should
+	// treat it as a *retryable* error.
+	ErrRemovalPending = errors.New("service removal still in progress")
 )
