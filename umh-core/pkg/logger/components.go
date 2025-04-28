@@ -31,6 +31,7 @@ const (
 	ComponentRedpandaManager          = "RedpandaManager"
 	ComponentDataFlowComponentManager = "DataFlowCompManager"
 	ComponentNmapManager              = "NmapCompManager"
+	ComponentConnectionManager        = "ConnectionManager"
 
 	// FSM components
 	ComponentBaseFSM                   = "BaseFSM"
@@ -40,6 +41,7 @@ const (
 	ComponentRedpandaInstance          = "RedpandaInstance"
 	ComponentNmapInstance              = "NmapInstance"
 	ComponentDataFlowComponentInstance = "DFCInstance"
+	ComponentConnectionInstance        = "ConnectionInstance"
 
 	// Service components
 	ComponentS6Service                = "S6Service"
@@ -51,6 +53,7 @@ const (
 	ComponentRedpandaService          = "RedpandaService"
 	ComponentAgentMonitorService      = "AgentMonitorService"
 	ComponentDataFlowComponentService = "DFCService"
+	ComponentConnectionService        = "ConnectionService"
 
 	// Configuration
 	ComponentConfigManager = "ConfigManager"
