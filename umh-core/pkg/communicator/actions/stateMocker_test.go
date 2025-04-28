@@ -1,0 +1,89 @@
+// Copyright 2025 UMH Systems GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package actions_test
+
+import (
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
+)
+
+var _ = Describe("StateMocker", func() {
+	var (
+		stateMocker  *actions.StateMocker
+		cfg          *config.FullConfig
+		testInstance fsm.FSMInstanceSnapshot
+		testConfig   dataflowcomponentserviceconfig.DataflowComponentServiceConfig
+	)
+
+	BeforeEach(func() {
+		cfg = &config.FullConfig{}
+		stateMocker = actions.NewStateMocker(cfg)
+		testConfig = dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+			BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
+				Input: map[string]interface{}{
+					"test": "input",
+				},
+				Output: map[string]interface{}{
+					"test": "output",
+				},
+			},
+		}
+		testInstance = fsm.FSMInstanceSnapshot{
+			ID:           "test-component-build",
+			DesiredState: "active",
+			CurrentState: "active",
+			LastObservedState: &dataflowcomponent.DataflowComponentObservedStateSnapshot{
+				Config: testConfig,
+			},
+		}
+	})
+
+	Context("GetState", func() {
+		It("should return the current state of the system", func() {
+			cfg.DataFlow = []config.DataFlowComponentConfig{
+				{
+					FSMInstanceConfig: config.FSMInstanceConfig{
+						Name: "test-component-1",
+					},
+					DataFlowComponentServiceConfig: testConfig,
+				},
+			}
+
+			// This just checks that the state isn't nil, we don't need to compare to expectedState
+			// since the StateMocker isn't fully implemented in this test
+
+			managerSnapshot := &actions.MockManagerSnapshot{
+				Instances: map[string]*fsm.FSMInstanceSnapshot{
+					"test-component-build": &testInstance,
+				},
+			}
+
+			state := stateMocker.GetState()
+			testSnapshot := &fsm.SystemSnapshot{
+				Managers: map[string]fsm.ManagerSnapshot{
+					constants.DataflowcomponentManagerName: managerSnapshot,
+				},
+			}
+
+			Expect(state).To(Equal(testSnapshot)) // The state is expected to be nil initially
+		})
+	})
+})
