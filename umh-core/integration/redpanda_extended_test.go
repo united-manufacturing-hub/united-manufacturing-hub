@@ -153,7 +153,9 @@ func checkRPK(topic string, lastLoopOffset int, lastLoopTimestamp time.Time, los
 	// 1) The timestamp is within reason (+-1m)
 	// 2) The offsets are increasing (e.g the last offset of the batch is higher then the current one)
 
+	samplingStart := time.Now()
 	messages, err := getRPKSample(topic)
+	samplingDuration := time.Since(samplingStart)
 	if err != nil {
 		return 0, err
 	}
@@ -190,7 +192,7 @@ func checkRPK(topic string, lastLoopOffset int, lastLoopTimestamp time.Time, los
 	GinkgoWriter.Printf("✅ Offset is increasing: %d > %d\n", newOffset, lastLoopOffset)
 
 	// 3. Calculate msg per sec based on now and lastlooptimestamp
-	elapsedTime := time.Since(lastLoopTimestamp)
+	elapsedTime := time.Since(lastLoopTimestamp) - samplingDuration
 	msgPerSec := float64(newOffset-lastLoopOffset) / elapsedTime.Seconds()
 
 	if msgPerSec <= 0 {

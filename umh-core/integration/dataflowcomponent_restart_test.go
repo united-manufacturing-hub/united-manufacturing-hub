@@ -24,7 +24,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var _ = Describe("DataFlowComponent Restart Integration Test", Ordered, Label("integration"), func() {
+var _ = FDescribe("DataFlowComponent Restart Integration Test", Ordered, Label("integration"), func() {
 	const (
 		topicName            = "dfc-restart-test-topic"
 		messagesPerSecond    = 5
@@ -115,7 +115,7 @@ var _ = Describe("DataFlowComponent Restart Integration Test", Ordered, Label("i
 			By(fmt.Sprintf("Waiting %s before restart", containerDownWait))
 			for i := 0; i < int(containerDownWait/time.Second); i++ {
 				time.Sleep(time.Second)
-				GinkgoWriter.Printf("Waiting until we can restart: %d seconds\n", containerDownWait-time.Duration(i)*time.Second)
+				GinkgoWriter.Printf("Waiting until we can restart: %f seconds\n", int(containerDownWait.Seconds())-i)
 			}
 
 			By("Starting the container again")

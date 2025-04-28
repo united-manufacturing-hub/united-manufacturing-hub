@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	public_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
@@ -38,8 +39,8 @@ type RedpandaMonitorManagerSnapshot struct {
 func (b *RedpandaMonitorManagerSnapshot) IsObservedStateSnapshot() {}
 
 // NewRedpandaMonitorManager constructs a manager.
-func NewRedpandaMonitorManager(name string) *RedpandaMonitorManager {
-	managerName := fmt.Sprintf("%s_%s", logger.ComponentRedpandaMonitorManager, name)
+func NewRedpandaMonitorManager() *RedpandaMonitorManager {
+	managerName := fmt.Sprintf("%s_%s", logger.ComponentRedpandaMonitorManager, constants.RedpandaMonitorServiceName)
 
 	baseMgr := public_fsm.NewBaseFSMManager[config.RedpandaMonitorConfig](
 		managerName,
@@ -47,7 +48,10 @@ func NewRedpandaMonitorManager(name string) *RedpandaMonitorManager {
 		// Extract config.FullConfig slice from FullConfig
 		func(fc config.FullConfig) ([]config.RedpandaMonitorConfig, error) {
 			// There can only be one redpanda monitor config
-			return []config.RedpandaMonitorConfig{fc.Internal.RedpandaMonitor}, nil
+			if fc.Internal.RedpandaMonitor == nil {
+				return nil, nil
+			}
+			return []config.RedpandaMonitorConfig{*fc.Internal.RedpandaMonitor}, nil
 		},
 		// Get name from config
 		func(fc config.RedpandaMonitorConfig) (string, error) {
@@ -90,7 +94,7 @@ func NewRedpandaMonitorManager(name string) *RedpandaMonitorManager {
 			return bi.GetExpectedMaxP95ExecutionTimePerInstance(), nil
 		},
 	)
-	metrics.InitErrorCounter(logger.ComponentRedpandaMonitorManager, name)
+	metrics.InitErrorCounter(logger.ComponentRedpandaMonitorManager, constants.RedpandaMonitorServiceName)
 
 	return &RedpandaMonitorManager{
 		BaseFSMManager: baseMgr,

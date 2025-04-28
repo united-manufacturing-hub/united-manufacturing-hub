@@ -38,7 +38,7 @@ type InternalConfig struct {
 	Redpanda        RedpandaConfig         `yaml:"redpanda,omitempty"`        // Redpanda config, can be updated while running
 	BenthosMonitor  []BenthosMonitorConfig `yaml:"benthosMonitor,omitempty"`  // BenthosMonitor config, can be updated while running
 	Connection      []ConnectionConfig     `yaml:"connection,omitempty"`      // Connection services to manage, can be updated while running
-	RedpandaMonitor RedpandaMonitorConfig  `yaml:"redpandaMonitor,omitempty"` // RedpandaMonitor config, can be updated while running
+	RedpandaMonitor *RedpandaMonitorConfig `yaml:"redpandaMonitor,omitempty"` // RedpandaMonitor config, can be updated while running
 }
 
 type AgentConfig struct {
