@@ -1139,10 +1139,6 @@ func (s *BenthosMonitorService) RemoveBenthosMonitorFromS6Manager(ctx context.Co
 		return ctx.Err()
 	}
 
-	if s.s6ServiceConfig == nil {
-		return ErrServiceNotExist
-	}
-
 	s.s6ServiceConfig = nil
 
 	// Check that the instance was actually removed
