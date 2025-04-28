@@ -178,6 +178,14 @@ func (m *MockManagerSnapshot) GetInstances() map[string]*fsm.FSMInstanceSnapshot
 	return m.Instances
 }
 
+// GetInstance returns an FSM instance by ID
+func (m *MockManagerSnapshot) GetInstance(id string) *fsm.FSMInstanceSnapshot {
+	if instance, exists := m.Instances[id]; exists {
+		return instance
+	}
+	return nil
+}
+
 func (m *MockManagerSnapshot) GetSnapshotTime() time.Time {
 	return time.Now()
 }

@@ -90,4 +90,55 @@ var _ = Describe("StateMocker", func() {
 			Expect(state).To(Equal(testSnapshot))
 		})
 	})
+
+	Context("StateTransitions", func() {
+		It("should simulate a component starting up", func() {
+			// Configure the test component
+			componentName := "test-component"
+			desiredState := "active"
+			startingState := "starting"
+
+			cfg.DataFlow = []config.DataFlowComponentConfig{
+				{
+					FSMInstanceConfig: config.FSMInstanceConfig{
+						Name:            componentName,
+						DesiredFSMState: desiredState,
+					},
+					DataFlowComponentServiceConfig: testConfig,
+				},
+			}
+
+			// Set up a transition sequence: starting -> active
+			stateMocker.SetTransitionSequence(componentName, []struct {
+				TickOffset int
+				State      string
+			}{
+				{0, startingState}, // Start in "starting" state
+				{2, desiredState},  // After 2 ticks, move to "active" state
+			})
+
+			// Initial update
+			stateMocker.UpdateState()
+
+			// First state should be "starting"
+			state := stateMocker.GetState()
+			mockManager := state.Managers[constants.DataflowcomponentManagerName].(*actions.MockManagerSnapshot)
+			component := mockManager.GetInstance(componentName)
+			Expect(component.CurrentState).To(Equal(startingState))
+
+			// Advance 1 tick - state should still be "starting"
+			stateMocker.Tick()
+			state = stateMocker.GetState()
+			mockManager = state.Managers[constants.DataflowcomponentManagerName].(*actions.MockManagerSnapshot)
+			component = mockManager.GetInstance(componentName)
+			Expect(component.CurrentState).To(Equal(startingState))
+
+			// Advance another tick - state should now be "active"
+			stateMocker.Tick()
+			state = stateMocker.GetState()
+			mockManager = state.Managers[constants.DataflowcomponentManagerName].(*actions.MockManagerSnapshot)
+			component = mockManager.GetInstance(componentName)
+			Expect(component.CurrentState).To(Equal(desiredState))
+		})
+	})
 })
