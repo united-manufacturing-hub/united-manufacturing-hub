@@ -34,4 +34,9 @@ var (
 
 	// ErrServiceNoSectionsFound indicates the benthos service has no sections
 	ErrServiceNoSectionsFound = errors.New("could not parse benthos metrics/configuration: no sections found. This can happen when the benthos service is not running, or the logs where rotated")
+
+	// ErrRemovalPending is returned by RemoveBenthosMonitorFromS6Manager while the
+	// S6 manager is still busy shutting the service down.  Callers should
+	// treat it as a *retryable* error.
+	ErrRemovalPending = errors.New("service removal still in progress")
 )

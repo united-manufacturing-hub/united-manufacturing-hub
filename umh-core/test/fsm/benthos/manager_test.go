@@ -30,9 +30,11 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	benthosfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
+	benthos_monitor_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos_monitor"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/portmanager"
 	benthossvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
+	benthos_monitor_service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos_monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 )
@@ -571,8 +573,8 @@ var _ = Describe("BenthosManager", func() {
 
 			// Get the config and the resulting S6 config
 			benthosCfg := fsmtest.CreateBenthosTestConfig(benthosName, benthosfsm.OperationalStateStopped)
-			realS6Service := benthossvc.NewDefaultBenthosService(benthosName)
-			s6Config, err := realS6Service.GenerateS6ConfigForBenthos(&benthosCfg.BenthosServiceConfig, benthosName)
+			realBenthosService := benthossvc.NewDefaultBenthosService(benthosName)
+			s6Config, err := realBenthosService.GenerateS6ConfigForBenthos(&benthosCfg.BenthosServiceConfig, benthosName)
 			Expect(err).NotTo(HaveOccurred())
 
 			//----------------------------------------------------------------------
@@ -592,12 +594,16 @@ var _ = Describe("BenthosManager", func() {
 			// we also return a stub S6ServiceConfig for GetConfig()
 			myMockS6Svc.GetConfigResult = s6Config
 
+			mockBenthosMonitorSvc := benthos_monitor_service.NewMockBenthosMonitorService()
+			mockBenthosMonitorMgr := benthos_monitor_fsm.NewBenthosMonitorManagerWithMockedService("rm-test-mgr", *mockBenthosMonitorSvc)
+
 			// ---------- assemble BenthosService with both injections -----------
 
 			benthosSvc := benthossvc.NewDefaultBenthosService(
 				benthosName,
 				benthossvc.WithS6Manager(mockS6Mgr),   // << manager mock
 				benthossvc.WithS6Service(myMockS6Svc), // << service mock
+				benthossvc.WithMonitorManager(mockBenthosMonitorMgr),
 			)
 
 			// ---------- craft the BenthosInstance & register it -----------------

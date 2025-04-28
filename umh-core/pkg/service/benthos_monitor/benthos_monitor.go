@@ -1143,7 +1143,14 @@ func (s *BenthosMonitorService) RemoveBenthosMonitorFromS6Manager(ctx context.Co
 		return ErrServiceNotExist
 	}
 
-	s.s6ServiceConfig = nil
+	s.s6ServiceConfig = &config.S6FSMConfig{}
+
+	// Check that the instance was actually removed
+	s6Name := s.GetS6ServiceName()
+	if inst, ok := s.s6Manager.GetInstance(s6Name); ok {
+		return fmt.Errorf("%w: S6 instance state=%s",
+			ErrRemovalPending, inst.GetCurrentFSMState())
+	}
 
 	// Clean up the metrics state
 	s.metricsState = NewBenthosMetricsState()
