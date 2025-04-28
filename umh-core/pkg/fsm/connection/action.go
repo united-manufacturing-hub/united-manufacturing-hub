@@ -66,7 +66,7 @@ func (c *ConnectionInstance) RemoveInstance(ctx context.Context, filesystemServi
 	// Remove the initiateConnection from the Nmap manager
 	err := c.service.RemoveConnectionFromNmapManager(ctx, filesystemService, c.baseFSMInstance.GetID())
 	if err != nil {
-		if err == connection.ErrServiceNotExist {
+		if errors.Is(err, connection.ErrServiceNotExist) {
 			c.baseFSMInstance.GetLogger().Debugf("Connection service %s not found in Nmap manager", c.baseFSMInstance.GetID())
 			return nil // do not throw an error, as each action is expected to be idempotent
 		}
@@ -228,7 +228,7 @@ func (c *ConnectionInstance) IsConnectionNmapDegraded() bool {
 // IsConnectionUp returns the value of IsConnectionFlaky and the OperationalStateOpen
 // of the Nmap FSM, which then is considered as a healthy connection.
 func (c *ConnectionInstance) IsConnectionNmapUp() bool {
-	return c.IsConnectionFlaky() &&
+	return !c.IsConnectionFlaky() &&
 		c.ObservedState.ServiceInfo.NmapFSMState == nmap.OperationalStateOpen
 }
 

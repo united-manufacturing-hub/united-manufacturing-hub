@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//go:build test
+// +build test
+
 package fsmtest
 
 import (
@@ -24,7 +27,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	connectionfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/connection"
 	nmapfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/nmap"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/connection"
 	connectionsvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/connection"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
@@ -49,7 +51,7 @@ func CreateConnectionTestConfig(name string, desiredState string) config.Connect
 func SetupConnectionServiceState(
 	mockService *connectionsvc.MockConnectionService,
 	serviceName string,
-	flags connection.ConnectionStateFlags,
+	flags connectionsvc.ConnectionStateFlags,
 ) {
 	// Ensure service exists in mock
 	mockService.ExistingConnections[serviceName] = true
@@ -250,6 +252,7 @@ func VerifyConnectionStableState(
 	// Execute reconcile cycles and check state stability
 	tick := snapshot.Tick
 	for i := 0; i < numCycles; i++ {
+		snapshot.Tick = tick
 		_, _ = instance.Reconcile(ctx, snapshot, filesystemService)
 		tick++
 
@@ -322,6 +325,7 @@ func StabilizeConnectionInstance(
 	// First wait for the instance to reach the target state
 	tick := snapshot.Tick
 	for i := 0; i < maxAttempts; i++ {
+		snapshot.Tick = tick
 		currentState := instance.GetCurrentFSMState()
 		if currentState == targetState {
 			// Now verify it remains stable
@@ -362,6 +366,7 @@ func WaitForConnectionDesiredState(
 	tick := snapshot.Tick
 
 	for i := 0; i < maxAttempts; i++ {
+		snapshot.Tick = tick
 		// Check if we've reached the target desired state
 		if instance.GetDesiredFSMState() == targetState {
 			return tick, nil
@@ -410,6 +415,7 @@ func ReconcileConnectionUntilError(
 
 	for i := 0; i < maxAttempts; i++ {
 		// Perform a reconcile cycle and capture the error and reconciled status
+		snapshot.Tick = tick
 		err, reconciled := instance.Reconcile(ctx, snapshot, filesystemService)
 		tick++
 

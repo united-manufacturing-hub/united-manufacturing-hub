@@ -71,6 +71,7 @@ type MockConnectionService struct {
 	ServiceExistsResult                   bool
 	ReconcileManagerError                 error
 	ReconcileManagerReconciled            bool
+	IsConnectionFlakyResult               bool
 
 	// For more complex testing scenarios
 	ConnectionStates    map[string]*ServiceInfo
@@ -114,6 +115,7 @@ func (m *MockConnectionService) SetConnectionState(connectionState string, flags
 			NmapFSMState: flags.NmapFSMState,
 		}
 	}
+	m.IsConnectionFlakyResult = flags.IsFlaky
 
 	// Store the flags
 	m.stateFlags[connectionState] = &flags
@@ -160,7 +162,7 @@ func (m *MockConnectionService) Status(ctx context.Context, filesystemService fi
 
 	// If we have a state already stored, return it
 	if state, exists := m.ConnectionStates[connectionName]; exists {
-		state.IsFlaky = m.isConnectionFlaky(connectionName)
+		state.IsFlaky = m.isConnectionFlaky()
 		return *state, m.StatusError
 	}
 
@@ -327,27 +329,6 @@ func (m *MockConnectionService) ReconcileManager(ctx context.Context, filesystem
 	return m.ReconcileManagerError, m.ReconcileManagerReconciled
 }
 
-func (c *MockConnectionService) isConnectionFlaky(connName string) bool {
-	scans, exists := c.RecentNmapStates[connName]
-
-	if !exists || len(scans) < 3 {
-		// Need at least 3 samples to determine flakiness
-		return false
-	}
-
-	firstState := scans[0]
-	secondState := scans[1]
-
-	// if those states are equal everything is right
-	if firstState == secondState {
-		return false
-	}
-
-	// if not we check if theres a second difference, which we then consider flaky
-	for _, state := range scans[2:] {
-		if state != secondState {
-			return true
-		}
-	}
-	return false
+func (m *MockConnectionService) isConnectionFlaky() bool {
+	return m.IsConnectionFlakyResult
 }

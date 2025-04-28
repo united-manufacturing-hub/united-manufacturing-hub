@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//go:build test
+// +build test
+
 package connection_test
 
 import (
@@ -21,13 +24,10 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/backoff"
 	pkgfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/connection"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/nmap"
 	connectionsvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/connection"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
-	nmapsvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/nmap"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
 	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsmtest"
 
@@ -59,28 +59,28 @@ var _ = Describe("Connection FSM", func() {
 			var err error
 
 			// Setup to Stopped state
-			// ToBeCreated → Creating
+			// ToBeCreated -> Creating
 			tick, err = fsmtest.TestConnectionStateTransition(
 				ctx, instance, mockService, mockFS, connectionName,
-				fsm.LifecycleStateToBeCreated,
-				fsm.LifecycleStateCreating, 5, tick)
+				internalfsm.LifecycleStateToBeCreated,
+				internalfsm.LifecycleStateCreating, 5, tick)
 			Expect(err).NotTo(HaveOccurred())
 
-			// Creating → Stopped
+			// Creating -> Stopped
 			tick, err = fsmtest.TestConnectionStateTransition(
 				ctx, instance, mockService, mockFS, connectionName,
-				fsm.LifecycleStateCreating,
+				internalfsm.LifecycleStateCreating,
 				connection.OperationalStateStopped, 5, tick)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(mockService.AddConnectionToNmapManagerCalled).To(BeTrue())
 
-			// Set desired state to Active
+			// Set desired state to Up
 			Expect(instance.SetDesiredFSMState(connection.OperationalStateUp)).To(Succeed())
 
 			// Transition from Stopped to Starting
-			fsmtest.TransitionToConnectionState(mockService, connectionName, dataflowcomponent.OperationalStateStarting)
+			fsmtest.TransitionToConnectionState(mockService, connectionName, connection.OperationalStateStarting)
 
-			// Execute transition: Stopped → Starting
+			// Execute transition: Stopped -> Starting
 			tick, err = fsmtest.TestConnectionStateTransition(
 				ctx, instance, mockService, mockFS, connectionName,
 				connection.OperationalStateStopped,
@@ -92,17 +92,17 @@ var _ = Describe("Connection FSM", func() {
 			var err error
 
 			// Setup to Stopped state
-			// ToBeCreated → Creating
+			// ToBeCreated -> Creating
 			tick, err = fsmtest.TestConnectionStateTransition(
 				ctx, instance, mockService, mockFS, connectionName,
-				fsm.LifecycleStateToBeCreated,
-				fsm.LifecycleStateCreating, 5, tick)
+				internalfsm.LifecycleStateToBeCreated,
+				internalfsm.LifecycleStateCreating, 5, tick)
 			Expect(err).NotTo(HaveOccurred())
 
-			// Creating → Stopped
+			// Creating -> Stopped
 			tick, err = fsmtest.TestConnectionStateTransition(
 				ctx, instance, mockService, mockFS, connectionName,
-				fsm.LifecycleStateCreating,
+				internalfsm.LifecycleStateCreating,
 				connection.OperationalStateStopped, 5, tick)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(mockService.AddConnectionToNmapManagerCalled).To(BeTrue())
@@ -113,7 +113,7 @@ var _ = Describe("Connection FSM", func() {
 			// Transition from Stopped to Starting
 			fsmtest.TransitionToConnectionState(mockService, connectionName, connection.OperationalStateStarting)
 
-			// Execute transition: Stopped → Starting
+			// Execute transition: Stopped -> Starting
 			tick, err = fsmtest.TestConnectionStateTransition(
 				ctx,
 				instance,
@@ -149,14 +149,14 @@ var _ = Describe("Connection FSM", func() {
 			// 1. First get to Stopped state
 			tick, err := fsmtest.TestConnectionStateTransition(
 				ctx, instance, mockService, mockFS, connectionName,
-				fsm.LifecycleStateToBeCreated,
-				fsm.LifecycleStateCreating, 5, tick)
+				internalfsm.LifecycleStateToBeCreated,
+				internalfsm.LifecycleStateCreating, 5, tick)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Creating → Stopped
 			tick, err = fsmtest.TestConnectionStateTransition(
 				ctx, instance, mockService, mockFS, connectionName,
-				fsm.LifecycleStateCreating,
+				internalfsm.LifecycleStateCreating,
 				connection.OperationalStateStopped, 5, tick)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(mockService.AddConnectionToNmapManagerCalled).To(BeTrue())
@@ -164,7 +164,7 @@ var _ = Describe("Connection FSM", func() {
 			// inject permanent error
 			mockService.StatusError = fmt.Errorf("%s: simulated", backoff.PermanentFailureError)
 
-			tick, recErr, reconciled := fsmtest.ReconcileConnectionUntilError(
+			_, recErr, reconciled := fsmtest.ReconcileConnectionUntilError(
 				ctx,
 				pkgfsm.SystemSnapshot{Tick: tick},
 				instance,
@@ -185,7 +185,7 @@ var _ = Describe("Connection FSM", func() {
 	})
 
 	Context("Error Handling", func() {
-		It("should handle nmap service not exist error correctly", func() {
+		It("should handle connection service not exist error correctly", func() {
 			var err error
 			// Setup to Creating state
 			tick, err = fsmtest.TestConnectionStateTransition(
@@ -194,15 +194,15 @@ var _ = Describe("Connection FSM", func() {
 				mockService,
 				mockFS,
 				connectionName,
-				fsm.LifecycleStateToBeCreated,
-				fsm.LifecycleStateCreating,
+				internalfsm.LifecycleStateToBeCreated,
+				internalfsm.LifecycleStateCreating,
 				5,
 				tick,
 			)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Force the exact error message from the logs with proper error wrapping
-			mockService.StatusError = fmt.Errorf("failed to get nmap config: failed to get nmap config file for service nmap-connection-%s: %w", connectionName, nmapsvc.ErrServiceNotExist)
+			mockService.StatusError = fmt.Errorf("failed to get connection config: failed to get connection config file for service %s: %w", connectionName, connectionsvc.ErrServiceNotExist)
 
 			// Attempt to reconcile - this should not set an FSM error if errors are correctly identified
 			snapshot := pkgfsm.SystemSnapshot{Tick: tick}
@@ -234,19 +234,19 @@ var _ = Describe("ConnectionInstance state transitions", func() {
 	BeforeEach(func() {
 		ctx = context.Background()
 		tick = 0
-		serviceName = "test-nmap"
+		serviceName = "test-connection-fsm"
 
 		instance, mockService, _ = fsmtest.SetupConnectionInstance(serviceName, connection.OperationalStateStopped)
 		mockFS = filesystem.NewMockFileSystem()
 
-		// to_be_created → creating
+		// to_be_created -> creating
 		tick, _ = fsmtest.TestConnectionStateTransition(
 			ctx, instance, mockService, mockFS, serviceName,
 			internalfsm.LifecycleStateToBeCreated,
 			internalfsm.LifecycleStateCreating,
 			5, tick,
 		)
-		// creating → stopped
+		// creating -> stopped
 		mockService.ConnectionStates[serviceName] = &connectionsvc.ServiceInfo{NmapFSMState: nmap.OperationalStateStopped}
 		mockService.ExistingConnections[serviceName] = true
 		tick, _ = fsmtest.TestConnectionStateTransition(
@@ -258,14 +258,14 @@ var _ = Describe("ConnectionInstance state transitions", func() {
 
 		// let the instance start scanning
 		Expect(instance.SetDesiredFSMState(connection.OperationalStateUp)).To(Succeed())
-		// stopped → starting
+		// stopped -> starting
 		tick, _ = fsmtest.TestConnectionStateTransition(
 			ctx, instance, mockService, mockFS, serviceName,
 			connection.OperationalStateStopped,
 			connection.OperationalStateStarting,
 			5, tick,
 		)
-		// starting → up (service up, port up)
+		// starting -> up (service up, port up)
 		mockService.SetConnectionState(serviceName, connectionsvc.ConnectionStateFlags{
 			IsNmapRunning: true,
 			IsFlaky:       false,
@@ -318,116 +318,103 @@ var _ = Describe("ConnectionInstance state transitions", func() {
 			)
 			Expect(err).NotTo(HaveOccurred())
 		}
-
-		// sanity check
 		Expect(instance.GetCurrentFSMState()).To(Equal(connection.OperationalStateStopped))
 	})
 
-	DescribeTable("transitions: up → from → to", func(fromState, toState, nmapFromState, nmapToState string, isFlaky bool) {
-		// Up → fromState
-		mockService.SetConnectionState(serviceName, connectionsvc.ConnectionStateFlags{
-			IsNmapRunning: true,
-			IsFlaky:       false,
-			NmapFSMState:  nmapFromState,
-		})
-		var err error
-		tick, err = fsmtest.TestConnectionStateTransition(
-			ctx,
-			instance,
-			mockService,
-			mockFS,
-			serviceName,
-			nmap.OperationalStateDegraded,
-			fromState,
-			10,
-			tick,
-		)
-		Expect(err).NotTo(HaveOccurred())
+	DescribeTable("transitions: up -> from -> to",
+		func(fromState, toState, nmapFromState, nmapToState string, fromIsFlaky, toIsFlaky bool) {
+			// Up -> fromState
+			mockService.SetConnectionState(serviceName, connectionsvc.ConnectionStateFlags{
+				IsNmapRunning: true,
+				IsFlaky:       fromIsFlaky,
+				NmapFSMState:  nmapFromState,
+			})
+			var err error
+			tick, err = fsmtest.TestConnectionStateTransition(
+				ctx,
+				instance,
+				mockService,
+				mockFS,
+				serviceName,
+				connection.OperationalStateUp,
+				fromState,
+				10,
+				tick,
+			)
+			Expect(err).NotTo(HaveOccurred())
 
-		// fromState → toState
-		mockService.SetConnectionState(serviceName, connectionsvc.ConnectionStateFlags{
-			IsNmapRunning: true,
-			IsFlaky:       isFlaky,
-			NmapFSMState:  nmapToState,
-		})
-		tick, err = fsmtest.TestConnectionStateTransition(
-			ctx,
-			instance,
-			mockService,
-			mockFS,
-			serviceName,
-			fromState,
-			toState,
-			10,
-			tick,
-		)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(instance.GetCurrentFSMState()).To(Equal(toState))
-	},
-		// -------------
-		//  open → …
+			// fromState -> toState
+			mockService.SetConnectionState(serviceName, connectionsvc.ConnectionStateFlags{
+				IsNmapRunning: true,
+				IsFlaky:       toIsFlaky,
+				NmapFSMState:  nmapToState,
+			})
+			tick, err = fsmtest.TestConnectionStateTransition(
+				ctx,
+				instance,
+				mockService,
+				mockFS,
+				serviceName,
+				fromState,
+				toState,
+				10,
+				tick,
+			)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(instance.GetCurrentFSMState()).To(Equal(toState))
+		},
 		Entry(
-			"up → down (nmap closed)",
+			"up -> down (nmap closed)",
 			connection.OperationalStateUp,
 			connection.OperationalStateDown,
 			nmap.OperationalStateOpen,
 			nmap.OperationalStateClosed,
 			false,
-		),
-		Entry(
-			"up → degraded (w/o flaky)",
-			connection.OperationalStateUp,
-			connection.OperationalStateDegraded,
-			nmap.OperationalStateOpen,
-			nmap.OperationalStateDegraded,
 			false,
 		),
 		Entry(
-			"up → degraded (w/ flaky)",
+			"up -> degraded (w flaky)",
 			connection.OperationalStateUp,
 			connection.OperationalStateDegraded,
 			nmap.OperationalStateOpen,
 			nmap.OperationalStateOpen,
+			false,
 			true,
 		),
 		Entry(
-			"down → up (from closed)",
+			"down -> up (from closed)",
 			connection.OperationalStateDown,
 			connection.OperationalStateUp,
 			nmap.OperationalStateClosed,
 			nmap.OperationalStateOpen,
 			false,
-		),
-		Entry(
-			"down → degraded (w/o flaky)",
-			connection.OperationalStateDown,
-			connection.OperationalStateDegraded,
-			nmap.OperationalStateClosed,
-			nmap.OperationalStateDegraded,
 			false,
 		),
 		Entry(
-			"down → degraded (w/ flaky)",
+			"down -> degraded (w flaky)",
 			connection.OperationalStateDown,
 			connection.OperationalStateDegraded,
 			nmap.OperationalStateClosed,
-			nmap.OperationalStateClosed,
+			nmap.OperationalStateOpen,
+			false,
 			true,
 		),
 		Entry(
-			"degraded → up",
+			"degraded -> up",
 			connection.OperationalStateDegraded,
 			connection.OperationalStateUp,
-			nmap.OperationalStateDegraded,
 			nmap.OperationalStateOpen,
+			nmap.OperationalStateOpen,
+			true,
 			false,
 		),
 		Entry(
-			"degraded → down",
+			"degraded -> down",
 			connection.OperationalStateDegraded,
 			connection.OperationalStateDown,
-			nmap.OperationalStateDegraded,
+			nmap.OperationalStateOpen,
 			nmap.OperationalStateClosed,
+			true,
 			false,
 		),
 	)

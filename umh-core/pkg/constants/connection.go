@@ -17,7 +17,7 @@ package constants
 import "time"
 
 const (
-	// NmapUpdateObservedStateTimeout is the timeout for updating the observed state
+	// ConnectionUpdateObservedStateTimeout is the timeout for updating the observed state
 	ConnectionUpdateObservedStateTimeout = 5 * time.Millisecond
 	// The amount of recent states to keep for flicker detection, if there were at least 2 states in the last 5 states that were differing, the connection is considered degraded
 	MaxRecentStates = 5

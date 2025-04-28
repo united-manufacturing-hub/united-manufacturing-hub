@@ -491,7 +491,6 @@ func (m *MockNmapService) SetServicePortState(serviceName string, state string, 
 		info.NmapStatus.LastScan.PortResult.LatencyMs = latencyMs
 		info.NmapStatus.Logs = logs
 	}
-	fmt.Println("Set Service Port State called")
 	m.StatusResult = *info
 }
 

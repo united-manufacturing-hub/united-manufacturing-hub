@@ -21,7 +21,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-func TestDataflowComponent(t *testing.T) {
+func TestConnection(t *testing.T) {
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "Connection Test Suite")
 }

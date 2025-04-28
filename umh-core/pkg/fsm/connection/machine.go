@@ -60,7 +60,7 @@ func NewConnectionInstance(
 			{
 				Name: EventProbeDown,
 				Src: []string{
-					OperationalStateDown,
+					OperationalStateUp,
 					OperationalStateDegraded,
 				},
 				Dst: OperationalStateDown,

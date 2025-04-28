@@ -37,12 +37,12 @@ func (instance *ConnectionInstance) registerCallbacks() {
 	})
 
 	instance.baseFSMInstance.AddCallback("enter_"+OperationalStateUp, func(ctx context.Context, e *fsm.Event) {
-		instance.baseFSMInstance.GetLogger().Infof("Entering active state for %s", instance.baseFSMInstance.GetID())
+		instance.baseFSMInstance.GetLogger().Infof("Entering up state for %s", instance.baseFSMInstance.GetID())
 	})
 
 	// Running phase state callbacks
 	instance.baseFSMInstance.AddCallback("enter_"+OperationalStateDown, func(ctx context.Context, e *fsm.Event) {
-		instance.baseFSMInstance.GetLogger().Infof("Entering idle state for %s", instance.baseFSMInstance.GetID())
+		instance.baseFSMInstance.GetLogger().Infof("Entering down state for %s", instance.baseFSMInstance.GetID())
 	})
 
 	instance.baseFSMInstance.AddCallback("enter_"+OperationalStateDegraded, func(ctx context.Context, e *fsm.Event) {

@@ -24,7 +24,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/backoff"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/connection"
+	connectionsvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/connection"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
@@ -91,7 +91,7 @@ func (c *ConnectionInstance) Reconcile(ctx context.Context, snapshot fsm.SystemS
 	// Step 2: Detect external changes.
 	if err = c.reconcileExternalChanges(ctx, filesystemService, snapshot.Tick); err != nil {
 		// If the service is not running, we don't want to return an error here, because we want to continue reconciling
-		if !errors.Is(err, connection.ErrServiceNotExist) {
+		if !errors.Is(err, connectionsvc.ErrServiceNotExist) {
 			c.baseFSMInstance.SetError(err, snapshot.Tick)
 			c.baseFSMInstance.GetLogger().Errorf("error reconciling external changes: %s", err)
 
@@ -178,7 +178,7 @@ func (c *ConnectionInstance) reconcileStateTransition(ctx context.Context, files
 
 	// Handle lifecycle states first - these take precedence over operational states
 	if internal_fsm.IsLifecycleState(currentState) {
-		err, reconciled := c.reconcileLifecycleStates(ctx, filesystemService, currentState)
+		err, reconciled = c.reconcileLifecycleStates(ctx, filesystemService, currentState)
 		if err != nil {
 			return err, false
 		}
@@ -187,7 +187,7 @@ func (c *ConnectionInstance) reconcileStateTransition(ctx context.Context, files
 
 	// Handle operational states
 	if IsOperationalState(currentState) {
-		err, reconciled := c.reconcileOperationalStates(ctx, filesystemService, currentState, desiredState, currentTime)
+		err, reconciled = c.reconcileOperationalStates(ctx, filesystemService, currentState, desiredState, currentTime)
 		if err != nil {
 			return err, false
 		}
@@ -277,7 +277,7 @@ func (c *ConnectionInstance) reconcileTransitionToActive(ctx context.Context, fi
 func (c *ConnectionInstance) reconcileStartingStates(ctx context.Context, filesystemService filesystem.Service, currentState string, currentTime time.Time) (err error, reconciled bool) {
 	start := time.Now()
 	defer func() {
-		metrics.ObserveReconcileTime(metrics.ComponentDataflowComponentInstance, c.baseFSMInstance.GetID()+".reconcileStartingState", time.Since(start))
+		metrics.ObserveReconcileTime(metrics.ComponentConnectionInstance, c.baseFSMInstance.GetID()+".reconcileStartingState", time.Since(start))
 	}()
 
 	switch currentState {

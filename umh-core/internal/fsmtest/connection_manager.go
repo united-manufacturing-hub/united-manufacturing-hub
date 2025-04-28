@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//go:build test
+// +build test
+
 package fsmtest
 
 import (
@@ -55,6 +58,7 @@ func WaitForConnectionManagerInstanceState(
 	tick := snapshot.Tick
 	currentState := ""
 	for i := 0; i < maxAttempts; i++ {
+		snapshot.Tick = tick
 		err, _ := manager.Reconcile(ctx, snapshot, filesystemService)
 		if err != nil {
 			return tick, err
@@ -143,7 +147,7 @@ func SetupServiceInConnectionManager(
 	instance := connectionfsm.NewConnectionInstance("", CreateConnectionTestConfig(connectionName, desiredState))
 
 	// Add it to the manager
-	manager.BaseFSMManager.AddInstanceForTest(connectionName, instance)
+	manager.AddInstanceForTest(connectionName, instance)
 
 	// Make sure the service exists in the mock service
 	mockService.ExistingConnections[connectionName] = true
