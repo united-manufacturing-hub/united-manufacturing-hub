@@ -519,9 +519,6 @@ func (a *DeployDataflowComponentAction) waitForComponentToBeActive() error {
 			remaining := timeoutDuration - elapsed
 			remainingSeconds := int(remaining.Seconds())
 
-			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
-				fmt.Sprintf("Checking if dataflow component '%s' is active (%ds remaining)...",
-					a.name, remainingSeconds), a.outboundChannel, models.DeployDataFlowComponent)
 			if dataflowcomponentManager, exists := a.systemSnapshot.Managers[constants.DataflowcomponentManagerName]; exists {
 				instances := dataflowcomponentManager.GetInstances()
 				found := false
