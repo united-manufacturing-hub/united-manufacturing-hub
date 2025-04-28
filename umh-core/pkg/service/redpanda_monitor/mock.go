@@ -294,9 +294,8 @@ func (m *MockRedpandaMonitorService) AddRedpandaMonitorToS6Manager(ctx context.C
 }
 
 // UpdateRedpandaMonitorInS6Manager mocks updating a Redpanda Monitor instance in the S6 manager
-func (m *MockRedpandaMonitorService) UpdateRedpandaMonitorInS6Manager(ctx context.Context, port uint16) error {
+func (m *MockRedpandaMonitorService) UpdateRedpandaMonitorInS6Manager(ctx context.Context) error {
 	m.UpdateRedpandaMonitorInS6ManagerCalled = true
-	m.UpdateLastPort = port
 
 	// Check for context cancellation
 	if ctx.Err() != nil {

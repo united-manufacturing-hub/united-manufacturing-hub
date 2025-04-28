@@ -19,9 +19,9 @@ import "time"
 // RedpandaMonitorUpdateObservedStateTimeout is the timeout for updating the observed state
 const RedpandaMonitorUpdateObservedStateTimeout = 2 * time.Millisecond
 
-// RedpandaMonitorExpectedMaxP95ExecutionTimePerInstance means that an instance will not reconcile if not 30ms are left
+// RedpandaMonitorExpectedMaxP95ExecutionTimePerInstance means that an instance will not reconcile if not 35ms are left
 // Note: in the intergation test, we defined an alerting threshold of 80% of the max ticker time, which is 100ms
-// So by setting this to 30 ms, we can ensure that an instance will never start if it triggers the alerting threshold
+// So by setting this to 35 ms, we can ensure that an instance will never start if it triggers the alerting threshold
 const RedpandaMonitorExpectedMaxP95ExecutionTimePerInstance = time.Millisecond * 35
 
 // RedpandaMonitorServiceName is the name of the redpanda monitor service

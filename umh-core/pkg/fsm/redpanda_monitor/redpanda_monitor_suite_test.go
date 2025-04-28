@@ -21,7 +21,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-func TestAgentFSM(t *testing.T) {
+func TestRedpandaMonitorFSM(t *testing.T) {
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "Redpanda Monitor FSM Suite")
 }

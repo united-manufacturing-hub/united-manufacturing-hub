@@ -213,7 +213,6 @@ func (r *RedpandaInstance) UpdateObservedStateOfInstance(ctx context.Context, fi
 		} else if strings.Contains(err.Error(), redpanda_service.ErrServiceNotExist.Error()) || strings.Contains(err.Error(), redpanda_service.ErrServiceNoLogFile.Error()) || strings.Contains(err.Error(), redpanda_service.ErrRedpandaMonitorInstanceNotFound.Error()) {
 			return nil
 		}
-		r.baseFSMInstance.GetLogger().Debugf("[UpdateObservedStateOfInstance] Got service status: %v (err: %v)", info, err)
 
 		return err
 	})
@@ -242,7 +241,7 @@ func (r *RedpandaInstance) UpdateObservedStateOfInstance(ctx context.Context, fi
 				r.baseFSMInstance.GetLogger().Debugf("Service not yet ready: %v", err)
 				return nil
 			}
-			r.baseFSMInstance.GetLogger().Debugf("[UpdateObservedStateOfInstance] Got service config: %v (err: %v)", observedConfig, err)
+
 			return fmt.Errorf("failed to get observed Redpanda config: %w", err)
 		}
 	})
