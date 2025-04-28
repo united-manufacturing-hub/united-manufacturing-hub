@@ -438,21 +438,29 @@ func (s *NmapService) RemoveNmapFromS6Manager(ctx context.Context, nmapName stri
 		return ctx.Err()
 	}
 
-	s6ServiceName := s.getS6ServiceName(nmapName)
+	// ------------------------------------------------------------------
+	// 1) Delete the *desired* config entry so the S6-manager will stop it
+	// ------------------------------------------------------------------
+	s6Name := s.getS6ServiceName(nmapName)
 
-	found := false
-
-	// Remove the S6 FSM config from the list
-	for i, s6Config := range s.s6ServiceConfigs {
-		if s6Config.Name == s6ServiceName {
-			s.s6ServiceConfigs = append(s.s6ServiceConfigs[:i], s.s6ServiceConfigs[i+1:]...)
-			found = true
-			break
+	// Helper that deletes exactly one element *without* reallocating when the
+	// element is already missing – keeps the call idempotent and allocation-free.
+	sliceRemoveByName := func(arr []config.S6FSMConfig, name string) []config.S6FSMConfig {
+		for i, cfg := range arr {
+			if cfg.Name == name {
+				return append(arr[:i], arr[i+1:]...)
+			}
 		}
+		return arr
 	}
 
-	if !found {
-		return ErrServiceNotExist
+	s.s6ServiceConfigs = sliceRemoveByName(s.s6ServiceConfigs, s6Name)
+
+	// ------------------------------------------------------------------
+	// 2) is the child FSM still alive?
+	// ------------------------------------------------------------------
+	if inst, ok := s.s6Manager.GetInstance(s6Name); ok {
+		return fmt.Errorf("%w: S6 instance state=%s", ErrRemovalPending, inst.GetCurrentFSMState())
 	}
 
 	// Clean up the cached scan results

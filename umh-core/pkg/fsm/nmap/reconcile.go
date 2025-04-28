@@ -211,6 +211,12 @@ func (n *NmapInstance) reconcileLifecycleStates(ctx context.Context, filesystemS
 
 	case internal_fsm.LifecycleStateRemoving:
 		if err := n.RemoveInstance(ctx, filesystemService); err != nil {
+			// Treat “removal still in progress” as a *non-error* so that the reconcile
+			// loop continues; the FSM stays in `removing` until RemoveInstance returns
+			// nil or a hard error.
+			if errors.Is(err, nmap_service.ErrRemovalPending) {
+				return nil, false
+			}
 			return err, false
 		}
 		return n.baseFSMInstance.SendEvent(ctx, internal_fsm.LifecycleEventRemoveDone), true

@@ -171,11 +171,8 @@ var _ = Describe("Nmap Service", func() {
 				Expect(service.s6ServiceConfigs).To(BeEmpty())
 			})
 
-			It("should return error when service doesn't exist", func() {
-				ctx := context.Background()
-				err := service.RemoveNmapFromS6Manager(ctx, "nonexistent")
-				Expect(err).To(Equal(ErrServiceNotExist))
-			})
+			// Note: removing a non-existent component should not result in an error
+			// the remove action will be called multiple times until the component is gone it returns nil
 		})
 	})
 

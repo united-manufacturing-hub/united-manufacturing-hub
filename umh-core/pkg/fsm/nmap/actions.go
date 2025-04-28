@@ -74,16 +74,43 @@ func (n *NmapInstance) RemoveInstance(ctx context.Context, filesystemService fil
 
 	// Initiate the removal cycle
 	err := n.monitorService.RemoveNmapFromS6Manager(ctx, n.baseFSMInstance.GetID())
-	if err != nil {
-		if err == nmap_service.ErrServiceNotExist {
-			n.baseFSMInstance.GetLogger().Debugf("Nmap service %s not found in S6 manager", n.baseFSMInstance.GetID())
-			return nil // do not throw an error, as each action is expected to be idempotent
-		}
-		return fmt.Errorf("failed to remove Nmap service %s from S6 manager: %w", n.baseFSMInstance.GetID(), err)
-	}
+	switch {
+	// ---------------------------------------------------------------
+	// happy paths
+	// ---------------------------------------------------------------
+	case err == nil: // fully removed
+		n.baseFSMInstance.GetLogger().
+			Infof("Nmap service %s removed from S6 manager",
+				n.baseFSMInstance.GetID())
+		return nil
 
-	n.baseFSMInstance.GetLogger().Debugf("Nmap service %s removed from S6 manager", n.baseFSMInstance.GetID())
-	return nil
+	case errors.Is(err, nmap_service.ErrServiceNotExist):
+		n.baseFSMInstance.GetLogger().
+			Infof("Nmap service %s already removed from S6 manager",
+				n.baseFSMInstance.GetID())
+		// idempotent: was already gone
+		return nil
+
+	// ---------------------------------------------------------------
+	// transient path – keep retrying
+	// ---------------------------------------------------------------
+	case errors.Is(err, nmap_service.ErrRemovalPending):
+		n.baseFSMInstance.GetLogger().
+			Infof("Nmap service %s removal still in progress",
+				n.baseFSMInstance.GetID())
+		// not an error from the FSM’s perspective – just means “try again”
+		return err
+
+	// ---------------------------------------------------------------
+	// real error – escalate
+	// ---------------------------------------------------------------
+	default:
+		n.baseFSMInstance.GetLogger().
+			Errorf("failed to remove service %s: %s",
+				n.baseFSMInstance.GetID(), err)
+		return fmt.Errorf("failed to remove service %s: %w",
+			n.baseFSMInstance.GetID(), err)
+	}
 }
 
 // StartInstance attempts to start the Nmap by setting the desired state to running for the given instance
