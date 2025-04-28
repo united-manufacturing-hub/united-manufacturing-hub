@@ -22,4 +22,10 @@ var (
 	ErrServiceNotExists = errors.New("dataflow component does not exist")
 	// ErrServiceAlreadyExists is returned when a dataflow component already exists
 	ErrServiceAlreadyExists = errors.New("dataflow component already exists")
+
+	// ErrRemovalPending is **not** a failure.
+	// It means the desired config has been deleted but the child FSM still
+	// exists.  Callers should keep reconciling and retry the removal in the
+	// next cycle.
+	ErrRemovalPending = errors.New("service removal still in progress")
 )

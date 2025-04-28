@@ -226,6 +226,12 @@ func (d *DataflowComponentInstance) reconcileLifecycleStates(ctx context.Context
 		return d.baseFSMInstance.SendEvent(ctx, internal_fsm.LifecycleEventCreateDone), true
 	case internal_fsm.LifecycleStateRemoving:
 		if err := d.RemoveInstance(ctx, filesystemService); err != nil {
+			// Treat “removal still in progress” as a *non-error* so that the reconcile
+			// loop continues; the FSM stays in `removing` until RemoveInstance returns
+			// nil or a hard error.
+			if errors.Is(err, dataflowcomponentservice.ErrRemovalPending) {
+				return nil, false
+			}
 			return err, false
 		}
 		return d.baseFSMInstance.SendEvent(ctx, internal_fsm.LifecycleEventRemoveDone), true

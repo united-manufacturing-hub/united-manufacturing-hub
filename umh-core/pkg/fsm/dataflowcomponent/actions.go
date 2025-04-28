@@ -65,16 +65,43 @@ func (b *DataflowComponentInstance) RemoveInstance(ctx context.Context, filesyst
 
 	// Remove the initiateDataflowComponent from the Benthos manager
 	err := b.service.RemoveDataFlowComponentFromBenthosManager(ctx, filesystemService, b.baseFSMInstance.GetID())
-	if err != nil {
-		if err == dataflowcomponentservice.ErrServiceNotExists {
-			b.baseFSMInstance.GetLogger().Debugf("DataflowComponent service %s not found in Benthos manager", b.baseFSMInstance.GetID())
-			return nil // do not throw an error, as each action is expected to be idempotent
-		}
-		return fmt.Errorf("failed to remove DataflowComponent service %s from Benthos manager: %w", b.baseFSMInstance.GetID(), err)
-	}
+	switch {
+	// ---------------------------------------------------------------
+	// happy paths
+	// ---------------------------------------------------------------
+	case err == nil: // fully removed
+		b.baseFSMInstance.GetLogger().
+			Infof("Benthos service %s removed from S6 manager",
+				b.baseFSMInstance.GetID())
+		return nil
 
-	b.baseFSMInstance.GetLogger().Debugf("DataflowComponent service %s removed from Benthos manager", b.baseFSMInstance.GetID())
-	return nil
+	case errors.Is(err, dataflowcomponentservice.ErrServiceNotExists):
+		b.baseFSMInstance.GetLogger().
+			Infof("Benthos service %s already removed from S6 manager",
+				b.baseFSMInstance.GetID())
+		// idempotent: was already gone
+		return nil
+
+	// ---------------------------------------------------------------
+	// transient path – keep retrying
+	// ---------------------------------------------------------------
+	case errors.Is(err, dataflowcomponentservice.ErrRemovalPending):
+		b.baseFSMInstance.GetLogger().
+			Infof("Benthos service %s removal still in progress",
+				b.baseFSMInstance.GetID())
+		// not an error from the FSM’s perspective – just means “try again”
+		return err
+
+	// ---------------------------------------------------------------
+	// real error – escalate
+	// ---------------------------------------------------------------
+	default:
+		b.baseFSMInstance.GetLogger().
+			Errorf("failed to remove service %s: %s",
+				b.baseFSMInstance.GetID(), err)
+		return fmt.Errorf("failed to remove service %s: %w",
+			b.baseFSMInstance.GetID(), err)
+	}
 }
 
 // StartInstance to start the DataflowComponent by setting the desired state to running for the given instance
