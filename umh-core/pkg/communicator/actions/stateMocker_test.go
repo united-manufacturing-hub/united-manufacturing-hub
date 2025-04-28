@@ -27,10 +27,9 @@ import (
 
 var _ = Describe("StateMocker", func() {
 	var (
-		stateMocker  *actions.StateMocker
-		cfg          *config.FullConfig
-		testInstance fsm.FSMInstanceSnapshot
-		testConfig   dataflowcomponentserviceconfig.DataflowComponentServiceConfig
+		stateMocker *actions.StateMocker
+		cfg         *config.FullConfig
+		testConfig  dataflowcomponentserviceconfig.DataflowComponentServiceConfig
 	)
 
 	BeforeEach(func() {
@@ -46,36 +45,41 @@ var _ = Describe("StateMocker", func() {
 				},
 			},
 		}
-		testInstance = fsm.FSMInstanceSnapshot{
-			ID:           "test-component-build",
-			DesiredState: "active",
-			CurrentState: "active",
-			LastObservedState: &dataflowcomponent.DataflowComponentObservedStateSnapshot{
-				Config: testConfig,
-			},
-		}
 	})
 
 	Context("GetState", func() {
 		It("should return the current state of the system", func() {
+			// Configure the test component with the same name and state that we expect
+			componentName := "test-component-build"
+			desiredState := "active"
+
 			cfg.DataFlow = []config.DataFlowComponentConfig{
 				{
 					FSMInstanceConfig: config.FSMInstanceConfig{
-						Name: "test-component-1",
+						Name:            componentName,
+						DesiredFSMState: desiredState,
 					},
 					DataFlowComponentServiceConfig: testConfig,
 				},
 			}
 
-			// This just checks that the state isn't nil, we don't need to compare to expectedState
-			// since the StateMocker isn't fully implemented in this test
-
-			managerSnapshot := &actions.MockManagerSnapshot{
-				Instances: map[string]*fsm.FSMInstanceSnapshot{
-					"test-component-build": &testInstance,
+			// Create the expected test instance with matching values
+			testInstance := fsm.FSMInstanceSnapshot{
+				ID:           componentName,
+				DesiredState: desiredState,
+				CurrentState: desiredState,
+				LastObservedState: &dataflowcomponent.DataflowComponentObservedStateSnapshot{
+					Config: testConfig,
 				},
 			}
 
+			managerSnapshot := &actions.MockManagerSnapshot{
+				Instances: map[string]*fsm.FSMInstanceSnapshot{
+					componentName: &testInstance,
+				},
+			}
+
+			stateMocker.UpdateState()
 			state := stateMocker.GetState()
 			testSnapshot := &fsm.SystemSnapshot{
 				Managers: map[string]fsm.ManagerSnapshot{
@@ -83,7 +87,7 @@ var _ = Describe("StateMocker", func() {
 				},
 			}
 
-			Expect(state).To(Equal(testSnapshot)) // The state is expected to be nil initially
+			Expect(state).To(Equal(testSnapshot))
 		})
 	})
 })
