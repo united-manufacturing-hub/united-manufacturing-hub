@@ -16,6 +16,7 @@ package config
 
 import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/connectionserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/nmapserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/redpandaserviceconfig"
@@ -36,6 +37,7 @@ type InternalConfig struct {
 	Nmap           []NmapConfig           `yaml:"nmap,omitempty"`           // Nmap services to manage, can be updated while running
 	Redpanda       RedpandaConfig         `yaml:"redpanda,omitempty"`       // Redpanda config, can be updated while running
 	BenthosMonitor []BenthosMonitorConfig `yaml:"benthosMonitor,omitempty"` // BenthosMonitor config, can be updated while running
+	Connection     []ConnectionConfig     `yaml:"connection,omitempty"`     // Connection services to manage, can be updated while running
 }
 
 type AgentConfig struct {
@@ -126,6 +128,15 @@ type RedpandaConfig struct {
 
 	// For the Redpanda service
 	RedpandaServiceConfig redpandaserviceconfig.RedpandaServiceConfig `yaml:"redpandaServiceConfig"`
+}
+
+// ConnectionConfig contains configuration for creating a Connection service
+type ConnectionConfig struct {
+	// For the FSM
+	FSMInstanceConfig `yaml:",inline"`
+
+	// For the Connection service
+	ConnectionServiceConfig connectionserviceconfig.ConnectionServiceConfig `yaml:"connectionServiceConfig"`
 }
 
 // Clone creates a deep copy of FullConfig

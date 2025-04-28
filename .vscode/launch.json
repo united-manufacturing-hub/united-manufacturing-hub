@@ -127,6 +127,14 @@
                 "-ginkgo.focus=with benthos scaling test"
             ],
             "showLog": true
+        },
+        {
+            "name": "Debug Ginkgo Tests (service-connection)",
+            "type": "go",
+            "request": "launch",
+            "mode": "test",
+            "program": "${workspaceFolder}/umh-core/pkg/service/connection",
+            "buildFlags": "--tags=test"
         }
     ]
 }

@@ -23,6 +23,7 @@ var (
 )
 
 // ConnectionServiceConfig represents the configuration for a DataFlowComponent
+// Only TCP probes are supported at the moment.
 type ConnectionServiceConfig struct {
 	NmapServiceConfig nmapserviceconfig.NmapServiceConfig `yaml:"nmap"`
 }
