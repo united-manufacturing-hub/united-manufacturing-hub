@@ -100,11 +100,11 @@ var _ = FDescribe("DataFlowComponent Restart Integration Test", Ordered, Label("
 			startTime := time.Now()
 			lastTimestamp = time.Now()
 			for time.Since(startTime) < testDuration {
+				time.Sleep(1 * time.Second)
 				newOffset, err := checkRPK(topicName, lastOffset, lastTimestamp, lossToleranceWarning, lossToleranceFail, messagesPerSecond)
 				Expect(err).ToNot(HaveOccurred())
 				lastOffset = newOffset
 				lastTimestamp = time.Now()
-				time.Sleep(1 * time.Second)
 			}
 
 			restartActions[mode]()
