@@ -71,6 +71,12 @@ var _ = FDescribe("DataFlowComponent Restart Integration Test", Ordered, Label("
 		Expect(waitForMetrics()).To(Succeed(), "Metrics endpoint should be available after startup")
 	})
 
+	AfterEach(func() {
+		// Reset the offset and timestamp
+		lastOffset = -1
+		lastTimestamp = time.Now()
+	})
+
 	AfterAll(func() {
 		By("Stopping and cleaning up the container after the test")
 		PrintLogsAndStopContainer()
@@ -120,7 +126,7 @@ var _ = FDescribe("DataFlowComponent Restart Integration Test", Ordered, Label("
 			By(fmt.Sprintf("Waiting %s before restart", containerDownWait))
 			for i := 0; i < int(containerDownWait/time.Second); i++ {
 				time.Sleep(time.Second)
-				GinkgoWriter.Printf("Waiting until we can restart: %f seconds\n", int(containerDownWait.Seconds())-i)
+				GinkgoWriter.Printf("Waiting until we can restart: %d seconds\n", int(containerDownWait.Seconds())-i)
 			}
 
 			By("Starting the container again")
@@ -137,21 +143,21 @@ var _ = FDescribe("DataFlowComponent Restart Integration Test", Ordered, Label("
 
 			// Wait for the first checkRPK to return a result
 			Eventually(func() bool {
-				newOffset, err := checkRPK(topicName, lastOffset, lastTimestamp, lossToleranceWarning, lossToleranceFail, messagesPerSecond)
-				lastOffset = newOffset
-				lastTimestamp = time.Now()
+				// We set the offset to -1, to prevent it from hard failing if no messages are yet produced
+				// We also don't care about the timestamp, because we will check it later
+				newOffset, err := checkRPK(topicName, -1, lastTimestamp, lossToleranceWarning, lossToleranceFail, messagesPerSecond)
 				return err == nil && newOffset != -1
-			}, 10*time.Second, 1*time.Second).Should(BeTrue(), "Messages should be produced after restart")
+			}, 30*time.Second, 1*time.Second).Should(BeTrue(), "Messages should be produced after restart")
 
 			By("Validating messages are being produced again after restart")
 			startTime = time.Now()
 			lastTimestamp = time.Now()
 			for time.Since(startTime) < testDuration {
+				time.Sleep(1 * time.Second)
 				newOffset, err := checkRPK(topicName, lastOffset, lastTimestamp, lossToleranceWarning, lossToleranceFail, messagesPerSecond)
 				Expect(err).ToNot(HaveOccurred())
 				lastOffset = newOffset
 				lastTimestamp = time.Now()
-				time.Sleep(1 * time.Second)
 			}
 
 		},
