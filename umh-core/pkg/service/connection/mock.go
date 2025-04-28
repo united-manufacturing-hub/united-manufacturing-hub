@@ -46,9 +46,9 @@ type MockConnectionService struct {
 	GenerateNmapConfigForConnectionCalled bool
 	GetConfigCalled                       bool
 	StatusCalled                          bool
-	AddConnectionCalled                   bool
-	UpdateConectionCalled                 bool
-	RemoveConnectionCalled                bool
+	AddConnectionToNmapManagerCalled      bool
+	UpdateConnectionInNmapManagerCalled   bool
+	RemoveConnectionFromNmapManagerCalled bool
 	StartConnectionCalled                 bool
 	StopConnectionCalled                  bool
 	ForceRemoveConnectionCalled           bool
@@ -62,9 +62,9 @@ type MockConnectionService struct {
 	GetConfigError                        error
 	StatusResult                          ServiceInfo
 	StatusError                           error
-	AddConnectionError                    error
-	UpdateConnectionError                 error
-	RemoveConnectionError                 error
+	AddConnectionToNmapManagerError       error
+	UpdateConnectionInNmapManagerError    error
+	RemoveConnectionFromNmapManagerError  error
 	StartConnectionError                  error
 	StopConnectionError                   error
 	ForceRemoveConnectionError            error
@@ -91,6 +91,7 @@ var _ IConnectionService = (*MockConnectionService)(nil)
 type ConnectionStateFlags struct {
 	IsNmapRunning bool
 	NmapFSMState  string
+	IsFlaky       bool
 }
 
 // NewMockConnectionService creates a new mock connection service
@@ -169,7 +170,7 @@ func (m *MockConnectionService) Status(ctx context.Context, filesystemService fi
 
 // AddConnectionToNmapManager mocks adding a Connection to the Nmap manager
 func (m *MockConnectionService) AddConnectionToNmapManager(ctx context.Context, filesystemService filesystem.Service, cfg *connectionserviceconfig.ConnectionServiceConfig, connectionName string) error {
-	m.AddConnectionCalled = true
+	m.AddConnectionToNmapManagerCalled = true
 
 	nmapName := fmt.Sprintf("connection-%s", connectionName)
 
@@ -195,12 +196,12 @@ func (m *MockConnectionService) AddConnectionToNmapManager(ctx context.Context, 
 	// Add the NmapConfig to the list of NmapConfigs
 	m.NmapConfigs = append(m.NmapConfigs, nmapConfig)
 
-	return m.AddConnectionError
+	return m.AddConnectionToNmapManagerError
 }
 
 // UpdateConnectionInNmapManager mocks updating a Connection in the Nmap manager
 func (m *MockConnectionService) UpdateConnectionInNmapManager(ctx context.Context, filesystemService filesystem.Service, cfg *connectionserviceconfig.ConnectionServiceConfig, connectionName string) error {
-	m.UpdateConectionCalled = true
+	m.UpdateConnectionInNmapManagerCalled = true
 
 	nmapName := fmt.Sprintf("connection-%s", connectionName)
 
@@ -229,12 +230,12 @@ func (m *MockConnectionService) UpdateConnectionInNmapManager(ctx context.Contex
 		NmapServiceConfig: m.GenerateNmapConfigForConnectionResult,
 	}
 
-	return m.UpdateConnectionError
+	return m.UpdateConnectionInNmapManagerError
 }
 
 // RemoveConnectionFromNmapManager mocks removing a Connection from the Nmap manager
 func (m *MockConnectionService) RemoveConnectionFromNmapManager(ctx context.Context, filesystemService filesystem.Service, connectionName string) error {
-	m.RemoveConnectionCalled = true
+	m.RemoveConnectionFromNmapManagerCalled = true
 
 	nmapName := fmt.Sprintf("connection-%s", connectionName)
 
@@ -257,7 +258,7 @@ func (m *MockConnectionService) RemoveConnectionFromNmapManager(ctx context.Cont
 	delete(m.ExistingConnections, connectionName)
 	delete(m.ConnectionStates, connectionName)
 
-	return m.RemoveConnectionError
+	return m.RemoveConnectionFromNmapManagerError
 }
 
 // StartDataFlowComponent mocks starting a Connection

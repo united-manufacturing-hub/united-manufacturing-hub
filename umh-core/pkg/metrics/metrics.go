@@ -36,6 +36,7 @@ const (
 	ComponentRedpandaManager       = "redpanda_manager"
 	ComponentNmapManager           = "nmap_manager"
 	ComponentDataFlowCompManager   = "dataflow_component_manager"
+	ComponentConnectionManager     = "connection_manager"
 	// Instances
 	ComponentBaseFSMInstance           = "base_fsm_instance"
 	ComponentS6Instance                = "s6_instance"
@@ -43,16 +44,18 @@ const (
 	ComponentRedpandaInstance          = "redpanda_instance"
 	ComponentNmapInstance              = "nmap_instance"
 	ComponentDataflowComponentInstance = "dataflow_component_instance"
+	ComponentConnectionInstance        = "connection_instance"
 	ComponentAgentMonitor              = "agent_monitor"
 	ComponentBenthosMonitor            = "benthos_monitor"
 	ComponentRedpandaMonitor           = "redpanda_monitor"
 	// Services
-	ComponentS6Service        = "s6_service"
-	ComponentBenthosService   = "benthos_service"
-	ComponentRedpandaService  = "redpanda_service"
-	ComponentNmapService      = "nmap_service"
-	ComponentFilesystem       = "filesystem"
-	ComponentContainerMonitor = "container_monitor"
+	ComponentS6Service         = "s6_service"
+	ComponentBenthosService    = "benthos_service"
+	ComponentRedpandaService   = "redpanda_service"
+	ComponentNmapService       = "nmap_service"
+	ComponentConnectionService = "connection_service"
+	ComponentFilesystem        = "filesystem"
+	ComponentContainerMonitor  = "container_monitor"
 )
 
 var (

@@ -1,0 +1,122 @@
+// Copyright 2025 UMH Systems GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package connection
+
+import (
+	"fmt"
+	"time"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	public_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/connection"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/nmap"
+	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+)
+
+func NewConnectionManagerWithMockedServices(name string) (*ConnectionManager, *connection.MockConnectionService) {
+
+	mockSvc := connection.NewMockConnectionService()
+
+	// Configure the mock S6 service
+	mockNmapService := mockSvc.NmapService.(*nmap.MockNmapService)
+	s6MockService := mockNmapService.S6Service.(*s6svc.MockService)
+
+	// Configure default responses to prevent real filesystem operations
+	s6MockService.CreateError = nil
+	s6MockService.RemoveError = nil
+	s6MockService.StartError = nil
+	s6MockService.StopError = nil
+	s6MockService.ForceRemoveError = nil
+
+	// Set up the mock to say services exist after creation
+	s6MockService.ServiceExistsResult = true
+
+	// Configure default successful statuses
+	s6MockService.StatusResult = s6svc.ServiceInfo{
+		Status: s6svc.ServiceUp,
+		Pid:    12345, // Fake PID
+		Uptime: 60,    // Fake uptime in seconds
+	}
+	// Create a new manager instance
+	// Lets create a mock manager here
+	mockFSMManager := public_fsm.NewBaseFSMManager[config.ConnectionConfig](
+		name,
+		"/dev/null",
+		func(config config.FullConfig) ([]config.ConnectionConfig, error) {
+			return config.Internal.Connection, nil
+		},
+		func(config config.ConnectionConfig) (string, error) {
+			return fmt.Sprintf("connection-%s", config.Name), nil
+		},
+		// Get desired state for Connection config
+		func(cfg config.ConnectionConfig) (string, error) {
+			return cfg.DesiredFSMState, nil
+		},
+		// Create Connection instance from config
+		func(cfg config.ConnectionConfig) (public_fsm.FSMInstance, error) {
+			instance := NewConnectionInstance("/dev/null", cfg)
+			nmapMockService := nmap.NewMockNmapService()
+			s6MockService := s6svc.NewMockService()
+			s6MockService.ServiceExistsResult = true
+			s6MockService.StatusResult = s6svc.ServiceInfo{
+				Status: s6svc.ServiceUp,
+				Pid:    12345, // Fake PID
+				Uptime: 60,    // Fake uptime in seconds
+			}
+			nmapMockService.S6Service = s6MockService
+			mockSvc.NmapService = nmapMockService
+			instance.service = mockSvc
+			return instance, nil
+		},
+		// Compare Connection configs
+		func(instance public_fsm.FSMInstance, cfg config.ConnectionConfig) (bool, error) {
+			connectionInstance, ok := instance.(*ConnectionInstance)
+			if !ok {
+				return false, fmt.Errorf("instance is not a ConnectionInstance")
+			}
+			connectionInstance.config = cfg.ConnectionServiceConfig
+			if mockSvc, ok := connectionInstance.service.(*connection.MockConnectionService); ok {
+				mockSvc.GetConfigResult = cfg.ConnectionServiceConfig
+			}
+			return true, nil
+		},
+		// Set Connection config
+		func(instance public_fsm.FSMInstance, cfg config.ConnectionConfig) error {
+			connectionInstance, ok := instance.(*ConnectionInstance)
+			if !ok {
+				return fmt.Errorf("instance is not a ConnectionInstance")
+			}
+			connectionInstance.config = cfg.ConnectionServiceConfig
+			if mockSvc, ok := connectionInstance.service.(*connection.MockConnectionService); ok {
+				mockSvc.GetConfigResult = cfg.ConnectionServiceConfig
+			}
+			return nil
+		},
+		// Get expected max p95 execution time per instance
+		func(instance public_fsm.FSMInstance) (time.Duration, error) {
+			connectionInstance, ok := instance.(*ConnectionInstance)
+			if !ok {
+				return 0, fmt.Errorf("instance is not a ConnectionInstance")
+			}
+			return connectionInstance.GetExpectedMaxP95ExecutionTimePerInstance(), nil
+		},
+	)
+
+	mockManager := &ConnectionManager{
+		BaseFSMManager: mockFSMManager,
+	}
+
+	return mockManager, mockSvc
+}
