@@ -1164,6 +1164,15 @@ func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsServ
 		return nil, fmt.Errorf("failed to read log file: %w", err)
 	}
 
+	entries, err := ParseLogsFromBytes(content)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse logs: %w", err)
+	}
+
+	return entries, nil
+}
+
+func ParseLogsFromBytes(content []byte) ([]LogEntry, error) {
 	// Split logs by newline
 	logs := strings.Split(strings.TrimSpace(string(content)), "\n")
 
@@ -1179,6 +1188,7 @@ func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsServ
 			entries = append(entries, entry)
 		}
 	}
+
 	return entries, nil
 }
 
