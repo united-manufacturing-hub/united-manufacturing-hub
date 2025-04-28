@@ -35,6 +35,7 @@ import (
 // enabling the method to read configuration or state information from the filesystem.
 // Currently not used in this implementation but added for consistency with the interface.
 func (b *RedpandaMonitorInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot, filesystemService filesystem.Service) (err error, reconciled bool) {
+	b.baseFSMInstance.GetLogger().Debugf("[Reconcile] Reconciling redpanda monitor instance %s", b.baseFSMInstance.GetID())
 	start := time.Now()
 	instanceName := b.baseFSMInstance.GetID()
 	defer func() {
@@ -150,6 +151,7 @@ func (b *RedpandaMonitorInstance) Reconcile(ctx context.Context, snapshot fsm.Sy
 	// It went all right, so clear the error
 	b.baseFSMInstance.ResetState()
 
+	b.baseFSMInstance.GetLogger().Debugf("[Reconcile] Reconciled redpanda monitor instance %s (reconciled: %t)", instanceName, reconciled)
 	return nil, reconciled
 }
 

@@ -18,7 +18,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	internal_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
@@ -93,14 +92,7 @@ func (r *RedpandaInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSna
 		// If the service is not running, we don't want to return an error here, because we want to continue reconciling
 		if !errors.Is(err, redpanda_service.ErrServiceNotExist) {
 			r.baseFSMInstance.SetError(err, snapshot.Tick)
-			// We expect that the logrotation will sometimes throw "could not parse redpanda metrics/configuration: no sections found. This can happen when the redpanda service is not running, or the logs where rotated"
-			// This is not an error, so we don't want to return an error here
-			if strings.Contains(err.Error(), "could not parse redpanda metrics/configuration: no sections found") {
-				r.baseFSMInstance.GetLogger().Debugf("ignoring error reconciling external changes: %s", err)
-				return nil, false
-			}
 			r.baseFSMInstance.GetLogger().Errorf("error reconciling external changes: %s", err)
-
 			if errors.Is(err, context.DeadlineExceeded) {
 				// Healthchecks occasionally take longer (sometimes up to 70ms),
 				// resulting in context.DeadlineExceeded errors. In this case, we want to

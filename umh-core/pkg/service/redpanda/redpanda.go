@@ -262,6 +262,7 @@ func (s *RedpandaService) GetConfig(ctx context.Context, filesystemService files
 	result.Resources.MaxCores = 1
 	result.Resources.MemoryPerCoreInBytes = 2048 * 1024 * 1024 // 2GB
 
+	s.logger.Debugf("[GetConfig] Returning config: %v", result)
 	return redpandaserviceconfig.NormalizeRedpandaConfig(result), nil
 }
 
@@ -365,6 +366,7 @@ func (s *RedpandaService) Status(ctx context.Context, filesystemService filesyst
 	// we should find a better way to do this
 	serviceInfo.RedpandaStatus.Logs = logs
 
+	s.logger.Debugf("[Status] Returning status: %v", serviceInfo)
 	return serviceInfo, nil
 }
 
@@ -435,6 +437,7 @@ func (s *RedpandaService) GetHealthCheckAndMetrics(ctx context.Context, tick uin
 		Logs:            logs,
 	}
 
+	s.logger.Debugf("[GetHealthCheckAndMetrics] Returning status: %v", s.lastStatus)
 	return s.lastStatus, nil
 }
 
@@ -488,7 +491,7 @@ func (s *RedpandaService) AddRedpandaToS6Manager(ctx context.Context, cfg *redpa
 		},
 	}
 	s.redpandaMonitorConfig = &redpandaMonitorConfig
-
+	s.logger.Debugf("[AddRedpandaToS6Manager] Added redpanda monitor config: %v", redpandaMonitorConfig)
 	return nil
 }
 
@@ -568,6 +571,7 @@ func (s *RedpandaService) UpdateRedpandaInS6Manager(ctx context.Context, cfg *re
 		},
 	}
 
+	s.logger.Debugf("[UpdateRedpandaInS6Manager] Updated redpanda monitor config: %v", s.redpandaMonitorConfig)
 	return nil
 }
 
@@ -609,6 +613,8 @@ func (s *RedpandaService) RemoveRedpandaFromS6Manager(ctx context.Context) error
 	if !found {
 		return ErrServiceNotExist
 	}
+
+	s.logger.Debugf("[RemoveRedpandaFromS6Manager] Removed redpanda monitor config: %v", s.redpandaMonitorConfig)
 	return nil
 }
 
@@ -651,6 +657,7 @@ func (s *RedpandaService) StartRedpanda(ctx context.Context) error {
 		return ErrServiceNotExist
 	}
 
+	s.logger.Debugf("[StartRedpanda] Started redpanda monitor config: %v", s.redpandaMonitorConfig)
 	return nil
 }
 
@@ -693,6 +700,7 @@ func (s *RedpandaService) StopRedpanda(ctx context.Context) error {
 		return ErrServiceNotExist
 	}
 
+	s.logger.Debugf("[StopRedpanda] Stopped redpanda monitor config: %v", s.redpandaMonitorConfig)
 	return nil
 }
 
@@ -719,7 +727,7 @@ func (s *RedpandaService) ReconcileManager(ctx context.Context, filesystemServic
 		return s6Err, false
 	}
 
-	// Also reconcile the benthos monitor
+	// Also reconcile the redpanda monitor
 
 	redpandaMonitorSnapshot := fsm.SystemSnapshot{
 		CurrentConfig: config.FullConfig{Internal: config.InternalConfig{RedpandaMonitor: s.redpandaMonitorConfig}},
@@ -731,6 +739,7 @@ func (s *RedpandaService) ReconcileManager(ctx context.Context, filesystemServic
 		return fmt.Errorf("failed to reconcile redpanda monitor: %w", monitorErr), false
 	}
 
+	s.logger.Debugf("[ReconcileManager] Reconciled redpanda monitor config: %v [%t | %t]", s.redpandaMonitorConfig, s6Reconciled, monitorReconciled)
 	// If either was reconciled, indicate that reconciliation occurred
 	return nil, s6Reconciled || monitorReconciled
 }
@@ -755,10 +764,12 @@ func (s *RedpandaService) IsLogsFine(logs []s6service.LogEntry, currentTime time
 
 		for _, failure := range failures {
 			if strings.Contains(log.Content, failure) {
+				s.logger.Debugf("[IsLogsFine] Found failure: %s", failure)
 				return false
 			}
 		}
 	}
+	s.logger.Debugf("[IsLogsFine] Logs are fine")
 	return true
 }
 
@@ -791,7 +802,7 @@ func (s *RedpandaService) ServiceExists(ctx context.Context, filesystemService f
 		sentry.ReportIssuef(sentry.IssueTypeError, s.logger, "Error checking if service exists for %s: %v", s6ServiceName, err)
 		return false
 	}
-
+	s.logger.Debugf("[ServiceExists] Service %s exists: %t", s6ServiceName, exists)
 	return exists
 }
 
@@ -801,6 +812,7 @@ func (s *RedpandaService) ServiceExists(ctx context.Context, filesystemService f
 func (s *RedpandaService) ForceRemoveRedpanda(ctx context.Context, filesystemService filesystem.Service) error {
 	s6ServiceName := constants.RedpandaServiceName
 	s6ServicePath := filepath.Join(constants.S6BaseDir, s6ServiceName)
+	s.logger.Debugf("[ForceRemoveRedpanda] Force removing service %s", s6ServiceName)
 	return s.s6Service.ForceRemove(ctx, s6ServicePath, filesystemService)
 }
 

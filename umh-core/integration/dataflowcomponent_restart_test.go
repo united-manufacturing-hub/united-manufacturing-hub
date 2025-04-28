@@ -24,7 +24,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var _ = Describe("DataFlowComponent Restart Integration Test", Ordered, Label("integration"), func() {
+var _ = FDescribe("DataFlowComponent Restart Integration Test", Ordered, Label("integration"), func() {
 	const (
 		topicName            = "dfc-restart-test-topic"
 		messagesPerSecond    = 5
@@ -82,8 +82,13 @@ var _ = Describe("DataFlowComponent Restart Integration Test", Ordered, Label("i
 
 	DescribeTable("should produce messages, survive a restart, and produce messages again",
 		func(mode restartMode) {
-			By("Waiting for services to stabilize")
-			time.Sleep(30 * time.Second)
+			// Wait for the first checkRPK to return a result
+			Eventually(func() bool {
+				newOffset, err := checkRPK(topicName, lastOffset, lastTimestamp, lossToleranceWarning, lossToleranceFail, messagesPerSecond)
+				lastOffset = newOffset
+				lastTimestamp = time.Now()
+				return err == nil && newOffset != -1
+			}, 30*time.Second, 1*time.Second).Should(BeTrue(), "Messages should be produced after restart")
 
 			By("Waiting for messages to be produced before restart")
 			startTime := time.Now()
@@ -129,6 +134,14 @@ var _ = Describe("DataFlowComponent Restart Integration Test", Ordered, Label("i
 				resp, err := httpGetWithTimeout(GetMetricsURL(), 1*time.Second)
 				return err == nil && resp == 200
 			}, 20*time.Second, 1*time.Second).Should(BeTrue(), "Metrics endpoint should be healthy after restart")
+
+			// Wait for the first checkRPK to return a result
+			Eventually(func() bool {
+				newOffset, err := checkRPK(topicName, lastOffset, lastTimestamp, lossToleranceWarning, lossToleranceFail, messagesPerSecond)
+				lastOffset = newOffset
+				lastTimestamp = time.Now()
+				return err == nil && newOffset != -1
+			}, 10*time.Second, 1*time.Second).Should(BeTrue(), "Messages should be produced after restart")
 
 			By("Validating messages are being produced again after restart")
 			startTime = time.Now()

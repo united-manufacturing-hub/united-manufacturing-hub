@@ -157,6 +157,8 @@ func checkRPK(topic string, lastLoopOffset int, lastLoopTimestamp time.Time, los
 	messages, err := getRPKSample(topic)
 	samplingDuration := time.Since(samplingStart)
 	if err != nil {
+		GinkgoWriter.Printf("❌ Error getting RPK sample: %v\n", err)
+		GinkgoWriter.Printf("❌ Messages: %v\n", messages)
 		return 0, err
 	}
 
