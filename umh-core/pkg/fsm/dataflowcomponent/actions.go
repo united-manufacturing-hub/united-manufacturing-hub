@@ -71,13 +71,13 @@ func (b *DataflowComponentInstance) RemoveInstance(ctx context.Context, filesyst
 	// ---------------------------------------------------------------
 	case err == nil: // fully removed
 		b.baseFSMInstance.GetLogger().
-			Infof("Benthos service %s removed from S6 manager",
+			Debugf("Benthos service %s removed from S6 manager",
 				b.baseFSMInstance.GetID())
 		return nil
 
 	case errors.Is(err, dataflowcomponentservice.ErrServiceNotExists):
 		b.baseFSMInstance.GetLogger().
-			Infof("Benthos service %s already removed from S6 manager",
+			Debugf("Benthos service %s already removed from S6 manager",
 				b.baseFSMInstance.GetID())
 		// idempotent: was already gone
 		return nil
@@ -87,7 +87,7 @@ func (b *DataflowComponentInstance) RemoveInstance(ctx context.Context, filesyst
 	// ---------------------------------------------------------------
 	case errors.Is(err, dataflowcomponentservice.ErrRemovalPending):
 		b.baseFSMInstance.GetLogger().
-			Infof("Benthos service %s removal still in progress",
+			Debugf("Benthos service %s removal still in progress",
 				b.baseFSMInstance.GetID())
 		// not an error from the FSM’s perspective – just means “try again”
 		return err
@@ -96,9 +96,6 @@ func (b *DataflowComponentInstance) RemoveInstance(ctx context.Context, filesyst
 	// real error – escalate
 	// ---------------------------------------------------------------
 	default:
-		b.baseFSMInstance.GetLogger().
-			Errorf("failed to remove service %s: %s",
-				b.baseFSMInstance.GetID(), err)
 		return fmt.Errorf("failed to remove service %s: %w",
 			b.baseFSMInstance.GetID(), err)
 	}

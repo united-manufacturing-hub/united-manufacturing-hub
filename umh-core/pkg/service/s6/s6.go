@@ -1297,6 +1297,15 @@ func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsServ
 		return nil, fmt.Errorf("failed to read log file: %w", err)
 	}
 
+	entries, err := ParseLogsFromBytes(content)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse logs: %w", err)
+	}
+
+	return entries, nil
+}
+
+func ParseLogsFromBytes(content []byte) ([]LogEntry, error) {
 	// Split logs by newline
 	logs := strings.Split(strings.TrimSpace(string(content)), "\n")
 
@@ -1312,6 +1321,7 @@ func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsServ
 			entries = append(entries, entry)
 		}
 	}
+
 	return entries, nil
 }
 
@@ -1324,7 +1334,7 @@ func parseLogLine(line string) LogEntry {
 
 	// Check if we have the double space separator
 	sepIdx := strings.Index(line, "  ")
-	if sepIdx == -1 || sepIdx > 28 {
+	if sepIdx == -1 || sepIdx > 29 {
 		return LogEntry{Content: line}
 	}
 

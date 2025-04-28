@@ -80,13 +80,13 @@ func (n *NmapInstance) RemoveInstance(ctx context.Context, filesystemService fil
 	// ---------------------------------------------------------------
 	case err == nil: // fully removed
 		n.baseFSMInstance.GetLogger().
-			Infof("Nmap service %s removed from S6 manager",
+			Debugf("Nmap service %s removed from S6 manager",
 				n.baseFSMInstance.GetID())
 		return nil
 
 	case errors.Is(err, nmap_service.ErrServiceNotExist):
 		n.baseFSMInstance.GetLogger().
-			Infof("Nmap service %s already removed from S6 manager",
+			Debugf("Nmap service %s already removed from S6 manager",
 				n.baseFSMInstance.GetID())
 		// idempotent: was already gone
 		return nil
@@ -96,7 +96,7 @@ func (n *NmapInstance) RemoveInstance(ctx context.Context, filesystemService fil
 	// ---------------------------------------------------------------
 	case errors.Is(err, nmap_service.ErrRemovalPending):
 		n.baseFSMInstance.GetLogger().
-			Infof("Nmap service %s removal still in progress",
+			Debugf("Nmap service %s removal still in progress",
 				n.baseFSMInstance.GetID())
 		// not an error from the FSM’s perspective – just means “try again”
 		return err
@@ -105,9 +105,6 @@ func (n *NmapInstance) RemoveInstance(ctx context.Context, filesystemService fil
 	// real error – escalate
 	// ---------------------------------------------------------------
 	default:
-		n.baseFSMInstance.GetLogger().
-			Errorf("failed to remove service %s: %s",
-				n.baseFSMInstance.GetID(), err)
 		return fmt.Errorf("failed to remove service %s: %w",
 			n.baseFSMInstance.GetID(), err)
 	}
