@@ -441,20 +441,26 @@ func (c *ConnectionService) RemoveConnectionFromNmapManager(
 
 	nmapName := c.getNmapName(connectionName)
 
-	// Remove the nmap config from the list of nmap configs
-	// so that the NmapManager will stop the service
-	// The NmapManager itself will handle a graceful shutdown of the underlying Nmap service
-	found := false
-	for i, config := range c.nmapConfigs {
-		if config.Name == nmapName {
-			c.nmapConfigs = append(c.nmapConfigs[:i], c.nmapConfigs[i+1:]...)
-			found = true
-			break
+	sliceRemoveByName := func(in []config.NmapConfig, name string) []config.NmapConfig {
+		for i, v := range in {
+			if v.Name == name {
+				return append(in[:i], in[i+1:]...)
+			}
 		}
+		return in // already gone
 	}
 
-	if !found {
-		return ErrServiceNotExist
+	//--------------------------------------------
+	// 1) trim desired-state slices (idempotent)
+	//--------------------------------------------
+	c.nmapConfigs = sliceRemoveByName(c.nmapConfigs, nmapName)
+
+	//--------------------------------------------
+	// 2) is the child FSM still alive?
+	//--------------------------------------------
+	if inst, ok := c.nmapManager.GetInstance(nmapName); ok {
+		return fmt.Errorf("%w: Nmap instance state=%s",
+			ErrRemovalPending, inst.GetCurrentFSMState())
 	}
 
 	return nil
