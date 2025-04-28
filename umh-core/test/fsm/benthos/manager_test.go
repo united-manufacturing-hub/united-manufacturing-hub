@@ -30,10 +30,11 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	benthosfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
+	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/portmanager"
 	benthossvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 )
 
 // Following the CursorRules, we never call manager.Reconcile(...) directly in loops.
@@ -555,72 +556,111 @@ var _ = Describe("BenthosManager", func() {
 	})
 
 	FContext("Benthos-to-S6 remove hook", func() {
-		It("calls the S6 mock's Remove() when an instance disappears from config", func() {
-			// ---------------------------------------------------------------------
-			// 1) plumbing – manager, mock service & tick counter
-			// ---------------------------------------------------------------------
-			manager, mockSvc := fsmtest.CreateMockBenthosManager("rm-test-mgr")
-			mockS6Svc := mockSvc.S6Service.(*s6.MockService)
+		It("calls the S6 mock’s Remove() when a Benthos instance disappears from config", func() {
+
+			//----------------------------------------------------------------------
+			// 0. plumbing & constants
+			//----------------------------------------------------------------------
+			const benthosName = "remove-me"
 
 			mockFS := filesystem.NewMockFileSystem()
-			// Use NoDeadlineContext for debugging instead of timeout
-			baseCtx := context.Background()
-			ctx, cancel := context.WithDeadline(baseCtx, time.Now().Add(10*time.Minute))
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
 
 			var tick uint64
 
-			const svc = "remove-me"
+			// Get the config and the resulting S6 config
+			benthosCfg := fsmtest.CreateBenthosTestConfig(benthosName, benthosfsm.OperationalStateStopped)
+			realS6Service := benthossvc.NewDefaultBenthosService(benthosName)
+			s6Config, err := realS6Service.GenerateS6ConfigForBenthos(&benthosCfg.BenthosServiceConfig, benthosName)
+			Expect(err).NotTo(HaveOccurred())
 
+			//----------------------------------------------------------------------
+			// 1. Build the dependency graph
 			// ---------------------------------------------------------------------
-			// 2) bring up ONE instance in a cheap "stopped" state
-			// ---------------------------------------------------------------------
+			//    – real BenthosManager
+			//    – BUT:  mock S6Manager  (so FSMs are mocks)
+			//      AND:  mock S6Service  (so ad-hoc calls are mocks)
+			//----------------------------------------------------------------------
+			benthosMgr := benthosfsm.NewBenthosManager("rm-test-mgr")
+			mockS6Mgr := s6fsm.NewS6ManagerWithMockedServices("rm-test-mgr")
+
+			// ---------- mock S6 *service* injected into BenthosService ----------
+			myMockS6Svc := s6service.NewMockService()
+			// a minimal, valid YAML so Unmarshal succeeds
+			myMockS6Svc.GetS6ConfigFileResult = []byte("logger:\n  level: info\n")
+			// we also return a stub S6ServiceConfig for GetConfig()
+			myMockS6Svc.GetConfigResult = s6Config
+
+			// ---------- assemble BenthosService with both injections -----------
+
+			benthosSvc := benthossvc.NewDefaultBenthosService(
+				benthosName,
+				benthossvc.WithS6Manager(mockS6Mgr),   // << manager mock
+				benthossvc.WithS6Service(myMockS6Svc), // << service mock
+			)
+
+			// ---------- craft the BenthosInstance & register it -----------------
+			benthosInst := benthosfsm.NewBenthosInstanceWithService(benthosCfg, benthosSvc)
+			benthosMgr.AddInstanceForTest(benthosName, benthosInst)
+
+			//----------------------------------------------------------------------
+			// 2. Reconcile until the Benthos FSM settles in “Stopped”.
+			//----------------------------------------------------------------------
 			startCfg := config.FullConfig{
 				Internal: config.InternalConfig{
-					Benthos: []config.BenthosConfig{
-						fsmtest.CreateBenthosTestConfig(svc, benthosfsm.OperationalStateStopped),
-					},
+					Benthos: []config.BenthosConfig{benthosCfg},
 				},
 			}
-			fsmtest.ConfigureBenthosManagerForState(mockSvc, svc, benthosfsm.OperationalStateStopped)
 
-			var err error
 			tick, err = fsmtest.WaitForBenthosManagerInstanceState(
 				ctx,
 				fsm.SystemSnapshot{CurrentConfig: startCfg, Tick: tick},
-				manager,
+				benthosMgr,
 				mockFS,
-				svc,
+				benthosName,
 				benthosfsm.OperationalStateStopped,
 				10,
 			)
 			Expect(err).NotTo(HaveOccurred())
 
-			// sanity-check – the instance exists
-			_, ok := manager.GetInstance(svc)
+			//----------------------------------------------------------------------
+			// 3. Grab the *mock* S6Service nested inside the S6Instance
+			//    (we’ll check its RemoveCalled flag at the end).
+			//----------------------------------------------------------------------
+			s6Name := benthosSvc.GetS6ServiceName(benthosName)
+			s6InstIfc, ok := mockS6Mgr.GetInstance(s6Name)
+			Expect(ok).To(BeTrue(), "S6 instance should exist after first reconcile")
+
+			s6Inst, ok := s6InstIfc.(*s6fsm.S6Instance)
 			Expect(ok).To(BeTrue())
 
-			// ---------------------------------------------------------------------
-			// 3) drop the instance from the desired config
-			// ---------------------------------------------------------------------
-			emptyCfg := config.FullConfig{Internal: config.InternalConfig{Benthos: []config.BenthosConfig{}}}
+			innerMockS6Svc, ok := s6Inst.GetService().(*s6service.MockService)
+			Expect(ok).To(BeTrue(), "internal service is not a MockService")
+
+			//----------------------------------------------------------------------
+			// 4. Hand the manager an *empty* Benthos section → instance must vanish
+			//----------------------------------------------------------------------
+			emptyCfg := config.FullConfig{
+				Internal: config.InternalConfig{Benthos: []config.BenthosConfig{}},
+			}
 
 			tick, err = fsmtest.WaitForBenthosManagerInstanceRemoval(
 				ctx,
 				fsm.SystemSnapshot{CurrentConfig: emptyCfg, Tick: tick},
-				manager,
+				benthosMgr,
 				mockFS,
-				svc,
+				benthosName,
 				15,
 			)
 			Expect(err).NotTo(HaveOccurred())
 
-			// ---------------------------------------------------------------------
-			// 4) assertion – did the BenthosInstance actually call S6.Remove() ?
-			// ---------------------------------------------------------------------
-			Expect(mockSvc.RemoveBenthosFromS6ManagerCalled).
-				To(BeTrue(), "BenthosManager never invoked S6Instance.Remove()")
-			Expect(mockS6Svc.RemoveCalled).To(BeTrue(), "S6Instance.Remove() was not called")
+			//----------------------------------------------------------------------
+			// 5. Assertion – did the S6 FSM actually invoke Remove() ?
+			//----------------------------------------------------------------------
+			Expect(innerMockS6Svc.RemoveCalled).To(BeTrue(),
+				"S6Instance.Remove() was never called")
+
 		})
 	})
 
