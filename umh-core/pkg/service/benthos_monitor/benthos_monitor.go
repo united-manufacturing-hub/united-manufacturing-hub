@@ -1143,7 +1143,7 @@ func (s *BenthosMonitorService) RemoveBenthosMonitorFromS6Manager(ctx context.Co
 		return ErrServiceNotExist
 	}
 
-	s.s6ServiceConfig = &config.S6FSMConfig{}
+	s.s6ServiceConfig = nil
 
 	// Check that the instance was actually removed
 	s6Name := s.GetS6ServiceName()
@@ -1206,11 +1206,13 @@ func (s *BenthosMonitorService) ReconcileManager(ctx context.Context, filesystem
 		return ctx.Err(), false
 	}
 
-	if s.s6ServiceConfig == nil {
-		return ErrServiceNotExist, false
+	serviceMap := config.FullConfig{Internal: config.InternalConfig{Services: []config.S6FSMConfig{}}}
+
+	if s.s6ServiceConfig != nil {
+		serviceMap.Internal.Services = []config.S6FSMConfig{*s.s6ServiceConfig}
 	}
 
-	return s.s6Manager.Reconcile(ctx, fsm.SystemSnapshot{CurrentConfig: config.FullConfig{Internal: config.InternalConfig{Services: []config.S6FSMConfig{*s.s6ServiceConfig}}}}, filesystemService)
+	return s.s6Manager.Reconcile(ctx, fsm.SystemSnapshot{CurrentConfig: serviceMap}, filesystemService)
 }
 
 // ServiceExists checks if a benthos instance exists

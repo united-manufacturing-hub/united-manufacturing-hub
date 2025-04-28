@@ -557,7 +557,7 @@ var _ = Describe("BenthosManager", func() {
 		})
 	})
 
-	FContext("Benthos-to-S6 remove hook", func() {
+	Context("Benthos-to-S6 remove hook", func() {
 		It("calls the S6 mock’s Remove() when a Benthos instance disappears from config", func() {
 
 			//----------------------------------------------------------------------
