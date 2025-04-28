@@ -88,7 +88,7 @@ func (b *BenthosInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnap
 	}
 
 	// Step 2: Detect external changes.
-	if err := b.reconcileExternalChanges(ctx, filesystemService, snapshot.Tick, start); err != nil {
+	if err = b.reconcileExternalChanges(ctx, filesystemService, snapshot.Tick, start); err != nil {
 		// If the service is not running, we don't want to return an error here, because we want to continue reconciling
 		if !errors.Is(err, benthos_service.ErrServiceNotExist) {
 			b.baseFSMInstance.SetError(err, snapshot.Tick)
@@ -105,7 +105,6 @@ func (b *BenthosInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnap
 			return nil, false // We don't want to return an error here, because we want to continue reconciling
 		}
 
-		//nolint:ineffassign // This is intentionally modifying the named return value accessed in defer
 		err = nil // The service does not exist, which is fine as this happens in the reconcileStateTransition
 	}
 
@@ -130,7 +129,6 @@ func (b *BenthosInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnap
 		b.baseFSMInstance.GetLogger().Errorf("error reconciling s6Manager: %s", s6Err)
 		return nil, false
 	}
-
 	// If either Benthos state or S6 state was reconciled, we return reconciled so that nothing happens anymore in this tick
 	// nothing should happen as we might have already taken up some significant time of the avaialble time per tick, so better
 	// to be on the safe side and let the rest handle in another tick
@@ -323,11 +321,13 @@ func (b *BenthosInstance) reconcileStartingStates(ctx context.Context, filesyste
 	case OperationalStateStartingWaitingForServiceToRemainRunning:
 		// If the S6 is not running, go back to starting
 		if !b.IsBenthosS6Running() || !b.IsBenthosConfigLoaded() || !b.IsBenthosHealthchecksPassed() {
+			b.baseFSMInstance.GetLogger().Debugf("benthos is not running, config is not loaded or healthchecks have not passed")
 			return b.baseFSMInstance.SendEvent(ctx, EventStartFailed), true
 		}
 
 		// Check if service has been running stably for some time
 		if !b.IsBenthosRunningForSomeTimeWithoutErrors(currentTime, constants.BenthosLogWindow) {
+			b.baseFSMInstance.GetLogger().Debugf("benthos is not running stably for some time without errors")
 			return nil, false
 		}
 

@@ -15,21 +15,15 @@
 package benthos
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"net/http"
 	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
-	dto "github.com/prometheus/client_model/go"
-	"github.com/prometheus/common/expfmt"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
@@ -37,11 +31,11 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos_monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/httpclient"
 	"go.uber.org/zap"
-	"golang.org/x/sync/errgroup"
 
+	benthos_monitor_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos_monitor"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 	"gopkg.in/yaml.v3"
 
@@ -58,7 +52,7 @@ type IBenthosService interface {
 	GetConfig(ctx context.Context, filesystemService filesystem.Service, benthosName string) (benthosserviceconfig.BenthosServiceConfig, error)
 	// Status checks the status of a Benthos service
 	// Expects benthosName (e.g. "myservice") as defined in the UMH config
-	Status(ctx context.Context, filesystemService filesystem.Service, benthosName string, metricsPort int, tick uint64) (ServiceInfo, error)
+	Status(ctx context.Context, filesystemService filesystem.Service, benthosName string, metricsPort uint16, tick uint64, loopStartTime time.Time) (ServiceInfo, error)
 	// AddBenthosToS6Manager adds a Benthos instance to the S6 manager
 	// Expects benthosName (e.g. "myservice") as defined in the UMH config
 	AddBenthosToS6Manager(ctx context.Context, filesystemService filesystem.Service, cfg *benthosserviceconfig.BenthosServiceConfig, benthosName string) error
@@ -87,7 +81,7 @@ type IBenthosService interface {
 	// Expects logs ([]s6service.LogEntry), currentTime (time.Time), and logWindow (time.Duration)
 	IsLogsFine(logs []s6service.LogEntry, currentTime time.Time, logWindow time.Duration) bool
 	// IsMetricsErrorFree checks if the metrics of a Benthos service are error-free
-	IsMetricsErrorFree(metrics Metrics) bool
+	IsMetricsErrorFree(metrics benthos_monitor.BenthosMetrics) bool
 	// HasProcessingActivity checks if a Benthos service has processing activity
 	HasProcessingActivity(status BenthosStatus) bool
 }
@@ -102,124 +96,29 @@ type ServiceInfo struct {
 	BenthosStatus BenthosStatus
 }
 
-// BenthosStatus contains information about the status of the Benthos service
 type BenthosStatus struct {
 	// HealthCheck contains information about the health of the Benthos service
-	HealthCheck HealthCheck
-	// Metrics contains information about the metrics of the Benthos service
-	Metrics Metrics
-	// MetricsState contains information about the metrics of the Benthos service
-	MetricsState *BenthosMetricsState
-	// Logs contains the logs of the Benthos service
-	Logs []s6service.LogEntry
-}
-
-// Metrics contains information about the metrics of the Benthos service
-type Metrics struct {
-	Input   InputMetrics   `json:"input,omitempty"`
-	Output  OutputMetrics  `json:"output,omitempty"`
-	Process ProcessMetrics `json:"process,omitempty"`
-}
-
-// InputMetrics contains input-specific metrics
-type InputMetrics struct {
-	ConnectionFailed int64   `json:"connection_failed"`
-	ConnectionLost   int64   `json:"connection_lost"`
-	ConnectionUp     int64   `json:"connection_up"`
-	LatencyNS        Latency `json:"latency_ns"`
-	Received         int64   `json:"received"`
-}
-
-// OutputMetrics contains output-specific metrics
-type OutputMetrics struct {
-	BatchSent        int64   `json:"batch_sent"`
-	ConnectionFailed int64   `json:"connection_failed"`
-	ConnectionLost   int64   `json:"connection_lost"`
-	ConnectionUp     int64   `json:"connection_up"`
-	Error            int64   `json:"error"`
-	LatencyNS        Latency `json:"latency_ns"`
-	Sent             int64   `json:"sent"`
-}
-
-// ProcessMetrics contains processor-specific metrics
-type ProcessMetrics struct {
-	Processors map[string]ProcessorMetrics `json:"processors"` // key is the processor path (e.g. "root.pipeline.processors.0")
-}
-
-// ProcessorMetrics contains metrics for a single processor
-type ProcessorMetrics struct {
-	Label         string  `json:"label"`
-	Received      int64   `json:"received"`
-	BatchReceived int64   `json:"batch_received"`
-	Sent          int64   `json:"sent"`
-	BatchSent     int64   `json:"batch_sent"`
-	Error         int64   `json:"error"`
-	LatencyNS     Latency `json:"latency_ns"`
-}
-
-// Latency contains latency metrics
-type Latency struct {
-	P50   float64 `json:"p50"`   // 50th percentile
-	P90   float64 `json:"p90"`   // 90th percentile
-	P99   float64 `json:"p99"`   // 99th percentile
-	Sum   float64 `json:"sum"`   // Total sum
-	Count int64   `json:"count"` // Number of samples
-}
-
-// HealthCheck contains information about the health of the Benthos service
-// https://docs.redpanda.com/redpanda-connect/guides/monitoring/
-type HealthCheck struct {
-	// IsLive is true if the Benthos service is live
-	IsLive bool
-	// IsReady is true if the Benthos service is ready to process data
-	IsReady bool
-	// Version contains the version of the Benthos service
-	Version string
-	// ReadyError contains any error message from the ready check
-	ReadyError string `json:"ready_error,omitempty"`
-	// ConnectionStatuses contains the detailed connection status of inputs and outputs
-	ConnectionStatuses []connStatus `json:"connection_statuses,omitempty"`
-}
-
-// versionResponse represents the JSON structure returned by the /version endpoint
-type versionResponse struct {
-	Version string `json:"version"`
-	Built   string `json:"built"`
-}
-
-// readyResponse represents the JSON structure returned by the /ready endpoint
-type readyResponse struct {
-	Error    string       `json:"error,omitempty"`
-	Statuses []connStatus `json:"statuses"`
-}
-
-type connStatus struct {
-	Label     string `json:"label"`
-	Path      string `json:"path"`
-	Connected bool   `json:"connected"`
-	Error     string `json:"error,omitempty"`
+	HealthCheck benthos_monitor.HealthCheck
+	// BenthosMetrics contains information about the metrics of the Benthos service
+	BenthosMetrics benthos_monitor.BenthosMetrics
+	// BenthosLogs contains the logs of the Benthos service
+	BenthosLogs []s6service.LogEntry
 }
 
 // BenthosService is the default implementation of the IBenthosService interface
 type BenthosService struct {
-	logger           *zap.SugaredLogger
+	logger *zap.SugaredLogger
+
 	s6Manager        *s6fsm.S6Manager
 	s6Service        s6service.Service // S6 service for direct S6 operations
 	s6ServiceConfigs []config.S6FSMConfig
-	httpClient       httpclient.HTTPClient
-	metricsState     *BenthosMetricsState
+
+	benthosMonitorManager *benthos_monitor_fsm.BenthosMonitorManager
+	benthosMonitorConfigs []config.BenthosMonitorConfig
 }
 
 // BenthosServiceOption is a function that modifies a BenthosService
 type BenthosServiceOption func(*BenthosService)
-
-// WithHTTPClient sets a custom HTTP client for the BenthosService
-// This is only used for testing purposes
-func WithHTTPClient(client httpclient.HTTPClient) BenthosServiceOption {
-	return func(s *BenthosService) {
-		s.httpClient = client
-	}
-}
 
 // WithS6Service sets a custom S6 service for the BenthosService
 func WithS6Service(s6Service s6service.Service) BenthosServiceOption {
@@ -228,16 +127,29 @@ func WithS6Service(s6Service s6service.Service) BenthosServiceOption {
 	}
 }
 
+// WithMonitorManager sets a custom monitor manager for the BenthosService
+func WithMonitorManager(monitorManager *benthos_monitor_fsm.BenthosMonitorManager) BenthosServiceOption {
+	return func(s *BenthosService) {
+		s.benthosMonitorManager = monitorManager
+	}
+}
+
+// WithS6Manager sets a custom S6 manager for the BenthosService
+func WithS6Manager(s6Manager *s6fsm.S6Manager) BenthosServiceOption {
+	return func(s *BenthosService) {
+		s.s6Manager = s6Manager
+	}
+}
+
 // NewDefaultBenthosService creates a new default Benthos service
 // name is the name of the Benthos service as defined in the UMH config
 func NewDefaultBenthosService(benthosName string, opts ...BenthosServiceOption) *BenthosService {
 	managerName := fmt.Sprintf("%s%s", logger.ComponentBenthosService, benthosName)
 	service := &BenthosService{
-		logger:       logger.For(managerName),
-		s6Manager:    s6fsm.NewS6Manager(managerName),
-		s6Service:    s6service.NewDefaultService(),
-		httpClient:   nil, // this is only for a mock in the tests
-		metricsState: NewBenthosMetricsState(),
+		logger:                logger.For(managerName),
+		s6Manager:             s6fsm.NewS6Manager(managerName),
+		s6Service:             s6service.NewDefaultService(),
+		benthosMonitorManager: benthos_monitor_fsm.NewBenthosMonitorManager(benthosName),
 	}
 
 	// Apply options
@@ -379,7 +291,7 @@ func (s *BenthosService) GetConfig(ctx context.Context, filesystemService filesy
 
 // extractMetricsPort safely extracts the metrics port from the config map
 // Returns 0 if any part of the path is missing or invalid
-func (s *BenthosService) extractMetricsPort(config map[string]interface{}) int {
+func (s *BenthosService) extractMetricsPort(config map[string]interface{}) uint16 {
 	// Check each level of nesting
 	metrics, ok := config["metrics"].(map[string]interface{})
 	if !ok {
@@ -403,17 +315,17 @@ func (s *BenthosService) extractMetricsPort(config map[string]interface{}) int {
 	}
 
 	portStr := parts[len(parts)-1]
-	port, err := strconv.Atoi(portStr)
+	port, err := strconv.ParseUint(portStr, 10, 16)
 	if err != nil {
 		return 0
 	}
-
-	return port
+	// This cast is safe because we know the port is a valid uint16
+	return uint16(port)
 }
 
 // Status checks the status of a Benthos service and returns ServiceInfo
 // Expects benthosName (e.g. "myservice") as defined in the UMH config
-func (s *BenthosService) Status(ctx context.Context, filesystemService filesystem.Service, benthosName string, metricsPort int, tick uint64) (ServiceInfo, error) {
+func (s *BenthosService) Status(ctx context.Context, filesystemService filesystem.Service, benthosName string, metricsPort uint16, tick uint64, loopStartTime time.Time) (ServiceInfo, error) {
 	if ctx.Err() != nil {
 		return ServiceInfo{}, ctx.Err()
 	}
@@ -473,20 +385,18 @@ func (s *BenthosService) Status(ctx context.Context, filesystemService filesyste
 		}
 	}
 
-	// Let's get the health check of the Benthos service
-	benthosStatus, err := s.GetHealthCheckAndMetrics(ctx, s6ServiceName, metricsPort, tick)
+	benthosStatus, err := s.GetHealthCheckAndMetrics(ctx, filesystemService, tick, loopStartTime, benthosName, logs)
 	if err != nil {
-		if strings.Contains(err.Error(), "connection refused") {
+		if strings.Contains(err.Error(), ErrLastObservedStateNil.Error()) {
 			return ServiceInfo{
 				S6ObservedState: s6ServiceObservedState,
-				S6FSMState:      s6FSMState, // Note for state transitions: When a service is stopped and then reactivated,
-				// this S6FSMState needs to be properly refreshed here.
-				// Otherwise, the service can not transition from stopping to stopped state
+				S6FSMState:      s6FSMState,
 				BenthosStatus: BenthosStatus{
-					Logs: logs,
+					BenthosLogs: logs,
 				},
-			}, ErrHealthCheckConnectionRefused
+			}, ErrLastObservedStateNil
 		}
+
 		return ServiceInfo{}, fmt.Errorf("failed to get health check: %w", err)
 	}
 
@@ -499,189 +409,17 @@ func (s *BenthosService) Status(ctx context.Context, filesystemService filesyste
 	// set the logs to the service info
 	// TODO: this is a hack to get the logs to the service info
 	// we should find a better way to do this
-	serviceInfo.BenthosStatus.Logs = logs
+	serviceInfo.BenthosStatus.BenthosLogs = logs
 
 	return serviceInfo, nil
 }
 
-// parseMetrics parses prometheus metrics into structured format
-func parseMetrics(data []byte) (Metrics, error) {
-	var parser expfmt.TextParser
-	metrics := Metrics{
-		Process: ProcessMetrics{
-			Processors: make(map[string]ProcessorMetrics),
-		},
-	}
+func (s *BenthosService) GetHealthCheckAndMetrics(ctx context.Context, filesystemService filesystem.Service, tick uint64, loopStartTime time.Time, benthosName string, logs []s6service.LogEntry) (BenthosStatus, error) {
 
-	// Parse the metrics text into prometheus format
-	mf, err := parser.TextToMetricFamilies(bytes.NewReader(data))
-	if err != nil {
-		return metrics, fmt.Errorf("failed to parse metrics: %w", err)
-	}
-
-	// Helper function to get metric value
-	getValue := func(m *dto.Metric) float64 {
-		if m.Counter != nil {
-			return m.Counter.GetValue()
-		}
-		if m.Gauge != nil {
-			return m.Gauge.GetValue()
-		}
-		if m.Untyped != nil {
-			return m.Untyped.GetValue()
-		}
-		return 0
-	}
-
-	// Helper function to get label value
-	getLabel := func(m *dto.Metric, name string) string {
-		for _, label := range m.Label {
-			if label.GetName() == name {
-				return label.GetValue()
-			}
-		}
-		return ""
-	}
-
-	// Process each metric family
-	for name, family := range mf {
-		switch name {
-		// Input metrics
-		case "input_connection_failed":
-			if len(family.Metric) > 0 {
-				metrics.Input.ConnectionFailed = int64(getValue(family.Metric[0]))
-			}
-		case "input_connection_lost":
-			if len(family.Metric) > 0 {
-				metrics.Input.ConnectionLost = int64(getValue(family.Metric[0]))
-			}
-		case "input_connection_up":
-			if len(family.Metric) > 0 {
-				metrics.Input.ConnectionUp = int64(getValue(family.Metric[0]))
-			}
-		case "input_received":
-			if len(family.Metric) > 0 {
-				metrics.Input.Received = int64(getValue(family.Metric[0]))
-			}
-		case "input_latency_ns":
-			updateLatencyFromFamily(&metrics.Input.LatencyNS, family)
-
-		// Output metrics
-		case "output_batch_sent":
-			if len(family.Metric) > 0 {
-				metrics.Output.BatchSent = int64(getValue(family.Metric[0]))
-			}
-		case "output_connection_failed":
-			if len(family.Metric) > 0 {
-				metrics.Output.ConnectionFailed = int64(getValue(family.Metric[0]))
-			}
-		case "output_connection_lost":
-			if len(family.Metric) > 0 {
-				metrics.Output.ConnectionLost = int64(getValue(family.Metric[0]))
-			}
-		case "output_connection_up":
-			if len(family.Metric) > 0 {
-				metrics.Output.ConnectionUp = int64(getValue(family.Metric[0]))
-			}
-		case "output_error":
-			if len(family.Metric) > 0 {
-				metrics.Output.Error = int64(getValue(family.Metric[0]))
-			}
-		case "output_sent":
-			if len(family.Metric) > 0 {
-				metrics.Output.Sent = int64(getValue(family.Metric[0]))
-			}
-		case "output_latency_ns":
-			updateLatencyFromFamily(&metrics.Output.LatencyNS, family)
-
-		// Process metrics
-		case "processor_received", "processor_batch_received",
-			"processor_sent", "processor_batch_sent",
-			"processor_error", "processor_latency_ns":
-			for _, metric := range family.Metric {
-				path := getLabel(metric, "path")
-				if path == "" {
-					continue
-				}
-
-				// Initialize processor metrics if not exists
-				if _, exists := metrics.Process.Processors[path]; !exists {
-					metrics.Process.Processors[path] = ProcessorMetrics{
-						Label: getLabel(metric, "label"),
-					}
-				}
-
-				proc := metrics.Process.Processors[path]
-				switch name {
-				case "processor_received":
-					proc.Received = int64(getValue(metric))
-				case "processor_batch_received":
-					proc.BatchReceived = int64(getValue(metric))
-				case "processor_sent":
-					proc.Sent = int64(getValue(metric))
-				case "processor_batch_sent":
-					proc.BatchSent = int64(getValue(metric))
-				case "processor_error":
-					proc.Error = int64(getValue(metric))
-				case "processor_latency_ns":
-					updateLatencyFromMetric(&proc.LatencyNS, metric)
-				}
-				metrics.Process.Processors[path] = proc
-			}
-		}
-	}
-
-	return metrics, nil
-}
-
-func updateLatencyFromFamily(latency *Latency, family *dto.MetricFamily) {
-	for _, metric := range family.Metric {
-		if metric.Summary == nil {
-			continue
-		}
-
-		latency.Sum = metric.Summary.GetSampleSum()
-		latency.Count = int64(metric.Summary.GetSampleCount())
-
-		for _, quantile := range metric.Summary.Quantile {
-			switch quantile.GetQuantile() {
-			case 0.5:
-				latency.P50 = quantile.GetValue()
-			case 0.9:
-				latency.P90 = quantile.GetValue()
-			case 0.99:
-				latency.P99 = quantile.GetValue()
-			}
-		}
-	}
-}
-
-func updateLatencyFromMetric(latency *Latency, metric *dto.Metric) {
-	if metric.Summary == nil {
-		return
-	}
-
-	latency.Sum = metric.Summary.GetSampleSum()
-	latency.Count = int64(metric.Summary.GetSampleCount())
-
-	for _, quantile := range metric.Summary.Quantile {
-		switch quantile.GetQuantile() {
-		case 0.5:
-			latency.P50 = quantile.GetValue()
-		case 0.9:
-			latency.P90 = quantile.GetValue()
-		case 0.99:
-			latency.P99 = quantile.GetValue()
-		}
-	}
-}
-
-// GetHealthCheckAndMetrics returns the health check and metrics of a Benthos service
-// Expects s6ServiceName (e.g. "benthos-myservice"), not the raw benthosName
-func (s *BenthosService) GetHealthCheckAndMetrics(ctx context.Context, s6ServiceName string, metricsPort int, tick uint64) (BenthosStatus, error) {
+	s.logger.Debugf("Getting health check and metrics for tick %d", tick)
 	start := time.Now()
 	defer func() {
-		metrics.ObserveReconcileTime(logger.ComponentBenthosService, s6ServiceName+".GetHealthCheckAndMetrics", time.Since(start))
+		metrics.ObserveReconcileTime(logger.ComponentBenthosService, metrics.ComponentBenthosService+"_get_health_check_and_metrics", time.Since(start))
 	}()
 
 	if ctx.Err() != nil {
@@ -690,156 +428,44 @@ func (s *BenthosService) GetHealthCheckAndMetrics(ctx context.Context, s6Service
 
 	// Skip health checks and metrics if the service doesn't exist yet
 	// This avoids unnecessary errors in Status() when the service is still being created
-	if _, exists := s.s6Manager.GetInstance(s6ServiceName); !exists {
-		return BenthosStatus{
-			HealthCheck: HealthCheck{
-				IsLive:  false,
-				IsReady: false,
-			},
-			Metrics: Metrics{},
-			Logs:    []s6service.LogEntry{},
-		}, nil
+	if _, exists := s.s6Manager.GetInstance(s.getS6ServiceName(benthosName)); !exists {
+		return BenthosStatus{}, nil
 	}
 
-	if metricsPort == 0 {
-		return BenthosStatus{}, fmt.Errorf("could not find metrics port for service %s", s6ServiceName)
+	// Get the last observed state of the benthos monitor
+	s6ServiceName := s.getS6ServiceName(benthosName)
+	lastObservedState, err := s.benthosMonitorManager.GetLastObservedState(s6ServiceName)
+	if err != nil {
+		return BenthosStatus{}, fmt.Errorf("failed to get last observed state in GetHealthCheckAndMetrics: %w", err)
 	}
 
-	baseURL := fmt.Sprintf("http://localhost:%d", metricsPort)
-
-	// Create a client to use for our requests
-	// If it's a mock client (used in tests), use it directly
-	// Otherwise, create a new client with timeouts based on context
-	var requestClient = s.httpClient
-
-	// Only create a default client if we're not using a mock client
-	if requestClient == nil {
-		requestClient = httpclient.NewDefaultHTTPClient()
+	if lastObservedState == nil {
+		return BenthosStatus{}, fmt.Errorf("last observed state is nil")
 	}
 
-	// Start an errgroup with the **same context** so if one sub-task
-	// fails or the context is canceled, all sub-tasks are signaled to stop.
-	g, gctx := errgroup.WithContext(ctx)
-
-	var mu sync.Mutex
-
-	// Results
-	var healthCheck HealthCheck
-	var metricsData Metrics
-
-	// 1) Check liveness
-	g.Go(func() error {
-		resp, _, err := requestClient.GetWithBody(gctx, baseURL+"/ping")
-		if err != nil {
-			return fmt.Errorf("failed liveness check: %w", err)
-		}
-		mu.Lock()
-		healthCheck.IsLive = (resp.StatusCode == http.StatusOK)
-		mu.Unlock()
-		return nil
-	})
-
-	// 2) Check readiness
-	g.Go(func() error {
-		resp, body, err := requestClient.GetWithBody(gctx, baseURL+"/ready")
-		if err != nil {
-			return fmt.Errorf("failed readiness check: %w", err)
-		}
-		var readyResp readyResponse
-		if err := json.Unmarshal(body, &readyResp); err != nil {
-			return fmt.Errorf("unmarshal readiness: %w", err)
-		}
-
-		// Update fields
-		mu.Lock()
-		healthCheck.IsReady = (resp.StatusCode == http.StatusOK && readyResp.Error == "")
-		healthCheck.ReadyError = readyResp.Error
-		healthCheck.ConnectionStatuses = readyResp.Statuses
-		mu.Unlock()
-
-		if !healthCheck.IsReady {
-			s.logger.Debugw("Service not ready",
-				"service", s6ServiceName,
-				"error", readyResp.Error,
-				"statuses", readyResp.Statuses,
-			)
-		}
-		return nil
-	})
-
-	// 3) Get version
-	g.Go(func() error {
-		_, body, err := requestClient.GetWithBody(gctx, baseURL+"/version")
-		if err != nil {
-			return fmt.Errorf("get version: %w", err)
-		}
-		var vData versionResponse
-		if err := json.Unmarshal(body, &vData); err != nil {
-			return fmt.Errorf("unmarshal version: %w", err)
-		}
-		mu.Lock()
-		healthCheck.Version = vData.Version
-		mu.Unlock()
-		return nil
-	})
-
-	// 4) Get metrics
-	g.Go(func() error {
-		_, body, err := requestClient.GetWithBody(gctx, baseURL+"/metrics")
-		if err != nil {
-			return fmt.Errorf("get metrics: %w", err)
-		}
-		m, err := parseMetrics(body)
-		if err != nil {
-			return fmt.Errorf("parse metrics: %w", err)
-		}
-		mu.Lock()
-		metricsData = m
-		mu.Unlock()
-		return nil
-	})
-
-	// Create a buffered channel to receive the result from g.Wait().
-	// The channel is buffered so that the goroutine sending on it doesn't block.
-	errc := make(chan error, 1)
-
-	// Run g.Wait() in a separate goroutine.
-	// This allows us to use a select statement to return early if the context is canceled.
-	go func() {
-		// g.Wait() blocks until all goroutines launched with g.Go() have returned.
-		// It returns the first non-nil error, if any.
-		errc <- g.Wait()
-	}()
-
-	// Use a select statement to wait for either the g.Wait() result or the context's cancellation.
-	select {
-	case err := <-errc:
-		// g.Wait() has finished, so check if any goroutine returned an error.
-		if err != nil {
-			// If there was an error in any sub-call, return that error.
-			return BenthosStatus{}, err
-		}
-		// If err is nil, all goroutines completed successfully.
-	case <-ctx.Done():
-		// The context was canceled or its deadline was exceeded before all goroutines finished.
-		// Although some goroutines might still be running in the background,
-		// they use a context (gctx) that should cause them to terminate promptly.
-		// Experiments have shown that without using this, some goroutines can still take up to 70ms to terminate.
-		return BenthosStatus{}, ctx.Err()
+	// Convert the last observed state to a BenthosMonitorObservedState
+	lastBenthosMonitorObservedState, ok := lastObservedState.(benthos_monitor_fsm.BenthosMonitorObservedState)
+	if !ok {
+		return BenthosStatus{}, fmt.Errorf("last observed state is not a BenthosMonitorObservedState: %v", lastObservedState)
 	}
 
-	// Update the metrics state
-	if s.metricsState == nil {
-		return BenthosStatus{}, fmt.Errorf("metrics state not initialized")
+	var benthosStatus BenthosStatus
+
+	if lastBenthosMonitorObservedState.ServiceInfo == nil {
+		return BenthosStatus{}, ErrLastObservedStateNil
 	}
 
-	s.metricsState.UpdateFromMetrics(metricsData, tick)
+	// if everything is fine, set the status to the service info
+	if lastBenthosMonitorObservedState.ServiceInfo.BenthosStatus.LastScan != nil {
+		benthosStatus.HealthCheck = lastBenthosMonitorObservedState.ServiceInfo.BenthosStatus.LastScan.HealthCheck
+		benthosStatus.BenthosMetrics = *lastBenthosMonitorObservedState.ServiceInfo.BenthosStatus.LastScan.BenthosMetrics
+		benthosStatus.BenthosLogs = lastBenthosMonitorObservedState.ServiceInfo.BenthosStatus.Logs
+	} else {
+		return BenthosStatus{}, fmt.Errorf("last scan is nil")
+	}
 
-	return BenthosStatus{
-		HealthCheck:  healthCheck,
-		Metrics:      metricsData,
-		MetricsState: s.metricsState,
-	}, nil
+	return benthosStatus, nil
+
 }
 
 // AddBenthosToS6Manager adds a Benthos instance to the S6 manager
@@ -852,6 +478,8 @@ func (s *BenthosService) AddBenthosToS6Manager(ctx context.Context, filesystemSe
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
+
+	s.logger.Debugf("Adding benthos to S6 manager with port: %d", cfg.MetricsPort)
 
 	s6ServiceName := s.getS6ServiceName(benthosName)
 
@@ -880,6 +508,17 @@ func (s *BenthosService) AddBenthosToS6Manager(ctx context.Context, filesystemSe
 	// Add the S6 FSM config to the list of S6 FSM configs
 	// so that the S6 manager will start the service
 	s.s6ServiceConfigs = append(s.s6ServiceConfigs, s6FSMConfig)
+
+	// Now do it the same with the benthos monitor
+	benthosMonitorConfig := config.BenthosMonitorConfig{
+		FSMInstanceConfig: config.FSMInstanceConfig{
+			Name:            s6ServiceName,
+			DesiredFSMState: benthos_monitor_fsm.OperationalStateActive,
+		},
+		MetricsPort: cfg.MetricsPort,
+	}
+
+	s.benthosMonitorConfigs = append(s.benthosMonitorConfigs, benthosMonitorConfig)
 
 	return nil
 }
@@ -928,6 +567,19 @@ func (s *BenthosService) UpdateBenthosInS6Manager(ctx context.Context, filesyste
 		S6ServiceConfig: s6Config,
 	}
 
+	// Now update the benthos monitor config
+	benthosMonitorDesiredState := benthos_monitor_fsm.OperationalStateActive
+	if currentDesiredState == s6fsm.OperationalStateStopped {
+		benthosMonitorDesiredState = benthos_monitor_fsm.OperationalStateStopped
+	}
+	s.benthosMonitorConfigs[index] = config.BenthosMonitorConfig{
+		FSMInstanceConfig: config.FSMInstanceConfig{
+			Name:            s6ServiceName,
+			DesiredFSMState: benthosMonitorDesiredState,
+		},
+		MetricsPort: cfg.MetricsPort,
+	}
+
 	// The next reconciliation of the S6 manager will detect the config change
 	// and update the service
 	return nil
@@ -954,6 +606,19 @@ func (s *BenthosService) RemoveBenthosFromS6Manager(ctx context.Context, filesys
 	for i, s6Config := range s.s6ServiceConfigs {
 		if s6Config.Name == s6ServiceName {
 			s.s6ServiceConfigs = append(s.s6ServiceConfigs[:i], s.s6ServiceConfigs[i+1:]...)
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		return ErrServiceNotExist
+	}
+
+	// Also remove the benthos monitor from the S6 manager
+	for i, benthosMonitorConfig := range s.benthosMonitorConfigs {
+		if benthosMonitorConfig.Name == s6ServiceName {
+			s.benthosMonitorConfigs = append(s.benthosMonitorConfigs[:i], s.benthosMonitorConfigs[i+1:]...)
 			found = true
 			break
 		}
@@ -993,6 +658,21 @@ func (s *BenthosService) StartBenthos(ctx context.Context, filesystemService fil
 	if !found {
 		return ErrServiceNotExist
 	}
+	// Reset found
+	found = false
+
+	// Also start the benthos monitor
+	for i, benthosMonitorConfig := range s.benthosMonitorConfigs {
+		if benthosMonitorConfig.Name == s6ServiceName {
+			s.benthosMonitorConfigs[i].DesiredFSMState = benthos_monitor_fsm.OperationalStateActive
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		return ErrServiceNotExist
+	}
 
 	return nil
 }
@@ -1024,6 +704,21 @@ func (s *BenthosService) StopBenthos(ctx context.Context, filesystemService file
 	if !found {
 		return ErrServiceNotExist
 	}
+	// Reset found
+	found = false
+
+	// Also stop the benthos monitor
+	for i, benthosMonitorConfig := range s.benthosMonitorConfigs {
+		if benthosMonitorConfig.Name == s6ServiceName {
+			s.benthosMonitorConfigs[i].DesiredFSMState = benthos_monitor_fsm.OperationalStateStopped
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		return ErrServiceNotExist
+	}
 
 	return nil
 }
@@ -1040,12 +735,30 @@ func (s *BenthosService) ReconcileManager(ctx context.Context, filesystemService
 
 	// Create a new snapshot with the current S6 service configs
 	// Note: therefore, the S6 manager will not have access to the full observed state
-	snapshot := fsm.SystemSnapshot{
+	s6Snapshot := fsm.SystemSnapshot{
 		CurrentConfig: config.FullConfig{Internal: config.InternalConfig{Services: s.s6ServiceConfigs}},
 		Tick:          tick,
 	}
 
-	return s.s6Manager.Reconcile(ctx, snapshot, filesystemService)
+	s6Err, s6Reconciled := s.s6Manager.Reconcile(ctx, s6Snapshot, filesystemService)
+	if s6Err != nil {
+		return fmt.Errorf("failed to reconcile S6 manager: %w", s6Err), false
+	}
+
+	// Also reconcile the benthos monitor
+
+	benthosMonitorSnapshot := fsm.SystemSnapshot{
+		CurrentConfig: config.FullConfig{Internal: config.InternalConfig{BenthosMonitor: s.benthosMonitorConfigs}},
+		Tick:          tick,
+	}
+
+	monitorErr, monitorReconciled := s.benthosMonitorManager.Reconcile(ctx, benthosMonitorSnapshot, filesystemService)
+	if monitorErr != nil {
+		return fmt.Errorf("failed to reconcile benthos monitor: %w", monitorErr), false
+	}
+
+	// If either was reconciled, indicate that reconciliation occurred
+	return nil, s6Reconciled || monitorReconciled
 }
 
 // IsLogsFine analyzes Benthos logs to determine if there are any critical issues
@@ -1107,14 +820,14 @@ func (s *BenthosService) IsLogsFine(logs []s6service.LogEntry, currentTime time.
 }
 
 // IsMetricsErrorFree checks if there are any errors in the Benthos metrics
-func (s *BenthosService) IsMetricsErrorFree(metrics Metrics) bool {
+func (s *BenthosService) IsMetricsErrorFree(metrics benthos_monitor.BenthosMetrics) bool {
 	// Check output errors
-	if metrics.Output.Error > 0 {
+	if metrics.Metrics.Output.Error > 0 {
 		return false
 	}
 
 	// Check processor errors
-	for _, proc := range metrics.Process.Processors {
+	for _, proc := range metrics.Metrics.Process.Processors {
 		if proc.Error > 0 {
 			return false
 		}
@@ -1125,7 +838,11 @@ func (s *BenthosService) IsMetricsErrorFree(metrics Metrics) bool {
 
 // HasProcessingActivity checks if the Benthos instance has active data processing based on metrics state
 func (s *BenthosService) HasProcessingActivity(status BenthosStatus) bool {
-	return status.MetricsState.IsActive
+	if status.BenthosMetrics.MetricsState == nil {
+		return false
+	}
+
+	return status.BenthosMetrics.MetricsState.IsActive
 }
 
 // ServiceExists checks if a Benthos service exists in the S6 manager

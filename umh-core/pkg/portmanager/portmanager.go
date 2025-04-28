@@ -25,7 +25,7 @@ import (
 type PortManager interface {
 	// AllocatePort allocates a port for a given instance and returns it
 	// Returns an error if no ports are available
-	AllocatePort(instanceName string) (int, error)
+	AllocatePort(instanceName string) (uint16, error)
 
 	// ReleasePort releases a port previously allocated to an instance
 	// Returns an error if the instance doesn't have a port
@@ -33,11 +33,11 @@ type PortManager interface {
 
 	// GetPort retrieves the port for a given instance
 	// Returns the port and true if found, 0 and false otherwise
-	GetPort(instanceName string) (int, bool)
+	GetPort(instanceName string) (uint16, bool)
 
 	// ReservePort attempts to reserve a specific port for an instance
 	// Returns an error if the port is already in use
-	ReservePort(instanceName string, port int) error
+	ReservePort(instanceName string, port uint16) error
 
 	// PreReconcile is called before the base FSM reconciliation to ensure ports are allocated
 	// It takes a list of instance names that should have ports allocated
@@ -56,15 +56,15 @@ type DefaultPortManager struct {
 	mutex sync.RWMutex
 
 	// instanceToPorts maps instance names to their allocated ports
-	instanceToPorts map[string]int
+	instanceToPorts map[string]uint16
 
 	// portToInstances maps ports to instance names
-	portToInstances map[int]string
+	portToInstances map[uint16]string
 
 	// configuration
-	minPort  int
-	maxPort  int
-	nextPort int
+	minPort  uint16
+	maxPort  uint16
+	nextPort uint16
 }
 
 // Global singleton instance of DefaultPortManager
@@ -85,7 +85,7 @@ func GetDefaultPortManager() *DefaultPortManager {
 // initDefaultPortManager initializes the singleton DefaultPortManager with the given port range.
 // It ensures the DefaultPortManager is initialized only once.
 // Returns error if initialization fails or if it was already initialized with different parameters.
-func initDefaultPortManager(minPort, maxPort int) (*DefaultPortManager, error) {
+func initDefaultPortManager(minPort, maxPort uint16) (*DefaultPortManager, error) {
 	var initErr error
 
 	defaultPortManagerOnce.Do(func() {
@@ -125,7 +125,7 @@ func initDefaultPortManager(minPort, maxPort int) (*DefaultPortManager, error) {
 // NewDefaultPortManager creates a new DefaultPortManager with the given port range.
 // If a singleton instance already exists, it returns that instance.
 // Otherwise, it creates and initializes the singleton instance.
-func NewDefaultPortManager(minPort, maxPort int) (*DefaultPortManager, error) {
+func NewDefaultPortManager(minPort, maxPort uint16) (*DefaultPortManager, error) {
 	// First validate inputs before checking the singleton
 	if minPort <= 0 || maxPort <= 0 {
 		return nil, fmt.Errorf("port range must be positive")
@@ -135,9 +135,6 @@ func NewDefaultPortManager(minPort, maxPort int) (*DefaultPortManager, error) {
 	}
 	if minPort < 1024 {
 		return nil, fmt.Errorf("minPort must be at least 1024 (non-privileged)")
-	}
-	if maxPort > 65535 {
-		return nil, fmt.Errorf("maxPort must be at most 65535")
 	}
 
 	// Only check existing singleton if inputs are valid
@@ -158,7 +155,7 @@ func NewDefaultPortManager(minPort, maxPort int) (*DefaultPortManager, error) {
 
 // newDefaultPortManager is an internal function that creates a new DefaultPortManager instance
 // without using the singleton pattern. This is used by InitDefaultPortManager.
-func newDefaultPortManager(minPort, maxPort int) (*DefaultPortManager, error) {
+func newDefaultPortManager(minPort, maxPort uint16) (*DefaultPortManager, error) {
 	if minPort <= 0 || maxPort <= 0 {
 		return nil, fmt.Errorf("port range must be positive")
 	}
@@ -168,13 +165,10 @@ func newDefaultPortManager(minPort, maxPort int) (*DefaultPortManager, error) {
 	if minPort < 1024 {
 		return nil, fmt.Errorf("minPort must be at least 1024 (non-privileged)")
 	}
-	if maxPort > 65535 {
-		return nil, fmt.Errorf("maxPort must be at most 65535")
-	}
 
 	return &DefaultPortManager{
-		instanceToPorts: make(map[string]int),
-		portToInstances: make(map[int]string),
+		instanceToPorts: make(map[string]uint16),
+		portToInstances: make(map[uint16]string),
 		minPort:         minPort,
 		maxPort:         maxPort,
 		nextPort:        minPort,
@@ -182,7 +176,7 @@ func newDefaultPortManager(minPort, maxPort int) (*DefaultPortManager, error) {
 }
 
 // AllocatePort allocates the next available port for a given instance
-func (pm *DefaultPortManager) AllocatePort(instanceName string) (int, error) {
+func (pm *DefaultPortManager) AllocatePort(instanceName string) (uint16, error) {
 	pm.mutex.Lock()
 	defer pm.mutex.Unlock()
 
@@ -251,7 +245,7 @@ func (pm *DefaultPortManager) ReleasePort(instanceName string) error {
 }
 
 // GetPort retrieves the port for a given instance
-func (pm *DefaultPortManager) GetPort(instanceName string) (int, bool) {
+func (pm *DefaultPortManager) GetPort(instanceName string) (uint16, bool) {
 	pm.mutex.RLock()
 	defer pm.mutex.RUnlock()
 
@@ -260,7 +254,7 @@ func (pm *DefaultPortManager) GetPort(instanceName string) (int, bool) {
 }
 
 // ReservePort attempts to reserve a specific port for an instance
-func (pm *DefaultPortManager) ReservePort(instanceName string, port int) error {
+func (pm *DefaultPortManager) ReservePort(instanceName string, port uint16) error {
 	if port <= 0 {
 		return fmt.Errorf("invalid port: %d (must be positive)", port)
 	}

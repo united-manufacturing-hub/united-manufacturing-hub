@@ -630,12 +630,12 @@ buffer:
 			Expect(mockConfig.Config.DataFlow[0].DesiredFSMState).To(Equal("active"))
 
 			// Verify inject configuration was properly processed
-			Expect(mockConfig.Config.DataFlow[0].DataFlowComponentConfig.BenthosConfig.CacheResources).To(HaveLen(1))
-			Expect(mockConfig.Config.DataFlow[0].DataFlowComponentConfig.BenthosConfig.CacheResources[0]["label"]).To(Equal("my_cache"))
-			Expect(mockConfig.Config.DataFlow[0].DataFlowComponentConfig.BenthosConfig.RateLimitResources).To(HaveLen(1))
-			Expect(mockConfig.Config.DataFlow[0].DataFlowComponentConfig.BenthosConfig.RateLimitResources[0]["label"]).To(Equal("limiter"))
-			Expect(mockConfig.Config.DataFlow[0].DataFlowComponentConfig.BenthosConfig.Buffer).To(HaveLen(1))
-			Expect(mockConfig.Config.DataFlow[0].DataFlowComponentConfig.BenthosConfig.Buffer["memory"]).To(Equal(map[string]interface{}{}))
+			Expect(mockConfig.Config.DataFlow[0].DataFlowComponentServiceConfig.BenthosConfig.CacheResources).To(HaveLen(1))
+			Expect(mockConfig.Config.DataFlow[0].DataFlowComponentServiceConfig.BenthosConfig.CacheResources[0]["label"]).To(Equal("my_cache"))
+			Expect(mockConfig.Config.DataFlow[0].DataFlowComponentServiceConfig.BenthosConfig.RateLimitResources).To(HaveLen(1))
+			Expect(mockConfig.Config.DataFlow[0].DataFlowComponentServiceConfig.BenthosConfig.RateLimitResources[0]["label"]).To(Equal("limiter"))
+			Expect(mockConfig.Config.DataFlow[0].DataFlowComponentServiceConfig.BenthosConfig.Buffer).To(HaveLen(1))
+			Expect(mockConfig.Config.DataFlow[0].DataFlowComponentServiceConfig.BenthosConfig.Buffer["memory"]).To(Equal(map[string]interface{}{}))
 		})
 	})
 })

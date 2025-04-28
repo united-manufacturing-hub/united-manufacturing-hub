@@ -89,7 +89,7 @@ func (r *RedpandaInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSna
 	}
 
 	// Step 2: Detect external changes.
-	if err := r.reconcileExternalChanges(ctx, filesystemService, snapshot.Tick, start); err != nil {
+	if err = r.reconcileExternalChanges(ctx, filesystemService, snapshot.Tick, start); err != nil {
 		// If the service is not running, we don't want to return an error here, because we want to continue reconciling
 		if !errors.Is(err, redpanda_service.ErrServiceNotExist) {
 			r.baseFSMInstance.SetError(err, snapshot.Tick)
@@ -112,7 +112,6 @@ func (r *RedpandaInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSna
 			return nil, false // We don't want to return an error here, because we want to continue reconciling
 		}
 
-		//nolint:ineffassign // This is intentionally modifying the named return value accessed in defer
 		err = nil // The service does not exist, which is fine as this happens in the reconcileStateTransition
 	}
 

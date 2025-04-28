@@ -18,7 +18,7 @@ import (
 	"fmt"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"gopkg.in/yaml.v3"
 )
 
@@ -58,8 +58,8 @@ func (b *DataFlowComponentBuilder) AddGoldenDataFlowComponent() *DataFlowCompone
 			Name:            "golden-dataflow",
 			DesiredFSMState: "active",
 		},
-		DataFlowComponentConfig: dataflowcomponentconfig.DataFlowComponentConfig{
-			BenthosConfig: dataflowcomponentconfig.BenthosConfig{
+		DataFlowComponentServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+			BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 				Input: map[string]interface{}{
 					"http_server": map[string]interface{}{
 						"path":    "/",
@@ -94,8 +94,8 @@ func (b *DataFlowComponentBuilder) AddGeneratorDataFlowComponent(name string, in
 			Name:            name,
 			DesiredFSMState: "active",
 		},
-		DataFlowComponentConfig: dataflowcomponentconfig.DataFlowComponentConfig{
-			BenthosConfig: dataflowcomponentconfig.BenthosConfig{
+		DataFlowComponentServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+			BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 				Input: map[string]interface{}{
 					"generate": map[string]interface{}{
 						"mapping":  `root = "hello world from DFC!"`,
@@ -129,9 +129,9 @@ func (b *DataFlowComponentBuilder) UpdateGeneratorDataFlowComponent(name string,
 	for i, component := range b.full.DataFlow {
 		if component.Name == name {
 			// Create updated input config with new interval
-			if input, ok := component.DataFlowComponentConfig.BenthosConfig.Input["generate"].(map[string]interface{}); ok {
+			if input, ok := component.DataFlowComponentServiceConfig.BenthosConfig.Input["generate"].(map[string]interface{}); ok {
 				input["interval"] = newInterval
-				b.full.DataFlow[i].DataFlowComponentConfig.BenthosConfig.Input["generate"] = input
+				b.full.DataFlow[i].DataFlowComponentServiceConfig.BenthosConfig.Input["generate"] = input
 			}
 			break
 		}

@@ -24,7 +24,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
@@ -352,8 +352,8 @@ func (a *EditDataflowComponentAction) Execute() (interface{}, map[string]interfa
 			Name:            a.name,
 			DesiredFSMState: "active",
 		},
-		DataFlowComponentConfig: dataflowcomponentconfig.DataFlowComponentConfig{
-			BenthosConfig: dataflowcomponentconfig.BenthosConfig{
+		DataFlowComponentServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+			BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 				Input:              normalizedConfig.Input,
 				Pipeline:           normalizedConfig.Pipeline,
 				Output:             normalizedConfig.Output,
@@ -465,7 +465,7 @@ func (a *EditDataflowComponentAction) waitForComponentToBeActive() error {
 									instance.CurrentState, remainingSeconds), a.outboundChannel, models.EditDataFlowComponent)
 						} else {
 							// check if the config is correct
-							if !dataflowcomponentconfig.NewComparator().ConfigsEqual(dfcSnapshot.Config, a.dfc.DataFlowComponentConfig) {
+							if !dataflowcomponentconfig.NewComparator().ConfigsEqual(&dfcSnapshot.Config, &a.dfc.DataFlowComponentConfig) {
 								SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
 									fmt.Sprintf("Dataflow component is active but config changes haven't applied yet (%ds remaining)...",
 										remainingSeconds), a.outboundChannel, models.EditDataFlowComponent)
@@ -474,6 +474,7 @@ func (a *EditDataflowComponentAction) waitForComponentToBeActive() error {
 									"Dataflow component is active with correct configuration. Edit complete.", a.outboundChannel, models.EditDataFlowComponent)
 								return nil
 							}
+
 						}
 					}
 				}

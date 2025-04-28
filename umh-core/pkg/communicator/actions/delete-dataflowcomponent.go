@@ -22,7 +22,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
@@ -186,7 +186,7 @@ func (a *DeleteDataflowComponentAction) waitForComponentToBeRemoved() error {
 			removed := true
 			if mgr, ok := a.systemSnapshot.Managers[constants.DataflowcomponentManagerName]; ok {
 				for _, inst := range mgr.GetInstances() {
-					if dataflowcomponentconfig.GenerateUUIDFromName(inst.ID) == a.componentUUID {
+					if dataflowcomponentserviceconfig.GenerateUUIDFromName(inst.ID) == a.componentUUID {
 						removed = false
 						SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
 							fmt.Sprintf("Component '%s' still exists in state '%s'. Waiting for removal (%ds remaining)...",

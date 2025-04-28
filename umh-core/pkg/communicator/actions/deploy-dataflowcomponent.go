@@ -24,7 +24,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
@@ -420,8 +420,8 @@ func (a *DeployDataflowComponentAction) Execute() (interface{}, map[string]inter
 			Name:            a.name,
 			DesiredFSMState: "active",
 		},
-		DataFlowComponentConfig: dataflowcomponentconfig.DataFlowComponentConfig{
-			BenthosConfig: dataflowcomponentconfig.BenthosConfig{
+		DataFlowComponentServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+			BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 				Input:              normalizedConfig.Input,
 				Pipeline:           normalizedConfig.Pipeline,
 				Output:             normalizedConfig.Output,
@@ -504,7 +504,7 @@ func (a *DeployDataflowComponentAction) waitForComponentToBeActive() error {
 					a.outboundChannel, models.DeployDataFlowComponent)
 				ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
 				defer cancel()
-				err := a.configManager.AtomicDeleteDataflowcomponent(ctx, dataflowcomponentconfig.GenerateUUIDFromName(a.name))
+				err := a.configManager.AtomicDeleteDataflowcomponent(ctx, dataflowcomponentserviceconfig.GenerateUUIDFromName(a.name))
 				if err != nil {
 					a.actionLogger.Errorf("failed to remove dataflowcomponent %s: %v", a.name, err)
 				}
@@ -555,7 +555,7 @@ func (a *DeployDataflowComponentAction) waitForComponentToBeActive() error {
 							stateMsg, a.outboundChannel, models.DeployDataFlowComponent)
 
 						// send the benthos logs to the user
-						logs = dfcSnapshot.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.Logs
+						logs = dfcSnapshot.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosLogs
 						// only send the logs that have not been sent yet
 						if len(logs) > len(lastLogs) {
 							for _, log := range logs[len(lastLogs):] {

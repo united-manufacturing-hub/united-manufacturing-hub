@@ -16,7 +16,7 @@ package dataflowcomponent
 
 import (
 	"github.com/tiendc/go-deepcopy"
-	dataflowcomponentconfig "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/dataflowcomponent"
@@ -24,7 +24,7 @@ import (
 
 // DataflowComponentObservedStateSnapshot is a deep-copyable snapshot of BenthosObservedState
 type DataflowComponentObservedStateSnapshot struct {
-	Config      dataflowcomponentconfig.DataFlowComponentConfig
+	Config      dataflowcomponentserviceconfig.DataflowComponentServiceConfig
 	ServiceInfo dataflowcomponent.ServiceInfo
 }
 

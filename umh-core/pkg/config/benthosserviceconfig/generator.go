@@ -41,8 +41,8 @@ func (g *Generator) RenderConfig(cfg BenthosServiceConfig) (string, error) {
 	}
 
 	// Convert the config to a normalized map
-	configMap := g.configToMap(cfg)
-	normalizedMap := normalizeConfig(configMap)
+	configMap := g.ConfigToMap(cfg)
+	normalizedMap := NormalizeConfig(configMap)
 
 	// Marshal to YAML
 	yamlBytes, err := yaml.Marshal(normalizedMap)
@@ -58,8 +58,8 @@ func (g *Generator) RenderConfig(cfg BenthosServiceConfig) (string, error) {
 	return yamlStr, nil
 }
 
-// configToMap converts a BenthosServiceConfig to a raw map for YAML generation
-func (g *Generator) configToMap(cfg BenthosServiceConfig) map[string]interface{} {
+// ConfigToMap converts a BenthosServiceConfig to a raw map for YAML generation
+func (g *Generator) ConfigToMap(cfg BenthosServiceConfig) map[string]interface{} {
 	configMap := make(map[string]interface{})
 
 	// Add all sections
@@ -110,8 +110,8 @@ func (g *Generator) configToMap(cfg BenthosServiceConfig) map[string]interface{}
 	return configMap
 }
 
-// normalizeConfig applies Benthos defaults to ensure consistent comparison
-func normalizeConfig(raw map[string]interface{}) map[string]interface{} {
+// NormalizeConfig applies Benthos defaults to ensure consistent comparison
+func NormalizeConfig(raw map[string]interface{}) map[string]interface{} {
 	// Create a deep copy to avoid modifying the original
 	normalized := make(map[string]interface{})
 	for k, v := range raw {

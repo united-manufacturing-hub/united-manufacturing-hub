@@ -69,7 +69,7 @@ func NewDataflowComponentManager(name string) *DataflowComponentManager {
 			if !ok {
 				return false, fmt.Errorf("instance is not a DataflowComponentInstance")
 			}
-			return dataflowComponentInstance.config.Equal(cfg.DataFlowComponentConfig), nil
+			return dataflowComponentInstance.config.Equal(cfg.DataFlowComponentServiceConfig), nil
 		},
 		// Set DataflowComponent config
 		func(instance public_fsm.FSMInstance, cfg config.DataFlowComponentConfig) error {
@@ -77,7 +77,7 @@ func NewDataflowComponentManager(name string) *DataflowComponentManager {
 			if !ok {
 				return fmt.Errorf("instance is not a DataflowComponentInstance")
 			}
-			dataflowComponentInstance.config = cfg.DataFlowComponentConfig
+			dataflowComponentInstance.config = cfg.DataFlowComponentServiceConfig
 			return nil
 		},
 		// Get expected max p95 execution time per instance
