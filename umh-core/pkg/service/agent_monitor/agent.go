@@ -126,7 +126,6 @@ func (c *AgentMonitorService) Status(ctx context.Context, systemSnapshot fsm.Sys
 	if location != nil {
 		status.Location = location
 	} else {
-		c.logger.Warn("No location found set in the config, using fallback 'Unknown location")
 		location = map[int]string{}
 		location[0] = "Unknown location" // fallback
 		status.Location = location
