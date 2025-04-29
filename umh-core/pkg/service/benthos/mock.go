@@ -27,6 +27,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/httpclient"
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
 // MockBenthosService is a mock implementation of the IBenthosService interface for testing
@@ -173,7 +174,7 @@ func (m *MockBenthosService) GetConfig(ctx context.Context, filesystemService fi
 }
 
 // Status mocks getting the status of a Benthos service
-func (m *MockBenthosService) Status(ctx context.Context, filesystemService filesystem.Service, serviceName string, metricsPort uint16, tick uint64, loopStartTime time.Time) (ServiceInfo, error) {
+func (m *MockBenthosService) Status(ctx context.Context, services serviceregistry.Provider, serviceName string, metricsPort uint16, tick uint64, loopStartTime time.Time) (ServiceInfo, error) {
 	m.StatusCalled = true
 
 	// Check if the service exists in the ExistingServices map
@@ -349,7 +350,7 @@ func (m *MockBenthosService) StopBenthos(ctx context.Context, filesystemService 
 }
 
 // ReconcileManager mocks reconciling the Benthos manager
-func (m *MockBenthosService) ReconcileManager(ctx context.Context, filesystemService filesystem.Service, tick uint64) (error, bool) {
+func (m *MockBenthosService) ReconcileManager(ctx context.Context, services serviceregistry.Provider, tick uint64) (error, bool) {
 	m.ReconcileManagerCalled = true
 	return m.ReconcileManagerError, m.ReconcileManagerReconciled
 }

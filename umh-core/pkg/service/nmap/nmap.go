@@ -33,6 +33,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	"go.uber.org/zap"
 )
 
@@ -522,7 +523,7 @@ func (s *NmapService) StopNmap(ctx context.Context, nmapName string) error {
 }
 
 // ReconcileManager reconciles the Nmap manager
-func (s *NmapService) ReconcileManager(ctx context.Context, filesystemService filesystem.Service, tick uint64) (err error, reconciled bool) {
+func (s *NmapService) ReconcileManager(ctx context.Context, services serviceregistry.Provider, tick uint64) (err error, reconciled bool) {
 	if s.s6Manager == nil {
 		return errors.New("s6 manager not initialized"), false
 	}
@@ -537,15 +538,15 @@ func (s *NmapService) ReconcileManager(ctx context.Context, filesystemService fi
 		Tick:          tick,
 	}
 
-	return s.s6Manager.Reconcile(ctx, snapshot, filesystemService)
+	return s.s6Manager.Reconcile(ctx, snapshot, services)
 }
 
 // ServiceExists checks if a nmap service exists
-func (s *NmapService) ServiceExists(ctx context.Context, filesystemService filesystem.Service, nmapName string) bool {
+func (s *NmapService) ServiceExists(ctx context.Context, services serviceregistry.Provider, nmapName string) bool {
 	s6ServiceName := s.getS6ServiceName(nmapName)
 	s6ServicePath := filepath.Join(constants.S6BaseDir, s6ServiceName)
 
-	exists, err := s.s6Service.ServiceExists(ctx, s6ServicePath, filesystemService)
+	exists, err := s.s6Service.ServiceExists(ctx, s6ServicePath, services.GetFileSystem())
 	if err != nil {
 		return false
 	}
@@ -559,10 +560,10 @@ func (s *NmapService) ServiceExists(ctx context.Context, filesystemService files
 // Expects nmapName (e.g. "myservice") as defined in the UMH config
 func (s *NmapService) ForceRemoveNmap(
 	ctx context.Context,
-	filesystemService filesystem.Service,
+	services serviceregistry.Provider,
 	nmapName string,
 ) error {
 	s6ServiceName := s.getS6ServiceName(nmapName)
 	s6ServicePath := filepath.Join(constants.S6BaseDir, s6ServiceName)
-	return s.s6Service.ForceRemove(ctx, s6ServicePath, filesystemService)
+	return s.s6Service.ForceRemove(ctx, s6ServicePath, services.GetFileSystem())
 }

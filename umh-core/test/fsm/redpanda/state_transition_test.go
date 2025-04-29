@@ -26,16 +26,16 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/redpandaserviceconfig"
 	redpanda_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/redpanda"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda_monitor"
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
 var _ = Describe("RedpandaService State Transitions", func() {
 	var (
 		mockS6Service      *s6service.MockService
-		mockFileSystem     *filesystem.MockFileSystem
+		mockSvcRegistry    *serviceregistry.Registry
 		mockMonitorService *redpanda_monitor.MockRedpandaMonitorService
 		redpandaService    *redpanda.RedpandaService
 		ctx                context.Context
@@ -46,7 +46,7 @@ var _ = Describe("RedpandaService State Transitions", func() {
 	BeforeEach(func() {
 		ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
 		mockS6Service = s6service.NewMockService()
-		mockFileSystem = filesystem.NewMockFileSystem()
+		mockSvcRegistry = serviceregistry.NewMockRegistry()
 		mockMonitorService = redpanda_monitor.NewMockRedpandaMonitorService()
 
 		// Set up mock logs for S6 service
@@ -139,17 +139,17 @@ var _ = Describe("RedpandaService State Transitions", func() {
 			tick := uint64(0)
 
 			By("Adding Redpanda to S6 manager")
-			err = redpandaService.AddRedpandaToS6Manager(ctx, redpandaConfig, mockFileSystem)
+			err = redpandaService.AddRedpandaToS6Manager(ctx, redpandaConfig, mockSvcRegistry.GetFileSystem())
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Reconciling the service to create it")
-			tick = reconcileRedpandaUntilState(ctx, redpandaService, mockFileSystem, tick, s6.LifecycleStateCreating)
+			tick = reconcileRedpandaUntilState(ctx, redpandaService, mockSvcRegistry, tick, s6.LifecycleStateCreating)
 
 			By("Reconciling until the service is stopped")
-			tick = reconcileRedpandaUntilState(ctx, redpandaService, mockFileSystem, tick, s6fsm.OperationalStateStopped)
+			tick = reconcileRedpandaUntilState(ctx, redpandaService, mockSvcRegistry, tick, s6fsm.OperationalStateStopped)
 
 			// Verify state
-			serviceInfo, err = redpandaService.Status(ctx, mockFileSystem, tick, time.Now())
+			serviceInfo, err = redpandaService.Status(ctx, mockSvcRegistry.GetFileSystem(), tick, time.Now())
 			Expect(err).To(Equal(redpanda.ErrRedpandaMonitorNotRunning))
 			Expect(serviceInfo.S6FSMState).To(Equal(s6fsm.OperationalStateStopped))
 
@@ -205,10 +205,10 @@ var _ = Describe("RedpandaService State Transitions", func() {
 			}
 
 			By("Reconciling until the service is running")
-			tick = reconcileRedpandaUntilState(ctx, redpandaService, mockFileSystem, tick, s6fsm.OperationalStateRunning)
+			tick = reconcileRedpandaUntilState(ctx, redpandaService, mockSvcRegistry, tick, s6fsm.OperationalStateRunning)
 
 			// Verify the service stays running
-			ensureRedpandaState(ctx, redpandaService, mockFileSystem, tick, s6fsm.OperationalStateRunning, 10)
+			ensureRedpandaState(ctx, redpandaService, mockSvcRegistry, tick, s6fsm.OperationalStateRunning, 10)
 		})
 
 		It("should transition from stopped to running, even if stale metrics are present", func() {
@@ -242,11 +242,11 @@ var _ = Describe("RedpandaService State Transitions", func() {
 			}
 
 			By("Adding Redpanda to S6 manager")
-			err = redpandaService.AddRedpandaToS6Manager(ctx, redpandaConfig, mockFileSystem)
+			err = redpandaService.AddRedpandaToS6Manager(ctx, redpandaConfig, mockSvcRegistry.GetFileSystem())
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Reconciling the service to create it")
-			tick = reconcileRedpandaUntilState(ctx, redpandaService, mockFileSystem, tick, s6.LifecycleStateCreating)
+			tick = reconcileRedpandaUntilState(ctx, redpandaService, mockSvcRegistry, tick, s6.LifecycleStateCreating)
 
 			mockMonitorService.StatusResult = redpanda_monitor.ServiceInfo{
 				S6FSMState: s6fsm.OperationalStateStopped,
@@ -265,10 +265,10 @@ var _ = Describe("RedpandaService State Transitions", func() {
 				},
 			}
 			By("Reconciling until the service is stopped")
-			tick = reconcileRedpandaUntilState(ctx, redpandaService, mockFileSystem, tick, s6fsm.OperationalStateStopped)
+			tick = reconcileRedpandaUntilState(ctx, redpandaService, mockSvcRegistry, tick, s6fsm.OperationalStateStopped)
 
 			// Verify state
-			serviceInfo, err = redpandaService.Status(ctx, mockFileSystem, tick, time.Now())
+			serviceInfo, err = redpandaService.Status(ctx, mockSvcRegistry.GetFileSystem(), tick, time.Now())
 			Expect(err).To(Equal(redpanda.ErrRedpandaMonitorNotRunning))
 			Expect(serviceInfo.S6FSMState).To(Equal(s6fsm.OperationalStateStopped))
 
@@ -299,10 +299,10 @@ var _ = Describe("RedpandaService State Transitions", func() {
 			}
 
 			By("Reconciling until the service is running")
-			tick = reconcileRedpandaUntilState(ctx, redpandaService, mockFileSystem, tick, s6fsm.OperationalStateRunning)
+			tick = reconcileRedpandaUntilState(ctx, redpandaService, mockSvcRegistry, tick, s6fsm.OperationalStateRunning)
 
 			By("Checking the service is running")
-			ensureRedpandaState(ctx, redpandaService, mockFileSystem, tick, s6fsm.OperationalStateRunning, 10)
+			ensureRedpandaState(ctx, redpandaService, mockSvcRegistry, tick, s6fsm.OperationalStateRunning, 10)
 		})
 
 		It("should transition from running to stopped when requested", func() {
@@ -311,11 +311,11 @@ var _ = Describe("RedpandaService State Transitions", func() {
 			tick := uint64(0)
 
 			By("Adding and starting Redpanda")
-			err = redpandaService.AddRedpandaToS6Manager(ctx, redpandaConfig, mockFileSystem)
+			err = redpandaService.AddRedpandaToS6Manager(ctx, redpandaConfig, mockSvcRegistry.GetFileSystem())
 			Expect(err).NotTo(HaveOccurred())
 
-			tick = reconcileRedpandaUntilState(ctx, redpandaService, mockFileSystem, tick, s6.LifecycleStateCreating)
-			tick = reconcileRedpandaUntilState(ctx, redpandaService, mockFileSystem, tick, s6fsm.OperationalStateStopped)
+			tick = reconcileRedpandaUntilState(ctx, redpandaService, mockSvcRegistry, tick, s6.LifecycleStateCreating)
+			tick = reconcileRedpandaUntilState(ctx, redpandaService, mockSvcRegistry, tick, s6fsm.OperationalStateStopped)
 
 			err = redpandaService.StartRedpanda(ctx)
 			Expect(err).NotTo(HaveOccurred())
@@ -367,7 +367,7 @@ var _ = Describe("RedpandaService State Transitions", func() {
 				},
 			}
 
-			tick = reconcileRedpandaUntilState(ctx, redpandaService, mockFileSystem, tick, s6fsm.OperationalStateRunning)
+			tick = reconcileRedpandaUntilState(ctx, redpandaService, mockSvcRegistry, tick, s6fsm.OperationalStateRunning)
 
 			By("Stopping the redpanda service")
 			err = redpandaService.StopRedpanda(ctx)
@@ -411,10 +411,10 @@ var _ = Describe("RedpandaService State Transitions", func() {
 			}
 
 			By("Reconciling until the service is stopped")
-			tick = reconcileRedpandaUntilState(ctx, redpandaService, mockFileSystem, tick, s6fsm.OperationalStateStopped)
+			tick = reconcileRedpandaUntilState(ctx, redpandaService, mockSvcRegistry, tick, s6fsm.OperationalStateStopped)
 
 			// Verify service is stopped
-			serviceInfo, err = redpandaService.Status(ctx, mockFileSystem, tick, time.Now())
+			serviceInfo, err = redpandaService.Status(ctx, mockSvcRegistry.GetFileSystem(), tick, time.Now())
 			Expect(err).To(Equal(redpanda.ErrRedpandaMonitorNotRunning))
 			Expect(serviceInfo.S6FSMState).To(Equal(s6fsm.OperationalStateStopped))
 		})
@@ -424,11 +424,11 @@ var _ = Describe("RedpandaService State Transitions", func() {
 			tick := uint64(0)
 
 			By("Adding and starting Redpanda")
-			err = redpandaService.AddRedpandaToS6Manager(ctx, redpandaConfig, mockFileSystem)
+			err = redpandaService.AddRedpandaToS6Manager(ctx, redpandaConfig, mockSvcRegistry.GetFileSystem())
 			Expect(err).NotTo(HaveOccurred())
 
-			tick = reconcileRedpandaUntilState(ctx, redpandaService, mockFileSystem, tick, s6.LifecycleStateCreating)
-			tick = reconcileRedpandaUntilState(ctx, redpandaService, mockFileSystem, tick, s6fsm.OperationalStateStopped)
+			tick = reconcileRedpandaUntilState(ctx, redpandaService, mockSvcRegistry, tick, s6.LifecycleStateCreating)
+			tick = reconcileRedpandaUntilState(ctx, redpandaService, mockSvcRegistry, tick, s6fsm.OperationalStateStopped)
 
 			err = redpandaService.StartRedpanda(ctx)
 			Expect(err).NotTo(HaveOccurred())
@@ -480,7 +480,7 @@ var _ = Describe("RedpandaService State Transitions", func() {
 				},
 			}
 
-			tick = reconcileRedpandaUntilState(ctx, redpandaService, mockFileSystem, tick, s6fsm.OperationalStateRunning)
+			tick = reconcileRedpandaUntilState(ctx, redpandaService, mockSvcRegistry, tick, s6fsm.OperationalStateRunning)
 
 			By("Updating the Redpanda configuration")
 			// Create a new config with different retention values
@@ -542,7 +542,7 @@ var _ = Describe("RedpandaService State Transitions", func() {
 				},
 			}
 
-			tick = reconcileRedpandaUntilState(ctx, redpandaService, mockFileSystem, tick, s6fsm.OperationalStateStopped)
+			tick = reconcileRedpandaUntilState(ctx, redpandaService, mockSvcRegistry, tick, s6fsm.OperationalStateStopped)
 
 			By("Starting the service with the new configuration")
 			// Start the service again
@@ -595,17 +595,17 @@ var _ = Describe("RedpandaService State Transitions", func() {
 				},
 			}
 
-			tick = reconcileRedpandaUntilState(ctx, redpandaService, mockFileSystem, tick, s6fsm.OperationalStateRunning)
+			tick = reconcileRedpandaUntilState(ctx, redpandaService, mockSvcRegistry, tick, s6fsm.OperationalStateRunning)
 
 			By("Verifying the new configuration was applied")
 			// Get the current config and verify it matches our updated values
-			config, err := redpandaService.GetConfig(ctx, mockFileSystem, tick, time.Now())
+			config, err := redpandaService.GetConfig(ctx, mockSvcRegistry.GetFileSystem(), tick, time.Now())
 			Expect(err).NotTo(HaveOccurred())
 			Expect(config.Topic.DefaultTopicRetentionMs).To(Equal(int64(2000000)))
 			Expect(config.Topic.DefaultTopicRetentionBytes).To(Equal(int64(2000000000)))
 
 			// Ensure the service stays running with the new configuration
-			ensureRedpandaState(ctx, redpandaService, mockFileSystem, tick, s6fsm.OperationalStateRunning, 5)
+			ensureRedpandaState(ctx, redpandaService, mockSvcRegistry, tick, s6fsm.OperationalStateRunning, 5)
 		})
 
 		It("should handle service removal gracefully", func() {
@@ -613,10 +613,10 @@ var _ = Describe("RedpandaService State Transitions", func() {
 			tick := uint64(0)
 
 			By("Setting up a running Redpanda service")
-			err = redpandaService.AddRedpandaToS6Manager(ctx, redpandaConfig, mockFileSystem)
+			err = redpandaService.AddRedpandaToS6Manager(ctx, redpandaConfig, mockSvcRegistry.GetFileSystem())
 			Expect(err).NotTo(HaveOccurred())
 
-			tick = reconcileRedpandaUntilState(ctx, redpandaService, mockFileSystem, tick, s6fsm.OperationalStateStopped)
+			tick = reconcileRedpandaUntilState(ctx, redpandaService, mockSvcRegistry, tick, s6fsm.OperationalStateStopped)
 
 			err = redpandaService.StartRedpanda(ctx)
 			Expect(err).NotTo(HaveOccurred())
@@ -658,7 +658,7 @@ var _ = Describe("RedpandaService State Transitions", func() {
 				},
 			}
 
-			_ = reconcileRedpandaUntilState(ctx, redpandaService, mockFileSystem, tick, s6fsm.OperationalStateRunning)
+			_ = reconcileRedpandaUntilState(ctx, redpandaService, mockSvcRegistry, tick, s6fsm.OperationalStateRunning)
 
 			By("Removing the Redpanda service")
 			err = redpandaService.RemoveRedpandaFromS6Manager(ctx)
@@ -672,7 +672,7 @@ var _ = Describe("RedpandaService State Transitions", func() {
 			// Disable error checks for the reconcile call after removal
 			// since the service is supposed to be gone
 			By("Verifying the service no longer exists")
-			exists := redpandaService.ServiceExists(ctx, mockFileSystem)
+			exists := redpandaService.ServiceExists(ctx, mockSvcRegistry.GetFileSystem())
 			Expect(exists).To(BeFalse())
 
 			// Let's just verify with direct checks rather than using reconcile
@@ -699,15 +699,15 @@ func createRedpandaMockLogs() []s6service.LogEntry {
 }
 
 // Reconcile until a specific state is reached
-func reconcileRedpandaUntilState(ctx context.Context, redpandaService *redpanda.RedpandaService, mockFileSystem *filesystem.MockFileSystem, tick uint64, expectedState string) uint64 {
+func reconcileRedpandaUntilState(ctx context.Context, redpandaService *redpanda.RedpandaService, services serviceregistry.Provider, tick uint64, expectedState string) uint64 {
 	var serviceInfo redpanda.ServiceInfo
 	for i := 0; i < 20; i++ {
-		err, _ := redpandaService.ReconcileManager(ctx, mockFileSystem, tick)
+		err, _ := redpandaService.ReconcileManager(ctx, services, tick)
 		Expect(err).NotTo(HaveOccurred())
 		tick++
 
 		// Check state
-		serviceInfo, err = redpandaService.Status(ctx, mockFileSystem, tick, time.Now())
+		serviceInfo, err = redpandaService.Status(ctx, services.GetFileSystem(), tick, time.Now())
 		GinkgoWriter.Printf("current state: %s, expected state: %s\n", serviceInfo.S6FSMState, expectedState)
 
 		shallSkipErrorCheck := (err == nil || (!redpanda_fsm.IsRunningState(serviceInfo.S6FSMState) && err.Error() == "redpanda monitor service is not running"))
@@ -729,14 +729,14 @@ func reconcileRedpandaUntilState(ctx context.Context, redpandaService *redpanda.
 }
 
 // Ensure the service remains in a specific state for multiple reconciliations
-func ensureRedpandaState(ctx context.Context, redpandaService *redpanda.RedpandaService, mockFileSystem *filesystem.MockFileSystem, tick uint64, expectedState string, iterations int) {
+func ensureRedpandaState(ctx context.Context, redpandaService *redpanda.RedpandaService, services serviceregistry.Provider, tick uint64, expectedState string, iterations int) {
 	for i := 0; i < iterations; i++ {
-		err, _ := redpandaService.ReconcileManager(ctx, mockFileSystem, tick)
+		err, _ := redpandaService.ReconcileManager(ctx, services, tick)
 		Expect(err).NotTo(HaveOccurred())
 		tick++
 
 		// Check state
-		serviceInfo, err := redpandaService.Status(ctx, mockFileSystem, tick, time.Now())
+		serviceInfo, err := redpandaService.Status(ctx, services.GetFileSystem(), tick, time.Now())
 
 		Expect(err).NotTo(HaveOccurred())
 		Expect(serviceInfo.S6FSMState).To(Equal(expectedState))
