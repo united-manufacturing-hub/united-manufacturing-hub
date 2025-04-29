@@ -473,11 +473,6 @@ func parseCurlError(errorString string) error {
 
 func (s *RedpandaMonitorService) processMetricsDataBytes(metricsDataBytes []byte, tick uint64) (*RedpandaMetrics, error) {
 
-	curlError := parseCurlError(string(metricsDataBytes))
-	if curlError != nil {
-		return nil, curlError
-	}
-
 	metricsDataString := string(metricsDataBytes)
 	// Strip any newlines
 	metricsDataString = strings.ReplaceAll(metricsDataString, "\n", "")
@@ -517,11 +512,6 @@ func (s *RedpandaMonitorService) processMetricsDataBytes(metricsDataBytes []byte
 
 func (s *RedpandaMonitorService) processClusterConfigDataBytes(clusterConfigDataBytes []byte, tick uint64) (*ClusterConfig, error) {
 
-	curlError := parseCurlError(string(clusterConfigDataBytes))
-	if curlError != nil {
-		return nil, curlError
-	}
-
 	clusterConfigDataString := string(clusterConfigDataBytes)
 	// Strip any newlines
 	clusterConfigDataString = strings.ReplaceAll(clusterConfigDataString, "\n", "")
@@ -544,9 +534,19 @@ func (s *RedpandaMonitorService) processClusterConfigDataBytes(clusterConfigData
 		}
 	}()
 
+	data, err := io.ReadAll(gzipReader)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read cluster config data: %w", err)
+	}
+
+	curlError := parseCurlError(string(data))
+	if curlError != nil {
+		return nil, curlError
+	}
+
 	// Parse the JSON response
 	var redpandaConfig map[string]interface{}
-	if err := json.NewDecoder(gzipReader).Decode(&redpandaConfig); err != nil {
+	if err := json.NewDecoder(bytes.NewReader(data)).Decode(&redpandaConfig); err != nil {
 		return nil, fmt.Errorf("failed to parse cluster config data: %w", err)
 	}
 
@@ -585,9 +585,18 @@ func ParseMetrics(dataReader io.Reader) (Metrics, error) {
 			TopicPartitionMap: make(map[string]int64), // Pre-allocate map to avoid nil check later
 		},
 	}
+	data, err := io.ReadAll(dataReader)
+	if err != nil {
+		return Metrics{}, fmt.Errorf("failed to read metrics data: %w", err)
+	}
+
+	curlError := parseCurlError(string(data))
+	if curlError != nil {
+		return Metrics{}, curlError
+	}
 
 	// Parse the metrics text into prometheus format
-	mf, err := parser.TextToMetricFamilies(dataReader)
+	mf, err := parser.TextToMetricFamilies(bytes.NewReader(data))
 	if err != nil {
 		return metrics, fmt.Errorf("failed to parse metrics: %w", err)
 	}
