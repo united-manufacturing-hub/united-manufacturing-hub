@@ -252,6 +252,11 @@ func (b *BenthosMonitorInstance) reconcileTransitionToActive(ctx context.Context
 		return b.reconcileStartingStates(ctx, filesystemService, currentState, currentTime)
 	case IsRunningState(currentState):
 		return b.reconcileRunningStates(ctx, filesystemService, currentState, currentTime)
+	case currentState == OperationalStateStopping:
+		// There can be the edge case where an fsm is set to stopped, and then a cycle later again to active
+		// It will cause the stopping process to start, but then the deisred state is again active, so it will land up in reconcileTransitionToActive
+		// if it is stopping, we will first finish the stopping process and then we will go to active
+		return b.reconcileTransitionToStopped(ctx, filesystemService, currentState)
 	default:
 		return fmt.Errorf("invalid current state: %s", currentState), false
 	}

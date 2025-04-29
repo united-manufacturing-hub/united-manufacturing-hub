@@ -297,7 +297,6 @@ func (b *BenthosInstance) reconcileStartingStates(ctx context.Context, filesyste
 
 		// Check if service has been running stably for some time
 		if !b.IsBenthosRunningForSomeTimeWithoutErrors(currentTime, constants.BenthosLogWindow) {
-			b.baseFSMInstance.GetLogger().Debugf("benthos is not running stably for some time without errors")
 			return nil, false
 		}
 

@@ -384,11 +384,11 @@ func (s *RedpandaMonitorService) ParseRedpandaLogs(ctx context.Context, logs []s
 
 	var metrics *RedpandaMetrics
 	var clusterConfig *ClusterConfig
-	// Processing the Metrics & cluster config takes ~5ms (especially the metrics parsing) each, therefore process them in parallel
+	// Processing the Metrics & cluster config takes time (especially the metrics parsing) each, therefore process them in parallel
 
-	ctx8, cancel8 := context.WithTimeout(ctx, constants.RedpandaUpdateObservedStateTimeout)
-	defer cancel8()
-	g, _ := errgroup.WithContext(ctx8)
+	ctxObservedStateTimeout, cancelObservedStateTimeout := context.WithTimeout(ctx, constants.RedpandaUpdateObservedStateTimeout/2) // the ctx already has  a time out of RedpandaUpdateObservedStateTimeout, so this timeout needs to be smaller
+	defer cancelObservedStateTimeout()
+	g, _ := errgroup.WithContext(ctxObservedStateTimeout)
 
 	g.Go(func() error {
 		var err error
@@ -423,11 +423,11 @@ func (s *RedpandaMonitorService) ParseRedpandaLogs(ctx context.Context, logs []s
 			return nil, err
 		}
 		// If err is nil, all goroutines completed successfully.
-	case <-ctx.Done():
+	case <-ctxObservedStateTimeout.Done():
 		// The context was canceled or its deadline was exceeded before all goroutines finished.
 		// Although some goroutines might still be running in the background,
 		// they use a context (gctx) that should cause them to terminate promptly.
-		return nil, ctx.Err()
+		return nil, ctxObservedStateTimeout.Err()
 	}
 
 	timestampDataString := strings.TrimSpace(string(timestampDataBytes))

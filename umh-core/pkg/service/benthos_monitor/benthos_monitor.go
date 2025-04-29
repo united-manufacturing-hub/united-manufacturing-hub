@@ -485,9 +485,9 @@ func (s *BenthosMonitorService) ParseBenthosLogs(ctx context.Context, logs []s6s
 	var versionResp versionResponse
 
 	// Process all data in parallel using errgroup
-	ctx8, cancel8 := context.WithTimeout(ctx, constants.BenthosUpdateObservedStateTimeout)
-	defer cancel8()
-	g, _ := errgroup.WithContext(ctx8)
+	ctxBenthosMonitor, cancelBenthosMonitor := context.WithTimeout(ctx, constants.BenthosMonitorUpdateObservedStateTimeout/2) // the ctx already has  a time out of BenthosMonitorUpdateObservedStateTimeout, so this timeout needs to be smaller
+	defer cancelBenthosMonitor()
+	g, _ := errgroup.WithContext(ctxBenthosMonitor)
 
 	// Step 1: Process Liveness from /ping endpoint
 	g.Go(func() error {
@@ -544,8 +544,8 @@ func (s *BenthosMonitorService) ParseBenthosLogs(ctx context.Context, logs []s6s
 			return nil, err
 		}
 		// All goroutines completed successfully
-	case <-ctx.Done():
-		return nil, ctx.Err()
+	case <-ctxBenthosMonitor.Done():
+		return nil, ctxBenthosMonitor.Err()
 	}
 
 	// Update healthCheck with the results from the parallel operations

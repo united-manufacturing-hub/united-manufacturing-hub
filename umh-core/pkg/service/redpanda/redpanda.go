@@ -363,8 +363,6 @@ func (s *RedpandaService) Status(ctx context.Context, filesystemService filesyst
 
 // GetHealthCheckAndMetrics returns the health check and metrics of a Redpanda service
 func (s *RedpandaService) GetHealthCheckAndMetrics(ctx context.Context, tick uint64, logs []s6service.LogEntry, filesystemService filesystem.Service, loopStartTime time.Time) (RedpandaStatus, error) {
-
-	s.logger.Debugf("Getting health check and metrics for tick %d", tick)
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(logger.ComponentRedpandaService, constants.RedpandaServiceName, time.Since(start))

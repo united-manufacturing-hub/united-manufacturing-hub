@@ -39,6 +39,8 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
+
+	"golang.org/x/sync/errgroup"
 )
 
 // ServiceStatus represents the status of an S6 service
@@ -357,9 +359,55 @@ func (s *DefaultService) Remove(ctx context.Context, servicePath string, fsServi
 	// Two independent best-effort deletions.  We *always* call them,
 	// even if the directory is missing, because RemoveAll on a non-
 	// existent path is cheap and returns nil – keeps the code simple.
+	// We start it in a separate goroutine and wait for constants.S6RemoveTimeout
+	// so that we keep the main reconcile loop fast. If this requires a couple
+	// of retries, it is fine as long as we do not block the main reconcile loop.
 	//----------------------------------------------------------------
-	srvErr := fsService.RemoveAll(ctx, servicePath)
-	logErr := fsService.RemoveAll(ctx, logDir)
+	ctxRemoveTimeout, cancel := context.WithTimeout(ctx, constants.S6RemoveTimeout)
+	defer cancel()
+
+	g, gctx := errgroup.WithContext(ctxRemoveTimeout)
+
+	var srvErr, logErr error
+
+	g.Go(func() error {
+		srvErr = fsService.RemoveAll(gctx, servicePath)
+		return srvErr
+	})
+
+	g.Go(func() error {
+		logErr = fsService.RemoveAll(gctx, logDir)
+		return logErr
+	})
+
+	// Create a buffered channel to receive the result from g.Wait().
+	// The channel is buffered so that the goroutine sending on it doesn't block.
+	errc := make(chan error, 1)
+
+	// Run g.Wait() in a separate goroutine.
+	// This allows us to use a select statement to return early if the context is canceled.
+	go func() {
+		// g.Wait() blocks until all goroutines launched with g.Go() have returned.
+		// It returns the first non-nil error, if any.
+		errc <- g.Wait()
+	}()
+
+	// Use a select statement to wait for either the g.Wait() result or the context's cancellation.
+	select {
+	case err := <-errc:
+		// g.Wait() has finished, so check if any goroutine returned an error.
+		if err != nil {
+			// If there was an error in any sub-call, return that error.
+			return fmt.Errorf("s6.Remove incomplete for %q: %s",
+				servicePath, err.Error())
+		}
+		// If err is nil, all goroutines completed successfully.
+	case <-ctxRemoveTimeout.Done():
+		// The context was canceled or its deadline was exceeded before all goroutines finished.
+		// Although some goroutines might still be running in the background,
+		// they use a context (gctx) that should cause them to terminate promptly.
+		return ctxRemoveTimeout.Err()
+	}
 
 	//----------------------------------------------------------------
 	// Double-check: report success only when both paths are gone *and*

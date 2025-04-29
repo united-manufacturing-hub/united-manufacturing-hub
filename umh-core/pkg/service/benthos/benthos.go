@@ -423,8 +423,6 @@ func (s *BenthosService) Status(ctx context.Context, filesystemService filesyste
 }
 
 func (s *BenthosService) GetHealthCheckAndMetrics(ctx context.Context, filesystemService filesystem.Service, tick uint64, loopStartTime time.Time, benthosName string, logs []s6service.LogEntry) (BenthosStatus, error) {
-
-	s.logger.Debugf("Getting health check and metrics for tick %d", tick)
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(logger.ComponentBenthosService, metrics.ComponentBenthosService+"_get_health_check_and_metrics", time.Since(start))
