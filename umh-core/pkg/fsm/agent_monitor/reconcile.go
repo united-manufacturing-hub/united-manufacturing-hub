@@ -27,13 +27,14 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
 // Reconcile periodically checks if the FSM needs state transitions based on metrics
 // The filesystemService parameter allows for filesystem operations during reconciliation,
 // enabling the method to read configuration or state information from the filesystem.
 // Currently not used in this implementation but added for consistency with the interface.
-func (a *AgentInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot, filesystemService filesystem.Service) (err error, reconciled bool) {
+func (a *AgentInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot, services serviceregistry.Provider) (err error, reconciled bool) {
 	start := time.Now()
 	instanceName := a.baseFSMInstance.GetID()
 	defer func() {
@@ -96,7 +97,7 @@ func (a *AgentInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapsh
 	}
 
 	// Step 3: Attempt to reconcile the state.
-	err, reconciled = a.reconcileStateTransition(ctx, filesystemService)
+	err, reconciled = a.reconcileStateTransition(ctx, services.GetFileSystem())
 	if err != nil {
 		// If the instance is removed, we don't want to return an error here, because we want to continue reconciling
 		// Also this should not

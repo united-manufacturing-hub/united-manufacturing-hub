@@ -40,7 +40,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/container_monitor"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	"go.uber.org/zap"
 )
 
@@ -59,16 +59,16 @@ var _ = Describe("Subscribe and Receive Test", func() {
 		capturedMsgs  []*models.UMHMessage
 		capturedMutex sync.Mutex
 
-		mockFS *filesystem.MockFileSystem
-		apiUrl string
-		log    *zap.SugaredLogger
+		mockSvcRegistry *serviceregistry.Registry
+		apiUrl          string
+		log             *zap.SugaredLogger
 	)
 
 	BeforeEach(func() {
 		// Set up context with timeout
 		ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
 
-		mockFS = filesystem.NewMockFileSystem()
+		mockSvcRegistry = serviceregistry.NewMockRegistry()
 
 		// Initialize test variables
 		instanceID = uuid.New()
@@ -121,7 +121,7 @@ var _ = Describe("Subscribe and Receive Test", func() {
 
 		// Initialize the manager with a reconcile call to create instances
 		dummyConfig := config.FullConfig{}
-		err, _ := containerManager.Reconcile(ctx, fsm.SystemSnapshot{CurrentConfig: dummyConfig, Tick: 1}, mockFS)
+		err, _ := containerManager.Reconcile(ctx, fsm.SystemSnapshot{CurrentConfig: dummyConfig, Tick: 1}, mockSvcRegistry)
 		Expect(err).NotTo(HaveOccurred())
 
 		// Create the snapshot after reconciliation

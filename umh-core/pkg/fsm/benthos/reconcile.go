@@ -27,6 +27,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	benthos_service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
 // Reconcile examines the BenthosInstance and, in three steps:
@@ -37,7 +38,7 @@ import (
 // This function is intended to be called repeatedly (e.g. in a periodic control loop).
 // Over multiple calls, it converges the actual state to the desired state. Transitions
 // that fail are retried in subsequent reconcile calls after a backoff period.
-func (b *BenthosInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot, filesystemService filesystem.Service) (err error, reconciled bool) {
+func (b *BenthosInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot, services serviceregistry.Provider) (err error, reconciled bool) {
 	start := time.Now()
 	benthosInstanceName := b.baseFSMInstance.GetID()
 	defer func() {
@@ -80,7 +81,7 @@ func (b *BenthosInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnap
 				func(ctx context.Context) error {
 					// Force removal when other approaches fail - bypasses state transitions
 					// and directly deletes files and resources
-					return b.service.ForceRemoveBenthos(ctx, filesystemService, benthosInstanceName)
+					return b.service.ForceRemoveBenthos(ctx, services.GetFileSystem(), benthosInstanceName)
 				},
 			)
 		}
@@ -88,7 +89,7 @@ func (b *BenthosInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnap
 	}
 
 	// Step 2: Detect external changes.
-	if err = b.reconcileExternalChanges(ctx, filesystemService, snapshot.Tick, start); err != nil {
+	if err := b.reconcileExternalChanges(ctx, services, snapshot.Tick, start); err != nil {
 		// If the service is not running, we don't want to return an error here, because we want to continue reconciling
 		if !errors.Is(err, benthos_service.ErrServiceNotExist) {
 			b.baseFSMInstance.SetError(err, snapshot.Tick)
@@ -105,12 +106,13 @@ func (b *BenthosInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnap
 			return nil, false // We don't want to return an error here, because we want to continue reconciling
 		}
 
+		//nolint:ineffassign
 		err = nil // The service does not exist, which is fine as this happens in the reconcileStateTransition
 	}
 
 	// Step 3: Attempt to reconcile the state.
 	currentTime := time.Now() // this is used to check if the instance is degraded and for the log check
-	err, reconciled = b.reconcileStateTransition(ctx, filesystemService, currentTime)
+	err, reconciled = b.reconcileStateTransition(ctx, services.GetFileSystem(), currentTime)
 	if err != nil {
 		// If the instance is removed, we don't want to return an error here, because we want to continue reconciling
 		if errors.Is(err, fsm.ErrInstanceRemoved) {
@@ -123,7 +125,7 @@ func (b *BenthosInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnap
 	}
 
 	// Reconcile the s6Manager
-	s6Err, s6Reconciled := b.service.ReconcileManager(ctx, filesystemService, snapshot.Tick)
+	s6Err, s6Reconciled := b.service.ReconcileManager(ctx, services, snapshot.Tick)
 	if s6Err != nil {
 		b.baseFSMInstance.SetError(s6Err, snapshot.Tick)
 		b.baseFSMInstance.GetLogger().Errorf("error reconciling s6Manager: %s", s6Err)
@@ -142,7 +144,7 @@ func (b *BenthosInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnap
 
 // reconcileExternalChanges checks if the BenthosInstance service status has changed
 // externally (e.g., if someone manually stopped or started it, or if it crashed)
-func (b *BenthosInstance) reconcileExternalChanges(ctx context.Context, filesystemService filesystem.Service, tick uint64, loopStartTime time.Time) error {
+func (b *BenthosInstance) reconcileExternalChanges(ctx context.Context, services serviceregistry.Provider, tick uint64, loopStartTime time.Time) error {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentBenthosInstance, b.baseFSMInstance.GetID()+".reconcileExternalChanges", time.Since(start))
@@ -153,7 +155,7 @@ func (b *BenthosInstance) reconcileExternalChanges(ctx context.Context, filesyst
 	observedStateCtx, cancel := context.WithTimeout(ctx, constants.BenthosUpdateObservedStateTimeout)
 	defer cancel()
 
-	err := b.UpdateObservedStateOfInstance(observedStateCtx, filesystemService, tick, loopStartTime)
+	err := b.UpdateObservedStateOfInstance(observedStateCtx, services, tick, loopStartTime)
 	if err != nil {
 		return fmt.Errorf("failed to update observed state: %w", err)
 	}

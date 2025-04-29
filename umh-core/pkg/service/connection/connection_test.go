@@ -28,9 +28,9 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	nmapfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/nmap"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/nmap"
 	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
 const (
@@ -46,7 +46,7 @@ var _ = Describe("ConnectionService", func() {
 		tick           uint64
 		connectionName string
 		cancelFunc     context.CancelFunc
-		mockFS         *filesystem.MockFileSystem
+		mockServices   *serviceregistry.Registry
 	)
 
 	BeforeEach(func() {
@@ -60,7 +60,7 @@ var _ = Describe("ConnectionService", func() {
 		// Set up a real service with mocked dependencies
 		service = NewDefaultConnectionService(connectionName,
 			WithNmapService(mockNmap))
-		mockFS = filesystem.NewMockFileSystem()
+		mockServices = serviceregistry.NewMockRegistry()
 	})
 
 	AfterEach(func() {
@@ -88,7 +88,7 @@ var _ = Describe("ConnectionService", func() {
 
 		It("should add a new connection to the nmap manager", func() {
 
-			err := service.AddConnectionToNmapManager(ctx, mockFS, cfg, connectionName)
+			err := service.AddConnectionToNmapManager(ctx, mockServices, cfg, connectionName)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify that a Nmap config was added to the service
@@ -104,23 +104,23 @@ var _ = Describe("ConnectionService", func() {
 
 		It("should return error when connection already exists", func() {
 
-			err := service.AddConnectionToNmapManager(ctx, mockFS, cfg, connectionName)
+			err := service.AddConnectionToNmapManager(ctx, mockServices, cfg, connectionName)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Try to add it again
-			err = service.AddConnectionToNmapManager(ctx, mockFS, cfg, connectionName)
+			err = service.AddConnectionToNmapManager(ctx, mockServices, cfg, connectionName)
 
 			Expect(err).To(MatchError(ErrServiceAlreadyExists))
 		})
 
 		It("should set up the connection for reconciliation with the nmap manager", func() {
 			// Act
-			err := service.AddConnectionToNmapManager(ctx, mockFS, cfg, connectionName)
+			err := service.AddConnectionToNmapManager(ctx, mockServices, cfg, connectionName)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Reconcile to ensure the component is passed to nmap manager
 			mockNmap.ReconcileManagerReconciled = true
-			_, reconciled := service.ReconcileManager(ctx, mockFS, tick)
+			_, reconciled := service.ReconcileManager(ctx, mockServices, tick)
 
 			// Assert
 			Expect(reconciled).To(BeTrue())
@@ -154,7 +154,7 @@ var _ = Describe("ConnectionService", func() {
 				WithNmapManager(manager))
 
 			// Add the component to the service
-			err := statusService.AddConnectionToNmapManager(ctx, mockFS, cfg, connectionName)
+			err := statusService.AddConnectionToNmapManager(ctx, mockServices, cfg, connectionName)
 			Expect(err).NotTo(HaveOccurred())
 
 			nmapName = statusService.getNmapName(connectionName)
@@ -183,7 +183,7 @@ var _ = Describe("ConnectionService", func() {
 				ctx,
 				fsm.SystemSnapshot{CurrentConfig: fullCfg, Tick: tick},
 				manager,
-				filesystem.NewMockFileSystem(),
+				mockServices,
 				nmapName,
 				nmapfsm.OperationalStateStopped,
 				10,
@@ -200,7 +200,7 @@ var _ = Describe("ConnectionService", func() {
 				ctx,
 				fsm.SystemSnapshot{CurrentConfig: fullCfg, Tick: tick},
 				manager,
-				filesystem.NewMockFileSystem(),
+				mockServices,
 				nmapName,
 				nmapfsm.OperationalStateOpen,
 				15,
@@ -212,11 +212,11 @@ var _ = Describe("ConnectionService", func() {
 			mockNmapService.ServiceStates[nmapName].NmapStatus.LastScan.PortResult.State = "open"
 
 			// Reconcile once to ensure that serviceInfo is used to update the observed state
-			_, reconciled := statusService.ReconcileManager(ctx, mockFS, tick)
+			_, reconciled := statusService.ReconcileManager(ctx, mockServices, tick)
 			Expect(reconciled).To(BeFalse())
 
 			// Call Status
-			status, err := statusService.Status(ctx, mockFS, connectionName, tick)
+			status, err := statusService.Status(ctx, mockServices, connectionName, tick)
 
 			// Assert
 			Expect(err).NotTo(HaveOccurred())
@@ -227,7 +227,7 @@ var _ = Describe("ConnectionService", func() {
 
 			statusService.recentNmapStates[connectionName] = []string{"open", "closed", "open"}
 
-			status, err = statusService.Status(ctx, mockFS, connectionName, tick)
+			status, err = statusService.Status(ctx, mockServices, connectionName, tick)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(status.IsFlaky).To(BeTrue())
 
@@ -239,7 +239,7 @@ var _ = Describe("ConnectionService", func() {
 			mockNmapService.ExistingServices = make(map[string]bool)
 
 			// Call Status for a non-existent component
-			_, err := statusService.Status(ctx, mockFS, connectionName, tick)
+			_, err := statusService.Status(ctx, mockServices, connectionName, tick)
 
 			// Assert - check for "not found" in the error message
 			Expect(err).To(HaveOccurred())
@@ -271,13 +271,13 @@ var _ = Describe("ConnectionService", func() {
 			}
 
 			// Add the component first
-			err := service.AddConnectionToNmapManager(ctx, mockFS, cfg, connectionName)
+			err := service.AddConnectionToNmapManager(ctx, mockServices, cfg, connectionName)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		It("should update an existing connection", func() {
 			// Act - update the component
-			err := service.UpdateConnectionInNmapManager(ctx, mockFS, updatedCfg, connectionName)
+			err := service.UpdateConnectionInNmapManager(ctx, mockServices, updatedCfg, connectionName)
 
 			// Assert
 			Expect(err).NotTo(HaveOccurred())
@@ -298,7 +298,7 @@ var _ = Describe("ConnectionService", func() {
 
 		It("should return error when component doesn't exist", func() {
 			// Act - try to update a non-existent component
-			err := service.UpdateConnectionInNmapManager(ctx, mockFS, updatedCfg, "non-existent")
+			err := service.UpdateConnectionInNmapManager(ctx, mockServices, updatedCfg, "non-existent")
 
 			// Assert
 			Expect(err).To(MatchError(ErrServiceNotExist))
@@ -320,13 +320,13 @@ var _ = Describe("ConnectionService", func() {
 			}
 
 			// Add the component first
-			err := service.AddConnectionToNmapManager(ctx, mockFS, cfg, connectionName)
+			err := service.AddConnectionToNmapManager(ctx, mockServices, cfg, connectionName)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		It("should start a connection by changing its desired state", func() {
 			// First stop the component
-			err := service.StopConnection(ctx, mockFS, connectionName)
+			err := service.StopConnection(ctx, mockServices, connectionName)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify the desired state was changed to stopped
@@ -342,7 +342,7 @@ var _ = Describe("ConnectionService", func() {
 			Expect(foundStopped).To(BeTrue())
 
 			// Now start the component
-			err = service.StartConnection(ctx, mockFS, connectionName)
+			err = service.StartConnection(ctx, mockServices, connectionName)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify the desired state was changed to active
@@ -359,11 +359,11 @@ var _ = Describe("ConnectionService", func() {
 
 		It("should return error when trying to start/stop non-existent connection", func() {
 			// Try to start a non-existent component
-			err := service.StartConnection(ctx, mockFS, "non-existent")
+			err := service.StartConnection(ctx, mockServices, "non-existent")
 			Expect(err).To(MatchError(ErrServiceNotExist))
 
 			// Try to stop a non-existent component
-			err = service.StopConnection(ctx, mockFS, "non-existent")
+			err = service.StopConnection(ctx, mockServices, "non-existent")
 			Expect(err).To(MatchError(ErrServiceNotExist))
 		})
 	})
@@ -383,7 +383,7 @@ var _ = Describe("ConnectionService", func() {
 			}
 
 			// Add the component first
-			err := service.AddConnectionToNmapManager(ctx, mockFS, cfg, connectionName)
+			err := service.AddConnectionToNmapManager(ctx, mockServices, cfg, connectionName)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -392,7 +392,7 @@ var _ = Describe("ConnectionService", func() {
 			initialCount := len(service.nmapConfigs)
 
 			// Act - remove the component
-			err := service.RemoveConnectionFromNmapManager(ctx, mockFS, connectionName)
+			err := service.RemoveConnectionFromNmapManager(ctx, mockServices, connectionName)
 
 			// Assert
 			Expect(err).NotTo(HaveOccurred())
@@ -407,7 +407,7 @@ var _ = Describe("ConnectionService", func() {
 
 		It("should return error when removing non-existent component", func() {
 			// Act - try to remove a non-existent component
-			err := service.RemoveConnectionFromNmapManager(ctx, mockFS, "non-existent")
+			err := service.RemoveConnectionFromNmapManager(ctx, mockServices, "non-existent")
 
 			// Assert
 			Expect(err).To(MatchError(ErrServiceNotExist))
@@ -423,7 +423,7 @@ var _ = Describe("ConnectionService", func() {
 					Port:   targetPort,
 				},
 			}
-			err := service.AddConnectionToNmapManager(ctx, mockFS, cfg, connectionName)
+			err := service.AddConnectionToNmapManager(ctx, mockServices, cfg, connectionName)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Use the real mock from the FSM package
@@ -434,7 +434,7 @@ var _ = Describe("ConnectionService", func() {
 			mockNmap.ReconcileManagerReconciled = true
 
 			// Act
-			err, reconciled := service.ReconcileManager(ctx, mockFS, tick)
+			err, reconciled := service.ReconcileManager(ctx, mockServices, tick)
 
 			// Assert
 			Expect(err).NotTo(HaveOccurred())
@@ -462,11 +462,11 @@ var _ = Describe("ConnectionService", func() {
 					Port:   targetPort,
 				},
 			}
-			err := testService.AddConnectionToNmapManager(ctx, mockFS, cfg, testComponentName)
+			err := testService.AddConnectionToNmapManager(ctx, mockServices, cfg, testComponentName)
 			Expect(err).NotTo(HaveOccurred())
 
 			// First reconcile - this will just create the instance in the manager
-			firstErr, reconciled := testService.ReconcileManager(ctx, mockFS, tick)
+			firstErr, reconciled := testService.ReconcileManager(ctx, mockServices, tick)
 			Expect(firstErr).NotTo(HaveOccurred())
 			Expect(reconciled).To(BeTrue()) // Should be true because we created a new instance
 
@@ -474,7 +474,7 @@ var _ = Describe("ConnectionService", func() {
 			mockNmapService.ReconcileManagerError = mockError
 
 			// Second reconcile - now that the instance exists, it will try to reconcile it
-			err, reconciled = testService.ReconcileManager(ctx, mockFS, tick+1)
+			err, reconciled = testService.ReconcileManager(ctx, mockServices, tick+1)
 
 			// Assert
 			Expect(err).ToNot(HaveOccurred()) // it should not return an error
@@ -647,14 +647,14 @@ func WaitForNmapManagerInstanceState(
 	ctx context.Context,
 	snapshot fsm.SystemSnapshot,
 	manager *nmapfsm.NmapManager,
-	filesystemService filesystem.Service,
+	services serviceregistry.Provider,
 	instanceName string,
 	desiredState string,
 	maxAttempts int,
 ) (uint64, error) {
 	tick := snapshot.Tick
 	for i := 0; i < maxAttempts; i++ {
-		err, _ := manager.Reconcile(ctx, snapshot, filesystemService)
+		err, _ := manager.Reconcile(ctx, snapshot, services)
 		if err != nil {
 			return tick, err
 		}

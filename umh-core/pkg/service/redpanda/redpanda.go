@@ -32,6 +32,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/httpclient"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda_monitor"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	"go.uber.org/zap"
 
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
@@ -61,7 +62,7 @@ type IRedpandaService interface {
 	ForceRemoveRedpanda(ctx context.Context, filesystemService filesystem.Service) error
 	// ServiceExists checks if a Redpanda service exists
 	ServiceExists(ctx context.Context, filesystemService filesystem.Service) bool
-	ReconcileManager(ctx context.Context, filesystemService filesystem.Service, tick uint64) (error, bool)
+	ReconcileManager(ctx context.Context, services serviceregistry.Provider, tick uint64) (error, bool)
 	// IsLogsFine checks if the logs of a Redpanda service are fine
 	// Expects logs ([]s6service.LogEntry), currentTime (time.Time), and logWindow (time.Duration)
 	IsLogsFine(logs []s6service.LogEntry, currentTime time.Time, logWindow time.Duration) bool
@@ -654,7 +655,7 @@ func (s *RedpandaService) StopRedpanda(ctx context.Context) error {
 
 // ReconcileManager reconciles the Redpanda manager
 // This basically just calls the Reconcile method of the S6 manager, resulting in a (re)start of the Redpanda service with the latest configuration
-func (s *RedpandaService) ReconcileManager(ctx context.Context, filesystemService filesystem.Service, tick uint64) (err error, reconciled bool) {
+func (s *RedpandaService) ReconcileManager(ctx context.Context, services serviceregistry.Provider, tick uint64) (err error, reconciled bool) {
 	if s.s6Manager == nil {
 		return errors.New("s6 manager not initialized"), false
 	}
@@ -670,13 +671,13 @@ func (s *RedpandaService) ReconcileManager(ctx context.Context, filesystemServic
 		Tick:          tick,
 	}
 
-	s6Err, s6Reconciled := s.s6Manager.Reconcile(ctx, snapshot, filesystemService)
+	s6Err, s6Reconciled := s.s6Manager.Reconcile(ctx, snapshot, services)
 	if s6Err != nil {
 		return s6Err, false
 	}
 
 	// Also reconcile the redpanda monitor service
-	monitorErr, monitorReconciled := s.metricsService.ReconcileManager(ctx, filesystemService, tick)
+	monitorErr, monitorReconciled := s.metricsService.ReconcileManager(ctx, services, tick)
 	if monitorErr != nil {
 		return monitorErr, false
 	}

@@ -26,6 +26,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
 // The functions in this file define heavier, possibly fail-prone operations
@@ -136,7 +137,7 @@ func (s *S6Instance) StopInstance(ctx context.Context, filesystemService filesys
 }
 
 // UpdateObservedStateOfInstance updates the observed state of the service
-func (s *S6Instance) UpdateObservedStateOfInstance(ctx context.Context, filesystemService filesystem.Service, tick uint64, loopStartTime time.Time) error {
+func (s *S6Instance) UpdateObservedStateOfInstance(ctx context.Context, services serviceregistry.Provider, tick uint64, loopStartTime time.Time) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
@@ -144,7 +145,7 @@ func (s *S6Instance) UpdateObservedStateOfInstance(ctx context.Context, filesyst
 	// If both desired and current state are stopped, we do not return immediately, as we still need to check for permanent errors
 
 	// Measure status time
-	info, err := s.service.Status(ctx, s.servicePath, filesystemService)
+	info, err := s.service.Status(ctx, s.servicePath, services.GetFileSystem())
 	if err != nil {
 		s.ObservedState.ServiceInfo.Status = s6service.ServiceUnknown
 
@@ -179,7 +180,7 @@ func (s *S6Instance) UpdateObservedStateOfInstance(ctx context.Context, filesyst
 	}
 
 	// Fetch the actual service config from s6
-	config, err := s.service.GetConfig(ctx, s.servicePath, filesystemService)
+	config, err := s.service.GetConfig(ctx, s.servicePath, services.GetFileSystem())
 	if err != nil {
 		return fmt.Errorf("failed to get S6 service config for %s: %w", s.baseFSMInstance.GetID(), err)
 	}
