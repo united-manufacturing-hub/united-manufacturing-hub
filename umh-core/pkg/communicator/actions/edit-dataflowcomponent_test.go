@@ -42,6 +42,7 @@ var _ = Describe("EditDataflowComponent", func() {
 		mockConfig      *config.MockConfigManager
 		componentName   string
 		componentUUID   uuid.UUID
+		stateMocker     *actions.StateMocker
 	)
 
 	// Setup before each test
@@ -96,7 +97,13 @@ var _ = Describe("EditDataflowComponent", func() {
 		}
 
 		mockConfig = config.NewMockConfigManager().WithConfig(initialConfig)
-		action = actions.NewEditDataflowComponentAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig)
+
+		// Startup the state mocker and get the mock snapshot
+		stateMocker = actions.NewStateMocker(mockConfig)
+		stateMocker.UpdateState()
+		mockSnapshot := stateMocker.GetState()
+
+		action = actions.NewEditDataflowComponentAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig, mockSnapshot)
 	})
 
 	// Cleanup after each test
@@ -414,11 +421,17 @@ var _ = Describe("EditDataflowComponent", func() {
 			// Reset tracking for this test
 			mockConfig.ResetCalls()
 
+			// start the state mocker
+			stateMocker.Start()
+
 			// Execute the action
 			result, metadata, err := action.Execute()
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(ContainSubstring("Successfully edited data flow component"))
 			Expect(metadata).To(BeNil())
+
+			// Stop the state mocker
+			stateMocker.Stop()
 
 			// Expect only the Confirmed message in the channel
 			// Success message is sent by HandleActionMessage, not by Execute
@@ -499,11 +512,17 @@ buffer:
 			// Reset tracking for this test
 			mockConfig.ResetCalls()
 
+			// start the state mocker
+			stateMocker.Start()
+
 			// Execute the action
 			result, metadata, err := action.Execute()
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(ContainSubstring("Successfully edited data flow component"))
 			Expect(metadata).To(BeNil())
+
+			// Stop the state mocker
+			stateMocker.Stop()
 
 			// Verify AtomicEditDataflowcomponent was called
 			Expect(mockConfig.EditDataflowcomponentCalled).To(BeTrue())

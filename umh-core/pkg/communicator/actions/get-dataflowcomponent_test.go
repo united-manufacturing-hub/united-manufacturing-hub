@@ -63,11 +63,87 @@ var _ = Describe("GetDataFlowComponent", func() {
 				},
 				ReleaseChannel: config.ReleaseChannelStable,
 			},
-			DataFlow: []config.DataFlowComponentConfig{},
+			DataFlow: []config.DataFlowComponentConfig{
+				{
+					FSMInstanceConfig: config.FSMInstanceConfig{
+						Name:            "test-component-1",
+						DesiredFSMState: "active",
+					},
+					DataFlowComponentServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
+							Input: map[string]interface{}{
+								"kafka": map[string]interface{}{
+									"addresses": []string{"localhost:9092"},
+									"topics":    []string{"test-topic"},
+								},
+							},
+							Output: map[string]interface{}{
+								"kafka": map[string]interface{}{
+									"addresses": []string{"localhost:9092"},
+									"topic":     "output-topic",
+								},
+							},
+							Pipeline: map[string]interface{}{
+								"processors": []interface{}{
+									map[string]interface{}{
+										"mapping": "root = this",
+									},
+								},
+							},
+							CacheResources: []map[string]interface{}{
+								{
+									"label":  "test-cache",
+									"memory": map[string]interface{}{},
+								},
+							},
+							RateLimitResources: []map[string]interface{}{
+								{
+									"label": "test-rate-limit",
+									"local": map[string]interface{}{},
+								},
+							},
+							Buffer: map[string]interface{}{
+								"memory": map[string]interface{}{},
+							},
+						},
+					},
+				},
+				{
+					FSMInstanceConfig: config.FSMInstanceConfig{
+						Name:            "test-component-2",
+						DesiredFSMState: "active",
+					},
+					DataFlowComponentServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
+							Input: map[string]interface{}{
+								"file": map[string]interface{}{
+									"paths": []string{"/tmp/input.txt"},
+								},
+							},
+							Output: map[string]interface{}{
+								"file": map[string]interface{}{
+									"path": "/tmp/output.txt",
+								},
+							},
+							Pipeline: map[string]interface{}{
+								"processors": []interface{}{
+									map[string]interface{}{
+										"text": map[string]interface{}{
+											"operator": "to_upper",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
 		}
 
-		// Create mock system snapshot with dataflow components
-		mockSnapshot = actions.CreateMockSystemSnapshot()
+		// Startup the state mocker and get the mock snapshot
+		stateMocker := actions.NewStateMocker(actions.NewDirectConfigManager(&initialConfig))
+		stateMocker.UpdateState()
+		mockSnapshot = stateMocker.GetState()
 
 		mockConfig = config.NewMockConfigManager().WithConfig(initialConfig)
 		action = actions.NewGetDataFlowComponentAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig, mockSnapshot)

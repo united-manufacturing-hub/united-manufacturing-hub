@@ -45,7 +45,8 @@ type EditDataflowComponentAction struct {
 	payload           models.CDFCPayload
 	name              string
 	metaType          string
-	componentUUID     uuid.UUID
+	oldComponentUUID  uuid.UUID
+	newComponentUUID  uuid.UUID
 	systemSnapshot    *fsm.SystemSnapshot
 	ignoreHealthCheck bool
 	actionLogger      *zap.SugaredLogger
@@ -57,7 +58,7 @@ type EditDataflowComponentAction struct {
 // This constructor is primarily used for testing to enable dependency injection, though it can be used
 // in production code as well. It initializes the action with the necessary fields but doesn't
 // populate the payload fields which must be done via Parse.
-func NewEditDataflowComponentAction(userEmail string, actionUUID uuid.UUID, instanceUUID uuid.UUID, outboundChannel chan *models.UMHMessage, configManager config.ConfigManager) *EditDataflowComponentAction {
+func NewEditDataflowComponentAction(userEmail string, actionUUID uuid.UUID, instanceUUID uuid.UUID, outboundChannel chan *models.UMHMessage, configManager config.ConfigManager, systemSnapshot *fsm.SystemSnapshot) *EditDataflowComponentAction {
 	return &EditDataflowComponentAction{
 		userEmail:       userEmail,
 		actionUUID:      actionUUID,
@@ -65,6 +66,7 @@ func NewEditDataflowComponentAction(userEmail string, actionUUID uuid.UUID, inst
 		outboundChannel: outboundChannel,
 		configManager:   configManager,
 		actionLogger:    logger.For(logger.ComponentCommunicator),
+		systemSnapshot:  systemSnapshot,
 	}
 }
 
@@ -104,10 +106,13 @@ func (a *EditDataflowComponentAction) Parse(payload interface{}) error {
 		return errors.New("missing required field Name")
 	}
 
-	a.componentUUID, err = uuid.Parse(topLevel.UUID)
+	a.oldComponentUUID, err = uuid.Parse(topLevel.UUID)
 	if err != nil {
 		return fmt.Errorf("invalid UUID format: %v", err)
 	}
+
+	//set the new component UUID by the name
+	a.newComponentUUID = dataflowcomponentserviceconfig.GenerateUUIDFromName(a.name)
 
 	// Store the meta type
 	a.metaType = topLevel.Meta.Type
@@ -132,7 +137,7 @@ func (a *EditDataflowComponentAction) Parse(payload interface{}) error {
 		return fmt.Errorf("unsupported component type: %s", a.metaType)
 	}
 
-	a.actionLogger.Debugf("Parsed EditDataFlowComponent action payload: name=%s, type=%s, UUID=%s", a.name, a.metaType, a.componentUUID)
+	a.actionLogger.Debugf("Parsed EditDataFlowComponent action payload: name=%s, type=%s, UUID=%s", a.name, a.metaType, a.oldComponentUUID)
 	return nil
 }
 
@@ -145,7 +150,7 @@ func (a *EditDataflowComponentAction) Parse(payload interface{}) error {
 // exactly which field or YAML section is invalid.
 func (a *EditDataflowComponentAction) Validate() error {
 	// Validate UUID was properly parsed
-	if a.componentUUID == uuid.Nil {
+	if a.oldComponentUUID == uuid.Nil {
 		return errors.New("component UUID is missing or invalid")
 	}
 
@@ -369,7 +374,7 @@ func (a *EditDataflowComponentAction) Execute() (interface{}, map[string]interfa
 	// Update the component in the configuration
 	ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
 	defer cancel()
-	a.oldConfig, err = a.configManager.AtomicEditDataflowcomponent(ctx, a.componentUUID, dfc)
+	a.oldConfig, err = a.configManager.AtomicEditDataflowcomponent(ctx, a.oldComponentUUID, dfc)
 	if err != nil {
 		errorMsg := fmt.Sprintf("failed to edit dataflowcomponent: %v", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errorMsg, a.outboundChannel, models.EditDataFlowComponent)
@@ -409,7 +414,7 @@ func (a *EditDataflowComponentAction) GetParsedPayload() models.CDFCPayload {
 
 // GetComponentUUID returns the UUID of the component being edited - exposed primarily for testing purposes.
 func (a *EditDataflowComponentAction) GetComponentUUID() uuid.UUID {
-	return a.componentUUID
+	return a.oldComponentUUID
 }
 
 func (a *EditDataflowComponentAction) waitForComponentToBeActive() error {
@@ -427,7 +432,7 @@ func (a *EditDataflowComponentAction) waitForComponentToBeActive() error {
 				SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Dataflow component did not become active in time. Rolling back to old config...", a.outboundChannel, models.EditDataFlowComponent)
 				ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
 				defer cancel()
-				_, err := a.configManager.AtomicEditDataflowcomponent(ctx, a.componentUUID, a.oldConfig)
+				_, err := a.configManager.AtomicEditDataflowcomponent(ctx, a.oldComponentUUID, a.oldConfig)
 				if err != nil {
 					a.actionLogger.Errorf("failed to roll back dataflowcomponent %s: %v", a.name, err)
 				}
@@ -439,7 +444,7 @@ func (a *EditDataflowComponentAction) waitForComponentToBeActive() error {
 			if dataflowcomponentManager, exists := a.systemSnapshot.Managers[constants.DataflowcomponentManagerName]; exists {
 				instances := dataflowcomponentManager.GetInstances()
 				for _, instance := range instances {
-					if dataflowcomponentserviceconfig.GenerateUUIDFromName(instance.ID) == a.componentUUID {
+					if dataflowcomponentserviceconfig.GenerateUUIDFromName(instance.ID) == a.newComponentUUID {
 						dfcSnapshot, ok := instance.LastObservedState.(*dataflowcomponent.DataflowComponentObservedStateSnapshot)
 						if !ok {
 							continue

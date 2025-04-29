@@ -27,14 +27,16 @@ import (
 
 var _ = Describe("StateMocker", func() {
 	var (
-		stateMocker *actions.StateMocker
-		cfg         *config.FullConfig
-		testConfig  dataflowcomponentserviceconfig.DataflowComponentServiceConfig
+		stateMocker   *actions.StateMocker
+		cfg           *config.FullConfig
+		configManager *actions.DirectConfigManager
+		testConfig    dataflowcomponentserviceconfig.DataflowComponentServiceConfig
 	)
 
 	BeforeEach(func() {
 		cfg = &config.FullConfig{}
-		stateMocker = actions.NewStateMocker(cfg)
+		configManager = actions.NewDirectConfigManager(cfg)
+		stateMocker = actions.NewStateMocker(configManager)
 		testConfig = dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 			BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 				Input: map[string]interface{}{
