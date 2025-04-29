@@ -17,7 +17,7 @@ package constants
 import "time"
 
 // BenthosMonitorUpdateObservedStateTimeout is the timeout for updating the observed state
-const BenthosMonitorUpdateObservedStateTimeout = 2 * time.Millisecond
+const BenthosMonitorUpdateObservedStateTimeout = 5 * time.Millisecond
 
 const BenthosMonitorProcessMetricsTimeout = 1 * time.Millisecond // needs to be smaller than BenthosMonitorUpdateObservedStateTimeout
 
