@@ -28,6 +28,8 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/connection"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
 )
 
 // The functions in this file define heavier, possibly fail-prone operations
@@ -65,16 +67,23 @@ func (c *ConnectionInstance) RemoveInstance(ctx context.Context, filesystemServi
 
 	// Remove the initiateConnection from the Nmap manager
 	err := c.service.RemoveConnectionFromNmapManager(ctx, filesystemService, c.baseFSMInstance.GetID())
-	if err != nil {
-		if errors.Is(err, connection.ErrServiceNotExist) {
-			c.baseFSMInstance.GetLogger().Debugf("Connection service %s not found in Nmap manager", c.baseFSMInstance.GetID())
-			return nil // do not throw an error, as each action is expected to be idempotent
-		}
-		return fmt.Errorf("failed to remove Connection service %s from Nmap manager: %w", c.baseFSMInstance.GetID(), err)
-	}
+	switch {
+	case err == nil: // fully removed
+		c.baseFSMInstance.GetLogger().Debugf("Connection service %s removed from nmap manager", c.baseFSMInstance.GetID())
+		return nil
 
-	c.baseFSMInstance.GetLogger().Debugf("Conenction service %s removed from Nmap manager", c.baseFSMInstance.GetID())
-	return nil
+	case errors.Is(err, connection.ErrServiceNotExist):
+		c.baseFSMInstance.GetLogger().Debugf("Connection service %s already removed from nmap manager", c.baseFSMInstance.GetID())
+		// idempotent: was already gone
+		return nil
+
+	case errors.Is(err, standarderrors.ErrRemovalPending):
+		c.baseFSMInstance.GetLogger().Debugf("Connection service %s removal still in progress", c.baseFSMInstance.GetID())
+		// not an error from the FSM's perspective - just means "try again"
+		return err
+	default:
+		return fmt.Errorf("failed to remove the service %s: %w", c.baseFSMInstance.GetID(), err)
+	}
 }
 
 // StartInstance to start the Connection by setting the desired state to running for the given instance
@@ -105,6 +114,12 @@ func (c *ConnectionInstance) StopInstance(ctx context.Context, filesystemService
 
 	c.baseFSMInstance.GetLogger().Debugf("Connection service %s stop command executed", c.baseFSMInstance.GetID())
 	return nil
+}
+
+// CheckForCreation checks whether the creation was successful
+// For Connection, this is a no-op as we don't need to check anything
+func (c *ConnectionInstance) CheckForCreation(ctx context.Context, filesystemService filesystem.Service) bool {
+	return true
 }
 
 // getServiceStatus gets the status of the Connection service
@@ -140,13 +155,13 @@ func (c *ConnectionInstance) getServiceStatus(ctx context.Context, filesystemSer
 }
 
 // UpdateObservedStateOfInstance updates the observed state of the service
-func (c *ConnectionInstance) UpdateObservedStateOfInstance(ctx context.Context, filesystemService filesystem.Service, tick uint64, loopStartTime time.Time) error {
+func (c *ConnectionInstance) UpdateObservedStateOfInstance(ctx context.Context, services serviceregistry.Provider, tick uint64, loopStartTime time.Time) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
 
 	start := time.Now()
-	info, err := c.getServiceStatus(ctx, filesystemService, tick)
+	info, err := c.getServiceStatus(ctx, services.GetFileSystem(), tick)
 	if err != nil {
 		return fmt.Errorf("error while getting service status: %w", err)
 	}
@@ -164,7 +179,7 @@ func (c *ConnectionInstance) UpdateObservedStateOfInstance(ctx context.Context, 
 
 	// Fetch the actual Nmap config from the service
 	start = time.Now()
-	observedConfig, err := c.service.GetConfig(ctx, filesystemService, c.baseFSMInstance.GetID())
+	observedConfig, err := c.service.GetConfig(ctx, services.GetFileSystem(), c.baseFSMInstance.GetID())
 	metrics.ObserveReconcileTime(logger.ComponentConnectionInstance, c.baseFSMInstance.GetID()+".getConfig", time.Since(start))
 	if err == nil {
 		// Only update if we successfully got the config
@@ -181,14 +196,14 @@ func (c *ConnectionInstance) UpdateObservedStateOfInstance(ctx context.Context, 
 
 	if !connectionserviceconfig.ConfigsEqual(&c.config, &c.ObservedState.ObservedConnectionConfig) {
 		// Check if the service exists before attempting to update
-		if c.service.ServiceExists(ctx, filesystemService, c.baseFSMInstance.GetID()) {
+		if c.service.ServiceExists(ctx, services.GetFileSystem(), c.baseFSMInstance.GetID()) {
 			c.baseFSMInstance.GetLogger().Debugf("Observed Connection config is different from desired config, updating Nmap configuration")
 
 			diffStr := connectionserviceconfig.ConfigDiff(&c.config, &c.ObservedState.ObservedConnectionConfig)
 			c.baseFSMInstance.GetLogger().Debugf("Configuration differences: %s", diffStr)
 
 			// Update the config in the Nmap manager
-			err := c.service.UpdateConnectionInNmapManager(ctx, filesystemService, &c.config, c.baseFSMInstance.GetID())
+			err := c.service.UpdateConnectionInNmapManager(ctx, services.GetFileSystem(), &c.config, c.baseFSMInstance.GetID())
 			if err != nil {
 				return fmt.Errorf("failed to update Connection service configuration: %w", err)
 			}

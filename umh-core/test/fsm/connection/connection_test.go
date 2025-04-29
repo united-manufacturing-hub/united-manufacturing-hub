@@ -12,9 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build test
-// +build test
-
 package connection_test
 
 import (
@@ -26,7 +23,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/connection"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/nmap"
 	connectionsvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/connection"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 
 	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsmtest"
@@ -37,12 +34,12 @@ import (
 
 var _ = Describe("Connection FSM", func() {
 	var (
-		instance       *connection.ConnectionInstance
-		mockService    *connectionsvc.MockConnectionService
-		connectionName string
-		ctx            context.Context
-		tick           uint64
-		mockFS         *filesystem.MockFileSystem
+		instance        *connection.ConnectionInstance
+		mockService     *connectionsvc.MockConnectionService
+		connectionName  string
+		ctx             context.Context
+		tick            uint64
+		mockSvcRegistry *serviceregistry.Registry
 	)
 
 	BeforeEach(func() {
@@ -51,7 +48,7 @@ var _ = Describe("Connection FSM", func() {
 		tick = 0
 
 		instance, mockService, _ = fsmtest.SetupConnectionInstance(connectionName, connection.OperationalStateUp)
-		mockFS = filesystem.NewMockFileSystem()
+		mockSvcRegistry = serviceregistry.NewMockRegistry()
 	})
 
 	Context("Basic State Transitions", func() {
@@ -61,14 +58,14 @@ var _ = Describe("Connection FSM", func() {
 			// Setup to Stopped state
 			// ToBeCreated -> Creating
 			tick, err = fsmtest.TestConnectionStateTransition(
-				ctx, instance, mockService, mockFS, connectionName,
+				ctx, instance, mockService, mockSvcRegistry, connectionName,
 				internalfsm.LifecycleStateToBeCreated,
 				internalfsm.LifecycleStateCreating, 5, tick)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Creating -> Stopped
 			tick, err = fsmtest.TestConnectionStateTransition(
-				ctx, instance, mockService, mockFS, connectionName,
+				ctx, instance, mockService, mockSvcRegistry, connectionName,
 				internalfsm.LifecycleStateCreating,
 				connection.OperationalStateStopped, 5, tick)
 			Expect(err).NotTo(HaveOccurred())
@@ -82,7 +79,7 @@ var _ = Describe("Connection FSM", func() {
 
 			// Execute transition: Stopped -> Starting
 			tick, err = fsmtest.TestConnectionStateTransition(
-				ctx, instance, mockService, mockFS, connectionName,
+				ctx, instance, mockService, mockSvcRegistry, connectionName,
 				connection.OperationalStateStopped,
 				connection.OperationalStateStarting, 5, tick)
 			Expect(err).NotTo(HaveOccurred())
@@ -94,14 +91,14 @@ var _ = Describe("Connection FSM", func() {
 			// Setup to Stopped state
 			// ToBeCreated -> Creating
 			tick, err = fsmtest.TestConnectionStateTransition(
-				ctx, instance, mockService, mockFS, connectionName,
+				ctx, instance, mockService, mockSvcRegistry, connectionName,
 				internalfsm.LifecycleStateToBeCreated,
 				internalfsm.LifecycleStateCreating, 5, tick)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Creating -> Stopped
 			tick, err = fsmtest.TestConnectionStateTransition(
-				ctx, instance, mockService, mockFS, connectionName,
+				ctx, instance, mockService, mockSvcRegistry, connectionName,
 				internalfsm.LifecycleStateCreating,
 				connection.OperationalStateStopped, 5, tick)
 			Expect(err).NotTo(HaveOccurred())
@@ -118,7 +115,7 @@ var _ = Describe("Connection FSM", func() {
 				ctx,
 				instance,
 				mockService,
-				mockFS,
+				mockSvcRegistry,
 				connectionName,
 				connection.OperationalStateStopped,
 				connection.OperationalStateStarting, 5, tick)
@@ -132,7 +129,7 @@ var _ = Describe("Connection FSM", func() {
 				ctx,
 				instance,
 				mockService,
-				mockFS,
+				mockSvcRegistry,
 				connectionName,
 				connection.OperationalStateStarting,
 				connection.OperationalStateUp,
@@ -148,14 +145,14 @@ var _ = Describe("Connection FSM", func() {
 			// Setup to Active state
 			// 1. First get to Stopped state
 			tick, err := fsmtest.TestConnectionStateTransition(
-				ctx, instance, mockService, mockFS, connectionName,
+				ctx, instance, mockService, mockSvcRegistry, connectionName,
 				internalfsm.LifecycleStateToBeCreated,
 				internalfsm.LifecycleStateCreating, 5, tick)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Creating → Stopped
 			tick, err = fsmtest.TestConnectionStateTransition(
-				ctx, instance, mockService, mockFS, connectionName,
+				ctx, instance, mockService, mockSvcRegistry, connectionName,
 				internalfsm.LifecycleStateCreating,
 				connection.OperationalStateStopped, 5, tick)
 			Expect(err).NotTo(HaveOccurred())
@@ -169,7 +166,7 @@ var _ = Describe("Connection FSM", func() {
 				pkgfsm.SystemSnapshot{Tick: tick},
 				instance,
 				mockService,
-				mockFS,
+				mockSvcRegistry,
 				connectionName,
 				5,
 			)
@@ -192,7 +189,7 @@ var _ = Describe("Connection FSM", func() {
 				ctx,
 				instance,
 				mockService,
-				mockFS,
+				mockSvcRegistry,
 				connectionName,
 				internalfsm.LifecycleStateToBeCreated,
 				internalfsm.LifecycleStateCreating,
@@ -206,7 +203,7 @@ var _ = Describe("Connection FSM", func() {
 
 			// Attempt to reconcile - this should not set an FSM error if errors are correctly identified
 			snapshot := pkgfsm.SystemSnapshot{Tick: tick}
-			err, _ = instance.Reconcile(ctx, snapshot, mockFS)
+			err, _ = instance.Reconcile(ctx, snapshot, mockSvcRegistry)
 			Expect(err).To(BeNil()) // Should not propagate an error
 
 			// The instance should not have an error set
@@ -221,12 +218,12 @@ var _ = Describe("Connection FSM", func() {
 
 var _ = Describe("ConnectionInstance state transitions", func() {
 	var (
-		ctx         context.Context
-		instance    *connection.ConnectionInstance
-		mockService *connectionsvc.MockConnectionService
-		mockFS      *filesystem.MockFileSystem
-		serviceName string
-		tick        uint64
+		ctx             context.Context
+		instance        *connection.ConnectionInstance
+		mockService     *connectionsvc.MockConnectionService
+		mockSvcRegistry *serviceregistry.Registry
+		serviceName     string
+		tick            uint64
 	)
 
 	// Bring the instance to Degraded once for every test‑row so each scenario
@@ -237,11 +234,11 @@ var _ = Describe("ConnectionInstance state transitions", func() {
 		serviceName = "test-connection-fsm"
 
 		instance, mockService, _ = fsmtest.SetupConnectionInstance(serviceName, connection.OperationalStateStopped)
-		mockFS = filesystem.NewMockFileSystem()
+		mockSvcRegistry = serviceregistry.NewMockRegistry()
 
 		// to_be_created -> creating
 		tick, _ = fsmtest.TestConnectionStateTransition(
-			ctx, instance, mockService, mockFS, serviceName,
+			ctx, instance, mockService, mockSvcRegistry, serviceName,
 			internalfsm.LifecycleStateToBeCreated,
 			internalfsm.LifecycleStateCreating,
 			5, tick,
@@ -250,7 +247,7 @@ var _ = Describe("ConnectionInstance state transitions", func() {
 		mockService.ConnectionStates[serviceName] = &connectionsvc.ServiceInfo{NmapFSMState: nmap.OperationalStateStopped}
 		mockService.ExistingConnections[serviceName] = true
 		tick, _ = fsmtest.TestConnectionStateTransition(
-			ctx, instance, mockService, mockFS, serviceName,
+			ctx, instance, mockService, mockSvcRegistry, serviceName,
 			internalfsm.LifecycleStateCreating,
 			connection.OperationalStateStopped,
 			5, tick,
@@ -260,7 +257,7 @@ var _ = Describe("ConnectionInstance state transitions", func() {
 		Expect(instance.SetDesiredFSMState(connection.OperationalStateUp)).To(Succeed())
 		// stopped -> starting
 		tick, _ = fsmtest.TestConnectionStateTransition(
-			ctx, instance, mockService, mockFS, serviceName,
+			ctx, instance, mockService, mockSvcRegistry, serviceName,
 			connection.OperationalStateStopped,
 			connection.OperationalStateStarting,
 			5, tick,
@@ -272,7 +269,7 @@ var _ = Describe("ConnectionInstance state transitions", func() {
 			NmapFSMState:  nmap.OperationalStateOpen,
 		})
 		tick, _ = fsmtest.TestConnectionStateTransition(
-			ctx, instance, mockService, mockFS, serviceName,
+			ctx, instance, mockService, mockSvcRegistry, serviceName,
 			connection.OperationalStateStarting,
 			connection.OperationalStateUp,
 			5, tick,
@@ -294,7 +291,7 @@ var _ = Describe("ConnectionInstance state transitions", func() {
 				ctx,
 				instance,
 				mockService,
-				mockFS,
+				mockSvcRegistry,
 				serviceName,
 				current,
 				connection.OperationalStateStopping,
@@ -309,7 +306,7 @@ var _ = Describe("ConnectionInstance state transitions", func() {
 				ctx,
 				instance,
 				mockService,
-				mockFS,
+				mockSvcRegistry,
 				serviceName,
 				connection.OperationalStateStopping,
 				connection.OperationalStateStopped,
@@ -334,7 +331,7 @@ var _ = Describe("ConnectionInstance state transitions", func() {
 				ctx,
 				instance,
 				mockService,
-				mockFS,
+				mockSvcRegistry,
 				serviceName,
 				connection.OperationalStateUp,
 				fromState,
@@ -353,7 +350,7 @@ var _ = Describe("ConnectionInstance state transitions", func() {
 				ctx,
 				instance,
 				mockService,
-				mockFS,
+				mockSvcRegistry,
 				serviceName,
 				fromState,
 				toState,

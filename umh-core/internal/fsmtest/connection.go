@@ -12,9 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build test
-// +build test
-
 package fsmtest
 
 import (
@@ -28,7 +25,7 @@ import (
 	connectionfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/connection"
 	nmapfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/nmap"
 	connectionsvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/connection"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
 // CreateConnectionTestConfig creates a standard Connection config for testing
@@ -179,7 +176,7 @@ func TestConnectionStateTransition(
 	ctx context.Context,
 	instance *connectionfsm.ConnectionInstance,
 	mockService *connectionsvc.MockConnectionService,
-	filesystemService filesystem.Service,
+	services serviceregistry.Provider,
 	serviceName string,
 	fromState string,
 	toState string,
@@ -204,7 +201,7 @@ func TestConnectionStateTransition(
 		}
 
 		// Perform a reconcile cycle
-		_, _ = instance.Reconcile(ctx, fsm.SystemSnapshot{Tick: tick}, filesystemService)
+		_, _ = instance.Reconcile(ctx, fsm.SystemSnapshot{Tick: tick}, services)
 		tick++
 	}
 
@@ -235,7 +232,7 @@ func VerifyConnectionStableState(
 	snapshot fsm.SystemSnapshot,
 	instance *connectionfsm.ConnectionInstance,
 	mockService *connectionsvc.MockConnectionService,
-	filesystemService filesystem.Service,
+	services serviceregistry.Provider,
 	serviceName string,
 	expectedState string,
 	numCycles int,
@@ -253,7 +250,7 @@ func VerifyConnectionStableState(
 	tick := snapshot.Tick
 	for i := 0; i < numCycles; i++ {
 		snapshot.Tick = tick
-		_, _ = instance.Reconcile(ctx, snapshot, filesystemService)
+		_, _ = instance.Reconcile(ctx, snapshot, services)
 		tick++
 
 		if instance.GetCurrentFSMState() != expectedState {
@@ -314,7 +311,7 @@ func StabilizeConnectionInstance(
 	snapshot fsm.SystemSnapshot,
 	instance *connectionfsm.ConnectionInstance,
 	mockService *connectionsvc.MockConnectionService,
-	filesystemService filesystem.Service,
+	services serviceregistry.Provider,
 	serviceName string,
 	targetState string,
 	maxAttempts int,
@@ -329,10 +326,10 @@ func StabilizeConnectionInstance(
 		currentState := instance.GetCurrentFSMState()
 		if currentState == targetState {
 			// Now verify it remains stable
-			return VerifyConnectionStableState(ctx, snapshot, instance, mockService, filesystemService, serviceName, targetState, 3)
+			return VerifyConnectionStableState(ctx, snapshot, instance, mockService, services, serviceName, targetState, 3)
 		}
 
-		_, _ = instance.Reconcile(ctx, snapshot, filesystemService)
+		_, _ = instance.Reconcile(ctx, snapshot, services)
 		tick++
 	}
 
@@ -359,7 +356,7 @@ func WaitForConnectionDesiredState(
 	ctx context.Context,
 	snapshot fsm.SystemSnapshot,
 	instance *connectionfsm.ConnectionInstance,
-	filesystemService filesystem.Service,
+	services serviceregistry.Provider,
 	targetState string,
 	maxAttempts int,
 ) (uint64, error) {
@@ -373,7 +370,7 @@ func WaitForConnectionDesiredState(
 		}
 
 		// Run a reconcile cycle
-		err, _ := instance.Reconcile(ctx, snapshot, filesystemService)
+		err, _ := instance.Reconcile(ctx, snapshot, services)
 		if err != nil {
 			return tick, err
 		}
@@ -407,7 +404,7 @@ func ReconcileConnectionUntilError(
 	snapshot fsm.SystemSnapshot,
 	instance *connectionfsm.ConnectionInstance,
 	mockService *connectionsvc.MockConnectionService,
-	filesystemService filesystem.Service,
+	servies serviceregistry.Provider,
 	serviceName string,
 	maxAttempts int,
 ) (uint64, error, bool) {
@@ -416,7 +413,7 @@ func ReconcileConnectionUntilError(
 	for i := 0; i < maxAttempts; i++ {
 		// Perform a reconcile cycle and capture the error and reconciled status
 		snapshot.Tick = tick
-		err, reconciled := instance.Reconcile(ctx, snapshot, filesystemService)
+		err, reconciled := instance.Reconcile(ctx, snapshot, servies)
 		tick++
 
 		if err != nil {

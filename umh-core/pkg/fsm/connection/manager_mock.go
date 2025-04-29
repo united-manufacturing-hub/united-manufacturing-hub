@@ -29,26 +29,6 @@ func NewConnectionManagerWithMockedServices(name string) (*ConnectionManager, *c
 
 	mockSvc := connection.NewMockConnectionService()
 
-	// Configure the mock S6 service
-	mockNmapService := mockSvc.NmapService.(*nmap.MockNmapService)
-	s6MockService := mockNmapService.S6Service.(*s6svc.MockService)
-
-	// Configure default responses to prevent real filesystem operations
-	s6MockService.CreateError = nil
-	s6MockService.RemoveError = nil
-	s6MockService.StartError = nil
-	s6MockService.StopError = nil
-	s6MockService.ForceRemoveError = nil
-
-	// Set up the mock to say services exist after creation
-	s6MockService.ServiceExistsResult = true
-
-	// Configure default successful statuses
-	s6MockService.StatusResult = s6svc.ServiceInfo{
-		Status: s6svc.ServiceUp,
-		Pid:    12345, // Fake PID
-		Uptime: 60,    // Fake uptime in seconds
-	}
 	// Create a new manager instance
 	// Lets create a mock manager here
 	mockFSMManager := public_fsm.NewBaseFSMManager[config.ConnectionConfig](

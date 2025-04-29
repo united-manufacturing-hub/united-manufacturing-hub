@@ -33,7 +33,6 @@ const (
 	OperationalStateStarting = "starting"
 
 	// Running phase states
-	// TODO: Define states for Connection
 	// OperationalStateDown is the state when the service is running but not actively processing data
 	OperationalStateDown = "down"
 	// OperationalStateUp is the state when the service is running and actively processing data
@@ -147,4 +146,11 @@ func (c *ConnectionInstance) GetConfig() connectionserviceconfig.ConnectionServi
 // This is a testing-only utility to access the private baseFSMInstance field
 func (c *ConnectionInstance) GetLastError() error {
 	return c.baseFSMInstance.GetLastError()
+}
+
+// IsTransientStreakCounterMaxed returns whether the transient streak counter
+// has reached the maximum number of ticks, which means that the FSM is stuck in a state
+// and should be removed
+func (c *ConnectionInstance) IsTransientStreakCounterMaxed() bool {
+	return c.baseFSMInstance.IsTransientStreakCounterMaxed()
 }

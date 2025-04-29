@@ -12,9 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build test
-// +build test
-
 package fsmtest
 
 import (
@@ -24,7 +21,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	connectionfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/connection"
 	connectionsvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/connection"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
 // WaitForConnectionManagerStable is a simple helper that calls manager.Reconcile once
@@ -34,9 +31,9 @@ func WaitForConnectionManagerStable(
 	ctx context.Context,
 	snapshot fsm.SystemSnapshot,
 	manager *connectionfsm.ConnectionManager,
-	filesystemService filesystem.Service,
+	services serviceregistry.Provider,
 ) (uint64, error) {
-	err, _ := manager.Reconcile(ctx, snapshot, filesystemService)
+	err, _ := manager.Reconcile(ctx, snapshot, services)
 	if err != nil {
 		return snapshot.Tick, err
 	}
@@ -50,7 +47,7 @@ func WaitForConnectionManagerInstanceState(
 	ctx context.Context,
 	snapshot fsm.SystemSnapshot,
 	manager *connectionfsm.ConnectionManager,
-	filesystemService filesystem.Service,
+	services serviceregistry.Provider,
 	instanceName string,
 	desiredState string,
 	maxAttempts int,
@@ -59,7 +56,7 @@ func WaitForConnectionManagerInstanceState(
 	currentState := ""
 	for i := 0; i < maxAttempts; i++ {
 		snapshot.Tick = tick
-		err, _ := manager.Reconcile(ctx, snapshot, filesystemService)
+		err, _ := manager.Reconcile(ctx, snapshot, services)
 		if err != nil {
 			return tick, err
 		}
@@ -83,13 +80,13 @@ func WaitForConnectionManagerInstanceRemoval(
 	ctx context.Context,
 	snapshot fsm.SystemSnapshot,
 	manager *connectionfsm.ConnectionManager,
-	filesystemService filesystem.Service,
+	services serviceregistry.Provider,
 	instanceName string,
 	maxAttempts int,
 ) (uint64, error) {
 	tick := snapshot.Tick
 	for i := 0; i < maxAttempts; i++ {
-		err, _ := manager.Reconcile(ctx, snapshot, filesystemService)
+		err, _ := manager.Reconcile(ctx, snapshot, services)
 		if err != nil {
 			return tick, err
 		}
@@ -109,13 +106,13 @@ func WaitForConnectionManagerMultiState(
 	ctx context.Context,
 	snapshot fsm.SystemSnapshot,
 	manager *connectionfsm.ConnectionManager,
-	filesystemService filesystem.Service,
+	services serviceregistry.Provider,
 	desiredMap map[string]string, // e.g. { "comp1": "idle", "comp2": "active" }
 	maxAttempts int,
 ) (uint64, error) {
 	tick := snapshot.Tick
 	for i := 0; i < maxAttempts; i++ {
-		err, _ := manager.Reconcile(ctx, snapshot, filesystemService)
+		err, _ := manager.Reconcile(ctx, snapshot, services)
 		if err != nil {
 			return tick, err
 		}
@@ -202,8 +199,8 @@ func ReconcileOnceConnectionManager(
 	ctx context.Context,
 	snapshot fsm.SystemSnapshot,
 	manager *connectionfsm.ConnectionManager,
-	filesystemService filesystem.Service,
+	services serviceregistry.Provider,
 ) (newTick uint64, err error, reconciled bool) {
-	err, rec := manager.Reconcile(ctx, snapshot, filesystemService)
+	err, rec := manager.Reconcile(ctx, snapshot, services)
 	return snapshot.Tick + 1, err, rec
 }

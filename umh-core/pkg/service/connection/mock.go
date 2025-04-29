@@ -26,6 +26,7 @@ import (
 	nmapfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/nmap"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/nmap"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
 // MockConnectionService provides a mock implementation of IConnectionService for testing.
@@ -324,7 +325,7 @@ func (m *MockConnectionService) ServiceExists(ctx context.Context, filesystemSer
 }
 
 // ReconcileManager mocks reconciling the DataFlowComponent manager
-func (m *MockConnectionService) ReconcileManager(ctx context.Context, filesystemService filesystem.Service, tick uint64) (error, bool) {
+func (m *MockConnectionService) ReconcileManager(ctx context.Context, services serviceregistry.Provider, tick uint64) (error, bool) {
 	m.ReconcileManagerCalled = true
 	return m.ReconcileManagerError, m.ReconcileManagerReconciled
 }

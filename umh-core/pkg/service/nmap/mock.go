@@ -309,7 +309,7 @@ func (m *MockNmapService) RemoveNmapFromS6Manager(ctx context.Context, nmapName 
 	return nil
 }
 
-func (m *MockNmapService) ForceRemoveNmap(ctx context.Context, services serviceregistry.Provider, nmapName string) error {
+func (m *MockNmapService) ForceRemoveNmap(ctx context.Context, filesystemService filesystem.Service, nmapName string) error {
 	m.ForceRemoveNmapCalled = true
 	return m.ForceRemoveNmapError
 }
@@ -382,7 +382,7 @@ func (m *MockNmapService) ReconcileManager(ctx context.Context, services service
 }
 
 // ServiceExists mocks checking if a service exists
-func (m *MockNmapService) ServiceExists(ctx context.Context, services serviceregistry.Provider, nmapName string) bool {
+func (m *MockNmapService) ServiceExists(ctx context.Context, filesystemService filesystem.Service, nmapName string) bool {
 
 	m.ServiceExistsCalled = true
 	return m.ServiceExistsResult

@@ -12,9 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build test
-// +build test
-
 package connection_test
 
 import (
@@ -31,17 +28,17 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/connection"
 	connectionsvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/connection"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
 var _ = Describe("ConnectionManager", func() {
 	var (
-		manager     *connection.ConnectionManager
-		mockService *connectionsvc.MockConnectionService
-		ctx         context.Context
-		tick        uint64
-		cancel      context.CancelFunc
-		mockFS      *filesystem.MockFileSystem
+		manager         *connection.ConnectionManager
+		mockService     *connectionsvc.MockConnectionService
+		ctx             context.Context
+		tick            uint64
+		cancel          context.CancelFunc
+		mockSvcRegistry *serviceregistry.Registry
 	)
 
 	AfterEach(func() {
@@ -51,7 +48,7 @@ var _ = Describe("ConnectionManager", func() {
 	BeforeEach(func() {
 		ctx, cancel = context.WithTimeout(context.Background(), 10*time.Minute)
 		tick = 0
-		mockFS = filesystem.NewMockFileSystem()
+		mockSvcRegistry = serviceregistry.NewMockRegistry()
 		manager, mockService = fsmtest.CreateMockConnectionManager("test-manager")
 
 		mockService.ExistingConnections = make(map[string]bool)
@@ -69,7 +66,7 @@ var _ = Describe("ConnectionManager", func() {
 				ctx,
 				fsm.SystemSnapshot{CurrentConfig: emptyConfig, Tick: tick},
 				manager,
-				mockFS,
+				mockSvcRegistry,
 			)
 			tick = newTick
 			Expect(err).NotTo(HaveOccurred())
@@ -98,7 +95,7 @@ var _ = Describe("ConnectionManager", func() {
 				ctx,
 				fsm.SystemSnapshot{CurrentConfig: cfg, Tick: tick},
 				manager,
-				mockFS,
+				mockSvcRegistry,
 				connectionName,
 				connection.OperationalStateStopped,
 				10,
@@ -133,7 +130,7 @@ var _ = Describe("ConnectionManager", func() {
 				ctx,
 				fsm.SystemSnapshot{CurrentConfig: cfg, Tick: tick},
 				manager,
-				mockFS,
+				mockSvcRegistry,
 				connectionName,
 				connection.OperationalStateUp,
 				20,
@@ -170,7 +167,7 @@ var _ = Describe("ConnectionManager", func() {
 					Tick:          tick,
 				},
 				manager,
-				mockFS,
+				mockSvcRegistry,
 				serviceName,
 				connection.OperationalStateUp,
 				20,
@@ -193,7 +190,7 @@ var _ = Describe("ConnectionManager", func() {
 					Tick:          tick,
 				},
 				manager,
-				mockFS,
+				mockSvcRegistry,
 				serviceName,
 				connection.OperationalStateDegraded,
 				20,
@@ -218,7 +215,7 @@ var _ = Describe("ConnectionManager", func() {
 				ctx,
 				fsm.SystemSnapshot{CurrentConfig: emptyCfg, Tick: tick},
 				manager,
-				mockFS,
+				mockSvcRegistry,
 				fmt.Sprintf("connection-%s", serviceName),
 				20,
 			)
@@ -253,7 +250,7 @@ var _ = Describe("ConnectionManager", func() {
 					Tick:          tick,
 				},
 				manager,
-				mockFS,
+				mockSvcRegistry,
 				connectionName,
 				connection.OperationalStateUp,
 				20,
@@ -278,7 +275,7 @@ var _ = Describe("ConnectionManager", func() {
 					Tick:          tick,
 				},
 				manager,
-				mockFS,
+				mockSvcRegistry,
 				connectionName,
 				connection.OperationalStateStopped,
 				20,
@@ -302,7 +299,7 @@ var _ = Describe("ConnectionManager", func() {
 					Tick:          tick,
 				},
 				manager,
-				mockFS,
+				mockSvcRegistry,
 				connectionName,
 				connection.OperationalStateUp,
 				20,
@@ -337,7 +334,7 @@ var _ = Describe("ConnectionManager", func() {
 				ctx,
 				fsm.SystemSnapshot{CurrentConfig: fullCfg, Tick: tick},
 				manager,
-				mockFS,
+				mockSvcRegistry,
 				map[string]string{
 					conn1Name: connection.OperationalStateUp,
 					conn2Name: connection.OperationalStateStopped,
@@ -382,7 +379,7 @@ var _ = Describe("ConnectionManager", func() {
 				ctx,
 				fsm.SystemSnapshot{CurrentConfig: fullCfg, Tick: tick},
 				manager,
-				mockFS,
+				mockSvcRegistry,
 				serviceName,
 				connection.OperationalStateUp,
 				20,
@@ -407,7 +404,7 @@ var _ = Describe("ConnectionManager", func() {
 				ctx,
 				fsm.SystemSnapshot{CurrentConfig: stoppedCfg, Tick: tick},
 				manager,
-				mockFS,
+				mockSvcRegistry,
 				serviceName,
 				connection.OperationalStateStopped,
 				20,
@@ -425,7 +422,7 @@ var _ = Describe("ConnectionManager", func() {
 					Connection: []config.ConnectionConfig{},
 				}}},
 				manager,
-				mockFS,
+				mockSvcRegistry,
 				serviceName,
 				15,
 			)
