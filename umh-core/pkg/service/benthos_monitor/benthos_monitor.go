@@ -600,11 +600,6 @@ func parseCurlError(errorString string) error {
 // It is live, when it contains the string "pong"
 func (s *BenthosMonitorService) ProcessPingData(pingDataBytes []byte) (bool, error) {
 
-	curlError := parseCurlError(string(pingDataBytes))
-	if curlError != nil {
-		return false, curlError
-	}
-
 	pingDataString := string(pingDataBytes)
 	// Strip any newlines
 	pingDataString = strings.ReplaceAll(pingDataString, "\n", "")
@@ -642,6 +637,11 @@ func ParsePingData(dataReader io.Reader) (bool, error) {
 		return false, fmt.Errorf("failed to read ping data: %w", err)
 	}
 
+	curlError := parseCurlError(string(data))
+	if curlError != nil {
+		// If we have any curl error, we can assume the service is not live (but we do not need to return the error)
+		return false, nil
+	}
 	if strings.Contains(string(data), "pong") {
 		return true, nil
 	}
@@ -653,11 +653,6 @@ func ParsePingData(dataReader io.Reader) (bool, error) {
 // It returns false if the service is not ready, and an error if there is an error parsing the ready data
 // It is ready, when the error field is empty
 func (s *BenthosMonitorService) ProcessReadyData(readyDataBytes []byte) (bool, readyResponse, error) {
-
-	curlError := parseCurlError(string(readyDataBytes))
-	if curlError != nil {
-		return false, readyResponse{}, curlError
-	}
 
 	readyDataString := string(readyDataBytes)
 	// Strip any newlines
@@ -716,11 +711,6 @@ func ParseReadyData(dataReader io.Reader) (bool, readyResponse, error) {
 // It returns an error if there is an error parsing the version data
 func (s *BenthosMonitorService) ProcessVersionData(versionDataBytes []byte) (versionResponse, error) {
 
-	curlError := parseCurlError(string(versionDataBytes))
-	if curlError != nil {
-		return versionResponse{}, curlError
-	}
-
 	versionDataString := string(versionDataBytes)
 	// Strip any newlines
 	versionDataString = strings.ReplaceAll(versionDataString, "\n", "")
@@ -758,6 +748,11 @@ func ParseVersionData(dataReader io.Reader) (versionResponse, error) {
 		return versionResponse{}, fmt.Errorf("failed to read version data: %w", err)
 	}
 
+	curlError := parseCurlError(string(data))
+	if curlError != nil {
+		return versionResponse{}, curlError
+	}
+
 	var versionResp versionResponse
 	if err := json.Unmarshal(data, &versionResp); err != nil {
 		return versionResponse{}, fmt.Errorf("failed to unmarshal version data: %w", err)
@@ -769,11 +764,6 @@ func ParseVersionData(dataReader io.Reader) (versionResponse, error) {
 // ProcessMetricsData processes the metrics data and returns the metrics response
 // It returns an error if there is an error parsing the metrics data
 func (s *BenthosMonitorService) ProcessMetricsData(metricsDataBytes []byte, tick uint64) (*BenthosMetrics, error) {
-
-	curlError := parseCurlError(string(metricsDataBytes))
-	if curlError != nil {
-		return nil, curlError
-	}
 
 	metricsDataString := string(metricsDataBytes)
 	// Strip any newlines
@@ -816,6 +806,11 @@ func ParseMetricsData(dataReader io.Reader) (Metrics, error) {
 	data, err := io.ReadAll(dataReader)
 	if err != nil {
 		return Metrics{}, fmt.Errorf("failed to read metrics data: %w", err)
+	}
+
+	curlError := parseCurlError(string(data))
+	if curlError != nil {
+		return Metrics{}, curlError
 	}
 
 	metrics, err := ParseMetricsFromBytes(data)
