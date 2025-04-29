@@ -13,47 +13,46 @@
 # limitations under the License.
 
 header:
-  license:
-    spdx-id: Apache-2.0
-    copyright-owner: UMH Systems GmbH
-    software-name: United Manufacturing Hub
+    license:
+        spdx-id: Apache-2.0
+        copyright-owner: UMH Systems GmbH
+        software-name: United Manufacturing Hub
 
-  paths-ignore:
-    - "**/*.md"
-    - "**/*.mdc"
-    - "LICENSE"
-    - "NOTICE"
-    - "CODEOWNERS"
-    - "AUTHORS"
-    - ".git"
-    - "deployment/united-manufacturing-hub/_mqttDevCertificates/"
-    - "deployment/united-manufacturing-hub/developmentCertificates/"
-    - "deployment/kafka-to-postgresql/postgresql.conf"
-    - "deployment/united-manufacturing-hub/templates/NOTES.txt"
-    - "deployment/united-manufacturing-hub/Chart.lock"
-    - "deployment/united-manufacturing-hub/.helmignore"
-    - "deployment/helm-repo/index.yaml"
-    - "umh-core/vendor/*"
-    - "umh-core/vendor/**/*"
-    - ".releaserc"
-    - ".gitignore"
-    - ".licenserc.yaml"
-    - "CODE_OF_CONDUCT.md"
-    - "CONTRIBUTING.md"
-    - "CONTRIBUTOR_LICENSE_AGREEMENT_ENTITY.md"
-    - "CONTRIBUTOR_LICENSE_AGREEMENT_INDIVIDUAL.md"
-    - "Makefile"
-    - "README.md"
-    - "SECURITY.md"
-    - "**/go.sum"
-    - "**/go.mod"
-    - "**/.dockerignore"
-    - "umh-core/s6-base/**/*"
-    - ".devcontainer/devcontainer.json"
-    - ".vscode/**"
-    - "umh-core/pkg/service/redpanda_monitor/test_metrics.txt"
-    - "umh-core/pkg/service/benthos_monitor/test_metrics.txt"
-    - "umh-core/pkg/service/s6/s6_test_data.txt"
-    - "umh-core/pkg/service/s6/s6_test_log_data.txt"
-
-  comment: on-failure
+    paths-ignore:
+        - "**/*.md"
+        - "**/*.mdc"
+        - "LICENSE"
+        - "NOTICE"
+        - "CODEOWNERS"
+        - "AUTHORS"
+        - ".git"
+        - "deployment/united-manufacturing-hub/_mqttDevCertificates/"
+        - "deployment/united-manufacturing-hub/developmentCertificates/"
+        - "deployment/kafka-to-postgresql/postgresql.conf"
+        - "deployment/united-manufacturing-hub/templates/NOTES.txt"
+        - "deployment/united-manufacturing-hub/Chart.lock"
+        - "deployment/united-manufacturing-hub/.helmignore"
+        - "deployment/helm-repo/index.yaml"
+        - "umh-core/vendor/*"
+        - "umh-core/vendor/**/*"
+        - ".releaserc"
+        - ".gitignore"
+        - ".licenserc.yaml"
+        - "CODE_OF_CONDUCT.md"
+        - "CONTRIBUTING.md"
+        - "CONTRIBUTOR_LICENSE_AGREEMENT_ENTITY.md"
+        - "CONTRIBUTOR_LICENSE_AGREEMENT_INDIVIDUAL.md"
+        - "Makefile"
+        - "README.md"
+        - "SECURITY.md"
+        - "**/go.sum"
+        - "**/go.mod"
+        - "**/.dockerignore"
+        - "umh-core/s6-base/**/*"
+        - ".devcontainer/devcontainer.json"
+        - ".vscode/**"
+        - "umh-core/pkg/service/redpanda_monitor/test_metrics.txt"
+        - "umh-core/pkg/service/benthos_monitor/test_metrics.txt"
+        - "umh-core/pkg/service/s6/s6_test_data.txt"
+        - "umh-core/pkg/service/s6/s6_test_log_data.txt"
+    comment: on-failure
