@@ -630,6 +630,7 @@ var _ = Describe("BenthosManager", func() {
 			// 3. Grab the *mock* S6Service nested inside the S6Instance
 			//    (we’ll check its RemoveCalled flag at the end).
 			//----------------------------------------------------------------------
+
 			s6Name := benthosSvc.GetS6ServiceName(benthosName)
 			s6InstIfc, ok := mockS6Mgr.GetInstance(s6Name)
 			Expect(ok).To(BeTrue(), "S6 instance should exist after first reconcile")
