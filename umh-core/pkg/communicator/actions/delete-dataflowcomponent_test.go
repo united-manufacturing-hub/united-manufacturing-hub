@@ -16,6 +16,7 @@ package actions_test
 
 import (
 	"errors"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -42,6 +43,7 @@ var _ = Describe("DeleteDataflowComponent", func() {
 		mockConfig      *config.MockConfigManager
 		componentName   string
 		componentUUID   uuid.UUID
+		systemMu        *sync.RWMutex
 	)
 
 	// Setup before each test
@@ -75,7 +77,8 @@ var _ = Describe("DeleteDataflowComponent", func() {
 		}
 
 		mockConfig = config.NewMockConfigManager().WithConfig(initialConfig)
-		action = actions.NewDeleteDataflowComponentAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig)
+		systemMu = &sync.RWMutex{}
+		action = actions.NewDeleteDataflowComponentAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig, nil, systemMu)
 	})
 
 	// Cleanup after each test

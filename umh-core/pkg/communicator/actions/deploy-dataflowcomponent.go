@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -49,13 +50,14 @@ type DeployDataflowComponentAction struct {
 	metaType          string
 	actionLogger      *zap.SugaredLogger
 	ignoreHealthCheck bool
+	systemMu          *sync.RWMutex
 }
 
 // NewDeployDataflowComponentAction creates a new DeployDataflowComponentAction with the provided parameters.
 // This constructor is primarily used for testing to enable dependency injection, though it can be used
 // in production code as well. It initializes the action with the necessary fields but doesn't
 // populate the payload, name, or metaType fields which must be done via Parse.
-func NewDeployDataflowComponentAction(userEmail string, actionUUID uuid.UUID, instanceUUID uuid.UUID, outboundChannel chan *models.UMHMessage, configManager config.ConfigManager) *DeployDataflowComponentAction {
+func NewDeployDataflowComponentAction(userEmail string, actionUUID uuid.UUID, instanceUUID uuid.UUID, outboundChannel chan *models.UMHMessage, configManager config.ConfigManager, systemSnapshot *fsm.SystemSnapshot, systemMu *sync.RWMutex) *DeployDataflowComponentAction {
 	return &DeployDataflowComponentAction{
 		userEmail:       userEmail,
 		actionUUID:      actionUUID,
@@ -63,6 +65,8 @@ func NewDeployDataflowComponentAction(userEmail string, actionUUID uuid.UUID, in
 		outboundChannel: outboundChannel,
 		configManager:   configManager,
 		actionLogger:    logger.For(logger.ComponentCommunicator),
+		systemSnapshot:  systemSnapshot,
+		systemMu:        systemMu,
 	}
 }
 

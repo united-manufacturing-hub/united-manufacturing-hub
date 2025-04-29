@@ -16,6 +16,7 @@ package actions_test
 
 import (
 	"reflect"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -43,6 +44,7 @@ var _ = Describe("GetDataFlowComponent", func() {
 		outboundChannel chan *models.UMHMessage
 		mockConfig      *config.MockConfigManager
 		mockSnapshot    *fsm.SystemSnapshot
+		systemMu        *sync.RWMutex
 	)
 
 	// Setup before each test
@@ -70,7 +72,10 @@ var _ = Describe("GetDataFlowComponent", func() {
 		mockSnapshot = createMockSystemSnapshot()
 
 		mockConfig = config.NewMockConfigManager().WithConfig(initialConfig)
-		action = actions.NewGetDataFlowComponentAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig, mockSnapshot)
+
+		systemMu = &sync.RWMutex{}
+
+		action = actions.NewGetDataFlowComponentAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig, mockSnapshot, systemMu)
 	})
 
 	// Cleanup after each test
@@ -247,7 +252,7 @@ var _ = Describe("GetDataFlowComponent", func() {
 			}
 
 			// Create action with empty snapshot
-			action = actions.NewGetDataFlowComponentAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig, emptySnapshot)
+			action = actions.NewGetDataFlowComponentAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig, emptySnapshot, systemMu)
 
 			// Parse valid payload
 			payload := map[string]interface{}{
@@ -274,7 +279,7 @@ var _ = Describe("GetDataFlowComponent", func() {
 			snapshotWithMissingState := createMockSystemSnapshotWithMissingState()
 
 			// Create action with this special snapshot
-			action = actions.NewGetDataFlowComponentAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig, snapshotWithMissingState)
+			action = actions.NewGetDataFlowComponentAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig, snapshotWithMissingState, systemMu)
 
 			// Parse with UUID that matches the component with missing state
 			testComponentID := "test-component-missing-state"
@@ -353,6 +358,7 @@ var _ = Describe("GetDataFlowComponent", func() {
 				outboundChannel,
 				mockConfig,
 				testSnapshot,
+				systemMu,
 			)
 
 			// Parse with the UUID of our test component
@@ -416,6 +422,7 @@ var _ = Describe("GetDataFlowComponent", func() {
 				outboundChannel,
 				mockConfig,
 				testSnapshot,
+				systemMu,
 			)
 
 			// Parse with the UUID of our invalid component

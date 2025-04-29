@@ -33,7 +33,7 @@ import (
 
 type CommunicationState struct {
 	LoginResponse     *v2.LoginResponse
-	mu                sync.Mutex
+	mu                *sync.RWMutex
 	Watchdog          *watchdog.Watchdog
 	InboundChannel    chan *models.UMHMessage
 	InsecureTLS       bool
@@ -103,7 +103,7 @@ func (c *CommunicationState) InitialiseAndStartRouter() {
 	}
 
 	c.mu.Lock()
-	c.Router = router.NewRouter(c.Watchdog, c.InboundChannel, c.LoginResponse.UUID, c.OutboundChannel, c.ReleaseChannel, c.SubscriberHandler, c.SystemSnapshot, c.ConfigManager, c.Logger)
+	c.Router = router.NewRouter(c.Watchdog, c.InboundChannel, c.LoginResponse.UUID, c.OutboundChannel, c.ReleaseChannel, c.SubscriberHandler, c.SystemSnapshot, c.ConfigManager, c.Logger, c.mu)
 	c.mu.Unlock()
 	if c.Router == nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "Failed to create router")

@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -51,13 +52,14 @@ type EditDataflowComponentAction struct {
 	actionLogger      *zap.SugaredLogger
 	dfc               config.DataFlowComponentConfig
 	oldConfig         config.DataFlowComponentConfig
+	systemMu          *sync.RWMutex
 }
 
 // NewEditDataflowComponentAction creates a new EditDataflowComponentAction with the provided parameters.
 // This constructor is primarily used for testing to enable dependency injection, though it can be used
 // in production code as well. It initializes the action with the necessary fields but doesn't
 // populate the payload fields which must be done via Parse.
-func NewEditDataflowComponentAction(userEmail string, actionUUID uuid.UUID, instanceUUID uuid.UUID, outboundChannel chan *models.UMHMessage, configManager config.ConfigManager) *EditDataflowComponentAction {
+func NewEditDataflowComponentAction(userEmail string, actionUUID uuid.UUID, instanceUUID uuid.UUID, outboundChannel chan *models.UMHMessage, configManager config.ConfigManager, systemSnapshot *fsm.SystemSnapshot, systemMu *sync.RWMutex) *EditDataflowComponentAction {
 	return &EditDataflowComponentAction{
 		userEmail:       userEmail,
 		actionUUID:      actionUUID,
@@ -65,6 +67,8 @@ func NewEditDataflowComponentAction(userEmail string, actionUUID uuid.UUID, inst
 		outboundChannel: outboundChannel,
 		configManager:   configManager,
 		actionLogger:    logger.For(logger.ComponentCommunicator),
+		systemSnapshot:  systemSnapshot,
+		systemMu:        systemMu,
 	}
 }
 

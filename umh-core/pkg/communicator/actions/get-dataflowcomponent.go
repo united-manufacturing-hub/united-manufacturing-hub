@@ -17,6 +17,7 @@ package actions
 import (
 	"fmt"
 	"slices"
+	"sync"
 
 	"github.com/google/uuid"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
@@ -39,13 +40,14 @@ type GetDataFlowComponentAction struct {
 	systemSnapshot  *fsm.SystemSnapshot
 	payload         models.GetDataflowcomponentRequestSchemaJson
 	actionLogger    *zap.SugaredLogger
+	systemMu        *sync.RWMutex
 }
 
 // NewGetDataFlowComponentAction creates a new GetDataFlowComponentAction with the provided parameters.
 // This constructor is primarily used for testing to enable dependency injection, though it can be used
 // in production code as well. It initializes the action with the necessary fields but doesn't
 // populate the payload field which must be done via Parse.
-func NewGetDataFlowComponentAction(userEmail string, actionUUID uuid.UUID, instanceUUID uuid.UUID, outboundChannel chan *models.UMHMessage, configManager config.ConfigManager, systemSnapshot *fsm.SystemSnapshot) *GetDataFlowComponentAction {
+func NewGetDataFlowComponentAction(userEmail string, actionUUID uuid.UUID, instanceUUID uuid.UUID, outboundChannel chan *models.UMHMessage, configManager config.ConfigManager, systemSnapshot *fsm.SystemSnapshot, systemMu *sync.RWMutex) *GetDataFlowComponentAction {
 	return &GetDataFlowComponentAction{
 		userEmail:       userEmail,
 		actionUUID:      actionUUID,
@@ -54,6 +56,7 @@ func NewGetDataFlowComponentAction(userEmail string, actionUUID uuid.UUID, insta
 		configManager:   configManager,
 		systemSnapshot:  systemSnapshot,
 		actionLogger:    logger.For(logger.ComponentCommunicator),
+		systemMu:        systemMu,
 	}
 }
 

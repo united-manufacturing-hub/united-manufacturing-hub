@@ -17,6 +17,7 @@ package actions_test
 import (
 	"context"
 	"errors"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -71,7 +72,8 @@ var _ = Describe("EditInstance", func() {
 		}
 
 		mockConfig = config.NewMockConfigManager().WithConfig(initialConfig)
-		action = actions.NewEditInstanceAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig)
+		mu := sync.RWMutex{}
+		action = actions.NewEditInstanceAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig, &mu)
 	})
 
 	// Cleanup after each test
@@ -289,7 +291,8 @@ var _ = Describe("EditInstance", func() {
 			}
 
 			// Create new action with our custom mock
-			action = actions.NewEditInstanceAction(userEmail, actionUUID, instanceUUID, outboundChannel, customMock)
+			mu := sync.RWMutex{}
+			action = actions.NewEditInstanceAction(userEmail, actionUUID, instanceUUID, outboundChannel, customMock, &mu)
 
 			// Parse with valid location
 			payload := map[string]interface{}{
