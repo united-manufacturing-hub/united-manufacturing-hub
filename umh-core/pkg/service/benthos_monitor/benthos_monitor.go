@@ -258,13 +258,13 @@ func (s *BenthosMonitorService) generateBenthosScript(port uint16) (string, erro
 	scriptContent := fmt.Sprintf(`#!/bin/sh
 while true; do
   echo "%s"
-  curl -sSL --max-time 1 http://localhost:%d/ping | gzip -c | xxd -p
+  curl -sSL --max-time 1 http://localhost:%d/ping 2>&1 | gzip -c | xxd -p
   echo "%s"
-  curl -sSL --max-time 1 http://localhost:%d/ready | gzip -c | xxd -p
+  curl -sSL --max-time 1 http://localhost:%d/ready 2>&1 | gzip -c | xxd -p
   echo "%s"
-  curl -sSL --max-time 1 http://localhost:%d/version | gzip -c | xxd -p
+  curl -sSL --max-time 1 http://localhost:%d/version 2>&1 | gzip -c | xxd -p
   echo "%s"
-  curl -sSL --max-time 1 http://localhost:%d/metrics | gzip -c | xxd -p
+  curl -sSL --max-time 1 http://localhost:%d/metrics 2>&1 | gzip -c | xxd -p
   echo "%s"
   date +%%s%%9N
   echo "%s"

@@ -227,9 +227,9 @@ func (s *RedpandaMonitorService) generateRedpandaScript() (string, error) {
 	scriptContent := fmt.Sprintf(`#!/bin/sh
 while true; do
   echo "%s"
-  curl -sSL --max-time 1 http://localhost:9644/public_metrics | gzip -c | xxd -p
+  curl -sSL --max-time 1 http://localhost:9644/public_metrics 2>&1 | gzip -c | xxd -p
   echo "%s"
-  curl -sSL --max-time 1 http://localhost:9644/v1/cluster_config | gzip -c | xxd -p
+  curl -sSL --max-time 1 http://localhost:9644/v1/cluster_config 2>&1 | gzip -c | xxd -p
   echo "%s"
   date +%%s%%9N
   echo "%s"
