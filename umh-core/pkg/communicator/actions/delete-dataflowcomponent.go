@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -41,13 +42,14 @@ type DeleteDataflowComponentAction struct {
 	systemSnapshot  *fsm.SystemSnapshot
 	componentUUID   uuid.UUID
 	actionLogger    *zap.SugaredLogger
+	systemMu        *sync.RWMutex
 }
 
 // NewDeleteDataflowComponentAction creates a new DeleteDataflowComponentAction with the provided parameters.
 // This constructor is primarily used for testing to enable dependency injection, though it can be used
 // in production code as well. It initializes the action with the necessary fields but doesn't
 // populate the component UUID field which must be done via Parse.
-func NewDeleteDataflowComponentAction(userEmail string, actionUUID uuid.UUID, instanceUUID uuid.UUID, outboundChannel chan *models.UMHMessage, configManager config.ConfigManager, systemSnapshot *fsm.SystemSnapshot) *DeleteDataflowComponentAction {
+func NewDeleteDataflowComponentAction(userEmail string, actionUUID uuid.UUID, instanceUUID uuid.UUID, outboundChannel chan *models.UMHMessage, configManager config.ConfigManager, systemSnapshot *fsm.SystemSnapshot, systemMu *sync.RWMutex) *DeleteDataflowComponentAction {
 	return &DeleteDataflowComponentAction{
 		userEmail:       userEmail,
 		actionUUID:      actionUUID,
@@ -56,6 +58,7 @@ func NewDeleteDataflowComponentAction(userEmail string, actionUUID uuid.UUID, in
 		configManager:   configManager,
 		actionLogger:    logger.For(logger.ComponentCommunicator),
 		systemSnapshot:  systemSnapshot,
+		systemMu:        systemMu,
 	}
 }
 

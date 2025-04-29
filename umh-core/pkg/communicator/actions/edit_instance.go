@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 
 	"github.com/google/uuid"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
@@ -37,13 +38,14 @@ type EditInstanceAction struct {
 	location        *models.EditInstanceLocationModel
 	configManager   config.ConfigManager
 	actionLogger    *zap.SugaredLogger
+	systemMu        *sync.RWMutex
 }
 
 // NewEditInstanceAction creates a new EditInstanceAction with the provided parameters.
 // This constructor is primarily used for testing purposes to enable dependency injection.
 // It initializes the action with the necessary fields but doesn't populate the location field
 // which must be done via Parse or SetLocation.
-func NewEditInstanceAction(userEmail string, actionUUID uuid.UUID, instanceUUID uuid.UUID, outboundChannel chan *models.UMHMessage, configManager config.ConfigManager) *EditInstanceAction {
+func NewEditInstanceAction(userEmail string, actionUUID uuid.UUID, instanceUUID uuid.UUID, outboundChannel chan *models.UMHMessage, configManager config.ConfigManager, systemMu *sync.RWMutex) *EditInstanceAction {
 	return &EditInstanceAction{
 		userEmail:       userEmail,
 		actionUUID:      actionUUID,
@@ -51,6 +53,7 @@ func NewEditInstanceAction(userEmail string, actionUUID uuid.UUID, instanceUUID 
 		outboundChannel: outboundChannel,
 		configManager:   configManager,
 		actionLogger:    logger.For(logger.ComponentCommunicator),
+		systemMu:        systemMu,
 	}
 }
 

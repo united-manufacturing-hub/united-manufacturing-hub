@@ -44,6 +44,7 @@ type Router struct {
 	configManager         config.ConfigManager
 	actionLogger          *zap.SugaredLogger
 	routerLogger          *zap.SugaredLogger
+	mu                    *sync.RWMutex
 }
 
 type ClientConnection struct {
@@ -60,6 +61,7 @@ func NewRouter(dog watchdog.Iface,
 	systemSnapshot *fsm.SystemSnapshot,
 	configManager config.ConfigManager,
 	logger *zap.SugaredLogger,
+	mu *sync.RWMutex,
 ) *Router {
 	return &Router{
 		dog:                   dog,
@@ -74,6 +76,7 @@ func NewRouter(dog watchdog.Iface,
 		configManager:         configManager,
 		actionLogger:          logger,
 		routerLogger:          logger,
+		mu:                    mu,
 	}
 }
 
@@ -146,5 +149,6 @@ func (r *Router) handleAction(messageContent models.UMHMessageContent, message *
 		traceId,
 		r.systemSnapshot,
 		r.configManager,
+		r.mu,
 	)
 }

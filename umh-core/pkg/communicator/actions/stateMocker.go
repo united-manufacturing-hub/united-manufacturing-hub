@@ -52,7 +52,7 @@ type StateMocker struct {
 	PendingTransitions map[string][]StateTransition // key is component ID
 	done               chan struct{}                // channel to signal shutdown of goroutine
 	running            atomic.Bool                  // flag to track if the mocker is running
-	mu                 sync.RWMutex                 // mutex to protect the state of the mocker
+	mu                 *sync.RWMutex                // mutex to protect the state of the mocker
 }
 
 // NewStateMocker creates a new StateMocker
@@ -65,7 +65,7 @@ func NewStateMocker(configManager ConfigManager) *StateMocker {
 		TickCounter:        0,
 		PendingTransitions: make(map[string][]StateTransition),
 		done:               make(chan struct{}),
-		mu:                 sync.RWMutex{},
+		mu:                 &sync.RWMutex{},
 	}
 }
 
@@ -77,6 +77,10 @@ func (s *StateMocker) GetState() *fsm.SystemSnapshot {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.State
+}
+
+func (s *StateMocker) GetMutex() *sync.RWMutex {
+	return s.mu
 }
 
 // GetConfigManager returns the config manager that is being used by the state mocker

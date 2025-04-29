@@ -70,8 +70,9 @@ var _ = Describe("DeployDataflowComponent", func() {
 		stateMocker = actions.NewStateMocker(mockConfig)
 		stateMocker.UpdateDfcState()
 		mockSnapshot := stateMocker.GetState()
+		systemMu := stateMocker.GetMutex()
 
-		action = actions.NewDeployDataflowComponentAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig, mockSnapshot)
+		action = actions.NewDeployDataflowComponentAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig, mockSnapshot, systemMu)
 	})
 
 	// Cleanup after each test
