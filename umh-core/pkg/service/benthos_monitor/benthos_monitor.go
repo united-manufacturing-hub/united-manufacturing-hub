@@ -35,7 +35,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 
 	dto "github.com/prometheus/client_model/go"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
@@ -172,15 +172,15 @@ type BenthosMonitorStatus struct {
 
 type IBenthosMonitorService interface {
 	GenerateS6ConfigForBenthosMonitor(benthosName string, port uint16) (s6serviceconfig.S6ServiceConfig, error)
-	Status(ctx context.Context, filesystemService filesystem.Service, tick uint64) (ServiceInfo, error)
+	Status(ctx context.Context, services serviceregistry.Provider, tick uint64) (ServiceInfo, error)
 	AddBenthosMonitorToS6Manager(ctx context.Context, port uint16) error
 	RemoveBenthosMonitorFromS6Manager(ctx context.Context) error
-	ForceRemoveBenthosMonitor(ctx context.Context, filesystemService filesystem.Service) error
+	ForceRemoveBenthosMonitor(ctx context.Context, services serviceregistry.Provider) error
 	UpdateBenthosMonitorInS6Manager(ctx context.Context, port uint16) error
 	StartBenthosMonitor(ctx context.Context) error
 	StopBenthosMonitor(ctx context.Context) error
-	ReconcileManager(ctx context.Context, filesystemService filesystem.Service, tick uint64) (error, bool)
-	ServiceExists(ctx context.Context, filesystemService filesystem.Service) bool
+	ReconcileManager(ctx context.Context, services serviceregistry.Provider, tick uint64) (error, bool)
+	ServiceExists(ctx context.Context, services serviceregistry.Provider) bool
 }
 
 // Ensure BenthosMonitorService implements IBenthosMonitorService
@@ -996,7 +996,7 @@ func updateLatencyFromMetric(latency *Latency, metric *dto.Metric) {
 }
 
 // Status checks the status of a benthos service
-func (s *BenthosMonitorService) Status(ctx context.Context, filesystemService filesystem.Service, tick uint64) (ServiceInfo, error) {
+func (s *BenthosMonitorService) Status(ctx context.Context, services serviceregistry.Provider, tick uint64) (ServiceInfo, error) {
 	if ctx.Err() != nil {
 		return ServiceInfo{}, ctx.Err()
 	}
@@ -1036,7 +1036,7 @@ func (s *BenthosMonitorService) Status(ctx context.Context, filesystemService fi
 
 	// Get logs
 	s6ServicePath := filepath.Join(constants.S6BaseDir, s6ServiceName)
-	logs, err := s.s6Service.GetLogs(ctx, s6ServicePath, filesystemService)
+	logs, err := s.s6Service.GetLogs(ctx, s6ServicePath, services.GetFileSystem())
 	if err != nil {
 		return ServiceInfo{}, fmt.Errorf("failed to get logs: %w", err)
 	}
@@ -1206,7 +1206,7 @@ func (s *BenthosMonitorService) StopBenthosMonitor(ctx context.Context) error {
 }
 
 // ReconcileManager reconciles the Benthos manager
-func (s *BenthosMonitorService) ReconcileManager(ctx context.Context, filesystemService filesystem.Service, tick uint64) (err error, reconciled bool) {
+func (s *BenthosMonitorService) ReconcileManager(ctx context.Context, services serviceregistry.Provider, tick uint64) (err error, reconciled bool) {
 	if s.s6Manager == nil {
 		return errors.New("s6 manager not initialized"), false
 	}
@@ -1221,11 +1221,11 @@ func (s *BenthosMonitorService) ReconcileManager(ctx context.Context, filesystem
 		serviceMap.Internal.Services = []config.S6FSMConfig{*s.s6ServiceConfig}
 	}
 
-	return s.s6Manager.Reconcile(ctx, fsm.SystemSnapshot{CurrentConfig: serviceMap}, filesystemService)
+	return s.s6Manager.Reconcile(ctx, fsm.SystemSnapshot{CurrentConfig: serviceMap}, services)
 }
 
 // ServiceExists checks if a benthos instance exists
-func (s *BenthosMonitorService) ServiceExists(ctx context.Context, filesystemService filesystem.Service) bool {
+func (s *BenthosMonitorService) ServiceExists(ctx context.Context, services serviceregistry.Provider) bool {
 	if s.s6Manager == nil {
 		return false
 	}
@@ -1234,7 +1234,7 @@ func (s *BenthosMonitorService) ServiceExists(ctx context.Context, filesystemSer
 		return false
 	}
 
-	exists, err := s.s6Service.ServiceExists(ctx, filepath.Join(constants.S6BaseDir, s.GetS6ServiceName()), filesystemService)
+	exists, err := s.s6Service.ServiceExists(ctx, filepath.Join(constants.S6BaseDir, s.GetS6ServiceName()), services.GetFileSystem())
 	if err != nil {
 		return false
 	}
@@ -1246,8 +1246,8 @@ func (s *BenthosMonitorService) ServiceExists(ctx context.Context, filesystemSer
 // This should only be called if the Benthos monitor is in a permanent failure state
 // and the instance itself cannot be stopped or removed
 // Expects benthosName (e.g. "myservice") as defined in the UMH config
-func (s *BenthosMonitorService) ForceRemoveBenthosMonitor(ctx context.Context, filesystemService filesystem.Service) error {
+func (s *BenthosMonitorService) ForceRemoveBenthosMonitor(ctx context.Context, services serviceregistry.Provider) error {
 	s6ServiceName := s.GetS6ServiceName()
 	s6ServicePath := filepath.Join(constants.S6BaseDir, s6ServiceName)
-	return s.s6Service.ForceRemove(ctx, s6ServicePath, filesystemService)
+	return services.GetFileSystem().RemoveAll(ctx, s6ServicePath)
 }

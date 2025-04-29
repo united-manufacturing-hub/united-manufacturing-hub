@@ -44,6 +44,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/nmap"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	"go.uber.org/zap"
 )
 
@@ -254,7 +255,7 @@ func (c *ConnectionService) GetConfig(
 // the FSM reconciliation system's timing mechanism.
 func (c *ConnectionService) Status(
 	ctx context.Context,
-	fs filesystem.Service,
+	services serviceregistry.Provider,
 	connName string,
 	tick uint64,
 ) (ServiceInfo, error) {
@@ -266,7 +267,7 @@ func (c *ConnectionService) Status(
 	if ctx.Err() != nil {
 		return ServiceInfo{}, ctx.Err()
 	}
-	if !c.ServiceExists(ctx, fs, connName) {
+	if !c.ServiceExists(ctx, services, connName) {
 		return ServiceInfo{}, ErrServiceNotExist
 	}
 
@@ -312,7 +313,7 @@ func (c *ConnectionService) Status(
 // Returns an error if the connection already exists or if registration fails.
 func (c *ConnectionService) AddConnectionToNmapManager(
 	ctx context.Context,
-	fs filesystem.Service,
+	services serviceregistry.Provider,
 	cfg *connectionserviceconfig.ConnectionServiceConfig,
 	connectionName string,
 ) error {
@@ -368,7 +369,7 @@ func (c *ConnectionService) AddConnectionToNmapManager(
 // Returns an error if the connection doesn't exist or if update fails.
 func (c *ConnectionService) UpdateConnectionInNmapManager(
 	ctx context.Context,
-	fs filesystem.Service,
+	services serviceregistry.Provider,
 	cfg *connectionserviceconfig.ConnectionServiceConfig,
 	connectionName string,
 ) error {
@@ -426,7 +427,7 @@ func (c *ConnectionService) UpdateConnectionInNmapManager(
 // Returns an error if the connection doesn't exist or removal fails.
 func (c *ConnectionService) RemoveConnectionFromNmapManager(
 	ctx context.Context,
-	fs filesystem.Service,
+	services serviceregistry.Provider,
 	connectionName string,
 ) error {
 	if c.nmapManager == nil {
@@ -470,7 +471,7 @@ func (c *ConnectionService) RemoveConnectionFromNmapManager(
 // Expects nmapName (e.g. "connection-myservice") as defined in the UMH config
 func (c *ConnectionService) StartConnection(
 	ctx context.Context,
-	filesystemService filesystem.Service,
+	services serviceregistry.Provider,
 	connectionName string,
 ) error {
 	if c.nmapManager == nil {
@@ -504,7 +505,7 @@ func (c *ConnectionService) StartConnection(
 // Expects nmapName (e.g. "connection-myservice") as defined in the UMH config
 func (c *ConnectionService) StopConnection(
 	ctx context.Context,
-	filesystemService filesystem.Service,
+	services serviceregistry.Provider,
 	connectionName string,
 ) error {
 	if c.nmapManager == nil {
@@ -542,7 +543,7 @@ func (c *ConnectionService) StopConnection(
 // This should be called periodically by a control loop.
 func (c *ConnectionService) ReconcileManager(
 	ctx context.Context,
-	fs filesystem.Service,
+	services serviceregistry.Provider,
 	tick uint64,
 ) (error, bool) {
 	start := time.Now()
@@ -566,7 +567,7 @@ func (c *ConnectionService) ReconcileManager(
 				Nmap: c.nmapConfigs,
 			}},
 		Tick: tick,
-	}, fs)
+	}, services)
 }
 
 // ServiceExists checks if a connection with the given name exists.
@@ -575,7 +576,7 @@ func (c *ConnectionService) ReconcileManager(
 // Returns true if the connection exists, false otherwise.
 func (c *ConnectionService) ServiceExists(
 	ctx context.Context,
-	fs filesystem.Service,
+	services serviceregistry.Provider,
 	connectionName string,
 ) bool {
 	if ctx.Err() != nil {
@@ -584,18 +585,18 @@ func (c *ConnectionService) ServiceExists(
 	nmapName := c.getNmapName(connectionName)
 
 	// Check if the actual service exists
-	return c.nmapService.ServiceExists(ctx, fs, nmapName)
+	return c.nmapService.ServiceExists(ctx, services, nmapName)
 }
 
 // ForceRemoveConnection removes a Connection from the Nmap manager
 // Expects nmapName (e.g. "connection-myservice") as defined in the UMH config
-func (c *ConnectionService) ForceRemoveConnection(ctx context.Context, filesystemService filesystem.Service, connectionName string) error {
+func (c *ConnectionService) ForceRemoveConnection(ctx context.Context, services serviceregistry.Provider, connectionName string) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
 
 	// force remove from Nmap manager
-	return c.nmapService.ForceRemoveNmap(ctx, filesystemService, c.getNmapName(connectionName))
+	return c.nmapService.ForceRemoveNmap(ctx, services, c.getNmapName(connectionName))
 }
 
 // updateRecentScans adds a new scan result to the history for flakiness detection.

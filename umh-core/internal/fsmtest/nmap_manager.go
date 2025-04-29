@@ -23,9 +23,9 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	nmapfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/nmap"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/nmap"
 	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
 // WaitForNmapManagerStable is a simple helper that calls manager.Reconcile once
@@ -35,10 +35,9 @@ func WaitForNmapManagerStable(
 	ctx context.Context,
 	snapshot fsm.SystemSnapshot,
 	manager *nmapfsm.NmapManager,
-
-	filesystemService filesystem.Service,
+	services serviceregistry.Provider,
 ) (uint64, error) {
-	err, _ := manager.Reconcile(ctx, snapshot, filesystemService)
+	err, _ := manager.Reconcile(ctx, snapshot, services)
 	if err != nil {
 		return snapshot.Tick, err
 	}
@@ -52,14 +51,14 @@ func WaitForNmapManagerInstanceState(
 	ctx context.Context,
 	snapshot fsm.SystemSnapshot,
 	manager *nmapfsm.NmapManager,
-	filesystemService filesystem.Service,
+	services serviceregistry.Provider,
 	instanceName string,
 	desiredState string,
 	maxAttempts int,
 ) (uint64, error) {
 	tick := snapshot.Tick
 	for i := 0; i < maxAttempts; i++ {
-		err, _ := manager.Reconcile(ctx, snapshot, filesystemService)
+		err, _ := manager.Reconcile(ctx, snapshot, services)
 		if err != nil {
 			return tick, err
 		}
@@ -84,13 +83,13 @@ func WaitForNmapManagerInstanceRemoval(
 	ctx context.Context,
 	snapshot fsm.SystemSnapshot,
 	manager *nmapfsm.NmapManager,
-	filesystemService filesystem.Service,
+	services serviceregistry.Provider,
 	instanceName string,
 	maxAttempts int,
 ) (uint64, error) {
 	tick := snapshot.Tick
 	for i := 0; i < maxAttempts; i++ {
-		err, _ := manager.Reconcile(ctx, snapshot, filesystemService)
+		err, _ := manager.Reconcile(ctx, snapshot, services)
 		if err != nil {
 			return tick, err
 		}
@@ -110,13 +109,13 @@ func WaitForNmapManagerMultiState(
 	ctx context.Context,
 	snapshot fsm.SystemSnapshot,
 	manager *nmapfsm.NmapManager,
-	filesystemService filesystem.Service,
+	services serviceregistry.Provider,
 	desiredMap map[string]string, // e.g. { "svc1": "idle", "svc2": "active" }
 	maxAttempts int,
 ) (uint64, error) {
 	tick := snapshot.Tick
 	for i := 0; i < maxAttempts; i++ {
-		err, _ := manager.Reconcile(ctx, snapshot, filesystemService)
+		err, _ := manager.Reconcile(ctx, snapshot, services)
 		if err != nil {
 			return tick, err
 		}
@@ -229,9 +228,8 @@ func ReconcileOnceNmapManager(
 	ctx context.Context,
 	snapshot fsm.SystemSnapshot,
 	manager *nmapfsm.NmapManager,
-
-	filesystemService filesystem.Service,
+	services serviceregistry.Provider,
 ) (newTick uint64, err error, reconciled bool) {
-	err, rec := manager.Reconcile(ctx, snapshot, filesystemService)
+	err, rec := manager.Reconcile(ctx, snapshot, services)
 	return snapshot.Tick + 1, err, rec
 }

@@ -25,6 +25,7 @@ import (
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
 // MockNmapService is a mock implementation of the INmapService interface for testing
@@ -308,7 +309,7 @@ func (m *MockNmapService) RemoveNmapFromS6Manager(ctx context.Context, nmapName 
 	return nil
 }
 
-func (m *MockNmapService) ForceRemoveNmap(ctx context.Context, filesystemService filesystem.Service, nmapName string) error {
+func (m *MockNmapService) ForceRemoveNmap(ctx context.Context, services serviceregistry.Provider, nmapName string) error {
 	m.ForceRemoveNmapCalled = true
 	return m.ForceRemoveNmapError
 }
@@ -371,7 +372,7 @@ func (m *MockNmapService) StopNmap(ctx context.Context, nmapName string) error {
 }
 
 // ReconcileManager mocks reconciling the manager
-func (m *MockNmapService) ReconcileManager(ctx context.Context, filesystemService filesystem.Service, tick uint64) (error, bool) {
+func (m *MockNmapService) ReconcileManager(ctx context.Context, services serviceregistry.Provider, tick uint64) (error, bool) {
 	if ctx.Err() != nil {
 		return ctx.Err(), false
 	}
@@ -381,7 +382,7 @@ func (m *MockNmapService) ReconcileManager(ctx context.Context, filesystemServic
 }
 
 // ServiceExists mocks checking if a service exists
-func (m *MockNmapService) ServiceExists(ctx context.Context, filesystemService filesystem.Service, nmapName string) bool {
+func (m *MockNmapService) ServiceExists(ctx context.Context, services serviceregistry.Provider, nmapName string) bool {
 
 	m.ServiceExistsCalled = true
 	return m.ServiceExistsResult

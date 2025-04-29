@@ -32,7 +32,8 @@ import (
 // NewDataflowComponentInstance creates a new DataflowComponentInstance with a given ID and service path
 func NewDataflowComponentInstance(
 	s6BaseDir string,
-	config config.DataFlowComponentConfig) *DataflowComponentInstance {
+	config config.DataFlowComponentConfig,
+) *DataflowComponentInstance {
 
 	cfg := internal_fsm.BaseFSMInstanceConfig{
 		ID:                           config.Name,
