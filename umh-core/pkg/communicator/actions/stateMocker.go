@@ -154,7 +154,7 @@ func (s *StateMocker) Run() error {
 		return ErrAlreadyRunning
 	}
 
-	ticker := time.NewTicker(1 * time.Second)
+	ticker := time.NewTicker(constants.DefaultTickerTime)
 
 	go func() {
 		defer ticker.Stop()

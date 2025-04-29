@@ -422,7 +422,7 @@ func (a *EditDataflowComponentAction) waitForComponentToBeActive() error {
 	// 1. waits for the component to appear in the system snapshot (relevant for changed name)
 	// 2. waits for the component to be active
 	// 3. waits for the component to have the correct config
-	ticker := time.NewTicker(1 * time.Second)
+	ticker := time.NewTicker(constants.DefaultTickerTime)
 	defer ticker.Stop()
 	timeout := time.After(constants.DataflowComponentWaitForActiveTimeout)
 	for {

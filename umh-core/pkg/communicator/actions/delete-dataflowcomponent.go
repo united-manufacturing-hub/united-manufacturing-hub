@@ -152,7 +152,7 @@ func (a *DeleteDataflowComponentAction) GetComponentUUID() uuid.UUID {
 
 func (a *DeleteDataflowComponentAction) waitForComponentToBeRemoved() error {
 	//check the system snapshot and waits for the instance to be removed
-	ticker := time.NewTicker(1 * time.Second)
+	ticker := time.NewTicker(constants.DefaultTickerTime)
 	defer ticker.Stop()
 	timeout := time.After(constants.DataflowComponentWaitForActiveTimeout)
 	for {

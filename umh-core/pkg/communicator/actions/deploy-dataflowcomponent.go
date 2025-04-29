@@ -489,7 +489,7 @@ func (a *DeployDataflowComponentAction) waitForComponentToBeActive() error {
 	var logs []s6.LogEntry
 	var lastLogs []s6.LogEntry
 
-	ticker := time.NewTicker(1 * time.Second)
+	ticker := time.NewTicker(constants.DefaultTickerTime)
 	defer ticker.Stop()
 	timeout := time.After(constants.DataflowComponentWaitForActiveTimeout)
 	for {
