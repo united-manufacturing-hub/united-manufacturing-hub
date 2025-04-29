@@ -33,6 +33,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos_monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
 	"go.uber.org/zap"
 
 	benthos_monitor_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos_monitor"
@@ -657,11 +658,11 @@ func (s *BenthosService) RemoveBenthosFromS6Manager(
 	// ------------------------------------------------------------------
 	if inst, ok := s.s6Manager.GetInstance(s6Name); ok {
 		return fmt.Errorf("%w: S6 instance state=%s",
-			ErrRemovalPending, inst.GetCurrentFSMState())
+			standarderrors.ErrRemovalPending, inst.GetCurrentFSMState())
 	}
 	if inst, ok := s.benthosMonitorManager.GetInstance(s6Name); ok {
 		return fmt.Errorf("%w: monitor instance state=%s",
-			ErrRemovalPending, inst.GetCurrentFSMState())
+			standarderrors.ErrRemovalPending, inst.GetCurrentFSMState())
 	}
 
 	// Everything really removed ➜ success, idempotent

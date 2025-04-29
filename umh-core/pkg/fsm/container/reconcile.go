@@ -27,6 +27,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	standarderrors "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
 )
 
 // Reconcile periodically checks if the FSM needs state transitions based on metrics
@@ -111,7 +112,7 @@ func (c *ContainerInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSn
 	if err != nil {
 		// If the instance is removed, we don't want to return an error here, because we want to continue reconciling
 		// Also this should not
-		if errors.Is(err, fsm.ErrInstanceRemoved) {
+		if errors.Is(err, standarderrors.ErrInstanceRemoved) {
 			return nil, false
 		}
 
@@ -216,7 +217,7 @@ func (c *ContainerInstance) reconcileStateTransition(ctx context.Context, filesy
 
 	// Handle lifecycle states first - these take precedence over operational states
 	if internal_fsm.IsLifecycleState(currentState) {
-		err, reconciled := c.reconcileLifecycleStates(ctx, filesystemService, currentState)
+		err, reconciled := c.baseFSMInstance.ReconcileLifecycleStates(ctx, filesystemService, currentState, c.CreateInstance, c.RemoveInstance, c.CheckForCreation)
 		if err != nil {
 			return err, false
 		}
@@ -252,35 +253,6 @@ func (c *ContainerInstance) updateObservedState(ctx context.Context) error {
 	// Save to observed state
 	c.ObservedState.ServiceInfo = status
 	return nil
-}
-
-// reconcileLifecycleStates handles to_be_created, creating, removing, removed
-func (c *ContainerInstance) reconcileLifecycleStates(ctx context.Context, filesystemService filesystem.Service, currentState string) (error, bool) {
-	switch currentState {
-	case internal_fsm.LifecycleStateToBeCreated:
-		// do creation
-		if err := c.CreateInstance(ctx, filesystemService); err != nil {
-			return err, false
-		}
-		return c.baseFSMInstance.SendEvent(ctx, internal_fsm.LifecycleEventCreate), true
-
-	case internal_fsm.LifecycleStateCreating:
-		// We can assume creation is done immediately (no real action)
-		return c.baseFSMInstance.SendEvent(ctx, internal_fsm.LifecycleEventCreateDone), true
-
-	case internal_fsm.LifecycleStateRemoving:
-		if err := c.RemoveInstance(ctx, filesystemService); err != nil {
-			return err, false
-		}
-		return c.baseFSMInstance.SendEvent(ctx, internal_fsm.LifecycleEventRemoveDone), true
-
-	case internal_fsm.LifecycleStateRemoved:
-		// The manager will clean this up eventually
-		return fsm.ErrInstanceRemoved, true
-
-	default:
-		return nil, false
-	}
 }
 
 // reconcileOperationalStates handles states related to instance operations (starting/stopping)

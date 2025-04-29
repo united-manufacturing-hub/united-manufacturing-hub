@@ -25,6 +25,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	benthos_monitor_service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos_monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	standarderrors "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
 )
 
 // CreateInstance is called when the FSM transitions from to_be_created -> creating.
@@ -73,7 +74,7 @@ func (b *BenthosMonitorInstance) RemoveInstance(ctx context.Context, filesystemS
 	// ---------------------------------------------------------------
 	// transient path – keep retrying
 	// ---------------------------------------------------------------
-	case errors.Is(err, benthos_monitor_service.ErrRemovalPending):
+	case errors.Is(err, standarderrors.ErrRemovalPending):
 		b.baseFSMInstance.GetLogger().
 			Infof("Benthos monitor service %s removal still in progress",
 				b.baseFSMInstance.GetID())
@@ -123,6 +124,11 @@ func (b *BenthosMonitorInstance) StopInstance(ctx context.Context, filesystemSer
 
 	b.baseFSMInstance.GetLogger().Debugf("Benthos Monitor service %s stop command executed", b.baseFSMInstance.GetID())
 	return nil
+}
+
+// CheckForCreation checks if the Benthos Monitor service should be created
+func (b *BenthosMonitorInstance) CheckForCreation(ctx context.Context, filesystemService filesystem.Service) bool {
+	return true
 }
 
 // UpdateObservedStateOfInstance is called when the FSM transitions to updating.

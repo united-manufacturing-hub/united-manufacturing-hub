@@ -59,6 +59,12 @@ func (a *AgentInstance) StopInstance(ctx context.Context, filesystemService file
 	return nil
 }
 
+// CheckForCreation is called when the FSM transitions to creating.
+// For agent monitoring, this is a no-op as we don't need to check anything
+func (a *AgentInstance) CheckForCreation(ctx context.Context, filesystemService filesystem.Service) bool {
+	return true
+}
+
 // UpdateObservedStateOfInstance is called when the FSM transitions to updating.
 // For agent monitoring, this is a no-op as we don't need to update any resources.
 func (a *AgentInstance) UpdateObservedStateOfInstance(ctx context.Context, filesystemService filesystem.Service, tick uint64, loopStartTime time.Time) error {

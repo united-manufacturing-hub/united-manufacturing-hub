@@ -44,6 +44,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/nmap"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
 	"go.uber.org/zap"
 )
 
@@ -460,7 +461,7 @@ func (c *ConnectionService) RemoveConnectionFromNmapManager(
 	//--------------------------------------------
 	if inst, ok := c.nmapManager.GetInstance(nmapName); ok {
 		return fmt.Errorf("%w: Nmap instance state=%s",
-			ErrRemovalPending, inst.GetCurrentFSMState())
+			standarderrors.ErrRemovalPending, inst.GetCurrentFSMState())
 	}
 
 	return nil

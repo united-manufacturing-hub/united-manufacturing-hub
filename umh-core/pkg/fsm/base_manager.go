@@ -53,6 +53,8 @@ type FSMInstance interface {
 	GetDesiredFSMState() string
 	// SetDesiredFSMState sets the desired state of the instance
 	SetDesiredFSMState(desiredState string) error
+	// GetTransientStreakCounter returns the transient streak counter
+	GetTransientStreakCounter() uint64
 	// Reconcile moves the instance toward its desired state
 	// Returns an error if reconciliation fails, and a boolean indicating
 	// whether a change was made to the instance's state
@@ -655,4 +657,30 @@ func (m *BaseFSMManager[C]) schedule(base uint64) uint64 {
 
 	// Round to nearest integer tick and add to the current manager tick
 	return m.managerTick + uint64(delta+0.5)
+}
+
+func (m *BaseFSMManager[C]) maybeEscalateRemoval(inst FSMInstance) {
+	bi := inst.(*BaseFSMInstance)
+
+	const max = 10 // could be manager-level config
+	if bi.IsTransientStreakCounterMaxed() {
+		return // not stuck yet
+	}
+
+	switch cur := bi.GetCurrentLifecycleState(); cur {
+	case internal_fsm.LifecycleStateRemoving:
+		// We’re already removing for >max ticks  →  call ForceRemove once
+		if fr, ok := inst.(interface {
+			ForceRemove(context.Context, filesystem.Service) error
+		}); ok {
+			go fr.ForceRemove(context.Background(), m.filesystem)
+		}
+	case internal_fsm.LifecycleStateCreating,
+		internal_fsm.LifecycleStateToBeCreated,
+		internal_fsm.LifecycleStateCreatingDone:
+		// Service never came up – flip desired to *removing*
+		_ = bi.SendLifecycleEvent(internal_fsm.LifecycleEventRemove) // fire-and-forget
+	}
+	// reset so we do not spam
+	bi.transientStreak = 0
 }

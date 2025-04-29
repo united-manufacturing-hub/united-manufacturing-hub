@@ -33,6 +33,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
 	"go.uber.org/zap"
 )
 
@@ -460,7 +461,7 @@ func (s *NmapService) RemoveNmapFromS6Manager(ctx context.Context, nmapName stri
 	// 2) is the child FSM still alive?
 	// ------------------------------------------------------------------
 	if inst, ok := s.s6Manager.GetInstance(s6Name); ok {
-		return fmt.Errorf("%w: S6 instance state=%s", ErrRemovalPending, inst.GetCurrentFSMState())
+		return fmt.Errorf("%w: S6 instance state=%s", standarderrors.ErrRemovalPending, inst.GetCurrentFSMState())
 	}
 
 	// Clean up the cached scan results

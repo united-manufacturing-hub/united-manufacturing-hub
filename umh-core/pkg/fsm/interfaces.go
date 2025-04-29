@@ -37,4 +37,7 @@ type FSMInstanceActions interface {
 
 	// UpdateObservedStateOfInstance updates the observed state of the instance
 	UpdateObservedStateOfInstance(ctx context.Context, filesystemService filesystem.Service, tick uint64, loopStartTime time.Time) error
+
+	// CheckForCreation checks if the instance should be created
+	CheckForCreation(ctx context.Context, filesystemService filesystem.Service) bool
 }

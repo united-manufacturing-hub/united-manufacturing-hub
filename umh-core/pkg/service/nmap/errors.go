@@ -28,12 +28,6 @@ var (
 
 	// ErrScanFailed indicates a scan operation failed
 	ErrScanFailed = errors.New("nmap scan failed")
-
-	// ErrRemovalPending is **not** a failure.
-	// It means the desired config has been deleted but the child FSM still
-	// exists.  Callers should keep reconciling and retry the removal in the
-	// next cycle.
-	ErrRemovalPending = errors.New("service removal still in progress")
 )
 
 // WrapMetricsError wraps an error with additional context

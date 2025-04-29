@@ -28,6 +28,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	dataflowcomponentservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/dataflowcomponent"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	standarderrors "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
 )
 
 // The functions in this file define heavier, possibly fail-prone operations
@@ -85,7 +86,7 @@ func (b *DataflowComponentInstance) RemoveInstance(ctx context.Context, filesyst
 	// ---------------------------------------------------------------
 	// transient path – keep retrying
 	// ---------------------------------------------------------------
-	case errors.Is(err, dataflowcomponentservice.ErrRemovalPending):
+	case errors.Is(err, standarderrors.ErrRemovalPending):
 		b.baseFSMInstance.GetLogger().
 			Debugf("Benthos service %s removal still in progress",
 				b.baseFSMInstance.GetID())
@@ -131,6 +132,12 @@ func (d *DataflowComponentInstance) StopInstance(ctx context.Context, filesystem
 
 	d.baseFSMInstance.GetLogger().Debugf("DataflowComponent service %s stop command executed", d.baseFSMInstance.GetID())
 	return nil
+}
+
+// CheckForCreation checks whether the creation was successful
+// For DataflowComponent, this is a no-op as we don't need to check anything
+func (d *DataflowComponentInstance) CheckForCreation(ctx context.Context, filesystemService filesystem.Service) bool {
+	return true
 }
 
 // getServiceStatus gets the status of the DataflowComponent service

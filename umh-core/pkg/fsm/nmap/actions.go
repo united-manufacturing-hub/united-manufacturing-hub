@@ -25,6 +25,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	nmap_service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/nmap"
+	standarderrors "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
 )
 
 // The functions in this file define heavier, possibly fail-prone operations
@@ -94,7 +95,7 @@ func (n *NmapInstance) RemoveInstance(ctx context.Context, filesystemService fil
 	// ---------------------------------------------------------------
 	// transient path – keep retrying
 	// ---------------------------------------------------------------
-	case errors.Is(err, nmap_service.ErrRemovalPending):
+	case errors.Is(err, standarderrors.ErrRemovalPending):
 		n.baseFSMInstance.GetLogger().
 			Debugf("Nmap service %s removal still in progress",
 				n.baseFSMInstance.GetID())
@@ -136,6 +137,12 @@ func (n *NmapInstance) StopInstance(ctx context.Context, filesystemService files
 
 	n.baseFSMInstance.GetLogger().Debugf("Nmap service %s stop command executed", n.baseFSMInstance.GetID())
 	return nil
+}
+
+// CheckForCreation checks whether the creation was successful
+// For Nmap, this is a no-op as we don't need to check anything
+func (n *NmapInstance) CheckForCreation(ctx context.Context, filesystemService filesystem.Service) bool {
+	return true
 }
 
 // UpdateObservedStateOfInstance updates the observed state of the service

@@ -28,6 +28,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	redpanda_service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda"
+	standarderrors "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
 )
 
 // Reconcile examines the RedpandaInstance and, in three steps:
@@ -120,7 +121,7 @@ func (r *RedpandaInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSna
 	err, reconciled = r.reconcileStateTransition(ctx, filesystemService, currentTime)
 	if err != nil {
 		// If the instance is removed, we don't want to return an error here, because we want to continue reconciling
-		if errors.Is(err, fsm.ErrInstanceRemoved) {
+		if errors.Is(err, standarderrors.ErrInstanceRemoved) {
 			return nil, false
 		}
 
@@ -184,7 +185,7 @@ func (r *RedpandaInstance) reconcileStateTransition(ctx context.Context, filesys
 
 	// Handle lifecycle states first - these take precedence over operational states
 	if internal_fsm.IsLifecycleState(currentState) {
-		err, reconciled := r.reconcileLifecycleStates(ctx, filesystemService, currentState)
+		err, reconciled := r.baseFSMInstance.ReconcileLifecycleStates(ctx, filesystemService, currentState, r.CreateInstance, r.RemoveInstance, r.CheckForCreation)
 		if err != nil {
 			return err, false
 		}
@@ -206,37 +207,6 @@ func (r *RedpandaInstance) reconcileStateTransition(ctx context.Context, filesys
 	}
 
 	return fmt.Errorf("invalid state: %s", currentState), false
-}
-
-// reconcileLifecycleStates handles states related to instance lifecycle (creating/removing)
-func (r *RedpandaInstance) reconcileLifecycleStates(ctx context.Context, filesystemService filesystem.Service, currentState string) (err error, reconciled bool) {
-	start := time.Now()
-	defer func() {
-		metrics.ObserveReconcileTime(metrics.ComponentRedpandaInstance, r.baseFSMInstance.GetID()+".reconcileLifecycleStates", time.Since(start))
-	}()
-
-	// Independent what the desired state is, we always need to reconcile the lifecycle states first
-	switch currentState {
-	case internal_fsm.LifecycleStateToBeCreated:
-		if err := r.CreateInstance(ctx, filesystemService); err != nil {
-			return err, false
-		}
-		return r.baseFSMInstance.SendEvent(ctx, internal_fsm.LifecycleEventCreate), true
-	case internal_fsm.LifecycleStateCreating:
-		// Check if the service is created
-		// For now, we'll assume it's created immediately after initiating creation
-		return r.baseFSMInstance.SendEvent(ctx, internal_fsm.LifecycleEventCreateDone), true
-	case internal_fsm.LifecycleStateRemoving:
-		if err := r.RemoveInstance(ctx, filesystemService); err != nil {
-			return err, false
-		}
-		return r.baseFSMInstance.SendEvent(ctx, internal_fsm.LifecycleEventRemoveDone), true
-	case internal_fsm.LifecycleStateRemoved:
-		return fsm.ErrInstanceRemoved, true
-	default:
-		// If we are not in a lifecycle state, just continue
-		return nil, false
-	}
 }
 
 // reconcileOperationalStates handles states related to instance operations (starting/stopping)

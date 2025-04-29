@@ -28,6 +28,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	benthos_service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	standarderrors "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
 )
 
 // The functions in this file define heavier, possibly fail-prone operations
@@ -101,7 +102,7 @@ func (b *BenthosInstance) RemoveInstance(
 	// ---------------------------------------------------------------
 	// transient path – keep retrying
 	// ---------------------------------------------------------------
-	case errors.Is(err, benthos_service.ErrRemovalPending):
+	case errors.Is(err, standarderrors.ErrRemovalPending):
 		b.baseFSMInstance.GetLogger().
 			Infof("Benthos service %s removal still in progress",
 				b.baseFSMInstance.GetID())
@@ -150,6 +151,11 @@ func (b *BenthosInstance) StopInstance(ctx context.Context, filesystemService fi
 
 	b.baseFSMInstance.GetLogger().Debugf("Benthos service %s stop command executed", b.baseFSMInstance.GetID())
 	return nil
+}
+
+// CheckForCreation checks if the Benthos service should be created
+func (b *BenthosInstance) CheckForCreation(ctx context.Context, filesystemService filesystem.Service) bool {
+	return true
 }
 
 // getServiceStatus gets the status of the Benthos service

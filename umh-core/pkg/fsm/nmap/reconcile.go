@@ -28,6 +28,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	nmap_service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/nmap"
+	standarderrors "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
 )
 
 // Reconcile examines the NmapInstance and, in three steps:
@@ -107,7 +108,7 @@ func (n *NmapInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapsho
 	err, reconciled = n.reconcileStateTransition(ctx, filesystemService, currentTime)
 	if err != nil {
 		// If the instance is removed, we don't want to return an error here, because we want to continue reconciling
-		if errors.Is(err, fsm.ErrInstanceRemoved) {
+		if errors.Is(err, standarderrors.ErrInstanceRemoved) {
 			return nil, false
 		}
 
@@ -171,7 +172,7 @@ func (n *NmapInstance) reconcileStateTransition(ctx context.Context, filesystemS
 
 	// Handle lifecycle states first - these take precedence over operational states
 	if internal_fsm.IsLifecycleState(currentState) {
-		err, reconciled := n.reconcileLifecycleStates(ctx, filesystemService, currentState)
+		err, reconciled := n.baseFSMInstance.ReconcileLifecycleStates(ctx, filesystemService, currentState, n.CreateInstance, n.RemoveInstance, n.CheckForCreation)
 		if err != nil {
 			return err, false
 		}
@@ -188,46 +189,6 @@ func (n *NmapInstance) reconcileStateTransition(ctx context.Context, filesystemS
 	}
 
 	return fmt.Errorf("invalid state: %s", currentState), false
-}
-
-// reconcileLifecycleStates handles to_be_created, creating, removing, removed
-func (n *NmapInstance) reconcileLifecycleStates(ctx context.Context, filesystemService filesystem.Service, currentState string) (error, bool) {
-	start := time.Now()
-	defer func() {
-		metrics.ObserveReconcileTime(metrics.ComponentNmapInstance, n.baseFSMInstance.GetID()+".reconcileLifecycleStates", time.Since(start))
-	}()
-
-	switch currentState {
-	case internal_fsm.LifecycleStateToBeCreated:
-		// do creation
-		if err := n.CreateInstance(ctx, filesystemService); err != nil {
-			return err, false
-		}
-		return n.baseFSMInstance.SendEvent(ctx, internal_fsm.LifecycleEventCreate), true
-
-	case internal_fsm.LifecycleStateCreating:
-		// We can assume creation is done immediately (no real action)
-		return n.baseFSMInstance.SendEvent(ctx, internal_fsm.LifecycleEventCreateDone), true
-
-	case internal_fsm.LifecycleStateRemoving:
-		if err := n.RemoveInstance(ctx, filesystemService); err != nil {
-			// Treat “removal still in progress” as a *non-error* so that the reconcile
-			// loop continues; the FSM stays in `removing` until RemoveInstance returns
-			// nil or a hard error.
-			if errors.Is(err, nmap_service.ErrRemovalPending) {
-				return nil, false
-			}
-			return err, false
-		}
-		return n.baseFSMInstance.SendEvent(ctx, internal_fsm.LifecycleEventRemoveDone), true
-
-	case internal_fsm.LifecycleStateRemoved:
-		// The manager will clean this up eventually
-		return fsm.ErrInstanceRemoved, true
-
-	default:
-		return nil, false
-	}
 }
 
 // reconcileOperationalStates handles operational (i.e. start/stop and sub-state)

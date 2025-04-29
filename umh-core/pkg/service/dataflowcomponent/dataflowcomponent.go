@@ -29,6 +29,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/portmanager"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
 
 	benthosfsmmanager "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
 	benthosservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
@@ -354,7 +355,7 @@ func (s *DataFlowComponentService) RemoveDataFlowComponentFromBenthosManager(ctx
 	// 2) is the child FSM still alive?
 	// ------------------------------------------------------------------
 	if inst, ok := s.benthosManager.GetInstance(benthosName); ok {
-		return fmt.Errorf("%w: Benthos instance state=%s", ErrRemovalPending, inst.GetCurrentFSMState())
+		return fmt.Errorf("%w: Benthos instance state=%s", standarderrors.ErrRemovalPending, inst.GetCurrentFSMState())
 	}
 
 	return nil

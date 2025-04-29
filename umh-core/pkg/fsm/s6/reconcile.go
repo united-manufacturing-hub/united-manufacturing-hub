@@ -27,6 +27,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
 )
 
 // Reconcile examines the S6Instance and, in three steps:
@@ -106,7 +107,7 @@ func (s *S6Instance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot,
 	if err != nil {
 		// If the instance is removed, we don't want to return an error here, because we want to continue reconciling
 		// Also this should not
-		if errors.Is(err, fsm.ErrInstanceRemoved) {
+		if errors.Is(err, standarderrors.ErrInstanceRemoved) {
 			return nil, false
 		}
 
@@ -168,7 +169,7 @@ func (s *S6Instance) reconcileStateTransition(ctx context.Context, filesystemSer
 
 	// Handle lifecycle states first - these take precedence over operational states
 	if internal_fsm.IsLifecycleState(currentState) {
-		err, reconciled := s.reconcileLifecycleStates(ctx, filesystemService, currentState)
+		err, reconciled := s.baseFSMInstance.ReconcileLifecycleStates(ctx, filesystemService, currentState, s.CreateInstance, s.RemoveInstance, s.CheckForCreation)
 		if err != nil {
 			return err, false
 		}
@@ -193,51 +194,6 @@ func (s *S6Instance) reconcileStateTransition(ctx context.Context, filesystemSer
 	}
 
 	return fmt.Errorf("invalid state: %s", currentState), false
-}
-
-// reconcileLifecycleStates handles states related to instance lifecycle (creating/removing)
-func (s *S6Instance) reconcileLifecycleStates(ctx context.Context, filesystemService filesystem.Service, currentState string) (err error, reconciled bool) {
-	start := time.Now()
-	defer func() {
-		metrics.ObserveReconcileTime(metrics.ComponentS6Instance, s.baseFSMInstance.GetID()+".reconcileLifecycleStates", time.Since(start))
-	}()
-
-	// Independent what the desired state is, we always need to reconcile the lifecycle states first
-	switch currentState {
-	case internal_fsm.LifecycleStateToBeCreated:
-		if err := s.CreateInstance(ctx, filesystemService); err != nil {
-			return err, true
-		}
-		return s.baseFSMInstance.SendEvent(ctx, internal_fsm.LifecycleEventCreate), true
-	case internal_fsm.LifecycleStateCreating:
-		// Check if the s6 service has its supervision directory set up
-		servicePath := s.servicePath
-		ready, err := s.service.EnsureSupervision(ctx, servicePath, filesystemService)
-		if err != nil {
-			s.baseFSMInstance.GetLogger().Warnf("Failed to ensure service supervision: %v", err)
-			return nil, false // Don't transition state yet, retry next reconcile
-		}
-
-		// Only transition if the supervise directory actually exists
-		if !ready {
-			s.baseFSMInstance.GetLogger().Debugf("Waiting for s6-svscan to create supervise directory")
-			return nil, false // Don't transition state yet, retry next reconcile
-		}
-
-		// If we get here, supervision is confirmed set up correctly
-		s.baseFSMInstance.GetLogger().Debugf("Service supervision confirmed, transitioning to Created state")
-		return s.baseFSMInstance.SendEvent(ctx, internal_fsm.LifecycleEventCreateDone), true
-	case internal_fsm.LifecycleStateRemoving:
-		if err := s.RemoveInstance(ctx, filesystemService); err != nil {
-			return err, true
-		}
-		return s.baseFSMInstance.SendEvent(ctx, internal_fsm.LifecycleEventRemoveDone), true
-	case internal_fsm.LifecycleStateRemoved:
-		return fsm.ErrInstanceRemoved, true
-	default:
-		// If we are not in a lifecycle state, just continue
-		return nil, false
-	}
 }
 
 // reconcileOperationalStates handles states related to instance operations (starting/stopping)

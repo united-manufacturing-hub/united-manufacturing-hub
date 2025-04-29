@@ -21,10 +21,4 @@ var (
 	ErrServiceNotExist = errors.New("connection service does not exist")
 	// ErrServiceAlreadyExists indicates the service already exists
 	ErrServiceAlreadyExists = errors.New("connection service already exists")
-
-	// ErrRemovalPending is **not** a failure.
-	// It means the desired config has been deleted but the child FSM still
-	// exists.  Callers should keep reconciling and retry the removal in the
-	// next cycle.
-	ErrRemovalPending = errors.New("service removal still in progress")
 )

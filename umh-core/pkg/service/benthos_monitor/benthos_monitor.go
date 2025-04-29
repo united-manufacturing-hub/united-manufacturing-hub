@@ -36,6 +36,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
 
 	dto "github.com/prometheus/client_model/go"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
@@ -1157,7 +1158,7 @@ func (s *BenthosMonitorService) RemoveBenthosMonitorFromS6Manager(ctx context.Co
 	s6Name := s.GetS6ServiceName()
 	if inst, ok := s.s6Manager.GetInstance(s6Name); ok {
 		return fmt.Errorf("%w: S6 instance state=%s",
-			ErrRemovalPending, inst.GetCurrentFSMState())
+			standarderrors.ErrRemovalPending, inst.GetCurrentFSMState())
 	}
 
 	// Clean up the metrics state
