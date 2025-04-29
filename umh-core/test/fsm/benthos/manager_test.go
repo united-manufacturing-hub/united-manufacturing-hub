@@ -35,8 +35,8 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/portmanager"
 	benthossvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
 	benthos_monitor_service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos_monitor"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
 // Following the CursorRules, we never call manager.Reconcile(...) directly in loops.
@@ -44,12 +44,12 @@ import (
 
 var _ = Describe("BenthosManager", func() {
 	var (
-		manager     *benthosfsm.BenthosManager
-		mockService *benthossvc.MockBenthosService
-		ctx         context.Context
-		tick        uint64
-		cancel      context.CancelFunc
-		mockFS      *filesystem.MockFileSystem
+		manager         *benthosfsm.BenthosManager
+		mockService     *benthossvc.MockBenthosService
+		ctx             context.Context
+		tick            uint64
+		cancel          context.CancelFunc
+		mockSvcRegistry *serviceregistry.Registry
 	)
 
 	AfterEach(func() {
@@ -59,7 +59,7 @@ var _ = Describe("BenthosManager", func() {
 	BeforeEach(func() {
 		ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second) // we need to have a deadline as the reconcile logic in the base fsm manager requires it
 		tick = 0
-		mockFS = filesystem.NewMockFileSystem()
+		mockSvcRegistry = serviceregistry.NewMockRegistry()
 		// Create a new BenthosManager with the mock service
 		manager, mockService = fsmtest.CreateMockBenthosManager("test-manager")
 
@@ -77,7 +77,7 @@ var _ = Describe("BenthosManager", func() {
 
 			// Single call to a helper that wraps Reconcile
 			newTick, err := fsmtest.WaitForBenthosManagerStable(
-				ctx, fsm.SystemSnapshot{CurrentConfig: emptyConfig, Tick: tick}, manager, mockFS,
+				ctx, fsm.SystemSnapshot{CurrentConfig: emptyConfig, Tick: tick}, manager, mockSvcRegistry,
 			)
 			tick = newTick
 			Expect(err).NotTo(HaveOccurred())
@@ -102,7 +102,7 @@ var _ = Describe("BenthosManager", func() {
 				ctx,
 				fsm.SystemSnapshot{CurrentConfig: cfg, Tick: tick},
 				manager,
-				mockFS,
+				mockSvcRegistry,
 				serviceName,
 				benthosfsm.OperationalStateStopped,
 				10,
@@ -136,7 +136,7 @@ var _ = Describe("BenthosManager", func() {
 				ctx,
 				fsm.SystemSnapshot{CurrentConfig: cfg, Tick: tick},
 				manager,
-				mockFS,
+				mockSvcRegistry,
 				serviceName,
 				benthosfsm.OperationalStateIdle, // or OperationalStateActive, whichever is stable
 				30,
@@ -165,7 +165,7 @@ var _ = Describe("BenthosManager", func() {
 			fsmtest.ConfigureBenthosManagerForState(mockService, serviceName, benthosfsm.OperationalStateIdle)
 
 			// 1) Wait for idle
-			newTick, err := fsmtest.WaitForBenthosManagerInstanceState(ctx, fsm.SystemSnapshot{CurrentConfig: fullCfg, Tick: tick}, manager, mockFS,
+			newTick, err := fsmtest.WaitForBenthosManagerInstanceState(ctx, fsm.SystemSnapshot{CurrentConfig: fullCfg, Tick: tick}, manager, mockSvcRegistry,
 				serviceName,
 				benthosfsm.OperationalStateIdle,
 				30,
@@ -177,7 +177,7 @@ var _ = Describe("BenthosManager", func() {
 			fsmtest.ConfigureBenthosManagerForState(mockService, serviceName, benthosfsm.OperationalStateDegraded)
 
 			// Wait for state transition
-			newTick, err = fsmtest.WaitForBenthosManagerInstanceState(ctx, fsm.SystemSnapshot{CurrentConfig: fullCfg, Tick: tick}, manager, mockFS,
+			newTick, err = fsmtest.WaitForBenthosManagerInstanceState(ctx, fsm.SystemSnapshot{CurrentConfig: fullCfg, Tick: tick}, manager, mockSvcRegistry,
 				serviceName,
 				benthosfsm.OperationalStateDegraded,
 				30,
@@ -194,7 +194,7 @@ var _ = Describe("BenthosManager", func() {
 				ctx,
 				fsm.SystemSnapshot{CurrentConfig: emptyConfig, Tick: tick},
 				manager,
-				mockFS,
+				mockSvcRegistry,
 				serviceName,
 				30, // More attempts for removal
 			)
@@ -219,7 +219,7 @@ var _ = Describe("BenthosManager", func() {
 			fsmtest.ConfigureBenthosManagerForState(mockService, serviceName, benthosfsm.OperationalStateIdle)
 
 			// Wait for idle or active
-			newTick, err := fsmtest.WaitForBenthosManagerInstanceState(ctx, fsm.SystemSnapshot{CurrentConfig: activeCfg, Tick: tick}, manager, mockFS,
+			newTick, err := fsmtest.WaitForBenthosManagerInstanceState(ctx, fsm.SystemSnapshot{CurrentConfig: activeCfg, Tick: tick}, manager, mockSvcRegistry,
 				serviceName,
 				benthosfsm.OperationalStateIdle,
 				30,
@@ -239,7 +239,7 @@ var _ = Describe("BenthosManager", func() {
 				},
 			}
 
-			newTick, err = fsmtest.WaitForBenthosManagerInstanceState(ctx, fsm.SystemSnapshot{CurrentConfig: stoppedCfg, Tick: tick}, manager, mockFS,
+			newTick, err = fsmtest.WaitForBenthosManagerInstanceState(ctx, fsm.SystemSnapshot{CurrentConfig: stoppedCfg, Tick: tick}, manager, mockSvcRegistry,
 				serviceName,
 				benthosfsm.OperationalStateStopped,
 				30,
@@ -251,7 +251,7 @@ var _ = Describe("BenthosManager", func() {
 			fsmtest.ConfigureBenthosManagerForState(mockService, serviceName, benthosfsm.OperationalStateIdle)
 
 			// Switch config back to active
-			newTick, err = fsmtest.WaitForBenthosManagerInstanceState(ctx, fsm.SystemSnapshot{CurrentConfig: activeCfg, Tick: tick}, manager, mockFS,
+			newTick, err = fsmtest.WaitForBenthosManagerInstanceState(ctx, fsm.SystemSnapshot{CurrentConfig: activeCfg, Tick: tick}, manager, mockSvcRegistry,
 				serviceName,
 				benthosfsm.OperationalStateIdle,
 				30,
@@ -286,7 +286,7 @@ var _ = Describe("BenthosManager", func() {
 				ctx,
 				fsm.SystemSnapshot{CurrentConfig: fullCfg, Tick: tick},
 				manager,
-				mockFS,
+				mockSvcRegistry,
 				map[string]string{
 					svc1: benthosfsm.OperationalStateIdle,
 					svc2: benthosfsm.OperationalStateStopped,
@@ -329,7 +329,7 @@ var _ = Describe("BenthosManager", func() {
 			fsmtest.ConfigureBenthosManagerForState(mockService, serviceName, benthosfsm.OperationalStateStarting)
 
 			// Initial reconcile to create the instance (using helper instead of direct call)
-			newTick, err := fsmtest.WaitForBenthosManagerStable(ctx, fsm.SystemSnapshot{CurrentConfig: fullCfg, Tick: tick}, manager, mockFS)
+			newTick, err := fsmtest.WaitForBenthosManagerStable(ctx, fsm.SystemSnapshot{CurrentConfig: fullCfg, Tick: tick}, manager, mockSvcRegistry)
 			Expect(err).NotTo(HaveOccurred())
 			tick = newTick
 
@@ -337,7 +337,7 @@ var _ = Describe("BenthosManager", func() {
 			fsmtest.ConfigureBenthosManagerForState(mockService, serviceName, benthosfsm.OperationalStateIdle)
 
 			// Eventually, it should try again and go to idle
-			newTick, err = fsmtest.WaitForBenthosManagerInstanceState(ctx, fsm.SystemSnapshot{CurrentConfig: fullCfg, Tick: tick}, manager, mockFS,
+			newTick, err = fsmtest.WaitForBenthosManagerInstanceState(ctx, fsm.SystemSnapshot{CurrentConfig: fullCfg, Tick: tick}, manager, mockSvcRegistry,
 				serviceName,
 				benthosfsm.OperationalStateIdle,
 				30,
@@ -360,7 +360,7 @@ var _ = Describe("BenthosManager", func() {
 			fsmtest.ConfigureBenthosManagerForState(mockService, serviceName, benthosfsm.OperationalStateIdle)
 
 			// Wait for idle
-			newTick, err := fsmtest.WaitForBenthosManagerInstanceState(ctx, fsm.SystemSnapshot{CurrentConfig: fullCfg, Tick: tick}, manager, mockFS,
+			newTick, err := fsmtest.WaitForBenthosManagerInstanceState(ctx, fsm.SystemSnapshot{CurrentConfig: fullCfg, Tick: tick}, manager, mockSvcRegistry,
 				serviceName,
 				benthosfsm.OperationalStateIdle,
 				30,
@@ -381,7 +381,7 @@ var _ = Describe("BenthosManager", func() {
 			}
 
 			// Wait for stopped
-			newTick, err = fsmtest.WaitForBenthosManagerInstanceState(ctx, fsm.SystemSnapshot{CurrentConfig: stoppedCfg, Tick: tick}, manager, mockFS,
+			newTick, err = fsmtest.WaitForBenthosManagerInstanceState(ctx, fsm.SystemSnapshot{CurrentConfig: stoppedCfg, Tick: tick}, manager, mockSvcRegistry,
 				serviceName,
 				benthosfsm.OperationalStateStopped,
 				30,
@@ -397,7 +397,7 @@ var _ = Describe("BenthosManager", func() {
 				ctx,
 				fsm.SystemSnapshot{CurrentConfig: config.FullConfig{Internal: config.InternalConfig{Benthos: []config.BenthosConfig{}}}},
 				manager,
-				mockFS,
+				mockSvcRegistry,
 				serviceName,
 				30,
 			)
@@ -432,12 +432,12 @@ var _ = Describe("BenthosManager", func() {
 			fsmtest.ConfigureBenthosManagerForState(mockService, serviceName, benthosfsm.OperationalStateStopped)
 
 			// Initial reconcile to create the instance
-			newTick, err := fsmtest.WaitForBenthosManagerStable(ctx, fsm.SystemSnapshot{CurrentConfig: fullCfg, Tick: tick}, manager, mockFS)
+			newTick, err := fsmtest.WaitForBenthosManagerStable(ctx, fsm.SystemSnapshot{CurrentConfig: fullCfg, Tick: tick}, manager, mockSvcRegistry)
 			Expect(err).NotTo(HaveOccurred())
 			tick = newTick
 
 			// The manager tries to reconcile, but the service isn't found initially
-			newTick, err = fsmtest.WaitForBenthosManagerInstanceState(ctx, fsm.SystemSnapshot{CurrentConfig: fullCfg, Tick: tick}, manager, mockFS,
+			newTick, err = fsmtest.WaitForBenthosManagerInstanceState(ctx, fsm.SystemSnapshot{CurrentConfig: fullCfg, Tick: tick}, manager, mockSvcRegistry,
 				serviceName,
 				benthosfsm.OperationalStateStopped,
 				30,
@@ -464,16 +464,15 @@ var _ = Describe("BenthosManager", func() {
 				},
 			}
 
-			// Initialize a mock port manager that tracks Pre/Post calls
-			mockPortMgr := portmanager.NewMockPortManager()
-			manager.WithPortManager(mockPortMgr)
+			// Get the mock port manager from the registry
+			mockPortMgr := mockSvcRegistry.GetPortManager().(*portmanager.MockPortManager)
 
 			// Perform a single manager reconcile using a helper (not a for-loop)
 			newTick, err, reconciled := fsmtest.ReconcileOnceBenthosManager(
 				ctx,
 				fsm.SystemSnapshot{CurrentConfig: fullCfg, Tick: tick},
 				manager,
-				mockFS,
+				mockSvcRegistry,
 			)
 			tick = newTick
 
@@ -505,17 +504,16 @@ var _ = Describe("BenthosManager", func() {
 				},
 			}
 
-			// Create a mock port manager that returns an error on PreReconcile
-			mockPortMgr := portmanager.NewMockPortManager()
+			// Get the mock port manager from the registry and configure it to return an error
+			mockPortMgr := mockSvcRegistry.GetPortManager().(*portmanager.MockPortManager)
 			mockPortMgr.PreReconcileError = fmt.Errorf("test port allocation error")
-			manager.WithPortManager(mockPortMgr)
 
 			// Reconcile once
 			newTick, err, reconciled := fsmtest.ReconcileOnceBenthosManager(
 				ctx,
 				fsm.SystemSnapshot{CurrentConfig: fullCfg, Tick: tick},
 				manager,
-				mockFS,
+				mockSvcRegistry,
 			)
 			tick = newTick
 
@@ -537,16 +535,15 @@ var _ = Describe("BenthosManager", func() {
 				},
 			}
 
-			// Set up a mock port manager
-			mockPortMgr := portmanager.NewMockPortManager()
-			manager.WithPortManager(mockPortMgr)
+			// Get the mock port manager from the registry
+			mockPortMgr := mockSvcRegistry.GetPortManager().(*portmanager.MockPortManager)
 
 			// Single reconcile
 			newTick, err, reconciled := fsmtest.ReconcileOnceBenthosManager(
 				ctx,
 				fsm.SystemSnapshot{CurrentConfig: fullCfg, Tick: tick},
 				manager,
-				mockFS,
+				mockSvcRegistry,
 			)
 			tick = newTick
 			Expect(err).NotTo(HaveOccurred())
@@ -565,7 +562,6 @@ var _ = Describe("BenthosManager", func() {
 			//----------------------------------------------------------------------
 			const benthosName = "remove-me"
 
-			mockFS := filesystem.NewMockFileSystem()
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
 
@@ -623,7 +619,7 @@ var _ = Describe("BenthosManager", func() {
 				ctx,
 				fsm.SystemSnapshot{CurrentConfig: startCfg, Tick: tick},
 				benthosMgr,
-				mockFS,
+				mockSvcRegistry,
 				benthosName,
 				benthosfsm.OperationalStateStopped,
 				10,
@@ -655,7 +651,7 @@ var _ = Describe("BenthosManager", func() {
 				ctx,
 				fsm.SystemSnapshot{CurrentConfig: emptyCfg, Tick: tick},
 				benthosMgr,
-				mockFS,
+				mockSvcRegistry,
 				benthosName,
 				15,
 			)

@@ -28,7 +28,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/portmanager"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
 
 	benthosfsmmanager "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
@@ -69,7 +69,7 @@ type IDataFlowComponentService interface {
 	ServiceExists(ctx context.Context, filesystemService filesystem.Service, componentName string) bool
 
 	// ReconcileManager reconciles the DataFlowComponent manager with the actual state
-	ReconcileManager(ctx context.Context, filesystemService filesystem.Service, tick uint64) (error, bool)
+	ReconcileManager(ctx context.Context, services serviceregistry.Provider, tick uint64) (error, bool)
 }
 
 // ServiceInfo contains information about a DataFlowComponent service
@@ -106,34 +106,9 @@ func WithBenthosManager(benthosManager *benthosfsmmanager.BenthosManager) DataFl
 	}
 }
 
-// WithPortRange sets a custom port range for the BenthosManager's PortManager
-// This helps avoid port conflicts when multiple DataFlowComponentServices are running
-func WithPortRange(minPort, maxPort uint16) DataFlowComponentServiceOption {
-	return func(s *DataFlowComponentService) {
-		// Create a new port manager with the specified range
-		portManager, err := portmanager.NewDefaultPortManager(minPort, maxPort)
-		if err != nil {
-			s.logger.Errorf("Failed to create port manager with range %d-%d: %v", minPort, maxPort, err)
-			return
-		}
-
-		// Set the port manager on the Benthos manager
-		s.benthosManager.WithPortManager(portManager)
-	}
-}
-
-// WithSharedPortManager sets a shared port manager across multiple DataFlowComponentServices
-// This is the recommended approach when multiple DataFlowComponentServices are running
-// to ensure proper coordination of port allocation
-func WithSharedPortManager(portManager portmanager.PortManager) DataFlowComponentServiceOption {
-	return func(s *DataFlowComponentService) {
-		// Set the shared port manager on the Benthos manager
-		s.benthosManager.WithPortManager(portManager)
-	}
-}
-
 // NewDefaultDataFlowComponentService creates a new default DataFlowComponent service
 func NewDefaultDataFlowComponentService(componentName string, opts ...DataFlowComponentServiceOption) *DataFlowComponentService {
+
 	managerName := fmt.Sprintf("%s%s", logger.ComponentDataFlowComponentService, componentName)
 	service := &DataFlowComponentService{
 		logger:         logger.For(managerName),
@@ -422,7 +397,7 @@ func (s *DataFlowComponentService) StopDataFlowComponent(ctx context.Context, fi
 }
 
 // ReconcileManager reconciles the DataFlowComponent manager
-func (s *DataFlowComponentService) ReconcileManager(ctx context.Context, filesystemService filesystem.Service, tick uint64) (error, bool) {
+func (s *DataFlowComponentService) ReconcileManager(ctx context.Context, services serviceregistry.Provider, tick uint64) (error, bool) {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(logger.ComponentDataFlowComponentService, "ReconcileManager", time.Since(start))
@@ -445,7 +420,7 @@ func (s *DataFlowComponentService) ReconcileManager(ctx context.Context, filesys
 			},
 		},
 		Tick: tick,
-	}, filesystemService)
+	}, services)
 }
 
 // ServiceExists checks if a DataFlowComponent service exists

@@ -28,6 +28,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	dataflowcomponentservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/dataflowcomponent"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	standarderrors "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
 )
 
@@ -174,13 +175,13 @@ func (d *DataflowComponentInstance) getServiceStatus(ctx context.Context, filesy
 }
 
 // UpdateObservedStateOfInstance updates the observed state of the service
-func (d *DataflowComponentInstance) UpdateObservedStateOfInstance(ctx context.Context, filesystemService filesystem.Service, tick uint64, loopStartTime time.Time) error {
+func (d *DataflowComponentInstance) UpdateObservedStateOfInstance(ctx context.Context, services serviceregistry.Provider, tick uint64, loopStartTime time.Time) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
 
 	start := time.Now()
-	info, err := d.getServiceStatus(ctx, filesystemService, tick)
+	info, err := d.getServiceStatus(ctx, services.GetFileSystem(), tick)
 	if err != nil {
 		return fmt.Errorf("error while getting service status: %w", err)
 	}
@@ -198,7 +199,7 @@ func (d *DataflowComponentInstance) UpdateObservedStateOfInstance(ctx context.Co
 
 	// Fetch the actual Benthos config from the service
 	start = time.Now()
-	observedConfig, err := d.service.GetConfig(ctx, filesystemService, d.baseFSMInstance.GetID())
+	observedConfig, err := d.service.GetConfig(ctx, services.GetFileSystem(), d.baseFSMInstance.GetID())
 	metrics.ObserveReconcileTime(logger.ComponentDataFlowComponentInstance, d.baseFSMInstance.GetID()+".getConfig", time.Since(start))
 	if err == nil {
 		// Only update if we successfully got the config
@@ -215,14 +216,14 @@ func (d *DataflowComponentInstance) UpdateObservedStateOfInstance(ctx context.Co
 
 	if !dataflowcomponentserviceconfig.ConfigsEqual(&d.config, &d.ObservedState.ObservedDataflowComponentConfig) {
 		// Check if the service exists before attempting to update
-		if d.service.ServiceExists(ctx, filesystemService, d.baseFSMInstance.GetID()) {
+		if d.service.ServiceExists(ctx, services.GetFileSystem(), d.baseFSMInstance.GetID()) {
 			d.baseFSMInstance.GetLogger().Debugf("Observed DataflowComponent config is different from desired config, updating Benthos configuration")
 
 			diffStr := dataflowcomponentserviceconfig.ConfigDiff(&d.config, &d.ObservedState.ObservedDataflowComponentConfig)
 			d.baseFSMInstance.GetLogger().Debugf("Configuration differences: %s", diffStr)
 
 			// Update the config in the Benthos manager
-			err := d.service.UpdateDataFlowComponentInBenthosManager(ctx, filesystemService, &d.config, d.baseFSMInstance.GetID())
+			err := d.service.UpdateDataFlowComponentInBenthosManager(ctx, services.GetFileSystem(), &d.config, d.baseFSMInstance.GetID())
 			if err != nil {
 				return fmt.Errorf("failed to update DataflowComponent service configuration: %w", err)
 			}

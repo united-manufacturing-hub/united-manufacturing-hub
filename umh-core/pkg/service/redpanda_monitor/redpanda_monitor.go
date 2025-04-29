@@ -39,6 +39,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 
 	dto "github.com/prometheus/client_model/go"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
@@ -156,7 +157,7 @@ type IRedpandaMonitorService interface {
 	RemoveRedpandaMonitorFromS6Manager(ctx context.Context) error
 	StartRedpandaMonitor(ctx context.Context) error
 	StopRedpandaMonitor(ctx context.Context) error
-	ReconcileManager(ctx context.Context, filesystemService filesystem.Service, tick uint64) (error, bool)
+	ReconcileManager(ctx context.Context, services serviceregistry.Provider, tick uint64) (error, bool)
 	ServiceExists(ctx context.Context, filesystemService filesystem.Service) bool
 }
 
@@ -870,7 +871,7 @@ func (s *RedpandaMonitorService) StopRedpandaMonitor(ctx context.Context) error 
 }
 
 // ReconcileManager reconciles the Redpanda manager
-func (s *RedpandaMonitorService) ReconcileManager(ctx context.Context, filesystemService filesystem.Service, tick uint64) (err error, reconciled bool) {
+func (s *RedpandaMonitorService) ReconcileManager(ctx context.Context, services serviceregistry.Provider, tick uint64) (err error, reconciled bool) {
 	if s.s6Manager == nil {
 		return errors.New("s6 manager not initialized"), false
 	}
@@ -883,7 +884,7 @@ func (s *RedpandaMonitorService) ReconcileManager(ctx context.Context, filesyste
 		return ErrServiceNotExist, false
 	}
 
-	return s.s6Manager.Reconcile(ctx, fsm.SystemSnapshot{CurrentConfig: config.FullConfig{Internal: config.InternalConfig{Services: []config.S6FSMConfig{*s.s6ServiceConfig}}}}, filesystemService)
+	return s.s6Manager.Reconcile(ctx, fsm.SystemSnapshot{CurrentConfig: config.FullConfig{Internal: config.InternalConfig{Services: []config.S6FSMConfig{*s.s6ServiceConfig}}}}, services)
 }
 
 // ServiceExists checks if a redpanda instance exists

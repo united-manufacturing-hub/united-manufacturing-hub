@@ -30,6 +30,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	redpanda_service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda_monitor"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -176,7 +177,7 @@ func (r *RedpandaInstance) GetServiceStatus(ctx context.Context, filesystemServi
 }
 
 // UpdateObservedStateOfInstance updates the observed state of the service
-func (r *RedpandaInstance) UpdateObservedStateOfInstance(ctx context.Context, filesystemService filesystem.Service, tick uint64, loopStartTime time.Time) error {
+func (r *RedpandaInstance) UpdateObservedStateOfInstance(ctx context.Context, services serviceregistry.Provider, tick uint64, loopStartTime time.Time) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
@@ -188,7 +189,7 @@ func (r *RedpandaInstance) UpdateObservedStateOfInstance(ctx context.Context, fi
 	if desiredState == OperationalStateStopped || currentState == OperationalStateStopped || currentState == OperationalStateStopping {
 		// For stopped instances, just check if the S6 service exists but don't do health checks
 		// This minimal information is sufficient for reconciliation
-		exists := r.service.ServiceExists(ctx, filesystemService)
+		exists := r.service.ServiceExists(ctx, services.GetFileSystem())
 		if !exists {
 			// If the service doesn't exist, nothing more to do
 			r.ObservedState = RedpandaObservedState{}
@@ -209,7 +210,7 @@ func (r *RedpandaInstance) UpdateObservedStateOfInstance(ctx context.Context, fi
 
 	g.Go(func() error {
 		start := time.Now()
-		info, err := r.GetServiceStatus(gctx, filesystemService, tick, loopStartTime)
+		info, err := r.GetServiceStatus(gctx, services.GetFileSystem(), tick, loopStartTime)
 		metrics.ObserveReconcileTime(logger.ComponentRedpandaInstance, r.baseFSMInstance.GetID()+".getServiceStatus", time.Since(start))
 		if err == nil {
 			// Store the raw service info
@@ -223,7 +224,7 @@ func (r *RedpandaInstance) UpdateObservedStateOfInstance(ctx context.Context, fi
 	g.Go(func() error {
 		start := time.Now()
 		// This GetConfig requires the tick parameter, which will be used to calculate the metrics state
-		observedConfig, err := r.service.GetConfig(gctx, filesystemService, tick, loopStartTime)
+		observedConfig, err := r.service.GetConfig(gctx, services.GetFileSystem(), tick, loopStartTime)
 		metrics.ObserveReconcileTime(logger.ComponentRedpandaInstance, r.baseFSMInstance.GetID()+".getConfig", time.Since(start))
 
 		if err == nil {
@@ -280,7 +281,7 @@ func (r *RedpandaInstance) UpdateObservedStateOfInstance(ctx context.Context, fi
 	// Use new ConfigsEqual function that handles Redpanda defaults properly
 	if !redpandaserviceconfig.ConfigsEqual(r.config, r.ObservedState.ObservedRedpandaServiceConfig) {
 		// Check if the service exists before attempting to update
-		if r.service.ServiceExists(ctx, filesystemService) {
+		if r.service.ServiceExists(ctx, services.GetFileSystem()) {
 			r.baseFSMInstance.GetLogger().Debugf("Observed Redpanda config is different from desired config, updating S6 configuration")
 
 			// Use the new ConfigDiff function for better debug output

@@ -26,9 +26,9 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	nmapfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/nmap"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/nmap"
 	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
 // CreateNmapTestConfig creates a standard Nmap config for testing
@@ -214,7 +214,7 @@ func TestNmapStateTransition(
 	ctx context.Context,
 	instance *nmapfsm.NmapInstance,
 	mockService *nmap.MockNmapService,
-	filesystemService filesystem.Service,
+	services serviceregistry.Provider,
 	serviceName string,
 	fromState string,
 	toState string,
@@ -239,7 +239,7 @@ func TestNmapStateTransition(
 		}
 
 		// Perform a reconcile cycle
-		_, _ = instance.Reconcile(ctx, fsm.SystemSnapshot{Tick: tick}, filesystemService)
+		_, _ = instance.Reconcile(ctx, fsm.SystemSnapshot{Tick: tick}, services)
 		tick++
 	}
 
@@ -256,7 +256,7 @@ func VerifyNmapStableState(
 	snapshot fsm.SystemSnapshot,
 	instance *nmapfsm.NmapInstance,
 	mockService *nmap.MockNmapService,
-	filesystemService filesystem.Service,
+	services serviceregistry.Provider,
 	serviceName string,
 	expectedState string,
 	numCycles int,
@@ -273,7 +273,7 @@ func VerifyNmapStableState(
 	// Execute reconcile cycles and check state stability
 	tick := snapshot.Tick
 	for i := 0; i < numCycles; i++ {
-		_, _ = instance.Reconcile(ctx, snapshot, filesystemService)
+		_, _ = instance.Reconcile(ctx, snapshot, services)
 		tick++
 
 		if instance.GetCurrentFSMState() != expectedState {
@@ -311,7 +311,7 @@ func StabilizeNmapInstance(
 	snapshot fsm.SystemSnapshot,
 	instance *nmapfsm.NmapInstance,
 	mockService *nmap.MockNmapService,
-	filesystemService filesystem.Service,
+	services serviceregistry.Provider,
 	serviceName string,
 	targetState string,
 	maxAttempts int,
@@ -325,10 +325,10 @@ func StabilizeNmapInstance(
 		currentState := instance.GetCurrentFSMState()
 		if currentState == targetState {
 			// Now verify it remains stable
-			return VerifyNmapStableState(ctx, snapshot, instance, mockService, filesystemService, serviceName, targetState, 3)
+			return VerifyNmapStableState(ctx, snapshot, instance, mockService, services, serviceName, targetState, 3)
 		}
 
-		_, _ = instance.Reconcile(ctx, snapshot, filesystemService)
+		_, _ = instance.Reconcile(ctx, snapshot, services)
 		tick++
 	}
 
@@ -343,7 +343,7 @@ func WaitForNmapDesiredState(
 	ctx context.Context,
 	snapshot fsm.SystemSnapshot,
 	instance *nmapfsm.NmapInstance,
-	filesystemService filesystem.Service,
+	services serviceregistry.Provider,
 	targetState string,
 	maxAttempts int,
 ) (uint64, error) {
@@ -356,7 +356,7 @@ func WaitForNmapDesiredState(
 		}
 
 		// Run a reconcile cycle
-		err, _ := instance.Reconcile(ctx, snapshot, filesystemService)
+		err, _ := instance.Reconcile(ctx, snapshot, services)
 		if err != nil {
 			return tick, err
 		}
@@ -376,7 +376,7 @@ func ReconcileNmapUntilError(
 	snapshot fsm.SystemSnapshot,
 	instance *nmapfsm.NmapInstance,
 	mockService *nmap.MockNmapService,
-	filesystemService filesystem.Service,
+	services serviceregistry.Provider,
 	serviceName string,
 	maxAttempts int,
 ) (uint64, error, bool) {
@@ -384,7 +384,7 @@ func ReconcileNmapUntilError(
 
 	for i := 0; i < maxAttempts; i++ {
 		// Perform a reconcile cycle and capture the error and reconciled status
-		err, reconciled := instance.Reconcile(ctx, snapshot, filesystemService)
+		err, reconciled := instance.Reconcile(ctx, snapshot, services)
 		tick++
 
 		if err != nil {

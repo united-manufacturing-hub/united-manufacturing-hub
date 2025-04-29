@@ -30,6 +30,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	"go.uber.org/zap"
 )
 
@@ -62,7 +63,7 @@ type FSMInstance interface {
 	// whether a change was made to the instance's state
 	// The filesystemService parameter is used to read and write to the filesystem.
 	// Specifically it is used so that we only need to read in the entire file system once, and then can pass it to all the managers and instances, who can then save on I/O operations.
-	Reconcile(ctx context.Context, snapshot SystemSnapshot, filesystemService filesystem.Service) (error, bool)
+	Reconcile(ctx context.Context, snapshot SystemSnapshot, services serviceregistry.Provider) (error, bool)
 	// Remove initiates the removal process for this instance
 	Remove(ctx context.Context) error
 	// GetLastObservedState returns the last known state of the instance
@@ -86,7 +87,7 @@ type FSMManager[C any] interface {
 	// The tick parameter provides a counter to track operation rate limiting
 	// The filesystemService parameter is used to read and write to the filesystem.
 	// Specifically it is used so that we only need to read in the entire file system once, and then can pass it to all the managers and instances, who can then save on I/O operations.
-	Reconcile(ctx context.Context, snapshot SystemSnapshot, filesystemService filesystem.Service) (error, bool)
+	Reconcile(ctx context.Context, snapshot SystemSnapshot, services serviceregistry.Provider) (error, bool)
 	// GetManagerName returns the name of this manager for logging and metrics
 	GetManagerName() string
 }
@@ -275,7 +276,7 @@ func (m *BaseFSMManager[C]) GetNextStateTick() uint64 {
 func (m *BaseFSMManager[C]) Reconcile(
 	ctx context.Context,
 	snapshot SystemSnapshot,
-	filesystemService filesystem.Service,
+	services serviceregistry.Provider,
 ) (error, bool) {
 	// Increment manager-specific tick counter
 	m.managerTick++
@@ -519,7 +520,7 @@ func (m *BaseFSMManager[C]) Reconcile(
 		// Pass manager-specific tick to instance.Reconcile
 		// Update the snapshot tick to the manager tick
 		snapshot.Tick = m.managerTick
-		err, reconciled := instance.Reconcile(instanceCtx, snapshot, filesystemService)
+		err, reconciled := instance.Reconcile(instanceCtx, snapshot, services)
 		reconcileTime := time.Since(reconcileStart)
 		metrics.ObserveReconcileTime(metrics.ComponentBaseFSMManager, m.managerName+".instances."+name, reconcileTime)
 
@@ -553,7 +554,7 @@ func (m *BaseFSMManager[C]) Reconcile(
 		}
 
 		// Check if the instance has been stuck in a transient state for too long
-		m.maybeEscalateRemoval(ctx, instance, filesystemService)
+		m.maybeEscalateRemoval(ctx, instance, services)
 
 		if reconciled {
 			return nil, true
@@ -703,7 +704,7 @@ func (m *BaseFSMManager[C]) schedule(base uint64) uint64 {
 //
 // This helper never returns an error. All failures in operations
 // are handled through the normal FSM reconciliation mechanisms.
-func (m *BaseFSMManager[C]) maybeEscalateRemoval(ctx context.Context, inst FSMInstance, filesystemService filesystem.Service) {
+func (m *BaseFSMManager[C]) maybeEscalateRemoval(ctx context.Context, inst FSMInstance, services serviceregistry.Provider) {
 	// Check if the instance has been in a transient state for too long
 	if !inst.IsTransientStreakCounterMaxed() {
 		return // Not stuck yet
@@ -726,7 +727,7 @@ func (m *BaseFSMManager[C]) maybeEscalateRemoval(ctx context.Context, inst FSMIn
 		if forceRemover, ok := inst.(interface {
 			ForceRemove(context.Context, filesystem.Service) error
 		}); ok {
-			err := forceRemover.ForceRemove(ctx, filesystemService)
+			err := forceRemover.ForceRemove(ctx, services.GetFileSystem())
 			if err != nil {
 				sentry.ReportFSMErrorf(
 					m.logger,
@@ -755,7 +756,7 @@ func (m *BaseFSMManager[C]) maybeEscalateRemoval(ctx context.Context, inst FSMIn
 			if forceRemover, ok := inst.(interface {
 				ForceRemove(context.Context, filesystem.Service) error
 			}); ok {
-				err := forceRemover.ForceRemove(ctx, filesystemService)
+				err := forceRemover.ForceRemove(ctx, services.GetFileSystem())
 				if err != nil {
 					sentry.ReportFSMErrorf(
 						m.logger,

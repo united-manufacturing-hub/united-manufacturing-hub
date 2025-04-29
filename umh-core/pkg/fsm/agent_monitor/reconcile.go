@@ -26,7 +26,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	standarderrors "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
 )
 
@@ -34,7 +34,7 @@ import (
 // The filesystemService parameter allows for filesystem operations during reconciliation,
 // enabling the method to read configuration or state information from the filesystem.
 // Currently not used in this implementation but added for consistency with the interface.
-func (a *AgentInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot, filesystemService filesystem.Service) (err error, reconciled bool) {
+func (a *AgentInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot, services serviceregistry.Provider) (err error, reconciled bool) {
 	start := time.Now()
 	instanceName := a.baseFSMInstance.GetID()
 	defer func() {
@@ -97,7 +97,7 @@ func (a *AgentInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapsh
 	}
 
 	// Step 3: Attempt to reconcile the state.
-	err, reconciled = a.reconcileStateTransition(ctx, filesystemService)
+	err, reconciled = a.reconcileStateTransition(ctx, services)
 	if err != nil {
 		// If the instance is removed, we don't want to return an error here, because we want to continue reconciling
 		// Also this should not
@@ -178,7 +178,7 @@ func healthCategoryToString(category models.HealthCategory) string {
 // Any functions that fetch information are disallowed here and must be called in reconcileExternalChanges
 // and exist in ExternalState.
 // This is to ensure full testability of the FSM.
-func (a *AgentInstance) reconcileStateTransition(ctx context.Context, filesystemService filesystem.Service) (err error, reconciled bool) {
+func (a *AgentInstance) reconcileStateTransition(ctx context.Context, services serviceregistry.Provider) (err error, reconciled bool) {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentAgentMonitor, a.baseFSMInstance.GetID()+".reconcileStateTransition", time.Since(start))
@@ -194,7 +194,7 @@ func (a *AgentInstance) reconcileStateTransition(ctx context.Context, filesystem
 
 	// Handle lifecycle states first - these take precedence over operational states
 	if internal_fsm.IsLifecycleState(currentState) {
-		err, reconciled := a.baseFSMInstance.ReconcileLifecycleStates(ctx, filesystemService, currentState, a.CreateInstance, a.RemoveInstance, a.CheckForCreation)
+		err, reconciled := a.baseFSMInstance.ReconcileLifecycleStates(ctx, services, currentState, a.CreateInstance, a.RemoveInstance, a.CheckForCreation)
 		if err != nil {
 			return err, false
 		}
@@ -207,7 +207,7 @@ func (a *AgentInstance) reconcileStateTransition(ctx context.Context, filesystem
 
 	// Handle operational states
 	if IsOperationalState(currentState) {
-		err, reconciled := a.reconcileOperationalStates(ctx, filesystemService, currentState, desiredState, time.Now())
+		err, reconciled := a.reconcileOperationalStates(ctx, services, currentState, desiredState, time.Now())
 		if err != nil {
 			return err, false
 		}
@@ -234,7 +234,7 @@ func (a *AgentInstance) updateObservedState(ctx context.Context, snapshot fsm.Sy
 }
 
 // reconcileOperationalStates handles states related to instance operations (starting/stopping)
-func (a *AgentInstance) reconcileOperationalStates(ctx context.Context, filesystemService filesystem.Service, currentState string, desiredState string, currentTime time.Time) (err error, reconciled bool) {
+func (a *AgentInstance) reconcileOperationalStates(ctx context.Context, services serviceregistry.Provider, currentState string, desiredState string, currentTime time.Time) (err error, reconciled bool) {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentAgentMonitor, a.baseFSMInstance.GetID()+".reconcileOperationalStates", time.Since(start))
@@ -242,9 +242,9 @@ func (a *AgentInstance) reconcileOperationalStates(ctx context.Context, filesyst
 
 	switch desiredState {
 	case OperationalStateActive:
-		return a.reconcileTransitionToActive(ctx, filesystemService, currentState, currentTime)
+		return a.reconcileTransitionToActive(ctx, services, currentState, currentTime)
 	case OperationalStateStopped:
-		return a.reconcileTransitionToStopped(ctx, filesystemService, currentState)
+		return a.reconcileTransitionToStopped(ctx, services, currentState)
 	default:
 		return fmt.Errorf("invalid desired state: %s", desiredState), false
 	}
@@ -252,7 +252,7 @@ func (a *AgentInstance) reconcileOperationalStates(ctx context.Context, filesyst
 
 // reconcileTransitionToActive handles transitions when the desired state is Active.
 // It deals with moving from various states to the Active state.
-func (a *AgentInstance) reconcileTransitionToActive(ctx context.Context, filesystemService filesystem.Service, currentState string, currentTime time.Time) (err error, reconciled bool) {
+func (a *AgentInstance) reconcileTransitionToActive(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time) (err error, reconciled bool) {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentAgentMonitor, a.baseFSMInstance.GetID()+".reconcileTransitionToActive", time.Since(start))
@@ -262,16 +262,16 @@ func (a *AgentInstance) reconcileTransitionToActive(ctx context.Context, filesys
 	// If we're stopped, we need to start first
 	case currentState == OperationalStateStopped:
 		// nothing to start here, just for consistency with other fsms
-		err := a.StartInstance(ctx, filesystemService)
+		err := a.StartInstance(ctx, services.GetFileSystem())
 		if err != nil {
 			return err, false
 		}
 		// Send event to transition from Stopped to Starting
 		return a.baseFSMInstance.SendEvent(ctx, EventStart), true
 	case IsStartingState(currentState):
-		return a.reconcileStartingStates(ctx, filesystemService, currentState, currentTime)
+		return a.reconcileStartingStates(ctx, services, currentState, currentTime)
 	case IsRunningState(currentState):
-		return a.reconcileRunningStates(ctx, filesystemService, currentState, currentTime)
+		return a.reconcileRunningStates(ctx, services, currentState, currentTime)
 	default:
 		return fmt.Errorf("invalid current state: %s", currentState), false
 	}
@@ -279,7 +279,7 @@ func (a *AgentInstance) reconcileTransitionToActive(ctx context.Context, filesys
 
 // reconcileStartingStates handles the various starting phase states when transitioning to a running state
 // no big startup process here
-func (a *AgentInstance) reconcileStartingStates(ctx context.Context, filesystemService filesystem.Service, currentState string, currentTime time.Time) (err error, reconciled bool) {
+func (a *AgentInstance) reconcileStartingStates(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time) (err error, reconciled bool) {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentAgentMonitor, a.baseFSMInstance.GetID()+".reconcileStartingStates", time.Since(start))
@@ -296,7 +296,7 @@ func (a *AgentInstance) reconcileStartingStates(ctx context.Context, filesystemS
 }
 
 // reconcileRunningStates handles the various running states when transitioning to Active.
-func (a *AgentInstance) reconcileRunningStates(ctx context.Context, filesystemService filesystem.Service, currentState string, currentTime time.Time) (err error, reconciled bool) {
+func (a *AgentInstance) reconcileRunningStates(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time) (err error, reconciled bool) {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentAgentMonitor, a.baseFSMInstance.GetID()+".reconcileRunningStates", time.Since(start))
@@ -322,7 +322,7 @@ func (a *AgentInstance) reconcileRunningStates(ctx context.Context, filesystemSe
 
 // reconcileTransitionToStopped handles transitions when the desired state is Stopped.
 // It deals with moving from any operational state to Stopping and then to Stopped.
-func (a *AgentInstance) reconcileTransitionToStopped(ctx context.Context, filesystemService filesystem.Service, currentState string) (err error, reconciled bool) {
+func (a *AgentInstance) reconcileTransitionToStopped(ctx context.Context, services serviceregistry.Provider, currentState string) (err error, reconciled bool) {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentAgentMonitor, a.baseFSMInstance.GetID()+".reconcileTransitionToStopped", time.Since(start))
@@ -341,7 +341,7 @@ func (a *AgentInstance) reconcileTransitionToStopped(ctx context.Context, filesy
 		return a.baseFSMInstance.SendEvent(ctx, EventStopDone), true
 	default:
 		// For any other state, initiate stop
-		err := a.StopInstance(ctx, filesystemService)
+		err := a.StopInstance(ctx, services.GetFileSystem())
 		if err != nil {
 			return err, false
 		}

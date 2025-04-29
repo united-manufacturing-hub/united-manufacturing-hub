@@ -28,6 +28,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	standarderrors "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
@@ -423,7 +424,7 @@ func (s *BaseFSMInstance) HandlePermanentError(
 // It will also update the transient streak counter
 func (s *BaseFSMInstance) ReconcileLifecycleStates(
 	ctx context.Context,
-	filesystemService filesystem.Service,
+	services serviceregistry.Provider,
 	currentState string,
 	createInstance func(ctx context.Context, filesystemService filesystem.Service) error,
 	removeInstance func(ctx context.Context, filesystemService filesystem.Service) error,
@@ -446,18 +447,18 @@ func (s *BaseFSMInstance) ReconcileLifecycleStates(
 	// Independent what the desired state is, we always need to reconcile the lifecycle states first
 	switch currentState {
 	case LifecycleStateToBeCreated:
-		if err := createInstance(ctx, filesystemService); err != nil {
+		if err := createInstance(ctx, services.GetFileSystem()); err != nil {
 			return err, false
 		}
 		return s.SendEvent(ctx, LifecycleEventCreate), true
 	case LifecycleStateCreating:
 		// Check if the service is created
-		if !checkForCreation(ctx, filesystemService) {
+		if !checkForCreation(ctx, services.GetFileSystem()) {
 			return nil, false // Don't transition state yet, retry next reconcile
 		}
 		return s.SendEvent(ctx, LifecycleEventCreateDone), true
 	case LifecycleStateRemoving:
-		if err := removeInstance(ctx, filesystemService); err != nil {
+		if err := removeInstance(ctx, services.GetFileSystem()); err != nil {
 			// Treat “removal still in progress” as a *non-error* so that the reconcile
 			// loop continues; the FSM stays in `removing` until RemoveInstance returns
 			// nil or a hard error.
