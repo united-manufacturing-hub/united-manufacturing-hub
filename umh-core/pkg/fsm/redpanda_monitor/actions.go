@@ -16,6 +16,7 @@ package redpanda_monitor
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -25,6 +26,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	redpanda_monitor_service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda_monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
 )
 
 // CreateInstance is called when the FSM transitions from to_be_created -> creating.
@@ -53,16 +55,34 @@ func (r *RedpandaMonitorInstance) RemoveInstance(ctx context.Context, filesystem
 
 	// Remove the Redpanda from the S6 manager
 	err := r.monitorService.RemoveRedpandaMonitorFromS6Manager(ctx)
-	if err != nil {
-		if err == redpanda_monitor_service.ErrServiceNotExist {
-			r.baseFSMInstance.GetLogger().Debugf("Redpanda Monitor service %s not found in S6 manager", r.baseFSMInstance.GetID())
-			return nil // do not throw an error, as each action is expected to be idempotent
-		}
-		return fmt.Errorf("failed to remove Redpanda Monitor service %s from S6 manager: %w", r.baseFSMInstance.GetID(), err)
-	}
+	switch {
+	// ---------------------------------------------------------------
+	// happy paths
+	// ---------------------------------------------------------------
+	case err == nil: // fully removed
+		r.baseFSMInstance.GetLogger().Debugf("Redpanda Monitor service %s removed from S6 manager", r.baseFSMInstance.GetID())
+		return nil
 
-	r.baseFSMInstance.GetLogger().Debugf("Redpanda Monitor service %s removed from S6 manager", r.baseFSMInstance.GetID())
-	return nil
+	case err == redpanda_monitor_service.ErrServiceNotExist:
+		r.baseFSMInstance.GetLogger().Debugf("Redpanda Monitor service %s not found in S6 manager", r.baseFSMInstance.GetID())
+		// idempotent: was already gone
+		return nil
+
+	// ---------------------------------------------------------------
+	// transient path – keep retrying
+	// ---------------------------------------------------------------
+	case errors.Is(err, standarderrors.ErrRemovalPending):
+		r.baseFSMInstance.GetLogger().Infof("Redpanda monitor service %s removal still in progress", r.baseFSMInstance.GetID())
+		// not an error from the FSM's perspective – just means "try again"
+		return err
+
+	// ---------------------------------------------------------------
+	// real error – escalate
+	// ---------------------------------------------------------------
+	default:
+		r.baseFSMInstance.GetLogger().Errorf("failed to remove Redpanda Monitor service %s: %s", r.baseFSMInstance.GetID(), err)
+		return fmt.Errorf("failed to remove Redpanda Monitor service %s: %w", r.baseFSMInstance.GetID(), err)
+	}
 }
 
 // StartInstance is called when the agent monitoring should be enabled.
