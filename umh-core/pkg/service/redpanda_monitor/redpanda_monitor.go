@@ -386,7 +386,7 @@ func (s *RedpandaMonitorService) ParseRedpandaLogs(ctx context.Context, logs []s
 	var clusterConfig *ClusterConfig
 	// Processing the Metrics & cluster config takes ~5ms (especially the metrics parsing) each, therefore process them in parallel
 
-	ctx8, cancel8 := context.WithTimeout(ctx, 8*time.Millisecond)
+	ctx8, cancel8 := context.WithTimeout(ctx, constants.RedpandaUpdateObservedStateTimeout)
 	defer cancel8()
 	g, _ := errgroup.WithContext(ctx8)
 

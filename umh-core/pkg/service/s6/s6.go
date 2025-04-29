@@ -1159,6 +1159,7 @@ func (s *DefaultService) ForceRemove(
 ) error {
 	start := time.Now()
 	defer func() {
+		metrics.IncErrorCount(metrics.ComponentS6Service, servicePath+".forceRemove") // a force remove is an error
 		metrics.ObserveReconcileTime(
 			metrics.ComponentS6Service,
 			servicePath+".forceRemove",
