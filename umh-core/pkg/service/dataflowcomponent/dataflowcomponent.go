@@ -28,7 +28,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/portmanager"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 
 	benthosfsmmanager "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
@@ -106,32 +105,6 @@ func WithBenthosManager(benthosManager *benthosfsmmanager.BenthosManager) DataFl
 	}
 }
 
-// WithPortRange sets a custom port range for the BenthosManager's PortManager
-// This helps avoid port conflicts when multiple DataFlowComponentServices are running
-func WithPortRange(minPort, maxPort uint16) DataFlowComponentServiceOption {
-	return func(s *DataFlowComponentService) {
-		// Create a new port manager with the specified range
-		portManager, err := portmanager.NewDefaultPortManager(minPort, maxPort)
-		if err != nil {
-			s.logger.Errorf("Failed to create port manager with range %d-%d: %v", minPort, maxPort, err)
-			return
-		}
-
-		// Set the port manager on the Benthos manager
-		s.benthosManager.WithPortManager(portManager)
-	}
-}
-
-// WithSharedPortManager sets a shared port manager across multiple DataFlowComponentServices
-// This is the recommended approach when multiple DataFlowComponentServices are running
-// to ensure proper coordination of port allocation
-func WithSharedPortManager(portManager portmanager.PortManager) DataFlowComponentServiceOption {
-	return func(s *DataFlowComponentService) {
-		// Set the shared port manager on the Benthos manager
-		s.benthosManager.WithPortManager(portManager)
-	}
-}
-
 // NewDefaultDataFlowComponentService creates a new default DataFlowComponent service
 func NewDefaultDataFlowComponentService(componentName string, opts ...DataFlowComponentServiceOption) *DataFlowComponentService {
 
@@ -146,17 +119,6 @@ func NewDefaultDataFlowComponentService(componentName string, opts ...DataFlowCo
 	// Apply options
 	for _, opt := range opts {
 		opt(service)
-	}
-
-	if service.benthosManager != nil && service.benthosManager.GetPortManager() == nil {
-		// The port manager is not set. Initalize service registry and get the port manager
-		// The service registry contains the shared instance of the port manager. So it is safe to use it here
-		servicesRegistry, err := serviceregistry.NewRegistry()
-		if err != nil {
-			service.logger.Errorf("Failed to create service registry: %s", err)
-			return nil
-		}
-		service.benthosManager.WithPortManager(servicesRegistry.GetPortManager())
 	}
 
 	return service
