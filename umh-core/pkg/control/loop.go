@@ -113,12 +113,12 @@ func NewControlLoop(configManager config.ConfigManager) *ControlLoop {
 	// Create the managers
 	managers := []fsm.FSMManager[any]{
 		s6.NewS6Manager(constants.DefaultManagerName),
-		benthos.NewBenthosManager(constants.DefaultManagerName, servicesRegistry.GetPortManager()), // Benthos manager needs the port manager in addition, since it needs to allocate ports
+		benthos.NewBenthosManager(constants.DefaultManagerName),
 		container.NewContainerManager(constants.DefaultManagerName),
 		redpanda.NewRedpandaManager(constants.DefaultManagerName),
 		agent_monitor.NewAgentManager(constants.DefaultManagerName),
 		nmap.NewNmapManager(constants.DefaultManagerName),
-		dataflowcomponent.NewDataflowComponentManager(constants.DefaultManagerName, servicesRegistry.GetPortManager()),
+		dataflowcomponent.NewDataflowComponentManager(constants.DefaultManagerName),
 	}
 
 	// Create a starvation checker
@@ -286,6 +286,9 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 	// 3) Place the newly fetched config into the snapshot
 	newSnapshot.CurrentConfig = cfg
 
+	if c == nil {
+		return fmt.Errorf("service registry is nil, possible initialization failure")
+	}
 	// 4) If your filesystem service is a buffered FS, sync once per loop:
 	bufferedFs, ok := c.services.GetFileSystem().(*filesystem.BufferedService)
 	if ok {

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package portmanager provides functionality to allocate, reserve and manage ports for services
+// Package serviceregistry provides a centralized registry for accessing core services like portmanager and filesystem
 
 package serviceregistry
 
@@ -25,29 +25,31 @@ import (
 )
 
 var (
-	instance Registry
-	once     sync.Once
+	initialized bool
+	initMutex   sync.Mutex
 )
 
 func NewRegistry() (*Registry, error) {
+	initMutex.Lock()
+	defer initMutex.Unlock()
 
-	//  Initialize the registry only once
-	// Since the registry contains services like portmanager which should be initialized only once and shared between services
-	// we need to make sure that the registry is initialized only once
-	var err error
-	once.Do(func() {
-		minPort := 9000
-		maxPort := 9999
-		pm, portErr := portmanager.NewDefaultPortManager(minPort, maxPort)
-		if portErr != nil {
-			err = fmt.Errorf("failed to create port manager: %w", portErr)
-			return
-		}
-		fs := filesystem.NewDefaultService()
-		instance = Registry{
-			PortManager: pm,
-			FileSystem:  fs,
-		}
-	})
-	return &instance, err
+	if initialized {
+		panic("NewRegistry called more than once - registry must be initialized once and explicitly passed between components")
+	}
+
+	minPort := uint16(9000)
+	maxPort := uint16(9999)
+	pm, portErr := portmanager.NewDefaultPortManager(minPort, maxPort)
+	if portErr != nil {
+		return nil, fmt.Errorf("failed to create port manager: %w", portErr)
+	}
+
+	fs := filesystem.NewDefaultService()
+	registry := &Registry{
+		PortManager: pm,
+		FileSystem:  fs,
+	}
+
+	initialized = true
+	return registry, nil
 }
