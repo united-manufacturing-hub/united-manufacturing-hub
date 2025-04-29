@@ -460,9 +460,8 @@ var _ = Describe("BenthosManager", func() {
 				},
 			}
 
-			// Initialize a mock port manager that tracks Pre/Post calls
-			mockPortMgr := portmanager.NewMockPortManager()
-			manager.WithPortManager(mockPortMgr)
+			// Get the mock port manager from the registry
+			mockPortMgr := mockSvcRegistry.GetPortManager().(*portmanager.MockPortManager)
 
 			// Perform a single manager reconcile using a helper (not a for-loop)
 			newTick, err, reconciled := fsmtest.ReconcileOnceBenthosManager(
@@ -501,10 +500,9 @@ var _ = Describe("BenthosManager", func() {
 				},
 			}
 
-			// Create a mock port manager that returns an error on PreReconcile
-			mockPortMgr := portmanager.NewMockPortManager()
+			// Get the mock port manager from the registry and configure it to return an error
+			mockPortMgr := mockSvcRegistry.GetPortManager().(*portmanager.MockPortManager)
 			mockPortMgr.PreReconcileError = fmt.Errorf("test port allocation error")
-			manager.WithPortManager(mockPortMgr)
 
 			// Reconcile once
 			newTick, err, reconciled := fsmtest.ReconcileOnceBenthosManager(
@@ -533,9 +531,8 @@ var _ = Describe("BenthosManager", func() {
 				},
 			}
 
-			// Set up a mock port manager
-			mockPortMgr := portmanager.NewMockPortManager()
-			manager.WithPortManager(mockPortMgr)
+			// Get the mock port manager from the registry
+			mockPortMgr := mockSvcRegistry.GetPortManager().(*portmanager.MockPortManager)
 
 			// Single reconcile
 			newTick, err, reconciled := fsmtest.ReconcileOnceBenthosManager(
