@@ -155,6 +155,12 @@ func (a *DeleteDataflowComponentAction) GetComponentUUID() uuid.UUID {
 	return a.componentUUID
 }
 
+func (a *DeleteDataflowComponentAction) GetSystemSnapshot() *fsm.SystemSnapshot {
+	a.systemMu.RLock()
+	defer a.systemMu.RUnlock()
+	return a.systemSnapshot
+}
+
 func (a *DeleteDataflowComponentAction) waitForComponentToBeRemoved() error {
 	//check the system snapshot and waits for the instance to be removed
 	ticker := time.NewTicker(1 * time.Second)
@@ -187,8 +193,10 @@ func (a *DeleteDataflowComponentAction) waitForComponentToBeRemoved() error {
 				fmt.Sprintf("Verifying removal of dataflow component '%s' (%ds remaining)...",
 					componentName, remainingSeconds), a.outboundChannel, models.DeleteDataFlowComponent)
 
+			systemSnapshot := a.GetSystemSnapshot()
+
 			removed := true
-			if mgr, ok := a.systemSnapshot.Managers[constants.DataflowcomponentManagerName]; ok {
+			if mgr, ok := systemSnapshot.Managers[constants.DataflowcomponentManagerName]; ok {
 				for _, inst := range mgr.GetInstances() {
 					if dataflowcomponentserviceconfig.GenerateUUIDFromName(inst.ID) == a.componentUUID {
 						removed = false
