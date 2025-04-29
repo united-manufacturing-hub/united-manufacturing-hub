@@ -29,21 +29,10 @@ type ConfigManager interface {
 	GetDataFlowConfig() []config.DataFlowComponentConfig
 }
 
-// DirectConfigManager is a simple implementation of ConfigManager that directly uses a FullConfig
-type DirectConfigManager struct {
-	config *config.FullConfig
-}
-
-// NewDirectConfigManager creates a new DirectConfigManager
-func NewDirectConfigManager(config *config.FullConfig) *DirectConfigManager {
-	return &DirectConfigManager{
-		config: config,
-	}
-}
-
-// GetDataFlowConfig implements ConfigManager interface
-func (c *DirectConfigManager) GetDataFlowConfig() []config.DataFlowComponentConfig {
-	return c.config.DataFlow
+// StateTransition represents a state transition for a component
+type StateTransition struct {
+	TickAt int
+	State  string
 }
 
 // the state mocker is used for unit testing to mock the state of the system
@@ -55,7 +44,7 @@ type StateMocker struct {
 	ConfigManager      ConfigManager
 	TickCounter        int
 	PendingTransitions map[string][]StateTransition // key is component ID
-	done               chan struct{}                // channel to signal shutdown
+	done               chan struct{}                // channel to signal shutdown of goroutine
 }
 
 // NewStateMocker creates a new StateMocker
@@ -145,8 +134,7 @@ func (s *StateMocker) UpdateState() {
 		Instances: dfcManagerInstaces,
 	}
 
-	// Instead of creating a new SystemSnapshot, update the existing one
-	// This ensures that pointers to s.State will see the updates
+	// update the state of the system with the new manager snapshot
 	if s.State.Managers == nil {
 		s.State.Managers = make(map[string]fsm.ManagerSnapshot)
 	}
@@ -172,19 +160,14 @@ func (s *StateMocker) Run() {
 	}()
 }
 
-// Stop signals the state mocker to stop updating and waits for it to complete
-func (s *StateMocker) Stop() {
-	close(s.done)
-}
-
 // Start is a convenience method that runs the state mocker in a new goroutine
 func (s *StateMocker) Start() {
 	go s.Run()
 }
 
-type StateTransition struct {
-	TickAt int
-	State  string
+// Stop signals the state mocker to stop updating and waits for it to complete
+func (s *StateMocker) Stop() {
+	close(s.done)
 }
 
 // SetTransitionSequence schedules state transitions for a component

@@ -29,13 +29,13 @@ var _ = Describe("StateMocker", func() {
 	var (
 		stateMocker   *actions.StateMocker
 		cfg           *config.FullConfig
-		configManager *actions.DirectConfigManager
+		configManager *config.MockConfigManager
 		testConfig    dataflowcomponentserviceconfig.DataflowComponentServiceConfig
 	)
 
 	BeforeEach(func() {
 		cfg = &config.FullConfig{}
-		configManager = actions.NewDirectConfigManager(cfg)
+		configManager = config.NewMockConfigManager()
 		stateMocker = actions.NewStateMocker(configManager)
 		testConfig = dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 			BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
@@ -64,6 +64,9 @@ var _ = Describe("StateMocker", func() {
 					DataFlowComponentServiceConfig: testConfig,
 				},
 			}
+
+			// Update the mock config manager with our test configuration
+			configManager.WithConfig(*cfg)
 
 			// Create the expected test instance with matching values
 			testInstance := fsm.FSMInstanceSnapshot{
@@ -109,6 +112,9 @@ var _ = Describe("StateMocker", func() {
 					DataFlowComponentServiceConfig: testConfig,
 				},
 			}
+
+			// Update the mock config manager with our test configuration
+			configManager.WithConfig(*cfg)
 
 			// Set up a transition sequence: starting -> active
 			stateMocker.SetTransitionSequence(componentName, []struct {
