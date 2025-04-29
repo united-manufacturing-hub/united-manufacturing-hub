@@ -420,6 +420,12 @@ func (a *EditDataflowComponentAction) GetComponentUUID() uuid.UUID {
 	return a.oldComponentUUID
 }
 
+func (a *EditDataflowComponentAction) GetSystemSnapshot() *fsm.SystemSnapshot {
+	a.systemMu.RLock()
+	defer a.systemMu.RUnlock()
+	return a.systemSnapshot
+}
+
 func (a *EditDataflowComponentAction) waitForComponentToBeActive() error {
 	// checks the system snapshot
 	// 1. waits for the component to appear in the system snapshot (relevant for changed name)
@@ -444,7 +450,8 @@ func (a *EditDataflowComponentAction) waitForComponentToBeActive() error {
 			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Dataflow component did not become active in time. Consider removing it.", a.outboundChannel, models.EditDataFlowComponent)
 			return nil
 		case <-ticker.C:
-			if dataflowcomponentManager, exists := a.systemSnapshot.Managers[constants.DataflowcomponentManagerName]; exists {
+			systemSnapshot := a.GetSystemSnapshot()
+			if dataflowcomponentManager, exists := systemSnapshot.Managers[constants.DataflowcomponentManagerName]; exists {
 				instances := dataflowcomponentManager.GetInstances()
 				for _, instance := range instances {
 					if dataflowcomponentserviceconfig.GenerateUUIDFromName(instance.ID) == a.newComponentUUID {

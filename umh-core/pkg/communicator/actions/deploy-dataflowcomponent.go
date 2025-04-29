@@ -477,6 +477,12 @@ func (a *DeployDataflowComponentAction) GetParsedPayload() models.CDFCPayload {
 	return a.payload
 }
 
+func (a *DeployDataflowComponentAction) GetSystemSnapshot() *fsm.SystemSnapshot {
+	a.systemMu.RLock()
+	defer a.systemMu.RUnlock()
+	return a.systemSnapshot
+}
+
 func (a *DeployDataflowComponentAction) waitForComponentToBeActive() error {
 	// checks the system snapshot
 	// 1. waits for the instance to appear in the system snapshot
@@ -512,7 +518,8 @@ func (a *DeployDataflowComponentAction) waitForComponentToBeActive() error {
 			return nil
 		case <-ticker.C:
 
-			if dataflowcomponentManager, exists := a.systemSnapshot.Managers[constants.DataflowcomponentManagerName]; exists {
+			systemSnapshot := a.GetSystemSnapshot()
+			if dataflowcomponentManager, exists := systemSnapshot.Managers[constants.DataflowcomponentManagerName]; exists {
 				instances := dataflowcomponentManager.GetInstances()
 				for _, instance := range instances {
 					// cast the instance LastObservedState to a dataflowcomponent instance

@@ -153,6 +153,12 @@ func (a *DeleteDataflowComponentAction) GetComponentUUID() uuid.UUID {
 	return a.componentUUID
 }
 
+func (a *DeleteDataflowComponentAction) GetSystemSnapshot() *fsm.SystemSnapshot {
+	a.systemMu.RLock()
+	defer a.systemMu.RUnlock()
+	return a.systemSnapshot
+}
+
 func (a *DeleteDataflowComponentAction) waitForComponentToBeRemoved() error {
 	//check the system snapshot and waits for the instance to be removed
 	ticker := time.NewTicker(constants.DefaultTickerTime)
@@ -163,8 +169,9 @@ func (a *DeleteDataflowComponentAction) waitForComponentToBeRemoved() error {
 		case <-timeout:
 			return fmt.Errorf("dataflowcomponent %s was not removed in time", a.componentUUID)
 		case <-ticker.C:
+			systemSnapshot := a.GetSystemSnapshot()
 			removed := true
-			if mgr, ok := a.systemSnapshot.Managers[constants.DataflowcomponentManagerName]; ok {
+			if mgr, ok := systemSnapshot.Managers[constants.DataflowcomponentManagerName]; ok {
 				for _, inst := range mgr.GetInstances() {
 					if dataflowcomponentserviceconfig.GenerateUUIDFromName(inst.ID) == a.componentUUID {
 						removed = false
