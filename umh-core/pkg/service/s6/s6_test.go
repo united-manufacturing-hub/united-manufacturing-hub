@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -394,11 +395,14 @@ var _ = Describe("S6 Service", func() {
 			svcPath string
 			logDir  string
 
-			exists map[string]bool // simple in-memory "filesystem"
+			exists sync.Map // key:string → bool, simple in-memory "filesystem"
 		)
 
 		// helper – PathExists reads from our map
-		pathExists := func(p string) bool { return exists[p] }
+		pathExists := func(p string) bool {
+			exists, ok := exists.Load(p)
+			return ok && exists.(bool)
+		}
 
 		BeforeEach(func() {
 			ctx = context.Background()
@@ -410,10 +414,8 @@ var _ = Describe("S6 Service", func() {
 			logDir = filepath.Join(constants.S6LogBaseDir, "my-service")
 
 			// default: both paths exist
-			exists = map[string]bool{
-				svcPath: true,
-				logDir:  true,
-			}
+			exists.Store(svcPath, true)
+			exists.Store(logDir, true)
 
 			// --- mock functions --------------------------------------------------
 
@@ -423,7 +425,7 @@ var _ = Describe("S6 Service", func() {
 
 			mockFS.WithRemoveAllFunc(func(ctx context.Context, p string) error {
 				// simulate deletion
-				delete(exists, p)
+				exists.Delete(p)
 				return nil
 			})
 		})
@@ -436,7 +438,7 @@ var _ = Describe("S6 Service", func() {
 		})
 
 		It("is successful when only the log dir had to be removed", func() {
-			delete(exists, svcPath) // service dir already gone
+			exists.Delete(svcPath) // service dir already gone
 
 			err := svc.Remove(ctx, svcPath, mockFS)
 			Expect(err).NotTo(HaveOccurred())
@@ -444,7 +446,7 @@ var _ = Describe("S6 Service", func() {
 		})
 
 		It("is idempotent (everything already gone)", func() {
-			exists = map[string]bool{} // nothing exists
+			exists = sync.Map{} // nothing exists
 
 			removeCalls := 0
 			mockFS.WithRemoveAllFunc(func(ctx context.Context, p string) error {
@@ -463,7 +465,7 @@ var _ = Describe("S6 Service", func() {
 				if p == svcPath {
 					return boom // fail removing service dir
 				}
-				delete(exists, p)
+				exists.Delete(p)
 				return nil
 			})
 
