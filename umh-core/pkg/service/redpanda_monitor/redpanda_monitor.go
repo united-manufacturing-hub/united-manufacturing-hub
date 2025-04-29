@@ -251,9 +251,9 @@ func (s *RedpandaMonitorService) generateRedpandaScript() (string, error) {
 	scriptContent := fmt.Sprintf(`#!/bin/sh
 while true; do
   echo "%s"
-  curl -sSL --max-time 1 http://localhost:9644/public_metrics | gzip -c | xxd -p
+  curl -sSL --max-time 1 http://localhost:9644/public_metrics 2>&1 | gzip -c | xxd -p
   echo "%s"
-  curl -sSL --max-time 1 http://localhost:9644/v1/cluster_config | gzip -c | xxd -p
+  curl -sSL --max-time 1 http://localhost:9644/v1/cluster_config 2>&1 | gzip -c | xxd -p
   echo "%s"
   date +%%s%%9N
   echo "%s"
@@ -408,11 +408,11 @@ func (s *RedpandaMonitorService) ParseRedpandaLogs(ctx context.Context, logs []s
 
 	var metrics *RedpandaMetrics
 	var clusterConfig *ClusterConfig
-	// Processing the Metrics & cluster config takes ~5ms (especially the metrics parsing) each, therefore process them in parallel
+	// Processing the Metrics & cluster config takes time (especially the metrics parsing) each, therefore process them in parallel
 
-	ctx8, cancel8 := context.WithTimeout(ctx, 8*time.Millisecond)
-	defer cancel8()
-	g, _ := errgroup.WithContext(ctx8)
+	ctxProcessMetrics, cancelProcessMetrics := context.WithTimeout(ctx, constants.RedpandaProcessMetricsTimeout)
+	defer cancelProcessMetrics()
+	g, _ := errgroup.WithContext(ctxProcessMetrics)
 
 	g.Go(func() error {
 		var err error
@@ -447,11 +447,11 @@ func (s *RedpandaMonitorService) ParseRedpandaLogs(ctx context.Context, logs []s
 			return nil, err
 		}
 		// If err is nil, all goroutines completed successfully.
-	case <-ctx.Done():
+	case <-ctxProcessMetrics.Done():
 		// The context was canceled or its deadline was exceeded before all goroutines finished.
 		// Although some goroutines might still be running in the background,
 		// they use a context (gctx) that should cause them to terminate promptly.
-		return nil, ctx.Err()
+		return nil, ctxProcessMetrics.Err()
 	}
 
 	timestampDataString := strings.TrimSpace(string(timestampDataBytes))
@@ -497,11 +497,6 @@ func parseCurlError(errorString string) error {
 
 func (s *RedpandaMonitorService) processMetricsDataBytes(metricsDataBytes []byte, tick uint64) (*RedpandaMetrics, error) {
 
-	curlError := parseCurlError(string(metricsDataBytes))
-	if curlError != nil {
-		return nil, curlError
-	}
-
 	metricsDataString := string(metricsDataBytes)
 	// Strip any newlines
 	metricsDataString = strings.ReplaceAll(metricsDataString, "\n", "")
@@ -541,11 +536,6 @@ func (s *RedpandaMonitorService) processMetricsDataBytes(metricsDataBytes []byte
 
 func (s *RedpandaMonitorService) processClusterConfigDataBytes(clusterConfigDataBytes []byte, tick uint64) (*ClusterConfig, error) {
 
-	curlError := parseCurlError(string(clusterConfigDataBytes))
-	if curlError != nil {
-		return nil, curlError
-	}
-
 	clusterConfigDataString := string(clusterConfigDataBytes)
 	// Strip any newlines
 	clusterConfigDataString = strings.ReplaceAll(clusterConfigDataString, "\n", "")
@@ -568,9 +558,19 @@ func (s *RedpandaMonitorService) processClusterConfigDataBytes(clusterConfigData
 		}
 	}()
 
+	data, err := io.ReadAll(gzipReader)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read cluster config data: %w", err)
+	}
+
+	curlError := parseCurlError(string(data))
+	if curlError != nil {
+		return nil, curlError
+	}
+
 	// Parse the JSON response
 	var redpandaConfig map[string]interface{}
-	if err := json.NewDecoder(gzipReader).Decode(&redpandaConfig); err != nil {
+	if err := json.NewDecoder(bytes.NewReader(data)).Decode(&redpandaConfig); err != nil {
 		return nil, fmt.Errorf("failed to parse cluster config data: %w", err)
 	}
 
@@ -609,9 +609,18 @@ func ParseMetrics(dataReader io.Reader) (Metrics, error) {
 			TopicPartitionMap: make(map[string]int64), // Pre-allocate map to avoid nil check later
 		},
 	}
+	data, err := io.ReadAll(dataReader)
+	if err != nil {
+		return Metrics{}, fmt.Errorf("failed to read metrics data: %w", err)
+	}
+
+	curlError := parseCurlError(string(data))
+	if curlError != nil {
+		return Metrics{}, curlError
+	}
 
 	// Parse the metrics text into prometheus format
-	mf, err := parser.TextToMetricFamilies(dataReader)
+	mf, err := parser.TextToMetricFamilies(bytes.NewReader(data))
 	if err != nil {
 		return metrics, fmt.Errorf("failed to parse metrics: %w", err)
 	}

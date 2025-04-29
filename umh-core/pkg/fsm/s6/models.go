@@ -147,3 +147,10 @@ func (s *S6Instance) GetConfig() config.S6FSMConfig {
 func (s *S6Instance) GetExpectedMaxP95ExecutionTimePerInstance() time.Duration {
 	return constants.S6ExpectedMaxP95ExecutionTimePerInstance
 }
+
+// IsTransientStreakCounterMaxed returns whether the transient streak counter
+// has reached the maximum number of ticks, which means that the FSM is stuck in a state
+// and should be removed
+func (s *S6Instance) IsTransientStreakCounterMaxed() bool {
+	return s.baseFSMInstance.IsTransientStreakCounterMaxed()
+}

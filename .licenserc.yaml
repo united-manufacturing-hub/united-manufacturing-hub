@@ -54,5 +54,6 @@ header:
     - "umh-core/pkg/service/redpanda_monitor/test_metrics.txt"
     - "umh-core/pkg/service/benthos_monitor/test_metrics.txt"
     - "umh-core/pkg/service/s6/s6_test_data.txt"
+    - "umh-core/pkg/service/s6/s6_test_log_data.txt"
 
   comment: on-failure

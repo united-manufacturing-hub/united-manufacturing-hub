@@ -29,6 +29,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	redpanda_monitor_service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda_monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
 )
 
 // Reconcile periodically checks if the FSM needs state transitions based on metrics
@@ -118,8 +119,8 @@ func (b *RedpandaMonitorInstance) Reconcile(ctx context.Context, snapshot fsm.Sy
 	if err != nil {
 		// If the instance is removed, we don't want to return an error here, because we want to continue reconciling
 		// Also this should not
-		if errors.Is(err, fsm.ErrInstanceRemoved) {
-			return nil, false
+		if errors.Is(err, standarderrors.ErrInstanceRemoved) {
+			return standarderrors.ErrInstanceRemoved, true
 		}
 
 		if errors.Is(err, context.DeadlineExceeded) {
@@ -236,7 +237,7 @@ func (b *RedpandaMonitorInstance) reconcileLifecycleStates(ctx context.Context, 
 
 	case internal_fsm.LifecycleStateRemoved:
 		// The manager will clean this up eventually
-		return fsm.ErrInstanceRemoved, true
+		return standarderrors.ErrInstanceRemoved, true
 
 	default:
 		return nil, false

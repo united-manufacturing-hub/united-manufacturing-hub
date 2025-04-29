@@ -25,9 +25,9 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
 )
 
 // Reconcile examines the S6Instance and, in three steps:
@@ -104,11 +104,11 @@ func (s *S6Instance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot,
 	}
 
 	// Step 3: Attempt to reconcile the state.
-	err, reconciled = s.reconcileStateTransition(ctx, services.GetFileSystem())
+	err, reconciled = s.reconcileStateTransition(ctx, services)
 	if err != nil {
 		// If the instance is removed, we don't want to return an error here, because we want to continue reconciling
 		// Also this should not
-		if errors.Is(err, fsm.ErrInstanceRemoved) {
+		if errors.Is(err, standarderrors.ErrInstanceRemoved) {
 			return nil, false
 		}
 
@@ -154,7 +154,7 @@ func (s *S6Instance) reconcileExternalChanges(ctx context.Context, services serv
 // Any functions that fetch information are disallowed here and must be called in reconcileExternalChanges
 // and exist in ExternalState.
 // This is to ensure full testability of the FSM.
-func (s *S6Instance) reconcileStateTransition(ctx context.Context, filesystemService filesystem.Service) (err error, reconciled bool) {
+func (s *S6Instance) reconcileStateTransition(ctx context.Context, services serviceregistry.Provider) (err error, reconciled bool) {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentS6Instance, s.baseFSMInstance.GetID()+".reconcileStateTransition", time.Since(start))
@@ -170,7 +170,7 @@ func (s *S6Instance) reconcileStateTransition(ctx context.Context, filesystemSer
 
 	// Handle lifecycle states first - these take precedence over operational states
 	if internal_fsm.IsLifecycleState(currentState) {
-		err, reconciled := s.reconcileLifecycleStates(ctx, filesystemService, currentState)
+		err, reconciled := s.baseFSMInstance.ReconcileLifecycleStates(ctx, services, currentState, s.CreateInstance, s.RemoveInstance, s.CheckForCreation)
 		if err != nil {
 			return err, false
 		}
@@ -183,7 +183,7 @@ func (s *S6Instance) reconcileStateTransition(ctx context.Context, filesystemSer
 
 	// Handle operational states
 	if IsOperationalState(currentState) {
-		err, reconciled := s.reconcileOperationalStates(ctx, filesystemService, currentState, desiredState)
+		err, reconciled := s.reconcileOperationalStates(ctx, services, currentState, desiredState)
 		if err != nil {
 			return err, false
 		}
@@ -197,53 +197,8 @@ func (s *S6Instance) reconcileStateTransition(ctx context.Context, filesystemSer
 	return fmt.Errorf("invalid state: %s", currentState), false
 }
 
-// reconcileLifecycleStates handles states related to instance lifecycle (creating/removing)
-func (s *S6Instance) reconcileLifecycleStates(ctx context.Context, filesystemService filesystem.Service, currentState string) (err error, reconciled bool) {
-	start := time.Now()
-	defer func() {
-		metrics.ObserveReconcileTime(metrics.ComponentS6Instance, s.baseFSMInstance.GetID()+".reconcileLifecycleStates", time.Since(start))
-	}()
-
-	// Independent what the desired state is, we always need to reconcile the lifecycle states first
-	switch currentState {
-	case internal_fsm.LifecycleStateToBeCreated:
-		if err := s.CreateInstance(ctx, filesystemService); err != nil {
-			return err, true
-		}
-		return s.baseFSMInstance.SendEvent(ctx, internal_fsm.LifecycleEventCreate), true
-	case internal_fsm.LifecycleStateCreating:
-		// Check if the s6 service has its supervision directory set up
-		servicePath := s.servicePath
-		ready, err := s.service.EnsureSupervision(ctx, servicePath, filesystemService)
-		if err != nil {
-			s.baseFSMInstance.GetLogger().Warnf("Failed to ensure service supervision: %v", err)
-			return nil, false // Don't transition state yet, retry next reconcile
-		}
-
-		// Only transition if the supervise directory actually exists
-		if !ready {
-			s.baseFSMInstance.GetLogger().Debugf("Waiting for s6-svscan to create supervise directory")
-			return nil, false // Don't transition state yet, retry next reconcile
-		}
-
-		// If we get here, supervision is confirmed set up correctly
-		s.baseFSMInstance.GetLogger().Debugf("Service supervision confirmed, transitioning to Created state")
-		return s.baseFSMInstance.SendEvent(ctx, internal_fsm.LifecycleEventCreateDone), true
-	case internal_fsm.LifecycleStateRemoving:
-		if err := s.RemoveInstance(ctx, filesystemService); err != nil {
-			return err, true
-		}
-		return s.baseFSMInstance.SendEvent(ctx, internal_fsm.LifecycleEventRemoveDone), true
-	case internal_fsm.LifecycleStateRemoved:
-		return fsm.ErrInstanceRemoved, true
-	default:
-		// If we are not in a lifecycle state, just continue
-		return nil, false
-	}
-}
-
 // reconcileOperationalStates handles states related to instance operations (starting/stopping)
-func (s *S6Instance) reconcileOperationalStates(ctx context.Context, filesystemService filesystem.Service, currentState string, desiredState string) (err error, reconciled bool) {
+func (s *S6Instance) reconcileOperationalStates(ctx context.Context, services serviceregistry.Provider, currentState string, desiredState string) (err error, reconciled bool) {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentS6Instance, s.baseFSMInstance.GetID()+".reconcileOperationalStates", time.Since(start))
@@ -251,9 +206,9 @@ func (s *S6Instance) reconcileOperationalStates(ctx context.Context, filesystemS
 
 	switch desiredState {
 	case OperationalStateRunning:
-		return s.reconcileTransitionToRunning(ctx, filesystemService, currentState)
+		return s.reconcileTransitionToRunning(ctx, services, currentState)
 	case OperationalStateStopped:
-		return s.reconcileTransitionToStopped(ctx, filesystemService, currentState)
+		return s.reconcileTransitionToStopped(ctx, services, currentState)
 	default:
 		return fmt.Errorf("invalid desired state: %s", desiredState), false // its simply an error, but we did not take any action
 	}
@@ -261,7 +216,7 @@ func (s *S6Instance) reconcileOperationalStates(ctx context.Context, filesystemS
 
 // reconcileTransitionToRunning handles transitions when the desired state is Running.
 // It deals with moving from Stopped/Failed to Starting and then to Running.
-func (s *S6Instance) reconcileTransitionToRunning(ctx context.Context, filesystemService filesystem.Service, currentState string) (err error, reconciled bool) {
+func (s *S6Instance) reconcileTransitionToRunning(ctx context.Context, services serviceregistry.Provider, currentState string) (err error, reconciled bool) {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentS6Instance, s.baseFSMInstance.GetID()+".reconcileTransitionToRunning", time.Since(start))
@@ -269,7 +224,7 @@ func (s *S6Instance) reconcileTransitionToRunning(ctx context.Context, filesyste
 
 	if currentState == OperationalStateStopped {
 		// Attempt to initiate start
-		if err := s.StartInstance(ctx, filesystemService); err != nil {
+		if err := s.StartInstance(ctx, services.GetFileSystem()); err != nil {
 			return err, true
 		}
 		// Send event to transition from Stopped/Failed to Starting
@@ -292,7 +247,7 @@ func (s *S6Instance) reconcileTransitionToRunning(ctx context.Context, filesyste
 // reconcileTransitionToStopped handles transitions when the desired state is Stopped.
 // It deals with moving from Running/Starting/Failed to Stopping and then to Stopped.
 // It returns a boolean indicating whether the instance is stopped.
-func (s *S6Instance) reconcileTransitionToStopped(ctx context.Context, filesystemService filesystem.Service, currentState string) (err error, reconciled bool) {
+func (s *S6Instance) reconcileTransitionToStopped(ctx context.Context, services serviceregistry.Provider, currentState string) (err error, reconciled bool) {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentS6Instance, s.baseFSMInstance.GetID()+".reconcileTransitionToStopped", time.Since(start))
@@ -300,7 +255,7 @@ func (s *S6Instance) reconcileTransitionToStopped(ctx context.Context, filesyste
 
 	if currentState == OperationalStateRunning || currentState == OperationalStateStarting {
 		// Attempt to initiate a stop
-		if err := s.StopInstance(ctx, filesystemService); err != nil {
+		if err := s.StopInstance(ctx, services.GetFileSystem()); err != nil {
 			return err, true
 		}
 		// Send event to transition to Stopping

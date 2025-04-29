@@ -139,3 +139,8 @@ func (r *RedpandaMonitorInstance) isMonitorHealthy(loopStartTime time.Time) bool
 
 	return true
 }
+
+// CheckForCreation checks if the Redpanda Monitor service should be created
+func (r *RedpandaMonitorInstance) CheckForCreation(ctx context.Context, filesystemService filesystem.Service) bool {
+	return true
+}
