@@ -16,6 +16,7 @@ package actions
 
 import (
 	"errors"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -51,6 +52,7 @@ type StateMocker struct {
 	PendingTransitions map[string][]StateTransition // key is component ID
 	done               chan struct{}                // channel to signal shutdown of goroutine
 	running            atomic.Bool                  // flag to track if the mocker is running
+	mu                 sync.RWMutex                 // mutex to protect the state of the mocker
 }
 
 // NewStateMocker creates a new StateMocker
@@ -63,6 +65,7 @@ func NewStateMocker(configManager ConfigManager) *StateMocker {
 		TickCounter:        0,
 		PendingTransitions: make(map[string][]StateTransition),
 		done:               make(chan struct{}),
+		mu:                 sync.RWMutex{},
 	}
 }
 
@@ -71,6 +74,8 @@ func NewStateMocker(configManager ConfigManager) *StateMocker {
 // it is called in a separate goroutine and regularly updates the state of the system
 // it then updates the state of the system according to the config just like the real system would do
 func (s *StateMocker) GetState() *fsm.SystemSnapshot {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	return s.State
 }
 
@@ -141,6 +146,8 @@ func (s *StateMocker) UpdateDfcState() {
 	}
 
 	// update the state of the system with the new manager snapshot
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if s.State.Managers == nil {
 		s.State.Managers = make(map[string]fsm.ManagerSnapshot)
 	}
