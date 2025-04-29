@@ -759,6 +759,7 @@ logger:
 
 			mockS6Service.ExistingServices[s6ServiceName] = true
 			mockS6Service.ServiceExistsResult = true
+			mockSvcRegistry = serviceregistry.NewMockRegistry()
 
 			// Add the service to the S6 manager
 			err := service.AddBenthosToS6Manager(ctx, mockSvcRegistry.GetFileSystem(), &benthosserviceconfig.BenthosServiceConfig{
