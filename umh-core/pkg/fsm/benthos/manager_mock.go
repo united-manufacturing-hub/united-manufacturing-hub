@@ -23,7 +23,6 @@ import (
 	public_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/portmanager"
 	benthossvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
 	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 )
@@ -134,10 +133,8 @@ func NewBenthosManagerWithMockedServices(name string) (*BenthosManager, *benthos
 	metrics.InitErrorCounter(metrics.ComponentBenthosManager, name)
 
 	// Use a mock port manager to avoid real port allocation
-	portManager := portmanager.NewMockPortManager()
 	manager := &BenthosManager{
 		BaseFSMManager: baseManager,
-		portManager:    portManager,
 	}
 
 	return manager, mockService

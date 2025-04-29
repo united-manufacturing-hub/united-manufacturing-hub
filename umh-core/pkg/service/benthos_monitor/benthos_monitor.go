@@ -36,6 +36,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 
 	dto "github.com/prometheus/client_model/go"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
@@ -175,12 +176,12 @@ type IBenthosMonitorService interface {
 	Status(ctx context.Context, filesystemService filesystem.Service, tick uint64) (ServiceInfo, error)
 	AddBenthosMonitorToS6Manager(ctx context.Context, port uint16) error
 	RemoveBenthosMonitorFromS6Manager(ctx context.Context) error
-	ForceRemoveBenthosMonitor(ctx context.Context, filesystemService filesystem.Service) error
+	ForceRemoveBenthosMonitor(ctx context.Context, services serviceregistry.Provider) error
 	UpdateBenthosMonitorInS6Manager(ctx context.Context, port uint16) error
 	StartBenthosMonitor(ctx context.Context) error
 	StopBenthosMonitor(ctx context.Context) error
-	ReconcileManager(ctx context.Context, filesystemService filesystem.Service, tick uint64) (error, bool)
-	ServiceExists(ctx context.Context, filesystemService filesystem.Service) bool
+	ReconcileManager(ctx context.Context, services serviceregistry.Provider, tick uint64) (error, bool)
+	ServiceExists(ctx context.Context, services serviceregistry.Provider) bool
 }
 
 // Ensure BenthosMonitorService implements IBenthosMonitorService
@@ -1190,7 +1191,7 @@ func (s *BenthosMonitorService) StopBenthosMonitor(ctx context.Context) error {
 }
 
 // ReconcileManager reconciles the Benthos manager
-func (s *BenthosMonitorService) ReconcileManager(ctx context.Context, filesystemService filesystem.Service, tick uint64) (err error, reconciled bool) {
+func (s *BenthosMonitorService) ReconcileManager(ctx context.Context, services serviceregistry.Provider, tick uint64) (err error, reconciled bool) {
 	if s.s6Manager == nil {
 		return errors.New("s6 manager not initialized"), false
 	}
@@ -1203,11 +1204,11 @@ func (s *BenthosMonitorService) ReconcileManager(ctx context.Context, filesystem
 		return ErrServiceNotExist, false
 	}
 
-	return s.s6Manager.Reconcile(ctx, fsm.SystemSnapshot{CurrentConfig: config.FullConfig{Internal: config.InternalConfig{Services: []config.S6FSMConfig{*s.s6ServiceConfig}}}}, filesystemService)
+	return s.s6Manager.Reconcile(ctx, fsm.SystemSnapshot{CurrentConfig: config.FullConfig{Internal: config.InternalConfig{Services: []config.S6FSMConfig{*s.s6ServiceConfig}}}}, services)
 }
 
 // ServiceExists checks if a benthos instance exists
-func (s *BenthosMonitorService) ServiceExists(ctx context.Context, filesystemService filesystem.Service) bool {
+func (s *BenthosMonitorService) ServiceExists(ctx context.Context, services serviceregistry.Provider) bool {
 	if s.s6Manager == nil {
 		return false
 	}
@@ -1216,7 +1217,7 @@ func (s *BenthosMonitorService) ServiceExists(ctx context.Context, filesystemSer
 		return false
 	}
 
-	exists, err := s.s6Service.ServiceExists(ctx, filepath.Join(constants.S6BaseDir, s.GetS6ServiceName()), filesystemService)
+	exists, err := services.GetFileSystem().ServiceExists(ctx, s.GetS6ServiceName())
 	if err != nil {
 		return false
 	}
@@ -1228,8 +1229,8 @@ func (s *BenthosMonitorService) ServiceExists(ctx context.Context, filesystemSer
 // This should only be called if the Benthos monitor is in a permanent failure state
 // and the instance itself cannot be stopped or removed
 // Expects benthosName (e.g. "myservice") as defined in the UMH config
-func (s *BenthosMonitorService) ForceRemoveBenthosMonitor(ctx context.Context, filesystemService filesystem.Service) error {
+func (s *BenthosMonitorService) ForceRemoveBenthosMonitor(ctx context.Context, services serviceregistry.Provider) error {
 	s6ServiceName := s.GetS6ServiceName()
 	s6ServicePath := filepath.Join(constants.S6BaseDir, s6ServiceName)
-	return s.s6Service.ForceRemove(ctx, s6ServicePath, filesystemService)
+	return services.GetFileSystem().RemoveAll(ctx, s6ServicePath)
 }

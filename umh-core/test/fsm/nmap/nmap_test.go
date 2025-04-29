@@ -31,9 +31,9 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/nmap"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	nmapsvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/nmap"
 	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
 var _ = Describe("NmapInstance FSM", func() {
@@ -44,7 +44,7 @@ var _ = Describe("NmapInstance FSM", func() {
 		ctx         context.Context
 		tick        uint64
 
-		mockFS *filesystem.MockFileSystem
+		mockServices *serviceregistry.Registry
 	)
 
 	BeforeEach(func() {
@@ -58,7 +58,7 @@ var _ = Describe("NmapInstance FSM", func() {
 		instance = inst
 		mockService = ms
 		instance.SetService(mockService)
-		mockFS = filesystem.NewMockFileSystem()
+		mockServices = serviceregistry.NewMockRegistry()
 	})
 
 	// -------------------------------------------------------------------------
@@ -72,7 +72,7 @@ var _ = Describe("NmapInstance FSM", func() {
 
 			// from "to_be_created" => "creating"
 			tick, err = fsmtest.TestNmapStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockServices, serviceName,
 				internalfsm.LifecycleStateToBeCreated,
 				internalfsm.LifecycleStateCreating,
 				5, // attempts
@@ -95,7 +95,7 @@ var _ = Describe("NmapInstance FSM", func() {
 
 			// from "creating" => "stopped"
 			tick, err = fsmtest.TestNmapStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockServices, serviceName,
 				internalfsm.LifecycleStateCreating,
 				nmap.OperationalStateStopped,
 				5,
@@ -113,7 +113,7 @@ var _ = Describe("NmapInstance FSM", func() {
 			})
 
 			tick, err = fsmtest.TestNmapStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockServices, serviceName,
 				nmap.OperationalStateStopped,
 				nmap.OperationalStateStarting,
 				5,
@@ -134,7 +134,7 @@ var _ = Describe("NmapInstance FSM", func() {
 
 			// Step 1: to_be_created => creating => stopped
 			tick, err = fsmtest.TestNmapStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockServices, serviceName,
 				internalfsm.LifecycleStateToBeCreated,
 				internalfsm.LifecycleStateCreating,
 				5,
@@ -147,7 +147,7 @@ var _ = Describe("NmapInstance FSM", func() {
 			mockService.ExistingServices[serviceName] = true
 
 			tick, err = fsmtest.TestNmapStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockServices, serviceName,
 				internalfsm.LifecycleStateCreating,
 				nmap.OperationalStateStopped,
 				5,
@@ -160,7 +160,7 @@ var _ = Describe("NmapInstance FSM", func() {
 
 			// from stopped => starting
 			tick, err = fsmtest.TestNmapStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockServices, serviceName,
 				nmap.OperationalStateStopped,
 				nmap.OperationalStateStarting,
 				5,
@@ -174,7 +174,7 @@ var _ = Describe("NmapInstance FSM", func() {
 				S6FSMState:  s6fsm.OperationalStateRunning,
 			})
 			tick, err = fsmtest.TestNmapStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockServices, serviceName,
 				nmap.OperationalStateStarting,
 				nmap.OperationalStateDegraded,
 				5,
@@ -195,7 +195,7 @@ var _ = Describe("NmapInstance FSM", func() {
 
 			// Step 1: to_be_created => creating => stopped
 			tick, err = fsmtest.TestNmapStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockServices, serviceName,
 				internalfsm.LifecycleStateToBeCreated,
 				internalfsm.LifecycleStateCreating,
 				5,
@@ -208,7 +208,7 @@ var _ = Describe("NmapInstance FSM", func() {
 			mockService.ExistingServices[serviceName] = true
 
 			tick, err = fsmtest.TestNmapStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockServices, serviceName,
 				internalfsm.LifecycleStateCreating,
 				nmap.OperationalStateStopped,
 				5,
@@ -221,7 +221,7 @@ var _ = Describe("NmapInstance FSM", func() {
 
 			// from stopped => starting
 			tick, err = fsmtest.TestNmapStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockServices, serviceName,
 				nmap.OperationalStateStopped,
 				nmap.OperationalStateStarting,
 				5,
@@ -236,7 +236,7 @@ var _ = Describe("NmapInstance FSM", func() {
 				S6FSMState:  s6fsm.OperationalStateRunning,
 			})
 			tick, err = fsmtest.TestNmapStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockServices, serviceName,
 				nmap.OperationalStateStarting,
 				nmap.OperationalStateDegraded,
 				5,
@@ -254,7 +254,7 @@ var _ = Describe("NmapInstance FSM", func() {
 			})
 
 			tick, err = fsmtest.TestNmapStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockServices, serviceName,
 				nmap.OperationalStateDegraded,
 				nmap.OperationalStateOpen,
 				5,
@@ -267,7 +267,7 @@ var _ = Describe("NmapInstance FSM", func() {
 			// Step 1: to_be_created => creating => stopped
 			var err error
 			tick, err = fsmtest.TestNmapStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockServices, serviceName,
 				internalfsm.LifecycleStateToBeCreated,
 				internalfsm.LifecycleStateCreating,
 				5,
@@ -280,7 +280,7 @@ var _ = Describe("NmapInstance FSM", func() {
 			mockService.ExistingServices[serviceName] = true
 
 			tick, err = fsmtest.TestNmapStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockServices, serviceName,
 				internalfsm.LifecycleStateCreating,
 				nmap.OperationalStateStopped,
 				5,
@@ -293,7 +293,7 @@ var _ = Describe("NmapInstance FSM", func() {
 
 			// from stopped => starting
 			tick, err = fsmtest.TestNmapStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockServices, serviceName,
 				nmap.OperationalStateStopped,
 				nmap.OperationalStateStarting,
 				5,
@@ -308,7 +308,7 @@ var _ = Describe("NmapInstance FSM", func() {
 				IsRunning:   true,
 			})
 			tick, err = fsmtest.TestNmapStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockServices, serviceName,
 				nmap.OperationalStateStarting,
 				nmap.OperationalStateDegraded,
 				5,
@@ -324,7 +324,7 @@ var _ = Describe("NmapInstance FSM", func() {
 				PortState:   string(nmap.PortStateOpen),
 			})
 			tick, err = fsmtest.TestNmapStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockServices, serviceName,
 				nmap.OperationalStateDegraded,
 				nmap.OperationalStateOpen,
 				5,
@@ -341,7 +341,7 @@ var _ = Describe("NmapInstance FSM", func() {
 				PortState:   "",
 			})
 			tick, err = fsmtest.TestNmapStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockServices, serviceName,
 				nmap.OperationalStateOpen,
 				nmap.OperationalStateDegraded,
 				10,
@@ -359,7 +359,7 @@ var _ = Describe("NmapInstance FSM", func() {
 			// Step 1: to_be_created => creating => stopped
 			var err error
 			tick, err = fsmtest.TestNmapStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockServices, serviceName,
 				internalfsm.LifecycleStateToBeCreated,
 				internalfsm.LifecycleStateCreating,
 				5,
@@ -371,7 +371,7 @@ var _ = Describe("NmapInstance FSM", func() {
 			mockService.ExistingServices[serviceName] = true
 
 			tick, err = fsmtest.TestNmapStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockServices, serviceName,
 				internalfsm.LifecycleStateCreating,
 				nmap.OperationalStateStopped,
 				5,
@@ -384,7 +384,7 @@ var _ = Describe("NmapInstance FSM", func() {
 
 			// from stopped => starting
 			tick, err = fsmtest.TestNmapStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockServices, serviceName,
 				nmap.OperationalStateStopped,
 				nmap.OperationalStateStarting,
 				5,
@@ -399,7 +399,7 @@ var _ = Describe("NmapInstance FSM", func() {
 				IsRunning:   true,
 			})
 			tick, err = fsmtest.TestNmapStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockServices, serviceName,
 				nmap.OperationalStateStarting,
 				nmap.OperationalStateDegraded,
 				5,
@@ -415,7 +415,7 @@ var _ = Describe("NmapInstance FSM", func() {
 				PortState:   string(nmap.PortStateOpen),
 			})
 			tick, err = fsmtest.TestNmapStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockServices, serviceName,
 				nmap.OperationalStateDegraded,
 				nmap.OperationalStateOpen,
 				10,
@@ -428,7 +428,7 @@ var _ = Describe("NmapInstance FSM", func() {
 
 			// from active => stopping
 			tick, err = fsmtest.TestNmapStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockServices, serviceName,
 				nmap.OperationalStateOpen,
 				nmap.OperationalStateStopping,
 				10,
@@ -443,7 +443,7 @@ var _ = Describe("NmapInstance FSM", func() {
 			})
 
 			tick, err = fsmtest.TestNmapStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockServices, serviceName,
 				nmap.OperationalStateStopping,
 				nmap.OperationalStateStopped,
 				5,
@@ -458,7 +458,7 @@ var _ = Describe("NmapInstance FSM", func() {
 
 			// First progress to creating state
 			tick, err = fsmtest.TestNmapStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockServices, serviceName,
 				internalfsm.LifecycleStateToBeCreated,
 				internalfsm.LifecycleStateCreating,
 				5,
@@ -472,7 +472,7 @@ var _ = Describe("NmapInstance FSM", func() {
 
 			// Progress to stopped state
 			tick, err = fsmtest.TestNmapStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockServices, serviceName,
 				internalfsm.LifecycleStateCreating,
 				nmap.OperationalStateStopped,
 				5,
@@ -485,7 +485,7 @@ var _ = Describe("NmapInstance FSM", func() {
 
 			// Progress to starting state
 			tick, err = fsmtest.TestNmapStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockServices, serviceName,
 				nmap.OperationalStateStopped,
 				nmap.OperationalStateStarting,
 				5,
@@ -500,7 +500,7 @@ var _ = Describe("NmapInstance FSM", func() {
 			var recErr error
 			var reconciled bool
 			tick, recErr, reconciled = fsmtest.ReconcileNmapUntilError(
-				ctx, fsm.SystemSnapshot{Tick: tick}, instance, mockService, mockFS, serviceName, 20,
+				ctx, fsm.SystemSnapshot{Tick: tick}, instance, mockService, mockServices, serviceName, 20,
 			)
 
 			// Verify force removal was attempted
@@ -519,12 +519,12 @@ var _ = Describe("NmapInstance FSM", func() {
 
 var _ = Describe("NmapInstance port‑state transitions", func() {
 	var (
-		ctx         context.Context
-		instance    *nmap.NmapInstance
-		mockService *nmapsvc.MockNmapService
-		mockFS      *filesystem.MockFileSystem
-		serviceName string
-		tick        uint64
+		ctx          context.Context
+		instance     *nmap.NmapInstance
+		mockService  *nmapsvc.MockNmapService
+		mockServices *serviceregistry.Registry
+		serviceName  string
+		tick         uint64
 	)
 
 	// Bring the instance to Degraded once for every test‑row so each scenario
@@ -535,11 +535,10 @@ var _ = Describe("NmapInstance port‑state transitions", func() {
 		serviceName = "test-nmap"
 
 		instance, mockService, _ = fsmtest.SetupNmapInstance(serviceName, nmap.OperationalStateStopped)
-		mockFS = filesystem.NewMockFileSystem()
-
+		mockServices = serviceregistry.NewMockRegistry()
 		// to_be_created → creating
 		tick, _ = fsmtest.TestNmapStateTransition(
-			ctx, instance, mockService, mockFS, serviceName,
+			ctx, instance, mockService, mockServices, serviceName,
 			internalfsm.LifecycleStateToBeCreated,
 			internalfsm.LifecycleStateCreating,
 			5, tick,
@@ -548,7 +547,7 @@ var _ = Describe("NmapInstance port‑state transitions", func() {
 		mockService.ServiceStates[serviceName] = &nmapsvc.ServiceInfo{S6FSMState: s6fsm.OperationalStateStopped}
 		mockService.ExistingServices[serviceName] = true
 		tick, _ = fsmtest.TestNmapStateTransition(
-			ctx, instance, mockService, mockFS, serviceName,
+			ctx, instance, mockService, mockServices, serviceName,
 			internalfsm.LifecycleStateCreating,
 			nmap.OperationalStateStopped,
 			5, tick,
@@ -558,7 +557,7 @@ var _ = Describe("NmapInstance port‑state transitions", func() {
 		Expect(instance.SetDesiredFSMState(nmap.OperationalStateOpen)).To(Succeed())
 		// stopped → starting
 		tick, _ = fsmtest.TestNmapStateTransition(
-			ctx, instance, mockService, mockFS, serviceName,
+			ctx, instance, mockService, mockServices, serviceName,
 			nmap.OperationalStateStopped,
 			nmap.OperationalStateStarting,
 			5, tick,
@@ -570,7 +569,7 @@ var _ = Describe("NmapInstance port‑state transitions", func() {
 			S6FSMState:  s6fsm.OperationalStateRunning,
 		})
 		tick, _ = fsmtest.TestNmapStateTransition(
-			ctx, instance, mockService, mockFS, serviceName,
+			ctx, instance, mockService, mockServices, serviceName,
 			nmap.OperationalStateStarting,
 			nmap.OperationalStateDegraded,
 			5, tick,
@@ -589,7 +588,7 @@ var _ = Describe("NmapInstance port‑state transitions", func() {
 		if cur != nmap.OperationalStateStopping && cur != nmap.OperationalStateStopped {
 			var err error
 			tick, err = fsmtest.TestNmapStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockServices, serviceName,
 				cur, nmap.OperationalStateStopping,
 				5, tick,
 			)
@@ -599,7 +598,7 @@ var _ = Describe("NmapInstance port‑state transitions", func() {
 		if instance.GetCurrentFSMState() != nmap.OperationalStateStopped {
 			var err error
 			tick, err = fsmtest.TestNmapStateTransition(
-				ctx, instance, mockService, mockFS, serviceName,
+				ctx, instance, mockService, mockServices, serviceName,
 				nmap.OperationalStateStopping, nmap.OperationalStateStopped,
 				5, tick,
 			)
@@ -619,7 +618,7 @@ var _ = Describe("NmapInstance port‑state transitions", func() {
 			PortState:   fromPort,
 		})
 		var err error
-		tick, err = fsmtest.TestNmapStateTransition(ctx, instance, mockService, mockFS, serviceName,
+		tick, err = fsmtest.TestNmapStateTransition(ctx, instance, mockService, mockServices, serviceName,
 			nmap.OperationalStateDegraded, fromState, 10, tick)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -630,7 +629,7 @@ var _ = Describe("NmapInstance port‑state transitions", func() {
 			S6FSMState:  s6fsm.OperationalStateRunning,
 			PortState:   toPort,
 		})
-		tick, err = fsmtest.TestNmapStateTransition(ctx, instance, mockService, mockFS, serviceName,
+		tick, err = fsmtest.TestNmapStateTransition(ctx, instance, mockService, mockServices, serviceName,
 			fromState, toState, 10, tick)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(instance.GetCurrentFSMState()).To(Equal(toState))

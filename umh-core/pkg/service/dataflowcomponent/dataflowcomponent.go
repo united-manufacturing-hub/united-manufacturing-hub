@@ -138,7 +138,7 @@ func NewDefaultDataFlowComponentService(componentName string, opts ...DataFlowCo
 	managerName := fmt.Sprintf("%s%s", logger.ComponentDataFlowComponentService, componentName)
 	service := &DataFlowComponentService{
 		logger:         logger.For(managerName),
-		benthosManager: benthosfsmmanager.NewBenthosManager(managerName, nil), // The port manager is assigned later using the WithSharedPortManager option
+		benthosManager: benthosfsmmanager.NewBenthosManager(managerName),
 		benthosService: benthosservice.NewDefaultBenthosService(componentName),
 		benthosConfigs: []config.BenthosConfig{},
 	}

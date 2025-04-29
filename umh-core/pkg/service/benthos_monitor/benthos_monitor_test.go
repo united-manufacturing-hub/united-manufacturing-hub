@@ -26,8 +26,8 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos_monitor"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
 // getTmpDir returns the temporary directory for a container
@@ -50,22 +50,22 @@ const curlError = "curl: (7) Failed to connect to localhost port 9123 after 0 ms
 
 var _ = Describe("Benthos Monitor Service", func() {
 	var (
-		service     *benthos_monitor.BenthosMonitorService
-		tick        uint64
-		mockFS      *filesystem.MockFileSystem
-		ctx         context.Context
-		cancel      context.CancelFunc
-		serviceName = "myservice"
+		service      *benthos_monitor.BenthosMonitorService
+		tick         uint64
+		mockServices *serviceregistry.Registry
+		ctx          context.Context
+		cancel       context.CancelFunc
+		serviceName  = "myservice"
 	)
 
 	BeforeEach(func() {
-		mockFS = filesystem.NewMockFileSystem()
-		service = benthos_monitor.NewBenthosMonitorService(serviceName)
+		mockServices = serviceregistry.NewMockRegistry()
+		service = benthos_monitor.NewBenthosMonitorService(serviceName, benthos_monitor.WithS6Service(s6service.NewMockService()))
 		tick = 0
 
 		// Cleanup the data directory
 		ctx, cancel = newTimeoutContext()
-		err := mockFS.RemoveAll(ctx, getTmpDir())
+		err := mockServices.GetFileSystem().RemoveAll(ctx, getTmpDir())
 		Expect(err).NotTo(HaveOccurred())
 	})
 	AfterEach(func() {
@@ -100,7 +100,7 @@ var _ = Describe("Benthos Monitor Service", func() {
 			ctx, cancel := newTimeoutContext()
 			defer cancel()
 
-			_, err := service.Status(ctx, mockFS, tick)
+			_, err := service.Status(ctx, mockServices, tick)
 			Expect(err).To(HaveOccurred())
 		})
 
@@ -119,7 +119,7 @@ var _ = Describe("Benthos Monitor Service", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Make sure the service exists by reconciling
-			err, _ = service.ReconcileManager(ctx, mockFS, 0)
+			err, _ = service.ReconcileManager(ctx, mockServices, 0)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Explicitly mark the service as existing in the mock
@@ -144,14 +144,14 @@ var _ = Describe("Benthos Monitor Service", func() {
 			mockS6.GetLogsResult = mockLogs
 
 			// Try getting status - we don't need to capture the result
-			_, err = service.Status(ctx, mockFS, tick)
+			_, err = service.Status(ctx, mockServices.GetFileSystem(), tick)
 			Expect(err).To(HaveOccurred())
 			// Check that this is a "failed to parse metrics" error
 			Expect(err.Error()).To(ContainSubstring("failed to parse metrics"))
 
 			// We expect an error due to the mock data not being real metrics data
 			// but at least the service should report as existing
-			Expect(service.ServiceExists(ctx, mockFS)).To(BeTrue())
+			Expect(service.ServiceExists(ctx, mockServices)).To(BeTrue())
 		})
 	})
 
