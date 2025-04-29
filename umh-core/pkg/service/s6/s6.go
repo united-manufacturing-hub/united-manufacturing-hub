@@ -1185,7 +1185,6 @@ func (s *DefaultService) ForceRemove(
 			return nil // no supervisor ⇒ nothing to kill
 		}
 		if pid, err := strconv.Atoi(strings.TrimSpace(string(data))); err == nil && pid > 0 {
-			// Best effort: ignore EPERM/ESRCH etc.
 			err = syscall.Kill(pid, syscall.SIGTERM)
 			if err != nil {
 				return fmt.Errorf("failed to kill supervisor for service %s: %w", dir, err)
@@ -1328,7 +1327,7 @@ func ParseLogsFromBytes(content []byte) ([]LogEntry, error) {
 // parseLogLine parses a log line from S6 format and returns a LogEntry
 func parseLogLine(line string) LogEntry {
 	// Quick check for empty strings or too short lines
-	if len(line) < 29 { // Minimum length for "YYYY-MM-DD HH:MM:SS  content"
+	if len(line) < 29 { // Minimum length for "YYYY-MM-DD HH:MM:SS.<9 digit nanoseconds>  content"
 		return LogEntry{Content: line}
 	}
 

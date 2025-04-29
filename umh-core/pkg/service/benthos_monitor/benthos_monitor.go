@@ -259,13 +259,13 @@ func (s *BenthosMonitorService) generateBenthosScript(port uint16) (string, erro
 	scriptContent := fmt.Sprintf(`#!/bin/sh
 while true; do
   echo "%s"
-  curl -sSL --max-time 1 http://localhost:%d/ping | gzip -c | xxd -p
+  curl -sSL --max-time 1 http://localhost:%d/ping 2>&1 | gzip -c | xxd -p
   echo "%s"
-  curl -sSL --max-time 1 http://localhost:%d/ready | gzip -c | xxd -p
+  curl -sSL --max-time 1 http://localhost:%d/ready 2>&1 | gzip -c | xxd -p
   echo "%s"
-  curl -sSL --max-time 1 http://localhost:%d/version | gzip -c | xxd -p
+  curl -sSL --max-time 1 http://localhost:%d/version 2>&1 | gzip -c | xxd -p
   echo "%s"
-  curl -sSL --max-time 1 http://localhost:%d/metrics | gzip -c | xxd -p
+  curl -sSL --max-time 1 http://localhost:%d/metrics 2>&1 | gzip -c | xxd -p
   echo "%s"
   date +%%s%%9N
   echo "%s"
@@ -697,6 +697,12 @@ func ParseReadyData(dataReader io.Reader) (bool, readyResponse, error) {
 	data, err := io.ReadAll(dataReader)
 	if err != nil {
 		return false, readyResponse{}, fmt.Errorf("failed to read ready data: %w", err)
+	}
+
+	curlError := parseCurlError(string(data))
+	if curlError != nil {
+		// If we have any curl error, we can assume the service is not ready (but we do not need to return the error)
+		return false, readyResponse{}, nil
 	}
 
 	var readyResp readyResponse
