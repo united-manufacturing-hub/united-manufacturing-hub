@@ -21,6 +21,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/pprof"
 	v2 "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/communication_state"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
@@ -47,6 +48,9 @@ func main() {
 
 	// Log using the component logger with structured fields
 	log.Info("Starting umh-core...")
+
+	// Start the pprof server (if enabled)
+	pprof.StartPprofServer()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
