@@ -698,6 +698,12 @@ func ParseReadyData(dataReader io.Reader) (bool, readyResponse, error) {
 		return false, readyResponse{}, fmt.Errorf("failed to read ready data: %w", err)
 	}
 
+	curlError := parseCurlError(string(data))
+	if curlError != nil {
+		// If we have any curl error, we can assume the service is not ready (but we do not need to return the error)
+		return false, readyResponse{}, nil
+	}
+
 	var readyResp readyResponse
 	if err := json.Unmarshal(data, &readyResp); err != nil {
 		return false, readyResponse{}, fmt.Errorf("failed to unmarshal ready data: %w", err)
