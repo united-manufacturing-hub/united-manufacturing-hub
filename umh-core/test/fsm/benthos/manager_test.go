@@ -35,7 +35,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/portmanager"
 	benthossvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
 	benthos_monitor_service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos_monitor"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
@@ -563,7 +562,6 @@ var _ = Describe("BenthosManager", func() {
 			//----------------------------------------------------------------------
 			const benthosName = "remove-me"
 
-			mockFS := filesystem.NewMockFileSystem()
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
 
@@ -621,7 +619,7 @@ var _ = Describe("BenthosManager", func() {
 				ctx,
 				fsm.SystemSnapshot{CurrentConfig: startCfg, Tick: tick},
 				benthosMgr,
-				mockFS,
+				mockSvcRegistry,
 				benthosName,
 				benthosfsm.OperationalStateStopped,
 				10,
@@ -653,7 +651,7 @@ var _ = Describe("BenthosManager", func() {
 				ctx,
 				fsm.SystemSnapshot{CurrentConfig: emptyCfg, Tick: tick},
 				benthosMgr,
-				mockFS,
+				mockSvcRegistry,
 				benthosName,
 				15,
 			)
