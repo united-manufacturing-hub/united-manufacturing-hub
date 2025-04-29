@@ -413,8 +413,8 @@ func (s *DefaultService) Remove(ctx context.Context, servicePath string, fsServi
 	// Double-check: report success only when both paths are gone *and*
 	// no I/O error occurred.
 	//----------------------------------------------------------------
-	srvLeft, _ := fsService.PathExists(ctx, servicePath)
-	logLeft, _ := fsService.PathExists(ctx, logDir)
+	srvLeft, srvLeftErr := fsService.PathExists(ctx, servicePath)
+	logLeft, logLeftErr := fsService.PathExists(ctx, logDir)
 
 	if srvErr != nil || logErr != nil || srvLeft || logLeft {
 		// build a helpful composite error message
@@ -430,6 +430,13 @@ func (s *DefaultService) Remove(ctx context.Context, servicePath string, fsServi
 		}
 		if logLeft {
 			parts = append(parts, "logDir still exists")
+		}
+
+		if srvLeftErr != nil {
+			parts = append(parts, fmt.Sprintf("serviceDir: %v", srvLeftErr))
+		}
+		if logLeftErr != nil {
+			parts = append(parts, fmt.Sprintf("logDir: %v", logLeftErr))
 		}
 
 		return fmt.Errorf("s6.Remove incomplete for %q: %s",

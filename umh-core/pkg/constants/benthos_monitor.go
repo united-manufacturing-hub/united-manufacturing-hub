@@ -17,9 +17,9 @@ package constants
 import "time"
 
 // BenthosMonitorUpdateObservedStateTimeout is the timeout for updating the observed state
-const BenthosMonitorUpdateObservedStateTimeout = 5 * time.Millisecond
+const BenthosMonitorUpdateObservedStateTimeout = 15 * time.Millisecond
 
-const BenthosMonitorProcessMetricsTimeout = 1 * time.Millisecond // needs to be smaller than BenthosMonitorUpdateObservedStateTimeout
+const BenthosMonitorProcessMetricsTimeout = 10 * time.Millisecond // needs to be smaller than BenthosMonitorUpdateObservedStateTimeout
 
 // BenthosMonitorExpectedMaxP95ExecutionTimePerInstance means that an instance will not reconcile if not 30ms are left
 // Note: in the intergation test, we defined an alerting threshold of 80% of the max ticker time, which is 100ms

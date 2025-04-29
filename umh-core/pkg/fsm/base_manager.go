@@ -727,18 +727,21 @@ func (m *BaseFSMManager[C]) maybeEscalateRemoval(ctx context.Context, inst FSMIn
 		if forceRemover, ok := inst.(interface {
 			ForceRemove(context.Context, filesystem.Service) error
 		}); ok {
-			err := forceRemover.ForceRemove(ctx, services.GetFileSystem())
-			if err != nil {
-				sentry.ReportFSMErrorf(
-					m.logger,
-					instanceName,
-					m.managerName,
-					"force_remove_error",
-					"Error force removing instance: %v",
-					err,
-				)
-			}
-			sentry.ReportIssuef(sentry.IssueTypeWarning, m.logger, "force removing instance %s: %v", instanceName, err)
+			// Run force removal in a detached goroutine to avoid blocking the main reconciliation loop
+			go func() {
+				err := forceRemover.ForceRemove(ctx, services.GetFileSystem())
+				if err != nil {
+					sentry.ReportFSMErrorf(
+						m.logger,
+						instanceName,
+						m.managerName,
+						"force_remove_error",
+						"Error force removing instance: %v",
+						err,
+					)
+				}
+				sentry.ReportIssuef(sentry.IssueTypeWarning, m.logger, "force removing instance %s: %v", instanceName, err)
+			}()
 		}
 		return
 	default:
@@ -756,18 +759,21 @@ func (m *BaseFSMManager[C]) maybeEscalateRemoval(ctx context.Context, inst FSMIn
 			if forceRemover, ok := inst.(interface {
 				ForceRemove(context.Context, filesystem.Service) error
 			}); ok {
-				err := forceRemover.ForceRemove(ctx, services.GetFileSystem())
-				if err != nil {
-					sentry.ReportFSMErrorf(
-						m.logger,
-						instanceName,
-						m.managerName,
-						"force_remove_error",
-						"Error force removing instance after normal removal failed: %v",
-						err,
-					)
-				}
-				sentry.ReportIssuef(sentry.IssueTypeWarning, m.logger, "force removing instance %s after normal removal failed: %v", instanceName, err)
+				// Run force removal in a detached goroutine to avoid blocking the main reconciliation loop
+				go func() {
+					err := forceRemover.ForceRemove(ctx, services.GetFileSystem())
+					if err != nil {
+						sentry.ReportFSMErrorf(
+							m.logger,
+							instanceName,
+							m.managerName,
+							"force_remove_error",
+							"Error force removing instance after normal removal failed: %v",
+							err,
+						)
+					}
+					sentry.ReportIssuef(sentry.IssueTypeWarning, m.logger, "force removing instance %s after normal removal failed: %v", instanceName, err)
+				}()
 			}
 		}
 		return
