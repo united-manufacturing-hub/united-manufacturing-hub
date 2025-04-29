@@ -65,6 +65,7 @@ var _ = Describe("Benthos Monitor FSM", func() {
 	})
 
 	AfterEach(func() {
+
 		cancel()
 	})
 

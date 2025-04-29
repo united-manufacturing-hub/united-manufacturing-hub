@@ -90,7 +90,7 @@ func NewDataflowComponentInstance(
 	instance := &DataflowComponentInstance{
 		baseFSMInstance: internal_fsm.NewBaseFSMInstance(cfg, backoffConfig, logger),
 		service:         dataflowcomponent.NewDefaultDataFlowComponentService(config.Name, dataflowcomponent.WithSharedPortManager(portManager)),
-		config:          config.DataFlowComponentConfig,
+		config:          config.DataFlowComponentServiceConfig,
 		ObservedState:   DataflowComponentObservedState{},
 	}
 

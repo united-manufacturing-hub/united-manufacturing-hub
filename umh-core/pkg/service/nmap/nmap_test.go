@@ -22,7 +22,6 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/nmapserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 
@@ -448,13 +447,13 @@ done`
 		var (
 			service       *NmapService
 			mockS6Service *s6service.MockService
-			mockFS        *filesystem.MockFileSystem
+			mockServices  *serviceregistry.Registry
 			nmapName      string
 		)
 
 		BeforeEach(func() {
 			mockS6Service = s6service.NewMockService()
-			mockFS = filesystem.NewMockFileSystem()
+			mockServices = serviceregistry.NewMockRegistry()
 			nmapName = "test-nmap"
 			service = NewDefaultNmapService(nmapName, WithS6Service(mockS6Service))
 		})
@@ -463,7 +462,7 @@ done`
 			ctx := context.Background()
 
 			// Call ForceRemoveNmap
-			err := service.ForceRemoveNmap(ctx, mockFS, nmapName)
+			err := service.ForceRemoveNmap(ctx, mockServices, nmapName)
 
 			// Verify no error
 			Expect(err).NotTo(HaveOccurred())
@@ -485,7 +484,7 @@ done`
 			mockS6Service.ForceRemoveError = mockError
 
 			// Call ForceRemoveNmap
-			err := service.ForceRemoveNmap(ctx, mockFS, nmapName)
+			err := service.ForceRemoveNmap(ctx, mockServices, nmapName)
 
 			// Verify error is propagated
 			Expect(err).To(MatchError(mockError))

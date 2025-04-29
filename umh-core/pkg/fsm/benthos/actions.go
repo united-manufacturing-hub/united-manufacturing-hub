@@ -28,6 +28,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	benthos_service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
 // The functions in this file define heavier, possibly fail-prone operations
@@ -111,8 +112,8 @@ func (b *BenthosInstance) StopInstance(ctx context.Context, filesystemService fi
 
 // getServiceStatus gets the status of the Benthos service
 // its main purpose is to handle the edge cases where the service is not yet created or not yet running
-func (b *BenthosInstance) getServiceStatus(ctx context.Context, filesystemService filesystem.Service, tick uint64, loopStartTime time.Time) (benthos_service.ServiceInfo, error) {
-	info, err := b.service.Status(ctx, filesystemService, b.baseFSMInstance.GetID(), b.config.MetricsPort, tick, loopStartTime)
+func (b *BenthosInstance) getServiceStatus(ctx context.Context, services serviceregistry.Provider, tick uint64, loopStartTime time.Time) (benthos_service.ServiceInfo, error) {
+	info, err := b.service.Status(ctx, services, b.baseFSMInstance.GetID(), b.config.MetricsPort, tick, loopStartTime)
 	if err != nil {
 		// If there's an error getting the service status, we need to distinguish between cases
 
@@ -145,13 +146,13 @@ func (b *BenthosInstance) getServiceStatus(ctx context.Context, filesystemServic
 }
 
 // UpdateObservedStateOfInstance updates the observed state of the service
-func (b *BenthosInstance) UpdateObservedStateOfInstance(ctx context.Context, filesystemService filesystem.Service, tick uint64, loopStartTime time.Time) error {
+func (b *BenthosInstance) UpdateObservedStateOfInstance(ctx context.Context, services serviceregistry.Provider, tick uint64, loopStartTime time.Time) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
 
 	start := time.Now()
-	info, err := b.getServiceStatus(ctx, filesystemService, tick, loopStartTime)
+	info, err := b.getServiceStatus(ctx, services, tick, loopStartTime)
 	if err != nil {
 		return err
 	}
@@ -169,7 +170,7 @@ func (b *BenthosInstance) UpdateObservedStateOfInstance(ctx context.Context, fil
 
 	// Fetch the actual Benthos config from the service
 	start = time.Now()
-	observedConfig, err := b.service.GetConfig(ctx, filesystemService, b.baseFSMInstance.GetID())
+	observedConfig, err := b.service.GetConfig(ctx, services.GetFileSystem(), b.baseFSMInstance.GetID())
 	metrics.ObserveReconcileTime(logger.ComponentBenthosInstance, b.baseFSMInstance.GetID()+".getConfig", time.Since(start))
 	if err == nil {
 		// Only update if we successfully got the config
@@ -188,7 +189,7 @@ func (b *BenthosInstance) UpdateObservedStateOfInstance(ctx context.Context, fil
 	// Use new ConfigsEqual function that handles Benthos defaults properly
 	if !benthosserviceconfig.ConfigsEqual(b.config, b.ObservedState.ObservedBenthosServiceConfig) {
 		// Check if the service exists before attempting to update
-		if b.service.ServiceExists(ctx, filesystemService, b.baseFSMInstance.GetID()) {
+		if b.service.ServiceExists(ctx, services.GetFileSystem(), b.baseFSMInstance.GetID()) {
 			b.baseFSMInstance.GetLogger().Debugf("Observed Benthos config is different from desired config, updating S6 configuration")
 
 			// Use the new ConfigDiff function for better debug output
@@ -196,7 +197,7 @@ func (b *BenthosInstance) UpdateObservedStateOfInstance(ctx context.Context, fil
 			b.baseFSMInstance.GetLogger().Debugf("Configuration differences: %s", diffStr)
 
 			// Update the config in the S6 manager
-			err := b.service.UpdateBenthosInS6Manager(ctx, filesystemService, &b.config, b.baseFSMInstance.GetID())
+			err := b.service.UpdateBenthosInS6Manager(ctx, services.GetFileSystem(), &b.config, b.baseFSMInstance.GetID())
 			if err != nil {
 				return fmt.Errorf("failed to update Benthos service configuration: %w", err)
 			}

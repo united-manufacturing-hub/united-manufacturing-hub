@@ -144,7 +144,7 @@ var _ = Describe("Benthos Monitor Service", func() {
 			mockS6.GetLogsResult = mockLogs
 
 			// Try getting status - we don't need to capture the result
-			_, err = service.Status(ctx, mockServices.GetFileSystem(), tick)
+			_, err = service.Status(ctx, mockServices, tick)
 			Expect(err).To(HaveOccurred())
 			// Check that this is a "failed to parse metrics" error
 			Expect(err.Error()).To(ContainSubstring("failed to parse metrics"))

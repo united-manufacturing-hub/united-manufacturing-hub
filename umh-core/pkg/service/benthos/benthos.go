@@ -53,7 +53,7 @@ type IBenthosService interface {
 	GetConfig(ctx context.Context, filesystemService filesystem.Service, benthosName string) (benthosserviceconfig.BenthosServiceConfig, error)
 	// Status checks the status of a Benthos service
 	// Expects benthosName (e.g. "myservice") as defined in the UMH config
-	Status(ctx context.Context, filesystemService filesystem.Service, benthosName string, metricsPort uint16, tick uint64, loopStartTime time.Time) (ServiceInfo, error)
+	Status(ctx context.Context, services serviceregistry.Provider, benthosName string, metricsPort uint16, tick uint64, loopStartTime time.Time) (ServiceInfo, error)
 	// AddBenthosToS6Manager adds a Benthos instance to the S6 manager
 	// Expects benthosName (e.g. "myservice") as defined in the UMH config
 	AddBenthosToS6Manager(ctx context.Context, filesystemService filesystem.Service, cfg *benthosserviceconfig.BenthosServiceConfig, benthosName string) error
@@ -326,7 +326,7 @@ func (s *BenthosService) extractMetricsPort(config map[string]interface{}) uint1
 
 // Status checks the status of a Benthos service and returns ServiceInfo
 // Expects benthosName (e.g. "myservice") as defined in the UMH config
-func (s *BenthosService) Status(ctx context.Context, filesystemService filesystem.Service, benthosName string, metricsPort uint16, tick uint64, loopStartTime time.Time) (ServiceInfo, error) {
+func (s *BenthosService) Status(ctx context.Context, services serviceregistry.Provider, benthosName string, metricsPort uint16, tick uint64, loopStartTime time.Time) (ServiceInfo, error) {
 	if ctx.Err() != nil {
 		return ServiceInfo{}, ctx.Err()
 	}
@@ -373,7 +373,7 @@ func (s *BenthosService) Status(ctx context.Context, filesystemService filesyste
 
 	// Let's get the logs of the Benthos service
 	s6ServicePath := filepath.Join(constants.S6BaseDir, s6ServiceName)
-	logs, err := s.s6Service.GetLogs(ctx, s6ServicePath, filesystemService)
+	logs, err := s.s6Service.GetLogs(ctx, s6ServicePath, services.GetFileSystem())
 	if err != nil {
 		if errors.Is(err, s6service.ErrServiceNotExist) {
 			s.logger.Debugf("Service %s does not exist, returning empty logs", s6ServiceName)
@@ -386,7 +386,7 @@ func (s *BenthosService) Status(ctx context.Context, filesystemService filesyste
 		}
 	}
 
-	benthosStatus, err := s.GetHealthCheckAndMetrics(ctx, filesystemService, tick, loopStartTime, benthosName, logs)
+	benthosStatus, err := s.GetHealthCheckAndMetrics(ctx, services.GetFileSystem(), tick, loopStartTime, benthosName, logs)
 	if err != nil {
 		if strings.Contains(err.Error(), ErrLastObservedStateNil.Error()) {
 			return ServiceInfo{

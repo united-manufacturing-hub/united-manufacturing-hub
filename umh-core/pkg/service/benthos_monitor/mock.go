@@ -23,7 +23,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
@@ -245,7 +244,7 @@ func (m *MockBenthosMonitorService) GenerateS6ConfigForBenthosMonitor(s6ServiceN
 }
 
 // Status mocks getting the status of a Benthos Monitor service
-func (m *MockBenthosMonitorService) Status(ctx context.Context, filesystemService filesystem.Service, tick uint64) (ServiceInfo, error) {
+func (m *MockBenthosMonitorService) Status(ctx context.Context, services serviceregistry.Provider, tick uint64) (ServiceInfo, error) {
 	m.StatusCalled = true
 
 	// Check for context cancellation

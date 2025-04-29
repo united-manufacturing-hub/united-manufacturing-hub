@@ -91,7 +91,7 @@ func (s *S6Instance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot,
 	}
 
 	// Step 2: Detect external changes.
-	if err := s.reconcileExternalChanges(ctx, services.GetFileSystem(), snapshot.Tick, start); err != nil {
+	if err := s.reconcileExternalChanges(ctx, services, snapshot.Tick, start); err != nil {
 		// If the service is not running, we don't want to return an error here, because we want to continue reconciling
 		if !errors.Is(err, s6service.ErrServiceNotExist) {
 			s.baseFSMInstance.SetError(err, snapshot.Tick)
@@ -133,7 +133,7 @@ func (s *S6Instance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot,
 
 // reconcileExternalChanges checks if the S6Instance service status has changed
 // externally (e.g., if someone manually stopped or started it, or if it crashed)
-func (s *S6Instance) reconcileExternalChanges(ctx context.Context, filesystemService filesystem.Service, tick uint64, loopStartTime time.Time) error {
+func (s *S6Instance) reconcileExternalChanges(ctx context.Context, services serviceregistry.Provider, tick uint64, loopStartTime time.Time) error {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentS6Instance, s.baseFSMInstance.GetID()+".reconcileExternalChanges", time.Since(start))
@@ -141,7 +141,7 @@ func (s *S6Instance) reconcileExternalChanges(ctx context.Context, filesystemSer
 
 	observedStateCtx, cancel := context.WithTimeout(ctx, constants.S6UpdateObservedStateTimeout)
 	defer cancel()
-	err := s.UpdateObservedStateOfInstance(observedStateCtx, filesystemService, tick, loopStartTime)
+	err := s.UpdateObservedStateOfInstance(observedStateCtx, services, tick, loopStartTime)
 	if err != nil {
 		return fmt.Errorf("failed to update observed state: %w", err)
 	}

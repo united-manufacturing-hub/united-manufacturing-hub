@@ -35,7 +35,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 
 	dto "github.com/prometheus/client_model/go"
@@ -173,7 +172,7 @@ type BenthosMonitorStatus struct {
 
 type IBenthosMonitorService interface {
 	GenerateS6ConfigForBenthosMonitor(benthosName string, port uint16) (s6serviceconfig.S6ServiceConfig, error)
-	Status(ctx context.Context, filesystemService filesystem.Service, tick uint64) (ServiceInfo, error)
+	Status(ctx context.Context, services serviceregistry.Provider, tick uint64) (ServiceInfo, error)
 	AddBenthosMonitorToS6Manager(ctx context.Context, port uint16) error
 	RemoveBenthosMonitorFromS6Manager(ctx context.Context) error
 	ForceRemoveBenthosMonitor(ctx context.Context, services serviceregistry.Provider) error
@@ -996,7 +995,7 @@ func updateLatencyFromMetric(latency *Latency, metric *dto.Metric) {
 }
 
 // Status checks the status of a benthos service
-func (s *BenthosMonitorService) Status(ctx context.Context, filesystemService filesystem.Service, tick uint64) (ServiceInfo, error) {
+func (s *BenthosMonitorService) Status(ctx context.Context, services serviceregistry.Provider, tick uint64) (ServiceInfo, error) {
 	if ctx.Err() != nil {
 		return ServiceInfo{}, ctx.Err()
 	}
@@ -1036,7 +1035,7 @@ func (s *BenthosMonitorService) Status(ctx context.Context, filesystemService fi
 
 	// Get logs
 	s6ServicePath := filepath.Join(constants.S6BaseDir, s6ServiceName)
-	logs, err := s.s6Service.GetLogs(ctx, s6ServicePath, filesystemService)
+	logs, err := s.s6Service.GetLogs(ctx, s6ServicePath, services.GetFileSystem())
 	if err != nil {
 		return ServiceInfo{}, fmt.Errorf("failed to get logs: %w", err)
 	}
@@ -1217,7 +1216,7 @@ func (s *BenthosMonitorService) ServiceExists(ctx context.Context, services serv
 		return false
 	}
 
-	exists, err := services.GetFileSystem().ServiceExists(ctx, s.GetS6ServiceName())
+	exists, err := s.s6Service.ServiceExists(ctx, filepath.Join(constants.S6BaseDir, s.GetS6ServiceName()), services.GetFileSystem())
 	if err != nil {
 		return false
 	}

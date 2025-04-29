@@ -627,7 +627,7 @@ var _ = Describe("Benthos Service", func() {
 
 			// Verify service is running with initial configuration
 			By("Verifying service is running with initial configuration")
-			info, err := service.Status(ctx, mockSvcRegistry.GetFileSystem(), benthosName, initialConfig.MetricsPort, tick, time.Now())
+			info, err := service.Status(ctx, mockSvcRegistry, benthosName, initialConfig.MetricsPort, tick, time.Now())
 			Expect(err).NotTo(HaveOccurred())
 			Expect(info.BenthosStatus.HealthCheck.IsLive).To(BeTrue())
 			Expect(info.BenthosStatus.HealthCheck.IsReady).To(BeTrue())
@@ -676,7 +676,7 @@ logger:
 
 			// Verify the service is running with new configuration
 			By("Verifying service is running with updated configuration")
-			info, err = service.Status(ctx, mockSvcRegistry.GetFileSystem(), benthosName, updatedConfig.MetricsPort, tick, time.Now())
+			info, err = service.Status(ctx, mockSvcRegistry, benthosName, updatedConfig.MetricsPort, tick, time.Now())
 			Expect(err).NotTo(HaveOccurred())
 			Expect(info.BenthosStatus.HealthCheck.IsLive).To(BeTrue())
 			Expect(info.BenthosStatus.HealthCheck.IsReady).To(BeTrue())
@@ -802,7 +802,7 @@ logger:
 			// Get the service status (which includes the logs)
 
 			// First one fails as there is no last observed state
-			info, err := service.Status(ctx, mockSvcRegistry.GetFileSystem(), benthosName, 4195, 1, time.Now())
+			info, err := service.Status(ctx, mockSvcRegistry, benthosName, 4195, 1, time.Now())
 			Expect(err).ToNot(HaveOccurred())
 
 			// Check if logs are fine - this should return false with our error logs
@@ -913,7 +913,7 @@ logger:
 				mockS6Service.GetLogsResult = testCase.logs
 
 				// Get status with the test logs
-				info, err := service.Status(ctx, mockSvcRegistry.GetFileSystem(), benthosName, 4195, 1, time.Now())
+				info, err := service.Status(ctx, mockSvcRegistry, benthosName, 4195, 1, time.Now())
 				Expect(err).NotTo(HaveOccurred())
 
 				// Check logs status
@@ -953,7 +953,7 @@ logger:
 			})
 
 			// Get the service status
-			info, err := service.Status(ctx, mockSvcRegistry.GetFileSystem(), benthosName, 4195, 1, time.Now())
+			info, err := service.Status(ctx, mockSvcRegistry, benthosName, 4195, 1, time.Now())
 			Expect(err).NotTo(HaveOccurred())
 
 			// Check if logs are fine

@@ -135,7 +135,7 @@ func (b *BenthosMonitorInstance) Reconcile(ctx context.Context, snapshot fsm.Sys
 		return nil, false // We don't want to return an error here, because we want to continue reconciling
 	}
 
-	s6Err, s6Reconciled := b.monitorService.ReconcileManager(ctx, services.GetFileSystem(), snapshot.Tick)
+	s6Err, s6Reconciled := b.monitorService.ReconcileManager(ctx, services, snapshot.Tick)
 	if s6Err != nil {
 		b.baseFSMInstance.SetError(s6Err, snapshot.Tick)
 		b.baseFSMInstance.GetLogger().Errorf("error reconciling s6Manager: %s", s6Err)
@@ -163,7 +163,7 @@ func (b *BenthosMonitorInstance) reconcileExternalChanges(ctx context.Context, s
 
 	observedStateCtx, cancel := context.WithTimeout(ctx, constants.S6UpdateObservedStateTimeout)
 	defer cancel()
-	err := b.UpdateObservedStateOfInstance(observedStateCtx, services.GetFileSystem(), tick, loopStartTime)
+	err := b.UpdateObservedStateOfInstance(observedStateCtx, services, tick, loopStartTime)
 	if err != nil {
 		return fmt.Errorf("failed to update observed state: %w", err)
 	}
