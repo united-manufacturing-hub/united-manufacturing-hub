@@ -92,6 +92,8 @@ func (s *StateMocker) Tick() {
 
 // here, the actual state update logic is implemented
 func (s *StateMocker) UpdateDfcState() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	// only take the dataflowcomponent configs and add them to the state of the dataflowcomponent manager
 	// the other managers are not updated
 
@@ -146,8 +148,6 @@ func (s *StateMocker) UpdateDfcState() {
 	}
 
 	// update the state of the system with the new manager snapshot
-	s.mu.Lock()
-	defer s.mu.Unlock()
 	if s.State.Managers == nil {
 		s.State.Managers = make(map[string]fsm.ManagerSnapshot)
 	}
@@ -205,6 +205,8 @@ func (s *StateMocker) SetTransitionSequence(componentID string, transitions []st
 	TickOffset int
 	State      string
 }) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	absoluteTransitions := make([]StateTransition, len(transitions))
 	for i, t := range transitions {
 		absoluteTransitions[i] = StateTransition{
