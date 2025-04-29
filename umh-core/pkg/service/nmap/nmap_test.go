@@ -22,8 +22,8 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/nmapserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -31,12 +31,12 @@ import (
 
 var _ = Describe("Nmap Service", func() {
 	var (
-		service   *NmapService
-		mockS6    *s6service.MockService
-		tick      uint64
-		nmapName  string
-		s6Service string
-		mockFS    *filesystem.MockFileSystem
+		service         *NmapService
+		mockS6          *s6service.MockService
+		tick            uint64
+		nmapName        string
+		s6Service       string
+		mockSvcRegistry *serviceregistry.Registry
 	)
 
 	BeforeEach(func() {
@@ -45,7 +45,7 @@ var _ = Describe("Nmap Service", func() {
 		service = NewDefaultNmapService(nmapName, WithS6Service(mockS6))
 		tick = 0
 		s6Service = service.getS6ServiceName(nmapName)
-		mockFS = filesystem.NewMockFileSystem()
+		mockSvcRegistry = serviceregistry.NewMockRegistry()
 	})
 
 	Describe("Script Generation", func() {
@@ -203,7 +203,7 @@ done`
 				mockS6.GetS6ConfigFileResult = []byte(scriptContent)
 				mockS6.ServiceExistsResult = true
 
-				config, err := service.GetConfig(ctx, mockFS, nmapName)
+				config, err := service.GetConfig(ctx, mockSvcRegistry.GetFileSystem(), nmapName)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(config.Target).To(Equal("test-host.local"))
 				Expect(config.Port).To(Equal(uint16(8080)))
@@ -213,7 +213,7 @@ done`
 				ctx, cancel := context.WithCancel(context.Background())
 				cancel() // Cancel immediately
 
-				_, err := service.GetConfig(ctx, mockFS, nmapName)
+				_, err := service.GetConfig(ctx, mockSvcRegistry.GetFileSystem(), nmapName)
 				Expect(err).To(Equal(context.Canceled))
 			})
 		})
@@ -382,7 +382,7 @@ done`
 			// Add and reconcile service
 			err := service.AddNmapToS6Manager(ctx, cfg, nmapName)
 			Expect(err).NotTo(HaveOccurred())
-			err, _ = service.ReconcileManager(ctx, mockFS, tick)
+			err, _ = service.ReconcileManager(ctx, mockSvcRegistry, tick)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -391,7 +391,7 @@ done`
 				ctx := context.Background()
 				mockS6.ServiceExistsResult = false
 
-				_, err := service.Status(ctx, mockFS, "nonexistent", tick)
+				_, err := service.Status(ctx, mockSvcRegistry.GetFileSystem(), "nonexistent", tick)
 				Expect(err).To(Equal(ErrServiceNotExist))
 			})
 		})
@@ -408,7 +408,7 @@ done`
 			// Add and reconcile service
 			err := service.AddNmapToS6Manager(ctx, cfg, nmapName)
 			Expect(err).NotTo(HaveOccurred())
-			err, _ = service.ReconcileManager(ctx, mockFS, tick)
+			err, _ = service.ReconcileManager(ctx, mockSvcRegistry, tick)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -447,13 +447,13 @@ done`
 		var (
 			service       *NmapService
 			mockS6Service *s6service.MockService
-			mockFS        *filesystem.MockFileSystem
+			mockServices  *serviceregistry.Registry
 			nmapName      string
 		)
 
 		BeforeEach(func() {
 			mockS6Service = s6service.NewMockService()
-			mockFS = filesystem.NewMockFileSystem()
+			mockServices = serviceregistry.NewMockRegistry()
 			nmapName = "test-nmap"
 			service = NewDefaultNmapService(nmapName, WithS6Service(mockS6Service))
 		})
@@ -462,7 +462,7 @@ done`
 			ctx := context.Background()
 
 			// Call ForceRemoveNmap
-			err := service.ForceRemoveNmap(ctx, mockFS, nmapName)
+			err := service.ForceRemoveNmap(ctx, mockServices, nmapName)
 
 			// Verify no error
 			Expect(err).NotTo(HaveOccurred())
@@ -484,7 +484,7 @@ done`
 			mockS6Service.ForceRemoveError = mockError
 
 			// Call ForceRemoveNmap
-			err := service.ForceRemoveNmap(ctx, mockFS, nmapName)
+			err := service.ForceRemoveNmap(ctx, mockServices, nmapName)
 
 			// Verify error is propagated
 			Expect(err).To(MatchError(mockError))

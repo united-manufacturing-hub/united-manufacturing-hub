@@ -30,9 +30,9 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda_monitor"
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
 // getTmpDir returns the temporary directory for a container
@@ -70,21 +70,21 @@ func getMetricsReader() *bytes.Reader {
 
 var _ = Describe("Redpanda Monitor Service", func() {
 	var (
-		service *redpanda_monitor.RedpandaMonitorService
-		tick    uint64
-		mockFS  *filesystem.MockFileSystem
-		ctx     context.Context
-		cancel  context.CancelFunc
+		service         *redpanda_monitor.RedpandaMonitorService
+		tick            uint64
+		mockSvcRegistry *serviceregistry.Registry
+		ctx             context.Context
+		cancel          context.CancelFunc
 	)
 
 	BeforeEach(func() {
-		mockFS = filesystem.NewMockFileSystem()
 		service = redpanda_monitor.NewRedpandaMonitorService()
 		tick = 0
 
+		mockSvcRegistry = serviceregistry.NewMockRegistry()
 		// Cleanup the data directory
 		ctx, cancel = newTimeoutContext()
-		err := mockFS.RemoveAll(ctx, getTmpDir())
+		err := mockSvcRegistry.GetFileSystem().RemoveAll(ctx, getTmpDir())
 		Expect(err).NotTo(HaveOccurred())
 	})
 	AfterEach(func() {
@@ -116,7 +116,7 @@ var _ = Describe("Redpanda Monitor Service", func() {
 			ctx, cancel := newTimeoutContext()
 			defer cancel()
 
-			_, err := service.Status(ctx, mockFS, tick)
+			_, err := service.Status(ctx, mockSvcRegistry.GetFileSystem(), tick)
 			Expect(err).To(HaveOccurred())
 		})
 
@@ -135,7 +135,7 @@ var _ = Describe("Redpanda Monitor Service", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Make sure the service exists by reconciling
-			err, _ = service.ReconcileManager(ctx, mockFS, 0)
+			err, _ = service.ReconcileManager(ctx, mockSvcRegistry, 0)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Explicitly mark the service as existing in the mock
@@ -155,14 +155,14 @@ var _ = Describe("Redpanda Monitor Service", func() {
 			mockS6.GetLogsResult = mockLogs
 
 			// Try getting status - we don't need to capture the result
-			_, err = service.Status(ctx, mockFS, tick)
+			_, err = service.Status(ctx, mockSvcRegistry.GetFileSystem(), tick)
 			Expect(err).To(HaveOccurred())
 			// Check that this is a "failed to parse metrics" error
 			Expect(err.Error()).To(ContainSubstring("failed to parse metrics"))
 
 			// We expect an error due to the mock data not being real metrics data
 			// but at least the service should report as existing
-			Expect(service.ServiceExists(ctx, mockFS)).To(BeTrue())
+			Expect(service.ServiceExists(ctx, mockSvcRegistry.GetFileSystem())).To(BeTrue())
 		})
 	})
 
