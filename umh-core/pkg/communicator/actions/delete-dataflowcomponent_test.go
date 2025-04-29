@@ -42,6 +42,7 @@ var _ = Describe("DeleteDataflowComponent", func() {
 		mockConfig      *config.MockConfigManager
 		componentName   string
 		componentUUID   uuid.UUID
+		stateMocker     *actions.StateMocker
 	)
 
 	// Setup before each test
@@ -75,7 +76,13 @@ var _ = Describe("DeleteDataflowComponent", func() {
 		}
 
 		mockConfig = config.NewMockConfigManager().WithConfig(initialConfig)
-		action = actions.NewDeleteDataflowComponentAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig)
+
+		// Startup the state mocker and get the mock snapshot
+		stateMocker = actions.NewStateMocker(mockConfig)
+		stateMocker.UpdateState()
+		mockSnapshot := stateMocker.GetState()
+
+		action = actions.NewDeleteDataflowComponentAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig, mockSnapshot)
 	})
 
 	// Cleanup after each test
@@ -152,11 +159,17 @@ var _ = Describe("DeleteDataflowComponent", func() {
 			// Reset tracking for this test
 			mockConfig.ResetCalls()
 
+			// Start the state mocker
+			stateMocker.Start()
+
 			// Execute the action
 			result, metadata, err := action.Execute()
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(ContainSubstring("Successfully deleted data flow component"))
 			Expect(metadata).To(BeNil())
+
+			// Stop the state mocker
+			stateMocker.Stop()
 
 			// Verify DeleteDataflowcomponentCalled was called
 			Expect(mockConfig.DeleteDataflowcomponentCalled).To(BeTrue())
@@ -177,12 +190,18 @@ var _ = Describe("DeleteDataflowComponent", func() {
 			err := action.Parse(payload)
 			Expect(err).NotTo(HaveOccurred())
 
+			// Start the state mocker
+			stateMocker.Start()
+
 			// Execute the action - should fail
 			result, metadata, err := action.Execute()
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to delete dataflow component"))
 			Expect(result).To(BeNil())
 			Expect(metadata).To(BeNil())
+
+			// Stop the state mocker
+			stateMocker.Stop()
 
 			// Expect Confirmed and Failure messages
 			var messages []*models.UMHMessage
@@ -222,12 +241,18 @@ var _ = Describe("DeleteDataflowComponent", func() {
 			// Set up mock to return component not found error
 			mockConfig.WithDeleteDataflowcomponentError(errors.New("dataflow component with UUID not found"))
 
+			// Start the state mocker
+			stateMocker.Start()
+
 			// Execute the action - should fail with component not found
 			result, metadata, err := action.Execute()
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("dataflow component with UUID not found"))
 			Expect(result).To(BeNil())
 			Expect(metadata).To(BeNil())
+
+			// Stop the state mocker
+			stateMocker.Stop()
 		})
 	})
 })

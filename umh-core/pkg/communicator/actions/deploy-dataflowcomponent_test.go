@@ -40,6 +40,7 @@ var _ = Describe("DeployDataflowComponent", func() {
 		instanceUUID    uuid.UUID
 		outboundChannel chan *models.UMHMessage
 		mockConfig      *config.MockConfigManager
+		stateMocker     *actions.StateMocker
 	)
 
 	// Setup before each test
@@ -64,7 +65,13 @@ var _ = Describe("DeployDataflowComponent", func() {
 		}
 
 		mockConfig = config.NewMockConfigManager().WithConfig(initialConfig)
-		action = actions.NewDeployDataflowComponentAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig)
+
+		// Startup the state mocker and get the mock snapshot
+		stateMocker = actions.NewStateMocker(mockConfig)
+		stateMocker.UpdateState()
+		mockSnapshot := stateMocker.GetState()
+
+		action = actions.NewDeployDataflowComponentAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig, mockSnapshot)
 	})
 
 	// Cleanup after each test
@@ -459,11 +466,17 @@ var _ = Describe("DeployDataflowComponent", func() {
 			// Reset tracking for this test
 			mockConfig.ResetCalls()
 
+			// start the state mocker
+			stateMocker.Start()
+
 			// Execute the action
 			result, metadata, err := action.Execute()
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(ContainSubstring("Successfully deployed data flow component"))
 			Expect(metadata).To(BeNil())
+
+			// Stop the state mocker
+			stateMocker.Stop()
 
 			// Only expect the Confirmed message in the channel
 			// Success message is sent by HandleActionMessage, not by Execute
@@ -523,12 +536,18 @@ var _ = Describe("DeployDataflowComponent", func() {
 			err := action.Parse(payload)
 			Expect(err).NotTo(HaveOccurred())
 
+			// Start the state mocker
+			stateMocker.Start()
+
 			// Execute the action - should fail
 			result, metadata, err := action.Execute()
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to add dataflowcomponent"))
 			Expect(result).To(BeNil())
 			Expect(metadata).To(BeNil())
+
+			// Stop the state mocker
+			stateMocker.Stop()
 
 			// Expect Confirmed and Failure messages
 			var messages []*models.UMHMessage
@@ -602,11 +621,17 @@ buffer:
 			// Reset tracking for this test
 			mockConfig.ResetCalls()
 
+			// start the state mocker
+			stateMocker.Start()
+
 			// Execute the action
 			result, metadata, err := action.Execute()
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(ContainSubstring("Successfully deployed data flow component"))
 			Expect(metadata).To(BeNil())
+
+			// Stop the state mocker
+			stateMocker.Stop()
 
 			// Only expect the Confirmed message in the channel
 			// Success message is sent by HandleActionMessage, not by Execute
