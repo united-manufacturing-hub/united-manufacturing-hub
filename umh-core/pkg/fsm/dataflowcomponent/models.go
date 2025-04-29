@@ -152,3 +152,10 @@ func (d *DataflowComponentInstance) GetConfig() dataflowcomponentconfig.Dataflow
 func (d *DataflowComponentInstance) GetLastError() error {
 	return d.baseFSMInstance.GetLastError()
 }
+
+// IsTransientStreakCounterMaxed returns whether the transient streak counter
+// has reached the maximum number of ticks, which means that the FSM is stuck in a state
+// and should be removed
+func (d *DataflowComponentInstance) IsTransientStreakCounterMaxed() bool {
+	return d.baseFSMInstance.IsTransientStreakCounterMaxed()
+}
