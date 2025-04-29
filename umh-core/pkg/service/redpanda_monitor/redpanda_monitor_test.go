@@ -81,6 +81,7 @@ var _ = Describe("Redpanda Monitor Service", func() {
 		service = redpanda_monitor.NewRedpandaMonitorService()
 		tick = 0
 
+		mockSvcRegistry = serviceregistry.NewMockRegistry()
 		// Cleanup the data directory
 		ctx, cancel = newTimeoutContext()
 		err := mockSvcRegistry.GetFileSystem().RemoveAll(ctx, getTmpDir())

@@ -58,6 +58,7 @@ var _ = Describe("Redpanda Service", func() {
 	BeforeEach(func() {
 		service = NewDefaultRedpandaService("redpanda")
 		tick = 0
+		mockSvcRegistry = serviceregistry.NewMockRegistry()
 
 		// Cleanup the data directory
 		ctx, cancel := newTimeoutContext()
