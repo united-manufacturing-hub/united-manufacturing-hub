@@ -160,7 +160,8 @@ var _ = Describe("DeleteDataflowComponent", func() {
 			mockConfig.ResetCalls()
 
 			// Start the state mocker
-			stateMocker.Start()
+			err = stateMocker.Start()
+			Expect(err).NotTo(HaveOccurred())
 
 			// Execute the action
 			result, metadata, err := action.Execute()
@@ -191,7 +192,8 @@ var _ = Describe("DeleteDataflowComponent", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Start the state mocker
-			stateMocker.Start()
+			err = stateMocker.Start()
+			Expect(err).NotTo(HaveOccurred())
 
 			// Execute the action - should fail
 			result, metadata, err := action.Execute()
@@ -242,7 +244,8 @@ var _ = Describe("DeleteDataflowComponent", func() {
 			mockConfig.WithDeleteDataflowcomponentError(errors.New("dataflow component with UUID not found"))
 
 			// Start the state mocker
-			stateMocker.Start()
+			err = stateMocker.Start()
+			Expect(err).NotTo(HaveOccurred())
 
 			// Execute the action - should fail with component not found
 			result, metadata, err := action.Execute()

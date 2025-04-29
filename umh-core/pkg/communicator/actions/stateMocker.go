@@ -15,6 +15,8 @@
 package actions
 
 import (
+	"errors"
+	"sync/atomic"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
@@ -22,6 +24,9 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
 )
+
+// ErrAlreadyRunning is returned when trying to start a StateMocker that is already running
+var ErrAlreadyRunning = errors.New("state mocker already running")
 
 // ConfigManager interface defines the methods needed by StateMocker to get configuration data
 type ConfigManager interface {
@@ -45,6 +50,7 @@ type StateMocker struct {
 	TickCounter        int
 	PendingTransitions map[string][]StateTransition // key is component ID
 	done               chan struct{}                // channel to signal shutdown of goroutine
+	running            atomic.Bool                  // flag to track if the mocker is running
 }
 
 // NewStateMocker creates a new StateMocker
@@ -141,13 +147,18 @@ func (s *StateMocker) UpdateDfcState() {
 	s.State.Managers[constants.DataflowcomponentManagerName] = managerSnapshot
 }
 
-// Start spawns a goroutine that updates the state of the system periodically
-// It returns immediately and can be stopped by calling Stop()
-func (s *StateMocker) Run() {
+// Run starts the state mocker and updates the state of the system periodically
+// It returns an error if already running
+func (s *StateMocker) Run() error {
+	if s.running.Swap(true) {
+		return ErrAlreadyRunning
+	}
+
 	ticker := time.NewTicker(1 * time.Second)
 
 	go func() {
 		defer ticker.Stop()
+		defer s.running.Store(false)
 
 		for {
 			select {
@@ -158,16 +169,27 @@ func (s *StateMocker) Run() {
 			}
 		}
 	}()
+
+	return nil
 }
 
 // Start is a convenience method that runs the state mocker in a new goroutine
-func (s *StateMocker) Start() {
-	go s.Run()
+// It returns an error if already running
+func (s *StateMocker) Start() error {
+	if err := s.Run(); err != nil {
+		return err
+	}
+	return nil
 }
 
 // Stop signals the state mocker to stop updating and waits for it to complete
+// It is safe to call Stop even if the mocker isn't running
 func (s *StateMocker) Stop() {
-	close(s.done)
+	if s.running.Load() {
+		close(s.done)
+		// Create a new channel for next run
+		s.done = make(chan struct{})
+	}
 }
 
 // SetTransitionSequence schedules state transitions for a component

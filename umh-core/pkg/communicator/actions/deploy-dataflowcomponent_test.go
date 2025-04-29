@@ -467,7 +467,8 @@ var _ = Describe("DeployDataflowComponent", func() {
 			mockConfig.ResetCalls()
 
 			// start the state mocker
-			stateMocker.Start()
+			err = stateMocker.Start()
+			Expect(err).NotTo(HaveOccurred())
 
 			// Execute the action
 			result, metadata, err := action.Execute()
@@ -537,7 +538,8 @@ var _ = Describe("DeployDataflowComponent", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Start the state mocker
-			stateMocker.Start()
+			err = stateMocker.Start()
+			Expect(err).NotTo(HaveOccurred())
 
 			// Execute the action - should fail
 			result, metadata, err := action.Execute()
@@ -622,7 +624,8 @@ buffer:
 			mockConfig.ResetCalls()
 
 			// start the state mocker
-			stateMocker.Start()
+			err = stateMocker.Start()
+			Expect(err).NotTo(HaveOccurred())
 
 			// Execute the action
 			result, metadata, err := action.Execute()
