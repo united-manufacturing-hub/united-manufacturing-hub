@@ -25,7 +25,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos_monitor"
 	benthos_monitor_svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos_monitor"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
 var _ = Describe("Benthos Monitor FSM", func() {
@@ -36,14 +36,13 @@ var _ = Describe("Benthos Monitor FSM", func() {
 		mockSvc *benthos_monitor_svc.MockBenthosMonitorService
 		inst    *benthos_monitor.BenthosMonitorInstance
 
-		mockFS *filesystem.MockFileSystem
+		mockServices *serviceregistry.Registry
 	)
 
 	BeforeEach(func() {
 		ctx, cancel = context.WithCancel(context.Background())
 
-		mockFS = filesystem.NewMockFileSystem()
-
+		mockServices = serviceregistry.NewMockRegistry()
 		mockSvc = benthos_monitor_svc.NewMockBenthosMonitorService()
 		// By default, let's set it up for healthy
 		mockSvc.SetServiceState(benthos_monitor_svc.ServiceStateFlags{
@@ -66,19 +65,20 @@ var _ = Describe("Benthos Monitor FSM", func() {
 	})
 
 	AfterEach(func() {
+
 		cancel()
 	})
 
 	Context("When newly created", func() {
 		It("Should initially be in lifecycle state `to_be_created` -> then `creating` -> `benthos_monitoring_stopped`", func() {
 			// On first reconcile, it should handle creation
-			err, did := inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 1}, mockFS)
+			err, did := inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 1}, mockServices)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(did).To(BeTrue())
 			Expect(inst.GetCurrentFSMState()).To(Equal("creating"))
 
 			// next reconcile
-			err, did = inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 2}, mockFS)
+			err, did = inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 2}, mockServices)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(did).To(BeTrue())
 			// now we should be in operational state 'benthos_monitoring_stopped'
@@ -89,10 +89,10 @@ var _ = Describe("Benthos Monitor FSM", func() {
 	Context("Lifecycle transitions", func() {
 		BeforeEach(func() {
 			// Ensure we've walked from to_be_created -> creating -> benthos_monitoring_stopped
-			err, did := inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 10}, mockFS)
+			err, did := inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 10}, mockServices)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(did).To(BeTrue())
-			err, did = inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 11}, mockFS)
+			err, did = inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 11}, mockServices)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(did).To(BeTrue())
 			Expect(inst.GetCurrentFSMState()).To(Equal(benthos_monitor.OperationalStateStopped))
@@ -103,13 +103,13 @@ var _ = Describe("Benthos Monitor FSM", func() {
 			err := inst.SetDesiredFSMState(benthos_monitor.OperationalStateActive)
 			Expect(err).ToNot(HaveOccurred())
 
-			err, did := inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 12}, mockFS)
+			err, did := inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 12}, mockServices)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(did).To(BeTrue())
 			Expect(inst.GetCurrentFSMState()).To(Equal(benthos_monitor.OperationalStateStarting))
 
 			// next reconcile
-			err, did = inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 13}, mockFS)
+			err, did = inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 13}, mockServices)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(did).To(BeTrue())
 			Expect(inst.GetCurrentFSMState()).To(Equal(benthos_monitor.OperationalStateDegraded))
@@ -117,7 +117,7 @@ var _ = Describe("Benthos Monitor FSM", func() {
 
 		It("Should remain `benthos_monitoring_stopped` if desired is `stopped`", func() {
 			// do one reconcile - no state change
-			err, did := inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 14}, mockFS)
+			err, did := inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 14}, mockServices)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(did).To(BeFalse())
 			Expect(inst.GetCurrentFSMState()).To(Equal(benthos_monitor.OperationalStateStopped))
@@ -127,23 +127,23 @@ var _ = Describe("Benthos Monitor FSM", func() {
 	Context("When monitoring is running", func() {
 		BeforeEach(func() {
 			// get to benthos_monitoring_stopped
-			err, did := inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 20}, mockFS)
+			err, did := inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 20}, mockServices)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(did).To(BeTrue())
-			err, did = inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 21}, mockFS)
+			err, did = inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 21}, mockServices)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(did).To(BeTrue())
 			// set desired = active
 			err = inst.SetDesiredFSMState(benthos_monitor.OperationalStateActive)
 			Expect(err).ToNot(HaveOccurred())
 			// cause start
-			err, did = inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 22}, mockFS)
+			err, did = inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 22}, mockServices)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(did).To(BeTrue())
 			Expect(inst.GetCurrentFSMState()).To(Equal(benthos_monitor.OperationalStateStarting))
 
 			// next reconcile
-			err, did = inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 23}, mockFS)
+			err, did = inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 23}, mockServices)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(did).To(BeTrue())
 			Expect(inst.GetCurrentFSMState()).To(Equal(benthos_monitor.OperationalStateDegraded))
@@ -174,7 +174,7 @@ var _ = Describe("Benthos Monitor FSM", func() {
 			}
 
 			// Currently mockSvc returns healthy metrics => we expect a transition
-			err, did := inst.Reconcile(ctx, snapshot, mockFS)
+			err, did := inst.Reconcile(ctx, snapshot, mockServices)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(did).To(BeTrue())
 			Expect(inst.GetCurrentFSMState()).To(Equal(benthos_monitor.OperationalStateActive))
@@ -200,19 +200,19 @@ var _ = Describe("Benthos Monitor FSM", func() {
 			freshInst := benthos_monitor.NewBenthosMonitorInstanceWithService(cfg, freshMock)
 
 			// Get it to the degraded state
-			err, did := freshInst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 1}, mockFS)
+			err, did := freshInst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 1}, mockServices)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(did).To(BeTrue()) // to_be_created -> creating
 
-			err, did = freshInst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 2}, mockFS)
+			err, did = freshInst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 2}, mockServices)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(did).To(BeTrue()) // creating -> stopped
 
-			err, did = freshInst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 3}, mockFS)
+			err, did = freshInst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 3}, mockServices)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(did).To(BeTrue()) // stopped -> starting
 
-			err, did = freshInst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 4}, mockFS)
+			err, did = freshInst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 4}, mockServices)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(did).To(BeTrue()) // starting -> degraded
 
@@ -247,7 +247,7 @@ var _ = Describe("Benthos Monitor FSM", func() {
 				SnapshotTime: time.Now(),
 			}
 
-			err, did = freshInst.Reconcile(ctx, snapshot, mockFS)
+			err, did = freshInst.Reconcile(ctx, snapshot, mockServices)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(did).To(BeFalse()) // no transition => still degraded
 			Expect(freshInst.GetCurrentFSMState()).To(Equal(benthos_monitor.OperationalStateDegraded))
@@ -273,7 +273,7 @@ var _ = Describe("Benthos Monitor FSM", func() {
 				SnapshotTime: time.Now(),
 			}
 
-			err, did := inst.Reconcile(ctx, snapshot1, mockFS)
+			err, did := inst.Reconcile(ctx, snapshot1, mockServices)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(did).To(BeTrue())
 			Expect(inst.GetCurrentFSMState()).To(Equal(benthos_monitor.OperationalStateActive))
@@ -288,7 +288,7 @@ var _ = Describe("Benthos Monitor FSM", func() {
 				SnapshotTime: time.Now(),
 			}
 
-			err, did = inst.Reconcile(ctx, snapshot2, mockFS)
+			err, did = inst.Reconcile(ctx, snapshot2, mockServices)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(did).To(BeTrue())
 			Expect(inst.GetCurrentFSMState()).To(Equal(benthos_monitor.OperationalStateStopping))
@@ -299,7 +299,7 @@ var _ = Describe("Benthos Monitor FSM", func() {
 				SnapshotTime: time.Now(),
 			}
 
-			err, did = inst.Reconcile(ctx, snapshot3, mockFS)
+			err, did = inst.Reconcile(ctx, snapshot3, mockServices)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(did).To(BeTrue())
 			Expect(inst.GetCurrentFSMState()).To(Equal(benthos_monitor.OperationalStateStopped))

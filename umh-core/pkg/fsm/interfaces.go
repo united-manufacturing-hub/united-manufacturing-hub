@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
 // FSMActions defines the standard lifecycle actions that all FSM instances should implement
@@ -36,5 +37,5 @@ type FSMInstanceActions interface {
 	StopInstance(ctx context.Context, filesystemService filesystem.Service) error
 
 	// UpdateObservedStateOfInstance updates the observed state of the instance
-	UpdateObservedStateOfInstance(ctx context.Context, filesystemService filesystem.Service, tick uint64, loopStartTime time.Time) error
+	UpdateObservedStateOfInstance(ctx context.Context, services serviceregistry.Provider, tick uint64, loopStartTime time.Time) error
 }

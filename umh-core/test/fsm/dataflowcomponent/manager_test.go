@@ -31,7 +31,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
 	dataflowcomponentsvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/dataflowcomponent"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
 // Following the CursorRules, we never call manager.Reconcile(...) directly in loops.
@@ -39,12 +39,12 @@ import (
 
 var _ = Describe("DataflowComponentManager", func() {
 	var (
-		manager     *dataflowcomponent.DataflowComponentManager
-		mockService *dataflowcomponentsvc.MockDataFlowComponentService
-		ctx         context.Context
-		tick        uint64
-		cancel      context.CancelFunc
-		mockFS      *filesystem.MockFileSystem
+		manager         *dataflowcomponent.DataflowComponentManager
+		mockService     *dataflowcomponentsvc.MockDataFlowComponentService
+		ctx             context.Context
+		tick            uint64
+		cancel          context.CancelFunc
+		mockSvcRegistry *serviceregistry.Registry
 	)
 
 	AfterEach(func() {
@@ -54,7 +54,7 @@ var _ = Describe("DataflowComponentManager", func() {
 	BeforeEach(func() {
 		ctx, cancel = context.WithTimeout(context.Background(), 10*time.Minute) // we need to have a deadline as the reconcile logic in the base fsm manager requires it
 		tick = 0
-		mockFS = filesystem.NewMockFileSystem()
+		mockSvcRegistry = serviceregistry.NewMockRegistry()
 		// Create a new DataflowComponentManager with the mock service
 		manager, mockService = fsmtest.CreateMockDataflowComponentManager("test-manager")
 
@@ -72,7 +72,7 @@ var _ = Describe("DataflowComponentManager", func() {
 
 			// Single call to a helper that wraps Reconcile
 			newTick, err := fsmtest.WaitForDataflowComponentManagerStable(
-				ctx, fsm.SystemSnapshot{CurrentConfig: emptyConfig, Tick: tick}, manager, mockFS,
+				ctx, fsm.SystemSnapshot{CurrentConfig: emptyConfig, Tick: tick}, manager, mockSvcRegistry,
 			)
 			tick = newTick
 			Expect(err).NotTo(HaveOccurred())
@@ -95,7 +95,7 @@ var _ = Describe("DataflowComponentManager", func() {
 				ctx,
 				fsm.SystemSnapshot{CurrentConfig: cfg, Tick: tick},
 				manager,
-				mockFS,
+				mockSvcRegistry,
 				componentName,
 				dataflowcomponent.OperationalStateStopped,
 				10,
@@ -124,7 +124,7 @@ var _ = Describe("DataflowComponentManager", func() {
 				ctx,
 				fsm.SystemSnapshot{CurrentConfig: cfg, Tick: tick},
 				manager,
-				mockFS,
+				mockSvcRegistry,
 				componentName,
 				dataflowcomponent.OperationalStateIdle, // or OperationalStateActive, whichever is stable
 				20,
@@ -151,7 +151,7 @@ var _ = Describe("DataflowComponentManager", func() {
 			newTick, err := fsmtest.WaitForDataflowComponentManagerInstanceState(ctx, fsm.SystemSnapshot{
 				CurrentConfig: fullCfg,
 				Tick:          tick,
-			}, manager, mockFS, serviceName, dataflowcomponent.OperationalStateIdle, 20)
+			}, manager, mockSvcRegistry, serviceName, dataflowcomponent.OperationalStateIdle, 20)
 			tick = newTick
 			Expect(err).NotTo(HaveOccurred())
 
@@ -162,7 +162,7 @@ var _ = Describe("DataflowComponentManager", func() {
 			newTick, err = fsmtest.WaitForDataflowComponentManagerInstanceState(ctx, fsm.SystemSnapshot{
 				CurrentConfig: fullCfg,
 				Tick:          tick,
-			}, manager, mockFS, serviceName, dataflowcomponent.OperationalStateDegraded, 20)
+			}, manager, mockSvcRegistry, serviceName, dataflowcomponent.OperationalStateDegraded, 20)
 			tick = newTick
 			Expect(err).NotTo(HaveOccurred())
 			Expect(manager.GetInstances()).To(HaveLen(1))
@@ -177,7 +177,7 @@ var _ = Describe("DataflowComponentManager", func() {
 				ctx,
 				fsm.SystemSnapshot{CurrentConfig: emptyCfg, Tick: tick},
 				manager,
-				mockFS,
+				mockSvcRegistry,
 				fmt.Sprintf("dataflow-%s", serviceName),
 				20,
 			)
@@ -202,7 +202,7 @@ var _ = Describe("DataflowComponentManager", func() {
 			newTick, err := fsmtest.WaitForDataflowComponentManagerInstanceState(ctx, fsm.SystemSnapshot{
 				CurrentConfig: fullCfg,
 				Tick:          tick,
-			}, manager, mockFS, componentName, dataflowcomponent.OperationalStateIdle, 20)
+			}, manager, mockSvcRegistry, componentName, dataflowcomponent.OperationalStateIdle, 20)
 			tick = newTick
 			Expect(err).NotTo(HaveOccurred())
 
@@ -215,7 +215,7 @@ var _ = Describe("DataflowComponentManager", func() {
 			newTick, err = fsmtest.WaitForDataflowComponentManagerInstanceState(ctx, fsm.SystemSnapshot{
 				CurrentConfig: fullCfg,
 				Tick:          tick,
-			}, manager, mockFS, componentName, dataflowcomponent.OperationalStateStopped, 20)
+			}, manager, mockSvcRegistry, componentName, dataflowcomponent.OperationalStateStopped, 20)
 			tick = newTick
 			Expect(err).NotTo(HaveOccurred())
 
@@ -227,7 +227,7 @@ var _ = Describe("DataflowComponentManager", func() {
 			newTick, err = fsmtest.WaitForDataflowComponentManagerInstanceState(ctx, fsm.SystemSnapshot{
 				CurrentConfig: fullCfg,
 				Tick:          tick,
-			}, manager, mockFS, componentName, dataflowcomponent.OperationalStateIdle, 20)
+			}, manager, mockSvcRegistry, componentName, dataflowcomponent.OperationalStateIdle, 20)
 			tick = newTick
 			Expect(err).NotTo(HaveOccurred())
 
@@ -259,7 +259,7 @@ var _ = Describe("DataflowComponentManager", func() {
 				ctx,
 				fsm.SystemSnapshot{CurrentConfig: fullCfg, Tick: tick},
 				manager,
-				mockFS,
+				mockSvcRegistry,
 				map[string]string{
 					comp1Name: dataflowcomponent.OperationalStateIdle,
 					comp2Name: dataflowcomponent.OperationalStateStopped,
@@ -298,7 +298,7 @@ var _ = Describe("DataflowComponentManager", func() {
 			fsmtest.ConfigureDataflowComponentManagerForState(mockService, serviceName, dataflowcomponent.OperationalStateIdle)
 
 			// Wait for idle
-			newTick, err := fsmtest.WaitForDataflowComponentManagerInstanceState(ctx, fsm.SystemSnapshot{CurrentConfig: fullCfg, Tick: tick}, manager, mockFS,
+			newTick, err := fsmtest.WaitForDataflowComponentManagerInstanceState(ctx, fsm.SystemSnapshot{CurrentConfig: fullCfg, Tick: tick}, manager, mockSvcRegistry,
 				serviceName,
 				dataflowcomponent.OperationalStateIdle,
 				20,
@@ -317,7 +317,7 @@ var _ = Describe("DataflowComponentManager", func() {
 			}
 
 			// Wait for stopped
-			newTick, err = fsmtest.WaitForDataflowComponentManagerInstanceState(ctx, fsm.SystemSnapshot{CurrentConfig: stoppedCfg, Tick: tick}, manager, mockFS,
+			newTick, err = fsmtest.WaitForDataflowComponentManagerInstanceState(ctx, fsm.SystemSnapshot{CurrentConfig: stoppedCfg, Tick: tick}, manager, mockSvcRegistry,
 				serviceName,
 				dataflowcomponent.OperationalStateStopped,
 				20,
@@ -333,7 +333,7 @@ var _ = Describe("DataflowComponentManager", func() {
 				ctx,
 				fsm.SystemSnapshot{CurrentConfig: config.FullConfig{DataFlow: []config.DataFlowComponentConfig{}}},
 				manager,
-				mockFS,
+				mockSvcRegistry,
 				serviceName,
 				15,
 			)
