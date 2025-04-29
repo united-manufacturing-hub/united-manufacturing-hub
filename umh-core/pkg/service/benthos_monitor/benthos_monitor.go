@@ -485,7 +485,7 @@ func (s *BenthosMonitorService) ParseBenthosLogs(ctx context.Context, logs []s6s
 	var versionResp versionResponse
 
 	// Process all data in parallel using errgroup
-	ctxBenthosMonitor, cancelBenthosMonitor := context.WithTimeout(ctx, constants.BenthosMonitorUpdateObservedStateTimeout/2) // the ctx already has  a time out of BenthosMonitorUpdateObservedStateTimeout, so this timeout needs to be smaller
+	ctxBenthosMonitor, cancelBenthosMonitor := context.WithTimeout(ctx, constants.BenthosMonitorProcessMetricsTimeout)
 	defer cancelBenthosMonitor()
 	g, _ := errgroup.WithContext(ctxBenthosMonitor)
 
