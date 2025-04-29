@@ -85,7 +85,7 @@ var _ = Describe("StateMocker", func() {
 			}
 
 			stateMocker.UpdateDfcState()
-			state := stateMocker.GetState()
+			state := stateMocker.GetSystemState()
 			testSnapshot := &fsm.SystemSnapshot{
 				Managers: map[string]fsm.ManagerSnapshot{
 					constants.DataflowcomponentManagerName: managerSnapshot,
@@ -129,21 +129,21 @@ var _ = Describe("StateMocker", func() {
 			stateMocker.UpdateDfcState()
 
 			// First state should be "starting"
-			state := stateMocker.GetState()
+			state := stateMocker.GetSystemState()
 			mockManager := state.Managers[constants.DataflowcomponentManagerName].(*actions.MockManagerSnapshot)
 			component := mockManager.GetInstance(componentName)
 			Expect(component.CurrentState).To(Equal(startingState))
 
 			// Advance 1 tick - state should still be "starting"
 			stateMocker.Tick()
-			state = stateMocker.GetState()
+			state = stateMocker.GetSystemState()
 			mockManager = state.Managers[constants.DataflowcomponentManagerName].(*actions.MockManagerSnapshot)
 			component = mockManager.GetInstance(componentName)
 			Expect(component.CurrentState).To(Equal(startingState))
 
 			// Advance another tick - state should now be "active"
 			stateMocker.Tick()
-			state = stateMocker.GetState()
+			state = stateMocker.GetSystemState()
 			mockManager = state.Managers[constants.DataflowcomponentManagerName].(*actions.MockManagerSnapshot)
 			component = mockManager.GetInstance(componentName)
 			Expect(component.CurrentState).To(Equal(desiredState))

@@ -69,11 +69,11 @@ func NewStateMocker(configManager ConfigManager) *StateMocker {
 	}
 }
 
-// GetState returns the current state of the system
+// GetSystemState returns the current state of the system
 // it is used by the action unit tests to check the state of the system
 // it is called in a separate goroutine and regularly updates the state of the system
 // it then updates the state of the system according to the config just like the real system would do
-func (s *StateMocker) GetState() *fsm.SystemSnapshot {
+func (s *StateMocker) GetSystemState() *fsm.SystemSnapshot {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.State
