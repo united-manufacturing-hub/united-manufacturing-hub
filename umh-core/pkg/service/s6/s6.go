@@ -1191,7 +1191,7 @@ func parseLogLine(line string) LogEntry {
 
 	// Check if we have the double space separator
 	sepIdx := strings.Index(line, "  ")
-	if sepIdx == -1 || sepIdx > 28 {
+	if sepIdx == -1 || sepIdx > 29 {
 		return LogEntry{Content: line}
 	}
 
