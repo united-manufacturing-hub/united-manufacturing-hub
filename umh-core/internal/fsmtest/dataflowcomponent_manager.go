@@ -145,7 +145,7 @@ func SetupServiceInDataflowComponentManager(
 	services serviceregistry.Provider,
 ) {
 	// Create a properly configured instance
-	instance := dataflowcomponentfsm.NewDataflowComponentInstance("", CreateDataflowComponentTestConfig(componentName, desiredState), services.GetPortManager())
+	instance := dataflowcomponentfsm.NewDataflowComponentInstance("", CreateDataflowComponentTestConfig(componentName, desiredState))
 
 	// Add it to the manager
 	manager.BaseFSMManager.AddInstanceForTest(componentName, instance)

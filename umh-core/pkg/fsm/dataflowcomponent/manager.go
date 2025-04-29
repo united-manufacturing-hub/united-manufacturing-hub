@@ -62,7 +62,7 @@ func NewDataflowComponentManager(name string) *DataflowComponentManager {
 		// Create Dataflowcomponent instance from config
 		func(cfg config.DataFlowComponentConfig) (public_fsm.FSMInstance, error) {
 			// We'll pass nil for the portManager here, and the instance will get it from the services registry during reconciliation
-			return NewDataflowComponentInstance(baseDataflowComponentDir, cfg, nil), nil
+			return NewDataflowComponentInstance(baseDataflowComponentDir, cfg), nil
 		},
 		// Compare Dataflowcomponent configs
 		func(instance public_fsm.FSMInstance, cfg config.DataFlowComponentConfig) (bool, error) {
