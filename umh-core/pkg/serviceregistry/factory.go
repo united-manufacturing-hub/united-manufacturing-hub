@@ -25,8 +25,9 @@ import (
 )
 
 var (
-	initialized bool
-	initMutex   sync.Mutex
+	globalRegistry *Registry
+	initialized    bool
+	initMutex      sync.Mutex
 )
 
 func NewRegistry() (*Registry, error) {
@@ -50,6 +51,16 @@ func NewRegistry() (*Registry, error) {
 		FileSystem:  fs,
 	}
 
+	globalRegistry = registry
 	initialized = true
 	return registry, nil
+}
+
+// GetGlobalRegistry returns the global registry instance.
+// This function is used to be called inside the manager.CreateSnapshot which might not have the service registry dependency injected.
+func GetGlobalRegistry() *Registry {
+	if !initialized || globalRegistry == nil {
+		panic("GetGlobalRegistry called before registry was initialized")
+	}
+	return globalRegistry
 }

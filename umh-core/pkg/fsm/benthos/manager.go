@@ -230,7 +230,9 @@ func (m *BenthosManager) CreateSnapshot() public_fsm.ManagerSnapshot {
 		BaseManagerSnapshot: baseManagerSnapshot,
 		PortAllocations:     make(map[string]uint16),
 	}
-
+	if pm := serviceregistry.GetGlobalRegistry().GetPortManager(); pm != nil {
+		m.ReconcilePortAllocations(benthosSnapshot, pm)
+	}
 	return benthosSnapshot
 }
 
