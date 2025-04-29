@@ -76,11 +76,11 @@ func (s *StateMocker) GetConfigManager() ConfigManager {
 // Tick advances the state mocker by one tick and updates the system state
 func (s *StateMocker) Tick() {
 	s.TickCounter++
-	s.UpdateState()
+	s.UpdateDfcState()
 }
 
 // here, the actual state update logic is implemented
-func (s *StateMocker) UpdateState() {
+func (s *StateMocker) UpdateDfcState() {
 	// only take the dataflowcomponent configs and add them to the state of the dataflowcomponent manager
 	// the other managers are not updated
 

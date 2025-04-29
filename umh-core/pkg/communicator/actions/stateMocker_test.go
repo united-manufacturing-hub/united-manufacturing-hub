@@ -84,7 +84,7 @@ var _ = Describe("StateMocker", func() {
 				},
 			}
 
-			stateMocker.UpdateState()
+			stateMocker.UpdateDfcState()
 			state := stateMocker.GetState()
 			testSnapshot := &fsm.SystemSnapshot{
 				Managers: map[string]fsm.ManagerSnapshot{
@@ -126,7 +126,7 @@ var _ = Describe("StateMocker", func() {
 			})
 
 			// Initial update
-			stateMocker.UpdateState()
+			stateMocker.UpdateDfcState()
 
 			// First state should be "starting"
 			state := stateMocker.GetState()

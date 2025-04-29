@@ -100,7 +100,7 @@ var _ = Describe("EditDataflowComponent", func() {
 
 		// Startup the state mocker and get the mock snapshot
 		stateMocker = actions.NewStateMocker(mockConfig)
-		stateMocker.UpdateState()
+		stateMocker.UpdateDfcState()
 		mockSnapshot := stateMocker.GetState()
 
 		action = actions.NewEditDataflowComponentAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig, mockSnapshot)
