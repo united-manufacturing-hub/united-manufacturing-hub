@@ -12,16 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package dataflowcomponentconfig_test
+package constants
 
-import (
-	"testing"
-
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
+const (
+	MaxRecentStates = 5 // The amount of recent states to keep for flicker detection, if there were at least 2 states in the last 5 states that were differing, the connection is considered degraded
 )
-
-func TestDataFlowComponentConfig(t *testing.T) {
-	RegisterFailHandler(Fail)
-	RunSpecs(t, "DataFlowComponentConfig Suite")
-}

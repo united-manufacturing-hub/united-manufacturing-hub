@@ -136,12 +136,12 @@ func WaitForBenthosManagerMultiState(
 	return tick, fmt.Errorf("not all instances reached desired states after %d attempts", maxAttempts)
 }
 
-// SetupServiceInManager adds a service to the manager and configures it with the mock service.
+// SetupBenthosServiceInManager adds a service to the manager and configures it with the mock service.
 // It creates an instance automatically and adds it to the manager.
 // Note: Since this cannot directly set the service field in the instance after creation,
 // the instance in the manager will be using the default service, not the mock service.
 // Tests should rely on the manager.Reconcile method instead, which uses the manager's own service.
-func SetupServiceInManager(
+func SetupBenthosServiceInManager(
 	manager *benthosfsm.BenthosManager,
 	mockService *benthossvc.MockBenthosService,
 	serviceName string,

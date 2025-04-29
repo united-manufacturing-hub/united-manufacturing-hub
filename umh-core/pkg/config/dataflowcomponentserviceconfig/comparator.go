@@ -12,15 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package dataflowcomponentconfig
+package dataflowcomponentserviceconfig
 
-import (
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
-)
+import "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
+
+// Comparator handles the comparison of DFC configurations
+type Comparator struct {
+}
+
+// NewComparator creates a new configuration comparator for DFC's
+func NewComparator() *Comparator {
+	return &Comparator{}
+}
 
 // ConfigsEqual compares two DataFlowComponentConfigs for equality
 // by converting to BenthosServiceConfig and using the existing comparison utilities
-func ConfigsEqual(a, b *DataFlowComponentConfig) bool {
+func (c *Comparator) ConfigsEqual(a, b *DataflowComponentServiceConfig) bool {
 	if a == nil || b == nil {
 		return false
 	}
@@ -32,40 +39,13 @@ func ConfigsEqual(a, b *DataFlowComponentConfig) bool {
 }
 
 // ConfigDiff returns a human-readable string describing differences between configs
-func ConfigDiff(a, b *DataFlowComponentConfig) string {
+func (c *Comparator) ConfigDiff(a, b *DataflowComponentServiceConfig) string {
 	if a == nil || b == nil {
-		return ""
+		return "one or both configurations are nil"
 	}
 	benthosA := a.GetBenthosServiceConfig()
 	benthosB := b.GetBenthosServiceConfig()
 
 	comparator := benthosserviceconfig.NewComparator()
 	return comparator.ConfigDiff(benthosA, benthosB)
-}
-
-// GenerateYAML generates YAML configuration for a DataFlowComponentConfig
-// using the existing benthos config generator
-func GenerateYAML(config *DataFlowComponentConfig) ([]byte, error) {
-	benthosConfig := config.GetBenthosServiceConfig()
-
-	generator := benthosserviceconfig.NewGenerator()
-	yaml, err := generator.RenderConfig(benthosConfig)
-	if err != nil {
-		return nil, err
-	}
-	return []byte(yaml), nil
-}
-
-// NormalizeConfig applies normalization to a DataFlowComponentConfig
-// by leveraging the existing normalizer for BenthosServiceConfig
-func NormalizeConfig(config *DataFlowComponentConfig) {
-	// Convert to BenthosServiceConfig
-	benthosConfig := config.GetBenthosServiceConfig()
-
-	// Normalize
-	normalizer := benthosserviceconfig.NewNormalizer()
-	normalized := normalizer.NormalizeConfig(benthosConfig)
-
-	// Update the simplified config with normalized values
-	config.BenthosConfig = FromBenthosServiceConfig(normalized).BenthosConfig
 }

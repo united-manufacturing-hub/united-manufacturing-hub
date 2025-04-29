@@ -23,12 +23,13 @@ var (
 )
 
 // ConnectionServiceConfig represents the configuration for a DataFlowComponent
+// Only TCP probes are supported at the moment.
 type ConnectionServiceConfig struct {
 	NmapServiceConfig nmapserviceconfig.NmapServiceConfig `yaml:"nmap"`
 }
 
 // Equal checks if two ConnectionServiceConfigs are equal
-func (c ConnectionServiceConfig) Equal(other ConnectionServiceConfig) bool {
+func (c *ConnectionServiceConfig) Equal(other *ConnectionServiceConfig) bool {
 	return NewComparator().ConfigsEqual(c, other)
 }
 
@@ -49,11 +50,11 @@ func NormalizeConnectionConfig(cfg ConnectionServiceConfig) ConnectionServiceCon
 }
 
 // ConfigsEqual is a package-level function for easy config comparison
-func ConfigsEqual(desired, observed ConnectionServiceConfig) bool {
+func ConfigsEqual(desired, observed *ConnectionServiceConfig) bool {
 	return defaultComparator.ConfigsEqual(desired, observed)
 }
 
 // ConfigDiff is a package-level function for easy config diff generation
-func ConfigDiff(desired, observed ConnectionServiceConfig) string {
+func ConfigDiff(desired, observed *ConnectionServiceConfig) string {
 	return defaultComparator.ConfigDiff(desired, observed)
 }

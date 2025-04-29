@@ -20,7 +20,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/agent_monitor"
@@ -333,7 +333,7 @@ func buildDataFlowComponentDataFromSnapshot(instance fsm.FSMInstanceSnapshot, lo
 		}
 
 		dfcData.Type = "custom" // this is a custom DFC; protocol converters will have a separate fsm
-		dfcData.UUID = dataflowcomponentconfig.GenerateUUIDFromName(instance.ID).String()
+		dfcData.UUID = dataflowcomponentserviceconfig.GenerateUUIDFromName(instance.ID).String()
 		dfcData.Metrics = &models.DfcMetrics{
 			AvgInputThroughputPerMinuteInMsgSec: float64(inputThroughput),
 		}
