@@ -24,8 +24,8 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/redpanda_monitor"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	redpanda_monitor_svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda_monitor"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
 var _ = Describe("Redpanda Monitor FSM", func() {
@@ -36,13 +36,13 @@ var _ = Describe("Redpanda Monitor FSM", func() {
 		mockSvc *redpanda_monitor_svc.MockRedpandaMonitorService
 		inst    *redpanda_monitor.RedpandaMonitorInstance
 
-		mockFS *filesystem.MockFileSystem
+		mockSvcRegistry *serviceregistry.Registry
 	)
 
 	BeforeEach(func() {
 		ctx, cancel = context.WithCancel(context.Background())
 
-		mockFS = filesystem.NewMockFileSystem()
+		mockSvcRegistry = serviceregistry.NewMockRegistry()
 
 		mockSvc = redpanda_monitor_svc.NewMockRedpandaMonitorService()
 		// By default, let's set it up for healthy
@@ -71,13 +71,13 @@ var _ = Describe("Redpanda Monitor FSM", func() {
 	Context("When newly created", func() {
 		It("Should initially be in lifecycle state `to_be_created` -> then `creating` -> `redpanda_monitoring_stopped`", func() {
 			// On first reconcile, it should handle creation
-			err, did := inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 1}, mockFS)
+			err, did := inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 1}, mockSvcRegistry)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(did).To(BeTrue())
 			Expect(inst.GetCurrentFSMState()).To(Equal("creating"))
 
 			// next reconcile
-			err, did = inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 2}, mockFS)
+			err, did = inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 2}, mockSvcRegistry)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(did).To(BeTrue())
 			// now we should be in operational state 'redpanda_monitoring_stopped'
@@ -88,10 +88,10 @@ var _ = Describe("Redpanda Monitor FSM", func() {
 	Context("Lifecycle transitions", func() {
 		BeforeEach(func() {
 			// Ensure we've walked from to_be_created -> creating -> redpanda_monitoring_stopped
-			err, did := inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 10}, mockFS)
+			err, did := inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 10}, mockSvcRegistry)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(did).To(BeTrue())
-			err, did = inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 11}, mockFS)
+			err, did = inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 11}, mockSvcRegistry)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(did).To(BeTrue())
 			Expect(inst.GetCurrentFSMState()).To(Equal(redpanda_monitor.OperationalStateStopped))
@@ -102,13 +102,13 @@ var _ = Describe("Redpanda Monitor FSM", func() {
 			err := inst.SetDesiredFSMState(redpanda_monitor.OperationalStateActive)
 			Expect(err).ToNot(HaveOccurred())
 
-			err, did := inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 12}, mockFS)
+			err, did := inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 12}, mockSvcRegistry)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(did).To(BeTrue())
 			Expect(inst.GetCurrentFSMState()).To(Equal(redpanda_monitor.OperationalStateStarting))
 
 			// next reconcile
-			err, did = inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 13}, mockFS)
+			err, did = inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 13}, mockSvcRegistry)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(did).To(BeTrue())
 			Expect(inst.GetCurrentFSMState()).To(Equal(redpanda_monitor.OperationalStateDegraded))
@@ -116,7 +116,7 @@ var _ = Describe("Redpanda Monitor FSM", func() {
 
 		It("Should remain `redpanda_monitoring_stopped` if desired is `stopped`", func() {
 			// do one reconcile - no state change
-			err, did := inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 14}, mockFS)
+			err, did := inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 14}, mockSvcRegistry)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(did).To(BeFalse())
 			Expect(inst.GetCurrentFSMState()).To(Equal(redpanda_monitor.OperationalStateStopped))
@@ -126,23 +126,23 @@ var _ = Describe("Redpanda Monitor FSM", func() {
 	Context("When monitoring is running", func() {
 		BeforeEach(func() {
 			// get to redpanda_monitoring_stopped
-			err, did := inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 20}, mockFS)
+			err, did := inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 20}, mockSvcRegistry)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(did).To(BeTrue())
-			err, did = inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 21}, mockFS)
+			err, did = inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 21}, mockSvcRegistry)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(did).To(BeTrue())
 			// set desired = active
 			err = inst.SetDesiredFSMState(redpanda_monitor.OperationalStateActive)
 			Expect(err).ToNot(HaveOccurred())
 			// cause start
-			err, did = inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 22}, mockFS)
+			err, did = inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 22}, mockSvcRegistry)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(did).To(BeTrue())
 			Expect(inst.GetCurrentFSMState()).To(Equal(redpanda_monitor.OperationalStateStarting))
 
 			// next reconcile
-			err, did = inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 23}, mockFS)
+			err, did = inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 23}, mockSvcRegistry)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(did).To(BeTrue())
 			Expect(inst.GetCurrentFSMState()).To(Equal(redpanda_monitor.OperationalStateDegraded))
@@ -187,7 +187,7 @@ var _ = Describe("Redpanda Monitor FSM", func() {
 			}
 
 			// Currently mockSvc returns healthy metrics => we expect a transition
-			err, did := inst.Reconcile(ctx, snapshot, mockFS)
+			err, did := inst.Reconcile(ctx, snapshot, mockSvcRegistry)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(did).To(BeTrue())
 			Expect(inst.GetCurrentFSMState()).To(Equal(redpanda_monitor.OperationalStateActive))
@@ -212,19 +212,19 @@ var _ = Describe("Redpanda Monitor FSM", func() {
 			freshInst := redpanda_monitor.NewRedpandaMonitorInstanceWithService(cfg, freshMock)
 
 			// Get it to the degraded state
-			err, did := freshInst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 1}, mockFS)
+			err, did := freshInst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 1}, mockSvcRegistry)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(did).To(BeTrue()) // to_be_created -> creating
 
-			err, did = freshInst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 2}, mockFS)
+			err, did = freshInst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 2}, mockSvcRegistry)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(did).To(BeTrue()) // creating -> stopped
 
-			err, did = freshInst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 3}, mockFS)
+			err, did = freshInst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 3}, mockSvcRegistry)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(did).To(BeTrue()) // stopped -> starting
 
-			err, did = freshInst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 4}, mockFS)
+			err, did = freshInst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 4}, mockSvcRegistry)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(did).To(BeTrue()) // starting -> degraded
 
@@ -259,7 +259,7 @@ var _ = Describe("Redpanda Monitor FSM", func() {
 				SnapshotTime: time.Now(),
 			}
 
-			err, did = freshInst.Reconcile(ctx, snapshot, mockFS)
+			err, did = freshInst.Reconcile(ctx, snapshot, mockSvcRegistry)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(did).To(BeFalse()) // no transition => still degraded
 			Expect(freshInst.GetCurrentFSMState()).To(Equal(redpanda_monitor.OperationalStateDegraded))
@@ -299,7 +299,7 @@ var _ = Describe("Redpanda Monitor FSM", func() {
 				SnapshotTime: time.Now(),
 			}
 
-			err, did := inst.Reconcile(ctx, snapshot1, mockFS)
+			err, did := inst.Reconcile(ctx, snapshot1, mockSvcRegistry)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(did).To(BeTrue())
 			Expect(inst.GetCurrentFSMState()).To(Equal(redpanda_monitor.OperationalStateActive))
@@ -314,7 +314,7 @@ var _ = Describe("Redpanda Monitor FSM", func() {
 				SnapshotTime: time.Now(),
 			}
 
-			err, did = inst.Reconcile(ctx, snapshot2, mockFS)
+			err, did = inst.Reconcile(ctx, snapshot2, mockSvcRegistry)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(did).To(BeTrue())
 			Expect(inst.GetCurrentFSMState()).To(Equal(redpanda_monitor.OperationalStateStopping))
@@ -325,7 +325,7 @@ var _ = Describe("Redpanda Monitor FSM", func() {
 				SnapshotTime: time.Now(),
 			}
 
-			err, did = inst.Reconcile(ctx, snapshot3, mockFS)
+			err, did = inst.Reconcile(ctx, snapshot3, mockSvcRegistry)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(did).To(BeTrue())
 			Expect(inst.GetCurrentFSMState()).To(Equal(redpanda_monitor.OperationalStateStopped))

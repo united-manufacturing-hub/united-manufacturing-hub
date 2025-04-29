@@ -28,13 +28,14 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	redpanda_monitor_service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda_monitor"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
 // Reconcile periodically checks if the FSM needs state transitions based on metrics
 // The filesystemService parameter allows for filesystem operations during reconciliation,
 // enabling the method to read configuration or state information from the filesystem.
 // Currently not used in this implementation but added for consistency with the interface.
-func (b *RedpandaMonitorInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot, filesystemService filesystem.Service) (err error, reconciled bool) {
+func (b *RedpandaMonitorInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot, services serviceregistry.Provider) (err error, reconciled bool) {
 	start := time.Now()
 	instanceName := b.baseFSMInstance.GetID()
 	defer func() {
@@ -77,7 +78,7 @@ func (b *RedpandaMonitorInstance) Reconcile(ctx context.Context, snapshot fsm.Sy
 				func(ctx context.Context) error {
 					// Force removal when other approaches fail - bypasses state transitions
 					// and directly deletes files and resources
-					return b.monitorService.ForceRemoveRedpandaMonitor(ctx, filesystemService)
+					return b.monitorService.ForceRemoveRedpandaMonitor(ctx, services.GetFileSystem())
 				},
 			)
 		}
@@ -85,7 +86,7 @@ func (b *RedpandaMonitorInstance) Reconcile(ctx context.Context, snapshot fsm.Sy
 	}
 
 	// Step 2: Detect external changes.
-	if err = b.reconcileExternalChanges(ctx, filesystemService, snapshot.Tick, start); err != nil {
+	if err = b.reconcileExternalChanges(ctx, services, snapshot.Tick, start); err != nil {
 
 		// I am using strings.Contains as i cannot get it working with errors.Is
 		isExpectedError := strings.Contains(err.Error(), redpanda_monitor_service.ErrServiceNotExist.Error()) ||
@@ -113,7 +114,7 @@ func (b *RedpandaMonitorInstance) Reconcile(ctx context.Context, snapshot fsm.Sy
 	}
 
 	// Step 3: Attempt to reconcile the state.
-	err, reconciled = b.reconcileStateTransition(ctx, filesystemService)
+	err, reconciled = b.reconcileStateTransition(ctx, services.GetFileSystem())
 	if err != nil {
 		// If the instance is removed, we don't want to return an error here, because we want to continue reconciling
 		// Also this should not
@@ -135,7 +136,7 @@ func (b *RedpandaMonitorInstance) Reconcile(ctx context.Context, snapshot fsm.Sy
 		return nil, false // We don't want to return an error here, because we want to continue reconciling
 	}
 
-	s6Err, s6Reconciled := b.monitorService.ReconcileManager(ctx, filesystemService, snapshot.Tick)
+	s6Err, s6Reconciled := b.monitorService.ReconcileManager(ctx, services, snapshot.Tick)
 	if s6Err != nil {
 		b.baseFSMInstance.SetError(s6Err, snapshot.Tick)
 		b.baseFSMInstance.GetLogger().Errorf("error reconciling s6Manager: %s", s6Err)
@@ -155,7 +156,7 @@ func (b *RedpandaMonitorInstance) Reconcile(ctx context.Context, snapshot fsm.Sy
 
 // reconcileExternalChanges checks if the Redpanda monitor service status has changed
 // externally (e.g., if someone manually stopped or started it, or if it crashed)
-func (b *RedpandaMonitorInstance) reconcileExternalChanges(ctx context.Context, filesystemService filesystem.Service, tick uint64, loopStartTime time.Time) error {
+func (b *RedpandaMonitorInstance) reconcileExternalChanges(ctx context.Context, services serviceregistry.Provider, tick uint64, loopStartTime time.Time) error {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentRedpandaMonitor, b.baseFSMInstance.GetID()+".reconcileExternalChanges", time.Since(start))
@@ -163,7 +164,7 @@ func (b *RedpandaMonitorInstance) reconcileExternalChanges(ctx context.Context, 
 
 	observedStateCtx, cancel := context.WithTimeout(ctx, constants.S6UpdateObservedStateTimeout)
 	defer cancel()
-	err := b.UpdateObservedStateOfInstance(observedStateCtx, filesystemService, tick, loopStartTime)
+	err := b.UpdateObservedStateOfInstance(observedStateCtx, services, tick, loopStartTime)
 	if err != nil {
 		return fmt.Errorf("failed to update observed state: %w", err)
 	}

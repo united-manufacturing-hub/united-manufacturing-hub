@@ -24,6 +24,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	redpanda_monitor_service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda_monitor"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
 // CreateInstance is called when the FSM transitions from to_be_created -> creating.
@@ -98,13 +99,13 @@ func (r *RedpandaMonitorInstance) StopInstance(ctx context.Context, filesystemSe
 }
 
 // UpdateObservedStateOfInstance is called when the FSM transitions to updating.
-func (r *RedpandaMonitorInstance) UpdateObservedStateOfInstance(ctx context.Context, filesystemService filesystem.Service, tick uint64, loopStartTime time.Time) error {
+func (r *RedpandaMonitorInstance) UpdateObservedStateOfInstance(ctx context.Context, services serviceregistry.Provider, tick uint64, loopStartTime time.Time) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
 
 	start := time.Now()
-	info, err := r.monitorService.Status(ctx, filesystemService, tick)
+	info, err := r.monitorService.Status(ctx, services.GetFileSystem(), tick)
 	if err != nil {
 		return err
 	}

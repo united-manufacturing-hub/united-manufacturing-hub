@@ -728,7 +728,7 @@ func (s *RedpandaService) ReconcileManager(ctx context.Context, services service
 		Tick:          tick,
 	}
 
-	monitorErr, monitorReconciled := s.redpandaMonitorManager.Reconcile(ctx, redpandaMonitorSnapshot, filesystemService)
+	monitorErr, monitorReconciled := s.redpandaMonitorManager.Reconcile(ctx, redpandaMonitorSnapshot, services)
 	if monitorErr != nil {
 		return fmt.Errorf("failed to reconcile redpanda monitor: %w", monitorErr), false
 	}
