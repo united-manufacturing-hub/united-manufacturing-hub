@@ -74,7 +74,10 @@ func prepareDataForBenchmark() ([]byte, string) {
 	var buf bytes.Buffer
 	gzipWriter := gzip.NewWriter(&buf)
 	_, _ = gzipWriter.Write([]byte(sampleMetrics))
-	gzipWriter.Close()
+	err := gzipWriter.Close()
+	if err != nil {
+		panic(err)
+	}
 
 	hexData := hex.EncodeToString(buf.Bytes())
 	return buf.Bytes(), hexData
@@ -94,7 +97,10 @@ func BenchmarkGzipDecode(b *testing.B) {
 		if err != nil {
 			b.Fatal(err)
 		}
-		reader.Close()
+		err = reader.Close()
+		if err != nil {
+			b.Fatal(err)
+		}
 	}
 }
 
@@ -132,12 +138,18 @@ func BenchmarkCompleteProcessing(b *testing.B) {
 		decodedMetricsDataBytes, _ := hex.DecodeString(encodedAndHexedData)
 
 		// Step 2: Gzip decompress
-		gzipReader, _ := gzip.NewReader(bytes.NewReader(decodedMetricsDataBytes))
-		decompressedData, _ := io.ReadAll(gzipReader)
-		gzipReader.Close()
+		gzipReader, err := gzip.NewReader(bytes.NewReader(decodedMetricsDataBytes))
+		if err != nil {
+			b.Fatal(err)
+		}
+		decompressedData, err := io.ReadAll(gzipReader)
+		if err != nil {
+			b.Fatal(err)
+		}
+		err = gzipReader.Close()
 
 		// Step 3: Parse metrics
-		_, err := ParseMetricsFromBytes(decompressedData)
+		_, err = ParseMetricsFromBytes(decompressedData)
 		if err != nil {
 			b.Fatal(err)
 		}
