@@ -320,9 +320,9 @@ func buildDataFlowComponentDataFromSnapshot(instance fsm.FSMInstanceSnapshot, lo
 			return models.Dfc{}, err
 		}
 		serviceInfo := observed.ServiceInfo
-		inputThroughput := int64(0)
+		inputThroughput := float64(0)
 		if serviceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.MetricsState != nil && serviceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.MetricsState.Input.LastCount > 0 {
-			inputThroughput = int64(serviceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.MetricsState.Input.MessagesPerTick / constants.DefaultTickerTime.Seconds())
+			inputThroughput = serviceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.MetricsState.Input.MessagesPerTick / constants.DefaultTickerTime.Seconds()
 		}
 
 		dfcData.Health = &models.Health{
@@ -335,7 +335,7 @@ func buildDataFlowComponentDataFromSnapshot(instance fsm.FSMInstanceSnapshot, lo
 		dfcData.Type = "custom" // this is a custom DFC; protocol converters will have a separate fsm
 		dfcData.UUID = dataflowcomponentserviceconfig.GenerateUUIDFromName(instance.ID).String()
 		dfcData.Metrics = &models.DfcMetrics{
-			AvgInputThroughputPerMinuteInMsgSec: float64(inputThroughput),
+			AvgInputThroughputPerMinuteInMsgSec: inputThroughput,
 		}
 		dfcData.Name = &instance.ID
 	} else {
