@@ -236,6 +236,7 @@ func (m *FileConfigManager) GetConfig(ctx context.Context, tick uint64) (FullCon
 	if err != nil {
 		return FullConfig{}, fmt.Errorf("failed to check if config file exists in %s: %w", m.configPath, err)
 	}
+
 	if !exists {
 		return FullConfig{}, fmt.Errorf("config file does not exist: %s", m.configPath)
 	}
