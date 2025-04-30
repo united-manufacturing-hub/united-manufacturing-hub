@@ -94,9 +94,10 @@ type FileConfigManager struct {
 	// we use our own implementation of a context aware mutex here to avoid deadlocks
 	mutexReadOrWrite ctxrwmutex.CtxRWMutex
 
+	// ---------- in-memory cache (read-only after RLock) ----------
 	cacheMu      sync.RWMutex // guards the two fields below
-	cacheModTime time.Time    // zero → no cache yet
-	cacheConfig  FullConfig
+	cacheModTime time.Time    // mtime of last successfully parsed file
+	cacheConfig  FullConfig   // struct obtained from that file
 }
 
 // NewFileConfigManager creates a new FileConfigManager
@@ -185,7 +186,27 @@ func (m *FileConfigManager) GetConfigWithOverwritesOrCreateNew(ctx context.Conte
 	return config, nil
 }
 
-// GetConfig returns the current config, always reading fresh from disk
+// GetConfig returns the current configuration.
+//
+// The function first takes a shared read lock so multiple callers can run
+// concurrently.  It then:
+//
+//  1. Ensures the directory exists (harmless no-op if it already does).
+//  2. Verifies the file exists, preserving the historical “config file
+//     does not exist” error semantics expected by callers and tests.
+//  3. Calls Stat() — an inexpensive syscall — and compares the file’s
+//     ModTime with the timestamp stored in the cache.
+//     • If identical, the file is guaranteed unchanged ⇒ return the
+//     cached *FullConfig* immediately (no I/O, no YAML decode).
+//     • Otherwise fall through to the slow path:
+//     a) Read the file with a context deadline.
+//     b) Unmarshal YAML into FullConfig (parseConfig).
+//     c) Do basic sanity checks.
+//     d) Atomically refresh the cache.
+//
+// Because the cache is keyed on ModTime, every observable write to the
+// file (which always updates mtime) causes the next reader to parse fresh
+// bytes, so external callers still see a “latest-on-call” behaviour.
 func (m *FileConfigManager) GetConfig(ctx context.Context, tick uint64) (FullConfig, error) {
 	// we use a read lock here, because we only read the config file
 	err := m.mutexReadOrWrite.RLock(ctx)
@@ -281,6 +302,12 @@ func (m *FileConfigManager) GetConfig(ctx context.Context, tick uint64) (FullCon
 	return config, nil
 }
 
+// parseConfig unmarshals *data* (a YAML document) into a FullConfig.
+//
+// The YAML decoder is configured with KnownFields(true) so that any
+// unknown or misspelled keys cause an immediate error, preventing silent
+// misconfiguration.  No additional semantic validation is performed here;
+// callers are responsible for deeper checks.
 func parseConfig(data []byte) (FullConfig, error) {
 	var cfg FullConfig
 
