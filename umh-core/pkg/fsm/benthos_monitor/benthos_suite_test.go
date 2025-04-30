@@ -21,7 +21,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-func TestAgentFSM(t *testing.T) {
+func TestBenthosMonitorFSM(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Agent FSM Suite")
+	RunSpecs(t, "Benthos Monitor FSM Suite")
 }

@@ -96,7 +96,8 @@ var _ = Describe("EditDataflowComponent", func() {
 		}
 
 		mockConfig = config.NewMockConfigManager().WithConfig(initialConfig)
-		action = actions.NewEditDataflowComponentAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig)
+
+		action = actions.NewEditDataflowComponentAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig, nil)
 	})
 
 	// Cleanup after each test
@@ -417,7 +418,7 @@ var _ = Describe("EditDataflowComponent", func() {
 			// Execute the action
 			result, metadata, err := action.Execute()
 			Expect(err).NotTo(HaveOccurred())
-			Expect(result).To(ContainSubstring("Successfully edited data flow component"))
+			Expect(result).To(ContainSubstring("Successfully edited dataflow component: test-component-updated"))
 			Expect(metadata).To(BeNil())
 
 			// Expect only the Confirmed message in the channel
@@ -502,7 +503,7 @@ buffer:
 			// Execute the action
 			result, metadata, err := action.Execute()
 			Expect(err).NotTo(HaveOccurred())
-			Expect(result).To(ContainSubstring("Successfully edited data flow component"))
+			Expect(result).To(ContainSubstring("Successfully edited dataflow component"))
 			Expect(metadata).To(BeNil())
 
 			// Verify AtomicEditDataflowcomponent was called
@@ -556,7 +557,7 @@ buffer:
 			// Execute the action - should fail
 			result, metadata, err := action.Execute()
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("failed to edit dataflowcomponent"))
+			Expect(err.Error()).To(ContainSubstring("Failed to edit dataflow component: mock edit dataflow component failure"))
 			Expect(result).To(BeNil())
 			Expect(metadata).To(BeNil())
 
@@ -582,7 +583,7 @@ buffer:
 
 			actionReplyPayloadStr, ok := actionReplyPayload["actionReplyPayload"].(string)
 			Expect(ok).To(BeTrue(), "Failed to extract actionReplyPayload as string")
-			Expect(actionReplyPayloadStr).To(ContainSubstring("failed to edit dataflowcomponent"))
+			Expect(actionReplyPayloadStr).To(ContainSubstring("Updating dataflow component 'test-component-updated' configuration.."))
 		})
 
 		It("should handle failure when component not found", func() {

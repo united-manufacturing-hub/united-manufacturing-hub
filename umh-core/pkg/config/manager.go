@@ -630,6 +630,13 @@ func (m *FileConfigManager) AtomicEditDataflowcomponent(ctx context.Context, com
 
 	oldConfig := DataFlowComponentConfig{}
 
+	// check for duplicate name before edit
+	for _, cmp := range config.DataFlow {
+		if cmp.Name == dfc.Name && dataflowcomponentserviceconfig.GenerateUUIDFromName(cmp.Name) != componentUUID {
+			return DataFlowComponentConfig{}, fmt.Errorf("another dataflow component with name %q already exists – choose a unique name", dfc.Name)
+		}
+	}
+
 	// Find the component with matching UUID
 	found := false
 	for i, component := range config.DataFlow {
@@ -645,13 +652,6 @@ func (m *FileConfigManager) AtomicEditDataflowcomponent(ctx context.Context, com
 
 	if !found {
 		return DataFlowComponentConfig{}, fmt.Errorf("dataflow component with UUID %s not found", componentUUID)
-	}
-
-	// check for duplicate name after edit
-	for _, cmp := range config.DataFlow {
-		if cmp.Name == dfc.Name && dataflowcomponentserviceconfig.GenerateUUIDFromName(cmp.Name) != componentUUID {
-			return DataFlowComponentConfig{}, fmt.Errorf("another dataflow component with name %q already exists – choose a unique name", dfc.Name)
-		}
 	}
 
 	// write the config

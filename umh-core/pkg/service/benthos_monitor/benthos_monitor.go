@@ -155,8 +155,6 @@ type BenthosMetricsScan struct {
 	HealthCheck HealthCheck
 	// Metrics contains information about the metrics of the Benthos service
 	BenthosMetrics *BenthosMetrics
-	// MetricsState contains information about the metrics of the Benthos service
-	MetricsState *BenthosMetricsState
 	// LastUpdatedAt contains the last time the metrics were updated
 	LastUpdatedAt time.Time
 }
