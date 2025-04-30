@@ -73,7 +73,7 @@ jobs:
           registry: ghcr.io
           username: $GITHUB_USER
           password: ${{ secrets.GITHUB_TOKEN }}
-          
+
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         env:
@@ -171,10 +171,10 @@ jobs:
         run: |
           # Get the base tags from meta
           TAGS="${{ steps.meta.outputs.tags }}"
-          
+
           # Convert newlines to spaces and handle as a space-separated list
           TAGS_SPACE=$(echo "$TAGS" | tr '\n' ' ')
-          
+
           # Process each tag
           for TAG in $TAGS_SPACE; do
             # Get the tag part without the registry/repo prefix
@@ -273,3 +273,60 @@ jobs:
             echo "Creating manifest for $TAG from $PLATFORM_TAGS"
             docker buildx imagetools create -t "${TAG}" ${PLATFORM_TAGS}
           done
+
+  notify-management-console:
+    needs: create-manifests
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on:
+      group: arc-runners-small
+    steps:
+      - name: Notify management console
+        run: |
+          set -euo pipefail
+          VERSION="${{ github.ref_name }}"
+
+          notify_mc() {
+            local base_url=$1
+
+            echo "Notifying $base_url of new version: $VERSION"
+
+            if [[ "$VERSION" == *-pre.* ]]; then
+              CHANNEL="nightly"
+            else
+              CHANNEL="stable"
+            fi
+
+            if [[ "$CHANNEL" == "nightly" ]]; then
+              # Pre-release, simply update the channel
+              curl --fail --silent --show-error --max-time 30 --retry 3 -X POST "$base_url/v2/webhook/versions/umh-core/update" \
+              -H "X-Webhook-Secret: ${{ secrets.UMH_MC_WEBHOOK_SECRET }}" \
+              -H "Content-Type: application/json" \
+              -d "{\"channel\":\"${CHANNEL}\",\"version\":\"${VERSION}\"}"
+            else
+              # Fetch current nightly to check if we can promote it
+              NIGHTLY_VERSION=$(curl --fail --silent --show-error --max-time 10 -X GET "$base_url/v2/versions/umh-core/nightly" | jq -r '.version')
+
+              # Extract base version from nightly version
+              # v0.0.0-pre.1 -> v0.0.0
+              NIGHTLY_BASE_VERSION=$(echo "$NIGHTLY_VERSION" | sed -E 's/(-pre\.[0-9]+)$//')
+
+              if [[ "$VERSION" == "$NIGHTLY_BASE_VERSION" ]]; then
+                # Promote nightly to stable
+                curl --fail --silent --show-error --max-time 30 --retry 3 -X POST "$base_url/v2/webhook/versions/umh-core/update" \
+                -H "X-Webhook-Secret: ${{ secrets.UMH_MC_WEBHOOK_SECRET }}" \
+                -H "Content-Type: application/json" \
+                -d "{\"channel\":\"stable\",\"version\":\"${VERSION}\",\"isPromotion\":true,\"promotedFrom\":\"nightly\"}"
+              else
+                # New stable release without promotion
+                curl --fail --silent --show-error --max-time 30 --retry 3 -X POST "$base_url/v2/webhook/versions/umh-core/update" \
+                -H "X-Webhook-Secret: ${{ secrets.UMH_MC_WEBHOOK_SECRET }}" \
+                -H "Content-Type: application/json" \
+                -d "{\"channel\":\"stable\",\"version\":\"${VERSION}\"}"
+              fi
+            fi
+
+            echo "Successfully notified $base_url"
+          }
+
+          notify_mc "https://staging.management.umh.app"
+          notify_mc "https://management.umh.app"
