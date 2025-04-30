@@ -40,11 +40,10 @@ type Router struct {
 	clientConnections     map[string]*ClientConnection
 	clientConnectionsLock sync.RWMutex
 	subHandler            *subscriber.Handler
-	systemSnapshot        *fsm.SystemSnapshot
+	systemSnapshotManager *fsm.SnapshotManager
 	configManager         config.ConfigManager
 	actionLogger          *zap.SugaredLogger
 	routerLogger          *zap.SugaredLogger
-	mu                    *sync.RWMutex
 }
 
 type ClientConnection struct {
@@ -58,10 +57,9 @@ func NewRouter(dog watchdog.Iface,
 	outboundChannel chan *models.UMHMessage,
 	releaseChannel config.ReleaseChannel,
 	subHandler *subscriber.Handler,
-	systemSnapshot *fsm.SystemSnapshot,
+	systemSnapshotManager *fsm.SnapshotManager,
 	configManager config.ConfigManager,
 	logger *zap.SugaredLogger,
-	mu *sync.RWMutex,
 ) *Router {
 	return &Router{
 		dog:                   dog,
@@ -72,11 +70,10 @@ func NewRouter(dog watchdog.Iface,
 		clientConnections:     make(map[string]*ClientConnection),
 		clientConnectionsLock: sync.RWMutex{},
 		subHandler:            subHandler,
-		systemSnapshot:        systemSnapshot,
+		systemSnapshotManager: systemSnapshotManager,
 		configManager:         configManager,
 		actionLogger:          logger,
 		routerLogger:          logger,
-		mu:                    mu,
 	}
 }
 
@@ -147,8 +144,7 @@ func (r *Router) handleAction(messageContent models.UMHMessageContent, message *
 		r.releaseChannel,
 		r.dog,
 		traceId,
-		r.systemSnapshot,
+		r.systemSnapshotManager,
 		r.configManager,
-		r.mu,
 	)
 }

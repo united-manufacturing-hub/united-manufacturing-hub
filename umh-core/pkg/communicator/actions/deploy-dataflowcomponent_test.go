@@ -69,10 +69,9 @@ var _ = Describe("DeployDataflowComponent", func() {
 		// Startup the state mocker and get the mock snapshot
 		stateMocker = actions.NewStateMocker(mockConfig)
 		stateMocker.UpdateDfcState()
-		mockSnapshot := stateMocker.GetSystemState()
-		systemMu := stateMocker.GetMutex()
+		mockStateManager := stateMocker.GetStateManager()
 
-		action = actions.NewDeployDataflowComponentAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig, mockSnapshot, systemMu)
+		action = actions.NewDeployDataflowComponentAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig, mockStateManager)
 	})
 
 	// Cleanup after each test
@@ -484,7 +483,7 @@ var _ = Describe("DeployDataflowComponent", func() {
 			// Execute the action
 			result, metadata, err := action.Execute()
 			Expect(err).NotTo(HaveOccurred())
-			Expect(result).To(ContainSubstring("Successfully deployed data flow component"))
+			Expect(result).To(ContainSubstring("Successfully deployed dataflow component"))
 			Expect(metadata).To(BeNil())
 
 			// Stop the state mocker
@@ -555,7 +554,7 @@ var _ = Describe("DeployDataflowComponent", func() {
 			// Execute the action - should fail
 			result, metadata, err := action.Execute()
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("failed to add dataflowcomponent"))
+			Expect(err.Error()).To(ContainSubstring("Failed to add dataflow component: mock add dataflow component failure"))
 			Expect(result).To(BeNil())
 			Expect(metadata).To(BeNil())
 
@@ -584,7 +583,7 @@ var _ = Describe("DeployDataflowComponent", func() {
 
 			actionReplyPayloadStr, ok := actionReplyPayload["actionReplyPayload"].(string)
 			Expect(ok).To(BeTrue(), "Failed to extract actionReplyPayload as string")
-			Expect(actionReplyPayloadStr).To(ContainSubstring("failed to add dataflowcomponent"))
+			Expect(actionReplyPayloadStr).To(ContainSubstring("Adding dataflow component 'test-component' to configuration.."))
 		})
 
 		It("should process inject data with cache resources, rate limit resources, and buffer", func() {
@@ -641,7 +640,7 @@ buffer:
 			// Execute the action
 			result, metadata, err := action.Execute()
 			Expect(err).NotTo(HaveOccurred())
-			Expect(result).To(ContainSubstring("Successfully deployed data flow component"))
+			Expect(result).To(ContainSubstring("Successfully deployed dataflow component: test-component-with-inject"))
 			Expect(metadata).To(BeNil())
 
 			// Stop the state mocker

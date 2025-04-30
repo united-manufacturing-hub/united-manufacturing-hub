@@ -46,7 +46,7 @@ type StateTransition struct {
 // it is passed a config manager that provides the config being used by the action unit tests
 // it then updates the state of the system according to the config just like the real system would do
 type StateMocker struct {
-	State              *fsm.SystemSnapshot
+	StateManager       *fsm.SnapshotManager
 	ConfigManager      ConfigManager
 	TickCounter        int
 	PendingTransitions map[string][]StateTransition // key is component ID
@@ -58,10 +58,8 @@ type StateMocker struct {
 // NewStateMocker creates a new StateMocker
 func NewStateMocker(configManager ConfigManager) *StateMocker {
 	return &StateMocker{
-		ConfigManager: configManager,
-		State: &fsm.SystemSnapshot{
-			Managers: make(map[string]fsm.ManagerSnapshot),
-		},
+		ConfigManager:      configManager,
+		StateManager:       fsm.NewSnapshotManager(),
 		TickCounter:        0,
 		PendingTransitions: make(map[string][]StateTransition),
 		done:               make(chan struct{}),
@@ -69,18 +67,12 @@ func NewStateMocker(configManager ConfigManager) *StateMocker {
 	}
 }
 
-// GetSystemState returns the current state of the system
-// it is used by the action unit tests to check the state of the system
-// it is called in a separate goroutine and regularly updates the state of the system
-// it then updates the state of the system according to the config just like the real system would do
-func (s *StateMocker) GetSystemState() *fsm.SystemSnapshot {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	return s.State
-}
-
 func (s *StateMocker) GetMutex() *sync.RWMutex {
 	return s.mu
+}
+
+func (s *StateMocker) GetStateManager() *fsm.SnapshotManager {
+	return s.StateManager
 }
 
 // GetConfigManager returns the config manager that is being used by the state mocker
@@ -103,10 +95,18 @@ func (s *StateMocker) UpdateDfcState() {
 	managerSnapshot := s.createDfcManagerSnapshot()
 
 	// update the state of the system with the new manager snapshot
-	if s.State.Managers == nil {
-		s.State.Managers = make(map[string]fsm.ManagerSnapshot)
+	systemSnapshot := s.StateManager.GetDeepCopySnapshot()
+	if systemSnapshot.Managers == nil {
+		managers := make(map[string]fsm.ManagerSnapshot)
+		s.StateManager.UpdateSnapshot(&fsm.SystemSnapshot{
+			Managers: managers,
+		})
 	}
-	s.State.Managers[constants.DataflowcomponentManagerName] = managerSnapshot
+	s.StateManager.UpdateSnapshot(&fsm.SystemSnapshot{
+		Managers: map[string]fsm.ManagerSnapshot{
+			constants.DataflowcomponentManagerName: managerSnapshot,
+		},
+	})
 }
 
 // createDfcManagerSnapshot creates a snapshot of the DataFlowComponent manager state
@@ -120,8 +120,9 @@ func (s *StateMocker) createDfcManagerSnapshot() fsm.ManagerSnapshot {
 		// get the default currentState from the last observed state (s.state)
 		currentState := curDataflowcomponent.DesiredFSMState
 		var instances map[string]*fsm.FSMInstanceSnapshot
-		if s.State != nil && s.State.Managers != nil {
-			if manager, ok := s.State.Managers[constants.DataflowcomponentManagerName]; ok {
+		systemSnapshot := s.StateManager.GetDeepCopySnapshot()
+		if systemSnapshot.Managers != nil {
+			if manager, ok := systemSnapshot.Managers[constants.DataflowcomponentManagerName]; ok {
 				instances = manager.GetInstances()
 			}
 		}

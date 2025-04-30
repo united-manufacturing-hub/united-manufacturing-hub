@@ -17,7 +17,6 @@ package actions_test
 import (
 	"context"
 	"errors"
-	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -25,6 +24,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 )
 
@@ -40,6 +40,7 @@ var _ = Describe("EditInstance", func() {
 		instanceUUID    uuid.UUID
 		outboundChannel chan *models.UMHMessage
 		mockConfig      *config.MockConfigManager
+		snapshotManager *fsm.SnapshotManager
 	)
 
 	// Setup before each test
@@ -72,8 +73,8 @@ var _ = Describe("EditInstance", func() {
 		}
 
 		mockConfig = config.NewMockConfigManager().WithConfig(initialConfig)
-		mu := sync.RWMutex{}
-		action = actions.NewEditInstanceAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig, &mu)
+		snapshotManager := fsm.NewSnapshotManager()
+		action = actions.NewEditInstanceAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig, snapshotManager)
 	})
 
 	// Cleanup after each test
@@ -291,8 +292,7 @@ var _ = Describe("EditInstance", func() {
 			}
 
 			// Create new action with our custom mock
-			mu := sync.RWMutex{}
-			action = actions.NewEditInstanceAction(userEmail, actionUUID, instanceUUID, outboundChannel, customMock, &mu)
+			action = actions.NewEditInstanceAction(userEmail, actionUUID, instanceUUID, outboundChannel, customMock, snapshotManager)
 
 			// Parse with valid location
 			payload := map[string]interface{}{

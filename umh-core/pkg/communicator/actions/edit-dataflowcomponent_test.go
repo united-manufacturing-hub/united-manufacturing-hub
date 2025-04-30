@@ -101,9 +101,9 @@ var _ = Describe("EditDataflowComponent", func() {
 		// Startup the state mocker and get the mock snapshot
 		stateMocker = actions.NewStateMocker(mockConfig)
 		stateMocker.UpdateDfcState()
-		mockSnapshot := stateMocker.GetSystemState()
-		systemMu := stateMocker.GetMutex()
-		action = actions.NewEditDataflowComponentAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig, mockSnapshot, systemMu)
+		mockManagerSnapshot := stateMocker.GetStateManager()
+
+		action = actions.NewEditDataflowComponentAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig, mockManagerSnapshot)
 	})
 
 	// Cleanup after each test
@@ -438,7 +438,7 @@ var _ = Describe("EditDataflowComponent", func() {
 			// Execute the action
 			result, metadata, err := action.Execute()
 			Expect(err).NotTo(HaveOccurred())
-			Expect(result).To(ContainSubstring("Successfully edited data flow component"))
+			Expect(result).To(ContainSubstring("Successfully edited dataflow component: test-component-updated"))
 			Expect(metadata).To(BeNil())
 
 			// Stop the state mocker
@@ -530,7 +530,7 @@ buffer:
 			// Execute the action
 			result, metadata, err := action.Execute()
 			Expect(err).NotTo(HaveOccurred())
-			Expect(result).To(ContainSubstring("Successfully edited data flow component"))
+			Expect(result).To(ContainSubstring("Successfully edited dataflow component"))
 			Expect(metadata).To(BeNil())
 
 			// Stop the state mocker
@@ -587,7 +587,7 @@ buffer:
 			// Execute the action - should fail
 			result, metadata, err := action.Execute()
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("failed to edit dataflowcomponent"))
+			Expect(err.Error()).To(ContainSubstring("Failed to edit dataflow component: mock edit dataflow component failure"))
 			Expect(result).To(BeNil())
 			Expect(metadata).To(BeNil())
 
@@ -613,7 +613,7 @@ buffer:
 
 			actionReplyPayloadStr, ok := actionReplyPayload["actionReplyPayload"].(string)
 			Expect(ok).To(BeTrue(), "Failed to extract actionReplyPayload as string")
-			Expect(actionReplyPayloadStr).To(ContainSubstring("failed to edit dataflowcomponent"))
+			Expect(actionReplyPayloadStr).To(ContainSubstring("Updating dataflow component 'test-component-updated' configuration.."))
 		})
 
 		It("should handle failure when component not found", func() {

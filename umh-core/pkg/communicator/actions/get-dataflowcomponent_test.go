@@ -16,7 +16,6 @@ package actions_test
 
 import (
 	"reflect"
-	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -43,8 +42,6 @@ var _ = Describe("GetDataFlowComponent", func() {
 		instanceUUID    uuid.UUID
 		outboundChannel chan *models.UMHMessage
 		mockConfig      *config.MockConfigManager
-		mockSnapshot    *fsm.SystemSnapshot
-		systemMu        *sync.RWMutex
 	)
 
 	// Setup before each test
@@ -147,10 +144,9 @@ var _ = Describe("GetDataFlowComponent", func() {
 		// Startup the state mocker and get the mock snapshot
 		stateMocker := actions.NewStateMocker(mockConfig)
 		stateMocker.UpdateDfcState()
-		mockSnapshot = stateMocker.GetSystemState()
-		systemMu = stateMocker.GetMutex()
+		mockManagerSnapshot := stateMocker.GetStateManager()
 
-		action = actions.NewGetDataFlowComponentAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig, mockSnapshot, systemMu)
+		action = actions.NewGetDataFlowComponentAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig, mockManagerSnapshot)
 	})
 
 	// Cleanup after each test
@@ -325,9 +321,11 @@ var _ = Describe("GetDataFlowComponent", func() {
 			emptySnapshot := &fsm.SystemSnapshot{
 				Managers: map[string]fsm.ManagerSnapshot{},
 			}
+			snapshotManager := fsm.NewSnapshotManager()
+			snapshotManager.UpdateSnapshot(emptySnapshot)
 
 			// Create action with empty snapshot
-			action = actions.NewGetDataFlowComponentAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig, emptySnapshot, systemMu)
+			action = actions.NewGetDataFlowComponentAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig, snapshotManager)
 
 			// Parse valid payload
 			payload := map[string]interface{}{
@@ -352,9 +350,11 @@ var _ = Describe("GetDataFlowComponent", func() {
 		It("should handle components with missing observed state", func() {
 			// Create a system snapshot with a component that has no observed state
 			snapshotWithMissingState := actions.CreateMockSystemSnapshotWithMissingState()
+			snapshotManager := fsm.NewSnapshotManager()
+			snapshotManager.UpdateSnapshot(snapshotWithMissingState)
 
 			// Create action with this special snapshot
-			action = actions.NewGetDataFlowComponentAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig, snapshotWithMissingState, systemMu)
+			action = actions.NewGetDataFlowComponentAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig, snapshotManager)
 
 			// Parse with UUID that matches the component with missing state
 			testComponentID := "test-component-missing-state"
@@ -419,11 +419,12 @@ var _ = Describe("GetDataFlowComponent", func() {
 				},
 			}
 
-			testSnapshot := &fsm.SystemSnapshot{
+			snapshotManager := fsm.NewSnapshotManager()
+			snapshotManager.UpdateSnapshot(&fsm.SystemSnapshot{
 				Managers: map[string]fsm.ManagerSnapshot{
 					constants.DataflowcomponentManagerName: managerSnapshot,
 				},
-			}
+			})
 
 			// Set up action with this snapshot
 			testAction := actions.NewGetDataFlowComponentAction(
@@ -432,8 +433,7 @@ var _ = Describe("GetDataFlowComponent", func() {
 				instanceUUID,
 				outboundChannel,
 				mockConfig,
-				testSnapshot,
-				systemMu,
+				snapshotManager,
 			)
 
 			// Parse with the UUID of our test component
@@ -490,6 +490,9 @@ var _ = Describe("GetDataFlowComponent", func() {
 				},
 			}
 
+			snapshotManager := fsm.NewSnapshotManager()
+			snapshotManager.UpdateSnapshot(testSnapshot)
+
 			// Set up action with this snapshot
 			testAction := actions.NewGetDataFlowComponentAction(
 				userEmail,
@@ -497,8 +500,7 @@ var _ = Describe("GetDataFlowComponent", func() {
 				instanceUUID,
 				outboundChannel,
 				mockConfig,
-				testSnapshot,
-				systemMu,
+				snapshotManager,
 			)
 
 			// Parse with the UUID of our invalid component

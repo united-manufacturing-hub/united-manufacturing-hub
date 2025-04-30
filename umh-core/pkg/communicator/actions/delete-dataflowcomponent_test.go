@@ -80,9 +80,8 @@ var _ = Describe("DeleteDataflowComponent", func() {
 		// Startup the state mocker and get the mock snapshot
 		stateMocker = actions.NewStateMocker(mockConfig)
 		stateMocker.UpdateDfcState()
-		mockSnapshot := stateMocker.GetSystemState()
-		systemMu := stateMocker.GetMutex()
-		action = actions.NewDeleteDataflowComponentAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig, mockSnapshot, systemMu)
+		mockStateManager := stateMocker.GetStateManager()
+		action = actions.NewDeleteDataflowComponentAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig, mockStateManager)
 	})
 
 	// Cleanup after each test
@@ -166,7 +165,7 @@ var _ = Describe("DeleteDataflowComponent", func() {
 			// Execute the action
 			result, metadata, err := action.Execute()
 			Expect(err).NotTo(HaveOccurred())
-			Expect(result).To(ContainSubstring("Successfully deleted data flow component"))
+			Expect(result).To(ContainSubstring("Successfully deleted dataflow component with UUID: " + componentUUID.String()))
 			Expect(metadata).To(BeNil())
 
 			// Stop the state mocker
@@ -198,7 +197,7 @@ var _ = Describe("DeleteDataflowComponent", func() {
 			// Execute the action - should fail
 			result, metadata, err := action.Execute()
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("failed to delete dataflow component"))
+			Expect(err.Error()).To(ContainSubstring("Failed to delete dataflow component: mock delete dataflow component failure"))
 			Expect(result).To(BeNil())
 			Expect(metadata).To(BeNil())
 
@@ -227,7 +226,7 @@ var _ = Describe("DeleteDataflowComponent", func() {
 
 			actionReplyPayloadStr, ok := actionReplyPayload["actionReplyPayload"].(string)
 			Expect(ok).To(BeTrue(), "Failed to extract actionReplyPayload as string")
-			Expect(actionReplyPayloadStr).To(ContainSubstring("failed to delete dataflow component"))
+			Expect(actionReplyPayloadStr).To(ContainSubstring("Removing dataflow component from configuration..."))
 		})
 
 		It("should return error when component not found", func() {
