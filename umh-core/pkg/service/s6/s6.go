@@ -26,6 +26,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"text/template"
 	"time"
@@ -123,9 +124,17 @@ type Service interface {
 	EnsureSupervision(ctx context.Context, servicePath string, fsService filesystem.Service) (bool, error)
 }
 
+type logState struct {
+	mu     sync.Mutex // guards every field below
+	inode  uint64     // to detect rotation
+	offset int64      // next byte to read
+	logs   []LogEntry // full slice accumulated so far
+}
+
 // DefaultService is the default implementation of the S6 Service interface
 type DefaultService struct {
-	logger *zap.SugaredLogger
+	logger     *zap.SugaredLogger
+	logCursors sync.Map // map[string]*logState (key = abs log path)
 }
 
 // NewDefaultService creates a new default S6 service
@@ -1346,21 +1355,104 @@ func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsServ
 		return nil, ErrLogFileNotFound
 	}
 
-	// Read the log file
-	content, err := fsService.ReadFile(ctx, logFile)
+	// ── 1. grab / create state ──────────────────────────────────────
+	stAny, _ := s.logCursors.LoadOrStore(logFile, &logState{})
+	st := stAny.(*logState)
+
+	st.mu.Lock()
+	defer st.mu.Unlock()
+
+	// ── 2. check inode & size (rotation / truncation?) ──────────────
+	fi, err := fsService.Stat(ctx, logFile)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read log file: %w", err)
+		return nil, err
+	}
+	sys := fi.Sys().(*syscall.Stat_t) // on Linux / Alpine
+	size, ino := fi.Size(), sys.Ino
+
+	// rotated or truncated ⇒ reset cache
+	if st.inode != ino || st.offset > size {
+		st.inode, st.offset = ino, 0
+		st.logs = st.logs[:0] // reuse slice capacity
 	}
 
-	entries, err := ParseLogsFromBytes(content)
+	// ── 3. read only the new bytes ──────────────────────────────────
+	chunk, newSize, err := fsService.ReadFileRange(ctx, logFile, st.offset)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse logs: %w", err)
+		return nil, err
+	}
+	st.offset = newSize // advance cursor even if chunk == nil
+
+	if len(chunk) != 0 {
+		// parse *delta* and append to cache
+		entries, err := ParseLogsFromBytes(chunk)
+		if err != nil {
+			return nil, err
+		}
+		st.logs = append(st.logs, entries...)
 	}
 
+	// ── 4. return *copy* so caller can’t mutate our cache ───────────
+	out := make([]LogEntry, len(st.logs))
+	copy(out, st.logs)
+	return out, nil
+}
+
+// ParseLogsFromBytes is a zero-allocation* parser for an s6 “current”
+// file.  It scans the buffer **once**, pre-allocates the result slice
+// and never calls strings.Split/Index, so the costly
+// runtime.growslice/strings.* nodes vanish from the profile.
+//
+//	*apart from the unavoidable string↔[]byte conversions needed for the
+//	LogEntry struct – those are just header copies, no heap memcopy.
+func ParseLogsFromBytes(buf []byte) ([]LogEntry, error) {
+	// Trim one trailing newline that is always present in rotated logs.
+	buf = bytes.TrimSuffix(buf, []byte{'\n'})
+
+	// 1) -------- pre-allocation --------------------------------------
+	nLines := bytes.Count(buf, []byte{'\n'}) + 1
+	entries := make([]LogEntry, 0, nLines) // avoids  runtime.growslice
+
+	// 2) -------- single pass over the buffer -------------------------
+	for start := 0; start < len(buf); {
+		// find next '\n'
+		nl := bytes.IndexByte(buf[start:], '\n')
+		var line []byte
+		if nl == -1 {
+			line = buf[start:]
+			start = len(buf)
+		} else {
+			line = buf[start : start+nl]
+			start += nl + 1
+		}
+		if len(line) == 0 { // empty line – rotate artefact
+			continue
+		}
+
+		// 3) -------- parse one line ----------------------------------
+		// format: 2025-04-20 13:01:02.123456789␠␠payload
+		sep := bytes.Index(line, []byte("  "))
+		if sep == -1 || sep < 29 { // malformed – keep raw
+			entries = append(entries, LogEntry{Content: string(line)})
+			continue
+		}
+
+		ts, err := ParseNano(string(line[:sep])) // ParseNano is already fast
+		if err != nil {
+			entries = append(entries, LogEntry{Content: string(line)})
+			continue
+		}
+
+		entries = append(entries, LogEntry{
+			Timestamp: ts,
+			Content:   string(line[sep+2:]),
+		})
+	}
 	return entries, nil
 }
 
-func ParseLogsFromBytes(content []byte) ([]LogEntry, error) {
+// ParseLogsFromBytes_Unoptimized is the more readable not optimized version of ParseLogsFromBytes
+func ParseLogsFromBytes_Unoptimized(content []byte) ([]LogEntry, error) {
 	// Split logs by newline
 	logs := strings.Split(strings.TrimSpace(string(content)), "\n")
 

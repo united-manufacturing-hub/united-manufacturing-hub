@@ -17,6 +17,7 @@ package filesystem
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"time"
@@ -32,6 +33,11 @@ type Service interface {
 
 	// ReadFile reads a file's contents respecting the context
 	ReadFile(ctx context.Context, path string) ([]byte, error)
+
+	// ReadFileRange reads the file starting at byte offset “from” and returns:
+	//   - chunk   – the data that was read (nil if nothing new)
+	//   - newSize – the file size **after** the read (use it as next offset)
+	ReadFileRange(ctx context.Context, path string, from int64) ([]byte, int64, error)
 
 	// WriteFile writes data to a file respecting the context
 	WriteFile(ctx context.Context, path string, data []byte, perm os.FileMode) error
@@ -141,6 +147,74 @@ func (s *DefaultService) ReadFile(ctx context.Context, path string) ([]byte, err
 			err = fmt.Errorf("context cancelled")
 		}
 		return nil, err
+	}
+}
+
+// ReadFileRange reads the file starting at byte offset “from” and returns:
+//   - chunk   – the data that was read (nil if nothing new)
+//   - newSize – the file size **after** the read (use it as next offset)
+func (s *DefaultService) ReadFileRange(
+	ctx context.Context,
+	path string,
+	from int64,
+) ([]byte, int64, error) {
+
+	if err := s.checkContext(ctx); err != nil {
+		return nil, 0, err
+	}
+
+	type result struct {
+		data    []byte
+		newSize int64
+		err     error
+	}
+	resCh := make(chan result, 1)
+
+	go func() {
+		f, err := os.Open(path)
+		if err != nil {
+			resCh <- result{nil, 0, err}
+			return
+		}
+		defer func() {
+			if err := f.Close(); err != nil {
+				resCh <- result{nil, 0, err}
+			}
+		}()
+
+		// stat *after* open so we have a consistent view
+		fi, err := f.Stat()
+		if err != nil {
+			resCh <- result{nil, 0, err}
+			return
+		}
+		size := fi.Size()
+
+		// nothing new?
+		if from >= size {
+			resCh <- result{nil, size, nil}
+			return
+		}
+
+		if _, err = f.Seek(from, io.SeekStart); err != nil {
+			resCh <- result{nil, 0, err}
+			return
+		}
+
+		buf := make([]byte, size-from)
+		if _, err = io.ReadFull(f, buf); err != nil {
+			resCh <- result{nil, 0, err}
+			return
+		}
+
+		resCh <- result{buf, size, nil}
+	}()
+
+	select {
+	case res := <-resCh:
+		return res.data, res.newSize, res.err
+	case <-ctx.Done():
+		return nil, 0, ctx.Err()
 	}
 }
 
