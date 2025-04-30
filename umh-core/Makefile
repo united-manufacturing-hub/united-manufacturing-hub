@@ -64,7 +64,7 @@ install:
 download-docker-binaries:
 	@mkdir -p .docker-cache/s6-overlay .docker-cache/benthos .docker-cache/redpanda
 	@echo "Downloading binaries with caching..."
-	
+
 	@# Check and update s6-overlay version
 	@if [ ! -f .docker-cache/s6-overlay/version ] || [ "$$(cat .docker-cache/s6-overlay/version)" != "$(S6_OVERLAY_VERSION)" ]; then \
 		rm -f .docker-cache/s6-overlay/*.tar.xz; \
@@ -74,7 +74,7 @@ download-docker-binaries:
 		wget -O .docker-cache/s6-overlay/s6-overlay-x86_64.tar.xz "https://github.com/just-containers/s6-overlay/releases/download/v$(S6_OVERLAY_VERSION)/s6-overlay-x86_64.tar.xz"; \
 		wget -O .docker-cache/s6-overlay/s6-overlay-aarch64.tar.xz "https://github.com/just-containers/s6-overlay/releases/download/v$(S6_OVERLAY_VERSION)/s6-overlay-aarch64.tar.xz"; \
 	fi
-	
+
 	@# Check and update Benthos version
 	@if [ ! -f .docker-cache/benthos/version ] || [ "$$(cat .docker-cache/benthos/version)" != "$(BENTHOS_UMH_VERSION)" ]; then \
 		rm -f .docker-cache/benthos/benthos-linux-*; \
@@ -82,7 +82,7 @@ download-docker-binaries:
 		wget -O .docker-cache/benthos/benthos-linux-amd64 "https://github.com/united-manufacturing-hub/benthos-umh/releases/download/v$(BENTHOS_UMH_VERSION)/benthos-linux-amd64"; \
 		wget -O .docker-cache/benthos/benthos-linux-arm64 "https://github.com/united-manufacturing-hub/benthos-umh/releases/download/v$(BENTHOS_UMH_VERSION)/benthos-linux-arm64"; \
 	fi
-	
+
 	@# Check and update Redpanda version
 	@if [ ! -f .docker-cache/redpanda/version ] || [ "$$(cat .docker-cache/redpanda/version)" != "$(REDPANDA_VERSION)" ]; then \
 		rm -rf .docker-cache/redpanda/redpanda-*.tar.gz .docker-cache/redpanda/amd64 .docker-cache/redpanda/arm64; \
@@ -99,7 +99,7 @@ download-docker-binaries:
 		docker cp $$CONTAINER_ARM64:/opt/redpanda .docker-cache/redpanda/arm64/; \
 		docker rm -v $$CONTAINER_ARM64; \
 	fi
-	
+
 	@# Verify all required files exist
 	@echo "Verifying downloaded files..."
 	@for f in \
@@ -118,7 +118,7 @@ download-docker-binaries:
 			exit 1; \
 		fi; \
 	done
-	
+
 	@# Verify redpanda directories exist
 	@if [ ! -d .docker-cache/redpanda/amd64/redpanda ] || [ ! -d .docker-cache/redpanda/arm64/redpanda ]; then \
 		echo "Missing required Redpanda directories"; \
@@ -200,7 +200,7 @@ test: vet nilaway lint
 unit-test: vet nilaway lint
 	ginkgo -r -v --tags=test --label-filter='!integration && !redpanda-extended' --fail-fast ./...
 
-benchmark: 
+benchmark:
 	@echo "Running benchmarks..."
 	go test -bench=. -benchmem ./...
 
@@ -225,6 +225,16 @@ pre-test: stop-all-pods vet nilaway lint
 pre-test-ci: vet nilaway lint
 
 integration-test: pre-test
+
+benchmark-benthos-metrics:
+	@echo "Running Benthos metrics benchmarks..."
+	cd pkg/service/benthos_monitor && go test -bench=. -benchmem
+
+benchmark-redpanda-metrics:
+	@echo "Running Redpanda metrics benchmarks..."
+	cd pkg/service/redpanda_monitor && go test -bench=. -benchmem
+
+integration-test: stop-all-pods vet nilaway lint
 	ginkgo -r -v --tags=test --label-filter='integration' --fail-fast ./...
 
 redpanda-extended-test: pre-test
