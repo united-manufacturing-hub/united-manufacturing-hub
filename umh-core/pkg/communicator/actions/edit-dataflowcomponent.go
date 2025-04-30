@@ -491,6 +491,7 @@ func (a *EditDataflowComponentAction) waitForComponentToBeActive() error {
 							SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
 								fmt.Sprintf("Dataflow component is in state '%s' (waiting for 'active', %ds remaining)...",
 									instance.CurrentState, remainingSeconds), a.outboundChannel, models.EditDataFlowComponent)
+							continue
 						} else {
 							SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Dataflow component is active.", a.outboundChannel, models.EditDataFlowComponent)
 						}
