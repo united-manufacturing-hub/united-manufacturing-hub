@@ -12,6 +12,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Package actions houses *imperative* operations that mutate the configuration
+// or runtime state of an UMH instance.  This file contains the implementation
+// for deleting a Data‑Flow Component (DFC).
+//
+// -----------------------------------------------------------------------------
+// BUSINESS CONTEXT
+// -----------------------------------------------------------------------------
+// A DFC is an FSM‑managed Benthos pipeline.  Deleting such a component is a
+// two‑step affair:
+//
+//   1. Remove the component **configuration** from the central store via
+//      `configManager.AtomicDeleteDataflowcomponent`.
+//   2. Observe the *live* FSM snapshot until the runtime has actually torn down
+//      the instance (it disappears from `systemSnapshot`).
+//
+// The Action’s contract mirrors the other mutate‑type actions:
+//   * A progress message is emitted for each significant milestone.
+//   * If the FSM does **not** remove the instance within
+//     `constants.DataflowComponentWaitForActiveTimeout`, the action finishes
+//     with *failure* (there is no rollback because the component is already
+//     unwanted).
+// -----------------------------------------------------------------------------
+
 package actions
 
 import (
@@ -33,24 +56,36 @@ import (
 	"go.uber.org/zap"
 )
 
-// DeleteDataflowComponentAction implements the Action interface for deleting
-// dataflow components from the UMH instance.
+// DeleteDataflowComponentAction removes a single DFC identified by UUID.
+//
+// The struct only contains *immutable* data required throughout the whole
+// lifecycle of a deletion.  Any value that changes during execution is local to
+// the respective method to avoid lock contention and race conditions.
+// ----------------------------------------------------------------------------
 type DeleteDataflowComponentAction struct {
-	userEmail       string
-	actionUUID      uuid.UUID
-	instanceUUID    uuid.UUID
-	outboundChannel chan *models.UMHMessage
-	configManager   config.ConfigManager
-	systemSnapshot  *fsm.SystemSnapshot
-	componentUUID   uuid.UUID
-	actionLogger    *zap.SugaredLogger
-	systemMu        *sync.RWMutex
+	// ─── Request metadata ────────────────────────────────────────────────────
+	userEmail    string    // used for feedback messages
+	actionUUID   uuid.UUID // unique ID of *this* action instance
+	instanceUUID uuid.UUID // ID of the UMH instance we operate on
+
+	// ─── Plumbing ────────────────────────────────────────────────────────────
+	outboundChannel chan *models.UMHMessage // channel for progress events
+	configManager   config.ConfigManager    // abstraction over config store
+
+	// ─── Runtime observation ────────────────────────────────────────────────
+	systemSnapshot *fsm.SystemSnapshot // pointer owned by FSM goroutine
+	systemMu       *sync.RWMutex       // protects systemSnapshot during copy
+
+	// ─── Business data ──────────────────────────────────────────────────────
+	componentUUID uuid.UUID // the component slated for deletion
+
+	// ─── Utilities ──────────────────────────────────────────────────────────
+	actionLogger *zap.SugaredLogger
 }
 
-// NewDeleteDataflowComponentAction creates a new DeleteDataflowComponentAction with the provided parameters.
-// This constructor is primarily used for testing to enable dependency injection, though it can be used
-// in production code as well. It initializes the action with the necessary fields but doesn't
-// populate the component UUID field which must be done via Parse.
+// NewDeleteDataflowComponentAction returns an *empty* action instance prepared
+// for unit tests or real execution.  The caller still needs to Parse and
+// Validate before calling Execute.
 func NewDeleteDataflowComponentAction(userEmail string, actionUUID uuid.UUID, instanceUUID uuid.UUID, outboundChannel chan *models.UMHMessage, configManager config.ConfigManager, systemSnapshot *fsm.SystemSnapshot, systemMu *sync.RWMutex) *DeleteDataflowComponentAction {
 	return &DeleteDataflowComponentAction{
 		userEmail:       userEmail,
@@ -64,8 +99,9 @@ func NewDeleteDataflowComponentAction(userEmail string, actionUUID uuid.UUID, in
 	}
 }
 
-// Parse implements the Action interface by extracting component UUID from the payload.
-// It parses the UUID string into a valid UUID object for later use.
+// Parse extracts the component UUID from the user‑supplied JSON payload.
+// Shape errors (missing or malformed UUID) are detected here so that Validate
+// can remain trivial.
 func (a *DeleteDataflowComponentAction) Parse(payload interface{}) error {
 	// Parse the payload to get the UUID
 	parsedPayload, err := ParseActionPayload[models.DeleteDFCPayload](payload)
@@ -90,8 +126,8 @@ func (a *DeleteDataflowComponentAction) Parse(payload interface{}) error {
 	return nil
 }
 
-// Validate implements the Action interface. For this action, validation is minimal
-// as the only requirement is a valid UUID, which is already checked during parsing.
+// Validate performs only *existence* checks because all heavy‑weight work has
+// already happened in Parse.
 func (a *DeleteDataflowComponentAction) Validate() error {
 	// UUID validation is already done in Parse, so there's not much additional validation needed
 	if a.componentUUID == uuid.Nil {
@@ -101,19 +137,18 @@ func (a *DeleteDataflowComponentAction) Validate() error {
 	return nil
 }
 
-// Execute implements the Action interface by performing the actual deletion of the dataflow component.
-// It follows the standard pattern for actions:
-// 1. Sends ActionConfirmed to indicate the action is starting
-// 2. Attempts to delete the component by UUID
-// 3. Sends ActionFinishedWithFailure if any error occurs
-// 4. Returns a success message (not sending ActionFinishedSuccessfull as that's done by the caller)
+// Execute removes the configuration entry and then waits until the runtime has
+// actually shut down the component.
+//
+// Progress is streamed via `outboundChannel` so that a human operator can watch
+// the deletion in real time.
 func (a *DeleteDataflowComponentAction) Execute() (interface{}, map[string]interface{}, error) {
 	a.actionLogger.Info("Executing DeleteDataflowComponent action")
 
-	// Send confirmation that action is starting
+	// ─── 1  Tell the UI we are about to start ──────────────────────────────
 	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionConfirmed, "Starting deletion of dataflow component with UUID: "+a.componentUUID.String(), a.outboundChannel, models.DeleteDataFlowComponent)
 
-	// Delete the component from configuration
+	// ─── 2  Remove the config atomically ───────────────────────────────────-
 	ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
 	defer cancel()
 
@@ -125,7 +160,7 @@ func (a *DeleteDataflowComponentAction) Execute() (interface{}, map[string]inter
 		return nil, nil, fmt.Errorf("%s", errorMsg)
 	}
 
-	// wait for the component to be removed
+	// ─── 3  Observe the runtime until the FSM forgets the instance ─────────
 	if a.systemSnapshot != nil { // skipping this for the unit tests
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Configuration updated. Waiting for dataflow component to be fully removed from the system...", a.outboundChannel, models.DeleteDataFlowComponent)
 		err = a.waitForComponentToBeRemoved()
@@ -136,7 +171,7 @@ func (a *DeleteDataflowComponentAction) Execute() (interface{}, map[string]inter
 		}
 	}
 
-	// return success message, but do not send it as this is done by the caller
+	// ─── 4  Tell the caller we are done (caller will send FinishedSuccessful) ──
 	successMsg := fmt.Sprintf("Successfully deleted dataflow component with UUID: %s", a.componentUUID)
 
 	return successMsg, nil, nil
@@ -157,7 +192,8 @@ func (a *DeleteDataflowComponentAction) GetComponentUUID() uuid.UUID {
 	return a.componentUUID
 }
 
-// GetSystemSnapshot returns a deep copy of the system snapshot to avoid the caller having to handle locking
+// GetSystemSnapshot returns a *deep copy* so that callers cannot accidentally
+// race with the FSM writer goroutine.
 func (a *DeleteDataflowComponentAction) GetSystemSnapshot() fsm.SystemSnapshot {
 	a.systemMu.RLock()
 	defer a.systemMu.RUnlock()
@@ -175,6 +211,9 @@ func (a *DeleteDataflowComponentAction) GetSystemSnapshot() fsm.SystemSnapshot {
 	return snapshotCopy
 }
 
+// waitForComponentToBeRemoved polls the snapshot until the DFC no longer
+// appears.  This is purely *observational* – there is no rollback because the
+// component is already gone from the configuration store.
 func (a *DeleteDataflowComponentAction) waitForComponentToBeRemoved() error {
 	//check the system snapshot and waits for the instance to be removed
 	ticker := time.NewTicker(1 * time.Second)
