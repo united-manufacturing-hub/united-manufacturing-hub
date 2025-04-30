@@ -498,12 +498,16 @@ func (a *DeployDataflowComponentAction) Execute() (interface{}, map[string]inter
 
 	// check against observedState as well
 	if a.systemSnapshotManager != nil { // skipping this for the unit tests
-		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Configuration updated. Waiting for dataflow component '"+a.name+"' to start and become active...", a.outboundChannel, models.DeployDataFlowComponent)
-		err = a.waitForComponentToBeActive()
-		if err != nil {
-			errorMsg := fmt.Sprintf("Failed to wait for dataflow component to be active: %v", err)
-			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errorMsg, a.outboundChannel, models.DeployDataFlowComponent)
-			return nil, nil, fmt.Errorf("%s", errorMsg)
+		if a.ignoreHealthCheck {
+			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Configuration updated amnd ignoring health check. Please check the dataflow component logs for any errors.", a.outboundChannel, models.EditDataFlowComponent)
+		} else {
+			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Configuration updated. Waiting for dataflow component '"+a.name+"' to start and become active...", a.outboundChannel, models.DeployDataFlowComponent)
+			err = a.waitForComponentToBeActive()
+			if err != nil {
+				errorMsg := fmt.Sprintf("Failed to wait for dataflow component to be active: %v", err)
+				SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errorMsg, a.outboundChannel, models.DeployDataFlowComponent)
+				return nil, nil, fmt.Errorf("%s", errorMsg)
+			}
 		}
 	}
 
@@ -553,22 +557,17 @@ func (a *DeployDataflowComponentAction) waitForComponentToBeActive() error {
 	for {
 		select {
 		case <-timeout:
-			if !a.ignoreHealthCheck {
-				SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
-					"Timeout reached. Dataflow component did not become active in time. Removing component...",
-					a.outboundChannel, models.DeployDataFlowComponent)
-				ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
-				defer cancel()
-				err := a.configManager.AtomicDeleteDataflowcomponent(ctx, dataflowcomponentserviceconfig.GenerateUUIDFromName(a.name))
-				if err != nil {
-					a.actionLogger.Errorf("failed to remove dataflowcomponent %s: %v", a.name, err)
-				}
-				return fmt.Errorf("dataflow component '%s' was removed because it did not become active within the timeout period", a.name)
-			}
 			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
-				"Timeout reached. Dataflow component did not become active in time. You may want to check logs and remove it if needed.",
+				"Timeout reached. Dataflow component did not become active in time. Removing component...",
 				a.outboundChannel, models.DeployDataFlowComponent)
-			return nil
+			ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
+			defer cancel()
+			err := a.configManager.AtomicDeleteDataflowcomponent(ctx, dataflowcomponentserviceconfig.GenerateUUIDFromName(a.name))
+			if err != nil {
+				a.actionLogger.Errorf("failed to remove dataflowcomponent %s: %v", a.name, err)
+			}
+			return fmt.Errorf("dataflow component '%s' was removed because it did not become active within the timeout period", a.name)
+
 		case <-ticker.C:
 			elapsed := time.Since(startTime)
 			remaining := timeoutDuration - elapsed
