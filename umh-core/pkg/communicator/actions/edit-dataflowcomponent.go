@@ -585,13 +585,12 @@ func (a *EditDataflowComponentAction) waitForComponentToBeActive() error {
 							}
 
 							continue
-						} else {
-							SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Dataflow component is active.", a.outboundChannel, models.EditDataFlowComponent)
 						}
+
 						// check if the config is correct
 						if !dataflowcomponentserviceconfig.NewComparator().ConfigsEqual(&dfcSnapshot.Config, &a.dfc.DataFlowComponentServiceConfig) {
 							SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
-								fmt.Sprintf("Dataflow component is active but config changes haven't applied yet (%ds remaining)...",
+								fmt.Sprintf("Dataflow component config changes haven't applied yet (%ds remaining)...",
 									remainingSeconds), a.outboundChannel, models.EditDataFlowComponent)
 						} else {
 							SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
