@@ -354,6 +354,41 @@ type Section struct {
 	BlockEndMarkerIndex   int
 }
 
+func ConcatContent(logs []s6service.LogEntry) []byte {
+	// 1st pass: exact size
+	size := 0
+	for i := range logs {
+		size += len(logs[i].Content)
+	}
+
+	// 1 alloc, no re-growth
+	buf := make([]byte, size)
+	off := 0
+	for i := range logs {
+		off += copy(buf[off:], logs[i].Content)
+	}
+	return buf
+}
+
+// build one DFA-based replacer at package-init;
+// one pass over the input, no regex, no 4×ReplaceAll
+var markerReplacer = strings.NewReplacer(
+	BLOCK_START_MARKER, "",
+	PING_END_MARKER, "",
+	READY_END, "",
+	VERSION_END, "",
+	METRICS_END_MARKER, "",
+	BLOCK_END_MARKER, "",
+)
+
+// stripMarkers returns a copy of b with every marker removed.
+// If you’re on Go ≥ 1.20 you can avoid the extra string-copy with
+//
+//	unsafe.String and unsafe.Slice, but the plain version is often fast enough.
+func StripMarkers(b []byte) []byte {
+	return []byte(markerReplacer.Replace(string(b)))
+}
+
 // ParseBenthosLogs parses the logs of a benthos service and extracts metrics
 func (s *BenthosMonitorService) ParseBenthosLogs(ctx context.Context, logs []s6service.LogEntry, tick uint64) (*BenthosMetricsScan, error) {
 	/*
@@ -461,62 +496,18 @@ func (s *BenthosMonitorService) ParseBenthosLogs(ctx context.Context, logs []s6s
 	var metricsDataBytes []byte
 	var timestampDataBytes []byte
 
-	for _, log := range pingData {
-		pingDataBytes = append(pingDataBytes, log.Content...)
-	}
-
-	for _, log := range readyData {
-		readyDataBytes = append(readyDataBytes, log.Content...)
-	}
-
-	for _, log := range versionData {
-		versionDataBytes = append(versionDataBytes, log.Content...)
-	}
-
-	for _, log := range metricsData {
-		metricsDataBytes = append(metricsDataBytes, log.Content...)
-	}
-
-	for _, log := range timestampData {
-		timestampDataBytes = append(timestampDataBytes, log.Content...)
-	}
+	pingDataBytes = ConcatContent(pingData)
+	readyDataBytes = ConcatContent(readyData)
+	versionDataBytes = ConcatContent(versionData)
+	metricsDataBytes = ConcatContent(metricsData)
+	timestampDataBytes = ConcatContent(timestampData)
 
 	// Remove any markers that might be in the data
-
-	pingDataBytes = bytes.ReplaceAll(pingDataBytes, []byte(BLOCK_START_MARKER), []byte{})
-	pingDataBytes = bytes.ReplaceAll(pingDataBytes, []byte(PING_END_MARKER), []byte{})
-	pingDataBytes = bytes.ReplaceAll(pingDataBytes, []byte(READY_END), []byte{})
-	pingDataBytes = bytes.ReplaceAll(pingDataBytes, []byte(VERSION_END), []byte{})
-	pingDataBytes = bytes.ReplaceAll(pingDataBytes, []byte(METRICS_END_MARKER), []byte{})
-	pingDataBytes = bytes.ReplaceAll(pingDataBytes, []byte(BLOCK_END_MARKER), []byte{})
-
-	readyDataBytes = bytes.ReplaceAll(readyDataBytes, []byte(BLOCK_START_MARKER), []byte{})
-	readyDataBytes = bytes.ReplaceAll(readyDataBytes, []byte(PING_END_MARKER), []byte{})
-	readyDataBytes = bytes.ReplaceAll(readyDataBytes, []byte(READY_END), []byte{})
-	readyDataBytes = bytes.ReplaceAll(readyDataBytes, []byte(VERSION_END), []byte{})
-	readyDataBytes = bytes.ReplaceAll(readyDataBytes, []byte(METRICS_END_MARKER), []byte{})
-	readyDataBytes = bytes.ReplaceAll(readyDataBytes, []byte(BLOCK_END_MARKER), []byte{})
-
-	versionDataBytes = bytes.ReplaceAll(versionDataBytes, []byte(BLOCK_START_MARKER), []byte{})
-	versionDataBytes = bytes.ReplaceAll(versionDataBytes, []byte(PING_END_MARKER), []byte{})
-	versionDataBytes = bytes.ReplaceAll(versionDataBytes, []byte(READY_END), []byte{})
-	versionDataBytes = bytes.ReplaceAll(versionDataBytes, []byte(VERSION_END), []byte{})
-	versionDataBytes = bytes.ReplaceAll(versionDataBytes, []byte(METRICS_END_MARKER), []byte{})
-	versionDataBytes = bytes.ReplaceAll(versionDataBytes, []byte(BLOCK_END_MARKER), []byte{})
-
-	metricsDataBytes = bytes.ReplaceAll(metricsDataBytes, []byte(BLOCK_START_MARKER), []byte{})
-	metricsDataBytes = bytes.ReplaceAll(metricsDataBytes, []byte(PING_END_MARKER), []byte{})
-	metricsDataBytes = bytes.ReplaceAll(metricsDataBytes, []byte(READY_END), []byte{})
-	metricsDataBytes = bytes.ReplaceAll(metricsDataBytes, []byte(VERSION_END), []byte{})
-	metricsDataBytes = bytes.ReplaceAll(metricsDataBytes, []byte(METRICS_END_MARKER), []byte{})
-	metricsDataBytes = bytes.ReplaceAll(metricsDataBytes, []byte(BLOCK_END_MARKER), []byte{})
-
-	timestampDataBytes = bytes.ReplaceAll(timestampDataBytes, []byte(BLOCK_START_MARKER), []byte{})
-	timestampDataBytes = bytes.ReplaceAll(timestampDataBytes, []byte(PING_END_MARKER), []byte{})
-	timestampDataBytes = bytes.ReplaceAll(timestampDataBytes, []byte(READY_END), []byte{})
-	timestampDataBytes = bytes.ReplaceAll(timestampDataBytes, []byte(VERSION_END), []byte{})
-	timestampDataBytes = bytes.ReplaceAll(timestampDataBytes, []byte(METRICS_END_MARKER), []byte{})
-	timestampDataBytes = bytes.ReplaceAll(timestampDataBytes, []byte(BLOCK_END_MARKER), []byte{})
+	pingDataBytes = StripMarkers(pingDataBytes)
+	readyDataBytes = StripMarkers(readyDataBytes)
+	versionDataBytes = StripMarkers(versionDataBytes)
+	metricsDataBytes = StripMarkers(metricsDataBytes)
+	timestampDataBytes = StripMarkers(timestampDataBytes)
 
 	var metrics *BenthosMetrics
 	var healthCheck HealthCheck
