@@ -12,4 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package fsm
+//go:build !pprof
+// +build !pprof
+
+package pprof
+
+import "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
+
+func StartPprofServer() {
+	logger.For(logger.ComponentCore).Info("Pprof is disabled")
+}

@@ -12,4 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package fsm
+//go:build pprof
+// +build pprof
+
+package pprof
+
+// Registers the pprof handlers on the default ServeMux when the tag is set.
+import (
+	"net/http"
+	_ "net/http/pprof"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
+)
+
+// Open webserver for pprof
+func StartPprofServer() {
+	logger.For(logger.ComponentCore).Info("Starting pprof server on port 6060")
+	go func() {
+		http.ListenAndServe(":6060", nil)
+	}()
+}
