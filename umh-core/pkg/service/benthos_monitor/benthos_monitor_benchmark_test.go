@@ -18,11 +18,12 @@
 // ────────────────────────────────────────────────────────────────────────────────
 //
 // Benchmarks (Go 1.22, Ryzen 9-5900X, pkg/service/benthos_monitor):
-//	BenchmarkGzipDecode-24                             98608             11983 ns/op           49169 B/op         11 allocs/op
-// 	BenchmarkHexDecode-24                            3110442             388.6 ns/op             416 B/op          1 allocs/op
-// 	BenchmarkMetricsParsing-24                         27571             42960 ns/op           28392 B/op        781 allocs/op
-// 	BenchmarkCompleteProcessing-24                     20348             59672 ns/op           75673 B/op        792 allocs/op
-// 	BenchmarkParseBenthosLogsWithPercentiles-24        10000            111753 ns/op            112572 p50ns            345167 p95ns            484639 p99ns          217350 B/op        911 allocs/op
+// BenchmarkGzipDecode-24                             83491             14535 ns/op           49169 B/op         11 allocs/op
+// BenchmarkHexDecode-24                            2826033               419.2 ns/op           416 B/op          1 allocs/op
+// BenchmarkMetricsParsing-24                         24597             47635 ns/op           28392 B/op        781 allocs/op
+// BenchmarkCompleteProcessing-24                     17631             70915 ns/op           75673 B/op        792 allocs/op
+// BenchmarkParseBenthosLogsWithPercentiles-24         7845            142591 ns/op            144292 p50ns            469733 p95ns            706459 p99ns          217352 B/op        911 allocs/op
+// BenchmarkUpdateFromMetrics-24                    2992988               399.1 ns/op           925 B/op          2 allocs/op
 //
 // Findings
 // --------
@@ -52,6 +53,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"reflect"
 	"sort"
 	"testing"
 	"time"
@@ -220,10 +222,38 @@ func BenchmarkHexDecode(b *testing.B) {
 func BenchmarkMetricsParsing(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
+		_, err := ParseMetricsFromBytesSlow([]byte(sampleMetrics))
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+// BenchmarkMetricsParsingOpt benchmarks the metrics parsing operation
+func BenchmarkMetricsParsingOpt(b *testing.B) {
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
 		_, err := ParseMetricsFromBytes([]byte(sampleMetrics))
 		if err != nil {
 			b.Fatal(err)
 		}
+	}
+}
+
+// Test that both output the same result
+func TestMetricsParsing(t *testing.T) {
+	metrics, err := ParseMetricsFromBytes([]byte(sampleMetrics))
+	if err != nil {
+		t.Fatal(err)
+	}
+	metricsOpt, err := ParseMetricsFromBytesSlow([]byte(sampleMetrics))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(metrics, metricsOpt) {
+		t.Logf("metrics: %+v", metrics)
+		t.Logf("metricsOpt: %+v", metricsOpt)
+		t.Fatal("metrics do not match")
 	}
 }
 
@@ -278,6 +308,103 @@ func BenchmarkParseBenthosLogsWithPercentiles(b *testing.B) {
 		if err != nil {
 			b.Fatal(err)
 		}
+		times[i] = time.Since(start)
+	}
+
+	// Sort times for percentile calculation
+	sort.Slice(times, func(i, j int) bool {
+		return times[i] < times[j]
+	})
+
+	// Calculate and report percentiles
+	p50 := times[int(float64(len(times))*0.50)]
+	p95 := times[int(float64(len(times))*0.95)]
+	p99 := times[int(float64(len(times))*0.99)]
+
+	b.ReportMetric(float64(p50.Nanoseconds()), "p50ns")
+	b.ReportMetric(float64(p95.Nanoseconds()), "p95ns")
+	b.ReportMetric(float64(p99.Nanoseconds()), "p99ns")
+}
+
+// BenchmarkUpdateFromMetricsWithPercentiles benchmarks the UpdateFromMetrics method and reports percentiles
+func BenchmarkUpdateFromMetricsWithPercentiles(b *testing.B) {
+	// Create a metrics state
+	metricsState := NewBenthosMetricsState()
+
+	// Create sample metrics
+	metrics := Metrics{
+		Input: InputMetrics{
+			ConnectionFailed: 0,
+			ConnectionLost:   0,
+			ConnectionUp:     1,
+			LatencyNS: Latency{
+				P50:   127167,
+				P90:   378375,
+				P99:   858666,
+				Sum:   3629208,
+				Count: 18,
+			},
+			Received: 18,
+		},
+		Output: OutputMetrics{
+			BatchSent:        18,
+			ConnectionFailed: 0,
+			ConnectionLost:   0,
+			ConnectionUp:     1,
+			Error:            0,
+			LatencyNS: Latency{
+				P50:   33250,
+				P90:   94709,
+				P99:   138250,
+				Sum:   816919,
+				Count: 18,
+			},
+			Sent: 18,
+		},
+		Process: ProcessMetrics{
+			Processors: map[string]ProcessorMetrics{
+				"root.pipeline.processors.0": {
+					Label:         "test_processor",
+					Received:      18,
+					BatchReceived: 18,
+					Sent:          18,
+					BatchSent:     18,
+					Error:         0,
+					LatencyNS: Latency{
+						P50:   10000,
+						P90:   20000,
+						P99:   30000,
+						Sum:   200000,
+						Count: 18,
+					},
+				},
+			},
+		},
+	}
+
+	// Collect execution times
+	times := make([]time.Duration, b.N)
+
+	b.ResetTimer()
+	b.StopTimer()
+	for i := 0; i < b.N; i++ {
+		// Simulate increasing counters for realistic benchmark
+		metrics.Input.Received++
+		metrics.Output.Sent++
+		metrics.Output.BatchSent++
+		for path := range metrics.Process.Processors {
+			proc := metrics.Process.Processors[path]
+			proc.Received++
+			proc.BatchReceived++
+			proc.Sent++
+			proc.BatchSent++
+			metrics.Process.Processors[path] = proc
+		}
+
+		start := time.Now()
+		b.StartTimer()
+		metricsState.UpdateFromMetrics(metrics, uint64(i))
+		b.StopTimer()
 		times[i] = time.Since(start)
 	}
 

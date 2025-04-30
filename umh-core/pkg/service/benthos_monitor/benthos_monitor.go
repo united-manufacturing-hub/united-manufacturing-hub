@@ -863,8 +863,178 @@ func ParseMetricsData(dataReader io.Reader) (Metrics, error) {
 	return metrics, nil
 }
 
+// --- helpers ---------------------------------------------------------------
+
+// return the numeric literal after the last space in the line
+func tailInt(line []byte) int64 {
+	i := bytes.LastIndexByte(line, ' ')
+	var v int64
+	for _, c := range line[i+1:] {
+		if c < '0' || c > '9' {
+			break
+		}
+		v = v*10 + int64(c-'0')
+	}
+	return v
+}
+func tailFloat(line []byte) float64 {
+	i := bytes.LastIndexByte(line, ' ')
+	//f, _ := strconv.ParseFloat(unsafeString(bytes.TrimSpace(line[i+1:])), 64)
+	f, _ := strconv.ParseFloat(string(bytes.TrimSpace(line[i+1:])), 64)
+	return f
+}
+
+// ---------------------------------------------------------------------------
+
+// ParseMetricsFromBytesOpt – fixed & quantile aware
+func ParseMetricsFromBytes(raw []byte) (Metrics, error) {
+	var m Metrics
+	m.Process.Processors = make(map[string]ProcessorMetrics, 8)
+
+	lineStart := 0
+	for i, b := range raw {
+		if b != '\n' && i != len(raw)-1 {
+			continue
+		}
+		end := i
+		if b != '\n' { // EOF w/o \n
+			end++
+		}
+		line := raw[lineStart:end]
+		lineStart = i + 1
+		if len(line) == 0 || line[0] == '#' {
+			continue
+		}
+
+		nameEnd := bytes.IndexByte(line, '{')
+		if nameEnd == -1 {
+			nameEnd = bytes.IndexByte(line, ' ')
+		}
+		if nameEnd == -1 {
+			continue
+		}
+		//name := unsafeString(line[:nameEnd])
+		name := string(line[:nameEnd])
+		switch name {
+
+		// ---------- input ----------
+		case "input_connection_failed":
+			m.Input.ConnectionFailed = tailInt(line)
+		case "input_connection_lost":
+			m.Input.ConnectionLost = tailInt(line)
+		case "input_connection_up":
+			m.Input.ConnectionUp = tailInt(line)
+		case "input_received":
+			m.Input.Received = tailInt(line)
+		case "input_latency_ns":
+			switch extractLabel(line[nameEnd:], "quantile") {
+			case "0.5":
+				m.Input.LatencyNS.P50 = tailFloat(line)
+			case "0.9":
+				m.Input.LatencyNS.P90 = tailFloat(line)
+			case "0.99":
+				m.Input.LatencyNS.P99 = tailFloat(line)
+			}
+		case "input_latency_ns_sum":
+			m.Input.LatencyNS.Sum = tailFloat(line)
+		case "input_latency_ns_count":
+			m.Input.LatencyNS.Count = tailInt(line)
+
+		// ---------- output ----------
+		case "output_batch_sent":
+			m.Output.BatchSent = tailInt(line)
+		case "output_connection_failed":
+			m.Output.ConnectionFailed = tailInt(line)
+		case "output_connection_lost":
+			m.Output.ConnectionLost = tailInt(line)
+		case "output_connection_up":
+			m.Output.ConnectionUp = tailInt(line)
+		case "output_error":
+			m.Output.Error = tailInt(line)
+		case "output_sent":
+			m.Output.Sent = tailInt(line)
+		case "output_latency_ns":
+			switch extractLabel(line[nameEnd:], "quantile") {
+			case "0.5":
+				m.Output.LatencyNS.P50 = tailFloat(line)
+			case "0.9":
+				m.Output.LatencyNS.P90 = tailFloat(line)
+			case "0.99":
+				m.Output.LatencyNS.P99 = tailFloat(line)
+			}
+		case "output_latency_ns_sum":
+			m.Output.LatencyNS.Sum = tailFloat(line)
+		case "output_latency_ns_count":
+			m.Output.LatencyNS.Count = tailInt(line)
+
+		// ---------- processors ----------
+		default:
+			if !bytes.HasPrefix(line, []byte("processor_")) {
+				continue
+			}
+			path := extractLabel(line[nameEnd:], "path")
+			if path == "" {
+				continue
+			}
+			pm := m.Process.Processors[path]
+			if pm.Label == "" {
+				pm.Label = extractLabel(line[nameEnd:], "label")
+			}
+
+			switch name {
+			case "processor_received":
+				pm.Received = tailInt(line)
+			case "processor_batch_received":
+				pm.BatchReceived = tailInt(line)
+			case "processor_sent":
+				pm.Sent = tailInt(line)
+			case "processor_batch_sent":
+				pm.BatchSent = tailInt(line)
+			case "processor_error":
+				pm.Error = tailInt(line)
+			case "processor_latency_ns":
+				switch extractLabel(line[nameEnd:], "quantile") {
+				case "0.5":
+					pm.LatencyNS.P50 = tailFloat(line)
+				case "0.9":
+					pm.LatencyNS.P90 = tailFloat(line)
+				case "0.99":
+					pm.LatencyNS.P99 = tailFloat(line)
+				}
+			case "processor_latency_ns_sum":
+				pm.LatencyNS.Sum = tailFloat(line)
+			case "processor_latency_ns_count":
+				pm.LatencyNS.Count = tailInt(line)
+			}
+			m.Process.Processors[path] = pm
+		}
+	}
+	return m, nil
+}
+
+func extractLabel(b []byte, key string) string {
+	// expects {label="...",path="..."} order irrelevant
+	key += "=\""
+	i := bytes.Index(b, []byte(key))
+	if i == -1 {
+		return ""
+	}
+	i += len(key)
+	j := bytes.IndexByte(b[i:], '"')
+	if j == -1 {
+		return ""
+	}
+	//return unsafeString(b[i : i+j])
+	return string(b[i : i+j])
+}
+
+// unsafeString converts a []byte to string without allocation.
+// Use only for read-only parsing.
+//func unsafeString(b []byte) string { return *(*string)(unsafe.Pointer(&b)) }
+
 // ParseMetricsFromBytes parses prometheus metrics into structured format
-func ParseMetricsFromBytes(data []byte) (Metrics, error) {
+// Deprecated: Use ParseMetricsFromBytes instead
+func ParseMetricsFromBytesSlow(data []byte) (Metrics, error) {
 	var parser expfmt.TextParser
 	metrics := Metrics{
 		Input:  InputMetrics{},
