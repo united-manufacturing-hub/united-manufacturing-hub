@@ -460,7 +460,7 @@ func (a *EditDataflowComponentAction) waitForComponentToBeActive() error {
 				SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Timeout reached. Dataflow component did not become active in time. Rolling back to previous configuration...", a.outboundChannel, models.EditDataFlowComponent)
 				ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
 				defer cancel()
-				_, err := a.configManager.AtomicEditDataflowcomponent(ctx, a.oldComponentUUID, a.oldConfig)
+				_, err := a.configManager.AtomicEditDataflowcomponent(ctx, a.newComponentUUID, a.oldConfig)
 				if err != nil {
 					a.actionLogger.Errorf("failed to roll back dataflowcomponent %s: %v", a.name, err)
 				}
