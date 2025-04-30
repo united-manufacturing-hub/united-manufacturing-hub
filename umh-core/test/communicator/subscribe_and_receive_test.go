@@ -127,6 +127,8 @@ var _ = Describe("Subscribe and Receive Test", func() {
 		// Create the snapshot after reconciliation
 		containerManagerSnapshot := containerManager.CreateSnapshot()
 		systemSnapshot.Managers["ContainerManager_Core"] = containerManagerSnapshot
+		systemSnapshotManager := fsm.NewSnapshotManager()
+		systemSnapshotManager.UpdateSnapshot(systemSnapshot)
 
 		// Initialize watchdog
 		dog = watchdog.NewWatchdog(ctx, time.NewTicker(1*time.Second), false, logger.For(logger.ComponentCommunicator))
@@ -175,7 +177,6 @@ var _ = Describe("Subscribe and Receive Test", func() {
 		// Initialize subscriber handler
 		ttl := 5 * time.Minute
 		cull := 1 * time.Minute
-		systemMu := &sync.Mutex{}
 		subHandler = subscriber.NewHandler(
 			dog,
 			state.Pusher,
@@ -184,8 +185,7 @@ var _ = Describe("Subscribe and Receive Test", func() {
 			cull,
 			config.ReleaseChannel("stable"),
 			false,
-			systemSnapshot,
-			systemMu,
+			systemSnapshotManager,
 			config.NewMockConfigManager(),
 			logger.For(logger.ComponentCommunicator),
 		)

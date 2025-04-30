@@ -16,7 +16,6 @@ package actions
 
 import (
 	"fmt"
-	"sync"
 
 	"github.com/google/uuid"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/encoding"
@@ -59,7 +58,7 @@ type Action interface {
 //
 // After execution, it handles sending the success reply if the action completed successfully.
 // Error handling for each step is done within this function.
-func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePayload, sender string, outboundChannel chan *models.UMHMessage, releaseChannel config.ReleaseChannel, dog watchdog.Iface, traceID uuid.UUID, systemSnapshot *fsm.SystemSnapshot, configManager config.ConfigManager, mu *sync.RWMutex) {
+func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePayload, sender string, outboundChannel chan *models.UMHMessage, releaseChannel config.ReleaseChannel, dog watchdog.Iface, traceID uuid.UUID, systemSnapshotManager *fsm.SnapshotManager, configManager config.ConfigManager) {
 	log := logger.For(logger.ComponentCommunicator)
 
 	// Start a new transaction for this action
@@ -76,53 +75,48 @@ func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePay
 			outboundChannel: outboundChannel,
 			configManager:   configManager,
 			actionLogger:    log,
-			systemMu:        mu,
 		}
 	case models.DeployDataFlowComponent:
 		action = &DeployDataflowComponentAction{
-			userEmail:       sender,
-			actionUUID:      payload.ActionUUID,
-			instanceUUID:    instanceUUID,
-			outboundChannel: outboundChannel,
-			configManager:   configManager,
-			systemSnapshot:  systemSnapshot,
-			actionLogger:    log,
-			systemMu:        mu,
+			userEmail:             sender,
+			actionUUID:            payload.ActionUUID,
+			instanceUUID:          instanceUUID,
+			outboundChannel:       outboundChannel,
+			configManager:         configManager,
+			systemSnapshotManager: systemSnapshotManager,
+			actionLogger:          log,
 		}
 
 	case models.DeleteDataFlowComponent:
 		action = &DeleteDataflowComponentAction{
-			userEmail:       sender,
-			actionUUID:      payload.ActionUUID,
-			instanceUUID:    instanceUUID,
-			outboundChannel: outboundChannel,
-			configManager:   configManager,
-			systemSnapshot:  systemSnapshot,
-			actionLogger:    log,
-			systemMu:        mu,
+			userEmail:             sender,
+			actionUUID:            payload.ActionUUID,
+			instanceUUID:          instanceUUID,
+			outboundChannel:       outboundChannel,
+			configManager:         configManager,
+			systemSnapshotManager: systemSnapshotManager,
+			actionLogger:          log,
 		}
 
 	case models.GetDataFlowComponent:
 		action = &GetDataFlowComponentAction{
-			userEmail:       sender,
-			actionUUID:      payload.ActionUUID,
-			instanceUUID:    instanceUUID,
-			outboundChannel: outboundChannel,
-			configManager:   configManager,
-			systemSnapshot:  systemSnapshot,
-			actionLogger:    log,
-			systemMu:        mu,
+			userEmail:             sender,
+			actionUUID:            payload.ActionUUID,
+			instanceUUID:          instanceUUID,
+			outboundChannel:       outboundChannel,
+			configManager:         configManager,
+			systemSnapshotManager: systemSnapshotManager,
+			actionLogger:          log,
 		}
 	case models.EditDataFlowComponent:
 		action = &EditDataflowComponentAction{
-			userEmail:       sender,
-			actionUUID:      payload.ActionUUID,
-			instanceUUID:    instanceUUID,
-			outboundChannel: outboundChannel,
-			configManager:   configManager,
-			actionLogger:    log,
-			systemSnapshot:  systemSnapshot,
-			systemMu:        mu,
+			userEmail:             sender,
+			actionUUID:            payload.ActionUUID,
+			instanceUUID:          instanceUUID,
+			outboundChannel:       outboundChannel,
+			configManager:         configManager,
+			actionLogger:          log,
+			systemSnapshotManager: systemSnapshotManager,
 		}
 
 	default:

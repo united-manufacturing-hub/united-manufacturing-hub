@@ -76,11 +76,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"sync"
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/tiendc/go-deepcopy"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
@@ -89,7 +87,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	"go.uber.org/zap"
 	"gopkg.in/yaml.v3"
 )
@@ -124,8 +121,7 @@ type EditDataflowComponentAction struct {
 	newComponentUUID uuid.UUID // deterministic UUID derived from the *new* name
 
 	// ─── Runtime observation & synchronisation ───────────────────────────────
-	systemSnapshot *fsm.SystemSnapshot // pointer updated by FSM goroutine; read‑only here
-	systemMu       *sync.RWMutex       // protects systemSnapshot while copying
+	systemSnapshotManager *fsm.SnapshotManager // manager that holds the latest system snapshot
 
 	ignoreHealthCheck bool // if true -> no rollback on timeout
 	actionLogger      *zap.SugaredLogger
@@ -138,16 +134,15 @@ type EditDataflowComponentAction struct {
 // NewEditDataflowComponentAction returns an *un‑parsed* action instance.  The
 // method exists mainly to support dependency injection in unit tests – caller
 // still needs to invoke Parse & Validate before Execute.
-func NewEditDataflowComponentAction(userEmail string, actionUUID uuid.UUID, instanceUUID uuid.UUID, outboundChannel chan *models.UMHMessage, configManager config.ConfigManager, systemSnapshot *fsm.SystemSnapshot, systemMu *sync.RWMutex) *EditDataflowComponentAction {
+func NewEditDataflowComponentAction(userEmail string, actionUUID uuid.UUID, instanceUUID uuid.UUID, outboundChannel chan *models.UMHMessage, configManager config.ConfigManager, systemSnapshotManager *fsm.SnapshotManager) *EditDataflowComponentAction {
 	return &EditDataflowComponentAction{
-		userEmail:       userEmail,
-		actionUUID:      actionUUID,
-		instanceUUID:    instanceUUID,
-		outboundChannel: outboundChannel,
-		configManager:   configManager,
-		actionLogger:    logger.For(logger.ComponentCommunicator),
-		systemSnapshot:  systemSnapshot,
-		systemMu:        systemMu,
+		userEmail:             userEmail,
+		actionUUID:            actionUUID,
+		instanceUUID:          instanceUUID,
+		outboundChannel:       outboundChannel,
+		configManager:         configManager,
+		actionLogger:          logger.For(logger.ComponentCommunicator),
+		systemSnapshotManager: systemSnapshotManager,
 	}
 }
 
@@ -456,7 +451,7 @@ func (a *EditDataflowComponentAction) Execute() (interface{}, map[string]interfa
 	}
 
 	// check against observedState as well
-	if a.systemSnapshot != nil { // skipping this for the unit tests
+	if a.systemSnapshotManager != nil { // skipping this for the unit tests
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Configuration updated. Waiting for dataflow component '"+a.name+"' to become active...", a.outboundChannel, models.EditDataFlowComponent)
 		err = a.waitForComponentToBeActive()
 		if err != nil {
@@ -490,26 +485,6 @@ func (a *EditDataflowComponentAction) GetParsedPayload() models.CDFCPayload {
 // GetComponentUUID returns the UUID of the component being edited - exposed primarily for testing purposes.
 func (a *EditDataflowComponentAction) GetComponentUUID() uuid.UUID {
 	return a.oldComponentUUID
-}
-
-// GetSystemSnapshot returns a **deep copy** of the last FSM snapshot to the
-// caller.  Copying avoids leaking the internal pointer and therefore makes the
-// struct goroutine‑safe without extra locking at the call‑site.
-func (a *EditDataflowComponentAction) GetSystemSnapshot() fsm.SystemSnapshot {
-	a.systemMu.RLock()
-	defer a.systemMu.RUnlock()
-
-	if a.systemSnapshot == nil {
-		return fsm.SystemSnapshot{}
-	}
-
-	var snapshotCopy fsm.SystemSnapshot
-	err := deepcopy.Copy(&snapshotCopy, a.systemSnapshot)
-	if err != nil {
-		sentry.ReportIssue(err, sentry.IssueTypeError, a.actionLogger)
-	}
-
-	return snapshotCopy
 }
 
 // waitForComponentToBeActive polls the live FSM state until either
@@ -550,7 +525,9 @@ func (a *EditDataflowComponentAction) waitForComponentToBeActive() error {
 			remaining := timeoutDuration - elapsed
 			remainingSeconds := int(remaining.Seconds())
 
-			systemSnapshot := a.GetSystemSnapshot()
+			// the snapshot manager holds the latest system snapshot which is asynchronously updated by the other goroutines
+			// we need to get a deep copy of it to prevent race conditions
+			systemSnapshot := a.systemSnapshotManager.GetDeepCopySnapshot()
 			if dataflowcomponentManager, exists := systemSnapshot.Managers[constants.DataflowcomponentManagerName]; exists {
 				instances := dataflowcomponentManager.GetInstances()
 				found := false
