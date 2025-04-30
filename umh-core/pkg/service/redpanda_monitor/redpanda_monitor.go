@@ -40,6 +40,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
 
 	dto "github.com/prometheus/client_model/go"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
@@ -841,11 +842,14 @@ func (s *RedpandaMonitorService) RemoveRedpandaMonitorFromS6Manager(ctx context.
 		return ctx.Err()
 	}
 
-	if s.s6ServiceConfig == nil {
-		return ErrServiceNotExist
-	}
-
 	s.s6ServiceConfig = nil
+
+	// Check that the instance was actually removed
+	s6Name := s.GetS6ServiceName()
+	if inst, ok := s.s6Manager.GetInstance(s6Name); ok {
+		return fmt.Errorf("%w: S6 instance state=%s",
+			standarderrors.ErrRemovalPending, inst.GetCurrentFSMState())
+	}
 
 	// Clean up the metrics state
 	s.metricsState = NewRedpandaMetricsState()
