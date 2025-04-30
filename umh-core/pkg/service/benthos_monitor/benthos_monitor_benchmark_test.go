@@ -22,6 +22,7 @@
 //   BenchmarkHexDecode-24           3 027 370 ops    0.39 µs/op      416 B   1 alloc
 //   BenchmarkMetricsParsing-24         28 386 ops   42.2 µs/op   28 392 B  781 allocs
 //   BenchmarkCompleteProcessing-24     20 557 ops   58.0 µs/op   75 673 B  792 allocs
+//   BenchmarkParseBenthosLogsWithPercentiles-24        10000            111753 ns/op            112572 p50ns            345167 p95ns            484639 p99ns          217350 B/op        911 allocs/op
 //
 // Findings
 // --------
@@ -47,9 +48,15 @@ package benthos_monitor
 import (
 	"bytes"
 	"compress/gzip"
+	"context"
 	"encoding/hex"
+	"fmt"
 	"io"
+	"sort"
 	"testing"
+	"time"
+
+	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 )
 
 var sampleMetrics = `# HELP input_connection_failed Benthos Counter metric
@@ -98,6 +105,10 @@ output_latency_ns_count{label="",path="root.output"} 18
 output_sent{label="",path="root.output"} 18
 `
 
+var samplePing = `pong`
+var sampleReady = `{"statuses":[{"label":"tcp_server","path":"root.input","connected":true},{"label":"http_client","path":"root.output","connected":true}]}`
+var sampleVersion = `{"version":"3.71.0","built":"2023-08-15T12:00:00Z"}`
+
 // Returns a gzip compressed string of the sample metrics
 // Also returns the same data but hex encoded
 func prepareDataForBenchmark() ([]byte, string) {
@@ -111,6 +122,64 @@ func prepareDataForBenchmark() ([]byte, string) {
 
 	hexData := hex.EncodeToString(buf.Bytes())
 	return buf.Bytes(), hexData
+}
+
+// Prepare sample log entries for ParseBenthosLogs benchmark
+func prepareSampleLogEntries() []s6service.LogEntry {
+	entries := []s6service.LogEntry{}
+
+	// Add BLOCK_START_MARKER
+	entries = append(entries, s6service.LogEntry{Content: BLOCK_START_MARKER})
+
+	// Add ping data
+	pingGzip := compressAndHex(samplePing)
+	entries = append(entries, s6service.LogEntry{Content: pingGzip})
+
+	// Add PING_END_MARKER
+	entries = append(entries, s6service.LogEntry{Content: PING_END_MARKER})
+
+	// Add ready data
+	readyGzip := compressAndHex(sampleReady)
+	entries = append(entries, s6service.LogEntry{Content: readyGzip})
+
+	// Add READY_END
+	entries = append(entries, s6service.LogEntry{Content: READY_END})
+
+	// Add version data
+	versionGzip := compressAndHex(sampleVersion)
+	entries = append(entries, s6service.LogEntry{Content: versionGzip})
+
+	// Add VERSION_END
+	entries = append(entries, s6service.LogEntry{Content: VERSION_END})
+
+	// Add metrics data
+	_, metricsHex := prepareDataForBenchmark()
+	entries = append(entries, s6service.LogEntry{Content: metricsHex})
+
+	// Add METRICS_END_MARKER
+	entries = append(entries, s6service.LogEntry{Content: METRICS_END_MARKER})
+
+	// Add timestamp (unix timestamp in nanoseconds)
+	timestamp := fmt.Sprintf("%d", time.Now().UnixNano())
+	entries = append(entries, s6service.LogEntry{Content: timestamp})
+
+	// Add BLOCK_END_MARKER
+	entries = append(entries, s6service.LogEntry{Content: BLOCK_END_MARKER})
+
+	return entries
+}
+
+// Helper to compress and hex encode a string
+func compressAndHex(data string) string {
+	var buf bytes.Buffer
+	gzipWriter := gzip.NewWriter(&buf)
+	_, _ = gzipWriter.Write([]byte(data))
+	err := gzipWriter.Close()
+	if err != nil {
+		panic(err)
+	}
+
+	return hex.EncodeToString(buf.Bytes())
 }
 
 // BenchmarkGzipDecode benchmarks just the gzip decoding operation
@@ -187,4 +256,42 @@ func BenchmarkCompleteProcessing(b *testing.B) {
 			b.Fatal(err)
 		}
 	}
+}
+
+// BenchmarkParseBenthosLogs benchmarks the ParseBenthosLogs function
+func BenchmarkParseBenthosLogsWithPercentiles(b *testing.B) {
+	// Create service and test data
+	service := NewBenthosMonitorService("test-benthos")
+	logs := prepareSampleLogEntries()
+	ctx := context.Background()
+
+	// Collect execution times
+	times := make([]time.Duration, b.N)
+
+	b.ResetTimer()
+	b.StopTimer()
+	for i := 0; i < b.N; i++ {
+		start := time.Now()
+		b.StartTimer()
+		_, err := service.ParseBenthosLogs(ctx, logs, uint64(i))
+		b.StopTimer()
+		if err != nil {
+			b.Fatal(err)
+		}
+		times[i] = time.Since(start)
+	}
+
+	// Sort times for percentile calculation
+	sort.Slice(times, func(i, j int) bool {
+		return times[i] < times[j]
+	})
+
+	// Calculate and report percentiles
+	p50 := times[int(float64(len(times))*0.50)]
+	p95 := times[int(float64(len(times))*0.95)]
+	p99 := times[int(float64(len(times))*0.99)]
+
+	b.ReportMetric(float64(p50.Nanoseconds()), "p50ns")
+	b.ReportMetric(float64(p95.Nanoseconds()), "p95ns")
+	b.ReportMetric(float64(p99.Nanoseconds()), "p99ns")
 }
