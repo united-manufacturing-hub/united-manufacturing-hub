@@ -152,7 +152,6 @@ func buildDataFlowComponentDataFromSnapshot(instance fsm.FSMInstanceSnapshot, lo
 	return dfcData, nil
 }
 
-
 func (a *GetDataFlowComponentAction) Execute() (interface{}, map[string]interface{}, error) {
 	a.actionLogger.Info("Executing the action")
 	numUUIDs := len(a.payload.VersionUUIDs)
@@ -160,7 +159,6 @@ func (a *GetDataFlowComponentAction) Execute() (interface{}, map[string]interfac
 	dataFlowComponents := []config.DataFlowComponentConfig{}
 	// Get the DataFlowComponent
 	a.actionLogger.Debugf("Getting the DataFlowComponent")
-
 
 	// the snapshot manager holds the latest system snapshot which is asynchronously updated by the other goroutines
 	// we need to get a deep copy of it to prevent race conditions
@@ -191,10 +189,6 @@ func (a *GetDataFlowComponentAction) Execute() (interface{}, map[string]interfac
 			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
 				fmt.Sprintf("Found %d of %d requested components. Some components might not exist in the system.",
 					foundComponents, numUUIDs), a.outboundChannel, models.GetDataFlowComponent)
-		} else {
-			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
-				"Dataflow component manager not found. No components will be returned.",
-				a.outboundChannel, models.GetDataFlowComponent)
 		}
 
 	}
