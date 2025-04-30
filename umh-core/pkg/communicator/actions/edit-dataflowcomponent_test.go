@@ -421,6 +421,16 @@ var _ = Describe("EditDataflowComponent", func() {
 			// Reset tracking for this test
 			mockConfig.ResetCalls()
 
+			// ------------------------------------------------------------------------------------------------
+			// Now, we test the action execution with the state mocker
+			// The action has a pointer to the config manager and the system state
+			// During the execution of the action, it will modify the config via an atomic operation
+			// The state mocker has access to the same config manager. Also, the system state is shared
+			// between the action and the state mocker.
+			// The stateMocker.Start() starts the state mocker in a separate goroutine in which it continuously
+			// updates the system state according to the config.
+			// ------------------------------------------------------------------------------------------------
+
 			// start the state mocker
 			err = stateMocker.Start()
 			Expect(err).NotTo(HaveOccurred())
