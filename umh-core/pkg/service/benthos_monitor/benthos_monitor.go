@@ -36,6 +36,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
 
 	dto "github.com/prometheus/client_model/go"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
@@ -258,13 +259,13 @@ func (s *BenthosMonitorService) generateBenthosScript(port uint16) (string, erro
 	scriptContent := fmt.Sprintf(`#!/bin/sh
 while true; do
   echo "%s"
-  curl -sSL --max-time 1 http://localhost:%d/ping | gzip -c | xxd -p
+  curl -sSL --max-time 1 http://localhost:%d/ping 2>&1 | gzip -c | xxd -p
   echo "%s"
-  curl -sSL --max-time 1 http://localhost:%d/ready | gzip -c | xxd -p
+  curl -sSL --max-time 1 http://localhost:%d/ready 2>&1 | gzip -c | xxd -p
   echo "%s"
-  curl -sSL --max-time 1 http://localhost:%d/version | gzip -c | xxd -p
+  curl -sSL --max-time 1 http://localhost:%d/version 2>&1 | gzip -c | xxd -p
   echo "%s"
-  curl -sSL --max-time 1 http://localhost:%d/metrics | gzip -c | xxd -p
+  curl -sSL --max-time 1 http://localhost:%d/metrics 2>&1 | gzip -c | xxd -p
   echo "%s"
   date +%%s%%9N
   echo "%s"
@@ -484,9 +485,9 @@ func (s *BenthosMonitorService) ParseBenthosLogs(ctx context.Context, logs []s6s
 	var versionResp versionResponse
 
 	// Process all data in parallel using errgroup
-	ctx8, cancel8 := context.WithTimeout(ctx, 8*time.Millisecond)
-	defer cancel8()
-	g, _ := errgroup.WithContext(ctx8)
+	ctxBenthosMonitor, cancelBenthosMonitor := context.WithTimeout(ctx, constants.BenthosMonitorProcessMetricsTimeout)
+	defer cancelBenthosMonitor()
+	g, _ := errgroup.WithContext(ctxBenthosMonitor)
 
 	// Step 1: Process Liveness from /ping endpoint
 	g.Go(func() error {
@@ -543,8 +544,8 @@ func (s *BenthosMonitorService) ParseBenthosLogs(ctx context.Context, logs []s6s
 			return nil, err
 		}
 		// All goroutines completed successfully
-	case <-ctx.Done():
-		return nil, ctx.Err()
+	case <-ctxBenthosMonitor.Done():
+		return nil, ctxBenthosMonitor.Err()
 	}
 
 	// Update healthCheck with the results from the parallel operations
@@ -600,11 +601,6 @@ func parseCurlError(errorString string) error {
 // It is live, when it contains the string "pong"
 func (s *BenthosMonitorService) ProcessPingData(pingDataBytes []byte) (bool, error) {
 
-	curlError := parseCurlError(string(pingDataBytes))
-	if curlError != nil {
-		return false, curlError
-	}
-
 	pingDataString := string(pingDataBytes)
 	// Strip any newlines
 	pingDataString = strings.ReplaceAll(pingDataString, "\n", "")
@@ -642,6 +638,11 @@ func ParsePingData(dataReader io.Reader) (bool, error) {
 		return false, fmt.Errorf("failed to read ping data: %w", err)
 	}
 
+	curlError := parseCurlError(string(data))
+	if curlError != nil {
+		// If we have any curl error, we can assume the service is not live (but we do not need to return the error)
+		return false, nil
+	}
 	if strings.Contains(string(data), "pong") {
 		return true, nil
 	}
@@ -653,11 +654,6 @@ func ParsePingData(dataReader io.Reader) (bool, error) {
 // It returns false if the service is not ready, and an error if there is an error parsing the ready data
 // It is ready, when the error field is empty
 func (s *BenthosMonitorService) ProcessReadyData(readyDataBytes []byte) (bool, readyResponse, error) {
-
-	curlError := parseCurlError(string(readyDataBytes))
-	if curlError != nil {
-		return false, readyResponse{}, curlError
-	}
 
 	readyDataString := string(readyDataBytes)
 	// Strip any newlines
@@ -698,6 +694,12 @@ func ParseReadyData(dataReader io.Reader) (bool, readyResponse, error) {
 		return false, readyResponse{}, fmt.Errorf("failed to read ready data: %w", err)
 	}
 
+	curlError := parseCurlError(string(data))
+	if curlError != nil {
+		// If we have any curl error, we can assume the service is not ready (but we do not need to return the error)
+		return false, readyResponse{}, nil
+	}
+
 	var readyResp readyResponse
 	if err := json.Unmarshal(data, &readyResp); err != nil {
 		return false, readyResponse{}, fmt.Errorf("failed to unmarshal ready data: %w", err)
@@ -709,11 +711,6 @@ func ParseReadyData(dataReader io.Reader) (bool, readyResponse, error) {
 // ProcessVersionData processes the version data and returns the version response
 // It returns an error if there is an error parsing the version data
 func (s *BenthosMonitorService) ProcessVersionData(versionDataBytes []byte) (versionResponse, error) {
-
-	curlError := parseCurlError(string(versionDataBytes))
-	if curlError != nil {
-		return versionResponse{}, curlError
-	}
 
 	versionDataString := string(versionDataBytes)
 	// Strip any newlines
@@ -752,6 +749,11 @@ func ParseVersionData(dataReader io.Reader) (versionResponse, error) {
 		return versionResponse{}, fmt.Errorf("failed to read version data: %w", err)
 	}
 
+	curlError := parseCurlError(string(data))
+	if curlError != nil {
+		return versionResponse{}, curlError
+	}
+
 	var versionResp versionResponse
 	if err := json.Unmarshal(data, &versionResp); err != nil {
 		return versionResponse{}, fmt.Errorf("failed to unmarshal version data: %w", err)
@@ -763,11 +765,6 @@ func ParseVersionData(dataReader io.Reader) (versionResponse, error) {
 // ProcessMetricsData processes the metrics data and returns the metrics response
 // It returns an error if there is an error parsing the metrics data
 func (s *BenthosMonitorService) ProcessMetricsData(metricsDataBytes []byte, tick uint64) (*BenthosMetrics, error) {
-
-	curlError := parseCurlError(string(metricsDataBytes))
-	if curlError != nil {
-		return nil, curlError
-	}
 
 	metricsDataString := string(metricsDataBytes)
 	// Strip any newlines
@@ -810,6 +807,11 @@ func ParseMetricsData(dataReader io.Reader) (Metrics, error) {
 	data, err := io.ReadAll(dataReader)
 	if err != nil {
 		return Metrics{}, fmt.Errorf("failed to read metrics data: %w", err)
+	}
+
+	curlError := parseCurlError(string(data))
+	if curlError != nil {
+		return Metrics{}, curlError
 	}
 
 	metrics, err := ParseMetricsFromBytes(data)
@@ -1129,7 +1131,19 @@ func (s *BenthosMonitorService) UpdateBenthosMonitorInS6Manager(ctx context.Cont
 	return nil
 }
 
-// RemoveBenthosMonitorFromS6Manager removes a benthos instance from the S6 manager
+// RemoveBenthosMonitorFromS6Manager is the monitor counterpart of
+// RemoveBenthosFromS6Manager.
+//
+// Implementation is kept **symmetrical** on purpose so both removal paths
+// behave identically.  Any change in semantics here most likely has to be
+// done in the main Benthos method as well.
+//
+// Returns:
+//
+//   - nil                    – monitor config + instance are gone
+//   - ErrServiceNotExist     – never created / already gone
+//   - ErrRemovalPending      – child S6-instance still busy
+//   - other error            – unrecoverable I/O problem
 func (s *BenthosMonitorService) RemoveBenthosMonitorFromS6Manager(ctx context.Context) error {
 	if s.s6Manager == nil {
 		return errors.New("s6 manager not initialized")
@@ -1139,11 +1153,14 @@ func (s *BenthosMonitorService) RemoveBenthosMonitorFromS6Manager(ctx context.Co
 		return ctx.Err()
 	}
 
-	if s.s6ServiceConfig == nil {
-		return ErrServiceNotExist
-	}
-
 	s.s6ServiceConfig = nil
+
+	// Check that the instance was actually removed
+	s6Name := s.GetS6ServiceName()
+	if inst, ok := s.s6Manager.GetInstance(s6Name); ok {
+		return fmt.Errorf("%w: S6 instance state=%s",
+			standarderrors.ErrRemovalPending, inst.GetCurrentFSMState())
+	}
 
 	// Clean up the metrics state
 	s.metricsState = NewBenthosMetricsState()
@@ -1199,11 +1216,13 @@ func (s *BenthosMonitorService) ReconcileManager(ctx context.Context, services s
 		return ctx.Err(), false
 	}
 
-	if s.s6ServiceConfig == nil {
-		return ErrServiceNotExist, false
+	serviceMap := config.FullConfig{Internal: config.InternalConfig{Services: []config.S6FSMConfig{}}}
+
+	if s.s6ServiceConfig != nil {
+		serviceMap.Internal.Services = []config.S6FSMConfig{*s.s6ServiceConfig}
 	}
 
-	return s.s6Manager.Reconcile(ctx, fsm.SystemSnapshot{CurrentConfig: config.FullConfig{Internal: config.InternalConfig{Services: []config.S6FSMConfig{*s.s6ServiceConfig}}}}, services)
+	return s.s6Manager.Reconcile(ctx, fsm.SystemSnapshot{CurrentConfig: serviceMap}, services)
 }
 
 // ServiceExists checks if a benthos instance exists

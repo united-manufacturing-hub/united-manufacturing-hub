@@ -34,6 +34,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos_monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
 	"go.uber.org/zap"
 
 	benthos_monitor_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos_monitor"
@@ -183,8 +184,11 @@ func (s *BenthosService) generateBenthosYaml(config *benthosserviceconfig.Bentho
 	)
 }
 
-// getS6ServiceName converts a benthosName (e.g. "myservice") to its S6 service name (e.g. "benthos-myservice")
-func (s *BenthosService) getS6ServiceName(benthosName string) string {
+// GetS6ServiceName converts a logical Benthos name ("my-pipe") into the
+// canonical S6 service name ("benthos-my-pipe").
+//
+// It is exported ONLY because tests and other packages need the mapping
+func (s *BenthosService) GetS6ServiceName(benthosName string) string {
 	return fmt.Sprintf("benthos-%s", benthosName)
 }
 
@@ -220,7 +224,7 @@ func (s *BenthosService) GetConfig(ctx context.Context, filesystemService filesy
 		return benthosserviceconfig.BenthosServiceConfig{}, ctx.Err()
 	}
 
-	s6ServiceName := s.getS6ServiceName(benthosName)
+	s6ServiceName := s.GetS6ServiceName(benthosName)
 	s6ServicePath := filepath.Join(constants.S6BaseDir, s6ServiceName)
 
 	// Request the config file from the S6 service
@@ -331,7 +335,7 @@ func (s *BenthosService) Status(ctx context.Context, services serviceregistry.Pr
 		return ServiceInfo{}, ctx.Err()
 	}
 
-	s6ServiceName := s.getS6ServiceName(benthosName)
+	s6ServiceName := s.GetS6ServiceName(benthosName)
 
 	// First, check if the service exists in the S6 manager
 	// This is a crucial check that prevents "instance not found" errors
@@ -396,6 +400,10 @@ func (s *BenthosService) Status(ctx context.Context, services serviceregistry.Pr
 					BenthosLogs: logs,
 				},
 			}, ErrLastObservedStateNil
+		} else if strings.Contains(err.Error(), "instance "+s6ServiceName+" not found") ||
+			strings.Contains(err.Error(), "not found") {
+			s.logger.Debugf("Service %s was removed during status check", s6ServiceName)
+			return ServiceInfo{}, ErrServiceNotExist
 		}
 
 		return ServiceInfo{}, fmt.Errorf("failed to get health check: %w", err)
@@ -416,8 +424,6 @@ func (s *BenthosService) Status(ctx context.Context, services serviceregistry.Pr
 }
 
 func (s *BenthosService) GetHealthCheckAndMetrics(ctx context.Context, filesystemService filesystem.Service, tick uint64, loopStartTime time.Time, benthosName string, logs []s6service.LogEntry) (BenthosStatus, error) {
-
-	s.logger.Debugf("Getting health check and metrics for tick %d", tick)
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(logger.ComponentBenthosService, metrics.ComponentBenthosService+"_get_health_check_and_metrics", time.Since(start))
@@ -429,12 +435,12 @@ func (s *BenthosService) GetHealthCheckAndMetrics(ctx context.Context, filesyste
 
 	// Skip health checks and metrics if the service doesn't exist yet
 	// This avoids unnecessary errors in Status() when the service is still being created
-	if _, exists := s.s6Manager.GetInstance(s.getS6ServiceName(benthosName)); !exists {
+	if _, exists := s.s6Manager.GetInstance(s.GetS6ServiceName(benthosName)); !exists {
 		return BenthosStatus{}, nil
 	}
 
 	// Get the last observed state of the benthos monitor
-	s6ServiceName := s.getS6ServiceName(benthosName)
+	s6ServiceName := s.GetS6ServiceName(benthosName)
 	lastObservedState, err := s.benthosMonitorManager.GetLastObservedState(s6ServiceName)
 	if err != nil {
 		return BenthosStatus{}, fmt.Errorf("failed to get last observed state in GetHealthCheckAndMetrics: %w", err)
@@ -482,7 +488,7 @@ func (s *BenthosService) AddBenthosToS6Manager(ctx context.Context, filesystemSe
 
 	s.logger.Debugf("Adding benthos to S6 manager with port: %d", cfg.MetricsPort)
 
-	s6ServiceName := s.getS6ServiceName(benthosName)
+	s6ServiceName := s.GetS6ServiceName(benthosName)
 
 	// Check whether s6ServiceConfigs already contains an entry for this instance
 	for _, s6Config := range s.s6ServiceConfigs {
@@ -535,7 +541,7 @@ func (s *BenthosService) UpdateBenthosInS6Manager(ctx context.Context, filesyste
 		return ctx.Err()
 	}
 
-	s6ServiceName := s.getS6ServiceName(benthosName)
+	s6ServiceName := s.GetS6ServiceName(benthosName)
 
 	// Check if the service exists
 	found := false
@@ -586,49 +592,79 @@ func (s *BenthosService) UpdateBenthosInS6Manager(ctx context.Context, filesyste
 	return nil
 }
 
-// RemoveBenthosFromS6Manager removes a Benthos instance from the S6 manager
-// Expects benthosName (e.g. "myservice") as defined in the UMH config
-func (s *BenthosService) RemoveBenthosFromS6Manager(ctx context.Context, filesystemService filesystem.Service, benthosName string) error {
+// RemoveBenthosFromS6Manager drives the *gradual* teardown of a Benthos
+// service and its monitor:
+//
+//  1. Delete the entry from `s6ServiceConfigs` and `benthosMonitorConfigs`
+//     → at the next reconcile cycle the child managers will move the
+//     respective S6 FSMs to *removing*.
+//  2. Return ErrRemovalPending until **both** child instances have
+//     completely vanished from their managers.
+//  3. Once neither instance exists anymore, return nil.
+//
+// The method is **idempotent** and **non-blocking**; callers are supposed
+// to invoke it every cycle while the parent FSM is in the removing state.
+//
+// Notice that we *do not* try to stop the underlying S6 service ourselves –
+// that is entirely the responsibility of the S6-manager + S6-FSM that own
+// the child instance.  We only manipulate *desired* config and observe the
+// effect.
+func (s *BenthosService) RemoveBenthosFromS6Manager(
+	ctx context.Context,
+	fs filesystem.Service,
+	benthosName string,
+) error {
 	if s.s6Manager == nil {
 		return errors.New("s6 manager not initialized")
 	}
-
-	if ctx.Err() != nil {
+	if ctx.Err() != nil { // context already cancelled / timed-out
 		return ctx.Err()
 	}
 
-	s6ServiceName := s.getS6ServiceName(benthosName)
+	s.logger.Infof("Removing benthos from S6 manager with name: %s", benthosName)
 
-	found := false
+	// ------------------------------------------------------------------
+	// 1) Delete the *desired* config entry so the S6-manager will stop it
+	// ------------------------------------------------------------------
+	s6Name := s.GetS6ServiceName(benthosName)
 
-	// Remove the S6 FSM config from the list of S6 FSM configs
-	// so that the S6 manager will stop the service
-	// The S6 manager itself will handle a graceful shutdown of the udnerlying S6 service
-	for i, s6Config := range s.s6ServiceConfigs {
-		if s6Config.Name == s6ServiceName {
-			s.s6ServiceConfigs = append(s.s6ServiceConfigs[:i], s.s6ServiceConfigs[i+1:]...)
-			found = true
-			break
+	// Helper that deletes exactly one element *without* reallocating when the
+	// element is already missing – keeps the call idempotent and allocation-free.
+	sliceRemoveByName := func(arr []config.S6FSMConfig, name string) []config.S6FSMConfig {
+		for i, cfg := range arr {
+			if cfg.Name == name {
+				return append(arr[:i], arr[i+1:]...)
+			}
 		}
+		return arr
 	}
 
-	if !found {
-		return ErrServiceNotExist
-	}
-
-	// Also remove the benthos monitor from the S6 manager
-	for i, benthosMonitorConfig := range s.benthosMonitorConfigs {
-		if benthosMonitorConfig.Name == s6ServiceName {
-			s.benthosMonitorConfigs = append(s.benthosMonitorConfigs[:i], s.benthosMonitorConfigs[i+1:]...)
-			found = true
-			break
+	// helper for BenthosMonitorConfig slices
+	sliceRemoveMonitorByName := func(arr []config.BenthosMonitorConfig, name string) []config.BenthosMonitorConfig {
+		for i, cfg := range arr {
+			if cfg.Name == name {
+				return append(arr[:i], arr[i+1:]...)
+			}
 		}
+		return arr
 	}
 
-	if !found {
-		return ErrServiceNotExist
+	s.s6ServiceConfigs = sliceRemoveByName(s.s6ServiceConfigs, s6Name)
+	s.benthosMonitorConfigs = sliceRemoveMonitorByName(s.benthosMonitorConfigs, s6Name)
+
+	// ------------------------------------------------------------------
+	// 2) Are the instances already gone?
+	// ------------------------------------------------------------------
+	if inst, ok := s.s6Manager.GetInstance(s6Name); ok {
+		return fmt.Errorf("%w: S6 instance state=%s",
+			standarderrors.ErrRemovalPending, inst.GetCurrentFSMState())
+	}
+	if inst, ok := s.benthosMonitorManager.GetInstance(s6Name); ok {
+		return fmt.Errorf("%w: monitor instance state=%s",
+			standarderrors.ErrRemovalPending, inst.GetCurrentFSMState())
 	}
 
+	// Everything really removed ➜ success, idempotent
 	return nil
 }
 
@@ -643,7 +679,7 @@ func (s *BenthosService) StartBenthos(ctx context.Context, filesystemService fil
 		return ctx.Err()
 	}
 
-	s6ServiceName := s.getS6ServiceName(benthosName)
+	s6ServiceName := s.GetS6ServiceName(benthosName)
 
 	found := false
 
@@ -689,7 +725,7 @@ func (s *BenthosService) StopBenthos(ctx context.Context, filesystemService file
 		return ctx.Err()
 	}
 
-	s6ServiceName := s.getS6ServiceName(benthosName)
+	s6ServiceName := s.GetS6ServiceName(benthosName)
 
 	found := false
 
@@ -848,7 +884,7 @@ func (s *BenthosService) HasProcessingActivity(status BenthosStatus) bool {
 
 // ServiceExists checks if a Benthos service exists in the S6 manager
 func (s *BenthosService) ServiceExists(ctx context.Context, filesystemService filesystem.Service, benthosName string) bool {
-	s6ServiceName := s.getS6ServiceName(benthosName)
+	s6ServiceName := s.GetS6ServiceName(benthosName)
 	s6ServicePath := filepath.Join(constants.S6BaseDir, s6ServiceName)
 
 	exists, err := s.s6Service.ServiceExists(ctx, s6ServicePath, filesystemService)
@@ -864,7 +900,7 @@ func (s *BenthosService) ServiceExists(ctx context.Context, filesystemService fi
 // and the instance itself cannot be stopped or removed
 // Expects benthosName (e.g. "myservice") as defined in the UMH config
 func (s *BenthosService) ForceRemoveBenthos(ctx context.Context, filesystemService filesystem.Service, benthosName string) error {
-	s6ServiceName := s.getS6ServiceName(benthosName)
+	s6ServiceName := s.GetS6ServiceName(benthosName)
 	s6ServicePath := filepath.Join(constants.S6BaseDir, s6ServiceName)
 	return s.s6Service.ForceRemove(ctx, s6ServicePath, filesystemService)
 }

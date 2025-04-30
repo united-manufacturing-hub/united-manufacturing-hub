@@ -82,6 +82,14 @@ func printSystemInformation() {
 			vmStat.Used/1024/1024,
 			vmStat.Total/1024/1024)
 	}
+
+	// Get starvation from cat /sys/fs/cgroup/cpu.stat within the container
+	cpuStat, err := runDockerCommand("exec", "-it", getContainerName(), "cat", "/sys/fs/cgroup/cpu.stat")
+	if err != nil {
+		GinkgoWriter.Printf("Failed to get cpu.stat: %v\n", err)
+	} else {
+		GinkgoWriter.Printf("cpu.stat: %s\n", cpuStat)
+	}
 }
 
 // failOnMetricsHealthIssue expects the metrics to be healthy, otherwise it fails the test

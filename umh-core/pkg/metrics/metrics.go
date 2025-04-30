@@ -37,6 +37,7 @@ const (
 	ComponentNmapManager           = "nmap_manager"
 	ComponentDataFlowCompManager   = "dataflow_component_manager"
 	// Instances
+	ComponentBaseFSMInstance           = "base_fsm_instance"
 	ComponentS6Instance                = "s6_instance"
 	ComponentBenthosInstance           = "benthos_instance"
 	ComponentRedpandaInstance          = "redpanda_instance"

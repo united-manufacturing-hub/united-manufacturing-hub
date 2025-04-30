@@ -533,7 +533,7 @@ var _ = Describe("Benthos Service", func() {
 				WithS6Manager(mockS6Manager),
 			)
 
-			s6ServiceName = service.getS6ServiceName(benthosName)
+			s6ServiceName = service.GetS6ServiceName(benthosName)
 
 			mockS6Service.ExistingServices[s6ServiceName] = true
 			mockS6Service.ServiceExistsResult = true
@@ -755,7 +755,7 @@ logger:
 				WithS6Manager(mockS6Manager),
 			)
 
-			s6ServiceName = service.getS6ServiceName(benthosName)
+			s6ServiceName = service.GetS6ServiceName(benthosName)
 
 			mockS6Service.ExistingServices[s6ServiceName] = true
 			mockS6Service.ServiceExistsResult = true
@@ -993,7 +993,7 @@ logger:
 			Expect(mockS6Service.ForceRemoveCalled).To(BeTrue())
 
 			// Verify the path is correct
-			expectedS6ServiceName := service.getS6ServiceName(benthosName)
+			expectedS6ServiceName := service.GetS6ServiceName(benthosName)
 			expectedS6ServicePath := filepath.Join(constants.S6BaseDir, expectedS6ServiceName)
 			Expect(mockS6Service.ForceRemovePath).To(Equal(expectedS6ServicePath))
 		})
