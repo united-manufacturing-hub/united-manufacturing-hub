@@ -119,3 +119,8 @@ type RedpandaMonitorInstance struct {
 func (b *RedpandaMonitorInstance) GetLastObservedState() publicfsm.ObservedState {
 	return b.ObservedState
 }
+
+// IsTransientStreakCounterMaxed returns true if the instance has been in a transient state for too long
+func (b *RedpandaMonitorInstance) IsTransientStreakCounterMaxed() bool {
+	return b.baseFSMInstance.IsTransientStreakCounterMaxed()
+}

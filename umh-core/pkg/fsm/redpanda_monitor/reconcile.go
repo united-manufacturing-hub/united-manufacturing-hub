@@ -29,6 +29,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	redpanda_monitor_service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda_monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
 )
 
 // Reconcile periodically checks if the FSM needs state transitions based on metrics
@@ -114,11 +115,11 @@ func (b *RedpandaMonitorInstance) Reconcile(ctx context.Context, snapshot fsm.Sy
 	}
 
 	// Step 3: Attempt to reconcile the state.
-	err, reconciled = b.reconcileStateTransition(ctx, services.GetFileSystem())
+	err, reconciled = b.reconcileStateTransition(ctx, services)
 	if err != nil {
 		// If the instance is removed, we don't want to return an error here, because we want to continue reconciling
 		// Also this should not
-		if errors.Is(err, fsm.ErrInstanceRemoved) {
+		if errors.Is(err, standarderrors.ErrInstanceRemoved) {
 			return nil, false
 		}
 
@@ -176,7 +177,7 @@ func (b *RedpandaMonitorInstance) reconcileExternalChanges(ctx context.Context, 
 // Any functions that fetch information are disallowed here and must be called in reconcileExternalChanges
 // and exist in ExternalState.
 // This is to ensure full testability of the FSM.
-func (b *RedpandaMonitorInstance) reconcileStateTransition(ctx context.Context, filesystemService filesystem.Service) (err error, reconciled bool) {
+func (b *RedpandaMonitorInstance) reconcileStateTransition(ctx context.Context, services serviceregistry.Provider) (err error, reconciled bool) {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentRedpandaMonitor, b.baseFSMInstance.GetID()+".reconcileStateTransition", time.Since(start))
@@ -187,7 +188,7 @@ func (b *RedpandaMonitorInstance) reconcileStateTransition(ctx context.Context, 
 
 	// Handle lifecycle states first - these take precedence over operational states
 	if internal_fsm.IsLifecycleState(currentState) {
-		err, reconciled := b.reconcileLifecycleStates(ctx, filesystemService, currentState)
+		err, reconciled := b.baseFSMInstance.ReconcileLifecycleStates(ctx, services, currentState, b.CreateInstance, b.RemoveInstance, b.CheckForCreation)
 		if err != nil {
 			return err, false
 		}
@@ -200,7 +201,7 @@ func (b *RedpandaMonitorInstance) reconcileStateTransition(ctx context.Context, 
 
 	// Handle operational states
 	if IsOperationalState(currentState) {
-		err, reconciled := b.reconcileOperationalStates(ctx, filesystemService, currentState, desiredState, time.Now())
+		err, reconciled := b.reconcileOperationalStates(ctx, services.GetFileSystem(), currentState, desiredState, time.Now())
 		if err != nil {
 			return err, false
 		}
@@ -214,33 +215,11 @@ func (b *RedpandaMonitorInstance) reconcileStateTransition(ctx context.Context, 
 	return fmt.Errorf("invalid state: %s", currentState), false
 }
 
-// reconcileLifecycleStates handles to_be_created, creating, removing, removed
-func (b *RedpandaMonitorInstance) reconcileLifecycleStates(ctx context.Context, filesystemService filesystem.Service, currentState string) (error, bool) {
-	switch currentState {
-	case internal_fsm.LifecycleStateToBeCreated:
-		// do creation
-		if err := b.CreateInstance(ctx, filesystemService); err != nil {
-			return err, false
-		}
-		return b.baseFSMInstance.SendEvent(ctx, internal_fsm.LifecycleEventCreate), true
-
-	case internal_fsm.LifecycleStateCreating:
-		// We can assume creation is done immediately (no real action)
-		return b.baseFSMInstance.SendEvent(ctx, internal_fsm.LifecycleEventCreateDone), true
-
-	case internal_fsm.LifecycleStateRemoving:
-		if err := b.RemoveInstance(ctx, filesystemService); err != nil {
-			return err, false
-		}
-		return b.baseFSMInstance.SendEvent(ctx, internal_fsm.LifecycleEventRemoveDone), true
-
-	case internal_fsm.LifecycleStateRemoved:
-		// The manager will clean this up eventually
-		return fsm.ErrInstanceRemoved, true
-
-	default:
-		return nil, false
-	}
+// CheckForCreation checks if the instance has been created
+func (b *RedpandaMonitorInstance) CheckForCreation(ctx context.Context, filesystemService filesystem.Service) bool {
+	// No need to check anything specific for redpanda monitor
+	// Creation is considered complete immediately
+	return true
 }
 
 // reconcileOperationalStates handles states related to instance operations (starting/stopping)
