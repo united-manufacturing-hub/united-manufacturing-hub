@@ -742,6 +742,8 @@ func (m *BaseFSMManager[C]) maybeEscalateRemoval(ctx context.Context, inst FSMIn
 				}
 				sentry.ReportIssuef(sentry.IssueTypeWarning, m.logger, "force removing instance %s: %v", instanceName, err)
 			}()
+		} else {
+			sentry.ReportIssuef(sentry.IssueTypeWarning, m.logger, "no force remover for instance %s, cannot force remove", instanceName)
 		}
 		return
 	default:
@@ -774,6 +776,8 @@ func (m *BaseFSMManager[C]) maybeEscalateRemoval(ctx context.Context, inst FSMIn
 					}
 					sentry.ReportIssuef(sentry.IssueTypeWarning, m.logger, "force removing instance %s after normal removal failed: %v", instanceName, err)
 				}()
+			} else {
+				sentry.ReportIssuef(sentry.IssueTypeWarning, m.logger, "no force remover for instance %s, cannot force remove", instanceName)
 			}
 		}
 		return
