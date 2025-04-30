@@ -119,3 +119,10 @@ type BenthosMonitorInstance struct {
 func (b *BenthosMonitorInstance) GetLastObservedState() publicfsm.ObservedState {
 	return b.ObservedState
 }
+
+// IsTransientStreakCounterMaxed returns whether the transient streak counter
+// has reached the maximum number of ticks, which means that the FSM is stuck in a state
+// and should be removed
+func (b *BenthosMonitorInstance) IsTransientStreakCounterMaxed() bool {
+	return b.baseFSMInstance.IsTransientStreakCounterMaxed()
+}

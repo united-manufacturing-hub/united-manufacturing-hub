@@ -113,6 +113,12 @@ func (r *RedpandaInstance) StopInstance(ctx context.Context, filesystemService f
 	return nil
 }
 
+// CheckForCreation checks whether the creation was successful
+// For Redpanda, this is a no-op as we don't need to check anything
+func (r *RedpandaInstance) CheckForCreation(ctx context.Context, filesystemService filesystem.Service) bool {
+	return true
+}
+
 // getServiceStatus gets the status of the Redpanda service
 // its main purpose is to habdle the edge cases where the service is not yet created or not yet running
 func (r *RedpandaInstance) GetServiceStatus(ctx context.Context, filesystemService filesystem.Service, tick uint64, loopStartTime time.Time) (redpanda_service.ServiceInfo, error) {
