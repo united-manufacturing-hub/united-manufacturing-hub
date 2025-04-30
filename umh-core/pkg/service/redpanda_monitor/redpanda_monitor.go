@@ -315,6 +315,42 @@ type Section struct {
 	BlockEndMarkerIndex         int
 }
 
+// ConcatContent concatenates the content of a slice of LogEntry objects into a single byte slice.
+// It calculates the total size of the content, allocates a buffer of that size, and then copies each LogEntry's content into the buffer.
+// This approach is more efficient than using multiple strings.ReplaceAll calls or regex operations.
+func ConcatContent(logs []s6service.LogEntry) []byte {
+	// 1st pass: exact size
+	size := 0
+	for i := range logs {
+		size += len(logs[i].Content)
+	}
+
+	// 1 alloc, no re-growth
+	buf := make([]byte, size)
+	off := 0
+	for i := range logs {
+		off += copy(buf[off:], logs[i].Content)
+	}
+	return buf
+}
+
+// build one DFA-based replacer at package-init;
+// one pass over the input, no regex, no 4×ReplaceAll
+var markerReplacer = strings.NewReplacer(
+	BLOCK_START_MARKER, "",
+	METRICS_END_MARKER, "",
+	CLUSTERCONFIG_END_MARKER, "",
+	BLOCK_END_MARKER, "",
+)
+
+// stripMarkers returns a copy of b with every marker removed.
+// If you’re on Go ≥ 1.20 you can avoid the extra string-copy with
+//
+//	unsafe.String and unsafe.Slice, but the plain version is often fast enough.
+func StripMarkers(b []byte) []byte {
+	return []byte(markerReplacer.Replace(string(b)))
+}
+
 // ParseRedpandaLogs parses the logs of a redpanda service and extracts metrics
 func (s *RedpandaMonitorService) ParseRedpandaLogs(ctx context.Context, logs []s6service.LogEntry, tick uint64) (*RedpandaMetricsAndClusterConfig, error) {
 	/*
@@ -332,7 +368,8 @@ func (s *RedpandaMonitorService) ParseRedpandaLogs(ctx context.Context, logs []s
 		return nil, fmt.Errorf("no logs provided")
 	}
 	// Find the markers in a single pass through the logs
-	sections := make([]Section, 0)
+	// Pre-allocate the slice to avoid reallocations (we usually expect ~4-7 sections)
+	sections := make([]Section, 0, 10)
 
 	currentSection := Section{
 		StartMarkerIndex:            -1,
@@ -398,31 +435,14 @@ func (s *RedpandaMonitorService) ParseRedpandaLogs(ctx context.Context, logs []s
 	var clusterConfigDataBytes []byte
 	var timestampDataBytes []byte
 
-	for _, log := range metricsData {
-		metricsDataBytes = append(metricsDataBytes, log.Content...)
-	}
-	for _, log := range clusterConfigData {
-		clusterConfigDataBytes = append(clusterConfigDataBytes, log.Content...)
-	}
-	for _, log := range timestampData {
-		timestampDataBytes = append(timestampDataBytes, log.Content...)
-	}
+	metricsDataBytes = ConcatContent(metricsData)
+	clusterConfigDataBytes = ConcatContent(clusterConfigData)
+	timestampDataBytes = ConcatContent(timestampData)
 
 	// Remove any markers that might be in the data
-	metricsDataBytes = bytes.ReplaceAll(metricsDataBytes, []byte(BLOCK_START_MARKER), []byte{})
-	metricsDataBytes = bytes.ReplaceAll(metricsDataBytes, []byte(METRICS_END_MARKER), []byte{})
-	metricsDataBytes = bytes.ReplaceAll(metricsDataBytes, []byte(CLUSTERCONFIG_END_MARKER), []byte{})
-	metricsDataBytes = bytes.ReplaceAll(metricsDataBytes, []byte(BLOCK_END_MARKER), []byte{})
-
-	clusterConfigDataBytes = bytes.ReplaceAll(clusterConfigDataBytes, []byte(BLOCK_START_MARKER), []byte{})
-	clusterConfigDataBytes = bytes.ReplaceAll(clusterConfigDataBytes, []byte(METRICS_END_MARKER), []byte{})
-	clusterConfigDataBytes = bytes.ReplaceAll(clusterConfigDataBytes, []byte(CLUSTERCONFIG_END_MARKER), []byte{})
-	clusterConfigDataBytes = bytes.ReplaceAll(clusterConfigDataBytes, []byte(BLOCK_END_MARKER), []byte{})
-
-	timestampDataBytes = bytes.ReplaceAll(timestampDataBytes, []byte(BLOCK_START_MARKER), []byte{})
-	timestampDataBytes = bytes.ReplaceAll(timestampDataBytes, []byte(METRICS_END_MARKER), []byte{})
-	timestampDataBytes = bytes.ReplaceAll(timestampDataBytes, []byte(CLUSTERCONFIG_END_MARKER), []byte{})
-	timestampDataBytes = bytes.ReplaceAll(timestampDataBytes, []byte(BLOCK_END_MARKER), []byte{})
+	metricsDataBytes = StripMarkers(metricsDataBytes)
+	clusterConfigDataBytes = StripMarkers(clusterConfigDataBytes)
+	timestampDataBytes = StripMarkers(timestampDataBytes)
 
 	var metrics *RedpandaMetrics
 	var clusterConfig *ClusterConfig

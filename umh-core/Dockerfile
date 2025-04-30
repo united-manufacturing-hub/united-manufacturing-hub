@@ -153,6 +153,7 @@ ENV S6_KEEP_ENV=1 \
     S6_CMD_WAIT_FOR_SERVICES=1 \
     S6_SERVICES_READYTIME=50 \
     S6_SYNC_DISKS=1 \
+    # Important: This needs to be T (ISO 8861) as our time parser expects this format
     S6_LOGGING_SCRIPT="n20 s1000000 T"
 VOLUME ["/data"]
 

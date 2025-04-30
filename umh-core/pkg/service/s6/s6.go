@@ -1403,7 +1403,8 @@ func parseLogLine(line string) LogEntry {
 	}
 
 	// Try to parse the timestamp
-	timestamp, err := time.Parse("2006-01-02 15:04:05.999999999", timestampStr)
+	// We are using ParseNano over time.Parse because it is faster for our specific time format
+	timestamp, err := ParseNano(timestampStr)
 	if err != nil {
 		return LogEntry{Content: line}
 	}
