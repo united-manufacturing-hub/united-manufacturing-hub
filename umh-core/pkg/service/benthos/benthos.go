@@ -103,7 +103,8 @@ type BenthosStatus struct {
 	HealthCheck benthos_monitor.HealthCheck
 	// BenthosMetrics contains information about the metrics of the Benthos service
 	BenthosMetrics benthos_monitor.BenthosMetrics
-	BenthosLogs    []s6service.LogEntry `copy:"-"`
+	// BenthosLogs contains the logs of the Benthos service
+	BenthosLogs []s6service.LogEntry `copy:"-"`
 }
 
 // BenthosService is the default implementation of the IBenthosService interface

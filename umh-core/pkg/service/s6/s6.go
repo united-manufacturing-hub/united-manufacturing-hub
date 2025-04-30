@@ -1390,6 +1390,16 @@ func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsServ
 			return nil, err
 		}
 		st.logs = append(st.logs, entries...)
+
+		// 1) append delta that just got parsed
+		st.logs = append(st.logs, entries...)
+
+		// 2) trim to the last maxLines elements
+		if overflow := len(st.logs) - constants.S6MaxLines; overflow > 0 {
+			// keep newest maxLines entries, reuse backing array
+			copy(st.logs, st.logs[overflow:])        // shift
+			st.logs = st.logs[:constants.S6MaxLines] // reslice -> length = maxLines
+		}
 	}
 
 	// ── 4. return *copy* so caller can’t mutate our cache ───────────
