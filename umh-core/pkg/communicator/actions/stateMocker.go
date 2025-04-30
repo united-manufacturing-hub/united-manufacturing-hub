@@ -99,8 +99,20 @@ func (s *StateMocker) UpdateDfcState() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	// only take the dataflowcomponent configs and add them to the state of the dataflowcomponent manager
-	// the other managers are not updated
 
+	managerSnapshot := s.createDfcManagerSnapshot()
+
+	// update the state of the system with the new manager snapshot
+	if s.State.Managers == nil {
+		s.State.Managers = make(map[string]fsm.ManagerSnapshot)
+	}
+	s.State.Managers[constants.DataflowcomponentManagerName] = managerSnapshot
+}
+
+// createDfcManagerSnapshot creates a snapshot of the DataFlowComponent manager state
+// it therefore uses the config manager to get the dataflowcomponent configs
+// and the pending transitions to update the state of the dataflowcomponent instances based on the tick counter
+func (s *StateMocker) createDfcManagerSnapshot() fsm.ManagerSnapshot {
 	//start with a basic snapshot
 	dfcManagerInstaces := map[string]*fsm.FSMInstanceSnapshot{}
 
@@ -147,15 +159,9 @@ func (s *StateMocker) UpdateDfcState() {
 		}
 	}
 
-	managerSnapshot := &MockManagerSnapshot{
+	return &MockManagerSnapshot{
 		Instances: dfcManagerInstaces,
 	}
-
-	// update the state of the system with the new manager snapshot
-	if s.State.Managers == nil {
-		s.State.Managers = make(map[string]fsm.ManagerSnapshot)
-	}
-	s.State.Managers[constants.DataflowcomponentManagerName] = managerSnapshot
 }
 
 // Run starts the state mocker and updates the state of the system periodically
