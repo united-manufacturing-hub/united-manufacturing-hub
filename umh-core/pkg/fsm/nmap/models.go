@@ -170,3 +170,10 @@ func (n *NmapInstance) GetLastObservedState() publicfsm.ObservedState {
 func (n *NmapInstance) SetService(service nmap.INmapService) {
 	n.monitorService = service
 }
+
+// IsTransientStreakCounterMaxed returns whether the transient streak counter
+// has reached the maximum number of ticks, which means that the FSM is stuck in a state
+// and should be removed
+func (n *NmapInstance) IsTransientStreakCounterMaxed() bool {
+	return n.baseFSMInstance.IsTransientStreakCounterMaxed()
+}

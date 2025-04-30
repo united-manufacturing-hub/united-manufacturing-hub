@@ -160,3 +160,10 @@ func (b *BenthosInstance) SetService(service benthossvc.IBenthosService) {
 func (b *BenthosInstance) GetConfig() benthosserviceconfig.BenthosServiceConfig {
 	return b.config
 }
+
+// IsTransientStreakCounterMaxed returns whether the transient streak counter
+// has reached the maximum number of ticks, which means that the FSM is stuck in a state
+// and should be removed
+func (b *BenthosInstance) IsTransientStreakCounterMaxed() bool {
+	return b.baseFSMInstance.IsTransientStreakCounterMaxed()
+}

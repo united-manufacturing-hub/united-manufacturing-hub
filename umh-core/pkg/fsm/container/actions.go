@@ -60,6 +60,12 @@ func (c *ContainerInstance) StopInstance(ctx context.Context, filesystemService 
 	return nil
 }
 
+// CheckForCreation checks whether the creation was successful
+// For container monitoring, this is a no-op as we don't need to check anything
+func (c *ContainerInstance) CheckForCreation(ctx context.Context, filesystemService filesystem.Service) bool {
+	return true
+}
+
 // UpdateObservedStateOfInstance is called when the FSM transitions to updating.
 // For container monitoring, this is a no-op as we don't need to update any resources.
 func (c *ContainerInstance) UpdateObservedStateOfInstance(ctx context.Context, services serviceregistry.Provider, tick uint64, loopStartTime time.Time) error {

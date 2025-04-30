@@ -120,3 +120,10 @@ type ContainerInstance struct {
 func (c *ContainerInstance) GetLastObservedState() publicfsm.ObservedState {
 	return c.ObservedState
 }
+
+// IsTransientStreakCounterMaxed returns whether the transient streak counter
+// has reached the maximum number of ticks, which means that the FSM is stuck in a state
+// and should be removed
+func (c *ContainerInstance) IsTransientStreakCounterMaxed() bool {
+	return c.baseFSMInstance.IsTransientStreakCounterMaxed()
+}
