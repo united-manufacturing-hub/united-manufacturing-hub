@@ -315,6 +315,9 @@ type Section struct {
 	BlockEndMarkerIndex         int
 }
 
+// ConcatContent concatenates the content of a slice of LogEntry objects into a single byte slice.
+// It calculates the total size of the content, allocates a buffer of that size, and then copies each LogEntry's content into the buffer.
+// This approach is more efficient than using multiple strings.ReplaceAll calls or regex operations.
 func ConcatContent(logs []s6service.LogEntry) []byte {
 	// 1st pass: exact size
 	size := 0
