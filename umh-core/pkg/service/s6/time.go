@@ -49,7 +49,7 @@ func ParseNano(s string) (time.Time, error) {
 	min := toInt(s[14], s[15])
 	sec := toInt(s[17], s[18])
 
-	// 9-digit nanoseconds (no bounds check needed)
+	// 9-digit nanoseconds: positions 20–28 are guaranteed digits by the s6 format and length check
 	nano := 0
 	for i := 20; i < 29; i++ {
 		nano = nano*10 + int(s[i]-'0')
