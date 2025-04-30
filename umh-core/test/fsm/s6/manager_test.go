@@ -545,7 +545,7 @@ var _ = Describe("S6Manager", func() {
 			mockService.StatusError = fmt.Errorf("temporary error fetching service state")
 
 			// Run reconciliation a few times with the error active
-			nextTick, err = fsmtest.RunMultipleReconciliations(ctx, manager, fsm.SystemSnapshot{CurrentConfig: config.FullConfig{Internal: config.InternalConfig{Services: serviceConfig}}, Tick: tick}, mockSvcRegistry, 15)
+			nextTick, err = fsmtest.RunMultipleReconciliations(ctx, manager, fsm.SystemSnapshot{CurrentConfig: config.FullConfig{Internal: config.InternalConfig{Services: serviceConfig}}, Tick: tick}, mockSvcRegistry, 10)
 			tick = nextTick
 
 			// Verify the instance still exists despite errors

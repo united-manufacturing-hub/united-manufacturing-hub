@@ -26,8 +26,8 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	benthos_service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
+	standarderrors "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
 )
 
 // Reconcile examines the BenthosInstance and, in three steps:
@@ -112,10 +112,10 @@ func (b *BenthosInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnap
 
 	// Step 3: Attempt to reconcile the state.
 	currentTime := time.Now() // this is used to check if the instance is degraded and for the log check
-	err, reconciled = b.reconcileStateTransition(ctx, services.GetFileSystem(), currentTime)
+	err, reconciled = b.reconcileStateTransition(ctx, services, currentTime)
 	if err != nil {
 		// If the instance is removed, we don't want to return an error here, because we want to continue reconciling
-		if errors.Is(err, fsm.ErrInstanceRemoved) {
+		if errors.Is(err, standarderrors.ErrInstanceRemoved) {
 			return nil, false
 		}
 
@@ -167,7 +167,7 @@ func (b *BenthosInstance) reconcileExternalChanges(ctx context.Context, services
 // Any functions that fetch information are disallowed here and must be called in reconcileExternalChanges
 // and exist in ObservedState.
 // This is to ensure full testability of the FSM.
-func (b *BenthosInstance) reconcileStateTransition(ctx context.Context, filesystemService filesystem.Service, currentTime time.Time) (err error, reconciled bool) {
+func (b *BenthosInstance) reconcileStateTransition(ctx context.Context, services serviceregistry.Provider, currentTime time.Time) (err error, reconciled bool) {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentBenthosInstance, b.baseFSMInstance.GetID()+".reconcileStateTransition", time.Since(start))
@@ -184,7 +184,7 @@ func (b *BenthosInstance) reconcileStateTransition(ctx context.Context, filesyst
 
 	// Handle lifecycle states first - these take precedence over operational states
 	if internal_fsm.IsLifecycleState(currentState) {
-		err, reconciled := b.reconcileLifecycleStates(ctx, filesystemService, currentState)
+		err, reconciled := b.baseFSMInstance.ReconcileLifecycleStates(ctx, services, currentState, b.CreateInstance, b.RemoveInstance, b.CheckForCreation)
 		if err != nil {
 			return err, false
 		}
@@ -193,7 +193,7 @@ func (b *BenthosInstance) reconcileStateTransition(ctx context.Context, filesyst
 
 	// Handle operational states
 	if IsOperationalState(currentState) {
-		err, reconciled := b.reconcileOperationalStates(ctx, filesystemService, currentState, desiredState, currentTime)
+		err, reconciled := b.reconcileOperationalStates(ctx, services, currentState, desiredState, currentTime)
 		if err != nil {
 			return err, false
 		}
@@ -203,39 +203,8 @@ func (b *BenthosInstance) reconcileStateTransition(ctx context.Context, filesyst
 	return fmt.Errorf("invalid state: %s", currentState), false
 }
 
-// reconcileLifecycleStates handles states related to instance lifecycle (creating/removing)
-func (b *BenthosInstance) reconcileLifecycleStates(ctx context.Context, filesystemService filesystem.Service, currentState string) (err error, reconciled bool) {
-	start := time.Now()
-	defer func() {
-		metrics.ObserveReconcileTime(metrics.ComponentBenthosInstance, b.baseFSMInstance.GetID()+".reconcileLifecycleStates", time.Since(start))
-	}()
-
-	// Independent what the desired state is, we always need to reconcile the lifecycle states first
-	switch currentState {
-	case internal_fsm.LifecycleStateToBeCreated:
-		if err := b.CreateInstance(ctx, filesystemService); err != nil {
-			return err, false
-		}
-		return b.baseFSMInstance.SendEvent(ctx, internal_fsm.LifecycleEventCreate), true
-	case internal_fsm.LifecycleStateCreating:
-		// Check if the service is created
-		// For now, we'll assume it's created immediately after initiating creation
-		return b.baseFSMInstance.SendEvent(ctx, internal_fsm.LifecycleEventCreateDone), true
-	case internal_fsm.LifecycleStateRemoving:
-		if err := b.RemoveInstance(ctx, filesystemService); err != nil {
-			return err, false
-		}
-		return b.baseFSMInstance.SendEvent(ctx, internal_fsm.LifecycleEventRemoveDone), true
-	case internal_fsm.LifecycleStateRemoved:
-		return fsm.ErrInstanceRemoved, true
-	default:
-		// If we are not in a lifecycle state, just continue
-		return nil, false
-	}
-}
-
 // reconcileOperationalStates handles states related to instance operations (starting/stopping)
-func (b *BenthosInstance) reconcileOperationalStates(ctx context.Context, filesystemService filesystem.Service, currentState string, desiredState string, currentTime time.Time) (err error, reconciled bool) {
+func (b *BenthosInstance) reconcileOperationalStates(ctx context.Context, services serviceregistry.Provider, currentState string, desiredState string, currentTime time.Time) (err error, reconciled bool) {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentBenthosInstance, b.baseFSMInstance.GetID()+".reconcileOperationalStates", time.Since(start))
@@ -243,9 +212,9 @@ func (b *BenthosInstance) reconcileOperationalStates(ctx context.Context, filesy
 
 	switch desiredState {
 	case OperationalStateActive:
-		return b.reconcileTransitionToActive(ctx, filesystemService, currentState, currentTime)
+		return b.reconcileTransitionToActive(ctx, services, currentState, currentTime)
 	case OperationalStateStopped:
-		return b.reconcileTransitionToStopped(ctx, filesystemService, currentState)
+		return b.reconcileTransitionToStopped(ctx, services, currentState)
 	default:
 		return fmt.Errorf("invalid desired state: %s", desiredState), false
 	}
@@ -253,7 +222,7 @@ func (b *BenthosInstance) reconcileOperationalStates(ctx context.Context, filesy
 
 // reconcileTransitionToActive handles transitions when the desired state is Active.
 // It deals with moving from various states to the Active state.
-func (b *BenthosInstance) reconcileTransitionToActive(ctx context.Context, filesystemService filesystem.Service, currentState string, currentTime time.Time) (err error, reconciled bool) {
+func (b *BenthosInstance) reconcileTransitionToActive(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time) (err error, reconciled bool) {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentBenthosInstance, b.baseFSMInstance.GetID()+".reconcileTransitionToActive", time.Since(start))
@@ -262,7 +231,7 @@ func (b *BenthosInstance) reconcileTransitionToActive(ctx context.Context, files
 	// If we're stopped, we need to start first
 	if currentState == OperationalStateStopped {
 		// Attempt to initiate start
-		if err := b.StartInstance(ctx, filesystemService); err != nil {
+		if err := b.StartInstance(ctx, services.GetFileSystem()); err != nil {
 			return err, false
 		}
 		// Send event to transition from Stopped to Starting
@@ -271,16 +240,16 @@ func (b *BenthosInstance) reconcileTransitionToActive(ctx context.Context, files
 
 	// Handle starting phase states
 	if IsStartingState(currentState) {
-		return b.reconcileStartingStates(ctx, filesystemService, currentState, currentTime)
+		return b.reconcileStartingStates(ctx, services, currentState, currentTime)
 	} else if IsRunningState(currentState) {
-		return b.reconcileRunningStates(ctx, filesystemService, currentState, currentTime)
+		return b.reconcileRunningStates(ctx, services, currentState, currentTime)
 	}
 
 	return nil, false
 }
 
 // reconcileStartingStates handles the various starting phase states when transitioning to Active.
-func (b *BenthosInstance) reconcileStartingStates(ctx context.Context, filesystemService filesystem.Service, currentState string, currentTime time.Time) (err error, reconciled bool) {
+func (b *BenthosInstance) reconcileStartingStates(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time) (err error, reconciled bool) {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentBenthosInstance, b.baseFSMInstance.GetID()+".reconcileStartingState", time.Since(start))
@@ -329,7 +298,6 @@ func (b *BenthosInstance) reconcileStartingStates(ctx context.Context, filesyste
 
 		// Check if service has been running stably for some time
 		if !b.IsBenthosRunningForSomeTimeWithoutErrors(currentTime, constants.BenthosLogWindow) {
-			b.baseFSMInstance.GetLogger().Debugf("benthos is not running stably for some time without errors")
 			return nil, false
 		}
 
@@ -340,7 +308,7 @@ func (b *BenthosInstance) reconcileStartingStates(ctx context.Context, filesyste
 }
 
 // reconcileRunningStates handles the various running states when transitioning to Active.
-func (b *BenthosInstance) reconcileRunningStates(ctx context.Context, filesystemService filesystem.Service, currentState string, currentTime time.Time) (err error, reconciled bool) {
+func (b *BenthosInstance) reconcileRunningStates(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time) (err error, reconciled bool) {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentBenthosInstance, b.baseFSMInstance.GetID()+".reconcileRunningState", time.Since(start))
@@ -376,7 +344,7 @@ func (b *BenthosInstance) reconcileRunningStates(ctx context.Context, filesystem
 
 // reconcileTransitionToStopped handles transitions when the desired state is Stopped.
 // It deals with moving from any operational state to Stopping and then to Stopped.
-func (b *BenthosInstance) reconcileTransitionToStopped(ctx context.Context, filesystemService filesystem.Service, currentState string) (err error, reconciled bool) {
+func (b *BenthosInstance) reconcileTransitionToStopped(ctx context.Context, services serviceregistry.Provider, currentState string) (err error, reconciled bool) {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentBenthosInstance, b.baseFSMInstance.GetID()+".reconcileTransitionToStopped", time.Since(start))
@@ -385,7 +353,7 @@ func (b *BenthosInstance) reconcileTransitionToStopped(ctx context.Context, file
 	// If we're in any operational state except Stopped or Stopping, initiate stop
 	if currentState != OperationalStateStopped && currentState != OperationalStateStopping {
 		// Attempt to initiate a stop
-		if err := b.StopInstance(ctx, filesystemService); err != nil {
+		if err := b.StopInstance(ctx, services.GetFileSystem()); err != nil {
 			return err, false
 		}
 		// Send event to transition to Stopping

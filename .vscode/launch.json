@@ -81,6 +81,13 @@
             "program": "${workspaceFolder}/umh-core/pkg/service/benthos"
         },
         {
+            "name": "Debug Ginkgo Tests (service-s6)",
+            "type": "go",
+            "request": "launch",
+            "mode": "test",
+            "program": "${workspaceFolder}/umh-core/pkg/service/s6"
+        },
+        {
             "name": "Debug Ginkgo Tests (service-benthos_monitor)",
             "type": "go",
             "request": "launch",

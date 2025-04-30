@@ -405,13 +405,8 @@ var _ = Describe("ConnectionService", func() {
 			}
 		})
 
-		It("should return error when removing non-existent component", func() {
-			// Act - try to remove a non-existent component
-			err := service.RemoveConnectionFromNmapManager(ctx, mockServices, "non-existent")
-
-			// Assert
-			Expect(err).To(MatchError(ErrServiceNotExist))
-		})
+		// Note: removing a non-existent component should not result in an error
+		// the remove action will be called multiple times until the component is gone it returns nil
 	})
 
 	Describe("ReconcileManager", func() {

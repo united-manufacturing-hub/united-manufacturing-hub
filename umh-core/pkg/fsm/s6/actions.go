@@ -136,6 +136,24 @@ func (s *S6Instance) StopInstance(ctx context.Context, filesystemService filesys
 	return nil
 }
 
+// CheckForCreation checks whether the creation was successful
+func (s *S6Instance) CheckForCreation(ctx context.Context, filesystemService filesystem.Service) bool {
+	servicePath := s.servicePath
+	ready, err := s.service.EnsureSupervision(ctx, servicePath, filesystemService)
+	if err != nil {
+		s.baseFSMInstance.GetLogger().Warnf("Failed to ensure service supervision: %v", err)
+		return false // Don't transition state yet, retry next reconcile
+	}
+
+	// Only transition if the supervise directory actually exists
+	if !ready {
+		s.baseFSMInstance.GetLogger().Debugf("Waiting for s6-svscan to create supervise directory")
+		return false // Don't transition state yet, retry next reconcile
+	}
+
+	return true // Transition to the next state
+}
+
 // UpdateObservedStateOfInstance updates the observed state of the service
 func (s *S6Instance) UpdateObservedStateOfInstance(ctx context.Context, services serviceregistry.Provider, tick uint64, loopStartTime time.Time) error {
 	if ctx.Err() != nil {

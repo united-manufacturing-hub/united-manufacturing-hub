@@ -29,6 +29,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	"go.uber.org/zap"
 )
@@ -53,6 +54,10 @@ type FSMInstance interface {
 	GetDesiredFSMState() string
 	// SetDesiredFSMState sets the desired state of the instance
 	SetDesiredFSMState(desiredState string) error
+	// IsTransientStreakCounterMaxed returns whether the transient streak counter
+	// has reached the maximum number of ticks, which means that the FSM is stuck in a state
+	// and should be removed
+	IsTransientStreakCounterMaxed() bool
 	// Reconcile moves the instance toward its desired state
 	// Returns an error if reconciliation fails, and a boolean indicating
 	// whether a change was made to the instance's state
@@ -548,6 +553,9 @@ func (m *BaseFSMManager[C]) Reconcile(
 			return fmt.Errorf("error reconciling instance: %w", err), false
 		}
 
+		// Check if the instance has been stuck in a transient state for too long
+		m.maybeEscalateRemoval(ctx, instance, services)
+
 		if reconciled {
 			return nil, true
 		}
@@ -655,4 +663,123 @@ func (m *BaseFSMManager[C]) schedule(base uint64) uint64 {
 
 	// Round to nearest integer tick and add to the current manager tick
 	return m.managerTick + uint64(delta+0.5)
+}
+
+// maybeEscalateRemoval is the **watch-dog** that prevents an FSM from being
+// stuck forever in one of the *transient* lifecycle states.
+//
+// It is invoked by the manager **once per tick** *after* an
+// `inst.Reconcile(…)` call has completed.
+// It checks if an instance has been in a transient state for too long
+// and takes action to prevent it from remaining stuck.
+//
+// # Inputs
+//
+//   - inst  – any FSMInstance that was just reconciled.
+//   - filesystemService - service used for file operations if a force remove is needed
+//
+// # Logic
+//
+//  1. **Check if the instance has been in a transient state too long**
+//     by using GetTransientStreakCounter() and comparing to a threshold
+//
+//  2. **Escalate** depending on the *current* state:
+//
+//     * **creating / to_be_created**
+//     → initiate normal removal. This asks the normal "graceful remove"
+//     path to start.
+//
+//     * **removing**
+//     → attempt a hard, unconditional teardown.
+//     If the concrete instance implements the ForceRemover interface,
+//     the manager calls the method in a detached goroutine.
+//
+// # Side effects
+//
+//   - May initiate instance removal
+//   - May launch a goroutine that calls `ForceRemove`
+//   - No error is returned from this function
+//
+// # Errors
+//
+// This helper never returns an error. All failures in operations
+// are handled through the normal FSM reconciliation mechanisms.
+func (m *BaseFSMManager[C]) maybeEscalateRemoval(ctx context.Context, inst FSMInstance, services serviceregistry.Provider) {
+	// Check if the instance has been in a transient state for too long
+	if !inst.IsTransientStreakCounterMaxed() {
+		return // Not stuck yet
+	}
+
+	currentState := inst.GetCurrentFSMState()
+
+	// Find the instance name from the instances map
+	var instanceName string
+	for name, i := range m.instances {
+		if i == inst {
+			instanceName = name
+			break
+		}
+	}
+
+	switch currentState {
+	case internalfsm.LifecycleStateRemoving:
+		// Instance is stuck in removing state - try force removal if possible
+		if forceRemover, ok := inst.(interface {
+			ForceRemove(context.Context, filesystem.Service) error
+		}); ok {
+			// Run force removal in a detached goroutine to avoid blocking the main reconciliation loop
+			go func() {
+				err := forceRemover.ForceRemove(ctx, services.GetFileSystem())
+				if err != nil {
+					sentry.ReportFSMErrorf(
+						m.logger,
+						instanceName,
+						m.managerName,
+						"force_remove_error",
+						"Error force removing instance: %v",
+						err,
+					)
+				}
+				sentry.ReportIssuef(sentry.IssueTypeWarning, m.logger, "force removing instance %s: %v", instanceName, err)
+			}()
+		} else {
+			sentry.ReportIssuef(sentry.IssueTypeWarning, m.logger, "no force remover for instance %s, cannot force remove", instanceName)
+		}
+		return
+	default:
+		// Instance is stuck in creating or to_be_created state - try normal removal
+		err := inst.Remove(ctx)
+		if err != nil {
+			sentry.ReportFSMErrorf(
+				m.logger,
+				instanceName,
+				m.managerName,
+				"remove_error",
+				"Error removing instance: %v",
+				err,
+			)
+			if forceRemover, ok := inst.(interface {
+				ForceRemove(context.Context, filesystem.Service) error
+			}); ok {
+				// Run force removal in a detached goroutine to avoid blocking the main reconciliation loop
+				go func() {
+					err := forceRemover.ForceRemove(ctx, services.GetFileSystem())
+					if err != nil {
+						sentry.ReportFSMErrorf(
+							m.logger,
+							instanceName,
+							m.managerName,
+							"force_remove_error",
+							"Error force removing instance after normal removal failed: %v",
+							err,
+						)
+					}
+					sentry.ReportIssuef(sentry.IssueTypeWarning, m.logger, "force removing instance %s after normal removal failed: %v", instanceName, err)
+				}()
+			} else {
+				sentry.ReportIssuef(sentry.IssueTypeWarning, m.logger, "no force remover for instance %s, cannot force remove", instanceName)
+			}
+		}
+		return
+	}
 }

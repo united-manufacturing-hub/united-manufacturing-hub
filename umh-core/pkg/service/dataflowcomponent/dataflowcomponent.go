@@ -29,6 +29,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
 
 	benthosfsmmanager "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
 	benthosservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
@@ -307,22 +308,29 @@ func (s *DataFlowComponentService) RemoveDataFlowComponentFromBenthosManager(ctx
 		return ctx.Err()
 	}
 
+	// ------------------------------------------------------------------
+	// 1) Delete the *desired* config entry so the S6-manager will stop it
+	// ------------------------------------------------------------------
 	benthosName := s.getBenthosName(componentName)
 
-	// Remove the benthos config from the list of benthos configs
-	// so that the BenthosManager will stop the service
-	// The BenthosManager itself will handle a graceful shutdown of the underlying Benthos service
-	found := false
-	for i, config := range s.benthosConfigs {
-		if config.Name == benthosName {
-			s.benthosConfigs = append(s.benthosConfigs[:i], s.benthosConfigs[i+1:]...)
-			found = true
-			break
+	// Helper that deletes exactly one element *without* reallocating when the
+	// element is already missing – keeps the call idempotent and allocation-free.
+	sliceRemoveByName := func(arr []config.BenthosConfig, name string) []config.BenthosConfig {
+		for i, cfg := range arr {
+			if cfg.Name == name {
+				return append(arr[:i], arr[i+1:]...)
+			}
 		}
+		return arr
 	}
 
-	if !found {
-		return ErrServiceNotExists
+	s.benthosConfigs = sliceRemoveByName(s.benthosConfigs, benthosName)
+
+	// ------------------------------------------------------------------
+	// 2) is the child FSM still alive?
+	// ------------------------------------------------------------------
+	if inst, ok := s.benthosManager.GetInstance(benthosName); ok {
+		return fmt.Errorf("%w: Benthos instance state=%s", standarderrors.ErrRemovalPending, inst.GetCurrentFSMState())
 	}
 
 	return nil

@@ -29,6 +29,7 @@ import (
 	dataflowcomponentservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/dataflowcomponent"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
+	standarderrors "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
 )
 
 // The functions in this file define heavier, possibly fail-prone operations
@@ -66,16 +67,40 @@ func (b *DataflowComponentInstance) RemoveInstance(ctx context.Context, filesyst
 
 	// Remove the initiateDataflowComponent from the Benthos manager
 	err := b.service.RemoveDataFlowComponentFromBenthosManager(ctx, filesystemService, b.baseFSMInstance.GetID())
-	if err != nil {
-		if err == dataflowcomponentservice.ErrServiceNotExists {
-			b.baseFSMInstance.GetLogger().Debugf("DataflowComponent service %s not found in Benthos manager", b.baseFSMInstance.GetID())
-			return nil // do not throw an error, as each action is expected to be idempotent
-		}
-		return fmt.Errorf("failed to remove DataflowComponent service %s from Benthos manager: %w", b.baseFSMInstance.GetID(), err)
-	}
+	switch {
+	// ---------------------------------------------------------------
+	// happy paths
+	// ---------------------------------------------------------------
+	case err == nil: // fully removed
+		b.baseFSMInstance.GetLogger().
+			Debugf("Benthos service %s removed from S6 manager",
+				b.baseFSMInstance.GetID())
+		return nil
 
-	b.baseFSMInstance.GetLogger().Debugf("DataflowComponent service %s removed from Benthos manager", b.baseFSMInstance.GetID())
-	return nil
+	case errors.Is(err, dataflowcomponentservice.ErrServiceNotExists):
+		b.baseFSMInstance.GetLogger().
+			Debugf("Benthos service %s already removed from S6 manager",
+				b.baseFSMInstance.GetID())
+		// idempotent: was already gone
+		return nil
+
+	// ---------------------------------------------------------------
+	// transient path – keep retrying
+	// ---------------------------------------------------------------
+	case errors.Is(err, standarderrors.ErrRemovalPending):
+		b.baseFSMInstance.GetLogger().
+			Debugf("Benthos service %s removal still in progress",
+				b.baseFSMInstance.GetID())
+		// not an error from the FSM’s perspective – just means “try again”
+		return err
+
+	// ---------------------------------------------------------------
+	// real error – escalate
+	// ---------------------------------------------------------------
+	default:
+		return fmt.Errorf("failed to remove service %s: %w",
+			b.baseFSMInstance.GetID(), err)
+	}
 }
 
 // StartInstance to start the DataflowComponent by setting the desired state to running for the given instance
@@ -108,6 +133,12 @@ func (d *DataflowComponentInstance) StopInstance(ctx context.Context, filesystem
 
 	d.baseFSMInstance.GetLogger().Debugf("DataflowComponent service %s stop command executed", d.baseFSMInstance.GetID())
 	return nil
+}
+
+// CheckForCreation checks whether the creation was successful
+// For DataflowComponent, this is a no-op as we don't need to check anything
+func (d *DataflowComponentInstance) CheckForCreation(ctx context.Context, filesystemService filesystem.Service) bool {
+	return true
 }
 
 // getServiceStatus gets the status of the DataflowComponent service
