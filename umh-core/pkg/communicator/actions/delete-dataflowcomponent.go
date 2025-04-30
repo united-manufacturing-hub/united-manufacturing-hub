@@ -154,14 +154,14 @@ func (a *DeleteDataflowComponentAction) Execute() (interface{}, map[string]inter
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errorMsg, a.outboundChannel, models.DeleteDataFlowComponent)
 		return nil, nil, fmt.Errorf("%s", errorMsg)
 	}
-  
-  // ─── 3  Observe the runtime until the FSM forgets the instance ─────────
+
+	// ─── 3  Observe the runtime until the FSM forgets the instance ─────────
 	if a.systemSnapshotManager != nil { // skipping this for the unit tests
 
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Configuration updated. Waiting for dataflow component to be fully removed from the system...", a.outboundChannel, models.DeleteDataFlowComponent)
 		err = a.waitForComponentToBeRemoved()
 		if err != nil {
-			errorMsg := fmt.Sprintf("Failed to wait for dataflowcomponent to be removed: %v", err)
+			errorMsg := fmt.Sprintf("Failed to wait for dataflow component to be removed: %v", err)
 			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errorMsg, a.outboundChannel, models.DeleteDataFlowComponent)
 			return nil, nil, fmt.Errorf("%s", errorMsg)
 		}
@@ -187,7 +187,6 @@ func (a *DeleteDataflowComponentAction) getUuid() uuid.UUID {
 func (a *DeleteDataflowComponentAction) GetComponentUUID() uuid.UUID {
 	return a.componentUUID
 }
-
 
 func (a *DeleteDataflowComponentAction) waitForComponentToBeRemoved() error {
 	//check the system snapshot and waits for the instance to be removed
