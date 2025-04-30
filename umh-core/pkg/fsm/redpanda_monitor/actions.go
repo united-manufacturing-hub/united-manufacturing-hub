@@ -53,7 +53,7 @@ func (r *RedpandaMonitorInstance) CreateInstance(ctx context.Context, filesystem
 func (r *RedpandaMonitorInstance) RemoveInstance(ctx context.Context, filesystemService filesystem.Service) error {
 	r.baseFSMInstance.GetLogger().Debugf("Starting Action: Removing Redpanda Monitor service %s from S6 manager ...", r.baseFSMInstance.GetID())
 
-	// Remove the Benthos from the S6 manager
+	// Remove the Redpanda from the S6 manager
 	err := r.monitorService.RemoveRedpandaMonitorFromS6Manager(ctx)
 	switch {
 	// ---------------------------------------------------------------
