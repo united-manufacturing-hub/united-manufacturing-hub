@@ -16,7 +16,6 @@ package generator
 
 import (
 	"fmt"
-	"sync"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
@@ -44,38 +43,24 @@ const (
 )
 
 type StatusCollectorType struct {
-	latestData    *LatestData
-	dog           watchdog.Iface
-	state         *fsm.SystemSnapshot
-	systemMu      *sync.Mutex
-	logger        *zap.SugaredLogger
-	configManager config.ConfigManager
-}
-
-type LatestData struct {
-	mu sync.RWMutex // A mutex to synchronize access to the fields
-
-	UnsTable   models.UnsTable
-	EventTable models.EventsTable
+	dog                   watchdog.Iface
+	systemSnapshotManager *fsm.SnapshotManager
+	logger                *zap.SugaredLogger
+	configManager         config.ConfigManager
 }
 
 func NewStatusCollector(
 	dog watchdog.Iface,
-	state *fsm.SystemSnapshot,
-	systemMu *sync.Mutex,
+	systemSnapshotManager *fsm.SnapshotManager,
 	configManager config.ConfigManager,
 	logger *zap.SugaredLogger,
 ) *StatusCollectorType {
 
-	latestData := &LatestData{}
-
 	collector := &StatusCollectorType{
-		latestData:    latestData,
-		dog:           dog,
-		state:         state,
-		systemMu:      systemMu,
-		logger:        logger,
-		configManager: configManager,
+		dog:                   dog,
+		systemSnapshotManager: systemSnapshotManager,
+		logger:                logger,
+		configManager:         configManager,
 	}
 
 	return collector
@@ -84,7 +69,8 @@ func NewStatusCollector(
 func (s *StatusCollectorType) getDataFlowComponentData() ([]models.Dfc, error) {
 	var dfcData []models.Dfc
 
-	if dataflowcomponentManager, exists := s.state.Managers[constants.DataflowcomponentManagerName]; exists {
+	snapshot := s.systemSnapshotManager.GetDeepCopySnapshot()
+	if dataflowcomponentManager, exists := snapshot.Managers[constants.DataflowcomponentManagerName]; exists {
 		instances := dataflowcomponentManager.GetInstances()
 
 		for _, instance := range instances {
@@ -98,7 +84,7 @@ func (s *StatusCollectorType) getDataFlowComponentData() ([]models.Dfc, error) {
 	} else {
 		s.logger.Warn("Dataflowcomponent manager not found in system snapshot",
 			zap.String("managerName", constants.DataflowcomponentManagerName),
-			zap.Any("allManagers", s.state.Managers))
+			zap.Any("allManagers", snapshot.Managers))
 		return nil, fmt.Errorf("dataflowcomponent manager not found in system snapshot")
 	}
 
@@ -106,14 +92,9 @@ func (s *StatusCollectorType) getDataFlowComponentData() ([]models.Dfc, error) {
 }
 
 func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
-	s.latestData.mu.RLock()
-	defer s.latestData.mu.RUnlock()
 
-	// Lock state for reading and hold it until we're done accessing state data
-	s.systemMu.Lock()
-	defer s.systemMu.Unlock()
-
-	if s.state == nil {
+	snapshot := s.systemSnapshotManager.GetDeepCopySnapshot()
+	if len(snapshot.Managers) == 0 {
 		sentry.ReportIssuef(sentry.IssueTypeError, s.logger, "[GenerateStatusMessage] State is nil, using empty state")
 		s.logger.Error("State is nil, using empty state")
 		return nil
@@ -122,7 +103,7 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 	// Create container data from the container manager if available
 	var containerData models.Container
 
-	if containerManager, exists := s.state.Managers[containerManagerName]; exists {
+	if containerManager, exists := snapshot.Managers[containerManagerName]; exists {
 		instances := containerManager.GetInstances()
 
 		if instance, ok := instances[coreInstanceName]; ok {
@@ -148,7 +129,7 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 	var agentData models.Agent
 	var releaseChannel string
 
-	if agentManager, exists := s.state.Managers[agentManagerName]; exists {
+	if agentManager, exists := snapshot.Managers[agentManagerName]; exists {
 		instances := agentManager.GetInstances()
 
 		s.logger.Debug("Agent manager instances",
@@ -320,9 +301,9 @@ func buildDataFlowComponentDataFromSnapshot(instance fsm.FSMInstanceSnapshot, lo
 			return models.Dfc{}, err
 		}
 		serviceInfo := observed.ServiceInfo
-		inputThroughput := int64(0)
+		inputThroughput := float64(0)
 		if serviceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.MetricsState != nil && serviceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.MetricsState.Input.LastCount > 0 {
-			inputThroughput = int64(serviceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.MetricsState.Input.MessagesPerTick / constants.DefaultTickerTime.Seconds())
+			inputThroughput = serviceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.MetricsState.Input.MessagesPerTick / constants.DefaultTickerTime.Seconds()
 		}
 
 		dfcData.Health = &models.Health{
@@ -335,7 +316,7 @@ func buildDataFlowComponentDataFromSnapshot(instance fsm.FSMInstanceSnapshot, lo
 		dfcData.Type = "custom" // this is a custom DFC; protocol converters will have a separate fsm
 		dfcData.UUID = dataflowcomponentserviceconfig.GenerateUUIDFromName(instance.ID).String()
 		dfcData.Metrics = &models.DfcMetrics{
-			AvgInputThroughputPerMinuteInMsgSec: float64(inputThroughput),
+			AvgInputThroughputPerMinuteInMsgSec: inputThroughput,
 		}
 		dfcData.Name = &instance.ID
 	} else {
