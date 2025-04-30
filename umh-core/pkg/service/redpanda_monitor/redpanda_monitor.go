@@ -155,8 +155,6 @@ type RedpandaMetricsScan struct {
 	RedpandaMetrics *RedpandaMetrics
 	// ClusterConfig contains information about the cluster config of the Redpanda service
 	ClusterConfig *ClusterConfig
-	// MetricsState contains information about the metrics of the Redpanda service
-	MetricsState *RedpandaMetricsState
 	// LastUpdatedAt contains the last time the metrics were updated
 	LastUpdatedAt time.Time
 }

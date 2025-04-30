@@ -97,7 +97,9 @@ func (m *MockRedpandaMonitorService) SetServiceState(flags ServiceStateFlags) {
 		m.ServiceState = &ServiceInfo{
 			RedpandaStatus: RedpandaMonitorStatus{
 				LastScan: &RedpandaMetricsScan{
-					MetricsState: m.metricsState,
+					RedpandaMetrics: &RedpandaMetrics{
+						MetricsState: m.metricsState,
+					},
 				},
 			},
 		}
@@ -247,11 +249,11 @@ func (m *MockRedpandaMonitorService) Status(ctx context.Context, filesystemServi
 	// If we have a state already stored, return it
 	if m.ServiceState != nil {
 		m.ServiceState.RedpandaStatus.LastScan = &RedpandaMetricsScan{
-			MetricsState:    m.metricsState,
 			HealthCheck:     m.ServiceState.RedpandaStatus.LastScan.HealthCheck,
 			RedpandaMetrics: m.ServiceState.RedpandaStatus.LastScan.RedpandaMetrics,
 			LastUpdatedAt:   m.LastScanTime,
 		}
+		m.ServiceState.RedpandaStatus.LastScan.RedpandaMetrics.MetricsState = m.metricsState
 		return *m.ServiceState, m.StatusError
 	}
 
@@ -423,7 +425,6 @@ func (m *MockRedpandaMonitorService) SetMetricsState(isActive bool) {
 
 	// Update the service state if it existsSetMetricsState
 	if m.ServiceState != nil && m.ServiceState.RedpandaStatus.LastScan != nil {
-		m.ServiceState.RedpandaStatus.LastScan.MetricsState = m.metricsState
 		m.ServiceState.RedpandaStatus.LastScan.RedpandaMetrics = &RedpandaMetrics{
 			Metrics: Metrics{
 				Infrastructure: InfrastructureMetrics{
@@ -435,6 +436,7 @@ func (m *MockRedpandaMonitorService) SetMetricsState(isActive bool) {
 				},
 			},
 		}
+		m.ServiceState.RedpandaStatus.LastScan.RedpandaMetrics.MetricsState = m.metricsState
 	}
 }
 
@@ -444,7 +446,9 @@ func (m *MockRedpandaMonitorService) SetMockLogs(logs []s6service.LogEntry) {
 		m.ServiceState = &ServiceInfo{
 			RedpandaStatus: RedpandaMonitorStatus{
 				LastScan: &RedpandaMetricsScan{
-					MetricsState: m.metricsState,
+					RedpandaMetrics: &RedpandaMetrics{
+						MetricsState: m.metricsState,
+					},
 				},
 			},
 		}
