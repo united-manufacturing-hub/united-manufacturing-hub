@@ -12,6 +12,36 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// ────────────────────────────────────────────────────────────────────────────────
+// ENG-2893  Faster metric parsing for Benthos/Redpanda
+// Context: Slack thread 2025-04-30 (this file ↔ ENG-2893, ENG-2884)
+// ────────────────────────────────────────────────────────────────────────────────
+//
+// Benchmarks (Go 1.22, Ryzen 9-5900X, pkg/service/benthos_monitor):
+//   BenchmarkGzipDecode-24            104 859 ops   11.4 µs/op   49 169 B   11 allocs
+//   BenchmarkHexDecode-24           3 027 370 ops    0.39 µs/op      416 B   1 alloc
+//   BenchmarkMetricsParsing-24         28 386 ops   42.2 µs/op   28 392 B  781 allocs
+//   BenchmarkCompleteProcessing-24     20 557 ops   58.0 µs/op   75 673 B  792 allocs
+//
+// Findings
+// --------
+// • ParseMetricsFromBytes ≈ 73 % of end-to-end time (42 µs of 58 µs).
+// • Total cost to handle one Benthos metrics payload (gzip→hex→parse) ≈ 0.05 ms.
+// • Hex decode is negligible; gzip decompression is minor; Prometheus text parse
+//   is the clear hotspot.
+//
+// Options under evaluation
+// ------------------------
+// 1. Avoid parsing every tick for every Benthos instance (parse only when needed).
+// 2. Replace Prometheus text parser with minimal hand-rolled parser.
+//
+// Related tickets
+//  • ENG-2893 – performance work.
+//  • ENG-2884 – parsing errors / observed-state update.
+//
+// Sample metrics used for the benchmark are below (taken from test_metrics.txt).
+// ────────────────────────────────────────────────────────────────────────────────
+
 package benthos_monitor
 
 import (

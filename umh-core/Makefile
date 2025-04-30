@@ -218,6 +218,10 @@ benchmark-s6-parse-log:
 	@echo "Running S6 parseLogLine benchmarks..."
 	cd pkg/service/s6 && go test -bench=ParseLogLine -benchmem
 
+benchmark-benthos-metrics:
+	@echo "Running Benthos metrics benchmarks..."
+	cd pkg/service/benthos_monitor && go test -bench=. -benchmem
+
 integration-test: stop-all-pods vet nilaway lint
 	ginkgo -r -v --tags=test --label-filter='integration' --fail-fast ./...
 
