@@ -266,11 +266,7 @@ func (m *MockBenthosMonitorService) Status(ctx context.Context, services service
 			BenthosMetrics: m.ServiceState.BenthosStatus.LastScan.BenthosMetrics,
 			LastUpdatedAt:  m.LastScanTime,
 		}
-		if m.ServiceState.BenthosStatus.LastScan.BenthosMetrics == nil {
-			m.ServiceState.BenthosStatus.LastScan.BenthosMetrics = &BenthosMetrics{
-				MetricsState: m.metricsState,
-			}
-		} else {
+		if m.ServiceState.BenthosStatus.LastScan.BenthosMetrics != nil {
 			m.ServiceState.BenthosStatus.LastScan.BenthosMetrics.MetricsState = m.metricsState
 		}
 		return *m.ServiceState, m.StatusError

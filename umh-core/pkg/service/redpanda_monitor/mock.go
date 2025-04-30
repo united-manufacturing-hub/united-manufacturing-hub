@@ -253,11 +253,7 @@ func (m *MockRedpandaMonitorService) Status(ctx context.Context, filesystemServi
 			RedpandaMetrics: m.ServiceState.RedpandaStatus.LastScan.RedpandaMetrics,
 			LastUpdatedAt:   m.LastScanTime,
 		}
-		if m.ServiceState.RedpandaStatus.LastScan.RedpandaMetrics == nil {
-			m.ServiceState.RedpandaStatus.LastScan.RedpandaMetrics = &RedpandaMetrics{
-				MetricsState: m.metricsState,
-			}
-		} else {
+		if m.ServiceState.RedpandaStatus.LastScan.RedpandaMetrics != nil {
 			m.ServiceState.RedpandaStatus.LastScan.RedpandaMetrics.MetricsState = m.metricsState
 		}
 		return *m.ServiceState, m.StatusError
