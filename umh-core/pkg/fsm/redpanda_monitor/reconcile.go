@@ -26,7 +26,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	redpanda_monitor_service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda_monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
@@ -201,7 +200,7 @@ func (b *RedpandaMonitorInstance) reconcileStateTransition(ctx context.Context, 
 
 	// Handle operational states
 	if IsOperationalState(currentState) {
-		err, reconciled := b.reconcileOperationalStates(ctx, services.GetFileSystem(), currentState, desiredState, time.Now())
+		err, reconciled := b.reconcileOperationalStates(ctx, services, currentState, desiredState, time.Now())
 		if err != nil {
 			return err, false
 		}
@@ -215,15 +214,8 @@ func (b *RedpandaMonitorInstance) reconcileStateTransition(ctx context.Context, 
 	return fmt.Errorf("invalid state: %s", currentState), false
 }
 
-// CheckForCreation checks if the instance has been created
-func (b *RedpandaMonitorInstance) CheckForCreation(ctx context.Context, filesystemService filesystem.Service) bool {
-	// No need to check anything specific for redpanda monitor
-	// Creation is considered complete immediately
-	return true
-}
-
 // reconcileOperationalStates handles states related to instance operations (starting/stopping)
-func (b *RedpandaMonitorInstance) reconcileOperationalStates(ctx context.Context, filesystemService filesystem.Service, currentState string, desiredState string, currentTime time.Time) (err error, reconciled bool) {
+func (b *RedpandaMonitorInstance) reconcileOperationalStates(ctx context.Context, services serviceregistry.Provider, currentState string, desiredState string, currentTime time.Time) (err error, reconciled bool) {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentRedpandaMonitor, b.baseFSMInstance.GetID()+".reconcileOperationalStates", time.Since(start))
@@ -231,9 +223,9 @@ func (b *RedpandaMonitorInstance) reconcileOperationalStates(ctx context.Context
 
 	switch desiredState {
 	case OperationalStateActive:
-		return b.reconcileTransitionToActive(ctx, filesystemService, currentState, currentTime)
+		return b.reconcileTransitionToActive(ctx, services, currentState, currentTime)
 	case OperationalStateStopped:
-		return b.reconcileTransitionToStopped(ctx, filesystemService, currentState)
+		return b.reconcileTransitionToStopped(ctx, services, currentState)
 	default:
 		return fmt.Errorf("invalid desired state: %s", desiredState), false
 	}
@@ -241,7 +233,7 @@ func (b *RedpandaMonitorInstance) reconcileOperationalStates(ctx context.Context
 
 // reconcileTransitionToActive handles transitions when the desired state is Active.
 // It deals with moving from various states to the Active state.
-func (b *RedpandaMonitorInstance) reconcileTransitionToActive(ctx context.Context, filesystemService filesystem.Service, currentState string, currentTime time.Time) (err error, reconciled bool) {
+func (b *RedpandaMonitorInstance) reconcileTransitionToActive(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time) (err error, reconciled bool) {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentRedpandaMonitor, b.baseFSMInstance.GetID()+".reconcileTransitionToActive", time.Since(start))
@@ -250,21 +242,21 @@ func (b *RedpandaMonitorInstance) reconcileTransitionToActive(ctx context.Contex
 	switch {
 	// If we're stopped, we need to start first
 	case currentState == OperationalStateStopped:
-		err := b.StartInstance(ctx, filesystemService)
+		err := b.StartInstance(ctx, services.GetFileSystem())
 		if err != nil {
 			return err, false
 		}
 		// Send event to transition from Stopped to Starting
 		return b.baseFSMInstance.SendEvent(ctx, EventStart), true
 	case IsStartingState(currentState):
-		return b.reconcileStartingStates(ctx, filesystemService, currentState, currentTime)
+		return b.reconcileStartingStates(ctx, services, currentState, currentTime)
 	case IsRunningState(currentState):
-		return b.reconcileRunningStates(ctx, filesystemService, currentState, currentTime)
+		return b.reconcileRunningStates(ctx, services, currentState, currentTime)
 	case currentState == OperationalStateStopping:
 		// There can be the edge case where an fsm is set to stopped, and then a cycle later again to active
 		// It will cause the stopping process to start, but then the deisred state is again active, so it will land up in reconcileTransitionToActive
 		// if it is stopping, we will first finish the stopping process and then we will go to active
-		return b.reconcileTransitionToStopped(ctx, filesystemService, currentState)
+		return b.reconcileTransitionToStopped(ctx, services, currentState)
 	default:
 		return fmt.Errorf("invalid current state: %s", currentState), false
 	}
@@ -272,7 +264,7 @@ func (b *RedpandaMonitorInstance) reconcileTransitionToActive(ctx context.Contex
 
 // reconcileStartingStates handles the various starting phase states when transitioning to a running state
 // no big startup process here
-func (b *RedpandaMonitorInstance) reconcileStartingStates(ctx context.Context, filesystemService filesystem.Service, currentState string, currentTime time.Time) (err error, reconciled bool) {
+func (b *RedpandaMonitorInstance) reconcileStartingStates(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time) (err error, reconciled bool) {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentRedpandaMonitor, b.baseFSMInstance.GetID()+".reconcileStartingStates", time.Since(start))
@@ -289,7 +281,7 @@ func (b *RedpandaMonitorInstance) reconcileStartingStates(ctx context.Context, f
 }
 
 // reconcileRunningStates handles the various running states when transitioning to Active.
-func (b *RedpandaMonitorInstance) reconcileRunningStates(ctx context.Context, filesystemService filesystem.Service, currentState string, currentTime time.Time) (err error, reconciled bool) {
+func (b *RedpandaMonitorInstance) reconcileRunningStates(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time) (err error, reconciled bool) {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentRedpandaMonitor, b.baseFSMInstance.GetID()+".reconcileRunningStates", time.Since(start))
@@ -315,7 +307,7 @@ func (b *RedpandaMonitorInstance) reconcileRunningStates(ctx context.Context, fi
 
 // reconcileTransitionToStopped handles transitions when the desired state is Stopped.
 // It deals with moving from any operational state to Stopping and then to Stopped.
-func (b *RedpandaMonitorInstance) reconcileTransitionToStopped(ctx context.Context, filesystemService filesystem.Service, currentState string) (err error, reconciled bool) {
+func (b *RedpandaMonitorInstance) reconcileTransitionToStopped(ctx context.Context, services serviceregistry.Provider, currentState string) (err error, reconciled bool) {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentRedpandaMonitor, b.baseFSMInstance.GetID()+".reconcileTransitionToStopped", time.Since(start))
@@ -334,7 +326,7 @@ func (b *RedpandaMonitorInstance) reconcileTransitionToStopped(ctx context.Conte
 		return b.baseFSMInstance.SendEvent(ctx, EventStopDone), true
 	default:
 		// For any other state, initiate stop
-		err := b.StopInstance(ctx, filesystemService)
+		err := b.StopInstance(ctx, services.GetFileSystem())
 		if err != nil {
 			return err, false
 		}
