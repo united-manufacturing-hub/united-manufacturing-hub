@@ -539,6 +539,8 @@ func (a *EditDataflowComponentAction) waitForComponentToBeActive() error {
 					if dataflowcomponentserviceconfig.GenerateUUIDFromName(instance.ID) == a.newComponentUUID {
 						found = true
 						dfcSnapshot, ok := instance.LastObservedState.(*dataflowcomponent.DataflowComponentObservedStateSnapshot)
+						// store the logs in the lastLogs variable to not send all the old logs of the unedited component
+						lastLogs = dfcSnapshot.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosLogs
 						if !ok {
 							SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
 								fmt.Sprintf("Waiting for dataflow component state info (%ds remaining)...", remainingSeconds), a.outboundChannel, models.EditDataFlowComponent)
