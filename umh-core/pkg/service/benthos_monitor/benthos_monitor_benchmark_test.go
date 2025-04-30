@@ -147,6 +147,9 @@ func BenchmarkCompleteProcessing(b *testing.B) {
 			b.Fatal(err)
 		}
 		err = gzipReader.Close()
+		if err != nil {
+			b.Fatal(err)
+		}
 
 		// Step 3: Parse metrics
 		_, err = ParseMetricsFromBytes(decompressedData)
