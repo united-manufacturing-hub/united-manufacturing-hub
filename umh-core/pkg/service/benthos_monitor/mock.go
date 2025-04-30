@@ -96,7 +96,9 @@ func (m *MockBenthosMonitorService) SetServiceState(flags ServiceStateFlags) {
 		m.ServiceState = &ServiceInfo{
 			BenthosStatus: BenthosMonitorStatus{
 				LastScan: &BenthosMetricsScan{
-					MetricsState: m.metricsState,
+					BenthosMetrics: &BenthosMetrics{
+						MetricsState: m.metricsState,
+					},
 				},
 			},
 		}
@@ -260,10 +262,12 @@ func (m *MockBenthosMonitorService) Status(ctx context.Context, services service
 	// If we have a state already stored, return it
 	if m.ServiceState != nil {
 		m.ServiceState.BenthosStatus.LastScan = &BenthosMetricsScan{
-			MetricsState:   m.metricsState,
 			HealthCheck:    m.ServiceState.BenthosStatus.LastScan.HealthCheck,
 			BenthosMetrics: m.ServiceState.BenthosStatus.LastScan.BenthosMetrics,
 			LastUpdatedAt:  m.LastScanTime,
+		}
+		if m.ServiceState.BenthosStatus.LastScan.BenthosMetrics != nil {
+			m.ServiceState.BenthosStatus.LastScan.BenthosMetrics.MetricsState = m.metricsState
 		}
 		return *m.ServiceState, m.StatusError
 	}
@@ -438,7 +442,6 @@ func (m *MockBenthosMonitorService) SetMetricsState(isActive bool) {
 
 	// Update the service state if it existsSetMetricsState
 	if m.ServiceState != nil && m.ServiceState.BenthosStatus.LastScan != nil {
-		m.ServiceState.BenthosStatus.LastScan.MetricsState = m.metricsState
 		m.ServiceState.BenthosStatus.LastScan.BenthosMetrics = &BenthosMetrics{
 			Metrics: Metrics{
 				Input: InputMetrics{
@@ -449,6 +452,7 @@ func (m *MockBenthosMonitorService) SetMetricsState(isActive bool) {
 				},
 			},
 		}
+		m.ServiceState.BenthosStatus.LastScan.BenthosMetrics.MetricsState = m.metricsState
 	}
 }
 
@@ -458,7 +462,9 @@ func (m *MockBenthosMonitorService) SetMockLogs(logs []s6service.LogEntry) {
 		m.ServiceState = &ServiceInfo{
 			BenthosStatus: BenthosMonitorStatus{
 				LastScan: &BenthosMetricsScan{
-					MetricsState: m.metricsState,
+					BenthosMetrics: &BenthosMetrics{
+						MetricsState: m.metricsState,
+					},
 				},
 			},
 		}
