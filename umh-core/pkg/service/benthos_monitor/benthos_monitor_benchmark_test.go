@@ -18,11 +18,11 @@
 // ────────────────────────────────────────────────────────────────────────────────
 //
 // Benchmarks (Go 1.22, Ryzen 9-5900X, pkg/service/benthos_monitor):
-//   BenchmarkGzipDecode-24            104 859 ops   11.4 µs/op   49 169 B   11 allocs
-//   BenchmarkHexDecode-24           3 027 370 ops    0.39 µs/op      416 B   1 alloc
-//   BenchmarkMetricsParsing-24         28 386 ops   42.2 µs/op   28 392 B  781 allocs
-//   BenchmarkCompleteProcessing-24     20 557 ops   58.0 µs/op   75 673 B  792 allocs
-//   BenchmarkParseBenthosLogsWithPercentiles-24        10000            111753 ns/op            112572 p50ns            345167 p95ns            484639 p99ns          217350 B/op        911 allocs/op
+//	BenchmarkGzipDecode-24                             98608             11983 ns/op           49169 B/op         11 allocs/op
+// 	BenchmarkHexDecode-24                            3110442             388.6 ns/op             416 B/op          1 allocs/op
+// 	BenchmarkMetricsParsing-24                         27571             42960 ns/op           28392 B/op        781 allocs/op
+// 	BenchmarkCompleteProcessing-24                     20348             59672 ns/op           75673 B/op        792 allocs/op
+// 	BenchmarkParseBenthosLogsWithPercentiles-24        10000            111753 ns/op            112572 p50ns            345167 p95ns            484639 p99ns          217350 B/op        911 allocs/op
 //
 // Findings
 // --------
