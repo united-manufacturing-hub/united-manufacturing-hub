@@ -41,18 +41,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sync"
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/tiendc/go-deepcopy"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	"go.uber.org/zap"
 )
 
@@ -73,8 +70,7 @@ type DeleteDataflowComponentAction struct {
 	configManager   config.ConfigManager    // abstraction over config store
 
 	// ─── Runtime observation ────────────────────────────────────────────────
-	systemSnapshot *fsm.SystemSnapshot // pointer owned by FSM goroutine
-	systemMu       *sync.RWMutex       // protects systemSnapshot during copy
+	systemSnapshotManager *fsm.SnapshotManager
 
 	// ─── Business data ──────────────────────────────────────────────────────
 	componentUUID uuid.UUID // the component slated for deletion
@@ -86,16 +82,15 @@ type DeleteDataflowComponentAction struct {
 // NewDeleteDataflowComponentAction returns an *empty* action instance prepared
 // for unit tests or real execution.  The caller still needs to Parse and
 // Validate before calling Execute.
-func NewDeleteDataflowComponentAction(userEmail string, actionUUID uuid.UUID, instanceUUID uuid.UUID, outboundChannel chan *models.UMHMessage, configManager config.ConfigManager, systemSnapshot *fsm.SystemSnapshot, systemMu *sync.RWMutex) *DeleteDataflowComponentAction {
+func NewDeleteDataflowComponentAction(userEmail string, actionUUID uuid.UUID, instanceUUID uuid.UUID, outboundChannel chan *models.UMHMessage, configManager config.ConfigManager, systemSnapshotManager *fsm.SnapshotManager) *DeleteDataflowComponentAction {
 	return &DeleteDataflowComponentAction{
-		userEmail:       userEmail,
-		actionUUID:      actionUUID,
-		instanceUUID:    instanceUUID,
-		outboundChannel: outboundChannel,
-		configManager:   configManager,
-		actionLogger:    logger.For(logger.ComponentCommunicator),
-		systemSnapshot:  systemSnapshot,
-		systemMu:        systemMu,
+		userEmail:             userEmail,
+		actionUUID:            actionUUID,
+		instanceUUID:          instanceUUID,
+		outboundChannel:       outboundChannel,
+		configManager:         configManager,
+		systemSnapshotManager: systemSnapshotManager,
+		actionLogger:          logger.For(logger.ComponentCommunicator),
 	}
 }
 
@@ -159,9 +154,10 @@ func (a *DeleteDataflowComponentAction) Execute() (interface{}, map[string]inter
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errorMsg, a.outboundChannel, models.DeleteDataFlowComponent)
 		return nil, nil, fmt.Errorf("%s", errorMsg)
 	}
+  
+  // ─── 3  Observe the runtime until the FSM forgets the instance ─────────
+	if a.systemSnapshotManager != nil { // skipping this for the unit tests
 
-	// ─── 3  Observe the runtime until the FSM forgets the instance ─────────
-	if a.systemSnapshot != nil { // skipping this for the unit tests
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Configuration updated. Waiting for dataflow component to be fully removed from the system...", a.outboundChannel, models.DeleteDataFlowComponent)
 		err = a.waitForComponentToBeRemoved()
 		if err != nil {
@@ -192,28 +188,7 @@ func (a *DeleteDataflowComponentAction) GetComponentUUID() uuid.UUID {
 	return a.componentUUID
 }
 
-// GetSystemSnapshot returns a *deep copy* so that callers cannot accidentally
-// race with the FSM writer goroutine.
-func (a *DeleteDataflowComponentAction) GetSystemSnapshot() fsm.SystemSnapshot {
-	a.systemMu.RLock()
-	defer a.systemMu.RUnlock()
 
-	if a.systemSnapshot == nil {
-		return fsm.SystemSnapshot{}
-	}
-
-	var snapshotCopy fsm.SystemSnapshot
-	err := deepcopy.Copy(&snapshotCopy, a.systemSnapshot)
-	if err != nil {
-		sentry.ReportIssue(err, sentry.IssueTypeError, a.actionLogger)
-	}
-
-	return snapshotCopy
-}
-
-// waitForComponentToBeRemoved polls the snapshot until the DFC no longer
-// appears.  This is purely *observational* – there is no rollback because the
-// component is already gone from the configuration store.
 func (a *DeleteDataflowComponentAction) waitForComponentToBeRemoved() error {
 	//check the system snapshot and waits for the instance to be removed
 	ticker := time.NewTicker(1 * time.Second)
@@ -224,7 +199,10 @@ func (a *DeleteDataflowComponentAction) waitForComponentToBeRemoved() error {
 
 	// try to find the component name for better logging
 	componentName := a.componentUUID.String() // Default to using UUID if name not found
-	if dataflowcomponentManager, exists := a.systemSnapshot.Managers[constants.DataflowcomponentManagerName]; exists {
+	// the snapshot manager holds the latest system snapshot which is asynchronously updated by the other goroutines
+	// we need to get a deep copy of it to prevent race conditions
+	systemSnapshot := a.systemSnapshotManager.GetDeepCopySnapshot()
+	if dataflowcomponentManager, exists := systemSnapshot.Managers[constants.DataflowcomponentManagerName]; exists {
 		for _, inst := range dataflowcomponentManager.GetInstances() {
 			if dataflowcomponentserviceconfig.GenerateUUIDFromName(inst.ID) == a.componentUUID {
 				componentName = inst.ID
@@ -246,7 +224,7 @@ func (a *DeleteDataflowComponentAction) waitForComponentToBeRemoved() error {
 				fmt.Sprintf("Verifying removal of dataflow component '%s' (%ds remaining)...",
 					componentName, remainingSeconds), a.outboundChannel, models.DeleteDataFlowComponent)
 
-			systemSnapshot := a.GetSystemSnapshot()
+			systemSnapshot := a.systemSnapshotManager.GetDeepCopySnapshot()
 
 			removed := true
 			if mgr, ok := systemSnapshot.Managers[constants.DataflowcomponentManagerName]; ok {
