@@ -20,6 +20,7 @@ import (
 	"sync"
 
 	"github.com/google/uuid"
+	"github.com/tiendc/go-deepcopy"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
@@ -27,6 +28,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	"go.uber.org/zap"
 	"gopkg.in/yaml.v3"
 )
@@ -96,6 +98,24 @@ func buildDataFlowComponentDataFromSnapshot(instance fsm.FSMInstanceSnapshot, lo
 	return dfcData, nil
 }
 
+// GetSystemSnapshot returns a deep copy of the system snapshot to avoid the caller having to handle locking
+func (a *GetDataFlowComponentAction) GetSystemSnapshot() fsm.SystemSnapshot {
+	a.systemMu.RLock()
+	defer a.systemMu.RUnlock()
+
+	if a.systemSnapshot == nil {
+		return fsm.SystemSnapshot{}
+	}
+
+	var snapshotCopy fsm.SystemSnapshot
+	err := deepcopy.Copy(&snapshotCopy, a.systemSnapshot)
+	if err != nil {
+		sentry.ReportIssue(err, sentry.IssueTypeError, a.actionLogger)
+	}
+
+	return snapshotCopy
+}
+
 func (a *GetDataFlowComponentAction) Execute() (interface{}, map[string]interface{}, error) {
 	a.actionLogger.Info("Executing the action")
 	numUUIDs := len(a.payload.VersionUUIDs)
@@ -104,7 +124,8 @@ func (a *GetDataFlowComponentAction) Execute() (interface{}, map[string]interfac
 	// Get the DataFlowComponent
 	a.actionLogger.Debugf("Getting the DataFlowComponent")
 
-	if dataflowcomponentManager, exists := a.systemSnapshot.Managers[constants.DataflowcomponentManagerName]; exists {
+	systemSnapshot := a.GetSystemSnapshot()
+	if dataflowcomponentManager, exists := systemSnapshot.Managers[constants.DataflowcomponentManagerName]; exists {
 		a.actionLogger.Debugf("Dataflowcomponent manager found, getting the dataflowcomponent")
 		instances := dataflowcomponentManager.GetInstances()
 		foundComponents := 0

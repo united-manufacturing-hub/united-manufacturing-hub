@@ -22,12 +22,14 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/tiendc/go-deepcopy"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	"go.uber.org/zap"
 )
 
@@ -155,10 +157,22 @@ func (a *DeleteDataflowComponentAction) GetComponentUUID() uuid.UUID {
 	return a.componentUUID
 }
 
-func (a *DeleteDataflowComponentAction) GetSystemSnapshot() *fsm.SystemSnapshot {
+// GetSystemSnapshot returns a deep copy of the system snapshot to avoid the caller having to handle locking
+func (a *DeleteDataflowComponentAction) GetSystemSnapshot() fsm.SystemSnapshot {
 	a.systemMu.RLock()
 	defer a.systemMu.RUnlock()
-	return a.systemSnapshot
+
+	if a.systemSnapshot == nil {
+		return fsm.SystemSnapshot{}
+	}
+
+	var snapshotCopy fsm.SystemSnapshot
+	err := deepcopy.Copy(&snapshotCopy, a.systemSnapshot)
+	if err != nil {
+		sentry.ReportIssue(err, sentry.IssueTypeError, a.actionLogger)
+	}
+
+	return snapshotCopy
 }
 
 func (a *DeleteDataflowComponentAction) waitForComponentToBeRemoved() error {
