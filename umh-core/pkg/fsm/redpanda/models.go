@@ -142,3 +142,10 @@ func (r *RedpandaInstance) SetService(service redpandasvc.IRedpandaService) {
 func (r *RedpandaInstance) GetConfig() redpandaserviceconfig.RedpandaServiceConfig {
 	return r.config
 }
+
+// IsTransientStreakCounterMaxed returns whether the transient streak counter
+// has reached the maximum number of ticks, which means that the FSM is stuck in a state
+// and should be removed
+func (r *RedpandaInstance) IsTransientStreakCounterMaxed() bool {
+	return r.baseFSMInstance.IsTransientStreakCounterMaxed()
+}

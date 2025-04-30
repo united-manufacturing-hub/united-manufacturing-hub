@@ -16,13 +16,16 @@ package s6
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
@@ -382,4 +385,93 @@ var _ = Describe("S6 Service", func() {
 			})
 		})
 	})
+
+	// --- NEW TESTS FOR DefaultService.Remove ------------------------------------
+	Describe("DefaultService Remove()", func() {
+		var (
+			ctx     context.Context
+			mockFS  *filesystem.MockFileSystem
+			svc     *DefaultService
+			svcPath string
+			logDir  string
+
+			exists sync.Map // key:string → bool, simple in-memory "filesystem"
+		)
+
+		// helper – PathExists reads from our map
+		pathExists := func(p string) bool {
+			exists, ok := exists.Load(p)
+			return ok && exists.(bool)
+		}
+
+		BeforeEach(func() {
+			ctx = context.Background()
+			mockFS = filesystem.NewMockFileSystem()
+			svc = &DefaultService{
+				logger: logger.For("test"),
+			}
+			svcPath = filepath.Join(constants.S6BaseDir, "my-service")
+			logDir = filepath.Join(constants.S6LogBaseDir, "my-service")
+
+			// default: both paths exist
+			exists.Store(svcPath, true)
+			exists.Store(logDir, true)
+
+			// --- mock functions --------------------------------------------------
+
+			mockFS.WithPathExistsFunc(func(ctx context.Context, p string) (bool, error) {
+				return pathExists(p), nil
+			})
+
+			mockFS.WithRemoveAllFunc(func(ctx context.Context, p string) error {
+				// simulate deletion
+				exists.Delete(p)
+				return nil
+			})
+		})
+
+		It("removes both service and log directory (normal case)", func() {
+			err := svc.Remove(ctx, svcPath, mockFS)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(pathExists(svcPath)).To(BeFalse())
+			Expect(pathExists(logDir)).To(BeFalse())
+		})
+
+		It("is successful when only the log dir had to be removed", func() {
+			exists.Delete(svcPath) // service dir already gone
+
+			err := svc.Remove(ctx, svcPath, mockFS)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(pathExists(logDir)).To(BeFalse())
+		})
+
+		It("is idempotent (everything already gone)", func() {
+			exists = sync.Map{} // nothing exists
+
+			removeCalls := 0
+			mockFS.WithRemoveAllFunc(func(ctx context.Context, p string) error {
+				removeCalls++
+				return nil
+			})
+
+			err := svc.Remove(ctx, svcPath, mockFS)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(removeCalls).To(Equal(0), "RemoveAll should not be called when nothing exists")
+		})
+
+		It("returns an error when deletion fails", func() {
+			boom := fmt.Errorf("IO error")
+			mockFS.WithRemoveAllFunc(func(ctx context.Context, p string) error {
+				if p == svcPath {
+					return boom // fail removing service dir
+				}
+				exists.Delete(p)
+				return nil
+			})
+
+			err := svc.Remove(ctx, svcPath, mockFS)
+			Expect(err).To(MatchError(ContainSubstring("IO error")))
+		})
+	})
+
 })
