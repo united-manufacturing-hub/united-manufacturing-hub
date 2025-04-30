@@ -222,6 +222,10 @@ benchmark-benthos-metrics:
 	@echo "Running Benthos metrics benchmarks..."
 	cd pkg/service/benthos_monitor && go test -bench=. -benchmem
 
+benchmark-redpanda-metrics:
+	@echo "Running Redpanda metrics benchmarks..."
+	cd pkg/service/redpanda_monitor && go test -bench=. -benchmem
+
 integration-test: stop-all-pods vet nilaway lint
 	ginkgo -r -v --tags=test --label-filter='integration' --fail-fast ./...
 
