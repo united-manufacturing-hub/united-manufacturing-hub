@@ -49,6 +49,32 @@ type CommunicationState struct {
 	Logger            *zap.SugaredLogger
 }
 
+// NewCommunicationState creates a new CommunicationState with initialized mutex
+func NewCommunicationState(
+	watchdog *watchdog.Watchdog,
+	inboundChannel chan *models.UMHMessage,
+	outboundChannel chan *models.UMHMessage,
+	releaseChannel config.ReleaseChannel,
+	systemSnapshot *fsm.SystemSnapshot,
+	configManager config.ConfigManager,
+	apiUrl string,
+	logger *zap.SugaredLogger,
+	insecureTLS bool,
+) *CommunicationState {
+	return &CommunicationState{
+		mu:              &sync.RWMutex{},
+		Watchdog:        watchdog,
+		InboundChannel:  inboundChannel,
+		OutboundChannel: outboundChannel,
+		ReleaseChannel:  releaseChannel,
+		SystemSnapshot:  systemSnapshot,
+		ConfigManager:   configManager,
+		ApiUrl:          apiUrl,
+		Logger:          logger,
+		InsecureTLS:     insecureTLS,
+	}
+}
+
 // InitialiseAndStartPuller creates a new Puller and starts it
 func (c *CommunicationState) InitialiseAndStartPuller() {
 	c.mu.Lock()
