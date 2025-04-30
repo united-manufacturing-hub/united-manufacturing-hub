@@ -34,7 +34,7 @@ func parseLogLineOptimized(line string) LogEntry {
 
 	// Check if we have the double space separator
 	sepIdx := strings.Index(line, "  ")
-	if sepIdx == -1 || sepIdx > 28 {
+	if sepIdx == -1 || sepIdx > 29 {
 		return LogEntry{Content: line}
 	}
 
@@ -134,6 +134,10 @@ func BenchmarkParseLogLine(b *testing.B) {
 				if entry.Content == "" && tc.name != "Empty string" && tc.name != "Missing content" {
 					b.Fatalf("Got empty content for: %s", tc.name)
 				}
+				// Ensure that expected equals result
+				if entry != tc.expected {
+					b.Fatalf("Expected %v, got %v", tc.expected, entry)
+				}
 			}
 		})
 	}
@@ -195,6 +199,10 @@ func BenchmarkParseLogLineOptimized(b *testing.B) {
 				// Prevent compiler optimizations by using the result
 				if entry.Content == "" && tc.name != "Empty string" && tc.name != "Missing content" {
 					b.Fatalf("Got empty content for: %s", tc.name)
+				}
+				// Ensure that expected equals result
+				if entry != tc.expected {
+					b.Fatalf("Expected %v, got %v", tc.expected, entry)
 				}
 			}
 		})
@@ -265,7 +273,11 @@ func BenchmarkParseRealLogData(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			// Use i % len(lines) to cycle through all lines
 			idx := i % len(lines)
-			_ = parseLogLineOriginal(lines[idx])
+			le := parseLogLineOriginal(lines[idx])
+			// Ensure that the result does not have an leading space
+			if le.Content != "" && le.Content[0] == ' ' {
+				b.Fatalf("Leading space found in content: %s", le.Content)
+			}
 		}
 	})
 
@@ -276,7 +288,11 @@ func BenchmarkParseRealLogData(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			// Use i % len(lines) to cycle through all lines
 			idx := i % len(lines)
-			_ = parseLogLineOptimized(lines[idx])
+			le := parseLogLineOptimized(lines[idx])
+			// Ensure that the result does not have an leading space
+			if le.Content != "" && le.Content[0] == ' ' {
+				b.Fatalf("Leading space found in content: %s", le.Content)
+			}
 		}
 	})
 
