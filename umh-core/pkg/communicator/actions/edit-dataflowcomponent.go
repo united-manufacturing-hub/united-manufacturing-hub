@@ -12,6 +12,63 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Package actions contains implementations of the Action interface that mutate the
+// UMH configuration or otherwise change the system state.
+//
+// -----------------------------------------------------------------------------
+// BUSINESS CONTEXT
+// -----------------------------------------------------------------------------
+// A Data‑Flow Component (DFC) in UMH is a Benthos pipeline that lives inside the
+// FSM runtime. Editing a DFC therefore means **writing a new desired
+// configuration** and then **waiting until the FSM reports that the running
+// instance has reached the
+//   - state "active" **and**
+//   - the *observed* configuration matches the *desired* one.
+//
+// If the component fails to come up within `constants.DataflowComponentWaitForActiveTimeout`
+// the action **rolls back** to the previous configuration (unless the caller set
+// `ignoreHealthCheck`).
+//
+// Why two UUIDs?
+//   * `oldComponentUUID` – the UUID that already exists in the system before the
+//     edit and is taken from the incoming request payload.
+//   * `newComponentUUID` – a *deterministic* UUID derived from the **name** *after*
+//     the edit (this can change when the user renames the component).  It is the
+//     key under which the rewritten config will be stored.
+//
+// Runtime state observation
+// -------------------------
+// The caller passes a pointer `*fsm.SystemSnapshot` that is owned and mutated by
+// a different goroutine inside the FSM event loop.  The action never locks that
+// pointer itself; instead it takes a *copy* under a read‑lock (`GetSystemSnapshot`).
+// This means the polling loop in `waitForComponentToBeActive` always sees a
+// consistent snapshot without blocking the FSM writer.
+//
+// Rollback strategy
+// -----------------
+// On timeout, `waitForComponentToBeActive` writes `oldConfig` back through the
+// same `AtomicEditDataflowcomponent` API that performed the edit.  It uses
+// `newComponentUUID` as key because – after a rename – the *existing* component
+// in the configuration store now sits under the new ID.
+//
+// -----------------------------------------------------------------------------
+// The concrete flow of an EditDataflowComponentAction
+// -----------------------------------------------------------------------------
+//   1. **Parse** – extract name, type, UUID, payload and flags.  Generate
+//      `newComponentUUID` from the (possibly new) name.
+//   2. **Validate** – structural sanity checks and YAML parsing.
+//   3. **Execute**
+//        a.     Send ActionConfirmed.
+//        b.     Translate the custom payload into a Benthos service config.
+//        c.     Write the new DFC config via `configManager.AtomicEditDataflowcomponent`.
+//        d.     Poll `systemSnapshot` until the instance reports `state==active`
+//               **and** `observedConfig == desiredConfig`.
+//        e.     If the poll times out → rollback (unless `ignoreHealthCheck`).
+//
+// All public methods below have Go‑doc comments that repeat these key aspects in
+// the exact location where a future maintainer will look for them.
+// -----------------------------------------------------------------------------
+
 package actions
 
 import (
@@ -30,52 +87,75 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 	"go.uber.org/zap"
 	"gopkg.in/yaml.v3"
 )
 
-// EditDataflowComponentAction implements the Action interface for editing
-// existing dataflow components in the UMH instance.
+// EditDataflowComponentAction implements the Action interface for editing an
+// existing Data‑Flow Component.  The struct only contains *immutable* data that
+// is required across the lifetime of a single action execution.
+//
+// NOTE: When adding new fields, decide explicitly whether the value is written
+// once during construction/parse (→ field) or transient in Execute (→ local var).
+// Keeping the struct immutable avoids subtle race conditions because callers are
+// not expected to share EditDataflowComponentAction instances between goroutines.
+// -----------------------------------------------------------------------------
+
 type EditDataflowComponentAction struct {
-	userEmail         string
-	actionUUID        uuid.UUID
-	instanceUUID      uuid.UUID
-	outboundChannel   chan *models.UMHMessage
-	configManager     config.ConfigManager
-	payload           models.CDFCPayload
-	name              string
-	metaType          string
-	componentUUID     uuid.UUID
-	systemSnapshot    *fsm.SystemSnapshot
-	ignoreHealthCheck bool
+	userEmail string // e‑mail of the human that triggered the action (used for replies)
+
+	actionUUID   uuid.UUID // unique ID of *this* action instance
+	instanceUUID uuid.UUID // ID of the UMH instance this action operates on
+
+	outboundChannel chan *models.UMHMessage // channel used to send progress events back to the UI
+
+	configManager config.ConfigManager // abstraction over the central configuration store
+
+	// Parsed request payload (only populated after Parse)
+	payload  models.CDFCPayload
+	name     string // human‑readable component name (may change during an edit)
+	metaType string // "custom" for now – future‑proofing for other component kinds
+
+	// ─── UUID choreography ────────────────────────────────────────────────────
+	oldComponentUUID uuid.UUID // UUID of the pre‑existing component (taken from the request)
+	newComponentUUID uuid.UUID // deterministic UUID derived from the *new* name
+
+	// ─── Runtime observation & synchronisation ───────────────────────────────
+	systemSnapshotManager *fsm.SnapshotManager // manager that holds the latest system snapshot
+
+	ignoreHealthCheck bool // if true -> no rollback on timeout
 	actionLogger      *zap.SugaredLogger
-	dfc               config.DataFlowComponentConfig
-	oldConfig         config.DataFlowComponentConfig
+
+	// Caches for rollback: we hold the freshly generated config and the old one
+	dfc       config.DataFlowComponentConfig // desired (new) config
+	oldConfig config.DataFlowComponentConfig // backup of the original config
 }
 
-// NewEditDataflowComponentAction creates a new EditDataflowComponentAction with the provided parameters.
-// This constructor is primarily used for testing to enable dependency injection, though it can be used
-// in production code as well. It initializes the action with the necessary fields but doesn't
-// populate the payload fields which must be done via Parse.
-func NewEditDataflowComponentAction(userEmail string, actionUUID uuid.UUID, instanceUUID uuid.UUID, outboundChannel chan *models.UMHMessage, configManager config.ConfigManager) *EditDataflowComponentAction {
+// NewEditDataflowComponentAction returns an *un‑parsed* action instance.  The
+// method exists mainly to support dependency injection in unit tests – caller
+// still needs to invoke Parse & Validate before Execute.
+func NewEditDataflowComponentAction(userEmail string, actionUUID uuid.UUID, instanceUUID uuid.UUID, outboundChannel chan *models.UMHMessage, configManager config.ConfigManager, systemSnapshotManager *fsm.SnapshotManager) *EditDataflowComponentAction {
 	return &EditDataflowComponentAction{
-		userEmail:       userEmail,
-		actionUUID:      actionUUID,
-		instanceUUID:    instanceUUID,
-		outboundChannel: outboundChannel,
-		configManager:   configManager,
-		actionLogger:    logger.For(logger.ComponentCommunicator),
+		userEmail:             userEmail,
+		actionUUID:            actionUUID,
+		instanceUUID:          instanceUUID,
+		outboundChannel:       outboundChannel,
+		configManager:         configManager,
+		actionLogger:          logger.For(logger.ComponentCommunicator),
+		systemSnapshotManager: systemSnapshotManager,
 	}
 }
 
-// Parse implements the Action interface by extracting dataflow component configuration from the payload.
-// It handles the top-level structure parsing first to extract name, UUID, component type, and other fields,
-// then delegates to specialized parsing functions based on the component type.
+// Parse implements the Action interface.
 //
-// Currently supported types:
-// - "custom": Custom dataflow components with Benthos configuration
+// It extracts the business fields from the raw JSON payload – *without* doing
+// deep semantic validation.  Responsibility is split deliberately so that unit
+// tests can cover each phase independently.
 //
-// The function returns appropriate errors for missing required fields or unsupported component types.
+// The function also computes `newComponentUUID` because the UUID is purely a
+// function of the name and therefore already known at this stage (even before
+// the heavy YAML parsing starts).
 func (a *EditDataflowComponentAction) Parse(payload interface{}) error {
 	//First parse the top level structure
 	type TopLevelPayload struct {
@@ -104,7 +184,10 @@ func (a *EditDataflowComponentAction) Parse(payload interface{}) error {
 		return errors.New("missing required field Name")
 	}
 
-	a.componentUUID, err = uuid.Parse(topLevel.UUID)
+	//set the new component UUID by the name
+	a.newComponentUUID = dataflowcomponentserviceconfig.GenerateUUIDFromName(a.name)
+
+	a.oldComponentUUID, err = uuid.Parse(topLevel.UUID)
 	if err != nil {
 		return fmt.Errorf("invalid UUID format: %v", err)
 	}
@@ -132,20 +215,18 @@ func (a *EditDataflowComponentAction) Parse(payload interface{}) error {
 		return fmt.Errorf("unsupported component type: %s", a.metaType)
 	}
 
-	a.actionLogger.Debugf("Parsed EditDataFlowComponent action payload: name=%s, type=%s, UUID=%s", a.name, a.metaType, a.componentUUID)
+	a.actionLogger.Debugf("Parsed EditDataFlowComponent action payload: name=%s, type=%s, UUID=%s", a.name, a.metaType, a.oldComponentUUID)
 	return nil
 }
 
-// Validate implements the Action interface by performing deeper validation of the parsed payload.
-// For custom dataflow components, it validates:
-// 1. Required fields exist (name, metaType, UUID, input/output configuration, pipeline)
-// 2. All YAML content is valid by attempting to parse it
+// Validate implements the Action interface.
 //
-// The function returns detailed error messages for any validation failures, indicating
-// exactly which field or YAML section is invalid.
+// After `Parse` succeeded, Validate performs all expensive checks such as YAML
+// unmarshalling.  That keeps error messages well‑structured: syntax/shape errors
+// surface here, whereas runtime failures show up in Execute.
 func (a *EditDataflowComponentAction) Validate() error {
 	// Validate UUID was properly parsed
-	if a.componentUUID == uuid.Nil {
+	if a.oldComponentUUID == uuid.Nil {
 		return errors.New("component UUID is missing or invalid")
 	}
 
@@ -220,23 +301,16 @@ func (a *EditDataflowComponentAction) Validate() error {
 	return nil
 }
 
-// Execute implements the Action interface by performing the actual editing of the dataflow component.
-// It follows the standard pattern for actions:
-// 1. Sends ActionConfirmed to indicate the action is starting
-// 2. Parses and normalizes all the configuration data
-// 3. Creates a DataFlowComponentConfig and updates it in the system configuration
-// 4. Sends ActionFinishedWithFailure if any error occurs
-// 5. Returns a success message (not sending ActionFinishedSuccessfull as that's done by the caller)
+// Execute implements the Action interface by performing the actual configuration
+// mutation and, optionally, waiting for the runtime to pick it up.
 //
-// The function handles custom dataflow components by:
-// - Converting YAML strings into structured configuration
-// - Normalizing the Benthos configuration
-// - Updating the component in the configuration with a desired state of "active"
+// The method is intentionally *long* because splitting it would complicate the
+// rollback logic – we need the full context to unwind safely.
 func (a *EditDataflowComponentAction) Execute() (interface{}, map[string]interface{}, error) {
 	a.actionLogger.Info("Executing EditDataflowComponent action")
 
 	// Send confirmation that action is starting
-	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionConfirmed, "Starting EditDataflowComponent", a.outboundChannel, models.EditDataFlowComponent)
+	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionConfirmed, "Starting edit of dataflow component: "+a.name, a.outboundChannel, models.EditDataFlowComponent)
 
 	// Parse the input and output configurations
 	benthosInput := make(map[string]interface{})
@@ -369,25 +443,27 @@ func (a *EditDataflowComponentAction) Execute() (interface{}, map[string]interfa
 	// Update the component in the configuration
 	ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
 	defer cancel()
-	a.oldConfig, err = a.configManager.AtomicEditDataflowcomponent(ctx, a.componentUUID, dfc)
+	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Updating dataflow component '"+a.name+"' configuration...", a.outboundChannel, models.EditDataFlowComponent)
+	a.oldConfig, err = a.configManager.AtomicEditDataflowcomponent(ctx, a.oldComponentUUID, dfc)
 	if err != nil {
-		errorMsg := fmt.Sprintf("failed to edit dataflowcomponent: %v", err)
+		errorMsg := fmt.Sprintf("Failed to edit dataflow component: %v", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errorMsg, a.outboundChannel, models.EditDataFlowComponent)
 		return nil, nil, fmt.Errorf("%s", errorMsg)
 	}
 
 	// check against observedState as well
-	if a.systemSnapshot != nil { // skipping this for the unit tests
+	if a.systemSnapshotManager != nil { // skipping this for the unit tests
+		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Configuration updated. Waiting for dataflow component '"+a.name+"' to become active...", a.outboundChannel, models.EditDataFlowComponent)
 		err = a.waitForComponentToBeActive()
 		if err != nil {
-			errorMsg := fmt.Sprintf("failed to wait for dataflowcomponent to be active: %v", err)
+			errorMsg := fmt.Sprintf("Failed to wait for dataflow component to be active: %v", err)
 			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errorMsg, a.outboundChannel, models.EditDataFlowComponent)
 			return nil, nil, fmt.Errorf("%s", errorMsg)
 		}
 	}
 
 	// return success message, but do not send it as this is done by the caller
-	successMsg := fmt.Sprintf("Successfully edited data flow component: %s", a.name)
+	successMsg := fmt.Sprintf("Successfully edited dataflow component: %s", a.name)
 
 	return successMsg, nil, nil
 }
@@ -409,9 +485,16 @@ func (a *EditDataflowComponentAction) GetParsedPayload() models.CDFCPayload {
 
 // GetComponentUUID returns the UUID of the component being edited - exposed primarily for testing purposes.
 func (a *EditDataflowComponentAction) GetComponentUUID() uuid.UUID {
-	return a.componentUUID
+	return a.oldComponentUUID
 }
 
+// waitForComponentToBeActive polls the live FSM state until either
+//   - the component shows up **active** with the *expected* configuration or
+//   - the timeout hits (→ rollback except when ignoreHealthCheck).
+//
+// Concurrency note: The method never writes to `systemSnapshot`; the FSM runtime
+// is the single writer.  We only take read‑locks while **copying** the full
+// snapshot to avoid holding the lock during YAML comparisons.
 func (a *EditDataflowComponentAction) waitForComponentToBeActive() error {
 	// checks the system snapshot
 	// 1. waits for the component to appear in the system snapshot (relevant for changed name)
@@ -420,43 +503,94 @@ func (a *EditDataflowComponentAction) waitForComponentToBeActive() error {
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 	timeout := time.After(constants.DataflowComponentWaitForActiveTimeout)
+	startTime := time.Now()
+	timeoutDuration := constants.DataflowComponentWaitForActiveTimeout
+
+	var logs []s6.LogEntry
+	var lastLogs []s6.LogEntry
+	oldLogsStored := false
+
 	for {
 		select {
 		case <-timeout:
 			if !a.ignoreHealthCheck {
-				SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Dataflow component did not become active in time. Rolling back to old config...", a.outboundChannel, models.EditDataFlowComponent)
+				SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Timeout reached. Dataflow component did not become active in time. Rolling back to previous configuration...", a.outboundChannel, models.EditDataFlowComponent)
 				ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
 				defer cancel()
-				_, err := a.configManager.AtomicEditDataflowcomponent(ctx, a.componentUUID, a.oldConfig)
+				_, err := a.configManager.AtomicEditDataflowcomponent(ctx, a.newComponentUUID, a.oldConfig)
 				if err != nil {
 					a.actionLogger.Errorf("failed to roll back dataflowcomponent %s: %v", a.name, err)
 				}
 				return fmt.Errorf("dataflowcomponent %s was not active in time and was rolled back to the old config", a.name)
 			}
-			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Dataflow component did not become active in time. Consider removing it.", a.outboundChannel, models.EditDataFlowComponent)
+			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Timeout reached. Dataflow component did not become active in time. Consider removing it or checking logs for errors.", a.outboundChannel, models.EditDataFlowComponent)
 			return nil
 		case <-ticker.C:
-			if dataflowcomponentManager, exists := a.systemSnapshot.Managers[constants.DataflowcomponentManagerName]; exists {
+			elapsed := time.Since(startTime)
+			remaining := timeoutDuration - elapsed
+			remainingSeconds := int(remaining.Seconds())
+
+			// the snapshot manager holds the latest system snapshot which is asynchronously updated by the other goroutines
+			// we need to get a deep copy of it to prevent race conditions
+			systemSnapshot := a.systemSnapshotManager.GetDeepCopySnapshot()
+			if dataflowcomponentManager, exists := systemSnapshot.Managers[constants.DataflowcomponentManagerName]; exists {
 				instances := dataflowcomponentManager.GetInstances()
+				found := false
 				for _, instance := range instances {
-					if dataflowcomponentserviceconfig.GenerateUUIDFromName(instance.ID) == a.componentUUID {
+					if dataflowcomponentserviceconfig.GenerateUUIDFromName(instance.ID) == a.newComponentUUID {
+						found = true
 						dfcSnapshot, ok := instance.LastObservedState.(*dataflowcomponent.DataflowComponentObservedStateSnapshot)
+						// store the logs in the lastLogs variable to not send all the old logs of the unedited component
+						if !oldLogsStored {
+							lastLogs = dfcSnapshot.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosLogs
+							oldLogsStored = true
+						}
 						if !ok {
+							SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
+								fmt.Sprintf("Waiting for dataflow component state info (%ds remaining)...", remainingSeconds), a.outboundChannel, models.EditDataFlowComponent)
 							continue
 						}
+
 						if instance.CurrentState != "active" {
-							SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Dataflow component is not active yet. Current state: "+instance.CurrentState+". Waiting...", a.outboundChannel, models.EditDataFlowComponent)
-						} else {
-							SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Dataflow component is active.", a.outboundChannel, models.EditDataFlowComponent)
+							SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
+								fmt.Sprintf("Dataflow component is in state '%s' (waiting for 'active', %ds remaining)...",
+									instance.CurrentState, remainingSeconds), a.outboundChannel, models.EditDataFlowComponent)
+							// send the benthos logs to the user
+							logs = dfcSnapshot.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosLogs
+							// only send the logs that have not been sent yet
+							if len(logs) > len(lastLogs) {
+								for _, log := range logs[len(lastLogs):] {
+									SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
+										fmt.Sprintf("[Benthos Log] %s", log.Content),
+										a.outboundChannel, models.EditDataFlowComponent)
+								}
+								lastLogs = logs
+							}
+
+							continue
 						}
+
 						// check if the config is correct
 						if !dataflowcomponentserviceconfig.NewComparator().ConfigsEqual(&dfcSnapshot.Config, &a.dfc.DataFlowComponentServiceConfig) {
-							SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Dataflow component has incorrect config. Waiting...", a.outboundChannel, models.EditDataFlowComponent)
+							SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
+								fmt.Sprintf("Dataflow component config changes haven't applied yet (%ds remaining)...",
+									remainingSeconds), a.outboundChannel, models.EditDataFlowComponent)
 						} else {
+							SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
+								"Dataflow component is active with correct configuration. Edit complete.", a.outboundChannel, models.EditDataFlowComponent)
 							return nil
 						}
 					}
 				}
+				if !found {
+					SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
+						fmt.Sprintf("Waiting for dataflow component to appear in system (%ds remaining)...",
+							remainingSeconds), a.outboundChannel, models.EditDataFlowComponent)
+				}
+			} else {
+				SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
+					fmt.Sprintf("Waiting for dataflow component manager (%ds remaining)...",
+						remainingSeconds), a.outboundChannel, models.EditDataFlowComponent)
 			}
 		}
 	}

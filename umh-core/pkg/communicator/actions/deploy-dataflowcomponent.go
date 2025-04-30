@@ -12,6 +12,49 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Package actions contains implementations of the Action interface that mutate the
+// UMH configuration or otherwise change the system state.
+//
+// -----------------------------------------------------------------------------
+// BUSINESS CONTEXT
+// -----------------------------------------------------------------------------
+// A *new* Data-Flow Component (DFC) in UMH is defined by a Benthos service
+// configuration and materialised as an FSM instance.  “Deploying” therefore
+// means **creating a new desired configuration entry** and **waiting until the
+// FSM reports**
+//
+//   - state "active" **and**
+//   - the *observed* configuration equals the *desired* one.
+//
+// If the component fails to reach `state=="active"` within
+// `constants.DataflowComponentWaitForActiveTimeout`, the action *removes* the
+// component again (unless the caller set `ignoreHealthCheck`).
+//
+// Runtime state observation
+// -------------------------
+// Just like EditDataflowComponentAction, the caller hands over a pointer
+// `*fsm.SystemSnapshot` that is filled by the FSM event loop.  The action only
+// takes *copies* under a read-lock (`GetSystemSnapshot`) to avoid blocking the
+// writer.
+//
+// -----------------------------------------------------------------------------
+// The concrete flow of a DeployDataflowComponentAction
+// -----------------------------------------------------------------------------
+//   1. **Parse** – extract name, type, payload and flags.
+//   2. **Validate** – structural sanity checks and YAML parsing.
+//   3. **Execute**
+//        a.     Send ActionConfirmed.
+//        b.     Translate the custom payload into a Benthos service config.
+//        c.     Add a new DFC config via `configManager.AtomicAddDataflowcomponent`
+//               (desired state = "active").
+//        d.     Poll `systemSnapshot` until the instance reports `state==active`.
+//        e.     If the poll times out → delete the component (unless
+//               `ignoreHealthCheck`).
+//
+// All public methods below have Go-doc comments that repeat these key aspects in
+// the exact location where a future maintainer will look for them.
+// -----------------------------------------------------------------------------
+
 package actions
 
 import (
@@ -35,34 +78,44 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// DeployDataflowComponentAction implements the Action interface for deploying
-// dataflow components to the UMH instance.
+// DeployDataflowComponentAction implements the Action interface for deploying a
+// *new* Data-Flow Component.  All fields are *immutable* after construction to
+// avoid race conditions – transient state lives in local variables only.
+// -----------------------------------------------------------------------------
 type DeployDataflowComponentAction struct {
-	userEmail         string
-	actionUUID        uuid.UUID
-	instanceUUID      uuid.UUID
-	outboundChannel   chan *models.UMHMessage
-	configManager     config.ConfigManager
-	systemSnapshot    *fsm.SystemSnapshot
-	payload           models.CDFCPayload
-	name              string
-	metaType          string
+	userEmail string // e-mail of the human that triggered the action
+
+	actionUUID   uuid.UUID // unique ID of *this* action instance
+	instanceUUID uuid.UUID // ID of the UMH instance this action operates on
+
+	outboundChannel chan *models.UMHMessage // channel used to send progress events back to the UI
+
+	configManager config.ConfigManager // abstraction over the central configuration store
+
+	// Parsed request payload (only populated after Parse)
+	payload  models.CDFCPayload
+	name     string // human-readable component name
+	metaType string // "custom" for now – future-proofing for other component kinds
+
+	// ─── Runtime observation & synchronisation ───────────────────────────────
+	systemSnapshotManager *fsm.SnapshotManager // Snapshot Manager holds the latest system snapshot
+
+	ignoreHealthCheck bool // if true → no delete on timeout
 	actionLogger      *zap.SugaredLogger
-	ignoreHealthCheck bool
 }
 
-// NewDeployDataflowComponentAction creates a new DeployDataflowComponentAction with the provided parameters.
-// This constructor is primarily used for testing to enable dependency injection, though it can be used
-// in production code as well. It initializes the action with the necessary fields but doesn't
-// populate the payload, name, or metaType fields which must be done via Parse.
-func NewDeployDataflowComponentAction(userEmail string, actionUUID uuid.UUID, instanceUUID uuid.UUID, outboundChannel chan *models.UMHMessage, configManager config.ConfigManager) *DeployDataflowComponentAction {
+// NewDeployDataflowComponentAction returns an *un-parsed* action instance.
+// Primarily used for dependency injection in unit tests – caller still needs to
+// invoke Parse & Validate before Execute.
+func NewDeployDataflowComponentAction(userEmail string, actionUUID uuid.UUID, instanceUUID uuid.UUID, outboundChannel chan *models.UMHMessage, configManager config.ConfigManager, systemSnapshotManager *fsm.SnapshotManager) *DeployDataflowComponentAction {
 	return &DeployDataflowComponentAction{
-		userEmail:       userEmail,
-		actionUUID:      actionUUID,
-		instanceUUID:    instanceUUID,
-		outboundChannel: outboundChannel,
-		configManager:   configManager,
-		actionLogger:    logger.For(logger.ComponentCommunicator),
+		userEmail:             userEmail,
+		actionUUID:            actionUUID,
+		instanceUUID:          instanceUUID,
+		outboundChannel:       outboundChannel,
+		configManager:         configManager,
+		actionLogger:          logger.For(logger.ComponentCommunicator),
+		systemSnapshotManager: systemSnapshotManager,
 	}
 }
 
@@ -306,7 +359,7 @@ func (a *DeployDataflowComponentAction) Execute() (interface{}, map[string]inter
 	a.actionLogger.Info("Executing DeployDataflowComponent action")
 
 	// Send confirmation that action is starting
-	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionConfirmed, "Starting DeployDataflowComponent", a.outboundChannel, models.DeployDataFlowComponent)
+	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionConfirmed, "Starting deployment of dataflow component: "+a.name, a.outboundChannel, models.DeployDataFlowComponent)
 
 	// Parse the input and output configurations
 	benthosInput := make(map[string]interface{})
@@ -432,28 +485,30 @@ func (a *DeployDataflowComponentAction) Execute() (interface{}, map[string]inter
 		},
 	}
 
+	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Adding dataflow component '"+a.name+"' to configuration...", a.outboundChannel, models.DeployDataFlowComponent)
 	// Update the location in the configuration
 	ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
 	defer cancel()
 	err = a.configManager.AtomicAddDataflowcomponent(ctx, dfc)
 	if err != nil {
-		errorMsg := fmt.Sprintf("failed to add dataflowcomponent: %v", err)
+		errorMsg := fmt.Sprintf("Failed to add dataflow component: %v", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errorMsg, a.outboundChannel, models.DeployDataFlowComponent)
 		return nil, nil, fmt.Errorf("%s", errorMsg)
 	}
 
 	// check against observedState as well
-	if a.systemSnapshot != nil { // skipping this for the unit tests
+	if a.systemSnapshotManager != nil { // skipping this for the unit tests
+		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Configuration updated. Waiting for dataflow component '"+a.name+"' to start and become active...", a.outboundChannel, models.DeployDataFlowComponent)
 		err = a.waitForComponentToBeActive()
 		if err != nil {
-			errorMsg := fmt.Sprintf("failed to wait for dataflowcomponent to be active: %v", err)
+			errorMsg := fmt.Sprintf("Failed to wait for dataflow component to be active: %v", err)
 			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errorMsg, a.outboundChannel, models.DeployDataFlowComponent)
 			return nil, nil, fmt.Errorf("%s", errorMsg)
 		}
 	}
 
 	// return success message, but do not send it as this is done by the caller
-	successMsg := fmt.Sprintf("Successfully deployed data flow component: %s", a.name)
+	successMsg := fmt.Sprintf("Successfully deployed dataflow component: %s", a.name)
 
 	return successMsg, nil, nil
 }
@@ -473,6 +528,8 @@ func (a *DeployDataflowComponentAction) GetParsedPayload() models.CDFCPayload {
 	return a.payload
 }
 
+// waitForComponentToBeActive polls live FSM state until the new component
+// becomes active or the timeout hits (→ delete unless ignoreHealthCheck).
 func (a *DeployDataflowComponentAction) waitForComponentToBeActive() error {
 	// checks the system snapshot
 	// 1. waits for the instance to appear in the system snapshot
@@ -491,49 +548,85 @@ func (a *DeployDataflowComponentAction) waitForComponentToBeActive() error {
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 	timeout := time.After(constants.DataflowComponentWaitForActiveTimeout)
+	startTime := time.Now()
+	timeoutDuration := constants.DataflowComponentWaitForActiveTimeout
 	for {
 		select {
 		case <-timeout:
 			if !a.ignoreHealthCheck {
-				SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Dataflow component did not become active in time. Removing...", a.outboundChannel, models.DeployDataFlowComponent)
+				SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
+					"Timeout reached. Dataflow component did not become active in time. Removing component...",
+					a.outboundChannel, models.DeployDataFlowComponent)
 				ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
 				defer cancel()
 				err := a.configManager.AtomicDeleteDataflowcomponent(ctx, dataflowcomponentserviceconfig.GenerateUUIDFromName(a.name))
 				if err != nil {
 					a.actionLogger.Errorf("failed to remove dataflowcomponent %s: %v", a.name, err)
 				}
-				return fmt.Errorf("dataflowcomponent %s was removed because it did not become active in time", a.name)
+				return fmt.Errorf("dataflow component '%s' was removed because it did not become active within the timeout period", a.name)
 			}
-			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Dataflow component did not become active in time. Consider removing it.", a.outboundChannel, models.DeployDataFlowComponent)
+			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
+				"Timeout reached. Dataflow component did not become active in time. You may want to check logs and remove it if needed.",
+				a.outboundChannel, models.DeployDataFlowComponent)
 			return nil
 		case <-ticker.C:
+			elapsed := time.Since(startTime)
+			remaining := timeoutDuration - elapsed
+			remainingSeconds := int(remaining.Seconds())
 
-			if dataflowcomponentManager, exists := a.systemSnapshot.Managers[constants.DataflowcomponentManagerName]; exists {
+			// the snapshot manager holds the latest system snapshot which is asynchronously updated by the other goroutines
+			// we need to get a deep copy of it to prevent race conditions
+			systemSnapshot := a.systemSnapshotManager.GetDeepCopySnapshot()
+			if dataflowcomponentManager, exists := systemSnapshot.Managers[constants.DataflowcomponentManagerName]; exists {
 				instances := dataflowcomponentManager.GetInstances()
+				found := false
 				for _, instance := range instances {
 					// cast the instance LastObservedState to a dataflowcomponent instance
 					curName := instance.ID
 					if curName != a.name {
 						continue
 					}
+					found = true
 					dfcSnapshot, ok := instance.LastObservedState.(*dataflowcomponent.DataflowComponentObservedStateSnapshot)
 					if !ok {
+						SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
+							fmt.Sprintf("Waiting for dataflow component state information (%ds remaining)...",
+								remainingSeconds), a.outboundChannel, models.DeployDataFlowComponent)
 						continue
 					}
 					if instance.CurrentState == "active" {
+						SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
+							"Dataflow component is now active! Deployment complete.",
+							a.outboundChannel, models.DeployDataFlowComponent)
 						return nil
 					} else {
+						stateMsg := fmt.Sprintf("Dataflow component is in state '%s' (waiting for 'active', %ds remaining)...",
+							instance.CurrentState, remainingSeconds)
+						SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
+							stateMsg, a.outboundChannel, models.DeployDataFlowComponent)
 						// send the benthos logs to the user
 						logs = dfcSnapshot.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosLogs
 						// only send the logs that have not been sent yet
 						if len(logs) > len(lastLogs) {
 							for _, log := range logs[len(lastLogs):] {
-								SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, log.Content, a.outboundChannel, models.DeployDataFlowComponent)
+								SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
+									fmt.Sprintf("[Benthos Log] %s", log.Content),
+									a.outboundChannel, models.DeployDataFlowComponent)
 							}
 							lastLogs = logs
 						}
 					}
 				}
+				if !found {
+					SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
+						fmt.Sprintf("Waiting for dataflow component to appear in system (%ds remaining)...",
+							remainingSeconds), a.outboundChannel, models.DeployDataFlowComponent)
+				}
+
+			} else {
+				SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
+					fmt.Sprintf("Waiting for dataflow component manager to initialize (%ds remaining)...",
+						remainingSeconds), a.outboundChannel, models.DeployDataFlowComponent)
 			}
 		}
 	}
