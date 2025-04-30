@@ -35,6 +35,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	"go.uber.org/zap"
 
+	redpanda_monitor_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/redpanda_monitor"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
@@ -106,14 +107,15 @@ type HealthCheck struct {
 
 // RedpandaService is the default implementation of the IRedpandaService interface
 type RedpandaService struct {
-	logger           *zap.SugaredLogger
-	s6Manager        *s6fsm.S6Manager
-	s6Service        s6service.Service // S6 service for direct S6 operations
-	s6ServiceConfigs []config.S6FSMConfig
-	httpClient       httpclient.HTTPClient
-	baseDir          string
-	lastStatus       RedpandaStatus
-	metricsService   redpanda_monitor.IRedpandaMonitorService
+	logger                 *zap.SugaredLogger
+	s6Manager              *s6fsm.S6Manager
+	s6Service              s6service.Service // S6 service for direct S6 operations
+	s6ServiceConfigs       []config.S6FSMConfig
+	httpClient             httpclient.HTTPClient
+	baseDir                string
+	lastStatus             RedpandaStatus
+	redpandaMonitorManager *redpanda_monitor_fsm.RedpandaMonitorManager
+	redpandaMonitorConfig  *config.RedpandaMonitorConfig
 }
 
 // RedpandaServiceOption is a function that modifies a RedpandaService
@@ -148,10 +150,10 @@ func WithBaseDir(baseDir string) RedpandaServiceOption {
 	}
 }
 
-// WithMonitorService sets a custom monitor service for the RedpandaService
-func WithMonitorService(monitorService redpanda_monitor.IRedpandaMonitorService) RedpandaServiceOption {
+// WithMonitorManager sets a custom monitor manager for the RedpandaService
+func WithMonitorManager(monitorManager *redpanda_monitor_fsm.RedpandaMonitorManager) RedpandaServiceOption {
 	return func(s *RedpandaService) {
-		s.metricsService = monitorService
+		s.redpandaMonitorManager = monitorManager
 	}
 }
 
@@ -160,12 +162,12 @@ func WithMonitorService(monitorService redpanda_monitor.IRedpandaMonitorService)
 func NewDefaultRedpandaService(redpandaName string, opts ...RedpandaServiceOption) *RedpandaService {
 	managerName := fmt.Sprintf("%s%s", logger.ComponentRedpandaService, redpandaName)
 	service := &RedpandaService{
-		logger:         logger.For(managerName),
-		s6Manager:      s6fsm.NewS6Manager(managerName),
-		s6Service:      s6service.NewDefaultService(),
-		httpClient:     nil, // this is only for a mock in the tests
-		baseDir:        constants.DefaultRedpandaBaseDir,
-		metricsService: redpanda_monitor.NewRedpandaMonitorService(),
+		logger:                 logger.For(managerName),
+		s6Manager:              s6fsm.NewS6Manager(managerName),
+		s6Service:              s6service.NewDefaultService(),
+		httpClient:             nil, // this is only for a mock in the tests
+		baseDir:                constants.DefaultRedpandaBaseDir,
+		redpandaMonitorManager: redpanda_monitor_fsm.NewRedpandaMonitorManager(),
 	}
 
 	// Apply options
@@ -230,13 +232,18 @@ func (s *RedpandaService) GetConfig(ctx context.Context, filesystemService files
 		return redpandaserviceconfig.RedpandaServiceConfig{}, ctx.Err()
 	}
 
-	status, err := s.metricsService.Status(ctx, filesystemService, tick)
+	state, err := s.redpandaMonitorManager.GetLastObservedState(constants.RedpandaMonitorServiceName)
 	if err != nil {
 		return redpandaserviceconfig.RedpandaServiceConfig{}, fmt.Errorf("failed to get redpanda status: %w", err)
 	}
+	redpandaState, ok := state.(redpanda_monitor_fsm.RedpandaMonitorObservedState)
+	if !ok {
+		return redpandaserviceconfig.RedpandaServiceConfig{}, fmt.Errorf("observed state is not a RedpandaMonitorObservedState: %v", state)
+	}
+	status := redpandaState.ServiceInfo
 
 	// If this is nil, we have not yet tried to scan for metrics and config, or there has been an error (but that one will be cached in the above Status() return)
-	if status.RedpandaStatus.LastScan == nil {
+	if status == nil || status.RedpandaStatus.LastScan == nil {
 		return redpandaserviceconfig.RedpandaServiceConfig{}, fmt.Errorf("last scan is nil")
 	}
 
@@ -391,39 +398,40 @@ func (s *RedpandaService) GetHealthCheckAndMetrics(ctx context.Context, tick uin
 		return s.lastStatus, nil
 	}
 
-	redpandaStatus, err := s.metricsService.Status(ctx, filesystemService, tick)
+	state, err := s.redpandaMonitorManager.GetLastObservedState(constants.RedpandaMonitorServiceName)
 	if err != nil {
 		return RedpandaStatus{}, fmt.Errorf("failed to get redpanda status: %w", err)
 	}
-
-	if redpandaStatus.S6FSMState != s6fsm.OperationalStateRunning {
-		return RedpandaStatus{}, ErrRedpandaMonitorNotRunning
+	redpandaState, ok := state.(redpanda_monitor_fsm.RedpandaMonitorObservedState)
+	if !ok {
+		return RedpandaStatus{}, fmt.Errorf("observed state is not a RedpandaMonitorObservedState: %v", state)
 	}
+	status := redpandaState.ServiceInfo
 
 	// If this is nil, we have not yet tried to scan for metrics and config, or there has been an error (but that one will be cached in the above Status() return)
-	if redpandaStatus.RedpandaStatus.LastScan == nil {
+	if status == nil || status.RedpandaStatus.LastScan == nil {
 		return RedpandaStatus{}, fmt.Errorf("last scan is nil")
 	}
 
 	// Check that the last scan is not older then RedpandaMaxMetricsAndConfigAge
-	if loopStartTime.Sub(redpandaStatus.RedpandaStatus.LastScan.LastUpdatedAt) > constants.RedpandaMaxMetricsAndConfigAge {
-		s.logger.Warnf("last scan is %s old, returning empty status", loopStartTime.Sub(redpandaStatus.RedpandaStatus.LastScan.LastUpdatedAt))
+	if loopStartTime.Sub(status.RedpandaStatus.LastScan.LastUpdatedAt) > constants.RedpandaMaxMetricsAndConfigAge {
+		s.logger.Warnf("last scan is %s old, returning empty status", loopStartTime.Sub(status.RedpandaStatus.LastScan.LastUpdatedAt))
 		return RedpandaStatus{}, fmt.Errorf("last scan is older than %s", constants.RedpandaMaxMetricsAndConfigAge)
 	}
 
 	// Create health check structure
 	healthCheck := HealthCheck{
 		// Liveness is determined by a successful response
-		IsLive: redpandaStatus.RedpandaStatus.IsRunning,
+		IsLive: status.RedpandaStatus.IsRunning,
 		// IsReady is the same as IsLive, as there is no distinct logic for a redpanda monitor services readiness
-		IsReady: redpandaStatus.RedpandaStatus.IsRunning,
+		IsReady: status.RedpandaStatus.IsRunning,
 		// Redpanda version is constant
 		Version: constants.RedpandaVersion,
 	}
 
 	s.lastStatus = RedpandaStatus{
 		HealthCheck:     healthCheck,
-		RedpandaMetrics: *redpandaStatus.RedpandaStatus.LastScan.Metrics,
+		RedpandaMetrics: *status.RedpandaStatus.LastScan.RedpandaMetrics,
 		Logs:            logs,
 	}
 
@@ -472,13 +480,14 @@ func (s *RedpandaService) AddRedpandaToS6Manager(ctx context.Context, cfg *redpa
 	// Add the S6 FSM config to the list of S6 FSM configs
 	s.s6ServiceConfigs = append(s.s6ServiceConfigs, s6FSMConfig)
 
-	// Also add the redpanda monitor to the S6 manager
-	// This function is idempotent, so it's safe to call it multiple times
-	if err := s.metricsService.AddRedpandaMonitorToS6Manager(ctx); err != nil {
-		if !errors.Is(err, redpanda_monitor.ErrServiceAlreadyExists) {
-			return fmt.Errorf("failed to add redpanda monitor to S6 manager: %w", err)
-		}
+	// Now do it the same with the redpanda monitor
+	redpandaMonitorConfig := config.RedpandaMonitorConfig{
+		FSMInstanceConfig: config.FSMInstanceConfig{
+			Name:            s6ServiceName,
+			DesiredFSMState: redpanda_monitor_fsm.OperationalStateActive,
+		},
 	}
+	s.redpandaMonitorConfig = &redpandaMonitorConfig
 
 	return nil
 }
@@ -538,7 +547,26 @@ func (s *RedpandaService) UpdateRedpandaInS6Manager(ctx context.Context, cfg *re
 	}
 
 	// Update the S6 FSM config for this instance
-	s.s6ServiceConfigs[index].S6ServiceConfig = s6Config
+	currentDesiredState := s.s6ServiceConfigs[index].DesiredFSMState
+	s.s6ServiceConfigs[index] = config.S6FSMConfig{
+		FSMInstanceConfig: config.FSMInstanceConfig{
+			Name:            s6ServiceName,
+			DesiredFSMState: currentDesiredState,
+		},
+		S6ServiceConfig: s6Config,
+	}
+
+	// Now update the redpanda monitor config
+	redpandaMonitorDesiredState := redpanda_monitor_fsm.OperationalStateActive
+	if currentDesiredState == s6fsm.OperationalStateStopped {
+		redpandaMonitorDesiredState = redpanda_monitor_fsm.OperationalStateStopped
+	}
+	s.redpandaMonitorConfig = &config.RedpandaMonitorConfig{
+		FSMInstanceConfig: config.FSMInstanceConfig{
+			Name:            s6ServiceName,
+			DesiredFSMState: redpandaMonitorDesiredState,
+		},
+	}
 
 	return nil
 }
@@ -573,10 +601,13 @@ func (s *RedpandaService) RemoveRedpandaFromS6Manager(ctx context.Context) error
 	}
 
 	// Also remove the redpanda monitor from the S6 manager
-	if err := s.metricsService.RemoveRedpandaMonitorFromS6Manager(ctx); err != nil {
-		if !errors.Is(err, redpanda_monitor.ErrServiceNotExist) {
-			return fmt.Errorf("failed to remove redpanda monitor from S6 manager: %w", err)
-		}
+	if s.redpandaMonitorConfig != nil {
+		s.redpandaMonitorConfig = nil
+		found = true
+	}
+
+	if !found {
+		return ErrServiceNotExist
 	}
 
 	return nil
@@ -608,10 +639,17 @@ func (s *RedpandaService) StartRedpanda(ctx context.Context) error {
 	if !found {
 		return ErrServiceNotExist
 	}
+	// Reset found
+	found = false
 
-	// This also needs to start the redpanda monitor service
-	if err := s.metricsService.StartRedpandaMonitor(ctx); err != nil {
-		return fmt.Errorf("failed to start redpanda monitor: %w", err)
+	// Also start the redpanda monitor
+	if s.redpandaMonitorConfig != nil {
+		s.redpandaMonitorConfig.DesiredFSMState = redpanda_monitor_fsm.OperationalStateActive
+		found = true
+	}
+
+	if !found {
+		return ErrServiceNotExist
 	}
 
 	return nil
@@ -643,10 +681,17 @@ func (s *RedpandaService) StopRedpanda(ctx context.Context) error {
 	if !found {
 		return ErrServiceNotExist
 	}
+	// Reset found
+	found = false
 
-	// This also needs to stop the redpanda monitor service
-	if err := s.metricsService.StopRedpandaMonitor(ctx); err != nil {
-		return fmt.Errorf("failed to stop redpanda monitor: %w", err)
+	// Also stop the redpanda monitor
+	if s.redpandaMonitorConfig != nil {
+		s.redpandaMonitorConfig.DesiredFSMState = redpanda_monitor_fsm.OperationalStateStopped
+		found = true
+	}
+
+	if !found {
+		return ErrServiceNotExist
 	}
 
 	return nil
@@ -675,10 +720,16 @@ func (s *RedpandaService) ReconcileManager(ctx context.Context, services service
 		return s6Err, false
 	}
 
-	// Also reconcile the redpanda monitor service
-	monitorErr, monitorReconciled := s.metricsService.ReconcileManager(ctx, services, tick)
+	// Also reconcile the redpanda monitor
+
+	redpandaMonitorSnapshot := fsm.SystemSnapshot{
+		CurrentConfig: config.FullConfig{Internal: config.InternalConfig{RedpandaMonitor: s.redpandaMonitorConfig}},
+		Tick:          tick,
+	}
+
+	monitorErr, monitorReconciled := s.redpandaMonitorManager.Reconcile(ctx, redpandaMonitorSnapshot, services)
 	if monitorErr != nil {
-		return monitorErr, false
+		return fmt.Errorf("failed to reconcile redpanda monitor: %w", monitorErr), false
 	}
 
 	// If either was reconciled, indicate that reconciliation occurred
@@ -705,10 +756,12 @@ func (s *RedpandaService) IsLogsFine(logs []s6service.LogEntry, currentTime time
 
 		for _, failure := range failures {
 			if strings.Contains(log.Content, failure) {
+
 				return false
 			}
 		}
 	}
+
 	return true
 }
 

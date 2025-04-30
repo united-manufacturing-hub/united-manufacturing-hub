@@ -18,7 +18,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"sync"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/pprof"
@@ -85,29 +84,29 @@ func main() {
 
 	// Start the control loop
 	controlLoop := control.NewControlLoop(configManager)
-	systemSnapshot := new(fsm.SystemSnapshot)
-	systemMu := new(sync.Mutex)
+	systemSnapshotManager := controlLoop.GetSnapshotManager()
 
 	// Initialize the communication state
-	communicationState := communication_state.CommunicationState{
-		Watchdog:        watchdog.NewWatchdog(ctx, time.NewTicker(time.Second*10), true, logger.For(logger.ComponentCommunicator)),
-		InboundChannel:  make(chan *models.UMHMessage, 100),
-		OutboundChannel: make(chan *models.UMHMessage, 100),
-		ReleaseChannel:  configData.Agent.ReleaseChannel,
-		SystemSnapshot:  systemSnapshot,
-		ConfigManager:   configManager,
-		ApiUrl:          configData.Agent.APIURL,
-		Logger:          logger.For(logger.ComponentCommunicator),
-	}
+	communicationState := communication_state.NewCommunicationState(
+		watchdog.NewWatchdog(ctx, time.NewTicker(time.Second*10), true, logger.For(logger.ComponentCommunicator)),
+		make(chan *models.UMHMessage, 100),
+		make(chan *models.UMHMessage, 100),
+		configData.Agent.ReleaseChannel,
+		systemSnapshotManager,
+		configManager,
+		configData.Agent.APIURL,
+		logger.For(logger.ComponentCommunicator),
+		false, // InsecureTLS
+	)
 
 	if configData.Agent.APIURL != "" && configData.Agent.AuthToken != "" {
-		enableBackendConnection(&configData, systemSnapshot, &communicationState, systemMu, controlLoop, communicationState.Logger)
+		enableBackendConnection(&configData, communicationState, controlLoop, communicationState.Logger)
 	} else {
 		log.Warnf("No backend connection enabled, please set API_URL and AUTH_TOKEN")
 	}
 
 	// Start the system snapshot logger
-	go SystemSnapshotLogger(ctx, controlLoop, systemSnapshot, systemMu)
+	go SystemSnapshotLogger(ctx, controlLoop, systemSnapshotManager)
 
 	// Start the control loop
 	err = controlLoop.Execute(ctx)
@@ -121,7 +120,7 @@ func main() {
 
 // SystemSnapshotLogger logs the system snapshot every 5 seconds
 // It is an example on how to access the system snapshot and log it for communication with other components
-func SystemSnapshotLogger(ctx context.Context, controlLoop *control.ControlLoop, systemSnapshot *fsm.SystemSnapshot, systemMu *sync.Mutex) {
+func SystemSnapshotLogger(ctx context.Context, controlLoop *control.ControlLoop, systemSnapshotManager *fsm.SnapshotManager) {
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 
@@ -139,11 +138,6 @@ func SystemSnapshotLogger(ctx context.Context, controlLoop *control.ControlLoop,
 			return
 		case <-ticker.C:
 			snapshot := controlLoop.GetSystemSnapshot()
-			if snapshot != nil {
-				systemMu.Lock()
-				*systemSnapshot = *snapshot
-				systemMu.Unlock()
-			}
 			if snapshot == nil {
 				sentry.ReportIssuef(sentry.IssueTypeWarning, snap_logger, "[SystemSnapshotLogger] No system snapshot available")
 				continue
@@ -168,7 +162,7 @@ func SystemSnapshotLogger(ctx context.Context, controlLoop *control.ControlLoop,
 	}
 }
 
-func enableBackendConnection(config *config.FullConfig, state *fsm.SystemSnapshot, communicationState *communication_state.CommunicationState, systemMu *sync.Mutex, controlLoop *control.ControlLoop, logger *zap.SugaredLogger) {
+func enableBackendConnection(config *config.FullConfig, communicationState *communication_state.CommunicationState, controlLoop *control.ControlLoop, logger *zap.SugaredLogger) {
 
 	logger.Info("Enabling backend connection")
 	// directly log the config to console, not to the logger
@@ -190,10 +184,10 @@ func enableBackendConnection(config *config.FullConfig, state *fsm.SystemSnapsho
 
 		// Get the config manager from the control loop
 		configManager := controlLoop.GetConfigManager()
-
+		snapshotManager := controlLoop.GetSnapshotManager()
 		communicationState.InitialiseAndStartPuller()
 		communicationState.InitialiseAndStartPusher()
-		communicationState.InitialiseAndStartSubscriberHandler(time.Minute*5, time.Minute, config, state, systemMu, configManager)
+		communicationState.InitialiseAndStartSubscriberHandler(time.Minute*5, time.Minute, config, snapshotManager, configManager)
 		communicationState.InitialiseAndStartRouter()
 
 	}

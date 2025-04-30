@@ -24,8 +24,6 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/generator"
 
-	"sync"
-
 	"github.com/united-manufacturing-hub/expiremap/v2/pkg/expiremap"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
@@ -42,7 +40,7 @@ type Handler struct {
 	instanceUUID               uuid.UUID
 	StatusCollector            *generator.StatusCollectorType
 	disableHardwareStatusCheck bool // nolint:unused // will be used in the future
-	state                      *fsm.SystemSnapshot
+	systemSnapshotManager      *fsm.SnapshotManager
 	configManager              config.ConfigManager
 	logger                     *zap.SugaredLogger
 }
@@ -55,8 +53,7 @@ func NewHandler(
 	cull time.Duration,
 	releaseChannel config.ReleaseChannel,
 	disableHardwareStatusCheck bool,
-	state *fsm.SystemSnapshot,
-	systemMu *sync.Mutex,
+	systemSnapshotManager *fsm.SnapshotManager,
 	configManager config.ConfigManager,
 	logger *zap.SugaredLogger,
 ) *Handler {
@@ -65,13 +62,12 @@ func NewHandler(
 	s.dog = dog
 	s.pusher = pusher
 	s.instanceUUID = instanceUUID
-	s.state = state
+	s.systemSnapshotManager = systemSnapshotManager
 	s.configManager = configManager
 	s.logger = logger
 	s.StatusCollector = generator.NewStatusCollector(
 		dog,
-		state,
-		systemMu,
+		systemSnapshotManager,
 		configManager,
 		logger,
 	)

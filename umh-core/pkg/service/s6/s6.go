@@ -1485,7 +1485,7 @@ func ParseLogsFromBytes_Unoptimized(content []byte) ([]LogEntry, error) {
 // parseLogLine parses a log line from S6 format and returns a LogEntry
 func parseLogLine(line string) LogEntry {
 	// Quick check for empty strings or too short lines
-	if len(line) < 29 { // Minimum length for "YYYY-MM-DD HH:MM:SS.<9 digit nanoseconds>  content"
+	if len(line) < 28 { // Minimum length for "YYYY-MM-DD HH:MM:SS.<9 digit nanoseconds>  content"
 		return LogEntry{Content: line}
 	}
 

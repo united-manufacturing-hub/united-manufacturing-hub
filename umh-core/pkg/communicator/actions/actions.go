@@ -58,7 +58,7 @@ type Action interface {
 //
 // After execution, it handles sending the success reply if the action completed successfully.
 // Error handling for each step is done within this function.
-func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePayload, sender string, outboundChannel chan *models.UMHMessage, releaseChannel config.ReleaseChannel, dog watchdog.Iface, traceID uuid.UUID, systemSnapshot *fsm.SystemSnapshot, configManager config.ConfigManager) {
+func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePayload, sender string, outboundChannel chan *models.UMHMessage, releaseChannel config.ReleaseChannel, dog watchdog.Iface, traceID uuid.UUID, systemSnapshotManager *fsm.SnapshotManager, configManager config.ConfigManager) {
 	log := logger.For(logger.ComponentCommunicator)
 
 	// Start a new transaction for this action
@@ -78,45 +78,45 @@ func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePay
 		}
 	case models.DeployDataFlowComponent:
 		action = &DeployDataflowComponentAction{
-			userEmail:       sender,
-			actionUUID:      payload.ActionUUID,
-			instanceUUID:    instanceUUID,
-			outboundChannel: outboundChannel,
-			configManager:   configManager,
-			systemSnapshot:  systemSnapshot,
-			actionLogger:    log,
+			userEmail:             sender,
+			actionUUID:            payload.ActionUUID,
+			instanceUUID:          instanceUUID,
+			outboundChannel:       outboundChannel,
+			configManager:         configManager,
+			systemSnapshotManager: systemSnapshotManager,
+			actionLogger:          log,
 		}
 
 	case models.DeleteDataFlowComponent:
 		action = &DeleteDataflowComponentAction{
-			userEmail:       sender,
-			actionUUID:      payload.ActionUUID,
-			instanceUUID:    instanceUUID,
-			outboundChannel: outboundChannel,
-			configManager:   configManager,
-			systemSnapshot:  systemSnapshot,
-			actionLogger:    log,
+			userEmail:             sender,
+			actionUUID:            payload.ActionUUID,
+			instanceUUID:          instanceUUID,
+			outboundChannel:       outboundChannel,
+			configManager:         configManager,
+			systemSnapshotManager: systemSnapshotManager,
+			actionLogger:          log,
 		}
 
 	case models.GetDataFlowComponent:
 		action = &GetDataFlowComponentAction{
-			userEmail:       sender,
-			actionUUID:      payload.ActionUUID,
-			instanceUUID:    instanceUUID,
-			outboundChannel: outboundChannel,
-			configManager:   configManager,
-			systemSnapshot:  systemSnapshot,
-			actionLogger:    log,
+			userEmail:             sender,
+			actionUUID:            payload.ActionUUID,
+			instanceUUID:          instanceUUID,
+			outboundChannel:       outboundChannel,
+			configManager:         configManager,
+			systemSnapshotManager: systemSnapshotManager,
+			actionLogger:          log,
 		}
 	case models.EditDataFlowComponent:
 		action = &EditDataflowComponentAction{
-			userEmail:       sender,
-			actionUUID:      payload.ActionUUID,
-			instanceUUID:    instanceUUID,
-			outboundChannel: outboundChannel,
-			configManager:   configManager,
-			actionLogger:    log,
-			systemSnapshot:  systemSnapshot,
+			userEmail:             sender,
+			actionUUID:            payload.ActionUUID,
+			instanceUUID:          instanceUUID,
+			outboundChannel:       outboundChannel,
+			configManager:         configManager,
+			actionLogger:          log,
+			systemSnapshotManager: systemSnapshotManager,
 		}
 
 	default:
@@ -125,6 +125,7 @@ func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePay
 		return
 	}
 
+	SendActionReply(instanceUUID, sender, payload.ActionUUID, models.ActionExecuting, "Parsing action payload", outboundChannel, payload.ActionType)
 	// Parse the action payload
 	err := action.Parse(payload.ActionPayload)
 	if err != nil {
@@ -132,6 +133,7 @@ func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePay
 		return
 	}
 
+	SendActionReply(instanceUUID, sender, payload.ActionUUID, models.ActionExecuting, "Validating action payload", outboundChannel, payload.ActionType)
 	// Validate the action payload
 	err = action.Validate()
 	if err != nil {
@@ -139,6 +141,7 @@ func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePay
 		return
 	}
 
+	SendActionReply(instanceUUID, sender, payload.ActionUUID, models.ActionExecuting, "Executing action", outboundChannel, payload.ActionType)
 	// Execute the action
 	result, metadata, err := action.Execute()
 	if err != nil {

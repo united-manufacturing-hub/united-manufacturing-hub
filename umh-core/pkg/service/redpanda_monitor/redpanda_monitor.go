@@ -40,6 +40,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
 
 	dto "github.com/prometheus/client_model/go"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
@@ -107,10 +108,17 @@ type TopicMetrics struct {
 	TopicPartitionMap map[string]int64
 }
 
-type RedpandaMetricsAndClusterConfig struct {
-	Metrics       *RedpandaMetrics
-	ClusterConfig *ClusterConfig
-	LastUpdatedAt time.Time
+// HealthCheck contains information about the health of the Redpanda service
+// https://docs.redpanda.com/redpanda-connect/guides/monitoring/
+type HealthCheck struct {
+	// IsLive is true if the Redpanda service is live
+	IsLive bool
+	// IsReady is true if the Redpanda service is ready to process data
+	IsReady bool
+	// Version contains the version of the Redpanda service
+	Version string
+	// ReadyError contains any error message from the ready check
+	ReadyError string `json:"ready_error,omitempty"`
 }
 
 type ClusterConfig struct {
@@ -122,10 +130,11 @@ type TopicConfig struct {
 	DefaultTopicRetentionBytes int64
 }
 
+// RedpandaMetrics contains information about the metrics of the Redpanda service
 type RedpandaMetrics struct {
-	// Metrics contains information about the metrics of the Redpanda service
+	// Metrics contains the metrics of the Redpanda service
 	Metrics Metrics
-	// MetricsState contains information about the metrics of the Redpanda service
+	// LastUpdatedAt contains the last time the metrics were updated
 	MetricsState *RedpandaMetricsState
 }
 
@@ -139,11 +148,23 @@ type ServiceInfo struct {
 	RedpandaStatus RedpandaMonitorStatus
 }
 
+// RedpandaMonitorScan contains information about the status of the Redpanda service
+type RedpandaMetricsScan struct {
+	// HealthCheck contains information about the health of the Redpanda service
+	HealthCheck HealthCheck
+	// Metrics contains information about the metrics of the Redpanda service
+	RedpandaMetrics *RedpandaMetrics
+	// ClusterConfig contains information about the cluster config of the Redpanda service
+	ClusterConfig *ClusterConfig
+	// LastUpdatedAt contains the last time the metrics were updated
+	LastUpdatedAt time.Time
+}
+
 // RedpandaMonitorStatus contains status information about the redpanda service
 type RedpandaMonitorStatus struct {
 	// LastScan contains the result of the last scan
 	// If this is nil, we never had a successfull scan
-	LastScan *RedpandaMetricsAndClusterConfig
+	LastScan *RedpandaMetricsScan
 	// IsRunning indicates whether the redpanda_monitor service is running
 	IsRunning bool
 	// Logs contains the structured s6 log entries emitted by the
@@ -160,6 +181,7 @@ type IRedpandaMonitorService interface {
 	StopRedpandaMonitor(ctx context.Context) error
 	ReconcileManager(ctx context.Context, services serviceregistry.Provider, tick uint64) (error, bool)
 	ServiceExists(ctx context.Context, filesystemService filesystem.Service) bool
+	ForceRemoveRedpandaMonitor(ctx context.Context, filesystemService filesystem.Service) error
 }
 
 // Ensure RedpandaMonitorService implements IRedpandaMonitorService
@@ -191,7 +213,7 @@ func WithS6Manager(s6Manager *s6fsm.S6Manager) RedpandaMonitorServiceOption {
 }
 
 func NewRedpandaMonitorService(opts ...RedpandaMonitorServiceOption) *RedpandaMonitorService {
-	managerName := fmt.Sprintf("%s%s", logger.ComponentRedpandaService, "redpanda-monitor")
+	managerName := fmt.Sprintf("%s%s", logger.ComponentRedpandaService, constants.RedpandaMonitorServiceName)
 	service := &RedpandaMonitorService{
 		logger:       logger.For(managerName),
 		metricsState: NewRedpandaMetricsState(),
@@ -243,7 +265,7 @@ done
 }
 
 func (s *RedpandaMonitorService) GetS6ServiceName() string {
-	return "redpanda-monitor"
+	return constants.RedpandaMonitorServiceName
 }
 
 func (s *RedpandaMonitorService) GenerateS6ConfigForRedpandaMonitor() (s6serviceconfig.S6ServiceConfig, error) {
@@ -312,7 +334,7 @@ func StripMarkers(b []byte) []byte {
 }
 
 // ParseRedpandaLogs parses the logs of a redpanda service and extracts metrics
-func (s *RedpandaMonitorService) ParseRedpandaLogs(ctx context.Context, logs []s6service.LogEntry, tick uint64) (*RedpandaMetricsAndClusterConfig, error) {
+func (s *RedpandaMonitorService) ParseRedpandaLogs(ctx context.Context, logs []s6service.LogEntry, tick uint64) (*RedpandaMetricsScan, error) {
 	/*
 		A normal log entry looks like this:
 		BLOCK_START_MARKER
@@ -467,10 +489,10 @@ func (s *RedpandaMonitorService) ParseRedpandaLogs(ctx context.Context, logs []s
 	}
 
 	lastUpdatedAt := time.Unix(0, int64(timestampNs))
-	return &RedpandaMetricsAndClusterConfig{
-		Metrics:       metrics,
-		ClusterConfig: clusterConfig,
-		LastUpdatedAt: lastUpdatedAt,
+	return &RedpandaMetricsScan{
+		RedpandaMetrics: metrics,
+		ClusterConfig:   clusterConfig,
+		LastUpdatedAt:   lastUpdatedAt,
 	}, nil
 }
 
@@ -841,11 +863,14 @@ func (s *RedpandaMonitorService) RemoveRedpandaMonitorFromS6Manager(ctx context.
 		return ctx.Err()
 	}
 
-	if s.s6ServiceConfig == nil {
-		return ErrServiceNotExist
-	}
-
 	s.s6ServiceConfig = nil
+
+	// Check that the instance was actually removed
+	s6Name := s.GetS6ServiceName()
+	if inst, ok := s.s6Manager.GetInstance(s6Name); ok {
+		return fmt.Errorf("%w: S6 instance state=%s",
+			standarderrors.ErrRemovalPending, inst.GetCurrentFSMState())
+	}
 
 	// Clean up the metrics state
 	s.metricsState = NewRedpandaMetricsState()
@@ -924,6 +949,15 @@ func (s *RedpandaMonitorService) ServiceExists(ctx context.Context, filesystemSe
 	}
 
 	return exists
+}
+
+// ForceRemoveRedpandaMonitor removes a Redpanda monitor from the S6 manager
+// This should only be called if the Redpanda monitor is in a permanent failure state
+// and the instance itself cannot be stopped or removed
+func (s *RedpandaMonitorService) ForceRemoveRedpandaMonitor(ctx context.Context, filesystemService filesystem.Service) error {
+	s6ServiceName := s.GetS6ServiceName()
+	s6ServicePath := filepath.Join(constants.S6BaseDir, s6ServiceName)
+	return s.s6Service.ForceRemove(ctx, s6ServicePath, filesystemService)
 }
 
 func ParseRedpandaIntegerlikeValue(value interface{}) (int64, error) {

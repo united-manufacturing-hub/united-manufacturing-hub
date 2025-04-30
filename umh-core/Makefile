@@ -231,9 +231,17 @@ benchmark-s6-time:
 	cd pkg/service/s6 && go test -bench=. -benchmem
 
 integration-test: stop-all-pods vet nilaway lint
+
+# Meta target to setup the environment for the tests
+pre-test: stop-all-pods vet nilaway lint
+
+# Meta target to setup the environment for the tests in CI environments
+pre-test-ci: vet nilaway lint
+
+integration-test: pre-test
 	ginkgo -r -v --tags=test --label-filter='integration' --fail-fast ./...
 
-redpanda-extended-test: stop-all-pods vet nilaway
+redpanda-extended-test: pre-test
 	ginkgo -r -v --tags=test --label-filter='redpanda-extended' --fail-fast --timeout=1.5h ./...
 
 
@@ -241,7 +249,7 @@ redpanda-extended-test: stop-all-pods vet nilaway
 # - Injects VERSION via ldflags into AppVersion for proper error identification in Sentry
 # - CI test failures SHOULD be reported to Sentry (unlike local dev failures)
 # - Helps identify flaky tests by consistently tracking failures in CI pipelines
-integration-test-ci: vet nilaway lint
+integration-test-ci: pre-test-ci
 	VERSION=$(VERSION) ginkgo -r -v --tags=test --label-filter='integration' --fail-fast -ldflags="-X 'github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/version.AppVersion=$(VERSION)'" ./...
 
 update-go-dependencies:
