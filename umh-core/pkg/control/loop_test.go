@@ -30,6 +30,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/starvationchecker"
 )
 
@@ -91,17 +92,19 @@ func generateDefectiveConfig() config.FullConfig {
 
 var _ = Describe("ControlLoop", func() {
 	var (
-		controlLoop *ControlLoop
-		mockManager *fsm.MockFSMManager
-		mockConfig  *config.MockConfigManager
-		ctx         context.Context
-		cancel      context.CancelFunc
-		tick        uint64
+		controlLoop     *ControlLoop
+		mockManager     *fsm.MockFSMManager
+		mockConfig      *config.MockConfigManager
+		mockSvcRegistry *serviceregistry.Registry
+		ctx             context.Context
+		cancel          context.CancelFunc
+		tick            uint64
 	)
 
 	BeforeEach(func() {
 		mockManager = fsm.NewMockFSMManager()
 		mockConfig = config.NewMockConfigManager()
+		mockSvcRegistry = serviceregistry.NewMockRegistry()
 
 		// Set up a context with timeout
 		ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
@@ -115,6 +118,7 @@ var _ = Describe("ControlLoop", func() {
 			configManager:     mockConfig,
 			logger:            logger.For(logger.ComponentControlLoop),
 			starvationChecker: starvationChecker,
+			services:          mockSvcRegistry,
 		}
 		tick = uint64(0)
 	})
@@ -204,6 +208,7 @@ var _ = Describe("ControlLoop", func() {
 				configManager:     trackingConfig,
 				starvationChecker: starvationChecker,
 				logger:            logger.For(logger.ComponentControlLoop),
+				services:          mockSvcRegistry,
 			}
 
 			// Use an atomic counter to track calls safely
@@ -285,6 +290,7 @@ var _ = Describe("ControlLoop", func() {
 				configManager:     timeoutConfig,
 				logger:            logger.For(logger.ComponentControlLoop),
 				starvationChecker: starvationChecker,
+				services:          mockSvcRegistry,
 			}
 
 			// Start executing in a goroutine

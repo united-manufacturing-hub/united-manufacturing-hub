@@ -23,8 +23,8 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
 // MockBenthosMonitorService is a mock implementation of the IBenthosMonitorService interface for testing
@@ -244,7 +244,7 @@ func (m *MockBenthosMonitorService) GenerateS6ConfigForBenthosMonitor(s6ServiceN
 }
 
 // Status mocks getting the status of a Benthos Monitor service
-func (m *MockBenthosMonitorService) Status(ctx context.Context, filesystemService filesystem.Service, tick uint64) (ServiceInfo, error) {
+func (m *MockBenthosMonitorService) Status(ctx context.Context, services serviceregistry.Provider, tick uint64) (ServiceInfo, error) {
 	m.StatusCalled = true
 
 	// Check for context cancellation
@@ -396,7 +396,7 @@ func (m *MockBenthosMonitorService) StopBenthosMonitor(ctx context.Context) erro
 }
 
 // ReconcileManager mocks reconciling the Benthos Monitor manager
-func (m *MockBenthosMonitorService) ReconcileManager(ctx context.Context, filesystemService filesystem.Service, tick uint64) (error, bool) {
+func (m *MockBenthosMonitorService) ReconcileManager(ctx context.Context, services serviceregistry.Provider, tick uint64) (error, bool) {
 	m.ReconcileManagerCalled = true
 
 	// Check for context cancellation
@@ -417,7 +417,7 @@ func (m *MockBenthosMonitorService) ReconcileManager(ctx context.Context, filesy
 }
 
 // ServiceExists mocks checking if a Benthos Monitor service exists
-func (m *MockBenthosMonitorService) ServiceExists(ctx context.Context, filesystemService filesystem.Service) bool {
+func (m *MockBenthosMonitorService) ServiceExists(ctx context.Context, services serviceregistry.Provider) bool {
 	m.ServiceExistsCalled = true
 
 	// Check for context cancellation
@@ -468,7 +468,7 @@ func (m *MockBenthosMonitorService) SetMockLogs(logs []s6service.LogEntry) {
 }
 
 // ForceRemoveBenthosMonitor mocks force removing a Benthos Monitor instance
-func (m *MockBenthosMonitorService) ForceRemoveBenthosMonitor(ctx context.Context, filesystemService filesystem.Service) error {
+func (m *MockBenthosMonitorService) ForceRemoveBenthosMonitor(ctx context.Context, services serviceregistry.Provider) error {
 	m.ForceRemoveBenthosMonitorCalled = true
 
 	return m.ForceRemoveBenthosMonitorError

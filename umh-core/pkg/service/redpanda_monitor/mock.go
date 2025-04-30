@@ -26,6 +26,7 @@ import (
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
 // MockRedpandaMonitorService is a mock implementation of the IRedpandaMonitorService interface for testing
@@ -279,7 +280,7 @@ func (m *MockRedpandaMonitorService) StopRedpandaMonitor(ctx context.Context) er
 }
 
 // ReconcileManager mocks reconciling the Redpanda Monitor manager
-func (m *MockRedpandaMonitorService) ReconcileManager(ctx context.Context, filesystemService filesystem.Service, tick uint64) (error, bool) {
+func (m *MockRedpandaMonitorService) ReconcileManager(ctx context.Context, services serviceregistry.Provider, tick uint64) (error, bool) {
 	m.ReconcileManagerCalled = true
 
 	// Check for context cancellation

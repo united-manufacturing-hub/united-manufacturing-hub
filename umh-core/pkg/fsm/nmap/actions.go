@@ -25,6 +25,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	nmap_service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/nmap"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
 // The functions in this file define heavier, possibly fail-prone operations
@@ -115,7 +116,7 @@ func (n *NmapInstance) StopInstance(ctx context.Context, filesystemService files
 }
 
 // UpdateObservedStateOfInstance updates the observed state of the service
-func (n *NmapInstance) UpdateObservedStateOfInstance(ctx context.Context, filesystemService filesystem.Service, tick uint64, loopTime time.Time) error {
+func (n *NmapInstance) UpdateObservedStateOfInstance(ctx context.Context, services serviceregistry.Provider, tick uint64, loopTime time.Time) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
@@ -129,7 +130,7 @@ func (n *NmapInstance) UpdateObservedStateOfInstance(ctx context.Context, filesy
 	}
 
 	start := time.Now()
-	svcInfo, err := n.monitorService.Status(ctx, filesystemService, n.config.Name, tick)
+	svcInfo, err := n.monitorService.Status(ctx, services.GetFileSystem(), n.config.Name, tick)
 	if err != nil {
 		// We want to return this specific error here, because we need to check
 		// whether the execution of Nmap failed multiple times in a row and set this
@@ -151,7 +152,7 @@ func (n *NmapInstance) UpdateObservedStateOfInstance(ctx context.Context, filesy
 
 	// Fetch the actual Nmap config from the service
 	start = time.Now()
-	observedConfig, err := n.monitorService.GetConfig(ctx, filesystemService, n.baseFSMInstance.GetID())
+	observedConfig, err := n.monitorService.GetConfig(ctx, services.GetFileSystem(), n.baseFSMInstance.GetID())
 	metrics.ObserveReconcileTime(logger.ComponentNmapInstance, n.baseFSMInstance.GetID()+".getConfig", time.Since(start))
 	if err == nil {
 		// Only update if we successfully got the config
@@ -170,7 +171,7 @@ func (n *NmapInstance) UpdateObservedStateOfInstance(ctx context.Context, filesy
 	// Use new ConfigsEqual function that handles Nmap defaults properly
 	if !n.config.NmapServiceConfig.Equal(n.ObservedState.ObservedNmapServiceConfig) {
 		// Check if the service exists before attempting to update
-		if n.monitorService.ServiceExists(ctx, filesystemService, n.baseFSMInstance.GetID()) {
+		if n.monitorService.ServiceExists(ctx, services, n.baseFSMInstance.GetID()) {
 			n.baseFSMInstance.GetLogger().Debugf("Observed Nmap config is different from desired config, updating S6 configuration")
 
 			// Update the config in the S6 manager
