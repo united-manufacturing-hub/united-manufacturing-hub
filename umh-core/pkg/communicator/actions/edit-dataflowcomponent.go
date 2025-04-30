@@ -90,6 +90,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 	"go.uber.org/zap"
 	"gopkg.in/yaml.v3"
 )
@@ -530,6 +531,9 @@ func (a *EditDataflowComponentAction) waitForComponentToBeActive() error {
 	startTime := time.Now()
 	timeoutDuration := constants.DataflowComponentWaitForActiveTimeout
 
+	var logs []s6.LogEntry
+	var lastLogs []s6.LogEntry
+
 	for {
 		select {
 		case <-timeout:
@@ -568,6 +572,18 @@ func (a *EditDataflowComponentAction) waitForComponentToBeActive() error {
 							SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
 								fmt.Sprintf("Dataflow component is in state '%s' (waiting for 'active', %ds remaining)...",
 									instance.CurrentState, remainingSeconds), a.outboundChannel, models.EditDataFlowComponent)
+							// send the benthos logs to the user
+							logs = dfcSnapshot.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosLogs
+							// only send the logs that have not been sent yet
+							if len(logs) > len(lastLogs) {
+								for _, log := range logs[len(lastLogs):] {
+									SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
+										fmt.Sprintf("[Benthos Log] %s", log.Content),
+										a.outboundChannel, models.EditDataFlowComponent)
+								}
+								lastLogs = logs
+							}
+
 							continue
 						} else {
 							SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Dataflow component is active.", a.outboundChannel, models.EditDataFlowComponent)
