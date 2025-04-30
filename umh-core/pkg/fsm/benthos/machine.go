@@ -31,8 +31,10 @@ import (
 )
 
 // NewBenthosInstance creates a new BenthosInstance with the given ID and service path
-func NewBenthosInstance(
-	config config.BenthosConfig) *BenthosInstance {
+func NewBenthosInstanceWithService(
+	config config.BenthosConfig,
+	service *benthos_service.BenthosService,
+) *BenthosInstance {
 
 	cfg := internal_fsm.BaseFSMInstanceConfig{
 		ID:                           config.Name,
@@ -82,7 +84,7 @@ func NewBenthosInstance(
 
 	instance := &BenthosInstance{
 		baseFSMInstance: internal_fsm.NewBaseFSMInstance(cfg, backoffConfig, logger),
-		service:         benthos_service.NewDefaultBenthosService(config.Name),
+		service:         service,
 		config:          config.BenthosServiceConfig,
 		ObservedState:   BenthosObservedState{},
 	}
@@ -97,6 +99,12 @@ func NewBenthosInstance(
 	metrics.InitErrorCounter(metrics.ComponentBenthosInstance, config.Name)
 
 	return instance
+}
+
+func NewBenthosInstance(
+	config config.BenthosConfig,
+) *BenthosInstance {
+	return NewBenthosInstanceWithService(config, benthos_service.NewDefaultBenthosService(config.Name))
 }
 
 // SetDesiredFSMState safely updates the desired state

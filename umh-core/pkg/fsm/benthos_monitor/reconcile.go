@@ -28,6 +28,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	benthos_monitor_service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos_monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
+	standarderrors "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
 )
 
 // Reconcile periodically checks if the FSM needs state transitions based on metrics
@@ -117,7 +118,7 @@ func (b *BenthosMonitorInstance) Reconcile(ctx context.Context, snapshot fsm.Sys
 	if err != nil {
 		// If the instance is removed, we don't want to return an error here, because we want to continue reconciling
 		// Also this should not
-		if errors.Is(err, fsm.ErrInstanceRemoved) {
+		if errors.Is(err, standarderrors.ErrInstanceRemoved) {
 			return nil, false
 		}
 
@@ -186,7 +187,7 @@ func (b *BenthosMonitorInstance) reconcileStateTransition(ctx context.Context, s
 
 	// Handle lifecycle states first - these take precedence over operational states
 	if internal_fsm.IsLifecycleState(currentState) {
-		err, reconciled := b.reconcileLifecycleStates(ctx, services, currentState)
+		err, reconciled := b.baseFSMInstance.ReconcileLifecycleStates(ctx, services, currentState, b.CreateInstance, b.RemoveInstance, b.CheckForCreation)
 		if err != nil {
 			return err, false
 		}
@@ -211,35 +212,6 @@ func (b *BenthosMonitorInstance) reconcileStateTransition(ctx context.Context, s
 	}
 
 	return fmt.Errorf("invalid state: %s", currentState), false
-}
-
-// reconcileLifecycleStates handles to_be_created, creating, removing, removed
-func (b *BenthosMonitorInstance) reconcileLifecycleStates(ctx context.Context, services serviceregistry.Provider, currentState string) (error, bool) {
-	switch currentState {
-	case internal_fsm.LifecycleStateToBeCreated:
-		// do creation
-		if err := b.CreateInstance(ctx, services.GetFileSystem()); err != nil {
-			return err, false
-		}
-		return b.baseFSMInstance.SendEvent(ctx, internal_fsm.LifecycleEventCreate), true
-
-	case internal_fsm.LifecycleStateCreating:
-		// We can assume creation is done immediately (no real action)
-		return b.baseFSMInstance.SendEvent(ctx, internal_fsm.LifecycleEventCreateDone), true
-
-	case internal_fsm.LifecycleStateRemoving:
-		if err := b.RemoveInstance(ctx, services.GetFileSystem()); err != nil {
-			return err, false
-		}
-		return b.baseFSMInstance.SendEvent(ctx, internal_fsm.LifecycleEventRemoveDone), true
-
-	case internal_fsm.LifecycleStateRemoved:
-		// The manager will clean this up eventually
-		return fsm.ErrInstanceRemoved, true
-
-	default:
-		return nil, false
-	}
 }
 
 // reconcileOperationalStates handles states related to instance operations (starting/stopping)
@@ -280,6 +252,11 @@ func (b *BenthosMonitorInstance) reconcileTransitionToActive(ctx context.Context
 		return b.reconcileStartingStates(ctx, services, currentState, currentTime)
 	case IsRunningState(currentState):
 		return b.reconcileRunningStates(ctx, services, currentState, currentTime)
+	case currentState == OperationalStateStopping:
+		// There can be the edge case where an fsm is set to stopped, and then a cycle later again to active
+		// It will cause the stopping process to start, but then the deisred state is again active, so it will land up in reconcileTransitionToActive
+		// if it is stopping, we will first finish the stopping process and then we will go to active
+		return b.reconcileTransitionToStopped(ctx, services, currentState)
 	default:
 		return fmt.Errorf("invalid current state: %s", currentState), false
 	}

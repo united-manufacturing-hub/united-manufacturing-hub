@@ -29,6 +29,7 @@ import (
 	benthos_service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
+	standarderrors "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
 )
 
 // The functions in this file define heavier, possibly fail-prone operations
@@ -59,23 +60,66 @@ func (b *BenthosInstance) CreateInstance(ctx context.Context, filesystemService 
 	return nil
 }
 
-// RemoveInstance attempts to remove the Benthos from the S6 manager.
-// It requires the service to be stopped before removal.
-func (b *BenthosInstance) RemoveInstance(ctx context.Context, filesystemService filesystem.Service) error {
-	b.baseFSMInstance.GetLogger().Debugf("Starting Action: Removing Benthos service %s from S6 manager ...", b.baseFSMInstance.GetID())
+// RemoveInstance is executed while the Benthos FSM sits in the *removing*
+// state.  The helper it calls (`RemoveBenthosFromS6Manager`) returns three
+// kinds of answers:
+//
+//   - nil                    – all artefacts are gone  →  fire remove_done
+//   - ErrServiceNotExist     – never created / already cleaned up
+//     → success, idempotent
+//   - ErrRemovalPending      – child S6-FSM is still deleting; *not* an error
+//     → stay in removing and try again next tick
+//   - everything else        – real failure  → bubble up so the back-off
+//     decorator can suspend operations.
+func (b *BenthosInstance) RemoveInstance(
+	ctx context.Context,
+	fs filesystem.Service,
+) error {
 
-	// Remove the Benthos from the S6 manager
-	err := b.service.RemoveBenthosFromS6Manager(ctx, filesystemService, b.baseFSMInstance.GetID())
-	if err != nil {
-		if err == benthos_service.ErrServiceNotExist {
-			b.baseFSMInstance.GetLogger().Debugf("Benthos service %s not found in S6 manager", b.baseFSMInstance.GetID())
-			return nil // do not throw an error, as each action is expected to be idempotent
-		}
-		return fmt.Errorf("failed to remove Benthos service %s from S6 manager: %w", b.baseFSMInstance.GetID(), err)
+	b.baseFSMInstance.GetLogger().
+		Infof("Removing Benthos service %s from S6 manager …",
+			b.baseFSMInstance.GetID())
+
+	err := b.service.RemoveBenthosFromS6Manager(
+		ctx, fs, b.baseFSMInstance.GetID())
+
+	switch {
+	// ---------------------------------------------------------------
+	// happy paths
+	// ---------------------------------------------------------------
+	case err == nil: // fully removed
+		b.baseFSMInstance.GetLogger().
+			Infof("Benthos service %s removed from S6 manager",
+				b.baseFSMInstance.GetID())
+		return nil
+
+	case errors.Is(err, benthos_service.ErrServiceNotExist):
+		b.baseFSMInstance.GetLogger().
+			Infof("Benthos service %s already removed from S6 manager",
+				b.baseFSMInstance.GetID())
+		// idempotent: was already gone
+		return nil
+
+	// ---------------------------------------------------------------
+	// transient path – keep retrying
+	// ---------------------------------------------------------------
+	case errors.Is(err, standarderrors.ErrRemovalPending):
+		b.baseFSMInstance.GetLogger().
+			Infof("Benthos service %s removal still in progress",
+				b.baseFSMInstance.GetID())
+		// not an error from the FSM’s perspective – just means “try again”
+		return err
+
+	// ---------------------------------------------------------------
+	// real error – escalate
+	// ---------------------------------------------------------------
+	default:
+		b.baseFSMInstance.GetLogger().
+			Errorf("failed to remove service %s: %s",
+				b.baseFSMInstance.GetID(), err)
+		return fmt.Errorf("failed to remove service %s: %w",
+			b.baseFSMInstance.GetID(), err)
 	}
-
-	b.baseFSMInstance.GetLogger().Debugf("Benthos service %s removed from S6 manager", b.baseFSMInstance.GetID())
-	return nil
 }
 
 // StartInstance attempts to start the benthos by setting the desired state to running for the given instance
@@ -108,6 +152,11 @@ func (b *BenthosInstance) StopInstance(ctx context.Context, filesystemService fi
 
 	b.baseFSMInstance.GetLogger().Debugf("Benthos service %s stop command executed", b.baseFSMInstance.GetID())
 	return nil
+}
+
+// CheckForCreation checks if the Benthos service should be created
+func (b *BenthosInstance) CheckForCreation(ctx context.Context, filesystemService filesystem.Service) bool {
+	return true
 }
 
 // getServiceStatus gets the status of the Benthos service
