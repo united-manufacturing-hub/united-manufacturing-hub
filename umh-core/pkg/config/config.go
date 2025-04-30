@@ -32,12 +32,13 @@ type FullConfig struct {
 }
 
 type InternalConfig struct {
-	Services       []S6FSMConfig          `yaml:"services,omitempty"`       // Services to manage, can be updated while running
-	Benthos        []BenthosConfig        `yaml:"benthos,omitempty"`        // Benthos services to manage, can be updated while running
-	Nmap           []NmapConfig           `yaml:"nmap,omitempty"`           // Nmap services to manage, can be updated while running
-	Redpanda       RedpandaConfig         `yaml:"redpanda,omitempty"`       // Redpanda config, can be updated while running
-	BenthosMonitor []BenthosMonitorConfig `yaml:"benthosMonitor,omitempty"` // BenthosMonitor config, can be updated while running
-	Connection     []ConnectionConfig     `yaml:"connection,omitempty"`     // Connection services to manage, can be updated while running
+	Services        []S6FSMConfig          `yaml:"services,omitempty"`        // Services to manage, can be updated while running
+	Benthos         []BenthosConfig        `yaml:"benthos,omitempty"`         // Benthos services to manage, can be updated while running
+	Nmap            []NmapConfig           `yaml:"nmap,omitempty"`            // Nmap services to manage, can be updated while running
+	Redpanda        RedpandaConfig         `yaml:"redpanda,omitempty"`        // Redpanda config, can be updated while running
+	BenthosMonitor  []BenthosMonitorConfig `yaml:"benthosMonitor,omitempty"`  // BenthosMonitor config, can be updated while running
+	Connection      []ConnectionConfig     `yaml:"connection,omitempty"`      // Connection services to manage, can be updated while running
+	RedpandaMonitor *RedpandaMonitorConfig `yaml:"redpandaMonitor,omitempty"` // RedpandaMonitor config, can be updated while running
 }
 
 type AgentConfig struct {
@@ -119,6 +120,12 @@ type NmapConfig struct {
 
 	// For the Nmap service
 	NmapServiceConfig nmapserviceconfig.NmapServiceConfig `yaml:"nmapServiceConfig"`
+}
+
+// RedpandaMonitorConfig contains configuration for creating a Redpanda monitor
+type RedpandaMonitorConfig struct {
+	// For the FSM
+	FSMInstanceConfig `yaml:",inline"`
 }
 
 // RedpandaConfig contains configuration for a Redpanda service
