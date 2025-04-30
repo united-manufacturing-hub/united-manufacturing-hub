@@ -53,7 +53,7 @@ func (r *RedpandaMonitorInstance) CreateInstance(ctx context.Context, filesystem
 func (r *RedpandaMonitorInstance) RemoveInstance(ctx context.Context, filesystemService filesystem.Service) error {
 	r.baseFSMInstance.GetLogger().Debugf("Starting Action: Removing Redpanda Monitor service %s from S6 manager ...", r.baseFSMInstance.GetID())
 
-	// Remove the Redpanda from the S6 manager
+	// Remove the Benthos from the S6 manager
 	err := r.monitorService.RemoveRedpandaMonitorFromS6Manager(ctx)
 	switch {
 	// ---------------------------------------------------------------
@@ -79,7 +79,7 @@ func (r *RedpandaMonitorInstance) RemoveInstance(ctx context.Context, filesystem
 		r.baseFSMInstance.GetLogger().
 			Infof("Redpanda monitor service %s removal still in progress",
 				r.baseFSMInstance.GetID())
-		// not an error from the FSM's perspective – just means "try again"
+		// not an error from the FSM’s perspective – just means “try again”
 		return err
 
 	// ---------------------------------------------------------------
