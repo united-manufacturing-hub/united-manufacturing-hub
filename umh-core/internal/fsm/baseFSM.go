@@ -16,6 +16,7 @@ package fsm
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -27,6 +28,10 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
+	standarderrors "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 )
 
 // BaseFSMInstance implements the public fsm.FSM interface
@@ -47,6 +52,13 @@ type BaseFSMInstance struct {
 
 	// logger is the logger for the FSM
 	logger *zap.SugaredLogger
+
+	// transientStreakCounter is the number of ticks a FSM has remained in a transient state
+	transientStreakCounter uint64
+
+	// lastObservedLifecycleState is the last state that was observed by the FSM
+	// Note: this is only temporary and should be replaced by a generalized implementation of the archive storage
+	lastObservedLifecycleState string
 }
 
 type BaseFSMInstanceConfig struct {
@@ -62,10 +74,23 @@ type BaseFSMInstanceConfig struct {
 	OperationalStateBeforeRemove string
 	// OperationalTransitions are the transitions that are allowed in the operational state
 	OperationalTransitions []fsm.EventDesc
+
+	// Fallback for Transient States
+	// If a FSM remains in one of these states for too long, it will cause a Remove / ForceRemove
+	// This is to prevent an fsm to be stuck forever in an intermediate state
+
+	// MaxTicksToRemainInTransientState is the maximum number of ticks a FSM can remain in a transient state
+	// Note: currently only used for lifecycle states
+	MaxTicksToRemainInTransientState uint64
 }
 
 // NewBaseFSMInstance creates a new FSM instance
 func NewBaseFSMInstance(cfg BaseFSMInstanceConfig, backoffConfig backoff.Config, logger *zap.SugaredLogger) *BaseFSMInstance {
+
+	// Set default max ticks to remain in transient state if not set
+	if cfg.MaxTicksToRemainInTransientState == 0 {
+		cfg.MaxTicksToRemainInTransientState = constants.DefaultMaxTicksToRemainInTransientState
+	}
 
 	baseInstance := &BaseFSMInstance{
 		cfg:       cfg,
@@ -392,4 +417,68 @@ func (s *BaseFSMInstance) HandlePermanentError(
 		}
 		return nil, false // Let's try to at least reconcile towards a stopped/removed state
 	}
+}
+
+// ReconcileLifecycleStates reconciles the lifecycle states of the FSM instance
+// It will reconcile the lifecycle states of the FSM instance and return the error and whether the reconciliation was successful
+// It will also update the transient streak counter
+func (s *BaseFSMInstance) ReconcileLifecycleStates(
+	ctx context.Context,
+	services serviceregistry.Provider,
+	currentState string,
+	createInstance func(ctx context.Context, filesystemService filesystem.Service) error,
+	removeInstance func(ctx context.Context, filesystemService filesystem.Service) error,
+	checkForCreation func(ctx context.Context, filesystemService filesystem.Service) bool,
+) (err error, reconciled bool) {
+	start := time.Now()
+	defer func() {
+		metrics.ObserveReconcileTime(metrics.ComponentBaseFSMInstance, s.GetID()+".reconcileLifecycleStates", time.Since(start))
+	}()
+
+	// Transient Streak Counter
+	// TODO: to be implemented in the future for also non lifecycle states
+	if currentState == s.lastObservedLifecycleState {
+		s.transientStreakCounter++
+	} else {
+		s.transientStreakCounter = 0
+	}
+	s.lastObservedLifecycleState = currentState
+
+	// Independent what the desired state is, we always need to reconcile the lifecycle states first
+	switch currentState {
+	case LifecycleStateToBeCreated:
+		if err := createInstance(ctx, services.GetFileSystem()); err != nil {
+			return err, false
+		}
+		return s.SendEvent(ctx, LifecycleEventCreate), true
+	case LifecycleStateCreating:
+		// Check if the service is created
+		if !checkForCreation(ctx, services.GetFileSystem()) {
+			return nil, false // Don't transition state yet, retry next reconcile
+		}
+		return s.SendEvent(ctx, LifecycleEventCreateDone), true
+	case LifecycleStateRemoving:
+		if err := removeInstance(ctx, services.GetFileSystem()); err != nil {
+			// Treat “removal still in progress” as a *non-error* so that the reconcile
+			// loop continues; the FSM stays in `removing` until RemoveInstance returns
+			// nil or a hard error.
+			if errors.Is(err, standarderrors.ErrRemovalPending) {
+				return nil, false
+			}
+			return err, false
+		}
+		return s.SendEvent(ctx, LifecycleEventRemoveDone), true
+	case LifecycleStateRemoved:
+		return standarderrors.ErrInstanceRemoved, true
+	default:
+		// If we are not in a lifecycle state, just continue
+		return nil, false
+	}
+}
+
+// IsTransientStreakCounterMaxed returns whether the transient streak counter
+// has reached the maximum number of ticks, which means that the FSM is stuck in a state
+// and should be removed
+func (s *BaseFSMInstance) IsTransientStreakCounterMaxed() bool {
+	return s.transientStreakCounter >= s.cfg.MaxTicksToRemainInTransientState
 }

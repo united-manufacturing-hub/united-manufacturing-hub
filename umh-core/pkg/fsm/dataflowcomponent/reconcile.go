@@ -23,12 +23,12 @@ import (
 	internal_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/backoff"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	dataflowcomponentservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/dataflowcomponent"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
-
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
+	standarderrors "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
 )
 
 // Reconcile examines the DataflowComponentInstance and, in three steps:
@@ -123,7 +123,7 @@ func (d *DataflowComponentInstance) Reconcile(ctx context.Context, snapshot fsm.
 	err, reconciled = d.reconcileStateTransition(ctx, services, currentTime)
 	if err != nil {
 		// If the instance is removed, we don't want to return an error here, because we want to continue reconciling
-		if errors.Is(err, fsm.ErrInstanceRemoved) {
+		if errors.Is(err, standarderrors.ErrInstanceRemoved) {
 			return nil, false
 		}
 
@@ -187,7 +187,7 @@ func (d *DataflowComponentInstance) reconcileStateTransition(ctx context.Context
 
 	// Handle lifecycle states first - these take precedence over operational states
 	if internal_fsm.IsLifecycleState(currentState) {
-		err, reconciled := d.reconcileLifecycleStates(ctx, services, currentState)
+		err, reconciled := d.baseFSMInstance.ReconcileLifecycleStates(ctx, services, currentState, d.CreateInstance, d.RemoveInstance, d.CheckForCreation)
 		if err != nil {
 			return err, false
 		}
@@ -204,37 +204,6 @@ func (d *DataflowComponentInstance) reconcileStateTransition(ctx context.Context
 	}
 
 	return fmt.Errorf("invalid state: %s", currentState), false
-}
-
-// reconcileLifecycleStates handles states related to instance lifecycle (creating/removing)
-func (d *DataflowComponentInstance) reconcileLifecycleStates(ctx context.Context, services serviceregistry.Provider, currentState string) (err error, reconciled bool) {
-	start := time.Now()
-	defer func() {
-		metrics.ObserveReconcileTime(metrics.ComponentDataflowComponentInstance, d.baseFSMInstance.GetID()+".reconcileLifecycleStates", time.Since(start))
-	}()
-
-	// Independent what the desired state is, we always need to reconcile the lifecycle states first
-	switch currentState {
-	case internal_fsm.LifecycleStateToBeCreated:
-		if err := d.CreateInstance(ctx, services.GetFileSystem()); err != nil {
-			return err, false
-		}
-		return d.baseFSMInstance.SendEvent(ctx, internal_fsm.LifecycleEventCreate), true
-	case internal_fsm.LifecycleStateCreating:
-		// Check if the service is created
-		// For now, we'll assume it's created immediately after initiating creation
-		return d.baseFSMInstance.SendEvent(ctx, internal_fsm.LifecycleEventCreateDone), true
-	case internal_fsm.LifecycleStateRemoving:
-		if err := d.RemoveInstance(ctx, services.GetFileSystem()); err != nil {
-			return err, false
-		}
-		return d.baseFSMInstance.SendEvent(ctx, internal_fsm.LifecycleEventRemoveDone), true
-	case internal_fsm.LifecycleStateRemoved:
-		return fsm.ErrInstanceRemoved, true
-	default:
-		// If we are not in a lifecycle state, just continue
-		return nil, false
-	}
 }
 
 // reconcileOperationalStates handles states related to instance operations (starting/stopping)

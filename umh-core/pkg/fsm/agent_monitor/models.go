@@ -120,3 +120,10 @@ type AgentInstance struct {
 func (a *AgentInstance) GetLastObservedState() publicfsm.ObservedState {
 	return a.ObservedState
 }
+
+// IsTransientStreakCounterMaxed returns whether the transient streak counter
+// has reached the maximum number of ticks, which means that the FSM is stuck in a state
+// and should be removed
+func (a *AgentInstance) IsTransientStreakCounterMaxed() bool {
+	return a.baseFSMInstance.IsTransientStreakCounterMaxed()
+}
