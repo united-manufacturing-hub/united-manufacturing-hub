@@ -294,7 +294,7 @@ func (r *RedpandaInstance) UpdateObservedStateOfInstance(ctx context.Context, se
 	}
 
 	// If the config could not be fetched, we can't update the S6 configuration
-	if r.ObservedState.ObservedRedpandaServiceConfig.Topic.DefaultTopicRetentionBytes == 0 {
+	if r.ObservedState.ObservedRedpandaServiceConfig.Resources.MaxCores == 0 {
 		r.baseFSMInstance.GetLogger().Debugf("Observed Redpanda config is not available, skipping update")
 		return nil
 	}
