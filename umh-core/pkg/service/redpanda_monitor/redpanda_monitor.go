@@ -46,6 +46,9 @@ import (
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 	"go.uber.org/zap"
+
+	"github.com/prometheus/prometheus/model/labels"
+	"github.com/prometheus/prometheus/model/textparse"
 )
 
 // Metrics contains information about the metrics of the Redpanda service
@@ -559,30 +562,17 @@ func parseCurlError(errorString string) error {
 
 func (s *RedpandaMonitorService) processMetricsDataBytes(metricsDataBytes []byte, tick uint64) (*RedpandaMetrics, error) {
 
-	metricsDataString := string(metricsDataBytes)
-	// Strip any newlines
-	metricsDataString = strings.ReplaceAll(metricsDataString, "\n", "")
-
-	// Decode the hex encoded metrics data
-	decodedMetricsDataBytes, err := hex.DecodeString(metricsDataString)
+	gzr, err := gzip.NewReader(hex.NewDecoder(bytes.NewReader(metricsDataBytes)))
 	if err != nil {
-		return nil, fmt.Errorf("failed to decode metrics data: %w", err)
-	}
-
-	// Decompress the metrics data
-	gzipReader, err := gzip.NewReader(bytes.NewReader(decodedMetricsDataBytes))
-	if err != nil {
-		return nil, fmt.Errorf("failed to decompress metrics data: %w", err)
+		return nil, fmt.Errorf("failed to create gzip reader: %w", err)
 	}
 	defer func() {
-		err := gzipReader.Close()
-		if err != nil {
-			sentry.ReportIssuef(sentry.IssueTypeError, s.logger, "failed to close gzip reader: %v", err)
+		if err := gzr.Close(); err != nil {
+			s.logger.Error("failed to close gzip reader", zap.Error(err))
 		}
 	}()
 
-	// Parse the metrics
-	metrics, err := ParseMetrics(gzipReader)
+	metrics, err := parseMetricsBlob(gzr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse metrics: %w", err)
 	}
@@ -594,6 +584,136 @@ func (s *RedpandaMonitorService) processMetricsDataBytes(metricsDataBytes []byte
 		Metrics:      metrics,
 		MetricsState: s.metricsState,
 	}, nil
+}
+
+func parseMetricsBlob(r io.Reader) (Metrics, error) {
+	payload, err := io.ReadAll(r)
+	if err != nil {
+		return Metrics{}, err
+	}
+	if curl := parseCurlError(string(payload)); curl != nil {
+		return Metrics{}, curl
+	}
+	return ParseMetricsFast(payload)
+}
+
+func ParseMetricsFast(b []byte) (Metrics, error) {
+	var (
+		m Metrics
+
+		foundFreeBytes, foundTotalBytes, foundFreeSpaceAlert bool
+		foundClusterTopics, foundUnavailablePartitions       bool
+		foundProduce, foundConsume                           bool
+		sawPartitionsMetric                                  bool
+	)
+
+	p := textparse.NewPromParser(b, labels.NewSymbolTable())
+
+	for {
+		typ, err := p.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return m, fmt.Errorf("iterating metric stream: %w", err)
+		}
+		if typ != textparse.EntrySeries {
+			continue
+		}
+
+		metricBytes, _, val := p.Series()
+		mName := seriesName(metricBytes) // ← metric id without labels
+
+		// Allocate a new slice only when we need labels.
+		var lbls labels.Labels
+		if mName == "redpanda_kafka_request_bytes_total" ||
+			mName == "redpanda_kafka_partitions" {
+			p.Labels(&lbls) // fills lbls; never nil afterwards
+		}
+
+		switch mName {
+		// ── infrastructure ────────────────────────────────────────────────
+		case "redpanda_storage_disk_free_bytes":
+			m.Infrastructure.Storage.FreeBytes = int64(val)
+			foundFreeBytes = true
+
+		case "redpanda_storage_disk_total_bytes":
+			m.Infrastructure.Storage.TotalBytes = int64(val)
+			foundTotalBytes = true
+
+		case "redpanda_storage_disk_free_space_alert":
+			m.Infrastructure.Storage.FreeSpaceAlert = val != 0
+			foundFreeSpaceAlert = true
+
+		// ── cluster ───────────────────────────────────────────────────────
+		case "redpanda_cluster_topics":
+			m.Cluster.Topics = int64(val)
+			foundClusterTopics = true
+
+		case "redpanda_cluster_unavailable_partitions":
+			m.Cluster.UnavailableTopics = int64(val)
+			foundUnavailablePartitions = true
+
+		// ── throughput  (needs a label) ───────────────────────────────────
+		case "redpanda_kafka_request_bytes_total":
+			if lbls == nil {
+				return m, fmt.Errorf("metric redpanda_kafka_request_bytes_total has no labels")
+			}
+			switch lbls.Get("redpanda_request") {
+			case "produce":
+				m.Throughput.BytesIn = int64(val)
+				foundProduce = true
+			case "consume":
+				m.Throughput.BytesOut = int64(val)
+				foundConsume = true
+			}
+
+		// ── per-topic (needs a label) ─────────────────────────────────────
+		case "redpanda_kafka_partitions":
+			if lbls == nil {
+				return m, fmt.Errorf("metric redpanda_kafka_partitions has no labels")
+			}
+			if topic := lbls.Get("redpanda_topic"); topic != "" {
+				if m.Topic.TopicPartitionMap == nil {
+					// a small, non-zero initial capacity
+					m.Topic.TopicPartitionMap = make(map[string]int64, 16)
+				}
+				m.Topic.TopicPartitionMap[topic] = int64(val)
+				sawPartitionsMetric = true
+			}
+		}
+	}
+
+	// ── validation – mirrors the old expfmt version ──────────────────────
+	switch {
+	case !foundFreeBytes:
+		return m, fmt.Errorf("metric redpanda_storage_disk_free_bytes not found")
+	case !foundTotalBytes:
+		return m, fmt.Errorf("metric redpanda_storage_disk_total_bytes not found")
+	case !foundFreeSpaceAlert:
+		return m, fmt.Errorf("metric redpanda_storage_disk_free_space_alert not found")
+	case !foundClusterTopics:
+		return m, fmt.Errorf("metric redpanda_cluster_topics not found")
+	case !foundUnavailablePartitions:
+		return m, fmt.Errorf("metric redpanda_cluster_unavailable_partitions not found")
+	case !foundProduce:
+		return m, fmt.Errorf(`metric redpanda_kafka_request_bytes_total with label redpanda_request="produce" not found`)
+	case !foundConsume:
+		return m, fmt.Errorf(`metric redpanda_kafka_request_bytes_total with label redpanda_request="consume" not found`)
+	case m.Cluster.Topics > 0 && !sawPartitionsMetric:
+		return m, fmt.Errorf("metric redpanda_kafka_partitions not found but redpanda_cluster_topics reports %d topics",
+			m.Cluster.Topics)
+	}
+
+	return m, nil
+}
+
+// helper – cheap split without allocations
+func seriesName(b []byte) string {
+	if i := bytes.IndexByte(b, '{'); i > 0 {
+		return string(b[:i])
+	}
+	return string(b)
 }
 
 func (s *RedpandaMonitorService) processClusterConfigDataBytes(clusterConfigDataBytes []byte, tick uint64) (*ClusterConfig, error) {
