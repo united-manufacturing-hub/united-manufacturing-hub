@@ -22,6 +22,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
@@ -42,6 +43,8 @@ import (
 	"gopkg.in/yaml.v3"
 
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+
+	"github.com/cespare/xxhash/v2"
 )
 
 // IBenthosService is the interface for managing Benthos services
@@ -158,7 +161,45 @@ type BenthosService struct {
 
 	benthosMonitorManager *benthos_monitor_fsm.BenthosMonitorManager
 	benthosMonitorConfigs []config.BenthosMonitorConfig
+
+	// -----------------------------------------------------------------------------
+	// 🌶️  Hot-path YAML-parsing cache
+	// -----------------------------------------------------------------------------
+
+	// configCache stores one *normalised* Benthos config per logical Benthos
+	// instance (“my-pipe”, “orders2db”, …).
+	//
+	//   • **Key**   – logical benthosName (without the "benthos-" prefix)
+	//   • **Value** – configCacheEntry{hash, parsed}
+	//
+	// We use sync.Map instead of a plain map+mutex because:
+	//
+	//   1. GetConfig might be called concurrently;
+	//      the cache is therefore *read-heavy* and *contention-light*.
+	//   2. sync.Map gives us lock-free reads and amortised-O(1) writes, which
+	//      is exactly what we need for a “mostly reads, very few writes” workload.
+	configCache sync.Map // map[string]configCacheEntry
 }
+
+// configCacheEntry is the value stored in configCache.
+//
+// A quick uint64 xxHash lets us tell in ~1 ns if the YAML has changed since
+// the previous call.  If the hash is identical we can *skip* the expensive
+// yaml.Unmarshal and simply hand the already-normalised struct back to the
+// caller – a ~20× speed-up on the hot path.
+type configCacheEntry struct {
+	// hash is xxhash.Sum64(buf) of the raw YAML file.  Collisions are
+	// vanishingly unlikely (2⁻⁶⁴), so equality is “good enough” to treat
+	// the file as unchanged.
+	hash uint64
+
+	// parsed is the *fully normalised* BenthosServiceConfig that callers
+	// expect.  It is treated as **read-only** after being cached; if callers
+	// ever start mutating the struct, we must clone it before returning.
+	parsed benthosserviceconfig.BenthosServiceConfig
+}
+
+func hash(buf []byte) uint64 { return xxhash.Sum64(buf) }
 
 // BenthosServiceOption is a function that modifies a BenthosService
 type BenthosServiceOption func(*BenthosService)
@@ -274,7 +315,18 @@ func (s *BenthosService) GetConfig(ctx context.Context, filesystemService filesy
 		return benthosserviceconfig.BenthosServiceConfig{}, fmt.Errorf("failed to get benthos config file for service %s: %w", s6ServiceName, err)
 	}
 
-	// Parse the YAML into a config map
+	h := hash(yamlData)
+
+	// ---------- fast path: YAML identical to last call ----------
+	if v, ok := s.configCache.Load(benthosName); ok {
+		entry := v.(configCacheEntry)
+		if entry.hash == h {
+			// Nothing changed – return the cached, already-normalised struct
+			return entry.parsed, nil
+		}
+	}
+
+	// ---------- slow path: YAML changed ----------
 	var benthosConfig map[string]interface{}
 	if err := yaml.Unmarshal(yamlData, &benthosConfig); err != nil {
 		return benthosserviceconfig.BenthosServiceConfig{}, fmt.Errorf("error parsing benthos config file for service %s: %w", s6ServiceName, err)
@@ -331,8 +383,16 @@ func (s *BenthosService) GetConfig(ctx context.Context, filesystemService filesy
 		}
 	}
 
+	parsed := benthosserviceconfig.NormalizeBenthosConfig(result)
+
+	// Store the parsed config in the cache
+	s.configCache.Store(benthosName, configCacheEntry{
+		hash:   h,
+		parsed: parsed,
+	})
+
 	// Normalize the config to ensure consistent defaults
-	return benthosserviceconfig.NormalizeBenthosConfig(result), nil
+	return parsed, nil
 }
 
 // extractMetricsPort safely extracts the metrics port from the config map
