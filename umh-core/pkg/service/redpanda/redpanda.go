@@ -146,13 +146,15 @@ type HealthCheck struct {
 
 // RedpandaService is the default implementation of the IRedpandaService interface
 type RedpandaService struct {
-	logger                 *zap.SugaredLogger
-	s6Manager              *s6fsm.S6Manager
-	s6Service              s6service.Service // S6 service for direct S6 operations
-	s6ServiceConfigs       []config.S6FSMConfig
-	httpClient             httpclient.HTTPClient
-	baseDir                string
-	lastStatus             RedpandaStatus
+	logger *zap.SugaredLogger
+
+	s6Manager        *s6fsm.S6Manager
+	s6Service        s6service.Service // S6 service for direct S6 operations
+	s6ServiceConfigs []config.S6FSMConfig
+	httpClient       httpclient.HTTPClient
+
+	baseDir string
+
 	redpandaMonitorManager *redpanda_monitor_fsm.RedpandaMonitorManager
 	redpandaMonitorConfigs []config.RedpandaMonitorConfig
 }
@@ -279,41 +281,45 @@ func (s *RedpandaService) GetConfig(ctx context.Context, filesystemService files
 		return redpandaserviceconfig.RedpandaServiceConfig{}, ctx.Err()
 	}
 
-	s6ServiceName := s.GetS6ServiceName(redpandaName)
+	// Skip health checks and metrics if the service doesn't exist yet
+	// This avoids unnecessary errors in Status() when the service is still being created
+	if _, exists := s.s6Manager.GetInstance(s.GetS6ServiceName(redpandaName)); !exists {
+		return redpandaserviceconfig.RedpandaServiceConfig{}, nil
+	}
 
-	state, err := s.redpandaMonitorManager.GetLastObservedState(s6ServiceName)
+	// Get the last observed state of the redpanda monitor
+	s6ServiceName := s.GetS6ServiceName(redpandaName)
+	lastObservedState, err := s.redpandaMonitorManager.GetLastObservedState(s6ServiceName)
 	if err != nil {
 		return redpandaserviceconfig.RedpandaServiceConfig{}, fmt.Errorf("failed to get redpanda status: %w", err)
 	}
-	redpandaState, ok := state.(redpanda_monitor_fsm.RedpandaMonitorObservedState)
-	if !ok {
-		return redpandaserviceconfig.RedpandaServiceConfig{}, fmt.Errorf("observed state is not a RedpandaMonitorObservedState: %v", state)
-	}
-	status := redpandaState.ServiceInfo
 
-	// If this is nil, we have not yet tried to scan for metrics and config, or there has been an error (but that one will be cached in the above Status() return)
-	if status == nil || status.RedpandaStatus.LastScan == nil {
+	if lastObservedState == nil {
+		return redpandaserviceconfig.RedpandaServiceConfig{}, ErrLastObservedStateNil
+	}
+
+	// Convert the last observed state of the redpanda monitor
+	lastRedpandaMonitorObservedState, ok := lastObservedState.(redpanda_monitor_fsm.RedpandaMonitorObservedState)
+	if !ok {
+		return redpandaserviceconfig.RedpandaServiceConfig{}, fmt.Errorf("observed state is not a RedpandaMonitorObservedState: %v", lastObservedState)
+	}
+
+	var redpandaStatus redpandaserviceconfig.RedpandaServiceConfig
+
+	if lastRedpandaMonitorObservedState.ServiceInfo == nil {
+		return redpandaserviceconfig.RedpandaServiceConfig{}, ErrLastObservedStateNil
+	}
+
+	if lastRedpandaMonitorObservedState.ServiceInfo.RedpandaStatus.LastScan != nil {
+		redpandaStatus.Topic.DefaultTopicRetentionMs = lastRedpandaMonitorObservedState.ServiceInfo.RedpandaStatus.LastScan.ClusterConfig.Topic.DefaultTopicRetentionMs
+		redpandaStatus.Topic.DefaultTopicRetentionBytes = lastRedpandaMonitorObservedState.ServiceInfo.RedpandaStatus.LastScan.ClusterConfig.Topic.DefaultTopicRetentionBytes
+		redpandaStatus.Resources.MaxCores = 1
+		redpandaStatus.Resources.MemoryPerCoreInBytes = 2048 * 1024 * 1024 // 2GB
+	} else {
 		return redpandaserviceconfig.RedpandaServiceConfig{}, fmt.Errorf("last scan is nil")
 	}
 
-	// Check that the last scan is not older then RedpandaMaxMetricsAndConfigAge
-	if loopStartTime.Sub(status.RedpandaStatus.LastScan.LastUpdatedAt) > constants.RedpandaMaxMetricsAndConfigAge {
-		s.logger.Warnf("last scan is %s old, returning empty status", loopStartTime.Sub(status.RedpandaStatus.LastScan.LastUpdatedAt))
-		return redpandaserviceconfig.RedpandaServiceConfig{}, fmt.Errorf("last scan is older than %s", constants.RedpandaMaxMetricsAndConfigAge)
-	}
-
-	lastScan := status.RedpandaStatus.LastScan
-
-	var result redpandaserviceconfig.RedpandaServiceConfig
-	result.Topic.DefaultTopicRetentionMs = lastScan.ClusterConfig.Topic.DefaultTopicRetentionMs
-	result.Topic.DefaultTopicRetentionBytes = lastScan.ClusterConfig.Topic.DefaultTopicRetentionBytes
-
-	// Safely extract MaxCores - this might not be available from the API
-	// so we'll use a default value
-	result.Resources.MaxCores = 1
-	result.Resources.MemoryPerCoreInBytes = 2048 * 1024 * 1024 // 2GB
-
-	return redpandaserviceconfig.NormalizeRedpandaConfig(result), nil
+	return redpandaserviceconfig.NormalizeRedpandaConfig(redpandaStatus), nil
 }
 
 // Status checks the status of a Redpanda service
@@ -328,7 +334,7 @@ func (s *RedpandaService) Status(ctx context.Context, filesystemService filesyst
 	// This is a crucial check that prevents "instance not found" errors
 	// during reconciliation when a service is being created or removed
 	if _, exists := s.s6Manager.GetInstance(s6ServiceName); !exists {
-		s.logger.Debugf("Service %s not found in S6 manager", redpandaName)
+		s.logger.Debugf("Service %s not found in S6 manager: %+v", redpandaName, s.s6Manager.GetInstances())
 		return ServiceInfo{}, ErrServiceNotExist
 	}
 
@@ -404,6 +410,22 @@ func (s *RedpandaService) Status(ctx context.Context, filesystemService filesyst
 			}, ErrRedpandaMonitorNotRunning
 		}
 
+		if strings.Contains(err.Error(), ErrLastObservedStateNil.Error()) {
+			return ServiceInfo{
+				S6ObservedState: s6ServiceObservedState,
+				S6FSMState:      s6FSMState,
+				RedpandaStatus: RedpandaStatus{
+					Logs: logs,
+				},
+			}, ErrLastObservedStateNil
+		}
+
+		if strings.Contains(err.Error(), "instance "+s6ServiceName+" not found") ||
+			strings.Contains(err.Error(), "not found") {
+			s.logger.Debugf("Service %s was removed during status check", s6ServiceName)
+			return ServiceInfo{}, ErrServiceNotExist
+		}
+
 		return ServiceInfo{}, fmt.Errorf("failed to get health check: %w", err)
 	}
 
@@ -435,7 +457,7 @@ func (s *RedpandaService) GetHealthCheckAndMetrics(ctx context.Context, tick uin
 	// Skip health checks and metrics if the service doesn't exist yet
 	// This avoids unnecessary errors in Status() when the service is still being created
 	if _, exists := s.s6Manager.GetInstance(s.GetS6ServiceName(redpandaName)); !exists {
-		s.lastStatus = RedpandaStatus{
+		return RedpandaStatus{
 			HealthCheck: HealthCheck{
 				IsLive:  false,
 				IsReady: false,
@@ -445,50 +467,53 @@ func (s *RedpandaService) GetHealthCheckAndMetrics(ctx context.Context, tick uin
 				MetricsState: nil,
 			},
 			Logs: []s6service.LogEntry{},
-		}
-		return s.lastStatus, nil
+		}, nil
 	}
 
 	// Get the last observed state of the redpanda monitor
 	s6ServiceName := s.GetS6ServiceName(redpandaName)
-	state, err := s.redpandaMonitorManager.GetLastObservedState(s6ServiceName)
+	lastObservedState, err := s.redpandaMonitorManager.GetLastObservedState(s6ServiceName)
 	if err != nil {
 		return RedpandaStatus{}, fmt.Errorf("failed to get redpanda status: %w", err)
 	}
-	redpandaState, ok := state.(redpanda_monitor_fsm.RedpandaMonitorObservedState)
+
+	if lastObservedState == nil {
+		return RedpandaStatus{}, ErrLastObservedStateNil
+	}
+
+	// Convert the last observed state of the redpanda monitor
+	lastRedpandaMonitorObservedState, ok := lastObservedState.(redpanda_monitor_fsm.RedpandaMonitorObservedState)
 	if !ok {
-		return RedpandaStatus{}, fmt.Errorf("observed state is not a RedpandaMonitorObservedState: %v", state)
-	}
-	status := redpandaState.ServiceInfo
-
-	// If this is nil, we have not yet tried to scan for metrics and config, or there has been an error (but that one will be cached in the above Status() return)
-	if status == nil || status.RedpandaStatus.LastScan == nil {
-		return RedpandaStatus{}, fmt.Errorf("last scan is nil")
+		return RedpandaStatus{}, fmt.Errorf("observed state is not a RedpandaMonitorObservedState: %v", lastObservedState)
 	}
 
-	// Check that the last scan is not older then RedpandaMaxMetricsAndConfigAge
-	if loopStartTime.Sub(status.RedpandaStatus.LastScan.LastUpdatedAt) > constants.RedpandaMaxMetricsAndConfigAge {
-		s.logger.Warnf("last scan is %s old, returning empty status", loopStartTime.Sub(status.RedpandaStatus.LastScan.LastUpdatedAt))
-		return RedpandaStatus{}, fmt.Errorf("last scan is older than %s", constants.RedpandaMaxMetricsAndConfigAge)
+	var redpandaStatus RedpandaStatus
+
+	if lastRedpandaMonitorObservedState.ServiceInfo == nil {
+		return RedpandaStatus{}, ErrLastObservedStateNil
 	}
+
+	// if everything is fine, set the status to the service info
 
 	// Create health check structure
 	healthCheck := HealthCheck{
 		// Liveness is determined by a successful response
-		IsLive: status.RedpandaStatus.IsRunning,
+		IsLive: lastRedpandaMonitorObservedState.ServiceInfo.RedpandaStatus.LastScan.HealthCheck.IsLive,
 		// IsReady is the same as IsLive, as there is no distinct logic for a redpanda monitor services readiness
-		IsReady: status.RedpandaStatus.IsRunning,
+		IsReady: lastRedpandaMonitorObservedState.ServiceInfo.RedpandaStatus.LastScan.HealthCheck.IsReady,
 		// Redpanda version is constant
 		Version: constants.RedpandaVersion,
 	}
 
-	s.lastStatus = RedpandaStatus{
-		HealthCheck:     healthCheck,
-		RedpandaMetrics: *status.RedpandaStatus.LastScan.RedpandaMetrics,
-		Logs:            logs,
+	if lastRedpandaMonitorObservedState.ServiceInfo.RedpandaStatus.LastScan != nil {
+		redpandaStatus.HealthCheck = healthCheck
+		redpandaStatus.RedpandaMetrics = *lastRedpandaMonitorObservedState.ServiceInfo.RedpandaStatus.LastScan.RedpandaMetrics
+		redpandaStatus.Logs = lastRedpandaMonitorObservedState.ServiceInfo.RedpandaStatus.Logs
+	} else {
+		return RedpandaStatus{}, fmt.Errorf("last scan is nil")
 	}
 
-	return s.lastStatus, nil
+	return redpandaStatus, nil
 }
 
 // AddRedpandaToS6Manager adds a Redpanda instance to the S6 manager

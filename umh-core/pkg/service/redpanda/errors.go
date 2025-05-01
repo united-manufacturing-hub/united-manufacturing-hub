@@ -31,4 +31,7 @@ var (
 
 	// ErrRedpandaMonitorInstanceNotFound indicates the redpanda monitor instance was not found
 	ErrRedpandaMonitorInstanceNotFound = errors.New("instance redpanda-monitor not found")
+
+	// ErrLastObservedStateNil indicates the last observed state is nil
+	ErrLastObservedStateNil = errors.New("last observed state is nil")
 )

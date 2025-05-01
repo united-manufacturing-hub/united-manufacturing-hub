@@ -166,6 +166,12 @@ func (r *RedpandaInstance) GetServiceStatus(ctx context.Context, filesystemServi
 			if !IsRunningState(r.baseFSMInstance.GetCurrentFSMState()) {
 				return info, nil
 			}
+		} else if errors.Is(err, redpanda_service.ErrLastObservedStateNil) {
+			// If the last observed state is nil, we can ignore this error
+			infoWithFailedHealthChecks := info
+			infoWithFailedHealthChecks.RedpandaStatus.HealthCheck.IsLive = false
+			infoWithFailedHealthChecks.RedpandaStatus.HealthCheck.IsReady = false
+			return infoWithFailedHealthChecks, nil
 		}
 
 		// For other errors, log them and return
@@ -217,7 +223,10 @@ func (r *RedpandaInstance) UpdateObservedStateOfInstance(ctx context.Context, se
 			observedStateMu.Lock()
 			r.ObservedState.ServiceInfo = info
 			observedStateMu.Unlock()
-		} else if strings.Contains(err.Error(), redpanda_service.ErrServiceNotExist.Error()) || strings.Contains(err.Error(), redpanda_service.ErrServiceNoLogFile.Error()) || strings.Contains(err.Error(), redpanda_service.ErrRedpandaMonitorInstanceNotFound.Error()) {
+		} else if strings.Contains(err.Error(), redpanda_service.ErrServiceNotExist.Error()) ||
+			strings.Contains(err.Error(), redpanda_service.ErrServiceNoLogFile.Error()) ||
+			strings.Contains(err.Error(), redpanda_service.ErrRedpandaMonitorInstanceNotFound.Error()) ||
+			strings.Contains(err.Error(), redpanda_service.ErrLastObservedStateNil.Error()) {
 			return nil
 		}
 
@@ -237,15 +246,18 @@ func (r *RedpandaInstance) UpdateObservedStateOfInstance(ctx context.Context, se
 			observedStateMu.Unlock()
 			return nil
 		} else {
-			if strings.Contains(err.Error(), redpanda_service.ErrServiceNotExist.Error()) || strings.Contains(err.Error(), redpanda_service.ErrServiceNoLogFile.Error()) || strings.Contains(err.Error(), redpanda_service.ErrRedpandaMonitorInstanceNotFound.Error()) {
+			if strings.Contains(err.Error(), redpanda_service.ErrServiceNotExist.Error()) ||
+				strings.Contains(err.Error(), redpanda_service.ErrServiceNoLogFile.Error()) ||
+				strings.Contains(err.Error(), redpanda_service.ErrRedpandaMonitorInstanceNotFound.Error()) ||
+				strings.Contains(err.Error(), redpanda_service.ErrLastObservedStateNil.Error()) {
 				// Log the error but don't fail - this might happen during creation when the config file doesn't exist yet
 				// Note: as we use the logs of the underlying redpanda_monitor service, we need to ignore ErrServiceNoLogFile here.
-				r.baseFSMInstance.GetLogger().Debugf("Service not found, will be created during reconciliation: %v", err)
+				r.baseFSMInstance.GetLogger().Debugf("Monitor service not found, will be created during reconciliation: %v", err)
 				return nil
 			}
 			if strings.Contains(err.Error(), redpanda_monitor.ErrServiceConnectionRefused.Error()) {
 				// This is expected during the startup phase of the redpanda service, when the service is not yet ready to receive connections
-				r.baseFSMInstance.GetLogger().Debugf("Service not yet ready: %v", err)
+				r.baseFSMInstance.GetLogger().Debugf("Monitor service not yet ready: %v", err)
 				return nil
 			}
 
@@ -279,6 +291,12 @@ func (r *RedpandaInstance) UpdateObservedStateOfInstance(ctx context.Context, se
 		// Although some goroutines might still be running in the background,
 		// they use a context (gctx) that should cause them to terminate promptly.
 		return ctx.Err()
+	}
+
+	// If the config could not be fetched, we can't update the S6 configuration
+	if r.ObservedState.ObservedRedpandaServiceConfig.Topic.DefaultTopicRetentionBytes == 0 {
+		r.baseFSMInstance.GetLogger().Debugf("Observed Redpanda config is not available, skipping update")
+		return nil
 	}
 
 	// Detect a config change - but let the S6 manager handle the actual reconciliation

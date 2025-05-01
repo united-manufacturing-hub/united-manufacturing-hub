@@ -46,10 +46,6 @@ func NewRedpandaMonitorManager(name string) *RedpandaMonitorManager {
 		"/dev/null", // no actual S6 base dir needed for a pure monitor
 		// Extract config.FullConfig slice from FullConfig
 		func(fc config.FullConfig) ([]config.RedpandaMonitorConfig, error) {
-			// There can only be one redpanda monitor config
-			if len(fc.Internal.RedpandaMonitor) == 0 {
-				return nil, nil
-			}
 			return fc.Internal.RedpandaMonitor, nil
 		},
 		// Get name from config
