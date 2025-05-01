@@ -1450,7 +1450,12 @@ func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsServ
 	// rotated or truncated ⇒ reset cache
 	if st.inode != ino || st.offset > size {
 		st.inode, st.offset = ino, 0
-		st.logs = st.logs[:0] // reuse slice capacity
+		// Clear the ring buffer   (slice may be nil or non-nil, both fine)
+		if st.logs != nil {
+			st.logs = st.logs[:0] // keep capacity but zero length
+		}
+		st.head = 0
+		st.full = false
 	}
 
 	// ── 3. read only the new bytes ──────────────────────────────────
@@ -1495,7 +1500,7 @@ func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsServ
 	if st.full {
 		length = constants.S6MaxLines
 	} else {
-		length = st.head // buffer not full yet
+		length = len(st.logs) // always the number of valid entries
 	}
 
 	out := make([]LogEntry, length)
