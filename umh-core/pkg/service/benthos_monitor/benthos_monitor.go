@@ -135,7 +135,7 @@ type connStatus struct {
 type BenthosMetrics struct {
 	// Metrics contains the metrics of the Benthos service
 	Metrics Metrics
-	// LastUpdatedAt contains the last time the metrics were updated
+	// MetricsState contains the state of the metrics
 	MetricsState *BenthosMetricsState
 }
 

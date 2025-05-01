@@ -199,7 +199,11 @@ type configCacheEntry struct {
 	parsed benthosserviceconfig.BenthosServiceConfig
 }
 
+// hash is a helper function for configCacheEntry.hash
 func hash(buf []byte) uint64 { return xxhash.Sum64(buf) }
+
+// benthosLogRe is a helper function for BenthosService.IsLogsFine
+var benthosLogRe = regexp.MustCompile(`^level=(error|warn)\s+msg="(.+)"`)
 
 // BenthosServiceOption is a function that modifies a BenthosService
 type BenthosServiceOption func(*BenthosService)
@@ -899,61 +903,51 @@ func (s *BenthosService) ReconcileManager(ctx context.Context, services servicer
 	return nil, s6Reconciled || monitorReconciled
 }
 
-// IsLogsFine analyzes Benthos logs to determine if there are any critical issues
-func (s *BenthosService) IsLogsFine(logs []s6service.LogEntry, currentTime time.Time, logWindow time.Duration) bool {
+// IsLogsFine reports whether recent Benthos logs contain critical errors or warnings.
+func (s *BenthosService) IsLogsFine(
+	logs []s6service.LogEntry,
+	now time.Time,
+	window time.Duration,
+) bool {
+
 	if len(logs) == 0 {
 		return true
 	}
 
-	// First, filter out by timestamp and then geenate []string from it
-	filteredLogs := []string{}
-	for _, log := range logs {
-		if log.Timestamp.After(currentTime.Add(-1 * logWindow)) {
-			filteredLogs = append(filteredLogs, log.Content)
-		}
+	cutoff := now.Add(-window)         // pre-compute once
+	critWarnSubstrings := [...]string{ // small, fixed slice
+		"failed to", "connection lost", "unable to",
 	}
 
-	// Compile regex patterns for different types of logs
-	benthosLogRegex := regexp.MustCompile(`^level=(error|warn)\s+msg="(.+)"`)
-	configErrorRegex := regexp.MustCompile(`^configuration file read error:`)
-	loggerErrorRegex := regexp.MustCompile(`^failed to create logger:`)
-	linterErrorRegex := regexp.MustCompile(`^Config lint error:`)
+	for _, l := range logs {
+		if l.Timestamp.Before(cutoff) {
+			continue // outside the window
+		}
 
-	for _, log := range filteredLogs {
-		// Check for critical system errors first
-		if configErrorRegex.MatchString(log) ||
-			loggerErrorRegex.MatchString(log) ||
-			linterErrorRegex.MatchString(log) {
+		// Very cheap checks first — just bytes/prefix matches.
+		switch {
+		case strings.HasPrefix(l.Content, "configuration file read error:"),
+			strings.HasPrefix(l.Content, "failed to create logger:"),
+			strings.HasPrefix(l.Content, "Config lint error:"):
 			return false
 		}
 
-		// Parse structured Benthos logs
-		if matches := benthosLogRegex.FindStringSubmatch(log); matches != nil {
-			level := matches[1]
-			message := matches[2]
+		// Only one regexp call per line.
+		if m := benthosLogRe.FindStringSubmatch(l.Content); m != nil {
+			level, msg := m[1], m[2]
 
-			// Error logs are always critical
 			if level == "error" {
 				return false
 			}
-
-			// For warnings, only consider them critical if they indicate serious issues
 			if level == "warn" {
-				criticalWarnings := []string{
-					"failed to",
-					"connection lost",
-					"unable to",
-				}
-
-				for _, criticalPattern := range criticalWarnings {
-					if strings.Contains(message, criticalPattern) {
+				for _, sub := range critWarnSubstrings {
+					if strings.Contains(msg, sub) {
 						return false
 					}
 				}
 			}
 		}
 	}
-
 	return true
 }
 
