@@ -1450,10 +1450,13 @@ func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsServ
 	// rotated or truncated ⇒ reset cache
 	if st.inode != ino || st.offset > size {
 		st.inode, st.offset = ino, 0
-		// Clear the ring buffer   (slice may be nil or non-nil, both fine)
-		if st.logs != nil {
-			st.logs = st.logs[:0] // keep capacity but zero length
+
+		if st.logs == nil {
+			st.logs = make([]LogEntry, 0, constants.S6MaxLines)
+		} else {
+			st.logs = st.logs[:0] // reuse backing array
 		}
+
 		st.head = 0
 		st.full = false
 	}
@@ -1511,11 +1514,17 @@ func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsServ
 	//
 	//	[head … max-1]  followed by  [0 … head-1]
 	if st.full {
+		// len(st.logs) == constants.S6MaxLines by construction
+		// (but add a defensive check to satisfy the linter)
+		if len(st.logs) == 0 {
+			return out, nil // should never happen, but safe
+		}
+
 		// copy the wrapped tail first
 		n := copy(out, st.logs[st.head:])
 		copy(out[n:], st.logs[:st.head])
 	} else {
-		copy(out, st.logs[:st.head]) // simple copy before first wrap
+		copy(out, st.logs) // simple copy before first wrap
 	}
 
 	return out, nil
