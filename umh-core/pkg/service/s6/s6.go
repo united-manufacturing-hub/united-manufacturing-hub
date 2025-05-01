@@ -124,11 +124,39 @@ type Service interface {
 	EnsureSupervision(ctx context.Context, servicePath string, fsService filesystem.Service) (bool, error)
 }
 
+// logState is the per-log-file cursor used by GetLogs.
+//
+// Fields:
+//
+//	mu     – guards every field in the struct (single-writer, multi-reader)
+//	inode  – inode of the file when we last touched it; changes ⇒ rotation
+//	offset – next byte to read on disk (monotonically increases until
+//	         rotation or truncation)
+//
+//	logs   – backing array that holds *at most* S6MaxLines entries.
+//	         Allocated once; after that, entries are overwritten in place.
+//	head   – index of the slot where the **next** entry will be written.
+//	         When head wraps from max-1 to 0, `full` is set to true.
+//	full   – true once the buffer has wrapped at least once; used to decide
+//	         how to linearise the ring when we copy it out.
 type logState struct {
-	mu     sync.Mutex // guards every field below
-	inode  uint64     // to detect rotation
-	offset int64      // next byte to read
-	logs   []LogEntry // full slice accumulated so far
+	// mu guards every field in the struct (single-writer, multi-reader)
+	mu sync.Mutex
+	// inode is the inode of the file when we last touched it; changes ⇒ rotation
+	inode uint64
+	// offset is the next byte to read on disk (monotonically increases until
+	// rotation or truncation)
+	offset int64
+
+	// logs is the backing array that holds *at most* S6MaxLines entries.
+	// Allocated once; after that, entries are overwritten in place.
+	logs []LogEntry
+	// head is the index of the slot where the **next** entry will be written.
+	// When head wraps from max-1 to 0, `full` is set to true.
+	head int
+	// full is true once the buffer has wrapped at least once; used to decide
+	// how to linearise the ring when we copy it out.
+	full bool
 }
 
 // DefaultService is the default implementation of the S6 Service interface
@@ -1326,7 +1354,56 @@ func (s *DefaultService) ForceRemove(
 	return nil
 }
 
-// GetStructuredLogs gets the logs of the service as structured LogEntry objects
+// GetLogs reads “just the new bytes” of the log file located at
+//
+//	/data/logs/<service-name>/current
+//
+// and returns — *always in a brand-new backing array* — the last
+// `constants.S6MaxLines` log lines parsed as `LogEntry` objects.
+//
+// The function keeps one in-memory cursor (`logState`) *per log file*:
+//
+//	logCursors : map[absLogPath]*logState
+//
+// That cursor stores where we stopped reading the file last time
+// (`offset`) and a fixed-size **ring buffer** with the most recent
+// lines.  Because of the ring buffer, we never re-allocate or shift
+// memory when trimming to the last *N* lines.
+//
+// High-level flow
+// ───────────────
+//
+//  1. **Fast checks & bookkeeping**
+//     • verify the service and the log file exist
+//     • fetch/create the cursor in `s.logCursors`
+//
+//  2. **Detect file rotation/truncation**
+//     If the inode changed or the file shrank, we reset the cursor
+//     and start reading from the beginning.
+//
+//  3. **Read only the delta**
+//     `ReadFileRange(ctx, path, st.offset)` returns the bytes that
+//     appeared since the previous call.  The cursor’s `offset` is
+//     advanced whether or not anything changed.
+//
+//  4. **Ring-append the new entries**
+//     Parsed log lines are appended to the ring.  Once the buffer
+//     is full (`len == cap`), we start overwriting from `head`,
+//     giving us an O(1) “keep the last N lines” strategy.
+//
+//  5. **Copy-out**
+//     We linearise the ring into chronological order and copy it
+//     into a fresh slice so callers can never mutate our cache.
+//
+// Performance guarantees
+// ──────────────────────
+//   - **At most one allocation per process** for the ring buffer.
+//   - Zero‐copy maintenance while the program runs.
+//   - Exactly one `memmove` per call (the final copy-out).
+//   - Thread-safety via the `logState.mu` mutex.
+//
+// Errors are returned early and unwrapped where they occur so callers
+// see the root cause (e.g. “file disappeared”, “permission denied”).
 func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsService filesystem.Service) ([]LogEntry, error) {
 	start := time.Now()
 	defer func() {
@@ -1384,27 +1461,58 @@ func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsServ
 	st.offset = newSize // advance cursor even if chunk == nil
 
 	if len(chunk) != 0 {
-		// parse *delta* and append to cache
 		entries, err := ParseLogsFromBytes(chunk)
 		if err != nil {
 			return nil, err
 		}
-		st.logs = append(st.logs, entries...)
 
-		// 1) append delta that just got parsed
-		st.logs = append(st.logs, entries...)
+		// --- Ring-buffer append ------------------------------------------
+		const max = constants.S6MaxLines
 
-		// 2) trim to the last maxLines elements
-		if overflow := len(st.logs) - constants.S6MaxLines; overflow > 0 {
-			// keep newest maxLines entries, reuse backing array
-			copy(st.logs, st.logs[overflow:])        // shift
-			st.logs = st.logs[:constants.S6MaxLines] // reslice -> length = maxLines
+		// allocate backing storage once, but with length 0 so the GC
+		// doesn't scan max empty structs before we actually need them
+		if st.logs == nil {
+			st.logs = make([]LogEntry, 0, max) // len == 0, cap == max
+		}
+
+		for _, e := range entries {
+			if len(st.logs) < max { // not full yet → grow
+				st.logs = append(st.logs, e)
+				st.head = len(st.logs) % max // head always points at the
+				// *next* write slot
+				if len(st.logs) == max {
+					st.full = true // will overwrite next round
+				}
+			} else { // full → true ring overwrite
+				st.logs[st.head] = e
+				st.head = (st.head + 1) % max // advance circular pointer
+			}
 		}
 	}
 
 	// ── 4. return *copy* so caller can’t mutate our cache ───────────
-	out := make([]LogEntry, len(st.logs))
-	copy(out, st.logs)
+	var length int
+	if st.full {
+		length = constants.S6MaxLines
+	} else {
+		length = st.head // buffer not full yet
+	}
+
+	out := make([]LogEntry, length)
+
+	// `head` always points **to** the slot for the *next* write, so the
+	// oldest entry is there, and the newest entry is just before it.
+	// We need to lay the data out linearly in time order:
+	//
+	//	[head … max-1]  followed by  [0 … head-1]
+	if st.full {
+		// copy the wrapped tail first
+		n := copy(out, st.logs[st.head:])
+		copy(out[n:], st.logs[:st.head])
+	} else {
+		copy(out, st.logs[:st.head]) // simple copy before first wrap
+	}
+
 	return out, nil
 }
 
