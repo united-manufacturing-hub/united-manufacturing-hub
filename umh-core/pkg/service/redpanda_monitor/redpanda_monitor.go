@@ -213,7 +213,7 @@ func (rms *RedpandaMonitorStatus) CopyLogs(src []s6service.LogEntry) error {
 }
 
 type IRedpandaMonitorService interface {
-	GenerateS6ConfigForRedpandaMonitor() (s6serviceconfig.S6ServiceConfig, error)
+	GenerateS6ConfigForRedpandaMonitor(s6ServiceName string) (s6serviceconfig.S6ServiceConfig, error)
 	Status(ctx context.Context, filesystemService filesystem.Service, tick uint64) (ServiceInfo, error)
 	AddRedpandaMonitorToS6Manager(ctx context.Context) error
 	RemoveRedpandaMonitorFromS6Manager(ctx context.Context) error
@@ -233,6 +233,7 @@ type RedpandaMonitorService struct {
 	s6Manager       *s6fsm.S6Manager
 	s6Service       s6service.Service
 	s6ServiceConfig *config.S6FSMConfig // There can only be one instance of this service (as there is also only one redpanda instance)
+	redpandaName    string              // normally a service can handle multiple instances, the service monitor here is different and can only handle one instance
 }
 
 // RedpandaMonitorServiceOption is a function that modifies a RedpandaMonitorService
@@ -252,13 +253,14 @@ func WithS6Manager(s6Manager *s6fsm.S6Manager) RedpandaMonitorServiceOption {
 	}
 }
 
-func NewRedpandaMonitorService(opts ...RedpandaMonitorServiceOption) *RedpandaMonitorService {
-	managerName := fmt.Sprintf("%s%s", logger.ComponentRedpandaService, constants.RedpandaMonitorServiceName)
+func NewRedpandaMonitorService(redpandaName string, opts ...RedpandaMonitorServiceOption) *RedpandaMonitorService {
+	managerName := fmt.Sprintf("%s%s", logger.ComponentRedpandaService, redpandaName)
 	service := &RedpandaMonitorService{
 		logger:       logger.For(managerName),
 		metricsState: NewRedpandaMetricsState(),
 		s6Manager:    s6fsm.NewS6Manager(logger.ComponentRedpandaMonitorService),
 		s6Service:    s6service.NewDefaultService(),
+		redpandaName: redpandaName,
 	}
 	for _, opt := range opts {
 		opt(service)
@@ -268,7 +270,7 @@ func NewRedpandaMonitorService(opts ...RedpandaMonitorServiceOption) *RedpandaMo
 
 // BLOCK_START_MARKER marks the begin of a new data block inside the logs.
 // Between it and MID_MARKER is the metrics data, between MID_MARKER and END_MARKER is the cluster config data.
-const BLOCK_START_MARKER = "BEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGIN"
+const BLOCK_START_MARKER = "BEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGINBEGIN"
 
 // METRICS_END_MARKER marks the end of the metrics data and the beginning of the cluster config data.
 const METRICS_END_MARKER = "METRICSENDMETRICSENDMETRICSENDMETRICSENDMETRICSENDMETRICSENDMETRICSENDMETRICSENDMETRICSENDMETRICSEND"
@@ -305,10 +307,10 @@ done
 }
 
 func (s *RedpandaMonitorService) GetS6ServiceName() string {
-	return constants.RedpandaMonitorServiceName
+	return fmt.Sprintf("redpanda-monitor-%s", s.redpandaName)
 }
 
-func (s *RedpandaMonitorService) GenerateS6ConfigForRedpandaMonitor() (s6serviceconfig.S6ServiceConfig, error) {
+func (s *RedpandaMonitorService) GenerateS6ConfigForRedpandaMonitor(s6ServiceName string) (s6serviceconfig.S6ServiceConfig, error) {
 	scriptContent, err := s.generateRedpandaScript()
 	if err != nil {
 		return s6serviceconfig.S6ServiceConfig{}, err
@@ -317,7 +319,7 @@ func (s *RedpandaMonitorService) GenerateS6ConfigForRedpandaMonitor() (s6service
 	s6Config := s6serviceconfig.S6ServiceConfig{
 		Command: []string{
 			"/bin/sh",
-			fmt.Sprintf("%s/%s/config/run_redpanda_monitor.sh", constants.S6BaseDir, s.GetS6ServiceName()),
+			fmt.Sprintf("%s/%s/config/run_redpanda_monitor.sh", constants.S6BaseDir, s6ServiceName),
 		},
 		Env: map[string]string{},
 		ConfigFiles: map[string]string{
@@ -871,7 +873,7 @@ func (s *RedpandaMonitorService) AddRedpandaMonitorToS6Manager(ctx context.Conte
 	}
 
 	// Generate the S6 config for this instance
-	s6Config, err := s.GenerateS6ConfigForRedpandaMonitor()
+	s6Config, err := s.GenerateS6ConfigForRedpandaMonitor(s6ServiceName)
 	if err != nil {
 		return fmt.Errorf("failed to generate S6 config for RedpandaMonitor service %s: %w", s6ServiceName, err)
 	}
@@ -880,7 +882,7 @@ func (s *RedpandaMonitorService) AddRedpandaMonitorToS6Manager(ctx context.Conte
 	s6FSMConfig := config.S6FSMConfig{
 		FSMInstanceConfig: config.FSMInstanceConfig{
 			Name:            s6ServiceName,
-			DesiredFSMState: s6fsm.OperationalStateRunning,
+			DesiredFSMState: s6fsm.OperationalStateStopped, // Ensure we start with a stopped service, so we can start it later
 		},
 		S6ServiceConfig: s6Config,
 	}

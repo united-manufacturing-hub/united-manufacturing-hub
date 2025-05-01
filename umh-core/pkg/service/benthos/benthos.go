@@ -552,7 +552,7 @@ func (s *BenthosService) GetHealthCheckAndMetrics(ctx context.Context, filesyste
 	}
 
 	if lastObservedState == nil {
-		return BenthosStatus{}, fmt.Errorf("last observed state is nil")
+		return BenthosStatus{}, ErrLastObservedStateNil
 	}
 
 	// Convert the last observed state to a BenthosMonitorObservedState

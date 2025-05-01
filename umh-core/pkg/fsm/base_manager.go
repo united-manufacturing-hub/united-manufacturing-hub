@@ -579,6 +579,7 @@ func (m *BaseFSMManager[C]) GetLastObservedState(serviceName string) (ObservedSt
 	if instance, exists := m.instances[serviceName]; exists {
 		return instance.GetLastObservedState(), nil
 	}
+	m.logger.Debugf("instance %s not found: %v", serviceName, m.instances)
 	return nil, fmt.Errorf("instance %s not found", serviceName)
 }
 

@@ -53,13 +53,14 @@ var _ = Describe("Redpanda Service", func() {
 		service         *RedpandaService
 		tick            uint64
 		mockSvcRegistry *serviceregistry.Registry
+		redpandaName    string
 	)
 
 	BeforeEach(func() {
 		service = NewDefaultRedpandaService("redpanda")
 		tick = 0
 		mockSvcRegistry = serviceregistry.NewMockRegistry()
-
+		redpandaName = "redpanda"
 		// Cleanup the data directory
 		ctx, cancel := newTimeoutContext()
 		defer cancel()
@@ -74,7 +75,7 @@ var _ = Describe("Redpanda Service", func() {
 		config.Topic.DefaultTopicRetentionBytes = 1000000000
 		ctx, cancel = newTimeoutContext()
 		defer cancel()
-		err = service.AddRedpandaToS6Manager(ctx, config, mockSvcRegistry.GetFileSystem())
+		err = service.AddRedpandaToS6Manager(ctx, config, mockSvcRegistry.GetFileSystem(), redpandaName)
 		Expect(err).NotTo(HaveOccurred())
 
 		// Reconcile the S6 manager
@@ -93,7 +94,7 @@ var _ = Describe("Redpanda Service", func() {
 				cfg.Topic.DefaultTopicRetentionMs = 1000000
 				cfg.Topic.DefaultTopicRetentionBytes = 1000000000
 
-				s6Config, err := service.GenerateS6ConfigForRedpanda(cfg)
+				s6Config, err := service.GenerateS6ConfigForRedpanda(cfg, service.GetS6ServiceName(redpandaName))
 				Expect(err).NotTo(HaveOccurred())
 				Expect(s6Config.ConfigFiles).To(HaveKey("redpanda.yaml"))
 				yaml := s6Config.ConfigFiles["redpanda.yaml"]
@@ -105,7 +106,7 @@ var _ = Describe("Redpanda Service", func() {
 
 		Context("with nil configuration", func() {
 			It("should return error", func() {
-				s6Config, err := service.GenerateS6ConfigForRedpanda(nil)
+				s6Config, err := service.GenerateS6ConfigForRedpanda(nil, service.GetS6ServiceName(redpandaName))
 				Expect(err).To(HaveOccurred())
 				Expect(s6Config).To(Equal(s6serviceconfig.S6ServiceConfig{}))
 			})
@@ -141,7 +142,7 @@ var _ = Describe("Redpanda Service", func() {
 
 			// Add the service with initial config
 			By("Adding the Redpanda service with initial config")
-			err := mockRedpandaService.AddRedpandaToS6Manager(ctx, initialConfig, mockSvcRegistry.GetFileSystem())
+			err := mockRedpandaService.AddRedpandaToS6Manager(ctx, initialConfig, mockSvcRegistry.GetFileSystem(), redpandaName)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(mockRedpandaService.AddRedpandaToS6ManagerCalled).To(BeTrue())
 
@@ -154,7 +155,7 @@ var _ = Describe("Redpanda Service", func() {
 
 			// Update the service configuration
 			By("Updating the Redpanda service configuration")
-			err = mockRedpandaService.UpdateRedpandaInS6Manager(ctx, updatedConfig)
+			err = mockRedpandaService.UpdateRedpandaInS6Manager(ctx, updatedConfig, redpandaName)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Reconcile to apply changes
@@ -175,17 +176,17 @@ var _ = Describe("Redpanda Service", func() {
 			By("Trying to update a non-existent service")
 			err := service.UpdateRedpandaInS6Manager(ctx, &redpandaserviceconfig.RedpandaServiceConfig{
 				BaseDir: getTmpDir(),
-			})
+			}, redpandaName)
 			Expect(err).To(Equal(ErrServiceNotExist))
 
 			// Try to stop a non-existent service
 			By("Trying to stop a non-existent service")
-			err = service.StopRedpanda(ctx)
+			err = service.StopRedpanda(ctx, redpandaName)
 			Expect(err).To(Equal(ErrServiceNotExist))
 
 			// Try to remove a non-existent service
 			By("Trying to remove a non-existent service")
-			err = service.RemoveRedpandaFromS6Manager(ctx)
+			err = service.RemoveRedpandaFromS6Manager(ctx, redpandaName)
 			Expect(err).To(Equal(ErrServiceNotExist))
 		})
 
@@ -197,14 +198,14 @@ var _ = Describe("Redpanda Service", func() {
 			By("Adding a service")
 			err := service.AddRedpandaToS6Manager(ctx, &redpandaserviceconfig.RedpandaServiceConfig{
 				BaseDir: getTmpDir(),
-			}, mockSvcRegistry.GetFileSystem())
+			}, mockSvcRegistry.GetFileSystem(), redpandaName)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Try to add the same service again
 			By("Trying to add the same service again")
 			err = service.AddRedpandaToS6Manager(ctx, &redpandaserviceconfig.RedpandaServiceConfig{
 				BaseDir: getTmpDir(),
-			}, mockSvcRegistry.GetFileSystem())
+			}, mockSvcRegistry.GetFileSystem(), redpandaName)
 			Expect(err).To(Equal(ErrServiceAlreadyExists))
 		})
 	})
@@ -525,7 +526,7 @@ var _ = Describe("Redpanda Service", func() {
 			defer cancel()
 
 			// Call ForceRemoveRedpanda
-			err := service.ForceRemoveRedpanda(ctx, mockFS)
+			err := service.ForceRemoveRedpanda(ctx, mockFS, redpandaName)
 
 			// Verify no error
 			Expect(err).NotTo(HaveOccurred())
@@ -534,7 +535,8 @@ var _ = Describe("Redpanda Service", func() {
 			Expect(mockS6Service.ForceRemoveCalled).To(BeTrue())
 
 			// Verify the path is correct
-			expectedS6ServicePath := filepath.Join(constants.S6BaseDir, constants.RedpandaServiceName)
+			expectedS6ServiceName := service.GetS6ServiceName(redpandaName)
+			expectedS6ServicePath := filepath.Join(constants.S6BaseDir, expectedS6ServiceName)
 			Expect(mockS6Service.ForceRemovePath).To(Equal(expectedS6ServicePath))
 		})
 
@@ -547,7 +549,7 @@ var _ = Describe("Redpanda Service", func() {
 			mockS6Service.ForceRemoveError = mockError
 
 			// Call ForceRemoveRedpanda
-			err := service.ForceRemoveRedpanda(ctx, mockFS)
+			err := service.ForceRemoveRedpanda(ctx, mockFS, redpandaName)
 
 			// Verify error is propagated
 			Expect(err).To(MatchError(mockError))
