@@ -1455,7 +1455,7 @@ func BenchmarkCompleteProcessing(b *testing.B) {
 // BenchmarkParseRedpandaLogs benchmarks the ParseRedpandaLogs function
 func BenchmarkParseRedpandaLogsWithPercentiles(b *testing.B) {
 	// Create service and test data
-	service := NewRedpandaMonitorService()
+	service := NewRedpandaMonitorService("test-redpanda")
 	logs := prepareSampleLogEntries()
 	ctx := context.Background()
 

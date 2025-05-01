@@ -19,7 +19,6 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	public_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
@@ -39,8 +38,8 @@ type RedpandaMonitorManagerSnapshot struct {
 func (b *RedpandaMonitorManagerSnapshot) IsObservedStateSnapshot() {}
 
 // NewRedpandaMonitorManager constructs a manager.
-func NewRedpandaMonitorManager() *RedpandaMonitorManager {
-	managerName := fmt.Sprintf("%s_%s", logger.ComponentRedpandaMonitorManager, constants.RedpandaMonitorServiceName)
+func NewRedpandaMonitorManager(name string) *RedpandaMonitorManager {
+	managerName := fmt.Sprintf("%s_%s", logger.ComponentRedpandaMonitorManager, name)
 
 	baseMgr := public_fsm.NewBaseFSMManager[config.RedpandaMonitorConfig](
 		managerName,
@@ -48,10 +47,10 @@ func NewRedpandaMonitorManager() *RedpandaMonitorManager {
 		// Extract config.FullConfig slice from FullConfig
 		func(fc config.FullConfig) ([]config.RedpandaMonitorConfig, error) {
 			// There can only be one redpanda monitor config
-			if fc.Internal.RedpandaMonitor == nil {
+			if len(fc.Internal.RedpandaMonitor) == 0 {
 				return nil, nil
 			}
-			return []config.RedpandaMonitorConfig{*fc.Internal.RedpandaMonitor}, nil
+			return fc.Internal.RedpandaMonitor, nil
 		},
 		// Get name from config
 		func(fc config.RedpandaMonitorConfig) (string, error) {
@@ -94,7 +93,7 @@ func NewRedpandaMonitorManager() *RedpandaMonitorManager {
 			return bi.GetExpectedMaxP95ExecutionTimePerInstance(), nil
 		},
 	)
-	metrics.InitErrorCounter(logger.ComponentRedpandaMonitorManager, constants.RedpandaMonitorServiceName)
+	metrics.InitErrorCounter(logger.ComponentRedpandaMonitorManager, name)
 
 	return &RedpandaMonitorManager{
 		BaseFSMManager: baseMgr,

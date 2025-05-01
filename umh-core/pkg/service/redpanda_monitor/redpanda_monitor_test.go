@@ -78,7 +78,7 @@ var _ = Describe("Redpanda Monitor Service", func() {
 	)
 
 	BeforeEach(func() {
-		service = redpanda_monitor.NewRedpandaMonitorService()
+		service = redpanda_monitor.NewRedpandaMonitorService("test-redpanda")
 		tick = 0
 
 		mockSvcRegistry = serviceregistry.NewMockRegistry()
@@ -93,7 +93,7 @@ var _ = Describe("Redpanda Monitor Service", func() {
 
 	Describe("GenerateS6ConfigForRedpandaMonitor", func() {
 		It("should generate valid S6 configuration", func() {
-			s6Config, err := service.GenerateS6ConfigForRedpandaMonitor()
+			s6Config, err := service.GenerateS6ConfigForRedpandaMonitor(service.GetS6ServiceName())
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify the config contains the expected command and script
@@ -128,7 +128,7 @@ var _ = Describe("Redpanda Monitor Service", func() {
 			mockS6 := s6service.NewMockService()
 
 			// Create a new service with the mock S6 service
-			service = redpanda_monitor.NewRedpandaMonitorService(redpanda_monitor.WithS6Service(mockS6))
+			service = redpanda_monitor.NewRedpandaMonitorService("test-redpanda", redpanda_monitor.WithS6Service(mockS6))
 
 			// Add the service first
 			err := service.AddRedpandaMonitorToS6Manager(ctx)
@@ -260,7 +260,7 @@ var _ = Describe("Redpanda Monitor Service", func() {
 			Expect(mockService.AddRedpandaToS6ManagerCalled).To(BeTrue())
 
 			// Generate config and verify it has expected content
-			config, err := mockService.GenerateS6ConfigForRedpandaMonitor()
+			config, err := mockService.GenerateS6ConfigForRedpandaMonitor("redpanda")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(mockService.GenerateS6ConfigForRedpandaMonitorCalled).To(BeTrue())
 			Expect(config.ConfigFiles).To(HaveKey("run_redpanda_monitor.sh"))
