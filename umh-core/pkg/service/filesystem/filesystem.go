@@ -22,7 +22,9 @@ import (
 	"os/exec"
 	"time"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 )
 
 // Service provides an interface for filesystem operations
@@ -178,7 +180,9 @@ func (s *DefaultService) ReadFileRange(
 		}
 		defer func() {
 			if err := f.Close(); err != nil {
-				resCh <- result{nil, 0, err}
+				// Sending to resCh will block the goroutine, so we don't want to do that
+				// Instead, we log the error
+				sentry.ReportServiceError(logger.For(logger.ComponentFilesystemService), "ReadFileRange", "failed to close file %s: %s", path, err)
 			}
 		}()
 

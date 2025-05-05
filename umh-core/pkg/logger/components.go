@@ -56,7 +56,7 @@ const (
 	ComponentAgentMonitorService      = "AgentMonitorService"
 	ComponentDataFlowComponentService = "DFCService"
 	ComponentConnectionService        = "ConnectionService"
-
+	ComponentFilesystemService        = "FilesystemService"
 	// Configuration
 	ComponentConfigManager = "ConfigManager"
 
