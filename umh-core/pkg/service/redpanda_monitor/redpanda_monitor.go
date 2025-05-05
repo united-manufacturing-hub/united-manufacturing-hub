@@ -27,6 +27,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"golang.org/x/sync/errgroup"
@@ -47,6 +48,7 @@ import (
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 	"go.uber.org/zap"
 
+	"github.com/cespare/xxhash/v2"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/model/textparse"
 )
@@ -237,6 +239,15 @@ type RedpandaMonitorService struct {
 	s6Service       s6service.Service
 	s6ServiceConfig *config.S6FSMConfig // There can only be one instance of this service (as there is also only one redpanda instance)
 	redpandaName    string              // normally a service can handle multiple instances, the service monitor here is different and can only handle one instance
+
+	// Cache metrics/clusterconfig/timestamp data
+	previousMetricsDataByteHash       uint64
+	previousClusterConfigDataByteHash uint64
+	previousTimestampDataByteHash     uint64
+	previousMetrics                   *RedpandaMetrics
+	previousClusterConfig             *ClusterConfig
+	previousLastUpdatedAt             time.Time
+	cacheMutex                        sync.Mutex
 }
 
 // RedpandaMonitorServiceOption is a function that modifies a RedpandaMonitorService
@@ -471,69 +482,111 @@ func (s *RedpandaMonitorService) ParseRedpandaLogs(ctx context.Context, logs []s
 	clusterConfigDataBytes = StripMarkers(clusterConfigDataBytes)
 	timestampDataBytes = StripMarkers(timestampDataBytes)
 
+	s.cacheMutex.Lock()
+	defer s.cacheMutex.Unlock()
+
+	metricsDataByteHash := xxhash.Sum64(metricsDataBytes)
+	clusterConfigDataByteHash := xxhash.Sum64(clusterConfigDataBytes)
+	timestampDataByteHash := xxhash.Sum64(timestampDataBytes)
+
+	metricsChanged := s.previousMetricsDataByteHash != metricsDataByteHash
+	clusterConfigChanged := s.previousClusterConfigDataByteHash != clusterConfigDataByteHash
+	timestampChanged := s.previousTimestampDataByteHash != timestampDataByteHash
+
+	if !metricsChanged && !clusterConfigChanged && !timestampChanged {
+		// No changes, return the cached values
+		return &RedpandaMetricsScan{
+			RedpandaMetrics: s.previousMetrics,
+			ClusterConfig:   s.previousClusterConfig,
+			LastUpdatedAt:   s.previousLastUpdatedAt,
+		}, nil
+	}
+
 	var metrics *RedpandaMetrics
 	var clusterConfig *ClusterConfig
+	var lastUpdatedAt time.Time
 	// Processing the Metrics & cluster config takes time (especially the metrics parsing) each, therefore process them in parallel
 
 	ctxProcessMetrics, cancelProcessMetrics := context.WithTimeout(ctx, constants.RedpandaProcessMetricsTimeout)
 	defer cancelProcessMetrics()
 	g, _ := errgroup.WithContext(ctxProcessMetrics)
 
-	g.Go(func() error {
-		var err error
-		metrics, err = s.processMetricsDataBytes(metricsDataBytes, tick)
-		return err
-	})
+	if metricsChanged {
+		g.Go(func() error {
+			var err error
+			metrics, err = s.processMetricsDataBytes(metricsDataBytes, tick)
+			return err
+		})
+	} else {
+		metrics = s.previousMetrics
+	}
 
-	g.Go(func() error {
-		var err error
-		clusterConfig, err = s.processClusterConfigDataBytes(clusterConfigDataBytes, tick)
-		return err
-	})
+	if clusterConfigChanged {
+		g.Go(func() error {
+			var err error
+			clusterConfig, err = s.processClusterConfigDataBytes(clusterConfigDataBytes, tick)
+			return err
+		})
+	} else {
+		clusterConfig = s.previousClusterConfig
+	}
 
-	// Create a buffered channel to receive the result from g.Wait().
-	// The channel is buffered so that the goroutine sending on it doesn't block.
-	errc := make(chan error, 1)
+	if metricsChanged || clusterConfigChanged {
+		// Create a buffered channel to receive the result from g.Wait().
+		// The channel is buffered so that the goroutine sending on it doesn't block.
+		errc := make(chan error, 1)
 
-	// Run g.Wait() in a separate goroutine.
-	// This allows us to use a select statement to return early if the context is canceled.
-	go func() {
-		// g.Wait() blocks until all goroutines launched with g.Go() have returned.
-		// It returns the first non-nil error, if any.
-		errc <- g.Wait()
-	}()
+		// Run g.Wait() in a separate goroutine.
+		// This allows us to use a select statement to return early if the context is canceled.
+		go func() {
+			// g.Wait() blocks until all goroutines launched with g.Go() have returned.
+			// It returns the first non-nil error, if any.
+			errc <- g.Wait()
+		}()
 
-	// Use a select statement to wait for either the g.Wait() result or the context's cancellation.
-	select {
-	case err := <-errc:
-		// g.Wait() has finished, so check if any goroutine returned an error.
-		if err != nil {
-			// If there was an error in any sub-call, return that error.
-			return nil, err
+		// Use a select statement to wait for either the g.Wait() result or the context's cancellation.
+		select {
+		case err := <-errc:
+			// g.Wait() has finished, so check if any goroutine returned an error.
+			if err != nil {
+				// If there was an error in any sub-call, return that error.
+				return nil, err
+			}
+			// If err is nil, all goroutines completed successfully.
+		case <-ctxProcessMetrics.Done():
+			// The context was canceled or its deadline was exceeded before all goroutines finished.
+			// Although some goroutines might still be running in the background,
+			// they use a context (gctx) that should cause them to terminate promptly.
+			return nil, ctxProcessMetrics.Err()
 		}
-		// If err is nil, all goroutines completed successfully.
-	case <-ctxProcessMetrics.Done():
-		// The context was canceled or its deadline was exceeded before all goroutines finished.
-		// Although some goroutines might still be running in the background,
-		// they use a context (gctx) that should cause them to terminate promptly.
-		return nil, ctxProcessMetrics.Err()
 	}
 
-	timestampDataString := strings.TrimSpace(string(timestampDataBytes))
-	// If the system resolution is to small, we need to pad the timestamp with zeros
-	// Good: 1744199140749598341
-	// Bad: 1744199121
-	if len(timestampDataString) < 19 {
-		timestampDataString = fmt.Sprintf("%s%s", timestampDataString, strings.Repeat("0", 19-len(timestampDataString)))
+	if timestampChanged {
+		timestampDataString := strings.TrimSpace(string(timestampDataBytes))
+		// If the system resolution is to small, we need to pad the timestamp with zeros
+		// Good: 1744199140749598341
+		// Bad: 1744199121
+		if len(timestampDataString) < 19 {
+			timestampDataString = fmt.Sprintf("%s%s", timestampDataString, strings.Repeat("0", 19-len(timestampDataString)))
+		}
+
+		// Parse the timestamp data from the timestampDataBytes (that we already extracted)
+		timestampNs, err := strconv.ParseUint(timestampDataString, 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse timestamp data: %w", err)
+		}
+
+		lastUpdatedAt = time.Unix(0, int64(timestampNs))
 	}
 
-	// Parse the timestamp data from the timestampDataBytes (that we already extracted)
-	timestampNs, err := strconv.ParseUint(timestampDataString, 10, 64)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse timestamp data: %w", err)
-	}
+	// Update previous values
+	s.previousMetricsDataByteHash = metricsDataByteHash
+	s.previousClusterConfigDataByteHash = clusterConfigDataByteHash
+	s.previousTimestampDataByteHash = timestampDataByteHash
+	s.previousMetrics = metrics
+	s.previousClusterConfig = clusterConfig
+	s.previousLastUpdatedAt = lastUpdatedAt
 
-	lastUpdatedAt := time.Unix(0, int64(timestampNs))
 	return &RedpandaMetricsScan{
 		RedpandaMetrics: metrics,
 		ClusterConfig:   clusterConfig,
