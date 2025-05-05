@@ -162,45 +162,49 @@ func (s *DefaultService) ReadFileRange(
 ) ([]byte, int64, error) {
 
 	if err := s.checkContext(ctx); err != nil {
+		return nil, 0, fmt.Errorf("Athavan context exceed even before reading file: %v", err)
+	}
+
+	// type result struct {
+	// 	data    []byte
+	// 	newSize int64
+	// 	err     error
+	// }
+	// resCh := make(chan result, 1)
+
+	// go func() {
+	reader, err := mmap.Open(path)
+	if err != nil {
+		// resCh <- result{nil, 0, err}
 		return nil, 0, err
+		// return
 	}
-
-	type result struct {
-		data    []byte
-		newSize int64
-		err     error
+	defer reader.Close()
+	totalSize := int64(reader.Len())
+	if from >= totalSize {
+		// resCh <- result{nil, totalSize, nil}
+		return nil, 0, err
+		// return
 	}
-	resCh := make(chan result, 1)
-
-	go func() {
-		reader, err := mmap.Open(path)
-		if err != nil {
-			resCh <- result{nil, 0, err}
-			return
-		}
-		defer reader.Close()
-		totalSize := int64(reader.Len())
-		if from >= totalSize {
-			resCh <- result{nil, totalSize, nil}
-			return
-		}
-		bytesToRead := totalSize - from
-		data := make([]byte, bytesToRead)
-		n, err := reader.ReadAt(data, from)
-		if err != nil && err != io.EOF {
-			resCh <- result{nil, 0, err}
-			return
-		}
-
-		resCh <- result{data[:n], totalSize, nil}
-	}()
-
-	select {
-	case res := <-resCh:
-		return res.data, res.newSize, res.err
-	case <-ctx.Done():
-		return nil, 0, ctx.Err()
+	bytesToRead := totalSize - from
+	data := make([]byte, bytesToRead)
+	n, err := reader.ReadAt(data, from)
+	if err != nil && err != io.EOF {
+		// resCh <- result{nil, 0, err}
+		return nil, 0, err
+		// return
 	}
+	return data[:n], totalSize, nil
+
+	// resCh <- result{data[:n], totalSize, nil}
+	// }()
+
+	// select {
+	// case res := <-resCh:
+	// 	return res.data, res.newSize, res.err
+	// case <-ctx.Done():
+	// 	return nil, 0, ctx.Err()
+	// }
 }
 
 // WriteFile writes data to a file respecting the context

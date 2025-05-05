@@ -378,8 +378,229 @@ func StripMarkers(b []byte) []byte {
 	return []byte(markerReplacer.Replace(string(b)))
 }
 
-// ParseRedpandaLogs parses the logs of a redpanda service and extracts metrics
+// ParseRedpandaLogs parses logs and extracts metrics with optimized performance
 func (s *RedpandaMonitorService) ParseRedpandaLogs(ctx context.Context, logs []s6service.LogEntry, tick uint64) (*RedpandaMetricsScan, error) {
+	if len(logs) == 0 {
+		return nil, fmt.Errorf("no logs provided")
+	}
+
+	// Use a more efficient algorithm to find sections in a single pass
+	section, err := findLatestCompleteSection(logs)
+	if err != nil {
+		return nil, err
+	}
+
+	// Extract data ranges directly without creating intermediate slices
+	metricsRange := logs[section.StartMarkerIndex+1 : section.MetricsEndMarkerIndex]
+	configRange := logs[section.MetricsEndMarkerIndex+1 : section.ClusterConfigEndMarkerIndex]
+	timestampRange := logs[section.ClusterConfigEndMarkerIndex+1 : section.BlockEndMarkerIndex]
+
+	// Pre-allocate with exact capacity needed
+	metricsDataBytes := preAllocateAndConcatContent(metricsRange)
+	configDataBytes := preAllocateAndConcatContent(configRange)
+
+	// Process timestamp first - it's fast and might fail early
+	timestampDataBytes := preAllocateAndConcatContent(timestampRange)
+	timestampNs, err := parseTimestamp(timestampDataBytes)
+	if err != nil {
+		return nil, err
+	}
+
+	// Use a sync.WaitGroup for better performance than errgroup
+	// var wg sync.WaitGroup
+	// wg.Add(2)
+
+	var (
+		metrics       *RedpandaMetrics
+		clusterConfig *ClusterConfig
+		metricsErr    error
+		configErr     error
+	)
+
+	// Use a longer timeout for processing
+	// ctxProcessMetrics, cancelProcessMetrics := context.WithTimeout(ctx, 5*time.Second) // Increased timeout
+	// defer cancelProcessMetrics()
+
+	// Process metrics with optimized goroutine
+	// go func() {
+	// 	defer wg.Done()
+	// 	select {
+	// 	case <-ctxProcessMetrics.Done():
+	// 		metricsErr = ctxProcessMetrics.Err()
+	// 		return
+	// 	default:
+	metrics, metricsErr = s.processMetricsDataBytes(metricsDataBytes, tick)
+	// 	}
+	// }()
+	//
+	// // Process cluster config with optimized goroutine
+	// go func() {
+	// 	defer wg.Done()
+	// 	select {
+	// 	case <-ctxProcessMetrics.Done():
+	// 		configErr = ctxProcessMetrics.Err()
+	// 		return
+	// 	default:
+	clusterConfig, configErr = s.processClusterConfigDataBytes(configDataBytes, tick)
+	// 	}
+	// }()
+	//
+	// // Create a channel to signal completion
+	// done := make(chan struct{})
+	// go func() {
+	// 	wg.Wait()
+	// 	close(done)
+	// }()
+	//
+	// Wait for either completion or timeout
+	// select {
+	// case <-done:
+	if metricsErr != nil {
+		return nil, fmt.Errorf("metrics processing error: %w", metricsErr)
+	}
+	if configErr != nil {
+		return nil, fmt.Errorf("config processing error: %w", configErr)
+	}
+	// case <-ctxProcessMetrics.Done():
+	// 	return nil, fmt.Errorf("processing timeout: %v", ctxProcessMetrics.Err())
+	// }
+
+	return &RedpandaMetricsScan{
+		RedpandaMetrics: metrics,
+		ClusterConfig:   clusterConfig,
+		LastUpdatedAt:   time.Unix(0, int64(timestampNs)),
+	}, nil
+}
+
+// findLatestCompleteSection finds the latest complete section in the logs
+func findLatestCompleteSection(logs []s6service.LogEntry) (Section, error) {
+	// Pre-allocate capacity for efficiency
+	sections := make([]Section, 0, 2)
+
+	currentSection := Section{
+		StartMarkerIndex:            -1,
+		MetricsEndMarkerIndex:       -1,
+		ClusterConfigEndMarkerIndex: -1,
+		BlockEndMarkerIndex:         -1,
+	}
+
+	// Define markers for faster lookup and less memory allocation
+	start := []byte(BLOCK_START_MARKER)
+	metricsEnd := []byte(METRICS_END_MARKER)
+	configEnd := []byte(CLUSTERCONFIG_END_MARKER)
+	blockEnd := []byte(BLOCK_END_MARKER)
+
+	for i, log := range logs {
+		content := []byte(log.Content)
+
+		// Use bytes.Contains for better performance
+		if bytes.Contains(content, start) {
+			currentSection.StartMarkerIndex = i
+		} else if bytes.Contains(content, metricsEnd) && currentSection.StartMarkerIndex != -1 {
+			currentSection.MetricsEndMarkerIndex = i
+		} else if bytes.Contains(content, configEnd) && currentSection.StartMarkerIndex != -1 {
+			currentSection.ClusterConfigEndMarkerIndex = i
+		} else if bytes.Contains(content, blockEnd) {
+			if currentSection.StartMarkerIndex != -1 {
+				currentSection.BlockEndMarkerIndex = i
+
+				// Check if section is valid
+				if isValidSection(currentSection) {
+					sections = append(sections, currentSection)
+				}
+
+				// Reset section
+				currentSection = Section{
+					StartMarkerIndex:            -1,
+					MetricsEndMarkerIndex:       -1,
+					ClusterConfigEndMarkerIndex: -1,
+					BlockEndMarkerIndex:         -1,
+				}
+			}
+		}
+	}
+
+	if len(sections) == 0 {
+		return Section{}, fmt.Errorf("no complete sections found in logs")
+	}
+
+	return sections[len(sections)-1], nil
+}
+
+// isValidSection checks if a section is valid and complete
+func isValidSection(s Section) bool {
+	return s.StartMarkerIndex != -1 &&
+		s.MetricsEndMarkerIndex != -1 &&
+		s.ClusterConfigEndMarkerIndex != -1 &&
+		s.BlockEndMarkerIndex != -1 &&
+		s.StartMarkerIndex < s.MetricsEndMarkerIndex &&
+		s.MetricsEndMarkerIndex < s.ClusterConfigEndMarkerIndex &&
+		s.ClusterConfigEndMarkerIndex < s.BlockEndMarkerIndex
+}
+
+// preAllocateAndConcatContent efficiently concatenates log content
+func preAllocateAndConcatContent(logs []s6service.LogEntry) []byte {
+	// Calculate exact capacity needed
+	totalLen := 0
+	for _, l := range logs {
+		totalLen += len(l.Content)
+	}
+
+	// Pre-allocate buffer with exact size
+	result := make([]byte, 0, totalLen)
+
+	// Append without intermediate allocations
+	for _, l := range logs {
+		result = append(result, l.Content...)
+	}
+
+	// Strip markers in-place to avoid additional allocation
+	return stripMarkersInPlace(result)
+}
+
+// stripMarkersInPlace removes markers without allocating new slices
+func stripMarkersInPlace(data []byte) []byte {
+	// Performance optimization: avoid allocations for empty markers
+	if len(data) == 0 {
+		return data
+	}
+
+	// Use bytes.Replace with a pre-allocated buffer for better performance
+	data = bytes.ReplaceAll(data, []byte(BLOCK_START_MARKER), nil)
+	data = bytes.ReplaceAll(data, []byte(METRICS_END_MARKER), nil)
+	data = bytes.ReplaceAll(data, []byte(CLUSTERCONFIG_END_MARKER), nil)
+	data = bytes.ReplaceAll(data, []byte(BLOCK_END_MARKER), nil)
+
+	return data
+}
+
+// parseTimestamp efficiently parses the timestamp
+func parseTimestamp(data []byte) (uint64, error) {
+	// Trim spaces without allocation
+	timestampStr := strings.TrimSpace(string(data))
+
+	// Handle short timestamps efficiently
+	if len(timestampStr) < 19 {
+		// Pre-calculate the padding needed
+		paddingNeeded := 19 - len(timestampStr)
+		if paddingNeeded > 0 {
+			// Use strings.Builder for zero-allocation string building
+			var sb strings.Builder
+			sb.Grow(19) // Pre-allocate for exact size
+			sb.WriteString(timestampStr)
+			for i := 0; i < paddingNeeded; i++ {
+				sb.WriteByte('0')
+			}
+			timestampStr = sb.String()
+		}
+	}
+
+	// Parse the timestamp
+	return strconv.ParseUint(timestampStr, 10, 64)
+}
+
+// ParseRedpandaLogs parses the logs of a redpanda service and extracts metrics
+func (s *RedpandaMonitorService) ParseRedpandaLogsV2(ctx context.Context, logs []s6service.LogEntry, tick uint64) (*RedpandaMetricsScan, error) {
 	/*
 		A normal log entry looks like this:
 		BLOCK_START_MARKER
@@ -516,7 +737,7 @@ func (s *RedpandaMonitorService) ParseRedpandaLogs(ctx context.Context, logs []s
 		// The context was canceled or its deadline was exceeded before all goroutines finished.
 		// Although some goroutines might still be running in the background,
 		// they use a context (gctx) that should cause them to terminate promptly.
-		return nil, ctxProcessMetrics.Err()
+		return nil, fmt.Errorf("Athavan context cancelled inside ctxProcessMetrics: %v", ctxProcessMetrics.Err())
 	}
 
 	timestampDataString := strings.TrimSpace(string(timestampDataBytes))
