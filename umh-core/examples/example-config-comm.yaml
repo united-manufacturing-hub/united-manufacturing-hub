@@ -43,6 +43,32 @@ dataFlow:
         output:
             stdout: {}
   
+  - name: vanakam-thamizha-dfc
+    desiredState: active
+    dataFlowComponentConfig:
+      benthos:
+        input:
+          opcua:
+            endpoint: opc.tcp://10.13.37.102:49320
+            nodeIDs:
+              - i=84
+            password: ""
+            subscribeEnabled: true
+            useHeartbeat: true
+            username: ""
+        pipeline:
+          processors:
+            - tag_processor:
+                defaults: |-
+                  // Set default location hierarchy and datacontract
+                  msg.meta.location_path = "enterprise.plant1.machiningArea.cnc-line.cnc5.plc123";
+                  msg.meta.data_contract = "_historian";
+                  msg.meta.virtual_path = msg.meta.opcua_tag_path;
+                  msg.meta.tag_name = msg.meta.opcua_tag_name;
+                  msg.payload = msg.payload;
+                  return msg;
+        output:
+            stdout: {}
 internal:
   redpanda:
-    desiredState: stopped
+    desiredState: active

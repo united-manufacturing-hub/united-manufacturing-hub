@@ -22,6 +22,8 @@ import (
 	"os/exec"
 	"time"
 
+	"golang.org/x/exp/mmap"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 )
 
@@ -171,43 +173,26 @@ func (s *DefaultService) ReadFileRange(
 	resCh := make(chan result, 1)
 
 	go func() {
-		f, err := os.Open(path)
+		reader, err := mmap.Open(path)
 		if err != nil {
 			resCh <- result{nil, 0, err}
 			return
 		}
-		defer func() {
-			if err := f.Close(); err != nil {
-				resCh <- result{nil, 0, err}
-			}
-		}()
-
-		// stat *after* open so we have a consistent view
-		fi, err := f.Stat()
-		if err != nil {
-			resCh <- result{nil, 0, err}
+		defer reader.Close()
+		totalSize := int64(reader.Len())
+		if from >= totalSize {
+			resCh <- result{nil, totalSize, nil}
 			return
 		}
-		size := fi.Size()
-
-		// nothing new?
-		if from >= size {
-			resCh <- result{nil, size, nil}
-			return
-		}
-
-		if _, err = f.Seek(from, io.SeekStart); err != nil {
+		bytesToRead := totalSize - from
+		data := make([]byte, bytesToRead)
+		n, err := reader.ReadAt(data, from)
+		if err != nil && err != io.EOF {
 			resCh <- result{nil, 0, err}
 			return
 		}
 
-		buf := make([]byte, size-from)
-		if _, err = io.ReadFull(f, buf); err != nil {
-			resCh <- result{nil, 0, err}
-			return
-		}
-
-		resCh <- result{buf, size, nil}
+		resCh <- result{data[:n], totalSize, nil}
 	}()
 
 	select {
