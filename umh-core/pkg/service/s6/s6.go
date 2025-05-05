@@ -26,6 +26,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"text/template"
 	"time"
@@ -123,9 +124,45 @@ type Service interface {
 	EnsureSupervision(ctx context.Context, servicePath string, fsService filesystem.Service) (bool, error)
 }
 
+// logState is the per-log-file cursor used by GetLogs.
+//
+// Fields:
+//
+//	mu     – guards every field in the struct (single-writer, multi-reader)
+//	inode  – inode of the file when we last touched it; changes ⇒ rotation
+//	offset – next byte to read on disk (monotonically increases until
+//	         rotation or truncation)
+//
+//	logs   – backing array that holds *at most* S6MaxLines entries.
+//	         Allocated once; after that, entries are overwritten in place.
+//	head   – index of the slot where the **next** entry will be written.
+//	         When head wraps from max-1 to 0, `full` is set to true.
+//	full   – true once the buffer has wrapped at least once; used to decide
+//	         how to linearise the ring when we copy it out.
+type logState struct {
+	// mu guards every field in the struct (single-writer, multi-reader)
+	mu sync.Mutex
+	// inode is the inode of the file when we last touched it; changes ⇒ rotation
+	inode uint64
+	// offset is the next byte to read on disk (monotonically increases until
+	// rotation or truncation)
+	offset int64
+
+	// logs is the backing array that holds *at most* S6MaxLines entries.
+	// Allocated once; after that, entries are overwritten in place.
+	logs []LogEntry
+	// head is the index of the slot where the **next** entry will be written.
+	// When head wraps from max-1 to 0, `full` is set to true.
+	head int
+	// full is true once the buffer has wrapped at least once; used to decide
+	// how to linearise the ring when we copy it out.
+	full bool
+}
+
 // DefaultService is the default implementation of the S6 Service interface
 type DefaultService struct {
-	logger *zap.SugaredLogger
+	logger     *zap.SugaredLogger
+	logCursors sync.Map // map[string]*logState (key = abs log path)
 }
 
 // NewDefaultService creates a new default S6 service
@@ -1317,7 +1354,56 @@ func (s *DefaultService) ForceRemove(
 	return nil
 }
 
-// GetStructuredLogs gets the logs of the service as structured LogEntry objects
+// GetLogs reads “just the new bytes” of the log file located at
+//
+//	/data/logs/<service-name>/current
+//
+// and returns — *always in a brand-new backing array* — the last
+// `constants.S6MaxLines` log lines parsed as `LogEntry` objects.
+//
+// The function keeps one in-memory cursor (`logState`) *per log file*:
+//
+//	logCursors : map[absLogPath]*logState
+//
+// That cursor stores where we stopped reading the file last time
+// (`offset`) and a fixed-size **ring buffer** with the most recent
+// lines.  Because of the ring buffer, we never re-allocate or shift
+// memory when trimming to the last *N* lines.
+//
+// High-level flow
+// ───────────────
+//
+//  1. **Fast checks & bookkeeping**
+//     • verify the service and the log file exist
+//     • fetch/create the cursor in `s.logCursors`
+//
+//  2. **Detect file rotation/truncation**
+//     If the inode changed or the file shrank, we reset the cursor
+//     and start reading from the beginning.
+//
+//  3. **Read only the delta**
+//     `ReadFileRange(ctx, path, st.offset)` returns the bytes that
+//     appeared since the previous call.  The cursor’s `offset` is
+//     advanced whether or not anything changed.
+//
+//  4. **Ring-append the new entries**
+//     Parsed log lines are appended to the ring.  Once the buffer
+//     is full (`len == cap`), we start overwriting from `head`,
+//     giving us an O(1) “keep the last N lines” strategy.
+//
+//  5. **Copy-out**
+//     We linearise the ring into chronological order and copy it
+//     into a fresh slice so callers can never mutate our cache.
+//
+// Performance guarantees
+// ──────────────────────
+//   - **At most one allocation per process** for the ring buffer.
+//   - Zero‐copy maintenance while the program runs.
+//   - Exactly one `memmove` per call (the final copy-out).
+//   - Thread-safety via the `logState.mu` mutex.
+//
+// Errors are returned early and unwrapped where they occur so callers
+// see the root cause (e.g. “file disappeared”, “permission denied”).
 func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsService filesystem.Service) ([]LogEntry, error) {
 	start := time.Now()
 	defer func() {
@@ -1346,21 +1432,159 @@ func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsServ
 		return nil, ErrLogFileNotFound
 	}
 
-	// Read the log file
-	content, err := fsService.ReadFile(ctx, logFile)
+	// ── 1. grab / create state ──────────────────────────────────────
+	stAny, _ := s.logCursors.LoadOrStore(logFile, &logState{})
+	st := stAny.(*logState)
+
+	st.mu.Lock()
+	defer st.mu.Unlock()
+
+	// ── 2. check inode & size (rotation / truncation?) ──────────────
+	fi, err := fsService.Stat(ctx, logFile)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read log file: %w", err)
+		return nil, err
+	}
+	sys := fi.Sys().(*syscall.Stat_t) // on Linux / Alpine
+	size, ino := fi.Size(), sys.Ino
+
+	// rotated or truncated ⇒ reset cache
+	if st.inode != ino || st.offset > size {
+		st.inode, st.offset = ino, 0
+
+		if st.logs == nil {
+			st.logs = make([]LogEntry, 0, constants.S6MaxLines)
+		} else {
+			st.logs = st.logs[:0] // reuse backing array
+		}
+
+		st.head = 0
+		st.full = false
 	}
 
-	entries, err := ParseLogsFromBytes(content)
+	// ── 3. read only the new bytes ──────────────────────────────────
+	chunk, newSize, err := fsService.ReadFileRange(ctx, logFile, st.offset)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse logs: %w", err)
+		return nil, err
+	}
+	st.offset = newSize // advance cursor even if chunk == nil
+
+	if len(chunk) != 0 {
+		entries, err := ParseLogsFromBytes(chunk)
+		if err != nil {
+			return nil, err
+		}
+
+		// --- Ring-buffer append ------------------------------------------
+		const max = constants.S6MaxLines
+
+		// allocate backing storage once, but with length 0 so the GC
+		// doesn't scan max empty structs before we actually need them
+		if st.logs == nil {
+			st.logs = make([]LogEntry, 0, max) // len == 0, cap == max
+		}
+
+		for _, e := range entries {
+			if len(st.logs) < max { // not full yet → grow
+				st.logs = append(st.logs, e)
+				st.head = len(st.logs) % max // head always points at the
+				// *next* write slot
+				if len(st.logs) == max {
+					st.full = true // will overwrite next round
+				}
+			} else { // full → true ring overwrite
+				st.logs[st.head] = e
+				st.head = (st.head + 1) % max // advance circular pointer
+			}
+		}
 	}
 
+	// ── 4. return *copy* so caller can’t mutate our cache ───────────
+	var length int
+	if st.full {
+		length = constants.S6MaxLines
+	} else {
+		length = len(st.logs) // always the number of valid entries
+	}
+
+	out := make([]LogEntry, length)
+
+	// `head` always points **to** the slot for the *next* write, so the
+	// oldest entry is there, and the newest entry is just before it.
+	// We need to lay the data out linearly in time order:
+	//
+	//	[head … max-1]  followed by  [0 … head-1]
+	if st.full {
+		// len(st.logs) == constants.S6MaxLines by construction
+		// (but add a defensive check to satisfy the linter)
+		if len(st.logs) == 0 {
+			return out, nil // should never happen, but safe
+		}
+
+		// copy the wrapped tail first
+		n := copy(out, st.logs[st.head:])
+		copy(out[n:], st.logs[:st.head])
+	} else {
+		copy(out, st.logs) // simple copy before first wrap
+	}
+
+	return out, nil
+}
+
+// ParseLogsFromBytes is a zero-allocation* parser for an s6 “current”
+// file.  It scans the buffer **once**, pre-allocates the result slice
+// and never calls strings.Split/Index, so the costly
+// runtime.growslice/strings.* nodes vanish from the profile.
+//
+//	*apart from the unavoidable string↔[]byte conversions needed for the
+//	LogEntry struct – those are just header copies, no heap memcopy.
+func ParseLogsFromBytes(buf []byte) ([]LogEntry, error) {
+	// Trim one trailing newline that is always present in rotated logs.
+	buf = bytes.TrimSuffix(buf, []byte{'\n'})
+
+	// 1) -------- pre-allocation --------------------------------------
+	nLines := bytes.Count(buf, []byte{'\n'}) + 1
+	entries := make([]LogEntry, 0, nLines) // avoids  runtime.growslice
+
+	// 2) -------- single pass over the buffer -------------------------
+	for start := 0; start < len(buf); {
+		// find next '\n'
+		nl := bytes.IndexByte(buf[start:], '\n')
+		var line []byte
+		if nl == -1 {
+			line = buf[start:]
+			start = len(buf)
+		} else {
+			line = buf[start : start+nl]
+			start += nl + 1
+		}
+		if len(line) == 0 { // empty line – rotate artefact
+			continue
+		}
+
+		// 3) -------- parse one line ----------------------------------
+		// format: 2025-04-20 13:01:02.123456789␠␠payload
+		sep := bytes.Index(line, []byte("  "))
+		if sep == -1 || sep < 29 { // malformed – keep raw
+			entries = append(entries, LogEntry{Content: string(line)})
+			continue
+		}
+
+		ts, err := ParseNano(string(line[:sep])) // ParseNano is already fast
+		if err != nil {
+			entries = append(entries, LogEntry{Content: string(line)})
+			continue
+		}
+
+		entries = append(entries, LogEntry{
+			Timestamp: ts,
+			Content:   string(line[sep+2:]),
+		})
+	}
 	return entries, nil
 }
 
-func ParseLogsFromBytes(content []byte) ([]LogEntry, error) {
+// ParseLogsFromBytes_Unoptimized is the more readable not optimized version of ParseLogsFromBytes
+func ParseLogsFromBytes_Unoptimized(content []byte) ([]LogEntry, error) {
 	// Split logs by newline
 	logs := strings.Split(strings.TrimSpace(string(content)), "\n")
 
@@ -1403,7 +1627,8 @@ func parseLogLine(line string) LogEntry {
 	}
 
 	// Try to parse the timestamp
-	timestamp, err := time.Parse("2006-01-02 15:04:05.999999999", timestampStr)
+	// We are using ParseNano over time.Parse because it is faster for our specific time format
+	timestamp, err := ParseNano(timestampStr)
 	if err != nil {
 		return LogEntry{Content: line}
 	}

@@ -27,8 +27,8 @@ import (
 	redpandaserviceconfig "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/redpandaserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/redpanda"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/monitor"
 	redpanda_service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda"
-	redpanda_monitor "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda_monitor"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -194,7 +194,7 @@ var _ = Describe("RedpandaInstance getServiceStatus", func() {
 	Describe("When handling ErrServiceConnectionRefused", func() {
 		BeforeEach(func() {
 			// Setup mock to return ErrServiceConnectionRefused
-			mockService.StatusError = redpanda_monitor.ErrServiceConnectionRefused
+			mockService.StatusError = monitor.ErrServiceConnectionRefused
 
 			// For testing health check failure in running states, we need a ServiceInfo
 			// that has the right properties
@@ -251,7 +251,7 @@ var _ = Describe("RedpandaInstance getServiceStatus", func() {
 			for _, state := range runningStates {
 				instance.GetBaseFSMInstanceForTest().SetCurrentFSMState(state)
 				_, err := instance.GetServiceStatus(ctx, fsMock, 1, time.Now())
-				Expect(err).To(Equal(redpanda_monitor.ErrServiceConnectionRefused))
+				Expect(err).To(Equal(monitor.ErrServiceConnectionRefused))
 			}
 		})
 	})

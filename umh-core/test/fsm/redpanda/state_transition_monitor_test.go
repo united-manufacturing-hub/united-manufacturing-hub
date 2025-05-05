@@ -29,7 +29,6 @@ import (
 	. "github.com/onsi/gomega"
 
 	s6 "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda_monitor"
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
@@ -157,10 +156,11 @@ var _ = Describe("RedpandaMonitor Service State Transitions", func() {
 		}
 
 		// Create a mocked S6 manager with mocked services to prevent using real S6 functionality
-		mockedS6Manager := s6fsm.NewS6ManagerWithMockedServices(constants.RedpandaMonitorServiceName)
+		mockedS6Manager := s6fsm.NewS6ManagerWithMockedServices("test-redpanda")
 
 		// Create the service with mocked dependencies
 		monitorService = redpanda_monitor.NewRedpandaMonitorService(
+			"test-redpanda",
 			redpanda_monitor.WithS6Service(mockS6Service),
 			redpanda_monitor.WithS6Manager(mockedS6Manager),
 		)
@@ -173,7 +173,7 @@ var _ = Describe("RedpandaMonitor Service State Transitions", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(reconciled).To(BeTrue())
 		// Get the instance after reconciliation
-		if instance, exists := mockedS6Manager.GetInstance(constants.RedpandaMonitorServiceName); exists {
+		if instance, exists := mockedS6Manager.GetInstance("test-redpanda"); exists {
 			// Type assert to S6Instance
 			if s6Instance, ok := instance.(*s6fsm.S6Instance); ok {
 				// Set our mock service
@@ -212,7 +212,8 @@ var _ = Describe("RedpandaMonitor Service State Transitions", func() {
 			tick++
 
 			By("Starting the redpanda monitor service")
-			// Add implicitly sets the desired state to running, no manualy start is required here
+			err = monitorService.StartRedpandaMonitor(ctx)
+			Expect(err).NotTo(HaveOccurred())
 
 			// Reconcile until the service is running
 			tick = reconcileMonitorUntilState(ctx, monitorService, mockSvcRegistry, tick, s6fsm.OperationalStateRunning)
@@ -230,7 +231,10 @@ var _ = Describe("RedpandaMonitor Service State Transitions", func() {
 			tick = reconcileMonitorUntilState(ctx, monitorService, mockSvcRegistry, tick, s6.LifecycleStateCreating)
 			tick = reconcileMonitorUntilState(ctx, monitorService, mockSvcRegistry, tick, s6fsm.OperationalStateStopped)
 
-			// Add implicitly sets the desired state to running, no manualy start is required here
+			By("Starting the redpanda monitor service")
+			err = monitorService.StartRedpandaMonitor(ctx)
+			Expect(err).NotTo(HaveOccurred())
+
 			tick = reconcileMonitorUntilState(ctx, monitorService, mockSvcRegistry, tick, s6fsm.OperationalStateRunning)
 
 			// Verify service is running
@@ -263,7 +267,10 @@ var _ = Describe("RedpandaMonitor Service State Transitions", func() {
 			tick = reconcileMonitorUntilState(ctx, monitorService, mockSvcRegistry, tick, s6.LifecycleStateCreating)
 			tick = reconcileMonitorUntilState(ctx, monitorService, mockSvcRegistry, tick, s6fsm.OperationalStateStopped)
 
-			// Add implicitly sets the desired state to running, no manualy start is required here
+			By("Starting the redpanda monitor service")
+			err = monitorService.StartRedpandaMonitor(ctx)
+			Expect(err).NotTo(HaveOccurred())
+
 			tick = reconcileMonitorUntilState(ctx, monitorService, mockSvcRegistry, tick, s6fsm.OperationalStateRunning)
 
 			By("Stopping the service")

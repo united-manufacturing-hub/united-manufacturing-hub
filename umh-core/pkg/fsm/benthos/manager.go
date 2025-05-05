@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/tiendc/go-deepcopy"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	public_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
@@ -185,11 +184,7 @@ func (m *BenthosManager) Reconcile(ctx context.Context, snapshot public_fsm.Syst
 		}
 	}
 
-	var snapshotWithPorts public_fsm.SystemSnapshot
-	err := deepcopy.Copy(&snapshotWithPorts, &snapshot)
-	if err != nil {
-		return fmt.Errorf("failed to copy snapshot: %w", err), false
-	}
+	snapshotWithPorts := snapshot // <- inexpensive value copy
 	snapshotWithPorts.CurrentConfig = cfgWithPorts
 
 	// Phase 2: Base FSM Reconciliation with port-aware config
