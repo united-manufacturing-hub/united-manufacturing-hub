@@ -82,6 +82,7 @@ var _ = Describe("DeleteDataflowComponent", func() {
 		stateMocker.UpdateDfcState()
 		mockStateManager := stateMocker.GetStateManager()
 		action = actions.NewDeleteDataflowComponentAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig, mockStateManager)
+
 	})
 
 	// Cleanup after each test

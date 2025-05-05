@@ -524,9 +524,10 @@ func (a *EditDataflowComponentAction) waitForComponentToBeActive() error {
 			defer cancel()
 			_, err := a.configManager.AtomicEditDataflowcomponent(ctx, a.newComponentUUID, a.oldConfig)
 			if err != nil {
-				a.actionLogger.Errorf("failed to roll back dataflowcomponent %s: %v", a.name, err)
+
+				a.actionLogger.Errorf("failed to roll back dataflow component %s: %v", a.name, err)
 			}
-			return fmt.Errorf("dataflowcomponent %s was not active in time and was rolled back to the old config", a.name)
+			return fmt.Errorf("dataflow component %s was not active in time and was rolled back to the old config", a.name)
 
 		case <-ticker.C:
 			elapsed := time.Since(startTime)

@@ -147,6 +147,7 @@ var _ = Describe("GetDataFlowComponent", func() {
 		mockManagerSnapshot := stateMocker.GetStateManager()
 
 		action = actions.NewGetDataFlowComponentAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig, mockManagerSnapshot)
+
 	})
 
 	// Cleanup after each test
@@ -350,6 +351,7 @@ var _ = Describe("GetDataFlowComponent", func() {
 		It("should handle components with missing observed state", func() {
 			// Create a system snapshot with a component that has no observed state
 			snapshotWithMissingState := actions.CreateMockSystemSnapshotWithMissingState()
+
 			snapshotManager := fsm.NewSnapshotManager()
 			snapshotManager.UpdateSnapshot(snapshotWithMissingState)
 

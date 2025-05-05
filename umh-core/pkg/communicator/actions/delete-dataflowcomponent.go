@@ -161,7 +161,7 @@ func (a *DeleteDataflowComponentAction) Execute() (interface{}, map[string]inter
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Configuration updated. Waiting for dataflow component to be fully removed from the system...", a.outboundChannel, models.DeleteDataFlowComponent)
 		err = a.waitForComponentToBeRemoved()
 		if err != nil {
-			errorMsg := fmt.Sprintf("Failed to wait for dataflowcomponent to be removed: %v", err)
+			errorMsg := fmt.Sprintf("Failed to wait for dataflow component to be removed: %v", err)
 			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errorMsg, a.outboundChannel, models.DeleteDataFlowComponent)
 			return nil, nil, fmt.Errorf("%s", errorMsg)
 		}

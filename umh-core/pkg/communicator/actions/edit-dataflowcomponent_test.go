@@ -104,6 +104,7 @@ var _ = Describe("EditDataflowComponent", func() {
 		mockManagerSnapshot := stateMocker.GetStateManager()
 
 		action = actions.NewEditDataflowComponentAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig, mockManagerSnapshot)
+
 	})
 
 	// Cleanup after each test

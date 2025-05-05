@@ -28,4 +28,7 @@ var (
 
 	// ErrRedpandaMonitorNotRunning indicates the redpanda monitor service is not running
 	ErrRedpandaMonitorNotRunning = errors.New("redpanda monitor service is not running")
+
+	// ErrRedpandaMonitorInstanceNotFound indicates the redpanda monitor instance was not found
+	ErrRedpandaMonitorInstanceNotFound = errors.New("instance redpanda-monitor not found")
 )
