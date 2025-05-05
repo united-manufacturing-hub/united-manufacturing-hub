@@ -24,10 +24,15 @@ import (
 // This method is used for testing purposes to consume messages that would normally be sent to the user
 func ConsumeOutboundMessages(outboundChannel chan *models.UMHMessage, messages *[]*models.UMHMessage, logMessages bool) {
 	for msg := range outboundChannel {
-		decodedMessage, _ := encoding.DecodeMessageFromUMHInstanceToUser(msg.Content)
+		*messages = append(*messages, msg)
+		decodedMessage, err := encoding.DecodeMessageFromUMHInstanceToUser(msg.Content)
+		if err != nil {
+			zap.S().Error("error decoding message", zap.Error(err))
+			continue
+		}
 		if logMessages {
 			zap.S().Info("received message", decodedMessage.Payload)
 		}
-		*messages = append(*messages, msg)
+
 	}
 }
