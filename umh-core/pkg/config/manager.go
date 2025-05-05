@@ -17,7 +17,9 @@ package config
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"reflect"
 	"sync"
@@ -91,6 +93,11 @@ type FileConfigManager struct {
 	// it will prevent multiple reads or read/write cycles to happen at the same time
 	// we use our own implementation of a context aware mutex here to avoid deadlocks
 	mutexReadOrWrite ctxrwmutex.CtxRWMutex
+
+	// ---------- in-memory cache (read-only after RLock) ----------
+	cacheMu      sync.RWMutex // guards the two fields below
+	cacheModTime time.Time    // mtime of last successfully parsed file
+	cacheConfig  FullConfig   // struct obtained from that file
 }
 
 // NewFileConfigManager creates a new FileConfigManager
@@ -179,7 +186,27 @@ func (m *FileConfigManager) GetConfigWithOverwritesOrCreateNew(ctx context.Conte
 	return config, nil
 }
 
-// GetConfig returns the current config, always reading fresh from disk
+// GetConfig returns the current configuration.
+//
+// The function first takes a shared read lock so multiple callers can run
+// concurrently.  It then:
+//
+//  1. Ensures the directory exists (harmless no-op if it already does).
+//  2. Verifies the file exists, preserving the historical “config file
+//     does not exist” error semantics expected by callers and tests.
+//  3. Calls Stat() — an inexpensive syscall — and compares the file’s
+//     ModTime with the timestamp stored in the cache.
+//     • If identical, the file is guaranteed unchanged ⇒ return the
+//     cached *FullConfig* immediately (no I/O, no YAML decode).
+//     • Otherwise fall through to the slow path:
+//     a) Read the file with a context deadline.
+//     b) Unmarshal YAML into FullConfig (parseConfig).
+//     c) Do basic sanity checks.
+//     d) Atomically refresh the cache.
+//
+// Because the cache is keyed on ModTime, every observable write to the
+// file (which always updates mtime) causes the next reader to parse fresh
+// bytes, so external callers still see a “latest-on-call” behaviour.
 func (m *FileConfigManager) GetConfig(ctx context.Context, tick uint64) (FullConfig, error) {
 	// we use a read lock here, because we only read the config file
 	err := m.mutexReadOrWrite.RLock(ctx)
@@ -204,21 +231,35 @@ func (m *FileConfigManager) GetConfig(ctx context.Context, tick uint64) (FullCon
 		return FullConfig{}, ctx.Err()
 	}
 
-	// Check if the file exists
+	// QUICK existence check
 	exists, err := m.fsService.FileExists(ctx, m.configPath)
 	if err != nil {
-		return FullConfig{}, err
+		return FullConfig{}, fmt.Errorf("failed to check if config file exists in %s: %w", m.configPath, err)
 	}
-
-	// Return empty config if the file doesn't exist
 	if !exists {
 		return FullConfig{}, fmt.Errorf("config file does not exist: %s", m.configPath)
 	}
 
-	// Check if context is already cancelled
-	if ctx.Err() != nil {
-		return FullConfig{}, ctx.Err()
+	// quick stat (µ-seconds, no disk I/O)
+	info, err := m.fsService.Stat(ctx, m.configPath)
+	switch {
+	case err == nil:
+		// file exists → continue with fast-/slow-path decision
+	case errors.Is(err, os.ErrNotExist):
+		return FullConfig{}, fmt.Errorf("config file does not exist: %s", m.configPath)
+	default:
+		return FullConfig{}, fmt.Errorf("failed to stat config file: %w", err)
 	}
+
+	// ---------- FAST PATH ----------
+	m.cacheMu.RLock()
+	if !m.cacheModTime.IsZero() && info.ModTime().Equal(m.cacheModTime) {
+		cfg := m.cacheConfig // return cached struct
+		m.cacheMu.RUnlock()
+		return cfg, nil
+	}
+	m.cacheMu.RUnlock()
+	// ---------- SLOW PATH (file changed) ----------
 
 	// Read the file
 	// Allow half of the timeout for the read operation
@@ -252,20 +293,28 @@ func (m *FileConfigManager) GetConfig(ctx context.Context, tick uint64) (FullCon
 		return FullConfig{}, fmt.Errorf("config file is empty: %s", m.configPath)
 	}
 
+	// update cache atomically
+	m.cacheMu.Lock()
+	m.cacheModTime = info.ModTime()
+	m.cacheConfig = config
+	m.cacheMu.Unlock()
+
 	return config, nil
 }
 
+// parseConfig unmarshals *data* (a YAML document) into a FullConfig.
+//
+// The YAML decoder is configured with KnownFields(true) so that any
+// unknown or misspelled keys cause an immediate error, preventing silent
+// misconfiguration.  No additional semantic validation is performed here;
+// callers are responsible for deeper checks.
 func parseConfig(data []byte) (FullConfig, error) {
-	var node yaml.Node
-	if err := yaml.Unmarshal(data, &node); err != nil {
-		return FullConfig{}, fmt.Errorf("failed to parse config file: %w", err)
-	}
 	var cfg FullConfig
 
-	decoder := yaml.NewDecoder(bytes.NewReader(data))
-	decoder.KnownFields(true)
-	if err := decoder.Decode(&cfg); err != nil {
-		return FullConfig{}, fmt.Errorf("failed to decode config file: %w", err)
+	dec := yaml.NewDecoder(bytes.NewReader(data))
+	dec.KnownFields(true) // ← refuses unknown keys
+	if err := dec.Decode(&cfg); err != nil {
+		return FullConfig{}, fmt.Errorf("failed to decode config: %w", err)
 	}
 	return cfg, nil
 }

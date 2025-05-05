@@ -81,7 +81,7 @@ func (r *RedpandaInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSna
 				func(ctx context.Context) error {
 					// Force removal when other approaches fail - bypasses state transitions
 					// and directly deletes files and resources
-					return r.service.ForceRemoveRedpanda(ctx, services.GetFileSystem())
+					return r.service.ForceRemoveRedpanda(ctx, services.GetFileSystem(), r.baseFSMInstance.GetID())
 				},
 			)
 		}

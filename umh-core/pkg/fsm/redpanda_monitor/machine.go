@@ -33,6 +33,7 @@ import (
 // NewRedpandaMonitorInstance creates a new RedpandaMonitorInstance with the standard transitions.
 func NewRedpandaMonitorInstance(config config.RedpandaMonitorConfig) *RedpandaMonitorInstance {
 	return NewRedpandaMonitorInstanceWithService(config, redpanda_monitor.NewRedpandaMonitorService(
+		config.Name,
 		redpanda_monitor.WithS6Service(s6.NewDefaultService()),
 	))
 }
@@ -41,7 +42,7 @@ func NewRedpandaMonitorInstance(config config.RedpandaMonitorConfig) *RedpandaMo
 func NewRedpandaMonitorInstanceWithService(config config.RedpandaMonitorConfig, service redpanda_monitor.IRedpandaMonitorService) *RedpandaMonitorInstance {
 	// Build the config for the base FSM
 	fsmCfg := internal_fsm.BaseFSMInstanceConfig{
-		ID: constants.RedpandaMonitorServiceName,
+		ID: config.Name,
 		// The user has said they only allow "active" or "stopped" as desired states
 		DesiredFSMState:              config.DesiredFSMState,  // "active" or "stopped"
 		OperationalStateAfterCreate:  OperationalStateStopped, // upon creation, start in stopped
@@ -67,7 +68,7 @@ func NewRedpandaMonitorInstanceWithService(config config.RedpandaMonitorConfig, 
 	}
 
 	// Construct the base instance
-	baseFSM := internal_fsm.NewBaseFSMInstance(fsmCfg, backoff.DefaultConfig(metrics.ComponentAgentMonitor, logger.For(constants.RedpandaMonitorServiceName)), logger.For(constants.RedpandaMonitorServiceName))
+	baseFSM := internal_fsm.NewBaseFSMInstance(fsmCfg, backoff.DefaultConfig(metrics.ComponentAgentMonitor, logger.For(config.Name)), logger.For(config.Name))
 
 	// Create our instance
 	instance := &RedpandaMonitorInstance{
@@ -80,7 +81,7 @@ func NewRedpandaMonitorInstanceWithService(config config.RedpandaMonitorConfig, 
 	instance.registerCallbacks()
 
 	// Initialize error counter
-	metrics.InitErrorCounter(metrics.ComponentAgentMonitor, constants.RedpandaMonitorServiceName)
+	metrics.InitErrorCounter(metrics.ComponentAgentMonitor, config.Name)
 
 	return instance
 }

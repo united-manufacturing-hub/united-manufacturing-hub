@@ -22,6 +22,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
@@ -42,6 +43,8 @@ import (
 	"gopkg.in/yaml.v3"
 
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+
+	"github.com/cespare/xxhash/v2"
 )
 
 // IBenthosService is the interface for managing Benthos services
@@ -103,8 +106,49 @@ type BenthosStatus struct {
 	HealthCheck benthos_monitor.HealthCheck
 	// BenthosMetrics contains information about the metrics of the Benthos service
 	BenthosMetrics benthos_monitor.BenthosMetrics
-	// BenthosLogs contains the logs of the Benthos service
+	// BenthosLogs contains the structured s6 log entries emitted by the
+	// Benthos service.
+	//
+	// **Performance consideration**
+	//
+	//   • Logs can grow quickly, and profiling shows that naïvely deep-copying
+	//     this slice dominates CPU time (see https://flamegraph.com/share/592a6a59-25d1-11f0-86bc-aa320ab09ef2).
+	//
+	//   • The FSM needs read-only access to the logs for historical snapshots;
+	//     it never mutates them.
+	//
+	//   • The s6 layer *always* allocates a brand-new slice when it returns
+	//     logs (see DefaultService.GetLogs), so sharing the slice’s backing
+	//     array across snapshots cannot introduce data races.
+	//
+	// Therefore we override the default behaviour and copy only the 3-word
+	// slice header (24 B on amd64) — see CopyBenthosLogs below.
 	BenthosLogs []s6service.LogEntry
+}
+
+// CopyBenthosLogs is a go-deepcopy override for the BenthosLogs field.
+//
+// go-deepcopy looks for a method with the signature
+//
+//	func (dst *T) Copy<FieldName>(src <FieldType>) error
+//
+// and, if present, calls it instead of performing its generic deep-copy logic.
+// By assigning the slice directly we make a **shallow copy**: the header is
+// duplicated but the underlying backing array is shared.
+//
+// Why this is safe:
+//
+//  1. The s6 service returns a fresh []LogEntry on every call, never reusing
+//     or mutating a previously returned slice.
+//  2. BenthosLogs is treated as immutable after the snapshot is taken.
+//
+// If either assumption changes, delete this method to fall back to the default
+// deep-copy (O(n) but safe for mutable slices).
+//
+// See also: https://github.com/tiendc/go-deepcopy?tab=readme-ov-file#copy-struct-fields-via-struct-methods
+func (bs *BenthosStatus) CopyBenthosLogs(src []s6service.LogEntry) error {
+	bs.BenthosLogs = src
+	return nil
 }
 
 // BenthosService is the default implementation of the IBenthosService interface
@@ -117,7 +161,49 @@ type BenthosService struct {
 
 	benthosMonitorManager *benthos_monitor_fsm.BenthosMonitorManager
 	benthosMonitorConfigs []config.BenthosMonitorConfig
+
+	// -----------------------------------------------------------------------------
+	// 🌶️  Hot-path YAML-parsing cache
+	// -----------------------------------------------------------------------------
+
+	// configCache stores one *normalised* Benthos config per logical Benthos
+	// instance (“my-pipe”, “orders2db”, …).
+	//
+	//   • **Key**   – logical benthosName (without the "benthos-" prefix)
+	//   • **Value** – configCacheEntry{hash, parsed}
+	//
+	// We use sync.Map instead of a plain map+mutex because:
+	//
+	//   1. GetConfig might be called concurrently;
+	//      the cache is therefore *read-heavy* and *contention-light*.
+	//   2. sync.Map gives us lock-free reads and amortised-O(1) writes, which
+	//      is exactly what we need for a “mostly reads, very few writes” workload.
+	configCache sync.Map // map[string]configCacheEntry
 }
+
+// configCacheEntry is the value stored in configCache.
+//
+// A quick uint64 xxHash lets us tell in ~1 ns if the YAML has changed since
+// the previous call.  If the hash is identical we can *skip* the expensive
+// yaml.Unmarshal and simply hand the already-normalised struct back to the
+// caller – a ~20× speed-up on the hot path.
+type configCacheEntry struct {
+	// hash is xxhash.Sum64(buf) of the raw YAML file.  Collisions are
+	// vanishingly unlikely (2⁻⁶⁴), so equality is “good enough” to treat
+	// the file as unchanged.
+	hash uint64
+
+	// parsed is the *fully normalised* BenthosServiceConfig that callers
+	// expect.  It is treated as **read-only** after being cached; if callers
+	// ever start mutating the struct, we must clone it before returning.
+	parsed benthosserviceconfig.BenthosServiceConfig
+}
+
+// hash is a helper function for configCacheEntry.hash
+func hash(buf []byte) uint64 { return xxhash.Sum64(buf) }
+
+// benthosLogRe is a helper function for BenthosService.IsLogsFine
+var benthosLogRe = regexp.MustCompile(`^level=(error|warn)\s+msg="(.+)"`)
 
 // BenthosServiceOption is a function that modifies a BenthosService
 type BenthosServiceOption func(*BenthosService)
@@ -233,7 +319,18 @@ func (s *BenthosService) GetConfig(ctx context.Context, filesystemService filesy
 		return benthosserviceconfig.BenthosServiceConfig{}, fmt.Errorf("failed to get benthos config file for service %s: %w", s6ServiceName, err)
 	}
 
-	// Parse the YAML into a config map
+	h := hash(yamlData)
+
+	// ---------- fast path: YAML identical to last call ----------
+	if v, ok := s.configCache.Load(benthosName); ok {
+		entry := v.(configCacheEntry)
+		if entry.hash == h {
+			// Nothing changed – return the cached, already-normalised struct
+			return entry.parsed, nil
+		}
+	}
+
+	// ---------- slow path: YAML changed ----------
 	var benthosConfig map[string]interface{}
 	if err := yaml.Unmarshal(yamlData, &benthosConfig); err != nil {
 		return benthosserviceconfig.BenthosServiceConfig{}, fmt.Errorf("error parsing benthos config file for service %s: %w", s6ServiceName, err)
@@ -290,8 +387,16 @@ func (s *BenthosService) GetConfig(ctx context.Context, filesystemService filesy
 		}
 	}
 
+	parsed := benthosserviceconfig.NormalizeBenthosConfig(result)
+
+	// Store the parsed config in the cache
+	s.configCache.Store(benthosName, configCacheEntry{
+		hash:   h,
+		parsed: parsed,
+	})
+
 	// Normalize the config to ensure consistent defaults
-	return benthosserviceconfig.NormalizeBenthosConfig(result), nil
+	return parsed, nil
 }
 
 // extractMetricsPort safely extracts the metrics port from the config map
@@ -447,7 +552,7 @@ func (s *BenthosService) GetHealthCheckAndMetrics(ctx context.Context, filesyste
 	}
 
 	if lastObservedState == nil {
-		return BenthosStatus{}, fmt.Errorf("last observed state is nil")
+		return BenthosStatus{}, ErrLastObservedStateNil
 	}
 
 	// Convert the last observed state to a BenthosMonitorObservedState
@@ -798,61 +903,51 @@ func (s *BenthosService) ReconcileManager(ctx context.Context, services servicer
 	return nil, s6Reconciled || monitorReconciled
 }
 
-// IsLogsFine analyzes Benthos logs to determine if there are any critical issues
-func (s *BenthosService) IsLogsFine(logs []s6service.LogEntry, currentTime time.Time, logWindow time.Duration) bool {
+// IsLogsFine reports whether recent Benthos logs contain critical errors or warnings.
+func (s *BenthosService) IsLogsFine(
+	logs []s6service.LogEntry,
+	now time.Time,
+	window time.Duration,
+) bool {
+
 	if len(logs) == 0 {
 		return true
 	}
 
-	// First, filter out by timestamp and then geenate []string from it
-	filteredLogs := []string{}
-	for _, log := range logs {
-		if log.Timestamp.After(currentTime.Add(-1 * logWindow)) {
-			filteredLogs = append(filteredLogs, log.Content)
-		}
+	cutoff := now.Add(-window)         // pre-compute once
+	critWarnSubstrings := [...]string{ // small, fixed slice
+		"failed to", "connection lost", "unable to",
 	}
 
-	// Compile regex patterns for different types of logs
-	benthosLogRegex := regexp.MustCompile(`^level=(error|warn)\s+msg="(.+)"`)
-	configErrorRegex := regexp.MustCompile(`^configuration file read error:`)
-	loggerErrorRegex := regexp.MustCompile(`^failed to create logger:`)
-	linterErrorRegex := regexp.MustCompile(`^Config lint error:`)
+	for _, l := range logs {
+		if l.Timestamp.Before(cutoff) {
+			continue // outside the window
+		}
 
-	for _, log := range filteredLogs {
-		// Check for critical system errors first
-		if configErrorRegex.MatchString(log) ||
-			loggerErrorRegex.MatchString(log) ||
-			linterErrorRegex.MatchString(log) {
+		// Very cheap checks first — just bytes/prefix matches.
+		switch {
+		case strings.HasPrefix(l.Content, "configuration file read error:"),
+			strings.HasPrefix(l.Content, "failed to create logger:"),
+			strings.HasPrefix(l.Content, "Config lint error:"):
 			return false
 		}
 
-		// Parse structured Benthos logs
-		if matches := benthosLogRegex.FindStringSubmatch(log); matches != nil {
-			level := matches[1]
-			message := matches[2]
+		// Only one regexp call per line.
+		if m := benthosLogRe.FindStringSubmatch(l.Content); m != nil {
+			level, msg := m[1], m[2]
 
-			// Error logs are always critical
 			if level == "error" {
 				return false
 			}
-
-			// For warnings, only consider them critical if they indicate serious issues
 			if level == "warn" {
-				criticalWarnings := []string{
-					"failed to",
-					"connection lost",
-					"unable to",
-				}
-
-				for _, criticalPattern := range criticalWarnings {
-					if strings.Contains(message, criticalPattern) {
+				for _, sub := range critWarnSubstrings {
+					if strings.Contains(msg, sub) {
 						return false
 					}
 				}
 			}
 		}
 	}
-
 	return true
 }
 

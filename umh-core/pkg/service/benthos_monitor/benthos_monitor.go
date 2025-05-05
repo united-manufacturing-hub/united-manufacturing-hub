@@ -40,6 +40,7 @@ import (
 
 	dto "github.com/prometheus/client_model/go"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/monitor"
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
@@ -135,7 +136,7 @@ type connStatus struct {
 type BenthosMetrics struct {
 	// Metrics contains the metrics of the Benthos service
 	Metrics Metrics
-	// LastUpdatedAt contains the last time the metrics were updated
+	// MetricsState contains the state of the metrics
 	MetricsState *BenthosMetricsState
 }
 
@@ -165,8 +166,49 @@ type BenthosMonitorStatus struct {
 	LastScan *BenthosMetricsScan
 	// IsRunning indicates whether the benthos_monitor service is running
 	IsRunning bool
-	// Logs contains the logs of the benthos_monitor service
+	// Logs contains the structured s6 log entries emitted by the
+	// benthos_monitor service.
+	//
+	// **Performance consideration**
+	//
+	//   • Logs can grow quickly, and profiling shows that naïvely deep-copying
+	//     this slice dominates CPU time (see https://flamegraph.com/share/592a6a59-25d1-11f0-86bc-aa320ab09ef2).
+	//
+	//   • The FSM needs read-only access to the logs for historical snapshots;
+	//     it never mutates them.
+	//
+	//   • The s6 layer *always* allocates a brand-new slice when it returns
+	//     logs (see DefaultService.GetLogs), so sharing the slice's backing
+	//     array across snapshots cannot introduce data races.
+	//
+	// Therefore we override the default behaviour and copy only the 3-word
+	// slice header (24 B on amd64) — see CopyLogs below.
 	Logs []s6service.LogEntry
+}
+
+// CopyLogs is a go-deepcopy override for the Logs field.
+//
+// go-deepcopy looks for a method with the signature
+//
+//	func (dst *T) Copy<FieldName>(src <FieldType>) error
+//
+// and, if present, calls it instead of performing its generic deep-copy logic.
+// By assigning the slice directly we make a **shallow copy**: the header is
+// duplicated but the underlying backing array is shared.
+//
+// Why this is safe:
+//
+//  1. The s6 service returns a fresh []LogEntry on every call, never reusing
+//     or mutating a previously returned slice.
+//  2. Logs is treated as immutable after the snapshot is taken.
+//
+// If either assumption changes, delete this method to fall back to the default
+// deep-copy (O(n) but safe for mutable slices).
+//
+// See also: https://github.com/tiendc/go-deepcopy?tab=readme-ov-file#copy-struct-fields-via-struct-methods
+func (bms *BenthosMonitorStatus) CopyLogs(src []s6service.LogEntry) error {
+	bms.Logs = src
+	return nil
 }
 
 type IBenthosMonitorService interface {
@@ -250,7 +292,7 @@ func (s *BenthosMonitorService) generateBenthosScript(port uint16) (string, erro
 	// Create the script content with a loop that executes benthos every second
 	// Also let's use gzip to compress the output & hex encode it
 	// We use gzip here, to prevent the output from being rotated halfway through the logs & hex encode it to avoid issues with special characters
-	// Max-time: https://everything.curl.dev/usingcurl/timeouts.html
+	// Max-time: https://everything.monitor.dev/usingcurl/timeouts.html
 	// The timestamp here is the unix nanosecond timestamp of the current time
 	// It is gathered AFTER the curl commands, preventing long curl execution times from affecting the timestamp
 	// +%s%9N: %s is the unix timestamp in seconds with 9 decimal places for nanoseconds
@@ -309,6 +351,44 @@ type Section struct {
 	VersionEndMarkerIndex int
 	MetricsEndMarkerIndex int
 	BlockEndMarkerIndex   int
+}
+
+// ConcatContent concatenates the content of a slice of LogEntry objects into a single byte slice.
+// It calculates the total size of the content, allocates a buffer of that size, and then copies each LogEntry's content into the buffer.
+// This approach is more efficient than using multiple strings.ReplaceAll calls or regex operations.
+func ConcatContent(logs []s6service.LogEntry) []byte {
+	// 1st pass: exact size
+	size := 0
+	for i := range logs {
+		size += len(logs[i].Content)
+	}
+
+	// 1 alloc, no re-growth
+	buf := make([]byte, size)
+	off := 0
+	for i := range logs {
+		off += copy(buf[off:], logs[i].Content)
+	}
+	return buf
+}
+
+// build one DFA-based replacer at package-init;
+// one pass over the input, no regex, no 4×ReplaceAll
+var markerReplacer = strings.NewReplacer(
+	BLOCK_START_MARKER, "",
+	PING_END_MARKER, "",
+	READY_END, "",
+	VERSION_END, "",
+	METRICS_END_MARKER, "",
+	BLOCK_END_MARKER, "",
+)
+
+// stripMarkers returns a copy of b with every marker removed.
+// If you’re on Go ≥ 1.20 you can avoid the extra string-copy with
+//
+//	unsafe.String and unsafe.Slice, but the plain version is often fast enough.
+func StripMarkers(b []byte) []byte {
+	return []byte(markerReplacer.Replace(string(b)))
 }
 
 // ParseBenthosLogs parses the logs of a benthos service and extracts metrics
@@ -418,62 +498,18 @@ func (s *BenthosMonitorService) ParseBenthosLogs(ctx context.Context, logs []s6s
 	var metricsDataBytes []byte
 	var timestampDataBytes []byte
 
-	for _, log := range pingData {
-		pingDataBytes = append(pingDataBytes, log.Content...)
-	}
-
-	for _, log := range readyData {
-		readyDataBytes = append(readyDataBytes, log.Content...)
-	}
-
-	for _, log := range versionData {
-		versionDataBytes = append(versionDataBytes, log.Content...)
-	}
-
-	for _, log := range metricsData {
-		metricsDataBytes = append(metricsDataBytes, log.Content...)
-	}
-
-	for _, log := range timestampData {
-		timestampDataBytes = append(timestampDataBytes, log.Content...)
-	}
+	pingDataBytes = ConcatContent(pingData)
+	readyDataBytes = ConcatContent(readyData)
+	versionDataBytes = ConcatContent(versionData)
+	metricsDataBytes = ConcatContent(metricsData)
+	timestampDataBytes = ConcatContent(timestampData)
 
 	// Remove any markers that might be in the data
-
-	pingDataBytes = bytes.ReplaceAll(pingDataBytes, []byte(BLOCK_START_MARKER), []byte{})
-	pingDataBytes = bytes.ReplaceAll(pingDataBytes, []byte(PING_END_MARKER), []byte{})
-	pingDataBytes = bytes.ReplaceAll(pingDataBytes, []byte(READY_END), []byte{})
-	pingDataBytes = bytes.ReplaceAll(pingDataBytes, []byte(VERSION_END), []byte{})
-	pingDataBytes = bytes.ReplaceAll(pingDataBytes, []byte(METRICS_END_MARKER), []byte{})
-	pingDataBytes = bytes.ReplaceAll(pingDataBytes, []byte(BLOCK_END_MARKER), []byte{})
-
-	readyDataBytes = bytes.ReplaceAll(readyDataBytes, []byte(BLOCK_START_MARKER), []byte{})
-	readyDataBytes = bytes.ReplaceAll(readyDataBytes, []byte(PING_END_MARKER), []byte{})
-	readyDataBytes = bytes.ReplaceAll(readyDataBytes, []byte(READY_END), []byte{})
-	readyDataBytes = bytes.ReplaceAll(readyDataBytes, []byte(VERSION_END), []byte{})
-	readyDataBytes = bytes.ReplaceAll(readyDataBytes, []byte(METRICS_END_MARKER), []byte{})
-	readyDataBytes = bytes.ReplaceAll(readyDataBytes, []byte(BLOCK_END_MARKER), []byte{})
-
-	versionDataBytes = bytes.ReplaceAll(versionDataBytes, []byte(BLOCK_START_MARKER), []byte{})
-	versionDataBytes = bytes.ReplaceAll(versionDataBytes, []byte(PING_END_MARKER), []byte{})
-	versionDataBytes = bytes.ReplaceAll(versionDataBytes, []byte(READY_END), []byte{})
-	versionDataBytes = bytes.ReplaceAll(versionDataBytes, []byte(VERSION_END), []byte{})
-	versionDataBytes = bytes.ReplaceAll(versionDataBytes, []byte(METRICS_END_MARKER), []byte{})
-	versionDataBytes = bytes.ReplaceAll(versionDataBytes, []byte(BLOCK_END_MARKER), []byte{})
-
-	metricsDataBytes = bytes.ReplaceAll(metricsDataBytes, []byte(BLOCK_START_MARKER), []byte{})
-	metricsDataBytes = bytes.ReplaceAll(metricsDataBytes, []byte(PING_END_MARKER), []byte{})
-	metricsDataBytes = bytes.ReplaceAll(metricsDataBytes, []byte(READY_END), []byte{})
-	metricsDataBytes = bytes.ReplaceAll(metricsDataBytes, []byte(VERSION_END), []byte{})
-	metricsDataBytes = bytes.ReplaceAll(metricsDataBytes, []byte(METRICS_END_MARKER), []byte{})
-	metricsDataBytes = bytes.ReplaceAll(metricsDataBytes, []byte(BLOCK_END_MARKER), []byte{})
-
-	timestampDataBytes = bytes.ReplaceAll(timestampDataBytes, []byte(BLOCK_START_MARKER), []byte{})
-	timestampDataBytes = bytes.ReplaceAll(timestampDataBytes, []byte(PING_END_MARKER), []byte{})
-	timestampDataBytes = bytes.ReplaceAll(timestampDataBytes, []byte(READY_END), []byte{})
-	timestampDataBytes = bytes.ReplaceAll(timestampDataBytes, []byte(VERSION_END), []byte{})
-	timestampDataBytes = bytes.ReplaceAll(timestampDataBytes, []byte(METRICS_END_MARKER), []byte{})
-	timestampDataBytes = bytes.ReplaceAll(timestampDataBytes, []byte(BLOCK_END_MARKER), []byte{})
+	pingDataBytes = StripMarkers(pingDataBytes)
+	readyDataBytes = StripMarkers(readyDataBytes)
+	versionDataBytes = StripMarkers(versionDataBytes)
+	metricsDataBytes = StripMarkers(metricsDataBytes)
+	timestampDataBytes = StripMarkers(timestampDataBytes)
 
 	var metrics *BenthosMetrics
 	var healthCheck HealthCheck
@@ -575,25 +611,6 @@ func (s *BenthosMonitorService) ParseBenthosLogs(ctx context.Context, logs []s6s
 	}, nil
 }
 
-func parseCurlError(errorString string) error {
-	if !strings.Contains(errorString, "curl") {
-		return nil
-	}
-
-	knownErrors := map[string]error{
-		"curl: (7)":  ErrServiceConnectionRefused,
-		"curl: (28)": ErrServiceConnectionTimedOut,
-	}
-
-	for knownError, err := range knownErrors {
-		if strings.Contains(errorString, knownError) {
-			return err
-		}
-	}
-
-	return fmt.Errorf("unknown curl error: %s", errorString)
-}
-
 // ProcessPingData processes the ping data and returns whether the service is live
 // It returns false if the service is not live, and an error if there is an error parsing the ping data
 // It is live, when it contains the string "pong"
@@ -636,7 +653,7 @@ func ParsePingData(dataReader io.Reader) (bool, error) {
 		return false, fmt.Errorf("failed to read ping data: %w", err)
 	}
 
-	curlError := parseCurlError(string(data))
+	curlError := monitor.ParseCurlError(string(data))
 	if curlError != nil {
 		// If we have any curl error, we can assume the service is not live (but we do not need to return the error)
 		return false, nil
@@ -692,7 +709,7 @@ func ParseReadyData(dataReader io.Reader) (bool, readyResponse, error) {
 		return false, readyResponse{}, fmt.Errorf("failed to read ready data: %w", err)
 	}
 
-	curlError := parseCurlError(string(data))
+	curlError := monitor.ParseCurlError(string(data))
 	if curlError != nil {
 		// If we have any curl error, we can assume the service is not ready (but we do not need to return the error)
 		return false, readyResponse{}, nil
@@ -747,7 +764,7 @@ func ParseVersionData(dataReader io.Reader) (versionResponse, error) {
 		return versionResponse{}, fmt.Errorf("failed to read version data: %w", err)
 	}
 
-	curlError := parseCurlError(string(data))
+	curlError := monitor.ParseCurlError(string(data))
 	if curlError != nil {
 		return versionResponse{}, curlError
 	}
@@ -807,7 +824,7 @@ func ParseMetricsData(dataReader io.Reader) (Metrics, error) {
 		return Metrics{}, fmt.Errorf("failed to read metrics data: %w", err)
 	}
 
-	curlError := parseCurlError(string(data))
+	curlError := monitor.ParseCurlError(string(data))
 	if curlError != nil {
 		return Metrics{}, curlError
 	}
@@ -820,8 +837,323 @@ func ParseMetricsData(dataReader io.Reader) (Metrics, error) {
 	return metrics, nil
 }
 
+// --- helpers ---------------------------------------------------------------
+
+// tailInt returns the integer found **after the final space** in a Prometheus
+// text-formatted line.
+//
+// Benthos’ metric stream is deliberately terse; for counters and gauges the
+// value we need is always the token after the last space.  A micro-parser that
+// walks backwards from the end lets us avoid a full `strings.Fields` split
+// (~3× faster and zero allocations on the hot-path).
+func tailInt(line []byte) (int64, error) {
+	i := bytes.LastIndexByte(line, ' ')
+	if i == -1 {
+		return 0, fmt.Errorf("failed to find space in line")
+	}
+	var v int64
+	for _, c := range line[i+1:] {
+		if c < '0' || c > '9' {
+			break
+		}
+		v = v*10 + int64(c-'0')
+	}
+	return v, nil
+}
+
+// tailFloat behaves like tailInt but parses the trailing token as a
+// `float64`.  It is used for histogram/summary quantiles and “_sum” lines
+// where sub-second precision is required.
+func tailFloat(line []byte) (float64, error) {
+	i := bytes.LastIndexByte(line, ' ')
+	if i == -1 {
+		return 0, fmt.Errorf("failed to find space in line")
+	}
+	//f, _ := strconv.ParseFloat(unsafeString(bytes.TrimSpace(line[i+1:])), 64)
+	f, err := strconv.ParseFloat(string(bytes.TrimSpace(line[i+1:])), 64)
+	if err != nil {
+		return 0, fmt.Errorf("failed to parse float: %w", err)
+	}
+	return f, nil
+}
+
+// ---------------------------------------------------------------------------
+
+// ParseMetricsFromBytesOpt – fixed & quantile aware
+func ParseMetricsFromBytes(raw []byte) (Metrics, error) {
+	var m Metrics
+	m.Process.Processors = make(map[string]ProcessorMetrics, 8)
+
+	lineStart := 0
+	for i, b := range raw {
+		if b != '\n' && i != len(raw)-1 {
+			continue
+		}
+		end := i
+		if b != '\n' { // EOF w/o \n
+			end++
+		}
+		line := raw[lineStart:end]
+		lineStart = i + 1
+		if len(line) == 0 || line[0] == '#' {
+			continue
+		}
+
+		nameEnd := bytes.IndexByte(line, '{')
+		if nameEnd == -1 {
+			nameEnd = bytes.IndexByte(line, ' ')
+		}
+		if nameEnd == -1 {
+			continue
+		}
+		//name := unsafeString(line[:nameEnd])
+		name := string(line[:nameEnd])
+		switch name {
+
+		// ---------- input ----------
+		case "input_connection_failed":
+			count, err := tailInt(line)
+			if err != nil {
+				return Metrics{}, fmt.Errorf("failed to parse input connection failed: %w", err)
+			}
+			m.Input.ConnectionFailed = count
+		case "input_connection_lost":
+			count, err := tailInt(line)
+			if err != nil {
+				return Metrics{}, fmt.Errorf("failed to parse input connection lost: %w", err)
+			}
+			m.Input.ConnectionLost = count
+		case "input_connection_up":
+			count, err := tailInt(line)
+			if err != nil {
+				return Metrics{}, fmt.Errorf("failed to parse input connection up: %w", err)
+			}
+			m.Input.ConnectionUp = count
+		case "input_received":
+			count, err := tailInt(line)
+			if err != nil {
+				return Metrics{}, fmt.Errorf("failed to parse input received: %w", err)
+			}
+			m.Input.Received = count
+		case "input_latency_ns":
+			switch extractLabel(line[nameEnd:], "quantile") {
+			case "0.5":
+				p50, err := tailFloat(line)
+				if err != nil {
+					return Metrics{}, fmt.Errorf("failed to parse input latency ns p50: %w", err)
+				}
+				m.Input.LatencyNS.P50 = p50
+			case "0.9":
+				p90, err := tailFloat(line)
+				if err != nil {
+					return Metrics{}, fmt.Errorf("failed to parse input latency ns p90: %w", err)
+				}
+				m.Input.LatencyNS.P90 = p90
+			case "0.99":
+				p99, err := tailFloat(line)
+				if err != nil {
+					return Metrics{}, fmt.Errorf("failed to parse input latency ns p99: %w", err)
+				}
+				m.Input.LatencyNS.P99 = p99
+			}
+		case "input_latency_ns_sum":
+			sum, err := tailFloat(line)
+			if err != nil {
+				return Metrics{}, fmt.Errorf("failed to parse input latency ns sum: %w", err)
+			}
+			m.Input.LatencyNS.Sum = sum
+		case "input_latency_ns_count":
+			count, err := tailInt(line)
+			if err != nil {
+				return Metrics{}, fmt.Errorf("failed to parse input latency ns count: %w", err)
+			}
+			m.Input.LatencyNS.Count = count
+
+		// ---------- output ----------
+		case "output_batch_sent":
+			count, err := tailInt(line)
+			if err != nil {
+				return Metrics{}, fmt.Errorf("failed to parse output batch sent: %w", err)
+			}
+			m.Output.BatchSent = count
+		case "output_connection_failed":
+			count, err := tailInt(line)
+			if err != nil {
+				return Metrics{}, fmt.Errorf("failed to parse output connection failed: %w", err)
+			}
+			m.Output.ConnectionFailed = count
+		case "output_connection_lost":
+			count, err := tailInt(line)
+			if err != nil {
+				return Metrics{}, fmt.Errorf("failed to parse output connection lost: %w", err)
+			}
+			m.Output.ConnectionLost = count
+		case "output_connection_up":
+			count, err := tailInt(line)
+			if err != nil {
+				return Metrics{}, fmt.Errorf("failed to parse output connection up: %w", err)
+			}
+			m.Output.ConnectionUp = count
+		case "output_error":
+			count, err := tailInt(line)
+			if err != nil {
+				return Metrics{}, fmt.Errorf("failed to parse output error: %w", err)
+			}
+			m.Output.Error = count
+		case "output_sent":
+			count, err := tailInt(line)
+			if err != nil {
+				return Metrics{}, fmt.Errorf("failed to parse output sent: %w", err)
+			}
+			m.Output.Sent = count
+		case "output_latency_ns":
+			switch extractLabel(line[nameEnd:], "quantile") {
+			case "0.5":
+				p50, err := tailFloat(line)
+				if err != nil {
+					return Metrics{}, fmt.Errorf("failed to parse output latency ns p50: %w", err)
+				}
+				m.Output.LatencyNS.P50 = p50
+			case "0.9":
+				p90, err := tailFloat(line)
+				if err != nil {
+					return Metrics{}, fmt.Errorf("failed to parse output latency ns p90: %w", err)
+				}
+				m.Output.LatencyNS.P90 = p90
+			case "0.99":
+				p99, err := tailFloat(line)
+				if err != nil {
+					return Metrics{}, fmt.Errorf("failed to parse output latency ns p99: %w", err)
+				}
+				m.Output.LatencyNS.P99 = p99
+			}
+		case "output_latency_ns_sum":
+			sum, err := tailFloat(line)
+			if err != nil {
+				return Metrics{}, fmt.Errorf("failed to parse output latency ns sum: %w", err)
+			}
+			m.Output.LatencyNS.Sum = sum
+		case "output_latency_ns_count":
+			count, err := tailInt(line)
+			if err != nil {
+				return Metrics{}, fmt.Errorf("failed to parse output latency ns count: %w", err)
+			}
+			m.Output.LatencyNS.Count = count
+
+		// ---------- processors ----------
+		default:
+			if !bytes.HasPrefix(line, []byte("processor_")) {
+				continue
+			}
+			path := extractLabel(line[nameEnd:], "path")
+			if path == "" {
+				continue
+			}
+			pm := m.Process.Processors[path]
+			if pm.Label == "" {
+				pm.Label = extractLabel(line[nameEnd:], "label")
+			}
+
+			switch name {
+			case "processor_received":
+				count, err := tailInt(line)
+				if err != nil {
+					return Metrics{}, fmt.Errorf("failed to parse processor received: %w", err)
+				}
+				pm.Received = count
+			case "processor_batch_received":
+				count, err := tailInt(line)
+				if err != nil {
+					return Metrics{}, fmt.Errorf("failed to parse processor batch received: %w", err)
+				}
+				pm.BatchReceived = count
+			case "processor_sent":
+				count, err := tailInt(line)
+				if err != nil {
+					return Metrics{}, fmt.Errorf("failed to parse processor sent: %w", err)
+				}
+				pm.Sent = count
+			case "processor_batch_sent":
+				count, err := tailInt(line)
+				if err != nil {
+					return Metrics{}, fmt.Errorf("failed to parse processor batch sent: %w", err)
+				}
+				pm.BatchSent = count
+			case "processor_error":
+				count, err := tailInt(line)
+				if err != nil {
+					return Metrics{}, fmt.Errorf("failed to parse processor error: %w", err)
+				}
+				pm.Error = count
+			case "processor_latency_ns":
+				switch extractLabel(line[nameEnd:], "quantile") {
+				case "0.5":
+					p50, err := tailFloat(line)
+					if err != nil {
+						return Metrics{}, fmt.Errorf("failed to parse processor latency ns p50: %w", err)
+					}
+					pm.LatencyNS.P50 = p50
+				case "0.9":
+					p90, err := tailFloat(line)
+					if err != nil {
+						return Metrics{}, fmt.Errorf("failed to parse processor latency ns p90: %w", err)
+					}
+					pm.LatencyNS.P90 = p90
+				case "0.99":
+					p99, err := tailFloat(line)
+					if err != nil {
+						return Metrics{}, fmt.Errorf("failed to parse processor latency ns p99: %w", err)
+					}
+					pm.LatencyNS.P99 = p99
+				}
+			case "processor_latency_ns_sum":
+				sum, err := tailFloat(line)
+				if err != nil {
+					return Metrics{}, fmt.Errorf("failed to parse processor latency ns sum: %w", err)
+				}
+				pm.LatencyNS.Sum = sum
+			case "processor_latency_ns_count":
+				count, err := tailInt(line)
+				if err != nil {
+					return Metrics{}, fmt.Errorf("failed to parse processor latency ns count: %w", err)
+				}
+				pm.LatencyNS.Count = count
+			}
+			m.Process.Processors[path] = pm
+		}
+	}
+	return m, nil
+}
+
+// extractLabel scans the raw label-set of a Prometheus series (the `{…}`
+// portion) and returns the *value* of a given label key.
+//
+// We read **only** the labels we care about (e.g. `path` or `quantile`), so
+// this hand-rolled matcher is an order of magnitude faster than allocating a
+// full `map[string]string` for every series.
+func extractLabel(b []byte, key string) string {
+	// expects {label="...",path="..."} order irrelevant
+	key += "=\""
+	i := bytes.Index(b, []byte(key))
+	if i == -1 {
+		return ""
+	}
+	i += len(key)
+	j := bytes.IndexByte(b[i:], '"')
+	if j == -1 {
+		return ""
+	}
+	//return unsafeString(b[i : i+j])
+	return string(b[i : i+j])
+}
+
+// unsafeString converts a []byte to string without allocation.
+// Use only for read-only parsing.
+//func unsafeString(b []byte) string { return *(*string)(unsafe.Pointer(&b)) }
+
 // ParseMetricsFromBytes parses prometheus metrics into structured format
-func ParseMetricsFromBytes(data []byte) (Metrics, error) {
+// Deprecated: Use ParseMetricsFromBytes instead
+func ParseMetricsFromBytesSlow(data []byte) (Metrics, error) {
 	var parser expfmt.TextParser
 	metrics := Metrics{
 		Input:  InputMetrics{},

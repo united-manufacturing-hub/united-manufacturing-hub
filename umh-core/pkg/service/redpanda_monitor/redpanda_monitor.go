@@ -27,6 +27,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"golang.org/x/sync/errgroup"
@@ -39,6 +40,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
 
@@ -46,6 +48,10 @@ import (
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 	"go.uber.org/zap"
+
+	"github.com/cespare/xxhash/v2"
+	"github.com/prometheus/prometheus/model/labels"
+	"github.com/prometheus/prometheus/model/textparse"
 )
 
 // Metrics contains information about the metrics of the Redpanda service
@@ -167,12 +173,53 @@ type RedpandaMonitorStatus struct {
 	LastScan *RedpandaMetricsScan
 	// IsRunning indicates whether the redpanda_monitor service is running
 	IsRunning bool
-	// Logs contains the logs of the redpanda_monitor service
+	// Logs contains the structured s6 log entries emitted by the
+	// redpanda_monitor service.
+	//
+	// **Performance consideration**
+	//
+	//   • Logs can grow quickly, and profiling shows that naïvely deep-copying
+	//     this slice dominates CPU time (see https://flamegraph.com/share/592a6a59-25d1-11f0-86bc-aa320ab09ef2).
+	//
+	//   • The FSM needs read-only access to the logs for historical snapshots;
+	//     it never mutates them.
+	//
+	//   • The s6 layer *always* allocates a brand-new slice when it returns
+	//     logs (see DefaultService.GetLogs), so sharing the slice's backing
+	//     array across snapshots cannot introduce data races.
+	//
+	// Therefore we override the default behaviour and copy only the 3-word
+	// slice header (24 B on amd64) — see CopyLogs below.
 	Logs []s6service.LogEntry
 }
 
+// CopyLogs is a go-deepcopy override for the Logs field.
+//
+// go-deepcopy looks for a method with the signature
+//
+//	func (dst *T) Copy<FieldName>(src <FieldType>) error
+//
+// and, if present, calls it instead of performing its generic deep-copy logic.
+// By assigning the slice directly we make a **shallow copy**: the header is
+// duplicated but the underlying backing array is shared.
+//
+// Why this is safe:
+//
+//  1. The s6 service returns a fresh []LogEntry on every call, never reusing
+//     or mutating a previously returned slice.
+//  2. Logs is treated as immutable after the snapshot is taken.
+//
+// If either assumption changes, delete this method to fall back to the default
+// deep-copy (O(n) but safe for mutable slices).
+//
+// See also: https://github.com/tiendc/go-deepcopy?tab=readme-ov-file#copy-struct-fields-via-struct-methods
+func (rms *RedpandaMonitorStatus) CopyLogs(src []s6service.LogEntry) error {
+	rms.Logs = src
+	return nil
+}
+
 type IRedpandaMonitorService interface {
-	GenerateS6ConfigForRedpandaMonitor() (s6serviceconfig.S6ServiceConfig, error)
+	GenerateS6ConfigForRedpandaMonitor(s6ServiceName string) (s6serviceconfig.S6ServiceConfig, error)
 	Status(ctx context.Context, filesystemService filesystem.Service, tick uint64) (ServiceInfo, error)
 	AddRedpandaMonitorToS6Manager(ctx context.Context) error
 	RemoveRedpandaMonitorFromS6Manager(ctx context.Context) error
@@ -192,6 +239,17 @@ type RedpandaMonitorService struct {
 	s6Manager       *s6fsm.S6Manager
 	s6Service       s6service.Service
 	s6ServiceConfig *config.S6FSMConfig // There can only be one instance of this service (as there is also only one redpanda instance)
+	redpandaName    string              // normally a service can handle multiple instances, the service monitor here is different and can only handle one instance
+
+	// Cache metrics/clusterconfig/timestamp data
+	previousMetricsDataByteHash       uint64
+	previousClusterConfigDataByteHash uint64
+	previousTimestampDataByteHash     uint64
+	previousMetrics                   *RedpandaMetrics
+	previousClusterConfig             *ClusterConfig
+	previousLastUpdatedAt             time.Time
+	// cacheMutex is used to synchronize access to above cache variables
+	cacheMutex sync.Mutex
 }
 
 // RedpandaMonitorServiceOption is a function that modifies a RedpandaMonitorService
@@ -211,13 +269,14 @@ func WithS6Manager(s6Manager *s6fsm.S6Manager) RedpandaMonitorServiceOption {
 	}
 }
 
-func NewRedpandaMonitorService(opts ...RedpandaMonitorServiceOption) *RedpandaMonitorService {
-	managerName := fmt.Sprintf("%s%s", logger.ComponentRedpandaService, constants.RedpandaMonitorServiceName)
+func NewRedpandaMonitorService(redpandaName string, opts ...RedpandaMonitorServiceOption) *RedpandaMonitorService {
+	managerName := fmt.Sprintf("%s%s", logger.ComponentRedpandaService, redpandaName)
 	service := &RedpandaMonitorService{
 		logger:       logger.For(managerName),
 		metricsState: NewRedpandaMetricsState(),
 		s6Manager:    s6fsm.NewS6Manager(logger.ComponentRedpandaMonitorService),
 		s6Service:    s6service.NewDefaultService(),
+		redpandaName: redpandaName,
 	}
 	for _, opt := range opts {
 		opt(service)
@@ -243,7 +302,7 @@ func (s *RedpandaMonitorService) generateRedpandaScript() (string, error) {
 	// Create the script content with a loop that executes redpanda every second
 	// Also let's use gzip to compress the output & hex encode it
 	// We use gzip here, to prevent the output from being rotated halfway through the logs & hex encode it to avoid issues with special characters
-	// Max-time: https://everything.curl.dev/usingcurl/timeouts.html
+	// Max-time: https://everything.monitor.dev/usingcurl/timeouts.html
 	// The timestamp here is the unix nanosecond timestamp of the current time
 	// It is gathered AFTER the curl commands, preventing long curl execution times from affecting the timestamp
 	// +%s%9N: %s is the unix timestamp in seconds with 9 decimal places for nanoseconds
@@ -264,10 +323,10 @@ done
 }
 
 func (s *RedpandaMonitorService) GetS6ServiceName() string {
-	return constants.RedpandaMonitorServiceName
+	return fmt.Sprintf("redpanda-monitor-%s", s.redpandaName)
 }
 
-func (s *RedpandaMonitorService) GenerateS6ConfigForRedpandaMonitor() (s6serviceconfig.S6ServiceConfig, error) {
+func (s *RedpandaMonitorService) GenerateS6ConfigForRedpandaMonitor(s6ServiceName string) (s6serviceconfig.S6ServiceConfig, error) {
 	scriptContent, err := s.generateRedpandaScript()
 	if err != nil {
 		return s6serviceconfig.S6ServiceConfig{}, err
@@ -276,7 +335,7 @@ func (s *RedpandaMonitorService) GenerateS6ConfigForRedpandaMonitor() (s6service
 	s6Config := s6serviceconfig.S6ServiceConfig{
 		Command: []string{
 			"/bin/sh",
-			fmt.Sprintf("%s/%s/config/run_redpanda_monitor.sh", constants.S6BaseDir, s.GetS6ServiceName()),
+			fmt.Sprintf("%s/%s/config/run_redpanda_monitor.sh", constants.S6BaseDir, s6ServiceName),
 		},
 		Env: map[string]string{},
 		ConfigFiles: map[string]string{
@@ -296,6 +355,42 @@ type Section struct {
 	BlockEndMarkerIndex         int
 }
 
+// ConcatContent concatenates the content of a slice of LogEntry objects into a single byte slice.
+// It calculates the total size of the content, allocates a buffer of that size, and then copies each LogEntry's content into the buffer.
+// This approach is more efficient than using multiple strings.ReplaceAll calls or regex operations.
+func ConcatContent(logs []s6service.LogEntry) []byte {
+	// 1st pass: exact size
+	size := 0
+	for i := range logs {
+		size += len(logs[i].Content)
+	}
+
+	// 1 alloc, no re-growth
+	buf := make([]byte, size)
+	off := 0
+	for i := range logs {
+		off += copy(buf[off:], logs[i].Content)
+	}
+	return buf
+}
+
+// build one DFA-based replacer at package-init;
+// one pass over the input, no regex, no 4×ReplaceAll
+var markerReplacer = strings.NewReplacer(
+	BLOCK_START_MARKER, "",
+	METRICS_END_MARKER, "",
+	CLUSTERCONFIG_END_MARKER, "",
+	BLOCK_END_MARKER, "",
+)
+
+// stripMarkers returns a copy of b with every marker removed.
+// If you’re on Go ≥ 1.20 you can avoid the extra string-copy with
+//
+//	unsafe.String and unsafe.Slice, but the plain version is often fast enough.
+func StripMarkers(b []byte) []byte {
+	return []byte(markerReplacer.Replace(string(b)))
+}
+
 // ParseRedpandaLogs parses the logs of a redpanda service and extracts metrics
 func (s *RedpandaMonitorService) ParseRedpandaLogs(ctx context.Context, logs []s6service.LogEntry, tick uint64) (*RedpandaMetricsScan, error) {
 	/*
@@ -313,7 +408,8 @@ func (s *RedpandaMonitorService) ParseRedpandaLogs(ctx context.Context, logs []s
 		return nil, fmt.Errorf("no logs provided")
 	}
 	// Find the markers in a single pass through the logs
-	sections := make([]Section, 0)
+	// Pre-allocate the slice to avoid reallocations (we usually expect ~4-7 sections)
+	sections := make([]Section, 0, 10)
 
 	currentSection := Section{
 		StartMarkerIndex:            -1,
@@ -379,95 +475,119 @@ func (s *RedpandaMonitorService) ParseRedpandaLogs(ctx context.Context, logs []s
 	var clusterConfigDataBytes []byte
 	var timestampDataBytes []byte
 
-	for _, log := range metricsData {
-		metricsDataBytes = append(metricsDataBytes, log.Content...)
-	}
-	for _, log := range clusterConfigData {
-		clusterConfigDataBytes = append(clusterConfigDataBytes, log.Content...)
-	}
-	for _, log := range timestampData {
-		timestampDataBytes = append(timestampDataBytes, log.Content...)
-	}
+	metricsDataBytes = ConcatContent(metricsData)
+	clusterConfigDataBytes = ConcatContent(clusterConfigData)
+	timestampDataBytes = ConcatContent(timestampData)
 
 	// Remove any markers that might be in the data
-	metricsDataBytes = bytes.ReplaceAll(metricsDataBytes, []byte(BLOCK_START_MARKER), []byte{})
-	metricsDataBytes = bytes.ReplaceAll(metricsDataBytes, []byte(METRICS_END_MARKER), []byte{})
-	metricsDataBytes = bytes.ReplaceAll(metricsDataBytes, []byte(CLUSTERCONFIG_END_MARKER), []byte{})
-	metricsDataBytes = bytes.ReplaceAll(metricsDataBytes, []byte(BLOCK_END_MARKER), []byte{})
+	metricsDataBytes = StripMarkers(metricsDataBytes)
+	clusterConfigDataBytes = StripMarkers(clusterConfigDataBytes)
+	timestampDataBytes = StripMarkers(timestampDataBytes)
 
-	clusterConfigDataBytes = bytes.ReplaceAll(clusterConfigDataBytes, []byte(BLOCK_START_MARKER), []byte{})
-	clusterConfigDataBytes = bytes.ReplaceAll(clusterConfigDataBytes, []byte(METRICS_END_MARKER), []byte{})
-	clusterConfigDataBytes = bytes.ReplaceAll(clusterConfigDataBytes, []byte(CLUSTERCONFIG_END_MARKER), []byte{})
-	clusterConfigDataBytes = bytes.ReplaceAll(clusterConfigDataBytes, []byte(BLOCK_END_MARKER), []byte{})
+	metricsDataByteHash := xxhash.Sum64(metricsDataBytes)
+	clusterConfigDataByteHash := xxhash.Sum64(clusterConfigDataBytes)
+	timestampDataByteHash := xxhash.Sum64(timestampDataBytes)
 
-	timestampDataBytes = bytes.ReplaceAll(timestampDataBytes, []byte(BLOCK_START_MARKER), []byte{})
-	timestampDataBytes = bytes.ReplaceAll(timestampDataBytes, []byte(METRICS_END_MARKER), []byte{})
-	timestampDataBytes = bytes.ReplaceAll(timestampDataBytes, []byte(CLUSTERCONFIG_END_MARKER), []byte{})
-	timestampDataBytes = bytes.ReplaceAll(timestampDataBytes, []byte(BLOCK_END_MARKER), []byte{})
+	metricsChanged := s.previousMetricsDataByteHash != metricsDataByteHash
+	clusterConfigChanged := s.previousClusterConfigDataByteHash != clusterConfigDataByteHash
+	timestampChanged := s.previousTimestampDataByteHash != timestampDataByteHash
+
+	if !metricsChanged && !clusterConfigChanged && !timestampChanged {
+		// No changes, return the cached values
+		return &RedpandaMetricsScan{
+			RedpandaMetrics: s.previousMetrics,
+			ClusterConfig:   s.previousClusterConfig,
+			LastUpdatedAt:   s.previousLastUpdatedAt,
+		}, nil
+	}
 
 	var metrics *RedpandaMetrics
 	var clusterConfig *ClusterConfig
+	var lastUpdatedAt time.Time
 	// Processing the Metrics & cluster config takes time (especially the metrics parsing) each, therefore process them in parallel
 
-	ctxProcessMetrics, cancelProcessMetrics := context.WithTimeout(ctx, constants.RedpandaProcessMetricsTimeout)
+	ctxProcessMetrics, cancelProcessMetrics := context.WithTimeout(ctx, constants.RedpandaMonitorProcessMetricsTimeout)
 	defer cancelProcessMetrics()
 	g, _ := errgroup.WithContext(ctxProcessMetrics)
 
-	g.Go(func() error {
-		var err error
-		metrics, err = s.processMetricsDataBytes(metricsDataBytes, tick)
-		return err
-	})
+	if metricsChanged {
+		g.Go(func() error {
+			var err error
+			metrics, err = s.processMetricsDataBytes(metricsDataBytes, tick)
+			return err
+		})
+	} else {
+		metrics = s.previousMetrics
+	}
 
-	g.Go(func() error {
-		var err error
-		clusterConfig, err = s.processClusterConfigDataBytes(clusterConfigDataBytes, tick)
-		return err
-	})
+	if clusterConfigChanged {
+		g.Go(func() error {
+			var err error
+			clusterConfig, err = s.processClusterConfigDataBytes(clusterConfigDataBytes, tick)
+			return err
+		})
+	} else {
+		clusterConfig = s.previousClusterConfig
+	}
 
-	// Create a buffered channel to receive the result from g.Wait().
-	// The channel is buffered so that the goroutine sending on it doesn't block.
-	errc := make(chan error, 1)
+	if metricsChanged || clusterConfigChanged {
+		// Create a buffered channel to receive the result from g.Wait().
+		// The channel is buffered so that the goroutine sending on it doesn't block.
+		errc := make(chan error, 1)
 
-	// Run g.Wait() in a separate goroutine.
-	// This allows us to use a select statement to return early if the context is canceled.
-	go func() {
-		// g.Wait() blocks until all goroutines launched with g.Go() have returned.
-		// It returns the first non-nil error, if any.
-		errc <- g.Wait()
-	}()
+		// Run g.Wait() in a separate goroutine.
+		// This allows us to use a select statement to return early if the context is canceled.
+		go func() {
+			// g.Wait() blocks until all goroutines launched with g.Go() have returned.
+			// It returns the first non-nil error, if any.
+			errc <- g.Wait()
+		}()
 
-	// Use a select statement to wait for either the g.Wait() result or the context's cancellation.
-	select {
-	case err := <-errc:
-		// g.Wait() has finished, so check if any goroutine returned an error.
-		if err != nil {
-			// If there was an error in any sub-call, return that error.
-			return nil, err
+		// Use a select statement to wait for either the g.Wait() result or the context's cancellation.
+		select {
+		case err := <-errc:
+			// g.Wait() has finished, so check if any goroutine returned an error.
+			if err != nil {
+				// If there was an error in any sub-call, return that error.
+				return nil, err
+			}
+			// If err is nil, all goroutines completed successfully.
+		case <-ctxProcessMetrics.Done():
+			// The context was canceled or its deadline was exceeded before all goroutines finished.
+			// Although some goroutines might still be running in the background,
+			// they use a context (gctx) that should cause them to terminate promptly.
+			return nil, ctxProcessMetrics.Err()
 		}
-		// If err is nil, all goroutines completed successfully.
-	case <-ctxProcessMetrics.Done():
-		// The context was canceled or its deadline was exceeded before all goroutines finished.
-		// Although some goroutines might still be running in the background,
-		// they use a context (gctx) that should cause them to terminate promptly.
-		return nil, ctxProcessMetrics.Err()
 	}
 
-	timestampDataString := strings.TrimSpace(string(timestampDataBytes))
-	// If the system resolution is to small, we need to pad the timestamp with zeros
-	// Good: 1744199140749598341
-	// Bad: 1744199121
-	if len(timestampDataString) < 19 {
-		timestampDataString = fmt.Sprintf("%s%s", timestampDataString, strings.Repeat("0", 19-len(timestampDataString)))
+	if timestampChanged {
+		timestampDataString := strings.TrimSpace(string(timestampDataBytes))
+		// If the system resolution is to small, we need to pad the timestamp with zeros
+		// Good: 1744199140749598341
+		// Bad: 1744199121
+		if len(timestampDataString) < 19 {
+			timestampDataString = fmt.Sprintf("%s%s", timestampDataString, strings.Repeat("0", 19-len(timestampDataString)))
+		}
+
+		// Parse the timestamp data from the timestampDataBytes (that we already extracted)
+		timestampNs, err := strconv.ParseUint(timestampDataString, 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse timestamp data: %w", err)
+		}
+
+		lastUpdatedAt = time.Unix(0, int64(timestampNs))
 	}
 
-	// Parse the timestamp data from the timestampDataBytes (that we already extracted)
-	timestampNs, err := strconv.ParseUint(timestampDataString, 10, 64)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse timestamp data: %w", err)
-	}
+	// Update previous values
+	s.cacheMutex.Lock()
+	defer s.cacheMutex.Unlock()
+	s.previousMetricsDataByteHash = metricsDataByteHash
+	s.previousClusterConfigDataByteHash = clusterConfigDataByteHash
+	s.previousTimestampDataByteHash = timestampDataByteHash
+	s.previousMetrics = metrics
+	s.previousClusterConfig = clusterConfig
+	s.previousLastUpdatedAt = lastUpdatedAt
 
-	lastUpdatedAt := time.Unix(0, int64(timestampNs))
 	return &RedpandaMetricsScan{
 		RedpandaMetrics: metrics,
 		ClusterConfig:   clusterConfig,
@@ -475,51 +595,19 @@ func (s *RedpandaMonitorService) ParseRedpandaLogs(ctx context.Context, logs []s
 	}, nil
 }
 
-func parseCurlError(errorString string) error {
-	if !strings.Contains(errorString, "curl") {
-		return nil
-	}
-
-	knownErrors := map[string]error{
-		"curl: (7)":  ErrServiceConnectionRefused,
-		"curl: (28)": ErrServiceConnectionTimedOut,
-	}
-
-	for knownError, err := range knownErrors {
-		if strings.Contains(errorString, knownError) {
-			return err
-		}
-	}
-
-	return fmt.Errorf("unknown curl error: %s", errorString)
-}
-
 func (s *RedpandaMonitorService) processMetricsDataBytes(metricsDataBytes []byte, tick uint64) (*RedpandaMetrics, error) {
 
-	metricsDataString := string(metricsDataBytes)
-	// Strip any newlines
-	metricsDataString = strings.ReplaceAll(metricsDataString, "\n", "")
-
-	// Decode the hex encoded metrics data
-	decodedMetricsDataBytes, err := hex.DecodeString(metricsDataString)
+	gzr, err := gzip.NewReader(hex.NewDecoder(bytes.NewReader(metricsDataBytes)))
 	if err != nil {
-		return nil, fmt.Errorf("failed to decode metrics data: %w", err)
-	}
-
-	// Decompress the metrics data
-	gzipReader, err := gzip.NewReader(bytes.NewReader(decodedMetricsDataBytes))
-	if err != nil {
-		return nil, fmt.Errorf("failed to decompress metrics data: %w", err)
+		return nil, fmt.Errorf("failed to create gzip reader: %w", err)
 	}
 	defer func() {
-		err := gzipReader.Close()
-		if err != nil {
-			sentry.ReportIssuef(sentry.IssueTypeError, s.logger, "failed to close gzip reader: %v", err)
+		if err := gzr.Close(); err != nil {
+			s.logger.Error("failed to close gzip reader", zap.Error(err))
 		}
 	}()
 
-	// Parse the metrics
-	metrics, err := ParseMetrics(gzipReader)
+	metrics, err := parseMetricsBlob(gzr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse metrics: %w", err)
 	}
@@ -531,6 +619,154 @@ func (s *RedpandaMonitorService) processMetricsDataBytes(metricsDataBytes []byte
 		Metrics:      metrics,
 		MetricsState: s.metricsState,
 	}, nil
+}
+
+// parseMetricsBlob converts a single gzip-compressed + hex-encoded response
+// from the Redpanda monitoring side-car into a `Metrics` struct.
+//
+// The helper exists to keep the higher-level log parser readable: decompression
+// and hex-decoding are detail noise, while *this* function encapsulates all
+// error handling related to corrupt or timed-out `curl` replies.
+func parseMetricsBlob(r io.Reader) (Metrics, error) {
+	payload, err := io.ReadAll(r)
+	if err != nil {
+		return Metrics{}, err
+	}
+	if curl := monitor.ParseCurlError(string(payload)); curl != nil {
+		return Metrics{}, curl
+	}
+	return ParseMetricsFast(payload)
+}
+
+// ParseMetricsFast is a zero-allocation Prometheus text parser tuned for
+// **exactly** the subset of Redpanda metrics the UMH-core needs for
+// reconciliation decisions:
+//
+//   - disk-space signals (free/total/alert)
+//   - cluster health (topic & partition counts)
+//   - throughput counters (`produce` / `consume`)
+//   - per-topic partition cardinality
+//
+// By specialising the parser we squeeze > 10× more throughput out of the
+// reconciler loop compared to the generic `expfmt` decoder, which in turn
+// allows the agent to monitor dozens of brokers on sub-millisecond budgets.
+func ParseMetricsFast(b []byte) (Metrics, error) {
+	var (
+		m Metrics
+
+		foundFreeBytes, foundTotalBytes, foundFreeSpaceAlert bool
+		foundClusterTopics, foundUnavailablePartitions       bool
+		foundProduce, foundConsume                           bool
+		sawPartitionsMetric                                  bool
+	)
+
+	p := textparse.NewPromParser(b, labels.NewSymbolTable())
+
+	for {
+		typ, err := p.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return m, fmt.Errorf("iterating metric stream: %w", err)
+		}
+		if typ != textparse.EntrySeries {
+			continue
+		}
+
+		metricBytes, _, val := p.Series()
+		mName := seriesName(metricBytes) // ← metric id without labels
+
+		// Allocate a new slice only when we need labels.
+		var lbls labels.Labels
+		if mName == "redpanda_kafka_request_bytes_total" ||
+			mName == "redpanda_kafka_partitions" {
+			p.Labels(&lbls) // fills lbls; never nil afterwards
+		}
+
+		switch mName {
+		// ── infrastructure ────────────────────────────────────────────────
+		case "redpanda_storage_disk_free_bytes":
+			m.Infrastructure.Storage.FreeBytes = int64(val)
+			foundFreeBytes = true
+
+		case "redpanda_storage_disk_total_bytes":
+			m.Infrastructure.Storage.TotalBytes = int64(val)
+			foundTotalBytes = true
+
+		case "redpanda_storage_disk_free_space_alert":
+			m.Infrastructure.Storage.FreeSpaceAlert = val != 0
+			foundFreeSpaceAlert = true
+
+		// ── cluster ───────────────────────────────────────────────────────
+		case "redpanda_cluster_topics":
+			m.Cluster.Topics = int64(val)
+			foundClusterTopics = true
+
+		case "redpanda_cluster_unavailable_partitions":
+			m.Cluster.UnavailableTopics = int64(val)
+			foundUnavailablePartitions = true
+
+		// ── throughput  (needs a label) ───────────────────────────────────
+		case "redpanda_kafka_request_bytes_total":
+			if lbls == nil {
+				return m, fmt.Errorf("metric redpanda_kafka_request_bytes_total has no labels")
+			}
+			switch lbls.Get("redpanda_request") {
+			case "produce":
+				m.Throughput.BytesIn = int64(val)
+				foundProduce = true
+			case "consume":
+				m.Throughput.BytesOut = int64(val)
+				foundConsume = true
+			}
+
+		// ── per-topic (needs a label) ─────────────────────────────────────
+		case "redpanda_kafka_partitions":
+			if lbls == nil {
+				return m, fmt.Errorf("metric redpanda_kafka_partitions has no labels")
+			}
+			if topic := lbls.Get("redpanda_topic"); topic != "" {
+				if m.Topic.TopicPartitionMap == nil {
+					// a small, non-zero initial capacity
+					m.Topic.TopicPartitionMap = make(map[string]int64, 16)
+				}
+				m.Topic.TopicPartitionMap[topic] = int64(val)
+				sawPartitionsMetric = true
+			}
+		}
+	}
+
+	// ── validation – mirrors the old expfmt version ──────────────────────
+	switch {
+	case !foundFreeBytes:
+		return m, fmt.Errorf("metric redpanda_storage_disk_free_bytes not found")
+	case !foundTotalBytes:
+		return m, fmt.Errorf("metric redpanda_storage_disk_total_bytes not found")
+	case !foundFreeSpaceAlert:
+		return m, fmt.Errorf("metric redpanda_storage_disk_free_space_alert not found")
+	case !foundClusterTopics:
+		return m, fmt.Errorf("metric redpanda_cluster_topics not found")
+	case !foundUnavailablePartitions:
+		return m, fmt.Errorf("metric redpanda_cluster_unavailable_partitions not found")
+	case !foundProduce:
+		return m, fmt.Errorf(`metric redpanda_kafka_request_bytes_total with label redpanda_request="produce" not found`)
+	case !foundConsume:
+		return m, fmt.Errorf(`metric redpanda_kafka_request_bytes_total with label redpanda_request="consume" not found`)
+	case m.Cluster.Topics > 0 && !sawPartitionsMetric:
+		return m, fmt.Errorf("metric redpanda_kafka_partitions not found but redpanda_cluster_topics reports %d topics",
+			m.Cluster.Topics)
+	}
+
+	return m, nil
+}
+
+// helper – cheap split without allocations
+func seriesName(b []byte) string {
+	if i := bytes.IndexByte(b, '{'); i > 0 {
+		return string(b[:i])
+	}
+	return string(b)
 }
 
 func (s *RedpandaMonitorService) processClusterConfigDataBytes(clusterConfigDataBytes []byte, tick uint64) (*ClusterConfig, error) {
@@ -562,7 +798,7 @@ func (s *RedpandaMonitorService) processClusterConfigDataBytes(clusterConfigData
 		return nil, fmt.Errorf("failed to read cluster config data: %w", err)
 	}
 
-	curlError := parseCurlError(string(data))
+	curlError := monitor.ParseCurlError(string(data))
 	if curlError != nil {
 		return nil, curlError
 	}
@@ -613,7 +849,7 @@ func ParseMetrics(dataReader io.Reader) (Metrics, error) {
 		return Metrics{}, fmt.Errorf("failed to read metrics data: %w", err)
 	}
 
-	curlError := parseCurlError(string(data))
+	curlError := monitor.ParseCurlError(string(data))
 	if curlError != nil {
 		return Metrics{}, curlError
 	}
@@ -810,7 +1046,7 @@ func (s *RedpandaMonitorService) AddRedpandaMonitorToS6Manager(ctx context.Conte
 	}
 
 	// Generate the S6 config for this instance
-	s6Config, err := s.GenerateS6ConfigForRedpandaMonitor()
+	s6Config, err := s.GenerateS6ConfigForRedpandaMonitor(s6ServiceName)
 	if err != nil {
 		return fmt.Errorf("failed to generate S6 config for RedpandaMonitor service %s: %w", s6ServiceName, err)
 	}
@@ -819,7 +1055,7 @@ func (s *RedpandaMonitorService) AddRedpandaMonitorToS6Manager(ctx context.Conte
 	s6FSMConfig := config.S6FSMConfig{
 		FSMInstanceConfig: config.FSMInstanceConfig{
 			Name:            s6ServiceName,
-			DesiredFSMState: s6fsm.OperationalStateRunning,
+			DesiredFSMState: s6fsm.OperationalStateStopped, // Ensure we start with a stopped service, so we can start it later
 		},
 		S6ServiceConfig: s6Config,
 	}

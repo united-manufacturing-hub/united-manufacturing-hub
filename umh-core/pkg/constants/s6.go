@@ -31,6 +31,7 @@ var (
 const (
 	S6UpdateObservedStateTimeout = time.Millisecond * 3
 	S6RemoveTimeout              = time.Millisecond * 3
+	S6MaxLines                   = 10000
 )
 
 const (

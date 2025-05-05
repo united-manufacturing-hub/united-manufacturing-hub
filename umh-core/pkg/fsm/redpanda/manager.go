@@ -52,7 +52,7 @@ func NewRedpandaManager(name string) *RedpandaManager {
 		func(fullConfig config.FullConfig) ([]config.RedpandaConfig, error) {
 			redpandaConfig := fullConfig.Internal.Redpanda
 			// Force redpanda name to be "redpanda"
-			redpandaConfig.Name = "redpanda"
+			redpandaConfig.Name = constants.RedpandaServiceName
 			return []config.RedpandaConfig{redpandaConfig}, nil
 		},
 		// Get name from Redpanda config
