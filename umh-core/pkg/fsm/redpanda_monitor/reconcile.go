@@ -96,8 +96,6 @@ func (b *RedpandaMonitorInstance) Reconcile(ctx context.Context, snapshot fsm.Sy
 			strings.Contains(err.Error(), redpanda_monitor_service.ErrServiceNoSectionsFound.Error())
 
 		if !isExpectedError {
-			b.baseFSMInstance.SetError(err, snapshot.Tick)
-			b.baseFSMInstance.GetLogger().Errorf("error reconciling external changes: %s", err)
 
 			if errors.Is(err, context.DeadlineExceeded) {
 				// Healthchecks occasionally take longer (sometimes up to 70ms),
@@ -107,6 +105,10 @@ func (b *RedpandaMonitorInstance) Reconcile(ctx context.Context, snapshot fsm.Sy
 				// further reconciliation attempts in the current tick.
 				return nil, true // We don't want to return an error here, as this can happen in normal operations
 			}
+
+			b.baseFSMInstance.SetError(err, snapshot.Tick)
+			b.baseFSMInstance.GetLogger().Errorf("error reconciling external changes: %s", err)
+
 			return nil, false // We don't want to return an error here, because we want to continue reconciling
 		}
 
@@ -162,7 +164,7 @@ func (b *RedpandaMonitorInstance) reconcileExternalChanges(ctx context.Context, 
 		metrics.ObserveReconcileTime(metrics.ComponentRedpandaMonitor, b.baseFSMInstance.GetID()+".reconcileExternalChanges", time.Since(start))
 	}()
 
-	observedStateCtx, cancel := context.WithTimeout(ctx, constants.S6UpdateObservedStateTimeout)
+	observedStateCtx, cancel := context.WithTimeout(ctx, constants.RedpandaMonitorUpdateObservedStateTimeout)
 	defer cancel()
 	err := b.UpdateObservedStateOfInstance(observedStateCtx, services, tick, loopStartTime)
 	if err != nil {

@@ -507,7 +507,7 @@ func (s *RedpandaMonitorService) ParseRedpandaLogs(ctx context.Context, logs []s
 	var lastUpdatedAt time.Time
 	// Processing the Metrics & cluster config takes time (especially the metrics parsing) each, therefore process them in parallel
 
-	ctxProcessMetrics, cancelProcessMetrics := context.WithTimeout(ctx, constants.RedpandaProcessMetricsTimeout)
+	ctxProcessMetrics, cancelProcessMetrics := context.WithTimeout(ctx, constants.RedpandaMonitorProcessMetricsTimeout)
 	defer cancelProcessMetrics()
 	g, _ := errgroup.WithContext(ctxProcessMetrics)
 

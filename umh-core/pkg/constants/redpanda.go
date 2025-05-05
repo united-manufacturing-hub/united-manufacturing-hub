@@ -26,8 +26,7 @@ const (
 )
 
 const (
-	RedpandaUpdateObservedStateTimeout = 35 * time.Millisecond
-	RedpandaProcessMetricsTimeout      = 30 * time.Millisecond // needs to be smaller than RedpandaUpdateObservedStateTimeout
+	RedpandaUpdateObservedStateTimeout = 20 * time.Millisecond
 )
 const (
 	// RedpandaExpectedMaxP95ExecutionTimePerInstance represents the maximum expected time for a Redpanda instance
