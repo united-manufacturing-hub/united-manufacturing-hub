@@ -187,7 +187,6 @@ func (s *StateMocker) detectConfigEvents(curDfcConfig []config.DataFlowComponent
 		return
 	}
 
-	zap.S().Info("detecting config changes")
 	// detect config changes
 	if len(curDfcConfig) == len(lastDfcConfig) {
 		// checking the config for changes (after edit-dataflowcomponent) is not easy because the name of the component can be changed
