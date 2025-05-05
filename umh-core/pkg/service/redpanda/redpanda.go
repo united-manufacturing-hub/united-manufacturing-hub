@@ -320,6 +320,12 @@ func (s *RedpandaService) GetConfig(ctx context.Context, filesystemService files
 		return redpandaserviceconfig.RedpandaServiceConfig{}, fmt.Errorf("last scan is nil")
 	}
 
+	// If the current state is stopped, we can return immediately
+	// There wont be any logs, metrics, etc. to check
+	if !lastRedpandaMonitorObservedState.ServiceInfo.RedpandaStatus.IsRunning {
+		return redpandaserviceconfig.RedpandaServiceConfig{}, ErrRedpandaMonitorNotRunning
+	}
+
 	return redpandaserviceconfig.NormalizeRedpandaConfig(redpandaStatus), nil
 }
 
@@ -512,6 +518,12 @@ func (s *RedpandaService) GetHealthCheckAndMetrics(ctx context.Context, tick uin
 		redpandaStatus.Logs = lastRedpandaMonitorObservedState.ServiceInfo.RedpandaStatus.Logs
 	} else {
 		return RedpandaStatus{}, fmt.Errorf("last scan is nil")
+	}
+
+	// If the service is not running, we can return immediately
+	// There wont be any logs, metrics, etc. to check
+	if !lastRedpandaMonitorObservedState.ServiceInfo.RedpandaStatus.IsRunning {
+		return RedpandaStatus{}, ErrRedpandaMonitorNotRunning
 	}
 
 	return redpandaStatus, nil

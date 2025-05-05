@@ -184,6 +184,11 @@ func (b *BenthosInstance) getServiceStatus(ctx context.Context, services service
 			infoWithFailedHealthChecks.BenthosStatus.HealthCheck.IsLive = false
 			infoWithFailedHealthChecks.BenthosStatus.HealthCheck.IsReady = false
 			return infoWithFailedHealthChecks, nil
+		} else if errors.Is(err, benthos_service.ErrBenthosMonitorNotRunning) {
+			// If the metrics service is not running, we are unable to get the logs/metrics, therefore we must return an empty status
+			if !IsRunningState(b.baseFSMInstance.GetCurrentFSMState()) {
+				return info, nil
+			}
 		}
 
 		// For other errors, log them and return

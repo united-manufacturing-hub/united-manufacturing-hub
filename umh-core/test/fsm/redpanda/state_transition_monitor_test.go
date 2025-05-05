@@ -300,7 +300,14 @@ func reconcileMonitorUntilState(ctx context.Context, monitorService *redpanda_mo
 
 		// Check state
 		serviceInfo, err := monitorService.Status(ctx, services.GetFileSystem(), tick)
-		Expect(err).NotTo(HaveOccurred())
+		if expectedState == s6fsm.OperationalStateStopped {
+			// If the expected state is stopped, we might expect an error
+			if err != nil {
+				Expect(err.Error()).To(ContainSubstring("service is stopped"))
+			}
+		} else {
+			Expect(err).NotTo(HaveOccurred())
+		}
 		if serviceInfo.S6FSMState == expectedState {
 			return tick
 		}

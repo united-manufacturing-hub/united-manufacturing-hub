@@ -1000,6 +1000,12 @@ func (s *RedpandaMonitorService) Status(ctx context.Context, filesystemService f
 		return ServiceInfo{}, fmt.Errorf("failed to get current FSM state: %w", err)
 	}
 
+	// If the current state is stopped or stopping, we can return immediately
+	// There wont be any logs, metrics, etc. to check
+	if fsmState == s6fsm.OperationalStateStopped || fsmState == s6fsm.OperationalStateStopping {
+		return ServiceInfo{}, monitor.ErrServiceStopped
+	}
+
 	// Get logs
 	s6ServicePath := filepath.Join(constants.S6BaseDir, s6ServiceName)
 	logs, err := s.s6Service.GetLogs(ctx, s6ServicePath, filesystemService)
