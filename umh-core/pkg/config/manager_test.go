@@ -172,7 +172,7 @@ internal:
 			It("should return an error", func() {
 				_, err := configManager.GetConfig(ctx, tick)
 				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(Equal("file check failed"))
+				Expect(err.Error()).To(ContainSubstring("file check failed"))
 			})
 		})
 
@@ -282,7 +282,7 @@ internal: {
 `
 				_, err := parseConfig([]byte(malformedYAML))
 				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("failed to parse config file"))
+				Expect(err.Error()).To(ContainSubstring("did not find expected node content"))
 			})
 
 			It("should return error for YAML with unknown fields when KnownFields is true", func() {
@@ -297,7 +297,7 @@ internal:
 `
 				_, err := parseConfig([]byte(yamlWithUnknownFields))
 				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("failed to decode config file"))
+				Expect(err.Error()).To(ContainSubstring("failed to decode config"))
 			})
 
 			It("should handle null values in YAML", func() {

@@ -1521,3 +1521,10 @@ func (bs *BufferedService) readFileIncrementally(absPath string, previousSize in
 	// Concatenate old and new content
 	return append(previousContent, newContent...), nil
 }
+
+// ReadFileRange reads the file starting at byte offset “from” and returns:
+//   - chunk   – the data that was read (nil if nothing new)
+//   - newSize – the file size **after** the read (use it as next offset)
+func (bs *BufferedService) ReadFileRange(ctx context.Context, path string, from int64) ([]byte, int64, error) {
+	panic("not implemented")
+}

@@ -68,6 +68,7 @@ func getLogRunScript(config s6serviceconfig.S6ServiceConfig, logDir string) (str
 	if config.LogFilesize > 0 {
 		// n20 is currently hardcoded to match the default defined in the Dockerfile
 		// using the same export method as in runScriptTemplate for env variables
+		// Important: This needs to be T (ISO 8861) as our time parser expects this format
 		logutilEnv = fmt.Sprintf("export S6_LOGGING_SCRIPT \"n%d s%d T\"", 20, config.LogFilesize)
 	}
 	logutilServiceCmd = fmt.Sprintf("logutil-service %s", logDir)

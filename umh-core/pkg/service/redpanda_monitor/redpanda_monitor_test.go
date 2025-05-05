@@ -78,7 +78,7 @@ var _ = Describe("Redpanda Monitor Service", func() {
 	)
 
 	BeforeEach(func() {
-		service = redpanda_monitor.NewRedpandaMonitorService()
+		service = redpanda_monitor.NewRedpandaMonitorService("test-redpanda")
 		tick = 0
 
 		mockSvcRegistry = serviceregistry.NewMockRegistry()
@@ -93,7 +93,7 @@ var _ = Describe("Redpanda Monitor Service", func() {
 
 	Describe("GenerateS6ConfigForRedpandaMonitor", func() {
 		It("should generate valid S6 configuration", func() {
-			s6Config, err := service.GenerateS6ConfigForRedpandaMonitor()
+			s6Config, err := service.GenerateS6ConfigForRedpandaMonitor(service.GetS6ServiceName())
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify the config contains the expected command and script
@@ -128,7 +128,7 @@ var _ = Describe("Redpanda Monitor Service", func() {
 			mockS6 := s6service.NewMockService()
 
 			// Create a new service with the mock S6 service
-			service = redpanda_monitor.NewRedpandaMonitorService(redpanda_monitor.WithS6Service(mockS6))
+			service = redpanda_monitor.NewRedpandaMonitorService("test-redpanda", redpanda_monitor.WithS6Service(mockS6))
 
 			// Add the service first
 			err := service.AddRedpandaMonitorToS6Manager(ctx)
@@ -260,7 +260,7 @@ var _ = Describe("Redpanda Monitor Service", func() {
 			Expect(mockService.AddRedpandaToS6ManagerCalled).To(BeTrue())
 
 			// Generate config and verify it has expected content
-			config, err := mockService.GenerateS6ConfigForRedpandaMonitor()
+			config, err := mockService.GenerateS6ConfigForRedpandaMonitor("redpanda")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(mockService.GenerateS6ConfigForRedpandaMonitorCalled).To(BeTrue())
 			Expect(config.ConfigFiles).To(HaveKey("run_redpanda_monitor.sh"))
@@ -722,6 +722,121 @@ var _ = Describe("Redpanda Monitor Service", func() {
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("unsupported value type"))
 			})
+		})
+	})
+
+	// Test for concatContent function
+	Describe("concatContent", func() {
+		It("should concatenate log entries correctly", func() {
+			logs := []s6service.LogEntry{
+				{Content: "Hello "},
+				{Content: "World"},
+				{Content: "!"},
+			}
+			result := redpanda_monitor.ConcatContent(logs)
+			Expect(string(result)).To(Equal("Hello World!"))
+		})
+
+		It("should handle empty log entries", func() {
+			logs := []s6service.LogEntry{
+				{Content: ""},
+				{Content: ""},
+				{Content: ""},
+			}
+			result := redpanda_monitor.ConcatContent(logs)
+			Expect(string(result)).To(Equal(""))
+		})
+
+		It("should handle mixed content", func() {
+			logs := []s6service.LogEntry{
+				{Content: "Line 1\n"},
+				{Content: "Line 2\n"},
+				{Content: "Line 3"},
+			}
+			result := redpanda_monitor.ConcatContent(logs)
+			Expect(string(result)).To(Equal("Line 1\nLine 2\nLine 3"))
+		})
+
+		It("should handle binary data", func() {
+			logs := []s6service.LogEntry{
+				{Content: string([]byte{0x01, 0x02})},
+				{Content: string([]byte{0x03, 0x04})},
+			}
+			result := redpanda_monitor.ConcatContent(logs)
+			Expect(result).To(Equal([]byte{0x01, 0x02, 0x03, 0x04}))
+		})
+
+		It("should handle a single log entry", func() {
+			logs := []s6service.LogEntry{
+				{Content: "Single entry"},
+			}
+			result := redpanda_monitor.ConcatContent(logs)
+			Expect(string(result)).To(Equal("Single entry"))
+		})
+
+		It("should handle empty logs slice", func() {
+			var logs []s6service.LogEntry
+			result := redpanda_monitor.ConcatContent(logs)
+			Expect(result).To(HaveLen(0))
+		})
+	})
+
+	// Test for StripMarkers function
+	Describe("StripMarkers", func() {
+		It("should remove all marker strings from input", func() {
+			// Test with all markers
+			input := []byte(
+				redpanda_monitor.BLOCK_START_MARKER +
+					"data1" +
+					redpanda_monitor.METRICS_END_MARKER +
+					"data2" +
+					redpanda_monitor.CLUSTERCONFIG_END_MARKER +
+					"data3" +
+					redpanda_monitor.BLOCK_END_MARKER)
+
+			result := redpanda_monitor.StripMarkers(input)
+			Expect(string(result)).To(Equal("data1data2data3"))
+		})
+
+		It("should handle input with no markers", func() {
+			input := []byte("just some regular data")
+			result := redpanda_monitor.StripMarkers(input)
+			Expect(string(result)).To(Equal("just some regular data"))
+		})
+
+		It("should handle empty input", func() {
+			input := []byte{}
+			result := redpanda_monitor.StripMarkers(input)
+			Expect(result).To(HaveLen(0))
+		})
+
+		It("should handle input with only markers", func() {
+			input := []byte(
+				redpanda_monitor.BLOCK_START_MARKER +
+					redpanda_monitor.METRICS_END_MARKER +
+					redpanda_monitor.CLUSTERCONFIG_END_MARKER +
+					redpanda_monitor.BLOCK_END_MARKER)
+
+			result := redpanda_monitor.StripMarkers(input)
+			Expect(result).To(HaveLen(0))
+		})
+
+		It("should handle multiple occurrences of markers", func() {
+			input := []byte(
+				redpanda_monitor.BLOCK_START_MARKER +
+					"data" +
+					redpanda_monitor.BLOCK_START_MARKER +
+					"more")
+
+			result := redpanda_monitor.StripMarkers(input)
+			Expect(string(result)).To(Equal("datamore"))
+		})
+
+		It("should handle markers with special regex characters", func() {
+			// Add some regex special chars that would cause issues if this was using regex
+			input := []byte("data[*+?^${}()|]" + redpanda_monitor.BLOCK_START_MARKER + "more")
+			result := redpanda_monitor.StripMarkers(input)
+			Expect(string(result)).To(Equal("data[*+?^${}()|]more"))
 		})
 	})
 })

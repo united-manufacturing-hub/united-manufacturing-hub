@@ -204,7 +204,7 @@ func (m *MockRedpandaMonitorService) SetGoodLastScan(currentTime time.Time) {
 }
 
 // GenerateS6ConfigForRedpandaMonitor mocks generating S6 config for Redpanda monitor
-func (m *MockRedpandaMonitorService) GenerateS6ConfigForRedpandaMonitor() (s6serviceconfig.S6ServiceConfig, error) {
+func (m *MockRedpandaMonitorService) GenerateS6ConfigForRedpandaMonitor(s6ServiceName string) (s6serviceconfig.S6ServiceConfig, error) {
 	m.GenerateS6ConfigForRedpandaMonitorCalled = true
 
 	// If error is set, return it
@@ -221,7 +221,7 @@ func (m *MockRedpandaMonitorService) GenerateS6ConfigForRedpandaMonitor() (s6ser
 	s6Config := s6serviceconfig.S6ServiceConfig{
 		Command: []string{
 			"/bin/sh",
-			fmt.Sprintf("%s/%s/config/run_redpanda_monitor.sh", constants.S6BaseDir, constants.RedpandaMonitorServiceName),
+			fmt.Sprintf("%s/%s/config/run_redpanda_monitor.sh", constants.S6BaseDir, s6ServiceName),
 		},
 		Env: map[string]string{},
 		ConfigFiles: map[string]string{
@@ -283,10 +283,11 @@ func (m *MockRedpandaMonitorService) AddRedpandaMonitorToS6Manager(ctx context.C
 	m.ServiceExistsResult = true
 
 	// Create an S6FSMConfig for this service
-	s6Config, _ := m.GenerateS6ConfigForRedpandaMonitor()
+	s6ServiceName := "redpanda"
+	s6Config, _ := m.GenerateS6ConfigForRedpandaMonitor(s6ServiceName)
 	s6FSMConfig := config.S6FSMConfig{
 		FSMInstanceConfig: config.FSMInstanceConfig{
-			Name:            constants.RedpandaMonitorServiceName,
+			Name:            s6ServiceName,
 			DesiredFSMState: s6fsm.OperationalStateRunning,
 		},
 		S6ServiceConfig: s6Config,

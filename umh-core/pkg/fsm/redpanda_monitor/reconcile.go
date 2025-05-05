@@ -26,6 +26,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/monitor"
 	redpanda_monitor_service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda_monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
@@ -91,13 +92,11 @@ func (b *RedpandaMonitorInstance) Reconcile(ctx context.Context, snapshot fsm.Sy
 		// I am using strings.Contains as i cannot get it working with errors.Is
 		isExpectedError := strings.Contains(err.Error(), redpanda_monitor_service.ErrServiceNotExist.Error()) ||
 			strings.Contains(err.Error(), redpanda_monitor_service.ErrServiceNoLogFile.Error()) ||
-			strings.Contains(err.Error(), redpanda_monitor_service.ErrServiceConnectionRefused.Error()) ||
-			strings.Contains(err.Error(), redpanda_monitor_service.ErrServiceConnectionTimedOut.Error()) ||
+			strings.Contains(err.Error(), monitor.ErrServiceConnectionRefused.Error()) ||
+			strings.Contains(err.Error(), monitor.ErrServiceConnectionTimedOut.Error()) ||
 			strings.Contains(err.Error(), redpanda_monitor_service.ErrServiceNoSectionsFound.Error())
 
 		if !isExpectedError {
-			b.baseFSMInstance.SetError(err, snapshot.Tick)
-			b.baseFSMInstance.GetLogger().Errorf("error reconciling external changes: %s", err)
 
 			if errors.Is(err, context.DeadlineExceeded) {
 				// Healthchecks occasionally take longer (sometimes up to 70ms),
@@ -107,6 +106,10 @@ func (b *RedpandaMonitorInstance) Reconcile(ctx context.Context, snapshot fsm.Sy
 				// further reconciliation attempts in the current tick.
 				return nil, true // We don't want to return an error here, as this can happen in normal operations
 			}
+
+			b.baseFSMInstance.SetError(err, snapshot.Tick)
+			b.baseFSMInstance.GetLogger().Errorf("error reconciling external changes: %s", err)
+
 			return nil, false // We don't want to return an error here, because we want to continue reconciling
 		}
 
@@ -162,7 +165,7 @@ func (b *RedpandaMonitorInstance) reconcileExternalChanges(ctx context.Context, 
 		metrics.ObserveReconcileTime(metrics.ComponentRedpandaMonitor, b.baseFSMInstance.GetID()+".reconcileExternalChanges", time.Since(start))
 	}()
 
-	observedStateCtx, cancel := context.WithTimeout(ctx, constants.S6UpdateObservedStateTimeout)
+	observedStateCtx, cancel := context.WithTimeout(ctx, constants.RedpandaMonitorUpdateObservedStateTimeout)
 	defer cancel()
 	err := b.UpdateObservedStateOfInstance(observedStateCtx, services, tick, loopStartTime)
 	if err != nil {

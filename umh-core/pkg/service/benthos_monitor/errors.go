@@ -26,12 +26,6 @@ var (
 	// ErrServiceNoLogFile indicates the health check had no logs to process
 	ErrServiceNoLogFile = errors.New("log file not found")
 
-	// ErrServiceConnectionRefused indicates the service connection was refused
-	ErrServiceConnectionRefused = errors.New("connection refused, while attempting to fetch metrics from benthos. This is expected during the startup phase of the benthos service, when the service is not yet ready to receive connections")
-
-	// ErrServiceConnectionTimedOut indicates the service connection timed out
-	ErrServiceConnectionTimedOut = errors.New("connection timed out, while attempting to fetch metrics from benthos. This can happen if the benthos service or the system is experiencing high load")
-
 	// ErrServiceNoSectionsFound indicates the benthos service has no sections
 	ErrServiceNoSectionsFound = errors.New("could not parse benthos metrics/configuration: no sections found. This can happen when the benthos service is not running, or the logs where rotated")
 )

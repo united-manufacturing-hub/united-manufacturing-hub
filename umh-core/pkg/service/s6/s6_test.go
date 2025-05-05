@@ -386,6 +386,18 @@ var _ = Describe("S6 Service", func() {
 		})
 	})
 
+	Describe("ParseLogsFromBytes", func() {
+		It("should parse logs from bytes", func() {
+			data, err := os.ReadFile("s6_test_log_data.txt")
+			Expect(len(data)).To(BeNumerically(">", 0))
+			Expect(err).NotTo(HaveOccurred())
+			entries, err := ParseLogsFromBytes(data)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Expect more than 0 log entries
+			Expect(len(entries)).To(BeNumerically(">", 0))
+		})
+	})
 	// --- NEW TESTS FOR DefaultService.Remove ------------------------------------
 	Describe("DefaultService Remove()", func() {
 		var (
@@ -473,5 +485,4 @@ var _ = Describe("S6 Service", func() {
 			Expect(err).To(MatchError(ContainSubstring("IO error")))
 		})
 	})
-
 })
