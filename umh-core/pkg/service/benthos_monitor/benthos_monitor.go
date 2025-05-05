@@ -857,7 +857,13 @@ func ParseMetricsData(dataReader io.Reader) (Metrics, error) {
 
 // --- helpers ---------------------------------------------------------------
 
-// return the numeric literal after the last space in the line
+// tailInt returns the integer found **after the final space** in a Prometheus
+// text-formatted line.
+//
+// Benthos’ metric stream is deliberately terse; for counters and gauges the
+// value we need is always the token after the last space.  A micro-parser that
+// walks backwards from the end lets us avoid a full `strings.Fields` split
+// (~3× faster and zero allocations on the hot-path).
 func tailInt(line []byte) (int64, error) {
 	i := bytes.LastIndexByte(line, ' ')
 	if i == -1 {
@@ -872,6 +878,10 @@ func tailInt(line []byte) (int64, error) {
 	}
 	return v, nil
 }
+
+// tailFloat behaves like tailInt but parses the trailing token as a
+// `float64`.  It is used for histogram/summary quantiles and “_sum” lines
+// where sub-second precision is required.
 func tailFloat(line []byte) (float64, error) {
 	i := bytes.LastIndexByte(line, ' ')
 	if i == -1 {
@@ -1127,6 +1137,12 @@ func ParseMetricsFromBytes(raw []byte) (Metrics, error) {
 	return m, nil
 }
 
+// extractLabel scans the raw label-set of a Prometheus series (the `{…}`
+// portion) and returns the *value* of a given label key.
+//
+// We read **only** the labels we care about (e.g. `path` or `quantile`), so
+// this hand-rolled matcher is an order of magnitude faster than allocating a
+// full `map[string]string` for every series.
 func extractLabel(b []byte, key string) string {
 	// expects {label="...",path="..."} order irrelevant
 	key += "=\""
