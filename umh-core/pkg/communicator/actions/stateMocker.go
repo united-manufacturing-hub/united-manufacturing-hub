@@ -101,20 +101,21 @@ func (s *StateMocker) UpdateDfcState() {
 	defer s.mu.Unlock()
 	// only take the dataflowcomponent configs and add them to the state of the dataflowcomponent manager
 
+	//get the current and the last config
 	curDfcConfig := s.ConfigManager.GetDataFlowConfig()
 	lastDfcConfig := s.LastConfig.DataFlow
+
+	// get the old system snapshot
 	systemSnapshot := s.StateManager.GetDeepCopySnapshot()
 
-	if len(curDfcConfig) > 0 && len(lastDfcConfig) > 0 && curDfcConfig[0].Name != lastDfcConfig[0].Name {
-		zap.S().Info("last config set with name", zap.String("name", curDfcConfig[0].Name))
-	}
-	if len(curDfcConfig) != len(lastDfcConfig) {
-		zap.S().Info("len change", zap.Int("cur", len(curDfcConfig)), zap.Int("last", len(lastDfcConfig)))
-	}
+	// detect config events (add, remove, edit) and add the corresponding state transitions to the pending transitions
 	s.detectConfigEvents(curDfcConfig, lastDfcConfig)
+
+	// update the last config
 	s.LastConfig.DataFlow = curDfcConfig
 	s.LastConfigSet = true
 
+	// create a new manager snapshot based on the current system snapshot, the config and the pending transitions
 	managerSnapshot := s.createDfcManagerSnapshot(systemSnapshot)
 
 	// update the state of the system with the new manager snapshot
@@ -131,6 +132,7 @@ func (s *StateMocker) UpdateDfcState() {
 	})
 }
 
+// detect config events (add, remove, edit) and add the corresponding state transitions to the pending transitions
 func (s *StateMocker) detectConfigEvents(curDfcConfig []config.DataFlowComponentConfig, lastDfcConfig []config.DataFlowComponentConfig) {
 
 	if !s.LastConfigSet {
