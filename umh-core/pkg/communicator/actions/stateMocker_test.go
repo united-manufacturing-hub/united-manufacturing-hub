@@ -17,6 +17,7 @@ package actions_test
 import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
@@ -147,6 +148,256 @@ var _ = Describe("StateMocker", func() {
 			mockManager = state.Managers[constants.DataflowcomponentManagerName].(*actions.MockManagerSnapshot)
 			component = mockManager.GetInstance(componentName)
 			Expect(component.CurrentState).To(Equal(desiredState))
+		})
+	})
+
+	Context("ConfigEvents", func() {
+		It("should handle adding a new component", func() {
+			// Start with no components
+			configManager.WithConfig(*cfg)
+			stateMocker.UpdateDfcState()
+
+			// Add a component
+			componentName := "new-component"
+			cfg.DataFlow = []config.DataFlowComponentConfig{
+				{
+					FSMInstanceConfig: config.FSMInstanceConfig{
+						Name:            componentName,
+						DesiredFSMState: "active",
+					},
+					DataFlowComponentServiceConfig: testConfig,
+				},
+			}
+			configManager.WithConfig(*cfg)
+
+			// Update state and verify component creation process starts
+			stateMocker.UpdateDfcState()
+			state := stateMocker.GetStateManager().GetDeepCopySnapshot()
+			mockManager := state.Managers[constants.DataflowcomponentManagerName].(*actions.MockManagerSnapshot)
+			component := mockManager.GetInstance(componentName)
+			Expect(component).ToNot(BeNil())
+			Expect(component.CurrentState).To(Equal(internalfsm.LifecycleStateToBeCreated))
+
+			// Advance ticks to simulate component creation
+			for i := 0; i < 15; i++ {
+				stateMocker.Tick()
+			}
+
+			// Component should now be active
+			state = stateMocker.GetStateManager().GetDeepCopySnapshot()
+			mockManager = state.Managers[constants.DataflowcomponentManagerName].(*actions.MockManagerSnapshot)
+			component = mockManager.GetInstance(componentName)
+			Expect(component.CurrentState).To(Equal(dataflowcomponent.OperationalStateActive))
+		})
+
+		It("should handle removing a component", func() {
+			// Start with one component
+			componentName := "existing-component"
+			cfg.DataFlow = []config.DataFlowComponentConfig{
+				{
+					FSMInstanceConfig: config.FSMInstanceConfig{
+						Name:            componentName,
+						DesiredFSMState: "active",
+					},
+					DataFlowComponentServiceConfig: testConfig,
+				},
+			}
+			configManager.WithConfig(*cfg)
+
+			// Initialize the state and make component active immediately
+			stateMocker.UpdateDfcState()
+
+			// Verify component exists and is active
+			state := stateMocker.GetStateManager().GetDeepCopySnapshot()
+			mockManager := state.Managers[constants.DataflowcomponentManagerName].(*actions.MockManagerSnapshot)
+			component := mockManager.GetInstance(componentName)
+			Expect(component).ToNot(BeNil())
+			Expect(component.CurrentState).To(Equal(dataflowcomponent.OperationalStateActive))
+
+			// Remove the component from config
+			cfg.DataFlow = []config.DataFlowComponentConfig{}
+			configManager.WithConfig(*cfg)
+
+			// Update state and verify removal process starts
+			stateMocker.UpdateDfcState()
+			state = stateMocker.GetStateManager().GetDeepCopySnapshot()
+			mockManager = state.Managers[constants.DataflowcomponentManagerName].(*actions.MockManagerSnapshot)
+			component = mockManager.GetInstance(componentName)
+			Expect(component).ToNot(BeNil())
+			Expect(component.CurrentState).To(Equal(internalfsm.LifecycleStateRemoving))
+
+			// Advance ticks to simulate component removal
+			for i := 0; i < 8; i++ {
+				stateMocker.Tick()
+			}
+
+			// Component should be in removed state
+			state = stateMocker.GetStateManager().GetDeepCopySnapshot()
+			mockManager = state.Managers[constants.DataflowcomponentManagerName].(*actions.MockManagerSnapshot)
+			component = mockManager.GetInstance(componentName)
+			Expect(component.CurrentState).To(Equal(internalfsm.LifecycleStateRemoved))
+		})
+
+		It("should handle editing a component's configuration", func() {
+			// Start with one component
+			componentName := "edit-component"
+			cfg.DataFlow = []config.DataFlowComponentConfig{
+				{
+					FSMInstanceConfig: config.FSMInstanceConfig{
+						Name:            componentName,
+						DesiredFSMState: "active",
+					},
+					DataFlowComponentServiceConfig: testConfig,
+				},
+			}
+			configManager.WithConfig(*cfg)
+
+			// Initialize the state and make component active immediately
+			stateMocker.UpdateDfcState()
+
+			// Verify component exists and is active
+			state := stateMocker.GetStateManager().GetDeepCopySnapshot()
+			mockManager := state.Managers[constants.DataflowcomponentManagerName].(*actions.MockManagerSnapshot)
+			component := mockManager.GetInstance(componentName)
+			Expect(component).ToNot(BeNil())
+			Expect(component.CurrentState).To(Equal(dataflowcomponent.OperationalStateActive))
+
+			// Edit the component configuration
+			updatedConfig := dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+				BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
+					Input: map[string]interface{}{
+						"test": "updated-input",
+					},
+					Output: map[string]interface{}{
+						"test": "updated-output",
+					},
+				},
+			}
+
+			cfg.DataFlow = []config.DataFlowComponentConfig{
+				{
+					FSMInstanceConfig: config.FSMInstanceConfig{
+						Name:            componentName,
+						DesiredFSMState: "active",
+					},
+					DataFlowComponentServiceConfig: updatedConfig,
+				},
+			}
+			configManager.WithConfig(*cfg)
+
+			// Update state and verify component goes through reconfiguration
+			stateMocker.UpdateDfcState()
+			state = stateMocker.GetStateManager().GetDeepCopySnapshot()
+			mockManager = state.Managers[constants.DataflowcomponentManagerName].(*actions.MockManagerSnapshot)
+			component = mockManager.GetInstance(componentName)
+			Expect(component).ToNot(BeNil())
+			Expect(component.CurrentState).To(Equal(dataflowcomponent.EventBenthosDegraded))
+
+			// Advance ticks to simulate component reconfiguration
+			for i := 0; i < 8; i++ {
+				stateMocker.Tick()
+			}
+
+			// Component should be active again with updated config
+			state = stateMocker.GetStateManager().GetDeepCopySnapshot()
+			mockManager = state.Managers[constants.DataflowcomponentManagerName].(*actions.MockManagerSnapshot)
+			component = mockManager.GetInstance(componentName)
+			Expect(component.CurrentState).To(Equal(dataflowcomponent.OperationalStateActive))
+
+			// Get the observed state and verify it has the updated config
+			observedState, ok := component.LastObservedState.(*dataflowcomponent.DataflowComponentObservedStateSnapshot)
+			Expect(ok).To(BeTrue())
+			Expect(observedState.Config).To(Equal(updatedConfig))
+		})
+
+		It("should handle editing a component's configuration with changed component name", func() {
+			// Start with one component
+			oldComponentName := "old-component-name"
+			cfg.DataFlow = []config.DataFlowComponentConfig{
+				{
+					FSMInstanceConfig: config.FSMInstanceConfig{
+						Name:            oldComponentName,
+						DesiredFSMState: "active",
+					},
+					DataFlowComponentServiceConfig: testConfig,
+				},
+			}
+			configManager.WithConfig(*cfg)
+
+			// Initialize the state and make component active immediately
+			stateMocker.UpdateDfcState()
+
+			// Verify component exists and is active
+			state := stateMocker.GetStateManager().GetDeepCopySnapshot()
+			mockManager := state.Managers[constants.DataflowcomponentManagerName].(*actions.MockManagerSnapshot)
+			component := mockManager.GetInstance(oldComponentName)
+			Expect(component).ToNot(BeNil())
+			Expect(component.CurrentState).To(Equal(dataflowcomponent.OperationalStateActive))
+
+			// Edit the component with a new name
+			newComponentName := "new-component-name"
+			cfg.DataFlow = []config.DataFlowComponentConfig{
+				{
+					FSMInstanceConfig: config.FSMInstanceConfig{
+						Name:            newComponentName,
+						DesiredFSMState: "active",
+					},
+					DataFlowComponentServiceConfig: testConfig,
+				},
+			}
+			configManager.WithConfig(*cfg)
+
+			// Update state and verify old component starts removal process
+			stateMocker.UpdateDfcState()
+			state = stateMocker.GetStateManager().GetDeepCopySnapshot()
+			mockManager = state.Managers[constants.DataflowcomponentManagerName].(*actions.MockManagerSnapshot)
+			oldComponent := mockManager.GetInstance(oldComponentName)
+			Expect(oldComponent).ToNot(BeNil())
+			Expect(oldComponent.CurrentState).To(Equal(internalfsm.LifecycleStateRemoving))
+
+			// Advance ticks to let old component reach removed state
+			for i := 0; i < 8; i++ {
+				stateMocker.Tick()
+			}
+
+			// Verify old component is now in removed state
+			state = stateMocker.GetStateManager().GetDeepCopySnapshot()
+			mockManager = state.Managers[constants.DataflowcomponentManagerName].(*actions.MockManagerSnapshot)
+			oldComponent = mockManager.GetInstance(oldComponentName)
+			Expect(oldComponent).ToNot(BeNil())
+			Expect(oldComponent.CurrentState).To(Equal(internalfsm.LifecycleStateRemoved))
+
+			// Advance ticks to let new component appear and initialize
+			for i := 0; i < 5; i++ {
+				stateMocker.Tick()
+			}
+
+			// Verify new component has appeared and is in creating state
+			state = stateMocker.GetStateManager().GetDeepCopySnapshot()
+			mockManager = state.Managers[constants.DataflowcomponentManagerName].(*actions.MockManagerSnapshot)
+			newComponent := mockManager.GetInstance(newComponentName)
+			Expect(newComponent).ToNot(BeNil())
+			Expect(newComponent.CurrentState).To(Equal(internalfsm.LifecycleStateCreating))
+
+			// Advance ticks to let new component reach active state
+			for i := 0; i < 15; i++ {
+				stateMocker.Tick()
+			}
+
+			// Verify old component has disappeared
+			state = stateMocker.GetStateManager().GetDeepCopySnapshot()
+			mockManager = state.Managers[constants.DataflowcomponentManagerName].(*actions.MockManagerSnapshot)
+			oldComponent = mockManager.GetInstance(oldComponentName)
+			Expect(oldComponent).To(BeNil())
+
+			// Verify new component is active with expected config
+			newComponent = mockManager.GetInstance(newComponentName)
+			Expect(newComponent).ToNot(BeNil())
+			Expect(newComponent.CurrentState).To(Equal(dataflowcomponent.OperationalStateActive))
+
+			observedState, ok := newComponent.LastObservedState.(*dataflowcomponent.DataflowComponentObservedStateSnapshot)
+			Expect(ok).To(BeTrue())
+			Expect(observedState.Config).To(Equal(testConfig))
 		})
 	})
 })
