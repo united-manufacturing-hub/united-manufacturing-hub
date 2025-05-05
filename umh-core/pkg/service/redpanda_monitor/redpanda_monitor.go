@@ -1003,24 +1003,48 @@ func (s *RedpandaMonitorService) Status(ctx context.Context, filesystemService f
 	// If the current state is stopped or stopping, we can return immediately
 	// There wont be any logs, metrics, etc. to check
 	if fsmState == s6fsm.OperationalStateStopped || fsmState == s6fsm.OperationalStateStopping {
-		return ServiceInfo{}, monitor.ErrServiceStopped
+		return ServiceInfo{
+			S6ObservedState: s6State,
+			S6FSMState:      fsmState,
+			RedpandaStatus: RedpandaMonitorStatus{
+				IsRunning: false,
+			},
+		}, monitor.ErrServiceStopped
 	}
 
 	// Get logs
 	s6ServicePath := filepath.Join(constants.S6BaseDir, s6ServiceName)
 	logs, err := s.s6Service.GetLogs(ctx, s6ServicePath, filesystemService)
 	if err != nil {
-		return ServiceInfo{}, fmt.Errorf("failed to get logs: %w", err)
+		return ServiceInfo{
+			S6ObservedState: s6State,
+			S6FSMState:      fsmState,
+			RedpandaStatus: RedpandaMonitorStatus{
+				IsRunning: false,
+			},
+		}, fmt.Errorf("failed to get logs: %w", err)
 	}
 
 	if len(logs) == 0 {
-		return ServiceInfo{}, ErrServiceNoLogFile
+		return ServiceInfo{
+			S6ObservedState: s6State,
+			S6FSMState:      fsmState,
+			RedpandaStatus: RedpandaMonitorStatus{
+				IsRunning: false,
+			},
+		}, ErrServiceNoLogFile
 	}
 
 	// Parse the logs
 	metrics, err := s.ParseRedpandaLogs(ctx, logs, tick)
 	if err != nil {
-		return ServiceInfo{}, fmt.Errorf("failed to parse metrics: %w", err)
+		return ServiceInfo{
+			S6ObservedState: s6State,
+			S6FSMState:      fsmState,
+			RedpandaStatus: RedpandaMonitorStatus{
+				IsRunning: false,
+			},
+		}, fmt.Errorf("failed to parse metrics: %w", err)
 	}
 
 	return ServiceInfo{

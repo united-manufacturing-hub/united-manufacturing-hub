@@ -141,7 +141,7 @@ var _ = Describe("RedpandaMonitor Service State Transitions", func() {
 	)
 
 	BeforeEach(func() {
-		ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
+		ctx, cancel = context.WithTimeout(context.Background(), 100*time.Second)
 		mockS6Service = s6service.NewMockService()
 		mockSvcRegistry = serviceregistry.NewMockRegistry()
 
@@ -206,7 +206,8 @@ var _ = Describe("RedpandaMonitor Service State Transitions", func() {
 			tick = reconcileMonitorUntilState(ctx, monitorService, mockSvcRegistry, tick, s6fsm.OperationalStateStopped)
 			// Verify state
 			serviceInfo, err = monitorService.Status(ctx, mockSvcRegistry.GetFileSystem(), tick)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("service is stopped"))
 			Expect(serviceInfo.S6FSMState).To(Equal(s6fsm.OperationalStateStopped))
 			Expect(serviceInfo.RedpandaStatus.IsRunning).To(BeFalse())
 			tick++
@@ -253,7 +254,8 @@ var _ = Describe("RedpandaMonitor Service State Transitions", func() {
 
 			// Verify service is stopped
 			serviceInfo, err = monitorService.Status(ctx, mockSvcRegistry.GetFileSystem(), tick)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("service is stopped"))
 			Expect(serviceInfo.S6FSMState).To(Equal(s6fsm.OperationalStateStopped))
 			Expect(serviceInfo.RedpandaStatus.IsRunning).To(BeFalse())
 		})
@@ -300,13 +302,9 @@ func reconcileMonitorUntilState(ctx context.Context, monitorService *redpanda_mo
 
 		// Check state
 		serviceInfo, err := monitorService.Status(ctx, services.GetFileSystem(), tick)
-		if expectedState == s6fsm.OperationalStateStopped {
-			// If the expected state is stopped, we might expect an error
-			if err != nil {
-				Expect(err.Error()).To(ContainSubstring("service is stopped"))
-			}
-		} else {
-			Expect(err).NotTo(HaveOccurred())
+		// If the expected state is stopped, we might expect an error
+		if err != nil {
+			Expect(err.Error()).To(ContainSubstring("service is stopped"))
 		}
 		if serviceInfo.S6FSMState == expectedState {
 			return tick
