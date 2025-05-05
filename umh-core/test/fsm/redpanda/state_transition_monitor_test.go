@@ -114,7 +114,18 @@ func createMonitorMockLogs(freBytes, totalBytes uint64, hasSpaceAlert bool, topi
 	}
 	configHex := hex.EncodeToString(configBuffer.Bytes())
 
-	readynessHex := hex.EncodeToString([]byte("{\"status\":\"ready\"}"))
+	// Compress and hex-encode readyness data
+	var readynessBuffer bytes.Buffer
+	gzipWriter = gzip.NewWriter(&readynessBuffer)
+	_, err = gzipWriter.Write([]byte("{\"status\":\"ready\"}"))
+	if err != nil {
+		return nil, fmt.Errorf("failed to write readyness data: %w", err)
+	}
+	err = gzipWriter.Close()
+	if err != nil {
+		return nil, fmt.Errorf("failed to close gzip writer: %w", err)
+	}
+	readynessHex := hex.EncodeToString(readynessBuffer.Bytes())
 
 	// Create timestamp
 	timestamp := time.Now()
