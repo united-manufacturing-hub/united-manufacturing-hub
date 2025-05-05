@@ -98,8 +98,6 @@ func (b *BenthosMonitorInstance) Reconcile(ctx context.Context, snapshot fsm.Sys
 			strings.Contains(err.Error(), monitor.ErrServiceStopped.Error()) // This is expected when the service is stopped or stopping, no need to fetch logs, metrics, etc.
 
 		if !isExpectedError {
-			b.baseFSMInstance.SetError(err, snapshot.Tick)
-			b.baseFSMInstance.GetLogger().Errorf("error reconciling external changes: %s", err)
 
 			if errors.Is(err, context.DeadlineExceeded) {
 				// Healthchecks occasionally take longer (sometimes up to 70ms),
@@ -109,6 +107,10 @@ func (b *BenthosMonitorInstance) Reconcile(ctx context.Context, snapshot fsm.Sys
 				// further reconciliation attempts in the current tick.
 				return nil, true // We don't want to return an error here, as this can happen in normal operations
 			}
+
+			b.baseFSMInstance.SetError(err, snapshot.Tick)
+			b.baseFSMInstance.GetLogger().Errorf("error reconciling external changes: %s", err)
+
 			return nil, false // We don't want to return an error here, because we want to continue reconciling
 		}
 

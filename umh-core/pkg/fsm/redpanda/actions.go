@@ -228,6 +228,10 @@ func (r *RedpandaInstance) UpdateObservedStateOfInstance(ctx context.Context, se
 			strings.Contains(err.Error(), redpanda_service.ErrRedpandaMonitorInstanceNotFound.Error()) ||
 			strings.Contains(err.Error(), redpanda_service.ErrLastObservedStateNil.Error()) {
 			return nil
+		} else if strings.Contains(err.Error(), redpanda_service.ErrRedpandaMonitorNotRunning.Error()) {
+			// This is expected during the startup phase of the redpanda service, when the redpanda monitor service is not yet running
+			r.baseFSMInstance.GetLogger().Debugf("Redpanda monitor service not yet running: %v", err)
+			return nil
 		}
 
 		return err
@@ -258,6 +262,12 @@ func (r *RedpandaInstance) UpdateObservedStateOfInstance(ctx context.Context, se
 			if strings.Contains(err.Error(), monitor.ErrServiceConnectionRefused.Error()) {
 				// This is expected during the startup phase of the redpanda service, when the service is not yet ready to receive connections
 				r.baseFSMInstance.GetLogger().Debugf("Monitor service not yet ready: %v", err)
+				return nil
+			}
+
+			if strings.Contains(err.Error(), redpanda_service.ErrRedpandaMonitorNotRunning.Error()) {
+				// This is expected during the startup phase of the redpanda service, when the redpanda monitor service is not yet running
+				r.baseFSMInstance.GetLogger().Debugf("Redpanda monitor service not yet running: %v", err)
 				return nil
 			}
 
@@ -407,6 +417,7 @@ func (r *RedpandaInstance) IsRedpandaMetricsErrorFree() bool {
 // But it means that it once worked, and then degraded
 func (r *RedpandaInstance) IsRedpandaDegraded(currentTime time.Time, logWindow time.Duration) bool {
 	if r.IsRedpandaS6Running() && r.IsRedpandaConfigLoaded() && r.IsRedpandaHealthchecksPassed() && r.IsRedpandaRunningForSomeTimeWithoutErrors(currentTime, logWindow) {
+		r.baseFSMInstance.GetLogger().Debugf("Redpanda service is degraded, because of: %v, %v, %v, %v", r.IsRedpandaS6Running(), r.IsRedpandaConfigLoaded(), r.IsRedpandaHealthchecksPassed(), r.IsRedpandaRunningForSomeTimeWithoutErrors(currentTime, logWindow))
 		return false
 	}
 	return true
