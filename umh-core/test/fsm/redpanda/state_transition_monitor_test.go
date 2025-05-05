@@ -114,6 +114,8 @@ func createMonitorMockLogs(freBytes, totalBytes uint64, hasSpaceAlert bool, topi
 	}
 	configHex := hex.EncodeToString(configBuffer.Bytes())
 
+	readynessHex := hex.EncodeToString([]byte("{\"status\":\"ready\"}"))
+
 	// Create timestamp
 	timestamp := time.Now()
 
@@ -124,6 +126,8 @@ func createMonitorMockLogs(freBytes, totalBytes uint64, hasSpaceAlert bool, topi
 		{Content: redpanda_monitor.METRICS_END_MARKER, Timestamp: timestamp},
 		{Content: configHex, Timestamp: timestamp},
 		{Content: redpanda_monitor.CLUSTERCONFIG_END_MARKER, Timestamp: timestamp},
+		{Content: readynessHex, Timestamp: timestamp},
+		{Content: redpanda_monitor.READYNESS_END_MARKER, Timestamp: timestamp},
 		{Content: strconv.FormatInt(timestamp.UnixNano(), 10), Timestamp: timestamp},
 		{Content: redpanda_monitor.BLOCK_END_MARKER, Timestamp: timestamp},
 	}

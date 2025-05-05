@@ -388,7 +388,7 @@ func (s *RedpandaService) Status(ctx context.Context, filesystemService filesyst
 		}
 	}
 	// Let's get the health check of the Redpanda service
-	redpandaStatus, err := s.GetHealthCheckAndMetrics(ctx, tick, logs, filesystemService, s6ServiceName, loopStartTime)
+	redpandaStatus, err := s.GetHealthCheckAndMetrics(ctx, tick, logs, filesystemService, redpandaName, loopStartTime)
 	if err != nil {
 		if strings.Contains(err.Error(), ErrServiceNoLogFile.Error()) {
 			return ServiceInfo{
@@ -502,17 +502,17 @@ func (s *RedpandaService) GetHealthCheckAndMetrics(ctx context.Context, tick uin
 
 	// if everything is fine, set the status to the service info
 
-	// Create health check structure
-	healthCheck := HealthCheck{
-		// Liveness is determined by a successful response
-		IsLive: lastRedpandaMonitorObservedState.ServiceInfo.RedpandaStatus.LastScan.HealthCheck.IsLive,
-		// IsReady is the same as IsLive, as there is no distinct logic for a redpanda monitor services readiness
-		IsReady: lastRedpandaMonitorObservedState.ServiceInfo.RedpandaStatus.LastScan.HealthCheck.IsReady,
-		// Redpanda version is constant
-		Version: constants.RedpandaVersion,
-	}
-
 	if lastRedpandaMonitorObservedState.ServiceInfo.RedpandaStatus.LastScan != nil {
+		// Create health check structure
+		healthCheck := HealthCheck{
+			// Liveness is determined by a successful response
+			IsLive: lastRedpandaMonitorObservedState.ServiceInfo.RedpandaStatus.LastScan.HealthCheck.IsLive,
+			// IsReady is the same as IsLive, as there is no distinct logic for a redpanda monitor services readiness
+			IsReady: lastRedpandaMonitorObservedState.ServiceInfo.RedpandaStatus.LastScan.HealthCheck.IsReady,
+			// Redpanda version is constant
+			Version: constants.RedpandaVersion,
+		}
+
 		redpandaStatus.HealthCheck = healthCheck
 		redpandaStatus.RedpandaMetrics = *lastRedpandaMonitorObservedState.ServiceInfo.RedpandaStatus.LastScan.RedpandaMetrics
 		redpandaStatus.Logs = lastRedpandaMonitorObservedState.ServiceInfo.RedpandaStatus.Logs

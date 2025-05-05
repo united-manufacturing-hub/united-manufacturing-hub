@@ -416,8 +416,8 @@ func (r *RedpandaInstance) IsRedpandaMetricsErrorFree() bool {
 // These check everything that is checked during the starting phase
 // But it means that it once worked, and then degraded
 func (r *RedpandaInstance) IsRedpandaDegraded(currentTime time.Time, logWindow time.Duration) bool {
+	r.baseFSMInstance.GetLogger().Debugf("Redpanda service is degraded, because of: %v, %v, %v, %v", r.IsRedpandaS6Running(), r.IsRedpandaConfigLoaded(), r.IsRedpandaHealthchecksPassed(), r.IsRedpandaRunningForSomeTimeWithoutErrors(currentTime, logWindow))
 	if r.IsRedpandaS6Running() && r.IsRedpandaConfigLoaded() && r.IsRedpandaHealthchecksPassed() && r.IsRedpandaRunningForSomeTimeWithoutErrors(currentTime, logWindow) {
-		r.baseFSMInstance.GetLogger().Debugf("Redpanda service is degraded, because of: %v, %v, %v, %v", r.IsRedpandaS6Running(), r.IsRedpandaConfigLoaded(), r.IsRedpandaHealthchecksPassed(), r.IsRedpandaRunningForSomeTimeWithoutErrors(currentTime, logWindow))
 		return false
 	}
 	return true

@@ -294,6 +294,9 @@ const METRICS_END_MARKER = "METRICSENDMETRICSENDMETRICSENDMETRICSENDMETRICSENDME
 // CLUSTERCONFIG_END_MARKER marks the end of the cluster config data and the beginning of the timestamp data.
 const CLUSTERCONFIG_END_MARKER = "CONFIGENDCONFIGENDCONFIGENDCONFIGENDCONFIGENDCONFIGENDCONFIGENDCONFIGENDCONFIGENDCONFIGENDCONFIGEND"
 
+// READYNESS_END_MARKER marks the end of the readyness data and the beginning of the timestamp data.
+const READYNESS_END_MARKER = "READYNESSENDREADYNESSENDREADYNESSENDREADYNESSENDREADYNESSENDREADYNESSENDREADYNESSENDREADYNESSENDREADYNESSENDREADYNESSEND"
+
 // BLOCK_END_MARKER marks the end of the cluster config data.
 const BLOCK_END_MARKER = "ENDENDENDENDENDENDENDENDENDENDENDENDENDENDENDENDENDENDENDENDENDENDENDENDENDENDENDENDENDENDENDENDEND"
 
@@ -313,11 +316,13 @@ while true; do
   echo "%s"
   curl -sSL --max-time 1 http://localhost:9644/v1/cluster_config 2>&1 | gzip -c | xxd -p
   echo "%s"
+  curl -sSL --max-time 1 http://localhost:9644/v1/status/ready 2>&1 | gzip -c | xxd -p
+  echo "%s"
   date +%%s%%9N
   echo "%s"
   sleep 1
 done
-`, BLOCK_START_MARKER, METRICS_END_MARKER, CLUSTERCONFIG_END_MARKER, BLOCK_END_MARKER)
+`, BLOCK_START_MARKER, METRICS_END_MARKER, CLUSTERCONFIG_END_MARKER, READYNESS_END_MARKER, BLOCK_END_MARKER)
 
 	return scriptContent, nil
 }
@@ -352,6 +357,7 @@ type Section struct {
 	StartMarkerIndex            int
 	MetricsEndMarkerIndex       int
 	ClusterConfigEndMarkerIndex int
+	ReadynessEndMarkerIndex     int
 	BlockEndMarkerIndex         int
 }
 
@@ -380,6 +386,7 @@ var markerReplacer = strings.NewReplacer(
 	BLOCK_START_MARKER, "",
 	METRICS_END_MARKER, "",
 	CLUSTERCONFIG_END_MARKER, "",
+	READYNESS_END_MARKER, "",
 	BLOCK_END_MARKER, "",
 )
 
@@ -400,6 +407,8 @@ func (s *RedpandaMonitorService) ParseRedpandaLogs(ctx context.Context, logs []s
 		METRICS_END_MARKER
 		Hex encoded gzip data of the cluster config
 		CLUSTERCONFIG_END_MARKER
+		Hex encoded gzip data of the readyness
+		READYNESS_END_MARKER
 		Timestamp data
 		BLOCK_END_MARKER
 	*/
@@ -415,6 +424,7 @@ func (s *RedpandaMonitorService) ParseRedpandaLogs(ctx context.Context, logs []s
 		StartMarkerIndex:            -1,
 		MetricsEndMarkerIndex:       -1,
 		ClusterConfigEndMarkerIndex: -1,
+		ReadynessEndMarkerIndex:     -1,
 		BlockEndMarkerIndex:         -1,
 	}
 
@@ -436,14 +446,20 @@ func (s *RedpandaMonitorService) ParseRedpandaLogs(ctx context.Context, logs []s
 				continue
 			}
 			currentSection.ClusterConfigEndMarkerIndex = i
+		} else if strings.Contains(logs[i].Content, READYNESS_END_MARKER) {
+			// Dont even try to find an end marker, if we dont have a start marker
+			if currentSection.StartMarkerIndex == -1 {
+				continue
+			}
+			currentSection.ReadynessEndMarkerIndex = i
 		} else if strings.Contains(logs[i].Content, BLOCK_END_MARKER) {
 			// We dont break here, as there might be multiple end markers
 			currentSection.BlockEndMarkerIndex = i
 
 			// If we have all sections add it to the list, otherwise discard !
-			if currentSection.StartMarkerIndex != -1 && currentSection.MetricsEndMarkerIndex != -1 && currentSection.ClusterConfigEndMarkerIndex != -1 && currentSection.BlockEndMarkerIndex != -1 {
+			if currentSection.StartMarkerIndex != -1 && currentSection.MetricsEndMarkerIndex != -1 && currentSection.ClusterConfigEndMarkerIndex != -1 && currentSection.ReadynessEndMarkerIndex != -1 && currentSection.BlockEndMarkerIndex != -1 {
 				// Check if the order makes sense, otherwise discard
-				if currentSection.StartMarkerIndex < currentSection.MetricsEndMarkerIndex && currentSection.MetricsEndMarkerIndex < currentSection.ClusterConfigEndMarkerIndex && currentSection.ClusterConfigEndMarkerIndex < currentSection.BlockEndMarkerIndex {
+				if currentSection.StartMarkerIndex < currentSection.MetricsEndMarkerIndex && currentSection.MetricsEndMarkerIndex < currentSection.ClusterConfigEndMarkerIndex && currentSection.ClusterConfigEndMarkerIndex < currentSection.ReadynessEndMarkerIndex && currentSection.ReadynessEndMarkerIndex < currentSection.BlockEndMarkerIndex {
 					sections = append(sections, currentSection)
 				}
 			}
@@ -469,19 +485,25 @@ func (s *RedpandaMonitorService) ParseRedpandaLogs(ctx context.Context, logs []s
 	// Metrics is the first part, cluster config is the second part, timestamp is the third part
 	metricsData := logs[actualSection.StartMarkerIndex+1 : actualSection.MetricsEndMarkerIndex]
 	clusterConfigData := logs[actualSection.MetricsEndMarkerIndex+1 : actualSection.ClusterConfigEndMarkerIndex]
-	timestampData := logs[actualSection.ClusterConfigEndMarkerIndex+1 : actualSection.BlockEndMarkerIndex]
+	readynessData := logs[actualSection.ClusterConfigEndMarkerIndex+1 : actualSection.ReadynessEndMarkerIndex]
+	timestampData := logs[actualSection.ReadynessEndMarkerIndex+1 : actualSection.BlockEndMarkerIndex]
 
 	var metricsDataBytes []byte
 	var clusterConfigDataBytes []byte
+	var readynessDataBytes []byte
 	var timestampDataBytes []byte
+
+	var readyness bool
 
 	metricsDataBytes = ConcatContent(metricsData)
 	clusterConfigDataBytes = ConcatContent(clusterConfigData)
+	readynessDataBytes = ConcatContent(readynessData)
 	timestampDataBytes = ConcatContent(timestampData)
 
 	// Remove any markers that might be in the data
 	metricsDataBytes = StripMarkers(metricsDataBytes)
 	clusterConfigDataBytes = StripMarkers(clusterConfigDataBytes)
+	readynessDataBytes = StripMarkers(readynessDataBytes)
 	timestampDataBytes = StripMarkers(timestampDataBytes)
 
 	metricsDataByteHash := xxhash.Sum64(metricsDataBytes)
@@ -492,12 +514,25 @@ func (s *RedpandaMonitorService) ParseRedpandaLogs(ctx context.Context, logs []s
 	clusterConfigChanged := s.previousClusterConfigDataByteHash != clusterConfigDataByteHash
 	timestampChanged := s.previousTimestampDataByteHash != timestampDataByteHash
 
+	// Now parse the readyness data
+	readyness, readynessError, err := s.parseReadynessData(readynessDataBytes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse readyness data: %w", err)
+	}
+
 	if !metricsChanged && !clusterConfigChanged && !timestampChanged {
+		healthCheck := HealthCheck{
+			IsLive:     readyness,
+			IsReady:    readyness,
+			Version:    constants.RedpandaVersion,
+			ReadyError: readynessError,
+		}
 		// No changes, return the cached values
 		return &RedpandaMetricsScan{
 			RedpandaMetrics: s.previousMetrics,
 			ClusterConfig:   s.previousClusterConfig,
 			LastUpdatedAt:   s.previousLastUpdatedAt,
+			HealthCheck:     healthCheck,
 		}, nil
 	}
 
@@ -588,7 +623,15 @@ func (s *RedpandaMonitorService) ParseRedpandaLogs(ctx context.Context, logs []s
 	s.previousClusterConfig = clusterConfig
 	s.previousLastUpdatedAt = lastUpdatedAt
 
+	healthCheck := HealthCheck{
+		IsLive:     readyness,
+		IsReady:    readyness,
+		Version:    constants.RedpandaVersion,
+		ReadyError: readynessError,
+	}
+
 	return &RedpandaMetricsScan{
+		HealthCheck:     healthCheck,
 		RedpandaMetrics: metrics,
 		ClusterConfig:   clusterConfig,
 		LastUpdatedAt:   lastUpdatedAt,
@@ -767,6 +810,39 @@ func seriesName(b []byte) string {
 		return string(b[:i])
 	}
 	return string(b)
+}
+
+func (s *RedpandaMonitorService) parseReadynessData(readynessDataBytes []byte) (bool, string, error) {
+	readynessDataString := string(readynessDataBytes)
+
+	// Strip any newlines
+	readynessDataString = strings.ReplaceAll(readynessDataString, "\n", "")
+
+	// Decode the hex encoded metrics data
+	decodedMetricsDataBytes, err := hex.DecodeString(readynessDataString)
+	if err != nil {
+		return false, "", fmt.Errorf("failed to decode readyness data: %w", err)
+	}
+
+	// Decompress the metrics data
+	gzipReader, err := gzip.NewReader(bytes.NewReader(decodedMetricsDataBytes))
+	if err != nil {
+		return false, "", fmt.Errorf("failed to create gzip reader: %w", err)
+	}
+	defer func() {
+		err := gzipReader.Close()
+		if err != nil {
+			sentry.ReportIssuef(sentry.IssueTypeError, s.logger, "failed to close gzip reader: %v", err)
+		}
+	}()
+
+	data, err := io.ReadAll(gzipReader)
+	if err != nil {
+		return false, "", fmt.Errorf("failed to read readyness data: %w", err)
+	}
+
+	readyness := strings.Contains(string(data), "{\"status\":\"ready\"}")
+	return readyness, string(data), nil
 }
 
 func (s *RedpandaMonitorService) processClusterConfigDataBytes(clusterConfigDataBytes []byte, tick uint64) (*ClusterConfig, error) {
