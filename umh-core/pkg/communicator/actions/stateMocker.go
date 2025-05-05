@@ -76,10 +76,6 @@ func NewStateMocker(configManager ConfigManager) *StateMocker {
 	}
 }
 
-func (s *StateMocker) GetMutex() *sync.RWMutex {
-	return s.mu
-}
-
 func (s *StateMocker) GetStateManager() *fsm.SnapshotManager {
 	return s.StateManager
 }
