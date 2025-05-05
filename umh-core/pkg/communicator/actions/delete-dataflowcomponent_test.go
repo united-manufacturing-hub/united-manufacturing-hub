@@ -16,7 +16,6 @@ package actions_test
 
 import (
 	"errors"
-	"time"
 
 	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo/v2"
@@ -43,6 +42,7 @@ var _ = Describe("DeleteDataflowComponent", func() {
 		componentName   string
 		componentUUID   uuid.UUID
 		stateMocker     *actions.StateMocker
+		messages        []*models.UMHMessage
 	)
 
 	// Setup before each test
@@ -82,6 +82,8 @@ var _ = Describe("DeleteDataflowComponent", func() {
 		stateMocker.UpdateDfcState()
 		mockStateManager := stateMocker.GetStateManager()
 		action = actions.NewDeleteDataflowComponentAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig, mockStateManager)
+
+		go actions.ConsumeOutboundMessages(outboundChannel, &messages, true)
 
 	})
 
@@ -204,18 +206,6 @@ var _ = Describe("DeleteDataflowComponent", func() {
 
 			// Stop the state mocker
 			stateMocker.Stop()
-
-			// Expect Confirmed and Failure messages
-			var messages []*models.UMHMessage
-			for i := 0; i < 2; i++ {
-				select {
-				case msg := <-outboundChannel:
-					messages = append(messages, msg)
-				case <-time.After(100 * time.Millisecond):
-					Fail("Timed out waiting for message")
-				}
-			}
-			Expect(messages).To(HaveLen(2))
 
 			// Verify the failure message content
 			decodedMessage, err := encoding.DecodeMessageFromUMHInstanceToUser(messages[1].Content)

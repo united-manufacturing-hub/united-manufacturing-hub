@@ -601,8 +601,7 @@ func (a *DeployDataflowComponentAction) waitForComponentToBeActive() error {
 					} else {
 						stateMsg := fmt.Sprintf("Dataflow component is in state '%s' (waiting for 'active', %ds remaining)...",
 							instance.CurrentState, remainingSeconds)
-						SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
-							stateMsg, a.outboundChannel, models.DeployDataFlowComponent)
+						SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, stateMsg, a.outboundChannel, models.DeployDataFlowComponent)
 						// send the benthos logs to the user
 						logs = dfcSnapshot.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosLogs
 						// only send the logs that have not been sent yet

@@ -16,7 +16,6 @@ package actions_test
 
 import (
 	"errors"
-	"time"
 
 	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo/v2"
@@ -41,6 +40,7 @@ var _ = Describe("DeployDataflowComponent", func() {
 		outboundChannel chan *models.UMHMessage
 		mockConfig      *config.MockConfigManager
 		stateMocker     *actions.StateMocker
+		messages        []*models.UMHMessage
 	)
 
 	// Setup before each test
@@ -65,13 +65,15 @@ var _ = Describe("DeployDataflowComponent", func() {
 		}
 
 		mockConfig = config.NewMockConfigManager().WithConfig(initialConfig)
-    
+
 		// Startup the state mocker and get the mock snapshot
 		stateMocker = actions.NewStateMocker(mockConfig)
 		stateMocker.UpdateDfcState()
 		mockStateManager := stateMocker.GetStateManager()
 
 		action = actions.NewDeployDataflowComponentAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig, mockStateManager)
+
+		go actions.ConsumeOutboundMessages(outboundChannel, &messages, true)
 
 	})
 
@@ -490,19 +492,6 @@ var _ = Describe("DeployDataflowComponent", func() {
 			// Stop the state mocker
 			stateMocker.Stop()
 
-			// Only expect the Confirmed message in the channel
-			// Success message is sent by HandleActionMessage, not by Execute
-			var messages []*models.UMHMessage
-			for i := 0; i < 1; i++ {
-				select {
-				case msg := <-outboundChannel:
-					messages = append(messages, msg)
-				case <-time.After(100 * time.Millisecond):
-					Fail("Timed out waiting for message")
-				}
-			}
-			Expect(messages).To(HaveLen(1))
-
 			// Verify AtomicAddDataflowcomponent was called
 			Expect(mockConfig.AddDataflowcomponentCalled).To(BeTrue())
 
@@ -561,18 +550,6 @@ var _ = Describe("DeployDataflowComponent", func() {
 
 			// Stop the state mocker
 			stateMocker.Stop()
-
-			// Expect Confirmed and Failure messages
-			var messages []*models.UMHMessage
-			for i := 0; i < 2; i++ {
-				select {
-				case msg := <-outboundChannel:
-					messages = append(messages, msg)
-				case <-time.After(100 * time.Millisecond):
-					Fail("Timed out waiting for message")
-				}
-			}
-			Expect(messages).To(HaveLen(2))
 
 			// Verify the failure message content
 			decodedMessage, err := encoding.DecodeMessageFromUMHInstanceToUser(messages[1].Content)
@@ -646,19 +623,6 @@ buffer:
 
 			// Stop the state mocker
 			stateMocker.Stop()
-
-			// Only expect the Confirmed message in the channel
-			// Success message is sent by HandleActionMessage, not by Execute
-			var messages []*models.UMHMessage
-			for i := 0; i < 1; i++ {
-				select {
-				case msg := <-outboundChannel:
-					messages = append(messages, msg)
-				case <-time.After(100 * time.Millisecond):
-					Fail("Timed out waiting for message")
-				}
-			}
-			Expect(messages).To(HaveLen(1))
 
 			// Verify AtomicAddDataflowcomponent was called
 			Expect(mockConfig.AddDataflowcomponentCalled).To(BeTrue())

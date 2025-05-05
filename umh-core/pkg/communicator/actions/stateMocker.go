@@ -20,10 +20,12 @@ import (
 	"sync/atomic"
 	"time"
 
+	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
+	"go.uber.org/zap"
 )
 
 // ErrAlreadyRunning is returned when trying to start a StateMocker that is already running
@@ -53,6 +55,9 @@ type StateMocker struct {
 	done               chan struct{}                // channel to signal shutdown of goroutine
 	running            atomic.Bool                  // flag to track if the mocker is running
 	mu                 *sync.RWMutex                // mutex to protect the state of the mocker
+	LastConfig         config.FullConfig            // last config is needed to detect config changes (events)
+	LastConfigSet      bool                         // flag to track if the last config has been set
+	IgnoreDfcUntilTick map[string]int               // map of component ID to tick to ignore
 }
 
 // NewStateMocker creates a new StateMocker
@@ -64,6 +69,9 @@ func NewStateMocker(configManager ConfigManager) *StateMocker {
 		PendingTransitions: make(map[string][]StateTransition),
 		done:               make(chan struct{}),
 		mu:                 &sync.RWMutex{},
+		LastConfig:         config.FullConfig{},
+		LastConfigSet:      false,
+		IgnoreDfcUntilTick: make(map[string]int),
 	}
 }
 
@@ -92,6 +100,7 @@ func (s *StateMocker) UpdateDfcState() {
 	defer s.mu.Unlock()
 	// only take the dataflowcomponent configs and add them to the state of the dataflowcomponent manager
 
+	s.detectConfigEvents()
 	managerSnapshot := s.createDfcManagerSnapshot()
 
 	// update the state of the system with the new manager snapshot
@@ -109,6 +118,72 @@ func (s *StateMocker) UpdateDfcState() {
 	})
 }
 
+func (s *StateMocker) detectConfigEvents() {
+	curDfcConfig := s.ConfigManager.GetDataFlowConfig()
+
+	if !s.LastConfigSet {
+		s.LastConfig.DataFlow = curDfcConfig
+		s.LastConfigSet = true
+		return
+	}
+
+	// detect added dfcs
+	if len(curDfcConfig) > len(s.LastConfig.DataFlow) {
+		for _, dfcConfig := range curDfcConfig {
+			found := false
+			for _, existing := range s.LastConfig.DataFlow {
+				if existing.Name == dfcConfig.Name {
+					found = true
+					break
+				}
+			}
+			if !found {
+				zap.S().Info("Detected new dataflow component", zap.String("name", dfcConfig.Name))
+				// add the default add transitions
+				s.PendingTransitions[dfcConfig.Name] = []StateTransition{
+					{TickAt: s.TickCounter, State: internalfsm.LifecycleStateToBeCreated},
+					{TickAt: s.TickCounter + 2, State: internalfsm.LifecycleStateCreating},
+					{TickAt: s.TickCounter + 4, State: dataflowcomponent.OperationalStateStarting},
+					{TickAt: s.TickCounter + 15, State: dataflowcomponent.OperationalStateActive},
+				}
+			}
+		}
+	}
+
+	// detect removed dfcs
+	if len(curDfcConfig) < len(s.LastConfig.DataFlow) {
+		for _, existing := range s.LastConfig.DataFlow {
+			found := false
+			for _, new := range curDfcConfig {
+				if new.Name == existing.Name {
+					found = true
+					break
+				}
+			}
+			if !found {
+				// we wait for 10 ticks before we remove the component from the state
+				// in the meantime, the state will be updated
+				zap.S().Info("Detected removed dataflow component", zap.String("name", existing.Name))
+				s.IgnoreDfcUntilTick[existing.Name] = s.TickCounter + 10
+				s.PendingTransitions[existing.Name] = []StateTransition{
+					{TickAt: s.TickCounter, State: internalfsm.LifecycleStateRemoving},
+					{TickAt: s.TickCounter + 8, State: internalfsm.LifecycleStateRemoved},
+				}
+			}
+		}
+	}
+
+	// detect config changes
+	// if len(curDfcConfig) == len(s.LastConfig.DataFlow) {
+	// 	for i, dfcConfig := range curDfcConfig {
+	// 		// check if the config or the name has changed
+	// 		// first check if we find dfcConfig.ID in the last config, if not, the name has changed
+	// 	}
+	// }
+
+	s.LastConfig.DataFlow = curDfcConfig
+}
+
 // createDfcManagerSnapshot creates a snapshot of the DataFlowComponent manager state
 // it therefore uses the config manager to get the dataflowcomponent configs
 // and the pending transitions to update the state of the dataflowcomponent instances based on the tick counter
@@ -117,6 +192,9 @@ func (s *StateMocker) createDfcManagerSnapshot() fsm.ManagerSnapshot {
 	dfcManagerInstaces := map[string]*fsm.FSMInstanceSnapshot{}
 
 	for _, curDataflowcomponent := range s.ConfigManager.GetDataFlowConfig() {
+
+		instanceExistsInCurrentSnapshot := false
+
 		// get the default currentState from the last observed state (s.state)
 		currentState := curDataflowcomponent.DesiredFSMState
 		var instances map[string]*fsm.FSMInstanceSnapshot
@@ -129,6 +207,7 @@ func (s *StateMocker) createDfcManagerSnapshot() fsm.ManagerSnapshot {
 
 		if instance, ok := instances[curDataflowcomponent.Name]; ok {
 			currentState = instance.CurrentState
+			instanceExistsInCurrentSnapshot = true
 		}
 
 		// Check if there are pending transitions for this component
@@ -137,7 +216,7 @@ func (s *StateMocker) createDfcManagerSnapshot() fsm.ManagerSnapshot {
 			for i, transition := range transitions {
 				if transition.TickAt <= s.TickCounter {
 					currentState = transition.State
-
+					zap.S().Info("Transition applied", zap.String("component", curDataflowcomponent.Name), zap.String("state", currentState))
 					// Remove applied transitions if they've been processed
 					if i < len(transitions)-1 {
 						s.PendingTransitions[curDataflowcomponent.Name] = transitions[i+1:]
@@ -148,6 +227,16 @@ func (s *StateMocker) createDfcManagerSnapshot() fsm.ManagerSnapshot {
 					break
 				}
 			}
+		}
+
+		if ignoreTick, ok := s.IgnoreDfcUntilTick[curDataflowcomponent.Name]; ok && s.TickCounter < ignoreTick {
+			// we dont update the config of this component until the tick counter is greater than the ignore tick
+			// if exists, we use the instance from the last system snapshot, else we do nothing
+			if instanceExistsInCurrentSnapshot && instances[curDataflowcomponent.Name] != nil {
+				dfcManagerInstaces[curDataflowcomponent.Name] = instances[curDataflowcomponent.Name]
+				dfcManagerInstaces[curDataflowcomponent.Name].CurrentState = currentState
+			}
+			continue
 		}
 
 		dfcManagerInstaces[curDataflowcomponent.Name] = &fsm.FSMInstanceSnapshot{
