@@ -17,7 +17,7 @@ agent:
 
 internal:
   redpanda:
-    desiredState: stopped
+    desiredState: active
     redpandaServiceConfig:
       # Note: Any change in here, will result in a restart of the Redpanda service
       topic:
