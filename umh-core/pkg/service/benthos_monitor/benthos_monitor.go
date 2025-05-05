@@ -1085,6 +1085,12 @@ func ParseMetricsFromBytes(raw []byte) (Metrics, error) {
 					return Metrics{}, fmt.Errorf("failed to parse processor batch received: %w", err)
 				}
 				pm.BatchReceived = count
+			case "processor_sent":
+				count, err := tailInt(line)
+				if err != nil {
+					return Metrics{}, fmt.Errorf("failed to parse processor sent: %w", err)
+				}
+				pm.Sent = count
 			case "processor_batch_sent":
 				count, err := tailInt(line)
 				if err != nil {
