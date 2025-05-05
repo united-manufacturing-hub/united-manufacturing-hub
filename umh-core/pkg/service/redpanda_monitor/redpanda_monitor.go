@@ -40,6 +40,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
 
@@ -247,7 +248,8 @@ type RedpandaMonitorService struct {
 	previousMetrics                   *RedpandaMetrics
 	previousClusterConfig             *ClusterConfig
 	previousLastUpdatedAt             time.Time
-	cacheMutex                        sync.Mutex
+	// cacheMutex is used to synchronize access to above cache variables
+	cacheMutex sync.Mutex
 }
 
 // RedpandaMonitorServiceOption is a function that modifies a RedpandaMonitorService
@@ -300,7 +302,7 @@ func (s *RedpandaMonitorService) generateRedpandaScript() (string, error) {
 	// Create the script content with a loop that executes redpanda every second
 	// Also let's use gzip to compress the output & hex encode it
 	// We use gzip here, to prevent the output from being rotated halfway through the logs & hex encode it to avoid issues with special characters
-	// Max-time: https://everything.curl.dev/usingcurl/timeouts.html
+	// Max-time: https://everything.monitor.dev/usingcurl/timeouts.html
 	// The timestamp here is the unix nanosecond timestamp of the current time
 	// It is gathered AFTER the curl commands, preventing long curl execution times from affecting the timestamp
 	// +%s%9N: %s is the unix timestamp in seconds with 9 decimal places for nanoseconds
@@ -482,9 +484,6 @@ func (s *RedpandaMonitorService) ParseRedpandaLogs(ctx context.Context, logs []s
 	clusterConfigDataBytes = StripMarkers(clusterConfigDataBytes)
 	timestampDataBytes = StripMarkers(timestampDataBytes)
 
-	s.cacheMutex.Lock()
-	defer s.cacheMutex.Unlock()
-
 	metricsDataByteHash := xxhash.Sum64(metricsDataBytes)
 	clusterConfigDataByteHash := xxhash.Sum64(clusterConfigDataBytes)
 	timestampDataByteHash := xxhash.Sum64(timestampDataBytes)
@@ -580,6 +579,8 @@ func (s *RedpandaMonitorService) ParseRedpandaLogs(ctx context.Context, logs []s
 	}
 
 	// Update previous values
+	s.cacheMutex.Lock()
+	defer s.cacheMutex.Unlock()
 	s.previousMetricsDataByteHash = metricsDataByteHash
 	s.previousClusterConfigDataByteHash = clusterConfigDataByteHash
 	s.previousTimestampDataByteHash = timestampDataByteHash
@@ -592,25 +593,6 @@ func (s *RedpandaMonitorService) ParseRedpandaLogs(ctx context.Context, logs []s
 		ClusterConfig:   clusterConfig,
 		LastUpdatedAt:   lastUpdatedAt,
 	}, nil
-}
-
-func parseCurlError(errorString string) error {
-	if !strings.Contains(errorString, "curl") {
-		return nil
-	}
-
-	knownErrors := map[string]error{
-		"curl: (7)":  ErrServiceConnectionRefused,
-		"curl: (28)": ErrServiceConnectionTimedOut,
-	}
-
-	for knownError, err := range knownErrors {
-		if strings.Contains(errorString, knownError) {
-			return err
-		}
-	}
-
-	return fmt.Errorf("unknown curl error: %s", errorString)
 }
 
 func (s *RedpandaMonitorService) processMetricsDataBytes(metricsDataBytes []byte, tick uint64) (*RedpandaMetrics, error) {
@@ -650,7 +632,7 @@ func parseMetricsBlob(r io.Reader) (Metrics, error) {
 	if err != nil {
 		return Metrics{}, err
 	}
-	if curl := parseCurlError(string(payload)); curl != nil {
+	if curl := monitor.ParseCurlError(string(payload)); curl != nil {
 		return Metrics{}, curl
 	}
 	return ParseMetricsFast(payload)
@@ -816,7 +798,7 @@ func (s *RedpandaMonitorService) processClusterConfigDataBytes(clusterConfigData
 		return nil, fmt.Errorf("failed to read cluster config data: %w", err)
 	}
 
-	curlError := parseCurlError(string(data))
+	curlError := monitor.ParseCurlError(string(data))
 	if curlError != nil {
 		return nil, curlError
 	}
@@ -867,7 +849,7 @@ func ParseMetrics(dataReader io.Reader) (Metrics, error) {
 		return Metrics{}, fmt.Errorf("failed to read metrics data: %w", err)
 	}
 
-	curlError := parseCurlError(string(data))
+	curlError := monitor.ParseCurlError(string(data))
 	if curlError != nil {
 		return Metrics{}, curlError
 	}

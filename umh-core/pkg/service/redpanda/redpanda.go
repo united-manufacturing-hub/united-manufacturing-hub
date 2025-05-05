@@ -31,6 +31,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/httpclient"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda_monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	"go.uber.org/zap"
@@ -394,12 +395,12 @@ func (s *RedpandaService) Status(ctx context.Context, filesystemService filesyst
 				},
 			}, ErrServiceNoLogFile
 		}
-		if strings.Contains(err.Error(), redpanda_monitor.ErrServiceConnectionRefused.Error()) {
+		if strings.Contains(err.Error(), monitor.ErrServiceConnectionRefused.Error()) {
 			return ServiceInfo{
 				S6ObservedState: s6ServiceObservedState,
 				S6FSMState:      s6FSMState,
 				RedpandaStatus:  redpandaStatus,
-			}, redpanda_monitor.ErrServiceConnectionRefused
+			}, monitor.ErrServiceConnectionRefused
 		}
 
 		if strings.Contains(err.Error(), ErrRedpandaMonitorNotRunning.Error()) {

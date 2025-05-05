@@ -28,8 +28,8 @@ import (
 	logger "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/monitor"
 	redpanda_service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda_monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	"golang.org/x/sync/errgroup"
 )
@@ -153,7 +153,7 @@ func (r *RedpandaInstance) GetServiceStatus(ctx context.Context, filesystemServi
 				// We have no running service, therefore we can simply return nil as error
 				return info, nil
 			}
-		} else if errors.Is(err, redpanda_monitor.ErrServiceConnectionRefused) {
+		} else if errors.Is(err, monitor.ErrServiceConnectionRefused) {
 			// If we are in the starting phase or stopped, ..., we can ignore this error, as it is expected
 			if !IsRunningState(r.baseFSMInstance.GetCurrentFSMState()) {
 				infoWithFailedHealthChecks := info
@@ -255,7 +255,7 @@ func (r *RedpandaInstance) UpdateObservedStateOfInstance(ctx context.Context, se
 				r.baseFSMInstance.GetLogger().Debugf("Monitor service not found, will be created during reconciliation: %v", err)
 				return nil
 			}
-			if strings.Contains(err.Error(), redpanda_monitor.ErrServiceConnectionRefused.Error()) {
+			if strings.Contains(err.Error(), monitor.ErrServiceConnectionRefused.Error()) {
 				// This is expected during the startup phase of the redpanda service, when the service is not yet ready to receive connections
 				r.baseFSMInstance.GetLogger().Debugf("Monitor service not yet ready: %v", err)
 				return nil

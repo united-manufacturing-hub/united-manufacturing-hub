@@ -40,6 +40,7 @@ import (
 
 	dto "github.com/prometheus/client_model/go"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/monitor"
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
@@ -291,7 +292,7 @@ func (s *BenthosMonitorService) generateBenthosScript(port uint16) (string, erro
 	// Create the script content with a loop that executes benthos every second
 	// Also let's use gzip to compress the output & hex encode it
 	// We use gzip here, to prevent the output from being rotated halfway through the logs & hex encode it to avoid issues with special characters
-	// Max-time: https://everything.curl.dev/usingcurl/timeouts.html
+	// Max-time: https://everything.monitor.dev/usingcurl/timeouts.html
 	// The timestamp here is the unix nanosecond timestamp of the current time
 	// It is gathered AFTER the curl commands, preventing long curl execution times from affecting the timestamp
 	// +%s%9N: %s is the unix timestamp in seconds with 9 decimal places for nanoseconds
@@ -610,25 +611,6 @@ func (s *BenthosMonitorService) ParseBenthosLogs(ctx context.Context, logs []s6s
 	}, nil
 }
 
-func parseCurlError(errorString string) error {
-	if !strings.Contains(errorString, "curl") {
-		return nil
-	}
-
-	knownErrors := map[string]error{
-		"curl: (7)":  ErrServiceConnectionRefused,
-		"curl: (28)": ErrServiceConnectionTimedOut,
-	}
-
-	for knownError, err := range knownErrors {
-		if strings.Contains(errorString, knownError) {
-			return err
-		}
-	}
-
-	return fmt.Errorf("unknown curl error: %s", errorString)
-}
-
 // ProcessPingData processes the ping data and returns whether the service is live
 // It returns false if the service is not live, and an error if there is an error parsing the ping data
 // It is live, when it contains the string "pong"
@@ -671,7 +653,7 @@ func ParsePingData(dataReader io.Reader) (bool, error) {
 		return false, fmt.Errorf("failed to read ping data: %w", err)
 	}
 
-	curlError := parseCurlError(string(data))
+	curlError := monitor.ParseCurlError(string(data))
 	if curlError != nil {
 		// If we have any curl error, we can assume the service is not live (but we do not need to return the error)
 		return false, nil
@@ -727,7 +709,7 @@ func ParseReadyData(dataReader io.Reader) (bool, readyResponse, error) {
 		return false, readyResponse{}, fmt.Errorf("failed to read ready data: %w", err)
 	}
 
-	curlError := parseCurlError(string(data))
+	curlError := monitor.ParseCurlError(string(data))
 	if curlError != nil {
 		// If we have any curl error, we can assume the service is not ready (but we do not need to return the error)
 		return false, readyResponse{}, nil
@@ -782,7 +764,7 @@ func ParseVersionData(dataReader io.Reader) (versionResponse, error) {
 		return versionResponse{}, fmt.Errorf("failed to read version data: %w", err)
 	}
 
-	curlError := parseCurlError(string(data))
+	curlError := monitor.ParseCurlError(string(data))
 	if curlError != nil {
 		return versionResponse{}, curlError
 	}
@@ -842,7 +824,7 @@ func ParseMetricsData(dataReader io.Reader) (Metrics, error) {
 		return Metrics{}, fmt.Errorf("failed to read metrics data: %w", err)
 	}
 
-	curlError := parseCurlError(string(data))
+	curlError := monitor.ParseCurlError(string(data))
 	if curlError != nil {
 		return Metrics{}, curlError
 	}

@@ -26,6 +26,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/monitor"
 	redpanda_monitor_service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda_monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
@@ -91,8 +92,8 @@ func (b *RedpandaMonitorInstance) Reconcile(ctx context.Context, snapshot fsm.Sy
 		// I am using strings.Contains as i cannot get it working with errors.Is
 		isExpectedError := strings.Contains(err.Error(), redpanda_monitor_service.ErrServiceNotExist.Error()) ||
 			strings.Contains(err.Error(), redpanda_monitor_service.ErrServiceNoLogFile.Error()) ||
-			strings.Contains(err.Error(), redpanda_monitor_service.ErrServiceConnectionRefused.Error()) ||
-			strings.Contains(err.Error(), redpanda_monitor_service.ErrServiceConnectionTimedOut.Error()) ||
+			strings.Contains(err.Error(), monitor.ErrServiceConnectionRefused.Error()) ||
+			strings.Contains(err.Error(), monitor.ErrServiceConnectionTimedOut.Error()) ||
 			strings.Contains(err.Error(), redpanda_monitor_service.ErrServiceNoSectionsFound.Error())
 
 		if !isExpectedError {
