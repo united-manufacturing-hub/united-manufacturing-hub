@@ -614,10 +614,6 @@ func parseCurlError(errorString string) error {
 }
 
 func (s *RedpandaMonitorService) processMetricsDataBytes(metricsDataBytes []byte, tick uint64) (*RedpandaMetrics, error) {
-	start := time.Now()
-	defer func() {
-		s.logger.Debugf("processMetricsDataBytes took %s", time.Since(start))
-	}()
 
 	gzr, err := gzip.NewReader(hex.NewDecoder(bytes.NewReader(metricsDataBytes)))
 	if err != nil {
