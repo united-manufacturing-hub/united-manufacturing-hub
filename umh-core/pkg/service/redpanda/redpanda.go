@@ -978,11 +978,6 @@ func (s *RedpandaService) ApplyConfigurationChanges(ctx context.Context, desired
 
 	// Execute the rpk commands
 	for _, cmdArgs := range commands {
-		// Early exit if context is done
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-
 		cmd := strings.Join(cmdArgs, " ")
 		s.logger.Infof("Executing command: %s", cmd)
 
