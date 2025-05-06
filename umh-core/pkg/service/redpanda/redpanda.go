@@ -941,6 +941,13 @@ func formatMemory(memory int) string {
 	return fmt.Sprintf("%d%s", memory, units[unitIndex])
 }
 
+func maxInt(a, b int64) int64 {
+	if a > b {
+		return a
+	}
+	return b
+}
+
 // ApplyConfigurationChanges applies configuration changes to a running Redpanda instance using rpk
 func (s *RedpandaService) ApplyConfigurationChanges(ctx context.Context, desired redpandaserviceconfig.RedpandaServiceConfig) error {
 	if ctx.Err() != nil {
@@ -957,12 +964,12 @@ func (s *RedpandaService) ApplyConfigurationChanges(ctx context.Context, desired
 
 	commands = append(commands, []string{
 		"/opt/redpanda/bin/rpk", "cluster", "config", "set",
-		"log_retention_ms", fmt.Sprintf("\"%d\"", normDesired.Topic.DefaultTopicRetentionMs),
+		"log_retention_ms", fmt.Sprintf("%d", maxInt(normDesired.Topic.DefaultTopicRetentionMs, 0)),
 	})
 
 	commands = append(commands, []string{
 		"/opt/redpanda/bin/rpk", "cluster", "config", "set",
-		"retention_bytes", fmt.Sprintf("\"%d\"", normDesired.Topic.DefaultTopicRetentionBytes),
+		"retention_bytes", fmt.Sprintf("%d", maxInt(normDesired.Topic.DefaultTopicRetentionBytes, 0)),
 	})
 
 	commands = append(commands, []string{
