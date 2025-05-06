@@ -25,10 +25,10 @@ sudo docker run -d \
   --restart unless-stopped \
   -v $(pwd)/umh-core-data:/data \
   -e AUTH_TOKEN=YOUR_TOKEN_HERE \
-  -e RELEASE_CHANNEL=stable             # nightly / enterprise are also available
-  -e LOCATION_0="My-Plant---Line-A"     # optional hierarchy; add LOCATION_1…n for deeper paths
+  -e RELEASE_CHANNEL=stable \
+  -e LOCATION_0="My-Plant---Line-A" \
   -e API_URL=https://management.umh.app/api \
-  management.umh.app/oci/united-manufacturing-hub/umh-core:v0.31.0
+  management.umh.app/oci/united-manufacturing-hub/umh-core:latest
 ```
 
 - Connect to the cloud console:  
