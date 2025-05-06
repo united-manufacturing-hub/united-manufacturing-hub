@@ -142,6 +142,92 @@ func detectConfigEvents(curDfcConfig []config.DataFlowComponentConfig, lastDfcCo
 
 	// detect added dfcs
 	if len(curDfcConfig) > len(lastDfcConfig) {
+		return detectAddedComponents(curDfcConfig, lastDfcConfig, pendingTransitions, ignoreDfcUntilTick, tickCounter)
+	}
+
+	// detect removed dfcs
+	if len(curDfcConfig) < len(lastDfcConfig) {
+		return detectRemovedComponents(curDfcConfig, lastDfcConfig, pendingTransitions, ignoreDfcUntilTick, tickCounter)
+	}
+
+	// detect config changes
+	if len(curDfcConfig) == len(lastDfcConfig) {
+		return detectEditedComponents(curDfcConfig, lastDfcConfig, pendingTransitions, ignoreDfcUntilTick, tickCounter)
+	}
+
+	return pendingTransitions, ignoreDfcUntilTick
+}
+
+// detectAddedComponents detects added components by comparing current and last config
+func detectAddedComponents(curDfcConfig []config.DataFlowComponentConfig, lastDfcConfig []config.DataFlowComponentConfig, pendingTransitions map[string][]StateTransition, ignoreDfcUntilTick map[string]int, tickCounter int) (map[string][]StateTransition, map[string]int) {
+	for _, dfcConfig := range curDfcConfig {
+		found := false
+		for _, existing := range lastDfcConfig {
+			if existing.Name == dfcConfig.Name {
+				found = true
+				break
+			}
+		}
+		if !found {
+			zap.S().Info("Detected new dataflow component", zap.String("name", dfcConfig.Name))
+			// add the default add transitions
+			pendingTransitions[dfcConfig.Name] = []StateTransition{
+				{TickAt: tickCounter, State: internalfsm.LifecycleStateToBeCreated},
+				{TickAt: tickCounter + 2, State: internalfsm.LifecycleStateCreating},
+				{TickAt: tickCounter + 4, State: dataflowcomponent.OperationalStateStarting},
+				{TickAt: tickCounter + 15, State: dataflowcomponent.OperationalStateActive},
+			}
+		}
+	}
+	return pendingTransitions, ignoreDfcUntilTick
+}
+
+// detectRemovedComponents detects removed components by comparing current and last config
+func detectRemovedComponents(curDfcConfig []config.DataFlowComponentConfig, lastDfcConfig []config.DataFlowComponentConfig, pendingTransitions map[string][]StateTransition, ignoreDfcUntilTick map[string]int, tickCounter int) (map[string][]StateTransition, map[string]int) {
+	for _, existing := range lastDfcConfig {
+		found := false
+		for _, new := range curDfcConfig {
+			if new.Name == existing.Name {
+				found = true
+				break
+			}
+		}
+		if !found {
+			// we wait for 10 ticks before we remove the component from the state
+			// in the meantime, the state will be updated
+			zap.S().Info("Detected removed dataflow component", zap.String("name", existing.Name))
+			ignoreDfcUntilTick[existing.Name] = tickCounter + 10
+			pendingTransitions[existing.Name] = []StateTransition{
+				{TickAt: tickCounter, State: internalfsm.LifecycleStateRemoving},
+				{TickAt: tickCounter + 8, State: internalfsm.LifecycleStateRemoved},
+			}
+		}
+	}
+	return pendingTransitions, ignoreDfcUntilTick
+}
+
+// detectEditedComponents detects edited components by comparing current and last config
+func detectEditedComponents(curDfcConfig []config.DataFlowComponentConfig, lastDfcConfig []config.DataFlowComponentConfig, pendingTransitions map[string][]StateTransition, ignoreDfcUntilTick map[string]int, tickCounter int) (map[string][]StateTransition, map[string]int) {
+	// checking the config for changes (after edit-dataflowcomponent) is not easy because the name of the component can be changed
+	// thus, we first check if the name of the component has changed by iterating over the last config and checking if the name is present in the new config
+	renamed := false
+	oldName := ""
+	newName := ""
+	for _, dfcConfig := range lastDfcConfig {
+		found := false
+		for _, new := range curDfcConfig {
+			if new.Name == dfcConfig.Name {
+				found = true
+				break
+			}
+		}
+		if !found {
+			renamed = true
+			oldName = dfcConfig.Name
+		}
+	}
+	if renamed {
+		// iterate over the new config and check if a name is not present in the last config
 		for _, dfcConfig := range curDfcConfig {
 			found := false
 			for _, existing := range lastDfcConfig {
@@ -151,115 +237,44 @@ func detectConfigEvents(curDfcConfig []config.DataFlowComponentConfig, lastDfcCo
 				}
 			}
 			if !found {
-				zap.S().Info("Detected new dataflow component", zap.String("name", dfcConfig.Name))
-				// add the default add transitions
-				pendingTransitions[dfcConfig.Name] = []StateTransition{
-					{TickAt: tickCounter, State: internalfsm.LifecycleStateToBeCreated},
-					{TickAt: tickCounter + 2, State: internalfsm.LifecycleStateCreating},
-					{TickAt: tickCounter + 4, State: dataflowcomponent.OperationalStateStarting},
-					{TickAt: tickCounter + 15, State: dataflowcomponent.OperationalStateActive},
-				}
+				newName = dfcConfig.Name
 			}
 		}
+		zap.S().Info("Detected changed dataflow component; old name: ", zap.String("oldName", oldName), zap.String("newName", newName))
+		// we need to update the pending transitions and ignore ticks for the old name
+		pendingTransitions[oldName] = []StateTransition{
+			{TickAt: tickCounter, State: internalfsm.LifecycleStateRemoving},
+			{TickAt: tickCounter + 8, State: internalfsm.LifecycleStateRemoved},
+		}
+		ignoreDfcUntilTick[oldName] = tickCounter + 10 // give it some time to remove the component from the state
+		// the new component should be added after 10 ticks
+		pendingTransitions[newName] = []StateTransition{
+			{TickAt: tickCounter + 10, State: internalfsm.LifecycleStateToBeCreated},
+			{TickAt: tickCounter + 12, State: internalfsm.LifecycleStateCreating},
+			{TickAt: tickCounter + 14, State: dataflowcomponent.OperationalStateStarting},
+			{TickAt: tickCounter + 25, State: dataflowcomponent.OperationalStateActive},
+		}
+		ignoreDfcUntilTick[newName] = tickCounter + 10 // give it some time to create the component
 		return pendingTransitions, ignoreDfcUntilTick
 	}
-
-	// detect removed dfcs
-	if len(curDfcConfig) < len(lastDfcConfig) {
-		for _, existing := range lastDfcConfig {
-			found := false
-			for _, new := range curDfcConfig {
-				if new.Name == existing.Name {
-					found = true
-					break
-				}
-			}
-			if !found {
-				// we wait for 10 ticks before we remove the component from the state
-				// in the meantime, the state will be updated
-				zap.S().Info("Detected removed dataflow component", zap.String("name", existing.Name))
-				ignoreDfcUntilTick[existing.Name] = tickCounter + 10
-				pendingTransitions[existing.Name] = []StateTransition{
-					{TickAt: tickCounter, State: internalfsm.LifecycleStateRemoving},
-					{TickAt: tickCounter + 8, State: internalfsm.LifecycleStateRemoved},
-				}
-			}
-		}
-		return pendingTransitions, ignoreDfcUntilTick
-	}
-
-	// detect config changes
-	if len(curDfcConfig) == len(lastDfcConfig) {
-		// checking the config for changes (after edit-dataflowcomponent) is not easy because the name of the component can be changed
-		// thus, we first check if the name of the component has changed by iterating over the last config and checking if the name is present in the new config
-		renamed := false
-		oldName := ""
-		newName := ""
-		for _, dfcConfig := range lastDfcConfig {
-			found := false
-			for _, new := range curDfcConfig {
-				if new.Name == dfcConfig.Name {
-					found = true
-					break
-				}
-			}
-			if !found {
-				renamed = true
-				oldName = dfcConfig.Name
-			}
-		}
-		if renamed {
-			// iterate over the new config and check if a name is not present in the last config
-			for _, dfcConfig := range curDfcConfig {
-				found := false
-				for _, existing := range lastDfcConfig {
-					if existing.Name == dfcConfig.Name {
-						found = true
-						break
+	// if the name is not changed, we need to identify which component has changed
+	// we do this by iterating over the last config and checking if the name is present in the new config and then comparing the configs
+	for _, dfcConfig := range lastDfcConfig {
+		for _, new := range curDfcConfig {
+			if new.Name == dfcConfig.Name {
+				if !reflect.DeepEqual(new, dfcConfig) {
+					zap.S().Info("Detected changed dataflow component", zap.String("name", dfcConfig.Name))
+					// we need to update the pending transitions and ignore ticks for the old name
+					pendingTransitions[dfcConfig.Name] = []StateTransition{
+						{TickAt: tickCounter, State: dataflowcomponent.EventBenthosDegraded},
+						{TickAt: tickCounter + 8, State: dataflowcomponent.OperationalStateActive},
 					}
-				}
-				if !found {
-					newName = dfcConfig.Name
-				}
-			}
-			zap.S().Info("Detected changed dataflow component; old name: ", zap.String("oldName", oldName), zap.String("newName", newName))
-			// we need to update the pending transitions and ignore ticks for the old name
-			pendingTransitions[oldName] = []StateTransition{
-				{TickAt: tickCounter, State: internalfsm.LifecycleStateRemoving},
-				{TickAt: tickCounter + 8, State: internalfsm.LifecycleStateRemoved},
-			}
-			ignoreDfcUntilTick[oldName] = tickCounter + 10 // give it some time to remove the component from the state
-			// the new component should be added after 10 ticks
-			pendingTransitions[newName] = []StateTransition{
-				{TickAt: tickCounter + 10, State: internalfsm.LifecycleStateToBeCreated},
-				{TickAt: tickCounter + 12, State: internalfsm.LifecycleStateCreating},
-				{TickAt: tickCounter + 14, State: dataflowcomponent.OperationalStateStarting},
-				{TickAt: tickCounter + 25, State: dataflowcomponent.OperationalStateActive},
-			}
-			ignoreDfcUntilTick[newName] = tickCounter + 10 // give it some time to create the component
-			return pendingTransitions, ignoreDfcUntilTick
-		}
-		// if the name is not changed, we need to identify which component has changed
-		// we do this by iterating over the last config and checking if the name is present in the new config and then comparing the configs
-		for _, dfcConfig := range lastDfcConfig {
-			for _, new := range curDfcConfig {
-				if new.Name == dfcConfig.Name {
-					if !reflect.DeepEqual(new, dfcConfig) {
-						zap.S().Info("Detected changed dataflow component", zap.String("name", dfcConfig.Name))
-						// we need to update the pending transitions and ignore ticks for the old name
-						pendingTransitions[dfcConfig.Name] = []StateTransition{
-							{TickAt: tickCounter, State: dataflowcomponent.EventBenthosDegraded},
-							{TickAt: tickCounter + 8, State: dataflowcomponent.OperationalStateActive},
-						}
-						ignoreDfcUntilTick[dfcConfig.Name] = tickCounter + 5 // give it some time to apply the new config
-					}
+					ignoreDfcUntilTick[dfcConfig.Name] = tickCounter + 5 // give it some time to apply the new config
 				}
 			}
 		}
 	}
-
 	return pendingTransitions, ignoreDfcUntilTick
-
 }
 
 // checkPendingTransitions checks if there are pending transitions for a component and applies them
