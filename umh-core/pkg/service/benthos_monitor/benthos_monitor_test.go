@@ -431,4 +431,19 @@ var _ = Describe("Benthos Monitor Service", func() {
 		// Here we simply check that it took the last element in the log entries
 		Expect(benthosMetricsConfig.LastUpdatedAt.Unix()).To(Equal(int64(1745502180)))
 	})
+
+	Describe("TailInt", func() {
+		It("should parse a simple integer at the end of the line", func() {
+			val, err := benthos_monitor.TailInt([]byte("foo 50000"))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(val).To(Equal(int64(50000)))
+		})
+
+		It("should fail to parse a float in scientific notation", func() {
+			line := []byte(`input_received{label="",path="root.input"} 1.074682e+06`)
+			val, err := benthos_monitor.TailInt(line)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(val).To(Equal(int64(1074682)))
+		})
+	})
 })
