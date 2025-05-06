@@ -96,9 +96,7 @@ func (s *StateMocker) Tick() {
 	systemSnapshot := s.StateManager.GetDeepCopySnapshot()
 
 	// detect config events (add, remove, edit) and add the corresponding state transitions to the pending transitions
-	pendingTransitions, ignoreDfcUntilTick := detectConfigEvents(curDfcConfig, lastDfcConfig, s.LastConfigSet, s.PendingTransitions, s.IgnoreDfcUntilTick, s.TickCounter)
-	s.PendingTransitions = pendingTransitions
-	s.IgnoreDfcUntilTick = ignoreDfcUntilTick
+	s.PendingTransitions, s.IgnoreDfcUntilTick = detectConfigEvents(curDfcConfig, lastDfcConfig, s.LastConfigSet, s.PendingTransitions, s.IgnoreDfcUntilTick, s.TickCounter)
 
 	s.LastConfig.DataFlow = curDfcConfig // update the last config
 	s.LastConfigSet = true
