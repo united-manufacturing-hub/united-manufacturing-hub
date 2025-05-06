@@ -22,4 +22,7 @@ var (
 
 	// ErrServiceConnectionTimedOut indicates the service connection timed out
 	ErrServiceConnectionTimedOut = errors.New("connection timed out, while attempting to fetch metrics via curl. This can happen if the service or the system is experiencing high load")
+
+	// ErrServiceStopped indicates the service is stopped
+	ErrServiceStopped = errors.New("service is stopped")
 )
