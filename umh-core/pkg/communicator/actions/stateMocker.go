@@ -90,18 +90,17 @@ func (s *StateMocker) Tick() {
 	// only take the dataflowcomponent configs and add them to the state of the dataflowcomponent manager
 	s.TickCounter++
 
-	//get the current and the last config
+	//get the current and the last config and the system snapshot
 	curDfcConfig := s.ConfigManager.GetDataFlowConfig()
 	lastDfcConfig := s.LastConfig.DataFlow
-
-	// get the old system snapshot
 	systemSnapshot := s.StateManager.GetDeepCopySnapshot()
 
 	// detect config events (add, remove, edit) and add the corresponding state transitions to the pending transitions
-	s.detectConfigEvents(curDfcConfig, lastDfcConfig)
+	pendingTransitions, ignoreDfcUntilTick := detectConfigEvents(curDfcConfig, lastDfcConfig, s.LastConfigSet, s.PendingTransitions, s.IgnoreDfcUntilTick, s.TickCounter)
+	s.PendingTransitions = pendingTransitions
+	s.IgnoreDfcUntilTick = ignoreDfcUntilTick
 
-	// update the last config
-	s.LastConfig.DataFlow = curDfcConfig
+	s.LastConfig.DataFlow = curDfcConfig // update the last config
 	s.LastConfigSet = true
 
 	// create a new manager snapshot based on the current system snapshot, the config and the pending transitions
@@ -122,12 +121,12 @@ func (s *StateMocker) Tick() {
 }
 
 // detect config events (add, remove, edit) and add the corresponding state transitions to the pending transitions
-func (s *StateMocker) detectConfigEvents(curDfcConfig []config.DataFlowComponentConfig, lastDfcConfig []config.DataFlowComponentConfig) {
+func detectConfigEvents(curDfcConfig []config.DataFlowComponentConfig, lastDfcConfig []config.DataFlowComponentConfig, lastConfigSet bool, pendingTransitions map[string][]StateTransition, ignoreDfcUntilTick map[string]int, tickCounter int) (map[string][]StateTransition, map[string]int) {
 
 	// in the first run, we dont have a last config, so we dont need to detect any config events
 	// after the call of detectConfigEvents, the last config is set
-	if !s.LastConfigSet {
-		return
+	if !lastConfigSet {
+		return pendingTransitions, ignoreDfcUntilTick
 	}
 
 	// detect added dfcs
@@ -143,15 +142,15 @@ func (s *StateMocker) detectConfigEvents(curDfcConfig []config.DataFlowComponent
 			if !found {
 				zap.S().Info("Detected new dataflow component", zap.String("name", dfcConfig.Name))
 				// add the default add transitions
-				s.PendingTransitions[dfcConfig.Name] = []StateTransition{
-					{TickAt: s.TickCounter, State: internalfsm.LifecycleStateToBeCreated},
-					{TickAt: s.TickCounter + 2, State: internalfsm.LifecycleStateCreating},
-					{TickAt: s.TickCounter + 4, State: dataflowcomponent.OperationalStateStarting},
-					{TickAt: s.TickCounter + 15, State: dataflowcomponent.OperationalStateActive},
+				pendingTransitions[dfcConfig.Name] = []StateTransition{
+					{TickAt: tickCounter, State: internalfsm.LifecycleStateToBeCreated},
+					{TickAt: tickCounter + 2, State: internalfsm.LifecycleStateCreating},
+					{TickAt: tickCounter + 4, State: dataflowcomponent.OperationalStateStarting},
+					{TickAt: tickCounter + 15, State: dataflowcomponent.OperationalStateActive},
 				}
 			}
 		}
-		return
+		return pendingTransitions, ignoreDfcUntilTick
 	}
 
 	// detect removed dfcs
@@ -168,14 +167,14 @@ func (s *StateMocker) detectConfigEvents(curDfcConfig []config.DataFlowComponent
 				// we wait for 10 ticks before we remove the component from the state
 				// in the meantime, the state will be updated
 				zap.S().Info("Detected removed dataflow component", zap.String("name", existing.Name))
-				s.IgnoreDfcUntilTick[existing.Name] = s.TickCounter + 10
-				s.PendingTransitions[existing.Name] = []StateTransition{
-					{TickAt: s.TickCounter, State: internalfsm.LifecycleStateRemoving},
-					{TickAt: s.TickCounter + 8, State: internalfsm.LifecycleStateRemoved},
+				ignoreDfcUntilTick[existing.Name] = tickCounter + 10
+				pendingTransitions[existing.Name] = []StateTransition{
+					{TickAt: tickCounter, State: internalfsm.LifecycleStateRemoving},
+					{TickAt: tickCounter + 8, State: internalfsm.LifecycleStateRemoved},
 				}
 			}
 		}
-		return
+		return pendingTransitions, ignoreDfcUntilTick
 	}
 
 	// detect config changes
@@ -214,20 +213,20 @@ func (s *StateMocker) detectConfigEvents(curDfcConfig []config.DataFlowComponent
 			}
 			zap.S().Info("Detected changed dataflow component; old name: ", zap.String("oldName", oldName), zap.String("newName", newName))
 			// we need to update the pending transitions and ignore ticks for the old name
-			s.PendingTransitions[oldName] = []StateTransition{
-				{TickAt: s.TickCounter, State: internalfsm.LifecycleStateRemoving},
-				{TickAt: s.TickCounter + 8, State: internalfsm.LifecycleStateRemoved},
+			pendingTransitions[oldName] = []StateTransition{
+				{TickAt: tickCounter, State: internalfsm.LifecycleStateRemoving},
+				{TickAt: tickCounter + 8, State: internalfsm.LifecycleStateRemoved},
 			}
-			s.IgnoreDfcUntilTick[oldName] = s.TickCounter + 10 // give it some time to remove the component from the state
+			ignoreDfcUntilTick[oldName] = tickCounter + 10 // give it some time to remove the component from the state
 			// the new component should be added after 10 ticks
-			s.PendingTransitions[newName] = []StateTransition{
-				{TickAt: s.TickCounter + 10, State: internalfsm.LifecycleStateToBeCreated},
-				{TickAt: s.TickCounter + 12, State: internalfsm.LifecycleStateCreating},
-				{TickAt: s.TickCounter + 14, State: dataflowcomponent.OperationalStateStarting},
-				{TickAt: s.TickCounter + 25, State: dataflowcomponent.OperationalStateActive},
+			pendingTransitions[newName] = []StateTransition{
+				{TickAt: tickCounter + 10, State: internalfsm.LifecycleStateToBeCreated},
+				{TickAt: tickCounter + 12, State: internalfsm.LifecycleStateCreating},
+				{TickAt: tickCounter + 14, State: dataflowcomponent.OperationalStateStarting},
+				{TickAt: tickCounter + 25, State: dataflowcomponent.OperationalStateActive},
 			}
-			s.IgnoreDfcUntilTick[newName] = s.TickCounter + 10 // give it some time to create the component
-			return
+			ignoreDfcUntilTick[newName] = tickCounter + 10 // give it some time to create the component
+			return pendingTransitions, ignoreDfcUntilTick
 		}
 		// if the name is not changed, we need to identify which component has changed
 		// we do this by iterating over the last config and checking if the name is present in the new config and then comparing the configs
@@ -237,16 +236,18 @@ func (s *StateMocker) detectConfigEvents(curDfcConfig []config.DataFlowComponent
 					if !reflect.DeepEqual(new, dfcConfig) {
 						zap.S().Info("Detected changed dataflow component", zap.String("name", dfcConfig.Name))
 						// we need to update the pending transitions and ignore ticks for the old name
-						s.PendingTransitions[dfcConfig.Name] = []StateTransition{
-							{TickAt: s.TickCounter, State: dataflowcomponent.EventBenthosDegraded},
-							{TickAt: s.TickCounter + 8, State: dataflowcomponent.OperationalStateActive},
+						pendingTransitions[dfcConfig.Name] = []StateTransition{
+							{TickAt: tickCounter, State: dataflowcomponent.EventBenthosDegraded},
+							{TickAt: tickCounter + 8, State: dataflowcomponent.OperationalStateActive},
 						}
-						s.IgnoreDfcUntilTick[dfcConfig.Name] = s.TickCounter + 5 // give it some time to apply the new config
+						ignoreDfcUntilTick[dfcConfig.Name] = tickCounter + 5 // give it some time to apply the new config
 					}
 				}
 			}
 		}
 	}
+
+	return pendingTransitions, ignoreDfcUntilTick
 
 }
 
