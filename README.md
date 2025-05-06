@@ -35,7 +35,7 @@ sudo docker run -d \
   1. Go to [management.umh.app](https://management.umh.app)  
   2. Follow the **Add Instance** steps to add a new UMH Core instance
 
-For more details on using UMH Core, see [our website](https://www.umh.app) or sign in to [management.umh.app](https://management.umh.app).
+For more details on using UMH Core, see [our website](https://www.umh.app), see the [README](umh-core/README.md), or sign in to [management.umh.app](https://management.umh.app).
 
 ---
 

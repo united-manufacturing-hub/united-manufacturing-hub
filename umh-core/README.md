@@ -6,15 +6,15 @@
 
 ## 1  What is UMH Core?
 
-UMH Core bundles three things into **one Docker container** that runs happily on a Raspberry Pi, an industrial PC, or any x86/ARM box:
+UMH Core bundles three things into **one Docker container** that runs happily on a Raspberry Pi, an industrial PC, or any AMD64/ARM64 box:
 
 | Inside the container | What it does                                                                                            |
 | -------------------- | ------------------------------------------------------------------------------------------------------- |
 | **Agent** (Go)       | Reads the YAML config, starts / stops services, talks to the UMH Management Console, and watches health |
-| **Benthos-UMH**      | Streams, converts, and routes data (every pipeline is called a **Data Flow Component — DFC**)           |
+| **[Benthos-UMH](https://github.com/United-Manufacturing-Hub/benthos-umh)**      | Streams, converts, and routes data (every pipeline is called a **[Data Flow Component](https://www.umh.app/product/data-flow-component) — DFC**)           |
 | **Redpanda**         | Kafka-compatible broker for store-and-forward buffering when the network blinks                         |
 
-Everything is orchestrated by **S6 Overlay**, so services start in the right order and restart automatically if they crash — *no Kubernetes required*.
+Everything is orchestrated by **[S6 Overlay](https://github.com/just-containers/s6-overlay)**, so services start in the right order and restart automatically if they crash — *no Kubernetes required*.
 
 ---
 
@@ -41,7 +41,9 @@ sudo docker run -d \
 | `API_URL`         | Where the agent calls home; defaults to the public SaaS URL                                             |
 | `LOGGING_LEVEL`   | Optional: `DEBUG`, `INFO` (default), `WARN`, `ERROR`                                                    |
 
-When the container starts it looks for **`/data/config.yaml`**. If the file is missing, the agent creates an empty skeleton that you (or the console) can later fill.
+You can get the AUTH_TOKEN from the Management Console. You can run umh-core without it, but then you will lack the option to supervise and control your components via the web UI.
+
+When the container starts it looks for **`/data/config.yaml`**. If the file is missing, the agent creates an empty skeleton that you (or the console) can later fill. When you use the Management Console and add there a new DFC, the agent will automatically update that config file as well. So you can use umh-core via CI/CD pipelines, as well as via the Management Console.
 
 ---
 
@@ -91,7 +93,7 @@ dataFlow:
 #### 4.1  What’s **not** in the file?
 
 Everything under the top-level key `internal:` is reserved for UMH engineers (built-in services, monitors, etc.).
-You never touch it; in the console UI those fields stay hidden.
+You should never touch it; in the console UI those fields stay hidden.
 
 ---
 
@@ -126,9 +128,8 @@ When all three are green again the DFC auto-returns to **Idle** (or **Active** i
 
 ### 5.3  How *Idle* ⇄ *Active* is decided
 
-* Benthos-Monitor marks **Active** after at least one message in the last second
-* After ≈ 120 s without a message the agent emits `EventBenthosNoDataReceived` → **Idle**
-* First new message emits `EventBenthosDataReceived` → back to **Active**
+* After ≈ 120 s without a message → **Idle**
+* First new message → back to **Active**
 
 ### 5.4  Redpanda store-and-forward layer
 
@@ -139,10 +140,6 @@ Every UMH Core instance ships with **one embedded Redpanda node** that listens i
 | Always-on buffering      | Redpanda starts automatically (`desiredState: active`)                                                                                 | Ride out network outages without data loss                                                    |
 | Zero mandatory wiring    | DFCs **don’t write to Redpanda unless you say so** – set `output.kafka.addresses: ["localhost:9092"]`                                  | Lets a PoC stay simple; you choose when to buffer                                             |
 | Architecture forward-fit | Forthcoming *Protocol Converter* DFCs will *always* write to Redpanda; you add a *Bridge DFC* to fan out (HTTP, MQTT, another Kafka …) | Standardises buffering & replay, avoids vendor lock-in                                        |
-| Retention defaults       | `defaultTopicRetentionMs: 604800000` (**7 days**); `defaultTopicRetentionBytes: 0` (unlimited size)                                    | Old data is retained for a week *per partition* unless you change it                          |
-| Disk guard rails         | FSM marks Redpanda **Degraded** if disk free space < threshold or partitions unavailable                                               | In Degraded state DFCs pause new writes until space is freed                                  |
-| Resources                | `maxCores: 1`, `memoryPerCoreInBytes: 2147483648` (2 GB)                                                                               | Works well on Pi 4 / small VM; tune under `internal.redpanda.redpandaServiceConfig.resources` |
-| Health probes            | `/live` & `/ready` pinged every 1 s; logs scanned for fatal patterns; metrics watched for `disk_full`, partition alerts                | Any issue shows a yellow **Redpanda** badge in the console                                    |
 
 ---
 
@@ -173,12 +170,12 @@ Idle ──▶ Active as soon as throughput rises
 
 ### Disk usage in practice
 
-Redpanda writes **1 GiB segments**; a segment can be deleted only after it is closed.
+Redpanda writes **128 MiB segments**; a segment can be deleted only after it is closed.
 With Snappy compression, a typical 200 B JSON payload shrinks to ≈ 20 B.
 Allowing a 5 GB safety buffer, a 40 GB SSD gives **≈ 35 GB usable history ≙ \~2.8 billion messages**.
 
 *Need more?*
-Shorten retention (`internal.redpanda.redpandaServiceConfig.defaultTopicRetentionMs`) or enlarge the disk.
+Shorten retention (either during install with `internal.redpanda.redpandaServiceConfig.defaultTopicRetentionMs` or later on the topic level using `rpk`) or enlarge the disk.
 
 ### Memory
 
@@ -217,3 +214,25 @@ UMH Core is stateless besides the **`/data`** volume. To grow:
 * Agent tick & FSM timings (each full reconcile loop < 100 ms by design)
 * Per-DFC counters: processed, error, latency, active / idle flag
 * Redpanda I/O and disk-utilisation stats
+
+---
+
+## 10 Updating
+
+To update umh-core, simply stop the container, pull the latest image, and start the container again.
+
+```bash
+# stop + delete the old container (data is preserved)
+sudo docker stop umh-core
+sudo docker rm umh-core
+
+# pull the latest image and re-create
+sudo docker run -d \
+  --restart unless-stopped \
+  -v "$(pwd)/umh-core-data":/data \
+  management.umh.app/oci/united-manufacturing-hub/umh-core:<NEW_VERSION>
+```
+
+Need to roll back? Just start the previous tag against the same `/data` volume.
+
+You can find the latest version on the [Releases](https://github.com/united-manufacturing-hub/united-manufacturing-hub/releases) page.
