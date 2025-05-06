@@ -27,8 +27,8 @@ sudo docker run -d \
   --restart unless-stopped \
   -v "$(pwd)/umh-core-data":/data \
   -e AUTH_TOKEN=<YOUR_TOKEN> \
-  -e RELEASE_CHANNEL=stable             # nightly / enterprise also available
-  -e LOCATION_0="My-Plant---Line-A"      # optional hierarchy (add LOCATION_1…n)
+  -e RELEASE_CHANNEL=stable \
+  -e LOCATION_0="My-Plant---Line-A" \
   -e API_URL=https://management.umh.app/api \
   management.umh.app/oci/united-manufacturing-hub/umh-core:latest
 ```
@@ -90,7 +90,7 @@ dataFlow:
           stdout: {}
 ```
 
-#### 4.1  What’s **not** in the file?
+### 4.1  What’s **not** in the file?
 
 Everything under the top-level key `internal:` is reserved for UMH engineers (built-in services, monitors, etc.).
 You should never touch it; in the console UI those fields stay hidden.
