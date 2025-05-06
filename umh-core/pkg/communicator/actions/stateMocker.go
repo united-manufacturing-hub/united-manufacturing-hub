@@ -134,6 +134,8 @@ func (s *StateMocker) UpdateDfcState() {
 // detect config events (add, remove, edit) and add the corresponding state transitions to the pending transitions
 func (s *StateMocker) detectConfigEvents(curDfcConfig []config.DataFlowComponentConfig, lastDfcConfig []config.DataFlowComponentConfig) {
 
+	// in the first run, we dont have a last config, so we dont need to detect any config events
+	// after the call of detectConfigEvents, the last config is set
 	if !s.LastConfigSet {
 		return
 	}
