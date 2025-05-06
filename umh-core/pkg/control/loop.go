@@ -38,6 +38,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/tiendc/go-deepcopy"
@@ -189,6 +190,10 @@ func (c *ControlLoop) Execute(ctx context.Context) error {
 				if errors.Is(err, context.DeadlineExceeded) {
 					// For timeouts, log warning but continue
 					sentry.ReportIssuef(sentry.IssueTypeWarning, c.logger, "Control loop reconcile timed out: %v", err)
+				} else if strings.Contains(err.Error(), "invalid desired state") {
+					// For invalid desired state, log warning but continue
+					c.logger.Warnf("Control loop received invalid desired state: %v", err)
+					return nil
 				} else if errors.Is(err, context.Canceled) {
 					// For cancellation, exit the loop
 					c.logger.Infof("Control loop cancelled")
