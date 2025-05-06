@@ -108,12 +108,15 @@ func LoadConfigWithEnvOverrides(ctx context.Context, configManager *FileConfigMa
 				},
 				RedpandaServiceConfig: redpandaserviceconfig.RedpandaServiceConfig{
 					Topic: redpandaserviceconfig.TopicConfig{
-						DefaultTopicRetentionMs:    604800000,
+						// 604800000 is 7 days in milliseconds
+						DefaultTopicRetentionMs: 604800000,
+						// 0 means no limit
 						DefaultTopicRetentionBytes: 0,
 					},
 					Resources: redpandaserviceconfig.ResourcesConfig{
-						MaxCores:             1,
-						MemoryPerCoreInBytes: 2147483648, // 2GB
+						MaxCores: 1,
+						// 2GB per core
+						MemoryPerCoreInBytes: 2147483648,
 					},
 				},
 			},
