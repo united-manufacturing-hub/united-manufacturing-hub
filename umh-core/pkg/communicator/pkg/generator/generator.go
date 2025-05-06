@@ -416,7 +416,7 @@ func buildAgentDataFromSnapshot(instance fsm.FSMInstanceSnapshot, log *zap.Sugar
 				releaseChannel = snapshot.ServiceInfoSnapshot.Release.Channel
 			} else {
 				log.Warn("Agent release data is nil, defaulting to stable")
-				releaseChannel = "stable"
+				releaseChannel = "n/a"
 			}
 		} else {
 			log.Warn("Agent observed state is not of expected type")
