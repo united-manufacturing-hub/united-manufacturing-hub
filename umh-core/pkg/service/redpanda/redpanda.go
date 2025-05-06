@@ -957,18 +957,12 @@ func (s *RedpandaService) ApplyConfigurationChanges(ctx context.Context, desired
 
 	commands = append(commands, []string{
 		"/opt/redpanda/bin/rpk", "cluster", "config", "set",
-		"log_retention_ms", fmt.Sprintf("%d", normDesired.Topic.DefaultTopicRetentionMs),
+		"log_retention_ms", fmt.Sprintf("\"%d\"", normDesired.Topic.DefaultTopicRetentionMs),
 	})
-	var retentionBytes string
-	if normDesired.Topic.DefaultTopicRetentionBytes == 0 {
-		retentionBytes = "-1" // rpk uses -1 for "no limit" (equivalent to null in YAML)
-	} else {
-		retentionBytes = fmt.Sprintf("%d", normDesired.Topic.DefaultTopicRetentionBytes)
-	}
 
 	commands = append(commands, []string{
 		"/opt/redpanda/bin/rpk", "cluster", "config", "set",
-		"retention_bytes", retentionBytes,
+		"retention_bytes", fmt.Sprintf("\"%d\"", normDesired.Topic.DefaultTopicRetentionBytes),
 	})
 
 	commands = append(commands, []string{
