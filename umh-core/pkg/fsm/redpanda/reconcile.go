@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	internal_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
@@ -25,7 +26,8 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
-	redpanda_service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/monitor"
+	redpanda_monitor_service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda_monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	standarderrors "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
 )
@@ -90,10 +92,16 @@ func (r *RedpandaInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSna
 
 	// Step 2: Detect external changes.
 	if err := r.reconcileExternalChanges(ctx, services, snapshot.Tick, start); err != nil {
-		// If the service is not running, we don't want to return an error here, because we want to continue reconciling
-		if !errors.Is(err, redpanda_service.ErrServiceNotExist) {
-			r.baseFSMInstance.SetError(err, snapshot.Tick)
-			r.baseFSMInstance.GetLogger().Errorf("error reconciling external changes: %s", err)
+		// I am using strings.Contains as i cannot get it working with errors.Is
+		isExpectedError := strings.Contains(err.Error(), redpanda_monitor_service.ErrServiceNotExist.Error()) ||
+			strings.Contains(err.Error(), redpanda_monitor_service.ErrServiceNoLogFile.Error()) ||
+			strings.Contains(err.Error(), monitor.ErrServiceConnectionRefused.Error()) ||
+			strings.Contains(err.Error(), monitor.ErrServiceConnectionTimedOut.Error()) ||
+			strings.Contains(err.Error(), redpanda_monitor_service.ErrServiceNoSectionsFound.Error()) ||
+			strings.Contains(err.Error(), monitor.ErrServiceStopped.Error()) // This is expected when the service is stopped or stopping, no need to fetch logs, metrics, etc.
+
+		if !isExpectedError {
+
 			if errors.Is(err, context.DeadlineExceeded) {
 				// Healthchecks occasionally take longer (sometimes up to 70ms),
 				// resulting in context.DeadlineExceeded errors. In this case, we want to
@@ -102,6 +110,9 @@ func (r *RedpandaInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSna
 				// further reconciliation attempts in the current tick.
 				return nil, true // We don't want to return an error here, as this can happen in normal operations
 			}
+
+			r.baseFSMInstance.SetError(err, snapshot.Tick)
+			r.baseFSMInstance.GetLogger().Errorf("error reconciling external changes: %s", err)
 			return nil, false // We don't want to return an error here, because we want to continue reconciling
 		}
 

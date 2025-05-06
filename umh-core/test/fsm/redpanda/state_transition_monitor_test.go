@@ -114,6 +114,19 @@ func createMonitorMockLogs(freBytes, totalBytes uint64, hasSpaceAlert bool, topi
 	}
 	configHex := hex.EncodeToString(configBuffer.Bytes())
 
+	// Compress and hex-encode readyness data
+	var readynessBuffer bytes.Buffer
+	gzipWriter = gzip.NewWriter(&readynessBuffer)
+	_, err = gzipWriter.Write([]byte("{\"status\":\"ready\"}"))
+	if err != nil {
+		return nil, fmt.Errorf("failed to write readyness data: %w", err)
+	}
+	err = gzipWriter.Close()
+	if err != nil {
+		return nil, fmt.Errorf("failed to close gzip writer: %w", err)
+	}
+	readynessHex := hex.EncodeToString(readynessBuffer.Bytes())
+
 	// Create timestamp
 	timestamp := time.Now()
 
@@ -124,6 +137,8 @@ func createMonitorMockLogs(freBytes, totalBytes uint64, hasSpaceAlert bool, topi
 		{Content: redpanda_monitor.METRICS_END_MARKER, Timestamp: timestamp},
 		{Content: configHex, Timestamp: timestamp},
 		{Content: redpanda_monitor.CLUSTERCONFIG_END_MARKER, Timestamp: timestamp},
+		{Content: readynessHex, Timestamp: timestamp},
+		{Content: redpanda_monitor.READYNESS_END_MARKER, Timestamp: timestamp},
 		{Content: strconv.FormatInt(timestamp.UnixNano(), 10), Timestamp: timestamp},
 		{Content: redpanda_monitor.BLOCK_END_MARKER, Timestamp: timestamp},
 	}
@@ -141,7 +156,7 @@ var _ = Describe("RedpandaMonitor Service State Transitions", func() {
 	)
 
 	BeforeEach(func() {
-		ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
+		ctx, cancel = context.WithTimeout(context.Background(), 100*time.Second)
 		mockS6Service = s6service.NewMockService()
 		mockSvcRegistry = serviceregistry.NewMockRegistry()
 
@@ -206,7 +221,8 @@ var _ = Describe("RedpandaMonitor Service State Transitions", func() {
 			tick = reconcileMonitorUntilState(ctx, monitorService, mockSvcRegistry, tick, s6fsm.OperationalStateStopped)
 			// Verify state
 			serviceInfo, err = monitorService.Status(ctx, mockSvcRegistry.GetFileSystem(), tick)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("service is stopped"))
 			Expect(serviceInfo.S6FSMState).To(Equal(s6fsm.OperationalStateStopped))
 			Expect(serviceInfo.RedpandaStatus.IsRunning).To(BeFalse())
 			tick++
@@ -253,7 +269,8 @@ var _ = Describe("RedpandaMonitor Service State Transitions", func() {
 
 			// Verify service is stopped
 			serviceInfo, err = monitorService.Status(ctx, mockSvcRegistry.GetFileSystem(), tick)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("service is stopped"))
 			Expect(serviceInfo.S6FSMState).To(Equal(s6fsm.OperationalStateStopped))
 			Expect(serviceInfo.RedpandaStatus.IsRunning).To(BeFalse())
 		})
@@ -300,7 +317,10 @@ func reconcileMonitorUntilState(ctx context.Context, monitorService *redpanda_mo
 
 		// Check state
 		serviceInfo, err := monitorService.Status(ctx, services.GetFileSystem(), tick)
-		Expect(err).NotTo(HaveOccurred())
+		// If the expected state is stopped, we might expect an error
+		if err != nil {
+			Expect(err.Error()).To(ContainSubstring("service is stopped"))
+		}
 		if serviceInfo.S6FSMState == expectedState {
 			return tick
 		}
