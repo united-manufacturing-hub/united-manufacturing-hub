@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/redpandaserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/env"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	"go.uber.org/zap"
@@ -104,6 +105,19 @@ func LoadConfigWithEnvOverrides(ctx context.Context, configManager *FileConfigMa
 			Redpanda: RedpandaConfig{
 				FSMInstanceConfig: FSMInstanceConfig{
 					DesiredFSMState: "active", // Default desired state for Redpanda
+				},
+				RedpandaServiceConfig: redpandaserviceconfig.RedpandaServiceConfig{
+					Topic: redpandaserviceconfig.TopicConfig{
+						// 604800000 is 7 days in milliseconds
+						DefaultTopicRetentionMs: 604800000,
+						// 0 means no limit
+						DefaultTopicRetentionBytes: 0,
+					},
+					Resources: redpandaserviceconfig.ResourcesConfig{
+						MaxCores: 1,
+						// 2GB per core
+						MemoryPerCoreInBytes: 2147483648,
+					},
 				},
 			},
 		},
