@@ -1,178 +1,171 @@
-Below is a revised README that incorporates the new requirement that changing the desired state is done by updating a YAML file. This can happen either by a user through a CI/CD pipeline or by the agent’s internal communication process.
+# UMH Core
+
+*A lightweight, single‑container gateway that connects your machines to the United Manufacturing Hub (UMH) Unified Namespace.*
 
 ---
 
-# umh-core
+## 1  What is UMH Core?
 
-**umh-core** is a lightweight edge container from the United Manufacturing Hub (UMH) ecosystem. It is designed to run on resource-constrained edge devices and is built to dynamically adjust its internal data flows based on configuration changes. The container:
+UMH Core bundles three things into **one Docker container** running happily on a Raspberry Pi, an industrial PC, or any x86/ARM box:
 
-- **Bootstraps** with a minimal YAML configuration (including an API key, metadata, and external broker settings).
-- Runs a **stateful agent** that reads its desired state from this configuration file. This YAML file may be updated externally (e.g. via a CI/CD pipeline) or internally by the agent’s own communication process.
-- Uses **Redpanda** (a Kafka-compatible broker) for internal store-and-forward capabilities.
-- Leverages **Benthos** for protocol conversion and data bridging.
-- Streams key state information (e.g., Redpanda topics) to the UMH Management Console—where features like the Tag Browser are provided.
-- Exposes a Prometheus metrics endpoint for basic monitoring.
+| Inside the container | What it does                                                                                          |
+| -------------------- | ----------------------------------------------------------------------------------------------------- |
+| **Agent** (Go)       | Reads a YAML config, starts/stops pipelines, talks to the UMH Management Console, and watches health. |
+| **Benthos‑UMH**      | Streams, converts, and routes data (each pipeline is called a **Data Flow Component — DFC**).         |
+| **Redpanda**         | Kafka‑compatible broker for store‑and‑forward buffering when the network blinks.                      |
 
-> **Key Concept:**  
-> Changing the desired state of the system is accomplished by updating a YAML configuration file. Updates may be pushed externally (via CI/CD) or by the agent’s internal communication process. The agent then compares the updated configuration with its current state and makes the necessary transitions.
+Everything is orchestrated by **S6 Overlay** so services start in the right order and are restarted if they crash — no Kubernetes required.
 
-## Core Components
+---
 
-1. **Agent**  
-   - A Go-based control loop that reads its desired state from a YAML configuration file.
-   - Manages the lifecycle of Benthos pipelines and Redpanda.
-   - Reacts to configuration updates by stopping, updating, or starting pipelines as needed.
-   - Communicates with the UMH Management Console (using the provided API key) to both send internal status and receive change requests.
+## 2  TL;DR — Spin it up
 
-2. **Benthos**  
-   - Provides data streaming and transformation capabilities.
-   - Runs protocol converters (e.g. OPC UA) that ingest data and publish to Redpanda.
-   - Hosts bridging pipelines to forward data (e.g. from Redpanda to an external MQTT broker) when configured.
-
-3. **Redpanda (Kafka-Compatible)**  
-   - Operates as the internal message broker for temporary storage and reliable store-and-forward.
-   - Data is not directly exposed externally; instead, the agent forwards topic metadata to the Management Console.
-   
-4. **External MQTT Bridge (Optional)**  
-   - When enabled, a Benthos pipeline bridges messages from Redpanda to an external MQTT broker.
-   - The configuration for this is specified in the YAML and can be updated as needed.
-
-## High-Level Architecture
-
-```
-                ┌───────────────────────────────┐
-                │         umh-core          │
-                │  (Single Container Instance) │
-                │                               │
-                │   ┌───────────────────────┐   │
-                │   │       Agent         │   │
-                │   │ - Reads bootstrapped  │   │
-                │   │   YAML config         │   │
-                │   │ - Manages state via   │   │
-                │   │   a deterministic FSM │   │
-                │   │ - Updates desired state│   │
-                │   │   on YAML changes     │   │
-                │   └───────────────────────┘   │
-                │           │                   │
-                │   ┌───────────────────────┐   │
-                │   │   Benthos Pipelines   │   │
-                │   │ - Protocol converters │   │
-                │   │ - Data bridges        │   │
-                │   └───────────────────────┘   │
-                │           │                   │
-                │   ┌───────────────────────┐   │
-                │   │      Redpanda         │   │
-                │   │  (Store-and-Forward)  │   │
-                │   └───────────────────────┘   │
-                │           │                   │
-                │  (Status & Topic Data sent   │
-                │   to UMH Management Console) │
-                └───────────────────────────────┘
-```
-
-## Getting Started
-
-### 1. Prepare the Bootstrap Configuration
-
-On first startup, **umh-core** uses a minimal bootstrapped configuration YAML file. This file is intended to be updated later—either externally via a CI/CD pipeline or by the agent’s communication process—so that the desired state of the container (and its pipelines) can change dynamically.
-
-Create a file named `umh-lite-bootstrap.yaml`:
-
-```yaml
-# umh-lite-bootstrap.yaml
-
-apiKey: "YOUR-UMH-BACKEND-API-KEY"
-
-metadata:
-  deviceId: "edge-device-001"
-  location: "enterprise.siteA.lineB"
-
-externalMQTT:
-  enabled: true
-  broker: "tcp://broker.example.com:1883"
-  username: "mqttUser"
-  password: "mqttPass"
-
-logLevel: "info"
-
-# Metrics settings (optional, for Prometheus scraping)
-metrics:
-  port: 4195
-```
-
-**Notes:**
-- The `apiKey` is used for secure communication with the UMH Management Console.
-- The `metadata` fields uniquely identify this edge instance.
-- The bootstrap YAML is a starting point; subsequent configuration changes will be applied by updating this file (either manually, via CI/CD, or via the agent).
-
-### 2. Deploy the Container
-
-Run **umh-core** with the bootstrap config and a persistent volume:
+The Management Console will generate a command similar to this:
 
 ```bash
-docker run -d \
-  --name umh-core \
-  -v $(pwd)/umh-lite-bootstrap.yaml:/data/umh-lite-bootstrap.yaml:ro \
-  -v umh-lite-state:/data \
-  -p 4195:4195 \
-  umh-core:latest
+sudo docker run -d \
+  --restart unless-stopped \
+  -v $(pwd)/umh-core-data:/data \
+  -e AUTH_TOKEN=YOUR_TOKEN_HERE \
+  -e RELEASE_CHANNEL=stable             # nightly / enterprise are also available
+  -e LOCATION_0="My‑Plant---Line‑A"      # optional, add LOCATION_1…n for hierarchies
+  -e API_URL=https://management.umh.app/api \
+  management.umh.app/oci/united-manufacturing-hub/umh-core:latest
 ```
 
-**Volume Mounts:**
-- `/data/umh-lite-bootstrap.yaml` is the read-only bootstrap configuration.
-- `umh-lite-state` is a persistent volume used for stateful data (Redpanda offsets, pipeline state, etc.).
+| Variable          | Purpose                                                                                                    |
+| ----------------- | ---------------------------------------------------------------------------------------------------------- |
+| `AUTH_TOKEN`      | **Required.** Authorises the agent with the cloud console. Easily revoke/rotate there.                     |
+| `RELEASE_CHANNEL` | `stable` (default), `nightly`, or `enterprise`. Controls automatic updates shipped with the container.     |
+| `LOCATION_0..n`   | Human‑readable hierarchy used by the console (e.g. `Company‑Plant‑Line`).                                  |
+| `API_URL`         | Where the agent should call home. Defaults to the public SaaS URL; you can point it to an on‑prem console. |
+| `LOGGING_LEVEL`   | Optional. `DEBUG`, `INFO` (default), `WARN`, `ERROR`.                                                      |
 
-### 3. How Desired State Updates Work
+When the container starts it looks for **`/data/config.yaml`**. If the file is missing, the agent creates an empty skeleton that you or the console can later fill.
 
-**umh-core** is designed to be dynamic:
-- **External Updates via CI/CD:**  
-  Users can update the YAML configuration in source control and deploy new versions via a CI/CD pipeline. When the new YAML is mounted, the agent detects the updated desired state and adjusts the pipelines accordingly.
-- **Internal Updates via the Agent:**  
-  The agent continuously communicates with the UMH Management Console. Change requests (such as new protocol converters or bridge adjustments) are written into an updated YAML file. The agent reads this file and transitions its internal state (e.g., from `StateRunning` to `StateConfigChanged`, then to `StateChangingConfig`, and finally to `StateStarting` before returning to `StateRunning`).
+---
 
-In either case, the updated YAML drives the agent’s finite state machine, ensuring that changes are applied deterministically.
+## 3  Folder & Volume Layout
 
-### 4. Metrics
+```
+/data
+ ├─ config.yaml           # Your desired‑state YAML (watched continuously)
+ ├─ logs/                 # Rolling logs for agent, each DFC, Redpanda …
+ ├─ redpanda/             # Broker data & WALs (safe to back up)
+ └─ hwid                  # Device fingerprint sent to the console
+```
 
-The container exposes a Prometheus metrics endpoint at port `4195`:
-- **Metrics Endpoint:** `http://<device-ip>:4195/metrics`  
-  This endpoint provides basic internal metrics from the agent, Benthos pipelines, and Redpanda.
-- While metrics are supported, the primary focus is on data flow reliability and dynamic configuration, not on extensive local metrics visualization.
+Mount **one persistent volume** (e.g. `umh-core-data`) to `/data` and you’re done.
 
-### 5. Management Console Integration
+---
 
-The agent sends key status information (including Redpanda topic data) to the UMH Management Console:
-- The **Management Console** provides a rich **Tag Browser** that visualizes data topics across the network.
-- The console is the central hub for managing configurations, monitoring health, and viewing historical data.
-- The agent itself does not host a Tag Browser UI—this functionality is centralized in the console.
+## 4  Configuration File (what *you* edit)
 
-### 6. Summary
+A minimal user‑managed config looks like:
 
-**umh-core** brings together:
-- **Dynamic, YAML-driven configuration**: Bootstrapped with minimal settings and updated at runtime via CI/CD or internal communication.
-- **A stateful agent**: Runs a deterministic control loop to manage Benthos pipelines and Redpanda, ensuring that protocol converters and data bridges match the desired state.
-- **Reliable data buffering**: Redpanda serves as an internal Kafka-compatible broker, providing store-and-forward capabilities.
-- **Seamless integration with the Management Console**: The agent reports state and topic data for centralized tag browsing and overall monitoring.
-- **Basic Prometheus Metrics**: For minimal monitoring of internal performance.
+```yaml
+agent:
+  metricsPort: 8080                    # optional (default 8080 inside container)
+  communicator:
+    apiUrl: https://management.umh.app/api
+    # authToken comes from the AUTH_TOKEN env var
+  releaseChannel: stable               # stable | nightly | enterprise
+  location:
+    0: My‑Plant
+    1: Line A
 
-## Troubleshooting & FAQs
+dataFlow:
+  - name: hello-world-dfc
+    desiredState: active               # active | stopped
+    dataFlowComponentConfig:
+      benthos:
+        input:
+          generate:
+            mapping: root = "hello world from DFC!"
+            interval: 1s
+        pipeline:
+          processors:
+            - bloblang: root = content()
+        output:
+          stdout: {}
+```
 
-- **Q: How do I update the desired state?**  
-  **A:** Update the `umh-lite-bootstrap.yaml` either by pushing a new version via your CI/CD pipeline or through the Management Console. The agent detects changes and adjusts the pipelines accordingly.
+### 4.1  What’s **not** in the file?
 
-- **Q: Where is data persisted?**  
-  **A:** All stateful data (Redpanda offsets, pipeline state) is stored in the mounted volume (`umh-lite-state`). Removing this volume will result in loss of local state.
+Everything under `internal:` is reserved for UMH engineers — those entries let us run built‑in services like Redpanda or Benthos Monitors. You never have to touch them and they stay hidden in the console UI.
 
-- **Q: What happens if connectivity is lost?**  
-  **A:** Redpanda buffers data locally (store-and-forward) until connectivity is restored. The agent will report status to the Management Console so you can monitor for issues.
+---
 
-- **Q: Does umh-core provide its own Tag Browser?**  
-  **A:** No. The agent streams topic data to the Management Console, which provides a centralized Tag Browser view.
+## 5  Data Flow Components (DFCs)
 
-## Contributing
+A **DFC** is a Benthos pipeline wrapped with health checks and lifecycle management. Use them to:
 
-Contributions to **umh-core** are welcome! Please refer to our [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines. For questions or discussions, join our [Discord](https://discord.gg/F9mqkZnm9d).
+* Convert protocols (OPC UA → MQTT, REST → Kafka, …)
+* Bridge data between brokers
+* Enrich or clean messages on the fly
 
-## License
+### 5.1  Lifecycle States
 
-**umh-core** is released under the [Apache 2.0 License](LICENSE).
+| State        | What it means                                                                            |
+| ------------ | ---------------------------------------------------------------------------------------- |
+| **Stopped**  | Config exists, pipeline is off.                                                          |
+| **Starting** | S6 starts Benthos, config loads, waiting for health OK & log window.                     |
+| **Idle**     | Running but **throughput below activity threshold** (no messages processed for ≈ 2 min). |
+| **Active**   | Running **and** processing messages (metrics flag `IsActive=true`).                      |
+| **Degraded** | Running **but** health checks fail or recent logs/metrics show errors.                   |
+| **Stopping** | Graceful shutdown in progress.                                                           |
+
+
+### 5.2  What puts a DFC in *Degraded*?
+
+A DFC flips from *Idle*/**Active** to **Degraded** if **any** of the following tests fail during the last 10 minutes **or** the last 10 000 log lines — whichever is shorter:
+
+1. **Health endpoints** `/ping` or `/ready` return non‑OK (checked once per second, 1 s curl timeout).
+2. **Logs** contain:
+
+   * Fatal prefixes: `configuration file read error:`, `failed to create logger:`, `Config lint error:`.
+   * Any line with level `error`.
+   * A `warn` line that includes *failed to*, *connection lost*, or *unable to*.
+3. **Metrics** report `error > 0` on **any output** *or* on **any processor**.
+
+If all three tests become green again (next health ping is OK, log window clean, error counters back to 0) the DFC auto‑returns to **Idle** (or **Active** if messages are flowing).
+
+### 5.3  How *Idle* ⇄ *Active* works
+
+* Benthos‑Monitor tags the pipeline **Active** whenever at least one message was processed in the last second.
+* If **no message** is seen for ≈ 120 s the agent sends `EventBenthosNoDataReceived` → *Idle*.
+* As soon as a message arrives (`EventBenthosDataReceived`) it flips back to *Active*.
+
+No data loss happens — this is just a status badge so you can tell silent pipelines from busy ones.
+
+---
+
+## 6  Startup Timeline (numbers from code)
+
+```
+Stopped ──▶ Starting
+            • S6 service up
+            • Wait 5 s uptime to deem "config loaded"
+            • /ping & /ready healthy
+            • No critical logs/metrics for 10 s (window = constants.BenthosLogWindow)
+            ──▶ Idle      (≤ 15 s total or retries kick in)
+Idle ──▶ Active as soon as throughput rises
+```
+
+---
+
+## 7  Health Checks & Self‑Healing
+
+* **Heartbeat:** every **1 s** the monitor fetches `/ping`, `/ready`, `/version`, and `/metrics`, each with a 1 s HTTP timeout.
+* **Automatic restarts:** on crash the agent restarts immediately; after every *rate‑limited* operation it must wait before repeating the same expensive action.
+* **Back‑off:** repeated failures grow the delay (constant + jitter) but there is *no hard cap* — the agent keeps trying forever until a config change
+
+---
+
+## 8  Metrics
+
+`http://<device‑ip>:8080/metrics` exposes Prometheus metrics for:
+
+* Agent ticks & FSM timings (all constants are sized so one loop < 100 ms).
+* Each DFC’s message counters, latency, error count
+* Redpanda I/O stats.

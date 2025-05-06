@@ -10,20 +10,27 @@ This repository contains:
 
 ## UMH Core
 
-**UMH Core** is a standalone Docker-based solution that bundles the essential services—such as Redpanda (Kafka-compatible broker), Benthos (for data flows), and management/orchestration—into a single container. It allows you to:
+**UMH Core** is a single-container, Docker-based edge gateway that bundles:
 
-- **Deploy a Unified Namespace** on any machine running Docker (no Kubernetes required).
-- **Orchestrate protocol converters and data flows** via Benthos-based pipelines.
-- **Integrate with [management.umh.app](https://management.umh.app) for remote monitoring and management**, including real-time logs and system health.
+- **Agent** – a small Go control-loop that reads `/data/config.yaml`, watches health, and talks to the UMH Management Console on [management.umh.app](https://management.umh.app).  
+- **Benthos-UMH** – a high-throughput streaming engine; every pipeline you define is called a **Data Flow Component (DFC)**.  
+- **Redpanda** – a Kafka-compatible broker that buffers data locally whenever the network blinks.
+
+Deploy UMH Core on any device that runs Docker (Raspberry Pi, industrial PC, cloud VM – **no Kubernetes required**).
 
 ### Quick Start
 
 ```bash
-docker run -d \
-  --name umh-core \
-  -v umh_data:/data \
-  ghcr.io/united-manufacturing-hub/umh-core:latest
+sudo docker run -d \
+  --restart unless-stopped \
+  -v $(pwd)/umh-core-data:/data \
+  -e AUTH_TOKEN=YOUR_TOKEN_HERE \
+  -e RELEASE_CHANNEL=stable             # nightly / enterprise are also available
+  -e LOCATION_0="My-Plant---Line-A"     # optional hierarchy; add LOCATION_1…n for deeper paths
+  -e API_URL=https://management.umh.app/api \
+  management.umh.app/oci/united-manufacturing-hub/umh-core:v0.31.0
 ```
+
 - Connect to the cloud console:  
   1. Go to [management.umh.app](https://management.umh.app)  
   2. Follow the **Add Instance** steps to add a new UMH Core instance
