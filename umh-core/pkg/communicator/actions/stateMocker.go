@@ -80,11 +80,6 @@ func (s *StateMocker) GetStateManager() *fsm.SnapshotManager {
 	return s.StateManager
 }
 
-// GetConfigManager returns the config manager that is being used by the state mocker
-func (s *StateMocker) GetConfigManager() ConfigManager {
-	return s.ConfigManager
-}
-
 // Tick advances the state mocker by one tick and updates the system state
 func (s *StateMocker) Tick() {
 	s.TickCounter++
