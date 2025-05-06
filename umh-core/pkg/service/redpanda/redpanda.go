@@ -991,11 +991,12 @@ func (s *RedpandaService) ApplyConfigurationChanges(ctx context.Context, desired
 		command := exec.Command(cmdArgs[0], cmdArgs[1:]...)
 		output, err := command.CombinedOutput()
 		s.logger.Infof("Command %s took %s", cmd, time.Since(now))
+		s.logger.Infof("Command output: %s", output)
+		s.logger.Infof("Command error: %v", err)
 		if err != nil {
 			s.logger.Errorf("Failed to execute command %s: %v, output: %s", cmd, err, string(output))
 			return fmt.Errorf("failed to apply config change with rpk: %w", err)
 		}
-		s.logger.Debugf("Command output: %s", output)
 	}
 
 	s.logger.Infof("Successfully applied all configuration changes to Redpanda instance")
