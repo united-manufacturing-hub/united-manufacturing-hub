@@ -132,8 +132,9 @@ type ClusterConfig struct {
 }
 
 type TopicConfig struct {
-	DefaultTopicRetentionMs    int64
-	DefaultTopicRetentionBytes int64
+	DefaultTopicRetentionMs     int64
+	DefaultTopicRetentionBytes  int64
+	DefaultTopicCompressionType string
 }
 
 // RedpandaMetrics contains information about the metrics of the Redpanda service
@@ -769,6 +770,7 @@ func seriesName(b []byte) string {
 	return string(b)
 }
 
+// Process the cluster config data
 func (s *RedpandaMonitorService) processClusterConfigDataBytes(clusterConfigDataBytes []byte, tick uint64) (*ClusterConfig, error) {
 
 	clusterConfigDataString := string(clusterConfigDataBytes)
@@ -828,6 +830,16 @@ func (s *RedpandaMonitorService) processClusterConfigDataBytes(clusterConfigData
 		}
 	} else {
 		return nil, fmt.Errorf("failed to parse cluster config data: no retention_bytes found")
+	}
+
+	if value, ok := redpandaConfig["log_compression_type"]; ok {
+		if strValue, ok := value.(string); ok {
+			result.Topic.DefaultTopicCompressionType = strValue
+		} else {
+			return nil, fmt.Errorf("failed to parse cluster config data: log_compression_type is not a string")
+		}
+	} else {
+		return nil, fmt.Errorf("failed to parse cluster config data: no log_compression_type found")
 	}
 
 	return &result, nil

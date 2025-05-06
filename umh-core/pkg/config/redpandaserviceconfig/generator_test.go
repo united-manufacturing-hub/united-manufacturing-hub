@@ -48,11 +48,13 @@ var _ = Describe("Redpanda YAML Generator", func() {
 					cfg := &RedpandaServiceConfig{}
 					cfg.Topic.DefaultTopicRetentionMs = 0
 					cfg.Topic.DefaultTopicRetentionBytes = 0
+					cfg.Topic.DefaultTopicCompressionType = ""
 					return cfg
 				}(),
 				expected: []string{
 					"retention_ms: -1",
 					"retention_bytes: null",
+					`compression_type: "snappy"`,
 				},
 			}),
 		Entry("should render configured paths correctly",
@@ -61,11 +63,13 @@ var _ = Describe("Redpanda YAML Generator", func() {
 					cfg := &RedpandaServiceConfig{}
 					cfg.Topic.DefaultTopicRetentionMs = 1000
 					cfg.Topic.DefaultTopicRetentionBytes = 1000
+					cfg.Topic.DefaultTopicCompressionType = "lz4"
 					return cfg
 				}(),
 				expected: []string{
 					"retention_ms: 1000",
 					"retention_bytes: 1000",
+					`compression_type: "lz4"`,
 				},
 			}),
 	)

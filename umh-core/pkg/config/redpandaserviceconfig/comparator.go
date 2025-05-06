@@ -66,6 +66,11 @@ func (c *Comparator) ConfigDiff(desired, observed RedpandaServiceConfig) string 
 			normDesired.Topic.DefaultTopicRetentionBytes, normObserved.Topic.DefaultTopicRetentionBytes))
 	}
 
+	if normDesired.Topic.DefaultTopicCompressionType != normObserved.Topic.DefaultTopicCompressionType {
+		diff.WriteString(fmt.Sprintf("Topic.DefaultTopicCompressionType: Want: %s, Have: %s\n",
+			normDesired.Topic.DefaultTopicCompressionType, normObserved.Topic.DefaultTopicCompressionType))
+	}
+
 	// Check resources configuration
 	if normDesired.Resources.MaxCores != normObserved.Resources.MaxCores {
 		diff.WriteString(fmt.Sprintf("Resources.MaxCores: Want: %d, Have: %d\n",
