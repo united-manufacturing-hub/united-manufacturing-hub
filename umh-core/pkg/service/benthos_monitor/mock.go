@@ -164,6 +164,7 @@ func (m *MockBenthosMonitorService) SetBenthosMonitorRunning() {
 			},
 		}
 	}
+	m.ServiceState.BenthosStatus.IsRunning = true
 	m.ServiceState.S6FSMState = s6fsm.OperationalStateRunning
 }
 
@@ -177,6 +178,7 @@ func (m *MockBenthosMonitorService) SetBenthosMonitorStopped() {
 			},
 		}
 	}
+	m.ServiceState.BenthosStatus.IsRunning = false
 	m.ServiceState.S6FSMState = s6fsm.OperationalStateStopped
 }
 

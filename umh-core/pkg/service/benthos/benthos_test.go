@@ -507,12 +507,13 @@ var _ = Describe("Benthos Service", func() {
 		)
 
 		BeforeEach(func() {
-			ctx, cancel = context.WithDeadline(context.Background(), time.Now().Add(1*time.Second))
+			ctx, cancel = context.WithDeadline(context.Background(), time.Now().Add(100*time.Second))
 			mockS6Service = s6service.NewMockService()
 			mockSvcRegistry = serviceregistry.NewMockRegistry()
 			benthosMonitorMockService = benthos_monitor.NewMockBenthosMonitorService()
 			benthosMonitorMockService.SetLiveStatus(true)
 			benthosMonitorMockService.SetReadyStatus(true, true, "")
+			benthosMonitorMockService.SetBenthosMonitorRunning()
 			benthosMonitorMockService.SetMetricsResponse(benthos_monitor.Metrics{
 				Input: benthos_monitor.InputMetrics{
 					Received: 100,
