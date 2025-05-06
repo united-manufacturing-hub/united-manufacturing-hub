@@ -203,7 +203,7 @@ type configCacheEntry struct {
 func hash(buf []byte) uint64 { return xxhash.Sum64(buf) }
 
 // benthosLogRe is a helper function for BenthosService.IsLogsFine
-var benthosLogRe = regexp.MustCompile(`^level=(error|warn)\s+msg="(.+)"`)
+var benthosLogRe = regexp.MustCompile(`^level=(error|warning)\s+msg="(.+)"`)
 
 // BenthosServiceOption is a function that modifies a BenthosService
 type BenthosServiceOption func(*BenthosService)
@@ -952,7 +952,7 @@ func (s *BenthosService) IsLogsFine(
 			if level == "error" {
 				return false
 			}
-			if level == "warn" {
+			if level == "warning" {
 				for _, sub := range critWarnSubstrings {
 					if strings.Contains(msg, sub) {
 						return false
