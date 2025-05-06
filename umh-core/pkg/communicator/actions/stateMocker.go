@@ -91,7 +91,10 @@ func (s *StateMocker) Tick() {
 	s.UpdateDfcState()
 }
 
-// here, the actual state update logic is implemented
+// UpdateDfcState updates the state of DataFlow components based on configuration changes.
+// It detects config events (additions, removals, edits), schedules appropriate state transitions,
+// and updates the system snapshot with the new manager state. This function is the core of the
+// state mocking system, simulating how real components would transition between states.
 func (s *StateMocker) UpdateDfcState() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
