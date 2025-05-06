@@ -987,7 +987,7 @@ func (s *RedpandaService) ApplyConfigurationChanges(ctx context.Context, desired
 		s.logger.Infof("Executing command: %s", cmd)
 
 		// Execute the command directly using os/exec
-		command := exec.CommandContext(ctx, cmdArgs[0], cmdArgs[1:]...)
+		command := exec.Command(cmdArgs[0], cmdArgs[1:]...)
 		output, err := command.CombinedOutput()
 		if err != nil {
 			s.logger.Errorf("Failed to execute command %s: %v, output: %s", cmd, err, string(output))
