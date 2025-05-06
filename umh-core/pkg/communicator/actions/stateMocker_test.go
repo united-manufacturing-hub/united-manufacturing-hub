@@ -85,7 +85,7 @@ var _ = Describe("StateMocker", func() {
 				},
 			}
 
-			stateMocker.UpdateDfcState()
+			stateMocker.Tick()
 			state := stateMocker.GetStateManager().GetDeepCopySnapshot()
 			testSnapshot := fsm.SystemSnapshot{
 				Managers: map[string]fsm.ManagerSnapshot{
@@ -122,12 +122,12 @@ var _ = Describe("StateMocker", func() {
 				TickOffset int
 				State      string
 			}{
-				{0, startingState}, // Start in "starting" state
-				{2, desiredState},  // After 2 ticks, move to "active" state
+				{1, startingState}, // Start in "starting" state
+				{3, desiredState},  // After 2 ticks, move to "active" state
 			})
 
 			// Initial update
-			stateMocker.UpdateDfcState()
+			stateMocker.Tick()
 
 			// First state should be "starting"
 			state := stateMocker.GetStateManager().GetDeepCopySnapshot()
@@ -155,7 +155,7 @@ var _ = Describe("StateMocker", func() {
 		It("should handle adding a new component", func() {
 			// Start with no components
 			configManager.WithConfig(*cfg)
-			stateMocker.UpdateDfcState()
+			stateMocker.Tick()
 
 			// Add a component
 			componentName := "new-component"
@@ -171,7 +171,7 @@ var _ = Describe("StateMocker", func() {
 			configManager.WithConfig(*cfg)
 
 			// Update state and verify component creation process starts
-			stateMocker.UpdateDfcState()
+			stateMocker.Tick()
 			state := stateMocker.GetStateManager().GetDeepCopySnapshot()
 			mockManager := state.Managers[constants.DataflowcomponentManagerName].(*actions.MockManagerSnapshot)
 			component := mockManager.GetInstance(componentName)
@@ -205,7 +205,7 @@ var _ = Describe("StateMocker", func() {
 			configManager.WithConfig(*cfg)
 
 			// Initialize the state and make component active immediately
-			stateMocker.UpdateDfcState()
+			stateMocker.Tick()
 
 			// Verify component exists and is active
 			state := stateMocker.GetStateManager().GetDeepCopySnapshot()
@@ -219,7 +219,7 @@ var _ = Describe("StateMocker", func() {
 			configManager.WithConfig(*cfg)
 
 			// Update state and verify removal process starts
-			stateMocker.UpdateDfcState()
+			stateMocker.Tick()
 			state = stateMocker.GetStateManager().GetDeepCopySnapshot()
 			mockManager = state.Managers[constants.DataflowcomponentManagerName].(*actions.MockManagerSnapshot)
 			component = mockManager.GetInstance(componentName)
@@ -253,7 +253,7 @@ var _ = Describe("StateMocker", func() {
 			configManager.WithConfig(*cfg)
 
 			// Initialize the state and make component active immediately
-			stateMocker.UpdateDfcState()
+			stateMocker.Tick()
 
 			// Verify component exists and is active
 			state := stateMocker.GetStateManager().GetDeepCopySnapshot()
@@ -286,7 +286,7 @@ var _ = Describe("StateMocker", func() {
 			configManager.WithConfig(*cfg)
 
 			// Update state and verify component goes through reconfiguration
-			stateMocker.UpdateDfcState()
+			stateMocker.Tick()
 			state = stateMocker.GetStateManager().GetDeepCopySnapshot()
 			mockManager = state.Managers[constants.DataflowcomponentManagerName].(*actions.MockManagerSnapshot)
 			component = mockManager.GetInstance(componentName)
@@ -325,7 +325,7 @@ var _ = Describe("StateMocker", func() {
 			configManager.WithConfig(*cfg)
 
 			// Initialize the state and make component active immediately
-			stateMocker.UpdateDfcState()
+			stateMocker.Tick()
 
 			// Verify component exists and is active
 			state := stateMocker.GetStateManager().GetDeepCopySnapshot()
@@ -348,7 +348,7 @@ var _ = Describe("StateMocker", func() {
 			configManager.WithConfig(*cfg)
 
 			// Update state and verify old component starts removal process
-			stateMocker.UpdateDfcState()
+			stateMocker.Tick()
 			state = stateMocker.GetStateManager().GetDeepCopySnapshot()
 			mockManager = state.Managers[constants.DataflowcomponentManagerName].(*actions.MockManagerSnapshot)
 			oldComponent := mockManager.GetInstance(oldComponentName)

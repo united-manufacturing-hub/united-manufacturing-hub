@@ -143,7 +143,7 @@ var _ = Describe("GetDataFlowComponent", func() {
 
 		// Startup the state mocker and get the mock snapshot
 		stateMocker := actions.NewStateMocker(mockConfig)
-		stateMocker.UpdateDfcState()
+		stateMocker.Tick()
 		mockManagerSnapshot := stateMocker.GetStateManager()
 
 		action = actions.NewGetDataFlowComponentAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig, mockManagerSnapshot)

@@ -80,20 +80,15 @@ func (s *StateMocker) GetStateManager() *fsm.SnapshotManager {
 	return s.StateManager
 }
 
-// Tick advances the state mocker by one tick and updates the system state
-func (s *StateMocker) Tick() {
-	s.TickCounter++
-	s.UpdateDfcState()
-}
-
 // UpdateDfcState updates the state of DataFlow components based on configuration changes.
 // It detects config events (additions, removals, edits), schedules appropriate state transitions,
 // and updates the system snapshot with the new manager state. This function is the core of the
 // state mocking system, simulating how real components would transition between states.
-func (s *StateMocker) UpdateDfcState() {
+func (s *StateMocker) Tick() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	// only take the dataflowcomponent configs and add them to the state of the dataflowcomponent manager
+	s.TickCounter++
 
 	//get the current and the last config
 	curDfcConfig := s.ConfigManager.GetDataFlowConfig()

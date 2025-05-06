@@ -79,7 +79,7 @@ var _ = Describe("DeleteDataflowComponent", func() {
 
 		// Startup the state mocker and get the mock snapshot
 		stateMocker = actions.NewStateMocker(mockConfig)
-		stateMocker.UpdateDfcState()
+		stateMocker.Tick()
 		mockStateManager := stateMocker.GetStateManager()
 		action = actions.NewDeleteDataflowComponentAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig, mockStateManager)
 
