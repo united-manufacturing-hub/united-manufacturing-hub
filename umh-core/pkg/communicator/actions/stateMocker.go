@@ -96,13 +96,26 @@ func (s *StateMocker) Tick() {
 	systemSnapshot := s.StateManager.GetDeepCopySnapshot()
 
 	// detect config events (add, remove, edit) and add the corresponding state transitions to the pending transitions
-	s.PendingTransitions, s.IgnoreDfcUntilTick = detectConfigEvents(curDfcConfig, lastDfcConfig, s.LastConfigSet, s.PendingTransitions, s.IgnoreDfcUntilTick, s.TickCounter)
+	updatedPendingTransitions, updatedIgnoreDfcUntilTick := detectConfigEvents(curDfcConfig, lastDfcConfig, s.LastConfigSet, s.PendingTransitions, s.IgnoreDfcUntilTick, s.TickCounter)
+	// Update local state with the changes from the function
+	s.PendingTransitions = updatedPendingTransitions
+	s.IgnoreDfcUntilTick = updatedIgnoreDfcUntilTick
 
 	s.LastConfig.DataFlow = curDfcConfig // update the last config
 	s.LastConfigSet = true
 
 	// create a new manager snapshot based on the current system snapshot, the config and the pending transitions
-	managerSnapshot := s.createDfcManagerSnapshot(systemSnapshot)
+	managerSnapshot, updatedPendingTransitions, updatedIgnoreDfcUntilTick := createDfcManagerSnapshot(
+		systemSnapshot,
+		s.ConfigManager,
+		s.IgnoreDfcUntilTick,
+		s.TickCounter,
+		s.PendingTransitions,
+	)
+
+	// Update local state with the changes from the function
+	s.PendingTransitions = updatedPendingTransitions
+	s.IgnoreDfcUntilTick = updatedIgnoreDfcUntilTick
 
 	// update the state of the system with the new manager snapshot
 	if systemSnapshot.Managers == nil {
@@ -250,37 +263,43 @@ func detectConfigEvents(curDfcConfig []config.DataFlowComponentConfig, lastDfcCo
 }
 
 // checkPendingTransitions checks if there are pending transitions for a component and applies them
-// It returns the updated state after applying any transitions that are due
-func (s *StateMocker) checkPendingTransitions(componentName string, currentState string) string {
+// It returns the updated state after applying any transitions that are due, along with the updated transitions map
+func checkPendingTransitions(componentName string, currentState string, pendingTransitions map[string][]StateTransition, tickCounter int) (string, map[string][]StateTransition) {
 	// Check if there are pending transitions for this component
-	if transitions, exists := s.PendingTransitions[componentName]; exists {
+	if transitions, exists := pendingTransitions[componentName]; exists {
 		// Find transitions that should be applied at this tick
 		for i, transition := range transitions {
-			if transition.TickAt <= s.TickCounter {
+			if transition.TickAt <= tickCounter {
 				currentState = transition.State
 				zap.S().Info("Transition applied", zap.String("component", componentName), zap.String("state", currentState))
 				// Remove applied transitions if they've been processed
 				if i < len(transitions)-1 {
-					s.PendingTransitions[componentName] = transitions[i+1:]
+					pendingTransitions[componentName] = transitions[i+1:]
 				} else {
 					// All transitions applied, clear the list
-					delete(s.PendingTransitions, componentName)
+					delete(pendingTransitions, componentName)
 				}
 				break
 			}
 		}
 	}
-	return currentState
+	return currentState, pendingTransitions
 }
 
 // createDfcManagerSnapshot creates a snapshot of the DataFlowComponent manager state
 // it therefore uses the config manager to get the dataflowcomponent configs
 // and the pending transitions to update the state of the dataflowcomponent instances based on the tick counter
-func (s *StateMocker) createDfcManagerSnapshot(systemSnapshot fsm.SystemSnapshot) fsm.ManagerSnapshot {
+func createDfcManagerSnapshot(
+	systemSnapshot fsm.SystemSnapshot,
+	configManager ConfigManager,
+	ignoreDfcUntilTick map[string]int,
+	tickCounter int,
+	pendingTransitions map[string][]StateTransition,
+) (fsm.ManagerSnapshot, map[string][]StateTransition, map[string]int) {
 	//start with a basic snapshot
 	dfcManagerInstaces := map[string]*fsm.FSMInstanceSnapshot{}
 
-	for _, curDataflowcomponent := range s.ConfigManager.GetDataFlowConfig() {
+	for _, curDataflowcomponent := range configManager.GetDataFlowConfig() {
 		instanceExistsInCurrentSnapshot := false
 
 		// get the default currentState from the last observed state (s.state)
@@ -299,9 +318,11 @@ func (s *StateMocker) createDfcManagerSnapshot(systemSnapshot fsm.SystemSnapshot
 		}
 
 		// Apply any pending transitions
-		currentState = s.checkPendingTransitions(curDataflowcomponent.Name, currentState)
+		var updatedPendingTransitions map[string][]StateTransition
+		currentState, updatedPendingTransitions = checkPendingTransitions(curDataflowcomponent.Name, currentState, pendingTransitions, tickCounter)
+		pendingTransitions = updatedPendingTransitions
 
-		if ignoreTick, ok := s.IgnoreDfcUntilTick[curDataflowcomponent.Name]; ok && s.TickCounter < ignoreTick {
+		if ignoreTick, ok := ignoreDfcUntilTick[curDataflowcomponent.Name]; ok && tickCounter < ignoreTick {
 			// we dont update the config of this component until the tick counter is greater than the ignore tick
 			// if exists, we use the instance from the last system snapshot, else we do nothing
 			if instanceExistsInCurrentSnapshot && instances[curDataflowcomponent.Name] != nil {
@@ -327,7 +348,7 @@ func (s *StateMocker) createDfcManagerSnapshot(systemSnapshot fsm.SystemSnapshot
 			for _, instance := range manager.GetInstances() {
 				// check if the instance is in the config
 				found := false
-				for _, dfcConfig := range s.ConfigManager.GetDataFlowConfig() {
+				for _, dfcConfig := range configManager.GetDataFlowConfig() {
 					if dfcConfig.Name == instance.ID {
 						found = true
 						break
@@ -335,10 +356,15 @@ func (s *StateMocker) createDfcManagerSnapshot(systemSnapshot fsm.SystemSnapshot
 				}
 				if !found {
 					// if the instance is not in the config, we need to check if it should be ignored from removing
-					if ignoreTick, ok := s.IgnoreDfcUntilTick[instance.ID]; ok {
-						if s.TickCounter < ignoreTick {
+					if ignoreTick, ok := ignoreDfcUntilTick[instance.ID]; ok {
+						if tickCounter < ignoreTick {
 							dfcManagerInstaces[instance.ID] = instance
-							dfcManagerInstaces[instance.ID].CurrentState = s.checkPendingTransitions(instance.ID, instance.CurrentState)
+
+							// Apply any pending transitions
+							var updatedPendingTransitions map[string][]StateTransition
+							newState, updatedPendingTransitions := checkPendingTransitions(instance.ID, instance.CurrentState, pendingTransitions, tickCounter)
+							pendingTransitions = updatedPendingTransitions
+							dfcManagerInstaces[instance.ID].CurrentState = newState
 						}
 					}
 				}
@@ -348,7 +374,7 @@ func (s *StateMocker) createDfcManagerSnapshot(systemSnapshot fsm.SystemSnapshot
 
 	return &MockManagerSnapshot{
 		Instances: dfcManagerInstaces,
-	}
+	}, pendingTransitions, ignoreDfcUntilTick
 }
 
 // Run starts the state mocker and updates the state of the system periodically
