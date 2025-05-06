@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -72,6 +73,8 @@ type IRedpandaService interface {
 	IsMetricsErrorFree(metrics redpanda_monitor.Metrics) bool
 	// HasProcessingActivity checks if a Redpanda service has processing activity
 	HasProcessingActivity(status RedpandaStatus) bool
+	// ApplyConfigurationChanges applies configuration changes to a running Redpanda instance using rpk
+	ApplyConfigurationChanges(ctx context.Context, desired redpandaserviceconfig.RedpandaServiceConfig) error
 }
 
 // ServiceInfo contains information about a Redpanda service
@@ -638,6 +641,23 @@ func (s *RedpandaService) UpdateRedpandaInS6Manager(ctx context.Context, cfg *re
 		return fmt.Errorf("failed to generate S6 config for Redpanda service %s: %w", s6ServiceName, err)
 	}
 
+	// Get the current state of the service
+	currentState, err := s.s6Manager.GetCurrentFSMState(s6ServiceName)
+	if err != nil {
+		s.logger.Warnf("Failed to get current FSM state for %s: %v", s6ServiceName, err)
+	} else {
+		// If the service is running, get the current configuration and apply changes using rpk
+		if currentState == s6fsm.OperationalStateRunning {
+			s.logger.Infof("Redpanda instance %s is running, applying configuration changes using rpk", redpandaName)
+
+			err = s.ApplyConfigurationChanges(ctx, *cfg)
+			if err != nil {
+				s.logger.Errorf("Failed to apply configuration changes to Redpanda instance %s: %v", redpandaName, err)
+				return err
+			}
+		}
+	}
+
 	// Update the S6 FSM config for this instance
 	currentDesiredState := s.s6ServiceConfigs[index].DesiredFSMState
 	s.s6ServiceConfigs[index] = config.S6FSMConfig{
@@ -919,4 +939,58 @@ func formatMemory(memory int) string {
 	}
 
 	return fmt.Sprintf("%d%s", memory, units[unitIndex])
+}
+
+// ApplyConfigurationChanges applies configuration changes to a running Redpanda instance using rpk
+func (s *RedpandaService) ApplyConfigurationChanges(ctx context.Context, desired redpandaserviceconfig.RedpandaServiceConfig) error {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+
+	// First normalize both configs to ensure we're comparing apples to apples
+	normDesired := redpandaserviceconfig.NormalizeRedpandaConfig(desired)
+
+	s.logger.Infof("Applying Redpanda configuration changes")
+
+	// Build rpk commands to apply changes
+	var commands [][]string
+
+	commands = append(commands, []string{
+		"/opt/redpanda/bin/rpk", "cluster", "config", "set",
+		"log_retention_ms", fmt.Sprintf("%d", normDesired.Topic.DefaultTopicRetentionMs),
+	})
+	var retentionBytes string
+	if normDesired.Topic.DefaultTopicRetentionBytes == 0 {
+		retentionBytes = "-1" // rpk uses -1 for "no limit" (equivalent to null in YAML)
+	} else {
+		retentionBytes = fmt.Sprintf("%d", normDesired.Topic.DefaultTopicRetentionBytes)
+	}
+
+	commands = append(commands, []string{
+		"/opt/redpanda/bin/rpk", "cluster", "config", "set",
+		"retention_bytes", retentionBytes,
+	})
+
+	commands = append(commands, []string{
+		"/opt/redpanda/bin/rpk", "cluster", "config", "set",
+		"log_compression_type", normDesired.Topic.DefaultTopicCompressionType,
+	})
+
+	// Execute the rpk commands
+	for _, cmdArgs := range commands {
+		cmd := strings.Join(cmdArgs, " ")
+		s.logger.Infof("Executing command: %s", cmd)
+
+		// Execute the command directly using os/exec
+		command := exec.CommandContext(ctx, cmdArgs[0], cmdArgs[1:]...)
+		output, err := command.CombinedOutput()
+		if err != nil {
+			s.logger.Errorf("Failed to execute command %s: %v, output: %s", cmd, err, string(output))
+			return fmt.Errorf("failed to apply config change with rpk: %w", err)
+		}
+		s.logger.Debugf("Command output: %s", output)
+	}
+
+	s.logger.Infof("Successfully applied all configuration changes to Redpanda instance")
+	return nil
 }

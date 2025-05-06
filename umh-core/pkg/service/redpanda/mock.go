@@ -48,6 +48,7 @@ type MockRedpandaService struct {
 	HasProcessingActivityCalled       bool
 	ServiceExistsCalled               bool
 	ForceRemoveRedpandaCalled         bool
+	ApplyConfigurationChangesCalled   bool
 
 	// Return values for each method
 	GenerateS6ConfigForRedpandaResult s6serviceconfig.S6ServiceConfig
@@ -65,6 +66,7 @@ type MockRedpandaService struct {
 	ReconcileManagerReconciled        bool
 	ServiceExistsResult               bool
 	ForceRemoveRedpandaError          error
+	ApplyConfigurationChangesError    error
 
 	// For more complex testing scenarios
 	ServiceState      *ServiceInfo
@@ -354,8 +356,14 @@ func (m *MockRedpandaService) ServiceExists(ctx context.Context, filesystemServi
 	return m.ServiceExistsResult
 }
 
-// ForceRemoveRedpanda mocks forcefully removing a Redpanda instance
+// ForceRemoveRedpanda mocks force-removing a Redpanda instance
 func (m *MockRedpandaService) ForceRemoveRedpanda(ctx context.Context, filesystemService filesystem.Service, redpandaName string) error {
 	m.ForceRemoveRedpandaCalled = true
 	return m.ForceRemoveRedpandaError
+}
+
+// ApplyConfigurationChanges mocks applying configuration changes to a running Redpanda instance
+func (m *MockRedpandaService) ApplyConfigurationChanges(ctx context.Context, desired redpandaserviceconfig.RedpandaServiceConfig) error {
+	m.ApplyConfigurationChangesCalled = true
+	return m.ApplyConfigurationChangesError
 }
