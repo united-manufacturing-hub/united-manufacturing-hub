@@ -134,7 +134,7 @@ type RedpandaConfig struct {
 	FSMInstanceConfig `yaml:",inline"`
 
 	// For the Redpanda service
-	RedpandaServiceConfig redpandaserviceconfig.RedpandaServiceConfig `yaml:"redpandaServiceConfig"`
+	RedpandaServiceConfig redpandaserviceconfig.RedpandaServiceConfig `yaml:"redpandaServiceConfig,omitempty"`
 }
 
 // ConnectionConfig contains configuration for creating a Connection service

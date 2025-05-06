@@ -94,7 +94,8 @@ func (b *RedpandaMonitorInstance) Reconcile(ctx context.Context, snapshot fsm.Sy
 			strings.Contains(err.Error(), redpanda_monitor_service.ErrServiceNoLogFile.Error()) ||
 			strings.Contains(err.Error(), monitor.ErrServiceConnectionRefused.Error()) ||
 			strings.Contains(err.Error(), monitor.ErrServiceConnectionTimedOut.Error()) ||
-			strings.Contains(err.Error(), redpanda_monitor_service.ErrServiceNoSectionsFound.Error())
+			strings.Contains(err.Error(), redpanda_monitor_service.ErrServiceNoSectionsFound.Error()) ||
+			strings.Contains(err.Error(), monitor.ErrServiceStopped.Error()) // This is expected when the service is stopped or stopping, no need to fetch logs, metrics, etc.
 
 		if !isExpectedError {
 

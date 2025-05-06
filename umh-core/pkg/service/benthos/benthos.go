@@ -203,7 +203,7 @@ type configCacheEntry struct {
 func hash(buf []byte) uint64 { return xxhash.Sum64(buf) }
 
 // benthosLogRe is a helper function for BenthosService.IsLogsFine
-var benthosLogRe = regexp.MustCompile(`^level=(error|warn)\s+msg="(.+)"`)
+var benthosLogRe = regexp.MustCompile(`^level=(error|warning)\s+msg="(.+)"`)
 
 // BenthosServiceOption is a function that modifies a BenthosService
 type BenthosServiceOption func(*BenthosService)
@@ -509,6 +509,13 @@ func (s *BenthosService) Status(ctx context.Context, services serviceregistry.Pr
 			strings.Contains(err.Error(), "not found") {
 			s.logger.Debugf("Service %s was removed during status check", s6ServiceName)
 			return ServiceInfo{}, ErrServiceNotExist
+		} else if strings.Contains(err.Error(), ErrBenthosMonitorNotRunning.Error()) {
+			s.logger.Debugf("Service %s is not running, returning empty logs", s6ServiceName)
+			return ServiceInfo{
+				S6ObservedState: s6ServiceObservedState,
+				S6FSMState:      s6FSMState,
+				BenthosStatus:   benthosStatus,
+			}, ErrBenthosMonitorNotRunning
 		}
 
 		return ServiceInfo{}, fmt.Errorf("failed to get health check: %w", err)
@@ -574,6 +581,12 @@ func (s *BenthosService) GetHealthCheckAndMetrics(ctx context.Context, filesyste
 		benthosStatus.BenthosLogs = lastBenthosMonitorObservedState.ServiceInfo.BenthosStatus.Logs
 	} else {
 		return BenthosStatus{}, fmt.Errorf("last scan is nil")
+	}
+
+	// If the service is not running, we can return immediately
+	// There wont be any logs, metrics, etc. to check
+	if !lastBenthosMonitorObservedState.ServiceInfo.BenthosStatus.IsRunning {
+		return BenthosStatus{}, ErrBenthosMonitorNotRunning
 	}
 
 	return benthosStatus, nil
@@ -939,7 +952,7 @@ func (s *BenthosService) IsLogsFine(
 			if level == "error" {
 				return false
 			}
-			if level == "warn" {
+			if level == "warning" {
 				for _, sub := range critWarnSubstrings {
 					if strings.Contains(msg, sub) {
 						return false
