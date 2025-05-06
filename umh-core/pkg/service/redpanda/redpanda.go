@@ -987,8 +987,10 @@ func (s *RedpandaService) ApplyConfigurationChanges(ctx context.Context, desired
 		s.logger.Infof("Executing command: %s", cmd)
 
 		// Execute the command directly using os/exec
+		now := time.Now()
 		command := exec.Command(cmdArgs[0], cmdArgs[1:]...)
 		output, err := command.CombinedOutput()
+		s.logger.Infof("Command %s took %s", cmd, time.Since(now))
 		if err != nil {
 			s.logger.Errorf("Failed to execute command %s: %v, output: %s", cmd, err, string(output))
 			return fmt.Errorf("failed to apply config change with rpk: %w", err)
