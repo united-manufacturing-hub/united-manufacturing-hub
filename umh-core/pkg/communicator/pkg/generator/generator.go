@@ -411,7 +411,13 @@ func buildAgentDataFromSnapshot(instance fsm.FSMInstanceSnapshot, log *zap.Sugar
 				DesiredState:  instance.DesiredState,
 				Category:      snapshot.ServiceInfoSnapshot.OverallHealth,
 			}
-			releaseChannel = snapshot.ServiceInfoSnapshot.Release.Channel
+			// Check if Release is nil before accessing its properties
+			if snapshot.ServiceInfoSnapshot.Release != nil {
+				releaseChannel = snapshot.ServiceInfoSnapshot.Release.Channel
+			} else {
+				log.Warn("Agent release data is nil, defaulting to stable")
+				releaseChannel = "stable"
+			}
 		} else {
 			log.Warn("Agent observed state is not of expected type")
 			sentry.ReportIssuef(sentry.IssueTypeError, log, "[buildAgentDataFromSnapshot] Agent observed state is not of expected type")
