@@ -227,7 +227,7 @@ func (m *MockRedpandaService) AddRedpandaToS6Manager(ctx context.Context, cfg *r
 }
 
 // UpdateRedpandaInS6Manager mocks updating an existing Redpanda instance in the S6 manager
-func (m *MockRedpandaService) UpdateRedpandaInS6Manager(ctx context.Context, cfg *redpandaserviceconfig.RedpandaServiceConfig, redpandaName string) error {
+func (m *MockRedpandaService) UpdateRedpandaInS6Manager(ctx context.Context, currentConfig *redpandaserviceconfig.RedpandaServiceConfig, desiredConfig *redpandaserviceconfig.RedpandaServiceConfig, redpandaName string) error {
 	m.UpdateRedpandaInS6ManagerCalled = true
 
 	// Check if the service exists
@@ -363,7 +363,7 @@ func (m *MockRedpandaService) ForceRemoveRedpanda(ctx context.Context, filesyste
 }
 
 // ApplyConfigurationChanges mocks applying configuration changes to a running Redpanda instance
-func (m *MockRedpandaService) ApplyConfigurationChanges(ctx context.Context, desired redpandaserviceconfig.RedpandaServiceConfig) error {
+func (m *MockRedpandaService) ApplyConfigurationChanges(ctx context.Context, currentConfig redpandaserviceconfig.RedpandaServiceConfig, desiredConfig redpandaserviceconfig.RedpandaServiceConfig) error {
 	m.ApplyConfigurationChangesCalled = true
 	return m.ApplyConfigurationChangesError
 }

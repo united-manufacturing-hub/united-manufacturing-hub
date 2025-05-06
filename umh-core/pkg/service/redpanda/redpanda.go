@@ -54,7 +54,7 @@ type IRedpandaService interface {
 	// AddRedpandaToS6Manager adds a Redpanda instance to the S6 manager
 	AddRedpandaToS6Manager(ctx context.Context, cfg *redpandaserviceconfig.RedpandaServiceConfig, filesystemService filesystem.Service, redpandaName string) error
 	// UpdateRedpandaInS6Manager updates an existing Redpanda instance in the S6 manager
-	UpdateRedpandaInS6Manager(ctx context.Context, cfg *redpandaserviceconfig.RedpandaServiceConfig, redpandaName string) error
+	UpdateRedpandaInS6Manager(ctx context.Context, currentConfig *redpandaserviceconfig.RedpandaServiceConfig, desiredConfig *redpandaserviceconfig.RedpandaServiceConfig, redpandaName string) error
 	// RemoveRedpandaFromS6Manager removes a Redpanda instance from the S6 manager
 	RemoveRedpandaFromS6Manager(ctx context.Context, redpandaName string) error
 	// StartRedpanda starts a Redpanda instance
@@ -74,7 +74,7 @@ type IRedpandaService interface {
 	// HasProcessingActivity checks if a Redpanda service has processing activity
 	HasProcessingActivity(status RedpandaStatus) bool
 	// ApplyConfigurationChanges applies configuration changes to a running Redpanda instance using rpk
-	ApplyConfigurationChanges(ctx context.Context, desired redpandaserviceconfig.RedpandaServiceConfig) error
+	ApplyConfigurationChanges(ctx context.Context, currentConfig redpandaserviceconfig.RedpandaServiceConfig, desiredConfig redpandaserviceconfig.RedpandaServiceConfig) error
 }
 
 // ServiceInfo contains information about a Redpanda service
@@ -609,7 +609,7 @@ func (s *RedpandaService) ensureRedpandaDirectories(ctx context.Context, baseDir
 }
 
 // UpdateRedpandaInS6Manager updates an existing Redpanda instance in the S6 manager
-func (s *RedpandaService) UpdateRedpandaInS6Manager(ctx context.Context, cfg *redpandaserviceconfig.RedpandaServiceConfig, redpandaName string) error {
+func (s *RedpandaService) UpdateRedpandaInS6Manager(ctx context.Context, currentConfig *redpandaserviceconfig.RedpandaServiceConfig, desiredConfig *redpandaserviceconfig.RedpandaServiceConfig, redpandaName string) error {
 	if s.s6Manager == nil {
 		return errors.New("s6 manager not initialized")
 	}
@@ -636,7 +636,7 @@ func (s *RedpandaService) UpdateRedpandaInS6Manager(ctx context.Context, cfg *re
 	}
 
 	// Generate the new S6 config for this instance
-	s6Config, err := s.GenerateS6ConfigForRedpanda(cfg, s6ServiceName)
+	s6Config, err := s.GenerateS6ConfigForRedpanda(desiredConfig, s6ServiceName)
 	if err != nil {
 		return fmt.Errorf("failed to generate S6 config for Redpanda service %s: %w", s6ServiceName, err)
 	}
@@ -650,7 +650,7 @@ func (s *RedpandaService) UpdateRedpandaInS6Manager(ctx context.Context, cfg *re
 		if currentState == s6fsm.OperationalStateRunning {
 			s.logger.Infof("Redpanda instance %s is running, applying configuration changes using rpk", redpandaName)
 
-			err = s.ApplyConfigurationChanges(ctx, *cfg)
+			err = s.ApplyConfigurationChanges(ctx, *currentConfig, *desiredConfig)
 			if err != nil {
 				s.logger.Errorf("Failed to apply configuration changes to Redpanda instance %s: %v", redpandaName, err)
 				return err
@@ -949,33 +949,46 @@ func maxInt(a, b int64) int64 {
 }
 
 // ApplyConfigurationChanges applies configuration changes to a running Redpanda instance using rpk
-func (s *RedpandaService) ApplyConfigurationChanges(ctx context.Context, desired redpandaserviceconfig.RedpandaServiceConfig) error {
+func (s *RedpandaService) ApplyConfigurationChanges(ctx context.Context, current, desired redpandaserviceconfig.RedpandaServiceConfig) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
 
 	// First normalize both configs to ensure we're comparing apples to apples
 	normDesired := redpandaserviceconfig.NormalizeRedpandaConfig(desired)
+	normCurrent := redpandaserviceconfig.NormalizeRedpandaConfig(current)
+
+	// Check if the configs are actually different
+	if redpandaserviceconfig.ConfigsEqual(normCurrent, normDesired) {
+		s.logger.Infof("No changes to apply to Redpanda instance")
+		return nil
+	}
 
 	s.logger.Infof("Applying Redpanda configuration changes")
 
 	// Build rpk commands to apply changes
 	var commands [][]string
 
-	commands = append(commands, []string{
-		"/opt/redpanda/bin/rpk", "cluster", "config", "set",
-		"log_retention_ms", fmt.Sprintf("%d", maxInt(normDesired.Topic.DefaultTopicRetentionMs, 0)),
-	})
+	if normDesired.Topic.DefaultTopicRetentionMs != normCurrent.Topic.DefaultTopicRetentionMs {
+		commands = append(commands, []string{
+			"/opt/redpanda/bin/rpk", "cluster", "config", "set",
+			"log_retention_ms", fmt.Sprintf("%d", maxInt(normDesired.Topic.DefaultTopicRetentionMs, 0)),
+		})
+	}
 
-	commands = append(commands, []string{
-		"/opt/redpanda/bin/rpk", "cluster", "config", "set",
-		"retention_bytes", fmt.Sprintf("%d", maxInt(normDesired.Topic.DefaultTopicRetentionBytes, 0)),
-	})
+	if normDesired.Topic.DefaultTopicRetentionBytes != normCurrent.Topic.DefaultTopicRetentionBytes {
+		commands = append(commands, []string{
+			"/opt/redpanda/bin/rpk", "cluster", "config", "set",
+			"retention_bytes", fmt.Sprintf("%d", maxInt(normDesired.Topic.DefaultTopicRetentionBytes, 0)),
+		})
+	}
 
-	commands = append(commands, []string{
-		"/opt/redpanda/bin/rpk", "cluster", "config", "set",
-		"log_compression_type", normDesired.Topic.DefaultTopicCompressionType,
-	})
+	if normDesired.Topic.DefaultTopicCompressionType != normCurrent.Topic.DefaultTopicCompressionType {
+		commands = append(commands, []string{
+			"/opt/redpanda/bin/rpk", "cluster", "config", "set",
+			"log_compression_type", normDesired.Topic.DefaultTopicCompressionType,
+		})
+	}
 
 	// Execute the rpk commands
 	for _, cmdArgs := range commands {
