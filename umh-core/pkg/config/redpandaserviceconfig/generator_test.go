@@ -52,7 +52,7 @@ var _ = Describe("Redpanda YAML Generator", func() {
 					return cfg
 				}(),
 				expected: []string{
-					"retention_ms: -1",
+					"retention_ms: 604800000",
 					"retention_bytes: null",
 					`compression_type: "snappy"`,
 				},

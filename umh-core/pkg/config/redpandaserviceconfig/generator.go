@@ -35,16 +35,15 @@ func NewGenerator() *Generator {
 
 // RenderConfig generates a Redpanda YAML configuration from a RedpandaServiceConfig
 func (g *Generator) RenderConfig(cfg RedpandaServiceConfig) (string, error) {
-	if cfg.Topic.DefaultTopicRetentionMs == 0 {
-		cfg.Topic.DefaultTopicRetentionMs = 0
-	}
-
 	if cfg.Topic.DefaultTopicRetentionBytes == 0 {
 		cfg.Topic.DefaultTopicRetentionBytes = 0
 	}
 
 	if cfg.Topic.DefaultTopicCompressionType == "" {
 		cfg.Topic.DefaultTopicCompressionType = "snappy"
+    
+	if cfg.Topic.DefaultTopicRetentionMs == 0 {
+		cfg.Topic.DefaultTopicRetentionMs = 604800000 // Redpanda by default sets this to 7 days when set to 0, therefore we just set it to 7 days to keep the code a bit cleaner
 	}
 
 	if cfg.BaseDir == "" {

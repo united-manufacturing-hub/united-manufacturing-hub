@@ -28,7 +28,7 @@ func (n *Normalizer) NormalizeConfig(cfg RedpandaServiceConfig) RedpandaServiceC
 	normalized := cfg
 
 	if normalized.Topic.DefaultTopicRetentionMs == 0 {
-		normalized.Topic.DefaultTopicRetentionMs = 0
+		normalized.Topic.DefaultTopicRetentionMs = 604800000 // Redpanda by default sets this to 7 days when set to 0
 	}
 
 	if normalized.Topic.DefaultTopicRetentionBytes == 0 {
