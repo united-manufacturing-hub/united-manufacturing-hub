@@ -213,15 +213,15 @@ var _ = Describe("Benthos Service", func() {
 				logs := []s6service.LogEntry{
 					{
 						Timestamp: currentTime.Add(-1 * time.Minute),
-						Content:   `level=warn msg="failed to process message"`,
+						Content:   `level=warning msg="failed to process message"`,
 					},
 					{
 						Timestamp: currentTime.Add(-2 * time.Minute),
-						Content:   `level=warn msg="connection lost to server"`,
+						Content:   `level=warning msg="connection lost to server"`,
 					},
 					{
 						Timestamp: currentTime.Add(-3 * time.Minute),
-						Content:   `level=warn msg="unable to reach endpoint"`,
+						Content:   `level=warning msg="unable to reach endpoint"`,
 					},
 				}
 				Expect(service.IsLogsFine(logs, currentTime, logWindow)).To(BeFalse())
@@ -231,11 +231,11 @@ var _ = Describe("Benthos Service", func() {
 				logs := []s6service.LogEntry{
 					{
 						Timestamp: currentTime.Add(-1 * time.Minute),
-						Content:   `level=warn msg="rate limit applied"`,
+						Content:   `level=warning msg="rate limit applied"`,
 					},
 					{
 						Timestamp: currentTime.Add(-2 * time.Minute),
-						Content:   `level=warn msg="message batch partially processed"`,
+						Content:   `level=warning msg="message batch partially processed"`,
 					},
 				}
 				Expect(service.IsLogsFine(logs, currentTime, logWindow)).To(BeTrue())
@@ -864,7 +864,7 @@ logger:
 					logs: []s6service.LogEntry{
 						{
 							Timestamp: currentTime.Add(-1 * time.Minute),
-							Content:   `level=warn msg="failed to process message batch"`,
+							Content:   `level=warning msg="failed to process message batch"`,
 						},
 					},
 					expectBad: true,
@@ -874,7 +874,7 @@ logger:
 					logs: []s6service.LogEntry{
 						{
 							Timestamp: currentTime.Add(-1 * time.Minute),
-							Content:   `level=warn msg="rate limit applied"`,
+							Content:   `level=warning msg="rate limit applied"`,
 						},
 					},
 					expectBad: false,
@@ -888,7 +888,7 @@ logger:
 						},
 						{
 							Timestamp: currentTime.Add(-2 * time.Minute),
-							Content:   `level=warn msg="rate limit applied"`,
+							Content:   `level=warning msg="rate limit applied"`,
 						},
 						{
 							Timestamp: currentTime.Add(-3 * time.Minute),
