@@ -929,7 +929,6 @@ func (s *RedpandaService) IsLogsFine(logs []s6service.LogEntry, currentTime time
 
 		for _, failure := range failures {
 			if strings.Contains(log.Content, failure) {
-				s.logger.Infof("Redpanda has issue: %s [log: %s]", failure, log.Content)
 				return false
 			}
 		}
@@ -1041,39 +1040,40 @@ func (s *RedpandaService) ApplyConfigurationChanges(ctx context.Context, current
 			"log_compression_type", normDesired.Topic.DefaultTopicCompressionType,
 		})
 	}
-
-	// Execute the rpk commands
-	for _, cmdArgs := range commands {
-		// Early return if the context has been cancelled
-		if ctx.Err() != nil {
-			return needsRestart, ctx.Err()
-		}
-
-		cmd := strings.Join(cmdArgs, " ")
-		s.logger.Infof("Executing command: %s", cmd)
-
-		// CommandContext is like [Command] but includes a context.
-		//
-		// The provided context is used to interrupt the process
-		// (by calling cmd.Cancel or [os.Process.Kill])
-		// if the context becomes done before the command completes on its own.
-		//
-		// CommandContext sets the command's Cancel function to invoke the Kill method
-		// on its Process, and leaves its WaitDelay unset. The caller may change the
-		// cancellation behavior by modifying those fields before starting the command.
-		cmdCtx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
-		now := time.Now()
-		command := exec.CommandContext(cmdCtx, cmdArgs[0], cmdArgs[1:]...)
-		output, err := command.CombinedOutput()
-		cancel()
-		s.logger.Infof("Command %s executed in %s, output: %s (err: %v)", cmd, time.Since(now), string(output), err)
-
-		if err != nil {
-			s.logger.Errorf("Failed to execute command %s: %v, output: %s", cmd, err, string(output))
-			return needsRestart, fmt.Errorf("failed to apply config change with rpk: %w", err)
-		}
-		needsRestart = true
+	if len(commands) == 0 {
+		return false, nil
 	}
+
+	// Execute the first rpk command (there will not be time for multiple commands)
+	cmdArgs := commands[0]
+
+	// Early return if the context has been cancelled
+	if ctx.Err() != nil {
+		return needsRestart, ctx.Err()
+	}
+
+	cmd := strings.Join(cmdArgs, " ")
+	s.logger.Infof("Executing command: %s", cmd)
+
+	// CommandContext is like [Command] but includes a context.
+	//
+	// The provided context is used to interrupt the process
+	// (by calling cmd.Cancel or [os.Process.Kill])
+	// if the context becomes done before the command completes on its own.
+	//
+	// CommandContext sets the command's Cancel function to invoke the Kill method
+	// on its Process, and leaves its WaitDelay unset. The caller may change the
+	// cancellation behavior by modifying those fields before starting the command.
+	now := time.Now()
+	command := exec.CommandContext(ctx, cmdArgs[0], cmdArgs[1:]...)
+	output, err := command.CombinedOutput()
+	s.logger.Infof("Command %s executed in %s, output: %s (err: %v)", cmd, time.Since(now), string(output), err)
+
+	if err != nil {
+		s.logger.Errorf("Failed to execute command %s: %v, output: %s", cmd, err, string(output))
+		return needsRestart, fmt.Errorf("failed to apply config change with rpk")
+	}
+	needsRestart = true
 
 	s.logger.Infof("Successfully applied all configuration changes to Redpanda instance")
 	return needsRestart, nil

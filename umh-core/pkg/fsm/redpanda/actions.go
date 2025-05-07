@@ -404,19 +404,16 @@ func (r *RedpandaInstance) AnyRestartsSinceCreation() bool {
 func (r *RedpandaInstance) IsRedpandaRunningForSomeTimeWithoutErrors(currentTime time.Time, logWindow time.Duration) bool {
 	currentUptime := r.ObservedState.ServiceInfo.S6ObservedState.ServiceInfo.Uptime
 	if currentUptime < 10 {
-		r.baseFSMInstance.GetLogger().Infof("Redpanda service %s has not been running for some time", r.baseFSMInstance.GetID())
 		return false
 	}
 
 	// Check if there are any issues in the Redpanda logs
 	if !r.IsRedpandaLogsFine(currentTime, logWindow) {
-		r.baseFSMInstance.GetLogger().Infof("Redpanda service %s logs are not fine", r.baseFSMInstance.GetID())
 		return false
 	}
 
 	// Check if there are any errors in the Redpanda metrics
 	if !r.IsRedpandaMetricsErrorFree() {
-		r.baseFSMInstance.GetLogger().Infof("Redpanda service %s metrics are not error free", r.baseFSMInstance.GetID())
 		return false
 	}
 
@@ -440,11 +437,6 @@ func (r *RedpandaInstance) IsRedpandaDegraded(currentTime time.Time, logWindow t
 	if r.IsRedpandaS6Running() && r.IsRedpandaConfigLoaded() && r.IsRedpandaHealthchecksPassed() && r.IsRedpandaRunningForSomeTimeWithoutErrors(currentTime, logWindow) {
 		return false
 	}
-	r.baseFSMInstance.GetLogger().Infof("Redpanda service %s is degraded", r.baseFSMInstance.GetID())
-	r.baseFSMInstance.GetLogger().Infof("IsRedpandaS6Running: %t", r.IsRedpandaS6Running())
-	r.baseFSMInstance.GetLogger().Infof("IsRedpandaConfigLoaded: %t", r.IsRedpandaConfigLoaded())
-	r.baseFSMInstance.GetLogger().Infof("IsRedpandaHealthchecksPassed: %t", r.IsRedpandaHealthchecksPassed())
-	r.baseFSMInstance.GetLogger().Infof("IsRedpandaRunningForSomeTimeWithoutErrors: %t", r.IsRedpandaRunningForSomeTimeWithoutErrors(currentTime, logWindow))
 	return true
 }
 
