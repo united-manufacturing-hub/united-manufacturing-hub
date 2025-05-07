@@ -200,5 +200,39 @@ var _ = Describe("MetricsState", Label("metrics_state"), func() {
 			tick++
 			Expect(state.IsActive).To(BeTrue()) // Active again due to throughput
 		})
+
+		It("should handle high throughput (60k msg/sec) without counter issues", func() {
+			// Simulate a baseline
+			state.UpdateFromMetrics(benthos_monitor.Metrics{
+				Input: benthos_monitor.InputMetrics{
+					Received: 0,
+				},
+			}, tick)
+			tick++
+
+			// Simulate 60,000 messages received in one tick
+			state.UpdateFromMetrics(benthos_monitor.Metrics{
+				Input: benthos_monitor.InputMetrics{
+					Received: 60000,
+				},
+			}, tick)
+			tick++
+
+			Expect(state.Input.LastCount).To(Equal(int64(60000)))
+			Expect(state.Input.MessagesPerTick).To(Equal(float64(60000)))
+			Expect(state.IsActive).To(BeTrue())
+
+			// Simulate another 60,000 messages in the next tick (total 120,000)
+			state.UpdateFromMetrics(benthos_monitor.Metrics{
+				Input: benthos_monitor.InputMetrics{
+					Received: 120000,
+				},
+			}, tick)
+			tick++
+
+			Expect(state.Input.LastCount).To(Equal(int64(120000)))
+			Expect(state.Input.MessagesPerTick).To(Equal(float64(60000))) // (120000-60000)/1
+			Expect(state.IsActive).To(BeTrue())
+		})
 	})
 })

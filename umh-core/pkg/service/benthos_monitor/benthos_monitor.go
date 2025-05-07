@@ -839,42 +839,34 @@ func ParseMetricsData(dataReader io.Reader) (Metrics, error) {
 
 // --- helpers ---------------------------------------------------------------
 
-// tailInt returns the integer found **after the final space** in a Prometheus
+// TailInt returns the integer found **after the final space** in a Prometheus
 // text-formatted line.
 //
-// Benthos’ metric stream is deliberately terse; for counters and gauges the
+// Benthos' metric stream is deliberately terse; for counters and gauges the
 // value we need is always the token after the last space.  A micro-parser that
 // walks backwards from the end lets us avoid a full `strings.Fields` split
 // (~3× faster and zero allocations on the hot-path).
-func tailInt(line []byte) (int64, error) {
+func TailInt(line []byte) (int64, error) {
 	i := bytes.LastIndexByte(line, ' ')
 	if i == -1 {
 		return 0, fmt.Errorf("failed to find space in line")
 	}
+	s := string(line[i+1:])
+	if strings.ContainsAny(s, "eE") {
+		f, err := strconv.ParseFloat(s, 64)
+		if err != nil {
+			return 0, fmt.Errorf("failed to parse float: %w", err)
+		}
+		return int64(f), nil
+	}
 	var v int64
-	for _, c := range line[i+1:] {
+	for _, c := range s {
 		if c < '0' || c > '9' {
 			break
 		}
 		v = v*10 + int64(c-'0')
 	}
 	return v, nil
-}
-
-// tailFloat behaves like tailInt but parses the trailing token as a
-// `float64`.  It is used for histogram/summary quantiles and “_sum” lines
-// where sub-second precision is required.
-func tailFloat(line []byte) (float64, error) {
-	i := bytes.LastIndexByte(line, ' ')
-	if i == -1 {
-		return 0, fmt.Errorf("failed to find space in line")
-	}
-	//f, _ := strconv.ParseFloat(unsafeString(bytes.TrimSpace(line[i+1:])), 64)
-	f, err := strconv.ParseFloat(string(bytes.TrimSpace(line[i+1:])), 64)
-	if err != nil {
-		return 0, fmt.Errorf("failed to parse float: %w", err)
-	}
-	return f, nil
 }
 
 // ---------------------------------------------------------------------------
@@ -912,25 +904,26 @@ func ParseMetricsFromBytes(raw []byte) (Metrics, error) {
 
 		// ---------- input ----------
 		case "input_connection_failed":
-			count, err := tailInt(line)
+			count, err := TailInt(line)
 			if err != nil {
 				return Metrics{}, fmt.Errorf("failed to parse input connection failed: %w", err)
 			}
 			m.Input.ConnectionFailed = count
 		case "input_connection_lost":
-			count, err := tailInt(line)
+			count, err := TailInt(line)
 			if err != nil {
 				return Metrics{}, fmt.Errorf("failed to parse input connection lost: %w", err)
 			}
 			m.Input.ConnectionLost = count
 		case "input_connection_up":
-			count, err := tailInt(line)
+			count, err := TailInt(line)
 			if err != nil {
 				return Metrics{}, fmt.Errorf("failed to parse input connection up: %w", err)
 			}
 			m.Input.ConnectionUp = count
 		case "input_received":
-			count, err := tailInt(line)
+			fmt.Printf("input received: %s\n", string(line))
+			count, err := TailInt(line)
 			if err != nil {
 				return Metrics{}, fmt.Errorf("failed to parse input received: %w", err)
 			}
@@ -938,32 +931,32 @@ func ParseMetricsFromBytes(raw []byte) (Metrics, error) {
 		case "input_latency_ns":
 			switch extractLabel(line[nameEnd:], "quantile") {
 			case "0.5":
-				p50, err := tailFloat(line)
+				p50, err := TailInt(line)
 				if err != nil {
 					return Metrics{}, fmt.Errorf("failed to parse input latency ns p50: %w", err)
 				}
-				m.Input.LatencyNS.P50 = p50
+				m.Input.LatencyNS.P50 = float64(p50)
 			case "0.9":
-				p90, err := tailFloat(line)
+				p90, err := TailInt(line)
 				if err != nil {
 					return Metrics{}, fmt.Errorf("failed to parse input latency ns p90: %w", err)
 				}
-				m.Input.LatencyNS.P90 = p90
+				m.Input.LatencyNS.P90 = float64(p90)
 			case "0.99":
-				p99, err := tailFloat(line)
+				p99, err := TailInt(line)
 				if err != nil {
 					return Metrics{}, fmt.Errorf("failed to parse input latency ns p99: %w", err)
 				}
-				m.Input.LatencyNS.P99 = p99
+				m.Input.LatencyNS.P99 = float64(p99)
 			}
 		case "input_latency_ns_sum":
-			sum, err := tailFloat(line)
+			sum, err := TailInt(line)
 			if err != nil {
 				return Metrics{}, fmt.Errorf("failed to parse input latency ns sum: %w", err)
 			}
-			m.Input.LatencyNS.Sum = sum
+			m.Input.LatencyNS.Sum = float64(sum)
 		case "input_latency_ns_count":
-			count, err := tailInt(line)
+			count, err := TailInt(line)
 			if err != nil {
 				return Metrics{}, fmt.Errorf("failed to parse input latency ns count: %w", err)
 			}
@@ -971,37 +964,37 @@ func ParseMetricsFromBytes(raw []byte) (Metrics, error) {
 
 		// ---------- output ----------
 		case "output_batch_sent":
-			count, err := tailInt(line)
+			count, err := TailInt(line)
 			if err != nil {
 				return Metrics{}, fmt.Errorf("failed to parse output batch sent: %w", err)
 			}
 			m.Output.BatchSent = count
 		case "output_connection_failed":
-			count, err := tailInt(line)
+			count, err := TailInt(line)
 			if err != nil {
 				return Metrics{}, fmt.Errorf("failed to parse output connection failed: %w", err)
 			}
 			m.Output.ConnectionFailed = count
 		case "output_connection_lost":
-			count, err := tailInt(line)
+			count, err := TailInt(line)
 			if err != nil {
 				return Metrics{}, fmt.Errorf("failed to parse output connection lost: %w", err)
 			}
 			m.Output.ConnectionLost = count
 		case "output_connection_up":
-			count, err := tailInt(line)
+			count, err := TailInt(line)
 			if err != nil {
 				return Metrics{}, fmt.Errorf("failed to parse output connection up: %w", err)
 			}
 			m.Output.ConnectionUp = count
 		case "output_error":
-			count, err := tailInt(line)
+			count, err := TailInt(line)
 			if err != nil {
 				return Metrics{}, fmt.Errorf("failed to parse output error: %w", err)
 			}
 			m.Output.Error = count
 		case "output_sent":
-			count, err := tailInt(line)
+			count, err := TailInt(line)
 			if err != nil {
 				return Metrics{}, fmt.Errorf("failed to parse output sent: %w", err)
 			}
@@ -1009,32 +1002,32 @@ func ParseMetricsFromBytes(raw []byte) (Metrics, error) {
 		case "output_latency_ns":
 			switch extractLabel(line[nameEnd:], "quantile") {
 			case "0.5":
-				p50, err := tailFloat(line)
+				p50, err := TailInt(line)
 				if err != nil {
 					return Metrics{}, fmt.Errorf("failed to parse output latency ns p50: %w", err)
 				}
-				m.Output.LatencyNS.P50 = p50
+				m.Output.LatencyNS.P50 = float64(p50)
 			case "0.9":
-				p90, err := tailFloat(line)
+				p90, err := TailInt(line)
 				if err != nil {
 					return Metrics{}, fmt.Errorf("failed to parse output latency ns p90: %w", err)
 				}
-				m.Output.LatencyNS.P90 = p90
+				m.Output.LatencyNS.P90 = float64(p90)
 			case "0.99":
-				p99, err := tailFloat(line)
+				p99, err := TailInt(line)
 				if err != nil {
 					return Metrics{}, fmt.Errorf("failed to parse output latency ns p99: %w", err)
 				}
-				m.Output.LatencyNS.P99 = p99
+				m.Output.LatencyNS.P99 = float64(p99)
 			}
 		case "output_latency_ns_sum":
-			sum, err := tailFloat(line)
+			sum, err := TailInt(line)
 			if err != nil {
 				return Metrics{}, fmt.Errorf("failed to parse output latency ns sum: %w", err)
 			}
-			m.Output.LatencyNS.Sum = sum
+			m.Output.LatencyNS.Sum = float64(sum)
 		case "output_latency_ns_count":
-			count, err := tailInt(line)
+			count, err := TailInt(line)
 			if err != nil {
 				return Metrics{}, fmt.Errorf("failed to parse output latency ns count: %w", err)
 			}
@@ -1056,31 +1049,31 @@ func ParseMetricsFromBytes(raw []byte) (Metrics, error) {
 
 			switch name {
 			case "processor_received":
-				count, err := tailInt(line)
+				count, err := TailInt(line)
 				if err != nil {
 					return Metrics{}, fmt.Errorf("failed to parse processor received: %w", err)
 				}
 				pm.Received = count
 			case "processor_batch_received":
-				count, err := tailInt(line)
+				count, err := TailInt(line)
 				if err != nil {
 					return Metrics{}, fmt.Errorf("failed to parse processor batch received: %w", err)
 				}
 				pm.BatchReceived = count
 			case "processor_sent":
-				count, err := tailInt(line)
+				count, err := TailInt(line)
 				if err != nil {
 					return Metrics{}, fmt.Errorf("failed to parse processor sent: %w", err)
 				}
 				pm.Sent = count
 			case "processor_batch_sent":
-				count, err := tailInt(line)
+				count, err := TailInt(line)
 				if err != nil {
 					return Metrics{}, fmt.Errorf("failed to parse processor batch sent: %w", err)
 				}
 				pm.BatchSent = count
 			case "processor_error":
-				count, err := tailInt(line)
+				count, err := TailInt(line)
 				if err != nil {
 					return Metrics{}, fmt.Errorf("failed to parse processor error: %w", err)
 				}
@@ -1088,32 +1081,32 @@ func ParseMetricsFromBytes(raw []byte) (Metrics, error) {
 			case "processor_latency_ns":
 				switch extractLabel(line[nameEnd:], "quantile") {
 				case "0.5":
-					p50, err := tailFloat(line)
+					p50, err := TailInt(line)
 					if err != nil {
 						return Metrics{}, fmt.Errorf("failed to parse processor latency ns p50: %w", err)
 					}
-					pm.LatencyNS.P50 = p50
+					pm.LatencyNS.P50 = float64(p50)
 				case "0.9":
-					p90, err := tailFloat(line)
+					p90, err := TailInt(line)
 					if err != nil {
 						return Metrics{}, fmt.Errorf("failed to parse processor latency ns p90: %w", err)
 					}
-					pm.LatencyNS.P90 = p90
+					pm.LatencyNS.P90 = float64(p90)
 				case "0.99":
-					p99, err := tailFloat(line)
+					p99, err := TailInt(line)
 					if err != nil {
 						return Metrics{}, fmt.Errorf("failed to parse processor latency ns p99: %w", err)
 					}
-					pm.LatencyNS.P99 = p99
+					pm.LatencyNS.P99 = float64(p99)
 				}
 			case "processor_latency_ns_sum":
-				sum, err := tailFloat(line)
+				sum, err := TailInt(line)
 				if err != nil {
 					return Metrics{}, fmt.Errorf("failed to parse processor latency ns sum: %w", err)
 				}
-				pm.LatencyNS.Sum = sum
+				pm.LatencyNS.Sum = float64(sum)
 			case "processor_latency_ns_count":
-				count, err := tailInt(line)
+				count, err := TailInt(line)
 				if err != nil {
 					return Metrics{}, fmt.Errorf("failed to parse processor latency ns count: %w", err)
 				}
