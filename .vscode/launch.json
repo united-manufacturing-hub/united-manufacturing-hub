@@ -14,6 +14,27 @@
             "port": 40000
         },
         {
+            "name": "Debug Actions Unit Tests",
+            "type": "go",
+            "request": "launch",
+            "mode": "test",
+            "program": "${workspaceFolder}/umh-core/pkg/communicator/actions",
+            "args": [
+                "--ginkgo.v"
+            ]
+        },
+        {
+            "name": "Debug StateMocker Tests",
+            "type": "go",
+            "request": "launch",
+            "mode": "test",
+            "program": "${workspaceFolder}/umh-core/pkg/communicator/actions",
+            "args": [
+                "--ginkgo.focus=StateMocker",
+                "--ginkgo.v"
+            ]
+        },
+        {
             "name": "Debug Ginkgo Tests (test-fsm-benthos)",
             "type": "go",
             "request": "launch",

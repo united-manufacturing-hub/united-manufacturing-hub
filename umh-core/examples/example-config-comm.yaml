@@ -45,4 +45,4 @@ dataFlow:
   
 internal:
   redpanda:
-    desiredState: stopped
+    desiredState: active
