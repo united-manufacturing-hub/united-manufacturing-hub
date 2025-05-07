@@ -554,6 +554,7 @@ func (a *EditDataflowComponentAction) waitForComponentToBeActive() error {
 							SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
 								fmt.Sprintf("Dataflow component config changes haven't applied yet (%ds remaining)...",
 									remainingSeconds), a.outboundChannel, models.EditDataFlowComponent)
+							continue
 						}
 
 						if instance.CurrentState != "active" {
