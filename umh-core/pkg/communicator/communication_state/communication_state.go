@@ -32,21 +32,47 @@ import (
 )
 
 type CommunicationState struct {
-	LoginResponse     *v2.LoginResponse
-	mu                sync.Mutex
-	Watchdog          *watchdog.Watchdog
-	InboundChannel    chan *models.UMHMessage
-	InsecureTLS       bool
-	Puller            *pull.Puller
-	Pusher            *push.Pusher
-	SubscriberHandler *subscriber.Handler
-	OutboundChannel   chan *models.UMHMessage
-	Router            *router.Router
-	ReleaseChannel    config.ReleaseChannel
-	SystemSnapshot    *fsm.SystemSnapshot
-	ConfigManager     config.ConfigManager
-	ApiUrl            string
-	Logger            *zap.SugaredLogger
+	LoginResponse         *v2.LoginResponse
+	mu                    *sync.RWMutex
+	Watchdog              *watchdog.Watchdog
+	InboundChannel        chan *models.UMHMessage
+	InsecureTLS           bool
+	Puller                *pull.Puller
+	Pusher                *push.Pusher
+	SubscriberHandler     *subscriber.Handler
+	OutboundChannel       chan *models.UMHMessage
+	Router                *router.Router
+	ReleaseChannel        config.ReleaseChannel
+	SystemSnapshotManager *fsm.SnapshotManager
+	ConfigManager         config.ConfigManager
+	ApiUrl                string
+	Logger                *zap.SugaredLogger
+}
+
+// NewCommunicationState creates a new CommunicationState with initialized mutex
+func NewCommunicationState(
+	watchdog *watchdog.Watchdog,
+	inboundChannel chan *models.UMHMessage,
+	outboundChannel chan *models.UMHMessage,
+	releaseChannel config.ReleaseChannel,
+	systemSnapshotManager *fsm.SnapshotManager,
+	configManager config.ConfigManager,
+	apiUrl string,
+	logger *zap.SugaredLogger,
+	insecureTLS bool,
+) *CommunicationState {
+	return &CommunicationState{
+		mu:                    &sync.RWMutex{},
+		Watchdog:              watchdog,
+		InboundChannel:        inboundChannel,
+		OutboundChannel:       outboundChannel,
+		ReleaseChannel:        releaseChannel,
+		SystemSnapshotManager: systemSnapshotManager,
+		ConfigManager:         configManager,
+		ApiUrl:                apiUrl,
+		Logger:                logger,
+		InsecureTLS:           insecureTLS,
+	}
 }
 
 // InitialiseAndStartPuller creates a new Puller and starts it
@@ -103,7 +129,7 @@ func (c *CommunicationState) InitialiseAndStartRouter() {
 	}
 
 	c.mu.Lock()
-	c.Router = router.NewRouter(c.Watchdog, c.InboundChannel, c.LoginResponse.UUID, c.OutboundChannel, c.ReleaseChannel, c.SubscriberHandler, c.SystemSnapshot, c.ConfigManager, c.Logger)
+	c.Router = router.NewRouter(c.Watchdog, c.InboundChannel, c.LoginResponse.UUID, c.OutboundChannel, c.ReleaseChannel, c.SubscriberHandler, c.SystemSnapshotManager, c.ConfigManager, c.Logger)
 	c.mu.Unlock()
 	if c.Router == nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "Failed to create router")
@@ -114,7 +140,7 @@ func (c *CommunicationState) InitialiseAndStartRouter() {
 // InitialiseAndStartSubscriberHandler creates a new subscriber handler and starts it
 // ttl is the time until a subscriber is considered dead (if no new subscriber message is received)
 // cull is the cycle time to remove dead subscribers
-func (s *CommunicationState) InitialiseAndStartSubscriberHandler(ttl time.Duration, cull time.Duration, config *config.FullConfig, state *fsm.SystemSnapshot, systemMu *sync.Mutex, configManager config.ConfigManager) {
+func (s *CommunicationState) InitialiseAndStartSubscriberHandler(ttl time.Duration, cull time.Duration, config *config.FullConfig, systemSnapshotManager *fsm.SnapshotManager, configManager config.ConfigManager) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -144,8 +170,7 @@ func (s *CommunicationState) InitialiseAndStartSubscriberHandler(ttl time.Durati
 		cull,
 		s.ReleaseChannel,
 		false, // disableHardwareStatusCheck
-		state,
-		systemMu,
+		systemSnapshotManager,
 		configManager,
 		s.Logger,
 	)

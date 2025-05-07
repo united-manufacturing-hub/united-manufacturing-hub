@@ -26,8 +26,8 @@ import (
 	benthosfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
 	dataflowcomponentsvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/dataflowcomponent"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsmtest"
@@ -38,12 +38,12 @@ import (
 
 var _ = Describe("DataFlowComponent FSM", func() {
 	var (
-		instance      *dataflowcomponent.DataflowComponentInstance
-		mockService   *dataflowcomponentsvc.MockDataFlowComponentService
-		componentName string
-		ctx           context.Context
-		tick          uint64
-		mockFS        *filesystem.MockFileSystem
+		instance        *dataflowcomponent.DataflowComponentInstance
+		mockService     *dataflowcomponentsvc.MockDataFlowComponentService
+		componentName   string
+		ctx             context.Context
+		tick            uint64
+		mockSvcRegistry *serviceregistry.Registry
 	)
 
 	BeforeEach(func() {
@@ -52,7 +52,7 @@ var _ = Describe("DataFlowComponent FSM", func() {
 		tick = 0
 
 		instance, mockService, _ = fsmtest.SetupDataflowComponentInstance(componentName, dataflowcomponent.OperationalStateIdle)
-		mockFS = filesystem.NewMockFileSystem()
+		mockSvcRegistry = serviceregistry.NewMockRegistry()
 	})
 
 	Context("Basic State Transitions", func() {
@@ -62,14 +62,14 @@ var _ = Describe("DataFlowComponent FSM", func() {
 			// Setup to Stopped state
 			// ToBeCreated → Creating
 			tick, err = fsmtest.TestDataflowComponentStateTransition(
-				ctx, instance, mockService, mockFS, componentName,
+				ctx, instance, mockService, mockSvcRegistry, componentName,
 				fsm.LifecycleStateToBeCreated,
 				fsm.LifecycleStateCreating, 5, tick)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Creating → Stopped
 			tick, err = fsmtest.TestDataflowComponentStateTransition(
-				ctx, instance, mockService, mockFS, componentName,
+				ctx, instance, mockService, mockSvcRegistry, componentName,
 				fsm.LifecycleStateCreating,
 				dataflowcomponent.OperationalStateStopped, 5, tick)
 			Expect(err).NotTo(HaveOccurred())
@@ -83,7 +83,7 @@ var _ = Describe("DataFlowComponent FSM", func() {
 
 			// Execute transition: Stopped → Starting
 			tick, err = fsmtest.TestDataflowComponentStateTransition(
-				ctx, instance, mockService, mockFS, componentName,
+				ctx, instance, mockService, mockSvcRegistry, componentName,
 				dataflowcomponent.OperationalStateStopped,
 				dataflowcomponent.OperationalStateStarting, 5, tick)
 			Expect(err).NotTo(HaveOccurred())
@@ -96,14 +96,14 @@ var _ = Describe("DataFlowComponent FSM", func() {
 			// Setup to Stopped state
 			// ToBeCreated → Creating
 			tick, err = fsmtest.TestDataflowComponentStateTransition(
-				ctx, instance, mockService, mockFS, componentName,
+				ctx, instance, mockService, mockSvcRegistry, componentName,
 				fsm.LifecycleStateToBeCreated,
 				fsm.LifecycleStateCreating, 5, tick)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Creating → Stopped
 			tick, err = fsmtest.TestDataflowComponentStateTransition(
-				ctx, instance, mockService, mockFS, componentName,
+				ctx, instance, mockService, mockSvcRegistry, componentName,
 				fsm.LifecycleStateCreating,
 				dataflowcomponent.OperationalStateStopped, 5, tick)
 			Expect(err).NotTo(HaveOccurred())
@@ -120,7 +120,7 @@ var _ = Describe("DataFlowComponent FSM", func() {
 				ctx,
 				instance,
 				mockService,
-				mockFS,
+				mockSvcRegistry,
 				componentName,
 				dataflowcomponent.OperationalStateStopped,
 				dataflowcomponent.OperationalStateStarting, 5, tick)
@@ -134,7 +134,7 @@ var _ = Describe("DataFlowComponent FSM", func() {
 				ctx,
 				instance,
 				mockService,
-				mockFS,
+				mockSvcRegistry,
 				componentName,
 				dataflowcomponent.OperationalStateStarting,
 				dataflowcomponent.OperationalStateIdle,
@@ -150,14 +150,14 @@ var _ = Describe("DataFlowComponent FSM", func() {
 			// Setup to Stopped state
 			// ToBeCreated → Creating
 			tick, err = fsmtest.TestDataflowComponentStateTransition(
-				ctx, instance, mockService, mockFS, componentName,
+				ctx, instance, mockService, mockSvcRegistry, componentName,
 				fsm.LifecycleStateToBeCreated,
 				fsm.LifecycleStateCreating, 5, tick)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Creating → Stopped
 			tick, err = fsmtest.TestDataflowComponentStateTransition(
-				ctx, instance, mockService, mockFS, componentName,
+				ctx, instance, mockService, mockSvcRegistry, componentName,
 				fsm.LifecycleStateCreating,
 				dataflowcomponent.OperationalStateStopped, 5, tick)
 			Expect(err).NotTo(HaveOccurred())
@@ -168,7 +168,7 @@ var _ = Describe("DataFlowComponent FSM", func() {
 
 			// Execute transition: Stopped → Starting
 			tick, err = fsmtest.TestDataflowComponentStateTransition(
-				ctx, instance, mockService, mockFS, componentName,
+				ctx, instance, mockService, mockSvcRegistry, componentName,
 				dataflowcomponent.OperationalStateStopped,
 				dataflowcomponent.OperationalStateStarting, 5, tick)
 			Expect(err).NotTo(HaveOccurred())
@@ -178,7 +178,7 @@ var _ = Describe("DataFlowComponent FSM", func() {
 				ctx,
 				instance,
 				mockService,
-				mockFS,
+				mockSvcRegistry,
 				componentName,
 				dataflowcomponent.OperationalStateStarting,
 				dataflowcomponent.OperationalStateIdle,
@@ -192,7 +192,7 @@ var _ = Describe("DataFlowComponent FSM", func() {
 				ctx,
 				instance,
 				mockService,
-				mockFS,
+				mockSvcRegistry,
 				componentName,
 				dataflowcomponent.OperationalStateIdle,
 				dataflowcomponent.OperationalStateActive,
@@ -207,14 +207,14 @@ var _ = Describe("DataFlowComponent FSM", func() {
 			// Setup to Stopped state
 			// ToBeCreated → Creating
 			tick, err = fsmtest.TestDataflowComponentStateTransition(
-				ctx, instance, mockService, mockFS, componentName,
+				ctx, instance, mockService, mockSvcRegistry, componentName,
 				fsm.LifecycleStateToBeCreated,
 				fsm.LifecycleStateCreating, 5, tick)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Creating → Stopped
 			tick, err = fsmtest.TestDataflowComponentStateTransition(
-				ctx, instance, mockService, mockFS, componentName,
+				ctx, instance, mockService, mockSvcRegistry, componentName,
 				fsm.LifecycleStateCreating,
 				dataflowcomponent.OperationalStateStopped, 5, tick)
 			Expect(err).NotTo(HaveOccurred())
@@ -225,7 +225,7 @@ var _ = Describe("DataFlowComponent FSM", func() {
 
 			// Execute transition: Stopped → Starting
 			tick, err = fsmtest.TestDataflowComponentStateTransition(
-				ctx, instance, mockService, mockFS, componentName,
+				ctx, instance, mockService, mockSvcRegistry, componentName,
 				dataflowcomponent.OperationalStateStopped,
 				dataflowcomponent.OperationalStateStarting, 5, tick)
 			Expect(err).NotTo(HaveOccurred())
@@ -235,7 +235,7 @@ var _ = Describe("DataFlowComponent FSM", func() {
 				ctx,
 				instance,
 				mockService,
-				mockFS,
+				mockSvcRegistry,
 				componentName,
 				dataflowcomponent.OperationalStateStarting,
 				dataflowcomponent.OperationalStateIdle,
@@ -249,7 +249,7 @@ var _ = Describe("DataFlowComponent FSM", func() {
 				ctx,
 				instance,
 				mockService,
-				mockFS,
+				mockSvcRegistry,
 				componentName,
 				dataflowcomponent.OperationalStateIdle,
 				dataflowcomponent.OperationalStateActive,
@@ -263,7 +263,7 @@ var _ = Describe("DataFlowComponent FSM", func() {
 				ctx,
 				instance,
 				mockService,
-				mockFS,
+				mockSvcRegistry,
 				componentName,
 				dataflowcomponent.OperationalStateActive,
 				dataflowcomponent.OperationalStateIdle,
@@ -279,14 +279,14 @@ var _ = Describe("DataFlowComponent FSM", func() {
 			// Setup to Stopped state
 			// ToBeCreated → Creating
 			tick, err = fsmtest.TestDataflowComponentStateTransition(
-				ctx, instance, mockService, mockFS, componentName,
+				ctx, instance, mockService, mockSvcRegistry, componentName,
 				fsm.LifecycleStateToBeCreated,
 				fsm.LifecycleStateCreating, 5, tick)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Creating → Stopped
 			tick, err = fsmtest.TestDataflowComponentStateTransition(
-				ctx, instance, mockService, mockFS, componentName,
+				ctx, instance, mockService, mockSvcRegistry, componentName,
 				fsm.LifecycleStateCreating,
 				dataflowcomponent.OperationalStateStopped, 5, tick)
 			Expect(err).NotTo(HaveOccurred())
@@ -297,7 +297,7 @@ var _ = Describe("DataFlowComponent FSM", func() {
 
 			// Execute transition: Stopped → Starting
 			tick, err = fsmtest.TestDataflowComponentStateTransition(
-				ctx, instance, mockService, mockFS, componentName,
+				ctx, instance, mockService, mockSvcRegistry, componentName,
 				dataflowcomponent.OperationalStateStopped,
 				dataflowcomponent.OperationalStateStarting, 5, tick)
 			Expect(err).NotTo(HaveOccurred())
@@ -307,7 +307,7 @@ var _ = Describe("DataFlowComponent FSM", func() {
 				ctx,
 				instance,
 				mockService,
-				mockFS,
+				mockSvcRegistry,
 				componentName,
 				dataflowcomponent.OperationalStateStarting,
 				dataflowcomponent.OperationalStateIdle,
@@ -321,7 +321,7 @@ var _ = Describe("DataFlowComponent FSM", func() {
 				ctx,
 				instance,
 				mockService,
-				mockFS,
+				mockSvcRegistry,
 				componentName,
 				dataflowcomponent.OperationalStateIdle,
 				dataflowcomponent.OperationalStateDegraded,
@@ -335,7 +335,7 @@ var _ = Describe("DataFlowComponent FSM", func() {
 				ctx,
 				instance,
 				mockService,
-				mockFS,
+				mockSvcRegistry,
 				componentName,
 				dataflowcomponent.OperationalStateDegraded,
 				dataflowcomponent.OperationalStateIdle,
@@ -354,14 +354,14 @@ var _ = Describe("DataFlowComponent FSM", func() {
 			// Setup to Stopped state
 			// ToBeCreated → Creating
 			tick, err = fsmtest.TestDataflowComponentStateTransition(
-				ctx, instance, mockService, mockFS, componentName,
+				ctx, instance, mockService, mockSvcRegistry, componentName,
 				fsm.LifecycleStateToBeCreated,
 				fsm.LifecycleStateCreating, 5, tick)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Creating → Stopped
 			tick, err = fsmtest.TestDataflowComponentStateTransition(
-				ctx, instance, mockService, mockFS, componentName,
+				ctx, instance, mockService, mockSvcRegistry, componentName,
 				fsm.LifecycleStateCreating,
 				dataflowcomponent.OperationalStateStopped, 5, tick)
 			Expect(err).NotTo(HaveOccurred())
@@ -394,7 +394,7 @@ var _ = Describe("DataFlowComponent FSM", func() {
 				ctx,
 				instance,
 				mockService,
-				mockFS,
+				mockSvcRegistry,
 				componentName,
 				dataflowcomponent.OperationalStateStarting,
 				dataflowcomponent.OperationalStateStartingFailed,
@@ -412,14 +412,14 @@ var _ = Describe("DataFlowComponent FSM", func() {
 			// Setup to Active state
 			// 1. First get to Stopped state
 			tick, err = fsmtest.TestDataflowComponentStateTransition(
-				ctx, instance, mockService, mockFS, componentName,
+				ctx, instance, mockService, mockSvcRegistry, componentName,
 				fsm.LifecycleStateToBeCreated,
 				fsm.LifecycleStateCreating, 5, tick)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Creating → Stopped
 			tick, err = fsmtest.TestDataflowComponentStateTransition(
-				ctx, instance, mockService, mockFS, componentName,
+				ctx, instance, mockService, mockSvcRegistry, componentName,
 				fsm.LifecycleStateCreating,
 				dataflowcomponent.OperationalStateStopped, 5, tick)
 			Expect(err).NotTo(HaveOccurred())
@@ -431,7 +431,7 @@ var _ = Describe("DataFlowComponent FSM", func() {
 
 			// Execute transition: Stopped → Starting
 			tick, err = fsmtest.TestDataflowComponentStateTransition(
-				ctx, instance, mockService, mockFS, componentName,
+				ctx, instance, mockService, mockSvcRegistry, componentName,
 				dataflowcomponent.OperationalStateStopped,
 				dataflowcomponent.OperationalStateStarting, 5, tick)
 			Expect(err).NotTo(HaveOccurred())
@@ -441,7 +441,7 @@ var _ = Describe("DataFlowComponent FSM", func() {
 				ctx,
 				instance,
 				mockService,
-				mockFS,
+				mockSvcRegistry,
 				componentName,
 				dataflowcomponent.OperationalStateStarting,
 				dataflowcomponent.OperationalStateIdle,
@@ -455,7 +455,7 @@ var _ = Describe("DataFlowComponent FSM", func() {
 				ctx,
 				instance,
 				mockService,
-				mockFS,
+				mockSvcRegistry,
 				componentName,
 				dataflowcomponent.OperationalStateIdle,
 				dataflowcomponent.OperationalStateActive,
@@ -472,7 +472,7 @@ var _ = Describe("DataFlowComponent FSM", func() {
 				ctx,
 				instance,
 				mockService,
-				mockFS,
+				mockSvcRegistry,
 				componentName,
 				dataflowcomponent.OperationalStateActive,
 				dataflowcomponent.OperationalStateStopping,
@@ -487,7 +487,7 @@ var _ = Describe("DataFlowComponent FSM", func() {
 				ctx,
 				instance,
 				mockService,
-				mockFS,
+				mockSvcRegistry,
 				componentName,
 				dataflowcomponent.OperationalStateStopping,
 				dataflowcomponent.OperationalStateStopped,
@@ -503,14 +503,14 @@ var _ = Describe("DataFlowComponent FSM", func() {
 			// Setup to Degraded state
 			// 1. First get to Stopped state
 			tick, err = fsmtest.TestDataflowComponentStateTransition(
-				ctx, instance, mockService, mockFS, componentName,
+				ctx, instance, mockService, mockSvcRegistry, componentName,
 				fsm.LifecycleStateToBeCreated,
 				fsm.LifecycleStateCreating, 5, tick)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Creating → Stopped
 			tick, err = fsmtest.TestDataflowComponentStateTransition(
-				ctx, instance, mockService, mockFS, componentName,
+				ctx, instance, mockService, mockSvcRegistry, componentName,
 				fsm.LifecycleStateCreating,
 				dataflowcomponent.OperationalStateStopped, 5, tick)
 			Expect(err).NotTo(HaveOccurred())
@@ -521,7 +521,7 @@ var _ = Describe("DataFlowComponent FSM", func() {
 
 			// Execute transition: Stopped → Starting
 			tick, err = fsmtest.TestDataflowComponentStateTransition(
-				ctx, instance, mockService, mockFS, componentName,
+				ctx, instance, mockService, mockSvcRegistry, componentName,
 				dataflowcomponent.OperationalStateStopped,
 				dataflowcomponent.OperationalStateStarting, 5, tick)
 			Expect(err).NotTo(HaveOccurred())
@@ -531,7 +531,7 @@ var _ = Describe("DataFlowComponent FSM", func() {
 				ctx,
 				instance,
 				mockService,
-				mockFS,
+				mockSvcRegistry,
 				componentName,
 				dataflowcomponent.OperationalStateStarting,
 				dataflowcomponent.OperationalStateIdle,
@@ -545,7 +545,7 @@ var _ = Describe("DataFlowComponent FSM", func() {
 				ctx,
 				instance,
 				mockService,
-				mockFS,
+				mockSvcRegistry,
 				componentName,
 				dataflowcomponent.OperationalStateIdle,
 				dataflowcomponent.OperationalStateDegraded,
@@ -562,7 +562,7 @@ var _ = Describe("DataFlowComponent FSM", func() {
 				ctx,
 				instance,
 				mockService,
-				mockFS,
+				mockSvcRegistry,
 				componentName,
 				dataflowcomponent.OperationalStateDegraded,
 				dataflowcomponent.OperationalStateStopping,
@@ -583,7 +583,7 @@ var _ = Describe("DataFlowComponent FSM", func() {
 				ctx,
 				instance,
 				mockService,
-				mockFS,
+				mockSvcRegistry,
 				componentName,
 				dataflowcomponent.OperationalStateStopping,
 				dataflowcomponent.OperationalStateStopped,
@@ -599,14 +599,14 @@ var _ = Describe("DataFlowComponent FSM", func() {
 			// Setup to Idle state
 			// 1. First get to Stopped state
 			tick, err = fsmtest.TestDataflowComponentStateTransition(
-				ctx, instance, mockService, mockFS, componentName,
+				ctx, instance, mockService, mockSvcRegistry, componentName,
 				fsm.LifecycleStateToBeCreated,
 				fsm.LifecycleStateCreating, 5, tick)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Creating → Stopped
 			tick, err = fsmtest.TestDataflowComponentStateTransition(
-				ctx, instance, mockService, mockFS, componentName,
+				ctx, instance, mockService, mockSvcRegistry, componentName,
 				fsm.LifecycleStateCreating,
 				dataflowcomponent.OperationalStateStopped, 5, tick)
 			Expect(err).NotTo(HaveOccurred())
@@ -617,7 +617,7 @@ var _ = Describe("DataFlowComponent FSM", func() {
 
 			// Execute transition: Stopped → Starting
 			tick, err = fsmtest.TestDataflowComponentStateTransition(
-				ctx, instance, mockService, mockFS, componentName,
+				ctx, instance, mockService, mockSvcRegistry, componentName,
 				dataflowcomponent.OperationalStateStopped,
 				dataflowcomponent.OperationalStateStarting, 5, tick)
 			Expect(err).NotTo(HaveOccurred())
@@ -627,7 +627,7 @@ var _ = Describe("DataFlowComponent FSM", func() {
 				ctx,
 				instance,
 				mockService,
-				mockFS,
+				mockSvcRegistry,
 				componentName,
 				dataflowcomponent.OperationalStateStarting,
 				dataflowcomponent.OperationalStateIdle,
@@ -644,7 +644,7 @@ var _ = Describe("DataFlowComponent FSM", func() {
 				ctx,
 				instance,
 				mockService,
-				mockFS,
+				mockSvcRegistry,
 				componentName,
 				dataflowcomponent.OperationalStateIdle,
 				dataflowcomponent.OperationalStateStopping,
@@ -659,7 +659,7 @@ var _ = Describe("DataFlowComponent FSM", func() {
 				ctx,
 				instance,
 				mockService,
-				mockFS,
+				mockSvcRegistry,
 				componentName,
 				dataflowcomponent.OperationalStateStopping,
 				dataflowcomponent.OperationalStateStopped,
@@ -674,14 +674,14 @@ var _ = Describe("DataFlowComponent FSM", func() {
 			// Setup to Active state
 			// 1. First get to Stopped state
 			tick, err = fsmtest.TestDataflowComponentStateTransition(
-				ctx, instance, mockService, mockFS, componentName,
+				ctx, instance, mockService, mockSvcRegistry, componentName,
 				fsm.LifecycleStateToBeCreated,
 				fsm.LifecycleStateCreating, 5, tick)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Creating → Stopped
 			tick, err = fsmtest.TestDataflowComponentStateTransition(
-				ctx, instance, mockService, mockFS, componentName,
+				ctx, instance, mockService, mockSvcRegistry, componentName,
 				fsm.LifecycleStateCreating,
 				dataflowcomponent.OperationalStateStopped, 5, tick)
 			Expect(err).NotTo(HaveOccurred())
@@ -693,7 +693,7 @@ var _ = Describe("DataFlowComponent FSM", func() {
 
 			// Execute transition: Stopped → Starting
 			tick, err = fsmtest.TestDataflowComponentStateTransition(
-				ctx, instance, mockService, mockFS, componentName,
+				ctx, instance, mockService, mockSvcRegistry, componentName,
 				dataflowcomponent.OperationalStateStopped,
 				dataflowcomponent.OperationalStateStarting, 5, tick)
 			Expect(err).NotTo(HaveOccurred())
@@ -702,7 +702,7 @@ var _ = Describe("DataFlowComponent FSM", func() {
 			snapshot := pkgfsm.SystemSnapshot{Tick: tick}
 			tick, err = fsmtest.VerifyDataflowComponentStableState(
 				ctx, snapshot,
-				instance, mockService, mockFS,
+				instance, mockService, mockSvcRegistry,
 				componentName,
 				dataflowcomponent.OperationalStateStarting,
 				3, // number of reconcile cycles to test
@@ -714,7 +714,7 @@ var _ = Describe("DataFlowComponent FSM", func() {
 				ctx,
 				instance,
 				mockService,
-				mockFS,
+				mockSvcRegistry,
 				componentName,
 				dataflowcomponent.OperationalStateStarting,
 				dataflowcomponent.OperationalStateIdle,
@@ -728,7 +728,7 @@ var _ = Describe("DataFlowComponent FSM", func() {
 				ctx,
 				instance,
 				mockService,
-				mockFS,
+				mockSvcRegistry,
 				componentName,
 				dataflowcomponent.OperationalStateIdle,
 				dataflowcomponent.OperationalStateActive,
@@ -742,7 +742,7 @@ var _ = Describe("DataFlowComponent FSM", func() {
 			snapshot = pkgfsm.SystemSnapshot{Tick: tick}
 			tick, err = fsmtest.VerifyDataflowComponentStableState(
 				ctx, snapshot,
-				instance, mockService, mockFS,
+				instance, mockService, mockSvcRegistry,
 				componentName,
 				dataflowcomponent.OperationalStateActive,
 				3, // number of reconcile cycles to test
@@ -754,7 +754,7 @@ var _ = Describe("DataFlowComponent FSM", func() {
 				dataflowcomponent.OperationalStateDegraded)
 
 			tick, err = fsmtest.TestDataflowComponentStateTransition(
-				ctx, instance, mockService, mockFS, componentName,
+				ctx, instance, mockService, mockSvcRegistry, componentName,
 				dataflowcomponent.OperationalStateActive,
 				dataflowcomponent.OperationalStateDegraded,
 				5, tick)
@@ -764,7 +764,7 @@ var _ = Describe("DataFlowComponent FSM", func() {
 
 			// Execute transition: Degraded -> Active
 			tick, err = fsmtest.TestDataflowComponentStateTransition(
-				ctx, instance, mockService, mockFS, componentName,
+				ctx, instance, mockService, mockSvcRegistry, componentName,
 				dataflowcomponent.OperationalStateDegraded,
 				dataflowcomponent.OperationalStateActive,
 				5, tick)
@@ -775,14 +775,14 @@ var _ = Describe("DataFlowComponent FSM", func() {
 			// Setup to Active state
 			// 1. First get to Stopped state
 			tick, err := fsmtest.TestDataflowComponentStateTransition(
-				ctx, instance, mockService, mockFS, componentName,
+				ctx, instance, mockService, mockSvcRegistry, componentName,
 				fsm.LifecycleStateToBeCreated,
 				fsm.LifecycleStateCreating, 5, tick)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Creating → Stopped
 			tick, err = fsmtest.TestDataflowComponentStateTransition(
-				ctx, instance, mockService, mockFS, componentName,
+				ctx, instance, mockService, mockSvcRegistry, componentName,
 				fsm.LifecycleStateCreating,
 				dataflowcomponent.OperationalStateStopped, 5, tick)
 			Expect(err).NotTo(HaveOccurred())
@@ -793,7 +793,7 @@ var _ = Describe("DataFlowComponent FSM", func() {
 
 			tick, recErr, reconciled := fsmtest.ReconcileDataflowComponentUntilError(
 				ctx, pkgfsm.SystemSnapshot{Tick: tick},
-				instance, mockService, mockFS,
+				instance, mockService, mockSvcRegistry,
 				componentName, 5)
 
 			Expect(recErr).To(HaveOccurred())
@@ -812,7 +812,7 @@ var _ = Describe("DataFlowComponent FSM", func() {
 
 			// Setup to Creating state
 			tick, err = fsmtest.TestDataflowComponentStateTransition(
-				ctx, instance, mockService, mockFS, componentName,
+				ctx, instance, mockService, mockSvcRegistry, componentName,
 				fsm.LifecycleStateToBeCreated,
 				fsm.LifecycleStateCreating, 5, tick)
 			Expect(err).NotTo(HaveOccurred())
@@ -822,7 +822,7 @@ var _ = Describe("DataFlowComponent FSM", func() {
 
 			// Attempt to reconcile - this should not set an FSM error if errors are correctly identified
 			snapshot := pkgfsm.SystemSnapshot{Tick: tick}
-			err, _ = instance.Reconcile(ctx, snapshot, mockFS)
+			err, _ = instance.Reconcile(ctx, snapshot, mockSvcRegistry)
 			Expect(err).To(BeNil()) // Should not propagate an error
 
 			// The instance should not have an error set

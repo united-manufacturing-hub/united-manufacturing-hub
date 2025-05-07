@@ -37,7 +37,7 @@ var _ = Describe("PortManager", func() {
 
 	Describe("NewDefaultPortManager", func() {
 		DescribeTable("initialization scenarios",
-			func(minPort, maxPort int, shouldSucceed bool) {
+			func(minPort, maxPort uint16, shouldSucceed bool) {
 				pm, err := NewDefaultPortManager(minPort, maxPort)
 				if shouldSucceed {
 					Expect(err).NotTo(HaveOccurred())
@@ -49,13 +49,13 @@ var _ = Describe("PortManager", func() {
 					Expect(pm).To(BeNil())
 				}
 			},
-			Entry("valid range", 8000, 9000, true),
-			Entry("invalid min port (negative)", -1, 9000, false),
-			Entry("invalid max port (negative)", 8000, -1, false),
-			Entry("min port greater than max port", 9000, 8000, false),
-			Entry("min port equals max port", 8000, 8000, false),
-			Entry("min port too low (privileged)", 80, 9000, false),
-			Entry("max port too high", 8000, 70000, false),
+			Entry("valid range", uint16(8000), uint16(9000), true),
+			//Entry("invalid min port (negative)", uint16(-1), uint16(9000), false), // This is not allowed, uint16 is unsigned
+			//Entry("invalid max port (negative)", uint16(8000), uint16(-1), false), // This is not allowed, uint16 is unsigned
+			Entry("min port greater than max port", uint16(9000), uint16(8000), false),
+			Entry("min port equals max port", uint16(8000), uint16(8000), false),
+			Entry("min port too low (privileged)", uint16(80), uint16(9000), false),
+			//Entry("max port too high", uint16(8000), uint16(70000), false), // This is not allowed, uint16 max is 65535
 		)
 	})
 
@@ -68,10 +68,10 @@ var _ = Describe("PortManager", func() {
 				instance := "test-instance"
 				port, err := pm.AllocatePort(instance)
 				Expect(err).NotTo(HaveOccurred())
-				Expect(port).To(Equal(8000))
+				Expect(port).To(Equal(uint16(8000)))
 
 				// Verify internal state
-				Expect(pm.nextPort).To(Equal(8001))
+				Expect(pm.nextPort).To(Equal(uint16(8001)))
 
 				gotPort, exists := pm.GetPort(instance)
 				Expect(exists).To(BeTrue())
@@ -94,13 +94,13 @@ var _ = Describe("PortManager", func() {
 
 			It("returns an error when all ports are allocated", func() {
 				// Small range to make testing easier
-				minPort := 8000
-				maxPort := 8002
+				minPort := uint16(8000)
+				maxPort := uint16(8002)
 				pm, err := NewDefaultPortManager(minPort, maxPort)
 				Expect(err).NotTo(HaveOccurred())
 
 				// Allocate all ports
-				for i := 0; i < maxPort-minPort+1; i++ {
+				for i := 0; i < int(maxPort)-int(minPort)+1; i++ {
 					instance := fmt.Sprintf("instance-%d", i)
 					_, err := pm.AllocatePort(instance)
 					Expect(err).NotTo(HaveOccurred())
@@ -112,14 +112,14 @@ var _ = Describe("PortManager", func() {
 			})
 
 			It("handles port wraparound correctly", func() {
-				minPort := 8000
-				maxPort := 8002
+				minPort := uint16(8000)
+				maxPort := uint16(8002)
 				pm, err := NewDefaultPortManager(minPort, maxPort)
 				Expect(err).NotTo(HaveOccurred())
 
 				// Fill all ports
-				ports := make(map[int]string)
-				for i := 0; i <= maxPort-minPort; i++ {
+				ports := make(map[uint16]string)
+				for i := 0; i <= int(maxPort)-int(minPort); i++ {
 					instName := fmt.Sprintf("instance-%d", i+1)
 					port, err := pm.AllocatePort(instName)
 					Expect(err).NotTo(HaveOccurred())
@@ -212,7 +212,7 @@ var _ = Describe("PortManager", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			instance := "test-instance"
-			portToReserve := 8500
+			portToReserve := uint16(8500)
 			err = pm.ReservePort(instance, portToReserve)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -237,7 +237,7 @@ var _ = Describe("PortManager", func() {
 			pm, err := NewDefaultPortManager(8000, 9000)
 			Expect(err).NotTo(HaveOccurred())
 
-			portToReserve := 8500
+			portToReserve := uint16(8500)
 			err = pm.ReservePort("instance-1", portToReserve)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -251,12 +251,12 @@ var _ = Describe("PortManager", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			instance := "test-instance"
-			port1 := 8500
+			port1 := uint16(8500)
 			err = pm.ReservePort(instance, port1)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Try to reserve a different port for the same instance
-			port2 := 8600
+			port2 := uint16(8600)
 			err = pm.ReservePort(instance, port2)
 			Expect(err).To(HaveOccurred())
 		})
@@ -266,7 +266,7 @@ var _ = Describe("PortManager", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			instance := "test-instance"
-			port := 8500
+			port := uint16(8500)
 			err = pm.ReservePort(instance, port)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -282,8 +282,9 @@ var _ = Describe("PortManager", func() {
 			err = pm.ReservePort("test-instance", 0)
 			Expect(err).To(HaveOccurred())
 
-			err = pm.ReservePort("test-instance", -1)
-			Expect(err).To(HaveOccurred())
+			// This is not allowed (statically), as uint16 is unsigned
+			//err = pm.ReservePort("test-instance", uint16(-1))
+			//Expect(err).To(HaveOccurred())
 		})
 	})
 
@@ -297,7 +298,7 @@ var _ = Describe("PortManager", func() {
 			wg.Add(numGoroutines)
 
 			errors := make([]error, numGoroutines)
-			ports := make([]int, numGoroutines)
+			ports := make([]uint16, numGoroutines)
 
 			for i := 0; i < numGoroutines; i++ {
 				go func(id int) {
@@ -314,7 +315,7 @@ var _ = Describe("PortManager", func() {
 			wg.Wait()
 
 			// Check results
-			allocatedPorts := make(map[int]string)
+			allocatedPorts := make(map[uint16]string)
 			for i, err := range errors {
 				if err == nil {
 					port := ports[i]
@@ -368,7 +369,7 @@ var _ = Describe("PortManager", func() {
 					defer GinkgoRecover()
 					defer wg.Done()
 					instance := fmt.Sprintf("reserve-instance-%d", id)
-					port := 8000 + id%1000                // Ensure we stay in range
+					port := uint16(8000 + id%1000)        // Ensure we stay in range
 					err := pm.ReservePort(instance, port) // Ignore errors, some might fail
 					if err != nil {
 						// Error is expected - should be "port already in use" or "instance already has port"

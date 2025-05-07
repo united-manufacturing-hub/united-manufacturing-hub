@@ -24,7 +24,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/encoding"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 )
 
@@ -52,7 +52,7 @@ var _ = Describe("DeleteDataflowComponent", func() {
 		instanceUUID = uuid.New()
 		outboundChannel = make(chan *models.UMHMessage, 10) // Buffer to prevent blocking
 		componentName = "test-component"
-		componentUUID = dataflowcomponentconfig.GenerateUUIDFromName(componentName)
+		componentUUID = dataflowcomponentserviceconfig.GenerateUUIDFromName(componentName)
 
 		// Create initial config with one data flow component
 		initialConfig := config.FullConfig{
@@ -75,7 +75,7 @@ var _ = Describe("DeleteDataflowComponent", func() {
 		}
 
 		mockConfig = config.NewMockConfigManager().WithConfig(initialConfig)
-		action = actions.NewDeleteDataflowComponentAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig)
+		action = actions.NewDeleteDataflowComponentAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig, nil)
 	})
 
 	// Cleanup after each test
@@ -155,7 +155,7 @@ var _ = Describe("DeleteDataflowComponent", func() {
 			// Execute the action
 			result, metadata, err := action.Execute()
 			Expect(err).NotTo(HaveOccurred())
-			Expect(result).To(ContainSubstring("Successfully deleted data flow component"))
+			Expect(result).To(ContainSubstring("Successfully deleted dataflow component with UUID: " + componentUUID.String()))
 			Expect(metadata).To(BeNil())
 
 			// Verify DeleteDataflowcomponentCalled was called
@@ -180,7 +180,7 @@ var _ = Describe("DeleteDataflowComponent", func() {
 			// Execute the action - should fail
 			result, metadata, err := action.Execute()
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("failed to delete dataflow component"))
+			Expect(err.Error()).To(ContainSubstring("Failed to delete dataflow component: mock delete dataflow component failure"))
 			Expect(result).To(BeNil())
 			Expect(metadata).To(BeNil())
 
@@ -206,7 +206,7 @@ var _ = Describe("DeleteDataflowComponent", func() {
 
 			actionReplyPayloadStr, ok := actionReplyPayload["actionReplyPayload"].(string)
 			Expect(ok).To(BeTrue(), "Failed to extract actionReplyPayload as string")
-			Expect(actionReplyPayloadStr).To(ContainSubstring("failed to delete dataflow component"))
+			Expect(actionReplyPayloadStr).To(ContainSubstring("Removing dataflow component from configuration..."))
 		})
 
 		It("should return error when component not found", func() {

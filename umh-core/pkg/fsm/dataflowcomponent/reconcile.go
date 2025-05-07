@@ -23,12 +23,12 @@ import (
 	internal_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/backoff"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	dataflowcomponentservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/dataflowcomponent"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
-
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
+	standarderrors "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
 )
 
 // Reconcile examines the DataflowComponentInstance and, in three steps:
@@ -39,7 +39,7 @@ import (
 // This function is intended to be called repeatedly (e.g. in a periodic control loop).
 // Over multiple calls, it converges the actual state to the desired state. Transitions
 // that fail are retried in subsequent reconcile calls after a backoff period.
-func (d *DataflowComponentInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot, filesystemService filesystem.Service) (err error, reconciled bool) {
+func (d *DataflowComponentInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot, services serviceregistry.Provider) (err error, reconciled bool) {
 	start := time.Now()
 	dataflowComponentInstanceName := d.baseFSMInstance.GetID()
 	defer func() {
@@ -77,12 +77,12 @@ func (d *DataflowComponentInstance) Reconcile(ctx context.Context, snapshot fsm.
 				},
 				func(ctx context.Context) error {
 					// Normal removal through state transition
-					return d.RemoveInstance(ctx, filesystemService)
+					return d.RemoveInstance(ctx, services.GetFileSystem())
 				},
 				func(ctx context.Context) error {
 					// Force removal when other approaches fail - bypasses state transitions
 					// and directly deletes files and resources
-					return d.service.ForceRemoveDataFlowComponent(ctx, filesystemService, dataflowComponentInstanceName)
+					return d.service.ForceRemoveDataFlowComponent(ctx, services.GetFileSystem(), dataflowComponentInstanceName)
 				},
 			)
 		}
@@ -90,7 +90,7 @@ func (d *DataflowComponentInstance) Reconcile(ctx context.Context, snapshot fsm.
 	}
 
 	// Step 2: Detect external changes.
-	if err := d.reconcileExternalChanges(ctx, filesystemService, snapshot.Tick); err != nil {
+	if err = d.reconcileExternalChanges(ctx, services, snapshot.Tick); err != nil {
 		// If the service is not running, we don't want to return an error here, because we want to continue reconciling
 		if !errors.Is(err, dataflowcomponentservice.ErrServiceNotExists) && !errors.Is(err, s6.ErrServiceNotExist) {
 			// errors.Is(err, s6.ErrServiceNotExist)
@@ -115,16 +115,15 @@ func (d *DataflowComponentInstance) Reconcile(ctx context.Context, snapshot fsm.
 			return nil, false // We don't want to return an error here, because we want to continue reconciling
 		}
 
-		//nolint:ineffassign // This is intentionally modifying the named return value accessed in defer
 		err = nil // The service does not exist, which is fine as this happens in the reconcileStateTransition
 	}
 
 	// Step 3: Attempt to reconcile the state.
 	currentTime := time.Now() // this is used to check if the instance is degraded and for the log check
-	err, reconciled = d.reconcileStateTransition(ctx, filesystemService, currentTime)
+	err, reconciled = d.reconcileStateTransition(ctx, services, currentTime)
 	if err != nil {
 		// If the instance is removed, we don't want to return an error here, because we want to continue reconciling
-		if errors.Is(err, fsm.ErrInstanceRemoved) {
+		if errors.Is(err, standarderrors.ErrInstanceRemoved) {
 			return nil, false
 		}
 
@@ -134,7 +133,7 @@ func (d *DataflowComponentInstance) Reconcile(ctx context.Context, snapshot fsm.
 	}
 
 	// Reconcile the benthosManager
-	benthosErr, benthosReconciled := d.service.ReconcileManager(ctx, filesystemService, snapshot.Tick)
+	benthosErr, benthosReconciled := d.service.ReconcileManager(ctx, services, snapshot.Tick)
 	if benthosErr != nil {
 		d.baseFSMInstance.SetError(benthosErr, snapshot.Tick)
 		d.baseFSMInstance.GetLogger().Errorf("error reconciling benthosManager: %s", benthosErr)
@@ -154,7 +153,7 @@ func (d *DataflowComponentInstance) Reconcile(ctx context.Context, snapshot fsm.
 
 // reconcileExternalChanges checks if the DataflowComponentInstance service status has changed
 // externally (e.g., if someone manually stopped or started it, or if it crashed)
-func (d *DataflowComponentInstance) reconcileExternalChanges(ctx context.Context, filesystemService filesystem.Service, tick uint64) error {
+func (d *DataflowComponentInstance) reconcileExternalChanges(ctx context.Context, services serviceregistry.Provider, tick uint64) error {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentDataflowComponentInstance, d.baseFSMInstance.GetID()+".reconcileExternalChanges", time.Since(start))
@@ -165,7 +164,7 @@ func (d *DataflowComponentInstance) reconcileExternalChanges(ctx context.Context
 	observedStateCtx, cancel := context.WithTimeout(ctx, constants.DataflowComponentUpdateObservedStateTimeout)
 	defer cancel()
 
-	err := d.UpdateObservedStateOfInstance(observedStateCtx, filesystemService, tick, start)
+	err := d.UpdateObservedStateOfInstance(observedStateCtx, services, tick, start)
 	if err != nil {
 		return fmt.Errorf("failed to update observed state: %w", err)
 	}
@@ -177,7 +176,7 @@ func (d *DataflowComponentInstance) reconcileExternalChanges(ctx context.Context
 // Any functions that fetch information are disallowed here and must be called in reconcileExternalChanges
 // and exist in ObservedState.
 // This is to ensure full testability of the FSM.
-func (d *DataflowComponentInstance) reconcileStateTransition(ctx context.Context, filesystemService filesystem.Service, currentTime time.Time) (err error, reconciled bool) {
+func (d *DataflowComponentInstance) reconcileStateTransition(ctx context.Context, services serviceregistry.Provider, currentTime time.Time) (err error, reconciled bool) {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentDataflowComponentInstance, d.baseFSMInstance.GetID()+".reconcileStateTransition", time.Since(start))
@@ -188,7 +187,7 @@ func (d *DataflowComponentInstance) reconcileStateTransition(ctx context.Context
 
 	// Handle lifecycle states first - these take precedence over operational states
 	if internal_fsm.IsLifecycleState(currentState) {
-		err, reconciled := d.reconcileLifecycleStates(ctx, filesystemService, currentState)
+		err, reconciled := d.baseFSMInstance.ReconcileLifecycleStates(ctx, services, currentState, d.CreateInstance, d.RemoveInstance, d.CheckForCreation)
 		if err != nil {
 			return err, false
 		}
@@ -197,7 +196,7 @@ func (d *DataflowComponentInstance) reconcileStateTransition(ctx context.Context
 
 	// Handle operational states
 	if IsOperationalState(currentState) {
-		err, reconciled := d.reconcileOperationalStates(ctx, filesystemService, currentState, desiredState, currentTime)
+		err, reconciled := d.reconcileOperationalStates(ctx, services, currentState, desiredState, currentTime)
 		if err != nil {
 			return err, false
 		}
@@ -207,39 +206,8 @@ func (d *DataflowComponentInstance) reconcileStateTransition(ctx context.Context
 	return fmt.Errorf("invalid state: %s", currentState), false
 }
 
-// reconcileLifecycleStates handles states related to instance lifecycle (creating/removing)
-func (d *DataflowComponentInstance) reconcileLifecycleStates(ctx context.Context, filesystemService filesystem.Service, currentState string) (err error, reconciled bool) {
-	start := time.Now()
-	defer func() {
-		metrics.ObserveReconcileTime(metrics.ComponentDataflowComponentInstance, d.baseFSMInstance.GetID()+".reconcileLifecycleStates", time.Since(start))
-	}()
-
-	// Independent what the desired state is, we always need to reconcile the lifecycle states first
-	switch currentState {
-	case internal_fsm.LifecycleStateToBeCreated:
-		if err := d.CreateInstance(ctx, filesystemService); err != nil {
-			return err, false
-		}
-		return d.baseFSMInstance.SendEvent(ctx, internal_fsm.LifecycleEventCreate), true
-	case internal_fsm.LifecycleStateCreating:
-		// Check if the service is created
-		// For now, we'll assume it's created immediately after initiating creation
-		return d.baseFSMInstance.SendEvent(ctx, internal_fsm.LifecycleEventCreateDone), true
-	case internal_fsm.LifecycleStateRemoving:
-		if err := d.RemoveInstance(ctx, filesystemService); err != nil {
-			return err, false
-		}
-		return d.baseFSMInstance.SendEvent(ctx, internal_fsm.LifecycleEventRemoveDone), true
-	case internal_fsm.LifecycleStateRemoved:
-		return fsm.ErrInstanceRemoved, true
-	default:
-		// If we are not in a lifecycle state, just continue
-		return nil, false
-	}
-}
-
 // reconcileOperationalStates handles states related to instance operations (starting/stopping)
-func (d *DataflowComponentInstance) reconcileOperationalStates(ctx context.Context, filesystemService filesystem.Service, currentState string, desiredState string, currentTime time.Time) (err error, reconciled bool) {
+func (d *DataflowComponentInstance) reconcileOperationalStates(ctx context.Context, services serviceregistry.Provider, currentState string, desiredState string, currentTime time.Time) (err error, reconciled bool) {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentDataflowComponentInstance, d.baseFSMInstance.GetID()+".reconcileOperationalStates", time.Since(start))
@@ -247,9 +215,9 @@ func (d *DataflowComponentInstance) reconcileOperationalStates(ctx context.Conte
 
 	switch desiredState {
 	case OperationalStateActive:
-		return d.reconcileTransitionToActive(ctx, filesystemService, currentState, currentTime)
+		return d.reconcileTransitionToActive(ctx, services, currentState, currentTime)
 	case OperationalStateStopped:
-		return d.reconcileTransitionToStopped(ctx, filesystemService, currentState)
+		return d.reconcileTransitionToStopped(ctx, services, currentState)
 	default:
 		return fmt.Errorf("invalid desired state: %s", desiredState), false
 	}
@@ -257,7 +225,7 @@ func (d *DataflowComponentInstance) reconcileOperationalStates(ctx context.Conte
 
 // reconcileTransitionToActive handles transitions when the desired state is Active.
 // It deals with moving from various states to the Active state.
-func (d *DataflowComponentInstance) reconcileTransitionToActive(ctx context.Context, filesystemService filesystem.Service, currentState string, currentTime time.Time) (err error, reconciled bool) {
+func (d *DataflowComponentInstance) reconcileTransitionToActive(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time) (err error, reconciled bool) {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentDataflowComponentInstance, d.baseFSMInstance.GetID()+".reconcileTransitionToActive", time.Since(start))
@@ -266,7 +234,7 @@ func (d *DataflowComponentInstance) reconcileTransitionToActive(ctx context.Cont
 	// If we're stopped, we need to start first
 	if currentState == OperationalStateStopped {
 		// Attempt to initiate start
-		if err := d.StartInstance(ctx, filesystemService); err != nil {
+		if err := d.StartInstance(ctx, services.GetFileSystem()); err != nil {
 			return err, false
 		}
 		// Send event to transition from Stopped to Starting
@@ -275,16 +243,16 @@ func (d *DataflowComponentInstance) reconcileTransitionToActive(ctx context.Cont
 
 	// Handle starting phase states
 	if IsStartingState(currentState) {
-		return d.reconcileStartingStates(ctx, filesystemService, currentState, currentTime)
+		return d.reconcileStartingStates(ctx, services, currentState, currentTime)
 	} else if IsRunningState(currentState) {
-		return d.reconcileRunningState(ctx, filesystemService, currentState, currentTime)
+		return d.reconcileRunningState(ctx, services, currentState, currentTime)
 	}
 
 	return nil, false
 }
 
 // reconcileStartingStates handles the various starting phase states when transitioning to Active.
-func (d *DataflowComponentInstance) reconcileStartingStates(ctx context.Context, filesystemService filesystem.Service, currentState string, currentTime time.Time) (err error, reconciled bool) {
+func (d *DataflowComponentInstance) reconcileStartingStates(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time) (err error, reconciled bool) {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentDataflowComponentInstance, d.baseFSMInstance.GetID()+".reconcileStartingState", time.Since(start))
@@ -324,7 +292,7 @@ func (d *DataflowComponentInstance) reconcileStartingStates(ctx context.Context,
 }
 
 // reconcileRunningState handles the various running states when transitioning to Active.
-func (d *DataflowComponentInstance) reconcileRunningState(ctx context.Context, filesystemService filesystem.Service, currentState string, currentTime time.Time) (err error, reconciled bool) {
+func (d *DataflowComponentInstance) reconcileRunningState(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time) (err error, reconciled bool) {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentDataflowComponentInstance, d.baseFSMInstance.GetID()+".reconcileRunningState", time.Since(start))
@@ -360,7 +328,7 @@ func (d *DataflowComponentInstance) reconcileRunningState(ctx context.Context, f
 
 // reconcileTransitionToStopped handles transitions when the desired state is Stopped.
 // It deals with moving from any operational state to Stopping and then to Stopped.
-func (d *DataflowComponentInstance) reconcileTransitionToStopped(ctx context.Context, filesystemService filesystem.Service, currentState string) (err error, reconciled bool) {
+func (d *DataflowComponentInstance) reconcileTransitionToStopped(ctx context.Context, services serviceregistry.Provider, currentState string) (err error, reconciled bool) {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentDataflowComponentInstance, d.baseFSMInstance.GetID()+".reconcileTransitionToStopped", time.Since(start))
@@ -376,7 +344,7 @@ func (d *DataflowComponentInstance) reconcileTransitionToStopped(ctx context.Con
 			return d.baseFSMInstance.SendEvent(ctx, EventStopDone), true
 		}
 	default:
-		if err := d.StopInstance(ctx, filesystemService); err != nil {
+		if err := d.StopInstance(ctx, services.GetFileSystem()); err != nil {
 			return err, false
 		}
 		// Send event to transition to Stopping

@@ -18,7 +18,7 @@ import (
 	"fmt"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"gopkg.in/yaml.v3"
 )
 
@@ -58,8 +58,8 @@ func (b *DataFlowComponentBuilder) AddGoldenDataFlowComponent() *DataFlowCompone
 			Name:            "golden-dataflow",
 			DesiredFSMState: "active",
 		},
-		DataFlowComponentConfig: dataflowcomponentconfig.DataFlowComponentConfig{
-			BenthosConfig: dataflowcomponentconfig.BenthosConfig{
+		DataFlowComponentServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+			BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 				Input: map[string]interface{}{
 					"http_server": map[string]interface{}{
 						"path":    "/",
@@ -94,8 +94,8 @@ func (b *DataFlowComponentBuilder) AddGeneratorDataFlowComponent(name string, in
 			Name:            name,
 			DesiredFSMState: "active",
 		},
-		DataFlowComponentConfig: dataflowcomponentconfig.DataFlowComponentConfig{
-			BenthosConfig: dataflowcomponentconfig.BenthosConfig{
+		DataFlowComponentServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+			BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 				Input: map[string]interface{}{
 					"generate": map[string]interface{}{
 						"mapping":  `root = "hello world from DFC!"`,
@@ -123,15 +123,63 @@ func (b *DataFlowComponentBuilder) AddGeneratorDataFlowComponent(name string, in
 	return b
 }
 
+// AddGeneratorDataFlowComponentToKafka adds a DataFlowComponent that generates messages and sends to a Kafka topic
+func (b *DataFlowComponentBuilder) AddGeneratorDataFlowComponentToKafka(name string, interval string, topic string) *DataFlowComponentBuilder {
+	dataFlowConfig := config.DataFlowComponentConfig{
+		FSMInstanceConfig: config.FSMInstanceConfig{
+			Name:            name,
+			DesiredFSMState: "active",
+		},
+		DataFlowComponentServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+			BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
+				Input: map[string]interface{}{
+					"generate": map[string]interface{}{
+						"mapping":  fmt.Sprintf(`root = "hello world from DFC! %s"`, name),
+						"interval": interval,
+						"count":    0, // Unlimited
+					},
+				},
+				Pipeline: map[string]interface{}{
+					"processors": []interface{}{
+						map[string]interface{}{
+							"bloblang": "root = content()",
+						},
+					},
+				},
+				Output: map[string]interface{}{
+					"kafka": map[string]interface{}{
+						"addresses":     []string{"localhost:9092"},
+						"topic":         topic,
+						"max_in_flight": 1000,
+						"client_id":     name,
+						"ack_replicas":  true,
+						"compression":   "snappy",
+						"metadata": map[string]interface{}{
+							"exclude_prefixes": []string{"_"},
+						},
+						"batching": map[string]interface{}{
+							"count":  100,
+							"period": "1s",
+						},
+					},
+				},
+			},
+		},
+	}
+	b.full.DataFlow = append(b.full.DataFlow, dataFlowConfig)
+	b.activeComponents[name] = true
+	return b
+}
+
 // UpdateGeneratorDataFlowComponent updates the interval of an existing generator DataFlowComponent
 func (b *DataFlowComponentBuilder) UpdateGeneratorDataFlowComponent(name string, newInterval string) *DataFlowComponentBuilder {
 	// Find and update the service
 	for i, component := range b.full.DataFlow {
 		if component.Name == name {
 			// Create updated input config with new interval
-			if input, ok := component.DataFlowComponentConfig.BenthosConfig.Input["generate"].(map[string]interface{}); ok {
+			if input, ok := component.DataFlowComponentServiceConfig.BenthosConfig.Input["generate"].(map[string]interface{}); ok {
 				input["interval"] = newInterval
-				b.full.DataFlow[i].DataFlowComponentConfig.BenthosConfig.Input["generate"] = input
+				b.full.DataFlow[i].DataFlowComponentServiceConfig.BenthosConfig.Input["generate"] = input
 			}
 			break
 		}

@@ -16,7 +16,6 @@ package redpanda_monitor
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
@@ -26,6 +25,7 @@ import (
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
 // MockRedpandaMonitorService is a mock implementation of the IRedpandaMonitorService interface for testing
@@ -34,25 +34,29 @@ type MockRedpandaMonitorService struct {
 	GenerateS6ConfigForRedpandaMonitorCalled bool
 	StatusCalled                             bool
 	AddRedpandaToS6ManagerCalled             bool
+	UpdateRedpandaMonitorInS6ManagerCalled   bool
 	RemoveRedpandaFromS6ManagerCalled        bool
 	StartRedpandaCalled                      bool
 	StopRedpandaCalled                       bool
 	ReconcileManagerCalled                   bool
 	ServiceExistsCalled                      bool
-
+	ForceRemoveRedpandaMonitorCalled         bool
 	// Return values for each method
 	GenerateS6ConfigForRedpandaMonitorResult s6serviceconfig.S6ServiceConfig
 	GenerateS6ConfigForRedpandaMonitorError  error
 	StatusResult                             ServiceInfo
 	StatusError                              error
 	AddRedpandaToS6ManagerError              error
+	UpdateRedpandaMonitorInS6ManagerError    error
 	RemoveRedpandaFromS6ManagerError         error
+	ForceRemoveRedpandaMonitorError          error
 	StartRedpandaError                       error
 	StopRedpandaError                        error
 	ReconcileManagerError                    error
 	ReconcileManagerReconciled               bool
 	ServiceExistsResult                      bool
-
+	UpdateLastPort                           uint16
+	LastScanTime                             time.Time
 	// For more complex testing scenarios
 	ServiceState      *ServiceInfo
 	ServiceExistsFlag bool
@@ -92,8 +96,8 @@ func (m *MockRedpandaMonitorService) SetServiceState(flags ServiceStateFlags) {
 	if m.ServiceState == nil {
 		m.ServiceState = &ServiceInfo{
 			RedpandaStatus: RedpandaMonitorStatus{
-				LastScan: &RedpandaMetricsAndClusterConfig{
-					Metrics: &RedpandaMetrics{
+				LastScan: &RedpandaMetricsScan{
+					RedpandaMetrics: &RedpandaMetrics{
 						MetricsState: m.metricsState,
 					},
 				},
@@ -124,8 +128,83 @@ func (m *MockRedpandaMonitorService) GetServiceState() *ServiceStateFlags {
 	return m.stateFlags
 }
 
+// SetReadyStatus sets the ready status of the Redpanda Monitor service
+func (m *MockRedpandaMonitorService) SetReadyStatus(inputConnected bool, outputConnected bool, errorMsg string) {
+	if m.ServiceState == nil {
+		m.ServiceState = &ServiceInfo{
+			RedpandaStatus: RedpandaMonitorStatus{
+				LastScan: &RedpandaMetricsScan{},
+			},
+		}
+	}
+	m.ServiceState.RedpandaStatus.LastScan.HealthCheck.IsReady = inputConnected && outputConnected && errorMsg == ""
+	m.ServiceState.RedpandaStatus.LastScan.HealthCheck.ReadyError = errorMsg
+}
+
+// SetRedpandaMonitorRunning sets the Redpanda Monitor service to running
+func (m *MockRedpandaMonitorService) SetRedpandaMonitorRunning() {
+	if m.ServiceState == nil {
+		m.ServiceState = &ServiceInfo{
+			RedpandaStatus: RedpandaMonitorStatus{
+				LastScan:  &RedpandaMetricsScan{},
+				IsRunning: true,
+			},
+		}
+	}
+	m.ServiceState.S6FSMState = s6fsm.OperationalStateRunning
+}
+
+// SetRedpandaMonitorStopped sets the Redpanda Monitor service to stopped
+func (m *MockRedpandaMonitorService) SetRedpandaMonitorStopped() {
+	if m.ServiceState == nil {
+		m.ServiceState = &ServiceInfo{
+			RedpandaStatus: RedpandaMonitorStatus{
+				LastScan:  &RedpandaMetricsScan{},
+				IsRunning: false,
+			},
+		}
+	}
+	m.ServiceState.S6FSMState = s6fsm.OperationalStateStopped
+}
+
+// SetLiveStatus sets the live status of the Redpanda Monitor service
+func (m *MockRedpandaMonitorService) SetLiveStatus(isLive bool) {
+	if m.ServiceState == nil {
+		m.ServiceState = &ServiceInfo{
+			RedpandaStatus: RedpandaMonitorStatus{
+				LastScan: &RedpandaMetricsScan{},
+			},
+		}
+	}
+	m.ServiceState.RedpandaStatus.LastScan.HealthCheck.IsLive = isLive
+}
+
+// SetMetricsResponse sets the metrics response of the Redpanda Monitor service
+func (m *MockRedpandaMonitorService) SetMetricsResponse(metrics Metrics) {
+	if m.ServiceState == nil {
+		m.ServiceState = &ServiceInfo{
+			RedpandaStatus: RedpandaMonitorStatus{
+				LastScan: &RedpandaMetricsScan{},
+			},
+		}
+	}
+	m.ServiceState.RedpandaStatus.LastScan.RedpandaMetrics = &RedpandaMetrics{
+		Metrics: metrics,
+	}
+}
+
+// SetOutdatedLastScan sets the last scan to outdated
+func (m *MockRedpandaMonitorService) SetOutdatedLastScan(currentTime time.Time) {
+	m.LastScanTime = currentTime.Add(-1 * time.Hour)
+}
+
+// SetGoodLastScan sets the last scan to good
+func (m *MockRedpandaMonitorService) SetGoodLastScan(currentTime time.Time) {
+	m.LastScanTime = currentTime
+}
+
 // GenerateS6ConfigForRedpandaMonitor mocks generating S6 config for Redpanda monitor
-func (m *MockRedpandaMonitorService) GenerateS6ConfigForRedpandaMonitor() (s6serviceconfig.S6ServiceConfig, error) {
+func (m *MockRedpandaMonitorService) GenerateS6ConfigForRedpandaMonitor(s6ServiceName string) (s6serviceconfig.S6ServiceConfig, error) {
 	m.GenerateS6ConfigForRedpandaMonitorCalled = true
 
 	// If error is set, return it
@@ -142,7 +221,7 @@ func (m *MockRedpandaMonitorService) GenerateS6ConfigForRedpandaMonitor() (s6ser
 	s6Config := s6serviceconfig.S6ServiceConfig{
 		Command: []string{
 			"/bin/sh",
-			fmt.Sprintf("%s/%s/config/run_redpanda_monitor.sh", constants.S6BaseDir, "redpanda-monitor-mock"),
+			fmt.Sprintf("%s/%s/config/run_redpanda_monitor.sh", constants.S6BaseDir, s6ServiceName),
 		},
 		Env: map[string]string{},
 		ConfigFiles: map[string]string{
@@ -164,17 +243,18 @@ func (m *MockRedpandaMonitorService) Status(ctx context.Context, filesystemServi
 
 	// Check if the service exists
 	if !m.ServiceExistsFlag {
-		return ServiceInfo{}, errors.New("service 'redpanda-monitor' not found")
+		return ServiceInfo{}, ErrServiceNotExist
 	}
 
 	// If we have a state already stored, return it
 	if m.ServiceState != nil {
-		now := time.Now()
-		m.ServiceState.RedpandaStatus.LastScan = &RedpandaMetricsAndClusterConfig{
-			Metrics: &RedpandaMetrics{
-				MetricsState: m.metricsState,
-			},
-			LastUpdatedAt: now,
+		m.ServiceState.RedpandaStatus.LastScan = &RedpandaMetricsScan{
+			HealthCheck:     m.ServiceState.RedpandaStatus.LastScan.HealthCheck,
+			RedpandaMetrics: m.ServiceState.RedpandaStatus.LastScan.RedpandaMetrics,
+			LastUpdatedAt:   m.LastScanTime,
+		}
+		if m.ServiceState.RedpandaStatus.LastScan.RedpandaMetrics != nil {
+			m.ServiceState.RedpandaStatus.LastScan.RedpandaMetrics.MetricsState = m.metricsState
 		}
 		return *m.ServiceState, m.StatusError
 	}
@@ -199,10 +279,12 @@ func (m *MockRedpandaMonitorService) AddRedpandaMonitorToS6Manager(ctx context.C
 
 	// Mark service as existing
 	m.ServiceExistsFlag = true
+	// keep the accessor in sync
+	m.ServiceExistsResult = true
 
 	// Create an S6FSMConfig for this service
-	s6ServiceName := "redpanda-monitor"
-	s6Config, _ := m.GenerateS6ConfigForRedpandaMonitor()
+	s6ServiceName := "redpanda"
+	s6Config, _ := m.GenerateS6ConfigForRedpandaMonitor(s6ServiceName)
 	s6FSMConfig := config.S6FSMConfig{
 		FSMInstanceConfig: config.FSMInstanceConfig{
 			Name:            s6ServiceName,
@@ -215,6 +297,29 @@ func (m *MockRedpandaMonitorService) AddRedpandaMonitorToS6Manager(ctx context.C
 	m.S6ServiceConfig = &s6FSMConfig
 
 	return m.AddRedpandaToS6ManagerError
+}
+
+// UpdateRedpandaMonitorInS6Manager mocks updating a Redpanda Monitor instance in the S6 manager
+func (m *MockRedpandaMonitorService) UpdateRedpandaMonitorInS6Manager(ctx context.Context) error {
+	m.UpdateRedpandaMonitorInS6ManagerCalled = true
+
+	// Check for context cancellation
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+
+	// Check whether the service exists
+	if m.S6ServiceConfig == nil {
+		return ErrServiceNotExist
+	}
+
+	// Remove the old instance
+	if err := m.RemoveRedpandaMonitorFromS6Manager(ctx); err != nil {
+		return fmt.Errorf("failed to remove old redpanda monitor: %w", err)
+	}
+
+	// Add the new instance
+	return m.AddRedpandaMonitorToS6Manager(ctx)
 }
 
 // RemoveRedpandaMonitorFromS6Manager mocks removing a Redpanda Monitor instance from the S6 manager
@@ -233,6 +338,8 @@ func (m *MockRedpandaMonitorService) RemoveRedpandaMonitorFromS6Manager(ctx cont
 
 	// Mark service as not existing
 	m.ServiceExistsFlag = false
+	// keep the accessor in sync
+	m.ServiceExistsResult = false
 	m.S6ServiceConfig = nil
 
 	return m.RemoveRedpandaFromS6ManagerError
@@ -279,7 +386,7 @@ func (m *MockRedpandaMonitorService) StopRedpandaMonitor(ctx context.Context) er
 }
 
 // ReconcileManager mocks reconciling the Redpanda Monitor manager
-func (m *MockRedpandaMonitorService) ReconcileManager(ctx context.Context, filesystemService filesystem.Service, tick uint64) (error, bool) {
+func (m *MockRedpandaMonitorService) ReconcileManager(ctx context.Context, services serviceregistry.Provider, tick uint64) (error, bool) {
 	m.ReconcileManagerCalled = true
 
 	// Check for context cancellation
@@ -312,30 +419,27 @@ func (m *MockRedpandaMonitorService) ServiceExists(ctx context.Context, filesyst
 }
 
 // SetMetricsState allows tests to directly set the metrics state
-func (m *MockRedpandaMonitorService) SetMetricsState(isActive bool, freeBytes int64, totalBytes int64, freeSpaceAlert bool) {
+func (m *MockRedpandaMonitorService) SetMetricsState(isActive bool) {
 	if m.metricsState == nil {
 		m.metricsState = NewRedpandaMetricsState()
 	}
 
 	m.metricsState.IsActive = isActive
 
-	// Create metrics to be used in service state
-	metrics := Metrics{
-		Infrastructure: InfrastructureMetrics{
-			Storage: StorageMetrics{
-				FreeBytes:      freeBytes,
-				TotalBytes:     totalBytes,
-				FreeSpaceAlert: freeSpaceAlert,
-			},
-		},
-	}
-
-	// Update the service state if it exists
+	// Update the service state if it existsSetMetricsState
 	if m.ServiceState != nil && m.ServiceState.RedpandaStatus.LastScan != nil {
-		m.ServiceState.RedpandaStatus.LastScan.Metrics = &RedpandaMetrics{
-			MetricsState: m.metricsState,
-			Metrics:      metrics,
+		m.ServiceState.RedpandaStatus.LastScan.RedpandaMetrics = &RedpandaMetrics{
+			Metrics: Metrics{
+				Infrastructure: InfrastructureMetrics{
+					Storage: StorageMetrics{
+						FreeBytes:      1000,
+						TotalBytes:     10000,
+						FreeSpaceAlert: false,
+					},
+				},
+			},
 		}
+		m.ServiceState.RedpandaStatus.LastScan.RedpandaMetrics.MetricsState = m.metricsState
 	}
 }
 
@@ -344,8 +448,8 @@ func (m *MockRedpandaMonitorService) SetMockLogs(logs []s6service.LogEntry) {
 	if m.ServiceState == nil {
 		m.ServiceState = &ServiceInfo{
 			RedpandaStatus: RedpandaMonitorStatus{
-				LastScan: &RedpandaMetricsAndClusterConfig{
-					Metrics: &RedpandaMetrics{
+				LastScan: &RedpandaMetricsScan{
+					RedpandaMetrics: &RedpandaMetrics{
 						MetricsState: m.metricsState,
 					},
 				},
@@ -354,4 +458,11 @@ func (m *MockRedpandaMonitorService) SetMockLogs(logs []s6service.LogEntry) {
 	}
 
 	m.ServiceState.RedpandaStatus.Logs = logs
+}
+
+// ForceRemoveRedpandaMonitor mocks force removing a Redpanda Monitor instance
+func (m *MockRedpandaMonitorService) ForceRemoveRedpandaMonitor(ctx context.Context, filesystemService filesystem.Service) error {
+	m.ForceRemoveRedpandaMonitorCalled = true
+
+	return m.ForceRemoveRedpandaMonitorError
 }

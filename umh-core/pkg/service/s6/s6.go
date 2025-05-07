@@ -26,6 +26,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"text/template"
 	"time"
@@ -39,6 +40,8 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
+
+	"golang.org/x/sync/errgroup"
 )
 
 // ServiceStatus represents the status of an S6 service
@@ -121,9 +124,45 @@ type Service interface {
 	EnsureSupervision(ctx context.Context, servicePath string, fsService filesystem.Service) (bool, error)
 }
 
+// logState is the per-log-file cursor used by GetLogs.
+//
+// Fields:
+//
+//	mu     – guards every field in the struct (single-writer, multi-reader)
+//	inode  – inode of the file when we last touched it; changes ⇒ rotation
+//	offset – next byte to read on disk (monotonically increases until
+//	         rotation or truncation)
+//
+//	logs   – backing array that holds *at most* S6MaxLines entries.
+//	         Allocated once; after that, entries are overwritten in place.
+//	head   – index of the slot where the **next** entry will be written.
+//	         When head wraps from max-1 to 0, `full` is set to true.
+//	full   – true once the buffer has wrapped at least once; used to decide
+//	         how to linearise the ring when we copy it out.
+type logState struct {
+	// mu guards every field in the struct (single-writer, multi-reader)
+	mu sync.Mutex
+	// inode is the inode of the file when we last touched it; changes ⇒ rotation
+	inode uint64
+	// offset is the next byte to read on disk (monotonically increases until
+	// rotation or truncation)
+	offset int64
+
+	// logs is the backing array that holds *at most* S6MaxLines entries.
+	// Allocated once; after that, entries are overwritten in place.
+	logs []LogEntry
+	// head is the index of the slot where the **next** entry will be written.
+	// When head wraps from max-1 to 0, `full` is set to true.
+	head int
+	// full is true once the buffer has wrapped at least once; used to decide
+	// how to linearise the ring when we copy it out.
+	full bool
+}
+
 // DefaultService is the default implementation of the S6 Service interface
 type DefaultService struct {
-	logger *zap.SugaredLogger
+	logger     *zap.SugaredLogger
+	logCursors sync.Map // map[string]*logState (key = abs log path)
 }
 
 // NewDefaultService creates a new default S6 service
@@ -225,15 +264,16 @@ func (s *DefaultService) Create(ctx context.Context, servicePath string, config 
 		return fmt.Errorf("failed to create log service directory: %w", err)
 	}
 
+	// Create logutil-service command line, see also https://skarnet.org/software/s6/s6-log.html
+	// logutil-service is a wrapper around s6_log and reads from the S6_LOGGING_SCRIPT environment variable
+	// We overwrite the default S6_LOGGING_SCRIPT with our own if config.LogFilesize is set
+	logRunContent, err := getLogRunScript(config, logDir)
+	if err != nil {
+		return fmt.Errorf("failed to get log run script: %w", err)
+	}
+
 	// Create log run script
 	logRunPath := filepath.Join(logServicePath, "run")
-	logRunContent := fmt.Sprintf(`#!/command/execlineb -P
-fdmove -c 2 1
-foreground { mkdir -p %s }
-foreground { chown -R nobody:nobody %s }
-logutil-service %s
-`, logDir, logDir, logDir)
-
 	if err := fsService.WriteFile(ctx, logRunPath, []byte(logRunContent), 0755); err != nil {
 		return fmt.Errorf("failed to write log run script: %w", err)
 	}
@@ -314,52 +354,133 @@ func (s *DefaultService) createS6ConfigFiles(ctx context.Context, servicePath st
 	return nil
 }
 
-// Remove removes the S6 service directory structure
+// Remove deletes every artefact that `Create` produced:
+//
+//   - <servicePath>             (the long-run service directory)
+//   - <servicePath>/log         (nested logger service)
+//   - <logBase>/<name>          (rotated log directory)
+//
+// The method is called once per reconcile *tick* while the S6-FSM is in the
+// *removing* state, therefore it must:
+//
+//  1. **Return quickly** – never wait or poll.
+//  2. **Be idempotent**  – safe to call when directories are half-gone.
+//  3. **Return nil only when nothing is left.**
+//
+// Any remaining file or I/O error leads to a non-nil return so the FSM keeps
+// trying (or escalates after the back-off threshold).
 func (s *DefaultService) Remove(ctx context.Context, servicePath string, fsService filesystem.Service) error {
 	start := time.Now()
 	defer func() {
-		metrics.ObserveReconcileTime(metrics.ComponentS6Service, servicePath+".remove", time.Since(start))
+		metrics.ObserveReconcileTime(metrics.ComponentS6Service,
+			servicePath+".remove", time.Since(start))
 	}()
 
-	if s.logger != nil {
-		s.logger.Debugf("Removing S6 service %s", servicePath)
+	if ctx.Err() != nil {
+		return ctx.Err() // context already cancelled / deadline exceeded
 	}
 
-	exists, err := s.ServiceExists(ctx, servicePath, fsService)
-	if err != nil {
-		return fmt.Errorf("failed to check if service exists: %w", err)
-	}
-	if !exists {
-		return ErrServiceNotExist
+	srvName := filepath.Base(servicePath)
+	logDir := filepath.Join(constants.S6LogBaseDir, srvName)
+
+	// ──────────────────────── fast-path ────────────────────────────
+	// If both paths are already gone we are done – lets the FSM fire
+	// "remove_done" immediately and exit the reconcile loop.
+	if gone, _ := fsService.PathExists(ctx, servicePath); !gone {
+		if gone2, _ := fsService.PathExists(ctx, logDir); !gone2 {
+			return nil
+		}
 	}
 
-	// Remove the service from contents.d first
-	serviceName := filepath.Base(servicePath)
-	//contentsFile := filepath.Join(filepath.Dir(servicePath), "user", "contents.d", serviceName)
-	//fsService.Remove(ctx, contentsFile) // Ignore errors - file might not exist
+	//----------------------------------------------------------------
+	// Two independent best-effort deletions.  We *always* call them,
+	// even if the directory is missing, because RemoveAll on a non-
+	// existent path is cheap and returns nil – keeps the code simple.
+	// We start it in a separate goroutine and wait for constants.S6RemoveTimeout
+	// so that we keep the main reconcile loop fast. If this requires a couple
+	// of retries, it is fine as long as we do not block the main reconcile loop.
+	//----------------------------------------------------------------
+	ctxRemoveTimeout, cancel := context.WithTimeout(ctx, constants.S6RemoveTimeout)
+	defer cancel()
 
-	// Remove the service directory
-	err = fsService.RemoveAll(ctx, servicePath)
-	if err != nil {
-		return fmt.Errorf("failed to remove S6 service %s: %w", servicePath, err)
+	g, gctx := errgroup.WithContext(ctxRemoveTimeout)
+
+	var srvErr, logErr error
+
+	g.Go(func() error {
+		srvErr = fsService.RemoveAll(gctx, servicePath)
+		return srvErr
+	})
+
+	g.Go(func() error {
+		logErr = fsService.RemoveAll(gctx, logDir)
+		return logErr
+	})
+
+	// Create a buffered channel to receive the result from g.Wait().
+	// The channel is buffered so that the goroutine sending on it doesn't block.
+	errc := make(chan error, 1)
+
+	// Run g.Wait() in a separate goroutine.
+	// This allows us to use a select statement to return early if the context is canceled.
+	go func() {
+		// g.Wait() blocks until all goroutines launched with g.Go() have returned.
+		// It returns the first non-nil error, if any.
+		errc <- g.Wait()
+	}()
+
+	// Use a select statement to wait for either the g.Wait() result or the context's cancellation.
+	select {
+	case err := <-errc:
+		// g.Wait() has finished, so check if any goroutine returned an error.
+		if err != nil {
+			// If there was an error in any sub-call, return that error.
+			return fmt.Errorf("s6.Remove incomplete for %q: %s",
+				servicePath, err.Error())
+		}
+		// If err is nil, all goroutines completed successfully.
+	case <-ctxRemoveTimeout.Done():
+		// The context was canceled or its deadline was exceeded before all goroutines finished.
+		// Although some goroutines might still be running in the background,
+		// they use a context (gctx) that should cause them to terminate promptly.
+		return ctxRemoveTimeout.Err()
 	}
 
-	// Clean up logs directory (best effort - don't block removal if this fails)
-	logDir := filepath.Join(constants.S6LogBaseDir, serviceName)
-	if logErr := fsService.RemoveAll(ctx, logDir); logErr != nil && s.logger != nil {
-		sentry.ReportServiceErrorf(
-			s.logger,
-			serviceName,
-			"s6",
-			"cleanup_logs",
-			"Failed to clean up log directory: %v",
-			logErr,
-		)
+	//----------------------------------------------------------------
+	// Double-check: report success only when both paths are gone *and*
+	// no I/O error occurred.
+	//----------------------------------------------------------------
+	srvLeft, srvLeftErr := fsService.PathExists(ctx, servicePath)
+	logLeft, logLeftErr := fsService.PathExists(ctx, logDir)
+
+	if srvErr != nil || logErr != nil || srvLeft || logLeft {
+		// build a helpful composite error message
+		var parts []string
+		if srvErr != nil {
+			parts = append(parts, fmt.Sprintf("serviceDir: %v", srvErr))
+		}
+		if logErr != nil {
+			parts = append(parts, fmt.Sprintf("logDir: %v", logErr))
+		}
+		if srvLeft {
+			parts = append(parts, "serviceDir still exists")
+		}
+		if logLeft {
+			parts = append(parts, "logDir still exists")
+		}
+
+		if srvLeftErr != nil {
+			parts = append(parts, fmt.Sprintf("serviceDir: %v", srvLeftErr))
+		}
+		if logLeftErr != nil {
+			parts = append(parts, fmt.Sprintf("logDir: %v", logLeftErr))
+		}
+
+		return fmt.Errorf("s6.Remove incomplete for %q: %s",
+			servicePath, strings.Join(parts, "; "))
 	}
 
-	if s.logger != nil {
-		s.logger.Debugf("Removed S6 service %s and its logs", servicePath)
-	}
+	s.logger.Debugf("Removed S6 service %s and its logs", servicePath)
 	return nil
 }
 
@@ -687,6 +808,7 @@ func (s *DefaultService) GetConfig(ctx context.Context, servicePath string, fsSe
 		ConfigFiles: make(map[string]string),
 		Env:         make(map[string]string),
 		MemoryLimit: 0,
+		LogFilesize: 0,
 	}
 
 	// Fetch run script
@@ -834,6 +956,38 @@ func (s *DefaultService) GetConfig(ctx context.Context, servicePath string, fsSe
 		}
 
 		observedS6ServiceConfig.ConfigFiles[entry.Name()] = string(content)
+	}
+
+	// Extract LogFilesize using regex
+	// Fetch run script
+	logServicePath := filepath.Join(servicePath, "log")
+	logScript := filepath.Join(logServicePath, "run")
+	exists, err = fsService.FileExists(ctx, logScript)
+	if err != nil {
+		return s6serviceconfig.S6ServiceConfig{}, fmt.Errorf("failed to check if log run§ script exists: %w", err)
+	}
+	if !exists {
+		return s6serviceconfig.S6ServiceConfig{}, fmt.Errorf("log run script not found")
+	}
+
+	logScriptContentRaw, err := fsService.ReadFile(ctx, logScript)
+	if err != nil {
+		return s6serviceconfig.S6ServiceConfig{}, fmt.Errorf("failed to read log run script: %w", err)
+	}
+
+	// Parse the run script content
+	logScriptContent := string(logScriptContentRaw)
+
+	// Extract log filesize using the dedicated log filesize parser
+	logSizeMatches := logFilesizeParser.FindStringSubmatch(logScriptContent)
+	if len(logSizeMatches) >= 2 {
+		observedS6ServiceConfig.LogFilesize, err = strconv.ParseInt(logSizeMatches[1], 10, 64)
+		if err != nil {
+			return s6serviceconfig.S6ServiceConfig{}, fmt.Errorf("failed to parse log filesize: %w", err)
+		}
+	} else {
+		// If no match found, default to 0
+		observedS6ServiceConfig.LogFilesize = 0
 	}
 
 	return observedS6ServiceConfig, nil
@@ -1067,17 +1221,195 @@ func (s *DefaultService) GetS6ConfigFile(ctx context.Context, servicePath string
 	return content, nil
 }
 
-// ForceRemove removes a service from the S6 manager
-func (s *DefaultService) ForceRemove(ctx context.Context, servicePath string, fsService filesystem.Service) error {
+// ForceRemove tears down an S6 long-run service **unconditionally**.
+//
+// It is the “nuclear option” the manager calls after several failed
+// graceful removals.  The function must therefore:
+//
+//   - **Be idempotent & non-blocking** – safe to invoke every 100 ms;
+//     never waits or polls.
+//   - **Erase every artefact** the service could have left behind.
+//   - **Return nil only when nothing remains.**
+//
+// Removal sequence
+// ----------------
+//  1. Best-effort **stop** the daemon *and* its logger with `s6-svc -d`.
+//     This is fast and harmless even if they are already down.
+//  2. **SIGTERM any lingering `s6-supervise` processes** (main + logger)
+//     by reading `<servicedir>/supervise/pid`.  Without this step a still-
+//     running supervisor could re-create the `supervise/` directory after
+//     we delete the tree.
+//  3. **Delete the two artefact trees**
+//     <servicePath>                       (includes …/log subdir)
+//     <logsBase>/<serviceName>            (rotated log files)
+//  4. **Double-check** that both paths are truly gone and that no I/O
+//     errors occurred; otherwise return an error so the caller retries.
+func (s *DefaultService) ForceRemove(
+	ctx context.Context,
+	servicePath string,
+	fsService filesystem.Service,
+) error {
+	start := time.Now()
+	defer func() {
+		metrics.IncErrorCount(metrics.ComponentS6Service, servicePath+".forceRemove") // a force remove is an error
+		metrics.ObserveReconcileTime(
+			metrics.ComponentS6Service,
+			servicePath+".forceRemove",
+			time.Since(start))
+	}()
+
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
 
-	return fsService.RemoveAll(ctx, servicePath)
+	//--------------------------------------------------------------------
+	// 1. Best-effort graceful stop (idempotent, non-blocking)
+	//--------------------------------------------------------------------
+	mainErr := s.Stop(ctx, servicePath, fsService)                         // main
+	loggerErr := s.Stop(ctx, filepath.Join(servicePath, "log"), fsService) // logger
+
+	//--------------------------------------------------------------------
+	// 2. SIGTERM lingering s6-supervise processes to avoid resurrection
+	//--------------------------------------------------------------------
+	killSupervise := func(dir string) error {
+		pidFile := filepath.Join(dir, "supervise", "pid")
+		data, err := fsService.ReadFile(ctx, pidFile)
+		if err != nil || len(data) == 0 {
+			return nil // no supervisor ⇒ nothing to kill
+		}
+		if pid, err := strconv.Atoi(strings.TrimSpace(string(data))); err == nil && pid > 0 {
+			err = syscall.Kill(pid, syscall.SIGTERM)
+			if err != nil {
+				return fmt.Errorf("failed to kill supervisor for service %s: %w", dir, err)
+			}
+		}
+		return nil
+	}
+	killSuperviseMainErr := killSupervise(servicePath)
+	killSuperviseLoggerErr := killSupervise(filepath.Join(servicePath, "log"))
+
+	//--------------------------------------------------------------------
+	// 3. Delete artefact trees
+	//--------------------------------------------------------------------
+	srvErr := fsService.RemoveAll(ctx, servicePath)
+
+	svcName := filepath.Base(servicePath)
+	logDir := filepath.Join(constants.S6LogBaseDir, svcName)
+	logErr := fsService.RemoveAll(ctx, logDir)
+
+	//--------------------------------------------------------------------
+	// 4. Verification – declare success *only* if nothing is left
+	//--------------------------------------------------------------------
+	svcLeft, pathExistsMainErr := fsService.PathExists(ctx, servicePath)
+	logLeft, pathExistsLoggerErr := fsService.PathExists(ctx, logDir)
+
+	if srvErr != nil || logErr != nil || svcLeft || logLeft {
+		var parts []string
+		if srvErr != nil {
+			parts = append(parts, fmt.Sprintf("serviceDir: %v", srvErr))
+		}
+		if logErr != nil {
+			parts = append(parts, fmt.Sprintf("logDir: %v", logErr))
+		}
+		if svcLeft || pathExistsMainErr != nil {
+			parts = append(parts, "serviceDir still exists")
+		}
+		if logLeft || pathExistsLoggerErr != nil {
+			parts = append(parts, "logDir still exists")
+		}
+
+		if mainErr != nil {
+			parts = append(parts, fmt.Sprintf("stopping service: %v", mainErr))
+		}
+
+		if loggerErr != nil {
+			parts = append(parts, fmt.Sprintf("stopping logger for service: %v", loggerErr))
+		}
+
+		if killSuperviseMainErr != nil {
+			parts = append(parts, fmt.Sprintf("killing supervisor for service: %v", killSuperviseMainErr))
+		}
+
+		if killSuperviseLoggerErr != nil {
+			parts = append(parts, fmt.Sprintf("killing supervisor for logger: %v", killSuperviseLoggerErr))
+		}
+
+		if pathExistsMainErr != nil {
+			parts = append(parts, fmt.Sprintf("checking if service exists: %v", pathExistsMainErr))
+		}
+
+		if pathExistsLoggerErr != nil {
+			parts = append(parts, fmt.Sprintf("checking if logger exists: %v", pathExistsLoggerErr))
+		}
+
+		aggregatedErr := fmt.Errorf("s6.ForceRemove incomplete for %q: %s",
+			servicePath, strings.Join(parts, "; "))
+
+		sentry.ReportIssuef(sentry.IssueTypeWarning, s.logger, "%s", aggregatedErr.Error())
+
+		return aggregatedErr
+	}
+
+	s.logger.Infof("Force-removed S6 service %s and its logs", servicePath)
+	return nil
 }
 
-// GetStructuredLogs gets the logs of the service as structured LogEntry objects
+// GetLogs reads “just the new bytes” of the log file located at
+//
+//	/data/logs/<service-name>/current
+//
+// and returns — *always in a brand-new backing array* — the last
+// `constants.S6MaxLines` log lines parsed as `LogEntry` objects.
+//
+// The function keeps one in-memory cursor (`logState`) *per log file*:
+//
+//	logCursors : map[absLogPath]*logState
+//
+// That cursor stores where we stopped reading the file last time
+// (`offset`) and a fixed-size **ring buffer** with the most recent
+// lines.  Because of the ring buffer, we never re-allocate or shift
+// memory when trimming to the last *N* lines.
+//
+// High-level flow
+// ───────────────
+//
+//  1. **Fast checks & bookkeeping**
+//     • verify the service and the log file exist
+//     • fetch/create the cursor in `s.logCursors`
+//
+//  2. **Detect file rotation/truncation**
+//     If the inode changed or the file shrank, we reset the cursor
+//     and start reading from the beginning.
+//
+//  3. **Read only the delta**
+//     `ReadFileRange(ctx, path, st.offset)` returns the bytes that
+//     appeared since the previous call.  The cursor’s `offset` is
+//     advanced whether or not anything changed.
+//
+//  4. **Ring-append the new entries**
+//     Parsed log lines are appended to the ring.  Once the buffer
+//     is full (`len == cap`), we start overwriting from `head`,
+//     giving us an O(1) “keep the last N lines” strategy.
+//
+//  5. **Copy-out**
+//     We linearise the ring into chronological order and copy it
+//     into a fresh slice so callers can never mutate our cache.
+//
+// Performance guarantees
+// ──────────────────────
+//   - **At most one allocation per process** for the ring buffer.
+//   - Zero‐copy maintenance while the program runs.
+//   - Exactly one `memmove` per call (the final copy-out).
+//   - Thread-safety via the `logState.mu` mutex.
+//
+// Errors are returned early and unwrapped where they occur so callers
+// see the root cause (e.g. “file disappeared”, “permission denied”).
 func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsService filesystem.Service) ([]LogEntry, error) {
+	start := time.Now()
+	defer func() {
+		metrics.ObserveReconcileTime(metrics.ComponentS6Service, servicePath+".getLogs", time.Since(start))
+	}()
+
 	serviceName := filepath.Base(servicePath)
 
 	// Check if the service exists first
@@ -1100,12 +1432,159 @@ func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsServ
 		return nil, ErrLogFileNotFound
 	}
 
-	// Read the log file
-	content, err := fsService.ReadFile(ctx, logFile)
+	// ── 1. grab / create state ──────────────────────────────────────
+	stAny, _ := s.logCursors.LoadOrStore(logFile, &logState{})
+	st := stAny.(*logState)
+
+	st.mu.Lock()
+	defer st.mu.Unlock()
+
+	// ── 2. check inode & size (rotation / truncation?) ──────────────
+	fi, err := fsService.Stat(ctx, logFile)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read log file: %w", err)
+		return nil, err
+	}
+	sys := fi.Sys().(*syscall.Stat_t) // on Linux / Alpine
+	size, ino := fi.Size(), sys.Ino
+
+	// rotated or truncated ⇒ reset cache
+	if st.inode != ino || st.offset > size {
+		st.inode, st.offset = ino, 0
+
+		if st.logs == nil {
+			st.logs = make([]LogEntry, 0, constants.S6MaxLines)
+		} else {
+			st.logs = st.logs[:0] // reuse backing array
+		}
+
+		st.head = 0
+		st.full = false
 	}
 
+	// ── 3. read only the new bytes ──────────────────────────────────
+	chunk, newSize, err := fsService.ReadFileRange(ctx, logFile, st.offset)
+	if err != nil {
+		return nil, err
+	}
+	st.offset = newSize // advance cursor even if chunk == nil
+
+	if len(chunk) != 0 {
+		entries, err := ParseLogsFromBytes(chunk)
+		if err != nil {
+			return nil, err
+		}
+
+		// --- Ring-buffer append ------------------------------------------
+		const max = constants.S6MaxLines
+
+		// allocate backing storage once, but with length 0 so the GC
+		// doesn't scan max empty structs before we actually need them
+		if st.logs == nil {
+			st.logs = make([]LogEntry, 0, max) // len == 0, cap == max
+		}
+
+		for _, e := range entries {
+			if len(st.logs) < max { // not full yet → grow
+				st.logs = append(st.logs, e)
+				st.head = len(st.logs) % max // head always points at the
+				// *next* write slot
+				if len(st.logs) == max {
+					st.full = true // will overwrite next round
+				}
+			} else { // full → true ring overwrite
+				st.logs[st.head] = e
+				st.head = (st.head + 1) % max // advance circular pointer
+			}
+		}
+	}
+
+	// ── 4. return *copy* so caller can’t mutate our cache ───────────
+	var length int
+	if st.full {
+		length = constants.S6MaxLines
+	} else {
+		length = len(st.logs) // always the number of valid entries
+	}
+
+	out := make([]LogEntry, length)
+
+	// `head` always points **to** the slot for the *next* write, so the
+	// oldest entry is there, and the newest entry is just before it.
+	// We need to lay the data out linearly in time order:
+	//
+	//	[head … max-1]  followed by  [0 … head-1]
+	if st.full {
+		// len(st.logs) == constants.S6MaxLines by construction
+		// (but add a defensive check to satisfy the linter)
+		if len(st.logs) == 0 {
+			return out, nil // should never happen, but safe
+		}
+
+		// copy the wrapped tail first
+		n := copy(out, st.logs[st.head:])
+		copy(out[n:], st.logs[:st.head])
+	} else {
+		copy(out, st.logs) // simple copy before first wrap
+	}
+
+	return out, nil
+}
+
+// ParseLogsFromBytes is a zero-allocation* parser for an s6 “current”
+// file.  It scans the buffer **once**, pre-allocates the result slice
+// and never calls strings.Split/Index, so the costly
+// runtime.growslice/strings.* nodes vanish from the profile.
+//
+//	*apart from the unavoidable string↔[]byte conversions needed for the
+//	LogEntry struct – those are just header copies, no heap memcopy.
+func ParseLogsFromBytes(buf []byte) ([]LogEntry, error) {
+	// Trim one trailing newline that is always present in rotated logs.
+	buf = bytes.TrimSuffix(buf, []byte{'\n'})
+
+	// 1) -------- pre-allocation --------------------------------------
+	nLines := bytes.Count(buf, []byte{'\n'}) + 1
+	entries := make([]LogEntry, 0, nLines) // avoids  runtime.growslice
+
+	// 2) -------- single pass over the buffer -------------------------
+	for start := 0; start < len(buf); {
+		// find next '\n'
+		nl := bytes.IndexByte(buf[start:], '\n')
+		var line []byte
+		if nl == -1 {
+			line = buf[start:]
+			start = len(buf)
+		} else {
+			line = buf[start : start+nl]
+			start += nl + 1
+		}
+		if len(line) == 0 { // empty line – rotate artefact
+			continue
+		}
+
+		// 3) -------- parse one line ----------------------------------
+		// format: 2025-04-20 13:01:02.123456789␠␠payload
+		sep := bytes.Index(line, []byte("  "))
+		if sep == -1 || sep < 29 { // malformed – keep raw
+			entries = append(entries, LogEntry{Content: string(line)})
+			continue
+		}
+
+		ts, err := ParseNano(string(line[:sep])) // ParseNano is already fast
+		if err != nil {
+			entries = append(entries, LogEntry{Content: string(line)})
+			continue
+		}
+
+		entries = append(entries, LogEntry{
+			Timestamp: ts,
+			Content:   string(line[sep+2:]),
+		})
+	}
+	return entries, nil
+}
+
+// ParseLogsFromBytes_Unoptimized is the more readable not optimized version of ParseLogsFromBytes
+func ParseLogsFromBytes_Unoptimized(content []byte) ([]LogEntry, error) {
 	// Split logs by newline
 	logs := strings.Split(strings.TrimSpace(string(content)), "\n")
 
@@ -1127,20 +1606,36 @@ func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsServ
 
 // parseLogLine parses a log line from S6 format and returns a LogEntry
 func parseLogLine(line string) LogEntry {
-	// S6 log format with T flag: YYYY-MM-DD HH:MM:SS.NNNNNNNNN  content
-	parts := strings.SplitN(line, "  ", 2)
-	if len(parts) != 2 {
+	// Quick check for empty strings or too short lines
+	if len(line) < 28 { // Minimum length for "YYYY-MM-DD HH:MM:SS.<9 digit nanoseconds>  content"
 		return LogEntry{Content: line}
 	}
 
-	timestamp, err := time.Parse("2006-01-02 15:04:05.999999999", parts[0])
+	// Check if we have the double space separator
+	sepIdx := strings.Index(line, "  ")
+	if sepIdx == -1 || sepIdx > 29 {
+		return LogEntry{Content: line}
+	}
+
+	// Extract timestamp part
+	timestampStr := line[:sepIdx]
+
+	// Extract content part (after the double space)
+	content := ""
+	if sepIdx+2 < len(line) {
+		content = line[sepIdx+2:]
+	}
+
+	// Try to parse the timestamp
+	// We are using ParseNano over time.Parse because it is faster for our specific time format
+	timestamp, err := ParseNano(timestampStr)
 	if err != nil {
 		return LogEntry{Content: line}
 	}
 
 	return LogEntry{
 		Timestamp: timestamp,
-		Content:   parts[1],
+		Content:   content,
 	}
 }
 

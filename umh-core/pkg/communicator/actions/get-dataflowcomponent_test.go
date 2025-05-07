@@ -23,7 +23,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
@@ -42,7 +42,6 @@ var _ = Describe("GetDataFlowComponent", func() {
 		instanceUUID    uuid.UUID
 		outboundChannel chan *models.UMHMessage
 		mockConfig      *config.MockConfigManager
-		mockSnapshot    *fsm.SystemSnapshot
 	)
 
 	// Setup before each test
@@ -67,10 +66,13 @@ var _ = Describe("GetDataFlowComponent", func() {
 		}
 
 		// Create mock system snapshot with dataflow components
-		mockSnapshot = createMockSystemSnapshot()
+		mockSnapshot := createMockSystemSnapshot()
+		mockSnapshotManager := fsm.NewSnapshotManager()
+		mockSnapshotManager.UpdateSnapshot(mockSnapshot)
 
 		mockConfig = config.NewMockConfigManager().WithConfig(initialConfig)
-		action = actions.NewGetDataFlowComponentAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig, mockSnapshot)
+
+		action = actions.NewGetDataFlowComponentAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig, mockSnapshotManager)
 	})
 
 	// Cleanup after each test
@@ -165,7 +167,7 @@ var _ = Describe("GetDataFlowComponent", func() {
 		It("should retrieve components that match the requested UUIDs", func() {
 			// Parse with valid UUIDs that match test components
 			testComponentID := "test-component-1"
-			testComponentUUID := dataflowcomponentconfig.GenerateUUIDFromName(testComponentID).String()
+			testComponentUUID := dataflowcomponentserviceconfig.GenerateUUIDFromName(testComponentID).String()
 
 			payload := map[string]interface{}{
 				"versionUUIDs": []interface{}{
@@ -245,9 +247,11 @@ var _ = Describe("GetDataFlowComponent", func() {
 			emptySnapshot := &fsm.SystemSnapshot{
 				Managers: map[string]fsm.ManagerSnapshot{},
 			}
+			snapshotManager := fsm.NewSnapshotManager()
+			snapshotManager.UpdateSnapshot(emptySnapshot)
 
 			// Create action with empty snapshot
-			action = actions.NewGetDataFlowComponentAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig, emptySnapshot)
+			action = actions.NewGetDataFlowComponentAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig, snapshotManager)
 
 			// Parse valid payload
 			payload := map[string]interface{}{
@@ -272,13 +276,15 @@ var _ = Describe("GetDataFlowComponent", func() {
 		It("should handle components with missing observed state", func() {
 			// Create a system snapshot with a component that has no observed state
 			snapshotWithMissingState := createMockSystemSnapshotWithMissingState()
+			snapshotManager := fsm.NewSnapshotManager()
+			snapshotManager.UpdateSnapshot(snapshotWithMissingState)
 
 			// Create action with this special snapshot
-			action = actions.NewGetDataFlowComponentAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig, snapshotWithMissingState)
+			action = actions.NewGetDataFlowComponentAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig, snapshotManager)
 
 			// Parse with UUID that matches the component with missing state
 			testComponentID := "test-component-missing-state"
-			testComponentUUID := dataflowcomponentconfig.GenerateUUIDFromName(testComponentID).String()
+			testComponentUUID := dataflowcomponentserviceconfig.GenerateUUIDFromName(testComponentID).String()
 
 			payload := map[string]interface{}{
 				"versionUUIDs": []interface{}{
@@ -312,8 +318,8 @@ var _ = Describe("GetDataFlowComponent", func() {
 				DesiredState: "active",
 				CurrentState: "active",
 				LastObservedState: &dataflowcomponent.DataflowComponentObservedStateSnapshot{
-					Config: dataflowcomponentconfig.DataFlowComponentConfig{
-						BenthosConfig: dataflowcomponentconfig.BenthosConfig{
+					Config: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 							Input: map[string]interface{}{
 								"test": "input",
 							},
@@ -339,11 +345,12 @@ var _ = Describe("GetDataFlowComponent", func() {
 				},
 			}
 
-			testSnapshot := &fsm.SystemSnapshot{
+			snapshotManager := fsm.NewSnapshotManager()
+			snapshotManager.UpdateSnapshot(&fsm.SystemSnapshot{
 				Managers: map[string]fsm.ManagerSnapshot{
 					constants.DataflowcomponentManagerName: managerSnapshot,
 				},
-			}
+			})
 
 			// Set up action with this snapshot
 			testAction := actions.NewGetDataFlowComponentAction(
@@ -352,11 +359,11 @@ var _ = Describe("GetDataFlowComponent", func() {
 				instanceUUID,
 				outboundChannel,
 				mockConfig,
-				testSnapshot,
+				snapshotManager,
 			)
 
 			// Parse with the UUID of our test component
-			testUUID := dataflowcomponentconfig.GenerateUUIDFromName("test-component-build").String()
+			testUUID := dataflowcomponentserviceconfig.GenerateUUIDFromName("test-component-build").String()
 			payload := map[string]interface{}{
 				"versionUUIDs": []interface{}{testUUID},
 			}
@@ -408,6 +415,9 @@ var _ = Describe("GetDataFlowComponent", func() {
 				},
 			}
 
+			snapshotManager := fsm.NewSnapshotManager()
+			snapshotManager.UpdateSnapshot(testSnapshot)
+
 			// Set up action with this snapshot
 			testAction := actions.NewGetDataFlowComponentAction(
 				userEmail,
@@ -415,11 +425,11 @@ var _ = Describe("GetDataFlowComponent", func() {
 				instanceUUID,
 				outboundChannel,
 				mockConfig,
-				testSnapshot,
+				snapshotManager,
 			)
 
 			// Parse with the UUID of our invalid component
-			testUUID := dataflowcomponentconfig.GenerateUUIDFromName("invalid-type-component").String()
+			testUUID := dataflowcomponentserviceconfig.GenerateUUIDFromName("invalid-type-component").String()
 			payload := map[string]interface{}{
 				"versionUUIDs": []interface{}{testUUID},
 			}
@@ -459,8 +469,8 @@ func createManagerSnapshot() fsm.ManagerSnapshot {
 			DesiredState: "active",
 			CurrentState: "active",
 			LastObservedState: &dataflowcomponent.DataflowComponentObservedStateSnapshot{
-				Config: dataflowcomponentconfig.DataFlowComponentConfig{
-					BenthosConfig: dataflowcomponentconfig.BenthosConfig{
+				Config: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+					BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 						Input: map[string]interface{}{
 							"kafka": map[string]interface{}{
 								"addresses": []string{"localhost:9092"},
@@ -504,8 +514,8 @@ func createManagerSnapshot() fsm.ManagerSnapshot {
 			DesiredState: "active",
 			CurrentState: "active",
 			LastObservedState: &dataflowcomponent.DataflowComponentObservedStateSnapshot{
-				Config: dataflowcomponentconfig.DataFlowComponentConfig{
-					BenthosConfig: dataflowcomponentconfig.BenthosConfig{
+				Config: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+					BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 						Input: map[string]interface{}{
 							"file": map[string]interface{}{
 								"paths": []string{"/tmp/input.txt"},

@@ -24,7 +24,7 @@ import (
 	public_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
 const (
@@ -52,7 +52,7 @@ func NewRedpandaManager(name string) *RedpandaManager {
 		func(fullConfig config.FullConfig) ([]config.RedpandaConfig, error) {
 			redpandaConfig := fullConfig.Internal.Redpanda
 			// Force redpanda name to be "redpanda"
-			redpandaConfig.Name = "redpanda"
+			redpandaConfig.Name = constants.RedpandaServiceName
 			return []config.RedpandaConfig{redpandaConfig}, nil
 		},
 		// Get name from Redpanda config
@@ -104,7 +104,7 @@ func NewRedpandaManager(name string) *RedpandaManager {
 	}
 }
 
-func (m *RedpandaManager) Reconcile(ctx context.Context, snapshot public_fsm.SystemSnapshot, filesystemService filesystem.Service) (error, bool) {
+func (m *RedpandaManager) Reconcile(ctx context.Context, snapshot public_fsm.SystemSnapshot, services serviceregistry.Provider) (error, bool) {
 	start := time.Now()
 	defer func() {
 		duration := time.Since(start)
@@ -112,7 +112,7 @@ func (m *RedpandaManager) Reconcile(ctx context.Context, snapshot public_fsm.Sys
 	}()
 
 	// We do not need to manage ports for Redpanda, therefore we can directly reconcile
-	return m.BaseFSMManager.Reconcile(ctx, snapshot, filesystemService)
+	return m.BaseFSMManager.Reconcile(ctx, snapshot, services)
 }
 
 func (m *RedpandaManager) CreateSnapshot() public_fsm.ManagerSnapshot {

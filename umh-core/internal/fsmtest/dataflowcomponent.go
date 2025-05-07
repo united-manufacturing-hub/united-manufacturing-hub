@@ -22,12 +22,12 @@ import (
 	"fmt"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	benthosfsmtype "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
 	dataflowcomponentfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
 	dataflowcomponentsvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/dataflowcomponent"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
 // CreateDataflowComponentTestConfig creates a standard DataflowComponent config for testing
@@ -37,8 +37,8 @@ func CreateDataflowComponentTestConfig(name string, desiredState string) config.
 			Name:            name,
 			DesiredFSMState: desiredState,
 		},
-		DataFlowComponentConfig: dataflowcomponentconfig.DataFlowComponentConfig{
-			BenthosConfig: dataflowcomponentconfig.BenthosConfig{
+		DataFlowComponentServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+			BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 				Input: map[string]interface{}{
 					"generate": map[string]interface{}{
 						"mapping":  "root = {\"message\":\"hello world\"}",
@@ -78,8 +78,8 @@ func SetupDataflowComponentServiceState(
 
 // ConfigureDataflowComponentServiceConfig configures the mock service with a default DataflowComponent config
 func ConfigureDataflowComponentServiceConfig(mockService *dataflowcomponentsvc.MockDataFlowComponentService) {
-	mockService.GetConfigResult = dataflowcomponentconfig.DataFlowComponentConfig{
-		BenthosConfig: dataflowcomponentconfig.BenthosConfig{
+	mockService.GetConfigResult = dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+		BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 			Input: map[string]interface{}{
 				"generate": map[string]interface{}{
 					"mapping":  "root = {\"message\":\"hello world\"}",
@@ -154,8 +154,11 @@ func SetupDataflowComponentInstance(serviceName string, desiredState string) (*d
 	// Add default service info
 	mockService.ComponentStates[serviceName] = &dataflowcomponentsvc.ServiceInfo{}
 
+	// Add mock service registry
+	mockSvcRegistry := serviceregistry.NewMockRegistry()
+
 	// Create new instance
-	instance := setUpMockDataflowComponentInstance(cfg, mockService)
+	instance := setUpMockDataflowComponentInstance(cfg, mockService, mockSvcRegistry)
 
 	return instance, mockService, cfg
 }
@@ -165,6 +168,7 @@ func SetupDataflowComponentInstance(serviceName string, desiredState string) (*d
 func setUpMockDataflowComponentInstance(
 	cfg config.DataFlowComponentConfig,
 	mockService *dataflowcomponentsvc.MockDataFlowComponentService,
+	mockSvcRegistry *serviceregistry.Registry,
 ) *dataflowcomponentfsm.DataflowComponentInstance {
 	// Create the instance
 	instance := dataflowcomponentfsm.NewDataflowComponentInstance("", cfg)
@@ -194,7 +198,7 @@ func TestDataflowComponentStateTransition(
 	ctx context.Context,
 	instance *dataflowcomponentfsm.DataflowComponentInstance,
 	mockService *dataflowcomponentsvc.MockDataFlowComponentService,
-	filesystemService filesystem.Service,
+	services serviceregistry.Provider,
 	serviceName string,
 	fromState string,
 	toState string,
@@ -219,7 +223,7 @@ func TestDataflowComponentStateTransition(
 		}
 
 		// Perform a reconcile cycle
-		_, _ = instance.Reconcile(ctx, fsm.SystemSnapshot{Tick: tick}, filesystemService)
+		_, _ = instance.Reconcile(ctx, fsm.SystemSnapshot{Tick: tick}, services)
 		tick++
 	}
 
@@ -250,7 +254,7 @@ func VerifyDataflowComponentStableState(
 	snapshot fsm.SystemSnapshot,
 	instance *dataflowcomponentfsm.DataflowComponentInstance,
 	mockService *dataflowcomponentsvc.MockDataFlowComponentService,
-	filesystemService filesystem.Service,
+	services serviceregistry.Provider,
 	serviceName string,
 	expectedState string,
 	numCycles int,
@@ -267,7 +271,7 @@ func VerifyDataflowComponentStableState(
 	// Execute reconcile cycles and check state stability
 	tick := snapshot.Tick
 	for i := 0; i < numCycles; i++ {
-		_, _ = instance.Reconcile(ctx, snapshot, filesystemService)
+		_, _ = instance.Reconcile(ctx, snapshot, services)
 		tick++
 
 		if instance.GetCurrentFSMState() != expectedState {
@@ -301,6 +305,7 @@ func CreateMockDataflowComponentInstance(
 	serviceName string,
 	mockService dataflowcomponentsvc.IDataFlowComponentService,
 	desiredState string,
+	services serviceregistry.Provider,
 ) *dataflowcomponentfsm.DataflowComponentInstance {
 	cfg := CreateDataflowComponentTestConfig(serviceName, desiredState)
 	instance := dataflowcomponentfsm.NewDataflowComponentInstance("", cfg)
@@ -328,7 +333,7 @@ func StabilizeDataflowComponentInstance(
 	snapshot fsm.SystemSnapshot,
 	instance *dataflowcomponentfsm.DataflowComponentInstance,
 	mockService *dataflowcomponentsvc.MockDataFlowComponentService,
-	filesystemService filesystem.Service,
+	services serviceregistry.Provider,
 	serviceName string,
 	targetState string,
 	maxAttempts int,
@@ -342,10 +347,10 @@ func StabilizeDataflowComponentInstance(
 		currentState := instance.GetCurrentFSMState()
 		if currentState == targetState {
 			// Now verify it remains stable
-			return VerifyDataflowComponentStableState(ctx, snapshot, instance, mockService, filesystemService, serviceName, targetState, 3)
+			return VerifyDataflowComponentStableState(ctx, snapshot, instance, mockService, services, serviceName, targetState, 3)
 		}
 
-		_, _ = instance.Reconcile(ctx, snapshot, filesystemService)
+		_, _ = instance.Reconcile(ctx, snapshot, services)
 		tick++
 	}
 
@@ -372,7 +377,7 @@ func WaitForDataflowComponentDesiredState(
 	ctx context.Context,
 	snapshot fsm.SystemSnapshot,
 	instance *dataflowcomponentfsm.DataflowComponentInstance,
-	filesystemService filesystem.Service,
+	services serviceregistry.Provider,
 	targetState string,
 	maxAttempts int,
 ) (uint64, error) {
@@ -385,7 +390,7 @@ func WaitForDataflowComponentDesiredState(
 		}
 
 		// Run a reconcile cycle
-		err, _ := instance.Reconcile(ctx, snapshot, filesystemService)
+		err, _ := instance.Reconcile(ctx, snapshot, services)
 		if err != nil {
 			return tick, err
 		}
@@ -419,7 +424,7 @@ func ReconcileDataflowComponentUntilError(
 	snapshot fsm.SystemSnapshot,
 	instance *dataflowcomponentfsm.DataflowComponentInstance,
 	mockService *dataflowcomponentsvc.MockDataFlowComponentService,
-	filesystemService filesystem.Service,
+	services serviceregistry.Provider,
 	serviceName string,
 	maxAttempts int,
 ) (uint64, error, bool) {
@@ -427,7 +432,7 @@ func ReconcileDataflowComponentUntilError(
 
 	for i := 0; i < maxAttempts; i++ {
 		// Perform a reconcile cycle and capture the error and reconciled status
-		err, reconciled := instance.Reconcile(ctx, snapshot, filesystemService)
+		err, reconciled := instance.Reconcile(ctx, snapshot, services)
 		tick++
 
 		if err != nil {

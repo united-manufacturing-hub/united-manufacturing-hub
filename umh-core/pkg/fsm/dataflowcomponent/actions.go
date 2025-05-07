@@ -22,12 +22,14 @@ import (
 	"time"
 
 	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	benthosfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	dataflowcomponentservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/dataflowcomponent"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
+	standarderrors "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
 )
 
 // The functions in this file define heavier, possibly fail-prone operations
@@ -65,16 +67,40 @@ func (b *DataflowComponentInstance) RemoveInstance(ctx context.Context, filesyst
 
 	// Remove the initiateDataflowComponent from the Benthos manager
 	err := b.service.RemoveDataFlowComponentFromBenthosManager(ctx, filesystemService, b.baseFSMInstance.GetID())
-	if err != nil {
-		if err == dataflowcomponentservice.ErrServiceNotExists {
-			b.baseFSMInstance.GetLogger().Debugf("DataflowComponent service %s not found in Benthos manager", b.baseFSMInstance.GetID())
-			return nil // do not throw an error, as each action is expected to be idempotent
-		}
-		return fmt.Errorf("failed to remove DataflowComponent service %s from Benthos manager: %w", b.baseFSMInstance.GetID(), err)
-	}
+	switch {
+	// ---------------------------------------------------------------
+	// happy paths
+	// ---------------------------------------------------------------
+	case err == nil: // fully removed
+		b.baseFSMInstance.GetLogger().
+			Debugf("Benthos service %s removed from S6 manager",
+				b.baseFSMInstance.GetID())
+		return nil
 
-	b.baseFSMInstance.GetLogger().Debugf("DataflowComponent service %s removed from Benthos manager", b.baseFSMInstance.GetID())
-	return nil
+	case errors.Is(err, dataflowcomponentservice.ErrServiceNotExists):
+		b.baseFSMInstance.GetLogger().
+			Debugf("Benthos service %s already removed from S6 manager",
+				b.baseFSMInstance.GetID())
+		// idempotent: was already gone
+		return nil
+
+	// ---------------------------------------------------------------
+	// transient path – keep retrying
+	// ---------------------------------------------------------------
+	case errors.Is(err, standarderrors.ErrRemovalPending):
+		b.baseFSMInstance.GetLogger().
+			Debugf("Benthos service %s removal still in progress",
+				b.baseFSMInstance.GetID())
+		// not an error from the FSM’s perspective – just means “try again”
+		return err
+
+	// ---------------------------------------------------------------
+	// real error – escalate
+	// ---------------------------------------------------------------
+	default:
+		return fmt.Errorf("failed to remove service %s: %w",
+			b.baseFSMInstance.GetID(), err)
+	}
 }
 
 // StartInstance to start the DataflowComponent by setting the desired state to running for the given instance
@@ -107,6 +133,12 @@ func (d *DataflowComponentInstance) StopInstance(ctx context.Context, filesystem
 
 	d.baseFSMInstance.GetLogger().Debugf("DataflowComponent service %s stop command executed", d.baseFSMInstance.GetID())
 	return nil
+}
+
+// CheckForCreation checks whether the creation was successful
+// For DataflowComponent, this is a no-op as we don't need to check anything
+func (d *DataflowComponentInstance) CheckForCreation(ctx context.Context, filesystemService filesystem.Service) bool {
+	return true
 }
 
 // getServiceStatus gets the status of the DataflowComponent service
@@ -143,13 +175,13 @@ func (d *DataflowComponentInstance) getServiceStatus(ctx context.Context, filesy
 }
 
 // UpdateObservedStateOfInstance updates the observed state of the service
-func (d *DataflowComponentInstance) UpdateObservedStateOfInstance(ctx context.Context, filesystemService filesystem.Service, tick uint64, loopStartTime time.Time) error {
+func (d *DataflowComponentInstance) UpdateObservedStateOfInstance(ctx context.Context, services serviceregistry.Provider, tick uint64, loopStartTime time.Time) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
 
 	start := time.Now()
-	info, err := d.getServiceStatus(ctx, filesystemService, tick)
+	info, err := d.getServiceStatus(ctx, services.GetFileSystem(), tick)
 	if err != nil {
 		return fmt.Errorf("error while getting service status: %w", err)
 	}
@@ -167,7 +199,7 @@ func (d *DataflowComponentInstance) UpdateObservedStateOfInstance(ctx context.Co
 
 	// Fetch the actual Benthos config from the service
 	start = time.Now()
-	observedConfig, err := d.service.GetConfig(ctx, filesystemService, d.baseFSMInstance.GetID())
+	observedConfig, err := d.service.GetConfig(ctx, services.GetFileSystem(), d.baseFSMInstance.GetID())
 	metrics.ObserveReconcileTime(logger.ComponentDataFlowComponentInstance, d.baseFSMInstance.GetID()+".getConfig", time.Since(start))
 	if err == nil {
 		// Only update if we successfully got the config
@@ -182,16 +214,16 @@ func (d *DataflowComponentInstance) UpdateObservedStateOfInstance(ctx context.Co
 		}
 	}
 
-	if !dataflowcomponentconfig.ConfigsEqual(&d.config, &d.ObservedState.ObservedDataflowComponentConfig) {
+	if !dataflowcomponentserviceconfig.ConfigsEqual(&d.config, &d.ObservedState.ObservedDataflowComponentConfig) {
 		// Check if the service exists before attempting to update
-		if d.service.ServiceExists(ctx, filesystemService, d.baseFSMInstance.GetID()) {
+		if d.service.ServiceExists(ctx, services.GetFileSystem(), d.baseFSMInstance.GetID()) {
 			d.baseFSMInstance.GetLogger().Debugf("Observed DataflowComponent config is different from desired config, updating Benthos configuration")
 
-			diffStr := dataflowcomponentconfig.ConfigDiff(&d.config, &d.ObservedState.ObservedDataflowComponentConfig)
+			diffStr := dataflowcomponentserviceconfig.ConfigDiff(&d.config, &d.ObservedState.ObservedDataflowComponentConfig)
 			d.baseFSMInstance.GetLogger().Debugf("Configuration differences: %s", diffStr)
 
 			// Update the config in the Benthos manager
-			err := d.service.UpdateDataFlowComponentInBenthosManager(ctx, filesystemService, &d.config, d.baseFSMInstance.GetID())
+			err := d.service.UpdateDataFlowComponentInBenthosManager(ctx, services.GetFileSystem(), &d.config, d.baseFSMInstance.GetID())
 			if err != nil {
 				return fmt.Errorf("failed to update DataflowComponent service configuration: %w", err)
 			}
@@ -238,7 +270,7 @@ func (d *DataflowComponentInstance) IsDataflowComponentDegraded() bool {
 func (d *DataflowComponentInstance) IsDataflowComponentWithProcessingActivity() bool {
 	benthosStatus := d.ObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus
 
-	return benthosStatus.MetricsState != nil && benthosStatus.MetricsState.IsActive
+	return benthosStatus.BenthosMetrics.MetricsState != nil && benthosStatus.BenthosMetrics.MetricsState.IsActive
 }
 
 // IsStartingPeriodGracePeriodExceeded returns true when the difference

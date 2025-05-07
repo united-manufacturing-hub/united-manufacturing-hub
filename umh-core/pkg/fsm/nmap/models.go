@@ -19,7 +19,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/nmapserviceconfig"
 	publicfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
-	nmap_service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/nmap"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/nmap"
 )
 
 // These are the nmap-monitor operational states, in addition
@@ -122,7 +122,7 @@ type NmapObservedState struct {
 	// LastStateChange is the timestamp of the last observed state change
 	LastStateChange int64
 	// We store the nmap data from nmap_monitor.GetStatus
-	ServiceInfo nmap_service.ServiceInfo
+	ServiceInfo nmap.ServiceInfo
 	// ObservedNmapServiceConfig contains the observed Nmap service config
 	ObservedNmapServiceConfig nmapserviceconfig.NmapServiceConfig
 }
@@ -143,7 +143,7 @@ type NmapInstance struct {
 	ObservedState NmapObservedState
 
 	// The nmap service used to gather metrics
-	monitorService nmap_service.INmapService
+	monitorService nmap.INmapService
 
 	// Possibly store config needed for nmap monitoring
 	config config.NmapConfig
@@ -163,4 +163,17 @@ const (
 // GetLastObservedState returns the last known observed data
 func (n *NmapInstance) GetLastObservedState() publicfsm.ObservedState {
 	return n.ObservedState
+}
+
+// SetService sets the Nmap service implementation
+// This is a testing-only utility to access the private field
+func (n *NmapInstance) SetService(service nmap.INmapService) {
+	n.monitorService = service
+}
+
+// IsTransientStreakCounterMaxed returns whether the transient streak counter
+// has reached the maximum number of ticks, which means that the FSM is stuck in a state
+// and should be removed
+func (n *NmapInstance) IsTransientStreakCounterMaxed() bool {
+	return n.baseFSMInstance.IsTransientStreakCounterMaxed()
 }

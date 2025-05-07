@@ -22,8 +22,8 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
 // ConfigureS6MockServiceState configures the mock service for a specific instance
@@ -78,10 +78,10 @@ func WaitForMockedManagerInstanceState(
 	ctx context.Context,
 	manager *s6.S6Manager,
 	snapshot fsm.SystemSnapshot,
-	filesystemService filesystem.Service,
+	services serviceregistry.Provider,
 	instanceName, desiredState string,
 	maxAttempts int,
 ) (uint64, error) {
 	// Simply call the regular function
-	return WaitForManagerInstanceState(ctx, manager, snapshot, filesystemService, instanceName, desiredState, maxAttempts)
+	return WaitForManagerInstanceState(ctx, manager, snapshot, services, instanceName, desiredState, maxAttempts)
 }

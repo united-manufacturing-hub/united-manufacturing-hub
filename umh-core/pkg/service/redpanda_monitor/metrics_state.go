@@ -23,7 +23,8 @@ type ComponentThroughput struct {
 	// BytesPerTick is the number of messages processed per tick (averaged over window)
 	BytesPerTick float64
 	// Window stores the last N message counts for calculating sliding window average
-	Window []MessageCount
+	// Do not deep-copy this field as it is not needed
+	Window []MessageCount `copy:"-"`
 }
 
 // MessageCount stores a count at a specific tick

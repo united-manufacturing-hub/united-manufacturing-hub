@@ -19,6 +19,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/tiendc/go-deepcopy"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 )
 
@@ -139,6 +140,24 @@ func (s *SnapshotManager) GetSnapshot() *SystemSnapshot {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.lastSnapshot
+}
+
+// GetDeepCopySnapshot returns a deep copy of the most recent system snapshot
+func (s *SnapshotManager) GetDeepCopySnapshot() SystemSnapshot {
+	if s == nil {
+		return SystemSnapshot{} // Safety check for nil receiver
+	}
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	var snapshotCopy SystemSnapshot
+	err := deepcopy.Copy(&snapshotCopy, s.lastSnapshot)
+	if err != nil {
+		// If deep copy fails, return nil to indicate failure
+		return SystemSnapshot{}
+	}
+	return snapshotCopy
 }
 
 // GetManagerSnapshots extracts snapshots from all FSM managers

@@ -64,7 +64,7 @@ var _ = Describe("DeployDataflowComponent", func() {
 		}
 
 		mockConfig = config.NewMockConfigManager().WithConfig(initialConfig)
-		action = actions.NewDeployDataflowComponentAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig)
+		action = actions.NewDeployDataflowComponentAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig, nil)
 	})
 
 	// Cleanup after each test
@@ -462,7 +462,7 @@ var _ = Describe("DeployDataflowComponent", func() {
 			// Execute the action
 			result, metadata, err := action.Execute()
 			Expect(err).NotTo(HaveOccurred())
-			Expect(result).To(ContainSubstring("Successfully deployed data flow component"))
+			Expect(result).To(ContainSubstring("Successfully deployed dataflow component"))
 			Expect(metadata).To(BeNil())
 
 			// Only expect the Confirmed message in the channel
@@ -526,7 +526,7 @@ var _ = Describe("DeployDataflowComponent", func() {
 			// Execute the action - should fail
 			result, metadata, err := action.Execute()
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("failed to add dataflowcomponent"))
+			Expect(err.Error()).To(ContainSubstring("Failed to add dataflow component: mock add dataflow component failure"))
 			Expect(result).To(BeNil())
 			Expect(metadata).To(BeNil())
 
@@ -552,7 +552,7 @@ var _ = Describe("DeployDataflowComponent", func() {
 
 			actionReplyPayloadStr, ok := actionReplyPayload["actionReplyPayload"].(string)
 			Expect(ok).To(BeTrue(), "Failed to extract actionReplyPayload as string")
-			Expect(actionReplyPayloadStr).To(ContainSubstring("failed to add dataflowcomponent"))
+			Expect(actionReplyPayloadStr).To(ContainSubstring("Adding dataflow component 'test-component' to configuration.."))
 		})
 
 		It("should process inject data with cache resources, rate limit resources, and buffer", func() {
@@ -605,7 +605,7 @@ buffer:
 			// Execute the action
 			result, metadata, err := action.Execute()
 			Expect(err).NotTo(HaveOccurred())
-			Expect(result).To(ContainSubstring("Successfully deployed data flow component"))
+			Expect(result).To(ContainSubstring("Successfully deployed dataflow component: test-component-with-inject"))
 			Expect(metadata).To(BeNil())
 
 			// Only expect the Confirmed message in the channel
@@ -630,12 +630,12 @@ buffer:
 			Expect(mockConfig.Config.DataFlow[0].DesiredFSMState).To(Equal("active"))
 
 			// Verify inject configuration was properly processed
-			Expect(mockConfig.Config.DataFlow[0].DataFlowComponentConfig.BenthosConfig.CacheResources).To(HaveLen(1))
-			Expect(mockConfig.Config.DataFlow[0].DataFlowComponentConfig.BenthosConfig.CacheResources[0]["label"]).To(Equal("my_cache"))
-			Expect(mockConfig.Config.DataFlow[0].DataFlowComponentConfig.BenthosConfig.RateLimitResources).To(HaveLen(1))
-			Expect(mockConfig.Config.DataFlow[0].DataFlowComponentConfig.BenthosConfig.RateLimitResources[0]["label"]).To(Equal("limiter"))
-			Expect(mockConfig.Config.DataFlow[0].DataFlowComponentConfig.BenthosConfig.Buffer).To(HaveLen(1))
-			Expect(mockConfig.Config.DataFlow[0].DataFlowComponentConfig.BenthosConfig.Buffer["memory"]).To(Equal(map[string]interface{}{}))
+			Expect(mockConfig.Config.DataFlow[0].DataFlowComponentServiceConfig.BenthosConfig.CacheResources).To(HaveLen(1))
+			Expect(mockConfig.Config.DataFlow[0].DataFlowComponentServiceConfig.BenthosConfig.CacheResources[0]["label"]).To(Equal("my_cache"))
+			Expect(mockConfig.Config.DataFlow[0].DataFlowComponentServiceConfig.BenthosConfig.RateLimitResources).To(HaveLen(1))
+			Expect(mockConfig.Config.DataFlow[0].DataFlowComponentServiceConfig.BenthosConfig.RateLimitResources[0]["label"]).To(Equal("limiter"))
+			Expect(mockConfig.Config.DataFlow[0].DataFlowComponentServiceConfig.BenthosConfig.Buffer).To(HaveLen(1))
+			Expect(mockConfig.Config.DataFlow[0].DataFlowComponentServiceConfig.BenthosConfig.Buffer["memory"]).To(Equal(map[string]interface{}{}))
 		})
 	})
 })

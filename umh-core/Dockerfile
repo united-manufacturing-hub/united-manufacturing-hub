@@ -17,6 +17,7 @@ ARG S6_OVERLAY_VERSION=3.2.0.2
 ARG BENTHOS_UMH_VERSION=0.6.2
 ARG REDPANDA_VERSION=24.3.8
 ARG DEBUG=false
+ARG PPROF=false
 WORKDIR /go/src/github.com/united-manufacturing-hub/united-manufacturing-hub
 
 # Set app version with a default value - can be overridden at build time
@@ -32,6 +33,14 @@ RUN if [ "$DEBUG" = "true" ]; then \
     CGO_ENABLED=0 go build \
     -gcflags="all=-N -l" \
     -ldflags "-X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants.S6OverlayVersion=${S6_OVERLAY_VERSION} \
+    -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants.BenthosVersion=${BENTHOS_UMH_VERSION} \
+    -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants.RedpandaVersion=${REDPANDA_VERSION} \
+    -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/version.AppVersion=${APP_VERSION}" \
+    -o /go/bin/umh-core cmd/main.go; \
+    elif [ "$PPROF" = "true" ]; then \
+    CGO_ENABLED=0 go build -mod=vendor -tags pprof \
+    -ldflags "-s -w \
+    -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants.S6OverlayVersion=${S6_OVERLAY_VERSION} \
     -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants.BenthosVersion=${BENTHOS_UMH_VERSION} \
     -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants.RedpandaVersion=${REDPANDA_VERSION} \
     -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/version.AppVersion=${APP_VERSION}" \
@@ -110,6 +119,7 @@ COPY --from=build /go/bin/umh-core /usr/local/bin/umh-core
 # Delve is a debugger for Go (https://github.com/go-delve/delve/)
 # We can use it for remote debugging of the UMH Core
 ARG DEBUG=false
+ARG DLV_VERSION=1.24.2
 RUN if [ "$DEBUG" = "true" ]; then \
     apk add --no-cache go && \ 
     go install github.com/go-delve/delve/cmd/dlv@${DLV_VERSION} && \
@@ -143,6 +153,7 @@ ENV S6_KEEP_ENV=1 \
     S6_CMD_WAIT_FOR_SERVICES=1 \
     S6_SERVICES_READYTIME=50 \
     S6_SYNC_DISKS=1 \
+    # Important: This needs to be T (ISO 8861) as our time parser expects this format
     S6_LOGGING_SCRIPT="n20 s1000000 T"
 VOLUME ["/data"]
 

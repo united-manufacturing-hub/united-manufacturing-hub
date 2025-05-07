@@ -31,7 +31,7 @@ var _ = Describe("MockPortManager", func() {
 		instanceName := "test-instance"
 		port, err := pm.AllocatePort(instanceName)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(port).To(Equal(9000))
+		Expect(port).To(Equal(uint16(9000)))
 		Expect(pm.AllocatePortCalled).To(BeTrue())
 
 		// Get the port
@@ -54,7 +54,7 @@ var _ = Describe("MockPortManager", func() {
 		pm := NewMockPortManager()
 
 		// Set predefined return values
-		expectedPort := 8888
+		expectedPort := uint16(8888)
 		pm.AllocatePortResult = expectedPort
 		expectedErr := errors.New("test error")
 		pm.ReleasePortError = expectedErr
@@ -74,7 +74,7 @@ var _ = Describe("MockPortManager", func() {
 
 		// Reserve a port
 		instanceName := "test-instance"
-		portToReserve := 8500
+		portToReserve := uint16(8500)
 		err := pm.ReservePort(instanceName, portToReserve)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(pm.ReservePortCalled).To(BeTrue())

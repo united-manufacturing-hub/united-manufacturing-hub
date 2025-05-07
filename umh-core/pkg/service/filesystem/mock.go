@@ -30,6 +30,7 @@ type MockFileSystem struct {
 	DelayRange          time.Duration
 	FailedOperations    map[string]bool
 	ReadFileFunc        func(ctx context.Context, path string) ([]byte, error)
+	ReadFileRangeFunc   func(ctx context.Context, path string, from int64) ([]byte, int64, error)
 	WriteFileFunc       func(ctx context.Context, path string, data []byte, perm os.FileMode) error
 	PathExistsFunc      func(ctx context.Context, path string) (bool, error)
 	FileExistsFunc      func(ctx context.Context, path string) (bool, error)
@@ -134,6 +135,13 @@ func (m *MockFileSystem) ReadFile(ctx context.Context, path string) ([]byte, err
 		return nil, errors.New("simulated failure in ReadFile")
 	}
 	return []byte("mock content"), nil
+}
+
+// ReadFileRange reads the file starting at byte offset “from” and returns:
+//   - chunk   – the data that was read (nil if nothing new)
+//   - newSize – the file size **after** the read (use it as next offset)
+func (m *MockFileSystem) ReadFileRange(ctx context.Context, path string, from int64) ([]byte, int64, error) {
+	panic("not implemented")
 }
 
 // WriteFile writes data to a file respecting the context

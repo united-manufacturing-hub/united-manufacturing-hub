@@ -23,24 +23,25 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
-	benthosfsmtype "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
+	benthosfsmmanager "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 	benthosservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos_monitor"
 	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
 var _ = Describe("DataFlowComponentService", func() {
 	var (
-		service       *DataFlowComponentService
-		mockBenthos   *benthosservice.MockBenthosService
-		ctx           context.Context
-		tick          uint64
-		componentName string
-		cancelFunc    context.CancelFunc
-		mockFS        *filesystem.MockFileSystem
+		service         *DataFlowComponentService
+		mockBenthos     *benthosservice.MockBenthosService
+		ctx             context.Context
+		tick            uint64
+		componentName   string
+		cancelFunc      context.CancelFunc
+		mockSvcRegistry *serviceregistry.Registry
 	)
 
 	BeforeEach(func() {
@@ -54,7 +55,7 @@ var _ = Describe("DataFlowComponentService", func() {
 		// Set up a real service with mocked dependencies
 		service = NewDefaultDataFlowComponentService(componentName,
 			WithBenthosService(mockBenthos))
-		mockFS = filesystem.NewMockFileSystem()
+		mockSvcRegistry = serviceregistry.NewMockRegistry()
 	})
 
 	AfterEach(func() {
@@ -64,13 +65,13 @@ var _ = Describe("DataFlowComponentService", func() {
 
 	Describe("AddDataFlowComponentToBenthosManager", func() {
 		var (
-			cfg *dataflowcomponentconfig.DataFlowComponentConfig
+			cfg *dataflowcomponentserviceconfig.DataflowComponentServiceConfig
 		)
 
 		BeforeEach(func() {
 			// Create a basic config for testing
-			cfg = &dataflowcomponentconfig.DataFlowComponentConfig{
-				BenthosConfig: dataflowcomponentconfig.BenthosConfig{
+			cfg = &dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+				BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 					Input: map[string]interface{}{
 						"kafka_consumer": map[string]interface{}{
 							"addresses": []string{"localhost:9092"},
@@ -100,7 +101,7 @@ var _ = Describe("DataFlowComponentService", func() {
 
 		It("should add a new component to the benthos manager", func() {
 			// Act
-			err := service.AddDataFlowComponentToBenthosManager(ctx, mockFS, cfg, componentName)
+			err := service.AddDataFlowComponentToBenthosManager(ctx, mockSvcRegistry.GetFileSystem(), cfg, componentName)
 
 			// Assert
 			Expect(err).NotTo(HaveOccurred())
@@ -113,16 +114,16 @@ var _ = Describe("DataFlowComponentService", func() {
 			Expect(service.benthosConfigs[0].Name).To(Equal(benthosName))
 
 			// Verify the desired state is set correctly
-			Expect(service.benthosConfigs[0].DesiredFSMState).To(Equal(benthosfsmtype.OperationalStateActive))
+			Expect(service.benthosConfigs[0].DesiredFSMState).To(Equal(benthosfsmmanager.OperationalStateActive))
 		})
 
 		It("should return error when component already exists", func() {
 			// Add the component first
-			err := service.AddDataFlowComponentToBenthosManager(ctx, mockFS, cfg, componentName)
+			err := service.AddDataFlowComponentToBenthosManager(ctx, mockSvcRegistry.GetFileSystem(), cfg, componentName)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Try to add it again
-			err = service.AddDataFlowComponentToBenthosManager(ctx, mockFS, cfg, componentName)
+			err = service.AddDataFlowComponentToBenthosManager(ctx, mockSvcRegistry.GetFileSystem(), cfg, componentName)
 
 			// Assert
 			Expect(err).To(MatchError(ErrServiceAlreadyExists))
@@ -130,12 +131,12 @@ var _ = Describe("DataFlowComponentService", func() {
 
 		It("should set up the component for reconciliation with the benthos manager", func() {
 			// Act
-			err := service.AddDataFlowComponentToBenthosManager(ctx, mockFS, cfg, componentName)
+			err := service.AddDataFlowComponentToBenthosManager(ctx, mockSvcRegistry.GetFileSystem(), cfg, componentName)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Reconcile to ensure the component is passed to benthos manager
 			mockBenthos.ReconcileManagerReconciled = true
-			_, _ = service.ReconcileManager(ctx, mockFS, tick)
+			_, _ = service.ReconcileManager(ctx, mockSvcRegistry, tick)
 
 			// Assert
 			//Expect(reconciled).To(BeTrue())
@@ -145,8 +146,8 @@ var _ = Describe("DataFlowComponentService", func() {
 
 	Describe("Status", func() {
 		var (
-			cfg                *dataflowcomponentconfig.DataFlowComponentConfig
-			manager            *benthosfsmtype.BenthosManager
+			cfg                *dataflowcomponentserviceconfig.DataflowComponentServiceConfig
+			manager            *benthosfsmmanager.BenthosManager
 			mockBenthosService *benthosservice.MockBenthosService
 			statusService      *DataFlowComponentService
 			benthosName        string
@@ -154,8 +155,8 @@ var _ = Describe("DataFlowComponentService", func() {
 
 		BeforeEach(func() {
 			// Create a basic config for testing
-			cfg = &dataflowcomponentconfig.DataFlowComponentConfig{
-				BenthosConfig: dataflowcomponentconfig.BenthosConfig{
+			cfg = &dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+				BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 					Input: map[string]interface{}{
 						"kafka_consumer": map[string]interface{}{
 							"addresses": []string{"localhost:9092"},
@@ -167,7 +168,7 @@ var _ = Describe("DataFlowComponentService", func() {
 			}
 
 			// Use the official mock manager from the FSM package
-			manager, mockBenthosService = benthosfsmtype.NewBenthosManagerWithMockedServices("test")
+			manager, mockBenthosService = benthosfsmmanager.NewBenthosManagerWithMockedServices("test")
 
 			// Create service with our official mock benthos manager
 			statusService = NewDefaultDataFlowComponentService(componentName,
@@ -175,7 +176,7 @@ var _ = Describe("DataFlowComponentService", func() {
 				WithBenthosManager(manager))
 
 			// Add the component to the service
-			err := statusService.AddDataFlowComponentToBenthosManager(ctx, mockFS, cfg, componentName)
+			err := statusService.AddDataFlowComponentToBenthosManager(ctx, mockSvcRegistry.GetFileSystem(), cfg, componentName)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Get the benthos name that will be used
@@ -199,55 +200,55 @@ var _ = Describe("DataFlowComponentService", func() {
 
 			// Configure benthos service for proper transitions
 			// First configure for creating -> created -> stopped
-			ConfigureBenthosManagerForState(mockBenthosService, benthosName, benthosfsmtype.OperationalStateStopped)
+			ConfigureBenthosManagerForState(mockBenthosService, benthosName, benthosfsmmanager.OperationalStateStopped)
 
 			// Wait for the instance to be created and reach stopped state
 			newTick, err := WaitForBenthosManagerInstanceState(
 				ctx,
 				fsm.SystemSnapshot{CurrentConfig: fullCfg, Tick: tick},
 				manager,
-				filesystem.NewMockFileSystem(),
+				mockSvcRegistry,
 				benthosName,
-				benthosfsmtype.OperationalStateStopped,
+				benthosfsmmanager.OperationalStateStopped,
 				10,
 			)
 			Expect(err).NotTo(HaveOccurred())
 			tick = newTick
 
 			// Now configure for transition to starting -> running
-			ConfigureBenthosManagerForState(mockBenthosService, benthosName, benthosfsmtype.OperationalStateActive)
+			ConfigureBenthosManagerForState(mockBenthosService, benthosName, benthosfsmmanager.OperationalStateActive)
 
 			// Wait for the instance to reach running state
 			newTick, err = WaitForBenthosManagerInstanceState(
 				ctx,
 				fsm.SystemSnapshot{CurrentConfig: fullCfg, Tick: tick},
 				manager,
-				filesystem.NewMockFileSystem(),
+				mockSvcRegistry,
 				benthosName,
-				benthosfsmtype.OperationalStateActive,
+				benthosfsmmanager.OperationalStateActive,
 				15,
 			)
 			Expect(err).NotTo(HaveOccurred())
 			tick = newTick
 
-			mockBenthosService.ServiceStates[benthosName].BenthosStatus.Metrics.Input.Received = 10
-			mockBenthosService.ServiceStates[benthosName].BenthosStatus.Metrics.Output.Sent = 10
+			mockBenthosService.ServiceStates[benthosName].BenthosStatus.BenthosMetrics.Metrics.Input.Received = 10
+			mockBenthosService.ServiceStates[benthosName].BenthosStatus.BenthosMetrics.Metrics.Output.Sent = 10
 
 			// Reconcile once to ensure that serviceInfo is used to update the observed state
-			_, reconciled := statusService.ReconcileManager(ctx, mockFS, tick)
+			_, reconciled := statusService.ReconcileManager(ctx, mockSvcRegistry, tick)
 			Expect(reconciled).To(BeFalse())
 
 			// Call Status
-			status, err := statusService.Status(ctx, mockFS, componentName, tick)
+			status, err := statusService.Status(ctx, mockSvcRegistry.GetFileSystem(), componentName, tick)
 
 			// Assert
 			Expect(err).NotTo(HaveOccurred())
-			Expect(status.BenthosFSMState).To(Equal(benthosfsmtype.OperationalStateActive))
+			Expect(status.BenthosFSMState).To(Equal(benthosfsmmanager.OperationalStateActive))
 			Expect(status.BenthosObservedState.ServiceInfo.S6ObservedState.ServiceInfo.Status).To(Equal(s6svc.ServiceUp))
 			Expect(status.BenthosObservedState.ServiceInfo.BenthosStatus.HealthCheck.IsLive).To(BeTrue())
 			Expect(status.BenthosObservedState.ServiceInfo.BenthosStatus.HealthCheck.IsReady).To(BeTrue())
-			Expect(status.BenthosObservedState.ServiceInfo.BenthosStatus.Metrics.Input.Received).To(Equal(int64(10)))
-			Expect(status.BenthosObservedState.ServiceInfo.BenthosStatus.Metrics.Output.Sent).To(Equal(int64(10)))
+			Expect(status.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.Metrics.Input.Received).To(Equal(int64(10)))
+			Expect(status.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.Metrics.Output.Sent).To(Equal(int64(10)))
 		})
 
 		It("should return error for non-existent component", func() {
@@ -256,7 +257,7 @@ var _ = Describe("DataFlowComponentService", func() {
 			mockBenthosService.ExistingServices = make(map[string]bool)
 
 			// Call Status for a non-existent component
-			_, err := statusService.Status(ctx, mockFS, componentName, tick)
+			_, err := statusService.Status(ctx, mockSvcRegistry.GetFileSystem(), componentName, tick)
 
 			// Assert - check for "does not exist" in the error message
 			Expect(err).To(HaveOccurred())
@@ -266,14 +267,14 @@ var _ = Describe("DataFlowComponentService", func() {
 
 	Describe("UpdateDataFlowComponentInBenthosManager", func() {
 		var (
-			cfg        *dataflowcomponentconfig.DataFlowComponentConfig
-			updatedCfg *dataflowcomponentconfig.DataFlowComponentConfig
+			cfg        *dataflowcomponentserviceconfig.DataflowComponentServiceConfig
+			updatedCfg *dataflowcomponentserviceconfig.DataflowComponentServiceConfig
 		)
 
 		BeforeEach(func() {
 			// Initial config
-			cfg = &dataflowcomponentconfig.DataFlowComponentConfig{
-				BenthosConfig: dataflowcomponentconfig.BenthosConfig{
+			cfg = &dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+				BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 					Input: map[string]interface{}{
 						"kafka_consumer": map[string]interface{}{
 							"addresses": []string{"localhost:9092"},
@@ -284,8 +285,8 @@ var _ = Describe("DataFlowComponentService", func() {
 			}
 
 			// Updated config with different settings
-			updatedCfg = &dataflowcomponentconfig.DataFlowComponentConfig{
-				BenthosConfig: dataflowcomponentconfig.BenthosConfig{
+			updatedCfg = &dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+				BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 					Input: map[string]interface{}{
 						"kafka_consumer": map[string]interface{}{
 							"addresses": []string{"localhost:9092"},
@@ -296,13 +297,13 @@ var _ = Describe("DataFlowComponentService", func() {
 			}
 
 			// Add the component first
-			err := service.AddDataFlowComponentToBenthosManager(ctx, mockFS, cfg, componentName)
+			err := service.AddDataFlowComponentToBenthosManager(ctx, mockSvcRegistry.GetFileSystem(), cfg, componentName)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		It("should update an existing component", func() {
 			// Act - update the component
-			err := service.UpdateDataFlowComponentInBenthosManager(ctx, mockFS, updatedCfg, componentName)
+			err := service.UpdateDataFlowComponentInBenthosManager(ctx, mockSvcRegistry.GetFileSystem(), updatedCfg, componentName)
 
 			// Assert
 			Expect(err).NotTo(HaveOccurred())
@@ -313,7 +314,7 @@ var _ = Describe("DataFlowComponentService", func() {
 			for _, config := range service.benthosConfigs {
 				if config.Name == benthosName {
 					found = true
-					Expect(config.DesiredFSMState).To(Equal(benthosfsmtype.OperationalStateActive))
+					Expect(config.DesiredFSMState).To(Equal(benthosfsmmanager.OperationalStateActive))
 					// In a real test, we'd verify the BenthosServiceConfig was updated as expected
 					break
 				}
@@ -323,7 +324,7 @@ var _ = Describe("DataFlowComponentService", func() {
 
 		It("should return error when component doesn't exist", func() {
 			// Act - try to update a non-existent component
-			err := service.UpdateDataFlowComponentInBenthosManager(ctx, mockFS, updatedCfg, "non-existent")
+			err := service.UpdateDataFlowComponentInBenthosManager(ctx, mockSvcRegistry.GetFileSystem(), updatedCfg, "non-existent")
 
 			// Assert
 			Expect(err).To(MatchError(ErrServiceNotExists))
@@ -332,13 +333,13 @@ var _ = Describe("DataFlowComponentService", func() {
 
 	Describe("StartAndStopDataFlowComponent", func() {
 		var (
-			cfg *dataflowcomponentconfig.DataFlowComponentConfig
+			cfg *dataflowcomponentserviceconfig.DataflowComponentServiceConfig
 		)
 
 		BeforeEach(func() {
 			// Create a basic config for testing
-			cfg = &dataflowcomponentconfig.DataFlowComponentConfig{
-				BenthosConfig: dataflowcomponentconfig.BenthosConfig{
+			cfg = &dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+				BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 					Input: map[string]interface{}{
 						"http_server": map[string]interface{}{
 							"address": "0.0.0.0:8080",
@@ -348,13 +349,13 @@ var _ = Describe("DataFlowComponentService", func() {
 			}
 
 			// Add the component first
-			err := service.AddDataFlowComponentToBenthosManager(ctx, mockFS, cfg, componentName)
+			err := service.AddDataFlowComponentToBenthosManager(ctx, mockSvcRegistry.GetFileSystem(), cfg, componentName)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		It("should start a component by changing its desired state", func() {
 			// First stop the component
-			err := service.StopDataFlowComponent(ctx, mockFS, componentName)
+			err := service.StopDataFlowComponent(ctx, mockSvcRegistry.GetFileSystem(), componentName)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify the desired state was changed to stopped
@@ -363,14 +364,14 @@ var _ = Describe("DataFlowComponentService", func() {
 			for _, config := range service.benthosConfigs {
 				if config.Name == benthosName {
 					foundStopped = true
-					Expect(config.DesiredFSMState).To(Equal(benthosfsmtype.OperationalStateStopped))
+					Expect(config.DesiredFSMState).To(Equal(benthosfsmmanager.OperationalStateStopped))
 					break
 				}
 			}
 			Expect(foundStopped).To(BeTrue())
 
 			// Now start the component
-			err = service.StartDataFlowComponent(ctx, mockFS, componentName)
+			err = service.StartDataFlowComponent(ctx, mockSvcRegistry.GetFileSystem(), componentName)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify the desired state was changed to active
@@ -378,7 +379,7 @@ var _ = Describe("DataFlowComponentService", func() {
 			for _, config := range service.benthosConfigs {
 				if config.Name == benthosName {
 					foundStarted = true
-					Expect(config.DesiredFSMState).To(Equal(benthosfsmtype.OperationalStateActive))
+					Expect(config.DesiredFSMState).To(Equal(benthosfsmmanager.OperationalStateActive))
 					break
 				}
 			}
@@ -387,24 +388,24 @@ var _ = Describe("DataFlowComponentService", func() {
 
 		It("should return error when trying to start/stop non-existent component", func() {
 			// Try to start a non-existent component
-			err := service.StartDataFlowComponent(ctx, mockFS, "non-existent")
+			err := service.StartDataFlowComponent(ctx, mockSvcRegistry.GetFileSystem(), "non-existent")
 			Expect(err).To(MatchError(ErrServiceNotExists))
 
 			// Try to stop a non-existent component
-			err = service.StopDataFlowComponent(ctx, mockFS, "non-existent")
+			err = service.StopDataFlowComponent(ctx, mockSvcRegistry.GetFileSystem(), "non-existent")
 			Expect(err).To(MatchError(ErrServiceNotExists))
 		})
 	})
 
 	Describe("RemoveDataFlowComponentFromBenthosManager", func() {
 		var (
-			cfg *dataflowcomponentconfig.DataFlowComponentConfig
+			cfg *dataflowcomponentserviceconfig.DataflowComponentServiceConfig
 		)
 
 		BeforeEach(func() {
 			// Create a basic config for testing
-			cfg = &dataflowcomponentconfig.DataFlowComponentConfig{
-				BenthosConfig: dataflowcomponentconfig.BenthosConfig{
+			cfg = &dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+				BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 					Input: map[string]interface{}{
 						"http_server": map[string]interface{}{
 							"address": "0.0.0.0:8080",
@@ -414,7 +415,7 @@ var _ = Describe("DataFlowComponentService", func() {
 			}
 
 			// Add the component first
-			err := service.AddDataFlowComponentToBenthosManager(ctx, mockFS, cfg, componentName)
+			err := service.AddDataFlowComponentToBenthosManager(ctx, mockSvcRegistry.GetFileSystem(), cfg, componentName)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -423,7 +424,7 @@ var _ = Describe("DataFlowComponentService", func() {
 			initialCount := len(service.benthosConfigs)
 
 			// Act - remove the component
-			err := service.RemoveDataFlowComponentFromBenthosManager(ctx, mockFS, componentName)
+			err := service.RemoveDataFlowComponentFromBenthosManager(ctx, mockSvcRegistry.GetFileSystem(), componentName)
 
 			// Assert
 			Expect(err).NotTo(HaveOccurred())
@@ -436,20 +437,15 @@ var _ = Describe("DataFlowComponentService", func() {
 			}
 		})
 
-		It("should return error when removing non-existent component", func() {
-			// Act - try to remove a non-existent component
-			err := service.RemoveDataFlowComponentFromBenthosManager(ctx, mockFS, "non-existent")
-
-			// Assert
-			Expect(err).To(MatchError(ErrServiceNotExists))
-		})
+		// Note: removing a non-existent component should not result in an error
+		// the remove action will be called multiple times until the component is gone it returns nil
 	})
 
 	Describe("ReconcileManager", func() {
 		It("should pass configs to the benthos manager for reconciliation", func() {
 			// Add a test component to have something to reconcile
-			cfg := &dataflowcomponentconfig.DataFlowComponentConfig{
-				BenthosConfig: dataflowcomponentconfig.BenthosConfig{
+			cfg := &dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+				BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 					Input: map[string]interface{}{
 						"http_server": map[string]interface{}{
 							"address": "0.0.0.0:8080",
@@ -457,18 +453,18 @@ var _ = Describe("DataFlowComponentService", func() {
 					},
 				},
 			}
-			err := service.AddDataFlowComponentToBenthosManager(ctx, mockFS, cfg, componentName)
+			err := service.AddDataFlowComponentToBenthosManager(ctx, mockSvcRegistry.GetFileSystem(), cfg, componentName)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Use the real mock from the FSM package
-			manager, _ := benthosfsmtype.NewBenthosManagerWithMockedServices("test")
+			manager, _ := benthosfsmmanager.NewBenthosManagerWithMockedServices("test")
 			service.benthosManager = manager
 
 			// Configure the mock to return true for reconciled
 			mockBenthos.ReconcileManagerReconciled = true
 
 			// Act
-			err, reconciled := service.ReconcileManager(ctx, mockFS, tick)
+			err, reconciled := service.ReconcileManager(ctx, mockSvcRegistry, tick)
 
 			// Assert
 			Expect(err).NotTo(HaveOccurred())
@@ -481,7 +477,7 @@ var _ = Describe("DataFlowComponentService", func() {
 			mockError := errors.New("test reconcile error")
 
 			// Create a real manager with mocked services
-			mockManager, mockBenthosService := benthosfsmtype.NewBenthosManagerWithMockedServices("test-error")
+			mockManager, mockBenthosService := benthosfsmmanager.NewBenthosManagerWithMockedServices("test-error")
 
 			// Create a service with our mocked manager
 			testService := NewDefaultDataFlowComponentService("test-error-service",
@@ -490,8 +486,8 @@ var _ = Describe("DataFlowComponentService", func() {
 
 			// Add a test component to have something to reconcile (just like in the other test)
 			testComponentName := "test-error-component"
-			cfg := &dataflowcomponentconfig.DataFlowComponentConfig{
-				BenthosConfig: dataflowcomponentconfig.BenthosConfig{
+			cfg := &dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+				BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 					Input: map[string]interface{}{
 						"http_server": map[string]interface{}{
 							"address": "0.0.0.0:8080",
@@ -499,11 +495,11 @@ var _ = Describe("DataFlowComponentService", func() {
 					},
 				},
 			}
-			err := testService.AddDataFlowComponentToBenthosManager(ctx, mockFS, cfg, testComponentName)
+			err := testService.AddDataFlowComponentToBenthosManager(ctx, mockSvcRegistry.GetFileSystem(), cfg, testComponentName)
 			Expect(err).NotTo(HaveOccurred())
 
 			// First reconcile - this will just create the instance in the manager
-			firstErr, reconciled := testService.ReconcileManager(ctx, mockFS, tick)
+			firstErr, reconciled := testService.ReconcileManager(ctx, mockSvcRegistry, tick)
 			Expect(firstErr).NotTo(HaveOccurred())
 			Expect(reconciled).To(BeTrue()) // Should be true because we created a new instance
 
@@ -511,7 +507,7 @@ var _ = Describe("DataFlowComponentService", func() {
 			mockBenthosService.ReconcileManagerError = mockError
 
 			// Second reconcile - now that the instance exists, it will try to reconcile it
-			err, reconciled = testService.ReconcileManager(ctx, mockFS, tick+1)
+			err, reconciled = testService.ReconcileManager(ctx, mockSvcRegistry, tick+1)
 
 			// Assert
 			Expect(err).ToNot(HaveOccurred()) // it should not return an error
@@ -551,28 +547,28 @@ func ConfigureBenthosManagerForState(mockService *benthosservice.MockBenthosServ
 
 func TransitionToBenthosState(mockService *benthosservice.MockBenthosService, serviceName string, targetState string) {
 	switch targetState {
-	case benthosfsmtype.OperationalStateStopped:
+	case benthosfsmmanager.OperationalStateStopped:
 		SetupBenthosServiceState(mockService, serviceName, benthosservice.ServiceStateFlags{
 			IsS6Running:          false,
 			S6FSMState:           s6fsm.OperationalStateStopped,
 			IsConfigLoaded:       false,
 			IsHealthchecksPassed: false,
 		})
-	case benthosfsmtype.OperationalStateStarting:
+	case benthosfsmmanager.OperationalStateStarting:
 		SetupBenthosServiceState(mockService, serviceName, benthosservice.ServiceStateFlags{
 			IsS6Running:          false,
 			S6FSMState:           s6fsm.OperationalStateStopped,
 			IsConfigLoaded:       false,
 			IsHealthchecksPassed: false,
 		})
-	case benthosfsmtype.OperationalStateStartingConfigLoading:
+	case benthosfsmmanager.OperationalStateStartingConfigLoading:
 		SetupBenthosServiceState(mockService, serviceName, benthosservice.ServiceStateFlags{
 			IsS6Running:          true,
 			S6FSMState:           s6fsm.OperationalStateRunning,
 			IsConfigLoaded:       false,
 			IsHealthchecksPassed: false,
 		})
-	case benthosfsmtype.OperationalStateIdle:
+	case benthosfsmmanager.OperationalStateIdle:
 		SetupBenthosServiceState(mockService, serviceName, benthosservice.ServiceStateFlags{
 			IsS6Running:            true,
 			S6FSMState:             s6fsm.OperationalStateRunning,
@@ -580,7 +576,7 @@ func TransitionToBenthosState(mockService *benthosservice.MockBenthosService, se
 			IsHealthchecksPassed:   true,
 			IsRunningWithoutErrors: true,
 		})
-	case benthosfsmtype.OperationalStateActive:
+	case benthosfsmmanager.OperationalStateActive:
 		SetupBenthosServiceState(mockService, serviceName, benthosservice.ServiceStateFlags{
 			IsS6Running:            true,
 			S6FSMState:             s6fsm.OperationalStateRunning,
@@ -589,7 +585,7 @@ func TransitionToBenthosState(mockService *benthosservice.MockBenthosService, se
 			IsRunningWithoutErrors: true,
 			HasProcessingActivity:  true,
 		})
-	case benthosfsmtype.OperationalStateDegraded:
+	case benthosfsmmanager.OperationalStateDegraded:
 		SetupBenthosServiceState(mockService, serviceName, benthosservice.ServiceStateFlags{
 			IsS6Running:            true,
 			S6FSMState:             s6fsm.OperationalStateRunning,
@@ -598,7 +594,7 @@ func TransitionToBenthosState(mockService *benthosservice.MockBenthosService, se
 			IsRunningWithoutErrors: false,
 			HasProcessingActivity:  true,
 		})
-	case benthosfsmtype.OperationalStateStopping:
+	case benthosfsmmanager.OperationalStateStopping:
 		SetupBenthosServiceState(mockService, serviceName, benthosservice.ServiceStateFlags{
 			IsS6Running:          false,
 			S6FSMState:           s6fsm.OperationalStateStopping,
@@ -641,12 +637,12 @@ func SetupBenthosServiceState(
 
 	// Update health check status
 	if flags.IsHealthchecksPassed {
-		mockService.ServiceStates[serviceName].BenthosStatus.HealthCheck = benthosservice.HealthCheck{
+		mockService.ServiceStates[serviceName].BenthosStatus.HealthCheck = benthos_monitor.HealthCheck{
 			IsLive:  true,
 			IsReady: true,
 		}
 	} else {
-		mockService.ServiceStates[serviceName].BenthosStatus.HealthCheck = benthosservice.HealthCheck{
+		mockService.ServiceStates[serviceName].BenthosStatus.HealthCheck = benthos_monitor.HealthCheck{
 			IsLive:  false,
 			IsReady: false,
 		}
@@ -654,11 +650,11 @@ func SetupBenthosServiceState(
 
 	// Setup metrics state if needed
 	if flags.HasProcessingActivity {
-		mockService.ServiceStates[serviceName].BenthosStatus.MetricsState = &benthosservice.BenthosMetricsState{
+		mockService.ServiceStates[serviceName].BenthosStatus.BenthosMetrics.MetricsState = &benthos_monitor.BenthosMetricsState{
 			IsActive: true,
 		}
-	} else if mockService.ServiceStates[serviceName].BenthosStatus.MetricsState == nil {
-		mockService.ServiceStates[serviceName].BenthosStatus.MetricsState = &benthosservice.BenthosMetricsState{
+	} else if mockService.ServiceStates[serviceName].BenthosStatus.BenthosMetrics.MetricsState == nil {
+		mockService.ServiceStates[serviceName].BenthosStatus.BenthosMetrics.MetricsState = &benthos_monitor.BenthosMetricsState{
 			IsActive: false,
 		}
 	}
@@ -671,8 +667,8 @@ func SetupBenthosServiceState(
 func WaitForBenthosManagerInstanceState(
 	ctx context.Context,
 	snapshot fsm.SystemSnapshot,
-	manager *benthosfsmtype.BenthosManager,
-	filesystemService filesystem.Service,
+	manager *benthosfsmmanager.BenthosManager,
+	services serviceregistry.Provider,
 	instanceName string,
 	expectedState string,
 	maxAttempts int,
@@ -680,7 +676,7 @@ func WaitForBenthosManagerInstanceState(
 	// Duplicate implementation from fsmtest package
 	tick := snapshot.Tick
 	for i := 0; i < maxAttempts; i++ {
-		err, _ := manager.Reconcile(ctx, snapshot, filesystemService)
+		err, _ := manager.Reconcile(ctx, snapshot, services)
 		if err != nil {
 			return tick, err
 		}

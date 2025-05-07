@@ -40,7 +40,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/container_monitor"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	"go.uber.org/zap"
 )
 
@@ -59,16 +59,16 @@ var _ = Describe("Subscribe and Receive Test", func() {
 		capturedMsgs  []*models.UMHMessage
 		capturedMutex sync.Mutex
 
-		mockFS *filesystem.MockFileSystem
-		apiUrl string
-		log    *zap.SugaredLogger
+		mockSvcRegistry *serviceregistry.Registry
+		apiUrl          string
+		log             *zap.SugaredLogger
 	)
 
 	BeforeEach(func() {
 		// Set up context with timeout
 		ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
 
-		mockFS = filesystem.NewMockFileSystem()
+		mockSvcRegistry = serviceregistry.NewMockRegistry()
 
 		// Initialize test variables
 		instanceID = uuid.New()
@@ -121,12 +121,14 @@ var _ = Describe("Subscribe and Receive Test", func() {
 
 		// Initialize the manager with a reconcile call to create instances
 		dummyConfig := config.FullConfig{}
-		err, _ := containerManager.Reconcile(ctx, fsm.SystemSnapshot{CurrentConfig: dummyConfig, Tick: 1}, mockFS)
+		err, _ := containerManager.Reconcile(ctx, fsm.SystemSnapshot{CurrentConfig: dummyConfig, Tick: 1}, mockSvcRegistry)
 		Expect(err).NotTo(HaveOccurred())
 
 		// Create the snapshot after reconciliation
 		containerManagerSnapshot := containerManager.CreateSnapshot()
 		systemSnapshot.Managers["ContainerManager_Core"] = containerManagerSnapshot
+		systemSnapshotManager := fsm.NewSnapshotManager()
+		systemSnapshotManager.UpdateSnapshot(systemSnapshot)
 
 		// Initialize watchdog
 		dog = watchdog.NewWatchdog(ctx, time.NewTicker(1*time.Second), false, logger.For(logger.ComponentCommunicator))
@@ -175,7 +177,6 @@ var _ = Describe("Subscribe and Receive Test", func() {
 		// Initialize subscriber handler
 		ttl := 5 * time.Minute
 		cull := 1 * time.Minute
-		systemMu := &sync.Mutex{}
 		subHandler = subscriber.NewHandler(
 			dog,
 			state.Pusher,
@@ -184,8 +185,7 @@ var _ = Describe("Subscribe and Receive Test", func() {
 			cull,
 			config.ReleaseChannel("stable"),
 			false,
-			systemSnapshot,
-			systemMu,
+			systemSnapshotManager,
 			config.NewMockConfigManager(),
 			logger.For(logger.ComponentCommunicator),
 		)

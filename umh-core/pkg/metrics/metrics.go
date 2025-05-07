@@ -29,20 +29,23 @@ const (
 	// Component Labels
 	ComponentControlLoop = "control_loop"
 	// Manager
-	ComponentBaseFSMManager      = "base_fsm_manager"
-	ComponentS6Manager           = "s6_manager"
-	ComponentBenthosManager      = "benthos_manager"
-	ComponentRedpandaManager     = "redpanda_manager"
-	ComponentNmapManager         = "nmap_manager"
-	ComponentDataFlowCompManager = "dataflow_component_manager"
+	ComponentBaseFSMManager        = "base_fsm_manager"
+	ComponentS6Manager             = "s6_manager"
+	ComponentBenthosManager        = "benthos_manager"
+	ComponentBenthosMonitorManager = "benthos_monitor_manager"
+	ComponentRedpandaManager       = "redpanda_manager"
+	ComponentNmapManager           = "nmap_manager"
+	ComponentDataFlowCompManager   = "dataflow_component_manager"
 	// Instances
+	ComponentBaseFSMInstance           = "base_fsm_instance"
 	ComponentS6Instance                = "s6_instance"
 	ComponentBenthosInstance           = "benthos_instance"
 	ComponentRedpandaInstance          = "redpanda_instance"
 	ComponentNmapInstance              = "nmap_instance"
 	ComponentDataflowComponentInstance = "dataflow_component_instance"
 	ComponentAgentMonitor              = "agent_monitor"
-
+	ComponentBenthosMonitor            = "benthos_monitor"
+	ComponentRedpandaMonitor           = "redpanda_monitor"
 	// Services
 	ComponentS6Service        = "s6_service"
 	ComponentBenthosService   = "benthos_service"

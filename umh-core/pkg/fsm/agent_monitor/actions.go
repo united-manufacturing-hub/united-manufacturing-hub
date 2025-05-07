@@ -20,6 +20,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
 // In Benthos, actions.go contained idempotent operations (like starting/stopping a service).
@@ -59,9 +60,15 @@ func (a *AgentInstance) StopInstance(ctx context.Context, filesystemService file
 	return nil
 }
 
+// CheckForCreation is called when the FSM transitions to creating.
+// For agent monitoring, this is a no-op as we don't need to check anything
+func (a *AgentInstance) CheckForCreation(ctx context.Context, filesystemService filesystem.Service) bool {
+	return true
+}
+
 // UpdateObservedStateOfInstance is called when the FSM transitions to updating.
 // For agent monitoring, this is a no-op as we don't need to update any resources.
-func (a *AgentInstance) UpdateObservedStateOfInstance(ctx context.Context, filesystemService filesystem.Service, tick uint64, loopStartTime time.Time) error {
+func (a *AgentInstance) UpdateObservedStateOfInstance(ctx context.Context, services serviceregistry.Provider, tick uint64, loopStartTime time.Time) error {
 	a.baseFSMInstance.GetLogger().Debugf("Updating observed state for %s (no-op)", a.baseFSMInstance.GetID())
 	return nil
 }
