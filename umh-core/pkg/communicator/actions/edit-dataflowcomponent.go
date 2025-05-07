@@ -565,12 +565,7 @@ func (a *EditDataflowComponentAction) waitForComponentToBeActive() error {
 							logs = dfcSnapshot.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosLogs
 							// only send the logs that have not been sent yet
 							if len(logs) > len(lastLogs) {
-								for _, log := range logs[len(lastLogs):] {
-									SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
-										fmt.Sprintf("[Benthos Log] %s", log.Content),
-										a.outboundChannel, models.EditDataFlowComponent)
-								}
-								lastLogs = logs
+								lastLogs = SendLimitedLogs(logs, lastLogs, a.instanceUUID, a.userEmail, a.actionUUID, a.outboundChannel, models.EditDataFlowComponent)
 							}
 
 							continue
