@@ -337,8 +337,8 @@ func (m *BaseFSMManager[C]) Reconcile(
 			err = instance.SetDesiredFSMState(desiredState)
 			if err != nil {
 				metrics.IncErrorCount(metrics.ComponentBaseFSMManager, m.managerName)
-				m.logger.Errorf("failed to set desired state: %v for instance %s", err, name)
-				return fmt.Errorf("failed to set desired state: %w", err), false
+				m.logger.Errorf("failed to set desired state: %v for newly to be created instance %s", err, name)
+				continue // Skip this instance for now, we should not create it
 			}
 			m.instances[name] = instance
 
@@ -402,7 +402,7 @@ func (m *BaseFSMManager[C]) Reconcile(
 			if err != nil {
 				metrics.IncErrorCount(metrics.ComponentBaseFSMManager, m.managerName)
 				m.logger.Errorf("failed to set desired state: %w for instance %s", err, name)
-				return fmt.Errorf("failed to set desired state: %w", err), false
+				continue // Skip this state change for now, it is broken, we should not update it
 			}
 
 			// Update last state change tick using manager-specific tick
