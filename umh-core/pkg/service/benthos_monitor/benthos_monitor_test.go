@@ -439,7 +439,7 @@ var _ = Describe("Benthos Monitor Service", func() {
 			Expect(val).To(Equal(int64(50000)))
 		})
 
-		It("should fail to parse a float in scientific notation", func() {
+		It("should parse a float in scientific notation", func() {
 			line := []byte(`input_received{label="",path="root.input"} 1.074682e+06`)
 			val, err := benthos_monitor.TailInt(line)
 			Expect(err).NotTo(HaveOccurred())
