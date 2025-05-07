@@ -349,16 +349,17 @@ func (b *BenthosInstance) IsBenthosMetricsErrorFree() bool {
 // IsBenthosDegraded determines if the Benthos service is degraded.
 // These check everything that is checked during the starting phase
 // But it means that it once worked, and then degraded
-func (b *BenthosInstance) IsBenthosDegraded(currentTime time.Time, logWindow time.Duration) (bool, s6service.LogEntry) {
+func (b *BenthosInstance) IsBenthosDegraded(currentTime time.Time, logWindow time.Duration) bool {
 	logsFine, logEntry := b.IsBenthosLogsFine(currentTime, logWindow)
 	if !logsFine {
-		return true, logEntry
+		b.ObservedState.ServiceInfo.BenthosStatus.BenthosDegradedLog = logEntry
+		return true
 	}
 
 	if b.IsBenthosS6Running() && b.IsBenthosConfigLoaded() && b.IsBenthosHealthchecksPassed() {
-		return false, s6service.LogEntry{}
+		return false
 	}
-	return true, s6service.LogEntry{}
+	return true
 }
 
 // IsBenthosWithProcessingActivity determines if the Benthos instance has active data processing
