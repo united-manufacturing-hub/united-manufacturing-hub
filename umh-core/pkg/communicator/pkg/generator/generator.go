@@ -111,9 +111,11 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 	// --- agent (only one instance) -------------------------------------------------------------
 	var agentData models.Agent
 	var agentDataReleaseChannel string
+	var agentDataCurrentVersion string
+	var agentDataVersions []models.Version
 	agInst, ok := findInstance(snapshot, agentManagerName, agentInstanceName)
 	if ok {
-		agentData, agentDataReleaseChannel = AgentFromSnapshot(agInst, s.logger)
+		agentData, agentDataReleaseChannel, agentDataCurrentVersion, agentDataVersions = AgentFromSnapshot(agInst, s.logger)
 	}
 
 	// --- redpanda (only one instance) -------------------------------------------------------------
@@ -130,6 +132,8 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 		dfcData = DfcsFromSnapshot(dfcMgr, s.logger)
 	}
 
+	// --- release (only one instance) -------------------------------------------------------------
+
 	// Create the status message
 	statusMessage := &models.StatusMessage{
 		Core: models.Core{
@@ -144,13 +148,14 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 			UnifiedNamespace: models.UnifiedNamespace{},
 			Release: models.Release{
 				Health: &models.Health{
-					Message:       "release monitoring is not implemented yet",
-					ObservedState: "n/a",
+					Message:       "",
+					ObservedState: "running",
 					DesiredState:  "running",
-					Category:      models.Neutral,
+					Category:      models.Active,
 				},
-				Version: "n/a",
-				Channel: agentDataReleaseChannel,
+				Version:  agentDataCurrentVersion,
+				Versions: agentDataVersions,
+				Channel:  agentDataReleaseChannel,
 				SupportedFeatures: []string{
 					"custom-dfc",
 					"action-deploy-data-flow-component",

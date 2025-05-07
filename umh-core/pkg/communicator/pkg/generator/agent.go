@@ -32,18 +32,18 @@ import (
 func AgentFromSnapshot(
 	inst *fsm.FSMInstanceSnapshot,
 	log *zap.SugaredLogger,
-) (models.Agent, string) {
+) (models.Agent, string, string, []models.Version) {
 
 	if inst == nil {
-		return defaultAgent(), "n/a"
+		return defaultAgent(), "n/a", "n/a", []models.Version{}
 	}
 
-	agent, channel, err := buildAgent(*inst, log)
+	agent, channel, currentVersion, versions, err := buildAgent(*inst, log)
 	if err != nil {
 		log.Error("unable to build agent data", zap.Error(err))
-		return defaultAgent(), "n/a"
+		return defaultAgent(), "n/a", "n/a", []models.Version{}
 	}
-	return agent, channel
+	return agent, channel, currentVersion, versions
 }
 
 // buildAgent maps a **non-nil** instance snapshot to models.Agent.
@@ -51,13 +51,13 @@ func AgentFromSnapshot(
 func buildAgent(
 	instance fsm.FSMInstanceSnapshot,
 	log *zap.SugaredLogger,
-) (models.Agent, string, error) {
+) (models.Agent, string, string, []models.Version, error) {
 
 	snap, ok := instance.LastObservedState.(*agent_monitor.AgentObservedStateSnapshot)
 	if !ok || snap == nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, log,
 			"[buildAgent] unexpected observed state %T", instance.LastObservedState)
-		return defaultAgent(), "n/a", fmt.Errorf("invalid observed-state")
+		return defaultAgent(), "n/a", "n/a", []models.Version{}, fmt.Errorf("invalid observed-state")
 	}
 
 	agent := models.Agent{
@@ -74,7 +74,18 @@ func buildAgent(
 	if snap.ServiceInfoSnapshot.Release != nil {
 		channel = snap.ServiceInfoSnapshot.Release.Channel
 	}
-	return agent, channel, nil
+
+	currentVersion := "n/a"
+	if snap.ServiceInfoSnapshot.Release != nil {
+		currentVersion = snap.ServiceInfoSnapshot.Release.Version
+	}
+
+	versions := []models.Version{}
+	if snap.ServiceInfoSnapshot.Release != nil {
+		versions = snap.ServiceInfoSnapshot.Release.Versions
+	}
+
+	return agent, channel, currentVersion, versions, nil
 }
 
 // defaultAgent returns hard-coded values when no snapshot information
