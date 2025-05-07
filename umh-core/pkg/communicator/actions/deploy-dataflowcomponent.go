@@ -19,7 +19,7 @@
 // BUSINESS CONTEXT
 // -----------------------------------------------------------------------------
 // A *new* Data-Flow Component (DFC) in UMH is defined by a Benthos service
-// configuration and materialised as an FSM instance.  “Deploying” therefore
+// configuration and materialised as an FSM instance.  "Deploying" therefore
 // means **creating a new desired configuration entry** and **waiting until the
 // FSM reports**
 //
@@ -606,11 +606,30 @@ func (a *DeployDataflowComponentAction) waitForComponentToBeActive() error {
 						logs = dfcSnapshot.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosLogs
 						// only send the logs that have not been sent yet
 						if len(logs) > len(lastLogs) {
-							for _, log := range logs[len(lastLogs):] {
+							maxLogsToSend := 10
+							logsToSend := logs[len(lastLogs):]
+							remainingLogs := len(logsToSend) - maxLogsToSend
+
+							// Send at most 10 logs
+							end := len(logsToSend)
+							if end > maxLogsToSend {
+								end = maxLogsToSend
+							}
+
+							for _, log := range logsToSend[:end] {
 								SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
 									fmt.Sprintf("[Benthos Log] %s", log.Content),
 									a.outboundChannel, models.DeployDataFlowComponent)
 							}
+
+							// Send message about remaining logs if any
+							if remainingLogs > 0 {
+								SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
+									fmt.Sprintf("[Benthos Log] %d remaining logs not displayed", remainingLogs),
+									a.outboundChannel, models.DeployDataFlowComponent)
+							}
+
+							// Update lastLogs to include all logs we've seen, even if not all were sent
 							lastLogs = logs
 						}
 					}
