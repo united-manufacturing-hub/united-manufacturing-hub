@@ -232,7 +232,8 @@ var _ = Describe("Redpanda Service", func() {
 						UnavailableTopics: 0, // No unavailable topics
 					},
 				}
-				Expect(service.IsMetricsErrorFree(metrics)).To(BeTrue())
+				result, _ := service.IsMetricsErrorFree(metrics)
+				Expect(result).To(BeTrue())
 			})
 
 			It("should detect storage free space alerts", func() {
@@ -245,7 +246,8 @@ var _ = Describe("Redpanda Service", func() {
 						},
 					},
 				}
-				Expect(service.IsMetricsErrorFree(metrics)).To(BeFalse())
+				result, _ := service.IsMetricsErrorFree(metrics)
+				Expect(result).To(BeFalse())
 			})
 
 			It("should detect unavailable topics", func() {
@@ -262,7 +264,8 @@ var _ = Describe("Redpanda Service", func() {
 						UnavailableTopics: 2, // Some topics are unavailable
 					},
 				}
-				Expect(service.IsMetricsErrorFree(metrics)).To(BeFalse())
+				result, _ := service.IsMetricsErrorFree(metrics)
+				Expect(result).To(BeFalse())
 			})
 
 			It("should pass when no storage alerts and all topics available", func() {
@@ -279,7 +282,8 @@ var _ = Describe("Redpanda Service", func() {
 						UnavailableTopics: 0, // All topics available
 					},
 				}
-				Expect(service.IsMetricsErrorFree(metrics)).To(BeTrue())
+				result, _ := service.IsMetricsErrorFree(metrics)
+				Expect(result).To(BeTrue())
 			})
 		})
 
@@ -294,7 +298,8 @@ var _ = Describe("Redpanda Service", func() {
 					},
 				}
 
-				Expect(service.HasProcessingActivity(status)).To(BeTrue())
+				result, _ := service.HasProcessingActivity(status)
+				Expect(result).To(BeTrue())
 			})
 
 			It("should detect lack of processing activity", func() {
@@ -307,7 +312,8 @@ var _ = Describe("Redpanda Service", func() {
 					},
 				}
 
-				Expect(service.HasProcessingActivity(status)).To(BeFalse())
+				result, _ := service.HasProcessingActivity(status)
+				Expect(result).To(BeFalse())
 			})
 
 			It("should handle nil metrics state", func() {
@@ -317,7 +323,8 @@ var _ = Describe("Redpanda Service", func() {
 					},
 				}
 
-				Expect(service.HasProcessingActivity(status)).To(BeFalse())
+				result, _ := service.HasProcessingActivity(status)
+				Expect(result).To(BeFalse())
 			})
 		})
 	})
@@ -337,7 +344,8 @@ var _ = Describe("Redpanda Service", func() {
 
 		Context("IsLogsFine", func() {
 			It("should return true when there are no logs", func() {
-				Expect(service.IsLogsFine([]s6service.LogEntry{}, currentTime, logWindow)).To(BeTrue())
+				result, _ := service.IsLogsFine([]s6service.LogEntry{}, currentTime, logWindow)
+				Expect(result).To(BeTrue())
 			})
 
 			It("should detect 'Address already in use' errors", func() {
@@ -351,7 +359,8 @@ var _ = Describe("Redpanda Service", func() {
 						Content:   "ERROR Address already in use (port 9092)",
 					},
 				}
-				Expect(service.IsLogsFine(logs, currentTime, logWindow)).To(BeFalse())
+				result, _ := service.IsLogsFine(logs, currentTime, logWindow)
+				Expect(result).To(BeFalse())
 			})
 
 			It("should detect 'Reactor stalled for' errors", func() {
@@ -365,7 +374,8 @@ var _ = Describe("Redpanda Service", func() {
 						Content:   "WARN Reactor stalled for 2s",
 					},
 				}
-				Expect(service.IsLogsFine(logs, currentTime, logWindow)).To(BeFalse())
+				result, _ := service.IsLogsFine(logs, currentTime, logWindow)
+				Expect(result).To(BeFalse())
 			})
 
 			It("should pass with normal logs", func() {
@@ -379,7 +389,8 @@ var _ = Describe("Redpanda Service", func() {
 						Content:   "INFO Created topic 'test-topic' with 3 partitions",
 					},
 				}
-				Expect(service.IsLogsFine(logs, currentTime, logWindow)).To(BeTrue())
+				result, _ := service.IsLogsFine(logs, currentTime, logWindow)
+				Expect(result).To(BeTrue())
 			})
 
 			It("should ignore logs outside the time window", func() {
@@ -393,7 +404,8 @@ var _ = Describe("Redpanda Service", func() {
 						Content:   "INFO Created topic 'test-topic' with 3 partitions",
 					},
 				}
-				Expect(service.IsLogsFine(logs, currentTime, logWindow)).To(BeTrue())
+				result, _ := service.IsLogsFine(logs, currentTime, logWindow)
+				Expect(result).To(BeTrue())
 			})
 
 			It("should handle logs at the edge of the time window", func() {
@@ -413,7 +425,7 @@ var _ = Describe("Redpanda Service", func() {
 				logs := []s6service.LogEntry{errorLog}
 
 				// Should pass because error log is exactly at boundary and will be excluded
-				result := service.IsLogsFine(logs, currentTime, logWindow)
+				result, _ := service.IsLogsFine(logs, currentTime, logWindow)
 				fmt.Printf("Debug - IsLogsFine result: %v\n", result)
 				Expect(result).To(BeFalse(), "Error log exactly at window boundary should be excluded")
 
@@ -427,7 +439,7 @@ var _ = Describe("Redpanda Service", func() {
 				fmt.Printf("Debug - Is normal log before window start? %v\n", normalLog.Timestamp.Before(windowStart))
 
 				// Should still pass
-				result = service.IsLogsFine(logs, currentTime, logWindow)
+				result, _ = service.IsLogsFine(logs, currentTime, logWindow)
 				fmt.Printf("Debug - IsLogsFine result with normal log: %v\n", result)
 				Expect(result).To(BeFalse(), "Adding a normal log inside the window should not affect the result")
 
@@ -441,7 +453,7 @@ var _ = Describe("Redpanda Service", func() {
 				fmt.Printf("Debug - Is error log inside before window start? %v\n", errorLogInside.Timestamp.Before(windowStart))
 
 				// Should fail because there's now an error log inside the window
-				result = service.IsLogsFine(logs, currentTime, logWindow)
+				result, _ = service.IsLogsFine(logs, currentTime, logWindow)
 				fmt.Printf("Debug - IsLogsFine result with error log inside: %v\n", result)
 				Expect(result).To(BeFalse(), "Error log inside window should cause the check to fail")
 			})
@@ -481,11 +493,13 @@ var _ = Describe("Redpanda Service", func() {
 				}
 
 				// Should fail because there's an error within the time window
-				Expect(service.IsLogsFine(logs, currentTime, logWindow)).To(BeFalse())
+				result, _ := service.IsLogsFine(logs, currentTime, logWindow)
+				Expect(result).To(BeFalse())
 
 				// Now move the error outside the window by adjusting the current time
 				adjustedTime := currentTime.Add(3 * time.Minute)
-				Expect(service.IsLogsFine(logs, adjustedTime, logWindow)).To(BeTrue())
+				result, _ = service.IsLogsFine(logs, adjustedTime, logWindow)
+				Expect(result).To(BeTrue())
 			})
 
 			It("should respect different window sizes", func() {
@@ -497,13 +511,16 @@ var _ = Describe("Redpanda Service", func() {
 				}
 
 				// With 5 minute window (default), error is detected
-				Expect(service.IsLogsFine(logs, currentTime, 5*time.Minute)).To(BeFalse())
+				result, _ := service.IsLogsFine(logs, currentTime, 5*time.Minute)
+				Expect(result).To(BeFalse())
 
 				// With 2 minute window, error is outside window and ignored
-				Expect(service.IsLogsFine(logs, currentTime, 2*time.Minute)).To(BeTrue())
+				result, _ = service.IsLogsFine(logs, currentTime, 2*time.Minute)
+				Expect(result).To(BeTrue())
 
 				// With 10 minute window, error is detected
-				Expect(service.IsLogsFine(logs, currentTime, 10*time.Minute)).To(BeFalse())
+				result, _ = service.IsLogsFine(logs, currentTime, 10*time.Minute)
+				Expect(result).To(BeFalse())
 			})
 		})
 	})

@@ -402,13 +402,18 @@ func (b *BenthosInstance) reconcileTransitionToStopped(ctx context.Context, serv
 			return err, false
 		}
 		// Send event to transition to Stopping
+		b.ObservedState.ServiceInfo.BenthosStatus.StatusReason = "stopping"
 		return b.baseFSMInstance.SendEvent(ctx, EventStop), true
 	}
 
 	// If already stopping, verify if the instance is completely stopped
-	stopped, _ := b.IsBenthosS6Stopped()
-	if currentState == OperationalStateStopping && stopped {
-		// Transition from Stopping to Stopped
+	isStopped, reason := b.IsBenthosS6Stopped()
+	if currentState == OperationalStateStopping {
+		if !isStopped {
+			b.ObservedState.ServiceInfo.BenthosStatus.StatusReason = fmt.Sprintf("stopping: %s", reason)
+			return nil, false
+		}
+		b.ObservedState.ServiceInfo.BenthosStatus.StatusReason = ""
 		return b.baseFSMInstance.SendEvent(ctx, EventStopDone), true
 	}
 

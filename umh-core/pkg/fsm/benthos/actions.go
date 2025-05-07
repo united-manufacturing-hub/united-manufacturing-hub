@@ -276,7 +276,7 @@ func (b *BenthosInstance) IsBenthosS6Running() (bool, string) {
 	if b.ObservedState.ServiceInfo.S6FSMState == s6fsm.OperationalStateRunning {
 		return true, ""
 	}
-	return false, fmt.Sprintf("Benthos is not in running state, current state: %s", b.ObservedState.ServiceInfo.S6FSMState)
+	return false, fmt.Sprintf("s6 is not running, current state: %s", b.ObservedState.ServiceInfo.S6FSMState)
 }
 
 // IsBenthosS6Stopped determines if the Benthos S6 FSM is in stopped state.
@@ -288,7 +288,7 @@ func (b *BenthosInstance) IsBenthosS6Stopped() (bool, string) {
 	if b.ObservedState.ServiceInfo.S6FSMState == s6fsm.OperationalStateStopped {
 		return true, ""
 	}
-	return false, fmt.Sprintf("Benthos is not in stopped state, current state: %s", b.ObservedState.ServiceInfo.S6FSMState)
+	return false, fmt.Sprintf("s6 is not stopped, current state: %s", b.ObservedState.ServiceInfo.S6FSMState)
 }
 
 // IsBenthosConfigLoaded determines if the Benthos service has successfully loaded its configuration.

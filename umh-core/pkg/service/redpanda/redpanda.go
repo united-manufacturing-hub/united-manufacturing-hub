@@ -67,11 +67,11 @@ type IRedpandaService interface {
 	ReconcileManager(ctx context.Context, services serviceregistry.Provider, tick uint64) (error, bool)
 	// IsLogsFine checks if the logs of a Redpanda service are fine
 	// Expects logs ([]s6service.LogEntry), currentTime (time.Time), and logWindow (time.Duration)
-	IsLogsFine(logs []s6service.LogEntry, currentTime time.Time, logWindow time.Duration) bool
+	IsLogsFine(logs []s6service.LogEntry, currentTime time.Time, logWindow time.Duration) (bool, s6service.LogEntry)
 	// IsMetricsErrorFree checks if the metrics of a Redpanda service are error-free
-	IsMetricsErrorFree(metrics redpanda_monitor.Metrics) bool
+	IsMetricsErrorFree(metrics redpanda_monitor.Metrics) (bool, string)
 	// HasProcessingActivity checks if a Redpanda service has processing activity
-	HasProcessingActivity(status RedpandaStatus) bool
+	HasProcessingActivity(status RedpandaStatus) (bool, string)
 }
 
 // ServiceInfo contains information about a Redpanda service
@@ -82,6 +82,8 @@ type ServiceInfo struct {
 	S6FSMState string
 	// RedpandaStatus contains information about the status of the Redpanda service
 	RedpandaStatus RedpandaStatus
+	// StatusReason contains the reason for the current state of the Redpanda service
+	StatusReason string
 }
 
 // RedpandaStatus contains information about the status of the Redpanda service
@@ -837,7 +839,7 @@ func (s *RedpandaService) ReconcileManager(ctx context.Context, services service
 }
 
 // IsLogsFine analyzes Redpanda logs to determine if there are any critical issues
-func (s *RedpandaService) IsLogsFine(logs []s6service.LogEntry, currentTime time.Time, logWindow time.Duration) bool {
+func (s *RedpandaService) IsLogsFine(logs []s6service.LogEntry, currentTime time.Time, logWindow time.Duration) (bool, s6service.LogEntry) {
 	failures := []string{
 		"Address already in use", // https://github.com/redpanda-data/redpanda/issues/3763
 		"Reactor stalled for",    // Multiple sources
@@ -856,32 +858,37 @@ func (s *RedpandaService) IsLogsFine(logs []s6service.LogEntry, currentTime time
 
 		for _, failure := range failures {
 			if strings.Contains(log.Content, failure) {
-
-				return false
+				return false, log
 			}
 		}
 	}
 
-	return true
+	return true, s6service.LogEntry{}
 }
 
 // IsMetricsErrorFree checks if the metrics of a Redpanda service are error-free
-func (s *RedpandaService) IsMetricsErrorFree(metrics redpanda_monitor.Metrics) bool {
+func (s *RedpandaService) IsMetricsErrorFree(metrics redpanda_monitor.Metrics) (bool, string) {
 	// Check output errors
 	if metrics.Infrastructure.Storage.FreeSpaceAlert {
-		return false
+		return false, fmt.Sprintf("storage free space alert: %d free bytes (total: %d bytes)", metrics.Infrastructure.Storage.FreeBytes, metrics.Infrastructure.Storage.TotalBytes)
 	}
 
 	if metrics.Cluster.UnavailableTopics > 0 {
-		return false
+		return false, fmt.Sprintf("unavailable topics: %d", metrics.Cluster.UnavailableTopics)
 	}
 
-	return true
+	return true, ""
 }
 
 // HasProcessingActivity checks if a Redpanda service has processing activity
-func (s *RedpandaService) HasProcessingActivity(status RedpandaStatus) bool {
-	return status.RedpandaMetrics.MetricsState != nil && status.RedpandaMetrics.MetricsState.IsActive
+func (s *RedpandaService) HasProcessingActivity(status RedpandaStatus) (bool, string) {
+	if status.RedpandaMetrics.MetricsState == nil {
+		return false, ""
+	}
+	if status.RedpandaMetrics.MetricsState.IsActive {
+		return true, ""
+	}
+	return false, fmt.Sprintf("no input bytes activity, (in=%.2f bytes/s, out=%.2f bytes/s)", status.RedpandaMetrics.MetricsState.Input.BytesPerTick, status.RedpandaMetrics.MetricsState.Output.BytesPerTick)
 }
 
 // ServiceExists checks if a Redpanda service exists

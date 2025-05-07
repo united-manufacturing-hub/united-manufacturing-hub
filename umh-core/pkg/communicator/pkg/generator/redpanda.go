@@ -66,7 +66,7 @@ func buildRedpanda(
 
 	out := models.Redpanda{
 		Health: &models.Health{
-			Message:       getRedpandaHealthMessage(healthCat),
+			Message:       snap.ServiceInfoSnapshot.StatusReason,
 			ObservedState: instance.CurrentState,
 			DesiredState:  instance.DesiredState,
 			Category:      healthCat,
@@ -87,15 +87,3 @@ func buildRedpanda(
 // defaultRedpanda produces an empty Redpanda struct when there is no
 // live data to populate it.
 func defaultRedpanda() models.Redpanda { return models.Redpanda{} }
-
-// getRedpandaHealthMessage is redpanda-specific.
-func getRedpandaHealthMessage(cat models.HealthCategory) string {
-	switch cat {
-	case models.Active:
-		return "Redpanda cluster healthy"
-	case models.Degraded:
-		return "Redpanda degraded"
-	default:
-		return "Redpanda status unknown"
-	}
-}
