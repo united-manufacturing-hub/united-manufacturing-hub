@@ -192,6 +192,9 @@ func (a *EditDataflowComponentAction) Parse(payload interface{}) error {
 		return fmt.Errorf("invalid UUID format: %v", err)
 	}
 
+	//set the new component UUID by the name
+	a.newComponentUUID = dataflowcomponentserviceconfig.GenerateUUIDFromName(a.name)
+
 	// Store the meta type
 	a.metaType = topLevel.Meta.Type
 	if a.metaType == "" {
@@ -504,7 +507,7 @@ func (a *EditDataflowComponentAction) waitForComponentToBeActive() error {
 	// 1. waits for the component to appear in the system snapshot (relevant for changed name)
 	// 2. waits for the component to be active
 	// 3. waits for the component to have the correct config
-	ticker := time.NewTicker(1 * time.Second)
+	ticker := time.NewTicker(constants.ActionTickerTime)
 	defer ticker.Stop()
 	timeout := time.After(constants.DataflowComponentWaitForActiveTimeout)
 	startTime := time.Now()
@@ -521,6 +524,7 @@ func (a *EditDataflowComponentAction) waitForComponentToBeActive() error {
 			defer cancel()
 			_, err := a.configManager.AtomicEditDataflowcomponent(ctx, a.newComponentUUID, a.oldConfig)
 			if err != nil {
+
 				a.actionLogger.Errorf("failed to roll back dataflow component %s: %v", a.name, err)
 			}
 			return fmt.Errorf("dataflow component %s was not active in time and was rolled back to the old config", a.name)

@@ -22,6 +22,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"go.uber.org/zap"
@@ -30,27 +31,29 @@ import (
 // EditInstanceAction implements the Action interface for editing instance properties.
 // Currently, it supports updating the location hierarchy (enterprise, site, area, line, workCell).
 type EditInstanceAction struct {
-	userEmail       string
-	actionUUID      uuid.UUID
-	instanceUUID    uuid.UUID
-	outboundChannel chan *models.UMHMessage
-	location        *models.EditInstanceLocationModel
-	configManager   config.ConfigManager
-	actionLogger    *zap.SugaredLogger
+	userEmail             string
+	actionUUID            uuid.UUID
+	instanceUUID          uuid.UUID
+	outboundChannel       chan *models.UMHMessage
+	location              *models.EditInstanceLocationModel
+	configManager         config.ConfigManager
+	actionLogger          *zap.SugaredLogger
+	systemSnapshotManager *fsm.SnapshotManager
 }
 
 // NewEditInstanceAction creates a new EditInstanceAction with the provided parameters.
 // This constructor is primarily used for testing purposes to enable dependency injection.
 // It initializes the action with the necessary fields but doesn't populate the location field
 // which must be done via Parse or SetLocation.
-func NewEditInstanceAction(userEmail string, actionUUID uuid.UUID, instanceUUID uuid.UUID, outboundChannel chan *models.UMHMessage, configManager config.ConfigManager) *EditInstanceAction {
+func NewEditInstanceAction(userEmail string, actionUUID uuid.UUID, instanceUUID uuid.UUID, outboundChannel chan *models.UMHMessage, configManager config.ConfigManager, systemSnapshotManager *fsm.SnapshotManager) *EditInstanceAction {
 	return &EditInstanceAction{
-		userEmail:       userEmail,
-		actionUUID:      actionUUID,
-		instanceUUID:    instanceUUID,
-		outboundChannel: outboundChannel,
-		configManager:   configManager,
-		actionLogger:    logger.For(logger.ComponentCommunicator),
+		userEmail:             userEmail,
+		actionUUID:            actionUUID,
+		instanceUUID:          instanceUUID,
+		outboundChannel:       outboundChannel,
+		configManager:         configManager,
+		actionLogger:          logger.For(logger.ComponentCommunicator),
+		systemSnapshotManager: systemSnapshotManager,
 	}
 }
 

@@ -16,7 +16,6 @@ package actions_test
 
 import (
 	"errors"
-	"time"
 
 	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo/v2"
@@ -40,6 +39,8 @@ var _ = Describe("DeployDataflowComponent", func() {
 		instanceUUID    uuid.UUID
 		outboundChannel chan *models.UMHMessage
 		mockConfig      *config.MockConfigManager
+		stateMocker     *actions.StateMocker
+		messages        []*models.UMHMessage
 	)
 
 	// Setup before each test
@@ -64,7 +65,16 @@ var _ = Describe("DeployDataflowComponent", func() {
 		}
 
 		mockConfig = config.NewMockConfigManager().WithConfig(initialConfig)
-		action = actions.NewDeployDataflowComponentAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig, nil)
+
+		// Startup the state mocker and get the mock snapshot
+		stateMocker = actions.NewStateMocker(mockConfig)
+		stateMocker.Tick()
+		mockStateManager := stateMocker.GetStateManager()
+
+		action = actions.NewDeployDataflowComponentAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig, mockStateManager)
+
+		go actions.ConsumeOutboundMessages(outboundChannel, &messages, true)
+
 	})
 
 	// Cleanup after each test
@@ -459,24 +469,28 @@ var _ = Describe("DeployDataflowComponent", func() {
 			// Reset tracking for this test
 			mockConfig.ResetCalls()
 
+			// ------------------------------------------------------------------------------------------------
+			// Now, we test the action execution with the state mocker
+			// The action has a pointer to the config manager and the system state
+			// During the execution of the action, it will modify the config via an atomic operation
+			// The state mocker has access to the same config manager. Also, the system state is shared
+			// between the action and the state mocker.
+			// The stateMocker.Start() starts the state mocker in a separate goroutine in which it continuously
+			// updates the system state according to the config.
+			// ------------------------------------------------------------------------------------------------
+
+			// start the state mocker
+			err = stateMocker.Start()
+			Expect(err).NotTo(HaveOccurred())
+
 			// Execute the action
 			result, metadata, err := action.Execute()
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(ContainSubstring("Successfully deployed dataflow component"))
 			Expect(metadata).To(BeNil())
 
-			// Only expect the Confirmed message in the channel
-			// Success message is sent by HandleActionMessage, not by Execute
-			var messages []*models.UMHMessage
-			for i := 0; i < 1; i++ {
-				select {
-				case msg := <-outboundChannel:
-					messages = append(messages, msg)
-				case <-time.After(100 * time.Millisecond):
-					Fail("Timed out waiting for message")
-				}
-			}
-			Expect(messages).To(HaveLen(1))
+			// Stop the state mocker
+			stateMocker.Stop()
 
 			// Verify AtomicAddDataflowcomponent was called
 			Expect(mockConfig.AddDataflowcomponentCalled).To(BeTrue())
@@ -523,6 +537,10 @@ var _ = Describe("DeployDataflowComponent", func() {
 			err := action.Parse(payload)
 			Expect(err).NotTo(HaveOccurred())
 
+			// Start the state mocker
+			err = stateMocker.Start()
+			Expect(err).NotTo(HaveOccurred())
+
 			// Execute the action - should fail
 			result, metadata, err := action.Execute()
 			Expect(err).To(HaveOccurred())
@@ -530,17 +548,8 @@ var _ = Describe("DeployDataflowComponent", func() {
 			Expect(result).To(BeNil())
 			Expect(metadata).To(BeNil())
 
-			// Expect Confirmed and Failure messages
-			var messages []*models.UMHMessage
-			for i := 0; i < 2; i++ {
-				select {
-				case msg := <-outboundChannel:
-					messages = append(messages, msg)
-				case <-time.After(100 * time.Millisecond):
-					Fail("Timed out waiting for message")
-				}
-			}
-			Expect(messages).To(HaveLen(2))
+			// Stop the state mocker
+			stateMocker.Stop()
 
 			// Verify the failure message content
 			decodedMessage, err := encoding.DecodeMessageFromUMHInstanceToUser(messages[1].Content)
@@ -602,24 +611,18 @@ buffer:
 			// Reset tracking for this test
 			mockConfig.ResetCalls()
 
+			// start the state mocker
+			err = stateMocker.Start()
+			Expect(err).NotTo(HaveOccurred())
+
 			// Execute the action
 			result, metadata, err := action.Execute()
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(ContainSubstring("Successfully deployed dataflow component: test-component-with-inject"))
 			Expect(metadata).To(BeNil())
 
-			// Only expect the Confirmed message in the channel
-			// Success message is sent by HandleActionMessage, not by Execute
-			var messages []*models.UMHMessage
-			for i := 0; i < 1; i++ {
-				select {
-				case msg := <-outboundChannel:
-					messages = append(messages, msg)
-				case <-time.After(100 * time.Millisecond):
-					Fail("Timed out waiting for message")
-				}
-			}
-			Expect(messages).To(HaveLen(1))
+			// Stop the state mocker
+			stateMocker.Stop()
 
 			// Verify AtomicAddDataflowcomponent was called
 			Expect(mockConfig.AddDataflowcomponentCalled).To(BeTrue())
