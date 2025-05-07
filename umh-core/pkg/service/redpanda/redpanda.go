@@ -483,6 +483,19 @@ func (s *RedpandaService) GetHealthCheckAndMetrics(ctx context.Context, tick uin
 		}, nil
 	}
 
+	// If the last log line contains "Shutdown complete." then we can return immediately
+	// as the service is not running
+	if len(logs) > 0 {
+		if strings.Contains(logs[len(logs)-1].Content, "Shutdown complete.") {
+			return RedpandaStatus{
+				HealthCheck: HealthCheck{
+					IsLive:  false,
+					IsReady: false,
+				},
+			}, nil
+		}
+	}
+
 	// Get the last observed state of the redpanda monitor
 	s6ServiceName := s.GetS6ServiceName(redpandaName)
 	lastObservedState, err := s.redpandaMonitorManager.GetLastObservedState(s6ServiceName)
@@ -916,7 +929,7 @@ func (s *RedpandaService) IsLogsFine(logs []s6service.LogEntry, currentTime time
 
 		for _, failure := range failures {
 			if strings.Contains(log.Content, failure) {
-
+				s.logger.Infof("Redpanda has issue: %s [log: %s]", failure, log.Content)
 				return false
 			}
 		}

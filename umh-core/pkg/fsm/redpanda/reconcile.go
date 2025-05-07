@@ -241,8 +241,6 @@ func (r *RedpandaInstance) reconcileTransitionToRestarting(ctx context.Context, 
 		metrics.ObserveReconcileTime(metrics.ComponentRedpandaInstance, r.baseFSMInstance.GetID()+".reconcileTransitionToRestarting", time.Since(start))
 	}()
 
-	r.baseFSMInstance.GetLogger().Infof("reconciling transition to restarting from state %s", currentState)
-
 	// If the current state is a running state, we need to stop the instance first
 	if IsRunningState(currentState) {
 		return r.reconcileTransitionToStopped(ctx, services, currentState)
@@ -263,8 +261,6 @@ func (r *RedpandaInstance) reconcileTransitionToActive(ctx context.Context, serv
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentRedpandaInstance, r.baseFSMInstance.GetID()+".reconcileTransitionToActive", time.Since(start))
 	}()
-
-	r.baseFSMInstance.GetLogger().Infof("reconciling transition to active from state %s", currentState)
 
 	// If we're stopped, we need to start first
 	if currentState == OperationalStateStopped {
