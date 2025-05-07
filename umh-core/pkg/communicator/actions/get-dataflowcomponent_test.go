@@ -62,17 +62,92 @@ var _ = Describe("GetDataFlowComponent", func() {
 				},
 				ReleaseChannel: config.ReleaseChannelStable,
 			},
-			DataFlow: []config.DataFlowComponentConfig{},
+			DataFlow: []config.DataFlowComponentConfig{
+				{
+					FSMInstanceConfig: config.FSMInstanceConfig{
+						Name:            "test-component-1",
+						DesiredFSMState: "active",
+					},
+					DataFlowComponentServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
+							Input: map[string]interface{}{
+								"kafka": map[string]interface{}{
+									"addresses": []string{"localhost:9092"},
+									"topics":    []string{"test-topic"},
+								},
+							},
+							Output: map[string]interface{}{
+								"kafka": map[string]interface{}{
+									"addresses": []string{"localhost:9092"},
+									"topic":     "output-topic",
+								},
+							},
+							Pipeline: map[string]interface{}{
+								"processors": []interface{}{
+									map[string]interface{}{
+										"mapping": "root = this",
+									},
+								},
+							},
+							CacheResources: []map[string]interface{}{
+								{
+									"label":  "test-cache",
+									"memory": map[string]interface{}{},
+								},
+							},
+							RateLimitResources: []map[string]interface{}{
+								{
+									"label": "test-rate-limit",
+									"local": map[string]interface{}{},
+								},
+							},
+							Buffer: map[string]interface{}{
+								"memory": map[string]interface{}{},
+							},
+						},
+					},
+				},
+				{
+					FSMInstanceConfig: config.FSMInstanceConfig{
+						Name:            "test-component-2",
+						DesiredFSMState: "active",
+					},
+					DataFlowComponentServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
+							Input: map[string]interface{}{
+								"file": map[string]interface{}{
+									"paths": []string{"/tmp/input.txt"},
+								},
+							},
+							Output: map[string]interface{}{
+								"file": map[string]interface{}{
+									"path": "/tmp/output.txt",
+								},
+							},
+							Pipeline: map[string]interface{}{
+								"processors": []interface{}{
+									map[string]interface{}{
+										"text": map[string]interface{}{
+											"operator": "to_upper",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
 		}
-
-		// Create mock system snapshot with dataflow components
-		mockSnapshot := createMockSystemSnapshot()
-		mockSnapshotManager := fsm.NewSnapshotManager()
-		mockSnapshotManager.UpdateSnapshot(mockSnapshot)
 
 		mockConfig = config.NewMockConfigManager().WithConfig(initialConfig)
 
-		action = actions.NewGetDataFlowComponentAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig, mockSnapshotManager)
+		// Startup the state mocker and get the mock snapshot
+		stateMocker := actions.NewStateMocker(mockConfig)
+		stateMocker.Tick()
+		mockManagerSnapshot := stateMocker.GetStateManager()
+
+		action = actions.NewGetDataFlowComponentAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig, mockManagerSnapshot)
+
 	})
 
 	// Cleanup after each test
@@ -275,7 +350,8 @@ var _ = Describe("GetDataFlowComponent", func() {
 
 		It("should handle components with missing observed state", func() {
 			// Create a system snapshot with a component that has no observed state
-			snapshotWithMissingState := createMockSystemSnapshotWithMissingState()
+			snapshotWithMissingState := actions.CreateMockSystemSnapshotWithMissingState()
+
 			snapshotManager := fsm.NewSnapshotManager()
 			snapshotManager.UpdateSnapshot(snapshotWithMissingState)
 
@@ -339,8 +415,8 @@ var _ = Describe("GetDataFlowComponent", func() {
 
 			// Since we can't directly call the unexported function, we'll test its behavior through Execute
 			// Get a system snapshot with our test instance
-			managerSnapshot := &mockManagerSnapshot{
-				instances: map[string]*fsm.FSMInstanceSnapshot{
+			managerSnapshot := &actions.MockManagerSnapshot{
+				Instances: map[string]*fsm.FSMInstanceSnapshot{
 					"test-component-build": &testInstance,
 				},
 			}
@@ -399,12 +475,13 @@ var _ = Describe("GetDataFlowComponent", func() {
 				ID:                "invalid-type-component",
 				DesiredState:      "active",
 				CurrentState:      "active",
-				LastObservedState: &mockObservedState{}, // Not a DataflowComponentObservedStateSnapshot
+				LastObservedState: &actions.MockObservedState{}, // Not a DataflowComponentObservedStateSnapshot
+
 			}
 
 			// Access the buildDataFlowComponentDataFromSnapshot through Execute
-			managerSnapshot := &mockManagerSnapshot{
-				instances: map[string]*fsm.FSMInstanceSnapshot{
+			managerSnapshot := &actions.MockManagerSnapshot{
+				Instances: map[string]*fsm.FSMInstanceSnapshot{
 					"invalid-type-component": &invalidInstance,
 				},
 			}
@@ -446,166 +523,3 @@ var _ = Describe("GetDataFlowComponent", func() {
 		})
 	})
 })
-
-// Helper function to create a mock system snapshot with dataflow components
-func createMockSystemSnapshot() *fsm.SystemSnapshot {
-	// Create a dataflowcomponent manager with test instances
-	managerSnapshot := createManagerSnapshot()
-
-	// Create and return system snapshot
-	return &fsm.SystemSnapshot{
-		Managers: map[string]fsm.ManagerSnapshot{
-			constants.DataflowcomponentManagerName: managerSnapshot,
-		},
-	}
-}
-
-// Helper function to create a manager snapshot with instances
-func createManagerSnapshot() fsm.ManagerSnapshot {
-	// Create instance snapshots
-	instancesSlice := []fsm.FSMInstanceSnapshot{
-		{
-			ID:           "test-component-1",
-			DesiredState: "active",
-			CurrentState: "active",
-			LastObservedState: &dataflowcomponent.DataflowComponentObservedStateSnapshot{
-				Config: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
-					BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
-						Input: map[string]interface{}{
-							"kafka": map[string]interface{}{
-								"addresses": []string{"localhost:9092"},
-								"topics":    []string{"test-topic"},
-							},
-						},
-						Output: map[string]interface{}{
-							"kafka": map[string]interface{}{
-								"addresses": []string{"localhost:9092"},
-								"topic":     "output-topic",
-							},
-						},
-						Pipeline: map[string]interface{}{
-							"processors": []interface{}{
-								map[string]interface{}{
-									"mapping": "root = this",
-								},
-							},
-						},
-						CacheResources: []map[string]interface{}{
-							{
-								"label":  "test-cache",
-								"memory": map[string]interface{}{},
-							},
-						},
-						RateLimitResources: []map[string]interface{}{
-							{
-								"label": "test-rate-limit",
-								"local": map[string]interface{}{},
-							},
-						},
-						Buffer: map[string]interface{}{
-							"memory": map[string]interface{}{},
-						},
-					},
-				},
-			},
-		},
-		{
-			ID:           "test-component-2",
-			DesiredState: "active",
-			CurrentState: "active",
-			LastObservedState: &dataflowcomponent.DataflowComponentObservedStateSnapshot{
-				Config: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
-					BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
-						Input: map[string]interface{}{
-							"file": map[string]interface{}{
-								"paths": []string{"/tmp/input.txt"},
-							},
-						},
-						Output: map[string]interface{}{
-							"file": map[string]interface{}{
-								"path": "/tmp/output.txt",
-							},
-						},
-						Pipeline: map[string]interface{}{
-							"processors": []interface{}{
-								map[string]interface{}{
-									"text": map[string]interface{}{
-										"operator": "to_upper",
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-	}
-
-	// Convert slice to map required by ManagerSnapshot interface
-	instances := make(map[string]*fsm.FSMInstanceSnapshot)
-	for i := range instancesSlice {
-		instance := instancesSlice[i]
-		instances[instance.ID] = &instance
-	}
-
-	return &mockManagerSnapshot{
-		instances: instances,
-	}
-}
-
-// Helper function to create a system snapshot with a component that has no observed state
-func createMockSystemSnapshotWithMissingState() *fsm.SystemSnapshot {
-	// Create a dataflowcomponent manager with an instance that has no observed state
-	instanceSlice := []fsm.FSMInstanceSnapshot{
-		{
-			ID:                "test-component-missing-state",
-			DesiredState:      "active",
-			CurrentState:      "active",
-			LastObservedState: nil, // No observed state
-		},
-	}
-
-	// Convert slice to map
-	instances := make(map[string]*fsm.FSMInstanceSnapshot)
-	for i := range instanceSlice {
-		instance := instanceSlice[i]
-		instances[instance.ID] = &instance
-	}
-
-	managerSnapshot := &mockManagerSnapshot{
-		instances: instances,
-	}
-
-	// Create and return system snapshot
-	return &fsm.SystemSnapshot{
-		Managers: map[string]fsm.ManagerSnapshot{
-			constants.DataflowcomponentManagerName: managerSnapshot,
-		},
-	}
-}
-
-// mockManagerSnapshot is a simple implementation of ManagerSnapshot interface for testing
-type mockManagerSnapshot struct {
-	instances map[string]*fsm.FSMInstanceSnapshot
-}
-
-func (m *mockManagerSnapshot) GetName() string {
-	return constants.DataflowcomponentManagerName
-}
-
-func (m *mockManagerSnapshot) GetInstances() map[string]*fsm.FSMInstanceSnapshot {
-	return m.instances
-}
-
-func (m *mockManagerSnapshot) GetSnapshotTime() time.Time {
-	return time.Now()
-}
-
-func (m *mockManagerSnapshot) GetManagerTick() uint64 {
-	return 0
-}
-
-// mockObservedState is a fake implementation of ObservedStateSnapshot for testing
-type mockObservedState struct{}
-
-func (m *mockObservedState) IsObservedStateSnapshot() {}

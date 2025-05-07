@@ -21,3 +21,7 @@ const (
 	// they should not take any longer than 5 seconds, because they only read/write to the config file or check the system state
 	ActionTimeout = time.Second * 5
 )
+
+const (
+	ActionTickerTime = time.Second * 1
+)
