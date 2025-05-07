@@ -15,6 +15,8 @@
 package generator
 
 import (
+	"fmt"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/agent_monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
@@ -22,66 +24,81 @@ import (
 	"go.uber.org/zap"
 )
 
-func agentFromInstanceSnapshot(
+// AgentFromSnapshot converts an optional FSMInstanceSnapshot into a
+// models.Agent and the corresponding release-channel string.
+//
+// If inst is nil or unusable we fall back to defaults *and* return
+// "n/a" for the channel.
+func AgentFromSnapshot(
 	inst *fsm.FSMInstanceSnapshot,
 	log *zap.SugaredLogger,
 ) (models.Agent, string) {
 
 	if inst == nil {
-		return buildDefaultAgentData()
-	}
-	return buildAgentDataFromInstanceSnapshot(*inst, log)
-}
-
-// buildAgentDataFromSnapshot creates agent data from a FSM instance snapshot
-func buildAgentDataFromInstanceSnapshot(instance fsm.FSMInstanceSnapshot, log *zap.SugaredLogger) (models.Agent, string) {
-	agentData := models.Agent{}
-	releaseChannel := "n/a"
-	// Check if we have actual observedState
-	if instance.LastObservedState != nil {
-		// Try to cast to the right type
-		if snapshot, ok := instance.LastObservedState.(*agent_monitor.AgentObservedStateSnapshot); ok {
-			// Ensure all fields are valid before accessing
-			if snapshot.ServiceInfoSnapshot.Location == nil {
-				log.Warn("Agent location data is nil")
-				agentData = models.Agent{
-					Location: map[int]string{0: "Unknown location"},
-				}
-			} else {
-				agentData = models.Agent{
-					Location: snapshot.ServiceInfoSnapshot.Location,
-				}
-			}
-			// build the health status
-			agentData.Health = &models.Health{
-				Message:       getHealthMessage(snapshot.ServiceInfoSnapshot.OverallHealth),
-				ObservedState: instance.CurrentState,
-				DesiredState:  instance.DesiredState,
-				Category:      snapshot.ServiceInfoSnapshot.OverallHealth,
-			}
-			// Check if Release is nil before accessing its properties
-			if snapshot.ServiceInfoSnapshot.Release != nil {
-				releaseChannel = snapshot.ServiceInfoSnapshot.Release.Channel
-			} else {
-				log.Warn("Agent release data is nil, defaulting to stable")
-				releaseChannel = "n/a"
-			}
-		} else {
-			log.Warn("Agent observed state is not of expected type")
-			sentry.ReportIssuef(sentry.IssueTypeError, log, "[buildAgentDataFromSnapshot] Agent observed state is not of expected type")
-		}
-	} else {
-		log.Warn("Agent instance has no observed state")
+		return defaultAgent(), "n/a"
 	}
 
-	return agentData, releaseChannel
+	agent, channel, err := buildAgent(*inst, log)
+	if err != nil {
+		log.Error("unable to build agent data", zap.Error(err))
+		return defaultAgent(), "n/a"
+	}
+	return agent, channel
 }
 
-// buildDefaultAgentData creates default agent data when no real data is available
-func buildDefaultAgentData() (models.Agent, string) {
-	agentData := models.Agent{
+// buildAgent maps a **non-nil** instance snapshot to models.Agent.
+// It returns “n/a” and an error if the observed state cannot be cast.
+func buildAgent(
+	instance fsm.FSMInstanceSnapshot,
+	log *zap.SugaredLogger,
+) (models.Agent, string, error) {
+
+	snap, ok := instance.LastObservedState.(*agent_monitor.AgentObservedStateSnapshot)
+	if !ok || snap == nil {
+		sentry.ReportIssuef(sentry.IssueTypeError, log,
+			"[buildAgent] unexpected observed state %T", instance.LastObservedState)
+		return defaultAgent(), "n/a", fmt.Errorf("invalid observed-state")
+	}
+
+	agent := models.Agent{
+		Location: snap.ServiceInfoSnapshot.Location,
+		Health: &models.Health{
+			Message:       getAgentHealthMessage(snap.ServiceInfoSnapshot.OverallHealth),
+			ObservedState: instance.CurrentState,
+			DesiredState:  instance.DesiredState,
+			Category:      snap.ServiceInfoSnapshot.OverallHealth,
+		},
+	}
+
+	channel := "n/a"
+	if snap.ServiceInfoSnapshot.Release != nil {
+		channel = snap.ServiceInfoSnapshot.Release.Channel
+	}
+	return agent, channel, nil
+}
+
+// defaultAgent returns hard-coded values when no snapshot information
+// is available.
+func defaultAgent() models.Agent {
+	return models.Agent{
 		Location: map[int]string{0: "Unknown location"},
+		Health: &models.Health{
+			Message:       "Agent status unknown",
+			ObservedState: "unknown",
+			DesiredState:  "running",
+			Category:      models.Neutral,
+		},
 	}
-	releaseChannel := "n/a"
-	return agentData, releaseChannel
+}
+
+// getHealthMessage is agent-specific. Extend as needed.
+func getAgentHealthMessage(cat models.HealthCategory) string {
+	switch cat {
+	case models.Active:
+		return "Agent operating normally"
+	case models.Degraded:
+		return "Agent degraded"
+	default:
+		return "Agent status unknown"
+	}
 }

@@ -15,8 +15,6 @@
 package generator
 
 import (
-	"fmt"
-
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
@@ -65,31 +63,6 @@ func NewStatusCollector(
 	return collector
 }
 
-func (s *StatusCollectorType) getDataFlowComponentData() ([]models.Dfc, error) {
-	var dfcData []models.Dfc
-
-	snapshot := s.systemSnapshotManager.GetDeepCopySnapshot()
-	if dataflowcomponentManager, exists := snapshot.Managers[constants.DataflowcomponentManagerName]; exists {
-		instances := dataflowcomponentManager.GetInstances()
-
-		for _, instance := range instances {
-			dfc, err := buildDataFlowComponentDataFromSnapshot(*instance, s.logger)
-			if err != nil {
-				s.logger.Error("Error building dataflowcomponent data", zap.Error(err))
-				continue
-			}
-			dfcData = append(dfcData, dfc)
-		}
-	} else {
-		s.logger.Warn("Dataflowcomponent manager not found in system snapshot",
-			zap.String("managerName", constants.DataflowcomponentManagerName),
-			zap.Any("allManagers", snapshot.Managers))
-		return nil, fmt.Errorf("dataflowcomponent manager not found in system snapshot")
-	}
-
-	return dfcData, nil
-}
-
 // findInstance finds an instance in the system snapshot
 // this is useful if we want to fetch the data from a manager, that always has one instance (e.g., core, agent, container, redpanda)
 // returns nil if the instance is not found
@@ -132,7 +105,7 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 	var containerData models.Container
 	contInst, ok := findInstance(snapshot, containerManagerName, coreInstanceName)
 	if ok {
-		containerData = buildContainerDataFromInstanceSnapshot(*contInst, s.logger)
+		containerData = ContainerFromSnapshot(contInst, s.logger)
 	}
 
 	// --- agent (only one instance) -------------------------------------------------------------
@@ -140,21 +113,21 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 	var agentDataReleaseChannel string
 	agInst, ok := findInstance(snapshot, agentManagerName, agentInstanceName)
 	if ok {
-		agentData, agentDataReleaseChannel = agentFromInstanceSnapshot(agInst, s.logger)
+		agentData, agentDataReleaseChannel = AgentFromSnapshot(agInst, s.logger)
 	}
 
 	// --- redpanda (only one instance) -------------------------------------------------------------
 	var redpandaData models.Redpanda
 	rpInst, ok := findInstance(snapshot, redpandaManagerName, redpandaInstanceName)
 	if ok {
-		redpandaData = redpandaFromInstanceSnapshot(rpInst, s.logger)
+		redpandaData = RedpandaFromSnapshot(rpInst, s.logger)
 	}
 
 	// --- dfc (multiple instances) ----------------------	---------------------------------------
 	var dfcData []models.Dfc
 	dfcMgr, ok := findManager(snapshot, constants.DataflowcomponentManagerName)
 	if ok {
-		dfcData = dfcsFromManagerSnapshot(dfcMgr, s.logger)
+		dfcData = DfcsFromSnapshot(dfcMgr, s.logger)
 	}
 
 	// Create the status message
@@ -199,18 +172,4 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 	}
 
 	return statusMessage
-}
-
-// getHealthMessage returns an appropriate message based on health category
-func getHealthMessage(health models.HealthCategory) string {
-	switch health {
-	case models.Active:
-		return "Component is operating normally"
-	case models.Degraded:
-		return "Component stopped working"
-	case models.Neutral:
-		return "Component status is neutral"
-	default:
-		return "Component status unknown"
-	}
 }

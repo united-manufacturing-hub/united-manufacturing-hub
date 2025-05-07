@@ -15,99 +15,98 @@
 package generator
 
 import (
+	"fmt"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/container"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"go.uber.org/zap"
 )
 
-func containerFromInstanceSnapshot(
+// ContainerFromSnapshot converts an optional FSMInstanceSnapshot into
+// a models.Container, returning sensible defaults when inst == nil.
+func ContainerFromSnapshot(
 	inst *fsm.FSMInstanceSnapshot,
 	log *zap.SugaredLogger,
 ) models.Container {
 
 	if inst == nil {
-		return buildDefaultContainerData()
+		return defaultContainer()
 	}
-	return buildContainerDataFromInstanceSnapshot(*inst, log)
+
+	c, err := buildContainer(*inst, log)
+	if err != nil {
+		log.Error("unable to build container data", zap.Error(err))
+		return defaultContainer()
+	}
+	return c
 }
 
-// buildContainerDataFromSnapshot creates container data from a FSM instance snapshot
-func buildContainerDataFromInstanceSnapshot(instance fsm.FSMInstanceSnapshot, log *zap.SugaredLogger) models.Container {
-	// Try to get observed state from instance
-	containerData := buildDefaultContainerData()
+// buildContainer assumes a *valid* snapshot and fills models.Container
+// with metrics and health data. It returns an error if the observed
+// state is of the wrong type.
+func buildContainer(
+	instance fsm.FSMInstanceSnapshot,
+	log *zap.SugaredLogger,
+) (models.Container, error) {
 
-	// Check if we have actual observedState
-	if instance.LastObservedState != nil {
-		// Try to cast to the right type
-		if snapshot, ok := instance.LastObservedState.(*container.ContainerObservedStateSnapshot); ok {
-			status := snapshot.ServiceInfoSnapshot
+	snap, ok := instance.LastObservedState.(*container.ContainerObservedStateSnapshot)
+	if !ok || snap == nil {
+		return models.Container{}, fmt.Errorf("invalid observed-state")
+	}
 
-			// Create health status
-			containerData.Health = &models.Health{
-				Message:       getHealthMessage(status.OverallHealth),
-				ObservedState: instance.CurrentState,
-				DesiredState:  instance.DesiredState,
-				Category:      status.OverallHealth,
+	status := snap.ServiceInfoSnapshot
+	out := defaultContainer() // start with defaults, then override
+
+	out.Health = &models.Health{
+		Message:       getContainerHealthMessage(status.OverallHealth),
+		ObservedState: instance.CurrentState,
+		DesiredState:  instance.DesiredState,
+		Category:      status.OverallHealth,
+	}
+
+	// CPU / Memory / Disk (all nil-safe)
+	if status.CPU != nil {
+		out.CPU = status.CPU
+		if out.CPU.Health == nil {
+			out.CPU.Health = &models.Health{
+				Message:       getContainerHealthMessage(status.CPUHealth),
+				ObservedState: status.CPUHealth.String(),
+				DesiredState:  models.Active.String(),
+				Category:      status.CPUHealth,
 			}
-
-			// Fill in CPU metrics
-			if status.CPU != nil {
-				containerData.CPU = status.CPU
-				// Ensure health is set
-				if containerData.CPU.Health == nil {
-					containerData.CPU.Health = &models.Health{
-						Message:       getHealthMessage(status.CPUHealth),
-						ObservedState: status.CPUHealth.String(),
-						DesiredState:  models.Active.String(),
-						Category:      status.CPUHealth,
-					}
-				}
-			}
-
-			// Fill in Memory metrics
-			if status.Memory != nil {
-				containerData.Memory = status.Memory
-				// Ensure health is set
-				if containerData.Memory.Health == nil {
-					containerData.Memory.Health = &models.Health{
-						Message:       getHealthMessage(status.MemoryHealth),
-						ObservedState: status.MemoryHealth.String(),
-						DesiredState:  models.Active.String(),
-						Category:      status.MemoryHealth,
-					}
-				}
-			}
-
-			// Fill in Disk metrics
-			if status.Disk != nil {
-				containerData.Disk = status.Disk
-				// Ensure health is set
-				if containerData.Disk.Health == nil {
-					containerData.Disk.Health = &models.Health{
-						Message:       getHealthMessage(status.DiskHealth),
-						ObservedState: status.DiskHealth.String(),
-						DesiredState:  models.Active.String(),
-						Category:      status.DiskHealth,
-					}
-				}
-			}
-
-			// Set hardware info
-			containerData.Hwid = status.Hwid
-			containerData.Architecture = status.Architecture
-		} else {
-			log.Warn("Container observed state is not of expected type")
 		}
-	} else {
-		log.Warn("Container instance has no observed state")
+	}
+	if status.Memory != nil {
+		out.Memory = status.Memory
+		if out.Memory.Health == nil {
+			out.Memory.Health = &models.Health{
+				Message:       getContainerHealthMessage(status.MemoryHealth),
+				ObservedState: status.MemoryHealth.String(),
+				DesiredState:  models.Active.String(),
+				Category:      status.MemoryHealth,
+			}
+		}
+	}
+	if status.Disk != nil {
+		out.Disk = status.Disk
+		if out.Disk.Health == nil {
+			out.Disk.Health = &models.Health{
+				Message:       getContainerHealthMessage(status.DiskHealth),
+				ObservedState: status.DiskHealth.String(),
+				DesiredState:  models.Active.String(),
+				Category:      status.DiskHealth,
+			}
+		}
 	}
 
-	return containerData
+	out.Hwid = status.Hwid
+	out.Architecture = status.Architecture
+	return out, nil
 }
 
-// buildDefaultContainerData creates default container data when no real data is available
-func buildDefaultContainerData() models.Container {
+// defaultContainer is used whenever no snapshot data is available.
+func defaultContainer() models.Container {
 	return models.Container{
 		Health: &models.Health{
 			Message:       "Container status unknown",
@@ -122,18 +121,6 @@ func buildDefaultContainerData() models.Container {
 				DesiredState:  "normal",
 				Category:      models.Neutral,
 			},
-			TotalUsageMCpu: 0,
-			CoreCount:      0,
-		},
-		Disk: &models.Disk{
-			Health: &models.Health{
-				Message:       "Disk status unknown",
-				ObservedState: "unknown",
-				DesiredState:  "normal",
-				Category:      models.Neutral,
-			},
-			DataPartitionUsedBytes:  0,
-			DataPartitionTotalBytes: 0,
 		},
 		Memory: &models.Memory{
 			Health: &models.Health{
@@ -142,10 +129,28 @@ func buildDefaultContainerData() models.Container {
 				DesiredState:  "normal",
 				Category:      models.Neutral,
 			},
-			CGroupUsedBytes:  0,
-			CGroupTotalBytes: 0,
+		},
+		Disk: &models.Disk{
+			Health: &models.Health{
+				Message:       "Disk status unknown",
+				ObservedState: "unknown",
+				DesiredState:  "normal",
+				Category:      models.Neutral,
+			},
 		},
 		Hwid:         "unknown",
 		Architecture: models.ArchitectureAmd64,
+	}
+}
+
+// getHealthMessage is container-specific.
+func getContainerHealthMessage(cat models.HealthCategory) string {
+	switch cat {
+	case models.Active:
+		return "Container operating normally"
+	case models.Degraded:
+		return "Container degraded"
+	default:
+		return "Container status unknown"
 	}
 }

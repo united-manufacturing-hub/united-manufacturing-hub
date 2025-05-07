@@ -24,83 +24,78 @@ import (
 	"go.uber.org/zap"
 )
 
-func redpandaFromInstanceSnapshot(
+// RedpandaFromSnapshot converts an optional FSMInstanceSnapshot into a
+// models.Redpanda. Defaults are returned when inst == nil.
+func RedpandaFromSnapshot(
 	inst *fsm.FSMInstanceSnapshot,
 	log *zap.SugaredLogger,
 ) models.Redpanda {
 
 	if inst == nil {
-		return buildDefaultRedpandaData()
+		return defaultRedpanda()
 	}
 
-	if rp, err := buildRedpandaDataFromInstanceSnapshot(*inst, log); err == nil {
-		return rp
+	rp, err := buildRedpanda(*inst, log)
+	if err != nil {
+		log.Error("unable to build redpanda data", zap.Error(err))
+		return defaultRedpanda()
 	}
-
-	return models.Redpanda{}
+	return rp
 }
 
-// buildRedpandaDataFromSnapshot creates redpanda data from a FSM instance snapshot
-// the instance will give us currentState, desiredState, etc. and the last observed state
-func buildRedpandaDataFromInstanceSnapshot(instance fsm.FSMInstanceSnapshot, log *zap.SugaredLogger) (models.Redpanda, error) {
-	redpandaData := models.Redpanda{}
+// buildRedpanda maps a **non-nil** instance snapshot to models.Redpanda.
+// It returns an error when the observed state cannot be cast.
+func buildRedpanda(
+	instance fsm.FSMInstanceSnapshot,
+	log *zap.SugaredLogger,
+) (models.Redpanda, error) {
 
-	// Check if we have actual observedState
-	if instance.LastObservedState != nil {
-
-		// Step 1: Assemble Health Information
-
-		// extract the current and desired state from the instance
-		currentState := instance.CurrentState
-		desiredState := instance.DesiredState
-
-		// Now derive the health category from the current state
-		healthCategory := models.Neutral
-		switch currentState {
-		case redpanda.OperationalStateActive:
-			healthCategory = models.Active
-		case redpanda.OperationalStateDegraded:
-			healthCategory = models.Degraded
-		}
-
-		// Now derive the health message from the health category
-		healthMessage := getHealthMessage(healthCategory)
-
-		// Now assemble the health status
-		redpandaData.Health = &models.Health{
-			Message:       healthMessage,
-			ObservedState: currentState,
-			DesiredState:  desiredState,
-			Category:      healthCategory,
-		}
-
-		// Step 2: Assemble Redpanda Metrics (AvgIncomingThroughputPerMinuteInMsgSec, AvgOutgoingThroughputPerMinuteInMsgSec)
-		// Try to cast to the right type
-		observedState, ok := instance.LastObservedState.(*redpanda.RedpandaObservedStateSnapshot)
-		if !ok {
-			err := fmt.Errorf("observed state %T does not match RedpandaObservedStateSnapshot", instance.LastObservedState)
-			log.Error(err)
-			return models.Redpanda{}, err
-		}
-
-		// Now fetch the last observed service info
-		observedStateServiceInfo := observedState.ServiceInfoSnapshot
-
-		// Now calculate the throughput metrics if available
-		if observedStateServiceInfo.RedpandaStatus.RedpandaMetrics.MetricsState != nil {
-			redpandaData.AvgIncomingThroughputPerMinuteInMsgSec = float64(observedStateServiceInfo.RedpandaStatus.RedpandaMetrics.MetricsState.Input.BytesPerTick) / constants.DefaultTickerTime.Seconds()
-			redpandaData.AvgOutgoingThroughputPerMinuteInMsgSec = float64(observedStateServiceInfo.RedpandaStatus.RedpandaMetrics.MetricsState.Output.BytesPerTick) / constants.DefaultTickerTime.Seconds()
-		}
-
-	} else {
-		log.Warn("no observed state found for redpanda", zap.String("instanceID", instance.ID))
-		return models.Redpanda{}, fmt.Errorf("no observed state found for redpanda")
+	snap, ok := instance.LastObservedState.(*redpanda.RedpandaObservedStateSnapshot)
+	if !ok || snap == nil {
+		return models.Redpanda{}, fmt.Errorf("invalid observed-state")
 	}
 
-	return redpandaData, nil
+	// Health ---------------------------------------------------------------
+	healthCat := models.Neutral
+	switch instance.CurrentState {
+	case redpanda.OperationalStateActive:
+		healthCat = models.Active
+	case redpanda.OperationalStateDegraded:
+		healthCat = models.Degraded
+	}
+
+	out := models.Redpanda{
+		Health: &models.Health{
+			Message:       getRedpandaHealthMessage(healthCat),
+			ObservedState: instance.CurrentState,
+			DesiredState:  instance.DesiredState,
+			Category:      healthCat,
+		},
+	}
+
+	// Metrics --------------------------------------------------------------
+	m := snap.ServiceInfoSnapshot.RedpandaStatus.RedpandaMetrics.MetricsState
+	if m != nil {
+		out.AvgIncomingThroughputPerMinuteInMsgSec =
+			float64(m.Input.BytesPerTick) / constants.DefaultTickerTime.Seconds()
+		out.AvgOutgoingThroughputPerMinuteInMsgSec =
+			float64(m.Output.BytesPerTick) / constants.DefaultTickerTime.Seconds()
+	}
+	return out, nil
 }
 
-// buildDefaultRedpandaData creates default redpanda data when no real data is available
-func buildDefaultRedpandaData() models.Redpanda {
-	return models.Redpanda{}
+// defaultRedpanda produces an empty Redpanda struct when there is no
+// live data to populate it.
+func defaultRedpanda() models.Redpanda { return models.Redpanda{} }
+
+// getRedpandaHealthMessage is redpanda-specific.
+func getRedpandaHealthMessage(cat models.HealthCategory) string {
+	switch cat {
+	case models.Active:
+		return "Redpanda cluster healthy"
+	case models.Degraded:
+		return "Redpanda degraded"
+	default:
+		return "Redpanda status unknown"
+	}
 }

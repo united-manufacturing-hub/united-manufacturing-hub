@@ -25,90 +25,100 @@ import (
 	"go.uber.org/zap"
 )
 
-func dfcsFromManagerSnapshot(
-	mgr fsm.ManagerSnapshot, // data-flow can have many instances
+// DfcsFromSnapshot converts an optional ManagerSnapshot — potentially
+// holding **many** instances — into a slice of models.Dfc.
+//
+// If mgr is nil or no instance could be converted, an empty slice is
+// returned.  This plural form is the only difference compared with the
+// single-instance helpers (AgentFromSnapshot, ContainerFromSnapshot,
+// …) in the other files.
+func DfcsFromSnapshot(
+	mgr fsm.ManagerSnapshot,
 	log *zap.SugaredLogger,
 ) []models.Dfc {
 
 	if mgr == nil {
-		return buildDefaultDataFlowComponentData()
+		return defaultDfcs()
 	}
+
 	var out []models.Dfc
 	for _, inst := range mgr.GetInstances() {
-		if d, err := buildDataFlowComponentDataFromSnapshot(*inst, log); err == nil {
+		if d, err := buildDfc(*inst, log); err == nil {
 			out = append(out, d)
 		}
 	}
 	return out
 }
 
-func buildDataFlowComponentDataFromSnapshot(instance fsm.FSMInstanceSnapshot, log *zap.SugaredLogger) (models.Dfc, error) {
-	dfcData := models.Dfc{}
+// buildDfc translates one FSMInstanceSnapshot into a models.Dfc.  It
+// returns an error when the observed state cannot be interpreted.
+func buildDfc(
+	instance fsm.FSMInstanceSnapshot,
+	log *zap.SugaredLogger,
+) (models.Dfc, error) {
 
-	// Check if we have actual observedState
-	if instance.LastObservedState != nil {
-		// Try to cast to the right type
-
-		// Create health status based on instance.CurrentState
-		extractHealthStatus := func(state string) models.HealthCategory {
-			switch state {
-			case dataflowcomponent.OperationalStateActive:
-				return models.Active
-			case dataflowcomponent.OperationalStateDegraded:
-				return models.Degraded
-			default:
-				return models.Neutral
-			}
-		}
-
-		// get the metrics from the instance
-		observed, ok := instance.LastObservedState.(*dataflowcomponent.DataflowComponentObservedStateSnapshot)
-		if !ok {
-			err := fmt.Errorf("observed state %T does not match DataflowComponentObservedStateSnapshot", instance.LastObservedState)
-			log.Error(err)
-			return models.Dfc{}, err
-		}
-		serviceInfo := observed.ServiceInfo
-		inputThroughput := float64(0)
-		if serviceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.MetricsState != nil && serviceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.MetricsState.Input.LastCount > 0 {
-			inputThroughput = serviceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.MetricsState.Input.MessagesPerTick / constants.DefaultTickerTime.Seconds()
-		}
-
-		dfcData.Health = &models.Health{
-			Message:       getDataflowHealthMessage(extractHealthStatus(instance.CurrentState), *observed),
-			ObservedState: instance.CurrentState,
-			DesiredState:  instance.DesiredState,
-			Category:      extractHealthStatus(instance.CurrentState),
-		}
-
-		dfcData.Type = "custom" // this is a custom DFC; protocol converters will have a separate fsm
-		dfcData.UUID = dataflowcomponentserviceconfig.GenerateUUIDFromName(instance.ID).String()
-		dfcData.Metrics = &models.DfcMetrics{
-			AvgInputThroughputPerMinuteInMsgSec: inputThroughput,
-		}
-		dfcData.Name = &instance.ID
-	} else {
-		log.Warn("no observed state found for dataflowcomponent", zap.String("instanceID", instance.ID))
-		return models.Dfc{}, fmt.Errorf("no observed state found for dataflowcomponent")
+	observed, ok := instance.LastObservedState.(*dataflowcomponent.DataflowComponentObservedStateSnapshot)
+	if !ok || observed == nil {
+		return models.Dfc{}, fmt.Errorf("observed state %T is not DataflowComponentObservedStateSnapshot", instance.LastObservedState)
 	}
 
-	return dfcData, nil
+	// ---- health ---------------------------------------------------------
+	healthCat := models.Neutral
+	switch instance.CurrentState {
+	case dataflowcomponent.OperationalStateActive:
+		healthCat = models.Active
+	case dataflowcomponent.OperationalStateDegraded:
+		healthCat = models.Degraded
+	}
+
+	dfc := models.Dfc{
+		Type: "custom",
+		UUID: dataflowcomponentserviceconfig.GenerateUUIDFromName(instance.ID).String(),
+		Name: &instance.ID,
+		Health: &models.Health{
+			Message:       getHealthMessage(healthCat, *observed),
+			ObservedState: instance.CurrentState,
+			DesiredState:  instance.DesiredState,
+			Category:      healthCat,
+		},
+	}
+
+	// ---- metrics --------------------------------------------------------
+	svcInfo := observed.ServiceInfo
+	if m := svcInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.MetricsState; m != nil &&
+		m.Input.LastCount > 0 {
+
+		dfc.Metrics = &models.DfcMetrics{
+			AvgInputThroughputPerMinuteInMsgSec: m.Input.MessagesPerTick / constants.DefaultTickerTime.Seconds(),
+		}
+	}
+	return dfc, nil
 }
 
-func buildDefaultDataFlowComponentData() []models.Dfc {
-	return []models.Dfc{}
-}
+// defaultDfcs returns an empty slice when the manager snapshot is nil
+// or unusable.
+func defaultDfcs() []models.Dfc { return []models.Dfc{} }
 
-// getDataflowHealthMessage returns an appropriate message for dataflow components
-func getDataflowHealthMessage(health models.HealthCategory, serviceInfo dataflowcomponent.DataflowComponentObservedStateSnapshot) string {
+// getHealthMessage is specific to data-flow components and keeps the
+// Benthos-log inspection logic in one place.
+func getHealthMessage(
+	health models.HealthCategory,
+	serviceInfo dataflowcomponent.DataflowComponentObservedStateSnapshot,
+) string {
+
 	switch health {
 	case models.Active:
 		return "Component is operating normally"
 	case models.Degraded:
-		if serviceInfo.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosDegradedLog.Content != "" {
-			return fmt.Sprintf("Component is degraded because of a bad log entry. If the problem persists, please check the logs for more information. Log entry: [ %s ] %s",
-				serviceInfo.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosDegradedLog.Timestamp.String(),
-				serviceInfo.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosDegradedLog.Content)
+		if serviceInfo.ServiceInfo.BenthosObservedState.ServiceInfo.
+			BenthosStatus.BenthosDegradedLog.Content != "" {
+
+			return fmt.Sprintf(
+				"Component degraded due to log entry [%s] %s",
+				serviceInfo.ServiceInfo.BenthosObservedState.ServiceInfo.
+					BenthosStatus.BenthosDegradedLog.Timestamp,
+				serviceInfo.ServiceInfo.BenthosObservedState.ServiceInfo.
+					BenthosStatus.BenthosDegradedLog.Content)
 		}
 		return "Component stopped working"
 	case models.Neutral:
