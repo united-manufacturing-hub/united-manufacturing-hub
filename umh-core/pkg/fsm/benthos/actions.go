@@ -302,7 +302,7 @@ func (b *BenthosInstance) IsBenthosConfigLoaded() (bool, string) {
 	if currentUptime >= constants.BenthosTimeUntilConfigLoadedInSeconds {
 		return true, ""
 	}
-	return false, fmt.Sprintf("Benthos has not been running for %d seconds, current uptime: %d seconds", constants.BenthosTimeUntilConfigLoadedInSeconds, currentUptime)
+	return false, fmt.Sprintf("Benthos has not been running for %d seconds, current uptime: %d seconds. If it remains in this state and uptime is not increasing, then benthos itself is in a crashloop, which is liekly caused by a configuration error.", constants.BenthosTimeUntilConfigLoadedInSeconds, currentUptime)
 }
 
 // IsBenthosHealthchecksPassed determines if the Benthos service has passed its healthchecks.
@@ -365,43 +365,38 @@ func (b *BenthosInstance) IsBenthosMetricsErrorFree() (bool, string) {
 // IsBenthosDegraded determines if the Benthos service is degraded.
 // These check everything that is checked during the starting phase
 // But it means that it once worked, and then degraded
-func (b *BenthosInstance) IsBenthosDegraded(currentTime time.Time, logWindow time.Duration) bool {
+func (b *BenthosInstance) IsBenthosDegraded(currentTime time.Time, logWindow time.Duration) (bool, string) {
 
 	// Same order as during starting phase
 	running, reason := b.IsBenthosS6Running()
 	if !running {
-		b.ObservedState.ServiceInfo.BenthosStatus.StatusReason = reason
-		return true
+		return true, reason
 	}
 
 	loaded, reason := b.IsBenthosConfigLoaded()
 	if !loaded {
-		b.ObservedState.ServiceInfo.BenthosStatus.StatusReason = reason
-		return true
+		return true, reason
 	}
 
 	logsFine, reason := b.IsBenthosLogsFine(currentTime, logWindow)
 	if !logsFine {
-		b.ObservedState.ServiceInfo.BenthosStatus.StatusReason = reason
-		return true
+		return true, reason
 	}
 
 	healthy, reason := b.IsBenthosHealthchecksPassed()
 	if !healthy {
-		b.ObservedState.ServiceInfo.BenthosStatus.StatusReason = reason
-		return true
+		return true, reason
 	}
 
-	return false
+	return false, ""
 }
 
 // IsBenthosWithProcessingActivity determines if the Benthos instance has active data processing
 // based on metrics data and possibly other observed state information
-func (b *BenthosInstance) IsBenthosWithProcessingActivity() bool {
+func (b *BenthosInstance) IsBenthosWithProcessingActivity() (bool, string) {
 	hasActivity, reason := b.service.HasProcessingActivity(b.ObservedState.ServiceInfo.BenthosStatus)
 	if !hasActivity {
-		b.ObservedState.ServiceInfo.BenthosStatus.StatusReason = reason
-		return false
+		return false, reason
 	}
-	return true
+	return true, ""
 }

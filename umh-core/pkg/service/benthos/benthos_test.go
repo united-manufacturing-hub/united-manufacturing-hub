@@ -375,6 +375,19 @@ var _ = Describe("Benthos Service", func() {
 				isLogsFine, _ := service.IsLogsFine(logs, currentTime, logWindow)
 				Expect(isLogsFine).To(BeTrue())
 			})
+
+			It("should handle DEBUG level logs", func() {
+				logs := []s6service.LogEntry{
+					{
+						Timestamp: currentTime.Add(-1 * time.Minute),
+						Content:   `level=error msg=TEST @service=benthos label="" path=root.pipeline.processors.0`,
+					},
+				}
+				isLogsFine, _ := service.IsLogsFine(logs, currentTime, logWindow)
+				Expect(isLogsFine).To(BeFalse())
+				//Note: there are no quotes around msg
+				// these can be produced using the log processor: https://docs.redpanda.com/redpanda-connect/components/processors/log/
+			})
 		})
 	})
 
@@ -427,7 +440,8 @@ var _ = Describe("Benthos Service", func() {
 						},
 					},
 				}
-				Expect(service.IsMetricsErrorFree(metrics)).To(BeFalse())
+				isMetricsErrorFree, _ := service.IsMetricsErrorFree(metrics)
+				Expect(isMetricsErrorFree).To(BeFalse())
 			})
 
 			It("should ignore connection failures", func() {
@@ -441,7 +455,8 @@ var _ = Describe("Benthos Service", func() {
 						},
 					},
 				}
-				Expect(service.IsMetricsErrorFree(metrics)).To(BeTrue())
+				isMetricsErrorFree, _ := service.IsMetricsErrorFree(metrics)
+				Expect(isMetricsErrorFree).To(BeTrue())
 			})
 
 			It("should detect processor errors", func() {
@@ -456,7 +471,8 @@ var _ = Describe("Benthos Service", func() {
 						},
 					},
 				}
-				Expect(service.IsMetricsErrorFree(metrics)).To(BeFalse())
+				isMetricsErrorFree, _ := service.IsMetricsErrorFree(metrics)
+				Expect(isMetricsErrorFree).To(BeFalse())
 			})
 
 			It("should detect errors in any processor", func() {
@@ -471,7 +487,8 @@ var _ = Describe("Benthos Service", func() {
 						},
 					},
 				}
-				Expect(service.IsMetricsErrorFree(metrics)).To(BeFalse())
+				isMetricsErrorFree, _ := service.IsMetricsErrorFree(metrics)
+				Expect(isMetricsErrorFree).To(BeFalse())
 			})
 		})
 	})

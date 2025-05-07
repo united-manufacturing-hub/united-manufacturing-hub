@@ -76,7 +76,7 @@ func buildDfc(
 		UUID: dataflowcomponentserviceconfig.GenerateUUIDFromName(instance.ID).String(),
 		Name: &instance.ID,
 		Health: &models.Health{
-			Message:       getHealthMessage(healthCat, *observed),
+			Message:       observed.ServiceInfo.StatusReason,
 			ObservedState: instance.CurrentState,
 			DesiredState:  instance.DesiredState,
 			Category:      healthCat,
@@ -98,31 +98,3 @@ func buildDfc(
 // defaultDfcs returns an empty slice when the manager snapshot is nil
 // or unusable.
 func defaultDfcs() []models.Dfc { return []models.Dfc{} }
-
-// getHealthMessage is specific to data-flow components and keeps the
-// Benthos-log inspection logic in one place.
-func getHealthMessage(
-	health models.HealthCategory,
-	serviceInfo dataflowcomponent.DataflowComponentObservedStateSnapshot,
-) string {
-
-	switch health {
-	case models.Active:
-		return "Component is operating normally"
-	case models.Degraded:
-		if serviceInfo.ServiceInfo.BenthosObservedState.ServiceInfo.
-			BenthosStatus.StatusReason != "" {
-
-			// TODO
-			return fmt.Sprintf(
-				"Component degraded due to log entry %s",
-				serviceInfo.ServiceInfo.BenthosObservedState.ServiceInfo.
-					BenthosStatus.StatusReason)
-		}
-		return "Component stopped working"
-	case models.Neutral:
-		return "Component status is neutral"
-	default:
-		return "Component status unknown"
-	}
-}

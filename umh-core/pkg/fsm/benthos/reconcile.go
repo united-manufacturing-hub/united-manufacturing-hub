@@ -261,7 +261,7 @@ func (b *BenthosInstance) reconcileStartingStates(ctx context.Context, services 
 		// First we need to ensure the S6 service is started
 		running, reason := b.IsBenthosS6Running()
 		if !running {
-			b.ObservedState.ServiceInfo.BenthosStatus.StatusReason = reason
+			b.ObservedState.ServiceInfo.BenthosStatus.StatusReason = fmt.Sprintf("benthos is starting: %s", reason)
 			return nil, false
 		}
 
@@ -272,14 +272,14 @@ func (b *BenthosInstance) reconcileStartingStates(ctx context.Context, services 
 		// If the S6 is not running, go back to starting
 		running, reason := b.IsBenthosS6Running()
 		if !running {
-			b.ObservedState.ServiceInfo.BenthosStatus.StatusReason = reason
+			b.ObservedState.ServiceInfo.BenthosStatus.StatusReason = fmt.Sprintf("benthos start failed: %s", reason)
 			return b.baseFSMInstance.SendEvent(ctx, EventStartFailed), true
 		}
 
 		// Now check whether benthos has loaded the config
 		loaded, reason := b.IsBenthosConfigLoaded()
 		if !loaded {
-			b.ObservedState.ServiceInfo.BenthosStatus.StatusReason = reason
+			b.ObservedState.ServiceInfo.BenthosStatus.StatusReason = fmt.Sprintf("benthos is starting and waiting for config to be loaded: %s", reason)
 			return nil, false
 		}
 
@@ -288,20 +288,20 @@ func (b *BenthosInstance) reconcileStartingStates(ctx context.Context, services 
 		// If the S6 is not running, go back to starting
 		running, reason := b.IsBenthosS6Running()
 		if !running {
-			b.ObservedState.ServiceInfo.BenthosStatus.StatusReason = reason
+			b.ObservedState.ServiceInfo.BenthosStatus.StatusReason = fmt.Sprintf("benthos start failed: %s", reason)
 			return b.baseFSMInstance.SendEvent(ctx, EventStartFailed), true
 		}
 
 		loaded, reason := b.IsBenthosConfigLoaded()
 		if !loaded {
-			b.ObservedState.ServiceInfo.BenthosStatus.StatusReason = reason
+			b.ObservedState.ServiceInfo.BenthosStatus.StatusReason = fmt.Sprintf("benthos start failed: %s", reason)
 			return b.baseFSMInstance.SendEvent(ctx, EventStartFailed), true
 		}
 
 		// Check if healthchecks have passed
 		passed, reason := b.IsBenthosHealthchecksPassed()
 		if !passed {
-			b.ObservedState.ServiceInfo.BenthosStatus.StatusReason = reason
+			b.ObservedState.ServiceInfo.BenthosStatus.StatusReason = fmt.Sprintf("benthos is starting and waiting for healthchecks to pass: %s", reason)
 			return b.baseFSMInstance.SendEvent(ctx, EventStartFailed), true
 		}
 
@@ -310,27 +310,27 @@ func (b *BenthosInstance) reconcileStartingStates(ctx context.Context, services 
 		// If the S6 is not running, go back to starting
 		running, reason := b.IsBenthosS6Running()
 		if !running {
-			b.ObservedState.ServiceInfo.BenthosStatus.StatusReason = reason
+			b.ObservedState.ServiceInfo.BenthosStatus.StatusReason = fmt.Sprintf("benthos start failed: %s", reason)
 			return b.baseFSMInstance.SendEvent(ctx, EventStartFailed), true
 		}
 
 		loaded, reason := b.IsBenthosConfigLoaded()
 		if !loaded {
-			b.ObservedState.ServiceInfo.BenthosStatus.StatusReason = reason
+			b.ObservedState.ServiceInfo.BenthosStatus.StatusReason = fmt.Sprintf("benthos start failed: %s", reason)
 			return b.baseFSMInstance.SendEvent(ctx, EventStartFailed), true
 		}
 
 		passed, reason := b.IsBenthosHealthchecksPassed()
 		if !passed {
-			b.ObservedState.ServiceInfo.BenthosStatus.StatusReason = reason
+			b.ObservedState.ServiceInfo.BenthosStatus.StatusReason = fmt.Sprintf("benthos start failed: %s", reason)
 			return b.baseFSMInstance.SendEvent(ctx, EventStartFailed), true
 		}
 
 		// Check if service has been running stably for some time
 		running, reason = b.IsBenthosRunningForSomeTimeWithoutErrors(currentTime, constants.BenthosLogWindow)
 		if !running {
-			b.ObservedState.ServiceInfo.BenthosStatus.StatusReason = reason
-			return b.baseFSMInstance.SendEvent(ctx, EventStartFailed), true
+			b.ObservedState.ServiceInfo.BenthosStatus.StatusReason = fmt.Sprintf("benthos is starting and waiting for service to remain running: %s", reason)
+			return nil, false
 		}
 
 		return b.baseFSMInstance.SendEvent(ctx, EventStartDone), true
@@ -349,25 +349,38 @@ func (b *BenthosInstance) reconcileRunningStates(ctx context.Context, services s
 	switch currentState {
 	case OperationalStateActive:
 		// If we're in Active, we need to check whether it is degraded
-		if b.IsBenthosDegraded(currentTime, constants.BenthosLogWindow) {
+		degraded, reasonDegraded := b.IsBenthosDegraded(currentTime, constants.BenthosLogWindow)
+		processing, reasonProcessing := b.IsBenthosWithProcessingActivity()
+		if degraded {
+			b.ObservedState.ServiceInfo.BenthosStatus.StatusReason = fmt.Sprintf("benthos will now degrade: %s", reasonDegraded)
 			return b.baseFSMInstance.SendEvent(ctx, EventDegraded), true
-		} else if !b.IsBenthosWithProcessingActivity() { // if there is no activity, we move to Idle
+		} else if !processing { // if there is no activity, we move to Idle
+			b.ObservedState.ServiceInfo.BenthosStatus.StatusReason = fmt.Sprintf("benthos will now idle: %s", reasonProcessing)
 			return b.baseFSMInstance.SendEvent(ctx, EventNoDataTimeout), true
 		}
+		// if we are active, send no status reason
 		return nil, false
 	case OperationalStateIdle:
 		// If we're in Idle, we need to check whether it is degraded
-		if b.IsBenthosDegraded(currentTime, constants.BenthosLogWindow) {
+		degraded, reasonDegraded := b.IsBenthosDegraded(currentTime, constants.BenthosLogWindow)
+		processing, reasonProcessing := b.IsBenthosWithProcessingActivity()
+		if degraded {
+			b.ObservedState.ServiceInfo.BenthosStatus.StatusReason = fmt.Sprintf("benthos will now degrade: %s", reasonDegraded)
 			return b.baseFSMInstance.SendEvent(ctx, EventDegraded), true
-		} else if b.IsBenthosWithProcessingActivity() { // if there is activity, we move to Active
+		} else if processing { // if there is activity, we move to Active
+			b.ObservedState.ServiceInfo.BenthosStatus.StatusReason = fmt.Sprintf("benthos will now be active: %s", reasonProcessing)
 			return b.baseFSMInstance.SendEvent(ctx, EventDataReceived), true
 		}
+		b.ObservedState.ServiceInfo.BenthosStatus.StatusReason = fmt.Sprintf("benthos is idle: %s", reasonProcessing)
 		return nil, false
 	case OperationalStateDegraded:
 		// If we're in Degraded, we need to recover to move to Idle
-		if !b.IsBenthosDegraded(currentTime, constants.BenthosLogWindow) {
+		degraded, reason := b.IsBenthosDegraded(currentTime, constants.BenthosLogWindow)
+		if !degraded {
+			b.ObservedState.ServiceInfo.BenthosStatus.StatusReason = fmt.Sprintf("benthos will now recover: %s", reason)
 			return b.baseFSMInstance.SendEvent(ctx, EventRecovered), true
 		}
+		b.ObservedState.ServiceInfo.BenthosStatus.StatusReason = fmt.Sprintf("benthos is degraded: %s", reason)
 		return nil, false
 	default:
 		return fmt.Errorf("invalid running state: %s", currentState), false

@@ -208,7 +208,7 @@ type configCacheEntry struct {
 func hash(buf []byte) uint64 { return xxhash.Sum64(buf) }
 
 // benthosLogRe is a helper function for BenthosService.IsLogsFine
-var benthosLogRe = regexp.MustCompile(`^level=(error|warning)\s+msg="(.+)"`)
+var benthosLogRe = regexp.MustCompile(`^level=(error|warning)\s+msg=(.+)`)
 
 // BenthosServiceOption is a function that modifies a BenthosService
 type BenthosServiceOption func(*BenthosService)
@@ -974,13 +974,13 @@ func (s *BenthosService) IsLogsFine(
 func (s *BenthosService) IsMetricsErrorFree(metrics benthos_monitor.BenthosMetrics) (bool, string) {
 	// Check output errors
 	if metrics.Metrics.Output.Error > 0 {
-		return false, fmt.Sprintf("benthos metrics contain %d output errors", metrics.Metrics.Output.Error)
+		return false, fmt.Sprintf("benthos reported %d output errors", metrics.Metrics.Output.Error)
 	}
 
 	// Check processor errors
 	for _, proc := range metrics.Metrics.Process.Processors {
 		if proc.Error > 0 {
-			return false, fmt.Sprintf("benthos metrics contain %d processor errors", proc.Error)
+			return false, fmt.Sprintf("benthos reported %d processor errors", proc.Error)
 		}
 	}
 
@@ -997,7 +997,9 @@ func (s *BenthosService) HasProcessingActivity(status BenthosStatus) (bool, stri
 		return true, ""
 	}
 
-	return false, fmt.Sprintf("benthos metrics state is not active: input=%.2f, output=%.2f", status.BenthosMetrics.MetricsState.Input.MessagesPerTick, status.BenthosMetrics.MetricsState.Output.MessagesPerTick)
+	msgPerSecInput := status.BenthosMetrics.MetricsState.Input.MessagesPerTick / constants.DefaultTickerTime.Seconds()
+	msgPerSecOutput := status.BenthosMetrics.MetricsState.Output.MessagesPerTick / constants.DefaultTickerTime.Seconds()
+	return false, fmt.Sprintf("benthos is idle and has not processed any messages for a while: current input=%.2f msg/sec, current output=%.2f msg/sec", msgPerSecInput, msgPerSecOutput)
 }
 
 // ServiceExists checks if a Benthos service exists in the S6 manager

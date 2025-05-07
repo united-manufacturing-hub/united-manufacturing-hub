@@ -261,16 +261,23 @@ func (d *DataflowComponentInstance) IsDataflowComponentBenthosStopped() bool {
 // IsDataflowComponentDegraded determines if the DataflowComponent service is degraded.
 // These check everything that is checked during the starting phase
 // But it means that it once worked, and then degraded
-func (d *DataflowComponentInstance) IsDataflowComponentDegraded() bool {
-	return d.ObservedState.ServiceInfo.BenthosFSMState == benthosfsm.OperationalStateDegraded
+func (d *DataflowComponentInstance) IsDataflowComponentDegraded() (bool, string) {
+	if d.ObservedState.ServiceInfo.BenthosFSMState == benthosfsm.OperationalStateDegraded {
+		return true, fmt.Sprintf("Benthos is degraded: %s", d.ObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.StatusReason)
+	}
+	return false, ""
 }
 
 // IsDataflowComponentWithProcessingActivity determines if the Benthos instance has active data processing
 // based on metrics data and possibly other observed state information
-func (d *DataflowComponentInstance) IsDataflowComponentWithProcessingActivity() bool {
+func (d *DataflowComponentInstance) IsDataflowComponentWithProcessingActivity() (bool, string) {
 	benthosStatus := d.ObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus
 
-	return benthosStatus.BenthosMetrics.MetricsState != nil && benthosStatus.BenthosMetrics.MetricsState.IsActive
+	if benthosStatus.BenthosMetrics.MetricsState != nil && benthosStatus.BenthosMetrics.MetricsState.IsActive {
+		return true, ""
+	}
+
+	return false, fmt.Sprintf("Benthos is not active: %s", benthosStatus.StatusReason)
 }
 
 // IsStartingPeriodGracePeriodExceeded returns true when the difference
@@ -290,9 +297,9 @@ func (d *DataflowComponentInstance) IsDataflowComponentWithProcessingActivity() 
 //     tick.
 //   - Any unexpected error results in a conservative **false** because we
 //     prefer to wait rather than fail spuriously.
-func (d *DataflowComponentInstance) IsStartingPeriodGracePeriodExceeded(ctx context.Context, currentTime time.Time) bool {
+func (d *DataflowComponentInstance) IsStartingPeriodGracePeriodExceeded(ctx context.Context, currentTime time.Time) (bool, string) {
 	// TODO
-	return false
+	return false, ""
 }
 
 // DidDFCAlreadyFailedBefore reports whether **any** permanent-failure event
@@ -309,7 +316,7 @@ func (d *DataflowComponentInstance) IsStartingPeriodGracePeriodExceeded(ctx cont
 //  3. The archive is assumed to be durable across process restarts;
 //     if it is not, this function must return `false`, effectively
 //     disabling the feature.
-func (d *DataflowComponentInstance) DidDFCAlreadyFailedBefore(ctx context.Context) bool {
+func (d *DataflowComponentInstance) DidDFCAlreadyFailedBefore(ctx context.Context) (bool, string) {
 	// TODO: Implement this
 	// TODO: make sure that the archive storage is persistent
 	/*
@@ -339,5 +346,5 @@ func (d *DataflowComponentInstance) DidDFCAlreadyFailedBefore(ctx context.Contex
 			// If we found any data points with this state, return true
 			return len(dataPoints) > 0
 	*/
-	return false
+	return false, ""
 }
