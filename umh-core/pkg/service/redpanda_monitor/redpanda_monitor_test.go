@@ -343,8 +343,8 @@ var _ = Describe("Redpanda Monitor Service", func() {
 
 		// Verify storage metrics
 		// Note: this value is different from the other test, as the metrics are different
-		Expect(metricsResult.Metrics.Infrastructure.Storage.FreeBytes).To(Equal(int64(258896789504)))
-		Expect(metricsResult.Metrics.Infrastructure.Storage.TotalBytes).To(Equal(int64(494384795648)))
+		Expect(metricsResult.Metrics.Infrastructure.Storage.FreeBytes).To(Equal(int64(135588388864)))
+		Expect(metricsResult.Metrics.Infrastructure.Storage.TotalBytes).To(Equal(int64(253322825728)))
 		Expect(metricsResult.Metrics.Infrastructure.Storage.FreeSpaceAlert).To(BeFalse())
 
 		// Verify cluster metrics
