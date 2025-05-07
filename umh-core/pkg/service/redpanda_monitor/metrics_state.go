@@ -14,6 +14,8 @@
 
 package redpanda_monitor
 
+import "fmt"
+
 // ComponentThroughput tracks throughput metrics for a single component
 type ComponentThroughput struct {
 	// LastTick is the last tick when metrics were updated
@@ -69,6 +71,8 @@ func (s *RedpandaMetricsState) UpdateFromMetrics(metrics Metrics, tick uint64) {
 
 	// Update activity status based on input throughput
 	s.IsActive = s.Input.BytesPerTick > 0 || s.Output.BytesPerTick > 0
+	fmt.Println("Input:", s.Input.BytesPerTick, "Output:", s.Output.BytesPerTick)
+	fmt.Println("Input:", s.Input.LastCount, "Output:", s.Output.LastCount)
 
 	// Update last tick
 	s.LastTick = tick

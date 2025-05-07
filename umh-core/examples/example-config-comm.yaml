@@ -35,14 +35,13 @@ dataFlow:
         input:
           generate:
             mapping: root = "hello world from DFC!"
-            interval: 1s # Output every 2 seconds
+            interval: 1s # Output every 1 seconds
             count: 0 # Set to 0 for unlimited messages
         pipeline:
           processors:
             - bloblang: root = content()
         output:
-            stdout: {}
-  
-internal:
-  redpanda:
-    desiredState: stopped
+            kafka:
+                addresses:
+                  - localhost:9092
+                topic: messages

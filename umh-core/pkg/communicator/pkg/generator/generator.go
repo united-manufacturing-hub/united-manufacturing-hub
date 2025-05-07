@@ -37,10 +37,11 @@ const (
 	containerManagerName = logger.ComponentContainerManager + "_" + constants.DefaultManagerName
 	benthosManagerName   = logger.ComponentBenthosManager + "_" + constants.DefaultManagerName
 	agentManagerName     = logger.ComponentAgentManager + "_" + constants.DefaultManagerName
-	redpandaManagerName  = logger.ComponentRedpandaManager + "_" + constants.DefaultManagerName
+	redpandaManagerName  = logger.ComponentRedpandaManager + constants.DefaultManagerName
 	// Instance name constants
-	coreInstanceName  = "Core"
-	agentInstanceName = "agent"
+	coreInstanceName     = "Core"
+	agentInstanceName    = "agent"
+	redpandaInstanceName = "redpanda"
 )
 
 type StatusCollectorType struct {
@@ -156,14 +157,14 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 	if redpandaManager, exists := snapshot.Managers[redpandaManagerName]; exists {
 		instances := redpandaManager.GetInstances()
 
-		if instance, ok := instances[coreInstanceName]; ok {
+		if instance, ok := instances[redpandaInstanceName]; ok {
 			redpandaData, err = buildRedpandaDataFromSnapshot(*instance, s.logger)
 			if err != nil {
 				s.logger.Error("Error building redpanda data", zap.Error(err))
 			}
 		} else {
 			s.logger.Warn("Redpanda instance not found in redpanda manager",
-				zap.String("instanceName", coreInstanceName))
+				zap.String("instanceName", redpandaInstanceName))
 			sentry.ReportIssuef(sentry.IssueTypeError, s.logger, "[GenerateStatusMessage] Redpanda instance not found in redpanda manager")
 			redpandaData = models.Redpanda{}
 		}
