@@ -777,6 +777,11 @@ func (s *RedpandaService) StartRedpanda(ctx context.Context, redpandaName string
 
 // StopRedpanda stops a Redpanda instance
 func (s *RedpandaService) StopRedpanda(ctx context.Context, redpandaName string) error {
+	s.logger.Infof("Stopping Redpanda instance %s", redpandaName)
+	s.logger.Infof("Stopping Redpanda instance %s", redpandaName)
+	s.logger.Infof("Stopping Redpanda instance %s", redpandaName)
+	s.logger.Infof("Stopping Redpanda instance %s", redpandaName)
+	s.logger.Infof("Stopping Redpanda instance %s", redpandaName)
 	if s.s6Manager == nil {
 		return errors.New("s6 manager not initialized")
 	}
@@ -987,12 +992,6 @@ func (s *RedpandaService) ApplyConfigurationChanges(ctx context.Context, current
 	if ctx.Err() != nil {
 		return false, ctx.Err()
 	}
-	if tick%10 != 0 {
-		// Skip applying changes if the tick is not a multiple of 10
-		// This is used to avoid applying changes when others might still be pending
-		s.logger.Infof("Skipping applying changes to Redpanda instance due to tick %d not being a multiple of 10", tick)
-		return false, nil
-	}
 
 	// First normalize both configs to ensure we're comparing apples to apples
 	normDesired := redpandaserviceconfig.NormalizeRedpandaConfig(desired)
@@ -1049,8 +1048,12 @@ func (s *RedpandaService) ApplyConfigurationChanges(ctx context.Context, current
 		// CommandContext sets the command's Cancel function to invoke the Kill method
 		// on its Process, and leaves its WaitDelay unset. The caller may change the
 		// cancellation behavior by modifying those fields before starting the command.
-		command := exec.CommandContext(ctx, cmdArgs[0], cmdArgs[1:]...)
+		cmdCtx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+		now := time.Now()
+		command := exec.CommandContext(cmdCtx, cmdArgs[0], cmdArgs[1:]...)
 		output, err := command.CombinedOutput()
+		cancel()
+		s.logger.Infof("Command %s executed in %s, output: %s (err: %v)", cmd, time.Since(now), string(output), err)
 
 		if err != nil {
 			s.logger.Errorf("Failed to execute command %s: %v, output: %s", cmd, err, string(output))

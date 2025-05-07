@@ -220,6 +220,8 @@ func (r *RedpandaInstance) reconcileOperationalStates(ctx context.Context, servi
 		metrics.ObserveReconcileTime(metrics.ComponentRedpandaInstance, r.baseFSMInstance.GetID()+".reconcileOperationalStates", time.Since(start))
 	}()
 
+	r.baseFSMInstance.GetLogger().Infof("reconciling transition to %s from state %s", desiredState, currentState)
+
 	switch desiredState {
 	case OperationalStateActive:
 		return r.reconcileTransitionToActive(ctx, services, currentState, currentTime)
@@ -239,22 +241,16 @@ func (r *RedpandaInstance) reconcileTransitionToRestarting(ctx context.Context, 
 		metrics.ObserveReconcileTime(metrics.ComponentRedpandaInstance, r.baseFSMInstance.GetID()+".reconcileTransitionToRestarting", time.Since(start))
 	}()
 
-	// If we are currently in a running state, we can directly use RestartInstance
+	r.baseFSMInstance.GetLogger().Infof("reconciling transition to restarting from state %s", currentState)
+
+	// If the current state is a running state, we need to stop the instance first
 	if IsRunningState(currentState) {
-		err := r.RestartInstance(ctx, services.GetFileSystem())
-		if err != nil {
-			return err, false
-		}
-		// This behaves as if we would have started the instance
-		return r.baseFSMInstance.SendEvent(ctx, EventStart), true
+		return r.reconcileTransitionToStopped(ctx, services, currentState)
 	}
 
-	// If we are currently in a stopped state, we only need to start the instance
+	// If the current state is a stopped state, we need to start the instance first
 	if currentState == OperationalStateStopped {
-		if err := r.StartInstance(ctx, services.GetFileSystem()); err != nil {
-			return err, false
-		}
-		return r.baseFSMInstance.SendEvent(ctx, EventStart), true
+		return r.reconcileTransitionToActive(ctx, services, currentState, time.Now())
 	}
 
 	return nil, false
@@ -267,6 +263,8 @@ func (r *RedpandaInstance) reconcileTransitionToActive(ctx context.Context, serv
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentRedpandaInstance, r.baseFSMInstance.GetID()+".reconcileTransitionToActive", time.Since(start))
 	}()
+
+	r.baseFSMInstance.GetLogger().Infof("reconciling transition to active from state %s", currentState)
 
 	// If we're stopped, we need to start first
 	if currentState == OperationalStateStopped {

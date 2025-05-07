@@ -79,6 +79,15 @@ type S6ObservedState struct {
 	ObservedS6ServiceConfig s6serviceconfig.S6ServiceConfig
 }
 
+// IsRunningState returns whether the given state is a running state
+func IsRunningState(state string) bool {
+	switch state {
+	case OperationalStateRunning:
+		return true
+	}
+	return false
+}
+
 // IsObservedState implements the ObservedState interface
 func (s S6ObservedState) IsObservedState() {}
 

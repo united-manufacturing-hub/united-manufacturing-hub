@@ -85,8 +85,10 @@ func NewS6InstanceWithService(
 // But ensures that the desired state is a valid state and that it is also a reasonable state
 // e.g., nobody wants to have an instance in the "starting" state, that is just intermediate
 func (s *S6Instance) SetDesiredFSMState(state string) error {
-	if state != OperationalStateRunning && state != OperationalStateStopped {
-		return fmt.Errorf("invalid desired state: %s. valid states are %s and %s", state, OperationalStateRunning, OperationalStateStopped)
+	if state != OperationalStateRunning &&
+		state != OperationalStateStopped &&
+		state != OperationalStateRestarting {
+		return fmt.Errorf("invalid desired state: %s. valid states are %s, %s and %s", state, OperationalStateRunning, OperationalStateStopped, OperationalStateRestarting)
 	}
 
 	s.baseFSMInstance.SetDesiredFSMState(state)
