@@ -813,7 +813,7 @@ func seriesName(b []byte) string {
 	return string(b)
 }
 
-// Process the cluster config data
+// Process the cluster readiness status
 func (s *RedpandaMonitorService) parseReadynessData(readynessDataBytes []byte) (bool, string, error) {
 	readynessDataString := string(readynessDataBytes)
 
