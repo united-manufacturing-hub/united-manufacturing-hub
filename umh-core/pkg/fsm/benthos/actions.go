@@ -28,6 +28,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	benthos_service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	standarderrors "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
 )
@@ -313,29 +314,30 @@ func (b *BenthosInstance) AnyRestartsSinceCreation() bool {
 }
 
 // IsBenthosRunningForSomeTimeWithoutErrors determines if the Benthos service has been running for some time.
-func (b *BenthosInstance) IsBenthosRunningForSomeTimeWithoutErrors(currentTime time.Time, logWindow time.Duration) bool {
+func (b *BenthosInstance) IsBenthosRunningForSomeTimeWithoutErrors(currentTime time.Time, logWindow time.Duration) (bool, s6service.LogEntry) {
 	currentUptime := b.ObservedState.ServiceInfo.S6ObservedState.ServiceInfo.Uptime
 	if currentUptime < 10 {
-		return false
+		return false, s6service.LogEntry{}
 	}
 
 	// Check if there are any issues in the Benthos logs
-	if !b.IsBenthosLogsFine(currentTime, logWindow) {
-		b.baseFSMInstance.GetLogger().Debugf("benthos logs are not fine")
-		return false
+	logsFine, logEntry := b.IsBenthosLogsFine(currentTime, logWindow)
+	if !logsFine {
+		b.baseFSMInstance.GetLogger().Debugf("benthos logs are not fine: %s", logEntry.Content)
+		return false, logEntry
 	}
 
 	// Check if there are any errors in the Benthos metrics
 	if !b.IsBenthosMetricsErrorFree() {
 		b.baseFSMInstance.GetLogger().Debugf("benthos metrics are not error free")
-		return false
+		return false, s6service.LogEntry{}
 	}
 
-	return true
+	return true, s6service.LogEntry{}
 }
 
 // IsBenthosLogsFine determines if there are any issues in the Benthos logs
-func (b *BenthosInstance) IsBenthosLogsFine(currentTime time.Time, logWindow time.Duration) bool {
+func (b *BenthosInstance) IsBenthosLogsFine(currentTime time.Time, logWindow time.Duration) (bool, s6service.LogEntry) {
 	return b.service.IsLogsFine(b.ObservedState.ServiceInfo.BenthosStatus.BenthosLogs, currentTime, logWindow)
 }
 
@@ -347,11 +349,16 @@ func (b *BenthosInstance) IsBenthosMetricsErrorFree() bool {
 // IsBenthosDegraded determines if the Benthos service is degraded.
 // These check everything that is checked during the starting phase
 // But it means that it once worked, and then degraded
-func (b *BenthosInstance) IsBenthosDegraded(currentTime time.Time, logWindow time.Duration) bool {
-	if b.IsBenthosS6Running() && b.IsBenthosConfigLoaded() && b.IsBenthosHealthchecksPassed() && b.IsBenthosRunningForSomeTimeWithoutErrors(currentTime, logWindow) {
-		return false
+func (b *BenthosInstance) IsBenthosDegraded(currentTime time.Time, logWindow time.Duration) (bool, s6service.LogEntry) {
+	logsFine, logEntry := b.IsBenthosLogsFine(currentTime, logWindow)
+	if !logsFine {
+		return true, logEntry
 	}
-	return true
+
+	if b.IsBenthosS6Running() && b.IsBenthosConfigLoaded() && b.IsBenthosHealthchecksPassed() {
+		return false, s6service.LogEntry{}
+	}
+	return true, s6service.LogEntry{}
 }
 
 // IsBenthosWithProcessingActivity determines if the Benthos instance has active data processing

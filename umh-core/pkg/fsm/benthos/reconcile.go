@@ -298,7 +298,8 @@ func (b *BenthosInstance) reconcileStartingStates(ctx context.Context, services 
 		}
 
 		// Check if service has been running stably for some time
-		if !b.IsBenthosRunningForSomeTimeWithoutErrors(currentTime, constants.BenthosLogWindow) {
+		running, _ := b.IsBenthosRunningForSomeTimeWithoutErrors(currentTime, constants.BenthosLogWindow)
+		if !running {
 			return nil, false
 		}
 
@@ -318,7 +319,8 @@ func (b *BenthosInstance) reconcileRunningStates(ctx context.Context, services s
 	switch currentState {
 	case OperationalStateActive:
 		// If we're in Active, we need to check whether it is degraded
-		if b.IsBenthosDegraded(currentTime, constants.BenthosLogWindow) {
+		degraded, _ := b.IsBenthosDegraded(currentTime, constants.BenthosLogWindow)
+		if degraded {
 			return b.baseFSMInstance.SendEvent(ctx, EventDegraded), true
 		} else if !b.IsBenthosWithProcessingActivity() { // if there is no activity, we move to Idle
 			return b.baseFSMInstance.SendEvent(ctx, EventNoDataTimeout), true
@@ -326,7 +328,8 @@ func (b *BenthosInstance) reconcileRunningStates(ctx context.Context, services s
 		return nil, false
 	case OperationalStateIdle:
 		// If we're in Idle, we need to check whether it is degraded
-		if b.IsBenthosDegraded(currentTime, constants.BenthosLogWindow) {
+		degraded, _ := b.IsBenthosDegraded(currentTime, constants.BenthosLogWindow)
+		if degraded {
 			return b.baseFSMInstance.SendEvent(ctx, EventDegraded), true
 		} else if b.IsBenthosWithProcessingActivity() { // if there is activity, we move to Active
 			return b.baseFSMInstance.SendEvent(ctx, EventDataReceived), true
@@ -334,7 +337,8 @@ func (b *BenthosInstance) reconcileRunningStates(ctx context.Context, services s
 		return nil, false
 	case OperationalStateDegraded:
 		// If we're in Degraded, we need to recover to move to Idle
-		if !b.IsBenthosDegraded(currentTime, constants.BenthosLogWindow) {
+		degraded, _ := b.IsBenthosDegraded(currentTime, constants.BenthosLogWindow)
+		if !degraded {
 			return b.baseFSMInstance.SendEvent(ctx, EventRecovered), true
 		}
 		return nil, false
