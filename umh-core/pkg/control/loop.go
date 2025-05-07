@@ -58,7 +58,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
-	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/starvationchecker"
 	"go.uber.org/zap"
 )
@@ -82,7 +82,8 @@ type ControlLoop struct {
 	starvationChecker *starvationchecker.StarvationChecker
 	currentTick       uint64
 	snapshotManager   *fsm.SnapshotManager
-	filesystemService filesystem.Service
+	managerTimes      map[string]time.Duration // Tracks execution time for each manager
+	services          *serviceregistry.Registry
 }
 
 // NewControlLoop creates a new control loop with all necessary managers.
@@ -102,6 +103,12 @@ func NewControlLoop(configManager config.ConfigManager) *ControlLoop {
 		log = zap.NewNop().Sugar()
 	}
 
+	// Create the service registry. The service registry will contain all services like filesystem, and portmanager
+	servicesRegistry, err := serviceregistry.NewRegistry()
+	if err != nil || servicesRegistry == nil {
+		sentry.ReportIssuef(sentry.IssueTypeFatal, log, "Failed to create service registry: %s", err)
+	}
+
 	// Create the managers
 	managers := []fsm.FSMManager[any]{
 		s6.NewS6Manager(constants.DefaultManagerName),
@@ -119,20 +126,7 @@ func NewControlLoop(configManager config.ConfigManager) *ControlLoop {
 	// Create a snapshot manager
 	snapshotManager := fsm.NewSnapshotManager()
 
-	// Create a buffered filesystem service
-	filesystemService := filesystem.NewDefaultService()
-
 	metrics.InitErrorCounter(metrics.ComponentControlLoop, "main")
-
-	// Now clean the S6 service directory except for the known services
-	s6Service := s6svc.NewDefaultService()
-	log.Debugf("Cleaning S6 service directory: %s", constants.S6BaseDir)
-	err := s6Service.CleanS6ServiceDirectory(context.Background(), constants.S6BaseDir, filesystem.NewDefaultService()) // we do not use the buffered service here, because we want to clean the real filesystem
-	if err != nil {
-		sentry.ReportIssuef(sentry.IssueTypeError, log, "Failed to clean S6 service directory: %s", err)
-
-	}
-	log.Debugf("S6 service directory cleaned: %s", constants.S6BaseDir)
 
 	return &ControlLoop{
 		managers:          managers,
@@ -141,7 +135,8 @@ func NewControlLoop(configManager config.ConfigManager) *ControlLoop {
 		logger:            log,
 		starvationChecker: starvationChecker,
 		snapshotManager:   snapshotManager,
-		filesystemService: filesystemService,
+		managerTimes:      make(map[string]time.Duration),
+		services:          servicesRegistry,
 	}
 }
 
@@ -280,8 +275,11 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 	// 3) Place the newly fetched config into the snapshot
 	newSnapshot.CurrentConfig = cfg
 
+	if c == nil {
+		return fmt.Errorf("service registry is nil, possible initialization failure")
+	}
 	// 4) If your filesystem service is a buffered FS, sync once per loop:
-	bufferedFs, ok := c.filesystemService.(*filesystem.BufferedService)
+	bufferedFs, ok := c.services.GetFileSystem().(*filesystem.BufferedService)
 	if ok {
 		// Step 1: Flush all pending writes to disk
 		err = bufferedFs.SyncToDisk(ctx)
@@ -299,7 +297,16 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 	}
 
 	// 5) Reconcile each manager with the current tick count and passing in the newSnapshot
+	// Reset manager times for this reconciliation cycle
+	c.managerTimes = make(map[string]time.Duration)
+
+	// Track executed managers for logging purposes
+	var executedManagers []string
+
 	for _, manager := range c.managers {
+		managerName := manager.GetManagerName()
+		executedManagers = append(executedManagers, managerName)
+
 		// Check if we have enough time to reconcile the manager
 		remaining, sufficient, err := ctxutil.HasSufficientTime(ctx, constants.DefaultMinimumRemainingTimePerManager)
 		if err != nil {
@@ -308,7 +315,7 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 			}
 			// For ErrInsufficientTime, skip reconciliation
 			if errors.Is(err, ctxutil.ErrInsufficientTime) {
-				c.logger.Warnf("Skipping reconcile cycle due to remaining time: %v", remaining)
+				c.logManagerTimes(remaining, executedManagers)
 				return nil
 			}
 			// Any other unexpected error
@@ -317,14 +324,19 @@ func (c *ControlLoop) Reconcile(ctx context.Context, ticker uint64) error {
 
 		// If sufficient is true but err is nil, we're good to proceed
 		if !sufficient {
-			c.logger.Warnf("Skipping reconcile cycle due to remaining time: %v", remaining)
+			c.logManagerTimes(remaining, executedManagers)
 			return nil
 		}
 
-		err, reconciled := manager.Reconcile(ctx, newSnapshot, c.filesystemService)
+		// Record manager execution time
+		managerStart := time.Now()
+		err, reconciled := manager.Reconcile(ctx, newSnapshot, c.services)
+		executionTime := time.Since(managerStart)
+		c.managerTimes[managerName] = executionTime
+
 		if err != nil {
-			metrics.IncErrorCount(metrics.ComponentControlLoop, manager.GetManagerName())
-			return fmt.Errorf("manager %s reconciliation failed: %w", manager.GetManagerName(), err)
+			metrics.IncErrorCount(metrics.ComponentControlLoop, managerName)
+			return fmt.Errorf("manager %s reconciliation failed: %w", managerName, err)
 		}
 
 		// If the manager was reconciled, skip the reconcilation of the next managers
@@ -398,6 +410,11 @@ func (c *ControlLoop) GetConfigManager() config.ConfigManager {
 	return c.configManager
 }
 
+// GetSnapshotManager returns the snapshot manager
+func (c *ControlLoop) GetSnapshotManager() *fsm.SnapshotManager {
+	return c.snapshotManager
+}
+
 // Stop gracefully terminates the control loop and its components.
 // This provides clean shutdown of all managed resources:
 // - Stops the starvation checker background goroutine
@@ -417,4 +434,21 @@ func (c *ControlLoop) Stop(ctx context.Context) error {
 	// Signal the control loop to stop
 	ctx.Done()
 	return nil
+}
+
+// logManagerTimes logs the execution times of all managers that were executed before skipping
+func (c *ControlLoop) logManagerTimes(remaining time.Duration, executedManagers []string) {
+	var totalTime time.Duration
+
+	for _, managerName := range executedManagers {
+		if execTime, ok := c.managerTimes[managerName]; ok {
+			totalTime += execTime
+		}
+	}
+
+	c.logger.Warnf("Skipping reconcile cycle due to remaining time: %v", remaining)
+	for _, managerName := range executedManagers {
+		c.logger.Warnf("Manager %s took %v", managerName, c.managerTimes[managerName])
+	}
+	c.logger.Warnf("Total time: %v", totalTime)
 }

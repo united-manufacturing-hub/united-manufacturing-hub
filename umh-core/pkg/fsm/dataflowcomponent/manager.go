@@ -24,7 +24,7 @@ import (
 	public_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
 const (
@@ -61,6 +61,7 @@ func NewDataflowComponentManager(name string) *DataflowComponentManager {
 		},
 		// Create Dataflowcomponent instance from config
 		func(cfg config.DataFlowComponentConfig) (public_fsm.FSMInstance, error) {
+			// We'll pass nil for the portManager here, and the instance will get it from the services registry during reconciliation
 			return NewDataflowComponentInstance(baseDataflowComponentDir, cfg), nil
 		},
 		// Compare Dataflowcomponent configs
@@ -69,7 +70,7 @@ func NewDataflowComponentManager(name string) *DataflowComponentManager {
 			if !ok {
 				return false, fmt.Errorf("instance is not a DataflowComponentInstance")
 			}
-			return dataflowComponentInstance.config.Equal(cfg.DataFlowComponentConfig), nil
+			return dataflowComponentInstance.config.Equal(cfg.DataFlowComponentServiceConfig), nil
 		},
 		// Set DataflowComponent config
 		func(instance public_fsm.FSMInstance, cfg config.DataFlowComponentConfig) error {
@@ -77,7 +78,7 @@ func NewDataflowComponentManager(name string) *DataflowComponentManager {
 			if !ok {
 				return fmt.Errorf("instance is not a DataflowComponentInstance")
 			}
-			dataflowComponentInstance.config = cfg.DataFlowComponentConfig
+			dataflowComponentInstance.config = cfg.DataFlowComponentServiceConfig
 			return nil
 		},
 		// Get expected max p95 execution time per instance
@@ -98,13 +99,13 @@ func NewDataflowComponentManager(name string) *DataflowComponentManager {
 // Reconcile calls the base manager's Reconcile method
 // The filesystemService parameter allows for filesystem operations during reconciliation,
 // enabling the method to read configuration or state information from the filesystem.
-func (m *DataflowComponentManager) Reconcile(ctx context.Context, snapshot public_fsm.SystemSnapshot, filesystemService filesystem.Service) (error, bool) {
+func (m *DataflowComponentManager) Reconcile(ctx context.Context, snapshot public_fsm.SystemSnapshot, services serviceregistry.Provider) (error, bool) {
 	start := time.Now()
 	defer func() {
 		duration := time.Since(start)
 		metrics.ObserveReconcileTime(logger.ComponentDataFlowComponentManager, m.GetManagerName(), duration)
 	}()
-	return m.BaseFSMManager.Reconcile(ctx, snapshot, filesystemService)
+	return m.BaseFSMManager.Reconcile(ctx, snapshot, services)
 }
 
 // CreateSnapshot overrides the base CreateSnapshot to include DataflowComponentManager-specific information

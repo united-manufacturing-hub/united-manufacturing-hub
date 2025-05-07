@@ -33,6 +33,8 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
 	"go.uber.org/zap"
 )
 
@@ -159,7 +161,7 @@ func (s *NmapService) GetConfig(ctx context.Context, filesystemService filesyste
 	if matches := portRegex.FindStringSubmatch(string(scriptData)); len(matches) > 1 {
 		port, err := strconv.Atoi(matches[1])
 		if err == nil {
-			result.Port = port
+			result.Port = uint16(port)
 		}
 	}
 
@@ -167,7 +169,7 @@ func (s *NmapService) GetConfig(ctx context.Context, filesystemService filesyste
 }
 
 // parseScanLogs parses the logs of an nmap service and extracts scan results
-func (s *NmapService) parseScanLogs(logs []s6service.LogEntry, port int) *NmapScanResult {
+func (s *NmapService) parseScanLogs(logs []s6service.LogEntry, port uint16) *NmapScanResult {
 	if len(logs) == 0 {
 		return nil
 	}
@@ -208,7 +210,7 @@ func (s *NmapService) parseScanLogs(logs []s6service.LogEntry, port int) *NmapSc
 	result := &NmapScanResult{
 		RawOutput: scanOutput,
 		PortResult: PortResult{
-			Port: port,
+			Port: uint16(port),
 		},
 		Metrics: ScanMetrics{},
 	}
@@ -232,7 +234,7 @@ func (s *NmapService) parseScanLogs(logs []s6service.LogEntry, port int) *NmapSc
 	}
 
 	// Extract port state
-	portStateRegex := regexp.MustCompile(`(?i)` + strconv.Itoa(port) + `/tcp\s+(\w+)`)
+	portStateRegex := regexp.MustCompile(`(?i)` + strconv.Itoa(int(port)) + `/tcp\s+(\w+)`)
 	if matches := portStateRegex.FindStringSubmatch(scanOutput); len(matches) > 1 {
 		result.PortResult.State = matches[1]
 	} else {
@@ -438,21 +440,29 @@ func (s *NmapService) RemoveNmapFromS6Manager(ctx context.Context, nmapName stri
 		return ctx.Err()
 	}
 
-	s6ServiceName := s.getS6ServiceName(nmapName)
+	// ------------------------------------------------------------------
+	// 1) Delete the *desired* config entry so the S6-manager will stop it
+	// ------------------------------------------------------------------
+	s6Name := s.getS6ServiceName(nmapName)
 
-	found := false
-
-	// Remove the S6 FSM config from the list
-	for i, s6Config := range s.s6ServiceConfigs {
-		if s6Config.Name == s6ServiceName {
-			s.s6ServiceConfigs = append(s.s6ServiceConfigs[:i], s.s6ServiceConfigs[i+1:]...)
-			found = true
-			break
+	// Helper that deletes exactly one element *without* reallocating when the
+	// element is already missing – keeps the call idempotent and allocation-free.
+	sliceRemoveByName := func(arr []config.S6FSMConfig, name string) []config.S6FSMConfig {
+		for i, cfg := range arr {
+			if cfg.Name == name {
+				return append(arr[:i], arr[i+1:]...)
+			}
 		}
+		return arr
 	}
 
-	if !found {
-		return ErrServiceNotExist
+	s.s6ServiceConfigs = sliceRemoveByName(s.s6ServiceConfigs, s6Name)
+
+	// ------------------------------------------------------------------
+	// 2) is the child FSM still alive?
+	// ------------------------------------------------------------------
+	if inst, ok := s.s6Manager.GetInstance(s6Name); ok {
+		return fmt.Errorf("%w: S6 instance state=%s", standarderrors.ErrRemovalPending, inst.GetCurrentFSMState())
 	}
 
 	// Clean up the cached scan results
@@ -522,7 +532,7 @@ func (s *NmapService) StopNmap(ctx context.Context, nmapName string) error {
 }
 
 // ReconcileManager reconciles the Nmap manager
-func (s *NmapService) ReconcileManager(ctx context.Context, filesystemService filesystem.Service, tick uint64) (err error, reconciled bool) {
+func (s *NmapService) ReconcileManager(ctx context.Context, services serviceregistry.Provider, tick uint64) (err error, reconciled bool) {
 	if s.s6Manager == nil {
 		return errors.New("s6 manager not initialized"), false
 	}
@@ -537,15 +547,15 @@ func (s *NmapService) ReconcileManager(ctx context.Context, filesystemService fi
 		Tick:          tick,
 	}
 
-	return s.s6Manager.Reconcile(ctx, snapshot, filesystemService)
+	return s.s6Manager.Reconcile(ctx, snapshot, services)
 }
 
 // ServiceExists checks if a nmap service exists
-func (s *NmapService) ServiceExists(ctx context.Context, filesystemService filesystem.Service, nmapName string) bool {
+func (s *NmapService) ServiceExists(ctx context.Context, services serviceregistry.Provider, nmapName string) bool {
 	s6ServiceName := s.getS6ServiceName(nmapName)
 	s6ServicePath := filepath.Join(constants.S6BaseDir, s6ServiceName)
 
-	exists, err := s.s6Service.ServiceExists(ctx, s6ServicePath, filesystemService)
+	exists, err := s.s6Service.ServiceExists(ctx, s6ServicePath, services.GetFileSystem())
 	if err != nil {
 		return false
 	}
@@ -559,10 +569,10 @@ func (s *NmapService) ServiceExists(ctx context.Context, filesystemService files
 // Expects nmapName (e.g. "myservice") as defined in the UMH config
 func (s *NmapService) ForceRemoveNmap(
 	ctx context.Context,
-	filesystemService filesystem.Service,
+	services serviceregistry.Provider,
 	nmapName string,
 ) error {
 	s6ServiceName := s.getS6ServiceName(nmapName)
 	s6ServicePath := filepath.Join(constants.S6BaseDir, s6ServiceName)
-	return s.s6Service.ForceRemove(ctx, s6ServicePath, filesystemService)
+	return s.s6Service.ForceRemove(ctx, s6ServicePath, services.GetFileSystem())
 }

@@ -23,6 +23,7 @@ import (
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
 const (
@@ -45,15 +46,15 @@ type INmapService interface {
 	// RemoveNmapFromS6Manager removes a nmap instance from the S6 manager
 	RemoveNmapFromS6Manager(ctx context.Context, nmapName string) error
 	// ForceRemoveNmap removes a Nmap instance from the s6 manager
-	ForceRemoveNmap(ctx context.Context, filesystemServiec filesystem.Service, nmapName string) error
+	ForceRemoveNmap(ctx context.Context, services serviceregistry.Provider, nmapName string) error
 	// StartNmap starts a nmap instance
 	StartNmap(ctx context.Context, nmapName string) error
 	// StopNmap stops a nmap instance
 	StopNmap(ctx context.Context, nmapName string) error
 	// ServiceExists checks if a nmap service exists
-	ServiceExists(ctx context.Context, filsystemService filesystem.Service, nmapName string) bool
+	ServiceExists(ctx context.Context, services serviceregistry.Provider, nmapName string) bool
 	// ReconcileManager reconciles the nmap manager
-	ReconcileManager(ctx context.Context, filesystemService filesystem.Service, tick uint64) (error, bool)
+	ReconcileManager(ctx context.Context, services serviceregistry.Provider, tick uint64) (error, bool)
 }
 
 // NmapScanResult contains the results of an nmap scan
@@ -73,7 +74,7 @@ type NmapScanResult struct {
 // PortResult contains the result for a specific port
 type PortResult struct {
 	// Port number
-	Port int `json:"port"`
+	Port uint16 `json:"port"`
 	// State (open/closed/filtered)
 	State string `json:"state"`
 	// Latency in milliseconds
@@ -102,6 +103,47 @@ type NmapServiceInfo struct {
 	LastScan *NmapScanResult
 	// IsRunning indicates whether the nmap service is running
 	IsRunning bool
-	// Logs contains the logs of the nmap service
+	// Logs contains the structured s6 log entries emitted by the
+	// nmap service.
+	//
+	// **Performance consideration**
+	//
+	//   • Logs can grow quickly, and profiling shows that naïvely deep-copying
+	//     this slice dominates CPU time (see https://flamegraph.com/share/592a6a59-25d1-11f0-86bc-aa320ab09ef2).
+	//
+	//   • The FSM needs read-only access to the logs for historical snapshots;
+	//     it never mutates them.
+	//
+	//   • The s6 layer *always* allocates a brand-new slice when it returns
+	//     logs (see DefaultService.GetLogs), so sharing the slice's backing
+	//     array across snapshots cannot introduce data races.
+	//
+	// Therefore we override the default behaviour and copy only the 3-word
+	// slice header (24 B on amd64) — see CopyLogs below.
 	Logs []s6service.LogEntry
+}
+
+// CopyLogs is a go-deepcopy override for the Logs field.
+//
+// go-deepcopy looks for a method with the signature
+//
+//	func (dst *T) Copy<FieldName>(src <FieldType>) error
+//
+// and, if present, calls it instead of performing its generic deep-copy logic.
+// By assigning the slice directly we make a **shallow copy**: the header is
+// duplicated but the underlying backing array is shared.
+//
+// Why this is safe:
+//
+//  1. The s6 service returns a fresh []LogEntry on every call, never reusing
+//     or mutating a previously returned slice.
+//  2. Logs is treated as immutable after the snapshot is taken.
+//
+// If either assumption changes, delete this method to fall back to the default
+// deep-copy (O(n) but safe for mutable slices).
+//
+// See also: https://github.com/tiendc/go-deepcopy?tab=readme-ov-file#copy-struct-fields-via-struct-methods
+func (nsi *NmapServiceInfo) CopyLogs(src []s6service.LogEntry) error {
+	nsi.Logs = src
+	return nil
 }

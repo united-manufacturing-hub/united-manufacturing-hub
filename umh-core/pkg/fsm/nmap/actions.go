@@ -25,6 +25,8 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	nmap_service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/nmap"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
+	standarderrors "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
 )
 
 // The functions in this file define heavier, possibly fail-prone operations
@@ -74,16 +76,40 @@ func (n *NmapInstance) RemoveInstance(ctx context.Context, filesystemService fil
 
 	// Initiate the removal cycle
 	err := n.monitorService.RemoveNmapFromS6Manager(ctx, n.baseFSMInstance.GetID())
-	if err != nil {
-		if err == nmap_service.ErrServiceNotExist {
-			n.baseFSMInstance.GetLogger().Debugf("Nmap service %s not found in S6 manager", n.baseFSMInstance.GetID())
-			return nil // do not throw an error, as each action is expected to be idempotent
-		}
-		return fmt.Errorf("failed to remove Nmap service %s from S6 manager: %w", n.baseFSMInstance.GetID(), err)
-	}
+	switch {
+	// ---------------------------------------------------------------
+	// happy paths
+	// ---------------------------------------------------------------
+	case err == nil: // fully removed
+		n.baseFSMInstance.GetLogger().
+			Debugf("Nmap service %s removed from S6 manager",
+				n.baseFSMInstance.GetID())
+		return nil
 
-	n.baseFSMInstance.GetLogger().Debugf("Nmap service %s removed from S6 manager", n.baseFSMInstance.GetID())
-	return nil
+	case errors.Is(err, nmap_service.ErrServiceNotExist):
+		n.baseFSMInstance.GetLogger().
+			Debugf("Nmap service %s already removed from S6 manager",
+				n.baseFSMInstance.GetID())
+		// idempotent: was already gone
+		return nil
+
+	// ---------------------------------------------------------------
+	// transient path – keep retrying
+	// ---------------------------------------------------------------
+	case errors.Is(err, standarderrors.ErrRemovalPending):
+		n.baseFSMInstance.GetLogger().
+			Debugf("Nmap service %s removal still in progress",
+				n.baseFSMInstance.GetID())
+		// not an error from the FSM’s perspective – just means “try again”
+		return err
+
+	// ---------------------------------------------------------------
+	// real error – escalate
+	// ---------------------------------------------------------------
+	default:
+		return fmt.Errorf("failed to remove service %s: %w",
+			n.baseFSMInstance.GetID(), err)
+	}
 }
 
 // StartInstance attempts to start the Nmap by setting the desired state to running for the given instance
@@ -114,8 +140,14 @@ func (n *NmapInstance) StopInstance(ctx context.Context, filesystemService files
 	return nil
 }
 
+// CheckForCreation checks whether the creation was successful
+// For Nmap, this is a no-op as we don't need to check anything
+func (n *NmapInstance) CheckForCreation(ctx context.Context, filesystemService filesystem.Service) bool {
+	return true
+}
+
 // UpdateObservedStateOfInstance updates the observed state of the service
-func (n *NmapInstance) UpdateObservedStateOfInstance(ctx context.Context, filesystemService filesystem.Service, tick uint64, loopTime time.Time) error {
+func (n *NmapInstance) UpdateObservedStateOfInstance(ctx context.Context, services serviceregistry.Provider, tick uint64, loopTime time.Time) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
@@ -129,7 +161,7 @@ func (n *NmapInstance) UpdateObservedStateOfInstance(ctx context.Context, filesy
 	}
 
 	start := time.Now()
-	svcInfo, err := n.monitorService.Status(ctx, filesystemService, n.config.Name, tick)
+	svcInfo, err := n.monitorService.Status(ctx, services.GetFileSystem(), n.config.Name, tick)
 	if err != nil {
 		// We want to return this specific error here, because we need to check
 		// whether the execution of Nmap failed multiple times in a row and set this
@@ -151,7 +183,7 @@ func (n *NmapInstance) UpdateObservedStateOfInstance(ctx context.Context, filesy
 
 	// Fetch the actual Nmap config from the service
 	start = time.Now()
-	observedConfig, err := n.monitorService.GetConfig(ctx, filesystemService, n.baseFSMInstance.GetID())
+	observedConfig, err := n.monitorService.GetConfig(ctx, services.GetFileSystem(), n.baseFSMInstance.GetID())
 	metrics.ObserveReconcileTime(logger.ComponentNmapInstance, n.baseFSMInstance.GetID()+".getConfig", time.Since(start))
 	if err == nil {
 		// Only update if we successfully got the config
@@ -170,7 +202,7 @@ func (n *NmapInstance) UpdateObservedStateOfInstance(ctx context.Context, filesy
 	// Use new ConfigsEqual function that handles Nmap defaults properly
 	if !n.config.NmapServiceConfig.Equal(n.ObservedState.ObservedNmapServiceConfig) {
 		// Check if the service exists before attempting to update
-		if n.monitorService.ServiceExists(ctx, filesystemService, n.baseFSMInstance.GetID()) {
+		if n.monitorService.ServiceExists(ctx, services, n.baseFSMInstance.GetID()) {
 			n.baseFSMInstance.GetLogger().Debugf("Observed Nmap config is different from desired config, updating S6 configuration")
 
 			// Update the config in the S6 manager

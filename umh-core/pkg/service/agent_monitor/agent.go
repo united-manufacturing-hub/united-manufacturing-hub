@@ -26,6 +26,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
@@ -43,8 +44,25 @@ type IAgentMonitorService interface {
 // ServiceInfo contains both raw metrics and health assessments
 type ServiceInfo struct {
 	// General: Location, Latency, Agent Logs, Agent Metrics
-	Location     map[int]string         `json:"location"`
-	Latency      *models.Latency        `json:"latency"`
+	Location map[int]string  `json:"location"`
+	Latency  *models.Latency `json:"latency"`
+	// AgentLogs contains the structured s6 log entries emitted by the
+	// agent service.
+	//
+	// **Performance consideration**
+	//
+	//   • Logs can grow quickly, and profiling shows that naïvely deep-copying
+	//     this slice dominates CPU time (see https://flamegraph.com/share/592a6a59-25d1-11f0-86bc-aa320ab09ef2).
+	//
+	//   • The FSM needs read-only access to the logs for historical snapshots;
+	//     it never mutates them.
+	//
+	//   • The s6 layer *always* allocates a brand-new slice when it returns
+	//     logs (see DefaultService.GetLogs), so sharing the slice's backing
+	//     array across snapshots cannot introduce data races.
+	//
+	// Therefore we override the default behaviour and copy only the 3-word
+	// slice header (24 B on amd64) — see CopyAgentLogs below.
 	AgentLogs    []s6.LogEntry          `json:"agentLogs"`
 	AgentMetrics map[string]interface{} `json:"agentMetrics,omitempty"`
 	// Release: Channel, Version, Supported Feature
@@ -54,6 +72,31 @@ type ServiceInfo struct {
 	OverallHealth models.HealthCategory `json:"overallHealth"`
 	LatencyHealth models.HealthCategory `json:"latencyHealth"`
 	ReleaseHealth models.HealthCategory `json:"releaseHealth"`
+}
+
+// CopyAgentLogs is a go-deepcopy override for the AgentLogs field.
+//
+// go-deepcopy looks for a method with the signature
+//
+//	func (dst *T) Copy<FieldName>(src <FieldType>) error
+//
+// and, if present, calls it instead of performing its generic deep-copy logic.
+// By assigning the slice directly we make a **shallow copy**: the header is
+// duplicated but the underlying backing array is shared.
+//
+// Why this is safe:
+//
+//  1. The s6 service returns a fresh []LogEntry on every call, never reusing
+//     or mutating a previously returned slice.
+//  2. AgentLogs is treated as immutable after the snapshot is taken.
+//
+// If either assumption changes, delete this method to fall back to the default
+// deep-copy (O(n) but safe for mutable slices).
+//
+// See also: https://github.com/tiendc/go-deepcopy?tab=readme-ov-file#copy-struct-fields-via-struct-methods
+func (si *ServiceInfo) CopyAgentLogs(src []s6.LogEntry) error {
+	si.AgentLogs = src
+	return nil
 }
 
 // AgentMonitorService implements the Service interface
@@ -104,6 +147,10 @@ func (c *AgentMonitorService) GetFilesystemService() filesystem.Service {
 
 // Status collects and returns the current agent status
 func (c *AgentMonitorService) Status(ctx context.Context, systemSnapshot fsm.SystemSnapshot) (*ServiceInfo, error) {
+	start := time.Now()
+	defer func() {
+		metrics.ObserveReconcileTime(metrics.ComponentAgentMonitor, c.instanceName+".status", time.Since(start))
+	}()
 
 	// Create a new status with default health (Active)
 	status := &ServiceInfo{
@@ -121,7 +168,6 @@ func (c *AgentMonitorService) Status(ctx context.Context, systemSnapshot fsm.Sys
 	if location != nil {
 		status.Location = location
 	} else {
-		c.logger.Warn("No location found set in the config, using fallback 'Unknown location")
 		location = map[int]string{}
 		location[0] = "Unknown location" // fallback
 		status.Location = location

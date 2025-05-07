@@ -86,9 +86,9 @@ func NewDataflowComponentManagerWithMockedServices(name string) (*DataflowCompon
 			if !ok {
 				return false, fmt.Errorf("instance is not a DataflowComponentInstance")
 			}
-			dataflowComponentInstance.config = cfg.DataFlowComponentConfig
+			dataflowComponentInstance.config = cfg.DataFlowComponentServiceConfig
 			if mockSvc, ok := dataflowComponentInstance.service.(*dataflowcomponentsvc.MockDataFlowComponentService); ok {
-				mockSvc.GetConfigResult = cfg.DataFlowComponentConfig
+				mockSvc.GetConfigResult = cfg.DataFlowComponentServiceConfig
 			}
 			return true, nil
 		},
@@ -98,9 +98,9 @@ func NewDataflowComponentManagerWithMockedServices(name string) (*DataflowCompon
 			if !ok {
 				return fmt.Errorf("instance is not a DataflowComponentInstance")
 			}
-			dataflowComponentInstance.config = cfg.DataFlowComponentConfig
+			dataflowComponentInstance.config = cfg.DataFlowComponentServiceConfig
 			if mockSvc, ok := dataflowComponentInstance.service.(*dataflowcomponentsvc.MockDataFlowComponentService); ok {
-				mockSvc.GetConfigResult = cfg.DataFlowComponentConfig
+				mockSvc.GetConfigResult = cfg.DataFlowComponentServiceConfig
 			}
 			return nil
 		},

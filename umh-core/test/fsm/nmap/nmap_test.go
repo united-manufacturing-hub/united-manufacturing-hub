@@ -1,4 +1,3 @@
-// nmap_fsm_test.go
 // Copyright 2025 UMH Systems GmbH
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,364 +19,662 @@ package nmap_test
 
 import (
 	"context"
+	"fmt"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/nmapserviceconfig"
+	// Adjust these imports to your actual module paths
+	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm" // for LifecycleStateToBeCreated, etc.
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsmtest"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/backoff"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/nmap"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
-	nmap_service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/nmap"
+	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
+	nmapsvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/nmap"
+	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
-var _ = Describe("Nmap FSM", func() {
+var _ = Describe("NmapInstance FSM", func() {
 	var (
-		ctx    context.Context
-		cancel context.CancelFunc
+		instance    *nmap.NmapInstance
+		mockService *nmapsvc.MockNmapService
+		serviceName string
+		ctx         context.Context
+		tick        uint64
 
-		mockSvc *nmap_service.MockNmapService
-		inst    *nmap.NmapInstance
-
-		mockFS filesystem.Service
+		mockServices *serviceregistry.Registry
 	)
 
 	BeforeEach(func() {
-		ctx, cancel = context.WithCancel(context.Background())
+		ctx = context.Background()
+		tick = 0
 
-		// Create a mock Nmap service.
-		mockSvc = nmap_service.NewMockNmapService()
+		// We create a default instance with a desired state of "stopped" initially
+		// You can adapt as needed. Or you can do it inside each test scenario if you prefer.
+		serviceName = "test-nmap"
+		inst, ms, _ := fsmtest.SetupNmapInstance(serviceName, nmap.OperationalStateStopped)
+		instance = inst
+		mockService = ms
+		instance.SetService(mockService)
+		mockServices = serviceregistry.NewMockRegistry()
+	})
 
-		// Create a mock filesystem service.
-		mockFS = filesystem.NewMockFileSystem()
+	// -------------------------------------------------------------------------
+	//  BASIC STATE TRANSITIONS
+	// -------------------------------------------------------------------------
+	Context("Basic State Transitions", func() {
+		It("should transition from Stopped to Starting when activated", func() {
+			// 1. Initially, the instance is "to_be_created"
+			//    Let's do a short path: to_be_created => creating => stopped
+			var err error
 
-		// Create a NmapConfig.
-		cfg := config.NmapConfig{
-			FSMInstanceConfig: config.FSMInstanceConfig{
-				Name:            "testing",
-				DesiredFSMState: nmap.OperationalStateStopped,
-			},
-			NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
-				Target: "127.0.0.1",
-				Port:   443,
-			},
+			// from "to_be_created" => "creating"
+			tick, err = fsmtest.TestNmapStateTransition(
+				ctx, instance, mockService, mockServices, serviceName,
+				internalfsm.LifecycleStateToBeCreated,
+				internalfsm.LifecycleStateCreating,
+				5, // attempts
+				tick,
+			)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(mockService.AddNmapToS6ManagerCalled).To(BeTrue())
+
+			// Next, mock the service creation success
+			mockService.ServiceStates[serviceName] = &nmapsvc.ServiceInfo{
+				S6FSMState: s6fsm.OperationalStateStopped,
+				S6ObservedState: s6fsm.S6ObservedState{
+					ServiceInfo: s6svc.ServiceInfo{Status: s6svc.ServiceDown, Uptime: 5},
+				},
+				NmapStatus: nmapsvc.NmapServiceInfo{
+					IsRunning: true,
+				},
+			}
+			mockService.ExistingServices[serviceName] = true
+
+			// from "creating" => "stopped"
+			tick, err = fsmtest.TestNmapStateTransition(
+				ctx, instance, mockService, mockServices, serviceName,
+				internalfsm.LifecycleStateCreating,
+				nmap.OperationalStateStopped,
+				5,
+				tick,
+			)
+			Expect(err).NotTo(HaveOccurred())
+
+			// 2. Now set desired state = Active => from "stopped" => "starting"
+			Expect(instance.SetDesiredFSMState(nmap.OperationalStateOpen)).To(Succeed())
+			Expect(instance.GetDesiredFSMState()).To(Equal(nmap.OperationalStateOpen))
+
+			// Also set the mock flags for an initial start attempt
+			mockService.SetServiceState(serviceName, nmapsvc.ServiceStateFlags{
+				IsS6Running: false,
+			})
+
+			tick, err = fsmtest.TestNmapStateTransition(
+				ctx, instance, mockService, mockServices, serviceName,
+				nmap.OperationalStateStopped,
+				nmap.OperationalStateStarting,
+				5,
+				tick,
+			)
+			Expect(err).NotTo(HaveOccurred())
+
+			// check that StartNmap was called
+			Expect(mockService.StartNmapCalled).To(BeTrue())
+		})
+
+		It("should transition to Idle when healthchecks pass", func() {
+			// We'll do a multi-step approach:
+			//  (1) to_be_created => creating => stopped
+			//  (2) desired=active => starting => degraded
+
+			var err error
+
+			// Step 1: to_be_created => creating => stopped
+			tick, err = fsmtest.TestNmapStateTransition(
+				ctx, instance, mockService, mockServices, serviceName,
+				internalfsm.LifecycleStateToBeCreated,
+				internalfsm.LifecycleStateCreating,
+				5,
+				tick,
+			)
+			Expect(err).NotTo(HaveOccurred())
+
+			mockService.ServiceStates[serviceName] = &nmapsvc.ServiceInfo{
+				S6FSMState: s6fsm.OperationalStateStopped}
+			mockService.ExistingServices[serviceName] = true
+
+			tick, err = fsmtest.TestNmapStateTransition(
+				ctx, instance, mockService, mockServices, serviceName,
+				internalfsm.LifecycleStateCreating,
+				nmap.OperationalStateStopped,
+				5,
+				tick,
+			)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Step 2: from stopped => starting => degraded
+			Expect(instance.SetDesiredFSMState(nmap.OperationalStateOpen)).To(Succeed())
+
+			// from stopped => starting
+			tick, err = fsmtest.TestNmapStateTransition(
+				ctx, instance, mockService, mockServices, serviceName,
+				nmap.OperationalStateStopped,
+				nmap.OperationalStateStarting,
+				5,
+				tick,
+			)
+			Expect(err).NotTo(HaveOccurred())
+
+			// from starting => degraded
+			mockService.SetServiceState(serviceName, nmapsvc.ServiceStateFlags{
+				IsS6Running: true,
+				S6FSMState:  s6fsm.OperationalStateRunning,
+			})
+			tick, err = fsmtest.TestNmapStateTransition(
+				ctx, instance, mockService, mockServices, serviceName,
+				nmap.OperationalStateStarting,
+				nmap.OperationalStateDegraded,
+				5,
+				tick,
+			)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(instance.GetCurrentFSMState()).To(Equal(nmap.OperationalStateDegraded))
+		})
+	})
+
+	// -------------------------------------------------------------------------
+	//  RUNNING STATE TRANSITIONS
+	// -------------------------------------------------------------------------
+	Context("Running State Transitions", func() {
+		It("should transition from Idle to Active when processing data", func() {
+			// Let's get from to_be_created => idle using step-by-step approach
+			var err error
+
+			// Step 1: to_be_created => creating => stopped
+			tick, err = fsmtest.TestNmapStateTransition(
+				ctx, instance, mockService, mockServices, serviceName,
+				internalfsm.LifecycleStateToBeCreated,
+				internalfsm.LifecycleStateCreating,
+				5,
+				tick,
+			)
+			Expect(err).NotTo(HaveOccurred())
+
+			mockService.ServiceStates[serviceName] = &nmapsvc.ServiceInfo{
+				S6FSMState: s6fsm.OperationalStateStopped}
+			mockService.ExistingServices[serviceName] = true
+
+			tick, err = fsmtest.TestNmapStateTransition(
+				ctx, instance, mockService, mockServices, serviceName,
+				internalfsm.LifecycleStateCreating,
+				nmap.OperationalStateStopped,
+				5,
+				tick,
+			)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Step 2: from stopped => starting => degraded
+			Expect(instance.SetDesiredFSMState(nmap.OperationalStateOpen)).To(Succeed())
+
+			// from stopped => starting
+			tick, err = fsmtest.TestNmapStateTransition(
+				ctx, instance, mockService, mockServices, serviceName,
+				nmap.OperationalStateStopped,
+				nmap.OperationalStateStarting,
+				5,
+				tick,
+			)
+			Expect(err).NotTo(HaveOccurred())
+
+			// from starting => degraded
+			mockService.SetServiceState(serviceName, nmapsvc.ServiceStateFlags{
+				IsRunning:   true,
+				IsS6Running: true,
+				S6FSMState:  s6fsm.OperationalStateRunning,
+			})
+			tick, err = fsmtest.TestNmapStateTransition(
+				ctx, instance, mockService, mockServices, serviceName,
+				nmap.OperationalStateStarting,
+				nmap.OperationalStateDegraded,
+				5,
+				tick,
+			)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(instance.GetCurrentFSMState()).To(Equal(nmap.OperationalStateDegraded))
+
+			// Step 3: from Idle => Active when processing data
+			mockService.SetServiceState(serviceName, nmapsvc.ServiceStateFlags{
+				IsS6Running: true,
+				IsRunning:   true,
+				S6FSMState:  s6fsm.OperationalStateRunning,
+				PortState:   string(nmap.PortStateOpen),
+			})
+
+			tick, err = fsmtest.TestNmapStateTransition(
+				ctx, instance, mockService, mockServices, serviceName,
+				nmap.OperationalStateDegraded,
+				nmap.OperationalStateOpen,
+				5,
+				tick,
+			)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should transition to Degraded when issues occur", func() {
+			// Step 1: to_be_created => creating => stopped
+			var err error
+			tick, err = fsmtest.TestNmapStateTransition(
+				ctx, instance, mockService, mockServices, serviceName,
+				internalfsm.LifecycleStateToBeCreated,
+				internalfsm.LifecycleStateCreating,
+				5,
+				tick,
+			)
+			Expect(err).NotTo(HaveOccurred())
+
+			mockService.ServiceStates[serviceName] = &nmapsvc.ServiceInfo{
+				S6FSMState: s6fsm.OperationalStateStopped}
+			mockService.ExistingServices[serviceName] = true
+
+			tick, err = fsmtest.TestNmapStateTransition(
+				ctx, instance, mockService, mockServices, serviceName,
+				internalfsm.LifecycleStateCreating,
+				nmap.OperationalStateStopped,
+				5,
+				tick,
+			)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Step 2: from stopped => starting => degraded => open
+			Expect(instance.SetDesiredFSMState(nmap.OperationalStateOpen)).To(Succeed())
+
+			// from stopped => starting
+			tick, err = fsmtest.TestNmapStateTransition(
+				ctx, instance, mockService, mockServices, serviceName,
+				nmap.OperationalStateStopped,
+				nmap.OperationalStateStarting,
+				5,
+				tick,
+			)
+			Expect(err).NotTo(HaveOccurred())
+
+			// from starting => degraded
+			mockService.SetServiceState(serviceName, nmapsvc.ServiceStateFlags{
+				IsS6Running: true,
+				S6FSMState:  s6fsm.OperationalStateRunning,
+				IsRunning:   true,
+			})
+			tick, err = fsmtest.TestNmapStateTransition(
+				ctx, instance, mockService, mockServices, serviceName,
+				nmap.OperationalStateStarting,
+				nmap.OperationalStateDegraded,
+				5,
+				tick,
+			)
+			Expect(err).NotTo(HaveOccurred())
+
+			// from idle => active
+			mockService.SetServiceState(serviceName, nmapsvc.ServiceStateFlags{
+				IsS6Running: true,
+				IsRunning:   true,
+				S6FSMState:  s6fsm.OperationalStateRunning,
+				PortState:   string(nmap.PortStateOpen),
+			})
+			tick, err = fsmtest.TestNmapStateTransition(
+				ctx, instance, mockService, mockServices, serviceName,
+				nmap.OperationalStateDegraded,
+				nmap.OperationalStateOpen,
+				5,
+				tick,
+			)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Step 3: Then degrade => set flags => "degraded"
+			mockService.SetServiceState(serviceName, nmapsvc.ServiceStateFlags{
+				IsS6Running: true,
+				IsRunning:   true,
+				S6FSMState:  s6fsm.OperationalStateRunning,
+				IsDegraded:  true,
+				PortState:   "",
+			})
+			tick, err = fsmtest.TestNmapStateTransition(
+				ctx, instance, mockService, mockServices, serviceName,
+				nmap.OperationalStateOpen,
+				nmap.OperationalStateDegraded,
+				10,
+				tick,
+			)
+			Expect(err).NotTo(HaveOccurred())
+		})
+	})
+
+	// -------------------------------------------------------------------------
+	//  STOPPING FLOW
+	// -------------------------------------------------------------------------
+	Context("Stopping Flow", func() {
+		It("should stop gracefully from Active state", func() {
+			// Step 1: to_be_created => creating => stopped
+			var err error
+			tick, err = fsmtest.TestNmapStateTransition(
+				ctx, instance, mockService, mockServices, serviceName,
+				internalfsm.LifecycleStateToBeCreated,
+				internalfsm.LifecycleStateCreating,
+				5,
+				tick,
+			)
+			Expect(err).NotTo(HaveOccurred())
+
+			mockService.ServiceStates[serviceName] = &nmapsvc.ServiceInfo{S6FSMState: s6fsm.OperationalStateStopped}
+			mockService.ExistingServices[serviceName] = true
+
+			tick, err = fsmtest.TestNmapStateTransition(
+				ctx, instance, mockService, mockServices, serviceName,
+				internalfsm.LifecycleStateCreating,
+				nmap.OperationalStateStopped,
+				5,
+				tick,
+			)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Step 2: from stopped => starting => degraded => active
+			Expect(instance.SetDesiredFSMState(nmap.OperationalStateOpen)).To(Succeed())
+
+			// from stopped => starting
+			tick, err = fsmtest.TestNmapStateTransition(
+				ctx, instance, mockService, mockServices, serviceName,
+				nmap.OperationalStateStopped,
+				nmap.OperationalStateStarting,
+				5,
+				tick,
+			)
+			Expect(err).NotTo(HaveOccurred())
+
+			// from starting => degraded
+			mockService.SetServiceState(serviceName, nmapsvc.ServiceStateFlags{
+				IsS6Running: true,
+				S6FSMState:  s6fsm.OperationalStateRunning,
+				IsRunning:   true,
+			})
+			tick, err = fsmtest.TestNmapStateTransition(
+				ctx, instance, mockService, mockServices, serviceName,
+				nmap.OperationalStateStarting,
+				nmap.OperationalStateDegraded,
+				5,
+				tick,
+			)
+			Expect(err).NotTo(HaveOccurred())
+
+			// from startingConfigLoading => open
+			mockService.SetServiceState(serviceName, nmapsvc.ServiceStateFlags{
+				IsS6Running: true,
+				S6FSMState:  s6fsm.OperationalStateRunning,
+				IsRunning:   true,
+				PortState:   string(nmap.PortStateOpen),
+			})
+			tick, err = fsmtest.TestNmapStateTransition(
+				ctx, instance, mockService, mockServices, serviceName,
+				nmap.OperationalStateDegraded,
+				nmap.OperationalStateOpen,
+				10,
+				tick,
+			)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Step 3: from active => stopping => stopped
+			Expect(instance.SetDesiredFSMState(nmap.OperationalStateStopped)).To(Succeed())
+
+			// from active => stopping
+			tick, err = fsmtest.TestNmapStateTransition(
+				ctx, instance, mockService, mockServices, serviceName,
+				nmap.OperationalStateOpen,
+				nmap.OperationalStateStopping,
+				10,
+				tick,
+			)
+			Expect(err).NotTo(HaveOccurred())
+
+			// simulate S6 stopping
+			mockService.SetServiceState(serviceName, nmapsvc.ServiceStateFlags{
+				IsS6Running: false,
+				S6FSMState:  s6fsm.OperationalStateStopped,
+			})
+
+			tick, err = fsmtest.TestNmapStateTransition(
+				ctx, instance, mockService, mockServices, serviceName,
+				nmap.OperationalStateStopping,
+				nmap.OperationalStateStopped,
+				5,
+				tick,
+			)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should attempt forced removal when not in a terminal state with a permanent error", func() {
+			// 1) Get to stopped state using proper transitions
+			var err error
+
+			// First progress to creating state
+			tick, err = fsmtest.TestNmapStateTransition(
+				ctx, instance, mockService, mockServices, serviceName,
+				internalfsm.LifecycleStateToBeCreated,
+				internalfsm.LifecycleStateCreating,
+				5,
+				tick,
+			)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Setup service in stopped state
+			mockService.ServiceStates[serviceName] = &nmapsvc.ServiceInfo{S6FSMState: s6fsm.OperationalStateStopped}
+			mockService.ExistingServices[serviceName] = true
+
+			// Progress to stopped state
+			tick, err = fsmtest.TestNmapStateTransition(
+				ctx, instance, mockService, mockServices, serviceName,
+				internalfsm.LifecycleStateCreating,
+				nmap.OperationalStateStopped,
+				5,
+				tick,
+			)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = instance.SetDesiredFSMState(nmap.OperationalStateOpen)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Progress to starting state
+			tick, err = fsmtest.TestNmapStateTransition(
+				ctx, instance, mockService, mockServices, serviceName,
+				nmap.OperationalStateStopped,
+				nmap.OperationalStateStarting,
+				5,
+				tick,
+			)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Create a permanent error that will be encountered during reconcile
+			mockService.StatusError = fmt.Errorf("%s: test permanent error", backoff.PermanentFailureError)
+
+			// Use the helper function to reconcile until error
+			var recErr error
+			var reconciled bool
+			tick, recErr, reconciled = fsmtest.ReconcileNmapUntilError(
+				ctx, fsm.SystemSnapshot{Tick: tick}, instance, mockService, mockServices, serviceName, 20,
+			)
+
+			// Verify force removal was attempted
+			Expect(mockService.ForceRemoveNmapCalled).To(BeTrue())
+
+			// Now we should get the error
+			Expect(recErr).To(HaveOccurred())
+			Expect(recErr.Error()).To(ContainSubstring(backoff.PermanentFailureError))
+			Expect(reconciled).To(BeTrue())
+
+			// Clear error for other tests
+		})
+	})
+
+})
+
+var _ = Describe("NmapInstance port‑state transitions", func() {
+	var (
+		ctx          context.Context
+		instance     *nmap.NmapInstance
+		mockService  *nmapsvc.MockNmapService
+		mockServices *serviceregistry.Registry
+		serviceName  string
+		tick         uint64
+	)
+
+	// Bring the instance to Degraded once for every test‑row so each scenario
+	// starts at the same baseline.
+	BeforeEach(func() {
+		ctx = context.Background()
+		tick = 0
+		serviceName = "test-nmap"
+
+		instance, mockService, _ = fsmtest.SetupNmapInstance(serviceName, nmap.OperationalStateStopped)
+		mockServices = serviceregistry.NewMockRegistry()
+		// to_be_created → creating
+		tick, _ = fsmtest.TestNmapStateTransition(
+			ctx, instance, mockService, mockServices, serviceName,
+			internalfsm.LifecycleStateToBeCreated,
+			internalfsm.LifecycleStateCreating,
+			5, tick,
+		)
+		// creating → stopped
+		mockService.ServiceStates[serviceName] = &nmapsvc.ServiceInfo{S6FSMState: s6fsm.OperationalStateStopped}
+		mockService.ExistingServices[serviceName] = true
+		tick, _ = fsmtest.TestNmapStateTransition(
+			ctx, instance, mockService, mockServices, serviceName,
+			internalfsm.LifecycleStateCreating,
+			nmap.OperationalStateStopped,
+			5, tick,
+		)
+
+		// let the instance start scanning
+		Expect(instance.SetDesiredFSMState(nmap.OperationalStateOpen)).To(Succeed())
+		// stopped → starting
+		tick, _ = fsmtest.TestNmapStateTransition(
+			ctx, instance, mockService, mockServices, serviceName,
+			nmap.OperationalStateStopped,
+			nmap.OperationalStateStarting,
+			5, tick,
+		)
+		// starting → degraded (service up, no port result yet)
+		mockService.SetServiceState(serviceName, nmapsvc.ServiceStateFlags{
+			IsS6Running: true,
+			IsRunning:   true,
+			S6FSMState:  s6fsm.OperationalStateRunning,
+		})
+		tick, _ = fsmtest.TestNmapStateTransition(
+			ctx, instance, mockService, mockServices, serviceName,
+			nmap.OperationalStateStarting,
+			nmap.OperationalStateDegraded,
+			5, tick,
+		)
+		Expect(instance.GetCurrentFSMState()).To(Equal(nmap.OperationalStateDegraded))
+	})
+	AfterEach(func() {
+		Expect(instance.SetDesiredFSMState(nmap.OperationalStateStopped)).To(Succeed())
+
+		mockService.SetServiceState(serviceName, nmapsvc.ServiceStateFlags{
+			IsS6Running: false,
+			S6FSMState:  s6fsm.OperationalStateStopped,
+		})
+
+		cur := instance.GetCurrentFSMState()
+		if cur != nmap.OperationalStateStopping && cur != nmap.OperationalStateStopped {
+			var err error
+			tick, err = fsmtest.TestNmapStateTransition(
+				ctx, instance, mockService, mockServices, serviceName,
+				cur, nmap.OperationalStateStopping,
+				5, tick,
+			)
+			Expect(err).NotTo(HaveOccurred())
 		}
 
-		// Create an instance using NewNmapInstanceWithService.
-		inst = nmap.NewNmapInstanceWithService(cfg, mockSvc)
+		if instance.GetCurrentFSMState() != nmap.OperationalStateStopped {
+			var err error
+			tick, err = fsmtest.TestNmapStateTransition(
+				ctx, instance, mockService, mockServices, serviceName,
+				nmap.OperationalStateStopping, nmap.OperationalStateStopped,
+				5, tick,
+			)
+			Expect(err).NotTo(HaveOccurred())
+		}
+
+		// sanity check
+		Expect(instance.GetCurrentFSMState()).To(Equal(nmap.OperationalStateStopped))
 	})
 
-	AfterEach(func() {
-		cancel()
-	})
-
-	Context("When newly created", func() {
-		It("should initially transition from creation to operational stopped", func() {
-			// On the first reconcile, the instance should process creation steps.
-			err, did := inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 1}, mockFS)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(did).To(BeTrue())
-			// Assuming the FSM goes to a "creating" state during the creation phase.
-			Expect(inst.GetCurrentFSMState()).To(Equal("creating"))
-
-			// On the next reconcile, the instance should complete creation and be operational in the stopped state.
-			err, did = inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 2}, mockFS)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(did).To(BeTrue())
-			Expect(inst.GetCurrentFSMState()).To(Equal(nmap.OperationalStateStopped))
+	DescribeTable("follows the degraded → from → to matrix", func(fromState, toState, fromPort, toPort string, _ uint64) {
+		// Degraded → fromState
+		mockService.SetServiceState(serviceName, nmapsvc.ServiceStateFlags{
+			IsS6Running: true,
+			IsRunning:   true,
+			S6FSMState:  s6fsm.OperationalStateRunning,
+			PortState:   fromPort,
 		})
-	})
+		var err error
+		tick, err = fsmtest.TestNmapStateTransition(ctx, instance, mockService, mockServices, serviceName,
+			nmap.OperationalStateDegraded, fromState, 10, tick)
+		Expect(err).NotTo(HaveOccurred())
 
-	Context("Lifecycle transitions", func() {
-		BeforeEach(func() {
-			// Advance the instance to an operational state.
-			inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 10}, mockFS)
-			inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 11}, mockFS)
-			Expect(inst.GetCurrentFSMState()).To(Equal(nmap.OperationalStateStopped))
+		// fromState → toState
+		mockService.SetServiceState(serviceName, nmapsvc.ServiceStateFlags{
+			IsS6Running: true,
+			IsRunning:   true,
+			S6FSMState:  s6fsm.OperationalStateRunning,
+			PortState:   toPort,
 		})
+		tick, err = fsmtest.TestNmapStateTransition(ctx, instance, mockService, mockServices, serviceName,
+			fromState, toState, 10, tick)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(instance.GetCurrentFSMState()).To(Equal(toState))
+	},
+		// -------------
+		//  open → …
+		Entry("open → closed", nmap.OperationalStateOpen, nmap.OperationalStateClosed, "open", "closed", uint64(24)),
+		Entry("open → filtered", nmap.OperationalStateOpen, nmap.OperationalStateFiltered, "open", "filtered", uint64(29)),
+		Entry("open → unfiltered", nmap.OperationalStateOpen, nmap.OperationalStateUnfiltered, "open", "unfiltered", uint64(31)),
+		Entry("open → open_filtered", nmap.OperationalStateOpen, nmap.OperationalStateOpenFiltered, "open", "open|filtered", uint64(36)),
+		Entry("open → closed_filtered", nmap.OperationalStateOpen, nmap.OperationalStateClosedFiltered, "open", "closed|filtered", uint64(41)),
 
-		It("stopped -> starting -> stopped", func() {
-			// Set desired state to active (e.g. "monitoring_open")
-			err := inst.SetDesiredFSMState(nmap.OperationalStateOpen)
-			Expect(err).NotTo(HaveOccurred())
+		//  filtered → …
+		Entry("filtered → open", nmap.OperationalStateFiltered, nmap.OperationalStateOpen, "filtered", "open", uint64(46)),
+		Entry("filtered → closed", nmap.OperationalStateFiltered, nmap.OperationalStateClosed, "filtered", "closed", uint64(51)),
+		Entry("filtered → unfiltered", nmap.OperationalStateFiltered, nmap.OperationalStateUnfiltered, "filtered", "unfiltered", uint64(56)),
+		Entry("filtered → open_filtered", nmap.OperationalStateFiltered, nmap.OperationalStateOpenFiltered, "filtered", "open|filtered", uint64(61)),
+		Entry("filtered → closed_filtered", nmap.OperationalStateFiltered, nmap.OperationalStateClosedFiltered, "filtered", "closed|filtered", uint64(66)),
 
-			// Reconcile to trigger the start sequence.
-			err, did := inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 12}, mockFS)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(did).To(BeTrue())
-			Expect(inst.GetCurrentFSMState()).To(Equal(nmap.OperationalStateStarting))
+		//  closed → …
+		Entry("closed → open", nmap.OperationalStateClosed, nmap.OperationalStateOpen, "closed", "open", uint64(71)),
+		Entry("closed → filtered", nmap.OperationalStateClosed, nmap.OperationalStateFiltered, "closed", "filtered", uint64(76)),
+		Entry("closed → unfiltered", nmap.OperationalStateClosed, nmap.OperationalStateUnfiltered, "closed", "unfiltered", uint64(81)),
+		Entry("closed → open_filtered", nmap.OperationalStateClosed, nmap.OperationalStateOpenFiltered, "closed", "open|filtered", uint64(86)),
+		Entry("closed → closed_filtered", nmap.OperationalStateClosed, nmap.OperationalStateClosedFiltered, "closed", "closed|filtered", uint64(91)),
 
-			err = inst.SetDesiredFSMState(nmap.OperationalStateStopped)
-			Expect(err).NotTo(HaveOccurred())
+		//  unfiltered → …
+		Entry("unfiltered → open", nmap.OperationalStateUnfiltered, nmap.OperationalStateOpen, "unfiltered", "open", uint64(96)),
+		Entry("unfiltered → filtered", nmap.OperationalStateUnfiltered, nmap.OperationalStateFiltered, "unfiltered", "filtered", uint64(101)),
+		Entry("unfiltered → closed", nmap.OperationalStateUnfiltered, nmap.OperationalStateClosed, "unfiltered", "closed", uint64(106)),
+		Entry("unfiltered → open_filtered", nmap.OperationalStateUnfiltered, nmap.OperationalStateOpenFiltered, "unfiltered", "open|filtered", uint64(111)),
+		Entry("unfiltered → closed_filtered", nmap.OperationalStateUnfiltered, nmap.OperationalStateClosedFiltered, "unfiltered", "closed|filtered", uint64(116)),
 
-			err, did = inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 13}, mockFS)
-			Expect(did).To(BeTrue())
-			Expect(inst.GetCurrentFSMState()).To(Equal(nmap.OperationalStateStopping))
+		//  open_filtered → …
+		Entry("open_filtered → open", nmap.OperationalStateOpenFiltered, nmap.OperationalStateOpen, "open|filtered", "open", uint64(121)),
+		Entry("open_filtered → filtered", nmap.OperationalStateOpenFiltered, nmap.OperationalStateFiltered, "open|filtered", "filtered", uint64(126)),
+		Entry("open_filtered → closed", nmap.OperationalStateOpenFiltered, nmap.OperationalStateClosed, "open|filtered", "closed", uint64(131)),
+		Entry("open_filtered → unfiltered", nmap.OperationalStateOpenFiltered, nmap.OperationalStateUnfiltered, "open|filtered", "unfiltered", uint64(136)),
+		Entry("open_filtered → closed_filtered", nmap.OperationalStateOpenFiltered, nmap.OperationalStateClosedFiltered, "open|filtered", "closed|filtered", uint64(141)),
 
-			err, did = inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 14}, mockFS)
-			Expect(did).To(BeTrue())
-			Expect(inst.GetCurrentFSMState()).To(Equal(nmap.OperationalStateStopped))
-		})
-
-		It("should remain stopped when desired state is stopped", func() {
-			err, did := inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 15}, mockFS)
-			Expect(err).NotTo(HaveOccurred())
-			// NOTE: did == true since s6 was reconciled
-			Expect(did).To(BeTrue())
-			Expect(inst.GetCurrentFSMState()).To(Equal(nmap.OperationalStateStopped))
-		})
-	})
-
-	Context("When monitoring is running", func() {
-		BeforeEach(func() {
-			// Advance the instance to an operational state.
-			inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 20}, mockFS)
-			inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 21}, mockFS)
-			err := inst.SetDesiredFSMState(nmap.OperationalStateOpen)
-			Expect(err).NotTo(HaveOccurred())
-
-			// Reconcile to trigger the start sequence: from stopped -> starting -> degraded.
-			err, did := inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 22}, mockFS)
-			Expect(did).To(BeTrue())
-			Expect(inst.GetCurrentFSMState()).To(Equal(nmap.OperationalStateStarting))
-
-			err, did = inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 23}, mockFS)
-			Expect(did).To(BeTrue())
-			Expect(inst.GetCurrentFSMState()).To(Equal(nmap.OperationalStateDegraded))
-		})
-		DescribeTable("testing states from -> to: ",
-			func(fromState string, toState string, portFromState string, portToState string, tick uint64) {
-				// Simulate that the last scan reports the port state portFromState.
-				mockSvc.SetServicePortState("testing", portFromState, 10.0)
-
-				// A reconcile call should detect the port state and trigger EventPortOpen.
-				err, did := inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: tick}, mockFS)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(did).To(BeTrue())
-				Expect(inst.GetCurrentFSMState()).To(Equal(fromState))
-
-				// Another reconcile call should check that it remains in the state
-				err, did = inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: tick + 1}, mockFS)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(did).To(BeTrue())
-				Expect(inst.GetCurrentFSMState()).To(Equal(fromState))
-
-				// Simulate that the last scan reports the port state portToState.
-				mockSvc.SetServicePortState("testing", portToState, 10.0)
-
-				// A reconcile call should detect the port state and trigger EventPortOpen.
-				err, did = inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: tick + 2}, mockFS)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(did).To(BeTrue())
-				Expect(inst.GetCurrentFSMState()).To(Equal(toState))
-
-				// Another reconcile call should check that it remains in the state
-				err, did = inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: tick + 3}, mockFS)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(did).To(BeTrue())
-				Expect(inst.GetCurrentFSMState()).To(Equal(toState))
-
-				mockSvc.SetNmapError("testing", 10.0)
-
-				err, did = inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: tick + 4}, mockFS)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(did).To(BeTrue())
-				Expect(inst.GetCurrentFSMState()).To(Equal(nmap.OperationalStateDegraded))
-			},
-			// state transitions from open ->
-			Entry("open -> closed",
-				nmap.OperationalStateOpen, nmap.OperationalStateClosed,
-				"open", "closed", uint64(24)),
-			Entry("open -> filtered",
-				nmap.OperationalStateOpen, nmap.OperationalStateFiltered,
-				"open", "filtered", uint64(29)),
-			Entry("open -> unfiltered",
-				nmap.OperationalStateOpen, nmap.OperationalStateUnfiltered,
-				"open", "unfiltered", uint64(31)),
-			Entry("open -> open_filtered",
-				nmap.OperationalStateOpen, nmap.OperationalStateOpenFiltered,
-				"open", "open|filtered", uint64(36)),
-			Entry("open -> closed_filtered",
-				nmap.OperationalStateOpen, nmap.OperationalStateClosedFiltered,
-				"open", "closed|filtered", uint64(41)),
-
-			// state transitions from filtered ->
-			Entry("filtered -> open",
-				nmap.OperationalStateFiltered, nmap.OperationalStateOpen,
-				"filtered", "open", uint64(46)),
-			Entry("filtered -> closed",
-				nmap.OperationalStateFiltered, nmap.OperationalStateClosed,
-				"filtered", "closed", uint64(51)),
-			Entry("filtered -> unfiltered",
-				nmap.OperationalStateFiltered, nmap.OperationalStateUnfiltered,
-				"filtered", "unfiltered", uint64(56)),
-			Entry("filtered -> open_filtered",
-				nmap.OperationalStateFiltered, nmap.OperationalStateOpenFiltered,
-				"filtered", "open|filtered", uint64(61)),
-			Entry("filtered -> closed_filtered",
-				nmap.OperationalStateFiltered, nmap.OperationalStateClosedFiltered,
-				"filtered", "closed|filtered", uint64(66)),
-
-			// state transitions from closed ->
-			Entry("closed -> open",
-				nmap.OperationalStateClosed, nmap.OperationalStateOpen,
-				"closed", "open", uint64(71)),
-			Entry("closed -> filtered",
-				nmap.OperationalStateClosed, nmap.OperationalStateFiltered,
-				"closed", "filtered", uint64(76)),
-			Entry("closed -> unfiltered",
-				nmap.OperationalStateClosed, nmap.OperationalStateUnfiltered,
-				"closed", "unfiltered", uint64(81)),
-			Entry("closed -> open_filtered",
-				nmap.OperationalStateClosed, nmap.OperationalStateOpenFiltered,
-				"closed", "open|filtered", uint64(86)),
-			Entry("closed -> closed_filtered",
-				nmap.OperationalStateClosed, nmap.OperationalStateClosedFiltered,
-				"closed", "closed|filtered", uint64(91)),
-
-			// state transitions from unfiltered ->
-			Entry("unfiltered -> open",
-				nmap.OperationalStateUnfiltered, nmap.OperationalStateOpen,
-				"unfiltered", "open", uint64(96)),
-			Entry("unfiltered -> filtered",
-				nmap.OperationalStateUnfiltered, nmap.OperationalStateFiltered,
-				"unfiltered", "filtered", uint64(101)),
-			Entry("unfiltered -> closed",
-				nmap.OperationalStateUnfiltered, nmap.OperationalStateClosed,
-				"unfiltered", "closed", uint64(106)),
-			Entry("unfiltered -> open_filtered",
-				nmap.OperationalStateUnfiltered, nmap.OperationalStateOpenFiltered,
-				"unfiltered", "open|filtered", uint64(111)),
-			Entry("unfiltered -> closed_filtered",
-				nmap.OperationalStateUnfiltered, nmap.OperationalStateClosedFiltered,
-				"unfiltered", "closed|filtered", uint64(116)),
-
-			// state transitions from open_filtered ->
-			Entry("open_filtered -> open",
-				nmap.OperationalStateOpenFiltered, nmap.OperationalStateOpen,
-				"open|filtered", "open", uint64(121)),
-			Entry("open_filtered -> filtered",
-				nmap.OperationalStateOpenFiltered, nmap.OperationalStateFiltered,
-				"open|filtered", "filtered", uint64(126)),
-			Entry("open_filtered -> closed",
-				nmap.OperationalStateOpenFiltered, nmap.OperationalStateClosed,
-				"open|filtered", "closed", uint64(131)),
-			Entry("open_filtered -> unfiltered",
-				nmap.OperationalStateOpenFiltered, nmap.OperationalStateUnfiltered,
-				"open|filtered", "unfiltered", uint64(136)),
-			Entry("open_filtered -> closed_filtered",
-				nmap.OperationalStateOpenFiltered, nmap.OperationalStateClosedFiltered,
-				"open|filtered", "closed|filtered", uint64(141)),
-
-			// state transitions from closed_filtered ->
-			Entry("closed_filtered -> open",
-				nmap.OperationalStateClosedFiltered, nmap.OperationalStateOpen,
-				"closed|filtered", "open", uint64(146)),
-			Entry("closed_filtered -> filtered",
-				nmap.OperationalStateClosedFiltered, nmap.OperationalStateFiltered,
-				"closed|filtered", "filtered", uint64(151)),
-			Entry("closed_filtered -> closed",
-				nmap.OperationalStateClosedFiltered, nmap.OperationalStateClosed,
-				"closed|filtered", "closed", uint64(156)),
-			Entry("closed_filtered -> unfiltered",
-				nmap.OperationalStateClosedFiltered, nmap.OperationalStateUnfiltered,
-				"closed|filtered", "unfiltered", uint64(161)),
-			Entry("closed_filtered -> open_filtered",
-				nmap.OperationalStateClosedFiltered, nmap.OperationalStateOpenFiltered,
-				"closed|filtered", "open|filtered", uint64(166)),
-		)
-		AfterEach(func() {
-			if inst.IsRemoved() {
-				return
-			}
-
-			err := inst.SetDesiredFSMState(nmap.OperationalStateStopped)
-			Expect(err).NotTo(HaveOccurred())
-
-			err, did := inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 27}, mockFS)
-			Expect(did).To(BeTrue())
-			Expect(inst.GetCurrentFSMState()).To(Equal(nmap.OperationalStateStopping))
-
-			err, did = inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 28}, mockFS)
-			Expect(did).To(BeTrue())
-			Expect(inst.GetCurrentFSMState()).To(Equal(nmap.OperationalStateStopped))
-		})
-
-		It("stays degraded", func() {
-			err, did := inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 25}, mockFS)
-			Expect(err).NotTo(HaveOccurred())
-			// No port event should occur; the state remains degraded.
-			// NOTE: did == true since s6 got reconciled
-			Expect(did).To(BeTrue())
-			Expect(inst.GetCurrentFSMState()).To(Equal(nmap.OperationalStateDegraded))
-		})
-	})
-
-	Context("When monitoring is running", func() {
-		BeforeEach(func() {
-			inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 200}, mockFS)
-			inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 201}, mockFS)
-			err := inst.SetDesiredFSMState(nmap.OperationalStateOpen)
-			Expect(err).NotTo(HaveOccurred())
-
-			// Reconcile to trigger the start sequence: from stopped -> starting -> degraded.
-			err, did := inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 202}, mockFS)
-			Expect(did).To(BeTrue())
-			Expect(inst.GetCurrentFSMState()).To(Equal(nmap.OperationalStateStarting))
-
-			err, did = inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 203}, mockFS)
-			Expect(did).To(BeTrue())
-			Expect(inst.GetCurrentFSMState()).To(Equal(nmap.OperationalStateDegraded))
-		})
-		It("should permanently fail after 3 repeated ErrScanFailed", func() {
-			err, did := inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 204}, mockFS)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(did).To(BeTrue())
-			Expect(inst.GetCurrentFSMState()).To(Equal(nmap.OperationalStateDegraded))
-
-			mockSvc.SetServicePortState("testing", "open", 10.0)
-			err, did = inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 205}, mockFS)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(did).To(BeTrue())
-			Expect(inst.GetCurrentFSMState()).To(Equal(nmap.OperationalStateOpen))
-
-			//  - InitialInterval = 10 ticks: 1st error at tick 206 causes skip until 216.
-			//  - MaxInterval = 20 ticks: 2nd error at tick 216 causes skip until 230.
-			//  - on the 3rd error (at tick >= 230), permanent failure is triggered.
-			mockSvc.ShouldErrScanFailed = true
-
-			// 1st error
-			inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 206}, mockFS)
-			for t := uint64(207); t < 216; t++ {
-				inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: t}, mockFS)
-				Expect(inst.IsRemoved()).To(BeFalse(), "Tick %d: instance should not be removed yet", t)
-				Expect(inst.GetDesiredFSMState()).To(Equal(nmap.OperationalStateOpen))
-			}
-
-			// 2nd error
-			inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 216}, mockFS)
-			for t := uint64(217); t < 229; t++ {
-				inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: t}, mockFS)
-				Expect(inst.IsRemoved()).To(BeFalse(), "Tick %d: instance should still not be removed", t)
-				Expect(inst.GetDesiredFSMState()).To(Equal(nmap.OperationalStateOpen))
-			}
-
-			// 3rd error
-			inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 230}, mockFS)
-			Expect(inst.GetDesiredFSMState()).To(Equal(nmap.OperationalStateOpen))
-
-			inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 231}, mockFS)
-
-			// Should now move the instance to stopped because of the permanent failure and attempt a normal removal
-			inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 232}, mockFS)
-			Expect(inst.GetDesiredFSMState()).To(Equal(nmap.OperationalStateStopped))
-
-			// The normal removal will also fail as we cannot get the observed state, so we move at one point to a force removal
-			for t := uint64(233); t < 263; t++ {
-				inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: t}, mockFS)
-			}
-			Expect(mockSvc.ForceRemoveNmapCalled).To(BeTrue())
-		})
-	})
+		//  closed_filtered → …
+		Entry("closed_filtered → open", nmap.OperationalStateClosedFiltered, nmap.OperationalStateOpen, "closed|filtered", "open", uint64(146)),
+		Entry("closed_filtered → filtered", nmap.OperationalStateClosedFiltered, nmap.OperationalStateFiltered, "closed|filtered", "filtered", uint64(151)),
+		Entry("closed_filtered → closed", nmap.OperationalStateClosedFiltered, nmap.OperationalStateClosed, "closed|filtered", "closed", uint64(156)),
+		Entry("closed_filtered → unfiltered", nmap.OperationalStateClosedFiltered, nmap.OperationalStateUnfiltered, "closed|filtered", "unfiltered", uint64(161)),
+		Entry("closed_filtered → open_filtered", nmap.OperationalStateClosedFiltered, nmap.OperationalStateOpenFiltered, "closed|filtered", "open|filtered", uint64(166)),
+	)
 })

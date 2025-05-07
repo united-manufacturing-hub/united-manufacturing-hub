@@ -135,37 +135,31 @@ download-docker-binaries:
 
 	@echo "All required files are present and up to date"
 
-build: download-docker-binaries
-	docker buildx build \
-		--platform linux/$(TARGETARCH) \
-		--build-arg S6_OVERLAY_VERSION=$(S6_OVERLAY_VERSION) \
-		--build-arg BENTHOS_UMH_VERSION=$(BENTHOS_UMH_VERSION) \
-		--build-arg REDPANDA_VERSION=$(REDPANDA_VERSION) \
-		--build-arg APP_VERSION=$(VERSION) \
-		--build-arg TARGETARCH=$(TARGETARCH) \
-		-t $(IMAGE_NAME):$(TAG) \
-		--progress=plain \
-		--load \
-		-f Dockerfile .
-    
-# build-debug: launches delve inside the container.
-# This allows you to use vscode's "Connect to umh-core" feature and use breakpoints, etc inside the container.
-# To use this, modify one of the build-<type> targets to use this target instead of build.
-# You also need to add -p 40000:40000 to the docker run command to expose the Delve port.
-build-debug: download-docker-binaries
-	docker buildx build \
-		--platform linux/$(TARGETARCH) \
-		--build-arg S6_OVERLAY_VERSION=$(S6_OVERLAY_VERSION) \
-		--build-arg BENTHOS_UMH_VERSION=$(BENTHOS_UMH_VERSION) \
-		--build-arg REDPANDA_VERSION=$(REDPANDA_VERSION) \
-		--build-arg APP_VERSION=$(VERSION) \
-		--build-arg TARGETARCH=$(TARGETARCH) \
-		--build-arg DLV_VERSION=$(DLV_VERSION) \
-		--build-arg DEBUG=true \
-		--progress=plain \
-		-t $(IMAGE_NAME):$(TAG)-debug \
-		-f Dockerfile .
-    
+.PHONY: build build-pprof build-debug
+COMMON_ARGS = \
+	--platform linux/$(TARGETARCH) \
+	--build-arg S6_OVERLAY_VERSION=$(S6_OVERLAY_VERSION) \
+	--build-arg BENTHOS_UMH_VERSION=$(BENTHOS_UMH_VERSION) \
+	--build-arg REDPANDA_VERSION=$(REDPANDA_VERSION) \
+	--build-arg APP_VERSION=$(VERSION) \
+	--build-arg TARGETARCH=$(TARGETARCH)
+
+define DOCKER_BUILD
+	docker buildx build $(COMMON_ARGS) $(EXTRA_ARGS) \
+		--progress=plain --load -f Dockerfile \
+		-t $(IMAGE_NAME):$(TAG) .
+endef
+
+build:
+build-pprof:       EXTRA_ARGS := --build-arg PPROF=true
+build-debug:       EXTRA_ARGS := --build-arg DLV_VERSION=$(DLV_VERSION) --build-arg DEBUG=true
+
+build build-pprof build-debug:
+	$(call DOCKER_BUILD)
+
+FLAVOR ?=                         # empty → normal build
+BUILD_TARGET = $(if $(FLAVOR),build-$(FLAVOR),build)
+
 stop-and-remove-umh-core-latest:
 	docker stop $(IMAGE_NAME) || true
 	docker rm $(IMAGE_NAME) || true
@@ -206,11 +200,48 @@ test: vet nilaway lint
 unit-test: vet nilaway lint
 	ginkgo -r -v --tags=test --label-filter='!integration && !redpanda-extended' --fail-fast ./...
 
+benchmark: 
+	@echo "Running benchmarks..."
+	go test -bench=. -benchmem ./...
+
+benchmark-config:
+	@echo "Running config package benchmarks..."
+	cd pkg/config && go test -bench=. -benchmem
+
+# More specific benchmarks can be added as needed
+benchmark-s6:
+	@echo "Running S6 benchmarks..."
+	cd pkg/service/s6 && go test -bench=. -benchmem
+
+# More specific benchmarks can be added as needed
+benchmark-s6-parse-log:
+	@echo "Running S6 parseLogLine benchmarks..."
+	cd pkg/service/s6 && go test -bench=ParseLogLine -benchmem
+
+benchmark-benthos-metrics:
+	@echo "Running Benthos metrics benchmarks..."
+	cd pkg/service/benthos_monitor && go test -bench=. -benchmem
+
+benchmark-redpanda-metrics:
+	@echo "Running Redpanda metrics benchmarks..."
+	cd pkg/service/redpanda_monitor && go test -bench=. -benchmem
+
+benchmark-s6-time:
+	@echo "Running S6 time benchmarks..."
+	cd pkg/service/s6 && go test -bench=. -benchmem
 
 integration-test: stop-all-pods vet nilaway lint
+
+# Meta target to setup the environment for the tests
+pre-test: stop-all-pods vet nilaway lint
+
+# Meta target to setup the environment for the tests in CI environments
+pre-test-ci: vet nilaway lint
+
+integration-test: pre-test
 	ginkgo -r -v --tags=test --label-filter='integration' --fail-fast ./...
 
-redpanda-extended-test: stop-all-pods vet nilaway
+redpanda-extended-test: pre-test
 	ginkgo -r -v --tags=test --label-filter='redpanda-extended' --fail-fast --timeout=1.5h ./...
 
 
@@ -218,7 +249,7 @@ redpanda-extended-test: stop-all-pods vet nilaway
 # - Injects VERSION via ldflags into AppVersion for proper error identification in Sentry
 # - CI test failures SHOULD be reported to Sentry (unlike local dev failures)
 # - Helps identify flaky tests by consistently tracking failures in CI pipelines
-integration-test-ci: vet nilaway lint
+integration-test-ci: pre-test-ci
 	VERSION=$(VERSION) ginkgo -r -v --tags=test --label-filter='integration' --fail-fast -ldflags="-X 'github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/version.AppVersion=$(VERSION)'" ./...
 
 update-go-dependencies:
@@ -226,28 +257,47 @@ update-go-dependencies:
 	go mod tidy
 	go mod vendor
 
-test-empty: stop-and-remove-umh-core-latest build
+
+
+###############################################################################
+# choose build flavour                                                        #
+#   make test-dfc              → uses normal  image (build)                  #
+#   make test-dfc FLAVOR=pprof → uses pprof   image (build-pprof)            #
+#   make test-dfc FLAVOR=debug → uses delve   image (build-debug)            #
+###############################################################################
+# To extract pprof data use:
+# http://localhost:6060/debug/pprof/profile?seconds=20
+# And open it with flamegraph.com
+
+test-empty: stop-and-remove-umh-core-latest $(BUILD_TARGET)
 	@mkdir -p $(PWD)/data
 	@cp $(PWD)/examples/example-config-empty.yaml $(PWD)/data/config.yaml
 	docker run \
 		--name $(IMAGE_NAME) \
 		-v $(PWD)/data:/data \
 		-p 8081:8080 \
+		-p 4195:4195 \
+		-p 6060:6060 \
+		-p 40000:40000 \
 		--memory $(MEMORY) \
 		--cpus $(CPUS) \
 		$(IMAGE_NAME):$(TAG)
 
-test-clean-install: stop-and-remove-umh-core-latest build
+test-clean-install: stop-and-remove-umh-core-latest $(BUILD_TARGET)
 	docker run \
 		--name $(IMAGE_NAME) \
 		-v $(PWD)/data:/data \
 		-e API_URL=https://management.umh.app/api \
 		-e RELEASE_CHANNEL=enterprise \
+		-p 8081:8080 \
+		-p 4195:4195 \
+		-p 6060:6060 \
+		-p 40000:40000 \
 		--memory $(MEMORY) \
 		--cpus $(CPUS) \
 		$(IMAGE_NAME):$(TAG)
 
-test-hello: stop-and-remove-umh-core-latest build
+test-hello: stop-and-remove-umh-core-latest $(BUILD_TARGET)
 	@mkdir -p $(PWD)/data
 	@cp $(PWD)/examples/example-config.yaml $(PWD)/data/config.yaml
 	docker run \
@@ -255,12 +305,14 @@ test-hello: stop-and-remove-umh-core-latest build
 		-v $(PWD)/data:/data \
 		-p 8081:8080 \
 		-p 4195:4195 \
+		-p 6060:6060 \
+		-p 40000:40000 \
 		--memory $(MEMORY) \
 		--cpus $(CPUS) \
 		-e LOGGING_LEVEL=DEBUG \
 		$(IMAGE_NAME):$(TAG)
 
-test-comm: stop-and-remove-umh-core-latest build
+test-comm: stop-and-remove-umh-core-latest $(BUILD_TARGET)
 	@mkdir -p $(PWD)/data
 	@cp $(PWD)/examples/example-config-comm.yaml $(PWD)/data/config.yaml
 	docker run \
@@ -268,13 +320,15 @@ test-comm: stop-and-remove-umh-core-latest build
 		-v $(PWD)/data:/data \
 		-p 8081:8080 \
 		-p 4195:4195 \
+		-p 6060:6060 \
+		-p 40000:40000 \
 		--memory $(MEMORY) \
 		--cpus $(CPUS) \
 		-e AUTH_TOKEN=$(AUTH_TOKEN) \
 		-e LOGGING_LEVEL=DEBUG \
 		$(IMAGE_NAME):$(TAG)
 
-test-broken: stop-and-remove-umh-core-latest build
+test-broken: stop-and-remove-umh-core-latest $(BUILD_TARGET)
 	@mkdir -p $(PWD)/data
 	@cp $(PWD)/examples/example-config-broken.yaml $(PWD)/data/config.yaml
 	docker run \
@@ -282,11 +336,13 @@ test-broken: stop-and-remove-umh-core-latest build
 		-v $(PWD)/data:/data \
 		-p 8081:8080 \
 		-p 4195:4195 \
+		-p 6060:6060 \
+		-p 40000:40000 \
 		--memory $(MEMORY) \
 		--cpus $(CPUS) \
 		$(IMAGE_NAME):$(TAG)
 
-test-benthos: stop-and-remove-umh-core-latest build
+test-benthos: stop-and-remove-umh-core-latest $(BUILD_TARGET)
 	@mkdir -p $(PWD)/data
 	@cp $(PWD)/examples/example-config-benthos.yaml $(PWD)/data/config.yaml
 	docker run \
@@ -295,12 +351,28 @@ test-benthos: stop-and-remove-umh-core-latest build
 		-e LOGGING_LEVEL=DEBUG \
 		-p 8081:8080 \
 		-p 4195:4195 \
+		-p 6060:6060 \
+		-p 40000:40000 \
 		--memory $(MEMORY) \
 		--cpus $(CPUS) \
 		$(IMAGE_NAME):$(TAG)
 
+test-benthos-single: stop-and-remove-umh-core-latest $(BUILD_TARGET)
+	@mkdir -p $(PWD)/data
+	@cp $(PWD)/examples/example-config-benthos-single.yaml $(PWD)/data/config.yaml
+	docker run \
+		--name $(IMAGE_NAME) \
+		-v $(PWD)/data:/data \
+		-e LOGGING_LEVEL=DEBUG \
+		-p 8081:8080 \
+		-p 4195:4195 \
+		-p 6060:6060 \
+		-p 40000:40000 \
+		--memory $(MEMORY) \
+		--cpus $(CPUS) \
+		$(IMAGE_NAME):$(TAG)
 
-test-redpanda: stop-and-remove-umh-core-latest build
+test-redpanda: stop-and-remove-umh-core-latest $(BUILD_TARGET)
 	@mkdir -p $(PWD)/data
 	@cp $(PWD)/examples/example-config-redpanda.yaml $(PWD)/data/config.yaml
 	docker run \
@@ -308,22 +380,43 @@ test-redpanda: stop-and-remove-umh-core-latest build
 		-v $(PWD)/data:/data \
 		-e LOGGING_LEVEL=DEBUG \
 		-p 8081:8080 \
+		-p 4195:4195 \
+		-p 6060:6060 \
+		-p 40000:40000 \
 		--memory $(MEMORY) \
 		--cpus $(CPUS) \
 		$(IMAGE_NAME):$(TAG)
 
-test-dfc: stop-and-remove-umh-core-latest build
+test-dfc: stop-and-remove-umh-core-latest $(BUILD_TARGET)
 	@mkdir -p $(PWD)/data
 	@cp $(PWD)/examples/example-config-dataflow.yaml $(PWD)/data/config.yaml
 	docker run \
 		--name $(IMAGE_NAME) \
 		-v $(PWD)/data:/data \
-		-e LOGGING_LEVEL=DEBUG \
+		-p 8081:8080 \
+		-p 4195:4195 \
+		-p 6060:6060 \
+		-p 40000:40000 \
 		--memory $(MEMORY) \
 		--cpus $(CPUS) \
+		-e LOGGING_LEVEL=DEBUG \
 		$(IMAGE_NAME):$(TAG)
 
-test-debug: stop-and-remove-umh-core-latest build-debug
+test-benthos-monitor: stop-and-remove-umh-core-latest $(BUILD_TARGET)
+	@mkdir -p $(PWD)/data
+	@cp $(PWD)/examples/example-config-benthos-monitor.yaml $(PWD)/data/config.yaml
+	docker run \
+		--name umh-core-staging \
+		-v $(PWD)/data:/data \
+		-p 8081:8080 \
+		-p 4195:4195 \
+		-p 6060:6060 \
+		-p 40000:40000 \
+		--memory $(MEMORY) \
+		--cpus $(CPUS) \
+		ghcr.io/united-manufacturing-hub/united-manufacturing-hub/umh-core:staging
+
+test-debug: stop-and-remove-umh-core-latest $(BUILD_TARGET)
 	@mkdir -p $(PWD)/data
 	@cp $(PWD)/examples/example-config-benthos-broken.yaml $(PWD)/data/config.yaml
 	docker run \
@@ -331,11 +424,12 @@ test-debug: stop-and-remove-umh-core-latest build-debug
 		-v $(PWD)/data:/data \
 		-p 8081:8080 \
 		-p 4195:4195 \
+		-p 6060:6060 \
 		-p 40000:40000 \
 		--memory $(MEMORY) \
 		--cpus $(CPUS) \
 		-e LOGGING_LEVEL=DEBUG \
-		$(IMAGE_NAME):$(TAG)-debug
+		$(IMAGE_NAME):$(TAG)
 
 pod-shell:
 	docker exec -it $(IMAGE_NAME) /bin/bash

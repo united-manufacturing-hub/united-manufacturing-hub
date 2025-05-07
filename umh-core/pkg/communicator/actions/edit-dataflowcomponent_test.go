@@ -24,7 +24,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/encoding"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 )
 
@@ -52,7 +52,7 @@ var _ = Describe("EditDataflowComponent", func() {
 		instanceUUID = uuid.New()
 		outboundChannel = make(chan *models.UMHMessage, 10) // Buffer to prevent blocking
 		componentName = "test-component"
-		componentUUID = dataflowcomponentconfig.GenerateUUIDFromName(componentName)
+		componentUUID = dataflowcomponentserviceconfig.GenerateUUIDFromName(componentName)
 
 		// Create initial config with one data flow component
 		initialConfig := config.FullConfig{
@@ -70,8 +70,8 @@ var _ = Describe("EditDataflowComponent", func() {
 						Name:            componentName,
 						DesiredFSMState: "active",
 					},
-					DataFlowComponentConfig: dataflowcomponentconfig.DataFlowComponentConfig{
-						BenthosConfig: dataflowcomponentconfig.BenthosConfig{
+					DataFlowComponentServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 							Input: map[string]interface{}{
 								"type": "http_server",
 								"http_server": map[string]interface{}{
@@ -96,7 +96,8 @@ var _ = Describe("EditDataflowComponent", func() {
 		}
 
 		mockConfig = config.NewMockConfigManager().WithConfig(initialConfig)
-		action = actions.NewEditDataflowComponentAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig)
+
+		action = actions.NewEditDataflowComponentAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig, nil)
 	})
 
 	// Cleanup after each test
@@ -417,7 +418,7 @@ var _ = Describe("EditDataflowComponent", func() {
 			// Execute the action
 			result, metadata, err := action.Execute()
 			Expect(err).NotTo(HaveOccurred())
-			Expect(result).To(ContainSubstring("Successfully edited data flow component"))
+			Expect(result).To(ContainSubstring("Successfully edited dataflow component: test-component-updated"))
 			Expect(metadata).To(BeNil())
 
 			// Expect only the Confirmed message in the channel
@@ -443,7 +444,7 @@ var _ = Describe("EditDataflowComponent", func() {
 
 			// Verify the component was updated with the new configuration
 			// Checking input configuration was updated
-			inputConfig := mockConfig.Config.DataFlow[0].DataFlowComponentConfig.BenthosConfig.Input
+			inputConfig := mockConfig.Config.DataFlow[0].DataFlowComponentServiceConfig.BenthosConfig.Input
 			Expect(inputConfig["type"]).To(Equal("http_server"))
 
 			httpServerConfig, ok := inputConfig["http_server"].(map[string]interface{})
@@ -502,19 +503,19 @@ buffer:
 			// Execute the action
 			result, metadata, err := action.Execute()
 			Expect(err).NotTo(HaveOccurred())
-			Expect(result).To(ContainSubstring("Successfully edited data flow component"))
+			Expect(result).To(ContainSubstring("Successfully edited dataflow component"))
 			Expect(metadata).To(BeNil())
 
 			// Verify AtomicEditDataflowcomponent was called
 			Expect(mockConfig.EditDataflowcomponentCalled).To(BeTrue())
 
 			// Verify the component was updated with the new configuration including inject data
-			Expect(mockConfig.Config.DataFlow[0].DataFlowComponentConfig.BenthosConfig.CacheResources).To(HaveLen(1))
-			Expect(mockConfig.Config.DataFlow[0].DataFlowComponentConfig.BenthosConfig.CacheResources[0]["label"]).To(Equal("my_cache"))
-			Expect(mockConfig.Config.DataFlow[0].DataFlowComponentConfig.BenthosConfig.RateLimitResources).To(HaveLen(1))
-			Expect(mockConfig.Config.DataFlow[0].DataFlowComponentConfig.BenthosConfig.RateLimitResources[0]["label"]).To(Equal("limiter"))
-			Expect(mockConfig.Config.DataFlow[0].DataFlowComponentConfig.BenthosConfig.Buffer).To(HaveLen(1))
-			Expect(mockConfig.Config.DataFlow[0].DataFlowComponentConfig.BenthosConfig.Buffer["memory"]).To(Equal(map[string]interface{}{}))
+			Expect(mockConfig.Config.DataFlow[0].DataFlowComponentServiceConfig.BenthosConfig.CacheResources).To(HaveLen(1))
+			Expect(mockConfig.Config.DataFlow[0].DataFlowComponentServiceConfig.BenthosConfig.CacheResources[0]["label"]).To(Equal("my_cache"))
+			Expect(mockConfig.Config.DataFlow[0].DataFlowComponentServiceConfig.BenthosConfig.RateLimitResources).To(HaveLen(1))
+			Expect(mockConfig.Config.DataFlow[0].DataFlowComponentServiceConfig.BenthosConfig.RateLimitResources[0]["label"]).To(Equal("limiter"))
+			Expect(mockConfig.Config.DataFlow[0].DataFlowComponentServiceConfig.BenthosConfig.Buffer).To(HaveLen(1))
+			Expect(mockConfig.Config.DataFlow[0].DataFlowComponentServiceConfig.BenthosConfig.Buffer["memory"]).To(Equal(map[string]interface{}{}))
 		})
 
 		It("should handle AtomicEditDataflowcomponent failure", func() {
@@ -556,7 +557,7 @@ buffer:
 			// Execute the action - should fail
 			result, metadata, err := action.Execute()
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("failed to edit dataflowcomponent"))
+			Expect(err.Error()).To(ContainSubstring("Failed to edit dataflow component: mock edit dataflow component failure"))
 			Expect(result).To(BeNil())
 			Expect(metadata).To(BeNil())
 
@@ -582,7 +583,7 @@ buffer:
 
 			actionReplyPayloadStr, ok := actionReplyPayload["actionReplyPayload"].(string)
 			Expect(ok).To(BeTrue(), "Failed to extract actionReplyPayload as string")
-			Expect(actionReplyPayloadStr).To(ContainSubstring("failed to edit dataflowcomponent"))
+			Expect(actionReplyPayloadStr).To(ContainSubstring("Updating dataflow component 'test-component-updated' configuration.."))
 		})
 
 		It("should handle failure when component not found", func() {

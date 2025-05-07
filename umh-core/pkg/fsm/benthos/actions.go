@@ -28,6 +28,8 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	benthos_service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
+	standarderrors "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
 )
 
 // The functions in this file define heavier, possibly fail-prone operations
@@ -58,23 +60,66 @@ func (b *BenthosInstance) CreateInstance(ctx context.Context, filesystemService 
 	return nil
 }
 
-// RemoveInstance attempts to remove the Benthos from the S6 manager.
-// It requires the service to be stopped before removal.
-func (b *BenthosInstance) RemoveInstance(ctx context.Context, filesystemService filesystem.Service) error {
-	b.baseFSMInstance.GetLogger().Debugf("Starting Action: Removing Benthos service %s from S6 manager ...", b.baseFSMInstance.GetID())
+// RemoveInstance is executed while the Benthos FSM sits in the *removing*
+// state.  The helper it calls (`RemoveBenthosFromS6Manager`) returns three
+// kinds of answers:
+//
+//   - nil                    – all artefacts are gone  →  fire remove_done
+//   - ErrServiceNotExist     – never created / already cleaned up
+//     → success, idempotent
+//   - ErrRemovalPending      – child S6-FSM is still deleting; *not* an error
+//     → stay in removing and try again next tick
+//   - everything else        – real failure  → bubble up so the back-off
+//     decorator can suspend operations.
+func (b *BenthosInstance) RemoveInstance(
+	ctx context.Context,
+	fs filesystem.Service,
+) error {
 
-	// Remove the Benthos from the S6 manager
-	err := b.service.RemoveBenthosFromS6Manager(ctx, filesystemService, b.baseFSMInstance.GetID())
-	if err != nil {
-		if err == benthos_service.ErrServiceNotExist {
-			b.baseFSMInstance.GetLogger().Debugf("Benthos service %s not found in S6 manager", b.baseFSMInstance.GetID())
-			return nil // do not throw an error, as each action is expected to be idempotent
-		}
-		return fmt.Errorf("failed to remove Benthos service %s from S6 manager: %w", b.baseFSMInstance.GetID(), err)
+	b.baseFSMInstance.GetLogger().
+		Infof("Removing Benthos service %s from S6 manager …",
+			b.baseFSMInstance.GetID())
+
+	err := b.service.RemoveBenthosFromS6Manager(
+		ctx, fs, b.baseFSMInstance.GetID())
+
+	switch {
+	// ---------------------------------------------------------------
+	// happy paths
+	// ---------------------------------------------------------------
+	case err == nil: // fully removed
+		b.baseFSMInstance.GetLogger().
+			Infof("Benthos service %s removed from S6 manager",
+				b.baseFSMInstance.GetID())
+		return nil
+
+	case errors.Is(err, benthos_service.ErrServiceNotExist):
+		b.baseFSMInstance.GetLogger().
+			Infof("Benthos service %s already removed from S6 manager",
+				b.baseFSMInstance.GetID())
+		// idempotent: was already gone
+		return nil
+
+	// ---------------------------------------------------------------
+	// transient path – keep retrying
+	// ---------------------------------------------------------------
+	case errors.Is(err, standarderrors.ErrRemovalPending):
+		b.baseFSMInstance.GetLogger().
+			Infof("Benthos service %s removal still in progress",
+				b.baseFSMInstance.GetID())
+		// not an error from the FSM’s perspective – just means “try again”
+		return err
+
+	// ---------------------------------------------------------------
+	// real error – escalate
+	// ---------------------------------------------------------------
+	default:
+		b.baseFSMInstance.GetLogger().
+			Errorf("failed to remove service %s: %s",
+				b.baseFSMInstance.GetID(), err)
+		return fmt.Errorf("failed to remove service %s: %w",
+			b.baseFSMInstance.GetID(), err)
 	}
-
-	b.baseFSMInstance.GetLogger().Debugf("Benthos service %s removed from S6 manager", b.baseFSMInstance.GetID())
-	return nil
 }
 
 // StartInstance attempts to start the benthos by setting the desired state to running for the given instance
@@ -109,10 +154,15 @@ func (b *BenthosInstance) StopInstance(ctx context.Context, filesystemService fi
 	return nil
 }
 
+// CheckForCreation checks if the Benthos service should be created
+func (b *BenthosInstance) CheckForCreation(ctx context.Context, filesystemService filesystem.Service) bool {
+	return true
+}
+
 // getServiceStatus gets the status of the Benthos service
 // its main purpose is to handle the edge cases where the service is not yet created or not yet running
-func (b *BenthosInstance) getServiceStatus(ctx context.Context, filesystemService filesystem.Service, tick uint64) (benthos_service.ServiceInfo, error) {
-	info, err := b.service.Status(ctx, filesystemService, b.baseFSMInstance.GetID(), b.config.MetricsPort, tick)
+func (b *BenthosInstance) getServiceStatus(ctx context.Context, services serviceregistry.Provider, tick uint64, loopStartTime time.Time) (benthos_service.ServiceInfo, error) {
+	info, err := b.service.Status(ctx, services, b.baseFSMInstance.GetID(), b.config.MetricsPort, tick, loopStartTime)
 	if err != nil {
 		// If there's an error getting the service status, we need to distinguish between cases
 
@@ -128,17 +178,17 @@ func (b *BenthosInstance) getServiceStatus(ctx context.Context, filesystemServic
 			// Log the warning but don't treat it as a fatal error
 			b.baseFSMInstance.GetLogger().Debugf("Service not found, will be created during reconciliation")
 			return benthos_service.ServiceInfo{}, nil
-		} else if errors.Is(err, benthos_service.ErrHealthCheckConnectionRefused) {
-			// Instead of conditional state checking, always return a ServiceInfo with failed health checks
-			// This allows the FSM to continue reconciliation and make proper state transition decisions
-			if b.baseFSMInstance.GetCurrentFSMState() != OperationalStateStopped { // no need to spam the logs if the service is already stopped
-				b.baseFSMInstance.GetLogger().Debugf("Health check refused connection for service %s, returning ServiceInfo with failed health checks", b.baseFSMInstance.GetID())
-			}
+		} else if errors.Is(err, benthos_service.ErrLastObservedStateNil) {
+			// If the last observed state is nil, we can ignore this error
 			infoWithFailedHealthChecks := info
 			infoWithFailedHealthChecks.BenthosStatus.HealthCheck.IsLive = false
 			infoWithFailedHealthChecks.BenthosStatus.HealthCheck.IsReady = false
-			// Return ServiceInfo with health checks failed but preserve S6FSMState if available
 			return infoWithFailedHealthChecks, nil
+		} else if errors.Is(err, benthos_service.ErrBenthosMonitorNotRunning) {
+			// If the metrics service is not running, we are unable to get the logs/metrics, therefore we must return an empty status
+			if !IsRunningState(b.baseFSMInstance.GetCurrentFSMState()) {
+				return info, nil
+			}
 		}
 
 		// For other errors, log them and return
@@ -150,13 +200,13 @@ func (b *BenthosInstance) getServiceStatus(ctx context.Context, filesystemServic
 }
 
 // UpdateObservedStateOfInstance updates the observed state of the service
-func (b *BenthosInstance) UpdateObservedStateOfInstance(ctx context.Context, filesystemService filesystem.Service, tick uint64, loopStartTime time.Time) error {
+func (b *BenthosInstance) UpdateObservedStateOfInstance(ctx context.Context, services serviceregistry.Provider, tick uint64, loopStartTime time.Time) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
 
 	start := time.Now()
-	info, err := b.getServiceStatus(ctx, filesystemService, tick)
+	info, err := b.getServiceStatus(ctx, services, tick, loopStartTime)
 	if err != nil {
 		return err
 	}
@@ -174,7 +224,7 @@ func (b *BenthosInstance) UpdateObservedStateOfInstance(ctx context.Context, fil
 
 	// Fetch the actual Benthos config from the service
 	start = time.Now()
-	observedConfig, err := b.service.GetConfig(ctx, filesystemService, b.baseFSMInstance.GetID())
+	observedConfig, err := b.service.GetConfig(ctx, services.GetFileSystem(), b.baseFSMInstance.GetID())
 	metrics.ObserveReconcileTime(logger.ComponentBenthosInstance, b.baseFSMInstance.GetID()+".getConfig", time.Since(start))
 	if err == nil {
 		// Only update if we successfully got the config
@@ -193,7 +243,7 @@ func (b *BenthosInstance) UpdateObservedStateOfInstance(ctx context.Context, fil
 	// Use new ConfigsEqual function that handles Benthos defaults properly
 	if !benthosserviceconfig.ConfigsEqual(b.config, b.ObservedState.ObservedBenthosServiceConfig) {
 		// Check if the service exists before attempting to update
-		if b.service.ServiceExists(ctx, filesystemService, b.baseFSMInstance.GetID()) {
+		if b.service.ServiceExists(ctx, services.GetFileSystem(), b.baseFSMInstance.GetID()) {
 			b.baseFSMInstance.GetLogger().Debugf("Observed Benthos config is different from desired config, updating S6 configuration")
 
 			// Use the new ConfigDiff function for better debug output
@@ -201,7 +251,7 @@ func (b *BenthosInstance) UpdateObservedStateOfInstance(ctx context.Context, fil
 			b.baseFSMInstance.GetLogger().Debugf("Configuration differences: %s", diffStr)
 
 			// Update the config in the S6 manager
-			err := b.service.UpdateBenthosInS6Manager(ctx, filesystemService, &b.config, b.baseFSMInstance.GetID())
+			err := b.service.UpdateBenthosInS6Manager(ctx, services.GetFileSystem(), &b.config, b.baseFSMInstance.GetID())
 			if err != nil {
 				return fmt.Errorf("failed to update Benthos service configuration: %w", err)
 			}
@@ -271,11 +321,13 @@ func (b *BenthosInstance) IsBenthosRunningForSomeTimeWithoutErrors(currentTime t
 
 	// Check if there are any issues in the Benthos logs
 	if !b.IsBenthosLogsFine(currentTime, logWindow) {
+		b.baseFSMInstance.GetLogger().Debugf("benthos logs are not fine")
 		return false
 	}
 
 	// Check if there are any errors in the Benthos metrics
 	if !b.IsBenthosMetricsErrorFree() {
+		b.baseFSMInstance.GetLogger().Debugf("benthos metrics are not error free")
 		return false
 	}
 
@@ -284,12 +336,12 @@ func (b *BenthosInstance) IsBenthosRunningForSomeTimeWithoutErrors(currentTime t
 
 // IsBenthosLogsFine determines if there are any issues in the Benthos logs
 func (b *BenthosInstance) IsBenthosLogsFine(currentTime time.Time, logWindow time.Duration) bool {
-	return b.service.IsLogsFine(b.ObservedState.ServiceInfo.BenthosStatus.Logs, currentTime, logWindow)
+	return b.service.IsLogsFine(b.ObservedState.ServiceInfo.BenthosStatus.BenthosLogs, currentTime, logWindow)
 }
 
 // IsBenthosMetricsErrorFree determines if the Benthos service has no errors in the metrics
 func (b *BenthosInstance) IsBenthosMetricsErrorFree() bool {
-	return b.service.IsMetricsErrorFree(b.ObservedState.ServiceInfo.BenthosStatus.Metrics)
+	return b.service.IsMetricsErrorFree(b.ObservedState.ServiceInfo.BenthosStatus.BenthosMetrics)
 }
 
 // IsBenthosDegraded determines if the Benthos service is degraded.
@@ -305,8 +357,5 @@ func (b *BenthosInstance) IsBenthosDegraded(currentTime time.Time, logWindow tim
 // IsBenthosWithProcessingActivity determines if the Benthos instance has active data processing
 // based on metrics data and possibly other observed state information
 func (b *BenthosInstance) IsBenthosWithProcessingActivity() bool {
-	if b.ObservedState.ServiceInfo.BenthosStatus.MetricsState == nil {
-		return false
-	}
 	return b.service.HasProcessingActivity(b.ObservedState.ServiceInfo.BenthosStatus)
 }
