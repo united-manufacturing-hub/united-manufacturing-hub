@@ -273,7 +273,7 @@ func (d *DataflowComponentInstance) reconcileStartingStates(ctx context.Context,
 		//    outside the FSM or recovered very quickly)?
 		//    ──► yes:  mark start successful (StartDone) and proceed.
 		if d.IsDataflowComponentBenthosRunning() {
-			d.ObservedState.ServiceInfo.StatusReason = "benthos started up"
+			d.ObservedState.ServiceInfo.StatusReason = "started up"
 			return d.baseFSMInstance.SendEvent(ctx, EventStartDone), true
 		}
 
@@ -286,7 +286,7 @@ func (d *DataflowComponentInstance) reconcileStartingStates(ctx context.Context,
 		}
 
 		// 4. Otherwise remain in OperationalStateStarting and try again on next tick.
-		d.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("waiting for benthos to be up: %s", d.ObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.StatusReason)
+		d.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("starting - waiting for benthos to be up: %s", d.ObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.StatusReason)
 		return nil, false
 	case OperationalStateStartingFailed:
 	// Do not do anything here.
@@ -312,10 +312,10 @@ func (d *DataflowComponentInstance) reconcileRunningState(ctx context.Context, s
 		degraded, reasonDegraded := d.IsDataflowComponentDegraded()
 		hasActivity, reasonActivity := d.IsDataflowComponentWithProcessingActivity()
 		if degraded {
-			d.ObservedState.ServiceInfo.StatusReason = reasonDegraded
+			d.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("degraded: %s", reasonDegraded)
 			return d.baseFSMInstance.SendEvent(ctx, EventBenthosDegraded), true
 		} else if !hasActivity { // if there is no activity, we move to Idle
-			d.ObservedState.ServiceInfo.StatusReason = reasonActivity
+			d.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("idling: %s", reasonActivity)
 			return d.baseFSMInstance.SendEvent(ctx, EventBenthosNoDataReceived), true
 		}
 		d.ObservedState.ServiceInfo.StatusReason = "" // if everything is fine, reset the status reason
@@ -325,13 +325,13 @@ func (d *DataflowComponentInstance) reconcileRunningState(ctx context.Context, s
 		degraded, reasonDegraded := d.IsDataflowComponentDegraded()
 		hasActivity, reasonActivity := d.IsDataflowComponentWithProcessingActivity()
 		if degraded {
-			d.ObservedState.ServiceInfo.StatusReason = reasonDegraded
+			d.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("degraded: %s", reasonDegraded)
 			return d.baseFSMInstance.SendEvent(ctx, EventBenthosDegraded), true
 		} else if !hasActivity { // if there is no activity, we stay in Idle
-			d.ObservedState.ServiceInfo.StatusReason = reasonActivity
+			d.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("idle: %s", reasonActivity)
 			return nil, false
 		}
-		d.ObservedState.ServiceInfo.StatusReason = "" // if everything is fine, reset the status reason
+		d.ObservedState.ServiceInfo.StatusReason = "active" // if everything is fine, reset the status reason
 		return d.baseFSMInstance.SendEvent(ctx, EventBenthosDataReceived), true
 	case OperationalStateDegraded:
 		// If we're in Degraded, we need to recover to move to Idle
@@ -342,7 +342,7 @@ func (d *DataflowComponentInstance) reconcileRunningState(ctx context.Context, s
 		}
 
 		// if it is not degraded, we move to Idle
-		d.ObservedState.ServiceInfo.StatusReason = "" // if everything is fine, reset the status reason
+		d.ObservedState.ServiceInfo.StatusReason = "recovering" // if everything is fine, reset the status reason
 		return d.baseFSMInstance.SendEvent(ctx, EventBenthosRecovered), true
 	default:
 		return fmt.Errorf("invalid running state: %s", currentState), false
@@ -360,22 +360,22 @@ func (d *DataflowComponentInstance) reconcileTransitionToStopped(ctx context.Con
 	switch currentState {
 	case OperationalStateStopped:
 		// Already stopped, nothing to do more
-		d.ObservedState.ServiceInfo.StatusReason = "DFC is supposed to be stopped and is already stopped"
+		d.ObservedState.ServiceInfo.StatusReason = "stopped"
 		return nil, false
 	case OperationalStateStopping:
 		if d.IsDataflowComponentBenthosStopped() {
 			// Transition from Stopping to Stopped
-			d.ObservedState.ServiceInfo.StatusReason = "benthos stopped, moving DFC to Stopped"
+			d.ObservedState.ServiceInfo.StatusReason = "stopped"
 			return d.baseFSMInstance.SendEvent(ctx, EventStopDone), true
 		}
+		d.ObservedState.ServiceInfo.StatusReason = "stopping"
+		return nil, false
 	default:
 		if err := d.StopInstance(ctx, services.GetFileSystem()); err != nil {
 			return err, false
 		}
 		// Send event to transition to Stopping
-		d.ObservedState.ServiceInfo.StatusReason = "DFC is stopping"
+		d.ObservedState.ServiceInfo.StatusReason = "stopping"
 		return d.baseFSMInstance.SendEvent(ctx, EventStop), true
 	}
-
-	return nil, false
 }

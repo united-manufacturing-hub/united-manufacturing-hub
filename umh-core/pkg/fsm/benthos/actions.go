@@ -302,7 +302,7 @@ func (b *BenthosInstance) IsBenthosConfigLoaded() (bool, string) {
 	if currentUptime >= constants.BenthosTimeUntilConfigLoadedInSeconds {
 		return true, ""
 	}
-	return false, fmt.Sprintf("Benthos has not been running for %d seconds, current uptime: %d seconds. If it remains in this state and uptime is not increasing, then benthos itself is in a crashloop, which is liekly caused by a configuration error.", constants.BenthosTimeUntilConfigLoadedInSeconds, currentUptime)
+	return false, fmt.Sprintf("uptime %d s (< %d s threshold)", currentUptime, constants.BenthosTimeUntilConfigLoadedInSeconds)
 }
 
 // IsBenthosHealthchecksPassed determines if the Benthos service has passed its healthchecks.
@@ -311,7 +311,7 @@ func (b *BenthosInstance) IsBenthosHealthchecksPassed() (bool, string) {
 		b.ObservedState.ServiceInfo.BenthosStatus.HealthCheck.IsReady {
 		return true, ""
 	}
-	return false, fmt.Sprintf("Benthos healthchecks did not pass, live: %t, ready: %t", b.ObservedState.ServiceInfo.BenthosStatus.HealthCheck.IsLive, b.ObservedState.ServiceInfo.BenthosStatus.HealthCheck.IsReady)
+	return false, fmt.Sprintf("healthchecks did not pass, live: %t, ready: %t", b.ObservedState.ServiceInfo.BenthosStatus.HealthCheck.IsLive, b.ObservedState.ServiceInfo.BenthosStatus.HealthCheck.IsReady)
 }
 
 // AnyRestartsSinceCreation determines if the Benthos service has restarted since its creation.
@@ -330,7 +330,7 @@ func (b *BenthosInstance) AnyRestartsSinceCreation() bool {
 func (b *BenthosInstance) IsBenthosRunningForSomeTimeWithoutErrors(currentTime time.Time, logWindow time.Duration) (bool, string) {
 	currentUptime := b.ObservedState.ServiceInfo.S6ObservedState.ServiceInfo.Uptime
 	if currentUptime < constants.BenthosTimeUntilRunningInSeconds {
-		return false, fmt.Sprintf("Benthos has not been running for at least %d seconds, current uptime: %d seconds", constants.BenthosTimeUntilRunningInSeconds, currentUptime)
+		return false, fmt.Sprintf("uptime %d s (< %d s threshold)", currentUptime, constants.BenthosTimeUntilRunningInSeconds)
 	}
 
 	// Check if there are any issues in the Benthos logs
@@ -352,7 +352,7 @@ func (b *BenthosInstance) IsBenthosRunningForSomeTimeWithoutErrors(currentTime t
 func (b *BenthosInstance) IsBenthosLogsFine(currentTime time.Time, logWindow time.Duration) (bool, string) {
 	logsFine, logEntry := b.service.IsLogsFine(b.ObservedState.ServiceInfo.BenthosStatus.BenthosLogs, currentTime, logWindow)
 	if !logsFine {
-		return false, fmt.Sprintf("Benthos logs are not fine, found the following error: [%s] %s", logEntry.Timestamp, logEntry.Content)
+		return false, fmt.Sprintf("log issue: [%s] %s", logEntry.Timestamp.Format(time.RFC3339), logEntry.Content)
 	}
 	return true, ""
 }
@@ -366,7 +366,6 @@ func (b *BenthosInstance) IsBenthosMetricsErrorFree() (bool, string) {
 // These check everything that is checked during the starting phase
 // But it means that it once worked, and then degraded
 func (b *BenthosInstance) IsBenthosDegraded(currentTime time.Time, logWindow time.Duration) (bool, string) {
-
 	// Same order as during starting phase
 	running, reason := b.IsBenthosS6Running()
 	if !running {

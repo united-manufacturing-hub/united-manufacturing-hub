@@ -263,7 +263,7 @@ func (d *DataflowComponentInstance) IsDataflowComponentBenthosStopped() bool {
 // But it means that it once worked, and then degraded
 func (d *DataflowComponentInstance) IsDataflowComponentDegraded() (bool, string) {
 	if d.ObservedState.ServiceInfo.BenthosFSMState == benthosfsm.OperationalStateDegraded {
-		return true, fmt.Sprintf("Benthos is degraded: %s", d.ObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.StatusReason)
+		return true, d.ObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.StatusReason
 	}
 	return false, ""
 }
@@ -277,7 +277,7 @@ func (d *DataflowComponentInstance) IsDataflowComponentWithProcessingActivity() 
 		return true, ""
 	}
 
-	return false, fmt.Sprintf("Benthos is not active: %s", benthosStatus.StatusReason)
+	return false, benthosStatus.StatusReason // no need to format, as it is already formatted
 }
 
 // IsStartingPeriodGracePeriodExceeded returns true when the difference

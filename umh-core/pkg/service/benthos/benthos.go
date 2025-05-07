@@ -999,7 +999,8 @@ func (s *BenthosService) HasProcessingActivity(status BenthosStatus) (bool, stri
 
 	msgPerSecInput := status.BenthosMetrics.MetricsState.Input.MessagesPerTick / constants.DefaultTickerTime.Seconds()
 	msgPerSecOutput := status.BenthosMetrics.MetricsState.Output.MessagesPerTick / constants.DefaultTickerTime.Seconds()
-	return false, fmt.Sprintf("benthos is idle and has not processed any messages for a while: current input=%.2f msg/sec, current output=%.2f msg/sec", msgPerSecInput, msgPerSecOutput)
+	return false, fmt.Sprintf("no input throughput (in=%.2f msg/s, out=%.2f msg/s)",
+		msgPerSecInput, msgPerSecOutput)
 }
 
 // ServiceExists checks if a Benthos service exists in the S6 manager
