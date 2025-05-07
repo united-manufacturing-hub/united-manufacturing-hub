@@ -15,8 +15,12 @@
 package actions
 
 import (
+	"fmt"
+
+	"github.com/google/uuid"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/encoding"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 	"go.uber.org/zap"
 )
 
@@ -35,4 +39,46 @@ func ConsumeOutboundMessages(outboundChannel chan *models.UMHMessage, messages *
 		}
 
 	}
+}
+
+// SendLimitedLogs sends a maximum of 10 logs to the user and a message about remaining logs.
+// Returns the updated lastLogs array that includes all logs, even those not sent.
+func SendLimitedLogs(
+	logs []s6.LogEntry,
+	lastLogs []s6.LogEntry,
+	instanceUUID uuid.UUID,
+	userEmail string,
+	actionUUID uuid.UUID,
+	outboundChannel chan *models.UMHMessage,
+	actionType models.ActionType) []s6.LogEntry {
+
+	if len(logs) <= len(lastLogs) {
+		return lastLogs
+	}
+
+	maxLogsToSend := 10
+	logsToSend := logs[len(lastLogs):]
+	remainingLogs := len(logsToSend) - maxLogsToSend
+
+	// Send at most maxLogsToSend logs
+	end := len(logsToSend)
+	if end > maxLogsToSend {
+		end = maxLogsToSend
+	}
+
+	for _, log := range logsToSend[:end] {
+		SendActionReply(instanceUUID, userEmail, actionUUID, models.ActionExecuting,
+			fmt.Sprintf("[Benthos Log] %s", log.Content),
+			outboundChannel, actionType)
+	}
+
+	// Send message about remaining logs if any
+	if remainingLogs > 0 {
+		SendActionReply(instanceUUID, userEmail, actionUUID, models.ActionExecuting,
+			fmt.Sprintf("[Benthos Log] %d remaining logs not displayed", remainingLogs),
+			outboundChannel, actionType)
+	}
+
+	// Return updated lastLogs to include all logs we've seen, even if not all were sent
+	return logs
 }

@@ -19,7 +19,7 @@
 // BUSINESS CONTEXT
 // -----------------------------------------------------------------------------
 // A *new* Data-Flow Component (DFC) in UMH is defined by a Benthos service
-// configuration and materialised as an FSM instance.  “Deploying” therefore
+// configuration and materialised as an FSM instance.  "Deploying" therefore
 // means **creating a new desired configuration entry** and **waiting until the
 // FSM reports**
 //
@@ -606,12 +606,7 @@ func (a *DeployDataflowComponentAction) waitForComponentToBeActive() error {
 						logs = dfcSnapshot.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosLogs
 						// only send the logs that have not been sent yet
 						if len(logs) > len(lastLogs) {
-							for _, log := range logs[len(lastLogs):] {
-								SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
-									fmt.Sprintf("[Benthos Log] %s", log.Content),
-									a.outboundChannel, models.DeployDataFlowComponent)
-							}
-							lastLogs = logs
+							lastLogs = SendLimitedLogs(logs, lastLogs, a.instanceUUID, a.userEmail, a.actionUUID, a.outboundChannel, models.DeployDataFlowComponent)
 						}
 					}
 				}
