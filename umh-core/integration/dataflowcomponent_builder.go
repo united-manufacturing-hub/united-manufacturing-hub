@@ -40,7 +40,7 @@ func NewDataFlowComponentBuilder() *DataFlowComponentBuilder {
 			Internal: config.InternalConfig{
 				Redpanda: config.RedpandaConfig{
 					FSMInstanceConfig: config.FSMInstanceConfig{
-						Name:            "redpanda",
+						Name:            "redpanda-redpanda",
 						DesiredFSMState: "stopped",
 					},
 				},

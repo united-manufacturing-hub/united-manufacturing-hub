@@ -104,7 +104,7 @@ var _ = Describe("Redpanda Extended Tests", Ordered, Label("redpanda-extended"),
 				if err != nil {
 					Fail(fmt.Sprintf("System is unstable: %v", err))
 				}
-				newOffset, err := checkRPK(testTopic, lastLoopOffset, lastLoopTimestamp, lossToleranceWarning, lossToleranceFail, producers*messagesPerSecond)
+				newOffset, err := checkMessagesViaRPK(testTopic, lastLoopOffset, lastLoopTimestamp, lossToleranceWarning, lossToleranceFail, producers*messagesPerSecond)
 				if err != nil {
 					Fail(fmt.Sprintf("RPK check failed: %v", err))
 				}
@@ -114,7 +114,7 @@ var _ = Describe("Redpanda Extended Tests", Ordered, Label("redpanda-extended"),
 			}
 
 			By("Verifying message count with rpk")
-			messageCount, err := checkRPK(testTopic, lastLoopOffset, lastLoopTimestamp, lossToleranceWarning, lossToleranceFail, producers*messagesPerSecond)
+			messageCount, err := checkMessagesViaRPK(testTopic, lastLoopOffset, lastLoopTimestamp, lossToleranceWarning, lossToleranceFail, producers*messagesPerSecond)
 			if err != nil {
 				Fail(fmt.Sprintf("RPK check failed: %v", err))
 			}
@@ -148,7 +148,7 @@ var _ = Describe("Redpanda Extended Tests", Ordered, Label("redpanda-extended"),
 	})
 })
 
-func checkRPK(topic string, lastLoopOffset int, lastLoopTimestamp time.Time, lossToleranceWarning float64, lossToleranceFail float64, messagesPerSecond int) (newOffset int, err error) {
+func checkMessagesViaRPK(topic string, lastLoopOffset int, lastLoopTimestamp time.Time, lossToleranceWarning float64, lossToleranceFail float64, messagesPerSecond int) (newOffset int, err error) {
 	// Fetch the latest Messages and validate that:
 	// 1) The timestamp is within reason (+-1m)
 	// 2) The offsets are increasing (e.g the last offset of the batch is higher then the current one)
@@ -212,6 +212,18 @@ func checkRPK(topic string, lastLoopOffset int, lastLoopTimestamp time.Time, los
 	}
 
 	return newOffset, nil
+}
+
+func getClusterConfigViaRPK(key string) (string, error) {
+	ctx, cncl := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cncl()
+	out, err := runDockerCommandWithCtx(ctx, "exec", getContainerName(), "/opt/redpanda/bin/rpk", "cluster", "config", "get", key)
+	if err != nil {
+		GinkgoWriter.Printf("❌ Error getting RPK cluster config: %v\n", err)
+		GinkgoWriter.Printf("❌ Output: %s\n", out)
+		return "", err
+	}
+	return strings.TrimSpace(out), nil
 }
 
 type Message struct {

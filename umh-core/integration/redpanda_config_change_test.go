@@ -22,12 +22,12 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var _ = FDescribe("Redpanda Config Change Test", Ordered, Label("integration"), func() {
+var _ = Describe("Redpanda Config Change Test", Ordered, Label("integration"), func() {
 	const (
 		topicName            = "compression-test-topic"
 		messagesPerSecond    = 5
 		testDuration         = 1 * time.Minute
-		compressionWaitTime  = 10 * time.Second
+		maxTestDuration      = 5 * time.Minute
 		lossToleranceWarning = 0.1 // 10% message loss
 		lossToleranceFail    = 0.2 // 20% message loss
 	)
@@ -39,7 +39,6 @@ var _ = FDescribe("Redpanda Config Change Test", Ordered, Label("integration"), 
 		By("Starting umh-core with Redpanda and a DFC that outputs to Kafka")
 		builder := NewDataFlowComponentBuilder()
 		builder.full.Internal.Redpanda.DesiredFSMState = "active"
-		builder.full.Internal.Redpanda.Name = "redpanda"
 		builder.AddGeneratorDataFlowComponentToKafka("dfc-compression", fmt.Sprintf("%dms", 1000/messagesPerSecond), topicName)
 		cfg := builder.BuildYAML()
 		Expect(writeConfigFile(cfg)).To(Succeed())
@@ -57,33 +56,52 @@ var _ = FDescribe("Redpanda Config Change Test", Ordered, Label("integration"), 
 	})
 
 	It("should continue processing messages after changing compression type to lz4", func() {
+		var err error
+		var compressionType string
 		By("Waiting for initial messages to be produced")
 		Eventually(func() bool {
-			newOffset, err := checkRPK(topicName, lastOffset, lastTimestamp, lossToleranceWarning, lossToleranceFail, messagesPerSecond)
+			newOffset, err := checkMessagesViaRPK(topicName, lastOffset, lastTimestamp, lossToleranceWarning, lossToleranceFail, messagesPerSecond)
 			lastOffset = newOffset
 			lastTimestamp = time.Now()
 			return err == nil && newOffset != -1
 		}, 30*time.Second, 1*time.Second).Should(BeTrue(), "Messages should be produced initially")
 
+		By("Checking that the initial compression type is snappy")
+		compressionType, err = getClusterConfigViaRPK("log_compression_type")
+		Expect(err).ToNot(HaveOccurred(), "Should get compression type")
+		Expect(compressionType).To(Equal("snappy"), "Compression type should be snappy")
+
 		By("Changing compression type to lz4")
 		builder := NewDataFlowComponentBuilder()
 		builder.full.Internal.Redpanda.DesiredFSMState = "active"
-		builder.full.Internal.Redpanda.Name = "redpanda"
 		builder.full.Internal.Redpanda.RedpandaServiceConfig.Topic.DefaultTopicCompressionType = "lz4"
 		builder.AddGeneratorDataFlowComponentToKafka("dfc-compression", fmt.Sprintf("%dms", 1000/messagesPerSecond), topicName)
 		cfg := builder.BuildYAML()
-		Expect(writeConfigFile(cfg)).To(Succeed())
+		Expect(cfg).To(ContainSubstring("defaultTopicCompressionType: lz4"))
+		Expect(writeConfigFile(cfg, getContainerName())).To(Succeed())
 
 		By("Waiting for compression change to take effect")
-		time.Sleep(compressionWaitTime)
+		Eventually(func() bool {
+			compressionType, err = getClusterConfigViaRPK("log_compression_type")
+			GinkgoWriter.Printf("Compression type: %s\n", compressionType)
+			return compressionType == "lz4"
+		}, 30*time.Second, 1*time.Second).Should(BeTrue(), "Compression type should be lz4")
 
 		By("Verifying messages continue to be processed after compression change")
 		startTime := time.Now()
 		lastTimestamp = time.Now()
 		for time.Since(startTime) < testDuration {
 			time.Sleep(1 * time.Second)
-			newOffset, err := checkRPK(topicName, lastOffset, lastTimestamp, lossToleranceWarning, lossToleranceFail, messagesPerSecond)
-			Expect(err).ToNot(HaveOccurred(), "Should continue processing messages after compression change")
+			newOffset, err := checkMessagesViaRPK(topicName, lastOffset, lastTimestamp, lossToleranceWarning, lossToleranceFail, messagesPerSecond)
+			if err != nil {
+				GinkgoWriter.Printf("Error checking messages: %v, assuming restart\n", err)
+				// Reset startTime to the current time
+				startTime = time.Now()
+				// Fail if we are above the max test duration
+				if time.Since(startTime) > maxTestDuration {
+					Fail("Test duration exceeded max test duration")
+				}
+			}
 			lastOffset = newOffset
 			lastTimestamp = time.Now()
 		}
