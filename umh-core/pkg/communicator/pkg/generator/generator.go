@@ -25,6 +25,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/agent_monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/container"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/redpanda"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
@@ -36,7 +37,7 @@ const (
 	containerManagerName = logger.ComponentContainerManager + "_" + constants.DefaultManagerName
 	benthosManagerName   = logger.ComponentBenthosManager + "_" + constants.DefaultManagerName
 	agentManagerName     = logger.ComponentAgentManager + "_" + constants.DefaultManagerName
-
+	redpandaManagerName  = logger.ComponentRedpandaManager + "_" + constants.DefaultManagerName
 	// Instance name constants
 	coreInstanceName  = "Core"
 	agentInstanceName = "agent"
@@ -93,6 +94,7 @@ func (s *StatusCollectorType) getDataFlowComponentData() ([]models.Dfc, error) {
 
 func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 
+	// Step 1: Get the snapshot
 	snapshot := s.systemSnapshotManager.GetDeepCopySnapshot()
 	if len(snapshot.Managers) == 0 {
 		sentry.ReportIssuef(sentry.IssueTypeError, s.logger, "[GenerateStatusMessage] State is nil, using empty state")
@@ -100,7 +102,7 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 		return nil
 	}
 
-	// Create container data from the container manager if available
+	// Step 2: Get container data from snapshot via the container manager if available
 	var containerData models.Container
 
 	if containerManager, exists := snapshot.Managers[containerManagerName]; exists {
@@ -120,12 +122,13 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 		containerData = buildDefaultContainerData()
 	}
 
+	// Step 3: Get dataflowcomponent data from snapshot via the dataflowcomponent manager if available
 	dfcData, err := s.getDataFlowComponentData()
 	if err != nil {
 		s.logger.Error("Error getting dataflowcomponent data", zap.Error(err))
 	}
 
-	// extract agent data from the agent manager if available
+	// Step 4: Get agent data from the agent manager if available
 	var agentData models.Agent
 	var releaseChannel string
 
@@ -147,6 +150,25 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 		}
 	}
 
+	// Step 5: Get redpanda data from the redpanda manager if available
+	var redpandaData models.Redpanda
+
+	if redpandaManager, exists := snapshot.Managers[redpandaManagerName]; exists {
+		instances := redpandaManager.GetInstances()
+
+		if instance, ok := instances[coreInstanceName]; ok {
+			redpandaData, err = buildRedpandaDataFromSnapshot(*instance, s.logger)
+			if err != nil {
+				s.logger.Error("Error building redpanda data", zap.Error(err))
+			}
+		} else {
+			s.logger.Warn("Redpanda instance not found in redpanda manager",
+				zap.String("instanceName", coreInstanceName))
+			sentry.ReportIssuef(sentry.IssueTypeError, s.logger, "[GenerateStatusMessage] Redpanda instance not found in redpanda manager")
+			redpandaData = models.Redpanda{}
+		}
+	}
+
 	// Create the status message
 	statusMessage := &models.StatusMessage{
 		Core: models.Core{
@@ -155,18 +177,9 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 				Latency:  &models.Latency{},
 				Location: agentData.Location,
 			},
-			Container: containerData,
-			Dfcs:      dfcData,
-			Redpanda: models.Redpanda{
-				Health: &models.Health{
-					Message:       "redpanda monitoring is not implemented yet",
-					ObservedState: "n/a",
-					DesiredState:  "running",
-					Category:      models.Neutral,
-				},
-				AvgIncomingThroughputPerMinuteInMsgSec: 0,
-				AvgOutgoingThroughputPerMinuteInMsgSec: 0,
-			},
+			Container:        containerData,
+			Dfcs:             dfcData,
+			Redpanda:         redpandaData,
 			UnifiedNamespace: models.UnifiedNamespace{},
 			Release: models.Release{
 				Health: &models.Health{
@@ -383,6 +396,66 @@ func buildDefaultContainerData() models.Container {
 		Hwid:         "unknown",
 		Architecture: models.ArchitectureAmd64,
 	}
+}
+
+// buildRedpandaDataFromSnapshot creates redpanda data from a FSM instance snapshot
+// the instance will give us currentState, desiredState, etc. and the last observed state
+func buildRedpandaDataFromSnapshot(instance fsm.FSMInstanceSnapshot, log *zap.SugaredLogger) (models.Redpanda, error) {
+	redpandaData := models.Redpanda{}
+
+	// Check if we have actual observedState
+	if instance.LastObservedState != nil {
+
+		// Step 1: Assemble Health Information
+
+		// extract the current and desired state from the instance
+		currentState := instance.CurrentState
+		desiredState := instance.DesiredState
+
+		// Now derive the health category from the current state
+		healthCategory := models.Neutral
+		switch currentState {
+		case redpanda.OperationalStateActive:
+			healthCategory = models.Active
+		case redpanda.OperationalStateDegraded:
+			healthCategory = models.Degraded
+		}
+
+		// Now derive the health message from the health category
+		healthMessage := getHealthMessage(healthCategory)
+
+		// Now assemble the health status
+		redpandaData.Health = &models.Health{
+			Message:       healthMessage,
+			ObservedState: currentState,
+			DesiredState:  desiredState,
+			Category:      healthCategory,
+		}
+
+		// Step 2: Assemble Redpanda Metrics (AvgIncomingThroughputPerMinuteInMsgSec, AvgOutgoingThroughputPerMinuteInMsgSec)
+		// Try to cast to the right type
+		observedState, ok := instance.LastObservedState.(*redpanda.RedpandaObservedStateSnapshot)
+		if !ok {
+			err := fmt.Errorf("observed state %T does not match RedpandaObservedStateSnapshot", instance.LastObservedState)
+			log.Error(err)
+			return models.Redpanda{}, err
+		}
+
+		// Now fetch the last observed service info
+		observedStateServiceInfo := observedState.ServiceInfoSnapshot
+
+		// Now calculate the throughput metrics if available
+		if observedStateServiceInfo.RedpandaStatus.RedpandaMetrics.MetricsState != nil {
+			redpandaData.AvgIncomingThroughputPerMinuteInMsgSec = float64(observedStateServiceInfo.RedpandaStatus.RedpandaMetrics.MetricsState.Input.BytesPerTick) / constants.DefaultTickerTime.Seconds()
+			redpandaData.AvgOutgoingThroughputPerMinuteInMsgSec = float64(observedStateServiceInfo.RedpandaStatus.RedpandaMetrics.MetricsState.Output.BytesPerTick) / constants.DefaultTickerTime.Seconds()
+		}
+
+	} else {
+		log.Warn("no observed state found for redpanda", zap.String("instanceID", instance.ID))
+		return models.Redpanda{}, fmt.Errorf("no observed state found for redpanda")
+	}
+
+	return redpandaData, nil
 }
 
 // buildAgentDataFromSnapshot creates agent data from a FSM instance snapshot

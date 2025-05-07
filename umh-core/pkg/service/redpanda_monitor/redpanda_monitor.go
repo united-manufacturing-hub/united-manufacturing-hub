@@ -140,7 +140,7 @@ type TopicConfig struct {
 type RedpandaMetrics struct {
 	// Metrics contains the metrics of the Redpanda service
 	Metrics Metrics
-	// LastUpdatedAt contains the last time the metrics were updated
+	// MetricsState contains the last observed state of the metrics
 	MetricsState *RedpandaMetricsState
 }
 
