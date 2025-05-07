@@ -321,7 +321,7 @@ func buildDataFlowComponentDataFromSnapshot(instance fsm.FSMInstanceSnapshot, lo
 		}
 
 		dfcData.Health = &models.Health{
-			Message:       getHealthMessage(extractHealthStatus(instance.CurrentState)),
+			Message:       getDataflowHealthMessage(extractHealthStatus(instance.CurrentState), *observed),
 			ObservedState: instance.CurrentState,
 			DesiredState:  instance.DesiredState,
 			Category:      extractHealthStatus(instance.CurrentState),
@@ -347,7 +347,26 @@ func getHealthMessage(health models.HealthCategory) string {
 	case models.Active:
 		return "Component is operating normally"
 	case models.Degraded:
-		return "Component is operating at reduced capacity"
+		return "Component stopped working"
+	case models.Neutral:
+		return "Component status is neutral"
+	default:
+		return "Component status unknown"
+	}
+}
+
+// getDataflowHealthMessage returns an appropriate message for dataflow components
+func getDataflowHealthMessage(health models.HealthCategory, serviceInfo dataflowcomponent.DataflowComponentObservedStateSnapshot) string {
+	switch health {
+	case models.Active:
+		return "Component is operating normally"
+	case models.Degraded:
+		if serviceInfo.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosDegradedLog.Content != "" {
+			return fmt.Sprintf("Component is degraded because of a bad log entry. If the problem persists, please check the logs for more information. Log entry: [ %s ] %s",
+				serviceInfo.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosDegradedLog.Timestamp.String(),
+				serviceInfo.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosDegradedLog.Content)
+		}
+		return "Component stopped working"
 	case models.Neutral:
 		return "Component status is neutral"
 	default:

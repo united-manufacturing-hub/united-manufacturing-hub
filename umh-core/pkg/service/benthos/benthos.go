@@ -124,6 +124,14 @@ type BenthosStatus struct {
 	// Therefore we override the default behaviour and copy only the 3-word
 	// slice header (24 B on amd64) — see CopyBenthosLogs below.
 	BenthosLogs []s6service.LogEntry
+
+	// BenthosDegradedLogs contains the logs of the Benthos service that are
+	// considered degraded.
+	//
+	// This is a separate field because it is not part of the S6 service's
+	// logs, and we need to copy it explicitly when the Benthos service is
+	// degraded.
+	BenthosDegradedLog s6service.LogEntry
 }
 
 // CopyBenthosLogs is a go-deepcopy override for the BenthosLogs field.
