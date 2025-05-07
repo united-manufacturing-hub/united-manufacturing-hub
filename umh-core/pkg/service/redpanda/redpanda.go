@@ -54,13 +54,15 @@ type IRedpandaService interface {
 	// AddRedpandaToS6Manager adds a Redpanda instance to the S6 manager
 	AddRedpandaToS6Manager(ctx context.Context, cfg *redpandaserviceconfig.RedpandaServiceConfig, filesystemService filesystem.Service, redpandaName string) error
 	// UpdateRedpandaInS6Manager updates an existing Redpanda instance in the S6 manager
-	UpdateRedpandaInS6Manager(ctx context.Context, currentConfig *redpandaserviceconfig.RedpandaServiceConfig, desiredConfig *redpandaserviceconfig.RedpandaServiceConfig, redpandaName string, tick uint64) error
+	UpdateRedpandaInS6Manager(ctx context.Context, currentConfig *redpandaserviceconfig.RedpandaServiceConfig, desiredConfig *redpandaserviceconfig.RedpandaServiceConfig, redpandaName string, tick uint64) (bool, error)
 	// RemoveRedpandaFromS6Manager removes a Redpanda instance from the S6 manager
 	RemoveRedpandaFromS6Manager(ctx context.Context, redpandaName string) error
 	// StartRedpanda starts a Redpanda instance
 	StartRedpanda(ctx context.Context, redpandaName string) error
 	// StopRedpanda stops a Redpanda instance
 	StopRedpanda(ctx context.Context, redpandaName string) error
+	// RestartRedpanda restarts a Redpanda instance
+	RestartRedpanda(ctx context.Context, redpandaName string) error
 	// ForceRemoveRedpanda removes a Redpanda instance from the S6 manager
 	ForceRemoveRedpanda(ctx context.Context, filesystemService filesystem.Service, redpandaName string) error
 	// ServiceExists checks if a Redpanda service exists
@@ -74,7 +76,7 @@ type IRedpandaService interface {
 	// HasProcessingActivity checks if a Redpanda service has processing activity
 	HasProcessingActivity(status RedpandaStatus) bool
 	// ApplyConfigurationChanges applies configuration changes to a running Redpanda instance using rpk
-	ApplyConfigurationChanges(ctx context.Context, currentConfig redpandaserviceconfig.RedpandaServiceConfig, desiredConfig redpandaserviceconfig.RedpandaServiceConfig, tick uint64) error
+	ApplyConfigurationChanges(ctx context.Context, currentConfig redpandaserviceconfig.RedpandaServiceConfig, desiredConfig redpandaserviceconfig.RedpandaServiceConfig, tick uint64) (bool, error)
 }
 
 // ServiceInfo contains information about a Redpanda service
@@ -609,13 +611,13 @@ func (s *RedpandaService) ensureRedpandaDirectories(ctx context.Context, baseDir
 }
 
 // UpdateRedpandaInS6Manager updates an existing Redpanda instance in the S6 manager
-func (s *RedpandaService) UpdateRedpandaInS6Manager(ctx context.Context, currentConfig *redpandaserviceconfig.RedpandaServiceConfig, desiredConfig *redpandaserviceconfig.RedpandaServiceConfig, redpandaName string, tick uint64) error {
+func (s *RedpandaService) UpdateRedpandaInS6Manager(ctx context.Context, currentConfig *redpandaserviceconfig.RedpandaServiceConfig, desiredConfig *redpandaserviceconfig.RedpandaServiceConfig, redpandaName string, tick uint64) (needsRestart bool, err error) {
 	if s.s6Manager == nil {
-		return errors.New("s6 manager not initialized")
+		return false, errors.New("s6 manager not initialized")
 	}
 
 	if ctx.Err() != nil {
-		return ctx.Err()
+		return false, ctx.Err()
 	}
 
 	s6ServiceName := s.GetS6ServiceName(redpandaName)
@@ -632,13 +634,13 @@ func (s *RedpandaService) UpdateRedpandaInS6Manager(ctx context.Context, current
 	}
 
 	if !found {
-		return ErrServiceNotExist
+		return false, ErrServiceNotExist
 	}
 
 	// Generate the new S6 config for this instance
 	s6Config, err := s.GenerateS6ConfigForRedpanda(desiredConfig, s6ServiceName)
 	if err != nil {
-		return fmt.Errorf("failed to generate S6 config for Redpanda service %s: %w", s6ServiceName, err)
+		return false, fmt.Errorf("failed to generate S6 config for Redpanda service %s: %w", s6ServiceName, err)
 	}
 
 	// Get the current state of the service
@@ -650,10 +652,10 @@ func (s *RedpandaService) UpdateRedpandaInS6Manager(ctx context.Context, current
 		if currentState == s6fsm.OperationalStateRunning {
 			s.logger.Infof("Redpanda instance %s is running, applying configuration changes using rpk", redpandaName)
 
-			err = s.ApplyConfigurationChanges(ctx, *currentConfig, *desiredConfig, tick)
+			needsRestart, err = s.ApplyConfigurationChanges(ctx, *currentConfig, *desiredConfig, tick)
 			if err != nil {
 				s.logger.Errorf("Failed to apply configuration changes to Redpanda instance %s: %v", redpandaName, err)
-				return err
+				return needsRestart, err
 			}
 		}
 	}
@@ -680,7 +682,7 @@ func (s *RedpandaService) UpdateRedpandaInS6Manager(ctx context.Context, current
 		},
 	}
 
-	return nil
+	return needsRestart, nil
 }
 
 // RemoveRedpandaFromS6Manager removes a Redpanda instance from the S6 manager
@@ -818,6 +820,38 @@ func (s *RedpandaService) StopRedpanda(ctx context.Context, redpandaName string)
 	return nil
 }
 
+// RestartRedpanda restarts a Redpanda instance
+func (s *RedpandaService) RestartRedpanda(ctx context.Context, redpandaName string) error {
+	if s.s6Manager == nil {
+		return errors.New("s6 manager not initialized")
+	}
+
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+
+	s6ServiceName := s.GetS6ServiceName(redpandaName)
+
+	found := false
+
+	// Set the desired state to restarting for the given instance
+	for i, s6Config := range s.s6ServiceConfigs {
+		if s6Config.Name == s6ServiceName {
+			s.s6ServiceConfigs[i].DesiredFSMState = s6fsm.OperationalStateRestarting
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		return ErrServiceNotExist
+	}
+
+	// We do not need to restart the redpanda monitor here
+
+	return nil
+}
+
 // ReconcileManager reconciles the Redpanda manager
 // This basically just calls the Reconcile method of the S6 manager, resulting in a (re)start of the Redpanda service with the latest configuration
 func (s *RedpandaService) ReconcileManager(ctx context.Context, services serviceregistry.Provider, tick uint64) (err error, reconciled bool) {
@@ -949,15 +983,15 @@ func maxInt(a, b int64) int64 {
 }
 
 // ApplyConfigurationChanges applies configuration changes to a running Redpanda instance using rpk
-func (s *RedpandaService) ApplyConfigurationChanges(ctx context.Context, current, desired redpandaserviceconfig.RedpandaServiceConfig, tick uint64) error {
+func (s *RedpandaService) ApplyConfigurationChanges(ctx context.Context, current, desired redpandaserviceconfig.RedpandaServiceConfig, tick uint64) (needsRestart bool, err error) {
 	if ctx.Err() != nil {
-		return ctx.Err()
+		return false, ctx.Err()
 	}
 	if tick%10 != 0 {
 		// Skip applying changes if the tick is not a multiple of 10
 		// This is used to avoid applying changes when others might still be pending
 		s.logger.Infof("Skipping applying changes to Redpanda instance due to tick %d not being a multiple of 10", tick)
-		return nil
+		return false, nil
 	}
 
 	// First normalize both configs to ensure we're comparing apples to apples
@@ -967,7 +1001,7 @@ func (s *RedpandaService) ApplyConfigurationChanges(ctx context.Context, current
 	// Check if the configs are actually different
 	if redpandaserviceconfig.ConfigsEqual(normCurrent, normDesired) {
 		s.logger.Infof("No changes to apply to Redpanda instance")
-		return nil
+		return false, nil
 	}
 
 	s.logger.Infof("Applying Redpanda configuration changes")
@@ -1000,17 +1034,11 @@ func (s *RedpandaService) ApplyConfigurationChanges(ctx context.Context, current
 	for _, cmdArgs := range commands {
 		// Early return if the context has been cancelled
 		if ctx.Err() != nil {
-			return ctx.Err()
+			return needsRestart, ctx.Err()
 		}
 
 		cmd := strings.Join(cmdArgs, " ")
 		s.logger.Infof("Executing command: %s", cmd)
-
-		// Execute the command directly using os/exec
-		now := time.Now()
-		command := exec.CommandContext(ctx, cmdArgs[0], cmdArgs[1:]...)
-		s.logger.Infof("Command %s took %s", cmd, time.Since(now))
-		output, err := command.CombinedOutput()
 
 		// CommandContext is like [Command] but includes a context.
 		//
@@ -1021,15 +1049,16 @@ func (s *RedpandaService) ApplyConfigurationChanges(ctx context.Context, current
 		// CommandContext sets the command's Cancel function to invoke the Kill method
 		// on its Process, and leaves its WaitDelay unset. The caller may change the
 		// cancellation behavior by modifying those fields before starting the command.
+		command := exec.CommandContext(ctx, cmdArgs[0], cmdArgs[1:]...)
+		output, err := command.CombinedOutput()
 
-		s.logger.Infof("Command output: %s", output)
-		s.logger.Infof("Command error: %v", err)
 		if err != nil {
 			s.logger.Errorf("Failed to execute command %s: %v, output: %s", cmd, err, string(output))
-			return fmt.Errorf("failed to apply config change with rpk: %w", err)
+			return needsRestart, fmt.Errorf("failed to apply config change with rpk: %w", err)
 		}
+		needsRestart = true
 	}
 
 	s.logger.Infof("Successfully applied all configuration changes to Redpanda instance")
-	return nil
+	return needsRestart, nil
 }

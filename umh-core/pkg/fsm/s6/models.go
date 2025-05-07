@@ -35,6 +35,9 @@ const (
 	OperationalStateStopping = "stopping"
 	// OperationalStateStopped indicates the service is not running
 	OperationalStateStopped = "stopped"
+	// OperationalStateRestarting indicates the service is in the process of restarting
+	OperationalStateRestarting = "restarting"
+
 	// OperationalStateUnknown indicates the service status is unknown
 	OperationalStateUnknown = "unknown"
 )
@@ -45,6 +48,7 @@ func IsOperationalState(state string) bool {
 		OperationalStateStarting,
 		OperationalStateRunning,
 		OperationalStateStopping,
+		OperationalStateRestarting,
 		OperationalStateUnknown:
 		return true
 	default:

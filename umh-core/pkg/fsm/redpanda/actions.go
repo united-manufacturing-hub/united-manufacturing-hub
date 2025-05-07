@@ -113,6 +113,19 @@ func (r *RedpandaInstance) StopInstance(ctx context.Context, filesystemService f
 	return nil
 }
 
+// RestartInstance attempts to restart the Redpanda by stopping and starting it
+func (r *RedpandaInstance) RestartInstance(ctx context.Context, filesystemService filesystem.Service) error {
+	r.baseFSMInstance.GetLogger().Debugf("Starting Action: Restarting Redpanda service %s ...", r.baseFSMInstance.GetID())
+
+	err := r.service.RestartRedpanda(ctx, r.baseFSMInstance.GetID())
+	if err != nil {
+		return fmt.Errorf("failed to restart Redpanda service %s: %w", r.baseFSMInstance.GetID(), err)
+	}
+
+	r.baseFSMInstance.GetLogger().Debugf("Redpanda service %s restart command executed", r.baseFSMInstance.GetID())
+	return nil
+}
+
 // CheckForCreation checks whether the creation was successful
 // For Redpanda, this is a no-op as we don't need to check anything
 func (r *RedpandaInstance) CheckForCreation(ctx context.Context, filesystemService filesystem.Service) bool {
@@ -183,7 +196,7 @@ func (r *RedpandaInstance) GetServiceStatus(ctx context.Context, filesystemServi
 }
 
 // UpdateObservedStateOfInstance updates the observed state of the service
-func (r *RedpandaInstance) UpdateObservedStateOfInstance(ctx context.Context, services serviceregistry.Provider, tick uint64, loopStartTime time.Time) error {
+func (r *RedpandaInstance) UpdateObservedStateOfInstance(ctx context.Context, services serviceregistry.Provider, tick uint64, loopStartTime time.Time) (err error) {
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
@@ -321,7 +334,12 @@ func (r *RedpandaInstance) UpdateObservedStateOfInstance(ctx context.Context, se
 			r.baseFSMInstance.GetLogger().Debugf("Configuration differences: %s", diffStr)
 
 			// Update the config in the S6 manager
-			err := r.service.UpdateRedpandaInS6Manager(ctx, &r.ObservedState.ObservedRedpandaServiceConfig, &r.config, r.baseFSMInstance.GetID(), tick)
+			var needsRestart bool
+			needsRestart, err = r.service.UpdateRedpandaInS6Manager(ctx, &r.ObservedState.ObservedRedpandaServiceConfig, &r.config, r.baseFSMInstance.GetID(), tick)
+			if needsRestart {
+				r.baseFSMInstance.GetLogger().Debugf("Redpanda service %s needs to be restarted", r.baseFSMInstance.GetID())
+				return r.RestartInstance(ctx, services.GetFileSystem())
+			}
 			if err != nil {
 				return fmt.Errorf("failed to update Redpanda service configuration: %w", err)
 			}

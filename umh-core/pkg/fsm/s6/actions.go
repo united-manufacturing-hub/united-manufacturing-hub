@@ -136,6 +136,23 @@ func (s *S6Instance) StopInstance(ctx context.Context, filesystemService filesys
 	return nil
 }
 
+// RestartInstance attempts to restart the S6 service.
+func (s *S6Instance) RestartInstance(ctx context.Context, filesystemService filesystem.Service) error {
+	start := time.Now()
+	defer func() {
+		metrics.ObserveReconcileTime(metrics.ComponentS6Instance, s.baseFSMInstance.GetID()+".RestartInstance", time.Since(start))
+	}()
+
+	s.baseFSMInstance.GetLogger().Debugf("Starting Action: Restarting S6 service %s ...", s.baseFSMInstance.GetID())
+
+	err := s.service.Restart(ctx, s.servicePath, filesystemService)
+	if err != nil {
+		return fmt.Errorf("failed to restart S6 service %s: %w", s.baseFSMInstance.GetID(), err)
+	}
+
+	return nil
+}
+
 // CheckForCreation checks whether the creation was successful
 func (s *S6Instance) CheckForCreation(ctx context.Context, filesystemService filesystem.Service) bool {
 	servicePath := s.servicePath

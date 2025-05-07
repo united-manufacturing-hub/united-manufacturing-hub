@@ -42,6 +42,7 @@ type MockRedpandaService struct {
 	RemoveRedpandaFromS6ManagerCalled bool
 	StartRedpandaCalled               bool
 	StopRedpandaCalled                bool
+	RestartRedpandaCalled             bool
 	ReconcileManagerCalled            bool
 	IsLogsFineCalled                  bool
 	IsMetricsErrorFreeCalled          bool
@@ -62,6 +63,7 @@ type MockRedpandaService struct {
 	RemoveRedpandaFromS6ManagerError  error
 	StartRedpandaError                error
 	StopRedpandaError                 error
+	RestartRedpandaError              error
 	ReconcileManagerError             error
 	ReconcileManagerReconciled        bool
 	ServiceExistsResult               bool
@@ -227,7 +229,7 @@ func (m *MockRedpandaService) AddRedpandaToS6Manager(ctx context.Context, cfg *r
 }
 
 // UpdateRedpandaInS6Manager mocks updating an existing Redpanda instance in the S6 manager
-func (m *MockRedpandaService) UpdateRedpandaInS6Manager(ctx context.Context, currentConfig *redpandaserviceconfig.RedpandaServiceConfig, desiredConfig *redpandaserviceconfig.RedpandaServiceConfig, redpandaName string, tick uint64) error {
+func (m *MockRedpandaService) UpdateRedpandaInS6Manager(ctx context.Context, currentConfig *redpandaserviceconfig.RedpandaServiceConfig, desiredConfig *redpandaserviceconfig.RedpandaServiceConfig, redpandaName string, tick uint64) (bool, error) {
 	m.UpdateRedpandaInS6ManagerCalled = true
 
 	// Check if the service exists
@@ -243,13 +245,14 @@ func (m *MockRedpandaService) UpdateRedpandaInS6Manager(ctx context.Context, cur
 	}
 
 	if !found {
-		return ErrServiceNotExist
+		return false, ErrServiceNotExist
 	}
 
 	// Update the config
 	m.S6ServiceConfigs[index].S6ServiceConfig = m.GenerateS6ConfigForRedpandaResult
 
-	return m.UpdateRedpandaInS6ManagerError
+	configsEqual := redpandaserviceconfig.ConfigsEqual(*currentConfig, *desiredConfig)
+	return !configsEqual, m.UpdateRedpandaInS6ManagerError
 }
 
 // RemoveRedpandaFromS6Manager mocks removing a Redpanda instance from the S6 manager
@@ -324,6 +327,29 @@ func (m *MockRedpandaService) StopRedpanda(ctx context.Context, redpandaName str
 	return m.StopRedpandaError
 }
 
+// RestartRedpanda mocks restarting a Redpanda instance
+func (m *MockRedpandaService) RestartRedpanda(ctx context.Context, redpandaName string) error {
+	m.RestartRedpandaCalled = true
+
+	s6ServiceName := redpandaName
+	found := false
+
+	// Set the desired state to stopped
+	for i, s6Config := range m.S6ServiceConfigs {
+		if s6Config.Name == s6ServiceName {
+			m.S6ServiceConfigs[i].DesiredFSMState = s6_fsm.OperationalStateRestarting
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		return ErrServiceNotExist
+	}
+
+	return m.RestartRedpandaError
+}
+
 // ReconcileManager mocks reconciling the Redpanda manager
 func (m *MockRedpandaService) ReconcileManager(ctx context.Context, services serviceregistry.Provider, tick uint64) (error, bool) {
 	m.ReconcileManagerCalled = true
@@ -363,7 +389,12 @@ func (m *MockRedpandaService) ForceRemoveRedpanda(ctx context.Context, filesyste
 }
 
 // ApplyConfigurationChanges mocks applying configuration changes to a running Redpanda instance
-func (m *MockRedpandaService) ApplyConfigurationChanges(ctx context.Context, currentConfig redpandaserviceconfig.RedpandaServiceConfig, desiredConfig redpandaserviceconfig.RedpandaServiceConfig, tick uint64) error {
+func (m *MockRedpandaService) ApplyConfigurationChanges(ctx context.Context, currentConfig redpandaserviceconfig.RedpandaServiceConfig, desiredConfig redpandaserviceconfig.RedpandaServiceConfig, tick uint64) (bool, error) {
 	m.ApplyConfigurationChangesCalled = true
-	return m.ApplyConfigurationChangesError
+
+	// First normalize both configs to ensure we're comparing apples to apples
+	normDesired := redpandaserviceconfig.NormalizeRedpandaConfig(desiredConfig)
+	normCurrent := redpandaserviceconfig.NormalizeRedpandaConfig(currentConfig)
+
+	return redpandaserviceconfig.ConfigsEqual(normCurrent, normDesired), m.ApplyConfigurationChangesError
 }

@@ -39,6 +39,9 @@ const (
 	// OperationalStateDegraded is the state when the service is running but has encountered issues
 	OperationalStateDegraded = "degraded"
 
+	// OperationalStateRestarting is the state when the service is in the process of restarting
+	OperationalStateRestarting = "restarting"
+
 	// OperationalStateStopping is the state when the service is in the process of stopping
 	OperationalStateStopping = "stopping"
 )
@@ -69,7 +72,8 @@ func IsOperationalState(state string) bool {
 		OperationalStateIdle,
 		OperationalStateActive,
 		OperationalStateDegraded,
-		OperationalStateStopping:
+		OperationalStateStopping,
+		OperationalStateRestarting:
 		return true
 	}
 	return false
@@ -89,6 +93,11 @@ func IsRunningState(state string) bool {
 		return true
 	}
 	return false
+}
+
+// IsRestartingState returns whether the given state is a restarting state
+func IsRestartingState(state string) bool {
+	return state == OperationalStateRestarting
 }
 
 // RedpandaObservedState contains the observed runtime state of a Redpanda instance

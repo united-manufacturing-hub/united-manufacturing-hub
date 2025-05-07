@@ -160,8 +160,9 @@ var _ = Describe("Redpanda Service", func() {
 
 			// Update the service configuration
 			By("Updating the Redpanda service configuration")
-			err = mockRedpandaService.UpdateRedpandaInS6Manager(ctx, initialConfig, updatedConfig, redpandaName, tick)
+			needsRestart, err := mockRedpandaService.UpdateRedpandaInS6Manager(ctx, initialConfig, updatedConfig, redpandaName, tick)
 			Expect(err).NotTo(HaveOccurred())
+			Expect(needsRestart).To(BeTrue())
 
 			// Reconcile to apply changes
 			By("Reconciling the manager to apply configuration changes")
@@ -179,7 +180,7 @@ var _ = Describe("Redpanda Service", func() {
 
 			// Try to update a non-existent service
 			By("Trying to update a non-existent service")
-			err := service.UpdateRedpandaInS6Manager(ctx, &redpandaserviceconfig.RedpandaServiceConfig{
+			_, err := service.UpdateRedpandaInS6Manager(ctx, &redpandaserviceconfig.RedpandaServiceConfig{
 				BaseDir: getTmpDir(),
 			}, &redpandaserviceconfig.RedpandaServiceConfig{
 				BaseDir: getTmpDir(),
