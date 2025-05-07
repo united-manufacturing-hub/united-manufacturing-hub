@@ -245,9 +245,12 @@ func (m *MockBenthosService) IsBenthosS6Stopped(serviceName string) bool {
 	return false
 }
 
-func (m *MockBenthosService) HasProcessingActivity(status BenthosStatus) bool {
+func (m *MockBenthosService) HasProcessingActivity(status BenthosStatus) (bool, string) {
 	m.HasProcessingActivityCalled = true
-	return status.BenthosMetrics.MetricsState.IsActive
+	if status.BenthosMetrics.MetricsState.IsActive {
+		return true, ""
+	}
+	return false, "benthos metrics state is not active"
 }
 
 // AddBenthosToS6Manager mocks adding a Benthos instance to the S6 manager
@@ -364,11 +367,11 @@ func (m *MockBenthosService) IsLogsFine(logs []s6service.LogEntry, currentTime t
 }
 
 // IsMetricsErrorFree mocks checking if metrics are error-free
-func (m *MockBenthosService) IsMetricsErrorFree(metrics benthos_monitor.BenthosMetrics) bool {
+func (m *MockBenthosService) IsMetricsErrorFree(metrics benthos_monitor.BenthosMetrics) (bool, string) {
 	m.IsMetricsErrorFreeCalled = true
 	// For testing purposes, we'll consider metrics error-free
 	// This can be enhanced based on testing needs
-	return true
+	return true, ""
 }
 
 // UpdateBenthosInS6Manager mocks updating a Benthos service configuration in the S6 manager

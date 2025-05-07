@@ -86,9 +86,9 @@ type IBenthosService interface {
 	// Expects logs ([]s6service.LogEntry), currentTime (time.Time), and logWindow (time.Duration)
 	IsLogsFine(logs []s6service.LogEntry, currentTime time.Time, logWindow time.Duration) (bool, s6service.LogEntry)
 	// IsMetricsErrorFree checks if the metrics of a Benthos service are error-free
-	IsMetricsErrorFree(metrics benthos_monitor.BenthosMetrics) bool
+	IsMetricsErrorFree(metrics benthos_monitor.BenthosMetrics) (bool, string)
 	// HasProcessingActivity checks if a Benthos service has processing activity
-	HasProcessingActivity(status BenthosStatus) bool
+	HasProcessingActivity(status BenthosStatus) (bool, string)
 }
 
 // ServiceInfo contains information about a Benthos service
@@ -125,13 +125,10 @@ type BenthosStatus struct {
 	// slice header (24 B on amd64) — see CopyBenthosLogs below.
 	BenthosLogs []s6service.LogEntry
 
-	// BenthosDegradedLogs contains the logs of the Benthos service that are
-	// considered degraded.
-	//
-	// This is a separate field because it is not part of the S6 service's
-	// logs, and we need to copy it explicitly when the Benthos service is
-	// degraded.
-	BenthosDegradedLog s6service.LogEntry
+	// StatusReason contains the reason for the status of the Benthos service
+	// If the service is degraded, this will contain the log entry that caused the degradation together with the information that it is degraded because of the log entry
+	// If the service is currently starting up, it will contain the s6 status of the service
+	StatusReason string
 }
 
 // CopyBenthosLogs is a go-deepcopy override for the BenthosLogs field.
@@ -973,29 +970,34 @@ func (s *BenthosService) IsLogsFine(
 }
 
 // IsMetricsErrorFree checks if there are any errors in the Benthos metrics
-func (s *BenthosService) IsMetricsErrorFree(metrics benthos_monitor.BenthosMetrics) bool {
+// Returns a boolean indicating if there are errors and a string containing the reason for the error
+func (s *BenthosService) IsMetricsErrorFree(metrics benthos_monitor.BenthosMetrics) (bool, string) {
 	// Check output errors
 	if metrics.Metrics.Output.Error > 0 {
-		return false
+		return false, fmt.Sprintf("benthos metrics contain %d output errors", metrics.Metrics.Output.Error)
 	}
 
 	// Check processor errors
 	for _, proc := range metrics.Metrics.Process.Processors {
 		if proc.Error > 0 {
-			return false
+			return false, fmt.Sprintf("benthos metrics contain %d processor errors", proc.Error)
 		}
 	}
 
-	return true
+	return true, ""
 }
 
 // HasProcessingActivity checks if the Benthos instance has active data processing based on metrics state
-func (s *BenthosService) HasProcessingActivity(status BenthosStatus) bool {
+func (s *BenthosService) HasProcessingActivity(status BenthosStatus) (bool, string) {
 	if status.BenthosMetrics.MetricsState == nil {
-		return false
+		return false, "benthos metrics state is nil"
 	}
 
-	return status.BenthosMetrics.MetricsState.IsActive
+	if status.BenthosMetrics.MetricsState.IsActive {
+		return true, ""
+	}
+
+	return false, fmt.Sprintf("benthos metrics state is not active: input=%.2f, output=%.2f", status.BenthosMetrics.MetricsState.Input.MessagesPerTick, status.BenthosMetrics.MetricsState.Output.MessagesPerTick)
 }
 
 // ServiceExists checks if a Benthos service exists in the S6 manager

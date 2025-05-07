@@ -259,7 +259,9 @@ func (b *BenthosInstance) reconcileStartingStates(ctx context.Context, services 
 	switch currentState {
 	case OperationalStateStarting:
 		// First we need to ensure the S6 service is started
-		if !b.IsBenthosS6Running() {
+		running, reason := b.IsBenthosS6Running()
+		if !running {
+			b.ObservedState.ServiceInfo.BenthosStatus.StatusReason = reason
 			return nil, false
 		}
 
@@ -268,39 +270,67 @@ func (b *BenthosInstance) reconcileStartingStates(ctx context.Context, services 
 		// Check if config has been loaded
 
 		// If the S6 is not running, go back to starting
-		if !b.IsBenthosS6Running() {
+		running, reason := b.IsBenthosS6Running()
+		if !running {
+			b.ObservedState.ServiceInfo.BenthosStatus.StatusReason = reason
 			return b.baseFSMInstance.SendEvent(ctx, EventStartFailed), true
 		}
 
 		// Now check whether benthos has loaded the config
-		if !b.IsBenthosConfigLoaded() {
+		loaded, reason := b.IsBenthosConfigLoaded()
+		if !loaded {
+			b.ObservedState.ServiceInfo.BenthosStatus.StatusReason = reason
 			return nil, false
 		}
 
 		return b.baseFSMInstance.SendEvent(ctx, EventConfigLoaded), true
 	case OperationalStateStartingWaitingForHealthchecks:
 		// If the S6 is not running, go back to starting
-		if !b.IsBenthosS6Running() || !b.IsBenthosConfigLoaded() {
+		running, reason := b.IsBenthosS6Running()
+		if !running {
+			b.ObservedState.ServiceInfo.BenthosStatus.StatusReason = reason
+			return b.baseFSMInstance.SendEvent(ctx, EventStartFailed), true
+		}
+
+		loaded, reason := b.IsBenthosConfigLoaded()
+		if !loaded {
+			b.ObservedState.ServiceInfo.BenthosStatus.StatusReason = reason
 			return b.baseFSMInstance.SendEvent(ctx, EventStartFailed), true
 		}
 
 		// Check if healthchecks have passed
-		if !b.IsBenthosHealthchecksPassed() {
-			return nil, false
+		passed, reason := b.IsBenthosHealthchecksPassed()
+		if !passed {
+			b.ObservedState.ServiceInfo.BenthosStatus.StatusReason = reason
+			return b.baseFSMInstance.SendEvent(ctx, EventStartFailed), true
 		}
 
 		return b.baseFSMInstance.SendEvent(ctx, EventHealthchecksPassed), true
 	case OperationalStateStartingWaitingForServiceToRemainRunning:
 		// If the S6 is not running, go back to starting
-		if !b.IsBenthosS6Running() || !b.IsBenthosConfigLoaded() || !b.IsBenthosHealthchecksPassed() {
-			b.baseFSMInstance.GetLogger().Debugf("benthos is not running, config is not loaded or healthchecks have not passed")
+		running, reason := b.IsBenthosS6Running()
+		if !running {
+			b.ObservedState.ServiceInfo.BenthosStatus.StatusReason = reason
+			return b.baseFSMInstance.SendEvent(ctx, EventStartFailed), true
+		}
+
+		loaded, reason := b.IsBenthosConfigLoaded()
+		if !loaded {
+			b.ObservedState.ServiceInfo.BenthosStatus.StatusReason = reason
+			return b.baseFSMInstance.SendEvent(ctx, EventStartFailed), true
+		}
+
+		passed, reason := b.IsBenthosHealthchecksPassed()
+		if !passed {
+			b.ObservedState.ServiceInfo.BenthosStatus.StatusReason = reason
 			return b.baseFSMInstance.SendEvent(ctx, EventStartFailed), true
 		}
 
 		// Check if service has been running stably for some time
-		running, _ := b.IsBenthosRunningForSomeTimeWithoutErrors(currentTime, constants.BenthosLogWindow)
+		running, reason = b.IsBenthosRunningForSomeTimeWithoutErrors(currentTime, constants.BenthosLogWindow)
 		if !running {
-			return nil, false
+			b.ObservedState.ServiceInfo.BenthosStatus.StatusReason = reason
+			return b.baseFSMInstance.SendEvent(ctx, EventStartFailed), true
 		}
 
 		return b.baseFSMInstance.SendEvent(ctx, EventStartDone), true
@@ -363,7 +393,8 @@ func (b *BenthosInstance) reconcileTransitionToStopped(ctx context.Context, serv
 	}
 
 	// If already stopping, verify if the instance is completely stopped
-	if currentState == OperationalStateStopping && b.IsBenthosS6Stopped() {
+	stopped, _ := b.IsBenthosS6Stopped()
+	if currentState == OperationalStateStopping && stopped {
 		// Transition from Stopping to Stopped
 		return b.baseFSMInstance.SendEvent(ctx, EventStopDone), true
 	}

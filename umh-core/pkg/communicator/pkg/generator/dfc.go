@@ -111,14 +111,13 @@ func getHealthMessage(
 		return "Component is operating normally"
 	case models.Degraded:
 		if serviceInfo.ServiceInfo.BenthosObservedState.ServiceInfo.
-			BenthosStatus.BenthosDegradedLog.Content != "" {
+			BenthosStatus.StatusReason != "" {
 
+			// TODO
 			return fmt.Sprintf(
-				"Component degraded due to log entry [%s] %s",
+				"Component degraded due to log entry %s",
 				serviceInfo.ServiceInfo.BenthosObservedState.ServiceInfo.
-					BenthosStatus.BenthosDegradedLog.Timestamp,
-				serviceInfo.ServiceInfo.BenthosObservedState.ServiceInfo.
-					BenthosStatus.BenthosDegradedLog.Content)
+					BenthosStatus.StatusReason)
 		}
 		return "Component stopped working"
 	case models.Neutral:
