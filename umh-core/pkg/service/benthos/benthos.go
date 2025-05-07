@@ -84,7 +84,7 @@ type IBenthosService interface {
 	ReconcileManager(ctx context.Context, services serviceregistry.Provider, tick uint64) (error, bool)
 	// IsLogsFine checks if the logs of a Benthos service are fine
 	// Expects logs ([]s6service.LogEntry), currentTime (time.Time), and logWindow (time.Duration)
-	IsLogsFine(logs []s6service.LogEntry, currentTime time.Time, logWindow time.Duration) bool
+	IsLogsFine(logs []s6service.LogEntry, currentTime time.Time, logWindow time.Duration) (bool, s6service.LogEntry)
 	// IsMetricsErrorFree checks if the metrics of a Benthos service are error-free
 	IsMetricsErrorFree(metrics benthos_monitor.BenthosMetrics) bool
 	// HasProcessingActivity checks if a Benthos service has processing activity
@@ -921,10 +921,10 @@ func (s *BenthosService) IsLogsFine(
 	logs []s6service.LogEntry,
 	now time.Time,
 	window time.Duration,
-) bool {
+) (bool, s6service.LogEntry) {
 
 	if len(logs) == 0 {
-		return true
+		return true, s6service.LogEntry{}
 	}
 
 	cutoff := now.Add(-window)         // pre-compute once
@@ -942,7 +942,7 @@ func (s *BenthosService) IsLogsFine(
 		case strings.HasPrefix(l.Content, "configuration file read error:"),
 			strings.HasPrefix(l.Content, "failed to create logger:"),
 			strings.HasPrefix(l.Content, "Config lint error:"):
-			return false
+			return false, l
 		}
 
 		// Only one regexp call per line.
@@ -950,18 +950,18 @@ func (s *BenthosService) IsLogsFine(
 			level, msg := m[1], m[2]
 
 			if level == "error" {
-				return false
+				return false, l
 			}
 			if level == "warning" {
 				for _, sub := range critWarnSubstrings {
 					if strings.Contains(msg, sub) {
-						return false
+						return false, l
 					}
 				}
 			}
 		}
 	}
-	return true
+	return true, s6service.LogEntry{}
 }
 
 // IsMetricsErrorFree checks if there are any errors in the Benthos metrics
