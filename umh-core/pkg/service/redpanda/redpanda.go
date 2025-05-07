@@ -54,7 +54,7 @@ type IRedpandaService interface {
 	// AddRedpandaToS6Manager adds a Redpanda instance to the S6 manager
 	AddRedpandaToS6Manager(ctx context.Context, cfg *redpandaserviceconfig.RedpandaServiceConfig, filesystemService filesystem.Service, redpandaName string) error
 	// UpdateRedpandaInS6Manager updates an existing Redpanda instance in the S6 manager
-	UpdateRedpandaInS6Manager(ctx context.Context, currentConfig *redpandaserviceconfig.RedpandaServiceConfig, desiredConfig *redpandaserviceconfig.RedpandaServiceConfig, redpandaName string) error
+	UpdateRedpandaInS6Manager(ctx context.Context, currentConfig *redpandaserviceconfig.RedpandaServiceConfig, desiredConfig *redpandaserviceconfig.RedpandaServiceConfig, redpandaName string, tick uint64) error
 	// RemoveRedpandaFromS6Manager removes a Redpanda instance from the S6 manager
 	RemoveRedpandaFromS6Manager(ctx context.Context, redpandaName string) error
 	// StartRedpanda starts a Redpanda instance
@@ -74,7 +74,7 @@ type IRedpandaService interface {
 	// HasProcessingActivity checks if a Redpanda service has processing activity
 	HasProcessingActivity(status RedpandaStatus) bool
 	// ApplyConfigurationChanges applies configuration changes to a running Redpanda instance using rpk
-	ApplyConfigurationChanges(ctx context.Context, currentConfig redpandaserviceconfig.RedpandaServiceConfig, desiredConfig redpandaserviceconfig.RedpandaServiceConfig) error
+	ApplyConfigurationChanges(ctx context.Context, currentConfig redpandaserviceconfig.RedpandaServiceConfig, desiredConfig redpandaserviceconfig.RedpandaServiceConfig, tick uint64) error
 }
 
 // ServiceInfo contains information about a Redpanda service
@@ -609,7 +609,7 @@ func (s *RedpandaService) ensureRedpandaDirectories(ctx context.Context, baseDir
 }
 
 // UpdateRedpandaInS6Manager updates an existing Redpanda instance in the S6 manager
-func (s *RedpandaService) UpdateRedpandaInS6Manager(ctx context.Context, currentConfig *redpandaserviceconfig.RedpandaServiceConfig, desiredConfig *redpandaserviceconfig.RedpandaServiceConfig, redpandaName string) error {
+func (s *RedpandaService) UpdateRedpandaInS6Manager(ctx context.Context, currentConfig *redpandaserviceconfig.RedpandaServiceConfig, desiredConfig *redpandaserviceconfig.RedpandaServiceConfig, redpandaName string, tick uint64) error {
 	if s.s6Manager == nil {
 		return errors.New("s6 manager not initialized")
 	}
@@ -650,7 +650,7 @@ func (s *RedpandaService) UpdateRedpandaInS6Manager(ctx context.Context, current
 		if currentState == s6fsm.OperationalStateRunning {
 			s.logger.Infof("Redpanda instance %s is running, applying configuration changes using rpk", redpandaName)
 
-			err = s.ApplyConfigurationChanges(ctx, *currentConfig, *desiredConfig)
+			err = s.ApplyConfigurationChanges(ctx, *currentConfig, *desiredConfig, tick)
 			if err != nil {
 				s.logger.Errorf("Failed to apply configuration changes to Redpanda instance %s: %v", redpandaName, err)
 				return err
@@ -949,9 +949,15 @@ func maxInt(a, b int64) int64 {
 }
 
 // ApplyConfigurationChanges applies configuration changes to a running Redpanda instance using rpk
-func (s *RedpandaService) ApplyConfigurationChanges(ctx context.Context, current, desired redpandaserviceconfig.RedpandaServiceConfig) error {
+func (s *RedpandaService) ApplyConfigurationChanges(ctx context.Context, current, desired redpandaserviceconfig.RedpandaServiceConfig, tick uint64) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
+	}
+	if tick%10 != 0 {
+		// Skip applying changes if the tick is not a multiple of 10
+		// This is used to avoid applying changes when others might still be pending
+		s.logger.Infof("Skipping applying changes to Redpanda instance due to tick %d not being a multiple of 10", tick)
+		return nil
 	}
 
 	// First normalize both configs to ensure we're comparing apples to apples
@@ -992,14 +998,30 @@ func (s *RedpandaService) ApplyConfigurationChanges(ctx context.Context, current
 
 	// Execute the rpk commands
 	for _, cmdArgs := range commands {
+		// Early return if the context has been cancelled
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+
 		cmd := strings.Join(cmdArgs, " ")
 		s.logger.Infof("Executing command: %s", cmd)
 
 		// Execute the command directly using os/exec
 		now := time.Now()
-		command := exec.Command(cmdArgs[0], cmdArgs[1:]...)
-		output, err := command.CombinedOutput()
+		command := exec.CommandContext(ctx, cmdArgs[0], cmdArgs[1:]...)
 		s.logger.Infof("Command %s took %s", cmd, time.Since(now))
+		output, err := command.CombinedOutput()
+
+		// CommandContext is like [Command] but includes a context.
+		//
+		// The provided context is used to interrupt the process
+		// (by calling cmd.Cancel or [os.Process.Kill])
+		// if the context becomes done before the command completes on its own.
+		//
+		// CommandContext sets the command's Cancel function to invoke the Kill method
+		// on its Process, and leaves its WaitDelay unset. The caller may change the
+		// cancellation behavior by modifying those fields before starting the command.
+
 		s.logger.Infof("Command output: %s", output)
 		s.logger.Infof("Command error: %v", err)
 		if err != nil {

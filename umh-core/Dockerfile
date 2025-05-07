@@ -154,7 +154,9 @@ ENV S6_KEEP_ENV=1 \
     S6_SERVICES_READYTIME=50 \
     S6_SYNC_DISKS=1 \
     # Important: This needs to be T (ISO 8861) as our time parser expects this format
-    S6_LOGGING_SCRIPT="n20 s1000000 T"
+    S6_LOGGING_SCRIPT="n20 s1000000 T" \
+    # Add rpk path to PATH
+    PATH="/opt/redpanda/bin:${PATH}"
 VOLUME ["/data"]
 
 ENTRYPOINT ["/init"]

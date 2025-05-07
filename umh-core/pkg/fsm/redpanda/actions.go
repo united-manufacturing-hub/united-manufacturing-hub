@@ -321,7 +321,7 @@ func (r *RedpandaInstance) UpdateObservedStateOfInstance(ctx context.Context, se
 			r.baseFSMInstance.GetLogger().Debugf("Configuration differences: %s", diffStr)
 
 			// Update the config in the S6 manager
-			err := r.service.UpdateRedpandaInS6Manager(ctx, &r.ObservedState.ObservedRedpandaServiceConfig, &r.config, r.baseFSMInstance.GetID())
+			err := r.service.UpdateRedpandaInS6Manager(ctx, &r.ObservedState.ObservedRedpandaServiceConfig, &r.config, r.baseFSMInstance.GetID(), tick)
 			if err != nil {
 				return fmt.Errorf("failed to update Redpanda service configuration: %w", err)
 			}
