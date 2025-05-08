@@ -202,7 +202,7 @@ func (n *NmapInstance) UpdateObservedStateOfInstance(ctx context.Context, servic
 	// Use new ConfigsEqual function that handles Nmap defaults properly
 	if !n.config.NmapServiceConfig.Equal(n.ObservedState.ObservedNmapServiceConfig) {
 		// Check if the service exists before attempting to update
-		if n.monitorService.ServiceExists(ctx, services, n.baseFSMInstance.GetID()) {
+		if n.monitorService.ServiceExists(ctx, services.GetFileSystem(), n.baseFSMInstance.GetID()) {
 			n.baseFSMInstance.GetLogger().Debugf("Observed Nmap config is different from desired config, updating S6 configuration")
 
 			// Update the config in the S6 manager
