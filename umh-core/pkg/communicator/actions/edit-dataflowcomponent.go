@@ -557,9 +557,9 @@ func (a *EditDataflowComponentAction) waitForComponentToBeActive() error {
 							continue
 						}
 
-						if instance.CurrentState != "active" {
+						if instance.CurrentState != "active" && instance.CurrentState != "idle" {
 							SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
-								fmt.Sprintf("Dataflow component is in state '%s' (waiting for 'active', %ds remaining)...",
+								fmt.Sprintf("Dataflow component is in state '%s' (waiting for 'active' or 'idle', %ds remaining)...",
 									instance.CurrentState, remainingSeconds), a.outboundChannel, models.EditDataFlowComponent)
 							// send the benthos logs to the user
 							logs = dfcSnapshot.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosLogs
@@ -571,7 +571,7 @@ func (a *EditDataflowComponentAction) waitForComponentToBeActive() error {
 							continue
 						} else {
 							SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
-								"Dataflow component is active with correct configuration. Edit complete.", a.outboundChannel, models.EditDataFlowComponent)
+								fmt.Sprintf("Dataflow component is in state '%s' with correct configuration. Edit complete.", instance.CurrentState), a.outboundChannel, models.EditDataFlowComponent)
 							return nil
 						}
 					}

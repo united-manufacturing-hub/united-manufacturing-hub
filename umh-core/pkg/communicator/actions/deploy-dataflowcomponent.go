@@ -593,13 +593,13 @@ func (a *DeployDataflowComponentAction) waitForComponentToBeActive() error {
 								remainingSeconds), a.outboundChannel, models.DeployDataFlowComponent)
 						continue
 					}
-					if instance.CurrentState == "active" {
+					if instance.CurrentState == "active" || instance.CurrentState == "idle" {
 						SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
-							"Dataflow component is now active! Deployment complete.",
+							fmt.Sprintf("Dataflow component is in state '%s' with correct configuration. Deployment complete.", instance.CurrentState),
 							a.outboundChannel, models.DeployDataFlowComponent)
 						return nil
 					} else {
-						stateMsg := fmt.Sprintf("Dataflow component is in state '%s' (waiting for 'active', %ds remaining)...",
+						stateMsg := fmt.Sprintf("Dataflow component is in state '%s' (waiting for 'active' or 'idle', %ds remaining)...",
 							instance.CurrentState, remainingSeconds)
 						SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, stateMsg, a.outboundChannel, models.DeployDataFlowComponent)
 						// send the benthos logs to the user
