@@ -194,10 +194,14 @@ func checkRedpandaState(url string, timeout time.Duration) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	defer resp.Body.Close()
 
 	// Read body
 	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		err = resp.Body.Close()
+		return 0, err
+	}
+	err = resp.Body.Close()
 	if err != nil {
 		return 0, err
 	}
