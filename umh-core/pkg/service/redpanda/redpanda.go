@@ -838,11 +838,6 @@ func (s *RedpandaService) ReconcileManager(ctx context.Context, services service
 
 // IsLogsFine analyzes Redpanda logs to determine if there are any critical issues
 func (s *RedpandaService) IsLogsFine(logs []s6service.LogEntry, currentTime time.Time, logWindow time.Duration) bool {
-	failures := []string{
-		"Address already in use", // https://github.com/redpanda-data/redpanda/issues/3763
-		"Reactor stalled for",    // Multiple sources
-	}
-
 	// Check logs within the time window
 	windowStart := currentTime.Add(-logWindow)
 
@@ -854,9 +849,8 @@ func (s *RedpandaService) IsLogsFine(logs []s6service.LogEntry, currentTime time
 			continue
 		}
 
-		for _, failure := range failures {
-			if strings.Contains(log.Content, failure) {
-
+		for _, failure := range RedpandaFailures {
+			if failure.IsFailure(log.Content) {
 				return false
 			}
 		}
