@@ -16,7 +16,10 @@ package integration_test
 
 import (
 	"fmt"
+	"io"
 	"net/http"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -24,7 +27,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var _ = Describe("DataFlowComponent Restart Integration Test", Ordered, Label("integration"), func() {
+var _ = FDescribe("DataFlowComponent Restart Integration Test", Ordered, Label("integration"), func() {
 	const (
 		topicName            = "dfc-restart-test-topic"
 		messagesPerSecond    = 5
@@ -161,6 +164,9 @@ var _ = Describe("DataFlowComponent Restart Integration Test", Ordered, Label("i
 			}
 
 			By("Ensuring that the state of redpanda is healthy")
+			redpandaState, err := checkRedpandaState(GetMetricsURL(), 1*time.Second)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(redpandaState).To(BeNumerically("==", 3))
 
 		},
 		Entry("graceful restart (docker stop/start)", gracefulRestart),
@@ -180,4 +186,27 @@ func httpGetWithTimeout(url string, timeout time.Duration) (int, error) {
 		return 0, err
 	}
 	return resp.StatusCode, nil
+}
+
+func checkRedpandaState(url string, timeout time.Duration) (int, error) {
+	client := &http.Client{Timeout: timeout}
+	resp, err := client.Get(url)
+	if err != nil {
+		return 0, err
+	}
+
+	// Read body
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return 0, err
+	}
+
+	// Get the umh_core_service_current_state{component="redpanda_instance",instance="redpanda"}
+	re := regexp.MustCompile(`umh_core_service_current_state{component="redpanda_instance",instance="redpanda"} (\d)`)
+	matches := re.FindStringSubmatch(string(body))
+	if len(matches) != 2 {
+		return 0, fmt.Errorf("no match found for umh_core_service_current_state")
+	}
+	GinkgoWriter.Printf("Redpanda state: %s\n", matches[1])
+	return strconv.Atoi(matches[1])
 }
