@@ -849,8 +849,8 @@ func (s *RedpandaService) IsLogsFine(logs []s6service.LogEntry, currentTime time
 			continue
 		}
 
-		for _, failure := range RedpandaFailures {
-			if failure.IsFailure(log.Content) {
+		for _, failureDetector := range RedpandaFailures {
+			if failureDetector.IsFailure(log.Content) {
 				return false
 			}
 		}
