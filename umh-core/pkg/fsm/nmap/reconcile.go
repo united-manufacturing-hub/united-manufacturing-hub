@@ -79,7 +79,7 @@ func (n *NmapInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapsho
 				func(ctx context.Context) error {
 					// Force removal as a last resort when normal state transitions can't work
 					// This directly removes files and resources
-					return n.monitorService.ForceRemoveNmap(ctx, services, instanceName)
+					return n.monitorService.ForceRemoveNmap(ctx, services.GetFileSystem(), instanceName)
 				},
 			)
 		}

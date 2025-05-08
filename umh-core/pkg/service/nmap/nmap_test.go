@@ -459,7 +459,7 @@ done`
 			ctx := context.Background()
 
 			// Call ForceRemoveNmap
-			err := service.ForceRemoveNmap(ctx, mockServices, nmapName)
+			err := service.ForceRemoveNmap(ctx, mockServices.GetFileSystem(), nmapName)
 
 			// Verify no error
 			Expect(err).NotTo(HaveOccurred())
@@ -481,7 +481,7 @@ done`
 			mockS6Service.ForceRemoveError = mockError
 
 			// Call ForceRemoveNmap
-			err := service.ForceRemoveNmap(ctx, mockServices, nmapName)
+			err := service.ForceRemoveNmap(ctx, mockServices.GetFileSystem(), nmapName)
 
 			// Verify error is propagated
 			Expect(err).To(MatchError(mockError))
