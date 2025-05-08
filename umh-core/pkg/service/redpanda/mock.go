@@ -329,23 +329,23 @@ func (m *MockRedpandaService) ReconcileManager(ctx context.Context, services ser
 }
 
 // IsLogsFine mocks checking if the logs are fine
-func (m *MockRedpandaService) IsLogsFine(logs []s6service.LogEntry, currentTime time.Time, logWindow time.Duration) bool {
+func (m *MockRedpandaService) IsLogsFine(logs []s6service.LogEntry, currentTime time.Time, logWindow time.Duration) (bool, s6service.LogEntry) {
 	m.IsLogsFineCalled = true
 	// For testing purposes, we'll consider logs fine if they're empty or nil
-	return len(logs) == 0
+	return len(logs) == 0, s6service.LogEntry{}
 }
 
 // IsMetricsErrorFree mocks checking if metrics are error-free
-func (m *MockRedpandaService) IsMetricsErrorFree(metrics redpanda_monitor.Metrics) bool {
+func (m *MockRedpandaService) IsMetricsErrorFree(metrics redpanda_monitor.Metrics) (bool, string) {
 	m.IsMetricsErrorFreeCalled = true
 	// For testing purposes, we'll consider metrics error-free
-	return !metrics.Infrastructure.Storage.FreeSpaceAlert
+	return !metrics.Infrastructure.Storage.FreeSpaceAlert, ""
 }
 
 // HasProcessingActivity mocks checking if a Redpanda service has processing activity
-func (m *MockRedpandaService) HasProcessingActivity(status RedpandaStatus) bool {
+func (m *MockRedpandaService) HasProcessingActivity(status RedpandaStatus) (bool, string) {
 	m.HasProcessingActivityCalled = true
-	return status.RedpandaMetrics.MetricsState != nil && status.RedpandaMetrics.MetricsState.IsActive
+	return status.RedpandaMetrics.MetricsState != nil && status.RedpandaMetrics.MetricsState.IsActive, ""
 }
 
 // ServiceExists mocks checking if a Redpanda service exists
