@@ -31,8 +31,8 @@ func NewNormalizer() *Normalizer {
 func (n *Normalizer) NormalizeConfig(cfg *ProtocolConverterServiceConfig) {
 
 	// Before normalizing, set the output config for the ProtocolConverter
-	// For the ProtocolConverter, the output is always kafka processor
-	// It is preferred to use the uns plugin that is developed in benthos-umh
+	// For the ProtocolConverter, the messages are published to a kafka sink
+	// It is preferred to use the uns benthos plugin to publish to kafka
 	cfg.DataflowComponentServiceConfig.BenthosConfig.Output = map[string]any{
 		"uns": map[string]any{},
 	}
