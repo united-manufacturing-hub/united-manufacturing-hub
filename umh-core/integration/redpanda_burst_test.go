@@ -23,7 +23,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var _ = FDescribe("Redpanda Extended Tests (burst)", Ordered, Label("redpanda-extended"), func() {
+var _ = Describe("Redpanda Extended Tests (burst)", Ordered, Label("redpanda-extended"), func() {
 
 	AfterAll(func() {
 		// Always stop container after the entire suite
