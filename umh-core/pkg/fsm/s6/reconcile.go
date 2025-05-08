@@ -209,31 +209,9 @@ func (s *S6Instance) reconcileOperationalStates(ctx context.Context, services se
 		return s.reconcileTransitionToRunning(ctx, services, currentState)
 	case OperationalStateStopped:
 		return s.reconcileTransitionToStopped(ctx, services, currentState)
-	case OperationalStateRestarting:
-		return s.reconcileTransitionToRestarting(ctx, services, currentState)
 	default:
 		return fmt.Errorf("invalid desired state: %s", desiredState), false // its simply an error, but we did not take any action
 	}
-}
-
-// reconcileTransitionToRestarting handles transitions when the desired state is Restarting.
-func (s *S6Instance) reconcileTransitionToRestarting(ctx context.Context, services serviceregistry.Provider, currentState string) (err error, reconciled bool) {
-	start := time.Now()
-	defer func() {
-		metrics.ObserveReconcileTime(metrics.ComponentS6Instance, s.baseFSMInstance.GetID()+".reconcileTransitionToRestarting", time.Since(start))
-	}()
-
-	// If the current state is a running state, we need to stop the instance first
-	if IsRunningState(currentState) {
-		return s.reconcileTransitionToStopped(ctx, services, currentState)
-	}
-
-	// If the current state is a stopped state, we need to start the instance first
-	if currentState == OperationalStateStopped {
-		return s.reconcileTransitionToRunning(ctx, services, currentState)
-	}
-
-	return nil, false
 }
 
 // reconcileTransitionToRunning handles transitions when the desired state is Running.

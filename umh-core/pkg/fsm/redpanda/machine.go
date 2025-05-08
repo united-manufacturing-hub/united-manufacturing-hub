@@ -101,13 +101,11 @@ func NewRedpandaInstance(
 func (r *RedpandaInstance) SetDesiredFSMState(state string) error {
 	// For Redpanda, we only allow setting Stopped or Active as desired states
 	if state != OperationalStateStopped &&
-		state != OperationalStateActive &&
-		state != OperationalStateRestarting {
-		return fmt.Errorf("invalid desired state: %s. valid states are %s, %s and %s",
+		state != OperationalStateActive {
+		return fmt.Errorf("invalid desired state: %s. valid states are %s and %s",
 			state,
 			OperationalStateStopped,
-			OperationalStateActive,
-			OperationalStateRestarting)
+			OperationalStateActive)
 	}
 
 	r.baseFSMInstance.SetDesiredFSMState(state)

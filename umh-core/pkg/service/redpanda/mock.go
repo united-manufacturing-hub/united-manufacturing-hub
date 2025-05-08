@@ -42,7 +42,6 @@ type MockRedpandaService struct {
 	RemoveRedpandaFromS6ManagerCalled bool
 	StartRedpandaCalled               bool
 	StopRedpandaCalled                bool
-	RestartRedpandaCalled             bool
 	ReconcileManagerCalled            bool
 	IsLogsFineCalled                  bool
 	IsMetricsErrorFreeCalled          bool
@@ -63,7 +62,6 @@ type MockRedpandaService struct {
 	RemoveRedpandaFromS6ManagerError  error
 	StartRedpandaError                error
 	StopRedpandaError                 error
-	RestartRedpandaError              error
 	ReconcileManagerError             error
 	ReconcileManagerReconciled        bool
 	ServiceExistsResult               bool
@@ -325,29 +323,6 @@ func (m *MockRedpandaService) StopRedpanda(ctx context.Context, redpandaName str
 	}
 
 	return m.StopRedpandaError
-}
-
-// RestartRedpanda mocks restarting a Redpanda instance
-func (m *MockRedpandaService) RestartRedpanda(ctx context.Context, redpandaName string) error {
-	m.RestartRedpandaCalled = true
-
-	s6ServiceName := redpandaName
-	found := false
-
-	// Set the desired state to stopped
-	for i, s6Config := range m.S6ServiceConfigs {
-		if s6Config.Name == s6ServiceName {
-			m.S6ServiceConfigs[i].DesiredFSMState = s6_fsm.OperationalStateRestarting
-			found = true
-			break
-		}
-	}
-
-	if !found {
-		return ErrServiceNotExist
-	}
-
-	return m.RestartRedpandaError
 }
 
 // ReconcileManager mocks reconciling the Redpanda manager

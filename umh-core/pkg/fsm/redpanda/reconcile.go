@@ -227,31 +227,9 @@ func (r *RedpandaInstance) reconcileOperationalStates(ctx context.Context, servi
 		return r.reconcileTransitionToActive(ctx, services, currentState, currentTime)
 	case OperationalStateStopped:
 		return r.reconcileTransitionToStopped(ctx, services, currentState)
-	case OperationalStateRestarting:
-		return r.reconcileTransitionToRestarting(ctx, services, currentState)
 	default:
 		return fmt.Errorf("invalid desired state: %s", desiredState), false
 	}
-}
-
-// reconcileTransitionToRestarting handles transitions when the desired state is Restarting.
-func (r *RedpandaInstance) reconcileTransitionToRestarting(ctx context.Context, services serviceregistry.Provider, currentState string) (err error, reconciled bool) {
-	start := time.Now()
-	defer func() {
-		metrics.ObserveReconcileTime(metrics.ComponentRedpandaInstance, r.baseFSMInstance.GetID()+".reconcileTransitionToRestarting", time.Since(start))
-	}()
-
-	// If the current state is a running state, we need to stop the instance first
-	if IsRunningState(currentState) {
-		return r.reconcileTransitionToStopped(ctx, services, currentState)
-	}
-
-	// If the current state is a stopped state, we need to start the instance first
-	if currentState == OperationalStateStopped {
-		return r.reconcileTransitionToActive(ctx, services, currentState, time.Now())
-	}
-
-	return nil, false
 }
 
 // reconcileTransitionToActive handles transitions when the desired state is Active.

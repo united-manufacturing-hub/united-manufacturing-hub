@@ -117,12 +117,12 @@ func (r *RedpandaInstance) StopInstance(ctx context.Context, filesystemService f
 func (r *RedpandaInstance) RestartInstance(ctx context.Context, filesystemService filesystem.Service) error {
 	r.baseFSMInstance.GetLogger().Debugf("Starting Action: Restarting Redpanda service %s ...", r.baseFSMInstance.GetID())
 
-	err := r.service.RestartRedpanda(ctx, r.baseFSMInstance.GetID())
+	// Just send a stop event to the service
+	err := r.baseFSMInstance.SendEvent(ctx, s6fsm.EventStop)
 	if err != nil {
-		return fmt.Errorf("failed to restart Redpanda service %s: %w", r.baseFSMInstance.GetID(), err)
+		return fmt.Errorf("failed to send stop event to Redpanda service %s: %w", r.baseFSMInstance.GetID(), err)
 	}
 
-	r.baseFSMInstance.GetLogger().Debugf("Redpanda service %s restart command executed", r.baseFSMInstance.GetID())
 	return nil
 }
 

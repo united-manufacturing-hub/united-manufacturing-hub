@@ -61,8 +61,6 @@ type IRedpandaService interface {
 	StartRedpanda(ctx context.Context, redpandaName string) error
 	// StopRedpanda stops a Redpanda instance
 	StopRedpanda(ctx context.Context, redpandaName string) error
-	// RestartRedpanda restarts a Redpanda instance
-	RestartRedpanda(ctx context.Context, redpandaName string) error
 	// ForceRemoveRedpanda removes a Redpanda instance from the S6 manager
 	ForceRemoveRedpanda(ctx context.Context, filesystemService filesystem.Service, redpandaName string) error
 	// ServiceExists checks if a Redpanda service exists
@@ -834,38 +832,6 @@ func (s *RedpandaService) StopRedpanda(ctx context.Context, redpandaName string)
 	if !found {
 		return ErrServiceNotExist
 	}
-
-	return nil
-}
-
-// RestartRedpanda restarts a Redpanda instance
-func (s *RedpandaService) RestartRedpanda(ctx context.Context, redpandaName string) error {
-	if s.s6Manager == nil {
-		return errors.New("s6 manager not initialized")
-	}
-
-	if ctx.Err() != nil {
-		return ctx.Err()
-	}
-
-	s6ServiceName := s.GetS6ServiceName(redpandaName)
-
-	found := false
-
-	// Set the desired state to restarting for the given instance
-	for i, s6Config := range s.s6ServiceConfigs {
-		if s6Config.Name == s6ServiceName {
-			s.s6ServiceConfigs[i].DesiredFSMState = s6fsm.OperationalStateRestarting
-			found = true
-			break
-		}
-	}
-
-	if !found {
-		return ErrServiceNotExist
-	}
-
-	// We do not need to restart the redpanda monitor here
 
 	return nil
 }
