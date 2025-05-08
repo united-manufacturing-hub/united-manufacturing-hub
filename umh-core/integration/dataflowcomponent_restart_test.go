@@ -160,6 +160,8 @@ var _ = Describe("DataFlowComponent Restart Integration Test", Ordered, Label("i
 				lastTimestamp = time.Now()
 			}
 
+			By("Ensuring that the state of redpanda is healthy")
+
 		},
 		Entry("graceful restart (docker stop/start)", gracefulRestart),
 		Entry("kill restart (docker kill/start)", killRestart),
