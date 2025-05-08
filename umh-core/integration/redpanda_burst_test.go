@@ -38,7 +38,7 @@ var _ = Describe("Redpanda Extended Tests (burst)", Ordered, Label("redpanda-ext
 
 	Context("with redpanda and 15 high-frequency benthos producers", func() {
 
-		// Add 10 benthos services that will produce messages to the "test-throughput" topic
+		// Add 15 benthos services that will produce messages to the "test-throughput" topic
 		const messagesPerSecond = 100 // Each benthos instance will produce 100 messages per second
 		const testDuration = 10 * time.Minute
 		const monitorHealthInterval = 30 * time.Second
@@ -118,7 +118,7 @@ var _ = Describe("Redpanda Extended Tests (burst)", Ordered, Label("redpanda-ext
 
 			// Calculate expected message count the given loss tolerance
 			totalSeconds := int(time.Since(startTime).Seconds())
-			expectedMessagesPerSecond := producers * messagesPerSecond // 10 producers * 10 messages per second
+			expectedMessagesPerSecond := producers * messagesPerSecond // 15 producers * 10 messages per second
 			expectedMessages := totalSeconds * expectedMessagesPerSecond
 			minimumExpectedMessages := int(float64(expectedMessages) * (1 - lossToleranceWarning))
 
