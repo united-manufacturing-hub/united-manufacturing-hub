@@ -447,8 +447,8 @@ func buildRedpandaDataFromSnapshot(instance fsm.FSMInstanceSnapshot, log *zap.Su
 
 		// Now calculate the throughput metrics if available
 		if observedStateServiceInfo.RedpandaStatus.RedpandaMetrics.MetricsState != nil {
-			redpandaData.AvgIncomingThroughputPerMinuteInMsgSec = float64(observedStateServiceInfo.RedpandaStatus.RedpandaMetrics.MetricsState.Input.BytesPerTick) / constants.DefaultTickerTime.Seconds()
-			redpandaData.AvgOutgoingThroughputPerMinuteInMsgSec = float64(observedStateServiceInfo.RedpandaStatus.RedpandaMetrics.MetricsState.Output.BytesPerTick) / constants.DefaultTickerTime.Seconds()
+			redpandaData.AvgIncomingThroughputPerMinuteInBytesSec = float64(observedStateServiceInfo.RedpandaStatus.RedpandaMetrics.MetricsState.Input.BytesPerTick) / constants.DefaultTickerTime.Seconds()
+			redpandaData.AvgOutgoingThroughputPerMinuteInBytesSec = float64(observedStateServiceInfo.RedpandaStatus.RedpandaMetrics.MetricsState.Output.BytesPerTick) / constants.DefaultTickerTime.Seconds()
 		}
 
 	} else {
