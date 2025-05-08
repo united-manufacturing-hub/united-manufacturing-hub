@@ -469,3 +469,7 @@ push-platform:
 
 # Build and push in one command (for CI)
 build-push: build push-platform
+
+# Retrieve metrics from the UMH Core instance and save them to a file
+dump-metrics:
+	curl -s http://localhost:8081/metrics > metrics.txt

@@ -177,11 +177,8 @@ func (b *BenthosInstance) reconcileStateTransition(ctx context.Context, services
 	currentState := b.baseFSMInstance.GetCurrentFSMState()
 	desiredState := b.baseFSMInstance.GetDesiredFSMState()
 
-	// If already in the desired state, nothing to do.
-	// This is wrong, as there could be a degradation
-	// if currentState == desiredState {
-	// 	return nil, false
-	// }
+	// Report current and desired state metrics
+	metrics.UpdateServiceState(metrics.ComponentBenthosInstance, b.baseFSMInstance.GetID(), currentState, desiredState)
 
 	// Handle lifecycle states first - these take precedence over operational states
 	if internal_fsm.IsLifecycleState(currentState) {

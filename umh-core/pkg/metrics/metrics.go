@@ -101,6 +101,27 @@ var (
 		},
 	)
 
+	// Service state metrics
+	serviceCurrentState = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: namespace,
+			Subsystem: subsystem,
+			Name:      "service_current_state",
+			Help:      "Current state of the service (0=Stopped, 1=Starting, 2=Running, 3=Active, 4=Idle, 5=Degraded, -1=Unknown)",
+		},
+		[]string{"component", "instance"},
+	)
+
+	serviceDesiredState = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: namespace,
+			Subsystem: subsystem,
+			Name:      "service_desired_state",
+			Help:      "Desired state of the service (0=Stopped, 1=Starting, 2=Running, 3=Active, 4=Idle, 5=Degraded, -1=Unknown)",
+		},
+		[]string{"component", "instance"},
+	)
+
 	// TODO: observed state
 )
 
@@ -142,4 +163,35 @@ func ObserveReconcileTime(component, instance string, duration time.Duration) {
 // AddStarvationTime increases the starvation counter by the specified seconds
 func AddStarvationTime(seconds float64) {
 	starvationSeconds.Add(seconds)
+}
+
+// UpdateServiceState updates the current and desired state metrics for a service
+func UpdateServiceState(component, instance string, currentState, desiredState string) {
+	// Convert state strings to numeric values
+	currentValue := getStateValue(currentState)
+	desiredValue := getStateValue(desiredState)
+
+	// Update the metrics
+	serviceCurrentState.WithLabelValues(component, instance).Set(currentValue)
+	serviceDesiredState.WithLabelValues(component, instance).Set(desiredValue)
+}
+
+// getStateValue converts a state string to a numeric value for the metric
+func getStateValue(state string) float64 {
+	switch state {
+	case "stopped":
+		return 0
+	case "starting":
+		return 1
+	case "running":
+		return 2
+	case "active":
+		return 3
+	case "idle":
+		return 4
+	case "degraded":
+		return 5
+	default:
+		return -1 // Unknown state
+	}
 }

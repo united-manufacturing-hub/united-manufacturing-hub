@@ -171,6 +171,9 @@ func (n *NmapInstance) reconcileStateTransition(ctx context.Context, services se
 	currentState := n.baseFSMInstance.GetCurrentFSMState()
 	desiredState := n.baseFSMInstance.GetDesiredFSMState()
 
+	// Report current and desired state metrics
+	metrics.UpdateServiceState(metrics.ComponentNmapInstance, n.baseFSMInstance.GetID(), currentState, desiredState)
+
 	// Handle lifecycle states first - these take precedence over operational states
 	if internal_fsm.IsLifecycleState(currentState) {
 		err, reconciled := n.baseFSMInstance.ReconcileLifecycleStates(ctx, services, currentState, n.CreateInstance, n.RemoveInstance, n.CheckForCreation)
