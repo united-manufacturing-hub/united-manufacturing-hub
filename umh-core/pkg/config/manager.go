@@ -294,14 +294,16 @@ func (m *FileConfigManager) GetConfig(ctx context.Context, tick uint64) (FullCon
 	}
 
 	// Validate the location map
+	// This ensures downstream code doesn't panic when trying to access the location map
 	if config.Agent.Location == nil {
-		sentry.ReportIssuef(sentry.IssueTypeWarning, m.logger, "location map is nil")
+		sentry.ReportIssuef(sentry.IssueTypeWarning, m.logger, "Configuration validation error: Location map is nil. Initializing empty map to prevent downstream errors.")
 		config.Agent.Location = make(map[int]string)
 	}
 
 	// Validate that the release channel is valid
+	// This prevent weird values from being set by the user
 	if config.Agent.ReleaseChannel != ReleaseChannelNightly && config.Agent.ReleaseChannel != ReleaseChannelStable && config.Agent.ReleaseChannel != ReleaseChannelEnterprise {
-		sentry.ReportIssuef(sentry.IssueTypeWarning, m.logger, "invalid release channel: %s", config.Agent.ReleaseChannel)
+		sentry.ReportIssuef(sentry.IssueTypeWarning, m.logger, "Configuration validation error: Invalid release channel '%s'. Allowed values are: %s, %s, %s. Setting to 'n/a'.", config.Agent.ReleaseChannel, ReleaseChannelNightly, ReleaseChannelStable, ReleaseChannelEnterprise)
 		config.Agent.ReleaseChannel = "n/a"
 	}
 
