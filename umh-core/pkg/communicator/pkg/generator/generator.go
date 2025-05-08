@@ -72,7 +72,7 @@ func findInstance(
 ) (*fsm.FSMInstanceSnapshot, bool) {
 
 	mgr, ok := findManager(snap, managerName)
-	if !ok {
+	if !ok || mgr == nil {
 		return nil, false
 	}
 	inst, ok := mgr.GetInstances()[instanceName]
