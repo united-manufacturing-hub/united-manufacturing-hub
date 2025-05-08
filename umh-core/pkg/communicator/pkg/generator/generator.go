@@ -19,10 +19,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/agent_monitor"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/container"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/redpanda"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
@@ -136,7 +132,7 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 		dfcData = DfcsFromSnapshot(dfcMgr, s.logger)
 	}
 
-  // Step 3: Create the status message
+	// Step 3: Create the status message
 	statusMessage := &models.StatusMessage{
 		Core: models.Core{
 			Agent: models.Agent{
