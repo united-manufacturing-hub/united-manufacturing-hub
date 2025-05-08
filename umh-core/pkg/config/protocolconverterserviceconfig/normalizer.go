@@ -30,6 +30,13 @@ func NewNormalizer() *Normalizer {
 // NormalizeConfig applies ProtocolConverter defaults to a structured config
 func (n *Normalizer) NormalizeConfig(cfg *ProtocolConverterServiceConfig) {
 
+	// Before normalizing, set the output config for the ProtocolConverter
+	// For the ProtocolConverter, the output is always kafka processor
+	// It is preferred to use the uns plugin that is developed in benthos-umh
+	cfg.DataflowComponentServiceConfig.BenthosConfig.Output = map[string]any{
+		"uns": map[string]any{},
+	}
+
 	// We need to first normalize the underlying DFCServiceConfig
 	dfcNormalizer := dataflowcomponentserviceconfig.NewNormalizer()
 	dfcNormalizer.NormalizeConfig(cfg.GetDFCServiceConfig())
