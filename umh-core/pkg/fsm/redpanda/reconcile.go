@@ -271,16 +271,21 @@ func (r *RedpandaInstance) reconcileStartingStates(ctx context.Context, services
 	switch currentState {
 	case OperationalStateStarting:
 		// First we need to ensure the S6 service is started
-		if !r.IsRedpandaS6Running() {
+		running, reason := r.IsRedpandaS6Running()
+		if !running {
+			r.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("starting: %s", reason)
 			return nil, false
 		}
 
 		// Check if "Successfully started Redpanda!" is found in logs
-		if r.IsRedpandaStarted() {
-			return r.baseFSMInstance.SendEvent(ctx, EventStartDone), true
+		started, reasonStarted := r.IsRedpandaStarted()
+		if !started {
+			r.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("starting: %s", reasonStarted)
+			return nil, false
 		}
 
-		return nil, false
+		r.ObservedState.ServiceInfo.StatusReason = ""
+		return r.baseFSMInstance.SendEvent(ctx, EventStartDone), true
 	default:
 		return fmt.Errorf("invalid starting state: %s", currentState), false
 	}
@@ -296,25 +301,39 @@ func (r *RedpandaInstance) reconcileRunningStates(ctx context.Context, services 
 	switch currentState {
 	case OperationalStateActive:
 		// If we're in Active, we need to check whether it is degraded
-		if r.IsRedpandaDegraded(currentTime, constants.RedpandaLogWindow) {
+		degraded, reasonDegraded := r.IsRedpandaDegraded(currentTime, constants.RedpandaLogWindow)
+		processingActivity, reasonProcessingActivity := r.IsRedpandaWithProcessingActivity()
+		if degraded {
+			r.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("degraded: %s", reasonDegraded)
 			return r.baseFSMInstance.SendEvent(ctx, EventDegraded), true
-		} else if !r.IsRedpandaWithProcessingActivity() { // if there is no activity, we move to Idle
+		} else if !processingActivity { // if there is no activity, we move to Idle
+			r.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("idling: %s", reasonProcessingActivity)
 			return r.baseFSMInstance.SendEvent(ctx, EventNoDataTimeout), true
 		}
+		// If we're in Active,  send no status reason
 		return nil, false
 	case OperationalStateIdle:
 		// If we're in Idle, we need to check whether it is degraded
-		if r.IsRedpandaDegraded(currentTime, constants.RedpandaLogWindow) {
+		degraded, reasonDegraded := r.IsRedpandaDegraded(currentTime, constants.RedpandaLogWindow)
+		processingActivity, reasonProcessingActivity := r.IsRedpandaWithProcessingActivity()
+
+		if degraded {
+			r.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("degraded: %s", reasonDegraded)
 			return r.baseFSMInstance.SendEvent(ctx, EventDegraded), true
-		} else if r.IsRedpandaWithProcessingActivity() { // if there is activity, we move to Active
+		} else if processingActivity { // if there is activity, we move to Active
+			r.ObservedState.ServiceInfo.StatusReason = ""
 			return r.baseFSMInstance.SendEvent(ctx, EventDataReceived), true
 		}
+		r.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("idle: %s", reasonProcessingActivity)
 		return nil, false
 	case OperationalStateDegraded:
 		// If we're in Degraded, we need to recover to move to Idle
-		if !r.IsRedpandaDegraded(currentTime, constants.RedpandaLogWindow) {
+		degraded, reason := r.IsRedpandaDegraded(currentTime, constants.RedpandaLogWindow)
+		if !degraded {
+			r.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("recovering: %s", reason)
 			return r.baseFSMInstance.SendEvent(ctx, EventRecovered), true
 		}
+		r.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("degraded: %s", reason)
 		return nil, false
 	default:
 		return fmt.Errorf("invalid running state: %s", currentState), false
@@ -336,12 +355,19 @@ func (r *RedpandaInstance) reconcileTransitionToStopped(ctx context.Context, ser
 			return err, false
 		}
 		// Send event to transition to Stopping
+		r.ObservedState.ServiceInfo.StatusReason = "stopping"
 		return r.baseFSMInstance.SendEvent(ctx, EventStop), true
 	}
 
 	// If already stopping, verify if the instance is completely stopped
-	if currentState == OperationalStateStopping && r.IsRedpandaS6Stopped() {
+	isStopped, reason := r.IsRedpandaS6Stopped()
+	if currentState == OperationalStateStopping {
+		if !isStopped {
+			r.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("stopping: %s", reason)
+			return nil, false
+		}
 		// Transition from Stopping to Stopped
+		r.ObservedState.ServiceInfo.StatusReason = ""
 		return r.baseFSMInstance.SendEvent(ctx, EventStopDone), true
 	}
 

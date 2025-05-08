@@ -82,13 +82,32 @@ type IBenthosService interface {
 	// ReconcileManager reconciles the Benthos manager
 	// Expects tick (uint64) as the current tick
 	ReconcileManager(ctx context.Context, services serviceregistry.Provider, tick uint64) (error, bool)
-	// IsLogsFine checks if the logs of a Benthos service are fine
-	// Expects logs ([]s6service.LogEntry), currentTime (time.Time), and logWindow (time.Duration)
-	IsLogsFine(logs []s6service.LogEntry, currentTime time.Time, logWindow time.Duration) bool
-	// IsMetricsErrorFree checks if the metrics of a Benthos service are error-free
-	IsMetricsErrorFree(metrics benthos_monitor.BenthosMetrics) bool
-	// HasProcessingActivity checks if a Benthos service has processing activity
-	HasProcessingActivity(status BenthosStatus) bool
+	// IsLogsFine reports true when recent Benthos logs (within the supplied
+	// window) contain no critical errors or warnings.
+	//
+	// It returns:
+	//
+	//	ok    – true when logs look clean, false otherwise.
+	//	entry – zero value when ok is true; otherwise the first offending log line.
+	IsLogsFine(logs []s6service.LogEntry, currentTime time.Time, logWindow time.Duration) (bool, s6service.LogEntry)
+	// IsMetricsErrorFree reports true when Benthos metrics contain no error
+	// counters.
+	//
+	// It returns:
+	//
+	//	ok     – true when metrics are error‑free, false otherwise.
+	//	reason – empty when ok is true; otherwise a short explanation (e.g.
+	//	         "benthos reported 3 processor errors").
+	IsMetricsErrorFree(metrics benthos_monitor.BenthosMetrics) (bool, string)
+	// HasProcessingActivity reports true when metrics (or other status signals)
+	// indicate the instance is actively processing data.
+	//
+	// It returns:
+	//
+	//	ok     – true when activity is detected, false otherwise.
+	//	reason – empty when ok is true; otherwise a short explanation such as
+	//	         "no input throughput (in=0.00 msg/s, out=0.00 msg/s)".
+	HasProcessingActivity(status BenthosStatus) (bool, string)
 }
 
 // ServiceInfo contains information about a Benthos service
@@ -124,6 +143,11 @@ type BenthosStatus struct {
 	// Therefore we override the default behaviour and copy only the 3-word
 	// slice header (24 B on amd64) — see CopyBenthosLogs below.
 	BenthosLogs []s6service.LogEntry
+
+	// StatusReason contains the reason for the status of the Benthos service
+	// If the service is degraded, this will contain the log entry that caused the degradation together with the information that it is degraded because of the log entry
+	// If the service is currently starting up, it will contain the s6 status of the service
+	StatusReason string
 }
 
 // CopyBenthosLogs is a go-deepcopy override for the BenthosLogs field.
@@ -203,7 +227,7 @@ type configCacheEntry struct {
 func hash(buf []byte) uint64 { return xxhash.Sum64(buf) }
 
 // benthosLogRe is a helper function for BenthosService.IsLogsFine
-var benthosLogRe = regexp.MustCompile(`^level=(error|warning)\s+msg="(.+)"`)
+var benthosLogRe = regexp.MustCompile(`^level=(error|warning)\s+msg=(.+)`)
 
 // BenthosServiceOption is a function that modifies a BenthosService
 type BenthosServiceOption func(*BenthosService)
@@ -916,15 +940,21 @@ func (s *BenthosService) ReconcileManager(ctx context.Context, services servicer
 	return nil, s6Reconciled || monitorReconciled
 }
 
-// IsLogsFine reports whether recent Benthos logs contain critical errors or warnings.
+// IsLogsFine reports true when recent Benthos logs (within the supplied
+// window) contain no critical errors or warnings.
+//
+// It returns:
+//
+//	ok    – true when logs look clean, false otherwise.
+//	entry – zero value when ok is true; otherwise the first offending log line.
 func (s *BenthosService) IsLogsFine(
 	logs []s6service.LogEntry,
 	now time.Time,
 	window time.Duration,
-) bool {
+) (bool, s6service.LogEntry) {
 
 	if len(logs) == 0 {
-		return true
+		return true, s6service.LogEntry{}
 	}
 
 	cutoff := now.Add(-window)         // pre-compute once
@@ -942,7 +972,7 @@ func (s *BenthosService) IsLogsFine(
 		case strings.HasPrefix(l.Content, "configuration file read error:"),
 			strings.HasPrefix(l.Content, "failed to create logger:"),
 			strings.HasPrefix(l.Content, "Config lint error:"):
-			return false
+			return false, l
 		}
 
 		// Only one regexp call per line.
@@ -950,44 +980,65 @@ func (s *BenthosService) IsLogsFine(
 			level, msg := m[1], m[2]
 
 			if level == "error" {
-				return false
+				return false, l
 			}
 			if level == "warning" {
 				for _, sub := range critWarnSubstrings {
 					if strings.Contains(msg, sub) {
-						return false
+						return false, l
 					}
 				}
 			}
 		}
 	}
-	return true
+	return true, s6service.LogEntry{}
 }
 
-// IsMetricsErrorFree checks if there are any errors in the Benthos metrics
-func (s *BenthosService) IsMetricsErrorFree(metrics benthos_monitor.BenthosMetrics) bool {
+// IsMetricsErrorFree reports true when Benthos metrics contain no error
+// counters.
+//
+// It returns:
+//
+//	ok     – true when metrics are error‑free, false otherwise.
+//	reason – empty when ok is true; otherwise a short explanation (e.g.
+//	         "benthos reported 3 processor errors").
+func (s *BenthosService) IsMetricsErrorFree(metrics benthos_monitor.BenthosMetrics) (bool, string) {
 	// Check output errors
 	if metrics.Metrics.Output.Error > 0 {
-		return false
+		return false, fmt.Sprintf("benthos reported %d output errors", metrics.Metrics.Output.Error)
 	}
 
 	// Check processor errors
 	for _, proc := range metrics.Metrics.Process.Processors {
 		if proc.Error > 0 {
-			return false
+			return false, fmt.Sprintf("benthos reported %d processor errors", proc.Error)
 		}
 	}
 
-	return true
+	return true, ""
 }
 
-// HasProcessingActivity checks if the Benthos instance has active data processing based on metrics state
-func (s *BenthosService) HasProcessingActivity(status BenthosStatus) bool {
+// HasProcessingActivity reports true when metrics (or other status signals)
+// indicate the instance is actively processing data.
+//
+// It returns:
+//
+//	ok     – true when activity is detected, false otherwise.
+//	reason – empty when ok is true; otherwise a short explanation such as
+//	         "no input throughput (in=0.00 msg/s, out=0.00 msg/s)".
+func (s *BenthosService) HasProcessingActivity(status BenthosStatus) (bool, string) {
 	if status.BenthosMetrics.MetricsState == nil {
-		return false
+		return false, "benthos metrics state is nil"
 	}
 
-	return status.BenthosMetrics.MetricsState.IsActive
+	if status.BenthosMetrics.MetricsState.IsActive {
+		return true, ""
+	}
+
+	msgPerSecInput := status.BenthosMetrics.MetricsState.Input.MessagesPerTick / constants.DefaultTickerTime.Seconds()
+	msgPerSecOutput := status.BenthosMetrics.MetricsState.Output.MessagesPerTick / constants.DefaultTickerTime.Seconds()
+	return false, fmt.Sprintf("no input throughput (in=%.2f msg/s, out=%.2f msg/s)",
+		msgPerSecInput, msgPerSecOutput)
 }
 
 // ServiceExists checks if a Benthos service exists in the S6 manager

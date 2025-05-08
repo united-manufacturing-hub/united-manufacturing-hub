@@ -49,3 +49,8 @@ var (
 const (
 	BenthosMaxMetricsAndConfigAge = time.Second * 10
 )
+
+const (
+	BenthosTimeUntilConfigLoadedInSeconds = 5
+	BenthosTimeUntilRunningInSeconds      = 10
+)
