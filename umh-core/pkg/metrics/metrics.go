@@ -15,7 +15,6 @@
 package metrics
 
 import (
-	"fmt"
 	"net/http"
 	"time"
 
@@ -190,7 +189,6 @@ func getStateValue(state string) float64 {
 	case "degraded":
 		return 5
 	default:
-		fmt.Printf("unknown state: %s\n", state)
 		return -1 // Unknown state
 	}
 }
