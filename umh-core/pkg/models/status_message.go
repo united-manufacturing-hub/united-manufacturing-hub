@@ -163,9 +163,9 @@ type DfcBridgeInfo struct {
 }
 
 type Redpanda struct {
-	Health                                 *Health `json:"health"`
-	AvgIncomingThroughputPerMinuteInMsgSec float64 `json:"avgIncomingThroughputPerMinuteInMsgSec"` // Incoming bytes per second, averaged over a minute
-	AvgOutgoingThroughputPerMinuteInMsgSec float64 `json:"avgOutgoingThroughputPerMinuteInMsgSec"` // Outgoing bytes per second, averaged over a minute
+	Health                                   *Health `json:"health"`
+	AvgIncomingThroughputPerMinuteInBytesSec float64 `json:"avgIncomingThroughputPerMinuteInBytesSec"` // Incoming bytes per second, averaged over a minute
+	AvgOutgoingThroughputPerMinuteInBytesSec float64 `json:"avgOutgoingThroughputPerMinuteInBytesSec"` // Outgoing bytes per second, averaged over a minute
 }
 
 type UnifiedNamespace struct {
