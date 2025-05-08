@@ -54,7 +54,7 @@ func DfcsFromSnapshot(
 // returns an error when the observed state cannot be interpreted.
 func buildDfc(
 	instance fsm.FSMInstanceSnapshot,
-	log *zap.SugaredLogger,
+	_ *zap.SugaredLogger,
 ) (models.Dfc, error) {
 
 	observed, ok := instance.LastObservedState.(*dataflowcomponent.DataflowComponentObservedStateSnapshot)

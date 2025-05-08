@@ -333,14 +333,14 @@ func (r *RedpandaInstance) UpdateObservedStateOfInstance(ctx context.Context, se
 	return nil
 }
 
-// IsRedpandaS6Running determines if the Redpanda S6 FSM is in running state.
-// Architecture Decision: We intentionally rely only on the FSM state, not the underlying
-// service implementation details. This maintains a clean separation of concerns where:
-// 1. The FSM is the source of truth for service state
-// 2. We trust the FSM's state management completely
-// 3. Implementation details of how S6 determines running state are encapsulated away
+// IsRedpandaS6Running reports true when the FSM state is
+// s6fsm.OperationalStateRunning.
 //
-// Note: This function requires the S6FSMState to be updated in the ObservedState.
+// It returns:
+//
+//	ok     – true when running, false otherwise.
+//	reason – empty when ok is true; otherwise a short operator-friendly
+//	         explanation.
 func (r *RedpandaInstance) IsRedpandaS6Running() (bool, string) {
 	if r.ObservedState.ServiceInfo.S6FSMState == s6fsm.OperationalStateRunning {
 		return true, ""
@@ -348,11 +348,14 @@ func (r *RedpandaInstance) IsRedpandaS6Running() (bool, string) {
 	return false, fmt.Sprintf("s6 is not running, current state: %s", r.ObservedState.ServiceInfo.S6FSMState)
 }
 
-// IsRedpandaS6Stopped determines if the Redpanda S6 FSM is in stopped state.
-// We follow the same architectural principle as IsRedpandaS6Running - relying solely
-// on the FSM state to maintain clean separation of concerns.
+// IsRedpandaS6Stopped reports true when the FSM state is
+// s6fsm.OperationalStateStopped.
 //
-// Note: This function requires the S6FSMState to be updated in the ObservedState.
+// It returns:
+//
+//	ok     – true when stopped, false otherwise.
+//	reason – empty when ok is true; otherwise a short operator-friendly
+//	         explanation.
 func (r *RedpandaInstance) IsRedpandaS6Stopped() (bool, string) {
 	if r.ObservedState.ServiceInfo.S6FSMState == s6fsm.OperationalStateStopped {
 		return true, ""
@@ -360,11 +363,14 @@ func (r *RedpandaInstance) IsRedpandaS6Stopped() (bool, string) {
 	return false, fmt.Sprintf("s6 is not stopped, current state: %s", r.ObservedState.ServiceInfo.S6FSMState)
 }
 
-// IsRedpandaConfigLoaded determines if the Redpanda service has successfully loaded its configuration.
-// Implementation: We check if the service has been running for at least 5 seconds without crashing.
-// This works because Redpanda performs config validation at startup and immediately panics
-// if there are any configuration errors, causing the service to restart.
-// Therefore, if the service stays up for >= 5 seconds, we can be confident the config is valid.
+// IsRedpandaConfigLoaded reports true once Redpanda has been up for at least
+// five seconds, implying the configuration parsed without a crash.
+//
+// It returns:
+//
+//	ok     – true when the config is considered loaded, false otherwise.
+//	reason – empty when ok is true; otherwise the current uptime versus the
+//	         5‑second threshold.
 func (r *RedpandaInstance) IsRedpandaConfigLoaded() (bool, string) {
 	currentUptime := r.ObservedState.ServiceInfo.S6ObservedState.ServiceInfo.Uptime
 	if currentUptime >= 5 {
@@ -373,7 +379,13 @@ func (r *RedpandaInstance) IsRedpandaConfigLoaded() (bool, string) {
 	return false, fmt.Sprintf("uptime %d s (< 5 s threshold)", currentUptime)
 }
 
-// IsRedpandaHealthchecksPassed determines if the Redpanda service has passed its healthchecks.
+// IsRedpandaHealthchecksPassed reports true when both liveness and readiness
+// probes pass.
+//
+// It returns:
+//
+//	ok     – true when probes pass, false otherwise.
+//	reason – empty when ok is true; otherwise details of the failed probe(s).
 func (r *RedpandaInstance) IsRedpandaHealthchecksPassed() (bool, string) {
 	if r.ObservedState.ServiceInfo.RedpandaStatus.HealthCheck.IsLive &&
 		r.ObservedState.ServiceInfo.RedpandaStatus.HealthCheck.IsReady {
@@ -382,7 +394,13 @@ func (r *RedpandaInstance) IsRedpandaHealthchecksPassed() (bool, string) {
 	return false, fmt.Sprintf("healthchecks did not pass, live: %t, ready: %t", r.ObservedState.ServiceInfo.RedpandaStatus.HealthCheck.IsLive, r.ObservedState.ServiceInfo.RedpandaStatus.HealthCheck.IsReady)
 }
 
-// AnyRestartsSinceCreation determines if the Redpanda service has restarted since its creation.
+// AnyRestartsSinceCreation reports true when the S6 exit history contains at
+// least one entry, indicating Redpanda has restarted since creation.
+//
+// It returns:
+//
+//	restarted – true when restarts were observed, false otherwise.
+//	reason    – empty when restarted is false; otherwise the restart count.
 func (r *RedpandaInstance) AnyRestartsSinceCreation() (bool, string) {
 	// We can analyse the S6 ExitHistory to determine if the service has restarted in the last seconds
 	// We need to check if any of the exit codes are 0 (which means a restart)
@@ -394,7 +412,14 @@ func (r *RedpandaInstance) AnyRestartsSinceCreation() (bool, string) {
 	return true, fmt.Sprintf("restarted %d times", len(r.ObservedState.ServiceInfo.S6ObservedState.ServiceInfo.ExitHistory))
 }
 
-// IsRedpandaRunningForSomeTimeWithoutErrors determines if the Redpanda service has been running for some time.
+// IsRedpandaRunningForSomeTimeWithoutErrors reports true when Redpanda has
+// been up for at least ten seconds, recent logs are clean, and metrics show no
+// errors.
+//
+// It returns:
+//
+//	ok     – true when all conditions pass, false otherwise.
+//	reason – empty when ok is true; otherwise the first detected failure.
 func (r *RedpandaInstance) IsRedpandaRunningForSomeTimeWithoutErrors(currentTime time.Time, logWindow time.Duration) (bool, string) {
 	currentUptime := r.ObservedState.ServiceInfo.S6ObservedState.ServiceInfo.Uptime
 	if currentUptime < 10 {
@@ -416,7 +441,13 @@ func (r *RedpandaInstance) IsRedpandaRunningForSomeTimeWithoutErrors(currentTime
 	return true, ""
 }
 
-// IsRedpandaLogsFine determines if there are any issues in the Redpanda logs
+// IsRedpandaLogsFine reports true when recent logs (within logWindow) have no
+// critical errors or warnings.
+//
+// It returns:
+//
+//	ok     – true when logs look clean, false otherwise.
+//	reason – empty when ok is true; otherwise the first offending log line.
 func (r *RedpandaInstance) IsRedpandaLogsFine(currentTime time.Time, logWindow time.Duration) (bool, string) {
 	logsFine, logEntry := r.service.IsLogsFine(r.ObservedState.ServiceInfo.RedpandaStatus.Logs, currentTime, logWindow)
 	if !logsFine {
@@ -425,14 +456,23 @@ func (r *RedpandaInstance) IsRedpandaLogsFine(currentTime time.Time, logWindow t
 	return true, ""
 }
 
-// IsRedpandaMetricsErrorFree determines if the Redpanda service has no errors in the metrics
+// IsRedpandaMetricsErrorFree proxies service.IsMetricsErrorFree.
+//
+// It returns:
+//
+//	ok     – true when metrics are error‑free, false otherwise.
+//	reason – empty when ok is true; otherwise a service‑provided explanation.
 func (r *RedpandaInstance) IsRedpandaMetricsErrorFree() (bool, string) {
 	return r.service.IsMetricsErrorFree(r.ObservedState.ServiceInfo.RedpandaStatus.RedpandaMetrics.Metrics)
 }
 
-// IsRedpandaDegraded determines if the Redpanda service is degraded.
-// These check everything that is checked during the starting phase
-// But it means that it once worked, and then degraded
+// IsRedpandaDegraded reports true when a previously healthy instance has
+// degraded (i.e. any of the startup predicates now fail).
+//
+// It returns:
+//
+//	degraded – true when degraded, false when still healthy.
+//	reason   – empty when degraded is false; otherwise the first failure cause.
 func (r *RedpandaInstance) IsRedpandaDegraded(currentTime time.Time, logWindow time.Duration) (bool, string) {
 	s6Running, reasonS6Running := r.IsRedpandaS6Running()
 	configLoaded, reasonConfigLoaded := r.IsRedpandaConfigLoaded()
@@ -454,8 +494,13 @@ func (r *RedpandaInstance) IsRedpandaDegraded(currentTime time.Time, logWindow t
 	return false, ""
 }
 
-// IsRedpandaWithProcessingActivity determines if the Redpanda instance has active data processing
-// based on metrics data and possibly other observed state information
+// IsRedpandaWithProcessingActivity reports true when metrics or other status
+// signals indicate active data processing.
+//
+// It returns:
+//
+//	ok     – true when activity is detected, false otherwise.
+//	reason – empty when ok is true; otherwise a service‑provided explanation.
 func (r *RedpandaInstance) IsRedpandaWithProcessingActivity() (bool, string) {
 	if r.ObservedState.ServiceInfo.RedpandaStatus.RedpandaMetrics.MetricsState == nil {
 		return false, ""
@@ -469,8 +514,13 @@ func (r *RedpandaInstance) IsRedpandaWithProcessingActivity() (bool, string) {
 	return true, ""
 }
 
-// IsRedpandaStarted checks if "Successfully started Redpanda!" is found in logs
-// indicating that Redpanda has successfully started.
+// IsRedpandaStarted reports true when the success message
+// "Successfully started Redpanda!" is present in logs.
+//
+// It returns:
+//
+//	ok     – true when the message is found, false otherwise.
+//	reason – empty when ok is true; otherwise a brief explanation.
 func (r *RedpandaInstance) IsRedpandaStarted() (bool, string) {
 	if r.ObservedState.ServiceInfo.RedpandaStatus.Logs == nil {
 		return false, "no logs found"

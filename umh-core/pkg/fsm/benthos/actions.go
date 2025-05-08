@@ -264,14 +264,14 @@ func (b *BenthosInstance) UpdateObservedStateOfInstance(ctx context.Context, ser
 	return nil
 }
 
-// IsBenthosS6Running determines if the Benthos S6 FSM is in running state.
-// Architecture Decision: We intentionally rely only on the FSM state, not the underlying
-// service implementation details. This maintains a clean separation of concerns where:
-// 1. The FSM is the source of truth for service state
-// 2. We trust the FSM's state management completely
-// 3. Implementation details of how S6 determines running state are encapsulated away
+// IsBenthosS6Running reports true when the FSM state is
+// s6fsm.OperationalStateRunning.
 //
-// Note: This function requires the S6FSMState to be updated in the ObservedState.
+// It returns:
+//
+//	ok     – true when running, false otherwise.
+//	reason – empty when ok is true; otherwise a short operator-friendly
+//	         explanation.
 func (b *BenthosInstance) IsBenthosS6Running() (bool, string) {
 	if b.ObservedState.ServiceInfo.S6FSMState == s6fsm.OperationalStateRunning {
 		return true, ""
@@ -279,11 +279,14 @@ func (b *BenthosInstance) IsBenthosS6Running() (bool, string) {
 	return false, fmt.Sprintf("s6 is not running, current state: %s", b.ObservedState.ServiceInfo.S6FSMState)
 }
 
-// IsBenthosS6Stopped determines if the Benthos S6 FSM is in stopped state.
-// We follow the same architectural principle as IsBenthosS6Running - relying solely
-// on the FSM state to maintain clean separation of concerns.
+// IsBenthosS6Stopped reports true when the FSM state is
+// s6fsm.OperationalStateStopped.
 //
-// Note: This function requires the S6FSMState to be updated in the ObservedState.
+// It returns:
+//
+//	ok     – true when stopped, false otherwise.
+//	reason – empty when ok is true; otherwise a short operator-friendly
+//	         explanation.
 func (b *BenthosInstance) IsBenthosS6Stopped() (bool, string) {
 	if b.ObservedState.ServiceInfo.S6FSMState == s6fsm.OperationalStateStopped {
 		return true, ""
@@ -291,12 +294,15 @@ func (b *BenthosInstance) IsBenthosS6Stopped() (bool, string) {
 	return false, fmt.Sprintf("s6 is not stopped, current state: %s", b.ObservedState.ServiceInfo.S6FSMState)
 }
 
-// IsBenthosConfigLoaded determines if the Benthos service has successfully loaded its configuration.
-// Implementation: We check if the service has been running for at least 5 seconds without crashing.
-// This works because Benthos performs config validation at startup and immediately panics
-// if there are any configuration errors, causing the service to restart.
-// Therefore, if the service stays up for >= 5 seconds, we can be confident the config is valid.
-// Returns true if the config is loaded, false otherwise and a reason string
+// IsBenthosConfigLoaded reports true once Benthos uptime is at least
+// constants.BenthosTimeUntilConfigLoadedInSeconds, indicating the
+// configuration was parsed without panic.
+//
+// It returns:
+//
+//	ok     – true when config is considered loaded, false otherwise.
+//	reason – empty when ok is true; otherwise the current uptime versus the
+//	         threshold.
 func (b *BenthosInstance) IsBenthosConfigLoaded() (bool, string) {
 	currentUptime := b.ObservedState.ServiceInfo.S6ObservedState.ServiceInfo.Uptime
 	if currentUptime >= constants.BenthosTimeUntilConfigLoadedInSeconds {
@@ -305,7 +311,13 @@ func (b *BenthosInstance) IsBenthosConfigLoaded() (bool, string) {
 	return false, fmt.Sprintf("uptime %d s (< %d s threshold)", currentUptime, constants.BenthosTimeUntilConfigLoadedInSeconds)
 }
 
-// IsBenthosHealthchecksPassed determines if the Benthos service has passed its healthchecks.
+// IsBenthosHealthchecksPassed reports true when both the liveness and
+// readiness probes are successful.
+//
+// It returns:
+//
+//	ok     – true when both probes pass, false otherwise.
+//	reason – empty when ok is true; otherwise details of the failed probe(s).
 func (b *BenthosInstance) IsBenthosHealthchecksPassed() (bool, string) {
 	if b.ObservedState.ServiceInfo.BenthosStatus.HealthCheck.IsLive &&
 		b.ObservedState.ServiceInfo.BenthosStatus.HealthCheck.IsReady {
@@ -326,7 +338,14 @@ func (b *BenthosInstance) AnyRestartsSinceCreation() bool {
 	return true
 }
 
-// IsBenthosRunningForSomeTimeWithoutErrors determines if the Benthos service has been running for some time.
+// IsBenthosRunningForSomeTimeWithoutErrors reports true when Benthos has been
+// up for at least constants.BenthosTimeUntilRunningInSeconds, recent logs show
+// no issues, and metrics are error‑free.
+//
+// It returns:
+//
+//	ok     – true when all conditions pass, false otherwise.
+//	reason – empty when ok is true; otherwise the first detected failure.
 func (b *BenthosInstance) IsBenthosRunningForSomeTimeWithoutErrors(currentTime time.Time, logWindow time.Duration) (bool, string) {
 	currentUptime := b.ObservedState.ServiceInfo.S6ObservedState.ServiceInfo.Uptime
 	if currentUptime < constants.BenthosTimeUntilRunningInSeconds {
@@ -348,7 +367,13 @@ func (b *BenthosInstance) IsBenthosRunningForSomeTimeWithoutErrors(currentTime t
 	return true, ""
 }
 
-// IsBenthosLogsFine determines if there are any issues in the Benthos logs
+// IsBenthosLogsFine reports true when no suspicious entries are found in the
+// recent log window.
+//
+// It returns:
+//
+//	ok     – true when logs look clean, false otherwise.
+//	reason – empty when ok is true; otherwise the first offending log line.
 func (b *BenthosInstance) IsBenthosLogsFine(currentTime time.Time, logWindow time.Duration) (bool, string) {
 	logsFine, logEntry := b.service.IsLogsFine(b.ObservedState.ServiceInfo.BenthosStatus.BenthosLogs, currentTime, logWindow)
 	if !logsFine {
@@ -357,14 +382,23 @@ func (b *BenthosInstance) IsBenthosLogsFine(currentTime time.Time, logWindow tim
 	return true, ""
 }
 
-// IsBenthosMetricsErrorFree determines if the Benthos service has no errors in the metrics
+// IsBenthosMetricsErrorFree wraps service.IsMetricsErrorFree.
+//
+// It returns:
+//
+//	ok     – true when metrics contain no errors, false otherwise.
+//	reason – empty when ok is true; otherwise a service‑provided explanation.
 func (b *BenthosInstance) IsBenthosMetricsErrorFree() (bool, string) {
 	return b.service.IsMetricsErrorFree(b.ObservedState.ServiceInfo.BenthosStatus.BenthosMetrics)
 }
 
-// IsBenthosDegraded determines if the Benthos service is degraded.
-// These check everything that is checked during the starting phase
-// But it means that it once worked, and then degraded
+// IsBenthosDegraded reports true when a previously healthy instance has
+// degraded (i.e. any of the startup predicates now fail).
+//
+// It returns:
+//
+//	degraded – true when degraded, false when still healthy.
+//	reason   – empty when degraded is false; otherwise the first failure cause.
 func (b *BenthosInstance) IsBenthosDegraded(currentTime time.Time, logWindow time.Duration) (bool, string) {
 	// Same order as during starting phase
 	running, reason := b.IsBenthosS6Running()
@@ -390,8 +424,13 @@ func (b *BenthosInstance) IsBenthosDegraded(currentTime time.Time, logWindow tim
 	return false, ""
 }
 
-// IsBenthosWithProcessingActivity determines if the Benthos instance has active data processing
-// based on metrics data and possibly other observed state information
+// IsBenthosWithProcessingActivity reports true when metrics (or other signals)
+// show that the instance is actively processing data.
+//
+// It returns:
+//
+//	ok     – true when processing activity is detected, false otherwise.
+//	reason – empty when ok is true; otherwise a service‑provided explanation.
 func (b *BenthosInstance) IsBenthosWithProcessingActivity() (bool, string) {
 	hasActivity, reason := b.service.HasProcessingActivity(b.ObservedState.ServiceInfo.BenthosStatus)
 	if !hasActivity {

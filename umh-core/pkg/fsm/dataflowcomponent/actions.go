@@ -235,14 +235,8 @@ func (d *DataflowComponentInstance) UpdateObservedStateOfInstance(ctx context.Co
 	return nil
 }
 
-// IsDataflowComponentBenthosRunning determines if the DataflowComponent's Benthos FSM is in running state.
-// Architecture Decision: We intentionally rely only on the FSM state, not the underlying
-// service implementation details. This maintains a clean separation of concerns where:
-// 1. The FSM is the source of truth for service state
-// 2. We trust the FSM's state management completely
-// 3. Implementation details of how Benthos determines running state are encapsulated away
-//
-// Note: This function requires the BenthosFSMState to be updated in the ObservedState.
+// IsDataflowComponentBenthosRunning reports true when the embedded Benthos FSM
+// is in one of the running states (Active, Idle or Degraded).
 func (d *DataflowComponentInstance) IsDataflowComponentBenthosRunning() bool {
 	switch d.ObservedState.ServiceInfo.BenthosFSMState {
 	// Consider Active , Degraded and Idle as running states
@@ -252,15 +246,20 @@ func (d *DataflowComponentInstance) IsDataflowComponentBenthosRunning() bool {
 	return false
 }
 
-// IsDataflowComponentBenthosStopped determines if the Dataflowcomponent's Benthos FSM is in the stopped state.
-// Note: This function requires the BenthosFSMState to be updated in the ObservedState.
+// IsDataflowComponentBenthosStopped reports true when the Benthos FSM state is
+// benthosfsm.OperationalStateStopped.
 func (d *DataflowComponentInstance) IsDataflowComponentBenthosStopped() bool {
 	return d.ObservedState.ServiceInfo.BenthosFSMState == benthosfsm.OperationalStateStopped
 }
 
-// IsDataflowComponentDegraded determines if the DataflowComponent service is degraded.
-// These check everything that is checked during the starting phase
-// But it means that it once worked, and then degraded
+// IsDataflowComponentDegraded reports true when the Benthos FSM is already in
+// OperationalStateDegraded.
+//
+// It returns:
+//
+//	degraded – true when degraded, false otherwise.
+//	reason   – empty when degraded is false; otherwise the current Benthos
+//	           status reason.
 func (d *DataflowComponentInstance) IsDataflowComponentDegraded() (bool, string) {
 	if d.ObservedState.ServiceInfo.BenthosFSMState == benthosfsm.OperationalStateDegraded {
 		return true, d.ObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.StatusReason
@@ -268,8 +267,13 @@ func (d *DataflowComponentInstance) IsDataflowComponentDegraded() (bool, string)
 	return false, ""
 }
 
-// IsDataflowComponentWithProcessingActivity determines if the Benthos instance has active data processing
-// based on metrics data and possibly other observed state information
+// IsDataflowComponentWithProcessingActivity reports true when Benthos metrics
+// indicate active message processing.
+//
+// It returns:
+//
+//	ok     – true when activity is detected, false otherwise.
+//	reason – empty when ok is true; otherwise the Benthos status reason.
 func (d *DataflowComponentInstance) IsDataflowComponentWithProcessingActivity() (bool, string) {
 	benthosStatus := d.ObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus
 

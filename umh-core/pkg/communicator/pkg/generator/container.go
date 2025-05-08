@@ -47,7 +47,7 @@ func ContainerFromSnapshot(
 // state is of the wrong type.
 func buildContainer(
 	instance fsm.FSMInstanceSnapshot,
-	log *zap.SugaredLogger,
+	_ *zap.SugaredLogger,
 ) (models.Container, error) {
 
 	snap, ok := instance.LastObservedState.(*container.ContainerObservedStateSnapshot)

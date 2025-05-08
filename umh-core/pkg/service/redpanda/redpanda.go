@@ -65,12 +65,27 @@ type IRedpandaService interface {
 	// ServiceExists checks if a Redpanda service exists
 	ServiceExists(ctx context.Context, filesystemService filesystem.Service, redpandaName string) bool
 	ReconcileManager(ctx context.Context, services serviceregistry.Provider, tick uint64) (error, bool)
-	// IsLogsFine checks if the logs of a Redpanda service are fine
-	// Expects logs ([]s6service.LogEntry), currentTime (time.Time), and logWindow (time.Duration)
+	// IsLogsFine reports true when recent Redpanda logs (within logWindow) contain
+	// no critical error patterns.
+	//
+	// It returns:
+	//   ok    – true when logs look clean, false otherwise.
+	//   entry – zero value when ok is true; otherwise the first offending log line.
 	IsLogsFine(logs []s6service.LogEntry, currentTime time.Time, logWindow time.Duration) (bool, s6service.LogEntry)
-	// IsMetricsErrorFree checks if the metrics of a Redpanda service are error-free
+	// IsMetricsErrorFree reports true when Redpanda metrics show no alerts or
+	// cluster‑level errors.
+	//
+	// It returns:
+	//   ok     – true when metrics are error‑free, false otherwise.
+	//   reason – empty when ok is true; otherwise a short explanation (e.g.
+	//            "storage free space alert: <free>/<total> bytes").
 	IsMetricsErrorFree(metrics redpanda_monitor.Metrics) (bool, string)
-	// HasProcessingActivity checks if a Redpanda service has processing activity
+	// HasProcessingActivity reports true when Redpanda metrics state indicates
+	// active input/output throughput.
+	//
+	// It returns:
+	//   ok     – true when activity is detected, false otherwise.
+	//   reason – empty when ok is true; otherwise a brief throughput summary.
 	HasProcessingActivity(status RedpandaStatus) (bool, string)
 }
 
@@ -838,7 +853,13 @@ func (s *RedpandaService) ReconcileManager(ctx context.Context, services service
 	return nil, s6Reconciled || monitorReconciled
 }
 
-// IsLogsFine analyzes Redpanda logs to determine if there are any critical issues
+// IsLogsFine reports true when recent Redpanda logs (within logWindow) contain
+// no critical error patterns.
+//
+// It returns:
+//
+//	ok    – true when logs look clean, false otherwise.
+//	entry – zero value when ok is true; otherwise the first offending log line.
 func (s *RedpandaService) IsLogsFine(logs []s6service.LogEntry, currentTime time.Time, logWindow time.Duration) (bool, s6service.LogEntry) {
 	failures := []string{
 		"Address already in use", // https://github.com/redpanda-data/redpanda/issues/3763
@@ -866,7 +887,14 @@ func (s *RedpandaService) IsLogsFine(logs []s6service.LogEntry, currentTime time
 	return true, s6service.LogEntry{}
 }
 
-// IsMetricsErrorFree checks if the metrics of a Redpanda service are error-free
+// IsMetricsErrorFree reports true when Redpanda metrics show no alerts or
+// cluster‑level errors.
+//
+// It returns:
+//
+//	ok     – true when metrics are error‑free, false otherwise.
+//	reason – empty when ok is true; otherwise a short explanation (e.g.
+//	         "storage free space alert: <free>/<total> bytes").
 func (s *RedpandaService) IsMetricsErrorFree(metrics redpanda_monitor.Metrics) (bool, string) {
 	// Check output errors
 	if metrics.Infrastructure.Storage.FreeSpaceAlert {
@@ -880,7 +908,13 @@ func (s *RedpandaService) IsMetricsErrorFree(metrics redpanda_monitor.Metrics) (
 	return true, ""
 }
 
-// HasProcessingActivity checks if a Redpanda service has processing activity
+// HasProcessingActivity reports true when Redpanda metrics state indicates
+// active input/output throughput.
+//
+// It returns:
+//
+//	ok     – true when activity is detected, false otherwise.
+//	reason – empty when ok is true; otherwise a brief throughput summary.
 func (s *RedpandaService) HasProcessingActivity(status RedpandaStatus) (bool, string) {
 	if status.RedpandaMetrics.MetricsState == nil {
 		return false, ""

@@ -47,7 +47,7 @@ func RedpandaFromSnapshot(
 // It returns an error when the observed state cannot be cast.
 func buildRedpanda(
 	instance fsm.FSMInstanceSnapshot,
-	log *zap.SugaredLogger,
+	_ *zap.SugaredLogger,
 ) (models.Redpanda, error) {
 
 	snap, ok := instance.LastObservedState.(*redpanda.RedpandaObservedStateSnapshot)
