@@ -24,19 +24,24 @@ type RedpandaFailure interface {
 	IsFailure(logLine string) bool
 }
 
+// RedpandaFailures is a list of failure detectors (implements RedpandaFailure), each checking for a specific condition inside the log line
 var RedpandaFailures = []RedpandaFailure{
 	&AddressAlreadyInUseFailure{},
 	&ReactorStalledFailure{},
 }
 
+// AddressAlreadyInUseFailure is a failure that occurs when the address is already in use
 type AddressAlreadyInUseFailure struct{}
 
+// IsFailure checks if the log line contains "Address already in use"
 func (a *AddressAlreadyInUseFailure) IsFailure(logLine string) bool {
 	return strings.Contains(logLine, "Address already in use")
 }
 
+// ReactorStalledFailure is a failure that occurs when the reactor is stalled
 type ReactorStalledFailure struct{}
 
+// IsFailure checks if the log line contains "Reactor stalled for", and if so, if the number of milliseconds is greater than 500
 var reactorStallRegex = regexp.MustCompile(`Reactor stalled for (\d+) ms`)
 
 func (r *ReactorStalledFailure) IsFailure(logLine string) bool {
@@ -80,5 +85,6 @@ func (r *ReactorStalledFailure) IsFailure(logLine string) bool {
 	}
 
 	// Return failure if the reactor stalled for more than 500ms
+	// 500ms was choosen, as it is very unlikely to happen during normal operation
 	return ms > 500
 }

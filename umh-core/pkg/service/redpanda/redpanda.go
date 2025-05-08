@@ -849,6 +849,7 @@ func (s *RedpandaService) IsLogsFine(logs []s6service.LogEntry, currentTime time
 			continue
 		}
 
+		// Check if the log contains failure, by applying all failure detectors (see redpanda_log_failures.go)
 		for _, failureDetector := range RedpandaFailures {
 			if failureDetector.IsFailure(log.Content) {
 				return false
