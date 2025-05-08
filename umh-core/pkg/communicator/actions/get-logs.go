@@ -118,7 +118,11 @@ func findDfcInstance(systemSnapshot fsm.SystemSnapshot, dfcUUID string) (*fsm.FS
 		}
 	}
 
-	return nil, fmt.Errorf("dfc instance not found")
+	return nil, fmt.Errorf("the requested DFC with UUID %s was not found", dfcUUID)
+}
+
+func logsRetrievalError(err error, logType models.LogType) error {
+	return fmt.Errorf("failed to retrieve logs for %s: %v", logType, err)
 }
 
 func (a *GetLogsAction) Execute() (interface{}, map[string]interface{}, error) {
@@ -130,54 +134,67 @@ func (a *GetLogsAction) Execute() (interface{}, map[string]interface{}, error) {
 	res := models.GetLogsResponse{Logs: []string{}}
 	systemSnapshot := a.systemSnapshotManager.GetDeepCopySnapshot()
 
-	// TODO: Refactor to use helper functions such as `findInstance` and `findManager` from the generator package
+	// TODO: Refactor to use helper functions such as `findInstance` and `findManager` similar to the generator package
 	switch a.payload.Type {
 	case models.RedpandaLogType:
 		redpandaManager, ok := systemSnapshot.Managers[constants.RedpandaManagerName]
 		if !ok {
-			return nil, nil, fmt.Errorf("redpanda manager not found")
+			err := logsRetrievalError(fmt.Errorf("redpanda manager not found"), a.payload.Type)
+			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, err.Error(), a.outboundChannel, models.GetLogs)
+			return nil, nil, err
 		}
 
 		redpandaInstance, ok := redpandaManager.GetInstances()[constants.RedpandaInstanceName]
 		if !ok || redpandaInstance == nil {
-			return nil, nil, fmt.Errorf("redpanda instance not found")
+			err := logsRetrievalError(fmt.Errorf("redpanda instance not found"), a.payload.Type)
+			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, err.Error(), a.outboundChannel, models.GetLogs)
+			return nil, nil, err
 		}
 
 		observedState, ok := redpandaInstance.LastObservedState.(*redpanda.RedpandaObservedStateSnapshot)
 		if !ok || observedState == nil {
-			a.actionLogger.Errorw("Observed state is of unexpected type", "redpandaInstance.ID", redpandaInstance.ID)
-			return nil, nil, fmt.Errorf("invalid observed state type for redpanda instance %s", redpandaInstance.ID)
+			err := logsRetrievalError(fmt.Errorf("invalid observed state type for redpanda instance %s", redpandaInstance.ID), a.payload.Type)
+			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, err.Error(), a.outboundChannel, models.GetLogs)
+			return nil, nil, err
 		}
 
 		res.Logs = mapS6LogsToResponse(observedState.ServiceInfoSnapshot.RedpandaStatus.Logs, reqStartTime)
 	case models.AgentLogType:
 		agentManager, ok := systemSnapshot.Managers[constants.AgentManagerName]
 		if !ok {
-			return nil, nil, fmt.Errorf("agent manager not found")
+			err := logsRetrievalError(fmt.Errorf("agent manager not found"), a.payload.Type)
+			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, err.Error(), a.outboundChannel, models.GetLogs)
+			return nil, nil, err
 		}
 
 		agentInstance, ok := agentManager.GetInstances()[constants.AgentInstanceName]
 		if !ok || agentInstance == nil {
-			return nil, nil, fmt.Errorf("agent instance not found")
+			err := logsRetrievalError(fmt.Errorf("agent instance not found"), a.payload.Type)
+			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, err.Error(), a.outboundChannel, models.GetLogs)
+			return nil, nil, err
 		}
 
 		observedState, ok := agentInstance.LastObservedState.(*agent_monitor.AgentObservedStateSnapshot)
 		if !ok || observedState == nil {
-			a.actionLogger.Errorw("Observed state is of unexpected type", "agentInstance.ID", agentInstance.ID)
-			return nil, nil, fmt.Errorf("invalid observed state type for agent instance %s", agentInstance.ID)
+			err := logsRetrievalError(fmt.Errorf("invalid observed state type for agent instance %s", agentInstance.ID), a.payload.Type)
+			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, err.Error(), a.outboundChannel, models.GetLogs)
+			return nil, nil, err
 		}
 
 		res.Logs = mapS6LogsToResponse(observedState.ServiceInfoSnapshot.AgentLogs, reqStartTime)
 	case models.DFCLogType:
 		dfcInstance, err := findDfcInstance(systemSnapshot, a.payload.UUID)
 		if err != nil {
-			return nil, nil, fmt.Errorf("the requested DFC with UUID %s was not found", a.payload.UUID)
+			err := logsRetrievalError(err, a.payload.Type)
+			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, err.Error(), a.outboundChannel, models.GetLogs)
+			return nil, nil, err
 		}
 
 		observedState, ok := dfcInstance.LastObservedState.(*dataflowcomponent.DataflowComponentObservedStateSnapshot)
 		if !ok || observedState == nil {
-			a.actionLogger.Errorw("Observed state is of unexpected type", "dfcInstance.ID", dfcInstance.ID)
-			return nil, nil, fmt.Errorf("invalid observed state type for DFC instance %s", dfcInstance.ID)
+			err := logsRetrievalError(fmt.Errorf("invalid observed state type for DFC instance %s", dfcInstance.ID), a.payload.Type)
+			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, err.Error(), a.outboundChannel, models.GetLogs)
+			return nil, nil, err
 		}
 
 		res.Logs = mapS6LogsToResponse(observedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosLogs, reqStartTime)
