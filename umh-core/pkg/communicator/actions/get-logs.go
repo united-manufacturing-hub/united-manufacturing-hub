@@ -21,7 +21,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
@@ -42,7 +41,6 @@ type GetLogsAction struct {
 
 	// ─── Plumbing ────────────────────────────────────────────────────────────
 	outboundChannel chan *models.UMHMessage
-	configManager   config.ConfigManager // currently unused but kept for symmetry
 
 	// ─── Runtime observation ────────────────────────────────────────────────
 	systemSnapshotManager *fsm.SnapshotManager
@@ -57,13 +55,12 @@ type GetLogsAction struct {
 // NewGetLogsAction creates a new GetLogsAction with the provided parameters.
 // This constructor is primarily used for testing to enable dependency injection.
 // Caller needs to invoke Parse and Validate before calling Execute.
-func NewGetLogsAction(userEmail string, actionUUID uuid.UUID, instanceUUID uuid.UUID, outboundChannel chan *models.UMHMessage, configManager config.ConfigManager, systemSnapshotManager *fsm.SnapshotManager) *GetLogsAction {
+func NewGetLogsAction(userEmail string, actionUUID uuid.UUID, instanceUUID uuid.UUID, outboundChannel chan *models.UMHMessage, systemSnapshotManager *fsm.SnapshotManager) *GetLogsAction {
 	return &GetLogsAction{
 		userEmail:             userEmail,
 		actionUUID:            actionUUID,
 		instanceUUID:          instanceUUID,
 		outboundChannel:       outboundChannel,
-		configManager:         configManager,
 		systemSnapshotManager: systemSnapshotManager,
 		actionLogger:          logger.For(logger.ComponentCommunicator),
 	}
@@ -244,6 +241,7 @@ func (a *GetLogsAction) getUuid() uuid.UUID {
 	return a.actionUUID
 }
 
-func (a *GetLogsAction) GetParsedVersionUUIDs() models.GetLogsRequest {
+// for testing
+func (a *GetLogsAction) GetPayload() models.GetLogsRequest {
 	return a.payload
 }
