@@ -293,6 +293,18 @@ func (m *FileConfigManager) GetConfig(ctx context.Context, tick uint64) (FullCon
 		return FullConfig{}, fmt.Errorf("config file is empty: %s", m.configPath)
 	}
 
+	// Validate the location map
+	if config.Agent.Location == nil {
+		sentry.ReportIssuef(sentry.IssueTypeWarning, m.logger, "location map is nil")
+		config.Agent.Location = make(map[int]string)
+	}
+
+	// Validate that the release channel is valid
+	if config.Agent.ReleaseChannel != ReleaseChannelNightly && config.Agent.ReleaseChannel != ReleaseChannelStable && config.Agent.ReleaseChannel != ReleaseChannelEnterprise {
+		sentry.ReportIssuef(sentry.IssueTypeWarning, m.logger, "invalid release channel: %s", config.Agent.ReleaseChannel)
+		config.Agent.ReleaseChannel = "n/a"
+	}
+
 	// update cache atomically
 	m.cacheMu.Lock()
 	m.cacheModTime = info.ModTime()
