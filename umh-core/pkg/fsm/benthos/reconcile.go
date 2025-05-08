@@ -302,7 +302,7 @@ func (b *BenthosInstance) reconcileStartingStates(ctx context.Context, services 
 		passed, reason := b.IsBenthosHealthchecksPassed()
 		if !passed {
 			b.ObservedState.ServiceInfo.BenthosStatus.StatusReason = fmt.Sprintf("waiting for healthchecks to pass: %s", reason)
-			return b.baseFSMInstance.SendEvent(ctx, EventStartFailed), true
+			return nil, false
 		}
 
 		return b.baseFSMInstance.SendEvent(ctx, EventHealthchecksPassed), true

@@ -78,7 +78,7 @@ func buildRedpanda(
 	if m != nil {
 		out.AvgIncomingThroughputPerMinuteInBytesSec =
 			float64(m.Input.BytesPerTick) / constants.DefaultTickerTime.Seconds()
-		out.AvgIncomingThroughputPerMinuteInBytesSec =
+		out.AvgOutgoingThroughputPerMinuteInBytesSec =
 			float64(m.Output.BytesPerTick) / constants.DefaultTickerTime.Seconds()
 	}
 	return out, nil
