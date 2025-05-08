@@ -39,7 +39,7 @@ var _ = FDescribe("Redpanda Extended Tests (burst)", Ordered, Label("redpanda-ex
 	Context("with redpanda and 15 high-frequency benthos producers", func() {
 
 		// Add 10 benthos services that will produce messages to the "test-throughput" topic
-		const messagesPerSecond = 100 // Each benthos instance will produce 10 messages per second
+		const messagesPerSecond = 100 // Each benthos instance will produce 100 messages per second
 		const testDuration = 10 * time.Minute
 		const monitorHealthInterval = 30 * time.Second
 		const lossToleranceWarning = 0.025 // Warn on 2.5% message loss
