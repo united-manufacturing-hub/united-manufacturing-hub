@@ -185,6 +185,9 @@ func (d *DataflowComponentInstance) reconcileStateTransition(ctx context.Context
 	currentState := d.baseFSMInstance.GetCurrentFSMState()
 	desiredState := d.baseFSMInstance.GetDesiredFSMState()
 
+	// Report current and desired state metrics
+	metrics.UpdateServiceState(metrics.ComponentDataflowComponentInstance, d.baseFSMInstance.GetID(), currentState, desiredState)
+
 	// Handle lifecycle states first - these take precedence over operational states
 	if internal_fsm.IsLifecycleState(currentState) {
 		err, reconciled := d.baseFSMInstance.ReconcileLifecycleStates(ctx, services, currentState, d.CreateInstance, d.RemoveInstance, d.CheckForCreation)

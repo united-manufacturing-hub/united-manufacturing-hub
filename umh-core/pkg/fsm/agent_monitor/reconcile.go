@@ -187,6 +187,9 @@ func (a *AgentInstance) reconcileStateTransition(ctx context.Context, services s
 	currentState := a.baseFSMInstance.GetCurrentFSMState()
 	desiredState := a.baseFSMInstance.GetDesiredFSMState()
 
+	// Report current and desired state metrics
+	metrics.UpdateServiceState(metrics.ComponentAgentMonitor, a.baseFSMInstance.GetID(), currentState, desiredState)
+
 	// If already in the desired state, nothing to do.
 	if currentState == desiredState {
 		return nil, false
