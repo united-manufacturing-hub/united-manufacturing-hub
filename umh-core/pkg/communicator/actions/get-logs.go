@@ -1,0 +1,202 @@
+package actions
+
+import (
+	"errors"
+	"fmt"
+	"slices"
+	"time"
+
+	"github.com/google/uuid"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/agent_monitor"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/redpanda"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+	"go.uber.org/zap"
+)
+
+type GetLogsAction struct {
+	// ─── Request metadata ────────────────────────────────────────────────────
+	userEmail    string
+	actionUUID   uuid.UUID
+	instanceUUID uuid.UUID
+
+	// ─── Plumbing ────────────────────────────────────────────────────────────
+	outboundChannel chan *models.UMHMessage
+	configManager   config.ConfigManager // currently unused but kept for symmetry
+
+	// ─── Runtime observation ────────────────────────────────────────────────
+	systemSnapshotManager *fsm.SnapshotManager
+
+	// ─── Parsed request payload ─────────────────────────────────────────────
+	payload models.GetLogsRequest
+
+	// ─── Utilities ──────────────────────────────────────────────────────────
+	actionLogger *zap.SugaredLogger
+}
+
+func NewGetLogsAction(userEmail string, actionUUID uuid.UUID, instanceUUID uuid.UUID, outboundChannel chan *models.UMHMessage, configManager config.ConfigManager, systemSnapshotManager *fsm.SnapshotManager) *GetLogsAction {
+	return &GetLogsAction{
+		userEmail:             userEmail,
+		actionUUID:            actionUUID,
+		instanceUUID:          instanceUUID,
+		outboundChannel:       outboundChannel,
+		configManager:         configManager,
+		systemSnapshotManager: systemSnapshotManager,
+		actionLogger:          logger.For(logger.ComponentCommunicator),
+	}
+}
+
+func (a *GetLogsAction) Parse(payload interface{}) (err error) {
+	a.actionLogger.Info("Parsing the payload")
+	a.payload, err = ParseActionPayload[models.GetLogsRequest](payload)
+	a.actionLogger.Info("Payload parsed: ", a.payload.StartTime, a.payload.Type, a.payload.UUID)
+	return err
+}
+
+func (a *GetLogsAction) Validate() (err error) {
+	a.actionLogger.Info("Validating the payload")
+
+	if a.payload.StartTime <= 0 {
+		return errors.New("start time must be greater than 0")
+	}
+
+	allowedLogTypes := []models.LogType{models.AgentLogType, models.DFCLogType, models.RedpandaLogType, models.TagBrowserLogType}
+	if !slices.Contains(allowedLogTypes, a.payload.Type) {
+		return errors.New("log type must be set and must be one of the following: agent, dfc, redpanda, tag-browser")
+	}
+
+	if a.payload.Type == models.DFCLogType {
+		if a.payload.UUID == "" {
+			return errors.New("uuid must be set to retrieve logs for a DFC")
+		}
+
+		_, err = uuid.Parse(a.payload.UUID)
+		if err != nil {
+			return fmt.Errorf("invalid UUID format: %v", err)
+		}
+	}
+
+	return nil
+}
+
+func mapS6LogsToResponse(logs []s6.LogEntry, startTimeUTC time.Time) []string {
+	logsArr := []string{}
+
+	for _, log := range logs {
+		if log.Timestamp.Before(startTimeUTC) {
+			continue
+		}
+
+		logsArr = append(logsArr, log.Content)
+	}
+
+	return logsArr
+}
+
+func findDfcInstance(systemSnapshot fsm.SystemSnapshot, dfcUUID string) (*fsm.FSMInstanceSnapshot, error) {
+	dfcManager, ok := systemSnapshot.Managers[constants.DataflowcomponentManagerName]
+	if !ok {
+		return nil, fmt.Errorf("dfc manager not found")
+	}
+
+	dfcInstances := dfcManager.GetInstances()
+
+	for _, instance := range dfcInstances {
+		if instance == nil {
+			continue
+		}
+
+		currentUUID := dataflowcomponentserviceconfig.GenerateUUIDFromName(instance.ID).String()
+		if currentUUID == dfcUUID {
+			return instance, nil
+		}
+	}
+
+	return nil, fmt.Errorf("dfc instance not found")
+}
+
+func (a *GetLogsAction) Execute() (interface{}, map[string]interface{}, error) {
+	a.actionLogger.Info("Executing GetLogs action")
+
+	// Request time is in unix ms, but log entries contain UTC timestamps
+	reqStartTime := time.UnixMilli(int64(a.payload.StartTime)).UTC()
+
+	res := models.GetLogsResponse{Logs: []string{}}
+	systemSnapshot := a.systemSnapshotManager.GetDeepCopySnapshot()
+
+	// TODO: Refactor to use helper functions such as `findInstance` and `findManager` from the generator package
+	switch a.payload.Type {
+	case models.RedpandaLogType:
+		redpandaManager, ok := systemSnapshot.Managers[constants.RedpandaManagerName]
+		if !ok {
+			return nil, nil, fmt.Errorf("redpanda manager not found")
+		}
+
+		redpandaInstance, ok := redpandaManager.GetInstances()[constants.RedpandaInstanceName]
+		if !ok || redpandaInstance == nil {
+			return nil, nil, fmt.Errorf("redpanda instance not found")
+		}
+
+		observedState, ok := redpandaInstance.LastObservedState.(*redpanda.RedpandaObservedStateSnapshot)
+		if !ok || observedState == nil {
+			a.actionLogger.Errorw("Observed state is of unexpected type", "redpandaInstance.ID", redpandaInstance.ID)
+			return nil, nil, fmt.Errorf("invalid observed state type for redpanda instance %s", redpandaInstance.ID)
+		}
+
+		res.Logs = mapS6LogsToResponse(observedState.ServiceInfoSnapshot.RedpandaStatus.Logs, reqStartTime)
+	case models.AgentLogType:
+		agentManager, ok := systemSnapshot.Managers[constants.AgentManagerName]
+		if !ok {
+			return nil, nil, fmt.Errorf("agent manager not found")
+		}
+
+		agentInstance, ok := agentManager.GetInstances()[constants.AgentInstanceName]
+		if !ok || agentInstance == nil {
+			return nil, nil, fmt.Errorf("agent instance not found")
+		}
+
+		observedState, ok := agentInstance.LastObservedState.(*agent_monitor.AgentObservedStateSnapshot)
+		if !ok || observedState == nil {
+			a.actionLogger.Errorw("Observed state is of unexpected type", "agentInstance.ID", agentInstance.ID)
+			return nil, nil, fmt.Errorf("invalid observed state type for agent instance %s", agentInstance.ID)
+		}
+
+		res.Logs = mapS6LogsToResponse(observedState.ServiceInfoSnapshot.AgentLogs, reqStartTime)
+	case models.DFCLogType:
+		dfcInstance, err := findDfcInstance(systemSnapshot, a.payload.UUID)
+		if err != nil {
+			return nil, nil, fmt.Errorf("the requested DFC with UUID %s was not found", a.payload.UUID)
+		}
+
+		observedState, ok := dfcInstance.LastObservedState.(*dataflowcomponent.DataflowComponentObservedStateSnapshot)
+		if !ok || observedState == nil {
+			a.actionLogger.Errorw("Observed state is of unexpected type", "dfcInstance.ID", dfcInstance.ID)
+			return nil, nil, fmt.Errorf("invalid observed state type for DFC instance %s", dfcInstance.ID)
+		}
+
+		res.Logs = mapS6LogsToResponse(observedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosLogs, reqStartTime)
+	case models.TagBrowserLogType:
+		// TODO: Implement tag browser logs
+		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, "Tag browser logs are not implemented yet", a.outboundChannel, models.GetLogs)
+	}
+
+	return res, nil, nil
+}
+
+func (a *GetLogsAction) getUserEmail() string {
+	return a.userEmail
+}
+
+func (a *GetLogsAction) getUuid() uuid.UUID {
+	return a.actionUUID
+}
+
+func (a *GetLogsAction) GetParsedVersionUUIDs() models.GetLogsRequest {
+	return a.payload
+}
