@@ -861,11 +861,6 @@ func (s *RedpandaService) ReconcileManager(ctx context.Context, services service
 //	ok    – true when logs look clean, false otherwise.
 //	entry – zero value when ok is true; otherwise the first offending log line.
 func (s *RedpandaService) IsLogsFine(logs []s6service.LogEntry, currentTime time.Time, logWindow time.Duration) (bool, s6service.LogEntry) {
-	failures := []string{
-		"Address already in use", // https://github.com/redpanda-data/redpanda/issues/3763
-		"Reactor stalled for",    // Multiple sources
-	}
-
 	// Check logs within the time window
 	windowStart := currentTime.Add(-logWindow)
 
@@ -877,8 +872,9 @@ func (s *RedpandaService) IsLogsFine(logs []s6service.LogEntry, currentTime time
 			continue
 		}
 
-		for _, failure := range failures {
-			if strings.Contains(log.Content, failure) {
+		// Check if the log contains failure, by applying all failure detectors (see redpanda_log_failures.go)
+		for _, failureDetector := range RedpandaFailures {
+			if failureDetector.IsFailure(log.Content) {
 				return false, log
 			}
 		}
