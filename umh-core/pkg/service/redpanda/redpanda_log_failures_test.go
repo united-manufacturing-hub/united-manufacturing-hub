@@ -15,17 +15,10 @@
 package redpanda_test
 
 import (
-	"testing"
-
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda"
 )
-
-func TestRedpandaLogFailures(t *testing.T) {
-	RegisterFailHandler(Fail)
-	RunSpecs(t, "Redpanda Log Failures Suite")
-}
 
 var _ = Describe("Redpanda Log Failures", func() {
 	Describe("AddressAlreadyInUseFailure", func() {

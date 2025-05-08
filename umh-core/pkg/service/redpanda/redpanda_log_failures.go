@@ -47,6 +47,24 @@ func (r *ReactorStalledFailure) IsFailure(logLine string) bool {
 
 	// Reactor stalls are always printed as milliseconds
 	// https://github.com/scylladb/seastar/blob/e06b9092f921da1bcf7240f16adb9e6d2e227ae5/src/core/reactor.cc#L1456C17-L1456C28
+	/*
+		void cpu_stall_detector::generate_trace() {
+		    auto delta = reactor::now() - _run_started_at;
+
+		    _total_reported++;
+		    if (_config.report) {
+		        _config.report();
+		        return;
+		    }
+
+		    backtrace_buffer buf;
+		    buf.append("Reactor stalled for ");
+		    buf.append_decimal(uint64_t(delta / 1ms));
+		    buf.append(" ms");
+		    print_with_backtrace(buf, _config.oneline);
+		    maybe_report_kernel_trace(buf);
+		}
+	*/
 	// Example line: Reactor stalled for 32 ms
 
 	// Extract the number of milliseconds from the log line
