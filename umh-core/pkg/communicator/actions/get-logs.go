@@ -1,3 +1,17 @@
+// Copyright 2025 UMH Systems GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package actions
 
 import (
@@ -40,6 +54,9 @@ type GetLogsAction struct {
 	actionLogger *zap.SugaredLogger
 }
 
+// NewGetLogsAction creates a new GetLogsAction with the provided parameters.
+// This constructor is primarily used for testing to enable dependency injection.
+// Caller needs to invoke Parse and Validate before calling Execute.
 func NewGetLogsAction(userEmail string, actionUUID uuid.UUID, instanceUUID uuid.UUID, outboundChannel chan *models.UMHMessage, configManager config.ConfigManager, systemSnapshotManager *fsm.SnapshotManager) *GetLogsAction {
 	return &GetLogsAction{
 		userEmail:             userEmail,
@@ -52,6 +69,8 @@ func NewGetLogsAction(userEmail string, actionUUID uuid.UUID, instanceUUID uuid.
 	}
 }
 
+// Parse extracts the business fields from the raw JSON payload.
+// Shape errors are detected here, while semantic validation is done in Validate.
 func (a *GetLogsAction) Parse(payload interface{}) (err error) {
 	a.actionLogger.Info("Parsing the payload")
 	a.payload, err = ParseActionPayload[models.GetLogsRequest](payload)
@@ -59,6 +78,10 @@ func (a *GetLogsAction) Parse(payload interface{}) (err error) {
 	return err
 }
 
+// Validate performs semantic validation of the parsed payload.
+// This includes checking that the provided start time is a valid timestamp,
+// and that the log type is one of the allowed types.
+// The UUID is necessary for DFC logs to identify the correct instance.
 func (a *GetLogsAction) Validate() (err error) {
 	a.actionLogger.Info("Validating the payload")
 
@@ -85,7 +108,9 @@ func (a *GetLogsAction) Validate() (err error) {
 	return nil
 }
 
-func mapS6LogsToResponse(logs []s6.LogEntry, startTimeUTC time.Time) []string {
+// mapS6LogsToSlice maps the S6 logs to a slice of strings.
+// It filters out logs that are before the provided start time.
+func mapS6LogsToSlice(logs []s6.LogEntry, startTimeUTC time.Time) []string {
 	logsArr := []string{}
 
 	for _, log := range logs {
@@ -99,6 +124,9 @@ func mapS6LogsToResponse(logs []s6.LogEntry, startTimeUTC time.Time) []string {
 	return logsArr
 }
 
+// findDfcInstance finds the DFC instance with the provided UUID.
+// It returns the instance if found, otherwise an error is returned.
+// TODO: Probably should be a shared helper function.
 func findDfcInstance(systemSnapshot fsm.SystemSnapshot, dfcUUID string) (*fsm.FSMInstanceSnapshot, error) {
 	dfcManager, ok := systemSnapshot.Managers[constants.DataflowcomponentManagerName]
 	if !ok {
@@ -125,6 +153,8 @@ func logsRetrievalError(err error, logType models.LogType) error {
 	return fmt.Errorf("failed to retrieve logs for %s: %v", logType, err)
 }
 
+// Execute takes care of retrieving the logs from the correct source based on the log type.
+// It returns a response object with an array of logs from the provided start time up to the current time.
 func (a *GetLogsAction) Execute() (interface{}, map[string]interface{}, error) {
 	a.actionLogger.Info("Executing GetLogs action")
 
@@ -158,7 +188,7 @@ func (a *GetLogsAction) Execute() (interface{}, map[string]interface{}, error) {
 			return nil, nil, err
 		}
 
-		res.Logs = mapS6LogsToResponse(observedState.ServiceInfoSnapshot.RedpandaStatus.Logs, reqStartTime)
+		res.Logs = mapS6LogsToSlice(observedState.ServiceInfoSnapshot.RedpandaStatus.Logs, reqStartTime)
 	case models.AgentLogType:
 		agentManager, ok := systemSnapshot.Managers[constants.AgentManagerName]
 		if !ok {
@@ -181,7 +211,7 @@ func (a *GetLogsAction) Execute() (interface{}, map[string]interface{}, error) {
 			return nil, nil, err
 		}
 
-		res.Logs = mapS6LogsToResponse(observedState.ServiceInfoSnapshot.AgentLogs, reqStartTime)
+		res.Logs = mapS6LogsToSlice(observedState.ServiceInfoSnapshot.AgentLogs, reqStartTime)
 	case models.DFCLogType:
 		dfcInstance, err := findDfcInstance(systemSnapshot, a.payload.UUID)
 		if err != nil {
@@ -197,7 +227,7 @@ func (a *GetLogsAction) Execute() (interface{}, map[string]interface{}, error) {
 			return nil, nil, err
 		}
 
-		res.Logs = mapS6LogsToResponse(observedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosLogs, reqStartTime)
+		res.Logs = mapS6LogsToSlice(observedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosLogs, reqStartTime)
 	case models.TagBrowserLogType:
 		// TODO: Implement tag browser logs
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, "Tag browser logs are not implemented yet", a.outboundChannel, models.GetLogs)
