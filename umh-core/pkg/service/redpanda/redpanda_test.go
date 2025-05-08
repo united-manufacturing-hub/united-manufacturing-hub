@@ -363,7 +363,7 @@ var _ = Describe("Redpanda Service", func() {
 					{
 						Timestamp: currentTime.Add(-30 * time.Second),
 						// Stalls are always printed in milliseconds (See redpanda_log_failures.go for more details)
-						Content: "WARN Reactor stalled for 2 ms",
+						Content: "WARN Reactor stalled for 2000 ms",
 					},
 				}
 				Expect(service.IsLogsFine(logs, currentTime, logWindow)).To(BeFalse())
