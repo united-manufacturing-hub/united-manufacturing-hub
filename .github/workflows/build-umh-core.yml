@@ -298,13 +298,13 @@ jobs:
 
             if [[ "$CHANNEL" == "nightly" ]]; then
               # Pre-release, simply update the channel
-              curl --fail --silent --show-error --max-time 30 --retry 3 -X POST "$base_url/v2/webhook/versions/umh-core/update" \
+              curl --fail --silent --show-error --max-time 30 --retry 3 -X POST "$base_url/api/v2/webhook/versions/umh-core/update" \
               -H "X-Webhook-Secret: ${{ secrets.UMH_MC_WEBHOOK_SECRET }}" \
               -H "Content-Type: application/json" \
               -d "{\"channel\":\"${CHANNEL}\",\"version\":\"${VERSION}\"}"
             else
               # Fetch current nightly to check if we can promote it
-              NIGHTLY_VERSION=$(curl --fail --silent --show-error --max-time 10 -X GET "$base_url/v2/versions/umh-core/nightly" | jq -r '.version')
+              NIGHTLY_VERSION=$(curl --fail --silent --show-error --max-time 10 -X GET "$base_url/api/v2/versions/umh-core/nightly" | jq -r '.version')
 
               # Extract base version from nightly version
               # v0.0.0-pre.1 -> v0.0.0
@@ -312,13 +312,13 @@ jobs:
 
               if [[ "$VERSION" == "$NIGHTLY_BASE_VERSION" ]]; then
                 # Promote nightly to stable
-                curl --fail --silent --show-error --max-time 30 --retry 3 -X POST "$base_url/v2/webhook/versions/umh-core/update" \
+                curl --fail --silent --show-error --max-time 30 --retry 3 -X POST "$base_url/api/v2/webhook/versions/umh-core/update" \
                 -H "X-Webhook-Secret: ${{ secrets.UMH_MC_WEBHOOK_SECRET }}" \
                 -H "Content-Type: application/json" \
                 -d "{\"channel\":\"stable\",\"version\":\"${VERSION}\",\"isPromotion\":true,\"promotedFrom\":\"nightly\"}"
               else
                 # New stable release without promotion
-                curl --fail --silent --show-error --max-time 30 --retry 3 -X POST "$base_url/v2/webhook/versions/umh-core/update" \
+                curl --fail --silent --show-error --max-time 30 --retry 3 -X POST "$base_url/api/v2/webhook/versions/umh-core/update" \
                 -H "X-Webhook-Secret: ${{ secrets.UMH_MC_WEBHOOK_SECRET }}" \
                 -H "Content-Type: application/json" \
                 -d "{\"channel\":\"stable\",\"version\":\"${VERSION}\"}"

@@ -922,7 +922,6 @@ func ParseMetricsFromBytes(raw []byte) (Metrics, error) {
 			}
 			m.Input.ConnectionUp = count
 		case "input_received":
-			fmt.Printf("input received: %s\n", string(line))
 			count, err := TailInt(line)
 			if err != nil {
 				return Metrics{}, fmt.Errorf("failed to parse input received: %w", err)
