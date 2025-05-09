@@ -284,6 +284,9 @@ func (r *RedpandaInstance) reconcileStartingStates(ctx context.Context, services
 			return nil, false
 		}
 
+		// Set the transition time when we detect successful start
+		r.transitionToRunningTime = currentTime
+
 		r.ObservedState.ServiceInfo.StatusReason = ""
 		return r.baseFSMInstance.SendEvent(ctx, EventStartDone), true
 	default:

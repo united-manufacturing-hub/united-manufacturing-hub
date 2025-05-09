@@ -19,6 +19,8 @@ import (
 	redpandaserviceconfig "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/redpandaserviceconfig"
 	publicfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 
+	"time"
+
 	redpandasvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda"
 )
 
@@ -124,6 +126,10 @@ type RedpandaInstance struct {
 
 	// config contains all the configuration for this service
 	config redpandaserviceconfig.RedpandaServiceConfig
+
+	// transitionToRunningTime tracks when we first transitioned to a running state
+	// This is used to ignore errors that occurred before we were fully running
+	transitionToRunningTime time.Time
 }
 
 // GetLastObservedState returns the last known state of the instance
