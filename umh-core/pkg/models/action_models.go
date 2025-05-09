@@ -517,7 +517,7 @@ const (
 // GetLogsRequest contains the necessary fields for executing a `get-logs` action.
 type GetLogsRequest struct {
 	// StartTime represents the time frame to start the logs from in unix milliseconds
-	StartTime float64 `json:"startTime"`
+	StartTime int64 `json:"startTime"`
 	// Type represents the type of the logs to retrieve
 	Type LogType `json:"type"`
 	// UUID represents the identifier of the entity to retrieve the logs for.

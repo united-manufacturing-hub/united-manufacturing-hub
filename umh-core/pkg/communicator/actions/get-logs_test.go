@@ -108,10 +108,11 @@ var _ = Describe("GetLogsAction", func() {
 
 	Describe("Parse", func() {
 		It("should parse valid get logs payload", func() {
-			payload := models.GetLogsRequest{
-				UUID:      dfcUUID.String(),
-				Type:      models.DFCLogType,
-				StartTime: float64(time.Now().Add(-time.Hour).Unix()),
+			startTime := time.Now().Add(-24 * time.Hour).UnixMilli()
+			payload := map[string]interface{}{
+				"uuid":      dfcUUID.String(),
+				"type":      models.DFCLogType,
+				"startTime": startTime,
 			}
 
 			err := action.Parse(payload)

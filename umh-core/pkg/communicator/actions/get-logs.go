@@ -156,7 +156,7 @@ func (a *GetLogsAction) Execute() (interface{}, map[string]interface{}, error) {
 	a.actionLogger.Info("Executing GetLogs action")
 
 	// Request time is in unix ms, but log entries contain UTC timestamps
-	reqStartTime := time.UnixMilli(int64(a.payload.StartTime)).UTC()
+	reqStartTime := time.UnixMilli(a.payload.StartTime).UTC()
 
 	res := models.GetLogsResponse{Logs: []string{}}
 	systemSnapshot := a.systemSnapshotManager.GetDeepCopySnapshot()
