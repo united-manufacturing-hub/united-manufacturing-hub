@@ -107,18 +107,18 @@ func (a *GetLogsAction) Validate() (err error) {
 
 // mapS6LogsToSlice maps the S6 logs to a slice of strings.
 // It filters out logs that are before the provided start time.
-func mapS6LogsToSlice(logs []s6.LogEntry, startTimeUTC time.Time) []string {
-	logsArr := []string{}
+func mapS6LogsToSlice(s6Logs []s6.LogEntry, startTimeUTC time.Time) []string {
+	logs := []string{}
 
-	for _, log := range logs {
+	for _, log := range s6Logs {
 		if log.Timestamp.Before(startTimeUTC) {
 			continue
 		}
 
-		logsArr = append(logsArr, log.Content)
+		logs = append(logs, log.Content)
 	}
 
-	return logsArr
+	return logs
 }
 
 // findDfcInstance finds the DFC instance with the provided UUID.
