@@ -363,22 +363,6 @@ func (r *RedpandaInstance) IsRedpandaS6Stopped() (bool, string) {
 	return false, fmt.Sprintf("s6 is not stopped, current state: %s", r.ObservedState.ServiceInfo.S6FSMState)
 }
 
-// IsRedpandaConfigLoaded reports true once Redpanda has been up for at least
-// five seconds, implying the configuration parsed without a crash.
-//
-// It returns:
-//
-//	ok     – true when the config is considered loaded, false otherwise.
-//	reason – empty when ok is true; otherwise the current uptime versus the
-//	         5‑second threshold.
-func (r *RedpandaInstance) IsRedpandaConfigLoaded() (bool, string) {
-	currentUptime := r.ObservedState.ServiceInfo.S6ObservedState.ServiceInfo.Uptime
-	if currentUptime >= 5 {
-		return true, ""
-	}
-	return false, fmt.Sprintf("uptime %d s (< 5 s threshold)", currentUptime)
-}
-
 // IsRedpandaHealthchecksPassed reports true when both liveness and readiness
 // probes pass.
 //
@@ -412,7 +396,7 @@ func (r *RedpandaInstance) AnyRestartsSinceCreation() (bool, string) {
 	return true, fmt.Sprintf("restarted %d times", len(r.ObservedState.ServiceInfo.S6ObservedState.ServiceInfo.ExitHistory))
 }
 
-// IsRedpandaRunningForSomeTimeWithoutErrors reports true when Redpanda has
+// IsRedpandaRunningWithoutErrors reports true when Redpanda has
 // been up for at least ten seconds, recent logs are clean, and metrics show no
 // errors.
 //
@@ -420,12 +404,7 @@ func (r *RedpandaInstance) AnyRestartsSinceCreation() (bool, string) {
 //
 //	ok     – true when all conditions pass, false otherwise.
 //	reason – empty when ok is true; otherwise the first detected failure.
-func (r *RedpandaInstance) IsRedpandaRunningForSomeTimeWithoutErrors(currentTime time.Time, logWindow time.Duration) (bool, string) {
-	currentUptime := r.ObservedState.ServiceInfo.S6ObservedState.ServiceInfo.Uptime
-	if currentUptime < 10 {
-		return false, fmt.Sprintf("uptime %d s (< %d s threshold)", currentUptime, 10)
-	}
-
+func (r *RedpandaInstance) IsRedpandaRunningWithoutErrors(currentTime time.Time, logWindow time.Duration) (bool, string) {
 	// Check if there are any issues in the Redpanda logs
 	logsFine, reason := r.IsRedpandaLogsFine(currentTime, logWindow)
 	if !logsFine {
@@ -475,15 +454,11 @@ func (r *RedpandaInstance) IsRedpandaMetricsErrorFree() (bool, string) {
 //	reason   – empty when degraded is false; otherwise the first failure cause.
 func (r *RedpandaInstance) IsRedpandaDegraded(currentTime time.Time, logWindow time.Duration) (bool, string) {
 	s6Running, reasonS6Running := r.IsRedpandaS6Running()
-	configLoaded, reasonConfigLoaded := r.IsRedpandaConfigLoaded()
 	healthchecksPassed, reasonHealthchecksPassed := r.IsRedpandaHealthchecksPassed()
-	runningForSomeTimeWithoutErrors, reasonRunningForSomeTimeWithoutErrors := r.IsRedpandaRunningForSomeTimeWithoutErrors(currentTime, logWindow)
+	runningForSomeTimeWithoutErrors, reasonRunningForSomeTimeWithoutErrors := r.IsRedpandaRunningWithoutErrors(currentTime, logWindow)
 
 	if !s6Running {
 		return true, reasonS6Running
-	}
-	if !configLoaded {
-		return true, reasonConfigLoaded
 	}
 	if !healthchecksPassed {
 		return true, reasonHealthchecksPassed
