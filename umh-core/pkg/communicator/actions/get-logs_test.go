@@ -55,7 +55,6 @@ var _ = Describe("GetLogsAction", func() {
 		outboundChannel = make(chan *models.UMHMessage, 10)
 		dfcName = "test-dfc"
 		dfcUUID = dataflowcomponentserviceconfig.GenerateUUIDFromName(dfcName)
-
 		snapshotManager = fsm.NewSnapshotManager()
 
 		// Mocked logs contain logs from 6h ago and 2h ago
@@ -172,7 +171,7 @@ var _ = Describe("GetLogsAction", func() {
 			}
 
 			err := action.Parse(payload)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).To(BeNil())
 
 			err = action.Validate()
 			Expect(err).To(BeNil())
@@ -185,7 +184,7 @@ var _ = Describe("GetLogsAction", func() {
 				"startTime": time.Now().Add(-24 * time.Hour).UnixMilli(),
 			}
 			err := action.Parse(payload)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).To(BeNil())
 
 			err = action.Validate()
 			Expect(err).To(HaveOccurred())
@@ -197,7 +196,7 @@ var _ = Describe("GetLogsAction", func() {
 				"type": models.DFCLogType,
 			}
 			err = action.Parse(payload)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).To(BeNil())
 
 			err = action.Validate()
 			Expect(err).To(HaveOccurred())
@@ -211,7 +210,7 @@ var _ = Describe("GetLogsAction", func() {
 				"startTime": time.Now().Add(-24 * time.Hour).UnixMilli(),
 			}
 			err := action.Parse(payload)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).To(BeNil())
 
 			err = action.Validate()
 			Expect(err).To(HaveOccurred())
@@ -224,7 +223,7 @@ var _ = Describe("GetLogsAction", func() {
 				"startTime": time.Now().Add(-24 * time.Hour).UnixMilli(),
 			}
 			err := action.Parse(payload)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).To(BeNil())
 
 			err = action.Validate()
 			Expect(err).To(HaveOccurred())
@@ -238,7 +237,7 @@ var _ = Describe("GetLogsAction", func() {
 				"startTime": time.Now().Add(-24 * time.Hour).UnixMilli(),
 			}
 			err := action.Parse(payload)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).To(BeNil())
 
 			err = action.Validate()
 			Expect(err).To(HaveOccurred())
@@ -258,7 +257,7 @@ var _ = Describe("GetLogsAction", func() {
 			}
 
 			err := action.Parse(payload)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).To(BeNil())
 
 			err = action.Validate()
 			Expect(err).To(BeNil())
@@ -279,7 +278,7 @@ var _ = Describe("GetLogsAction", func() {
 			}
 
 			err := action.Parse(payload)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).To(BeNil())
 
 			err = action.Validate()
 			Expect(err).To(BeNil())
@@ -299,7 +298,7 @@ var _ = Describe("GetLogsAction", func() {
 			}
 
 			err := action.Parse(payload)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).To(BeNil())
 
 			err = action.Validate()
 			Expect(err).To(BeNil())
@@ -321,7 +320,7 @@ var _ = Describe("GetLogsAction", func() {
 			}
 
 			err := action.Parse(payload)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).To(BeNil())
 
 			err = action.Validate()
 			Expect(err).To(BeNil())
