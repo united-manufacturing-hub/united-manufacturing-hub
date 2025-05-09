@@ -79,6 +79,9 @@ type ServiceInfo struct {
 
 	// BenthosFSMState contains the current state of the Benthos FSM
 	BenthosFSMState string
+
+	// StatusReason contains the reason for the current status
+	StatusReason string
 }
 
 // DataFlowComponentService is the default implementation of the IDataFlowComponentService interface
@@ -203,6 +206,7 @@ func (s *DataFlowComponentService) Status(ctx context.Context, filesystemService
 	return ServiceInfo{
 		BenthosObservedState: benthosObservedState,
 		BenthosFSMState:      benthosFSMState,
+		StatusReason:         benthosObservedState.ServiceInfo.BenthosStatus.StatusReason,
 	}, nil
 }
 

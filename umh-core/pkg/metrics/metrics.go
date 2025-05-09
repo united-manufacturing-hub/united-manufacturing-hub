@@ -36,6 +36,7 @@ const (
 	ComponentRedpandaManager       = "redpanda_manager"
 	ComponentNmapManager           = "nmap_manager"
 	ComponentDataFlowCompManager   = "dataflow_component_manager"
+	ComponentConnectionManager     = "connection_manager"
 	// Instances
 	ComponentBaseFSMInstance           = "base_fsm_instance"
 	ComponentS6Instance                = "s6_instance"
@@ -43,16 +44,18 @@ const (
 	ComponentRedpandaInstance          = "redpanda_instance"
 	ComponentNmapInstance              = "nmap_instance"
 	ComponentDataflowComponentInstance = "dataflow_component_instance"
+	ComponentConnectionInstance        = "connection_instance"
 	ComponentAgentMonitor              = "agent_monitor"
 	ComponentBenthosMonitor            = "benthos_monitor"
 	ComponentRedpandaMonitor           = "redpanda_monitor"
 	// Services
-	ComponentS6Service        = "s6_service"
-	ComponentBenthosService   = "benthos_service"
-	ComponentRedpandaService  = "redpanda_service"
-	ComponentNmapService      = "nmap_service"
-	ComponentFilesystem       = "filesystem"
-	ComponentContainerMonitor = "container_monitor"
+	ComponentS6Service         = "s6_service"
+	ComponentBenthosService    = "benthos_service"
+	ComponentRedpandaService   = "redpanda_service"
+	ComponentNmapService       = "nmap_service"
+	ComponentConnectionService = "connection_service"
+	ComponentFilesystem        = "filesystem"
+	ComponentContainerMonitor  = "container_monitor"
 )
 
 var (
@@ -98,6 +101,27 @@ var (
 		},
 	)
 
+	// Service state metrics
+	serviceCurrentState = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: namespace,
+			Subsystem: subsystem,
+			Name:      "service_current_state",
+			Help:      "Current state of the service (0=Stopped, 1=Starting, 2=Running, 3=Active, 4=Idle, 5=Degraded, -1=Unknown)",
+		},
+		[]string{"component", "instance"},
+	)
+
+	serviceDesiredState = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: namespace,
+			Subsystem: subsystem,
+			Name:      "service_desired_state",
+			Help:      "Desired state of the service (0=Stopped, 1=Starting, 2=Running, 3=Active, 4=Idle, 5=Degraded, -1=Unknown)",
+		},
+		[]string{"component", "instance"},
+	)
+
 	// TODO: observed state
 )
 
@@ -139,4 +163,35 @@ func ObserveReconcileTime(component, instance string, duration time.Duration) {
 // AddStarvationTime increases the starvation counter by the specified seconds
 func AddStarvationTime(seconds float64) {
 	starvationSeconds.Add(seconds)
+}
+
+// UpdateServiceState updates the current and desired state metrics for a service
+func UpdateServiceState(component, instance string, currentState, desiredState string) {
+	// Convert state strings to numeric values
+	currentValue := getStateValue(currentState)
+	desiredValue := getStateValue(desiredState)
+
+	// Update the metrics
+	serviceCurrentState.WithLabelValues(component, instance).Set(currentValue)
+	serviceDesiredState.WithLabelValues(component, instance).Set(desiredValue)
+}
+
+// getStateValue converts a state string to a numeric value for the metric
+func getStateValue(state string) float64 {
+	switch state {
+	case "stopped":
+		return 0
+	case "starting":
+		return 1
+	case "running":
+		return 2
+	case "active":
+		return 3
+	case "idle":
+		return 4
+	case "degraded":
+		return 5
+	default:
+		return -1 // Unknown state
+	}
 }
