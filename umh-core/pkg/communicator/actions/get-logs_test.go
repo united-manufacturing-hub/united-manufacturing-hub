@@ -45,7 +45,6 @@ var _ = Describe("GetLogsAction", func() {
 		outboundChannel chan *models.UMHMessage
 		dfcName         string
 		dfcUUID         uuid.UUID
-		messages        []*models.UMHMessage
 		snapshotManager *fsm.SnapshotManager
 	)
 
@@ -131,7 +130,6 @@ var _ = Describe("GetLogsAction", func() {
 		})
 
 		action = actions.NewGetLogsAction(userEmail, actionUUID, instanceUUID, outboundChannel, snapshotManager)
-		go actions.ConsumeOutboundMessages(outboundChannel, &messages, true)
 	})
 
 	AfterEach(func() {
@@ -292,7 +290,7 @@ var _ = Describe("GetLogsAction", func() {
 		})
 
 		It("should handle missing manager errors gracefully", func() {
-			// Mock a log retrieval error by clearing the snapshot manager
+			// Mock a log retrieval error by clearing all managers from the snapshot
 			snapshotManager.UpdateSnapshot(&fsm.SystemSnapshot{})
 
 			payload := map[string]interface{}{
