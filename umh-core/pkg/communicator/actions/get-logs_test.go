@@ -24,11 +24,15 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
+	agent_monitor_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/agent_monitor"
 	benthosfsmmanager "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
 	dfc_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
+	redpanda_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/redpanda"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/agent_monitor"
 	benthossvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/dataflowcomponent"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 )
 
@@ -67,6 +71,7 @@ var _ = Describe("GetLogsAction", func() {
 			},
 		}
 
+		// DFC logs mock
 		dfcServiceInfo := dataflowcomponent.ServiceInfo{
 			BenthosObservedState: benthosfsmmanager.BenthosObservedState{
 				ServiceInfo: benthossvc.ServiceInfo{
@@ -76,31 +81,57 @@ var _ = Describe("GetLogsAction", func() {
 				},
 			},
 		}
-
-		dfcMockedObservedState := &dfc_fsm.DataflowComponentObservedStateSnapshot{
-			ServiceInfo: dfcServiceInfo,
+		dfcMockedObservedState := &dfc_fsm.DataflowComponentObservedStateSnapshot{ServiceInfo: dfcServiceInfo}
+		mockDfcInstances := map[string]*fsm.FSMInstanceSnapshot{
+			dfcUUID.String(): {
+				ID:                dfcName,
+				CurrentState:      "active",
+				LastObservedState: dfcMockedObservedState,
+			},
 		}
+		dfcManagerSnapshot := &actions.MockManagerSnapshot{Instances: mockDfcInstances}
 
-		mockDfcInstances := make(map[string]*fsm.FSMInstanceSnapshot)
-		mockDfcInstances[dfcUUID.String()] = &fsm.FSMInstanceSnapshot{
-			ID:                dfcName,
-			CurrentState:      "active",
-			LastObservedState: dfcMockedObservedState,
+		// Agent logs mock
+		agentServiceInfo := agent_monitor.ServiceInfo{AgentLogs: mockedLogs}
+		agentMockedObservedState := &agent_monitor_fsm.AgentObservedStateSnapshot{
+			ServiceInfoSnapshot: agentServiceInfo,
 		}
-
-		mockSnapshot := &actions.MockManagerSnapshot{
-			Instances: mockDfcInstances,
+		mockAgentInstances := map[string]*fsm.FSMInstanceSnapshot{
+			constants.AgentInstanceName: {
+				ID:                constants.AgentInstanceName,
+				CurrentState:      "active",
+				LastObservedState: agentMockedObservedState,
+			},
 		}
+		agentManagerSnapshot := &actions.MockManagerSnapshot{Instances: mockAgentInstances}
 
+		// Redpanda logs mock
+		redpandaServiceInfo := redpanda.ServiceInfo{
+			RedpandaStatus: redpanda.RedpandaStatus{
+				Logs: mockedLogs,
+			},
+		}
+		redpandaMockedObservedState := &redpanda_fsm.RedpandaObservedStateSnapshot{ServiceInfoSnapshot: redpandaServiceInfo}
+		mockRedpandaInstances := map[string]*fsm.FSMInstanceSnapshot{
+			constants.RedpandaInstanceName: {
+				ID:                constants.RedpandaInstanceName,
+				CurrentState:      "active",
+				LastObservedState: redpandaMockedObservedState,
+			},
+		}
+		redpandaManagerSnapshot := &actions.MockManagerSnapshot{Instances: mockRedpandaInstances}
+
+		// Update snapshot manager with all mocked instances
 		snapshotManager.UpdateSnapshot(&fsm.SystemSnapshot{
 			Managers: map[string]fsm.ManagerSnapshot{
-				constants.DataflowcomponentManagerName: mockSnapshot,
+				constants.DataflowcomponentManagerName: dfcManagerSnapshot,
+				constants.AgentManagerName:             agentManagerSnapshot,
+				constants.RedpandaManagerName:          redpandaManagerSnapshot,
 			},
 		})
 
 		action = actions.NewGetLogsAction(userEmail, actionUUID, instanceUUID, outboundChannel, snapshotManager)
 		go actions.ConsumeOutboundMessages(outboundChannel, &messages, true)
-
 	})
 
 	AfterEach(func() {
@@ -218,11 +249,14 @@ var _ = Describe("GetLogsAction", func() {
 	})
 
 	Describe("Execute", func() {
-		It("should return logs for a DFC", func() {
+		DescribeTable("should return logs when log type is", func(logType models.LogType, expectedLogs []string) {
 			payload := map[string]interface{}{
-				"uuid":      dfcUUID.String(),
-				"type":      models.DFCLogType,
+				"type":      logType,
 				"startTime": time.Now().Add(-24 * time.Hour).UnixMilli(),
+			}
+
+			if logType == models.DFCLogType {
+				payload["uuid"] = dfcUUID.String()
 			}
 
 			err := action.Parse(payload)
@@ -233,7 +267,71 @@ var _ = Describe("GetLogsAction", func() {
 
 			result, _, err := action.Execute()
 			Expect(err).To(BeNil())
-			Expect(result).To(Equal(models.GetLogsResponse{Logs: []string{"test log", "test log 2"}}))
+			Expect(result).To(Equal(models.GetLogsResponse{Logs: expectedLogs}))
+		},
+			Entry("dfc", models.DFCLogType, []string{"test log", "test log 2"}),
+			Entry("agent", models.AgentLogType, []string{"test log", "test log 2"}),
+			Entry("redpdanda", models.RedpandaLogType, []string{"test log", "test log 2"}))
+
+		It("should return logs for the given start time", func() {
+			// Start time of 3h ago should only yield the mocked log from 2h ago
+			payload := map[string]interface{}{
+				"type":      models.AgentLogType,
+				"startTime": time.Now().Add(-3 * time.Hour).UnixMilli(),
+			}
+
+			err := action.Parse(payload)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = action.Validate()
+			Expect(err).To(BeNil())
+
+			result, _, err := action.Execute()
+			Expect(err).To(BeNil())
+			Expect(result).To(Equal(models.GetLogsResponse{Logs: []string{"test log 2"}}))
+		})
+
+		It("should handle missing manager errors gracefully", func() {
+			// Mock a log retrieval error by clearing the snapshot manager
+			snapshotManager.UpdateSnapshot(&fsm.SystemSnapshot{})
+
+			payload := map[string]interface{}{
+				"type":      models.RedpandaLogType,
+				"startTime": time.Now().Add(-24 * time.Hour).UnixMilli(),
+			}
+
+			err := action.Parse(payload)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = action.Validate()
+			Expect(err).To(BeNil())
+
+			result, _, err := action.Execute()
+			Expect(result).To(BeNil())
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("failed to retrieve logs for redpanda: redpanda manager not found"))
+		})
+
+		It("should handle missing instance errors gracefully", func() {
+			// Mock a missing instance by clearing the agent instance from the corresponding manager snapshot
+			manager := snapshotManager.GetSnapshot().Managers[constants.AgentManagerName]
+			manager.GetInstances()[constants.AgentInstanceName] = nil
+
+			payload := map[string]interface{}{
+				"type":      models.AgentLogType,
+				"startTime": time.Now().Add(-24 * time.Hour).UnixMilli(),
+			}
+
+			err := action.Parse(payload)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = action.Validate()
+			Expect(err).To(BeNil())
+
+			result, _, err := action.Execute()
+			Expect(result).To(BeNil())
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("failed to retrieve logs for agent: agent instance not found"))
 		})
 	})
 })
