@@ -161,6 +161,7 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 					"action-delete-data-flow-component",
 					"action-edit-data-flow-component",
 					"action-get-logs",
+					"action-get-dataflowcomponent-metrics",
 				},
 			},
 		},

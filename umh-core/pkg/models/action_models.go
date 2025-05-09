@@ -182,6 +182,8 @@ const (
 	UpdateConfiguration ActionType = "update-configuration"
 	// GetLogs represents the action type for retrieving logs
 	GetLogs ActionType = "get-logs"
+	// GetDataflowcomponentMetrics represents the action type for retrieving metrics of a data flow component
+	GetDataflowcomponentMetrics ActionType = "get-dataflowcomponent-metrics"
 )
 
 // TestNetworkConnectionPayload contains the necessary fields for executing a TestNetworkConnection action.
@@ -527,4 +529,8 @@ type GetLogsRequest struct {
 
 type GetLogsResponse struct {
 	Logs []string `json:"logs"`
+}
+
+type GetDataflowcomponentMetricsRequest struct {
+	UUID string `json:"uuid"`
 }
