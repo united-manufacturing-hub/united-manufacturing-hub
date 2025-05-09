@@ -421,7 +421,7 @@ func (r *RedpandaInstance) AnyUnexpectedRestartsInTheLastHour() (bool, string) {
 	}
 
 	if len(restarts) > 0 {
-		return true, fmt.Sprintf("unexpected restarts: %v", restarts)
+		return true, fmt.Sprintf("unexpected restarts within the last hour: %v", restarts)
 	}
 
 	return false, ""
