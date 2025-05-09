@@ -85,6 +85,10 @@ func (a *GetLogsAction) Validate() (err error) {
 		return errors.New("start time must be greater than 0")
 	}
 
+	if a.payload.StartTime > time.Now().UnixMilli() {
+		return errors.New("start time must be in the past")
+	}
+
 	allowedLogTypes := []models.LogType{models.AgentLogType, models.DFCLogType, models.RedpandaLogType, models.TagBrowserLogType}
 	if !slices.Contains(allowedLogTypes, a.payload.Type) {
 		return errors.New("log type must be set and must be one of the following: agent, dfc, redpanda, tag-browser")
