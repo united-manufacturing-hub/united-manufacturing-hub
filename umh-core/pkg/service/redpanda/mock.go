@@ -329,7 +329,7 @@ func (m *MockRedpandaService) ReconcileManager(ctx context.Context, services ser
 }
 
 // IsLogsFine mocks checking if the logs are fine
-func (m *MockRedpandaService) IsLogsFine(logs []s6service.LogEntry, currentTime time.Time, logWindow time.Duration) (bool, s6service.LogEntry) {
+func (m *MockRedpandaService) IsLogsFine(logs []s6service.LogEntry, currentTime time.Time, logWindow time.Duration, transitionToRunningTime time.Time) (bool, s6service.LogEntry) {
 	m.IsLogsFineCalled = true
 	// For testing purposes, we'll consider logs fine if they're empty or nil
 	return len(logs) == 0, s6service.LogEntry{}
