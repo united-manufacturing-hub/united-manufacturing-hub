@@ -554,18 +554,8 @@ func (a *EditDataflowComponentAction) waitForComponentToBeActive() error {
 						// we need to use the ObservedBenthosServiceConfig  instead of the LastObservedState.Config because the LastObservedState.Config
 						// is only the desired config and not the observed config.
 						// The types are slightly different, so we need to convert them to the same type before comparing.
-						observedConfig := dfcSnapshot.ServiceInfo.BenthosObservedState.ObservedBenthosServiceConfig
-						observedConfigInDfcConfig := dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
-							BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
-								Input:              observedConfig.Input,
-								Pipeline:           observedConfig.Pipeline,
-								Output:             observedConfig.Output,
-								CacheResources:     observedConfig.CacheResources,
-								RateLimitResources: observedConfig.RateLimitResources,
-								Buffer:             observedConfig.Buffer,
-							},
-						}
-						if !dataflowcomponentserviceconfig.NewComparator().ConfigsEqual(&observedConfigInDfcConfig, &a.dfc.DataFlowComponentServiceConfig) {
+
+						if !CompareSnapshotWithDesiredConfig(dfcSnapshot, a.dfc) {
 							SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
 								fmt.Sprintf("Dataflow component config changes haven't applied yet (%ds remaining)...",
 									remainingSeconds), a.outboundChannel, models.EditDataFlowComponent)
@@ -611,4 +601,18 @@ func (a *EditDataflowComponentAction) waitForComponentToBeActive() error {
 			}
 		}
 	}
+}
+
+func CompareSnapshotWithDesiredConfig(dfcSnapshot *dataflowcomponent.DataflowComponentObservedStateSnapshot, desiredConfig config.DataFlowComponentConfig) bool {
+	observedConfig := dfcSnapshot.ServiceInfo.BenthosObservedState.ObservedBenthosServiceConfig
+	observedConfigInDfcConfig := dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+		BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
+			Input:              observedConfig.Input,
+			Pipeline:           observedConfig.Pipeline,
+			Output:             observedConfig.Output,
+			CacheResources:     observedConfig.CacheResources,
+			RateLimitResources: observedConfig.RateLimitResources,
+		},
+	}
+	return dataflowcomponentserviceconfig.NewComparator().ConfigsEqual(&observedConfigInDfcConfig, &desiredConfig.DataFlowComponentServiceConfig)
 }
