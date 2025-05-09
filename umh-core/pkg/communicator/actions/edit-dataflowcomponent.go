@@ -615,6 +615,7 @@ func CompareSnapshotWithDesiredConfig(dfcSnapshot *dataflowcomponent.DataflowCom
 			Output:             observedConfig.Output,
 			CacheResources:     observedConfig.CacheResources,
 			RateLimitResources: observedConfig.RateLimitResources,
+			Buffer:             observedConfig.Buffer,
 		},
 	}
 	return dataflowcomponentserviceconfig.NewComparator().ConfigsEqual(&observedConfigInDfcConfig, &desiredConfig.DataFlowComponentServiceConfig)
