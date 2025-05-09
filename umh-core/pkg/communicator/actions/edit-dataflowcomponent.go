@@ -604,6 +604,9 @@ func (a *EditDataflowComponentAction) waitForComponentToBeActive() error {
 }
 
 func CompareSnapshotWithDesiredConfig(dfcSnapshot *dataflowcomponent.DataflowComponentObservedStateSnapshot, desiredConfig config.DataFlowComponentConfig) bool {
+	if dfcSnapshot == nil || dfcSnapshot.ServiceInfo.BenthosObservedState.ObservedBenthosServiceConfig.Input == nil {
+		return false
+	}
 	observedConfig := dfcSnapshot.ServiceInfo.BenthosObservedState.ObservedBenthosServiceConfig
 	observedConfigInDfcConfig := dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 		BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
