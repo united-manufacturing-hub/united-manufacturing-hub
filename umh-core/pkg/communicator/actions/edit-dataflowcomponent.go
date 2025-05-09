@@ -549,11 +549,20 @@ func (a *EditDataflowComponentAction) waitForComponentToBeActive() error {
 								fmt.Sprintf("Waiting for dataflow component state info (%ds remaining)...", remainingSeconds), a.outboundChannel, models.EditDataFlowComponent)
 							continue
 						}
-						// check if the config is correct
-						// get the ObservedBenthosServiceConfig and compare it with the new config
-						// we need to use the ObservedBenthosServiceConfig  instead of the LastObservedState.Config because the LastObservedState.Config
-						// is only the desired config and not the observed config.
-						// The types are slightly different, so we need to convert them to the same type before comparing.
+						// Verify that the Benthos instance has applied the desired configuration.
+						// We compare the desired DataFlowComponentConfig with the *observed* Benthos
+						// configuration contained in
+						// dfcSnapshot.ServiceInfo.BenthosObservedState.ObservedBenthosServiceConfig.
+						//
+						// Do NOT use instance.LastObservedState.Config: the reconcile loop sets
+						// that field to the desired config as soon as it writes to the store,
+						// potentially some ticks before Benthos has actually restarted. Relying on
+						// it here would let the action declare success while the container is
+						// still starting up.
+						//
+						// ObservedBenthosServiceConfig and DataflowComponentServiceConfig differ in
+						// type, so we convert the observed struct to the DFC representation before
+						// running the comparison.
 
 						if !CompareSnapshotWithDesiredConfig(dfcSnapshot, a.dfc) {
 							SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
