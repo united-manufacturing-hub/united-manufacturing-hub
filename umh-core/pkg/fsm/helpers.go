@@ -28,7 +28,10 @@ func FindManager(
 	managerName string,
 ) (ManagerSnapshot, bool) {
 	mgr, ok := snap.Managers[managerName]
-	return mgr, ok
+	if !ok || mgr == nil {
+		return nil, false
+	}
+	return mgr, true
 }
 
 // FindInstance finds an instance in the system snapshot.
