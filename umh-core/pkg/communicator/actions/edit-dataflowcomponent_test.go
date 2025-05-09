@@ -443,7 +443,7 @@ var _ = Describe("EditDataflowComponent", func() {
 			// Execute the action
 			result, metadata, err := action.Execute()
 			Expect(err).NotTo(HaveOccurred())
-			Expect(result).To(ContainSubstring("Successfully edited dataflow component: test-component-updated"))
+			Expect(result).To(ContainSubstring("success"))
 			Expect(metadata).To(BeNil())
 
 			// Stop the state mocker
@@ -522,7 +522,7 @@ buffer:
 			// Execute the action
 			result, metadata, err := action.Execute()
 			Expect(err).NotTo(HaveOccurred())
-			Expect(result).To(ContainSubstring("Successfully edited dataflow component"))
+			Expect(result).To(ContainSubstring("success"))
 			Expect(metadata).To(BeNil())
 
 			// Stop the state mocker
@@ -579,7 +579,7 @@ buffer:
 			// Execute the action - should fail
 			result, metadata, err := action.Execute()
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("Failed to edit dataflow component: mock edit dataflow component failure"))
+			Expect(err.Error()).To(ContainSubstring("failed to edit dataflow component: mock edit dataflow component failure"))
 			Expect(result).To(BeNil())
 			Expect(metadata).To(BeNil())
 
@@ -593,7 +593,7 @@ buffer:
 
 			actionReplyPayloadStr, ok := actionReplyPayload["actionReplyPayload"].(string)
 			Expect(ok).To(BeTrue(), "Failed to extract actionReplyPayload as string")
-			Expect(actionReplyPayloadStr).To(ContainSubstring("Updating dataflow component 'test-component-updated' configuration.."))
+			Expect(actionReplyPayloadStr).To(ContainSubstring("updating configuration"))
 		})
 
 		It("should handle failure when component not found", func() {

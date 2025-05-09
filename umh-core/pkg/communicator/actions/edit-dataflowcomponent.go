@@ -313,7 +313,7 @@ func (a *EditDataflowComponentAction) Execute() (interface{}, map[string]interfa
 	a.actionLogger.Info("Executing EditDataflowComponent action")
 
 	// Send confirmation that action is starting
-	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionConfirmed, "Starting edit of dataflow component: "+a.name, a.outboundChannel, models.EditDataFlowComponent)
+	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionConfirmed, Label("edit", a.name)+"starting", a.outboundChannel, models.EditDataFlowComponent)
 
 	// Parse the input and output configurations
 	benthosInput := make(map[string]interface{})
@@ -323,7 +323,7 @@ func (a *EditDataflowComponentAction) Execute() (interface{}, map[string]interfa
 	// First try to use the Input data
 	err := yaml.Unmarshal([]byte(a.payload.Inputs.Data), &benthosInput)
 	if err != nil {
-		errMsg := fmt.Sprintf("Failed to parse input data: %s", err.Error())
+		errMsg := Label("edit", a.name) + fmt.Sprintf("failed to parse input data: %s", err.Error())
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errMsg, a.outboundChannel, models.EditDataFlowComponent)
 		return nil, nil, fmt.Errorf("%s", errMsg)
 	}
@@ -331,7 +331,7 @@ func (a *EditDataflowComponentAction) Execute() (interface{}, map[string]interfa
 	//parse the output data
 	err = yaml.Unmarshal([]byte(a.payload.Outputs.Data), &benthosOutput)
 	if err != nil {
-		errMsg := fmt.Sprintf("Failed to parse output data: %s", err.Error())
+		errMsg := Label("edit", a.name) + fmt.Sprintf("failed to parse output data: %s", err.Error())
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errMsg, a.outboundChannel, models.EditDataFlowComponent)
 		return nil, nil, fmt.Errorf("%s", errMsg)
 	}
@@ -340,7 +340,7 @@ func (a *EditDataflowComponentAction) Execute() (interface{}, map[string]interfa
 	if a.payload.Inject.Data != "" {
 		err = yaml.Unmarshal([]byte(a.payload.Inject.Data), &benthosYamlInject)
 		if err != nil {
-			errMsg := fmt.Sprintf("Failed to parse inject data: %s", err.Error())
+			errMsg := Label("edit", a.name) + fmt.Sprintf("failed to parse inject data: %s", err.Error())
 			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errMsg, a.outboundChannel, models.EditDataFlowComponent)
 			return nil, nil, fmt.Errorf("%s", errMsg)
 		}
@@ -398,7 +398,7 @@ func (a *EditDataflowComponentAction) Execute() (interface{}, map[string]interfa
 			var procConfig map[string]interface{}
 			err := yaml.Unmarshal([]byte(processor.Data), &procConfig)
 			if err != nil {
-				errMsg := fmt.Sprintf("Failed to parse pipeline processor %s: %s", processorName, err.Error())
+				errMsg := Label("edit", a.name) + fmt.Sprintf("failed to parse pipeline processor %s: %s", processorName, err.Error())
 				SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errMsg, a.outboundChannel, models.EditDataFlowComponent)
 				return nil, nil, fmt.Errorf("%s", errMsg)
 			}
@@ -446,10 +446,10 @@ func (a *EditDataflowComponentAction) Execute() (interface{}, map[string]interfa
 	// Update the component in the configuration
 	ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
 	defer cancel()
-	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Updating dataflow component '"+a.name+"' configuration...", a.outboundChannel, models.EditDataFlowComponent)
+	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, Label("edit", a.name)+"updating configuration", a.outboundChannel, models.EditDataFlowComponent)
 	a.oldConfig, err = a.configManager.AtomicEditDataflowcomponent(ctx, a.oldComponentUUID, dfc)
 	if err != nil {
-		errorMsg := fmt.Sprintf("Failed to edit dataflow component: %v", err)
+		errorMsg := Label("edit", a.name) + fmt.Sprintf("failed to edit dataflow component: %v", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errorMsg, a.outboundChannel, models.EditDataFlowComponent)
 		return nil, nil, fmt.Errorf("%s", errorMsg)
 	}
@@ -457,12 +457,12 @@ func (a *EditDataflowComponentAction) Execute() (interface{}, map[string]interfa
 	// check against observedState as well
 	if a.systemSnapshotManager != nil { // skipping this for the unit tests
 		if a.ignoreHealthCheck {
-			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Configuration updated amnd ignoring health check. Please check the dataflow component logs for any errors.", a.outboundChannel, models.EditDataFlowComponent)
+			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, Label("edit", a.name)+"configuration updated; but ignoring the health check", a.outboundChannel, models.EditDataFlowComponent)
 		} else {
-			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Configuration updated. Waiting for dataflow component '"+a.name+"' to become active...", a.outboundChannel, models.EditDataFlowComponent)
+			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, Label("edit", a.name)+"configuration updated; waiting to become active", a.outboundChannel, models.EditDataFlowComponent)
 			err = a.waitForComponentToBeActive()
 			if err != nil {
-				errorMsg := fmt.Sprintf("Failed to wait for dataflow component to be active: %v", err)
+				errorMsg := Label("edit", a.name) + fmt.Sprintf("failed to wait for dataflow component to be active: %v", err)
 				SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errorMsg, a.outboundChannel, models.EditDataFlowComponent)
 				return nil, nil, fmt.Errorf("%s", errorMsg)
 			}
@@ -470,7 +470,7 @@ func (a *EditDataflowComponentAction) Execute() (interface{}, map[string]interfa
 	}
 
 	// return success message, but do not send it as this is done by the caller
-	successMsg := fmt.Sprintf("Successfully edited dataflow component: %s", a.name)
+	successMsg := Label("edit", a.name) + "success"
 
 	return successMsg, nil, nil
 }
@@ -519,7 +519,8 @@ func (a *EditDataflowComponentAction) waitForComponentToBeActive() error {
 	for {
 		select {
 		case <-timeout:
-			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Timeout reached. Dataflow component did not become active in time. Rolling back to previous configuration...", a.outboundChannel, models.EditDataFlowComponent)
+			stateMessage := Label("edit", a.name) + "timeout reached. it did not become active in time. rolling back"
+			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, stateMessage, a.outboundChannel, models.EditDataFlowComponent)
 			ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
 			defer cancel()
 			_, err := a.configManager.AtomicEditDataflowcomponent(ctx, a.newComponentUUID, a.oldConfig)
@@ -545,46 +546,51 @@ func (a *EditDataflowComponentAction) waitForComponentToBeActive() error {
 						found = true
 						dfcSnapshot, ok := instance.LastObservedState.(*dataflowcomponent.DataflowComponentObservedStateSnapshot)
 						if !ok {
+							stateMessage := RemainingPrefixSec(remainingSeconds) + "waiting for state info"
 							SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
-								fmt.Sprintf("Waiting for dataflow component state info (%ds remaining)...", remainingSeconds), a.outboundChannel, models.EditDataFlowComponent)
+								stateMessage, a.outboundChannel, models.EditDataFlowComponent)
 							continue
 						}
 						// check if the config is correct
 						if !dataflowcomponentserviceconfig.NewComparator().ConfigsEqual(&dfcSnapshot.Config, &a.dfc.DataFlowComponentServiceConfig) {
+							stateMessage := RemainingPrefixSec(remainingSeconds) + "config not yet applied"
 							SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
-								fmt.Sprintf("Dataflow component config changes haven't applied yet (%ds remaining)...",
-									remainingSeconds), a.outboundChannel, models.EditDataFlowComponent)
+								stateMessage, a.outboundChannel, models.EditDataFlowComponent)
 							continue
 						}
 
 						if instance.CurrentState != "active" && instance.CurrentState != "idle" {
+							// currentStateReason contains more information on why the DFC is in its current state
+							currentStateReason := dfcSnapshot.ServiceInfo.StatusReason
+
+							stateMessage := RemainingPrefixSec(remainingSeconds) + currentStateReason
 							SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
-								fmt.Sprintf("Dataflow component is in state '%s' (waiting for 'active' or 'idle', %ds remaining)...",
-									instance.CurrentState, remainingSeconds), a.outboundChannel, models.EditDataFlowComponent)
+								stateMessage, a.outboundChannel, models.EditDataFlowComponent)
 							// send the benthos logs to the user
 							logs = dfcSnapshot.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosLogs
 							// only send the logs that have not been sent yet
 							if len(logs) > len(lastLogs) {
-								lastLogs = SendLimitedLogs(logs, lastLogs, a.instanceUUID, a.userEmail, a.actionUUID, a.outboundChannel, models.EditDataFlowComponent)
+								lastLogs = SendLimitedLogs(logs, lastLogs, a.instanceUUID, a.userEmail, a.actionUUID, a.outboundChannel, models.EditDataFlowComponent, remainingSeconds)
 							}
 
 							continue
 						} else {
+							stateMessage := RemainingPrefixSec(remainingSeconds) + fmt.Sprintf("completed. is in state '%s' with correct configuration", instance.CurrentState)
 							SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
-								fmt.Sprintf("Dataflow component is in state '%s' with correct configuration. Edit complete.", instance.CurrentState), a.outboundChannel, models.EditDataFlowComponent)
+								stateMessage, a.outboundChannel, models.EditDataFlowComponent)
 							return nil
 						}
 					}
 				}
 				if !found {
+					stateMessage := RemainingPrefixSec(remainingSeconds) + "waiting for it to appear in the config"
 					SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
-						fmt.Sprintf("Waiting for dataflow component to appear in system (%ds remaining)...",
-							remainingSeconds), a.outboundChannel, models.EditDataFlowComponent)
+						stateMessage, a.outboundChannel, models.EditDataFlowComponent)
 				}
 			} else {
+				stateMessage := RemainingPrefixSec(remainingSeconds) + "waiting for manager to initialise"
 				SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
-					fmt.Sprintf("Waiting for dataflow component manager (%ds remaining)...",
-						remainingSeconds), a.outboundChannel, models.EditDataFlowComponent)
+					stateMessage, a.outboundChannel, models.EditDataFlowComponent)
 			}
 		}
 	}
