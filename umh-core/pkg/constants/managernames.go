@@ -16,12 +16,17 @@ package constants
 
 import "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 
+// TODO: clean up these constants
 const (
 	// Manager name constants
 	ContainerManagerName         = logger.ComponentContainerManager + "_" + DefaultManagerName
 	BenthosManagerName           = logger.ComponentBenthosManager + "_" + DefaultManagerName
 	DataflowcomponentManagerName = logger.ComponentDataFlowComponentManager + DefaultManagerName
+	AgentManagerName             = logger.ComponentAgentManager + "_" + DefaultManagerName
+	RedpandaManagerName          = logger.ComponentRedpandaManager + DefaultManagerName
 
 	// Instance name constants
-	CoreInstanceName = "Core"
+	CoreInstanceName     = "Core"
+	RedpandaInstanceName = "redpanda"
+	AgentInstanceName    = "agent"
 )

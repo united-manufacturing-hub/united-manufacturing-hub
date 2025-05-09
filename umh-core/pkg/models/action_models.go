@@ -180,6 +180,8 @@ const (
 	GetConfiguration ActionType = "get-configuration"
 	// UpdateConfiguration represents the action type for updating a configuration
 	UpdateConfiguration ActionType = "update-configuration"
+	// GetLogs represents the action type for retrieving logs
+	GetLogs ActionType = "get-logs"
 )
 
 // TestNetworkConnectionPayload contains the necessary fields for executing a TestNetworkConnection action.
@@ -501,4 +503,28 @@ type CommonDataFlowComponentPipelineConfigProcessors map[string]struct {
 type CommonDataFlowComponentRawYamlConfig struct {
 	// This is the raw yaml data
 	Data string `json:"data" yaml:"data" mapstructure:"data"`
+}
+
+type LogType string
+
+const (
+	AgentLogType      LogType = "agent"
+	DFCLogType        LogType = "dfc"
+	RedpandaLogType   LogType = "redpanda"
+	TagBrowserLogType LogType = "tag-browser"
+)
+
+// GetLogsRequest contains the necessary fields for executing a `get-logs` action.
+type GetLogsRequest struct {
+	// StartTime represents the time frame to start the logs from in unix milliseconds
+	StartTime int64 `json:"startTime"`
+	// Type represents the type of the logs to retrieve
+	Type LogType `json:"type"`
+	// UUID represents the identifier of the entity to retrieve the logs for.
+	// This is optional and only used for DFC logs.
+	UUID string `json:"uuid"`
+}
+
+type GetLogsResponse struct {
+	Logs []string `json:"logs"`
 }
