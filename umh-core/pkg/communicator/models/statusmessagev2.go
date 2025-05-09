@@ -43,16 +43,16 @@ type Core struct {
 	Agent     Agent     `json:"agent"`
 	Container Container `json:"container"`
 	// List of deployed DFCs. Different DFC types can have different properties
-	Dfcs           []Dfc                  `json:"dfcs"`
-	EventsTable    map[string]EventsTable `json:"eventsTable,omitempty"`
-	Latency        Latency                `json:"latency"`
-	Redpanda       Redpanda               `json:"redpanda"`
-	ReleaseChannel string                 `json:"releaseChannel"`
+	Dfcs           []Dfc      `json:"dfcs"`
+	EventsTable    EventTable `json:"eventsTable,omitempty"`
+	Latency        Latency    `json:"latency"`
+	Redpanda       Redpanda   `json:"redpanda"`
+	ReleaseChannel string     `json:"releaseChannel"`
 	// List of supported feature keywords. If a feature is supported, its corresponding keyword
 	// will be included in the array.
-	SupportedFeatures []string            `json:"supportedFeatures"`
-	UnsTable          map[string]UnsTable `json:"unsTable,omitempty"`
-	Version           string              `json:"version"`
+	SupportedFeatures []string `json:"supportedFeatures"`
+	UnsTable          UnsTable `json:"unsTable,omitempty"`
+	Version           string   `json:"version"`
 }
 
 type Agent struct {
