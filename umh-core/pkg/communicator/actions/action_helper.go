@@ -50,7 +50,8 @@ func SendLimitedLogs(
 	userEmail string,
 	actionUUID uuid.UUID,
 	outboundChannel chan *models.UMHMessage,
-	actionType models.ActionType) []s6.LogEntry {
+	actionType models.ActionType,
+	remainingSeconds int) []s6.LogEntry {
 
 	if len(logs) <= len(lastLogs) {
 		return lastLogs
@@ -64,18 +65,35 @@ func SendLimitedLogs(
 	end := min(len(logsToSend), maxLogsToSend)
 
 	for _, log := range logsToSend[:end] {
+		stateMessage := RemainingPrefixSec(remainingSeconds) + "received log line: " + log.Content
 		SendActionReply(instanceUUID, userEmail, actionUUID, models.ActionExecuting,
-			fmt.Sprintf("[Benthos Log] %s", log.Content),
+			stateMessage,
 			outboundChannel, actionType)
 	}
 
 	// Send message about remaining logs if any
 	if remainingLogs > 0 {
+		stateMessage := RemainingPrefixSec(remainingSeconds) + fmt.Sprintf("%d remaining logs not displayed", remainingLogs)
 		SendActionReply(instanceUUID, userEmail, actionUUID, models.ActionExecuting,
-			fmt.Sprintf("[Benthos Log] %d remaining logs not displayed", remainingLogs),
+			stateMessage,
 			outboundChannel, actionType)
 	}
 
 	// Return updated lastLogs to include all logs we've seen, even if not all were sent
 	return logs
+}
+
+// RemainingPrefixSec formats d (assumed ≤20 s) as "[left: NN s] ".
+func RemainingPrefixSec(dSeconds int) string {
+	return fmt.Sprintf("[left: %02d s] ", dSeconds) // fixed 15-rune prefix
+}
+
+// High-level label for one-off (non-polling) messages.
+//
+//	action = "deploy", "edit" …
+//	name   = human name of the component
+//
+// → "deploy(foo): "
+func Label(action, name string) string {
+	return fmt.Sprintf("%s(%s): ", action, name)
 }
