@@ -227,7 +227,9 @@ func (a *GetLogsAction) Execute() (interface{}, map[string]interface{}, error) {
 		res.Logs = mapS6LogsToSlice(observedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosLogs, reqStartTime)
 	case models.TagBrowserLogType:
 		// TODO: Implement tag browser logs
-		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, "Tag browser logs are not implemented yet", a.outboundChannel, models.GetLogs)
+		err := errors.New("tag-browser logs are not implemented yet")
+		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, err.Error(), a.outboundChannel, models.GetLogs)
+		return nil, nil, err
 	}
 
 	return res, nil, nil
