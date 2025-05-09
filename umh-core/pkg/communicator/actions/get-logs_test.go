@@ -47,6 +47,7 @@ var _ = Describe("GetLogsAction", func() {
 		dfcName         string
 		dfcUUID         uuid.UUID
 		snapshotManager *fsm.SnapshotManager
+		mockedLogs      []s6.LogEntry
 	)
 
 	BeforeEach(func() {
@@ -59,7 +60,7 @@ var _ = Describe("GetLogsAction", func() {
 		snapshotManager = fsm.NewSnapshotManager()
 
 		// Mocked logs contain logs from 6h ago and 2h ago
-		mockedLogs := []s6.LogEntry{
+		mockedLogs = []s6.LogEntry{
 			{
 				Timestamp: time.Now().Add(-6 * time.Hour).UTC(),
 				Content:   "test log",
@@ -268,9 +269,9 @@ var _ = Describe("GetLogsAction", func() {
 			Expect(err).To(BeNil())
 			Expect(result).To(Equal(models.GetLogsResponse{Logs: expectedLogs}))
 		},
-			Entry("dfc", models.DFCLogType, []string{"test log", "test log 2"}),
-			Entry("agent", models.AgentLogType, []string{"test log", "test log 2"}),
-			Entry("redpdanda", models.RedpandaLogType, []string{"test log", "test log 2"}))
+			Entry("dfc", models.DFCLogType, mockedLogs),
+			Entry("agent", models.AgentLogType, mockedLogs),
+			Entry("redpdanda", models.RedpandaLogType, mockedLogs))
 
 		It("should return logs for the given start time", func() {
 			// Start time of 3h ago should only yield the mocked log from 2h ago
