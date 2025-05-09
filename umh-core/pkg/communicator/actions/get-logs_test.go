@@ -55,13 +55,14 @@ var _ = Describe("GetLogsAction", func() {
 
 		snapshotManager = fsm.NewSnapshotManager()
 
+		// Mocked logs contain logs from 6h ago and 2h ago
 		mockedLogs := []s6.LogEntry{
 			{
-				Timestamp: time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+				Timestamp: time.Now().Add(-6 * time.Hour).UTC(),
 				Content:   "test log",
 			},
 			{
-				Timestamp: time.Date(2024, 1, 1, 0, 0, 1, 0, time.UTC),
+				Timestamp: time.Now().Add(-2 * time.Hour).UTC(),
 				Content:   "test log 2",
 			},
 		}
@@ -134,6 +135,20 @@ var _ = Describe("GetLogsAction", func() {
 	})
 
 	Describe("Validate", func() {
+		It("should validate a valid payload", func() {
+			payload := map[string]interface{}{
+				"uuid":      dfcUUID.String(),
+				"type":      models.DFCLogType,
+				"startTime": time.Now().Add(-24 * time.Hour).UnixMilli(),
+			}
+
+			err := action.Parse(payload)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = action.Validate()
+			Expect(err).To(BeNil())
+		})
+
 		It("should return an error if the payload is missing a required field", func() {
 			// Missing log type
 			payload := map[string]interface{}{
@@ -202,5 +217,23 @@ var _ = Describe("GetLogsAction", func() {
 		})
 	})
 
-	// Describe("Execute", func() {})
+	Describe("Execute", func() {
+		It("should return logs for a DFC", func() {
+			payload := map[string]interface{}{
+				"uuid":      dfcUUID.String(),
+				"type":      models.DFCLogType,
+				"startTime": time.Now().Add(-24 * time.Hour).UnixMilli(),
+			}
+
+			err := action.Parse(payload)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = action.Validate()
+			Expect(err).To(BeNil())
+
+			result, _, err := action.Execute()
+			Expect(err).To(BeNil())
+			Expect(result).To(Equal(models.GetLogsResponse{Logs: []string{"test log", "test log 2"}}))
+		})
+	})
 })
