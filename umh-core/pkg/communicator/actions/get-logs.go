@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/agent_monitor"
@@ -40,6 +41,7 @@ type GetLogsAction struct {
 
 	// ─── Plumbing ────────────────────────────────────────────────────────────
 	outboundChannel chan *models.UMHMessage
+	configManager   config.ConfigManager // Unused, but kept for symmetry with other actions
 
 	// ─── Runtime observation ────────────────────────────────────────────────
 	systemSnapshotManager *fsm.SnapshotManager
@@ -54,13 +56,14 @@ type GetLogsAction struct {
 // NewGetLogsAction creates a new GetLogsAction with the provided parameters.
 // This constructor is primarily used for testing to enable dependency injection.
 // Caller needs to invoke Parse and Validate before calling Execute.
-func NewGetLogsAction(userEmail string, actionUUID uuid.UUID, instanceUUID uuid.UUID, outboundChannel chan *models.UMHMessage, systemSnapshotManager *fsm.SnapshotManager) *GetLogsAction {
+func NewGetLogsAction(userEmail string, actionUUID uuid.UUID, instanceUUID uuid.UUID, outboundChannel chan *models.UMHMessage, systemSnapshotManager *fsm.SnapshotManager, configManager config.ConfigManager) *GetLogsAction {
 	return &GetLogsAction{
 		userEmail:             userEmail,
 		actionUUID:            actionUUID,
 		instanceUUID:          instanceUUID,
 		outboundChannel:       outboundChannel,
 		systemSnapshotManager: systemSnapshotManager,
+		configManager:         configManager,
 		actionLogger:          logger.For(logger.ComponentCommunicator),
 	}
 }
