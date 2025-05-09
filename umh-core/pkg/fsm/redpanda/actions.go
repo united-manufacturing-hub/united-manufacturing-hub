@@ -396,6 +396,37 @@ func (r *RedpandaInstance) AnyRestartsSinceCreation() (bool, string) {
 	return true, fmt.Sprintf("restarted %d times", len(r.ObservedState.ServiceInfo.S6ObservedState.ServiceInfo.ExitHistory))
 }
 
+// AnyUnexpectedRestartsInTheLastHour reports true when the S6 exit history contains at
+// least one entry, indicating Redpanda has restarted in the last hour using an exit code other than 0
+//
+// It returns:
+//
+//	restarted – true when restarts were observed, false otherwise.
+//	reason    – empty when restarted is false; otherwise the restart count.
+func (r *RedpandaInstance) AnyUnexpectedRestartsInTheLastHour() (bool, string) {
+	// We can analyse the S6 ExitHistory to determine if the service has restarted in the last hour
+	// We need to check if any of the exit codes are 0 (which means a restart)
+	// and if the time of the restart is within the last hour
+	if len(r.ObservedState.ServiceInfo.S6ObservedState.ServiceInfo.ExitHistory) == 0 {
+		return false, ""
+	}
+
+	// Check if any of the exit codes are 0 (which means a restart)
+	// and if the time of the restart is within the last hour
+	var restarts []int
+	for _, exitCode := range r.ObservedState.ServiceInfo.S6ObservedState.ServiceInfo.ExitHistory {
+		if exitCode.ExitCode != 0 && exitCode.Timestamp.After(time.Now().Add(-1*time.Hour)) {
+			restarts = append(restarts, exitCode.ExitCode)
+		}
+	}
+
+	if len(restarts) > 0 {
+		return true, fmt.Sprintf("unexpected restarts within the last hour: %v", restarts)
+	}
+
+	return false, ""
+}
+
 // IsRedpandaRunningWithoutErrors reports true when Redpanda has
 // been up for at least ten seconds, recent logs are clean, and metrics show no
 // errors.
@@ -456,7 +487,7 @@ func (r *RedpandaInstance) IsRedpandaDegraded(currentTime time.Time, logWindow t
 	s6Running, reasonS6Running := r.IsRedpandaS6Running()
 	healthchecksPassed, reasonHealthchecksPassed := r.IsRedpandaHealthchecksPassed()
 	runningForSomeTimeWithoutErrors, reasonRunningForSomeTimeWithoutErrors := r.IsRedpandaRunningWithoutErrors(currentTime, logWindow)
-
+	unexpectedRestarts, reasonUnexpectedRestarts := r.AnyUnexpectedRestartsInTheLastHour()
 	if !s6Running {
 		return true, reasonS6Running
 	}
@@ -465,6 +496,9 @@ func (r *RedpandaInstance) IsRedpandaDegraded(currentTime time.Time, logWindow t
 	}
 	if !runningForSomeTimeWithoutErrors {
 		return true, reasonRunningForSomeTimeWithoutErrors
+	}
+	if unexpectedRestarts {
+		return true, reasonUnexpectedRestarts
 	}
 	return false, ""
 }
