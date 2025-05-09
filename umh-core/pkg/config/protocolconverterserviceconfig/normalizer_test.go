@@ -50,11 +50,6 @@ var _ = Describe("ProtocolConverter YAML Normalizer", func() {
 								"topic": "test/topic",
 							},
 						},
-						Output: map[string]any{
-							"kafka": map[string]any{
-								"topic": "test-output",
-							},
-						},
 						Pipeline: map[string]any{
 							"processors": []any{
 								map[string]any{
@@ -75,9 +70,12 @@ var _ = Describe("ProtocolConverter YAML Normalizer", func() {
 			inputMqtt := config.DataflowComponentServiceConfig.BenthosConfig.Input["mqtt"].(map[string]any)
 			Expect(inputMqtt["topic"]).To(Equal("test/topic"))
 
-			// Check output preserved
-			outputKafka := config.DataflowComponentServiceConfig.BenthosConfig.Output["kafka"].(map[string]any)
-			Expect(outputKafka["topic"]).To(Equal("test-output"))
+			// The output should be automatically set to uns
+			outputKafka := config.DataflowComponentServiceConfig.BenthosConfig.Output
+			// Check that "uns" is a map[string]any{}
+			unsValue, ok := outputKafka["uns"].(map[string]any)
+			Expect(ok).To(BeTrue(), "uns value should be a map[string]any")
+			Expect(unsValue).To(BeEmpty(), "uns map should be empty")
 
 			// Check pipeline processors preserved
 			processors := config.DataflowComponentServiceConfig.BenthosConfig.Pipeline["processors"].([]any)
@@ -105,7 +103,7 @@ var _ = Describe("ProtocolConverter YAML Normalizer", func() {
 			normalizer.NormalizeConfig(config)
 
 			Expect(config.DataflowComponentServiceConfig.BenthosConfig.Input).NotTo(BeNil())
-			Expect(config.DataflowComponentServiceConfig.BenthosConfig.Output).NotTo(BeNil())
+			Expect(config.DataflowComponentServiceConfig.BenthosConfig.Output).NotTo(BeNil()) // this should be set to `uns` plugin automatically
 			Expect(config.DataflowComponentServiceConfig.BenthosConfig.Pipeline).NotTo(BeNil())
 
 			// Buffer should have the none buffer set
