@@ -62,10 +62,7 @@ func SendLimitedLogs(
 	remainingLogs := len(logsToSend) - maxLogsToSend
 
 	// Send at most maxLogsToSend logs
-	end := len(logsToSend)
-	if end > maxLogsToSend {
-		end = maxLogsToSend
-	}
+	end := min(len(logsToSend), maxLogsToSend)
 
 	for _, log := range logsToSend[:end] {
 		stateMessage := RemainingPrefixSec(remainingSeconds) + "received log line: " + log.Content
