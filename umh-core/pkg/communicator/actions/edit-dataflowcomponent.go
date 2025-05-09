@@ -567,7 +567,7 @@ func (a *EditDataflowComponentAction) waitForComponentToBeActive() error {
 						// running the comparison.
 
 						if !CompareSnapshotWithDesiredConfig(dfcSnapshot, a.dfc) {
-
+							stateMessage := RemainingPrefixSec(remainingSeconds) + "config not yet applied"
 							SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
 								stateMessage, a.outboundChannel, models.EditDataFlowComponent)
 							continue
