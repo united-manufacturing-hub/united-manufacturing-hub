@@ -19,13 +19,10 @@ agent:
     # authToken is provided via AUTH_TOKEN environment variable
   releaseChannel: stable
   location:
-      0: Example Location 0
-      1: Example Location 1
-      2: Example Location 2
-      3: Example Location 3
-      4: Example Location 4
-      5: Example Location 5
-      6: Example Location 6
+      0: test-enterprise
+      1: test-site
+      2: test-area
+      3: test-line
 
 dataFlow:
   - name: hello-world-dfc

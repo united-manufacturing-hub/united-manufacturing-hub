@@ -551,11 +551,11 @@ func (s *NmapService) ReconcileManager(ctx context.Context, services serviceregi
 }
 
 // ServiceExists checks if a nmap service exists
-func (s *NmapService) ServiceExists(ctx context.Context, services serviceregistry.Provider, nmapName string) bool {
+func (s *NmapService) ServiceExists(ctx context.Context, filesystemService filesystem.Service, nmapName string) bool {
 	s6ServiceName := s.getS6ServiceName(nmapName)
 	s6ServicePath := filepath.Join(constants.S6BaseDir, s6ServiceName)
 
-	exists, err := s.s6Service.ServiceExists(ctx, s6ServicePath, services.GetFileSystem())
+	exists, err := s.s6Service.ServiceExists(ctx, s6ServicePath, filesystemService)
 	if err != nil {
 		return false
 	}
@@ -569,10 +569,10 @@ func (s *NmapService) ServiceExists(ctx context.Context, services serviceregistr
 // Expects nmapName (e.g. "myservice") as defined in the UMH config
 func (s *NmapService) ForceRemoveNmap(
 	ctx context.Context,
-	services serviceregistry.Provider,
+	filesystemService filesystem.Service,
 	nmapName string,
 ) error {
 	s6ServiceName := s.getS6ServiceName(nmapName)
 	s6ServicePath := filepath.Join(constants.S6BaseDir, s6ServiceName)
-	return s.s6Service.ForceRemove(ctx, s6ServicePath, services.GetFileSystem())
+	return s.s6Service.ForceRemove(ctx, s6ServicePath, filesystemService)
 }

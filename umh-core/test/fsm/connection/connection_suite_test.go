@@ -12,13 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package constants
+package connection_test
 
-import "time"
+import (
+	"testing"
 
-const (
-	// ConnectionUpdateObservedStateTimeout is the timeout for updating the observed state
-	ConnectionUpdateObservedStateTimeout = 5 * time.Millisecond
-	// The amount of recent states to keep for flicker detection, if there were at least 2 states in the last 5 states that were differing, the connection is considered degraded
-	MaxRecentStates = 5
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 )
+
+func TestConnection(t *testing.T) {
+	RegisterFailHandler(Fail)
+	RunSpecs(t, "Connection Test Suite")
+}
