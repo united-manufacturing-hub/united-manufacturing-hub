@@ -71,7 +71,7 @@ type IRedpandaService interface {
 	// It returns:
 	//   ok    – true when logs look clean, false otherwise.
 	//   entry – zero value when ok is true; otherwise the first offending log line.
-	IsLogsFine(logs []s6service.LogEntry, currentTime time.Time, logWindow time.Duration) (bool, s6service.LogEntry)
+	IsLogsFine(logs []s6service.LogEntry, currentTime time.Time, logWindow time.Duration, transitionToRunningTime time.Time) (bool, s6service.LogEntry)
 	// IsMetricsErrorFree reports true when Redpanda metrics show no alerts or
 	// cluster‑level errors.
 	//
@@ -860,7 +860,7 @@ func (s *RedpandaService) ReconcileManager(ctx context.Context, services service
 //
 //	ok    – true when logs look clean, false otherwise.
 //	entry – zero value when ok is true; otherwise the first offending log line.
-func (s *RedpandaService) IsLogsFine(logs []s6service.LogEntry, currentTime time.Time, logWindow time.Duration) (bool, s6service.LogEntry) {
+func (s *RedpandaService) IsLogsFine(logs []s6service.LogEntry, currentTime time.Time, logWindow time.Duration, transitionToRunningTime time.Time) (bool, s6service.LogEntry) {
 	// Check logs within the time window
 	windowStart := currentTime.Add(-logWindow)
 
@@ -874,7 +874,7 @@ func (s *RedpandaService) IsLogsFine(logs []s6service.LogEntry, currentTime time
 
 		// Check if the log contains failure, by applying all failure detectors (see redpanda_log_failures.go)
 		for _, failureDetector := range RedpandaFailures {
-			if failureDetector.IsFailure(log.Content) {
+			if failureDetector.IsFailure(log, transitionToRunningTime) {
 				return false, log
 			}
 		}

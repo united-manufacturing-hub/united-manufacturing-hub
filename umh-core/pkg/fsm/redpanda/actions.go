@@ -428,7 +428,7 @@ func (r *RedpandaInstance) IsRedpandaRunningWithoutErrors(currentTime time.Time,
 //	ok     – true when logs look clean, false otherwise.
 //	reason – empty when ok is true; otherwise the first offending log line.
 func (r *RedpandaInstance) IsRedpandaLogsFine(currentTime time.Time, logWindow time.Duration) (bool, string) {
-	logsFine, logEntry := r.service.IsLogsFine(r.ObservedState.ServiceInfo.RedpandaStatus.Logs, currentTime, logWindow)
+	logsFine, logEntry := r.service.IsLogsFine(r.ObservedState.ServiceInfo.RedpandaStatus.Logs, currentTime, logWindow, r.transitionToRunningTime)
 	if !logsFine {
 		return false, fmt.Sprintf("log issue: [%s] %s", logEntry.Timestamp.Format(time.RFC3339), logEntry.Content)
 	}
