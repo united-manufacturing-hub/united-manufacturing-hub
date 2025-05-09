@@ -86,8 +86,10 @@ type ExitEvent struct {
 
 // LogEntry represents a parsed log entry from the S6 logs
 type LogEntry struct {
+	// Timestamp in UTC time
 	Timestamp time.Time `json:"timestamp"`
-	Content   string    `json:"content"`
+	// Content of the log entry
+	Content string `json:"content"`
 }
 
 // Service defines the interface for interacting with S6 services

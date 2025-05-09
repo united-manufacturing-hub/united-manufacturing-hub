@@ -63,32 +63,6 @@ func NewStatusCollector(
 	return collector
 }
 
-// findInstance finds an instance in the system snapshot
-// this is useful if we want to fetch the data from a manager, that always has one instance (e.g., core, agent, container, redpanda)
-// returns nil if the instance is not found
-func findInstance(
-	snap fsm.SystemSnapshot,
-	managerName, instanceName string,
-) (*fsm.FSMInstanceSnapshot, bool) {
-
-	mgr, ok := findManager(snap, managerName)
-	if !ok || mgr == nil {
-		return nil, false
-	}
-	inst, ok := mgr.GetInstances()[instanceName]
-	return inst, ok
-}
-
-// findManager finds a manager in the system snapshot
-// returns nil if the manager is not found
-func findManager(
-	snap fsm.SystemSnapshot,
-	managerName string,
-) (fsm.ManagerSnapshot, bool) {
-	mgr, ok := snap.Managers[managerName]
-	return mgr, ok
-}
-
 func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 
 	// Step 1: Get the snapshot
@@ -103,7 +77,7 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 
 	// --- container (only one instance) ---------------------------------------------------------
 	var containerData models.Container
-	contInst, ok := findInstance(snapshot, containerManagerName, coreInstanceName)
+	contInst, ok := fsm.FindInstance(snapshot, containerManagerName, coreInstanceName)
 	if ok {
 		containerData = ContainerFromSnapshot(contInst, s.logger)
 	}
@@ -113,21 +87,21 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 	var agentDataReleaseChannel string
 	var agentDataCurrentVersion string
 	var agentDataVersions []models.Version
-	agInst, ok := findInstance(snapshot, agentManagerName, agentInstanceName)
+	agInst, ok := fsm.FindInstance(snapshot, agentManagerName, agentInstanceName)
 	if ok {
 		agentData, agentDataReleaseChannel, agentDataCurrentVersion, agentDataVersions = AgentFromSnapshot(agInst, s.logger)
 	}
 
 	// --- redpanda (only one instance) -------------------------------------------------------------
 	var redpandaData models.Redpanda
-	rpInst, ok := findInstance(snapshot, redpandaManagerName, redpandaInstanceName)
+	rpInst, ok := fsm.FindInstance(snapshot, redpandaManagerName, redpandaInstanceName)
 	if ok {
 		redpandaData = RedpandaFromSnapshot(rpInst, s.logger)
 	}
 
 	// --- dfc (multiple instances) ----------------------	---------------------------------------
 	var dfcData []models.Dfc
-	dfcMgr, ok := findManager(snapshot, constants.DataflowcomponentManagerName)
+	dfcMgr, ok := fsm.FindManager(snapshot, constants.DataflowcomponentManagerName)
 	if ok {
 		dfcData = DfcsFromSnapshot(dfcMgr, s.logger)
 	}
@@ -160,6 +134,7 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 					"action-get-data-flow-component",
 					"action-delete-data-flow-component",
 					"action-edit-data-flow-component",
+					"action-get-logs",
 				},
 			},
 		},
