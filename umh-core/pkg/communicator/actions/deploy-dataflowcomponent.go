@@ -359,7 +359,7 @@ func (a *DeployDataflowComponentAction) Execute() (interface{}, map[string]inter
 	a.actionLogger.Info("Executing DeployDataflowComponent action")
 
 	// Send confirmation that action is starting
-	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionConfirmed, "Starting deployment of dataflow component: "+a.name, a.outboundChannel, models.DeployDataFlowComponent)
+	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionConfirmed, Label("deploy", a.name)+"starting", a.outboundChannel, models.DeployDataFlowComponent)
 
 	// Parse the input and output configurations
 	benthosInput := make(map[string]interface{})
@@ -369,7 +369,7 @@ func (a *DeployDataflowComponentAction) Execute() (interface{}, map[string]inter
 	// First try to use the Input data
 	err := yaml.Unmarshal([]byte(a.payload.Inputs.Data), &benthosInput)
 	if err != nil {
-		errMsg := fmt.Sprintf("Failed to parse input data: %s", err.Error())
+		errMsg := Label("deploy", a.name) + fmt.Sprintf("failed to parse input data: %s", err.Error())
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errMsg, a.outboundChannel, models.DeployDataFlowComponent)
 		return nil, nil, fmt.Errorf("%s", errMsg)
 	}
@@ -377,7 +377,7 @@ func (a *DeployDataflowComponentAction) Execute() (interface{}, map[string]inter
 	//parse the output data
 	err = yaml.Unmarshal([]byte(a.payload.Outputs.Data), &benthosOutput)
 	if err != nil {
-		errMsg := fmt.Sprintf("Failed to parse output data: %s", err.Error())
+		errMsg := Label("deploy", a.name) + fmt.Sprintf("failed to parse output data: %s", err.Error())
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errMsg, a.outboundChannel, models.DeployDataFlowComponent)
 		return nil, nil, fmt.Errorf("%s", errMsg)
 	}
@@ -385,7 +385,7 @@ func (a *DeployDataflowComponentAction) Execute() (interface{}, map[string]inter
 	//parse the inject data
 	err = yaml.Unmarshal([]byte(a.payload.Inject.Data), &benthosYamlInject)
 	if err != nil {
-		errMsg := fmt.Sprintf("Failed to parse inject data: %s", err.Error())
+		errMsg := Label("deploy", a.name) + fmt.Sprintf("failed to parse inject data: %s", err.Error())
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errMsg, a.outboundChannel, models.DeployDataFlowComponent)
 		return nil, nil, fmt.Errorf("%s", errMsg)
 	}
@@ -442,7 +442,7 @@ func (a *DeployDataflowComponentAction) Execute() (interface{}, map[string]inter
 			var procConfig map[string]interface{}
 			err := yaml.Unmarshal([]byte(processor.Data), &procConfig)
 			if err != nil {
-				errMsg := fmt.Sprintf("Failed to parse pipeline processor %s: %s", processorName, err.Error())
+				errMsg := Label("deploy", a.name) + fmt.Sprintf("failed to parse pipeline processor %s: %s", processorName, err.Error())
 				SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errMsg, a.outboundChannel, models.DeployDataFlowComponent)
 				return nil, nil, fmt.Errorf("%s", errMsg)
 			}
@@ -485,13 +485,13 @@ func (a *DeployDataflowComponentAction) Execute() (interface{}, map[string]inter
 		},
 	}
 
-	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Adding dataflow component '"+a.name+"' to configuration...", a.outboundChannel, models.DeployDataFlowComponent)
+	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, Label("deploy", a.name)+"adding to configuration", a.outboundChannel, models.DeployDataFlowComponent)
 	// Update the location in the configuration
 	ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
 	defer cancel()
 	err = a.configManager.AtomicAddDataflowcomponent(ctx, dfc)
 	if err != nil {
-		errorMsg := fmt.Sprintf("Failed to add dataflow component: %v", err)
+		errorMsg := Label("deploy", a.name) + fmt.Sprintf("failed to add dataflow component: %v.", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errorMsg, a.outboundChannel, models.DeployDataFlowComponent)
 		return nil, nil, fmt.Errorf("%s", errorMsg)
 	}
@@ -499,12 +499,12 @@ func (a *DeployDataflowComponentAction) Execute() (interface{}, map[string]inter
 	// check against observedState as well
 	if a.systemSnapshotManager != nil { // skipping this for the unit tests
 		if a.ignoreHealthCheck {
-			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Configuration updated amnd ignoring health check. Please check the dataflow component logs for any errors.", a.outboundChannel, models.EditDataFlowComponent)
+			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, Label("deploy", a.name)+"configuration updated; but ignoring the health check", a.outboundChannel, models.EditDataFlowComponent)
 		} else {
-			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Configuration updated. Waiting for dataflow component '"+a.name+"' to start and become active...", a.outboundChannel, models.DeployDataFlowComponent)
+			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, Label("deploy", a.name)+"configuration updated; waiting to become active", a.outboundChannel, models.DeployDataFlowComponent)
 			err = a.waitForComponentToBeActive()
 			if err != nil {
-				errorMsg := fmt.Sprintf("Failed to wait for dataflow component to be active: %v", err)
+				errorMsg := Label("deploy", a.name) + fmt.Sprintf("failed to wait for dataflow component to be active: %v", err)
 				SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errorMsg, a.outboundChannel, models.DeployDataFlowComponent)
 				return nil, nil, fmt.Errorf("%s", errorMsg)
 			}
@@ -512,7 +512,7 @@ func (a *DeployDataflowComponentAction) Execute() (interface{}, map[string]inter
 	}
 
 	// return success message, but do not send it as this is done by the caller
-	successMsg := fmt.Sprintf("Successfully deployed dataflow component: %s", a.name)
+	successMsg := Label("deploy", a.name) + "success"
 
 	return successMsg, nil, nil
 }
@@ -555,10 +555,14 @@ func (a *DeployDataflowComponentAction) waitForComponentToBeActive() error {
 	startTime := time.Now()
 	timeoutDuration := constants.DataflowComponentWaitForActiveTimeout
 	for {
+		elapsed := time.Since(startTime)
+		remaining := timeoutDuration - elapsed
+		remainingSeconds := int(remaining.Seconds())
+
 		select {
 		case <-timeout:
-			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
-				"Timeout reached. Dataflow component did not become active in time. Removing component...",
+			stateMessage := Label("deploy", a.name) + "timeout reached. it did not become active in time. removing"
+			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, stateMessage,
 				a.outboundChannel, models.DeployDataFlowComponent)
 			ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
 			defer cancel()
@@ -569,9 +573,6 @@ func (a *DeployDataflowComponentAction) waitForComponentToBeActive() error {
 			return fmt.Errorf("dataflow component '%s' was removed because it did not become active within the timeout period", a.name)
 
 		case <-ticker.C:
-			elapsed := time.Since(startTime)
-			remaining := timeoutDuration - elapsed
-			remainingSeconds := int(remaining.Seconds())
 
 			// the snapshot manager holds the latest system snapshot which is asynchronously updated by the other goroutines
 			// we need to get a deep copy of it to prevent race conditions
@@ -588,38 +589,40 @@ func (a *DeployDataflowComponentAction) waitForComponentToBeActive() error {
 					found = true
 					dfcSnapshot, ok := instance.LastObservedState.(*dataflowcomponent.DataflowComponentObservedStateSnapshot)
 					if !ok {
-						SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
-							fmt.Sprintf("Waiting for dataflow component state information (%ds remaining)...",
-								remainingSeconds), a.outboundChannel, models.DeployDataFlowComponent)
+						stateMessage := RemainingPrefixSec(remainingSeconds) + "waiting for state info"
+						SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, stateMessage,
+							a.outboundChannel, models.DeployDataFlowComponent)
 						continue
 					}
 					if instance.CurrentState == "active" || instance.CurrentState == "idle" {
-						SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
-							fmt.Sprintf("Dataflow component is in state '%s' with correct configuration. Deployment complete.", instance.CurrentState),
+						stateMessage := RemainingPrefixSec(remainingSeconds) + fmt.Sprintf("completed. is in state '%s' with correct configuration", instance.CurrentState)
+						SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, stateMessage,
 							a.outboundChannel, models.DeployDataFlowComponent)
 						return nil
 					} else {
-						stateMsg := fmt.Sprintf("Dataflow component is in state '%s' (waiting for 'active' or 'idle', %ds remaining)...",
-							instance.CurrentState, remainingSeconds)
-						SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, stateMsg, a.outboundChannel, models.DeployDataFlowComponent)
+						// currentStateReason contains more information on why the DFC is in its current state
+						currentStateReason := dfcSnapshot.ServiceInfo.StatusReason
+
+						stateMessage := RemainingPrefixSec(remainingSeconds) + currentStateReason
+						SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, stateMessage, a.outboundChannel, models.DeployDataFlowComponent)
 						// send the benthos logs to the user
 						logs = dfcSnapshot.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosLogs
 						// only send the logs that have not been sent yet
 						if len(logs) > len(lastLogs) {
-							lastLogs = SendLimitedLogs(logs, lastLogs, a.instanceUUID, a.userEmail, a.actionUUID, a.outboundChannel, models.DeployDataFlowComponent)
+							lastLogs = SendLimitedLogs(logs, lastLogs, a.instanceUUID, a.userEmail, a.actionUUID, a.outboundChannel, models.DeployDataFlowComponent, remainingSeconds)
 						}
 					}
 				}
 				if !found {
+					stateMessage := RemainingPrefixSec(remainingSeconds) + "waiting for it to appear in the config"
 					SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
-						fmt.Sprintf("Waiting for dataflow component to appear in system (%ds remaining)...",
-							remainingSeconds), a.outboundChannel, models.DeployDataFlowComponent)
+						stateMessage, a.outboundChannel, models.DeployDataFlowComponent)
 				}
 
 			} else {
+				stateMessage := RemainingPrefixSec(remainingSeconds) + "waiting for manager to initialise"
 				SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
-					fmt.Sprintf("Waiting for dataflow component manager to initialize (%ds remaining)...",
-						remainingSeconds), a.outboundChannel, models.DeployDataFlowComponent)
+					stateMessage, a.outboundChannel, models.DeployDataFlowComponent)
 			}
 		}
 	}
