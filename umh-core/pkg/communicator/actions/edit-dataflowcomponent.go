@@ -551,8 +551,22 @@ func (a *EditDataflowComponentAction) waitForComponentToBeActive() error {
 								stateMessage, a.outboundChannel, models.EditDataFlowComponent)
 							continue
 						}
-						// check if the config is correct
-						if !dataflowcomponentserviceconfig.NewComparator().ConfigsEqual(&dfcSnapshot.Config, &a.dfc.DataFlowComponentServiceConfig) {
+						// Verify that the Benthos instance has applied the desired configuration.
+						// We compare the desired DataFlowComponentConfig with the *observed* Benthos
+						// configuration contained in
+						// dfcSnapshot.ServiceInfo.BenthosObservedState.ObservedBenthosServiceConfig.
+						//
+						// Do NOT use instance.LastObservedState.Config: the reconcile loop sets
+						// that field to the desired config as soon as it writes to the store,
+						// potentially some ticks before Benthos has actually restarted. Relying on
+						// it here would let the action declare success while the container is
+						// still starting up.
+						//
+						// ObservedBenthosServiceConfig and DataflowComponentServiceConfig differ in
+						// type, so we convert the observed struct to the DFC representation before
+						// running the comparison.
+
+						if !CompareSnapshotWithDesiredConfig(dfcSnapshot, a.dfc) {
 							stateMessage := RemainingPrefixSec(remainingSeconds) + "config not yet applied"
 							SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
 								stateMessage, a.outboundChannel, models.EditDataFlowComponent)
@@ -594,4 +608,22 @@ func (a *EditDataflowComponentAction) waitForComponentToBeActive() error {
 			}
 		}
 	}
+}
+
+func CompareSnapshotWithDesiredConfig(dfcSnapshot *dataflowcomponent.DataflowComponentObservedStateSnapshot, desiredConfig config.DataFlowComponentConfig) bool {
+	if dfcSnapshot == nil || dfcSnapshot.ServiceInfo.BenthosObservedState.ObservedBenthosServiceConfig.Input == nil {
+		return false
+	}
+	observedConfig := dfcSnapshot.ServiceInfo.BenthosObservedState.ObservedBenthosServiceConfig
+	observedConfigInDfcConfig := dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+		BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
+			Input:              observedConfig.Input,
+			Pipeline:           observedConfig.Pipeline,
+			Output:             observedConfig.Output,
+			CacheResources:     observedConfig.CacheResources,
+			RateLimitResources: observedConfig.RateLimitResources,
+			Buffer:             observedConfig.Buffer,
+		},
+	}
+	return dataflowcomponentserviceconfig.NewComparator().ConfigsEqual(&observedConfigInDfcConfig, &desiredConfig.DataFlowComponentServiceConfig)
 }
