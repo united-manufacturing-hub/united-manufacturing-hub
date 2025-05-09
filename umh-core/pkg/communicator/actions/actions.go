@@ -125,6 +125,7 @@ func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePay
 			actionUUID:            payload.ActionUUID,
 			instanceUUID:          instanceUUID,
 			outboundChannel:       outboundChannel,
+			configManager:         configManager,
 			actionLogger:          log,
 			systemSnapshotManager: systemSnapshotManager,
 		}
