@@ -71,7 +71,7 @@ func NewGetLogsAction(userEmail string, actionUUID uuid.UUID, instanceUUID uuid.
 func (a *GetLogsAction) Parse(payload interface{}) (err error) {
 	a.actionLogger.Info("Parsing the payload")
 	a.payload, err = ParseActionPayload[models.GetLogsRequest](payload)
-	a.actionLogger.Info("Payload parsed: ", a.payload.StartTime, a.payload.Type, a.payload.UUID)
+	a.actionLogger.Info("Payload parsed: %v", a.payload)
 	return err
 }
 

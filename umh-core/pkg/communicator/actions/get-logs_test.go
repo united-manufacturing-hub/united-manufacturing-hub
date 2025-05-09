@@ -108,11 +108,10 @@ var _ = Describe("GetLogsAction", func() {
 
 	Describe("Parse", func() {
 		It("should parse valid get logs payload", func() {
-			startTime := time.Now().Add(-24 * time.Hour).UnixMilli()
 			payload := map[string]interface{}{
 				"uuid":      dfcUUID.String(),
 				"type":      models.DFCLogType,
-				"startTime": startTime,
+				"startTime": time.Now().Add(-24 * time.Hour).UnixMilli(),
 			}
 
 			err := action.Parse(payload)
@@ -120,6 +119,88 @@ var _ = Describe("GetLogsAction", func() {
 			Expect(action.GetPayload().UUID).To(Equal(dfcUUID.String()))
 			Expect(action.GetPayload().Type).To(Equal(models.DFCLogType))
 		})
+
+		It("should return an error if the payload is invalid", func() {
+			payload := map[string]interface{}{
+				"uuid":      dfcUUID.String(),
+				"type":      models.DFCLogType,
+				"startTime": "not-a-number",
+			}
+
+			err := action.Parse(payload)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("error unmarshaling into target type"))
+		})
 	})
 
+	Describe("Validate", func() {
+		It("should return an error if the payload is missing a required field", func() {
+			// Missing log type
+			payload := map[string]interface{}{
+				"uuid":      dfcUUID.String(),
+				"startTime": time.Now().Add(-24 * time.Hour).UnixMilli(),
+			}
+			err := action.Parse(payload)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = action.Validate()
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("log type must be set and must be one of the following: agent, dfc, redpanda, tag-browser"))
+
+			// Missing start time
+			payload = map[string]interface{}{
+				"uuid": dfcUUID.String(),
+				"type": models.DFCLogType,
+			}
+			err = action.Parse(payload)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = action.Validate()
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("start time must be greater than 0"))
+		})
+
+		It("should return an error if the log type is invalid", func() {
+			payload := map[string]interface{}{
+				"uuid":      dfcUUID.String(),
+				"type":      "invalid",
+				"startTime": time.Now().Add(-24 * time.Hour).UnixMilli(),
+			}
+			err := action.Parse(payload)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = action.Validate()
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("log type must be set and must be one of the following: agent, dfc, redpanda, tag-browser"))
+		})
+
+		It("should return an error if the uuid is missing on DFC log type", func() {
+			payload := map[string]interface{}{
+				"type":      models.DFCLogType,
+				"startTime": time.Now().Add(-24 * time.Hour).UnixMilli(),
+			}
+			err := action.Parse(payload)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = action.Validate()
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("uuid must be set to retrieve logs for a DFC"))
+		})
+
+		It("should return an error if the uuid is invalid", func() {
+			payload := map[string]interface{}{
+				"uuid":      "invalid",
+				"type":      models.DFCLogType,
+				"startTime": time.Now().Add(-24 * time.Hour).UnixMilli(),
+			}
+			err := action.Parse(payload)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = action.Validate()
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("invalid UUID format"))
+		})
+	})
+
+	// Describe("Execute", func() {})
 })
