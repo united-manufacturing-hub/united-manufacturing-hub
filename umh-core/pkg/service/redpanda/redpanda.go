@@ -15,9 +15,13 @@
 package redpanda
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"net/http"
 	"path/filepath"
 	"strings"
 	"time"
@@ -87,6 +91,8 @@ type IRedpandaService interface {
 	//   ok     – true when activity is detected, false otherwise.
 	//   reason – empty when ok is true; otherwise a brief throughput summary.
 	HasProcessingActivity(status RedpandaStatus) (bool, string)
+	// UpdateRedpandaClusterConfig updates the cluster config of a Redpanda service by sending a PUT request to the Redpanda API
+	UpdateRedpandaClusterConfig(ctx context.Context, redpandaName string, configUpdates map[string]interface{}) error
 }
 
 // ServiceInfo contains information about a Redpanda service
@@ -955,4 +961,64 @@ func formatMemory(memory int) string {
 	}
 
 	return fmt.Sprintf("%d%s", memory, units[unitIndex])
+}
+
+// updateRedpandaClusterConfig updates Redpanda's cluster config via HTTP PUT request
+func (s *RedpandaService) UpdateRedpandaClusterConfig(ctx context.Context, redpandaName string, configUpdates map[string]interface{}) error {
+	if s.httpClient == nil {
+		return fmt.Errorf("http client not initialized")
+	}
+
+	// If the context is done, return an error
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+
+	// Construct the request body
+	requestBody := map[string]interface{}{
+		"upsert": configUpdates,
+		"remove": []string{},
+	}
+
+	// Convert to JSON
+	jsonBody, err := json.Marshal(requestBody)
+	if err != nil {
+		return fmt.Errorf("failed to marshal request body: %w", err)
+	}
+
+	// Construct the URL
+	url := "http://localhost:9644/v1/cluster_config"
+
+	// Create the request
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, url, bytes.NewBuffer(jsonBody))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	// Set headers
+	req.Header.Set("Content-Type", "application/json")
+
+	// Send the request
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to send request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Check response status
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("request failed with status %d: %s", resp.StatusCode, string(body))
+	}
+
+	// Parse response
+	var response struct {
+		ConfigVersion int `json:"config_version"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
+		return fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	s.logger.Debugf("Successfully updated Redpanda cluster config for %s, new config version: %d", redpandaName, response.ConfigVersion)
+	return nil
 }
