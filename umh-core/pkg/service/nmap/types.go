@@ -45,14 +45,14 @@ type INmapService interface {
 	UpdateNmapInS6Manager(ctx context.Context, cfg *nmapserviceconfig.NmapServiceConfig, nmapName string) error
 	// RemoveNmapFromS6Manager removes a nmap instance from the S6 manager
 	RemoveNmapFromS6Manager(ctx context.Context, nmapName string) error
-	// ForceRemoveNmap removes a Nmap instance from the s6 manager
-	ForceRemoveNmap(ctx context.Context, services serviceregistry.Provider, nmapName string) error
+	// korceRemoveNmap removes a Nmap instance from the s6 manager
+	ForceRemoveNmap(ctx context.Context, filesystemService filesystem.Service, nmapName string) error
 	// StartNmap starts a nmap instance
 	StartNmap(ctx context.Context, nmapName string) error
 	// StopNmap stops a nmap instance
 	StopNmap(ctx context.Context, nmapName string) error
 	// ServiceExists checks if a nmap service exists
-	ServiceExists(ctx context.Context, services serviceregistry.Provider, nmapName string) bool
+	ServiceExists(ctx context.Context, filesystemService filesystem.Service, nmapName string) bool
 	// ReconcileManager reconciles the nmap manager
 	ReconcileManager(ctx context.Context, services serviceregistry.Provider, tick uint64) (error, bool)
 }

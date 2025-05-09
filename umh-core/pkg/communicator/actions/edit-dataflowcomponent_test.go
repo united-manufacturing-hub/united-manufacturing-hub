@@ -42,6 +42,8 @@ var _ = Describe("EditDataflowComponent", func() {
 		mockConfig      *config.MockConfigManager
 		componentName   string
 		componentUUID   uuid.UUID
+		stateMocker     *actions.StateMocker
+		messages        []*models.UMHMessage
 	)
 
 	// Setup before each test
@@ -97,7 +99,15 @@ var _ = Describe("EditDataflowComponent", func() {
 
 		mockConfig = config.NewMockConfigManager().WithConfig(initialConfig)
 
-		action = actions.NewEditDataflowComponentAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig, nil)
+		// Startup the state mocker and get the mock snapshot
+		stateMocker = actions.NewStateMocker(mockConfig)
+		stateMocker.Tick()
+		mockManagerSnapshot := stateMocker.GetStateManager()
+
+		action = actions.NewEditDataflowComponentAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig, mockManagerSnapshot)
+
+		go actions.ConsumeOutboundMessages(outboundChannel, &messages, true)
+
 	})
 
 	// Cleanup after each test
@@ -415,24 +425,29 @@ var _ = Describe("EditDataflowComponent", func() {
 			// Reset tracking for this test
 			mockConfig.ResetCalls()
 
+			// ------------------------------------------------------------------------------------------------
+			// Now, we test the action execution with the state mocker
+			// The action has a pointer to the config manager and the system state
+			// During the execution of the action, it will modify the config via an atomic operation
+			// The state mocker has access to the same config manager. Also, the system state is shared
+			// between the action and the state mocker.
+			// The stateMocker.Start() starts the state mocker in a separate goroutine in which it continuously
+			// updates the system state according to the config.
+			// ------------------------------------------------------------------------------------------------
+
+			// start the state mocker
+			err = stateMocker.Start()
+			Expect(err).NotTo(HaveOccurred())
+			time.Sleep(1 * time.Second)
+
 			// Execute the action
 			result, metadata, err := action.Execute()
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(ContainSubstring("Successfully edited dataflow component: test-component-updated"))
 			Expect(metadata).To(BeNil())
 
-			// Expect only the Confirmed message in the channel
-			// Success message is sent by HandleActionMessage, not by Execute
-			var messages []*models.UMHMessage
-			for i := 0; i < 1; i++ {
-				select {
-				case msg := <-outboundChannel:
-					messages = append(messages, msg)
-				case <-time.After(100 * time.Millisecond):
-					Fail("Timed out waiting for message")
-				}
-			}
-			Expect(messages).To(HaveLen(1))
+			// Stop the state mocker
+			stateMocker.Stop()
 
 			// Verify AtomicEditDataflowcomponent was called
 			Expect(mockConfig.EditDataflowcomponentCalled).To(BeTrue())
@@ -500,11 +515,18 @@ buffer:
 			// Reset tracking for this test
 			mockConfig.ResetCalls()
 
+			// start the state mocker
+			err = stateMocker.Start()
+			Expect(err).NotTo(HaveOccurred())
+
 			// Execute the action
 			result, metadata, err := action.Execute()
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(ContainSubstring("Successfully edited dataflow component"))
 			Expect(metadata).To(BeNil())
+
+			// Stop the state mocker
+			stateMocker.Stop()
 
 			// Verify AtomicEditDataflowcomponent was called
 			Expect(mockConfig.EditDataflowcomponentCalled).To(BeTrue())
@@ -560,18 +582,6 @@ buffer:
 			Expect(err.Error()).To(ContainSubstring("Failed to edit dataflow component: mock edit dataflow component failure"))
 			Expect(result).To(BeNil())
 			Expect(metadata).To(BeNil())
-
-			// Expect Confirmed and Failure messages
-			var messages []*models.UMHMessage
-			for i := 0; i < 2; i++ {
-				select {
-				case msg := <-outboundChannel:
-					messages = append(messages, msg)
-				case <-time.After(100 * time.Millisecond):
-					Fail("Timed out waiting for message")
-				}
-			}
-			Expect(messages).To(HaveLen(2))
 
 			// Verify the failure message content
 			decodedMessage, err := encoding.DecodeMessageFromUMHInstanceToUser(messages[1].Content)

@@ -33,10 +33,6 @@ func GetAppVersion() string {
 func GetComponentVersions() []models.Version {
 	return []models.Version{
 		{
-			Name:    "UMH Core",
-			Version: AppVersion,
-		},
-		{
 			Name:    "S6 Overlay",
 			Version: constants.S6OverlayVersion,
 		},

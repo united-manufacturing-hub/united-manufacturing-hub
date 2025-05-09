@@ -206,7 +206,8 @@ var _ = Describe("Benthos Service", func() {
 						Content:   `level=error msg="failed to connect to broker"`,
 					},
 				}
-				Expect(service.IsLogsFine(logs, currentTime, logWindow)).To(BeFalse())
+				isLogsFine, _ := service.IsLogsFine(logs, currentTime, logWindow)
+				Expect(isLogsFine).To(BeFalse())
 			})
 
 			It("should detect critical warnings in official Benthos logs", func() {
@@ -224,7 +225,8 @@ var _ = Describe("Benthos Service", func() {
 						Content:   `level=warning msg="unable to reach endpoint"`,
 					},
 				}
-				Expect(service.IsLogsFine(logs, currentTime, logWindow)).To(BeFalse())
+				isLogsFine, _ := service.IsLogsFine(logs, currentTime, logWindow)
+				Expect(isLogsFine).To(BeFalse())
 			})
 
 			It("should ignore non-critical warnings in official Benthos logs", func() {
@@ -238,7 +240,8 @@ var _ = Describe("Benthos Service", func() {
 						Content:   `level=warning msg="message batch partially processed"`,
 					},
 				}
-				Expect(service.IsLogsFine(logs, currentTime, logWindow)).To(BeTrue())
+				isLogsFine, _ := service.IsLogsFine(logs, currentTime, logWindow)
+				Expect(isLogsFine).To(BeTrue())
 			})
 
 			It("should detect configuration file read errors", func() {
@@ -248,7 +251,8 @@ var _ = Describe("Benthos Service", func() {
 						Content:   `configuration file read error: file not found`,
 					},
 				}
-				Expect(service.IsLogsFine(logs, currentTime, logWindow)).To(BeFalse())
+				isLogsFine, _ := service.IsLogsFine(logs, currentTime, logWindow)
+				Expect(isLogsFine).To(BeFalse())
 			})
 
 			It("should detect logger creation errors", func() {
@@ -258,7 +262,8 @@ var _ = Describe("Benthos Service", func() {
 						Content:   `failed to create logger: invalid log level`,
 					},
 				}
-				Expect(service.IsLogsFine(logs, currentTime, logWindow)).To(BeFalse())
+				isLogsFine, _ := service.IsLogsFine(logs, currentTime, logWindow)
+				Expect(isLogsFine).To(BeFalse())
 			})
 
 			It("should detect linter errors", func() {
@@ -272,7 +277,8 @@ var _ = Describe("Benthos Service", func() {
 						Content:   `shutting down due to linter errors`,
 					},
 				}
-				Expect(service.IsLogsFine(logs, currentTime, logWindow)).To(BeFalse())
+				isLogsFine, _ := service.IsLogsFine(logs, currentTime, logWindow)
+				Expect(isLogsFine).To(BeFalse())
 			})
 
 			It("should ignore error-like strings in message content", func() {
@@ -290,7 +296,8 @@ var _ = Describe("Benthos Service", func() {
 						Content:   `level=info msg="Error rate metrics collected"`,
 					},
 				}
-				Expect(service.IsLogsFine(logs, currentTime, logWindow)).To(BeTrue())
+				isLogsFine, _ := service.IsLogsFine(logs, currentTime, logWindow)
+				Expect(isLogsFine).To(BeTrue())
 			})
 
 			It("should ignore error patterns not at start of line", func() {
@@ -308,7 +315,8 @@ var _ = Describe("Benthos Service", func() {
 						Content:   `level=info msg="Documentation: Config lint error examples"`,
 					},
 				}
-				Expect(service.IsLogsFine(logs, currentTime, logWindow)).To(BeTrue())
+				isLogsFine, _ := service.IsLogsFine(logs, currentTime, logWindow)
+				Expect(isLogsFine).To(BeTrue())
 			})
 
 			It("should handle mixed log types correctly", func() {
@@ -330,7 +338,8 @@ var _ = Describe("Benthos Service", func() {
 						Content:   `level=error msg="failed to connect"`,
 					},
 				}
-				Expect(service.IsLogsFine(logs, currentTime, logWindow)).To(BeFalse())
+				isLogsFine, _ := service.IsLogsFine(logs, currentTime, logWindow)
+				Expect(isLogsFine).To(BeFalse())
 			})
 
 			It("should handle malformed Benthos logs gracefully", func() {
@@ -348,7 +357,8 @@ var _ = Describe("Benthos Service", func() {
 						Content:   `random text with warning and error keywords`,
 					},
 				}
-				Expect(service.IsLogsFine(logs, currentTime, logWindow)).To(BeTrue())
+				isLogsFine, _ := service.IsLogsFine(logs, currentTime, logWindow)
+				Expect(isLogsFine).To(BeTrue())
 			})
 
 			It("should ignore logs outside the time window", func() {
@@ -362,7 +372,21 @@ var _ = Describe("Benthos Service", func() {
 						Content:   `level=error msg="Old error that should be ignored"`,
 					},
 				}
-				Expect(service.IsLogsFine(logs, currentTime, logWindow)).To(BeTrue())
+				isLogsFine, _ := service.IsLogsFine(logs, currentTime, logWindow)
+				Expect(isLogsFine).To(BeTrue())
+			})
+
+			It("should handle DEBUG level logs", func() {
+				logs := []s6service.LogEntry{
+					{
+						Timestamp: currentTime.Add(-1 * time.Minute),
+						Content:   `level=error msg=TEST @service=benthos label="" path=root.pipeline.processors.0`,
+					},
+				}
+				isLogsFine, _ := service.IsLogsFine(logs, currentTime, logWindow)
+				Expect(isLogsFine).To(BeFalse())
+				//Note: there are no quotes around msg
+				// these can be produced using the log processor: https://docs.redpanda.com/redpanda-connect/components/processors/log/
 			})
 		})
 	})
@@ -416,7 +440,8 @@ var _ = Describe("Benthos Service", func() {
 						},
 					},
 				}
-				Expect(service.IsMetricsErrorFree(metrics)).To(BeFalse())
+				isMetricsErrorFree, _ := service.IsMetricsErrorFree(metrics)
+				Expect(isMetricsErrorFree).To(BeFalse())
 			})
 
 			It("should ignore connection failures", func() {
@@ -430,7 +455,8 @@ var _ = Describe("Benthos Service", func() {
 						},
 					},
 				}
-				Expect(service.IsMetricsErrorFree(metrics)).To(BeTrue())
+				isMetricsErrorFree, _ := service.IsMetricsErrorFree(metrics)
+				Expect(isMetricsErrorFree).To(BeTrue())
 			})
 
 			It("should detect processor errors", func() {
@@ -445,7 +471,8 @@ var _ = Describe("Benthos Service", func() {
 						},
 					},
 				}
-				Expect(service.IsMetricsErrorFree(metrics)).To(BeFalse())
+				isMetricsErrorFree, _ := service.IsMetricsErrorFree(metrics)
+				Expect(isMetricsErrorFree).To(BeFalse())
 			})
 
 			It("should detect errors in any processor", func() {
@@ -460,7 +487,8 @@ var _ = Describe("Benthos Service", func() {
 						},
 					},
 				}
-				Expect(service.IsMetricsErrorFree(metrics)).To(BeFalse())
+				isMetricsErrorFree, _ := service.IsMetricsErrorFree(metrics)
+				Expect(isMetricsErrorFree).To(BeFalse())
 			})
 		})
 	})
@@ -808,7 +836,7 @@ logger:
 			Expect(err).ToNot(HaveOccurred())
 
 			// Check if logs are fine - this should return false with our error logs
-			isLogsFine := service.IsLogsFine(info.BenthosStatus.BenthosLogs, currentTime, logWindow)
+			isLogsFine, _ := service.IsLogsFine(info.BenthosStatus.BenthosLogs, currentTime, logWindow)
 			Expect(isLogsFine).To(BeFalse(), "Service with error logs should be identified as having issues")
 		})
 
@@ -919,7 +947,7 @@ logger:
 				Expect(err).NotTo(HaveOccurred())
 
 				// Check logs status
-				isLogsFine := service.IsLogsFine(info.BenthosStatus.BenthosLogs, currentTime, logWindow)
+				isLogsFine, _ := service.IsLogsFine(info.BenthosStatus.BenthosLogs, currentTime, logWindow)
 				if testCase.expectBad {
 					Expect(isLogsFine).To(BeFalse(), "Should detect problems in logs")
 				} else {
@@ -959,7 +987,7 @@ logger:
 			Expect(err).NotTo(HaveOccurred())
 
 			// Check if logs are fine
-			isLogsFine := service.IsLogsFine(info.BenthosStatus.BenthosLogs, currentTime, logWindow)
+			isLogsFine, _ := service.IsLogsFine(info.BenthosStatus.BenthosLogs, currentTime, logWindow)
 			Expect(isLogsFine).To(BeFalse(), "Service with error logs should be identified as having issues")
 
 			// Verify that the instance health is properly reflected

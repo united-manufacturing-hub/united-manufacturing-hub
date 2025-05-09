@@ -192,6 +192,9 @@ func (a *EditDataflowComponentAction) Parse(payload interface{}) error {
 		return fmt.Errorf("invalid UUID format: %v", err)
 	}
 
+	//set the new component UUID by the name
+	a.newComponentUUID = dataflowcomponentserviceconfig.GenerateUUIDFromName(a.name)
+
 	// Store the meta type
 	a.metaType = topLevel.Meta.Type
 	if a.metaType == "" {
@@ -504,7 +507,7 @@ func (a *EditDataflowComponentAction) waitForComponentToBeActive() error {
 	// 1. waits for the component to appear in the system snapshot (relevant for changed name)
 	// 2. waits for the component to be active
 	// 3. waits for the component to have the correct config
-	ticker := time.NewTicker(1 * time.Second)
+	ticker := time.NewTicker(constants.ActionTickerTime)
 	defer ticker.Stop()
 	timeout := time.After(constants.DataflowComponentWaitForActiveTimeout)
 	startTime := time.Now()
@@ -521,6 +524,7 @@ func (a *EditDataflowComponentAction) waitForComponentToBeActive() error {
 			defer cancel()
 			_, err := a.configManager.AtomicEditDataflowcomponent(ctx, a.newComponentUUID, a.oldConfig)
 			if err != nil {
+
 				a.actionLogger.Errorf("failed to roll back dataflow component %s: %v", a.name, err)
 			}
 			return fmt.Errorf("dataflow component %s was not active in time and was rolled back to the old config", a.name)
@@ -553,26 +557,21 @@ func (a *EditDataflowComponentAction) waitForComponentToBeActive() error {
 							continue
 						}
 
-						if instance.CurrentState != "active" {
+						if instance.CurrentState != "active" && instance.CurrentState != "idle" {
 							SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
-								fmt.Sprintf("Dataflow component is in state '%s' (waiting for 'active', %ds remaining)...",
+								fmt.Sprintf("Dataflow component is in state '%s' (waiting for 'active' or 'idle', %ds remaining)...",
 									instance.CurrentState, remainingSeconds), a.outboundChannel, models.EditDataFlowComponent)
 							// send the benthos logs to the user
 							logs = dfcSnapshot.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosLogs
 							// only send the logs that have not been sent yet
 							if len(logs) > len(lastLogs) {
-								for _, log := range logs[len(lastLogs):] {
-									SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
-										fmt.Sprintf("[Benthos Log] %s", log.Content),
-										a.outboundChannel, models.EditDataFlowComponent)
-								}
-								lastLogs = logs
+								lastLogs = SendLimitedLogs(logs, lastLogs, a.instanceUUID, a.userEmail, a.actionUUID, a.outboundChannel, models.EditDataFlowComponent)
 							}
 
 							continue
 						} else {
 							SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
-								"Dataflow component is active with correct configuration. Edit complete.", a.outboundChannel, models.EditDataFlowComponent)
+								fmt.Sprintf("Dataflow component is in state '%s' with correct configuration. Edit complete.", instance.CurrentState), a.outboundChannel, models.EditDataFlowComponent)
 							return nil
 						}
 					}

@@ -132,7 +132,7 @@ var _ = Describe("ControlLoop", func() {
 			loop := NewControlLoop(mockConfig)
 			Expect(loop).NotTo(BeNil())
 			Expect(loop.tickerTime).To(Equal(constants.DefaultTickerTime))
-			Expect(loop.managers).To(HaveLen(7))
+			Expect(loop.managers).To(HaveLen(8))
 			Expect(loop.configManager).NotTo(BeNil())
 		})
 	})

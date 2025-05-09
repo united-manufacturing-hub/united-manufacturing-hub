@@ -210,6 +210,9 @@ func (c *ContainerInstance) reconcileStateTransition(ctx context.Context, servic
 	currentState := c.baseFSMInstance.GetCurrentFSMState()
 	desiredState := c.baseFSMInstance.GetDesiredFSMState()
 
+	// Report current and desired state metrics
+	metrics.UpdateServiceState(metrics.ComponentContainerMonitor, c.baseFSMInstance.GetID(), currentState, desiredState)
+
 	// If already in the desired state, nothing to do.
 	if currentState == desiredState {
 		return nil, false
