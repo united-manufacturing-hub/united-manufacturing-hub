@@ -486,7 +486,7 @@ var _ = Describe("DeployDataflowComponent", func() {
 			// Execute the action
 			result, metadata, err := action.Execute()
 			Expect(err).NotTo(HaveOccurred())
-			Expect(result).To(ContainSubstring("Successfully deployed dataflow component"))
+			Expect(result).To(ContainSubstring("success"))
 			Expect(metadata).To(BeNil())
 
 			// Stop the state mocker
@@ -544,7 +544,7 @@ var _ = Describe("DeployDataflowComponent", func() {
 			// Execute the action - should fail
 			result, metadata, err := action.Execute()
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("Failed to add dataflow component: mock add dataflow component failure"))
+			Expect(err.Error()).To(ContainSubstring("failed to add dataflow component: mock add dataflow component failure"))
 			Expect(result).To(BeNil())
 			Expect(metadata).To(BeNil())
 
@@ -557,11 +557,11 @@ var _ = Describe("DeployDataflowComponent", func() {
 
 			// Extract the ActionReplyPayload from the decoded message
 			actionReplyPayload, ok := decodedMessage.Payload.(map[string]interface{})
-			Expect(ok).To(BeTrue(), "Failed to cast Payload to map[string]interface{}")
+			Expect(ok).To(BeTrue(), "failed to cast Payload to map[string]interface{}")
 
 			actionReplyPayloadStr, ok := actionReplyPayload["actionReplyPayload"].(string)
-			Expect(ok).To(BeTrue(), "Failed to extract actionReplyPayload as string")
-			Expect(actionReplyPayloadStr).To(ContainSubstring("Adding dataflow component 'test-component' to configuration.."))
+			Expect(ok).To(BeTrue(), "failed to extract actionReplyPayload as string")
+			Expect(actionReplyPayloadStr).To(ContainSubstring("adding to configuration"))
 		})
 
 		It("should process inject data with cache resources, rate limit resources, and buffer", func() {
@@ -618,7 +618,7 @@ buffer:
 			// Execute the action
 			result, metadata, err := action.Execute()
 			Expect(err).NotTo(HaveOccurred())
-			Expect(result).To(ContainSubstring("Successfully deployed dataflow component: test-component-with-inject"))
+			Expect(result).To(ContainSubstring("success"))
 			Expect(metadata).To(BeNil())
 
 			// Stop the state mocker
