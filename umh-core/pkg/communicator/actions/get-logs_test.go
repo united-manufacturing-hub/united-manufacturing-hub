@@ -306,7 +306,7 @@ var _ = Describe("GetLogsAction", func() {
 			result, _, err := action.Execute()
 			Expect(result).To(BeNil())
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("failed to retrieve logs for redpanda: redpanda manager not found"))
+			Expect(err.Error()).To(ContainSubstring("failed to retrieve logs for redpanda: redpanda instance not found"))
 		})
 
 		It("should handle missing instance errors gracefully", func() {
