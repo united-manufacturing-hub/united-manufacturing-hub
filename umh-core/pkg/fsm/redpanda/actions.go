@@ -421,11 +421,6 @@ func (r *RedpandaInstance) AnyRestartsSinceCreation() (bool, string) {
 //	ok     – true when all conditions pass, false otherwise.
 //	reason – empty when ok is true; otherwise the first detected failure.
 func (r *RedpandaInstance) IsRedpandaRunningForSomeTimeWithoutErrors(currentTime time.Time, logWindow time.Duration) (bool, string) {
-	currentUptime := r.ObservedState.ServiceInfo.S6ObservedState.ServiceInfo.Uptime
-	if currentUptime < 10 {
-		return false, fmt.Sprintf("uptime %d s (< %d s threshold)", currentUptime, 10)
-	}
-
 	// Check if there are any issues in the Redpanda logs
 	logsFine, reason := r.IsRedpandaLogsFine(currentTime, logWindow)
 	if !logsFine {
