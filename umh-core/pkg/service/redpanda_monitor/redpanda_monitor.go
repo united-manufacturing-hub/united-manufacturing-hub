@@ -140,7 +140,7 @@ type TopicConfig struct {
 type RedpandaMetrics struct {
 	// Metrics contains the metrics of the Redpanda service
 	Metrics Metrics
-	// LastUpdatedAt contains the last time the metrics were updated
+	// MetricsState contains the last observed state of the metrics
 	MetricsState *RedpandaMetricsState
 }
 
@@ -752,15 +752,30 @@ func ParseMetricsFast(b []byte) (Metrics, error) {
 
 		// ── throughput  (needs a label) ───────────────────────────────────
 		case "redpanda_kafka_request_bytes_total":
+			/*
+				We need to sum up the values over all topics
+
+					# HELP redpanda_kafka_request_bytes_total Total number of bytes produced per topic
+					# TYPE redpanda_kafka_request_bytes_total counter
+					redpanda_kafka_request_bytes_total{redpanda_namespace="kafka",redpanda_request="produce",redpanda_topic="test"} 27768
+					redpanda_kafka_request_bytes_total{redpanda_namespace="kafka",redpanda_request="follower_consume",redpanda_topic="test"} 0
+					redpanda_kafka_request_bytes_total{redpanda_namespace="kafka",redpanda_request="follower_consume",redpanda_topic="messages"} 0
+					redpanda_kafka_request_bytes_total{redpanda_namespace="kafka",redpanda_request="consume",redpanda_topic="test"} 24564
+					redpanda_kafka_request_bytes_total{redpanda_namespace="redpanda",redpanda_request="produce",redpanda_topic="controller"} 0
+					redpanda_kafka_request_bytes_total{redpanda_namespace="redpanda",redpanda_request="follower_consume",redpanda_topic="controller"} 0
+					redpanda_kafka_request_bytes_total{redpanda_namespace="kafka",redpanda_request="produce",redpanda_topic="messages"} 0
+					redpanda_kafka_request_bytes_total{redpanda_namespace="redpanda",redpanda_request="consume",redpanda_topic="controller"} 0
+					redpanda_kafka_request_bytes_total{redpanda_namespace="kafka",redpanda_request="consume",redpanda_topic="messages"} 0
+			*/
 			if lbls == nil {
 				return m, fmt.Errorf("metric redpanda_kafka_request_bytes_total has no labels")
 			}
 			switch lbls.Get("redpanda_request") {
 			case "produce":
-				m.Throughput.BytesIn = int64(val)
+				m.Throughput.BytesIn += int64(val)
 				foundProduce = true
 			case "consume":
-				m.Throughput.BytesOut = int64(val)
+				m.Throughput.BytesOut += int64(val)
 				foundConsume = true
 			}
 

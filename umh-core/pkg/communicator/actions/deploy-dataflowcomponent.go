@@ -19,7 +19,7 @@
 // BUSINESS CONTEXT
 // -----------------------------------------------------------------------------
 // A *new* Data-Flow Component (DFC) in UMH is defined by a Benthos service
-// configuration and materialised as an FSM instance.  “Deploying” therefore
+// configuration and materialised as an FSM instance.  "Deploying" therefore
 // means **creating a new desired configuration entry** and **waiting until the
 // FSM reports**
 //
@@ -549,7 +549,7 @@ func (a *DeployDataflowComponentAction) waitForComponentToBeActive() error {
 	var logs []s6.LogEntry
 	var lastLogs []s6.LogEntry
 
-	ticker := time.NewTicker(1 * time.Second)
+	ticker := time.NewTicker(constants.ActionTickerTime)
 	defer ticker.Stop()
 	timeout := time.After(constants.DataflowComponentWaitForActiveTimeout)
 	startTime := time.Now()
@@ -593,26 +593,20 @@ func (a *DeployDataflowComponentAction) waitForComponentToBeActive() error {
 								remainingSeconds), a.outboundChannel, models.DeployDataFlowComponent)
 						continue
 					}
-					if instance.CurrentState == "active" {
+					if instance.CurrentState == "active" || instance.CurrentState == "idle" {
 						SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
-							"Dataflow component is now active! Deployment complete.",
+							fmt.Sprintf("Dataflow component is in state '%s' with correct configuration. Deployment complete.", instance.CurrentState),
 							a.outboundChannel, models.DeployDataFlowComponent)
 						return nil
 					} else {
-						stateMsg := fmt.Sprintf("Dataflow component is in state '%s' (waiting for 'active', %ds remaining)...",
+						stateMsg := fmt.Sprintf("Dataflow component is in state '%s' (waiting for 'active' or 'idle', %ds remaining)...",
 							instance.CurrentState, remainingSeconds)
-						SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
-							stateMsg, a.outboundChannel, models.DeployDataFlowComponent)
+						SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, stateMsg, a.outboundChannel, models.DeployDataFlowComponent)
 						// send the benthos logs to the user
 						logs = dfcSnapshot.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosLogs
 						// only send the logs that have not been sent yet
 						if len(logs) > len(lastLogs) {
-							for _, log := range logs[len(lastLogs):] {
-								SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
-									fmt.Sprintf("[Benthos Log] %s", log.Content),
-									a.outboundChannel, models.DeployDataFlowComponent)
-							}
-							lastLogs = logs
+							lastLogs = SendLimitedLogs(logs, lastLogs, a.instanceUUID, a.userEmail, a.actionUUID, a.outboundChannel, models.DeployDataFlowComponent)
 						}
 					}
 				}

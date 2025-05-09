@@ -79,7 +79,7 @@ func (n *NmapInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapsho
 				func(ctx context.Context) error {
 					// Force removal as a last resort when normal state transitions can't work
 					// This directly removes files and resources
-					return n.monitorService.ForceRemoveNmap(ctx, services, instanceName)
+					return n.monitorService.ForceRemoveNmap(ctx, services.GetFileSystem(), instanceName)
 				},
 			)
 		}
@@ -170,6 +170,9 @@ func (n *NmapInstance) reconcileStateTransition(ctx context.Context, services se
 
 	currentState := n.baseFSMInstance.GetCurrentFSMState()
 	desiredState := n.baseFSMInstance.GetDesiredFSMState()
+
+	// Report current and desired state metrics
+	metrics.UpdateServiceState(metrics.ComponentNmapInstance, n.baseFSMInstance.GetID(), currentState, desiredState)
 
 	// Handle lifecycle states first - these take precedence over operational states
 	if internal_fsm.IsLifecycleState(currentState) {
