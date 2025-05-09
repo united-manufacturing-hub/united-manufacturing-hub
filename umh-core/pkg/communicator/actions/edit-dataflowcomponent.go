@@ -550,7 +550,22 @@ func (a *EditDataflowComponentAction) waitForComponentToBeActive() error {
 							continue
 						}
 						// check if the config is correct
-						if !dataflowcomponentserviceconfig.NewComparator().ConfigsEqual(&dfcSnapshot.Config, &a.dfc.DataFlowComponentServiceConfig) {
+						// get the ObservedBenthosServiceConfig and compare it with the new config
+						// we need to use the ObservedBenthosServiceConfig  instead of the LastObservedState.Config because the LastObservedState.Config
+						// is only the desired config and not the observed config.
+						// The types are slightly different, so we need to convert them to the same type before comparing.
+						observedConfig := dfcSnapshot.ServiceInfo.BenthosObservedState.ObservedBenthosServiceConfig
+						observedConfigInDfcConfig := dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+							BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
+								Input:              observedConfig.Input,
+								Pipeline:           observedConfig.Pipeline,
+								Output:             observedConfig.Output,
+								CacheResources:     observedConfig.CacheResources,
+								RateLimitResources: observedConfig.RateLimitResources,
+								Buffer:             observedConfig.Buffer,
+							},
+						}
+						if !dataflowcomponentserviceconfig.NewComparator().ConfigsEqual(&observedConfigInDfcConfig, &a.dfc.DataFlowComponentServiceConfig) {
 							SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
 								fmt.Sprintf("Dataflow component config changes haven't applied yet (%ds remaining)...",
 									remainingSeconds), a.outboundChannel, models.EditDataFlowComponent)
@@ -570,14 +585,14 @@ func (a *EditDataflowComponentAction) waitForComponentToBeActive() error {
 
 							continue
 						} else {
-							if elapsed < time.Second*3 {
-								// if the component is in state 'active' or 'idle' but has not been in that state for 3 seconds, wait some more time
-								// when changing the config, it can happen that the component goes to 'idle' for a short period of time
-								// this is a workaround to prevent the action from finishing prematurely
-								// we dont need user feedback here as this is an intermediate state for only three seconds
-								continue
+							// if elapsed < time.Second*3 {
+							// 	// if the component is in state 'active' or 'idle' but has not been in that state for 3 seconds, wait some more time
+							// 	// when changing the config, it can happen that the component goes to 'idle' for a short period of time
+							// 	// this is a workaround to prevent the action from finishing prematurely
+							// 	// we dont need user feedback here as this is an intermediate state for only three seconds
+							// 	continue
 
-							}
+							// }
 							SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
 								fmt.Sprintf("Dataflow component is in state '%s' with correct configuration. Edit complete.", instance.CurrentState), a.outboundChannel, models.EditDataFlowComponent)
 							return nil
