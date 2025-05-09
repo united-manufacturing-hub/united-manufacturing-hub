@@ -1003,12 +1003,20 @@ func (s *RedpandaService) UpdateRedpandaClusterConfig(ctx context.Context, redpa
 	if err != nil {
 		return fmt.Errorf("failed to send request: %w", err)
 	}
-	defer resp.Body.Close()
 
 	// Check response status
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
+		err := resp.Body.Close()
+		if err != nil {
+			return fmt.Errorf("failed to close response body: %w", err)
+		}
 		return fmt.Errorf("request failed with status %d: %s", resp.StatusCode, string(body))
+	} else {
+		err := resp.Body.Close()
+		if err != nil {
+			return fmt.Errorf("failed to close response body: %w", err)
+		}
 	}
 
 	// Parse response
