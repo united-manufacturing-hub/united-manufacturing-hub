@@ -17,13 +17,14 @@ package integration_test
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
 
-var _ = FDescribe("Redpanda Config Update Integration Test", Ordered, Label("integration"), func() {
+var _ = Describe("Redpanda Config Update Integration Test", Ordered, Label("integration"), func() {
 	const (
 		topicName         = "dfc-config-update-test-topic"
 		messagesPerSecond = 5
@@ -74,7 +75,8 @@ var _ = FDescribe("Redpanda Config Update Integration Test", Ordered, Label("int
 		By("Updating Redpanda configuration with new retention time")
 		builder.full.Internal.Redpanda.RedpandaServiceConfig.Topic.DefaultTopicRetentionMs = 7200000 // 2 hours in milliseconds
 		cfg := builder.BuildYAML()
-		Expect(writeConfigFile(cfg)).To(Succeed())
+		GinkgoWriter.Printf("Updated config: %s\n", cfg)
+		Expect(writeConfigFile(cfg, getContainerName())).To(Succeed())
 
 		By("Checking if the config has been applied")
 		Eventually(func() bool {
@@ -82,7 +84,7 @@ var _ = FDescribe("Redpanda Config Update Integration Test", Ordered, Label("int
 			GinkgoWriter.Printf("Redpanda config: %s\n", redpandaConfig)
 			GinkgoWriter.Printf("Error: %v\n", err)
 			return err == nil && redpandaConfig == "7200000"
-		}, 60*time.Second, 1*time.Second).Should(BeTrue(), "Redpanda config should be updated")
+		}, 20*time.Second, 1*time.Second).Should(BeTrue(), "Redpanda config should be updated")
 
 		By("Waiting for Redpanda to restart and apply new config")
 		// Wait for metrics to become available again after restart
@@ -97,7 +99,7 @@ var _ = FDescribe("Redpanda Config Update Integration Test", Ordered, Label("int
 			lastOffset = newOffset
 			lastTimestamp = time.Now()
 			return err == nil && newOffset != -1
-		}, 30*time.Second, 1*time.Second).Should(BeTrue(), "Messages should be produced after config update")
+		}, 5*time.Second, 1*time.Second).Should(BeTrue(), "Messages should be produced after config update")
 
 		By("Verifying messages continue to be produced after config update")
 		startTime := time.Now()
@@ -114,6 +116,14 @@ var _ = FDescribe("Redpanda Config Update Integration Test", Ordered, Label("int
 		Expect(err).ToNot(HaveOccurred())
 		Expect(redpandaState).To(BeNumerically("==", 3))
 
+		By("Checking if the config has not been changed back")
+		Eventually(func() bool {
+			redpandaConfig, err := getRedpandaConfig("log_retention_ms")
+			GinkgoWriter.Printf("Redpanda config: %s\n", redpandaConfig)
+			GinkgoWriter.Printf("Error: %v\n", err)
+			return err == nil && redpandaConfig == "7200000"
+		}, 5*time.Second, 1*time.Second).Should(BeTrue(), "Redpanda config should not be changed back")
+
 	})
 })
 
@@ -124,5 +134,5 @@ func getRedpandaConfig(key string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return out, nil
+	return strings.TrimSpace(out), nil
 }
