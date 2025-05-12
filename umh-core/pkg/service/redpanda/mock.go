@@ -362,7 +362,7 @@ func (m *MockRedpandaService) ForceRemoveRedpanda(ctx context.Context, filesyste
 }
 
 // UpdateRedpandaClusterConfig mocks updating the cluster config of a Redpanda instance
-func (m *MockRedpandaService) UpdateRedpandaClusterConfig(ctx context.Context, redpandaName string, configUpdates map[string]interface{}, removals []string) error {
+func (m *MockRedpandaService) UpdateRedpandaClusterConfig(ctx context.Context, redpandaName string, configUpdates map[string]interface{}) error {
 	m.UpdateRedpandaClusterConfigCalled = true
 	return m.UpdateRedpandaClusterConfigError
 }

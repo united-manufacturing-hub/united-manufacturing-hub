@@ -178,28 +178,21 @@ func (r *RedpandaInstance) reconcileExternalChanges(ctx context.Context, service
 		// Reconcile the cluster config via HTTP
 		// 1. Check if we have changes in the config
 		var changes = make(map[string]interface{})
-		var removals = make([]string, 0)
 		if r.ObservedState.ObservedRedpandaServiceConfig.Topic.DefaultTopicRetentionBytes != r.config.Topic.DefaultTopicRetentionBytes {
 			// https://docs.redpanda.com/current/reference/properties/cluster-properties/#retention_bytes
 
 			if r.config.Topic.DefaultTopicRetentionBytes > 0 {
 				changes["retention_bytes"] = r.config.Topic.DefaultTopicRetentionBytes
-			} else {
-				// Negative values are considered as a removal
-				removals = append(removals, "retention_bytes")
 			}
 		}
 		if r.ObservedState.ObservedRedpandaServiceConfig.Topic.DefaultTopicRetentionMs != r.config.Topic.DefaultTopicRetentionMs {
 			// https://docs.redpanda.com/current/reference/properties/cluster-properties/#log_retention_ms
 			if r.config.Topic.DefaultTopicRetentionMs > 0 {
 				changes["log_retention_ms"] = r.config.Topic.DefaultTopicRetentionMs
-			} else {
-				// Negative values are considered as a removal
-				removals = append(removals, "log_retention_ms")
 			}
 		}
-		if len(changes) > 0 || len(removals) > 0 {
-			err := r.service.UpdateRedpandaClusterConfig(ctx, r.baseFSMInstance.GetID(), changes, removals)
+		if len(changes) > 0 {
+			err := r.service.UpdateRedpandaClusterConfig(ctx, r.baseFSMInstance.GetID(), changes)
 			if err != nil {
 				return fmt.Errorf("failed to update Redpanda cluster config: %w", err), false
 			}
