@@ -20,6 +20,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"go.uber.org/zap"
 )
@@ -76,15 +77,15 @@ func (a *GetDataflowcomponentMetricsAction) Validate() (err error) {
 }
 
 func (a *GetDataflowcomponentMetricsAction) Execute() (interface{}, map[string]interface{}, error) {
-	// dfcInstance, err := findDfcInstance(a.systemSnapshotManager.GetDeepCopySnapshot(), a.payload.UUID)
-	// if err != nil {
-	// 	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, "failed to find DFC instance", a.outboundChannel, models.GetDataflowcomponentMetrics)
-	// 	return nil, nil, err
-	// }
+	dfcInstance, err := fsm.FindDfcInstanceByUUID(a.systemSnapshotManager.GetDeepCopySnapshot(), a.payload.UUID)
+	if err != nil {
+		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, "failed to find DFC instance", a.outboundChannel, models.GetDataflowcomponentMetrics)
+		return nil, nil, err
+	}
 
-	// metrics := dfcInstance.LastObservedState.(*dataflowcomponent.DataflowComponentObservedStateSnapshot).ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics
+	metrics := dfcInstance.LastObservedState.(*dataflowcomponent.DataflowComponentObservedStateSnapshot).ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics
 
-	return nil, nil, nil
+	return metrics, nil, nil
 }
 
 func (a *GetDataflowcomponentMetricsAction) getUserEmail() string {
