@@ -181,13 +181,16 @@ func (r *RedpandaInstance) reconcileExternalChanges(ctx context.Context, service
 		if r.ObservedState.ObservedRedpandaServiceConfig.Topic.DefaultTopicRetentionBytes != r.config.Topic.DefaultTopicRetentionBytes {
 			// https://docs.redpanda.com/current/reference/properties/cluster-properties/#retention_bytes
 
-			if r.config.Topic.DefaultTopicRetentionBytes > 0 {
+			// Zero values are ignored, as they are invalid in redpanda
+			if r.config.Topic.DefaultTopicRetentionBytes != 0 {
 				changes["retention_bytes"] = r.config.Topic.DefaultTopicRetentionBytes
 			}
 		}
 		if r.ObservedState.ObservedRedpandaServiceConfig.Topic.DefaultTopicRetentionMs != r.config.Topic.DefaultTopicRetentionMs {
 			// https://docs.redpanda.com/current/reference/properties/cluster-properties/#log_retention_ms
-			if r.config.Topic.DefaultTopicRetentionMs > 0 {
+
+			// Zero values are ignored, as they are invalid in redpanda
+			if r.config.Topic.DefaultTopicRetentionMs != 0 {
 				changes["log_retention_ms"] = r.config.Topic.DefaultTopicRetentionMs
 			}
 		}
