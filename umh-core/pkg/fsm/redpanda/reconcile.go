@@ -172,6 +172,7 @@ func (r *RedpandaInstance) reconcileExternalChanges(ctx context.Context, service
 	}
 
 	currentState := r.baseFSMInstance.GetCurrentFSMState()
+	r.baseFSMInstance.GetLogger().Infof("Current state: %s", currentState)
 	if IsRunningState(currentState) {
 		// Reconcile the cluster config via HTTP
 		// 1. Check if we have changes in the config
@@ -185,10 +186,25 @@ func (r *RedpandaInstance) reconcileExternalChanges(ctx context.Context, service
 			changes["log_retention_ms"] = r.ObservedState.ObservedRedpandaServiceConfig.Topic.DefaultTopicRetentionMs
 		}
 		if len(changes) > 0 {
+			r.baseFSMInstance.GetLogger().Infof("Updating Redpanda cluster config: %v", changes)
 			err := r.service.UpdateRedpandaClusterConfig(ctx, r.baseFSMInstance.GetID(), changes)
 			if err != nil {
 				return fmt.Errorf("failed to update Redpanda cluster config: %w", err)
 			}
+
+			// Stop the instance to trigger a restart
+			if err := r.StopInstance(ctx, services.GetFileSystem()); err != nil {
+				return err
+			}
+
+			// Send stop event to trigger a restart
+			r.baseFSMInstance.GetLogger().Infof("Sending stop event to trigger a restart")
+			err = r.baseFSMInstance.SendEvent(ctx, EventStop)
+			if err != nil {
+				return err
+			}
+			r.baseFSMInstance.GetLogger().Infof("Stop event sent to trigger a restart")
+			return nil
 		}
 	}
 	return nil
@@ -208,11 +224,14 @@ func (r *RedpandaInstance) reconcileStateTransition(ctx context.Context, service
 	currentState := r.baseFSMInstance.GetCurrentFSMState()
 	desiredState := r.baseFSMInstance.GetDesiredFSMState()
 
+	r.baseFSMInstance.GetLogger().Infof("Current state: %s, desired state: %s", currentState, desiredState)
+
 	// Report current and desired state metrics
 	metrics.UpdateServiceState(metrics.ComponentRedpandaInstance, r.baseFSMInstance.GetID(), currentState, desiredState)
 
 	// Handle lifecycle states first - these take precedence over operational states
 	if internal_fsm.IsLifecycleState(currentState) {
+		r.baseFSMInstance.GetLogger().Infof("Reconciling lifecycle states from state: %s", currentState)
 		err, reconciled := r.baseFSMInstance.ReconcileLifecycleStates(ctx, services, currentState, r.CreateInstance, r.RemoveInstance, r.CheckForCreation)
 		if err != nil {
 			return err, false
@@ -222,11 +241,13 @@ func (r *RedpandaInstance) reconcileStateTransition(ctx context.Context, service
 
 	// If both current and desired state are stopped, we don't need to do anything
 	if currentState == OperationalStateStopped && desiredState == OperationalStateStopped {
+		r.baseFSMInstance.GetLogger().Infof("Currently in %s state, and we want to be stopped, so we don't need to do anything", currentState)
 		return nil, false
 	}
 
 	// Handle operational states
 	if IsOperationalState(currentState) {
+		r.baseFSMInstance.GetLogger().Infof("Reconciling operational states from state: %s", currentState)
 		err, reconciled := r.reconcileOperationalStates(ctx, services, currentState, desiredState, currentTime)
 		if err != nil {
 			return err, false
@@ -246,8 +267,10 @@ func (r *RedpandaInstance) reconcileOperationalStates(ctx context.Context, servi
 
 	switch desiredState {
 	case OperationalStateActive:
+		r.baseFSMInstance.GetLogger().Infof("Reconciling transition to active from state: %s", currentState)
 		return r.reconcileTransitionToActive(ctx, services, currentState, currentTime)
 	case OperationalStateStopped:
+		r.baseFSMInstance.GetLogger().Infof("Reconciling transition to stopped from state: %s", currentState)
 		return r.reconcileTransitionToStopped(ctx, services, currentState)
 	default:
 		return fmt.Errorf("invalid desired state: %s", desiredState), false
@@ -261,6 +284,7 @@ func (r *RedpandaInstance) reconcileTransitionToActive(ctx context.Context, serv
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentRedpandaInstance, r.baseFSMInstance.GetID()+".reconcileTransitionToActive", time.Since(start))
 	}()
+	r.baseFSMInstance.GetLogger().Infof("Reconciling transition to active from state: %s", currentState)
 
 	switch {
 	// If we're stopped, we need to start first
@@ -374,9 +398,11 @@ func (r *RedpandaInstance) reconcileTransitionToStopped(ctx context.Context, ser
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentRedpandaInstance, r.baseFSMInstance.GetID()+".reconcileTransitionToStopped", time.Since(start))
 	}()
+	r.baseFSMInstance.GetLogger().Infof("Reconciling transition to stopped from state: %s", currentState)
 
 	// If we're in any operational state except Stopped or Stopping, initiate stop
 	if currentState != OperationalStateStopped && currentState != OperationalStateStopping {
+		r.baseFSMInstance.GetLogger().Infof("Currently in %s state, but we want to be stopped, so we need to initiate a stop", currentState)
 		// Attempt to initiate a stop
 		if err := r.StopInstance(ctx, services.GetFileSystem()); err != nil {
 			return err, false
