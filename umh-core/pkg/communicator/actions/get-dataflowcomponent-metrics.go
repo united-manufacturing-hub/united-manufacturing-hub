@@ -79,7 +79,7 @@ func (a *GetDataflowcomponentMetricsAction) Validate() (err error) {
 func (a *GetDataflowcomponentMetricsAction) Execute() (interface{}, map[string]interface{}, error) {
 	dfcInstance, err := fsm.FindDfcInstanceByUUID(a.systemSnapshotManager.GetDeepCopySnapshot(), a.payload.UUID)
 	if err != nil {
-		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, "failed to find DFC instance", a.outboundChannel, models.GetDataflowcomponentMetrics)
+		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, "failed to find DFC instance", a.outboundChannel, models.GetDataFlowComponentMetrics)
 		return nil, nil, err
 	}
 
