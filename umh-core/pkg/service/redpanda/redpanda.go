@@ -968,7 +968,6 @@ func (s *RedpandaService) UpdateRedpandaClusterConfig(ctx context.Context, redpa
 	if s.httpClient == nil {
 		return fmt.Errorf("http client not initialized")
 	}
-	s.logger.Debugf("Updating Redpanda cluster config for %s with config updates: %v", redpandaName, configUpdates)
 
 	// If the context is done, return an error
 	if ctx.Err() != nil {
@@ -1035,8 +1034,6 @@ func (s *RedpandaService) UpdateRedpandaClusterConfig(ctx context.Context, redpa
 		return fmt.Errorf("failed to close response body: %w", bodyError)
 	}
 
-	s.logger.Debugf("Successfully sent Redpanda cluster config update for %s, new config version: %d", redpandaName, response.ConfigVersion)
-
 	// Do a readback of the cluster config to verify the update
 	// http://127.0.0.1:9644/v1/cluster_config
 
@@ -1064,24 +1061,18 @@ func (s *RedpandaService) UpdateRedpandaClusterConfig(ctx context.Context, redpa
 	for key, value := range configUpdates {
 		readbackValue, ok := readbackConfig[key]
 		if !ok {
-			s.logger.Errorf("key %s not found in Redpanda cluster config for %s", key, redpandaName)
 			return fmt.Errorf("key %s not found in Redpanda cluster config for %s", key, redpandaName)
 		}
-
-		s.logger.Debugf("key %s: %v [Type: %T]", key, value, value)
-		s.logger.Debugf("readback key %s: %v [Type: %T]", key, readbackValue, readbackValue)
 
 		// If readback value is a string, we can just compare the strings
 		if readbackValueString, ok := readbackValue.(string); ok {
 			if readbackValueString != value {
-				s.logger.Errorf("value of %s in Redpanda cluster config for %s is not the same as the value in the request [string comparison]", key, redpandaName)
 				return fmt.Errorf("value of %s in Redpanda cluster config for %s is not the same as the value in the request [string comparison]", key, redpandaName)
 			}
 		}
 		// Otherwise we can assume that the value is a float64, and we can therefore compare the float64s
 		readbackValueFloat, ok := readbackValue.(float64)
 		if !ok {
-			s.logger.Errorf("value of %s in Redpanda cluster config for %s is not a float64 [readback]", key, redpandaName)
 			return fmt.Errorf("value of %s in Redpanda cluster config for %s is not a float64 [readback]", key, redpandaName)
 		}
 		valueFloat, ok := value.(float64)
@@ -1089,19 +1080,15 @@ func (s *RedpandaService) UpdateRedpandaClusterConfig(ctx context.Context, redpa
 			// Try to cast an int and then to a float64
 			valueInt, ok := value.(int64)
 			if !ok {
-				s.logger.Errorf("value of %s in Redpanda cluster config for %s is not a float64 [request]", key, redpandaName)
 				return fmt.Errorf("value of %s in Redpanda cluster config for %s is not a float64 [request]", key, redpandaName)
 			}
 			valueFloat = float64(valueInt)
 		}
 
 		if readbackValueFloat != valueFloat {
-			s.logger.Errorf("value of %s in Redpanda cluster config for %s is not the same as the value in the request [float64 comparison]", key, redpandaName)
 			return fmt.Errorf("value of %s in Redpanda cluster config for %s is not the same as the value in the request [float64 comparison]", key, redpandaName)
 		}
 	}
-
-	s.logger.Debugf("Update of Redpanda cluster config for %s successful", redpandaName)
 
 	return nil
 }
