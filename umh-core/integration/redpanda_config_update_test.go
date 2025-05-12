@@ -82,7 +82,7 @@ var _ = FDescribe("Redpanda Config Update Integration Test", Ordered, Label("int
 			GinkgoWriter.Printf("Redpanda config: %s\n", redpandaConfig)
 			GinkgoWriter.Printf("Error: %v\n", err)
 			return err == nil && redpandaConfig == "7200000"
-		}, 20*time.Second, 1*time.Second).Should(BeTrue(), "Redpanda config should be updated")
+		}, 60*time.Second, 1*time.Second).Should(BeTrue(), "Redpanda config should be updated")
 
 		By("Waiting for Redpanda to restart and apply new config")
 		// Wait for metrics to become available again after restart

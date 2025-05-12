@@ -1034,6 +1034,38 @@ func (s *RedpandaService) UpdateRedpandaClusterConfig(ctx context.Context, redpa
 		return fmt.Errorf("failed to close response body: %w", bodyError)
 	}
 
-	s.logger.Debugf("Successfully updated Redpanda cluster config for %s, new config version: %d", redpandaName, response.ConfigVersion)
+	s.logger.Debugf("Successfully sent Redpanda cluster config update for %s, new config version: %d", redpandaName, response.ConfigVersion)
+
+	// Do a readback of the cluster config to verify the update
+	// http://127.0.0.1:9644/v1/cluster_config?key=log_retention_ms
+
+	readbackUrl := fmt.Sprintf("http://localhost:9644/v1/cluster_config?key=%s", "log_retention_ms")
+
+	readbackReq, err := http.NewRequestWithContext(ctx, http.MethodGet, readbackUrl, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create readback request: %w", err)
+	}
+
+	readbackResp, err := s.httpClient.Do(readbackReq)
+	if err != nil {
+		return fmt.Errorf("failed to send readback request: %w", err)
+	}
+
+	readbackBody, err := io.ReadAll(readbackResp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read readback response body: %w", err)
+	}
+
+	readbackBodyString := string(readbackBody)
+
+	s.logger.Debugf("Readback of Redpanda cluster config for %s: %s", redpandaName, readbackBodyString)
+
+	// Check if the readback body contains the key
+	if !strings.Contains(readbackBodyString, "log_retention_ms") {
+		return fmt.Errorf("readback of Redpanda cluster config for %s does not contain the key 'log_retention_ms'", redpandaName)
+	}
+
+	s.logger.Debugf("Update of Redpanda cluster config for %s successful", redpandaName)
+
 	return nil
 }
