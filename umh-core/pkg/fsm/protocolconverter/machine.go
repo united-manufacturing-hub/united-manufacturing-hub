@@ -26,14 +26,40 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/dataflowcomponent"
+	protocolconvertersvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/protocolconverter"
 )
 
-// NewDataflowComponentInstance creates a new DataflowComponentInstance with a given ID and service path
-func NewDataflowComponentInstance(
+// NewProtocolConverterInstance creates a new ProtocolConverterInstance with a given ID and service path
+func NewProtocolConverterInstance(
 	s6BaseDir string,
-	config config.DataFlowComponentConfig,
-) *DataflowComponentInstance {
+	config config.ProtocolConverterConfig,
+) *ProtocolConverterInstance {
+
+	var degradedStates = []string{
+		OperationalStateDegradedConnection,
+		OperationalStateDegradedRedpanda,
+		OperationalStateDegradedDFC,
+		OperationalStateDegradedOther,
+	}
+
+	var runningStates = []string{
+		OperationalStateActive,
+		OperationalStateIdle,
+	}
+	runningStates = append(runningStates, degradedStates...)
+
+	var startingStates = []string{
+		OperationalStateStartingConnection,
+		OperationalStateStartingRedpanda,
+		OperationalStateStartingDFC,
+	}
+
+	var startingStatesWithFailed = append(startingStates, append(
+		[]string{OperationalStateStartingFailedDFC},
+		[]string{OperationalStateStartingFailedDFCMissing}...,
+	)...)
+
+	var startingAndRunningStates = append(startingStatesWithFailed, runningStates...)
 
 	cfg := internal_fsm.BaseFSMInstanceConfig{
 		ID:                           config.Name,
@@ -44,37 +70,44 @@ func NewDataflowComponentInstance(
 			// Basic lifecycle transitions
 			// Stopped is the initial state
 			// stopped -> starting
-			{Name: EventStart, Src: []string{OperationalStateStopped}, Dst: OperationalStateStarting},
+			{Name: EventStart, Src: []string{OperationalStateStopped}, Dst: OperationalStateStartingConnection},
+			{Name: EventStartConnectionUp, Src: []string{OperationalStateStartingConnection}, Dst: OperationalStateStartingRedpanda},
+			{Name: EventStartRedpandaUp, Src: []string{OperationalStateStartingRedpanda}, Dst: OperationalStateStartingDFC},
+
+			// EventStartRetry allows to reset the starting phase, e.g., if an intermediary check failed
+			// So it will cause the start to happen again
+			// In benthos, we simply call a EventStartFailed, and then let the system retry
+			// But the protocol converter, an EventStartFailed means an unrecoverable error requiring human intervention
+			// So this is why there is a separate EventStartRetry
+			{Name: EventStartRetry, Src: startingStates, Dst: OperationalStateStartingConnection},
 
 			// starting -> idle
-			{Name: EventStartDone, Src: []string{OperationalStateStarting}, Dst: OperationalStateIdle},
+			{Name: EventStartDFCUp, Src: []string{OperationalStateStartingDFC}, Dst: OperationalStateIdle},
 
 			// idle -> active
-			{Name: EventBenthosDataReceived, Src: []string{OperationalStateIdle}, Dst: OperationalStateActive},
+			{Name: EventDFCActive, Src: []string{OperationalStateIdle}, Dst: OperationalStateActive},
 
 			//	active/idle -> degraded
-			{Name: EventBenthosDegraded, Src: []string{OperationalStateActive, OperationalStateIdle}, Dst: OperationalStateDegraded},
+			{Name: EventConnectionUnhealthy, Src: runningStates, Dst: OperationalStateDegradedConnection},
+			{Name: EventRedpandaDegraded, Src: runningStates, Dst: OperationalStateDegradedRedpanda},
+			{Name: EventDFCDegraded, Src: runningStates, Dst: OperationalStateDegradedDFC},
+			{Name: EventDegradedOther, Src: runningStates, Dst: OperationalStateDegradedOther},
 
 			// active -> idle
-			{Name: EventBenthosNoDataReceived, Src: []string{OperationalStateActive}, Dst: OperationalStateIdle},
+			{Name: EventDFCIdle, Src: []string{OperationalStateActive}, Dst: OperationalStateIdle},
 
 			// degraded -> idle
-			{Name: EventBenthosRecovered, Src: []string{OperationalStateDegraded}, Dst: OperationalStateIdle},
+			{Name: EventRecovered, Src: degradedStates, Dst: OperationalStateIdle},
 
 			// starting -> startingFailed
-			{Name: EventStartFailed, Src: []string{OperationalStateStarting}, Dst: OperationalStateStartingFailed},
+			{Name: EventStartFailedDFCMissing, Src: startingStates, Dst: OperationalStateStartingFailedDFCMissing},
+			{Name: EventStartFailedDFC, Src: startingStates, Dst: OperationalStateStartingFailedDFC},
 
 			// everywhere to stopping
 			{
 				Name: EventStop,
-				Src: []string{
-					OperationalStateStarting,
-					OperationalStateStartingFailed,
-					OperationalStateIdle,
-					OperationalStateActive,
-					OperationalStateDegraded,
-				},
-				Dst: OperationalStateStopping,
+				Src:  startingAndRunningStates,
+				Dst:  OperationalStateStopping,
 			},
 
 			// stopping to stopped
@@ -85,16 +118,16 @@ func NewDataflowComponentInstance(
 	logger := logger.For(config.Name)
 	backoffConfig := backoff.DefaultConfig(cfg.ID, logger)
 
-	instance := &DataflowComponentInstance{
+	instance := &ProtocolConverterInstance{
 		baseFSMInstance: internal_fsm.NewBaseFSMInstance(cfg, backoffConfig, logger),
-		service:         dataflowcomponent.NewDefaultDataFlowComponentService(config.Name),
-		config:          config.DataFlowComponentServiceConfig,
-		ObservedState:   DataflowComponentObservedState{},
+		service:         protocolconvertersvc.NewDefaultProtocolConverterService(config.Name),
+		config:          config.ProtocolConverterServiceConfig,
+		ObservedState:   ProtocolConverterObservedState{},
 	}
 
 	instance.registerCallbacks()
 
-	metrics.InitErrorCounter(metrics.ComponentDataflowComponentInstance, config.Name)
+	metrics.InitErrorCounter(metrics.ComponentProtocolConverterInstance, config.Name)
 
 	return instance
 }
@@ -102,7 +135,7 @@ func NewDataflowComponentInstance(
 // SetDesiredFSMState safely updates the desired state
 // But ensures that the desired state is a valid state and that it is also a reasonable state
 // e.g., nobody wants to have an instance in the "starting" state, that is just intermediate
-func (d *DataflowComponentInstance) SetDesiredFSMState(state string) error {
+func (d *ProtocolConverterInstance) SetDesiredFSMState(state string) error {
 	if state != OperationalStateStopped &&
 		state != OperationalStateActive {
 		return fmt.Errorf("invalid desired state: %s. valid states are %s and %s",
@@ -116,49 +149,49 @@ func (d *DataflowComponentInstance) SetDesiredFSMState(state string) error {
 }
 
 // GetCurrentFSMState returns the current state of the FSM
-func (d *DataflowComponentInstance) GetCurrentFSMState() string {
+func (d *ProtocolConverterInstance) GetCurrentFSMState() string {
 	return d.baseFSMInstance.GetCurrentFSMState()
 }
 
 // GetDesiredFSMState returns the desired state of the FSM
-func (d *DataflowComponentInstance) GetDesiredFSMState() string {
+func (d *ProtocolConverterInstance) GetDesiredFSMState() string {
 	return d.baseFSMInstance.GetDesiredFSMState()
 }
 
 // Remove starts the removal process, it is idempotent and can be called multiple times
 // Note: it is only removed once IsRemoved returns true
-func (d *DataflowComponentInstance) Remove(ctx context.Context) error {
+func (d *ProtocolConverterInstance) Remove(ctx context.Context) error {
 	return d.baseFSMInstance.Remove(ctx)
 }
 
 // IsRemoved returns true if the instance has been removed
-func (d *DataflowComponentInstance) IsRemoved() bool {
+func (d *ProtocolConverterInstance) IsRemoved() bool {
 	return d.baseFSMInstance.IsRemoved()
 }
 
 // IsRemoving returns true if the instance is in the removing state
-func (d *DataflowComponentInstance) IsRemoving() bool {
+func (d *ProtocolConverterInstance) IsRemoving() bool {
 	return d.baseFSMInstance.IsRemoving()
 }
 
 // IsStopping returns true if the instance is in the stopping state
-func (d *DataflowComponentInstance) IsStopping() bool {
+func (d *ProtocolConverterInstance) IsStopping() bool {
 	return d.baseFSMInstance.GetCurrentFSMState() == OperationalStateStopping
 }
 
 // IsStopped returns true if the instance is in the stopped state
-func (d *DataflowComponentInstance) IsStopped() bool {
+func (d *ProtocolConverterInstance) IsStopped() bool {
 	return d.baseFSMInstance.GetCurrentFSMState() == OperationalStateStopped
 }
 
 // PrintState prints the current state of the FSM for debugging
-func (d *DataflowComponentInstance) PrintState() {
+func (d *ProtocolConverterInstance) PrintState() {
 	d.baseFSMInstance.GetLogger().Debugf("Current state: %s", d.baseFSMInstance.GetCurrentFSMState())
 	d.baseFSMInstance.GetLogger().Debugf("Desired state: %s", d.baseFSMInstance.GetDesiredFSMState())
 	d.baseFSMInstance.GetLogger().Debugf("Observed state: %+v", d.ObservedState)
 }
 
 // GetExpectedMaxP95ExecutionTimePerInstance returns the expected max p95 execution time of the instance
-func (d *DataflowComponentInstance) GetExpectedMaxP95ExecutionTimePerInstance() time.Duration {
-	return constants.DataflowComponentExpectedMaxP95ExecutionTimePerInstance
+func (d *ProtocolConverterInstance) GetExpectedMaxP95ExecutionTimePerInstance() time.Duration {
+	return constants.ProtocolConverterExpectedMaxP95ExecutionTimePerInstance
 }

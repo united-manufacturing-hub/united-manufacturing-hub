@@ -22,21 +22,21 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/dataflowcomponent"
 )
 
-// DataflowComponentObservedStateSnapshot is a deep-copyable snapshot of BenthosObservedState
-type DataflowComponentObservedStateSnapshot struct {
+// ProtocolConverterObservedStateSnapshot is a deep-copyable snapshot of BenthosObservedState
+type ProtocolConverterObservedStateSnapshot struct {
 	Config      dataflowcomponentserviceconfig.DataflowComponentServiceConfig
 	ServiceInfo dataflowcomponent.ServiceInfo
 }
 
 // IsObservedStateSnapshot implements the fsm.ObservedStateSnapshot interface
-func (s *DataflowComponentObservedStateSnapshot) IsObservedStateSnapshot() {
+func (s *ProtocolConverterObservedStateSnapshot) IsObservedStateSnapshot() {
 	// Marker method implementation
 }
 
 // CreateObservedStateSnapshot implements the fsm.ObservedStateConverter interface for DataflowComponentInstance
-func (d *DataflowComponentInstance) CreateObservedStateSnapshot() fsm.ObservedStateSnapshot {
+func (d *ProtocolConverterInstance) CreateObservedStateSnapshot() fsm.ObservedStateSnapshot {
 	// Create a deep copy of the observed state
-	snapshot := &DataflowComponentObservedStateSnapshot{}
+	snapshot := &ProtocolConverterObservedStateSnapshot{}
 
 	// Deep copy config
 	err := deepcopy.Copy(&snapshot.Config, &d.config)

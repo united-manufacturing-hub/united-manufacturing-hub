@@ -16,9 +16,9 @@ package protocolconverter
 
 import (
 	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
-	dataflowcomponentconfig "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
+	protocolconverterconfig "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
 	publicfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
-	dataflowcomponentsvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/dataflowcomponent"
+	protocolconvertersvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/protocolconverter"
 )
 
 // Operational state constants (using internal_fsm compatible naming)
@@ -47,10 +47,11 @@ const (
 	OperationalStateActive = "active"
 	// OperationalStateDegradedConnection is the state when the protocol converter successfully started up once, but then the connection goes down or degraded
 	OperationalStateDegradedConnection = "degraded_connection"
-	// OperationalStateDegradedDFC is the state when the protocol converter successfully started up once, but then the DFC goes down or degraded
-	OperationalStateDegradedDFC = "degraded_dfc"
 	// OperationalStateDegradedRedpanda is the state when the protocol converter successfully started up once, but then the redpanda goes down or degraded
 	OperationalStateDegradedRedpanda = "degraded_redpanda"
+	// OperationalStateDegradedDFC is the state when the protocol converter successfully started up once, but then the DFC goes down or degraded
+	OperationalStateDegradedDFC = "degraded_dfc"
+
 	// OperationalStateDegradedOther is the state when the protocol converter successfully started up once, but then we detected some state that cannot happen
 	// State 1: DFC is idle, but redpanda is active (or vice versa) --> they depend on each other
 	// State 2: redpanda is idle or active, but the DFC benthos has no output active (or vice versa) --> they depend on each other
@@ -61,29 +62,53 @@ const (
 // Operational event constants
 const (
 	// Basic lifecycle events
-	EventStart       = "start"
-	EventStartDone   = "start_done"
-	EventStop        = "stop"
-	EventStopDone    = "stop_done"
-	EventStartFailed = "start_failed"
+	EventStart             = "start"
+	EventStartConnectionUp = "start_connection_up"
+	EventStartRedpandaUp   = "start_redpanda_up"
+	EventStartDFCUp        = "start_dfc_up"
+	EventStartRetry        = "start_retry"
+
+	EventStop     = "stop"
+	EventStopDone = "stop_done"
+
+	EventStartFailedDFCMissing = "start_failed_dfc_missing"
+	EventStartFailedDFC        = "start_failed_dfc"
+
+	// EventConnectionUp is up
+	EventConnectionUp = "connection_up"
+	// EventConnectionUnhealthy is down or degraded
+	EventConnectionUnhealthy = "connection_unhealthy"
+
+	// EventRedpandaHealthy is either idle or active
+	EventRedpandaHealthy  = "redpanda_healthy"
+	EventRedpandaDegraded = "redpanda_degraded"
 
 	// Running phase events
-	EventBenthosDataReceived   = "benthos_data_received"
-	EventBenthosNoDataReceived = "benthos_no_data_received"
-	EventBenthosDegraded       = "benthos_degraded"
-	EventBenthosRecovered      = "benthos_recovered"
+	EventDFCActive   = "dfc_active"
+	EventDFCIdle     = "dfc_idle"
+	EventDFCDegraded = "dfc_degraded"
+
+	EventRecovered = "recovered"
+
+	EventDegradedOther = "degraded_other"
 )
 
 // IsOperationalState returns whether the given state is a valid operational state
 func IsOperationalState(state string) bool {
 	switch state {
-	case OperationalStateStopped,
-		OperationalStateStarting,
-		OperationalStateStartingFailed,
+	case OperationalStateStopping,
+		OperationalStateStopped,
+		OperationalStateStartingConnection,
+		OperationalStateStartingRedpanda,
+		OperationalStateStartingDFC,
+		OperationalStateStartingFailedDFC,
+		OperationalStateStartingFailedDFCMissing,
 		OperationalStateIdle,
 		OperationalStateActive,
-		OperationalStateDegraded,
-		OperationalStateStopping:
+		OperationalStateDegradedConnection,
+		OperationalStateDegradedRedpanda,
+		OperationalStateDegradedDFC,
+		OperationalStateDegradedOther:
 		return true
 	}
 	return false
@@ -92,8 +117,11 @@ func IsOperationalState(state string) bool {
 // IsStartingState returns whether the given state is a starting state
 func IsStartingState(state string) bool {
 	switch state {
-	case OperationalStateStarting,
-		OperationalStateStartingFailed:
+	case OperationalStateStartingConnection,
+		OperationalStateStartingRedpanda,
+		OperationalStateStartingDFC,
+		OperationalStateStartingFailedDFC,
+		OperationalStateStartingFailedDFCMissing:
 		return true
 	}
 	return false
@@ -104,73 +132,76 @@ func IsRunningState(state string) bool {
 	switch state {
 	case OperationalStateIdle,
 		OperationalStateActive,
-		OperationalStateDegraded:
+		OperationalStateDegradedConnection,
+		OperationalStateDegradedRedpanda,
+		OperationalStateDegradedDFC,
+		OperationalStateDegradedOther:
 		return true
 	}
 	return false
 }
 
-// DataflowComponentObservedState contains the observed runtime state of a DataflowComponent instance
-type DataflowComponentObservedState struct {
-	// ServiceInfo contains information about the S6 service
-	ServiceInfo dataflowcomponentsvc.ServiceInfo
+// ProtocolConverterObservedState contains the observed runtime state of a ProtocolConverter instance
+type ProtocolConverterObservedState struct {
+	// ServiceInfo contains information about the ProtocolConverter service
+	ServiceInfo protocolconvertersvc.ServiceInfo
 
-	// ObservedDataflowComponentConfig contains the observed DataflowComponent service config
-	ObservedDataflowComponentConfig dataflowcomponentconfig.DataflowComponentServiceConfig
+	// ObservedProtocolConverterConfig contains the observed ProtocolConverter service config
+	ObservedProtocolConverterConfig protocolconverterconfig.ProtocolConverterServiceConfig
 }
 
 // IsObservedState implements the ObservedState interface
-func (b DataflowComponentObservedState) IsObservedState() {}
+func (b ProtocolConverterObservedState) IsObservedState() {}
 
-// BenthosInstance implements the FSMInstance interface
-// If BenthosInstance does not implement the FSMInstance interface, this will
+// ProtocolConverterInstance implements the FSMInstance interface
+// If ProtocolConverterInstance does not implement the FSMInstance interface, this will
 // be detected at compile time
-var _ publicfsm.FSMInstance = (*DataflowComponentInstance)(nil)
+var _ publicfsm.FSMInstance = (*ProtocolConverterInstance)(nil)
 
-// DataflowComponentInstance is a state-machine managed instance of a DataflowComponent service.
-type DataflowComponentInstance struct {
+// ProtocolConverterInstance is a state-machine managed instance of a ProtocolConverter service.
+type ProtocolConverterInstance struct {
 	baseFSMInstance *internalfsm.BaseFSMInstance
 
 	// ObservedState represents the observed state of the service
 	// ObservedState contains all metrics, logs, etc.
 	// that are updated at the beginning of Reconcile and then used to
 	// determine the next state
-	ObservedState DataflowComponentObservedState
+	ObservedState ProtocolConverterObservedState
 
-	// service is the DataflowComponent service implementation to use
-	// It has a manager that manages the benthos service instances
-	service dataflowcomponentsvc.IDataFlowComponentService
+	// service is the ProtocolConverter service implementation to use
+	// It has a manager that manages the protocolconverter service instances
+	service protocolconvertersvc.IProtocolConverterService
 
 	// config contains all the configuration for this service
-	config dataflowcomponentconfig.DataflowComponentServiceConfig
+	config protocolconverterconfig.ProtocolConverterServiceConfig
 }
 
 // GetLastObservedState returns the last known state of the instance
-func (d *DataflowComponentInstance) GetLastObservedState() publicfsm.ObservedState {
+func (d *ProtocolConverterInstance) GetLastObservedState() publicfsm.ObservedState {
 	return d.ObservedState
 }
 
-// SetService sets the DataflowComponent service implementation to use
+// SetService sets the ProtocolConverter service implementation to use
 // This is a testing-only utility to access the private service field
-func (d *DataflowComponentInstance) SetService(service dataflowcomponentsvc.IDataFlowComponentService) {
+func (d *ProtocolConverterInstance) SetService(service protocolconvertersvc.IProtocolConverterService) {
 	d.service = service
 }
 
-// GetConfig returns the DataflowComponentServiceConfig for this service
+// GetConfig returns the ProtocolConverterServiceConfig for this service
 // This is a testing-only utility to access the private service field
-func (d *DataflowComponentInstance) GetConfig() dataflowcomponentconfig.DataflowComponentServiceConfig {
+func (d *ProtocolConverterInstance) GetConfig() protocolconverterconfig.ProtocolConverterServiceConfig {
 	return d.config
 }
 
 // GetLastError returns the last error of the instance
 // This is a testing-only utility to access the private baseFSMInstance field
-func (d *DataflowComponentInstance) GetLastError() error {
+func (d *ProtocolConverterInstance) GetLastError() error {
 	return d.baseFSMInstance.GetLastError()
 }
 
 // IsTransientStreakCounterMaxed returns whether the transient streak counter
 // has reached the maximum number of ticks, which means that the FSM is stuck in a state
 // and should be removed
-func (d *DataflowComponentInstance) IsTransientStreakCounterMaxed() bool {
+func (d *ProtocolConverterInstance) IsTransientStreakCounterMaxed() bool {
 	return d.baseFSMInstance.IsTransientStreakCounterMaxed()
 }

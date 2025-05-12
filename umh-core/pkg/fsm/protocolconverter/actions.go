@@ -8,7 +8,7 @@
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or impliep.
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
@@ -22,12 +22,15 @@ import (
 	"time"
 
 	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
-	benthosfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
+	connectionfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/connection"
+	dataflowfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
+	redpandafsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/redpanda"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	dataflowcomponentservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/dataflowcomponent"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/protocolconverter"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	standarderrors "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
 )
@@ -43,30 +46,30 @@ import (
 //   - If an error occurs, the Reconcile function must handle
 //     setting error state and scheduling a retry/backoff.
 
-// CreateInstance attempts to add the DataflowComponent to the Benthos manager.
-func (d *DataflowComponentInstance) CreateInstance(ctx context.Context, filesystemService filesystem.Service) error {
-	d.baseFSMInstance.GetLogger().Debugf("Starting Action: Adding DataflowComponent service %s to Benthos manager ...", d.baseFSMInstance.GetID())
+// CreateInstance attempts to add the ProtocolConverter to the Benthos manager.
+func (p *ProtocolConverterInstance) CreateInstance(ctx context.Context, filesystemService filesystem.Service) error {
+	p.baseFSMInstance.GetLogger().Debugf("Starting Action: Adding ProtocolConverter service %s to Benthos manager ...", p.baseFSMInstance.GetID())
 
-	err := d.service.AddDataFlowComponentToBenthosManager(ctx, filesystemService, &d.config, d.baseFSMInstance.GetID())
+	err := p.service.AddToManager(ctx, filesystemService, &p.config, p.baseFSMInstance.GetID())
 	if err != nil {
 		if errors.Is(err, dataflowcomponentservice.ErrServiceAlreadyExists) {
-			d.baseFSMInstance.GetLogger().Debugf("DataflowComponent service %s already exists in Benthos manager", d.baseFSMInstance.GetID())
+			p.baseFSMInstance.GetLogger().Debugf("ProtocolConverter service %s already exists in Benthos manager", p.baseFSMInstance.GetID())
 			return nil // do not throw an error, as each action is expected to be idempotent
 		}
-		return fmt.Errorf("failed to add DataflowComponent service %s to Benthos manager: %w", d.baseFSMInstance.GetID(), err)
+		return fmt.Errorf("failed to add ProtocolConverter service %s to DFC manager: %w", p.baseFSMInstance.GetID(), err)
 	}
 
-	d.baseFSMInstance.GetLogger().Debugf("DataflowComponent service %s added to Benthos manager", d.baseFSMInstance.GetID())
+	p.baseFSMInstance.GetLogger().Debugf("ProtocolConverter service %s added to DFC manager", p.baseFSMInstance.GetID())
 	return nil
 }
 
-// RemoveInstance attempts to remove the DataflowComponent from the Benthos manager.
+// RemoveInstance attempts to remove the ProtocolConverter from the Benthos manager.
 // It requires the service to be stopped before removal.
-func (b *DataflowComponentInstance) RemoveInstance(ctx context.Context, filesystemService filesystem.Service) error {
-	b.baseFSMInstance.GetLogger().Debugf("Starting Action: Removing DataflowComponent service %s from Benthos manager ...", b.baseFSMInstance.GetID())
+func (b *ProtocolConverterInstance) RemoveInstance(ctx context.Context, filesystemService filesystem.Service) error {
+	b.baseFSMInstance.GetLogger().Debugf("Starting Action: Removing ProtocolConverter service %s from Benthos manager ...", b.baseFSMInstance.GetID())
 
 	// Remove the initiateDataflowComponent from the Benthos manager
-	err := b.service.RemoveDataFlowComponentFromBenthosManager(ctx, filesystemService, b.baseFSMInstance.GetID())
+	err := b.service.RemoveFromManager(ctx, filesystemService, b.baseFSMInstance.GetID())
 	switch {
 	// ---------------------------------------------------------------
 	// happy paths
@@ -104,47 +107,47 @@ func (b *DataflowComponentInstance) RemoveInstance(ctx context.Context, filesyst
 }
 
 // StartInstance to start the DataflowComponent by setting the desired state to running for the given instance
-func (d *DataflowComponentInstance) StartInstance(ctx context.Context, filesystemService filesystem.Service) error {
-	d.baseFSMInstance.GetLogger().Debugf("Starting Action: Starting DataflowComponent service %s ...", d.baseFSMInstance.GetID())
+func (p *ProtocolConverterInstance) StartInstance(ctx context.Context, filesystemService filesystem.Service) error {
+	p.baseFSMInstance.GetLogger().Debugf("Starting Action: Starting ProtocolConverter service %s ...", p.baseFSMInstance.GetID())
 
 	// TODO: Add pre-start validation
 
 	// Set the desired state to running for the given instance
-	err := d.service.StartDataFlowComponent(ctx, filesystemService, d.baseFSMInstance.GetID())
+	err := p.service.Start(ctx, filesystemService, p.baseFSMInstance.GetID())
 	if err != nil {
 		// if the service is not there yet but we attempt to start it, we need to throw an error
-		return fmt.Errorf("failed to start DataflowComponent service %s: %w", d.baseFSMInstance.GetID(), err)
+		return fmt.Errorf("failed to start ProtocolConverter service %s: %w", p.baseFSMInstance.GetID(), err)
 	}
 
-	d.baseFSMInstance.GetLogger().Debugf("DataflowComponent service %s start command executed", d.baseFSMInstance.GetID())
+	p.baseFSMInstance.GetLogger().Debugf("ProtocolConverter service %s start command executed", p.baseFSMInstance.GetID())
 	return nil
 }
 
 // StopInstance attempts to stop the DataflowComponent by setting the desired state to stopped for the given instance
-func (d *DataflowComponentInstance) StopInstance(ctx context.Context, filesystemService filesystem.Service) error {
-	d.baseFSMInstance.GetLogger().Debugf("Starting Action: Stopping DataflowComponent service %s ...", d.baseFSMInstance.GetID())
+func (p *ProtocolConverterInstance) StopInstance(ctx context.Context, filesystemService filesystem.Service) error {
+	p.baseFSMInstance.GetLogger().Debugf("Starting Action: Stopping ProtocolConverter service %s ...", p.baseFSMInstance.GetID())
 
 	// Set the desired state to stopped for the given instance
-	err := d.service.StopDataFlowComponent(ctx, filesystemService, d.baseFSMInstance.GetID())
+	err := p.service.Stop(ctx, filesystemService, p.baseFSMInstance.GetID())
 	if err != nil {
 		// if the service is not there yet but we attempt to stop it, we need to throw an error
-		return fmt.Errorf("failed to stop DataflowComponent service %s: %w", d.baseFSMInstance.GetID(), err)
+		return fmt.Errorf("failed to stop ProtocolConverter service %s: %w", p.baseFSMInstance.GetID(), err)
 	}
 
-	d.baseFSMInstance.GetLogger().Debugf("DataflowComponent service %s stop command executed", d.baseFSMInstance.GetID())
+	p.baseFSMInstance.GetLogger().Debugf("ProtocolConverter service %s stop command executed", p.baseFSMInstance.GetID())
 	return nil
 }
 
 // CheckForCreation checks whether the creation was successful
 // For DataflowComponent, this is a no-op as we don't need to check anything
-func (d *DataflowComponentInstance) CheckForCreation(ctx context.Context, filesystemService filesystem.Service) bool {
+func (p *ProtocolConverterInstance) CheckForCreation(ctx context.Context, filesystemService filesystem.Service) bool {
 	return true
 }
 
-// getServiceStatus gets the status of the DataflowComponent service
+// getServiceStatus gets the status of the ProtocolConverter service
 // its main purpose is to handle the edge cases where the service is not yet created or not yet running
-func (d *DataflowComponentInstance) getServiceStatus(ctx context.Context, filesystemService filesystem.Service, tick uint64) (dataflowcomponentservice.ServiceInfo, error) {
-	info, err := d.service.Status(ctx, filesystemService, d.baseFSMInstance.GetID(), tick)
+func (p *ProtocolConverterInstance) getServiceStatus(ctx context.Context, services serviceregistry.Provider, tick uint64) (protocolconverter.ServiceInfo, error) {
+	info, err := p.service.Status(ctx, services, p.baseFSMInstance.GetID(), tick)
 	if err != nil {
 		// If there's an error getting the service status, we need to distinguish between cases
 
@@ -152,21 +155,22 @@ func (d *DataflowComponentInstance) getServiceStatus(ctx context.Context, filesy
 			// If the service is being created, we don't want to count this as an error
 			// The instance is likely in Creating or ToBeCreated state, so service doesn't exist yet
 			// This will be handled in the reconcileStateTransition where the service gets created
-			if d.baseFSMInstance.GetCurrentFSMState() == internalfsm.LifecycleStateCreating ||
-				d.baseFSMInstance.GetCurrentFSMState() == internalfsm.LifecycleStateToBeCreated {
-				return dataflowcomponentservice.ServiceInfo{}, dataflowcomponentservice.ErrServiceNotExists
+			if p.baseFSMInstance.GetCurrentFSMState() == internalfsm.LifecycleStateCreating ||
+				p.baseFSMInstance.GetCurrentFSMState() == internalfsm.LifecycleStateToBeCreated {
+				return protocolconverter.ServiceInfo{}, dataflowcomponentservice.ErrServiceNotExists
 			}
 
 			// Log the warning but don't treat it as a fatal error
-			d.baseFSMInstance.GetLogger().Debugf("Service not found, will be created during reconciliation")
-			return dataflowcomponentservice.ServiceInfo{}, nil
+			p.baseFSMInstance.GetLogger().Debugf("Service not found, will be created during reconciliation")
+			return protocolconverter.ServiceInfo{}, nil
 		}
 
 		// For other errors, log them and return
-		d.baseFSMInstance.GetLogger().Errorf("error updating observed state for %s: %s", d.baseFSMInstance.GetID(), err)
+		p.baseFSMInstance.GetLogger().Errorf("error updating observed state for %s: %s", p.baseFSMInstance.GetID(), err)
 		infoWithFailedHealthChecks := info
-		infoWithFailedHealthChecks.BenthosObservedState.ServiceInfo.BenthosStatus.HealthCheck.IsLive = false
-		infoWithFailedHealthChecks.BenthosObservedState.ServiceInfo.BenthosStatus.HealthCheck.IsReady = false
+
+		// TODO: set the healthchecks to false
+
 		// return the info with healthchecks failed
 		return infoWithFailedHealthChecks, err
 	}
@@ -175,22 +179,22 @@ func (d *DataflowComponentInstance) getServiceStatus(ctx context.Context, filesy
 }
 
 // UpdateObservedStateOfInstance updates the observed state of the service
-func (d *DataflowComponentInstance) UpdateObservedStateOfInstance(ctx context.Context, services serviceregistry.Provider, tick uint64, loopStartTime time.Time) error {
+func (p *ProtocolConverterInstance) UpdateObservedStateOfInstance(ctx context.Context, services serviceregistry.Provider, tick uint64, loopStartTime time.Time) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
 
 	start := time.Now()
-	info, err := d.getServiceStatus(ctx, services.GetFileSystem(), tick)
+	info, err := p.getServiceStatus(ctx, services, tick)
 	if err != nil {
 		return fmt.Errorf("error while getting service status: %w", err)
 	}
-	metrics.ObserveReconcileTime(logger.ComponentDataFlowComponentInstance, d.baseFSMInstance.GetID()+".getServiceStatus", time.Since(start))
+	metrics.ObserveReconcileTime(logger.ComponentProtocolConverterInstance, p.baseFSMInstance.GetID()+".getServiceStatus", time.Since(start))
 	// Store the raw service info
-	d.ObservedState.ServiceInfo = info
+	p.ObservedState.ServiceInfo = info
 
-	currentState := d.baseFSMInstance.GetCurrentFSMState()
-	desiredState := d.baseFSMInstance.GetDesiredFSMState()
+	currentState := p.baseFSMInstance.GetCurrentFSMState()
+	desiredState := p.baseFSMInstance.GetDesiredFSMState()
 	// If both desired and current state are stopped, we can return immediately
 	// There wont be any logs, metrics, etc. to check
 	if desiredState == OperationalStateStopped && currentState == OperationalStateStopped {
@@ -199,156 +203,146 @@ func (d *DataflowComponentInstance) UpdateObservedStateOfInstance(ctx context.Co
 
 	// Fetch the actual Benthos config from the service
 	start = time.Now()
-	observedConfig, err := d.service.GetConfig(ctx, services.GetFileSystem(), d.baseFSMInstance.GetID())
-	metrics.ObserveReconcileTime(logger.ComponentDataFlowComponentInstance, d.baseFSMInstance.GetID()+".getConfig", time.Since(start))
+	observedConfig, err := p.service.GetConfig(ctx, services.GetFileSystem(), p.baseFSMInstance.GetID())
+	metrics.ObserveReconcileTime(logger.ComponentProtocolConverterInstance, p.baseFSMInstance.GetID()+".getConfig", time.Since(start))
 	if err == nil {
 		// Only update if we successfully got the config
-		d.ObservedState.ObservedDataflowComponentConfig = observedConfig
+		p.ObservedState.ObservedProtocolConverterConfig = observedConfig
 	} else {
 		if strings.Contains(err.Error(), dataflowcomponentservice.ErrServiceNotExists.Error()) {
 			// Log the error but don't fail - this might happen during creation when the config file doesn't exist yet
-			d.baseFSMInstance.GetLogger().Debugf("Service not found, will be created during reconciliation: %v", err)
+			p.baseFSMInstance.GetLogger().Debugf("Service not found, will be created during reconciliation: %v", err)
 			return nil
 		} else {
-			return fmt.Errorf("failed to get observed DataflowComponent config: %w", err)
+			return fmt.Errorf("failed to get observed ProtocolConverter config: %w", err)
 		}
 	}
 
-	if !dataflowcomponentserviceconfig.ConfigsEqual(&d.config, &d.ObservedState.ObservedDataflowComponentConfig) {
+	if !protocolconverterserviceconfig.ConfigsEqual(&p.config, &p.ObservedState.ObservedProtocolConverterConfig) {
 		// Check if the service exists before attempting to update
-		if d.service.ServiceExists(ctx, services.GetFileSystem(), d.baseFSMInstance.GetID()) {
-			d.baseFSMInstance.GetLogger().Debugf("Observed DataflowComponent config is different from desired config, updating Benthos configuration")
+		if p.service.ServiceExists(ctx, services.GetFileSystem(), p.baseFSMInstance.GetID()) {
+			p.baseFSMInstance.GetLogger().Debugf("Observed ProtocolConverter config is different from desired config, updating ProtocolConverter configuration")
 
-			diffStr := dataflowcomponentserviceconfig.ConfigDiff(&d.config, &d.ObservedState.ObservedDataflowComponentConfig)
-			d.baseFSMInstance.GetLogger().Debugf("Configuration differences: %s", diffStr)
+			diffStr := protocolconverterserviceconfig.ConfigDiff(&p.config, &p.ObservedState.ObservedProtocolConverterConfig)
+			p.baseFSMInstance.GetLogger().Debugf("Configuration differences: %s", diffStr)
 
 			// Update the config in the Benthos manager
-			err := d.service.UpdateDataFlowComponentInBenthosManager(ctx, services.GetFileSystem(), &d.config, d.baseFSMInstance.GetID())
+			err := p.service.UpdateInManager(ctx, services.GetFileSystem(), &p.config, p.baseFSMInstance.GetID())
 			if err != nil {
-				return fmt.Errorf("failed to update DataflowComponent service configuration: %w", err)
+				return fmt.Errorf("failed to update ProtocolConverter service configuration: %w", err)
 			}
 		} else {
-			d.baseFSMInstance.GetLogger().Debugf("Config differences detected but service does not exist yet, skipping update")
+			p.baseFSMInstance.GetLogger().Debugf("Config differences detected but service does not exist yet, skipping update")
 		}
 	}
 
 	return nil
 }
 
-// IsDataflowComponentBenthosRunning reports true when the embedded Benthos FSM
-// is in one of the running states (Active, Idle or Degraded).
-func (d *DataflowComponentInstance) IsDataflowComponentBenthosRunning() bool {
-	switch d.ObservedState.ServiceInfo.BenthosFSMState {
-	// Consider Active , Degraded and Idle as running states
-	case benthosfsm.OperationalStateActive, benthosfsm.OperationalStateIdle, benthosfsm.OperationalStateDegraded:
-		return true
-	}
-	return false
-}
-
-// IsDataflowComponentBenthosStopped reports true when the Benthos FSM state is
-// benthosfsm.OperationalStateStopped.
-func (d *DataflowComponentInstance) IsDataflowComponentBenthosStopped() bool {
-	return d.ObservedState.ServiceInfo.BenthosFSMState == benthosfsm.OperationalStateStopped
-}
-
-// IsDataflowComponentDegraded reports true when the Benthos FSM is already in
-// OperationalStateDegraded.
+// IsConnectionUp checks whether the underlying connection is up and running
+// and not down or degraded (e.g., because of flakiness)
 //
 // It returns:
 //
-//	degraded – true when degraded, false otherwise.
-//	reason   – empty when degraded is false; otherwise the current Benthos
-//	           status reason.
-func (d *DataflowComponentInstance) IsDataflowComponentDegraded() (bool, string) {
-	if d.ObservedState.ServiceInfo.BenthosFSMState == benthosfsm.OperationalStateDegraded {
-		return true, d.ObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.StatusReason
-	}
-	return false, ""
-}
-
-// IsDataflowComponentWithProcessingActivity reports true when Benthos metrics
-// indicate active message processing.
-//
-// It returns:
-//
-//	ok     – true when activity is detected, false otherwise.
-//	reason – empty when ok is true; otherwise the Benthos status reason.
-func (d *DataflowComponentInstance) IsDataflowComponentWithProcessingActivity() (bool, string) {
-	benthosStatus := d.ObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus
-
-	if benthosStatus.BenthosMetrics.MetricsState != nil && benthosStatus.BenthosMetrics.MetricsState.IsActive {
+//	ok     – true when the connection is up and running, false otherwise.
+//	reason – empty when ok is true; otherwise a service‑provided explanation.
+func (p *ProtocolConverterInstance) IsConnectionUp() (bool, string) {
+	if p.ObservedState.ServiceInfo.ConnectionFSMState == connectionfsm.OperationalStateUp {
 		return true, ""
 	}
-
-	return false, benthosStatus.StatusReason // no need to format, as it is already formatted
+	return false, fmt.Sprintf("connection is %s", p.ObservedState.ServiceInfo.ConnectionFSMState) // TODO: add flaky status and latency, or alternaitvely status reason
 }
 
-// IsStartingPeriodGracePeriodExceeded returns true when the difference
-// between `currentTime` (supplied by Reconcile for easier testing) and the
-// timestamp of the **latest** EventStart/OperationalStateStarting record
-// in the archive exceeds `constants.WaitTimeBeforeMarkingStartFailed`.
+// IsRedpandaHealthy checks whether the underlying redpanda is healthy
+// so either idle or active
 //
-// Why archive lookup instead of a timer?
-//   - Unit tests can inject an arbitrary `currentTime` without monkey-
-//     patching `time.Now()`.
-//   - Persistence across restarts guarantees that the grace-period is not
-//     reset accidentally.
+// It returns:
 //
-// Behaviour:
-//   - If the archive has *no* Starting event yet, we treat the grace period
-//     as **not** exceeded (return false) – Reconcile will wait for the next
-//     tick.
-//   - Any unexpected error results in a conservative **false** because we
-//     prefer to wait rather than fail spuriously.
-func (d *DataflowComponentInstance) IsStartingPeriodGracePeriodExceeded(ctx context.Context, currentTime time.Time) (bool, string) {
-	// TODO
+//	ok     – true when the redpanda is healthy, false otherwise.
+//	reason – empty when ok is true; otherwise a service‑provided explanation.
+func (p *ProtocolConverterInstance) IsRedpandaHealthy() (bool, string) {
+	if p.ObservedState.ServiceInfo.RedpandaFSMState == redpandafsm.OperationalStateIdle || p.ObservedState.ServiceInfo.RedpandaFSMState == redpandafsm.OperationalStateActive {
+		return true, ""
+	}
+	return false, p.ObservedState.ServiceInfo.RedpandaObservedState.ServiceInfo.StatusReason
+}
+
+// IsDFCHealthy checks whether the underlying DFC is healthy
+// so either idle or active
+//
+// It returns:
+//
+//	ok     – true when the DFC is healthy, false otherwise.
+//	reason – empty when ok is true; otherwise a explanation
+func (p *ProtocolConverterInstance) IsDFCHealthy() (bool, string) {
+	if p.ObservedState.ServiceInfo.DataflowComponentFSMState == dataflowfsm.OperationalStateIdle || p.ObservedState.ServiceInfo.DataflowComponentFSMState == dataflowfsm.OperationalStateActive {
+		return true, ""
+	}
+	return false, p.ObservedState.ServiceInfo.DataflowComponentObservedState.ServiceInfo.StatusReason
+}
+
+// IsOtherDegraded checks for certain states that should never happen
+// and moves the instance into a degraded state if they happen anyway
+// Case 1: DFC and redpanda should either be both idle or both active, if they differ (for more than a tick) something must have gone wrong (exept that redpanda can be active because of a different DFC)
+// Case 2: if redpanda is idle or active, but the DFC has no output active, something must have gone wrong (either redpanda is actually down and not detected, or the DFC is not connecting to Kafka)
+// Case 3: if the connection is down, but the DFC input is active, something must have gone wrong (either the connection is actually down and not detected, or the DFC is not handling it well)
+//
+// It returns:
+//
+//	ok     – true when there is an issue, false otherwise.
+//	reason – empty when ok is true; otherwise a explanation
+func (p *ProtocolConverterInstance) IsOtherDegraded() (bool, string) {
+
+	// Check for case 1.1
+	if p.ObservedState.ServiceInfo.DataflowComponentFSMState == dataflowfsm.OperationalStateActive &&
+		p.ObservedState.ServiceInfo.RedpandaFSMState == redpandafsm.OperationalStateIdle {
+		return true, "DFC is active, but redpanda is idle"
+	}
+
+	// Check for case 2
+	benthosMetrics := p.ObservedState.ServiceInfo.DataflowComponentObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.Metrics
+	isBenthosOutputActive := benthosMetrics.Output.ConnectionUp-(benthosMetrics.Output.ConnectionLost+benthosMetrics.Output.ConnectionFailed) == 0 // if the amount of connection losts and connection failrues is bigger than the amount of connection ups, the output is not active
+	if (p.ObservedState.ServiceInfo.RedpandaFSMState == redpandafsm.OperationalStateIdle ||
+		p.ObservedState.ServiceInfo.RedpandaFSMState == redpandafsm.OperationalStateActive) &&
+		!isBenthosOutputActive {
+		return true, fmt.Sprintf("Redpanda is %s, but the DFC has no output active (connection up: %d, connection lost: %d, connection failed: %d)", p.ObservedState.ServiceInfo.RedpandaFSMState, benthosMetrics.Output.ConnectionUp, benthosMetrics.Output.ConnectionLost, benthosMetrics.Output.ConnectionFailed)
+	}
+
+	// Check for case 3
+	isBenthosInputActive := benthosMetrics.Input.ConnectionUp-(benthosMetrics.Input.ConnectionLost+benthosMetrics.Input.ConnectionFailed) == 0 // if the amount of connection losts and connection failrues is bigger than the amount of connection ups, the input is not active
+	if p.ObservedState.ServiceInfo.ConnectionFSMState != connectionfsm.OperationalStateUp &&
+		isBenthosInputActive {
+		return true, fmt.Sprintf("Connection is %s, but the DFC has input active (connection up: %d, connection lost: %d, connection failed: %d)", p.ObservedState.ServiceInfo.ConnectionFSMState, benthosMetrics.Input.ConnectionUp, benthosMetrics.Input.ConnectionLost, benthosMetrics.Input.ConnectionFailed)
+	}
+
 	return false, ""
 }
 
-// DidDFCAlreadyFailedBefore reports whether **any** permanent-failure event
-// for this DataflowComponent (currently `OperationalStateStartingFailed`)
-// has ever been written to the archive.
+// IsDataflowComponentWithProcessingActivity checks whether the DFC has any processing activity
+// so whether it is active
 //
-// Business rules:
-//  1. Starting is considered an *irrecoverable* failure – the instance
-//     must be deleted/recreated by an operator or by the manager after a
-//     config change.  The FSM must therefore *never* leave
-//     `StartingFailed` automatically.
-//  2. To make the decision idempotent and testable we query the persistent
-//     `ArchiveEventStorage` instead of using an in-memory flag.
-//  3. The archive is assumed to be durable across process restarts;
-//     if it is not, this function must return `false`, effectively
-//     disabling the feature.
-func (d *DataflowComponentInstance) DidDFCAlreadyFailedBefore(ctx context.Context) (bool, string) {
-	// TODO: Implement this
-	// TODO: make sure that the archive storage is persistent
-	/*
-		// Query for any data points with the specified failed state
-		options := storage.QueryOptions{
-			Limit:     1,                                                           // We only need to know if any exist, so limit to 1
-			StartTime: time.Now().Add(-constants.WaitTimeBeforeMarkingStartFailed), // Get only the recent events to avoid old stale events
-			SortDesc:  true,                                                        // recent events first
-			States:    d.DataflowComponentBenthosFailureStates(),
-		}
+// It returns:
+//
+//	ok     – true when the DFC is active, false otherwise.
+//	reason – empty when ok is true; otherwise a explanation
+func (p *ProtocolConverterInstance) IsDataflowComponentWithProcessingActivity() (bool, string) {
+	if p.ObservedState.ServiceInfo.DataflowComponentFSMState == dataflowfsm.OperationalStateActive {
+		return true, ""
+	}
+	return false, fmt.Sprintf("DFC is %s", p.ObservedState.ServiceInfo.DataflowComponentFSMState)
+}
 
-
-
-
-			if d.archiveStorage == nil {
-				d.baseFSMInstance.GetLogger().Warnf("archiveStorage is not initialized- skippling failed-state detection")
-				return false
-			}
-
-			dataPoints, err := d.archiveStorage.GetDataPoints(ctx, d.baseFSMInstance.GetID(), options)
-			if err != nil {
-				d.baseFSMInstance.GetLogger().Warnf("Failed to query state history: %v", err)
-				return false // Default to false if we can't query
-			}
-
-			d.baseFSMInstance.GetLogger().Infof("Found %d data points with failed states. Data points: %v", len(dataPoints), dataPoints)
-			// If we found any data points with this state, return true
-			return len(dataPoints) > 0
-	*/
+// IsProtocolConverterStopped checks whether the ProtocolConverter is stopped
+// which means that connection and DFC are both stopped
+//
+// It returns:
+//
+//	ok     – true when the ProtocolConverter is stopped, false otherwise.
+//	reason – empty when ok is true; otherwise a service‑provided explanation
+func (p *ProtocolConverterInstance) IsProtocolConverterStopped() (bool, string) {
+	protocolConverterStopped, reason := p.service.IsProtocolConverterStopped(p.baseFSMInstance.GetID())
+	if protocolConverterStopped {
+		return true, reason
+	}
 	return false, ""
 }

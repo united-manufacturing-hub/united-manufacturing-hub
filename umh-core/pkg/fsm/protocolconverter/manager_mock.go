@@ -21,13 +21,13 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	public_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	benthossvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
-	dataflowcomponentsvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/dataflowcomponent"
+	protocolconvertersvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/protocolconverter"
 	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 )
 
-func NewDataflowComponentManagerWithMockedServices(name string) (*DataflowComponentManager, *dataflowcomponentsvc.MockDataFlowComponentService) {
+func NewProtocolConverterManagerWithMockedServices(name string) (*ProtocolConverterManager, *protocolconvertersvc.MockProtocolConverterService) {
 
-	mockSvc := dataflowcomponentsvc.NewMockDataFlowComponentService()
+	mockSvc := protocolconvertersvc.NewMockProtocolConverterService()
 
 	// Configure the mock S6 service
 	mockBenthosService := mockSvc.BenthosService.(*benthossvc.MockBenthosService)

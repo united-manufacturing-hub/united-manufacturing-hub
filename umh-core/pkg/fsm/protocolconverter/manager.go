@@ -28,70 +28,70 @@ import (
 )
 
 const (
-	baseDataflowComponentDir = constants.S6BaseDir
+	baseProtocolConverterDir = constants.S6BaseDir
 )
 
-// DataflowComponentManager implements the FSM management for DataflowComponent services
-type DataflowComponentManager struct {
-	*public_fsm.BaseFSMManager[config.DataFlowComponentConfig]
+// ProtocolConverterManager implements the FSM management for ProtocolConverter services
+type ProtocolConverterManager struct {
+	*public_fsm.BaseFSMManager[config.ProtocolConverterConfig]
 }
 
-// DataFlowComponentSnapshot extends the base ManagerSnapshot with Dataflowcomponent specific information
-type DataflowComponentSnapshot struct {
+// ProtocolConverterSnapshot extends the base ManagerSnapshot with ProtocolConverter specific information
+type ProtocolConverterSnapshot struct {
 	// Embed BaseManagerSnapshot to include its methods using composition
 	*public_fsm.BaseManagerSnapshot
 }
 
-func NewDataflowComponentManager(name string) *DataflowComponentManager {
-	managerName := fmt.Sprintf("%s%s", logger.ComponentDataFlowComponentManager, name)
-	baseManager := public_fsm.NewBaseFSMManager[config.DataFlowComponentConfig](
+func NewProtocolConverterManager(name string) *ProtocolConverterManager {
+	managerName := fmt.Sprintf("%s%s", logger.ComponentProtocolConverterManager, name)
+	baseManager := public_fsm.NewBaseFSMManager[config.ProtocolConverterConfig](
 		managerName,
-		baseDataflowComponentDir,
-		// Extract the dataflow config from fullConfig
-		func(fullConfig config.FullConfig) ([]config.DataFlowComponentConfig, error) {
-			return fullConfig.DataFlow, nil
+		baseProtocolConverterDir,
+		// Extract the protocolconverter config from fullConfig
+		func(fullConfig config.FullConfig) ([]config.ProtocolConverterConfig, error) {
+			return fullConfig.ProtocolConverter, nil
 		},
-		// Get name for Dataflowcomponent config
-		func(cfg config.DataFlowComponentConfig) (string, error) {
+		// Get name for ProtocolConverter config
+		func(cfg config.ProtocolConverterConfig) (string, error) {
 			return cfg.Name, nil
 		},
-		// Get desired state for Dataflowcomponent config
-		func(cfg config.DataFlowComponentConfig) (string, error) {
+		// Get desired state for ProtocolConverter config
+		func(cfg config.ProtocolConverterConfig) (string, error) {
 			return cfg.DesiredFSMState, nil
 		},
-		// Create Dataflowcomponent instance from config
-		func(cfg config.DataFlowComponentConfig) (public_fsm.FSMInstance, error) {
+		// Create ProtocolConverter instance from config
+		func(cfg config.ProtocolConverterConfig) (public_fsm.FSMInstance, error) {
 			// We'll pass nil for the portManager here, and the instance will get it from the services registry during reconciliation
-			return NewDataflowComponentInstance(baseDataflowComponentDir, cfg), nil
+			return NewProtocolConverterInstance(baseProtocolConverterDir, cfg), nil
 		},
-		// Compare Dataflowcomponent configs
-		func(instance public_fsm.FSMInstance, cfg config.DataFlowComponentConfig) (bool, error) {
-			dataflowComponentInstance, ok := instance.(*DataflowComponentInstance)
+		// Compare ProtocolConverter configs
+		func(instance public_fsm.FSMInstance, cfg config.ProtocolConverterConfig) (bool, error) {
+			protocolConverterInstance, ok := instance.(*ProtocolConverterInstance)
 			if !ok {
-				return false, fmt.Errorf("instance is not a DataflowComponentInstance")
+				return false, fmt.Errorf("instance is not a ProtocolConverterInstance")
 			}
-			return dataflowComponentInstance.config.Equal(cfg.DataFlowComponentServiceConfig), nil
+			return protocolConverterInstance.config.Equal(cfg.ProtocolConverterServiceConfig), nil
 		},
-		// Set DataflowComponent config
-		func(instance public_fsm.FSMInstance, cfg config.DataFlowComponentConfig) error {
-			dataflowComponentInstance, ok := instance.(*DataflowComponentInstance)
+		// Set ProtocolConverter config
+		func(instance public_fsm.FSMInstance, cfg config.ProtocolConverterConfig) error {
+			protocolConverterInstance, ok := instance.(*ProtocolConverterInstance)
 			if !ok {
-				return fmt.Errorf("instance is not a DataflowComponentInstance")
+				return fmt.Errorf("instance is not a ProtocolConverterInstance")
 			}
-			dataflowComponentInstance.config = cfg.DataFlowComponentServiceConfig
+			protocolConverterInstance.config = cfg.ProtocolConverterServiceConfig
 			return nil
 		},
 		// Get expected max p95 execution time per instance
 		func(instance public_fsm.FSMInstance) (time.Duration, error) {
-			dataflowComponentInstance, ok := instance.(*DataflowComponentInstance)
+			protocolConverterInstance, ok := instance.(*ProtocolConverterInstance)
 			if !ok {
-				return 0, fmt.Errorf("instance is not a DataflowComponentInstance")
+				return 0, fmt.Errorf("instance is not a ProtocolConverterInstance")
 			}
-			return dataflowComponentInstance.GetExpectedMaxP95ExecutionTimePerInstance(), nil
+			return protocolConverterInstance.GetExpectedMaxP95ExecutionTimePerInstance(), nil
 		},
 	)
-	metrics.InitErrorCounter(metrics.ComponentDataFlowCompManager, name)
-	return &DataflowComponentManager{
+	metrics.InitErrorCounter(metrics.ComponentProtocolConverterManager, name)
+	return &ProtocolConverterManager{
 		BaseFSMManager: baseManager,
 	}
 }
@@ -99,36 +99,36 @@ func NewDataflowComponentManager(name string) *DataflowComponentManager {
 // Reconcile calls the base manager's Reconcile method
 // The filesystemService parameter allows for filesystem operations during reconciliation,
 // enabling the method to read configuration or state information from the filesystem.
-func (m *DataflowComponentManager) Reconcile(ctx context.Context, snapshot public_fsm.SystemSnapshot, services serviceregistry.Provider) (error, bool) {
+func (m *ProtocolConverterManager) Reconcile(ctx context.Context, snapshot public_fsm.SystemSnapshot, services serviceregistry.Provider) (error, bool) {
 	start := time.Now()
 	defer func() {
 		duration := time.Since(start)
-		metrics.ObserveReconcileTime(logger.ComponentDataFlowComponentManager, m.GetManagerName(), duration)
+		metrics.ObserveReconcileTime(logger.ComponentProtocolConverterManager, m.GetManagerName(), duration)
 	}()
 	return m.BaseFSMManager.Reconcile(ctx, snapshot, services)
 }
 
-// CreateSnapshot overrides the base CreateSnapshot to include DataflowComponentManager-specific information
-func (m *DataflowComponentManager) CreateSnapshot() public_fsm.ManagerSnapshot {
+// CreateSnapshot overrides the base CreateSnapshot to include ProtocolConverterManager-specific information
+func (m *ProtocolConverterManager) CreateSnapshot() public_fsm.ManagerSnapshot {
 	// Get base snapshot from parent
 	baseSnapshot := m.BaseFSMManager.CreateSnapshot()
 
 	// We need to convert the interface to the concrete type
 	baseManagerSnapshot, ok := baseSnapshot.(*public_fsm.BaseManagerSnapshot)
 	if !ok {
-		logger.For(logger.ComponentDataFlowComponentManager).Errorf(
+		logger.For(logger.ComponentProtocolConverterManager).Errorf(
 			"Failed to convert base snapshot to BaseManagerSnapshot, using generic snapshot")
 		return baseSnapshot
 	}
 
-	// Create DataflowComponentManager-specific snapshot
-	snap := &DataflowComponentSnapshot{
+	// Create ProtocolConverterManager-specific snapshot
+	snap := &ProtocolConverterSnapshot{
 		BaseManagerSnapshot: baseManagerSnapshot,
 	}
 	return snap
 }
 
 // IsObservedStateSnapshot implements the fsm.ObservedStateSnapshot interface
-func (s *DataflowComponentSnapshot) IsObservedStateSnapshot() {
+func (s *ProtocolConverterSnapshot) IsObservedStateSnapshot() {
 	// Marker method implementation
 }
