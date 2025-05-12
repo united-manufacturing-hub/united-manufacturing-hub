@@ -170,19 +170,25 @@ func (r *RedpandaInstance) reconcileExternalChanges(ctx context.Context, service
 	if err != nil {
 		return fmt.Errorf("failed to update observed state: %w", err)
 	}
-	// Reconcile the cluster config via HTTP
-	// 1. Check if we have changes in the config
-	var changes = make(map[string]interface{})
-	if r.ObservedState.ObservedRedpandaServiceConfig.Topic.DefaultTopicRetentionBytes != r.config.Topic.DefaultTopicRetentionBytes {
-		changes["retention_bytes"] = r.ObservedState.ObservedRedpandaServiceConfig.Topic.DefaultTopicRetentionBytes
-	}
-	if r.ObservedState.ObservedRedpandaServiceConfig.Topic.DefaultTopicRetentionMs != r.config.Topic.DefaultTopicRetentionMs {
-		changes["retention_ms"] = r.ObservedState.ObservedRedpandaServiceConfig.Topic.DefaultTopicRetentionMs
-	}
-	if len(changes) > 0 {
-		err := r.service.UpdateRedpandaClusterConfig(ctx, r.baseFSMInstance.GetID(), changes)
-		if err != nil {
-			return fmt.Errorf("failed to update Redpanda cluster config: %w", err)
+
+	currentState := r.baseFSMInstance.GetCurrentFSMState()
+	if IsRunningState(currentState) {
+		// Reconcile the cluster config via HTTP
+		// 1. Check if we have changes in the config
+		var changes = make(map[string]interface{})
+		if r.ObservedState.ObservedRedpandaServiceConfig.Topic.DefaultTopicRetentionBytes != r.config.Topic.DefaultTopicRetentionBytes {
+			// https://docs.redpanda.com/current/reference/properties/cluster-properties/#retention_bytes
+			changes["retention_bytes"] = r.ObservedState.ObservedRedpandaServiceConfig.Topic.DefaultTopicRetentionBytes
+		}
+		if r.ObservedState.ObservedRedpandaServiceConfig.Topic.DefaultTopicRetentionMs != r.config.Topic.DefaultTopicRetentionMs {
+			// https://docs.redpanda.com/current/reference/properties/cluster-properties/#log_retention_ms
+			changes["log_retention_ms"] = r.ObservedState.ObservedRedpandaServiceConfig.Topic.DefaultTopicRetentionMs
+		}
+		if len(changes) > 0 {
+			err := r.service.UpdateRedpandaClusterConfig(ctx, r.baseFSMInstance.GetID(), changes)
+			if err != nil {
+				return fmt.Errorf("failed to update Redpanda cluster config: %w", err)
+			}
 		}
 	}
 	return nil

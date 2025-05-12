@@ -230,7 +230,7 @@ func NewDefaultRedpandaService(redpandaName string, opts ...RedpandaServiceOptio
 		logger:                 logger.For(managerName),
 		s6Manager:              s6fsm.NewS6Manager(managerName),
 		s6Service:              s6service.NewDefaultService(),
-		httpClient:             nil, // this is only for a mock in the tests
+		httpClient:             httpclient.NewDefaultHTTPClient(),
 		baseDir:                constants.DefaultRedpandaBaseDir,
 		redpandaMonitorManager: redpanda_monitor_fsm.NewRedpandaMonitorManager(redpandaName),
 	}
@@ -1001,6 +1001,10 @@ func (s *RedpandaService) UpdateRedpandaClusterConfig(ctx context.Context, redpa
 	// Send the request
 	resp, err := s.httpClient.Do(req)
 	if err != nil {
+		// If we get a connection refused error, it means that the Redpanda service is not yet ready, so we just ignore it
+		if strings.Contains(err.Error(), "connection refused") {
+			return nil
+		}
 		return fmt.Errorf("failed to send request: %w", err)
 	}
 
@@ -1012,11 +1016,6 @@ func (s *RedpandaService) UpdateRedpandaClusterConfig(ctx context.Context, redpa
 			return fmt.Errorf("failed to close response body: %w", err)
 		}
 		return fmt.Errorf("request failed with status %d: %s", resp.StatusCode, string(body))
-	} else {
-		err := resp.Body.Close()
-		if err != nil {
-			return fmt.Errorf("failed to close response body: %w", err)
-		}
 	}
 
 	// Parse response
@@ -1024,7 +1023,15 @@ func (s *RedpandaService) UpdateRedpandaClusterConfig(ctx context.Context, redpa
 		ConfigVersion int `json:"config_version"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
+		bodyError := resp.Body.Close()
+		if bodyError != nil {
+			return fmt.Errorf("failed to close response body: %w", bodyError)
+		}
 		return fmt.Errorf("failed to decode response: %w", err)
+	}
+	bodyError := resp.Body.Close()
+	if bodyError != nil {
+		return fmt.Errorf("failed to close response body: %w", bodyError)
 	}
 
 	s.logger.Debugf("Successfully updated Redpanda cluster config for %s, new config version: %d", redpandaName, response.ConfigVersion)
