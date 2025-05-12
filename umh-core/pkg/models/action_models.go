@@ -528,3 +528,7 @@ type GetLogsRequest struct {
 type GetLogsResponse struct {
 	Logs []string `json:"logs"`
 }
+
+type GetDataflowcomponentMetricsRequest struct {
+	UUID string `json:"uuid" binding:"required"`
+}
