@@ -92,7 +92,7 @@ type IRedpandaService interface {
 	//   reason – empty when ok is true; otherwise a brief throughput summary.
 	HasProcessingActivity(status RedpandaStatus) (bool, string)
 	// UpdateRedpandaClusterConfig updates the cluster config of a Redpanda service by sending a PUT request to the Redpanda API
-	UpdateRedpandaClusterConfig(ctx context.Context, redpandaName string, configUpdates map[string]interface{}) error
+	UpdateRedpandaClusterConfig(ctx context.Context, redpandaName string, configUpdates map[string]interface{}, removals []string) error
 }
 
 // ServiceInfo contains information about a Redpanda service
@@ -964,7 +964,7 @@ func formatMemory(memory int) string {
 }
 
 // updateRedpandaClusterConfig updates Redpanda's cluster config via HTTP PUT request
-func (s *RedpandaService) UpdateRedpandaClusterConfig(ctx context.Context, redpandaName string, configUpdates map[string]interface{}) error {
+func (s *RedpandaService) UpdateRedpandaClusterConfig(ctx context.Context, redpandaName string, configUpdates map[string]interface{}, removals []string) error {
 	if s.httpClient == nil {
 		return fmt.Errorf("http client not initialized")
 	}
@@ -977,7 +977,7 @@ func (s *RedpandaService) UpdateRedpandaClusterConfig(ctx context.Context, redpa
 	// Construct the request body
 	requestBody := map[string]interface{}{
 		"upsert": configUpdates,
-		"remove": []string{},
+		"remove": removals,
 	}
 
 	// Convert to JSON
@@ -1099,6 +1099,8 @@ func (s *RedpandaService) UpdateRedpandaClusterConfig(ctx context.Context, redpa
 			return fmt.Errorf("value of %s in Redpanda cluster config for %s is not the same as the value in the request [float64 comparison]", key, redpandaName)
 		}
 	}
+
+	// Checking for removals is more difficult, as it could either return null or it's default value, and is therefore excluded from the comparison
 
 	s.logger.Debugf("Update of Redpanda cluster config for %s successful", redpandaName)
 

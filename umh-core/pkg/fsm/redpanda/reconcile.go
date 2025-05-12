@@ -178,16 +178,32 @@ func (r *RedpandaInstance) reconcileExternalChanges(ctx context.Context, service
 		// Reconcile the cluster config via HTTP
 		// 1. Check if we have changes in the config
 		var changes = make(map[string]interface{})
+		var removals = make([]string, 0)
+		// If the config is not set, we don't want to update it (therefore we ignore the 0 value)
+		// Note: This shouldn't happen in a normal deployment (as we default to sensible values), but it can happen in a test environment
 		if r.ObservedState.ObservedRedpandaServiceConfig.Topic.DefaultTopicRetentionBytes != r.config.Topic.DefaultTopicRetentionBytes && r.config.Topic.DefaultTopicRetentionBytes != 0 {
 			// https://docs.redpanda.com/current/reference/properties/cluster-properties/#retention_bytes
-			changes["retention_bytes"] = r.config.Topic.DefaultTopicRetentionBytes
+
+			if r.config.Topic.DefaultTopicRetentionBytes > 0 {
+				changes["retention_bytes"] = r.config.Topic.DefaultTopicRetentionBytes
+			} else {
+				// Negative values are considered as a removal
+				removals = append(removals, "retention_bytes")
+			}
 		}
+		// If the config is not set, we don't want to update it (therefore we ignore the 0 value)
+		// Note: This shouldn't happen in a normal deployment (as we default to sensible values), but it can happen in a test environment
 		if r.ObservedState.ObservedRedpandaServiceConfig.Topic.DefaultTopicRetentionMs != r.config.Topic.DefaultTopicRetentionMs && r.config.Topic.DefaultTopicRetentionMs != 0 {
 			// https://docs.redpanda.com/current/reference/properties/cluster-properties/#log_retention_ms
-			changes["log_retention_ms"] = r.config.Topic.DefaultTopicRetentionMs
+			if r.config.Topic.DefaultTopicRetentionMs > 0 {
+				changes["log_retention_ms"] = r.config.Topic.DefaultTopicRetentionMs
+			} else {
+				// Negative values are considered as a removal
+				removals = append(removals, "log_retention_ms")
+			}
 		}
 		if len(changes) > 0 {
-			err := r.service.UpdateRedpandaClusterConfig(ctx, r.baseFSMInstance.GetID(), changes)
+			err := r.service.UpdateRedpandaClusterConfig(ctx, r.baseFSMInstance.GetID(), changes, removals)
 			if err != nil {
 				return fmt.Errorf("failed to update Redpanda cluster config: %w", err), false
 			}
