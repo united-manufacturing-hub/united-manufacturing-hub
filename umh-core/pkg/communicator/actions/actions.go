@@ -168,8 +168,6 @@ func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePay
 // SendActionReply sends an action reply with the given state and payload.
 // It is a convenience wrapper around SendActionReplyWithAdditionalContext that doesn't include additional context.
 // It returns false if an error occurred during message generation or sending.
-//
-// Deprecated: Use SendActionReplyV2 instead. This function accepts payload of type interface{} which is discouraged for further usage.
 func SendActionReply(instanceUUID uuid.UUID, userEmail string, actionUUID uuid.UUID, arstate models.ActionReplyState, payload interface{}, outboundChannel chan *models.UMHMessage, action models.ActionType) bool {
 	return SendActionReplyWithAdditionalContext(instanceUUID, userEmail, actionUUID, arstate, payload, outboundChannel, action, nil)
 }

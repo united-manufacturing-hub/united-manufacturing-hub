@@ -31,8 +31,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
-
-	"golang.org/x/sys/unix"
 )
 
 // ServiceInfo contains both raw metrics and health assessments
@@ -365,32 +363,6 @@ func (c *ContainerMonitorService) getDiskMetrics(ctx context.Context) (*models.D
 	}
 
 	return diskStat, nil
-}
-
-// getMacOSAdjustedDiskMetrics retrieves adjusted disk metrics using unix.Statfs.
-// It uses stat.Frsize when available, since on Docker Desktop for macOS the reported
-// Bsize is often 1024× larger than the actual block size.
-// We use unix.Statfs directly instead of relying on gopsutil's disk.Usage because:
-// 1. It gives us direct access to the Frsize field which is crucial for proper block size calculation
-// 2. gopsutil doesn't handle the Docker Desktop for macOS edge case correctly
-func (c *ContainerMonitorService) getMacOSAdjustedDiskMetrics() (usedBytes, totalBytes uint64, err error) {
-	var stat unix.Statfs_t
-	err = unix.Statfs(c.dataPath, &stat)
-	if err != nil {
-		return 0, 0, fmt.Errorf("failed to stat filesystem at %s: %w", c.dataPath, err)
-	}
-
-	// Use Frsize if available; it represents the fundamental block size for macOS.
-	bSize := uint64(stat.Bsize)
-	if stat.Frsize > 0 {
-		bSize = uint64(stat.Frsize)
-	}
-
-	// Compute total and used bytes based on the corrected block size.
-	totalBytes = stat.Blocks * bSize
-	usedBytes = (stat.Blocks - stat.Bfree) * bSize
-
-	return usedBytes, totalBytes, nil
 }
 
 // getHWID gets the hardware ID from system

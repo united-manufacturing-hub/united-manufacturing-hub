@@ -20,10 +20,13 @@ import (
 	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
+	benthosfsmmanager "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
+	dfcservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/dataflowcomponent"
 )
 
 var _ = Describe("StateMocker", func() {
@@ -76,6 +79,18 @@ var _ = Describe("StateMocker", func() {
 				CurrentState: desiredState,
 				LastObservedState: &dataflowcomponent.DataflowComponentObservedStateSnapshot{
 					Config: testConfig,
+					ServiceInfo: dfcservice.ServiceInfo{
+						BenthosObservedState: benthosfsmmanager.BenthosObservedState{
+							ObservedBenthosServiceConfig: benthosserviceconfig.BenthosServiceConfig{
+								Input:              testConfig.BenthosConfig.Input,
+								Pipeline:           testConfig.BenthosConfig.Pipeline,
+								Output:             testConfig.BenthosConfig.Output,
+								CacheResources:     testConfig.BenthosConfig.CacheResources,
+								RateLimitResources: testConfig.BenthosConfig.RateLimitResources,
+								Buffer:             testConfig.BenthosConfig.Buffer,
+							},
+						},
+					},
 				},
 			}
 

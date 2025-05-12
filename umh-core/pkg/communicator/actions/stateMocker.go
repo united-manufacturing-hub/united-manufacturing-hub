@@ -23,9 +23,12 @@ import (
 
 	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
+	benthosfsmmanager "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
+	dfcservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/dataflowcomponent"
 	"go.uber.org/zap"
 )
 
@@ -353,6 +356,18 @@ func createDfcManagerSnapshot(
 			CurrentState: currentState,
 			LastObservedState: &dataflowcomponent.DataflowComponentObservedStateSnapshot{
 				Config: curDataflowcomponent.DataFlowComponentServiceConfig,
+				ServiceInfo: dfcservice.ServiceInfo{
+					BenthosObservedState: benthosfsmmanager.BenthosObservedState{
+						ObservedBenthosServiceConfig: benthosserviceconfig.BenthosServiceConfig{
+							Input:              curDataflowcomponent.DataFlowComponentServiceConfig.BenthosConfig.Input,
+							Pipeline:           curDataflowcomponent.DataFlowComponentServiceConfig.BenthosConfig.Pipeline,
+							Output:             curDataflowcomponent.DataFlowComponentServiceConfig.BenthosConfig.Output,
+							CacheResources:     curDataflowcomponent.DataFlowComponentServiceConfig.BenthosConfig.CacheResources,
+							RateLimitResources: curDataflowcomponent.DataFlowComponentServiceConfig.BenthosConfig.RateLimitResources,
+							Buffer:             curDataflowcomponent.DataFlowComponentServiceConfig.BenthosConfig.Buffer,
+						},
+					},
+				},
 			},
 		}
 	}
