@@ -91,7 +91,8 @@ func (r *RedpandaInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSna
 	}
 
 	// Step 2: Detect external changes.
-	if err := r.reconcileExternalChanges(ctx, services, snapshot.Tick, start); err != nil {
+	err, reconciled = r.reconcileExternalChanges(ctx, services, snapshot.Tick, start)
+	if err != nil {
 		// I am using strings.Contains as i cannot get it working with errors.Is
 		isExpectedError := strings.Contains(err.Error(), redpanda_monitor_service.ErrServiceNotExist.Error()) ||
 			strings.Contains(err.Error(), redpanda_monitor_service.ErrServiceNoLogFile.Error()) ||
@@ -155,7 +156,7 @@ func (r *RedpandaInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSna
 
 // reconcileExternalChanges checks if the RedpandaInstance service status has changed
 // externally (e.g., if someone manually stopped or started it, or if it crashed)
-func (r *RedpandaInstance) reconcileExternalChanges(ctx context.Context, services serviceregistry.Provider, tick uint64, loopStartTime time.Time) error {
+func (r *RedpandaInstance) reconcileExternalChanges(ctx context.Context, services serviceregistry.Provider, tick uint64, loopStartTime time.Time) (err error, reconciled bool) {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentRedpandaInstance, r.baseFSMInstance.GetID()+".reconcileExternalChanges", time.Since(start))
@@ -166,9 +167,9 @@ func (r *RedpandaInstance) reconcileExternalChanges(ctx context.Context, service
 	observedStateCtx, cancel := context.WithTimeout(ctx, constants.RedpandaUpdateObservedStateTimeout)
 	defer cancel()
 
-	err := r.UpdateObservedStateOfInstance(observedStateCtx, services, tick, loopStartTime)
+	err = r.UpdateObservedStateOfInstance(observedStateCtx, services, tick, loopStartTime)
 	if err != nil {
-		return fmt.Errorf("failed to update observed state: %w", err)
+		return fmt.Errorf("failed to update observed state: %w", err), false
 	}
 
 	currentState := r.baseFSMInstance.GetCurrentFSMState()
@@ -189,25 +190,27 @@ func (r *RedpandaInstance) reconcileExternalChanges(ctx context.Context, service
 			r.baseFSMInstance.GetLogger().Infof("Updating Redpanda cluster config: %v", changes)
 			err := r.service.UpdateRedpandaClusterConfig(ctx, r.baseFSMInstance.GetID(), changes)
 			if err != nil {
-				return fmt.Errorf("failed to update Redpanda cluster config: %w", err)
+				return fmt.Errorf("failed to update Redpanda cluster config: %w", err), false
 			}
 
-			// Stop the instance to trigger a restart
+			r.baseFSMInstance.GetLogger().Infof("Stopping Redpanda instance to apply cluster config changes")
+			// Attempt to initiate a stop
 			if err := r.StopInstance(ctx, services.GetFileSystem()); err != nil {
-				return err
+				return err, false
 			}
+			r.baseFSMInstance.GetLogger().Infof("Redpanda instance stopped to apply cluster config changes")
 
 			// Send stop event to trigger a restart
 			r.baseFSMInstance.GetLogger().Infof("Sending stop event to trigger a restart")
 			err = r.baseFSMInstance.SendEvent(ctx, EventStop)
 			if err != nil {
-				return err
+				return err, false
 			}
 			r.baseFSMInstance.GetLogger().Infof("Stop event sent to trigger a restart")
-			return nil
+			return nil, true
 		}
 	}
-	return nil
+	return nil, false
 }
 
 // reconcileStateTransition compares the current state with the desired state
@@ -414,6 +417,7 @@ func (r *RedpandaInstance) reconcileTransitionToStopped(ctx context.Context, ser
 
 	// If already stopping, verify if the instance is completely stopped
 	isStopped, reason := r.IsRedpandaS6Stopped()
+	r.baseFSMInstance.GetLogger().Infof("IsRedpandaS6Stopped: %t, reason: %s", isStopped, reason)
 	if currentState == OperationalStateStopping {
 		if !isStopped {
 			r.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("stopping: %s", reason)
