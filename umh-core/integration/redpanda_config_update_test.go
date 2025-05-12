@@ -24,7 +24,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var _ = Describe("Redpanda Config Update Integration Test", Ordered, Label("integration"), func() {
+var _ = FDescribe("Redpanda Config Update Integration Test", Ordered, Label("integration"), func() {
 	const (
 		topicName         = "dfc-config-update-test-topic"
 		messagesPerSecond = 5
@@ -123,6 +123,19 @@ var _ = Describe("Redpanda Config Update Integration Test", Ordered, Label("inte
 			GinkgoWriter.Printf("Error: %v\n", err)
 			return err == nil && redpandaConfig == "7200000"
 		}, 5*time.Second, 1*time.Second).Should(BeTrue(), "Redpanda config should not be changed back")
+
+		// Let's check that we can remove keys as well
+		builder.full.Internal.Redpanda.RedpandaServiceConfig.Topic.DefaultTopicRetentionMs = 0
+		cfg = builder.BuildYAML()
+		Expect(writeConfigFile(cfg, getContainerName())).To(Succeed())
+
+		By("Checking if the config has been removed")
+		Eventually(func() bool {
+			redpandaConfig, err := getRedpandaConfig("log_retention_ms")
+			GinkgoWriter.Printf("Redpanda config: %s\n", redpandaConfig)
+			GinkgoWriter.Printf("Error: %v\n", err)
+			return err != nil && redpandaConfig == "604800000" // Default value
+		}, 5*time.Second, 1*time.Second).Should(BeTrue(), "Redpanda config should be removed")
 
 	})
 })
