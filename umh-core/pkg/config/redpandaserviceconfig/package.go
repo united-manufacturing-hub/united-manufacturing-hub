@@ -23,8 +23,9 @@ var (
 // RedpandaServiceConfig represents the configuration for a Redpanda service
 // TopicConfig represents the topic-related configuration for Redpanda
 type TopicConfig struct {
-	DefaultTopicRetentionMs    int64 `yaml:"defaultTopicRetentionMs,omitempty"`
-	DefaultTopicRetentionBytes int64 `yaml:"defaultTopicRetentionBytes,omitempty"`
+	DefaultTopicRetentionMs    int64  `yaml:"defaultTopicRetentionMs,omitempty"`
+	DefaultTopicRetentionBytes int64  `yaml:"defaultTopicRetentionBytes,omitempty"`
+	DefaultTopicCompression    string `yaml:"defaultTopicCompression,omitempty"`
 }
 
 // ResourcesConfig represents the resource-related configuration for Redpanda
