@@ -234,25 +234,27 @@ func (d *DataflowComponentInstance) reconcileTransitionToActive(ctx context.Cont
 		metrics.ObserveReconcileTime(metrics.ComponentDataflowComponentInstance, d.baseFSMInstance.GetID()+".reconcileTransitionToActive", time.Since(start))
 	}()
 
+	switch {
 	// If we're stopped, we need to start first
-	if currentState == OperationalStateStopped {
-		// Attempt to initiate start
-		if err := d.StartInstance(ctx, services.GetFileSystem()); err != nil {
+	case currentState == OperationalStateStopped:
+		err := d.StartInstance(ctx, services.GetFileSystem())
+		if err != nil {
 			return err, false
 		}
-		d.ObservedState.ServiceInfo.StatusReason = "started"
 		// Send event to transition from Stopped to Starting
 		return d.baseFSMInstance.SendEvent(ctx, EventStart), true
-	}
-
-	// Handle starting phase states
-	if IsStartingState(currentState) {
+	case IsStartingState(currentState):
 		return d.reconcileStartingStates(ctx, services, currentState, currentTime)
-	} else if IsRunningState(currentState) {
-		return d.reconcileRunningState(ctx, services, currentState, currentTime)
+	case IsRunningState(currentState):
+		return d.reconcileRunningStates(ctx, services, currentState, currentTime)
+	case currentState == OperationalStateStopping:
+		// There can be the edge case where an fsm is set to stopped, and then a cycle later again to active
+		// It will cause the stopping process to start, but then the deisred state is again active, so it will land up in reconcileTransitionToActive
+		// if it is stopping, we will first finish the stopping process and then we will go to active
+		return d.reconcileTransitionToStopped(ctx, services, currentState)
+	default:
+		return fmt.Errorf("invalid current state: %s", currentState), false
 	}
-
-	return nil, false
 }
 
 // reconcileStartingStates handles the various starting phase states when transitioning to Active.
@@ -302,11 +304,11 @@ func (d *DataflowComponentInstance) reconcileStartingStates(ctx context.Context,
 	return nil, false
 }
 
-// reconcileRunningState handles the various running states when transitioning to Active.
-func (d *DataflowComponentInstance) reconcileRunningState(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time) (err error, reconciled bool) {
+// reconcileRunningStates handles the various running states when transitioning to Active.
+func (d *DataflowComponentInstance) reconcileRunningStates(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time) (err error, reconciled bool) {
 	start := time.Now()
 	defer func() {
-		metrics.ObserveReconcileTime(metrics.ComponentDataflowComponentInstance, d.baseFSMInstance.GetID()+".reconcileRunningState", time.Since(start))
+		metrics.ObserveReconcileTime(metrics.ComponentDataflowComponentInstance, d.baseFSMInstance.GetID()+".reconcileRunningStates", time.Since(start))
 	}()
 
 	switch currentState {
