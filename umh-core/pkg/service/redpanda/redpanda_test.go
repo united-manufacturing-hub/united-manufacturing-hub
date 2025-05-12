@@ -344,7 +344,7 @@ var _ = Describe("Redpanda Service", func() {
 
 		Context("IsLogsFine", func() {
 			It("should return true when there are no logs", func() {
-				result, _ := service.IsLogsFine([]s6service.LogEntry{}, currentTime, logWindow)
+				result, _ := service.IsLogsFine([]s6service.LogEntry{}, currentTime, logWindow, time.Time{})
 				Expect(result).To(BeTrue())
 			})
 
@@ -359,7 +359,7 @@ var _ = Describe("Redpanda Service", func() {
 						Content:   "ERROR Address already in use (port 9092)",
 					},
 				}
-				result, _ := service.IsLogsFine(logs, currentTime, logWindow)
+				result, _ := service.IsLogsFine(logs, currentTime, logWindow, time.Time{})
 				Expect(result).To(BeFalse())
 			})
 
@@ -371,11 +371,10 @@ var _ = Describe("Redpanda Service", func() {
 					},
 					{
 						Timestamp: currentTime.Add(-30 * time.Second),
-						// Stalls are always printed in milliseconds (See redpanda_log_failures.go for more details)
-						Content: "WARN Reactor stalled for 2000 ms",
+						Content:   "WARN Reactor stalled for 2000 ms",
 					},
 				}
-				result, _ := service.IsLogsFine(logs, currentTime, logWindow)
+				result, _ := service.IsLogsFine(logs, currentTime, logWindow, time.Time{})
 				Expect(result).To(BeFalse())
 			})
 
@@ -390,33 +389,31 @@ var _ = Describe("Redpanda Service", func() {
 						Content:   "INFO Created topic 'test-topic' with 3 partitions",
 					},
 				}
-				result, _ := service.IsLogsFine(logs, currentTime, logWindow)
+				result, _ := service.IsLogsFine(logs, currentTime, logWindow, time.Time{})
 				Expect(result).To(BeTrue())
 			})
 
 			It("should ignore logs outside the time window", func() {
 				logs := []s6service.LogEntry{
 					{
-						Timestamp: currentTime.Add(-10 * time.Minute), // Outside our 5-minute window
+						Timestamp: currentTime.Add(-10 * time.Minute),
 						Content:   "ERROR Address already in use (port 9092)",
 					},
 					{
-						Timestamp: currentTime.Add(-30 * time.Second), // Inside window
+						Timestamp: currentTime.Add(-30 * time.Second),
 						Content:   "INFO Created topic 'test-topic' with 3 partitions",
 					},
 				}
-				result, _ := service.IsLogsFine(logs, currentTime, logWindow)
+				result, _ := service.IsLogsFine(logs, currentTime, logWindow, time.Time{})
 				Expect(result).To(BeTrue())
 			})
 
 			It("should handle logs at the edge of the time window", func() {
-				// Create test logs with error exactly at the window boundary
 				errorLog := s6service.LogEntry{
-					Timestamp: currentTime.Add(-logWindow), // Exactly at boundary (should be excluded)
+					Timestamp: currentTime.Add(-logWindow),
 					Content:   "ERROR Address already in use (port 9092)",
 				}
 
-				// Debug info
 				windowStart := currentTime.Add(-logWindow)
 				fmt.Printf("Debug - Window start: %v\n", windowStart)
 				fmt.Printf("Debug - Error log time: %v\n", errorLog.Timestamp)
@@ -425,82 +422,64 @@ var _ = Describe("Redpanda Service", func() {
 
 				logs := []s6service.LogEntry{errorLog}
 
-				// Should pass because error log is exactly at boundary and will be excluded
-				result, _ := service.IsLogsFine(logs, currentTime, logWindow)
+				result, _ := service.IsLogsFine(logs, currentTime, logWindow, time.Time{})
 				fmt.Printf("Debug - IsLogsFine result: %v\n", result)
 				Expect(result).To(BeFalse(), "Error log exactly at window boundary should be excluded")
 
-				// Add a normal log just inside the window
 				normalLog := s6service.LogEntry{
-					Timestamp: currentTime.Add(-logWindow).Add(1 * time.Millisecond), // Just inside window
+					Timestamp: currentTime.Add(-logWindow).Add(1 * time.Millisecond),
 					Content:   "INFO Normal log inside window",
 				}
 				logs = append(logs, normalLog)
 				fmt.Printf("Debug - Normal log time: %v\n", normalLog.Timestamp)
 				fmt.Printf("Debug - Is normal log before window start? %v\n", normalLog.Timestamp.Before(windowStart))
 
-				// Should still pass
-				result, _ = service.IsLogsFine(logs, currentTime, logWindow)
+				result, _ = service.IsLogsFine(logs, currentTime, logWindow, time.Time{})
 				fmt.Printf("Debug - IsLogsFine result with normal log: %v\n", result)
 				Expect(result).To(BeFalse(), "Adding a normal log inside the window should not affect the result")
 
-				// Now add an error log just inside the window
 				errorLogInside := s6service.LogEntry{
-					Timestamp: currentTime.Add(-logWindow).Add(2 * time.Millisecond), // Just inside window
+					Timestamp: currentTime.Add(-logWindow).Add(2 * time.Millisecond),
 					Content:   "ERROR Reactor stalled for 5s",
 				}
 				logs = append(logs, errorLogInside)
 				fmt.Printf("Debug - Error log inside time: %v\n", errorLogInside.Timestamp)
 				fmt.Printf("Debug - Is error log inside before window start? %v\n", errorLogInside.Timestamp.Before(windowStart))
 
-				// Should fail because there's now an error log inside the window
-				result, _ = service.IsLogsFine(logs, currentTime, logWindow)
+				result, _ = service.IsLogsFine(logs, currentTime, logWindow, time.Time{})
 				fmt.Printf("Debug - IsLogsFine result with error log inside: %v\n", result)
 				Expect(result).To(BeFalse(), "Error log inside window should cause the check to fail")
 			})
 
 			It("should evaluate logs with mixed timestamps correctly", func() {
-				// Mix of:
-				// - Old errors (outside window)
-				// - Recent errors (inside window)
-				// - Old normal logs
-				// - Recent normal logs
 				logs := []s6service.LogEntry{
-					// Outside window, error - should be ignored
 					{
 						Timestamp: currentTime.Add(-10 * time.Minute),
 						Content:   "ERROR Address already in use (port 9092)",
 					},
-					// Outside window, normal - should be ignored
 					{
 						Timestamp: currentTime.Add(-7 * time.Minute),
 						Content:   "INFO Starting Redpanda",
 					},
-					// Inside window, normal - should not trigger failure
 					{
 						Timestamp: currentTime.Add(-4 * time.Minute),
 						Content:   "INFO Created topic 'test-topic'",
 					},
-					// Inside window with error - should trigger failure
 					{
 						Timestamp: currentTime.Add(-3 * time.Minute),
-						// Stalls are always printed in milliseconds (See redpanda_log_failures.go for more details)
-						Content: "ERROR Reactor stalled for 10000 ms",
+						Content:   "ERROR Reactor stalled for 10000 ms",
 					},
-					// Latest log, normal - should not affect result
 					{
 						Timestamp: currentTime.Add(-1 * time.Minute),
 						Content:   "INFO Successfully processed batch",
 					},
 				}
 
-				// Should fail because there's an error within the time window
-				result, _ := service.IsLogsFine(logs, currentTime, logWindow)
+				result, _ := service.IsLogsFine(logs, currentTime, logWindow, time.Time{})
 				Expect(result).To(BeFalse())
 
-				// Now move the error outside the window by adjusting the current time
 				adjustedTime := currentTime.Add(3 * time.Minute)
-				result, _ = service.IsLogsFine(logs, adjustedTime, logWindow)
+				result, _ = service.IsLogsFine(logs, adjustedTime, logWindow, time.Time{})
 				Expect(result).To(BeTrue())
 			})
 
@@ -512,16 +491,41 @@ var _ = Describe("Redpanda Service", func() {
 					},
 				}
 
-				// With 5 minute window (default), error is detected
-				result, _ := service.IsLogsFine(logs, currentTime, 5*time.Minute)
+				result, _ := service.IsLogsFine(logs, currentTime, 5*time.Minute, time.Time{})
 				Expect(result).To(BeFalse())
 
-				// With 2 minute window, error is outside window and ignored
-				result, _ = service.IsLogsFine(logs, currentTime, 2*time.Minute)
+				result, _ = service.IsLogsFine(logs, currentTime, 2*time.Minute, time.Time{})
 				Expect(result).To(BeTrue())
 
-				// With 10 minute window, error is detected
-				result, _ = service.IsLogsFine(logs, currentTime, 10*time.Minute)
+				result, _ = service.IsLogsFine(logs, currentTime, 10*time.Minute, time.Time{})
+				Expect(result).To(BeFalse())
+			})
+
+			It("should ignore errors before transition time", func() {
+				transitionTime := currentTime.Add(-2 * time.Minute)
+				logs := []s6service.LogEntry{
+					{
+						Timestamp: currentTime.Add(-3 * time.Minute), // Before transition
+						Content:   "ERROR Reactor stalled for 1000 ms",
+					},
+					{
+						Timestamp: currentTime.Add(-1 * time.Minute), // After transition
+						Content:   "INFO Normal operation",
+					},
+				}
+				result, _ := service.IsLogsFine(logs, currentTime, logWindow, transitionTime)
+				Expect(result).To(BeTrue())
+			})
+
+			It("should detect errors after transition time", func() {
+				transitionTime := currentTime.Add(-2 * time.Minute)
+				logs := []s6service.LogEntry{
+					{
+						Timestamp: currentTime.Add(-1 * time.Minute), // After transition
+						Content:   "ERROR Reactor stalled for 1000 ms",
+					},
+				}
+				result, _ := service.IsLogsFine(logs, currentTime, logWindow, transitionTime)
 				Expect(result).To(BeFalse())
 			})
 		})

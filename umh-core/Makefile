@@ -12,20 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Copyright 2025 UMH Systems GmbH
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
 .PHONY: build run clean test
 
 IMAGE_NAME = umh-core
@@ -38,7 +24,7 @@ TARGETARCH := $(shell go env GOARCH)
 
 # Default values for build arguments
 S6_OVERLAY_VERSION = 3.2.0.2
-BENTHOS_UMH_VERSION = 0.9.1
+BENTHOS_UMH_VERSION = 0.9.2
 REDPANDA_VERSION = 24.3.8
 
 # Debug values
@@ -64,7 +50,7 @@ install:
 download-docker-binaries:
 	@mkdir -p .docker-cache/s6-overlay .docker-cache/benthos .docker-cache/redpanda
 	@echo "Downloading binaries with caching..."
-	
+
 	@# Check and update s6-overlay version
 	@if [ ! -f .docker-cache/s6-overlay/version ] || [ "$$(cat .docker-cache/s6-overlay/version)" != "$(S6_OVERLAY_VERSION)" ]; then \
 		rm -f .docker-cache/s6-overlay/*.tar.xz; \
@@ -74,7 +60,7 @@ download-docker-binaries:
 		wget -O .docker-cache/s6-overlay/s6-overlay-x86_64.tar.xz "https://github.com/just-containers/s6-overlay/releases/download/v$(S6_OVERLAY_VERSION)/s6-overlay-x86_64.tar.xz"; \
 		wget -O .docker-cache/s6-overlay/s6-overlay-aarch64.tar.xz "https://github.com/just-containers/s6-overlay/releases/download/v$(S6_OVERLAY_VERSION)/s6-overlay-aarch64.tar.xz"; \
 	fi
-	
+
 	@# Check and update Benthos version
 	@if [ ! -f .docker-cache/benthos/version ] || [ "$$(cat .docker-cache/benthos/version)" != "$(BENTHOS_UMH_VERSION)" ]; then \
 		rm -f .docker-cache/benthos/benthos-linux-*; \
@@ -82,7 +68,7 @@ download-docker-binaries:
 		wget -O .docker-cache/benthos/benthos-linux-amd64 "https://github.com/united-manufacturing-hub/benthos-umh/releases/download/v$(BENTHOS_UMH_VERSION)/benthos-linux-amd64"; \
 		wget -O .docker-cache/benthos/benthos-linux-arm64 "https://github.com/united-manufacturing-hub/benthos-umh/releases/download/v$(BENTHOS_UMH_VERSION)/benthos-linux-arm64"; \
 	fi
-	
+
 	@# Check and update Redpanda version
 	@if [ ! -f .docker-cache/redpanda/version ] || [ "$$(cat .docker-cache/redpanda/version)" != "$(REDPANDA_VERSION)" ]; then \
 		rm -rf .docker-cache/redpanda/redpanda-*.tar.gz .docker-cache/redpanda/amd64 .docker-cache/redpanda/arm64; \
@@ -99,7 +85,7 @@ download-docker-binaries:
 		docker cp $$CONTAINER_ARM64:/opt/redpanda .docker-cache/redpanda/arm64/; \
 		docker rm -v $$CONTAINER_ARM64; \
 	fi
-	
+
 	@# Verify all required files exist
 	@echo "Verifying downloaded files..."
 	@for f in \
@@ -118,7 +104,7 @@ download-docker-binaries:
 			exit 1; \
 		fi; \
 	done
-	
+
 	@# Verify redpanda directories exist
 	@if [ ! -d .docker-cache/redpanda/amd64/redpanda ] || [ ! -d .docker-cache/redpanda/arm64/redpanda ]; then \
 		echo "Missing required Redpanda directories"; \
@@ -200,7 +186,7 @@ test: vet nilaway lint
 unit-test: vet nilaway lint
 	ginkgo -r -v --tags=test --label-filter='!integration && !redpanda-extended' --fail-fast ./...
 
-benchmark: 
+benchmark:
 	@echo "Running benchmarks..."
 	go test -bench=. -benchmem ./...
 
