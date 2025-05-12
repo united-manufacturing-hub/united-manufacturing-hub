@@ -51,6 +51,7 @@ func NewGetDataflowcomponentMetricsAction(userEmail string, actionUUID uuid.UUID
 		instanceUUID:          instanceUUID,
 		outboundChannel:       outboundChannel,
 		systemSnapshotManager: systemSnapshotManager,
+		actionLogger:          zap.S().With("action", "GetDataflowcomponentMetricsAction"),
 	}
 }
 
