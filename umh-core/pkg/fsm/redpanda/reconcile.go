@@ -178,11 +178,11 @@ func (r *RedpandaInstance) reconcileExternalChanges(ctx context.Context, service
 		// Reconcile the cluster config via HTTP
 		// 1. Check if we have changes in the config
 		var changes = make(map[string]interface{})
-		if r.ObservedState.ObservedRedpandaServiceConfig.Topic.DefaultTopicRetentionBytes != r.config.Topic.DefaultTopicRetentionBytes {
+		if r.ObservedState.ObservedRedpandaServiceConfig.Topic.DefaultTopicRetentionBytes != r.config.Topic.DefaultTopicRetentionBytes && r.config.Topic.DefaultTopicRetentionBytes != 0 {
 			// https://docs.redpanda.com/current/reference/properties/cluster-properties/#retention_bytes
 			changes["retention_bytes"] = r.config.Topic.DefaultTopicRetentionBytes
 		}
-		if r.ObservedState.ObservedRedpandaServiceConfig.Topic.DefaultTopicRetentionMs != r.config.Topic.DefaultTopicRetentionMs {
+		if r.ObservedState.ObservedRedpandaServiceConfig.Topic.DefaultTopicRetentionMs != r.config.Topic.DefaultTopicRetentionMs && r.config.Topic.DefaultTopicRetentionMs != 0 {
 			// https://docs.redpanda.com/current/reference/properties/cluster-properties/#log_retention_ms
 			changes["log_retention_ms"] = r.config.Topic.DefaultTopicRetentionMs
 		}
