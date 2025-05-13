@@ -138,6 +138,15 @@ func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePay
 			systemSnapshotManager,
 			configManager,
 		)
+	case models.SetConfigFile:
+		action = NewSetConfigFileAction(
+			sender,
+			payload.ActionUUID,
+			instanceUUID,
+			outboundChannel,
+			systemSnapshotManager,
+			configManager,
+		)
 	default:
 		log.Errorf("Unknown action type: %s", payload.ActionType)
 		SendActionReply(instanceUUID, sender, payload.ActionUUID, models.ActionFinishedWithFailure, "Unknown action type", outboundChannel, payload.ActionType)
