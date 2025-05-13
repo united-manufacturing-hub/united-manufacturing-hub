@@ -16,6 +16,11 @@ package http_test
 
 import (
 	"context"
+	"fmt"
+	"io"
+	netHTTP "net/http"
+	"strings"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -29,13 +34,35 @@ var _ = Describe("Requester", func() {
 
 	var log *zap.SugaredLogger
 
-	// Set API_URL to the production API URL in order for the gock library to correctly
-	// intercept the requests to the production API done by the code under test
 	const apiUrl = "https://management.umh.app/api"
 
 	BeforeEach(func() {
 		log = logger.For("RequesterTest")
 	})
+
+	// doHTTPRequestWithRetry is a test helper that retries HTTP requests on connection issues
+	doHTTPRequestWithRetry := func(ctx context.Context, url string, header map[string]string, cookies *map[string]string, insecureTLS bool, logger *zap.SugaredLogger) (*netHTTP.Response, error) {
+		var lastErr error
+		for i := 0; i < 10; i++ {
+			response, err := http.DoHTTPRequest(ctx, url, header, cookies, insecureTLS, logger)
+			if err == nil {
+				return response, nil
+			}
+
+			// Only retry on connection-related errors
+			if strings.Contains(err.Error(), "connection") ||
+				strings.Contains(err.Error(), "timeout") ||
+				strings.Contains(err.Error(), "EOF") {
+				lastErr = err
+				time.Sleep(time.Second * time.Duration(i+1)) // Exponential backoff
+				continue
+			}
+
+			// For non-connection errors, return immediately
+			return response, err
+		}
+		return nil, fmt.Errorf("failed after 10 retries, last error: %w", lastErr)
+	}
 
 	// The tests in this context are ported from the old requester_test.go file
 	Context("Requester", func() {
@@ -56,35 +83,119 @@ var _ = Describe("Requester", func() {
 		})
 
 		Context("GetRequest", func() {
-			It("should return error for non 200 response", func() {
-				_, err, _ := http.GetRequest[any](context.Background(), http.LoginEndpoint, header, &cookies, false, apiUrl, log)
-				Expect(err).To(HaveOccurred())
+			It("should return no error", func() {
+				_, status, err := http.GetRequest[any](context.Background(), http.LoginEndpoint, header, &cookies, false, apiUrl, log)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(status).To(Equal(200))
 			})
 		})
 
 		Context("PostRequest", func() {
-			It("should return error for non 200 response", func() {
-				_, err, _ := http.PostRequest[any](context.Background(), http.LoginEndpoint, &data, header, &cookies, false, apiUrl, log)
+			It("should return error an error", func() {
+				_, status, err := http.PostRequest[any](context.Background(), http.LoginEndpoint, &data, header, &cookies, false, apiUrl, log)
 				Expect(err).To(HaveOccurred())
+				Expect(status).To(Equal(401))
 			})
 		})
 	})
 
 	Context("TLS Security", func() {
-		// https://badssl.com/ is a website from the chromium project that provides various TLS test sites
-		// The one we choose here is the untrusted-root.badssl.com site, which is a site that has a certificate
-		// that is not trusted by default.
-		const untrustedURL = "https://untrusted-root.badssl.com"
+		Describe("Certificate Validation", func() {
+			// https://badssl.com/ is a website from the chromium project that provides various TLS test sites
+			// These test sites help verify different TLS security scenarios
+			testCases := map[string]string{
+				"expired":        "https://expired.badssl.com",
+				"wrong-host":     "https://wrong.host.badssl.com",
+				"self-signed":    "https://self-signed.badssl.com",
+				"untrusted-root": "https://untrusted-root.badssl.com",
+				// The revoked certificate test is disabled, as go's crypto/tls requires the user to implement certificate revocation checking
+				// See also: https://www.cossacklabs.com/blog/tls-validation-implementing-ocsp-and-crl-in-go/
+				// "revoked":        "https://revoked.badssl.com",
+				// The pinning test is disabled, as go's crypto/tls ignores HPKP (HTTP Public Key Pinning)
+				// See also: https://blog.ordina-jworks.io/security/2018/02/12/HPKP-deprecated-what-now.html
+				// "pinning-test":   "https://pinning-test.badssl.com"
+			}
 
-		It("should fail with secure TLS", func() {
-			_, _, err := http.GetRequest[any](context.Background(), "/", nil, nil, false, untrustedURL, log)
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("certificate"))
+			for name, url := range testCases {
+				It(fmt.Sprintf("should fail with secure TLS for %s", name), func() {
+					response, err := doHTTPRequestWithRetry(context.Background(), url, nil, nil, false, log)
+					// Read response body for debugging
+					if response != nil {
+						body, err := io.ReadAll(response.Body)
+						Expect(err).ToNot(HaveOccurred())
+						GinkgoWriter.Println(string(body))
+					}
+					Expect(err).To(HaveOccurred())
+					Expect(err.Error()).To(ContainSubstring("certificate"))
+				})
+
+				It(fmt.Sprintf("should succeed with insecure TLS for %s", name), func() {
+					_, err := doHTTPRequestWithRetry(context.Background(), url, nil, nil, true, log)
+					Expect(err).ToNot(HaveOccurred())
+				})
+			}
+		})
+		Describe("Key exchange", func() {
+			// These will always fail, as the go crypto/tls does not allow them anymore (For good reasons)
+			testCases := map[string]string{
+				"dh480":             "https://dh480.badssl.com",
+				"dh512":             "https://dh512.badssl.com",
+				"dh1024":            "https://dh1024.badssl.com",
+				"dh2048":            "https://dh2048.badssl.com",
+				"dh-small-subgroup": "https://dh-small-subgroup.badssl.com",
+				"dh-composite":      "https://dh-composite.badssl.com",
+			}
+			for name, url := range testCases {
+				It(fmt.Sprintf("should fail with secure TLS for %s", name), func() {
+					_, err := doHTTPRequestWithRetry(context.Background(), url, nil, nil, false, log)
+					Expect(err).To(HaveOccurred())
+				})
+
+				It(fmt.Sprintf("should fail with insecure TLS for %s", name), func() {
+					_, err := doHTTPRequestWithRetry(context.Background(), url, nil, nil, true, log)
+					Expect(err).To(HaveOccurred())
+				})
+			}
 		})
 
-		It("should succeed with insecure TLS", func() {
-			_, _, err := http.GetRequest[any](context.Background(), "/", nil, nil, true, untrustedURL, log)
-			Expect(err).ToNot(HaveOccurred())
+		Describe("Protocol", func() {
+			// By default go only allows TLS 1.2 and above
+			testCases := map[string]string{
+				"tls-v1-0": "https://tls-v1-0.badssl.com",
+				"tls-v1-1": "https://tls-v1-1.badssl.com",
+			}
+			for name, url := range testCases {
+				It(fmt.Sprintf("should fail with secure TLS for %s", name), func() {
+					_, err := doHTTPRequestWithRetry(context.Background(), url, nil, nil, false, log)
+					Expect(err).To(HaveOccurred())
+				})
+
+				It(fmt.Sprintf("should succeed with insecure TLS for %s", name), func() {
+					_, err := doHTTPRequestWithRetry(context.Background(), url, nil, nil, true, log)
+					Expect(err).ToNot(HaveOccurred())
+				})
+			}
+		})
+
+		Describe("Cipher Suites", func() {
+			// These cipher suites where removed from go, using them requires custom args when building the executable
+			testCases := map[string]string{
+				"rc4-md5": "https://rc4-md5.badssl.com",
+				"rc4":     "https://rc4.badssl.com",
+				"3des":    "https://3des.badssl.com",
+				"null":    "https://null.badssl.com",
+			}
+			for name, url := range testCases {
+				It(fmt.Sprintf("should fail with secure TLS for %s", name), func() {
+					_, err := doHTTPRequestWithRetry(context.Background(), url, nil, nil, false, log)
+					Expect(err).To(HaveOccurred())
+				})
+
+				It(fmt.Sprintf("should fail with insecure TLS for %s", name), func() {
+					_, err := doHTTPRequestWithRetry(context.Background(), url, nil, nil, true, log)
+					Expect(err).To(HaveOccurred())
+				})
+			}
 		})
 	})
 })
