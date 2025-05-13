@@ -210,6 +210,7 @@ func enhanceConnectionError(err error) error {
 }
 
 // DoHTTPRequest performs the actual HTTP request and returns the response and any errors
+// This is an internal function, better use GetRequest or PostRequest instead
 func DoHTTPRequest(ctx context.Context, url string, header map[string]string, cookies *map[string]string, insecureTLS bool, logger *zap.SugaredLogger) (*http.Response, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
