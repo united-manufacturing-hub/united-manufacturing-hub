@@ -1042,6 +1042,10 @@ func (s *RedpandaService) verifyRedpandaClusterConfig(ctx context.Context, redpa
 
 	readbackResp, err := s.httpClient.Do(readbackReq)
 	if err != nil {
+		// If we get a connection refused error, it means that the Redpanda service is not yet ready (or is in the progress of restarting), so we just ignore it
+		if strings.Contains(err.Error(), "connection refused") {
+			return nil
+		}
 		return fmt.Errorf("failed to send readback request: %w", err)
 	}
 
