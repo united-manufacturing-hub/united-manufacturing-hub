@@ -410,17 +410,17 @@ var _ = Describe("GetDataflowcomponentMetricsAction", func() {
 			var processor1LabelMetric *actions.DfcMetric
 
 			for _, metric := range metricsResult.Metrics {
-				if metric.Location == actions.DfcMetricLocationInput &&
-					metric.Path == "messages" &&
+				if metric.ComponentType == actions.DfcMetricComponentTypeInput &&
+					metric.Path == "root.input" &&
 					metric.Name == "received" {
 					inputReceivedMetric = &metric
 				}
-				if metric.Location == actions.DfcMetricLocationOutput &&
-					metric.Path == "messages" &&
+				if metric.ComponentType == actions.DfcMetricComponentTypeOutput &&
+					metric.Path == "root.output" &&
 					metric.Name == "sent" {
 					outputSentMetric = &metric
 				}
-				if metric.Location == actions.DfcMetricLocationProcessing &&
+				if metric.ComponentType == actions.DfcMetricComponentTypeProcessor &&
 					metric.Path == "processor_1" &&
 					metric.Name == "label" {
 					processor1LabelMetric = &metric
