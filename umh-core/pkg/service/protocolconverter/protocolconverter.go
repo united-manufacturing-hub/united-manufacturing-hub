@@ -560,7 +560,7 @@ func (p *ProtocolConverterService) Start(
 
 	// Find and update our cached config
 	dfcFound := false
-	for i, config := range p.connectionConfig {
+	for i, config := range p.dataflowComponentConfig {
 		if config.Name == underlyingName {
 			p.dataflowComponentConfig[i].DesiredFSMState = dfcfsm.OperationalStateActive
 			dfcFound = true
@@ -608,7 +608,7 @@ func (p *ProtocolConverterService) Stop(
 
 	// Find and update our cached config
 	dfcFound := false
-	for i, config := range p.connectionConfig {
+	for i, config := range p.dataflowComponentConfig {
 		if config.Name == underlyingName {
 			p.dataflowComponentConfig[i].DesiredFSMState = dfcfsm.OperationalStateStopped
 			dfcFound = true
@@ -680,10 +680,8 @@ func (p *ProtocolConverterService) ReconcileManager(
 	return nil, connReconciled || dfcReconciled
 }
 
-// ServiceExists checks if a connection with the given name exists.
-// Used by the FSM to determine appropriate transitions.
-//
-// Returns true if the connection exists, false otherwise.
+// ServiceExists checks if a connection and a dataflowcomponent with the given name exist.
+// If only one of the services exists, it returns false.
 func (p *ProtocolConverterService) ServiceExists(
 	ctx context.Context,
 	filesystemService filesystem.Service,
