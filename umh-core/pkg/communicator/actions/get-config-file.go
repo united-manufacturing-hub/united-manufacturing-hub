@@ -91,6 +91,16 @@ func (a *GetConfigFileAction) Execute() (interface{}, map[string]interface{}, er
 	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
 		fmt.Sprintf("Reading config file from %s", configPath), a.outboundChannel, models.GetConfigFile)
 
+	// read the file info to retrieve the last modified time
+	fileInfo, err := a.fsService.Stat(ctx, configPath)
+	if err != nil || fileInfo == nil {
+		errMsg := fmt.Sprintf("Failed to read config file info: %v", err)
+		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
+			errMsg, a.outboundChannel, models.GetConfigFile)
+		return nil, nil, fmt.Errorf("failed to read config file info: %w", err)
+	}
+	lastModifiedTime := fileInfo.ModTime()
+
 	// Read the file content
 	data, err := a.fsService.ReadFile(ctx, configPath)
 	if err != nil {
@@ -102,7 +112,8 @@ func (a *GetConfigFileAction) Execute() (interface{}, map[string]interface{}, er
 
 	// Return the file content as a string
 	response := models.GetConfigFileResponse{
-		Content: string(data),
+		Content:          string(data),
+		LastModifiedTime: lastModifiedTime,
 	}
 
 	return response, nil, nil

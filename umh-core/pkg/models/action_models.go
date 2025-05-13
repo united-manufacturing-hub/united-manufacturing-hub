@@ -15,6 +15,8 @@
 package models
 
 import (
+	"time"
+
 	"github.com/Masterminds/semver/v3"
 	"github.com/google/uuid"
 )
@@ -533,5 +535,6 @@ type GetLogsResponse struct {
 
 // GetConfigFileResponse contains the config file content
 type GetConfigFileResponse struct {
-	Content string `json:"content"`
+	Content          string    `json:"content"`
+	LastModifiedTime time.Time `json:"lastModifiedTime"`
 }
