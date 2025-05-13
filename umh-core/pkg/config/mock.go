@@ -23,6 +23,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
+	filesystem "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
 // MockConfigManager is a mock implementation of ConfigManager for testing
@@ -67,6 +68,11 @@ func (m *MockConfigManager) GetConfig(ctx context.Context, tick uint64) (FullCon
 	}
 
 	return m.Config, m.ConfigError
+}
+
+// GetFileSystemService is never called in the mock but only here to implement the ConfigManager interface
+func (m *MockConfigManager) GetFileSystemService() filesystem.Service {
+	return nil
 }
 
 // WriteConfig implements the ConfigManager interface

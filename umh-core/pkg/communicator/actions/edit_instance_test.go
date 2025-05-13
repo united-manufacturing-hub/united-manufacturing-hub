@@ -26,6 +26,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
 // EditInstance tests verify the behavior of the EditInstanceAction.
@@ -332,6 +333,11 @@ var _ = Describe("EditInstance", func() {
 // allowing tests to verify proper error handling when persistence operations fail.
 type writeFailingMockConfigManager struct {
 	mockConfigManager *config.MockConfigManager
+}
+
+// GetFileSystemService is never called in the mock but only here to implement the ConfigManager interface
+func (w *writeFailingMockConfigManager) GetFileSystemService() filesystem.Service {
+	return nil
 }
 
 // GetConfig passes through to the underlying mock implementation
