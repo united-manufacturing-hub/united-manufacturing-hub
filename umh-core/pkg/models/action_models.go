@@ -548,8 +548,8 @@ type SetConfigFileResponse struct {
 	Content          string `json:"content"`
 	LastModifiedTime string `json:"lastModifiedTime"`
 	Success          bool   `json:"success"`
+}
 
 type GetDataflowcomponentMetricsRequest struct {
 	UUID string `json:"uuid" binding:"required"`
-
 }
