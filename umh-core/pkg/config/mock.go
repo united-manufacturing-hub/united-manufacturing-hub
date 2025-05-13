@@ -40,11 +40,14 @@ type MockConfigManager struct {
 	ConfigDelay                   time.Duration
 	mutexReadOrWrite              sync.Mutex
 	mutexReadAndWrite             sync.Mutex
+	MockFileSystem                *filesystem.MockFileSystem
 }
 
 // NewMockConfigManager creates a new MockConfigManager instance
 func NewMockConfigManager() *MockConfigManager {
-	return &MockConfigManager{}
+	return &MockConfigManager{
+		MockFileSystem: filesystem.NewMockFileSystem(),
+	}
 }
 
 // GetDataFlowConfig returns the DataFlow component configurations
@@ -70,9 +73,9 @@ func (m *MockConfigManager) GetConfig(ctx context.Context, tick uint64) (FullCon
 	return m.Config, m.ConfigError
 }
 
-// GetFileSystemService is never called in the mock but only here to implement the ConfigManager interface
+// GetFileSystemService returns the mock filesystem service
 func (m *MockConfigManager) GetFileSystemService() filesystem.Service {
-	return nil
+	return m.MockFileSystem
 }
 
 // WriteConfig implements the ConfigManager interface
