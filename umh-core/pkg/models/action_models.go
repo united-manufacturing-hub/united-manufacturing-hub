@@ -182,6 +182,8 @@ const (
 	UpdateConfiguration ActionType = "update-configuration"
 	// GetLogs represents the action type for retrieving logs
 	GetLogs ActionType = "get-logs"
+	// GetConfigFile represents the action type for retrieving the configuration file
+	GetConfigFile ActionType = "get-config-file"
 )
 
 // TestNetworkConnectionPayload contains the necessary fields for executing a TestNetworkConnection action.
@@ -527,4 +529,9 @@ type GetLogsRequest struct {
 
 type GetLogsResponse struct {
 	Logs []string `json:"logs"`
+}
+
+// GetConfigFileResponse contains the config file content
+type GetConfigFileResponse struct {
+	Content string `json:"content"`
 }
