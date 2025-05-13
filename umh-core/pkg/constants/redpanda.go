@@ -53,5 +53,5 @@ const (
 
 const (
 	AdminAPIPort    = 9644
-	AdminAPITimeout = 20 * time.Millisecond
+	AdminAPITimeout = 25 * time.Millisecond
 )
