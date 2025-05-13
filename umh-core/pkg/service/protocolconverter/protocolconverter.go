@@ -38,15 +38,28 @@ import (
 	"go.uber.org/zap"
 )
 
-// IProtocolConverterService is the interface for managing DataFlowComponent services
+// IProtocolConverterService defines the public contract for a *protocol-converter*:
+// a logical unit that combines **one Connection + one Data-Flow-Component (DFC)**
+// and surfaces them as a single object to the rest of UMH-Core.
 type IProtocolConverterService interface {
-	// GenerateConfig generates a connection & dfc config for a given protocolconverter
+	// GenerateConfig converts a high-level `ProtocolConverterServiceConfig`
+	// into the two *concrete* child configs required by the underlying FSMs.
+	//
+	// Arguments
+	//   protConvConfig – user-supplied high-level spec (may be partially filled)
+	//   protConvName   – logical converter name as used in the UMH YAML
+	//
+	// Returns the *fully-normalised* Connection- and DFC-configs
+	// plus any validation error encountered.
 	GenerateConfig(protConvConfig *protocolconverterserviceconfig.ProtocolConverterServiceConfig, protConvName string) (connectionserviceconfig.ConnectionServiceConfig, dataflowcomponentserviceconfig.DataflowComponentServiceConfig, error)
 
-	// GetConfig returns the actual ProtocolConverter serviceconfig from the underlying services
+	// GetConfig fetches the *live* configuration by reading the child services
+	// on disk.
 	GetConfig(ctx context.Context, filesystemService filesystem.Service, protConvName string) (protocolconverterserviceconfig.ProtocolConverterServiceConfig, error)
 
-	// Status checks the status of a ProtocolConverter service
+	// Status aggregates health from Connection, DFC and Redpanda into a single
+	// snapshot.  The returned structure is **read-only** – callers must not
+	// mutate it.
 	Status(ctx context.Context, services serviceregistry.Provider, connName string, tick uint64) (ServiceInfo, error)
 
 	// AddToManager adds a ProtocolConverter to the Connection & DFC manager
@@ -67,29 +80,39 @@ type IProtocolConverterService interface {
 	// ForceRemove removes a ProtocolConverter from the Connetion & DFC manager
 	ForceRemove(ctx context.Context, filesystemService filesystem.Service, protConvName string) error
 
-	// ServiceExists checks if a ProtocolConverter service exists
+	// ServiceExists checks if a connection and a dataflowcomponent with the given name exist.
+	// If only one of the services exists, it returns false.
 	ServiceExists(ctx context.Context, filesystemService filesystem.Service, protConvName string) bool
 
-	// ReconcileManager reconciles the ProtocolConverter manager with the actual state
+	// ReconcileManager is the heart-beat: on every tick it feeds the *desired*
+	// slices into the child-managers, lets them run one state-machine cycle and
+	// returns:
+	//   err        – unrecoverable problem (configuration bug, ctx cancellation)
+	//   reconciled – true when *any* child manager made progress
 	ReconcileManager(ctx context.Context, services serviceregistry.Provider, tick uint64) (error, bool)
 }
 
 // ServiceInfo holds information about the ProtocolConverters underlying health states.
 type ServiceInfo struct {
-	// Observed states from the underlying fsm-components
-	ConnectionObservedState        connectionfsm.ConnectionObservedState
+	// ConnectionObservedState is the last sample from the connection manager.
+	ConnectionObservedState connectionfsm.ConnectionObservedState
+	// ConnectionFSMState is the *current* FSM state string (e.g. "up", "stopped").
+	ConnectionFSMState string
+
+	// DataflowComponentObservedState mirrors the DFC manager.
 	DataflowComponentObservedState dfcfsm.DataflowComponentObservedState
-	RedpandaObservedState          redpandafsm.RedpandaObservedState
+	DataflowComponentFSMState      string
 
-	// Current states of the underlying fsm-components
-	ConnectionFSMState        string
-	DataflowComponentFSMState string
-	RedpandaFSMState          string
+	// RedpandaObservedState is included so a protocol-converter can degrade
+	// itself when the message bus is down.
+	RedpandaObservedState redpandafsm.RedpandaObservedState
+	RedpandaFSMState      string
 
-	// LastChange stores the tick when the status last changed.
+	// LastChange is the global tick when any of the above fields last changed.
 	LastChange uint64
 
-	// StatusReason is the reason for the current state
+	// StatusReason is a short human string (log excerpt, metrics finding, …)
+	// explaining *why* the converter is not “green”.
 	StatusReason string
 }
 
@@ -137,7 +160,11 @@ func WithUnderlyingManagers(
 	}
 }
 
-// NewDefaultProtocolConverterService creates a new ConnectionService with default options.
+// NewDefaultProtocolConverterService returns a fully initialised service with
+// default child managers.  Call-site may inject mocks via functional options.
+//
+// Note: `protConvName` is the *logical* name – **without** the "protocolconverter-"
+// prefix – exactly as it appears in the UMH YAML.
 func NewDefaultProtocolConverterService(protConvName string, opts ...ProtocolConverterServiceOption) *ProtocolConverterService {
 	managerName := fmt.Sprintf("%s%s", logger.ComponentProtocolConverterService, protConvName)
 	service := &ProtocolConverterService{
