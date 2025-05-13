@@ -15,6 +15,7 @@
 package actions_test
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -47,6 +48,7 @@ var _ = Describe("GetLogsAction", func() {
 		dfcName         string
 		dfcUUID         uuid.UUID
 		snapshotManager *fsm.SnapshotManager
+		mockedLogs      []s6.LogEntry
 	)
 
 	BeforeEach(func() {
@@ -59,7 +61,7 @@ var _ = Describe("GetLogsAction", func() {
 		snapshotManager = fsm.NewSnapshotManager()
 
 		// Mocked logs contain logs from 6h ago and 2h ago
-		mockedLogs := []s6.LogEntry{
+		mockedLogs = []s6.LogEntry{
 			{
 				Timestamp: time.Now().Add(-6 * time.Hour).UTC(),
 				Content:   "test log",
@@ -248,7 +250,7 @@ var _ = Describe("GetLogsAction", func() {
 	})
 
 	Describe("Execute", func() {
-		DescribeTable("should return logs when log type is", func(logType models.LogType, expectedLogs []string) {
+		DescribeTable("should return logs when log type is", func(logType models.LogType) {
 			payload := map[string]interface{}{
 				"type":      logType,
 				"startTime": time.Now().Add(-24 * time.Hour).UnixMilli(),
@@ -264,13 +266,19 @@ var _ = Describe("GetLogsAction", func() {
 			err = action.Validate()
 			Expect(err).To(BeNil())
 
+			// add the time to the loglines
+			expectedLogs := []string{
+				fmt.Sprintf("[%s] test log", mockedLogs[0].Timestamp.Format(time.RFC3339)),
+				fmt.Sprintf("[%s] test log 2", mockedLogs[1].Timestamp.Format(time.RFC3339)),
+			}
+
 			result, _, err := action.Execute()
 			Expect(err).To(BeNil())
 			Expect(result).To(Equal(models.GetLogsResponse{Logs: expectedLogs}))
 		},
-			Entry("dfc", models.DFCLogType, []string{"test log", "test log 2"}),
-			Entry("agent", models.AgentLogType, []string{"test log", "test log 2"}),
-			Entry("redpdanda", models.RedpandaLogType, []string{"test log", "test log 2"}))
+			Entry("dfc", models.DFCLogType),
+			Entry("agent", models.AgentLogType),
+			Entry("redpanda", models.RedpandaLogType))
 
 		It("should return logs for the given start time", func() {
 			// Start time of 3h ago should only yield the mocked log from 2h ago
@@ -287,7 +295,7 @@ var _ = Describe("GetLogsAction", func() {
 
 			result, _, err := action.Execute()
 			Expect(err).To(BeNil())
-			Expect(result).To(Equal(models.GetLogsResponse{Logs: []string{"test log 2"}}))
+			Expect(result).To(Equal(models.GetLogsResponse{Logs: []string{fmt.Sprintf("[%s] test log 2", mockedLogs[1].Timestamp.Format(time.RFC3339))}}))
 		})
 
 		It("should handle missing manager errors gracefully", func() {

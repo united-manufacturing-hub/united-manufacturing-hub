@@ -121,7 +121,9 @@ func mapS6LogsToSlice(s6Logs []s6.LogEntry, startTimeUTC time.Time) []string {
 			continue
 		}
 
-		logs = append(logs, log.Content)
+		logline := fmt.Sprintf("[%s] %s", log.Timestamp.Format(time.RFC3339), log.Content)
+
+		logs = append(logs, logline)
 	}
 
 	return logs
