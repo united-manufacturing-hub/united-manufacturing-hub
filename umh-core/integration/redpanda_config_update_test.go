@@ -24,7 +24,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var _ = Describe("Redpanda Config Update Integration Test", Ordered, Label("integration"), func() {
+var _ = FDescribe("Redpanda Config Update Integration Test", Ordered, Label("integration"), func() {
 	const (
 		topicName         = "dfc-config-update-test-topic"
 		messagesPerSecond = 5

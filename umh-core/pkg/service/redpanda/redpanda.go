@@ -981,11 +981,8 @@ func (s *RedpandaService) setRedpandaClusterConfig(ctx context.Context, configUp
 		return fmt.Errorf("failed to marshal request body: %w", err)
 	}
 
-	// Construct the URL
-	url := "http://localhost:9644/v1/cluster_config"
-
 	// Create the request
-	req, err := http.NewRequestWithContext(ctx, http.MethodPut, url, bytes.NewBuffer(jsonBody))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, fmt.Sprintf("http://localhost:%d/v1/cluster_config", constants.AdminAPIPort), bytes.NewBuffer(jsonBody))
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
@@ -1038,7 +1035,7 @@ func (s *RedpandaService) verifyRedpandaClusterConfig(ctx context.Context, redpa
 		return fmt.Errorf("http client not initialized")
 	}
 
-	readbackReq, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://localhost:9644/v1/cluster_config", nil)
+	readbackReq, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("http://localhost:%d/v1/cluster_config", constants.AdminAPIPort), nil)
 	if err != nil {
 		return fmt.Errorf("failed to create readback request: %w", err)
 	}
@@ -1059,6 +1056,8 @@ func (s *RedpandaService) verifyRedpandaClusterConfig(ctx context.Context, redpa
 		return fmt.Errorf("failed to unmarshal readback response body: %w", err)
 	}
 
+	// Validate all keys against the readback config
+	// Since the types of our request and the response might differ we need to handle the different types
 	for key, value := range configUpdates {
 		readbackValue, ok := readbackConfig[key]
 		if !ok {
@@ -1094,18 +1093,44 @@ func (s *RedpandaService) verifyRedpandaClusterConfig(ctx context.Context, redpa
 	return nil
 }
 
-// UpdateRedpandaClusterConfig updates Redpanda's cluster config via HTTP PUT request
+// UpdateRedpandaClusterConfig updates Redpanda's cluster configuration through its admin API.
+// The function performs two key operations:
+//  1. Sends a PUT request to update the cluster configuration
+//  2. Verifies the changes by reading back and comparing the new values
+//
+// Note on restarts:
+//   - This function does not directly trigger a Redpanda restart
+//   - Restarts are handled by the reconcile loop when S6 service config changes
+//   - This ensures all configuration changes are applied, including those requiring restarts
+//
+// The reconcile loop continues smoothly because:
+//   - Configuration readback confirms changes are applied
+//   - Redpanda metrics reflect updated values (therefore not blocking the loop)
+//   - Both HTTP operations complete within the standard context timeout
 func (s *RedpandaService) UpdateRedpandaClusterConfig(ctx context.Context, redpandaName string, configUpdates map[string]interface{}) error {
-	// If the context is done, return an error
+	// If the parent context is done, return an error
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
 
+	// Define a context for the set cluster config call, ensuring that we don't block the rest of the loop for too long
+	setRedpandaClusterConfigContext, setRedpandaClusterConfigContextCancel := context.WithTimeout(ctx, constants.AdminAPITimeout)
+	defer setRedpandaClusterConfigContextCancel()
+
 	// Set the cluster config
-	if err := s.setRedpandaClusterConfig(ctx, configUpdates); err != nil {
+	if err := s.setRedpandaClusterConfig(setRedpandaClusterConfigContext, configUpdates); err != nil {
 		return err
 	}
 
+	// If the parent context is done, return an error
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+
+	// Define a context for the verify cluster config call, ensuring that we don't block the rest of the loop for too long
+	verifyRedpandaClusterConfigContext, verifyRedpandaClusterConfigContextCancel := context.WithTimeout(ctx, constants.AdminAPITimeout)
+	defer verifyRedpandaClusterConfigContextCancel()
+
 	// Verify the config was applied correctly
-	return s.verifyRedpandaClusterConfig(ctx, redpandaName, configUpdates)
+	return s.verifyRedpandaClusterConfig(verifyRedpandaClusterConfigContext, redpandaName, configUpdates)
 }
