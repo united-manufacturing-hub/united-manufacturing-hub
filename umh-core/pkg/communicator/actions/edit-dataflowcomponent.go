@@ -116,6 +116,7 @@ type EditDataflowComponentAction struct {
 	payload  models.CDFCPayload
 	name     string // human‑readable component name (may change during an edit)
 	metaType string // "custom" for now – future‑proofing for other component kinds
+	state    string // the desired state of the component
 
 	// ─── UUID choreography ────────────────────────────────────────────────────
 	oldComponentUUID uuid.UUID // UUID of the pre‑existing component (taken from the request)
@@ -166,6 +167,7 @@ func (a *EditDataflowComponentAction) Parse(payload interface{}) error {
 		Payload           interface{} `json:"payload"`
 		UUID              string      `json:"uuid"`
 		IgnoreHealthCheck bool        `json:"ignoreHealthCheck"`
+		State             string      `json:"state"`
 	}
 
 	// Parse the top level payload
@@ -182,6 +184,15 @@ func (a *EditDataflowComponentAction) Parse(payload interface{}) error {
 	a.name = topLevel.Name
 	if a.name == "" {
 		return errors.New("missing required field Name")
+	}
+
+	a.state = topLevel.State
+	if a.state == "" {
+		a.state = "active"
+	}
+	if a.state != "active" && a.state != "stopped" {
+		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, "invalid state: "+a.state, a.outboundChannel, models.EditDataFlowComponent)
+		return fmt.Errorf("invalid state: %s", a.state)
 	}
 
 	//set the new component UUID by the name
@@ -410,6 +421,9 @@ func (a *EditDataflowComponentAction) Execute() (interface{}, map[string]interfa
 		benthosPipeline["processors"] = processors
 	}
 
+	// get the desired state
+	desiredState := a.state
+
 	// Create the Benthos service config
 	benthosConfig := benthosserviceconfig.BenthosServiceConfig{
 		Input:              benthosInput,
@@ -427,7 +441,7 @@ func (a *EditDataflowComponentAction) Execute() (interface{}, map[string]interfa
 	dfc := config.DataFlowComponentConfig{
 		FSMInstanceConfig: config.FSMInstanceConfig{
 			Name:            a.name,
-			DesiredFSMState: "active",
+			DesiredFSMState: desiredState,
 		},
 		DataFlowComponentServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 			BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{

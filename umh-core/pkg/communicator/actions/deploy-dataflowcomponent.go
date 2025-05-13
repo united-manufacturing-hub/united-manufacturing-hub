@@ -96,7 +96,7 @@ type DeployDataflowComponentAction struct {
 	payload  models.CDFCPayload
 	name     string // human-readable component name
 	metaType string // "custom" for now – future-proofing for other component kinds
-
+	state    string // the desired state of the component
 	// ─── Runtime observation & synchronisation ───────────────────────────────
 	systemSnapshotManager *fsm.SnapshotManager // Snapshot Manager holds the latest system snapshot
 
@@ -136,6 +136,7 @@ func (a *DeployDataflowComponentAction) Parse(payload interface{}) error {
 		} `json:"meta"`
 		IgnoreHealthCheck bool        `json:"ignoreHealthCheck"`
 		Payload           interface{} `json:"payload"`
+		State             string      `json:"state"`
 	}
 
 	// Parse the top level payload
@@ -152,6 +153,11 @@ func (a *DeployDataflowComponentAction) Parse(payload interface{}) error {
 	a.name = topLevel.Name
 	if a.name == "" {
 		return errors.New("missing required field Name")
+	}
+
+	a.state = topLevel.State
+	if a.state == "" {
+		a.state = "active"
 	}
 
 	// Store the meta type
