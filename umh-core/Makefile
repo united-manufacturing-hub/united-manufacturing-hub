@@ -232,6 +232,8 @@ integration-test: pre-test
 redpanda-extended-test: pre-test
 	ginkgo -r -v --tags=test --label-filter='redpanda-extended' --fail-fast --timeout=1.5h ./...
 
+badssl-test: pre-test
+	ginkgo -r -v --tags=test --label-filter='tls' --fail-fast ./...
 
 # integration-test-ci: Runs integration tests in CI environments with proper version tagging
 # - Injects VERSION via ldflags into AppVersion for proper error identification in Sentry
