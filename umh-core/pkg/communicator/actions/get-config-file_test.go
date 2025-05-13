@@ -17,6 +17,7 @@ package actions_test
 import (
 	"context"
 	"errors"
+	"os"
 	"time"
 
 	"github.com/google/uuid"
@@ -27,6 +28,22 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 )
+
+// memFileInfo is a simple implementation of os.FileInfo for testing
+type memFileInfo struct {
+	name  string
+	size  int64
+	mode  os.FileMode
+	mtime time.Time
+	dir   bool
+}
+
+func (m *memFileInfo) Name() string       { return m.name }
+func (m *memFileInfo) Size() int64        { return m.size }
+func (m *memFileInfo) Mode() os.FileMode  { return m.mode }
+func (m *memFileInfo) ModTime() time.Time { return m.mtime }
+func (m *memFileInfo) IsDir() bool        { return m.dir }
+func (m *memFileInfo) Sys() interface{}   { return nil }
 
 var _ = Describe("GetConfigFile", func() {
 	var (
@@ -108,6 +125,40 @@ var _ = Describe("GetConfigFile", func() {
 			response, ok := result.(models.GetConfigFileResponse)
 			Expect(ok).To(BeTrue(), "Result should be a GetConfigFileResponse")
 			Expect(response.Content).To(Equal(configContent))
+
+			// there should be a message sent to the outbound channel
+			Eventually(outboundChannel).Should(Receive())
+		})
+
+		It("should include the last modified time in the response", func() {
+			// Create a mock file info with specific modification time
+			fixedTime := time.Date(2023, 5, 15, 10, 30, 0, 0, time.UTC)
+			mockFileInfo := &memFileInfo{
+				name:  "config.yaml",
+				size:  100,
+				mode:  0644,
+				mtime: fixedTime,
+				dir:   false,
+			}
+
+			mockConfig.MockFileSystem.WithStatFunc(func(ctx context.Context, path string) (os.FileInfo, error) {
+				if path == config.DefaultConfigPath {
+					return mockFileInfo, nil
+				}
+				return nil, errors.New("file not found")
+			})
+
+			result, metadata, err := action.Execute()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(metadata).To(BeNil())
+
+			response, ok := result.(models.GetConfigFileResponse)
+			Expect(ok).To(BeTrue(), "Result should be a GetConfigFileResponse")
+			Expect(response.Content).To(Equal(configContent))
+
+			// Check that LastModifiedTime is set correctly
+			expectedTimeStr := fixedTime.Format(time.RFC3339)
+			Expect(response.LastModifiedTime).To(Equal(expectedTimeStr))
 
 			// there should be a message sent to the outbound channel
 			Eventually(outboundChannel).Should(Receive())
