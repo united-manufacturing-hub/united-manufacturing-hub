@@ -30,7 +30,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
-type GetConfigFileAction struct {
+type SetConfigFileAction struct {
 	// ─── Request metadata ────────────────────────────────────────────────────
 	userEmail    string
 	actionUUID   uuid.UUID
@@ -44,13 +44,16 @@ type GetConfigFileAction struct {
 	// ─── Runtime observation ────────────────────────────────────────────────
 	systemSnapshotManager *fsm.SnapshotManager
 
+	// ─── Request payload ───────────────────────────────────────────────────
+	payload models.SetConfigFilePayload
+
 	// ─── Utilities ──────────────────────────────────────────────────────────
 	actionLogger *zap.SugaredLogger
 }
 
-// NewGetConfigFileAction creates a new GetConfigFileAction with the provided parameters.
-func NewGetConfigFileAction(userEmail string, actionUUID uuid.UUID, instanceUUID uuid.UUID, outboundChannel chan *models.UMHMessage, systemSnapshotManager *fsm.SnapshotManager, configManager config.ConfigManager) *GetConfigFileAction {
-	return &GetConfigFileAction{
+// NewSetConfigFileAction creates a new SetConfigFileAction with the provided parameters.
+func NewSetConfigFileAction(userEmail string, actionUUID uuid.UUID, instanceUUID uuid.UUID, outboundChannel chan *models.UMHMessage, systemSnapshotManager *fsm.SnapshotManager, configManager config.ConfigManager) *SetConfigFileAction {
+	return &SetConfigFileAction{
 		userEmail:             userEmail,
 		actionUUID:            actionUUID,
 		instanceUUID:          instanceUUID,
@@ -63,24 +66,41 @@ func NewGetConfigFileAction(userEmail string, actionUUID uuid.UUID, instanceUUID
 }
 
 // Parse extracts the business fields from the raw JSON payload.
-// The GetConfigFile action doesn't require any payload, so this is a no-op.
-func (a *GetConfigFileAction) Parse(payload interface{}) error {
-	a.actionLogger.Info("Parsing GetConfigFile payload")
-	// No payload to parse for this action
+func (a *SetConfigFileAction) Parse(payload interface{}) error {
+	a.actionLogger.Info("Parsing SetConfigFile payload")
+
+	// Extract SetConfigFilePayload from the interface{}
+	payloadStruct, err := ParseActionPayload[models.SetConfigFilePayload](payload)
+	if err != nil {
+		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
+			"Failed to parse payload as SetConfigFilePayload", a.outboundChannel, models.SetConfigFile)
+		return fmt.Errorf("failed to parse payload as SetConfigFilePayload: %w", err)
+	}
+
+	a.payload = payloadStruct
 	return nil
 }
 
 // Validate performs semantic validation of the parsed payload.
-// The GetConfigFile action doesn't require any payload, so this is a no-op.
-func (a *GetConfigFileAction) Validate() error {
-	a.actionLogger.Info("Validating GetConfigFile action")
-	// No validation needed for this action
+func (a *SetConfigFileAction) Validate() error {
+	a.actionLogger.Info("Validating SetConfigFile action")
+
+	// Ensure content is not empty
+	if a.payload.Content == "" {
+		return fmt.Errorf("config file content cannot be empty")
+	}
+
+	// Ensure LastModifiedTime is not zero
+	if a.payload.LastModifiedTime == "" {
+		return fmt.Errorf("last modified time cannot be zero")
+	}
+
 	return nil
 }
 
-// Execute takes care of retrieving the config file content.
-func (a *GetConfigFileAction) Execute() (interface{}, map[string]interface{}, error) {
-	a.actionLogger.Info("Executing GetConfigFile action")
+// Execute takes care of updating the config file content.
+func (a *SetConfigFileAction) Execute() (interface{}, map[string]interface{}, error) {
+	a.actionLogger.Info("Executing SetConfigFile action")
 
 	// Create a context with timeout
 	ctx, cancel := context.WithTimeout(context.Background(), constants.ConfigGetConfigTimeout)
@@ -90,40 +110,63 @@ func (a *GetConfigFileAction) Execute() (interface{}, map[string]interface{}, er
 	configPath := config.DefaultConfigPath
 
 	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
-		fmt.Sprintf("Reading config file from %s", configPath), a.outboundChannel, models.GetConfigFile)
+		fmt.Sprintf("Updating config file at %s", configPath), a.outboundChannel, models.SetConfigFile)
 
-	// read the file info to retrieve the last modified time
+	// Read the file info to retrieve the current last modified time
 	fileInfo, err := a.fsService.Stat(ctx, configPath)
 	if err != nil || fileInfo == nil {
 		errMsg := fmt.Sprintf("Failed to read config file info: %v", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
-			errMsg, a.outboundChannel, models.GetConfigFile)
+			errMsg, a.outboundChannel, models.SetConfigFile)
 		return nil, nil, fmt.Errorf("failed to read config file info: %w", err)
 	}
-	lastModifiedTime := fileInfo.ModTime()
 
-	// Read the file content
-	data, err := a.fsService.ReadFile(ctx, configPath)
-	if err != nil {
-		errMsg := fmt.Sprintf("Failed to read config file: %v", err)
+	currentLastModified := fileInfo.ModTime().Format(time.RFC3339)
+
+	// Check if the file has been modified since the client last read it
+	if currentLastModified != a.payload.LastModifiedTime {
+		errMsg := "Config file has been modified since last read. Please fetch the latest version and try again."
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
-			errMsg, a.outboundChannel, models.GetConfigFile)
-		return nil, nil, fmt.Errorf("failed to read config file: %w", err)
+			errMsg, a.outboundChannel, models.SetConfigFile)
+		return nil, nil, fmt.Errorf("concurrent modification detected: file modified at %v, client has version from %v",
+			currentLastModified, a.payload.LastModifiedTime)
 	}
 
-	// Return the file content as a string
-	response := models.GetConfigFileResponse{
-		Content:          string(data),
-		LastModifiedTime: lastModifiedTime.Format(time.RFC3339),
+	// Write the new content to the file
+	err = a.fsService.WriteFile(ctx, configPath, []byte(a.payload.Content), 0644)
+	if err != nil {
+		errMsg := fmt.Sprintf("Failed to write config file: %v", err)
+		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
+			errMsg, a.outboundChannel, models.SetConfigFile)
+		return nil, nil, fmt.Errorf("failed to write config file: %w", err)
+	}
+
+	// Read the updated file info to get the new last modified time
+	updatedFileInfo, err := a.fsService.Stat(ctx, configPath)
+	if err != nil || updatedFileInfo == nil {
+		a.actionLogger.Warnf("Failed to read updated config file info: %v", err)
+		// This is not a critical error, so we continue with the current time
+	}
+
+	newLastModifiedTime := ""
+	if updatedFileInfo != nil {
+		newLastModifiedTime = updatedFileInfo.ModTime().Format(time.RFC3339)
+	}
+
+	// Return the new last modified time
+	response := models.SetConfigFileResponse{
+		Content:          a.payload.Content,
+		LastModifiedTime: newLastModifiedTime,
+		Success:          true,
 	}
 
 	return response, nil, nil
 }
 
-func (a *GetConfigFileAction) getUserEmail() string {
+func (a *SetConfigFileAction) getUserEmail() string {
 	return a.userEmail
 }
 
-func (a *GetConfigFileAction) getUuid() uuid.UUID {
+func (a *SetConfigFileAction) getUuid() uuid.UUID {
 	return a.actionUUID
 }

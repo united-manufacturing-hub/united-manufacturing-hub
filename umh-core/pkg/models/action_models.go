@@ -15,8 +15,6 @@
 package models
 
 import (
-	"time"
-
 	"github.com/Masterminds/semver/v3"
 	"github.com/google/uuid"
 )
@@ -186,6 +184,8 @@ const (
 	GetLogs ActionType = "get-logs"
 	// GetConfigFile represents the action type for retrieving the configuration file
 	GetConfigFile ActionType = "get-config-file"
+	// SetConfigFile represents the action type for updating the configuration file
+	SetConfigFile ActionType = "set-config-file"
 )
 
 // TestNetworkConnectionPayload contains the necessary fields for executing a TestNetworkConnection action.
@@ -535,6 +535,17 @@ type GetLogsResponse struct {
 
 // GetConfigFileResponse contains the config file content
 type GetConfigFileResponse struct {
-	Content          string    `json:"content"`
-	LastModifiedTime time.Time `json:"lastModifiedTime"`
+	Content          string `json:"content"`
+	LastModifiedTime string `json:"lastModifiedTime"`
+}
+
+type SetConfigFilePayload struct {
+	Content          string `json:"content"`
+	LastModifiedTime string `json:"lastModifiedTime"`
+}
+
+type SetConfigFileResponse struct {
+	Content          string `json:"content"`
+	LastModifiedTime string `json:"lastModifiedTime"`
+	Success          bool   `json:"success"`
 }
