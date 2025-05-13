@@ -227,7 +227,7 @@ var _ = Describe("DataFlowComponentService", func() {
 			mockConnService.ExistingConnections[statusService.getConnectionName(protConvName)] = true
 		})
 
-		FIt("should report status correctly for an existing component", func() {
+		It("should report status correctly for an existing component", func() {
 			// Create the full config for reconciliation
 			fullCfg := config.FullConfig{
 				DataFlow: statusService.dataflowComponentConfig,
@@ -396,7 +396,6 @@ var _ = Describe("DataFlowComponentService", func() {
 				if config.Name == underlyingName {
 					dfcFound = true
 					Expect(config.DesiredFSMState).To(Equal(dfcfsm.OperationalStateActive))
-					// In a real test, we'd verify the BenthosServiceConfig was updated as expected
 					break
 				}
 			}
@@ -406,7 +405,6 @@ var _ = Describe("DataFlowComponentService", func() {
 				if config.Name == underlyingName {
 					connFound = true
 					Expect(config.DesiredFSMState).To(Equal(connfsm.OperationalStateUp))
-					// In a real test, we'd verify the BenthosServiceConfig was updated as expected
 					break
 				}
 			}

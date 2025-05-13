@@ -446,17 +446,17 @@ func (p *ProtocolConverterService) UpdateInManager(
 	connCurrentDesiredState := p.connectionConfig[indexConn].DesiredFSMState
 	p.connectionConfig[indexConn] = config.ConnectionConfig{
 		FSMInstanceConfig: config.FSMInstanceConfig{
-			Name:            protConvName,
+			Name:            underlyingName,
 			DesiredFSMState: connCurrentDesiredState,
 		},
 		ConnectionServiceConfig: *connConfig,
 	}
 
 	// Create a config.DataflowComponentConfig that wraps the DataflowComponentServiceConfig
-	dfcCurrentDesiredState := p.connectionConfig[indexConn].DesiredFSMState
+	dfcCurrentDesiredState := p.dataflowComponentConfig[indexDFC].DesiredFSMState
 	p.dataflowComponentConfig[indexDFC] = config.DataFlowComponentConfig{
 		FSMInstanceConfig: config.FSMInstanceConfig{
-			Name:            protConvName,
+			Name:            underlyingName,
 			DesiredFSMState: dfcCurrentDesiredState,
 		},
 		DataFlowComponentServiceConfig: *dfcConfig,
