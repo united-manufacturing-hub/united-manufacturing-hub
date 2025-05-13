@@ -96,7 +96,7 @@ func main() {
 		configManager,
 		configData.Agent.APIURL,
 		logger.For(logger.ComponentCommunicator),
-		false, // InsecureTLS
+		configData.Agent.AllowInsecureTLS,
 	)
 
 	if configData.Agent.APIURL != "" && configData.Agent.AuthToken != "" {

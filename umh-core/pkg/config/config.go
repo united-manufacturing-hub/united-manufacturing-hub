@@ -46,6 +46,7 @@ type AgentConfig struct {
 	CommunicatorConfig `yaml:"communicator,omitempty"`
 	ReleaseChannel     ReleaseChannel `yaml:"releaseChannel,omitempty"`
 	Location           map[int]string `yaml:"location,omitempty"`
+	AllowInsecureTLS   bool           `yaml:"allowInsecureTLS,omitempty"` // Allow TLS connections without verifying the certificate.
 }
 
 type CommunicatorConfig struct {

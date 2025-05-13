@@ -171,6 +171,8 @@ cleanup-tmp:
 cleanup-data:
 	rm -rf ./data/*
 
+cleanup-all: cleanup-ci cleanup-tmp cleanup-data
+
 vet:
 	go vet -tags=test ./...
 

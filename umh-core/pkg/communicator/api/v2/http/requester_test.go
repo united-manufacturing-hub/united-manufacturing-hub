@@ -69,4 +69,22 @@ var _ = Describe("Requester", func() {
 			})
 		})
 	})
+
+	Context("TLS Security", func() {
+		// https://badssl.com/ is a website from the chromium project that provides various TLS test sites
+		// The one we choose here is the untrusted-root.badssl.com site, which is a site that has a certificate
+		// that is not trusted by default.
+		const untrustedURL = "https://untrusted-root.badssl.com"
+
+		It("should fail with secure TLS", func() {
+			_, _, err := http.GetRequest[any](context.Background(), "/", nil, nil, false, untrustedURL, log)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("certificate"))
+		})
+
+		It("should succeed with insecure TLS", func() {
+			_, _, err := http.GetRequest[any](context.Background(), "/", nil, nil, true, untrustedURL, log)
+			Expect(err).ToNot(HaveOccurred())
+		})
+	})
 })
