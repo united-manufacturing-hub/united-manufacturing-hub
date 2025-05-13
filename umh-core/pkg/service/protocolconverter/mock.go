@@ -22,6 +22,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/connectionserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	benthosfsmmanager "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
 	connfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/connection"
 	dfcfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
@@ -207,6 +208,7 @@ func (m *MockProtocolConverterService) GetConfig(
 func (m *MockProtocolConverterService) Status(
 	ctx context.Context,
 	services serviceregistry.Provider,
+	snapshot fsm.SystemSnapshot,
 	protConvName string,
 	tick uint64,
 ) (ServiceInfo, error) {
@@ -245,7 +247,7 @@ func (m *MockProtocolConverterService) AddToManager(
 	}
 
 	// Check whether the component already exists
-	for _, connConfig := range m.dfcConfigs {
+	for _, connConfig := range m.connConfigs {
 		if connConfig.Name == underlyingName {
 			return ErrServiceAlreadyExists
 		}

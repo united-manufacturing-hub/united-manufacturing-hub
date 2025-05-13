@@ -20,13 +20,13 @@ import (
 )
 
 // GetConnectionServiceConfig converts the component config to a full ConnectionServiceConfig
-func (c *ProtocolConverterServiceConfig) GetConnectionServiceConfig() *connectionserviceconfig.ConnectionServiceConfig {
-	return &c.ConnectionServiceConfig
+func (c *ProtocolConverterServiceConfig) GetConnectionServiceConfig() connectionserviceconfig.ConnectionServiceConfig {
+	return c.ConnectionServiceConfig
 }
 
 // GetDFCServiceConfig converts the component config to a full ConnectionServiceConfig
-func (c *ProtocolConverterServiceConfig) GetDFCServiceConfig() *dataflowcomponentserviceconfig.DataflowComponentServiceConfig {
-	return &c.DataflowComponentServiceConfig
+func (c *ProtocolConverterServiceConfig) GetDFCServiceConfig() dataflowcomponentserviceconfig.DataflowComponentServiceConfig {
+	return c.DataflowComponentServiceConfig
 }
 
 // FromConnectionAndDFCServiceConfig creates a ProtocolConverterServiceConfig

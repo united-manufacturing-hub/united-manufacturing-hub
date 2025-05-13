@@ -171,6 +171,14 @@
             "mode": "test",
             "program": "${workspaceFolder}/umh-core/pkg/service/connection",
             "buildFlags": "--tags=test"
+        },
+        {
+            "name": "Debug Ginkgo Tests (dataflowcomponentserviceconfig)",
+            "type": "go",
+            "request": "launch",
+            "mode": "test",
+            "program": "${workspaceFolder}/umh-core/pkg/config/dataflowcomponentserviceconfig",
+            "buildFlags": "--tags=test"
         }
     ]
 }

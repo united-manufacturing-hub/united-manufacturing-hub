@@ -25,10 +25,10 @@ import (
 var _ = Describe("ProtocolConverter YAML Normalizer", func() {
 	Describe("NormalizeConfig", func() {
 		It("should set default values for empty config", func() {
-			config := &ProtocolConverterServiceConfig{}
+			config := ProtocolConverterServiceConfig{}
 			normalizer := NewNormalizer()
 
-			normalizer.NormalizeConfig(config)
+			config = normalizer.NormalizeConfig(config)
 
 			Expect(config.DataflowComponentServiceConfig.BenthosConfig).NotTo(BeNil())
 			Expect(config.DataflowComponentServiceConfig.BenthosConfig.Output).NotTo(BeNil())
@@ -36,7 +36,7 @@ var _ = Describe("ProtocolConverter YAML Normalizer", func() {
 		})
 
 		It("should preserve existing values", func() {
-			config := &ProtocolConverterServiceConfig{
+			config := ProtocolConverterServiceConfig{
 				ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
 					NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
 						Target: "127.0.0.1",
@@ -69,7 +69,7 @@ var _ = Describe("ProtocolConverter YAML Normalizer", func() {
 			}
 
 			normalizer := NewNormalizer()
-			normalizer.NormalizeConfig(config)
+			config = normalizer.NormalizeConfig(config)
 
 			// Check input preserved
 			inputMqtt := config.DataflowComponentServiceConfig.BenthosConfig.Input["mqtt"].(map[string]any)
@@ -88,7 +88,7 @@ var _ = Describe("ProtocolConverter YAML Normalizer", func() {
 		})
 
 		It("should normalize maps by ensuring they're not nil", func() {
-			config := &ProtocolConverterServiceConfig{
+			config := ProtocolConverterServiceConfig{
 				DataflowComponentServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 					BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 						// Input is nil
@@ -102,7 +102,7 @@ var _ = Describe("ProtocolConverter YAML Normalizer", func() {
 			}
 
 			normalizer := NewNormalizer()
-			normalizer.NormalizeConfig(config)
+			config = normalizer.NormalizeConfig(config)
 
 			Expect(config.DataflowComponentServiceConfig.BenthosConfig.Input).NotTo(BeNil())
 			Expect(config.DataflowComponentServiceConfig.BenthosConfig.Output).NotTo(BeNil())
@@ -120,15 +120,15 @@ var _ = Describe("ProtocolConverter YAML Normalizer", func() {
 	// Test the package-level function
 	Describe("NormalizeDataFlowComponentConfig package function", func() {
 		It("should use the default normalizer", func() {
-			config1 := &ProtocolConverterServiceConfig{}
-			config2 := &ProtocolConverterServiceConfig{}
+			config1 := ProtocolConverterServiceConfig{}
+			config2 := ProtocolConverterServiceConfig{}
 
 			// Use package-level function
-			NormalizeProtocolConverterConfig(config1)
+			config1 = NormalizeProtocolConverterConfig(config1)
 
 			// Use normalizer directly
 			normalizer := NewNormalizer()
-			normalizer.NormalizeConfig(config2)
+			config2 = normalizer.NormalizeConfig(config2)
 
 			// Results should be the same
 			Expect(config1).To(Equal(config2))

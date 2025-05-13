@@ -33,7 +33,7 @@ type ProtocolConverterServiceConfig struct {
 
 // Equal checks if two ProtocolConverterServiceConfigs are equal
 func (c ProtocolConverterServiceConfig) Equal(other ProtocolConverterServiceConfig) bool {
-	return NewComparator().ConfigsEqual(&c, &other)
+	return NewComparator().ConfigsEqual(c, other)
 }
 
 // RenderProtocolConverterYAML is a package-level function for easy YAML generation
@@ -52,16 +52,16 @@ func RenderProtocolConverterYAML(
 }
 
 // NormalizeProtocolConverterConfig is a package-level function for easy config normalization
-func NormalizeProtocolConverterConfig(cfg *ProtocolConverterServiceConfig) {
-	defaultNormalizer.NormalizeConfig(cfg)
+func NormalizeProtocolConverterConfig(cfg ProtocolConverterServiceConfig) ProtocolConverterServiceConfig {
+	return defaultNormalizer.NormalizeConfig(cfg)
 }
 
 // ConfigsEqual is a package-level function for easy config comparison
-func ConfigsEqual(desired, observed *ProtocolConverterServiceConfig) bool {
+func ConfigsEqual(desired, observed ProtocolConverterServiceConfig) bool {
 	return defaultComparator.ConfigsEqual(desired, observed)
 }
 
 // ConfigDiff is a package-level function for easy config diff generation
-func ConfigDiff(desired, observed *ProtocolConverterServiceConfig) string {
+func ConfigDiff(desired, observed ProtocolConverterServiceConfig) string {
 	return defaultComparator.ConfigDiff(desired, observed)
 }

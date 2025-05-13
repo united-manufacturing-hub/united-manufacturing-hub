@@ -60,7 +60,7 @@ type IProtocolConverterService interface {
 	// Status aggregates health from Connection, DFC and Redpanda into a single
 	// snapshot.  The returned structure is **read-only** – callers must not
 	// mutate it.
-	Status(ctx context.Context, services serviceregistry.Provider, connName string, tick uint64) (ServiceInfo, error)
+	Status(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot, protConvName string, tick uint64) (ServiceInfo, error)
 
 	// AddToManager adds a ProtocolConverter to the Connection & DFC manager
 	AddToManager(ctx context.Context, filesystemService filesystem.Service, protConvCfg *protocolconverterserviceconfig.ProtocolConverterServiceConfig, protConvName string) error
@@ -212,20 +212,20 @@ func (p *ProtocolConverterService) GenerateConfig(
 	protConvConfig *protocolconverterserviceconfig.ProtocolConverterServiceConfig,
 	protConvName string,
 ) (
-	*connectionserviceconfig.ConnectionServiceConfig,
-	*dataflowcomponentserviceconfig.DataflowComponentServiceConfig,
+	connectionserviceconfig.ConnectionServiceConfig,
+	dataflowcomponentserviceconfig.DataflowComponentServiceConfig,
 	error,
 ) {
 	if protConvConfig == nil {
-		return &connectionserviceconfig.ConnectionServiceConfig{},
-			&dataflowcomponentserviceconfig.DataflowComponentServiceConfig{},
+		return connectionserviceconfig.ConnectionServiceConfig{},
+			dataflowcomponentserviceconfig.DataflowComponentServiceConfig{},
 			fmt.Errorf("protocolConverter config is nil")
 	}
 
 	generatedConfig, err := p.generateProtocolConverterYaml(protConvConfig)
 	if err != nil {
-		return &connectionserviceconfig.ConnectionServiceConfig{},
-			&dataflowcomponentserviceconfig.DataflowComponentServiceConfig{},
+		return connectionserviceconfig.ConnectionServiceConfig{},
+			dataflowcomponentserviceconfig.DataflowComponentServiceConfig{},
 			fmt.Errorf("failed to generate ProtocolConverterServiceConfig: %w", err)
 	}
 
@@ -398,7 +398,7 @@ func (p *ProtocolConverterService) AddToManager(
 			Name:            underlyingName,
 			DesiredFSMState: connectionfsm.OperationalStateUp,
 		},
-		ConnectionServiceConfig: *connServiceConfig,
+		ConnectionServiceConfig: connServiceConfig,
 	}
 
 	dfcConfig := config.DataFlowComponentConfig{
@@ -406,7 +406,7 @@ func (p *ProtocolConverterService) AddToManager(
 			Name:            underlyingName,
 			DesiredFSMState: dfcfsm.OperationalStateActive,
 		},
-		DataFlowComponentServiceConfig: *dfcServiceConfig,
+		DataFlowComponentServiceConfig: dfcServiceConfig,
 	}
 
 	// Add the configurations to the lists
@@ -476,7 +476,7 @@ func (p *ProtocolConverterService) UpdateInManager(
 			Name:            underlyingName,
 			DesiredFSMState: connCurrentDesiredState,
 		},
-		ConnectionServiceConfig: *connConfig,
+		ConnectionServiceConfig: connConfig,
 	}
 
 	// Create a config.DataflowComponentConfig that wraps the DataflowComponentServiceConfig
@@ -486,7 +486,7 @@ func (p *ProtocolConverterService) UpdateInManager(
 			Name:            underlyingName,
 			DesiredFSMState: dfcCurrentDesiredState,
 		},
-		DataFlowComponentServiceConfig: *dfcConfig,
+		DataFlowComponentServiceConfig: dfcConfig,
 	}
 
 	return nil

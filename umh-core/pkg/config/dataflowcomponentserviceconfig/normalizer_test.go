@@ -22,10 +22,10 @@ import (
 var _ = Describe("DFC YAML Normalizer", func() {
 	Describe("NormalizeConfig", func() {
 		It("should set default values for empty config", func() {
-			config := &DataflowComponentServiceConfig{}
+			config := DataflowComponentServiceConfig{}
 			normalizer := NewNormalizer()
 
-			normalizer.NormalizeConfig(config)
+			config = normalizer.NormalizeConfig(config)
 
 			Expect(config.BenthosConfig).NotTo(BeNil())
 			Expect(config.BenthosConfig.Output).NotTo(BeNil())
@@ -33,7 +33,7 @@ var _ = Describe("DFC YAML Normalizer", func() {
 		})
 
 		It("should preserve existing values", func() {
-			config := &DataflowComponentServiceConfig{
+			config := DataflowComponentServiceConfig{
 				BenthosConfig{
 					Input: map[string]any{
 						"mqtt": map[string]any{
@@ -58,7 +58,7 @@ var _ = Describe("DFC YAML Normalizer", func() {
 			}
 
 			normalizer := NewNormalizer()
-			normalizer.NormalizeConfig(config)
+			config = normalizer.NormalizeConfig(config)
 
 			// Check input preserved
 			inputMqtt := config.BenthosConfig.Input["mqtt"].(map[string]any)
@@ -77,7 +77,7 @@ var _ = Describe("DFC YAML Normalizer", func() {
 		})
 
 		It("should normalize maps by ensuring they're not nil", func() {
-			config := &DataflowComponentServiceConfig{
+			config := DataflowComponentServiceConfig{
 				BenthosConfig{
 					// Input is nil
 					// Output is nil
@@ -89,7 +89,7 @@ var _ = Describe("DFC YAML Normalizer", func() {
 			}
 
 			normalizer := NewNormalizer()
-			normalizer.NormalizeConfig(config)
+			config = normalizer.NormalizeConfig(config)
 
 			Expect(config.BenthosConfig.Input).NotTo(BeNil())
 			Expect(config.BenthosConfig.Output).NotTo(BeNil())
@@ -107,8 +107,8 @@ var _ = Describe("DFC YAML Normalizer", func() {
 	// Test the package-level function
 	Describe("NormalizeDataFlowComponentConfig package function", func() {
 		It("should use the default normalizer", func() {
-			config1 := &DataflowComponentServiceConfig{}
-			config2 := &DataflowComponentServiceConfig{}
+			config1 := DataflowComponentServiceConfig{}
+			config2 := DataflowComponentServiceConfig{}
 
 			// Use package-level function
 			NormalizeDataFlowComponentConfig(config1)
