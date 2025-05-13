@@ -24,6 +24,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions/testutil"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
@@ -73,12 +74,12 @@ var _ = Describe("SetConfigFile", func() {
 			return nil, errors.New("file not found")
 		})
 
-		mockFileInfo := &memFileInfo{
-			name:  "config.yaml",
-			size:  100,
-			mode:  0644,
-			mtime: fixedTime,
-			dir:   false,
+		mockFileInfo := &testutil.MemFileInfo{
+			FileName:  "config.yaml",
+			FileSize:  100,
+			FileMode:  0644,
+			FileMtime: fixedTime,
+			FileDir:   false,
 		}
 
 		mockConfig.MockFileSystem.WithStatFunc(func(ctx context.Context, path string) (os.FileInfo, error) {
@@ -190,12 +191,12 @@ var _ = Describe("SetConfigFile", func() {
 
 		It("should detect concurrent modification", func() {
 			differentTime := time.Date(2023, 5, 16, 10, 30, 0, 0, time.UTC)
-			mockFileInfo := &memFileInfo{
-				name:  "config.yaml",
-				size:  100,
-				mode:  0644,
-				mtime: differentTime,
-				dir:   false,
+			mockFileInfo := &testutil.MemFileInfo{
+				FileName:  "config.yaml",
+				FileSize:  100,
+				FileMode:  0644,
+				FileMtime: differentTime,
+				FileDir:   false,
 			}
 
 			mockConfig.MockFileSystem.WithStatFunc(func(ctx context.Context, path string) (os.FileInfo, error) {
@@ -252,12 +253,12 @@ var _ = Describe("SetConfigFile", func() {
 				statCallCount++
 				if statCallCount == 1 {
 					// First call to get current file info succeeds
-					return &memFileInfo{
-						name:  "config.yaml",
-						size:  100,
-						mode:  0644,
-						mtime: time.Date(2023, 5, 15, 10, 30, 0, 0, time.UTC),
-						dir:   false,
+					return &testutil.MemFileInfo{
+						FileName:  "config.yaml",
+						FileSize:  100,
+						FileMode:  0644,
+						FileMtime: time.Date(2023, 5, 15, 10, 30, 0, 0, time.UTC),
+						FileDir:   false,
 					}, nil
 				}
 				return nil, errors.New("simulated stat error after write")
