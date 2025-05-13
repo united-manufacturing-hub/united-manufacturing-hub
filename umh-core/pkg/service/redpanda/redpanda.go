@@ -982,7 +982,7 @@ func (s *RedpandaService) setRedpandaClusterConfig(ctx context.Context, configUp
 	}
 
 	// Create the request
-	req, err := http.NewRequestWithContext(ctx, http.MethodPut, fmt.Sprintf("http://localhost:%d/v1/cluster_config", constants.AdminAPIPort), bytes.NewBuffer(jsonBody))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, fmt.Sprintf("http://127.0.0.1:%d/v1/cluster_config", constants.AdminAPIPort), bytes.NewBuffer(jsonBody))
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
@@ -1035,7 +1035,7 @@ func (s *RedpandaService) verifyRedpandaClusterConfig(ctx context.Context, redpa
 		return fmt.Errorf("http client not initialized")
 	}
 
-	readbackReq, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("http://localhost:%d/v1/cluster_config", constants.AdminAPIPort), nil)
+	readbackReq, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("http://127.0.0.1:%d/v1/cluster_config", constants.AdminAPIPort), nil)
 	if err != nil {
 		return fmt.Errorf("failed to create readback request: %w", err)
 	}
