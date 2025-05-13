@@ -1054,6 +1054,11 @@ func (s *RedpandaService) verifyRedpandaClusterConfig(ctx context.Context, redpa
 		return fmt.Errorf("failed to read readback response body: %w", err)
 	}
 
+	err = readbackResp.Body.Close()
+	if err != nil {
+		return fmt.Errorf("failed to close readback response body: %w", err)
+	}
+
 	// Parse as JSON
 	var readbackConfig map[string]interface{}
 	if err := json.Unmarshal(readbackBody, &readbackConfig); err != nil {
