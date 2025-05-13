@@ -103,7 +103,8 @@ var _ = Describe("Requester", func() {
 		})
 	})
 
-	Context("TLS Security", func() {
+	// badssl.com is not ment for automated testing, therefore we will only run the tests when the label is provided
+	Context("TLS Security", Label("tls"), func() {
 		Describe("Certificate Validation", func() {
 			// https://badssl.com/ is a website from the chromium project that provides various TLS test sites
 			// These test sites help verify different TLS security scenarios
@@ -143,7 +144,7 @@ var _ = Describe("Requester", func() {
 				})
 			}
 		})
-		Describe("Key exchange", func() {
+		Describe("Key exchange", Label("tls"), func() {
 			// These will always fail, as the go crypto/tls does not allow them anymore (For good reasons)
 			testCases := map[string]string{
 				"dh480":             "https://dh480.badssl.com",
@@ -170,7 +171,7 @@ var _ = Describe("Requester", func() {
 			}
 		})
 
-		Describe("Protocol", func() {
+		Describe("Protocol", Label("tls"), func() {
 			// By default go only allows TLS 1.2 and above
 			testCases := map[string]string{
 				"tls-v1-0": "https://tls-v1-0.badssl.com",
@@ -193,7 +194,7 @@ var _ = Describe("Requester", func() {
 			}
 		})
 
-		Describe("Cipher Suites", func() {
+		Describe("Cipher Suites", Label("tls"), func() {
 			// These cipher suites where removed from go, using them requires custom args when building the executable
 			testCases := map[string]string{
 				"rc4-md5": "https://rc4-md5.badssl.com",
