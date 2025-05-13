@@ -24,26 +24,11 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions/testutil"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 )
-
-// memFileInfo is a simple implementation of os.FileInfo for testing
-type memFileInfo struct {
-	name  string
-	size  int64
-	mode  os.FileMode
-	mtime time.Time
-	dir   bool
-}
-
-func (m *memFileInfo) Name() string       { return m.name }
-func (m *memFileInfo) Size() int64        { return m.size }
-func (m *memFileInfo) Mode() os.FileMode  { return m.mode }
-func (m *memFileInfo) ModTime() time.Time { return m.mtime }
-func (m *memFileInfo) IsDir() bool        { return m.dir }
-func (m *memFileInfo) Sys() interface{}   { return nil }
 
 var _ = Describe("GetConfigFile", func() {
 	var (
@@ -133,12 +118,12 @@ var _ = Describe("GetConfigFile", func() {
 		It("should include the last modified time in the response", func() {
 			// Create a mock file info with specific modification time
 			fixedTime := time.Date(2023, 5, 15, 10, 30, 0, 0, time.UTC)
-			mockFileInfo := &memFileInfo{
-				name:  "config.yaml",
-				size:  100,
-				mode:  0644,
-				mtime: fixedTime,
-				dir:   false,
+			mockFileInfo := &testutil.MemFileInfo{
+				FileName:  "config.yaml",
+				FileSize:  100,
+				FileMode:  0644,
+				FileMtime: fixedTime,
+				FileDir:   false,
 			}
 
 			mockConfig.MockFileSystem.WithStatFunc(func(ctx context.Context, path string) (os.FileInfo, error) {
