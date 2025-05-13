@@ -1113,12 +1113,13 @@ func (s *RedpandaService) UpdateRedpandaClusterConfig(ctx context.Context, redpa
 		return ctx.Err()
 	}
 
-	// Define a context for the set cluster config call, ensuring that we don't block the rest of the loop for too long
-	setRedpandaClusterConfigContext, setRedpandaClusterConfigContextCancel := context.WithTimeout(ctx, constants.AdminAPITimeout)
-	defer setRedpandaClusterConfigContextCancel()
+	// Since we are doing 2 API calls, we just allocate double the time
+	// This also helps smooth out the time, as one of them then can take slightly longer, but both still are bound by the same timeout
+	innerCtx, innerCtxCancel := context.WithTimeout(ctx, constants.AdminAPITimeout*2)
+	defer innerCtxCancel()
 
 	// Set the cluster config
-	if err := s.setRedpandaClusterConfig(setRedpandaClusterConfigContext, configUpdates); err != nil {
+	if err := s.setRedpandaClusterConfig(innerCtx, configUpdates); err != nil {
 		return err
 	}
 
@@ -1127,10 +1128,6 @@ func (s *RedpandaService) UpdateRedpandaClusterConfig(ctx context.Context, redpa
 		return ctx.Err()
 	}
 
-	// Define a context for the verify cluster config call, ensuring that we don't block the rest of the loop for too long
-	verifyRedpandaClusterConfigContext, verifyRedpandaClusterConfigContextCancel := context.WithTimeout(ctx, constants.AdminAPITimeout)
-	defer verifyRedpandaClusterConfigContextCancel()
-
 	// Verify the config was applied correctly
-	return s.verifyRedpandaClusterConfig(verifyRedpandaClusterConfigContext, redpandaName, configUpdates)
+	return s.verifyRedpandaClusterConfig(innerCtx, redpandaName, configUpdates)
 }
