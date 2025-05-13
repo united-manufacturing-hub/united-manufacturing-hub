@@ -96,7 +96,7 @@ func main() {
 		configManager,
 		configData.Agent.APIURL,
 		logger.For(logger.ComponentCommunicator),
-		configData.Agent.AllowInsecureTLS,
+		configData.Agent.CommunicatorConfig.AllowInsecureTLS,
 	)
 
 	if configData.Agent.APIURL != "" && configData.Agent.AuthToken != "" {
@@ -174,7 +174,7 @@ func enableBackendConnection(config *config.FullConfig, communicationState *comm
 	if config.Agent.APIURL != "" && config.Agent.AuthToken != "" {
 		// This can temporarely deactivated, e.g., during integration tests where just the mgmtcompanion-config is changed directly
 
-		login := v2.NewLogin(config.Agent.AuthToken, config.Agent.AllowInsecureTLS, config.Agent.APIURL, logger)
+		login := v2.NewLogin(config.Agent.AuthToken, config.Agent.CommunicatorConfig.AllowInsecureTLS, config.Agent.APIURL, logger)
 		if login == nil {
 			sentry.ReportIssuef(sentry.IssueTypeError, logger, "[v2.NewLogin] Failed to create login object")
 			return

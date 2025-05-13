@@ -46,12 +46,12 @@ type AgentConfig struct {
 	CommunicatorConfig `yaml:"communicator,omitempty"`
 	ReleaseChannel     ReleaseChannel `yaml:"releaseChannel,omitempty"`
 	Location           map[int]string `yaml:"location,omitempty"`
-	AllowInsecureTLS   bool           `yaml:"allowInsecureTLS,omitempty"` // Allow TLS connections without verifying the certificate.
 }
 
 type CommunicatorConfig struct {
-	APIURL    string `yaml:"apiUrl,omitempty"`
-	AuthToken string `yaml:"authToken,omitempty"`
+	APIURL           string `yaml:"apiUrl,omitempty"`
+	AuthToken        string `yaml:"authToken,omitempty"`
+	AllowInsecureTLS bool   `yaml:"allowInsecureTLS,omitempty"` // Allow TLS connections without verifying the certificate.
 }
 
 // FSMInstanceConfig is the config for a FSM instance
