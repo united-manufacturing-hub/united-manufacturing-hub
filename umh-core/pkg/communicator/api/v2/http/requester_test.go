@@ -17,7 +17,6 @@ package http_test
 import (
 	"context"
 	"fmt"
-	"io"
 	netHTTP "net/http"
 	"strings"
 	"time"
@@ -104,6 +103,7 @@ var _ = Describe("Requester", func() {
 	})
 
 	// badssl.com is not ment for automated testing, therefore we will only run the tests when the label is provided
+	// These tests check if umh-core can be deployed in environment with insecure TLS (e.g corporate proxies with there own self-signed certificates)
 	Context("TLS Security", Label("tls"), func() {
 		Describe("Certificate Validation", func() {
 			// https://badssl.com/ is a website from the chromium project that provides various TLS test sites
@@ -125,13 +125,7 @@ var _ = Describe("Requester", func() {
 				It(fmt.Sprintf("should fail with secure TLS for %s", name), func() {
 					ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 					defer cancel()
-					response, err := doHTTPRequestWithRetry(ctx, url, nil, nil, false, log)
-					// Read response body for debugging
-					if response != nil {
-						body, err := io.ReadAll(response.Body)
-						Expect(err).ToNot(HaveOccurred())
-						GinkgoWriter.Println(string(body))
-					}
+					_, err := doHTTPRequestWithRetry(ctx, url, nil, nil, false, log)
 					Expect(err).To(HaveOccurred())
 					Expect(err.Error()).To(ContainSubstring("certificate"))
 				})
