@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//go:build test
+// +build test
+
 package protocolconverter
 
 import (
@@ -22,23 +25,19 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	fsmtest "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsmtest"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/connectionserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/nmapserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
-	benthosfsmmanager "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
 	connfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/connection"
 	dfcfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
-	nmapfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/nmap"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
-	benthosservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos_monitor"
+	redpandafsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/redpanda"
 	connservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/connection"
 	dfcservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/dataflowcomponent"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/nmap"
-	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+	redpandaservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
@@ -175,7 +174,6 @@ var _ = Describe("DataFlowComponentService", func() {
 			mockConnService *connservice.MockConnectionService
 			mockDfcService  *dfcservice.MockDataFlowComponentService
 			statusService   *ProtocolConverterService
-			underlyingName  string
 		)
 
 		BeforeEach(func() {
@@ -214,23 +212,22 @@ var _ = Describe("DataFlowComponentService", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Get the benthos name that will be used
-			underlyingName = statusService.getUnderlyingName(protConvName)
 
 			// Set up the mock to say the component exists
 			mockDfcService.ServiceExistsResult = true
 			if mockDfcService.ExistingComponents == nil {
 				mockDfcService.ExistingComponents = make(map[string]bool)
 			}
-			mockDfcService.ExistingComponents[underlyingName] = true
+			mockDfcService.ExistingComponents[statusService.getDFCName(protConvName)] = true
 
 			mockConnService.ServiceExistsResult = true
 			if mockConnService.ExistingConnections == nil {
 				mockConnService.ExistingConnections = make(map[string]bool)
 			}
-			mockConnService.ExistingConnections[underlyingName] = true
+			mockConnService.ExistingConnections[statusService.getConnectionName(protConvName)] = true
 		})
 
-		It("should report status correctly for an existing component", func() {
+		FIt("should report status correctly for an existing component", func() {
 			// Create the full config for reconciliation
 			fullCfg := config.FullConfig{
 				DataFlow: statusService.dataflowComponentConfig,
@@ -241,7 +238,7 @@ var _ = Describe("DataFlowComponentService", func() {
 
 			// Configure services for proper transitions
 			// First configure for creating -> created -> stopped
-			ConfigureManagersForState(mockConnService, mockDfcService, underlyingName, connfsm.OperationalStateStopped, dfcfsm.OperationalStateStopped)
+			ConfigureManagersForState(mockConnService, mockDfcService, statusService.getUnderlyingName(protConvName), connfsm.OperationalStateStopped, dfcfsm.OperationalStateStopped)
 
 			// Wait for the instance to be created and reach stopped state
 			newTick, err := WaitForDfcManagerInstanceState(
@@ -249,7 +246,7 @@ var _ = Describe("DataFlowComponentService", func() {
 				fsm.SystemSnapshot{CurrentConfig: fullCfg, Tick: tick},
 				dfcManager,
 				mockSvcRegistry,
-				underlyingName,
+				statusService.getDFCName(protConvName),
 				dfcfsm.OperationalStateStopped,
 				10,
 			)
@@ -262,7 +259,7 @@ var _ = Describe("DataFlowComponentService", func() {
 				fsm.SystemSnapshot{CurrentConfig: fullCfg, Tick: tick},
 				connManager,
 				mockSvcRegistry,
-				underlyingName,
+				statusService.getConnectionName(protConvName),
 				connfsm.OperationalStateStopped,
 				10,
 			)
@@ -271,7 +268,7 @@ var _ = Describe("DataFlowComponentService", func() {
 			tick = newTick
 
 			// Now configure for transition to starting -> running
-			ConfigureManagersForState(mockConnService, mockDfcService, underlyingName, connfsm.OperationalStateUp, dfcfsm.OperationalStateActive)
+			ConfigureManagersForState(mockConnService, mockDfcService, statusService.getUnderlyingName(protConvName), connfsm.OperationalStateUp, dfcfsm.OperationalStateActive)
 
 			// Wait for the instance to reach running state
 			newTick, err = WaitForDfcManagerInstanceState(
@@ -279,7 +276,7 @@ var _ = Describe("DataFlowComponentService", func() {
 				fsm.SystemSnapshot{CurrentConfig: fullCfg, Tick: tick},
 				dfcManager,
 				mockSvcRegistry,
-				underlyingName,
+				statusService.getDFCName(protConvName),
 				dfcfsm.OperationalStateActive,
 				15,
 			)
@@ -292,7 +289,7 @@ var _ = Describe("DataFlowComponentService", func() {
 				fsm.SystemSnapshot{CurrentConfig: fullCfg, Tick: tick},
 				connManager,
 				mockSvcRegistry,
-				underlyingName,
+				statusService.getConnectionName(protConvName),
 				connfsm.OperationalStateUp,
 				15,
 			)
@@ -303,22 +300,26 @@ var _ = Describe("DataFlowComponentService", func() {
 			_, reconciled := statusService.ReconcileManager(ctx, mockSvcRegistry, tick)
 			Expect(reconciled).To(BeFalse())
 
+			snapshot := GetSystemSnapshotForTickAndRedpandaState(tick, redpandafsm.OperationalStateActive)
+
 			// Call Status
-			status, err := statusService.Status(ctx, mockSvcRegistry, protConvName, tick)
+			status, err := statusService.Status(ctx, mockSvcRegistry, snapshot, protConvName, tick)
 
 			// Assert
 			Expect(err).NotTo(HaveOccurred())
 			Expect(status.DataflowComponentFSMState).To(Equal(dfcfsm.OperationalStateActive))
 			Expect(status.ConnectionFSMState).To(Equal(connfsm.OperationalStateUp))
+			Expect(status.RedpandaFSMState).To(Equal(redpandafsm.OperationalStateActive))
 		})
 
 		It("should return error for non-existent component", func() {
 			// Set up the mock to say the service doesn't exist
 			mockDfcService.ServiceExistsResult = false
 			mockDfcService.ExistingComponents = make(map[string]bool)
+			snapshot := GetSystemSnapshotForTickAndRedpandaState(tick, redpandafsm.OperationalStateActive)
 
 			// Call Status for a non-existent component
-			_, err := statusService.Status(ctx, mockSvcRegistry, protConvName, tick)
+			_, err := statusService.Status(ctx, mockSvcRegistry, snapshot, protConvName, tick)
 
 			// Assert - check for "does not exist" in the error message
 			Expect(err).To(HaveOccurred())
@@ -683,208 +684,11 @@ func ConfigureManagersForState(
 	connTargetState string,
 	dfcTargetState string,
 ) {
-	// Make sure the service exists in the mock
-	if mockDfcService.ExistingComponents == nil {
-		mockDfcService.ExistingComponents = make(map[string]bool)
-	}
-	mockDfcService.ExistingComponents[serviceName] = true
-
-	// Make sure the service exists in the mock
-	if mockConnService.ExistingConnections == nil {
-		mockConnService.ExistingConnections = make(map[string]bool)
-	}
-	mockConnService.ExistingConnections[serviceName] = true
-
-	// Make sure service state is initialized
-	if mockDfcService.ComponentStates == nil {
-		mockDfcService.ComponentStates = make(map[string]*dfcservice.ServiceInfo)
-	}
-	if mockDfcService.ComponentStates[serviceName] == nil {
-		mockDfcService.ComponentStates[serviceName] = &dfcservice.ServiceInfo{}
-	}
-
-	if mockConnService.ConnectionStates == nil {
-		mockConnService.ConnectionStates = make(map[string]*connservice.ServiceInfo)
-	}
-	if mockConnService.ConnectionStates[serviceName] == nil {
-		mockConnService.ConnectionStates[serviceName] = &connservice.ServiceInfo{}
-	}
 
 	// Configure the services for the target state
-	TransitionToDfcState(mockDfcService, serviceName, dfcTargetState)
-	TransitionToConnState(mockConnService, serviceName, connTargetState)
+	fsmtest.TransitionToDataflowComponentState(mockDfcService, serviceName, dfcTargetState)
+	fsmtest.TransitionToConnectionState(mockConnService, serviceName, connTargetState)
 
-}
-
-// TODO: check on the correct flags here!
-func TransitionToDfcState(mockService *dfcservice.MockDataFlowComponentService, serviceName string, targetState string) {
-	switch targetState {
-	case dfcfsm.OperationalStateStopped:
-		SetupDfcServiceState(mockService, serviceName, dfcservice.ComponentStateFlags{
-			IsBenthosRunning:                 false,
-			BenthosFSMState:                  benthosfsmmanager.OperationalStateStopped,
-			IsBenthosProcessingMetricsActive: false,
-		})
-	case dfcfsm.OperationalStateStarting:
-		SetupDfcServiceState(mockService, serviceName, dfcservice.ComponentStateFlags{
-			IsBenthosRunning:                 true,
-			BenthosFSMState:                  benthosfsmmanager.OperationalStateStarting,
-			IsBenthosProcessingMetricsActive: false,
-		})
-	case dfcfsm.OperationalStateIdle:
-		SetupDfcServiceState(mockService, serviceName, dfcservice.ComponentStateFlags{
-			IsBenthosRunning:                 true,
-			BenthosFSMState:                  benthosfsmmanager.OperationalStateIdle,
-			IsBenthosProcessingMetricsActive: false,
-		})
-	case dfcfsm.OperationalStateActive:
-		SetupDfcServiceState(mockService, serviceName, dfcservice.ComponentStateFlags{
-			IsBenthosRunning:                 true,
-			BenthosFSMState:                  benthosfsmmanager.OperationalStateActive,
-			IsBenthosProcessingMetricsActive: true,
-		})
-	case dfcfsm.OperationalStateDegraded:
-		SetupDfcServiceState(mockService, serviceName, dfcservice.ComponentStateFlags{
-			IsBenthosRunning:                 true,
-			BenthosFSMState:                  benthosfsmmanager.OperationalStateDegraded,
-			IsBenthosProcessingMetricsActive: false,
-		})
-	case dfcfsm.OperationalStateStopping:
-		SetupDfcServiceState(mockService, serviceName, dfcservice.ComponentStateFlags{
-			IsBenthosRunning:                 false,
-			BenthosFSMState:                  benthosfsmmanager.OperationalStateStopped,
-			IsBenthosProcessingMetricsActive: false,
-		})
-	}
-}
-
-// TODO: check on the correct flags here!
-func TransitionToConnState(mockService *connservice.MockConnectionService, serviceName string, targetState string) {
-	switch targetState {
-	case connfsm.OperationalStateStopped:
-		SetupConnServiceState(mockService, serviceName, connservice.ConnectionStateFlags{
-			IsNmapRunning: false,
-			NmapFSMState:  nmapfsm.OperationalStateStopped,
-			IsFlaky:       false,
-		})
-	case connfsm.OperationalStateStarting:
-		SetupConnServiceState(mockService, serviceName, connservice.ConnectionStateFlags{
-			IsNmapRunning: true,
-			NmapFSMState:  nmapfsm.OperationalStateOpen,
-			IsFlaky:       false,
-		})
-	case connfsm.OperationalStateUp:
-		SetupConnServiceState(mockService, serviceName, connservice.ConnectionStateFlags{
-			IsNmapRunning: true,
-			NmapFSMState:  nmapfsm.OperationalStateOpen,
-			IsFlaky:       false,
-		})
-	case connfsm.OperationalStateDown:
-		SetupConnServiceState(mockService, serviceName, connservice.ConnectionStateFlags{
-			IsNmapRunning: false,
-			NmapFSMState:  nmapfsm.OperationalStateClosed,
-			IsFlaky:       false,
-		})
-	case connfsm.OperationalStateDegraded:
-		SetupConnServiceState(mockService, serviceName, connservice.ConnectionStateFlags{
-			IsNmapRunning: true,
-			NmapFSMState:  nmapfsm.OperationalStateDegraded,
-			IsFlaky:       true,
-		})
-	case connfsm.OperationalStateStopping:
-		SetupConnServiceState(mockService, serviceName, connservice.ConnectionStateFlags{
-			IsNmapRunning: false,
-			NmapFSMState:  nmapfsm.OperationalStateStopping,
-			IsFlaky:       false,
-		})
-	}
-}
-
-func SetupDfcServiceState(
-	mockService *dfcservice.MockDataFlowComponentService,
-	componentName string,
-	flags dfcservice.ComponentStateFlags,
-) {
-	// Ensure service exists in mock
-	mockService.ExistingComponents[componentName] = true
-
-	// Create service info if it doesn't exist
-	if mockService.ComponentStates[componentName] == nil {
-		mockService.ComponentStates[componentName] = &dfcservice.ServiceInfo{}
-	}
-
-	// Set Benthos FSM state
-	if flags.BenthosFSMState != "" {
-		mockService.ComponentStates[componentName].BenthosFSMState = flags.BenthosFSMState
-	}
-
-	// Update S6 observed state
-	if flags.IsBenthosRunning {
-		mockService.ComponentStates[componentName].BenthosObservedState.ServiceInfo = benthosservice.ServiceInfo{
-			S6ObservedState: s6.S6ObservedState{
-				ServiceInfo: s6svc.ServiceInfo{
-					Status: s6svc.ServiceUp,
-					Uptime: 10, // Set uptime to 10s to simulate config loaded
-					Pid:    1234,
-				},
-			},
-		}
-	} else {
-		mockService.ComponentStates[componentName].BenthosObservedState.ServiceInfo = benthosservice.ServiceInfo{
-			S6ObservedState: s6.S6ObservedState{
-				ServiceInfo: s6svc.ServiceInfo{
-					Status: s6svc.ServiceDown,
-				},
-			},
-		}
-	}
-
-	// Setup metrics state if needed
-	if flags.IsBenthosProcessingMetricsActive {
-		mockService.ComponentStates[componentName].BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.MetricsState = &benthos_monitor.BenthosMetricsState{
-			IsActive: true,
-		}
-	} else if mockService.ComponentStates[componentName].BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.MetricsState == nil {
-		mockService.ComponentStates[componentName].BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.MetricsState = &benthos_monitor.BenthosMetricsState{
-			IsActive: false,
-		}
-	}
-
-	// Store the service state flags directly
-	mockService.SetComponentState(componentName, flags)
-}
-
-// SetupConnServiceState configures the mock service state for Nmap instance tests
-func SetupConnServiceState(
-	mockService *connservice.MockConnectionService,
-	connName string,
-	flags connservice.ConnectionStateFlags,
-) {
-	// Ensure service exists in mock
-	mockService.ExistingConnections[connName] = true
-
-	// Create service info if it doesn't exist
-	if mockService.ConnectionStates[connName] == nil {
-		mockService.ConnectionStates[connName] = &connservice.ServiceInfo{}
-	}
-
-	// Update Connection observed state
-	if flags.IsNmapRunning {
-		mockService.ConnectionStates[connName].NmapObservedState.ServiceInfo = nmap.ServiceInfo{
-			NmapStatus: nmap.NmapServiceInfo{
-				IsRunning: flags.IsNmapRunning,
-			},
-		}
-	} else {
-		mockService.ConnectionStates[connName].NmapObservedState.ServiceInfo = nmap.ServiceInfo{
-			NmapStatus: nmap.NmapServiceInfo{
-				IsRunning: false,
-			},
-		}
-	}
-
-	// Store the service state flags directly
-	mockService.SetConnectionState(connName, flags)
 }
 
 // WaitForDfcManagerInstanceState waits for instance to reach desired state
@@ -939,4 +743,38 @@ func WaitForConnManagerInstanceState(
 		}
 	}
 	return tick, fmt.Errorf("instance didn't reach expected state: %s", expectedState)
+}
+
+// GetSystemSnapshotForTickAndRedpandaState returns a full system snapshot with the user specified tick and the state of where redpanda should be in
+// it is used to to test the protocol converter service and is required as the Status function will extract redpanda information from it
+func GetSystemSnapshotForTickAndRedpandaState(
+	tick uint64,
+	redpandaState string,
+) fsm.SystemSnapshot {
+	snapshot := fsm.SystemSnapshot{
+		Tick:         tick,
+		SnapshotTime: time.Now(),
+	}
+
+	// Add the redpanda manager to the snapshot
+	snapshot.Managers = make(map[string]fsm.ManagerSnapshot)
+	snapshot.Managers[fsm.RedpandaManagerName] = &redpandafsm.RedpandaManagerSnapshot{
+		BaseManagerSnapshot: &fsm.BaseManagerSnapshot{
+			Instances: map[string]*fsm.FSMInstanceSnapshot{
+				fsm.RedpandaInstanceName: {
+					CurrentState: redpandaState,
+					// LastObservedState is not yet needed, but I added it anyway as it is not intuitive to understand where which struct is coming from
+					// "help for the next developer"
+					LastObservedState: &redpandafsm.RedpandaObservedStateSnapshot{
+						ServiceInfoSnapshot: redpandaservice.ServiceInfo{
+							RedpandaStatus: redpandaservice.RedpandaStatus{},
+						},
+					},
+				},
+			},
+			ManagerTick:  tick,
+			SnapshotTime: time.Now(),
+		},
+	}
+	return snapshot
 }

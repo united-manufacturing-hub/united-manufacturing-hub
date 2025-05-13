@@ -108,8 +108,8 @@ type ProtocolConverterService struct {
 	dataflowComponentService dfc.IDataFlowComponentService
 	dataflowComponentConfig  []config.DataFlowComponentConfig
 
-	// Redpanda
-	redpandaManager *redpandafsm.RedpandaManager
+	// Redpanda is not part of a protocol converter service, we just monitor it here in the protocol converter for better error reporting itself in the protocol converter fsm
+	// e.g., if redpanda is down, the protocol converter will likely also have issues
 }
 
 // ProtocolConverterServiceOption is a function that configures a ConnectionService.
@@ -161,6 +161,16 @@ func NewDefaultProtocolConverterService(protConvName string, opts ...ProtocolCon
 // getUnderlyingName converts a protConvName to its underlying service name
 func (p *ProtocolConverterService) getUnderlyingName(protConvName string) string {
 	return fmt.Sprintf("protocolconverter-%s", protConvName)
+}
+
+// getConnectionName converts a protConvName to the name of the connection service
+func (p *ProtocolConverterService) getConnectionName(protConvName string) string {
+	return fmt.Sprintf("connection-%s", p.getUnderlyingName(protConvName))
+}
+
+// getDFCName converts a protConvName to the name of the dataflowcomponent service
+func (p *ProtocolConverterService) getDFCName(protConvName string) string {
+	return fmt.Sprintf("dataflow-%s", p.getUnderlyingName(protConvName))
 }
 
 func (p *ProtocolConverterService) generateProtocolConverterYaml(config *protocolconverterserviceconfig.ProtocolConverterServiceConfig) (string, error) {
@@ -234,6 +244,7 @@ func (p *ProtocolConverterService) GetConfig(
 func (p *ProtocolConverterService) Status(
 	ctx context.Context,
 	services serviceregistry.Provider,
+	snapshot fsm.SystemSnapshot,
 	protConvName string,
 	tick uint64,
 ) (ServiceInfo, error) {
@@ -249,24 +260,27 @@ func (p *ProtocolConverterService) Status(
 		return ServiceInfo{}, ErrServiceNotExist
 	}
 
-	underlyingName := p.getUnderlyingName(protConvName)
+	connectionName := p.getConnectionName(protConvName)
+	dfcName := p.getDFCName(protConvName)
+
+	// --- redpanda (only one instance) -------------------------------------------------------------
+	rpInst, ok := fsm.FindInstance(snapshot, fsm.RedpandaManagerName, fsm.RedpandaInstanceName)
+	if !ok || rpInst == nil {
+		return ServiceInfo{}, fmt.Errorf("redpanda instance not found")
+	}
 
 	// get last observed states
-	connectionStatus, err := p.connectionManager.GetLastObservedState(underlyingName)
+	connectionStatus, err := p.connectionManager.GetLastObservedState(connectionName)
 	if err != nil {
 		return ServiceInfo{}, fmt.Errorf("failed to get connection observed state: %w", err)
 	}
 
-	dfcStatus, err := p.dataflowComponentManager.GetLastObservedState(underlyingName)
+	dfcStatus, err := p.dataflowComponentManager.GetLastObservedState(dfcName)
 	if err != nil {
 		return ServiceInfo{}, fmt.Errorf("failed to get dataflowcomponent observed state: %w", err)
 	}
 
-	redpandaStatus, err := p.redpandaManager.GetLastObservedState(underlyingName)
-	if err != nil {
-		return ServiceInfo{}, fmt.Errorf("failed to get redpanda observed state: %w", err)
-	}
-
+	redpandaStatus := rpInst.LastObservedState
 	// check observed state types
 	connectionObservedState, ok := connectionStatus.(connectionfsm.ConnectionObservedState)
 	if !ok {
@@ -278,26 +292,31 @@ func (p *ProtocolConverterService) Status(
 		return ServiceInfo{}, fmt.Errorf("dataflowcomponent status for dataflowcomponent %s is not a DataflowComponentObservedState", protConvName)
 	}
 
-	redpandaObservedState, ok := redpandaStatus.(redpandafsm.RedpandaObservedState)
+	// redpandaObservedStateSnapshot is slightly different from the others as it comes from the snapshot
+	// and not from the fsm-instance
+	redpandaObservedStateSnapshot, ok := redpandaStatus.(*redpandafsm.RedpandaObservedStateSnapshot)
 	if !ok {
-		return ServiceInfo{}, fmt.Errorf("redpanda status for redpanda %s is not a RedpandaObservedState", protConvName)
+		return ServiceInfo{}, fmt.Errorf("redpanda status for redpanda %s is not a RedpandaObservedStateSnapshot", protConvName)
+	}
+
+	// Now it is in the same format
+	redpandaObservedState := redpandafsm.RedpandaObservedState{
+		ServiceInfo:                   redpandaObservedStateSnapshot.ServiceInfoSnapshot,
+		ObservedRedpandaServiceConfig: redpandaObservedStateSnapshot.Config,
 	}
 
 	// get current fsm states
-	connectionFSMState, err := p.connectionManager.GetCurrentFSMState(protConvName)
+	connectionFSMState, err := p.connectionManager.GetCurrentFSMState(connectionName)
 	if err != nil {
 		return ServiceInfo{}, fmt.Errorf("failed to get connection FSM state: %w", err)
 	}
 
-	dfcFSMState, err := p.dataflowComponentManager.GetCurrentFSMState(protConvName)
+	dfcFSMState, err := p.dataflowComponentManager.GetCurrentFSMState(dfcName)
 	if err != nil {
 		return ServiceInfo{}, fmt.Errorf("failed to get dataflowcomponent FSM state: %w", err)
 	}
 
-	redpandaFSMState, err := p.dataflowComponentManager.GetCurrentFSMState(protConvName)
-	if err != nil {
-		return ServiceInfo{}, fmt.Errorf("failed to get redpanda FSM state: %w", err)
-	}
+	redpandaFSMState := rpInst.CurrentState
 
 	return ServiceInfo{
 		ConnectionObservedState:        connectionObservedState,
@@ -335,7 +354,7 @@ func (p *ProtocolConverterService) AddToManager(
 
 	// Check if the connection already exists in our configs
 	for _, existingConfig := range p.connectionConfig {
-		if existingConfig.Name == protConvName {
+		if existingConfig.Name == underlyingName {
 			return ErrServiceAlreadyExists
 		}
 	}
@@ -649,9 +668,8 @@ func (p *ProtocolConverterService) ReconcileManager(
 	// Use the dfcManager's Reconcile method
 	err, dfcReconciled := p.dataflowComponentManager.Reconcile(ctx, fsm.SystemSnapshot{
 		CurrentConfig: config.FullConfig{
-			Internal: config.InternalConfig{
-				Connection: p.connectionConfig,
-			}},
+			DataFlow: p.dataflowComponentConfig,
+		},
 		Tick: tick,
 	}, services)
 

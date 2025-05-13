@@ -21,6 +21,25 @@ import (
 
 	"github.com/tiendc/go-deepcopy"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
+)
+
+// These are the names of the managers and instances that are part of the system snapshot
+// They are quite inconsistent and need to be cleaned up
+const (
+	// Manager name constants
+	ContainerManagerName         = logger.ComponentContainerManager + "_" + constants.DefaultManagerName
+	BenthosManagerName           = logger.ComponentBenthosManager + "_" + constants.DefaultManagerName
+	AgentManagerName             = logger.ComponentAgentManager + "_" + constants.DefaultManagerName
+	RedpandaManagerName          = logger.ComponentRedpandaManager + constants.DefaultManagerName
+	DataflowcomponentManagerName = constants.DataflowcomponentManagerName
+
+	// Instance name constants
+	CoreInstanceName     = "Core"
+	AgentInstanceName    = "agent"
+	RedpandaInstanceName = "redpanda"
 )
 
 // ObservedStateSnapshot represents a deep copy of an observed state
@@ -254,4 +273,56 @@ func getManagerSnapshot(manager FSMManager[any]) ManagerSnapshot {
 	}
 
 	return snapshot
+}
+
+// FindManager finds a manager in the system snapshot.
+// Returns nil and false if the manager is not found.
+func FindManager(
+	snap SystemSnapshot,
+	managerName string,
+) (ManagerSnapshot, bool) {
+	mgr, ok := snap.Managers[managerName]
+	if !ok || mgr == nil {
+		return nil, false
+	}
+	return mgr, true
+}
+
+// FindInstance finds an instance in the system snapshot.
+// This is useful if we want to fetch the data from a manager that always has one instance (e.g., core, agent, container, redpanda).
+// Returns nil and false if the instance is not found.
+func FindInstance(
+	snap SystemSnapshot,
+	managerName, instanceName string,
+) (*FSMInstanceSnapshot, bool) {
+	mgr, ok := FindManager(snap, managerName)
+	if !ok {
+		return nil, false
+	}
+	inst, ok := mgr.GetInstances()[instanceName]
+	return inst, ok
+}
+
+// FindDfcInstanceByUUID finds a dataflow component instance with the given UUID.
+// It returns the instance if found, otherwise an error is returned.
+func FindDfcInstanceByUUID(systemSnapshot SystemSnapshot, dfcUUID string) (*FSMInstanceSnapshot, error) {
+	dfcManager, ok := FindManager(systemSnapshot, constants.DataflowcomponentManagerName)
+	if !ok {
+		return nil, fmt.Errorf("dfc manager not found")
+	}
+
+	dfcInstances := dfcManager.GetInstances()
+
+	for _, instance := range dfcInstances {
+		if instance == nil {
+			continue
+		}
+
+		currentUUID := dataflowcomponentserviceconfig.GenerateUUIDFromName(instance.ID).String()
+		if currentUUID == dfcUUID {
+			return instance, nil
+		}
+	}
+
+	return nil, fmt.Errorf("the requested DFC with UUID %s was not found", dfcUUID)
 }
