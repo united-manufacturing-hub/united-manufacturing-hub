@@ -204,9 +204,9 @@ func (n *NmapInstance) reconcileOperationalStates(ctx context.Context, currentSt
 
 	switch desiredState {
 	case OperationalStateOpen: // "running" – user wants active monitoring
-		return n.reconcileTransitionToActive(ctx, currentState, services, currentTime)
+		return n.reconcileTransitionToActive(ctx, services, currentState, currentTime)
 	case OperationalStateStopped:
-		return n.reconcileTransitionToStopped(ctx, currentState, services)
+		return n.reconcileTransitionToStopped(ctx, services, currentState)
 	default:
 		return fmt.Errorf("invalid desired state: %s", desiredState), false
 	}
@@ -214,7 +214,7 @@ func (n *NmapInstance) reconcileOperationalStates(ctx context.Context, currentSt
 
 // reconcileTransitionToActive handles transitions when the desired state is Active.
 // It deals with moving from various states to the Active state.
-func (n *NmapInstance) reconcileTransitionToActive(ctx context.Context, currentState string, services serviceregistry.Provider, currentTime time.Time) (err error, reconciled bool) {
+func (n *NmapInstance) reconcileTransitionToActive(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time) (err error, reconciled bool) {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentNmapInstance, n.baseFSMInstance.GetID()+".reconcileTransitionToActive", time.Since(start))
@@ -223,8 +223,8 @@ func (n *NmapInstance) reconcileTransitionToActive(ctx context.Context, currentS
 	switch {
 	// If we're stopped, we need to start first
 	case currentState == OperationalStateStopped:
-		// Attempt to start instance
-		if err := n.StartInstance(ctx, services.GetFileSystem()); err != nil {
+		err := n.StartInstance(ctx, services.GetFileSystem())
+		if err != nil {
 			return err, false
 		}
 		// Send event to transition from Stopped to Starting
@@ -233,6 +233,11 @@ func (n *NmapInstance) reconcileTransitionToActive(ctx context.Context, currentS
 		return n.reconcileStartingStates(ctx, services, currentState, currentTime)
 	case IsRunningState(currentState):
 		return n.reconcileRunningStates(ctx, services, currentState, currentTime)
+	case currentState == OperationalStateStopping:
+		// There can be the edge case where an fsm is set to stopped, and then a cycle later again to active
+		// It will cause the stopping process to start, but then the deisred state is again active, so it will land up in reconcileTransitionToActive
+		// if it is stopping, we will first finish the stopping process and then we will go to active
+		return n.reconcileTransitionToStopped(ctx, services, currentState)
 	default:
 		return fmt.Errorf("invalid current state: %s", currentState), false
 	}
@@ -243,7 +248,7 @@ func (n *NmapInstance) reconcileTransitionToActive(ctx context.Context, currentS
 //
 //	from any running state (open, filtered, closed, degraded) -> stopping (EventStop)
 //	then from stopping -> stopped (EventStopped)
-func (n *NmapInstance) reconcileTransitionToStopped(ctx context.Context, currentState string, services serviceregistry.Provider) (err error, reconciled bool) {
+func (n *NmapInstance) reconcileTransitionToStopped(ctx context.Context, services serviceregistry.Provider, currentState string) (err error, reconciled bool) {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentNmapInstance, n.baseFSMInstance.GetID()+".reconcileTransitionToStopped", time.Since(start))

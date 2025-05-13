@@ -286,7 +286,6 @@ func (c *ContainerInstance) reconcileTransitionToActive(ctx context.Context, ser
 	switch {
 	// If we're stopped, we need to start first
 	case currentState == OperationalStateStopped:
-		// nothing to start here, just for consistency with other fsms
 		err := c.StartInstance(ctx, services.GetFileSystem())
 		if err != nil {
 			return err, false
@@ -297,6 +296,11 @@ func (c *ContainerInstance) reconcileTransitionToActive(ctx context.Context, ser
 		return c.reconcileStartingStates(ctx, services, currentState, currentTime)
 	case IsRunningState(currentState):
 		return c.reconcileRunningStates(ctx, services, currentState, currentTime)
+	case currentState == OperationalStateStopping:
+		// There can be the edge case where an fsm is set to stopped, and then a cycle later again to active
+		// It will cause the stopping process to start, but then the deisred state is again active, so it will land up in reconcileTransitionToActive
+		// if it is stopping, we will first finish the stopping process and then we will go to active
+		return c.reconcileTransitionToStopped(ctx, services, currentState)
 	default:
 		return fmt.Errorf("invalid current state: %s", currentState), false
 	}

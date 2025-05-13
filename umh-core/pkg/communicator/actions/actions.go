@@ -129,6 +129,7 @@ func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePay
 			actionLogger:          log,
 			systemSnapshotManager: systemSnapshotManager,
 		}
+
 	case models.GetConfigFile:
 		action = NewGetConfigFileAction(
 			sender,
@@ -147,6 +148,17 @@ func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePay
 			systemSnapshotManager,
 			configManager,
 		)
+
+	case models.GetDataFlowComponentMetrics:
+		action = &GetDataflowcomponentMetricsAction{
+			userEmail:             sender,
+			actionUUID:            payload.ActionUUID,
+			instanceUUID:          instanceUUID,
+			outboundChannel:       outboundChannel,
+			actionLogger:          log,
+			systemSnapshotManager: systemSnapshotManager,
+		}
+
 	default:
 		log.Errorf("Unknown action type: %s", payload.ActionType)
 		SendActionReply(instanceUUID, sender, payload.ActionUUID, models.ActionFinishedWithFailure, "Unknown action type", outboundChannel, payload.ActionType)
