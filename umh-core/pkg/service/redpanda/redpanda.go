@@ -963,15 +963,10 @@ func formatMemory(memory int) string {
 	return fmt.Sprintf("%d%s", memory, units[unitIndex])
 }
 
-// updateRedpandaClusterConfig updates Redpanda's cluster config via HTTP PUT request
-func (s *RedpandaService) UpdateRedpandaClusterConfig(ctx context.Context, redpandaName string, configUpdates map[string]interface{}) error {
+// setRedpandaClusterConfig sends a PUT request to update Redpanda's cluster config
+func (s *RedpandaService) setRedpandaClusterConfig(ctx context.Context, configUpdates map[string]interface{}) error {
 	if s.httpClient == nil {
 		return fmt.Errorf("http client not initialized")
-	}
-
-	// If the context is done, return an error
-	if ctx.Err() != nil {
-		return ctx.Err()
 	}
 
 	// Construct the request body
@@ -1034,8 +1029,14 @@ func (s *RedpandaService) UpdateRedpandaClusterConfig(ctx context.Context, redpa
 		return fmt.Errorf("failed to close response body: %w", bodyError)
 	}
 
-	// Do a readback of the cluster config to verify the update
-	// http://127.0.0.1:9644/v1/cluster_config
+	return nil
+}
+
+// verifyRedpandaClusterConfig reads back the cluster config and verifies that the updates were applied correctly
+func (s *RedpandaService) verifyRedpandaClusterConfig(ctx context.Context, redpandaName string, configUpdates map[string]interface{}) error {
+	if s.httpClient == nil {
+		return fmt.Errorf("http client not initialized")
+	}
 
 	readbackReq, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://localhost:9644/v1/cluster_config", nil)
 	if err != nil {
@@ -1091,4 +1092,20 @@ func (s *RedpandaService) UpdateRedpandaClusterConfig(ctx context.Context, redpa
 	}
 
 	return nil
+}
+
+// UpdateRedpandaClusterConfig updates Redpanda's cluster config via HTTP PUT request
+func (s *RedpandaService) UpdateRedpandaClusterConfig(ctx context.Context, redpandaName string, configUpdates map[string]interface{}) error {
+	// If the context is done, return an error
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+
+	// Set the cluster config
+	if err := s.setRedpandaClusterConfig(ctx, configUpdates); err != nil {
+		return err
+	}
+
+	// Verify the config was applied correctly
+	return s.verifyRedpandaClusterConfig(ctx, redpandaName, configUpdates)
 }

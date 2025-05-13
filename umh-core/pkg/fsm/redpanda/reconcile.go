@@ -172,8 +172,8 @@ func (r *RedpandaInstance) reconcileExternalChanges(ctx context.Context, service
 		return fmt.Errorf("failed to update observed state: %w", err), false
 	}
 
+	// If the config differs and we are currently running, we will apply the changes by doing an REST call to the Redpanda Admin API (https://docs.redpanda.com/api/admin-api/).
 	currentState := r.baseFSMInstance.GetCurrentFSMState()
-	r.baseFSMInstance.GetLogger().Infof("Current state: %s", currentState)
 	if IsRunningState(currentState) {
 		// Reconcile the cluster config via HTTP
 		// 1. Check if we have changes in the config
