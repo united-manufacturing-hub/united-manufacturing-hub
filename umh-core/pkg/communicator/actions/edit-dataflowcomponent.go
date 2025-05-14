@@ -394,17 +394,59 @@ func (a *EditDataflowComponentAction) Execute() (interface{}, map[string]interfa
 		// Convert each processor configuration in the pipeline
 		processors := []interface{}{}
 
-		for processorName, processor := range a.payload.Pipeline {
-			var procConfig map[string]interface{}
-			err := yaml.Unmarshal([]byte(processor.Data), &procConfig)
-			if err != nil {
-				errMsg := Label("edit", a.name) + fmt.Sprintf("failed to parse pipeline processor %s: %s", processorName, err.Error())
-				SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errMsg, a.outboundChannel, models.EditDataFlowComponent)
-				return nil, nil, fmt.Errorf("%s", errMsg)
-			}
+		// Check if we have numeric keys (0, 1, 2, ...) and use them to preserve order
+		numericKeys := make(map[int]string)
+		hasNumericKeys := true
 
-			// Add processor to the list
-			processors = append(processors, procConfig)
+		// Try to parse all keys as integers
+		for processorName := range a.payload.Pipeline {
+			var index int
+			_, err := fmt.Sscanf(processorName, "%d", &index)
+			if err != nil {
+				hasNumericKeys = false
+				break
+			}
+			numericKeys[index] = processorName
+		}
+
+		if hasNumericKeys {
+			// Process in numeric order
+			for i := range len(a.payload.Pipeline) {
+				processorName, exists := numericKeys[i]
+				if !exists {
+					hasNumericKeys = false
+					break
+				}
+
+				processor := a.payload.Pipeline[processorName]
+				var procConfig map[string]interface{}
+				err := yaml.Unmarshal([]byte(processor.Data), &procConfig)
+				if err != nil {
+					errMsg := Label("edit", a.name) + fmt.Sprintf("failed to parse pipeline processor %s: %s", processorName, err.Error())
+					SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errMsg, a.outboundChannel, models.EditDataFlowComponent)
+					return nil, nil, fmt.Errorf("%s", errMsg)
+				}
+
+				// Add processor to the list
+				processors = append(processors, procConfig)
+			}
+		}
+
+		// If we don't have proper numeric keys, fall back to unordered processing
+		if !hasNumericKeys {
+			a.actionLogger.Warn("Processor order may not be preserved as non-numeric keys were found")
+			for processorName, processor := range a.payload.Pipeline {
+				var procConfig map[string]interface{}
+				err := yaml.Unmarshal([]byte(processor.Data), &procConfig)
+				if err != nil {
+					errMsg := Label("edit", a.name) + fmt.Sprintf("failed to parse pipeline processor %s: %s", processorName, err.Error())
+					SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errMsg, a.outboundChannel, models.EditDataFlowComponent)
+					return nil, nil, fmt.Errorf("%s", errMsg)
+				}
+
+				// Add processor to the list
+				processors = append(processors, procConfig)
+			}
 		}
 
 		benthosPipeline["processors"] = processors

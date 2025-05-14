@@ -453,9 +453,17 @@ var _ = Describe("DeployDataflowComponent", func() {
 						},
 						"pipeline": map[string]interface{}{
 							"processors": map[string]interface{}{
-								"proc1": map[string]interface{}{
+								"0": map[string]interface{}{
 									"type": "yaml",
-									"data": "type: mapping\nprocs: []",
+									"data": "type: mapping\ndescription: \"First processor - position 0\"\nprocs: []",
+								},
+								"1": map[string]interface{}{
+									"type": "yaml",
+									"data": "type: mapping\ndescription: \"Second processor - position 1\"\nprocs: []",
+								},
+								"2": map[string]interface{}{
+									"type": "yaml",
+									"data": "type: mapping\ndescription: \"Third processor - position 2\"\nprocs: []",
 								},
 							},
 						},
@@ -499,6 +507,33 @@ var _ = Describe("DeployDataflowComponent", func() {
 			Expect(mockConfig.Config.DataFlow).To(HaveLen(1))
 			Expect(mockConfig.Config.DataFlow[0].Name).To(Equal("test-component"))
 			Expect(mockConfig.Config.DataFlow[0].DesiredFSMState).To(Equal("active"))
+
+			// Verify processor order is preserved
+			processorsPipeline, ok := mockConfig.Config.DataFlow[0].DataFlowComponentServiceConfig.BenthosConfig.Pipeline["processors"].([]interface{})
+			Expect(ok).To(BeTrue(), "Pipeline processors should be a slice of interfaces")
+			Expect(processorsPipeline).To(HaveLen(3), "Should have 3 processors")
+
+			// Verify the order is preserved by checking the descriptions added to each processor
+			firstProcessor, ok := processorsPipeline[0].(map[string]interface{})
+			Expect(ok).To(BeTrue(), "Processor should be a map")
+			Expect(firstProcessor["type"]).To(Equal("mapping"))
+			Expect(firstProcessor["procs"]).To(Equal([]interface{}{}))
+			Expect(firstProcessor).To(HaveKey("description"), "First processor should have a description")
+			Expect(firstProcessor["description"]).To(Equal("First processor - position 0"))
+
+			secondProcessor, ok := processorsPipeline[1].(map[string]interface{})
+			Expect(ok).To(BeTrue(), "Processor should be a map")
+			Expect(secondProcessor["type"]).To(Equal("mapping"))
+			Expect(secondProcessor["procs"]).To(Equal([]interface{}{}))
+			Expect(secondProcessor).To(HaveKey("description"), "Second processor should have a description")
+			Expect(secondProcessor["description"]).To(Equal("Second processor - position 1"))
+
+			thirdProcessor, ok := processorsPipeline[2].(map[string]interface{})
+			Expect(ok).To(BeTrue(), "Processor should be a map")
+			Expect(thirdProcessor["type"]).To(Equal("mapping"))
+			Expect(thirdProcessor["procs"]).To(Equal([]interface{}{}))
+			Expect(thirdProcessor).To(HaveKey("description"), "Third processor should have a description")
+			Expect(thirdProcessor["description"]).To(Equal("Third processor - position 2"))
 		})
 
 		It("should handle AtomicAddDataflowcomponent failure", func() {
