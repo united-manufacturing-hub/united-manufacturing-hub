@@ -72,8 +72,10 @@ func (a *SetConfigFileAction) Parse(payload interface{}) error {
 	// Extract SetConfigFilePayload from the interface{}
 	payloadStruct, err := ParseActionPayload[models.SetConfigFilePayload](payload)
 	if err != nil {
-		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
-			"Failed to parse payload as SetConfigFilePayload", a.outboundChannel, models.SetConfigFile)
+		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID,
+			models.ActionFinishedWithFailure,
+			"Failed to parse payload as SetConfigFilePayload",
+			a.outboundChannel, models.SetConfigFile)
 		return fmt.Errorf("failed to parse payload as SetConfigFilePayload: %w", err)
 	}
 
