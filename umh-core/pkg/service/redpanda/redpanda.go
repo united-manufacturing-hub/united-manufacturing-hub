@@ -964,7 +964,7 @@ func formatMemory(memory int) string {
 }
 
 // setRedpandaClusterConfig sends a PUT request to update Redpanda's cluster config
-func (s *RedpandaService) setRedpandaClusterConfig(ctx context.Context, configUpdates map[string]interface{}) error {
+func (s *RedpandaService) setRedpandaClusterConfig(ctx context.Context, configUpdates map[string]interface{}) (err error) {
 	if s.httpClient == nil {
 		return fmt.Errorf("http client not initialized")
 	}
@@ -976,13 +976,15 @@ func (s *RedpandaService) setRedpandaClusterConfig(ctx context.Context, configUp
 	}
 
 	// Convert to JSON
-	jsonBody, err := json.Marshal(requestBody)
+	var jsonBody []byte
+	jsonBody, err = json.Marshal(requestBody)
 	if err != nil {
 		return fmt.Errorf("failed to marshal request body: %w", err)
 	}
 
 	// Create the request
-	req, err := http.NewRequestWithContext(ctx, http.MethodPut, fmt.Sprintf("http://127.0.0.1:%d/v1/cluster_config", constants.AdminAPIPort), bytes.NewBuffer(jsonBody))
+	var req *http.Request
+	req, err = http.NewRequestWithContext(ctx, http.MethodPut, fmt.Sprintf("http://127.0.0.1:%d/v1/cluster_config", constants.AdminAPIPort), bytes.NewBuffer(jsonBody))
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
@@ -991,7 +993,8 @@ func (s *RedpandaService) setRedpandaClusterConfig(ctx context.Context, configUp
 	req.Header.Set("Content-Type", "application/json")
 
 	// Send the request
-	resp, err := s.httpClient.Do(req)
+	var resp *http.Response
+	resp, err = s.httpClient.Do(req)
 	if err != nil {
 		// If we get a connection refused error, it means that the Redpanda service is not yet ready, so we just ignore it
 		if strings.Contains(err.Error(), "connection refused") {
@@ -1000,13 +1003,18 @@ func (s *RedpandaService) setRedpandaClusterConfig(ctx context.Context, configUp
 		return fmt.Errorf("failed to send request: %w", err)
 	}
 
+	defer func() {
+		if resp != nil {
+			closeErr := resp.Body.Close()
+			if closeErr != nil {
+				err = fmt.Errorf("failed to close response body: %w", closeErr)
+			}
+		}
+	}()
+
 	// Check response status
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		err := resp.Body.Close()
-		if err != nil {
-			return fmt.Errorf("failed to close response body: %w", err)
-		}
 		return fmt.Errorf("request failed with status %d: %s", resp.StatusCode, string(body))
 	}
 
@@ -1015,15 +1023,7 @@ func (s *RedpandaService) setRedpandaClusterConfig(ctx context.Context, configUp
 		ConfigVersion int `json:"config_version"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
-		bodyError := resp.Body.Close()
-		if bodyError != nil {
-			return fmt.Errorf("failed to close response body: %w", bodyError)
-		}
 		return fmt.Errorf("failed to decode response: %w", err)
-	}
-	bodyError := resp.Body.Close()
-	if bodyError != nil {
-		return fmt.Errorf("failed to close response body: %w", bodyError)
 	}
 
 	return nil
@@ -1073,29 +1073,27 @@ func (s *RedpandaService) verifyRedpandaClusterConfig(ctx context.Context, redpa
 			return fmt.Errorf("key %s not found in Redpanda cluster config for %s", key, redpandaName)
 		}
 
-		// If readback value is a string, we can just compare the strings
-		if readbackValueString, ok := readbackValue.(string); ok {
-			if readbackValueString != value {
-				return fmt.Errorf("value of %s in Redpanda cluster config for %s is not the same as the value in the request [string comparison]", key, redpandaName)
+		switch val := readbackValue.(type) {
+		case string:
+			if val != value.(string) {
+				return fmt.Errorf("value for key %s in Redpanda cluster config for %s does not match expected value %s", key, redpandaName, value)
 			}
-		}
-		// Otherwise we can assume that the value is a float64, and we can therefore compare the float64s
-		readbackValueFloat, ok := readbackValue.(float64)
-		if !ok {
-			return fmt.Errorf("value of %s in Redpanda cluster config for %s is not a float64 [readback]", key, redpandaName)
-		}
-		valueFloat, ok := value.(float64)
-		if !ok {
-			// Try to cast an int and then to a float64
-			valueInt, ok := value.(int64)
-			if !ok {
-				return fmt.Errorf("value of %s in Redpanda cluster config for %s is not a float64 [request]", key, redpandaName)
+		case float32:
+			if val != value.(float32) {
+				return fmt.Errorf("value for key %s in Redpanda cluster config for %s does not match expected value %f", key, redpandaName, value)
 			}
-			valueFloat = float64(valueInt)
-		}
-
-		if readbackValueFloat != valueFloat {
-			return fmt.Errorf("value of %s in Redpanda cluster config for %s is not the same as the value in the request [float64 comparison]", key, redpandaName)
+		case float64:
+			if val != value.(float64) {
+				return fmt.Errorf("value for key %s in Redpanda cluster config for %s does not match expected value %f", key, redpandaName, value)
+			}
+		case int:
+			if val != value.(int) {
+				return fmt.Errorf("value for key %s in Redpanda cluster config for %s does not match expected value %d", key, redpandaName, value)
+			}
+		case int64:
+			if val != value.(int64) {
+				return fmt.Errorf("value for key %s in Redpanda cluster config for %s does not match expected value %d", key, redpandaName, value)
+			}
 		}
 	}
 

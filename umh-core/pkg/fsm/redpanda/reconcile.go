@@ -91,7 +91,8 @@ func (r *RedpandaInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSna
 	}
 
 	// Step 2: Detect external changes.
-	err, reconciled = r.reconcileExternalChanges(ctx, services, snapshot.Tick, start)
+	var externalReconciled bool
+	err, externalReconciled = r.reconcileExternalChanges(ctx, services, snapshot.Tick, start)
 	if err != nil {
 		// I am using strings.Contains as i cannot get it working with errors.Is
 		isExpectedError := strings.Contains(err.Error(), redpanda_monitor_service.ErrServiceNotExist.Error()) ||
@@ -143,10 +144,10 @@ func (r *RedpandaInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSna
 		return nil, false
 	}
 
-	// If either Redpanda state or S6 state was reconciled, we return reconciled so that nothing happens anymore in this tick
-	// nothing should happen as we might have already taken up some significant time of the avaialble time per tick, so better
+	// If either Redpanda state, S6 state or the internal redpanda state via the Admin API was reconciled, we return reconciled so that nothing happens anymore in this tick
+	// nothing should happen as we might have already taken up some significant time of the available time per tick, so better
 	// to be on the safe side and let the rest handle in another tick
-	reconciled = reconciled || s6Reconciled
+	reconciled = reconciled || s6Reconciled || externalReconciled
 
 	// It went all right, so clear the error
 	r.baseFSMInstance.ResetState()
@@ -166,11 +167,6 @@ func (r *RedpandaInstance) reconcileExternalChanges(ctx context.Context, service
 	// that a single status of a single instance does not block the whole reconciliation
 	observedStateCtx, cancel := context.WithTimeout(ctx, constants.RedpandaUpdateObservedStateTimeout)
 	defer cancel()
-
-	err = r.UpdateObservedStateOfInstance(observedStateCtx, services, tick, loopStartTime)
-	if err != nil {
-		return fmt.Errorf("failed to update observed state: %w", err), false
-	}
 
 	// If the config differs and we are currently running,
 	// we will apply the changes by doing an REST call to the Redpanda Admin API (https://docs.redpanda.com/api/admin-api/).
@@ -205,6 +201,11 @@ func (r *RedpandaInstance) reconcileExternalChanges(ctx context.Context, service
 			}
 			return nil, true
 		}
+	}
+
+	err = r.UpdateObservedStateOfInstance(observedStateCtx, services, tick, loopStartTime)
+	if err != nil {
+		return fmt.Errorf("failed to update observed state: %w", err), false
 	}
 	return nil, false
 }
