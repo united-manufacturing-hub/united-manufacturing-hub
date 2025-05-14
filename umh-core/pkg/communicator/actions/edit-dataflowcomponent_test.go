@@ -409,7 +409,7 @@ var _ = Describe("EditDataflowComponent", func() {
 						},
 						"pipeline": map[string]interface{}{
 							"processors": map[string]interface{}{
-								"proc1": map[string]interface{}{
+								"0": map[string]interface{}{
 									"type": "yaml",
 									"data": "type: mapping\nprocs: []",
 								},
@@ -587,7 +587,7 @@ buffer:
 						},
 						"pipeline": map[string]interface{}{
 							"processors": map[string]interface{}{
-								"proc1": map[string]interface{}{
+								"0": map[string]interface{}{
 									"type": "yaml",
 									"data": "type: mapping\nprocs: []",
 								},
@@ -651,7 +651,7 @@ buffer:
 						},
 						"pipeline": map[string]interface{}{
 							"processors": map[string]interface{}{
-								"proc1": map[string]interface{}{
+								"0": map[string]interface{}{
 									"type": "yaml",
 									"data": "type: mapping\nprocs: []",
 								},
@@ -705,7 +705,7 @@ buffer:
 						},
 						"pipeline": map[string]interface{}{
 							"processors": map[string]interface{}{
-								"proc1": map[string]interface{}{
+								"0": map[string]interface{}{
 									"type": "yaml",
 									"data": "type: mapping\nprocs: []",
 								},
