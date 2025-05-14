@@ -335,7 +335,7 @@ func (b *BenthosInstance) IsBenthosHealthchecksPassed() (bool, string) {
 		isOutputUp {
 		return true, ""
 	}
-	return false, fmt.Sprintf("healthchecks did not pass, live: %t, ready: %t", b.ObservedState.ServiceInfo.BenthosStatus.HealthCheck.IsLive, b.ObservedState.ServiceInfo.BenthosStatus.HealthCheck.IsReady)
+	return false, fmt.Sprintf("healthchecks did not pass, live: %t, ready: %t, input: %t, output: %t", b.ObservedState.ServiceInfo.BenthosStatus.HealthCheck.IsLive, b.ObservedState.ServiceInfo.BenthosStatus.HealthCheck.IsReady, isInputUp, isOutputUp)
 }
 
 // AnyRestartsSinceCreation determines if the Benthos service has restarted since its creation.
