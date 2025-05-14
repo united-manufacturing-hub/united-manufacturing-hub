@@ -312,15 +312,27 @@ func (b *BenthosInstance) IsBenthosConfigLoaded() (bool, string) {
 }
 
 // IsBenthosHealthchecksPassed reports true when both the liveness and
-// readiness probes are successful.
+// readiness probes are successful. Additionally, the input and output need to be connected.
 //
 // It returns:
 //
 //	ok     – true when both probes pass, false otherwise.
 //	reason – empty when ok is true; otherwise details of the failed probe(s).
 func (b *BenthosInstance) IsBenthosHealthchecksPassed() (bool, string) {
+	connectionUpCounterInput := b.ObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.Metrics.Input.ConnectionUp
+	connectionFailedCounterInput := b.ObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.Metrics.Input.ConnectionFailed
+	connectionLostCounterInput := b.ObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.Metrics.Input.ConnectionLost
+	isInputUp := connectionUpCounterInput > (connectionFailedCounterInput + connectionLostCounterInput)
+
+	connectionUpCounterOutput := b.ObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.Metrics.Output.ConnectionUp
+	connectionFailedCounterOutput := b.ObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.Metrics.Output.ConnectionFailed
+	connectionLostCounterOutput := b.ObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.Metrics.Output.ConnectionLost
+	isOutputUp := connectionUpCounterOutput > (connectionFailedCounterOutput + connectionLostCounterOutput)
+
 	if b.ObservedState.ServiceInfo.BenthosStatus.HealthCheck.IsLive &&
-		b.ObservedState.ServiceInfo.BenthosStatus.HealthCheck.IsReady {
+		b.ObservedState.ServiceInfo.BenthosStatus.HealthCheck.IsReady &&
+		isInputUp &&
+		isOutputUp {
 		return true, ""
 	}
 	return false, fmt.Sprintf("healthchecks did not pass, live: %t, ready: %t", b.ObservedState.ServiceInfo.BenthosStatus.HealthCheck.IsLive, b.ObservedState.ServiceInfo.BenthosStatus.HealthCheck.IsReady)
