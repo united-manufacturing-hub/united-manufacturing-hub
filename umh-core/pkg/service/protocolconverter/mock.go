@@ -269,7 +269,7 @@ func (m *MockProtocolConverterService) AddToManager(
 	connConfig := config.ConnectionConfig{
 		FSMInstanceConfig: config.FSMInstanceConfig{
 			Name:            underlyingName,
-			DesiredFSMState: dfcfsm.OperationalStateActive,
+			DesiredFSMState: connfsm.OperationalStateUp,
 		},
 		ConnectionServiceConfig: m.GenerateConfigResultConnection,
 	}
