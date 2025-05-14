@@ -105,7 +105,7 @@ func (a *SetConfigFileAction) Execute() (interface{}, map[string]interface{}, er
 	a.actionLogger.Info("Executing SetConfigFile action")
 
 	// Create a context with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), constants.ConfigGetConfigTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), constants.GetOrSetConfigFileTimeout)
 	defer cancel()
 
 	// Use the default config path from the config manager
