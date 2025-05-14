@@ -434,6 +434,7 @@ func (a *EditDataflowComponentAction) Execute() (interface{}, map[string]interfa
 
 		// If we don't have proper numeric keys, fall back to unordered processing
 		if !hasNumericKeys {
+			processors = processors[:0] // reset to avoid duplicates
 			a.actionLogger.Warn("Processor order may not be preserved as non-numeric keys were found")
 			for processorName, processor := range a.payload.Pipeline {
 				var procConfig map[string]interface{}
