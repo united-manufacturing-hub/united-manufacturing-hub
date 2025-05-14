@@ -24,7 +24,7 @@ TARGETARCH := $(shell go env GOARCH)
 
 # Default values for build arguments
 S6_OVERLAY_VERSION = 3.2.0.2
-BENTHOS_UMH_VERSION = 0.9.2
+BENTHOS_UMH_VERSION = 0.9.3-alpha.1
 REDPANDA_VERSION = 24.3.8
 
 # Debug values
