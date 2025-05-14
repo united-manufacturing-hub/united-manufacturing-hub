@@ -20,19 +20,14 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 )
 
-// this function returns the relation of index to processor name that is used to oder the incoming processors
-// the processorName must always be the string of the index
-// if this is not the case, the first argument will be false
+// this function returns weather the string indexes of the given map are all numeric
 // this func is only called when len(pipeline) > 0 so we dont need to check
-func CheckIfOrderedNumericKeys(pipeline map[string]models.DfcDataConfig) (bool, map[int]string) {
-	numericKeys := make(map[int]string)
-
+func CheckIfOrderedNumericKeys(pipeline map[string]models.DfcDataConfig) bool {
 	for processorName := range pipeline {
 		index, err := strconv.Atoi(processorName)
 		if err != nil || index < 0 {
-			return false, nil
+			return false
 		}
-		numericKeys[index] = processorName
 	}
-	return true, numericKeys
+	return true
 }

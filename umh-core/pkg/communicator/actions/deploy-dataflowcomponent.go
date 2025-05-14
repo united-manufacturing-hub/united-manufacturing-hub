@@ -446,16 +446,12 @@ func (a *DeployDataflowComponentAction) Execute() (interface{}, map[string]inter
 		//    Otherwise keep the old behaviour (unordered) but warn the user.
 
 		// Try to parse all keys as integers
-		hasNumericKeys, numericKeys := CheckIfOrderedNumericKeys(a.payload.Pipeline)
+		hasNumericKeys := CheckIfOrderedNumericKeys(a.payload.Pipeline)
 
 		if hasNumericKeys {
 			// Process in numeric order
 			for i := range len(a.payload.Pipeline) {
-				processorName, exists := numericKeys[i]
-				if !exists {
-					hasNumericKeys = false
-					break
-				}
+				processorName := fmt.Sprintf("%d", i)
 
 				processor := a.payload.Pipeline[processorName]
 				var procConfig map[string]interface{}

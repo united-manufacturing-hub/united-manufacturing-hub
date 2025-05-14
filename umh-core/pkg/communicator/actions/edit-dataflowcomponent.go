@@ -395,16 +395,12 @@ func (a *EditDataflowComponentAction) Execute() (interface{}, map[string]interfa
 		processors := []interface{}{}
 
 		// Check if we have numeric keys (0, 1, 2, ...) and use them to preserve order
-		hasNumericKeys, numericKeys := CheckIfOrderedNumericKeys(a.payload.Pipeline)
+		hasNumericKeys := CheckIfOrderedNumericKeys(a.payload.Pipeline)
 
 		if hasNumericKeys {
 			// Process in numeric order
 			for i := range len(a.payload.Pipeline) {
-				processorName, exists := numericKeys[i]
-				if !exists {
-					hasNumericKeys = false
-					break
-				}
+				processorName := fmt.Sprintf("%d", i)
 
 				processor := a.payload.Pipeline[processorName]
 				var procConfig map[string]interface{}
