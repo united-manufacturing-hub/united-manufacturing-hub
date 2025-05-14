@@ -421,7 +421,7 @@ func (a *EditDataflowComponentAction) Execute() (interface{}, map[string]interfa
 			// the frontend always sends numerous keys so this should never happen
 			SendActionReply(a.instanceUUID, a.userEmail,
 				a.actionUUID, models.ActionFinishedWithFailure, "At least one processor with a non-numerous key was found.",
-				a.outboundChannel, models.DeployDataFlowComponent)
+				a.outboundChannel, models.EditDataFlowComponent)
 			return nil, nil, fmt.Errorf("at least one processor with a non-numerous key was found")
 		}
 
