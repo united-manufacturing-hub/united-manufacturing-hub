@@ -55,8 +55,8 @@ func RenderDataFlowComponentYAML(benthos benthosserviceconfig.BenthosServiceConf
 }
 
 // NormalizeDataFlowComponentConfig is a package-level function for easy config normalization
-func NormalizeDataFlowComponentConfig(cfg DataflowComponentServiceConfig) {
-	defaultNormalizer.NormalizeConfig(cfg)
+func NormalizeDataFlowComponentConfig(cfg DataflowComponentServiceConfig) DataflowComponentServiceConfig {
+	return defaultNormalizer.NormalizeConfig(cfg)
 }
 
 // ConfigsEqual is a package-level function for easy config comparison

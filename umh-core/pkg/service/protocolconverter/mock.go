@@ -444,7 +444,7 @@ func (m *MockProtocolConverterService) Stop(
 	// Set the desired state to stopped for the given component
 	for i, connConfig := range m.connConfigs {
 		if connConfig.Name == underlyingName {
-			m.connConfigs[i].DesiredFSMState = connfsm.OperationalStateUp
+			m.connConfigs[i].DesiredFSMState = connfsm.OperationalStateStopped
 			connFound = true
 			break
 		}

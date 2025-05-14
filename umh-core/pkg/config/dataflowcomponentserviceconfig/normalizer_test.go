@@ -111,11 +111,11 @@ var _ = Describe("DFC YAML Normalizer", func() {
 			config2 := DataflowComponentServiceConfig{}
 
 			// Use package-level function
-			NormalizeDataFlowComponentConfig(config1)
+			config1 = NormalizeDataFlowComponentConfig(config1)
 
 			// Use normalizer directly
 			normalizer := NewNormalizer()
-			normalizer.NormalizeConfig(config2)
+			config2 = normalizer.NormalizeConfig(config2)
 
 			// Results should be the same
 			Expect(config1.BenthosConfig).To(Equal(config2.BenthosConfig))
