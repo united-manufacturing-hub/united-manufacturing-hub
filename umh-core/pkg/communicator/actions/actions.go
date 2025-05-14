@@ -131,23 +131,23 @@ func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePay
 		}
 
 	case models.GetConfigFile:
-		action = NewGetConfigFileAction(
-			sender,
-			payload.ActionUUID,
-			instanceUUID,
-			outboundChannel,
-			systemSnapshotManager,
-			configManager,
-		)
+		action = &GetConfigFileAction{
+			userEmail:             sender,
+			actionUUID:            payload.ActionUUID,
+			instanceUUID:          instanceUUID,
+			outboundChannel:       outboundChannel,
+			systemSnapshotManager: systemSnapshotManager,
+			configManager:         configManager,
+		}
 	case models.SetConfigFile:
-		action = NewSetConfigFileAction(
-			sender,
-			payload.ActionUUID,
-			instanceUUID,
-			outboundChannel,
-			systemSnapshotManager,
-			configManager,
-		)
+		action = &SetConfigFileAction{
+			userEmail:             sender,
+			actionUUID:            payload.ActionUUID,
+			instanceUUID:          instanceUUID,
+			outboundChannel:       outboundChannel,
+			systemSnapshotManager: systemSnapshotManager,
+			configManager:         configManager,
+		}
 
 	case models.GetDataFlowComponentMetrics:
 		action = &GetDataflowcomponentMetricsAction{
