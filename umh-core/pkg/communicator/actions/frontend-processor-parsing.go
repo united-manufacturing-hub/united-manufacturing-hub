@@ -15,7 +15,7 @@
 package actions
 
 import (
-	"fmt"
+	"strconv"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 )
@@ -29,9 +29,8 @@ func CheckIfOrderedNumericKeys(pipeline map[string]models.DfcDataConfig) (bool, 
 	}
 
 	for processorName := range pipeline {
-		var index int
-		_, err := fmt.Sscanf(processorName, "%d", &index)
-		if err != nil {
+		index, err := strconv.Atoi(processorName)
+		if err != nil || index < 0 {
 			return false, nil
 		}
 		numericKeys[index] = processorName

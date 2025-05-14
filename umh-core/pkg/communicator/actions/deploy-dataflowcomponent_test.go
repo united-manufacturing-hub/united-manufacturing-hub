@@ -536,6 +536,65 @@ var _ = Describe("DeployDataflowComponent", func() {
 			Expect(thirdProcessor["description"]).To(Equal("Third processor - position 2"))
 		})
 
+		It("should fail if a non-numerous index is given", func() {
+			// Setup - parse valid payload first
+			payload := map[string]interface{}{
+				"name": "test-component",
+				"meta": map[string]interface{}{
+					"type": "custom",
+				},
+				"ignoreHealthCheck": false,
+				"payload": map[string]interface{}{
+					"customDataFlowComponent": map[string]interface{}{
+						"inputs": map[string]interface{}{
+							"type": "yaml",
+							"data": "input: something\nformat: json",
+						},
+						"outputs": map[string]interface{}{
+							"type": "yaml",
+							"data": "output: something\nformat: json",
+						},
+						"pipeline": map[string]interface{}{
+							"processors": map[string]interface{}{
+								"0": map[string]interface{}{
+									"type": "yaml",
+									"data": "type: mapping\ndescription: \"First processor - position 0\"\nprocs: []",
+								},
+								"1proc": map[string]interface{}{
+									"type": "yaml",
+									"data": "type: mapping\ndescription: \"Second processor - position 1\"\nprocs: []",
+								},
+								"2": map[string]interface{}{
+									"type": "yaml",
+									"data": "type: mapping\ndescription: \"Third processor - position 2\"\nprocs: []",
+								},
+							},
+						},
+					},
+				},
+			}
+
+			err := action.Parse(payload)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Reset tracking for this test
+			mockConfig.ResetCalls()
+
+			// start the state mocker
+			err = stateMocker.Start()
+			Expect(err).NotTo(HaveOccurred())
+
+			// Execute the action
+			_, metadata, err := action.Execute()
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("at least one processor with a non-numerous key was found"))
+			Expect(metadata).To(BeNil())
+
+			// Stop the state mocker
+			stateMocker.Stop()
+
+		})
+
 		It("should handle AtomicAddDataflowcomponent failure", func() {
 			// Set up mock to fail on AtomicAddDataflowcomponent
 			mockConfig.WithAddDataflowcomponentError(errors.New("mock add dataflow component failure"))
