@@ -132,8 +132,9 @@ type ClusterConfig struct {
 }
 
 type TopicConfig struct {
-	DefaultTopicRetentionMs    int64
-	DefaultTopicRetentionBytes int64
+	DefaultTopicRetentionMs          int64
+	DefaultTopicRetentionBytes       int64
+	DefaultTopicCompressionAlgorithm string
 }
 
 // RedpandaMetrics contains information about the metrics of the Redpanda service

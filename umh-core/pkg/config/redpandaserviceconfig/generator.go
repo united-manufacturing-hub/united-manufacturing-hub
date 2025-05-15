@@ -43,6 +43,10 @@ func (g *Generator) RenderConfig(cfg RedpandaServiceConfig) (string, error) {
 		cfg.Topic.DefaultTopicRetentionMs = 604800000 // Redpanda by default sets this to 7 days when set to 0, therefore we just set it to 7 days to keep the code a bit cleaner
 	}
 
+	if cfg.Topic.DefaultTopicCompressionAlgorithm == "" {
+		cfg.Topic.DefaultTopicCompressionAlgorithm = "snappy"
+	}
+
 	if cfg.BaseDir == "" {
 		cfg.BaseDir = "/data"
 	}
@@ -93,6 +97,7 @@ redpanda:
   # Default topic retention configuration:
   log_retention_ms: {{if eq .Topic.DefaultTopicRetentionMs 0}}-1{{else}}{{.Topic.DefaultTopicRetentionMs}}{{end}}
   retention_bytes: {{if eq .Topic.DefaultTopicRetentionBytes 0}}null{{else}}{{.Topic.DefaultTopicRetentionBytes}}{{end}}
+  compression_algorithm: "{{.Topic.DefaultTopicCompressionAlgorithm}}"
 
   # Set the default number of partitions for new topics
   default_topic_partitions: 1

@@ -243,7 +243,7 @@ func (s *RedpandaService) generateRedpandaYaml(config *redpandaserviceconfig.Red
 		return "", fmt.Errorf("config is nil")
 	}
 
-	return redpandaserviceconfig.RenderRedpandaYAML(config.Topic.DefaultTopicRetentionMs, config.Topic.DefaultTopicRetentionBytes)
+	return redpandaserviceconfig.RenderRedpandaYAML(config.Topic.DefaultTopicRetentionMs, config.Topic.DefaultTopicRetentionBytes, config.Topic.DefaultTopicCompressionAlgorithm)
 }
 
 // generateS6ConfigForRedpanda creates a S6 config for a given redpanda instance
@@ -331,6 +331,7 @@ func (s *RedpandaService) GetConfig(ctx context.Context, filesystemService files
 	if lastRedpandaMonitorObservedState.ServiceInfo.RedpandaStatus.LastScan != nil {
 		redpandaStatus.Topic.DefaultTopicRetentionMs = lastRedpandaMonitorObservedState.ServiceInfo.RedpandaStatus.LastScan.ClusterConfig.Topic.DefaultTopicRetentionMs
 		redpandaStatus.Topic.DefaultTopicRetentionBytes = lastRedpandaMonitorObservedState.ServiceInfo.RedpandaStatus.LastScan.ClusterConfig.Topic.DefaultTopicRetentionBytes
+		redpandaStatus.Topic.DefaultTopicCompressionAlgorithm = lastRedpandaMonitorObservedState.ServiceInfo.RedpandaStatus.LastScan.ClusterConfig.Topic.DefaultTopicCompressionAlgorithm
 		redpandaStatus.Resources.MaxCores = 1
 		redpandaStatus.Resources.MemoryPerCoreInBytes = 2048 * 1024 * 1024 // 2GB
 	} else {

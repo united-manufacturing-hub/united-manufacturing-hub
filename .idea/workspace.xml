@@ -20,18 +20,35 @@
     <option name="autoReloadType" value="ALL" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="f7579cb6-498a-42a2-bbeb-08e68ec43c6a" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/umh-core/integration/redpanda_burst_test.go" beforeDir="false" afterPath="$PROJECT_DIR$/umh-core/integration/redpanda_burst_test.go" afterDir="false" />
+    <list default="true" id="0fead188-9091-4463-a9f4-75e8dedf3882" name="Changes" comment="">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/umh-core/integration/redpanda_builder.go" beforeDir="false" afterPath="$PROJECT_DIR$/umh-core/integration/redpanda_builder.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/umh-core/pkg/config/env.go" beforeDir="false" afterPath="$PROJECT_DIR$/umh-core/pkg/config/env.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/umh-core/pkg/config/redpandaserviceconfig/comparator.go" beforeDir="false" afterPath="$PROJECT_DIR$/umh-core/pkg/config/redpandaserviceconfig/comparator.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/umh-core/pkg/config/redpandaserviceconfig/comparator_test.go" beforeDir="false" afterPath="$PROJECT_DIR$/umh-core/pkg/config/redpandaserviceconfig/comparator_test.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/umh-core/pkg/config/redpandaserviceconfig/generator.go" beforeDir="false" afterPath="$PROJECT_DIR$/umh-core/pkg/config/redpandaserviceconfig/generator.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/umh-core/pkg/config/redpandaserviceconfig/generator_test.go" beforeDir="false" afterPath="$PROJECT_DIR$/umh-core/pkg/config/redpandaserviceconfig/generator_test.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/umh-core/pkg/config/redpandaserviceconfig/normalizer.go" beforeDir="false" afterPath="$PROJECT_DIR$/umh-core/pkg/config/redpandaserviceconfig/normalizer.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/umh-core/pkg/config/redpandaserviceconfig/normalizer_test.go" beforeDir="false" afterPath="$PROJECT_DIR$/umh-core/pkg/config/redpandaserviceconfig/normalizer_test.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/umh-core/pkg/config/redpandaserviceconfig/package.go" beforeDir="false" afterPath="$PROJECT_DIR$/umh-core/pkg/config/redpandaserviceconfig/package.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/umh-core/pkg/service/redpanda/redpanda.go" beforeDir="false" afterPath="$PROJECT_DIR$/umh-core/pkg/service/redpanda/redpanda.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/umh-core/pkg/service/redpanda_monitor/redpanda_monitor.go" beforeDir="false" afterPath="$PROJECT_DIR$/umh-core/pkg/service/redpanda_monitor/redpanda_monitor.go" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
     <option name="LAST_RESOLUTION" value="IGNORE" />
   </component>
-  <component name="GOROOT" url="file://$USER_HOME$/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.24.2.darwin-arm64" />
+  <component name="GOROOT" url="file://$USER_HOME$/sdk/go1.24.3" />
   <component name="Git.Settings">
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
   </component>
+  <component name="GitHubPullRequestSearchHistory">{
+  &quot;lastFilter&quot;: {
+    &quot;state&quot;: &quot;OPEN&quot;,
+    &quot;assignee&quot;: &quot;Scarjit&quot;
+  }
+}</component>
   <component name="GitToolBoxStore">
     <option name="recentBranches">
       <RecentBranches>
@@ -41,16 +58,16 @@
               <option name="branches">
                 <list>
                   <RecentBranch>
-                    <option name="branchName" value="staging" />
-                    <option name="lastUsedInstant" value="1746719176" />
+                    <option name="branchName" value="eng-2947-2" />
+                    <option name="lastUsedInstant" value="1747319538" />
                   </RecentBranch>
                   <RecentBranch>
-                    <option name="branchName" value="eng-2975" />
-                    <option name="lastUsedInstant" value="1746715187" />
+                    <option name="branchName" value="eng-2947-1" />
+                    <option name="lastUsedInstant" value="1747319498" />
                   </RecentBranch>
                   <RecentBranch>
-                    <option name="branchName" value="eng-2810" />
-                    <option name="lastUsedInstant" value="1746713532" />
+                    <option name="branchName" value="eng-2952-1" />
+                    <option name="lastUsedInstant" value="1747319497" />
                   </RecentBranch>
                 </list>
               </option>
@@ -61,17 +78,34 @@
       </RecentBranches>
     </option>
   </component>
-  <component name="ProjectColorInfo">{
-  &quot;associatedIndex&quot;: 2
+  <component name="GithubProjectSettings">
+    <option name="branchProtectionPatterns">
+      <list>
+        <option value="main" />
+        <option value="staging" />
+      </list>
+    </option>
+  </component>
+  <component name="GithubPullRequestsUISettings">{
+  &quot;selectedUrlAndAccountId&quot;: {
+    &quot;url&quot;: &quot;git@github.com:united-manufacturing-hub/united-manufacturing-hub.git&quot;,
+    &quot;accountId&quot;: &quot;ef4ec155-84e6-450d-9f3d-52f6e043d56f&quot;
+  }
 }</component>
-  <component name="ProjectId" id="2wofh1ZK3FvlO4oBB0xymLQAVH0" />
+  <component name="KubernetesApiPersistence">{}</component>
+  <component name="KubernetesApiProvider">{
+  &quot;isMigrated&quot;: true
+}</component>
+  <component name="ProjectColorInfo">{
+  &quot;associatedIndex&quot;: 8
+}</component>
+  <component name="ProjectId" id="2x8RWlUJ3Mv11JnL6jwub3rCtJI" />
   <component name="ProjectViewState">
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
   <component name="PropertiesComponent"><![CDATA[{
   "keyToString": {
-    "ModuleVcsDetector.initialDetectionPerformed": "true",
     "RunOnceActivity.GoLinterPluginOnboarding": "true",
     "RunOnceActivity.GoLinterPluginStorageMigration": "true",
     "RunOnceActivity.ShowReadmeOnStart": "true",
@@ -79,69 +113,32 @@
     "RunOnceActivity.go.formatter.settings.were.checked": "true",
     "RunOnceActivity.go.migrated.go.modules.settings": "true",
     "RunOnceActivity.go.modules.go.list.on.any.changes.was.set": "true",
-    "git-widget-placeholder": "eng-2810",
+    "git-widget-placeholder": "eng-2947-2",
     "go.import.settings.migrated": "true",
     "go.sdk.automatically.set": "true",
-    "last_opened_file_path": "/Users/fl/Git/united-manufacturing-hub",
+    "junie.onboarding.icon.badge.shown": "true",
+    "last_opened_file_path": "/Users/fl",
     "node.js.detected.package.eslint": "true",
     "node.js.selected.package.eslint": "(autodetect)",
     "nodejs_package_manager_path": "npm",
-    "settings.editor.selected.configurable": "settings.sync"
+    "settings.editor.selected.configurable": "preferences.pluginManager"
   }
 }]]></component>
-  <component name="RdControllerToolWindowsLayoutState" isNewUi="true">
-    <layout>
-      <window_info id="Space Code Reviews" />
-      <window_info id="Bookmarks" side_tool="true" />
-      <window_info id="Merge Requests" />
-      <window_info id="Welcome to GitHub Copilot" />
-      <window_info id="Backup and Sync History" />
-      <window_info id="Commit_Guest" show_stripe_button="false" />
-      <window_info id="Pull Requests" />
-      <window_info id="Learn" />
-      <window_info active="true" content_ui="combo" id="Project" order="0" sideWeight="0.78842413" visible="true" weight="0.1068314" />
-      <window_info id="Commit" order="1" weight="0.25" />
-      <window_info active="true" id="Structure" order="2" sideWeight="0.21157587" side_tool="true" visible="true" weight="0.1068314" />
-      <window_info anchor="bottom" id="Database Changes" />
-      <window_info anchor="bottom" id="TypeScript" />
-      <window_info anchor="bottom" id="TODO" />
-      <window_info anchor="bottom" id="GraphQL" />
-      <window_info anchor="bottom" id="File Transfer" />
-      <window_info anchor="bottom" id="Snyk" />
-      <window_info anchor="bottom" id="Version Control" order="0" />
-      <window_info anchor="bottom" id="Problems" order="1" />
-      <window_info anchor="bottom" id="Problems View" order="2" />
-      <window_info active="true" anchor="bottom" id="Terminal" order="3" visible="true" weight="0.22155477" />
-      <window_info anchor="bottom" id="Services" order="4" weight="0.38833922" />
-      <window_info anchor="right" id="PR AI Assistant" />
-      <window_info anchor="right" id="String Manipulation" />
-      <window_info anchor="right" id="Endpoints" />
-      <window_info anchor="right" id="github.copilotToolWindow" />
-      <window_info anchor="right" id="Coverage" side_tool="true" />
-      <window_info anchor="right" id="GitHub Copilot Chat" />
-      <window_info anchor="right" id="Notifications" order="0" weight="0.11468023" />
-      <window_info active="true" anchor="right" id="AIAssistant" order="1" sideWeight="0.5004864" visible="true" weight="0.11468023" />
-      <window_info anchor="right" id="Database" order="2" weight="0.11468023" />
-      <window_info anchor="right" id="Gradle" order="3" weight="0.25" />
-      <window_info anchor="right" id="Maven" order="4" weight="0.25" />
-      <window_info active="true" anchor="right" id="make" order="5" sideWeight="0.49951363" side_tool="true" visible="true" weight="0.11468023" />
-    </layout>
-  </component>
   <component name="SharedIndexes">
     <attachedChunks>
       <set>
-        <option value="bundled-gosdk-3b128438d3f6-34ac7aa8f6ab-org.jetbrains.plugins.go.sharedIndexes.bundled-GO-251.23774.430" />
-        <option value="bundled-js-predefined-d6986cc7102b-f27c65a3e318-JavaScript-GO-251.23774.430" />
+        <option value="bundled-gosdk-3b128438d3f6-4b567d62c776-org.jetbrains.plugins.go.sharedIndexes.bundled-GO-251.25410.140" />
+        <option value="bundled-js-predefined-d6986cc7102b-6a121458b545-JavaScript-GO-251.25410.140" />
       </set>
     </attachedChunks>
   </component>
   <component name="TaskManager">
     <task active="true" id="Default" summary="Default task">
-      <changelist id="f7579cb6-498a-42a2-bbeb-08e68ec43c6a" name="Changes" comment="" />
-      <created>1746712964245</created>
+      <changelist id="0fead188-9091-4463-a9f4-75e8dedf3882" name="Changes" comment="" />
+      <created>1747317747766</created>
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
-      <updated>1746712964245</updated>
+      <updated>1747317747766</updated>
     </task>
     <servers />
   </component>
