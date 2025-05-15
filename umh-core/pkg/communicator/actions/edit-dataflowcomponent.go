@@ -294,8 +294,8 @@ func (a *EditDataflowComponentAction) Validate() error {
 		}
 
 		// Validate inject data
-		if a.payload.Inject.Type != "" && a.payload.Inject.Data != "" {
-			if err := yaml.Unmarshal([]byte(a.payload.Inject.Data), &temp); err != nil {
+		if a.payload.Inject != "" {
+			if err := yaml.Unmarshal([]byte(a.payload.Inject), &temp); err != nil {
 				return fmt.Errorf("inject.data is not valid YAML: %v", err)
 			}
 		}
@@ -337,8 +337,8 @@ func (a *EditDataflowComponentAction) Execute() (interface{}, map[string]interfa
 	}
 
 	//parse the inject data
-	if a.payload.Inject.Data != "" {
-		err = yaml.Unmarshal([]byte(a.payload.Inject.Data), &benthosYamlInject)
+	if a.payload.Inject != "" {
+		err = yaml.Unmarshal([]byte(a.payload.Inject), &benthosYamlInject)
 		if err != nil {
 			errMsg := Label("edit", a.name) + fmt.Sprintf("failed to parse inject data: %s", err.Error())
 			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errMsg, a.outboundChannel, models.EditDataFlowComponent)
