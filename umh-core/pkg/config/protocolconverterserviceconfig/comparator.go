@@ -43,8 +43,8 @@ func (c *Comparator) ConfigsEqual(desired, observed ProtocolConverterServiceConf
 	// compare dfc's
 	comparatorDFC := dataflowcomponentserviceconfig.NewComparator()
 
-	return comparatorConnection.ConfigsEqual(&connectionD, &connectionO) &&
-		comparatorDFC.ConfigsEqual(&dfcD, &dfcO)
+	return comparatorConnection.ConfigsEqual(connectionD, connectionO) &&
+		comparatorDFC.ConfigsEqual(dfcD, dfcO)
 }
 
 // ConfigDiff returns a human-readable string describing differences between configs
@@ -57,11 +57,11 @@ func (c *Comparator) ConfigDiff(desired, observed ProtocolConverterServiceConfig
 
 	// diff for connection
 	comparatorConnection := connectionserviceconfig.NewComparator()
-	connectionDiff := comparatorConnection.ConfigDiff(&connectionD, &connectionO)
+	connectionDiff := comparatorConnection.ConfigDiff(connectionD, connectionO)
 
 	// diff for dfc's
 	comparatorDFC := dataflowcomponentserviceconfig.NewComparator()
-	dfcDiff := comparatorDFC.ConfigDiff(&dfcD, &dfcO)
+	dfcDiff := comparatorDFC.ConfigDiff(dfcD, dfcO)
 
 	return connectionDiff + dfcDiff
 }

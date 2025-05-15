@@ -37,6 +37,7 @@ import (
 
 	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	connectionfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/connection"
 	dataflowfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
 	redpandafsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/redpanda"
@@ -160,8 +161,8 @@ func (p *ProtocolConverterInstance) CheckForCreation(ctx context.Context, filesy
 
 // getServiceStatus gets the status of the ProtocolConverter service
 // its main purpose is to handle the edge cases where the service is not yet created or not yet running
-func (p *ProtocolConverterInstance) getServiceStatus(ctx context.Context, services serviceregistry.Provider, tick uint64) (protocolconverter.ServiceInfo, error) {
-	info, err := p.service.Status(ctx, services, p.baseFSMInstance.GetID(), tick)
+func (p *ProtocolConverterInstance) getServiceStatus(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot, tick uint64) (protocolconverter.ServiceInfo, error) {
+	info, err := p.service.Status(ctx, services, snapshot, p.baseFSMInstance.GetID(), tick)
 	if err != nil {
 		// If there's an error getting the service status, we need to distinguish between cases
 
@@ -193,13 +194,13 @@ func (p *ProtocolConverterInstance) getServiceStatus(ctx context.Context, servic
 }
 
 // UpdateObservedStateOfInstance updates the observed state of the service
-func (p *ProtocolConverterInstance) UpdateObservedStateOfInstance(ctx context.Context, services serviceregistry.Provider, tick uint64, loopStartTime time.Time) error {
+func (p *ProtocolConverterInstance) UpdateObservedStateOfInstance(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot, tick uint64, loopStartTime time.Time) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
 
 	start := time.Now()
-	info, err := p.getServiceStatus(ctx, services, tick)
+	info, err := p.getServiceStatus(ctx, services, snapshot, tick)
 	if err != nil {
 		return fmt.Errorf("error while getting service status: %w", err)
 	}
@@ -354,9 +355,6 @@ func (p *ProtocolConverterInstance) IsDataflowComponentWithProcessingActivity() 
 //	ok     – true when the ProtocolConverter is stopped, false otherwise.
 //	reason – empty when ok is true; otherwise a service‑provided explanation
 func (p *ProtocolConverterInstance) IsProtocolConverterStopped() (bool, string) {
-	protocolConverterStopped, reason := p.service.IsProtocolConverterStopped(p.baseFSMInstance.GetID())
-	if protocolConverterStopped {
-		return true, reason
-	}
+	// TODO
 	return false, ""
 }
