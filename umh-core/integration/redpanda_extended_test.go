@@ -180,9 +180,9 @@ func checkRPK(topic string, lastLoopOffset int, lastLoopTimestamp time.Time, los
 	currentNow := time.Now().UTC()
 	timeDifference := lastTime.Sub(currentNow)
 	if lastTime.Before(currentNow.Add(-1 * time.Minute)) {
-		return 0, errors.New(fmt.Sprintf("❌ Timestamp is too old: %s (%dms)", lastTime, lastTime.Sub(currentNow).Milliseconds()))
+		return 0, fmt.Errorf("❌ Timestamp is too old: %s (%dms)", lastTime, lastTime.Sub(currentNow).Milliseconds())
 	} else if lastTime.After(currentNow.Add(1 * time.Minute)) {
-		return 0, errors.New(fmt.Sprintf("❌ Timestamp is too new: %s (%dms)", lastTime, lastTime.Sub(currentNow).Milliseconds()))
+		return 0, fmt.Errorf("❌ Timestamp is too new: %s (%dms)", lastTime, lastTime.Sub(currentNow).Milliseconds())
 	}
 
 	GinkgoWriter.Printf("✅ Timestamp is within reason: %s (time difference: %s)\n", lastTime, timeDifference)
@@ -202,7 +202,7 @@ func checkRPK(topic string, lastLoopOffset int, lastLoopTimestamp time.Time, los
 		return 0, errors.New("❌ Msg per sec is not positive")
 	}
 	if msgPerSec < float64(messagesPerSecond)*lossToleranceFail {
-		return 0, errors.New(fmt.Sprintf("❌ Msg per sec is too low: %f (expected %d, tolerated %f [%.2f%%])\n", msgPerSec, messagesPerSecond, float64(messagesPerSecond)*lossToleranceFail, float64(messagesPerSecond)*lossToleranceFail/float64(messagesPerSecond)*100))
+		return 0, fmt.Errorf("❌ Msg per sec is too low: %f (expected %d, tolerated %f [%.2f%%])\n", msgPerSec, messagesPerSecond, float64(messagesPerSecond)*lossToleranceFail, float64(messagesPerSecond)*lossToleranceFail/float64(messagesPerSecond)*100)
 	} else {
 		// Let's warn (but not fail) if we are below the loss tolerance (use a nice warning signal)
 		if msgPerSec < float64(messagesPerSecond)*(1-lossToleranceWarning) {
