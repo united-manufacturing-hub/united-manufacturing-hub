@@ -355,6 +355,9 @@ func (p *ProtocolConverterInstance) IsDataflowComponentWithProcessingActivity() 
 //	ok     – true when the ProtocolConverter is stopped, false otherwise.
 //	reason – empty when ok is true; otherwise a service‑provided explanation
 func (p *ProtocolConverterInstance) IsProtocolConverterStopped() (bool, string) {
-	// TODO
-	return false, ""
+	if p.ObservedState.ServiceInfo.ConnectionFSMState == connectionfsm.OperationalStateStopped &&
+		p.ObservedState.ServiceInfo.DataflowComponentFSMState == dataflowfsm.OperationalStateStopped {
+		return true, ""
+	}
+	return false, fmt.Sprintf("connection is %s, DFC is %s", p.ObservedState.ServiceInfo.ConnectionFSMState, p.ObservedState.ServiceInfo.DataflowComponentFSMState)
 }
