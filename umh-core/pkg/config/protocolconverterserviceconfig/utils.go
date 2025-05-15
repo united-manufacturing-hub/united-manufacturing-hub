@@ -24,19 +24,26 @@ func (c *ProtocolConverterServiceConfig) GetConnectionServiceConfig() connection
 	return c.ConnectionServiceConfig
 }
 
-// GetDFCServiceConfig converts the component config to a full ConnectionServiceConfig
-func (c *ProtocolConverterServiceConfig) GetDFCServiceConfig() dataflowcomponentserviceconfig.DataflowComponentServiceConfig {
-	return c.DataflowComponentServiceConfig
+// GetDFCReadServiceConfig converts the component config to a full ConnectionServiceConfig
+func (c *ProtocolConverterServiceConfig) GetDFCReadServiceConfig() dataflowcomponentserviceconfig.DataflowComponentServiceConfig {
+	return c.DataflowComponentReadServiceConfig
+}
+
+// GetDFCWriteServiceConfig converts the component config to a full ConnectionServiceConfig
+func (c *ProtocolConverterServiceConfig) GetDFCWriteServiceConfig() dataflowcomponentserviceconfig.DataflowComponentServiceConfig {
+	return c.DataflowComponentWriteServiceConfig
 }
 
 // FromConnectionAndDFCServiceConfig creates a ProtocolConverterServiceConfig
 // from a ConnectionServiceConfig and DataFlowComponentConfig
 func FromConnectionAndDFCServiceConfig(
 	connection connectionserviceconfig.ConnectionServiceConfig,
-	dfc dataflowcomponentserviceconfig.DataflowComponentServiceConfig,
+	dfcRead dataflowcomponentserviceconfig.DataflowComponentServiceConfig,
+	dfcWrite dataflowcomponentserviceconfig.DataflowComponentServiceConfig,
 ) ProtocolConverterServiceConfig {
 	return ProtocolConverterServiceConfig{
-		ConnectionServiceConfig:        connection,
-		DataflowComponentServiceConfig: dfc,
+		ConnectionServiceConfig:             connection,
+		DataflowComponentReadServiceConfig:  dfcRead,
+		DataflowComponentWriteServiceConfig: dfcWrite,
 	}
 }

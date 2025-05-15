@@ -144,14 +144,14 @@ func (m *MockProtocolConverterService) SetComponentState(protConvName string, fl
 	// Ensure ServiceInfo exists for this component
 	if _, exists := m.ConverterStates[protConvName]; !exists {
 		m.ConverterStates[protConvName] = &ServiceInfo{
-			DataflowComponentFSMState:      flags.dfcFSMState,
-			DataflowComponentObservedState: *dfcObservedState,
-			ConnectionFSMState:             flags.connectionFSMState,
-			ConnectionObservedState:        *connObservedState,
+			DataflowComponentReadFSMState:      flags.dfcFSMState,
+			DataflowComponentReadObservedState: *dfcObservedState,
+			ConnectionFSMState:                 flags.connectionFSMState,
+			ConnectionObservedState:            *connObservedState,
 		}
 	} else {
-		m.ConverterStates[protConvName].DataflowComponentObservedState = *dfcObservedState
-		m.ConverterStates[protConvName].DataflowComponentFSMState = flags.dfcFSMState
+		m.ConverterStates[protConvName].DataflowComponentReadObservedState = *dfcObservedState
+		m.ConverterStates[protConvName].DataflowComponentReadFSMState = flags.dfcFSMState
 		m.ConverterStates[protConvName].ConnectionObservedState = *connObservedState
 		m.ConverterStates[protConvName].ConnectionFSMState = flags.connectionFSMState
 	}
@@ -383,8 +383,8 @@ func (m *MockProtocolConverterService) RemoveFromManager(
 	return m.RemoveFromManagerError
 }
 
-// Start mocks starting a ProtocolConverter
-func (m *MockProtocolConverterService) Start(ctx context.Context, filesystemService filesystem.Service, protConvName string) error {
+// StartProtocolConverter mocks starting a ProtocolConverter
+func (m *MockProtocolConverterService) StartProtocolConverter(ctx context.Context, filesystemService filesystem.Service, protConvName string) error {
 	m.StartCalled = true
 
 	underlyingName := fmt.Sprintf("protocolconverter-%s", protConvName)
@@ -418,8 +418,8 @@ func (m *MockProtocolConverterService) Start(ctx context.Context, filesystemServ
 	return m.StartError
 }
 
-// Stop mocks stopping a ProtocolConverter
-func (m *MockProtocolConverterService) Stop(
+// StopProtocolConverter mocks stopping a ProtocolConverter
+func (m *MockProtocolConverterService) StopProtocolConverter(
 	ctx context.Context,
 	filesystemService filesystem.Service,
 	protConvName string,
@@ -457,8 +457,8 @@ func (m *MockProtocolConverterService) Stop(
 	return m.StopError
 }
 
-// ForceRemove mocks force removing a ProtocolConverter
-func (m *MockProtocolConverterService) ForceRemove(ctx context.Context, filesystemService filesystem.Service, protConvName string) error {
+// ForceRemoveProtocolConverter mocks force removing a ProtocolConverter
+func (m *MockProtocolConverterService) ForceRemoveProtocolConverter(ctx context.Context, filesystemService filesystem.Service, protConvName string) error {
 	m.ForceRemoveCalled = true
 	return m.ForceRemoveError
 }

@@ -34,8 +34,11 @@ func (c *Comparator) ConfigsEqual(desired, observed ProtocolConverterServiceConf
 	connectionD := desired.GetConnectionServiceConfig()
 	connectionO := observed.GetConnectionServiceConfig()
 
-	dfcD := desired.GetDFCServiceConfig()
-	dfcO := observed.GetDFCServiceConfig()
+	dfcReadD := desired.GetDFCReadServiceConfig()
+	dfcReadO := observed.GetDFCReadServiceConfig()
+
+	dfcWriteD := desired.GetDFCWriteServiceConfig()
+	dfcWriteO := observed.GetDFCWriteServiceConfig()
 
 	// compare connections
 	comparatorConnection := connectionserviceconfig.NewComparator()
@@ -44,7 +47,8 @@ func (c *Comparator) ConfigsEqual(desired, observed ProtocolConverterServiceConf
 	comparatorDFC := dataflowcomponentserviceconfig.NewComparator()
 
 	return comparatorConnection.ConfigsEqual(connectionD, connectionO) &&
-		comparatorDFC.ConfigsEqual(dfcD, dfcO)
+		comparatorDFC.ConfigsEqual(dfcReadD, dfcReadO) &&
+		comparatorDFC.ConfigsEqual(dfcWriteD, dfcWriteO)
 }
 
 // ConfigDiff returns a human-readable string describing differences between configs
@@ -52,8 +56,11 @@ func (c *Comparator) ConfigDiff(desired, observed ProtocolConverterServiceConfig
 	connectionD := desired.GetConnectionServiceConfig()
 	connectionO := observed.GetConnectionServiceConfig()
 
-	dfcD := desired.GetDFCServiceConfig()
-	dfcO := observed.GetDFCServiceConfig()
+	dfcReadD := desired.GetDFCReadServiceConfig()
+	dfcReadO := observed.GetDFCReadServiceConfig()
+
+	dfcWriteD := desired.GetDFCWriteServiceConfig()
+	dfcWriteO := observed.GetDFCWriteServiceConfig()
 
 	// diff for connection
 	comparatorConnection := connectionserviceconfig.NewComparator()
@@ -61,7 +68,8 @@ func (c *Comparator) ConfigDiff(desired, observed ProtocolConverterServiceConfig
 
 	// diff for dfc's
 	comparatorDFC := dataflowcomponentserviceconfig.NewComparator()
-	dfcDiff := comparatorDFC.ConfigDiff(dfcD, dfcO)
+	dfcReadDiff := comparatorDFC.ConfigDiff(dfcReadD, dfcReadO)
+	dfcWriteDiff := comparatorDFC.ConfigDiff(dfcWriteD, dfcWriteO)
 
-	return connectionDiff + dfcDiff
+	return connectionDiff + dfcReadDiff + dfcWriteDiff
 }

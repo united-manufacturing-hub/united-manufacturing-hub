@@ -61,13 +61,14 @@ var _ = Describe("ProtocolConverter YAML Generator", func() {
 							},
 						},
 					},
+					dataflowcomponentserviceconfig.DataflowComponentServiceConfig{}, //TODO: Add write DFC
 				},
 				// NOTE: We expect port 0 here, since ot comes out of ToBenthosServiceConfig()
 				expected: []string{
 					"connection:",
 					"  target: 127.0.0.1",
 					"  port: 443",
-					"dataflowcomponent:",
+					"dataflowcomponent_read:",
 					"  benthos:",
 					"    output:",
 					"      stdout: {}",
@@ -75,6 +76,8 @@ var _ = Describe("ProtocolConverter YAML Generator", func() {
 					"      address: 0.0.0.0:0",
 					"    logger:",
 					"      level: INFO",
+					"dataflowcomponent_write:",
+					// TODO: Add write DFC
 				},
 				notExpected: []string{
 					"stdin",
@@ -98,16 +101,19 @@ var _ = Describe("ProtocolConverter YAML Generator", func() {
 							},
 						},
 					},
+					dataflowcomponentserviceconfig.DataflowComponentServiceConfig{}, //TODO: Add write DFC
 				},
 				expected: []string{
 					"connection:",
 					"  target: 127.0.0.1",
 					"  port: 443",
-					"dataflowcomponent:",
+					"dataflowcomponent_read:",
 					"  benthos:",
 					"    output:",
 					"      stdout:",
 					"        codec: lines",
+					"dataflowcomponent_write:",
+					// TODO: Add write DFC
 				},
 				notExpected: []string{
 					"stdin",
@@ -130,15 +136,18 @@ var _ = Describe("ProtocolConverter YAML Generator", func() {
 							},
 						},
 					},
+					dataflowcomponentserviceconfig.DataflowComponentServiceConfig{}, //TODO: Add write DFC
 				},
 				expected: []string{
 					"connection:",
 					"  target: 127.0.0.1",
 					"  port: 443",
-					"dataflowcomponent:",
+					"dataflowcomponent_read:",
 					"  benthos:",
 					"    output:",
 					"      stdout: {}",
+					"dataflowcomponent_write:",
+					// TODO: Add write DFC
 				},
 				notExpected: []string{
 					"input: {}", // Empty input should not render as an empty object
@@ -181,12 +190,13 @@ var _ = Describe("ProtocolConverter YAML Generator", func() {
 							},
 						},
 					},
+					dataflowcomponentserviceconfig.DataflowComponentServiceConfig{}, //TODO: Add write DFC
 				},
 				expected: []string{
 					"connection:",
 					"  target: 127.0.0.1",
 					"  port: 443",
-					"dataflowcomponent:",
+					"dataflowcomponent_read:",
 					"  benthos:",
 					"    input:",
 					"      kafka:",
@@ -204,6 +214,8 @@ var _ = Describe("ProtocolConverter YAML Generator", func() {
 					"      aws_s3:",
 					"        bucket: example-bucket",
 					"        path: ${!count:files}-${!timestamp_unix_nano}.txt",
+					"dataflowcomponent_write:",
+					// TODO: Add write DFC
 				},
 				notExpected: []string{
 					"stdin",
@@ -222,7 +234,7 @@ var _ = Describe("ProtocolConverter YAML Generator", func() {
 				},
 			}
 
-			dfcConfig := dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+			dfcReadConfig := dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 				BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 					Input: map[string]any{
 						"kafka": map[string]any{
@@ -239,8 +251,10 @@ var _ = Describe("ProtocolConverter YAML Generator", func() {
 				},
 			}
 
+			dfcWriteConfig := dataflowcomponentserviceconfig.DataflowComponentServiceConfig{}
+
 			// Use package-level function
-			yamlStr1, err := RenderProtocolConverterYAML(connectionConfig, dfcConfig)
+			yamlStr1, err := RenderProtocolConverterYAML(connectionConfig, dfcReadConfig, dfcWriteConfig)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Use Generator directly
@@ -251,7 +265,7 @@ var _ = Describe("ProtocolConverter YAML Generator", func() {
 						Port:   443,
 					},
 				},
-				DataflowComponentServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+				DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 					BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 						Input: map[string]any{
 							"kafka": map[string]any{
@@ -267,6 +281,7 @@ var _ = Describe("ProtocolConverter YAML Generator", func() {
 						},
 					},
 				},
+				DataflowComponentWriteServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{},
 			}
 			generator := NewGenerator()
 			yamlStr2, err := generator.RenderConfig(cfg)

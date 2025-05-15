@@ -72,13 +72,13 @@ type IProtocolConverterService interface {
 	RemoveFromManager(ctx context.Context, filesystemService filesystem.Service, protConvName string) error
 
 	// Start starts a ProtocolConverter
-	Start(ctx context.Context, filesystemService filesystem.Service, protConvName string) error
+	StartProtocolConverter(ctx context.Context, filesystemService filesystem.Service, protConvName string) error
 
 	// Stop stops a ProtocolConverter
-	Stop(ctx context.Context, filesystemService filesystem.Service, protConvName string) error
+	StopProtocolConverter(ctx context.Context, filesystemService filesystem.Service, protConvName string) error
 
 	// ForceRemove removes a ProtocolConverter from the Connetion & DFC manager
-	ForceRemove(ctx context.Context, filesystemService filesystem.Service, protConvName string) error
+	ForceRemoveProtocolConverter(ctx context.Context, filesystemService filesystem.Service, protConvName string) error
 
 	// ServiceExists checks if a connection and a dataflowcomponent with the given name exist.
 	// If only one of the services exists, it returns false.
@@ -99,9 +99,13 @@ type ServiceInfo struct {
 	// ConnectionFSMState is the *current* FSM state string (e.g. "up", "stopped").
 	ConnectionFSMState string
 
-	// DataflowComponentObservedState mirrors the DFC manager.
-	DataflowComponentObservedState dfcfsm.DataflowComponentObservedState
-	DataflowComponentFSMState      string
+	// DataflowComponentReadObservedState mirrors the DFC manager.
+	DataflowComponentReadObservedState dfcfsm.DataflowComponentObservedState
+	DataflowComponentReadFSMState      string
+
+	// DataflowComponentWriteObservedState mirrors the DFC manager.
+	DataflowComponentWriteObservedState dfcfsm.DataflowComponentObservedState
+	DataflowComponentWriteFSMState      string
 
 	// RedpandaObservedState is included so a protocol-converter can degrade
 	// itself when the message bus is down.
@@ -112,7 +116,7 @@ type ServiceInfo struct {
 	LastChange uint64
 
 	// StatusReason is a short human string (log excerpt, metrics finding, …)
-	// explaining *why* the converter is not “green”.
+	// explaining *why* the converter is not "green".
 	StatusReason string
 }
 
@@ -127,6 +131,7 @@ type ProtocolConverterService struct {
 	connectionConfig  []config.ConnectionConfig
 
 	// DataflowComponent
+	// It has the config for a reading DFC and a writing DFC
 	dataflowComponentManager *dfcfsm.DataflowComponentManager
 	dataflowComponentService dfc.IDataFlowComponentService
 	dataflowComponentConfig  []config.DataFlowComponentConfig
@@ -139,6 +144,8 @@ type ProtocolConverterService struct {
 // This follows the functional options pattern for flexible configuration.
 type ProtocolConverterServiceOption func(*ProtocolConverterService)
 
+// WithUnderlyingServices sets the underlying services for the protocol converter service
+// Used for testing purposes
 func WithUnderlyingServices(
 	connService connection.IConnectionService,
 	dfcService dfc.IDataFlowComponentService,
@@ -149,6 +156,8 @@ func WithUnderlyingServices(
 	}
 }
 
+// WithUnderlyingManagers sets the underlying managers for the protocol converter service
+// Used for testing purposes
 func WithUnderlyingManagers(
 	connMgr *connectionfsm.ConnectionManager,
 	dfcMgr *dfcfsm.DataflowComponentManager,
@@ -185,26 +194,98 @@ func NewDefaultProtocolConverterService(protConvName string, opts ...ProtocolCon
 	return service
 }
 
-// getUnderlyingName converts a protConvName to its underlying service name
+// getUnderlyingName returns the *base* external name that all child services of
+// a Protocol-Converter share. It simply prepends the fixed
+// `"protocolconverter-"` prefix to the logical name the user supplied in the
+// UMH YAML.
+//
+// Example:
+//
+//	protConvName = "mixing-station"
+//	→ "protocolconverter-mixing-station"
 func (p *ProtocolConverterService) getUnderlyingName(protConvName string) string {
 	return fmt.Sprintf("protocolconverter-%s", protConvName)
 }
 
-// getConnectionName converts a protConvName to the name of the connection service
+// getUnderlyingConnectionName returns the external name handed to the **Connection
+// manager**. For the Connection we do **not** add any read/write qualifier –
+// the underlying base name is already unique across all Connection instances.
+//
+// Example:
+//
+//	protConvName = "mixing-station"
+//	→ "protocolconverter-mixing-station"
+func (p *ProtocolConverterService) getUnderlyingConnectionName(protConvName string) string {
+	return p.getUnderlyingName(protConvName)
+}
+
+// getUnderlyingDFCReadName returns the external name handed to the
+// **Data-flow-Component manager** for the *reading* DFC.
+// The `"read-"` role prefix is added so the manager can distinguish the two
+// sibling DFCs that belong to the same converter.
+//
+// Example:
+//
+//	protConvName = "mixing-station"
+//	→ "read-protocolconverter-mixing-station"
+func (p *ProtocolConverterService) getUnderlyingDFCReadName(protConvName string) string {
+	return fmt.Sprintf("read-%s", p.getUnderlyingName(protConvName))
+}
+
+// getUnderlyingDFCWriteName returns the external name handed to the
+// **Data-flow-Component manager** for the *writing* DFC.
+// The `"write-"` role prefix is added so the manager can distinguish the two
+// sibling DFCs that belong to the same converter.
+//
+// Example:
+//
+//	protConvName = "mixing-station"
+//	→ "write-protocolconverter-mixing-station"
+func (p *ProtocolConverterService) getUnderlyingDFCWriteName(protConvName string) string {
+	return fmt.Sprintf("write-%s", p.getUnderlyingName(protConvName))
+}
+
+// getConnectionName returns the **internal** name under which the Connection
+// instance is stored inside the Connection manager.
+// The manager prepends its own `"connection-"` prefix to the external name.
+//
+// Example:
+//
+//	protConvName = "mixing-station"
+//	→ "connection-protocolconverter-mixing-station"
 func (p *ProtocolConverterService) getConnectionName(protConvName string) string {
 	return fmt.Sprintf("connection-%s", p.getUnderlyingName(protConvName))
 }
 
-// getDFCName converts a protConvName to the name of the dataflowcomponent service
-func (p *ProtocolConverterService) getDFCName(protConvName string) string {
-	return fmt.Sprintf("dataflow-%s", p.getUnderlyingName(protConvName))
+// getDFCReadName returns the **internal** name under which the *reading*
+// Data-flow-Component instance is stored inside the DFC manager.
+// The manager prepends its `"dataflow-"` prefix to the external read name.
+//
+// Example:
+//
+//	protConvName = "mixing-station"
+//	→ "dataflow-read-protocolconverter-mixing-station"
+func (p *ProtocolConverterService) getDFCReadName(protConvName string) string {
+	return fmt.Sprintf("dataflow-%s", p.getUnderlyingDFCReadName(protConvName))
+}
+
+// getDFCWriteName returns the **internal** name under which the *writing*
+// Data-flow-Component instance is stored inside the DFC manager.
+// The manager prepends its `"dataflow-"` prefix to the external write name.
+//
+// Example:
+//
+//	protConvName = "mixing-station"
+//	→ "dataflow-write-protocolconverter-mixing-station"
+func (p *ProtocolConverterService) getDFCWriteName(protConvName string) string {
+	return fmt.Sprintf("dataflow-%s", p.getUnderlyingDFCWriteName(protConvName))
 }
 
 func (p *ProtocolConverterService) generateProtocolConverterYaml(config *protocolconverterserviceconfig.ProtocolConverterServiceConfig) (string, error) {
 	if config == nil {
 		return "", fmt.Errorf("config is nil")
 	}
-	return protocolconverterserviceconfig.RenderProtocolConverterYAML(config.ConnectionServiceConfig, config.DataflowComponentServiceConfig)
+	return protocolconverterserviceconfig.RenderProtocolConverterYAML(config.ConnectionServiceConfig, config.DataflowComponentReadServiceConfig, config.DataflowComponentWriteServiceConfig)
 }
 
 // GenerateConfig generates a dfc & connection config for a given protocolconverter
@@ -214,10 +295,12 @@ func (p *ProtocolConverterService) GenerateConfig(
 ) (
 	connectionserviceconfig.ConnectionServiceConfig,
 	dataflowcomponentserviceconfig.DataflowComponentServiceConfig,
+	dataflowcomponentserviceconfig.DataflowComponentServiceConfig,
 	error,
 ) {
 	if protConvConfig == nil {
 		return connectionserviceconfig.ConnectionServiceConfig{},
+			dataflowcomponentserviceconfig.DataflowComponentServiceConfig{},
 			dataflowcomponentserviceconfig.DataflowComponentServiceConfig{},
 			fmt.Errorf("protocolConverter config is nil")
 	}
@@ -226,16 +309,20 @@ func (p *ProtocolConverterService) GenerateConfig(
 	if err != nil {
 		return connectionserviceconfig.ConnectionServiceConfig{},
 			dataflowcomponentserviceconfig.DataflowComponentServiceConfig{},
+			dataflowcomponentserviceconfig.DataflowComponentServiceConfig{},
 			fmt.Errorf("failed to generate ProtocolConverterServiceConfig: %w", err)
 	}
 
-	protConvConfig.DataflowComponentServiceConfig = dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+	protConvConfig.DataflowComponentReadServiceConfig = dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 		BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 			Output: map[string]any{"uns": generatedConfig},
 		},
 	}
 
-	return protConvConfig.GetConnectionServiceConfig(), protConvConfig.GetDFCServiceConfig(), nil
+	// TODO: Add write DFC
+	protConvConfig.DataflowComponentWriteServiceConfig = dataflowcomponentserviceconfig.DataflowComponentServiceConfig{}
+
+	return protConvConfig.GetConnectionServiceConfig(), protConvConfig.GetDFCReadServiceConfig(), protConvConfig.GetDFCWriteServiceConfig(), nil
 }
 
 // GetConfig returns the actual ProtocolConverter config from the protocolConverter service
@@ -248,21 +335,28 @@ func (p *ProtocolConverterService) GetConfig(
 		return protocolconverterserviceconfig.ProtocolConverterServiceConfig{}, ctx.Err()
 	}
 
-	serviceName := p.getUnderlyingName(protConvName)
+	underlyingConnectionName := p.getUnderlyingConnectionName(protConvName)
+	underlyingDFCReadName := p.getUnderlyingDFCReadName(protConvName)
+	underlyingDFCWriteName := p.getUnderlyingDFCWriteName(protConvName)
 
 	// Get the Connection config
-	connConfig, err := p.connectionService.GetConfig(ctx, filesystemService, serviceName)
+	connConfig, err := p.connectionService.GetConfig(ctx, filesystemService, underlyingConnectionName)
 	if err != nil {
 		return protocolconverterserviceconfig.ProtocolConverterServiceConfig{}, fmt.Errorf("failed to get connection config: %w", err)
 	}
 
-	dfcConfig, err := p.dataflowComponentService.GetConfig(ctx, filesystemService, serviceName)
+	dfcReadConfig, err := p.dataflowComponentService.GetConfig(ctx, filesystemService, underlyingDFCReadName)
 	if err != nil {
-		return protocolconverterserviceconfig.ProtocolConverterServiceConfig{}, fmt.Errorf("failed to get connection config: %w", err)
+		return protocolconverterserviceconfig.ProtocolConverterServiceConfig{}, fmt.Errorf("failed to get read dataflowcomponent config: %w", err)
+	}
+
+	dfcWriteConfig, err := p.dataflowComponentService.GetConfig(ctx, filesystemService, underlyingDFCWriteName)
+	if err != nil {
+		return protocolconverterserviceconfig.ProtocolConverterServiceConfig{}, fmt.Errorf("failed to get write dataflowcomponent config: %w", err)
 	}
 
 	// Convert Connection & DFC config to ProtocolConverter config
-	return protocolconverterserviceconfig.FromConnectionAndDFCServiceConfig(connConfig, dfcConfig), nil
+	return protocolconverterserviceconfig.FromConnectionAndDFCServiceConfig(connConfig, dfcReadConfig, dfcWriteConfig), nil
 }
 
 // Status returns information about the connection health for the specified connection.
@@ -288,7 +382,8 @@ func (p *ProtocolConverterService) Status(
 	}
 
 	connectionName := p.getConnectionName(protConvName)
-	dfcName := p.getDFCName(protConvName)
+	dfcReadName := p.getDFCReadName(protConvName)
+	dfcWriteName := p.getDFCWriteName(protConvName)
 
 	// --- redpanda (only one instance) -------------------------------------------------------------
 	rpInst, ok := fsm.FindInstance(snapshot, fsm.RedpandaManagerName, fsm.RedpandaInstanceName)
@@ -333,31 +428,57 @@ func (p *ProtocolConverterService) Status(
 		return ServiceInfo{}, fmt.Errorf("failed to get connection FSM state: %w", err)
 	}
 
-	// -- DFC --------------------------------------------------------------------------------
+	// -- DFC Read --------------------------------------------------------------------------------
 
-	dfcStatus, err := p.dataflowComponentManager.GetLastObservedState(dfcName)
-	if err != nil {
-		return ServiceInfo{}, fmt.Errorf("failed to get dataflowcomponent observed state: %w", err)
+	dfcReadStatus, err := p.dataflowComponentManager.GetLastObservedState(dfcReadName)
+	dfcReadExists := err == nil
+	var dfcReadObservedState dfcfsm.DataflowComponentObservedState
+	var dfcReadFSMState string
+	if dfcReadExists {
+		dfcReadObservedState, ok = dfcReadStatus.(dfcfsm.DataflowComponentObservedState)
+		if !ok {
+			return ServiceInfo{}, fmt.Errorf("read dataflowcomponent status for dataflowcomponent %s is not a DataflowComponentObservedState", protConvName)
+		}
+
+		dfcReadFSMState, err = p.dataflowComponentManager.GetCurrentFSMState(dfcReadName)
+		if err != nil {
+			return ServiceInfo{}, fmt.Errorf("failed to get read dataflowcomponent FSM state: %w", err)
+		}
 	}
 
-	dfcObservedState, ok := dfcStatus.(dfcfsm.DataflowComponentObservedState)
-	if !ok {
-		return ServiceInfo{}, fmt.Errorf("dataflowcomponent status for dataflowcomponent %s is not a DataflowComponentObservedState", protConvName)
+	// -- DFC Write --------------------------------------------------------------------------------
+
+	dfcWriteStatus, err := p.dataflowComponentManager.GetLastObservedState(dfcWriteName)
+	dfcWriteExists := err == nil
+	var dfcWriteObservedState dfcfsm.DataflowComponentObservedState
+	var dfcWriteFSMState string
+	if dfcWriteExists {
+		dfcWriteObservedState, ok = dfcWriteStatus.(dfcfsm.DataflowComponentObservedState)
+		if !ok {
+			return ServiceInfo{}, fmt.Errorf("write dataflowcomponent status for dataflowcomponent %s is not a DataflowComponentObservedState", protConvName)
+		}
+
+		dfcWriteFSMState, err = p.dataflowComponentManager.GetCurrentFSMState(dfcWriteName)
+		if err != nil {
+			return ServiceInfo{}, fmt.Errorf("failed to get write dataflowcomponent FSM state: %w", err)
+		}
 	}
 
-	dfcFSMState, err := p.dataflowComponentManager.GetCurrentFSMState(dfcName)
-	if err != nil {
-		return ServiceInfo{}, fmt.Errorf("failed to get dataflowcomponent FSM state: %w", err)
+	// Error if both DFCs are missing
+	if !dfcReadExists && !dfcWriteExists {
+		return ServiceInfo{}, fmt.Errorf("neither read nor write dataflowcomponent exists for protocolconverter %s", protConvName)
 	}
 
 	return ServiceInfo{
-		ConnectionObservedState:        connectionObservedState,
-		ConnectionFSMState:             connectionFSMState,
-		DataflowComponentObservedState: dfcObservedState,
-		DataflowComponentFSMState:      dfcFSMState,
-		RedpandaObservedState:          redpandaObservedState,
-		RedpandaFSMState:               redpandaFSMState,
-		LastChange:                     tick,
+		ConnectionObservedState:             connectionObservedState,
+		ConnectionFSMState:                  connectionFSMState,
+		DataflowComponentReadObservedState:  dfcReadObservedState,
+		DataflowComponentReadFSMState:       dfcReadFSMState,
+		DataflowComponentWriteObservedState: dfcWriteObservedState,
+		DataflowComponentWriteFSMState:      dfcWriteFSMState,
+		RedpandaObservedState:               redpandaObservedState,
+		RedpandaFSMState:                    redpandaFSMState,
+		LastChange:                          tick,
 	}, nil
 }
 
@@ -382,17 +503,19 @@ func (p *ProtocolConverterService) AddToManager(
 		return ctx.Err()
 	}
 
-	underlyingName := p.getUnderlyingName(protConvName)
+	underlyingConnectionName := p.getUnderlyingConnectionName(protConvName)
+	underlyingDFCReadName := p.getUnderlyingDFCReadName(protConvName)
+	underlyingDFCWriteName := p.getUnderlyingDFCWriteName(protConvName)
 
 	// Check if the connection already exists in our configs
 	for _, existingConfig := range p.connectionConfig {
-		if existingConfig.Name == underlyingName {
+		if existingConfig.Name == underlyingConnectionName {
 			return ErrServiceAlreadyExists
 		}
 	}
 
 	// Generate Connection & DFC Serviceconfigs from ProtocolConverter config
-	connServiceConfig, dfcServiceConfig, err := p.GenerateConfig(cfg, protConvName)
+	connServiceConfig, dfcReadServiceConfig, dfcWriteServiceConfig, err := p.GenerateConfig(cfg, protConvName)
 	if err != nil {
 		return fmt.Errorf("failed to generate serviceconfigs: %v", err)
 	}
@@ -400,23 +523,31 @@ func (p *ProtocolConverterService) AddToManager(
 	// Create a config.ConnectionConfig that wraps the NmapServiceConfig
 	connectionConfig := config.ConnectionConfig{
 		FSMInstanceConfig: config.FSMInstanceConfig{
-			Name:            underlyingName,
+			Name:            underlyingConnectionName,
 			DesiredFSMState: connectionfsm.OperationalStateUp,
 		},
 		ConnectionServiceConfig: connServiceConfig,
 	}
 
-	dfcConfig := config.DataFlowComponentConfig{
+	dfcReadConfig := config.DataFlowComponentConfig{
 		FSMInstanceConfig: config.FSMInstanceConfig{
-			Name:            underlyingName,
+			Name:            underlyingDFCReadName,
 			DesiredFSMState: dfcfsm.OperationalStateActive,
 		},
-		DataFlowComponentServiceConfig: dfcServiceConfig,
+		DataFlowComponentServiceConfig: dfcReadServiceConfig,
+	}
+
+	dfcWriteConfig := config.DataFlowComponentConfig{
+		FSMInstanceConfig: config.FSMInstanceConfig{
+			Name:            underlyingDFCWriteName,
+			DesiredFSMState: dfcfsm.OperationalStateActive,
+		},
+		DataFlowComponentServiceConfig: dfcWriteServiceConfig,
 	}
 
 	// Add the configurations to the lists
 	p.connectionConfig = append(p.connectionConfig, connectionConfig)
-	p.dataflowComponentConfig = append(p.dataflowComponentConfig, dfcConfig)
+	p.dataflowComponentConfig = append(p.dataflowComponentConfig, dfcReadConfig, dfcWriteConfig)
 
 	return nil
 }
@@ -441,13 +572,11 @@ func (p *ProtocolConverterService) UpdateInManager(
 		return ctx.Err()
 	}
 
-	underlyingName := p.getUnderlyingName(protConvName)
-
 	// Check if the connectionconfig exists
 	foundConn := false
 	indexConn := -1
 	for i, config := range p.connectionConfig {
-		if config.Name == underlyingName {
+		if config.Name == p.getUnderlyingConnectionName(protConvName) {
 			foundConn = true
 			indexConn = i
 			break
@@ -459,22 +588,32 @@ func (p *ProtocolConverterService) UpdateInManager(
 	}
 
 	// Check if the dfcconfig exists
-	foundDFC := false
-	indexDFC := -1
+	foundReadDFC := false
+	indexReadDFC := -1
 	for i, config := range p.dataflowComponentConfig {
-		if config.Name == underlyingName {
-			foundDFC = true
-			indexDFC = i
+		if config.Name == p.getUnderlyingDFCReadName(protConvName) {
+			foundReadDFC = true
+			indexReadDFC = i
 			break
 		}
 	}
 
-	if !foundDFC {
+	foundWriteDFC := false
+	indexWriteDFC := -1
+	for i, config := range p.dataflowComponentConfig {
+		if config.Name == p.getUnderlyingDFCWriteName(protConvName) {
+			foundWriteDFC = true
+			indexWriteDFC = i
+		}
+	}
+
+	// either read or write dfc must exist
+	if !foundReadDFC && !foundWriteDFC {
 		return ErrServiceNotExist
 	}
 
 	// Convert our connection config to Connection service config
-	connConfig, dfcConfig, err := p.GenerateConfig(cfg, protConvName)
+	connConfig, dfcReadConfig, dfcWriteConfig, err := p.GenerateConfig(cfg, protConvName)
 	if err != nil {
 		return fmt.Errorf("failed to generate configs: %w", err)
 	}
@@ -483,20 +622,33 @@ func (p *ProtocolConverterService) UpdateInManager(
 	connCurrentDesiredState := p.connectionConfig[indexConn].DesiredFSMState
 	p.connectionConfig[indexConn] = config.ConnectionConfig{
 		FSMInstanceConfig: config.FSMInstanceConfig{
-			Name:            underlyingName,
+			Name:            p.getUnderlyingConnectionName(protConvName),
 			DesiredFSMState: connCurrentDesiredState,
 		},
 		ConnectionServiceConfig: connConfig,
 	}
 
 	// Create a config.DataflowComponentConfig that wraps the DataflowComponentServiceConfig
-	dfcCurrentDesiredState := p.dataflowComponentConfig[indexDFC].DesiredFSMState
-	p.dataflowComponentConfig[indexDFC] = config.DataFlowComponentConfig{
-		FSMInstanceConfig: config.FSMInstanceConfig{
-			Name:            underlyingName,
-			DesiredFSMState: dfcCurrentDesiredState,
-		},
-		DataFlowComponentServiceConfig: dfcConfig,
+	if foundReadDFC {
+		dfcCurrentDesiredState := p.dataflowComponentConfig[indexReadDFC].DesiredFSMState
+		p.dataflowComponentConfig[indexReadDFC] = config.DataFlowComponentConfig{
+			FSMInstanceConfig: config.FSMInstanceConfig{
+				Name:            p.getUnderlyingDFCReadName(protConvName),
+				DesiredFSMState: dfcCurrentDesiredState,
+			},
+			DataFlowComponentServiceConfig: dfcReadConfig,
+		}
+	}
+
+	if foundWriteDFC {
+		dfcCurrentDesiredState := p.dataflowComponentConfig[indexWriteDFC].DesiredFSMState
+		p.dataflowComponentConfig[indexWriteDFC] = config.DataFlowComponentConfig{
+			FSMInstanceConfig: config.FSMInstanceConfig{
+				Name:            p.getUnderlyingDFCWriteName(protConvName),
+				DesiredFSMState: dfcCurrentDesiredState,
+			},
+			DataFlowComponentServiceConfig: dfcWriteConfig,
+		}
 	}
 
 	return nil
@@ -522,7 +674,9 @@ func (p *ProtocolConverterService) RemoveFromManager(
 		return ctx.Err()
 	}
 
-	underlyingName := p.getUnderlyingName(protConvName)
+	connectionName := p.getUnderlyingConnectionName(protConvName)
+	dfcReadName := p.getUnderlyingDFCReadName(protConvName)
+	dfcWriteName := p.getUnderlyingDFCWriteName(protConvName)
 
 	connSliceRemoveByName := func(in []config.ConnectionConfig, name string) []config.ConnectionConfig {
 		for i, v := range in {
@@ -545,18 +699,24 @@ func (p *ProtocolConverterService) RemoveFromManager(
 	//--------------------------------------------
 	// 1) trim desired-state slices (idempotent)
 	//--------------------------------------------
-	p.connectionConfig = connSliceRemoveByName(p.connectionConfig, underlyingName)
-	p.dataflowComponentConfig = dfcSliceRemoveByName(p.dataflowComponentConfig, underlyingName)
+	p.connectionConfig = connSliceRemoveByName(p.connectionConfig, connectionName)
+	p.dataflowComponentConfig = dfcSliceRemoveByName(p.dataflowComponentConfig, dfcReadName)
+	p.dataflowComponentConfig = dfcSliceRemoveByName(p.dataflowComponentConfig, dfcWriteName)
 
 	//--------------------------------------------
 	// 2) is the child FSM still alive?
 	//--------------------------------------------
-	if inst, ok := p.connectionManager.GetInstance(underlyingName); ok {
+	if inst, ok := p.connectionManager.GetInstance(connectionName); ok {
 		return fmt.Errorf("%w: Connection instance state=%s",
 			standarderrors.ErrRemovalPending, inst.GetCurrentFSMState())
 	}
 
-	if inst, ok := p.dataflowComponentManager.GetInstance(underlyingName); ok {
+	if inst, ok := p.dataflowComponentManager.GetInstance(dfcReadName); ok {
+		return fmt.Errorf("%w: DataflowComponent instance state=%s",
+			standarderrors.ErrRemovalPending, inst.GetCurrentFSMState())
+	}
+
+	if inst, ok := p.dataflowComponentManager.GetInstance(dfcWriteName); ok {
 		return fmt.Errorf("%w: DataflowComponent instance state=%s",
 			standarderrors.ErrRemovalPending, inst.GetCurrentFSMState())
 	}
@@ -566,7 +726,7 @@ func (p *ProtocolConverterService) RemoveFromManager(
 
 // Start starts a ProtocolConverter
 // Expects protConvName (e.g. "protocolconverter-myservice") as defined in the UMH config
-func (p *ProtocolConverterService) Start(
+func (p *ProtocolConverterService) StartProtocolConverter(
 	ctx context.Context,
 	filesystemService filesystem.Service,
 	protConvName string,
@@ -583,12 +743,14 @@ func (p *ProtocolConverterService) Start(
 		return ctx.Err()
 	}
 
-	underlyingName := p.getUnderlyingName(protConvName)
+	connectionName := p.getUnderlyingConnectionName(protConvName)
+	dfcReadName := p.getUnderlyingDFCReadName(protConvName)
+	dfcWriteName := p.getUnderlyingDFCWriteName(protConvName)
 
 	// Find and update our cached config
 	connFound := false
 	for i, config := range p.connectionConfig {
-		if config.Name == underlyingName {
+		if config.Name == connectionName {
 			p.connectionConfig[i].DesiredFSMState = connectionfsm.OperationalStateUp
 			connFound = true
 			break
@@ -600,16 +762,25 @@ func (p *ProtocolConverterService) Start(
 	}
 
 	// Find and update our cached config
-	dfcFound := false
+	dfcReadFound := false
+	dfcWriteFound := false
 	for i, config := range p.dataflowComponentConfig {
-		if config.Name == underlyingName {
+		if config.Name == dfcReadName {
 			p.dataflowComponentConfig[i].DesiredFSMState = dfcfsm.OperationalStateActive
-			dfcFound = true
+			dfcReadFound = true
 			break
 		}
 	}
 
-	if !dfcFound {
+	for i, config := range p.dataflowComponentConfig {
+		if config.Name == dfcWriteName {
+			p.dataflowComponentConfig[i].DesiredFSMState = dfcfsm.OperationalStateActive
+			dfcWriteFound = true
+			break
+		}
+	}
+
+	if !dfcReadFound || !dfcWriteFound {
 		return ErrServiceNotExist
 	}
 
@@ -618,7 +789,7 @@ func (p *ProtocolConverterService) Start(
 
 // Stop stops a ProtocolConverter
 // Expects protConvName (e.g. "protocolconverter-myservice") as defined in the UMH config
-func (p *ProtocolConverterService) Stop(
+func (p *ProtocolConverterService) StopProtocolConverter(
 	ctx context.Context,
 	filesystemService filesystem.Service,
 	protConvName string,
@@ -635,12 +806,14 @@ func (p *ProtocolConverterService) Stop(
 		return ctx.Err()
 	}
 
-	underlyingName := p.getUnderlyingName(protConvName)
+	connectionName := p.getUnderlyingConnectionName(protConvName)
+	dfcReadName := p.getUnderlyingDFCReadName(protConvName)
+	dfcWriteName := p.getUnderlyingDFCWriteName(protConvName)
 
 	// Find and update our cached config
 	connFound := false
 	for i, config := range p.connectionConfig {
-		if config.Name == underlyingName {
+		if config.Name == connectionName {
 			p.connectionConfig[i].DesiredFSMState = connectionfsm.OperationalStateStopped
 			connFound = true
 			break
@@ -652,16 +825,24 @@ func (p *ProtocolConverterService) Stop(
 	}
 
 	// Find and update our cached config
-	dfcFound := false
+	dfcReadFound := false
+	dfcWriteFound := false
 	for i, config := range p.dataflowComponentConfig {
-		if config.Name == underlyingName {
+		if config.Name == dfcReadName {
 			p.dataflowComponentConfig[i].DesiredFSMState = dfcfsm.OperationalStateStopped
-			dfcFound = true
+			dfcReadFound = true
 			break
 		}
 	}
 
-	if !dfcFound {
+	for i, config := range p.dataflowComponentConfig {
+		if config.Name == dfcWriteName {
+			p.dataflowComponentConfig[i].DesiredFSMState = dfcfsm.OperationalStateStopped
+			dfcWriteFound = true
+		}
+	}
+
+	if !dfcReadFound || !dfcWriteFound {
 		return ErrServiceNotExist
 	}
 
@@ -735,19 +916,23 @@ func (p *ProtocolConverterService) ServiceExists(
 	if ctx.Err() != nil {
 		return false
 	}
-	underlyingName := p.getUnderlyingName(protConvName)
+
+	connectionName := p.getUnderlyingConnectionName(protConvName)
+	dfcReadName := p.getUnderlyingDFCReadName(protConvName)
+	dfcWriteName := p.getUnderlyingDFCWriteName(protConvName)
 
 	// Check if the actual service exists
-	connExists := p.connectionService.ServiceExists(ctx, filesystemService, underlyingName)
-	dfcExists := p.dataflowComponentService.ServiceExists(ctx, filesystemService, underlyingName)
+	connExists := p.connectionService.ServiceExists(ctx, filesystemService, connectionName)
+	dfcReadExists := p.dataflowComponentService.ServiceExists(ctx, filesystemService, dfcReadName)
+	dfcWriteExists := p.dataflowComponentService.ServiceExists(ctx, filesystemService, dfcWriteName)
 
 	// if one of the services doesn't exist we should return that
-	return connExists && dfcExists
+	return connExists && (dfcReadExists || dfcWriteExists)
 }
 
 // ForceRemove removes a ProtocolConverter from the Connection & DFC manager
 // Expects protConvName (e.g. "protocolconverter-myservice") as defined in the UMH config
-func (c *ProtocolConverterService) ForceRemove(
+func (c *ProtocolConverterService) ForceRemoveProtocolConverter(
 	ctx context.Context,
 	filesystemService filesystem.Service,
 	protConvName string,
@@ -756,16 +941,23 @@ func (c *ProtocolConverterService) ForceRemove(
 		return ctx.Err()
 	}
 
-	underlyingName := c.getUnderlyingName(protConvName)
+	connectionName := c.getUnderlyingConnectionName(protConvName)
+	dfcReadName := c.getUnderlyingDFCReadName(protConvName)
+	dfcWriteName := c.getUnderlyingDFCWriteName(protConvName)
 
 	// force remove from Connection manager
-	err := c.connectionService.ForceRemoveConnection(ctx, filesystemService, underlyingName)
+	err := c.connectionService.ForceRemoveConnection(ctx, filesystemService, connectionName)
 	if err != nil {
 		return err
 	}
 
 	// force remove from dataflowcomponent manager
-	err = c.dataflowComponentService.ForceRemoveDataFlowComponent(ctx, filesystemService, underlyingName)
+	err = c.dataflowComponentService.ForceRemoveDataFlowComponent(ctx, filesystemService, dfcReadName)
+	if err != nil {
+		return err
+	}
+
+	err = c.dataflowComponentService.ForceRemoveDataFlowComponent(ctx, filesystemService, dfcWriteName)
 	if err != nil {
 		return err
 	}

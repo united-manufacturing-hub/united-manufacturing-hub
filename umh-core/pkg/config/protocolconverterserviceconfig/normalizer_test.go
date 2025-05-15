@@ -30,9 +30,9 @@ var _ = Describe("ProtocolConverter YAML Normalizer", func() {
 
 			config = normalizer.NormalizeConfig(config)
 
-			Expect(config.DataflowComponentServiceConfig.BenthosConfig).NotTo(BeNil())
-			Expect(config.DataflowComponentServiceConfig.BenthosConfig.Output).NotTo(BeNil())
-			Expect(config.DataflowComponentServiceConfig.BenthosConfig.Pipeline).NotTo(BeNil())
+			Expect(config.DataflowComponentReadServiceConfig.BenthosConfig).NotTo(BeNil())
+			Expect(config.DataflowComponentReadServiceConfig.BenthosConfig.Output).NotTo(BeNil())
+			Expect(config.DataflowComponentReadServiceConfig.BenthosConfig.Pipeline).NotTo(BeNil())
 		})
 
 		It("should preserve existing values", func() {
@@ -43,7 +43,7 @@ var _ = Describe("ProtocolConverter YAML Normalizer", func() {
 						Port:   443,
 					},
 				},
-				DataflowComponentServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+				DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 					BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 						Input: map[string]any{
 							"mqtt": map[string]any{
@@ -72,15 +72,15 @@ var _ = Describe("ProtocolConverter YAML Normalizer", func() {
 			config = normalizer.NormalizeConfig(config)
 
 			// Check input preserved
-			inputMqtt := config.DataflowComponentServiceConfig.BenthosConfig.Input["mqtt"].(map[string]any)
+			inputMqtt := config.DataflowComponentReadServiceConfig.BenthosConfig.Input["mqtt"].(map[string]any)
 			Expect(inputMqtt["topic"]).To(Equal("test/topic"))
 
 			// Check output preserved
-			outputKafka := config.DataflowComponentServiceConfig.BenthosConfig.Output["kafka"].(map[string]any)
+			outputKafka := config.DataflowComponentReadServiceConfig.BenthosConfig.Output["kafka"].(map[string]any)
 			Expect(outputKafka["topic"]).To(Equal("test-output"))
 
 			// Check pipeline processors preserved
-			processors := config.DataflowComponentServiceConfig.BenthosConfig.Pipeline["processors"].([]any)
+			processors := config.DataflowComponentReadServiceConfig.BenthosConfig.Pipeline["processors"].([]any)
 			Expect(processors).To(HaveLen(1))
 			processor := processors[0].(map[string]any)
 			processorText := processor["text"].(map[string]any)
@@ -89,7 +89,7 @@ var _ = Describe("ProtocolConverter YAML Normalizer", func() {
 
 		It("should normalize maps by ensuring they're not nil", func() {
 			config := ProtocolConverterServiceConfig{
-				DataflowComponentServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+				DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 					BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 						// Input is nil
 						// Output is nil
@@ -104,16 +104,16 @@ var _ = Describe("ProtocolConverter YAML Normalizer", func() {
 			normalizer := NewNormalizer()
 			config = normalizer.NormalizeConfig(config)
 
-			Expect(config.DataflowComponentServiceConfig.BenthosConfig.Input).NotTo(BeNil())
-			Expect(config.DataflowComponentServiceConfig.BenthosConfig.Output).NotTo(BeNil())
-			Expect(config.DataflowComponentServiceConfig.BenthosConfig.Pipeline).NotTo(BeNil())
+			Expect(config.DataflowComponentReadServiceConfig.BenthosConfig.Input).NotTo(BeNil())
+			Expect(config.DataflowComponentReadServiceConfig.BenthosConfig.Output).NotTo(BeNil())
+			Expect(config.DataflowComponentReadServiceConfig.BenthosConfig.Pipeline).NotTo(BeNil())
 
 			// Buffer should have the none buffer set
-			Expect(config.DataflowComponentServiceConfig.BenthosConfig.Buffer).To(HaveKey("none"))
+			Expect(config.DataflowComponentReadServiceConfig.BenthosConfig.Buffer).To(HaveKey("none"))
 
 			// These should be empty
-			Expect(config.DataflowComponentServiceConfig.BenthosConfig.CacheResources).To(BeEmpty())
-			Expect(config.DataflowComponentServiceConfig.BenthosConfig.RateLimitResources).To(BeEmpty())
+			Expect(config.DataflowComponentReadServiceConfig.BenthosConfig.CacheResources).To(BeEmpty())
+			Expect(config.DataflowComponentReadServiceConfig.BenthosConfig.RateLimitResources).To(BeEmpty())
 		})
 	})
 

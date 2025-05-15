@@ -27,8 +27,9 @@ var (
 
 // ProtocolConverterServiceConfig represents the configuration for a ProtocolConverter
 type ProtocolConverterServiceConfig struct {
-	ConnectionServiceConfig        connectionserviceconfig.ConnectionServiceConfig               `yaml:"connection"`
-	DataflowComponentServiceConfig dataflowcomponentserviceconfig.DataflowComponentServiceConfig `yaml:"dataflowcomponent"`
+	ConnectionServiceConfig             connectionserviceconfig.ConnectionServiceConfig               `yaml:"connection"`
+	DataflowComponentReadServiceConfig  dataflowcomponentserviceconfig.DataflowComponentServiceConfig `yaml:"dataflowcomponent_read"`
+	DataflowComponentWriteServiceConfig dataflowcomponentserviceconfig.DataflowComponentServiceConfig `yaml:"dataflowcomponent_write"`
 }
 
 // Equal checks if two ProtocolConverterServiceConfigs are equal
@@ -39,12 +40,14 @@ func (c ProtocolConverterServiceConfig) Equal(other ProtocolConverterServiceConf
 // RenderProtocolConverterYAML is a package-level function for easy YAML generation
 func RenderProtocolConverterYAML(
 	connection connectionserviceconfig.ConnectionServiceConfig,
-	dfc dataflowcomponentserviceconfig.DataflowComponentServiceConfig,
+	dfcRead dataflowcomponentserviceconfig.DataflowComponentServiceConfig,
+	dfcWrite dataflowcomponentserviceconfig.DataflowComponentServiceConfig,
 ) (string, error) {
 	// Create a config object from the individual components
 	cfg := ProtocolConverterServiceConfig{
-		ConnectionServiceConfig:        connection,
-		DataflowComponentServiceConfig: dfc,
+		ConnectionServiceConfig:             connection,
+		DataflowComponentReadServiceConfig:  dfcRead,
+		DataflowComponentWriteServiceConfig: dfcWrite,
 	}
 
 	// Use the generator to render the YAML

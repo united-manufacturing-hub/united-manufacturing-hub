@@ -87,7 +87,7 @@ var _ = Describe("DataFlowComponentService", func() {
 						Port:   102,
 					},
 				},
-				DataflowComponentServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+				DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 					BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 						Input: map[string]interface{}{
 							"kafka_consumer": map[string]interface{}{
@@ -127,12 +127,16 @@ var _ = Describe("DataFlowComponentService", func() {
 
 			// Verify that a configs were added to the service
 			Expect(service.connectionConfig).To(HaveLen(1))
-			Expect(service.dataflowComponentConfig).To(HaveLen(1))
+			Expect(service.dataflowComponentConfig).To(HaveLen(2))
 
 			// Verify the name follows the expected pattern
-			underlyingName := service.getUnderlyingName(protConvName)
-			Expect(service.connectionConfig[0].Name).To(Equal(underlyingName))
-			Expect(service.dataflowComponentConfig[0].Name).To(Equal(underlyingName))
+			underlyingConnectionName := service.getUnderlyingConnectionName(protConvName)
+			underlyingDFCReadName := service.getUnderlyingDFCReadName(protConvName)
+			underlyingDFCWriteName := service.getUnderlyingDFCWriteName(protConvName)
+
+			Expect(service.connectionConfig[0].Name).To(Equal(underlyingConnectionName))
+			Expect(service.dataflowComponentConfig[0].Name).To(Equal(underlyingDFCReadName))
+			Expect(service.dataflowComponentConfig[1].Name).To(Equal(underlyingDFCWriteName))
 
 			// Verify the desired state is set correctly
 			Expect(service.connectionConfig[0].DesiredFSMState).To(Equal(connfsm.OperationalStateUp))
@@ -162,7 +166,7 @@ var _ = Describe("DataFlowComponentService", func() {
 			_, _ = service.ReconcileManager(ctx, mockSvcRegistry, tick)
 
 			Expect(service.connectionConfig).To(HaveLen(1))
-			Expect(service.dataflowComponentConfig).To(HaveLen(1))
+			Expect(service.dataflowComponentConfig).To(HaveLen(2))
 		})
 	})
 
@@ -185,7 +189,7 @@ var _ = Describe("DataFlowComponentService", func() {
 						Port:   102,
 					},
 				},
-				DataflowComponentServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+				DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 					BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 						Input: map[string]interface{}{
 							"kafka_consumer": map[string]interface{}{
@@ -218,7 +222,7 @@ var _ = Describe("DataFlowComponentService", func() {
 			if mockDfcService.ExistingComponents == nil {
 				mockDfcService.ExistingComponents = make(map[string]bool)
 			}
-			mockDfcService.ExistingComponents[statusService.getDFCName(protConvName)] = true
+			mockDfcService.ExistingComponents[statusService.getDFCReadName(protConvName)] = true
 
 			mockConnService.ServiceExistsResult = true
 			if mockConnService.ExistingConnections == nil {
@@ -238,7 +242,7 @@ var _ = Describe("DataFlowComponentService", func() {
 
 			// Configure services for proper transitions
 			// First configure for creating -> created -> stopped
-			ConfigureManagersForState(mockConnService, mockDfcService, statusService.getUnderlyingName(protConvName), connfsm.OperationalStateStopped, dfcfsm.OperationalStateStopped)
+			ConfigureManagersForState(mockConnService, mockDfcService, statusService, protConvName, connfsm.OperationalStateStopped, dfcfsm.OperationalStateStopped)
 
 			// Wait for the instance to be created and reach stopped state
 			newTick, err := WaitForDfcManagerInstanceState(
@@ -246,7 +250,7 @@ var _ = Describe("DataFlowComponentService", func() {
 				fsm.SystemSnapshot{CurrentConfig: fullCfg, Tick: tick},
 				dfcManager,
 				mockSvcRegistry,
-				statusService.getDFCName(protConvName),
+				statusService.getDFCReadName(protConvName), // Just wait for the read component
 				dfcfsm.OperationalStateStopped,
 				10,
 			)
@@ -268,7 +272,7 @@ var _ = Describe("DataFlowComponentService", func() {
 			tick = newTick
 
 			// Now configure for transition to starting -> running
-			ConfigureManagersForState(mockConnService, mockDfcService, statusService.getUnderlyingName(protConvName), connfsm.OperationalStateUp, dfcfsm.OperationalStateActive)
+			ConfigureManagersForState(mockConnService, mockDfcService, statusService, protConvName, connfsm.OperationalStateUp, dfcfsm.OperationalStateActive)
 
 			// Wait for the instance to reach running state
 			newTick, err = WaitForDfcManagerInstanceState(
@@ -276,7 +280,7 @@ var _ = Describe("DataFlowComponentService", func() {
 				fsm.SystemSnapshot{CurrentConfig: fullCfg, Tick: tick},
 				dfcManager,
 				mockSvcRegistry,
-				statusService.getDFCName(protConvName),
+				statusService.getDFCReadName(protConvName), // Just wait for the read component
 				dfcfsm.OperationalStateActive,
 				15,
 			)
@@ -307,7 +311,7 @@ var _ = Describe("DataFlowComponentService", func() {
 
 			// Assert
 			Expect(err).NotTo(HaveOccurred())
-			Expect(status.DataflowComponentFSMState).To(Equal(dfcfsm.OperationalStateActive))
+			Expect(status.DataflowComponentReadFSMState).To(Equal(dfcfsm.OperationalStateActive))
 			Expect(status.ConnectionFSMState).To(Equal(connfsm.OperationalStateUp))
 			Expect(status.RedpandaFSMState).To(Equal(redpandafsm.OperationalStateActive))
 		})
@@ -343,7 +347,7 @@ var _ = Describe("DataFlowComponentService", func() {
 					},
 				},
 
-				DataflowComponentServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+				DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 					BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 						Input: map[string]interface{}{
 							"kafka_consumer": map[string]interface{}{
@@ -365,7 +369,7 @@ var _ = Describe("DataFlowComponentService", func() {
 					},
 				},
 
-				DataflowComponentServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+				DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 					BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 						Input: map[string]interface{}{
 							"kafka_consumer": map[string]interface{}{
@@ -390,19 +394,31 @@ var _ = Describe("DataFlowComponentService", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify the config was updated but the desired state was preserved
-			underlyingName := service.getUnderlyingName(protConvName)
-			var dfcFound, connFound bool
+			underlyingConnectionName := service.getUnderlyingConnectionName(protConvName)
+			underlyingDFCReadName := service.getUnderlyingDFCReadName(protConvName)
+			underlyingDFCWriteName := service.getUnderlyingDFCWriteName(protConvName)
+
+			var dfcReadFound, dfcWriteFound, connFound bool
 			for _, config := range service.dataflowComponentConfig {
-				if config.Name == underlyingName {
-					dfcFound = true
+				if config.Name == underlyingDFCReadName {
+					dfcReadFound = true
 					Expect(config.DesiredFSMState).To(Equal(dfcfsm.OperationalStateActive))
 					break
 				}
 			}
-			Expect(dfcFound).To(BeTrue())
+			Expect(dfcReadFound).To(BeTrue())
+
+			for _, config := range service.dataflowComponentConfig {
+				if config.Name == underlyingDFCWriteName {
+					dfcWriteFound = true
+					Expect(config.DesiredFSMState).To(Equal(dfcfsm.OperationalStateActive))
+					break
+				}
+			}
+			Expect(dfcWriteFound).To(BeTrue())
 
 			for _, config := range service.connectionConfig {
-				if config.Name == underlyingName {
+				if config.Name == underlyingConnectionName {
 					connFound = true
 					Expect(config.DesiredFSMState).To(Equal(connfsm.OperationalStateUp))
 					break
@@ -434,7 +450,7 @@ var _ = Describe("DataFlowComponentService", func() {
 						Port:   102,
 					},
 				},
-				DataflowComponentServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+				DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 					BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 						Input: map[string]interface{}{
 							"http_server": map[string]interface{}{
@@ -452,14 +468,15 @@ var _ = Describe("DataFlowComponentService", func() {
 
 		It("should start a protocolConverter by changing its desired state", func() {
 			// First stop the component
-			err := service.Stop(ctx, mockSvcRegistry.GetFileSystem(), protConvName)
+			err := service.StopProtocolConverter(ctx, mockSvcRegistry.GetFileSystem(), protConvName)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify the desired state was changed to stopped
-			underlyingName := service.getUnderlyingName(protConvName)
+			underlyingDFCReadName := service.getUnderlyingDFCReadName(protConvName)
+			underlyingConnectionName := service.getUnderlyingConnectionName(protConvName)
 			var foundDfcStopped, foundConnStopped bool
 			for _, config := range service.dataflowComponentConfig {
-				if config.Name == underlyingName {
+				if config.Name == underlyingDFCReadName {
 					foundDfcStopped = true
 					Expect(config.DesiredFSMState).To(Equal(dfcfsm.OperationalStateStopped))
 					break
@@ -468,7 +485,7 @@ var _ = Describe("DataFlowComponentService", func() {
 			Expect(foundDfcStopped).To(BeTrue())
 
 			for _, config := range service.connectionConfig {
-				if config.Name == underlyingName {
+				if config.Name == underlyingConnectionName {
 					foundConnStopped = true
 					Expect(config.DesiredFSMState).To(Equal(connfsm.OperationalStateStopped))
 					break
@@ -477,13 +494,13 @@ var _ = Describe("DataFlowComponentService", func() {
 			Expect(foundConnStopped).To(BeTrue())
 
 			// Now start the component
-			err = service.Start(ctx, mockSvcRegistry.GetFileSystem(), protConvName)
+			err = service.StartProtocolConverter(ctx, mockSvcRegistry.GetFileSystem(), protConvName)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify the desired state was changed to active
 			var foundDfcStarted, foundConnStarted bool
 			for _, config := range service.dataflowComponentConfig {
-				if config.Name == underlyingName {
+				if config.Name == underlyingDFCReadName {
 					foundDfcStarted = true
 					Expect(config.DesiredFSMState).To(Equal(dfcfsm.OperationalStateActive))
 					break
@@ -492,7 +509,7 @@ var _ = Describe("DataFlowComponentService", func() {
 			Expect(foundDfcStarted).To(BeTrue())
 
 			for _, config := range service.connectionConfig {
-				if config.Name == underlyingName {
+				if config.Name == underlyingConnectionName {
 					foundConnStarted = true
 					Expect(config.DesiredFSMState).To(Equal(connfsm.OperationalStateUp))
 					break
@@ -503,11 +520,11 @@ var _ = Describe("DataFlowComponentService", func() {
 
 		It("should return error when trying to start/stop non-existent protocolConverter", func() {
 			// Try to start a non-existent protocolConverter
-			err := service.Start(ctx, mockSvcRegistry.GetFileSystem(), "non-existent")
+			err := service.StartProtocolConverter(ctx, mockSvcRegistry.GetFileSystem(), "non-existent")
 			Expect(err).To(MatchError(ErrServiceNotExist))
 
 			// Try to stop a non-existent protocolConverter
-			err = service.Stop(ctx, mockSvcRegistry.GetFileSystem(), "non-existent")
+			err = service.StopProtocolConverter(ctx, mockSvcRegistry.GetFileSystem(), "non-existent")
 			Expect(err).To(MatchError(ErrServiceNotExist))
 		})
 	})
@@ -526,7 +543,7 @@ var _ = Describe("DataFlowComponentService", func() {
 						Port:   102,
 					},
 				},
-				DataflowComponentServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+				DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 					BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 						Input: map[string]interface{}{
 							"http_server": map[string]interface{}{
@@ -552,7 +569,7 @@ var _ = Describe("DataFlowComponentService", func() {
 
 			// Assert
 			Expect(err).NotTo(HaveOccurred())
-			Expect(service.dataflowComponentConfig).To(HaveLen(initialDfcCount - 1))
+			Expect(service.dataflowComponentConfig).To(HaveLen(initialDfcCount - 2))
 			Expect(service.connectionConfig).To(HaveLen(initialConnCount - 1))
 
 			// Verify the component is no longer in the list
@@ -580,7 +597,7 @@ var _ = Describe("DataFlowComponentService", func() {
 						Port:   102,
 					},
 				},
-				DataflowComponentServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+				DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 					BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 						Input: map[string]interface{}{
 							"http_server": map[string]interface{}{
@@ -634,7 +651,7 @@ var _ = Describe("DataFlowComponentService", func() {
 						Port:   102,
 					},
 				},
-				DataflowComponentServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+				DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 					BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 						Input: map[string]interface{}{
 							"http_server": map[string]interface{}{
@@ -678,14 +695,19 @@ var _ = Describe("DataFlowComponentService", func() {
 func ConfigureManagersForState(
 	mockConnService *connservice.MockConnectionService,
 	mockDfcService *dfcservice.MockDataFlowComponentService,
-	serviceName string,
+	service *ProtocolConverterService,
+	protConvName string,
 	connTargetState string,
 	dfcTargetState string,
 ) {
+	connectionName := service.getUnderlyingConnectionName(protConvName)
+	dfcReadName := service.getUnderlyingDFCReadName(protConvName)
+	dfcWriteName := service.getUnderlyingDFCWriteName(protConvName)
 
 	// Configure the services for the target state
-	fsmtest.TransitionToDataflowComponentState(mockDfcService, serviceName, dfcTargetState)
-	fsmtest.TransitionToConnectionState(mockConnService, serviceName, connTargetState)
+	fsmtest.TransitionToDataflowComponentState(mockDfcService, dfcReadName, dfcTargetState)
+	fsmtest.TransitionToDataflowComponentState(mockDfcService, dfcWriteName, dfcTargetState)
+	fsmtest.TransitionToConnectionState(mockConnService, connectionName, connTargetState)
 
 }
 

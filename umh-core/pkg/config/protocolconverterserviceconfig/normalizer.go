@@ -35,7 +35,8 @@ func (n *Normalizer) NormalizeConfig(cfg ProtocolConverterServiceConfig) Protoco
 
 	// We need to first normalize the underlying DFCServiceConfig
 	dfcNormalizer := dataflowcomponentserviceconfig.NewNormalizer()
-	normalized.DataflowComponentServiceConfig = dfcNormalizer.NormalizeConfig(normalized.GetDFCServiceConfig())
+	normalized.DataflowComponentReadServiceConfig = dfcNormalizer.NormalizeConfig(normalized.GetDFCReadServiceConfig())
+	normalized.DataflowComponentWriteServiceConfig = dfcNormalizer.NormalizeConfig(normalized.GetDFCWriteServiceConfig())
 
 	// Then we  need to normalize the underlying ConnectionServiceConfig
 	connectionNormalizer := connectionserviceconfig.NewNormalizer()

@@ -56,13 +56,15 @@ func (g *Generator) configToMap(cfg ProtocolConverterServiceConfig) map[string]a
 	dfcGenerator := dataflowcomponentserviceconfig.NewGenerator()
 	connectionGenerator := connectionserviceconfig.NewGenerator()
 
-	dfcConfigMap := dfcGenerator.ConfigToMap(cfg.DataflowComponentServiceConfig)
+	dfcReadConfigMap := dfcGenerator.ConfigToMap(cfg.DataflowComponentReadServiceConfig)
+	dfcWriteConfigMap := dfcGenerator.ConfigToMap(cfg.DataflowComponentWriteServiceConfig)
 	connectionConfigMap := connectionGenerator.ConfigToMap(cfg.ConnectionServiceConfig)
 
 	configMap := make(map[string]any)
 
 	// indent the config by 1
-	configMap["dataflowcomponent"] = dfcConfigMap
+	configMap["dataflowcomponent_read"] = dfcReadConfigMap
+	configMap["dataflowcomponent_write"] = dfcWriteConfigMap
 	configMap["connection"] = connectionConfigMap
 
 	return configMap
@@ -73,20 +75,27 @@ func normalizeConfig(raw map[string]any) map[string]any {
 	normalized := make(map[string]any)
 
 	// extract and check the dfc config
-	dfcConfig, ok := raw["dataflowcomponent"].(map[string]any)
+	dfcReadConfig, ok := raw["dataflowcomponent_read"].(map[string]any)
 	if !ok {
-		dfcConfig = raw
+		dfcReadConfig = raw
+	}
+
+	dfcWriteConfig, ok := raw["dataflowcomponent_write"].(map[string]any)
+	if !ok {
+		dfcWriteConfig = raw
 	}
 
 	// extract and check the connection config
 	connectionConfig, ok := raw["connection"].(map[string]any)
 	if !ok {
-		dfcConfig = raw
+		connectionConfig = raw
 	}
 
-	normalizedDFCConfig := dataflowcomponentserviceconfig.NormalizeConfig(dfcConfig)
+	normalizedDFCReadConfig := dataflowcomponentserviceconfig.NormalizeConfig(dfcReadConfig)
+	normalizedDFCWriteConfig := dataflowcomponentserviceconfig.NormalizeConfig(dfcWriteConfig)
 	normalizedConnectionConfig := connectionserviceconfig.NormalizeConfig(connectionConfig)
-	normalized["dataflowcomponent"] = normalizedDFCConfig
+	normalized["dataflowcomponent_read"] = normalizedDFCReadConfig
+	normalized["dataflowcomponent_write"] = normalizedDFCWriteConfig
 	normalized["connection"] = normalizedConnectionConfig
 	return normalized
 }
