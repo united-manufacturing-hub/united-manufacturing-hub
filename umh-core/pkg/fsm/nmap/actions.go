@@ -21,6 +21,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
@@ -147,7 +148,7 @@ func (n *NmapInstance) CheckForCreation(ctx context.Context, filesystemService f
 }
 
 // UpdateObservedStateOfInstance updates the observed state of the service
-func (n *NmapInstance) UpdateObservedStateOfInstance(ctx context.Context, services serviceregistry.Provider, tick uint64, loopTime time.Time) error {
+func (n *NmapInstance) UpdateObservedStateOfInstance(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot, tick uint64, loopTime time.Time) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
