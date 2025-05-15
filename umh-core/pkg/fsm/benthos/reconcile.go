@@ -226,24 +226,27 @@ func (b *BenthosInstance) reconcileTransitionToActive(ctx context.Context, servi
 		metrics.ObserveReconcileTime(metrics.ComponentBenthosInstance, b.baseFSMInstance.GetID()+".reconcileTransitionToActive", time.Since(start))
 	}()
 
+	switch {
 	// If we're stopped, we need to start first
-	if currentState == OperationalStateStopped {
-		// Attempt to initiate start
-		if err := b.StartInstance(ctx, services.GetFileSystem()); err != nil {
+	case currentState == OperationalStateStopped:
+		err := b.StartInstance(ctx, services.GetFileSystem())
+		if err != nil {
 			return err, false
 		}
 		// Send event to transition from Stopped to Starting
 		return b.baseFSMInstance.SendEvent(ctx, EventStart), true
-	}
-
-	// Handle starting phase states
-	if IsStartingState(currentState) {
+	case IsStartingState(currentState):
 		return b.reconcileStartingStates(ctx, services, currentState, currentTime)
-	} else if IsRunningState(currentState) {
+	case IsRunningState(currentState):
 		return b.reconcileRunningStates(ctx, services, currentState, currentTime)
+	case currentState == OperationalStateStopping:
+		// There can be the edge case where an fsm is set to stopped, and then a cycle later again to active
+		// It will cause the stopping process to start, but then the deisred state is again active, so it will land up in reconcileTransitionToActive
+		// if it is stopping, we will first finish the stopping process and then we will go to active
+		return b.reconcileTransitionToStopped(ctx, services, currentState)
+	default:
+		return fmt.Errorf("invalid current state: %s", currentState), false
 	}
-
-	return nil, false
 }
 
 // reconcileStartingStates handles the various starting phase states when transitioning to Active.
