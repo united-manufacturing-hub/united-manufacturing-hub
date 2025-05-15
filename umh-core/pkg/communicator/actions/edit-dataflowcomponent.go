@@ -405,17 +405,34 @@ func (a *EditDataflowComponentAction) Execute() (interface{}, map[string]interfa
 		// Convert each processor configuration in the pipeline
 		processors := []interface{}{}
 
-		for processorName, processor := range a.payload.Pipeline {
-			var procConfig map[string]interface{}
-			err := yaml.Unmarshal([]byte(processor.Data), &procConfig)
-			if err != nil {
-				errMsg := Label("edit", a.name) + fmt.Sprintf("failed to parse pipeline processor %s: %s", processorName, err.Error())
-				SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errMsg, a.outboundChannel, models.EditDataFlowComponent)
-				return nil, nil, fmt.Errorf("%s", errMsg)
-			}
+		// Check if we have numeric keys (0, 1, 2, ...) and use them to preserve order
+		hasNumericKeys := CheckIfOrderedNumericKeys(a.payload.Pipeline)
 
-			// Add processor to the list
-			processors = append(processors, procConfig)
+		if hasNumericKeys {
+			// Process in numeric order
+			for i := range len(a.payload.Pipeline) {
+				processorName := fmt.Sprintf("%d", i)
+
+				processor := a.payload.Pipeline[processorName]
+				var procConfig map[string]interface{}
+				err := yaml.Unmarshal([]byte(processor.Data), &procConfig)
+				if err != nil {
+					errMsg := Label("edit", a.name) + fmt.Sprintf("failed to parse pipeline processor %s: %s", processorName, err.Error())
+					SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errMsg, a.outboundChannel, models.EditDataFlowComponent)
+					return nil, nil, fmt.Errorf("%s", errMsg)
+				}
+
+				// Add processor to the list
+				processors = append(processors, procConfig)
+			}
+		}
+
+		if !hasNumericKeys {
+			// the frontend always sends numerous keys so this should never happen
+			SendActionReply(a.instanceUUID, a.userEmail,
+				a.actionUUID, models.ActionFinishedWithFailure, "At least one processor with a non-numerous key was found.",
+				a.outboundChannel, models.EditDataFlowComponent)
+			return nil, nil, fmt.Errorf("at least one processor with a non-numerous key was found")
 		}
 
 		benthosPipeline["processors"] = processors
