@@ -242,14 +242,7 @@ func parseCustomDataFlowComponent(payload interface{}) (models.CDFCPayload, erro
 			Type: cdfcParsed.Outputs.Type,
 			Data: cdfcParsed.Outputs.Data,
 		},
-	}
-
-	// Add inject data if present
-	if cdfcParsed.Inject.Type != "" && cdfcParsed.Inject.Data != "" {
-		cdfcPayload.Inject = models.DfcDataConfig{
-			Type: cdfcParsed.Inject.Type,
-			Data: cdfcParsed.Inject.Data,
-		}
+		Inject: cdfcParsed.Inject.Data,
 	}
 
 	// Process the pipeline processors
@@ -333,8 +326,8 @@ func (a *DeployDataflowComponentAction) Validate() error {
 		}
 
 		// Validate inject data
-		if a.payload.Inject.Type != "" && a.payload.Inject.Data != "" {
-			if err := yaml.Unmarshal([]byte(a.payload.Inject.Data), &temp); err != nil {
+		if a.payload.Inject != "" {
+			if err := yaml.Unmarshal([]byte(a.payload.Inject), &temp); err != nil {
 				return fmt.Errorf("inject.data is not valid YAML: %v", err)
 			}
 		}
@@ -383,7 +376,7 @@ func (a *DeployDataflowComponentAction) Execute() (interface{}, map[string]inter
 	}
 
 	//parse the inject data
-	err = yaml.Unmarshal([]byte(a.payload.Inject.Data), &benthosYamlInject)
+	err = yaml.Unmarshal([]byte(a.payload.Inject), &benthosYamlInject)
 	if err != nil {
 		errMsg := Label("deploy", a.name) + fmt.Sprintf("failed to parse inject data: %s", err.Error())
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errMsg, a.outboundChannel, models.DeployDataFlowComponent)
