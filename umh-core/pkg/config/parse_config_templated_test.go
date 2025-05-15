@@ -30,7 +30,7 @@ var _ = Describe("ParseConfigTemplated", func() {
 			parsedConfig, err := parseConfig(cfg)
 			Expect(err).To(BeNil())
 
-			Expect(parsedConfig.DataFlow).To(HaveLen(2))
+			Expect(parsedConfig.DataFlow).To(HaveLen(3))
 			Expect(parsedConfig.DataFlow[0].Name).To(Equal("data-flow-hello-world"))
 
 			generatedConfigGeneratePart := parsedConfig.DataFlow[0].DataFlowComponentServiceConfig.BenthosConfig.Input["generate"]

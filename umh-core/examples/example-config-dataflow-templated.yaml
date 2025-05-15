@@ -28,6 +28,7 @@ agent:
 
 # Data Flow Components
 dataFlow:
+  # using the template (yaml anchors + go templating)
   - name: data-flow-hello-world
     desiredState: active
     dataFlowComponentConfig: *data-flow-hello-world-template
@@ -35,16 +36,20 @@ dataFlow:
       greeting: "hello world from Data Flow Component!"
   - name: data-flow-hello-world-2
     desiredState: active
+    dataFlowComponentConfig: *data-flow-hello-world-template
+    customVariables:
+      greeting: "hello world from Data Flow Component 2!"
+
+  # using just go templating (no yaml anchors)
+  - name: data-flow-hello-world-3
+    desiredState: active
     dataFlowComponentConfig:
       input:
         generate:
           mapping: root = "{{ .customVariables.greeting }}"
-          interval: 1s
-          count: 0
-      output:
-        stdout: {}
     customVariables:
-      greeting: "hello world from Data Flow Component 2!"
+      greeting: "hello world from Data Flow Component 3!"
+  
 
 internal:
   redpanda:
