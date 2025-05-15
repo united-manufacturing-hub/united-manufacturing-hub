@@ -60,6 +60,8 @@ var (
 type ConfigManager interface {
 	// GetConfig returns the current config
 	GetConfig(ctx context.Context, tick uint64) (FullConfig, error)
+	// GetFileSystemService returns the filesystem service
+	GetFileSystemService() filesystem.Service
 	// AtomicSetLocation sets the location in the config atomically
 	AtomicSetLocation(ctx context.Context, location models.EditInstanceLocationModel) error
 	// AtomicAddDataflowcomponent adds a dataflowcomponent to the config atomically
@@ -122,6 +124,11 @@ func NewFileConfigManager() *FileConfigManager {
 func (m *FileConfigManager) WithFileSystemService(fsService filesystem.Service) *FileConfigManager {
 	m.fsService = fsService
 	return m
+}
+
+// GetFileSystemService returns the filesystem service
+func (m *FileConfigManager) GetFileSystemService() filesystem.Service {
+	return m.fsService
 }
 
 // get config or create new with given config parameters (communicator, release channel, location)
@@ -376,6 +383,11 @@ func NewFileConfigManagerWithBackoff() (*FileConfigManagerWithBackoff, error) {
 // it is used in main.go to get the config with overwrites or create a new one on startup
 func (m *FileConfigManagerWithBackoff) GetConfigWithOverwritesOrCreateNew(ctx context.Context, config FullConfig) (FullConfig, error) {
 	return m.configManager.GetConfigWithOverwritesOrCreateNew(ctx, config)
+}
+
+// GetFileSystemService returns the filesystem service
+func (m *FileConfigManagerWithBackoff) GetFileSystemService() filesystem.Service {
+	return m.configManager.GetFileSystemService()
 }
 
 // writeConfig writes the config to the file

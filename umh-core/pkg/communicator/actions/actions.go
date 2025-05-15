@@ -129,6 +129,26 @@ func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePay
 			actionLogger:          log,
 			systemSnapshotManager: systemSnapshotManager,
 		}
+
+	case models.GetConfigFile:
+		action = &GetConfigFileAction{
+			userEmail:             sender,
+			actionUUID:            payload.ActionUUID,
+			instanceUUID:          instanceUUID,
+			outboundChannel:       outboundChannel,
+			systemSnapshotManager: systemSnapshotManager,
+			configManager:         configManager,
+		}
+	case models.SetConfigFile:
+		action = &SetConfigFileAction{
+			userEmail:             sender,
+			actionUUID:            payload.ActionUUID,
+			instanceUUID:          instanceUUID,
+			outboundChannel:       outboundChannel,
+			systemSnapshotManager: systemSnapshotManager,
+			configManager:         configManager,
+		}
+
 	case models.GetDataFlowComponentMetrics:
 		action = &GetDataflowcomponentMetricsAction{
 			userEmail:             sender,

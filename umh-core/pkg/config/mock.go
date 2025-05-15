@@ -23,6 +23,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
+	filesystem "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
 // MockConfigManager is a mock implementation of ConfigManager for testing
@@ -39,11 +40,14 @@ type MockConfigManager struct {
 	ConfigDelay                   time.Duration
 	mutexReadOrWrite              sync.Mutex
 	mutexReadAndWrite             sync.Mutex
+	MockFileSystem                *filesystem.MockFileSystem
 }
 
 // NewMockConfigManager creates a new MockConfigManager instance
 func NewMockConfigManager() *MockConfigManager {
-	return &MockConfigManager{}
+	return &MockConfigManager{
+		MockFileSystem: filesystem.NewMockFileSystem(),
+	}
 }
 
 // GetDataFlowConfig returns the DataFlow component configurations
@@ -67,6 +71,11 @@ func (m *MockConfigManager) GetConfig(ctx context.Context, tick uint64) (FullCon
 	}
 
 	return m.Config, m.ConfigError
+}
+
+// GetFileSystemService returns the mock filesystem service
+func (m *MockConfigManager) GetFileSystemService() filesystem.Service {
+	return m.MockFileSystem
 }
 
 // WriteConfig implements the ConfigManager interface
