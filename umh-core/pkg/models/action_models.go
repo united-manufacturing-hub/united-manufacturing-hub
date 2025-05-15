@@ -34,7 +34,7 @@ type CDFCPayload struct {
 	Inputs          DfcDataConfig            `json:"inputs"`
 	Outputs         DfcDataConfig            `json:"outputs"`
 	Pipeline        map[string]DfcDataConfig `json:"pipeline"`
-	Inject          DfcDataConfig            `json:"inject"`
+	Inject          string                   `json:"inject"`
 	IgnoreErrors    bool                     `json:"ignoreErrors"`
 	BenthosImageTag string                   `json:"benthosImageTag"`
 }
@@ -372,9 +372,8 @@ type CustomDFCPayload struct {
 			Data string `json:"data"`
 		} `json:"outputs"`
 		Inject struct {
-			Type string `json:"type"`
 			Data string `json:"data"`
-		} `json:"inject"`
+		} `json:"rawYAML"`
 		Pipeline struct {
 			Processors map[string]struct {
 				Type string `json:"type"`

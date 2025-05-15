@@ -286,8 +286,7 @@ var _ = Describe("EditDataflowComponent", func() {
 							"type": "yaml",
 							"data": "type: stdout",
 						},
-						"inject": map[string]interface{}{
-							"type": "yaml",
+						"rawYAML": map[string]interface{}{
 							"data": "cache_resources:\n- label: my_cache\n  memory: {}\nrate_limit_resources:\n- label: limiter\n  local: {}\nbuffer:\n  memory: {}\n",
 						},
 						"pipeline": map[string]interface{}{
@@ -305,7 +304,7 @@ var _ = Describe("EditDataflowComponent", func() {
 			// Call Parse method
 			err := action.Parse(payload)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(action.GetParsedPayload().Inject.Data).To(Equal("cache_resources:\n- label: my_cache\n  memory: {}\nrate_limit_resources:\n- label: limiter\n  local: {}\nbuffer:\n  memory: {}\n"))
+			Expect(action.GetParsedPayload().Inject).To(Equal("cache_resources:\n- label: my_cache\n  memory: {}\nrate_limit_resources:\n- label: limiter\n  local: {}\nbuffer:\n  memory: {}\n"))
 		})
 	})
 
@@ -409,7 +408,7 @@ var _ = Describe("EditDataflowComponent", func() {
 						},
 						"pipeline": map[string]interface{}{
 							"processors": map[string]interface{}{
-								"proc1": map[string]interface{}{
+								"0": map[string]interface{}{
 									"type": "yaml",
 									"data": "type: mapping\nprocs: []",
 								},
@@ -468,6 +467,94 @@ var _ = Describe("EditDataflowComponent", func() {
 			Expect(httpServerConfig["port"]).To(Equal(int(8001)))
 		})
 
+		It("should preserve processor order when using numeric keys", func() {
+			// Setup - parse valid payload with numerically ordered processors
+			payload := map[string]interface{}{
+				"name": "test-component-updated",
+				"uuid": componentUUID.String(),
+				"meta": map[string]interface{}{
+					"type": "custom",
+				},
+				"payload": map[string]interface{}{
+					"customDataFlowComponent": map[string]interface{}{
+						"inputs": map[string]interface{}{
+							"type": "yaml",
+							"data": "type: http_server\nhttp_server:\n  path: /updated\n  port: 8001",
+						},
+						"outputs": map[string]interface{}{
+							"type": "yaml",
+							"data": "type: stdout",
+						},
+						"pipeline": map[string]interface{}{
+							"processors": map[string]interface{}{
+								"0": map[string]interface{}{
+									"type": "yaml",
+									"data": "type: mapping\ndescription: \"First processor - position 0\"\nprocs: []",
+								},
+								"1": map[string]interface{}{
+									"type": "yaml",
+									"data": "type: mapping\ndescription: \"Second processor - position 1\"\nprocs: []",
+								},
+								"2": map[string]interface{}{
+									"type": "yaml",
+									"data": "type: mapping\ndescription: \"Third processor - position 2\"\nprocs: []",
+								},
+							},
+						},
+					},
+				},
+			}
+
+			err := action.Parse(payload)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Reset tracking for this test
+			mockConfig.ResetCalls()
+
+			// Start the state mocker
+			err = stateMocker.Start()
+			Expect(err).NotTo(HaveOccurred())
+
+			// Execute the action
+			result, metadata, err := action.Execute()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result).To(ContainSubstring("success"))
+			Expect(metadata).To(BeNil())
+
+			// Stop the state mocker
+			stateMocker.Stop()
+
+			// Verify AtomicEditDataflowcomponent was called
+			Expect(mockConfig.EditDataflowcomponentCalled).To(BeTrue())
+
+			// Verify processor order is preserved
+			processorsPipeline, ok := mockConfig.Config.DataFlow[0].DataFlowComponentServiceConfig.BenthosConfig.Pipeline["processors"].([]interface{})
+			Expect(ok).To(BeTrue(), "Pipeline processors should be a slice of interfaces")
+			Expect(processorsPipeline).To(HaveLen(3), "Should have 3 processors")
+
+			// Verify the order is preserved by checking the descriptions added to each processor
+			firstProcessor, ok := processorsPipeline[0].(map[string]interface{})
+			Expect(ok).To(BeTrue(), "Processor should be a map")
+			Expect(firstProcessor["type"]).To(Equal("mapping"))
+			Expect(firstProcessor["procs"]).To(Equal([]interface{}{}))
+			Expect(firstProcessor).To(HaveKey("description"), "First processor should have a description")
+			Expect(firstProcessor["description"]).To(Equal("First processor - position 0"))
+
+			secondProcessor, ok := processorsPipeline[1].(map[string]interface{})
+			Expect(ok).To(BeTrue(), "Processor should be a map")
+			Expect(secondProcessor["type"]).To(Equal("mapping"))
+			Expect(secondProcessor["procs"]).To(Equal([]interface{}{}))
+			Expect(secondProcessor).To(HaveKey("description"), "Second processor should have a description")
+			Expect(secondProcessor["description"]).To(Equal("Second processor - position 1"))
+
+			thirdProcessor, ok := processorsPipeline[2].(map[string]interface{})
+			Expect(ok).To(BeTrue(), "Processor should be a map")
+			Expect(thirdProcessor["type"]).To(Equal("mapping"))
+			Expect(thirdProcessor["procs"]).To(Equal([]interface{}{}))
+			Expect(thirdProcessor).To(HaveKey("description"), "Third processor should have a description")
+			Expect(thirdProcessor["description"]).To(Equal("Third processor - position 2"))
+		})
+
 		It("should handle edit with inject data containing cache resources", func() {
 			// Setup - parse valid payload with inject data
 			payload := map[string]interface{}{
@@ -486,8 +573,7 @@ var _ = Describe("EditDataflowComponent", func() {
 							"type": "yaml",
 							"data": "type: stdout",
 						},
-						"inject": map[string]interface{}{
-							"type": "yaml",
+						"rawYAML": map[string]interface{}{
 							"data": `cache_resources:
 - label: my_cache
   memory: {}
@@ -499,7 +585,7 @@ buffer:
 						},
 						"pipeline": map[string]interface{}{
 							"processors": map[string]interface{}{
-								"proc1": map[string]interface{}{
+								"0": map[string]interface{}{
 									"type": "yaml",
 									"data": "type: mapping\nprocs: []",
 								},
@@ -563,7 +649,7 @@ buffer:
 						},
 						"pipeline": map[string]interface{}{
 							"processors": map[string]interface{}{
-								"proc1": map[string]interface{}{
+								"0": map[string]interface{}{
 									"type": "yaml",
 									"data": "type: mapping\nprocs: []",
 								},
@@ -617,7 +703,7 @@ buffer:
 						},
 						"pipeline": map[string]interface{}{
 							"processors": map[string]interface{}{
-								"proc1": map[string]interface{}{
+								"0": map[string]interface{}{
 									"type": "yaml",
 									"data": "type: mapping\nprocs: []",
 								},
