@@ -296,28 +296,7 @@ func (p *ProtocolConverterService) Status(
 		return ServiceInfo{}, fmt.Errorf("redpanda instance not found")
 	}
 
-	// get last observed states
-	connectionStatus, err := p.connectionManager.GetLastObservedState(connectionName)
-	if err != nil {
-		return ServiceInfo{}, fmt.Errorf("failed to get connection observed state: %w", err)
-	}
-
-	dfcStatus, err := p.dataflowComponentManager.GetLastObservedState(dfcName)
-	if err != nil {
-		return ServiceInfo{}, fmt.Errorf("failed to get dataflowcomponent observed state: %w", err)
-	}
-
 	redpandaStatus := rpInst.LastObservedState
-	// check observed state types
-	connectionObservedState, ok := connectionStatus.(connectionfsm.ConnectionObservedState)
-	if !ok {
-		return ServiceInfo{}, fmt.Errorf("connection status for connection %s is not a ConnectionObservedState", protConvName)
-	}
-
-	dfcObservedState, ok := dfcStatus.(dfcfsm.DataflowComponentObservedState)
-	if !ok {
-		return ServiceInfo{}, fmt.Errorf("dataflowcomponent status for dataflowcomponent %s is not a DataflowComponentObservedState", protConvName)
-	}
 
 	// redpandaObservedStateSnapshot is slightly different from the others as it comes from the snapshot
 	// and not from the fsm-instance
@@ -332,18 +311,44 @@ func (p *ProtocolConverterService) Status(
 		ObservedRedpandaServiceConfig: redpandaObservedStateSnapshot.Config,
 	}
 
+	redpandaFSMState := rpInst.CurrentState
+
+	// -- connection --------------------------------------------------------------------------------
+
+	// get last observed states
+	connectionStatus, err := p.connectionManager.GetLastObservedState(connectionName)
+	if err != nil {
+		return ServiceInfo{}, fmt.Errorf("failed to get connection observed state: %w", err)
+	}
+
+	// check observed state types
+	connectionObservedState, ok := connectionStatus.(connectionfsm.ConnectionObservedState)
+	if !ok {
+		return ServiceInfo{}, fmt.Errorf("connection status for connection %s is not a ConnectionObservedState", protConvName)
+	}
+
 	// get current fsm states
 	connectionFSMState, err := p.connectionManager.GetCurrentFSMState(connectionName)
 	if err != nil {
 		return ServiceInfo{}, fmt.Errorf("failed to get connection FSM state: %w", err)
 	}
 
+	// -- DFC --------------------------------------------------------------------------------
+
+	dfcStatus, err := p.dataflowComponentManager.GetLastObservedState(dfcName)
+	if err != nil {
+		return ServiceInfo{}, fmt.Errorf("failed to get dataflowcomponent observed state: %w", err)
+	}
+
+	dfcObservedState, ok := dfcStatus.(dfcfsm.DataflowComponentObservedState)
+	if !ok {
+		return ServiceInfo{}, fmt.Errorf("dataflowcomponent status for dataflowcomponent %s is not a DataflowComponentObservedState", protConvName)
+	}
+
 	dfcFSMState, err := p.dataflowComponentManager.GetCurrentFSMState(dfcName)
 	if err != nil {
 		return ServiceInfo{}, fmt.Errorf("failed to get dataflowcomponent FSM state: %w", err)
 	}
-
-	redpandaFSMState := rpInst.CurrentState
 
 	return ServiceInfo{
 		ConnectionObservedState:        connectionObservedState,
@@ -448,6 +453,11 @@ func (p *ProtocolConverterService) UpdateInManager(
 			break
 		}
 	}
+
+	if !foundConn {
+		return ErrServiceNotExist
+	}
+
 	// Check if the dfcconfig exists
 	foundDFC := false
 	indexDFC := -1
@@ -459,7 +469,7 @@ func (p *ProtocolConverterService) UpdateInManager(
 		}
 	}
 
-	if !foundConn || !foundDFC {
+	if !foundDFC {
 		return ErrServiceNotExist
 	}
 
@@ -585,6 +595,10 @@ func (p *ProtocolConverterService) Start(
 		}
 	}
 
+	if !connFound {
+		return ErrServiceNotExist
+	}
+
 	// Find and update our cached config
 	dfcFound := false
 	for i, config := range p.dataflowComponentConfig {
@@ -595,7 +609,7 @@ func (p *ProtocolConverterService) Start(
 		}
 	}
 
-	if !connFound || !dfcFound {
+	if !dfcFound {
 		return ErrServiceNotExist
 	}
 
@@ -633,6 +647,10 @@ func (p *ProtocolConverterService) Stop(
 		}
 	}
 
+	if !connFound {
+		return ErrServiceNotExist
+	}
+
 	// Find and update our cached config
 	dfcFound := false
 	for i, config := range p.dataflowComponentConfig {
@@ -643,7 +661,7 @@ func (p *ProtocolConverterService) Stop(
 		}
 	}
 
-	if !connFound || !dfcFound {
+	if !dfcFound {
 		return ErrServiceNotExist
 	}
 

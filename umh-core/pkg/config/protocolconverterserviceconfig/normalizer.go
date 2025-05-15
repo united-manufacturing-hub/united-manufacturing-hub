@@ -30,13 +30,16 @@ func NewNormalizer() *Normalizer {
 // NormalizeConfig applies ProtocolConverter defaults to a structured config
 func (n *Normalizer) NormalizeConfig(cfg ProtocolConverterServiceConfig) ProtocolConverterServiceConfig {
 
+	// create a copy
+	normalized := cfg
+
 	// We need to first normalize the underlying DFCServiceConfig
 	dfcNormalizer := dataflowcomponentserviceconfig.NewNormalizer()
-	cfg.DataflowComponentServiceConfig = dfcNormalizer.NormalizeConfig(cfg.GetDFCServiceConfig())
+	normalized.DataflowComponentServiceConfig = dfcNormalizer.NormalizeConfig(normalized.GetDFCServiceConfig())
 
 	// Then we  need to normalize the underlying ConnectionServiceConfig
 	connectionNormalizer := connectionserviceconfig.NewNormalizer()
-	cfg.ConnectionServiceConfig = connectionNormalizer.NormalizeConfig(cfg.GetConnectionServiceConfig())
+	normalized.ConnectionServiceConfig = connectionNormalizer.NormalizeConfig(normalized.GetConnectionServiceConfig())
 
-	return cfg
+	return normalized
 }

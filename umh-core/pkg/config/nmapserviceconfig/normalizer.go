@@ -24,5 +24,7 @@ func NewNormalizer() *Normalizer {
 
 // NormalizeConfig doesn't do anything, there is no normalization needed here
 func (n *Normalizer) NormalizeConfig(cfg NmapServiceConfig) NmapServiceConfig {
-	return cfg
+	// create a copy
+	normalized := cfg
+	return normalized
 }
