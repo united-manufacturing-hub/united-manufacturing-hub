@@ -286,8 +286,7 @@ var _ = Describe("EditDataflowComponent", func() {
 							"type": "yaml",
 							"data": "type: stdout",
 						},
-						"inject": map[string]interface{}{
-							"type": "yaml",
+						"rawYAML": map[string]interface{}{
 							"data": "cache_resources:\n- label: my_cache\n  memory: {}\nrate_limit_resources:\n- label: limiter\n  local: {}\nbuffer:\n  memory: {}\n",
 						},
 						"pipeline": map[string]interface{}{
@@ -305,7 +304,7 @@ var _ = Describe("EditDataflowComponent", func() {
 			// Call Parse method
 			err := action.Parse(payload)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(action.GetParsedPayload().Inject.Data).To(Equal("cache_resources:\n- label: my_cache\n  memory: {}\nrate_limit_resources:\n- label: limiter\n  local: {}\nbuffer:\n  memory: {}\n"))
+			Expect(action.GetParsedPayload().Inject).To(Equal("cache_resources:\n- label: my_cache\n  memory: {}\nrate_limit_resources:\n- label: limiter\n  local: {}\nbuffer:\n  memory: {}\n"))
 		})
 	})
 
@@ -574,8 +573,7 @@ var _ = Describe("EditDataflowComponent", func() {
 							"type": "yaml",
 							"data": "type: stdout",
 						},
-						"inject": map[string]interface{}{
-							"type": "yaml",
+						"rawYAML": map[string]interface{}{
 							"data": `cache_resources:
 - label: my_cache
   memory: {}
