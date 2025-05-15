@@ -30,12 +30,12 @@ var _ = Describe("ParseConfigTemplated", func() {
 			parsedConfig, err := parseConfig(cfg)
 			Expect(err).To(BeNil())
 
-			Expect(parsedConfig.DataFlow).To(HaveLen(1))
+			Expect(parsedConfig.DataFlow).To(HaveLen(2))
 			Expect(parsedConfig.DataFlow[0].Name).To(Equal("data-flow-hello-world"))
 
 			generatedConfigGeneratePart := parsedConfig.DataFlow[0].DataFlowComponentServiceConfig.BenthosConfig.Input["generate"]
 			Expect(generatedConfigGeneratePart).To(Equal(map[string]any{
-				"mapping":  "root = \"hello world from Data Flow Component!\"",
+				"mapping":  "root = \"{{ .customVariables.greeting }}\"",
 				"interval": "1s",
 				"count":    0,
 			}))

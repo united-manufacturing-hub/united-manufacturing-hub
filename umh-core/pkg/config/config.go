@@ -130,7 +130,7 @@ type ProtocolConverterConfig struct {
 
 	ProtocolConverterServiceConfig protocolconverterserviceconfig.ProtocolConverterServiceConfig `yaml:"protocolConverterServiceConfig"`
 
-	CustomTemplateVariables TemplateVariables `yaml:"customTemplateVariables,omitempty"`
+	CustomVariables []TemplateVariable `yaml:"customVariables,omitempty"`
 
 	// private marker – not (un)marshalled
 	// explanation see templating.go
@@ -173,7 +173,11 @@ type ConnectionConfig struct {
 	ConnectionServiceConfig connectionserviceconfig.ConnectionServiceConfig `yaml:"connectionServiceConfig"`
 }
 
-type TemplateVariables map[string]string
+// TemplateVariable is a variable that can be used in templating
+type TemplateVariable struct {
+	Name  string `yaml:"name"`
+	Value any    `yaml:"value"`
+}
 
 // Clone creates a deep copy of FullConfig
 func (c FullConfig) Clone() FullConfig {

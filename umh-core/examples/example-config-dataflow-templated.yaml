@@ -17,7 +17,7 @@ templates:
     benthos:
       input:
         generate:
-          mapping: root = "hello world from Data Flow Component!"
+          mapping: root = "{{ .customVariables.greeting }}"
           interval: 1s
           count: 0
       output:
@@ -25,12 +25,26 @@ templates:
 
 agent:
   metricsPort: 8080
-  
+
 # Data Flow Components
 dataFlow:
   - name: data-flow-hello-world
     desiredState: active
     dataFlowComponentConfig: *data-flow-hello-world-template
+    customVariables:
+      greeting: "hello world from Data Flow Component!"
+  - name: data-flow-hello-world-2
+    desiredState: active
+    dataFlowComponentConfig:
+      input:
+        generate:
+          mapping: root = "{{ .customVariables.greeting }}"
+          interval: 1s
+          count: 0
+      output:
+        stdout: {}
+    customVariables:
+      greeting: "hello world from Data Flow Component 2!"
 
 internal:
   redpanda:
