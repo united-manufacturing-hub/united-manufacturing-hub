@@ -19,19 +19,42 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 )
 
-// GetConnectionServiceConfig converts the component config to a full ConnectionServiceConfig
+// GetConnectionServiceConfig converts the component config to a full ProtocolConverterServiceConfig
+// no customization needed
 func (c *ProtocolConverterServiceConfig) GetConnectionServiceConfig() connectionserviceconfig.ConnectionServiceConfig {
 	return c.ConnectionServiceConfig
 }
 
-// GetDFCReadServiceConfig converts the component config to a full ConnectionServiceConfig
+// GetDFCReadServiceConfig converts the component config to a full ProtocolConverterServiceConfig
+// For a read DFC, the user is not allowed to set its own output config, so we "enforce" the output config
+// to be the uns output config.
 func (c *ProtocolConverterServiceConfig) GetDFCReadServiceConfig() dataflowcomponentserviceconfig.DataflowComponentServiceConfig {
-	return c.DataflowComponentReadServiceConfig
+	// copy the config
+	dfcReadConfig := c.DataflowComponentReadServiceConfig
+
+	// enforce the output config to be the uns output config
+	dfcReadConfig.BenthosConfig.Output = map[string]any{
+		"uns": map[string]any{
+			"bridged_by": "!{{ .bridged_by }}",
+		},
+	}
+
+	return dfcReadConfig
 }
 
-// GetDFCWriteServiceConfig converts the component config to a full ConnectionServiceConfig
+// GetDFCWriteServiceConfig converts the component config to a full ProtocolConverterServiceConfig
+// For a write DFC, the user is not allowed to set its own input config, so we "enforce" the input config
+// to be the uns input config.
 func (c *ProtocolConverterServiceConfig) GetDFCWriteServiceConfig() dataflowcomponentserviceconfig.DataflowComponentServiceConfig {
-	return c.DataflowComponentWriteServiceConfig
+	dfcWriteConfig := c.DataflowComponentWriteServiceConfig
+
+	dfcWriteConfig.BenthosConfig.Input = map[string]any{
+		"uns": map[string]any{
+			"consumer_group": "!{{ .consumer_group }}",
+			"umh_topic":      "!{{ .umh_topic }}",
+		},
+	}
+	return dfcWriteConfig
 }
 
 // FromConnectionAndDFCServiceConfig creates a ProtocolConverterServiceConfig

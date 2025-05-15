@@ -281,13 +281,6 @@ func (p *ProtocolConverterService) getDFCWriteName(protConvName string) string {
 	return fmt.Sprintf("dataflow-%s", p.getUnderlyingDFCWriteName(protConvName))
 }
 
-func (p *ProtocolConverterService) generateProtocolConverterYaml(config *protocolconverterserviceconfig.ProtocolConverterServiceConfig) (string, error) {
-	if config == nil {
-		return "", fmt.Errorf("config is nil")
-	}
-	return protocolconverterserviceconfig.RenderProtocolConverterYAML(config.ConnectionServiceConfig, config.DataflowComponentReadServiceConfig, config.DataflowComponentWriteServiceConfig)
-}
-
 // GenerateConfig generates a dfc & connection config for a given protocolconverter
 func (p *ProtocolConverterService) GenerateConfig(
 	protConvConfig *protocolconverterserviceconfig.ProtocolConverterServiceConfig,
@@ -304,23 +297,6 @@ func (p *ProtocolConverterService) GenerateConfig(
 			dataflowcomponentserviceconfig.DataflowComponentServiceConfig{},
 			fmt.Errorf("protocolConverter config is nil")
 	}
-
-	generatedConfig, err := p.generateProtocolConverterYaml(protConvConfig)
-	if err != nil {
-		return connectionserviceconfig.ConnectionServiceConfig{},
-			dataflowcomponentserviceconfig.DataflowComponentServiceConfig{},
-			dataflowcomponentserviceconfig.DataflowComponentServiceConfig{},
-			fmt.Errorf("failed to generate ProtocolConverterServiceConfig: %w", err)
-	}
-
-	protConvConfig.DataflowComponentReadServiceConfig = dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
-		BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
-			Output: map[string]any{"uns": generatedConfig},
-		},
-	}
-
-	// TODO: Add write DFC
-	protConvConfig.DataflowComponentWriteServiceConfig = dataflowcomponentserviceconfig.DataflowComponentServiceConfig{}
 
 	return protConvConfig.GetConnectionServiceConfig(), protConvConfig.GetDFCReadServiceConfig(), protConvConfig.GetDFCWriteServiceConfig(), nil
 }

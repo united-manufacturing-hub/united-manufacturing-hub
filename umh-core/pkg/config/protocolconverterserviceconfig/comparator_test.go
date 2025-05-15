@@ -140,10 +140,10 @@ var _ = Describe("ProtocolConverter YAML Comparator", func() {
 					BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 						Input: map[string]any{
 							"mqtt": map[string]any{
-								"topic": "test/topic",
+								"topic": "test/topic1",
 							},
 						},
-						Output: map[string]any{
+						Output: map[string]any{ // wrong user input, read DFC will always have uns output
 							"kafka": map[string]any{
 								"topic": "test-output",
 							},
@@ -163,10 +163,10 @@ var _ = Describe("ProtocolConverter YAML Comparator", func() {
 					BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 						Input: map[string]any{
 							"mqtt": map[string]any{
-								"topic": "test/topic",
+								"topic": "test/topic2",
 							},
 						},
-						Output: map[string]any{
+						Output: map[string]any{ // wrong user input, read DFC will always have uns output
 							"kafka": map[string]any{
 								"topic": "different-output",
 							},
@@ -186,8 +186,8 @@ var _ = Describe("ProtocolConverter YAML Comparator", func() {
 			Expect(equal).To(BeFalse())
 
 			diff := comparator.ConfigDiff(config1, config2)
-			Expect(diff).To(ContainSubstring("Output config differences"))
-			Expect(diff).To(ContainSubstring("Output.kafka differs"))
+			Expect(diff).To(ContainSubstring("Input config differences"))
+			Expect(diff).To(ContainSubstring("Input.mqtt differs"))
 		})
 
 		It("should consider configs with different Target not equal", func() {
@@ -317,7 +317,7 @@ var _ = Describe("ProtocolConverter YAML Comparator", func() {
 								"topic": "test/topic",
 							},
 						},
-						Output: map[string]any{
+						Output: map[string]any{ // wrong user input, read DFC will always have uns output
 							"kafka": map[string]any{
 								"topic": "test-output",
 							},
@@ -340,7 +340,7 @@ var _ = Describe("ProtocolConverter YAML Comparator", func() {
 								"topic": "different/topic",
 							},
 						},
-						Output: map[string]any{
+						Output: map[string]any{ // wrong user input, read DFC will always have uns output
 							"kafka": map[string]any{
 								"topic": "different-output",
 							},
@@ -360,9 +360,6 @@ var _ = Describe("ProtocolConverter YAML Comparator", func() {
 
 			Expect(diff).To(ContainSubstring("Input config differences"))
 			Expect(diff).To(ContainSubstring("Input.mqtt differs"))
-
-			Expect(diff).To(ContainSubstring("Output config differences"))
-			Expect(diff).To(ContainSubstring("Output.kafka differs"))
 
 			Expect(diff).To(ContainSubstring("Port:"))
 			Expect(diff).To(ContainSubstring("Want: 443"))

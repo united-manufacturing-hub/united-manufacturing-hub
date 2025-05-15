@@ -76,8 +76,8 @@ var _ = Describe("ProtocolConverter YAML Normalizer", func() {
 			Expect(inputMqtt["topic"]).To(Equal("test/topic"))
 
 			// Check output preserved
-			outputKafka := config.DataflowComponentReadServiceConfig.BenthosConfig.Output["kafka"].(map[string]any)
-			Expect(outputKafka["topic"]).To(Equal("test-output"))
+			outputUns := config.DataflowComponentReadServiceConfig.BenthosConfig.Output["uns"].(map[string]any) // note that this is NOT kafka, but uns
+			Expect(outputUns["bridged_by"]).To(Equal("!{{ .bridged_by }}"))
 
 			// Check pipeline processors preserved
 			processors := config.DataflowComponentReadServiceConfig.BenthosConfig.Pipeline["processors"].([]any)
