@@ -416,7 +416,6 @@ func (a *EditDataflowComponentAction) Execute() (interface{}, map[string]interfa
 			}
 		}
 
-		// If we don't have proper numeric keys, fall back to unordered processing
 		if !hasNumericKeys {
 			// the frontend always sends numerous keys so this should never happen
 			SendActionReply(a.instanceUUID, a.userEmail,
