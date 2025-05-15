@@ -114,7 +114,14 @@ type DataFlowComponentConfig struct {
 	FSMInstanceConfig `yaml:",inline"`
 
 	DataFlowComponentServiceConfig dataflowcomponentserviceconfig.DataflowComponentServiceConfig `yaml:"dataFlowComponentConfig"`
+
+	// private marker – not (un)marshalled
+	// explanation see templating.go
+	hasAnchors bool `yaml:"-"`
 }
+
+// HasAnchors returns true if the DataFlowComponentConfig has anchors, see templating.go
+func (d DataFlowComponentConfig) HasAnchors() bool { return d.hasAnchors }
 
 // ProtocolConverterConfig contains configuration for creating a ProtocolConverter
 type ProtocolConverterConfig struct {
@@ -122,7 +129,16 @@ type ProtocolConverterConfig struct {
 	FSMInstanceConfig `yaml:",inline"`
 
 	ProtocolConverterServiceConfig protocolconverterserviceconfig.ProtocolConverterServiceConfig `yaml:"protocolConverterServiceConfig"`
+
+	CustomTemplateVariables TemplateVariables `yaml:"customTemplateVariables,omitempty"`
+
+	// private marker – not (un)marshalled
+	// explanation see templating.go
+	hasAnchors bool `yaml:"-"`
 }
+
+// HasAnchors returns true if the ProtocolConverterConfig has anchors, see templating.go
+func (d ProtocolConverterConfig) HasAnchors() bool { return d.hasAnchors }
 
 // NmapConfig contains configuration for creating a Nmap service
 type NmapConfig struct {
@@ -156,6 +172,8 @@ type ConnectionConfig struct {
 	// For the Connection service
 	ConnectionServiceConfig connectionserviceconfig.ConnectionServiceConfig `yaml:"connectionServiceConfig"`
 }
+
+type TemplateVariables map[string]string
 
 // Clone creates a deep copy of FullConfig
 func (c FullConfig) Clone() FullConfig {
