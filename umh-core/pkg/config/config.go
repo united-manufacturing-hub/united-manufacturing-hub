@@ -30,7 +30,7 @@ type FullConfig struct {
 	Agent     AgentConfig               `yaml:"agent"`               // Agent config, requires restart to take effect
 	DataFlow  []DataFlowComponentConfig `yaml:"dataFlow,omitempty"`  // DataFlow components to manage, can be updated while running
 	Internal  InternalConfig            `yaml:"internal,omitempty"`  // Internal config, not to be used by the user, only to be used for testing internal components
-	Templates []any                     `yaml:"templates,omitempty"` // general yaml templates, where anchor can be placed, see also examples/example-config-dataflow-templated.yaml
+	Templates []any                     `yaml:"templates,omitempty"` // proof of concept for general yaml templates, where anchor can be placed, see also examples/example-config-dataflow-templated.yaml
 }
 
 type InternalConfig struct {
