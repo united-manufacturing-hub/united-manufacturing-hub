@@ -1,20 +1,4 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!--
-  ~ Copyright 2025 UMH Systems GmbH
-  ~
-  ~ Licensed under the Apache License, Version 2.0 (the "License");
-  ~ you may not use this file except in compliance with the License.
-  ~ You may obtain a copy of the License at
-  ~
-  ~     http://www.apache.org/licenses/LICENSE-2.0
-  ~
-  ~ Unless required by applicable law or agreed to in writing, software
-  ~ distributed under the License is distributed on an "AS IS" BASIS,
-  ~ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  ~ See the License for the specific language governing permissions and
-  ~ limitations under the License.
--->
-
 <project version="4">
   <component name="AutoImportSettings">
     <option name="autoReloadType" value="ALL" />
@@ -22,17 +6,6 @@
   <component name="ChangeListManager">
     <list default="true" id="0fead188-9091-4463-a9f4-75e8dedf3882" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/umh-core/integration/redpanda_builder.go" beforeDir="false" afterPath="$PROJECT_DIR$/umh-core/integration/redpanda_builder.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/umh-core/pkg/config/env.go" beforeDir="false" afterPath="$PROJECT_DIR$/umh-core/pkg/config/env.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/umh-core/pkg/config/redpandaserviceconfig/comparator.go" beforeDir="false" afterPath="$PROJECT_DIR$/umh-core/pkg/config/redpandaserviceconfig/comparator.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/umh-core/pkg/config/redpandaserviceconfig/comparator_test.go" beforeDir="false" afterPath="$PROJECT_DIR$/umh-core/pkg/config/redpandaserviceconfig/comparator_test.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/umh-core/pkg/config/redpandaserviceconfig/generator.go" beforeDir="false" afterPath="$PROJECT_DIR$/umh-core/pkg/config/redpandaserviceconfig/generator.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/umh-core/pkg/config/redpandaserviceconfig/generator_test.go" beforeDir="false" afterPath="$PROJECT_DIR$/umh-core/pkg/config/redpandaserviceconfig/generator_test.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/umh-core/pkg/config/redpandaserviceconfig/normalizer.go" beforeDir="false" afterPath="$PROJECT_DIR$/umh-core/pkg/config/redpandaserviceconfig/normalizer.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/umh-core/pkg/config/redpandaserviceconfig/normalizer_test.go" beforeDir="false" afterPath="$PROJECT_DIR$/umh-core/pkg/config/redpandaserviceconfig/normalizer_test.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/umh-core/pkg/config/redpandaserviceconfig/package.go" beforeDir="false" afterPath="$PROJECT_DIR$/umh-core/pkg/config/redpandaserviceconfig/package.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/umh-core/pkg/service/redpanda/redpanda.go" beforeDir="false" afterPath="$PROJECT_DIR$/umh-core/pkg/service/redpanda/redpanda.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/umh-core/pkg/service/redpanda_monitor/redpanda_monitor.go" beforeDir="false" afterPath="$PROJECT_DIR$/umh-core/pkg/service/redpanda_monitor/redpanda_monitor.go" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -104,26 +77,26 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent"><![CDATA[{
-  "keyToString": {
-    "RunOnceActivity.GoLinterPluginOnboarding": "true",
-    "RunOnceActivity.GoLinterPluginStorageMigration": "true",
-    "RunOnceActivity.ShowReadmeOnStart": "true",
-    "RunOnceActivity.git.unshallow": "true",
-    "RunOnceActivity.go.formatter.settings.were.checked": "true",
-    "RunOnceActivity.go.migrated.go.modules.settings": "true",
-    "RunOnceActivity.go.modules.go.list.on.any.changes.was.set": "true",
-    "git-widget-placeholder": "eng-2947-2",
-    "go.import.settings.migrated": "true",
-    "go.sdk.automatically.set": "true",
-    "junie.onboarding.icon.badge.shown": "true",
-    "last_opened_file_path": "/Users/fl",
-    "node.js.detected.package.eslint": "true",
-    "node.js.selected.package.eslint": "(autodetect)",
-    "nodejs_package_manager_path": "npm",
-    "settings.editor.selected.configurable": "preferences.pluginManager"
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;RunOnceActivity.GoLinterPluginOnboarding&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.GoLinterPluginStorageMigration&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.go.formatter.settings.were.checked&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.go.migrated.go.modules.settings&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.go.modules.go.list.on.any.changes.was.set&quot;: &quot;true&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;eng-2947-2&quot;,
+    &quot;go.import.settings.migrated&quot;: &quot;true&quot;,
+    &quot;go.sdk.automatically.set&quot;: &quot;true&quot;,
+    &quot;junie.onboarding.icon.badge.shown&quot;: &quot;true&quot;,
+    &quot;last_opened_file_path&quot;: &quot;/Users/fl&quot;,
+    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
+    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
+    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
+    &quot;settings.editor.selected.configurable&quot;: &quot;preferences.pluginManager&quot;
   }
-}]]></component>
+}</component>
   <component name="SharedIndexes">
     <attachedChunks>
       <set>
