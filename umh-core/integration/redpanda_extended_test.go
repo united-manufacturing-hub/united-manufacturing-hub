@@ -189,7 +189,7 @@ func checkRPK(topic string, lastLoopOffset int, lastLoopTimestamp time.Time, los
 
 	// 2. Check offset
 	if newOffset <= lastLoopOffset {
-		return 0, errors.New(fmt.Sprintf("Offset is not increasing: %d <= %d", newOffset, lastLoopOffset))
+		return 0, fmt.Errorf("Offset is not increasing: %d <= %d", newOffset, lastLoopOffset)
 	}
 
 	GinkgoWriter.Printf("✅ Offset is increasing: %d > %d\n", newOffset, lastLoopOffset)
