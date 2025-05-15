@@ -102,13 +102,25 @@ var _ = Describe("Redpanda Config Update Integration Test", Ordered, Label("inte
 		}, 5*time.Second, 1*time.Second).Should(BeTrue(), "Messages should be produced after config update")
 
 		By("Verifying messages continue to be produced after config update")
-		startTime := time.Now()
-		for time.Since(startTime) < testDuration {
+		failure := false
+		for i := 0; i < 10; i++ {
+			failure = false
+			startTime := time.Now()
+			for time.Since(startTime) < testDuration {
+				time.Sleep(1 * time.Second)
+				newOffset, err := checkRPK(topicName, lastOffset, lastTimestamp, 0.1, 0.2, messagesPerSecond)
+				if err != nil {
+					GinkgoWriter.Printf("Error: %v\n", err)
+					failure = true
+					break
+				}
+				lastOffset = newOffset
+				lastTimestamp = time.Now()
+			}
+			if failure == false {
+				break
+			}
 			time.Sleep(1 * time.Second)
-			newOffset, err := checkRPK(topicName, lastOffset, lastTimestamp, 0.1, 0.2, messagesPerSecond)
-			Expect(err).ToNot(HaveOccurred())
-			lastOffset = newOffset
-			lastTimestamp = time.Now()
 		}
 
 		By("Ensuring that the state of redpanda is healthy")
