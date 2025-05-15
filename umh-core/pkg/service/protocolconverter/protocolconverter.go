@@ -754,10 +754,3 @@ func (c *ProtocolConverterService) ForceRemove(
 
 	return nil
 }
-
-// IsProtocolConverterStopped checks whether the ProtocolConverter is stopped
-// which means that connection and DFC are both stopped
-func (p *ProtocolConverterService) IsProtocolConverterStopped(protConvName string) (bool, string) {
-
-	return false, ""
-}

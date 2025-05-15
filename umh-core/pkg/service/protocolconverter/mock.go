@@ -27,12 +27,14 @@ import (
 	connfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/connection"
 	dfcfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
 	nmapfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/nmap"
+	redpandafsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/redpanda"
 	benthosservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos_monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/connection"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/dataflowcomponent"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/nmap"
+	redpandasvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
@@ -90,8 +92,10 @@ var _ IProtocolConverterService = (*MockProtocolConverterService)(nil)
 type ConverterStateFlags struct {
 	IsDFCRunning       bool
 	IsConnectionUp     bool
-	dfcFSMState        string
-	connectionFSMState string
+	IsRedpandaRunning  bool
+	DfcFSMState        string
+	ConnectionFSMState string
+	RedpandaFSMState   string
 	PortState          nmapfsm.PortState
 }
 
@@ -141,19 +145,34 @@ func (m *MockProtocolConverterService) SetComponentState(protConvName string, fl
 			},
 		},
 	}
+
+	redpandaObservedState := &redpandafsm.RedpandaObservedState{
+		ServiceInfo: redpandasvc.ServiceInfo{
+			RedpandaStatus: redpandasvc.RedpandaStatus{
+				HealthCheck: redpandasvc.HealthCheck{
+					IsReady: flags.IsRedpandaRunning,
+					IsLive:  flags.IsRedpandaRunning,
+				},
+			},
+		},
+	}
 	// Ensure ServiceInfo exists for this component
 	if _, exists := m.ConverterStates[protConvName]; !exists {
 		m.ConverterStates[protConvName] = &ServiceInfo{
-			DataflowComponentFSMState:      flags.dfcFSMState,
+			DataflowComponentFSMState:      flags.DfcFSMState,
 			DataflowComponentObservedState: *dfcObservedState,
-			ConnectionFSMState:             flags.connectionFSMState,
+			ConnectionFSMState:             flags.ConnectionFSMState,
 			ConnectionObservedState:        *connObservedState,
+			RedpandaFSMState:               flags.RedpandaFSMState,
+			RedpandaObservedState:          *redpandaObservedState,
 		}
 	} else {
 		m.ConverterStates[protConvName].DataflowComponentObservedState = *dfcObservedState
-		m.ConverterStates[protConvName].DataflowComponentFSMState = flags.dfcFSMState
+		m.ConverterStates[protConvName].DataflowComponentFSMState = flags.DfcFSMState
 		m.ConverterStates[protConvName].ConnectionObservedState = *connObservedState
-		m.ConverterStates[protConvName].ConnectionFSMState = flags.connectionFSMState
+		m.ConverterStates[protConvName].ConnectionFSMState = flags.ConnectionFSMState
+		m.ConverterStates[protConvName].RedpandaObservedState = *redpandaObservedState
+		m.ConverterStates[protConvName].RedpandaFSMState = flags.RedpandaFSMState
 	}
 
 	// Store the flags
