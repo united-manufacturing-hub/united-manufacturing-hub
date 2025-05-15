@@ -194,6 +194,15 @@ func (r *RedpandaInstance) reconcileExternalChanges(ctx context.Context, service
 				changes["log_retention_ms"] = r.config.Topic.DefaultTopicRetentionMs
 			}
 		}
+		if r.ObservedState.ObservedRedpandaServiceConfig.Topic.DefaultTopicCompressionAlgorithm != r.config.Topic.DefaultTopicCompressionAlgorithm {
+			// https://docs.redpanda.com/current/reference/properties/cluster-properties/#log_compression_type
+
+			// Zero values are ignored, as they are invalid in redpanda
+			if r.config.Topic.DefaultTopicCompressionAlgorithm != "" {
+				changes["log_compression_type"] = r.config.Topic.DefaultTopicCompressionAlgorithm
+			}
+		}
+
 		if len(changes) > 0 {
 			err := r.service.UpdateRedpandaClusterConfig(ctx, r.baseFSMInstance.GetID(), changes)
 			if err != nil {
