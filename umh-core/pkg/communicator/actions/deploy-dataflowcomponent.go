@@ -616,33 +616,34 @@ func (a *DeployDataflowComponentAction) waitForComponentToBeActive() (string, er
 						SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, stateMessage,
 							a.outboundChannel, models.DeployDataFlowComponent)
 						return "", nil
-					} else {
-						// currentStateReason contains more information on why the DFC is in its current state
-						currentStateReason := dfcSnapshot.ServiceInfo.StatusReason
-
-						stateMessage := RemainingPrefixSec(remainingSeconds) + currentStateReason
-						SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, stateMessage, a.outboundChannel, models.DeployDataFlowComponent)
-						// send the benthos logs to the user
-						logs = dfcSnapshot.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosLogs
-
-						// only send the logs that have not been sent yet
-						if len(logs) > len(lastLogs) {
-							lastLogs = SendLimitedLogs(logs, lastLogs, a.instanceUUID, a.userEmail, a.actionUUID, a.outboundChannel, models.DeployDataFlowComponent, remainingSeconds)
-						}
-						// check if the logs contain any of the error lines and if so, cancel the action with rolling back
-						if CheckBenthosLogLinesForConfigErrors(logs) {
-							SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Failed to parse config. Removing the component.", a.outboundChannel, models.DeployDataFlowComponent)
-							ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
-							defer cancel()
-							err := a.configManager.AtomicDeleteDataflowcomponent(ctx, dataflowcomponentserviceconfig.GenerateUUIDFromName(a.name))
-							if err != nil {
-								a.actionLogger.Errorf("failed to remove dataflowcomponent %s: %v", a.name, err)
-								SendActionReplyV2(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, "DFC not removed. Please check your configuration and consider, removing the component manually..", "ERR_CONFIG_ERROR", nil, a.outboundChannel, models.DeployDataFlowComponent, nil)
-							}
-							SendActionReplyV2(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, "DFC removed", "ERR_CONFIG_ERROR", nil, a.outboundChannel, models.DeployDataFlowComponent, nil)
-							return "ERR_CONFIG_ERROR", fmt.Errorf("dataflow component '%s' was removed because of a config error", a.name)
-						}
 					}
+
+					// currentStateReason contains more information on why the DFC is in its current state
+					currentStateReason := dfcSnapshot.ServiceInfo.StatusReason
+
+					stateMessage := RemainingPrefixSec(remainingSeconds) + currentStateReason
+					SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, stateMessage, a.outboundChannel, models.DeployDataFlowComponent)
+					// send the benthos logs to the user
+					logs = dfcSnapshot.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosLogs
+
+					// only send the logs that have not been sent yet
+					if len(logs) > len(lastLogs) {
+						lastLogs = SendLimitedLogs(logs, lastLogs, a.instanceUUID, a.userEmail, a.actionUUID, a.outboundChannel, models.DeployDataFlowComponent, remainingSeconds)
+					}
+					// check if the logs contain any of the error lines and if so, cancel the action with rolling back
+					if CheckBenthosLogLinesForConfigErrors(logs) {
+						SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Failed to parse config. Removing the component.", a.outboundChannel, models.DeployDataFlowComponent)
+						ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
+						defer cancel()
+						err := a.configManager.AtomicDeleteDataflowcomponent(ctx, dataflowcomponentserviceconfig.GenerateUUIDFromName(a.name))
+						if err != nil {
+							a.actionLogger.Errorf("failed to remove dataflowcomponent %s: %v", a.name, err)
+							SendActionReplyV2(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, "DFC not removed. Please check your configuration and consider, removing the component manually..", "ERR_CONFIG_ERROR", nil, a.outboundChannel, models.DeployDataFlowComponent, nil)
+						}
+						SendActionReplyV2(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, "DFC removed", "ERR_CONFIG_ERROR", nil, a.outboundChannel, models.DeployDataFlowComponent, nil)
+						return "ERR_CONFIG_ERROR", fmt.Errorf("dataflow component '%s' was removed because of a config error", a.name)
+					}
+
 				}
 				if !found {
 					stateMessage := RemainingPrefixSec(remainingSeconds) + "waiting for it to appear in the config"
