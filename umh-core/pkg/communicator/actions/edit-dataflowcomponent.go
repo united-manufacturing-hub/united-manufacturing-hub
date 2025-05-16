@@ -590,40 +590,41 @@ func (a *EditDataflowComponentAction) waitForComponentToBeActive() (string, erro
 							continue
 						}
 
-						if instance.CurrentState != "active" && instance.CurrentState != "idle" {
-							// currentStateReason contains more information on why the DFC is in its current state
-							currentStateReason := dfcSnapshot.ServiceInfo.StatusReason
-
-							stateMessage := RemainingPrefixSec(remainingSeconds) + currentStateReason
-							SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
-								stateMessage, a.outboundChannel, models.EditDataFlowComponent)
-							// send the benthos logs to the user
-							logs = dfcSnapshot.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosLogs
-
-							// only send the logs that have not been sent yet
-							if len(logs) > len(lastLogs) {
-								lastLogs = SendLimitedLogs(logs, lastLogs, a.instanceUUID, a.userEmail, a.actionUUID, a.outboundChannel, models.EditDataFlowComponent, remainingSeconds)
-							}
-							// check if the logs contain any of the error lines and if so, cancel the action with rolling back
-							if CheckBenthosLogLinesForConfigErrors(logs) {
-								SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Failed to parse config. Rolling back...", a.outboundChannel, models.EditDataFlowComponent)
-								ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
-								defer cancel()
-								_, err := a.configManager.AtomicEditDataflowcomponent(ctx, a.newComponentUUID, a.oldConfig)
-								if err != nil {
-									SendActionReplyV2(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, "DFC not rolled back. Please check your configuration and consider, removing the component manually..", "ERR_CONFIG_ERROR", nil, a.outboundChannel, models.DeployDataFlowComponent, nil)
-									a.actionLogger.Errorf("failed to roll back dataflow component %s: %v", a.name, err)
-								}
-								return "ERR_CONFIG_ERROR", fmt.Errorf("dataflow component '%s' was rolled back because of a config error", a.name)
-							}
-
-							continue
-						} else {
+						if instance.CurrentState == "active" || instance.CurrentState == "idle" {
 							stateMessage := RemainingPrefixSec(remainingSeconds) + fmt.Sprintf("completed. is in state '%s' with correct configuration", instance.CurrentState)
 							SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
 								stateMessage, a.outboundChannel, models.EditDataFlowComponent)
 							return "", nil
 						}
+
+						// currentStateReason contains more information on why the DFC is in its current state
+						currentStateReason := dfcSnapshot.ServiceInfo.StatusReason
+
+						stateMessage := RemainingPrefixSec(remainingSeconds) + currentStateReason
+						SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
+							stateMessage, a.outboundChannel, models.EditDataFlowComponent)
+						// send the benthos logs to the user
+						logs = dfcSnapshot.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosLogs
+
+						// only send the logs that have not been sent yet
+						if len(logs) > len(lastLogs) {
+							lastLogs = SendLimitedLogs(logs, lastLogs, a.instanceUUID, a.userEmail, a.actionUUID, a.outboundChannel, models.EditDataFlowComponent, remainingSeconds)
+						}
+						// check if the logs contain any of the error lines and if so, cancel the action with rolling back
+						if CheckBenthosLogLinesForConfigErrors(logs) {
+							SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Failed to parse config. Rolling back...", a.outboundChannel, models.EditDataFlowComponent)
+							ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
+							defer cancel()
+							_, err := a.configManager.AtomicEditDataflowcomponent(ctx, a.newComponentUUID, a.oldConfig)
+							if err != nil {
+								SendActionReplyV2(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, "DFC not rolled back. Please check your configuration and consider, removing the component manually..", "ERR_CONFIG_ERROR", nil, a.outboundChannel, models.DeployDataFlowComponent, nil)
+								a.actionLogger.Errorf("failed to roll back dataflow component %s: %v", a.name, err)
+							}
+							return "ERR_CONFIG_ERROR", fmt.Errorf("dataflow component '%s' was rolled back because of a config error", a.name)
+						}
+
+						continue
+
 					}
 				}
 				if !found {
