@@ -194,12 +194,12 @@ func (c *ConnectionInstance) UpdateObservedStateOfInstance(ctx context.Context, 
 		}
 	}
 
-	if !connectionserviceconfig.ConfigsEqual(&c.config, &c.ObservedState.ObservedConnectionConfig) {
+	if !connectionserviceconfig.ConfigsEqual(c.config, c.ObservedState.ObservedConnectionConfig) {
 		// Check if the service exists before attempting to update
 		if c.service.ServiceExists(ctx, services.GetFileSystem(), c.baseFSMInstance.GetID()) {
 			c.baseFSMInstance.GetLogger().Debugf("Observed Connection config is different from desired config, updating Nmap configuration")
 
-			diffStr := connectionserviceconfig.ConfigDiff(&c.config, &c.ObservedState.ObservedConnectionConfig)
+			diffStr := connectionserviceconfig.ConfigDiff(c.config, c.ObservedState.ObservedConnectionConfig)
 			c.baseFSMInstance.GetLogger().Debugf("Configuration differences: %s", diffStr)
 
 			// Update the config in the Nmap manager

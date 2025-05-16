@@ -12,19 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package nmapserviceconfig
+package variables
 
-// Normalizer handles the normalization of Nmap configurations
+// Normalizer handles normalization of VariableBundle
 type Normalizer struct{}
 
-// NewNormalizer creates a new configuration normalizer for Nmap
+// NewNormalizer creates a new Normalizer instance
 func NewNormalizer() *Normalizer {
 	return &Normalizer{}
 }
 
-// NormalizeConfig doesn't do anything, there is no normalization needed here
-func (n *Normalizer) NormalizeConfig(cfg NmapServiceConfig) NmapServiceConfig {
-	// create a copy
-	normalized := cfg
-	return normalized
+// NormalizeConfig normalizes a VariableBundle
+func (n *Normalizer) NormalizeConfig(vb VariableBundle) VariableBundle {
+	// For now, just return the input as is since VariableBundle is already normalized
+	// This can be extended later if needed
+	return vb
 }

@@ -17,26 +17,10 @@ package generator
 import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	"go.uber.org/zap"
-)
-
-const (
-	// Manager name constants
-	// TODO: clean up these constants
-	containerManagerName         = logger.ComponentContainerManager + "_" + constants.DefaultManagerName
-	benthosManagerName           = logger.ComponentBenthosManager + "_" + constants.DefaultManagerName
-	agentManagerName             = logger.ComponentAgentManager + "_" + constants.DefaultManagerName
-	redpandaManagerName          = logger.ComponentRedpandaManager + constants.DefaultManagerName
-	dataflowcomponentManagerName = constants.DataflowcomponentManagerName
-	// Instance name constants
-	coreInstanceName     = "Core"
-	agentInstanceName    = "agent"
-	redpandaInstanceName = "redpanda"
 )
 
 type StatusCollectorType struct {
@@ -77,7 +61,7 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 
 	// --- container (only one instance) ---------------------------------------------------------
 	var containerData models.Container
-	contInst, ok := fsm.FindInstance(snapshot, containerManagerName, coreInstanceName)
+	contInst, ok := fsm.FindInstance(snapshot, fsm.ContainerManagerName, fsm.CoreInstanceName)
 	if ok {
 		containerData = ContainerFromSnapshot(contInst, s.logger)
 	}
@@ -87,21 +71,21 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 	var agentDataReleaseChannel string
 	var agentDataCurrentVersion string
 	var agentDataVersions []models.Version
-	agInst, ok := fsm.FindInstance(snapshot, agentManagerName, agentInstanceName)
+	agInst, ok := fsm.FindInstance(snapshot, fsm.AgentManagerName, fsm.AgentInstanceName)
 	if ok {
 		agentData, agentDataReleaseChannel, agentDataCurrentVersion, agentDataVersions = AgentFromSnapshot(agInst, s.logger)
 	}
 
 	// --- redpanda (only one instance) -------------------------------------------------------------
 	var redpandaData models.Redpanda
-	rpInst, ok := fsm.FindInstance(snapshot, redpandaManagerName, redpandaInstanceName)
+	rpInst, ok := fsm.FindInstance(snapshot, fsm.RedpandaManagerName, fsm.RedpandaInstanceName)
 	if ok {
 		redpandaData = RedpandaFromSnapshot(rpInst, s.logger)
 	}
 
 	// --- dfc (multiple instances) ----------------------	---------------------------------------
 	var dfcData []models.Dfc
-	dfcMgr, ok := fsm.FindManager(snapshot, constants.DataflowcomponentManagerName)
+	dfcMgr, ok := fsm.FindManager(snapshot, fsm.DataflowcomponentManagerName)
 	if ok {
 		dfcData = DfcsFromSnapshot(dfcMgr, s.logger)
 	}

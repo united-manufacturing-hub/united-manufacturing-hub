@@ -12,19 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package nmapserviceconfig
+package protocolconverter
 
-// Normalizer handles the normalization of Nmap configurations
-type Normalizer struct{}
+import (
+	"testing"
 
-// NewNormalizer creates a new configuration normalizer for Nmap
-func NewNormalizer() *Normalizer {
-	return &Normalizer{}
-}
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+)
 
-// NormalizeConfig doesn't do anything, there is no normalization needed here
-func (n *Normalizer) NormalizeConfig(cfg NmapServiceConfig) NmapServiceConfig {
-	// create a copy
-	normalized := cfg
-	return normalized
+func TestProtocolConverter(t *testing.T) {
+	RegisterFailHandler(Fail)
+	RunSpecs(t, "ProtocolConverter Suite")
 }
