@@ -35,6 +35,10 @@ func (n *Normalizer) NormalizeConfig(cfg RedpandaServiceConfig) RedpandaServiceC
 		normalized.Topic.DefaultTopicRetentionBytes = 0
 	}
 
+	if normalized.Topic.DefaultTopicCompressionAlgorithm == "" {
+		normalized.Topic.DefaultTopicCompressionAlgorithm = "snappy"
+	}
+
 	if normalized.Resources.MaxCores == 0 {
 		normalized.Resources.MaxCores = 1
 	}
