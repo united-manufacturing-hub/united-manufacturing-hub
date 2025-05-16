@@ -17,6 +17,7 @@ package protocolconverterserviceconfig
 import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/connectionserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/variables"
 )
 
 var (
@@ -25,33 +26,21 @@ var (
 	defaultComparator = NewComparator()
 )
 
-// ProtocolConverterServiceConfig represents the configuration for a ProtocolConverter
-type ProtocolConverterServiceConfig struct {
+type ProtocolConverterServiceConfigTemplateVariable struct {
 	ConnectionServiceConfig             connectionserviceconfig.ConnectionServiceConfig               `yaml:"connection"`
 	DataflowComponentReadServiceConfig  dataflowcomponentserviceconfig.DataflowComponentServiceConfig `yaml:"dataflowcomponent_read"`
 	DataflowComponentWriteServiceConfig dataflowcomponentserviceconfig.DataflowComponentServiceConfig `yaml:"dataflowcomponent_write"`
 }
 
+// ProtocolConverterServiceConfig represents the configuration for a ProtocolConverter
+type ProtocolConverterServiceConfig struct {
+	Template  ProtocolConverterServiceConfigTemplateVariable `yaml:"template"`
+	Variables variables.VariableBundle                       `yaml:"variables"`
+}
+
 // Equal checks if two ProtocolConverterServiceConfigs are equal
 func (c ProtocolConverterServiceConfig) Equal(other ProtocolConverterServiceConfig) bool {
 	return NewComparator().ConfigsEqual(c, other)
-}
-
-// RenderProtocolConverterYAML is a package-level function for easy YAML generation
-func RenderProtocolConverterYAML(
-	connection connectionserviceconfig.ConnectionServiceConfig,
-	dfcRead dataflowcomponentserviceconfig.DataflowComponentServiceConfig,
-	dfcWrite dataflowcomponentserviceconfig.DataflowComponentServiceConfig,
-) (string, error) {
-	// Create a config object from the individual components
-	cfg := ProtocolConverterServiceConfig{
-		ConnectionServiceConfig:             connection,
-		DataflowComponentReadServiceConfig:  dfcRead,
-		DataflowComponentWriteServiceConfig: dfcWrite,
-	}
-
-	// Use the generator to render the YAML
-	return defaultGenerator.RenderConfig(cfg)
 }
 
 // NormalizeProtocolConverterConfig is a package-level function for easy config normalization

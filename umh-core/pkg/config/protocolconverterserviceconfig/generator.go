@@ -19,6 +19,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/connectionserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/variables"
 	"gopkg.in/yaml.v3"
 )
 
@@ -55,47 +56,77 @@ func (g *Generator) configToMap(cfg ProtocolConverterServiceConfig) map[string]a
 	// use generator to create a valid dfcConfigMap & connectionConfigMap
 	dfcGenerator := dataflowcomponentserviceconfig.NewGenerator()
 	connectionGenerator := connectionserviceconfig.NewGenerator()
+	variableBundleGenerator := variables.NewGenerator()
 
-	dfcReadConfigMap := dfcGenerator.ConfigToMap(cfg.DataflowComponentReadServiceConfig)
-	dfcWriteConfigMap := dfcGenerator.ConfigToMap(cfg.DataflowComponentWriteServiceConfig)
-	connectionConfigMap := connectionGenerator.ConfigToMap(cfg.ConnectionServiceConfig)
+	// Get the template configs
+	dfcReadConfigMap := dfcGenerator.ConfigToMap(cfg.Template.DataflowComponentReadServiceConfig)
+	dfcWriteConfigMap := dfcGenerator.ConfigToMap(cfg.Template.DataflowComponentWriteServiceConfig)
+	connectionConfigMap := connectionGenerator.ConfigToMap(cfg.Template.ConnectionServiceConfig)
+	variableBundleConfigMap := variableBundleGenerator.ConfigToMap(cfg.Variables)
 
 	configMap := make(map[string]any)
 
-	// indent the config by 1
-	configMap["dataflowcomponent_read"] = dfcReadConfigMap
-	configMap["dataflowcomponent_write"] = dfcWriteConfigMap
-	configMap["connection"] = connectionConfigMap
+	// Create the template structure
+	templateMap := make(map[string]any)
+	templateMap["connection"] = connectionConfigMap
+	templateMap["dataflowcomponent_read"] = dfcReadConfigMap
+	templateMap["dataflowcomponent_write"] = dfcWriteConfigMap
+
+	// Add template and variables to the root config
+	configMap["template"] = templateMap
+	configMap["variables"] = variableBundleConfigMap
 
 	return configMap
 }
 
-// normalizeConfig does not need to adjust anything here
+// normalizeConfig normalizes the configuration by applying defaults and ensuring consistency
 func normalizeConfig(raw map[string]any) map[string]any {
 	normalized := make(map[string]any)
 
-	// extract and check the dfc config
-	dfcReadConfig, ok := raw["dataflowcomponent_read"].(map[string]any)
+	// Extract template and variables
+	template, ok := raw["template"].(map[string]any)
 	if !ok {
-		dfcReadConfig = raw
+		template = raw
 	}
 
-	dfcWriteConfig, ok := raw["dataflowcomponent_write"].(map[string]any)
+	variables, ok := raw["variables"].(map[string]any)
 	if !ok {
-		dfcWriteConfig = raw
+		variables = make(map[string]any)
 	}
 
-	// extract and check the connection config
-	connectionConfig, ok := raw["connection"].(map[string]any)
+	// Extract and normalize template components
+	dfcReadConfig, ok := template["dataflowcomponent_read"].(map[string]any)
 	if !ok {
-		connectionConfig = raw
+		dfcReadConfig = template
 	}
 
+	dfcWriteConfig, ok := template["dataflowcomponent_write"].(map[string]any)
+	if !ok {
+		dfcWriteConfig = template
+	}
+
+	connectionConfig, ok := template["connection"].(map[string]any)
+	if !ok {
+		connectionConfig = template
+	}
+
+	// Normalize each component
 	normalizedDFCReadConfig := dataflowcomponentserviceconfig.NormalizeConfig(dfcReadConfig)
 	normalizedDFCWriteConfig := dataflowcomponentserviceconfig.NormalizeConfig(dfcWriteConfig)
 	normalizedConnectionConfig := connectionserviceconfig.NormalizeConfig(connectionConfig)
-	normalized["dataflowcomponent_read"] = normalizedDFCReadConfig
-	normalized["dataflowcomponent_write"] = normalizedDFCWriteConfig
-	normalized["connection"] = normalizedConnectionConfig
+
+	// Variables don't need normalization, they are just key-value pairs
+	normalizedVariables := variables
+
+	// Reconstruct the normalized template
+	normalizedTemplate := make(map[string]any)
+	normalizedTemplate["dataflowcomponent_read"] = normalizedDFCReadConfig
+	normalizedTemplate["dataflowcomponent_write"] = normalizedDFCWriteConfig
+	normalizedTemplate["connection"] = normalizedConnectionConfig
+
+	// Set the normalized template and variables
+	normalized["template"] = normalizedTemplate
+	normalized["variables"] = normalizedVariables
+
 	return normalized
 }

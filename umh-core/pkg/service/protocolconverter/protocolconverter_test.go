@@ -81,32 +81,34 @@ var _ = Describe("DataFlowComponentService", func() {
 		BeforeEach(func() {
 			// Create a basic config for testing
 			cfg = &protocolconverterserviceconfig.ProtocolConverterServiceConfig{
-				ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
-					NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
-						Target: "localhost",
-						Port:   102,
-					},
-				},
-				DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
-					BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
-						Input: map[string]interface{}{
-							"kafka_consumer": map[string]interface{}{
-								"addresses": []string{"localhost:9092"},
-								"topics":    []string{"test-topic"},
-								"group_id":  "test-group",
-							},
+				Template: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplateVariable{
+					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
+						NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
+							Target: "localhost",
+							Port:   102,
 						},
-						Pipeline: map[string]interface{}{
-							"processors": []map[string]interface{}{
-								{
-									"mapping": "root = this",
+					},
+					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
+							Input: map[string]interface{}{
+								"kafka_consumer": map[string]interface{}{
+									"addresses": []string{"localhost:9092"},
+									"topics":    []string{"test-topic"},
+									"group_id":  "test-group",
 								},
 							},
-						},
-						Output: map[string]interface{}{
-							"elasticsearch": map[string]interface{}{
-								"urls":  []string{"http://localhost:9200"},
-								"index": "test-index",
+							Pipeline: map[string]interface{}{
+								"processors": []map[string]interface{}{
+									{
+										"mapping": "root = this",
+									},
+								},
+							},
+							Output: map[string]interface{}{
+								"elasticsearch": map[string]interface{}{
+									"urls":  []string{"http://localhost:9200"},
+									"index": "test-index",
+								},
 							},
 						},
 					},
@@ -183,19 +185,21 @@ var _ = Describe("DataFlowComponentService", func() {
 		BeforeEach(func() {
 			// Create a basic config for testing
 			cfg = &protocolconverterserviceconfig.ProtocolConverterServiceConfig{
-				ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
-					NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
-						Target: "localhost",
-						Port:   102,
+				Template: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplateVariable{
+					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
+						NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
+							Target: "localhost",
+							Port:   102,
+						},
 					},
-				},
-				DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
-					BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
-						Input: map[string]interface{}{
-							"kafka_consumer": map[string]interface{}{
-								"addresses": []string{"localhost:9092"},
-								"topics":    []string{"test-topic"},
-								"group_id":  "test-group",
+					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
+							Input: map[string]interface{}{
+								"kafka_consumer": map[string]interface{}{
+									"addresses": []string{"localhost:9092"},
+									"topics":    []string{"test-topic"},
+									"group_id":  "test-group",
+								},
 							},
 						},
 					},
@@ -340,19 +344,21 @@ var _ = Describe("DataFlowComponentService", func() {
 		BeforeEach(func() {
 			// Initial config
 			config = &protocolconverterserviceconfig.ProtocolConverterServiceConfig{
-				ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
-					NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
-						Target: "localhost",
-						Port:   102,
+				Template: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplateVariable{
+					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
+						NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
+							Target: "localhost",
+							Port:   102,
+						},
 					},
-				},
 
-				DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
-					BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
-						Input: map[string]interface{}{
-							"kafka_consumer": map[string]interface{}{
-								"addresses": []string{"localhost:9092"},
-								"topics":    []string{"test-topic"},
+					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
+							Input: map[string]interface{}{
+								"kafka_consumer": map[string]interface{}{
+									"addresses": []string{"localhost:9092"},
+									"topics":    []string{"test-topic"},
+								},
 							},
 						},
 					},
@@ -362,19 +368,21 @@ var _ = Describe("DataFlowComponentService", func() {
 			// Updated config with different settings
 
 			updatedConfig = &protocolconverterserviceconfig.ProtocolConverterServiceConfig{
-				ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
-					NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
-						Target: "localhost",
-						Port:   102,
+				Template: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplateVariable{
+					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
+						NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
+							Target: "localhost",
+							Port:   102,
+						},
 					},
-				},
 
-				DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
-					BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
-						Input: map[string]interface{}{
-							"kafka_consumer": map[string]interface{}{
-								"addresses": []string{"localhost:9092"},
-								"topics":    []string{"updated-topic"},
+					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
+							Input: map[string]interface{}{
+								"kafka_consumer": map[string]interface{}{
+									"addresses": []string{"localhost:9092"},
+									"topics":    []string{"updated-topic"},
+								},
 							},
 						},
 					},
@@ -444,17 +452,19 @@ var _ = Describe("DataFlowComponentService", func() {
 		BeforeEach(func() {
 			// Create a basic config for testing
 			cfg = &protocolconverterserviceconfig.ProtocolConverterServiceConfig{
-				ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
-					NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
-						Target: "localhost",
-						Port:   102,
+				Template: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplateVariable{
+					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
+						NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
+							Target: "localhost",
+							Port:   102,
+						},
 					},
-				},
-				DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
-					BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
-						Input: map[string]interface{}{
-							"http_server": map[string]interface{}{
-								"address": "0.0.0.0:8080",
+					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
+							Input: map[string]interface{}{
+								"http_server": map[string]interface{}{
+									"address": "0.0.0.0:8080",
+								},
 							},
 						},
 					},
@@ -537,17 +547,19 @@ var _ = Describe("DataFlowComponentService", func() {
 		BeforeEach(func() {
 			// Create a basic config for testing
 			cfg = &protocolconverterserviceconfig.ProtocolConverterServiceConfig{
-				ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
-					NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
-						Target: "localhost",
-						Port:   102,
+				Template: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplateVariable{
+					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
+						NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
+							Target: "localhost",
+							Port:   102,
+						},
 					},
-				},
-				DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
-					BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
-						Input: map[string]interface{}{
-							"http_server": map[string]interface{}{
-								"address": "0.0.0.0:8080",
+					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
+							Input: map[string]interface{}{
+								"http_server": map[string]interface{}{
+									"address": "0.0.0.0:8080",
+								},
 							},
 						},
 					},
@@ -591,17 +603,19 @@ var _ = Describe("DataFlowComponentService", func() {
 		It("should pass configs to the managers for reconciliation", func() {
 			// Add a test component to have something to reconcile
 			cfg := &protocolconverterserviceconfig.ProtocolConverterServiceConfig{
-				ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
-					NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
-						Target: "localhost",
-						Port:   102,
+				Template: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplateVariable{
+					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
+						NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
+							Target: "localhost",
+							Port:   102,
+						},
 					},
-				},
-				DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
-					BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
-						Input: map[string]interface{}{
-							"http_server": map[string]interface{}{
-								"address": "0.0.0.0:8080",
+					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
+							Input: map[string]interface{}{
+								"http_server": map[string]interface{}{
+									"address": "0.0.0.0:8080",
+								},
 							},
 						},
 					},
@@ -645,17 +659,19 @@ var _ = Describe("DataFlowComponentService", func() {
 			// Add a test component to have something to reconcile (just like in the other test)
 			testComponentName := "test-error-component"
 			cfg := &protocolconverterserviceconfig.ProtocolConverterServiceConfig{
-				ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
-					NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
-						Target: "localhost",
-						Port:   102,
+				Template: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplateVariable{
+					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
+						NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
+							Target: "localhost",
+							Port:   102,
+						},
 					},
-				},
-				DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
-					BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
-						Input: map[string]interface{}{
-							"http_server": map[string]interface{}{
-								"address": "0.0.0.0:8080",
+					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
+							Input: map[string]interface{}{
+								"http_server": map[string]interface{}{
+									"address": "0.0.0.0:8080",
+								},
 							},
 						},
 					},

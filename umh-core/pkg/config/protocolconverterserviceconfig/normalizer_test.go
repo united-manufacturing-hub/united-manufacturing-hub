@@ -30,36 +30,38 @@ var _ = Describe("ProtocolConverter YAML Normalizer", func() {
 
 			config = normalizer.NormalizeConfig(config)
 
-			Expect(config.DataflowComponentReadServiceConfig.BenthosConfig).NotTo(BeNil())
-			Expect(config.DataflowComponentReadServiceConfig.BenthosConfig.Output).NotTo(BeNil())
-			Expect(config.DataflowComponentReadServiceConfig.BenthosConfig.Pipeline).NotTo(BeNil())
+			Expect(config.Template.DataflowComponentReadServiceConfig.BenthosConfig).NotTo(BeNil())
+			Expect(config.Template.DataflowComponentReadServiceConfig.BenthosConfig.Output).NotTo(BeNil())
+			Expect(config.Template.DataflowComponentReadServiceConfig.BenthosConfig.Pipeline).NotTo(BeNil())
 		})
 
 		It("should preserve existing values", func() {
 			config := ProtocolConverterServiceConfig{
-				ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
-					NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
-						Target: "127.0.0.1",
-						Port:   443,
+				Template: ProtocolConverterServiceConfigTemplateVariable{
+					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
+						NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
+							Target: "127.0.0.1",
+							Port:   443,
+						},
 					},
-				},
-				DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
-					BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
-						Input: map[string]any{
-							"mqtt": map[string]any{
-								"topic": "test/topic",
+					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
+							Input: map[string]any{
+								"mqtt": map[string]any{
+									"topic": "test/topic",
+								},
 							},
-						},
-						Output: map[string]any{
-							"kafka": map[string]any{
-								"topic": "test-output",
+							Output: map[string]any{
+								"kafka": map[string]any{
+									"topic": "test-output",
+								},
 							},
-						},
-						Pipeline: map[string]any{
-							"processors": []any{
-								map[string]any{
-									"text": map[string]any{
-										"operator": "to_upper",
+							Pipeline: map[string]any{
+								"processors": []any{
+									map[string]any{
+										"text": map[string]any{
+											"operator": "to_upper",
+										},
 									},
 								},
 							},
@@ -72,15 +74,15 @@ var _ = Describe("ProtocolConverter YAML Normalizer", func() {
 			config = normalizer.NormalizeConfig(config)
 
 			// Check input preserved
-			inputMqtt := config.DataflowComponentReadServiceConfig.BenthosConfig.Input["mqtt"].(map[string]any)
+			inputMqtt := config.Template.DataflowComponentReadServiceConfig.BenthosConfig.Input["mqtt"].(map[string]any)
 			Expect(inputMqtt["topic"]).To(Equal("test/topic"))
 
 			// Check output preserved
-			outputUns := config.DataflowComponentReadServiceConfig.BenthosConfig.Output["uns"].(map[string]any) // note that this is NOT kafka, but uns
+			outputUns := config.Template.DataflowComponentReadServiceConfig.BenthosConfig.Output["uns"].(map[string]any) // note that this is NOT kafka, but uns
 			Expect(outputUns["bridged_by"]).To(Equal("!{{ .bridged_by }}"))
 
 			// Check pipeline processors preserved
-			processors := config.DataflowComponentReadServiceConfig.BenthosConfig.Pipeline["processors"].([]any)
+			processors := config.Template.DataflowComponentReadServiceConfig.BenthosConfig.Pipeline["processors"].([]any)
 			Expect(processors).To(HaveLen(1))
 			processor := processors[0].(map[string]any)
 			processorText := processor["text"].(map[string]any)
@@ -89,14 +91,16 @@ var _ = Describe("ProtocolConverter YAML Normalizer", func() {
 
 		It("should normalize maps by ensuring they're not nil", func() {
 			config := ProtocolConverterServiceConfig{
-				DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
-					BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
-						// Input is nil
-						// Output is nil
-						Pipeline: map[string]any{}, // Empty but not nil
-						// Buffer is nil
-						// CacheResources is nil
-						// RateLimitResources is nil
+				Template: ProtocolConverterServiceConfigTemplateVariable{
+					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
+							// Input is nil
+							// Output is nil
+							Pipeline: map[string]any{}, // Empty but not nil
+							// Buffer is nil
+							// CacheResources is nil
+							// RateLimitResources is nil
+						},
 					},
 				},
 			}
@@ -104,16 +108,16 @@ var _ = Describe("ProtocolConverter YAML Normalizer", func() {
 			normalizer := NewNormalizer()
 			config = normalizer.NormalizeConfig(config)
 
-			Expect(config.DataflowComponentReadServiceConfig.BenthosConfig.Input).NotTo(BeNil())
-			Expect(config.DataflowComponentReadServiceConfig.BenthosConfig.Output).NotTo(BeNil())
-			Expect(config.DataflowComponentReadServiceConfig.BenthosConfig.Pipeline).NotTo(BeNil())
+			Expect(config.Template.DataflowComponentReadServiceConfig.BenthosConfig.Input).NotTo(BeNil())
+			Expect(config.Template.DataflowComponentReadServiceConfig.BenthosConfig.Output).NotTo(BeNil())
+			Expect(config.Template.DataflowComponentReadServiceConfig.BenthosConfig.Pipeline).NotTo(BeNil())
 
 			// Buffer should have the none buffer set
-			Expect(config.DataflowComponentReadServiceConfig.BenthosConfig.Buffer).To(HaveKey("none"))
+			Expect(config.Template.DataflowComponentReadServiceConfig.BenthosConfig.Buffer).To(HaveKey("none"))
 
 			// These should be empty
-			Expect(config.DataflowComponentReadServiceConfig.BenthosConfig.CacheResources).To(BeEmpty())
-			Expect(config.DataflowComponentReadServiceConfig.BenthosConfig.RateLimitResources).To(BeEmpty())
+			Expect(config.Template.DataflowComponentReadServiceConfig.BenthosConfig.CacheResources).To(BeEmpty())
+			Expect(config.Template.DataflowComponentReadServiceConfig.BenthosConfig.RateLimitResources).To(BeEmpty())
 		})
 	})
 

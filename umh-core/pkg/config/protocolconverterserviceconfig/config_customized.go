@@ -22,7 +22,7 @@ import (
 // GetConnectionServiceConfig converts the component config to a full ProtocolConverterServiceConfig
 // no customization needed
 func (c *ProtocolConverterServiceConfig) GetConnectionServiceConfig() connectionserviceconfig.ConnectionServiceConfig {
-	return c.ConnectionServiceConfig
+	return c.Template.ConnectionServiceConfig
 }
 
 // GetDFCReadServiceConfig converts the component config to a full ProtocolConverterServiceConfig
@@ -30,7 +30,7 @@ func (c *ProtocolConverterServiceConfig) GetConnectionServiceConfig() connection
 // to be the uns output config.
 func (c *ProtocolConverterServiceConfig) GetDFCReadServiceConfig() dataflowcomponentserviceconfig.DataflowComponentServiceConfig {
 	// copy the config
-	dfcReadConfig := c.DataflowComponentReadServiceConfig
+	dfcReadConfig := c.Template.DataflowComponentReadServiceConfig
 
 	// enforce the output config to be the uns output config
 	dfcReadConfig.BenthosConfig.Output = map[string]any{
@@ -46,7 +46,7 @@ func (c *ProtocolConverterServiceConfig) GetDFCReadServiceConfig() dataflowcompo
 // For a write DFC, the user is not allowed to set its own input config, so we "enforce" the input config
 // to be the uns input config.
 func (c *ProtocolConverterServiceConfig) GetDFCWriteServiceConfig() dataflowcomponentserviceconfig.DataflowComponentServiceConfig {
-	dfcWriteConfig := c.DataflowComponentWriteServiceConfig
+	dfcWriteConfig := c.Template.DataflowComponentWriteServiceConfig
 
 	dfcWriteConfig.BenthosConfig.Input = map[string]any{
 		"uns": map[string]any{
@@ -65,8 +65,10 @@ func FromConnectionAndDFCServiceConfig(
 	dfcWrite dataflowcomponentserviceconfig.DataflowComponentServiceConfig,
 ) ProtocolConverterServiceConfig {
 	return ProtocolConverterServiceConfig{
-		ConnectionServiceConfig:             connection,
-		DataflowComponentReadServiceConfig:  dfcRead,
-		DataflowComponentWriteServiceConfig: dfcWrite,
+		Template: ProtocolConverterServiceConfigTemplateVariable{
+			ConnectionServiceConfig:             connection,
+			DataflowComponentReadServiceConfig:  dfcRead,
+			DataflowComponentWriteServiceConfig: dfcWrite,
+		},
 	}
 }

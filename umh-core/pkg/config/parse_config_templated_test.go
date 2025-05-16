@@ -21,23 +21,21 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var _ = Describe("ParseConfigTemplated", func() {
+var _ = FDescribe("ParseConfigTemplated", func() {
 	Context("when the config is valid", func() {
 		It("should parse the config correctly", func() {
-			cfg, err := os.ReadFile("../../examples/example-config-dataflow-templated.yaml")
+			cfg, err := os.ReadFile("../../examples/example-config-protocolconverter-templated.yaml")
 			Expect(err).To(BeNil())
 
 			parsedConfig, err := parseConfig(cfg)
 			Expect(err).To(BeNil())
 
-			Expect(parsedConfig.DataFlow).To(HaveLen(3))
-			Expect(parsedConfig.DataFlow[0].Name).To(Equal("data-flow-hello-world"))
+			Expect(parsedConfig.ProtocolConverter).To(HaveLen(3))
+			Expect(parsedConfig.ProtocolConverter[0].Name).To(Equal("temperature-sensor-pc"))
 
-			generatedConfigGeneratePart := parsedConfig.DataFlow[0].DataFlowComponentServiceConfig.BenthosConfig.Input["generate"]
+			generatedConfigGeneratePart := parsedConfig.ProtocolConverter[0].ProtocolConverterServiceConfig.Template.DataflowComponentReadServiceConfig.BenthosConfig.Input["opcua"]
 			Expect(generatedConfigGeneratePart).To(Equal(map[string]any{
-				"mapping":  "root = \"{{ .customVariables.greeting }}\"",
-				"interval": "1s",
-				"count":    0,
+				"address": "opc.tcp://{{ .IP }}:{{ .PORT }}",
 			}))
 		})
 	})

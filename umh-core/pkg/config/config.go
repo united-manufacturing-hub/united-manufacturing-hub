@@ -27,21 +27,21 @@ import (
 )
 
 type FullConfig struct {
-	Agent     AgentConfig               `yaml:"agent"`               // Agent config, requires restart to take effect
-	DataFlow  []DataFlowComponentConfig `yaml:"dataFlow,omitempty"`  // DataFlow components to manage, can be updated while running
-	Internal  InternalConfig            `yaml:"internal,omitempty"`  // Internal config, not to be used by the user, only to be used for testing internal components
-	Templates []any                     `yaml:"templates,omitempty"` // proof of concept for general yaml templates, where anchor can be placed, see also examples/example-config-dataflow-templated.yaml
+	Agent             AgentConfig               `yaml:"agent"`                       // Agent config, requires restart to take effect
+	DataFlow          []DataFlowComponentConfig `yaml:"dataFlow,omitempty"`          // DataFlow components to manage, can be updated while running
+	ProtocolConverter []ProtocolConverterConfig `yaml:"protocolConverter,omitempty"` // ProtocolConverter config, can be updated while runnnig
+	Internal          InternalConfig            `yaml:"internal,omitempty"`          // Internal config, not to be used by the user, only to be used for testing internal components
+	Templates         []any                     `yaml:"templates,omitempty"`         // proof of concept for general yaml templates, where anchor can be placed, see also examples/example-config-dataflow-templated.yaml
 }
 
 type InternalConfig struct {
-	Services          []S6FSMConfig             `yaml:"services,omitempty"`          // Services to manage, can be updated while running
-	Benthos           []BenthosConfig           `yaml:"benthos,omitempty"`           // Benthos services to manage, can be updated while running
-	Nmap              []NmapConfig              `yaml:"nmap,omitempty"`              // Nmap services to manage, can be updated while running
-	Redpanda          RedpandaConfig            `yaml:"redpanda,omitempty"`          // Redpanda config, can be updated while running
-	BenthosMonitor    []BenthosMonitorConfig    `yaml:"benthosMonitor,omitempty"`    // BenthosMonitor config, can be updated while running
-	Connection        []ConnectionConfig        `yaml:"connection,omitempty"`        // Connection services to manage, can be updated while running
-	RedpandaMonitor   []RedpandaMonitorConfig   `yaml:"redpandaMonitor,omitempty"`   // RedpandaMonitor config, can be updated while running
-	ProtocolConverter []ProtocolConverterConfig `yaml:"protocolConverter,omitempty"` // ProtocolConverter config, can be updated while runnnig
+	Services        []S6FSMConfig           `yaml:"services,omitempty"`        // Services to manage, can be updated while running
+	Benthos         []BenthosConfig         `yaml:"benthos,omitempty"`         // Benthos services to manage, can be updated while running
+	Nmap            []NmapConfig            `yaml:"nmap,omitempty"`            // Nmap services to manage, can be updated while running
+	Redpanda        RedpandaConfig          `yaml:"redpanda,omitempty"`        // Redpanda config, can be updated while running
+	BenthosMonitor  []BenthosMonitorConfig  `yaml:"benthosMonitor,omitempty"`  // BenthosMonitor config, can be updated while running
+	Connection      []ConnectionConfig      `yaml:"connection,omitempty"`      // Connection services to manage, can be updated while running
+	RedpandaMonitor []RedpandaMonitorConfig `yaml:"redpandaMonitor,omitempty"` // RedpandaMonitor config, can be updated while running
 }
 
 type AgentConfig struct {
@@ -129,8 +129,6 @@ type ProtocolConverterConfig struct {
 	FSMInstanceConfig `yaml:",inline"`
 
 	ProtocolConverterServiceConfig protocolconverterserviceconfig.ProtocolConverterServiceConfig `yaml:"protocolConverterServiceConfig"`
-
-	CustomVariables []TemplateVariable `yaml:"customVariables,omitempty"`
 
 	// private marker – not (un)marshalled
 	// explanation see templating.go
