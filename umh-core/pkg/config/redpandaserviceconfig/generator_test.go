@@ -67,7 +67,7 @@ var _ = Describe("Redpanda YAML Generator", func() {
 				expected: []string{
 					"retention_ms: 1000",
 					"retention_bytes: 1000",
-					"compression_algorithm: \"lz4\"",
+					"log_compression_type: \"lz4\"",
 				},
 			}),
 		Entry("should render default compression algorithm",
@@ -81,7 +81,7 @@ var _ = Describe("Redpanda YAML Generator", func() {
 				expected: []string{
 					"retention_ms: 1000",
 					"retention_bytes: 1000",
-					"compression_algorithm: \"snappy\"",
+					"log_compression_type: \"snappy\"",
 				},
 			}),
 	)

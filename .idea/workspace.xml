@@ -21,7 +21,11 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="0fead188-9091-4463-a9f4-75e8dedf3882" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/umh-core/pkg/fsm/redpanda/reconcile.go" beforeDir="false" afterPath="$PROJECT_DIR$/umh-core/pkg/fsm/redpanda/reconcile.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/umh-core/examples/example-config-redpanda.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/umh-core/examples/example-config-redpanda.yaml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/umh-core/integration/redpanda_config_update_test.go" beforeDir="false" afterPath="$PROJECT_DIR$/umh-core/integration/redpanda_config_update_test.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/umh-core/pkg/service/redpanda/mock.go" beforeDir="false" afterPath="$PROJECT_DIR$/umh-core/pkg/service/redpanda/mock.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/umh-core/pkg/service/redpanda/redpanda_test.go" beforeDir="false" afterPath="$PROJECT_DIR$/umh-core/pkg/service/redpanda/redpanda_test.go" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
