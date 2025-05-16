@@ -21,7 +21,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var _ = FDescribe("ParseConfigTemplated", func() {
+var _ = Describe("ParseConfigTemplated", func() {
 	Context("when the config is valid", func() {
 		It("should parse the config correctly", func() {
 			cfg, err := os.ReadFile("../../examples/example-config-protocolconverter-templated.yaml")

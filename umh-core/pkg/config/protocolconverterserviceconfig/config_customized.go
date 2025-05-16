@@ -63,12 +63,10 @@ func FromConnectionAndDFCServiceConfig(
 	connection connectionserviceconfig.ConnectionServiceConfig,
 	dfcRead dataflowcomponentserviceconfig.DataflowComponentServiceConfig,
 	dfcWrite dataflowcomponentserviceconfig.DataflowComponentServiceConfig,
-) ProtocolConverterServiceConfig {
-	return ProtocolConverterServiceConfig{
-		Template: ProtocolConverterServiceConfigTemplateVariable{
-			ConnectionServiceConfig:             connection,
-			DataflowComponentReadServiceConfig:  dfcRead,
-			DataflowComponentWriteServiceConfig: dfcWrite,
-		},
+) ProtocolConverterServiceConfigTemplated {
+	return ProtocolConverterServiceConfigTemplated{
+		ConnectionServiceConfig:             connection,
+		DataflowComponentReadServiceConfig:  dfcRead,
+		DataflowComponentWriteServiceConfig: dfcWrite,
 	}
 }

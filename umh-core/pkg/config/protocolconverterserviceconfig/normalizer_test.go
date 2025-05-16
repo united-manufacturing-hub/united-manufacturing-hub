@@ -37,7 +37,7 @@ var _ = Describe("ProtocolConverter YAML Normalizer", func() {
 
 		It("should preserve existing values", func() {
 			config := ProtocolConverterServiceConfig{
-				Template: ProtocolConverterServiceConfigTemplateVariable{
+				Template: ProtocolConverterServiceConfigTemplated{
 					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
 						NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
 							Target: "127.0.0.1",
@@ -91,7 +91,7 @@ var _ = Describe("ProtocolConverter YAML Normalizer", func() {
 
 		It("should normalize maps by ensuring they're not nil", func() {
 			config := ProtocolConverterServiceConfig{
-				Template: ProtocolConverterServiceConfigTemplateVariable{
+				Template: ProtocolConverterServiceConfigTemplated{
 					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 							// Input is nil

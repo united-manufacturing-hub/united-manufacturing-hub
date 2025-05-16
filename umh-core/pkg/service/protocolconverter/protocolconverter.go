@@ -282,23 +282,28 @@ func (p *ProtocolConverterService) getDFCWriteName(protConvName string) string {
 }
 
 // GenerateConfig generates a dfc & connection config for a given protocolconverter
+// this is the function that will apply the variables and should be called in the manager when comparing the desired state
+// (which will still have variables) with the live state (which will have the variables applied)
 func (p *ProtocolConverterService) GenerateConfig(
 	protConvConfig *protocolconverterserviceconfig.ProtocolConverterServiceConfig,
 	protConvName string,
 ) (
-	connectionserviceconfig.ConnectionServiceConfig,
-	dataflowcomponentserviceconfig.DataflowComponentServiceConfig,
-	dataflowcomponentserviceconfig.DataflowComponentServiceConfig,
+	protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplated,
 	error,
 ) {
 	if protConvConfig == nil {
-		return connectionserviceconfig.ConnectionServiceConfig{},
-			dataflowcomponentserviceconfig.DataflowComponentServiceConfig{},
-			dataflowcomponentserviceconfig.DataflowComponentServiceConfig{},
-			fmt.Errorf("protocolConverter config is nil")
+		return protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplated{}, fmt.Errorf("protocolConverter config is nil")
 	}
 
-	return protConvConfig.GetConnectionServiceConfig(), protConvConfig.GetDFCReadServiceConfig(), protConvConfig.GetDFCWriteServiceConfig(), nil
+	templatedConfig := protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplated{
+		ConnectionServiceConfig:             protConvConfig.GetConnectionServiceConfig(),
+		DataflowComponentReadServiceConfig:  protConvConfig.GetDFCReadServiceConfig(),
+		DataflowComponentWriteServiceConfig: protConvConfig.GetDFCWriteServiceConfig(),
+	}
+
+	// TODO: Apply the variables to the config
+
+	return templatedConfig, nil
 }
 
 // GetConfig returns the actual ProtocolConverter config from the protocolConverter service
@@ -306,9 +311,9 @@ func (p *ProtocolConverterService) GetConfig(
 	ctx context.Context,
 	filesystemService filesystem.Service,
 	protConvName string,
-) (protocolconverterserviceconfig.ProtocolConverterServiceConfig, error) {
+) (protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplated, error) {
 	if ctx.Err() != nil {
-		return protocolconverterserviceconfig.ProtocolConverterServiceConfig{}, ctx.Err()
+		return protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplated{}, ctx.Err()
 	}
 
 	underlyingConnectionName := p.getUnderlyingConnectionName(protConvName)
@@ -318,17 +323,17 @@ func (p *ProtocolConverterService) GetConfig(
 	// Get the Connection config
 	connConfig, err := p.connectionService.GetConfig(ctx, filesystemService, underlyingConnectionName)
 	if err != nil {
-		return protocolconverterserviceconfig.ProtocolConverterServiceConfig{}, fmt.Errorf("failed to get connection config: %w", err)
+		return protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplated{}, fmt.Errorf("failed to get connection config: %w", err)
 	}
 
 	dfcReadConfig, err := p.dataflowComponentService.GetConfig(ctx, filesystemService, underlyingDFCReadName)
 	if err != nil {
-		return protocolconverterserviceconfig.ProtocolConverterServiceConfig{}, fmt.Errorf("failed to get read dataflowcomponent config: %w", err)
+		return protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplated{}, fmt.Errorf("failed to get read dataflowcomponent config: %w", err)
 	}
 
 	dfcWriteConfig, err := p.dataflowComponentService.GetConfig(ctx, filesystemService, underlyingDFCWriteName)
 	if err != nil {
-		return protocolconverterserviceconfig.ProtocolConverterServiceConfig{}, fmt.Errorf("failed to get write dataflowcomponent config: %w", err)
+		return protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplated{}, fmt.Errorf("failed to get write dataflowcomponent config: %w", err)
 	}
 
 	// Convert Connection & DFC config to ProtocolConverter config
@@ -491,10 +496,14 @@ func (p *ProtocolConverterService) AddToManager(
 	}
 
 	// Generate Connection & DFC Serviceconfigs from ProtocolConverter config
-	connServiceConfig, dfcReadServiceConfig, dfcWriteServiceConfig, err := p.GenerateConfig(cfg, protConvName)
+	templatedConfig, err := p.GenerateConfig(cfg, protConvName)
 	if err != nil {
 		return fmt.Errorf("failed to generate serviceconfigs: %v", err)
 	}
+
+	connServiceConfig := templatedConfig.ConnectionServiceConfig
+	dfcReadServiceConfig := templatedConfig.DataflowComponentReadServiceConfig
+	dfcWriteServiceConfig := templatedConfig.DataflowComponentWriteServiceConfig
 
 	// Create a config.ConnectionConfig that wraps the NmapServiceConfig
 	connectionConfig := config.ConnectionConfig{
@@ -589,10 +598,14 @@ func (p *ProtocolConverterService) UpdateInManager(
 	}
 
 	// Convert our connection config to Connection service config
-	connConfig, dfcReadConfig, dfcWriteConfig, err := p.GenerateConfig(cfg, protConvName)
+	templatedConfig, err := p.GenerateConfig(cfg, protConvName)
 	if err != nil {
 		return fmt.Errorf("failed to generate configs: %w", err)
 	}
+
+	connConfig := templatedConfig.ConnectionServiceConfig
+	dfcReadConfig := templatedConfig.DataflowComponentReadServiceConfig
+	dfcWriteConfig := templatedConfig.DataflowComponentWriteServiceConfig
 
 	// Create a config.ConnectionConfig that wraps the ConnectionServiceConfig
 	connCurrentDesiredState := p.connectionConfig[indexConn].DesiredFSMState

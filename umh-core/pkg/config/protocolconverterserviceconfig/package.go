@@ -21,12 +21,13 @@ import (
 )
 
 var (
-	defaultGenerator  = NewGenerator()
 	defaultNormalizer = NewNormalizer()
 	defaultComparator = NewComparator()
 )
 
-type ProtocolConverterServiceConfigTemplateVariable struct {
+// ProtocolConverterServiceConfigTemplated represents the configuration for a ProtocolConverter
+// that had its variables applied. This is then ready to use in the FSM.
+type ProtocolConverterServiceConfigTemplated struct {
 	ConnectionServiceConfig             connectionserviceconfig.ConnectionServiceConfig               `yaml:"connection"`
 	DataflowComponentReadServiceConfig  dataflowcomponentserviceconfig.DataflowComponentServiceConfig `yaml:"dataflowcomponent_read"`
 	DataflowComponentWriteServiceConfig dataflowcomponentserviceconfig.DataflowComponentServiceConfig `yaml:"dataflowcomponent_write"`
@@ -34,13 +35,14 @@ type ProtocolConverterServiceConfigTemplateVariable struct {
 
 // ProtocolConverterServiceConfig represents the configuration for a ProtocolConverter
 type ProtocolConverterServiceConfig struct {
-	Template  ProtocolConverterServiceConfigTemplateVariable `yaml:"template"`
-	Variables variables.VariableBundle                       `yaml:"variables"`
+	Template  ProtocolConverterServiceConfigTemplated `yaml:"template"`
+	Variables variables.VariableBundle                `yaml:"variables,omitempty"`
+	Location  map[int]string                          `yaml:"location,omitempty"`
 }
 
 // Equal checks if two ProtocolConverterServiceConfigs are equal
 func (c ProtocolConverterServiceConfig) Equal(other ProtocolConverterServiceConfig) bool {
-	return NewComparator().ConfigsEqual(c, other)
+	return defaultComparator.ConfigsEqual(c, other)
 }
 
 // NormalizeProtocolConverterConfig is a package-level function for easy config normalization

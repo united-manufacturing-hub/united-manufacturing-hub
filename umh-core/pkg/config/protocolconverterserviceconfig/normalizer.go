@@ -17,6 +17,7 @@ package protocolconverterserviceconfig
 import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/connectionserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/variables"
 )
 
 // Normalizer handles the normalization of ProtocolConverter configurations
@@ -41,6 +42,12 @@ func (n *Normalizer) NormalizeConfig(cfg ProtocolConverterServiceConfig) Protoco
 	// Then we  need to normalize the underlying ConnectionServiceConfig
 	connectionNormalizer := connectionserviceconfig.NewNormalizer()
 	normalized.Template.ConnectionServiceConfig = connectionNormalizer.NormalizeConfig(normalized.GetConnectionServiceConfig())
+
+	// Then we need to normalize the variables
+	variablesNormalizer := variables.NewNormalizer()
+	normalized.Variables = variablesNormalizer.NormalizeConfig(normalized.Variables)
+
+	// no need to normalize the location
 
 	return normalized
 }

@@ -75,7 +75,7 @@ func (g *Generator) configToMap(cfg ProtocolConverterServiceConfig) map[string]a
 	// Add template and variables to the root config
 	configMap["template"] = templateMap
 	configMap["variables"] = variableBundleConfigMap
-
+	configMap["location"] = cfg.Location
 	return configMap
 }
 
@@ -92,6 +92,11 @@ func normalizeConfig(raw map[string]any) map[string]any {
 	variables, ok := raw["variables"].(map[string]any)
 	if !ok {
 		variables = make(map[string]any)
+	}
+
+	location, ok := raw["location"].(map[string]any)
+	if !ok {
+		location = make(map[string]any)
 	}
 
 	// Extract and normalize template components
@@ -127,6 +132,6 @@ func normalizeConfig(raw map[string]any) map[string]any {
 	// Set the normalized template and variables
 	normalized["template"] = normalizedTemplate
 	normalized["variables"] = normalizedVariables
-
+	normalized["location"] = location // no need to normalize it
 	return normalized
 }
