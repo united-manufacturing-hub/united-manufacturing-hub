@@ -24,7 +24,7 @@ import (
 
 var _ = Describe("ProtocolConverter YAML Generator", func() {
 	type testCase struct {
-		config      *ProtocolConverterServiceConfig
+		config      *ProtocolConverterServiceConfigSpec
 		expected    []string
 		notExpected []string
 	}
@@ -47,8 +47,8 @@ var _ = Describe("ProtocolConverter YAML Generator", func() {
 		},
 		Entry("should render empty stdout output correctly",
 			testCase{
-				config: &ProtocolConverterServiceConfig{
-					Template: ProtocolConverterServiceConfigTemplated{
+				config: &ProtocolConverterServiceConfigSpec{
+					Template: ProtocolConverterServiceConfigTemplate{
 						connectionserviceconfig.ConnectionServiceConfig{
 							NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
 								Target: "127.0.0.1",
@@ -87,8 +87,8 @@ var _ = Describe("ProtocolConverter YAML Generator", func() {
 			}),
 		Entry("should render configured output correctly",
 			testCase{
-				config: &ProtocolConverterServiceConfig{
-					Template: ProtocolConverterServiceConfigTemplated{
+				config: &ProtocolConverterServiceConfigSpec{
+					Template: ProtocolConverterServiceConfigTemplate{
 						connectionserviceconfig.ConnectionServiceConfig{
 							NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
 								Target: "127.0.0.1",
@@ -125,8 +125,8 @@ var _ = Describe("ProtocolConverter YAML Generator", func() {
 			}),
 		Entry("should render empty input correctly",
 			testCase{
-				config: &ProtocolConverterServiceConfig{
-					Template: ProtocolConverterServiceConfigTemplated{
+				config: &ProtocolConverterServiceConfigSpec{
+					Template: ProtocolConverterServiceConfigTemplate{
 						connectionserviceconfig.ConnectionServiceConfig{
 							NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
 								Target: "127.0.0.1",
@@ -161,8 +161,8 @@ var _ = Describe("ProtocolConverter YAML Generator", func() {
 			}),
 		Entry("should render Kafka input with processor and AWS S3 output",
 			testCase{
-				config: &ProtocolConverterServiceConfig{
-					Template: ProtocolConverterServiceConfigTemplated{
+				config: &ProtocolConverterServiceConfigSpec{
+					Template: ProtocolConverterServiceConfigTemplate{
 						connectionserviceconfig.ConnectionServiceConfig{
 							NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
 								Target: "127.0.0.1",

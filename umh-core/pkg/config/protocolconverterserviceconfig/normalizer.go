@@ -29,7 +29,7 @@ func NewNormalizer() *Normalizer {
 }
 
 // NormalizeConfig applies ProtocolConverter defaults to a structured config
-func (n *Normalizer) NormalizeConfig(cfg ProtocolConverterServiceConfig) ProtocolConverterServiceConfig {
+func (n *Normalizer) NormalizeConfig(cfg ProtocolConverterServiceConfigSpec) ProtocolConverterServiceConfigSpec {
 
 	// create a copy
 	normalized := cfg

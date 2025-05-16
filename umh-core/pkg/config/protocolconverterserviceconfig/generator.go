@@ -33,8 +33,8 @@ func NewGenerator() *Generator {
 	return &Generator{}
 }
 
-// RenderConfig generates a ProtocolConverter YAML configuration from a ProtocolConverterServiceConfig
-func (g *Generator) RenderConfig(cfg ProtocolConverterServiceConfig) (string, error) {
+// RenderConfig generates a ProtocolConverter YAML configuration from a ProtocolConverterServiceConfigSpec
+func (g *Generator) RenderConfig(cfg ProtocolConverterServiceConfigSpec) (string, error) {
 
 	// Convert the config to a normalized map
 	configMap := g.configToMap(cfg)
@@ -52,7 +52,7 @@ func (g *Generator) RenderConfig(cfg ProtocolConverterServiceConfig) (string, er
 }
 
 // configToMap converts a DataFlowComponentServiceConfig to a raw map for YAML generation
-func (g *Generator) configToMap(cfg ProtocolConverterServiceConfig) map[string]any {
+func (g *Generator) configToMap(cfg ProtocolConverterServiceConfigSpec) map[string]any {
 	// use generator to create a valid dfcConfigMap & connectionConfigMap
 	dfcGenerator := dataflowcomponentserviceconfig.NewGenerator()
 	connectionGenerator := connectionserviceconfig.NewGenerator()

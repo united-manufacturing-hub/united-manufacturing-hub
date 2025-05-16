@@ -25,7 +25,7 @@ import (
 var _ = Describe("ProtocolConverter YAML Normalizer", func() {
 	Describe("NormalizeConfig", func() {
 		It("should set default values for empty config", func() {
-			config := ProtocolConverterServiceConfig{}
+			config := ProtocolConverterServiceConfigSpec{}
 			normalizer := NewNormalizer()
 
 			config = normalizer.NormalizeConfig(config)
@@ -36,8 +36,8 @@ var _ = Describe("ProtocolConverter YAML Normalizer", func() {
 		})
 
 		It("should preserve existing values", func() {
-			config := ProtocolConverterServiceConfig{
-				Template: ProtocolConverterServiceConfigTemplated{
+			config := ProtocolConverterServiceConfigSpec{
+				Template: ProtocolConverterServiceConfigTemplate{
 					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
 						NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
 							Target: "127.0.0.1",
@@ -90,8 +90,8 @@ var _ = Describe("ProtocolConverter YAML Normalizer", func() {
 		})
 
 		It("should normalize maps by ensuring they're not nil", func() {
-			config := ProtocolConverterServiceConfig{
-				Template: ProtocolConverterServiceConfigTemplated{
+			config := ProtocolConverterServiceConfigSpec{
+				Template: ProtocolConverterServiceConfigTemplate{
 					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 							// Input is nil
@@ -124,8 +124,8 @@ var _ = Describe("ProtocolConverter YAML Normalizer", func() {
 	// Test the package-level function
 	Describe("NormalizeDataFlowComponentConfig package function", func() {
 		It("should use the default normalizer", func() {
-			config1 := ProtocolConverterServiceConfig{}
-			config2 := ProtocolConverterServiceConfig{}
+			config1 := ProtocolConverterServiceConfigSpec{}
+			config2 := ProtocolConverterServiceConfigSpec{}
 
 			// Use package-level function
 			config1 = NormalizeProtocolConverterConfig(config1)

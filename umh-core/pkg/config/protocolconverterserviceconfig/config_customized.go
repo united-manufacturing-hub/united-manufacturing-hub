@@ -21,14 +21,14 @@ import (
 
 // GetConnectionServiceConfig converts the component config to a full ProtocolConverterServiceConfig
 // no customization needed
-func (c *ProtocolConverterServiceConfig) GetConnectionServiceConfig() connectionserviceconfig.ConnectionServiceConfig {
+func (c *ProtocolConverterServiceConfigSpec) GetConnectionServiceConfig() connectionserviceconfig.ConnectionServiceConfig {
 	return c.Template.ConnectionServiceConfig
 }
 
 // GetDFCReadServiceConfig converts the component config to a full ProtocolConverterServiceConfig
 // For a read DFC, the user is not allowed to set its own output config, so we "enforce" the output config
 // to be the uns output config.
-func (c *ProtocolConverterServiceConfig) GetDFCReadServiceConfig() dataflowcomponentserviceconfig.DataflowComponentServiceConfig {
+func (c *ProtocolConverterServiceConfigSpec) GetDFCReadServiceConfig() dataflowcomponentserviceconfig.DataflowComponentServiceConfig {
 	// copy the config
 	dfcReadConfig := c.Template.DataflowComponentReadServiceConfig
 
@@ -45,7 +45,7 @@ func (c *ProtocolConverterServiceConfig) GetDFCReadServiceConfig() dataflowcompo
 // GetDFCWriteServiceConfig converts the component config to a full ProtocolConverterServiceConfig
 // For a write DFC, the user is not allowed to set its own input config, so we "enforce" the input config
 // to be the uns input config.
-func (c *ProtocolConverterServiceConfig) GetDFCWriteServiceConfig() dataflowcomponentserviceconfig.DataflowComponentServiceConfig {
+func (c *ProtocolConverterServiceConfigSpec) GetDFCWriteServiceConfig() dataflowcomponentserviceconfig.DataflowComponentServiceConfig {
 	dfcWriteConfig := c.Template.DataflowComponentWriteServiceConfig
 
 	dfcWriteConfig.BenthosConfig.Input = map[string]any{
@@ -63,8 +63,8 @@ func FromConnectionAndDFCServiceConfig(
 	connection connectionserviceconfig.ConnectionServiceConfig,
 	dfcRead dataflowcomponentserviceconfig.DataflowComponentServiceConfig,
 	dfcWrite dataflowcomponentserviceconfig.DataflowComponentServiceConfig,
-) ProtocolConverterServiceConfigTemplated {
-	return ProtocolConverterServiceConfigTemplated{
+) ProtocolConverterServiceConfigRuntime {
+	return ProtocolConverterServiceConfigRuntime{
 		ConnectionServiceConfig:             connection,
 		DataflowComponentReadServiceConfig:  dfcRead,
 		DataflowComponentWriteServiceConfig: dfcWrite,

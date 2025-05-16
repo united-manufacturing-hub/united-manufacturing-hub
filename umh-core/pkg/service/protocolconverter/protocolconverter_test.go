@@ -75,13 +75,13 @@ var _ = Describe("DataFlowComponentService", func() {
 
 	Describe("AddToManager", func() {
 		var (
-			cfg *protocolconverterserviceconfig.ProtocolConverterServiceConfig
+			cfg *protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec
 		)
 
 		BeforeEach(func() {
 			// Create a basic config for testing
-			cfg = &protocolconverterserviceconfig.ProtocolConverterServiceConfig{
-				Template: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplated{
+			cfg = &protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
+				Template: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
 					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
 						NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
 							Target: "localhost",
@@ -174,7 +174,7 @@ var _ = Describe("DataFlowComponentService", func() {
 
 	Describe("Status", func() {
 		var (
-			cfg             *protocolconverterserviceconfig.ProtocolConverterServiceConfig
+			cfg             *protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec
 			dfcManager      *dfcfsm.DataflowComponentManager
 			connManager     *connfsm.ConnectionManager
 			mockConnService *connservice.MockConnectionService
@@ -184,8 +184,8 @@ var _ = Describe("DataFlowComponentService", func() {
 
 		BeforeEach(func() {
 			// Create a basic config for testing
-			cfg = &protocolconverterserviceconfig.ProtocolConverterServiceConfig{
-				Template: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplated{
+			cfg = &protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
+				Template: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
 					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
 						NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
 							Target: "localhost",
@@ -337,14 +337,14 @@ var _ = Describe("DataFlowComponentService", func() {
 
 	Describe("UpdateInManager", func() {
 		var (
-			config        *protocolconverterserviceconfig.ProtocolConverterServiceConfig
-			updatedConfig *protocolconverterserviceconfig.ProtocolConverterServiceConfig
+			config        *protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec
+			updatedConfig *protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec
 		)
 
 		BeforeEach(func() {
 			// Initial config
-			config = &protocolconverterserviceconfig.ProtocolConverterServiceConfig{
-				Template: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplated{
+			config = &protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
+				Template: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
 					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
 						NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
 							Target: "localhost",
@@ -367,8 +367,8 @@ var _ = Describe("DataFlowComponentService", func() {
 
 			// Updated config with different settings
 
-			updatedConfig = &protocolconverterserviceconfig.ProtocolConverterServiceConfig{
-				Template: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplated{
+			updatedConfig = &protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
+				Template: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
 					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
 						NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
 							Target: "localhost",
@@ -446,13 +446,13 @@ var _ = Describe("DataFlowComponentService", func() {
 
 	Describe("StartAndStopDataFlowComponent", func() {
 		var (
-			cfg *protocolconverterserviceconfig.ProtocolConverterServiceConfig
+			cfg *protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec
 		)
 
 		BeforeEach(func() {
 			// Create a basic config for testing
-			cfg = &protocolconverterserviceconfig.ProtocolConverterServiceConfig{
-				Template: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplated{
+			cfg = &protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
+				Template: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
 					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
 						NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
 							Target: "localhost",
@@ -541,13 +541,13 @@ var _ = Describe("DataFlowComponentService", func() {
 
 	Describe("RemoveFromManager", func() {
 		var (
-			cfg *protocolconverterserviceconfig.ProtocolConverterServiceConfig
+			cfg *protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec
 		)
 
 		BeforeEach(func() {
 			// Create a basic config for testing
-			cfg = &protocolconverterserviceconfig.ProtocolConverterServiceConfig{
-				Template: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplated{
+			cfg = &protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
+				Template: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
 					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
 						NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
 							Target: "localhost",
@@ -602,8 +602,8 @@ var _ = Describe("DataFlowComponentService", func() {
 	Describe("ReconcileManager", func() {
 		It("should pass configs to the managers for reconciliation", func() {
 			// Add a test component to have something to reconcile
-			cfg := &protocolconverterserviceconfig.ProtocolConverterServiceConfig{
-				Template: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplated{
+			cfg := &protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
+				Template: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
 					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
 						NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
 							Target: "localhost",
@@ -658,8 +658,8 @@ var _ = Describe("DataFlowComponentService", func() {
 
 			// Add a test component to have something to reconcile (just like in the other test)
 			testComponentName := "test-error-component"
-			cfg := &protocolconverterserviceconfig.ProtocolConverterServiceConfig{
-				Template: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplated{
+			cfg := &protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
+				Template: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
 					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
 						NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
 							Target: "localhost",

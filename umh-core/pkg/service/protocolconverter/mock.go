@@ -55,7 +55,7 @@ type MockProtocolConverterService struct {
 	GenerateConfigResultDFC        dataflowcomponentserviceconfig.DataflowComponentServiceConfig
 	GenerateConfigResultConnection connectionserviceconfig.ConnectionServiceConfig
 	GenerateConfigError            error
-	GetConfigResult                protocolconverterserviceconfig.ProtocolConverterServiceConfig
+	GetConfigResult                protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec
 	GetConfigError                 error
 	StatusResult                   ServiceInfo
 	StatusError                    error
@@ -173,7 +173,7 @@ func (m *MockProtocolConverterService) GetConverterState(protConvName string) *C
 
 // GenerateConfig mocks generating connection & dfc config for a ProtocolConverter
 func (m *MockProtocolConverterService) GenerateConfig(
-	protConvConfig *protocolconverterserviceconfig.ProtocolConverterServiceConfig,
+	protConvConfig *protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec,
 	protConvName string,
 ) (
 	connectionserviceconfig.ConnectionServiceConfig,
@@ -190,14 +190,14 @@ func (m *MockProtocolConverterService) GetConfig(
 	filesystemService filesystem.Service,
 	protConvName string,
 ) (
-	protocolconverterserviceconfig.ProtocolConverterServiceConfig,
+	protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec,
 	error,
 ) {
 	m.GetConfigCalled = true
 
 	// If error is set, return it
 	if m.GetConfigError != nil {
-		return protocolconverterserviceconfig.ProtocolConverterServiceConfig{}, m.GetConfigError
+		return protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{}, m.GetConfigError
 	}
 
 	// If a result is preset, return it
@@ -232,7 +232,7 @@ func (m *MockProtocolConverterService) Status(
 func (m *MockProtocolConverterService) AddToManager(
 	ctx context.Context,
 	filesystemService filesystem.Service,
-	cfg *protocolconverterserviceconfig.ProtocolConverterServiceConfig,
+	cfg *protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec,
 	protConvName string,
 ) error {
 	m.AddToManagerCalled = true
@@ -285,7 +285,7 @@ func (m *MockProtocolConverterService) AddToManager(
 func (m *MockProtocolConverterService) UpdateInManager(
 	ctx context.Context,
 	filesystemService filesystem.Service,
-	cfg *protocolconverterserviceconfig.ProtocolConverterServiceConfig,
+	cfg *protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec,
 	protConvName string,
 ) error {
 	m.UpdateInManagerCalled = true

@@ -42,20 +42,51 @@ import (
 // a logical unit that combines **one Connection + one Data-Flow-Component (DFC)**
 // and surfaces them as a single object to the rest of UMH-Core.
 type IProtocolConverterService interface {
-	// GenerateConfig converts a high-level `ProtocolConverterServiceConfig`
-	// into the two *concrete* child configs required by the underlying FSMs.
+	// GenerateConfig turns the *author-facing* specification (Spec) into the
+	// *desired* runtime representation that the manager will later compare with the
+	// live system.
 	//
-	// Arguments
-	//   protConvConfig – user-supplied high-level spec (may be partially filled)
-	//   protConvName   – logical converter name as used in the UMH YAML
+	// Workflow:
 	//
-	// Returns the *fully-normalised* Connection- and DFC-configs
-	// plus any validation error encountered.
-	GenerateConfig(protConvConfig *protocolconverterserviceconfig.ProtocolConverterServiceConfig, protConvName string) (connectionserviceconfig.ConnectionServiceConfig, dataflowcomponentserviceconfig.DataflowComponentServiceConfig, error)
+	//  1. The caller passes in a **ProtocolConverterServiceConfigSpec** that was
+	//     unmarshalled straight from the user’s `config.yaml`.  At this point the
+	//     struct may still contain:
+	//
+	//     • raw `text/template` actions (`{{ … }}`)
+	//     • a Variables bundle (key/value pairs)
+	//     • optional Location hints
+	//
+	//  2. We assemble the three subordinate blueprints (Connection, read-DFC,
+	//     write-DFC) into a **ProtocolConverterServiceConfigRuntime** while
+	//     *enforcing* the UNS guard-rails:
+	//
+	//     • read-DFC → `BenthosConfig.Output` is forced to UNS
+	//     • write-DFC → `BenthosConfig.Input`  is forced to UNS
+	//
+	//  3. (TODO) Variable interpolation & location injection happen here.  After
+	//     this step **no** `{{ … }}` directives may remain.
+	//
+	// The returned Runtime object is therefore *fully rendered* and *side-effect
+	// free* – ready to hand to the FSM or to diff against the actual system
+	// state.
+	//
+	// A nil *protConvConfig* yields an explicit error instead of a zero Runtime.
+	GenerateConfig(protConvConfig *protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec, protConvName string) (connectionserviceconfig.ConnectionServiceConfig, dataflowcomponentserviceconfig.DataflowComponentServiceConfig, error)
 
-	// GetConfig fetches the *live* configuration by reading the child services
-	// on disk.
-	GetConfig(ctx context.Context, filesystemService filesystem.Service, protConvName string) (protocolconverterserviceconfig.ProtocolConverterServiceConfig, error)
+	// GetConfig pulls the **actual** runtime configuration that is currently
+	// deployed for the given Protocol-Converter.
+	//
+	// It does so by:
+	//  1. Deriving the names of the underlying resources (Connection, read-DFC,
+	//     write-DFC).
+	//  2. Asking the respective sub-services for their *Runtime* configs.
+	//  3. Stitching those parts back together via
+	//     `FromConnectionAndDFCServiceConfig`.
+	//
+	// The resulting **ProtocolConverterServiceConfigRuntime** reflects the state
+	// the FSM is *really* running with and therefore forms the “live” side of the
+	// reconcile equation:
+	GetConfig(ctx context.Context, filesystemService filesystem.Service, protConvName string) (protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec, error)
 
 	// Status aggregates health from Connection, DFC and Redpanda into a single
 	// snapshot.  The returned structure is **read-only** – callers must not
@@ -63,10 +94,10 @@ type IProtocolConverterService interface {
 	Status(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot, protConvName string, tick uint64) (ServiceInfo, error)
 
 	// AddToManager adds a ProtocolConverter to the Connection & DFC manager
-	AddToManager(ctx context.Context, filesystemService filesystem.Service, protConvCfg *protocolconverterserviceconfig.ProtocolConverterServiceConfig, protConvName string) error
+	AddToManager(ctx context.Context, filesystemService filesystem.Service, protConvCfg *protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec, protConvName string) error
 
 	// UpdateInManager updates an existing ProtocolConverter in the Connection & DFC manager
-	UpdateInManager(ctx context.Context, filesystemService filesystem.Service, protConvCfg *protocolconverterserviceconfig.ProtocolConverterServiceConfig, protConvName string) error
+	UpdateInManager(ctx context.Context, filesystemService filesystem.Service, protConvCfg *protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec, protConvName string) error
 
 	// RemoveFromManager removes a ProtocolConverter from the Connection & DFC manager
 	RemoveFromManager(ctx context.Context, filesystemService filesystem.Service, protConvName string) error
@@ -281,21 +312,47 @@ func (p *ProtocolConverterService) getDFCWriteName(protConvName string) string {
 	return fmt.Sprintf("dataflow-%s", p.getUnderlyingDFCWriteName(protConvName))
 }
 
-// GenerateConfig generates a dfc & connection config for a given protocolconverter
-// this is the function that will apply the variables and should be called in the manager when comparing the desired state
-// (which will still have variables) with the live state (which will have the variables applied)
+// GenerateConfig turns the *author-facing* specification (Spec) into the
+// *desired* runtime representation that the manager will later compare with the
+// live system.
+//
+// Workflow:
+//
+//  1. The caller passes in a **ProtocolConverterServiceConfigSpec** that was
+//     unmarshalled straight from the user’s `config.yaml`.  At this point the
+//     struct may still contain:
+//
+//     • raw `text/template` actions (`{{ … }}`)
+//     • a Variables bundle (key/value pairs)
+//     • optional Location hints
+//
+//  2. We assemble the three subordinate blueprints (Connection, read-DFC,
+//     write-DFC) into a **ProtocolConverterServiceConfigRuntime** while
+//     *enforcing* the UNS guard-rails:
+//
+//     • read-DFC → `BenthosConfig.Output` is forced to UNS
+//     • write-DFC → `BenthosConfig.Input`  is forced to UNS
+//
+//  3. (TODO) Variable interpolation & location injection happen here.  After
+//     this step **no** `{{ … }}` directives may remain.
+//
+// The returned Runtime object is therefore *fully rendered* and *side-effect
+// free* – ready to hand to the FSM or to diff against the actual system
+// state.
+//
+// A nil *protConvConfig* yields an explicit error instead of a zero Runtime.
 func (p *ProtocolConverterService) GenerateConfig(
-	protConvConfig *protocolconverterserviceconfig.ProtocolConverterServiceConfig,
+	protConvConfig *protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec,
 	protConvName string,
 ) (
-	protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplated,
+	protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime,
 	error,
 ) {
 	if protConvConfig == nil {
-		return protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplated{}, fmt.Errorf("protocolConverter config is nil")
+		return protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime{}, fmt.Errorf("protocolConverter config is nil")
 	}
 
-	templatedConfig := protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplated{
+	templatedConfig := protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime{
 		ConnectionServiceConfig:             protConvConfig.GetConnectionServiceConfig(),
 		DataflowComponentReadServiceConfig:  protConvConfig.GetDFCReadServiceConfig(),
 		DataflowComponentWriteServiceConfig: protConvConfig.GetDFCWriteServiceConfig(),
@@ -306,14 +363,26 @@ func (p *ProtocolConverterService) GenerateConfig(
 	return templatedConfig, nil
 }
 
-// GetConfig returns the actual ProtocolConverter config from the protocolConverter service
+// GetConfig pulls the **actual** runtime configuration that is currently
+// deployed for the given Protocol-Converter.
+//
+// It does so by:
+//  1. Deriving the names of the underlying resources (Connection, read-DFC,
+//     write-DFC).
+//  2. Asking the respective sub-services for their *Runtime* configs.
+//  3. Stitching those parts back together via
+//     `FromConnectionAndDFCServiceConfig`.
+//
+// The resulting **ProtocolConverterServiceConfigRuntime** reflects the state
+// the FSM is *really* running with and therefore forms the “live” side of the
+// reconcile equation:
 func (p *ProtocolConverterService) GetConfig(
 	ctx context.Context,
 	filesystemService filesystem.Service,
 	protConvName string,
-) (protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplated, error) {
+) (protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime, error) {
 	if ctx.Err() != nil {
-		return protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplated{}, ctx.Err()
+		return protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime{}, ctx.Err()
 	}
 
 	underlyingConnectionName := p.getUnderlyingConnectionName(protConvName)
@@ -323,21 +392,22 @@ func (p *ProtocolConverterService) GetConfig(
 	// Get the Connection config
 	connConfig, err := p.connectionService.GetConfig(ctx, filesystemService, underlyingConnectionName)
 	if err != nil {
-		return protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplated{}, fmt.Errorf("failed to get connection config: %w", err)
+		return protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime{}, fmt.Errorf("failed to get connection config: %w", err)
 	}
 
 	dfcReadConfig, err := p.dataflowComponentService.GetConfig(ctx, filesystemService, underlyingDFCReadName)
 	if err != nil {
-		return protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplated{}, fmt.Errorf("failed to get read dataflowcomponent config: %w", err)
+		return protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime{}, fmt.Errorf("failed to get read dataflowcomponent config: %w", err)
 	}
 
 	dfcWriteConfig, err := p.dataflowComponentService.GetConfig(ctx, filesystemService, underlyingDFCWriteName)
 	if err != nil {
-		return protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplated{}, fmt.Errorf("failed to get write dataflowcomponent config: %w", err)
+		return protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime{}, fmt.Errorf("failed to get write dataflowcomponent config: %w", err)
 	}
 
-	// Convert Connection & DFC config to ProtocolConverter config
-	return protocolconverterserviceconfig.FromConnectionAndDFCServiceConfig(connConfig, dfcReadConfig, dfcWriteConfig), nil
+	actualConfig := protocolconverterserviceconfig.FromConnectionAndDFCServiceConfig(connConfig, dfcReadConfig, dfcWriteConfig)
+
+	return actualConfig, nil
 }
 
 // Status returns information about the connection health for the specified connection.
@@ -467,7 +537,7 @@ func (p *ProtocolConverterService) Status(
 func (p *ProtocolConverterService) AddToManager(
 	ctx context.Context,
 	filesystemService filesystem.Service,
-	cfg *protocolconverterserviceconfig.ProtocolConverterServiceConfig,
+	cfg *protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec,
 	protConvName string,
 ) error {
 	if p.connectionManager == nil {
@@ -541,7 +611,7 @@ func (p *ProtocolConverterService) AddToManager(
 func (p *ProtocolConverterService) UpdateInManager(
 	ctx context.Context,
 	filesystemService filesystem.Service,
-	cfg *protocolconverterserviceconfig.ProtocolConverterServiceConfig,
+	cfg *protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec,
 	protConvName string,
 ) error {
 	if p.connectionManager == nil {

@@ -128,7 +128,7 @@ type ProtocolConverterConfig struct {
 	// For the FSM
 	FSMInstanceConfig `yaml:",inline"`
 
-	ProtocolConverterServiceConfig protocolconverterserviceconfig.ProtocolConverterServiceConfig `yaml:"protocolConverterServiceConfig"`
+	ProtocolConverterServiceConfig protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec `yaml:"protocolConverterServiceConfig"`
 
 	// private marker – not (un)marshalled
 	// explanation see templating.go
