@@ -15,9 +15,13 @@
 package redpanda
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"net/http"
 	"path/filepath"
 	"strings"
 	"time"
@@ -87,6 +91,8 @@ type IRedpandaService interface {
 	//   ok     – true when activity is detected, false otherwise.
 	//   reason – empty when ok is true; otherwise a brief throughput summary.
 	HasProcessingActivity(status RedpandaStatus) (bool, string)
+	// UpdateRedpandaClusterConfig updates the cluster config of a Redpanda service by sending a PUT request to the Redpanda API
+	UpdateRedpandaClusterConfig(ctx context.Context, redpandaName string, configUpdates map[string]interface{}) error
 }
 
 // ServiceInfo contains information about a Redpanda service
@@ -224,7 +230,7 @@ func NewDefaultRedpandaService(redpandaName string, opts ...RedpandaServiceOptio
 		logger:                 logger.For(managerName),
 		s6Manager:              s6fsm.NewS6Manager(managerName),
 		s6Service:              s6service.NewDefaultService(),
-		httpClient:             nil, // this is only for a mock in the tests
+		httpClient:             httpclient.NewDefaultHTTPClient(),
 		baseDir:                constants.DefaultRedpandaBaseDir,
 		redpandaMonitorManager: redpanda_monitor_fsm.NewRedpandaMonitorManager(redpandaName),
 	}
@@ -955,4 +961,180 @@ func formatMemory(memory int) string {
 	}
 
 	return fmt.Sprintf("%d%s", memory, units[unitIndex])
+}
+
+// setRedpandaClusterConfig sends a PUT request to update Redpanda's cluster config
+func (s *RedpandaService) setRedpandaClusterConfig(ctx context.Context, configUpdates map[string]interface{}) (err error) {
+	if s.httpClient == nil {
+		return fmt.Errorf("http client not initialized")
+	}
+
+	// Construct the request body
+	requestBody := map[string]interface{}{
+		"upsert": configUpdates,
+		"remove": []string{},
+	}
+
+	// Convert to JSON
+	var jsonBody []byte
+	jsonBody, err = json.Marshal(requestBody)
+	if err != nil {
+		return fmt.Errorf("failed to marshal request body: %w", err)
+	}
+
+	// Create the request
+	var req *http.Request
+	req, err = http.NewRequestWithContext(ctx, http.MethodPut, fmt.Sprintf("http://127.0.0.1:%d/v1/cluster_config", constants.AdminAPIPort), bytes.NewBuffer(jsonBody))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	// Set headers
+	req.Header.Set("Content-Type", "application/json")
+
+	// Send the request
+	var resp *http.Response
+	resp, err = s.httpClient.Do(req)
+	if err != nil {
+		// If we get a connection refused error, it means that the Redpanda service is not yet ready, so we just ignore it
+		if strings.Contains(err.Error(), "connection refused") {
+			return nil
+		}
+		return fmt.Errorf("failed to send request: %w", err)
+	}
+
+	defer func() {
+		if resp != nil {
+			closeErr := resp.Body.Close()
+			if closeErr != nil {
+				err = fmt.Errorf("failed to close response body: %w", closeErr)
+			}
+		}
+	}()
+
+	// Check response status
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("request failed with status %d: %s", resp.StatusCode, string(body))
+	}
+
+	// Parse response
+	var response struct {
+		ConfigVersion int `json:"config_version"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
+		return fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return nil
+}
+
+// verifyRedpandaClusterConfig reads back the cluster config and verifies that the updates were applied correctly
+func (s *RedpandaService) verifyRedpandaClusterConfig(ctx context.Context, redpandaName string, configUpdates map[string]interface{}) error {
+	if s.httpClient == nil {
+		return fmt.Errorf("http client not initialized")
+	}
+
+	readbackReq, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("http://127.0.0.1:%d/v1/cluster_config", constants.AdminAPIPort), nil)
+	if err != nil {
+		return fmt.Errorf("failed to create readback request: %w", err)
+	}
+
+	readbackResp, err := s.httpClient.Do(readbackReq)
+	if err != nil {
+		// If we get a connection refused error, it means that the Redpanda service is not yet ready (or is in the progress of restarting), so we just ignore it
+		if strings.Contains(err.Error(), "connection refused") {
+			return nil
+		}
+		return fmt.Errorf("failed to send readback request: %w", err)
+	}
+
+	readbackBody, err := io.ReadAll(readbackResp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read readback response body: %w", err)
+	}
+
+	err = readbackResp.Body.Close()
+	if err != nil {
+		return fmt.Errorf("failed to close readback response body: %w", err)
+	}
+
+	// Parse as JSON
+	var readbackConfig map[string]interface{}
+	if err := json.Unmarshal(readbackBody, &readbackConfig); err != nil {
+		return fmt.Errorf("failed to unmarshal readback response body: %w", err)
+	}
+
+	// Validate all keys against the readback config
+	// Since the types of our request and the response might differ we need to handle the different types
+	for key, value := range configUpdates {
+		readbackValue, ok := readbackConfig[key]
+		if !ok {
+			return fmt.Errorf("key %s not found in Redpanda cluster config for %s", key, redpandaName)
+		}
+
+		switch val := readbackValue.(type) {
+		case string:
+			if val != value.(string) {
+				return fmt.Errorf("value for key %s in Redpanda cluster config for %s does not match expected value %s", key, redpandaName, value)
+			}
+		case float32:
+			if val != value.(float32) {
+				return fmt.Errorf("value for key %s in Redpanda cluster config for %s does not match expected value %f", key, redpandaName, value)
+			}
+		case float64:
+			if val != value.(float64) {
+				return fmt.Errorf("value for key %s in Redpanda cluster config for %s does not match expected value %f", key, redpandaName, value)
+			}
+		case int:
+			if val != value.(int) {
+				return fmt.Errorf("value for key %s in Redpanda cluster config for %s does not match expected value %d", key, redpandaName, value)
+			}
+		case int64:
+			if val != value.(int64) {
+				return fmt.Errorf("value for key %s in Redpanda cluster config for %s does not match expected value %d", key, redpandaName, value)
+			}
+		}
+	}
+
+	return nil
+}
+
+// UpdateRedpandaClusterConfig updates Redpanda's cluster configuration through its admin API.
+// The function performs two key operations:
+//  1. Sends a PUT request to update the cluster configuration
+//  2. Verifies the changes by reading back and comparing the new values
+//
+// Note on restarts:
+//   - This function does not directly trigger a Redpanda restart
+//   - Restarts are handled by the reconcile loop when S6 service config changes
+//   - This ensures all configuration changes are applied, including those requiring restarts
+//
+// The reconcile loop continues smoothly because:
+//   - Configuration readback confirms changes are applied
+//   - Redpanda metrics reflect updated values (therefore not blocking the loop)
+//   - Both HTTP operations complete within the standard context timeout
+func (s *RedpandaService) UpdateRedpandaClusterConfig(ctx context.Context, redpandaName string, configUpdates map[string]interface{}) error {
+	// If the parent context is done, return an error
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+
+	// Since we are doing 2 API calls, we just allocate double the time
+	// This also helps smooth out the time, as one of them then can take slightly longer, but both still are bound by the same timeout
+	innerCtx, innerCtxCancel := context.WithTimeout(ctx, constants.AdminAPITimeout*2)
+	defer innerCtxCancel()
+
+	// Set the cluster config
+	if err := s.setRedpandaClusterConfig(innerCtx, configUpdates); err != nil {
+		return err
+	}
+
+	// If the parent context is done, return an error
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+
+	// Verify the config was applied correctly
+	return s.verifyRedpandaClusterConfig(innerCtx, redpandaName, configUpdates)
 }

@@ -50,3 +50,8 @@ const (
 const (
 	RedpandaMaxMetricsAndConfigAge = 10 * time.Second
 )
+
+const (
+	AdminAPIPort    = 9644
+	AdminAPITimeout = 25 * time.Millisecond
+)
