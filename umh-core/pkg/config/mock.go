@@ -88,6 +88,7 @@ func (m *MockConfigManager) writeConfig(ctx context.Context, cfg FullConfig) err
 	defer m.mutexReadOrWrite.Unlock()
 
 	m.Config = cfg
+	m.CacheModTime = time.Now()
 	return nil
 }
 

@@ -168,7 +168,7 @@ var _ = Describe("SetConfigFile", func() {
 			response, ok := result.(models.SetConfigFileResponse)
 			Expect(ok).To(BeTrue(), "Result should be a SetConfigFileResponse")
 			Expect(response.Content).To(Equal(configContent))
-			Expect(response.LastModifiedTime).To(Equal(lastModifiedTime))
+			Expect(response.LastModifiedTime).NotTo(Equal(lastModifiedTime))
 			Expect(response.Success).To(BeTrue())
 
 			// there should be a message sent to the outbound channel
@@ -184,6 +184,20 @@ var _ = Describe("SetConfigFile", func() {
 			Expect(err.Error()).To(ContainSubstring("concurrent modification detected"))
 			Expect(result).To(BeNil())
 			Expect(metadata).To(BeNil())
+
+			// there should be a message sent to the outbound channel
+			Eventually(outboundChannel).Should(Receive())
+		})
+
+		It("should retrieve a new last modified time", func() {
+			result, metadata, err := action.Execute()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(metadata).To(BeNil())
+
+			response, ok := result.(models.SetConfigFileResponse)
+			Expect(ok).To(BeTrue(), "Result should be a SetConfigFileResponse")
+			Expect(response.LastModifiedTime).NotTo(Equal(lastModifiedTime))
+			Expect(response.Success).To(BeTrue())
 
 			// there should be a message sent to the outbound channel
 			Eventually(outboundChannel).Should(Receive())
