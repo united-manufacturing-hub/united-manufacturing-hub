@@ -25,10 +25,19 @@ var ErrBenthosLogLines = []string{
 	"Config lint error",
 }
 
+// CheckBenthosLogLinesForConfigErrors examines a slice of S6 log entries for
+// Benthos configuration errors. It performs case-insensitive checks for known
+// error patterns combined with the word "error". Returns true if any errors
+// are detected, false otherwise.
 func CheckBenthosLogLinesForConfigErrors(logs []s6.LogEntry) bool {
 	for _, log := range logs {
+		logContent := strings.ToLower(log.Content)
+		if !strings.Contains(logContent, "error") {
+			continue
+		}
+
 		for _, errLine := range ErrBenthosLogLines {
-			if strings.Contains(log.Content, errLine) && strings.Contains(log.Content, "error") {
+			if strings.Contains(logContent, strings.ToLower(errLine)) {
 				return true
 			}
 		}
