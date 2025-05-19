@@ -440,3 +440,8 @@ func (w *writeFailingMockConfigManager) AtomicEditDataflowcomponent(ctx context.
 func (w *writeFailingMockConfigManager) GetConfigAsString(ctx context.Context) (string, error) {
 	return w.mockConfigManager.GetConfigAsString(ctx)
 }
+
+// GetCacheModTime returns the modification time of the config file
+func (w *writeFailingMockConfigManager) GetCacheModTime() time.Time {
+	return w.mockConfigManager.GetCacheModTime()
+}
