@@ -62,6 +62,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/google/uuid"
@@ -158,6 +159,10 @@ func (a *DeployDataflowComponentAction) Parse(payload interface{}) error {
 	a.state = topLevel.State
 	if a.state == "" {
 		a.state = "active"
+	}
+	if a.state != "active" && a.state != "stopped" {
+		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, "invalid state: "+a.state, a.outboundChannel, models.DeployDataFlowComponent)
+		return fmt.Errorf("invalid state: %s", a.state)
 	}
 
 	// Store the meta type
@@ -494,7 +499,7 @@ func (a *DeployDataflowComponentAction) Execute() (interface{}, map[string]inter
 	dfc := config.DataFlowComponentConfig{
 		FSMInstanceConfig: config.FSMInstanceConfig{
 			Name:            a.name,
-			DesiredFSMState: "active",
+			DesiredFSMState: a.state,
 		},
 		DataFlowComponentServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 			BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
@@ -617,7 +622,16 @@ func (a *DeployDataflowComponentAction) waitForComponentToBeActive() error {
 							a.outboundChannel, models.DeployDataFlowComponent)
 						continue
 					}
-					if instance.CurrentState == "active" || instance.CurrentState == "idle" {
+					// Compare current state with the desired state
+					var acceptedStates []string
+					switch a.state {
+					case "active":
+						acceptedStates = []string{"active", "idle"}
+					case "stopped":
+						acceptedStates = []string{"stopped"}
+					}
+
+					if slices.Contains(acceptedStates, instance.CurrentState) {
 						stateMessage := RemainingPrefixSec(remainingSeconds) + fmt.Sprintf("completed. is in state '%s' with correct configuration", instance.CurrentState)
 						SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, stateMessage,
 							a.outboundChannel, models.DeployDataFlowComponent)
