@@ -21,6 +21,7 @@ import (
 
 	"github.com/google/uuid"
 	"go.uber.org/zap"
+	"gopkg.in/yaml.v3"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
@@ -87,6 +88,12 @@ func (a *SetConfigFileAction) Validate() error {
 	// Ensure content is not empty
 	if a.payload.Content == "" {
 		return fmt.Errorf("config file content cannot be empty")
+	}
+
+	// Validate YAML format
+	var yamlContent interface{}
+	if err := yaml.Unmarshal([]byte(a.payload.Content), &yamlContent); err != nil {
+		return fmt.Errorf("invalid YAML content: %w", err)
 	}
 
 	// Ensure LastModifiedTime is not zero
