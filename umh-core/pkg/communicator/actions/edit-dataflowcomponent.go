@@ -606,10 +606,11 @@ func (a *EditDataflowComponentAction) waitForComponentToBeReady() error {
 						}
 
 						// depending on the desired state, we accept different states
-						acceptedStates := []string{}
-						if a.state == "active" {
+						var acceptedStates []string
+						switch a.state {
+						case "active":
 							acceptedStates = []string{"active", "idle"}
-						} else if a.state == "stopped" {
+						case "stopped":
 							acceptedStates = []string{"stopped"}
 						}
 
