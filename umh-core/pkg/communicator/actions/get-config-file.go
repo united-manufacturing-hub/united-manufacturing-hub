@@ -98,7 +98,13 @@ func (a *GetConfigFileAction) Execute() (interface{}, map[string]interface{}, er
 		return nil, nil, fmt.Errorf("failed to read config file: %w", err)
 	}
 
-	lastModifiedTime := a.configManager.GetCacheModTime()
+	lastModifiedTime, err := a.configManager.GetCacheModTime()
+	if err != nil {
+		errMsg := fmt.Sprintf("Failed to get cache mod time: %v", err)
+		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
+			errMsg, a.outboundChannel, models.GetConfigFile)
+		return nil, nil, fmt.Errorf("failed to get cache mod time: %w", err)
+	}
 
 	// Return the file content as a string
 	response := models.GetConfigFileResponse{

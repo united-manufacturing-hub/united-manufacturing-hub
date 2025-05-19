@@ -111,10 +111,17 @@ func (a *SetConfigFileAction) Execute() (interface{}, map[string]interface{}, er
 	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
 		fmt.Sprintf("Updating config file at %s", configPath), a.outboundChannel, models.SetConfigFile)
 
-	currentLastModified := a.configManager.GetCacheModTime().Format(time.RFC3339)
+	currentLastModified, err := a.configManager.GetCacheModTime()
+	if err != nil {
+		errMsg := fmt.Sprintf("Failed to get cache mod time: %v", err)
+		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
+			errMsg, a.outboundChannel, models.SetConfigFile)
+		return nil, nil, fmt.Errorf("failed to get cache mod time: %w", err)
+	}
+	currentLastModifiedTimeString := currentLastModified.Format(time.RFC3339)
 
 	// Check if the file has been modified since the client last read it
-	if currentLastModified != a.payload.LastModifiedTime {
+	if currentLastModifiedTimeString != a.payload.LastModifiedTime {
 		errMsg := "Config file has been modified since last read. Please fetch the latest version and try again."
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
 			errMsg, a.outboundChannel, models.SetConfigFile)
@@ -123,7 +130,7 @@ func (a *SetConfigFileAction) Execute() (interface{}, map[string]interface{}, er
 	}
 
 	// Write the new content to the file
-	err := a.configManager.WriteConfigFromSting(ctx, a.payload.Content)
+	err = a.configManager.WriteConfigFromSting(ctx, a.payload.Content)
 	if err != nil {
 		errMsg := fmt.Sprintf("Failed to write config file: %v", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
@@ -131,12 +138,19 @@ func (a *SetConfigFileAction) Execute() (interface{}, map[string]interface{}, er
 		return nil, nil, fmt.Errorf("failed to write config file: %w", err)
 	}
 
-	newLastModifiedTime := a.configManager.GetCacheModTime().Format(time.RFC3339)
+	newLastModifiedTime, err := a.configManager.GetCacheModTime()
+	if err != nil {
+		errMsg := fmt.Sprintf("Failed to get cache mod time: %v", err)
+		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
+			errMsg, a.outboundChannel, models.SetConfigFile)
+		return nil, nil, fmt.Errorf("failed to get cache mod time: %w", err)
+	}
+	newLastModifiedTimeString := newLastModifiedTime.Format(time.RFC3339)
 
 	// Return the new last modified time
 	response := models.SetConfigFileResponse{
 		Content:          a.payload.Content,
-		LastModifiedTime: newLastModifiedTime,
+		LastModifiedTime: newLastModifiedTimeString,
 		Success:          true,
 	}
 

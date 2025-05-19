@@ -329,8 +329,8 @@ func (m *MockConfigManager) WithGetConfigAsStringError(err error) *MockConfigMan
 }
 
 // GetCacheModTime returns the modification time of the config file
-func (m *MockConfigManager) GetCacheModTime() time.Time {
-	return m.CacheModTime
+func (m *MockConfigManager) GetCacheModTime() (time.Time, error) {
+	return m.CacheModTime, nil
 }
 
 // WithCacheModTime configures the mock to return the given modification time when GetCacheModTime is called
