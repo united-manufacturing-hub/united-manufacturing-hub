@@ -136,6 +136,31 @@ var _ = Describe("SetConfigFile", func() {
 			Expect(err.Error()).To(ContainSubstring("content cannot be empty"))
 		})
 
+		It("should fail validation with invalid YAML content", func() {
+			invalidYAML := `{
+				"agent": {
+					"metricsPort": 8080,
+					"location": {
+						0: "Enterprise",
+						1: "Site", 
+						2: "Area"
+						"invalid-yaml"
+					}
+				},
+			}`
+
+			payload := map[string]interface{}{
+				"content":          invalidYAML,
+				"lastModifiedTime": lastModifiedTime,
+			}
+			err := action.Parse(payload)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = action.Validate()
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("invalid YAML content"))
+		})
+
 		It("should fail validation with empty lastModifiedTime", func() {
 			payload := map[string]interface{}{
 				"content":          configContent,
