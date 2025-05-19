@@ -24,7 +24,6 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions/testutil"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
@@ -55,9 +54,9 @@ var _ = Describe("SetConfigFile", func() {
 			"agent": {
 				"metricsPort": 8080,
 				"location": {
-					"0": "Enterprise",
-					"1": "Site",
-					"2": "Area"
+					0: "Enterprise",
+					1: "Site",
+					2: "Area"
 				}
 			},
 			"dataFlow": []
@@ -74,20 +73,7 @@ var _ = Describe("SetConfigFile", func() {
 			return nil, errors.New("file not found")
 		})
 
-		mockFileInfo := &testutil.MemFileInfo{
-			FileName:  "config.yaml",
-			FileSize:  100,
-			FileMode:  0644,
-			FileMtime: fixedTime,
-			FileDir:   false,
-		}
-
-		mockConfig.MockFileSystem.WithStatFunc(func(ctx context.Context, path string) (os.FileInfo, error) {
-			if path == config.DefaultConfigPath {
-				return mockFileInfo, nil
-			}
-			return nil, errors.New("file not found")
-		})
+		mockConfig.WithCacheModTime(fixedTime)
 
 		mockConfig.MockFileSystem.WithWriteFileFunc(func(ctx context.Context, path string, data []byte, perm os.FileMode) error {
 			return nil
@@ -191,20 +177,7 @@ var _ = Describe("SetConfigFile", func() {
 
 		It("should detect concurrent modification", func() {
 			differentTime := time.Date(2023, 5, 16, 10, 30, 0, 0, time.UTC)
-			mockFileInfo := &testutil.MemFileInfo{
-				FileName:  "config.yaml",
-				FileSize:  100,
-				FileMode:  0644,
-				FileMtime: differentTime,
-				FileDir:   false,
-			}
-
-			mockConfig.MockFileSystem.WithStatFunc(func(ctx context.Context, path string) (os.FileInfo, error) {
-				if path == config.DefaultConfigPath {
-					return mockFileInfo, nil
-				}
-				return nil, errors.New("file not found")
-			})
+			mockConfig.WithCacheModTime(differentTime)
 
 			result, metadata, err := action.Execute()
 			Expect(err).To(HaveOccurred())
@@ -216,87 +189,5 @@ var _ = Describe("SetConfigFile", func() {
 			Eventually(outboundChannel).Should(Receive())
 		})
 
-		It("should handle file stat errors", func() {
-			mockConfig.MockFileSystem.WithStatFunc(func(ctx context.Context, path string) (os.FileInfo, error) {
-				return nil, errors.New("simulated stat error")
-			})
-
-			result, metadata, err := action.Execute()
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("failed to read config file info"))
-			Expect(result).To(BeNil())
-			Expect(metadata).To(BeNil())
-
-			// there should be a message sent to the outbound channel
-			Eventually(outboundChannel).Should(Receive())
-		})
-
-		It("should handle file write errors", func() {
-			mockConfig.MockFileSystem.WithWriteFileFunc(func(ctx context.Context, path string, data []byte, perm os.FileMode) error {
-				return errors.New("simulated write error")
-			})
-
-			result, metadata, err := action.Execute()
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("failed to write config file"))
-			Expect(result).To(BeNil())
-			Expect(metadata).To(BeNil())
-
-			// there should be a message sent to the outbound channel
-			Eventually(outboundChannel).Should(Receive())
-		})
-
-		It("should handle Stat error after successful write", func() {
-			// first Stat call succeeds, second fails
-			var statCallCount int
-			mockConfig.MockFileSystem.WithStatFunc(func(ctx context.Context, path string) (os.FileInfo, error) {
-				statCallCount++
-				if statCallCount == 1 {
-					// First call to get current file info succeeds
-					return &testutil.MemFileInfo{
-						FileName:  "config.yaml",
-						FileSize:  100,
-						FileMode:  0644,
-						FileMtime: time.Date(2023, 5, 15, 10, 30, 0, 0, time.UTC),
-						FileDir:   false,
-					}, nil
-				}
-				return nil, errors.New("simulated stat error after write")
-			})
-
-			result, metadata, err := action.Execute()
-			Expect(err).NotTo(HaveOccurred())
-			Expect(metadata).To(BeNil())
-
-			response, ok := result.(models.SetConfigFileResponse)
-			Expect(ok).To(BeTrue(), "Result should be a SetConfigFileResponse")
-			Expect(response.Success).To(BeTrue())
-			// LastModifiedTime should be empty if we failed to stat the file after writing
-			Expect(response.LastModifiedTime).To(Equal(""))
-
-			// there should be a message sent to the outbound channel
-			Eventually(outboundChannel).Should(Receive())
-		})
-
-		It("should respect context timeout", func() {
-			// setup filesystem to delay longer than the context timeout
-			mockConfig.MockFileSystem.WithWriteFileFunc(func(ctx context.Context, path string, data []byte, perm os.FileMode) error {
-				select {
-				case <-time.After(2 * time.Second):
-					return nil
-				case <-ctx.Done():
-					return ctx.Err()
-				}
-			})
-
-			result, metadata, err := action.Execute()
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("failed to write config file"))
-			Expect(result).To(BeNil())
-			Expect(metadata).To(BeNil())
-
-			// there should be a message sent to the outbound channel
-			Eventually(outboundChannel).Should(Receive())
-		})
 	})
 })

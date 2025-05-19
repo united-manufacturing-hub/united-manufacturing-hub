@@ -111,16 +111,7 @@ func (a *SetConfigFileAction) Execute() (interface{}, map[string]interface{}, er
 	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
 		fmt.Sprintf("Updating config file at %s", configPath), a.outboundChannel, models.SetConfigFile)
 
-	// Read the file info to retrieve the current last modified time
-	fileInfo, err := a.configManager.GetFileSystemService().Stat(ctx, configPath)
-	if err != nil || fileInfo == nil {
-		errMsg := fmt.Sprintf("Failed to read config file info: %v", err)
-		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
-			errMsg, a.outboundChannel, models.SetConfigFile)
-		return nil, nil, fmt.Errorf("failed to read config file info: %w", err)
-	}
-
-	currentLastModified := fileInfo.ModTime().Format(time.RFC3339)
+	currentLastModified := a.configManager.GetCacheModTime().Format(time.RFC3339)
 
 	// Check if the file has been modified since the client last read it
 	if currentLastModified != a.payload.LastModifiedTime {
@@ -132,7 +123,7 @@ func (a *SetConfigFileAction) Execute() (interface{}, map[string]interface{}, er
 	}
 
 	// Write the new content to the file
-	err = a.configManager.GetFileSystemService().WriteFile(ctx, configPath, []byte(a.payload.Content), 0644)
+	err := a.configManager.WriteConfigFromSting(ctx, a.payload.Content)
 	if err != nil {
 		errMsg := fmt.Sprintf("Failed to write config file: %v", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
@@ -140,17 +131,7 @@ func (a *SetConfigFileAction) Execute() (interface{}, map[string]interface{}, er
 		return nil, nil, fmt.Errorf("failed to write config file: %w", err)
 	}
 
-	// Read the updated file info to get the new last modified time
-	updatedFileInfo, err := a.configManager.GetFileSystemService().Stat(ctx, configPath)
-	if err != nil || updatedFileInfo == nil {
-		a.actionLogger.Warnf("Failed to read updated config file info: %v", err)
-		// This is not a critical error, so we continue with the current time
-	}
-
-	newLastModifiedTime := ""
-	if updatedFileInfo != nil {
-		newLastModifiedTime = updatedFileInfo.ModTime().Format(time.RFC3339)
-	}
+	newLastModifiedTime := a.configManager.GetCacheModTime().Format(time.RFC3339)
 
 	// Return the new last modified time
 	response := models.SetConfigFileResponse{

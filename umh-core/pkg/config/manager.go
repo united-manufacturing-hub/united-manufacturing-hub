@@ -74,6 +74,8 @@ type ConfigManager interface {
 	GetConfigAsString(ctx context.Context) (string, error)
 	// GetConfigModTime returns the modification time of the config file
 	GetCacheModTime() time.Time
+	// WriteConfigFromSting writes a config from a string to the config file
+	WriteConfigFromSting(ctx context.Context, config string) error
 }
 
 // FileConfigManager implements the ConfigManager interface by reading from a file
@@ -737,4 +739,25 @@ func (m *FileConfigManager) GetCacheModTime() time.Time {
 // GetCacheModTime delegates to the underlying FileConfigManager
 func (m *FileConfigManagerWithBackoff) GetCacheModTime() time.Time {
 	return m.configManager.GetCacheModTime()
+}
+
+// WriteConfigFromSting writes a config from a string to the config file
+func (m *FileConfigManager) WriteConfigFromSting(ctx context.Context, config string) error {
+	// first parse the config
+	parsedConfig, err := parseConfig([]byte(config))
+	if err != nil {
+		return fmt.Errorf("failed to parse config: %w", err)
+	}
+
+	return m.writeConfig(ctx, parsedConfig)
+}
+
+// WriteConfigFromSting delegates to the underlying FileConfigManager
+func (m *FileConfigManagerWithBackoff) WriteConfigFromSting(ctx context.Context, config string) error {
+	// Check if context is already cancelled
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+
+	return m.configManager.WriteConfigFromSting(ctx, config)
 }
