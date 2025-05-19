@@ -32,11 +32,14 @@ type MockConfigManager struct {
 	AddDataflowcomponentCalled    bool
 	DeleteDataflowcomponentCalled bool
 	EditDataflowcomponentCalled   bool
+	GetConfigAsStringCalled       bool
 	Config                        FullConfig
 	ConfigError                   error
 	AddDataflowcomponentError     error
 	DeleteDataflowcomponentError  error
 	EditDataflowcomponentError    error
+	GetConfigAsStringError        error
+	ConfigAsString                string
 	ConfigDelay                   time.Duration
 	mutexReadOrWrite              sync.Mutex
 	mutexReadAndWrite             sync.Mutex
@@ -281,4 +284,45 @@ func (m *MockConfigManager) AtomicEditDataflowcomponent(ctx context.Context, com
 	}
 
 	return oldConfig, nil
+}
+
+// GetConfigAsString implements the ConfigManager interface
+func (m *MockConfigManager) GetConfigAsString(ctx context.Context) (string, error) {
+	m.mutexReadOrWrite.Lock()
+	defer m.mutexReadOrWrite.Unlock()
+	m.GetConfigAsStringCalled = true
+
+	if m.ConfigDelay > 0 {
+		select {
+		case <-time.After(m.ConfigDelay):
+			// Delay completed
+		case <-ctx.Done():
+			return "", ctx.Err()
+		}
+	}
+
+	if m.GetConfigAsStringError != nil {
+		return "", m.GetConfigAsStringError
+	}
+
+	// If ConfigAsString is set, return it
+	if m.ConfigAsString != "" {
+		return m.ConfigAsString, nil
+	}
+
+	// Otherwise, read the file from the mock filesystem
+	data, err := m.MockFileSystem.ReadFile(ctx, DefaultConfigPath)
+	return string(data), err
+}
+
+// WithConfigAsString configures the mock to return the given string when GetConfigAsString is called
+func (m *MockConfigManager) WithConfigAsString(content string) *MockConfigManager {
+	m.ConfigAsString = content
+	return m
+}
+
+// WithGetConfigAsStringError configures the mock to return the given error when GetConfigAsString is called
+func (m *MockConfigManager) WithGetConfigAsStringError(err error) *MockConfigManager {
+	m.GetConfigAsStringError = err
+	return m
 }

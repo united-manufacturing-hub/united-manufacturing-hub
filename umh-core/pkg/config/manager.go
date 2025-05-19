@@ -70,6 +70,8 @@ type ConfigManager interface {
 	AtomicDeleteDataflowcomponent(ctx context.Context, componentUUID uuid.UUID) error
 	// AtomicEditDataflowcomponent edits a dataflowcomponent in the config atomically
 	AtomicEditDataflowcomponent(ctx context.Context, componentUUID uuid.UUID, dfc DataFlowComponentConfig) (DataFlowComponentConfig, error)
+	// GetConfigAsString returns the current config as a string
+	GetConfigAsString(ctx context.Context) (string, error)
 }
 
 // FileConfigManager implements the ConfigManager interface by reading from a file
@@ -199,9 +201,9 @@ func (m *FileConfigManager) GetConfigWithOverwritesOrCreateNew(ctx context.Conte
 // concurrently.  It then:
 //
 //  1. Ensures the directory exists (harmless no-op if it already does).
-//  2. Verifies the file exists, preserving the historical “config file
-//     does not exist” error semantics expected by callers and tests.
-//  3. Calls Stat() — an inexpensive syscall — and compares the file’s
+//  2. Verifies the file exists, preserving the historical "config file
+//     does not exist" error semantics expected by callers and tests.
+//  3. Calls Stat() — an inexpensive syscall — and compares the file's
 //     ModTime with the timestamp stored in the cache.
 //     • If identical, the file is guaranteed unchanged ⇒ return the
 //     cached *FullConfig* immediately (no I/O, no YAML decode).
@@ -213,7 +215,7 @@ func (m *FileConfigManager) GetConfigWithOverwritesOrCreateNew(ctx context.Conte
 //
 // Because the cache is keyed on ModTime, every observable write to the
 // file (which always updates mtime) causes the next reader to parse fresh
-// bytes, so external callers still see a “latest-on-call” behaviour.
+// bytes, so external callers still see a "latest-on-call" behaviour.
 func (m *FileConfigManager) GetConfig(ctx context.Context, tick uint64) (FullConfig, error) {
 	// we use a read lock here, because we only read the config file
 	err := m.mutexReadOrWrite.RLock(ctx)
@@ -697,4 +699,80 @@ func (m *FileConfigManagerWithBackoff) AtomicEditDataflowcomponent(ctx context.C
 	}
 
 	return m.configManager.AtomicEditDataflowcomponent(ctx, componentUUID, dfc)
+}
+
+// GetConfigAsString returns the current config file contents as a string
+func (m *FileConfigManager) GetConfigAsString(ctx context.Context) (string, error) {
+	// we use a read lock here, because we only read the config file
+	err := m.mutexReadOrWrite.RLock(ctx)
+	if err != nil {
+		return "", fmt.Errorf("failed to lock config file: %w", err)
+	}
+	defer m.mutexReadOrWrite.RUnlock()
+
+	// Check if context is already cancelled
+	if ctx.Err() != nil {
+		return "", ctx.Err()
+	}
+
+	// Check if file exists
+	exists, err := m.fsService.FileExists(ctx, m.configPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to check if config file exists in %s: %w", m.configPath, err)
+	}
+	if !exists {
+		return "", fmt.Errorf("config file does not exist: %s", m.configPath)
+	}
+
+	// Read the file
+	readFileCtx, cancel := context.WithTimeout(ctx, constants.ConfigGetConfigTimeout/2)
+	defer cancel()
+	data, err := m.fsService.ReadFile(readFileCtx, m.configPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to read config file: %w", err)
+	}
+
+	return string(data), nil
+}
+
+// GetConfigAsString returns the current config as a string with backoff logic for failures
+func (m *FileConfigManagerWithBackoff) GetConfigAsString(ctx context.Context) (string, error) {
+	start := time.Now()
+	defer func() {
+		duration := time.Since(start)
+		metrics.ObserveReconcileTime(logger.ComponentConfigManager, "get_config_as_string", duration)
+	}()
+
+	// Check if context is already cancelled
+	if ctx.Err() != nil {
+		return "", ctx.Err()
+	}
+
+	// Check if we should skip operation due to backoff
+	tick := uint64(0) // Use 0 as tick for this operation
+	if m.backoffManager.ShouldSkipOperation(tick) {
+		// Get appropriate backoff error (temporary or permanent)
+		backoffErr := m.backoffManager.GetBackoffError(tick)
+
+		// Log additional information for permanent failures
+		if m.backoffManager.IsPermanentlyFailed() {
+			sentry.ReportIssuef(sentry.IssueTypeError, m.logger, "ConfigManager is permanently failed. Last error: %v", m.backoffManager.GetLastError())
+		}
+
+		return "", backoffErr
+	}
+
+	// Try to fetch the config as string
+	getConfigCtx, cancel := context.WithTimeout(ctx, constants.ConfigGetConfigTimeout)
+	defer cancel()
+
+	configStr, err := m.configManager.GetConfigAsString(getConfigCtx)
+	if err != nil {
+		m.backoffManager.SetError(err, tick)
+		return "", err
+	}
+
+	// Reset backoff state on successful operation
+	m.backoffManager.Reset()
+	return configStr, nil
 }

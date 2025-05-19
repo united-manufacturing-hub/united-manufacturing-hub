@@ -435,3 +435,8 @@ func (w *writeFailingMockConfigManager) AtomicEditDataflowcomponent(ctx context.
 
 	return config.DataFlowComponentConfig{}, nil
 }
+
+// GetConfigAsString implements the ConfigManager interface
+func (w *writeFailingMockConfigManager) GetConfigAsString(ctx context.Context) (string, error) {
+	return w.mockConfigManager.GetConfigAsString(ctx)
+}

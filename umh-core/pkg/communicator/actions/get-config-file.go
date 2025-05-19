@@ -27,7 +27,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
 type GetConfigFileAction struct {
@@ -39,7 +38,6 @@ type GetConfigFileAction struct {
 	// ─── Plumbing ────────────────────────────────────────────────────────────
 	outboundChannel chan *models.UMHMessage
 	configManager   config.ConfigManager
-	fsService       filesystem.Service
 
 	// ─── Runtime observation ────────────────────────────────────────────────
 	systemSnapshotManager *fsm.SnapshotManager
@@ -57,7 +55,6 @@ func NewGetConfigFileAction(userEmail string, actionUUID uuid.UUID, instanceUUID
 		outboundChannel:       outboundChannel,
 		systemSnapshotManager: systemSnapshotManager,
 		configManager:         configManager,
-		fsService:             configManager.GetFileSystemService(),
 		actionLogger:          logger.For(logger.ComponentCommunicator),
 	}
 }
@@ -92,8 +89,17 @@ func (a *GetConfigFileAction) Execute() (interface{}, map[string]interface{}, er
 	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
 		fmt.Sprintf("Reading config file from %s", configPath), a.outboundChannel, models.GetConfigFile)
 
+	// Get the config file content as string using the new method
+	content, err := a.configManager.GetConfigAsString(ctx)
+	if err != nil {
+		errMsg := fmt.Sprintf("Failed to read config file: %v", err)
+		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
+			errMsg, a.outboundChannel, models.GetConfigFile)
+		return nil, nil, fmt.Errorf("failed to read config file: %w", err)
+	}
+
 	// read the file info to retrieve the last modified time
-	fileInfo, err := a.fsService.Stat(ctx, configPath)
+	fileInfo, err := a.configManager.GetFileSystemService().Stat(ctx, configPath)
 	if err != nil || fileInfo == nil {
 		errMsg := fmt.Sprintf("Failed to read config file info: %v", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
@@ -102,18 +108,18 @@ func (a *GetConfigFileAction) Execute() (interface{}, map[string]interface{}, er
 	}
 	lastModifiedTime := fileInfo.ModTime()
 
-	// Read the file content
-	data, err := a.fsService.ReadFile(ctx, configPath)
-	if err != nil {
-		errMsg := fmt.Sprintf("Failed to read config file: %v", err)
-		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
-			errMsg, a.outboundChannel, models.GetConfigFile)
-		return nil, nil, fmt.Errorf("failed to read config file: %w", err)
-	}
+	// // Read the file content
+	// data, err := a.fsService.ReadFile(ctx, configPath)
+	// if err != nil {
+	// 	errMsg := fmt.Sprintf("Failed to read config file: %v", err)
+	// 	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
+	// 		errMsg, a.outboundChannel, models.GetConfigFile)
+	// 	return nil, nil, fmt.Errorf("failed to read config file: %w", err)
+	// }
 
 	// Return the file content as a string
 	response := models.GetConfigFileResponse{
-		Content:          string(data),
+		Content:          content,
 		LastModifiedTime: lastModifiedTime.Format(time.RFC3339),
 	}
 
