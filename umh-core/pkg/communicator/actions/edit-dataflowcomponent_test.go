@@ -717,9 +717,6 @@ buffer:
 			Expect(result).To(ContainSubstring("success"))
 			Expect(metadata).To(BeNil())
 
-			// Stop state mocker
-			stateMocker.Stop()
-
 			// Verify the state was updated to stopped
 			Expect(mockConfig.Config.DataFlow[0].DesiredFSMState).To(Equal("stopped"))
 
@@ -761,10 +758,6 @@ buffer:
 
 			// Parse the active state payload
 			err = action.Parse(payloadActive)
-			Expect(err).NotTo(HaveOccurred())
-
-			// Start state mocker for the second state transition
-			err = stateMocker.Start()
 			Expect(err).NotTo(HaveOccurred())
 
 			// Execute the second state change (stopped to active)
