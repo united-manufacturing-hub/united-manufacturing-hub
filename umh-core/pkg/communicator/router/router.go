@@ -136,6 +136,7 @@ func (r *Router) handleAction(messageContent models.UMHMessageContent, message *
 	if message.Metadata != nil {
 		traceId = message.Metadata.TraceID
 	}
+
 	go actions.HandleActionMessage(
 		r.instanceUUID,
 		actionPayload,

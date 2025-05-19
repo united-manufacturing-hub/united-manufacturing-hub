@@ -27,7 +27,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
 type SetConfigFileAction struct {
@@ -39,7 +38,6 @@ type SetConfigFileAction struct {
 	// ─── Plumbing ────────────────────────────────────────────────────────────
 	outboundChannel chan *models.UMHMessage
 	configManager   config.ConfigManager
-	fsService       filesystem.Service
 
 	// ─── Runtime observation ────────────────────────────────────────────────
 	systemSnapshotManager *fsm.SnapshotManager
@@ -60,7 +58,6 @@ func NewSetConfigFileAction(userEmail string, actionUUID uuid.UUID, instanceUUID
 		outboundChannel:       outboundChannel,
 		systemSnapshotManager: systemSnapshotManager,
 		configManager:         configManager,
-		fsService:             configManager.GetFileSystemService(),
 		actionLogger:          logger.For(logger.ComponentCommunicator),
 	}
 }
@@ -115,7 +112,7 @@ func (a *SetConfigFileAction) Execute() (interface{}, map[string]interface{}, er
 		fmt.Sprintf("Updating config file at %s", configPath), a.outboundChannel, models.SetConfigFile)
 
 	// Read the file info to retrieve the current last modified time
-	fileInfo, err := a.fsService.Stat(ctx, configPath)
+	fileInfo, err := a.configManager.GetFileSystemService().Stat(ctx, configPath)
 	if err != nil || fileInfo == nil {
 		errMsg := fmt.Sprintf("Failed to read config file info: %v", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
@@ -135,7 +132,7 @@ func (a *SetConfigFileAction) Execute() (interface{}, map[string]interface{}, er
 	}
 
 	// Write the new content to the file
-	err = a.fsService.WriteFile(ctx, configPath, []byte(a.payload.Content), 0644)
+	err = a.configManager.GetFileSystemService().WriteFile(ctx, configPath, []byte(a.payload.Content), 0644)
 	if err != nil {
 		errMsg := fmt.Sprintf("Failed to write config file: %v", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
@@ -144,7 +141,7 @@ func (a *SetConfigFileAction) Execute() (interface{}, map[string]interface{}, er
 	}
 
 	// Read the updated file info to get the new last modified time
-	updatedFileInfo, err := a.fsService.Stat(ctx, configPath)
+	updatedFileInfo, err := a.configManager.GetFileSystemService().Stat(ctx, configPath)
 	if err != nil || updatedFileInfo == nil {
 		a.actionLogger.Warnf("Failed to read updated config file info: %v", err)
 		// This is not a critical error, so we continue with the current time

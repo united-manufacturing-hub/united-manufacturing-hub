@@ -62,6 +62,7 @@ var _ = Describe("GetConfigFile", func() {
 
 		// Create mock config manager
 		mockConfig = config.NewMockConfigManager()
+		mockConfig.WithConfigAsString(configContent)
 
 		// Setup mock filesystem with a config file
 		mockConfig.MockFileSystem.WithReadFileFunc(func(ctx context.Context, path string) ([]byte, error) {
@@ -153,6 +154,7 @@ var _ = Describe("GetConfigFile", func() {
 			mockConfig.MockFileSystem.WithReadFileFunc(func(ctx context.Context, path string) ([]byte, error) {
 				return nil, errors.New("simulated filesystem error")
 			})
+			mockConfig.WithGetConfigAsStringError(errors.New("simulated filesystem error"))
 
 			result, metadata, err := action.Execute()
 			Expect(err).To(HaveOccurred())
@@ -174,6 +176,7 @@ var _ = Describe("GetConfigFile", func() {
 					return nil, ctx.Err()
 				}
 			})
+			mockConfig.WithConfigDelay(2 * time.Second)
 
 			result, metadata, err := action.Execute()
 			Expect(err).To(HaveOccurred())
