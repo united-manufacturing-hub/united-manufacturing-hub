@@ -545,7 +545,7 @@ func (a *EditDataflowComponentAction) waitForComponentToBeActive() (string, erro
 
 				a.actionLogger.Errorf("failed to roll back dataflow component %s: %v", a.name, err)
 			}
-			return "ERR_RETRY_ROLLBACK_TIMEOUT", fmt.Errorf("dataflow component %s was not active in time and was rolled back to the old config", a.name)
+			return models.ErrRetryRollbackTimeout, fmt.Errorf("dataflow component %s was not active in time and was rolled back to the old config", a.name)
 
 		case <-ticker.C:
 			elapsed := time.Since(startTime)
@@ -620,7 +620,7 @@ func (a *EditDataflowComponentAction) waitForComponentToBeActive() (string, erro
 								SendActionReplyV2(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, "DFC not rolled back. Please check your configuration and consider, removing the component manually..", "ERR_CONFIG_ERROR", nil, a.outboundChannel, models.DeployDataFlowComponent, nil)
 								a.actionLogger.Errorf("failed to roll back dataflow component %s: %v", a.name, err)
 							}
-							return "ERR_CONFIG_ERROR", fmt.Errorf("dataflow component '%s' was rolled back because of a config error", a.name)
+							return models.ErrConfigFileInvalid, fmt.Errorf("dataflow component '%s' was rolled back because of a config error", a.name)
 						}
 
 						continue

@@ -587,7 +587,7 @@ func (a *DeployDataflowComponentAction) waitForComponentToBeActive() (string, er
 			if err != nil {
 				a.actionLogger.Errorf("failed to remove dataflowcomponent %s: %v", a.name, err)
 			}
-			return "ERR_RETRY_ROLLBACK_TIMEOUT", fmt.Errorf("dataflow component '%s' was removed because it did not become active within the timeout period", a.name)
+			return models.ErrRetryRollbackTimeout, fmt.Errorf("dataflow component '%s' was removed because it did not become active within the timeout period", a.name)
 
 		case <-ticker.C:
 
@@ -641,7 +641,7 @@ func (a *DeployDataflowComponentAction) waitForComponentToBeActive() (string, er
 							SendActionReplyV2(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, "DFC not removed. Please check your configuration and consider, removing the component manually..", "ERR_CONFIG_ERROR", nil, a.outboundChannel, models.DeployDataFlowComponent, nil)
 						}
 						SendActionReplyV2(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, "DFC removed", "ERR_CONFIG_ERROR", nil, a.outboundChannel, models.DeployDataFlowComponent, nil)
-						return "ERR_CONFIG_ERROR", fmt.Errorf("dataflow component '%s' was removed because of a config error", a.name)
+						return models.ErrConfigFileInvalid, fmt.Errorf("dataflow component '%s' was removed because of a config error", a.name)
 					}
 
 				}

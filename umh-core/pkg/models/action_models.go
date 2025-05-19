@@ -588,5 +588,6 @@ const (
 	ErrRetryDFCConfigError  = "ERR_RETRY_DFC_CONFIG_ERROR"
 	ErrSendingActionReply   = "ERR_SENDING_REPLY"
 	ErrAbortRollbackFailed  = "ERR_ABORT_ROLLBACK_FAILED"
-	ErrEditPayload          = "ERR_EDIT_PAYLOAD"
+	ErrRetryRollbackTimeout = "ERR_RETRY_ROLLBACK_TIMEOUT"
+	ErrConfigFileInvalid    = "ERR_CONFIG_FILE_INVALID"
 )
