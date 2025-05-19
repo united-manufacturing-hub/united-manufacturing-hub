@@ -44,6 +44,7 @@ type MockConfigManager struct {
 	mutexReadOrWrite              sync.Mutex
 	mutexReadAndWrite             sync.Mutex
 	MockFileSystem                *filesystem.MockFileSystem
+	CacheModTime                  time.Time
 }
 
 // NewMockConfigManager creates a new MockConfigManager instance
@@ -324,5 +325,16 @@ func (m *MockConfigManager) WithConfigAsString(content string) *MockConfigManage
 // WithGetConfigAsStringError configures the mock to return the given error when GetConfigAsString is called
 func (m *MockConfigManager) WithGetConfigAsStringError(err error) *MockConfigManager {
 	m.GetConfigAsStringError = err
+	return m
+}
+
+// GetCacheModTime returns the modification time of the config file
+func (m *MockConfigManager) GetCacheModTime() time.Time {
+	return m.CacheModTime
+}
+
+// WithCacheModTime configures the mock to return the given modification time when GetCacheModTime is called
+func (m *MockConfigManager) WithCacheModTime(modTime time.Time) *MockConfigManager {
+	m.CacheModTime = modTime
 	return m
 }

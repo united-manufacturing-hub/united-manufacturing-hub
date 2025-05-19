@@ -98,24 +98,7 @@ func (a *GetConfigFileAction) Execute() (interface{}, map[string]interface{}, er
 		return nil, nil, fmt.Errorf("failed to read config file: %w", err)
 	}
 
-	// read the file info to retrieve the last modified time
-	fileInfo, err := a.configManager.GetFileSystemService().Stat(ctx, configPath)
-	if err != nil || fileInfo == nil {
-		errMsg := fmt.Sprintf("Failed to read config file info: %v", err)
-		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
-			errMsg, a.outboundChannel, models.GetConfigFile)
-		return nil, nil, fmt.Errorf("failed to read config file info: %w", err)
-	}
-	lastModifiedTime := fileInfo.ModTime()
-
-	// // Read the file content
-	// data, err := a.fsService.ReadFile(ctx, configPath)
-	// if err != nil {
-	// 	errMsg := fmt.Sprintf("Failed to read config file: %v", err)
-	// 	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
-	// 		errMsg, a.outboundChannel, models.GetConfigFile)
-	// 	return nil, nil, fmt.Errorf("failed to read config file: %w", err)
-	// }
+	lastModifiedTime := a.configManager.GetCacheModTime()
 
 	// Return the file content as a string
 	response := models.GetConfigFileResponse{

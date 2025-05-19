@@ -17,14 +17,12 @@ package actions_test
 import (
 	"context"
 	"errors"
-	"os"
 	"time"
 
 	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions/testutil"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
@@ -119,20 +117,8 @@ var _ = Describe("GetConfigFile", func() {
 		It("should include the last modified time in the response", func() {
 			// Create a mock file info with specific modification time
 			fixedTime := time.Date(2023, 5, 15, 10, 30, 0, 0, time.UTC)
-			mockFileInfo := &testutil.MemFileInfo{
-				FileName:  "config.yaml",
-				FileSize:  100,
-				FileMode:  0644,
-				FileMtime: fixedTime,
-				FileDir:   false,
-			}
 
-			mockConfig.MockFileSystem.WithStatFunc(func(ctx context.Context, path string) (os.FileInfo, error) {
-				if path == config.DefaultConfigPath {
-					return mockFileInfo, nil
-				}
-				return nil, errors.New("file not found")
-			})
+			mockConfig.WithCacheModTime(fixedTime)
 
 			result, metadata, err := action.Execute()
 			Expect(err).NotTo(HaveOccurred())
