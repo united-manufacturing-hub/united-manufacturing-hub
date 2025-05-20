@@ -81,7 +81,7 @@ func hasAnchors(n *yaml.Node) bool {
 //     must refuse to modify this DFC automatically.
 //   - If **no**  → the helpers may proceed and rewrite the config.
 //
-// The top-level loader (`parseConfig`) doesn’t need to be aware of any
+// The top-level loader (`parseConfig`) doesn't need to be aware of any
 // of this: it simply decodes into `FullConfig` and the magic happens
 // inside every DFC.
 func (d *DataFlowComponentConfig) UnmarshalYAML(value *yaml.Node) error {
@@ -156,7 +156,7 @@ func RenderTemplate[T any](tmpl T, scope map[string]any) (T, error) {
 	}
 
 	// B. parse + execute the template (no extra FuncMap – sandboxed!)
-	tpl, err := template.New("pc").Parse(string(raw))
+	tpl, err := template.New("pc").Option("missingkey=error").Parse(string(raw))
 	if err != nil {
 		return *new(T), err
 	}

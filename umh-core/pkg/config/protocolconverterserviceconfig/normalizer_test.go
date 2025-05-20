@@ -112,6 +112,12 @@ var _ = Describe("ProtocolConverter YAML Normalizer", func() {
 			Expect(config.Template.DataflowComponentReadServiceConfig.BenthosConfig.Output).NotTo(BeNil())
 			Expect(config.Template.DataflowComponentReadServiceConfig.BenthosConfig.Pipeline).NotTo(BeNil())
 
+			// Check write-side configuration
+			Expect(config.Template.DataflowComponentWriteServiceConfig.BenthosConfig).NotTo(BeNil())
+			Expect(config.Template.DataflowComponentWriteServiceConfig.BenthosConfig.Input).NotTo(BeNil())
+			Expect(config.Template.DataflowComponentWriteServiceConfig.BenthosConfig.Output).NotTo(BeNil())
+			Expect(config.Template.DataflowComponentWriteServiceConfig.BenthosConfig.Pipeline).NotTo(BeNil())
+
 			// Buffer should have the none buffer set
 			Expect(config.Template.DataflowComponentReadServiceConfig.BenthosConfig.Buffer).To(HaveKey("none"))
 

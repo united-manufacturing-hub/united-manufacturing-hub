@@ -1042,7 +1042,7 @@ func (p *ProtocolConverterService) StopProtocolConverter(
 		}
 	}
 
-	if !dfcReadFound || !dfcWriteFound {
+	if !dfcReadFound && !dfcWriteFound {
 		return ErrServiceNotExist
 	}
 
