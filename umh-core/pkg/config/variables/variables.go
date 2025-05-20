@@ -29,7 +29,7 @@ func (vb VariableBundle) Equal(other VariableBundle) bool {
 // Convenient helper – flat view the template engine will see
 func (vb VariableBundle) Flatten() map[string]any {
 	out := map[string]any{}
-	// Agent & user vars are both stored in User after precedence resolution.
+	// move user variables to the top level
 	for k, v := range vb.User {
 		out[k] = v
 	}

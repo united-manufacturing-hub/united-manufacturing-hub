@@ -15,6 +15,10 @@
 package config
 
 import (
+	"bytes"
+	"fmt"
+	"text/template"
+
 	"gopkg.in/yaml.v3"
 )
 
@@ -136,4 +140,41 @@ func (d *ProtocolConverterConfig) UnmarshalYAML(value *yaml.Node) error {
 	d.hasAnchors = hasAnchors(cfgNode) // fn shown below
 
 	return nil
+}
+
+// RenderTemplate takes an *arbitrary* struct that still contains
+// {{ … }} actions, renders it with text/template and returns the same
+// struct type fully materialised.
+//
+// Callers **must** supply a fully-merged variable scope; the function does
+// not fetch or inject `.global`, `.internal`, or `.location` keys.
+func RenderTemplate[T any](tmpl T, scope map[string]any) (T, error) {
+	// A. serialise to YAML – keeps anchors & order stable for diffing
+	raw, err := yaml.Marshal(tmpl)
+	if err != nil {
+		return *new(T), err
+	}
+
+	// B. parse + execute the template (no extra FuncMap – sandboxed!)
+	tpl, err := template.New("pc").Parse(string(raw))
+	if err != nil {
+		return *new(T), err
+	}
+
+	var buf bytes.Buffer
+	if err := tpl.Execute(&buf, scope); err != nil {
+		return *new(T), err
+	}
+
+	// C. unmarshal back into the *same* Go type
+	var out T
+	if err := yaml.Unmarshal(buf.Bytes(), &out); err != nil {
+		return *new(T), err
+	}
+
+	// D. sanity-check – no {{ left over
+	if bytes.Contains(buf.Bytes(), []byte("{{")) {
+		return *new(T), fmt.Errorf("unresolved template markers in %T", tmpl)
+	}
+	return out, nil
 }

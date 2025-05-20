@@ -35,7 +35,7 @@ func (c *ProtocolConverterServiceConfigSpec) GetDFCReadServiceConfig() dataflowc
 	// enforce the output config to be the uns output config
 	dfcReadConfig.BenthosConfig.Output = map[string]any{
 		"uns": map[string]any{
-			"bridged_by": "!{{ .bridged_by }}",
+			"bridged_by": "{{ .bridged_by }}",
 		},
 	}
 
@@ -50,8 +50,8 @@ func (c *ProtocolConverterServiceConfigSpec) GetDFCWriteServiceConfig() dataflow
 
 	dfcWriteConfig.BenthosConfig.Input = map[string]any{
 		"uns": map[string]any{
-			"consumer_group": "!{{ .consumer_group }}",
-			"umh_topic":      "!{{ .umh_topic }}",
+			"consumer_group": "{{ .consumer_group }}",
+			"umh_topic":      "{{ .umh_topic }}",
 		},
 	}
 	return dfcWriteConfig

@@ -312,55 +312,86 @@ func (p *ProtocolConverterService) getDFCWriteName(protConvName string) string {
 	return fmt.Sprintf("dataflow-%s", p.getUnderlyingDFCWriteName(protConvName))
 }
 
-// GenerateConfig turns the *author-facing* specification (Spec) into the
-// *desired* runtime representation that the manager will later compare with the
+// GenerateConfig turns the **author-facing** specification (*Spec*) into the
+// **fully rendered** runtime configuration that the FSM compares against the
 // live system.
 //
-// Workflow:
+// Preconditions
+// ─────────────
 //
-//  1. The caller passes in a **ProtocolConverterServiceConfigSpec** that was
-//     unmarshalled straight from the user’s `config.yaml`.  At this point the
-//     struct may still contain:
+//   - *Spec* has been unmarshalled from YAML **and** already passed through the
+//     variable-enrichment step performed by the control loop / manager.
 //
-//     • raw `text/template` actions (`{{ … }}`)
-//     • a Variables bundle (key/value pairs)
-//     • optional Location hints
+//     👉  That means `spec.Variables` **already** contains
+//     – user-supplied keys                 (flat)
+//     – authoritative `.location` map      (merged from agent)
+//     – fleet-wide  `.global`  namespace   (injected by central loop)
+//     – runtime-only `.internal` namespace (added by the manager)
 //
-//  2. We assemble the three subordinate blueprints (Connection, read-DFC,
-//     write-DFC) into a **ProtocolConverterServiceConfigRuntime** while
-//     *enforcing* the UNS guard-rails:
+//     GenerateConfig does **not** add or override any variables.
+//     If a key is missing, template rendering will fail.
 //
-//     • read-DFC → `BenthosConfig.Output` is forced to UNS
-//     • write-DFC → `BenthosConfig.Input`  is forced to UNS
+// Workflow
+// ──────────────────────────────────────────────────────────────────────────────
+// 1. Retrieve the three subordinate blueprints from *Spec*
 //
-//  3. (TODO) Variable interpolation & location injection happen here.  After
-//     this step **no** `{{ … }}` directives may remain.
+//   - Connection
 //
-// The returned Runtime object is therefore *fully rendered* and *side-effect
-// free* – ready to hand to the FSM or to diff against the actual system
-// state.
+//   - read-DFC   (with UNS **output** enforced via GetDFCReadServiceConfig)
 //
-// A nil *protConvConfig* yields an explicit error instead of a zero Runtime.
+//   - write-DFC  (with UNS **input**  enforced via GetDFCWriteServiceConfig)
+//
+//     2. Render each blueprint with the already-enriched variable scope using
+//     `config.RenderTemplate`. After this step **no** `{{ … }}` directives
+//     remain.
+//
+//     3. Assemble the concrete pieces into a
+//     `ProtocolConverterServiceConfigRuntime` value and return it.
+//
+// Notes
+// ─────
+//   - The function is pure: it performs no side-effects and never mutates *Spec*.
+//   - Passing a nil *Spec* results in an explicit error; an empty runtime
+//     struct is **never** returned.
+//
+// The returned object is ready for diffing or to be handed straight to the
+// Protocol-Converter FSM.
 func (p *ProtocolConverterService) GenerateConfig(
-	protConvConfig *protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec,
+	spec *protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec,
 	protConvName string,
 ) (
 	protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime,
 	error,
 ) {
-	if protConvConfig == nil {
+	if spec == nil {
 		return protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime{}, fmt.Errorf("protocolConverter config is nil")
 	}
 
-	templatedConfig := protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime{
-		ConnectionServiceConfig:             protConvConfig.GetConnectionServiceConfig(),
-		DataflowComponentReadServiceConfig:  protConvConfig.GetDFCReadServiceConfig(),
-		DataflowComponentWriteServiceConfig: protConvConfig.GetDFCWriteServiceConfig(),
+	// Get the variables as a flat map
+	scope := spec.Variables.Flatten()
+
+	// ─── Render the three sub-templates ─────────────────────────────
+	// Ensure to use GetDFCReadServiceConfig(), etc. to get the uns input/output enforced
+	conn, err := config.RenderTemplate(spec.GetConnectionServiceConfig(), scope)
+	if err != nil {
+		return protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime{}, err
 	}
 
-	// TODO: Apply the variables to the config
+	read, err := config.RenderTemplate(spec.GetDFCReadServiceConfig(), scope)
+	if err != nil {
+		return protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime{}, err
+	}
 
-	return templatedConfig, nil
+	write, err := config.RenderTemplate(spec.GetDFCWriteServiceConfig(), scope)
+	if err != nil {
+		return protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime{}, err
+	}
+
+	return protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime{
+		ConnectionServiceConfig:             conn,
+		DataflowComponentReadServiceConfig:  read,
+		DataflowComponentWriteServiceConfig: write,
+	}, nil
 }
 
 // GetConfig pulls the **actual** runtime configuration that is currently
