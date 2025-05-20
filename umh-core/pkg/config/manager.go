@@ -710,6 +710,9 @@ func (m *FileConfigManagerWithBackoff) AtomicEditDataflowcomponent(ctx context.C
 }
 
 // GetConfigAsString returns the current config file contents as a string
+// This function is used in the get-config-file action to retrieve the raw config file
+// without any yaml parsing applied. This allows to display yaml anchors and change them
+// via the frontend
 func (m *FileConfigManager) GetConfigAsString(ctx context.Context) (string, error) {
 	// in the GetConfig method, we already read the file and cached the raw config to m.cacheRawConfig
 	_, err := m.GetConfig(ctx, 0)
