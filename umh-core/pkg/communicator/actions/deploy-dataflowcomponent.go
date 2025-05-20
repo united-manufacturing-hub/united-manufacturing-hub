@@ -554,6 +554,9 @@ func (a *DeployDataflowComponentAction) GetParsedPayload() models.CDFCPayload {
 
 // waitForComponentToBeActive polls live FSM state until the new component
 // becomes active or the timeout hits (→ delete unless ignoreHealthCheck).
+// the function returns the error code and and the error message via an error object
+// the error code is a string that is sent to the frontend to allow it to determine if the action can be retried or not
+// the error message is sent to the frontend to allow the user to see the error message
 func (a *DeployDataflowComponentAction) waitForComponentToBeActive(ctx context.Context) (string, error) {
 	// checks the system snapshot
 	// 1. waits for the instance to appear in the system snapshot
