@@ -532,7 +532,7 @@ func (a *DeployDataflowComponentAction) Execute() (interface{}, map[string]inter
 	}
 
 	// return success message, but do not send it as this is done by the caller
-	successMsg := Label("deploy", a.name) + "success"
+	successMsg := Label("deploy", a.name) + "component successfully deployed and activated"
 
 	return successMsg, nil, nil
 }
@@ -592,8 +592,9 @@ func (a *DeployDataflowComponentAction) waitForComponentToBeActive(ctx context.C
 			err := a.configManager.AtomicDeleteDataflowcomponent(ctx, dataflowcomponentserviceconfig.GenerateUUIDFromName(a.name))
 			if err != nil {
 				a.actionLogger.Errorf("failed to remove dataflowcomponent %s: %v", a.name, err)
+				return models.ErrRetryRollbackTimeout, fmt.Errorf("dataflow component '%s' failed to activate within timeout but could not be removed: %v. Please check system load and consider removing the component manually", a.name, err)
 			}
-			return models.ErrRetryRollbackTimeout, fmt.Errorf("dataflow component '%s' was removed because it did not become active within the timeout period", a.name)
+			return models.ErrRetryRollbackTimeout, fmt.Errorf("dataflow component '%s' was removed because it did not become active within the timeout period. Please check system load or component configuration and try again", a.name)
 
 		case <-ticker.C:
 
@@ -618,7 +619,7 @@ func (a *DeployDataflowComponentAction) waitForComponentToBeActive(ctx context.C
 						continue
 					}
 					if instance.CurrentState == "active" || instance.CurrentState == "idle" {
-						stateMessage := RemainingPrefixSec(remainingSeconds) + fmt.Sprintf("completed. is in state '%s' with correct configuration", instance.CurrentState)
+						stateMessage := RemainingPrefixSec(remainingSeconds) + fmt.Sprintf("component successfully activated with state '%s', configuration verified", instance.CurrentState)
 						SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, stateMessage,
 							a.outboundChannel, models.DeployDataFlowComponent)
 						return "", nil
@@ -642,14 +643,14 @@ func (a *DeployDataflowComponentAction) waitForComponentToBeActive(ctx context.C
 					// abort the startup process rather than waiting for the full timeout period,
 					// as these errors require configuration changes to resolve.
 					if CheckBenthosLogLinesForConfigErrors(logs) {
-						SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Failed to parse config. Removing the component.", a.outboundChannel, models.DeployDataFlowComponent)
+						SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, Label("deploy", a.name)+"configuration error detected. Removing component...", a.outboundChannel, models.DeployDataFlowComponent)
 						err := a.configManager.AtomicDeleteDataflowcomponent(ctx, dataflowcomponentserviceconfig.GenerateUUIDFromName(a.name))
 						if err != nil {
 							a.actionLogger.Errorf("failed to remove dataflowcomponent %s: %v", a.name, err)
-							return models.ErrConfigFileInvalid, fmt.Errorf("dataflow component '%s' not removed. Please check your configuration and consider removing the component manually", a.name)
+							return models.ErrConfigFileInvalid, fmt.Errorf("dataflow component '%s' has invalid configuration but could not be removed: %v. Please check your logs and consider removing the component manually", a.name, err)
 						}
 
-						return models.ErrConfigFileInvalid, fmt.Errorf("dataflow component '%s' was removed because of a config error", a.name)
+						return models.ErrConfigFileInvalid, fmt.Errorf("dataflow component '%s' was removed due to configuration errors. Please check the component logs, fix the configuration issues, and try deploying again", a.name)
 					}
 
 				}

@@ -490,7 +490,7 @@ func (a *EditDataflowComponentAction) Execute() (interface{}, map[string]interfa
 	}
 
 	// return success message, but do not send it as this is done by the caller
-	successMsg := Label("edit", a.name) + "success"
+	successMsg := Label("edit", a.name) + "component successfully updated and activated"
 
 	return successMsg, nil, nil
 }
@@ -548,10 +548,10 @@ func (a *EditDataflowComponentAction) waitForComponentToBeActive(ctx context.Con
 			defer cancel()
 			_, err := a.configManager.AtomicEditDataflowcomponent(ctx, a.newComponentUUID, a.oldConfig)
 			if err != nil {
-
 				a.actionLogger.Errorf("failed to roll back dataflow component %s: %v", a.name, err)
+				return models.ErrRetryRollbackTimeout, fmt.Errorf("dataflow component '%s' failed to activate within timeout and could not be rolled back: %v. Please check system load and consider manually restoring the previous configuration", a.name, err)
 			}
-			return models.ErrRetryRollbackTimeout, fmt.Errorf("dataflow component %s was not active in time and was rolled back to the old config", a.name)
+			return models.ErrRetryRollbackTimeout, fmt.Errorf("dataflow component '%s' was rolled back to its previous configuration because it did not become active within the timeout period. Please check system load or component configuration and try again", a.name)
 
 		case <-ticker.C:
 			elapsed := time.Since(startTime)
@@ -597,7 +597,7 @@ func (a *EditDataflowComponentAction) waitForComponentToBeActive(ctx context.Con
 						}
 
 						if instance.CurrentState == "active" || instance.CurrentState == "idle" {
-							stateMessage := RemainingPrefixSec(remainingSeconds) + fmt.Sprintf("completed. is in state '%s' with correct configuration", instance.CurrentState)
+							stateMessage := RemainingPrefixSec(remainingSeconds) + fmt.Sprintf("component successfully activated with state '%s', configuration verified", instance.CurrentState)
 							SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
 								stateMessage, a.outboundChannel, models.EditDataFlowComponent)
 							return "", nil
@@ -622,14 +622,14 @@ func (a *EditDataflowComponentAction) waitForComponentToBeActive(ctx context.Con
 						// abort the startup process rather than waiting for the full timeout period,
 						// as these errors require configuration changes to resolve.
 						if CheckBenthosLogLinesForConfigErrors(logs) {
-							SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Failed to parse config. Rolling back...", a.outboundChannel, models.EditDataFlowComponent)
+							SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, Label("edit", a.name)+"configuration error detected. Rolling back...", a.outboundChannel, models.EditDataFlowComponent)
 
 							_, err := a.configManager.AtomicEditDataflowcomponent(ctx, a.newComponentUUID, a.oldConfig)
 							if err != nil {
 								a.actionLogger.Errorf("failed to roll back dataflow component %s: %v", a.name, err)
-								return models.ErrConfigFileInvalid, fmt.Errorf("dataflow component '%s' was rolled back because of a config error", a.name)
+								return models.ErrConfigFileInvalid, fmt.Errorf("dataflow component '%s' has invalid configuration but could not be rolled back: %v. Please check your logs and consider manually restoring the previous configuration", a.name, err)
 							}
-							return models.ErrConfigFileInvalid, fmt.Errorf("dataflow component '%s' was rolled back because of a config error", a.name)
+							return models.ErrConfigFileInvalid, fmt.Errorf("dataflow component '%s' was rolled back to its previous configuration due to configuration errors. Please check the component logs, fix the configuration issues, and try editing again", a.name)
 						}
 
 						continue
