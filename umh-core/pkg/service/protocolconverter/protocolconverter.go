@@ -1152,13 +1152,17 @@ func (c *ProtocolConverterService) ForceRemoveProtocolConverter(
 	}
 
 	// force remove from dataflowcomponent manager
+	// We attempt to remove both read and write DFCs regardless of individual errors.
+	// If a component doesn't exist (ErrServiceNotExists), we log the error but continue
+	// with removing the other component. Only return an error if it's a different failure
+	// (like permission issues or system errors).
 	err = c.dataflowComponentService.ForceRemoveDataFlowComponent(ctx, filesystemService, dfcReadName)
-	if err != nil {
+	if err != nil && !errors.Is(err, dfc.ErrServiceNotExists) {
 		return err
 	}
 
 	err = c.dataflowComponentService.ForceRemoveDataFlowComponent(ctx, filesystemService, dfcWriteName)
-	if err != nil {
+	if err != nil && !errors.Is(err, dfc.ErrServiceNotExists) {
 		return err
 	}
 

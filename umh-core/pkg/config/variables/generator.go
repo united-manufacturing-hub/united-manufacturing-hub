@@ -35,11 +35,24 @@ func (g *Generator) RenderConfig(vb VariableBundle) (string, error) {
 	return string(bytes), nil
 }
 
-// ConfigToMap converts a NmapServiceConfig to a raw map for YAML generation
+// ConfigToMap converts a VariableBundle to a raw map for YAML generation
 func (g *Generator) ConfigToMap(cfg VariableBundle) map[string]any {
 	configMap := make(map[string]any)
 
-	// TODO
+	// Add user variables if present
+	if len(cfg.User) > 0 {
+		configMap["user"] = cfg.User
+	}
+
+	// Add global variables if present
+	if len(cfg.Global) > 0 {
+		configMap["global"] = cfg.Global
+	}
+
+	// Add internal variables if present
+	if len(cfg.Internal) > 0 {
+		configMap["internal"] = cfg.Internal
+	}
 
 	return configMap
 }
