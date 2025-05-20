@@ -71,6 +71,9 @@ type ConfigManager interface {
 	// AtomicEditDataflowcomponent edits a dataflowcomponent in the config atomically
 	AtomicEditDataflowcomponent(ctx context.Context, componentUUID uuid.UUID, dfc DataFlowComponentConfig) (DataFlowComponentConfig, error)
 	// GetConfigAsString returns the current config as a string
+	// This function is used in the get-config-file action to retrieve the raw config file
+	// without any yaml parsing applied. This allows to display yaml anchors and change them
+	// via the frontend
 	GetConfigAsString(ctx context.Context) (string, error)
 	// GetCacheModTime returns the modification time of the config file
 	GetCacheModTime(ctx context.Context) (time.Time, error)
