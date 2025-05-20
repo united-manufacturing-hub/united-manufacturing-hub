@@ -137,7 +137,7 @@ func (a *SetConfigFileAction) Execute() (interface{}, map[string]interface{}, er
 	}
 
 	// Write the new content to the file
-	err = a.configManager.WriteConfigFromSting(ctx, a.payload.Content)
+	err = a.configManager.WriteConfigFromString(ctx, a.payload.Content)
 	if err != nil {
 		errMsg := fmt.Sprintf("Failed to write config file: %v", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,

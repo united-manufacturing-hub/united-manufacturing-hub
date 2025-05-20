@@ -340,8 +340,8 @@ func (m *MockConfigManager) WithCacheModTime(modTime time.Time) *MockConfigManag
 	return m
 }
 
-// WriteConfigFromSting implements the ConfigManager interface
-func (m *MockConfigManager) WriteConfigFromSting(ctx context.Context, config string) error {
+// WriteConfigFromString implements the ConfigManager interface
+func (m *MockConfigManager) WriteConfigFromString(ctx context.Context, config string) error {
 	// parse the config
 	parsedConfig, err := parseConfig([]byte(config))
 	if err != nil {
