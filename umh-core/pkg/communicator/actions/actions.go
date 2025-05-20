@@ -169,6 +169,8 @@ func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePay
 		return
 	}
 
+	// don't log the result for GetLogs
+	// in combination with auto-reloading the logs from the UI, this would cause a lot of noise
 	if payload.ActionType != models.GetLogs {
 		log.Debugf("Action executed, sending reply: %v", result)
 	}
