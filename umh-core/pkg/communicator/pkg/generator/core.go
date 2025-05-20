@@ -16,6 +16,7 @@ package generator
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"go.uber.org/zap"
@@ -71,21 +72,9 @@ func DeriveCoreHealth(
 
 	if len(unhealthyComponents) > 0 {
 		coreHealth.Category = models.Degraded
-		coreHealth.Message = fmt.Sprintf("Unhealthy components: %v", unhealthyComponents)
+		coreHealth.Message = fmt.Sprintf("Unhealthy components:\n%s", strings.Join(unhealthyComponents, "\n"))
 		logger.Warnf("Core health is degraded: %s", coreHealth.Message)
 	}
 
 	return coreHealth
-}
-
-// GetCoreHealthMessage returns a health message based on the provided health category
-func GetCoreHealthMessage(cat models.HealthCategory) string {
-	switch cat {
-	case models.Active:
-		return "Core operating normally"
-	case models.Degraded:
-		return "Core degraded"
-	default:
-		return "Core status unknown"
-	}
 }
