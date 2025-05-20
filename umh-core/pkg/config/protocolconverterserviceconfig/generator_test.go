@@ -49,20 +49,20 @@ var _ = Describe("ProtocolConverter YAML Generator", func() {
 			testCase{
 				config: &ProtocolConverterServiceConfigSpec{
 					Template: ProtocolConverterServiceConfigTemplate{
-						connectionserviceconfig.ConnectionServiceConfig{
+						ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
 							NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
 								Target: "127.0.0.1",
 								Port:   443,
 							},
 						},
-						dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+						DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 							BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 								Output: map[string]any{
 									"stdout": map[string]any{},
 								},
 							},
 						},
-						dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+						DataflowComponentWriteServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 							BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 								Input: map[string]any{
 									"stdin": map[string]any{},
@@ -110,13 +110,13 @@ var _ = Describe("ProtocolConverter YAML Generator", func() {
 			testCase{
 				config: &ProtocolConverterServiceConfigSpec{
 					Template: ProtocolConverterServiceConfigTemplate{
-						connectionserviceconfig.ConnectionServiceConfig{
+						ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
 							NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
 								Target: "127.0.0.1",
 								Port:   443,
 							},
 						},
-						dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+						DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 							BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 								Output: map[string]any{
 									"stdout": map[string]any{
@@ -125,7 +125,7 @@ var _ = Describe("ProtocolConverter YAML Generator", func() {
 								},
 							},
 						},
-						dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+						DataflowComponentWriteServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 							BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 								Input: map[string]any{
 									"http_server": map[string]any{
@@ -165,13 +165,13 @@ var _ = Describe("ProtocolConverter YAML Generator", func() {
 			testCase{
 				config: &ProtocolConverterServiceConfigSpec{
 					Template: ProtocolConverterServiceConfigTemplate{
-						connectionserviceconfig.ConnectionServiceConfig{
+						ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
 							NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
 								Target: "127.0.0.1",
 								Port:   443,
 							},
 						},
-						dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+						DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 							BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 								Input: map[string]any{},
 								Output: map[string]any{
@@ -179,7 +179,7 @@ var _ = Describe("ProtocolConverter YAML Generator", func() {
 								},
 							},
 						},
-						dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+						DataflowComponentWriteServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 							BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 								Input: map[string]any{
 									"file": map[string]any{
@@ -221,13 +221,13 @@ var _ = Describe("ProtocolConverter YAML Generator", func() {
 			testCase{
 				config: &ProtocolConverterServiceConfigSpec{
 					Template: ProtocolConverterServiceConfigTemplate{
-						connectionserviceconfig.ConnectionServiceConfig{
+						ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
 							NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
 								Target: "127.0.0.1",
 								Port:   443,
 							},
 						},
-						dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+						DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 							BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 								Input: map[string]any{
 									"kafka": map[string]any{
@@ -255,7 +255,7 @@ var _ = Describe("ProtocolConverter YAML Generator", func() {
 								},
 							},
 						},
-						dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+						DataflowComponentWriteServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 							BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 								Input: map[string]any{
 									"mqtt": map[string]any{

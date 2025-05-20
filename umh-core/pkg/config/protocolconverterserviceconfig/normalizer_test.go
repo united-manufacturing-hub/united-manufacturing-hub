@@ -79,7 +79,7 @@ var _ = Describe("ProtocolConverter YAML Normalizer", func() {
 
 			// Check output preserved
 			outputUns := config.Template.DataflowComponentReadServiceConfig.BenthosConfig.Output["uns"].(map[string]any) // note that this is NOT kafka, but uns
-			Expect(outputUns["bridged_by"]).To(Equal("{{ .bridged_by }}"))
+			Expect(outputUns["bridged_by"]).To(Equal("{{ .internal.bridged_by }}"))
 
 			// Check pipeline processors preserved
 			processors := config.Template.DataflowComponentReadServiceConfig.BenthosConfig.Pipeline["processors"].([]any)
