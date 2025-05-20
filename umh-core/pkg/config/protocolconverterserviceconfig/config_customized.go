@@ -32,11 +32,13 @@ func (c *ProtocolConverterServiceConfigSpec) GetDFCReadServiceConfig() dataflowc
 	// copy the config
 	dfcReadConfig := c.Template.DataflowComponentReadServiceConfig
 
-	// enforce the output config to be the uns output config
-	dfcReadConfig.BenthosConfig.Output = map[string]any{
-		"uns": map[string]any{
-			"bridged_by": "{{ .bridged_by }}",
-		},
+	// Only append UNS output if there's an input config
+	if len(dfcReadConfig.BenthosConfig.Input) > 0 {
+		dfcReadConfig.BenthosConfig.Output = map[string]any{
+			"uns": map[string]any{
+				"bridged_by": "{{ .internal.bridged_by }}",
+			},
+		}
 	}
 
 	return dfcReadConfig
@@ -48,11 +50,14 @@ func (c *ProtocolConverterServiceConfigSpec) GetDFCReadServiceConfig() dataflowc
 func (c *ProtocolConverterServiceConfigSpec) GetDFCWriteServiceConfig() dataflowcomponentserviceconfig.DataflowComponentServiceConfig {
 	dfcWriteConfig := c.Template.DataflowComponentWriteServiceConfig
 
-	dfcWriteConfig.BenthosConfig.Input = map[string]any{
-		"uns": map[string]any{
-			"consumer_group": "{{ .consumer_group }}",
-			"umh_topic":      "{{ .umh_topic }}",
-		},
+	// Only append UNS input if there's an output config
+	if len(dfcWriteConfig.BenthosConfig.Output) > 0 {
+		dfcWriteConfig.BenthosConfig.Input = map[string]any{
+			"uns": map[string]any{
+				"consumer_group": "{{ .internal.bridged_by }}", // use bridged_by as consumer group
+				"umh_topic":      "{{ .internal.umh_topic }}",  // this needs to come from some value set by the user
+			},
+		}
 	}
 	return dfcWriteConfig
 }

@@ -768,7 +768,7 @@ var _ = Describe("DataFlowComponentService", func() {
 							Input: map[string]interface{}{
 								"random_input": map[string]interface{}{
 									"address":    "{{.nested.key}}",
-									"bridged_by": "{{.bridged_by}}",
+									"bridged_by": "{{.internal.bridged_by}}",
 									"global_var": "{{.global.global_var}}",
 									"location_0": "{{index .location \"0\"}}",
 									"location_1": "{{index .location \"1\"}}",
@@ -860,7 +860,7 @@ var _ = Describe("DataFlowComponentService", func() {
 						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 							Input: map[string]interface{}{
 								"random_input": map[string]interface{}{
-									"bridged_by": "{{.bridged_by}}",
+									"bridged_by": "{{.internal.bridged_by}}",
 								},
 							},
 						},

@@ -492,7 +492,7 @@ func BuildRuntimeConfig(
 	if nodeName == "" {
 		nodeName = "unknown"
 	}
-	vb.User["bridged_by"] = generateProtocolConverterBridgedBy(nodeName, pcName)
+	vb.Internal["bridged_by"] = generateProtocolConverterBridgedBy(nodeName, pcName)
 
 	//----------------------------------------------------------------------
 	// 4. Render all three sub-templates
