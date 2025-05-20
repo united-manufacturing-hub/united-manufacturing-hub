@@ -151,7 +151,7 @@ func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePay
 	if err != nil {
 		// If parsing fails, send a structured error reply using SendActionReplyV2 with ErrRetryParseFailed
 		// this will allow the UI to retry the action
-		SendActionReplyV2(instanceUUID, sender, payload.ActionUUID, models.ActionFinishedWithFailure, "Failed to parse action payload: "+err.Error(), models.ErrRetryParseFailed, nil, outboundChannel, payload.ActionType, nil)
+		SendActionReplyV2(instanceUUID, sender, payload.ActionUUID, models.ActionFinishedWithFailure, "Failed to parse action payload: "+err.Error(), models.ErrParseFailed, nil, outboundChannel, payload.ActionType, nil)
 		log.Errorf("Error parsing action payload: %s", err)
 		return
 	}
@@ -161,7 +161,7 @@ func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePay
 	err = action.Validate()
 	if err != nil {
 		// If validation fails, send a structured error reply using SendActionReplyV2 with ErrEditValidationFailed
-		SendActionReplyV2(instanceUUID, sender, payload.ActionUUID, models.ActionFinishedWithFailure, "Failed to validate action payload: "+err.Error(), models.ErrEditValidationFailed, nil, outboundChannel, payload.ActionType, nil)
+		SendActionReplyV2(instanceUUID, sender, payload.ActionUUID, models.ActionFinishedWithFailure, "Failed to validate action payload: "+err.Error(), models.ErrValidationFailed, nil, outboundChannel, payload.ActionType, nil)
 		log.Errorf("Error validating action payload: %s", err)
 		return
 	}

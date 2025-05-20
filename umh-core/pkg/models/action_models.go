@@ -580,14 +580,21 @@ const ActionReplyResponseSchemaJsonActionReplyStateActionSuccess ActionReplyResp
 
 type ActionReplyResponseSchemaJsonActionReplyPayloadV2Payload map[string]interface{}
 
+// Error codes for the action reply payload.
+// The error codes have two purposes:
+// 1. To allow the frontend to determine if the action can be retried or not
+// 2. To display them to the user
+// if an error code starts with "ERR_RETRY_" the action can be retried (see fetcher.js in the frontend)
 const (
-	ErrRetryParseFailed     = "ERR_RETRY_ACTION_PARSE_FAILED"
-	ErrEditValidationFailed = "ERR_EDIT_VALIDATION_FAILED"
-	ErrAbortExecutionFailed = "ERR_ABORT_EXECUTION_FAILED"
-	ErrRetryDFCTimeout      = "ERR_RETRY_DFC_TIMEOUT"
-	ErrRetryDFCConfigError  = "ERR_RETRY_DFC_CONFIG_ERROR"
-	ErrSendingActionReply   = "ERR_SENDING_REPLY"
-	ErrAbortRollbackFailed  = "ERR_ABORT_ROLLBACK_FAILED"
+	// ErrParseFailed is the error code for a failed parse of the action payload.
+	// the error is not retryable because the parsing is deterministic
+	ErrParseFailed = "ERR_ACTION_PARSE_FAILED"
+	// ErrValidationFailed is the error code for a failed validation of the action payload.
+	// the error is not retryable because the validation is deterministic
+	ErrValidationFailed = "ERR_VALIDATION_FAILED"
+	// ErrRetryRollbackTimeout is the error code for a timeout during the dfc deployment.
+	// It is retryable because the timeout might be caused by a busy system.
 	ErrRetryRollbackTimeout = "ERR_RETRY_ROLLBACK_TIMEOUT"
-	ErrConfigFileInvalid    = "ERR_CONFIG_FILE_INVALID"
+	// ErrConfigFileInvalid is sent when the deployment of a dfc fails because the config file is invalid.
+	ErrConfigFileInvalid = "ERR_CONFIG_FILE_INVALID"
 )
