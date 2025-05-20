@@ -32,5 +32,5 @@ const (
 const (
 	// GetOrSetConfigFileTimeout is the timeout for the get-config-file action and the set-config-file action
 	// to avoid blocking the config file
-	GetOrSetConfigFileTimeout = time.Millisecond * 30
+	GetOrSetConfigFileTimeout = time.Second * 1
 )
