@@ -62,7 +62,19 @@ var _ = Describe("ProtocolConverter YAML Generator", func() {
 								},
 							},
 						},
-						dataflowcomponentserviceconfig.DataflowComponentServiceConfig{}, //TODO: Add write DFC
+						dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+							BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
+								Input: map[string]any{
+									"stdin": map[string]any{},
+								},
+								Output: map[string]any{
+									"kafka": map[string]any{
+										"addresses": []string{"kafka:9092"},
+										"topic":     "output-topic",
+									},
+								},
+							},
+						},
 					},
 				},
 				// NOTE: We expect port 0 here, since ot comes out of ToBenthosServiceConfig()
@@ -79,11 +91,20 @@ var _ = Describe("ProtocolConverter YAML Generator", func() {
 					"    logger:",
 					"      level: INFO",
 					"dataflowcomponent_write:",
-					// TODO: Add write DFC
+					"  benthos:",
+					"    input:",
+					"      stdin: {}",
+					"    output:",
+					"      kafka:",
+					"        addresses:",
+					"        - kafka:9092",
+					"        topic: output-topic",
+					"    http:",
+					"      address: 0.0.0.0:0",
+					"    logger:",
+					"      level: INFO",
 				},
-				notExpected: []string{
-					"stdin",
-				},
+				notExpected: []string{},
 			}),
 		Entry("should render configured output correctly",
 			testCase{
@@ -104,7 +125,20 @@ var _ = Describe("ProtocolConverter YAML Generator", func() {
 								},
 							},
 						},
-						dataflowcomponentserviceconfig.DataflowComponentServiceConfig{}, //TODO: Add write DFC
+						dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+							BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
+								Input: map[string]any{
+									"http_server": map[string]any{
+										"path": "/data",
+									},
+								},
+								Output: map[string]any{
+									"http_client": map[string]any{
+										"url": "http://api.example.com/ingest",
+									},
+								},
+							},
+						},
 					},
 				},
 				expected: []string{
@@ -117,11 +151,15 @@ var _ = Describe("ProtocolConverter YAML Generator", func() {
 					"      stdout:",
 					"        codec: lines",
 					"dataflowcomponent_write:",
-					// TODO: Add write DFC
+					"  benthos:",
+					"    input:",
+					"      http_server:",
+					"        path: /data",
+					"    output:",
+					"      http_client:",
+					"        url: http://api.example.com/ingest",
 				},
-				notExpected: []string{
-					"stdin",
-				},
+				notExpected: []string{},
 			}),
 		Entry("should render empty input correctly",
 			testCase{
@@ -141,7 +179,20 @@ var _ = Describe("ProtocolConverter YAML Generator", func() {
 								},
 							},
 						},
-						dataflowcomponentserviceconfig.DataflowComponentServiceConfig{}, //TODO: Add write DFC
+						dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+							BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
+								Input: map[string]any{
+									"file": map[string]any{
+										"paths": []string{"/tmp/input.txt"},
+									},
+								},
+								Output: map[string]any{
+									"file": map[string]any{
+										"path": "/tmp/output.txt",
+									},
+								},
+							},
+						},
 					},
 				},
 				expected: []string{
@@ -153,7 +204,14 @@ var _ = Describe("ProtocolConverter YAML Generator", func() {
 					"    output:",
 					"      stdout: {}",
 					"dataflowcomponent_write:",
-					// TODO: Add write DFC
+					"  benthos:",
+					"    input:",
+					"      file:",
+					"        paths:",
+					"        - /tmp/input.txt",
+					"    output:",
+					"      file:",
+					"        path: /tmp/output.txt",
 				},
 				notExpected: []string{
 					"input: {}", // Empty input should not render as an empty object
@@ -197,7 +255,32 @@ var _ = Describe("ProtocolConverter YAML Generator", func() {
 								},
 							},
 						},
-						dataflowcomponentserviceconfig.DataflowComponentServiceConfig{}, //TODO: Add write DFC
+						dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+							BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
+								Input: map[string]any{
+									"mqtt": map[string]any{
+										"urls":   []string{"tcp://mqtt-broker:1883"},
+										"topics": []string{"sensor/data"},
+									},
+								},
+								Pipeline: map[string]any{
+									"processors": []any{
+										map[string]any{
+											"json": map[string]any{
+												"operator": "select",
+												"path":     "payload",
+											},
+										},
+									},
+								},
+								Output: map[string]any{
+									"redis_pubsub": map[string]any{
+										"url":     "redis://redis:6379",
+										"channel": "processed_data",
+									},
+								},
+							},
+						},
 					},
 				},
 				expected: []string{
@@ -223,11 +306,24 @@ var _ = Describe("ProtocolConverter YAML Generator", func() {
 					"        bucket: example-bucket",
 					"        path: ${!count:files}-${!timestamp_unix_nano}.txt",
 					"dataflowcomponent_write:",
-					// TODO: Add write DFC
+					"  benthos:",
+					"    input:",
+					"      mqtt:",
+					"        urls:",
+					"        - tcp://mqtt-broker:1883",
+					"        topics:",
+					"        - sensor/data",
+					"    pipeline:",
+					"      processors:",
+					"      - json:",
+					"          operator: select",
+					"          path: payload",
+					"    output:",
+					"      redis_pubsub:",
+					"        url: redis://redis:6379",
+					"        channel: processed_data",
 				},
-				notExpected: []string{
-					"stdin",
-				},
+				notExpected: []string{},
 			}),
 	)
 })
