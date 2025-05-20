@@ -480,6 +480,9 @@ func (a *EditDataflowComponentAction) Execute() (interface{}, map[string]interfa
 			errCode, err := a.waitForComponentToBeActive()
 			if err != nil {
 				errorMsg := Label("edit", a.name) + fmt.Sprintf("failed to wait for dataflow component to be active: %v", err)
+				// waitForComponentToBeActive gives us the error code, which we then forward to the frontend using the SendActionReplyV2 function
+				// the error code is a string that can be used to identify the error reason
+				// the main reason for this is to allow the frontend to determine weather it should offer a retry option or not
 				SendActionReplyV2(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errorMsg, errCode, nil, a.outboundChannel, models.EditDataFlowComponent, nil)
 				return nil, nil, fmt.Errorf("%s", errorMsg)
 			}
@@ -621,8 +624,8 @@ func (a *EditDataflowComponentAction) waitForComponentToBeActive() (string, erro
 							defer cancel()
 							_, err := a.configManager.AtomicEditDataflowcomponent(ctx, a.newComponentUUID, a.oldConfig)
 							if err != nil {
-								SendActionReplyV2(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, "DFC not rolled back. Please check your configuration and consider, removing the component manually..", "ERR_CONFIG_ERROR", nil, a.outboundChannel, models.DeployDataFlowComponent, nil)
 								a.actionLogger.Errorf("failed to roll back dataflow component %s: %v", a.name, err)
+								return models.ErrConfigFileInvalid, fmt.Errorf("dataflow component '%s' was rolled back because of a config error", a.name)
 							}
 							return models.ErrConfigFileInvalid, fmt.Errorf("dataflow component '%s' was rolled back because of a config error", a.name)
 						}

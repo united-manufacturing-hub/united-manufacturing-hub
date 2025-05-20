@@ -150,6 +150,7 @@ func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePay
 	err := action.Parse(payload.ActionPayload)
 	if err != nil {
 		// If parsing fails, send a structured error reply using SendActionReplyV2 with ErrRetryParseFailed
+		// this will allow the UI to retry the action
 		SendActionReplyV2(instanceUUID, sender, payload.ActionUUID, models.ActionFinishedWithFailure, "Failed to parse action payload: "+err.Error(), models.ErrRetryParseFailed, nil, outboundChannel, payload.ActionType, nil)
 		log.Errorf("Error parsing action payload: %s", err)
 		return

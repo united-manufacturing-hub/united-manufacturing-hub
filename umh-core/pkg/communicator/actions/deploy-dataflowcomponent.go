@@ -522,6 +522,9 @@ func (a *DeployDataflowComponentAction) Execute() (interface{}, map[string]inter
 			errCode, err := a.waitForComponentToBeActive()
 			if err != nil {
 				errorMsg := Label("deploy", a.name) + fmt.Sprintf("failed to wait for dataflow component to be active: %v", err)
+				// waitForComponentToBeActive gives us the error code, which we then forward to the frontend using the SendActionReplyV2 function
+				// the error code is a string that can be used to identify the error reason
+				// the main reason for this is to allow the frontend to determine weather it should offer a retry option or not
 				SendActionReplyV2(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errorMsg, errCode, nil, a.outboundChannel, models.DeployDataFlowComponent, nil)
 				return nil, nil, fmt.Errorf("%s", errorMsg)
 			}
@@ -642,10 +645,9 @@ func (a *DeployDataflowComponentAction) waitForComponentToBeActive() (string, er
 						err := a.configManager.AtomicDeleteDataflowcomponent(ctx, dataflowcomponentserviceconfig.GenerateUUIDFromName(a.name))
 						if err != nil {
 							a.actionLogger.Errorf("failed to remove dataflowcomponent %s: %v", a.name, err)
-							SendActionReplyV2(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, "DFC not removed. Please check your configuration and consider removing the component manually.", "ERR_CONFIG_ERROR", nil, a.outboundChannel, models.DeployDataFlowComponent, nil)
-						} else {
-							SendActionReplyV2(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, "DFC removed", "ERR_CONFIG_ERROR", nil, a.outboundChannel, models.DeployDataFlowComponent, nil)
+							return models.ErrConfigFileInvalid, fmt.Errorf("dataflow component '%s' not removed. Please check your configuration and consider removing the component manually", a.name)
 						}
+
 						return models.ErrConfigFileInvalid, fmt.Errorf("dataflow component '%s' was removed because of a config error", a.name)
 					}
 
