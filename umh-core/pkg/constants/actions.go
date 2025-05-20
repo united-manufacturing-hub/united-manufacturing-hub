@@ -25,7 +25,7 @@ const (
 const (
 	// ActionTickerTime is the time between the ticks of the action ticker
 	// especially relevant for deploy-dataflow-component or edit-dataflow-component
-	// becuase they have a ticker loop to check the status of the dataflow component
+	// because they have a ticker loop to check the status of the dataflow component
 	ActionTickerTime = time.Second * 1
 )
 
