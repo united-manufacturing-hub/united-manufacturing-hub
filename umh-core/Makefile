@@ -171,6 +171,8 @@ cleanup-tmp:
 cleanup-data:
 	rm -rf ./data/*
 
+cleanup-all: cleanup-ci cleanup-tmp cleanup-data
+
 vet:
 	go vet -tags=test ./...
 
@@ -184,7 +186,7 @@ test: vet nilaway lint
 	go test -v -tags=test ./...
 
 unit-test: vet nilaway lint
-	ginkgo -r -v --tags=test --label-filter='!integration && !redpanda-extended' --fail-fast ./...
+	ginkgo -r -v --tags=test --label-filter='!integration && !redpanda-extended && !tls' --fail-fast ./...
 
 benchmark:
 	@echo "Running benchmarks..."
@@ -230,6 +232,8 @@ integration-test: pre-test
 redpanda-extended-test: pre-test
 	ginkgo -r -v --tags=test --label-filter='redpanda-extended' --fail-fast --timeout=1.5h ./...
 
+badssl-test: pre-test
+	ginkgo -r -v --tags=test --label-filter='tls' --fail-fast ./...
 
 # integration-test-ci: Runs integration tests in CI environments with proper version tagging
 # - Injects VERSION via ldflags into AppVersion for proper error identification in Sentry
