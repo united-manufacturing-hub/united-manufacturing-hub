@@ -407,7 +407,7 @@ func (a *EditDataflowComponentAction) Execute() (interface{}, map[string]interfa
 				err := yaml.Unmarshal([]byte(processor.Data), &procConfig)
 				if err != nil {
 					errMsg := Label("edit", a.name) + fmt.Sprintf("failed to parse pipeline processor %s: %s", processorName, err.Error())
-					SendActionReplyV2(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errMsg, "ERR_RETRY_DFC_TIMEOUT", nil, a.outboundChannel, models.EditDataFlowComponent, nil)
+					SendActionReplyV2(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errMsg, models.ErrRetryRollbackTimeout, nil, a.outboundChannel, models.EditDataFlowComponent, nil)
 					return nil, nil, fmt.Errorf("%s", errMsg)
 				}
 

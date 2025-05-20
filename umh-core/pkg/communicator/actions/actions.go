@@ -183,6 +183,9 @@ func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePay
 // It is a convenience wrapper around SendActionReplyWithAdditionalContext that doesn't include additional context.
 // It returns false if an error occurred during message generation or sending.
 func SendActionReply(instanceUUID uuid.UUID, userEmail string, actionUUID uuid.UUID, arstate models.ActionReplyState, payload interface{}, outboundChannel chan *models.UMHMessage, action models.ActionType) bool {
+	// TODO: The 'action' parameter will be used in the future for action-specific logic or logging
+	_ = action
+
 	return SendActionReplyWithAdditionalContext(instanceUUID, userEmail, actionUUID, arstate, payload, outboundChannel, action, nil)
 }
 
@@ -193,6 +196,9 @@ func SendActionReply(instanceUUID uuid.UUID, userEmail string, actionUUID uuid.U
 // This is the primary method for sending action status messages to users, and is
 // used for confirmation, progress updates, success, and failure notifications.
 func SendActionReplyWithAdditionalContext(instanceUUID uuid.UUID, userEmail string, actionUUID uuid.UUID, arstate models.ActionReplyState, payload interface{}, outboundChannel chan *models.UMHMessage, action models.ActionType, actionContext map[string]interface{}) bool {
+	// TODO: The 'action' parameter will be used in the future for action-specific logic or logging
+	_ = action
+
 	err := sendActionReplyInternal(instanceUUID, userEmail, actionUUID, arstate, payload, outboundChannel, actionContext)
 	if err != nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, logger.For(logger.ComponentCommunicator), "Error generating action reply: %w", err)
@@ -305,6 +311,8 @@ func SendActionReplyV2(
 	action models.ActionType,
 	actionContext map[string]interface{},
 ) bool {
+	// TODO: The 'action' parameter will be used in the future for action-specific logic or logging
+	_ = action
 
 	return sendActionReplyWithAdditionalContextV2(instanceUUID, userEmail, actionUUID, arstate, message, errorCode, payloadV2, outboundChannel, action, actionContext)
 }
@@ -321,6 +329,8 @@ func sendActionReplyWithAdditionalContextV2(
 	action models.ActionType,
 	actionContext map[string]interface{},
 ) bool {
+	// TODO: The 'action' parameter will be used in the future for action-specific logic or logging
+	_ = action
 
 	err := sendActionReplyInternalV2(instanceUUID, userEmail, actionUUID, arstate, message, errorCode, payloadV2, outboundChannel, actionContext)
 	if err != nil {
