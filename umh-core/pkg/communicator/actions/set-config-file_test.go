@@ -29,8 +29,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 )
 
-// memFileInfo already defined in get-config-file_test.go
-
 var _ = Describe("SetConfigFile", func() {
 	var (
 		action           *actions.SetConfigFileAction
