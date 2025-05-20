@@ -71,7 +71,7 @@ type ProtocolConverterServiceConfigRuntime ProtocolConverterServiceConfigTemplat
 //
 // Field semantics:
 //   - Template  – the blueprint to render; **required**.
-//   - Variables – a bag of key/value pairs that are exposed to the Template’s
+//   - Variables – a bag of key/value pairs that are exposed to the Template's
 //     `text/template` actions.  Optional: an empty bundle leaves
 //     placeholders unresolved.
 //   - Location  – used to further specify the exact location of the converter in addition to the agent.location
@@ -81,7 +81,7 @@ type ProtocolConverterServiceConfigRuntime ProtocolConverterServiceConfigTemplat
 type ProtocolConverterServiceConfigSpec struct {
 	Template  ProtocolConverterServiceConfigTemplate `yaml:"template"`
 	Variables variables.VariableBundle               `yaml:"variables,omitempty"`
-	Location  map[int]string                         `yaml:"location,omitempty"`
+	Location  map[string]string                      `yaml:"location,omitempty"`
 }
 
 // Equal checks if two ProtocolConverterServiceConfigs are equal

@@ -19,12 +19,11 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/connectionserviceconfig"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	connectionfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/connection"
@@ -44,36 +43,57 @@ import (
 // a logical unit that combines **one Connection + one Data-Flow-Component (DFC)**
 // and surfaces them as a single object to the rest of UMH-Core.
 type IProtocolConverterService interface {
-	// GenerateConfig turns the *author-facing* specification (Spec) into the
-	// *desired* runtime representation that the manager will later compare with the
-	// live system.
+	// BuildRuntimeConfig merges all variables (user + agent + global + internal),
+	// performs the location merge, derives the `bridged_by` header, and finally
+	// renders the three sub-templates.
 	//
-	// Workflow:
+	// Preconditions
+	// ─────────────
 	//
-	//  1. The caller passes in a **ProtocolConverterServiceConfigSpec** that was
-	//     unmarshalled straight from the user’s `config.yaml`.  At this point the
-	//     struct may still contain:
+	//   - *Spec* has been unmarshalled from YAML **and** already passed through the
+	//     variable-enrichment step performed by the control loop / manager.
 	//
-	//     • raw `text/template` actions (`{{ … }}`)
-	//     • a Variables bundle (key/value pairs)
-	//     • optional Location hints
+	//     👉  That means `spec.Variables` **already** contains
+	//     – user-supplied keys                 (flat)
+	//     – authoritative `.location` map      (merged from agent)
+	//     – fleet-wide  `.global`  namespace   (injected by central loop)
+	//     – runtime-only `.internal` namespace (added by the manager)
 	//
-	//  2. We assemble the three subordinate blueprints (Connection, read-DFC,
-	//     write-DFC) into a **ProtocolConverterServiceConfigRuntime** while
-	//     *enforcing* the UNS guard-rails:
+	// Workflow
+	// ──────────────────────────────────────────────────────────────────────────────
+	// 1. Merge & normalize location maps:
+	//    • `agentLocation` – authoritative map from agent.location (may be nil)
+	//    • `pcLocation`    – optional overrides/extension from the PC spec
+	//    • Fill gaps with "unknown" up to highest defined level
 	//
-	//     • read-DFC → `BenthosConfig.Output` is forced to UNS
-	//     • write-DFC → `BenthosConfig.Input`  is forced to UNS
+	// 2. Assemble complete variable bundle:
+	//    • Start with user bundle (flat)
+	//    • Add merged location map
+	//    • Add global variables if present
+	//    • Add internal namespace with PC ID
+	//    • Add bridged_by header derived from nodeName and pcName
 	//
-	//  3. (TODO) Variable interpolation & location injection happen here.  After
-	//     this step **no** `{{ … }}` directives may remain.
+	// 3. Render all three sub-templates:
+	//    • Connection
+	//    • read-DFC   (with UNS **output** enforced)
+	//    • write-DFC  (with UNS **input**  enforced)
 	//
-	// The returned Runtime object is therefore *fully rendered* and *side-effect
-	// free* – ready to hand to the FSM or to diff against the actual system
-	// state.
-	//
-	// A nil *protConvConfig* yields an explicit error instead of a zero Runtime.
-	GenerateConfig(protConvConfig *protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec, protConvName string) (connectionserviceconfig.ConnectionServiceConfig, dataflowcomponentserviceconfig.DataflowComponentServiceConfig, error)
+	// Notes
+	// ─────
+	//   - The function is pure: it performs no side-effects and never mutates *Spec*.
+	//   - Passing a nil *Spec* results in an explicit error; an empty runtime
+	//     struct is **never** returned.
+	//   - After rendering, **no** `{{ … }}` directives remain.
+	//   - The returned object is ready for diffing or to be handed straight to the
+	//     Protocol-Converter FSM.
+	BuildRuntimeConfig(
+		spec *protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec,
+		agentLocation map[string]string,
+		pcLocation map[string]string,
+		globalVars map[string]any,
+		nodeName string,
+		pcName string,
+	) (protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime, error)
 
 	// GetConfig pulls the **actual** runtime configuration that is currently
 	// deployed for the given Protocol-Converter.
@@ -86,7 +106,7 @@ type IProtocolConverterService interface {
 	//     `FromConnectionAndDFCServiceConfig`.
 	//
 	// The resulting **ProtocolConverterServiceConfigRuntime** reflects the state
-	// the FSM is *really* running with and therefore forms the “live” side of the
+	// the FSM is *really* running with and therefore forms the "live" side of the
 	// reconcile equation:
 	GetConfig(ctx context.Context, filesystemService filesystem.Service, protConvName string) (protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec, error)
 
@@ -400,12 +420,12 @@ func renderConfig(
 // • `agentLocation` – authoritative map from agent.location (may be nil)
 // • `pcLocation`    – optional overrides/extension from the PC spec
 // • `globalVars`    – central-loop injection (may be empty)
-// • `nodeName`      – k8s node name; empty string means “unknown”
-// • `pcName`        – logical PC name (without the “protocol-converter-” prefix)
+// • `nodeName`      – k8s node name; empty string means "unknown"
+// • `pcName`        – logical PC name (without the "protocol-converter-" prefix)
 func BuildRuntimeConfig(
 	spec *protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec,
-	agentLocation map[int]string,
-	pcLocation map[int]string,
+	agentLocation map[string]string,
+	pcLocation map[string]string,
 	globalVars map[string]any,
 	nodeName string,
 	pcName string,
@@ -419,7 +439,7 @@ func BuildRuntimeConfig(
 	//----------------------------------------------------------------------
 	// 1. Merge & normalise *location* map
 	//----------------------------------------------------------------------
-	loc := map[int]string{}
+	loc := map[string]string{}
 
 	// 1a) copy agent levels (authoritative)
 	for k, v := range agentLocation {
@@ -436,13 +456,15 @@ func BuildRuntimeConfig(
 	// 1c) fill gaps up to the highest defined level with "unknown"
 	maxLevel := -1
 	for k := range loc {
-		if k > maxLevel {
-			maxLevel = k
+		level, err := strconv.Atoi(k)
+		if err == nil && level > maxLevel {
+			maxLevel = level
 		}
 	}
 	for i := 0; i <= maxLevel; i++ {
-		if _, exists := loc[i]; !exists {
-			loc[i] = "unknown"
+		key := strconv.Itoa(i)
+		if _, exists := loc[key]; !exists {
+			loc[key] = "unknown"
 		}
 	}
 
@@ -505,7 +527,7 @@ func generateProtocolConverterBridgedBy(nodeName, pcName string) string {
 //     `FromConnectionAndDFCServiceConfig`.
 //
 // The resulting **ProtocolConverterServiceConfigRuntime** reflects the state
-// the FSM is *really* running with and therefore forms the “live” side of the
+// the FSM is *really* running with and therefore forms the "live" side of the
 // reconcile equation:
 func (p *ProtocolConverterService) GetConfig(
 	ctx context.Context,
@@ -958,7 +980,7 @@ func (p *ProtocolConverterService) StartProtocolConverter(
 		}
 	}
 
-	if !dfcReadFound || !dfcWriteFound {
+	if !dfcReadFound && !dfcWriteFound {
 		return ErrServiceNotExist
 	}
 

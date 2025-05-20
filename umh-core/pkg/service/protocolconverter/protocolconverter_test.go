@@ -770,9 +770,9 @@ var _ = Describe("DataFlowComponentService", func() {
 									"address":    "{{.nested.key}}",
 									"bridged_by": "{{.bridged_by}}",
 									"global_var": "{{.global.global_var}}",
-									"location_0": "{{index .location 0}}",
-									"location_1": "{{index .location 1}}",
-									"location_2": "{{index .location 2}}",
+									"location_0": "{{index .location \"0\"}}",
+									"location_1": "{{index .location \"1\"}}",
+									"location_2": "{{index .location \"2\"}}",
 								},
 							},
 						},
@@ -781,12 +781,12 @@ var _ = Describe("DataFlowComponentService", func() {
 			}
 
 			// Set up location maps
-			agentLocation := map[int]string{
-				0: "factory",
-				1: "line1",
+			agentLocation := map[string]string{
+				"0": "factory",
+				"1": "line1",
 			}
-			pcLocation := map[int]string{
-				2: "machine1",
+			pcLocation := map[string]string{
+				"2": "machine1",
 			}
 
 			// Set up global vars

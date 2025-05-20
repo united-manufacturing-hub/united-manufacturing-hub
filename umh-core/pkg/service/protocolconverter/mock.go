@@ -39,17 +39,18 @@ import (
 // MockProtocolConverterService is a mock implementation of the IProtocolConverterService interface for testing
 type MockProtocolConverterService struct {
 	// Tracks calls to methods
-	GenerateConfigCalled    bool
-	GetConfigCalled         bool
-	StatusCalled            bool
-	AddToManagerCalled      bool
-	UpdateInManagerCalled   bool
-	RemoveFromManagerCalled bool
-	StartCalled             bool
-	StopCalled              bool
-	ForceRemoveCalled       bool
-	ServiceExistsCalled     bool
-	ReconcileManagerCalled  bool
+	GenerateConfigCalled     bool
+	GetConfigCalled          bool
+	StatusCalled             bool
+	AddToManagerCalled       bool
+	UpdateInManagerCalled    bool
+	RemoveFromManagerCalled  bool
+	StartCalled              bool
+	StopCalled               bool
+	ForceRemoveCalled        bool
+	ServiceExistsCalled      bool
+	ReconcileManagerCalled   bool
+	BuildRuntimeConfigCalled bool
 
 	// Return values for each method
 	GenerateConfigResultDFC        dataflowcomponentserviceconfig.DataflowComponentServiceConfig
@@ -68,6 +69,8 @@ type MockProtocolConverterService struct {
 	ServiceExistsResult            bool
 	ReconcileManagerError          error
 	ReconcileManagerReconciled     bool
+	BuildRuntimeConfigResult       protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime
+	BuildRuntimeConfigError        error
 
 	// For more complex testing scenarios
 	ConverterStates    map[string]*ServiceInfo
@@ -169,19 +172,6 @@ func (m *MockProtocolConverterService) GetConverterState(protConvName string) *C
 	flags := &ConverterStateFlags{}
 	m.stateFlags[protConvName] = flags
 	return flags
-}
-
-// GenerateConfig mocks generating connection & dfc config for a ProtocolConverter
-func (m *MockProtocolConverterService) GenerateConfig(
-	protConvConfig *protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec,
-	protConvName string,
-) (
-	connectionserviceconfig.ConnectionServiceConfig,
-	dataflowcomponentserviceconfig.DataflowComponentServiceConfig,
-	error,
-) {
-	m.GenerateConfigCalled = true
-	return m.GenerateConfigResultConnection, m.GenerateConfigResultDFC, m.GenerateConfigError
 }
 
 // GetConfig mocks getting the ProtocolConverter configuration
@@ -473,4 +463,17 @@ func (m *MockProtocolConverterService) ServiceExists(ctx context.Context, filesy
 func (m *MockProtocolConverterService) ReconcileManager(ctx context.Context, services serviceregistry.Provider, tick uint64) (error, bool) {
 	m.ReconcileManagerCalled = true
 	return m.ReconcileManagerError, m.ReconcileManagerReconciled
+}
+
+// BuildRuntimeConfig mocks building the runtime config for a ProtocolConverter
+func (m *MockProtocolConverterService) BuildRuntimeConfig(
+	spec *protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec,
+	agentLocation map[string]string,
+	pcLocation map[string]string,
+	globalVars map[string]any,
+	nodeName string,
+	pcName string,
+) (protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime, error) {
+	m.BuildRuntimeConfigCalled = true
+	return m.BuildRuntimeConfigResult, m.BuildRuntimeConfigError
 }
