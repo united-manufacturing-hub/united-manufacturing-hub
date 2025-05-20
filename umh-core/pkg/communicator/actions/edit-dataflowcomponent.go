@@ -477,7 +477,7 @@ func (a *EditDataflowComponentAction) Execute() (interface{}, map[string]interfa
 			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, Label("edit", a.name)+"configuration updated; but ignoring the health check", a.outboundChannel, models.EditDataFlowComponent)
 		} else {
 			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, Label("edit", a.name)+"configuration updated; waiting to become active", a.outboundChannel, models.EditDataFlowComponent)
-			errCode, err := a.waitForComponentToBeActive()
+			errCode, err := a.waitForComponentToBeActive(ctx)
 			if err != nil {
 				errorMsg := Label("edit", a.name) + fmt.Sprintf("failed to wait for dataflow component to be active: %v", err)
 				// waitForComponentToBeActive gives us the error code, which we then forward to the frontend using the SendActionReplyV2 function
@@ -522,7 +522,7 @@ func (a *EditDataflowComponentAction) GetComponentUUID() uuid.UUID {
 // Concurrency note: The method never writes to `systemSnapshot`; the FSM runtime
 // is the single writer.  We only take read‑locks while **copying** the full
 // snapshot to avoid holding the lock during YAML comparisons.
-func (a *EditDataflowComponentAction) waitForComponentToBeActive() (string, error) {
+func (a *EditDataflowComponentAction) waitForComponentToBeActive(ctx context.Context) (string, error) {
 	// checks the system snapshot
 	// 1. waits for the component to appear in the system snapshot (relevant for changed name)
 	// 2. waits for the component to be active
@@ -620,8 +620,7 @@ func (a *EditDataflowComponentAction) waitForComponentToBeActive() (string, erro
 						// as these errors require configuration changes to resolve.
 						if CheckBenthosLogLinesForConfigErrors(logs) {
 							SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Failed to parse config. Rolling back...", a.outboundChannel, models.EditDataFlowComponent)
-							ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
-							defer cancel()
+
 							_, err := a.configManager.AtomicEditDataflowcomponent(ctx, a.newComponentUUID, a.oldConfig)
 							if err != nil {
 								a.actionLogger.Errorf("failed to roll back dataflow component %s: %v", a.name, err)

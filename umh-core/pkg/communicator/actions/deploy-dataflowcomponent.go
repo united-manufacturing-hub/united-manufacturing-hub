@@ -519,7 +519,7 @@ func (a *DeployDataflowComponentAction) Execute() (interface{}, map[string]inter
 			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, Label("deploy", a.name)+"configuration updated; but ignoring the health check", a.outboundChannel, models.EditDataFlowComponent)
 		} else {
 			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, Label("deploy", a.name)+"configuration updated; waiting to become active", a.outboundChannel, models.DeployDataFlowComponent)
-			errCode, err := a.waitForComponentToBeActive()
+			errCode, err := a.waitForComponentToBeActive(ctx)
 			if err != nil {
 				errorMsg := Label("deploy", a.name) + fmt.Sprintf("failed to wait for dataflow component to be active: %v", err)
 				// waitForComponentToBeActive gives us the error code, which we then forward to the frontend using the SendActionReplyV2 function
@@ -554,7 +554,7 @@ func (a *DeployDataflowComponentAction) GetParsedPayload() models.CDFCPayload {
 
 // waitForComponentToBeActive polls live FSM state until the new component
 // becomes active or the timeout hits (→ delete unless ignoreHealthCheck).
-func (a *DeployDataflowComponentAction) waitForComponentToBeActive() (string, error) {
+func (a *DeployDataflowComponentAction) waitForComponentToBeActive(ctx context.Context) (string, error) {
 	// checks the system snapshot
 	// 1. waits for the instance to appear in the system snapshot
 	// 2. takes the logs of the instance and sends them to the user in 1-second intervals
@@ -640,8 +640,6 @@ func (a *DeployDataflowComponentAction) waitForComponentToBeActive() (string, er
 					// as these errors require configuration changes to resolve.
 					if CheckBenthosLogLinesForConfigErrors(logs) {
 						SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Failed to parse config. Removing the component.", a.outboundChannel, models.DeployDataFlowComponent)
-						ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
-						defer cancel()
 						err := a.configManager.AtomicDeleteDataflowcomponent(ctx, dataflowcomponentserviceconfig.GenerateUUIDFromName(a.name))
 						if err != nil {
 							a.actionLogger.Errorf("failed to remove dataflowcomponent %s: %v", a.name, err)
