@@ -31,6 +31,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/nmapserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/variables"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	connfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/connection"
 	dfcfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
@@ -75,7 +76,8 @@ var _ = Describe("DataFlowComponentService", func() {
 
 	Describe("AddToManager", func() {
 		var (
-			cfg *protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec
+			cfg        *protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec
+			runtimeCfg protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime
 		)
 
 		BeforeEach(func() {
@@ -118,11 +120,16 @@ var _ = Describe("DataFlowComponentService", func() {
 			// Set up mock to return a valid BenthosServiceConfig when generating config
 			mockDfc.ServiceExistsResult = false
 			mockConn.ServiceExistsResult = false
+
+			var err error
+			runtimeCfg, err = BuildRuntimeConfig(cfg, nil, nil, nil, "", protConvName)
+			Expect(err).NotTo(HaveOccurred())
 		})
 
 		It("should add a new protocolConverter to the underlying manager", func() {
+
 			// Act
-			err := service.AddToManager(ctx, mockSvcRegistry.GetFileSystem(), cfg, protConvName)
+			err := service.AddToManager(ctx, mockSvcRegistry.GetFileSystem(), &runtimeCfg, protConvName)
 
 			// Assert
 			Expect(err).NotTo(HaveOccurred())
@@ -147,11 +154,11 @@ var _ = Describe("DataFlowComponentService", func() {
 
 		It("should return error when the protocolConverter already exists", func() {
 			// Add the ProtocolConverter first
-			err := service.AddToManager(ctx, mockSvcRegistry.GetFileSystem(), cfg, protConvName)
+			err := service.AddToManager(ctx, mockSvcRegistry.GetFileSystem(), &runtimeCfg, protConvName)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Try to add it again
-			err = service.AddToManager(ctx, mockSvcRegistry.GetFileSystem(), cfg, protConvName)
+			err = service.AddToManager(ctx, mockSvcRegistry.GetFileSystem(), &runtimeCfg, protConvName)
 
 			// Assert
 			Expect(err).To(MatchError(ErrServiceAlreadyExists))
@@ -159,7 +166,7 @@ var _ = Describe("DataFlowComponentService", func() {
 
 		It("should set up the protocolConverter for reconciliation with the managers", func() {
 			// Act
-			err := service.AddToManager(ctx, mockSvcRegistry.GetFileSystem(), cfg, protConvName)
+			err := service.AddToManager(ctx, mockSvcRegistry.GetFileSystem(), &runtimeCfg, protConvName)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Reconcile to ensure the protocl converter is passed to managers
@@ -175,6 +182,7 @@ var _ = Describe("DataFlowComponentService", func() {
 	Describe("Status", func() {
 		var (
 			cfg             *protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec
+			runtimeCfg      protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime
 			dfcManager      *dfcfsm.DataflowComponentManager
 			connManager     *connfsm.ConnectionManager
 			mockConnService *connservice.MockConnectionService
@@ -206,6 +214,10 @@ var _ = Describe("DataFlowComponentService", func() {
 				},
 			}
 
+			var err error
+			runtimeCfg, err = BuildRuntimeConfig(cfg, nil, nil, nil, "", protConvName)
+			Expect(err).NotTo(HaveOccurred())
+
 			// Use the official mock manager from the FSM package
 			dfcManager, mockDfcService = dfcfsm.NewDataflowComponentManagerWithMockedServices("test")
 			connManager, mockConnService = connfsm.NewConnectionManagerWithMockedServices("test")
@@ -216,7 +228,7 @@ var _ = Describe("DataFlowComponentService", func() {
 				WithUnderlyingManagers(connManager, dfcManager))
 
 			// Add the component to the service
-			err := statusService.AddToManager(ctx, mockSvcRegistry.GetFileSystem(), cfg, protConvName)
+			err = statusService.AddToManager(ctx, mockSvcRegistry.GetFileSystem(), &runtimeCfg, protConvName)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Get the benthos name that will be used
@@ -337,8 +349,10 @@ var _ = Describe("DataFlowComponentService", func() {
 
 	Describe("UpdateInManager", func() {
 		var (
-			config        *protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec
-			updatedConfig *protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec
+			config            *protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec
+			updatedConfig     *protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec
+			runtimeCfg        protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime
+			updatedRuntimeCfg protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime
 		)
 
 		BeforeEach(func() {
@@ -389,14 +403,21 @@ var _ = Describe("DataFlowComponentService", func() {
 				},
 			}
 
+			var err error
+			runtimeCfg, err = BuildRuntimeConfig(config, nil, nil, nil, "", protConvName)
+			Expect(err).NotTo(HaveOccurred())
+
+			updatedRuntimeCfg, err = BuildRuntimeConfig(updatedConfig, nil, nil, nil, "", protConvName)
+			Expect(err).NotTo(HaveOccurred())
+
 			// Add the component first
-			err := service.AddToManager(ctx, mockSvcRegistry.GetFileSystem(), config, protConvName)
+			err = service.AddToManager(ctx, mockSvcRegistry.GetFileSystem(), &runtimeCfg, protConvName)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		It("should update an existing component", func() {
 			// Act - update the component
-			err := service.UpdateInManager(ctx, mockSvcRegistry.GetFileSystem(), updatedConfig, protConvName)
+			err := service.UpdateInManager(ctx, mockSvcRegistry.GetFileSystem(), &updatedRuntimeCfg, protConvName)
 
 			// Assert
 			Expect(err).NotTo(HaveOccurred())
@@ -437,7 +458,7 @@ var _ = Describe("DataFlowComponentService", func() {
 
 		It("should return error when protocolConverter doesn't exist", func() {
 			// Act - try to update a non-existent component
-			err := service.UpdateInManager(ctx, mockSvcRegistry.GetFileSystem(), updatedConfig, "non-existent")
+			err := service.UpdateInManager(ctx, mockSvcRegistry.GetFileSystem(), &updatedRuntimeCfg, "non-existent")
 
 			// Assert
 			Expect(err).To(MatchError(ErrServiceNotExist))
@@ -446,7 +467,8 @@ var _ = Describe("DataFlowComponentService", func() {
 
 	Describe("StartAndStopDataFlowComponent", func() {
 		var (
-			cfg *protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec
+			cfg        *protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec
+			runtimeCfg protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime
 		)
 
 		BeforeEach(func() {
@@ -471,8 +493,12 @@ var _ = Describe("DataFlowComponentService", func() {
 				},
 			}
 
+			var err error
+			runtimeCfg, err = BuildRuntimeConfig(cfg, nil, nil, nil, "", protConvName)
+			Expect(err).NotTo(HaveOccurred())
+
 			// Add the component first
-			err := service.AddToManager(ctx, mockSvcRegistry.GetFileSystem(), cfg, protConvName)
+			err = service.AddToManager(ctx, mockSvcRegistry.GetFileSystem(), &runtimeCfg, protConvName)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -541,7 +567,8 @@ var _ = Describe("DataFlowComponentService", func() {
 
 	Describe("RemoveFromManager", func() {
 		var (
-			cfg *protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec
+			cfg        *protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec
+			runtimeCfg protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime
 		)
 
 		BeforeEach(func() {
@@ -566,8 +593,12 @@ var _ = Describe("DataFlowComponentService", func() {
 				},
 			}
 
+			var err error
+			runtimeCfg, err = BuildRuntimeConfig(cfg, nil, nil, nil, "", protConvName)
+			Expect(err).NotTo(HaveOccurred())
+
 			// Add the component first
-			err := service.AddToManager(ctx, mockSvcRegistry.GetFileSystem(), cfg, protConvName)
+			err = service.AddToManager(ctx, mockSvcRegistry.GetFileSystem(), &runtimeCfg, protConvName)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -622,7 +653,10 @@ var _ = Describe("DataFlowComponentService", func() {
 				},
 			}
 
-			err := service.AddToManager(ctx, mockSvcRegistry.GetFileSystem(), cfg, protConvName)
+			runtimeCfg, err := BuildRuntimeConfig(cfg, nil, nil, nil, "", protConvName)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = service.AddToManager(ctx, mockSvcRegistry.GetFileSystem(), &runtimeCfg, protConvName)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Use the real mock from the FSM package
@@ -677,7 +711,11 @@ var _ = Describe("DataFlowComponentService", func() {
 					},
 				},
 			}
-			err := testService.AddToManager(ctx, mockSvcRegistry.GetFileSystem(), cfg, testComponentName)
+
+			runtimeCfg, err := BuildRuntimeConfig(cfg, nil, nil, nil, "", testComponentName)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = testService.AddToManager(ctx, mockSvcRegistry.GetFileSystem(), &runtimeCfg, testComponentName)
 			Expect(err).NotTo(HaveOccurred())
 
 			// First reconcile - this will just create the instance in the manager
@@ -703,6 +741,142 @@ var _ = Describe("DataFlowComponentService", func() {
 
 			// Alternatively, we could check for side effects of the error
 			// but for a unit test, verifying that reconciled is false is sufficient
+		})
+	})
+
+	Describe("BuildRuntimeConfig", func() {
+		It("should correctly render variables in templates", func() {
+			// Create a spec with templates that use variables
+			spec := &protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
+				Variables: variables.VariableBundle{
+					User: map[string]interface{}{
+						"custom_var": "test-value",
+						"nested": map[string]interface{}{
+							"key": "nested-value",
+						},
+					},
+				},
+				Template: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
+					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
+						NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
+							Target: "{{.custom_var}}",
+							Port:   102,
+						},
+					},
+					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
+							Input: map[string]interface{}{
+								"random_input": map[string]interface{}{
+									"address":    "{{.nested.key}}",
+									"bridged_by": "{{.bridged_by}}",
+									"global_var": "{{.global.global_var}}",
+									"location_0": "{{index .location 0}}",
+									"location_1": "{{index .location 1}}",
+									"location_2": "{{index .location 2}}",
+								},
+							},
+						},
+					},
+				},
+			}
+
+			// Set up location maps
+			agentLocation := map[int]string{
+				0: "factory",
+				1: "line1",
+			}
+			pcLocation := map[int]string{
+				2: "machine1",
+			}
+
+			// Set up global vars
+			globalVars := map[string]interface{}{
+				"global_var": "global-value",
+			}
+
+			// Build the runtime config
+			runtimeCfg, err := BuildRuntimeConfig(spec, agentLocation, pcLocation, globalVars, "test-node", "test-pc")
+			Expect(err).NotTo(HaveOccurred())
+
+			// 1. Verify user variables are rendered
+			Expect(runtimeCfg.ConnectionServiceConfig.NmapServiceConfig.Target).To(Equal("test-value"))
+			Expect(runtimeCfg.DataflowComponentReadServiceConfig.BenthosConfig.Input["random_input"].(map[string]interface{})["address"]).To(Equal("nested-value"))
+
+			// 2. Verify global vars are accessible
+			Expect(runtimeCfg.DataflowComponentReadServiceConfig.BenthosConfig.Input["random_input"].(map[string]interface{})["global_var"]).To(Equal("global-value"))
+
+			// 3. Verify bridged_by header
+			Expect(runtimeCfg.DataflowComponentReadServiceConfig.BenthosConfig.Input["random_input"].(map[string]interface{})["bridged_by"]).To(Equal("protocol-converter-test-node-test-pc"))
+
+			// 4. Verify location merging
+			Expect(runtimeCfg.DataflowComponentReadServiceConfig.BenthosConfig.Input["random_input"].(map[string]interface{})["location_0"]).To(Equal("factory"))
+			Expect(runtimeCfg.DataflowComponentReadServiceConfig.BenthosConfig.Input["random_input"].(map[string]interface{})["location_1"]).To(Equal("line1"))
+			Expect(runtimeCfg.DataflowComponentReadServiceConfig.BenthosConfig.Input["random_input"].(map[string]interface{})["location_2"]).To(Equal("machine1"))
+		})
+
+		It("should handle nil inputs gracefully", func() {
+			// Test with nil spec
+			_, err := BuildRuntimeConfig(nil, nil, nil, nil, "", "")
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(Equal("nil spec"))
+
+			// Test with nil maps, but reference internal and user variables in the template
+			spec := &protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
+				Variables: variables.VariableBundle{
+					User: map[string]interface{}{
+						"custom_var": "test-value",
+					},
+				},
+				Template: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
+					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
+						NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
+							Target: "{{.custom_var}}",
+							Port:   102,
+						},
+					},
+					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
+							Input: map[string]interface{}{
+								"random_input": map[string]interface{}{
+									"internal_id": "{{.internal.id}}",
+								},
+							},
+						},
+					},
+				},
+			}
+			runtimeCfg, err := BuildRuntimeConfig(spec, nil, nil, nil, "", "test-pc")
+			Expect(err).NotTo(HaveOccurred())
+			// User variable rendered
+			Expect(runtimeCfg.ConnectionServiceConfig.NmapServiceConfig.Target).To(Equal("test-value"))
+			// Internal variable rendered
+			Expect(runtimeCfg.DataflowComponentReadServiceConfig.BenthosConfig.Input["random_input"].(map[string]interface{})["internal_id"]).To(Equal("test-pc"))
+		})
+
+		It("should sanitize bridged_by header correctly", func() {
+			spec := &protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
+				Template: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
+					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
+							Input: map[string]interface{}{
+								"random_input": map[string]interface{}{
+									"bridged_by": "{{.bridged_by}}",
+								},
+							},
+						},
+					},
+				},
+			}
+
+			// Test with special characters
+			runtimeCfg, err := BuildRuntimeConfig(spec, nil, nil, nil, "test@node", "test.pc")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(runtimeCfg.DataflowComponentReadServiceConfig.BenthosConfig.Input["random_input"].(map[string]interface{})["bridged_by"]).To(Equal("protocol-converter-test-node-test-pc"))
+
+			// Test with multiple special characters
+			runtimeCfg, err = BuildRuntimeConfig(spec, nil, nil, nil, "test@node#1", "test.pc@2")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(runtimeCfg.DataflowComponentReadServiceConfig.BenthosConfig.Input["random_input"].(map[string]interface{})["bridged_by"]).To(Equal("protocol-converter-test-node-1-test-pc-2"))
 		})
 	})
 })

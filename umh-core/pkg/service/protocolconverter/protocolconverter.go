@@ -18,6 +18,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
@@ -312,7 +314,7 @@ func (p *ProtocolConverterService) getDFCWriteName(protConvName string) string {
 	return fmt.Sprintf("dataflow-%s", p.getUnderlyingDFCWriteName(protConvName))
 }
 
-// GenerateConfig turns the **author-facing** specification (*Spec*) into the
+// renderConfig turns the **author-facing** specification (*Spec*) into the
 // **fully rendered** runtime configuration that the FSM compares against the
 // live system.
 //
@@ -328,7 +330,7 @@ func (p *ProtocolConverterService) getDFCWriteName(protConvName string) string {
 //     – fleet-wide  `.global`  namespace   (injected by central loop)
 //     – runtime-only `.internal` namespace (added by the manager)
 //
-//     GenerateConfig does **not** add or override any variables.
+//     renderConfig does **not** add or override any variables.
 //     If a key is missing, template rendering will fail.
 //
 // Workflow
@@ -356,9 +358,9 @@ func (p *ProtocolConverterService) getDFCWriteName(protConvName string) string {
 //
 // The returned object is ready for diffing or to be handed straight to the
 // Protocol-Converter FSM.
-func (p *ProtocolConverterService) GenerateConfig(
+func renderConfig(
 	spec *protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec,
-	protConvName string,
+	scope map[string]any,
 ) (
 	protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime,
 	error,
@@ -366,9 +368,6 @@ func (p *ProtocolConverterService) GenerateConfig(
 	if spec == nil {
 		return protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime{}, fmt.Errorf("protocolConverter config is nil")
 	}
-
-	// Get the variables as a flat map
-	scope := spec.Variables.Flatten()
 
 	// ─── Render the three sub-templates ─────────────────────────────
 	// Ensure to use GetDFCReadServiceConfig(), etc. to get the uns input/output enforced
@@ -392,6 +391,107 @@ func (p *ProtocolConverterService) GenerateConfig(
 		DataflowComponentReadServiceConfig:  read,
 		DataflowComponentWriteServiceConfig: write,
 	}, nil
+}
+
+// BuildRuntimeConfig merges all variables (user + agent + global + internal),
+// performs the location merge, derives the `bridged_by` header, and finally
+// renders the three sub-templates.
+//
+// • `agentLocation` – authoritative map from agent.location (may be nil)
+// • `pcLocation`    – optional overrides/extension from the PC spec
+// • `globalVars`    – central-loop injection (may be empty)
+// • `nodeName`      – k8s node name; empty string means “unknown”
+// • `pcName`        – logical PC name (without the “protocol-converter-” prefix)
+func BuildRuntimeConfig(
+	spec *protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec,
+	agentLocation map[int]string,
+	pcLocation map[int]string,
+	globalVars map[string]any,
+	nodeName string,
+	pcName string,
+) (protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime, error) {
+
+	if spec == nil {
+		return protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime{},
+			fmt.Errorf("nil spec")
+	}
+
+	//----------------------------------------------------------------------
+	// 1. Merge & normalise *location* map
+	//----------------------------------------------------------------------
+	loc := map[int]string{}
+
+	// 1a) copy agent levels (authoritative)
+	for k, v := range agentLocation {
+		loc[k] = v
+	}
+
+	// 1b) extend with PC-local additions (never overwrite agent keys)
+	for k, v := range pcLocation {
+		if _, exists := loc[k]; !exists {
+			loc[k] = v
+		}
+	}
+
+	// 1c) fill gaps up to the highest defined level with "unknown"
+	maxLevel := -1
+	for k := range loc {
+		if k > maxLevel {
+			maxLevel = k
+		}
+	}
+	for i := 0; i <= maxLevel; i++ {
+		if _, exists := loc[i]; !exists {
+			loc[i] = "unknown"
+		}
+	}
+
+	//----------------------------------------------------------------------
+	// 2. Assemble the **complete** variable bundle
+	//----------------------------------------------------------------------
+	vb := spec.Variables // start with user bundle (flat)
+	if vb.User == nil {
+		vb.User = map[string]any{}
+	}
+	vb.User["location"] = loc // merged map
+
+	if len(globalVars) != 0 {
+		vb.Global = globalVars
+	}
+
+	// Internal namespace
+	vb.Internal = map[string]any{
+		"id": pcName,
+	}
+
+	//----------------------------------------------------------------------
+	// 3. bridged_by header
+	//----------------------------------------------------------------------
+	if nodeName == "" {
+		nodeName = "unknown"
+	}
+	vb.User["bridged_by"] = generateProtocolConverterBridgedBy(nodeName, pcName)
+
+	//----------------------------------------------------------------------
+	// 4. Render all three sub-templates
+	//----------------------------------------------------------------------
+	scope := vb.Flatten()
+	return renderConfig(spec, scope) // unexported helper that enforces UNS
+}
+
+// ---------------------------------------------------------------------
+// Helper: derive a sanitised bridged_by value
+// ---------------------------------------------------------------------
+func generateProtocolConverterBridgedBy(nodeName, pcName string) string {
+	bridgeName := fmt.Sprintf("protocol-converter-%s-%s", nodeName, pcName)
+
+	reNonAlnum := regexp.MustCompile(`[^a-zA-Z0-9]`)
+	bridgeName = reNonAlnum.ReplaceAllString(bridgeName, "-")
+
+	reMultiDash := regexp.MustCompile(`-{2,}`)
+	bridgeName = reMultiDash.ReplaceAllString(bridgeName, "-")
+
+	return strings.Trim(bridgeName, "-")
 }
 
 // GetConfig pulls the **actual** runtime configuration that is currently
@@ -568,7 +668,7 @@ func (p *ProtocolConverterService) Status(
 func (p *ProtocolConverterService) AddToManager(
 	ctx context.Context,
 	filesystemService filesystem.Service,
-	cfg *protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec,
+	cfg *protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime,
 	protConvName string,
 ) error {
 	if p.connectionManager == nil {
@@ -596,15 +696,9 @@ func (p *ProtocolConverterService) AddToManager(
 		}
 	}
 
-	// Generate Connection & DFC Serviceconfigs from ProtocolConverter config
-	templatedConfig, err := p.GenerateConfig(cfg, protConvName)
-	if err != nil {
-		return fmt.Errorf("failed to generate serviceconfigs: %v", err)
-	}
-
-	connServiceConfig := templatedConfig.ConnectionServiceConfig
-	dfcReadServiceConfig := templatedConfig.DataflowComponentReadServiceConfig
-	dfcWriteServiceConfig := templatedConfig.DataflowComponentWriteServiceConfig
+	connServiceConfig := cfg.ConnectionServiceConfig
+	dfcReadServiceConfig := cfg.DataflowComponentReadServiceConfig
+	dfcWriteServiceConfig := cfg.DataflowComponentWriteServiceConfig
 
 	// Create a config.ConnectionConfig that wraps the NmapServiceConfig
 	connectionConfig := config.ConnectionConfig{
@@ -642,7 +736,7 @@ func (p *ProtocolConverterService) AddToManager(
 func (p *ProtocolConverterService) UpdateInManager(
 	ctx context.Context,
 	filesystemService filesystem.Service,
-	cfg *protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec,
+	cfg *protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime,
 	protConvName string,
 ) error {
 	if p.connectionManager == nil {
@@ -698,15 +792,9 @@ func (p *ProtocolConverterService) UpdateInManager(
 		return ErrServiceNotExist
 	}
 
-	// Convert our connection config to Connection service config
-	templatedConfig, err := p.GenerateConfig(cfg, protConvName)
-	if err != nil {
-		return fmt.Errorf("failed to generate configs: %w", err)
-	}
-
-	connConfig := templatedConfig.ConnectionServiceConfig
-	dfcReadConfig := templatedConfig.DataflowComponentReadServiceConfig
-	dfcWriteConfig := templatedConfig.DataflowComponentWriteServiceConfig
+	connConfig := cfg.ConnectionServiceConfig
+	dfcReadConfig := cfg.DataflowComponentReadServiceConfig
+	dfcWriteConfig := cfg.DataflowComponentWriteServiceConfig
 
 	// Create a config.ConnectionConfig that wraps the ConnectionServiceConfig
 	connCurrentDesiredState := p.connectionConfig[indexConn].DesiredFSMState
