@@ -118,7 +118,7 @@ func (a *SetConfigFileAction) Execute() (interface{}, map[string]interface{}, er
 	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
 		fmt.Sprintf("Updating config file at %s", configPath), a.outboundChannel, models.SetConfigFile)
 
-	currentLastModified, err := a.configManager.GetCacheModTime()
+	currentLastModified, err := a.configManager.GetCacheModTime(ctx)
 	if err != nil {
 		errMsg := fmt.Sprintf("Failed to get cache mod time: %v", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
@@ -145,7 +145,7 @@ func (a *SetConfigFileAction) Execute() (interface{}, map[string]interface{}, er
 		return nil, nil, fmt.Errorf("failed to write config file: %w", err)
 	}
 
-	newLastModifiedTime, err := a.configManager.GetCacheModTime()
+	newLastModifiedTime, err := a.configManager.GetCacheModTime(ctx)
 	if err != nil {
 		errMsg := fmt.Sprintf("Failed to get cache mod time: %v", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
