@@ -62,6 +62,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/google/uuid"
@@ -96,7 +97,7 @@ type DeployDataflowComponentAction struct {
 	payload  models.CDFCPayload
 	name     string // human-readable component name
 	metaType string // "custom" for now – future-proofing for other component kinds
-
+	state    string // the desired state of the component
 	// ─── Runtime observation & synchronisation ───────────────────────────────
 	systemSnapshotManager *fsm.SnapshotManager // Snapshot Manager holds the latest system snapshot
 
@@ -136,6 +137,7 @@ func (a *DeployDataflowComponentAction) Parse(payload interface{}) error {
 		} `json:"meta"`
 		IgnoreHealthCheck bool        `json:"ignoreHealthCheck"`
 		Payload           interface{} `json:"payload"`
+		State             string      `json:"state"`
 	}
 
 	// Parse the top level payload
@@ -152,6 +154,15 @@ func (a *DeployDataflowComponentAction) Parse(payload interface{}) error {
 	a.name = topLevel.Name
 	if a.name == "" {
 		return errors.New("missing required field Name")
+	}
+
+	a.state = topLevel.State
+	if a.state == "" {
+		a.state = "active"
+	}
+	if a.state != "active" && a.state != "stopped" {
+		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, "invalid state: "+a.state, a.outboundChannel, models.DeployDataFlowComponent)
+		return fmt.Errorf("invalid state: %s", a.state)
 	}
 
 	// Store the meta type
@@ -488,7 +499,7 @@ func (a *DeployDataflowComponentAction) Execute() (interface{}, map[string]inter
 	dfc := config.DataFlowComponentConfig{
 		FSMInstanceConfig: config.FSMInstanceConfig{
 			Name:            a.name,
-			DesiredFSMState: "active",
+			DesiredFSMState: a.state,
 		},
 		DataFlowComponentServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 			BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
@@ -519,7 +530,7 @@ func (a *DeployDataflowComponentAction) Execute() (interface{}, map[string]inter
 			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, Label("deploy", a.name)+"configuration updated; but ignoring the health check", a.outboundChannel, models.EditDataFlowComponent)
 		} else {
 			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, Label("deploy", a.name)+"configuration updated; waiting to become active", a.outboundChannel, models.DeployDataFlowComponent)
-			err = a.waitForComponentToBeActive()
+			err = a.waitForComponentToBeReady()
 			if err != nil {
 				errorMsg := Label("deploy", a.name) + fmt.Sprintf("failed to wait for dataflow component to be active: %v", err)
 				SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errorMsg, a.outboundChannel, models.DeployDataFlowComponent)
@@ -549,9 +560,9 @@ func (a *DeployDataflowComponentAction) GetParsedPayload() models.CDFCPayload {
 	return a.payload
 }
 
-// waitForComponentToBeActive polls live FSM state until the new component
+// waitForComponentToBeReady polls live FSM state until the new component
 // becomes active or the timeout hits (→ delete unless ignoreHealthCheck).
-func (a *DeployDataflowComponentAction) waitForComponentToBeActive() error {
+func (a *DeployDataflowComponentAction) waitForComponentToBeReady() error {
 	// checks the system snapshot
 	// 1. waits for the instance to appear in the system snapshot
 	// 2. takes the logs of the instance and sends them to the user in 1-second intervals
@@ -611,7 +622,16 @@ func (a *DeployDataflowComponentAction) waitForComponentToBeActive() error {
 							a.outboundChannel, models.DeployDataFlowComponent)
 						continue
 					}
-					if instance.CurrentState == "active" || instance.CurrentState == "idle" {
+					// Compare current state with the desired state
+					var acceptedStates []string
+					switch a.state {
+					case "active":
+						acceptedStates = []string{"active", "idle"}
+					case "stopped":
+						acceptedStates = []string{"stopped"}
+					}
+
+					if slices.Contains(acceptedStates, instance.CurrentState) {
 						stateMessage := RemainingPrefixSec(remainingSeconds) + fmt.Sprintf("completed. is in state '%s' with correct configuration", instance.CurrentState)
 						SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, stateMessage,
 							a.outboundChannel, models.DeployDataFlowComponent)

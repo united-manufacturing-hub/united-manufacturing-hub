@@ -76,6 +76,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/google/uuid"
@@ -116,6 +117,7 @@ type EditDataflowComponentAction struct {
 	payload  models.CDFCPayload
 	name     string // human‑readable component name (may change during an edit)
 	metaType string // "custom" for now – future‑proofing for other component kinds
+	state    string // the desired state of the component
 
 	// ─── UUID choreography ────────────────────────────────────────────────────
 	oldComponentUUID uuid.UUID // UUID of the pre‑existing component (taken from the request)
@@ -166,6 +168,7 @@ func (a *EditDataflowComponentAction) Parse(payload interface{}) error {
 		Payload           interface{} `json:"payload"`
 		UUID              string      `json:"uuid"`
 		IgnoreHealthCheck bool        `json:"ignoreHealthCheck"`
+		State             string      `json:"state"`
 	}
 
 	// Parse the top level payload
@@ -182,6 +185,15 @@ func (a *EditDataflowComponentAction) Parse(payload interface{}) error {
 	a.name = topLevel.Name
 	if a.name == "" {
 		return errors.New("missing required field Name")
+	}
+
+	a.state = topLevel.State
+	if a.state == "" {
+		a.state = "active"
+	}
+	if a.state != "active" && a.state != "stopped" {
+		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, "invalid state: "+a.state, a.outboundChannel, models.EditDataFlowComponent)
+		return fmt.Errorf("invalid state: %s", a.state)
 	}
 
 	//set the new component UUID by the name
@@ -427,6 +439,9 @@ func (a *EditDataflowComponentAction) Execute() (interface{}, map[string]interfa
 		benthosPipeline["processors"] = processors
 	}
 
+	// get the desired state
+	desiredState := a.state
+
 	// Create the Benthos service config
 	benthosConfig := benthosserviceconfig.BenthosServiceConfig{
 		Input:              benthosInput,
@@ -444,7 +459,7 @@ func (a *EditDataflowComponentAction) Execute() (interface{}, map[string]interfa
 	dfc := config.DataFlowComponentConfig{
 		FSMInstanceConfig: config.FSMInstanceConfig{
 			Name:            a.name,
-			DesiredFSMState: "active",
+			DesiredFSMState: desiredState,
 		},
 		DataFlowComponentServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 			BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
@@ -477,7 +492,7 @@ func (a *EditDataflowComponentAction) Execute() (interface{}, map[string]interfa
 			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, Label("edit", a.name)+"configuration updated; but ignoring the health check", a.outboundChannel, models.EditDataFlowComponent)
 		} else {
 			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, Label("edit", a.name)+"configuration updated; waiting to become active", a.outboundChannel, models.EditDataFlowComponent)
-			err = a.waitForComponentToBeActive()
+			err = a.waitForComponentToBeReady()
 			if err != nil {
 				errorMsg := Label("edit", a.name) + fmt.Sprintf("failed to wait for dataflow component to be active: %v", err)
 				SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errorMsg, a.outboundChannel, models.EditDataFlowComponent)
@@ -512,14 +527,14 @@ func (a *EditDataflowComponentAction) GetComponentUUID() uuid.UUID {
 	return a.oldComponentUUID
 }
 
-// waitForComponentToBeActive polls the live FSM state until either
+// waitForComponentToBeReady polls the live FSM state until either
 //   - the component shows up **active** with the *expected* configuration or
 //   - the timeout hits (→ rollback except when ignoreHealthCheck).
 //
 // Concurrency note: The method never writes to `systemSnapshot`; the FSM runtime
 // is the single writer.  We only take read‑locks while **copying** the full
 // snapshot to avoid holding the lock during YAML comparisons.
-func (a *EditDataflowComponentAction) waitForComponentToBeActive() error {
+func (a *EditDataflowComponentAction) waitForComponentToBeReady() error {
 	// checks the system snapshot
 	// 1. waits for the component to appear in the system snapshot (relevant for changed name)
 	// 2. waits for the component to be active
@@ -590,7 +605,16 @@ func (a *EditDataflowComponentAction) waitForComponentToBeActive() error {
 							continue
 						}
 
-						if instance.CurrentState != "active" && instance.CurrentState != "idle" {
+						// depending on the desired state, we accept different states
+						var acceptedStates []string
+						switch a.state {
+						case "active":
+							acceptedStates = []string{"active", "idle"}
+						case "stopped":
+							acceptedStates = []string{"stopped"}
+						}
+
+						if !slices.Contains(acceptedStates, instance.CurrentState) {
 							// currentStateReason contains more information on why the DFC is in its current state
 							currentStateReason := dfcSnapshot.ServiceInfo.StatusReason
 
