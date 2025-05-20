@@ -446,6 +446,16 @@ func (w *writeFailingMockConfigManager) GetCacheModTime(ctx context.Context) (ti
 	return w.mockConfigManager.GetCacheModTime(ctx)
 }
 
+// GetCacheModTimeWithoutUpdate returns the modification time without updating the cache
+func (w *writeFailingMockConfigManager) GetCacheModTimeWithoutUpdate() time.Time {
+	return w.mockConfigManager.GetCacheModTimeWithoutUpdate()
+}
+
+// UpdateAndGetCacheModTime updates the cache and returns the modification time
+func (w *writeFailingMockConfigManager) UpdateAndGetCacheModTime(ctx context.Context) (time.Time, error) {
+	return w.mockConfigManager.UpdateAndGetCacheModTime(ctx)
+}
+
 // WriteConfigFromString implements the ConfigManager interface
 func (w *writeFailingMockConfigManager) WriteConfigFromString(ctx context.Context, config string) error {
 	return w.mockConfigManager.WriteConfigFromString(ctx, config)

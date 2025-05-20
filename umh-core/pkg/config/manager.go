@@ -72,8 +72,12 @@ type ConfigManager interface {
 	AtomicEditDataflowcomponent(ctx context.Context, componentUUID uuid.UUID, dfc DataFlowComponentConfig) (DataFlowComponentConfig, error)
 	// GetConfigAsString returns the current config as a string
 	GetConfigAsString(ctx context.Context) (string, error)
-	// GetConfigModTime returns the modification time of the config file
+	// GetCacheModTime returns the modification time of the config file
 	GetCacheModTime(ctx context.Context) (time.Time, error)
+	// GetCacheModTimeWithoutUpdate returns the modification time without updating the cache
+	GetCacheModTimeWithoutUpdate() time.Time
+	// UpdateAndGetCacheModTime updates the cache and returns the modification time
+	UpdateAndGetCacheModTime(ctx context.Context) (time.Time, error)
 	// WriteConfigFromString writes a config from a string to the config file
 	WriteConfigFromString(ctx context.Context, config string) error
 }
@@ -734,7 +738,7 @@ func (m *FileConfigManagerWithBackoff) GetConfigAsString(ctx context.Context) (s
 	return m.configManager.cacheRawConfig, nil
 }
 
-// GetConfigModTime returns the modification time of the config file
+// GetCacheModTime returns the modification time of the config file
 func (m *FileConfigManager) GetCacheModTime(ctx context.Context) (time.Time, error) {
 	// read config to update the cache mod time
 	_, err := m.GetConfig(ctx, 0)
@@ -747,9 +751,37 @@ func (m *FileConfigManager) GetCacheModTime(ctx context.Context) (time.Time, err
 	return m.cacheModTime, nil
 }
 
+// GetCacheModTimeWithoutUpdate returns the modification time without updating the cache
+func (m *FileConfigManager) GetCacheModTimeWithoutUpdate() time.Time {
+	m.cacheMu.RLock()
+	defer m.cacheMu.RUnlock()
+	return m.cacheModTime
+}
+
+// UpdateAndGetCacheModTime updates the cache and returns the modification time
+func (m *FileConfigManager) UpdateAndGetCacheModTime(ctx context.Context) (time.Time, error) {
+	// read config to update the cache mod time
+	_, err := m.GetConfig(ctx, 0)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("failed to get config: %w", err)
+	}
+
+	return m.GetCacheModTimeWithoutUpdate(), nil
+}
+
 // GetCacheModTime delegates to the underlying FileConfigManager
 func (m *FileConfigManagerWithBackoff) GetCacheModTime(ctx context.Context) (time.Time, error) {
 	return m.configManager.GetCacheModTime(ctx)
+}
+
+// GetCacheModTimeWithoutUpdate delegates to the underlying FileConfigManager
+func (m *FileConfigManagerWithBackoff) GetCacheModTimeWithoutUpdate() time.Time {
+	return m.configManager.GetCacheModTimeWithoutUpdate()
+}
+
+// UpdateAndGetCacheModTime delegates to the underlying FileConfigManager
+func (m *FileConfigManagerWithBackoff) UpdateAndGetCacheModTime(ctx context.Context) (time.Time, error) {
+	return m.configManager.UpdateAndGetCacheModTime(ctx)
 }
 
 // WriteConfigFromString writes a config from a string to the config file
