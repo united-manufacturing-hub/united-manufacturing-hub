@@ -291,7 +291,9 @@ func (m *FileConfigManager) GetConfig(ctx context.Context, tick uint64) (FullCon
 	// This ensures that there is at least half of the timeout left for the parse operation
 
 	//update the cached raw config
+	m.cacheMu.Lock()
 	m.cacheRawConfig = string(data)
+	m.cacheMu.Unlock()
 
 	// Check if context is already cancelled
 	if ctx.Err() != nil {
@@ -726,9 +728,10 @@ func (m *FileConfigManager) GetConfigAsString(ctx context.Context) (string, erro
 	}
 
 	m.cacheMu.RLock()
-	defer m.cacheMu.RUnlock()
+	rawConfig := m.cacheRawConfig
+	m.cacheMu.RUnlock()
 
-	return m.cacheRawConfig, nil
+	return rawConfig, nil
 }
 
 // GetConfigAsString returns the current config as a string with backoff logic for failures
@@ -739,7 +742,11 @@ func (m *FileConfigManagerWithBackoff) GetConfigAsString(ctx context.Context) (s
 		return "", fmt.Errorf("failed to get config: %w", err)
 	}
 
-	return m.configManager.cacheRawConfig, nil
+	m.configManager.cacheMu.RLock()
+	rawConfig := m.configManager.cacheRawConfig
+	m.configManager.cacheMu.RUnlock()
+
+	return rawConfig, nil
 }
 
 // GetCacheModTimeWithoutUpdate returns the modification time without updating the cache
