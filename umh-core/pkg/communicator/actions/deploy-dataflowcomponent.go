@@ -530,7 +530,7 @@ func (a *DeployDataflowComponentAction) Execute() (interface{}, map[string]inter
 			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, Label("deploy", a.name)+"configuration updated; but ignoring the health check", a.outboundChannel, models.EditDataFlowComponent)
 		} else {
 			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, Label("deploy", a.name)+"configuration updated; waiting to become active", a.outboundChannel, models.DeployDataFlowComponent)
-			err = a.waitForComponentToBeActive()
+			err = a.waitForComponentToBeReady()
 			if err != nil {
 				errorMsg := Label("deploy", a.name) + fmt.Sprintf("failed to wait for dataflow component to be active: %v", err)
 				SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errorMsg, a.outboundChannel, models.DeployDataFlowComponent)
@@ -560,9 +560,9 @@ func (a *DeployDataflowComponentAction) GetParsedPayload() models.CDFCPayload {
 	return a.payload
 }
 
-// waitForComponentToBeActive polls live FSM state until the new component
+// waitForComponentToBeReady polls live FSM state until the new component
 // becomes active or the timeout hits (→ delete unless ignoreHealthCheck).
-func (a *DeployDataflowComponentAction) waitForComponentToBeActive() error {
+func (a *DeployDataflowComponentAction) waitForComponentToBeReady() error {
 	// checks the system snapshot
 	// 1. waits for the instance to appear in the system snapshot
 	// 2. takes the logs of the instance and sends them to the user in 1-second intervals
