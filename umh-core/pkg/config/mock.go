@@ -329,11 +329,6 @@ func (m *MockConfigManager) WithGetConfigAsStringError(err error) *MockConfigMan
 	return m
 }
 
-// GetCacheModTime returns the modification time of the config file
-func (m *MockConfigManager) GetCacheModTime(ctx context.Context) (time.Time, error) {
-	return m.CacheModTime, nil
-}
-
 // GetCacheModTimeWithoutUpdate returns the modification time from the cache without updating it
 func (m *MockConfigManager) GetCacheModTimeWithoutUpdate() time.Time {
 	return m.CacheModTime
