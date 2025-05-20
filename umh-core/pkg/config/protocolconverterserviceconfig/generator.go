@@ -89,14 +89,34 @@ func normalizeConfig(raw map[string]any) map[string]any {
 		template = raw
 	}
 
-	variables, ok := raw["variables"].(map[string]any)
+	rawVariables, ok := raw["variables"].(map[string]any)
 	if !ok {
-		variables = make(map[string]any)
+		rawVariables = make(map[string]any)
 	}
 
-	location, ok := raw["location"].(map[string]any)
-	if !ok {
-		location = make(map[string]any)
+	// Process location map correctly to ensure it's a proper map[string]string
+	// This handles converting location keys (like level numbers) to the correct format
+	locationMap := make(map[string]string)
+	if rawLocation, ok := raw["location"].(map[string]any); ok {
+		// Convert map[string]any to map[string]string
+		for k, v := range rawLocation {
+			// Convert any value type to string if possible
+			if strValue, ok := v.(string); ok {
+				locationMap[k] = strValue
+			} else if numValue, ok := v.(int); ok {
+				// Handle integer values by converting to string
+				locationMap[k] = fmt.Sprintf("%d", numValue)
+			} else if floatValue, ok := v.(float64); ok {
+				// YAML often unmarshal numbers as float64
+				locationMap[k] = fmt.Sprintf("%g", floatValue)
+			} else if boolValue, ok := v.(bool); ok {
+				locationMap[k] = fmt.Sprintf("%t", boolValue)
+			}
+			// Other types are ignored
+		}
+	} else if typedLocation, ok := raw["location"].(map[string]string); ok {
+		// If already in the right format, just use it directly
+		locationMap = typedLocation
 	}
 
 	// Extract and normalize template components
@@ -121,7 +141,7 @@ func normalizeConfig(raw map[string]any) map[string]any {
 	normalizedConnectionConfig := connectionserviceconfig.NormalizeConfig(connectionConfig)
 
 	// Variables don't need normalization, they are just key-value pairs
-	normalizedVariables := variables
+	normalizedVariables := variables.NormalizeConfig(rawVariables)
 
 	// Reconstruct the normalized template
 	normalizedTemplate := make(map[string]any)
@@ -132,6 +152,6 @@ func normalizeConfig(raw map[string]any) map[string]any {
 	// Set the normalized template and variables
 	normalized["template"] = normalizedTemplate
 	normalized["variables"] = normalizedVariables
-	normalized["location"] = location // no need to normalize it
+	normalized["location"] = locationMap // Use our correctly processed location map
 	return normalized
 }
