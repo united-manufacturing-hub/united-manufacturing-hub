@@ -32,7 +32,6 @@ func DeriveCoreHealth(
 	logger *zap.SugaredLogger,
 ) *models.Health {
 	var unhealthyComponents []string
-	var warnings []string
 
 	// Check each component's health
 	// Agent health check
@@ -62,9 +61,6 @@ func DeriveCoreHealth(
 		}
 	}
 
-	// Handle warnings (components that are in warning state)
-	// This could be expanded if there are specific warning states to check
-
 	// Determine overall health
 	coreHealth := &models.Health{
 		ObservedState: "running",
@@ -77,9 +73,6 @@ func DeriveCoreHealth(
 		coreHealth.Category = models.Degraded
 		coreHealth.Message = fmt.Sprintf("Unhealthy components: %v", unhealthyComponents)
 		logger.Warnf("Core health is degraded: %s", coreHealth.Message)
-	} else if len(warnings) > 0 {
-		coreHealth.Category = models.Degraded
-		coreHealth.Message = fmt.Sprintf("Warnings: %v", warnings)
 	}
 
 	return coreHealth
