@@ -608,13 +608,13 @@ func (a *EditDataflowComponentAction) waitForComponentToBeActive() (string, erro
 
 						// only send the logs that have not been sent yet
 						if len(logs) > len(lastLogs) {
-							// SendLimitedLogs is used to detect fatal configuration errors that would cause
-							// Benthos to enter a CrashLoop. When such errors are detected, we can immediately
-							// abort the startup process rather than waiting for the full timeout period,
-							// as these errors require configuration changes to resolve.
+
 							lastLogs = SendLimitedLogs(logs, lastLogs, a.instanceUUID, a.userEmail, a.actionUUID, a.outboundChannel, models.EditDataFlowComponent, remainingSeconds)
 						}
-						// check if the logs contain any of the error lines and if so, cancel the action with rolling back
+						// CheckBenthosLogLinesForConfigErrors is used to detect fatal configuration errors that would cause
+						// Benthos to enter a CrashLoop. When such errors are detected, we can immediately
+						// abort the startup process rather than waiting for the full timeout period,
+						// as these errors require configuration changes to resolve.
 						if CheckBenthosLogLinesForConfigErrors(logs) {
 							SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Failed to parse config. Rolling back...", a.outboundChannel, models.EditDataFlowComponent)
 							ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
