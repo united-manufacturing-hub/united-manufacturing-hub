@@ -169,7 +169,9 @@ func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePay
 		return
 	}
 
-	log.Debugf("Action executed, sending reply: %v", result)
+	if payload.ActionType != models.GetLogs {
+		log.Debugf("Action executed, sending reply: %v", result)
+	}
 
 	SendActionReplyWithAdditionalContext(instanceUUID, sender, payload.ActionUUID, models.ActionFinishedSuccessfull, result, outboundChannel, payload.ActionType, metadata)
 }
