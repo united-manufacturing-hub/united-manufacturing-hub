@@ -150,7 +150,7 @@ agent:
   metricsPort: 8080
   communicator:
     apiUrl: https://management.umh.app/api
-    authToken: 7d4c499b04050cf9502f7dca277df4fa813749b3c43dae059c7021627db95f46
+    authToken: abc123
   location:
     0: test-enterprise
     1: test-site
