@@ -363,5 +363,9 @@ func (m *MockConfigManager) WriteConfigFromString(ctx context.Context, config st
 		return fmt.Errorf("failed to write config: %w", err)
 	}
 
+	// update the cache mod time
+	m.CacheModTime = time.Now()
+	m.ConfigAsString = config
+
 	return nil
 }
