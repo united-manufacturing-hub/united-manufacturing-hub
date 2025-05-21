@@ -80,7 +80,7 @@ type ConfigManager interface {
 	// UpdateAndGetCacheModTime updates the cache and returns the modification time
 	UpdateAndGetCacheModTime(ctx context.Context) (time.Time, error)
 	// WriteConfigFromString writes a config from a string to the config file
-	WriteConfigFromString(ctx context.Context, config string) error
+	WriteConfigFromString(ctx context.Context, configStr string) error
 }
 
 // FileConfigManager implements the ConfigManager interface by reading from a file
@@ -290,11 +290,6 @@ func (m *FileConfigManager) GetConfig(ctx context.Context, tick uint64) (FullCon
 	}
 	// This ensures that there is at least half of the timeout left for the parse operation
 
-	//update the cached raw config
-	m.cacheMu.Lock()
-	m.cacheRawConfig = string(data)
-	m.cacheMu.Unlock()
-
 	// Check if context is already cancelled
 	if ctx.Err() != nil {
 		return FullConfig{}, ctx.Err()
@@ -331,8 +326,9 @@ func (m *FileConfigManager) GetConfig(ctx context.Context, tick uint64) (FullCon
 		config.Agent.ReleaseChannel = "n/a"
 	}
 
-	// update cache atomically
+	// update all cache fields atomically in a single critical section
 	m.cacheMu.Lock()
+	m.cacheRawConfig = string(data)
 	m.cacheModTime = info.ModTime()
 	m.cacheConfig = config
 	m.cacheMu.Unlock()
@@ -439,6 +435,19 @@ func (m *FileConfigManager) writeConfig(ctx context.Context, config FullConfig) 
 	if err := m.fsService.WriteFile(ctx, m.configPath, data, 0666); err != nil {
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
+
+	// Update the cache to reflect the new config
+	info, err := m.fsService.Stat(ctx, m.configPath)
+	if err != nil {
+		return fmt.Errorf("failed to stat config file after write: %w", err)
+	}
+
+	// Update all cache fields atomically in a single critical section
+	m.cacheMu.Lock()
+	m.cacheRawConfig = string(data)
+	m.cacheModTime = info.ModTime()
+	m.cacheConfig = config
+	m.cacheMu.Unlock()
 
 	m.logger.Infof("Successfully wrote config to %s", m.configPath)
 	return nil
@@ -780,13 +789,13 @@ func (m *FileConfigManagerWithBackoff) UpdateAndGetCacheModTime(ctx context.Cont
 }
 
 // WriteConfigFromString writes a config from a string to the config file
-func (m *FileConfigManager) WriteConfigFromString(ctx context.Context, config string) error {
+func (m *FileConfigManager) WriteConfigFromString(ctx context.Context, configStr string) error {
 	// First parse the config with strict validation to detect syntax errors and schema problems
-	_, err := parseConfig([]byte(config), false)
+	_, err := parseConfig([]byte(configStr), false)
 	if err != nil {
 		// If strict parsing fails, try again with allowUnknownFields=true
 		// This allows YAML anchors and other custom fields
-		_, err = parseConfig([]byte(config), true)
+		_, err = parseConfig([]byte(configStr), true)
 		if err != nil {
 			return fmt.Errorf("failed to parse config: %w", err)
 		}
@@ -811,20 +820,39 @@ func (m *FileConfigManager) WriteConfigFromString(ctx context.Context, config st
 	}
 
 	// Write the raw string directly to file to preserve all YAML features
-	if err := m.fsService.WriteFile(ctx, m.configPath, []byte(config), 0666); err != nil {
+	if err := m.fsService.WriteFile(ctx, m.configPath, []byte(configStr), 0666); err != nil {
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
+
+	// Update the cache to reflect the new config
+	info, err := m.fsService.Stat(ctx, m.configPath)
+	if err != nil {
+		return fmt.Errorf("failed to stat config file after write: %w", err)
+	}
+
+	// Parse the config for the cache
+	parsedConfig, err := parseConfig([]byte(configStr), true)
+	if err != nil {
+		return fmt.Errorf("failed to parse config for cache update: %w", err)
+	}
+
+	// Update all cache fields atomically in a single critical section
+	m.cacheMu.Lock()
+	m.cacheRawConfig = configStr
+	m.cacheModTime = info.ModTime()
+	m.cacheConfig = parsedConfig
+	m.cacheMu.Unlock()
 
 	m.logger.Infof("Successfully wrote config to %s", m.configPath)
 	return nil
 }
 
 // WriteConfigFromString delegates to the underlying FileConfigManager
-func (m *FileConfigManagerWithBackoff) WriteConfigFromString(ctx context.Context, config string) error {
+func (m *FileConfigManagerWithBackoff) WriteConfigFromString(ctx context.Context, configStr string) error {
 	// Check if context is already cancelled
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
 
-	return m.configManager.WriteConfigFromString(ctx, config)
+	return m.configManager.WriteConfigFromString(ctx, configStr)
 }
