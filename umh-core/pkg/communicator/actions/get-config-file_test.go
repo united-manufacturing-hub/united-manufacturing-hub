@@ -136,6 +136,80 @@ var _ = Describe("GetConfigFile", func() {
 			Eventually(outboundChannel).Should(Receive())
 		})
 
+		// here we test if the yaml anchors are properly passed to the frontend
+		// yaml anchors are the reason, why we process the config as a string here and do not parse it
+		It("should preserve YAML anchors in the config file", func() {
+			// Setup a config with YAML anchors
+			yamlWithAnchors := `
+# Define a common processor base
+commonProcessor: &commonProcessor
+  bloblang: |-
+    root = content()
+
+agent:
+  metricsPort: 8080
+  communicator:
+    apiUrl: https://management.umh.app/api
+    authToken: test123
+  location:
+    0: test-enterprise
+    1: test-site
+    2: test-area
+dataFlow:
+  - name: hello-world-dfc
+    desiredState: active
+    dataFlowComponentConfig:
+      benthos:
+        input:
+          generate:
+            count: 0
+            interval: 1s
+            mapping: root = "hello world from DFC!"
+        pipeline:
+          processors:
+            - <<: *commonProcessor
+              bloblang: |-
+                # Step 1
+                root = content()
+            - <<: *commonProcessor
+              bloblang: |-
+                # Step 2
+                root = content()
+        output:
+          kafka:
+            addresses:
+              - localhost:9092
+            topic: messages
+internal:
+  redpanda:
+    desiredState: active
+`
+			mockConfig.WithConfigAsString(yamlWithAnchors)
+			mockConfig.MockFileSystem.WithReadFileFunc(func(ctx context.Context, path string) ([]byte, error) {
+				if path == config.DefaultConfigPath {
+					return []byte(yamlWithAnchors), nil
+				}
+				return nil, errors.New("file not found")
+			})
+
+			result, metadata, err := action.Execute()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(metadata).To(BeNil())
+
+			response, ok := result.(models.GetConfigFileResponse)
+			Expect(ok).To(BeTrue(), "Result should be a GetConfigFileResponse")
+
+			// Check that the content is returned exactly as is, with anchors preserved
+			Expect(response.Content).To(Equal(yamlWithAnchors))
+
+			// Verify the content contains the YAML anchors
+			Expect(response.Content).To(ContainSubstring("&commonProcessor"))
+			Expect(response.Content).To(ContainSubstring("<<: *commonProcessor"))
+
+			// there should be a message sent to the outbound channel
+			Eventually(outboundChannel).Should(Receive())
+		})
+
 		It("should handle filesystem errors", func() {
 			mockConfig.MockFileSystem.WithReadFileFunc(func(ctx context.Context, path string) ([]byte, error) {
 				return nil, errors.New("simulated filesystem error")
