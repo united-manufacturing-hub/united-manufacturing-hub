@@ -124,7 +124,7 @@ func (a *SetConfigFileAction) Execute() (interface{}, map[string]interface{}, er
 
 	currentLastModified, err := a.configManager.UpdateAndGetCacheModTime(ctx)
 	if err != nil {
-		errMsg := fmt.Sprintf("Failed to get cache mod time: %v", err)
+		errMsg := fmt.Sprintf("Failed to get cache mod time, refresh the page and double check if the file has been modified. Consider rolling back to the previous version if issues persist. Error: %v", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
 			errMsg, a.outboundChannel, models.SetConfigFile)
 		return nil, nil, fmt.Errorf("failed to get cache mod time: %w", err)
@@ -151,7 +151,7 @@ func (a *SetConfigFileAction) Execute() (interface{}, map[string]interface{}, er
 
 	newLastModifiedTime, err := a.configManager.UpdateAndGetCacheModTime(ctx)
 	if err != nil {
-		errMsg := fmt.Sprintf("Failed to get cache mod time: %v", err)
+		errMsg := fmt.Sprintf("Failed to get cache mod time, refresh the page and double check if the file has been modified. Consider rolling back to the previous version if issues persist. Error: %v", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
 			errMsg, a.outboundChannel, models.SetConfigFile)
 		return nil, nil, fmt.Errorf("failed to get cache mod time: %w", err)
