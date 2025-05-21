@@ -778,8 +778,8 @@ func (m *FileConfigManagerWithBackoff) UpdateAndGetCacheModTime(ctx context.Cont
 	return m.configManager.UpdateAndGetCacheModTime(ctx)
 }
 
-// WriteConfigFromSting writes a config from a string to the config file
-func (m *FileConfigManager) WriteConfigFromSting(ctx context.Context, config string) error {
+// WriteConfigFromString writes a config from a string to the config file
+func (m *FileConfigManager) WriteConfigFromString(ctx context.Context, config string) error {
 	// first parse the config
 	parsedConfig, err := parseConfig([]byte(config))
 	if err != nil {
@@ -789,12 +789,12 @@ func (m *FileConfigManager) WriteConfigFromSting(ctx context.Context, config str
 	return m.writeConfig(ctx, parsedConfig)
 }
 
-// WriteConfigFromSting delegates to the underlying FileConfigManager
-func (m *FileConfigManagerWithBackoff) WriteConfigFromSting(ctx context.Context, config string) error {
+// WriteConfigFromString delegates to the underlying FileConfigManager
+func (m *FileConfigManagerWithBackoff) WriteConfigFromString(ctx context.Context, config string) error {
 	// Check if context is already cancelled
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
 
-	return m.configManager.WriteConfigFromSting(ctx, config)
+	return m.configManager.WriteConfigFromString(ctx, config)
 }
