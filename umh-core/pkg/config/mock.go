@@ -334,6 +334,16 @@ func (m *MockConfigManager) GetCacheModTime(ctx context.Context) (time.Time, err
 	return m.CacheModTime, nil
 }
 
+// GetCacheModTimeWithoutUpdate returns the modification time from the cache without updating it
+func (m *MockConfigManager) GetCacheModTimeWithoutUpdate() time.Time {
+	return m.CacheModTime
+}
+
+// UpdateAndGetCacheModTime updates the cache and returns the modification time
+func (m *MockConfigManager) UpdateAndGetCacheModTime(ctx context.Context) (time.Time, error) {
+	return m.CacheModTime, nil
+}
+
 // WithCacheModTime configures the mock to return the given modification time when GetCacheModTime is called
 func (m *MockConfigManager) WithCacheModTime(modTime time.Time) *MockConfigManager {
 	m.CacheModTime = modTime
