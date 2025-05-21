@@ -47,7 +47,7 @@ func DeriveCoreHealth(
 	}
 
 	// Redpanda health check - both active and neutral (idle) states are acceptable
-	if redpandaHealth != nil && !(redpandaHealth.Category == models.Active || redpandaHealth.Category == models.Neutral) {
+	if redpandaHealth != nil && redpandaHealth.Category != models.Active && redpandaHealth.Category != models.Neutral {
 		unhealthyComponents = append(unhealthyComponents, fmt.Sprintf("Redpanda: %s", redpandaHealth.Message))
 	}
 
@@ -61,9 +61,9 @@ func DeriveCoreHealth(
 		// Both Active and Idle are considered healthy states for DFCs
 		// Also ignore components that are starting
 		if dfc.Health != nil &&
-			!(dfc.Health.ObservedState == dataflowcomponent.OperationalStateActive ||
-				dfc.Health.ObservedState == dataflowcomponent.OperationalStateIdle ||
-				strings.Contains(strings.ToLower(dfc.Health.ObservedState), "starting")) {
+			dfc.Health.ObservedState != dataflowcomponent.OperationalStateActive &&
+			dfc.Health.ObservedState != dataflowcomponent.OperationalStateIdle &&
+			!strings.Contains(strings.ToLower(dfc.Health.ObservedState), "starting") {
 			unhealthyComponents = append(unhealthyComponents, fmt.Sprintf("DFC %s: %s", dfc.UUID, dfc.Health.Message))
 		}
 	}
