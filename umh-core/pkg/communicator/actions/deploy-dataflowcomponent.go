@@ -524,7 +524,7 @@ func (a *DeployDataflowComponentAction) Execute() (interface{}, map[string]inter
 				errorMsg := Label("deploy", a.name) + fmt.Sprintf("failed to wait for dataflow component to be active: %v", err)
 				// waitForComponentToBeActive gives us the error code, which we then forward to the frontend using the SendActionReplyV2 function
 				// the error code is a string that can be used to identify the error reason
-				// the main reason for this is to allow the frontend to determine weather it should offer a retry option or not
+				// the main reason for this is to allow the frontend to determine whether it should offer a retry option or not
 				SendActionReplyV2(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errorMsg, errCode, nil, a.outboundChannel, models.DeployDataFlowComponent, nil)
 				return nil, nil, fmt.Errorf("%s", errorMsg)
 			}
