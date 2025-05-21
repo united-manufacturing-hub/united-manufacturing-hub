@@ -15,6 +15,7 @@
 package actions
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"time"
@@ -90,9 +91,12 @@ func (a *SetConfigFileAction) Validate() error {
 		return fmt.Errorf("config file content cannot be empty")
 	}
 
-	// Validate YAML format
+	// Validate YAML format by trying to parse it with yaml.v3, but allow unknown fields
+	// This will permit YAML anchors while still checking basic YAML syntax
 	var yamlContent interface{}
-	if err := yaml.Unmarshal([]byte(a.payload.Content), &yamlContent); err != nil {
+	dec := yaml.NewDecoder(bytes.NewReader([]byte(a.payload.Content)))
+	dec.KnownFields(false) // Allow unknown fields (including anchors)
+	if err := dec.Decode(&yamlContent); err != nil {
 		return fmt.Errorf("invalid YAML content: %w", err)
 	}
 

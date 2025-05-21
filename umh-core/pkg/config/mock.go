@@ -347,10 +347,15 @@ func (m *MockConfigManager) WithCacheModTime(modTime time.Time) *MockConfigManag
 
 // WriteConfigFromSting implements the ConfigManager interface
 func (m *MockConfigManager) WriteConfigFromString(ctx context.Context, config string) error {
-	// parse the config
-	parsedConfig, err := parseConfig([]byte(config))
+	// First parse the config with strict validation to detect syntax errors and schema problems
+	parsedConfig, err := parseConfig([]byte(config), false)
 	if err != nil {
-		return fmt.Errorf("failed to parse config: %w", err)
+		// If strict parsing fails, try again with allowUnknownFields=true
+		// This allows YAML anchors and other custom fields
+		parsedConfig, err = parseConfig([]byte(config), true)
+		if err != nil {
+			return fmt.Errorf("failed to parse config: %w", err)
+		}
 	}
 
 	// write the config

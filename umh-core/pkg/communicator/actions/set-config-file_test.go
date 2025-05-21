@@ -121,6 +121,40 @@ var _ = Describe("SetConfigFile", func() {
 			Expect(err).NotTo(HaveOccurred())
 		})
 
+		It("should pass validation with valid YAML containing anchors", func() {
+			yamlWithAnchors := `
+agent:
+  metricsPort: 8080
+  
+# Define anchor for common environment variables
+common_env: &common_env
+  DEBUG: "true"
+  LOG_LEVEL: "info"
+
+# Define anchor for common volumes
+common_volumes: &common_volumes
+  data: /data
+  config: /config
+
+dataFlow:
+  - name: component1
+    env:
+      <<: *common_env  # Include common environment variables
+      COMPONENT_SPECIFIC: "value1"
+    volumes:
+      <<: *common_volumes # Include common volumes
+`
+			payload := map[string]interface{}{
+				"content":          yamlWithAnchors,
+				"lastModifiedTime": lastModifiedTime,
+			}
+			err := action.Parse(payload)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = action.Validate()
+			Expect(err).NotTo(HaveOccurred())
+		})
+
 		It("should fail validation with empty content", func() {
 			payload := map[string]interface{}{
 				"content":          "",
@@ -191,6 +225,58 @@ var _ = Describe("SetConfigFile", func() {
 			response, ok := result.(models.SetConfigFileResponse)
 			Expect(ok).To(BeTrue(), "Result should be a SetConfigFileResponse")
 			Expect(response.Content).To(Equal(configContent))
+			Expect(response.LastModifiedTime).NotTo(Equal(lastModifiedTime))
+			Expect(response.Success).To(BeTrue())
+
+			// there should be a message sent to the outbound channel
+			Eventually(outboundChannel).Should(Receive())
+		})
+
+		It("should successfully update the config file with YAML anchors", func() {
+			// YAML with anchors
+			yamlWithAnchors := `
+agent:
+  metricsPort: 8080
+  
+# Define anchor for common environment variables
+common_env: &common_env
+  DEBUG: "true"
+  LOG_LEVEL: "info"
+
+# Define anchor for common volumes
+common_volumes: &common_volumes
+  data: /data
+  config: /config
+
+dataFlow:
+  - name: component1
+    env:
+      <<: *common_env  # Include common environment variables
+      COMPONENT_SPECIFIC: "value1"
+    volumes:
+      <<: *common_volumes # Include common volumes
+  
+  - name: component2
+    env:
+      <<: *common_env  # Reuse the same anchor
+      COMPONENT_SPECIFIC: "value2" 
+    volumes:
+      <<: *common_volumes # Reuse the same anchor
+`
+			payload := map[string]interface{}{
+				"content":          yamlWithAnchors,
+				"lastModifiedTime": lastModifiedTime,
+			}
+			err := action.Parse(payload)
+			Expect(err).NotTo(HaveOccurred())
+
+			result, metadata, err := action.Execute()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(metadata).To(BeNil())
+
+			response, ok := result.(models.SetConfigFileResponse)
+			Expect(ok).To(BeTrue(), "Result should be a SetConfigFileResponse")
+			Expect(response.Content).To(Equal(yamlWithAnchors))
 			Expect(response.LastModifiedTime).NotTo(Equal(lastModifiedTime))
 			Expect(response.Success).To(BeTrue())
 

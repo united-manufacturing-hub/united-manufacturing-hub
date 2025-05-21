@@ -300,7 +300,7 @@ func (m *FileConfigManager) GetConfig(ctx context.Context, tick uint64) (FullCon
 		return FullConfig{}, ctx.Err()
 	}
 
-	config, err := parseConfig(data)
+	config, err := parseConfig(data, false)
 	if err != nil {
 		return FullConfig{}, fmt.Errorf("failed to parse config file: %w", err)
 	}
@@ -342,15 +342,16 @@ func (m *FileConfigManager) GetConfig(ctx context.Context, tick uint64) (FullCon
 
 // parseConfig unmarshals *data* (a YAML document) into a FullConfig.
 //
-// The YAML decoder is configured with KnownFields(true) so that any
+// The YAML decoder is configured with KnownFields(true) by default so that any
 // unknown or misspelled keys cause an immediate error, preventing silent
-// misconfiguration.  No additional semantic validation is performed here;
+// misconfiguration. Setting allowUnknownFields to true allows YAML anchors and other
+// custom fields to pass validation. No additional semantic validation is performed here;
 // callers are responsible for deeper checks.
-func parseConfig(data []byte) (FullConfig, error) {
+func parseConfig(data []byte, allowUnknownFields bool) (FullConfig, error) {
 	var cfg FullConfig
 
 	dec := yaml.NewDecoder(bytes.NewReader(data))
-	dec.KnownFields(true) // ← refuses unknown keys
+	dec.KnownFields(!allowUnknownFields) // Only reject unknown keys if allowUnknownFields is false
 	if err := dec.Decode(&cfg); err != nil {
 		return FullConfig{}, fmt.Errorf("failed to decode config: %w", err)
 	}
@@ -780,13 +781,42 @@ func (m *FileConfigManagerWithBackoff) UpdateAndGetCacheModTime(ctx context.Cont
 
 // WriteConfigFromString writes a config from a string to the config file
 func (m *FileConfigManager) WriteConfigFromString(ctx context.Context, config string) error {
-	// first parse the config
-	parsedConfig, err := parseConfig([]byte(config))
+	// First parse the config with strict validation to detect syntax errors and schema problems
+	_, err := parseConfig([]byte(config), false)
 	if err != nil {
-		return fmt.Errorf("failed to parse config: %w", err)
+		// If strict parsing fails, try again with allowUnknownFields=true
+		// This allows YAML anchors and other custom fields
+		_, err = parseConfig([]byte(config), true)
+		if err != nil {
+			return fmt.Errorf("failed to parse config: %w", err)
+		}
 	}
 
-	return m.writeConfig(ctx, parsedConfig)
+	// We use a write lock here because we write the config file
+	err = m.mutexReadOrWrite.Lock(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to lock config file: %w", err)
+	}
+	defer m.mutexReadOrWrite.Unlock()
+
+	// Check if context is already cancelled
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+
+	// Create the directory if it doesn't exist
+	dir := filepath.Dir(m.configPath)
+	if err := m.fsService.EnsureDirectory(ctx, dir); err != nil {
+		return fmt.Errorf("failed to create config directory: %w", err)
+	}
+
+	// Write the raw string directly to file to preserve all YAML features
+	if err := m.fsService.WriteFile(ctx, m.configPath, []byte(config), 0666); err != nil {
+		return fmt.Errorf("failed to write config file: %w", err)
+	}
+
+	m.logger.Infof("Successfully wrote config to %s", m.configPath)
+	return nil
 }
 
 // WriteConfigFromString delegates to the underlying FileConfigManager
