@@ -109,7 +109,7 @@ type IProtocolConverterService interface {
 	// The resulting **ProtocolConverterServiceConfigRuntime** reflects the state
 	// the FSM is *really* running with and therefore forms the "live" side of the
 	// reconcile equation:
-	GetConfig(ctx context.Context, filesystemService filesystem.Service, protConvName string) (protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec, error)
+	GetConfig(ctx context.Context, filesystemService filesystem.Service, protConvName string) (protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime, error)
 
 	// Status aggregates health from Connection, DFC and Redpanda into a single
 	// snapshot.  The returned structure is **read-only** – callers must not
@@ -117,10 +117,10 @@ type IProtocolConverterService interface {
 	Status(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot, protConvName string, tick uint64) (ServiceInfo, error)
 
 	// AddToManager adds a ProtocolConverter to the Connection & DFC manager
-	AddToManager(ctx context.Context, filesystemService filesystem.Service, protConvCfg *protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec, protConvName string) error
+	AddToManager(ctx context.Context, filesystemService filesystem.Service, protConvCfg *protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime, protConvName string) error
 
 	// UpdateInManager updates an existing ProtocolConverter in the Connection & DFC manager
-	UpdateInManager(ctx context.Context, filesystemService filesystem.Service, protConvCfg *protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec, protConvName string) error
+	UpdateInManager(ctx context.Context, filesystemService filesystem.Service, protConvCfg *protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime, protConvName string) error
 
 	// RemoveFromManager removes a ProtocolConverter from the Connection & DFC manager
 	RemoveFromManager(ctx context.Context, filesystemService filesystem.Service, protConvName string) error
@@ -423,7 +423,7 @@ func renderConfig(
 // • `globalVars`    – central-loop injection (may be empty)
 // • `nodeName`      – k8s node name; empty string means "unknown"
 // • `pcName`        – logical PC name (without the "protocol-converter-" prefix)
-func BuildRuntimeConfig(
+func (p *ProtocolConverterService) BuildRuntimeConfig(
 	spec protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec,
 	agentLocation map[string]string,
 	pcLocation map[string]string,

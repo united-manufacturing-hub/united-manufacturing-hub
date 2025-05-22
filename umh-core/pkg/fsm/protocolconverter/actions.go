@@ -12,20 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Copyright 2025 UMH Systems GmbH
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or impliep.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
 package protocolconverter
 
 import (
@@ -128,7 +114,7 @@ func (p *ProtocolConverterInstance) StartInstance(ctx context.Context, filesyste
 	// TODO: Add pre-start validation
 
 	// Set the desired state to running for the given instance
-	err := p.service.Start(ctx, filesystemService, p.baseFSMInstance.GetID())
+	err := p.service.StartProtocolConverter(ctx, filesystemService, p.baseFSMInstance.GetID())
 	if err != nil {
 		// if the service is not there yet but we attempt to start it, we need to throw an error
 		return fmt.Errorf("failed to start ProtocolConverter service %s: %w", p.baseFSMInstance.GetID(), err)
@@ -143,7 +129,7 @@ func (p *ProtocolConverterInstance) StopInstance(ctx context.Context, filesystem
 	p.baseFSMInstance.GetLogger().Debugf("Starting Action: Stopping ProtocolConverter service %s ...", p.baseFSMInstance.GetID())
 
 	// Set the desired state to stopped for the given instance
-	err := p.service.Stop(ctx, filesystemService, p.baseFSMInstance.GetID())
+	err := p.service.StopProtocolConverter(ctx, filesystemService, p.baseFSMInstance.GetID())
 	if err != nil {
 		// if the service is not there yet but we attempt to stop it, we need to throw an error
 		return fmt.Errorf("failed to stop ProtocolConverter service %s: %w", p.baseFSMInstance.GetID(), err)
@@ -290,10 +276,11 @@ func (p *ProtocolConverterInstance) IsRedpandaHealthy() (bool, string) {
 //	ok     – true when the DFC is healthy, false otherwise.
 //	reason – empty when ok is true; otherwise a explanation
 func (p *ProtocolConverterInstance) IsDFCHealthy() (bool, string) {
-	if p.ObservedState.ServiceInfo.DataflowComponentFSMState == dataflowfsm.OperationalStateIdle || p.ObservedState.ServiceInfo.DataflowComponentFSMState == dataflowfsm.OperationalStateActive {
+	if p.ObservedState.ServiceInfo.DataflowComponentReadFSMState == dataflowfsm.OperationalStateIdle || p.ObservedState.ServiceInfo.DataflowComponentReadFSMState == dataflowfsm.OperationalStateActive {
 		return true, ""
 	}
-	return false, p.ObservedState.ServiceInfo.DataflowComponentObservedState.ServiceInfo.StatusReason
+	// TODO: check the write DFC as well
+	return false, p.ObservedState.ServiceInfo.DataflowComponentReadObservedState.ServiceInfo.StatusReason
 }
 
 // IsOtherDegraded checks for certain states that should never happen
@@ -308,14 +295,16 @@ func (p *ProtocolConverterInstance) IsDFCHealthy() (bool, string) {
 //	reason – empty when ok is true; otherwise a explanation
 func (p *ProtocolConverterInstance) IsOtherDegraded() (bool, string) {
 
+	// TODO: check the write DFC as well
+
 	// Check for case 1.1
-	if p.ObservedState.ServiceInfo.DataflowComponentFSMState == dataflowfsm.OperationalStateActive &&
+	if p.ObservedState.ServiceInfo.DataflowComponentReadFSMState == dataflowfsm.OperationalStateActive &&
 		p.ObservedState.ServiceInfo.RedpandaFSMState == redpandafsm.OperationalStateIdle {
 		return true, "DFC is active, but redpanda is idle"
 	}
 
 	// Check for case 2
-	benthosMetrics := p.ObservedState.ServiceInfo.DataflowComponentObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.Metrics
+	benthosMetrics := p.ObservedState.ServiceInfo.DataflowComponentReadObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.Metrics
 	isBenthosOutputActive := benthosMetrics.Output.ConnectionUp-(benthosMetrics.Output.ConnectionLost+benthosMetrics.Output.ConnectionFailed) == 0 // if the amount of connection losts and connection failrues is bigger than the amount of connection ups, the output is not active
 	if (p.ObservedState.ServiceInfo.RedpandaFSMState == redpandafsm.OperationalStateIdle ||
 		p.ObservedState.ServiceInfo.RedpandaFSMState == redpandafsm.OperationalStateActive) &&
@@ -341,10 +330,11 @@ func (p *ProtocolConverterInstance) IsOtherDegraded() (bool, string) {
 //	ok     – true when the DFC is active, false otherwise.
 //	reason – empty when ok is true; otherwise a explanation
 func (p *ProtocolConverterInstance) IsDataflowComponentWithProcessingActivity() (bool, string) {
-	if p.ObservedState.ServiceInfo.DataflowComponentFSMState == dataflowfsm.OperationalStateActive {
+	// TODO: check the write DFC as well
+	if p.ObservedState.ServiceInfo.DataflowComponentReadFSMState == dataflowfsm.OperationalStateActive {
 		return true, ""
 	}
-	return false, fmt.Sprintf("DFC is %s", p.ObservedState.ServiceInfo.DataflowComponentFSMState)
+	return false, fmt.Sprintf("DFC is %s", p.ObservedState.ServiceInfo.DataflowComponentReadFSMState)
 }
 
 // IsProtocolConverterStopped checks whether the ProtocolConverter is stopped
@@ -355,9 +345,10 @@ func (p *ProtocolConverterInstance) IsDataflowComponentWithProcessingActivity() 
 //	ok     – true when the ProtocolConverter is stopped, false otherwise.
 //	reason – empty when ok is true; otherwise a service‑provided explanation
 func (p *ProtocolConverterInstance) IsProtocolConverterStopped() (bool, string) {
+	// TODO: check the write DFC as well
 	if p.ObservedState.ServiceInfo.ConnectionFSMState == connectionfsm.OperationalStateStopped &&
-		p.ObservedState.ServiceInfo.DataflowComponentFSMState == dataflowfsm.OperationalStateStopped {
+		p.ObservedState.ServiceInfo.DataflowComponentReadFSMState == dataflowfsm.OperationalStateStopped {
 		return true, ""
 	}
-	return false, fmt.Sprintf("connection is %s, DFC is %s", p.ObservedState.ServiceInfo.ConnectionFSMState, p.ObservedState.ServiceInfo.DataflowComponentFSMState)
+	return false, fmt.Sprintf("connection is %s, DFC is %s", p.ObservedState.ServiceInfo.ConnectionFSMState, p.ObservedState.ServiceInfo.DataflowComponentReadFSMState)
 }

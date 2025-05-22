@@ -147,7 +147,7 @@ type ProtocolConverterObservedState struct {
 	ServiceInfo protocolconvertersvc.ServiceInfo
 
 	// ObservedProtocolConverterConfig contains the observed ProtocolConverter service config
-	ObservedProtocolConverterConfig protocolconverterconfig.ProtocolConverterServiceConfig
+	ObservedProtocolConverterConfig protocolconverterconfig.ProtocolConverterServiceConfigRuntime
 }
 
 // IsObservedState implements the ObservedState interface
@@ -172,8 +172,14 @@ type ProtocolConverterInstance struct {
 	// It has a manager that manages the protocolconverter service instances
 	service protocolconvertersvc.IProtocolConverterService
 
-	// config contains all the configuration for this service
-	config protocolconverterconfig.ProtocolConverterServiceConfig
+	// config contains all the runtime configuration for this service
+	// but it does not contain the name and the desired state
+	config protocolconverterconfig.ProtocolConverterServiceConfigRuntime
+
+	// desiredState contains the desired state of the service
+	desiredState string
+
+	// the name will be stored in the baseFSMInstance
 }
 
 // GetLastObservedState returns the last known state of the instance
@@ -189,7 +195,7 @@ func (d *ProtocolConverterInstance) SetService(service protocolconvertersvc.IPro
 
 // GetConfig returns the ProtocolConverterServiceConfig for this service
 // This is a testing-only utility to access the private service field
-func (d *ProtocolConverterInstance) GetConfig() protocolconverterconfig.ProtocolConverterServiceConfig {
+func (d *ProtocolConverterInstance) GetConfig() protocolconverterconfig.ProtocolConverterServiceConfigRuntime {
 	return d.config
 }
 

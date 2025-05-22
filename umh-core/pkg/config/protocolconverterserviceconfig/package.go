@@ -85,7 +85,7 @@ type ProtocolConverterServiceConfigSpec struct {
 }
 
 // Equal checks if two ProtocolConverterServiceConfigs are equal
-func (c ProtocolConverterServiceConfigSpec) Equal(other ProtocolConverterServiceConfigSpec) bool {
+func (c ProtocolConverterServiceConfigRuntime) Equal(other ProtocolConverterServiceConfigRuntime) bool {
 	return defaultComparator.ConfigsEqual(c, other)
 }
 
@@ -95,11 +95,11 @@ func NormalizeProtocolConverterConfig(cfg ProtocolConverterServiceConfigSpec) Pr
 }
 
 // ConfigsEqual is a package-level function for easy config comparison
-func ConfigsEqual(desired, observed ProtocolConverterServiceConfigSpec) bool {
+func ConfigsEqual(desired, observed ProtocolConverterServiceConfigRuntime) bool {
 	return defaultComparator.ConfigsEqual(desired, observed)
 }
 
 // ConfigDiff is a package-level function for easy config diff generation
-func ConfigDiff(desired, observed ProtocolConverterServiceConfigSpec) string {
+func ConfigDiff(desired, observed ProtocolConverterServiceConfigRuntime) string {
 	return defaultComparator.ConfigDiff(desired, observed)
 }
