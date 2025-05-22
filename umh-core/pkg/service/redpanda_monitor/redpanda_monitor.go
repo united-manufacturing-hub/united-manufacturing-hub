@@ -312,17 +312,17 @@ func (s *RedpandaMonitorService) generateRedpandaScript() (string, error) {
 	scriptContent := fmt.Sprintf(`#!/bin/sh
 while true; do
   echo "%s"
-  curl -sSL --max-time 1 http://localhost:9644/public_metrics 2>&1 | gzip -c | xxd -p
+  curl -sSL --max-time 1 http://localhost:%d/public_metrics 2>&1 | gzip -c | xxd -p
   echo "%s"
-  curl -sSL --max-time 1 http://localhost:9644/v1/cluster_config 2>&1 | gzip -c | xxd -p
+  curl -sSL --max-time 1 http://localhost:%d/v1/cluster_config 2>&1 | gzip -c | xxd -p
   echo "%s"
-  curl -sSL --max-time 1 http://localhost:9644/v1/status/ready 2>&1 | gzip -c | xxd -p
+  curl -sSL --max-time 1 http://localhost:%d/v1/status/ready 2>&1 | gzip -c | xxd -p
   echo "%s"
   date +%%s%%9N
   echo "%s"
   sleep 1
 done
-`, BLOCK_START_MARKER, METRICS_END_MARKER, CLUSTERCONFIG_END_MARKER, READYNESS_END_MARKER, BLOCK_END_MARKER)
+`, BLOCK_START_MARKER, constants.AdminAPIPort, METRICS_END_MARKER, constants.AdminAPIPort, CLUSTERCONFIG_END_MARKER, constants.AdminAPIPort, READYNESS_END_MARKER, BLOCK_END_MARKER)
 
 	return scriptContent, nil
 }

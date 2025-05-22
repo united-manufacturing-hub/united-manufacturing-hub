@@ -17,6 +17,7 @@ package integration_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -167,7 +168,7 @@ func checkRPK(topic string, lastLoopOffset int, lastLoopTimestamp time.Time, los
 		newOffset = int(messages[len(messages)-1].Offset)
 		lastTimestamp = messages[len(messages)-1].Timestamp
 	} else {
-		Fail("❌ No messages received")
+		return 0, errors.New("❌ No messages received")
 	}
 
 	// 1. Check timestamp
@@ -179,16 +180,16 @@ func checkRPK(topic string, lastLoopOffset int, lastLoopTimestamp time.Time, los
 	currentNow := time.Now().UTC()
 	timeDifference := lastTime.Sub(currentNow)
 	if lastTime.Before(currentNow.Add(-1 * time.Minute)) {
-		Fail(fmt.Sprintf("❌ Timestamp is too old: %s (%dms)", lastTime, lastTime.Sub(currentNow).Milliseconds()))
+		return 0, fmt.Errorf("❌ Timestamp is too old: %s (%dms)", lastTime, lastTime.Sub(currentNow).Milliseconds())
 	} else if lastTime.After(currentNow.Add(1 * time.Minute)) {
-		Fail(fmt.Sprintf("❌ Timestamp is too new: %s (%dms)", lastTime, lastTime.Sub(currentNow).Milliseconds()))
+		return 0, fmt.Errorf("❌ Timestamp is too new: %s (%dms)", lastTime, lastTime.Sub(currentNow).Milliseconds())
 	}
 
 	GinkgoWriter.Printf("✅ Timestamp is within reason: %s (time difference: %s)\n", lastTime, timeDifference)
 
 	// 2. Check offset
 	if newOffset <= lastLoopOffset {
-		Fail(fmt.Sprintf("Offset is not increasing: %d <= %d", newOffset, lastLoopOffset))
+		return 0, fmt.Errorf("Offset is not increasing: %d <= %d", newOffset, lastLoopOffset)
 	}
 
 	GinkgoWriter.Printf("✅ Offset is increasing: %d > %d\n", newOffset, lastLoopOffset)
@@ -198,10 +199,10 @@ func checkRPK(topic string, lastLoopOffset int, lastLoopTimestamp time.Time, los
 	msgPerSec := float64(newOffset-lastLoopOffset) / elapsedTime.Seconds()
 
 	if msgPerSec <= 0 {
-		Fail("❌ Msg per sec is not positive")
+		return 0, errors.New("❌ Msg per sec is not positive")
 	}
 	if msgPerSec < float64(messagesPerSecond)*lossToleranceFail {
-		Fail(fmt.Sprintf("❌ Msg per sec is too low: %f (expected %d, tolerated %f [%.2f%%])\n", msgPerSec, messagesPerSecond, float64(messagesPerSecond)*lossToleranceFail, float64(messagesPerSecond)*lossToleranceFail/float64(messagesPerSecond)*100))
+		return 0, fmt.Errorf("❌ Msg per sec is too low: %f (expected %d, tolerated %f [%.2f%%])\n", msgPerSec, messagesPerSecond, float64(messagesPerSecond)*lossToleranceFail, float64(messagesPerSecond)*lossToleranceFail/float64(messagesPerSecond)*100)
 	} else {
 		// Let's warn (but not fail) if we are below the loss tolerance (use a nice warning signal)
 		if msgPerSec < float64(messagesPerSecond)*(1-lossToleranceWarning) {

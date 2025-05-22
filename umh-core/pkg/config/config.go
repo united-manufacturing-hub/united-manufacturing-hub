@@ -29,19 +29,19 @@ import (
 type FullConfig struct {
 	Agent             AgentConfig               `yaml:"agent"`                       // Agent config, requires restart to take effect
 	DataFlow          []DataFlowComponentConfig `yaml:"dataFlow,omitempty"`          // DataFlow components to manage, can be updated while running
-	ProtocolConverter []ProtocolConverterConfig `yaml:"protocolConverter,omitempty"` // ProtocolConverter components to manage, can be updated while running
+	ProtocolConverter []ProtocolConverterConfig `yaml:"protocolConverter,omitempty"` // ProtocolConverter config, can be updated while runnnig
 	Internal          InternalConfig            `yaml:"internal,omitempty"`          // Internal config, not to be used by the user, only to be used for testing internal components
+	Templates         []any                     `yaml:"templates,omitempty"`         // proof of concept for general yaml templates, where anchor can be placed, see also examples/example-config-dataflow-templated.yaml
 }
 
 type InternalConfig struct {
-	Services          []S6FSMConfig             `yaml:"services,omitempty"`          // Services to manage, can be updated while running
-	Benthos           []BenthosConfig           `yaml:"benthos,omitempty"`           // Benthos services to manage, can be updated while running
-	Nmap              []NmapConfig              `yaml:"nmap,omitempty"`              // Nmap services to manage, can be updated while running
-	Redpanda          RedpandaConfig            `yaml:"redpanda,omitempty"`          // Redpanda config, can be updated while running
-	BenthosMonitor    []BenthosMonitorConfig    `yaml:"benthosMonitor,omitempty"`    // BenthosMonitor config, can be updated while running
-	Connection        []ConnectionConfig        `yaml:"connection,omitempty"`        // Connection services to manage, can be updated while running
-	RedpandaMonitor   []RedpandaMonitorConfig   `yaml:"redpandaMonitor,omitempty"`   // RedpandaMonitor config, can be updated while running
-	ProtocolConverter []ProtocolConverterConfig `yaml:"protocolConverter,omitempty"` // ProtocolConverter config, can be updated while runnnig
+	Services        []S6FSMConfig           `yaml:"services,omitempty"`        // Services to manage, can be updated while running
+	Benthos         []BenthosConfig         `yaml:"benthos,omitempty"`         // Benthos services to manage, can be updated while running
+	Nmap            []NmapConfig            `yaml:"nmap,omitempty"`            // Nmap services to manage, can be updated while running
+	Redpanda        RedpandaConfig          `yaml:"redpanda,omitempty"`        // Redpanda config, can be updated while running
+	BenthosMonitor  []BenthosMonitorConfig  `yaml:"benthosMonitor,omitempty"`  // BenthosMonitor config, can be updated while running
+	Connection      []ConnectionConfig      `yaml:"connection,omitempty"`      // Connection services to manage, can be updated while running
+	RedpandaMonitor []RedpandaMonitorConfig `yaml:"redpandaMonitor,omitempty"` // RedpandaMonitor config, can be updated while running
 }
 
 type AgentConfig struct {
@@ -52,8 +52,9 @@ type AgentConfig struct {
 }
 
 type CommunicatorConfig struct {
-	APIURL    string `yaml:"apiUrl,omitempty"`
-	AuthToken string `yaml:"authToken,omitempty"`
+	APIURL           string `yaml:"apiUrl,omitempty"`
+	AuthToken        string `yaml:"authToken,omitempty"`
+	AllowInsecureTLS bool   `yaml:"allowInsecureTLS,omitempty"` // Allow TLS connections without verifying the certificate.
 }
 
 // FSMInstanceConfig is the config for a FSM instance
@@ -114,15 +115,29 @@ type DataFlowComponentConfig struct {
 	FSMInstanceConfig `yaml:",inline"`
 
 	DataFlowComponentServiceConfig dataflowcomponentserviceconfig.DataflowComponentServiceConfig `yaml:"dataFlowComponentConfig"`
+
+	// private marker – not (un)marshalled
+	// explanation see templating.go
+	hasAnchors bool `yaml:"-"`
 }
+
+// HasAnchors returns true if the DataFlowComponentConfig has anchors, see templating.go
+func (d DataFlowComponentConfig) HasAnchors() bool { return d.hasAnchors }
 
 // ProtocolConverterConfig contains configuration for creating a ProtocolConverter
 type ProtocolConverterConfig struct {
 	// For the FSM
 	FSMInstanceConfig `yaml:",inline"`
 
-	ProtocolConverterServiceConfig protocolconverterserviceconfig.ProtocolConverterServiceConfig `yaml:"protocolConverterServiceConfig"`
+	ProtocolConverterServiceConfig protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec `yaml:"protocolConverterServiceConfig"`
+
+	// private marker – not (un)marshalled
+	// explanation see templating.go
+	hasAnchors bool `yaml:"-"`
 }
+
+// HasAnchors returns true if the ProtocolConverterConfig has anchors, see templating.go
+func (d ProtocolConverterConfig) HasAnchors() bool { return d.hasAnchors }
 
 // NmapConfig contains configuration for creating a Nmap service
 type NmapConfig struct {
@@ -155,6 +170,12 @@ type ConnectionConfig struct {
 
 	// For the Connection service
 	ConnectionServiceConfig connectionserviceconfig.ConnectionServiceConfig `yaml:"connectionServiceConfig"`
+}
+
+// TemplateVariable is a variable that can be used in templating
+type TemplateVariable struct {
+	Name  string `yaml:"name"`
+	Value any    `yaml:"value"`
 }
 
 // Clone creates a deep copy of FullConfig

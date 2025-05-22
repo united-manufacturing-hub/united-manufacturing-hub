@@ -239,8 +239,8 @@ func (a *GetDataFlowComponentAction) Execute() (interface{}, map[string]interfac
 					a.actionLogger.Warnf("Failed to marshal processor data: %v", err)
 					continue
 				}
-				// Use index as processor name if not specified
-				procName := fmt.Sprintf("processor_%d", i)
+				// Use index as processor name to allow sorting in the frontend
+				procName := fmt.Sprintf("%d", i)
 				processors[procName] = struct {
 					Data string `json:"data" yaml:"data" mapstructure:"data"`
 					Type string `json:"type" yaml:"type" mapstructure:"type"`

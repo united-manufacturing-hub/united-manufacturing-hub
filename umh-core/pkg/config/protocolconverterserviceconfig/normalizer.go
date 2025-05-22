@@ -17,6 +17,7 @@ package protocolconverterserviceconfig
 import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/connectionserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/variables"
 )
 
 // Normalizer handles the normalization of ProtocolConverter configurations
@@ -28,15 +29,25 @@ func NewNormalizer() *Normalizer {
 }
 
 // NormalizeConfig applies ProtocolConverter defaults to a structured config
-func (n *Normalizer) NormalizeConfig(cfg ProtocolConverterServiceConfig) ProtocolConverterServiceConfig {
+func (n *Normalizer) NormalizeConfig(cfg ProtocolConverterServiceConfigSpec) ProtocolConverterServiceConfigSpec {
+
+	// create a copy
+	normalized := cfg
 
 	// We need to first normalize the underlying DFCServiceConfig
 	dfcNormalizer := dataflowcomponentserviceconfig.NewNormalizer()
-	cfg.DataflowComponentServiceConfig = dfcNormalizer.NormalizeConfig(cfg.GetDFCServiceConfig())
+	normalized.Template.DataflowComponentReadServiceConfig = dfcNormalizer.NormalizeConfig(normalized.GetDFCReadServiceConfig())
+	normalized.Template.DataflowComponentWriteServiceConfig = dfcNormalizer.NormalizeConfig(normalized.GetDFCWriteServiceConfig())
 
 	// Then we  need to normalize the underlying ConnectionServiceConfig
 	connectionNormalizer := connectionserviceconfig.NewNormalizer()
-	cfg.ConnectionServiceConfig = connectionNormalizer.NormalizeConfig(cfg.GetConnectionServiceConfig())
+	normalized.Template.ConnectionServiceConfig = connectionNormalizer.NormalizeConfig(normalized.GetConnectionServiceConfig())
 
-	return cfg
+	// Then we need to normalize the variables
+	variablesNormalizer := variables.NewNormalizer()
+	normalized.Variables = variablesNormalizer.NormalizeConfig(normalized.Variables)
+
+	// no need to normalize the location
+
+	return normalized
 }

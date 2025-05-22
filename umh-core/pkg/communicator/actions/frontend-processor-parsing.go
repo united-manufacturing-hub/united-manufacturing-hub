@@ -12,19 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package nmapserviceconfig
+package actions
 
-// Normalizer handles the normalization of Nmap configurations
-type Normalizer struct{}
+import (
+	"strconv"
 
-// NewNormalizer creates a new configuration normalizer for Nmap
-func NewNormalizer() *Normalizer {
-	return &Normalizer{}
-}
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
+)
 
-// NormalizeConfig doesn't do anything, there is no normalization needed here
-func (n *Normalizer) NormalizeConfig(cfg NmapServiceConfig) NmapServiceConfig {
-	// create a copy
-	normalized := cfg
-	return normalized
+// this function returns weather the string indexes of the given map are all numeric
+// this func is only called when len(pipeline) > 0 so we dont need to check
+func CheckIfOrderedNumericKeys(pipeline map[string]models.DfcDataConfig) bool {
+	for processorName := range pipeline {
+		index, err := strconv.Atoi(processorName)
+		if err != nil || index < 0 {
+			return false
+		}
+	}
+	return true
 }

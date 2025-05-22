@@ -242,14 +242,7 @@ func parseCustomDataFlowComponent(payload interface{}) (models.CDFCPayload, erro
 			Type: cdfcParsed.Outputs.Type,
 			Data: cdfcParsed.Outputs.Data,
 		},
-	}
-
-	// Add inject data if present
-	if cdfcParsed.Inject.Type != "" && cdfcParsed.Inject.Data != "" {
-		cdfcPayload.Inject = models.DfcDataConfig{
-			Type: cdfcParsed.Inject.Type,
-			Data: cdfcParsed.Inject.Data,
-		}
+		Inject: cdfcParsed.Inject.Data,
 	}
 
 	// Process the pipeline processors
@@ -333,8 +326,8 @@ func (a *DeployDataflowComponentAction) Validate() error {
 		}
 
 		// Validate inject data
-		if a.payload.Inject.Type != "" && a.payload.Inject.Data != "" {
-			if err := yaml.Unmarshal([]byte(a.payload.Inject.Data), &temp); err != nil {
+		if a.payload.Inject != "" {
+			if err := yaml.Unmarshal([]byte(a.payload.Inject), &temp); err != nil {
 				return fmt.Errorf("inject.data is not valid YAML: %v", err)
 			}
 		}
@@ -383,7 +376,7 @@ func (a *DeployDataflowComponentAction) Execute() (interface{}, map[string]inter
 	}
 
 	//parse the inject data
-	err = yaml.Unmarshal([]byte(a.payload.Inject.Data), &benthosYamlInject)
+	err = yaml.Unmarshal([]byte(a.payload.Inject), &benthosYamlInject)
 	if err != nil {
 		errMsg := Label("deploy", a.name) + fmt.Sprintf("failed to parse inject data: %s", err.Error())
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errMsg, a.outboundChannel, models.DeployDataFlowComponent)
@@ -438,17 +431,41 @@ func (a *DeployDataflowComponentAction) Execute() (interface{}, map[string]inter
 		// Convert each processor configuration in the pipeline
 		processors := []interface{}{}
 
-		for processorName, processor := range a.payload.Pipeline {
-			var procConfig map[string]interface{}
-			err := yaml.Unmarshal([]byte(processor.Data), &procConfig)
-			if err != nil {
-				errMsg := Label("deploy", a.name) + fmt.Sprintf("failed to parse pipeline processor %s: %s", processorName, err.Error())
-				SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errMsg, a.outboundChannel, models.DeployDataFlowComponent)
-				return nil, nil, fmt.Errorf("%s", errMsg)
-			}
+		// Check if we have numeric keys (0, 1, 2, ...) and use them to preserve order
+		// 1. In Go, iterating over a map gives the keys in random order each time
+		// 2. In Benthos pipelines the order of processors matters
+		// 3. Therefore, we need to check If the map keys look like 0, 1, 2, … treat them as an
+		//    explicit index and replay them in that exact numerical order.
+		//    Otherwise keep the old behaviour (unordered) but warn the user.
 
-			// Add processor to the list
-			processors = append(processors, procConfig)
+		// Try to parse all keys as integers
+		hasNumericKeys := CheckIfOrderedNumericKeys(a.payload.Pipeline)
+
+		if hasNumericKeys {
+			// Process in numeric order
+			for i := range len(a.payload.Pipeline) {
+				processorName := fmt.Sprintf("%d", i)
+
+				processor := a.payload.Pipeline[processorName]
+				var procConfig map[string]interface{}
+				err := yaml.Unmarshal([]byte(processor.Data), &procConfig)
+				if err != nil {
+					errMsg := Label("deploy", a.name) + fmt.Sprintf("failed to parse pipeline processor %s: %s", processorName, err.Error())
+					SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errMsg, a.outboundChannel, models.DeployDataFlowComponent)
+					return nil, nil, fmt.Errorf("%s", errMsg)
+				}
+
+				// Add processor to the list
+				processors = append(processors, procConfig)
+			}
+		}
+
+		if !hasNumericKeys {
+			// the frontend always sends numerous keys so this should never happen
+			SendActionReply(a.instanceUUID, a.userEmail,
+				a.actionUUID, models.ActionFinishedWithFailure, "At least one processor with a non-numerous key was found.",
+				a.outboundChannel, models.DeployDataFlowComponent)
+			return nil, nil, fmt.Errorf("at least one processor with a non-numerous key was found")
 		}
 
 		benthosPipeline["processors"] = processors

@@ -41,23 +41,24 @@ import (
 // MockProtocolConverterService is a mock implementation of the IProtocolConverterService interface for testing
 type MockProtocolConverterService struct {
 	// Tracks calls to methods
-	GenerateConfigCalled    bool
-	GetConfigCalled         bool
-	StatusCalled            bool
-	AddToManagerCalled      bool
-	UpdateInManagerCalled   bool
-	RemoveFromManagerCalled bool
-	StartCalled             bool
-	StopCalled              bool
-	ForceRemoveCalled       bool
-	ServiceExistsCalled     bool
-	ReconcileManagerCalled  bool
+	GenerateConfigCalled     bool
+	GetConfigCalled          bool
+	StatusCalled             bool
+	AddToManagerCalled       bool
+	UpdateInManagerCalled    bool
+	RemoveFromManagerCalled  bool
+	StartCalled              bool
+	StopCalled               bool
+	ForceRemoveCalled        bool
+	ServiceExistsCalled      bool
+	ReconcileManagerCalled   bool
+	BuildRuntimeConfigCalled bool
 
 	// Return values for each method
 	GenerateConfigResultDFC        dataflowcomponentserviceconfig.DataflowComponentServiceConfig
 	GenerateConfigResultConnection connectionserviceconfig.ConnectionServiceConfig
 	GenerateConfigError            error
-	GetConfigResult                protocolconverterserviceconfig.ProtocolConverterServiceConfig
+	GetConfigResult                protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec
 	GetConfigError                 error
 	StatusResult                   ServiceInfo
 	StatusError                    error
@@ -70,6 +71,8 @@ type MockProtocolConverterService struct {
 	ServiceExistsResult            bool
 	ReconcileManagerError          error
 	ReconcileManagerReconciled     bool
+	BuildRuntimeConfigResult       protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime
+	BuildRuntimeConfigError        error
 
 	// For more complex testing scenarios
 	ConverterStates    map[string]*ServiceInfo
@@ -159,16 +162,14 @@ func (m *MockProtocolConverterService) SetComponentState(protConvName string, fl
 	// Ensure ServiceInfo exists for this component
 	if _, exists := m.ConverterStates[protConvName]; !exists {
 		m.ConverterStates[protConvName] = &ServiceInfo{
-			DataflowComponentFSMState:      flags.DfcFSMState,
-			DataflowComponentObservedState: *dfcObservedState,
-			ConnectionFSMState:             flags.ConnectionFSMState,
-			ConnectionObservedState:        *connObservedState,
-			RedpandaFSMState:               flags.RedpandaFSMState,
-			RedpandaObservedState:          *redpandaObservedState,
+			DataflowComponentReadFSMState:      flags.dfcFSMState,
+			DataflowComponentReadObservedState: *dfcObservedState,
+			ConnectionFSMState:                 flags.connectionFSMState,
+			ConnectionObservedState:            *connObservedState,
 		}
 	} else {
-		m.ConverterStates[protConvName].DataflowComponentObservedState = *dfcObservedState
-		m.ConverterStates[protConvName].DataflowComponentFSMState = flags.DfcFSMState
+		m.ConverterStates[protConvName].DataflowComponentReadObservedState = *dfcObservedState
+		m.ConverterStates[protConvName].DataflowComponentReadFSMState = flags.dfcFSMState
 		m.ConverterStates[protConvName].ConnectionObservedState = *connObservedState
 		m.ConverterStates[protConvName].ConnectionFSMState = flags.ConnectionFSMState
 		m.ConverterStates[protConvName].RedpandaObservedState = *redpandaObservedState
@@ -190,33 +191,20 @@ func (m *MockProtocolConverterService) GetConverterState(protConvName string) *C
 	return flags
 }
 
-// GenerateConfig mocks generating connection & dfc config for a ProtocolConverter
-func (m *MockProtocolConverterService) GenerateConfig(
-	protConvConfig *protocolconverterserviceconfig.ProtocolConverterServiceConfig,
-	protConvName string,
-) (
-	connectionserviceconfig.ConnectionServiceConfig,
-	dataflowcomponentserviceconfig.DataflowComponentServiceConfig,
-	error,
-) {
-	m.GenerateConfigCalled = true
-	return m.GenerateConfigResultConnection, m.GenerateConfigResultDFC, m.GenerateConfigError
-}
-
 // GetConfig mocks getting the ProtocolConverter configuration
 func (m *MockProtocolConverterService) GetConfig(
 	ctx context.Context,
 	filesystemService filesystem.Service,
 	protConvName string,
 ) (
-	protocolconverterserviceconfig.ProtocolConverterServiceConfig,
+	protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec,
 	error,
 ) {
 	m.GetConfigCalled = true
 
 	// If error is set, return it
 	if m.GetConfigError != nil {
-		return protocolconverterserviceconfig.ProtocolConverterServiceConfig{}, m.GetConfigError
+		return protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{}, m.GetConfigError
 	}
 
 	// If a result is preset, return it
@@ -251,7 +239,7 @@ func (m *MockProtocolConverterService) Status(
 func (m *MockProtocolConverterService) AddToManager(
 	ctx context.Context,
 	filesystemService filesystem.Service,
-	cfg *protocolconverterserviceconfig.ProtocolConverterServiceConfig,
+	cfg *protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec,
 	protConvName string,
 ) error {
 	m.AddToManagerCalled = true
@@ -304,7 +292,7 @@ func (m *MockProtocolConverterService) AddToManager(
 func (m *MockProtocolConverterService) UpdateInManager(
 	ctx context.Context,
 	filesystemService filesystem.Service,
-	cfg *protocolconverterserviceconfig.ProtocolConverterServiceConfig,
+	cfg *protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec,
 	protConvName string,
 ) error {
 	m.UpdateInManagerCalled = true
@@ -402,8 +390,8 @@ func (m *MockProtocolConverterService) RemoveFromManager(
 	return m.RemoveFromManagerError
 }
 
-// Start mocks starting a ProtocolConverter
-func (m *MockProtocolConverterService) Start(ctx context.Context, filesystemService filesystem.Service, protConvName string) error {
+// StartProtocolConverter mocks starting a ProtocolConverter
+func (m *MockProtocolConverterService) StartProtocolConverter(ctx context.Context, filesystemService filesystem.Service, protConvName string) error {
 	m.StartCalled = true
 
 	underlyingName := fmt.Sprintf("protocolconverter-%s", protConvName)
@@ -437,8 +425,8 @@ func (m *MockProtocolConverterService) Start(ctx context.Context, filesystemServ
 	return m.StartError
 }
 
-// Stop mocks stopping a ProtocolConverter
-func (m *MockProtocolConverterService) Stop(
+// StopProtocolConverter mocks stopping a ProtocolConverter
+func (m *MockProtocolConverterService) StopProtocolConverter(
 	ctx context.Context,
 	filesystemService filesystem.Service,
 	protConvName string,
@@ -476,8 +464,8 @@ func (m *MockProtocolConverterService) Stop(
 	return m.StopError
 }
 
-// ForceRemove mocks force removing a ProtocolConverter
-func (m *MockProtocolConverterService) ForceRemove(ctx context.Context, filesystemService filesystem.Service, protConvName string) error {
+// ForceRemoveProtocolConverter mocks force removing a ProtocolConverter
+func (m *MockProtocolConverterService) ForceRemoveProtocolConverter(ctx context.Context, filesystemService filesystem.Service, protConvName string) error {
 	m.ForceRemoveCalled = true
 	return m.ForceRemoveError
 }
@@ -492,4 +480,17 @@ func (m *MockProtocolConverterService) ServiceExists(ctx context.Context, filesy
 func (m *MockProtocolConverterService) ReconcileManager(ctx context.Context, services serviceregistry.Provider, tick uint64) (error, bool) {
 	m.ReconcileManagerCalled = true
 	return m.ReconcileManagerError, m.ReconcileManagerReconciled
+}
+
+// BuildRuntimeConfig mocks building the runtime config for a ProtocolConverter
+func (m *MockProtocolConverterService) BuildRuntimeConfig(
+	spec protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec,
+	agentLocation map[string]string,
+	pcLocation map[string]string,
+	globalVars map[string]any,
+	nodeName string,
+	pcName string,
+) (protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime, error) {
+	m.BuildRuntimeConfigCalled = true
+	return m.BuildRuntimeConfigResult, m.BuildRuntimeConfigError
 }

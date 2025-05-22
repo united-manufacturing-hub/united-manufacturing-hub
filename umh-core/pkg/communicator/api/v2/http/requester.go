@@ -67,6 +67,7 @@ func GetClient(insecureTLS bool) *http.Client {
 			TLSNextProto:      make(map[string]func(authority string, c *tls.Conn) http.RoundTripper),
 			TLSClientConfig: &tls.Config{
 				InsecureSkipVerify: insecureTLS,
+				MinVersion:         tls.VersionTLS10, // Allow older TLS versions
 			},
 		}
 
@@ -208,19 +209,12 @@ func enhanceConnectionError(err error) error {
 	return fmt.Errorf("connection error: %w (no response received from server, status code 0)", err)
 }
 
-// GetRequest does a GET request to the given endpoint, with optional header and cookies
-func GetRequest[R any](ctx context.Context, endpoint Endpoint, header map[string]string, cookies *map[string]string, insecureTLS bool, apiURL string, logger *zap.SugaredLogger) (result *R, statusCode int, responseErr error) {
-	// Set up context with default 30 second timeout if none provided
-	if ctx == nil {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-	}
-
-	url := apiURL + string(endpoint)
+// DoHTTPRequest performs the actual HTTP request and returns the response and any errors
+// This is an internal function, better use GetRequest or PostRequest instead
+func DoHTTPRequest(ctx context.Context, url string, header map[string]string, cookies *map[string]string, insecureTLS bool, logger *zap.SugaredLogger) (*http.Response, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		return nil, 0, err
+		return nil, err
 	}
 
 	// Set headers
@@ -252,22 +246,11 @@ func GetRequest[R any](ctx context.Context, endpoint Endpoint, header map[string
 	response, err := GetClient(insecureTLS).Do(req.WithContext(httptrace.WithClientTrace(req.Context(), trace)))
 	if err != nil {
 		if response != nil {
-			return nil, response.StatusCode, err
+			return response, err
 		}
 		// Enhance error message for connection failures
-		return nil, 0, enhanceConnectionError(err)
+		return nil, enhanceConnectionError(err)
 	}
-	defer func() {
-		if err := response.Body.Close(); err != nil {
-			if responseErr != nil {
-				// If we already have an error, just log this one
-				logger.Errorf("Error closing response body: %v", err)
-			} else {
-				// No previous error, so return this one
-				responseErr = fmt.Errorf("error closing response body: %w", err)
-			}
-		}
-	}()
 
 	// Record latencies
 	now := time.Now()
@@ -278,7 +261,19 @@ func GetRequest[R any](ctx context.Context, endpoint Endpoint, header map[string
 
 	processLatencyHeaders(response, timings.firstByte, logger)
 
-	// Read and process response
+	return response, nil
+}
+
+// processJSONResponse processes the HTTP response and unmarshals the JSON body
+func processJSONResponse[R any](response *http.Response, cookies *map[string]string, endpoint Endpoint, logger *zap.SugaredLogger) (*R, int, error) {
+	defer func() {
+		if err := response.Body.Close(); err != nil {
+			// Log error but don't return it since we're in a defer
+			// The main error handling will be done by the caller
+			logger.Warnf("Failed to close response body: %s", err)
+		}
+	}()
+
 	bodyBytes, err := io.ReadAll(response.Body)
 	if err != nil {
 		return nil, response.StatusCode, err
@@ -318,14 +313,12 @@ func GetRequest[R any](ctx context.Context, endpoint Endpoint, header map[string
 		LatestExternalIp = ip
 	}
 
-	statusCode = response.StatusCode
-	result = &typedResult
-	return
+	return &typedResult, response.StatusCode, nil
 }
 
-// PostRequest does a POST request to the given endpoint, with optional header and cookies
-// Note: Cookies will be updated with the response cookies, if not nil
-func PostRequest[R any, T any](ctx context.Context, endpoint Endpoint, data *T, header map[string]string, cookies *map[string]string, insecureTLS bool, apiURL string, logger *zap.SugaredLogger) (result *R, statusCode int, responseErr error) {
+// GetRequest does a GET request to the given endpoint, with optional header and cookies
+// It is a wrapper around DoHTTPRequest
+func GetRequest[R any](ctx context.Context, endpoint Endpoint, header map[string]string, cookies *map[string]string, insecureTLS bool, apiURL string, logger *zap.SugaredLogger) (result *R, statusCode int, responseErr error) {
 	// Set up context with default 30 second timeout if none provided
 	if ctx == nil {
 		var cancel context.CancelFunc
@@ -334,11 +327,24 @@ func PostRequest[R any, T any](ctx context.Context, endpoint Endpoint, data *T, 
 	}
 
 	url := apiURL + string(endpoint)
+	response, err := DoHTTPRequest(ctx, url, header, cookies, insecureTLS, logger)
+	if err != nil {
+		if response != nil {
+			return nil, response.StatusCode, err
+		}
+		return nil, 0, err
+	}
 
+	result, statusCode, responseErr = processJSONResponse[R](response, cookies, endpoint, logger)
+	return
+}
+
+// DoHTTPPostRequest performs the actual HTTP POST request and returns the response and any errors
+func DoHTTPPostRequest[T any](ctx context.Context, url string, data *T, header map[string]string, cookies *map[string]string, insecureTLS bool, logger *zap.SugaredLogger) (*http.Response, error) {
 	// Marshal the data into JSON format
 	body, err := safejson.Marshal(data)
 	if err != nil {
-		return nil, 0, err
+		return nil, err
 	}
 
 	// Create a reader from the body
@@ -347,7 +353,7 @@ func PostRequest[R any, T any](ctx context.Context, endpoint Endpoint, data *T, 
 	// Create a new HTTP request with context
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bodyReader)
 	if err != nil {
-		return nil, 0, err
+		return nil, err
 	}
 
 	// Set content type to application/json
@@ -383,72 +389,36 @@ func PostRequest[R any, T any](ctx context.Context, endpoint Endpoint, data *T, 
 	response, err := GetClient(insecureTLS).Do(req.WithContext(httptrace.WithClientTrace(req.Context(), trace)))
 	if err != nil {
 		if response != nil {
-			return nil, response.StatusCode, err
+			return response, err
 		}
 		// Enhance error message for connection failures
-		return nil, 0, enhanceConnectionError(err)
+		return nil, enhanceConnectionError(err)
 	}
 	latenciesFRB.Set(time.Now(), timeTillFirstByte)
 
-	// Read response body
-	defer func() {
-		if err := response.Body.Close(); err != nil {
-			if responseErr != nil {
-				// If we already have an error, just log this one
-				logger.Errorf("Error closing response body: %v", err)
-			} else {
-				// No previous error, so return this one
-				responseErr = fmt.Errorf("error closing response body: %w", err)
-			}
-		}
-	}()
+	return response, nil
+}
 
-	bodyBytes, err := io.ReadAll(response.Body)
+// PostRequest does a POST request to the given endpoint, with optional header and cookies
+// Note: Cookies will be updated with the response cookies, if not nil
+// It is a wrapper around DoHTTPPostRequest
+func PostRequest[R any, T any](ctx context.Context, endpoint Endpoint, data *T, header map[string]string, cookies *map[string]string, insecureTLS bool, apiURL string, logger *zap.SugaredLogger) (result *R, statusCode int, responseErr error) {
+	// Set up context with default 30 second timeout if none provided
+	if ctx == nil {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+	}
+
+	url := apiURL + string(endpoint)
+	response, err := DoHTTPPostRequest(ctx, url, data, header, cookies, insecureTLS, logger)
 	if err != nil {
-		return nil, response.StatusCode, err
-	}
-
-	// Check if the response was successful (status code 2XX-3XX)
-	if response.StatusCode < 200 || response.StatusCode > 399 {
-		// Handle error reporting internally
-		error_handler.ReportHTTPErrors(
-			errors.New("error response code: "+response.Status),
-			response.StatusCode,
-			string(endpoint),
-			http.MethodPost,
-			data,
-			bodyBytes,
-		)
-
-		if len(bodyBytes) != 0 {
-			var parseResult R
-			err = safejson.Unmarshal(bodyBytes, &parseResult)
-			if err != nil {
-				return nil, response.StatusCode, err
-			}
-
-			if strings.Contains(fmt.Sprint(parseResult), "channel is full") {
-				return nil, response.StatusCode, nil
-			}
+		if response != nil {
+			return nil, response.StatusCode, err
 		}
-		return nil, response.StatusCode, errors.New("error response code: " + response.Status)
+		return nil, 0, err
 	}
 
-	// If response body is empty
-	if len(bodyBytes) == 0 {
-		return nil, response.StatusCode, nil
-	}
-
-	// Unmarshal response body
-	var typedResult R
-	err = safejson.Unmarshal(bodyBytes, &typedResult)
-	if err != nil {
-		return nil, response.StatusCode, err
-	}
-
-	processCookies(response, cookies)
-
-	statusCode = response.StatusCode
-	result = &typedResult
+	result, statusCode, responseErr = processJSONResponse[R](response, cookies, endpoint, logger)
 	return
 }
