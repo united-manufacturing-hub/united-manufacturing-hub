@@ -182,6 +182,8 @@ const (
 	UpdateConfiguration ActionType = "update-configuration"
 	// GetLogs represents the action type for retrieving logs
 	GetLogs ActionType = "get-logs"
+	// GetMetrics represents the action type for retrieving metrics
+	GetMetrics ActionType = "get-metrics"
 )
 
 // TestNetworkConnectionPayload contains the necessary fields for executing a TestNetworkConnection action.
@@ -528,6 +530,41 @@ type GetLogsResponse struct {
 	Logs []string `json:"logs"`
 }
 
+type MetricResourceType string
+
+const (
+	DFCMetricResourceType      MetricResourceType = "dfc"
+	RedpandaMetricResourceType MetricResourceType = "redpanda"
+)
+
+type GetMetricsRequest struct {
+	// Type represents the type of the resource to retrieve the metrics for
+	Type MetricResourceType `json:"type" binding:"required"`
+	// UUID represents the identifier of the entity to retrieve the metrics for.
+	// This is optional and only used for DFC metrics.
+	UUID string `json:"uuid"`
+}
+
+type MetricValueType string
+
+const (
+	MetricValueTypeNumber MetricValueType = "number"
+	MetricValueTypeString MetricValueType = "string"
+)
+
+type Metric struct {
+	ValueType     MetricValueType `json:"value_type"`
+	Value         any             `json:"value"`
+	ComponentType string          `json:"component_type"`
+	Path          string          `json:"path"`
+	Name          string          `json:"name"`
+}
+
+type GetMetricsResponse struct {
+	Metrics []Metric `json:"metrics"`
+}
+
+// Deprecated: Use GetMetricsRequest instead.
 type GetDataflowcomponentMetricsRequest struct {
 	UUID string `json:"uuid" binding:"required"`
 }
