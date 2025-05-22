@@ -20,8 +20,10 @@ import (
 	"slices"
 
 	"github.com/google/uuid"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/redpanda"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"go.uber.org/zap"
 )
@@ -95,6 +97,7 @@ const (
 	RedpandaMetricComponentTypeStorage = "storage"
 	RedpandaMetricComponentTypeCluster = "cluster"
 	RedpandaMetricComponentTypeKafka   = "kafka"
+	RedpandaMetricComponentTypeTopic   = "topic"
 )
 
 func getDFCMetrics(uuid string, systemSnapshotManager *fsm.SnapshotManager) (models.GetMetricsResponse, error) {
@@ -163,8 +166,55 @@ func getDFCMetrics(uuid string, systemSnapshotManager *fsm.SnapshotManager) (mod
 	return res, nil
 }
 
-// func getRedpandaMetrics() (models.GetMetricsResponse, error) {
-// }
+func getRedpandaMetrics(systemSnapshot *fsm.SnapshotManager) (models.GetMetricsResponse, error) {
+	res := models.GetMetricsResponse{Metrics: []models.Metric{}}
+
+	redpandaInst, ok := fsm.FindInstance(systemSnapshot.GetDeepCopySnapshot(), constants.RedpandaManagerName, constants.RedpandaInstanceName)
+	if !ok || redpandaInst == nil {
+		return res, fmt.Errorf("redpanda instance not found")
+	}
+
+	observedState, ok := redpandaInst.LastObservedState.(*redpanda.RedpandaObservedStateSnapshot)
+	if !ok || observedState == nil {
+		return res, fmt.Errorf("redpanda instance %s has no observed state", redpandaInst.ID)
+	}
+
+	metrics := observedState.ServiceInfoSnapshot.RedpandaStatus.RedpandaMetrics.Metrics
+
+	// Process storage metrics
+	storagePath := "redpanda.storage"
+	storageMetrics := metrics.Infrastructure.Storage
+	res.Metrics = append(res.Metrics,
+		models.Metric{ValueType: models.MetricValueTypeNumber, Value: storageMetrics.FreeBytes, ComponentType: RedpandaMetricComponentTypeStorage, Path: storagePath, Name: "disk_free_bytes"},
+		models.Metric{ValueType: models.MetricValueTypeNumber, Value: storageMetrics.TotalBytes, ComponentType: RedpandaMetricComponentTypeStorage, Path: storagePath, Name: "disk_total_bytes"},
+		models.Metric{ValueType: models.MetricValueTypeBoolean, Value: storageMetrics.FreeSpaceAlert, ComponentType: RedpandaMetricComponentTypeStorage, Path: storagePath, Name: "disk_free_space_alert"},
+	)
+
+	// Process cluster metrics
+	clusterPath := "redpanda.cluster"
+	clusterMetrics := metrics.Cluster
+	res.Metrics = append(res.Metrics,
+		models.Metric{ValueType: models.MetricValueTypeNumber, Value: clusterMetrics.Topics, ComponentType: RedpandaMetricComponentTypeCluster, Path: clusterPath, Name: "topics"},
+		models.Metric{ValueType: models.MetricValueTypeNumber, Value: clusterMetrics.UnavailableTopics, ComponentType: RedpandaMetricComponentTypeCluster, Path: clusterPath, Name: "unavailable_partitions"},
+	)
+
+	// Process kafka metrics (throughput)
+	kafkaPath := "redpanda.kafka"
+	res.Metrics = append(res.Metrics,
+		models.Metric{ValueType: models.MetricValueTypeNumber, Value: metrics.Throughput.BytesIn, ComponentType: RedpandaMetricComponentTypeKafka, Path: kafkaPath, Name: "request_bytes_in"},
+		models.Metric{ValueType: models.MetricValueTypeNumber, Value: metrics.Throughput.BytesOut, ComponentType: RedpandaMetricComponentTypeKafka, Path: kafkaPath, Name: "request_bytes_out"},
+	)
+
+	// Process topic metrics
+	topicPath := "redpanda.topic"
+	for topicName, partitionCount := range metrics.Topic.TopicPartitionMap {
+		res.Metrics = append(res.Metrics,
+			models.Metric{ValueType: models.MetricValueTypeNumber, Value: partitionCount, ComponentType: RedpandaMetricComponentTypeTopic, Path: topicPath, Name: fmt.Sprintf("%s_partitions", topicName)},
+		)
+	}
+
+	return res, nil
+}
 
 func (a *GetMetricsAction) Execute() (interface{}, map[string]interface{}, error) {
 	a.actionLogger.Info("Executing the action")
@@ -180,14 +230,14 @@ func (a *GetMetricsAction) Execute() (interface{}, map[string]interface{}, error
 		}
 
 		return metrics, nil, nil
-	// case models.RedpandaMetricResourceType:
-	// 	metrics, err := getRedpandaMetrics()
-	// 	if err != nil {
-	// 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, err.Error(), a.outboundChannel, models.GetMetrics)
-	// 		return nil, nil, err
-	// 	}
+	case models.RedpandaMetricResourceType:
+		metrics, err := getRedpandaMetrics(a.systemSnapshotManager)
+		if err != nil {
+			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, err.Error(), a.outboundChannel, models.GetMetrics)
+			return nil, nil, err
+		}
 
-	// 	return metrics, nil, nil
+		return metrics, nil, nil
 	default:
 		err := errors.New("unknown metric type")
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, err.Error(), a.outboundChannel, models.GetMetrics)

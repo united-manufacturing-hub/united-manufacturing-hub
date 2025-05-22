@@ -548,8 +548,9 @@ type GetMetricsRequest struct {
 type MetricValueType string
 
 const (
-	MetricValueTypeNumber MetricValueType = "number"
-	MetricValueTypeString MetricValueType = "string"
+	MetricValueTypeNumber  MetricValueType = "number"
+	MetricValueTypeString  MetricValueType = "string"
+	MetricValueTypeBoolean MetricValueType = "boolean"
 )
 
 type Metric struct {
