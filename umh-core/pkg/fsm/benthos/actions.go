@@ -311,15 +311,45 @@ func (b *BenthosInstance) IsBenthosConfigLoaded() (bool, string) {
 	return false, fmt.Sprintf("uptime %d s (< %d s threshold)", currentUptime, constants.BenthosTimeUntilConfigLoadedInSeconds)
 }
 
-// IsBenthosHealthchecksPassed reports true when both the liveness and
-// readiness probes are successful. The function implements a debounce mechanism
-// that requires health checks to pass continuously for a minimum duration before
-// reporting success.
+// IsBenthosHealthchecksPassed debounces Benthos liveness/readiness.
 //
-// It returns:
+// Historical context:
 //
-//	ok     – true when both probes pass for the required duration, false otherwise.
-//	reason – empty when ok is true; otherwise details of the failed probe(s) or debounce status.
+//  1. **Original behaviour** – We returned *true* as soon as Benthos reported
+//     `IsLive && IsReady`.  A one-tick spike of readiness was enough to push
+//     the FSM from *starting_waiting_for_healthchecks* to *idle/active*, even
+//     if the connection was not really up and would be marked as failed a ms later.
+//
+//  2. **Counter experiment** – We tried redefining “connected” with
+//     connection_up > connection_failed + connection_lost
+//     for input and output.  Turned out Benthos sets `IsReady` by checking
+//     *those same counters*, so the experiment yielded identical results and
+//     added no value.
+//
+//  3. **Time-based debounce (rejected)** – Holding a `time.Time` inside the
+//     function and comparing with `time.Now()` fixed flapping but forced every
+//     caller to take its own wall-clock sample – awkward in unit tests.
+//
+//  4. **Current tick-based debounce** – The function is now handed the current
+//     *tick* (`currentTick uint64`).  We remember the first tick at which
+//     Benthos became healthy and only report `ok=true` once
+//
+//     currentTick - healthChecksPassingSinceTick >= BenthosHealthCheckStableDurationInTicks
+//
+//     If health ever drops back to false, `healthChecksPassingSinceTick` is
+//     reset and the timer restarts.
+//
+//     *Pros:*
+//     • deterministic in tests (we control ticks)
+//     • zero extra `time.Now()` calls during reconcile
+//     • behaviour is still “≈ 5 s of stability” in production
+//
+// Return values:
+//
+//	ok     – true after the stable-duration requirement is met
+//	reason – empty on success; otherwise why we’re still waiting or which probe
+//	         failed (“healthchecks passing but not stable yet …”, or
+//	         “healthchecks did not pass: live=false, ready=true”, etc.)
 func (b *BenthosInstance) IsBenthosHealthchecksPassed(currentTick uint64) (bool, string) {
 	// Check if all health checks are currently passing
 	allChecksPassing := b.ObservedState.ServiceInfo.BenthosStatus.HealthCheck.IsLive &&

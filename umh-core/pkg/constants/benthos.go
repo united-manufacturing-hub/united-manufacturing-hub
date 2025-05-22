@@ -51,7 +51,26 @@ const (
 )
 
 const (
-	BenthosTimeUntilConfigLoadedInSeconds   = 5
-	BenthosTimeUntilRunningInSeconds        = 10
+	BenthosTimeUntilConfigLoadedInSeconds = 5
+	BenthosTimeUntilRunningInSeconds      = 10
+	// BenthosHealthCheckStableDurationInTicks represents the debounce period for
+	// Benthos readiness.
+	//
+	// ⚠️  Why we need it
+	// ------------------
+	// Benthos exposes two booleans per instance:
+	//
+	//   • IsLive  – process is running
+	//   • IsReady – *both* input and output are connected **right now**
+	//
+	// A pod can therefore oscillate like:
+	//
+	//   live=true, ready=true   ← connection succeeds
+	//   live=true, ready=false  ← broker drops a socket a few ms later
+	//
+	// Our FSM used to consume IsReady verbatim, so a 1-frame “true” was enough to
+	// advance the state machine.
+	//
+	// Change this constant if you need a different stability window.
 	BenthosHealthCheckStableDurationInTicks = uint64(5 * time.Second / DefaultTickerTime) // 5 seconds
 )
