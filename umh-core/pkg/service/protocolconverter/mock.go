@@ -71,8 +71,6 @@ type MockProtocolConverterService struct {
 	ServiceExistsResult            bool
 	ReconcileManagerError          error
 	ReconcileManagerReconciled     bool
-	BuildRuntimeConfigResult       protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime
-	BuildRuntimeConfigError        error
 
 	// For more complex testing scenarios
 	ConverterStates    map[string]*ServiceInfo
@@ -488,17 +486,4 @@ func (m *MockProtocolConverterService) ServiceExists(ctx context.Context, filesy
 func (m *MockProtocolConverterService) ReconcileManager(ctx context.Context, services serviceregistry.Provider, tick uint64) (error, bool) {
 	m.ReconcileManagerCalled = true
 	return m.ReconcileManagerError, m.ReconcileManagerReconciled
-}
-
-// BuildRuntimeConfig mocks building the runtime config for a ProtocolConverter
-func (m *MockProtocolConverterService) BuildRuntimeConfig(
-	spec protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec,
-	agentLocation map[string]string,
-	pcLocation map[string]string,
-	globalVars map[string]any,
-	nodeName string,
-	pcName string,
-) (protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime, error) {
-	m.BuildRuntimeConfigCalled = true
-	return m.BuildRuntimeConfigResult, m.BuildRuntimeConfigError
 }

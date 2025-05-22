@@ -25,48 +25,52 @@ import (
 var _ = Describe("ProtocolConverter YAML Comparator", func() {
 	Describe("ConfigsEqual", func() {
 		It("should consider identical configs equal", func() {
-			config1 := ProtocolConverterServiceConfigRuntime{
-				DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
-					BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
-						Input: map[string]any{
-							"mqtt": map[string]any{
-								"topic": "test/topic",
+			config1 := ProtocolConverterServiceConfigSpec{
+				Template: ProtocolConverterServiceConfigTemplate{
+					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
+							Input: map[string]any{
+								"mqtt": map[string]any{
+									"topic": "test/topic",
+								},
 							},
-						},
-						Output: map[string]any{
-							"kafka": map[string]any{
-								"topic": "test/output",
+							Output: map[string]any{
+								"kafka": map[string]any{
+									"topic": "test/output",
+								},
 							},
 						},
 					},
-				},
-				ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
-					NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
-						Target: "127.0.0.1",
-						Port:   443,
+					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
+						NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
+							Target: "127.0.0.1",
+							Port:   443,
+						},
 					},
 				},
 			}
 
-			config2 := ProtocolConverterServiceConfigRuntime{
-				DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
-					BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
-						Input: map[string]any{
-							"mqtt": map[string]any{
-								"topic": "test/topic",
+			config2 := ProtocolConverterServiceConfigSpec{
+				Template: ProtocolConverterServiceConfigTemplate{
+					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
+							Input: map[string]any{
+								"mqtt": map[string]any{
+									"topic": "test/topic",
+								},
 							},
-						},
-						Output: map[string]any{
-							"kafka": map[string]any{
-								"topic": "test/output",
+							Output: map[string]any{
+								"kafka": map[string]any{
+									"topic": "test/output",
+								},
 							},
 						},
 					},
-				},
-				ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
-					NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
-						Target: "127.0.0.1",
-						Port:   443,
+					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
+						NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
+							Target: "127.0.0.1",
+							Port:   443,
+						},
 					},
 				},
 			}
@@ -78,48 +82,52 @@ var _ = Describe("ProtocolConverter YAML Comparator", func() {
 		})
 
 		It("should consider configs with different input not equal", func() {
-			config1 := ProtocolConverterServiceConfigRuntime{
-				DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
-					BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
-						Input: map[string]any{
-							"mqtt": map[string]any{
-								"topic": "test/topic",
+			config1 := ProtocolConverterServiceConfigSpec{
+				Template: ProtocolConverterServiceConfigTemplate{
+					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
+							Input: map[string]any{
+								"mqtt": map[string]any{
+									"topic": "test/topic",
+								},
 							},
-						},
-						Output: map[string]any{
-							"kafka": map[string]any{
-								"topic": "test/output",
+							Output: map[string]any{
+								"kafka": map[string]any{
+									"topic": "test/output",
+								},
 							},
 						},
 					},
-				},
-				ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
-					NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
-						Target: "127.0.0.1",
-						Port:   443,
+					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
+						NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
+							Target: "127.0.0.1",
+							Port:   443,
+						},
 					},
 				},
 			}
 
-			config2 := ProtocolConverterServiceConfigRuntime{
-				DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
-					BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
-						Input: map[string]any{
-							"mqtt": map[string]any{
-								"topic": "different/topic",
+			config2 := ProtocolConverterServiceConfigSpec{
+				Template: ProtocolConverterServiceConfigTemplate{
+					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
+							Input: map[string]any{
+								"mqtt": map[string]any{
+									"topic": "different/topic",
+								},
 							},
-						},
-						Output: map[string]any{
-							"kafka": map[string]any{
-								"topic": "test/output",
+							Output: map[string]any{
+								"kafka": map[string]any{
+									"topic": "test/output",
+								},
 							},
 						},
 					},
-				},
-				ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
-					NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
-						Target: "127.0.0.1",
-						Port:   443,
+					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
+						NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
+							Target: "127.0.0.1",
+							Port:   443,
+						},
 					},
 				},
 			}
@@ -134,48 +142,53 @@ var _ = Describe("ProtocolConverter YAML Comparator", func() {
 		})
 
 		It("should consider configs with different output not equal", func() {
-			config1 := ProtocolConverterServiceConfigRuntime{
-				DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
-					BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
-						Input: map[string]any{
-							"mqtt": map[string]any{
-								"topic": "test/topic1",
+
+			config1 := ProtocolConverterServiceConfigSpec{
+				Template: ProtocolConverterServiceConfigTemplate{
+					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
+							Input: map[string]any{
+								"mqtt": map[string]any{
+									"topic": "test/topic1",
+								},
 							},
-						},
-						Output: map[string]any{ // wrong user input, read DFC will always have uns output
-							"kafka": map[string]any{
-								"topic": "test-output",
+							Output: map[string]any{ // wrong user input, read DFC will always have uns output
+								"kafka": map[string]any{
+									"topic": "test-output",
+								},
 							},
 						},
 					},
-				},
-				ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
-					NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
-						Target: "127.0.0.1",
-						Port:   443,
+					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
+						NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
+							Target: "127.0.0.1",
+							Port:   443,
+						},
 					},
 				},
 			}
 
-			config2 := ProtocolConverterServiceConfigRuntime{
-				DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
-					BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
-						Input: map[string]any{
-							"mqtt": map[string]any{
-								"topic": "test/topic2",
+			config2 := ProtocolConverterServiceConfigSpec{
+				Template: ProtocolConverterServiceConfigTemplate{
+					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
+							Input: map[string]any{
+								"mqtt": map[string]any{
+									"topic": "test/topic2",
+								},
 							},
-						},
-						Output: map[string]any{ // wrong user input, read DFC will always have uns output
-							"kafka": map[string]any{
-								"topic": "different-output",
+							Output: map[string]any{ // wrong user input, read DFC will always have uns output
+								"kafka": map[string]any{
+									"topic": "different-output",
+								},
 							},
 						},
 					},
-				},
-				ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
-					NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
-						Target: "127.0.0.1",
-						Port:   443,
+					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
+						NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
+							Target: "127.0.0.1",
+							Port:   443,
+						},
 					},
 				},
 			}
@@ -190,48 +203,53 @@ var _ = Describe("ProtocolConverter YAML Comparator", func() {
 		})
 
 		It("should consider configs with different Target not equal", func() {
-			config1 := ProtocolConverterServiceConfigRuntime{
-				DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
-					BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
-						Input: map[string]any{
-							"mqtt": map[string]any{
-								"topic": "test/topic",
+
+			config1 := ProtocolConverterServiceConfigSpec{
+				Template: ProtocolConverterServiceConfigTemplate{
+					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
+							Input: map[string]any{
+								"mqtt": map[string]any{
+									"topic": "test/topic",
+								},
 							},
-						},
-						Output: map[string]any{
-							"kafka": map[string]any{
-								"topic": "test-output",
+							Output: map[string]any{
+								"kafka": map[string]any{
+									"topic": "test-output",
+								},
 							},
 						},
 					},
-				},
-				ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
-					NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
-						Target: "127.0.0.1",
-						Port:   443,
+					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
+						NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
+							Target: "127.0.0.1",
+							Port:   443,
+						},
 					},
 				},
 			}
 
-			config2 := ProtocolConverterServiceConfigRuntime{
-				DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
-					BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
-						Input: map[string]any{
-							"mqtt": map[string]any{
-								"topic": "test/topic",
+			config2 := ProtocolConverterServiceConfigSpec{
+				Template: ProtocolConverterServiceConfigTemplate{
+					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
+							Input: map[string]any{
+								"mqtt": map[string]any{
+									"topic": "test/topic",
+								},
 							},
-						},
-						Output: map[string]any{
-							"kafka": map[string]any{
-								"topic": "test-output",
+							Output: map[string]any{
+								"kafka": map[string]any{
+									"topic": "test-output",
+								},
 							},
 						},
 					},
-				},
-				ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
-					NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
-						Target: "127.0.0.2",
-						Port:   443,
+					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
+						NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
+							Target: "127.0.0.2",
+							Port:   443,
+						},
 					},
 				},
 			}
@@ -247,48 +265,53 @@ var _ = Describe("ProtocolConverter YAML Comparator", func() {
 		})
 
 		It("should consider configs with different Port not equal", func() {
-			config1 := ProtocolConverterServiceConfigRuntime{
-				DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
-					BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
-						Input: map[string]any{
-							"mqtt": map[string]any{
-								"topic": "test/topic",
+
+			config1 := ProtocolConverterServiceConfigSpec{
+				Template: ProtocolConverterServiceConfigTemplate{
+					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
+							Input: map[string]any{
+								"mqtt": map[string]any{
+									"topic": "test/topic",
+								},
 							},
-						},
-						Output: map[string]any{
-							"kafka": map[string]any{
-								"topic": "test-output",
+							Output: map[string]any{
+								"kafka": map[string]any{
+									"topic": "test-output",
+								},
 							},
 						},
 					},
-				},
-				ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
-					NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
-						Target: "127.0.0.1",
-						Port:   443,
+					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
+						NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
+							Target: "127.0.0.1",
+							Port:   443,
+						},
 					},
 				},
 			}
 
-			config2 := ProtocolConverterServiceConfigRuntime{
-				DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
-					BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
-						Input: map[string]any{
-							"mqtt": map[string]any{
-								"topic": "test/topic",
+			config2 := ProtocolConverterServiceConfigSpec{
+				Template: ProtocolConverterServiceConfigTemplate{
+					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
+							Input: map[string]any{
+								"mqtt": map[string]any{
+									"topic": "test/topic",
+								},
 							},
-						},
-						Output: map[string]any{
-							"kafka": map[string]any{
-								"topic": "test-output",
+							Output: map[string]any{
+								"kafka": map[string]any{
+									"topic": "test-output",
+								},
 							},
 						},
 					},
-				},
-				ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
-					NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
-						Target: "127.0.0.1",
-						Port:   444,
+					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
+						NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
+							Target: "127.0.0.1",
+							Port:   444,
+						},
 					},
 				},
 			}
@@ -306,48 +329,52 @@ var _ = Describe("ProtocolConverter YAML Comparator", func() {
 
 	Describe("ConfigDiff", func() {
 		It("should generate readable diff for different configs", func() {
-			config1 := ProtocolConverterServiceConfigRuntime{
-				DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
-					BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
-						Input: map[string]any{
-							"mqtt": map[string]any{
-								"topic": "test/topic",
+			config1 := ProtocolConverterServiceConfigSpec{
+				Template: ProtocolConverterServiceConfigTemplate{
+					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
+							Input: map[string]any{
+								"mqtt": map[string]any{
+									"topic": "test/topic",
+								},
 							},
-						},
-						Output: map[string]any{ // wrong user input, read DFC will always have uns output
-							"kafka": map[string]any{
-								"topic": "test-output",
+							Output: map[string]any{ // wrong user input, read DFC will always have uns output
+								"kafka": map[string]any{
+									"topic": "test-output",
+								},
 							},
 						},
 					},
-				},
-				ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
-					NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
-						Target: "127.0.0.1",
-						Port:   443,
+					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
+						NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
+							Target: "127.0.0.1",
+							Port:   443,
+						},
 					},
 				},
 			}
 
-			config2 := ProtocolConverterServiceConfigRuntime{
-				DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
-					BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
-						Input: map[string]any{
-							"mqtt": map[string]any{
-								"topic": "different/topic",
+			config2 := ProtocolConverterServiceConfigSpec{
+				Template: ProtocolConverterServiceConfigTemplate{
+					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
+							Input: map[string]any{
+								"mqtt": map[string]any{
+									"topic": "different/topic",
+								},
 							},
-						},
-						Output: map[string]any{ // wrong user input, read DFC will always have uns output
-							"kafka": map[string]any{
-								"topic": "different-output",
+							Output: map[string]any{ // wrong user input, read DFC will always have uns output
+								"kafka": map[string]any{
+									"topic": "different-output",
+								},
 							},
 						},
 					},
-				},
-				ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
-					NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
-						Target: "127.0.0.1",
-						Port:   444,
+					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
+						NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
+							Target: "127.0.0.1",
+							Port:   444,
+						},
 					},
 				},
 			}
@@ -367,48 +394,52 @@ var _ = Describe("ProtocolConverter YAML Comparator", func() {
 	// Test package-level functions
 	Describe("Package-level functions", func() {
 		It("ConfigsEqual should use default comparator", func() {
-			config1 := ProtocolConverterServiceConfigRuntime{
-				DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
-					BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
-						Input: map[string]any{
-							"mqtt": map[string]any{
-								"topic": "test/topic",
+			config1 := ProtocolConverterServiceConfigSpec{
+				Template: ProtocolConverterServiceConfigTemplate{
+					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
+							Input: map[string]any{
+								"mqtt": map[string]any{
+									"topic": "test/topic",
+								},
 							},
-						},
-						Output: map[string]any{
-							"mqtt": map[string]any{
-								"topic": "test-output",
+							Output: map[string]any{
+								"mqtt": map[string]any{
+									"topic": "test-output",
+								},
 							},
 						},
 					},
-				},
-				ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
-					NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
-						Target: "127.0.0.1",
-						Port:   443,
+					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
+						NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
+							Target: "127.0.0.1",
+							Port:   443,
+						},
 					},
 				},
 			}
 
-			config2 := ProtocolConverterServiceConfigRuntime{
-				DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
-					BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
-						Input: map[string]any{
-							"mqtt": map[string]any{
-								"topic": "test/topic",
+			config2 := ProtocolConverterServiceConfigSpec{
+				Template: ProtocolConverterServiceConfigTemplate{
+					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
+							Input: map[string]any{
+								"mqtt": map[string]any{
+									"topic": "test/topic",
+								},
 							},
-						},
-						Output: map[string]any{
-							"mqtt": map[string]any{
-								"topic": "test-output",
+							Output: map[string]any{
+								"mqtt": map[string]any{
+									"topic": "test-output",
+								},
 							},
 						},
 					},
-				},
-				ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
-					NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
-						Target: "127.0.0.1",
-						Port:   443,
+					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
+						NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
+							Target: "127.0.0.1",
+							Port:   443,
+						},
 					},
 				},
 			}
@@ -424,48 +455,52 @@ var _ = Describe("ProtocolConverter YAML Comparator", func() {
 		})
 
 		It("ConfigDiff should use default comparator", func() {
-			config1 := ProtocolConverterServiceConfigRuntime{
-				DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
-					BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
-						Input: map[string]any{
-							"mqtt": map[string]any{
-								"topic": "test/topic",
+			config1 := ProtocolConverterServiceConfigSpec{
+				Template: ProtocolConverterServiceConfigTemplate{
+					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
+							Input: map[string]any{
+								"mqtt": map[string]any{
+									"topic": "test/topic",
+								},
 							},
-						},
-						Output: map[string]any{
-							"mqtt": map[string]any{
-								"topic": "test-output",
+							Output: map[string]any{
+								"mqtt": map[string]any{
+									"topic": "test-output",
+								},
 							},
 						},
 					},
-				},
-				ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
-					NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
-						Target: "127.0.0.1",
-						Port:   443,
+					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
+						NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
+							Target: "127.0.0.1",
+							Port:   443,
+						},
 					},
 				},
 			}
 
-			config2 := ProtocolConverterServiceConfigRuntime{
-				DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
-					BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
-						Input: map[string]any{
-							"mqtt": map[string]any{
-								"topic": "different/topic",
+			config2 := ProtocolConverterServiceConfigSpec{
+				Template: ProtocolConverterServiceConfigTemplate{
+					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
+							Input: map[string]any{
+								"mqtt": map[string]any{
+									"topic": "different/topic",
+								},
 							},
-						},
-						Output: map[string]any{
-							"mqtt": map[string]any{
-								"topic": "different-output",
+							Output: map[string]any{
+								"mqtt": map[string]any{
+									"topic": "different-output",
+								},
 							},
 						},
 					},
-				},
-				ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
-					NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
-						Target: "127.0.0.1",
-						Port:   444,
+					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
+						NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
+							Target: "127.0.0.1",
+							Port:   444,
+						},
 					},
 				},
 			}

@@ -17,6 +17,7 @@ package protocolconverterserviceconfig
 import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/connectionserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/variables"
 )
 
 // Comparator handles the comparison of Connection configurations
@@ -30,15 +31,15 @@ func NewComparator() *Comparator {
 
 // ConfigsEqual compares two ConnectionServiceConfigs by converting to NmapServiceConfig
 // and using the existing comparison utilization
-func (c *Comparator) ConfigsEqual(desired, observed ProtocolConverterServiceConfigRuntime) (isEqual bool) {
-	connectionD := desired.ConnectionServiceConfig
-	connectionO := observed.ConnectionServiceConfig
+func (c *Comparator) ConfigsEqual(desired, observed ProtocolConverterServiceConfigSpec) (isEqual bool) {
+	connectionD := desired.GetConnectionServiceConfig()
+	connectionO := observed.GetConnectionServiceConfig()
 
-	dfcReadD := desired.DataflowComponentReadServiceConfig
-	dfcReadO := observed.DataflowComponentReadServiceConfig
+	dfcReadD := desired.GetDFCReadServiceConfig()
+	dfcReadO := observed.GetDFCReadServiceConfig()
 
-	dfcWriteD := desired.DataflowComponentWriteServiceConfig
-	dfcWriteO := observed.DataflowComponentWriteServiceConfig
+	dfcWriteD := desired.GetDFCWriteServiceConfig()
+	dfcWriteO := observed.GetDFCWriteServiceConfig()
 
 	// compare connections
 	comparatorConnection := connectionserviceconfig.NewComparator()
@@ -46,21 +47,25 @@ func (c *Comparator) ConfigsEqual(desired, observed ProtocolConverterServiceConf
 	// compare dfc's
 	comparatorDFC := dataflowcomponentserviceconfig.NewComparator()
 
+	// compare variables
+	comparatorVariable := variables.NewComparator()
+
 	return comparatorConnection.ConfigsEqual(connectionD, connectionO) &&
 		comparatorDFC.ConfigsEqual(dfcReadD, dfcReadO) &&
-		comparatorDFC.ConfigsEqual(dfcWriteD, dfcWriteO)
+		comparatorDFC.ConfigsEqual(dfcWriteD, dfcWriteO) &&
+		comparatorVariable.ConfigsEqual(desired.Variables, observed.Variables)
 }
 
 // ConfigDiff returns a human-readable string describing differences between configs
-func (c *Comparator) ConfigDiff(desired, observed ProtocolConverterServiceConfigRuntime) string {
-	connectionD := desired.ConnectionServiceConfig
-	connectionO := observed.ConnectionServiceConfig
+func (c *Comparator) ConfigDiff(desired, observed ProtocolConverterServiceConfigSpec) string {
+	connectionD := desired.GetConnectionServiceConfig()
+	connectionO := observed.GetConnectionServiceConfig()
 
-	dfcReadD := desired.DataflowComponentReadServiceConfig
-	dfcReadO := observed.DataflowComponentReadServiceConfig
+	dfcReadD := desired.GetDFCReadServiceConfig()
+	dfcReadO := observed.GetDFCReadServiceConfig()
 
-	dfcWriteD := desired.DataflowComponentWriteServiceConfig
-	dfcWriteO := observed.DataflowComponentWriteServiceConfig
+	dfcWriteD := desired.GetDFCWriteServiceConfig()
+	dfcWriteO := observed.GetDFCWriteServiceConfig()
 
 	// diff for connection
 	comparatorConnection := connectionserviceconfig.NewComparator()
@@ -71,5 +76,9 @@ func (c *Comparator) ConfigDiff(desired, observed ProtocolConverterServiceConfig
 	dfcReadDiff := comparatorDFC.ConfigDiff(dfcReadD, dfcReadO)
 	dfcWriteDiff := comparatorDFC.ConfigDiff(dfcWriteD, dfcWriteO)
 
-	return connectionDiff + dfcReadDiff + dfcWriteDiff
+	// diff for variables
+	comparatorVariable := variables.NewComparator()
+	variableDiff := comparatorVariable.ConfigDiff(desired.Variables, observed.Variables)
+
+	return connectionDiff + dfcReadDiff + dfcWriteDiff + variableDiff
 }

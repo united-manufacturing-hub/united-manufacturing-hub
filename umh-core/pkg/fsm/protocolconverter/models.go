@@ -172,14 +172,11 @@ type ProtocolConverterInstance struct {
 	// It has a manager that manages the protocolconverter service instances
 	service protocolconvertersvc.IProtocolConverterService
 
-	// config contains all the runtime configuration for this service
-	// but it does not contain the name and the desired state
-	config protocolconverterconfig.ProtocolConverterServiceConfigRuntime
+	// config contains all the configuration spec for this service
+	config protocolconverterconfig.ProtocolConverterServiceConfigSpec
 
-	// desiredState contains the desired state of the service
-	desiredState string
-
-	// the name will be stored in the baseFSMInstance
+	// renderedConfig contains the rendered configuration for this service
+	renderedConfig protocolconverterconfig.ProtocolConverterServiceConfigRuntime
 }
 
 // GetLastObservedState returns the last known state of the instance
@@ -195,7 +192,7 @@ func (d *ProtocolConverterInstance) SetService(service protocolconvertersvc.IPro
 
 // GetConfig returns the ProtocolConverterServiceConfig for this service
 // This is a testing-only utility to access the private service field
-func (d *ProtocolConverterInstance) GetConfig() protocolconverterconfig.ProtocolConverterServiceConfigRuntime {
+func (d *ProtocolConverterInstance) GetConfig() protocolconverterconfig.ProtocolConverterServiceConfigSpec {
 	return d.config
 }
 

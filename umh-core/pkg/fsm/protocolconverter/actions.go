@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -32,6 +33,7 @@ import (
 	dataflowcomponentservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/dataflowcomponent"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/protocolconverter"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/protocolconverter/runtime_config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	standarderrors "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
 )
@@ -51,7 +53,7 @@ import (
 func (p *ProtocolConverterInstance) CreateInstance(ctx context.Context, filesystemService filesystem.Service) error {
 	p.baseFSMInstance.GetLogger().Debugf("Starting Action: Adding ProtocolConverter service %s to Benthos manager ...", p.baseFSMInstance.GetID())
 
-	err := p.service.AddToManager(ctx, filesystemService, &p.config, p.baseFSMInstance.GetID())
+	err := p.service.AddToManager(ctx, filesystemService, &p.renderedConfig, p.baseFSMInstance.GetID())
 	if err != nil {
 		if errors.Is(err, dataflowcomponentservice.ErrServiceAlreadyExists) {
 			p.baseFSMInstance.GetLogger().Debugf("ProtocolConverter service %s already exists in Benthos manager", p.baseFSMInstance.GetID())
@@ -219,16 +221,30 @@ func (p *ProtocolConverterInstance) UpdateObservedStateOfInstance(ctx context.Co
 		}
 	}
 
-	if !protocolconverterserviceconfig.ConfigsEqual(p.config, p.ObservedState.ObservedProtocolConverterConfig) {
+	// Now render the config
+	start = time.Now()
+	p.renderedConfig, err = runtime_config.BuildRuntimeConfig(
+		p.config,
+		convertIntMapToStringMap(snapshot.CurrentConfig.Agent.Location),
+		nil,       // TODO: add global vars
+		"unknown", // TODO: add node name
+		p.baseFSMInstance.GetID(),
+	)
+	if err != nil {
+		return fmt.Errorf("failed to build runtime config: %w", err)
+	}
+	metrics.ObserveReconcileTime(logger.ComponentProtocolConverterInstance, p.baseFSMInstance.GetID()+".buildRuntimeConfig", time.Since(start))
+
+	if !protocolconverterserviceconfig.ConfigsEqualRuntime(p.renderedConfig, p.ObservedState.ObservedProtocolConverterConfig) {
 		// Check if the service exists before attempting to update
 		if p.service.ServiceExists(ctx, services.GetFileSystem(), p.baseFSMInstance.GetID()) {
 			p.baseFSMInstance.GetLogger().Debugf("Observed ProtocolConverter config is different from desired config, updating ProtocolConverter configuration")
 
-			diffStr := protocolconverterserviceconfig.ConfigDiff(p.config, p.ObservedState.ObservedProtocolConverterConfig)
+			diffStr := protocolconverterserviceconfig.ConfigDiffRuntime(p.renderedConfig, p.ObservedState.ObservedProtocolConverterConfig)
 			p.baseFSMInstance.GetLogger().Debugf("Configuration differences: %s", diffStr)
 
 			// Update the config in the Benthos manager
-			err := p.service.UpdateInManager(ctx, services.GetFileSystem(), &p.config, p.baseFSMInstance.GetID())
+			err := p.service.UpdateInManager(ctx, services.GetFileSystem(), &p.renderedConfig, p.baseFSMInstance.GetID())
 			if err != nil {
 				return fmt.Errorf("failed to update ProtocolConverter service configuration: %w", err)
 			}
@@ -238,6 +254,15 @@ func (p *ProtocolConverterInstance) UpdateObservedStateOfInstance(ctx context.Co
 	}
 
 	return nil
+}
+
+// convertIntMapToStringMap converts a map[int]string to map[string]string
+func convertIntMapToStringMap(m map[int]string) map[string]string {
+	result := make(map[string]string)
+	for k, v := range m {
+		result[strconv.Itoa(k)] = v
+	}
+	return result
 }
 
 // IsConnectionUp checks whether the underlying connection is up and running

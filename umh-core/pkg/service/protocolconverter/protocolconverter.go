@@ -532,6 +532,10 @@ func (p *ProtocolConverterService) UpdateInManager(
 		return errors.New("dataflowcomponent manager not initialized")
 	}
 
+	if cfg == nil {
+		return errors.New("config is nil")
+	}
+
 	p.logger.Infof("Updating protocolconverter %s", protConvName)
 
 	if ctx.Err() != nil {

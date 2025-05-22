@@ -22,6 +22,7 @@ import (
 	"github.com/looplab/fsm"
 	internal_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/backoff"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	protocolconverterconfig "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
@@ -32,8 +33,7 @@ import (
 // NewProtocolConverterInstance creates a new ProtocolConverterInstance with a given ID and service path
 func NewProtocolConverterInstance(
 	s6BaseDir string,
-	config protocolconverterconfig.ProtocolConverterServiceConfigRuntime,
-	name string, // this is needed compared to other instances, because the name is not part of the runtime config
+	config config.ProtocolConverterConfig,
 ) *ProtocolConverterInstance {
 
 	var degradedStates = []string{
@@ -63,7 +63,7 @@ func NewProtocolConverterInstance(
 	var startingAndRunningStates = append(startingStatesWithFailed, runningStates...)
 
 	cfg := internal_fsm.BaseFSMInstanceConfig{
-		ID:                           name,
+		ID:                           config.Name,
 		DesiredFSMState:              OperationalStateStopped,
 		OperationalStateAfterCreate:  OperationalStateStopped,
 		OperationalStateBeforeRemove: OperationalStateStopped,
@@ -116,19 +116,20 @@ func NewProtocolConverterInstance(
 		},
 	}
 
-	logger := logger.For(name)
+	logger := logger.For(config.Name)
 	backoffConfig := backoff.DefaultConfig(cfg.ID, logger)
 
 	instance := &ProtocolConverterInstance{
 		baseFSMInstance: internal_fsm.NewBaseFSMInstance(cfg, backoffConfig, logger),
-		service:         protocolconvertersvc.NewDefaultProtocolConverterService(name),
-		config:          config,
+		service:         protocolconvertersvc.NewDefaultProtocolConverterService(config.Name),
+		config:          config.ProtocolConverterServiceConfig,
 		ObservedState:   ProtocolConverterObservedState{},
+		renderedConfig:  protocolconverterconfig.ProtocolConverterServiceConfigRuntime{},
 	}
 
 	instance.registerCallbacks()
 
-	metrics.InitErrorCounter(metrics.ComponentProtocolConverterInstance, name)
+	metrics.InitErrorCounter(metrics.ComponentProtocolConverterInstance, config.Name)
 
 	return instance
 }

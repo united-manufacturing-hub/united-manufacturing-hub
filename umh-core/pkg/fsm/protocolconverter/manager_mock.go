@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
 	public_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/connection"
 	dfcsvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/dataflowcomponent"
@@ -66,7 +67,7 @@ func NewProtocolConverterManagerWithMockedServices(name string) (*ProtocolConver
 			}
 			protocolConverterInstance.config = cfg.ProtocolConverterServiceConfig
 			if mockSvc, ok := protocolConverterInstance.service.(*protocolconvertersvc.MockProtocolConverterService); ok {
-				mockSvc.GetConfigResult = cfg.ProtocolConverterServiceConfig
+				mockSvc.GetConfigResult = protocolconverterserviceconfig.SpecToRuntime(cfg.ProtocolConverterServiceConfig)
 			}
 			return true, nil
 		},
@@ -78,7 +79,7 @@ func NewProtocolConverterManagerWithMockedServices(name string) (*ProtocolConver
 			}
 			protocolConverterInstance.config = cfg.ProtocolConverterServiceConfig
 			if mockSvc, ok := protocolConverterInstance.service.(*protocolconvertersvc.MockProtocolConverterService); ok {
-				mockSvc.GetConfigResult = cfg.ProtocolConverterServiceConfig
+				mockSvc.GetConfigResult = protocolconverterserviceconfig.SpecToRuntime(cfg.ProtocolConverterServiceConfig)
 			}
 			return nil
 		},
