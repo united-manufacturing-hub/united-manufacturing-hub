@@ -97,24 +97,25 @@ const (
 	RedpandaMetricComponentTypeKafka   = "kafka"
 )
 
-func getDFCMetrics(uuid string, systemSnapshotManager *fsm.SnapshotManager) (*models.GetMetricsResponse, error) {
+func getDFCMetrics(uuid string, systemSnapshotManager *fsm.SnapshotManager) (models.GetMetricsResponse, error) {
+	res := models.GetMetricsResponse{Metrics: []models.Metric{}}
+
 	dfcInstance, err := fsm.FindDfcInstanceByUUID(systemSnapshotManager.GetDeepCopySnapshot(), uuid)
 	if err != nil {
-		return nil, err
+		return res, err
 	}
 
-	// Safety check to ensure LastObservedState is not nil
-	if dfcInstance.LastObservedState == nil {
+	observedState, ok := dfcInstance.LastObservedState.(*dataflowcomponent.DataflowComponentObservedStateSnapshot)
+	if !ok || observedState == nil {
 		err = fmt.Errorf("DFC instance %s has no observed state", uuid)
-		return nil, err
+		return res, err
 	}
 
-	metrics := dfcInstance.LastObservedState.(*dataflowcomponent.DataflowComponentObservedStateSnapshot).ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.Metrics
-	flattenedMetrics := []models.Metric{}
+	metrics := observedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.Metrics
 
 	// Process Input metrics
 	inputPath := "root.input"
-	flattenedMetrics = append(flattenedMetrics,
+	res.Metrics = append(res.Metrics,
 		models.Metric{ValueType: models.MetricValueTypeNumber, Value: metrics.Input.ConnectionFailed, ComponentType: DFCMetricComponentTypeInput, Path: inputPath, Name: "connection_failed"},
 		models.Metric{ValueType: models.MetricValueTypeNumber, Value: metrics.Input.ConnectionLost, ComponentType: DFCMetricComponentTypeInput, Path: inputPath, Name: "connection_lost"},
 		models.Metric{ValueType: models.MetricValueTypeNumber, Value: metrics.Input.ConnectionUp, ComponentType: DFCMetricComponentTypeInput, Path: inputPath, Name: "connection_up"},
@@ -128,7 +129,7 @@ func getDFCMetrics(uuid string, systemSnapshotManager *fsm.SnapshotManager) (*mo
 
 	// Process Output metrics
 	outputPath := "root.output"
-	flattenedMetrics = append(flattenedMetrics,
+	res.Metrics = append(res.Metrics,
 		models.Metric{ValueType: models.MetricValueTypeNumber, Value: metrics.Output.BatchSent, ComponentType: DFCMetricComponentTypeOutput, Path: outputPath, Name: "batch_sent"},
 		models.Metric{ValueType: models.MetricValueTypeNumber, Value: metrics.Output.ConnectionFailed, ComponentType: DFCMetricComponentTypeOutput, Path: outputPath, Name: "connection_failed"},
 		models.Metric{ValueType: models.MetricValueTypeNumber, Value: metrics.Output.ConnectionLost, ComponentType: DFCMetricComponentTypeOutput, Path: outputPath, Name: "connection_lost"},
@@ -144,7 +145,7 @@ func getDFCMetrics(uuid string, systemSnapshotManager *fsm.SnapshotManager) (*mo
 
 	// Process processor metrics
 	for path, proc := range metrics.Process.Processors {
-		flattenedMetrics = append(flattenedMetrics,
+		res.Metrics = append(res.Metrics,
 			models.Metric{ValueType: models.MetricValueTypeString, Value: proc.Label, ComponentType: DFCMetricComponentTypeProcessor, Path: path, Name: "label"},
 			models.Metric{ValueType: models.MetricValueTypeNumber, Value: proc.Received, ComponentType: DFCMetricComponentTypeProcessor, Path: path, Name: "received"},
 			models.Metric{ValueType: models.MetricValueTypeNumber, Value: proc.BatchReceived, ComponentType: DFCMetricComponentTypeProcessor, Path: path, Name: "batch_received"},
@@ -159,7 +160,7 @@ func getDFCMetrics(uuid string, systemSnapshotManager *fsm.SnapshotManager) (*mo
 		)
 	}
 
-	return &models.GetMetricsResponse{Metrics: flattenedMetrics}, nil
+	return res, nil
 }
 
 // func getRedpandaMetrics() (models.GetMetricsResponse, error) {
