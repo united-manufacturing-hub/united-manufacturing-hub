@@ -57,7 +57,7 @@ func (g *Generator) ConfigToMap(cfg VariableBundle) map[string]any {
 	return configMap
 }
 
-// normalizeConfig applies nothing since Nmap has no default settings
+// normalizeConfig applies nothing since Variables has no default settings
 func NormalizeConfig(raw map[string]any) map[string]any {
 	return raw
 }

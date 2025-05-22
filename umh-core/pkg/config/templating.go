@@ -137,7 +137,7 @@ func (d *ProtocolConverterConfig) UnmarshalYAML(value *yaml.Node) error {
 	*d = ProtocolConverterConfig(tmp)
 
 	// 4. flag = true when that subtree has &anchor or *alias
-	d.hasAnchors = hasAnchors(cfgNode) // fn shown below
+	d.hasAnchors = hasAnchors(cfgNode)
 
 	return nil
 }

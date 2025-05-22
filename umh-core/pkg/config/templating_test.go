@@ -121,3 +121,81 @@ dataFlow:
 		})
 	})
 })
+
+var _ = Describe("RenderTemplate", func() {
+	type TestStruct struct {
+		Name    string `yaml:"name"`
+		Value   int    `yaml:"value"`
+		Message string `yaml:"message"`
+	}
+
+	It("successfully renders a template with valid variables", func() {
+		tmpl := TestStruct{
+			Name:    "{{.name}}",
+			Value:   42,
+			Message: "Hello {{.user}}!",
+		}
+
+		scope := map[string]any{
+			"name": "test",
+			"user": "world",
+		}
+
+		result, err := RenderTemplate(tmpl, scope)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result.Name).To(Equal("test"))
+		Expect(result.Value).To(Equal(42))
+		Expect(result.Message).To(Equal("Hello world!"))
+	})
+
+	It("returns error when template has missing variables", func() {
+		tmpl := TestStruct{
+			Name:    "{{.name}}",
+			Value:   42,
+			Message: "Hello {{.user}}!",
+		}
+
+		scope := map[string]any{
+			"name": "test",
+			// missing "user" variable
+		}
+
+		_, err := RenderTemplate(tmpl, scope)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("map has no entry for key"))
+	})
+
+	It("returns error when template has invalid syntax", func() {
+		tmpl := TestStruct{
+			Name:    "{{.name",
+			Value:   42,
+			Message: "Hello {{.user}}!",
+		}
+
+		scope := map[string]any{
+			"name": "test",
+			"user": "world",
+		}
+
+		_, err := RenderTemplate(tmpl, scope)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("bad character"))
+	})
+
+	It("returns error when template has unresolved markers", func() {
+		tmpl := TestStruct{
+			Name:    "{{.name}}",
+			Value:   42,
+			Message: "Hello {{.user}}!",
+		}
+
+		scope := map[string]any{
+			"name": "{{.invalid}}", // nested template that won't be resolved
+			"user": "world",
+		}
+
+		_, err := RenderTemplate(tmpl, scope)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("unresolved template markers"))
+	})
+})
