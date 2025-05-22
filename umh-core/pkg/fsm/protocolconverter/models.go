@@ -175,7 +175,11 @@ type ProtocolConverterInstance struct {
 	// config contains all the configuration spec for this service
 	config protocolconverterconfig.ProtocolConverterServiceConfigSpec
 
-	// renderedConfig contains the rendered configuration for this service
+	// renderedConfig is the last fully-rendered runtime configuration.
+	// It is **zero-value** when the instance is first created; the real
+	// configuration is rendered during the *first* Reconcile() cycle
+	// once the instance has access to SystemSnapshot (agent location,
+	// global variables, node name, …).
 	renderedConfig protocolconverterconfig.ProtocolConverterServiceConfigRuntime
 }
 

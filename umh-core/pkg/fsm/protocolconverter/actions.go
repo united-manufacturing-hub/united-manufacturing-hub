@@ -49,10 +49,25 @@ import (
 //   - If an error occurs, the Reconcile function must handle
 //     setting error state and scheduling a retry/backoff.
 
-// CreateInstance attempts to add the ProtocolConverter to the Benthos manager.
+// CreateInstance registers the protocol-converter with the subordinate
+// managers **without** an initial runtime configuration.
+//
+// Rationale
+// ----------
+// The full runtime config depends on data that is only available in the
+// control-loop’s SystemSnapshot (agent location, global vars, node name).
+// Rather than widening the BaseFSM callbacks to pass the snapshot, we
+// start with an empty config here and perform the real rendering at the
+// very beginning of the first Reconcile() tick.
+//
+// ⚠️  Do **not** assume the underlying Connection / Dataflow components are
+// already configured when this function returns – they will be updated in
+// the next reconciliation cycle.
 func (p *ProtocolConverterInstance) CreateInstance(ctx context.Context, filesystemService filesystem.Service) error {
 	p.baseFSMInstance.GetLogger().Debugf("Starting Action: Adding ProtocolConverter service %s to Benthos manager ...", p.baseFSMInstance.GetID())
 
+	// AddToManager intentionally receives an empty runtime config; the
+	// first Reconcile() call will render and push the real one.
 	err := p.service.AddToManager(ctx, filesystemService, &p.renderedConfig, p.baseFSMInstance.GetID())
 	if err != nil {
 		if errors.Is(err, dataflowcomponentservice.ErrServiceAlreadyExists) {
@@ -66,7 +81,7 @@ func (p *ProtocolConverterInstance) CreateInstance(ctx context.Context, filesyst
 	return nil
 }
 
-// RemoveInstance attempts to remove the ProtocolConverter from the Benthos manager.
+// RemoveInstance attempts to remove the ProtocolConverter from the Benthos and connection manager.
 // It requires the service to be stopped before removal.
 func (b *ProtocolConverterInstance) RemoveInstance(ctx context.Context, filesystemService filesystem.Service) error {
 	b.baseFSMInstance.GetLogger().Debugf("Starting Action: Removing ProtocolConverter service %s from Benthos manager ...", b.baseFSMInstance.GetID())
