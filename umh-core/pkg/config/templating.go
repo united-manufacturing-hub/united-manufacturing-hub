@@ -36,7 +36,7 @@ import (
 // The UMH configuration file lets operators use YAML templating.
 // We therefore want to detect whether a mapping still
 // contains anchors/aliases and, if so, refuse automatic mutations
-// (Add/Edit/Delete) so that we never flatten or overwrite a handcrafted
+// (currently only Edit operations) so that we never flatten or overwrite a handcrafted
 // template.
 //
 // Behaviour

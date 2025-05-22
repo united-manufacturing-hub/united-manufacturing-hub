@@ -76,13 +76,13 @@ var _ = Describe("DataFlowComponentService", func() {
 
 	Describe("AddToManager", func() {
 		var (
-			cfg        *protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec
+			cfg        protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec
 			runtimeCfg protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime
 		)
 
 		BeforeEach(func() {
 			// Create a basic config for testing
-			cfg = &protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
+			cfg = protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
 				Template: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
 					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
 						NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
@@ -181,7 +181,7 @@ var _ = Describe("DataFlowComponentService", func() {
 
 	Describe("Status", func() {
 		var (
-			cfg             *protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec
+			cfg             protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec
 			runtimeCfg      protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime
 			dfcManager      *dfcfsm.DataflowComponentManager
 			connManager     *connfsm.ConnectionManager
@@ -192,7 +192,7 @@ var _ = Describe("DataFlowComponentService", func() {
 
 		BeforeEach(func() {
 			// Create a basic config for testing
-			cfg = &protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
+			cfg = protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
 				Template: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
 					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
 						NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
@@ -349,15 +349,15 @@ var _ = Describe("DataFlowComponentService", func() {
 
 	Describe("UpdateInManager", func() {
 		var (
-			config            *protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec
-			updatedConfig     *protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec
+			config            protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec
+			updatedConfig     protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec
 			runtimeCfg        protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime
 			updatedRuntimeCfg protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime
 		)
 
 		BeforeEach(func() {
 			// Initial config
-			config = &protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
+			config = protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
 				Template: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
 					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
 						NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
@@ -381,7 +381,7 @@ var _ = Describe("DataFlowComponentService", func() {
 
 			// Updated config with different settings
 
-			updatedConfig = &protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
+			updatedConfig = protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
 				Template: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
 					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
 						NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
@@ -467,13 +467,13 @@ var _ = Describe("DataFlowComponentService", func() {
 
 	Describe("StartAndStopDataFlowComponent", func() {
 		var (
-			cfg        *protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec
+			cfg        protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec
 			runtimeCfg protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime
 		)
 
 		BeforeEach(func() {
 			// Create a basic config for testing
-			cfg = &protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
+			cfg = protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
 				Template: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
 					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
 						NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
@@ -567,13 +567,13 @@ var _ = Describe("DataFlowComponentService", func() {
 
 	Describe("RemoveFromManager", func() {
 		var (
-			cfg        *protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec
+			cfg        protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec
 			runtimeCfg protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime
 		)
 
 		BeforeEach(func() {
 			// Create a basic config for testing
-			cfg = &protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
+			cfg = protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
 				Template: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
 					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
 						NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
@@ -633,7 +633,7 @@ var _ = Describe("DataFlowComponentService", func() {
 	Describe("ReconcileManager", func() {
 		It("should pass configs to the managers for reconciliation", func() {
 			// Add a test component to have something to reconcile
-			cfg := &protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
+			cfg := protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
 				Template: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
 					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
 						NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
@@ -692,7 +692,7 @@ var _ = Describe("DataFlowComponentService", func() {
 
 			// Add a test component to have something to reconcile (just like in the other test)
 			testComponentName := "test-error-component"
-			cfg := &protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
+			cfg := protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
 				Template: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
 					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
 						NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
@@ -747,7 +747,7 @@ var _ = Describe("DataFlowComponentService", func() {
 	Describe("BuildRuntimeConfig", func() {
 		It("should correctly render variables in templates", func() {
 			// Create a spec with templates that use variables
-			spec := &protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
+			spec := protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
 				Variables: variables.VariableBundle{
 					User: map[string]interface{}{
 						"custom_var": "test-value",
@@ -816,12 +816,12 @@ var _ = Describe("DataFlowComponentService", func() {
 
 		It("should handle nil inputs gracefully", func() {
 			// Test with nil spec
-			_, err := BuildRuntimeConfig(nil, nil, nil, nil, "", "")
+			_, err := BuildRuntimeConfig(protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{}, nil, nil, nil, "", "")
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(Equal("nil spec"))
 
 			// Test with nil maps, but reference internal and user variables in the template
-			spec := &protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
+			spec := protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
 				Variables: variables.VariableBundle{
 					User: map[string]interface{}{
 						"custom_var": "test-value",
@@ -854,7 +854,7 @@ var _ = Describe("DataFlowComponentService", func() {
 		})
 
 		It("should sanitize bridged_by header correctly", func() {
-			spec := &protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
+			spec := protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
 				Template: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
 					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{

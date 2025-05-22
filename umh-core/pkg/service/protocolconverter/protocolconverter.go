@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
@@ -87,7 +88,7 @@ type IProtocolConverterService interface {
 	//   - The returned object is ready for diffing or to be handed straight to the
 	//     Protocol-Converter FSM.
 	BuildRuntimeConfig(
-		spec *protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec,
+		spec protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec,
 		agentLocation map[string]string,
 		pcLocation map[string]string,
 		globalVars map[string]any,
@@ -379,13 +380,13 @@ func (p *ProtocolConverterService) getDFCWriteName(protConvName string) string {
 // The returned object is ready for diffing or to be handed straight to the
 // Protocol-Converter FSM.
 func renderConfig(
-	spec *protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec,
+	spec protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec,
 	scope map[string]any,
 ) (
 	protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime,
 	error,
 ) {
-	if spec == nil {
+	if reflect.DeepEqual(spec, protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{}) {
 		return protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime{}, fmt.Errorf("protocolConverter config is nil")
 	}
 
@@ -423,7 +424,7 @@ func renderConfig(
 // • `nodeName`      – k8s node name; empty string means "unknown"
 // • `pcName`        – logical PC name (without the "protocol-converter-" prefix)
 func BuildRuntimeConfig(
-	spec *protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec,
+	spec protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec,
 	agentLocation map[string]string,
 	pcLocation map[string]string,
 	globalVars map[string]any,
@@ -431,7 +432,7 @@ func BuildRuntimeConfig(
 	pcName string,
 ) (protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime, error) {
 
-	if spec == nil {
+	if reflect.DeepEqual(spec, protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{}) {
 		return protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime{},
 			fmt.Errorf("nil spec")
 	}
@@ -806,6 +807,7 @@ func (p *ProtocolConverterService) UpdateInManager(
 		if config.Name == p.getUnderlyingDFCWriteName(protConvName) {
 			foundWriteDFC = true
 			indexWriteDFC = i
+			break
 		}
 	}
 

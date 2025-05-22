@@ -100,19 +100,9 @@ func normalizeConfig(raw map[string]any) map[string]any {
 	if rawLocation, ok := raw["location"].(map[string]any); ok {
 		// Convert map[string]any to map[string]string
 		for k, v := range rawLocation {
-			// Convert any value type to string if possible
-			if strValue, ok := v.(string); ok {
-				locationMap[k] = strValue
-			} else if numValue, ok := v.(int); ok {
-				// Handle integer values by converting to string
-				locationMap[k] = fmt.Sprintf("%d", numValue)
-			} else if floatValue, ok := v.(float64); ok {
-				// YAML often unmarshal numbers as float64
-				locationMap[k] = fmt.Sprintf("%g", floatValue)
-			} else if boolValue, ok := v.(bool); ok {
-				locationMap[k] = fmt.Sprintf("%t", boolValue)
-			}
-			// Other types are ignored
+			// Use fmt.Sprint to convert any value type to string
+			// This handles all basic types (string, int, float, bool) with appropriate formatting
+			locationMap[k] = fmt.Sprint(v)
 		}
 	} else if typedLocation, ok := raw["location"].(map[string]string); ok {
 		// If already in the right format, just use it directly

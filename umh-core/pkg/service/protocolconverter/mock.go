@@ -467,7 +467,7 @@ func (m *MockProtocolConverterService) ReconcileManager(ctx context.Context, ser
 
 // BuildRuntimeConfig mocks building the runtime config for a ProtocolConverter
 func (m *MockProtocolConverterService) BuildRuntimeConfig(
-	spec *protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec,
+	spec protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec,
 	agentLocation map[string]string,
 	pcLocation map[string]string,
 	globalVars map[string]any,
