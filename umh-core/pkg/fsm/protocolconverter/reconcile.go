@@ -96,7 +96,7 @@ func (p *ProtocolConverterInstance) Reconcile(ctx context.Context, snapshot fsm.
 				func(ctx context.Context) error {
 					// Force removal when other approaches fail - bypasses state transitions
 					// and directly deletes files and resources
-					return p.service.ForceRemove(ctx, services.GetFileSystem(), protocolConverterInstanceName)
+					return p.service.ForceRemoveProtocolConverter(ctx, services.GetFileSystem(), protocolConverterInstanceName)
 				},
 			)
 		}

@@ -122,7 +122,7 @@ var _ = Describe("DataFlowComponentService", func() {
 			mockConn.ServiceExistsResult = false
 
 			var err error
-			runtimeCfg, err = BuildRuntimeConfig(cfg, nil, nil, nil, "", protConvName)
+			runtimeCfg, err = service.BuildRuntimeConfig(cfg, nil, nil, nil, "", protConvName)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -215,7 +215,7 @@ var _ = Describe("DataFlowComponentService", func() {
 			}
 
 			var err error
-			runtimeCfg, err = BuildRuntimeConfig(cfg, nil, nil, nil, "", protConvName)
+			runtimeCfg, err = service.BuildRuntimeConfig(cfg, nil, nil, nil, "", protConvName)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Use the official mock manager from the FSM package
@@ -404,10 +404,10 @@ var _ = Describe("DataFlowComponentService", func() {
 			}
 
 			var err error
-			runtimeCfg, err = BuildRuntimeConfig(config, nil, nil, nil, "", protConvName)
+			runtimeCfg, err = service.BuildRuntimeConfig(config, nil, nil, nil, "", protConvName)
 			Expect(err).NotTo(HaveOccurred())
 
-			updatedRuntimeCfg, err = BuildRuntimeConfig(updatedConfig, nil, nil, nil, "", protConvName)
+			updatedRuntimeCfg, err = service.BuildRuntimeConfig(updatedConfig, nil, nil, nil, "", protConvName)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Add the component first
@@ -494,7 +494,7 @@ var _ = Describe("DataFlowComponentService", func() {
 			}
 
 			var err error
-			runtimeCfg, err = BuildRuntimeConfig(cfg, nil, nil, nil, "", protConvName)
+			runtimeCfg, err = service.BuildRuntimeConfig(cfg, nil, nil, nil, "", protConvName)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Add the component first
@@ -594,7 +594,7 @@ var _ = Describe("DataFlowComponentService", func() {
 			}
 
 			var err error
-			runtimeCfg, err = BuildRuntimeConfig(cfg, nil, nil, nil, "", protConvName)
+			runtimeCfg, err = service.BuildRuntimeConfig(cfg, nil, nil, nil, "", protConvName)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Add the component first
@@ -653,7 +653,7 @@ var _ = Describe("DataFlowComponentService", func() {
 				},
 			}
 
-			runtimeCfg, err := BuildRuntimeConfig(cfg, nil, nil, nil, "", protConvName)
+			runtimeCfg, err := service.BuildRuntimeConfig(cfg, nil, nil, nil, "", protConvName)
 			Expect(err).NotTo(HaveOccurred())
 
 			err = service.AddToManager(ctx, mockSvcRegistry.GetFileSystem(), &runtimeCfg, protConvName)
@@ -712,7 +712,7 @@ var _ = Describe("DataFlowComponentService", func() {
 				},
 			}
 
-			runtimeCfg, err := BuildRuntimeConfig(cfg, nil, nil, nil, "", testComponentName)
+			runtimeCfg, err := service.BuildRuntimeConfig(cfg, nil, nil, nil, "", testComponentName)
 			Expect(err).NotTo(HaveOccurred())
 
 			err = testService.AddToManager(ctx, mockSvcRegistry.GetFileSystem(), &runtimeCfg, testComponentName)
@@ -744,7 +744,7 @@ var _ = Describe("DataFlowComponentService", func() {
 		})
 	})
 
-	Describe("BuildRuntimeConfig", func() {
+	Describe("service.BuildRuntimeConfig", func() {
 		It("should correctly render variables in templates", func() {
 			// Create a spec with templates that use variables
 			spec := protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
@@ -795,7 +795,7 @@ var _ = Describe("DataFlowComponentService", func() {
 			}
 
 			// Build the runtime config
-			runtimeCfg, err := BuildRuntimeConfig(spec, agentLocation, pcLocation, globalVars, "test-node", "test-pc")
+			runtimeCfg, err := service.BuildRuntimeConfig(spec, agentLocation, pcLocation, globalVars, "test-node", "test-pc")
 			Expect(err).NotTo(HaveOccurred())
 
 			// 1. Verify user variables are rendered
@@ -816,7 +816,7 @@ var _ = Describe("DataFlowComponentService", func() {
 
 		It("should handle nil inputs gracefully", func() {
 			// Test with nil spec
-			_, err := BuildRuntimeConfig(protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{}, nil, nil, nil, "", "")
+			_, err := service.BuildRuntimeConfig(protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{}, nil, nil, nil, "", "")
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(Equal("nil spec"))
 
@@ -845,7 +845,7 @@ var _ = Describe("DataFlowComponentService", func() {
 					},
 				},
 			}
-			runtimeCfg, err := BuildRuntimeConfig(spec, nil, nil, nil, "", "test-pc")
+			runtimeCfg, err := service.BuildRuntimeConfig(spec, nil, nil, nil, "", "test-pc")
 			Expect(err).NotTo(HaveOccurred())
 			// User variable rendered
 			Expect(runtimeCfg.ConnectionServiceConfig.NmapServiceConfig.Target).To(Equal("test-value"))
@@ -869,12 +869,12 @@ var _ = Describe("DataFlowComponentService", func() {
 			}
 
 			// Test with special characters
-			runtimeCfg, err := BuildRuntimeConfig(spec, nil, nil, nil, "test@node", "test.pc")
+			runtimeCfg, err := service.BuildRuntimeConfig(spec, nil, nil, nil, "test@node", "test.pc")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(runtimeCfg.DataflowComponentReadServiceConfig.BenthosConfig.Input["random_input"].(map[string]interface{})["bridged_by"]).To(Equal("protocol-converter-test-node-test-pc"))
 
 			// Test with multiple special characters
-			runtimeCfg, err = BuildRuntimeConfig(spec, nil, nil, nil, "test@node#1", "test.pc@2")
+			runtimeCfg, err = service.BuildRuntimeConfig(spec, nil, nil, nil, "test@node#1", "test.pc@2")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(runtimeCfg.DataflowComponentReadServiceConfig.BenthosConfig.Input["random_input"].(map[string]interface{})["bridged_by"]).To(Equal("protocol-converter-test-node-1-test-pc-2"))
 		})

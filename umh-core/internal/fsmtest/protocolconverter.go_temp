@@ -112,9 +112,10 @@ func SetupProtocolConverterServiceState(
 
 // ConfigureProtocolConverterServiceConfig configures the mock service with a default ProtocolConverter config
 func ConfigureProtocolConverterServiceConfig(mockService *protocolconvertersvc.MockProtocolConverterService) {
-	mockService.GetConfigResult = protocolconverterserviceconfig.ProtocolConverterServiceConfig{
-		DataflowComponentServiceConfig: goodDataflowComponentConfig,
-		ConnectionServiceConfig:        goodConnectionServiceConfig,
+	mockService.GetConfigResult = protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime{
+		DataflowComponentReadServiceConfig:  goodDataflowComponentReadConfig,
+		DataflowComponentWriteServiceConfig: goodDataflowComponentWriteConfig,
+		ConnectionServiceConfig:             goodConnectionServiceConfig,
 	}
 }
 

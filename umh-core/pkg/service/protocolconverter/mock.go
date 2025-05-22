@@ -58,7 +58,7 @@ type MockProtocolConverterService struct {
 	GenerateConfigResultDFC        dataflowcomponentserviceconfig.DataflowComponentServiceConfig
 	GenerateConfigResultConnection connectionserviceconfig.ConnectionServiceConfig
 	GenerateConfigError            error
-	GetConfigResult                protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec
+	GetConfigResult                protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime
 	GetConfigError                 error
 	StatusResult                   ServiceInfo
 	StatusError                    error
@@ -96,7 +96,8 @@ type ConverterStateFlags struct {
 	IsDFCRunning       bool
 	IsConnectionUp     bool
 	IsRedpandaRunning  bool
-	DfcFSMState        string
+	DfcFSMReadState    string
+	DfcFSMWriteState   string
 	ConnectionFSMState string
 	RedpandaFSMState   string
 	PortState          nmapfsm.PortState
@@ -116,7 +117,7 @@ func NewMockProtocolConverterService() *MockProtocolConverterService {
 
 // SetComponentState sets all state flags for a protocolConverter at once
 func (m *MockProtocolConverterService) SetComponentState(protConvName string, flags ConverterStateFlags) {
-	dfcObservedState := &dfcfsm.DataflowComponentObservedState{
+	dfcObservedReadState := &dfcfsm.DataflowComponentObservedState{
 		ServiceInfo: dataflowcomponent.ServiceInfo{
 			BenthosObservedState: benthosfsmmanager.BenthosObservedState{
 				ServiceInfo: benthosservice.ServiceInfo{
@@ -131,6 +132,9 @@ func (m *MockProtocolConverterService) SetComponentState(protConvName string, fl
 			},
 		},
 	}
+
+	// TODO: Add write state
+	dfcObservedWriteState := &dfcfsm.DataflowComponentObservedState{}
 
 	connObservedState := &connfsm.ConnectionObservedState{
 		ServiceInfo: connection.ServiceInfo{
@@ -162,14 +166,18 @@ func (m *MockProtocolConverterService) SetComponentState(protConvName string, fl
 	// Ensure ServiceInfo exists for this component
 	if _, exists := m.ConverterStates[protConvName]; !exists {
 		m.ConverterStates[protConvName] = &ServiceInfo{
-			DataflowComponentReadFSMState:      flags.dfcFSMState,
-			DataflowComponentReadObservedState: *dfcObservedState,
-			ConnectionFSMState:                 flags.connectionFSMState,
-			ConnectionObservedState:            *connObservedState,
+			DataflowComponentReadFSMState:       flags.DfcFSMReadState,
+			DataflowComponentReadObservedState:  *dfcObservedReadState,
+			DataflowComponentWriteFSMState:      flags.DfcFSMWriteState,
+			DataflowComponentWriteObservedState: *dfcObservedWriteState,
+			ConnectionFSMState:                  flags.ConnectionFSMState,
+			ConnectionObservedState:             *connObservedState,
 		}
 	} else {
-		m.ConverterStates[protConvName].DataflowComponentReadObservedState = *dfcObservedState
-		m.ConverterStates[protConvName].DataflowComponentReadFSMState = flags.dfcFSMState
+		m.ConverterStates[protConvName].DataflowComponentReadObservedState = *dfcObservedReadState
+		m.ConverterStates[protConvName].DataflowComponentReadFSMState = flags.DfcFSMReadState
+		m.ConverterStates[protConvName].DataflowComponentWriteObservedState = *dfcObservedWriteState
+		m.ConverterStates[protConvName].DataflowComponentWriteFSMState = flags.DfcFSMWriteState
 		m.ConverterStates[protConvName].ConnectionObservedState = *connObservedState
 		m.ConverterStates[protConvName].ConnectionFSMState = flags.ConnectionFSMState
 		m.ConverterStates[protConvName].RedpandaObservedState = *redpandaObservedState
@@ -197,14 +205,14 @@ func (m *MockProtocolConverterService) GetConfig(
 	filesystemService filesystem.Service,
 	protConvName string,
 ) (
-	protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec,
+	protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime,
 	error,
 ) {
 	m.GetConfigCalled = true
 
 	// If error is set, return it
 	if m.GetConfigError != nil {
-		return protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{}, m.GetConfigError
+		return protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime{}, m.GetConfigError
 	}
 
 	// If a result is preset, return it
@@ -239,7 +247,7 @@ func (m *MockProtocolConverterService) Status(
 func (m *MockProtocolConverterService) AddToManager(
 	ctx context.Context,
 	filesystemService filesystem.Service,
-	cfg *protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec,
+	cfg *protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime,
 	protConvName string,
 ) error {
 	m.AddToManagerCalled = true
@@ -292,7 +300,7 @@ func (m *MockProtocolConverterService) AddToManager(
 func (m *MockProtocolConverterService) UpdateInManager(
 	ctx context.Context,
 	filesystemService filesystem.Service,
-	cfg *protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec,
+	cfg *protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime,
 	protConvName string,
 ) error {
 	m.UpdateInManagerCalled = true
