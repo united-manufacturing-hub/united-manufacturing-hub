@@ -531,3 +531,70 @@ type GetLogsResponse struct {
 type GetDataflowcomponentMetricsRequest struct {
 	UUID string `json:"uuid" binding:"required"`
 }
+
+type ActionReplyResponseSchemaJson struct {
+	// Additional contextual data for the action, allows arbitrary key-value pairs.
+	ActionContext ActionReplyResponseSchemaJsonActionContext `json:"actionContext,omitempty" yaml:"actionContext,omitempty" mapstructure:"actionContext,omitempty"`
+
+	// Legacy action reply payload, can be a string or an object for backward
+	// compatibility.
+	ActionReplyPayload interface{} `json:"actionReplyPayload" yaml:"actionReplyPayload" mapstructure:"actionReplyPayload"`
+
+	// Structured response payload for any action reply.
+	ActionReplyPayloadV2 *ActionReplyResponseSchemaJsonActionReplyPayloadV2 `json:"actionReplyPayloadV2,omitempty" yaml:"actionReplyPayloadV2,omitempty" mapstructure:"actionReplyPayloadV2,omitempty"`
+
+	// State of the action reply.
+	ActionReplyState ActionReplyResponseSchemaJsonActionReplyState `json:"actionReplyState" yaml:"actionReplyState" mapstructure:"actionReplyState"`
+
+	// Unique identifier for the action.
+	ActionUUID string `json:"actionUUID" yaml:"actionUUID" mapstructure:"actionUUID"`
+}
+
+// Additional contextual data for the action, allows arbitrary key-value pairs.
+type ActionReplyResponseSchemaJsonActionContext map[string]interface{}
+
+type ActionReplyResponseSchemaJsonActionReplyPayloadV2 struct {
+	// Machine-readable error code (e.g., 'ERR_CONFIG_CHANGED').
+	ErrorCode *string `json:"errorCode,omitempty" yaml:"errorCode,omitempty" mapstructure:"errorCode,omitempty"`
+
+	// Human-readable error message.
+	Message string `json:"message" yaml:"message" mapstructure:"message"`
+
+	// Additional payload for the action reply.
+	Payload ActionReplyResponseSchemaJsonActionReplyPayloadV2Payload `json:"payload,omitempty" yaml:"payload,omitempty" mapstructure:"payload,omitempty"`
+}
+
+type ActionReplyResponseSchemaJsonActionReplyState string
+
+const ActionReplyResponseSchemaJsonActionReplyStateActionConfirmed ActionReplyResponseSchemaJsonActionReplyState = "action-confirmed"
+const ActionReplyResponseSchemaJsonActionReplyStateActionExecuting ActionReplyResponseSchemaJsonActionReplyState = "action-executing"
+const ActionReplyResponseSchemaJsonActionReplyStateActionFailure ActionReplyResponseSchemaJsonActionReplyState = "action-failure"
+const ActionReplyResponseSchemaJsonActionReplyStateActionSuccess ActionReplyResponseSchemaJsonActionReplyState = "action-success"
+
+// var enumValues_ActionReplyResponseSchemaJsonActionReplyState = []interface{}{
+// 	"action-confirmed",
+// 	"action-executing",
+// 	"action-success",
+// 	"action-failure",
+// }
+
+type ActionReplyResponseSchemaJsonActionReplyPayloadV2Payload map[string]interface{}
+
+// Error codes for the action reply payload.
+// The error codes have two purposes:
+// 1. To allow the frontend to determine if the action can be retried or not
+// 2. To display them to the user
+// if an error code starts with "ERR_RETRY_" the action can be retried (see fetcher.js in the frontend)
+const (
+	// ErrParseFailed is the error code for a failed parse of the action payload.
+	// the error is not retryable because the parsing is deterministic
+	ErrParseFailed = "ERR_ACTION_PARSE_FAILED"
+	// ErrValidationFailed is the error code for a failed validation of the action payload.
+	// the error is not retryable because the validation is deterministic
+	ErrValidationFailed = "ERR_VALIDATION_FAILED"
+	// ErrRetryRollbackTimeout is the error code for a timeout during the dfc deployment.
+	// It is retryable because the timeout might be caused by a busy system.
+	ErrRetryRollbackTimeout = "ERR_RETRY_ROLLBACK_TIMEOUT"
+	// ErrConfigFileInvalid is sent when the deployment of a dfc fails because the config file is invalid.
+	ErrConfigFileInvalid = "ERR_CONFIG_FILE_INVALID"
+)
