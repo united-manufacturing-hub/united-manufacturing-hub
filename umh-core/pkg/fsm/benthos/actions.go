@@ -355,7 +355,6 @@ func (b *BenthosInstance) IsBenthosHealthchecksPassed(currentTick uint64) (bool,
 	allChecksPassing := b.ObservedState.ServiceInfo.BenthosStatus.HealthCheck.IsLive &&
 		b.ObservedState.ServiceInfo.BenthosStatus.HealthCheck.IsReady
 
-	fmt.Printf("IsBenthosHealthchecksPassed for %s: %t\n", b.baseFSMInstance.GetID(), allChecksPassing)
 	// If health checks are passing, update or initialize the timestamp
 	if allChecksPassing {
 		if b.healthChecksPassingSinceTick == 0 {
