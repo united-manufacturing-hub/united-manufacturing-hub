@@ -254,3 +254,16 @@ sudo docker run -d \
 Need to roll back? Just start the previous tag against the same `/data` volume.
 
 You can find the latest version on the [Releases](https://github.com/united-manufacturing-hub/united-manufacturing-hub/releases) page.
+
+## 11  Quick troubleshooting
+
+* **SELinux volume permissions**
+  — On RHEL, Rocky, or other SELinux-enabled systems, append `:z` to the volume mount so Docker can relabel the directory:
+  If you omit this, you might see `chmod: /data/config.yaml: no such file or directory` and the container fails to start.
+
+  ```bash
+  -v "$(pwd)/umh-core-data:/data:z"
+  ```
+
+* **TLS interception**
+  — If your corporate network intercepts TLS traffic, follow the steps in [4.2 – Corporate Firewalls & TLS](#42--corporate-firewalls--tls) to add your CA certificate or, as a last resort, set `allowInsecureTLS: true` in `config.yaml`.
