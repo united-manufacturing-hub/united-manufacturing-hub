@@ -51,6 +51,7 @@ const (
 )
 
 const (
-	BenthosTimeUntilConfigLoadedInSeconds = 5
-	BenthosTimeUntilRunningInSeconds      = 10
+	BenthosTimeUntilConfigLoadedInSeconds   = 5
+	BenthosTimeUntilRunningInSeconds        = 10
+	BenthosHealthCheckStableDurationInTicks = uint64(5 * time.Second / DefaultTickerTime) // 5 seconds
 )
