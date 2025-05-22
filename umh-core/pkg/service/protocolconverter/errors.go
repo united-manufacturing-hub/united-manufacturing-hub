@@ -12,19 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package nmapserviceconfig
+package protocolconverter
 
-// Normalizer handles the normalization of Nmap configurations
-type Normalizer struct{}
+import "errors"
 
-// NewNormalizer creates a new configuration normalizer for Nmap
-func NewNormalizer() *Normalizer {
-	return &Normalizer{}
-}
-
-// NormalizeConfig doesn't do anything, there is no normalization needed here
-func (n *Normalizer) NormalizeConfig(cfg NmapServiceConfig) NmapServiceConfig {
-	// create a copy
-	normalized := cfg
-	return normalized
-}
+var (
+	// ErrServiceNotExist indicates the requested service does not exist
+	ErrServiceNotExist = errors.New("protocol converter service does not exist")
+	// ErrServiceAlreadyExists indicates the service already exists
+	ErrServiceAlreadyExists = errors.New("protocol converter service already exists")
+)
