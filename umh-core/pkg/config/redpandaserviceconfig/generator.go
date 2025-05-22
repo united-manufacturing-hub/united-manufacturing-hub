@@ -19,6 +19,8 @@ import (
 	"fmt"
 	"strings"
 	"text/template"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 )
 
 // Generator handles the generation of Redpanda YAML configurations
@@ -52,9 +54,20 @@ func (g *Generator) RenderConfig(cfg RedpandaServiceConfig) (string, error) {
 
 	// Resources.MaxCores & Resources.MemoryPerCoreInBytes are not used in the template, but directly passed to the redpanda binary
 
+	// The admin api port is not configureable via the config, but we have it set in the constants.
+	type extendedRedpandaServiceConfig struct {
+		RedpandaServiceConfig
+		AdminAPIPort int
+	}
+
+	extendedCfg := extendedRedpandaServiceConfig{
+		RedpandaServiceConfig: cfg,
+		AdminAPIPort:          constants.AdminAPIPort,
+	}
+
 	// Render the template
 	var rendered bytes.Buffer
-	if err := g.tmpl.Execute(&rendered, cfg); err != nil {
+	if err := g.tmpl.Execute(&rendered, extendedCfg); err != nil {
 		return "", fmt.Errorf("failed to execute template: %w", err)
 	}
 
@@ -86,7 +99,7 @@ redpanda:
 
   admin:
     address: "0.0.0.0"
-    port: 9644
+    port: {{.AdminAPIPort}}
 
   developer_mode: true
 

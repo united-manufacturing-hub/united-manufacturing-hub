@@ -91,7 +91,9 @@ func (r *RedpandaInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSna
 	}
 
 	// Step 2: Detect external changes.
-	if err := r.reconcileExternalChanges(ctx, services, snapshot.Tick, start); err != nil {
+	var externalReconciled bool
+	err, externalReconciled = r.reconcileExternalChanges(ctx, services, snapshot.Tick, start)
+	if err != nil {
 		// I am using strings.Contains as i cannot get it working with errors.Is
 		isExpectedError := strings.Contains(err.Error(), redpanda_monitor_service.ErrServiceNotExist.Error()) ||
 			strings.Contains(err.Error(), redpanda_monitor_service.ErrServiceNoLogFile.Error()) ||
@@ -142,10 +144,10 @@ func (r *RedpandaInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSna
 		return nil, false
 	}
 
-	// If either Redpanda state or S6 state was reconciled, we return reconciled so that nothing happens anymore in this tick
-	// nothing should happen as we might have already taken up some significant time of the avaialble time per tick, so better
+	// If either Redpanda state, S6 state or the internal redpanda state via the Admin API was reconciled, we return reconciled so that nothing happens anymore in this tick
+	// nothing should happen as we might have already taken up some significant time of the available time per tick, so better
 	// to be on the safe side and let the rest handle in another tick
-	reconciled = reconciled || s6Reconciled
+	reconciled = reconciled || s6Reconciled || externalReconciled
 
 	// It went all right, so clear the error
 	r.baseFSMInstance.ResetState()
@@ -155,7 +157,7 @@ func (r *RedpandaInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSna
 
 // reconcileExternalChanges checks if the RedpandaInstance service status has changed
 // externally (e.g., if someone manually stopped or started it, or if it crashed)
-func (r *RedpandaInstance) reconcileExternalChanges(ctx context.Context, services serviceregistry.Provider, tick uint64, loopStartTime time.Time) error {
+func (r *RedpandaInstance) reconcileExternalChanges(ctx context.Context, services serviceregistry.Provider, tick uint64, loopStartTime time.Time) (err error, reconciled bool) {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentRedpandaInstance, r.baseFSMInstance.GetID()+".reconcileExternalChanges", time.Since(start))
@@ -166,11 +168,46 @@ func (r *RedpandaInstance) reconcileExternalChanges(ctx context.Context, service
 	observedStateCtx, cancel := context.WithTimeout(ctx, constants.RedpandaUpdateObservedStateTimeout)
 	defer cancel()
 
-	err := r.UpdateObservedStateOfInstance(observedStateCtx, services, tick, loopStartTime)
-	if err != nil {
-		return fmt.Errorf("failed to update observed state: %w", err)
+	// If the config differs and we are currently running,
+	// we will apply the changes by doing an REST call to the Redpanda Admin API (https://docs.redpanda.com/api/admin-api/).
+	// We also check that the desired state is a running state,
+	// preventing issues when redpanda is currently stopping, but the current state is not yet updated
+	currentState := r.baseFSMInstance.GetCurrentFSMState()
+	desiredState := r.baseFSMInstance.GetDesiredFSMState()
+	if IsRunningState(currentState) && IsRunningState(desiredState) {
+		// Reconcile the cluster config via HTTP
+		// 1. Check if we have changes in the config
+		var changes = make(map[string]interface{})
+		if r.ObservedState.ObservedRedpandaServiceConfig.Topic.DefaultTopicRetentionBytes != r.config.Topic.DefaultTopicRetentionBytes {
+			// https://docs.redpanda.com/current/reference/properties/cluster-properties/#retention_bytes
+
+			// Zero values are ignored, as they are invalid in redpanda
+			if r.config.Topic.DefaultTopicRetentionBytes != 0 {
+				changes["retention_bytes"] = r.config.Topic.DefaultTopicRetentionBytes
+			}
+		}
+		if r.ObservedState.ObservedRedpandaServiceConfig.Topic.DefaultTopicRetentionMs != r.config.Topic.DefaultTopicRetentionMs {
+			// https://docs.redpanda.com/current/reference/properties/cluster-properties/#log_retention_ms
+
+			// Zero values are ignored, as they are invalid in redpanda
+			if r.config.Topic.DefaultTopicRetentionMs != 0 {
+				changes["log_retention_ms"] = r.config.Topic.DefaultTopicRetentionMs
+			}
+		}
+		if len(changes) > 0 {
+			err := r.service.UpdateRedpandaClusterConfig(ctx, r.baseFSMInstance.GetID(), changes)
+			if err != nil {
+				return fmt.Errorf("failed to update Redpanda cluster config: %w", err), false
+			}
+			return nil, true
+		}
 	}
-	return nil
+
+	err = r.UpdateObservedStateOfInstance(observedStateCtx, services, tick, loopStartTime)
+	if err != nil {
+		return fmt.Errorf("failed to update observed state: %w", err), false
+	}
+	return nil, false
 }
 
 // reconcileStateTransition compares the current state with the desired state
