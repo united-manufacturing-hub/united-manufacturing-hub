@@ -167,24 +167,21 @@ var _ = Describe("GetMetricsAction", func() {
 				payload["uuid"] = dfcUUID.String()
 			}
 
-			// Parse and validate
 			err := action.Parse(payload)
 			Expect(err).NotTo(HaveOccurred())
 
 			err = action.Validate()
 			Expect(err).NotTo(HaveOccurred())
 
-			// Execute
 			result, _, err := action.Execute()
 			Expect(err).NotTo(HaveOccurred())
 
-			// Validate response
-			response, ok := result.(models.GetMetricsResponse)
+			res, ok := result.(models.GetMetricsResponse)
 			Expect(ok).To(BeTrue())
-			Expect(len(response.Metrics)).To(Equal(expectedMetricsCount))
+			Expect(len(res.Metrics)).To(Equal(expectedMetricsCount))
 
 			// Validate that all metrics have the expected structure
-			for _, metric := range response.Metrics {
+			for _, metric := range res.Metrics {
 				Expect(metric.Name).NotTo(BeEmpty())
 				Expect(metric.Path).NotTo(BeEmpty())
 				Expect(metric.ComponentType).NotTo(BeEmpty())
@@ -193,7 +190,7 @@ var _ = Describe("GetMetricsAction", func() {
 		},
 			Entry("dfc", models.DFCMetricResourceType, func() {
 				// Mock DFC metrics response
-				expectedResponse := models.GetMetricsResponse{
+				expectedRes := models.GetMetricsResponse{
 					Metrics: []models.Metric{
 						{
 							Name:          "input_received",
@@ -213,12 +210,12 @@ var _ = Describe("GetMetricsAction", func() {
 				}
 				mockProvider.EXPECT().
 					GetMetrics(gomock.Any(), snapshotManager).
-					Return(expectedResponse, nil).
+					Return(expectedRes, nil).
 					Times(1)
 			}, 2),
 			Entry("redpanda", models.RedpandaMetricResourceType, func() {
 				// Mock Redpanda metrics response
-				expectedResponse := models.GetMetricsResponse{
+				expectedRes := models.GetMetricsResponse{
 					Metrics: []models.Metric{
 						{
 							Name:          "storage_disk_free_bytes",
@@ -245,12 +242,12 @@ var _ = Describe("GetMetricsAction", func() {
 				}
 				mockProvider.EXPECT().
 					GetMetrics(gomock.Any(), snapshotManager).
-					Return(expectedResponse, nil).
+					Return(expectedRes, nil).
 					Times(1)
 			}, 3))
 
 		It("should handle metrics provider errors gracefully", func() {
-			// Setup mock to return an error
+			// Setup mock provider to return an error
 			mockProvider.EXPECT().
 				GetMetrics(gomock.Any(), snapshotManager).
 				Return(models.GetMetricsResponse{}, fmt.Errorf("failed to get metrics")).
