@@ -72,7 +72,7 @@ func NewGetMetricsActionWithProvider(userEmail string, actionUUID uuid.UUID, ins
 func (a *GetMetricsAction) Parse(payload interface{}) (err error) {
 	a.actionLogger.Info("Parsing the payload")
 	a.payload, err = ParseActionPayload[models.GetMetricsRequest](payload)
-	a.actionLogger.Info("Payload parsed: %v", a.payload)
+	a.actionLogger.Infow("Payload parsed", "payload", a.payload)
 	return err
 }
 
