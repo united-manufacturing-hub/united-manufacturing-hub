@@ -539,6 +539,7 @@ const (
 	RedpandaMetricResourceType MetricResourceType = "redpanda"
 )
 
+// GetMetricsRequest contains the necessary fields for executing a `get-metrics` action.
 type GetMetricsRequest struct {
 	// Type represents the type of the resource to retrieve the metrics for
 	Type MetricResourceType `json:"type" binding:"required"`
@@ -555,6 +556,7 @@ const (
 	MetricValueTypeBoolean MetricValueType = "boolean"
 )
 
+// Metric represents a single metric value, agnostic of the resource type.
 type Metric struct {
 	ValueType     MetricValueType `json:"value_type"`
 	Value         any             `json:"value"`
@@ -563,6 +565,7 @@ type Metric struct {
 	Name          string          `json:"name"`
 }
 
+// GetMetricsResponse contains the metrics yielded by the `get-metrics` action.
 type GetMetricsResponse struct {
 	Metrics []Metric `json:"metrics"`
 }
