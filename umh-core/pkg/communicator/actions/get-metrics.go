@@ -47,6 +47,8 @@ type GetMetricsAction struct {
 	actionLogger *zap.SugaredLogger
 }
 
+// NewGetMetricsAction creates a new GetMetricsAction with the provided parameters.
+// Caller needs to invoke Parse and Validate before calling Execute.
 func NewGetMetricsAction(userEmail string, actionUUID uuid.UUID, instanceUUID uuid.UUID, outboundChannel chan *models.UMHMessage, systemSnapshotManager *fsm.SnapshotManager) *GetMetricsAction {
 	return &GetMetricsAction{
 		userEmail:             userEmail,
@@ -58,6 +60,8 @@ func NewGetMetricsAction(userEmail string, actionUUID uuid.UUID, instanceUUID uu
 	}
 }
 
+// Parse extracts the business fields from the raw JSON payload.
+// Shape errors are detected here, while semantic validation is done in Validate.
 func (a *GetMetricsAction) Parse(payload interface{}) (err error) {
 	a.actionLogger.Info("Parsing the payload")
 	a.payload, err = ParseActionPayload[models.GetMetricsRequest](payload)
@@ -65,6 +69,8 @@ func (a *GetMetricsAction) Parse(payload interface{}) (err error) {
 	return err
 }
 
+// Validate performs semantic validation of the parsed payload.
+// This verifies that the metric type is allowed and that the UUID is valid for DFC metrics.
 func (a *GetMetricsAction) Validate() (err error) {
 	a.actionLogger.Info("Validating the payload")
 
@@ -87,6 +93,10 @@ func (a *GetMetricsAction) Validate() (err error) {
 	return nil
 }
 
+// getDFCMetrics retrieves metrics from the DFC instance and converts them
+// to a standardized format matching the Get-Metrics API response structure.
+// The metrics are organized by component types that match Benthos' naming conventions.
+// See: https://docs.redpanda.com/redpanda-connect/components/metrics/about/#metric-names
 func getDFCMetrics(uuid string, systemSnapshotManager *fsm.SnapshotManager) (models.GetMetricsResponse, error) {
 	res := models.GetMetricsResponse{Metrics: []models.Metric{}}
 
@@ -151,6 +161,10 @@ func getDFCMetrics(uuid string, systemSnapshotManager *fsm.SnapshotManager) (mod
 	return res, nil
 }
 
+// getRedpandaMetrics retrieves metrics from the Redpanda instance and converts them
+// to a standardized format matching the Get-Metrics API response structure.
+// The metrics are organized by component types that match Redpanda's naming conventions.
+// See: https://docs.redpanda.com/current/reference/public-metrics-reference
 func getRedpandaMetrics(systemSnapshot *fsm.SnapshotManager) (models.GetMetricsResponse, error) {
 	res := models.GetMetricsResponse{Metrics: []models.Metric{}}
 
@@ -189,14 +203,17 @@ func getRedpandaMetrics(systemSnapshot *fsm.SnapshotManager) (models.GetMetricsR
 
 	// Process topic metrics
 	for topicName, partitionCount := range metrics.Topic.TopicPartitionMap {
+		topicPath := fmt.Sprintf("%s.%s", RedpandaTopicPath, topicName)
 		res.Metrics = append(res.Metrics,
-			models.Metric{ValueType: models.MetricValueTypeNumber, Value: partitionCount, ComponentType: RedpandaMetricComponentTypeTopic, Path: RedpandaTopicPath, Name: fmt.Sprintf("%s_partitions", topicName)},
+			models.Metric{ValueType: models.MetricValueTypeNumber, Value: partitionCount, ComponentType: RedpandaMetricComponentTypeTopic, Path: topicPath, Name: "partitions"},
 		)
 	}
 
 	return res, nil
 }
 
+// Execute retrieves the metrics from the correct source based on the metric type.
+// It returns a response object with an array of metrics or an error if the retrieval fails.
 func (a *GetMetricsAction) Execute() (interface{}, map[string]interface{}, error) {
 	a.actionLogger.Info("Executing the action")
 
