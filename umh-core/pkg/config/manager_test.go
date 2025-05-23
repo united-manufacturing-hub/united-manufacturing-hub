@@ -248,7 +248,7 @@ agent:
     0: Enterprise
     1: Site
 `
-				config, err := parseConfig([]byte(validYAML))
+				config, err := parseConfig([]byte(validYAML), false)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(config.Internal.Services).To(HaveLen(1))
@@ -262,14 +262,14 @@ agent:
 			})
 
 			It("should handle empty input", func() {
-				config, err := parseConfig([]byte{})
+				config, err := parseConfig([]byte{}, false)
 				Expect(err).To(HaveOccurred())
 				Expect(config).To(Equal(FullConfig{}))
 			})
 
 			It("should handle empty but valid YAML", func() {
 				emptyYAML := "---\n"
-				config, err := parseConfig([]byte(emptyYAML))
+				config, err := parseConfig([]byte(emptyYAML), false)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(config).To(Equal(FullConfig{}))
 			})
@@ -280,7 +280,7 @@ internal: {
   services: [
     { name: service1, desiredState: running,
 `
-				_, err := parseConfig([]byte(malformedYAML))
+				_, err := parseConfig([]byte(malformedYAML), false)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("did not find expected node content"))
 			})
@@ -295,7 +295,7 @@ internal:
   unknownSection:
     key: value
 `
-				_, err := parseConfig([]byte(yamlWithUnknownFields))
+				_, err := parseConfig([]byte(yamlWithUnknownFields), false)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to decode config"))
 			})
@@ -313,7 +313,7 @@ internal:
 agent:
   location: null
 `
-				config, err := parseConfig([]byte(yamlWithNulls))
+				config, err := parseConfig([]byte(yamlWithNulls), false)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(config.Internal.Services).To(HaveLen(1))
 				Expect(config.Internal.Services[0].Name).To(Equal("service1"))
@@ -338,7 +338,7 @@ internal:
         configFiles:
           "file with spaces.txt": "content with multiple\nlines\nand \"quotes\""
 `
-				config, err := parseConfig([]byte(complexYAML))
+				config, err := parseConfig([]byte(complexYAML), false)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(config.Internal.Services).To(HaveLen(1))
@@ -383,7 +383,7 @@ internal:
 					data, err := fsService.ReadFile(ctx, filepath.Join("../../examples", file.Name()))
 					Expect(err).NotTo(HaveOccurred())
 
-					_, err = parseConfig(data)
+					_, err = parseConfig(data, false)
 					Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to parse %s", file.Name()))
 				}
 			})
