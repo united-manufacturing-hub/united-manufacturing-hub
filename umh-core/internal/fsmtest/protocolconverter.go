@@ -98,29 +98,12 @@ func SetupProtocolConverterServiceState(
 	serviceName string,
 	flags protocolconvertersvc.ConverterStateFlags,
 ) {
-	// Ensure service exists in mock
-	mockService.ExistingComponents[serviceName] = true
-
-	// Create service info if it doesn't exist
-	if mockService.ConverterStates[serviceName] == nil {
-		mockService.ConverterStates[serviceName] = &protocolconvertersvc.ServiceInfo{}
-	}
-
-	// Set the Benthos FSM state
-	if flags.DfcFSMReadState != "" {
-		mockService.ConverterStates[serviceName].DataflowComponentReadFSMState = flags.DfcFSMReadState
-	}
-
-	if flags.DfcFSMWriteState != "" {
-		mockService.ConverterStates[serviceName].DataflowComponentWriteFSMState = flags.DfcFSMWriteState
-	}
-
-	if flags.ConnectionFSMState != "" {
-		mockService.ConverterStates[serviceName].ConnectionFSMState = flags.ConnectionFSMState
-	}
-
-	// Store the service state flags directly
-	mockService.SetComponentState(serviceName, flags)
+	// Use the new delegation approach - this will:
+	// 1. Forward to DFC mock with converted flags
+	// 2. Forward to Connection mock with converted flags
+	// 3. Build aggregated ServiceInfo for Status() calls
+	// 4. Store flags for backward compatibility
+	mockService.SetConverterState(serviceName, flags)
 }
 
 // ConfigureProtocolConverterServiceConfig configures the mock service with a default ProtocolConverter config
@@ -277,12 +260,8 @@ func SetupProtocolConverterInstance(serviceName string, desiredState string) (*p
 	// Create mock service
 	mockService := protocolconvertersvc.NewMockProtocolConverterService()
 
-	// Set up initial service states
+	// Set up initial service states - the delegation approach will handle ConverterStates automatically
 	mockService.ExistingComponents = make(map[string]bool)
-	mockService.ConverterStates = make(map[string]*protocolconvertersvc.ServiceInfo)
-
-	// Add default service info
-	mockService.ConverterStates[serviceName] = &protocolconvertersvc.ServiceInfo{}
 
 	// Add mock service registry
 	mockSvcRegistry := serviceregistry.NewMockRegistry()

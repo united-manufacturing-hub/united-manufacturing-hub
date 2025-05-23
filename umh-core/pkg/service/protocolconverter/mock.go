@@ -23,22 +23,32 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
-	benthosfsmmanager "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
 	connfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/connection"
 	dfcfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
 	nmapfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/nmap"
 	redpandafsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/redpanda"
-	benthosservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos_monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/connection"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/dataflowcomponent"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/nmap"
 	redpandasvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
 // MockProtocolConverterService is a mock implementation of the IProtocolConverterService interface for testing
+//
+// Why delegation?
+//
+// The Protocol-Converter FSM is *by definition* the union of the
+// Connection FSM and *two* DFC FSMs (read + write).  Re-encoding all
+// low-level fields (e.g. PortState, BenthosMetrics.IsActive) in a new
+// "converter flag bag" risks drifting out-of-sync with the canonical
+// mocks that the Connection / DFC teams already maintain.
+//
+// Instead we embed their mocks and translate the high-level intent
+// (Idle, Active, Down, …) into the exact flag structs those mocks
+// expect.  One source of truth, less duplication, and all helper
+// fns (`SetupConnectionServiceState`, `TransitionToDataflowComponentState`,
+// …) remain reusable.
 type MockProtocolConverterService struct {
 	// Tracks calls to methods
 	GenerateConfigCalled     bool
@@ -81,9 +91,18 @@ type MockProtocolConverterService struct {
 	// State control for FSM testing
 	stateFlags map[string]*ConverterStateFlags
 
-	// service mocks
-	DfcService  dataflowcomponent.IDataFlowComponentService
-	ConnService connection.IConnectionService
+	/*
+	   Each protocol-converter *instance* is backed by
+	     • one Connection  (talks to PLC / OPC-UA, etc.)
+	     • one READ DFC    (Benthos pipeline → Kafka, …)
+
+	   Instead of re-implementing state flags here, we embed the
+	   **already battle-tested** mocks used by those FSMs.  That gives
+	   us full fidelity (e.g. Nmap scan results, Benthos metrics-active
+	   flag) and keeps all FSM helpers DRY.
+	*/
+	DfcService  *dataflowcomponent.MockDataFlowComponentService
+	ConnService *connection.MockConnectionService
 }
 
 // Ensure MockProtocolConverterService implements IProtocolConverterService
@@ -110,80 +129,42 @@ func NewMockProtocolConverterService() *MockProtocolConverterService {
 		connConfigs:        make([]config.ConnectionConfig, 0),
 		stateFlags:         make(map[string]*ConverterStateFlags),
 		DfcService:         dataflowcomponent.NewMockDataFlowComponentService(),
+		ConnService:        connection.NewMockConnectionService(),
 	}
 }
 
-// SetComponentState sets all state flags for a protocolConverter at once
-func (m *MockProtocolConverterService) SetComponentState(protConvName string, flags ConverterStateFlags) {
-	dfcObservedReadState := &dfcfsm.DataflowComponentObservedState{
-		ServiceInfo: dataflowcomponent.ServiceInfo{
-			BenthosObservedState: benthosfsmmanager.BenthosObservedState{
-				ServiceInfo: benthosservice.ServiceInfo{
-					BenthosStatus: benthosservice.BenthosStatus{
-						BenthosMetrics: benthos_monitor.BenthosMetrics{
-							MetricsState: &benthos_monitor.BenthosMetricsState{
-								IsActive: flags.IsDFCRunning,
-							},
-						},
-					},
-				},
-			},
-		},
-	}
+// SetConverterState updates **both** underlying mocks so their FSMs
+// look exactly like a real system in the requested Protocol-Converter
+// high-level state.  It then synthesises a single ServiceInfo snapshot
+// (`ConverterStates`) so the ProtocolConverterService.Status method can
+// still return aggregated data without peeking into the sub-services.
+func (m *MockProtocolConverterService) SetConverterState(
+	protConvName string,
+	flags ConverterStateFlags,
+) {
+	// Ensure service exists in mock
+	m.ExistingComponents[protConvName] = true
 
-	// TODO: Add write state
-	dfcObservedWriteState := &dfcfsm.DataflowComponentObservedState{}
+	// 1. Forward to DFC mock
+	dfcFlags := ConverterToDFCFlags(flags)
+	m.DfcService.SetComponentState(protConvName, dfcFlags)
 
-	connObservedState := &connfsm.ConnectionObservedState{
-		ServiceInfo: connection.ServiceInfo{
-			NmapObservedState: nmapfsm.NmapObservedState{
-				ServiceInfo: nmap.ServiceInfo{
-					NmapStatus: nmap.NmapServiceInfo{
-						IsRunning: flags.IsConnectionUp,
-						LastScan: &nmap.NmapScanResult{
-							PortResult: nmap.PortResult{
-								State: string(flags.PortState),
-							},
-						},
-					},
-				},
-			},
-		},
-	}
+	// 2. Forward to Connection mock
+	connFlags := ConverterToConnFlags(flags)
+	m.ConnService.SetConnectionState(protConvName, connFlags)
 
-	redpandaObservedState := &redpandafsm.RedpandaObservedState{
-		ServiceInfo: redpandasvc.ServiceInfo{
-			RedpandaStatus: redpandasvc.RedpandaStatus{
-				HealthCheck: redpandasvc.HealthCheck{
-					IsReady: flags.IsRedpandaRunning,
-					IsLive:  flags.IsRedpandaRunning,
-				},
-			},
-		},
-	}
-	// Ensure ServiceInfo exists for this component
-	if _, exists := m.ConverterStates[protConvName]; !exists {
-		m.ConverterStates[protConvName] = &ServiceInfo{
-			DataflowComponentReadFSMState:       flags.DfcFSMReadState,
-			DataflowComponentReadObservedState:  *dfcObservedReadState,
-			DataflowComponentWriteFSMState:      flags.DfcFSMWriteState,
-			DataflowComponentWriteObservedState: *dfcObservedWriteState,
-			ConnectionFSMState:                  flags.ConnectionFSMState,
-			ConnectionObservedState:             *connObservedState,
-		}
-	} else {
-		m.ConverterStates[protConvName].DataflowComponentReadObservedState = *dfcObservedReadState
-		m.ConverterStates[protConvName].DataflowComponentReadFSMState = flags.DfcFSMReadState
-		m.ConverterStates[protConvName].DataflowComponentWriteObservedState = *dfcObservedWriteState
-		m.ConverterStates[protConvName].DataflowComponentWriteFSMState = flags.DfcFSMWriteState
-		m.ConverterStates[protConvName].ConnectionObservedState = *connObservedState
-		m.ConverterStates[protConvName].ConnectionFSMState = flags.ConnectionFSMState
-		m.ConverterStates[protConvName].RedpandaObservedState = *redpandaObservedState
-		m.ConverterStates[protConvName].RedpandaFSMState = flags.RedpandaFSMState
-	}
+	// 3. Build a *single* aggregate ServiceInfo for Status()
+	m.ConverterStates[protConvName] = BuildProtocolConverterServiceInfo(
+		protConvName, flags, m.DfcService, m.ConnService,
+	)
 
-	// Store the flags
+	// Store the flags for backward compatibility
 	m.stateFlags[protConvName] = &flags
+}
+
+// SetComponentState is kept for backward compatibility but now delegates to SetConverterState
+func (m *MockProtocolConverterService) SetComponentState(protConvName string, flags ConverterStateFlags) {
+	m.SetConverterState(protConvName, flags)
 }
 
 // GetConverterState gets the state flags for a protocol converter
@@ -195,6 +176,73 @@ func (m *MockProtocolConverterService) GetConverterState(protConvName string) *C
 	flags := &ConverterStateFlags{}
 	m.stateFlags[protConvName] = flags
 	return flags
+}
+
+// ConverterToDFCFlags converts high-level ConverterStateFlags into the
+// exact flag struct used by the DFC mock.
+func ConverterToDFCFlags(src ConverterStateFlags) dataflowcomponent.ComponentStateFlags {
+	return dataflowcomponent.ComponentStateFlags{
+		IsBenthosRunning:                 src.IsDFCRunning,
+		BenthosFSMState:                  src.DfcFSMReadState,
+		IsBenthosProcessingMetricsActive: src.IsDFCRunning && src.DfcFSMReadState == dfcfsm.OperationalStateActive,
+	}
+}
+
+// ConverterToConnFlags converts high-level ConverterStateFlags into the
+// flag struct the Connection mock expects.
+func ConverterToConnFlags(src ConverterStateFlags) connection.ConnectionStateFlags {
+	return connection.ConnectionStateFlags{
+		IsNmapRunning: src.IsConnectionUp,
+		NmapFSMState:  src.ConnectionFSMState,
+		IsFlaky:       false, // Default to not flaky
+	}
+}
+
+// BuildProtocolConverterServiceInfo builds an aggregated ServiceInfo from the sub-mocks
+func BuildProtocolConverterServiceInfo(
+	name string,
+	flags ConverterStateFlags,
+	dfcMock *dataflowcomponent.MockDataFlowComponentService,
+	connMock *connection.MockConnectionService,
+) *ServiceInfo {
+	// Get observed states from the sub-mocks
+	var dfcInfo dataflowcomponent.ServiceInfo
+	var connInfo connection.ServiceInfo
+
+	if dfcMock.ComponentStates[name] != nil {
+		dfcInfo = *dfcMock.ComponentStates[name]
+	}
+
+	if connMock.ConnectionStates[name] != nil {
+		connInfo = *connMock.ConnectionStates[name]
+	}
+
+	// Build the aggregate ServiceInfo
+	return &ServiceInfo{
+		DataflowComponentReadFSMState: flags.DfcFSMReadState,
+		DataflowComponentReadObservedState: dfcfsm.DataflowComponentObservedState{
+			ServiceInfo: dfcInfo,
+		},
+		DataflowComponentWriteFSMState: flags.DfcFSMWriteState,
+		DataflowComponentWriteObservedState: dfcfsm.DataflowComponentObservedState{
+			ServiceInfo: dataflowcomponent.ServiceInfo{}, // TODO: Add write DFC support
+		},
+		ConnectionFSMState: flags.ConnectionFSMState,
+		ConnectionObservedState: connfsm.ConnectionObservedState{
+			ServiceInfo: connInfo,
+		},
+		RedpandaFSMState: flags.RedpandaFSMState,
+		RedpandaObservedState: redpandafsm.RedpandaObservedState{
+			ServiceInfo: redpandasvc.ServiceInfo{
+				RedpandaStatus: redpandasvc.RedpandaStatus{
+					HealthCheck: redpandasvc.HealthCheck{
+						IsReady: flags.IsRedpandaRunning,
+						IsLive:  flags.IsRedpandaRunning,
+					},
+				},
+			},
+		},
+	}
 }
 
 // GetConfig mocks getting the ProtocolConverter configuration
