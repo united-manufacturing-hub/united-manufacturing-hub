@@ -25,6 +25,7 @@ import (
 	"go.uber.org/zap"
 )
 
+// Deprecated: Use GetMetricsAction instead. Kept for backward compatibility.
 type GetDataflowcomponentMetricsAction struct {
 	// ─── Request metadata ────────────────────────────────────────────────────
 	userEmail    string
@@ -160,10 +161,12 @@ func (a *GetDataflowcomponentMetricsAction) GetParsedPayload() models.GetDataflo
 	return a.payload
 }
 
+// Deprecated: Use models.GetMetricsResponse instead. Kept for backward compatibility.
 type DfcMetrics struct {
 	Metrics []DfcMetric `json:"metrics"`
 }
 
+// Deprecated: Use models.Metric instead. Kept for backward compatibility.
 type DfcMetric struct {
 	ValueType     DfcMetricType          `json:"value_type"`
 	Value         any                    `json:"value"`
@@ -172,6 +175,7 @@ type DfcMetric struct {
 	Name          string                 `json:"name"`
 }
 
+// Deprecated: Use models.MetricValueType instead. Kept for backward compatibility.
 type DfcMetricType string
 
 const (
@@ -182,7 +186,7 @@ const (
 // DfcMetricComponentType represents the Redpanda Connect component type that emitted the metric.
 // Each component type uses a specific prefix in its metric names (e.g., input_received, processor_error, output_sent).
 //
-// See: https://docs.redpanda.com/redpanda-connect/components/metrics/about/#metric-names
+// Deprecated: It's now a regular string defined in models.Metric.ComponentType.
 type DfcMetricComponentType string
 
 const (

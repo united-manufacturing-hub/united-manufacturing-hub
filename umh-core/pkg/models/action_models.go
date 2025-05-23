@@ -165,6 +165,8 @@ const (
 	// DeleteDataFlowComponent represents the action type for deleting a data flow component
 	DeleteDataFlowComponent ActionType = "delete-data-flow-component"
 	// GetDataFlowComponentMetrics represents the action type for retrieving metrics of a data flow component
+	//
+	// Deprecated: Use GetMetrics instead. Kept for backward compatibility.
 	GetDataFlowComponentMetrics ActionType = "get-data-flow-component-metrics"
 	// GetDataFlowComponentLog reperesents the action type for getting the audit log for a data flow component
 	GetDataFlowComponentLog ActionType = "get-data-flow-component-log"
@@ -182,6 +184,8 @@ const (
 	UpdateConfiguration ActionType = "update-configuration"
 	// GetLogs represents the action type for retrieving logs
 	GetLogs ActionType = "get-logs"
+	// GetMetrics represents the action type for retrieving metrics
+	GetMetrics ActionType = "get-metrics"
 )
 
 // TestNetworkConnectionPayload contains the necessary fields for executing a TestNetworkConnection action.
@@ -528,6 +532,45 @@ type GetLogsResponse struct {
 	Logs []string `json:"logs"`
 }
 
+type MetricResourceType string
+
+const (
+	DFCMetricResourceType      MetricResourceType = "dfc"
+	RedpandaMetricResourceType MetricResourceType = "redpanda"
+)
+
+// GetMetricsRequest contains the necessary fields for executing a `get-metrics` action.
+type GetMetricsRequest struct {
+	// Type represents the type of the resource to retrieve the metrics for
+	Type MetricResourceType `json:"type" binding:"required"`
+	// UUID represents the identifier of the entity to retrieve the metrics for.
+	// This is optional and only used for DFC metrics.
+	UUID string `json:"uuid"`
+}
+
+type MetricValueType string
+
+const (
+	MetricValueTypeNumber  MetricValueType = "number"
+	MetricValueTypeString  MetricValueType = "string"
+	MetricValueTypeBoolean MetricValueType = "boolean"
+)
+
+// Metric represents a single metric value, agnostic of the resource type.
+type Metric struct {
+	ValueType     MetricValueType `json:"value_type"`
+	Value         any             `json:"value"`
+	ComponentType string          `json:"component_type"`
+	Path          string          `json:"path"`
+	Name          string          `json:"name"`
+}
+
+// GetMetricsResponse contains the metrics yielded by the `get-metrics` action.
+type GetMetricsResponse struct {
+	Metrics []Metric `json:"metrics"`
+}
+
+// Deprecated: Use GetMetricsRequest instead.
 type GetDataflowcomponentMetricsRequest struct {
 	UUID string `json:"uuid" binding:"required"`
 }
