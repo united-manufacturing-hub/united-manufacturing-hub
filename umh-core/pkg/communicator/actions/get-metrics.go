@@ -42,27 +42,27 @@ type GetMetricsAction struct {
 	payload models.GetMetricsRequest
 
 	// ─── Utilities ──────────────────────────────────────────────────────────
-	actionLogger *zap.SugaredLogger
 	provider     providers.MetricsProvider
+	actionLogger *zap.SugaredLogger
 }
 
 // NewGetMetricsAction creates a new GetMetricsAction with the provided parameters.
 // Caller needs to invoke Parse and Validate before calling Execute.
-func NewGetMetricsAction(userEmail string, actionUUID uuid.UUID, instanceUUID uuid.UUID, outboundChannel chan *models.UMHMessage, systemSnapshotManager *fsm.SnapshotManager) *GetMetricsAction {
+func NewGetMetricsAction(userEmail string, actionUUID uuid.UUID, instanceUUID uuid.UUID, outboundChannel chan *models.UMHMessage, systemSnapshotManager *fsm.SnapshotManager, logger *zap.SugaredLogger) *GetMetricsAction {
 	return &GetMetricsAction{
 		userEmail:             userEmail,
 		actionUUID:            actionUUID,
 		instanceUUID:          instanceUUID,
 		outboundChannel:       outboundChannel,
 		systemSnapshotManager: systemSnapshotManager,
-		actionLogger:          zap.S().With("action", "GetMetricsAction"),
 		provider:              &providers.DefaultMetricsProvider{},
+		actionLogger:          logger.With("action", "GetMetricsAction"),
 	}
 }
 
 // For testing - allow injection of a custom provider
-func NewGetMetricsActionWithProvider(userEmail string, actionUUID uuid.UUID, instanceUUID uuid.UUID, outboundChannel chan *models.UMHMessage, systemSnapshotManager *fsm.SnapshotManager, provider providers.MetricsProvider) *GetMetricsAction {
-	action := NewGetMetricsAction(userEmail, actionUUID, instanceUUID, outboundChannel, systemSnapshotManager)
+func NewGetMetricsActionWithProvider(userEmail string, actionUUID uuid.UUID, instanceUUID uuid.UUID, outboundChannel chan *models.UMHMessage, systemSnapshotManager *fsm.SnapshotManager, logger *zap.SugaredLogger, provider providers.MetricsProvider) *GetMetricsAction {
+	action := NewGetMetricsAction(userEmail, actionUUID, instanceUUID, outboundChannel, systemSnapshotManager, logger)
 	action.provider = provider
 	return action
 }

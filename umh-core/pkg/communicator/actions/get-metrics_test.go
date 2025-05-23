@@ -74,7 +74,7 @@ var _ = Describe("GetMetricsAction", func() {
 		})
 
 		// Set up the action with our mock provider
-		action = actions.NewGetMetricsActionWithProvider(userEmail, actionUUID, instanceUUID, outboundChannel, snapshotManager, mockProvider)
+		action = actions.NewGetMetricsActionWithProvider(userEmail, actionUUID, instanceUUID, outboundChannel, snapshotManager, nil, mockProvider)
 	})
 
 	AfterEach(func() {
@@ -272,7 +272,7 @@ var _ = Describe("GetMetricsAction", func() {
 		DescribeTable("should handle missing FSM instance gracefully:", func(metricType models.MetricResourceType) {
 			// Use REAL action with internal provider to test the error handling
 			emptySnapshotManager := fsm.NewSnapshotManager()
-			action = actions.NewGetMetricsAction(userEmail, actionUUID, instanceUUID, outboundChannel, emptySnapshotManager)
+			action = actions.NewGetMetricsAction(userEmail, actionUUID, instanceUUID, outboundChannel, emptySnapshotManager, nil)
 
 			payload := map[string]interface{}{
 				"type": metricType,
@@ -298,7 +298,7 @@ var _ = Describe("GetMetricsAction", func() {
 
 		It("should return an error when a non-existent DFC UUID is provided", func() {
 			// Use REAL action with internal provider to test the error handling
-			action = actions.NewGetMetricsAction(userEmail, actionUUID, instanceUUID, outboundChannel, snapshotManager)
+			action = actions.NewGetMetricsAction(userEmail, actionUUID, instanceUUID, outboundChannel, snapshotManager, nil)
 
 			payload := map[string]interface{}{
 				"type": models.DFCMetricResourceType,
