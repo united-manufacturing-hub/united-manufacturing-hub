@@ -253,5 +253,32 @@ var _ = Describe("GetMetricsAction", func() {
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to get metrics"))
 		})
+
+		DescribeTable("should handle missing FSM instance gracefully:", func(metricType models.MetricResourceType) {
+			// Use REAL action with internal provider to test the error handling
+			// Our snapshot manager is empty, so the instance will not be found
+			a := actions.NewGetMetricsAction(userEmail, actionUUID, instanceUUID, outboundChannel, fsm.NewSnapshotManager())
+
+			payload := map[string]interface{}{
+				"type": metricType,
+			}
+			if metricType == models.DFCMetricResourceType {
+				payload["uuid"] = dfcUUID.String()
+			}
+
+			err := a.Parse(payload)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = a.Validate()
+			Expect(err).NotTo(HaveOccurred())
+
+			result, _, err := a.Execute()
+			Expect(result).To(BeNil())
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("not found"))
+		},
+			Entry("dfc", models.DFCMetricResourceType),
+			Entry("redpanda", models.RedpandaMetricResourceType),
+		)
 	})
 })
