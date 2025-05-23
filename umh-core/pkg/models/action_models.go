@@ -165,6 +165,8 @@ const (
 	// DeleteDataFlowComponent represents the action type for deleting a data flow component
 	DeleteDataFlowComponent ActionType = "delete-data-flow-component"
 	// GetDataFlowComponentMetrics represents the action type for retrieving metrics of a data flow component
+	//
+	// Deprecated: Use GetMetrics instead. Kept for backward compatibility.
 	GetDataFlowComponentMetrics ActionType = "get-data-flow-component-metrics"
 	// GetDataFlowComponentLog reperesents the action type for getting the audit log for a data flow component
 	GetDataFlowComponentLog ActionType = "get-data-flow-component-log"
