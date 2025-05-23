@@ -68,6 +68,7 @@ var (
 )
 
 // CreateProtocolConverterTestConfig creates a standard ProtocolConverter config for testing
+// it will contain a read and write DFC and a connection
 func CreateProtocolConverterTestConfig(name string, desiredState string) config.ProtocolConverterConfig {
 	return config.ProtocolConverterConfig{
 		FSMInstanceConfig: config.FSMInstanceConfig{
@@ -99,9 +100,14 @@ func SetupProtocolConverterServiceState(
 	}
 
 	// Set the Benthos FSM state
-	if flags.DfcFSMState != "" {
-		mockService.ConverterStates[serviceName].DataflowComponentFSMState = flags.DfcFSMState
+	if flags.DfcFSMReadState != "" {
+		mockService.ConverterStates[serviceName].DataflowComponentReadFSMState = flags.DfcFSMReadState
 	}
+
+	if flags.DfcFSMWriteState != "" {
+		mockService.ConverterStates[serviceName].DataflowComponentWriteFSMState = flags.DfcFSMWriteState
+	}
+
 	if flags.ConnectionFSMState != "" {
 		mockService.ConverterStates[serviceName].ConnectionFSMState = flags.ConnectionFSMState
 	}
@@ -120,13 +126,15 @@ func ConfigureProtocolConverterServiceConfig(mockService *protocolconvertersvc.M
 }
 
 func ConfigureProtocolConverterServiceConfigWithMissingDfc(mockService *protocolconvertersvc.MockProtocolConverterService) {
-	mockService.GetConfigResult = protocolconverterserviceconfig.ProtocolConverterServiceConfig{
-		DataflowComponentServiceConfig: missingDataflowComponentConfig,
-		ConnectionServiceConfig:        goodConnectionServiceConfig,
+	mockService.GetConfigResult = protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime{
+		DataflowComponentReadServiceConfig:  missingDataflowComponentConfig,
+		DataflowComponentWriteServiceConfig: missingDataflowComponentConfig,
+		ConnectionServiceConfig:             goodConnectionServiceConfig,
 	}
 }
 
 // TransitionToProtocolConverterState is a helper to configure a service for a given high-level state
+// TODO: add write DFC state
 func TransitionToProtocolConverterState(mockService *protocolconvertersvc.MockProtocolConverterService, serviceName string, state string) {
 	switch state {
 	case protocolconverterfsm.OperationalStateStopped:
@@ -134,7 +142,7 @@ func TransitionToProtocolConverterState(mockService *protocolconvertersvc.MockPr
 			IsDFCRunning:       false,
 			IsConnectionUp:     false,
 			IsRedpandaRunning:  false,
-			DfcFSMState:        dataflowcomponentfsm.OperationalStateStopped,
+			DfcFSMReadState:    dataflowcomponentfsm.OperationalStateStopped,
 			ConnectionFSMState: connectionservicefsm.OperationalStateStopped,
 			RedpandaFSMState:   redpandafsm.OperationalStateStopped,
 			PortState:          nmapfsm.PortStateClosed,
@@ -145,7 +153,7 @@ func TransitionToProtocolConverterState(mockService *protocolconvertersvc.MockPr
 			IsDFCRunning:       false,
 			IsConnectionUp:     false,
 			IsRedpandaRunning:  false,
-			DfcFSMState:        dataflowcomponentfsm.OperationalStateStopped,
+			DfcFSMReadState:    dataflowcomponentfsm.OperationalStateStopped,
 			ConnectionFSMState: connectionservicefsm.OperationalStateStarting,
 			RedpandaFSMState:   redpandafsm.OperationalStateStopped,
 			PortState:          nmapfsm.PortStateClosed,
@@ -156,7 +164,7 @@ func TransitionToProtocolConverterState(mockService *protocolconvertersvc.MockPr
 			IsDFCRunning:       false,
 			IsConnectionUp:     true,
 			IsRedpandaRunning:  false,
-			DfcFSMState:        dataflowcomponentfsm.OperationalStateStopped,
+			DfcFSMReadState:    dataflowcomponentfsm.OperationalStateStopped,
 			ConnectionFSMState: connectionservicefsm.OperationalStateUp,
 			RedpandaFSMState:   redpandafsm.OperationalStateStarting,
 			PortState:          nmapfsm.PortStateOpen,
@@ -167,7 +175,7 @@ func TransitionToProtocolConverterState(mockService *protocolconvertersvc.MockPr
 			IsDFCRunning:       false,
 			IsConnectionUp:     true,
 			IsRedpandaRunning:  true,
-			DfcFSMState:        dataflowcomponentfsm.OperationalStateStarting,
+			DfcFSMReadState:    dataflowcomponentfsm.OperationalStateStarting,
 			ConnectionFSMState: connectionservicefsm.OperationalStateUp,
 			RedpandaFSMState:   redpandafsm.OperationalStateIdle,
 			PortState:          nmapfsm.PortStateOpen,
@@ -178,7 +186,7 @@ func TransitionToProtocolConverterState(mockService *protocolconvertersvc.MockPr
 			IsDFCRunning:       false,
 			IsConnectionUp:     true,
 			IsRedpandaRunning:  true,
-			DfcFSMState:        dataflowcomponentfsm.OperationalStateStartingFailed,
+			DfcFSMReadState:    dataflowcomponentfsm.OperationalStateStartingFailed,
 			ConnectionFSMState: connectionservicefsm.OperationalStateUp,
 			RedpandaFSMState:   redpandafsm.OperationalStateIdle,
 			PortState:          nmapfsm.PortStateOpen,
@@ -189,7 +197,7 @@ func TransitionToProtocolConverterState(mockService *protocolconvertersvc.MockPr
 			IsDFCRunning:       false,
 			IsConnectionUp:     true,
 			IsRedpandaRunning:  true,
-			DfcFSMState:        "",
+			DfcFSMReadState:    "",
 			ConnectionFSMState: connectionservicefsm.OperationalStateUp,
 			RedpandaFSMState:   redpandafsm.OperationalStateIdle,
 			PortState:          nmapfsm.PortStateOpen,
@@ -200,7 +208,7 @@ func TransitionToProtocolConverterState(mockService *protocolconvertersvc.MockPr
 			IsDFCRunning:       true,
 			IsConnectionUp:     true,
 			IsRedpandaRunning:  true,
-			DfcFSMState:        dataflowcomponentfsm.OperationalStateIdle,
+			DfcFSMReadState:    dataflowcomponentfsm.OperationalStateIdle,
 			ConnectionFSMState: connectionservicefsm.OperationalStateUp,
 			RedpandaFSMState:   redpandafsm.OperationalStateIdle,
 			PortState:          nmapfsm.PortStateOpen,
@@ -211,7 +219,7 @@ func TransitionToProtocolConverterState(mockService *protocolconvertersvc.MockPr
 			IsDFCRunning:       true,
 			IsConnectionUp:     true,
 			IsRedpandaRunning:  true,
-			DfcFSMState:        dataflowcomponentfsm.OperationalStateActive,
+			DfcFSMReadState:    dataflowcomponentfsm.OperationalStateActive,
 			ConnectionFSMState: connectionservicefsm.OperationalStateUp,
 			RedpandaFSMState:   redpandafsm.OperationalStateActive,
 			PortState:          nmapfsm.PortStateOpen,
@@ -222,7 +230,7 @@ func TransitionToProtocolConverterState(mockService *protocolconvertersvc.MockPr
 			IsDFCRunning:       true,
 			IsConnectionUp:     false,
 			IsRedpandaRunning:  true,
-			DfcFSMState:        dataflowcomponentfsm.OperationalStateActive,
+			DfcFSMReadState:    dataflowcomponentfsm.OperationalStateActive,
 			ConnectionFSMState: connectionservicefsm.OperationalStateDegraded,
 			RedpandaFSMState:   redpandafsm.OperationalStateActive,
 			PortState:          nmapfsm.PortStateOpen,
@@ -233,7 +241,7 @@ func TransitionToProtocolConverterState(mockService *protocolconvertersvc.MockPr
 			IsDFCRunning:       true,
 			IsConnectionUp:     true,
 			IsRedpandaRunning:  false,
-			DfcFSMState:        dataflowcomponentfsm.OperationalStateActive,
+			DfcFSMReadState:    dataflowcomponentfsm.OperationalStateActive,
 			ConnectionFSMState: connectionservicefsm.OperationalStateUp,
 			RedpandaFSMState:   redpandafsm.OperationalStateDegraded,
 			PortState:          nmapfsm.PortStateOpen,
@@ -244,7 +252,7 @@ func TransitionToProtocolConverterState(mockService *protocolconvertersvc.MockPr
 			IsDFCRunning:       false,
 			IsConnectionUp:     true,
 			IsRedpandaRunning:  true,
-			DfcFSMState:        dataflowcomponentfsm.OperationalStateDegraded,
+			DfcFSMReadState:    dataflowcomponentfsm.OperationalStateDegraded,
 			ConnectionFSMState: connectionservicefsm.OperationalStateUp,
 			RedpandaFSMState:   redpandafsm.OperationalStateActive,
 			PortState:          nmapfsm.PortStateOpen,
