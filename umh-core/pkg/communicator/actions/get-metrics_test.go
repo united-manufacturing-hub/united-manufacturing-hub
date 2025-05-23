@@ -23,7 +23,9 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions/providers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
+	dfc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"go.uber.org/mock/gomock"
 )
@@ -54,6 +56,22 @@ var _ = Describe("GetMetricsAction", func() {
 		dfcName = "test-dfc"
 		dfcUUID = dataflowcomponentserviceconfig.GenerateUUIDFromName(dfcName)
 		snapshotManager = fsm.NewSnapshotManager()
+
+		// Add a mock DFC instance to test the error handling when the DFC is not found
+		// NOTE: We could also create snapshot manager mocks with gomock, but it's not worth the effort now
+		snapshotManager.UpdateSnapshot(&fsm.SystemSnapshot{
+			Managers: map[string]fsm.ManagerSnapshot{
+				constants.DataflowcomponentManagerName: &actions.MockManagerSnapshot{
+					Instances: map[string]*fsm.FSMInstanceSnapshot{
+						dfcName: {
+							ID:                dfcName,
+							CurrentState:      "active",
+							LastObservedState: &dfc.DataflowComponentObservedStateSnapshot{},
+						},
+					},
+				},
+			},
+		})
 
 		// Set up the action with our mock provider
 		action = actions.NewGetMetricsActionWithProvider(userEmail, actionUUID, instanceUUID, outboundChannel, snapshotManager, mockProvider)
@@ -256,8 +274,8 @@ var _ = Describe("GetMetricsAction", func() {
 
 		DescribeTable("should handle missing FSM instance gracefully:", func(metricType models.MetricResourceType) {
 			// Use REAL action with internal provider to test the error handling
-			// Our snapshot manager is empty, so the instance will not be found
-			a := actions.NewGetMetricsAction(userEmail, actionUUID, instanceUUID, outboundChannel, fsm.NewSnapshotManager())
+			emptySnapshotManager := fsm.NewSnapshotManager()
+			action = actions.NewGetMetricsAction(userEmail, actionUUID, instanceUUID, outboundChannel, emptySnapshotManager)
 
 			payload := map[string]interface{}{
 				"type": metricType,
@@ -266,13 +284,13 @@ var _ = Describe("GetMetricsAction", func() {
 				payload["uuid"] = dfcUUID.String()
 			}
 
-			err := a.Parse(payload)
+			err := action.Parse(payload)
 			Expect(err).NotTo(HaveOccurred())
 
-			err = a.Validate()
+			err = action.Validate()
 			Expect(err).NotTo(HaveOccurred())
 
-			result, _, err := a.Execute()
+			result, _, err := action.Execute()
 			Expect(result).To(BeNil())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("not found"))
@@ -280,5 +298,26 @@ var _ = Describe("GetMetricsAction", func() {
 			Entry("dfc", models.DFCMetricResourceType),
 			Entry("redpanda", models.RedpandaMetricResourceType),
 		)
+
+		It("should return an error when a non-existent DFC UUID is provided", func() {
+			// Use REAL action with internal provider to test the error handling
+			action = actions.NewGetMetricsAction(userEmail, actionUUID, instanceUUID, outboundChannel, snapshotManager)
+
+			payload := map[string]interface{}{
+				"type": models.DFCMetricResourceType,
+				"uuid": uuid.New().String(),
+			}
+
+			err := action.Parse(payload)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = action.Validate()
+			Expect(err).NotTo(HaveOccurred())
+
+			result, _, err := action.Execute()
+			Expect(result).To(BeNil())
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("the requested DFC with UUID %s was not found", payload["uuid"]))
+		})
 	})
 })
