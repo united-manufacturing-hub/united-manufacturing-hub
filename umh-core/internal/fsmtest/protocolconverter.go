@@ -18,17 +18,24 @@
 package fsmtest
 
 import (
+	"context"
+	"fmt"
+	"time"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/connectionserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/nmapserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	connectionservicefsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/connection"
 	dataflowcomponentfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
 	nmapfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/nmap"
 	protocolconverterfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/protocolconverter"
 	redpandafsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/redpanda"
 	protocolconvertersvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/protocolconverter"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
 var (
@@ -259,4 +266,194 @@ func TransitionToProtocolConverterState(mockService *protocolconvertersvc.MockPr
 		})
 		ConfigureProtocolConverterServiceConfig(mockService)
 	}
+}
+
+// SetupProtocolConverterInstance creates and configures a ProtocolConverter instance for testing.
+// Returns the instance, the mock service, and the config used to create it.
+func SetupProtocolConverterInstance(serviceName string, desiredState string) (*protocolconverterfsm.ProtocolConverterInstance, *protocolconvertersvc.MockProtocolConverterService, config.ProtocolConverterConfig) {
+	// Create test config
+	cfg := CreateProtocolConverterTestConfig(serviceName, desiredState)
+
+	// Create mock service
+	mockService := protocolconvertersvc.NewMockProtocolConverterService()
+
+	// Set up initial service states
+	mockService.ExistingComponents = make(map[string]bool)
+	mockService.ConverterStates = make(map[string]*protocolconvertersvc.ServiceInfo)
+
+	// Add default service info
+	mockService.ConverterStates[serviceName] = &protocolconvertersvc.ServiceInfo{}
+
+	// Add mock service registry
+	mockSvcRegistry := serviceregistry.NewMockRegistry()
+
+	// Create new instance
+	instance := setUpMockProtocolConverterInstance(cfg, mockService, mockSvcRegistry)
+
+	return instance, mockService, cfg
+}
+
+// setUpMockProtocolConverterInstance creates a ProtocolConverterInstance with a mock service
+// This is an internal helper function used by SetupProtocolConverterInstance
+func setUpMockProtocolConverterInstance(
+	cfg config.ProtocolConverterConfig,
+	mockService *protocolconvertersvc.MockProtocolConverterService,
+	mockSvcRegistry *serviceregistry.Registry,
+) *protocolconverterfsm.ProtocolConverterInstance {
+	// Create the instance
+	instance := protocolconverterfsm.NewProtocolConverterInstance("", cfg)
+
+	// Set the mock service
+	instance.SetService(mockService)
+	return instance
+}
+
+// TestProtocolConverterStateTransition tests a transition from one state to another.
+//
+// Parameters:
+//   - ctx: Context for cancellation
+//   - instance: The ProtocolConverterInstance to reconcile
+//   - mockService: The mock service to use
+//   - filesystemService: The filesystem service to use
+//   - serviceName: The name of the service instance
+//   - fromState: Starting state to verify before transition
+//   - toState: Target state to reach
+//   - maxAttempts: Maximum number of reconcile cycles to attempt
+//   - startTick: The starting tick value for reconciliation
+//
+// Returns:
+//   - uint64: The final tick value after transition
+//   - error: Any error that occurred during transition
+func TestProtocolConverterStateTransition(
+	ctx context.Context,
+	instance *protocolconverterfsm.ProtocolConverterInstance,
+	mockService *protocolconvertersvc.MockProtocolConverterService,
+	services serviceregistry.Provider,
+	serviceName string,
+	fromState string,
+	toState string,
+	maxAttempts int,
+	startTick uint64,
+	startTimestamp time.Time,
+) (uint64, error) {
+	// Verify we are in the correct starting state
+	if instance.GetCurrentFSMState() != fromState {
+		return startTick, fmt.Errorf("instance not in expected state; want '%s', got '%s'", fromState, instance.GetCurrentFSMState())
+	}
+
+	// Execute reconciliation in a loop until we reach the target state
+	tick := startTick
+	for i := 0; i < maxAttempts; i++ {
+		// Call reconcile directly on the instance
+		snapshot := fsm.SystemSnapshot{
+			Tick:         tick,
+			SnapshotTime: startTimestamp.Add(time.Duration(tick) * constants.DefaultTickerTime),
+		}
+		err, _ := instance.Reconcile(ctx, snapshot, services)
+		if err != nil {
+			return tick, err
+		}
+		tick++
+
+		// Check if we've reached the target state
+		if instance.GetCurrentFSMState() == toState {
+			return tick, nil
+		}
+	}
+
+	return tick, fmt.Errorf("failed to reach target state '%s' after %d attempts; current state: '%s'", toState, maxAttempts, instance.GetCurrentFSMState())
+}
+
+// WaitForProtocolConverterManagerStable waits for the manager to reach a stable state with all instances
+func WaitForProtocolConverterManagerStable(
+	ctx context.Context,
+	snapshot fsm.SystemSnapshot,
+	manager *protocolconverterfsm.ProtocolConverterManager,
+	services serviceregistry.Provider,
+) (uint64, error) {
+	tick := snapshot.Tick
+	maxAttempts := 10
+
+	for i := 0; i < maxAttempts; i++ {
+		// Create a copy of the snapshot with updated tick
+		currentSnapshot := snapshot
+		currentSnapshot.Tick = tick
+
+		// Reconcile the manager
+		err, _ := manager.Reconcile(ctx, currentSnapshot, services)
+		if err != nil {
+			return tick, err
+		}
+		tick++
+	}
+
+	return tick, nil
+}
+
+// WaitForProtocolConverterManagerInstanceState waits for an instance to reach a specific state
+func WaitForProtocolConverterManagerInstanceState(
+	ctx context.Context,
+	snapshot fsm.SystemSnapshot,
+	manager *protocolconverterfsm.ProtocolConverterManager,
+	services serviceregistry.Provider,
+	instanceName string,
+	expectedState string,
+	maxAttempts int,
+) (uint64, error) {
+	// Same pattern as in other similar functions
+	tick := snapshot.Tick
+
+	for i := 0; i < maxAttempts; i++ {
+		// Create a new snapshot copy with updated tick
+		currentSnapshot := snapshot
+		currentSnapshot.Tick = tick
+
+		// Reconcile the manager
+		err, _ := manager.Reconcile(ctx, currentSnapshot, services)
+		if err != nil {
+			return tick, err
+		}
+		tick++
+
+		// Get the instance and check its state
+		instance, found := manager.GetInstance(fmt.Sprintf("protconv-%s", instanceName))
+		if found && instance.GetCurrentFSMState() == expectedState {
+			return tick, nil
+		}
+	}
+
+	return tick, fmt.Errorf("instance %s didn't reach expected state: %s", instanceName, expectedState)
+}
+
+// WaitForProtocolConverterManagerInstanceRemoval waits for an instance to be removed
+func WaitForProtocolConverterManagerInstanceRemoval(
+	ctx context.Context,
+	snapshot fsm.SystemSnapshot,
+	manager *protocolconverterfsm.ProtocolConverterManager,
+	services serviceregistry.Provider,
+	instanceName string,
+	maxAttempts int,
+) (uint64, error) {
+	tick := snapshot.Tick
+
+	for i := 0; i < maxAttempts; i++ {
+		// Create a new snapshot copy with updated tick
+		currentSnapshot := snapshot
+		currentSnapshot.Tick = tick
+
+		// Reconcile the manager
+		err, _ := manager.Reconcile(ctx, currentSnapshot, services)
+		if err != nil {
+			return tick, err
+		}
+		tick++
+
+		// Check if the instance is gone
+		instances := manager.GetInstances()
+		if _, exists := instances[instanceName]; !exists {
+			return tick, nil
+		}
+	}
+
+	return tick, fmt.Errorf("instance %s was not removed after %d attempts", instanceName, maxAttempts)
 }

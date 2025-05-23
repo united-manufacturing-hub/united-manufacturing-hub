@@ -1,0 +1,159 @@
+// Copyright 2025 UMH Systems GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+//go:build test
+// +build test
+
+package protocolconverter_test
+
+import (
+	"context"
+
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsmtest"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
+	protocolconverterfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/protocolconverter"
+	protocolconvertersvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/protocolconverter"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
+)
+
+var _ = Describe("ProtocolConverter FSM", func() {
+	var (
+		instance        *protocolconverterfsm.ProtocolConverterInstance
+		mockService     *protocolconvertersvc.MockProtocolConverterService
+		converterName   string
+		ctx             context.Context
+		tick            uint64
+		mockSvcRegistry *serviceregistry.Registry
+	)
+
+	BeforeEach(func() {
+		converterName = "test-protocol-converter-fsm"
+		ctx = context.Background()
+		tick = 0
+
+		// Create an instance with a mock service using the fsmtest helper
+		instance, mockService, _ = fsmtest.SetupProtocolConverterInstance(converterName, protocolconverterfsm.OperationalStateIdle)
+		mockSvcRegistry = serviceregistry.NewMockRegistry()
+	})
+
+	Context("Basic State Transitions", func() {
+		It("should transition from lifecycle states (to_be_created -> creating -> ready)", func() {
+			var err error
+
+			// Test the initial transition: ToBeCreated → Creating
+			tick, err = fsmtest.TestProtocolConverterStateTransition(
+				ctx, instance, mockService, mockSvcRegistry, converterName,
+				fsm.LifecycleStateToBeCreated,
+				fsm.LifecycleStateCreating, 5, tick)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Test the next transition: Creating → Ready
+			tick, err = fsmtest.TestProtocolConverterStateTransition(
+				ctx, instance, mockService, mockSvcRegistry, converterName,
+				fsm.LifecycleStateCreating,
+				protocolconverterfsm.OperationalStateReady, 5, tick)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Verify that the AddToManager method was called
+			Expect(mockService.AddToManagerCalled).To(BeTrue())
+		})
+
+		It("should transition from stopped to active", func() {
+			var err error
+
+			// Setup to Ready state first
+			tick, err = fsmtest.TestProtocolConverterStateTransition(
+				ctx, instance, mockService, mockSvcRegistry, converterName,
+				fsm.LifecycleStateToBeCreated,
+				protocolconverterfsm.OperationalStateReady, 10, tick)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Set desired state to Active
+			Expect(instance.SetDesiredFSMState(protocolconverterfsm.OperationalStateActive)).To(Succeed())
+
+			// Test transition: Ready → Active
+			// First set the state that will be returned by the service
+			fsmtest.TransitionToProtocolConverterState(mockService, converterName, protocolconverterfsm.OperationalStateActive)
+
+			tick, err = fsmtest.TestProtocolConverterStateTransition(
+				ctx, instance, mockService, mockSvcRegistry, converterName,
+				protocolconverterfsm.OperationalStateReady,
+				protocolconverterfsm.OperationalStateActive, 5, tick)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Verify that the StartProtocolConverter method was called
+			Expect(mockService.StartProtocolConverterCalled).To(BeTrue())
+		})
+
+		It("should handle degraded state properly", func() {
+			var err error
+
+			// Setup to Active state first
+			tick, err = fsmtest.TestProtocolConverterStateTransition(
+				ctx, instance, mockService, mockSvcRegistry, converterName,
+				fsm.LifecycleStateToBeCreated,
+				protocolconverterfsm.OperationalStateActive, 15, tick)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Simulate degradation by setting mock services to return degraded state
+			fsmtest.TransitionToProtocolConverterState(mockService, converterName, protocolconverterfsm.OperationalStateDegraded)
+
+			// Test transition: Active → Degraded
+			tick, err = fsmtest.TestProtocolConverterStateTransition(
+				ctx, instance, mockService, mockSvcRegistry, converterName,
+				protocolconverterfsm.OperationalStateActive,
+				protocolconverterfsm.OperationalStateDegraded, 5, tick)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should handle lifecycle removal", func() {
+			var err error
+
+			// Setup to Active state first
+			tick, err = fsmtest.TestProtocolConverterStateTransition(
+				ctx, instance, mockService, mockSvcRegistry, converterName,
+				fsm.LifecycleStateToBeCreated,
+				protocolconverterfsm.OperationalStateActive, 15, tick)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Set desired state to Removed
+			Expect(instance.SetDesiredFSMState(fsm.LifecycleStateToBeRemoved)).To(Succeed())
+
+			// Configure for removal
+			fsmtest.TransitionToProtocolConverterState(mockService, converterName, fsm.LifecycleStateRemoving)
+
+			// Test transition: Active → ToBeRemoved → Removing
+			tick, err = fsmtest.TestProtocolConverterStateTransition(
+				ctx, instance, mockService, mockSvcRegistry, converterName,
+				protocolconverterfsm.OperationalStateActive,
+				fsm.LifecycleStateRemoving, 10, tick)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Verify that the RemoveFromManager method was called
+			Expect(mockService.RemoveFromManagerCalled).To(BeTrue())
+
+			// Configure for final removal
+			fsmtest.TransitionToProtocolConverterState(mockService, converterName, fsm.LifecycleStateRemoved)
+
+			// Test transition: Removing → Removed
+			tick, err = fsmtest.TestProtocolConverterStateTransition(
+				ctx, instance, mockService, mockSvcRegistry, converterName,
+				fsm.LifecycleStateRemoving,
+				fsm.LifecycleStateRemoved, 5, tick)
+			Expect(err).NotTo(HaveOccurred())
+		})
+	})
+})
