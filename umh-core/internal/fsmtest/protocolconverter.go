@@ -293,12 +293,13 @@ func setUpMockProtocolConverterInstance(
 //   - ctx: Context for cancellation
 //   - instance: The ProtocolConverterInstance to reconcile
 //   - mockService: The mock service to use
-//   - filesystemService: The filesystem service to use
+//   - services: The service registry provider
 //   - serviceName: The name of the service instance
 //   - fromState: Starting state to verify before transition
 //   - toState: Target state to reach
 //   - maxAttempts: Maximum number of reconcile cycles to attempt
 //   - startTick: The starting tick value for reconciliation
+//   - startTimestamp: The starting timestamp for reconciliation
 //
 // Returns:
 //   - uint64: The final tick value after transition
@@ -315,14 +316,22 @@ func TestProtocolConverterStateTransition(
 	startTick uint64,
 	startTimestamp time.Time,
 ) (uint64, error) {
-	// Verify we are in the correct starting state
+	// 1. Verify we are in the correct starting state
 	if instance.GetCurrentFSMState() != fromState {
 		return startTick, fmt.Errorf("instance not in expected state; want '%s', got '%s'", fromState, instance.GetCurrentFSMState())
 	}
 
-	// Execute reconciliation in a loop until we reach the target state
+	// 2. Set up the mock service for the target state
+	TransitionToProtocolConverterState(mockService, serviceName, toState)
+
+	// 3. Execute reconciliation in a loop until we reach the target state
 	tick := startTick
 	for i := 0; i < maxAttempts; i++ {
+		currentState := instance.GetCurrentFSMState()
+		if currentState == toState {
+			return tick, nil // Success!
+		}
+
 		// Call reconcile directly on the instance
 		snapshot := fsm.SystemSnapshot{
 			Tick:         tick,
@@ -333,106 +342,228 @@ func TestProtocolConverterStateTransition(
 			return tick, err
 		}
 		tick++
-
-		// Check if we've reached the target state
-		if instance.GetCurrentFSMState() == toState {
-			return tick, nil
-		}
 	}
 
-	return tick, fmt.Errorf("failed to reach target state '%s' after %d attempts; current state: '%s'", toState, maxAttempts, instance.GetCurrentFSMState())
+	return startTick + uint64(maxAttempts), fmt.Errorf("failed to reach target state '%s' after %d attempts; current state: '%s'", toState, maxAttempts, instance.GetCurrentFSMState())
 }
 
-// WaitForProtocolConverterManagerStable waits for the manager to reach a stable state with all instances
-func WaitForProtocolConverterManagerStable(
+// VerifyProtocolConverterStableState ensures that an instance remains in the same state
+// over multiple reconciliation cycles.
+//
+// Parameters:
+//   - ctx: Context for cancellation
+//   - snapshot: The system snapshot to use
+//   - instance: The ProtocolConverterInstance to reconcile
+//   - mockService: The mock service to use
+//   - services: The service registry provider
+//   - serviceName: The name of the service instance
+//   - expectedState: The state the instance should remain in
+//   - numCycles: Number of reconcile cycles to perform
+//
+// Returns:
+//   - uint64: The final tick value after verification
+//   - error: Any error that occurred during verification
+func VerifyProtocolConverterStableState(
 	ctx context.Context,
 	snapshot fsm.SystemSnapshot,
-	manager *protocolconverterfsm.ProtocolConverterManager,
+	instance *protocolconverterfsm.ProtocolConverterInstance,
+	mockService *protocolconvertersvc.MockProtocolConverterService,
 	services serviceregistry.Provider,
+	serviceName string,
+	expectedState string,
+	numCycles int,
 ) (uint64, error) {
-	tick := snapshot.Tick
-	maxAttempts := 10
+	// Initial state check
+	if instance.GetCurrentFSMState() != expectedState {
+		return snapshot.Tick, fmt.Errorf("instance is not in expected state %s; actual: %s",
+			expectedState, instance.GetCurrentFSMState())
+	}
 
-	for i := 0; i < maxAttempts; i++ {
-		// Create a copy of the snapshot with updated tick
+	// Ensure the mock service stays configured for the expected state
+	TransitionToProtocolConverterState(mockService, serviceName, expectedState)
+
+	// Execute reconcile cycles and check state stability
+	tick := snapshot.Tick
+	for i := 0; i < numCycles; i++ {
 		currentSnapshot := snapshot
 		currentSnapshot.Tick = tick
-
-		// Reconcile the manager
-		err, _ := manager.Reconcile(ctx, currentSnapshot, services)
-		if err != nil {
-			return tick, err
-		}
+		_, _ = instance.Reconcile(ctx, currentSnapshot, services)
 		tick++
+
+		if instance.GetCurrentFSMState() != expectedState {
+			return tick, fmt.Errorf(
+				"state changed from %s to %s during cycle %d/%d",
+				expectedState, instance.GetCurrentFSMState(), i+1, numCycles)
+		}
 	}
 
 	return tick, nil
 }
 
-// WaitForProtocolConverterManagerInstanceState waits for an instance to reach a specific state
-func WaitForProtocolConverterManagerInstanceState(
+// StabilizeProtocolConverterInstance ensures the ProtocolConverter instance reaches and remains in a stable state.
+//
+// Parameters:
+//   - ctx: Context for cancellation
+//   - snapshot: The system snapshot to use
+//   - instance: The ProtocolConverterInstance to stabilize
+//   - mockService: The mock service to use
+//   - services: The service registry provider
+//   - serviceName: The name of the service
+//   - targetState: The desired state to reach
+//   - maxAttempts: Maximum number of reconcile cycles to attempt
+//
+// Returns:
+//   - uint64: The final tick value after stabilization
+//   - error: Any error that occurred during stabilization
+func StabilizeProtocolConverterInstance(
 	ctx context.Context,
 	snapshot fsm.SystemSnapshot,
-	manager *protocolconverterfsm.ProtocolConverterManager,
+	instance *protocolconverterfsm.ProtocolConverterInstance,
+	mockService *protocolconvertersvc.MockProtocolConverterService,
 	services serviceregistry.Provider,
-	instanceName string,
-	expectedState string,
+	serviceName string,
+	targetState string,
 	maxAttempts int,
 ) (uint64, error) {
-	// Same pattern as in other similar functions
-	tick := snapshot.Tick
+	// Configure the mock service for the target state
+	TransitionToProtocolConverterState(mockService, serviceName, targetState)
 
+	// First wait for the instance to reach the target state
+	tick := snapshot.Tick
 	for i := 0; i < maxAttempts; i++ {
-		// Create a new snapshot copy with updated tick
+		currentState := instance.GetCurrentFSMState()
+		if currentState == targetState {
+			// Now verify it remains stable
+			return VerifyProtocolConverterStableState(ctx, snapshot, instance, mockService, services, serviceName, targetState, 3)
+		}
+
 		currentSnapshot := snapshot
 		currentSnapshot.Tick = tick
-
-		// Reconcile the manager
-		err, _ := manager.Reconcile(ctx, currentSnapshot, services)
-		if err != nil {
-			return tick, err
-		}
+		_, _ = instance.Reconcile(ctx, currentSnapshot, services)
 		tick++
-
-		// Get the instance and check its state
-		instance, found := manager.GetInstance(fmt.Sprintf("protconv-%s", instanceName))
-		if found && instance.GetCurrentFSMState() == expectedState {
-			return tick, nil
-		}
 	}
 
-	return tick, fmt.Errorf("instance %s didn't reach expected state: %s", instanceName, expectedState)
+	return tick, fmt.Errorf(
+		"failed to reach state %s after %d attempts; current state: %s",
+		targetState, maxAttempts, instance.GetCurrentFSMState())
 }
 
-// WaitForProtocolConverterManagerInstanceRemoval waits for an instance to be removed
-func WaitForProtocolConverterManagerInstanceRemoval(
+// ResetProtocolConverterInstanceError resets the error and backoff state of a ProtocolConverterInstance.
+// This is useful in tests to clear error conditions.
+//
+// Parameters:
+//   - mockService: The mock service to reset
+func ResetProtocolConverterInstanceError(mockService *protocolconvertersvc.MockProtocolConverterService) {
+	// Clear any error conditions in the mock
+	mockService.AddToManagerError = nil
+	mockService.UpdateInManagerError = nil
+	mockService.RemoveFromManagerError = nil
+	mockService.StartError = nil
+	mockService.StopError = nil
+	mockService.ForceRemoveError = nil
+	mockService.ReconcileManagerError = nil
+}
+
+// CreateMockProtocolConverterInstance creates a ProtocolConverter instance for testing.
+// It sets up a new instance with a mock service.
+func CreateMockProtocolConverterInstance(
+	serviceName string,
+	mockService protocolconvertersvc.IProtocolConverterService,
+	desiredState string,
+	services serviceregistry.Provider,
+) *protocolconverterfsm.ProtocolConverterInstance {
+	cfg := CreateProtocolConverterTestConfig(serviceName, desiredState)
+	instance := protocolconverterfsm.NewProtocolConverterInstance("", cfg)
+	instance.SetService(mockService)
+	return instance
+}
+
+// WaitForProtocolConverterDesiredState waits for an instance's desired state to reach a target value.
+// This is useful for testing error handling scenarios where the instance changes its own desired state.
+//
+// Parameters:
+//   - ctx: Context for cancellation
+//   - snapshot: The system snapshot to use
+//   - instance: The ProtocolConverterInstance to monitor
+//   - services: The service registry provider
+//   - targetState: The desired state to wait for
+//   - maxAttempts: Maximum number of reconcile cycles to attempt
+//
+// Returns:
+//   - uint64: The final tick value after waiting
+//   - error: Any error that occurred during waiting
+func WaitForProtocolConverterDesiredState(
 	ctx context.Context,
 	snapshot fsm.SystemSnapshot,
-	manager *protocolconverterfsm.ProtocolConverterManager,
+	instance *protocolconverterfsm.ProtocolConverterInstance,
 	services serviceregistry.Provider,
-	instanceName string,
+	targetState string,
 	maxAttempts int,
 ) (uint64, error) {
 	tick := snapshot.Tick
 
 	for i := 0; i < maxAttempts; i++ {
-		// Create a new snapshot copy with updated tick
+		// Check if we've reached the target desired state
+		if instance.GetDesiredFSMState() == targetState {
+			return tick, nil
+		}
+
+		// Run a reconcile cycle
 		currentSnapshot := snapshot
 		currentSnapshot.Tick = tick
-
-		// Reconcile the manager
-		err, _ := manager.Reconcile(ctx, currentSnapshot, services)
+		err, _ := instance.Reconcile(ctx, currentSnapshot, services)
 		if err != nil {
 			return tick, err
 		}
+
+		tick++
+	}
+
+	return tick, fmt.Errorf(
+		"failed to reach desired state %s after %d attempts; current desired state: %s",
+		targetState, maxAttempts, instance.GetDesiredFSMState())
+}
+
+// ReconcileProtocolConverterUntilError performs reconciliation until an error occurs or maximum attempts are reached.
+// This is useful for testing error handling scenarios where we expect an error to occur during reconciliation.
+//
+// Parameters:
+//   - ctx: Context for cancellation
+//   - snapshot: The system snapshot to use
+//   - instance: The ProtocolConverterInstance to reconcile
+//   - mockService: The mock service that may produce an error
+//   - services: The service registry provider
+//   - serviceName: The name of the service
+//   - maxAttempts: Maximum number of reconcile cycles to attempt
+//
+// Returns:
+//   - uint64: The final tick value after reconciliation
+//   - error: The error encountered during reconciliation (nil if no error occurred after maxAttempts)
+//   - bool: Whether reconciliation was successful (false if an error was encountered)
+func ReconcileProtocolConverterUntilError(
+	ctx context.Context,
+	snapshot fsm.SystemSnapshot,
+	instance *protocolconverterfsm.ProtocolConverterInstance,
+	mockService *protocolconvertersvc.MockProtocolConverterService,
+	services serviceregistry.Provider,
+	serviceName string,
+	maxAttempts int,
+) (uint64, error, bool) {
+	tick := snapshot.Tick
+
+	for i := 0; i < maxAttempts; i++ {
+		// Perform a reconcile cycle and capture the error and reconciled status
+		currentSnapshot := snapshot
+		currentSnapshot.Tick = tick
+		err, reconciled := instance.Reconcile(ctx, currentSnapshot, services)
 		tick++
 
-		// Check if the instance is gone
-		instances := manager.GetInstances()
-		if _, exists := instances[instanceName]; !exists {
-			return tick, nil
+		if err != nil {
+			// Error found, return it along with the current tick
+			return tick, err, reconciled
 		}
 	}
 
-	return tick, fmt.Errorf("instance %s was not removed after %d attempts", instanceName, maxAttempts)
+	// No error found after maxAttempts
+	return tick, nil, true
 }
