@@ -139,14 +139,7 @@ func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePay
 			systemSnapshotManager: systemSnapshotManager,
 		}
 	case models.GetMetrics:
-		action = &GetMetricsAction{
-			userEmail:             sender,
-			actionUUID:            payload.ActionUUID,
-			instanceUUID:          instanceUUID,
-			outboundChannel:       outboundChannel,
-			actionLogger:          log,
-			systemSnapshotManager: systemSnapshotManager,
-		}
+		action = NewGetMetricsAction(sender, payload.ActionUUID, instanceUUID, outboundChannel, systemSnapshotManager)
 
 	default:
 		log.Errorf("Unknown action type: %s", payload.ActionType)
