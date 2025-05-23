@@ -1,3 +1,4 @@
+//go:generate mockgen -destination=metrics_provider_mock.go -package=providers github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions/providers MetricsProvider
 package providers
 
 import (
