@@ -88,7 +88,7 @@ func (n *NmapInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapsho
 	}
 
 	// Step 2: Detect external changes.
-	if err := n.reconcileExternalChanges(ctx, services, snapshot.Tick, start); err != nil {
+	if err := n.reconcileExternalChanges(ctx, services, snapshot, snapshot.Tick, start); err != nil {
 		// If the service is not running, we don't want to return an error here, because we want to continue reconciling
 		if !errors.Is(err, nmap_service.ErrServiceNotExist) {
 			n.baseFSMInstance.SetError(err, snapshot.Tick)
@@ -139,7 +139,7 @@ func (n *NmapInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapsho
 
 // reconcileExternalChanges checks if the Nmap service status has changed
 // externally (e.g., if someone manually stopped or started it, or if it crashed)
-func (n *NmapInstance) reconcileExternalChanges(ctx context.Context, services serviceregistry.Provider, tick uint64, loopStartTime time.Time) error {
+func (n *NmapInstance) reconcileExternalChanges(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot, tick uint64, loopStartTime time.Time) error {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentNmapInstance, n.baseFSMInstance.GetID()+".reconcileExternalChanges", time.Since(start))
@@ -147,7 +147,7 @@ func (n *NmapInstance) reconcileExternalChanges(ctx context.Context, services se
 
 	observedStateCtx, cancel := context.WithTimeout(ctx, constants.S6UpdateObservedStateTimeout)
 	defer cancel()
-	err := n.UpdateObservedStateOfInstance(observedStateCtx, services, tick, loopStartTime)
+	err := n.UpdateObservedStateOfInstance(observedStateCtx, services, snapshot, tick, loopStartTime)
 	if err != nil {
 		if errors.Is(err, nmap_service.ErrScanFailed) {
 			return err
