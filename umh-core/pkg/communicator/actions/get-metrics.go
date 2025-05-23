@@ -87,19 +87,6 @@ func (a *GetMetricsAction) Validate() (err error) {
 	return nil
 }
 
-const (
-	// DFC metric component types
-	DFCMetricComponentTypeInput     = "input"
-	DFCMetricComponentTypeOutput    = "output"
-	DFCMetricComponentTypeProcessor = "processor"
-
-	// Redpanda metric component types
-	RedpandaMetricComponentTypeStorage = "storage"
-	RedpandaMetricComponentTypeCluster = "cluster"
-	RedpandaMetricComponentTypeKafka   = "kafka"
-	RedpandaMetricComponentTypeTopic   = "topic"
-)
-
 func getDFCMetrics(uuid string, systemSnapshotManager *fsm.SnapshotManager) (models.GetMetricsResponse, error) {
 	res := models.GetMetricsResponse{Metrics: []models.Metric{}}
 
@@ -117,33 +104,31 @@ func getDFCMetrics(uuid string, systemSnapshotManager *fsm.SnapshotManager) (mod
 	metrics := observedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.Metrics
 
 	// Process Input metrics
-	inputPath := "root.input"
 	res.Metrics = append(res.Metrics,
-		models.Metric{ValueType: models.MetricValueTypeNumber, Value: metrics.Input.ConnectionFailed, ComponentType: DFCMetricComponentTypeInput, Path: inputPath, Name: "connection_failed"},
-		models.Metric{ValueType: models.MetricValueTypeNumber, Value: metrics.Input.ConnectionLost, ComponentType: DFCMetricComponentTypeInput, Path: inputPath, Name: "connection_lost"},
-		models.Metric{ValueType: models.MetricValueTypeNumber, Value: metrics.Input.ConnectionUp, ComponentType: DFCMetricComponentTypeInput, Path: inputPath, Name: "connection_up"},
-		models.Metric{ValueType: models.MetricValueTypeNumber, Value: metrics.Input.Received, ComponentType: DFCMetricComponentTypeInput, Path: inputPath, Name: "received"},
-		models.Metric{ValueType: models.MetricValueTypeNumber, Value: metrics.Input.LatencyNS.P50, ComponentType: DFCMetricComponentTypeInput, Path: inputPath, Name: "latency_ns_p50"},
-		models.Metric{ValueType: models.MetricValueTypeNumber, Value: metrics.Input.LatencyNS.P90, ComponentType: DFCMetricComponentTypeInput, Path: inputPath, Name: "latency_ns_p90"},
-		models.Metric{ValueType: models.MetricValueTypeNumber, Value: metrics.Input.LatencyNS.P99, ComponentType: DFCMetricComponentTypeInput, Path: inputPath, Name: "latency_ns_p99"},
-		models.Metric{ValueType: models.MetricValueTypeNumber, Value: metrics.Input.LatencyNS.Sum, ComponentType: DFCMetricComponentTypeInput, Path: inputPath, Name: "latency_ns_sum"},
-		models.Metric{ValueType: models.MetricValueTypeNumber, Value: metrics.Input.LatencyNS.Count, ComponentType: DFCMetricComponentTypeInput, Path: inputPath, Name: "latency_ns_count"},
+		models.Metric{ValueType: models.MetricValueTypeNumber, Value: metrics.Input.ConnectionFailed, ComponentType: DFCMetricComponentTypeInput, Path: DFCInputPath, Name: "connection_failed"},
+		models.Metric{ValueType: models.MetricValueTypeNumber, Value: metrics.Input.ConnectionLost, ComponentType: DFCMetricComponentTypeInput, Path: DFCInputPath, Name: "connection_lost"},
+		models.Metric{ValueType: models.MetricValueTypeNumber, Value: metrics.Input.ConnectionUp, ComponentType: DFCMetricComponentTypeInput, Path: DFCInputPath, Name: "connection_up"},
+		models.Metric{ValueType: models.MetricValueTypeNumber, Value: metrics.Input.Received, ComponentType: DFCMetricComponentTypeInput, Path: DFCInputPath, Name: "received"},
+		models.Metric{ValueType: models.MetricValueTypeNumber, Value: metrics.Input.LatencyNS.P50, ComponentType: DFCMetricComponentTypeInput, Path: DFCInputPath, Name: "latency_ns_p50"},
+		models.Metric{ValueType: models.MetricValueTypeNumber, Value: metrics.Input.LatencyNS.P90, ComponentType: DFCMetricComponentTypeInput, Path: DFCInputPath, Name: "latency_ns_p90"},
+		models.Metric{ValueType: models.MetricValueTypeNumber, Value: metrics.Input.LatencyNS.P99, ComponentType: DFCMetricComponentTypeInput, Path: DFCInputPath, Name: "latency_ns_p99"},
+		models.Metric{ValueType: models.MetricValueTypeNumber, Value: metrics.Input.LatencyNS.Sum, ComponentType: DFCMetricComponentTypeInput, Path: DFCInputPath, Name: "latency_ns_sum"},
+		models.Metric{ValueType: models.MetricValueTypeNumber, Value: metrics.Input.LatencyNS.Count, ComponentType: DFCMetricComponentTypeInput, Path: DFCInputPath, Name: "latency_ns_count"},
 	)
 
 	// Process Output metrics
-	outputPath := "root.output"
 	res.Metrics = append(res.Metrics,
-		models.Metric{ValueType: models.MetricValueTypeNumber, Value: metrics.Output.BatchSent, ComponentType: DFCMetricComponentTypeOutput, Path: outputPath, Name: "batch_sent"},
-		models.Metric{ValueType: models.MetricValueTypeNumber, Value: metrics.Output.ConnectionFailed, ComponentType: DFCMetricComponentTypeOutput, Path: outputPath, Name: "connection_failed"},
-		models.Metric{ValueType: models.MetricValueTypeNumber, Value: metrics.Output.ConnectionLost, ComponentType: DFCMetricComponentTypeOutput, Path: outputPath, Name: "connection_lost"},
-		models.Metric{ValueType: models.MetricValueTypeNumber, Value: metrics.Output.ConnectionUp, ComponentType: DFCMetricComponentTypeOutput, Path: outputPath, Name: "connection_up"},
-		models.Metric{ValueType: models.MetricValueTypeNumber, Value: metrics.Output.Error, ComponentType: DFCMetricComponentTypeOutput, Path: outputPath, Name: "error"},
-		models.Metric{ValueType: models.MetricValueTypeNumber, Value: metrics.Output.Sent, ComponentType: DFCMetricComponentTypeOutput, Path: outputPath, Name: "sent"},
-		models.Metric{ValueType: models.MetricValueTypeNumber, Value: metrics.Output.LatencyNS.P50, ComponentType: DFCMetricComponentTypeOutput, Path: outputPath, Name: "latency_ns_p50"},
-		models.Metric{ValueType: models.MetricValueTypeNumber, Value: metrics.Output.LatencyNS.P90, ComponentType: DFCMetricComponentTypeOutput, Path: outputPath, Name: "latency_ns_p90"},
-		models.Metric{ValueType: models.MetricValueTypeNumber, Value: metrics.Output.LatencyNS.P99, ComponentType: DFCMetricComponentTypeOutput, Path: outputPath, Name: "latency_ns_p99"},
-		models.Metric{ValueType: models.MetricValueTypeNumber, Value: metrics.Output.LatencyNS.Sum, ComponentType: DFCMetricComponentTypeOutput, Path: outputPath, Name: "latency_ns_sum"},
-		models.Metric{ValueType: models.MetricValueTypeNumber, Value: metrics.Output.LatencyNS.Count, ComponentType: DFCMetricComponentTypeOutput, Path: outputPath, Name: "latency_ns_count"},
+		models.Metric{ValueType: models.MetricValueTypeNumber, Value: metrics.Output.BatchSent, ComponentType: DFCMetricComponentTypeOutput, Path: DFCOutputPath, Name: "batch_sent"},
+		models.Metric{ValueType: models.MetricValueTypeNumber, Value: metrics.Output.ConnectionFailed, ComponentType: DFCMetricComponentTypeOutput, Path: DFCOutputPath, Name: "connection_failed"},
+		models.Metric{ValueType: models.MetricValueTypeNumber, Value: metrics.Output.ConnectionLost, ComponentType: DFCMetricComponentTypeOutput, Path: DFCOutputPath, Name: "connection_lost"},
+		models.Metric{ValueType: models.MetricValueTypeNumber, Value: metrics.Output.ConnectionUp, ComponentType: DFCMetricComponentTypeOutput, Path: DFCOutputPath, Name: "connection_up"},
+		models.Metric{ValueType: models.MetricValueTypeNumber, Value: metrics.Output.Error, ComponentType: DFCMetricComponentTypeOutput, Path: DFCOutputPath, Name: "error"},
+		models.Metric{ValueType: models.MetricValueTypeNumber, Value: metrics.Output.Sent, ComponentType: DFCMetricComponentTypeOutput, Path: DFCOutputPath, Name: "sent"},
+		models.Metric{ValueType: models.MetricValueTypeNumber, Value: metrics.Output.LatencyNS.P50, ComponentType: DFCMetricComponentTypeOutput, Path: DFCOutputPath, Name: "latency_ns_p50"},
+		models.Metric{ValueType: models.MetricValueTypeNumber, Value: metrics.Output.LatencyNS.P90, ComponentType: DFCMetricComponentTypeOutput, Path: DFCOutputPath, Name: "latency_ns_p90"},
+		models.Metric{ValueType: models.MetricValueTypeNumber, Value: metrics.Output.LatencyNS.P99, ComponentType: DFCMetricComponentTypeOutput, Path: DFCOutputPath, Name: "latency_ns_p99"},
+		models.Metric{ValueType: models.MetricValueTypeNumber, Value: metrics.Output.LatencyNS.Sum, ComponentType: DFCMetricComponentTypeOutput, Path: DFCOutputPath, Name: "latency_ns_sum"},
+		models.Metric{ValueType: models.MetricValueTypeNumber, Value: metrics.Output.LatencyNS.Count, ComponentType: DFCMetricComponentTypeOutput, Path: DFCOutputPath, Name: "latency_ns_count"},
 	)
 
 	// Process processor metrics
@@ -182,34 +167,30 @@ func getRedpandaMetrics(systemSnapshot *fsm.SnapshotManager) (models.GetMetricsR
 	metrics := observedState.ServiceInfoSnapshot.RedpandaStatus.RedpandaMetrics.Metrics
 
 	// Process storage metrics
-	storagePath := "redpanda.storage"
 	storageMetrics := metrics.Infrastructure.Storage
 	res.Metrics = append(res.Metrics,
-		models.Metric{ValueType: models.MetricValueTypeNumber, Value: storageMetrics.FreeBytes, ComponentType: RedpandaMetricComponentTypeStorage, Path: storagePath, Name: "disk_free_bytes"},
-		models.Metric{ValueType: models.MetricValueTypeNumber, Value: storageMetrics.TotalBytes, ComponentType: RedpandaMetricComponentTypeStorage, Path: storagePath, Name: "disk_total_bytes"},
-		models.Metric{ValueType: models.MetricValueTypeBoolean, Value: storageMetrics.FreeSpaceAlert, ComponentType: RedpandaMetricComponentTypeStorage, Path: storagePath, Name: "disk_free_space_alert"},
+		models.Metric{ValueType: models.MetricValueTypeNumber, Value: storageMetrics.FreeBytes, ComponentType: RedpandaMetricComponentTypeStorage, Path: RedpandaStoragePath, Name: "disk_free_bytes"},
+		models.Metric{ValueType: models.MetricValueTypeNumber, Value: storageMetrics.TotalBytes, ComponentType: RedpandaMetricComponentTypeStorage, Path: RedpandaStoragePath, Name: "disk_total_bytes"},
+		models.Metric{ValueType: models.MetricValueTypeBoolean, Value: storageMetrics.FreeSpaceAlert, ComponentType: RedpandaMetricComponentTypeStorage, Path: RedpandaStoragePath, Name: "disk_free_space_alert"},
 	)
 
 	// Process cluster metrics
-	clusterPath := "redpanda.cluster"
 	clusterMetrics := metrics.Cluster
 	res.Metrics = append(res.Metrics,
-		models.Metric{ValueType: models.MetricValueTypeNumber, Value: clusterMetrics.Topics, ComponentType: RedpandaMetricComponentTypeCluster, Path: clusterPath, Name: "topics"},
-		models.Metric{ValueType: models.MetricValueTypeNumber, Value: clusterMetrics.UnavailableTopics, ComponentType: RedpandaMetricComponentTypeCluster, Path: clusterPath, Name: "unavailable_partitions"},
+		models.Metric{ValueType: models.MetricValueTypeNumber, Value: clusterMetrics.Topics, ComponentType: RedpandaMetricComponentTypeCluster, Path: RedpandaClusterPath, Name: "topics"},
+		models.Metric{ValueType: models.MetricValueTypeNumber, Value: clusterMetrics.UnavailableTopics, ComponentType: RedpandaMetricComponentTypeCluster, Path: RedpandaClusterPath, Name: "unavailable_partitions"},
 	)
 
 	// Process kafka metrics (throughput)
-	kafkaPath := "redpanda.kafka"
 	res.Metrics = append(res.Metrics,
-		models.Metric{ValueType: models.MetricValueTypeNumber, Value: metrics.Throughput.BytesIn, ComponentType: RedpandaMetricComponentTypeKafka, Path: kafkaPath, Name: "request_bytes_in"},
-		models.Metric{ValueType: models.MetricValueTypeNumber, Value: metrics.Throughput.BytesOut, ComponentType: RedpandaMetricComponentTypeKafka, Path: kafkaPath, Name: "request_bytes_out"},
+		models.Metric{ValueType: models.MetricValueTypeNumber, Value: metrics.Throughput.BytesIn, ComponentType: RedpandaMetricComponentTypeKafka, Path: RedpandaKafkaPath, Name: "request_bytes_in"},
+		models.Metric{ValueType: models.MetricValueTypeNumber, Value: metrics.Throughput.BytesOut, ComponentType: RedpandaMetricComponentTypeKafka, Path: RedpandaKafkaPath, Name: "request_bytes_out"},
 	)
 
 	// Process topic metrics
-	topicPath := "redpanda.topic"
 	for topicName, partitionCount := range metrics.Topic.TopicPartitionMap {
 		res.Metrics = append(res.Metrics,
-			models.Metric{ValueType: models.MetricValueTypeNumber, Value: partitionCount, ComponentType: RedpandaMetricComponentTypeTopic, Path: topicPath, Name: fmt.Sprintf("%s_partitions", topicName)},
+			models.Metric{ValueType: models.MetricValueTypeNumber, Value: partitionCount, ComponentType: RedpandaMetricComponentTypeTopic, Path: RedpandaTopicPath, Name: fmt.Sprintf("%s_partitions", topicName)},
 		)
 	}
 
@@ -256,3 +237,26 @@ func (a *GetMetricsAction) getUuid() uuid.UUID {
 func (a *GetMetricsAction) GetParsedPayload() models.GetMetricsRequest {
 	return a.payload
 }
+
+const (
+	// DFC paths
+	DFCInputPath  = "root.input"
+	DFCOutputPath = "root.output"
+
+	// DFC metric component types
+	DFCMetricComponentTypeInput     = "input"
+	DFCMetricComponentTypeOutput    = "output"
+	DFCMetricComponentTypeProcessor = "processor"
+
+	// Redpanda paths
+	RedpandaStoragePath = "redpanda.storage"
+	RedpandaClusterPath = "redpanda.cluster"
+	RedpandaKafkaPath   = "redpanda.kafka"
+	RedpandaTopicPath   = "redpanda.topic"
+
+	// Redpanda metric component types
+	RedpandaMetricComponentTypeStorage = "storage"
+	RedpandaMetricComponentTypeCluster = "cluster"
+	RedpandaMetricComponentTypeKafka   = "kafka"
+	RedpandaMetricComponentTypeTopic   = "topic"
+)
