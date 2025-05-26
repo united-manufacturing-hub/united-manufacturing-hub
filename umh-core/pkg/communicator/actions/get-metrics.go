@@ -105,7 +105,7 @@ func (a *GetMetricsAction) Validate() (err error) {
 func (a *GetMetricsAction) Execute() (interface{}, map[string]interface{}, error) {
 	a.actionLogger.Info("Executing the action")
 
-	metrics, err := a.provider.GetMetrics(a.payload, a.systemSnapshotManager)
+	metrics, err := a.provider.GetMetrics(a.payload, a.systemSnapshotManager.GetDeepCopySnapshot())
 	if err != nil {
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, err.Error(), a.outboundChannel, models.GetMetrics)
 		return nil, nil, err

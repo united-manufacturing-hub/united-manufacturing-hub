@@ -29,19 +29,19 @@ import (
 type MetricsProvider interface {
 	// GetMetrics retrieves metrics from the appropriate source based on the payload type.
 	// It returns a response object with an array of metrics or an error if the retrieval fails.
-	GetMetrics(payload models.GetMetricsRequest, snapshotManager *fsm.SnapshotManager) (models.GetMetricsResponse, error)
+	GetMetrics(payload models.GetMetricsRequest, snapshot fsm.SystemSnapshot) (models.GetMetricsResponse, error)
 }
 
 // DefaultMetricsProvider implements the MetricsProvider interface
 type DefaultMetricsProvider struct{}
 
 // GetMetrics delegates to the appropriate helper function based on resource type
-func (p *DefaultMetricsProvider) GetMetrics(payload models.GetMetricsRequest, snapshotManager *fsm.SnapshotManager) (models.GetMetricsResponse, error) {
+func (p *DefaultMetricsProvider) GetMetrics(payload models.GetMetricsRequest, snapshot fsm.SystemSnapshot) (models.GetMetricsResponse, error) {
 	switch payload.Type {
 	case models.DFCMetricResourceType:
-		return getDFCMetrics(payload.UUID, snapshotManager)
+		return getDFCMetrics(payload.UUID, snapshot)
 	case models.RedpandaMetricResourceType:
-		return getRedpandaMetrics(snapshotManager)
+		return getRedpandaMetrics(snapshot)
 	default:
 		return models.GetMetricsResponse{}, fmt.Errorf("unsupported metric type: %s", payload.Type)
 	}
@@ -51,10 +51,10 @@ func (p *DefaultMetricsProvider) GetMetrics(payload models.GetMetricsRequest, sn
 // to a standardized format matching the Get-Metrics API response structure.
 // The metrics are organized by component types that match Benthos' naming conventions.
 // See: https://docs.redpanda.com/redpanda-connect/components/metrics/about/#metric-names
-func getDFCMetrics(uuid string, systemSnapshotManager *fsm.SnapshotManager) (models.GetMetricsResponse, error) {
+func getDFCMetrics(uuid string, snapshot fsm.SystemSnapshot) (models.GetMetricsResponse, error) {
 	res := models.GetMetricsResponse{Metrics: []models.Metric{}}
 
-	dfcInstance, err := fsm.FindDfcInstanceByUUID(systemSnapshotManager.GetDeepCopySnapshot(), uuid)
+	dfcInstance, err := fsm.FindDfcInstanceByUUID(snapshot, uuid)
 	if err != nil {
 		return res, err
 	}
@@ -121,10 +121,10 @@ func getDFCMetrics(uuid string, systemSnapshotManager *fsm.SnapshotManager) (mod
 // to a standardized format matching the Get-Metrics API response structure.
 // The metrics are organized by component types that match Redpanda's naming conventions.
 // See: https://docs.redpanda.com/current/reference/public-metrics-reference
-func getRedpandaMetrics(systemSnapshot *fsm.SnapshotManager) (models.GetMetricsResponse, error) {
+func getRedpandaMetrics(snapshot fsm.SystemSnapshot) (models.GetMetricsResponse, error) {
 	res := models.GetMetricsResponse{Metrics: []models.Metric{}}
 
-	redpandaInst, ok := fsm.FindInstance(systemSnapshot.GetDeepCopySnapshot(), constants.RedpandaManagerName, constants.RedpandaInstanceName)
+	redpandaInst, ok := fsm.FindInstance(snapshot, constants.RedpandaManagerName, constants.RedpandaInstanceName)
 	if !ok || redpandaInst == nil {
 		return res, fmt.Errorf("redpanda instance not found")
 	}

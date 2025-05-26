@@ -56,16 +56,16 @@ func (m *MockMetricsProvider) EXPECT() *MockMetricsProviderMockRecorder {
 }
 
 // GetMetrics mocks base method.
-func (m *MockMetricsProvider) GetMetrics(payload models.GetMetricsRequest, snapshotManager *fsm.SnapshotManager) (models.GetMetricsResponse, error) {
+func (m *MockMetricsProvider) GetMetrics(payload models.GetMetricsRequest, snapshot fsm.SystemSnapshot) (models.GetMetricsResponse, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetMetrics", payload, snapshotManager)
+	ret := m.ctrl.Call(m, "GetMetrics", payload, snapshot)
 	ret0, _ := ret[0].(models.GetMetricsResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetMetrics indicates an expected call of GetMetrics.
-func (mr *MockMetricsProviderMockRecorder) GetMetrics(payload, snapshotManager any) *gomock.Call {
+func (mr *MockMetricsProviderMockRecorder) GetMetrics(payload, snapshot any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMetrics", reflect.TypeOf((*MockMetricsProvider)(nil).GetMetrics), payload, snapshotManager)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMetrics", reflect.TypeOf((*MockMetricsProvider)(nil).GetMetrics), payload, snapshot)
 }

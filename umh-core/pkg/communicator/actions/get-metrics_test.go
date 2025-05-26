@@ -28,6 +28,7 @@ import (
 	dfc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"go.uber.org/mock/gomock"
+	"go.uber.org/zap"
 )
 
 var _ = Describe("GetMetricsAction", func() {
@@ -43,6 +44,7 @@ var _ = Describe("GetMetricsAction", func() {
 		dfcName         string
 		dfcUUID         uuid.UUID
 		snapshotManager *fsm.SnapshotManager
+		log             = zap.NewNop().Sugar()
 	)
 
 	BeforeEach(func() {
@@ -74,7 +76,7 @@ var _ = Describe("GetMetricsAction", func() {
 		})
 
 		// Set up the action with our mock provider
-		action = actions.NewGetMetricsActionWithProvider(userEmail, actionUUID, instanceUUID, outboundChannel, snapshotManager, nil, mockProvider)
+		action = actions.NewGetMetricsActionWithProvider(userEmail, actionUUID, instanceUUID, outboundChannel, snapshotManager, log, mockProvider)
 	})
 
 	AfterEach(func() {
@@ -209,7 +211,7 @@ var _ = Describe("GetMetricsAction", func() {
 					},
 				}
 				mockProvider.EXPECT().
-					GetMetrics(gomock.Any(), snapshotManager).
+					GetMetrics(gomock.Any(), snapshotManager.GetDeepCopySnapshot()).
 					Return(expectedRes, nil).
 					Times(1)
 			}, 2),
@@ -241,7 +243,7 @@ var _ = Describe("GetMetricsAction", func() {
 					},
 				}
 				mockProvider.EXPECT().
-					GetMetrics(gomock.Any(), snapshotManager).
+					GetMetrics(gomock.Any(), snapshotManager.GetDeepCopySnapshot()).
 					Return(expectedRes, nil).
 					Times(1)
 			}, 3))
@@ -249,7 +251,7 @@ var _ = Describe("GetMetricsAction", func() {
 		It("should handle metrics provider errors gracefully", func() {
 			// Setup mock provider to return an error
 			mockProvider.EXPECT().
-				GetMetrics(gomock.Any(), snapshotManager).
+				GetMetrics(gomock.Any(), snapshotManager.GetDeepCopySnapshot()).
 				Return(models.GetMetricsResponse{}, fmt.Errorf("failed to get metrics")).
 				Times(1)
 
@@ -272,7 +274,7 @@ var _ = Describe("GetMetricsAction", func() {
 		DescribeTable("should handle missing FSM instance gracefully:", func(metricType models.MetricResourceType) {
 			// Use REAL action with internal provider to test the error handling
 			emptySnapshotManager := fsm.NewSnapshotManager()
-			action = actions.NewGetMetricsAction(userEmail, actionUUID, instanceUUID, outboundChannel, emptySnapshotManager, nil)
+			action = actions.NewGetMetricsAction(userEmail, actionUUID, instanceUUID, outboundChannel, emptySnapshotManager, log)
 
 			payload := map[string]interface{}{
 				"type": metricType,
@@ -298,7 +300,7 @@ var _ = Describe("GetMetricsAction", func() {
 
 		It("should return an error when a non-existent DFC UUID is provided", func() {
 			// Use REAL action with internal provider to test the error handling
-			action = actions.NewGetMetricsAction(userEmail, actionUUID, instanceUUID, outboundChannel, snapshotManager, nil)
+			action = actions.NewGetMetricsAction(userEmail, actionUUID, instanceUUID, outboundChannel, snapshotManager, log)
 
 			payload := map[string]interface{}{
 				"type": models.DFCMetricResourceType,
