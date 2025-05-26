@@ -103,3 +103,27 @@ func ConfigsEqual(desired, observed ProtocolConverterServiceConfigSpec) bool {
 func ConfigDiff(desired, observed ProtocolConverterServiceConfigSpec) string {
 	return defaultComparator.ConfigDiff(desired, observed)
 }
+
+// ConfigsEqualRuntime is a package-level function for comparing runtime configurations
+func ConfigsEqualRuntime(desired, observed ProtocolConverterServiceConfigRuntime) bool {
+	// Convert runtime configs to spec configs for comparison
+	// This allows us to reuse the existing comparison logic
+	desiredSpec := ProtocolConverterServiceConfigSpec{Template: ProtocolConverterServiceConfigTemplate(desired)}
+	observedSpec := ProtocolConverterServiceConfigSpec{Template: ProtocolConverterServiceConfigTemplate(observed)}
+	return defaultComparator.ConfigsEqual(desiredSpec, observedSpec)
+}
+
+// ConfigDiffRuntime is a package-level function for generating diffs between runtime configurations
+func ConfigDiffRuntime(desired, observed ProtocolConverterServiceConfigRuntime) string {
+	// Convert runtime configs to spec configs for diffing
+	// This allows us to reuse the existing diff generation logic
+	desiredSpec := ProtocolConverterServiceConfigSpec{Template: ProtocolConverterServiceConfigTemplate(desired)}
+	observedSpec := ProtocolConverterServiceConfigSpec{Template: ProtocolConverterServiceConfigTemplate(observed)}
+	return defaultComparator.ConfigDiff(desiredSpec, observedSpec)
+}
+
+// SpecToRuntime converts a ProtocolConverterServiceConfigSpec to a ProtocolConverterServiceConfigRuntime
+// This is commonly used when we need to convert from the config structure to the runtime structure
+func SpecToRuntime(spec ProtocolConverterServiceConfigSpec) ProtocolConverterServiceConfigRuntime {
+	return ProtocolConverterServiceConfigRuntime(spec.Template)
+}

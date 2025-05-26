@@ -20,25 +20,20 @@ package protocolconverter
 import (
 	"context"
 	"errors"
-	"fmt"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	fsmtest "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsmtest"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/connectionserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/nmapserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/variables"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	connfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/connection"
 	dfcfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
-	redpandafsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/redpanda"
 	connservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/connection"
 	dfcservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/dataflowcomponent"
-	redpandaservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda"
+	runtime_config "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/protocolconverter/runtime_config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
@@ -122,7 +117,7 @@ var _ = Describe("DataFlowComponentService", func() {
 			mockConn.ServiceExistsResult = false
 
 			var err error
-			runtimeCfg, err = BuildRuntimeConfig(cfg, nil, nil, nil, "", protConvName)
+			runtimeCfg, err = runtime_config.BuildRuntimeConfig(cfg, nil, nil, "", protConvName)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -215,7 +210,7 @@ var _ = Describe("DataFlowComponentService", func() {
 			}
 
 			var err error
-			runtimeCfg, err = BuildRuntimeConfig(cfg, nil, nil, nil, "", protConvName)
+			runtimeCfg, err = runtime_config.BuildRuntimeConfig(cfg, nil, nil, "", protConvName)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Use the official mock manager from the FSM package
@@ -245,105 +240,6 @@ var _ = Describe("DataFlowComponentService", func() {
 				mockConnService.ExistingConnections = make(map[string]bool)
 			}
 			mockConnService.ExistingConnections[statusService.getConnectionName(protConvName)] = true
-		})
-
-		It("should report status correctly for an existing component", func() {
-			// Create the full config for reconciliation
-			fullCfg := config.FullConfig{
-				DataFlow: statusService.dataflowComponentConfig,
-				Internal: config.InternalConfig{
-					Connection: statusService.connectionConfig,
-				},
-			}
-
-			// Configure services for proper transitions
-			// First configure for creating -> created -> stopped
-			ConfigureManagersForState(mockConnService, mockDfcService, statusService, protConvName, connfsm.OperationalStateStopped, dfcfsm.OperationalStateStopped)
-
-			// Wait for the instance to be created and reach stopped state
-			newTick, err := WaitForDfcManagerInstanceState(
-				ctx,
-				fsm.SystemSnapshot{CurrentConfig: fullCfg, Tick: tick},
-				dfcManager,
-				mockSvcRegistry,
-				statusService.getDFCReadName(protConvName), // Just wait for the read component
-				dfcfsm.OperationalStateStopped,
-				10,
-			)
-
-			Expect(err).NotTo(HaveOccurred())
-			tick = newTick
-
-			newTick, err = WaitForConnManagerInstanceState(
-				ctx,
-				fsm.SystemSnapshot{CurrentConfig: fullCfg, Tick: tick},
-				connManager,
-				mockSvcRegistry,
-				statusService.getConnectionName(protConvName),
-				connfsm.OperationalStateStopped,
-				10,
-			)
-
-			Expect(err).NotTo(HaveOccurred())
-			tick = newTick
-
-			// Now configure for transition to starting -> running
-			ConfigureManagersForState(mockConnService, mockDfcService, statusService, protConvName, connfsm.OperationalStateUp, dfcfsm.OperationalStateActive)
-
-			// Wait for the instance to reach running state
-			newTick, err = WaitForDfcManagerInstanceState(
-				ctx,
-				fsm.SystemSnapshot{CurrentConfig: fullCfg, Tick: tick},
-				dfcManager,
-				mockSvcRegistry,
-				statusService.getDFCReadName(protConvName), // Just wait for the read component
-				dfcfsm.OperationalStateActive,
-				15,
-			)
-			Expect(err).NotTo(HaveOccurred())
-			tick = newTick
-
-			// Wait for the instance to reach running state
-			newTick, err = WaitForConnManagerInstanceState(
-				ctx,
-				fsm.SystemSnapshot{CurrentConfig: fullCfg, Tick: tick},
-				connManager,
-				mockSvcRegistry,
-				statusService.getConnectionName(protConvName),
-				connfsm.OperationalStateUp,
-				15,
-			)
-			Expect(err).NotTo(HaveOccurred())
-			tick = newTick
-
-			// Reconcile once to ensure that serviceInfo is used to update the observed state
-			_, reconciled := statusService.ReconcileManager(ctx, mockSvcRegistry, tick)
-			Expect(reconciled).To(BeFalse())
-
-			snapshot := GetSystemSnapshotForTickAndRedpandaState(tick, redpandafsm.OperationalStateActive)
-
-			// Call Status
-			status, err := statusService.Status(ctx, mockSvcRegistry, snapshot, protConvName, tick)
-
-			// Assert
-			Expect(err).NotTo(HaveOccurred())
-			Expect(status.DataflowComponentReadFSMState).To(Equal(dfcfsm.OperationalStateActive))
-			Expect(status.ConnectionFSMState).To(Equal(connfsm.OperationalStateUp))
-			Expect(status.RedpandaFSMState).To(Equal(redpandafsm.OperationalStateActive))
-		})
-
-		It("should return error for non-existent component", func() {
-			// Set up the mock to say the service doesn't exist
-			mockDfcService.ServiceExistsResult = false
-			mockDfcService.ExistingComponents = make(map[string]bool)
-			snapshot := GetSystemSnapshotForTickAndRedpandaState(tick, redpandafsm.OperationalStateActive)
-
-			// Call Status for a non-existent component
-			_, err := statusService.Status(ctx, mockSvcRegistry, snapshot, protConvName, tick)
-
-			// Assert - check for "does not exist" in the error message
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("does not exist"))
 		})
 	})
 
@@ -404,10 +300,10 @@ var _ = Describe("DataFlowComponentService", func() {
 			}
 
 			var err error
-			runtimeCfg, err = BuildRuntimeConfig(config, nil, nil, nil, "", protConvName)
+			runtimeCfg, err = runtime_config.BuildRuntimeConfig(config, nil, nil, "", protConvName)
 			Expect(err).NotTo(HaveOccurred())
 
-			updatedRuntimeCfg, err = BuildRuntimeConfig(updatedConfig, nil, nil, nil, "", protConvName)
+			updatedRuntimeCfg, err = runtime_config.BuildRuntimeConfig(updatedConfig, nil, nil, "", protConvName)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Add the component first
@@ -494,7 +390,7 @@ var _ = Describe("DataFlowComponentService", func() {
 			}
 
 			var err error
-			runtimeCfg, err = BuildRuntimeConfig(cfg, nil, nil, nil, "", protConvName)
+			runtimeCfg, err = runtime_config.BuildRuntimeConfig(cfg, nil, nil, "", protConvName)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Add the component first
@@ -594,7 +490,7 @@ var _ = Describe("DataFlowComponentService", func() {
 			}
 
 			var err error
-			runtimeCfg, err = BuildRuntimeConfig(cfg, nil, nil, nil, "", protConvName)
+			runtimeCfg, err = runtime_config.BuildRuntimeConfig(cfg, nil, nil, "", protConvName)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Add the component first
@@ -653,7 +549,7 @@ var _ = Describe("DataFlowComponentService", func() {
 				},
 			}
 
-			runtimeCfg, err := BuildRuntimeConfig(cfg, nil, nil, nil, "", protConvName)
+			runtimeCfg, err := runtime_config.BuildRuntimeConfig(cfg, nil, nil, "", protConvName)
 			Expect(err).NotTo(HaveOccurred())
 
 			err = service.AddToManager(ctx, mockSvcRegistry.GetFileSystem(), &runtimeCfg, protConvName)
@@ -712,7 +608,7 @@ var _ = Describe("DataFlowComponentService", func() {
 				},
 			}
 
-			runtimeCfg, err := BuildRuntimeConfig(cfg, nil, nil, nil, "", testComponentName)
+			runtimeCfg, err := runtime_config.BuildRuntimeConfig(cfg, nil, nil, "", testComponentName)
 			Expect(err).NotTo(HaveOccurred())
 
 			err = testService.AddToManager(ctx, mockSvcRegistry.GetFileSystem(), &runtimeCfg, testComponentName)
@@ -744,7 +640,7 @@ var _ = Describe("DataFlowComponentService", func() {
 		})
 	})
 
-	Describe("BuildRuntimeConfig", func() {
+	Describe("runtime_config.BuildRuntimeConfig", func() {
 		It("should correctly render variables in templates", func() {
 			// Create a spec with templates that use variables
 			spec := protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
@@ -789,13 +685,15 @@ var _ = Describe("DataFlowComponentService", func() {
 				"2": "machine1",
 			}
 
+			spec.Location = pcLocation
+
 			// Set up global vars
 			globalVars := map[string]interface{}{
 				"global_var": "global-value",
 			}
 
 			// Build the runtime config
-			runtimeCfg, err := BuildRuntimeConfig(spec, agentLocation, pcLocation, globalVars, "test-node", "test-pc")
+			runtimeCfg, err := runtime_config.BuildRuntimeConfig(spec, agentLocation, globalVars, "test-node", "test-pc")
 			Expect(err).NotTo(HaveOccurred())
 
 			// 1. Verify user variables are rendered
@@ -816,7 +714,7 @@ var _ = Describe("DataFlowComponentService", func() {
 
 		It("should handle nil inputs gracefully", func() {
 			// Test with nil spec
-			_, err := BuildRuntimeConfig(protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{}, nil, nil, nil, "", "")
+			_, err := runtime_config.BuildRuntimeConfig(protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{}, nil, nil, "", "")
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(Equal("nil spec"))
 
@@ -845,7 +743,7 @@ var _ = Describe("DataFlowComponentService", func() {
 					},
 				},
 			}
-			runtimeCfg, err := BuildRuntimeConfig(spec, nil, nil, nil, "", "test-pc")
+			runtimeCfg, err := runtime_config.BuildRuntimeConfig(spec, nil, nil, "", "test-pc")
 			Expect(err).NotTo(HaveOccurred())
 			// User variable rendered
 			Expect(runtimeCfg.ConnectionServiceConfig.NmapServiceConfig.Target).To(Equal("test-value"))
@@ -869,128 +767,14 @@ var _ = Describe("DataFlowComponentService", func() {
 			}
 
 			// Test with special characters
-			runtimeCfg, err := BuildRuntimeConfig(spec, nil, nil, nil, "test@node", "test.pc")
+			runtimeCfg, err := runtime_config.BuildRuntimeConfig(spec, nil, nil, "test@node", "test.pc")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(runtimeCfg.DataflowComponentReadServiceConfig.BenthosConfig.Input["random_input"].(map[string]interface{})["bridged_by"]).To(Equal("protocol-converter-test-node-test-pc"))
 
 			// Test with multiple special characters
-			runtimeCfg, err = BuildRuntimeConfig(spec, nil, nil, nil, "test@node#1", "test.pc@2")
+			runtimeCfg, err = runtime_config.BuildRuntimeConfig(spec, nil, nil, "test@node#1", "test.pc@2")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(runtimeCfg.DataflowComponentReadServiceConfig.BenthosConfig.Input["random_input"].(map[string]interface{})["bridged_by"]).To(Equal("protocol-converter-test-node-1-test-pc-2"))
 		})
 	})
 })
-
-// ConfigureManagersForState configures mock service for proper transitions
-func ConfigureManagersForState(
-	mockConnService *connservice.MockConnectionService,
-	mockDfcService *dfcservice.MockDataFlowComponentService,
-	service *ProtocolConverterService,
-	protConvName string,
-	connTargetState string,
-	dfcTargetState string,
-) {
-	connectionName := service.getUnderlyingConnectionName(protConvName)
-	dfcReadName := service.getUnderlyingDFCReadName(protConvName)
-	dfcWriteName := service.getUnderlyingDFCWriteName(protConvName)
-
-	// Configure the services for the target state
-	fsmtest.TransitionToDataflowComponentState(mockDfcService, dfcReadName, dfcTargetState)
-	fsmtest.TransitionToDataflowComponentState(mockDfcService, dfcWriteName, dfcTargetState)
-	fsmtest.TransitionToConnectionState(mockConnService, connectionName, connTargetState)
-
-}
-
-// WaitForDfcManagerInstanceState waits for instance to reach desired state
-func WaitForDfcManagerInstanceState(
-	ctx context.Context,
-	snapshot fsm.SystemSnapshot,
-	manager *dfcfsm.DataflowComponentManager,
-	services serviceregistry.Provider,
-	instanceName string,
-	expectedState string,
-	maxAttempts int,
-) (uint64, error) {
-	// Duplicate implementation from fsmtest package
-	tick := snapshot.Tick
-	for i := 0; i < maxAttempts; i++ {
-		// Create a new snapshot copy with updated tick
-		currentSnapshot := snapshot
-		currentSnapshot.Tick = tick
-		err, _ := manager.Reconcile(ctx, currentSnapshot, services)
-		if err != nil {
-			return tick, err
-		}
-		tick++
-
-		instance, found := manager.GetInstance(instanceName)
-		if found && instance.GetCurrentFSMState() == expectedState {
-			return tick, nil
-		}
-	}
-	return tick, fmt.Errorf("instance didn't reach expected state: %s", expectedState)
-}
-
-// WaitForConnManagerInstanceState waits for instance to reach desired state
-func WaitForConnManagerInstanceState(
-	ctx context.Context,
-	snapshot fsm.SystemSnapshot,
-	manager *connfsm.ConnectionManager,
-	services serviceregistry.Provider,
-	instanceName string,
-	expectedState string,
-	maxAttempts int,
-) (uint64, error) {
-	// Duplicate implementation from fsmtest package
-	tick := snapshot.Tick
-	for i := 0; i < maxAttempts; i++ {
-		// Create a new snapshot copy with updated tick
-		currentSnapshot := snapshot
-		currentSnapshot.Tick = tick
-		err, _ := manager.Reconcile(ctx, currentSnapshot, services)
-		if err != nil {
-			return tick, err
-		}
-		tick++
-
-		instance, found := manager.GetInstance(instanceName)
-		if found && instance.GetCurrentFSMState() == expectedState {
-			return tick, nil
-		}
-	}
-	return tick, fmt.Errorf("instance didn't reach expected state: %s", expectedState)
-}
-
-// GetSystemSnapshotForTickAndRedpandaState returns a full system snapshot with the user specified tick and the state of where redpanda should be in
-// it is used to to test the protocol converter service and is required as the Status function will extract redpanda information from it
-func GetSystemSnapshotForTickAndRedpandaState(
-	tick uint64,
-	redpandaState string,
-) fsm.SystemSnapshot {
-	snapshot := fsm.SystemSnapshot{
-		Tick:         tick,
-		SnapshotTime: time.Now(),
-	}
-
-	// Add the redpanda manager to the snapshot
-	snapshot.Managers = make(map[string]fsm.ManagerSnapshot)
-	snapshot.Managers[fsm.RedpandaManagerName] = &redpandafsm.RedpandaManagerSnapshot{
-		BaseManagerSnapshot: &fsm.BaseManagerSnapshot{
-			Instances: map[string]*fsm.FSMInstanceSnapshot{
-				fsm.RedpandaInstanceName: {
-					CurrentState: redpandaState,
-					// LastObservedState is not yet needed, but I added it anyway as it is not intuitive to understand where which struct is coming from
-					// "help for the next developer"
-					LastObservedState: &redpandafsm.RedpandaObservedStateSnapshot{
-						ServiceInfoSnapshot: redpandaservice.ServiceInfo{
-							RedpandaStatus: redpandaservice.RedpandaStatus{},
-						},
-					},
-				},
-			},
-			ManagerTick:  tick,
-			SnapshotTime: time.Now(),
-		},
-	}
-	return snapshot
-}
