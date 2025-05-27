@@ -20,6 +20,7 @@ package protocolconverter
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -233,13 +234,13 @@ var _ = Describe("DataFlowComponentService", func() {
 			if mockDfcService.ExistingComponents == nil {
 				mockDfcService.ExistingComponents = make(map[string]bool)
 			}
-			mockDfcService.ExistingComponents[statusService.getDFCReadName(protConvName)] = true
+			mockDfcService.ExistingComponents[fmt.Sprintf("dataflow-read-protocolconverter-%s", protConvName)] = true
 
 			mockConnService.ServiceExistsResult = true
 			if mockConnService.ExistingConnections == nil {
 				mockConnService.ExistingConnections = make(map[string]bool)
 			}
-			mockConnService.ExistingConnections[statusService.getConnectionName(protConvName)] = true
+			mockConnService.ExistingConnections[fmt.Sprintf("connection-protocolconverter-%s", protConvName)] = true
 		})
 	})
 
