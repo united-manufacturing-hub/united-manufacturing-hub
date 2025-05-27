@@ -129,7 +129,7 @@ func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePay
 			actionLogger:          log,
 			systemSnapshotManager: systemSnapshotManager,
 		}
-	case models.GetDataFlowComponentMetrics:
+	case models.GetDataFlowComponentMetrics: //nolint:staticcheck // Deprecated but kept for back compat
 		action = &GetDataflowcomponentMetricsAction{
 			userEmail:             sender,
 			actionUUID:            payload.ActionUUID,

@@ -39,7 +39,7 @@ type GetDataflowcomponentMetricsAction struct {
 	systemSnapshotManager *fsm.SnapshotManager
 
 	// ─── Parsed request payload ─────────────────────────────────────────────
-	payload models.GetDataflowcomponentMetricsRequest
+	payload models.GetDataflowcomponentMetricsRequest //nolint:staticcheck // Deprecated but kept for back compat
 
 	// ─── Utilities ──────────────────────────────────────────────────────────
 	actionLogger *zap.SugaredLogger
@@ -58,7 +58,7 @@ func NewGetDataflowcomponentMetricsAction(userEmail string, actionUUID uuid.UUID
 
 func (a *GetDataflowcomponentMetricsAction) Parse(payload interface{}) (err error) {
 	a.actionLogger.Info("Parsing the payload")
-	a.payload, err = ParseActionPayload[models.GetDataflowcomponentMetricsRequest](payload)
+	a.payload, err = ParseActionPayload[models.GetDataflowcomponentMetricsRequest](payload) //nolint:staticcheck // Deprecated but kept for back compat
 	a.actionLogger.Info("Payload parsed: %v", a.payload)
 	return err
 }
@@ -81,14 +81,14 @@ func (a *GetDataflowcomponentMetricsAction) Validate() (err error) {
 func (a *GetDataflowcomponentMetricsAction) Execute() (interface{}, map[string]interface{}, error) {
 	dfcInstance, err := fsm.FindDfcInstanceByUUID(a.systemSnapshotManager.GetDeepCopySnapshot(), a.payload.UUID)
 	if err != nil {
-		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, "failed to find DFC instance", a.outboundChannel, models.GetDataFlowComponentMetrics)
+		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, "failed to find DFC instance", a.outboundChannel, models.GetDataFlowComponentMetrics) //nolint:staticcheck // Deprecated but kept for back compat
 		return nil, nil, err
 	}
 
 	// Safety check to ensure LastObservedState is not nil
 	if dfcInstance.LastObservedState == nil {
 		err = fmt.Errorf("DFC instance %s has no observed state", a.payload.UUID)
-		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, err.Error(), a.outboundChannel, models.GetDataFlowComponentMetrics)
+		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, err.Error(), a.outboundChannel, models.GetDataFlowComponentMetrics) //nolint:staticcheck // Deprecated but kept for back compat
 		return nil, nil, err
 	}
 
@@ -157,7 +157,7 @@ func (a *GetDataflowcomponentMetricsAction) getUuid() uuid.UUID {
 	return a.actionUUID
 }
 
-func (a *GetDataflowcomponentMetricsAction) GetParsedPayload() models.GetDataflowcomponentMetricsRequest {
+func (a *GetDataflowcomponentMetricsAction) GetParsedPayload() models.GetDataflowcomponentMetricsRequest { //nolint:staticcheck // Deprecated but kept for back compat
 	return a.payload
 }
 
