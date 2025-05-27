@@ -114,7 +114,7 @@ var _ = Describe("DataFlowComponentService", func() {
 			Expect(service.benthosConfigs[0].Name).To(Equal(benthosName))
 
 			// Verify the desired state is set correctly
-			Expect(service.benthosConfigs[0].DesiredFSMState).To(Equal(benthosfsmmanager.OperationalStateActive))
+			Expect(service.benthosConfigs[0].DesiredFSMState).To(Equal(benthosfsmmanager.OperationalStateStopped))
 		})
 
 		It("should return error when component already exists", func() {
@@ -218,6 +218,10 @@ var _ = Describe("DataFlowComponentService", func() {
 			// Now configure for transition to starting -> running
 			ConfigureBenthosManagerForState(mockBenthosService, benthosName, benthosfsmmanager.OperationalStateActive)
 
+			// Start it
+			err = statusService.StartDataFlowComponent(ctx, mockSvcRegistry.GetFileSystem(), componentName)
+			Expect(err).NotTo(HaveOccurred())
+
 			// Wait for the instance to reach running state
 			newTick, err = WaitForBenthosManagerInstanceState(
 				ctx,
@@ -314,7 +318,7 @@ var _ = Describe("DataFlowComponentService", func() {
 			for _, config := range service.benthosConfigs {
 				if config.Name == benthosName {
 					found = true
-					Expect(config.DesiredFSMState).To(Equal(benthosfsmmanager.OperationalStateActive))
+					Expect(config.DesiredFSMState).To(Equal(benthosfsmmanager.OperationalStateStopped))
 					// In a real test, we'd verify the BenthosServiceConfig was updated as expected
 					break
 				}

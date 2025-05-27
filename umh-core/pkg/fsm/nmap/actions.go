@@ -21,6 +21,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
@@ -147,7 +148,7 @@ func (n *NmapInstance) CheckForCreation(ctx context.Context, filesystemService f
 }
 
 // UpdateObservedStateOfInstance updates the observed state of the service
-func (n *NmapInstance) UpdateObservedStateOfInstance(ctx context.Context, services serviceregistry.Provider, tick uint64, loopTime time.Time) error {
+func (n *NmapInstance) UpdateObservedStateOfInstance(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot, tick uint64, loopTime time.Time) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
@@ -163,14 +164,13 @@ func (n *NmapInstance) UpdateObservedStateOfInstance(ctx context.Context, servic
 	start := time.Now()
 	svcInfo, err := n.monitorService.Status(ctx, services.GetFileSystem(), n.config.Name, tick)
 	if err != nil {
-		// We want to return this specific error here, because we need to check
-		// whether the execution of Nmap failed multiple times in a row and set this
-		// as a permanent Error. This also might happen, because we read the nmap
-		// metrics from logs, which can be inconsistent in some ticks.
-		if errors.Is(err, nmap_service.ErrScanFailed) {
-			return err
+		if strings.Contains(err.Error(), nmap_service.ErrServiceNotExist.Error()) {
+			// Log the error but don't fail - this might happen during creation when nmap doesn't exist yet
+			n.baseFSMInstance.GetLogger().Debugf("Service not found, will be created during reconciliation: %v", err)
+			return nil
+		} else {
+			return fmt.Errorf("failed to get nmap metrics: %w", err)
 		}
-		return fmt.Errorf("failed to get nmap metrics: %w", err)
 	}
 	metrics.ObserveReconcileTime(logger.ComponentNmapInstance, n.baseFSMInstance.GetID()+".getServiceStatus", time.Since(start))
 

@@ -90,7 +90,7 @@ func (c *ConnectionInstance) Reconcile(ctx context.Context, snapshot fsm.SystemS
 	}
 
 	// Step 2: Detect external changes.
-	if err = c.reconcileExternalChanges(ctx, services, snapshot.Tick); err != nil {
+	if err = c.reconcileExternalChanges(ctx, services, snapshot, snapshot.Tick); err != nil {
 		// If the service is not running, we don't want to return an error here, because we want to continue reconciling
 		if !errors.Is(err, connectionsvc.ErrServiceNotExist) {
 
@@ -145,7 +145,7 @@ func (c *ConnectionInstance) Reconcile(ctx context.Context, snapshot fsm.SystemS
 
 // reconcileExternalChanges checks if the ConnectionInstance service status has changed
 // externally (e.g., if someone manually stopped or started it, or if it crashed)
-func (c *ConnectionInstance) reconcileExternalChanges(ctx context.Context, services serviceregistry.Provider, tick uint64) error {
+func (c *ConnectionInstance) reconcileExternalChanges(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot, tick uint64) error {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentConnectionInstance, c.baseFSMInstance.GetID()+".reconcileExternalChanges", time.Since(start))
@@ -156,7 +156,7 @@ func (c *ConnectionInstance) reconcileExternalChanges(ctx context.Context, servi
 	observedStateCtx, cancel := context.WithTimeout(ctx, constants.ConnectionUpdateObservedStateTimeout)
 	defer cancel()
 
-	err := c.UpdateObservedStateOfInstance(observedStateCtx, services, tick, start)
+	err := c.UpdateObservedStateOfInstance(observedStateCtx, services, snapshot, tick, start)
 	if err != nil {
 		return fmt.Errorf("failed to update observed state: %w", err)
 	}
