@@ -27,6 +27,8 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/control"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/protocolconverter"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
@@ -143,19 +145,60 @@ func SystemSnapshotLogger(ctx context.Context, controlLoop *control.ControlLoop,
 				continue
 			}
 
-			snap_logger.Infof("System snapshot at tick %d, managers: %d",
+			snap_logger.Infof("=== System Snapshot (Tick %d) - %d Managers ===",
 				snapshot.Tick, len(snapshot.Managers))
 
 			// Log manager information
 			for managerName, manager := range snapshot.Managers {
 				instances := manager.GetInstances()
-				snap_logger.Infof("Manager: %s, instances: %d, tick: %d",
-					managerName, len(instances), manager.GetManagerTick())
 
-				// Log instance information
-				for instanceName, instance := range instances {
-					snap_logger.Infof("Instance: %s, current state: %s, desired state: %s",
-						instanceName, instance.CurrentState, instance.DesiredState)
+				if len(instances) == 0 {
+					snap_logger.Infof("📁 %s (tick: %d) - No instances",
+						managerName, manager.GetManagerTick())
+				} else {
+					snap_logger.Infof("📁 %s (tick: %d) - %d instance(s):",
+						managerName, manager.GetManagerTick(), len(instances))
+
+					// Log instance information with indentation
+					for instanceName, instance := range instances {
+						statusReason := ""
+
+						// Extract StatusReason from LastObservedState based on manager type
+						if instance.LastObservedState != nil {
+							switch managerName {
+							case "DataFlowCompManagerCore":
+								if dfcSnapshot, ok := instance.LastObservedState.(*dataflowcomponent.DataflowComponentObservedStateSnapshot); ok {
+									statusReason = dfcSnapshot.ServiceInfo.StatusReason
+								}
+							case "ProtocolConverterManagerCore":
+								if pcSnapshot, ok := instance.LastObservedState.(*protocolconverter.ProtocolConverterObservedStateSnapshot); ok {
+									statusReason = pcSnapshot.ServiceInfo.StatusReason
+								}
+							}
+						}
+
+						// Format state with emojis for better visibility
+						stateIcon := "🔄"
+						if instance.CurrentState == instance.DesiredState {
+							if instance.CurrentState == "active" {
+								stateIcon = "✅"
+							} else if instance.CurrentState == "stopped" {
+								stateIcon = "⏹️"
+							} else if instance.CurrentState == "idle" {
+								stateIcon = "💤"
+							}
+						} else {
+							stateIcon = "⚠️"
+						}
+
+						if statusReason != "" {
+							snap_logger.Infof("  └─ %s %s: %s → %s | %s",
+								stateIcon, instanceName, instance.CurrentState, instance.DesiredState, statusReason)
+						} else {
+							snap_logger.Infof("  └─ %s %s: %s → %s",
+								stateIcon, instanceName, instance.CurrentState, instance.DesiredState)
+						}
+					}
 				}
 			}
 		}

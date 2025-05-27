@@ -35,7 +35,9 @@ protocolConverter:
           benthos:
             input:
               generate:
-                mapping: root = "hello world from Benthos!"
+                mapping: |
+                  root = "hello world from Benthos!"
+                  meta topic = "umh.v1.test"
                 interval: 1s # Output every 1 seconds
                 count: 0 # Set to 0 for unlimited messages
       variables:
