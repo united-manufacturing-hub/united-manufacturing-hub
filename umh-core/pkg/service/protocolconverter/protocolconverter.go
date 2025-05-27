@@ -451,7 +451,7 @@ func (p *ProtocolConverterService) AddToManager(
 	connectionConfig := config.ConnectionConfig{
 		FSMInstanceConfig: config.FSMInstanceConfig{
 			Name:            underlyingConnectionName,
-			DesiredFSMState: connectionfsm.OperationalStateUp,
+			DesiredFSMState: connectionfsm.OperationalStateStopped,
 		},
 		ConnectionServiceConfig: connServiceConfig,
 	}
@@ -459,7 +459,7 @@ func (p *ProtocolConverterService) AddToManager(
 	dfcReadConfig := config.DataFlowComponentConfig{
 		FSMInstanceConfig: config.FSMInstanceConfig{
 			Name:            underlyingDFCReadName,
-			DesiredFSMState: dfcfsm.OperationalStateActive,
+			DesiredFSMState: dfcfsm.OperationalStateStopped,
 		},
 		DataFlowComponentServiceConfig: dfcReadServiceConfig,
 	}
@@ -467,7 +467,7 @@ func (p *ProtocolConverterService) AddToManager(
 	dfcWriteConfig := config.DataFlowComponentConfig{
 		FSMInstanceConfig: config.FSMInstanceConfig{
 			Name:            underlyingDFCWriteName,
-			DesiredFSMState: dfcfsm.OperationalStateActive,
+			DesiredFSMState: dfcfsm.OperationalStateStopped,
 		},
 		DataFlowComponentServiceConfig: dfcWriteServiceConfig,
 	}
@@ -656,6 +656,7 @@ func (p *ProtocolConverterService) RemoveFromManager(
 
 // Start starts a ProtocolConverter
 // Expects protConvName (e.g. "protocolconverter-myservice") as defined in the UMH config
+// Starts DFCs only when they are not empty
 func (p *ProtocolConverterService) StartProtocolConverter(
 	ctx context.Context,
 	filesystemService filesystem.Service,
@@ -696,7 +697,12 @@ func (p *ProtocolConverterService) StartProtocolConverter(
 	dfcWriteFound := false
 	for i, config := range p.dataflowComponentConfig {
 		if config.Name == dfcReadName {
-			p.dataflowComponentConfig[i].DesiredFSMState = dfcfsm.OperationalStateActive
+			// Only start the DFC, if it has been configured
+			if len(p.dataflowComponentConfig[i].DataFlowComponentServiceConfig.BenthosConfig.Input) > 0 {
+				p.dataflowComponentConfig[i].DesiredFSMState = dfcfsm.OperationalStateActive
+			} else {
+				p.dataflowComponentConfig[i].DesiredFSMState = dfcfsm.OperationalStateStopped
+			}
 			dfcReadFound = true
 			break
 		}
@@ -704,7 +710,12 @@ func (p *ProtocolConverterService) StartProtocolConverter(
 
 	for i, config := range p.dataflowComponentConfig {
 		if config.Name == dfcWriteName {
-			p.dataflowComponentConfig[i].DesiredFSMState = dfcfsm.OperationalStateActive
+			// Only start the DFC, if it has been configured
+			if len(p.dataflowComponentConfig[i].DataFlowComponentServiceConfig.BenthosConfig.Input) > 0 {
+				p.dataflowComponentConfig[i].DesiredFSMState = dfcfsm.OperationalStateActive
+			} else {
+				p.dataflowComponentConfig[i].DesiredFSMState = dfcfsm.OperationalStateStopped
+			}
 			dfcWriteFound = true
 			break
 		}
@@ -769,6 +780,7 @@ func (p *ProtocolConverterService) StopProtocolConverter(
 		if config.Name == dfcWriteName {
 			p.dataflowComponentConfig[i].DesiredFSMState = dfcfsm.OperationalStateStopped
 			dfcWriteFound = true
+			break
 		}
 	}
 
