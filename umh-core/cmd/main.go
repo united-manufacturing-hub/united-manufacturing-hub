@@ -178,16 +178,15 @@ func SystemSnapshotLogger(ctx context.Context, controlLoop *control.ControlLoop,
 						}
 
 						// Format state with emojis for better visibility
-						stateIcon := "🔄"
-						if instance.CurrentState == instance.DesiredState {
-							if instance.CurrentState == "active" {
-								stateIcon = "✅"
-							} else if instance.CurrentState == "stopped" {
-								stateIcon = "⏹️"
-							} else if instance.CurrentState == "idle" {
-								stateIcon = "💤"
-							}
-						} else {
+						stateIcon := "⚠️"
+						switch instance.CurrentState {
+						case "active":
+							stateIcon = "✅"
+						case "stopped":
+							stateIcon = "⏹️"
+						case "idle":
+							stateIcon = "💤"
+						case "degraded":
 							stateIcon = "⚠️"
 						}
 
