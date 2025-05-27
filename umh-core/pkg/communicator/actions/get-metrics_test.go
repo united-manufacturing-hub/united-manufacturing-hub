@@ -211,7 +211,7 @@ var _ = Describe("GetMetricsAction", func() {
 					},
 				}
 				mockProvider.EXPECT().
-					GetMetrics(gomock.Any(), snapshotManager.GetDeepCopySnapshot()).
+					GetMetrics(gomock.Any(), gomock.AssignableToTypeOf(fsm.SystemSnapshot{})).
 					Return(expectedRes, nil).
 					Times(1)
 			}, 2),
@@ -243,7 +243,7 @@ var _ = Describe("GetMetricsAction", func() {
 					},
 				}
 				mockProvider.EXPECT().
-					GetMetrics(gomock.Any(), snapshotManager.GetDeepCopySnapshot()).
+					GetMetrics(gomock.Any(), gomock.AssignableToTypeOf(fsm.SystemSnapshot{})).
 					Return(expectedRes, nil).
 					Times(1)
 			}, 3))
@@ -251,7 +251,7 @@ var _ = Describe("GetMetricsAction", func() {
 		It("should handle metrics provider errors gracefully", func() {
 			// Setup mock provider to return an error
 			mockProvider.EXPECT().
-				GetMetrics(gomock.Any(), snapshotManager.GetDeepCopySnapshot()).
+				GetMetrics(gomock.Any(), gomock.AssignableToTypeOf(fsm.SystemSnapshot{})).
 				Return(models.GetMetricsResponse{}, fmt.Errorf("failed to get metrics")).
 				Times(1)
 
