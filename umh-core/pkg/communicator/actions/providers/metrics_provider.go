@@ -56,7 +56,7 @@ func getDFCMetrics(uuid string, snapshot fsm.SystemSnapshot) (models.GetMetricsR
 
 	dfcInstance, err := fsm.FindDfcInstanceByUUID(snapshot, uuid)
 	if err != nil {
-		return res, fmt.Errorf("failed to find the DFC instance: %w", err)
+		return res, fmt.Errorf("failed to find the %s instance: %w", models.DFCMetricResourceType, err)
 	}
 
 	observedState, ok := dfcInstance.LastObservedState.(*dataflowcomponent.DataflowComponentObservedStateSnapshot)
@@ -126,7 +126,7 @@ func getRedpandaMetrics(snapshot fsm.SystemSnapshot) (models.GetMetricsResponse,
 
 	redpandaInst, ok := fsm.FindInstance(snapshot, constants.RedpandaManagerName, constants.RedpandaInstanceName)
 	if !ok || redpandaInst == nil {
-		return res, fmt.Errorf("failed to find the redpanda instance")
+		return res, fmt.Errorf("failed to find the %s instance", models.RedpandaMetricResourceType)
 	}
 
 	observedState, ok := redpandaInst.LastObservedState.(*redpanda.RedpandaObservedStateSnapshot)

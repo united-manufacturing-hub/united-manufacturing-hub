@@ -292,7 +292,7 @@ var _ = Describe("GetMetricsAction", func() {
 			result, _, err := action.Execute()
 			Expect(result).To(BeNil())
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("not found"))
+			Expect(err.Error()).To(ContainSubstring("failed to find the %s instance", metricType))
 		},
 			Entry("dfc", models.DFCMetricResourceType),
 			Entry("redpanda", models.RedpandaMetricResourceType),
