@@ -1,0 +1,43 @@
+# Copyright 2025 UMH Systems GmbH
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# ---------- Agent-wide settings ---------- #
+agent:
+  metricsPort: 8080
+  location:            # authoritative, can’t be overridden
+    0: "plant-A"
+    1: "line-4"
+
+# ---------- Protocol-converters ---------- #
+protocolConverter:
+  - name: vibration-sensor-pc
+    desiredState: active
+    protocolConverterServiceConfig:
+      location:
+        2: "machine-7"
+      template:
+        connection:
+          nmap:
+            target:   "localhost"
+            port:     8080
+        #dataflowcomponent_read:
+        #  benthos:
+        #    input:
+        #      generate:
+        #        mapping: root = "hello world from Benthos!"
+        #        interval: 1s # Output every 1 seconds
+        #        count: 0 # Set to 0 for unlimited messages
+      variables:
+        HOST:   "localhost"
+        PORT: "8080"
