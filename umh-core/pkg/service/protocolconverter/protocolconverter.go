@@ -349,9 +349,9 @@ func (p *ProtocolConverterService) Status(
 		return ServiceInfo{}, ErrServiceNotExist
 	}
 
-	connectionName := p.getConnectionName(protConvName)
-	dfcReadName := p.getDFCReadName(protConvName)
-	dfcWriteName := p.getDFCWriteName(protConvName)
+	underlyingConnectionName := p.getUnderlyingConnectionName(protConvName)
+	underlyingDFCReadName := p.getUnderlyingDFCReadName(protConvName)
+	underlyingDFCWriteName := p.getUnderlyingDFCWriteName(protConvName)
 
 	// --- redpanda (only one instance) -------------------------------------------------------------
 	rpInst, ok := fsm.FindInstance(snapshot, fsm.RedpandaManagerName, fsm.RedpandaInstanceName)
@@ -379,7 +379,7 @@ func (p *ProtocolConverterService) Status(
 	// -- connection --------------------------------------------------------------------------------
 
 	// get last observed states
-	connectionStatus, err := p.connectionManager.GetLastObservedState(connectionName)
+	connectionStatus, err := p.connectionManager.GetLastObservedState(underlyingConnectionName)
 	if err != nil {
 		return ServiceInfo{}, fmt.Errorf("failed to get connection observed state: %w", err)
 	}
@@ -391,14 +391,14 @@ func (p *ProtocolConverterService) Status(
 	}
 
 	// get current fsm states
-	connectionFSMState, err := p.connectionManager.GetCurrentFSMState(connectionName)
+	connectionFSMState, err := p.connectionManager.GetCurrentFSMState(underlyingConnectionName)
 	if err != nil {
 		return ServiceInfo{}, fmt.Errorf("failed to get connection FSM state: %w", err)
 	}
 
 	// -- DFC Read --------------------------------------------------------------------------------
 
-	dfcReadStatus, err := p.dataflowComponentManager.GetLastObservedState(dfcReadName)
+	dfcReadStatus, err := p.dataflowComponentManager.GetLastObservedState(underlyingDFCReadName)
 	dfcReadExists := err == nil
 	var dfcReadObservedState dfcfsm.DataflowComponentObservedState
 	var dfcReadFSMState string
@@ -408,7 +408,7 @@ func (p *ProtocolConverterService) Status(
 			return ServiceInfo{}, fmt.Errorf("read dataflowcomponent status for dataflowcomponent %s is not a DataflowComponentObservedState", protConvName)
 		}
 
-		dfcReadFSMState, err = p.dataflowComponentManager.GetCurrentFSMState(dfcReadName)
+		dfcReadFSMState, err = p.dataflowComponentManager.GetCurrentFSMState(underlyingDFCReadName)
 		if err != nil {
 			return ServiceInfo{}, fmt.Errorf("failed to get read dataflowcomponent FSM state: %w", err)
 		}
@@ -416,7 +416,7 @@ func (p *ProtocolConverterService) Status(
 
 	// -- DFC Write --------------------------------------------------------------------------------
 
-	dfcWriteStatus, err := p.dataflowComponentManager.GetLastObservedState(dfcWriteName)
+	dfcWriteStatus, err := p.dataflowComponentManager.GetLastObservedState(underlyingDFCWriteName)
 	dfcWriteExists := err == nil
 	var dfcWriteObservedState dfcfsm.DataflowComponentObservedState
 	var dfcWriteFSMState string
@@ -426,7 +426,7 @@ func (p *ProtocolConverterService) Status(
 			return ServiceInfo{}, fmt.Errorf("write dataflowcomponent status for dataflowcomponent %s is not a DataflowComponentObservedState", protConvName)
 		}
 
-		dfcWriteFSMState, err = p.dataflowComponentManager.GetCurrentFSMState(dfcWriteName)
+		dfcWriteFSMState, err = p.dataflowComponentManager.GetCurrentFSMState(underlyingDFCWriteName)
 		if err != nil {
 			return ServiceInfo{}, fmt.Errorf("failed to get write dataflowcomponent FSM state: %w", err)
 		}
