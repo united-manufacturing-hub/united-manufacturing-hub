@@ -247,42 +247,6 @@ func (p *ProtocolConverterService) getUnderlyingDFCWriteName(protConvName string
 	return fmt.Sprintf("write-%s", p.getUnderlyingName(protConvName))
 }
 
-// getConnectionName returns the **internal** name under which the Connection
-// instance is stored inside the Connection manager.
-// The manager prepends its own `"connection-"` prefix to the external name.
-//
-// Example:
-//
-//	protConvName = "mixing-station"
-//	→ "connection-protocolconverter-mixing-station"
-func (p *ProtocolConverterService) getConnectionName(protConvName string) string {
-	return fmt.Sprintf("connection-%s", p.getUnderlyingName(protConvName))
-}
-
-// getDFCReadName returns the **internal** name under which the *reading*
-// Data-flow-Component instance is stored inside the DFC manager.
-// The manager prepends its `"dataflow-"` prefix to the external read name.
-//
-// Example:
-//
-//	protConvName = "mixing-station"
-//	→ "dataflow-read-protocolconverter-mixing-station"
-func (p *ProtocolConverterService) getDFCReadName(protConvName string) string {
-	return fmt.Sprintf("dataflow-%s", p.getUnderlyingDFCReadName(protConvName))
-}
-
-// getDFCWriteName returns the **internal** name under which the *writing*
-// Data-flow-Component instance is stored inside the DFC manager.
-// The manager prepends its `"dataflow-"` prefix to the external write name.
-//
-// Example:
-//
-//	protConvName = "mixing-station"
-//	→ "dataflow-write-protocolconverter-mixing-station"
-func (p *ProtocolConverterService) getDFCWriteName(protConvName string) string {
-	return fmt.Sprintf("dataflow-%s", p.getUnderlyingDFCWriteName(protConvName))
-}
-
 // GetConfig pulls the **actual** runtime configuration that is currently
 // deployed for the given Protocol-Converter.
 //
