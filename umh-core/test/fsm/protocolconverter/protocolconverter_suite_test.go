@@ -12,8 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package nmap provides functionality for managing nmap scan services.
-// This package has been refactored to use service logs for scan results,
-// so the parser.go file is no longer needed. All parsing functionality
-// is now implemented in nmap.go in the parseScanLogs method.
-package nmap
+//go:build test
+// +build test
+
+package protocolconverter_test
+
+import (
+	"testing"
+
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+)
+
+func TestProtocolConverter(t *testing.T) {
+	RegisterFailHandler(Fail)
+	RunSpecs(t, "ProtocolConverter FSM Suite")
+}
