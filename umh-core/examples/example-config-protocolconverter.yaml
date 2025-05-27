@@ -31,13 +31,13 @@ protocolConverter:
           nmap:
             target:   "localhost"
             port:     8080
-        #dataflowcomponent_read:
-        #  benthos:
-        #    input:
-        #      generate:
-        #        mapping: root = "hello world from Benthos!"
-        #        interval: 1s # Output every 1 seconds
-        #        count: 0 # Set to 0 for unlimited messages
+        dataflowcomponent_read:
+          benthos:
+            input:
+              generate:
+                mapping: root = "hello world from Benthos!"
+                interval: 1s # Output every 1 seconds
+                count: 0 # Set to 0 for unlimited messages
       variables:
         HOST:   "localhost"
         PORT: "8080"
