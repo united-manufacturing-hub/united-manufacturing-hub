@@ -29,17 +29,28 @@ protocolConverter:
       template:
         connection:
           nmap:
-            target:   "localhost"
+            target:   "{{ .HOST }}"
             port:     8080
         dataflowcomponent_read:
           benthos:
             input:
               generate:
-                mapping: |
-                  root = "hello world from Benthos!"
-                  meta topic = "umh.v1.test"
-                interval: 1s # Output every 1 seconds
-                count: 0 # Set to 0 for unlimited messages
+                  count: 0
+                  interval: 1s
+                  mapping: |
+                      root = random_int(min:10, max:20)
+            pipeline:
+              processors:
+                  - tag_processor:
+                      defaults: |
+                        // Minimal example
+                        msg.meta.location_path = "{{ .location_path }}"; // auto-generated path from agent and protocol converter location
+                        msg.meta.data_contract = "_raw";
+                        msg.meta.tag_name      = "random_int";
+                        msg.meta.host          = "{{ .HOST }}"; // optional metadata
+                        msg.meta.port          = "{{ .PORT }}"; // optional metadata
+                        // tag_processor now auto-creates msg.meta.topic
+                        return msg;
       variables:
         HOST:   "localhost"
         PORT: "8080"

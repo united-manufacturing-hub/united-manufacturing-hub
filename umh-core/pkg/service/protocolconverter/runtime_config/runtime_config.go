@@ -132,6 +132,16 @@ func BuildRuntimeConfig(
 		}
 	}
 
+	// 1d) generate location path (dot-separated string)
+	var pathParts []string
+	for i := 0; i <= maxLevel; i++ {
+		key := strconv.Itoa(i)
+		if val, exists := loc[key]; exists {
+			pathParts = append(pathParts, val)
+		}
+	}
+	locationPath := strings.Join(pathParts, ".")
+
 	//----------------------------------------------------------------------
 	// 2. Assemble the **complete** variable bundle
 	//----------------------------------------------------------------------
@@ -140,6 +150,7 @@ func BuildRuntimeConfig(
 		vb.User = map[string]any{}
 	}
 	vb.User["location"] = loc // merged map
+	vb.User["location_path"] = locationPath
 
 	if len(globalVars) != 0 {
 		vb.Global = globalVars
