@@ -61,7 +61,7 @@ func (g *Generator) configToMap(cfg ProtocolConverterServiceConfigSpec) map[stri
 	// Get the template configs
 	dfcReadConfigMap := dfcGenerator.ConfigToMap(cfg.Template.DataflowComponentReadServiceConfig)
 	dfcWriteConfigMap := dfcGenerator.ConfigToMap(cfg.Template.DataflowComponentWriteServiceConfig)
-	connectionConfigMap := connectionGenerator.ConfigToMap(cfg.Template.ConnectionServiceConfig)
+	connectionConfigMap := connectionGenerator.ConfigToMap(connectionserviceconfig.ConvertTemplateToRuntime(cfg.Template.ConnectionServiceConfig))
 	variableBundleConfigMap := variableBundleGenerator.ConfigToMap(cfg.Variables)
 
 	configMap := make(map[string]any)

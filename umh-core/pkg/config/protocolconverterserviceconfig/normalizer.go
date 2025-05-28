@@ -41,7 +41,7 @@ func (n *Normalizer) NormalizeConfig(cfg ProtocolConverterServiceConfigSpec) Pro
 
 	// Then we  need to normalize the underlying ConnectionServiceConfig
 	connectionNormalizer := connectionserviceconfig.NewNormalizer()
-	normalized.Template.ConnectionServiceConfig = connectionNormalizer.NormalizeConfig(normalized.GetConnectionServiceConfig())
+	normalized.Template.ConnectionServiceConfig = connectionserviceconfig.ConvertRuntimeToTemplate(connectionNormalizer.NormalizeConfig(connectionserviceconfig.ConvertTemplateToRuntime(normalized.GetConnectionServiceConfig())))
 
 	// Then we need to normalize the variables
 	variablesNormalizer := variables.NewNormalizer()
