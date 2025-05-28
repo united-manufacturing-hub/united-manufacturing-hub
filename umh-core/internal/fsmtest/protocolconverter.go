@@ -62,7 +62,14 @@ var (
 		},
 	}
 
-	goodConnectionServiceConfig = connectionserviceconfig.ConnectionServiceConfig{
+	goodConnectionServiceConfig = connectionserviceconfig.ConnectionServiceConfigTemplate{
+		NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
+			Target: "localhost",
+			Port:   "443",
+		},
+	}
+
+	goodConnectionServiceConfigRuntime = connectionserviceconfig.ConnectionServiceConfigRuntime{
 		NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
 			Target: "localhost",
 			Port:   443,
@@ -134,7 +141,7 @@ func ConfigureProtocolConverterServiceConfig(mockService *protocolconvertersvc.M
 		DataflowComponentReadServiceConfig: goodDataflowComponentReadConfig,
 		// TODO: add write DFC config
 		// DataflowComponentWriteServiceConfig: goodDataflowComponentWriteConfig,
-		ConnectionServiceConfig: goodConnectionServiceConfig,
+		ConnectionServiceConfig: goodConnectionServiceConfigRuntime,
 	}
 }
 
@@ -143,7 +150,7 @@ func ConfigureProtocolConverterServiceConfigWithMissingDfc(mockService *protocol
 		DataflowComponentReadServiceConfig: missingDataflowComponentConfig,
 		// TODO: add write DFC config
 		// DataflowComponentWriteServiceConfig: missingDataflowComponentConfig,
-		ConnectionServiceConfig: goodConnectionServiceConfig,
+		ConnectionServiceConfig: goodConnectionServiceConfigRuntime,
 	}
 }
 

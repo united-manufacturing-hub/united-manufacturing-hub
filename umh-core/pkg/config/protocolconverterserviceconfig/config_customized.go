@@ -19,9 +19,10 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 )
 
-// GetConnectionServiceConfig converts the component config to a full ProtocolConverterServiceConfig
-// no customization needed
-func (c ProtocolConverterServiceConfigSpec) GetConnectionServiceConfig() connectionserviceconfig.ConnectionServiceConfig {
+// GetConnectionServiceConfig returns the template form of the connection config.
+// This is used during rendering to access the template that may contain variables like {{ .PORT }}.
+// The template will be rendered into a runtime config with proper types during BuildRuntimeConfig.
+func (c ProtocolConverterServiceConfigSpec) GetConnectionServiceConfig() connectionserviceconfig.ConnectionServiceConfigTemplate {
 	return c.Template.ConnectionServiceConfig
 }
 
