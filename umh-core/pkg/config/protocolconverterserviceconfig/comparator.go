@@ -50,7 +50,10 @@ func (c *Comparator) ConfigsEqual(desired, observed ProtocolConverterServiceConf
 	// compare variables
 	comparatorVariable := variables.NewComparator()
 
-	return comparatorConnection.ConfigsEqual(connectionD, connectionO) &&
+	connectionDTemplate := connectionserviceconfig.ConvertTemplateToRuntime(connectionD)
+	connectionOTemplate := connectionserviceconfig.ConvertTemplateToRuntime(connectionO)
+
+	return comparatorConnection.ConfigsEqual(connectionDTemplate, connectionOTemplate) &&
 		comparatorDFC.ConfigsEqual(dfcReadD, dfcReadO) &&
 		comparatorDFC.ConfigsEqual(dfcWriteD, dfcWriteO) &&
 		comparatorVariable.ConfigsEqual(desired.Variables, observed.Variables)
@@ -69,7 +72,9 @@ func (c *Comparator) ConfigDiff(desired, observed ProtocolConverterServiceConfig
 
 	// diff for connection
 	comparatorConnection := connectionserviceconfig.NewComparator()
-	connectionDiff := comparatorConnection.ConfigDiff(connectionD, connectionO)
+	connectionDTemplate := connectionserviceconfig.ConvertTemplateToRuntime(connectionD)
+	connectionOTemplate := connectionserviceconfig.ConvertTemplateToRuntime(connectionO)
+	connectionDiff := comparatorConnection.ConfigDiff(connectionDTemplate, connectionOTemplate)
 
 	// diff for dfc's
 	comparatorDFC := dataflowcomponentserviceconfig.NewComparator()

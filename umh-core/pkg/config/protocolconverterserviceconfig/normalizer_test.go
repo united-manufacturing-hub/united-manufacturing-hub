@@ -19,7 +19,6 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/connectionserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/nmapserviceconfig"
 )
 
 var _ = Describe("ProtocolConverter YAML Normalizer", func() {
@@ -38,10 +37,10 @@ var _ = Describe("ProtocolConverter YAML Normalizer", func() {
 		It("should preserve existing values", func() {
 			config := ProtocolConverterServiceConfigSpec{
 				Template: ProtocolConverterServiceConfigTemplate{
-					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
-						NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
+					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+						NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
 							Target: "127.0.0.1",
-							Port:   443,
+							Port:   "443",
 						},
 					},
 					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{

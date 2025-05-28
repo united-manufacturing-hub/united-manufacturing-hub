@@ -30,7 +30,7 @@ protocolConverter:
         connection:
           nmap:
             target:   "{{ .HOST }}"
-            port:     8080
+            port:     "{{ .PORT }}"    # Now templatable! Resolves to proper uint16 at runtime
         dataflowcomponent_read:
           benthos:
             input:
