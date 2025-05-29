@@ -43,6 +43,7 @@ var _ = Describe("GetMetricsAction", func() {
 		mockProvider *MockMetricsProvider
 
 		action          *actions.GetMetricsAction
+		actionFactory   actions.ActionFactory
 		userEmail       string
 		actionUUID      uuid.UUID
 		instanceUUID    uuid.UUID
@@ -133,7 +134,7 @@ var _ = Describe("GetMetricsAction", func() {
 		})
 
 		// Set up the action with our mock provider
-		factory := actions.ActionFactory{
+		actionFactory = actions.ActionFactory{
 			ActionDependencies: actions.ActionDependencies{
 				UserEmail:             userEmail,
 				ActionUUID:            actionUUID,
@@ -143,7 +144,7 @@ var _ = Describe("GetMetricsAction", func() {
 				ActionLogger:          log,
 			},
 		}
-		action = factory.NewGetMetricsActionWithProvider(mockProvider)
+		action = actionFactory.NewGetMetricsActionWithProvider(mockProvider)
 	})
 
 	AfterEach(func() {
@@ -280,18 +281,8 @@ var _ = Describe("GetMetricsAction", func() {
 
 		DescribeTable("should handle missing FSM instance gracefully:", func(metricType models.MetricResourceType) {
 			// Use REAL action with internal provider to test the error handling
-			emptySnapshotManager := fsm.NewSnapshotManager()
-			factory := actions.ActionFactory{
-				ActionDependencies: actions.ActionDependencies{
-					UserEmail:             userEmail,
-					ActionUUID:            actionUUID,
-					InstanceUUID:          instanceUUID,
-					OutboundChannel:       outboundChannel,
-					SystemSnapshotManager: emptySnapshotManager,
-					ActionLogger:          log,
-				},
-			}
-			action = factory.NewGetMetricsAction()
+			action = actionFactory.NewGetMetricsAction()
+			action.SystemSnapshotManager = fsm.NewSnapshotManager() // Emulate empty snapshot manager
 
 			payload := map[string]interface{}{
 				"type": metricType,
@@ -317,17 +308,7 @@ var _ = Describe("GetMetricsAction", func() {
 
 		It("should return an error when a non-existent DFC UUID is provided", func() {
 			// Use REAL action with internal provider to test the error handling
-			factory := actions.ActionFactory{
-				ActionDependencies: actions.ActionDependencies{
-					UserEmail:             userEmail,
-					ActionUUID:            actionUUID,
-					InstanceUUID:          instanceUUID,
-					OutboundChannel:       outboundChannel,
-					SystemSnapshotManager: snapshotManager,
-					ActionLogger:          log,
-				},
-			}
-			action = factory.NewGetMetricsAction()
+			action = actionFactory.NewGetMetricsAction()
 
 			payload := map[string]interface{}{
 				"type": models.DFCMetricResourceType,
