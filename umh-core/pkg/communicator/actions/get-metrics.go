@@ -21,48 +21,24 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions/providers"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
-	"go.uber.org/zap"
 )
 
 type GetMetricsAction struct {
-	// ─── Request metadata ────────────────────────────────────────────────────
-	userEmail    string
-	actionUUID   uuid.UUID
-	instanceUUID uuid.UUID
-
-	// ─── Plumbing ────────────────────────────────────────────────────────────
-	outboundChannel chan *models.UMHMessage
-
-	// ─── Runtime observation ────────────────────────────────────────────────
-	systemSnapshotManager *fsm.SnapshotManager
-
-	// ─── Parsed request payload ─────────────────────────────────────────────
-	payload models.GetMetricsRequest
-
-	// ─── Utilities ──────────────────────────────────────────────────────────
-	provider     providers.MetricsProvider
-	actionLogger *zap.SugaredLogger
+	ActionDependencies
+	payload  models.GetMetricsRequest
+	provider providers.MetricsProvider
 }
 
 // NewGetMetricsAction creates a new GetMetricsAction with the provided parameters.
 // Caller needs to invoke Parse and Validate before calling Execute.
-func NewGetMetricsAction(userEmail string, actionUUID uuid.UUID, instanceUUID uuid.UUID, outboundChannel chan *models.UMHMessage, systemSnapshotManager *fsm.SnapshotManager, logger *zap.SugaredLogger) *GetMetricsAction {
-	return &GetMetricsAction{
-		userEmail:             userEmail,
-		actionUUID:            actionUUID,
-		instanceUUID:          instanceUUID,
-		outboundChannel:       outboundChannel,
-		systemSnapshotManager: systemSnapshotManager,
-		provider:              &providers.DefaultMetricsProvider{},
-		actionLogger:          logger.With("action", "GetMetricsAction"),
-	}
+func (a *ActionFactory) NewGetMetricsAction() *GetMetricsAction {
+	return &GetMetricsAction{ActionDependencies: a.ActionDependencies, provider: &providers.DefaultMetricsProvider{}}
 }
 
 // For testing - allow injection of a custom provider
-func NewGetMetricsActionWithProvider(userEmail string, actionUUID uuid.UUID, instanceUUID uuid.UUID, outboundChannel chan *models.UMHMessage, systemSnapshotManager *fsm.SnapshotManager, logger *zap.SugaredLogger, provider providers.MetricsProvider) *GetMetricsAction {
-	action := NewGetMetricsAction(userEmail, actionUUID, instanceUUID, outboundChannel, systemSnapshotManager, logger)
+func (a *ActionFactory) NewGetMetricsActionWithProvider(provider providers.MetricsProvider) *GetMetricsAction {
+	action := a.NewGetMetricsAction()
 	action.provider = provider
 	return action
 }
@@ -70,16 +46,16 @@ func NewGetMetricsActionWithProvider(userEmail string, actionUUID uuid.UUID, ins
 // Parse extracts the business fields from the raw JSON payload.
 // Shape errors are detected here, while semantic validation is done in Validate.
 func (a *GetMetricsAction) Parse(payload interface{}) (err error) {
-	a.actionLogger.Info("Parsing the payload")
+	a.ActionLogger.Info("Parsing the payload")
 	a.payload, err = ParseActionPayload[models.GetMetricsRequest](payload)
-	a.actionLogger.Infow("Payload parsed", "payload", a.payload)
+	a.ActionLogger.Infow("Payload parsed", "payload", a.payload)
 	return err
 }
 
 // Validate performs semantic validation of the parsed payload.
 // This verifies that the metric type is allowed and that the UUID is valid for DFC metrics.
 func (a *GetMetricsAction) Validate() (err error) {
-	a.actionLogger.Info("Validating the payload")
+	a.ActionLogger.Info("Validating the payload")
 
 	allowedMetricTypes := []models.MetricResourceType{models.DFCMetricResourceType, models.RedpandaMetricResourceType}
 	if !slices.Contains(allowedMetricTypes, a.payload.Type) {
@@ -103,11 +79,11 @@ func (a *GetMetricsAction) Validate() (err error) {
 // Execute retrieves the metrics from the correct source based on the metric type.
 // It returns a response object with an array of metrics or an error if the retrieval fails.
 func (a *GetMetricsAction) Execute() (interface{}, map[string]interface{}, error) {
-	a.actionLogger.Info("Executing the action")
+	a.ActionLogger.Info("Executing the action")
 
-	metrics, err := a.provider.GetMetrics(a.payload, a.systemSnapshotManager.GetDeepCopySnapshot())
+	metrics, err := a.provider.GetMetrics(a.payload, a.SystemSnapshotManager.GetDeepCopySnapshot())
 	if err != nil {
-		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, err.Error(), a.outboundChannel, models.GetMetrics)
+		a.SendFailure(err.Error(), models.GetMetrics)
 		return nil, nil, err
 	}
 
@@ -115,11 +91,11 @@ func (a *GetMetricsAction) Execute() (interface{}, map[string]interface{}, error
 }
 
 func (a *GetMetricsAction) getUserEmail() string {
-	return a.userEmail
+	return a.UserEmail
 }
 
 func (a *GetMetricsAction) getUuid() uuid.UUID {
-	return a.actionUUID
+	return a.ActionUUID
 }
 
 func (a *GetMetricsAction) GetParsedPayload() models.GetMetricsRequest {

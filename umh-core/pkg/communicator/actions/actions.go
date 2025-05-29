@@ -26,11 +26,12 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
+	"go.uber.org/zap"
 )
 
-// Action is the interface that all action types must implement.
+// ActionExecutor is the interface that all action types must implement.
 // It defines the core lifecycle methods for parsing, validating, and executing actions.
-type Action interface {
+type ActionExecutor interface {
 	// Parse parses the ActionMessagePayload into the corresponding action type.
 	// It should extract and validate all required fields from the raw payload.
 	Parse(interface{}) error
@@ -52,19 +53,63 @@ type Action interface {
 	getUuid() uuid.UUID
 }
 
-// HandleActionMessage is the main entry point for processing action messages.
-// It identifies the action type, creates the appropriate action implementation,
-// and processes it through the Parse->Validate->Execute flow.
-//
-// After execution, it handles sending the success reply if the action completed successfully.
-// Error handling for each step is done within this function.
+// Deprecated: Use ActionExecutor instead.
+type Action = ActionExecutor
+
+// ActionDependencies is a struct that contains common dependencies for all actions.
+// Together with the dependencies, it provides helper methods for sending action replies.
+type ActionDependencies struct {
+	UserEmail             string
+	ActionUUID            uuid.UUID
+	InstanceUUID          uuid.UUID
+	OutboundChannel       chan *models.UMHMessage
+	SystemSnapshotManager *fsm.SnapshotManager
+	ConfigManager         config.ConfigManager
+	ActionLogger          *zap.SugaredLogger
+}
+
+func (a *ActionDependencies) SendReply(state models.ActionReplyState, payload interface{}, actionType models.ActionType) bool {
+	return SendActionReply(a.InstanceUUID, a.UserEmail, a.ActionUUID, state, payload, a.OutboundChannel, actionType)
+}
+
+func (a *ActionDependencies) SendFailure(message string, actionType models.ActionType) {
+	a.SendReply(models.ActionFinishedWithFailure, message, actionType)
+}
+
+func (a *ActionDependencies) SendExecuting(message string, actionType models.ActionType) {
+	a.SendReply(models.ActionExecuting, message, actionType)
+}
+
+func (a *ActionDependencies) SendConfirmed(message string, actionType models.ActionType) {
+	a.SendReply(models.ActionConfirmed, message, actionType)
+}
+
+// ActionFactory is a factory for creating action instances.
+// It is used to create actions via their constructors with
+// access to common dependencies.
+type ActionFactory struct {
+	ActionDependencies
+}
+
 func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePayload, sender string, outboundChannel chan *models.UMHMessage, releaseChannel config.ReleaseChannel, dog watchdog.Iface, traceID uuid.UUID, systemSnapshotManager *fsm.SnapshotManager, configManager config.ConfigManager) {
 	log := logger.For(logger.ComponentCommunicator)
 
 	// Start a new transaction for this action
 	log.Debugf("Handling action message: Type: %s, Payload: %v", payload.ActionType, payload.ActionPayload)
 
-	var action Action
+	deps := ActionDependencies{
+		UserEmail:             sender,
+		ActionUUID:            payload.ActionUUID,
+		InstanceUUID:          instanceUUID,
+		OutboundChannel:       outboundChannel,
+		ConfigManager:         configManager,
+		SystemSnapshotManager: systemSnapshotManager,
+		ActionLogger:          log,
+	}
+
+	factory := ActionFactory{deps}
+
+	var action ActionExecutor
 	switch payload.ActionType {
 
 	case models.EditInstance:
@@ -139,7 +184,7 @@ func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePay
 			systemSnapshotManager: systemSnapshotManager,
 		}
 	case models.GetMetrics:
-		action = NewGetMetricsAction(sender, payload.ActionUUID, instanceUUID, outboundChannel, systemSnapshotManager, log)
+		action = factory.NewGetMetricsAction()
 
 	default:
 		log.Errorf("Unknown action type: %s", payload.ActionType)
