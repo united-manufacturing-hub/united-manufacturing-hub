@@ -20,41 +20,23 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
-	"go.uber.org/zap"
 )
 
 // EditInstanceAction implements the Action interface for editing instance properties.
 // Currently, it supports updating the location hierarchy (enterprise, site, area, line, workCell).
 type EditInstanceAction struct {
-	userEmail             string
-	actionUUID            uuid.UUID
-	instanceUUID          uuid.UUID
-	outboundChannel       chan *models.UMHMessage
-	location              *models.EditInstanceLocationModel
-	configManager         config.ConfigManager
-	actionLogger          *zap.SugaredLogger
-	systemSnapshotManager *fsm.SnapshotManager
+	ActionDependencies
+	location *models.EditInstanceLocationModel
 }
 
 // NewEditInstanceAction creates a new EditInstanceAction with the provided parameters.
 // This constructor is primarily used for testing purposes to enable dependency injection.
 // It initializes the action with the necessary fields but doesn't populate the location field
 // which must be done via Parse or SetLocation.
-func NewEditInstanceAction(userEmail string, actionUUID uuid.UUID, instanceUUID uuid.UUID, outboundChannel chan *models.UMHMessage, configManager config.ConfigManager, systemSnapshotManager *fsm.SnapshotManager) *EditInstanceAction {
-	return &EditInstanceAction{
-		userEmail:             userEmail,
-		actionUUID:            actionUUID,
-		instanceUUID:          instanceUUID,
-		outboundChannel:       outboundChannel,
-		configManager:         configManager,
-		actionLogger:          logger.For(logger.ComponentCommunicator),
-		systemSnapshotManager: systemSnapshotManager,
-	}
+func (a *ActionFactory) NewEditInstanceAction() *EditInstanceAction {
+	return &EditInstanceAction{ActionDependencies: a.ActionDependencies}
 }
 
 // Parse implements the Action interface by extracting location information from the payload.
@@ -64,7 +46,7 @@ func NewEditInstanceAction(userEmail string, actionUUID uuid.UUID, instanceUUID 
 // The function handles the case where no location is provided by leaving the location field nil,
 // which is valid and indicates no location change is requested.
 func (a *EditInstanceAction) Parse(payload interface{}) error {
-	a.actionLogger.Debug("Parsing EditInstance action payload")
+	a.ActionLogger.Debug("Parsing EditInstance action payload")
 
 	// Convert the payload to a map
 	payloadMap, ok := payload.(map[string]interface{})
@@ -139,27 +121,27 @@ func (a *EditInstanceAction) Validate() error {
 // For EditInstanceAction, if no location update is requested (location is nil),
 // it returns early with a message indicating no changes were made.
 func (a *EditInstanceAction) Execute() (interface{}, map[string]interface{}, error) {
-	a.actionLogger.Debug("Executing EditInstance action")
+	a.ActionLogger.Debug("Executing EditInstance action")
 
 	// Send confirmation that action is starting
-	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionConfirmed, "Starting EditInstance action", a.outboundChannel, models.EditInstance)
+	a.SendConfirmed("Starting EditInstance action", models.EditInstance)
 
 	// If we don't have any location to update, return early
 	if a.location == nil {
-		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "No location changes requested", a.outboundChannel, models.EditInstance)
+		a.SendExecuting("No location changes requested", models.EditInstance)
 		return "No changes were made to the instance", nil, nil
 	}
 
 	// Send progress update
-	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Updating instance location", a.outboundChannel, models.EditInstance)
+	a.SendExecuting("Updating instance location", models.EditInstance)
 
 	// Update the location in the configuration
 	ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
 	defer cancel()
-	err := a.configManager.AtomicSetLocation(ctx, *a.location)
+	err := a.ConfigManager.AtomicSetLocation(ctx, *a.location)
 	if err != nil {
 		errorMsg := fmt.Sprintf("Failed to update instance location: %s", err)
-		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errorMsg, a.outboundChannel, models.EditInstance)
+		a.SendFailure(errorMsg, models.EditInstance)
 		return nil, nil, fmt.Errorf("failed to update instance location: %w", err)
 	}
 
@@ -172,12 +154,12 @@ func (a *EditInstanceAction) Execute() (interface{}, map[string]interface{}, err
 
 // getUserEmail implements the Action interface by returning the user email associated with this action.
 func (a *EditInstanceAction) getUserEmail() string {
-	return a.userEmail
+	return a.UserEmail
 }
 
 // getUuid implements the Action interface by returning the UUID of this action.
 func (a *EditInstanceAction) getUuid() uuid.UUID {
-	return a.actionUUID
+	return a.ActionUUID
 }
 
 // Methods added for testing purposes

@@ -26,6 +26,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
+	"go.uber.org/zap"
 )
 
 // EditInstance tests verify the behavior of the EditInstanceAction.
@@ -34,22 +35,18 @@ import (
 var _ = Describe("EditInstance", func() {
 	// Variables used across tests
 	var (
-		action          *actions.EditInstanceAction
-		userEmail       string
-		actionUUID      uuid.UUID
-		instanceUUID    uuid.UUID
-		outboundChannel chan *models.UMHMessage
-		mockConfig      *config.MockConfigManager
-		snapshotManager *fsm.SnapshotManager
+		action        *actions.EditInstanceAction
+		actionFactory *actions.ActionFactory
+		mockConfig    *config.MockConfigManager
 	)
 
 	// Setup before each test
 	BeforeEach(func() {
 		// Initialize test variables
-		userEmail = "test@example.com"
-		actionUUID = uuid.New()
-		instanceUUID = uuid.New()
-		outboundChannel = make(chan *models.UMHMessage, 10) // Buffer to prevent blocking
+		userEmail := "test@example.com"
+		actionUUID := uuid.New()
+		instanceUUID := uuid.New()
+		outboundChannel := make(chan *models.UMHMessage, 10) // Buffer to prevent blocking
 
 		// Create initial config with existing location data
 		initialConfig := config.FullConfig{
@@ -74,16 +71,27 @@ var _ = Describe("EditInstance", func() {
 
 		mockConfig = config.NewMockConfigManager().WithConfig(initialConfig)
 		snapshotManager := fsm.NewSnapshotManager()
-		action = actions.NewEditInstanceAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig, snapshotManager)
+		actionFactory = &actions.ActionFactory{
+			ActionDependencies: actions.ActionDependencies{
+				UserEmail:             userEmail,
+				ActionUUID:            actionUUID,
+				InstanceUUID:          instanceUUID,
+				OutboundChannel:       outboundChannel,
+				ConfigManager:         mockConfig,
+				SystemSnapshotManager: snapshotManager,
+				ActionLogger:          zap.NewNop().Sugar(),
+			},
+		}
+		action = actionFactory.NewEditInstanceAction()
 	})
 
 	// Cleanup after each test
 	AfterEach(func() {
 		// Drain the outbound channel to prevent goroutine leaks
-		for len(outboundChannel) > 0 {
-			<-outboundChannel
+		for len(action.OutboundChannel) > 0 {
+			<-action.OutboundChannel
 		}
-		close(outboundChannel)
+		close(action.OutboundChannel)
 	})
 
 	Describe("Parse", func() {
@@ -192,7 +200,7 @@ var _ = Describe("EditInstance", func() {
 			var messages []*models.UMHMessage
 			for i := 0; i < 2; i++ {
 				select {
-				case msg := <-outboundChannel:
+				case msg := <-action.OutboundChannel:
 					messages = append(messages, msg)
 				default:
 					Fail("Expected more messages in the outbound channel")
@@ -229,7 +237,7 @@ var _ = Describe("EditInstance", func() {
 			var messages []*models.UMHMessage
 			for i := 0; i < 2; i++ {
 				select {
-				case msg := <-outboundChannel:
+				case msg := <-action.OutboundChannel:
 					messages = append(messages, msg)
 				case <-time.After(100 * time.Millisecond):
 					Fail("Timed out waiting for message")
@@ -273,7 +281,7 @@ var _ = Describe("EditInstance", func() {
 			var messages []*models.UMHMessage
 			for i := 0; i < 3; i++ {
 				select {
-				case msg := <-outboundChannel:
+				case msg := <-action.OutboundChannel:
 					messages = append(messages, msg)
 				case <-time.After(100 * time.Millisecond):
 					Fail("Timed out waiting for message")
@@ -292,7 +300,8 @@ var _ = Describe("EditInstance", func() {
 			}
 
 			// Create new action with our custom mock
-			action = actions.NewEditInstanceAction(userEmail, actionUUID, instanceUUID, outboundChannel, customMock, snapshotManager)
+			actionFactory.ConfigManager = customMock
+			action = actionFactory.NewEditInstanceAction()
 
 			// Parse with valid location
 			payload := map[string]interface{}{
@@ -314,7 +323,7 @@ var _ = Describe("EditInstance", func() {
 			var messages []*models.UMHMessage
 			for i := 0; i < 3; i++ {
 				select {
-				case msg := <-outboundChannel:
+				case msg := <-action.OutboundChannel:
 					messages = append(messages, msg)
 				case <-time.After(100 * time.Millisecond):
 					Fail("Timed out waiting for message")

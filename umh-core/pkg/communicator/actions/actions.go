@@ -110,15 +110,7 @@ func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePay
 	switch payload.ActionType {
 
 	case models.EditInstance:
-		action = &EditInstanceAction{
-			userEmail:             sender,
-			actionUUID:            payload.ActionUUID,
-			instanceUUID:          instanceUUID,
-			outboundChannel:       outboundChannel,
-			configManager:         configManager,
-			actionLogger:          log,
-			systemSnapshotManager: systemSnapshotManager,
-		}
+		action = factory.NewEditInstanceAction()
 	case models.DeployDataFlowComponent:
 		action = &DeployDataflowComponentAction{
 			userEmail:             sender,
