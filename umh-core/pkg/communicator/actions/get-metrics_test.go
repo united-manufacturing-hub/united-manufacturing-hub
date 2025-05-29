@@ -42,16 +42,10 @@ var _ = Describe("GetMetricsAction", func() {
 	var (
 		mockProvider *MockMetricsProvider
 
-		action          *actions.GetMetricsAction
-		actionFactory   actions.ActionFactory
-		userEmail       string
-		actionUUID      uuid.UUID
-		instanceUUID    uuid.UUID
-		outboundChannel chan *models.UMHMessage
-		dfcName         string
-		dfcUUID         uuid.UUID
-		snapshotManager *fsm.SnapshotManager
-		log             = zap.NewNop().Sugar()
+		action        *actions.GetMetricsAction
+		actionFactory actions.ActionFactory
+		dfcName       string
+		dfcUUID       uuid.UUID
 	)
 
 	BeforeEach(func() {
@@ -109,13 +103,13 @@ var _ = Describe("GetMetricsAction", func() {
 			},
 		}
 
-		userEmail = "test@example.com"
-		actionUUID = uuid.New()
-		instanceUUID = uuid.New()
-		outboundChannel = make(chan *models.UMHMessage, 10)
+		userEmail := "test@example.com"
+		actionUUID := uuid.New()
+		instanceUUID := uuid.New()
+		outboundChannel := make(chan *models.UMHMessage, 10)
 		dfcName = "test-dfc"
 		dfcUUID = dataflowcomponentserviceconfig.GenerateUUIDFromName(dfcName)
-		snapshotManager = fsm.NewSnapshotManager()
+		snapshotManager := fsm.NewSnapshotManager()
 
 		// Add a mock DFC instance to test the error handling when the DFC is not found
 		// NOTE: We could also create snapshot manager mocks with gomock, but it's not worth the effort now
@@ -141,7 +135,7 @@ var _ = Describe("GetMetricsAction", func() {
 				InstanceUUID:          instanceUUID,
 				OutboundChannel:       outboundChannel,
 				SystemSnapshotManager: snapshotManager,
-				ActionLogger:          log,
+				ActionLogger:          zap.NewNop().Sugar(),
 			},
 		}
 		action = actionFactory.NewGetMetricsActionWithProvider(mockProvider)
@@ -149,10 +143,10 @@ var _ = Describe("GetMetricsAction", func() {
 
 	AfterEach(func() {
 		// Drain the outbound channel to prevent goroutine leaks
-		for len(outboundChannel) > 0 {
-			<-outboundChannel
+		for len(action.OutboundChannel) > 0 {
+			<-action.OutboundChannel
 		}
-		close(outboundChannel)
+		close(action.OutboundChannel)
 	})
 
 	Describe("Parse", func() {
