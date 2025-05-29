@@ -38,9 +38,7 @@ func (a *ActionFactory) NewGetMetricsAction() *GetMetricsAction {
 
 // For testing - allow injection of a custom provider
 func (a *ActionFactory) NewGetMetricsActionWithProvider(provider providers.MetricsProvider) *GetMetricsAction {
-	action := a.NewGetMetricsAction()
-	action.provider = provider
-	return action
+	return &GetMetricsAction{ActionDependencies: a.ActionDependencies, provider: provider}
 }
 
 // Parse extracts the business fields from the raw JSON payload.
