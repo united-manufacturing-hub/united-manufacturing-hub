@@ -53,9 +53,6 @@ type ActionExecutor interface {
 	getUuid() uuid.UUID
 }
 
-// Deprecated: Use ActionExecutor instead.
-type Action = ActionExecutor
-
 // ActionDependencies is a struct that contains common dependencies for all actions.
 // Together with the dependencies, it provides helper methods for sending action replies.
 type ActionDependencies struct {
