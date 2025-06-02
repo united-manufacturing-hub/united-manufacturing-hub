@@ -871,9 +871,3 @@ func (m *FileConfigManagerWithBackoff) WriteConfigFromString(ctx context.Context
 
 	return m.configManager.WriteConfigFromString(ctx, configStr, expectedModTime)
 }
-
-// parseTime parses a time string in RFC3339 format
-func parseTime(timeStr string) time.Time {
-	t, _ := time.Parse(time.RFC3339, timeStr)
-	return t
-}
