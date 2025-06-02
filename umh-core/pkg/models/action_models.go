@@ -618,4 +618,7 @@ const (
 	ErrRetryRollbackTimeout = "ERR_RETRY_ROLLBACK_TIMEOUT"
 	// ErrConfigFileInvalid is sent when the deployment of a dfc fails because the config file is invalid.
 	ErrConfigFileInvalid = "ERR_CONFIG_FILE_INVALID"
+	// ErrRetryConfigWriteFailed is the error code for a config file write failure.
+	// It is retryable because the write failure might be caused by temporary filesystem issues.
+	ErrRetryConfigWriteFailed = "ERR_RETRY_CONFIG_WRITE_FAILED"
 )

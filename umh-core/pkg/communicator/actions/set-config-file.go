@@ -126,8 +126,8 @@ func (a *SetConfigFileAction) Execute() (interface{}, map[string]interface{}, er
 	err := a.configManager.WriteConfigFromString(ctx, a.payload.Content, a.payload.LastModifiedTime)
 	if err != nil {
 		errMsg := fmt.Sprintf("Failed to write config file: %v", err)
-		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
-			errMsg, a.outboundChannel, models.SetConfigFile)
+		SendActionReplyV2(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
+			errMsg, models.ErrRetryConfigWriteFailed, nil, a.outboundChannel, models.SetConfigFile, nil)
 		return nil, nil, fmt.Errorf("failed to write config file: %w", err)
 	}
 
