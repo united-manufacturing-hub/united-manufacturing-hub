@@ -134,13 +134,14 @@ func (b *BenthosMonitorInstance) CheckForCreation(ctx context.Context, filesyste
 }
 
 // UpdateObservedStateOfInstance is called when the FSM transitions to updating.
-func (b *BenthosMonitorInstance) UpdateObservedStateOfInstance(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot, tick uint64, loopStartTime time.Time) error {
+// For Benthos monitoring, this is a no-op as we don't need to update any resources.
+func (b *BenthosMonitorInstance) UpdateObservedStateOfInstance(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
 
 	start := time.Now()
-	info, err := b.monitorService.Status(ctx, services, tick)
+	info, err := b.monitorService.Status(ctx, services, snapshot.Tick)
 	if err != nil {
 		return err
 	}

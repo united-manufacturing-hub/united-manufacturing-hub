@@ -90,7 +90,8 @@ func (d *DataflowComponentInstance) Reconcile(ctx context.Context, snapshot fsm.
 	}
 
 	// Step 2: Detect external changes.
-	if err = d.reconcileExternalChanges(ctx, services, snapshot, snapshot.Tick); err != nil {
+	err = d.reconcileExternalChanges(ctx, services, snapshot)
+	if err != nil {
 		// If the service is not running, we don't want to return an error here, because we want to continue reconciling
 		if !errors.Is(err, dataflowcomponentservice.ErrServiceNotExists) && !errors.Is(err, s6.ErrServiceNotExist) {
 			// errors.Is(err, s6.ErrServiceNotExist)
@@ -153,7 +154,7 @@ func (d *DataflowComponentInstance) Reconcile(ctx context.Context, snapshot fsm.
 
 // reconcileExternalChanges checks if the DataflowComponentInstance service status has changed
 // externally (e.g., if someone manually stopped or started it, or if it crashed)
-func (d *DataflowComponentInstance) reconcileExternalChanges(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot, tick uint64) error {
+func (d *DataflowComponentInstance) reconcileExternalChanges(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) error {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentDataflowComponentInstance, d.baseFSMInstance.GetID()+".reconcileExternalChanges", time.Since(start))
@@ -164,7 +165,7 @@ func (d *DataflowComponentInstance) reconcileExternalChanges(ctx context.Context
 	observedStateCtx, cancel := context.WithTimeout(ctx, constants.DataflowComponentUpdateObservedStateTimeout)
 	defer cancel()
 
-	err := d.UpdateObservedStateOfInstance(observedStateCtx, services, snapshot, tick, start)
+	err := d.UpdateObservedStateOfInstance(observedStateCtx, services, snapshot)
 	if err != nil {
 		return fmt.Errorf("failed to update observed state: %w", err)
 	}
