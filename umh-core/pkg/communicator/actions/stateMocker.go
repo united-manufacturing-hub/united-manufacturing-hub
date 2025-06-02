@@ -292,7 +292,7 @@ func detectEditedComponents(curDfcConfig []config.DataFlowComponentConfig, lastD
 	for _, dfcConfig := range lastDfcConfig {
 		for _, new := range curDfcConfig {
 			if new.Name == dfcConfig.Name {
-				if !reflect.DeepEqual(new, dfcConfig) || dfcConfig.DesiredFSMState != new.DesiredFSMState {
+				if !reflect.DeepEqual(new, dfcConfig) {
 					zap.S().Info("Detected changed dataflow component", zap.String("name", dfcConfig.Name))
 					// we need to update the pending transitions and ignore ticks for the old name
 					switch new.DesiredFSMState {
