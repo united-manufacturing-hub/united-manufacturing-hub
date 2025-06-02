@@ -346,11 +346,17 @@ func (m *MockConfigManager) WithCacheModTime(modTime time.Time) *MockConfigManag
 }
 
 // WriteConfigFromString implements the ConfigManager interface
-func (m *MockConfigManager) WriteConfigFromString(ctx context.Context, config string, expectedModTime *time.Time) error {
+func (m *MockConfigManager) WriteConfigFromString(ctx context.Context, config string, expectedModTime string) error {
 	// If expectedModTime is provided, check for concurrent modification
-	if expectedModTime != nil && !m.CacheModTime.Equal(*expectedModTime) {
-		return fmt.Errorf("concurrent modification detected: file modified at %v, expected %v",
-			m.CacheModTime.Format(time.RFC3339), expectedModTime.Format(time.RFC3339))
+	if expectedModTime != "" {
+		expectedTime, err := time.Parse(time.RFC3339, expectedModTime)
+		if err != nil {
+			return fmt.Errorf("invalid expected modification time format: %w", err)
+		}
+		if !m.CacheModTime.Equal(expectedTime) {
+			return fmt.Errorf("concurrent modification detected: file modified at %v, expected %v",
+				m.CacheModTime.Format(time.RFC3339), expectedModTime)
+		}
 	}
 
 	// First parse the config with strict validation to detect syntax errors and schema problems

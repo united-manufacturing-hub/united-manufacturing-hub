@@ -122,17 +122,8 @@ func (a *SetConfigFileAction) Execute() (interface{}, map[string]interface{}, er
 	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
 		fmt.Sprintf("Updating config file at %s", configPath), a.outboundChannel, models.SetConfigFile)
 
-	// Parse the expected modification time from the payload
-	expectedModTime, err := time.Parse(time.RFC3339, a.payload.LastModifiedTime)
-	if err != nil {
-		errMsg := fmt.Sprintf("Invalid last modified time format: %v", err)
-		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
-			errMsg, a.outboundChannel, models.SetConfigFile)
-		return nil, nil, fmt.Errorf("invalid last modified time format: %w", err)
-	}
-
 	// Write the new content to the file with atomic concurrent modification check
-	err = a.configManager.WriteConfigFromString(ctx, a.payload.Content, &expectedModTime)
+	err := a.configManager.WriteConfigFromString(ctx, a.payload.Content, a.payload.LastModifiedTime)
 	if err != nil {
 		errMsg := fmt.Sprintf("Failed to write config file: %v", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
