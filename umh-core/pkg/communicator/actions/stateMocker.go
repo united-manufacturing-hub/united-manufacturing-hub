@@ -21,6 +21,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/tiendc/go-deepcopy"
 	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
@@ -108,7 +109,7 @@ func (s *StateMocker) Tick() {
 	// slice *header* (len, cap, data-ptr). Both variables would then share the same
 	// backing array, so any in-place mutation (like changing DesiredFSMState during
 	// a test) would update *both* curDfcConfig and lastConfig.DataFlow, and our
-	// “desired-state changed” check would never fire. We therefore deep-copy the
+	// "desired-state changed" check would never fire. We therefore deep-copy the
 	// slice (and its structs) to get an immutable snapshot for this tick.
 	s.lastConfig.DataFlow = copyDfcSlice(curDfcConfig) // update the last config
 	s.lastConfigSet = true
@@ -573,7 +574,13 @@ func copyDfcSlice(src []config.DataFlowComponentConfig) []config.DataFlowCompone
 	if src == nil {
 		return nil
 	}
-	dst := make([]config.DataFlowComponentConfig, len(src))
-	copy(dst, src) // copies the structs (value copy)
+
+	var dst []config.DataFlowComponentConfig
+	err := deepcopy.Copy(&dst, &src)
+	if err != nil {
+		// This should never happen
+		panic(err)
+	}
+
 	return dst
 }
