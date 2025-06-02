@@ -134,8 +134,8 @@ func (a *SetConfigFileAction) Execute() (interface{}, map[string]interface{}, er
 	newLastModifiedTime, err := a.configManager.UpdateAndGetCacheModTime(ctx)
 	if err != nil {
 		errMsg := fmt.Sprintf("Failed to get cache mod time, refresh the page and double check if the file has been modified. Consider rolling back to the previous version if issues persist. Error: %v", err)
-		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
-			errMsg, a.outboundChannel, models.SetConfigFile)
+		SendActionReplyV2(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
+			errMsg, models.ErrGetCacheModTimeFailed, nil, a.outboundChannel, models.SetConfigFile, nil)
 		return nil, nil, fmt.Errorf("failed to get cache mod time: %w", err)
 	}
 	newLastModifiedTimeString := newLastModifiedTime.Format(time.RFC3339)
