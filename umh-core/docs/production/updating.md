@@ -9,6 +9,7 @@ sudo docker rm umh-core
 
 # pull the latest image and re-create
 sudo docker run -d \
+  --name umh-core \
   --restart unless-stopped \
   -v "$(pwd)/umh-core-data":/data \
   management.umh.app/oci/united-manufacturing-hub/umh-core:<NEW_VERSION>

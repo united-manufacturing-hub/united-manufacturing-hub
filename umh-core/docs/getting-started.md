@@ -78,7 +78,7 @@ From the Console you can :
     </code></pre>
 4.  **Watch it work**
 
-    Open the Topic Browser in the console; you should see `random_int` under `plant-A.lineA.machine-7._raw.random_int`&#x20;
+    Open the Topic Browser in the console; you should see `random_int` under `plant-A.line-4.machine-7._raw.random_int`&#x20;
 
 ### Quick troubleshooting
 

@@ -31,7 +31,7 @@ agent:
     apiUrl: "https://api.management.umh.app"
     authToken: "${UMH_AUTH_TOKEN}"
   location:
-    0: acme
+    0: acme-inc
     1: plant1
     2: press-shop
     
@@ -78,10 +78,6 @@ dataFlow:
 | `output.*`            | Usually `uns: {}` for Unified Namespace. MQTT, HTTP, SQL, etc. also available. |
 
 _For full  syntax see_ [Broken link](broken-reference "mention")
-
-Certainly. Here's a clean, self-contained **“Protocol Converters”** section you can drop directly into your config reference documentation:
-
-***
 
 ### Bridge – Bridge from Device to UNS
 
