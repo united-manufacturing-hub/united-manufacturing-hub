@@ -84,9 +84,6 @@ func (m *MockConfigManager) GetFileSystemService() filesystem.Service {
 
 // WriteConfig implements the ConfigManager interface
 func (m *MockConfigManager) writeConfig(ctx context.Context, cfg FullConfig) error {
-	m.mutexReadOrWrite.Lock()
-	defer m.mutexReadOrWrite.Unlock()
-
 	m.Config = cfg
 	m.CacheModTime = time.Now()
 	return nil
@@ -347,6 +344,9 @@ func (m *MockConfigManager) WithCacheModTime(modTime time.Time) *MockConfigManag
 
 // WriteConfigFromString implements the ConfigManager interface
 func (m *MockConfigManager) WriteConfigFromString(ctx context.Context, config string, expectedModTime string) error {
+	m.mutexReadOrWrite.Lock()
+	defer m.mutexReadOrWrite.Unlock()
+
 	// If expectedModTime is provided, check for concurrent modification
 	if expectedModTime != "" {
 		expectedTime, err := time.Parse(time.RFC3339, expectedModTime)
