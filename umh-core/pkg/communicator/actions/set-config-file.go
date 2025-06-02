@@ -122,26 +122,17 @@ func (a *SetConfigFileAction) Execute() (interface{}, map[string]interface{}, er
 	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
 		fmt.Sprintf("Updating config file at %s", configPath), a.outboundChannel, models.SetConfigFile)
 
-	currentLastModified, err := a.configManager.UpdateAndGetCacheModTime(ctx)
+	// Parse the expected modification time from the payload
+	expectedModTime, err := time.Parse(time.RFC3339, a.payload.LastModifiedTime)
 	if err != nil {
-		errMsg := fmt.Sprintf("Failed to get cache mod time, refresh the page and double check if the file has been modified. Consider rolling back to the previous version if issues persist. Error: %v", err)
+		errMsg := fmt.Sprintf("Invalid last modified time format: %v", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
 			errMsg, a.outboundChannel, models.SetConfigFile)
-		return nil, nil, fmt.Errorf("failed to get cache mod time: %w", err)
-	}
-	currentLastModifiedTimeString := currentLastModified.Format(time.RFC3339)
-
-	// Check if the file has been modified since the client last read it
-	if currentLastModifiedTimeString != a.payload.LastModifiedTime {
-		errMsg := "Config file has been modified since last read. Please fetch the latest version and try again."
-		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
-			errMsg, a.outboundChannel, models.SetConfigFile)
-		return nil, nil, fmt.Errorf("concurrent modification detected: file modified at %v, client has version from %v",
-			currentLastModified, a.payload.LastModifiedTime)
+		return nil, nil, fmt.Errorf("invalid last modified time format: %w", err)
 	}
 
-	// Write the new content to the file
-	err = a.configManager.WriteConfigFromString(ctx, a.payload.Content)
+	// Write the new content to the file with atomic concurrent modification check
+	err = a.configManager.WriteConfigFromString(ctx, a.payload.Content, &expectedModTime)
 	if err != nil {
 		errMsg := fmt.Sprintf("Failed to write config file: %v", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,

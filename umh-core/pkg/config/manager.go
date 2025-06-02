@@ -80,7 +80,7 @@ type ConfigManager interface {
 	// UpdateAndGetCacheModTime updates the cache and returns the modification time
 	UpdateAndGetCacheModTime(ctx context.Context) (time.Time, error)
 	// WriteConfigFromString writes a config from a string to the config file
-	WriteConfigFromString(ctx context.Context, configStr string) error
+	WriteConfigFromString(ctx context.Context, configStr string, expectedModTime *time.Time) error
 }
 
 // FileConfigManager implements the ConfigManager interface by reading from a file
@@ -789,7 +789,8 @@ func (m *FileConfigManagerWithBackoff) UpdateAndGetCacheModTime(ctx context.Cont
 }
 
 // WriteConfigFromString writes a config from a string to the config file
-func (m *FileConfigManager) WriteConfigFromString(ctx context.Context, configStr string) error {
+// If expectedModTime is provided, it will check that the file hasn't been modified since that time
+func (m *FileConfigManager) WriteConfigFromString(ctx context.Context, configStr string, expectedModTime *time.Time) error {
 	// First parse the config with strict validation to detect syntax errors and schema problems
 	_, err := parseConfig([]byte(configStr), false)
 	if err != nil {
@@ -811,6 +812,20 @@ func (m *FileConfigManager) WriteConfigFromString(ctx context.Context, configStr
 	// Check if context is already cancelled
 	if ctx.Err() != nil {
 		return ctx.Err()
+	}
+
+	// If expectedModTime is provided, check for concurrent modification atomically under the lock
+	if expectedModTime != nil {
+		info, err := m.fsService.Stat(ctx, m.configPath)
+		if err != nil && !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("failed to stat config file: %w", err)
+		}
+
+		// If file exists, check modification time
+		if err == nil && !info.ModTime().Equal(*expectedModTime) {
+			return fmt.Errorf("concurrent modification detected: file modified at %v, expected %v",
+				info.ModTime().Format(time.RFC3339), expectedModTime.Format(time.RFC3339))
+		}
 	}
 
 	// Create the directory if it doesn't exist
@@ -848,11 +863,11 @@ func (m *FileConfigManager) WriteConfigFromString(ctx context.Context, configStr
 }
 
 // WriteConfigFromString delegates to the underlying FileConfigManager
-func (m *FileConfigManagerWithBackoff) WriteConfigFromString(ctx context.Context, configStr string) error {
+func (m *FileConfigManagerWithBackoff) WriteConfigFromString(ctx context.Context, configStr string, expectedModTime *time.Time) error {
 	// Check if context is already cancelled
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
 
-	return m.configManager.WriteConfigFromString(ctx, configStr)
+	return m.configManager.WriteConfigFromString(ctx, configStr, expectedModTime)
 }
