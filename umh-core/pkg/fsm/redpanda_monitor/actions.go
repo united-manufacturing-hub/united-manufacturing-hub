@@ -136,13 +136,13 @@ func (r *RedpandaMonitorInstance) CheckForCreation(ctx context.Context, filesyst
 }
 
 // UpdateObservedStateOfInstance is called when the FSM transitions to updating.
-func (r *RedpandaMonitorInstance) UpdateObservedStateOfInstance(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot, tick uint64, loopStartTime time.Time) error {
+func (r *RedpandaMonitorInstance) UpdateObservedStateOfInstance(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
 
 	start := time.Now()
-	info, err := r.monitorService.Status(ctx, services.GetFileSystem(), tick)
+	info, err := r.monitorService.Status(ctx, services.GetFileSystem(), snapshot.Tick)
 	if err != nil {
 		return err
 	}

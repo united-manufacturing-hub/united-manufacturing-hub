@@ -148,7 +148,7 @@ func (n *NmapInstance) CheckForCreation(ctx context.Context, filesystemService f
 }
 
 // UpdateObservedStateOfInstance updates the observed state of the service
-func (n *NmapInstance) UpdateObservedStateOfInstance(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot, tick uint64, loopTime time.Time) error {
+func (n *NmapInstance) UpdateObservedStateOfInstance(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
@@ -162,7 +162,7 @@ func (n *NmapInstance) UpdateObservedStateOfInstance(ctx context.Context, servic
 	}
 
 	start := time.Now()
-	svcInfo, err := n.monitorService.Status(ctx, services.GetFileSystem(), n.config.Name, tick)
+	svcInfo, err := n.monitorService.Status(ctx, services.GetFileSystem(), n.config.Name, snapshot.Tick)
 	if err != nil {
 		if strings.Contains(err.Error(), nmap_service.ErrServiceNotExist.Error()) {
 			// Log the error but don't fail - this might happen during creation when nmap doesn't exist yet

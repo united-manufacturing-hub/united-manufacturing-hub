@@ -16,7 +16,6 @@ package container
 
 import (
 	"context"
-	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
@@ -69,7 +68,7 @@ func (c *ContainerInstance) CheckForCreation(ctx context.Context, filesystemServ
 
 // UpdateObservedStateOfInstance is called when the FSM transitions to updating.
 // For container monitoring, this is a no-op as we don't need to update any resources.
-func (c *ContainerInstance) UpdateObservedStateOfInstance(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot, tick uint64, loopStartTime time.Time) error {
+func (c *ContainerInstance) UpdateObservedStateOfInstance(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}

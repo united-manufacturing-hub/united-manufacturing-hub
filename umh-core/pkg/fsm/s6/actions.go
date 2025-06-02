@@ -156,7 +156,7 @@ func (s *S6Instance) CheckForCreation(ctx context.Context, filesystemService fil
 }
 
 // UpdateObservedStateOfInstance updates the observed state of the service
-func (s *S6Instance) UpdateObservedStateOfInstance(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot, tick uint64, loopStartTime time.Time) error {
+func (s *S6Instance) UpdateObservedStateOfInstance(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
