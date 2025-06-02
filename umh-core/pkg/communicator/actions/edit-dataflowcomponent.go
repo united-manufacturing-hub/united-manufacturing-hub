@@ -419,7 +419,7 @@ func (a *EditDataflowComponentAction) Execute() (interface{}, map[string]interfa
 				err := yaml.Unmarshal([]byte(processor.Data), &procConfig)
 				if err != nil {
 					errMsg := Label("edit", a.name) + fmt.Sprintf("failed to parse pipeline processor %s: %s", processorName, err.Error())
-					SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errMsg, a.outboundChannel, models.EditDataFlowComponent)
+					SendActionReplyV2(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errMsg, models.ErrRetryRollbackTimeout, nil, a.outboundChannel, models.EditDataFlowComponent, nil)
 					return nil, nil, fmt.Errorf("%s", errMsg)
 				}
 
@@ -492,17 +492,20 @@ func (a *EditDataflowComponentAction) Execute() (interface{}, map[string]interfa
 			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, Label("edit", a.name)+"configuration updated; but ignoring the health check", a.outboundChannel, models.EditDataFlowComponent)
 		} else {
 			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, Label("edit", a.name)+"configuration updated; waiting to become active", a.outboundChannel, models.EditDataFlowComponent)
-			err = a.waitForComponentToBeReady()
+			errCode, err := a.waitForComponentToBeReady(ctx)
 			if err != nil {
 				errorMsg := Label("edit", a.name) + fmt.Sprintf("failed to wait for dataflow component to be active: %v", err)
-				SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errorMsg, a.outboundChannel, models.EditDataFlowComponent)
+				// waitForComponentToBeReady gives us the error code, which we then forward to the frontend using the SendActionReplyV2 function
+				// the error code is a string that can be used to identify the error reason
+				// the main reason for this is to allow the frontend to determine whether it should offer a retry option or not
+				SendActionReplyV2(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errorMsg, errCode, nil, a.outboundChannel, models.EditDataFlowComponent, nil)
 				return nil, nil, fmt.Errorf("%s", errorMsg)
 			}
 		}
 	}
 
 	// return success message, but do not send it as this is done by the caller
-	successMsg := Label("edit", a.name) + "success"
+	successMsg := Label("edit", a.name) + "component successfully updated and activated"
 
 	return successMsg, nil, nil
 }
@@ -534,7 +537,10 @@ func (a *EditDataflowComponentAction) GetComponentUUID() uuid.UUID {
 // Concurrency note: The method never writes to `systemSnapshot`; the FSM runtime
 // is the single writer.  We only take read‑locks while **copying** the full
 // snapshot to avoid holding the lock during YAML comparisons.
-func (a *EditDataflowComponentAction) waitForComponentToBeReady() error {
+// the function returns the error code and and the error message via an error object
+// the error code is a string that is sent to the frontend to allow it to determine if the action can be retried or not
+// the error message is sent to the frontend to allow the user to see the error message
+func (a *EditDataflowComponentAction) waitForComponentToBeReady(ctx context.Context) (string, error) {
 	// checks the system snapshot
 	// 1. waits for the component to appear in the system snapshot (relevant for changed name)
 	// 2. waits for the component to be active
@@ -553,14 +559,13 @@ func (a *EditDataflowComponentAction) waitForComponentToBeReady() error {
 		case <-timeout:
 			stateMessage := Label("edit", a.name) + "timeout reached. it did not become active in time. rolling back"
 			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, stateMessage, a.outboundChannel, models.EditDataFlowComponent)
-			ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
-			defer cancel()
+
 			_, err := a.configManager.AtomicEditDataflowcomponent(ctx, a.newComponentUUID, a.oldConfig)
 			if err != nil {
-
 				a.actionLogger.Errorf("failed to roll back dataflow component %s: %v", a.name, err)
+				return models.ErrRetryRollbackTimeout, fmt.Errorf("dataflow component '%s' failed to activate within timeout and could not be rolled back: %v. Please check system load and consider manually restoring the previous configuration", a.name, err)
 			}
-			return fmt.Errorf("dataflow component %s was not active in time and was rolled back to the old config", a.name)
+			return models.ErrRetryRollbackTimeout, fmt.Errorf("dataflow component '%s' was rolled back to its previous configuration because it did not become active within the timeout period. Please check system load or component configuration and try again", a.name)
 
 		case <-ticker.C:
 			elapsed := time.Since(startTime)
@@ -623,18 +628,32 @@ func (a *EditDataflowComponentAction) waitForComponentToBeReady() error {
 								stateMessage, a.outboundChannel, models.EditDataFlowComponent)
 							// send the benthos logs to the user
 							logs = dfcSnapshot.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosLogs
+
 							// only send the logs that have not been sent yet
 							if len(logs) > len(lastLogs) {
+
 								lastLogs = SendLimitedLogs(logs, lastLogs, a.instanceUUID, a.userEmail, a.actionUUID, a.outboundChannel, models.EditDataFlowComponent, remainingSeconds)
+							}
+							// CheckBenthosLogLinesForConfigErrors is used to detect fatal configuration errors that would cause
+							// Benthos to enter a CrashLoop. When such errors are detected, we can immediately
+							// abort the startup process rather than waiting for the full timeout period,
+							// as these errors require configuration changes to resolve.
+							if CheckBenthosLogLinesForConfigErrors(logs) {
+								SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, Label("edit", a.name)+"configuration error detected. Rolling back...", a.outboundChannel, models.EditDataFlowComponent)
+
+								_, err := a.configManager.AtomicEditDataflowcomponent(ctx, a.newComponentUUID, a.oldConfig)
+								if err != nil {
+									a.actionLogger.Errorf("failed to roll back dataflow component %s: %v", a.name, err)
+									return models.ErrConfigFileInvalid, fmt.Errorf("dataflow component '%s' has invalid configuration but could not be rolled back: %v. Please check your logs and consider manually restoring the previous configuration", a.name, err)
+								}
+								return models.ErrConfigFileInvalid, fmt.Errorf("dataflow component '%s' was rolled back to its previous configuration due to configuration errors. Please check the component logs, fix the configuration issues, and try editing again", a.name)
 							}
 
 							continue
-						} else {
-							stateMessage := RemainingPrefixSec(remainingSeconds) + fmt.Sprintf("completed. is in state '%s' with correct configuration", instance.CurrentState)
-							SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
-								stateMessage, a.outboundChannel, models.EditDataFlowComponent)
-							return nil
 						}
+
+						// Component is in the desired state, return success
+						return "", nil
 					}
 				}
 				if !found {
