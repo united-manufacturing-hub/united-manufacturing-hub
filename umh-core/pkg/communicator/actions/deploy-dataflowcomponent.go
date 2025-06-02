@@ -95,9 +95,9 @@ type DeployDataflowComponentAction struct {
 
 	// Parsed request payload (only populated after Parse)
 	payload  models.CDFCPayload
-	name     string // human-readable component name
-	metaType string // "custom" for now – future-proofing for other component kinds
-	state    string // the desired state of the component
+	name     string                // human-readable component name
+	metaType string                // "custom" for now – future-proofing for other component kinds
+	state    models.ComponentState // the desired state of the component
 	// ─── Runtime observation & synchronisation ───────────────────────────────
 	systemSnapshotManager *fsm.SnapshotManager // Snapshot Manager holds the latest system snapshot
 
@@ -156,12 +156,12 @@ func (a *DeployDataflowComponentAction) Parse(payload interface{}) error {
 		return errors.New("missing required field Name")
 	}
 
-	a.state = topLevel.State
+	a.state = models.ComponentState(topLevel.State)
 	if a.state == "" {
-		a.state = "active"
+		a.state = models.ComponentStateActive
 	}
-	if a.state != "active" && a.state != "stopped" {
-		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, "invalid state: "+a.state, a.outboundChannel, models.DeployDataFlowComponent)
+	if !a.state.IsValid() {
+		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, "invalid state: "+string(a.state), a.outboundChannel, models.DeployDataFlowComponent)
 		return fmt.Errorf("invalid state: %s", a.state)
 	}
 
@@ -499,7 +499,7 @@ func (a *DeployDataflowComponentAction) Execute() (interface{}, map[string]inter
 	dfc := config.DataFlowComponentConfig{
 		FSMInstanceConfig: config.FSMInstanceConfig{
 			Name:            a.name,
-			DesiredFSMState: a.state,
+			DesiredFSMState: a.state.String(),
 		},
 		DataFlowComponentServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 			BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
@@ -630,9 +630,9 @@ func (a *DeployDataflowComponentAction) waitForComponentToBeReady(ctx context.Co
 					// Compare current state with the desired state
 					var acceptedStates []string
 					switch a.state {
-					case "active":
+					case models.ComponentStateActive:
 						acceptedStates = []string{"active", "idle"}
-					case "stopped":
+					case models.ComponentStateStopped:
 						acceptedStates = []string{"stopped"}
 					}
 
