@@ -9,8 +9,6 @@ Inside that one image you’ll find:
 * **Agent** – a Go service that reads `config.yaml`, launches pipelines, watches health, and phones home to the Management Console.
 * **S6 Supervisor** – keeps every subprocess alive and starts them in the correct order.
 
-> One image, one command, store-and-forward included.
-
 ### Why teams pick UMH-Core
 
 | Benefit         | What it means in practice                                                                                               |

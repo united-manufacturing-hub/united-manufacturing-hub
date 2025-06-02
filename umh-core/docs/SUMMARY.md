@@ -1,6 +1,6 @@
 # Table of contents
 
-* [Introduction](../README.md)
+* [Introduction](README.md)
 * [Getting Started](getting-started.md)
 * [Usage](usage/README.md)
   * [Unified Namespace](usage/unified-namespace/README.md)
