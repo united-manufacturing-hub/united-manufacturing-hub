@@ -709,8 +709,6 @@ buffer:
 			err = stateMocker.Start()
 			Expect(err).NotTo(HaveOccurred())
 
-			time.Sleep(3 * time.Second)
-
 			// Execute the first state change (active to stopped)
 			result, metadata, err := action.Execute()
 			Expect(err).NotTo(HaveOccurred())
