@@ -418,6 +418,9 @@ type GetDataflowcomponentResponseContent struct {
 
 	// Payload corresponds to the JSON schema field "payload".
 	Payload Payload `json:"payload" yaml:"payload" mapstructure:"payload"`
+
+	// State corresponds to the JSON schema field "state".
+	State string `json:"state" yaml:"state" mapstructure:"state"`
 }
 
 type Payload interface{}
