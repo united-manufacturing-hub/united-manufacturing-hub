@@ -601,3 +601,23 @@ const (
 	// ErrConfigFileInvalid is sent when the deployment of a dfc fails because the config file is invalid.
 	ErrConfigFileInvalid = "ERR_CONFIG_FILE_INVALID"
 )
+
+// ComponentState represents the desired state of a data flow component
+type ComponentState string
+
+const (
+	// ComponentStateActive indicates the component should be running
+	ComponentStateActive ComponentState = "active"
+	// ComponentStateStopped indicates the component should be stopped
+	ComponentStateStopped ComponentState = "stopped"
+)
+
+// String returns the string representation of the ComponentState
+func (s ComponentState) String() string {
+	return string(s)
+}
+
+// IsValid checks if the ComponentState has a valid value
+func (s ComponentState) IsValid() bool {
+	return s == ComponentStateActive || s == ComponentStateStopped
+}

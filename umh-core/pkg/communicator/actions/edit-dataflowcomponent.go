@@ -93,26 +93,6 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// ComponentState represents the desired state of a data flow component
-type ComponentState string
-
-const (
-	// ComponentStateActive indicates the component should be running
-	ComponentStateActive ComponentState = "active"
-	// ComponentStateStopped indicates the component should be stopped
-	ComponentStateStopped ComponentState = "stopped"
-)
-
-// String returns the string representation of the ComponentState
-func (s ComponentState) String() string {
-	return string(s)
-}
-
-// IsValid checks if the ComponentState has a valid value
-func (s ComponentState) IsValid() bool {
-	return s == ComponentStateActive || s == ComponentStateStopped
-}
-
 // EditDataflowComponentAction implements the Action interface for editing an
 // existing Data‑Flow Component.  The struct only contains *immutable* data that
 // is required across the lifetime of a single action execution.
@@ -135,9 +115,9 @@ type EditDataflowComponentAction struct {
 
 	// Parsed request payload (only populated after Parse)
 	payload  models.CDFCPayload
-	name     string         // human‑readable component name (may change during an edit)
-	metaType string         // "custom" for now – future‑proofing for other component kinds
-	state    ComponentState // the desired state of the component
+	name     string                // human‑readable component name (may change during an edit)
+	metaType string                // "custom" for now – future‑proofing for other component kinds
+	state    models.ComponentState // the desired state of the component
 
 	// ─── UUID choreography ────────────────────────────────────────────────────
 	oldComponentUUID uuid.UUID // UUID of the pre‑existing component (taken from the request)
@@ -207,9 +187,9 @@ func (a *EditDataflowComponentAction) Parse(payload interface{}) error {
 		return errors.New("missing required field Name")
 	}
 
-	a.state = ComponentState(topLevel.State)
+	a.state = models.ComponentState(topLevel.State)
 	if a.state == "" {
-		a.state = ComponentStateActive
+		a.state = models.ComponentStateActive
 	}
 	if !a.state.IsValid() {
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, "invalid state: "+string(a.state), a.outboundChannel, models.EditDataFlowComponent)
@@ -633,9 +613,9 @@ func (a *EditDataflowComponentAction) waitForComponentToBeReady(ctx context.Cont
 						// depending on the desired state, we accept different states
 						var acceptedStates []string
 						switch a.state {
-						case ComponentStateActive:
+						case models.ComponentStateActive:
 							acceptedStates = []string{"active", "idle"}
-						case ComponentStateStopped:
+						case models.ComponentStateStopped:
 							acceptedStates = []string{"stopped"}
 						}
 
