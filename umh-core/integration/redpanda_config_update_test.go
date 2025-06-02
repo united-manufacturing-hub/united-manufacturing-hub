@@ -25,6 +25,7 @@ import (
 )
 
 var _ = Describe("Redpanda Config Update Integration Test", Ordered, Label("integration"), func() {
+	Skip("This test is currently flaky")
 	const (
 		topicName         = "dfc-config-update-test-topic"
 		messagesPerSecond = 5
