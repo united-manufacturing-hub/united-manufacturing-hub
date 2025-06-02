@@ -25,7 +25,6 @@ import (
 )
 
 var _ = Describe("Redpanda Config Update Integration Test", Ordered, Label("integration"), func() {
-	Skip("This test is currently flaky")
 	const (
 		topicName         = "dfc-config-update-test-topic"
 		messagesPerSecond = 5
@@ -65,6 +64,7 @@ var _ = Describe("Redpanda Config Update Integration Test", Ordered, Label("inte
 	})
 
 	It("should update Redpanda config and continue producing messages", func() {
+		Skip("This test is currently flaky")
 		// Wait for initial messages to be produced
 		Eventually(func() bool {
 			newOffset, err := checkRPK(topicName, lastOffset, lastTimestamp, 0.1, 0.2, messagesPerSecond)
@@ -136,7 +136,6 @@ var _ = Describe("Redpanda Config Update Integration Test", Ordered, Label("inte
 			GinkgoWriter.Printf("Error: %v\n", err)
 			return err == nil && redpandaConfig == "7200000"
 		}, 5*time.Second, 1*time.Second).Should(BeTrue(), "Redpanda config should not be changed back")
-
 	})
 })
 
