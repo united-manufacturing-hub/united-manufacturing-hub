@@ -111,9 +111,6 @@ type ServiceInfo struct {
 	RedpandaObservedState redpandafsm.RedpandaObservedState
 	RedpandaFSMState      string
 
-	// LastChange is the global tick when any of the above fields last changed.
-	LastChange uint64
-
 	// StatusReason is a short human string (log excerpt, metrics finding, …)
 	// explaining *why* the converter is not "green".
 	StatusReason string
@@ -410,7 +407,6 @@ func (p *ProtocolConverterService) Status(
 		DataflowComponentWriteFSMState:      dfcWriteFSMState,
 		RedpandaObservedState:               redpandaObservedState,
 		RedpandaFSMState:                    redpandaFSMState,
-		LastChange:                          tick,
 	}, nil
 }
 

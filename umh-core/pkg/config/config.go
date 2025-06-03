@@ -172,12 +172,6 @@ type ConnectionConfig struct {
 	ConnectionServiceConfig connectionserviceconfig.ConnectionServiceConfig `yaml:"connectionServiceConfig"`
 }
 
-// TemplateVariable is a variable that can be used in templating
-type TemplateVariable struct {
-	Name  string `yaml:"name"`
-	Value any    `yaml:"value"`
-}
-
 // Clone creates a deep copy of FullConfig
 func (c FullConfig) Clone() FullConfig {
 	clone := FullConfig{
