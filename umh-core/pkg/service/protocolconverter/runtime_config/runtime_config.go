@@ -101,6 +101,23 @@ func BuildRuntimeConfig(
 	}
 
 	// 1c) fill gaps up to the highest defined level with "unknown"
+	//
+	// Design Decision: Fill Missing Levels vs. Return Error
+	// ───────────────────────────────────────────────────────────────────────────
+	// When location hierarchy has gaps (e.g., levels 0,3 defined but 1,2 missing),
+	// we choose to fill the gaps with "unknown" rather than returning an error.
+	//
+	// Rationale:
+	// • FSM Context: This runs in a reconciliation loop. Returning an error here
+	//   would cause endless retries without fixing the underlying config issue.
+	// • Error Handling Separation: Critical config validation belongs in the
+	//   initial parsing phase, not during runtime config building.
+	// • Graceful Degradation: A running system with some "unknown" location levels
+	//   provides better UX than a completely broken protocol converter.
+	// • Observable Failure: "unknown" values are visible in logs/metrics, making
+	//   the configuration gap obvious while maintaining system functionality.
+	// • Practical Recovery: Users can fix missing levels and the system will
+	//   automatically pick up the corrected configuration on the next reconcile.
 	maxLevel := -1
 	for k := range loc {
 		level, err := strconv.Atoi(k)
