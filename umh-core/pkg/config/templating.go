@@ -161,6 +161,10 @@ func (d *ProtocolConverterConfig) UnmarshalYAML(value *yaml.Node) error {
 // Callers **must** supply a fully-merged variable scope; the function does
 // not fetch or inject `.global`, `.internal`, or `.location` keys.
 func RenderTemplate[T any](tmpl T, scope map[string]any) (T, error) {
+	if scope == nil {
+		return *new(T), fmt.Errorf("scope cannot be nil")
+	}
+
 	// A. serialise to YAML – keeps anchors & order stable for diffing
 	raw, err := yaml.Marshal(tmpl)
 	if err != nil {
