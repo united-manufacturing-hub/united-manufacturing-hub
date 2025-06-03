@@ -122,7 +122,7 @@ type DataFlowComponentConfig struct {
 }
 
 // HasAnchors returns true if the DataFlowComponentConfig has anchors, see templating.go
-func (d DataFlowComponentConfig) HasAnchors() bool { return d.hasAnchors }
+func (d *DataFlowComponentConfig) HasAnchors() bool { return d.hasAnchors }
 
 // ProtocolConverterConfig contains configuration for creating a ProtocolConverter
 type ProtocolConverterConfig struct {
@@ -137,7 +137,7 @@ type ProtocolConverterConfig struct {
 }
 
 // HasAnchors returns true if the ProtocolConverterConfig has anchors, see templating.go
-func (d ProtocolConverterConfig) HasAnchors() bool { return d.hasAnchors }
+func (d *ProtocolConverterConfig) HasAnchors() bool { return d.hasAnchors }
 
 // NmapConfig contains configuration for creating a Nmap service
 type NmapConfig struct {
