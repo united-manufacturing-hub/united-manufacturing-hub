@@ -138,20 +138,22 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 					"action-get-config-file",
 					"action-set-config-file",
 					"action-get-data-flow-component-metrics",
+					"core-health",
 					"log-logs-suppression",
 				},
 			},
 		},
 	}
 
-	// Derive and set core health from other healths
-	//TODO: set core health from other healths
-	statusMessage.Core.Health = &models.Health{
-		Message:       "core monitoring is not implemented yet",
-		ObservedState: "running",
-		DesiredState:  "running",
-		Category:      models.Active,
-	}
+	// Derive core health from other healths
+	statusMessage.Core.Health = DeriveCoreHealth(
+		statusMessage.Core.Agent.Health,
+		statusMessage.Core.Container.Health,
+		statusMessage.Core.Redpanda.Health,
+		statusMessage.Core.Release.Health,
+		dfcData,
+		s.logger,
+	)
 
 	return statusMessage
 }
