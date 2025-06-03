@@ -522,7 +522,7 @@ func (a *DeployDataflowComponentAction) Execute() (interface{}, map[string]inter
 	// check against observedState as well
 	if a.systemSnapshotManager != nil { // skipping this for the unit tests
 		if a.ignoreHealthCheck {
-			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, Label("deploy", a.name)+"configuration updated; but ignoring the health check", a.outboundChannel, models.EditDataFlowComponent)
+			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, Label("deploy", a.name)+"configuration updated; but ignoring the health check", a.outboundChannel, models.DeployDataFlowComponent)
 		} else {
 			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, Label("deploy", a.name)+"configuration updated; waiting to become ready", a.outboundChannel, models.DeployDataFlowComponent)
 			errCode, err := a.waitForComponentToBeReady(ctx)

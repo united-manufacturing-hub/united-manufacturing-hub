@@ -500,7 +500,11 @@ func (a *EditDataflowComponentAction) Execute() (interface{}, map[string]interfa
 	}
 
 	// return success message, but do not send it as this is done by the caller
-	successMsg := Label("edit", a.name) + "component successfully updated and activated"
+	terminal := map[string]string{
+		dataflowcomponent.OperationalStateActive:  "activated",
+		dataflowcomponent.OperationalStateStopped: "stopped",
+	}[a.state]
+	successMsg := Label("edit", a.name) + "component successfully updated and " + terminal
 
 	return successMsg, nil, nil
 }
