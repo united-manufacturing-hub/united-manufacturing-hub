@@ -60,7 +60,7 @@ type IProtocolConverterService interface {
 	// Status aggregates health from Connection, DFC and Redpanda into a single
 	// snapshot.  The returned structure is **read-only** – callers must not
 	// mutate it.
-	Status(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot, protConvName string, tick uint64) (ServiceInfo, error)
+	Status(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot, protConvName string) (ServiceInfo, error)
 
 	// AddToManager adds a ProtocolConverter to the Connection & DFC manager
 	AddToManager(ctx context.Context, filesystemService filesystem.Service, protConvCfg *protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime, protConvName string) error
@@ -297,7 +297,6 @@ func (p *ProtocolConverterService) Status(
 	services serviceregistry.Provider,
 	snapshot fsm.SystemSnapshot,
 	protConvName string,
-	tick uint64,
 ) (ServiceInfo, error) {
 	start := time.Now()
 	defer func() {
@@ -310,6 +309,8 @@ func (p *ProtocolConverterService) Status(
 	if !p.ServiceExists(ctx, services.GetFileSystem(), protConvName) {
 		return ServiceInfo{}, ErrServiceNotExist
 	}
+
+	tick := snapshot.Tick
 
 	underlyingConnectionName := p.getUnderlyingConnectionName(protConvName)
 	underlyingDFCReadName := p.getUnderlyingDFCReadName(protConvName)

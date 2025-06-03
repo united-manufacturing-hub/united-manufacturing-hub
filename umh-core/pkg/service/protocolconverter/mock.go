@@ -271,7 +271,6 @@ func (m *MockProtocolConverterService) Status(
 	services serviceregistry.Provider,
 	snapshot fsm.SystemSnapshot,
 	protConvName string,
-	tick uint64,
 ) (ServiceInfo, error) {
 	m.StatusCalled = true
 
