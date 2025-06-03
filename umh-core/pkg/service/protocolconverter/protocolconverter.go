@@ -698,6 +698,11 @@ func (p *ProtocolConverterService) StartProtocolConverter(
 	for i, config := range p.dataflowComponentConfig {
 		if config.Name == dfcReadName {
 			// Only start the DFC, if it has been configured
+			// We check benthos.input > 0 while setting dfcReadFound regardless because we distinguish
+			// between two cases: (1) service config missing entirely (return error), vs (2) service
+			// config exists but is unconfigured/empty (set to stopped state). This defensive programming
+			// handles the edge case of calling start before AddToManager and gracefully manages
+			// misconfigured services, consistent with other FSM patterns across the codebase.
 			if len(p.dataflowComponentConfig[i].DataFlowComponentServiceConfig.BenthosConfig.Input) > 0 {
 				p.dataflowComponentConfig[i].DesiredFSMState = dfcfsm.OperationalStateActive
 			} else {
