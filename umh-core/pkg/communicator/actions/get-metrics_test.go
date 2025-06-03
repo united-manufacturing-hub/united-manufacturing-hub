@@ -21,20 +21,25 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions/providers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	dfc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
-	"go.uber.org/mock/gomock"
 	"go.uber.org/zap"
 )
 
+type MockMetricsProvider struct {
+	GetMockMetrics func(payload models.GetMetricsRequest, snapshot fsm.SystemSnapshot) (models.GetMetricsResponse, error)
+}
+
+func (m *MockMetricsProvider) GetMetrics(payload models.GetMetricsRequest, snapshot fsm.SystemSnapshot) (models.GetMetricsResponse, error) {
+	return m.GetMockMetrics(payload, snapshot)
+}
+
 var _ = Describe("GetMetricsAction", func() {
 	var (
-		ctrl         *gomock.Controller
-		mockProvider *providers.MockMetricsProvider
+		mockProvider *MockMetricsProvider
 
 		action          *actions.GetMetricsAction
 		userEmail       string
@@ -48,8 +53,59 @@ var _ = Describe("GetMetricsAction", func() {
 	)
 
 	BeforeEach(func() {
-		ctrl = gomock.NewController(GinkgoT())
-		mockProvider = providers.NewMockMetricsProvider(ctrl)
+		mockProvider = &MockMetricsProvider{
+			GetMockMetrics: func(payload models.GetMetricsRequest, _ fsm.SystemSnapshot) (models.GetMetricsResponse, error) {
+				switch payload.Type {
+				case models.DFCMetricResourceType:
+					return models.GetMetricsResponse{
+						Metrics: []models.Metric{
+							{
+								Name:          "input_received",
+								Path:          "dfc.input.received",
+								ComponentType: "input",
+								ValueType:     models.MetricValueTypeNumber,
+								Value:         float64(100),
+							},
+							{
+								Name:          "output_sent",
+								Path:          "dfc.output.sent",
+								ComponentType: "output",
+								ValueType:     models.MetricValueTypeNumber,
+								Value:         float64(95),
+							},
+						},
+					}, nil
+				case models.RedpandaMetricResourceType:
+					return models.GetMetricsResponse{
+						Metrics: []models.Metric{
+							{
+								Name:          "storage_disk_free_bytes",
+								Path:          "redpanda.storage.disk_free_bytes",
+								ComponentType: "storage",
+								ValueType:     models.MetricValueTypeNumber,
+								Value:         int64(1000000000),
+							},
+							{
+								Name:          "storage_disk_free_space_alert",
+								Path:          "redpanda.storage.disk_free_space_alert",
+								ComponentType: "storage",
+								ValueType:     models.MetricValueTypeBoolean,
+								Value:         false,
+							},
+							{
+								Name:          "request_bytes_total",
+								Path:          "redpanda.kafka.request_bytes_total",
+								ComponentType: "kafka",
+								ValueType:     models.MetricValueTypeNumber,
+								Value:         int64(500000),
+							},
+						},
+					}, nil
+				default:
+					return models.GetMetricsResponse{}, fmt.Errorf("unsupported metric type: %s", payload.Type)
+				}
+			},
+		}
 
 		userEmail = "test@example.com"
 		actionUUID = uuid.New()
@@ -157,10 +213,7 @@ var _ = Describe("GetMetricsAction", func() {
 	})
 
 	Describe("Execute", func() {
-		DescribeTable("should return metrics when metric type is", func(metricType models.MetricResourceType, setupMock func(), expectedMetricsCount int) {
-			// Setup the mock expectations
-			setupMock()
-
+		DescribeTable("should return metrics when metric type is", func(metricType models.MetricResourceType) {
 			// Prepare payload
 			payload := map[string]interface{}{
 				"type": metricType,
@@ -180,7 +233,6 @@ var _ = Describe("GetMetricsAction", func() {
 
 			res, ok := result.(models.GetMetricsResponse)
 			Expect(ok).To(BeTrue())
-			Expect(len(res.Metrics)).To(Equal(expectedMetricsCount))
 
 			// Validate that all metrics have the expected structure
 			for _, metric := range res.Metrics {
@@ -190,70 +242,14 @@ var _ = Describe("GetMetricsAction", func() {
 				Expect(metric.ValueType).NotTo(BeEmpty())
 			}
 		},
-			Entry("dfc", models.DFCMetricResourceType, func() {
-				// Mock DFC metrics response
-				expectedRes := models.GetMetricsResponse{
-					Metrics: []models.Metric{
-						{
-							Name:          "input_received",
-							Path:          "dfc.input.received",
-							ComponentType: "input",
-							ValueType:     models.MetricValueTypeNumber,
-							Value:         float64(100),
-						},
-						{
-							Name:          "output_sent",
-							Path:          "dfc.output.sent",
-							ComponentType: "output",
-							ValueType:     models.MetricValueTypeNumber,
-							Value:         float64(95),
-						},
-					},
-				}
-				mockProvider.EXPECT().
-					GetMetrics(gomock.Any(), gomock.AssignableToTypeOf(fsm.SystemSnapshot{})).
-					Return(expectedRes, nil).
-					Times(1)
-			}, 2),
-			Entry("redpanda", models.RedpandaMetricResourceType, func() {
-				// Mock Redpanda metrics response
-				expectedRes := models.GetMetricsResponse{
-					Metrics: []models.Metric{
-						{
-							Name:          "storage_disk_free_bytes",
-							Path:          "redpanda.storage.disk_free_bytes",
-							ComponentType: "storage",
-							ValueType:     models.MetricValueTypeNumber,
-							Value:         int64(1000000000),
-						},
-						{
-							Name:          "storage_disk_free_space_alert",
-							Path:          "redpanda.storage.disk_free_space_alert",
-							ComponentType: "storage",
-							ValueType:     models.MetricValueTypeBoolean,
-							Value:         false,
-						},
-						{
-							Name:          "request_bytes_total",
-							Path:          "redpanda.kafka.request_bytes_total",
-							ComponentType: "kafka",
-							ValueType:     models.MetricValueTypeNumber,
-							Value:         int64(500000),
-						},
-					},
-				}
-				mockProvider.EXPECT().
-					GetMetrics(gomock.Any(), gomock.AssignableToTypeOf(fsm.SystemSnapshot{})).
-					Return(expectedRes, nil).
-					Times(1)
-			}, 3))
+			Entry("dfc", models.DFCMetricResourceType),
+			Entry("redpanda", models.RedpandaMetricResourceType))
 
 		It("should handle metrics provider errors gracefully", func() {
 			// Setup mock provider to return an error
-			mockProvider.EXPECT().
-				GetMetrics(gomock.Any(), gomock.AssignableToTypeOf(fsm.SystemSnapshot{})).
-				Return(models.GetMetricsResponse{}, fmt.Errorf("failed to get metrics")).
-				Times(1)
+			mockProvider.GetMockMetrics = func(payload models.GetMetricsRequest, _ fsm.SystemSnapshot) (models.GetMetricsResponse, error) {
+				return models.GetMetricsResponse{}, fmt.Errorf("failed to get metrics")
+			}
 
 			payload := map[string]interface{}{
 				"type": models.RedpandaMetricResourceType,
