@@ -27,7 +27,7 @@ func NewNormalizer() *Normalizer {
 // NormalizeConfig applies DFC defaults to a structured config
 func (n *Normalizer) NormalizeConfig(cfg DataflowComponentServiceConfig) DataflowComponentServiceConfig {
 
-	// create a copy
+	// create a shallow copy
 	normalized := cfg
 
 	// We need to first normalize the underlying BenthosServiceConfig

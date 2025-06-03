@@ -31,7 +31,7 @@ func NewNormalizer() *Normalizer {
 // NormalizeConfig applies ProtocolConverter defaults to a structured config
 func (n *Normalizer) NormalizeConfig(cfg ProtocolConverterServiceConfigSpec) ProtocolConverterServiceConfigSpec {
 
-	// create a copy
+	// create a shallow copy
 	normalized := cfg
 
 	// We need to first normalize the underlying DFCServiceConfig

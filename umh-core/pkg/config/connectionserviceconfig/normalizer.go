@@ -27,7 +27,7 @@ func NewNormalizer() *Normalizer {
 // NormalizeConfig applies normalization to a ConnectionServiceConfig
 // by leveraging the existing normalizer for NmapServiceConfig
 func (n *Normalizer) NormalizeConfig(cfg ConnectionServiceConfig) ConnectionServiceConfig {
-	// create a copy
+	// create a shallow copy
 	normalized := cfg
 
 	normalizer := nmapserviceconfig.NewNormalizer()
