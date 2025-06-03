@@ -188,11 +188,7 @@ func (a *EditDataflowComponentAction) Parse(payload interface{}) error {
 	}
 
 	a.state = models.ComponentState(topLevel.State)
-	if a.state == "" {
-		a.state = models.ComponentStateActive
-	}
 	if !a.state.IsValid() {
-		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, "invalid state: "+string(a.state), a.outboundChannel, models.EditDataFlowComponent)
 		return fmt.Errorf("invalid state: %s", a.state)
 	}
 
@@ -224,7 +220,6 @@ func (a *EditDataflowComponentAction) Parse(payload interface{}) error {
 		}
 		a.payload = payload
 	case "protocolConverter", "dataBridge", "streamProcessor":
-		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, "component type not supported", a.outboundChannel, models.EditDataFlowComponent)
 		return fmt.Errorf("component type %s not yet supported", a.metaType)
 	default:
 		return fmt.Errorf("unsupported component type: %s", a.metaType)
@@ -531,7 +526,7 @@ func (a *EditDataflowComponentAction) GetComponentUUID() uuid.UUID {
 }
 
 // waitForComponentToBeReady polls the live FSM state until either
-//   - the component shows up **active** with the *expected* configuration or
+//   - the component shows up **active** or equivalent with the *expected* configuration or
 //   - the timeout hits (→ rollback except when ignoreHealthCheck).
 //
 // Concurrency note: The method never writes to `systemSnapshot`; the FSM runtime
@@ -614,9 +609,9 @@ func (a *EditDataflowComponentAction) waitForComponentToBeReady(ctx context.Cont
 						var acceptedStates []string
 						switch a.state {
 						case models.ComponentStateActive:
-							acceptedStates = []string{"active", "idle"}
+							acceptedStates = []string{dataflowcomponent.OperationalStateActive, dataflowcomponent.OperationalStateIdle}
 						case models.ComponentStateStopped:
-							acceptedStates = []string{"stopped"}
+							acceptedStates = []string{dataflowcomponent.OperationalStateStopped}
 						}
 
 						if !slices.Contains(acceptedStates, instance.CurrentState) {

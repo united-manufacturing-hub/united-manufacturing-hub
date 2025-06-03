@@ -94,6 +94,7 @@ var _ = Describe("DeployDataflowComponent", func() {
 				"meta": map[string]interface{}{
 					"type": "custom",
 				},
+				"state":             "active",
 				"ignoreHealthCheck": false,
 				"payload": map[string]interface{}{
 					"customDataFlowComponent": map[string]interface{}{
@@ -129,6 +130,7 @@ var _ = Describe("DeployDataflowComponent", func() {
 				"meta": map[string]interface{}{
 					"type": "custom",
 				},
+				"state":             "active",
 				"ignoreHealthCheck": false,
 				"payload": map[string]interface{}{
 					"customDataFlowComponent": map[string]interface{}{
@@ -169,6 +171,7 @@ var _ = Describe("DeployDataflowComponent", func() {
 				"meta": map[string]interface{}{
 					"type": "custom",
 				},
+				"state":             "active",
 				"ignoreHealthCheck": false,
 				"payload": map[string]interface{}{
 					"customDataFlowComponent": map[string]interface{}{
@@ -210,6 +213,7 @@ var _ = Describe("DeployDataflowComponent", func() {
 				"meta": map[string]interface{}{
 					"type": "custom",
 				},
+				"state": "active",
 				"payload": map[string]interface{}{
 					"customDataFlowComponent": map[string]interface{}{
 						"inputs": map[string]interface{}{
@@ -233,8 +237,9 @@ var _ = Describe("DeployDataflowComponent", func() {
 		It("should return error for missing meta type", func() {
 			// Payload with missing meta.type field
 			payload := map[string]interface{}{
-				"name": "test-component",
-				"meta": map[string]interface{}{},
+				"name":  "test-component",
+				"meta":  map[string]interface{}{},
+				"state": "active",
 				"payload": map[string]interface{}{
 					"customDataFlowComponent": map[string]interface{}{
 						"inputs": map[string]interface{}{
@@ -262,6 +267,7 @@ var _ = Describe("DeployDataflowComponent", func() {
 				"meta": map[string]interface{}{
 					"type": "unsupported-type",
 				},
+				"state":   "active",
 				"payload": map[string]interface{}{},
 			}
 
@@ -278,6 +284,7 @@ var _ = Describe("DeployDataflowComponent", func() {
 				"meta": map[string]interface{}{
 					"type": "custom",
 				},
+				"state":   "active",
 				"payload": map[string]interface{}{
 					// Missing customDataFlowComponent
 				},
@@ -296,6 +303,7 @@ var _ = Describe("DeployDataflowComponent", func() {
 				"meta": map[string]interface{}{
 					"type": "custom",
 				},
+				"state": "active",
 				"payload": map[string]interface{}{
 					"customDataFlowComponent": map[string]interface{}{
 						// Missing inputs
@@ -328,6 +336,7 @@ var _ = Describe("DeployDataflowComponent", func() {
 				"meta": map[string]interface{}{
 					"type": "custom",
 				},
+				"state": "active",
 				"payload": map[string]interface{}{
 					"customDataFlowComponent": map[string]interface{}{
 						"inputs": map[string]interface{}{
@@ -362,6 +371,7 @@ var _ = Describe("DeployDataflowComponent", func() {
 				"meta": map[string]interface{}{
 					"type": "custom",
 				},
+				"state": "active",
 				"payload": map[string]interface{}{
 					// Direct inputs without customDataFlowComponent wrapper
 					"inputs": map[string]interface{}{
@@ -398,6 +408,7 @@ var _ = Describe("DeployDataflowComponent", func() {
 				"meta": map[string]interface{}{
 					"type": "custom",
 				},
+				"state":             "active",
 				"ignoreHealthCheck": false,
 				"payload": map[string]interface{}{
 					"customDataFlowComponent": map[string]interface{}{
@@ -438,6 +449,7 @@ var _ = Describe("DeployDataflowComponent", func() {
 				"meta": map[string]interface{}{
 					"type": "custom",
 				},
+				"state":             "active",
 				"ignoreHealthCheck": false,
 				"payload": map[string]interface{}{
 					"customDataFlowComponent": map[string]interface{}{
@@ -541,6 +553,7 @@ var _ = Describe("DeployDataflowComponent", func() {
 				"meta": map[string]interface{}{
 					"type": "custom",
 				},
+				"state":             "active",
 				"ignoreHealthCheck": false,
 				"payload": map[string]interface{}{
 					"customDataFlowComponent": map[string]interface{}{
@@ -603,6 +616,7 @@ var _ = Describe("DeployDataflowComponent", func() {
 				"meta": map[string]interface{}{
 					"type": "custom",
 				},
+				"state":             "active",
 				"ignoreHealthCheck": false,
 				"payload": map[string]interface{}{
 					"customDataFlowComponent": map[string]interface{}{
@@ -663,6 +677,7 @@ var _ = Describe("DeployDataflowComponent", func() {
 				"meta": map[string]interface{}{
 					"type": "custom",
 				},
+				"state":             "active",
 				"ignoreHealthCheck": false,
 				"payload": map[string]interface{}{
 					"customDataFlowComponent": map[string]interface{}{

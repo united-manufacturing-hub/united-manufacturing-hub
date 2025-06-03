@@ -128,6 +128,7 @@ var _ = Describe("EditDataflowComponent", func() {
 				"meta": map[string]interface{}{
 					"type": "custom",
 				},
+				"state": "active",
 				"payload": map[string]interface{}{
 					"customDataFlowComponent": map[string]interface{}{
 						"inputs": map[string]interface{}{
@@ -163,6 +164,7 @@ var _ = Describe("EditDataflowComponent", func() {
 				"meta": map[string]interface{}{
 					"type": "custom",
 				},
+				"state": "active",
 				"payload": map[string]interface{}{
 					"customDataFlowComponent": map[string]interface{}{
 						"inputs": map[string]interface{}{
@@ -191,6 +193,7 @@ var _ = Describe("EditDataflowComponent", func() {
 				"meta": map[string]interface{}{
 					"type": "custom",
 				},
+				"state": "active",
 			}
 
 			// Call Parse method
@@ -206,6 +209,7 @@ var _ = Describe("EditDataflowComponent", func() {
 				"meta": map[string]interface{}{
 					"type": "custom",
 				},
+				"state": "active",
 				"payload": map[string]interface{}{
 					"customDataFlowComponent": map[string]interface{}{
 						"inputs": map[string]interface{}{
@@ -229,9 +233,10 @@ var _ = Describe("EditDataflowComponent", func() {
 		It("should return error for missing meta type", func() {
 			// Payload with missing meta type
 			payload := map[string]interface{}{
-				"name": "test-component-updated",
-				"uuid": componentUUID.String(),
-				"meta": map[string]interface{}{},
+				"name":  "test-component-updated",
+				"uuid":  componentUUID.String(),
+				"meta":  map[string]interface{}{},
+				"state": "active",
 				"payload": map[string]interface{}{
 					"customDataFlowComponent": map[string]interface{}{
 						"inputs": map[string]interface{}{
@@ -260,6 +265,7 @@ var _ = Describe("EditDataflowComponent", func() {
 				"meta": map[string]interface{}{
 					"type": "unsupported-type",
 				},
+				"state": "active",
 			}
 
 			// Call Parse method
@@ -276,6 +282,7 @@ var _ = Describe("EditDataflowComponent", func() {
 				"meta": map[string]interface{}{
 					"type": "custom",
 				},
+				"state": "active",
 				"payload": map[string]interface{}{
 					"customDataFlowComponent": map[string]interface{}{
 						"inputs": map[string]interface{}{
@@ -317,6 +324,7 @@ var _ = Describe("EditDataflowComponent", func() {
 				"meta": map[string]interface{}{
 					"type": "custom",
 				},
+				"state": "active",
 				"payload": map[string]interface{}{
 					"customDataFlowComponent": map[string]interface{}{
 						"inputs": map[string]interface{}{
@@ -355,6 +363,7 @@ var _ = Describe("EditDataflowComponent", func() {
 				"meta": map[string]interface{}{
 					"type": "custom",
 				},
+				"state": "active",
 				"payload": map[string]interface{}{
 					"customDataFlowComponent": map[string]interface{}{
 						"inputs": map[string]interface{}{
@@ -396,6 +405,7 @@ var _ = Describe("EditDataflowComponent", func() {
 				"meta": map[string]interface{}{
 					"type": "custom",
 				},
+				"state": "active",
 				"payload": map[string]interface{}{
 					"customDataFlowComponent": map[string]interface{}{
 						"inputs": map[string]interface{}{
@@ -475,6 +485,7 @@ var _ = Describe("EditDataflowComponent", func() {
 				"meta": map[string]interface{}{
 					"type": "custom",
 				},
+				"state": "active",
 				"payload": map[string]interface{}{
 					"customDataFlowComponent": map[string]interface{}{
 						"inputs": map[string]interface{}{
@@ -563,6 +574,7 @@ var _ = Describe("EditDataflowComponent", func() {
 				"meta": map[string]interface{}{
 					"type": "custom",
 				},
+				"state": "active",
 				"payload": map[string]interface{}{
 					"customDataFlowComponent": map[string]interface{}{
 						"inputs": map[string]interface{}{
@@ -782,6 +794,7 @@ buffer:
 				"meta": map[string]interface{}{
 					"type": "custom",
 				},
+				"state": "active",
 				"payload": map[string]interface{}{
 					"customDataFlowComponent": map[string]interface{}{
 						"inputs": map[string]interface{}{
@@ -836,6 +849,7 @@ buffer:
 				"meta": map[string]interface{}{
 					"type": "custom",
 				},
+				"state": "active",
 				"payload": map[string]interface{}{
 					"customDataFlowComponent": map[string]interface{}{
 						"inputs": map[string]interface{}{
