@@ -94,8 +94,14 @@ func (d *DataFlowComponentConfig) UnmarshalYAML(value *yaml.Node) error {
 	}
 
 	// 2. locate the child node with key "dataFlowComponentConfig"
+	// Note: In YAML v3, mapping nodes store key-value pairs in Content as alternating elements:
+	// Content[0]=key1, Content[1]=value1, Content[2]=key2, Content[3]=value2, etc.
+	// We iterate by 2 to step through each key-value pair.
 	var cfgNode *yaml.Node
-	for i := 0; i < len(value.Content)-1; i += 2 {
+	if len(value.Content)%2 != 0 {
+		return fmt.Errorf("invalid YAML mapping node: Content length %d is not even", len(value.Content))
+	}
+	for i := 0; i < len(value.Content); i += 2 {
 		k, v := value.Content[i], value.Content[i+1]
 		if k.Value == "dataFlowComponentConfig" {
 			cfgNode = v
@@ -124,8 +130,14 @@ func (d *ProtocolConverterConfig) UnmarshalYAML(value *yaml.Node) error {
 	}
 
 	// 2. locate the child node with key "protocolConverterConfig"
+	// Note: In YAML v3, mapping nodes store key-value pairs in Content as alternating elements:
+	// Content[0]=key1, Content[1]=value1, Content[2]=key2, Content[3]=value2, etc.
+	// We iterate by 2 to step through each key-value pair.
 	var cfgNode *yaml.Node
-	for i := 0; i < len(value.Content)-1; i += 2 {
+	if len(value.Content)%2 != 0 {
+		return fmt.Errorf("invalid YAML mapping node: Content length %d is not even", len(value.Content))
+	}
+	for i := 0; i < len(value.Content); i += 2 {
 		k, v := value.Content[i], value.Content[i+1]
 		if k.Value == "protocolConverterConfig" {
 			cfgNode = v
