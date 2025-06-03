@@ -242,14 +242,7 @@ func parseCustomDataFlowComponent(payload interface{}) (models.CDFCPayload, erro
 			Type: cdfcParsed.Outputs.Type,
 			Data: cdfcParsed.Outputs.Data,
 		},
-	}
-
-	// Add inject data if present
-	if cdfcParsed.Inject.Type != "" && cdfcParsed.Inject.Data != "" {
-		cdfcPayload.Inject = models.DfcDataConfig{
-			Type: cdfcParsed.Inject.Type,
-			Data: cdfcParsed.Inject.Data,
-		}
+		Inject: cdfcParsed.Inject.Data,
 	}
 
 	// Process the pipeline processors
@@ -333,8 +326,8 @@ func (a *DeployDataflowComponentAction) Validate() error {
 		}
 
 		// Validate inject data
-		if a.payload.Inject.Type != "" && a.payload.Inject.Data != "" {
-			if err := yaml.Unmarshal([]byte(a.payload.Inject.Data), &temp); err != nil {
+		if a.payload.Inject != "" {
+			if err := yaml.Unmarshal([]byte(a.payload.Inject), &temp); err != nil {
 				return fmt.Errorf("inject.data is not valid YAML: %v", err)
 			}
 		}
@@ -383,7 +376,7 @@ func (a *DeployDataflowComponentAction) Execute() (interface{}, map[string]inter
 	}
 
 	//parse the inject data
-	err = yaml.Unmarshal([]byte(a.payload.Inject.Data), &benthosYamlInject)
+	err = yaml.Unmarshal([]byte(a.payload.Inject), &benthosYamlInject)
 	if err != nil {
 		errMsg := Label("deploy", a.name) + fmt.Sprintf("failed to parse inject data: %s", err.Error())
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errMsg, a.outboundChannel, models.DeployDataFlowComponent)
@@ -438,17 +431,41 @@ func (a *DeployDataflowComponentAction) Execute() (interface{}, map[string]inter
 		// Convert each processor configuration in the pipeline
 		processors := []interface{}{}
 
-		for processorName, processor := range a.payload.Pipeline {
-			var procConfig map[string]interface{}
-			err := yaml.Unmarshal([]byte(processor.Data), &procConfig)
-			if err != nil {
-				errMsg := Label("deploy", a.name) + fmt.Sprintf("failed to parse pipeline processor %s: %s", processorName, err.Error())
-				SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errMsg, a.outboundChannel, models.DeployDataFlowComponent)
-				return nil, nil, fmt.Errorf("%s", errMsg)
-			}
+		// Check if we have numeric keys (0, 1, 2, ...) and use them to preserve order
+		// 1. In Go, iterating over a map gives the keys in random order each time
+		// 2. In Benthos pipelines the order of processors matters
+		// 3. Therefore, we need to check If the map keys look like 0, 1, 2, … treat them as an
+		//    explicit index and replay them in that exact numerical order.
+		//    Otherwise keep the old behaviour (unordered) but warn the user.
 
-			// Add processor to the list
-			processors = append(processors, procConfig)
+		// Try to parse all keys as integers
+		hasNumericKeys := CheckIfOrderedNumericKeys(a.payload.Pipeline)
+
+		if hasNumericKeys {
+			// Process in numeric order
+			for i := range len(a.payload.Pipeline) {
+				processorName := fmt.Sprintf("%d", i)
+
+				processor := a.payload.Pipeline[processorName]
+				var procConfig map[string]interface{}
+				err := yaml.Unmarshal([]byte(processor.Data), &procConfig)
+				if err != nil {
+					errMsg := Label("deploy", a.name) + fmt.Sprintf("failed to parse pipeline processor %s: %s", processorName, err.Error())
+					SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errMsg, a.outboundChannel, models.DeployDataFlowComponent)
+					return nil, nil, fmt.Errorf("%s", errMsg)
+				}
+
+				// Add processor to the list
+				processors = append(processors, procConfig)
+			}
+		}
+
+		if !hasNumericKeys {
+			// the frontend always sends numerous keys so this should never happen
+			SendActionReply(a.instanceUUID, a.userEmail,
+				a.actionUUID, models.ActionFinishedWithFailure, "At least one processor with a non-numerous key was found.",
+				a.outboundChannel, models.DeployDataFlowComponent)
+			return nil, nil, fmt.Errorf("at least one processor with a non-numerous key was found")
 		}
 
 		benthosPipeline["processors"] = processors
@@ -502,17 +519,20 @@ func (a *DeployDataflowComponentAction) Execute() (interface{}, map[string]inter
 			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, Label("deploy", a.name)+"configuration updated; but ignoring the health check", a.outboundChannel, models.EditDataFlowComponent)
 		} else {
 			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, Label("deploy", a.name)+"configuration updated; waiting to become active", a.outboundChannel, models.DeployDataFlowComponent)
-			err = a.waitForComponentToBeActive()
+			errCode, err := a.waitForComponentToBeActive(ctx)
 			if err != nil {
 				errorMsg := Label("deploy", a.name) + fmt.Sprintf("failed to wait for dataflow component to be active: %v", err)
-				SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errorMsg, a.outboundChannel, models.DeployDataFlowComponent)
+				// waitForComponentToBeActive gives us the error code, which we then forward to the frontend using the SendActionReplyV2 function
+				// the error code is a string that can be used to identify the error reason
+				// the main reason for this is to allow the frontend to determine whether it should offer a retry option or not
+				SendActionReplyV2(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errorMsg, errCode, nil, a.outboundChannel, models.DeployDataFlowComponent, nil)
 				return nil, nil, fmt.Errorf("%s", errorMsg)
 			}
 		}
 	}
 
 	// return success message, but do not send it as this is done by the caller
-	successMsg := Label("deploy", a.name) + "success"
+	successMsg := Label("deploy", a.name) + "component successfully deployed and activated"
 
 	return successMsg, nil, nil
 }
@@ -534,7 +554,10 @@ func (a *DeployDataflowComponentAction) GetParsedPayload() models.CDFCPayload {
 
 // waitForComponentToBeActive polls live FSM state until the new component
 // becomes active or the timeout hits (→ delete unless ignoreHealthCheck).
-func (a *DeployDataflowComponentAction) waitForComponentToBeActive() error {
+// the function returns the error code and and the error message via an error object
+// the error code is a string that is sent to the frontend to allow it to determine if the action can be retried or not
+// the error message is sent to the frontend to allow the user to see the error message
+func (a *DeployDataflowComponentAction) waitForComponentToBeActive(ctx context.Context) (string, error) {
 	// checks the system snapshot
 	// 1. waits for the instance to appear in the system snapshot
 	// 2. takes the logs of the instance and sends them to the user in 1-second intervals
@@ -569,8 +592,9 @@ func (a *DeployDataflowComponentAction) waitForComponentToBeActive() error {
 			err := a.configManager.AtomicDeleteDataflowcomponent(ctx, dataflowcomponentserviceconfig.GenerateUUIDFromName(a.name))
 			if err != nil {
 				a.actionLogger.Errorf("failed to remove dataflowcomponent %s: %v", a.name, err)
+				return models.ErrRetryRollbackTimeout, fmt.Errorf("dataflow component '%s' failed to activate within timeout but could not be removed: %v. Please check system load and consider removing the component manually", a.name, err)
 			}
-			return fmt.Errorf("dataflow component '%s' was removed because it did not become active within the timeout period", a.name)
+			return models.ErrRetryRollbackTimeout, fmt.Errorf("dataflow component '%s' was removed because it did not become active within the timeout period. Please check system load or component configuration and try again", a.name)
 
 		case <-ticker.C:
 
@@ -595,23 +619,40 @@ func (a *DeployDataflowComponentAction) waitForComponentToBeActive() error {
 						continue
 					}
 					if instance.CurrentState == "active" || instance.CurrentState == "idle" {
-						stateMessage := RemainingPrefixSec(remainingSeconds) + fmt.Sprintf("completed. is in state '%s' with correct configuration", instance.CurrentState)
+						stateMessage := RemainingPrefixSec(remainingSeconds) + fmt.Sprintf("component successfully activated with state '%s', configuration verified", instance.CurrentState)
 						SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, stateMessage,
 							a.outboundChannel, models.DeployDataFlowComponent)
-						return nil
-					} else {
-						// currentStateReason contains more information on why the DFC is in its current state
-						currentStateReason := dfcSnapshot.ServiceInfo.StatusReason
-
-						stateMessage := RemainingPrefixSec(remainingSeconds) + currentStateReason
-						SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, stateMessage, a.outboundChannel, models.DeployDataFlowComponent)
-						// send the benthos logs to the user
-						logs = dfcSnapshot.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosLogs
-						// only send the logs that have not been sent yet
-						if len(logs) > len(lastLogs) {
-							lastLogs = SendLimitedLogs(logs, lastLogs, a.instanceUUID, a.userEmail, a.actionUUID, a.outboundChannel, models.DeployDataFlowComponent, remainingSeconds)
-						}
+						return "", nil
 					}
+
+					// currentStateReason contains more information on why the DFC is in its current state
+					currentStateReason := dfcSnapshot.ServiceInfo.StatusReason
+
+					stateMessage := RemainingPrefixSec(remainingSeconds) + currentStateReason
+					SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, stateMessage, a.outboundChannel, models.DeployDataFlowComponent)
+					// send the benthos logs to the user
+					logs = dfcSnapshot.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosLogs
+
+					// only send the logs that have not been sent yet
+					if len(logs) > len(lastLogs) {
+
+						lastLogs = SendLimitedLogs(logs, lastLogs, a.instanceUUID, a.userEmail, a.actionUUID, a.outboundChannel, models.DeployDataFlowComponent, remainingSeconds)
+					}
+					// CheckBenthosLogLinesForConfigErrors is used to detect fatal configuration errors that would cause
+					// Benthos to enter a CrashLoop. When such errors are detected, we can immediately
+					// abort the startup process rather than waiting for the full timeout period,
+					// as these errors require configuration changes to resolve.
+					if CheckBenthosLogLinesForConfigErrors(logs) {
+						SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, Label("deploy", a.name)+"configuration error detected. Removing component...", a.outboundChannel, models.DeployDataFlowComponent)
+						err := a.configManager.AtomicDeleteDataflowcomponent(ctx, dataflowcomponentserviceconfig.GenerateUUIDFromName(a.name))
+						if err != nil {
+							a.actionLogger.Errorf("failed to remove dataflowcomponent %s: %v", a.name, err)
+							return models.ErrConfigFileInvalid, fmt.Errorf("dataflow component '%s' has invalid configuration but could not be removed: %v. Please check your logs and consider removing the component manually", a.name, err)
+						}
+
+						return models.ErrConfigFileInvalid, fmt.Errorf("dataflow component '%s' was removed due to configuration errors. Please check the component logs, fix the configuration issues, and try deploying again", a.name)
+					}
+
 				}
 				if !found {
 					stateMessage := RemainingPrefixSec(remainingSeconds) + "waiting for it to appear in the config"
