@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:generate mockgen -destination=metrics_provider_mock.go -package=providers github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions/providers MetricsProvider
 package providers
 
 import (

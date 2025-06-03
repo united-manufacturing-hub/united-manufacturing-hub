@@ -29,6 +29,7 @@ import (
 	"go.uber.org/zap"
 )
 
+// MockMetricsProvider is a mock implementation of a struct that implements the MetricsProvider interface.
 type MockMetricsProvider struct {
 	GetMockMetrics func(payload models.GetMetricsRequest, snapshot fsm.SystemSnapshot) (models.GetMetricsResponse, error)
 }
