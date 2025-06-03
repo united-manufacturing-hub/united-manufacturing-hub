@@ -115,9 +115,9 @@ type EditDataflowComponentAction struct {
 
 	// Parsed request payload (only populated after Parse)
 	payload  models.CDFCPayload
-	name     string                // human‑readable component name (may change during an edit)
-	metaType string                // "custom" for now – future‑proofing for other component kinds
-	state    models.ComponentState // the desired state of the component
+	name     string // human‑readable component name (may change during an edit)
+	metaType string // "custom" for now – future‑proofing for other component kinds
+	state    string // the desired state of the component
 
 	// ─── UUID choreography ────────────────────────────────────────────────────
 	oldComponentUUID uuid.UUID // UUID of the pre‑existing component (taken from the request)
@@ -187,8 +187,8 @@ func (a *EditDataflowComponentAction) Parse(payload interface{}) error {
 		return errors.New("missing required field Name")
 	}
 
-	a.state = models.ComponentState(topLevel.State)
-	if !a.state.IsValid() {
+	a.state = topLevel.State
+	if a.state != dataflowcomponent.OperationalStateStopped && a.state != dataflowcomponent.OperationalStateActive {
 		return fmt.Errorf("invalid state: %s", a.state)
 	}
 
@@ -435,7 +435,7 @@ func (a *EditDataflowComponentAction) Execute() (interface{}, map[string]interfa
 	}
 
 	// get the desired state
-	desiredState := a.state.String()
+	desiredState := a.state
 
 	// Create the Benthos service config
 	benthosConfig := benthosserviceconfig.BenthosServiceConfig{
@@ -608,9 +608,9 @@ func (a *EditDataflowComponentAction) waitForComponentToBeReady(ctx context.Cont
 						// depending on the desired state, we accept different states
 						var acceptedStates []string
 						switch a.state {
-						case models.ComponentStateActive:
+						case dataflowcomponent.OperationalStateActive:
 							acceptedStates = []string{dataflowcomponent.OperationalStateActive, dataflowcomponent.OperationalStateIdle}
-						case models.ComponentStateStopped:
+						case dataflowcomponent.OperationalStateStopped:
 							acceptedStates = []string{dataflowcomponent.OperationalStateStopped}
 						}
 

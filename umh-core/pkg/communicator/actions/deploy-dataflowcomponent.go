@@ -95,9 +95,9 @@ type DeployDataflowComponentAction struct {
 
 	// Parsed request payload (only populated after Parse)
 	payload  models.CDFCPayload
-	name     string                // human-readable component name
-	metaType string                // "custom" for now – future-proofing for other component kinds
-	state    models.ComponentState // the desired state of the component
+	name     string // human-readable component name
+	metaType string // "custom" for now – future-proofing for other component kinds
+	state    string // the desired state of the component
 	// ─── Runtime observation & synchronisation ───────────────────────────────
 	systemSnapshotManager *fsm.SnapshotManager // Snapshot Manager holds the latest system snapshot
 
@@ -156,8 +156,8 @@ func (a *DeployDataflowComponentAction) Parse(payload interface{}) error {
 		return errors.New("missing required field Name")
 	}
 
-	a.state = models.ComponentState(topLevel.State)
-	if !a.state.IsValid() {
+	a.state = topLevel.State
+	if a.state != dataflowcomponent.OperationalStateStopped && a.state != dataflowcomponent.OperationalStateActive {
 		return fmt.Errorf("invalid state: %s", a.state)
 	}
 
@@ -494,7 +494,7 @@ func (a *DeployDataflowComponentAction) Execute() (interface{}, map[string]inter
 	dfc := config.DataFlowComponentConfig{
 		FSMInstanceConfig: config.FSMInstanceConfig{
 			Name:            a.name,
-			DesiredFSMState: a.state.String(),
+			DesiredFSMState: a.state,
 		},
 		DataFlowComponentServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 			BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
@@ -625,9 +625,9 @@ func (a *DeployDataflowComponentAction) waitForComponentToBeReady(ctx context.Co
 					// Compare current state with the desired state
 					var acceptedStates []string
 					switch a.state {
-					case models.ComponentStateActive:
+					case dataflowcomponent.OperationalStateActive:
 						acceptedStates = []string{dataflowcomponent.OperationalStateActive, dataflowcomponent.OperationalStateIdle}
-					case models.ComponentStateStopped:
+					case dataflowcomponent.OperationalStateStopped:
 						acceptedStates = []string{dataflowcomponent.OperationalStateStopped}
 					}
 
