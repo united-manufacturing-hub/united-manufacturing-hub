@@ -18,7 +18,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"go.uber.org/zap"
 )
@@ -60,10 +59,7 @@ func DeriveCoreHealth(
 	for _, dfc := range dfcs {
 		// Both Active and Idle are considered healthy states for DFCs
 		// Also ignore components that are starting
-		if dfc.Health != nil &&
-			dfc.Health.ObservedState != dataflowcomponent.OperationalStateActive &&
-			dfc.Health.ObservedState != dataflowcomponent.OperationalStateIdle &&
-			!strings.Contains(strings.ToLower(dfc.Health.ObservedState), "starting") {
+		if dfc.Health != nil && dfc.Health.Category == models.Degraded {
 			unhealthyComponents = append(unhealthyComponents, fmt.Sprintf("DFC %s: %s", dfc.UUID, dfc.Health.Message))
 		}
 	}
