@@ -164,24 +164,24 @@ func RenderTemplate[T any](tmpl T, scope map[string]any) (T, error) {
 	// A. serialise to YAML – keeps anchors & order stable for diffing
 	raw, err := yaml.Marshal(tmpl)
 	if err != nil {
-		return *new(T), err
+		return *new(T), fmt.Errorf("failed to marshal template of type %T to YAML: %w", tmpl, err)
 	}
 
 	// B. parse + execute the template (no extra FuncMap – sandboxed!)
 	tpl, err := template.New("pc").Option("missingkey=error").Parse(string(raw))
 	if err != nil {
-		return *new(T), err
+		return *new(T), fmt.Errorf("failed to parse template for type %T: %w", tmpl, err)
 	}
 
 	var buf bytes.Buffer
 	if err := tpl.Execute(&buf, scope); err != nil {
-		return *new(T), err
+		return *new(T), fmt.Errorf("failed to execute template for type %T: %w", tmpl, err)
 	}
 
 	// C. unmarshal back into the *same* Go type
 	var out T
 	if err := yaml.Unmarshal(buf.Bytes(), &out); err != nil {
-		return *new(T), err
+		return *new(T), fmt.Errorf("failed to unmarshal rendered template back to type %T: %w", tmpl, err)
 	}
 
 	// D. sanity-check – no {{ left over
