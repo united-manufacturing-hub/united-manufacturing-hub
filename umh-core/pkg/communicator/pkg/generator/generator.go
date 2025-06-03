@@ -17,6 +17,7 @@ package generator
 import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
@@ -61,7 +62,7 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 
 	// --- container (only one instance) ---------------------------------------------------------
 	var containerData models.Container
-	contInst, ok := fsm.FindInstance(snapshot, fsm.ContainerManagerName, fsm.CoreInstanceName)
+	contInst, ok := fsm.FindInstance(snapshot, constants.ContainerManagerName, constants.CoreInstanceName)
 	if ok {
 		containerData = ContainerFromSnapshot(contInst, s.logger)
 	}
@@ -71,21 +72,21 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 	var agentDataReleaseChannel string
 	var agentDataCurrentVersion string
 	var agentDataVersions []models.Version
-	agInst, ok := fsm.FindInstance(snapshot, fsm.AgentManagerName, fsm.AgentInstanceName)
+	agInst, ok := fsm.FindInstance(snapshot, constants.AgentManagerName, constants.AgentInstanceName)
 	if ok {
 		agentData, agentDataReleaseChannel, agentDataCurrentVersion, agentDataVersions = AgentFromSnapshot(agInst, s.logger)
 	}
 
 	// --- redpanda (only one instance) -------------------------------------------------------------
 	var redpandaData models.Redpanda
-	rpInst, ok := fsm.FindInstance(snapshot, fsm.RedpandaManagerName, fsm.RedpandaInstanceName)
+	rpInst, ok := fsm.FindInstance(snapshot, constants.RedpandaManagerName, constants.RedpandaInstanceName)
 	if ok {
 		redpandaData = RedpandaFromSnapshot(rpInst, s.logger)
 	}
 
 	// --- dfc (multiple instances) ----------------------	---------------------------------------
 	var dfcData []models.Dfc
-	dfcMgr, ok := fsm.FindManager(snapshot, fsm.DataflowcomponentManagerName)
+	dfcMgr, ok := fsm.FindManager(snapshot, constants.DataflowcomponentManagerName)
 	if ok {
 		dfcData = DfcsFromSnapshot(dfcMgr, s.logger)
 	}

@@ -23,23 +23,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
-)
-
-// These are the names of the managers and instances that are part of the system snapshot
-// They are quite inconsistent and need to be cleaned up
-const (
-	// Manager name constants
-	ContainerManagerName         = logger.ComponentContainerManager + "_" + constants.DefaultManagerName
-	BenthosManagerName           = logger.ComponentBenthosManager + "_" + constants.DefaultManagerName
-	AgentManagerName             = logger.ComponentAgentManager + "_" + constants.DefaultManagerName
-	RedpandaManagerName          = logger.ComponentRedpandaManager + constants.DefaultManagerName
-	DataflowcomponentManagerName = constants.DataflowcomponentManagerName
-
-	// Instance name constants
-	CoreInstanceName     = "Core"
-	AgentInstanceName    = "agent"
-	RedpandaInstanceName = "redpanda"
 )
 
 // ObservedStateSnapshot represents a deep copy of an observed state

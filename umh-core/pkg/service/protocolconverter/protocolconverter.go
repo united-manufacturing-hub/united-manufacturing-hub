@@ -22,6 +22,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	connectionfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/connection"
 	dfcfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
@@ -315,7 +316,7 @@ func (p *ProtocolConverterService) Status(
 	underlyingDFCWriteName := p.getUnderlyingDFCWriteName(protConvName)
 
 	// --- redpanda (only one instance) -------------------------------------------------------------
-	rpInst, ok := fsm.FindInstance(snapshot, fsm.RedpandaManagerName, fsm.RedpandaInstanceName)
+	rpInst, ok := fsm.FindInstance(snapshot, constants.RedpandaManagerName, constants.RedpandaInstanceName)
 	if !ok || rpInst == nil {
 		return ServiceInfo{}, fmt.Errorf("redpanda instance not found")
 	}
