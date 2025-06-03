@@ -83,6 +83,7 @@ func (m *MockConfigManager) GetFileSystemService() filesystem.Service {
 }
 
 // WriteConfig implements the ConfigManager interface
+// all the functions that call MockConfigManager.writeConfig must hold the mutexReadAndWrite mutex
 func (m *MockConfigManager) writeConfig(ctx context.Context, cfg FullConfig) error {
 	m.Config = cfg
 	m.CacheModTime = time.Now()
