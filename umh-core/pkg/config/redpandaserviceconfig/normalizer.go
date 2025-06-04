@@ -24,7 +24,7 @@ func NewNormalizer() *Normalizer {
 
 // NormalizeConfig applies Redpanda defaults to a structured config
 func (n *Normalizer) NormalizeConfig(cfg RedpandaServiceConfig) RedpandaServiceConfig {
-	// Create a copy
+	// create a shallow copy
 	normalized := cfg
 
 	if normalized.Topic.DefaultTopicRetentionMs == 0 {
