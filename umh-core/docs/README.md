@@ -1,8 +1,10 @@
 # Introduction
 
+> **Looking for the old Kubernetes Helm stack?** See the [UMH Core vs UMH Classic FAQ](umh-core-vs-classic-faq.md) to understand which edition fits your project and the current migration path.
+
 UMH-Core is a **single Docker container that turns any PC, VM, or edge gateway into an Industrial Data Hub**.
 
-Inside that one image you’ll find:
+Inside that one image you'll find:
 
 * **Redpanda** – an embedded, Kafka-compatible broker that buffers every message.
 * **Benthos-UMH** – a stream-processor engine with 50 + industrial connectors.
@@ -22,7 +24,7 @@ Inside that one image you’ll find:
 ```
 Instance
 └─ Core
-   ├─ Bridges          # ingest or egest data (ex-“Protocol Converters”)
+   ├─ Bridges          # ingest or egest data (ex-"Protocol Converters")
    │   ├─ Source Flow  # read side
    │   └─ Sink Flow    # write side
    │   └─ Connection   # monitors the network connection
@@ -32,7 +34,7 @@ Instance
 
 * **Bridge** – a Data Flow that **connects** an external system to the UNS.
 * **Stream Processor** – transforms messages already inside the UNS.
-* **Stand-alone Flow** – point-to-point when UNS buffering isn’t wanted.
+* **Stand-alone Flow** – point-to-point when UNS buffering isn't wanted.
 * **Connection** - a continious network check whether the external system is available
 
 ### Typical architecture

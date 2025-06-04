@@ -19,10 +19,12 @@
   * [Sizing Guide](production/sizing-guide.md)
   * [Corporate Firewalls](production/corporate-firewalls.md)
   * [Metrics](production/metrics.md)
+  * [Migration from Classic](production/migration-from-classic.md)
 * [Reference](reference/README.md)
   * [Configuration Reference](reference/configuration-reference.md)
   * [Container Layout](reference/container-layout.md)
   * [State Machines](reference/state-machines.md)
+* [UMH Core vs UMH Classic](umh-core-vs-classic-faq.md)
 
 ## UMH Classic
 

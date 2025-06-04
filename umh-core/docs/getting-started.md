@@ -76,6 +76,9 @@ From the Console you can :
     <strong>     --name umh-core -v $(pwd):/data \
     </strong>     management.umh.app/oci/united-manufacturing-hub/umh-core:latest
     </code></pre>
+
+> **Note for UMH Classic users:** the former Helm/Kubernetes installation is no longer required. UMH Core ships as a single container; Kubernetes is purely optional if you need scaling or HA.
+
 4.  **Watch it work**
 
     Open the Topic Browser in the console; you should see `random_int` under `plant-A.line-4.machine-7._raw.random_int`&#x20;
