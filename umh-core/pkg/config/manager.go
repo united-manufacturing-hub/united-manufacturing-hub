@@ -127,6 +127,8 @@ func (m *FileConfigManager) WithFileSystemService(fsService filesystem.Service) 
 // get config or create new with given config parameters (communicator, release channel, location)
 // if the config file does not exist, it will be created with default values and then overwritten with the given config parameters
 func (m *FileConfigManager) GetConfigWithOverwritesOrCreateNew(ctx context.Context, configOverride FullConfig) (FullConfig, error) {
+	fmt.Println("GetConfigWithOverwritesOrCreateNew")
+	defer fmt.Println("GetConfigWithOverwritesOrCreateNew done")
 	// Check if context is already cancelled
 	if ctx.Err() != nil {
 		return FullConfig{}, ctx.Err()
@@ -208,6 +210,8 @@ func (m *FileConfigManager) GetConfigWithOverwritesOrCreateNew(ctx context.Conte
 // file (which always updates mtime) causes the next reader to parse fresh
 // bytes, so external callers still see a “latest-on-call” behaviour.
 func (m *FileConfigManager) GetConfig(ctx context.Context, tick uint64) (FullConfig, error) {
+	fmt.Println("GetConfig")
+	defer fmt.Println("GetConfig done")
 	// we use a read lock here, because we only read the config file
 	err := m.mutexReadOrWrite.RLock(ctx)
 	if err != nil {
@@ -323,6 +327,8 @@ func (m *FileConfigManager) GetConfig(ctx context.Context, tick uint64) (FullCon
 // misconfiguration.  No additional semantic validation is performed here;
 // callers are responsible for deeper checks.
 func parseConfig(data []byte) (FullConfig, error) {
+	fmt.Println("parseConfig")
+	defer fmt.Println("parseConfig done")
 	var cfg FullConfig
 
 	dec := yaml.NewDecoder(bytes.NewReader(data))
@@ -375,12 +381,16 @@ func NewFileConfigManagerWithBackoff() (*FileConfigManagerWithBackoff, error) {
 // GetConfigWithOverwritesOrCreateNew wraps the FileConfigManager's GetConfigWithOverwritesOrCreateNew method
 // it is used in main.go to get the config with overwrites or create a new one on startup
 func (m *FileConfigManagerWithBackoff) GetConfigWithOverwritesOrCreateNew(ctx context.Context, config FullConfig) (FullConfig, error) {
+	fmt.Println("GetConfigWithOverwritesOrCreateNew")
+	defer fmt.Println("GetConfigWithOverwritesOrCreateNew done")
 	return m.configManager.GetConfigWithOverwritesOrCreateNew(ctx, config)
 }
 
 // writeConfig writes the config to the file
 // it should not be exposed or used outside of the config manager, due to potential race conditions
 func (m *FileConfigManager) writeConfig(ctx context.Context, config FullConfig) error {
+	fmt.Println("writeConfig")
+	defer fmt.Println("writeConfig done")
 	// we use a write lock here, because we write the config file
 	err := m.mutexReadOrWrite.Lock(ctx)
 	if err != nil {
@@ -417,6 +427,8 @@ func (m *FileConfigManager) writeConfig(ctx context.Context, config FullConfig) 
 // WithFileSystemService allows setting a custom filesystem service on the wrapped FileConfigManager
 // useful for testing or advanced use cases
 func (m *FileConfigManagerWithBackoff) WithFileSystemService(fsService filesystem.Service) *FileConfigManagerWithBackoff {
+	fmt.Println("WithFileSystemService")
+	defer fmt.Println("WithFileSystemService done")
 	m.configManager.WithFileSystemService(fsService)
 	return m
 }
@@ -426,6 +438,8 @@ func (m *FileConfigManagerWithBackoff) WithFileSystemService(fsService filesyste
 // It adds backoff logic to handle temporary and permanent failures
 // It will return either a temporary backoff error or a permanent failure error
 func (m *FileConfigManagerWithBackoff) GetConfig(ctx context.Context, tick uint64) (FullConfig, error) {
+	fmt.Println("GetConfig")
+	defer fmt.Println("GetConfig done")
 	start := time.Now()
 	defer func() {
 		duration := time.Since(start)
@@ -468,22 +482,30 @@ func (m *FileConfigManagerWithBackoff) GetConfig(ctx context.Context, tick uint6
 // Reset forcefully resets the config manager's state, including permanent failure status
 // This should be called when the parent component has taken action to address the failure
 func (m *FileConfigManagerWithBackoff) Reset() {
+	fmt.Println("Reset")
+	defer fmt.Println("Reset done")
 	m.backoffManager.Reset()
 }
 
 // IsPermanentFailure returns true if the config manager has permanently failed
 // This can be used by consumers to distinguish between temporary and permanent failures
 func (m *FileConfigManagerWithBackoff) IsPermanentFailure() bool {
+	fmt.Println("IsPermanentFailure")
+	defer fmt.Println("IsPermanentFailure done")
 	return m.backoffManager.IsPermanentlyFailed()
 }
 
 // GetLastError returns the last error that occurred when fetching the config
 func (m *FileConfigManagerWithBackoff) GetLastError() error {
+	fmt.Println("GetLastError")
+	defer fmt.Println("GetLastError done")
 	return m.backoffManager.GetLastError()
 }
 
 // AtomicSetLocation sets the location in the config atomically
 func (m *FileConfigManager) AtomicSetLocation(ctx context.Context, location models.EditInstanceLocationModel) error {
+	fmt.Println("AtomicSetLocation")
+	defer fmt.Println("AtomicSetLocation done")
 	err := m.mutexAtomicUpdate.Lock(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to lock config file: %w", err)
@@ -527,6 +549,8 @@ func (m *FileConfigManager) AtomicSetLocation(ctx context.Context, location mode
 
 // AtomicSetLocation delegates to the underlying FileConfigManager
 func (m *FileConfigManagerWithBackoff) AtomicSetLocation(ctx context.Context, location models.EditInstanceLocationModel) error {
+	fmt.Println("AtomicSetLocation")
+	defer fmt.Println("AtomicSetLocation done")
 	// Check if context is already cancelled
 	if ctx.Err() != nil {
 		return ctx.Err()
@@ -537,6 +561,8 @@ func (m *FileConfigManagerWithBackoff) AtomicSetLocation(ctx context.Context, lo
 
 // AtomicAddDataflowcomponent adds a dataflowcomponent to the config atomically
 func (m *FileConfigManager) AtomicAddDataflowcomponent(ctx context.Context, dfc DataFlowComponentConfig) error {
+	fmt.Println("AtomicAddDataflowcomponent")
+	defer fmt.Println("AtomicAddDataflowcomponent done")
 	err := m.mutexAtomicUpdate.Lock(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to lock config file: %w", err)
@@ -569,6 +595,8 @@ func (m *FileConfigManager) AtomicAddDataflowcomponent(ctx context.Context, dfc 
 
 // AtomicAddDataflowcomponent delegates to the underlying FileConfigManager
 func (m *FileConfigManagerWithBackoff) AtomicAddDataflowcomponent(ctx context.Context, dfc DataFlowComponentConfig) error {
+	fmt.Println("AtomicAddDataflowcomponent")
+	defer fmt.Println("AtomicAddDataflowcomponent done")
 	// Check if context is already cancelled
 	if ctx.Err() != nil {
 		return ctx.Err()
@@ -579,6 +607,8 @@ func (m *FileConfigManagerWithBackoff) AtomicAddDataflowcomponent(ctx context.Co
 
 // AtomicDeleteDataflowcomponent deletes a dataflowcomponent from the config atomically
 func (m *FileConfigManager) AtomicDeleteDataflowcomponent(ctx context.Context, componentUUID uuid.UUID) error {
+	fmt.Println("AtomicDeleteDataflowcomponent")
+	defer fmt.Println("AtomicDeleteDataflowcomponent done")
 	err := m.mutexAtomicUpdate.Lock(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to lock config file: %w", err)
@@ -621,6 +651,8 @@ func (m *FileConfigManager) AtomicDeleteDataflowcomponent(ctx context.Context, c
 
 // AtomicDeleteDataflowcomponent delegates to the underlying FileConfigManager
 func (m *FileConfigManagerWithBackoff) AtomicDeleteDataflowcomponent(ctx context.Context, componentUUID uuid.UUID) error {
+	fmt.Println("AtomicDeleteDataflowcomponent")
+	defer fmt.Println("AtomicDeleteDataflowcomponent done")
 	// Check if context is already cancelled
 	if ctx.Err() != nil {
 		return ctx.Err()
@@ -631,6 +663,8 @@ func (m *FileConfigManagerWithBackoff) AtomicDeleteDataflowcomponent(ctx context
 
 // AtomicEditDataflowcomponent edits a dataflowcomponent in the config atomically
 func (m *FileConfigManager) AtomicEditDataflowcomponent(ctx context.Context, componentUUID uuid.UUID, dfc DataFlowComponentConfig) (DataFlowComponentConfig, error) {
+	fmt.Println("AtomicEditDataflowcomponent")
+	defer fmt.Println("AtomicEditDataflowcomponent done")
 	err := m.mutexAtomicUpdate.Lock(ctx)
 	if err != nil {
 		return DataFlowComponentConfig{}, fmt.Errorf("failed to lock config file: %w", err)
@@ -710,6 +744,8 @@ func (m *FileConfigManager) AtomicEditDataflowcomponent(ctx context.Context, com
 
 // AtomicEditDataflowcomponent delegates to the underlying FileConfigManager
 func (m *FileConfigManagerWithBackoff) AtomicEditDataflowcomponent(ctx context.Context, componentUUID uuid.UUID, dfc DataFlowComponentConfig) (DataFlowComponentConfig, error) {
+	fmt.Println("AtomicEditDataflowcomponent")
+	defer fmt.Println("AtomicEditDataflowcomponent done")
 	// Check if context is already cancelled
 	if ctx.Err() != nil {
 		return DataFlowComponentConfig{}, ctx.Err()
