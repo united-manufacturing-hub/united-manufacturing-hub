@@ -127,13 +127,10 @@ func (a *SetConfigFileAction) Execute() (interface{}, map[string]interface{}, er
 		return nil, nil, fmt.Errorf("failed to write config file: %w", err)
 	}
 
-	newLastModifiedTime, err := a.configManager.UpdateAndGetCacheModTime(ctx)
-	if err != nil {
-		errMsg := fmt.Sprintf("Failed to get cache mod time, refresh the page and double check if the file has been modified. Consider rolling back to the previous version if issues persist. Error: %v", err)
-		SendActionReplyV2(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
-			errMsg, models.ErrGetCacheModTimeFailed, nil, a.outboundChannel, models.SetConfigFile, nil)
-		return nil, nil, fmt.Errorf("failed to get cache mod time: %w", err)
-	}
+	// the WriteConfigFromString call above updates the cache mod time in the config manager
+	// so we can just get it without updating it (which would be a blocking operation)
+	newLastModifiedTime := a.configManager.GetCacheModTimeWithoutUpdate()
+
 	newLastModifiedTimeString := newLastModifiedTime.Format(time.RFC3339)
 
 	// Return the new last modified time

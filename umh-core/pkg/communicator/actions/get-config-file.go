@@ -98,13 +98,9 @@ func (a *GetConfigFileAction) Execute() (interface{}, map[string]interface{}, er
 		return nil, nil, fmt.Errorf("failed to read config file: %w", err)
 	}
 
-	lastModifiedTime, err := a.configManager.UpdateAndGetCacheModTime(ctx)
-	if err != nil {
-		errMsg := fmt.Sprintf("Failed to get cache mod time: %v", err)
-		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
-			errMsg, a.outboundChannel, models.GetConfigFile)
-		return nil, nil, fmt.Errorf("failed to get cache mod time: %w", err)
-	}
+	// the GetConfigAsString call above updates the cache mod time in the config manager
+	// so we can just get it without updating it (which would be a blocking operation)
+	lastModifiedTime := a.configManager.GetCacheModTimeWithoutUpdate()
 
 	// Return the file content as a string
 	response := models.GetConfigFileResponse{
