@@ -24,18 +24,18 @@ Inside that one image you'll find:
 ```
 Instance
 └─ Core
-   ├─ Bridges          # ingest or egest data (ex-"Protocol Converters")
+   ├─ Bridges 🚧         # ingest or egest data (ex-"Protocol Converters") - Coming Soon
    │   ├─ Source Flow  # read side
-   │   └─ Sink Flow    # write side
+   │   └─ Sink Flow    # write side  
    │   └─ Connection   # monitors the network connection
-   ├─ Stream Processors 
-   └─ Stand-alone Flows
+   ├─ Stream Processors 🚧  # Roadmap - transforms messages inside UNS
+   └─ Stand-alone Flows ✅  # Available now
 ```
 
-* **Bridge** – a Data Flow that **connects** an external system to the UNS.
-* **Stream Processor** – transforms messages already inside the UNS.
-* **Stand-alone Flow** – point-to-point when UNS buffering isn't wanted.
-* **Connection** - a continious network check whether the external system is available
+* **Bridge** 🚧 – a Data Flow that **connects** an external system to the UNS. *(Coming very soon)*
+* **Stream Processor** 🚧 – transforms messages already inside the UNS. *(Roadmap item)*
+* **Stand-alone Flow** ✅ – point-to-point when UNS buffering isn't wanted. *(Available now)*
+* **Connection** ✅ - a continuous network check whether the external system is available. *(Available now)*
 
 ### Typical architecture
 

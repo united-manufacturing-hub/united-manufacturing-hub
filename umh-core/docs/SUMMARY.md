@@ -13,7 +13,7 @@
     * [Overview](usage/data-flows/overview.md)
     * [Bridges](usage/data-flows/bridges.md)
     * [Stand-Alone Flow](usage/data-flows/stand-alone-flow.md)
-    * [Stream Processor (upcoming)](usage/data-flows/stream-processor-upcoming.md)
+    * [Stream Processor 🚧](usage/data-flows/stream-processor-upcoming.md)
 * [Production](production/README.md)
   * [Updating](production/updating.md)
   * [Sizing Guide](production/sizing-guide.md)

@@ -140,7 +140,7 @@ You never have to operate or even "see" Redpanda; UMH Core embeds and manages it
 
 **Short answer:** create a **Bridge** on each side that speaks the upcoming *umh-core-API* output/input plug-in.
 
-Why **HTTP**?
+> 🚧 **Roadmap**: The *umh-core-API* plugin is under development to enable direct Core-to-Core communication.
 
 * It's the most firewall-friendly protocol in enterprise networks.
 * SSL/TLS is easy to terminate and audit.
