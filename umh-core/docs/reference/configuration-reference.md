@@ -81,6 +81,8 @@ _For full  syntax see_ [Broken link](broken-reference "mention")
 
 ### Bridge – Bridge from Device to UNS
 
+> 🚧 **Coming Soon**: Bridges are under active development.
+
 A [**bridge**](../usage/data-flows/bridges.md) (formerly known as protocol converter) ingests data from a field device (e.g. OPC UA server, Siemens S7, Modbus controller) and pushes it into the Unified Namespace (UNS), and vice versa.\
 It combines a **connection probe** and two **stand-alone data flows (one for reading and one for writing)** under a single name and lifecycle.
 
