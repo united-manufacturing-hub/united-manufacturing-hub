@@ -219,3 +219,82 @@ After completing the basic migration:
 1. **[Data Modeling](../usage/data-modeling/README.md)** 🚧 - Implement structured data contracts
 2. **[Stream Processors](../usage/data-flows/stream-processors.md)** 🚧 - Transform raw data to business models  
 3. **[Production Deployment](../production/README.md)** - Scale and secure your UMH Core deployment 
+
+### Tag Groups Migration
+
+**UMH Classic (Tag Groups in Payload):**
+```yaml
+# Classic bridge configuration
+pipeline:
+  processors:
+    - tag_processor:
+        defaults: |
+          msg.meta.data_contract = "_historian";
+          msg.meta.tag_name = "head";  # Groups appear inside payload
+
+# Classic payload with tag groups
+{
+  "timestamp_ms": 1670001234567,
+  "pos": { 
+    "x": 12.5,
+    "y": 7.3,
+    "z": 3.2
+  },  
+  "temperature": 50.0,
+  "collision": false
+}
+
+# Classic database storage
+# head$pos$x, head$pos$y, head$pos$z, head$temperature, head$collision
+```
+
+**UMH Core (Virtual Paths in Topics):**
+```yaml
+# Core data model with virtual paths
+datamodels:
+  - name: CNCHead
+    version: v1
+    structure:
+      pos:
+        x: { type: timeseries }
+        y: { type: timeseries }
+        z: { type: timeseries }
+      temperature: { type: timeseries }
+      collision: { type: timeseries }
+
+# Core stream processor
+streamprocessors:
+  - name: cnc_head_sp
+    contract: _cnc_head:v1
+    sources:
+      x_raw: "umh.v1.corp.plant.line.cnc._raw.head_pos_x"
+      y_raw: "umh.v1.corp.plant.line.cnc._raw.head_pos_y"
+      z_raw: "umh.v1.corp.plant.line.cnc._raw.head_pos_z"
+      temp_raw: "umh.v1.corp.plant.line.cnc._raw.head_temperature"
+      collision_raw: "umh.v1.corp.plant.line.cnc._raw.head_collision"
+    mapping:
+      pos.x: "x_raw"
+      pos.y: "y_raw"  
+      pos.z: "z_raw"
+      temperature: "temp_raw"
+      collision: "collision_raw"
+
+# Result: Individual topics with virtual paths
+# umh.v1.corp.plant.line.cnc._cnc_head.pos.x
+# umh.v1.corp.plant.line.cnc._cnc_head.pos.y
+# umh.v1.corp.plant.line.cnc._cnc_head.pos.z
+# umh.v1.corp.plant.line.cnc._cnc_head.temperature
+# umh.v1.corp.plant.line.cnc._cnc_head.collision
+```
+
+**Migration Benefits:**
+- **Granular subscriptions**: Subscribe to just `pos.*` for positioning data
+- **Independent scaling**: Different retention for different sensor groups
+- **Type safety**: Each topic has explicit schema validation
+- **Cross-site consistency**: Same virtual path structure across all CNCs
+
+**Migration Steps:**
+1. **Identify tag groups** in Classic payloads (nested JSON objects)
+2. **Create data models** with folder structures matching groups
+3. **Define stream processors** to map raw inputs to virtual paths
+4. **Update consumers** to subscribe to specific virtual path patterns 

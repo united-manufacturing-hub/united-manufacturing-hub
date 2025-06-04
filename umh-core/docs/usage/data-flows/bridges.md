@@ -25,6 +25,10 @@ Bridges (shown as `protocolConverter:` in YAML configuration) connect external d
 - Custom processing that doesn't require device connectivity patterns
 - High-throughput scenarios where monitoring overhead isn't needed
 
+## Benthos vs Node-RED Decision Matrix
+
+**Use Benthos/Bridges** for data pipelines with verified industrial protocols (OPC UA, Modbus, S7, Ethernet/IP), production throughput requirements, or when you need enterprise reliability and structured configurations that scale across teams. The Management Console provides GUI configuration with input validation 🚧, making Benthos accessible to OT teams while maintaining structured, maintainable configs. **Use Node-RED** for rapid prototyping with visual programming, complex site-specific business logic requiring full JavaScript, protocols not yet available in Benthos-UMH, or when building custom applications and dashboards beyond data movement. Many deployments use both: Benthos for high-volume standard protocols, Node-RED for specialized integration and custom applications.
+
 ## Configuration Structure
 
 ```yaml
