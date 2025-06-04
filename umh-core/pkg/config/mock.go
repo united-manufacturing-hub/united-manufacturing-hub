@@ -27,18 +27,20 @@ import (
 
 // MockConfigManager is a mock implementation of ConfigManager for testing
 type MockConfigManager struct {
-	GetConfigCalled               bool
-	AddDataflowcomponentCalled    bool
-	DeleteDataflowcomponentCalled bool
-	EditDataflowcomponentCalled   bool
-	Config                        FullConfig
-	ConfigError                   error
-	AddDataflowcomponentError     error
-	DeleteDataflowcomponentError  error
-	EditDataflowcomponentError    error
-	ConfigDelay                   time.Duration
-	mutexReadOrWrite              sync.Mutex
-	mutexReadAndWrite             sync.Mutex
+	GetConfigCalled                  bool
+	AddDataflowcomponentCalled       bool
+	DeleteDataflowcomponentCalled    bool
+	EditDataflowcomponentCalled      bool
+	AtomicAddProtocolConverterCalled bool
+	Config                           FullConfig
+	ConfigError                      error
+	AddDataflowcomponentError        error
+	DeleteDataflowcomponentError     error
+	EditDataflowcomponentError       error
+	AtomicAddProtocolConverterError  error
+	ConfigDelay                      time.Duration
+	mutexReadOrWrite                 sync.Mutex
+	mutexReadAndWrite                sync.Mutex
 }
 
 // NewMockConfigManager creates a new MockConfigManager instance
@@ -114,6 +116,12 @@ func (m *MockConfigManager) WithEditDataflowcomponentError(err error) *MockConfi
 	return m
 }
 
+// WithAtomicAddProtocolConverterError configures the mock to return the given error when AtomicAddProtocolConverter is called
+func (m *MockConfigManager) WithAtomicAddProtocolConverterError(err error) *MockConfigManager {
+	m.AtomicAddProtocolConverterError = err
+	return m
+}
+
 // ResetCalls clears the called flags for testing multiple calls
 func (m *MockConfigManager) ResetCalls() {
 	m.mutexReadOrWrite.Lock()
@@ -122,6 +130,7 @@ func (m *MockConfigManager) ResetCalls() {
 	m.AddDataflowcomponentCalled = false
 	m.DeleteDataflowcomponentCalled = false
 	m.EditDataflowcomponentCalled = false
+	m.AtomicAddProtocolConverterCalled = false
 }
 
 // atomic set location
@@ -279,11 +288,39 @@ func (m *MockConfigManager) AtomicAddProtocolConverter(ctx context.Context, pc P
 	m.mutexReadAndWrite.Lock()
 	defer m.mutexReadAndWrite.Unlock()
 
+	m.AtomicAddProtocolConverterCalled = true
+
+	if m.AtomicAddProtocolConverterError != nil {
+		return m.AtomicAddProtocolConverterError
+	}
+
 	// get the current config
 	config, err := m.GetConfig(ctx, 0)
 	if err != nil {
 		return fmt.Errorf("failed to get config: %w", err)
 	}
+
+	// check for duplicate name before add (similar to real implementation)
+	for _, cmp := range config.ProtocolConverter {
+		if cmp.Name == pc.Name {
+			return fmt.Errorf("another protocol converter with name %q already exists – choose a unique name", pc.Name)
+		}
+	}
+
+	// Generate template name from protocol converter name (simulate real implementation)
+	templateName := generateMockTemplateAnchorName(pc.Name)
+
+	// Create a simple template to simulate template creation
+	templateWithAnchor := map[string]interface{}{
+		templateName: map[string]interface{}{
+			"connection": map[string]interface{}{
+				"ip":   "{{ .IP }}",
+				"port": "{{ .PORT }}",
+			},
+		},
+		"_anchor": templateName, // Metadata to indicate this should be an anchor
+	}
+	config.Templates = append(config.Templates, templateWithAnchor)
 
 	// add the protocol converter
 	config.ProtocolConverter = append(config.ProtocolConverter, pc)
@@ -294,4 +331,20 @@ func (m *MockConfigManager) AtomicAddProtocolConverter(ctx context.Context, pc P
 	}
 
 	return nil
+}
+
+// generateMockTemplateAnchorName creates a valid YAML anchor name from a protocol converter name
+// This mirrors the real implementation for testing
+func generateMockTemplateAnchorName(pcName string) string {
+	// Replace non-alphanumeric characters with underscores and add template suffix
+	// YAML anchors must contain only alphanumeric characters
+	result := ""
+	for _, r := range pcName {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') {
+			result += string(r)
+		} else {
+			result += "_"
+		}
+	}
+	return result + "_template"
 }
