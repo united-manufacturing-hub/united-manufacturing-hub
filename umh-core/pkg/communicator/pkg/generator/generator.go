@@ -138,6 +138,7 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 					"action-get-data-flow-component-metrics",
 					"core-health",
 					"log-logs-suppression",
+					"pause-dfc",
 				},
 			},
 		},
