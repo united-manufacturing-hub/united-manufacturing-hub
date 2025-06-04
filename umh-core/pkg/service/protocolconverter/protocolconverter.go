@@ -310,8 +310,6 @@ func (p *ProtocolConverterService) Status(
 		return ServiceInfo{}, ErrServiceNotExist
 	}
 
-	tick := snapshot.Tick
-
 	underlyingConnectionName := p.getUnderlyingConnectionName(protConvName)
 	underlyingDFCReadName := p.getUnderlyingDFCReadName(protConvName)
 	underlyingDFCWriteName := p.getUnderlyingDFCWriteName(protConvName)
