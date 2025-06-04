@@ -26,7 +26,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/control"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/protocolconverter"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
@@ -108,7 +107,7 @@ func main() {
 	}
 
 	// Start the system snapshot logger
-	go SystemSnapshotLogger(ctx, controlLoop, systemSnapshotManager)
+	go SystemSnapshotLogger(ctx, controlLoop)
 
 	// Start the control loop
 	err = controlLoop.Execute(ctx)
@@ -122,7 +121,7 @@ func main() {
 
 // SystemSnapshotLogger logs the system snapshot every 5 seconds
 // It is an example on how to access the system snapshot and log it for communication with other components
-func SystemSnapshotLogger(ctx context.Context, controlLoop *control.ControlLoop, systemSnapshotManager *fsm.SnapshotManager) {
+func SystemSnapshotLogger(ctx context.Context, controlLoop *control.ControlLoop) {
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 
