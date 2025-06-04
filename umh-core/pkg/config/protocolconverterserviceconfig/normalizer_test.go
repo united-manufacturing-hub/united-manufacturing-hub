@@ -110,13 +110,17 @@ var _ = Describe("ProtocolConverter YAML Normalizer", func() {
 
 			Expect(config.Template.DataflowComponentReadServiceConfig.BenthosConfig.Input).NotTo(BeNil())
 			Expect(config.Template.DataflowComponentReadServiceConfig.BenthosConfig.Output).NotTo(BeNil())
-			Expect(config.Template.DataflowComponentReadServiceConfig.BenthosConfig.Pipeline).To(BeEmpty())
+			// processor subfield should exist in the pipeline field
+			Expect(config.Template.DataflowComponentReadServiceConfig.BenthosConfig.Pipeline).To(HaveKey("processors"))
+			Expect(config.Template.DataflowComponentReadServiceConfig.BenthosConfig.Pipeline["processors"]).To(BeEmpty())
 
 			// Check write-side configuration
 			Expect(config.Template.DataflowComponentWriteServiceConfig.BenthosConfig).NotTo(BeNil())
 			Expect(config.Template.DataflowComponentWriteServiceConfig.BenthosConfig.Input).NotTo(BeNil())
 			Expect(config.Template.DataflowComponentWriteServiceConfig.BenthosConfig.Output).NotTo(BeNil())
-			Expect(config.Template.DataflowComponentWriteServiceConfig.BenthosConfig.Pipeline).NotTo(BeNil())
+			// processor subfield should exist in the pipeline field
+			Expect(config.Template.DataflowComponentWriteServiceConfig.BenthosConfig.Pipeline).To(HaveKey("processors"))
+			Expect(config.Template.DataflowComponentWriteServiceConfig.BenthosConfig.Pipeline["processors"]).To(BeEmpty())
 
 			// Buffer should have the none buffer set
 			Expect(config.Template.DataflowComponentReadServiceConfig.BenthosConfig.Buffer).To(HaveKey("none"))
