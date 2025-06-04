@@ -598,3 +598,36 @@ const (
 	// ErrConfigFileInvalid is sent when the deployment of a dfc fails because the config file is invalid.
 	ErrConfigFileInvalid = "ERR_CONFIG_FILE_INVALID"
 )
+
+type ProtocolConverterConnection struct {
+	IP   string `json:"ip" binding:"required"`
+	Port uint32 `json:"port" binding:"required"`
+}
+
+type ProtocolConverterDFC struct {
+	IgnoreErrors *bool                                 `json:"ignoreErrors,omitempty" yaml:"ignoreErrors,omitempty" mapstructure:"ignoreErrors,omitempty"`
+	Inputs       CommonDataFlowComponentInputConfig    `json:"inputs" yaml:"inputs" mapstructure:"inputs"`
+	Pipeline     CommonDataFlowComponentPipelineConfig `json:"pipeline" yaml:"pipeline" mapstructure:"pipeline"`
+	RawYAML      *CommonDataFlowComponentRawYamlConfig `json:"rawYAML,omitempty" yaml:"rawYAML,omitempty" mapstructure:"rawYAML,omitempty"`
+}
+
+type ProtocolConverterVariable struct {
+	Label string `json:"label" yaml:"label" mapstructure:"label"`
+	Value string `json:"value" yaml:"value" mapstructure:"value"`
+}
+
+type ProtocolConverterTemplateInfo struct {
+	IsTemplated bool                        `json:"isTemplated" yaml:"isTemplated" mapstructure:"isTemplated"`
+	Variables   []ProtocolConverterVariable `json:"variables" yaml:"variables" mapstructure:"variables"`
+	RootUUID    uuid.UUID                   `json:"rootUUID" yaml:"rootUUID" mapstructure:"rootUUID"`
+}
+
+type ProtocolConverter struct {
+	UUID         *uuid.UUID                     `json:"uuid" binding:"required"`
+	Name         string                         `json:"name" binding:"required"`
+	Location     map[int]string                 `json:"location"`
+	Connection   ProtocolConverterConnection    `json:"connection"`
+	ReadDFC      *ProtocolConverterDFC          `json:"readDFC"`
+	WriteDFC     *ProtocolConverterDFC          `json:"writeDFC"`
+	TemplateInfo *ProtocolConverterTemplateInfo `json:"templateInfo"`
+}
