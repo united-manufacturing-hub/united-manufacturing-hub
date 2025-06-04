@@ -27,8 +27,8 @@ func (c ProtocolConverterServiceConfigSpec) GetConnectionServiceConfig() connect
 
 // GetDFCReadServiceConfig converts the component config to a full ProtocolConverterServiceConfig
 // For a read DFC, the user is not allowed to set its own output config, so we "enforce" the output config
-// to be the uns output config.
-func (c ProtocolConverterServiceConfigSpec) GetDFCReadServiceConfig() dataflowcomponentserviceconfig.DataflowComponentServiceConfig {
+// to be the UNS output config. This ensures protocol converters always write to the unified namespace.
+func (c *ProtocolConverterServiceConfigSpec) GetDFCReadServiceConfig() dataflowcomponentserviceconfig.DataflowComponentServiceConfig {
 	// copy the config
 	dfcReadConfig := c.Template.DataflowComponentReadServiceConfig
 
@@ -46,8 +46,8 @@ func (c ProtocolConverterServiceConfigSpec) GetDFCReadServiceConfig() dataflowco
 
 // GetDFCWriteServiceConfig converts the component config to a full ProtocolConverterServiceConfig
 // For a write DFC, the user is not allowed to set its own input config, so we "enforce" the input config
-// to be the uns input config.
-func (c ProtocolConverterServiceConfigSpec) GetDFCWriteServiceConfig() dataflowcomponentserviceconfig.DataflowComponentServiceConfig {
+// to be the UNS input config. This ensures protocol converters always read from the unified namespace.
+func (c *ProtocolConverterServiceConfigSpec) GetDFCWriteServiceConfig() dataflowcomponentserviceconfig.DataflowComponentServiceConfig {
 	dfcWriteConfig := c.Template.DataflowComponentWriteServiceConfig
 
 	// Only append UNS input if there's an output config

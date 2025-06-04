@@ -54,7 +54,7 @@ import (
 // Rationale
 // ----------
 // The full runtime config depends on data that is only available in the
-// control-loop’s SystemSnapshot (agent location, global vars, node name).
+// control-loop's SystemSnapshot (agent location, global vars, node name).
 // Rather than widening the BaseFSM callbacks to pass the snapshot, we
 // start with an empty config here and perform the real rendering at the
 // very beginning of the first Reconcile() tick.
@@ -65,8 +65,9 @@ import (
 func (p *ProtocolConverterInstance) CreateInstance(ctx context.Context, filesystemService filesystem.Service) error {
 	p.baseFSMInstance.GetLogger().Debugf("Starting Action: Adding ProtocolConverter service %s to DFC and Connection manager ...", p.baseFSMInstance.GetID())
 
-	// AddToManager intentionally receives an empty runtime config; the
-	// first Reconcile() call will render and push the real one.
+	// AddToManager intentionally receives an empty runtime config because template
+	// rendering requires SystemSnapshot data not available at creation time.
+	// The first UpdateObservedStateOfInstance() call will render and push the real config.
 	err := p.service.AddToManager(ctx, filesystemService, &p.renderedConfig, p.baseFSMInstance.GetID())
 	if err != nil {
 		if errors.Is(err, protocolconvertersvc.ErrServiceAlreadyExists) {
@@ -111,7 +112,7 @@ func (b *ProtocolConverterInstance) RemoveInstance(ctx context.Context, filesyst
 		b.baseFSMInstance.GetLogger().
 			Debugf("Benthos service %s removal still in progress",
 				b.baseFSMInstance.GetID())
-		// not an error from the FSM’s perspective – just means “try again”
+		// not an error from the FSM's perspective – just means "try again"
 		return err
 
 	// ---------------------------------------------------------------
@@ -164,7 +165,7 @@ func (p *ProtocolConverterInstance) CheckForCreation(ctx context.Context, filesy
 // getServiceStatus gets the status of the ProtocolConverter service
 // its main purpose is to handle the edge cases where the service is not yet created or not yet running
 func (p *ProtocolConverterInstance) getServiceStatus(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot, tick uint64) (protocolconvertersvc.ServiceInfo, error) {
-	info, err := p.service.Status(ctx, services, snapshot, p.baseFSMInstance.GetID(), tick)
+	info, err := p.service.Status(ctx, services, snapshot, p.baseFSMInstance.GetID())
 	if err != nil {
 		// If there's an error getting the service status, we need to distinguish between cases
 
@@ -196,13 +197,13 @@ func (p *ProtocolConverterInstance) getServiceStatus(ctx context.Context, servic
 }
 
 // UpdateObservedStateOfInstance updates the observed state of the service
-func (p *ProtocolConverterInstance) UpdateObservedStateOfInstance(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot, tick uint64, loopStartTime time.Time) error {
+func (p *ProtocolConverterInstance) UpdateObservedStateOfInstance(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
 
 	start := time.Now()
-	info, err := p.getServiceStatus(ctx, services, snapshot, tick)
+	info, err := p.getServiceStatus(ctx, services, snapshot, snapshot.Tick)
 	if err != nil {
 		return fmt.Errorf("error while getting service status: %w", err)
 	}
@@ -261,6 +262,22 @@ func (p *ProtocolConverterInstance) UpdateObservedStateOfInstance(ctx context.Co
 			err := p.service.UpdateInManager(ctx, services.GetFileSystem(), &p.renderedConfig, p.baseFSMInstance.GetID())
 			if err != nil {
 				return fmt.Errorf("failed to update ProtocolConverter service configuration: %w", err)
+			}
+
+			// UNIQUE BEHAVIOR: Re-evaluate DFC desired states after config changes
+			// This is different from other FSMs which set desired states once and don't change them.
+			// Protocol converters must re-evaluate because:
+			// 1. DFC configs may transition from empty -> populated as templates are rendered
+			// 2. Empty DFCs should remain stopped, populated DFCs should be started
+			// 3. This ensures we don't start broken Benthos instances with empty configs
+			if p.baseFSMInstance.GetDesiredFSMState() == OperationalStateActive {
+				err := p.service.EvaluateDFCDesiredStates(p.baseFSMInstance.GetID(), "active")
+				if err != nil {
+					p.baseFSMInstance.GetLogger().Debugf("Failed to re-evaluate DFC states after config update: %v", err)
+					// Don't fail the entire update - this is a best-effort re-evaluation
+				} else {
+					p.baseFSMInstance.GetLogger().Debugf("Re-evaluated DFC desired states after config update")
+				}
 			}
 		} else {
 			p.baseFSMInstance.GetLogger().Debugf("Config differences detected but service does not exist yet, skipping update")

@@ -160,7 +160,7 @@ func (c *Comparator) ConfigDiff(desired, observed BenthosServiceConfig) string {
 	}
 
 	if diff.Len() == 0 {
-		return "No significant differences"
+		return "No significant differences\n"
 	}
 
 	return diff.String()
