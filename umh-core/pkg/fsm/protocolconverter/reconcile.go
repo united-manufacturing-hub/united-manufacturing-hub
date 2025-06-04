@@ -164,7 +164,7 @@ func (p *ProtocolConverterInstance) reconcileExternalChanges(ctx context.Context
 	observedStateCtx, cancel := context.WithTimeout(ctx, constants.ProtocolConverterUpdateObservedStateTimeout)
 	defer cancel()
 
-	err := p.UpdateObservedStateOfInstance(observedStateCtx, services, snapshot, tick, start)
+	err := p.UpdateObservedStateOfInstance(observedStateCtx, services, snapshot)
 	if err != nil {
 		return fmt.Errorf("failed to update observed state: %w", err)
 	}
