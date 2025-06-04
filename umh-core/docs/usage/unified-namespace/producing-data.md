@@ -99,17 +99,7 @@ Example result: `umh.v1.acme.plant1.line4.sensor1._temperature.temperature_in_c`
 
 ## Stand-alone Flows vs Bridges
 
-**Use Bridges when:**
-- Connecting to field devices (PLCs, sensors)
-- Need connection monitoring
-- Want location-based organization
-
-**Use Stand-alone Flows when:**
-- Point-to-point data movement
-- No connection monitoring needed
-- Custom processing pipelines
-
-For complete Stand-alone Flow examples and patterns, see [Stand-alone Flows Documentation](../data-flows/stand-alone-flow.md).
+For choosing between Bridges and Stand-alone Flows, see the [complete comparison in Bridges documentation](../data-flows/bridges.md#when-to-use-bridges).
 
 ## Migration from UMH Classic
 
