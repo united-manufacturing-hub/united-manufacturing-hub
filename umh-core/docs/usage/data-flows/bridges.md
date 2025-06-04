@@ -170,15 +170,7 @@ The nmap health check verifies that the target device is reachable on the specif
 
 ## State Management
 
-Bridges use finite state machines to track operational status:
-
-- **starting** → **active**: Normal operation
-- **active** → **idle**: No data flowing but connection healthy  
-- **active** → **degraded**: Connection issues or processing errors
-- **degraded** → **active**: Recovery from issues
-- **any** → **stopped**: Administrative shutdown
-
-Monitor bridge states via [metrics endpoint](../../production/metrics.md).
+Bridges use finite state machines to track operational status. For complete state definitions, transitions, and monitoring details, see [State Machines Reference](../../reference/state-machines.md).
 
 ## Template Variables
 
