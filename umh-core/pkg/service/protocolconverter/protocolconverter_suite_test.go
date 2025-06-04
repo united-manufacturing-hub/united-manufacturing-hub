@@ -12,20 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package connectionserviceconfig
+package protocolconverter
 
 import (
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/nmapserviceconfig"
+	"testing"
+
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 )
 
-// GetNmapServiceConfig converts the component config to a full NmapServiceConfig
-func (c ConnectionServiceConfig) GetNmapServiceConfig() nmapserviceconfig.NmapServiceConfig {
-	return c.NmapServiceConfig
-}
-
-// FromNmapServiceConfig creates a ConnectionServiceConfig from a NmapServiceConfig,
-func FromNmapServiceConfig(nmap nmapserviceconfig.NmapServiceConfig) ConnectionServiceConfig {
-	return ConnectionServiceConfig{
-		NmapServiceConfig: nmap,
-	}
+func TestProtocolConverter(t *testing.T) {
+	RegisterFailHandler(Fail)
+	RunSpecs(t, "ProtocolConverter Suite")
 }

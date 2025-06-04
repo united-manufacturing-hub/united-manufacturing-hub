@@ -691,6 +691,37 @@ func (m *FileConfigManager) AtomicEditDataflowcomponent(ctx context.Context, com
 		}
 	}
 
+	// ------------------------------------------------------------------
+	// Guard against overwriting a DFC that still relies on YAML
+	// templating (anchors/aliases)
+	//
+	// Background
+	// ----------
+	// Operators may define *dataFlowComponentConfig* via an anchor:
+	//
+	//     templates:
+	//       - &baseCfg { … }
+	//     dataFlow:
+	//       - name: dfc-1
+	//         dataFlowComponentConfig: *baseCfg   # ← alias
+	//
+	// Policy
+	// ------
+	// If the component we are about to **edit** still hasAnchors == true
+	// we MUST refuse to touch it; otherwise we would flatten or delete
+	// the user’s template when we rewrite the file.
+	for _, c := range config.DataFlow {
+		if dataflowcomponentserviceconfig.GenerateUUIDFromName(c.Name) == componentUUID {
+			if c.HasAnchors() {
+				return DataFlowComponentConfig{}, fmt.Errorf(
+					"dataFlowComponentConfig for %s is defined via YAML anchors/aliases; "+
+						"please edit the file manually", componentUUID)
+			}
+			break
+		}
+	}
+	// End of guard
+
 	// Find the component with matching UUID
 	found := false
 	for i, component := range config.DataFlow {
