@@ -25,41 +25,43 @@ import (
 var _ = Describe("ProtocolConverter YAML Normalizer", func() {
 	Describe("NormalizeConfig", func() {
 		It("should set default values for empty config", func() {
-			config := &ProtocolConverterServiceConfig{}
+			config := ProtocolConverterServiceConfigSpec{}
 			normalizer := NewNormalizer()
 
-			normalizer.NormalizeConfig(config)
+			config = normalizer.NormalizeConfig(config)
 
-			Expect(config.DataflowComponentServiceConfig.BenthosConfig).NotTo(BeNil())
-			Expect(config.DataflowComponentServiceConfig.BenthosConfig.Output).NotTo(BeNil())
-			Expect(config.DataflowComponentServiceConfig.BenthosConfig.Pipeline).NotTo(BeNil())
+			Expect(config.Template.DataflowComponentReadServiceConfig.BenthosConfig).NotTo(BeNil())
+			Expect(config.Template.DataflowComponentReadServiceConfig.BenthosConfig.Output).NotTo(BeNil())
+			Expect(config.Template.DataflowComponentReadServiceConfig.BenthosConfig.Pipeline).NotTo(BeNil())
 		})
 
 		It("should preserve existing values", func() {
-			config := &ProtocolConverterServiceConfig{
-				ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
-					NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
-						Target: "127.0.0.1",
-						Port:   443,
+			config := ProtocolConverterServiceConfigSpec{
+				Template: ProtocolConverterServiceConfigTemplate{
+					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
+						NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
+							Target: "127.0.0.1",
+							Port:   443,
+						},
 					},
-				},
-				DataflowComponentServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
-					BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
-						Input: map[string]any{
-							"mqtt": map[string]any{
-								"topic": "test/topic",
+					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
+							Input: map[string]any{
+								"mqtt": map[string]any{
+									"topic": "test/topic",
+								},
 							},
-						},
-						Output: map[string]any{
-							"kafka": map[string]any{
-								"topic": "test-output",
+							Output: map[string]any{
+								"kafka": map[string]any{
+									"topic": "test-output",
+								},
 							},
-						},
-						Pipeline: map[string]any{
-							"processors": []any{
-								map[string]any{
-									"text": map[string]any{
-										"operator": "to_upper",
+							Pipeline: map[string]any{
+								"processors": []any{
+									map[string]any{
+										"text": map[string]any{
+											"operator": "to_upper",
+										},
 									},
 								},
 							},
@@ -69,18 +71,18 @@ var _ = Describe("ProtocolConverter YAML Normalizer", func() {
 			}
 
 			normalizer := NewNormalizer()
-			normalizer.NormalizeConfig(config)
+			config = normalizer.NormalizeConfig(config)
 
 			// Check input preserved
-			inputMqtt := config.DataflowComponentServiceConfig.BenthosConfig.Input["mqtt"].(map[string]any)
+			inputMqtt := config.Template.DataflowComponentReadServiceConfig.BenthosConfig.Input["mqtt"].(map[string]any)
 			Expect(inputMqtt["topic"]).To(Equal("test/topic"))
 
 			// Check output preserved
-			outputKafka := config.DataflowComponentServiceConfig.BenthosConfig.Output["kafka"].(map[string]any)
-			Expect(outputKafka["topic"]).To(Equal("test-output"))
+			outputUns := config.Template.DataflowComponentReadServiceConfig.BenthosConfig.Output["uns"].(map[string]any) // note that this is NOT kafka, but uns
+			Expect(outputUns["bridged_by"]).To(Equal("{{ .internal.bridged_by }}"))
 
 			// Check pipeline processors preserved
-			processors := config.DataflowComponentServiceConfig.BenthosConfig.Pipeline["processors"].([]any)
+			processors := config.Template.DataflowComponentReadServiceConfig.BenthosConfig.Pipeline["processors"].([]any)
 			Expect(processors).To(HaveLen(1))
 			processor := processors[0].(map[string]any)
 			processorText := processor["text"].(map[string]any)
@@ -88,47 +90,59 @@ var _ = Describe("ProtocolConverter YAML Normalizer", func() {
 		})
 
 		It("should normalize maps by ensuring they're not nil", func() {
-			config := &ProtocolConverterServiceConfig{
-				DataflowComponentServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
-					BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
-						// Input is nil
-						// Output is nil
-						Pipeline: map[string]any{}, // Empty but not nil
-						// Buffer is nil
-						// CacheResources is nil
-						// RateLimitResources is nil
+			config := ProtocolConverterServiceConfigSpec{
+				Template: ProtocolConverterServiceConfigTemplate{
+					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
+							// Input is nil
+							// Output is nil
+							Pipeline: map[string]any{}, // Empty but not nil
+							// Buffer is nil
+							// CacheResources is nil
+							// RateLimitResources is nil
+						},
 					},
 				},
 			}
 
 			normalizer := NewNormalizer()
-			normalizer.NormalizeConfig(config)
+			config = normalizer.NormalizeConfig(config)
 
-			Expect(config.DataflowComponentServiceConfig.BenthosConfig.Input).NotTo(BeNil())
-			Expect(config.DataflowComponentServiceConfig.BenthosConfig.Output).NotTo(BeNil())
-			Expect(config.DataflowComponentServiceConfig.BenthosConfig.Pipeline).NotTo(BeNil())
+			Expect(config.Template.DataflowComponentReadServiceConfig.BenthosConfig.Input).NotTo(BeNil())
+			Expect(config.Template.DataflowComponentReadServiceConfig.BenthosConfig.Output).NotTo(BeNil())
+			// processor subfield should exist in the pipeline field
+			Expect(config.Template.DataflowComponentReadServiceConfig.BenthosConfig.Pipeline).To(HaveKey("processors"))
+			Expect(config.Template.DataflowComponentReadServiceConfig.BenthosConfig.Pipeline["processors"]).To(BeEmpty())
+
+			// Check write-side configuration
+			Expect(config.Template.DataflowComponentWriteServiceConfig.BenthosConfig).NotTo(BeNil())
+			Expect(config.Template.DataflowComponentWriteServiceConfig.BenthosConfig.Input).NotTo(BeNil())
+			Expect(config.Template.DataflowComponentWriteServiceConfig.BenthosConfig.Output).NotTo(BeNil())
+			// processor subfield should exist in the pipeline field
+			Expect(config.Template.DataflowComponentWriteServiceConfig.BenthosConfig.Pipeline).To(HaveKey("processors"))
+			Expect(config.Template.DataflowComponentWriteServiceConfig.BenthosConfig.Pipeline["processors"]).To(BeEmpty())
 
 			// Buffer should have the none buffer set
-			Expect(config.DataflowComponentServiceConfig.BenthosConfig.Buffer).To(HaveKey("none"))
+			Expect(config.Template.DataflowComponentReadServiceConfig.BenthosConfig.Buffer).To(HaveKey("none"))
 
 			// These should be empty
-			Expect(config.DataflowComponentServiceConfig.BenthosConfig.CacheResources).To(BeEmpty())
-			Expect(config.DataflowComponentServiceConfig.BenthosConfig.RateLimitResources).To(BeEmpty())
+			Expect(config.Template.DataflowComponentReadServiceConfig.BenthosConfig.CacheResources).To(BeEmpty())
+			Expect(config.Template.DataflowComponentReadServiceConfig.BenthosConfig.RateLimitResources).To(BeEmpty())
 		})
 	})
 
 	// Test the package-level function
 	Describe("NormalizeDataFlowComponentConfig package function", func() {
 		It("should use the default normalizer", func() {
-			config1 := &ProtocolConverterServiceConfig{}
-			config2 := &ProtocolConverterServiceConfig{}
+			config1 := ProtocolConverterServiceConfigSpec{}
+			config2 := ProtocolConverterServiceConfigSpec{}
 
 			// Use package-level function
-			NormalizeProtocolConverterConfig(config1)
+			config1 = NormalizeProtocolConverterConfig(config1)
 
 			// Use normalizer directly
 			normalizer := NewNormalizer()
-			normalizer.NormalizeConfig(config2)
+			config2 = normalizer.NormalizeConfig(config2)
 
 			// Results should be the same
 			Expect(config1).To(Equal(config2))

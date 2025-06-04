@@ -12,20 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package connectionserviceconfig
+package variables
 
-import (
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/nmapserviceconfig"
-)
+// Normalizer handles normalization of VariableBundle
+type Normalizer struct{}
 
-// GetNmapServiceConfig converts the component config to a full NmapServiceConfig
-func (c ConnectionServiceConfig) GetNmapServiceConfig() nmapserviceconfig.NmapServiceConfig {
-	return c.NmapServiceConfig
+// NewNormalizer creates a new Normalizer instance
+func NewNormalizer() *Normalizer {
+	return &Normalizer{}
 }
 
-// FromNmapServiceConfig creates a ConnectionServiceConfig from a NmapServiceConfig,
-func FromNmapServiceConfig(nmap nmapserviceconfig.NmapServiceConfig) ConnectionServiceConfig {
-	return ConnectionServiceConfig{
-		NmapServiceConfig: nmap,
-	}
+// NormalizeConfig normalizes a VariableBundle
+func (n *Normalizer) NormalizeConfig(vb VariableBundle) VariableBundle {
+	// For now, just return the input as is since VariableBundle is already normalized
+	// This can be extended later if needed
+	return vb
 }

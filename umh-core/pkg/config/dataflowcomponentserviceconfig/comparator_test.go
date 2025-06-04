@@ -53,7 +53,7 @@ var _ = Describe("DFC YAML Comparator", func() {
 			}
 
 			comparator := NewComparator()
-			equal := comparator.ConfigsEqual(&config1, &config2)
+			equal := comparator.ConfigsEqual(config1, config2)
 
 			Expect(equal).To(BeTrue())
 		})
@@ -90,10 +90,10 @@ var _ = Describe("DFC YAML Comparator", func() {
 			}
 
 			comparator := NewComparator()
-			equal := comparator.ConfigsEqual(&config1, &config2)
+			equal := comparator.ConfigsEqual(config1, config2)
 			Expect(equal).To(BeFalse())
 
-			diff := comparator.ConfigDiff(&config1, &config2)
+			diff := comparator.ConfigDiff(config1, config2)
 			Expect(diff).To(ContainSubstring("Input config differences"))
 			Expect(diff).To(ContainSubstring("Input.mqtt differs"))
 		})
@@ -131,10 +131,10 @@ var _ = Describe("DFC YAML Comparator", func() {
 			}
 
 			comparator := NewComparator()
-			equal := comparator.ConfigsEqual(&config1, &config2)
+			equal := comparator.ConfigsEqual(config1, config2)
 			Expect(equal).To(BeFalse())
 
-			diff := comparator.ConfigDiff(&config1, &config2)
+			diff := comparator.ConfigDiff(config1, config2)
 			Expect(diff).To(ContainSubstring("Output config differences"))
 			Expect(diff).To(ContainSubstring("Output.kafka differs"))
 		})
@@ -173,7 +173,7 @@ var _ = Describe("DFC YAML Comparator", func() {
 			}
 
 			comparator := NewComparator()
-			diff := comparator.ConfigDiff(&config1, &config2)
+			diff := comparator.ConfigDiff(config1, config2)
 
 			Expect(diff).To(ContainSubstring("Input config differences"))
 			Expect(diff).To(ContainSubstring("Input.mqtt differs"))
@@ -207,11 +207,11 @@ var _ = Describe("DFC YAML Comparator", func() {
 			}
 
 			// Use package-level function
-			equal1 := ConfigsEqual(&config1, &config2)
+			equal1 := ConfigsEqual(config1, config2)
 
 			// Use comparator directly
 			comparator := NewComparator()
-			equal2 := comparator.ConfigsEqual(&config1, &config2)
+			equal2 := comparator.ConfigsEqual(config1, config2)
 
 			Expect(equal1).To(Equal(equal2))
 		})
@@ -237,11 +237,11 @@ var _ = Describe("DFC YAML Comparator", func() {
 				},
 			}
 			// Use package-level function
-			diff1 := ConfigDiff(&config1, &config2)
+			diff1 := ConfigDiff(config1, config2)
 
 			// Use comparator directly
 			comparator := NewComparator()
-			diff2 := comparator.ConfigDiff(&config1, &config2)
+			diff2 := comparator.ConfigDiff(config1, config2)
 
 			Expect(diff1).To(Equal(diff2))
 		})
