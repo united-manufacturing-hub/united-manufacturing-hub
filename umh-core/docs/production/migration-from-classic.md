@@ -95,7 +95,7 @@ protocolConverter:
 | **Data Contracts** | `_historian` only | `_raw` + explicit contracts |
 | **Configuration** | Direct Benthos config | Embedded within Bridges/Flows |
 | **Output** | Direct Kafka | UNS output (abstracts Kafka) |
-| **Location** | Manual topic construction | Automatic ISA-95 hierarchy |
+| **Location** | Manual topic construction | Automatic hierarchical path construction (supports ISA-95, KKS, or custom naming) |
 | **Data Modeling** | Single payload format | Structured models + contracts |
 | **Database Integration** | Automatic with `_historian` | Manual with specific contracts |
 

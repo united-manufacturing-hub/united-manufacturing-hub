@@ -7,7 +7,7 @@ Bridges (shown as `protocolConverter:` in YAML configuration) connect external d
 ## Key Features
 
 - **Connection Monitoring**: Continuous health checks via nmap, ping, or custom probes
-- **Location Hierarchy**: Automatic ISA-95 path construction from agent and bridge locations
+- **Location Hierarchy**: Automatic hierarchical path construction from agent and bridge locations (supports ISA-95, KKS, or custom naming)
 - **Bidirectional Data Flow**: Separate read and write pipelines for full device interaction
 - **Variable Templating**: Go template support for flexible configuration
 - **State Management**: Advanced finite state machine for operational visibility
@@ -226,7 +226,9 @@ streamprocessors:
     # ... transformation logic ...
 ```
 
-## Data Contract Evolution
+## Data Contract Evolution 🚧
+
+> **🚧 Roadmap Item**: The current `tag_processor` implementation follows the benthos-umh pattern with tag names in payloads. With the next UMH Core release, `tag_processor` will be updated to align with the new data model where tag names are only in topics (not in payloads) and metadata is not included in message payloads.
 
 Bridges support evolution from simple raw data to structured data contracts. See [Configuration Reference - Data Contract Guidelines](../../reference/configuration-reference.md#tag_processor) for complete tag_processor syntax.
 

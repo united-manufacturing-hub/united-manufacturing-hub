@@ -7,14 +7,14 @@ The Unified Namespace (UNS) is the core messaging backbone of UMH Core, providin
 Traditional manufacturing systems create "spaghetti diagrams" with point-to-point connections between every system. The UNS flips this model:
 
 - **Event-driven**: Devices publish data as events happen
-- **Standard hierarchy**: ISA-95 compatible location paths
+- **Standard hierarchy**: Flexible location paths (supports ISA-95, KKS, or custom naming)
 - **Schema enforcement**: Data contracts ensure consistent payload formats
 - **Publish-regardless**: Producers don't need to know about consumers
 
 ## Documentation Structure
 
 - **[Overview](overview.md)** - Core UNS concepts and benefits
-- **[Topic Convention](topic-convention.md)** - ISA-95 hierarchical naming structure
+- **[Topic Convention](topic-convention.md)** - Hierarchical naming structure (ISA-95 compatible)
 - **[Payload Formats](payload-formats.md)** - Message structure and data types
 - **[Producing Data](producing-data.md)** 🚧 - How to publish data to the UNS
 - **[Consuming Data](consuming-data.md)** 🚧 - How to subscribe and process UNS data

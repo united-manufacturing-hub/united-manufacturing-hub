@@ -48,14 +48,14 @@ This binding ensures:
 
 ### Location Hierarchy
 
-Stream processors define their position in the ISA-95 hierarchy:
+Stream processors define their position in the hierarchical organization (commonly based on ISA-95 but adaptable to KKS or custom naming standards). For complete hierarchy structure and rules, see [Topic Convention](../unified-namespace/topic-convention.md).
 
 ```yaml
 location:
-  level0: corpA        # Enterprise
-  level1: plant-A      # Site
-  level2: line-4       # Area
-  level3: pump41       # Work Unit
+  level0: corpA        # Enterprise (mandatory)
+  level1: plant-A      # Site/Region (optional)
+  level2: line-4       # Area/Zone (optional)
+  level3: pump41       # Work Unit (optional)
   level4: motor        # Work Center (optional)
 ```
 

@@ -113,8 +113,8 @@ If your corporate network intercepts TLS traffic, follow the steps in [corporate
 The example above shows:
 
 - **`protocolConverter:`** - Creates a Bridge (UI terminology) for device connectivity
-- **`tag_processor`** - Adds UNS metadata for proper topic construction  
-- **Location hierarchy** - Combines `agent.location` + `protocolConverter.location` for ISA-95 paths
+- **`tag_processor`** 🚧 - Adds UNS metadata for proper topic construction (will be updated in next release to align with new data model)
+- **Location hierarchy** - Combines `agent.location` + `protocolConverter.location` for hierarchical paths (supports ISA-95, KKS, or custom naming)
 - **Data contracts** - `_raw` is the simplest contract for unprocessed data
 
 For complete configuration syntax, see [Configuration Reference](reference/configuration-reference.md).

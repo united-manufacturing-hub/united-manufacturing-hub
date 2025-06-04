@@ -10,7 +10,7 @@ The **Unified Namespace** flips that flow:
 
 * **Event driven** – every device, PLC or app _publishes_ its own events as\
   they happen.
-* **Standard topic hierarchy** – an ISA-95-compatible key encodes enterprise,\
+* **Standard topic hierarchy** – a hierarchical key (compatible with ISA-95, KKS, or custom naming standards) encodes enterprise,
   site, area, … plus a _data-contract_ that describes the payload, data sources and data sinks.
 * **Publish-regardless mentality** – producers do not care whether a consumer\
   exists yet; that turns "add a new dashboard" into a _reading_ exercise, not\
@@ -33,7 +33,7 @@ UNS topics follow a strict [Topic Convention](topic-convention.md):
 ```
 
 This structure provides:
-- **Location context**: ISA-95 hierarchical addressing
+- **Location context**: Hierarchical addressing (supports ISA-95, KKS, or custom naming)
 - **Data semantics**: Contract-based payload validation
 - **Version control**: Schema evolution support
 

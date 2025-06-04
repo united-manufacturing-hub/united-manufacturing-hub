@@ -102,6 +102,7 @@ Database: Auto-created TimescaleDB hypertable
 - **Automatic Validation**: UNS output plugin rejects non-compliant messages
 - **Sub-Model Reusability**: Define once, use across multiple assets
 - **Enterprise Reliability**: Combines MQTT simplicity with data-center-grade features
+- **Generic Hierarchical Support**: Built-in hierarchical naming (level0-4+) supports ISA-95, KKS, or custom standards
 
 ## Getting Started
 

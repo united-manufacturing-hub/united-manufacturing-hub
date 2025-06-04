@@ -1,4 +1,3 @@
-
 # Stream Processor Implementation
 
 > 🚧 **Roadmap Item** - Stream processors transform messages already inside the Unified Namespace using the unified data-modelling system.
@@ -69,7 +68,7 @@ streamprocessors:
   - name: processor_name
     desiredState: active          # active | inactive
     contract: contract_name:v1    # Required: binds to data contract
-    location:                     # ISA-95 hierarchy
+    location:                     # Hierarchical organization (ISA-95, KKS, or custom)
       level0: enterprise
       level1: site
       level2: area
@@ -81,20 +80,20 @@ streamprocessors:
       model_field: "javascript_expression"
 ```
 
-### Location Hierarchy (ISA-95)
+### Location Hierarchy
 
-Defines the asset position in your enterprise hierarchy:
+Stream processors define their position in the hierarchical organization (commonly based on ISA-95 but adaptable to KKS or custom naming standards). For complete hierarchy structure and rules, see [Topic Convention](../unified-namespace/topic-convention.md).
 
 ```yaml
 location:
-  level0: corpA        # Enterprise/Corporation
-  level1: plant-A      # Site/Facility
-  level2: line-4       # Area/Production Line
-  level3: pump41       # Work Unit/Equipment
-  level4: motor1       # Work Center/Component (optional)
+  level0: corpA        # Enterprise (mandatory)
+  level1: plant-A      # Site/Region (optional)  
+  level2: line-4       # Area/Zone (optional)
+  level3: pump42       # Work Unit (optional)
+  level4: motor1       # Work Center (optional)
 ```
 
-**Generated UNS Topics:**
+This creates UNS topics following the standard convention:
 ```
 umh.v1.{level0}.{level1}.{level2}.{level3}[.{level4}].{contract}.{field_path}
 ```
@@ -350,7 +349,7 @@ Stream Processor (pump42_sp)                    [Deploy]
    Desired State     Active
    Contract          _pump:v1 ▼     (model implied: Pump:v1)
 
-2) Location (ISA-95)
+2) Location
    level0: corpA     level1: plant-A
    level2: line-4    level3: pump42    level4: (blank)
 
@@ -448,7 +447,7 @@ umh.v1
 
 The unified data-modelling approach addresses key manufacturing requirements:
 
-### 1. Generic ISA-95 Support
+### 1. Generic Hierarchical Support
 - Built-in `level0-4` location hierarchy
 - Automatic UNS topic generation
 - Hierarchical database storage

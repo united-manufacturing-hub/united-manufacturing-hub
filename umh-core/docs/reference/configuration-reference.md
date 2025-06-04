@@ -11,19 +11,19 @@ This is the reference for the central config `/data/config.yaml`
 | Field                           | Type               | Default             | Purpose                                                                                        |
 | ------------------------------- | ------------------ | ------------------- | ---------------------------------------------------------------------------------------------- |
 | `metricsPort`                   | `int`              | **9102**            | Exposes Prometheus metrics for the container.                                                  |
-| `location`                      | map `int → string` | –                   | ISA-95 hierarchy that identifies this gateway. **Level 0 must exist**.                         |
+| `location`                      | map `int → string` | –                   | Hierarchical location path (level0-4+) that identifies this gateway. **Level 0 (enterprise) is mandatory**. Can follow ISA-95, KKS, or any organizational naming standard. |
 | `communicator.apiUrl`           | `string`           | – (console-managed) | HTTPS endpoint of the Management Console.                                                      |
 | `communicator.authToken`        | `string`           | –                   | API Key issued by the console. Can be set via `UMH_AUTH_TOKEN` env-var.                        |
 | `communicator.allowInsecureTLS` | `bool`             | `false`             | Skip TLS verification [corporate-firewalls.md](../production/corporate-firewalls.md "mention") |
 
 **Location levels**
 
-| Index | Typical meaning                  | Example         |
-| ----- | -------------------------------- | --------------- |
-| `0`   | Enterprise                       | `acme-inc`      |
-| `1`   | Site / Plant                     | `cologne-plant` |
-| `2`   | Area / Line                      | `cnc-line`      |
-| `3+`  | Free-form (work-cell, PLC id, …) | `plc123`        |
+| Index | Generic Level | ISA-95 Example     | KKS Example      | Other Examples  |
+| ----- | ------------- | ------------------ | ---------------- | --------------- |
+| `0`   | Enterprise    | `enterprise`       | `powerplant`     | `acme-inc`      |
+| `1`   | Site/Region   | `site`/`plant`     | `unit-group`     | `cologne-plant` |
+| `2`   | Area/Zone     | `area`/`line`      | `unit`           | `cnc-line`      |
+| `3+`  | Work Cell+    | `work-cell`, `plc` | `component-grp`  | `plc123`        |
 
 ```yaml
 agent:
@@ -138,18 +138,24 @@ protocolConverter:
 
 UMH Core includes specialized processors for industrial data:
 
-#### tag_processor
+#### tag_processor 🚧
 
-Adds UNS metadata for topic construction:
+> **🚧 Roadmap Item**: The current `tag_processor` implementation follows the benthos-umh pattern with tag names in payloads. With the next UMH Core release, `tag_processor` will be updated to align with the new data model where:
+> - Tag names are only in topics (not in payloads)
+> - Metadata is not included in message payloads
+> - Output follows standard [timeseries payload format](../usage/unified-namespace/payload-formats.md)
+
+For current implementation details, see [Benthos-UMH Tag Processor Documentation](https://docs.umh.app/benthos-umh/processing/tag-processor).
 
 ```yaml
-processors:
-  - tag_processor:
-      defaults: |
-        msg.meta.location_path = "{{ .location_path }}";
-        msg.meta.data_contract = "_raw";
-        msg.meta.tag_name = msg.meta.opcua_tag_name;
-        return msg;
+pipeline:
+  processors:
+    - tag_processor:
+        defaults: |
+          msg.meta.location_path = "{{ .location_path }}";
+          msg.meta.data_contract = "_raw";
+          msg.meta.tag_name = "temperature";
+          return msg;
 ```
 
 **Data Contract Guidelines:**

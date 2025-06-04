@@ -52,7 +52,9 @@ protocolConverter:
 
 UMH Core supports 50+ industrial connectors via Benthos-UMH. For complete protocol documentation and examples, see [Bridges - Supported Protocols](../data-flows/bridges.md#supported-protocols).
 
-## Tag Processor
+## Tag Processor 🚧
+
+> **🚧 Roadmap Item**: The current `tag_processor` implementation follows the benthos-umh pattern with tag names in payloads. With the next UMH Core release, `tag_processor` will be updated to align with the new data model where tag names are only in topics (not in payloads) and metadata is not included in message payloads.
 
 The `tag_processor` is crucial for UNS compliance. It adds required metadata for topic construction. For complete syntax and examples, see [Configuration Reference - Tag Processor](../../reference/configuration-reference.md#tag_processor).
 
@@ -123,4 +125,3 @@ For complete Stand-alone Flow examples and patterns, see [Stand-alone Flows Docu
 
 - [Connect ifm IO-Link Masters with the UNS](https://learn.umh.app/blog/connect-ifm-io-link-masters-with-the-uns/) - Real-world sensor connectivity
 - [Node-RED meets Benthos!](https://learn.umh.app/blog/node-red-meets-benthos/) - Custom processing with Node-RED JavaScript
-
