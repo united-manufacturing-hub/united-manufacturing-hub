@@ -273,3 +273,25 @@ func (m *MockConfigManager) AtomicEditDataflowcomponent(ctx context.Context, com
 
 	return oldConfig, nil
 }
+
+// AtomicAddProtocolConverter implements the ConfigManager interface
+func (m *MockConfigManager) AtomicAddProtocolConverter(ctx context.Context, pc ProtocolConverterConfig) error {
+	m.mutexReadAndWrite.Lock()
+	defer m.mutexReadAndWrite.Unlock()
+
+	// get the current config
+	config, err := m.GetConfig(ctx, 0)
+	if err != nil {
+		return fmt.Errorf("failed to get config: %w", err)
+	}
+
+	// add the protocol converter
+	config.ProtocolConverter = append(config.ProtocolConverter, pc)
+
+	// write the config
+	if err := m.writeConfig(ctx, config); err != nil {
+		return fmt.Errorf("failed to write config: %w", err)
+	}
+
+	return nil
+}

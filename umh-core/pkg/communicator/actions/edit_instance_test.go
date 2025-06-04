@@ -429,3 +429,21 @@ func (w *writeFailingMockConfigManager) AtomicEditDataflowcomponent(ctx context.
 
 	return config.DataFlowComponentConfig{}, nil
 }
+
+// AtomicAddProtocolConverter implements the required interface method but ensures the write fails
+func (w *writeFailingMockConfigManager) AtomicAddProtocolConverter(ctx context.Context, pc config.ProtocolConverterConfig) error {
+	// Get the current config
+	config, err := w.GetConfig(ctx, 0)
+	if err != nil {
+		return err
+	}
+
+	// do not add anything
+
+	// Write config (will fail with this mock)
+	if err := w.writeConfig(ctx, config); err != nil {
+		return err
+	}
+
+	return nil
+}

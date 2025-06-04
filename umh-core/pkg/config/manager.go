@@ -31,6 +31,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/backoff"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/ctxutil/ctxmutex"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/ctxutil/ctxrwmutex"
@@ -68,6 +69,8 @@ type ConfigManager interface {
 	AtomicDeleteDataflowcomponent(ctx context.Context, componentUUID uuid.UUID) error
 	// AtomicEditDataflowcomponent edits a dataflowcomponent in the config atomically
 	AtomicEditDataflowcomponent(ctx context.Context, componentUUID uuid.UUID, dfc DataFlowComponentConfig) (DataFlowComponentConfig, error)
+	// AtomicAddProtocolConverter adds a protocol converter to the config atomically
+	AtomicAddProtocolConverter(ctx context.Context, pc ProtocolConverterConfig) error
 }
 
 // FileConfigManager implements the ConfigManager interface by reading from a file
@@ -192,9 +195,9 @@ func (m *FileConfigManager) GetConfigWithOverwritesOrCreateNew(ctx context.Conte
 // concurrently.  It then:
 //
 //  1. Ensures the directory exists (harmless no-op if it already does).
-//  2. Verifies the file exists, preserving the historical “config file
-//     does not exist” error semantics expected by callers and tests.
-//  3. Calls Stat() — an inexpensive syscall — and compares the file’s
+//  2. Verifies the file exists, preserving the historical "config file
+//     does not exist" error semantics expected by callers and tests.
+//  3. Calls Stat() — an inexpensive syscall — and compares the file's
 //     ModTime with the timestamp stored in the cache.
 //     • If identical, the file is guaranteed unchanged ⇒ return the
 //     cached *FullConfig* immediately (no I/O, no YAML decode).
@@ -206,7 +209,7 @@ func (m *FileConfigManager) GetConfigWithOverwritesOrCreateNew(ctx context.Conte
 //
 // Because the cache is keyed on ModTime, every observable write to the
 // file (which always updates mtime) causes the next reader to parse fresh
-// bytes, so external callers still see a “latest-on-call” behaviour.
+// bytes, so external callers still see a "latest-on-call" behaviour.
 func (m *FileConfigManager) GetConfig(ctx context.Context, tick uint64) (FullConfig, error) {
 	// we use a read lock here, because we only read the config file
 	err := m.mutexReadOrWrite.RLock(ctx)
@@ -399,8 +402,13 @@ func (m *FileConfigManager) writeConfig(ctx context.Context, config FullConfig) 
 		return fmt.Errorf("failed to create config directory: %w", err)
 	}
 
-	// Marshal the config to YAML
-	data, err := yaml.Marshal(config)
+	// Use custom YAML marshaling if we have templates that need anchors
+	var data []byte
+	if len(config.Templates) > 0 {
+		data, err = marshalConfigWithAnchors(config)
+	} else {
+		data, err = yaml.Marshal(config)
+	}
 	if err != nil {
 		return fmt.Errorf("failed to marshal config: %w", err)
 	}
@@ -411,6 +419,171 @@ func (m *FileConfigManager) writeConfig(ctx context.Context, config FullConfig) 
 	}
 
 	m.logger.Infof("Successfully wrote config to %s", m.configPath)
+	return nil
+}
+
+// marshalConfigWithAnchors handles custom YAML marshaling to create anchors for templates
+func marshalConfigWithAnchors(config FullConfig) ([]byte, error) {
+	// Use yaml.Node to create proper anchors and aliases
+	var rootNode yaml.Node
+
+	// First, marshal the config to get the basic structure
+	if err := rootNode.Encode(config); err != nil {
+		return nil, fmt.Errorf("failed to encode config to yaml.Node: %w", err)
+	}
+
+	// Process the node tree to create anchors and aliases
+	if err := processNodeForAnchors(&rootNode, config); err != nil {
+		return nil, fmt.Errorf("failed to process nodes for anchors: %w", err)
+	}
+
+	// Marshal the processed node tree to YAML
+	var buf bytes.Buffer
+	encoder := yaml.NewEncoder(&buf)
+	encoder.SetIndent(2)
+	if err := encoder.Encode(&rootNode); err != nil {
+		return nil, fmt.Errorf("failed to encode processed node: %w", err)
+	}
+	if err := encoder.Close(); err != nil {
+		return nil, fmt.Errorf("failed to close yaml encoder: %w", err)
+	}
+
+	return buf.Bytes(), nil
+}
+
+// processNodeForAnchors processes the yaml.Node tree to create anchors for templates
+func processNodeForAnchors(node *yaml.Node, config FullConfig) error {
+	if node == nil {
+		return nil
+	}
+
+	// Find the templates section and add anchors
+	if node.Kind == yaml.DocumentNode && len(node.Content) > 0 {
+		return processNodeForAnchors(node.Content[0], config)
+	}
+
+	if node.Kind == yaml.MappingNode {
+		for i := 0; i < len(node.Content); i += 2 {
+			keyNode := node.Content[i]
+			valueNode := node.Content[i+1]
+
+			// Process templates section
+			if keyNode.Value == "templates" && valueNode.Kind == yaml.SequenceNode {
+				if err := processTemplatesNode(valueNode, config); err != nil {
+					return err
+				}
+			}
+
+			// Process protocol converters section to create aliases
+			if keyNode.Value == "protocolConverter" && valueNode.Kind == yaml.SequenceNode {
+				if err := processProtocolConvertersNode(valueNode, config); err != nil {
+					return err
+				}
+			}
+
+			// Recursively process child nodes
+			if err := processNodeForAnchors(valueNode, config); err != nil {
+				return err
+			}
+		}
+	}
+
+	if node.Kind == yaml.SequenceNode {
+		for _, child := range node.Content {
+			if err := processNodeForAnchors(child, config); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+// processTemplatesNode adds anchors to template definitions
+func processTemplatesNode(templatesNode *yaml.Node, config FullConfig) error {
+	for _, templateNode := range templatesNode.Content {
+		if templateNode.Kind == yaml.MappingNode {
+			// Find template items and add anchors
+			for i := 0; i < len(templateNode.Content); i += 2 {
+				keyNode := templateNode.Content[i]
+				valueNode := templateNode.Content[i+1]
+
+				// Skip metadata fields
+				if keyNode.Value == "_anchor" {
+					continue
+				}
+
+				// Add anchor to the template value node
+				if valueNode.Anchor == "" {
+					valueNode.Anchor = keyNode.Value // Use the template name as anchor
+				}
+			}
+		}
+	}
+	return nil
+}
+
+// processProtocolConvertersNode creates aliases for protocol converters that reference templates
+func processProtocolConvertersNode(pcNode *yaml.Node, config FullConfig) error {
+	for _, converterNode := range pcNode.Content {
+		if converterNode.Kind == yaml.MappingNode {
+			// Look for protocol converters that have template references
+			for i := 0; i < len(converterNode.Content); i += 2 {
+				keyNode := converterNode.Content[i]
+				valueNode := converterNode.Content[i+1]
+
+				if keyNode.Value == "protocolConverterServiceConfig" && valueNode.Kind == yaml.MappingNode {
+					if err := processProtocolConverterServiceConfig(valueNode); err != nil {
+						return err
+					}
+				}
+			}
+		}
+	}
+	return nil
+}
+
+// processProtocolConverterServiceConfig handles template references in protocol converter service config
+func processProtocolConverterServiceConfig(serviceConfigNode *yaml.Node) error {
+	var templateRefName string
+
+	// First pass: find the template reference
+	for i := 0; i < len(serviceConfigNode.Content); i += 2 {
+		keyNode := serviceConfigNode.Content[i]
+		valueNode := serviceConfigNode.Content[i+1]
+
+		if keyNode.Value == "location" && valueNode.Kind == yaml.MappingNode {
+			for j := 0; j < len(valueNode.Content); j += 2 {
+				locationKeyNode := valueNode.Content[j]
+				locationValueNode := valueNode.Content[j+1]
+
+				if locationKeyNode.Value == "_templateRef" {
+					templateRefName = locationValueNode.Value
+					// Remove the metadata field
+					valueNode.Content = append(valueNode.Content[:j], valueNode.Content[j+2:]...)
+					break
+				}
+			}
+		}
+	}
+
+	// Second pass: replace template with alias if we found a reference
+	if templateRefName != "" {
+		for i := 0; i < len(serviceConfigNode.Content); i += 2 {
+			keyNode := serviceConfigNode.Content[i]
+
+			if keyNode.Value == "template" {
+				// Replace with alias node
+				aliasNode := &yaml.Node{
+					Kind:  yaml.AliasNode,
+					Value: templateRefName,
+				}
+				serviceConfigNode.Content[i+1] = aliasNode
+				break
+			}
+		}
+	}
+
 	return nil
 }
 
@@ -670,7 +843,7 @@ func (m *FileConfigManager) AtomicEditDataflowcomponent(ctx context.Context, com
 	// ------
 	// If the component we are about to **edit** still hasAnchors == true
 	// we MUST refuse to touch it; otherwise we would flatten or delete
-	// the user’s template when we rewrite the file.
+	// the user's template when we rewrite the file.
 	for _, c := range config.DataFlow {
 		if dataflowcomponentserviceconfig.GenerateUUIDFromName(c.Name) == componentUUID {
 			if c.HasAnchors() {
@@ -716,4 +889,150 @@ func (m *FileConfigManagerWithBackoff) AtomicEditDataflowcomponent(ctx context.C
 	}
 
 	return m.configManager.AtomicEditDataflowcomponent(ctx, componentUUID, dfc)
+}
+
+// AtomicAddProtocolConverter adds a protocol converter to the config atomically
+// Creates an anchored template in the templates section and references it from the protocol converter
+func (m *FileConfigManager) AtomicAddProtocolConverter(ctx context.Context, pc ProtocolConverterConfig) error {
+	err := m.mutexAtomicUpdate.Lock(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to lock config file: %w", err)
+	}
+	defer m.mutexAtomicUpdate.Unlock()
+
+	// get the current config
+	config, err := m.GetConfig(ctx, 0)
+	if err != nil {
+		return fmt.Errorf("failed to get config: %w", err)
+	}
+
+	// check for duplicate name before add
+	for _, cmp := range config.ProtocolConverter {
+		if cmp.Name == pc.Name {
+			return fmt.Errorf("another protocol converter with name %q already exists – choose a unique name", pc.Name)
+		}
+	}
+
+	// Generate template name from protocol converter name
+	templateName := generateTemplateAnchorName(pc.Name)
+
+	// Check if template name already exists
+	if templateExists(config.Templates, templateName) {
+		return fmt.Errorf("template with anchor name %q already exists – choose a unique protocol converter name", templateName)
+	}
+
+	// Create the anchored template and add it to the templates section
+	templateContent := createTemplateContent(pc.ProtocolConverterServiceConfig.Template)
+
+	// Add template to config.Templates with anchor metadata
+	templateWithAnchor := map[string]interface{}{
+		templateName: templateContent,
+		"_anchor":    templateName, // Metadata to indicate this should be an anchor
+	}
+	config.Templates = append(config.Templates, templateWithAnchor)
+
+	// Add metadata to indicate this should reference a template
+	// We'll use a special field or modify the YAML generation
+	if pc.ProtocolConverterServiceConfig.Location == nil {
+		pc.ProtocolConverterServiceConfig.Location = make(map[string]string)
+	}
+	pc.ProtocolConverterServiceConfig.Location["_templateRef"] = templateName
+
+	// Add the protocol converter
+	config.ProtocolConverter = append(config.ProtocolConverter, pc)
+
+	// write the config
+	if err := m.writeConfig(ctx, config); err != nil {
+		return fmt.Errorf("failed to write config: %w", err)
+	}
+
+	return nil
+}
+
+// generateTemplateAnchorName creates a valid YAML anchor name from a protocol converter name
+func generateTemplateAnchorName(pcName string) string {
+	// Replace non-alphanumeric characters with underscores and add template suffix
+	// YAML anchors must contain only alphanumeric characters
+	result := ""
+	for _, r := range pcName {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') {
+			result += string(r)
+		} else {
+			result += "_"
+		}
+	}
+	return result + "_template"
+}
+
+// templateExists checks if a template with the given anchor name already exists
+func templateExists(templates []map[string]interface{}, anchorName string) bool {
+	for _, template := range templates {
+		if _, exists := template[anchorName]; exists {
+			return true
+		}
+	}
+	return false
+}
+
+// createTemplateContent converts a template config to a map for YAML anchoring
+func createTemplateContent(template protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate) map[string]interface{} {
+	// Convert the template struct to a map that can be used in YAML templates section
+	templateMap := make(map[string]interface{})
+
+	// Add connection config
+	if template.ConnectionServiceConfig.NmapTemplate != nil {
+		connectionMap := map[string]interface{}{
+			"ip":   template.ConnectionServiceConfig.NmapTemplate.Target,
+			"port": template.ConnectionServiceConfig.NmapTemplate.Port,
+		}
+		templateMap["connection"] = connectionMap
+	}
+
+	// Add dataflow component configs (currently empty as per deploy action)
+	// These will be populated later via edit actions
+	if !isEmptyDataflowComponentConfig(template.DataflowComponentReadServiceConfig) {
+		templateMap["dataflowcomponent_read"] = convertDataflowComponentToMap(template.DataflowComponentReadServiceConfig)
+	}
+
+	if !isEmptyDataflowComponentConfig(template.DataflowComponentWriteServiceConfig) {
+		templateMap["dataflowcomponent_write"] = convertDataflowComponentToMap(template.DataflowComponentWriteServiceConfig)
+	}
+
+	return templateMap
+}
+
+// isEmptyDataflowComponentConfig checks if a dataflow component config is empty
+func isEmptyDataflowComponentConfig(config dataflowcomponentserviceconfig.DataflowComponentServiceConfig) bool {
+	// For now, assume it's empty if BenthosConfig is nil or empty
+	return config.BenthosConfig.Input == nil && config.BenthosConfig.Output == nil
+}
+
+// convertDataflowComponentToMap converts a dataflow component config to a map
+func convertDataflowComponentToMap(config dataflowcomponentserviceconfig.DataflowComponentServiceConfig) map[string]interface{} {
+	// Convert dataflow component to map structure
+	// This is a simplified conversion - may need to be more comprehensive
+	result := make(map[string]interface{})
+
+	if config.BenthosConfig.Input != nil || config.BenthosConfig.Output != nil {
+		benthosMap := make(map[string]interface{})
+		if config.BenthosConfig.Input != nil {
+			benthosMap["input"] = config.BenthosConfig.Input
+		}
+		if config.BenthosConfig.Output != nil {
+			benthosMap["output"] = config.BenthosConfig.Output
+		}
+		result["benthos"] = benthosMap
+	}
+
+	return result
+}
+
+// AtomicAddProtocolConverter delegates to the underlying FileConfigManager
+func (m *FileConfigManagerWithBackoff) AtomicAddProtocolConverter(ctx context.Context, pc ProtocolConverterConfig) error {
+	// Check if context is already cancelled
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+
+	return m.configManager.AtomicAddProtocolConverter(ctx, pc)
 }
