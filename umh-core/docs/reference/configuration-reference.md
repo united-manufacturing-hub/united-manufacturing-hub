@@ -85,6 +85,7 @@ _For complete input/output syntax see [Benthos-UMH Documentation](https://docs.u
 > 🚧 **Roadmap Item**: Bridges are under active development. Current functionality includes connection monitoring and basic read/write flows.
 
 A [**bridge**](../usage/data-flows/bridges.md) (UI: "Bridges", YAML: `protocolConverter:`) ingests data from a field device (e.g. OPC UA server, Siemens S7, Modbus controller) and pushes it into the Unified Namespace (UNS), and vice versa.\
+
 It combines a **connection probe** and two **stand-alone data flows (one for reading and one for writing)** under a single name and lifecycle.
 
 ```yaml
