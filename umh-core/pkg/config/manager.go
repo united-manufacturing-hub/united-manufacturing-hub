@@ -716,13 +716,13 @@ func (m *FileConfigManager) AtomicEditDataflowcomponent(ctx context.Context, com
 	// ------
 	// If the component we are about to **edit** still hasAnchors == true
 	// we MUST refuse to touch it; otherwise we would flatten or delete
-	// the user’s template when we rewrite the file.
+	// the user's template when we rewrite the file.
 	for _, c := range config.DataFlow {
 		if dataflowcomponentserviceconfig.GenerateUUIDFromName(c.Name) == componentUUID {
 			if c.HasAnchors() {
 				return DataFlowComponentConfig{}, fmt.Errorf(
 					"dataFlowComponentConfig for %s is defined via YAML anchors/aliases; "+
-						"please edit the file manually", componentUUID)
+						"please edit the file manually or see https://docs.umh.app/reference/configuration-reference for more details", componentUUID)
 			}
 			break
 		}
