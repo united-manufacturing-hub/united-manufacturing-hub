@@ -163,11 +163,6 @@ func (r *RedpandaInstance) reconcileExternalChanges(ctx context.Context, service
 		metrics.ObserveReconcileTime(metrics.ComponentRedpandaInstance, r.baseFSMInstance.GetID()+".reconcileExternalChanges", time.Since(start))
 	}()
 
-	// Fetching the observed state can sometimes take longer, but we need to ensure when reconciling a lot of instances
-	// that a single status of a single instance does not block the whole reconciliation
-	observedStateCtx, cancel := context.WithTimeout(ctx, constants.RedpandaUpdateObservedStateTimeout)
-	defer cancel()
-
 	// If the config differs and we are currently running,
 	// we will apply the changes by doing an REST call to the Redpanda Admin API (https://docs.redpanda.com/api/admin-api/).
 	// We also check that the desired state is a running state,
@@ -212,6 +207,10 @@ func (r *RedpandaInstance) reconcileExternalChanges(ctx context.Context, service
 		}
 	}
 
+	// Fetching the observed state can sometimes take longer, but we need to ensure when reconciling a lot of instances
+	// that a single status of a single instance does not block the whole reconciliation
+	observedStateCtx, cancel := context.WithTimeout(ctx, constants.RedpandaUpdateObservedStateTimeout)
+	defer cancel()
 	err = r.UpdateObservedStateOfInstance(observedStateCtx, services, tick, loopStartTime)
 	if err != nil {
 		return fmt.Errorf("failed to update observed state: %w", err), false
