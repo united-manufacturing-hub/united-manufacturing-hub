@@ -87,7 +87,7 @@ func (b *BenthosMonitorInstance) Reconcile(ctx context.Context, snapshot fsm.Sys
 	}
 
 	// Step 2: Detect external changes.
-	if err = b.reconcileExternalChanges(ctx, services, snapshot.Tick, start); err != nil {
+	if err = b.reconcileExternalChanges(ctx, services, snapshot); err != nil {
 
 		// I am using strings.Contains as i cannot get it working with errors.Is
 		isExpectedError := strings.Contains(err.Error(), benthos_monitor_service.ErrServiceNotExist.Error()) ||
@@ -160,7 +160,7 @@ func (b *BenthosMonitorInstance) Reconcile(ctx context.Context, snapshot fsm.Sys
 
 // reconcileExternalChanges checks if the Benthos monitor service status has changed
 // externally (e.g., if someone manually stopped or started it, or if it crashed)
-func (b *BenthosMonitorInstance) reconcileExternalChanges(ctx context.Context, services serviceregistry.Provider, tick uint64, loopStartTime time.Time) error {
+func (b *BenthosMonitorInstance) reconcileExternalChanges(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) error {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentBenthosMonitor, b.baseFSMInstance.GetID()+".reconcileExternalChanges", time.Since(start))
@@ -168,7 +168,7 @@ func (b *BenthosMonitorInstance) reconcileExternalChanges(ctx context.Context, s
 
 	observedStateCtx, cancel := context.WithTimeout(ctx, constants.S6UpdateObservedStateTimeout)
 	defer cancel()
-	err := b.UpdateObservedStateOfInstance(observedStateCtx, services, tick, loopStartTime)
+	err := b.UpdateObservedStateOfInstance(observedStateCtx, services, snapshot)
 	if err != nil {
 		return fmt.Errorf("failed to update observed state: %w", err)
 	}

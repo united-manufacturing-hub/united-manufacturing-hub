@@ -24,6 +24,7 @@ import (
 	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
 	benthosserviceconfig "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 	logger "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
@@ -108,7 +109,7 @@ func (b *BenthosInstance) RemoveInstance(
 		b.baseFSMInstance.GetLogger().
 			Infof("Benthos service %s removal still in progress",
 				b.baseFSMInstance.GetID())
-		// not an error from the FSM’s perspective – just means “try again”
+		// not an error from the FSM's perspective – just means "try again"
 		return err
 
 	// ---------------------------------------------------------------
@@ -201,13 +202,13 @@ func (b *BenthosInstance) getServiceStatus(ctx context.Context, services service
 }
 
 // UpdateObservedStateOfInstance updates the observed state of the service
-func (b *BenthosInstance) UpdateObservedStateOfInstance(ctx context.Context, services serviceregistry.Provider, tick uint64, loopStartTime time.Time) error {
+func (b *BenthosInstance) UpdateObservedStateOfInstance(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
 
 	start := time.Now()
-	info, err := b.getServiceStatus(ctx, services, tick, loopStartTime)
+	info, err := b.getServiceStatus(ctx, services, snapshot.Tick, snapshot.SnapshotTime)
 	if err != nil {
 		return err
 	}

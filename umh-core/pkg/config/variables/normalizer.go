@@ -12,8 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package nmap provides functionality for managing nmap scan services.
-// This package has been refactored to use service logs for scan results,
-// so the parser.go file is no longer needed. All parsing functionality
-// is now implemented in nmap.go in the parseScanLogs method.
-package nmap
+package variables
+
+// Normalizer handles normalization of VariableBundle
+type Normalizer struct{}
+
+// NewNormalizer creates a new Normalizer instance
+func NewNormalizer() *Normalizer {
+	return &Normalizer{}
+}
+
+// NormalizeConfig normalizes a VariableBundle
+func (n *Normalizer) NormalizeConfig(vb VariableBundle) VariableBundle {
+	// For now, just return the input as is since VariableBundle is already normalized
+	// This can be extended later if needed
+	return vb
+}
