@@ -27,20 +27,22 @@ import (
 
 // MockConfigManager is a mock implementation of ConfigManager for testing
 type MockConfigManager struct {
-	GetConfigCalled                  bool
-	AddDataflowcomponentCalled       bool
-	DeleteDataflowcomponentCalled    bool
-	EditDataflowcomponentCalled      bool
-	AtomicAddProtocolConverterCalled bool
-	Config                           FullConfig
-	ConfigError                      error
-	AddDataflowcomponentError        error
-	DeleteDataflowcomponentError     error
-	EditDataflowcomponentError       error
-	AtomicAddProtocolConverterError  error
-	ConfigDelay                      time.Duration
-	mutexReadOrWrite                 sync.Mutex
-	mutexReadAndWrite                sync.Mutex
+	GetConfigCalled                   bool
+	AddDataflowcomponentCalled        bool
+	DeleteDataflowcomponentCalled     bool
+	EditDataflowcomponentCalled       bool
+	AtomicAddProtocolConverterCalled  bool
+	AtomicEditProtocolConverterCalled bool
+	Config                            FullConfig
+	ConfigError                       error
+	AddDataflowcomponentError         error
+	DeleteDataflowcomponentError      error
+	EditDataflowcomponentError        error
+	AtomicAddProtocolConverterError   error
+	AtomicEditProtocolConverterError  error
+	ConfigDelay                       time.Duration
+	mutexReadOrWrite                  sync.Mutex
+	mutexReadAndWrite                 sync.Mutex
 }
 
 // NewMockConfigManager creates a new MockConfigManager instance
@@ -122,6 +124,12 @@ func (m *MockConfigManager) WithAtomicAddProtocolConverterError(err error) *Mock
 	return m
 }
 
+// WithAtomicEditProtocolConverterError configures the mock to return the given error when AtomicEditProtocolConverter is called
+func (m *MockConfigManager) WithAtomicEditProtocolConverterError(err error) *MockConfigManager {
+	m.AtomicEditProtocolConverterError = err
+	return m
+}
+
 // ResetCalls clears the called flags for testing multiple calls
 func (m *MockConfigManager) ResetCalls() {
 	m.mutexReadOrWrite.Lock()
@@ -131,6 +139,7 @@ func (m *MockConfigManager) ResetCalls() {
 	m.DeleteDataflowcomponentCalled = false
 	m.EditDataflowcomponentCalled = false
 	m.AtomicAddProtocolConverterCalled = false
+	m.AtomicEditProtocolConverterCalled = false
 }
 
 // atomic set location
@@ -331,6 +340,49 @@ func (m *MockConfigManager) AtomicAddProtocolConverter(ctx context.Context, pc P
 	}
 
 	return nil
+}
+
+// AtomicEditProtocolConverter implements the ConfigManager interface
+func (m *MockConfigManager) AtomicEditProtocolConverter(ctx context.Context, componentUUID uuid.UUID, pc ProtocolConverterConfig) (ProtocolConverterConfig, error) {
+	m.mutexReadAndWrite.Lock()
+	defer m.mutexReadAndWrite.Unlock()
+
+	m.AtomicEditProtocolConverterCalled = true
+
+	if m.AtomicEditProtocolConverterError != nil {
+		return ProtocolConverterConfig{}, m.AtomicEditProtocolConverterError
+	}
+
+	// get the current config
+	config, err := m.GetConfig(ctx, 0)
+	if err != nil {
+		return ProtocolConverterConfig{}, fmt.Errorf("failed to get config: %w", err)
+	}
+
+	// Find the protocol converter with matching UUID
+	found := false
+	var oldConfig ProtocolConverterConfig
+	for i, cmp := range config.ProtocolConverter {
+		cmpID := dataflowcomponentserviceconfig.GenerateUUIDFromName(cmp.Name)
+		if cmpID == componentUUID {
+			// Found the protocol converter to edit, update it
+			oldConfig = cmp
+			config.ProtocolConverter[i] = pc
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		return ProtocolConverterConfig{}, fmt.Errorf("protocol converter with UUID %s not found", componentUUID)
+	}
+
+	// write the config
+	if err := m.writeConfig(ctx, config); err != nil {
+		return ProtocolConverterConfig{}, fmt.Errorf("failed to write config: %w", err)
+	}
+
+	return oldConfig, nil
 }
 
 // generateMockTemplateAnchorName creates a valid YAML anchor name from a protocol converter name

@@ -206,7 +206,7 @@ func (a *EditDataflowComponentAction) Parse(payload interface{}) error {
 	// Handle different component types
 	switch a.metaType {
 	case "custom":
-		payload, err := parseCustomDataFlowComponent(topLevel.Payload)
+		payload, err := ParseCustomDataFlowComponent(topLevel.Payload)
 		if err != nil {
 			return err
 		}

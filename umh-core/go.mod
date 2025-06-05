@@ -19,6 +19,7 @@ require (
 	github.com/prometheus/client_golang v1.22.0
 	github.com/prometheus/client_model v0.6.2
 	github.com/prometheus/common v0.63.0
+	github.com/prometheus/prometheus v0.303.0
 	github.com/shirou/gopsutil/v3 v3.24.5
 	github.com/tiendc/go-deepcopy v1.5.1
 	github.com/united-manufacturing-hub/expiremap/v2 v2.1.0
@@ -46,7 +47,6 @@ require (
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/power-devops/perfstat v0.0.0-20240221224432-82ca36839d55 // indirect
 	github.com/prometheus/procfs v0.16.0 // indirect
-	github.com/prometheus/prometheus v0.303.0 // indirect
 	github.com/shoenig/go-m1cpu v0.1.6 // indirect
 	github.com/tklauser/go-sysconf v0.3.15 // indirect
 	github.com/tklauser/numcpus v0.10.0 // indirect

@@ -71,6 +71,8 @@ type ConfigManager interface {
 	AtomicEditDataflowcomponent(ctx context.Context, componentUUID uuid.UUID, dfc DataFlowComponentConfig) (DataFlowComponentConfig, error)
 	// AtomicAddProtocolConverter adds a protocol converter to the config atomically
 	AtomicAddProtocolConverter(ctx context.Context, pc ProtocolConverterConfig) error
+	// AtomicEditProtocolConverter edits a protocol converter in the config atomically
+	AtomicEditProtocolConverter(ctx context.Context, componentUUID uuid.UUID, pc ProtocolConverterConfig) (ProtocolConverterConfig, error)
 }
 
 // FileConfigManager implements the ConfigManager interface by reading from a file
@@ -1011,4 +1013,93 @@ func (m *FileConfigManagerWithBackoff) AtomicAddProtocolConverter(ctx context.Co
 	}
 
 	return m.configManager.AtomicAddProtocolConverter(ctx, pc)
+}
+
+// AtomicEditProtocolConverter edits a protocol converter in the config atomically
+func (m *FileConfigManager) AtomicEditProtocolConverter(ctx context.Context, componentUUID uuid.UUID, pc ProtocolConverterConfig) (ProtocolConverterConfig, error) {
+	err := m.mutexAtomicUpdate.Lock(ctx)
+	if err != nil {
+		return ProtocolConverterConfig{}, fmt.Errorf("failed to lock config file: %w", err)
+	}
+	defer m.mutexAtomicUpdate.Unlock()
+
+	// get the current config
+	config, err := m.GetConfig(ctx, 0)
+	if err != nil {
+		return ProtocolConverterConfig{}, fmt.Errorf("failed to get config: %w", err)
+	}
+
+	oldConfig := ProtocolConverterConfig{}
+
+	// check for duplicate name before edit
+	for _, cmp := range config.ProtocolConverter {
+		if cmp.Name == pc.Name && dataflowcomponentserviceconfig.GenerateUUIDFromName(cmp.Name) != componentUUID {
+			return ProtocolConverterConfig{}, fmt.Errorf("another protocol converter with name %q already exists – choose a unique name", pc.Name)
+		}
+	}
+
+	// ------------------------------------------------------------------
+	// Guard against overwriting a DFC that still relies on YAML
+	// templating (anchors/aliases)
+	//
+	// Background
+	// ----------
+	// Operators may define *dataFlowComponentConfig* via an anchor:
+	//
+	//     templates:
+	//       - &baseCfg { … }
+	//     dataFlow:
+	//       - name: dfc-1
+	//         dataFlowComponentConfig: *baseCfg   # ← alias
+	//
+	// Policy
+	// ------
+	// If the component we are about to **edit** still hasAnchors == true
+	// we MUST refuse to touch it; otherwise we would flatten or delete
+	// the user's template when we rewrite the file.
+	for _, c := range config.ProtocolConverter {
+		if dataflowcomponentserviceconfig.GenerateUUIDFromName(c.Name) == componentUUID {
+			if c.HasAnchors() {
+				return ProtocolConverterConfig{}, fmt.Errorf(
+					"dataFlowComponentConfig for %s is defined via YAML anchors/aliases; "+
+						"please edit the file manually", componentUUID)
+			}
+			break
+		}
+	}
+	// End of guard
+
+	// Find the component with matching UUID
+	found := false
+	for i, component := range config.ProtocolConverter {
+		componentID := dataflowcomponentserviceconfig.GenerateUUIDFromName(component.Name)
+		if componentID == componentUUID {
+			// Found the component to edit, update it
+			oldConfig = config.ProtocolConverter[i]
+			config.ProtocolConverter[i] = pc
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		return ProtocolConverterConfig{}, fmt.Errorf("dataflow component with UUID %s not found", componentUUID)
+	}
+
+	// write the config
+	if err := m.writeConfig(ctx, config); err != nil {
+		return ProtocolConverterConfig{}, fmt.Errorf("failed to write config: %w", err)
+	}
+
+	return oldConfig, nil
+}
+
+// AtomicEditProtocolConverter delegates to the underlying FileConfigManager
+func (m *FileConfigManagerWithBackoff) AtomicEditProtocolConverter(ctx context.Context, componentUUID uuid.UUID, pc ProtocolConverterConfig) (ProtocolConverterConfig, error) {
+	// Check if context is already cancelled
+	if ctx.Err() != nil {
+		return ProtocolConverterConfig{}, ctx.Err()
+	}
+
+	return m.configManager.AtomicEditProtocolConverter(ctx, componentUUID, pc)
 }

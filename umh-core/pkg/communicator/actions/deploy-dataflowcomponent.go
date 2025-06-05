@@ -59,14 +59,12 @@ package actions
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
@@ -75,7 +73,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 	"go.uber.org/zap"
-	"gopkg.in/yaml.v3"
 )
 
 // DeployDataflowComponentAction implements the Action interface for deploying a
@@ -128,44 +125,20 @@ func NewDeployDataflowComponentAction(userEmail string, actionUUID uuid.UUID, in
 //
 // The function returns appropriate errors for missing required fields or unsupported component types.
 func (a *DeployDataflowComponentAction) Parse(payload interface{}) error {
-	// First parse the top level structure
-	type TopLevelPayload struct {
-		Name string `json:"name"`
-		Meta struct {
-			Type string `json:"type"`
-		} `json:"meta"`
-		IgnoreHealthCheck bool        `json:"ignoreHealthCheck"`
-		Payload           interface{} `json:"payload"`
-	}
-
-	// Parse the top level payload
-	var topLevel TopLevelPayload
-	payloadBytes, err := json.Marshal(payload)
+	// First parse the top level structure using shared function
+	topLevel, err := ParseDataflowComponentTopLevel(payload)
 	if err != nil {
-		return fmt.Errorf("failed to marshal payload: %v", err)
-	}
-
-	if err := json.Unmarshal(payloadBytes, &topLevel); err != nil {
-		return fmt.Errorf("failed to unmarshal top level payload: %v", err)
+		return err
 	}
 
 	a.name = topLevel.Name
-	if a.name == "" {
-		return errors.New("missing required field Name")
-	}
-
-	// Store the meta type
 	a.metaType = topLevel.Meta.Type
-	if a.metaType == "" {
-		return errors.New("missing required field Meta.Type")
-	}
-
 	a.ignoreHealthCheck = topLevel.IgnoreHealthCheck
 
 	// Handle different component types
 	switch a.metaType {
 	case "custom":
-		payload, err := parseCustomDataFlowComponent(topLevel.Payload)
+		payload, err := ParseCustomDataFlowComponent(topLevel.Payload)
 		if err != nil {
 			return err
 		}
@@ -179,82 +152,6 @@ func (a *DeployDataflowComponentAction) Parse(payload interface{}) error {
 
 	a.actionLogger.Debugf("Parsed DeployDataFlowComponent action payload: name=%s, type=%s", a.name, a.metaType)
 	return nil
-}
-
-// parseCustomDataFlowComponent is a helper function that parses the custom dataflow component
-// payload structure. It extracts the inputs, outputs, pipeline, and optional inject configurations.
-//
-// The function performs structure validation to ensure required sections exist, but delegates
-// detailed validation to the Validate method.
-func parseCustomDataFlowComponent(payload interface{}) (models.CDFCPayload, error) {
-	// Define our intermediate struct to parse the nested payload
-
-	// Parse the nested custom data flow component payload
-	var customPayloadMap map[string]interface{}
-	nestedPayloadBytes, err := json.Marshal(payload)
-	if err != nil {
-		return models.CDFCPayload{}, fmt.Errorf("failed to marshal nested payload: %v", err)
-	}
-
-	if err := json.Unmarshal(nestedPayloadBytes, &customPayloadMap); err != nil {
-		return models.CDFCPayload{}, fmt.Errorf("failed to unmarshal nested payload: %v", err)
-	}
-
-	// Extract the customDataFlowComponent section
-	cdfc, ok := customPayloadMap["customDataFlowComponent"]
-	if !ok {
-		return models.CDFCPayload{}, errors.New("missing customDataFlowComponent in payload")
-	}
-
-	// Convert to the expected structure
-	cdfcMap, ok := cdfc.(map[string]interface{})
-	if !ok {
-		return models.CDFCPayload{}, errors.New("customDataFlowComponent is not a valid object")
-	}
-
-	// Only check that required top-level sections exist for parsing
-	// Detailed validation will be done in Validate()
-	_, ok = cdfcMap["inputs"].(map[string]interface{})
-	if !ok {
-		return models.CDFCPayload{}, errors.New("missing required field inputs")
-	}
-
-	_, ok = cdfcMap["outputs"].(map[string]interface{})
-	if !ok {
-		return models.CDFCPayload{}, errors.New("missing required field outputs")
-	}
-
-	// Use ParseActionPayload to convert the raw payload to our struct
-	parsedPayload, err := ParseActionPayload[models.CustomDFCPayload](payload)
-	if err != nil {
-		return models.CDFCPayload{}, fmt.Errorf("failed to parse payload: %v", err)
-	}
-
-	cdfcParsed := parsedPayload.CustomDataFlowComponent
-
-	// Create our return model
-	cdfcPayload := models.CDFCPayload{
-		Inputs: models.DfcDataConfig{
-			Type: cdfcParsed.Inputs.Type,
-			Data: cdfcParsed.Inputs.Data,
-		},
-		Outputs: models.DfcDataConfig{
-			Type: cdfcParsed.Outputs.Type,
-			Data: cdfcParsed.Outputs.Data,
-		},
-		Inject: cdfcParsed.Inject.Data,
-	}
-
-	// Process the pipeline processors
-	cdfcPayload.Pipeline = make(map[string]models.DfcDataConfig)
-	for key, proc := range cdfcParsed.Pipeline.Processors {
-		cdfcPayload.Pipeline[key] = models.DfcDataConfig{
-			Type: proc.Type,
-			Data: proc.Data,
-		}
-	}
-
-	return cdfcPayload, nil
 }
 
 // Validate implements the Action interface by performing deeper validation of the parsed payload.
@@ -274,62 +171,10 @@ func (a *DeployDataflowComponentAction) Validate() error {
 		return errors.New("missing required field Meta.Type")
 	}
 
-	// For custom type, validate the payload structure
+	// For custom type, validate the payload structure using shared function
 	if a.metaType == "custom" {
-		// Validate input fields
-		if a.payload.Inputs.Type == "" {
-			return errors.New("missing required field inputs.type")
-		}
-		if a.payload.Inputs.Data == "" {
-			return errors.New("missing required field inputs.data")
-		}
-
-		// Validate output fields
-		if a.payload.Outputs.Type == "" {
-			return errors.New("missing required field outputs.type")
-		}
-		if a.payload.Outputs.Data == "" {
-			return errors.New("missing required field outputs.data")
-		}
-
-		// Validate pipeline
-		if len(a.payload.Pipeline) == 0 {
-			return errors.New("missing required field pipeline.processors")
-		}
-
-		// Validate YAML in all components
-		var temp map[string]interface{}
-
-		// Validate Input YAML
-		if err := yaml.Unmarshal([]byte(a.payload.Inputs.Data), &temp); err != nil {
-			return fmt.Errorf("inputs.data is not valid YAML: %v", err)
-		}
-
-		// Validate Output YAML
-		if err := yaml.Unmarshal([]byte(a.payload.Outputs.Data), &temp); err != nil {
-			return fmt.Errorf("outputs.data is not valid YAML: %v", err)
-		}
-
-		// Validate pipeline processor YAML and fields
-		for key, proc := range a.payload.Pipeline {
-			if proc.Type == "" {
-				return fmt.Errorf("missing required field pipeline.processors.%s.type", key)
-			}
-			if proc.Data == "" {
-				return fmt.Errorf("missing required field pipeline.processors.%s.data", key)
-			}
-
-			// Check processor YAML
-			if err := yaml.Unmarshal([]byte(proc.Data), &temp); err != nil {
-				return fmt.Errorf("pipeline.processors.%s.data is not valid YAML: %v", key, err)
-			}
-		}
-
-		// Validate inject data
-		if a.payload.Inject != "" {
-			if err := yaml.Unmarshal([]byte(a.payload.Inject), &temp); err != nil {
-				return fmt.Errorf("inject.data is not valid YAML: %v", err)
-			}
+		if err := ValidateCustomDataFlowComponentPayload(a.payload); err != nil {
+			return err
 		}
 	}
 
@@ -354,153 +199,16 @@ func (a *DeployDataflowComponentAction) Execute() (interface{}, map[string]inter
 	// Send confirmation that action is starting
 	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionConfirmed, Label("deploy", a.name)+"starting", a.outboundChannel, models.DeployDataFlowComponent)
 
-	// Parse the input and output configurations
-	benthosInput := make(map[string]interface{})
-	benthosOutput := make(map[string]interface{})
-	benthosYamlInject := make(map[string]interface{})
-
-	// First try to use the Input data
-	err := yaml.Unmarshal([]byte(a.payload.Inputs.Data), &benthosInput)
+	// Parse and create Benthos configuration using shared function
+	benthosConfig, err := CreateBenthosConfigFromCDFCPayload(a.payload, a.name)
 	if err != nil {
-		errMsg := Label("deploy", a.name) + fmt.Sprintf("failed to parse input data: %s", err.Error())
+		errMsg := Label("deploy", a.name) + err.Error()
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errMsg, a.outboundChannel, models.DeployDataFlowComponent)
 		return nil, nil, fmt.Errorf("%s", errMsg)
 	}
 
-	//parse the output data
-	err = yaml.Unmarshal([]byte(a.payload.Outputs.Data), &benthosOutput)
-	if err != nil {
-		errMsg := Label("deploy", a.name) + fmt.Sprintf("failed to parse output data: %s", err.Error())
-		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errMsg, a.outboundChannel, models.DeployDataFlowComponent)
-		return nil, nil, fmt.Errorf("%s", errMsg)
-	}
-
-	//parse the inject data
-	err = yaml.Unmarshal([]byte(a.payload.Inject), &benthosYamlInject)
-	if err != nil {
-		errMsg := Label("deploy", a.name) + fmt.Sprintf("failed to parse inject data: %s", err.Error())
-		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errMsg, a.outboundChannel, models.DeployDataFlowComponent)
-		return nil, nil, fmt.Errorf("%s", errMsg)
-	}
-
-	//parse the cache resources, rate limit resources and buffer from the inject data
-	cacheResources, ok := benthosYamlInject["cache_resources"].([]interface{})
-	if !ok {
-		cacheResources = []interface{}{}
-	}
-
-	rateLimitResources, ok := benthosYamlInject["rate_limit_resources"].([]interface{})
-	if !ok {
-		rateLimitResources = []interface{}{}
-	}
-
-	buffer, ok := benthosYamlInject["buffer"].(map[string]interface{})
-	if !ok {
-		buffer = map[string]interface{}{}
-	}
-
-	benthosCacheResources := make([]map[string]interface{}, len(cacheResources))
-	for i, resource := range cacheResources {
-		resourceMap, ok := resource.(map[string]interface{})
-		if !ok {
-			return nil, nil, fmt.Errorf("cache resource %d is not a valid object", i)
-		}
-		benthosCacheResources[i] = resourceMap
-	}
-
-	benthosRateLimitResources := make([]map[string]interface{}, len(rateLimitResources))
-	for i, resource := range rateLimitResources {
-		resourceMap, ok := resource.(map[string]interface{})
-		if !ok {
-			return nil, nil, fmt.Errorf("rate limit resource %d is not a valid object", i)
-		}
-		benthosRateLimitResources[i] = resourceMap
-	}
-
-	benthosBuffer := make(map[string]interface{})
-	for key, value := range buffer {
-		benthosBuffer[key] = value
-	}
-
-	// Convert pipeline data to Benthos pipeline configuration
-	benthosPipeline := map[string]interface{}{
-		"processors": []interface{}{},
-	}
-
-	if len(a.payload.Pipeline) > 0 {
-		// Convert each processor configuration in the pipeline
-		processors := []interface{}{}
-
-		// Check if we have numeric keys (0, 1, 2, ...) and use them to preserve order
-		// 1. In Go, iterating over a map gives the keys in random order each time
-		// 2. In Benthos pipelines the order of processors matters
-		// 3. Therefore, we need to check If the map keys look like 0, 1, 2, … treat them as an
-		//    explicit index and replay them in that exact numerical order.
-		//    Otherwise keep the old behaviour (unordered) but warn the user.
-
-		// Try to parse all keys as integers
-		hasNumericKeys := CheckIfOrderedNumericKeys(a.payload.Pipeline)
-
-		if hasNumericKeys {
-			// Process in numeric order
-			for i := range len(a.payload.Pipeline) {
-				processorName := fmt.Sprintf("%d", i)
-
-				processor := a.payload.Pipeline[processorName]
-				var procConfig map[string]interface{}
-				err := yaml.Unmarshal([]byte(processor.Data), &procConfig)
-				if err != nil {
-					errMsg := Label("deploy", a.name) + fmt.Sprintf("failed to parse pipeline processor %s: %s", processorName, err.Error())
-					SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errMsg, a.outboundChannel, models.DeployDataFlowComponent)
-					return nil, nil, fmt.Errorf("%s", errMsg)
-				}
-
-				// Add processor to the list
-				processors = append(processors, procConfig)
-			}
-		}
-
-		if !hasNumericKeys {
-			// the frontend always sends numerous keys so this should never happen
-			SendActionReply(a.instanceUUID, a.userEmail,
-				a.actionUUID, models.ActionFinishedWithFailure, "At least one processor with a non-numerous key was found.",
-				a.outboundChannel, models.DeployDataFlowComponent)
-			return nil, nil, fmt.Errorf("at least one processor with a non-numerous key was found")
-		}
-
-		benthosPipeline["processors"] = processors
-	}
-
-	// Create the Benthos service config
-	benthosConfig := benthosserviceconfig.BenthosServiceConfig{
-		Input:              benthosInput,
-		Output:             benthosOutput,
-		Pipeline:           benthosPipeline,
-		CacheResources:     benthosCacheResources,
-		RateLimitResources: benthosRateLimitResources,
-		Buffer:             benthosBuffer,
-	}
-
-	// Normalize the config
-	normalizedConfig := benthosserviceconfig.NormalizeBenthosConfig(benthosConfig)
-
-	// Create the DataFlowComponentConfig
-	dfc := config.DataFlowComponentConfig{
-		FSMInstanceConfig: config.FSMInstanceConfig{
-			Name:            a.name,
-			DesiredFSMState: "active",
-		},
-		DataFlowComponentServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
-			BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
-				Input:              normalizedConfig.Input,
-				Pipeline:           normalizedConfig.Pipeline,
-				Output:             normalizedConfig.Output,
-				CacheResources:     normalizedConfig.CacheResources,
-				RateLimitResources: normalizedConfig.RateLimitResources,
-				Buffer:             normalizedConfig.Buffer,
-			},
-		},
-	}
+	// Create the DataFlowComponentConfig using shared function
+	dfc := CreateDataFlowComponentConfig(a.name, benthosConfig)
 
 	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, Label("deploy", a.name)+"adding to configuration", a.outboundChannel, models.DeployDataFlowComponent)
 	// Update the location in the configuration

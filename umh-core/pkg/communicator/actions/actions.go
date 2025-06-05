@@ -147,6 +147,16 @@ func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePay
 			configManager:   configManager,
 			actionLogger:    log,
 		}
+	case models.EditProtocolConverter:
+		action = &EditProtocolConverterAction{
+			userEmail:             sender,
+			actionUUID:            payload.ActionUUID,
+			instanceUUID:          instanceUUID,
+			outboundChannel:       outboundChannel,
+			configManager:         configManager,
+			systemSnapshotManager: systemSnapshotManager,
+			actionLogger:          log,
+		}
 
 	default:
 		log.Errorf("Unknown action type: %s", payload.ActionType)
