@@ -122,6 +122,51 @@ func (a *GetProtocolConverterAction) Validate() error {
 	return nil
 }
 
+// determineProcessingMode analyzes the pipeline processors in readDFC only
+// to determine the appropriate processing mode based on the business rules.
+func determineProcessingMode(readDFC *models.ProtocolConverterDFC) string {
+	// Only look at readDFC as requested
+	if readDFC == nil {
+		return "realtime"
+	}
+
+	processors := readDFC.Pipeline.Processors
+
+	// If more than one processor, return custom
+	if len(processors) > 1 {
+		return "custom"
+	}
+
+	// If exactly one processor, check its type
+	if len(processors) == 1 {
+		// Get the first (and only) processor from the map
+		for _, processor := range processors {
+			switch processor.Type {
+			case "nodered_js":
+				return "nodered_js"
+			case "tag_processor":
+				return "tag_processor"
+			default:
+				return "custom"
+			}
+		}
+	}
+
+	// No processors found, fall back to realtime
+	return "custom"
+}
+
+// determineProtocol analyzes the input processors to determine the protocol
+func determineProtocol(readDFC *models.ProtocolConverterDFC) string {
+	if readDFC == nil {
+		return "generic"
+	}
+
+	input := readDFC.Inputs
+
+	return input.Type
+}
+
 // buildProtocolConverterDFCFromConfig converts a dataflow component service config
 // into the models.ProtocolConverterDFC format expected by the API using the shared function.
 func buildProtocolConverterDFCFromConfig(dfcConfig dataflowcomponentserviceconfig.DataflowComponentServiceConfig, a *GetProtocolConverterAction) (*models.ProtocolConverterDFC, error) {
@@ -253,8 +298,8 @@ func (a *GetProtocolConverterAction) Execute() (interface{}, map[string]interfac
 
 				// Create meta information
 				meta := &models.ProtocolConverterMeta{
-					ProcessingMode: "realtime", // Default for protocol converters
-					Protocol:       "generic",  // Could be extracted from config if available
+					ProcessingMode: determineProcessingMode(readDFC),
+					Protocol:       determineProtocol(readDFC),
 				}
 
 				// Build the response
