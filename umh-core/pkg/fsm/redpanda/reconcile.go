@@ -41,6 +41,9 @@ import (
 // Over multiple calls, it converges the actual state to the desired state. Transitions
 // that fail are retried in subsequent reconcile calls after a backoff period.
 func (r *RedpandaInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot, services serviceregistry.Provider) (err error, reconciled bool) {
+	defer func() {
+		r.baseFSMInstance.GetLogger().Debugf("RedpandaInstance Reconcile: %v, %v", err, reconciled)
+	}()
 	start := time.Now()
 	redpandaInstanceName := r.baseFSMInstance.GetID()
 	defer func() {
@@ -55,6 +58,7 @@ func (r *RedpandaInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSna
 
 	// Check if context is already cancelled
 	if ctx.Err() != nil {
+		r.baseFSMInstance.GetLogger().Debugf("Context cancelled for Redpanda pipeline %s", redpandaInstanceName)
 		return ctx.Err(), false
 	}
 
@@ -68,6 +72,7 @@ func (r *RedpandaInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSna
 			// For permanent errors, we need special handling based on the instance's current state:
 			// 1. If already in a shutdown state (removed, removing, stopping, stopped), try force removal
 			// 2. If not in a shutdown state, attempt normal removal first, then force if needed
+			r.baseFSMInstance.GetLogger().Debugf("Handling permanent error for Redpanda pipeline %s: %w", redpandaInstanceName, err)
 			return r.baseFSMInstance.HandlePermanentError(
 				ctx,
 				err,
@@ -87,12 +92,14 @@ func (r *RedpandaInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSna
 				},
 			)
 		}
+		r.baseFSMInstance.GetLogger().Debugf("Skipping reconcile for Redpanda pipeline %s: %w", redpandaInstanceName, err)
 		return nil, false
 	}
 
 	// Step 2: Detect external changes.
 	var externalReconciled bool
 	err, externalReconciled = r.reconcileExternalChanges(ctx, services, snapshot.Tick, start)
+	r.baseFSMInstance.GetLogger().Debugf("Reconcile external changes for Redpanda pipeline %s: %v, %v", redpandaInstanceName, err, externalReconciled)
 	if err != nil {
 		// I am using strings.Contains as i cannot get it working with errors.Is
 		isExpectedError := strings.Contains(err.Error(), redpanda_monitor_service.ErrServiceNotExist.Error()) ||
@@ -110,6 +117,7 @@ func (r *RedpandaInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSna
 				// mark the reconciliation as complete for this tick since we've likely
 				// already consumed significant time. We return reconciled=true to prevent
 				// further reconciliation attempts in the current tick.
+				r.baseFSMInstance.GetLogger().Debugf("Reconcile external has deadline exceeded")
 				return nil, true // We don't want to return an error here, as this can happen in normal operations
 			}
 
@@ -147,11 +155,11 @@ func (r *RedpandaInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSna
 	// If either Redpanda state, S6 state or the internal redpanda state via the Admin API was reconciled, we return reconciled so that nothing happens anymore in this tick
 	// nothing should happen as we might have already taken up some significant time of the available time per tick, so better
 	// to be on the safe side and let the rest handle in another tick
+	r.baseFSMInstance.GetLogger().Debugf("Reconcile: %v, %v, %v, %v", err, reconciled, s6Reconciled, externalReconciled)
 	reconciled = reconciled || s6Reconciled || externalReconciled
 
 	// It went all right, so clear the error
 	r.baseFSMInstance.ResetState()
-
 	return nil, reconciled
 }
 
@@ -170,10 +178,12 @@ func (r *RedpandaInstance) reconcileExternalChanges(ctx context.Context, service
 	currentState := r.baseFSMInstance.GetCurrentFSMState()
 	desiredState := r.baseFSMInstance.GetDesiredFSMState()
 	if IsRunningState(currentState) && IsRunningState(desiredState) {
+		r.baseFSMInstance.GetLogger().Debugf("Reconcile external changes: %v, %v", currentState, desiredState)
 		// Reconcile the cluster config via HTTP
 		// 1. Check if we have changes in the config
 		var changes = make(map[string]interface{})
 		if r.ObservedState.ObservedRedpandaServiceConfig.Topic.DefaultTopicRetentionBytes != r.config.Topic.DefaultTopicRetentionBytes {
+			r.baseFSMInstance.GetLogger().Debugf("DefaultTopicRetentionBytes: %v, %v", r.ObservedState.ObservedRedpandaServiceConfig.Topic.DefaultTopicRetentionBytes, r.config.Topic.DefaultTopicRetentionBytes)
 			// https://docs.redpanda.com/current/reference/properties/cluster-properties/#retention_bytes
 
 			// Zero values are ignored, as they are invalid in redpanda
@@ -182,6 +192,7 @@ func (r *RedpandaInstance) reconcileExternalChanges(ctx context.Context, service
 			}
 		}
 		if r.ObservedState.ObservedRedpandaServiceConfig.Topic.DefaultTopicRetentionMs != r.config.Topic.DefaultTopicRetentionMs {
+			r.baseFSMInstance.GetLogger().Debugf("DefaultTopicRetentionMs: %v, %v", r.ObservedState.ObservedRedpandaServiceConfig.Topic.DefaultTopicRetentionMs, r.config.Topic.DefaultTopicRetentionMs)
 			// https://docs.redpanda.com/current/reference/properties/cluster-properties/#log_retention_ms
 
 			// Zero values are ignored, as they are invalid in redpanda
@@ -190,6 +201,7 @@ func (r *RedpandaInstance) reconcileExternalChanges(ctx context.Context, service
 			}
 		}
 		if r.ObservedState.ObservedRedpandaServiceConfig.Topic.DefaultTopicCompressionAlgorithm != r.config.Topic.DefaultTopicCompressionAlgorithm {
+			r.baseFSMInstance.GetLogger().Debugf("DefaultTopicCompressionAlgorithm: %v, %v", r.ObservedState.ObservedRedpandaServiceConfig.Topic.DefaultTopicCompressionAlgorithm, r.config.Topic.DefaultTopicCompressionAlgorithm)
 			// https://docs.redpanda.com/current/reference/properties/cluster-properties/#log_compression_type
 
 			// Zero values are ignored, as they are invalid in redpanda
@@ -199,6 +211,7 @@ func (r *RedpandaInstance) reconcileExternalChanges(ctx context.Context, service
 		}
 
 		if len(changes) > 0 {
+			r.baseFSMInstance.GetLogger().Debugf("Updating Redpanda cluster config: %v", changes)
 			err := r.service.UpdateRedpandaClusterConfig(ctx, r.baseFSMInstance.GetID(), changes)
 			if err != nil {
 				return fmt.Errorf("failed to update Redpanda cluster config: %w", err), false

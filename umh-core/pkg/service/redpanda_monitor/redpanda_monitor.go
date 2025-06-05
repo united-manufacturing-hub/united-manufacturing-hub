@@ -415,6 +415,7 @@ func (s *RedpandaMonitorService) ParseRedpandaLogs(ctx context.Context, logs []s
 	*/
 
 	if len(logs) == 0 {
+		s.logger.Debugf("No logs provided")
 		return nil, fmt.Errorf("no logs provided")
 	}
 	// Find the markers in a single pass through the logs
@@ -476,6 +477,7 @@ func (s *RedpandaMonitorService) ParseRedpandaLogs(ctx context.Context, logs []s
 	}
 
 	if len(sections) == 0 {
+		s.logger.Debugf("No sections found in logs")
 		return nil, fmt.Errorf("could not parse redpanda metrics/configuration: no sections found. This can happen when the redpanda service is not running, or the logs where rotated")
 	}
 
@@ -514,6 +516,11 @@ func (s *RedpandaMonitorService) ParseRedpandaLogs(ctx context.Context, logs []s
 	metricsChanged := s.previousMetricsDataByteHash != metricsDataByteHash
 	clusterConfigChanged := s.previousClusterConfigDataByteHash != clusterConfigDataByteHash
 	timestampChanged := s.previousTimestampDataByteHash != timestampDataByteHash
+
+	s.logger.Debugf("Metrics changed: %v, Cluster config changed: %v, Timestamp changed: %v", metricsChanged, clusterConfigChanged, timestampChanged)
+	s.logger.Debugf("Timestamp: %v", timestampDataBytes)
+	s.logger.Debugf("Previous timestamp hash: %v", s.previousTimestampDataByteHash)
+	s.logger.Debugf("Timestamp hash: %v", timestampDataByteHash)
 
 	// Now parse the readyness data
 	readyness, readynessError, err := s.parseReadynessData(readynessDataBytes)
@@ -931,6 +938,11 @@ func (s *RedpandaMonitorService) processClusterConfigDataBytes(clusterConfigData
 	} else {
 		return nil, fmt.Errorf("failed to parse cluster config data: no log_compression_type found")
 	}
+
+	s.logger.Debugf("Cluster config [log_retention_ms: %d, retention_bytes: %d, log_compression_type: %s]",
+		result.Topic.DefaultTopicRetentionMs,
+		result.Topic.DefaultTopicRetentionBytes,
+		result.Topic.DefaultTopicCompressionAlgorithm)
 
 	return &result, nil
 }

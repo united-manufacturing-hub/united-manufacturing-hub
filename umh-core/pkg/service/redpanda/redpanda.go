@@ -1072,25 +1072,30 @@ func (s *RedpandaService) verifyRedpandaClusterConfig(ctx context.Context, redpa
 	for key, value := range configUpdates {
 		readbackValue, ok := readbackConfig[key]
 		if !ok {
+			s.logger.Debugf("Key %s not found in Redpanda cluster config for %s", key, redpandaName)
 			return fmt.Errorf("key %s not found in Redpanda cluster config for %s", key, redpandaName)
 		}
 
 		// Convert both values to strings for comparison to handle type differences
 		expectedStr, err := anyToType[string](value)
 		if err != nil {
+			s.logger.Debugf("Failed to convert expected value for key %s: %v", key, err)
 			return fmt.Errorf("failed to convert expected value for key %s: %w", key, err)
 		}
 
 		actualStr, err := anyToType[string](readbackValue)
 		if err != nil {
+			s.logger.Debugf("Failed to convert actual value for key %s: %v", key, err)
 			return fmt.Errorf("failed to convert actual value for key %s: %w", key, err)
 		}
 
 		if expectedStr != actualStr {
+			s.logger.Debugf("Config verification failed for key %s: expected %s, got %s", key, expectedStr, actualStr)
 			return fmt.Errorf("config verification failed for key %s: expected %s, got %s", key, expectedStr, actualStr)
 		}
 	}
 
+	s.logger.Debugf("Config verification passed for %s", redpandaName)
 	return nil
 }
 
@@ -1120,6 +1125,7 @@ func (s *RedpandaService) UpdateRedpandaClusterConfig(ctx context.Context, redpa
 	defer innerCtxCancel()
 
 	// Set the cluster config
+	s.logger.Debugf("Setting Redpanda cluster config: %v", configUpdates)
 	if err := s.setRedpandaClusterConfig(innerCtx, configUpdates); err != nil {
 		return err
 	}
@@ -1130,6 +1136,7 @@ func (s *RedpandaService) UpdateRedpandaClusterConfig(ctx context.Context, redpa
 	}
 
 	// Verify the config was applied correctly
+	s.logger.Debugf("Verifying Redpanda cluster config: %v", configUpdates)
 	return s.verifyRedpandaClusterConfig(innerCtx, redpandaName, configUpdates)
 }
 
