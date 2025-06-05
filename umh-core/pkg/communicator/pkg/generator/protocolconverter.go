@@ -107,7 +107,7 @@ func buildProtocolConverterAsDfc(
 		Name:        &instance.ID,
 		Connections: connections,
 		Health: &models.Health{
-			Message:       getProtocolConverterStatusMessage(instance.CurrentState),
+			Message:       getProtocolConverterStatusMessage(instance.CurrentState, observed.ServiceInfo.ConnectionFSMState, observed.ServiceInfo.ConnectionObservedState.ServiceInfo.NmapFSMState),
 			ObservedState: instance.CurrentState,
 			DesiredState:  instance.DesiredState,
 			Category:      healthCat,
@@ -123,25 +123,86 @@ func buildProtocolConverterAsDfc(
 }
 
 // getProtocolConverterStatusMessage returns a human-readable status message for the given state
-func getProtocolConverterStatusMessage(state string) string {
+func getProtocolConverterStatusMessage(state string, connectionState string, nmapState string) string {
+	baseMessage := ""
+	connectionSuffix := ""
+
+	// Get base message from protocol converter state
 	switch state {
 	case protocolconverter.OperationalStateActive:
-		return "Protocol converter is active and processing data"
+		baseMessage = "Protocol converter is active and processing data"
 	case protocolconverter.OperationalStateIdle:
-		return "Protocol converter is idle"
+		baseMessage = "Protocol converter is idle"
 	case protocolconverter.OperationalStateStopped:
-		return "Protocol converter is stopped"
+		baseMessage = "Protocol converter is stopped"
 	case protocolconverter.OperationalStateDegradedConnection:
-		return "Protocol converter connection is degraded"
+		baseMessage = "Protocol converter connection is degraded"
 	case protocolconverter.OperationalStateDegradedRedpanda:
-		return "Protocol converter Redpanda connection is degraded"
+		baseMessage = "Protocol converter Redpanda connection is degraded"
 	case protocolconverter.OperationalStateDegradedDFC:
-		return "Protocol converter data flow component is degraded"
+		baseMessage = "Protocol converter data flow component is degraded"
 	case protocolconverter.OperationalStateDegradedOther:
-		return "Protocol converter has other degradation issues"
+		baseMessage = "Protocol converter has other degradation issues"
 	default:
-		return fmt.Sprintf("Protocol converter state: %s", state)
+		baseMessage = fmt.Sprintf("Protocol converter state: %s", state)
 	}
+
+	// Add connection state information if available
+	if connectionState != "" {
+		switch connectionState {
+		case "up", "active", "connected":
+			if state == protocolconverter.OperationalStateActive {
+				connectionSuffix = " with healthy connection"
+			}
+		case "down", "disconnected", "failed":
+			connectionSuffix = " - connection is down"
+		case "degraded", "timeout", "unstable":
+			connectionSuffix = " - connection is unstable"
+		case "connecting", "reconnecting":
+			connectionSuffix = " - connection is being established"
+		default:
+			// For specific error states or unknown states, include the raw connection state
+			if connectionState != "unknown" && connectionState != "" {
+				connectionSuffix = fmt.Sprintf(" - connection: %s", connectionState)
+			}
+		}
+	}
+
+	// Add Nmap state information if available
+	if nmapState != "" {
+		nmapSuffix := ""
+		switch nmapState {
+		case "open":
+			nmapSuffix = " (port is open)"
+		case "closed":
+			nmapSuffix = " (port is closed)"
+		case "filtered":
+			nmapSuffix = " (port is filtered by firewall)"
+		case "unfiltered":
+			nmapSuffix = " (port is unfiltered)"
+		case "open_filtered", "open|filtered":
+			nmapSuffix = " (port is open or filtered)"
+		case "closed_filtered", "closed|filtered":
+			nmapSuffix = " (port is closed or filtered)"
+		case "starting":
+			nmapSuffix = " (nmap is starting)"
+		case "stopped":
+			nmapSuffix = " (nmap is stopped)"
+		case "degraded":
+			nmapSuffix = " (nmap execution failed)"
+		default:
+			nmapSuffix = fmt.Sprintf(" (nmap: %s)", nmapState)
+		}
+
+		// Only add nmap details if they add meaningful information
+		if connectionSuffix == "" {
+			connectionSuffix = nmapSuffix
+		} else if nmapSuffix != "" {
+			connectionSuffix += nmapSuffix
+		}
+	}
+
+	return baseMessage + connectionSuffix
 }
 
 // getHealthCategoryFromState converts a FSM state string to models.HealthCategory
