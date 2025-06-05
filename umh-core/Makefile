@@ -421,6 +421,21 @@ test-debug: stop-and-remove-umh-core-latest $(BUILD_TARGET)
 		-e LOGGING_LEVEL=DEBUG \
 		$(IMAGE_NAME):$(TAG)
 
+# This assumes that the data directory already contains a config.yaml file
+test-no-copy: stop-and-remove-umh-core-latest $(BUILD_TARGET)
+	@mkdir -p $(PWD)/data
+	docker run \
+		--name $(IMAGE_NAME) \
+		-v $(PWD)/data:/data \
+		-e LOGGING_LEVEL=DEBUG \
+		-p 8081:8080 \
+		-p 4195:4195 \
+		-p 6060:6060 \
+		-p 40000:40000 \
+		--memory $(MEMORY) \
+		--cpus $(CPUS) \
+		$(IMAGE_NAME):$(TAG)
+
 pod-shell:
 	docker exec -it $(IMAGE_NAME) /bin/bash
 

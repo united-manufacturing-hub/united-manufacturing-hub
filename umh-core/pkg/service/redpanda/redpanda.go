@@ -23,6 +23,7 @@ import (
 	"io"
 	"net/http"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -1074,27 +1075,19 @@ func (s *RedpandaService) verifyRedpandaClusterConfig(ctx context.Context, redpa
 			return fmt.Errorf("key %s not found in Redpanda cluster config for %s", key, redpandaName)
 		}
 
-		switch val := readbackValue.(type) {
-		case string:
-			if val != value.(string) {
-				return fmt.Errorf("value for key %s in Redpanda cluster config for %s does not match expected value %s", key, redpandaName, value)
-			}
-		case float32:
-			if val != value.(float32) {
-				return fmt.Errorf("value for key %s in Redpanda cluster config for %s does not match expected value %f", key, redpandaName, value)
-			}
-		case float64:
-			if val != value.(float64) {
-				return fmt.Errorf("value for key %s in Redpanda cluster config for %s does not match expected value %f", key, redpandaName, value)
-			}
-		case int:
-			if val != value.(int) {
-				return fmt.Errorf("value for key %s in Redpanda cluster config for %s does not match expected value %d", key, redpandaName, value)
-			}
-		case int64:
-			if val != value.(int64) {
-				return fmt.Errorf("value for key %s in Redpanda cluster config for %s does not match expected value %d", key, redpandaName, value)
-			}
+		// Convert both values to strings for comparison to handle type differences
+		expectedStr, err := anyToType[string](value)
+		if err != nil {
+			return fmt.Errorf("failed to convert expected value for key %s: %w", key, err)
+		}
+
+		actualStr, err := anyToType[string](readbackValue)
+		if err != nil {
+			return fmt.Errorf("failed to convert actual value for key %s: %w", key, err)
+		}
+
+		if expectedStr != actualStr {
+			return fmt.Errorf("config verification failed for key %s: expected %s, got %s", key, expectedStr, actualStr)
 		}
 	}
 
@@ -1138,4 +1131,109 @@ func (s *RedpandaService) UpdateRedpandaClusterConfig(ctx context.Context, redpa
 
 	// Verify the config was applied correctly
 	return s.verifyRedpandaClusterConfig(innerCtx, redpandaName, configUpdates)
+}
+
+func anyToType[T any](input any) (result T, err error) {
+	switch target := any(result).(type) {
+	case string:
+		switch v := input.(type) {
+		case string:
+			return any(v).(T), nil
+		case int:
+			return any(fmt.Sprintf("%d", v)).(T), nil
+		case int64:
+			return any(fmt.Sprintf("%d", v)).(T), nil
+		case float64:
+			// Check if it's actually an integer represented as float
+			if v == float64(int64(v)) {
+				return any(fmt.Sprintf("%.0f", v)).(T), nil
+			}
+			return any(fmt.Sprintf("%g", v)).(T), nil
+		case float32:
+			if v == float32(int32(v)) {
+				return any(fmt.Sprintf("%.0f", v)).(T), nil
+			}
+			return any(fmt.Sprintf("%g", v)).(T), nil
+		default:
+			return result, fmt.Errorf("cannot convert %T to string", input)
+		}
+	case int:
+		switch v := input.(type) {
+		case int:
+			return any(v).(T), nil
+		case int64:
+			return any(int(v)).(T), nil
+		case float64:
+			return any(int(v)).(T), nil
+		case float32:
+			return any(int(v)).(T), nil
+		case string:
+			intVal, parseErr := strconv.Atoi(v)
+			if parseErr != nil {
+				return result, fmt.Errorf("cannot convert string %q to int: %w", v, parseErr)
+			}
+			return any(intVal).(T), nil
+		default:
+			return result, fmt.Errorf("cannot convert %T to int", input)
+		}
+	case int64:
+		switch v := input.(type) {
+		case int:
+			return any(int64(v)).(T), nil
+		case int64:
+			return any(v).(T), nil
+		case float64:
+			return any(int64(v)).(T), nil
+		case float32:
+			return any(int64(v)).(T), nil
+		case string:
+			intVal, parseErr := strconv.ParseInt(v, 10, 64)
+			if parseErr != nil {
+				return result, fmt.Errorf("cannot convert string %q to int64: %w", v, parseErr)
+			}
+			return any(intVal).(T), nil
+		default:
+			return result, fmt.Errorf("cannot convert %T to int64", input)
+		}
+	case float64:
+		switch v := input.(type) {
+		case float64:
+			return any(v).(T), nil
+		case float32:
+			return any(float64(v)).(T), nil
+		case int:
+			return any(float64(v)).(T), nil
+		case int64:
+			return any(float64(v)).(T), nil
+		case string:
+			floatVal, parseErr := strconv.ParseFloat(v, 64)
+			if parseErr != nil {
+				return result, fmt.Errorf("cannot convert string %q to float64: %w", v, parseErr)
+			}
+			return any(floatVal).(T), nil
+		default:
+			return result, fmt.Errorf("cannot convert %T to float64", input)
+		}
+	case float32:
+		switch v := input.(type) {
+		case float32:
+			return any(v).(T), nil
+		case float64:
+			return any(float32(v)).(T), nil
+		case int:
+			return any(float32(v)).(T), nil
+		case int64:
+			return any(float32(v)).(T), nil
+		case string:
+			floatVal, parseErr := strconv.ParseFloat(v, 32)
+			if parseErr != nil {
+				return result, fmt.Errorf("cannot convert string %q to float32: %w", v, parseErr)
+			}
+			return any(float32(floatVal)).(T), nil
+		default:
+			return result, fmt.Errorf("cannot convert %T to float32", input)
+		}
+	default:
+		return result, fmt.Errorf("unsupported target type %T", target)
+	}
 }
