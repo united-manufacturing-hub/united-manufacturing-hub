@@ -168,11 +168,11 @@ func (a *DeployProtocolConverterAction) Execute() (interface{}, map[string]inter
 
 // createProtocolConverterConfig creates a ProtocolConverterConfig with templated configuration
 func (a *DeployProtocolConverterAction) createProtocolConverterConfig() config.ProtocolConverterConfig {
-	// Create variables bundle with IP and PORT in the User namespace
+	// Create variables bundle with IP and PORT as strings in the User namespace
 	variableBundle := variables.VariableBundle{
 		User: map[string]any{
-			"IP":   a.payload.Connection.IP,
-			"PORT": fmt.Sprintf("%d", a.payload.Connection.Port),
+			"IP":   a.payload.Connection.IP,                      // Keep IP as string
+			"PORT": fmt.Sprintf("%d", a.payload.Connection.Port), // Convert port to string
 		},
 	}
 

@@ -979,23 +979,19 @@ func createTemplateContent(template protocolconverterserviceconfig.ProtocolConve
 	// Convert the template struct to a map that can be used in YAML templates section
 	templateMap := make(map[string]interface{})
 
-	// Add connection config
+	// Add connection config using the proper struct - let YAML marshaler handle the tags
 	if template.ConnectionServiceConfig.NmapTemplate != nil {
-		connectionMap := map[string]interface{}{
-			"ip":   template.ConnectionServiceConfig.NmapTemplate.Target,
-			"port": template.ConnectionServiceConfig.NmapTemplate.Port,
-		}
-		templateMap["connection"] = connectionMap
+		templateMap["connection"] = template.ConnectionServiceConfig
 	}
 
 	// Add dataflow component configs (currently empty as per deploy action)
 	// These will be populated later via edit actions
 	if !isEmptyDataflowComponentConfig(template.DataflowComponentReadServiceConfig) {
-		templateMap["dataflowcomponent_read"] = convertDataflowComponentToMap(template.DataflowComponentReadServiceConfig)
+		templateMap["dataflowcomponent_read"] = template.DataflowComponentReadServiceConfig
 	}
 
 	if !isEmptyDataflowComponentConfig(template.DataflowComponentWriteServiceConfig) {
-		templateMap["dataflowcomponent_write"] = convertDataflowComponentToMap(template.DataflowComponentWriteServiceConfig)
+		templateMap["dataflowcomponent_write"] = template.DataflowComponentWriteServiceConfig
 	}
 
 	return templateMap
@@ -1005,26 +1001,6 @@ func createTemplateContent(template protocolconverterserviceconfig.ProtocolConve
 func isEmptyDataflowComponentConfig(config dataflowcomponentserviceconfig.DataflowComponentServiceConfig) bool {
 	// For now, assume it's empty if BenthosConfig is nil or empty
 	return config.BenthosConfig.Input == nil && config.BenthosConfig.Output == nil
-}
-
-// convertDataflowComponentToMap converts a dataflow component config to a map
-func convertDataflowComponentToMap(config dataflowcomponentserviceconfig.DataflowComponentServiceConfig) map[string]interface{} {
-	// Convert dataflow component to map structure
-	// This is a simplified conversion - may need to be more comprehensive
-	result := make(map[string]interface{})
-
-	if config.BenthosConfig.Input != nil || config.BenthosConfig.Output != nil {
-		benthosMap := make(map[string]interface{})
-		if config.BenthosConfig.Input != nil {
-			benthosMap["input"] = config.BenthosConfig.Input
-		}
-		if config.BenthosConfig.Output != nil {
-			benthosMap["output"] = config.BenthosConfig.Output
-		}
-		result["benthos"] = benthosMap
-	}
-
-	return result
 }
 
 // AtomicAddProtocolConverter delegates to the underlying FileConfigManager

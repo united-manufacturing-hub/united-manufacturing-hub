@@ -91,6 +91,13 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 		dfcData = DfcsFromSnapshot(dfcMgr, s.logger)
 	}
 
+	// --- protocol converters (multiple instances) as DFCs --------------------------
+	protocolConverterMgr, ok := fsm.FindManager(snapshot, constants.ProtocolConverterManagerName)
+	if ok {
+		protocolConverterDfcs := ProtocolConvertersFromSnapshot(protocolConverterMgr, s.logger)
+		dfcData = append(dfcData, protocolConverterDfcs...)
+	}
+
 	// Step 3: Create the status message
 	statusMessage := &models.StatusMessage{
 		Core: models.Core{
@@ -119,6 +126,7 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 					"action-get-data-flow-component",
 					"action-delete-data-flow-component",
 					"action-edit-data-flow-component",
+					"action-deploy-protocol-converter",
 					"action-get-logs",
 					"action-get-data-flow-component-metrics",
 					"core-health",
