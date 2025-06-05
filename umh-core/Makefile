@@ -140,7 +140,7 @@ build:
 build-pprof:       EXTRA_ARGS := --build-arg PPROF=true
 build-debug:       EXTRA_ARGS := --build-arg DLV_VERSION=$(DLV_VERSION) --build-arg DEBUG=true
 
-build build-pprof build-debug:
+build build-pprof build-debug: download-docker-binaries
 	$(call DOCKER_BUILD)
 
 FLAVOR ?=                         # empty → normal build
