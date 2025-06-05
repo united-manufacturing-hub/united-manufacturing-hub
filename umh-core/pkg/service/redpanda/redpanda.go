@@ -1175,7 +1175,7 @@ func anyToString(input any) (result string, err error) {
 		}
 		return fmt.Sprintf("%g", v), nil
 	case bool:
-		if v == true {
+		if v {
 			return "true", nil
 		}
 		return "false", nil
