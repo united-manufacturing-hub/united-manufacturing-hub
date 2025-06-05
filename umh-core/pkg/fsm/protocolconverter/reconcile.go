@@ -77,7 +77,7 @@ func (p *ProtocolConverterInstance) Reconcile(ctx context.Context, snapshot fsm.
 				},
 				func(ctx context.Context) error {
 					// Normal removal through state transition
-					return p.RemoveInstance(ctx, services.GetFileSystem())
+
 				},
 				func(ctx context.Context) error {
 					// Force removal when other approaches fail - bypasses state transitions
@@ -90,7 +90,7 @@ func (p *ProtocolConverterInstance) Reconcile(ctx context.Context, snapshot fsm.
 	}
 
 	// Step 2: Detect external changes.
-	if err = p.reconcileExternalChanges(ctx, services, snapshot, snapshot.Tick); err != nil {
+	if err = p.reconcileExternalChanges(ctx, services, snapshot); err != nil {
 		// If the service is not running, we don't want to return an error here, because we want to continue reconciling
 		if !errors.Is(err, protocolconvertersvc.ErrServiceNotExist) && !errors.Is(err, s6.ErrServiceNotExist) {
 			// errors.Is(err, s6.ErrServiceNotExist)
@@ -158,7 +158,7 @@ func (p *ProtocolConverterInstance) Reconcile(ctx context.Context, snapshot fsm.
 
 // reconcileExternalChanges checks if the DataflowComponentInstance service status has changed
 // externally (e.g., if someone manually stopped or started it, or if it crashed)
-func (p *ProtocolConverterInstance) reconcileExternalChanges(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot, tick uint64) error {
+func (p *ProtocolConverterInstance) reconcileExternalChanges(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) error {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentProtocolConverterInstance, p.baseFSMInstance.GetID()+".reconcileExternalChanges", time.Since(start))

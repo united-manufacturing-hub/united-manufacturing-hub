@@ -23,6 +23,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
+	filesystem "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
 // MockConfigManager is a mock implementation of ConfigManager for testing
@@ -40,14 +41,20 @@ type MockConfigManager struct {
 	EditDataflowcomponentError        error
 	AtomicAddProtocolConverterError   error
 	AtomicEditProtocolConverterError  error
+  ConfigAsString                    error
+  GetConfigAsStringError            error
 	ConfigDelay                       time.Duration
 	mutexReadOrWrite                  sync.Mutex
 	mutexReadAndWrite                 sync.Mutex
+	MockFileSystem                    *filesystem.MockFileSystem
+	CacheModTime                      time.Time
 }
 
 // NewMockConfigManager creates a new MockConfigManager instance
 func NewMockConfigManager() *MockConfigManager {
-	return &MockConfigManager{}
+	return &MockConfigManager{
+		MockFileSystem: filesystem.NewMockFileSystem(),
+	}
 }
 
 // GetDataFlowConfig returns the DataFlow component configurations
@@ -73,12 +80,16 @@ func (m *MockConfigManager) GetConfig(ctx context.Context, tick uint64) (FullCon
 	return m.Config, m.ConfigError
 }
 
-// WriteConfig implements the ConfigManager interface
-func (m *MockConfigManager) writeConfig(ctx context.Context, cfg FullConfig) error {
-	m.mutexReadOrWrite.Lock()
-	defer m.mutexReadOrWrite.Unlock()
+// GetFileSystemService returns the mock filesystem service
+func (m *MockConfigManager) GetFileSystemService() filesystem.Service {
+	return m.MockFileSystem
+}
 
+// WriteConfig implements the ConfigManager interface
+// all the functions that call MockConfigManager.writeConfig must hold the mutexReadAndWrite mutex
+func (m *MockConfigManager) writeConfig(ctx context.Context, cfg FullConfig) error {
 	m.Config = cfg
+	m.CacheModTime = time.Now()
 	return nil
 }
 
@@ -292,6 +303,7 @@ func (m *MockConfigManager) AtomicEditDataflowcomponent(ctx context.Context, com
 	return oldConfig, nil
 }
 
+
 // AtomicAddProtocolConverter implements the ConfigManager interface
 func (m *MockConfigManager) AtomicAddProtocolConverter(ctx context.Context, pc ProtocolConverterConfig) error {
 	m.mutexReadAndWrite.Lock()
@@ -399,4 +411,100 @@ func generateMockTemplateAnchorName(pcName string) string {
 		}
 	}
 	return result + "_template"
+// GetConfigAsString implements the ConfigManager interface
+func (m *MockConfigManager) GetConfigAsString(ctx context.Context) (string, error) {
+	m.mutexReadOrWrite.Lock()
+	defer m.mutexReadOrWrite.Unlock()
+	m.GetConfigAsStringCalled = true
+
+	if m.ConfigDelay > 0 {
+		select {
+		case <-time.After(m.ConfigDelay):
+			// Delay completed
+		case <-ctx.Done():
+			return "", ctx.Err()
+		}
+	}
+
+	if m.GetConfigAsStringError != nil {
+		return "", m.GetConfigAsStringError
+	}
+
+	// If ConfigAsString is set, return it
+	if m.ConfigAsString != "" {
+		return m.ConfigAsString, nil
+	}
+
+	// Otherwise, read the file from the mock filesystem
+	data, err := m.MockFileSystem.ReadFile(ctx, DefaultConfigPath)
+	return string(data), err
+}
+
+// WithConfigAsString configures the mock to return the given string when GetConfigAsString is called
+func (m *MockConfigManager) WithConfigAsString(content string) *MockConfigManager {
+	m.ConfigAsString = content
+	return m
+}
+
+// WithGetConfigAsStringError configures the mock to return the given error when GetConfigAsString is called
+func (m *MockConfigManager) WithGetConfigAsStringError(err error) *MockConfigManager {
+	m.GetConfigAsStringError = err
+	return m
+}
+
+// GetCacheModTimeWithoutUpdate returns the modification time from the cache without updating it
+func (m *MockConfigManager) GetCacheModTimeWithoutUpdate() time.Time {
+	return m.CacheModTime
+}
+
+// UpdateAndGetCacheModTime updates the cache and returns the modification time
+func (m *MockConfigManager) UpdateAndGetCacheModTime(ctx context.Context) (time.Time, error) {
+	return m.CacheModTime, nil
+}
+
+// WithCacheModTime configures the mock to return the given modification time when GetCacheModTime is called
+func (m *MockConfigManager) WithCacheModTime(modTime time.Time) *MockConfigManager {
+	m.CacheModTime = modTime
+	return m
+}
+
+// WriteConfigFromString implements the ConfigManager interface
+func (m *MockConfigManager) WriteConfigFromString(ctx context.Context, config string, expectedModTime string) error {
+	m.mutexReadOrWrite.Lock()
+	defer m.mutexReadOrWrite.Unlock()
+
+	// If expectedModTime is provided, check for concurrent modification
+	if expectedModTime != "" {
+		expectedTime, err := time.Parse(time.RFC3339, expectedModTime)
+		if err != nil {
+			return fmt.Errorf("invalid expected modification time format: %w", err)
+		}
+		if !m.CacheModTime.Equal(expectedTime) {
+			return fmt.Errorf("concurrent modification detected: file modified at %v, expected %v",
+				m.CacheModTime.Format(time.RFC3339), expectedModTime)
+		}
+	}
+
+	// First parse the config with strict validation to detect syntax errors and schema problems
+	parsedConfig, err := parseConfig([]byte(config), false)
+	if err != nil {
+		// If strict parsing fails, try again with allowUnknownFields=true
+		// This allows YAML anchors and other custom fields
+		parsedConfig, err = parseConfig([]byte(config), true)
+		if err != nil {
+			return fmt.Errorf("failed to parse config: %w", err)
+		}
+	}
+
+	// write the config
+	if err := m.writeConfig(ctx, parsedConfig); err != nil {
+		return fmt.Errorf("failed to write config: %w", err)
+	}
+
+	// update the cache mod time
+	m.CacheModTime = time.Now()
+	m.ConfigAsString = config
+
+	return nil
+
 }

@@ -27,7 +27,8 @@ var _ = Describe("ParseConfigTemplated", func() {
 			cfg, err := os.ReadFile("../../examples/example-config-protocolconverter-templated.yaml")
 			Expect(err).To(BeNil())
 
-			parsedConfig, err := parseConfig(cfg)
+			parsedConfig, err := parseConfig(cfg, false)
+
 			Expect(err).To(BeNil())
 
 			Expect(parsedConfig.ProtocolConverter).To(HaveLen(3))

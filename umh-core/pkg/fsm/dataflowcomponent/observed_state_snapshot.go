@@ -22,7 +22,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/dataflowcomponent"
 )
 
-// DataflowComponentObservedStateSnapshot is a deep-copyable snapshot of BenthosObservedState
+// DataflowComponentObservedStateSnapshot is a deep-copyable snapshot of DataflowComponentObservedState
 type DataflowComponentObservedStateSnapshot struct {
 	Config      dataflowcomponentserviceconfig.DataflowComponentServiceConfig
 	ServiceInfo dataflowcomponent.ServiceInfo
