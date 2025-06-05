@@ -120,6 +120,8 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 					"action-delete-data-flow-component",
 					"action-edit-data-flow-component",
 					"action-get-logs",
+					"action-get-config-file",
+					"action-set-config-file",
 					"action-get-data-flow-component-metrics",
 					"core-health",
 					"log-logs-suppression",
