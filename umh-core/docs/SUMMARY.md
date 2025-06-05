@@ -28,6 +28,7 @@
   * [Configuration Reference](reference/configuration-reference.md)
   * [Container Layout](reference/container-layout.md)
   * [State Machines](reference/state-machines.md)
+  * [Environment Variables](reference/environment-variables.md)
 * [UMH Core vs UMH Classic](umh-core-vs-classic-faq.md)
 
 ## UMH Classic
