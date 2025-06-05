@@ -140,6 +140,7 @@ build:
 build-pprof:       EXTRA_ARGS := --build-arg PPROF=true
 build-debug:       EXTRA_ARGS := --build-arg DLV_VERSION=$(DLV_VERSION) --build-arg DEBUG=true
 
+# Refresh cache and build docker binaries
 build build-pprof build-debug: download-docker-binaries
 	$(call DOCKER_BUILD)
 
@@ -421,7 +422,7 @@ test-debug: stop-and-remove-umh-core-latest $(BUILD_TARGET)
 		-e LOGGING_LEVEL=DEBUG \
 		$(IMAGE_NAME):$(TAG)
 
-# This assumes that the data directory already contains a config.yaml file
+# This run configuration allows easy start without overwriting the config.yaml
 test-no-copy: stop-and-remove-umh-core-latest $(BUILD_TARGET)
 	@mkdir -p $(PWD)/data
 	docker run \

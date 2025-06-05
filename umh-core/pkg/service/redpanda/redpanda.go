@@ -23,7 +23,6 @@ import (
 	"io"
 	"net/http"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
@@ -1092,13 +1091,13 @@ func (s *RedpandaService) verifyRedpandaClusterConfig(ctx context.Context, redpa
 		}
 
 		// Convert both values to strings for comparison to handle type differences
-		expectedStr, err := anyToType[string](value)
+		expectedStr, err := anyToString(value)
 		if err != nil {
 			s.logger.Debugf("Failed to convert expected value for key %s: %v", key, err)
 			return fmt.Errorf("failed to convert expected value for key %s: %w", key, err)
 		}
 
-		actualStr, err := anyToType[string](readbackValue)
+		actualStr, err := anyToString(readbackValue)
 		if err != nil {
 			s.logger.Debugf("Failed to convert actual value for key %s: %v", key, err)
 			return fmt.Errorf("failed to convert actual value for key %s: %w", key, err)
@@ -1155,107 +1154,32 @@ func (s *RedpandaService) UpdateRedpandaClusterConfig(ctx context.Context, redpa
 	return s.verifyRedpandaClusterConfig(innerCtx, redpandaName, configUpdates)
 }
 
-func anyToType[T any](input any) (result T, err error) {
-	switch target := any(result).(type) {
+// anyToString converts common data types to string for easier comparison
+func anyToString(input any) (result string, err error) {
+	switch v := input.(type) {
 	case string:
-		switch v := input.(type) {
-		case string:
-			return any(v).(T), nil
-		case int:
-			return any(fmt.Sprintf("%d", v)).(T), nil
-		case int64:
-			return any(fmt.Sprintf("%d", v)).(T), nil
-		case float64:
-			// Check if it's actually an integer represented as float
-			if v == float64(int64(v)) {
-				return any(fmt.Sprintf("%.0f", v)).(T), nil
-			}
-			return any(fmt.Sprintf("%g", v)).(T), nil
-		case float32:
-			if v == float32(int32(v)) {
-				return any(fmt.Sprintf("%.0f", v)).(T), nil
-			}
-			return any(fmt.Sprintf("%g", v)).(T), nil
-		default:
-			return result, fmt.Errorf("cannot convert %T to string", input)
-		}
+		return v, nil
 	case int:
-		switch v := input.(type) {
-		case int:
-			return any(v).(T), nil
-		case int64:
-			return any(int(v)).(T), nil
-		case float64:
-			return any(int(v)).(T), nil
-		case float32:
-			return any(int(v)).(T), nil
-		case string:
-			intVal, parseErr := strconv.Atoi(v)
-			if parseErr != nil {
-				return result, fmt.Errorf("cannot convert string %q to int: %w", v, parseErr)
-			}
-			return any(intVal).(T), nil
-		default:
-			return result, fmt.Errorf("cannot convert %T to int", input)
-		}
+		return fmt.Sprintf("%d", v), nil
 	case int64:
-		switch v := input.(type) {
-		case int:
-			return any(int64(v)).(T), nil
-		case int64:
-			return any(v).(T), nil
-		case float64:
-			return any(int64(v)).(T), nil
-		case float32:
-			return any(int64(v)).(T), nil
-		case string:
-			intVal, parseErr := strconv.ParseInt(v, 10, 64)
-			if parseErr != nil {
-				return result, fmt.Errorf("cannot convert string %q to int64: %w", v, parseErr)
-			}
-			return any(intVal).(T), nil
-		default:
-			return result, fmt.Errorf("cannot convert %T to int64", input)
-		}
+		return fmt.Sprintf("%d", v), nil
 	case float64:
-		switch v := input.(type) {
-		case float64:
-			return any(v).(T), nil
-		case float32:
-			return any(float64(v)).(T), nil
-		case int:
-			return any(float64(v)).(T), nil
-		case int64:
-			return any(float64(v)).(T), nil
-		case string:
-			floatVal, parseErr := strconv.ParseFloat(v, 64)
-			if parseErr != nil {
-				return result, fmt.Errorf("cannot convert string %q to float64: %w", v, parseErr)
-			}
-			return any(floatVal).(T), nil
-		default:
-			return result, fmt.Errorf("cannot convert %T to float64", input)
+		// Check if it's actually an integer represented as float
+		if v == float64(int64(v)) {
+			return fmt.Sprintf("%.0f", v), nil
 		}
+		return fmt.Sprintf("%g", v), nil
 	case float32:
-		switch v := input.(type) {
-		case float32:
-			return any(v).(T), nil
-		case float64:
-			return any(float32(v)).(T), nil
-		case int:
-			return any(float32(v)).(T), nil
-		case int64:
-			return any(float32(v)).(T), nil
-		case string:
-			floatVal, parseErr := strconv.ParseFloat(v, 32)
-			if parseErr != nil {
-				return result, fmt.Errorf("cannot convert string %q to float32: %w", v, parseErr)
-			}
-			return any(float32(floatVal)).(T), nil
-		default:
-			return result, fmt.Errorf("cannot convert %T to float32", input)
+		if v == float32(int32(v)) {
+			return fmt.Sprintf("%.0f", v), nil
 		}
+		return fmt.Sprintf("%g", v), nil
+	case bool:
+		if v == true {
+			return "true", nil
+		}
+		return "false", nil
 	default:
-		return result, fmt.Errorf("unsupported target type %T", target)
+		return result, fmt.Errorf("cannot convert %T to string", input)
 	}
 }

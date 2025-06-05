@@ -334,6 +334,8 @@ func (r *RedpandaInstance) UpdateObservedStateOfInstance(ctx context.Context, se
 	// we will apply the changes by doing an REST call to the Redpanda Admin API (https://docs.redpanda.com/api/admin-api/).
 	// We also check that the desired state is a running state,
 	// preventing issues when redpanda is currently stopping, but the current state is not yet updated
+	//
+	// Important: This *must* run after the rest of the update state, otherwise we will incorrectly look at an potential old state and infinitly loop.
 	currentState = r.baseFSMInstance.GetCurrentFSMState()
 	desiredState = r.baseFSMInstance.GetDesiredFSMState()
 	r.baseFSMInstance.GetLogger().Debugf("Current state: %s, desired state: %s", currentState, desiredState)
