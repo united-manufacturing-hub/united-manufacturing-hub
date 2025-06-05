@@ -303,13 +303,6 @@ func (p *ProtocolConverterInstance) reconcileStartingStates(ctx context.Context,
 		return p.baseFSMInstance.SendEvent(ctx, EventStartRedpandaUp), true
 	case OperationalStateStartingDFC:
 
-		// If neither read not write DFC is existing, then go into OperationalStateStartingFailedDFCMissing
-		existing, reason := p.IsDFCExisting()
-		if !existing {
-			p.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("starting: %s", reason)
-			return p.baseFSMInstance.SendEvent(ctx, EventStartFailedDFCMissing), true
-		}
-
 		// If the connection is not up, we need to go back to starting
 		running, reason := p.IsConnectionUp()
 		if !running {
@@ -322,6 +315,13 @@ func (p *ProtocolConverterInstance) reconcileStartingStates(ctx context.Context,
 		if !running {
 			p.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("starting: %s", reason)
 			return p.baseFSMInstance.SendEvent(ctx, EventStartRetry), false // a previous succeeding check failed, so let's retry the whole start process
+		}
+
+		// If neither read not write DFC is existing, then go into OperationalStateStartingFailedDFCMissing
+		existing, reason := p.IsDFCExisting()
+		if !existing {
+			p.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("starting: %s", reason)
+			return p.baseFSMInstance.SendEvent(ctx, EventStartFailedDFCMissing), true
 		}
 
 		// Now check whether the DFC is healthy
