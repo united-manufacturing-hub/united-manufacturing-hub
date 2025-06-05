@@ -21,6 +21,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	benthosfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
 	benthossvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
@@ -52,7 +53,6 @@ func WaitForBenthosManagerInstanceState(
 	ctx context.Context,
 	snapshot fsm.SystemSnapshot,
 	manager *benthosfsm.BenthosManager,
-
 	services serviceregistry.Provider,
 	instanceName string,
 	desiredState string,
@@ -60,6 +60,10 @@ func WaitForBenthosManagerInstanceState(
 ) (uint64, error) {
 	tick := snapshot.Tick
 	for i := 0; i < maxAttempts; i++ {
+
+		// Update the snapshot time and tick to simulate the passage of time
+		snapshot.SnapshotTime = snapshot.SnapshotTime.Add(constants.DefaultTickerTime)
+		snapshot.Tick = tick
 		err, _ := manager.Reconcile(ctx, snapshot, services)
 		if err != nil {
 			return tick, err
@@ -115,6 +119,10 @@ func WaitForBenthosManagerMultiState(
 ) (uint64, error) {
 	tick := snapshot.Tick
 	for i := 0; i < maxAttempts; i++ {
+
+		// Update the snapshot time and tick to simulate the passage of time
+		snapshot.SnapshotTime = snapshot.SnapshotTime.Add(constants.DefaultTickerTime)
+		snapshot.Tick = tick
 		err, _ := manager.Reconcile(ctx, snapshot, services)
 		if err != nil {
 			return tick, err
