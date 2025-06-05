@@ -64,7 +64,6 @@ var _ = Describe("Redpanda Config Update Integration Test", Ordered, Label("inte
 	})
 
 	It("should update Redpanda config and continue producing messages", func() {
-		Skip("This test is currently flaky")
 		// Wait for initial messages to be produced
 		Eventually(func() bool {
 			newOffset, err := checkRPK(topicName, lastOffset, lastTimestamp, 0.1, 0.2, messagesPerSecond)
