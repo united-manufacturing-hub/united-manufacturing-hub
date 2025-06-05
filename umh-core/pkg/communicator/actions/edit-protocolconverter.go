@@ -57,7 +57,6 @@ type EditProtocolConverterAction struct {
 	// Parsed request payload (only populated after Parse)
 	protocolConverterUUID uuid.UUID
 	name                  string // protocol converter name (optional for updates)
-	metaType              string // "custom" for dataflow components
 	dfcPayload            models.CDFCPayload
 	dfcType               string // "read" or "write"
 	ignoreHealthCheck     bool
@@ -91,7 +90,6 @@ func (a *EditProtocolConverterAction) Parse(payload interface{}) error {
 	}
 
 	a.name = topLevel.Name
-	a.metaType = topLevel.Meta.Type
 	a.ignoreHealthCheck = topLevel.IgnoreHealthCheck
 
 	// Extract UUID from the DFC name - this assumes the name format includes the protocol converter UUID
@@ -128,23 +126,14 @@ func (a *EditProtocolConverterAction) Parse(payload interface{}) error {
 	}
 	a.dfcType = editPayload.DFCType
 
-	// Handle different component types
-	switch a.metaType {
-	case "custom":
-		dfcPayload, err := ParseCustomDataFlowComponent(editPayload.DFC)
-		if err != nil {
-			return fmt.Errorf("failed to parse custom dataflow component: %v", err)
-		}
-		a.dfcPayload = dfcPayload
-	case "protocolConverter", "dataBridge", "streamProcessor":
-		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionConfirmed, "component type not supported", a.outboundChannel, models.EditProtocolConverter)
-		return fmt.Errorf("component type %s not yet supported", a.metaType)
-	default:
-		return fmt.Errorf("unsupported component type: %s", a.metaType)
+	dfcPayload, err := ParseCustomDataFlowComponent(editPayload.DFC)
+	if err != nil {
+		return fmt.Errorf("failed to parse custom dataflow component: %v", err)
 	}
+	a.dfcPayload = dfcPayload
 
-	a.actionLogger.Debugf("Parsed EditProtocolConverter action payload: uuid=%s, name=%s, type=%s, dfcType=%s",
-		a.protocolConverterUUID, a.name, a.metaType, a.dfcType)
+	a.actionLogger.Debugf("Parsed EditProtocolConverter action payload: uuid=%s, name=%s, dfcType=%s",
+		a.protocolConverterUUID, a.name, a.dfcType)
 	return nil
 }
 
@@ -159,11 +148,8 @@ func (a *EditProtocolConverterAction) Validate() error {
 		return errors.New("missing required field dfcType")
 	}
 
-	// For custom type, validate the DFC payload structure
-	if a.metaType == "custom" {
-		if err := ValidateCustomDataFlowComponentPayload(a.dfcPayload); err != nil {
-			return fmt.Errorf("invalid dataflow component configuration: %v", err)
-		}
+	if err := ValidateCustomDataFlowComponentPayload(a.dfcPayload); err != nil {
+		return fmt.Errorf("invalid dataflow component configuration: %v", err)
 	}
 
 	return nil

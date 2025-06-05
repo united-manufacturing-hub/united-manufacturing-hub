@@ -59,10 +59,6 @@ func ParseDataflowComponentTopLevel(payload interface{}) (DataflowComponentTopLe
 		return DataflowComponentTopLevelPayload{}, errors.New("missing required field Name")
 	}
 
-	if topLevel.Meta.Type == "" {
-		return DataflowComponentTopLevelPayload{}, errors.New("missing required field Meta.Type")
-	}
-
 	return topLevel, nil
 }
 
