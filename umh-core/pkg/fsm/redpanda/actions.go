@@ -368,7 +368,6 @@ func (r *RedpandaInstance) UpdateObservedStateOfInstance(ctx context.Context, se
 		r.baseFSMInstance.GetLogger().Debugf("Changes: %v", changes)
 
 		// Only apply if there are changes.
-		// Additionally, only apply every 10th tick to avoid skipping the metrics and cluster config update, which would in turn cause an infinite loop of reconciling.
 		if len(changes) > 0 {
 			err := r.service.UpdateRedpandaClusterConfig(ctx, r.baseFSMInstance.GetID(), changes)
 			if err != nil {
