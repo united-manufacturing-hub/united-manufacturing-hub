@@ -59,7 +59,6 @@ type EditProtocolConverterAction struct {
 	name                  string // protocol converter name (optional for updates)
 	dfcPayload            models.CDFCPayload
 	dfcType               string // "read" or "write"
-	ignoreHealthCheck     bool
 
 	// Runtime observation for health checks
 	systemSnapshotManager *fsm.SnapshotManager
