@@ -127,7 +127,7 @@ func (a *GetProtocolConverterAction) Validate() error {
 func determineProcessingMode(readDFC *models.ProtocolConverterDFC) string {
 	// Only look at readDFC as requested
 	if readDFC == nil {
-		return "realtime"
+		return "no_dfc"
 	}
 
 	processors := readDFC.Pipeline.Processors
@@ -152,7 +152,7 @@ func determineProcessingMode(readDFC *models.ProtocolConverterDFC) string {
 		}
 	}
 
-	// No processors found, fall back to realtime
+	// No processors found, fall back to custom
 	return "custom"
 }
 
