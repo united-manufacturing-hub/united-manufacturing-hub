@@ -97,7 +97,7 @@ func buildProtocolConverterAsDfc(
 	//check if the protocol converter is initialized by checking if a read dfc is present
 	isInitialized := false
 	input := observed.ObservedProtocolConverterConfig.DataflowComponentReadServiceConfig.BenthosConfig.Input
-	if input != nil && len(input) > 0 {
+	if len(input) > 0 {
 		isInitialized = true
 	}
 
