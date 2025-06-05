@@ -630,4 +630,10 @@ type ProtocolConverter struct {
 	ReadDFC      *ProtocolConverterDFC          `json:"readDFC"`
 	WriteDFC     *ProtocolConverterDFC          `json:"writeDFC"`
 	TemplateInfo *ProtocolConverterTemplateInfo `json:"templateInfo"`
+	Meta         *ProtocolConverterMeta         `json:"meta"`
+}
+
+type ProtocolConverterMeta struct {
+	ProcessingMode string `json:"processingMode"`
+	Protocol       string `json:"protocol"`
 }
