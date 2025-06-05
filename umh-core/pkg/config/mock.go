@@ -41,8 +41,9 @@ type MockConfigManager struct {
 	EditDataflowcomponentError        error
 	AtomicAddProtocolConverterError   error
 	AtomicEditProtocolConverterError  error
-  ConfigAsString                    error
-  GetConfigAsStringError            error
+	ConfigAsString                    string
+	GetConfigAsStringError            error
+	GetConfigAsStringCalled           bool
 	ConfigDelay                       time.Duration
 	mutexReadOrWrite                  sync.Mutex
 	mutexReadAndWrite                 sync.Mutex
@@ -303,7 +304,6 @@ func (m *MockConfigManager) AtomicEditDataflowcomponent(ctx context.Context, com
 	return oldConfig, nil
 }
 
-
 // AtomicAddProtocolConverter implements the ConfigManager interface
 func (m *MockConfigManager) AtomicAddProtocolConverter(ctx context.Context, pc ProtocolConverterConfig) error {
 	m.mutexReadAndWrite.Lock()
@@ -411,6 +411,9 @@ func generateMockTemplateAnchorName(pcName string) string {
 		}
 	}
 	return result + "_template"
+
+}
+
 // GetConfigAsString implements the ConfigManager interface
 func (m *MockConfigManager) GetConfigAsString(ctx context.Context) (string, error) {
 	m.mutexReadOrWrite.Lock()
@@ -506,5 +509,4 @@ func (m *MockConfigManager) WriteConfigFromString(ctx context.Context, config st
 	m.ConfigAsString = config
 
 	return nil
-
 }

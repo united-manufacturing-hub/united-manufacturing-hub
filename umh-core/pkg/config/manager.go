@@ -940,7 +940,6 @@ func (m *FileConfigManagerWithBackoff) AtomicEditDataflowcomponent(ctx context.C
 	return m.configManager.AtomicEditDataflowcomponent(ctx, componentUUID, dfc)
 }
 
-
 // AtomicAddProtocolConverter adds a protocol converter to the config atomically
 // Creates an anchored template in the templates section and references it from the protocol converter
 func (m *FileConfigManager) AtomicAddProtocolConverter(ctx context.Context, pc ProtocolConverterConfig) error {
@@ -1056,89 +1055,6 @@ func isEmptyDataflowComponentConfig(config dataflowcomponentserviceconfig.Datafl
 // AtomicAddProtocolConverter delegates to the underlying FileConfigManager
 func (m *FileConfigManagerWithBackoff) AtomicAddProtocolConverter(ctx context.Context, pc ProtocolConverterConfig) error {
 
-// GetConfigAsString returns the current config file contents as a string
-// This function is used in the get-config-file action to retrieve the raw config file
-// without any yaml parsing applied. This allows to display yaml anchors and change them
-// via the frontend
-func (m *FileConfigManager) GetConfigAsString(ctx context.Context) (string, error) {
-	// in the GetConfig method, we already read the file and cached the raw config to m.cacheRawConfig
-	_, err := m.GetConfig(ctx, 0)
-	if err != nil {
-		return "", fmt.Errorf("failed to get config: %w", err)
-	}
-
-	m.cacheMu.RLock()
-	rawConfig := m.cacheRawConfig
-	m.cacheMu.RUnlock()
-
-	return rawConfig, nil
-}
-
-// GetConfigAsString returns the current config as a string with backoff logic for failures
-func (m *FileConfigManagerWithBackoff) GetConfigAsString(ctx context.Context) (string, error) {
-	// in the GetConfig method, we already read the file and cached the raw config to m.cacheRawConfig
-	_, err := m.GetConfig(ctx, 0)
-	if err != nil {
-		return "", fmt.Errorf("failed to get config: %w", err)
-	}
-
-	m.configManager.cacheMu.RLock()
-	rawConfig := m.configManager.cacheRawConfig
-	m.configManager.cacheMu.RUnlock()
-
-	return rawConfig, nil
-}
-
-// GetCacheModTimeWithoutUpdate returns the modification time without updating the cache
-func (m *FileConfigManager) GetCacheModTimeWithoutUpdate() time.Time {
-	m.cacheMu.RLock()
-	modTime := m.cacheModTime
-	m.cacheMu.RUnlock()
-	return modTime
-}
-
-// UpdateAndGetCacheModTime updates the cache and returns the modification time
-func (m *FileConfigManager) UpdateAndGetCacheModTime(ctx context.Context) (time.Time, error) {
-	// read config to update the cache mod time
-	_, err := m.GetConfig(ctx, 0)
-	if err != nil {
-		return time.Time{}, fmt.Errorf("failed to get config: %w", err)
-	}
-
-	return m.GetCacheModTimeWithoutUpdate(), nil
-}
-
-// GetCacheModTimeWithoutUpdate delegates to the underlying FileConfigManager
-func (m *FileConfigManagerWithBackoff) GetCacheModTimeWithoutUpdate() time.Time {
-	return m.configManager.GetCacheModTimeWithoutUpdate()
-}
-
-// UpdateAndGetCacheModTime delegates to the underlying FileConfigManager
-func (m *FileConfigManagerWithBackoff) UpdateAndGetCacheModTime(ctx context.Context) (time.Time, error) {
-	return m.configManager.UpdateAndGetCacheModTime(ctx)
-}
-
-// WriteConfigFromString writes a config from a string to the config file
-// If expectedModTime is provided, it will check that the file hasn't been modified since that time
-func (m *FileConfigManager) WriteConfigFromString(ctx context.Context, configStr string, expectedModTime string) error {
-	// First parse the config with strict validation to detect syntax errors and schema problems
-	_, err := parseConfig([]byte(configStr), false)
-	if err != nil {
-		// If strict parsing fails, try again with allowUnknownFields=true
-		// This allows YAML anchors and other custom fields
-		_, err = parseConfig([]byte(configStr), true)
-		if err != nil {
-			return fmt.Errorf("failed to parse config: %w", err)
-		}
-	}
-
-	// We use a write lock here because we write the config file
-	err = m.mutexReadOrWrite.Lock(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to lock config file: %w", err)
-	}
-	defer m.mutexReadOrWrite.Unlock()
-
 	// Check if context is already cancelled
 	if ctx.Err() != nil {
 		return ctx.Err()
@@ -1226,15 +1142,89 @@ func (m *FileConfigManager) AtomicEditProtocolConverter(ctx context.Context, com
 	return oldConfig, nil
 }
 
-// AtomicEditProtocolConverter delegates to the underlying FileConfigManager
-func (m *FileConfigManagerWithBackoff) AtomicEditProtocolConverter(ctx context.Context, componentUUID uuid.UUID, pc ProtocolConverterConfig) (ProtocolConverterConfig, error) {
-	// Check if context is already cancelled
-	if ctx.Err() != nil {
-		return ProtocolConverterConfig{}, ctx.Err()
+// GetConfigAsString returns the current config file contents as a string
+// This function is used in the get-config-file action to retrieve the raw config file
+// without any yaml parsing applied. This allows to display yaml anchors and change them
+// via the frontend
+func (m *FileConfigManager) GetConfigAsString(ctx context.Context) (string, error) {
+	// in the GetConfig method, we already read the file and cached the raw config to m.cacheRawConfig
+	_, err := m.GetConfig(ctx, 0)
+	if err != nil {
+		return "", fmt.Errorf("failed to get config: %w", err)
 	}
 
-	return m.configManager.AtomicEditProtocolConverter(ctx, componentUUID, pc)
-	// If expectedModTime is provided, check for concurrent modification atomically under the lock
+	m.cacheMu.RLock()
+	rawConfig := m.cacheRawConfig
+	m.cacheMu.RUnlock()
+
+	return rawConfig, nil
+}
+
+// GetConfigAsString returns the current config as a string with backoff logic for failures
+func (m *FileConfigManagerWithBackoff) GetConfigAsString(ctx context.Context) (string, error) {
+	// in the GetConfig method, we already read the file and cached the raw config to m.cacheRawConfig
+	_, err := m.GetConfig(ctx, 0)
+	if err != nil {
+		return "", fmt.Errorf("failed to get config: %w", err)
+	}
+
+	m.configManager.cacheMu.RLock()
+	rawConfig := m.configManager.cacheRawConfig
+	m.configManager.cacheMu.RUnlock()
+
+	return rawConfig, nil
+}
+
+// GetCacheModTimeWithoutUpdate returns the modification time without updating the cache
+func (m *FileConfigManager) GetCacheModTimeWithoutUpdate() time.Time {
+	m.cacheMu.RLock()
+	modTime := m.cacheModTime
+	m.cacheMu.RUnlock()
+	return modTime
+}
+
+// UpdateAndGetCacheModTime updates the cache and returns the modification time
+func (m *FileConfigManager) UpdateAndGetCacheModTime(ctx context.Context) (time.Time, error) {
+	// read config to update the cache mod time
+	_, err := m.GetConfig(ctx, 0)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("failed to get config: %w", err)
+	}
+
+	return m.GetCacheModTimeWithoutUpdate(), nil
+}
+
+// GetCacheModTimeWithoutUpdate delegates to the underlying FileConfigManager
+func (m *FileConfigManagerWithBackoff) GetCacheModTimeWithoutUpdate() time.Time {
+	return m.configManager.GetCacheModTimeWithoutUpdate()
+}
+
+// UpdateAndGetCacheModTime delegates to the underlying FileConfigManager
+func (m *FileConfigManagerWithBackoff) UpdateAndGetCacheModTime(ctx context.Context) (time.Time, error) {
+	return m.configManager.UpdateAndGetCacheModTime(ctx)
+}
+
+// WriteConfigFromString writes a config from a string to the config file
+// If expectedModTime is provided, it will check that the file hasn't been modified since that time
+func (m *FileConfigManager) WriteConfigFromString(ctx context.Context, configStr string, expectedModTime string) error {
+	// First parse the config with strict validation to detect syntax errors and schema problems
+	_, err := parseConfig([]byte(configStr), false)
+	if err != nil {
+		// If strict parsing fails, try again with allowUnknownFields=true
+		// This allows YAML anchors and other custom fields
+		_, err = parseConfig([]byte(configStr), true)
+		if err != nil {
+			return fmt.Errorf("failed to parse config: %w", err)
+		}
+	}
+
+	// We use a write lock here because we write the config file
+	err = m.mutexReadOrWrite.Lock(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to lock config file: %w", err)
+	}
+	defer m.mutexReadOrWrite.Unlock()
+
 	if expectedModTime != "" {
 		info, err := m.fsService.Stat(ctx, m.configPath)
 		if err != nil && !errors.Is(err, os.ErrNotExist) {
@@ -1290,4 +1280,17 @@ func (m *FileConfigManagerWithBackoff) WriteConfigFromString(ctx context.Context
 	}
 
 	return m.configManager.WriteConfigFromString(ctx, configStr, expectedModTime)
+
+}
+
+// AtomicEditProtocolConverter delegates to the underlying FileConfigManager
+func (m *FileConfigManagerWithBackoff) AtomicEditProtocolConverter(ctx context.Context, componentUUID uuid.UUID, pc ProtocolConverterConfig) (ProtocolConverterConfig, error) {
+	// Check if context is already cancelled
+	if ctx.Err() != nil {
+		return ProtocolConverterConfig{}, ctx.Err()
+	}
+
+	return m.configManager.AtomicEditProtocolConverter(ctx, componentUUID, pc)
+	// If expectedModTime is provided, check for concurrent modification atomically under the lock
+
 }

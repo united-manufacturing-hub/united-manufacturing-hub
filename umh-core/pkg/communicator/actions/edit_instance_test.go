@@ -470,6 +470,7 @@ func (w *writeFailingMockConfigManager) AtomicEditProtocolConverter(ctx context.
 	}
 
 	return config.ProtocolConverterConfig{}, nil
+}
 
 // GetConfigAsString implements the ConfigManager interface
 func (w *writeFailingMockConfigManager) GetConfigAsString(ctx context.Context) (string, error) {
