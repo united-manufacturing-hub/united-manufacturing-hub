@@ -336,9 +336,13 @@ func (s *RedpandaService) GetConfig(ctx context.Context, filesystemService files
 	}
 
 	if lastRedpandaMonitorObservedState.ServiceInfo.RedpandaStatus.LastScan != nil {
-		redpandaStatus.Topic.DefaultTopicRetentionMs = lastRedpandaMonitorObservedState.ServiceInfo.RedpandaStatus.LastScan.ClusterConfig.Topic.DefaultTopicRetentionMs
-		redpandaStatus.Topic.DefaultTopicRetentionBytes = lastRedpandaMonitorObservedState.ServiceInfo.RedpandaStatus.LastScan.ClusterConfig.Topic.DefaultTopicRetentionBytes
-		redpandaStatus.Topic.DefaultTopicCompressionAlgorithm = lastRedpandaMonitorObservedState.ServiceInfo.RedpandaStatus.LastScan.ClusterConfig.Topic.DefaultTopicCompressionAlgorithm
+		if lastRedpandaMonitorObservedState.ServiceInfo.RedpandaStatus.LastScan.ClusterConfig != nil {
+			redpandaStatus.Topic.DefaultTopicRetentionMs = lastRedpandaMonitorObservedState.ServiceInfo.RedpandaStatus.LastScan.ClusterConfig.Topic.DefaultTopicRetentionMs
+			redpandaStatus.Topic.DefaultTopicRetentionBytes = lastRedpandaMonitorObservedState.ServiceInfo.RedpandaStatus.LastScan.ClusterConfig.Topic.DefaultTopicRetentionBytes
+			redpandaStatus.Topic.DefaultTopicCompressionAlgorithm = lastRedpandaMonitorObservedState.ServiceInfo.RedpandaStatus.LastScan.ClusterConfig.Topic.DefaultTopicCompressionAlgorithm
+		} else {
+			s.logger.Debugf("Cluster config is nil, skipping update")
+		}
 		redpandaStatus.Resources.MaxCores = 1
 		redpandaStatus.Resources.MemoryPerCoreInBytes = 2048 * 1024 * 1024 // 2GB
 	} else {
@@ -539,7 +543,18 @@ func (s *RedpandaService) GetHealthCheckAndMetrics(ctx context.Context, tick uin
 		}
 
 		redpandaStatus.HealthCheck = healthCheck
-		redpandaStatus.RedpandaMetrics = *lastRedpandaMonitorObservedState.ServiceInfo.RedpandaStatus.LastScan.RedpandaMetrics
+
+		// Check if RedpandaMetrics is not nil before dereferencing
+		if lastRedpandaMonitorObservedState.ServiceInfo.RedpandaStatus.LastScan.RedpandaMetrics != nil {
+			redpandaStatus.RedpandaMetrics = *lastRedpandaMonitorObservedState.ServiceInfo.RedpandaStatus.LastScan.RedpandaMetrics
+		} else {
+			// Set empty metrics if nil
+			redpandaStatus.RedpandaMetrics = redpanda_monitor.RedpandaMetrics{
+				Metrics:      redpanda_monitor.Metrics{},
+				MetricsState: nil,
+			}
+		}
+
 		redpandaStatus.Logs = lastRedpandaMonitorObservedState.ServiceInfo.RedpandaStatus.Logs
 	} else {
 		return RedpandaStatus{}, fmt.Errorf("last scan is nil")

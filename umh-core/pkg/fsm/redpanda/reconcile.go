@@ -41,9 +41,6 @@ import (
 // Over multiple calls, it converges the actual state to the desired state. Transitions
 // that fail are retried in subsequent reconcile calls after a backoff period.
 func (r *RedpandaInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot, services serviceregistry.Provider) (err error, reconciled bool) {
-	defer func() {
-		r.baseFSMInstance.GetLogger().Debugf("RedpandaInstance Reconcile: %v, %v", err, reconciled)
-	}()
 	start := time.Now()
 	redpandaInstanceName := r.baseFSMInstance.GetID()
 	defer func() {
@@ -58,21 +55,18 @@ func (r *RedpandaInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSna
 
 	// Check if context is already cancelled
 	if ctx.Err() != nil {
-		r.baseFSMInstance.GetLogger().Debugf("Context cancelled for Redpanda pipeline %s", redpandaInstanceName)
 		return ctx.Err(), false
 	}
 
 	// Step 1: If there's a lastError, see if we've waited enough.
 	if r.baseFSMInstance.ShouldSkipReconcileBecauseOfError(snapshot.Tick) {
 		err := r.baseFSMInstance.GetBackoffError(snapshot.Tick)
-		r.baseFSMInstance.GetLogger().Debugf("Skipping reconcile for Redpanda pipeline %s: %w", redpandaInstanceName, err)
 
 		// if it is a permanent error, start the removal process and reset the error (so that we can reconcile towards a stopped / removed state)
 		if backoff.IsPermanentFailureError(err) {
 			// For permanent errors, we need special handling based on the instance's current state:
 			// 1. If already in a shutdown state (removed, removing, stopping, stopped), try force removal
 			// 2. If not in a shutdown state, attempt normal removal first, then force if needed
-			r.baseFSMInstance.GetLogger().Debugf("Handling permanent error for Redpanda pipeline %s: %w", redpandaInstanceName, err)
 			return r.baseFSMInstance.HandlePermanentError(
 				ctx,
 				err,
@@ -92,14 +86,12 @@ func (r *RedpandaInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSna
 				},
 			)
 		}
-		r.baseFSMInstance.GetLogger().Debugf("Skipping reconcile for Redpanda pipeline %s: %w", redpandaInstanceName, err)
 		return nil, false
 	}
 
 	// Step 2: Detect external changes.
 	var externalReconciled bool
 	err, externalReconciled = r.reconcileExternalChanges(ctx, services, snapshot.Tick, start)
-	r.baseFSMInstance.GetLogger().Debugf("Reconcile external changes for Redpanda pipeline %s: %v, %v", redpandaInstanceName, err, externalReconciled)
 	if err != nil {
 		// I am using strings.Contains as i cannot get it working with errors.Is
 		isExpectedError := strings.Contains(err.Error(), redpanda_monitor_service.ErrServiceNotExist.Error()) ||
@@ -117,7 +109,6 @@ func (r *RedpandaInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSna
 				// mark the reconciliation as complete for this tick since we've likely
 				// already consumed significant time. We return reconciled=true to prevent
 				// further reconciliation attempts in the current tick.
-				r.baseFSMInstance.GetLogger().Debugf("Reconcile external has deadline exceeded")
 				return nil, true // We don't want to return an error here, as this can happen in normal operations
 			}
 
@@ -155,7 +146,6 @@ func (r *RedpandaInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSna
 	// If either Redpanda state, S6 state or the internal redpanda state via the Admin API was reconciled, we return reconciled so that nothing happens anymore in this tick
 	// nothing should happen as we might have already taken up some significant time of the available time per tick, so better
 	// to be on the safe side and let the rest handle in another tick
-	r.baseFSMInstance.GetLogger().Debugf("Reconcile: %v, %v, %v, %v", err, reconciled, s6Reconciled, externalReconciled)
 	reconciled = reconciled || s6Reconciled || externalReconciled
 
 	// It went all right, so clear the error
@@ -170,55 +160,6 @@ func (r *RedpandaInstance) reconcileExternalChanges(ctx context.Context, service
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentRedpandaInstance, r.baseFSMInstance.GetID()+".reconcileExternalChanges", time.Since(start))
 	}()
-
-	// If the config differs and we are currently running,
-	// we will apply the changes by doing an REST call to the Redpanda Admin API (https://docs.redpanda.com/api/admin-api/).
-	// We also check that the desired state is a running state,
-	// preventing issues when redpanda is currently stopping, but the current state is not yet updated
-	currentState := r.baseFSMInstance.GetCurrentFSMState()
-	desiredState := r.baseFSMInstance.GetDesiredFSMState()
-	if IsRunningState(currentState) && IsRunningState(desiredState) {
-		r.baseFSMInstance.GetLogger().Debugf("Reconcile external changes: %v, %v", currentState, desiredState)
-		// Reconcile the cluster config via HTTP
-		// 1. Check if we have changes in the config
-		var changes = make(map[string]interface{})
-		if r.ObservedState.ObservedRedpandaServiceConfig.Topic.DefaultTopicRetentionBytes != r.config.Topic.DefaultTopicRetentionBytes {
-			r.baseFSMInstance.GetLogger().Debugf("DefaultTopicRetentionBytes: %v, %v", r.ObservedState.ObservedRedpandaServiceConfig.Topic.DefaultTopicRetentionBytes, r.config.Topic.DefaultTopicRetentionBytes)
-			// https://docs.redpanda.com/current/reference/properties/cluster-properties/#retention_bytes
-
-			// Zero values are ignored, as they are invalid in redpanda
-			if r.config.Topic.DefaultTopicRetentionBytes != 0 {
-				changes["retention_bytes"] = r.config.Topic.DefaultTopicRetentionBytes
-			}
-		}
-		if r.ObservedState.ObservedRedpandaServiceConfig.Topic.DefaultTopicRetentionMs != r.config.Topic.DefaultTopicRetentionMs {
-			r.baseFSMInstance.GetLogger().Debugf("DefaultTopicRetentionMs: %v, %v", r.ObservedState.ObservedRedpandaServiceConfig.Topic.DefaultTopicRetentionMs, r.config.Topic.DefaultTopicRetentionMs)
-			// https://docs.redpanda.com/current/reference/properties/cluster-properties/#log_retention_ms
-
-			// Zero values are ignored, as they are invalid in redpanda
-			if r.config.Topic.DefaultTopicRetentionMs != 0 {
-				changes["log_retention_ms"] = r.config.Topic.DefaultTopicRetentionMs
-			}
-		}
-		if r.ObservedState.ObservedRedpandaServiceConfig.Topic.DefaultTopicCompressionAlgorithm != r.config.Topic.DefaultTopicCompressionAlgorithm {
-			r.baseFSMInstance.GetLogger().Debugf("DefaultTopicCompressionAlgorithm: %v, %v", r.ObservedState.ObservedRedpandaServiceConfig.Topic.DefaultTopicCompressionAlgorithm, r.config.Topic.DefaultTopicCompressionAlgorithm)
-			// https://docs.redpanda.com/current/reference/properties/cluster-properties/#log_compression_type
-
-			// Zero values are ignored, as they are invalid in redpanda
-			if r.config.Topic.DefaultTopicCompressionAlgorithm != "" {
-				changes["log_compression_type"] = r.config.Topic.DefaultTopicCompressionAlgorithm
-			}
-		}
-
-		if len(changes) > 0 {
-			r.baseFSMInstance.GetLogger().Debugf("Updating Redpanda cluster config: %v", changes)
-			err := r.service.UpdateRedpandaClusterConfig(ctx, r.baseFSMInstance.GetID(), changes)
-			if err != nil {
-				return fmt.Errorf("failed to update Redpanda cluster config: %w", err), false
-			}
-			return nil, true
-		}
-	}
 
 	// Fetching the observed state can sometimes take longer, but we need to ensure when reconciling a lot of instances
 	// that a single status of a single instance does not block the whole reconciliation
@@ -334,21 +275,21 @@ func (r *RedpandaInstance) reconcileStartingStates(ctx context.Context, services
 		// First we need to ensure the S6 service is started
 		running, reason := r.IsRedpandaS6Running()
 		if !running {
-			r.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("starting: %s", reason)
+			r.PreviousObservedState.ServiceInfo.StatusReason = fmt.Sprintf("starting: %s", reason)
 			return nil, false
 		}
 
 		// Check if "Successfully started Redpanda!" is found in logs
 		started, reasonStarted := r.IsRedpandaStarted()
 		if !started {
-			r.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("starting: %s", reasonStarted)
+			r.PreviousObservedState.ServiceInfo.StatusReason = fmt.Sprintf("starting: %s", reasonStarted)
 			return nil, false
 		}
 
 		// Set the transition time when we detect successful start
 		r.transitionToRunningTime = currentTime
 
-		r.ObservedState.ServiceInfo.StatusReason = ""
+		r.PreviousObservedState.ServiceInfo.StatusReason = ""
 		return r.baseFSMInstance.SendEvent(ctx, EventStartDone), true
 	default:
 		return fmt.Errorf("invalid starting state: %s", currentState), false
@@ -368,10 +309,10 @@ func (r *RedpandaInstance) reconcileRunningStates(ctx context.Context, services 
 		degraded, reasonDegraded := r.IsRedpandaDegraded(currentTime, constants.RedpandaLogWindow)
 		processingActivity, reasonProcessingActivity := r.IsRedpandaWithProcessingActivity()
 		if degraded {
-			r.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("degraded: %s", reasonDegraded)
+			r.PreviousObservedState.ServiceInfo.StatusReason = fmt.Sprintf("degraded: %s", reasonDegraded)
 			return r.baseFSMInstance.SendEvent(ctx, EventDegraded), true
 		} else if !processingActivity { // if there is no activity, we move to Idle
-			r.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("idling: %s", reasonProcessingActivity)
+			r.PreviousObservedState.ServiceInfo.StatusReason = fmt.Sprintf("idling: %s", reasonProcessingActivity)
 			return r.baseFSMInstance.SendEvent(ctx, EventNoDataTimeout), true
 		}
 		// If we're in Active,  send no status reason
@@ -382,22 +323,22 @@ func (r *RedpandaInstance) reconcileRunningStates(ctx context.Context, services 
 		processingActivity, reasonProcessingActivity := r.IsRedpandaWithProcessingActivity()
 
 		if degraded {
-			r.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("degraded: %s", reasonDegraded)
+			r.PreviousObservedState.ServiceInfo.StatusReason = fmt.Sprintf("degraded: %s", reasonDegraded)
 			return r.baseFSMInstance.SendEvent(ctx, EventDegraded), true
 		} else if processingActivity { // if there is activity, we move to Active
-			r.ObservedState.ServiceInfo.StatusReason = ""
+			r.PreviousObservedState.ServiceInfo.StatusReason = ""
 			return r.baseFSMInstance.SendEvent(ctx, EventDataReceived), true
 		}
-		r.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("idle: %s", reasonProcessingActivity)
+		r.PreviousObservedState.ServiceInfo.StatusReason = fmt.Sprintf("idle: %s", reasonProcessingActivity)
 		return nil, false
 	case OperationalStateDegraded:
 		// If we're in Degraded, we need to recover to move to Idle
 		degraded, reason := r.IsRedpandaDegraded(currentTime, constants.RedpandaLogWindow)
 		if !degraded {
-			r.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("recovering: %s", reason)
+			r.PreviousObservedState.ServiceInfo.StatusReason = fmt.Sprintf("recovering: %s", reason)
 			return r.baseFSMInstance.SendEvent(ctx, EventRecovered), true
 		}
-		r.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("degraded: %s", reason)
+		r.PreviousObservedState.ServiceInfo.StatusReason = fmt.Sprintf("degraded: %s", reason)
 		return nil, false
 	default:
 		return fmt.Errorf("invalid running state: %s", currentState), false
@@ -419,7 +360,7 @@ func (r *RedpandaInstance) reconcileTransitionToStopped(ctx context.Context, ser
 			return err, false
 		}
 		// Send event to transition to Stopping
-		r.ObservedState.ServiceInfo.StatusReason = "stopping"
+		r.PreviousObservedState.ServiceInfo.StatusReason = "stopping"
 		return r.baseFSMInstance.SendEvent(ctx, EventStop), true
 	}
 
@@ -427,11 +368,11 @@ func (r *RedpandaInstance) reconcileTransitionToStopped(ctx context.Context, ser
 	isStopped, reason := r.IsRedpandaS6Stopped()
 	if currentState == OperationalStateStopping {
 		if !isStopped {
-			r.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("stopping: %s", reason)
+			r.PreviousObservedState.ServiceInfo.StatusReason = fmt.Sprintf("stopping: %s", reason)
 			return nil, false
 		}
 		// Transition from Stopping to Stopped
-		r.ObservedState.ServiceInfo.StatusReason = ""
+		r.PreviousObservedState.ServiceInfo.StatusReason = ""
 		return r.baseFSMInstance.SendEvent(ctx, EventStopDone), true
 	}
 

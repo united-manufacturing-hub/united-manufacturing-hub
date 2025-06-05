@@ -579,7 +579,7 @@ func (a *EditDataflowComponentAction) waitForComponentToBeActive(ctx context.Con
 						// configuration contained in
 						// dfcSnapshot.ServiceInfo.BenthosObservedState.ObservedBenthosServiceConfig.
 						//
-						// Do NOT use instance.LastObservedState.Config: the reconcile loop sets
+						// Do NOT use instance.PreviousObservedState.Config: the reconcile loop sets
 						// that field to the desired config as soon as it writes to the store,
 						// potentially some ticks before Benthos has actually restarted. Relying on
 						// it here would let the action declare success while the container is

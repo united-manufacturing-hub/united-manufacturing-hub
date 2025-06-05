@@ -517,11 +517,6 @@ func (s *RedpandaMonitorService) ParseRedpandaLogs(ctx context.Context, logs []s
 	clusterConfigChanged := s.previousClusterConfigDataByteHash != clusterConfigDataByteHash
 	timestampChanged := s.previousTimestampDataByteHash != timestampDataByteHash
 
-	s.logger.Debugf("Metrics changed: %v, Cluster config changed: %v, Timestamp changed: %v", metricsChanged, clusterConfigChanged, timestampChanged)
-	s.logger.Debugf("Timestamp: %v", timestampDataBytes)
-	s.logger.Debugf("Previous timestamp hash: %v", s.previousTimestampDataByteHash)
-	s.logger.Debugf("Timestamp hash: %v", timestampDataByteHash)
-
 	// Now parse the readyness data
 	readyness, readynessError, err := s.parseReadynessData(readynessDataBytes)
 	if err != nil {
@@ -617,7 +612,7 @@ func (s *RedpandaMonitorService) ParseRedpandaLogs(ctx context.Context, logs []s
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse timestamp data: %w", err)
 		}
-
+		// Convert the nano seconds to a time.Time object
 		lastUpdatedAt = time.Unix(0, int64(timestampNs))
 	}
 
