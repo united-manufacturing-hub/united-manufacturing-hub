@@ -143,6 +143,8 @@ func getProtocolConverterStatusMessage(state string, connectionState string, nma
 		baseMessage = "Protocol converter data flow component is degraded"
 	case protocolconverter.OperationalStateDegradedOther:
 		baseMessage = "Protocol converter has other degradation issues"
+	case protocolconverter.OperationalStateStartingFailedDFCMissing:
+		baseMessage = "No DFC added yet"
 	default:
 		baseMessage = fmt.Sprintf("Protocol converter state: %s", state)
 	}
