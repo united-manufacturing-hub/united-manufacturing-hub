@@ -99,7 +99,7 @@ var _ = Describe("ConnectionService", func() {
 			Expect(service.nmapConfigs[0].Name).To(Equal(nmapName))
 
 			// Verify the desired state is set correctly
-			Expect(service.nmapConfigs[0].DesiredFSMState).To(Equal(nmapfsm.OperationalStateOpen))
+			Expect(service.nmapConfigs[0].DesiredFSMState).To(Equal(nmapfsm.OperationalStateStopped))
 		})
 
 		It("should return error when connection already exists", func() {
@@ -193,6 +193,10 @@ var _ = Describe("ConnectionService", func() {
 
 			// Now configure for transition to starting -> running
 			ConfigureNmapManagerForState(mockNmapService, nmapName, nmapfsm.OperationalStateOpen)
+
+			// Start it
+			err = statusService.StartConnection(ctx, mockServices.GetFileSystem(), connectionName)
+			Expect(err).NotTo(HaveOccurred())
 
 			// Wait for the instance to reach running state
 			By("before WaitForNmapManagerInstanceState 2")
@@ -288,7 +292,7 @@ var _ = Describe("ConnectionService", func() {
 			for _, config := range service.nmapConfigs {
 				if config.Name == nmapName {
 					found = true
-					Expect(config.DesiredFSMState).To(Equal(nmapfsm.OperationalStateOpen))
+					Expect(config.DesiredFSMState).To(Equal(nmapfsm.OperationalStateStopped))
 					// In a real test, we'd verify the ConnectionServiceConfig was updated as expected
 					break
 				}

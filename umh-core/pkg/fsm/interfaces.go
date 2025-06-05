@@ -16,7 +16,6 @@ package fsm
 
 import (
 	"context"
-	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
@@ -37,7 +36,7 @@ type FSMInstanceActions interface {
 	StopInstance(ctx context.Context, filesystemService filesystem.Service) error
 
 	// UpdateObservedStateOfInstance updates the observed state of the instance
-	UpdateObservedStateOfInstance(ctx context.Context, services serviceregistry.Provider, tick uint64, loopStartTime time.Time) error
+	UpdateObservedStateOfInstance(ctx context.Context, services serviceregistry.Provider, snapshot SystemSnapshot) error
 
 	// CheckForCreation checks if the instance should be created
 	CheckForCreation(ctx context.Context, filesystemService filesystem.Service) bool
