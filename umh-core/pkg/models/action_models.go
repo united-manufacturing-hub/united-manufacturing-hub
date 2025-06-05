@@ -186,6 +186,10 @@ const (
 	GetLogs ActionType = "get-logs"
 	// GetMetrics represents the action type for retrieving metrics
 	GetMetrics ActionType = "get-metrics"
+	// GetConfigFile represents the action type for retrieving the configuration file
+	GetConfigFile ActionType = "get-config-file"
+	// SetConfigFile represents the action type for updating the configuration file
+	SetConfigFile ActionType = "set-config-file"
 )
 
 // TestNetworkConnectionPayload contains the necessary fields for executing a TestNetworkConnection action.
@@ -570,6 +574,23 @@ type GetMetricsResponse struct {
 	Metrics []Metric `json:"metrics"`
 }
 
+// GetConfigFileResponse contains the config file content
+type GetConfigFileResponse struct {
+	Content          string `json:"content"`
+	LastModifiedTime string `json:"lastModifiedTime"`
+}
+
+type SetConfigFilePayload struct {
+	Content          string `json:"content"`
+	LastModifiedTime string `json:"lastModifiedTime"`
+}
+
+type SetConfigFileResponse struct {
+	Content          string `json:"content"`
+	LastModifiedTime string `json:"lastModifiedTime"`
+	Success          bool   `json:"success"`
+}
+
 // Deprecated: Use GetMetricsRequest instead.
 type GetDataflowcomponentMetricsRequest struct {
 	UUID string `json:"uuid" binding:"required"`
@@ -640,4 +661,10 @@ const (
 	ErrRetryRollbackTimeout = "ERR_RETRY_ROLLBACK_TIMEOUT"
 	// ErrConfigFileInvalid is sent when the deployment of a dfc fails because the config file is invalid.
 	ErrConfigFileInvalid = "ERR_CONFIG_FILE_INVALID"
+	// ErrRetryConfigWriteFailed is the error code for a config file write failure.
+	// It is retryable because the write failure might be caused by temporary filesystem issues.
+	ErrRetryConfigWriteFailed = "ERR_RETRY_CONFIG_WRITE_FAILED"
+	// ErrGetCacheModTimeFailed is the error code for a failed cache mod time retrieval.
+	// It is not retryable because we already changed the config file and the user should refresh the page.
+	ErrGetCacheModTimeFailed = "ERR_GET_CACHE_MOD_TIME_FAILED"
 )

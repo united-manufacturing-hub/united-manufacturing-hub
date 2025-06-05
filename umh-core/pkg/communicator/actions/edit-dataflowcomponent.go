@@ -665,5 +665,5 @@ func CompareSnapshotWithDesiredConfig(dfcSnapshot *dataflowcomponent.DataflowCom
 			Buffer:             observedConfig.Buffer,
 		},
 	}
-	return dataflowcomponentserviceconfig.NewComparator().ConfigsEqual(&observedConfigInDfcConfig, &desiredConfig.DataFlowComponentServiceConfig)
+	return dataflowcomponentserviceconfig.NewComparator().ConfigsEqual(observedConfigInDfcConfig, desiredConfig.DataFlowComponentServiceConfig)
 }

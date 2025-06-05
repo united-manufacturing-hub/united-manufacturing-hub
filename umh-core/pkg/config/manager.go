@@ -60,6 +60,8 @@ var (
 type ConfigManager interface {
 	// GetConfig returns the current config
 	GetConfig(ctx context.Context, tick uint64) (FullConfig, error)
+	// GetFileSystemService returns the filesystem service
+	GetFileSystemService() filesystem.Service
 	// AtomicSetLocation sets the location in the config atomically
 	AtomicSetLocation(ctx context.Context, location models.EditInstanceLocationModel) error
 	// AtomicAddDataflowcomponent adds a dataflowcomponent to the config atomically
@@ -68,6 +70,17 @@ type ConfigManager interface {
 	AtomicDeleteDataflowcomponent(ctx context.Context, componentUUID uuid.UUID) error
 	// AtomicEditDataflowcomponent edits a dataflowcomponent in the config atomically
 	AtomicEditDataflowcomponent(ctx context.Context, componentUUID uuid.UUID, dfc DataFlowComponentConfig) (DataFlowComponentConfig, error)
+	// GetConfigAsString returns the current config as a string
+	// This function is used in the get-config-file action to retrieve the raw config file
+	// without any yaml parsing applied. This allows to display yaml anchors and change them
+	// via the frontend
+	GetConfigAsString(ctx context.Context) (string, error)
+	// GetCacheModTime returns the modification time of the config file
+	GetCacheModTimeWithoutUpdate() time.Time
+	// UpdateAndGetCacheModTime updates the cache and returns the modification time
+	UpdateAndGetCacheModTime(ctx context.Context) (time.Time, error)
+	// WriteConfigFromString writes a config from a string to the config file
+	WriteConfigFromString(ctx context.Context, configStr string, expectedModTime string) error
 }
 
 // FileConfigManager implements the ConfigManager interface by reading from a file
@@ -95,9 +108,10 @@ type FileConfigManager struct {
 	mutexReadOrWrite ctxrwmutex.CtxRWMutex
 
 	// ---------- in-memory cache (read-only after RLock) ----------
-	cacheMu      sync.RWMutex // guards the two fields below
-	cacheModTime time.Time    // mtime of last successfully parsed file
-	cacheConfig  FullConfig   // struct obtained from that file
+	cacheMu        sync.RWMutex // guards the two fields below
+	cacheModTime   time.Time    // mtime of last successfully parsed file
+	cacheConfig    FullConfig   // struct obtained from that file
+	cacheRawConfig string
 }
 
 // NewFileConfigManager creates a new FileConfigManager
@@ -122,6 +136,11 @@ func NewFileConfigManager() *FileConfigManager {
 func (m *FileConfigManager) WithFileSystemService(fsService filesystem.Service) *FileConfigManager {
 	m.fsService = fsService
 	return m
+}
+
+// GetFileSystemService returns the filesystem service
+func (m *FileConfigManager) GetFileSystemService() filesystem.Service {
+	return m.fsService
 }
 
 // get config or create new with given config parameters (communicator, release channel, location)
@@ -192,9 +211,9 @@ func (m *FileConfigManager) GetConfigWithOverwritesOrCreateNew(ctx context.Conte
 // concurrently.  It then:
 //
 //  1. Ensures the directory exists (harmless no-op if it already does).
-//  2. Verifies the file exists, preserving the historical “config file
-//     does not exist” error semantics expected by callers and tests.
-//  3. Calls Stat() — an inexpensive syscall — and compares the file’s
+//  2. Verifies the file exists, preserving the historical "config file
+//     does not exist" error semantics expected by callers and tests.
+//  3. Calls Stat() — an inexpensive syscall — and compares the file's
 //     ModTime with the timestamp stored in the cache.
 //     • If identical, the file is guaranteed unchanged ⇒ return the
 //     cached *FullConfig* immediately (no I/O, no YAML decode).
@@ -206,7 +225,7 @@ func (m *FileConfigManager) GetConfigWithOverwritesOrCreateNew(ctx context.Conte
 //
 // Because the cache is keyed on ModTime, every observable write to the
 // file (which always updates mtime) causes the next reader to parse fresh
-// bytes, so external callers still see a “latest-on-call” behaviour.
+// bytes, so external callers still see a "latest-on-call" behaviour.
 func (m *FileConfigManager) GetConfig(ctx context.Context, tick uint64) (FullConfig, error) {
 	// we use a read lock here, because we only read the config file
 	err := m.mutexReadOrWrite.RLock(ctx)
@@ -276,7 +295,7 @@ func (m *FileConfigManager) GetConfig(ctx context.Context, tick uint64) (FullCon
 		return FullConfig{}, ctx.Err()
 	}
 
-	config, err := parseConfig(data)
+	config, err := parseConfig(data, false)
 	if err != nil {
 		return FullConfig{}, fmt.Errorf("failed to parse config file: %w", err)
 	}
@@ -307,8 +326,9 @@ func (m *FileConfigManager) GetConfig(ctx context.Context, tick uint64) (FullCon
 		config.Agent.ReleaseChannel = "n/a"
 	}
 
-	// update cache atomically
+	// update all cache fields atomically in a single critical section
 	m.cacheMu.Lock()
+	m.cacheRawConfig = string(data)
 	m.cacheModTime = info.ModTime()
 	m.cacheConfig = config
 	m.cacheMu.Unlock()
@@ -318,15 +338,16 @@ func (m *FileConfigManager) GetConfig(ctx context.Context, tick uint64) (FullCon
 
 // parseConfig unmarshals *data* (a YAML document) into a FullConfig.
 //
-// The YAML decoder is configured with KnownFields(true) so that any
+// The YAML decoder is configured with KnownFields(true) by default so that any
 // unknown or misspelled keys cause an immediate error, preventing silent
-// misconfiguration.  No additional semantic validation is performed here;
+// misconfiguration. Setting allowUnknownFields to true allows YAML anchors and other
+// custom fields to pass validation. No additional semantic validation is performed here;
 // callers are responsible for deeper checks.
-func parseConfig(data []byte) (FullConfig, error) {
+func parseConfig(data []byte, allowUnknownFields bool) (FullConfig, error) {
 	var cfg FullConfig
 
 	dec := yaml.NewDecoder(bytes.NewReader(data))
-	dec.KnownFields(true) // ← refuses unknown keys
+	dec.KnownFields(!allowUnknownFields) // Only reject unknown keys if allowUnknownFields is false
 	if err := dec.Decode(&cfg); err != nil {
 		return FullConfig{}, fmt.Errorf("failed to decode config: %w", err)
 	}
@@ -378,6 +399,11 @@ func (m *FileConfigManagerWithBackoff) GetConfigWithOverwritesOrCreateNew(ctx co
 	return m.configManager.GetConfigWithOverwritesOrCreateNew(ctx, config)
 }
 
+// GetFileSystemService returns the filesystem service
+func (m *FileConfigManagerWithBackoff) GetFileSystemService() filesystem.Service {
+	return m.configManager.GetFileSystemService()
+}
+
 // writeConfig writes the config to the file
 // it should not be exposed or used outside of the config manager, due to potential race conditions
 func (m *FileConfigManager) writeConfig(ctx context.Context, config FullConfig) error {
@@ -409,6 +435,19 @@ func (m *FileConfigManager) writeConfig(ctx context.Context, config FullConfig) 
 	if err := m.fsService.WriteFile(ctx, m.configPath, data, 0666); err != nil {
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
+
+	// Update the cache to reflect the new config
+	info, err := m.fsService.Stat(ctx, m.configPath)
+	if err != nil {
+		return fmt.Errorf("failed to stat config file after write: %w", err)
+	}
+
+	// Update all cache fields atomically in a single critical section
+	m.cacheMu.Lock()
+	m.cacheRawConfig = string(data)
+	m.cacheModTime = info.ModTime()
+	m.cacheConfig = config
+	m.cacheMu.Unlock()
 
 	m.logger.Infof("Successfully wrote config to %s", m.configPath)
 	return nil
@@ -652,6 +691,37 @@ func (m *FileConfigManager) AtomicEditDataflowcomponent(ctx context.Context, com
 		}
 	}
 
+	// ------------------------------------------------------------------
+	// Guard against overwriting a DFC that still relies on YAML
+	// templating (anchors/aliases)
+	//
+	// Background
+	// ----------
+	// Operators may define *dataFlowComponentConfig* via an anchor:
+	//
+	//     templates:
+	//       - &baseCfg { … }
+	//     dataFlow:
+	//       - name: dfc-1
+	//         dataFlowComponentConfig: *baseCfg   # ← alias
+	//
+	// Policy
+	// ------
+	// If the component we are about to **edit** still hasAnchors == true
+	// we MUST refuse to touch it; otherwise we would flatten or delete
+	// the user’s template when we rewrite the file.
+	for _, c := range config.DataFlow {
+		if dataflowcomponentserviceconfig.GenerateUUIDFromName(c.Name) == componentUUID {
+			if c.HasAnchors() {
+				return DataFlowComponentConfig{}, fmt.Errorf(
+					"dataFlowComponentConfig for %s is defined via YAML anchors/aliases; "+
+						"please edit the file manually", componentUUID)
+			}
+			break
+		}
+	}
+	// End of guard
+
 	// Find the component with matching UUID
 	found := false
 	for i, component := range config.DataFlow {
@@ -685,4 +755,150 @@ func (m *FileConfigManagerWithBackoff) AtomicEditDataflowcomponent(ctx context.C
 	}
 
 	return m.configManager.AtomicEditDataflowcomponent(ctx, componentUUID, dfc)
+}
+
+// GetConfigAsString returns the current config file contents as a string
+// This function is used in the get-config-file action to retrieve the raw config file
+// without any yaml parsing applied. This allows to display yaml anchors and change them
+// via the frontend
+func (m *FileConfigManager) GetConfigAsString(ctx context.Context) (string, error) {
+	// in the GetConfig method, we already read the file and cached the raw config to m.cacheRawConfig
+	_, err := m.GetConfig(ctx, 0)
+	if err != nil {
+		return "", fmt.Errorf("failed to get config: %w", err)
+	}
+
+	m.cacheMu.RLock()
+	rawConfig := m.cacheRawConfig
+	m.cacheMu.RUnlock()
+
+	return rawConfig, nil
+}
+
+// GetConfigAsString returns the current config as a string with backoff logic for failures
+func (m *FileConfigManagerWithBackoff) GetConfigAsString(ctx context.Context) (string, error) {
+	// in the GetConfig method, we already read the file and cached the raw config to m.cacheRawConfig
+	_, err := m.GetConfig(ctx, 0)
+	if err != nil {
+		return "", fmt.Errorf("failed to get config: %w", err)
+	}
+
+	m.configManager.cacheMu.RLock()
+	rawConfig := m.configManager.cacheRawConfig
+	m.configManager.cacheMu.RUnlock()
+
+	return rawConfig, nil
+}
+
+// GetCacheModTimeWithoutUpdate returns the modification time without updating the cache
+func (m *FileConfigManager) GetCacheModTimeWithoutUpdate() time.Time {
+	m.cacheMu.RLock()
+	modTime := m.cacheModTime
+	m.cacheMu.RUnlock()
+	return modTime
+}
+
+// UpdateAndGetCacheModTime updates the cache and returns the modification time
+func (m *FileConfigManager) UpdateAndGetCacheModTime(ctx context.Context) (time.Time, error) {
+	// read config to update the cache mod time
+	_, err := m.GetConfig(ctx, 0)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("failed to get config: %w", err)
+	}
+
+	return m.GetCacheModTimeWithoutUpdate(), nil
+}
+
+// GetCacheModTimeWithoutUpdate delegates to the underlying FileConfigManager
+func (m *FileConfigManagerWithBackoff) GetCacheModTimeWithoutUpdate() time.Time {
+	return m.configManager.GetCacheModTimeWithoutUpdate()
+}
+
+// UpdateAndGetCacheModTime delegates to the underlying FileConfigManager
+func (m *FileConfigManagerWithBackoff) UpdateAndGetCacheModTime(ctx context.Context) (time.Time, error) {
+	return m.configManager.UpdateAndGetCacheModTime(ctx)
+}
+
+// WriteConfigFromString writes a config from a string to the config file
+// If expectedModTime is provided, it will check that the file hasn't been modified since that time
+func (m *FileConfigManager) WriteConfigFromString(ctx context.Context, configStr string, expectedModTime string) error {
+	// First parse the config with strict validation to detect syntax errors and schema problems
+	_, err := parseConfig([]byte(configStr), false)
+	if err != nil {
+		// If strict parsing fails, try again with allowUnknownFields=true
+		// This allows YAML anchors and other custom fields
+		_, err = parseConfig([]byte(configStr), true)
+		if err != nil {
+			return fmt.Errorf("failed to parse config: %w", err)
+		}
+	}
+
+	// We use a write lock here because we write the config file
+	err = m.mutexReadOrWrite.Lock(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to lock config file: %w", err)
+	}
+	defer m.mutexReadOrWrite.Unlock()
+
+	// Check if context is already cancelled
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+
+	// If expectedModTime is provided, check for concurrent modification atomically under the lock
+	if expectedModTime != "" {
+		info, err := m.fsService.Stat(ctx, m.configPath)
+		if err != nil && !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("failed to stat config file: %w", err)
+		}
+
+		// If file exists, check modification time
+		if err == nil && info.ModTime().Format(time.RFC3339) != expectedModTime {
+			return fmt.Errorf("concurrent modification detected: file modified at %v, expected %v",
+				info.ModTime().Format(time.RFC3339), expectedModTime)
+		}
+	}
+
+	// Create the directory if it doesn't exist
+	dir := filepath.Dir(m.configPath)
+	if err := m.fsService.EnsureDirectory(ctx, dir); err != nil {
+		return fmt.Errorf("failed to create config directory: %w", err)
+	}
+
+	// Write the raw string directly to file to preserve all YAML features
+	if err := m.fsService.WriteFile(ctx, m.configPath, []byte(configStr), 0666); err != nil {
+		return fmt.Errorf("failed to write config file: %w", err)
+	}
+
+	// Update the cache to reflect the new config
+	info, err := m.fsService.Stat(ctx, m.configPath)
+	if err != nil {
+		return fmt.Errorf("failed to stat config file after write: %w", err)
+	}
+
+	// Parse the config for the cache
+	parsedConfig, err := parseConfig([]byte(configStr), true)
+	if err != nil {
+		return fmt.Errorf("failed to parse config for cache update: %w", err)
+	}
+
+	// Update all cache fields atomically in a single critical section
+	m.cacheMu.Lock()
+	m.cacheRawConfig = configStr
+	m.cacheModTime = info.ModTime()
+	m.cacheConfig = parsedConfig
+	m.cacheMu.Unlock()
+
+	m.logger.Infof("Successfully wrote config to %s", m.configPath)
+	return nil
+}
+
+// WriteConfigFromString delegates to the underlying FileConfigManager
+func (m *FileConfigManagerWithBackoff) WriteConfigFromString(ctx context.Context, configStr string, expectedModTime string) error {
+	// Check if context is already cancelled
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+
+	return m.configManager.WriteConfigFromString(ctx, configStr, expectedModTime)
 }

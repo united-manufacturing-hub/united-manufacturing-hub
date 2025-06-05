@@ -19,7 +19,7 @@ import (
 )
 
 // GetNmapServiceConfig converts the component config to a full NmapServiceConfig
-func (c *ConnectionServiceConfig) GetNmapServiceConfig() nmapserviceconfig.NmapServiceConfig {
+func (c ConnectionServiceConfig) GetNmapServiceConfig() nmapserviceconfig.NmapServiceConfig {
 	return c.NmapServiceConfig
 }
 
