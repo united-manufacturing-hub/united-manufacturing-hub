@@ -94,6 +94,13 @@ type ConfigManager interface {
 	// errors when trying to customize templated configurations.
 	// AtomicUnlinkFromTemplate(ctx context.Context, componentUUID uuid.UUID) error
 
+	// TODO: Add AtomicUnlinkFromTemplate method
+	// AtomicUnlinkFromTemplate converts a templated configuration (using YAML anchors/aliases)
+	// to an inline template configuration, making it UI-editable while preserving all
+	// current functionality. This addresses the UX gap where users hit "please edit the file manually"
+	// errors when trying to customize templated configurations.
+	// AtomicUnlinkFromTemplate(ctx context.Context, componentUUID uuid.UUID) error
+
 }
 
 // FileConfigManager implements the ConfigManager interface by reading from a file
