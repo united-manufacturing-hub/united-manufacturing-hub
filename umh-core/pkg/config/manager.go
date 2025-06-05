@@ -215,6 +215,7 @@ func (m *FileConfigManager) GetConfig(ctx context.Context, tick uint64) (FullCon
 	// we use a read lock here, because we only read the config file
 	err := m.mutexReadOrWrite.RLock(ctx)
 	if err != nil {
+		fmt.Printf("failed to lock config file: %v\n", err)
 		return FullConfig{}, fmt.Errorf("failed to lock config file: %w", err)
 	}
 	defer m.mutexReadOrWrite.RUnlock()
@@ -227,20 +228,24 @@ func (m *FileConfigManager) GetConfig(ctx context.Context, tick uint64) (FullCon
 	// Create the directory if it doesn't exist
 	dir := filepath.Dir(m.configPath)
 	if err := m.fsService.EnsureDirectory(ctx, dir); err != nil {
+		fmt.Printf("failed to create config directory: %v\n", err)
 		return FullConfig{}, fmt.Errorf("failed to create config directory: %w", err)
 	}
 
 	// Check if context is already cancelled
 	if ctx.Err() != nil {
+		fmt.Printf("context err: %v\n", ctx.Err())
 		return FullConfig{}, ctx.Err()
 	}
 
 	// QUICK existence check
 	exists, err := m.fsService.FileExists(ctx, m.configPath)
 	if err != nil {
+		fmt.Printf("failed to check if config file exists in %s: %v\n", m.configPath, err)
 		return FullConfig{}, fmt.Errorf("failed to check if config file exists in %s: %w", m.configPath, err)
 	}
 	if !exists {
+		fmt.Printf("config file does not exist: %s", m.configPath)
 		return FullConfig{}, fmt.Errorf("config file does not exist: %s", m.configPath)
 	}
 
@@ -250,8 +255,10 @@ func (m *FileConfigManager) GetConfig(ctx context.Context, tick uint64) (FullCon
 	case err == nil:
 		// file exists → continue with fast-/slow-path decision
 	case errors.Is(err, os.ErrNotExist):
+		fmt.Printf("config file does not exist: %s\n", m.configPath)
 		return FullConfig{}, fmt.Errorf("config file does not exist: %s", m.configPath)
 	default:
+		fmt.Printf("failed to stat config file: %v\n", err)
 		return FullConfig{}, fmt.Errorf("failed to stat config file: %w", err)
 	}
 
@@ -260,6 +267,7 @@ func (m *FileConfigManager) GetConfig(ctx context.Context, tick uint64) (FullCon
 	if !m.cacheModTime.IsZero() && info.ModTime().Equal(m.cacheModTime) {
 		cfg := m.cacheConfig // return cached struct
 		m.cacheMu.RUnlock()
+		fmt.Printf("fast path return\n")
 		return cfg, nil
 	}
 	m.cacheMu.RUnlock()
@@ -271,22 +279,26 @@ func (m *FileConfigManager) GetConfig(ctx context.Context, tick uint64) (FullCon
 	defer cancel()
 	data, err := m.fsService.ReadFile(readFileCtx, m.configPath)
 	if err != nil {
+		fmt.Printf("failed to read config file: %v\n", err)
 		return FullConfig{}, fmt.Errorf("failed to read config file: %w", err)
 	}
 	// This ensures that there is at least half of the timeout left for the parse operation
 
 	// Check if context is already cancelled
 	if ctx.Err() != nil {
+		fmt.Printf("context err: %v\n", ctx.Err())
 		return FullConfig{}, ctx.Err()
 	}
 
 	config, err := parseConfig(data)
 	if err != nil {
+		fmt.Printf("failed to parse config file: %v", err)
 		return FullConfig{}, fmt.Errorf("failed to parse config file: %w", err)
 	}
 
 	// Check if context is already cancelled
 	if ctx.Err() != nil {
+		fmt.Printf("context err: %v\n", ctx.Err())
 		return FullConfig{}, ctx.Err()
 	}
 
@@ -294,6 +306,7 @@ func (m *FileConfigManager) GetConfig(ctx context.Context, tick uint64) (FullCon
 	// Note: sometimes it can happen that due to a filesystem error or maybe in the tests due to docker cp, the file is empty
 	// In this case we want to return an error, which is then ignored by the control loop and will retry in the next cycle
 	if reflect.DeepEqual(config, FullConfig{}) {
+		fmt.Printf("config file is empty: %s\n", m.configPath)
 		return FullConfig{}, fmt.Errorf("config file is empty: %s", m.configPath)
 	}
 
@@ -317,6 +330,7 @@ func (m *FileConfigManager) GetConfig(ctx context.Context, tick uint64) (FullCon
 	m.cacheConfig = config
 	m.cacheMu.Unlock()
 
+	fmt.Printf("slow path return\n")
 	return config, nil
 }
 
