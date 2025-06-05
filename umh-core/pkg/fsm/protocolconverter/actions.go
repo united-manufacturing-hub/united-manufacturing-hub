@@ -241,8 +241,8 @@ func (p *ProtocolConverterInstance) UpdateObservedStateOfInstance(ctx context.Co
 	p.renderedConfig, err = runtime_config.BuildRuntimeConfig(
 		p.config,
 		convertIntMapToStringMap(snapshot.CurrentConfig.Agent.Location),
-		nil,       // TODO: add global vars
-		"unknown", // TODO: add node name
+		nil,             // TODO: add global vars
+		"unimplemented", // TODO: add node name
 		p.baseFSMInstance.GetID(),
 	)
 	if err != nil {
