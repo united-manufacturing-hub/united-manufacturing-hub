@@ -179,6 +179,8 @@ func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePay
 			systemSnapshotManager: systemSnapshotManager,
 			actionLogger:          log,
 		}
+	case models.GetProtocolConverter:
+		action = NewGetProtocolConverterAction(sender, payload.ActionUUID, instanceUUID, outboundChannel, configManager, systemSnapshotManager)
 
 	default:
 		log.Errorf("Unknown action type: %s", payload.ActionType)

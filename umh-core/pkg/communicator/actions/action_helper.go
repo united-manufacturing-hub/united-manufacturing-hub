@@ -19,10 +19,153 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/encoding"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 	"go.uber.org/zap"
+	"gopkg.in/yaml.v3"
 )
+
+// BuildDataFlowComponentDataFromSnapshot converts the *observed* FSM snapshot
+// into a `config.DataFlowComponentConfig`.  This function can be used by both
+// get-dataflowcomponent and get-protocol-converter actions.
+//
+// The function extracts the configuration data from a dataflow component FSM instance
+// and builds a complete DataFlowComponentConfig structure that can be used to construct
+// API responses.
+func BuildDataFlowComponentDataFromSnapshot(instance fsm.FSMInstanceSnapshot, log *zap.SugaredLogger) (config.DataFlowComponentConfig, error) {
+	dfcData := config.DataFlowComponentConfig{}
+
+	log.Infow("Building dataflowcomponent data from snapshot", "instanceID", instance.ID)
+
+	if instance.LastObservedState != nil {
+		// Try to cast to the right type
+		observedState, ok := instance.LastObservedState.(*dataflowcomponent.DataflowComponentObservedStateSnapshot)
+		if !ok {
+			log.Errorw("Observed state is of unexpected type", "instanceID", instance.ID)
+			return config.DataFlowComponentConfig{}, fmt.Errorf("invalid observed state type for dataflowcomponent %s", instance.ID)
+		}
+		dfcData.DataFlowComponentServiceConfig = observedState.Config
+		dfcData.Name = instance.ID
+		dfcData.DesiredFSMState = instance.DesiredState
+
+	} else {
+		log.Warnw("No observed state found for dataflowcomponent", "instanceID", instance.ID)
+		return config.DataFlowComponentConfig{}, fmt.Errorf("no observed state found for dataflowcomponent")
+	}
+
+	return dfcData, nil
+}
+
+// BuildCommonDataFlowComponentPropertiesFromConfig converts a DataFlowComponentServiceConfig
+// into the CommonDataFlowComponentCDFCPropertiesPayload format expected by the API.
+// This function can be used by both get-dataflowcomponent and get-protocol-converter actions.
+//
+// The function extracts inputs, outputs, pipeline, and rawYAML from the Benthos configuration
+// and builds the complete CDFC properties structure that can be used to construct API responses.
+func BuildCommonDataFlowComponentPropertiesFromConfig(dfcConfig dataflowcomponentserviceconfig.DataflowComponentServiceConfig, log *zap.SugaredLogger) (models.CommonDataFlowComponentCDFCPropertiesPayload, error) {
+	// build the payload
+	dfc_payload := models.CommonDataFlowComponentCDFCPropertiesPayload{}
+	tagValue := "" // the benthos image tag is not used anymore in UMH Core
+	dfc_payload.CDFCProperties.BenthosImageTag = &models.CommonDataFlowComponentBenthosImageTagConfig{
+		Tag: &tagValue,
+	}
+	dfc_payload.CDFCProperties.IgnoreErrors = nil
+
+	//fill the inputs, outputs, pipeline and rawYAML
+	// Convert the BenthosConfig input to CommonDataFlowComponentInputConfig
+	inputData, err := yaml.Marshal(dfcConfig.BenthosConfig.Input)
+	if err != nil {
+		log.Warnf("Failed to marshal input data: %v", err)
+		return models.CommonDataFlowComponentCDFCPropertiesPayload{}, err
+	}
+	dfc_payload.CDFCProperties.Inputs = models.CommonDataFlowComponentInputConfig{
+		Data: string(inputData),
+		Type: "benthos", // Default type for benthos inputs
+	}
+
+	// Convert the BenthosConfig output to CommonDataFlowComponentOutputConfig
+	outputData, err := yaml.Marshal(dfcConfig.BenthosConfig.Output)
+	if err != nil {
+		log.Warnf("Failed to marshal output data: %v", err)
+		return models.CommonDataFlowComponentCDFCPropertiesPayload{}, err
+	}
+	dfc_payload.CDFCProperties.Outputs = models.CommonDataFlowComponentOutputConfig{
+		Data: string(outputData),
+		Type: "benthos", // Default type for benthos outputs
+	}
+
+	// Convert the BenthosConfig pipeline to CommonDataFlowComponentPipelineConfig
+	processors := models.CommonDataFlowComponentPipelineConfigProcessors{}
+
+	// Extract processors from the pipeline if they exist
+	if pipeline, ok := dfcConfig.BenthosConfig.Pipeline["processors"].([]interface{}); ok {
+		for i, proc := range pipeline {
+			procData, err := yaml.Marshal(proc)
+			if err != nil {
+				log.Warnf("Failed to marshal processor data: %v", err)
+				continue
+			}
+			// Use index as processor name to allow sorting in the frontend
+			procName := fmt.Sprintf("%d", i)
+			processors[procName] = struct {
+				Data string `json:"data" yaml:"data" mapstructure:"data"`
+				Type string `json:"type" yaml:"type" mapstructure:"type"`
+			}{
+				Data: string(procData),
+				Type: "bloblang", // Default type for benthos processors
+			}
+		}
+	}
+
+	// Set threads value if present in the pipeline
+	var threads *int
+	if threadsVal, ok := dfcConfig.BenthosConfig.Pipeline["threads"]; ok {
+		if t, ok := threadsVal.(int); ok {
+			threads = &t
+		}
+	}
+
+	dfc_payload.CDFCProperties.Pipeline = models.CommonDataFlowComponentPipelineConfig{
+		Processors: processors,
+		Threads:    threads,
+	}
+
+	// Create RawYAML from the cache_resources, rate_limit_resources, and buffer
+	rawYAMLMap := map[string]interface{}{}
+
+	// Add cache resources if present
+	if len(dfcConfig.BenthosConfig.CacheResources) > 0 {
+		rawYAMLMap["cache_resources"] = dfcConfig.BenthosConfig.CacheResources
+	}
+
+	// Add rate limit resources if present
+	if len(dfcConfig.BenthosConfig.RateLimitResources) > 0 {
+		rawYAMLMap["rate_limit_resources"] = dfcConfig.BenthosConfig.RateLimitResources
+	}
+
+	// Add buffer if present
+	if len(dfcConfig.BenthosConfig.Buffer) > 0 {
+		rawYAMLMap["buffer"] = dfcConfig.BenthosConfig.Buffer
+	}
+
+	// Only create rawYAML if we have any data
+	if len(rawYAMLMap) > 0 {
+		rawYAMLData, err := yaml.Marshal(rawYAMLMap)
+		if err != nil {
+			log.Warnf("Failed to marshal rawYAML data: %v", err)
+		} else {
+			dfc_payload.CDFCProperties.RawYAML = &models.CommonDataFlowComponentRawYamlConfig{
+				Data: string(rawYAMLData),
+			}
+		}
+	}
+
+	return dfc_payload, nil
+}
 
 // ConsumeOutboundMessages processes messages from the outbound channel
 // This method is used for testing purposes to consume messages that would normally be sent to the user
