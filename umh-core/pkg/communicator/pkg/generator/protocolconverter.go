@@ -94,6 +94,13 @@ func buildProtocolConverterAsDfc(
 		connections = append(connections, connection)
 	}
 
+	//check if the protocol converter is initialized by checking if a read dfc is present
+	isInitialized := false
+	input := observed.ObservedProtocolConverterConfig.DataflowComponentReadServiceConfig.BenthosConfig.Input
+	if input != nil && len(input) > 0 {
+		isInitialized = true
+	}
+
 	dfc := models.Dfc{
 		Type:        models.DfcTypeProtocolConverter,
 		UUID:        uuid.String(),
@@ -108,7 +115,8 @@ func buildProtocolConverterAsDfc(
 		// Metrics are not implemented yet for protocol converters
 		Metrics: nil,
 		// Bridge info is not applicable for protocol converters
-		Bridge: nil,
+		Bridge:        nil,
+		IsInitialized: isInitialized,
 	}
 
 	return dfc, nil
