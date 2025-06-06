@@ -340,7 +340,6 @@ func (r *RedpandaInstance) UpdateObservedStateOfInstance(ctx context.Context, se
 	// Important: This *must* run after the rest of the update state, otherwise we will incorrectly look at an potential old state and infinitly loop.
 	currentState = r.baseFSMInstance.GetCurrentFSMState()
 	desiredState = r.baseFSMInstance.GetDesiredFSMState()
-	r.baseFSMInstance.GetLogger().Debugf("Current state: %s, desired state: %s", currentState, desiredState)
 	if IsRunningState(currentState) && IsRunningState(desiredState) {
 		// Reconcile the cluster config via HTTP
 		// 1. Check if we have changes in the config
