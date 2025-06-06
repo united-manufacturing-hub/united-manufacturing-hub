@@ -187,7 +187,15 @@ func (p *ProtocolConverterInstance) getServiceStatus(ctx context.Context, servic
 		p.baseFSMInstance.GetLogger().Errorf("error updating observed state for %s: %s", p.baseFSMInstance.GetID(), err)
 		infoWithFailedHealthChecks := info
 
-		// TODO: set the healthchecks to false
+		// Set health flags to false to indicate failure, following the pattern used by other FSMs
+		// Only set health checks for components that have them (Benthos components and Redpanda)
+		infoWithFailedHealthChecks.DataflowComponentReadObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.HealthCheck.IsLive = false
+		infoWithFailedHealthChecks.DataflowComponentReadObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.HealthCheck.IsReady = false
+		infoWithFailedHealthChecks.DataflowComponentWriteObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.HealthCheck.IsLive = false
+		infoWithFailedHealthChecks.DataflowComponentWriteObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.HealthCheck.IsReady = false
+
+		// Set the StatusReason to explain the error
+		infoWithFailedHealthChecks.StatusReason = fmt.Sprintf("service status error: %s", err.Error())
 
 		// return the info with healthchecks failed
 		return infoWithFailedHealthChecks, err
