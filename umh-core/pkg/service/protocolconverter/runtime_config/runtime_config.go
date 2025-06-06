@@ -274,7 +274,10 @@ func renderConfig(
 
 	// 2. Convert the rendered template to runtime config with proper types
 	// This handles the string-to-uint16 port conversion and type safety
-	connRuntime := connectionserviceconfig.ConvertTemplateToRuntime(conn)
+	connRuntime, err := connectionserviceconfig.ConvertTemplateToRuntime(conn)
+	if err != nil {
+		return protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime{}, fmt.Errorf("failed to convert connection template to runtime: %w", err)
+	}
 
 	read, err := config.RenderTemplate(spec.GetDFCReadServiceConfig(), scope)
 	if err != nil {

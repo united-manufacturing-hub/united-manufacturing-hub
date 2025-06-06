@@ -121,6 +121,33 @@ func CreateProtocolConverterTestConfigWithMissingDfc(name string, desiredState s
 	}
 }
 
+// CreateProtocolConverterTestConfigWithInvalidPort creates a ProtocolConverter config with an invalid port for testing error handling
+// The invalid port will cause conversion from template to runtime to fail
+func CreateProtocolConverterTestConfigWithInvalidPort(name string, desiredState string, invalidPort string) config.ProtocolConverterConfig {
+	invalidConnectionServiceConfig := connectionserviceconfig.ConnectionServiceConfigTemplate{
+		NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
+			Target: "localhost",
+			Port:   invalidPort, // This will cause parsing to fail
+		},
+	}
+
+	return config.ProtocolConverterConfig{
+		FSMInstanceConfig: config.FSMInstanceConfig{
+			Name:            name,
+			DesiredFSMState: desiredState,
+		},
+		ProtocolConverterServiceConfig: protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
+			Template: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
+				DataflowComponentReadServiceConfig: goodDataflowComponentReadConfig,
+				// ignoring write DFC for now as I get otherwise the error message of
+				// failed to build runtime config: template: pc:5:36: executing "pc" at <.internal.umh_topic>: map has no entry for key "umh_topic"
+				// DataflowComponentWriteServiceConfig: goodDataflowComponentWriteConfig,
+				ConnectionServiceConfig: invalidConnectionServiceConfig,
+			},
+		},
+	}
+}
+
 // SetupProtocolConverterServiceState configures the mock service state for ProtocolConverter instance tests
 func SetupProtocolConverterServiceState(
 	mockService *protocolconvertersvc.MockProtocolConverterService,
@@ -337,11 +364,20 @@ func SetupProtocolConverterInstanceWithMissingDfc(serviceName string, desiredSta
 
 	// Configure service with default config
 	ConfigureProtocolConverterServiceConfig(mockService)
-
-	// Add mock service registry
 	mockSvcRegistry := serviceregistry.NewMockRegistry()
 
 	// Create new instance
+	instance := setUpMockProtocolConverterInstance(cfg, mockService, mockSvcRegistry)
+
+	return instance, mockService, cfg
+}
+
+// SetupProtocolConverterInstanceWithInvalidPort creates a ProtocolConverter instance with invalid port configuration for testing error handling
+func SetupProtocolConverterInstanceWithInvalidPort(serviceName string, desiredState string, invalidPort string) (*protocolconverterfsm.ProtocolConverterInstance, *protocolconvertersvc.MockProtocolConverterService, config.ProtocolConverterConfig) {
+	cfg := CreateProtocolConverterTestConfigWithInvalidPort(serviceName, desiredState, invalidPort)
+	mockService := protocolconvertersvc.NewMockProtocolConverterService()
+	mockSvcRegistry := serviceregistry.NewMockRegistry()
+
 	instance := setUpMockProtocolConverterInstance(cfg, mockService, mockSvcRegistry)
 
 	return instance, mockService, cfg

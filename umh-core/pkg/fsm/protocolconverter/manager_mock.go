@@ -73,7 +73,13 @@ func NewProtocolConverterManagerWithMockedServices(name string) (*ProtocolConver
 			if !configsEqual {
 				protocolConverterInstance.config = cfg.ProtocolConverterServiceConfig
 				if mockSvc, ok := protocolConverterInstance.service.(*protocolconvertersvc.MockProtocolConverterService); ok {
-					mockSvc.GetConfigResult = protocolconverterserviceconfig.SpecToRuntime(cfg.ProtocolConverterServiceConfig)
+					runtimeConfig, err := protocolconverterserviceconfig.SpecToRuntime(cfg.ProtocolConverterServiceConfig)
+					if err != nil {
+						// For invalid configs, don't update the mock service but don't fail the comparison
+						// This matches the behavior of the real manager where invalid configs are handled gracefully
+						return configsEqual, nil
+					}
+					mockSvc.GetConfigResult = runtimeConfig
 				}
 			}
 
@@ -87,7 +93,13 @@ func NewProtocolConverterManagerWithMockedServices(name string) (*ProtocolConver
 			}
 			protocolConverterInstance.config = cfg.ProtocolConverterServiceConfig
 			if mockSvc, ok := protocolConverterInstance.service.(*protocolconvertersvc.MockProtocolConverterService); ok {
-				mockSvc.GetConfigResult = protocolconverterserviceconfig.SpecToRuntime(cfg.ProtocolConverterServiceConfig)
+				runtimeConfig, err := protocolconverterserviceconfig.SpecToRuntime(cfg.ProtocolConverterServiceConfig)
+				if err != nil {
+					// For invalid configs, don't update the mock service but don't fail the set operation
+					// This matches the behavior of the real manager where invalid configs are handled gracefully
+					return nil
+				}
+				mockSvc.GetConfigResult = runtimeConfig
 			}
 			return nil
 		},

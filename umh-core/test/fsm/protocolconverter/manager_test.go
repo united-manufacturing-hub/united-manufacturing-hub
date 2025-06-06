@@ -458,4 +458,155 @@ var _ = Describe("ProtocolConverterManager", func() {
 			Expect(inst.GetCurrentFSMState()).To(Equal(protocolconverter.OperationalStateStartingFailedDFCMissing))
 		})
 	})
+
+	// -------------------------------------------------------------------------
+	//  CONFIGURATION VALIDATION
+	// -------------------------------------------------------------------------
+	Context("Configuration Validation", func() {
+		It("should handle invalid port configurations gracefully", func() {
+			converterName := "test-invalid-port-converter"
+
+			// Create a config with an invalid port (non-numeric string)
+			cfg := config.FullConfig{
+				ProtocolConverter: []config.ProtocolConverterConfig{
+					fsmtest.CreateProtocolConverterTestConfigWithInvalidPort(converterName, protocolconverter.OperationalStateActive, "not-a-number"),
+				},
+			}
+
+			// Try to reconcile - should fail with configuration error
+			newTick, err := fsmtest.WaitForProtocolConverterManagerStable(
+				ctx, fsm.SystemSnapshot{CurrentConfig: cfg, Tick: tick}, manager, mockSvcRegistry,
+			)
+			tick = newTick
+
+			// The manager should handle the error gracefully (no error returned)
+			// The config comparison fails internally but doesn't propagate as an error
+			Expect(err).NotTo(HaveOccurred())
+
+			// The instance should be created but remain in its initial state
+			// due to the config comparison failure preventing updates
+			instances := manager.GetInstances()
+			Expect(instances).To(HaveLen(1))
+			Expect(instances).To(HaveKey(fmt.Sprintf("protocolconverter-%s", converterName)))
+		})
+
+		It("should handle empty port configurations", func() {
+			converterName := "test-empty-port-converter"
+
+			// Create a config with an empty port
+			cfg := config.FullConfig{
+				ProtocolConverter: []config.ProtocolConverterConfig{
+					fsmtest.CreateProtocolConverterTestConfigWithInvalidPort(converterName, protocolconverter.OperationalStateActive, ""),
+				},
+			}
+
+			// Try to reconcile - should fail with configuration error
+			newTick, err := fsmtest.WaitForProtocolConverterManagerStable(
+				ctx, fsm.SystemSnapshot{CurrentConfig: cfg, Tick: tick}, manager, mockSvcRegistry,
+			)
+			tick = newTick
+
+			// The manager should handle the error gracefully (no error returned)
+			Expect(err).NotTo(HaveOccurred())
+
+			// The instance should be created but remain in its initial state
+			instances := manager.GetInstances()
+			Expect(instances).To(HaveLen(1))
+			Expect(instances).To(HaveKey(fmt.Sprintf("protocolconverter-%s", converterName)))
+		})
+
+		It("should handle out-of-range port numbers", func() {
+			converterName := "test-large-port-converter"
+
+			// Create a config with a port number larger than uint16 max (65535)
+			cfg := config.FullConfig{
+				ProtocolConverter: []config.ProtocolConverterConfig{
+					fsmtest.CreateProtocolConverterTestConfigWithInvalidPort(converterName, protocolconverter.OperationalStateActive, "99999"),
+				},
+			}
+
+			// Try to reconcile - should fail with configuration error
+			newTick, err := fsmtest.WaitForProtocolConverterManagerStable(
+				ctx, fsm.SystemSnapshot{CurrentConfig: cfg, Tick: tick}, manager, mockSvcRegistry,
+			)
+			tick = newTick
+
+			// The manager should handle the error gracefully (no error returned)
+			Expect(err).NotTo(HaveOccurred())
+
+			// The instance should be created but remain in its initial state
+			instances := manager.GetInstances()
+			Expect(instances).To(HaveLen(1))
+			Expect(instances).To(HaveKey(fmt.Sprintf("protocolconverter-%s", converterName)))
+		})
+
+		It("should handle negative port numbers", func() {
+			converterName := "test-negative-port-converter"
+
+			// Create a config with a negative port number
+			cfg := config.FullConfig{
+				ProtocolConverter: []config.ProtocolConverterConfig{
+					fsmtest.CreateProtocolConverterTestConfigWithInvalidPort(converterName, protocolconverter.OperationalStateActive, "-1"),
+				},
+			}
+
+			// Try to reconcile - should fail with configuration error
+			newTick, err := fsmtest.WaitForProtocolConverterManagerStable(
+				ctx, fsm.SystemSnapshot{CurrentConfig: cfg, Tick: tick}, manager, mockSvcRegistry,
+			)
+			tick = newTick
+
+			// The manager should handle the error gracefully (no error returned)
+			Expect(err).NotTo(HaveOccurred())
+
+			// The instance should be created but remain in its initial state
+			instances := manager.GetInstances()
+			Expect(instances).To(HaveLen(1))
+			Expect(instances).To(HaveKey(fmt.Sprintf("protocolconverter-%s", converterName)))
+		})
+
+		It("should handle mixed valid and invalid configurations", func() {
+			validConverterName := "test-valid-converter"
+			invalidConverterName := "test-invalid-converter"
+
+			// Create configs with one valid and one invalid
+			cfg := config.FullConfig{
+				ProtocolConverter: []config.ProtocolConverterConfig{
+					fsmtest.CreateProtocolConverterTestConfig(validConverterName, protocolconverter.OperationalStateActive),
+					fsmtest.CreateProtocolConverterTestConfigWithInvalidPort(invalidConverterName, protocolconverter.OperationalStateActive, "invalid-port"),
+				},
+			}
+
+			// Configure the valid one to reach idle state
+			fsmtest.ConfigureProtocolConverterManagerForState(mockService, validConverterName, protocolconverter.OperationalStateIdle)
+
+			// Try to reconcile - give it more time since it needs to create two instances
+			// The manager can only create one instance per tick, so we need at least 2 ticks
+			// Let's manually reconcile multiple times to ensure both instances are created
+			var err error
+			for i := 0; i < 20; i++ {
+				currentSnapshot := fsm.SystemSnapshot{CurrentConfig: cfg, Tick: tick}
+				err, _ = manager.Reconcile(ctx, currentSnapshot, mockSvcRegistry)
+				if err != nil {
+					break
+				}
+				tick++
+
+				// Check if we have both instances
+				instances := manager.GetInstances()
+				if len(instances) >= 2 {
+					break
+				}
+			}
+
+			// The manager should handle the error gracefully (no error returned)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Both instances should be created, but the invalid one will fail config comparison
+			instances := manager.GetInstances()
+			Expect(instances).To(HaveLen(2))
+			Expect(instances).To(HaveKey(fmt.Sprintf("protocolconverter-%s", validConverterName)))
+			Expect(instances).To(HaveKey(fmt.Sprintf("protocolconverter-%s", invalidConverterName)))
+		})
+	})
 })
