@@ -1,4 +1,4 @@
-# Stand-Alone Flow
+# Stand-alone Flow
 
 Stand-alone Flows (shown as `dataFlow:` in YAML configuration) provide point-to-point data movement without the connection monitoring and location hierarchy features of Bridges. They're ideal for custom processing pipelines and situations where you don't need UNS buffering.
 

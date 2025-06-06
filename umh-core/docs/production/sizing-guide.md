@@ -4,7 +4,7 @@
 
 #### What that box handles
 
-* **≈ 9 protocol-converter DFCs** (e.g. OPC UA ➜ Redpanda) **plus one bridge DFC** that forwards from the local Redpanda to an external MQTT broker
+* **≈ 9 bridges instances** (e.g. OPC UA ➜ Redpanda) **plus one bridge instance** that forwards from the local Redpanda to an external MQTT broker
 * **≈ 900 tags at 1 message / second each**
 * Keeps **seven days** of history under the default cluster retention (`log_retention_ms = 7 days`)
 * Runs comfortably below 70 % CPU and I/O on a Hetzner CAX21 / CX32-class VM or Raspberry Pi 4
@@ -24,11 +24,11 @@ Shorten retention (either during install with `internal.redpanda.redpandaService
 | ------------------- | ------------------------------------------------ |
 | Redpanda            | ≈ 2 GB · cores + 1.5 GB head-room (Seastar rule) |
 | Agent + supervision | ≈ 150 MB                                         |
-| Each extra DFC      | ≈ 100 MB                                         |
+| Each extra pipeline | ≈ 100 MB                                         |
 
 #### CPU
 
-_One core_ is kept busy by Redpanda. _One additional core_ comfortably covers the agent and the first dozen DFCs doing light transforms. Heavy parsing, encryption, or synchronous HTTP calls may warrant more cores or a faster CPU.
+_One core_ is kept busy by Redpanda. _One additional core_ comfortably covers the agent and the first dozen pipelines doing light transforms. Heavy parsing, encryption, or synchronous HTTP calls may warrant more cores or a faster CPU.
 
 #### Easy vertical scaling
 

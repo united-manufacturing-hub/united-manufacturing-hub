@@ -12,7 +12,7 @@
   * [Data Flows](usage/data-flows/README.md)
     * [Overview](usage/data-flows/overview.md)
     * [Bridges](usage/data-flows/bridges.md)
-    * [Stand-Alone Flow](usage/data-flows/stand-alone-flow.md)
+    * [Stand-alone Flow](usage/data-flows/stand-alone-flow.md)
     * [Stream Processor 🚧](usage/data-flows/stream-processor-upcoming.md)
   * [Data Modeling 🚧](usage/data-modeling/README.md)
     * [Data Models 🚧](usage/data-modeling/data-models.md)

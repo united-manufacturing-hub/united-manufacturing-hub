@@ -32,7 +32,7 @@ Instance
    └─ Stand-alone Flows ✅  # Available now
 ```
 
-* **Bridge** 🚧 – a Data Flow that **connects** an external system to the UNS. *(Roadmap item - basic functionality available)*
+* **Bridge** 🚧 – connects external systems to the UNS with health monitoring. See [Bridges](usage/data-flows/bridges.md) for details. *(Roadmap item - basic functionality available)*
 * **Stream Processor** 🚧 – transforms messages already inside the UNS. *(Roadmap item)*
 * **Stand-alone Flow** ✅ – point-to-point when UNS buffering isn't wanted. *(Available now)*
 * **Connection** ✅ - a continuous network check whether the external system is available. *(Available now)*

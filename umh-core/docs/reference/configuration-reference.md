@@ -6,6 +6,16 @@ This is the reference for the central config `/data/config.yaml`
 > **Hot-reload:** The Agent polls the file every tick; valid changes are applied automatically.\
 > **UI Terminology:** In the Management Console UI, `protocolConverter:` is shown as "Bridges" and `dataFlow:` is shown as "Stand-alone Flows"
 
+## Terminology Reference
+
+| Current Term (UMH Core) | Legacy Term (UMH Classic) | YAML Key | Description |
+|------------------------|---------------------------|-----------|-------------|
+| Bridge | Protocol Converter | `protocolConverter:` | Connects external devices to UNS with health monitoring |
+| Stand-alone Flow | Data Flow Component (DFC) | `dataFlow:` | Point-to-point data processing pipelines |
+| Stream Processor | Stream Processor | `dataFlow:` | Processes data within UNS (upcoming feature) |
+
+> **Note:** YAML configuration keys retain legacy names for backward compatibility. The Management Console UI uses the current terminology.
+
 ### Agent - Runtime & Device identity
 
 | Field                           | Type               | Default             | Purpose                                                                                        |
@@ -13,7 +23,7 @@ This is the reference for the central config `/data/config.yaml`
 | `metricsPort`                   | `int`              | **9102**            | Exposes Prometheus metrics for the container.                                                  |
 | `location`                      | map `int → string` | –                   | Hierarchical location path (level0-4+) that identifies this gateway. **Level 0 (enterprise) is mandatory**. Can follow ISA-95, KKS, or any organizational naming standard. |
 | `communicator.apiUrl`           | `string`           | – (console-managed) | HTTPS endpoint of the Management Console.                                                      |
-| `communicator.authToken`        | `string`           | –                   | API Key issued by the console. Can be set via `UMH_AUTH_TOKEN` env-var.                        |
+| `communicator.authToken`        | `string`           | –                   | API Key issued by the console. Can be set via `AUTH_TOKEN` env-var.                        |
 | `communicator.allowInsecureTLS` | `bool`             | `false`             | Skip TLS verification [corporate-firewalls.md](../production/corporate-firewalls.md "mention") |
 
 **Location levels**
@@ -30,7 +40,7 @@ agent:
   metricsPort: 9102
   communicator:
     apiUrl: "https://api.management.umh.app"
-    authToken: "${UMH_AUTH_TOKEN}"
+    authToken: "${AUTH_TOKEN}"
   location:
     0: acme-inc
     1: plant1
@@ -40,7 +50,7 @@ agent:
 
 ### DataFlow - Stand-alone Flows
 
-A list of all [stand-alone flows](../usage/data-flows/stand-alone-flow.md) (UI: "Stand-alone Flows"). Each entry spins up one Benthos-UMH instance.
+A list of all [stand-alone flows](../usage/data-flows/stand-alone-flow.md) (UI: "Stand-alone Flows", YAML: `dataFlow:`). Each entry spins up one Benthos-UMH instance.
 
 | Field                             | Type                  | Required | Description                                        |
 | --------------------------------- | --------------------- | -------- | -------------------------------------------------- |
