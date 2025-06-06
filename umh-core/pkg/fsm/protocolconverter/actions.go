@@ -164,7 +164,6 @@ func (p *ProtocolConverterInstance) CheckForCreation(ctx context.Context, filesy
 
 // getServiceStatus gets the status of the ProtocolConverter service
 // its main purpose is to handle the edge cases where the service is not yet created or not yet running
-
 func (p *ProtocolConverterInstance) getServiceStatus(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) (protocolconvertersvc.ServiceInfo, error) {
 	info, err := p.service.Status(ctx, services, snapshot, p.baseFSMInstance.GetID())
 	if err != nil {

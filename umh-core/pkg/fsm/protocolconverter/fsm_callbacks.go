@@ -48,7 +48,6 @@ func (instance *ProtocolConverterInstance) registerCallbacks() {
 	// Basic operational state callbacks
 	instance.baseFSMInstance.AddCallback("enter_"+OperationalStateStartingConnection, func(ctx context.Context, e *fsm.Event) {
 		instance.baseFSMInstance.GetLogger().Infof("Entering starting connection state for %s", instance.baseFSMInstance.GetID())
-
 		//instance.archiveStorage.StoreDataPoint(ctx, storage.DataPoint{
 		//	Record: storage.Record{
 		//		State:       OperationalStateStartingConnection,
