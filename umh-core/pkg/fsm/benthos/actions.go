@@ -24,6 +24,7 @@ import (
 	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
 	benthosserviceconfig "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 	logger "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
@@ -108,7 +109,7 @@ func (b *BenthosInstance) RemoveInstance(
 		b.baseFSMInstance.GetLogger().
 			Infof("Benthos service %s removal still in progress",
 				b.baseFSMInstance.GetID())
-		// not an error from the FSM’s perspective – just means “try again”
+		// not an error from the FSM's perspective – just means "try again"
 		return err
 
 	// ---------------------------------------------------------------
@@ -201,13 +202,13 @@ func (b *BenthosInstance) getServiceStatus(ctx context.Context, services service
 }
 
 // UpdateObservedStateOfInstance updates the observed state of the service
-func (b *BenthosInstance) UpdateObservedStateOfInstance(ctx context.Context, services serviceregistry.Provider, tick uint64, loopStartTime time.Time) error {
+func (b *BenthosInstance) UpdateObservedStateOfInstance(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
 
 	start := time.Now()
-	info, err := b.getServiceStatus(ctx, services, tick, loopStartTime)
+	info, err := b.getServiceStatus(ctx, services, snapshot.Tick, snapshot.SnapshotTime)
 	if err != nil {
 		return err
 	}
@@ -311,19 +312,76 @@ func (b *BenthosInstance) IsBenthosConfigLoaded() (bool, string) {
 	return false, fmt.Sprintf("uptime %d s (< %d s threshold)", currentUptime, constants.BenthosTimeUntilConfigLoadedInSeconds)
 }
 
-// IsBenthosHealthchecksPassed reports true when both the liveness and
-// readiness probes are successful.
+// IsBenthosHealthchecksPassed debounces Benthos liveness/readiness.
 //
-// It returns:
+// Historical context:
 //
-//	ok     – true when both probes pass, false otherwise.
-//	reason – empty when ok is true; otherwise details of the failed probe(s).
-func (b *BenthosInstance) IsBenthosHealthchecksPassed() (bool, string) {
-	if b.ObservedState.ServiceInfo.BenthosStatus.HealthCheck.IsLive &&
-		b.ObservedState.ServiceInfo.BenthosStatus.HealthCheck.IsReady {
-		return true, ""
+//  1. **Original behaviour** – We returned *true* as soon as Benthos reported
+//     `IsLive && IsReady`.  A one-tick spike of readiness was enough to push
+//     the FSM from *starting_waiting_for_healthchecks* to *idle/active*, even
+//     if the connection was not really up and would be marked as failed a ms later.
+//
+//  2. **Counter experiment** – We tried redefining “connected” with
+//     connection_up > connection_failed + connection_lost
+//     for input and output.  Turned out Benthos sets `IsReady` by checking
+//     *those same counters*, so the experiment yielded identical results and
+//     added no value.
+//
+//  3. **Time-based debounce (rejected)** – Holding a `time.Time` inside the
+//     function and comparing with `time.Now()` fixed flapping but forced every
+//     caller to take its own wall-clock sample – awkward in unit tests.
+//
+//  4. **Current tick-based debounce** – The function is now handed the current
+//     *tick* (`currentTick uint64`).  We remember the first tick at which
+//     Benthos became healthy and only report `ok=true` once
+//
+//     currentTick - healthChecksPassingSinceTick >= BenthosHealthCheckStableDurationInTicks
+//
+//     If health ever drops back to false, `healthChecksPassingSinceTick` is
+//     reset and the timer restarts.
+//
+//     *Pros:*
+//     • deterministic in tests (we control ticks)
+//     • zero extra `time.Now()` calls during reconcile
+//     • behaviour is still “≈ 5 s of stability” in production
+//
+// Return values:
+//
+//	ok     – true after the stable-duration requirement is met
+//	reason – empty on success; otherwise why we’re still waiting or which probe
+//	         failed (“healthchecks passing but not stable yet …”, or
+//	         “healthchecks did not pass: live=false, ready=true”, etc.)
+func (b *BenthosInstance) IsBenthosHealthchecksPassed(currentTick uint64) (bool, string) {
+	// Check if all health checks are currently passing
+	allChecksPassing := b.ObservedState.ServiceInfo.BenthosStatus.HealthCheck.IsLive &&
+		b.ObservedState.ServiceInfo.BenthosStatus.HealthCheck.IsReady
+
+	// If health checks are passing, update or initialize the timestamp
+	if allChecksPassing {
+		if b.healthChecksPassingSinceTick == 0 {
+			b.healthChecksPassingSinceTick = currentTick
+		}
+	} else {
+		// Reset the timestamp if any check fails
+		b.healthChecksPassingSinceTick = 0
+		return false, fmt.Sprintf("healthchecks did not pass: live=%t, ready=%t",
+			b.ObservedState.ServiceInfo.BenthosStatus.HealthCheck.IsLive,
+			b.ObservedState.ServiceInfo.BenthosStatus.HealthCheck.IsReady)
 	}
-	return false, fmt.Sprintf("healthchecks did not pass, live: %t, ready: %t", b.ObservedState.ServiceInfo.BenthosStatus.HealthCheck.IsLive, b.ObservedState.ServiceInfo.BenthosStatus.HealthCheck.IsReady)
+
+	// If we have a timestamp and enough time has passed, return success
+	if b.healthChecksPassingSinceTick != 0 {
+		elapsed := currentTick - b.healthChecksPassingSinceTick
+		if elapsed >= constants.BenthosHealthCheckStableDurationInTicks {
+			return true, ""
+		}
+		return false, fmt.Sprintf("healthchecks passing but not stable yet (%.2f/%d)",
+			float64(elapsed)/float64(constants.BenthosHealthCheckStableDurationInTicks),
+			constants.BenthosHealthCheckStableDurationInTicks)
+	}
+	return false, fmt.Sprintf("healthchecks not passing: live=%t, ready=%t",
+		b.ObservedState.ServiceInfo.BenthosStatus.HealthCheck.IsLive,
+		b.ObservedState.ServiceInfo.BenthosStatus.HealthCheck.IsReady)
 }
 
 // AnyRestartsSinceCreation determines if the Benthos service has restarted since its creation.
@@ -399,7 +457,7 @@ func (b *BenthosInstance) IsBenthosMetricsErrorFree() (bool, string) {
 //
 //	degraded – true when degraded, false when still healthy.
 //	reason   – empty when degraded is false; otherwise the first failure cause.
-func (b *BenthosInstance) IsBenthosDegraded(currentTime time.Time, logWindow time.Duration) (bool, string) {
+func (b *BenthosInstance) IsBenthosDegraded(currentTime time.Time, logWindow time.Duration, currentTick uint64) (bool, string) {
 	// Same order as during starting phase
 	running, reason := b.IsBenthosS6Running()
 	if !running {
@@ -416,7 +474,7 @@ func (b *BenthosInstance) IsBenthosDegraded(currentTime time.Time, logWindow tim
 		return true, reason
 	}
 
-	healthy, reason := b.IsBenthosHealthchecksPassed()
+	healthy, reason := b.IsBenthosHealthchecksPassed(currentTick)
 	if !healthy {
 		return true, reason
 	}

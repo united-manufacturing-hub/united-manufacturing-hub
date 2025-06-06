@@ -91,7 +91,7 @@ func (r *RedpandaInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSna
 
 	// Step 2: Detect external changes.
 	var externalReconciled bool
-	err, externalReconciled = r.reconcileExternalChanges(ctx, services, snapshot.Tick, start)
+	err, externalReconciled = r.reconcileExternalChanges(ctx, services, snapshot)
 	if err != nil {
 		// I am using strings.Contains as i cannot get it working with errors.Is
 		isExpectedError := strings.Contains(err.Error(), redpanda_monitor_service.ErrServiceNotExist.Error()) ||
@@ -155,7 +155,7 @@ func (r *RedpandaInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSna
 
 // reconcileExternalChanges checks if the RedpandaInstance service status has changed
 // externally (e.g., if someone manually stopped or started it, or if it crashed)
-func (r *RedpandaInstance) reconcileExternalChanges(ctx context.Context, services serviceregistry.Provider, tick uint64, loopStartTime time.Time) (err error, reconciled bool) {
+func (r *RedpandaInstance) reconcileExternalChanges(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) (err error, reconciled bool) {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentRedpandaInstance, r.baseFSMInstance.GetID()+".reconcileExternalChanges", time.Since(start))
@@ -165,7 +165,7 @@ func (r *RedpandaInstance) reconcileExternalChanges(ctx context.Context, service
 	// that a single status of a single instance does not block the whole reconciliation
 	observedStateCtx, cancel := context.WithTimeout(ctx, constants.RedpandaUpdateObservedStateTimeout)
 	defer cancel()
-	err = r.UpdateObservedStateOfInstance(observedStateCtx, services, tick, loopStartTime)
+	err = r.UpdateObservedStateOfInstance(observedStateCtx, services, snapshot)
 	if err != nil {
 		return fmt.Errorf("failed to update observed state: %w", err), false
 	}
