@@ -78,11 +78,11 @@ func buildProtocolConverterAsDfc(
 
 	// Create connection info for protocol converter
 	var connections []models.Connection
-	if observed.ObservedProtocolConverterConfig.ConnectionServiceConfig.NmapServiceConfig.Target != "" {
+	if observed.ObservedProtocolConverterRuntimeConfig.ConnectionServiceConfig.NmapServiceConfig.Target != "" {
 		connection := models.Connection{
 			Name: instance.ID + "-connection",
 			UUID: dataflowcomponentserviceconfig.GenerateUUIDFromName(instance.ID + "-connection").String(), // Derive connection UUID from PC UUID
-			URI:  fmt.Sprintf("%s:%d", observed.ObservedProtocolConverterConfig.ConnectionServiceConfig.NmapServiceConfig.Target, observed.ObservedProtocolConverterConfig.ConnectionServiceConfig.NmapServiceConfig.Port),
+			URI:  fmt.Sprintf("%s:%d", observed.ObservedProtocolConverterRuntimeConfig.ConnectionServiceConfig.NmapServiceConfig.Target, observed.ObservedProtocolConverterRuntimeConfig.ConnectionServiceConfig.NmapServiceConfig.Port),
 			Health: &models.Health{
 				Message:       observed.ServiceInfo.StatusReason,
 				ObservedState: observed.ServiceInfo.ConnectionFSMState,
@@ -96,7 +96,7 @@ func buildProtocolConverterAsDfc(
 
 	//check if the protocol converter is initialized by checking if a read dfc is present
 	isInitialized := false
-	input := observed.ObservedProtocolConverterConfig.DataflowComponentReadServiceConfig.BenthosConfig.Input
+	input := observed.ObservedProtocolConverterRuntimeConfig.DataflowComponentReadServiceConfig.BenthosConfig.Input
 	if len(input) > 0 {
 		isInitialized = true
 	}

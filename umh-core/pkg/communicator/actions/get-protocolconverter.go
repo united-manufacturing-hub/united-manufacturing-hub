@@ -232,7 +232,7 @@ func (a *GetProtocolConverterAction) Execute() (interface{}, map[string]interfac
 				var ip string
 				var port uint32
 
-				config := observedState.ObservedProtocolConverterConfig
+				config := observedState.ObservedProtocolConverterRuntimeConfig
 				if config.ConnectionServiceConfig.NmapServiceConfig.Target != "" {
 					ip = config.ConnectionServiceConfig.NmapServiceConfig.Target
 				}
