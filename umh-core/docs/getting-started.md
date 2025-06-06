@@ -1,5 +1,9 @@
 # Getting Started
 
+**60 seconds — that's all it takes to launch UMH-Core.**
+
+No kubectl, no Kubernetes setup, just a single Docker container. Anything that runs Docker works — from your MacBook terminal to enterprise edge boxes.
+
 ### System requirements
 
 **Minimum:**

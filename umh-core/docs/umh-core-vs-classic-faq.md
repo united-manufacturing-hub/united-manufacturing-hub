@@ -2,12 +2,18 @@
 
 ## Why a single Docker container?
 
+* **Enterprise deployment reality**
+  * _In most enterprises_: **tight operating system images, firewalls, and network hoops** turn Kubernetes setup into friction. Custom load-balancers, network policies, storage classes, and custom upgrade paths create endless variables.
+  * _UMH Core_: **anything that runs Docker works** — from MacBook terminals to edge boxes to enterprise K8s clusters.
 * **Deployment complexity**
   * _UMH Classic_: many pods, sidecars, service meshes → a forest of YAML.
   * _UMH Core_: **one image, one command**, sub-second startup.
 * **Observability & recovery**
   * _Classic_: error clues spread across pod logs, `kubectl` events, load-balancers. Kubernetes states (PodPending, Running, etc.) is usually not want the user woudl expect (Running does not mean the pod is healthy)
   * _Core_: **each component has well-defined states** and is recovered if the state is not healthy (e.g., incl. watching out for error or warning logs, metrics checks, etc.); S6 restarts failed processes instantly.
+* **Real-time responsiveness**
+  * _Classic_: waiting thirty seconds for a new pipeline to launch due to Kubernetes overhead
+  * _Core_: **ticks every 100 milliseconds**, so configuration changes feel instant
 * **Version management**
   * _Classic_: drift between Node-RED plug-ins, broker, bridges.
   * _Core_: _bump one line in the Dockerfile → ship vX.Y_ — everything already integration-tested.
@@ -21,8 +27,10 @@ We collapse the stack into a single supervised image, giving enterprises less in
 
 A "modular monolith" is the sweet spot for most factories:
 
+* **You don't split a five-piece toolkit into hundreds of micro-services** – yet one big binary (like some protocol converters out there) is risky. If one protocol converter fails, it takes all the rest with it.
+* **UMH Core** packs the essentials (Agent, Benthos pipelines, Redpanda buffer) in one container but launches **every single part as its own S6-supervised process**. Crash one, the others stay green.
+* **Scale when it hurts:** Need more juice later for select pipelines? Break that process out into its own container.
 * **Micro-services tax** – separate repos, CI/CD pipelines, service discovery, network latency – only pays off when you reach FAANG-scale org size.
-* **UMH Core** keeps clear boundaries (each Bridge, each pipeline, its own process) **inside one runtime**. Start simple, split when it hurts – industry trend is swinging back that way.
 
 ***
 
@@ -30,7 +38,8 @@ A "modular monolith" is the sweet spot for most factories:
 
 We didn't ditch it—**we de-coupled from it**.
 
-* **UMH Core is&#x20;**_**more**_**&#x20;k8s-friendly** because it's self-contained. Drop the same image into k3s, OpenShift, EKS or bare Docker; no hidden assumptions about CNIs, StorageClasses, or LBs.
+* **The enterprise Kubernetes reality:** Organizations run their K8s clusters with custom load balancers, network policies, custom storage classes, and their own upgrade paths. Building one product that survives every combination and ships an SLA is a nightmare.
+* **Our solution:** **UMH Core is _more_ k8s-friendly** because it's self-contained. Drop the same image into k3s, OpenShift, EKS or bare Docker; no hidden assumptions about CNIs, StorageClasses, or LBs.
 * With one container, those variables disappear. **Kubernetes becomes an optional scheduler, not a hard dependency.**
 
 ***
@@ -100,8 +109,9 @@ Our value prop is **curated integration + SLA**. If every customer patches their
 
 ## How does UMH Core track health if it's not using Kubernetes pod states?
 
-* Every component (Bridge, Benthos pipeline, Redpanda, etc.) is wrapped in a **finite-state machine** managed by the Agent: `starting → active → idle → degraded → stopped`.
-* The Agent evaluates **metrics + logs** every 100 ms. A Bridge stuck in a retry loop goes to `degraded`, a pipeline with zero throughput stays `idle`, etc.
+* **Remember Kubernetes?** A green "Running" pod in Kubernetes only means the container has started — not that your application is healthy.
+* **In UMH Core, green actually means healthy.** Every component (Bridge, Benthos pipeline, Redpanda, etc.) is wrapped in a **finite-state machine** managed by the Agent: `starting → active → idle → degraded → stopped`.
+* The Agent evaluates **metrics + logs + live config** every 100 ms. A Bridge stuck in a retry loop goes to `degraded`, a pipeline with zero throughput stays `idle`, etc. It fires warnings if anything drifts, and restarts a pipeline the moment a new config lands.
 * States and counters are exported via `/metrics`, so you can alert on "connection _degraded_ for > 30 s", not just pod restarts.
 
 This offers **finer-grained insight** than Kubernetes' generic `Running/CrashLoopBackOff`.

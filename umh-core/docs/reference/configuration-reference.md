@@ -6,6 +6,36 @@ This is the reference for the central config `/data/config.yaml`
 > **Hot-reload:** The Agent polls the file every tick; valid changes are applied automatically.\
 > **UI Terminology:** In the Management Console UI, `protocolConverter:` is shown as "Bridges" and `dataFlow:` is shown as "Stand-alone Flows"
 
+## YAML vs UI: Choose Your Workflow
+
+UMH Core supports both **direct YAML editing** and **Management Console UI** for configuration. Each approach has distinct advantages:
+
+### YAML Configuration Benefits
+
+* **Version Control**: Every change is tracked with Git — see who changed what, when, and why
+* **GitOps Integration**: Automate deployments, rollbacks, and multi-environment promotion
+* **AI/LLM Integration**: Tools like Cursor and ChatGPT can generate, modify, and optimize configurations
+* **Templating Power**: Create and connect hundreds of machines with a few keystrokes using YAML anchors
+* **IDE Support**: Syntax highlighting, validation, autocomplete, and refactoring tools
+
+### UI Configuration Benefits
+
+* **Zero Code**: Any OT person or business user can click and configure without YAML knowledge
+* **Input Validation**: Real-time validation prevents configuration errors before deployment
+* **Visual Guidance**: Wizards and forms guide users through complex protocol configurations
+* **Live Preview**: See the impact of changes before applying them
+
+### The Best of Both Worlds
+
+**UMH Core provides two-way synchronization:** changes made in the UI are reflected in the YAML file, and YAML edits are shown in the UI. This means:
+
+* **OT teams** can use the UI for day-to-day operations
+* **IT teams** can use YAML for infrastructure-as-code workflows  
+* **Both approaches** maintain full version control and auditability
+* **Scaling operations** benefit from templating while **individual adjustments** benefit from UI convenience
+
+> **Pro Tip**: Start with the UI to understand the configuration structure, then switch to YAML for advanced templating and automation.
+
 ## Terminology Reference
 
 | Current Term (UMH Core) | Legacy Term (UMH Classic) | YAML Key | Description |

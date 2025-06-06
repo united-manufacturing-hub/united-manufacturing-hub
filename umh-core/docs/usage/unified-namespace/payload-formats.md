@@ -34,9 +34,10 @@ umh.v1.acme._historian.weather
 
 | Hidden problem                     | Why it hurts in real projects                                                                                                                                                            |
 | ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **No single, unique identifier**   | The true tag is _topic + JSON-key_ (`…weather.temperature`). Every dashboard, rule engine, historian and schema registry must now learn a _two-dimensional_ address space.               |
-| **Edge-case combinatorics**        | _Missing key? late arriving field? partial PLC failure?_  Each choice (ignore / cache / null) multiplies test cases and bugs.                                                            |
-| **Unintuitive logic for OT users** | <p>They just want to write<br><code>if …weather.temperature > 30 &#x26;&#x26; …isCloudy == true</code><br>not manage local caches or delta-messages.</p>                                 |
+| **No single, unique identifier**   | You need **three dimensions** to access a tag: topic, tag name, and JSON path. Every dashboard, rule engine, historian and schema registry must now learn this complex address space. |
+| **Real-world timing issues**        | _What happens when the source gives you a new temperature value, but no humidity value?_ In OPC UA subscriptions, humidity might arrive 100ms later. Do you cache it? How do you know if you're receiving a cached value or if the temperature really stayed constant for hours?                                                            |
+| **Unintuitive logic for OT users** | <p>**As an OT person, you simply want to write:**<br><code>if …weather.temperature > 30 &#x26;&#x26; …isCloudy == true</code><br>**Not manage local caches or three-dimensional addressing.**</p>                                 |
+| **Edge-case combinatorics**        | _Missing key? Late arriving field? Partial PLC failure?_ Each choice (ignore / cache / null) multiplies test cases and bugs.                                                            |
 | **Merge window guessing**          | Two PLC variables that change _almost_ at the same time still arrive as separate OPC UA notifications. You must decide _how long_ to wait before you believe you have a "complete" JSON. |
 | **Clock skew & racing updates**    | Reading 100 tags into one JSON can take milliseconds; by the time the last field is read the first may already have changed—yet a single timestamp suggests they belong together.        |
 | **Topic-vs-payload bikeshedding**  | Should a nested struct live under `weather.*` or inside the payload? Different consumers want different splits → endless disagreements.                                                  |
@@ -60,6 +61,7 @@ The _address_ of a datapoint is now self-contained and stable; the payload is al
 
 * **Intuitive expressions** – both OT & IT write rules against plain topics:`if umh.v1.acme._historian.weather.temperature > 30 …`
 * **Zero merge code** – every value is complete at publish time; no caching.
+* **Simplified business discussions** – You only need to discuss the "folder structure" (topic hierarchy) with business stakeholders. No need to explain the difference between tag names, topics, JSON paths, and payload formats.
 * **Schema enforcement moves to the topic** – data contract can simply specify time-series payload; no further schema needed.
 * **Unlimited fan-out** – a client interested **only** in humidity subscribes once; it is not spammed by temperature updates.
 
