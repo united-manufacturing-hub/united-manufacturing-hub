@@ -136,7 +136,10 @@ func WaitForProtocolConverterManagerMultiState(
 ) (uint64, error) {
 	tick := snapshot.Tick
 	for i := 0; i < maxAttempts; i++ {
-		err, _ := manager.Reconcile(ctx, snapshot, services)
+		// Create a copy of the snapshot with updated tick
+		currentSnapshot := snapshot
+		currentSnapshot.Tick = tick
+		err, _ := manager.Reconcile(ctx, currentSnapshot, services)
 		if err != nil {
 			return tick, err
 		}
