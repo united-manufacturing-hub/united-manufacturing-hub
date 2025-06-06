@@ -246,6 +246,8 @@ func (p *ProtocolConverterInstance) UpdateObservedStateOfInstance(ctx context.Co
 		p.baseFSMInstance.GetID(),
 	)
 	if err != nil {
+		// Capture the configuration error in StatusReason for troubleshooting
+		p.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("config error: %s", err.Error())
 		return fmt.Errorf("failed to build runtime config: %w", err)
 	}
 	metrics.ObserveReconcileTime(logger.ComponentProtocolConverterInstance, p.baseFSMInstance.GetID()+".buildRuntimeConfig", time.Since(start))

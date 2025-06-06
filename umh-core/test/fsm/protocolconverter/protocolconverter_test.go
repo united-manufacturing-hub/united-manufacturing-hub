@@ -1166,4 +1166,38 @@ var _ = Describe("ProtocolConverter FSM", func() {
 			Expect(err).NotTo(HaveOccurred())
 		})
 	})
+
+	// =========================================================================
+	//  CONFIGURATION VALIDATION
+	// =========================================================================
+	Context("Configuration Validation", func() {
+		It("should get stuck in creating state with error message when config is invalid", func() {
+			var err error
+
+			// Create an instance with invalid port configuration
+			invalidInstance, invalidMockService, _ := fsmtest.SetupProtocolConverterInstanceWithInvalidPort(componentName, protocolconverterfsm.OperationalStateStopped, "invalid-port")
+
+			// Attempt reconciliation several times
+			finalTick, err, _ := fsmtest.ReconcileProtocolConverterUntilError(
+				ctx, fsm.SystemSnapshot{Tick: tick}, invalidInstance, invalidMockService, mockRegistry, componentName, 5)
+
+			// Should NOT get an error propagated up (FSM handles it gracefully)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(finalTick).To(BeNumerically(">", tick))
+
+			// The instance should get stuck in creating state
+			currentState := invalidInstance.GetCurrentFSMState()
+			Expect(currentState).To(Equal(internalfsm.LifecycleStateCreating))
+
+			// The observed state should contain the configuration error in StatusReason
+			observedState := invalidInstance.GetLastObservedState()
+			Expect(observedState).NotTo(BeNil())
+			if pcObservedState, ok := observedState.(protocolconverterfsm.ProtocolConverterObservedState); ok {
+				Expect(pcObservedState.ServiceInfo.StatusReason).To(ContainSubstring("config error"))
+				Expect(pcObservedState.ServiceInfo.StatusReason).To(ContainSubstring("invalid syntax"))
+			} else {
+				Fail("Could not cast observed state to ProtocolConverterObservedState")
+			}
+		})
+	})
 })
