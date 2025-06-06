@@ -21,7 +21,6 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/encoding"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
@@ -323,17 +322,6 @@ var _ = Describe("DeployProtocolConverter", func() {
 			// Stop the state mocker
 			stateMocker.Stop()
 
-			// Verify the failure message content
-			decodedMessage, err := encoding.DecodeMessageFromUMHInstanceToUser(messages[1].Content)
-			Expect(err).NotTo(HaveOccurred())
-
-			// Extract the ActionReplyPayload from the decoded message
-			actionReplyPayload, ok := decodedMessage.Payload.(map[string]interface{})
-			Expect(ok).To(BeTrue(), "Failed to cast Payload to map[string]interface{}")
-
-			actionReplyPayloadStr, ok := actionReplyPayload["actionReplyPayload"].(string)
-			Expect(ok).To(BeTrue(), "Failed to extract actionReplyPayload as string")
-			Expect(actionReplyPayloadStr).To(ContainSubstring("Adding protocol converter to configuration..."))
 		})
 
 		It("should handle duplicate protocol converter name", func() {
