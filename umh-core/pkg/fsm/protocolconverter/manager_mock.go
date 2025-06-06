@@ -65,11 +65,19 @@ func NewProtocolConverterManagerWithMockedServices(name string) (*ProtocolConver
 			if !ok {
 				return false, fmt.Errorf("instance is not a ProtocolConverterInstance")
 			}
-			protocolConverterInstance.config = cfg.ProtocolConverterServiceConfig
-			if mockSvc, ok := protocolConverterInstance.service.(*protocolconvertersvc.MockProtocolConverterService); ok {
-				mockSvc.GetConfigResult = protocolconverterserviceconfig.SpecToRuntime(cfg.ProtocolConverterServiceConfig)
+
+			// Perform actual comparison - return true if configs are equal
+			configsEqual := protocolconverterserviceconfig.ConfigsEqual(protocolConverterInstance.config, cfg.ProtocolConverterServiceConfig)
+
+			// Only update config if configs are different (for mock service)
+			if !configsEqual {
+				protocolConverterInstance.config = cfg.ProtocolConverterServiceConfig
+				if mockSvc, ok := protocolConverterInstance.service.(*protocolconvertersvc.MockProtocolConverterService); ok {
+					mockSvc.GetConfigResult = protocolconverterserviceconfig.SpecToRuntime(cfg.ProtocolConverterServiceConfig)
+				}
 			}
-			return true, nil
+
+			return configsEqual, nil
 		},
 		// Set ProtocolConverter config
 		func(instance public_fsm.FSMInstance, cfg config.ProtocolConverterConfig) error {
