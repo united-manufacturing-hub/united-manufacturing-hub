@@ -49,6 +49,7 @@ package actions
 
 import (
 	"fmt"
+	"strconv"
 
 	"github.com/google/uuid"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
@@ -232,12 +233,20 @@ func (a *GetProtocolConverterAction) Execute() (interface{}, map[string]interfac
 				var ip string
 				var port uint32
 
-				config := observedState.ObservedProtocolConverterRuntimeConfig
-				if config.ConnectionServiceConfig.NmapServiceConfig.Target != "" {
-					ip = config.ConnectionServiceConfig.NmapServiceConfig.Target
+				config := observedState.ObservedProtocolConverterTemplateConfig
+				if config.ConnectionServiceConfig.NmapTemplate.Target != "" {
+					ip = config.ConnectionServiceConfig.NmapTemplate.Target
 				}
-				if config.ConnectionServiceConfig.NmapServiceConfig.Port != 0 {
-					port = uint32(config.ConnectionServiceConfig.NmapServiceConfig.Port)
+				if config.ConnectionServiceConfig.NmapTemplate.Port != "" {
+					portInt, err := strconv.ParseUint(config.ConnectionServiceConfig.NmapTemplate.Port, 10, 32)
+					if err != nil {
+						a.actionLogger.Warnw("Failed to parse port number", "port", config.ConnectionServiceConfig.NmapTemplate.Port, "error", err)
+						SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
+							fmt.Sprintf("Warning: Invalid port number '%s' for protocol converter '%s'", config.ConnectionServiceConfig.NmapTemplate.Port, instance.ID),
+							a.outboundChannel, models.GetProtocolConverter)
+						return nil, nil, fmt.Errorf("invalid port number '%s' for protocol converter %s: %v", config.ConnectionServiceConfig.NmapTemplate.Port, instance.ID, err)
+					}
+					port = uint32(portInt)
 				}
 
 				// Build ReadDFC if present
