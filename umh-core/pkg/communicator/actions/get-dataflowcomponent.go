@@ -303,6 +303,7 @@ func (a *GetDataFlowComponentAction) Execute() (interface{}, map[string]interfac
 			Name:      component.Name,
 			ParentDFC: nil,
 			Payload:   dfc_payload,
+			State:     component.DesiredFSMState,
 		}
 	}
 
