@@ -24,6 +24,7 @@ import (
 
 	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/redpandaserviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
@@ -347,28 +348,41 @@ func (r *RedpandaInstance) UpdateObservedStateOfInstance(ctx context.Context, se
 		if r.PreviousObservedState.ObservedRedpandaServiceConfig.Topic.DefaultTopicRetentionBytes != r.config.Topic.DefaultTopicRetentionBytes {
 			// https://docs.redpanda.com/current/reference/properties/cluster-properties/#retention_bytes
 
-			// Zero values are ignored, as they are invalid in redpanda
 			if r.config.Topic.DefaultTopicRetentionBytes != 0 {
 				changes["retention_bytes"] = r.config.Topic.DefaultTopicRetentionBytes
+			} else {
+				// If the config does not set a value, we update as needed
+				if r.PreviousObservedState.ObservedRedpandaServiceConfig.Topic.DefaultTopicRetentionBytes != constants.DefaultRedpandaTopicDefaultTopicRetentionBytes {
+					changes["retention_bytes"] = constants.DefaultRedpandaTopicDefaultTopicRetentionBytes
+				}
 			}
 		}
+
 		if r.PreviousObservedState.ObservedRedpandaServiceConfig.Topic.DefaultTopicRetentionMs != r.config.Topic.DefaultTopicRetentionMs {
 			// https://docs.redpanda.com/current/reference/properties/cluster-properties/#log_retention_ms
 
-			// Zero values are ignored, as they are invalid in redpanda
 			if r.config.Topic.DefaultTopicRetentionMs != 0 {
 				changes["log_retention_ms"] = r.config.Topic.DefaultTopicRetentionMs
+			} else {
+				// If the config does not set a value, we update as needed
+				if r.PreviousObservedState.ObservedRedpandaServiceConfig.Topic.DefaultTopicRetentionMs != constants.DefaultRedpandaTopicDefaultTopicRetentionMs {
+					changes["log_retention_ms"] = constants.DefaultRedpandaTopicDefaultTopicRetentionMs
+				}
 			}
 		}
+
 		if r.PreviousObservedState.ObservedRedpandaServiceConfig.Topic.DefaultTopicCompressionAlgorithm != r.config.Topic.DefaultTopicCompressionAlgorithm {
 			// https://docs.redpanda.com/current/reference/properties/cluster-properties/#log_compression_type
 
-			// Zero values are ignored, as they are invalid in redpanda
 			if r.config.Topic.DefaultTopicCompressionAlgorithm != "" {
 				changes["log_compression_type"] = r.config.Topic.DefaultTopicCompressionAlgorithm
+			} else {
+				// If the config does not set a value, we update as needed
+				if r.PreviousObservedState.ObservedRedpandaServiceConfig.Topic.DefaultTopicCompressionAlgorithm != constants.DefaultRedpandaTopicDefaultTopicCompressionAlgorithm {
+					changes["log_compression_type"] = constants.DefaultRedpandaTopicDefaultTopicCompressionAlgorithm
+				}
 			}
 		}
-		r.baseFSMInstance.GetLogger().Debugf("Changes: %v", changes)
 
 		// Only apply if there are changes.
 		if len(changes) > 0 {
