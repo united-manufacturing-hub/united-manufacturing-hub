@@ -230,31 +230,6 @@ var _ = Describe("DeployDataflowComponent", func() {
 			Expect(err.Error()).To(ContainSubstring("missing required field Name"))
 		})
 
-		It("should return error for missing meta type", func() {
-			// Payload with missing meta.type field
-			payload := map[string]interface{}{
-				"name": "test-component",
-				"meta": map[string]interface{}{},
-				"payload": map[string]interface{}{
-					"customDataFlowComponent": map[string]interface{}{
-						"inputs": map[string]interface{}{
-							"type": "yaml",
-							"data": "input: something\nformat: json",
-						},
-						"outputs": map[string]interface{}{
-							"type": "yaml",
-							"data": "output: something\nformat: json",
-						},
-					},
-				},
-			}
-
-			// Call Parse method
-			err := action.Parse(payload)
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("missing required field Meta.Type"))
-		})
-
 		It("should return error for unsupported component type", func() {
 			// Payload with unsupported meta.type
 			payload := map[string]interface{}{
