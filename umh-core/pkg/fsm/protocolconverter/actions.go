@@ -349,6 +349,26 @@ func (p *ProtocolConverterInstance) IsDFCHealthy() (bool, string) {
 	return false, p.ObservedState.ServiceInfo.DataflowComponentReadObservedState.ServiceInfo.StatusReason
 }
 
+// safeBenthosMetrics safely extracts Benthos metrics from the observed state,
+// returning a zero-value metrics struct if any part of the chain is nil.
+// This prevents panics during startup or error conditions when the full
+// observedState structure may not be populated yet.
+func (p *ProtocolConverterInstance) safeBenthosMetrics() (input, output struct{ ConnectionUp, ConnectionLost int64 }) {
+	// Return zero values if the MetricsState pointer is nil (this is the only field that can actually be nil)
+	if p.ObservedState.ServiceInfo.DataflowComponentReadObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.MetricsState == nil {
+		return
+	}
+
+	metrics := p.ObservedState.ServiceInfo.DataflowComponentReadObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.Metrics
+	return struct{ ConnectionUp, ConnectionLost int64 }{
+			ConnectionUp:   metrics.Input.ConnectionUp,
+			ConnectionLost: metrics.Input.ConnectionLost,
+		}, struct{ ConnectionUp, ConnectionLost int64 }{
+			ConnectionUp:   metrics.Output.ConnectionUp,
+			ConnectionLost: metrics.Output.ConnectionLost,
+		}
+}
+
 // IsOtherDegraded checks for certain states that should never happen
 // and moves the instance into a degraded state if they happen anyway
 // Case 1: DFC and redpanda should either be both idle or both active, if they differ (for more than a tick) something must have gone wrong (exept that redpanda can be active because of a different DFC)
@@ -369,20 +389,22 @@ func (p *ProtocolConverterInstance) IsOtherDegraded() (bool, string) {
 		return true, "DFC is active, but redpanda is idle"
 	}
 
+	// Safely extract Benthos metrics to avoid nil pointer panics
+	inputMetrics, outputMetrics := p.safeBenthosMetrics()
+
 	// Check for case 2
-	benthosMetrics := p.ObservedState.ServiceInfo.DataflowComponentReadObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.Metrics
-	isBenthosOutputActive := benthosMetrics.Output.ConnectionUp-(benthosMetrics.Output.ConnectionLost) > 0 // if the amount of connection losts is bigger than the amount of connection ups, the output is not active
+	isBenthosOutputActive := outputMetrics.ConnectionUp-outputMetrics.ConnectionLost > 0 // if the amount of connection losts is bigger than the amount of connection ups, the output is not active
 	if (p.ObservedState.ServiceInfo.RedpandaFSMState == redpandafsm.OperationalStateIdle ||
 		p.ObservedState.ServiceInfo.RedpandaFSMState == redpandafsm.OperationalStateActive) &&
 		!isBenthosOutputActive {
-		return true, fmt.Sprintf("Redpanda is %s, but the DFC has no output active (connection up: %d, connection lost: %d)", p.ObservedState.ServiceInfo.RedpandaFSMState, benthosMetrics.Output.ConnectionUp, benthosMetrics.Output.ConnectionLost)
+		return true, fmt.Sprintf("Redpanda is %s, but the DFC has no output active (connection up: %d, connection lost: %d)", p.ObservedState.ServiceInfo.RedpandaFSMState, outputMetrics.ConnectionUp, outputMetrics.ConnectionLost)
 	}
 
 	// Check for case 3
-	isBenthosInputActive := benthosMetrics.Input.ConnectionUp-(benthosMetrics.Input.ConnectionLost) > 0 // if the amount of connection losts is bigger than the amount of connection ups, the input is not active
+	isBenthosInputActive := inputMetrics.ConnectionUp-inputMetrics.ConnectionLost > 0 // if the amount of connection losts is bigger than the amount of connection ups, the input is not active
 	if p.ObservedState.ServiceInfo.ConnectionFSMState != connectionfsm.OperationalStateUp &&
 		isBenthosInputActive {
-		return true, fmt.Sprintf("Connection is %s, but the DFC has input active (connection up: %d, connection lost: %d)", p.ObservedState.ServiceInfo.ConnectionFSMState, benthosMetrics.Input.ConnectionUp, benthosMetrics.Input.ConnectionLost)
+		return true, fmt.Sprintf("Connection is %s, but the DFC has input active (connection up: %d, connection lost: %d)", p.ObservedState.ServiceInfo.ConnectionFSMState, inputMetrics.ConnectionUp, inputMetrics.ConnectionLost)
 	}
 
 	return false, ""
