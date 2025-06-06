@@ -225,7 +225,7 @@ func (p *ProtocolConverterInstance) UpdateObservedStateOfInstance(ctx context.Co
 	metrics.ObserveReconcileTime(logger.ComponentProtocolConverterInstance, p.baseFSMInstance.GetID()+".getConfig", time.Since(start))
 	if err == nil {
 		// Only update if we successfully got the config
-		p.ObservedState.ObservedProtocolConverterConfig = observedConfig
+		p.ObservedState.ObservedProtocolConverterRuntimeConfig = observedConfig
 	} else {
 		if strings.Contains(err.Error(), protocolconvertersvc.ErrServiceNotExist.Error()) {
 			// Log the error but don't fail - this might happen during creation when the config file doesn't exist yet
@@ -250,12 +250,12 @@ func (p *ProtocolConverterInstance) UpdateObservedStateOfInstance(ctx context.Co
 	}
 	metrics.ObserveReconcileTime(logger.ComponentProtocolConverterInstance, p.baseFSMInstance.GetID()+".buildRuntimeConfig", time.Since(start))
 
-	if !protocolconverterserviceconfig.ConfigsEqualRuntime(p.renderedConfig, p.ObservedState.ObservedProtocolConverterConfig) {
+	if !protocolconverterserviceconfig.ConfigsEqualRuntime(p.renderedConfig, p.ObservedState.ObservedProtocolConverterRuntimeConfig) {
 		// Check if the service exists before attempting to update
 		if p.service.ServiceExists(ctx, services.GetFileSystem(), p.baseFSMInstance.GetID()) {
 			p.baseFSMInstance.GetLogger().Debugf("Observed ProtocolConverter config is different from desired config, updating ProtocolConverter configuration")
 
-			diffStr := protocolconverterserviceconfig.ConfigDiffRuntime(p.renderedConfig, p.ObservedState.ObservedProtocolConverterConfig)
+			diffStr := protocolconverterserviceconfig.ConfigDiffRuntime(p.renderedConfig, p.ObservedState.ObservedProtocolConverterRuntimeConfig)
 			p.baseFSMInstance.GetLogger().Debugf("Configuration differences: %s", diffStr)
 
 			// Update the config in the Benthos manager
