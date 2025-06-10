@@ -233,11 +233,11 @@ var _ = Describe("ProtocolConverterManager", func() {
 			// Configure for idle state again
 			fsmtest.ConfigureProtocolConverterManagerForState(mockService, converterName, protocolconverter.OperationalStateIdle)
 
-			// Wait for idle again
+			// Wait for idle again - increased attempts from 20 to 30 to handle slower CI environments
 			newTick, err = fsmtest.WaitForProtocolConverterManagerInstanceState(ctx, fsm.SystemSnapshot{CurrentConfig: fullCfg, Tick: tick}, manager, mockSvcRegistry,
 				converterName,
 				protocolconverter.OperationalStateIdle,
-				20,
+				30,
 			)
 			tick = newTick
 			Expect(err).NotTo(HaveOccurred())

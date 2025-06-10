@@ -19,6 +19,7 @@ package protocolconverter_test
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -27,7 +28,12 @@ import (
 	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsmtest"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
+	connectionfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/connection"
+	connectionservicefsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/connection"
+	dataflowcomponentfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
+	nmapfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/nmap"
 	protocolconverterfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/protocolconverter"
+	redpandafsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/redpanda"
 	protocolconvertersvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/protocolconverter"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
@@ -1198,6 +1204,89 @@ var _ = Describe("ProtocolConverter FSM", func() {
 			} else {
 				Fail("Could not cast observed state to ProtocolConverterObservedState")
 			}
+		})
+
+		It("should fail during startup when connection target is unreachable", func() {
+			var err error
+
+			// Create a standard instance (we'll configure the mock to simulate unreachable port)
+			// This reproduces the exact scenario from the bug report: localhost:8082 should be unreachable
+			unreachableInstance, unreachableMockService, _ := fsmtest.SetupProtocolConverterInstance(
+				componentName, protocolconverterfsm.OperationalStateStopped)
+
+			// Set desired state to active to trigger startup sequence
+			Expect(unreachableInstance.SetDesiredFSMState(protocolconverterfsm.OperationalStateActive)).To(Succeed())
+
+			// Progress through initial lifecycle creation
+			tick, err = fsmtest.TestProtocolConverterStateTransition(
+				ctx, unreachableInstance, unreachableMockService, mockRegistry, componentName,
+				internalfsm.LifecycleStateToBeCreated,
+				internalfsm.LifecycleStateCreating, 5, tick, startTime)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Simulate service created but with stopped state (normal startup)
+			unreachableMockService.ExistingComponents[componentName] = true
+			fsmtest.TransitionToProtocolConverterState(unreachableMockService, componentName, protocolconverterfsm.OperationalStateStopped)
+
+			tick, err = fsmtest.TestProtocolConverterStateTransition(
+				ctx, unreachableInstance, unreachableMockService, mockRegistry, componentName,
+				internalfsm.LifecycleStateCreating,
+				protocolconverterfsm.OperationalStateStopped, 5, tick, startTime)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Now try to start - this should get to starting_connection
+			tick, err = fsmtest.TestProtocolConverterStateTransition(
+				ctx, unreachableInstance, unreachableMockService, mockRegistry, componentName,
+				protocolconverterfsm.OperationalStateStopped,
+				protocolconverterfsm.OperationalStateStartingConnection, 5, tick, startTime)
+			Expect(err).NotTo(HaveOccurred())
+
+			// HERE IS THE KEY: Configure the connection as DOWN/CLOSED to simulate unreachable port
+			// This simulates what would happen if nmap found port 8082 to be closed
+			fsmtest.SetupProtocolConverterServiceState(unreachableMockService, componentName,
+				protocolconvertersvc.ConverterStateFlags{
+					IsDFCRunning:       false,
+					IsConnectionUp:     false, // Connection is DOWN because port is unreachable
+					IsRedpandaRunning:  false,
+					DfcFSMReadState:    dataflowcomponentfsm.OperationalStateStopped,
+					ConnectionFSMState: connectionfsm.OperationalStateDown, // Connection is DOWN!
+					RedpandaFSMState:   redpandafsm.OperationalStateStopped,
+					PortState:          nmapfsm.PortStateClosed, // Port is CLOSED (unreachable)
+				})
+
+			// The instance should stay stuck in starting_connection because connection is down
+			// Let's try multiple reconcile cycles to confirm it doesn't progress past starting states
+			for i := 0; i < 10; i++ {
+				tick++
+				currentSnapshot := fsm.SystemSnapshot{Tick: tick}
+				_, reconciled := unreachableInstance.Reconcile(ctx, currentSnapshot, mockRegistry)
+				_ = reconciled
+
+				currentState := unreachableInstance.GetCurrentFSMState()
+
+				// The bug is that it somehow progresses past starting states to degraded_other
+				// It should stay in starting_connection or starting_* states when connection is down
+				if currentState == protocolconverterfsm.OperationalStateDegradedOther {
+					Fail(fmt.Sprintf("BUG REPRODUCED: Instance progressed to degraded_other (state=%s) instead of staying in starting states. This means the connection test didn't catch the unreachable port during startup. Connection state was: %s", currentState, unreachableInstance.ObservedState.ServiceInfo.ConnectionFSMState))
+				}
+
+				// Also check if it wrongly progresses to other running states
+				if currentState == protocolconverterfsm.OperationalStateIdle || currentState == protocolconverterfsm.OperationalStateActive {
+					Fail(fmt.Sprintf("BUG REPRODUCED: Instance progressed to running state %s despite connection being down. This means the connection check during startup is not working properly.", currentState))
+				}
+
+				// Expected behavior: should stay in starting_connection since connection is down
+				Expect(currentState).To(Equal(protocolconverterfsm.OperationalStateStartingConnection),
+					fmt.Sprintf("Instance should stay in starting_connection when connection is down, but got: %s. Connection state: %s",
+						currentState, unreachableInstance.ObservedState.ServiceInfo.ConnectionFSMState))
+			}
+
+			// Verify the connection state shows it's not up
+			connectionUp, reason := unreachableInstance.IsConnectionUp()
+			Expect(connectionUp).To(BeFalse(), fmt.Sprintf("Connection should not be up for unreachable port, reason: %s", reason))
+
+			// Verify the observed connection state is indeed DOWN
+			Expect(unreachableInstance.ObservedState.ServiceInfo.ConnectionFSMState).To(Equal(connectionservicefsm.OperationalStateDown))
 		})
 	})
 })
