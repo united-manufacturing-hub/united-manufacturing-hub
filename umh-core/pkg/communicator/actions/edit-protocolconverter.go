@@ -136,7 +136,7 @@ func (a *EditProtocolConverterAction) Validate() error {
 		return errors.New("missing required field dfcType")
 	}
 
-	if err := ValidateCustomDataFlowComponentPayload(a.dfcPayload); err != nil {
+	if err := ValidateCustomDataFlowComponentPayload(a.dfcPayload, false); err != nil {
 		return fmt.Errorf("invalid dataflow component configuration: %v", err)
 	}
 
