@@ -29,7 +29,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsmtest"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	connectionfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/connection"
-	connectionservicefsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/connection"
 	dataflowcomponentfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
 	nmapfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/nmap"
 	protocolconverterfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/protocolconverter"
@@ -1286,7 +1285,7 @@ var _ = Describe("ProtocolConverter FSM", func() {
 			Expect(connectionUp).To(BeFalse(), fmt.Sprintf("Connection should not be up for unreachable port, reason: %s", reason))
 
 			// Verify the observed connection state is indeed DOWN
-			Expect(unreachableInstance.ObservedState.ServiceInfo.ConnectionFSMState).To(Equal(connectionservicefsm.OperationalStateDown))
+			Expect(unreachableInstance.ObservedState.ServiceInfo.ConnectionFSMState).To(Equal(connectionfsm.OperationalStateDown))
 		})
 	})
 })
