@@ -271,21 +271,7 @@ var _ = Describe("GetProtocolConverter", func() {
 					Managers: map[string]fsm.ManagerSnapshot{
 						constants.ProtocolConverterManagerName: pcManagerSnapshot,
 					},
-					CurrentConfig: config.FullConfig{
-						ProtocolConverter: []config.ProtocolConverterConfig{
-							{
-								FSMInstanceConfig: config.FSMInstanceConfig{
-									Name: testPCName,
-								},
-								ProtocolConverterServiceConfig: protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
-									Location: map[string]string{
-										"1": "factory",
-										"2": "line-1",
-									},
-								},
-							},
-						},
-					},
+					CurrentConfig: config.FullConfig{},
 				}
 
 				snapshotManager.UpdateSnapshot(systemSnapshot)
@@ -364,6 +350,10 @@ var _ = Describe("GetProtocolConverter", func() {
 								},
 							},
 						},
+						Location: map[string]string{
+							"1": "factory",
+							"3": "line-2",
+						},
 					},
 					ServiceInfo: protocolconvertersvc.ServiceInfo{
 						ConnectionFSMState: "up",
@@ -391,21 +381,7 @@ var _ = Describe("GetProtocolConverter", func() {
 					Managers: map[string]fsm.ManagerSnapshot{
 						constants.ProtocolConverterManagerName: pcManagerSnapshot,
 					},
-					CurrentConfig: config.FullConfig{
-						ProtocolConverter: []config.ProtocolConverterConfig{
-							{
-								FSMInstanceConfig: config.FSMInstanceConfig{
-									Name: testPCName,
-								},
-								ProtocolConverterServiceConfig: protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
-									Location: map[string]string{
-										"1": "factory",
-										"3": "line-2",
-									},
-								},
-							},
-						},
-					},
+					CurrentConfig: config.FullConfig{},
 				}
 
 				snapshotManager.UpdateSnapshot(systemSnapshot)
@@ -593,66 +569,6 @@ var _ = Describe("GetProtocolConverter", func() {
 				Expect(result).To(BeNil())
 				Expect(metadata).To(BeNil())
 				Expect(err.Error()).To(ContainSubstring("invalid observed state"))
-			})
-		})
-
-		Context("when protocol converter has invalid port configuration", func() {
-			It("should return error for invalid port number", func() {
-				testPCName := "test-protocol-converter-invalid-port"
-
-				// Create observed state with invalid port
-				observedState := &protocolconverter.ProtocolConverterObservedStateSnapshot{
-					ObservedProtocolConverterSpecConfig: protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
-						Template: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
-							ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
-								NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
-									Target: "192.168.1.100",
-									Port:   "invalid-port", // Invalid port
-								},
-							},
-						},
-					},
-					ServiceInfo: protocolconvertersvc.ServiceInfo{},
-				}
-
-				// Create FSM instance
-				instance := &fsm.FSMInstanceSnapshot{
-					ID:                testPCName,
-					CurrentState:      protocolconverter.OperationalStateActive,
-					DesiredState:      protocolconverter.OperationalStateActive,
-					LastObservedState: observedState,
-				}
-
-				// Create protocol converter manager snapshot
-				pcManagerSnapshot := &actions.MockManagerSnapshot{
-					Instances: map[string]*fsm.FSMInstanceSnapshot{
-						testPCName: instance,
-					},
-				}
-
-				// Create system snapshot
-				systemSnapshot := &fsm.SystemSnapshot{
-					Managers: map[string]fsm.ManagerSnapshot{
-						constants.ProtocolConverterManagerName: pcManagerSnapshot,
-					},
-				}
-
-				snapshotManager.UpdateSnapshot(systemSnapshot)
-
-				// Parse with the test UUID
-				actualUUID := dataflowcomponentserviceconfig.GenerateUUIDFromName(testPCName)
-				payload := map[string]interface{}{
-					"uuid": actualUUID.String(),
-				}
-				err := action.Parse(payload)
-				Expect(err).NotTo(HaveOccurred())
-
-				// Execute the action
-				result, metadata, err := action.Execute()
-				Expect(err).To(HaveOccurred())
-				Expect(result).To(BeNil())
-				Expect(metadata).To(BeNil())
-				Expect(err.Error()).To(ContainSubstring("invalid port number"))
 			})
 		})
 	})

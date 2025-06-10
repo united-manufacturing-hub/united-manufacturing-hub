@@ -752,6 +752,12 @@ var _ = Describe("DataFlowComponentService", func() {
 		It("should sanitize bridged_by header correctly", func() {
 			spec := protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
 				Template: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
+					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+						NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
+							Target: "localhost",
+							Port:   "443",
+						},
+					},
 					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 							Input: map[string]interface{}{
