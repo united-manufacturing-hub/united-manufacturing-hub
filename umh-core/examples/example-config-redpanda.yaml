@@ -28,6 +28,9 @@ internal:
         # this corresponds to retention_bytes (See also: https://docs.redpanda.com/current/manage/cluster-maintenance/disk-utilization/)
         defaultTopicRetentionBytes: 0
 
+        # this corresponds to log_compression_type (See also: https://docs.redpanda.com/current/manage/cluster-maintenance/compression/)
+        defaultTopicCompressionAlgorithm: "snappy"
+
       resources:
         # this corresponds to --smp from scylladb/seastar
         # See also:

@@ -152,7 +152,7 @@ func (m *MockRedpandaService) GetConfig(ctx context.Context, filesystemService f
 	}
 
 	// If a result is preset, return it
-	if m.GetConfigResult.Topic.DefaultTopicRetentionMs != 0 || m.GetConfigResult.Topic.DefaultTopicRetentionBytes != 0 {
+	if m.GetConfigResult.Topic.DefaultTopicRetentionMs != 0 || m.GetConfigResult.Topic.DefaultTopicRetentionBytes != 0 || m.GetConfigResult.Topic.DefaultTopicCompressionAlgorithm != "" {
 		return m.GetConfigResult, nil
 	}
 
@@ -160,6 +160,7 @@ func (m *MockRedpandaService) GetConfig(ctx context.Context, filesystemService f
 	config := redpandaserviceconfig.RedpandaServiceConfig{}
 	config.Topic.DefaultTopicRetentionMs = 1000000
 	config.Topic.DefaultTopicRetentionBytes = 1000000000
+	config.Topic.DefaultTopicCompressionAlgorithm = "snappy"
 	return config, nil
 }
 
