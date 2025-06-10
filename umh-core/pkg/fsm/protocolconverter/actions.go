@@ -83,25 +83,25 @@ func (p *ProtocolConverterInstance) CreateInstance(ctx context.Context, filesyst
 
 // RemoveInstance attempts to remove the ProtocolConverter from the Benthos and connection manager.
 // It requires the service to be stopped before removal.
-func (b *ProtocolConverterInstance) RemoveInstance(ctx context.Context, filesystemService filesystem.Service) error {
-	b.baseFSMInstance.GetLogger().Debugf("Starting Action: Removing ProtocolConverter service %s from DFC and Connection manager ...", b.baseFSMInstance.GetID())
+func (p *ProtocolConverterInstance) RemoveInstance(ctx context.Context, filesystemService filesystem.Service) error {
+	p.baseFSMInstance.GetLogger().Debugf("Starting Action: Removing ProtocolConverter service %s from DFC and Connection manager ...", p.baseFSMInstance.GetID())
 
 	// Remove the initiateDataflowComponent from the Benthos manager
-	err := b.service.RemoveFromManager(ctx, filesystemService, b.baseFSMInstance.GetID())
+	err := p.service.RemoveFromManager(ctx, filesystemService, p.baseFSMInstance.GetID())
 	switch {
 	// ---------------------------------------------------------------
 	// happy paths
 	// ---------------------------------------------------------------
 	case err == nil: // fully removed
-		b.baseFSMInstance.GetLogger().
+		p.baseFSMInstance.GetLogger().
 			Debugf("Benthos service %s removed from S6 manager",
-				b.baseFSMInstance.GetID())
+				p.baseFSMInstance.GetID())
 		return nil
 
 	case errors.Is(err, protocolconvertersvc.ErrServiceNotExist):
-		b.baseFSMInstance.GetLogger().
+		p.baseFSMInstance.GetLogger().
 			Debugf("Benthos service %s already removed from S6 manager",
-				b.baseFSMInstance.GetID())
+				p.baseFSMInstance.GetID())
 		// idempotent: was already gone
 		return nil
 
@@ -109,9 +109,9 @@ func (b *ProtocolConverterInstance) RemoveInstance(ctx context.Context, filesyst
 	// transient path – keep retrying
 	// ---------------------------------------------------------------
 	case errors.Is(err, standarderrors.ErrRemovalPending):
-		b.baseFSMInstance.GetLogger().
+		p.baseFSMInstance.GetLogger().
 			Debugf("Benthos service %s removal still in progress",
-				b.baseFSMInstance.GetID())
+				p.baseFSMInstance.GetID())
 		// not an error from the FSM's perspective – just means "try again"
 		return err
 
@@ -120,7 +120,7 @@ func (b *ProtocolConverterInstance) RemoveInstance(ctx context.Context, filesyst
 	// ---------------------------------------------------------------
 	default:
 		return fmt.Errorf("failed to remove service %s: %w",
-			b.baseFSMInstance.GetID(), err)
+			p.baseFSMInstance.GetID(), err)
 	}
 }
 
