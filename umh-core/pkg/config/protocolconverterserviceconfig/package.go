@@ -15,6 +15,8 @@
 package protocolconverterserviceconfig
 
 import (
+	"fmt"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/connectionserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/variables"
@@ -29,12 +31,16 @@ var (
 // Protocol-Converter. The struct **may still contain** Go
 // `text/template` actions (e.g. `{{ .bridged_by }}`) so that callers can
 // substitute values later on.
+//
+// This template form allows connection parameters (like port) to be templated
+// using expressions like "{{ .PORT }}" which are resolved during rendering.
 type ProtocolConverterServiceConfigTemplate struct {
 
 	// ConnectionServiceConfig describes how the converter connects to the
-	// underlying messaging infrastructure.  **Copied verbatim** into the final
-	// Runtime config – no guard‑rails are applied here.
-	ConnectionServiceConfig connectionserviceconfig.ConnectionServiceConfig `yaml:"connection"`
+	// underlying messaging infrastructure. Uses the template form to allow
+	// templating of connection parameters like port numbers.
+	// At render time, this gets converted to the runtime form with proper types.
+	ConnectionServiceConfig connectionserviceconfig.ConnectionServiceConfigTemplate `yaml:"connection"`
 
 	// DataflowComponentReadServiceConfig is the blueprint for the *read* side
 	// of the converter.  At render time we enforce that
@@ -53,14 +59,25 @@ type ProtocolConverterServiceConfigTemplate struct {
 // Variables injected and the UNS guard‑rails enforced.  This is the *only*
 // structure the FSM should ever receive.
 //
-// It is defined as a type‑alias of `ProtocolConverterServiceConfigTemplate` to
-// make clear that the *shape* is identical – only the state differs.
+// The connection config uses the runtime form with proper types (uint16 port)
+// to ensure type safety during FSM operations.
 //
 // Invariants:
 //   - MUST NOT contain any `{{ ... }}` directives.
 //   - `DataflowComponentReadServiceConfig.BenthosConfig.Output` **is** UNS.
 //   - `DataflowComponentWriteServiceConfig.BenthosConfig.Input` **is** UNS.
-type ProtocolConverterServiceConfigRuntime ProtocolConverterServiceConfigTemplate
+//   - `ConnectionServiceConfig` has all template variables resolved with proper types.
+type ProtocolConverterServiceConfigRuntime struct {
+
+	// ConnectionServiceConfig is the fully rendered connection configuration
+	// with all template variables resolved and proper types enforced.
+	ConnectionServiceConfig connectionserviceconfig.ConnectionServiceConfigRuntime `yaml:"connection"`
+
+	// DataflowComponentReadServiceConfig and DataflowComponentWriteServiceConfig
+	// remain unchanged as they don't need the template/runtime split yet.
+	DataflowComponentReadServiceConfig  dataflowcomponentserviceconfig.DataflowComponentServiceConfig `yaml:"dataflowcomponent_read"`
+	DataflowComponentWriteServiceConfig dataflowcomponentserviceconfig.DataflowComponentServiceConfig `yaml:"dataflowcomponent_write"`
+}
 
 // ProtocolConverterServiceConfigSpec is the **user‑facing** wrapper that binds a
 // reusable Template to concrete runtime Variables and optional placement
@@ -104,26 +121,70 @@ func ConfigDiff(desired, observed ProtocolConverterServiceConfigSpec) string {
 	return defaultComparator.ConfigDiff(desired, observed)
 }
 
+// convertRuntimeToTemplate converts a runtime configuration back to template format.
+// This helper exists because our comparison and diff logic operates on template types,
+// but FSMs work with runtime types. When we need to compare or diff runtime configs,
+// we must first convert them back to template format to reuse existing logic.
+//
+// The conversion process:
+// - Runtime connection config (uint16 port) → Template connection config (string port)
+// - DFC configs remain unchanged (they're already template-compatible)
+//
+// This avoids duplicating the conversion logic across ConfigsEqualRuntime and ConfigDiffRuntime.
+func convertRuntimeToTemplate(runtime ProtocolConverterServiceConfigRuntime) ProtocolConverterServiceConfigTemplate {
+	connectionTemplate := connectionserviceconfig.ConvertRuntimeToTemplate(runtime.ConnectionServiceConfig)
+
+	return ProtocolConverterServiceConfigTemplate{
+		ConnectionServiceConfig:             connectionTemplate,
+		DataflowComponentReadServiceConfig:  runtime.DataflowComponentReadServiceConfig,
+		DataflowComponentWriteServiceConfig: runtime.DataflowComponentWriteServiceConfig,
+	}
+}
+
 // ConfigsEqualRuntime is a package-level function for comparing runtime configurations
 func ConfigsEqualRuntime(desired, observed ProtocolConverterServiceConfigRuntime) bool {
+	// Convert runtime configs back to template format for comparison
+	// This is necessary because our comparison logic operates on template types
+	// Runtime types (uint16 port) → Template types (string port)
+	protocolConverterDesiredTemplate := convertRuntimeToTemplate(desired)
+	protocolConverterObservedTemplate := convertRuntimeToTemplate(observed)
+
 	// Convert runtime configs to spec configs for comparison
-	// This allows us to reuse the existing comparison logic
-	desiredSpec := ProtocolConverterServiceConfigSpec{Template: ProtocolConverterServiceConfigTemplate(desired)}
-	observedSpec := ProtocolConverterServiceConfigSpec{Template: ProtocolConverterServiceConfigTemplate(observed)}
+	// This allows us to reuse the existing comparison logic that operates on specs
+	// The comparison will handle deep equality checking of all nested fields
+	desiredSpec := ProtocolConverterServiceConfigSpec{Template: protocolConverterDesiredTemplate}
+	observedSpec := ProtocolConverterServiceConfigSpec{Template: protocolConverterObservedTemplate}
 	return defaultComparator.ConfigsEqual(desiredSpec, observedSpec)
 }
 
 // ConfigDiffRuntime is a package-level function for generating diffs between runtime configurations
 func ConfigDiffRuntime(desired, observed ProtocolConverterServiceConfigRuntime) string {
-	// Convert runtime configs to spec configs for diffing
+	// Convert runtime configs back to template format for diffing
 	// This allows us to reuse the existing diff generation logic
-	desiredSpec := ProtocolConverterServiceConfigSpec{Template: ProtocolConverterServiceConfigTemplate(desired)}
-	observedSpec := ProtocolConverterServiceConfigSpec{Template: ProtocolConverterServiceConfigTemplate(observed)}
+	protocolConverterDesiredTemplate := convertRuntimeToTemplate(desired)
+	protocolConverterObservedTemplate := convertRuntimeToTemplate(observed)
+
+	// Convert to spec configs for diffing
+	desiredSpec := ProtocolConverterServiceConfigSpec{Template: protocolConverterDesiredTemplate}
+	observedSpec := ProtocolConverterServiceConfigSpec{Template: protocolConverterObservedTemplate}
 	return defaultComparator.ConfigDiff(desiredSpec, observedSpec)
 }
 
 // SpecToRuntime converts a ProtocolConverterServiceConfigSpec to a ProtocolConverterServiceConfigRuntime
-// This is commonly used when we need to convert from the config structure to the runtime structure
-func SpecToRuntime(spec ProtocolConverterServiceConfigSpec) ProtocolConverterServiceConfigRuntime {
-	return ProtocolConverterServiceConfigRuntime(spec.Template)
+// This function performs structural conversion from template to runtime types.
+// It assumes the spec template contains no unresolved template variables.
+// For full template rendering with variable substitution, use the runtime_config package instead.
+func SpecToRuntime(spec ProtocolConverterServiceConfigSpec) (ProtocolConverterServiceConfigRuntime, error) {
+	// Convert template connection config to runtime format using existing helper
+	// This handles the string-to-uint16 port conversion properly
+	connRuntime, err := connectionserviceconfig.ConvertTemplateToRuntime(spec.Template.ConnectionServiceConfig)
+	if err != nil {
+		return ProtocolConverterServiceConfigRuntime{}, fmt.Errorf("invalid connection configuration: %w", err)
+	}
+
+	return ProtocolConverterServiceConfigRuntime{
+		ConnectionServiceConfig:             connRuntime,
+		DataflowComponentReadServiceConfig:  spec.Template.DataflowComponentReadServiceConfig,
+		DataflowComponentWriteServiceConfig: spec.Template.DataflowComponentWriteServiceConfig,
+	}, nil
 }

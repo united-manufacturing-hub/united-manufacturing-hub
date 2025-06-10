@@ -22,6 +22,7 @@ import (
 	"strings"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/connectionserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
 )
 
@@ -132,6 +133,16 @@ func BuildRuntimeConfig(
 		}
 	}
 
+	// 1d) generate location path (dot-separated string)
+	var pathParts []string
+	for i := 0; i <= maxLevel; i++ {
+		key := strconv.Itoa(i)
+		if val, exists := loc[key]; exists {
+			pathParts = append(pathParts, val)
+		}
+	}
+	locationPath := strings.Join(pathParts, ".")
+
 	//----------------------------------------------------------------------
 	// 2. Assemble the **complete** variable bundle
 	//----------------------------------------------------------------------
@@ -140,6 +151,7 @@ func BuildRuntimeConfig(
 		vb.User = map[string]any{}
 	}
 	vb.User["location"] = loc // merged map
+	vb.User["location_path"] = locationPath
 
 	if len(globalVars) != 0 {
 		vb.Global = globalVars
@@ -184,6 +196,10 @@ func generateProtocolConverterBridgedBy(nodeName, pcName string) string {
 // **fully rendered** runtime configuration that the FSM compares against the
 // live system.
 //
+// This function performs template rendering and type conversion from template
+// types (which use strings for YAML compatibility) to runtime types (which use
+// proper Go types for type safety and validation).
+//
 // Preconditions
 // ─────────────
 //
@@ -213,8 +229,19 @@ func generateProtocolConverterBridgedBy(nodeName, pcName string) string {
 //     `config.RenderTemplate`. After this step **no** `{{ … }}` directives
 //     remain.
 //
-//     3. Assemble the concrete pieces into a
+// 3. Convert template types to runtime types:
+//
+//   - Connection: Convert rendered string port (e.g., "443" or "{{ .PORT }}") to uint16
+//
+//   - DFC configs: Already in final form after template rendering
+//
+//     4. Assemble the concrete pieces into a
 //     `ProtocolConverterServiceConfigRuntime` value and return it.
+//
+// Template vs Runtime Types
+// ─────────────────────────
+// - Template types use strings for all templatable fields to enable YAML templating
+// - Runtime types use proper Go types (uint16 for ports) for type safety
 //
 // Notes
 // ─────
@@ -237,9 +264,19 @@ func renderConfig(
 
 	// ─── Render the three sub-templates ─────────────────────────────
 	// Ensure to use GetDFCReadServiceConfig(), etc. to get the uns input/output enforced
+
+	// 1. Render the connection template with variable substitution
+	// This converts template strings like "{{ .PORT }}" to actual values
 	conn, err := config.RenderTemplate(spec.GetConnectionServiceConfig(), scope)
 	if err != nil {
 		return protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime{}, err
+	}
+
+	// 2. Convert the rendered template to runtime config with proper types
+	// This handles the string-to-uint16 port conversion and type safety
+	connRuntime, err := connectionserviceconfig.ConvertTemplateToRuntime(conn)
+	if err != nil {
+		return protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime{}, fmt.Errorf("failed to convert connection template to runtime: %w", err)
 	}
 
 	read, err := config.RenderTemplate(spec.GetDFCReadServiceConfig(), scope)
@@ -253,7 +290,7 @@ func renderConfig(
 	}
 
 	return protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime{
-		ConnectionServiceConfig:             conn,
+		ConnectionServiceConfig:             connRuntime,
 		DataflowComponentReadServiceConfig:  read,
 		DataflowComponentWriteServiceConfig: write,
 	}, nil

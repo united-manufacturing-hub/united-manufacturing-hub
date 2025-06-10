@@ -12,36 +12,36 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package dataflowcomponent
+package protocolconverter
 
 import (
 	"github.com/tiendc/go-deepcopy"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/dataflowcomponent"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/protocolconverter"
 )
 
-// DataflowComponentObservedStateSnapshot is a deep-copyable snapshot of DataflowComponentObservedState
-type DataflowComponentObservedStateSnapshot struct {
-	Config      dataflowcomponentserviceconfig.DataflowComponentServiceConfig
-	ServiceInfo dataflowcomponent.ServiceInfo
+// ProtocolConverterObservedStateSnapshot is a deep-copyable snapshot of ProtocolConverterObservedState
+type ProtocolConverterObservedStateSnapshot struct {
+	ObservedProtocolConverterConfig protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime
+	ServiceInfo                     protocolconverter.ServiceInfo
 }
 
 // IsObservedStateSnapshot implements the fsm.ObservedStateSnapshot interface
-func (s *DataflowComponentObservedStateSnapshot) IsObservedStateSnapshot() {
+func (s *ProtocolConverterObservedStateSnapshot) IsObservedStateSnapshot() {
 	// Marker method implementation
 }
 
-// CreateObservedStateSnapshot implements the fsm.ObservedStateConverter interface for DataflowComponentInstance
-func (d *DataflowComponentInstance) CreateObservedStateSnapshot() fsm.ObservedStateSnapshot {
+// CreateObservedStateSnapshot implements the fsm.ObservedStateConverter interface for ProtocolConverterInstance
+func (d *ProtocolConverterInstance) CreateObservedStateSnapshot() fsm.ObservedStateSnapshot {
 	// Create a deep copy of the observed state
-	snapshot := &DataflowComponentObservedStateSnapshot{}
+	snapshot := &ProtocolConverterObservedStateSnapshot{}
 
-	// Deep copy config
-	err := deepcopy.Copy(&snapshot.Config, &d.config)
+	// Deep copy observed protocol converter config
+	err := deepcopy.Copy(&snapshot.ObservedProtocolConverterConfig, &d.ObservedState.ObservedProtocolConverterConfig)
 	if err != nil {
-		sentry.ReportIssuef(sentry.IssueTypeError, d.baseFSMInstance.GetLogger(), "failed to deep copy config: %v", err)
+		sentry.ReportIssuef(sentry.IssueTypeError, d.baseFSMInstance.GetLogger(), "failed to deep copy observed protocol converter config: %v", err)
 		return nil
 	}
 

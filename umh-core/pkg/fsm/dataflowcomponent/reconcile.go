@@ -77,7 +77,10 @@ func (d *DataflowComponentInstance) Reconcile(ctx context.Context, snapshot fsm.
 				},
 				func(ctx context.Context) error {
 					// Normal removal through state transition
-					return d.RemoveInstance(ctx, services.GetFileSystem())
+					// Use Remove() instead of RemoveInstance() to ensure proper FSM state management.
+					// Remove() triggers FSM state transitions via baseFSMInstance.Remove(),
+					// while RemoveInstance() bypasses FSM and directly performs file operations.
+					return d.Remove(ctx)
 				},
 				func(ctx context.Context) error {
 					// Force removal when other approaches fail - bypasses state transitions

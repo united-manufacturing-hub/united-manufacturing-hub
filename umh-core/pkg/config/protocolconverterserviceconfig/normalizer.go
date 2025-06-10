@@ -41,7 +41,10 @@ func (n *Normalizer) NormalizeConfig(cfg ProtocolConverterServiceConfigSpec) Pro
 
 	// Then we  need to normalize the underlying ConnectionServiceConfig
 	connectionNormalizer := connectionserviceconfig.NewNormalizer()
-	normalized.Template.ConnectionServiceConfig = connectionNormalizer.NormalizeConfig(normalized.GetConnectionServiceConfig())
+	// If conversion fails, e.g., because the port is not a number, keep the original template config (graceful degradation during normalization)
+	if connRuntime, err := connectionserviceconfig.ConvertTemplateToRuntime(normalized.GetConnectionServiceConfig()); err == nil {
+		normalized.Template.ConnectionServiceConfig = connectionserviceconfig.ConvertRuntimeToTemplate(connectionNormalizer.NormalizeConfig(connRuntime))
+	}
 
 	// Then we need to normalize the variables
 	variablesNormalizer := variables.NewNormalizer()

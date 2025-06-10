@@ -26,9 +26,15 @@ func NewGenerator() *Generator {
 	return &Generator{}
 }
 
-// RenderConfig converts a VariableBundle to YAML
+// RenderConfig converts a VariableBundle to YAML showing all namespaces
+// This is intended for internal use, debugging, or when you need to see
+// the complete structure including global and internal variables.
+// For user-facing YAML, use yaml.Marshal(vb) directly which will use
+// the custom MarshalYAML method to show only user variables.
 func (g *Generator) RenderConfig(vb VariableBundle) (string, error) {
-	bytes, err := yaml.Marshal(vb)
+	// Use ConfigToMap to get the full structure with all namespaces
+	configMap := g.ConfigToMap(vb)
+	bytes, err := yaml.Marshal(configMap)
 	if err != nil {
 		return "", err
 	}

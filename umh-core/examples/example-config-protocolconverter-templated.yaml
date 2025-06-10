@@ -33,7 +33,7 @@ templates:
 # ---------- Agent-wide settings ---------- #
 agent:
   metricsPort: 8080
-  location:            # authoritative, can’t be overridden
+  location:            # authoritative, can't be overridden
     0: "plant-A"
     1: "line-4"
 
@@ -42,11 +42,11 @@ protocolConverter:
   # ────────────────────────────────────────────────────────────────
   - name: temperature-sensor-pc
     desiredState: active
-    # Intentionally tries to override level-0; will be ignored
-    location:
-      0: "override-level0"
-      2: "machine-7"
     protocolConverterServiceConfig:
+      # Intentionally tries to override level-0; will be ignored
+      location:
+        0: "override-level0"
+        2: "machine-7"
       template: *opcua_http       # uses the anchor
       variables:                  # <- flat, user-defined variables
         IP:   "10.0.1.50"

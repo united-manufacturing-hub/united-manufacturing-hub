@@ -27,7 +27,6 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/connectionserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/nmapserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/variables"
 	connfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/connection"
@@ -80,10 +79,10 @@ var _ = Describe("DataFlowComponentService", func() {
 			// Create a basic config for testing
 			cfg = protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
 				Template: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
-					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
-						NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
+					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+						NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
 							Target: "localhost",
-							Port:   102,
+							Port:   "102",
 						},
 					},
 					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
@@ -190,10 +189,10 @@ var _ = Describe("DataFlowComponentService", func() {
 			// Create a basic config for testing
 			cfg = protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
 				Template: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
-					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
-						NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
+					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+						NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
 							Target: "localhost",
-							Port:   102,
+							Port:   "102",
 						},
 					},
 					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
@@ -256,13 +255,12 @@ var _ = Describe("DataFlowComponentService", func() {
 			// Initial config
 			config = protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
 				Template: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
-					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
-						NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
+					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+						NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
 							Target: "localhost",
-							Port:   102,
+							Port:   "102",
 						},
 					},
-
 					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 							Input: map[string]interface{}{
@@ -280,13 +278,12 @@ var _ = Describe("DataFlowComponentService", func() {
 
 			updatedConfig = protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
 				Template: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
-					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
-						NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
+					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+						NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
 							Target: "localhost",
-							Port:   102,
+							Port:   "102",
 						},
 					},
-
 					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 							Input: map[string]interface{}{
@@ -372,10 +369,10 @@ var _ = Describe("DataFlowComponentService", func() {
 			// Create a basic config for testing
 			cfg = protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
 				Template: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
-					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
-						NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
+					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+						NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
 							Target: "localhost",
-							Port:   102,
+							Port:   "102",
 						},
 					},
 					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
@@ -472,10 +469,10 @@ var _ = Describe("DataFlowComponentService", func() {
 			// Create a basic config for testing
 			cfg = protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
 				Template: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
-					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
-						NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
+					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+						NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
 							Target: "localhost",
-							Port:   102,
+							Port:   "102",
 						},
 					},
 					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
@@ -532,10 +529,10 @@ var _ = Describe("DataFlowComponentService", func() {
 			// Add a test component to have something to reconcile
 			cfg := protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
 				Template: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
-					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
-						NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
+					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+						NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
 							Target: "localhost",
-							Port:   102,
+							Port:   "102",
 						},
 					},
 					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
@@ -591,10 +588,10 @@ var _ = Describe("DataFlowComponentService", func() {
 			testComponentName := "test-error-component"
 			cfg := protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
 				Template: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
-					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
-						NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
+					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+						NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
 							Target: "localhost",
-							Port:   102,
+							Port:   "102",
 						},
 					},
 					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
@@ -654,10 +651,10 @@ var _ = Describe("DataFlowComponentService", func() {
 					},
 				},
 				Template: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
-					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
-						NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
+					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+						NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
 							Target: "{{.custom_var}}",
-							Port:   102,
+							Port:   "102",
 						},
 					},
 					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
@@ -727,10 +724,10 @@ var _ = Describe("DataFlowComponentService", func() {
 					},
 				},
 				Template: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
-					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
-						NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
+					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+						NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
 							Target: "{{.custom_var}}",
-							Port:   102,
+							Port:   "102",
 						},
 					},
 					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
@@ -755,6 +752,12 @@ var _ = Describe("DataFlowComponentService", func() {
 		It("should sanitize bridged_by header correctly", func() {
 			spec := protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
 				Template: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
+					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+						NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
+							Target: "localhost",
+							Port:   "443",
+						},
+					},
 					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 							Input: map[string]interface{}{

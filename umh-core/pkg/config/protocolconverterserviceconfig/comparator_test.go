@@ -19,7 +19,6 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/connectionserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/nmapserviceconfig"
 )
 
 var _ = Describe("ProtocolConverter YAML Comparator", func() {
@@ -41,10 +40,10 @@ var _ = Describe("ProtocolConverter YAML Comparator", func() {
 							},
 						},
 					},
-					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
-						NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
+					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+						NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
 							Target: "127.0.0.1",
-							Port:   443,
+							Port:   "443",
 						},
 					},
 				},
@@ -66,10 +65,10 @@ var _ = Describe("ProtocolConverter YAML Comparator", func() {
 							},
 						},
 					},
-					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
-						NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
+					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+						NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
 							Target: "127.0.0.1",
-							Port:   443,
+							Port:   "443",
 						},
 					},
 				},
@@ -98,10 +97,10 @@ var _ = Describe("ProtocolConverter YAML Comparator", func() {
 							},
 						},
 					},
-					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
-						NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
+					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+						NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
 							Target: "127.0.0.1",
-							Port:   443,
+							Port:   "443",
 						},
 					},
 				},
@@ -123,10 +122,10 @@ var _ = Describe("ProtocolConverter YAML Comparator", func() {
 							},
 						},
 					},
-					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
-						NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
+					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+						NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
 							Target: "127.0.0.1",
-							Port:   443,
+							Port:   "443",
 						},
 					},
 				},
@@ -159,10 +158,10 @@ var _ = Describe("ProtocolConverter YAML Comparator", func() {
 							},
 						},
 					},
-					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
-						NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
+					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+						NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
 							Target: "127.0.0.1",
-							Port:   443,
+							Port:   "443",
 						},
 					},
 				},
@@ -184,10 +183,10 @@ var _ = Describe("ProtocolConverter YAML Comparator", func() {
 							},
 						},
 					},
-					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
-						NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
+					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+						NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
 							Target: "127.0.0.1",
-							Port:   443,
+							Port:   "443",
 						},
 					},
 				},
@@ -220,10 +219,10 @@ var _ = Describe("ProtocolConverter YAML Comparator", func() {
 							},
 						},
 					},
-					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
-						NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
+					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+						NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
 							Target: "127.0.0.1",
-							Port:   443,
+							Port:   "443",
 						},
 					},
 				},
@@ -245,10 +244,10 @@ var _ = Describe("ProtocolConverter YAML Comparator", func() {
 							},
 						},
 					},
-					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
-						NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
+					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+						NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
 							Target: "127.0.0.2",
-							Port:   443,
+							Port:   "443",
 						},
 					},
 				},
@@ -282,10 +281,10 @@ var _ = Describe("ProtocolConverter YAML Comparator", func() {
 							},
 						},
 					},
-					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
-						NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
+					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+						NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
 							Target: "127.0.0.1",
-							Port:   443,
+							Port:   "443",
 						},
 					},
 				},
@@ -307,10 +306,10 @@ var _ = Describe("ProtocolConverter YAML Comparator", func() {
 							},
 						},
 					},
-					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
-						NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
+					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+						NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
 							Target: "127.0.0.1",
-							Port:   444,
+							Port:   "444",
 						},
 					},
 				},
@@ -345,10 +344,10 @@ var _ = Describe("ProtocolConverter YAML Comparator", func() {
 							},
 						},
 					},
-					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
-						NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
+					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+						NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
 							Target: "127.0.0.1",
-							Port:   443,
+							Port:   "443",
 						},
 					},
 				},
@@ -370,10 +369,10 @@ var _ = Describe("ProtocolConverter YAML Comparator", func() {
 							},
 						},
 					},
-					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
-						NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
+					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+						NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
 							Target: "127.0.0.1",
-							Port:   444,
+							Port:   "444",
 						},
 					},
 				},
@@ -410,10 +409,10 @@ var _ = Describe("ProtocolConverter YAML Comparator", func() {
 							},
 						},
 					},
-					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
-						NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
+					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+						NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
 							Target: "127.0.0.1",
-							Port:   443,
+							Port:   "443",
 						},
 					},
 				},
@@ -435,10 +434,10 @@ var _ = Describe("ProtocolConverter YAML Comparator", func() {
 							},
 						},
 					},
-					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
-						NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
+					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+						NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
 							Target: "127.0.0.1",
-							Port:   443,
+							Port:   "443",
 						},
 					},
 				},
@@ -471,10 +470,10 @@ var _ = Describe("ProtocolConverter YAML Comparator", func() {
 							},
 						},
 					},
-					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
-						NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
+					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+						NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
 							Target: "127.0.0.1",
-							Port:   443,
+							Port:   "443",
 						},
 					},
 				},
@@ -496,10 +495,10 @@ var _ = Describe("ProtocolConverter YAML Comparator", func() {
 							},
 						},
 					},
-					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
-						NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
+					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+						NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
 							Target: "127.0.0.1",
-							Port:   444,
+							Port:   "444",
 						},
 					},
 				},
