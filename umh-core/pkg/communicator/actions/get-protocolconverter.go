@@ -117,9 +117,14 @@ func (a *GetProtocolConverterAction) Parse(payload interface{}) (err error) {
 	return err
 }
 
-// Validate is a no‑op because the request schema does not require additional
-// semantic checks beyond JSON deserialization.
+// Validate validates the parsed payload, checking that required fields are present
+// and properly formatted.
 func (a *GetProtocolConverterAction) Validate() error {
+	// Check if UUID is the zero value (empty UUID)
+	if a.payload.UUID == uuid.Nil {
+		return fmt.Errorf("uuid must be set to retrieve protocol converter")
+	}
+
 	return nil
 }
 
@@ -229,29 +234,38 @@ func (a *GetProtocolConverterAction) Execute() (interface{}, map[string]interfac
 					return nil, nil, fmt.Errorf("no observed state found for protocol converter %s", instance.ID)
 				}
 
-				// Extract connection info from variables
+				// Extract connection info from template config
 				var ip string
 				var port uint32
 
-				config := observedState.ObservedProtocolConverterTemplateConfig
-				if config.ConnectionServiceConfig.NmapTemplate.Target != "" {
-					ip = config.ConnectionServiceConfig.NmapTemplate.Target
+				templateConfig := observedState.ObservedProtocolConverterTemplateConfig
+				a.actionLogger.Debugf("Template config content: %+v", templateConfig)
+				if templateConfig.ConnectionServiceConfig.NmapTemplate != nil && templateConfig.ConnectionServiceConfig.NmapTemplate.Target != "" {
+					ip = templateConfig.ConnectionServiceConfig.NmapTemplate.Target
 				}
-				if config.ConnectionServiceConfig.NmapTemplate.Port != "" {
-					portInt, err := strconv.ParseUint(config.ConnectionServiceConfig.NmapTemplate.Port, 10, 32)
+				if templateConfig.ConnectionServiceConfig.NmapTemplate != nil && templateConfig.ConnectionServiceConfig.NmapTemplate.Port != "" {
+					portInt, err := strconv.ParseUint(templateConfig.ConnectionServiceConfig.NmapTemplate.Port, 10, 32)
 					if err != nil {
-						a.actionLogger.Warnw("Failed to parse port number", "port", config.ConnectionServiceConfig.NmapTemplate.Port, "error", err)
+						a.actionLogger.Warnw("Failed to parse port number", "port", templateConfig.ConnectionServiceConfig.NmapTemplate.Port, "error", err)
 						SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
-							fmt.Sprintf("Warning: Invalid port number '%s' for protocol converter '%s'", config.ConnectionServiceConfig.NmapTemplate.Port, instance.ID),
+							fmt.Sprintf("Warning: Invalid port number '%s' for protocol converter '%s'", templateConfig.ConnectionServiceConfig.NmapTemplate.Port, instance.ID),
 							a.outboundChannel, models.GetProtocolConverter)
-						return nil, nil, fmt.Errorf("invalid port number '%s' for protocol converter %s: %v", config.ConnectionServiceConfig.NmapTemplate.Port, instance.ID, err)
+						return nil, nil, fmt.Errorf("invalid port number '%s' for protocol converter %s: %v", templateConfig.ConnectionServiceConfig.NmapTemplate.Port, instance.ID, err)
 					}
 					port = uint32(portInt)
+				} else {
+					SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
+						fmt.Sprintf("Warning: No port found for protocol converter '%s'", instance.ID),
+						a.outboundChannel, models.GetProtocolConverter)
+					return nil, nil, fmt.Errorf("no port found for protocol converter %s", instance.ID)
 				}
+
+				// DFC configs are stored in runtime config, not template config
+				runtimeConfig := observedState.ObservedProtocolConverterRuntimeConfig
 
 				// Build ReadDFC if present
 				var readDFC *models.ProtocolConverterDFC
-				if readDFCConfig := config.DataflowComponentReadServiceConfig; len(readDFCConfig.BenthosConfig.Input) > 0 {
+				if readDFCConfig := runtimeConfig.DataflowComponentReadServiceConfig; len(readDFCConfig.BenthosConfig.Input) > 0 {
 					var err error
 					readDFC, err = buildProtocolConverterDFCFromConfig(readDFCConfig, a)
 					if err != nil {
@@ -264,7 +278,7 @@ func (a *GetProtocolConverterAction) Execute() (interface{}, map[string]interfac
 
 				// Build WriteDFC if present
 				var writeDFC *models.ProtocolConverterDFC
-				if writeDFCConfig := config.DataflowComponentWriteServiceConfig; len(writeDFCConfig.BenthosConfig.Input) > 0 {
+				if writeDFCConfig := runtimeConfig.DataflowComponentWriteServiceConfig; len(writeDFCConfig.BenthosConfig.Input) > 0 {
 					var err error
 					writeDFC, err = buildProtocolConverterDFCFromConfig(writeDFCConfig, a)
 					if err != nil {

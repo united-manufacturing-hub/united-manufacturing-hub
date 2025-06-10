@@ -411,6 +411,17 @@ func BuildCommonDataFlowComponentPropertiesFromConfig(dfcConfig dataflowcomponen
 				log.Warnf("Failed to marshal processor data: %v", err)
 				continue
 			}
+
+			// Determine processor type by looking at the processor structure
+			processorType := "bloblang" // Default type
+			if procMap, ok := proc.(map[string]interface{}); ok {
+				// Get the first key in the processor map as the type
+				for key := range procMap {
+					processorType = key
+					break
+				}
+			}
+
 			// Use index as processor name to allow sorting in the frontend
 			procName := fmt.Sprintf("%d", i)
 			processors[procName] = struct {
@@ -418,7 +429,7 @@ func BuildCommonDataFlowComponentPropertiesFromConfig(dfcConfig dataflowcomponen
 				Type string `json:"type" yaml:"type" mapstructure:"type"`
 			}{
 				Data: string(procData),
-				Type: "bloblang", // Default type for benthos processors
+				Type: processorType,
 			}
 		}
 	}

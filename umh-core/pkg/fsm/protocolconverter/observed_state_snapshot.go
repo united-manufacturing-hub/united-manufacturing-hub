@@ -42,14 +42,14 @@ func (d *ProtocolConverterInstance) CreateObservedStateSnapshot() fsm.ObservedSt
 	// Deep copy observed protocol converter runtime config
 	err := deepcopy.Copy(&snapshot.ObservedProtocolConverterRuntimeConfig, &d.ObservedState.ObservedProtocolConverterRuntimeConfig)
 	if err != nil {
-		sentry.ReportIssuef(sentry.IssueTypeError, d.baseFSMInstance.GetLogger(), "failed to deep copy observed protocol converter config: %v", err)
+		sentry.ReportIssuef(sentry.IssueTypeError, d.baseFSMInstance.GetLogger(), "failed to deep copy observed protocol converter runtime config: %v", err)
 		return nil
 	}
 
 	// Deep copy observed protocol converter template config
 	err = deepcopy.Copy(&snapshot.ObservedProtocolConverterTemplateConfig, &d.ObservedState.ObservedProtocolConverterTemplateConfig)
 	if err != nil {
-		sentry.ReportIssuef(sentry.IssueTypeError, d.baseFSMInstance.GetLogger(), "failed to deep copy observed protocol converter config: %v", err)
+		sentry.ReportIssuef(sentry.IssueTypeError, d.baseFSMInstance.GetLogger(), "failed to deep copy observed protocol converter template config: %v", err)
 		return nil
 	}
 
