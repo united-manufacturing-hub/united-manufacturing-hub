@@ -234,31 +234,77 @@ func (a *GetProtocolConverterAction) Execute() (interface{}, map[string]interfac
 					return nil, nil, fmt.Errorf("no observed state found for protocol converter %s", instance.ID)
 				}
 
-				// Extract connection info from template config
+				templateConfig := observedState.ObservedProtocolConverterSpecConfig.Template
+				a.actionLogger.Debugf("Template config content: %+v", templateConfig)
+
+				// Extract template information and variables from the observed spec config
+				var templateInfo *models.ProtocolConverterTemplateInfo
 				var ip string
 				var port uint32
+				var variables []models.ProtocolConverterVariable
+				var isTemplated bool
 
-				templateConfig := observedState.ObservedProtocolConverterTemplateConfig
-				a.actionLogger.Debugf("Template config content: %+v", templateConfig)
-				if templateConfig.ConnectionServiceConfig.NmapTemplate != nil && templateConfig.ConnectionServiceConfig.NmapTemplate.Target != "" {
-					ip = templateConfig.ConnectionServiceConfig.NmapTemplate.Target
-				}
-				if templateConfig.ConnectionServiceConfig.NmapTemplate != nil && templateConfig.ConnectionServiceConfig.NmapTemplate.Port != "" {
-					portInt, err := strconv.ParseUint(templateConfig.ConnectionServiceConfig.NmapTemplate.Port, 10, 32)
-					if err != nil {
-						a.actionLogger.Warnw("Failed to parse port number", "port", templateConfig.ConnectionServiceConfig.NmapTemplate.Port, "error", err)
-						SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
-							fmt.Sprintf("Warning: Invalid port number '%s' for protocol converter '%s'", templateConfig.ConnectionServiceConfig.NmapTemplate.Port, instance.ID),
-							a.outboundChannel, models.GetProtocolConverter)
-						return nil, nil, fmt.Errorf("invalid port number '%s' for protocol converter %s: %v", templateConfig.ConnectionServiceConfig.NmapTemplate.Port, instance.ID, err)
+				// Extract variables from observed spec config
+				specConfig := observedState.ObservedProtocolConverterSpecConfig
+				if specConfig.Variables.User != nil {
+					for key, value := range specConfig.Variables.User {
+						valueStr := fmt.Sprintf("%v", value) // Convert any type to string
+						variables = append(variables, models.ProtocolConverterVariable{
+							Label: key,
+							Value: valueStr,
+						})
+
+						// Extract IP and Port from variables
+						switch key {
+						case "IP", "ip", "target", "Target":
+							ip = valueStr
+						case "Port", "port", "PORT":
+							if portInt, err := strconv.ParseUint(valueStr, 10, 32); err == nil {
+								port = uint32(portInt)
+							} else {
+								a.actionLogger.Warnw("Failed to parse port from variable", "port", valueStr, "error", err)
+							}
+						}
 					}
-					port = uint32(portInt)
-				} else {
-					SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
-						fmt.Sprintf("Warning: No port found for protocol converter '%s'", instance.ID),
-						a.outboundChannel, models.GetProtocolConverter)
-					return nil, nil, fmt.Errorf("no port found for protocol converter %s", instance.ID)
+					isTemplated = len(variables) > 0
 				}
+
+				// If no variables found, check template config for non-templated values
+				if !isTemplated {
+					if templateConfig.ConnectionServiceConfig.NmapTemplate != nil {
+						if templateConfig.ConnectionServiceConfig.NmapTemplate.Target != "" {
+							ip = templateConfig.ConnectionServiceConfig.NmapTemplate.Target
+						}
+						if templateConfig.ConnectionServiceConfig.NmapTemplate.Port != "" {
+							if portInt, err := strconv.ParseUint(templateConfig.ConnectionServiceConfig.NmapTemplate.Port, 10, 32); err == nil {
+								port = uint32(portInt)
+							} else {
+								a.actionLogger.Warnw("Failed to parse port number", "port", templateConfig.ConnectionServiceConfig.NmapTemplate.Port, "error", err)
+							}
+						}
+					}
+				}
+
+				// Create template info
+				templateInfo = &models.ProtocolConverterTemplateInfo{
+					IsTemplated: isTemplated,
+					Variables:   variables,
+					RootUUID:    uuid.Nil, // For now, we don't have a root UUID concept
+				}
+
+				// Validate that we have IP and Port
+				// if ip == "" {
+				// 	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
+				// 		fmt.Sprintf("Warning: No IP found for protocol converter '%s'", instance.ID),
+				// 		a.outboundChannel, models.GetProtocolConverter)
+				// 	return nil, nil, fmt.Errorf("no IP found for protocol converter %s", instance.ID)
+				// }
+				// if port == 0 {
+				// 	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
+				// 		fmt.Sprintf("Warning: No port found for protocol converter '%s'", instance.ID),
+				// 		a.outboundChannel, models.GetProtocolConverter)
+				// 	return nil, nil, fmt.Errorf("no port found for protocol converter %s", instance.ID)
+				// }
 
 				// DFC configs are stored in runtime config, not template config
 				runtimeConfig := observedState.ObservedProtocolConverterRuntimeConfig
@@ -289,32 +335,15 @@ func (a *GetProtocolConverterAction) Execute() (interface{}, map[string]interfac
 					}
 				}
 
-				// Location is stored in the config spec, not in the observed runtime state
-				// We need to access the protocol converter from the system snapshot to get the config
+				// Location is stored in the config spec
 				location := make(map[int]string)
-				if pcManager, exists := systemSnapshot.Managers[constants.ProtocolConverterManagerName]; exists {
-					if pcInstances := pcManager.GetInstances(); pcInstances != nil {
-						for _, pcInstance := range pcInstances {
-							if pcInstance.ID == instance.ID {
-								// Extract location from system snapshot config
-								if pcConfigs := systemSnapshot.CurrentConfig.ProtocolConverter; pcConfigs != nil {
-									for _, pcConfig := range pcConfigs {
-										if pcConfig.Name == instance.ID {
-											// Convert location from string map to int map (reverse of deploy operation)
-											if len(pcConfig.ProtocolConverterServiceConfig.Location) > 0 {
-												for k, v := range pcConfig.ProtocolConverterServiceConfig.Location {
-													var intKey int
-													if _, err := fmt.Sscanf(k, "%d", &intKey); err == nil {
-														location[intKey] = v
-													}
-												}
-											}
-											break
-										}
-									}
-								}
-								break
-							}
+
+				// Extract location from observed spec config
+				if len(specConfig.Location) > 0 {
+					for k, v := range specConfig.Location {
+						var intKey int
+						if _, err := fmt.Sscanf(k, "%d", &intKey); err == nil {
+							location[intKey] = v
 						}
 					}
 				}
@@ -334,11 +363,10 @@ func (a *GetProtocolConverterAction) Execute() (interface{}, map[string]interfac
 						IP:   ip,
 						Port: port,
 					},
-					ReadDFC:  readDFC,
-					WriteDFC: writeDFC,
-					Meta:     meta,
-					// TemplateInfo can be added later if needed
-					TemplateInfo: nil,
+					ReadDFC:      readDFC,
+					WriteDFC:     writeDFC,
+					Meta:         meta,
+					TemplateInfo: templateInfo,
 				}
 
 				a.actionLogger.Info("Protocol converter found and built, returning response")

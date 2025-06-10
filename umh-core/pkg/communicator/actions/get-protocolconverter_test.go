@@ -24,6 +24,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/nmapserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/variables"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	connectionfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/connection"
@@ -196,12 +197,24 @@ var _ = Describe("GetProtocolConverter", func() {
 							},
 						},
 					},
-					ObservedProtocolConverterTemplateConfig: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
-						ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
-							NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
-								Target: "192.168.1.100",
-								Port:   "502",
+					ObservedProtocolConverterSpecConfig: protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
+						Template: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
+							ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+								NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
+									Target: "{{ .IP }}",
+									Port:   "{{ .PORT }}",
+								},
 							},
+						},
+						Variables: variables.VariableBundle{
+							User: map[string]interface{}{
+								"IP":   "192.168.1.100",
+								"PORT": "502",
+							},
+						},
+						Location: map[string]string{
+							"1": "factory",
+							"2": "line-1",
 						},
 					},
 					ServiceInfo: protocolconvertersvc.ServiceInfo{
@@ -342,11 +355,13 @@ var _ = Describe("GetProtocolConverter", func() {
 						DataflowComponentReadServiceConfig:  dataflowcomponentserviceconfig.DataflowComponentServiceConfig{},
 						DataflowComponentWriteServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{},
 					},
-					ObservedProtocolConverterTemplateConfig: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
-						ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
-							NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
-								Target: "192.168.1.101",
-								Port:   "503",
+					ObservedProtocolConverterSpecConfig: protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
+						Template: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
+							ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+								NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
+									Target: "192.168.1.101",
+									Port:   "503",
+								},
 							},
 						},
 					},
@@ -587,11 +602,13 @@ var _ = Describe("GetProtocolConverter", func() {
 
 				// Create observed state with invalid port
 				observedState := &protocolconverter.ProtocolConverterObservedStateSnapshot{
-					ObservedProtocolConverterTemplateConfig: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
-						ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
-							NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
-								Target: "192.168.1.100",
-								Port:   "invalid-port", // Invalid port
+					ObservedProtocolConverterSpecConfig: protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
+						Template: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
+							ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+								NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
+									Target: "192.168.1.100",
+									Port:   "invalid-port", // Invalid port
+								},
 							},
 						},
 					},
