@@ -68,7 +68,8 @@ func (p *ProtocolConverterInstance) CreateInstance(ctx context.Context, filesyst
 	// AddToManager intentionally receives an empty runtime config because template
 	// rendering requires SystemSnapshot data not available at creation time.
 	// The first UpdateObservedStateOfInstance() call will render and push the real config.
-	err := p.service.AddToManager(ctx, filesystemService, &p.renderedConfig, p.baseFSMInstance.GetID())
+	// We also pass the template config so it can be stored for later retrieval.
+	err := p.service.AddToManager(ctx, filesystemService, &p.renderedConfig, p.config.Template, p.baseFSMInstance.GetID())
 	if err != nil {
 		if errors.Is(err, protocolconvertersvc.ErrServiceAlreadyExists) {
 			p.baseFSMInstance.GetLogger().Debugf("ProtocolConverter service %s already exists in DFC and Connection manager", p.baseFSMInstance.GetID())
@@ -244,6 +245,22 @@ func (p *ProtocolConverterInstance) UpdateObservedStateOfInstance(ctx context.Co
 		}
 	}
 
+	// Fetch the template config from the service
+	start = time.Now()
+	observedTemplateConfig, err := p.service.GetTemplateConfig(ctx, p.baseFSMInstance.GetID())
+	metrics.ObserveReconcileTime(logger.ComponentProtocolConverterInstance, p.baseFSMInstance.GetID()+".getTemplateConfig", time.Since(start))
+	if err == nil {
+		// Only update if we successfully got the template config
+		p.ObservedState.ObservedProtocolConverterTemplateConfig = observedTemplateConfig
+	} else {
+		if strings.Contains(err.Error(), protocolconvertersvc.ErrServiceNotExist.Error()) {
+			// Log the error but don't fail - this might happen during creation when the template config doesn't exist yet
+			p.baseFSMInstance.GetLogger().Debugf("Template config not found, will be created during reconciliation: %v", err)
+		} else {
+			return fmt.Errorf("failed to get observed ProtocolConverter template config: %w", err)
+		}
+	}
+
 	// Now render the config
 	start = time.Now()
 	p.renderedConfig, err = runtime_config.BuildRuntimeConfig(
@@ -269,7 +286,7 @@ func (p *ProtocolConverterInstance) UpdateObservedStateOfInstance(ctx context.Co
 			p.baseFSMInstance.GetLogger().Debugf("Configuration differences: %s", diffStr)
 
 			// Update the config in the Benthos manager
-			err := p.service.UpdateInManager(ctx, services.GetFileSystem(), &p.renderedConfig, p.baseFSMInstance.GetID())
+			err := p.service.UpdateInManager(ctx, services.GetFileSystem(), &p.renderedConfig, p.config.Template, p.baseFSMInstance.GetID())
 			if err != nil {
 				return fmt.Errorf("failed to update ProtocolConverter service configuration: %w", err)
 			}

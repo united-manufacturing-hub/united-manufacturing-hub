@@ -53,6 +53,7 @@ type MockProtocolConverterService struct {
 	// Tracks calls to methods
 	GenerateConfigCalled     bool
 	GetConfigCalled          bool
+	GetTemplateConfigCalled  bool
 	StatusCalled             bool
 	AddToManagerCalled       bool
 	UpdateInManagerCalled    bool
@@ -70,6 +71,8 @@ type MockProtocolConverterService struct {
 	GenerateConfigError            error
 	GetConfigResult                protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime
 	GetConfigError                 error
+	GetTemplateConfigResult        protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate
+	GetTemplateConfigError         error
 	StatusResult                   ServiceInfo
 	StatusError                    error
 	AddToManagerError              error
@@ -265,6 +268,25 @@ func (m *MockProtocolConverterService) GetConfig(
 	return m.GetConfigResult, nil
 }
 
+// GetTemplateConfig mocks getting the ProtocolConverter template configuration
+func (m *MockProtocolConverterService) GetTemplateConfig(
+	ctx context.Context,
+	protConvName string,
+) (
+	protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate,
+	error,
+) {
+	m.GetTemplateConfigCalled = true
+
+	// If error is set, return it
+	if m.GetTemplateConfigError != nil {
+		return protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{}, m.GetTemplateConfigError
+	}
+
+	// If a result is preset, return it
+	return m.GetTemplateConfigResult, nil
+}
+
 // Status mocks getting the status of a ProtocolConverter
 func (m *MockProtocolConverterService) Status(
 	ctx context.Context,
@@ -293,6 +315,7 @@ func (m *MockProtocolConverterService) AddToManager(
 	ctx context.Context,
 	filesystemService filesystem.Service,
 	cfg *protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime,
+	templateCfg protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate,
 	protConvName string,
 ) error {
 	m.AddToManagerCalled = true
@@ -346,6 +369,7 @@ func (m *MockProtocolConverterService) UpdateInManager(
 	ctx context.Context,
 	filesystemService filesystem.Service,
 	cfg *protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime,
+	templateCfg protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate,
 	protConvName string,
 ) error {
 	m.UpdateInManagerCalled = true

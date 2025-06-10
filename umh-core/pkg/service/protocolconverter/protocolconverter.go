@@ -57,16 +57,23 @@ type IProtocolConverterService interface {
 	// reconcile equation:
 	GetConfig(ctx context.Context, filesystemService filesystem.Service, protConvName string) (protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime, error)
 
+	// GetTemplateConfig retrieves the original template configuration for the
+	// given Protocol-Converter before template rendering.
+	//
+	// This returns the template config with placeholder variables (e.g., "{{ .PORT }}")
+	// as stored when the service was added/updated to the manager.
+	GetTemplateConfig(ctx context.Context, protConvName string) (protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate, error)
+
 	// Status aggregates health from Connection, DFC and Redpanda into a single
 	// snapshot.  The returned structure is **read-only** – callers must not
 	// mutate it.
 	Status(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot, protConvName string) (ServiceInfo, error)
 
 	// AddToManager adds a ProtocolConverter to the Connection & DFC manager
-	AddToManager(ctx context.Context, filesystemService filesystem.Service, protConvCfg *protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime, protConvName string) error
+	AddToManager(ctx context.Context, filesystemService filesystem.Service, protConvCfg *protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime, templateCfg protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate, protConvName string) error
 
 	// UpdateInManager updates an existing ProtocolConverter in the Connection & DFC manager
-	UpdateInManager(ctx context.Context, filesystemService filesystem.Service, protConvCfg *protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime, protConvName string) error
+	UpdateInManager(ctx context.Context, filesystemService filesystem.Service, protConvCfg *protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime, templateCfg protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate, protConvName string) error
 
 	// RemoveFromManager removes a ProtocolConverter from the Connection & DFC manager
 	RemoveFromManager(ctx context.Context, filesystemService filesystem.Service, protConvName string) error
@@ -138,6 +145,10 @@ type ProtocolConverterService struct {
 	dataflowComponentService dfc.IDataFlowComponentService
 	dataflowComponentConfig  []config.DataFlowComponentConfig
 
+	// Template configs store the original template configurations before rendering
+	// Maps protocol converter name to its template config
+	templateConfigs map[string]protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate
+
 	// Redpanda is not part of a protocol converter service, we just monitor it here in the protocol converter for better error reporting itself in the protocol converter fsm
 	// e.g., if redpanda is down, the protocol converter will likely also have issues
 }
@@ -186,6 +197,7 @@ func NewDefaultProtocolConverterService(protConvName string, opts ...ProtocolCon
 		dataflowComponentManager: dfcfsm.NewDataflowComponentManager(managerName),
 		dataflowComponentService: dfc.NewDefaultDataFlowComponentService(protConvName),
 		dataflowComponentConfig:  []config.DataFlowComponentConfig{},
+		templateConfigs:          make(map[string]protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate),
 	}
 
 	// Apply options
@@ -292,6 +304,24 @@ func (p *ProtocolConverterService) GetConfig(
 	actualConfig := protocolconverterserviceconfig.FromConnectionAndDFCServiceConfig(connConfig, dfcReadConfig, dfcWriteConfig)
 
 	return actualConfig, nil
+}
+
+// GetTemplateConfig retrieves the original template configuration for the
+// given Protocol-Converter before template rendering.
+func (p *ProtocolConverterService) GetTemplateConfig(
+	ctx context.Context,
+	protConvName string,
+) (protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate, error) {
+	if ctx.Err() != nil {
+		return protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{}, ctx.Err()
+	}
+
+	templateConfig, exists := p.templateConfigs[protConvName]
+	if !exists {
+		return protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{}, ErrServiceNotExist
+	}
+
+	return templateConfig, nil
 }
 
 // Status returns information about the connection health for the specified connection.
@@ -420,6 +450,7 @@ func (p *ProtocolConverterService) AddToManager(
 	ctx context.Context,
 	filesystemService filesystem.Service,
 	cfg *protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime,
+	templateCfg protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate,
 	protConvName string,
 ) error {
 	if p.connectionManager == nil {
@@ -480,6 +511,10 @@ func (p *ProtocolConverterService) AddToManager(
 	p.connectionConfig = append(p.connectionConfig, connectionConfig)
 	p.dataflowComponentConfig = append(p.dataflowComponentConfig, dfcReadConfig, dfcWriteConfig)
 
+	// Store the template config
+	p.templateConfigs[protConvName] = templateCfg
+	p.logger.Debugf("Stored template config for ProtocolConverter %s", protConvName)
+
 	p.logger.Infof("ProtocolConverter %s added to manager", protConvName)
 	p.logger.Infof("Connection config: %+v", p.connectionConfig)
 	p.logger.Infof("Dataflow component config: %+v", p.dataflowComponentConfig)
@@ -492,6 +527,7 @@ func (p *ProtocolConverterService) UpdateInManager(
 	ctx context.Context,
 	filesystemService filesystem.Service,
 	cfg *protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime,
+	templateCfg protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate,
 	protConvName string,
 ) error {
 	if p.connectionManager == nil {
@@ -589,6 +625,10 @@ func (p *ProtocolConverterService) UpdateInManager(
 		}
 	}
 
+	// Store the template config
+	p.templateConfigs[protConvName] = templateCfg
+	p.logger.Debugf("Updated template config for ProtocolConverter %s", protConvName)
+
 	p.logger.Info("Updated protocolconverter config in manager")
 	p.logger.Infof("Connection config: %+v", p.connectionConfig)
 	p.logger.Infof("Dataflow component config: %+v", p.dataflowComponentConfig)
@@ -644,6 +684,10 @@ func (p *ProtocolConverterService) RemoveFromManager(
 	p.connectionConfig = connSliceRemoveByName(p.connectionConfig, connectionName)
 	p.dataflowComponentConfig = dfcSliceRemoveByName(p.dataflowComponentConfig, dfcReadName)
 	p.dataflowComponentConfig = dfcSliceRemoveByName(p.dataflowComponentConfig, dfcWriteName)
+
+	// Remove template config
+	delete(p.templateConfigs, protConvName)
+	p.logger.Debugf("Removed template config for ProtocolConverter %s", protConvName)
 
 	//--------------------------------------------
 	// 2) is the child FSM still alive?

@@ -94,6 +94,13 @@ func buildProtocolConverterAsDfc(
 		connections = append(connections, connection)
 	}
 
+	// var templatePort string
+	// if observed.ObservedProtocolConverterTemplateConfig.ConnectionServiceConfig.NmapTemplate != nil {
+	// 	templatePort = observed.ObservedProtocolConverterTemplateConfig.ConnectionServiceConfig.NmapTemplate.Port
+	// } else {
+	// 	templatePort = "not found"
+	// }
+
 	//check if the protocol converter is initialized by checking if a read dfc is present
 	isInitialized := false
 	input := observed.ObservedProtocolConverterRuntimeConfig.DataflowComponentReadServiceConfig.BenthosConfig.Input
@@ -107,7 +114,8 @@ func buildProtocolConverterAsDfc(
 		Name:        &instance.ID,
 		Connections: connections,
 		Health: &models.Health{
-			Message:       getProtocolConverterStatusMessage(instance.CurrentState, observed.ServiceInfo.ConnectionFSMState, observed.ServiceInfo.ConnectionObservedState.ServiceInfo.NmapFSMState),
+			Message: getProtocolConverterStatusMessage(instance.CurrentState, observed.ServiceInfo.ConnectionFSMState, observed.ServiceInfo.ConnectionObservedState.ServiceInfo.NmapFSMState),
+			//Message:       fmt.Sprintf("templatePort is %s", templatePort),
 			ObservedState: instance.CurrentState,
 			DesiredState:  instance.DesiredState,
 			Category:      healthCat,

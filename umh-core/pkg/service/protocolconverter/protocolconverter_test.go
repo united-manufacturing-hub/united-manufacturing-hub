@@ -124,7 +124,7 @@ var _ = Describe("DataFlowComponentService", func() {
 		It("should add a new protocolConverter to the underlying manager", func() {
 
 			// Act
-			err := service.AddToManager(ctx, mockSvcRegistry.GetFileSystem(), &runtimeCfg, protConvName)
+			err := service.AddToManager(ctx, mockSvcRegistry.GetFileSystem(), &runtimeCfg, cfg.Template, protConvName)
 
 			// Assert
 			Expect(err).NotTo(HaveOccurred())
@@ -149,11 +149,11 @@ var _ = Describe("DataFlowComponentService", func() {
 
 		It("should return error when the protocolConverter already exists", func() {
 			// Add the ProtocolConverter first
-			err := service.AddToManager(ctx, mockSvcRegistry.GetFileSystem(), &runtimeCfg, protConvName)
+			err := service.AddToManager(ctx, mockSvcRegistry.GetFileSystem(), &runtimeCfg, cfg.Template, protConvName)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Try to add it again
-			err = service.AddToManager(ctx, mockSvcRegistry.GetFileSystem(), &runtimeCfg, protConvName)
+			err = service.AddToManager(ctx, mockSvcRegistry.GetFileSystem(), &runtimeCfg, cfg.Template, protConvName)
 
 			// Assert
 			Expect(err).To(MatchError(ErrServiceAlreadyExists))
@@ -161,7 +161,7 @@ var _ = Describe("DataFlowComponentService", func() {
 
 		It("should set up the protocolConverter for reconciliation with the managers", func() {
 			// Act
-			err := service.AddToManager(ctx, mockSvcRegistry.GetFileSystem(), &runtimeCfg, protConvName)
+			err := service.AddToManager(ctx, mockSvcRegistry.GetFileSystem(), &runtimeCfg, cfg.Template, protConvName)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Reconcile to ensure the protocl converter is passed to managers
@@ -223,7 +223,7 @@ var _ = Describe("DataFlowComponentService", func() {
 				WithUnderlyingManagers(connManager, dfcManager))
 
 			// Add the component to the service
-			err = statusService.AddToManager(ctx, mockSvcRegistry.GetFileSystem(), &runtimeCfg, protConvName)
+			err = statusService.AddToManager(ctx, mockSvcRegistry.GetFileSystem(), &runtimeCfg, cfg.Template, protConvName)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Get the benthos name that will be used
@@ -305,13 +305,13 @@ var _ = Describe("DataFlowComponentService", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Add the component first
-			err = service.AddToManager(ctx, mockSvcRegistry.GetFileSystem(), &runtimeCfg, protConvName)
+			err = service.AddToManager(ctx, mockSvcRegistry.GetFileSystem(), &runtimeCfg, config.Template, protConvName)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		It("should update an existing component", func() {
 			// Act - update the component
-			err := service.UpdateInManager(ctx, mockSvcRegistry.GetFileSystem(), &updatedRuntimeCfg, protConvName)
+			err := service.UpdateInManager(ctx, mockSvcRegistry.GetFileSystem(), &updatedRuntimeCfg, updatedConfig.Template, protConvName)
 
 			// Assert
 			Expect(err).NotTo(HaveOccurred())
@@ -352,7 +352,7 @@ var _ = Describe("DataFlowComponentService", func() {
 
 		It("should return error when protocolConverter doesn't exist", func() {
 			// Act - try to update a non-existent component
-			err := service.UpdateInManager(ctx, mockSvcRegistry.GetFileSystem(), &updatedRuntimeCfg, "non-existent")
+			err := service.UpdateInManager(ctx, mockSvcRegistry.GetFileSystem(), &updatedRuntimeCfg, updatedConfig.Template, "non-existent")
 
 			// Assert
 			Expect(err).To(MatchError(ErrServiceNotExist))
@@ -392,7 +392,7 @@ var _ = Describe("DataFlowComponentService", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Add the component first
-			err = service.AddToManager(ctx, mockSvcRegistry.GetFileSystem(), &runtimeCfg, protConvName)
+			err = service.AddToManager(ctx, mockSvcRegistry.GetFileSystem(), &runtimeCfg, cfg.Template, protConvName)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -492,7 +492,7 @@ var _ = Describe("DataFlowComponentService", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Add the component first
-			err = service.AddToManager(ctx, mockSvcRegistry.GetFileSystem(), &runtimeCfg, protConvName)
+			err = service.AddToManager(ctx, mockSvcRegistry.GetFileSystem(), &runtimeCfg, cfg.Template, protConvName)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -550,7 +550,7 @@ var _ = Describe("DataFlowComponentService", func() {
 			runtimeCfg, err := runtime_config.BuildRuntimeConfig(cfg, nil, nil, "", protConvName)
 			Expect(err).NotTo(HaveOccurred())
 
-			err = service.AddToManager(ctx, mockSvcRegistry.GetFileSystem(), &runtimeCfg, protConvName)
+			err = service.AddToManager(ctx, mockSvcRegistry.GetFileSystem(), &runtimeCfg, cfg.Template, protConvName)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Use the real mock from the FSM package
@@ -609,7 +609,7 @@ var _ = Describe("DataFlowComponentService", func() {
 			runtimeCfg, err := runtime_config.BuildRuntimeConfig(cfg, nil, nil, "", testComponentName)
 			Expect(err).NotTo(HaveOccurred())
 
-			err = testService.AddToManager(ctx, mockSvcRegistry.GetFileSystem(), &runtimeCfg, testComponentName)
+			err = testService.AddToManager(ctx, mockSvcRegistry.GetFileSystem(), &runtimeCfg, cfg.Template, testComponentName)
 			Expect(err).NotTo(HaveOccurred())
 
 			// First reconcile - this will just create the instance in the manager
