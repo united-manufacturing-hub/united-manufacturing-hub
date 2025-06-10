@@ -184,6 +184,16 @@ func (c *ControlLoop) Execute(ctx context.Context) error {
 
 			// Record metrics for the reconcile cycle
 			cycleTime := time.Since(start)
+
+			// If cycleTime is greater than tickerTime, log a warning
+			if cycleTime > c.tickerTime {
+				c.logger.Warnf("Control loop reconcile cycle time is greater then ticker time: %v", cycleTime)
+				// If cycleTime is greater than 2*tickerTime, log an error
+				if cycleTime > 2*c.tickerTime {
+					c.logger.Errorf("Control loop reconcile cycle time is greater then 2*ticker time: %v", cycleTime)
+				}
+			}
+
 			metrics.ObserveReconcileTime(metrics.ComponentControlLoop, "main", cycleTime)
 
 			// Handle errors differently based on type

@@ -120,6 +120,9 @@ COPY --from=downloader / /
 # Copy built application
 COPY --from=build /go/bin/umh-core /usr/local/bin/umh-core
 
+# Install coreutils (this allows date resolution beyond seconds)
+RUN apk add --no-cache coreutils
+
 # Handle DEBUG mode - install Go and Delve when DEBUG=true
 # Delve is a debugger for Go (https://github.com/go-delve/delve/)
 # We can use it for remote debugging of the UMH Core

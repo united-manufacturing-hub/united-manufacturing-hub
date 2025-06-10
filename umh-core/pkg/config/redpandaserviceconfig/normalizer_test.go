@@ -28,6 +28,16 @@ var _ = Describe("Redpanda YAML Normalizer", func() {
 			normalizedConfig := normalizer.NormalizeConfig(config)
 			Expect(normalizedConfig.Topic.DefaultTopicRetentionMs).To(Equal(int64(604800000)))
 			Expect(normalizedConfig.Topic.DefaultTopicRetentionBytes).To(Equal(int64(0)))
+			Expect(normalizedConfig.Topic.DefaultTopicCompressionAlgorithm).To(Equal("snappy"))
+		})
+
+		It("should not override existing compression algorithm", func() {
+			config := RedpandaServiceConfig{}
+			config.Topic.DefaultTopicCompressionAlgorithm = "lz4"
+			normalizer := NewNormalizer()
+
+			normalizedConfig := normalizer.NormalizeConfig(config)
+			Expect(normalizedConfig.Topic.DefaultTopicCompressionAlgorithm).To(Equal("lz4"))
 		})
 	})
 })
