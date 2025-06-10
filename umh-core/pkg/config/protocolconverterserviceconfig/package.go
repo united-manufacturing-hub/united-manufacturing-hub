@@ -15,6 +15,8 @@
 package protocolconverterserviceconfig
 
 import (
+	"fmt"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/connectionserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/variables"
@@ -172,14 +174,17 @@ func ConfigDiffRuntime(desired, observed ProtocolConverterServiceConfigRuntime) 
 // This function performs structural conversion from template to runtime types.
 // It assumes the spec template contains no unresolved template variables.
 // For full template rendering with variable substitution, use the runtime_config package instead.
-func SpecToRuntime(spec ProtocolConverterServiceConfigSpec) ProtocolConverterServiceConfigRuntime {
+func SpecToRuntime(spec ProtocolConverterServiceConfigSpec) (ProtocolConverterServiceConfigRuntime, error) {
 	// Convert template connection config to runtime format using existing helper
 	// This handles the string-to-uint16 port conversion properly
-	connRuntime := connectionserviceconfig.ConvertTemplateToRuntime(spec.Template.ConnectionServiceConfig)
+	connRuntime, err := connectionserviceconfig.ConvertTemplateToRuntime(spec.Template.ConnectionServiceConfig)
+	if err != nil {
+		return ProtocolConverterServiceConfigRuntime{}, fmt.Errorf("invalid connection configuration: %w", err)
+	}
 
 	return ProtocolConverterServiceConfigRuntime{
 		ConnectionServiceConfig:             connRuntime,
 		DataflowComponentReadServiceConfig:  spec.Template.DataflowComponentReadServiceConfig,
 		DataflowComponentWriteServiceConfig: spec.Template.DataflowComponentWriteServiceConfig,
-	}
+	}, nil
 }

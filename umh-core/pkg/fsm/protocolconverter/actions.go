@@ -83,25 +83,25 @@ func (p *ProtocolConverterInstance) CreateInstance(ctx context.Context, filesyst
 
 // RemoveInstance attempts to remove the ProtocolConverter from the Benthos and connection manager.
 // It requires the service to be stopped before removal.
-func (b *ProtocolConverterInstance) RemoveInstance(ctx context.Context, filesystemService filesystem.Service) error {
-	b.baseFSMInstance.GetLogger().Debugf("Starting Action: Removing ProtocolConverter service %s from DFC and Connection manager ...", b.baseFSMInstance.GetID())
+func (p *ProtocolConverterInstance) RemoveInstance(ctx context.Context, filesystemService filesystem.Service) error {
+	p.baseFSMInstance.GetLogger().Debugf("Starting Action: Removing ProtocolConverter service %s from DFC and Connection manager ...", p.baseFSMInstance.GetID())
 
 	// Remove the initiateDataflowComponent from the Benthos manager
-	err := b.service.RemoveFromManager(ctx, filesystemService, b.baseFSMInstance.GetID())
+	err := p.service.RemoveFromManager(ctx, filesystemService, p.baseFSMInstance.GetID())
 	switch {
 	// ---------------------------------------------------------------
 	// happy paths
 	// ---------------------------------------------------------------
 	case err == nil: // fully removed
-		b.baseFSMInstance.GetLogger().
+		p.baseFSMInstance.GetLogger().
 			Debugf("Benthos service %s removed from S6 manager",
-				b.baseFSMInstance.GetID())
+				p.baseFSMInstance.GetID())
 		return nil
 
 	case errors.Is(err, protocolconvertersvc.ErrServiceNotExist):
-		b.baseFSMInstance.GetLogger().
+		p.baseFSMInstance.GetLogger().
 			Debugf("Benthos service %s already removed from S6 manager",
-				b.baseFSMInstance.GetID())
+				p.baseFSMInstance.GetID())
 		// idempotent: was already gone
 		return nil
 
@@ -109,9 +109,9 @@ func (b *ProtocolConverterInstance) RemoveInstance(ctx context.Context, filesyst
 	// transient path – keep retrying
 	// ---------------------------------------------------------------
 	case errors.Is(err, standarderrors.ErrRemovalPending):
-		b.baseFSMInstance.GetLogger().
+		p.baseFSMInstance.GetLogger().
 			Debugf("Benthos service %s removal still in progress",
-				b.baseFSMInstance.GetID())
+				p.baseFSMInstance.GetID())
 		// not an error from the FSM's perspective – just means "try again"
 		return err
 
@@ -120,7 +120,7 @@ func (b *ProtocolConverterInstance) RemoveInstance(ctx context.Context, filesyst
 	// ---------------------------------------------------------------
 	default:
 		return fmt.Errorf("failed to remove service %s: %w",
-			b.baseFSMInstance.GetID(), err)
+			p.baseFSMInstance.GetID(), err)
 	}
 }
 
@@ -187,7 +187,15 @@ func (p *ProtocolConverterInstance) getServiceStatus(ctx context.Context, servic
 		p.baseFSMInstance.GetLogger().Errorf("error updating observed state for %s: %s", p.baseFSMInstance.GetID(), err)
 		infoWithFailedHealthChecks := info
 
-		// TODO: set the healthchecks to false
+		// Set health flags to false to indicate failure, following the pattern used by other FSMs
+		// Only set health checks for components that have them (Benthos components and Redpanda)
+		infoWithFailedHealthChecks.DataflowComponentReadObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.HealthCheck.IsLive = false
+		infoWithFailedHealthChecks.DataflowComponentReadObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.HealthCheck.IsReady = false
+		infoWithFailedHealthChecks.DataflowComponentWriteObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.HealthCheck.IsLive = false
+		infoWithFailedHealthChecks.DataflowComponentWriteObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.HealthCheck.IsReady = false
+
+		// Set the StatusReason to explain the error
+		infoWithFailedHealthChecks.StatusReason = fmt.Sprintf("service status error: %s", err.Error())
 
 		// return the info with healthchecks failed
 		return infoWithFailedHealthChecks, err
@@ -246,6 +254,8 @@ func (p *ProtocolConverterInstance) UpdateObservedStateOfInstance(ctx context.Co
 		p.baseFSMInstance.GetID(),
 	)
 	if err != nil {
+		// Capture the configuration error in StatusReason for troubleshooting
+		p.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("config error: %s", err.Error())
 		return fmt.Errorf("failed to build runtime config: %w", err)
 	}
 	metrics.ObserveReconcileTime(logger.ComponentProtocolConverterInstance, p.baseFSMInstance.GetID()+".buildRuntimeConfig", time.Since(start))
@@ -339,6 +349,26 @@ func (p *ProtocolConverterInstance) IsDFCHealthy() (bool, string) {
 	return false, p.ObservedState.ServiceInfo.DataflowComponentReadObservedState.ServiceInfo.StatusReason
 }
 
+// safeBenthosMetrics safely extracts Benthos metrics from the observed state,
+// returning a zero-value metrics struct if any part of the chain is nil.
+// This prevents panics during startup or error conditions when the full
+// observedState structure may not be populated yet.
+func (p *ProtocolConverterInstance) safeBenthosMetrics() (input, output struct{ ConnectionUp, ConnectionLost int64 }) {
+	// Return zero values if the MetricsState pointer is nil (this is the only field that can actually be nil)
+	if p.ObservedState.ServiceInfo.DataflowComponentReadObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.MetricsState == nil {
+		return
+	}
+
+	metrics := p.ObservedState.ServiceInfo.DataflowComponentReadObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.Metrics
+	return struct{ ConnectionUp, ConnectionLost int64 }{
+			ConnectionUp:   metrics.Input.ConnectionUp,
+			ConnectionLost: metrics.Input.ConnectionLost,
+		}, struct{ ConnectionUp, ConnectionLost int64 }{
+			ConnectionUp:   metrics.Output.ConnectionUp,
+			ConnectionLost: metrics.Output.ConnectionLost,
+		}
+}
+
 // IsOtherDegraded checks for certain states that should never happen
 // and moves the instance into a degraded state if they happen anyway
 // Case 1: DFC and redpanda should either be both idle or both active, if they differ (for more than a tick) something must have gone wrong (exept that redpanda can be active because of a different DFC)
@@ -359,20 +389,22 @@ func (p *ProtocolConverterInstance) IsOtherDegraded() (bool, string) {
 		return true, "DFC is active, but redpanda is idle"
 	}
 
+	// Safely extract Benthos metrics to avoid nil pointer panics
+	inputMetrics, outputMetrics := p.safeBenthosMetrics()
+
 	// Check for case 2
-	benthosMetrics := p.ObservedState.ServiceInfo.DataflowComponentReadObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.Metrics
-	isBenthosOutputActive := benthosMetrics.Output.ConnectionUp-(benthosMetrics.Output.ConnectionLost) > 0 // if the amount of connection losts is bigger than the amount of connection ups, the output is not active
+	isBenthosOutputActive := outputMetrics.ConnectionUp-outputMetrics.ConnectionLost > 0 // if the amount of connection losts is bigger than the amount of connection ups, the output is not active
 	if (p.ObservedState.ServiceInfo.RedpandaFSMState == redpandafsm.OperationalStateIdle ||
 		p.ObservedState.ServiceInfo.RedpandaFSMState == redpandafsm.OperationalStateActive) &&
 		!isBenthosOutputActive {
-		return true, fmt.Sprintf("Redpanda is %s, but the DFC has no output active (connection up: %d, connection lost: %d)", p.ObservedState.ServiceInfo.RedpandaFSMState, benthosMetrics.Output.ConnectionUp, benthosMetrics.Output.ConnectionLost)
+		return true, fmt.Sprintf("Redpanda is %s, but the DFC has no output active (connection up: %d, connection lost: %d)", p.ObservedState.ServiceInfo.RedpandaFSMState, outputMetrics.ConnectionUp, outputMetrics.ConnectionLost)
 	}
 
 	// Check for case 3
-	isBenthosInputActive := benthosMetrics.Input.ConnectionUp-(benthosMetrics.Input.ConnectionLost) > 0 // if the amount of connection losts is bigger than the amount of connection ups, the input is not active
+	isBenthosInputActive := inputMetrics.ConnectionUp-inputMetrics.ConnectionLost > 0 // if the amount of connection losts is bigger than the amount of connection ups, the input is not active
 	if p.ObservedState.ServiceInfo.ConnectionFSMState != connectionfsm.OperationalStateUp &&
 		isBenthosInputActive {
-		return true, fmt.Sprintf("Connection is %s, but the DFC has input active (connection up: %d, connection lost: %d)", p.ObservedState.ServiceInfo.ConnectionFSMState, benthosMetrics.Input.ConnectionUp, benthosMetrics.Input.ConnectionLost)
+		return true, fmt.Sprintf("Connection is %s, but the DFC has input active (connection up: %d, connection lost: %d)", p.ObservedState.ServiceInfo.ConnectionFSMState, inputMetrics.ConnectionUp, inputMetrics.ConnectionLost)
 	}
 
 	return false, ""

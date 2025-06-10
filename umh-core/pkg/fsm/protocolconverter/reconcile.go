@@ -347,7 +347,7 @@ func (p *ProtocolConverterInstance) reconcileStartingStates(ctx context.Context,
 func (p *ProtocolConverterInstance) reconcileRunningState(ctx context.Context, services serviceregistry.Provider, currentState string, currentTime time.Time) (err error, reconciled bool) {
 	start := time.Now()
 	defer func() {
-		metrics.ObserveReconcileTime(metrics.ComponentDataflowComponentInstance, p.baseFSMInstance.GetID()+".reconcileRunningState", time.Since(start))
+		metrics.ObserveReconcileTime(metrics.ComponentProtocolConverterInstance, p.baseFSMInstance.GetID()+".reconcileRunningState", time.Since(start))
 	}()
 
 	switch currentState {

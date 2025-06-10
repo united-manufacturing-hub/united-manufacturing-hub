@@ -27,6 +27,9 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
+// protocolConverterInstancePrefix is the consistent prefix used for protocol converter instance IDs
+const protocolConverterInstancePrefix = "protocolconverter"
+
 // WaitForProtocolConverterManagerStable waits for the manager to reach a stable state with all instances
 func WaitForProtocolConverterManagerStable(
 	ctx context.Context,
@@ -79,7 +82,7 @@ func WaitForProtocolConverterManagerInstanceState(
 		tick++
 
 		// Get the instance and check its state
-		instance, found := manager.GetInstance(fmt.Sprintf("protocolconverter-%s", instanceName))
+		instance, found := manager.GetInstance(fmt.Sprintf("%s-%s", protocolConverterInstancePrefix, instanceName))
 		if found && instance.GetCurrentFSMState() == expectedState {
 			return tick, nil
 		}
@@ -133,7 +136,10 @@ func WaitForProtocolConverterManagerMultiState(
 ) (uint64, error) {
 	tick := snapshot.Tick
 	for i := 0; i < maxAttempts; i++ {
-		err, _ := manager.Reconcile(ctx, snapshot, services)
+		// Create a copy of the snapshot with updated tick
+		currentSnapshot := snapshot
+		currentSnapshot.Tick = tick
+		err, _ := manager.Reconcile(ctx, currentSnapshot, services)
 		if err != nil {
 			return tick, err
 		}
@@ -141,7 +147,7 @@ func WaitForProtocolConverterManagerMultiState(
 
 		allMatched := true
 		for conv, desired := range desiredMap {
-			inst, found := manager.GetInstance(fmt.Sprintf("protocolconverter-%s", conv))
+			inst, found := manager.GetInstance(fmt.Sprintf("%s-%s", protocolConverterInstancePrefix, conv))
 			if !found || inst.GetCurrentFSMState() != desired {
 				allMatched = false
 				break
@@ -166,7 +172,7 @@ func SetupServiceInProtocolConverterManager(
 	instance := protocolconverterfsm.NewProtocolConverterInstance("", CreateProtocolConverterTestConfig(converterName, desiredState))
 
 	// Add it to the manager
-	manager.BaseFSMManager.AddInstanceForTest(fmt.Sprintf("protconv-%s", converterName), instance)
+	manager.BaseFSMManager.AddInstanceForTest(fmt.Sprintf("%s-%s", protocolConverterInstancePrefix, converterName), instance)
 
 	// Make sure the service exists in the mock service
 	mockService.ExistingComponents[converterName] = true

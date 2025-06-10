@@ -131,6 +131,7 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 					"action-get-config-file",
 					"action-set-config-file",
 					"action-get-data-flow-component-metrics",
+					"log-logs-suppression", // Prevents logging of GetLogs action results to avoid log flooding when UI auto-refreshes logs (see HandleActionMessage GetLogs suppression for details)
 					"core-health",
 				},
 			},

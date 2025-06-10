@@ -15,6 +15,8 @@
 package protocolconverterserviceconfig
 
 import (
+	"fmt"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/connectionserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/variables"
@@ -50,8 +52,14 @@ func (c *Comparator) ConfigsEqual(desired, observed ProtocolConverterServiceConf
 	// compare variables
 	comparatorVariable := variables.NewComparator()
 
-	connectionDTemplate := connectionserviceconfig.ConvertTemplateToRuntime(connectionD)
-	connectionOTemplate := connectionserviceconfig.ConvertTemplateToRuntime(connectionO)
+	// If conversion fails for either config, consider them not equal (fail-safe comparison)
+	connectionDTemplate, errD := connectionserviceconfig.ConvertTemplateToRuntime(connectionD)
+	connectionOTemplate, errO := connectionserviceconfig.ConvertTemplateToRuntime(connectionO)
+
+	// If either conversion fails, they are not equal
+	if errD != nil || errO != nil {
+		return false
+	}
 
 	return comparatorConnection.ConfigsEqual(connectionDTemplate, connectionOTemplate) &&
 		comparatorDFC.ConfigsEqual(dfcReadD, dfcReadO) &&
@@ -72,9 +80,15 @@ func (c *Comparator) ConfigDiff(desired, observed ProtocolConverterServiceConfig
 
 	// diff for connection
 	comparatorConnection := connectionserviceconfig.NewComparator()
-	connectionDTemplate := connectionserviceconfig.ConvertTemplateToRuntime(connectionD)
-	connectionOTemplate := connectionserviceconfig.ConvertTemplateToRuntime(connectionO)
-	connectionDiff := comparatorConnection.ConfigDiff(connectionDTemplate, connectionOTemplate)
+	connectionDTemplate, errD := connectionserviceconfig.ConvertTemplateToRuntime(connectionD)
+	connectionOTemplate, errO := connectionserviceconfig.ConvertTemplateToRuntime(connectionO)
+
+	var connectionDiff string
+	if errD != nil || errO != nil {
+		connectionDiff = fmt.Sprintf("Connection conversion error - desired: %v, observed: %v\n", errD, errO)
+	} else {
+		connectionDiff = comparatorConnection.ConfigDiff(connectionDTemplate, connectionOTemplate)
+	}
 
 	// diff for dfc's
 	comparatorDFC := dataflowcomponentserviceconfig.NewComparator()

@@ -15,6 +15,7 @@
 package connectionserviceconfig
 
 import (
+	"fmt"
 	"strconv"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/nmapserviceconfig"
@@ -126,7 +127,7 @@ func ConvertRuntimeToTemplate(cfg ConnectionServiceConfigRuntime) ConnectionServ
 // Conversion Process:
 // 1. Parse the string port from template (e.g., "443" or rendered "{{ .PORT }}") to uint16
 // 2. Build runtime config with proper Go types for type safety
-// 3. Handle conversion errors by returning empty config (caller should check for zero values)
+// 3. Return error if conversion fails instead of silently defaulting to zero values
 //
 // Template vs Runtime Types:
 // - Template: Uses string port for YAML templating compatibility
@@ -138,17 +139,17 @@ func ConvertRuntimeToTemplate(cfg ConnectionServiceConfigRuntime) ConnectionServ
 // - Any code that needs to convert from template form to runtime form
 //
 // NOTE: this does NOT perform template rendering. It only converts the template form to runtime form.
-func ConvertTemplateToRuntime(cfg ConnectionServiceConfigTemplate) ConnectionServiceConfigRuntime {
+func ConvertTemplateToRuntime(cfg ConnectionServiceConfigTemplate) (ConnectionServiceConfigRuntime, error) {
 	// Handle nil NmapTemplate (e.g., from empty/uninitialized configs)
 	if cfg.NmapTemplate == nil {
-		return ConnectionServiceConfigRuntime{} // Return empty config for nil template
+		return ConnectionServiceConfigRuntime{}, fmt.Errorf("connection template is nil or empty")
 	}
 
 	// Parse string port to uint16 for runtime type safety
 	// Template uses string to allow expressions like "{{ .PORT }}", runtime needs uint16
 	port, err := strconv.ParseUint(cfg.NmapTemplate.Port, 10, 16)
 	if err != nil {
-		return ConnectionServiceConfigRuntime{} // Return empty config on conversion error
+		return ConnectionServiceConfigRuntime{}, fmt.Errorf("failed to parse port '%s' as uint16: %w", cfg.NmapTemplate.Port, err)
 	}
 
 	// Build runtime config with proper types - this is the final form used by FSMs
@@ -157,5 +158,5 @@ func ConvertTemplateToRuntime(cfg ConnectionServiceConfigTemplate) ConnectionSer
 			Target: cfg.NmapTemplate.Target,
 			Port:   uint16(port), // Convert from string template to uint16 runtime type
 		},
-	}
+	}, nil
 }

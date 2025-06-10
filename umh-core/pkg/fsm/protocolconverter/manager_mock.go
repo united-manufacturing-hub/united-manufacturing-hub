@@ -65,11 +65,25 @@ func NewProtocolConverterManagerWithMockedServices(name string) (*ProtocolConver
 			if !ok {
 				return false, fmt.Errorf("instance is not a ProtocolConverterInstance")
 			}
-			protocolConverterInstance.config = cfg.ProtocolConverterServiceConfig
-			if mockSvc, ok := protocolConverterInstance.service.(*protocolconvertersvc.MockProtocolConverterService); ok {
-				mockSvc.GetConfigResult = protocolconverterserviceconfig.SpecToRuntime(cfg.ProtocolConverterServiceConfig)
+
+			// Perform actual comparison - return true if configs are equal
+			configsEqual := protocolconverterserviceconfig.ConfigsEqual(protocolConverterInstance.config, cfg.ProtocolConverterServiceConfig)
+
+			// Only update config if configs are different (for mock service)
+			if !configsEqual {
+				protocolConverterInstance.config = cfg.ProtocolConverterServiceConfig
+				if mockSvc, ok := protocolConverterInstance.service.(*protocolconvertersvc.MockProtocolConverterService); ok {
+					runtimeConfig, err := protocolconverterserviceconfig.SpecToRuntime(cfg.ProtocolConverterServiceConfig)
+					if err != nil {
+						// For invalid configs, don't update the mock service but don't fail the comparison
+						// This matches the behavior of the real manager where invalid configs are handled gracefully
+						return configsEqual, nil
+					}
+					mockSvc.GetConfigResult = runtimeConfig
+				}
 			}
-			return true, nil
+
+			return configsEqual, nil
 		},
 		// Set ProtocolConverter config
 		func(instance public_fsm.FSMInstance, cfg config.ProtocolConverterConfig) error {
@@ -79,7 +93,13 @@ func NewProtocolConverterManagerWithMockedServices(name string) (*ProtocolConver
 			}
 			protocolConverterInstance.config = cfg.ProtocolConverterServiceConfig
 			if mockSvc, ok := protocolConverterInstance.service.(*protocolconvertersvc.MockProtocolConverterService); ok {
-				mockSvc.GetConfigResult = protocolconverterserviceconfig.SpecToRuntime(cfg.ProtocolConverterServiceConfig)
+				runtimeConfig, err := protocolconverterserviceconfig.SpecToRuntime(cfg.ProtocolConverterServiceConfig)
+				if err != nil {
+					// For invalid configs, don't update the mock service but don't fail the set operation
+					// This matches the behavior of the real manager where invalid configs are handled gracefully
+					return nil
+				}
+				mockSvc.GetConfigResult = runtimeConfig
 			}
 			return nil
 		},
