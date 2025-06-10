@@ -244,6 +244,9 @@ func (p *ProtocolConverterInstance) UpdateObservedStateOfInstance(ctx context.Co
 		}
 	}
 
+	// Store the spec config
+	p.ObservedState.ObservedProtocolConverterSpecConfig = p.config
+
 	// Now render the config
 	start = time.Now()
 	p.renderedConfig, err = runtime_config.BuildRuntimeConfig(
