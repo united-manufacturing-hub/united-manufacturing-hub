@@ -140,7 +140,8 @@ build:
 build-pprof:       EXTRA_ARGS := --build-arg PPROF=true
 build-debug:       EXTRA_ARGS := --build-arg DLV_VERSION=$(DLV_VERSION) --build-arg DEBUG=true
 
-build build-pprof build-debug:
+# Refresh cache and build docker binaries
+build build-pprof build-debug: download-docker-binaries
 	$(call DOCKER_BUILD)
 
 FLAVOR ?=                         # empty → normal build
@@ -452,17 +453,19 @@ test-debug: stop-and-remove-umh-core-latest $(BUILD_TARGET)
 		-e LOGGING_LEVEL=DEBUG \
 		$(IMAGE_NAME):$(TAG)
 
-run: 
+# This run configuration allows easy start without overwriting the config.yaml
+test-no-copy: stop-and-remove-umh-core-latest $(BUILD_TARGET)
+	@mkdir -p $(PWD)/data
 	docker run \
 		--name $(IMAGE_NAME) \
 		-v $(PWD)/data:/data \
+		-e LOGGING_LEVEL=DEBUG \
 		-p 8081:8080 \
 		-p 4195:4195 \
 		-p 6060:6060 \
 		-p 40000:40000 \
 		--memory $(MEMORY) \
 		--cpus $(CPUS) \
-		-e LOGGING_LEVEL=DEBUG \
 		$(IMAGE_NAME):$(TAG)
 
 pod-shell:
