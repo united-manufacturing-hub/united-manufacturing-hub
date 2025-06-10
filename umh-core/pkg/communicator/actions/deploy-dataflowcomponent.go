@@ -605,7 +605,7 @@ func (a *DeployDataflowComponentAction) waitForComponentToBeActive(ctx context.C
 				instances := dataflowcomponentManager.GetInstances()
 				found := false
 				for _, instance := range instances {
-					// cast the instance PreviousObservedState to a dataflowcomponent instance
+					// cast the instance LastObservedState to a dataflowcomponent instance
 					curName := instance.ID
 					if curName != a.name {
 						continue

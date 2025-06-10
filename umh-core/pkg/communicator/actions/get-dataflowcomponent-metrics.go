@@ -84,7 +84,7 @@ func (a *GetDataflowcomponentMetricsAction) Execute() (interface{}, map[string]i
 		return nil, nil, err
 	}
 
-	// Safety check to ensure PreviousObservedState is not nil
+	// Safety check to ensure LastObservedState is not nil
 	if dfcInstance.LastObservedState == nil {
 		err = fmt.Errorf("DFC instance %s has no observed state", a.payload.UUID)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, err.Error(), a.outboundChannel, models.GetDataFlowComponentMetrics)
