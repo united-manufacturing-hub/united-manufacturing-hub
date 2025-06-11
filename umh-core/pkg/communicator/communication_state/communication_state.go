@@ -121,8 +121,6 @@ func (c *CommunicationState) InitialiseAndStartPusher() {
 
 // InitialiseAndStartRouter creates a new Router and starts it
 func (c *CommunicationState) InitialiseAndStartRouter() {
-	c.LoginResponseMu.RLock()
-	defer c.LoginResponseMu.RUnlock()
 	if c.Puller == nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "Puller is nil, cannot start router")
 		return
@@ -137,7 +135,9 @@ func (c *CommunicationState) InitialiseAndStartRouter() {
 	}
 
 	c.mu.Lock()
+	c.LoginResponseMu.RLock()
 	c.Router = router.NewRouter(c.Watchdog, c.InboundChannel, c.LoginResponse.UUID, c.OutboundChannel, c.ReleaseChannel, c.SubscriberHandler, c.SystemSnapshotManager, c.ConfigManager, c.Logger)
+	c.LoginResponseMu.RUnlock()
 	c.mu.Unlock()
 	if c.Router == nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "Failed to create router")
@@ -194,21 +194,28 @@ func (c *CommunicationState) InitialiseReAuthHandler(authToken string, insecureT
 	go func() {
 		ticker := time.NewTicker(1 * time.Hour)
 
-		// Register a watchdog with a timeout of 25200 seconds (7 hours).
+		// Register a watchdog with a timeout of 3 hours, allowing up to 3 ticks, before it fails.
 		watchUUID := c.Watchdog.RegisterHeartbeat("communicationstate-re-auth-handler", 0, uint64((3 * time.Hour).Seconds()), false)
 		for {
 			<-ticker.C
-			c.Watchdog.ReportHeartbeatStatus(watchUUID, watchdog.HEARTBEAT_STATUS_OK)
 			c.Logger.Debugf("Re-fetching login credentials")
 			credentials := v2.NewLogin(authToken, insecureTLS, c.ApiUrl, c.Logger)
+			if credentials == nil {
+				continue
+			}
+			c.Watchdog.ReportHeartbeatStatus(watchUUID, watchdog.HEARTBEAT_STATUS_OK)
 			c.LoginResponseMu.Lock()
 			c.LoginResponse = credentials
 			c.LoginResponseMu.Unlock()
 
+			c.mu.Lock()
 			c.LoginResponseMu.RLock()
 			c.Puller.UpdateJWT(c.LoginResponse.JWT)
 			c.Pusher.UpdateJWT(c.LoginResponse.JWT)
 			c.LoginResponseMu.RUnlock()
+			c.mu.Unlock()
 		}
+
+		// The ticker will run for the lifetime of our program, therefore no cleanup is required.
 	}()
 }
