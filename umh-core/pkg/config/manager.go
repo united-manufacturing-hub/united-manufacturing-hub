@@ -271,6 +271,9 @@ func (m *FileConfigManager) GetConfig(ctx context.Context, tick uint64) (FullCon
 	switch {
 	case err == nil:
 		// file exists → continue with fast-/slow-path decision
+		if info == nil {
+			return FullConfig{}, fmt.Errorf("stat returned nil for config file: %s", m.configPath)
+		}
 	case errors.Is(err, os.ErrNotExist):
 		return FullConfig{}, fmt.Errorf("config file does not exist: %s", m.configPath)
 	default:
@@ -447,6 +450,9 @@ func (m *FileConfigManager) writeConfig(ctx context.Context, config FullConfig) 
 	info, err := m.fsService.Stat(ctx, m.configPath)
 	if err != nil {
 		return fmt.Errorf("failed to stat config file after write: %w", err)
+	}
+	if info == nil {
+		return fmt.Errorf("stat returned nil for config file after write: %s", m.configPath)
 	}
 
 	// Update all cache fields atomically in a single critical section
@@ -860,9 +866,14 @@ func (m *FileConfigManager) WriteConfigFromString(ctx context.Context, configStr
 		}
 
 		// If file exists, check modification time
-		if err == nil && info.ModTime().Format(time.RFC3339) != expectedModTime {
-			return fmt.Errorf("concurrent modification detected: file modified at %v, expected %v",
-				info.ModTime().Format(time.RFC3339), expectedModTime)
+		if err == nil {
+			if info == nil {
+				return fmt.Errorf("stat returned nil for config file: %s", m.configPath)
+			}
+			if info.ModTime().Format(time.RFC3339) != expectedModTime {
+				return fmt.Errorf("concurrent modification detected: file modified at %v, expected %v",
+					info.ModTime().Format(time.RFC3339), expectedModTime)
+			}
 		}
 	}
 
@@ -881,6 +892,9 @@ func (m *FileConfigManager) WriteConfigFromString(ctx context.Context, configStr
 	info, err := m.fsService.Stat(ctx, m.configPath)
 	if err != nil {
 		return fmt.Errorf("failed to stat config file after write: %w", err)
+	}
+	if info == nil {
+		return fmt.Errorf("stat returned nil for config file after write: %s", m.configPath)
 	}
 
 	// Parse the config for the cache

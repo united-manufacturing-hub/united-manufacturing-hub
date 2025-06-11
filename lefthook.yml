@@ -27,7 +27,7 @@ pre-push:
       root: "umh-core"
       run: |
         go install go.uber.org/nilaway/cmd/nilaway@latest
-        nilaway -include-pkgs="github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core" ./...
+        nilaway ./...
 
     - name: golangci-lint
       glob: "**/*.go"
