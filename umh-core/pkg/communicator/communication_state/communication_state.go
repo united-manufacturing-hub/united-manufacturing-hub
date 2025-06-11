@@ -33,6 +33,7 @@ import (
 
 type CommunicationState struct {
 	LoginResponse         *v2.LoginResponse
+	LoginResponseMu       *sync.RWMutex
 	mu                    *sync.RWMutex
 	Watchdog              *watchdog.Watchdog
 	InboundChannel        chan *models.UMHMessage
@@ -63,6 +64,7 @@ func NewCommunicationState(
 ) *CommunicationState {
 	return &CommunicationState{
 		mu:                    &sync.RWMutex{},
+		LoginResponseMu:       &sync.RWMutex{},
 		Watchdog:              watchdog,
 		InboundChannel:        inboundChannel,
 		OutboundChannel:       outboundChannel,
@@ -79,6 +81,8 @@ func NewCommunicationState(
 func (c *CommunicationState) InitialiseAndStartPuller() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	c.LoginResponseMu.RLock()
+	defer c.LoginResponseMu.RUnlock()
 	if c.LoginResponse == nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "LoginResponse is nil, cannot start puller")
 		return
@@ -98,6 +102,8 @@ func (c *CommunicationState) InitialiseAndStartPuller() {
 func (c *CommunicationState) InitialiseAndStartPusher() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	c.LoginResponseMu.RLock()
+	defer c.LoginResponseMu.RUnlock()
 	if c.LoginResponse == nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "LoginResponse is nil, cannot start pusher")
 		return
@@ -115,6 +121,8 @@ func (c *CommunicationState) InitialiseAndStartPusher() {
 
 // InitialiseAndStartRouter creates a new Router and starts it
 func (c *CommunicationState) InitialiseAndStartRouter() {
+	c.LoginResponseMu.RLock()
+	defer c.LoginResponseMu.RUnlock()
 	if c.Puller == nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "Puller is nil, cannot start router")
 		return
@@ -140,42 +148,64 @@ func (c *CommunicationState) InitialiseAndStartRouter() {
 // InitialiseAndStartSubscriberHandler creates a new subscriber handler and starts it
 // ttl is the time until a subscriber is considered dead (if no new subscriber message is received)
 // cull is the cycle time to remove dead subscribers
-func (s *CommunicationState) InitialiseAndStartSubscriberHandler(ttl time.Duration, cull time.Duration, config *config.FullConfig, systemSnapshotManager *fsm.SnapshotManager, configManager config.ConfigManager) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+func (c *CommunicationState) InitialiseAndStartSubscriberHandler(ttl time.Duration, cull time.Duration, config *config.FullConfig, systemSnapshotManager *fsm.SnapshotManager, configManager config.ConfigManager) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.LoginResponseMu.RLock()
+	defer c.LoginResponseMu.RUnlock()
 
-	if s.Watchdog == nil {
-		sentry.ReportIssuef(sentry.IssueTypeError, s.Logger, "Watchdog is nil, cannot start subscriber handler")
+	if c.Watchdog == nil {
+		sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "Watchdog is nil, cannot start subscriber handler")
 		return
 	}
 
-	if s.Pusher == nil {
-		sentry.ReportIssuef(sentry.IssueTypeError, s.Logger, "Pusher is nil, cannot start subscriber handler")
+	if c.Pusher == nil {
+		sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "Pusher is nil, cannot start subscriber handler")
 		return
 	}
-	if s.LoginResponse == nil {
-		sentry.ReportIssuef(sentry.IssueTypeError, s.Logger, "LoginResponse is nil, cannot start subscriber handler")
+	if c.LoginResponse == nil {
+		sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "LoginResponse is nil, cannot start subscriber handler")
 		return
 	}
 	if config == nil {
-		sentry.ReportIssuef(sentry.IssueTypeError, s.Logger, "Config is nil, cannot start subscriber handler")
+		sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "Config is nil, cannot start subscriber handler")
 		return
 	}
 
-	s.SubscriberHandler = subscriber.NewHandler(
-		s.Watchdog,
-		s.Pusher,
-		s.LoginResponse.UUID,
+	c.SubscriberHandler = subscriber.NewHandler(
+		c.Watchdog,
+		c.Pusher,
+		c.LoginResponse.UUID,
 		ttl,
 		cull,
-		s.ReleaseChannel,
+		c.ReleaseChannel,
 		false, // disableHardwareStatusCheck
 		systemSnapshotManager,
 		configManager,
-		s.Logger,
+		c.Logger,
 	)
-	if s.SubscriberHandler == nil {
-		sentry.ReportIssuef(sentry.IssueTypeError, s.Logger, "Failed to create subscriber handler")
+	if c.SubscriberHandler == nil {
+		sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "Failed to create subscriber handler")
 	}
-	s.SubscriberHandler.StartNotifier()
+	c.SubscriberHandler.StartNotifier()
+}
+
+func (c *CommunicationState) InitialiseReAuthHandler(authToken string, insecureTLS bool) {
+	go func() {
+		ticker := time.NewTicker(6 * time.Hour)
+
+		for {
+			<-ticker.C
+			c.Logger.Debugf("Re-fetching login credentials")
+			credentials := v2.NewLogin(authToken, insecureTLS, c.ApiUrl, c.Logger)
+			c.LoginResponseMu.Lock()
+			c.LoginResponse = credentials
+			c.LoginResponseMu.Unlock()
+
+			c.LoginResponseMu.RLock()
+			c.Puller.UpdateJWT(c.LoginResponse.JWT)
+			c.Pusher.UpdateJWT(c.LoginResponse.JWT)
+			c.LoginResponseMu.RUnlock()
+		}
+	}()
 }
