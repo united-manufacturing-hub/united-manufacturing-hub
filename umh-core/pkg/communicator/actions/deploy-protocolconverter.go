@@ -37,6 +37,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
@@ -162,6 +163,11 @@ func (a *DeployProtocolConverterAction) Execute() (interface{}, map[string]inter
 		Connection: a.payload.Connection,
 		// ReadDFC, WriteDFC, and TemplateInfo are nil as they will be added later
 	}
+
+	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
+		"Waiting for protocol converter to be active...", a.outboundChannel, models.DeployProtocolConverter)
+	// sleep for 2 seconds
+	time.Sleep(2 * time.Second)
 
 	return response, nil, nil
 }

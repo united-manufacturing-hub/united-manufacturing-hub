@@ -386,9 +386,17 @@ func BuildCommonDataFlowComponentPropertiesFromConfig(dfcConfig dataflowcomponen
 		log.Warnf("Failed to marshal input data: %v", err)
 		return models.CommonDataFlowComponentCDFCPropertiesPayload{}, err
 	}
+
+	// Determine input type by looking at the input structure
+	inputType := "benthos" // Default type
+	for key := range dfcConfig.BenthosConfig.Input {
+		inputType = key
+		break
+	}
+
 	dfc_payload.CDFCProperties.Inputs = models.CommonDataFlowComponentInputConfig{
 		Data: string(inputData),
-		Type: "benthos", // Default type for benthos inputs
+		Type: inputType,
 	}
 
 	// Convert the BenthosConfig output to CommonDataFlowComponentOutputConfig
@@ -397,9 +405,17 @@ func BuildCommonDataFlowComponentPropertiesFromConfig(dfcConfig dataflowcomponen
 		log.Warnf("Failed to marshal output data: %v", err)
 		return models.CommonDataFlowComponentCDFCPropertiesPayload{}, err
 	}
+
+	// Determine output type by looking at the output structure
+	outputType := "benthos" // Default type
+	for key := range dfcConfig.BenthosConfig.Output {
+		outputType = key
+		break
+	}
+
 	dfc_payload.CDFCProperties.Outputs = models.CommonDataFlowComponentOutputConfig{
 		Data: string(outputData),
-		Type: "benthos", // Default type for benthos outputs
+		Type: outputType,
 	}
 
 	// Convert the BenthosConfig pipeline to CommonDataFlowComponentPipelineConfig

@@ -1119,8 +1119,8 @@ func (m *FileConfigManager) AtomicEditProtocolConverter(ctx context.Context, com
 	// Find the component with matching UUID
 	found := false
 	for i, component := range config.ProtocolConverter {
-		componentID := dataflowcomponentserviceconfig.GenerateUUIDFromName(component.Name)
-		if componentID == componentUUID {
+		curComponentID := dataflowcomponentserviceconfig.GenerateUUIDFromName(component.Name)
+		if curComponentID == componentUUID {
 			// Found the component to edit, update it
 			oldConfig = config.ProtocolConverter[i]
 			config.ProtocolConverter[i] = pc

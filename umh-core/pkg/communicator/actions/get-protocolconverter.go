@@ -133,7 +133,7 @@ func (a *GetProtocolConverterAction) Validate() error {
 func determineProcessingMode(readDFC *models.ProtocolConverterDFC) string {
 	// Only look at readDFC as requested
 	if readDFC == nil {
-		return "no_dfc"
+		return "" // reply with empty string to indicate that no DFC is present
 	}
 
 	processors := readDFC.Pipeline.Processors
@@ -165,7 +165,7 @@ func determineProcessingMode(readDFC *models.ProtocolConverterDFC) string {
 // determineProtocol analyzes the input processors to determine the protocol
 func determineProtocol(readDFC *models.ProtocolConverterDFC) string {
 	if readDFC == nil {
-		return "generic"
+		return "" // reply with empty string to indicate that no DFC is present
 	}
 
 	input := readDFC.Inputs
