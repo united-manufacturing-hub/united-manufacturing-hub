@@ -204,15 +204,18 @@ func (c *CommunicationState) InitialiseReAuthHandler(authToken string, insecureT
 				continue
 			}
 			c.Watchdog.ReportHeartbeatStatus(watchUUID, watchdog.HEARTBEAT_STATUS_OK)
-			c.LoginResponseMu.Lock()
-			c.LoginResponse = credentials
-			c.LoginResponseMu.Unlock()
 
 			c.mu.Lock()
-			c.LoginResponseMu.RLock()
-			c.Puller.UpdateJWT(c.LoginResponse.JWT)
-			c.Pusher.UpdateJWT(c.LoginResponse.JWT)
-			c.LoginResponseMu.RUnlock()
+			c.LoginResponseMu.Lock()
+			c.LoginResponse = credentials
+
+			if c.Puller != nil {
+				c.Puller.UpdateJWT(c.LoginResponse.JWT)
+			}
+			if c.Pusher != nil {
+				c.Pusher.UpdateJWT(c.LoginResponse.JWT)
+			}
+			c.LoginResponseMu.Unlock()
 			c.mu.Unlock()
 		}
 
