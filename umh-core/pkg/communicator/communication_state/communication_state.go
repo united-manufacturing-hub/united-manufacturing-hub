@@ -194,8 +194,11 @@ func (c *CommunicationState) InitialiseReAuthHandler(authToken string, insecureT
 	go func() {
 		ticker := time.NewTicker(6 * time.Hour)
 
+		// Register a watchdog with a timeout of 25200 seconds (7 hours).
+		watchUUID := c.Watchdog.RegisterHeartbeat("communicationstate-re-auth-handler", 1, 25200, false)
 		for {
 			<-ticker.C
+			c.Watchdog.ReportHeartbeatStatus(watchUUID, watchdog.HEARTBEAT_STATUS_OK)
 			c.Logger.Debugf("Re-fetching login credentials")
 			credentials := v2.NewLogin(authToken, insecureTLS, c.ApiUrl, c.Logger)
 			c.LoginResponseMu.Lock()
