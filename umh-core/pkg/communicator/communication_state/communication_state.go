@@ -192,10 +192,10 @@ func (c *CommunicationState) InitialiseAndStartSubscriberHandler(ttl time.Durati
 
 func (c *CommunicationState) InitialiseReAuthHandler(authToken string, insecureTLS bool) {
 	go func() {
-		ticker := time.NewTicker(6 * time.Hour)
+		ticker := time.NewTicker(1 * time.Hour)
 
 		// Register a watchdog with a timeout of 25200 seconds (7 hours).
-		watchUUID := c.Watchdog.RegisterHeartbeat("communicationstate-re-auth-handler", 1, 25200, false)
+		watchUUID := c.Watchdog.RegisterHeartbeat("communicationstate-re-auth-handler", 0, uint64((3 * time.Hour).Seconds()), false)
 		for {
 			<-ticker.C
 			c.Watchdog.ReportHeartbeatStatus(watchUUID, watchdog.HEARTBEAT_STATUS_OK)
