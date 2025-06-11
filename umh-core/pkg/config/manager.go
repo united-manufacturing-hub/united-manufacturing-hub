@@ -355,10 +355,37 @@ func (m *FileConfigManager) GetConfig(ctx context.Context, tick uint64) (FullCon
 // misconfiguration. Setting allowUnknownFields to true allows YAML anchors and other
 // custom fields to pass validation.
 //
-// This function also extracts YAML anchor references from protocol converters without
-// expanding them. It returns a mapping of protocol converter names to their anchor names.
-// When a protocol converter uses a YAML alias (e.g., template: *opcua_http), the template
-// field will be empty in the returned config, and the anchor name will be in the map.
+// YAML Anchor Handling for Protocol Converters:
+// This function intelligently processes YAML anchors/aliases in protocol converter templates
+// to prevent anchor expansion while preserving the structure for parsing. When a protocol
+// converter uses a template reference via YAML alias (e.g., template: *opcua_http), this
+// function:
+//
+//   1. Detects the alias reference in the protocol converter's template field
+//   2. Extracts the anchor name (e.g., "opcua_http" from "*opcua_http")
+//   3. Maps the protocol converter name to the anchor name in the returned anchorMap
+//   4. Replaces the alias node with an empty template structure to prevent parsing errors
+//   5. Preserves the templates section unchanged so anchors remain available
+//
+// Protocol Converter Anchor Mapping:
+//   - Templated protocol converters (using YAML aliases): Will have an entry in anchorMap
+//     mapping the converter name to the referenced anchor name
+//   - Inline protocol converters (no YAML aliases): Will NOT appear in anchorMap, their
+//     template content is parsed normally into the FullConfig structure
+//
+// Example behavior:
+//   Input:  template: *opcua_http  (YAML alias)
+//   Result: - template field becomes empty in FullConfig
+//           - anchorMap["converter-name"] = "opcua_http"
+//
+//   Input:  template: { connection: {...} }  (inline template)
+//   Result: - template field contains the inline content in FullConfig
+//           - No entry added to anchorMap
+//
+// This approach allows the system to distinguish between templated configurations
+// (which require special handling and cannot be edited via UI) and inline configurations
+// (which can be modified through standard config management operations).
+
 func parseConfig(data []byte, allowUnknownFields bool) (FullConfig, map[string]string, error) {
 	var cfg FullConfig
 	anchorMap := make(map[string]string)
@@ -1102,7 +1129,6 @@ func (m *FileConfigManager) AtomicAddProtocolConverter(ctx context.Context, pc P
 	// Add template to config.Templates with anchor metadata
 	templateWithAnchor := map[string]interface{}{
 		templateName: templateContent,
-		"_anchor":    templateName, // Metadata to indicate this should be an anchor
 	}
 	config.Templates = append(config.Templates, templateWithAnchor)
 
@@ -1111,7 +1137,6 @@ func (m *FileConfigManager) AtomicAddProtocolConverter(ctx context.Context, pc P
 	if pc.ProtocolConverterServiceConfig.Location == nil {
 		pc.ProtocolConverterServiceConfig.Location = make(map[string]string)
 	}
-	pc.ProtocolConverterServiceConfig.Location["_templateRef"] = templateName
 
 	// Add the protocol converter
 	config.ProtocolConverter = append(config.ProtocolConverter, pc)

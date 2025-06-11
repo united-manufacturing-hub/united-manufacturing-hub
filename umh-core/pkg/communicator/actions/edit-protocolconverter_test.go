@@ -105,14 +105,6 @@ var _ = Describe("EditProtocolConverter", func() {
 							User: map[string]interface{}{
 								"IP":   "wttr.in",
 								"PORT": "80",
-								"location": map[string]interface{}{
-									"_templateRef": "wetter_template",
-									"0":            "test-enterprise",
-									"1":            "test-site",
-									"2":            "test-area",
-									"3":            "test-line",
-								},
-								"location_path": "test-enterprise.test-site.test-area.test-line",
 							},
 						},
 						Location: map[string]string{

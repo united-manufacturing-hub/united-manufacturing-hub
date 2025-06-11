@@ -22,7 +22,7 @@ import (
 )
 
 var _ = Describe("ParseConfigTemplated", func() {
-	Context("when the config is valid", func() {
+	Context("when the config is valid and anchors are used", func() {
 		It("should parse the config correctly", func() {
 			cfg, err := os.ReadFile("../../examples/example-config-protocolconverter-templated.yaml")
 			Expect(err).To(BeNil())
@@ -64,6 +64,25 @@ var _ = Describe("ParseConfigTemplated", func() {
 				},
 			}))
 
+		})
+	})
+
+	Context("when the config is valid and no anchors are used", func() {
+		It("should parse the config correctly", func() {
+			cfg, err := os.ReadFile("../../examples/example-config-protocolconverter.yaml")
+			Expect(err).To(BeNil())
+
+			parsedConfig, anchorMap, err := parseConfig(cfg, false)
+			Expect(err).To(BeNil())
+
+			Expect(anchorMap).To(BeEmpty())
+
+			Expect(parsedConfig.ProtocolConverter).To(HaveLen(1))
+			Expect(parsedConfig.ProtocolConverter[0].Name).To(Equal("vibration-sensor-pc"))
+			Expect(parsedConfig.ProtocolConverter[0].ProtocolConverterServiceConfig.Template.ConnectionServiceConfig.NmapTemplate).ToNot(BeNil())
+			Expect(parsedConfig.ProtocolConverter[0].ProtocolConverterServiceConfig.Template.DataflowComponentReadServiceConfig.BenthosConfig.Input["generate"]).ToNot(BeNil())
+
+			Expect(anchorMap).To(BeEmpty())
 		})
 	})
 })
