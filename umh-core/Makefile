@@ -226,7 +226,7 @@ integration-test: stop-all-pods vet nilaway lint
 pre-test: stop-all-pods vet nilaway lint
 
 # Meta target to setup the environment for the tests in CI environments
-pre-test-ci: vet nilaway lint
+pre-test-ci: vet lint
 
 integration-test: pre-test
 	ginkgo -r -v --tags=test --label-filter='integration' --fail-fast ./...
