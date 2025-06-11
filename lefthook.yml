@@ -22,12 +22,14 @@ pre-push:
   parallel: true
   jobs:
     # Nilaway is to heavy for pre-commit, so we run it in pre-push
+    # We currenty exclude the prometheus textparse & ginkgo v2 packages, preventing false positives in tests.
+    # We also exclude integration tests, since they are not prod code.
     - name: nilaway
       glob: "**/*.go"
       root: "umh-core"
       run: |
         go install go.uber.org/nilaway/cmd/nilaway@latest
-        nilaway ./...
+        nilaway -exclude-pkgs="github.com/prometheus/prometheus/util/textparse,github.com/onsi/ginkgo/v2" -exclude-errors-in-files="integration/" ./...
 
     - name: golangci-lint
       glob: "**/*.go"
