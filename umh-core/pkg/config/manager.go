@@ -348,6 +348,32 @@ func (m *FileConfigManager) GetConfig(ctx context.Context, tick uint64) (FullCon
 	return config, nil
 }
 
+// getConfigWithAnchors returns the current configuration along with the anchor mapping
+// This is used internally by atomic functions that need to know which protocol converters use anchors
+func (m *FileConfigManager) getConfigWithAnchors(ctx context.Context) (FullConfig, map[string]string, error) {
+	// We need to re-read and parse the file to get the anchor map
+	// since GetConfig() doesn't return the anchor information
+
+	err := m.mutexReadOrWrite.RLock(ctx)
+	if err != nil {
+		return FullConfig{}, nil, fmt.Errorf("failed to lock config file: %w", err)
+	}
+	defer m.mutexReadOrWrite.RUnlock()
+
+	// Read the file
+	data, err := m.fsService.ReadFile(ctx, m.configPath)
+	if err != nil {
+		return FullConfig{}, nil, fmt.Errorf("failed to read config file: %w", err)
+	}
+
+	config, anchorMap, err := parseConfig(data, true) // Use allowUnknownFields=true for anchor handling
+	if err != nil {
+		return FullConfig{}, nil, fmt.Errorf("failed to parse config file: %w", err)
+	}
+
+	return config, anchorMap, nil
+}
+
 // parseConfig unmarshals *data* (a YAML document) into a FullConfig.
 //
 // The YAML decoder is configured with KnownFields(true) by default so that any
@@ -1102,8 +1128,8 @@ func (m *FileConfigManager) AtomicAddProtocolConverter(ctx context.Context, pc P
 	}
 	defer m.mutexAtomicUpdate.Unlock()
 
-	// get the current config
-	config, err := m.GetConfig(ctx, 0)
+	// get the current config and anchor map
+	config, anchorMap, err := m.getConfigWithAnchors(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get config: %w", err)
 	}
@@ -1118,9 +1144,16 @@ func (m *FileConfigManager) AtomicAddProtocolConverter(ctx context.Context, pc P
 	// Generate template name from protocol converter name
 	templateName := generateTemplateAnchorName(pc.Name)
 
-	// Check if template name already exists
+	// Check if template name already exists (both in templates section and anchor map)
 	if templateExists(config.Templates, templateName) {
 		return fmt.Errorf("template with anchor name %q already exists – choose a unique protocol converter name", templateName)
+	}
+
+	// Also check if any existing protocol converter uses this anchor name
+	for _, existingAnchor := range anchorMap {
+		if existingAnchor == templateName {
+			return fmt.Errorf("template anchor %q is already in use by another protocol converter – choose a unique protocol converter name", templateName)
+		}
 	}
 
 	// Create the anchored template and add it to the templates section
@@ -1131,12 +1164,6 @@ func (m *FileConfigManager) AtomicAddProtocolConverter(ctx context.Context, pc P
 		templateName: templateContent,
 	}
 	config.Templates = append(config.Templates, templateWithAnchor)
-
-	// Add metadata to indicate this should reference a template
-	// We'll use a special field or modify the YAML generation
-	if pc.ProtocolConverterServiceConfig.Location == nil {
-		pc.ProtocolConverterServiceConfig.Location = make(map[string]string)
-	}
 
 	// Add the protocol converter
 	config.ProtocolConverter = append(config.ProtocolConverter, pc)
@@ -1222,8 +1249,8 @@ func (m *FileConfigManager) AtomicEditProtocolConverter(ctx context.Context, com
 	}
 	defer m.mutexAtomicUpdate.Unlock()
 
-	// get the current config
-	config, err := m.GetConfig(ctx, 0)
+	// get the current config and anchor map
+	config, anchorMap, err := m.getConfigWithAnchors(ctx)
 	if err != nil {
 		return ProtocolConverterConfig{}, fmt.Errorf("failed to get config: %w", err)
 	}
@@ -1237,36 +1264,22 @@ func (m *FileConfigManager) AtomicEditProtocolConverter(ctx context.Context, com
 		}
 	}
 
-	// ------------------------------------------------------------------
-	// Guard against overwriting a DFC that still relies on YAML
-	// templating (anchors/aliases)
-	//
-	// Background
-	// ----------
-	// Operators may define *dataFlowComponentConfig* via an anchor:
-	//
-	//     templates:
-	//       - &baseCfg { … }
-	//     dataFlow:
-	//       - name: dfc-1
-	//         dataFlowComponentConfig: *baseCfg   # ← alias
-	//
-	// Policy
-	// ------
-	// If the component we are about to **edit** still hasAnchors == true
-	// we MUST refuse to touch it; otherwise we would flatten or delete
-	// the user's template when we rewrite the file.
+	// Guard against overwriting a protocol converter that uses YAML templating (anchors/aliases)
+	var componentToEditName string
 	for _, c := range config.ProtocolConverter {
 		if dataflowcomponentserviceconfig.GenerateUUIDFromName(c.Name) == componentUUID {
-			if c.HasAnchors() {
-				return ProtocolConverterConfig{}, fmt.Errorf(
-					"dataFlowComponentConfig for %s is defined via YAML anchors/aliases; "+
-						"please edit the file manually", componentUUID)
-			}
+			componentToEditName = c.Name
 			break
 		}
 	}
-	// End of guard
+
+	if componentToEditName != "" {
+		if _, isTemplated := anchorMap[componentToEditName]; isTemplated {
+			return ProtocolConverterConfig{}, fmt.Errorf(
+				"protocol converter %s is defined via YAML anchors/aliases; "+
+					"please edit the file manually or see https://docs.umh.app/reference/configuration-reference for more details", componentToEditName)
+		}
+	}
 
 	// Find the component with matching UUID
 	found := false
@@ -1282,7 +1295,7 @@ func (m *FileConfigManager) AtomicEditProtocolConverter(ctx context.Context, com
 	}
 
 	if !found {
-		return ProtocolConverterConfig{}, fmt.Errorf("dataflow component with UUID %s not found", componentUUID)
+		return ProtocolConverterConfig{}, fmt.Errorf("protocol converter with UUID %s not found", componentUUID)
 	}
 
 	// write the config
