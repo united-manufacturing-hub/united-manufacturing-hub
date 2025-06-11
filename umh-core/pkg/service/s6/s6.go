@@ -733,8 +733,8 @@ func (s *DefaultService) ExitHistory(ctx context.Context, superviseDir string, f
 	if err != nil {
 		return nil, fmt.Errorf("failed to read dtally file: %w", err)
 	}
-	if data == nil {
-		return nil, fmt.Errorf("failed to read dtally file: received nil data")
+	if data == nil { // Empty history file
+		return nil, nil
 	}
 
 	// Verify that the file size is a multiple of the dtally record size.
