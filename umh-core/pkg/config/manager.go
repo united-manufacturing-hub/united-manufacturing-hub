@@ -1272,24 +1272,59 @@ func (m *FileConfigManager) AtomicEditProtocolConverter(ctx context.Context, com
 		}
 	}
 
-	// Guard against overwriting a protocol converter that uses YAML templating (anchors/aliases)
+	// Find the component to edit and check if it's anchored
 	var componentToEditName string
+	var isAnchored bool
+	var anchorName string
+
 	for _, c := range config.ProtocolConverter {
 		if dataflowcomponentserviceconfig.GenerateUUIDFromName(c.Name) == componentUUID {
 			componentToEditName = c.Name
+			anchorName, isAnchored = anchorMap[componentToEditName]
 			break
 		}
 	}
 
-	if componentToEditName != "" {
-		if _, isTemplated := anchorMap[componentToEditName]; isTemplated {
-			return ProtocolConverterConfig{}, fmt.Errorf(
-				"protocol converter %s is defined via YAML anchors/aliases; "+
-					"please edit the file manually or see https://docs.umh.app/reference/configuration-reference for more details", componentToEditName)
-		}
+	if componentToEditName == "" {
+		return ProtocolConverterConfig{}, fmt.Errorf("protocol converter with UUID %s not found", componentUUID)
 	}
 
-	// Find the component with matching UUID
+	// Handle anchored protocol converters
+	if isAnchored {
+		expectedAnchorName := generateTemplateAnchorName(componentToEditName)
+
+		if anchorName != expectedAnchorName {
+			return ProtocolConverterConfig{}, fmt.Errorf(
+				"protocol converter %s uses template anchor %q which doesn't match the expected pattern %q; "+
+					"please edit the template manually in the file or rename the anchor to match the expected pattern",
+				componentToEditName, anchorName, expectedAnchorName)
+		}
+
+		// Update the template in the templates section instead of the protocol converter
+		templateUpdated := false
+		for i, template := range config.Templates {
+			if _, exists := template[anchorName]; exists {
+				// Create new template content from the protocol converter's template
+				newTemplateContent := createTemplateContent(pc.ProtocolConverterServiceConfig.Template)
+
+				// Update the template
+				config.Templates[i] = map[string]interface{}{
+					anchorName: newTemplateContent,
+				}
+				templateUpdated = true
+				break
+			}
+		}
+
+		if !templateUpdated {
+			return ProtocolConverterConfig{}, fmt.Errorf("template %q referenced by protocol converter %s not found in templates section", anchorName, componentToEditName)
+		}
+
+		// For anchored protocol converters, clear the template and preserve other fields
+		pc.ProtocolConverterServiceConfig.Template = protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{}
+	}
+
+	// Find and update the component with matching UUID
 	found := false
 	for i, component := range config.ProtocolConverter {
 		curComponentID := dataflowcomponentserviceconfig.GenerateUUIDFromName(component.Name)
