@@ -308,17 +308,17 @@ var _ = Describe("GetProtocolConverter", func() {
 
 				// Verify read DFC is populated
 				Expect(response.ReadDFC).NotTo(BeNil())
-				Expect(response.ReadDFC.Inputs.Type).To(Equal("benthos"))
+				Expect(response.ReadDFC.Inputs.Type).To(Equal("modbus"))
 				Expect(response.ReadDFC.Pipeline.Processors).To(HaveLen(1))
 
 				// Verify write DFC is populated
 				Expect(response.WriteDFC).NotTo(BeNil())
-				Expect(response.WriteDFC.Inputs.Type).To(Equal("benthos"))
+				Expect(response.WriteDFC.Inputs.Type).To(Equal("kafka"))
 
 				// Verify meta information
 				Expect(response.Meta).NotTo(BeNil())
 				Expect(response.Meta.ProcessingMode).To(Equal("tag_processor")) // Determined from read DFC
-				Expect(response.Meta.Protocol).To(Equal("benthos"))             // Determined from read DFC input type
+				Expect(response.Meta.Protocol).To(Equal("modbus"))              // Determined from read DFC input type
 
 			})
 		})
@@ -421,8 +421,8 @@ var _ = Describe("GetProtocolConverter", func() {
 
 				// Verify meta information reflects uninitialized state
 				Expect(response.Meta).NotTo(BeNil())
-				Expect(response.Meta.ProcessingMode).To(Equal("no_dfc")) // No DFC present
-				Expect(response.Meta.Protocol).To(Equal("generic"))      // Default protocol
+				Expect(response.Meta.ProcessingMode).To(Equal("")) // No DFC present
+				Expect(response.Meta.Protocol).To(Equal(""))       // Default protocol
 
 			})
 		})

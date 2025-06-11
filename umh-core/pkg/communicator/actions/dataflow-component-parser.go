@@ -391,6 +391,13 @@ func BuildCommonDataFlowComponentPropertiesFromConfig(dfcConfig dataflowcomponen
 	inputType := "benthos" // Default type
 	for key := range dfcConfig.BenthosConfig.Input {
 		inputType = key
+		if inputType == "input" {
+			innerMap := dfcConfig.BenthosConfig.Input["input"].(map[string]interface{})
+			for key := range innerMap {
+				inputType = key
+				break
+			}
+		}
 		break
 	}
 

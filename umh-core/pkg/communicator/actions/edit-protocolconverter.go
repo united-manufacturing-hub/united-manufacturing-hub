@@ -228,80 +228,9 @@ func (a *EditProtocolConverterAction) Execute() (interface{}, map[string]interfa
 	//     // Wait for protocol converter to be active
 	// }
 
-	// Extract connection info from the updated config
-	var ip string
-	var port uint32
+	_ = oldConfig
 
-	if ipVar, exists := targetPC.ProtocolConverterServiceConfig.Variables.User["IP"]; exists {
-		if ipStr, ok := ipVar.(string); ok {
-			ip = ipStr
-		}
-	}
-
-	if portVar, exists := targetPC.ProtocolConverterServiceConfig.Variables.User["PORT"]; exists {
-		if portStr, ok := portVar.(string); ok {
-			// PORT is stored as string, need to convert
-			if portInt, parseErr := fmt.Sscanf(portStr, "%d", &port); parseErr != nil || portInt != 1 {
-				a.actionLogger.Warnf("Failed to parse PORT variable as integer: %v", portStr)
-			}
-		}
-	}
-
-	// Extract location from config
-	location := make(map[int]string)
-	if len(targetPC.ProtocolConverterServiceConfig.Location) > 0 {
-		for k, v := range targetPC.ProtocolConverterServiceConfig.Location {
-			var intKey int
-			if _, err := fmt.Sscanf(k, "%d", &intKey); err == nil {
-				location[intKey] = v
-			}
-		}
-	}
-
-	// Build ReadDFC if present
-	var readDFC *models.ProtocolConverterDFC
-	if readDFCConfig := targetPC.ProtocolConverterServiceConfig.Template.DataflowComponentReadServiceConfig; len(readDFCConfig.BenthosConfig.Input) > 0 {
-		var err error
-		readDFC, err = a.buildProtocolConverterDFCFromConfig(readDFCConfig)
-		if err != nil {
-			a.actionLogger.Warnf("Failed to build read DFC: %v", err)
-		}
-	}
-
-	// Build WriteDFC if present
-	var writeDFC *models.ProtocolConverterDFC
-	if writeDFCConfig := targetPC.ProtocolConverterServiceConfig.Template.DataflowComponentWriteServiceConfig; len(writeDFCConfig.BenthosConfig.Input) > 0 {
-		var err error
-		writeDFC, err = a.buildProtocolConverterDFCFromConfig(writeDFCConfig)
-		if err != nil {
-			a.actionLogger.Warnf("Failed to build write DFC: %v", err)
-		}
-	}
-
-	// Create meta information
-	meta := &models.ProtocolConverterMeta{
-		ProcessingMode: a.determineProcessingMode(readDFC),
-		Protocol:       a.determineProtocol(readDFC),
-	}
-
-	response := models.ProtocolConverter{
-		UUID:     &a.protocolConverterUUID,
-		Name:     targetPC.Name,
-		Location: location,
-		Connection: models.ProtocolConverterConnection{
-			IP:   ip,
-			Port: port,
-		},
-		ReadDFC:  readDFC,
-		WriteDFC: writeDFC,
-		Meta:     meta,
-		// TemplateInfo can be added later if needed
-		TemplateInfo: nil,
-	}
-
-	_ = oldConfig // Suppress unused variable warning
-
-	return response, nil, nil
+	return nil, nil, nil
 }
 
 // getUserEmail implements the Action interface by returning the user email associated with this action.
@@ -327,75 +256,6 @@ func (a *EditProtocolConverterAction) GetProtocolConverterUUID() uuid.UUID {
 // GetDFCType returns the DFC type (read/write) - exposed for testing purposes.
 func (a *EditProtocolConverterAction) GetDFCType() string {
 	return a.dfcType
-}
-
-// buildProtocolConverterDFCFromConfig converts a dataflow component service config
-// into the models.ProtocolConverterDFC format expected by the API using the shared function.
-func (a *EditProtocolConverterAction) buildProtocolConverterDFCFromConfig(dfcConfig dataflowcomponentserviceconfig.DataflowComponentServiceConfig) (*models.ProtocolConverterDFC, error) {
-	if len(dfcConfig.BenthosConfig.Input) == 0 {
-		// No DFC configuration present
-		return nil, nil
-	}
-
-	// Use the shared function to build the common DFC properties
-	commonPayload, err := BuildCommonDataFlowComponentPropertiesFromConfig(dfcConfig, a.actionLogger)
-	if err != nil {
-		return nil, err
-	}
-
-	// Convert the common payload to ProtocolConverterDFC format
-	dfc := &models.ProtocolConverterDFC{
-		Inputs:   commonPayload.CDFCProperties.Inputs,
-		Pipeline: commonPayload.CDFCProperties.Pipeline,
-		RawYAML:  commonPayload.CDFCProperties.RawYAML,
-	}
-
-	return dfc, nil
-}
-
-// determineProcessingMode analyzes the pipeline processors in readDFC only
-// to determine the appropriate processing mode based on the business rules.
-func (a *EditProtocolConverterAction) determineProcessingMode(readDFC *models.ProtocolConverterDFC) string {
-	// Only look at readDFC as requested
-	if readDFC == nil {
-		return "no_dfc"
-	}
-
-	processors := readDFC.Pipeline.Processors
-
-	// If more than one processor, return custom
-	if len(processors) > 1 {
-		return "custom"
-	}
-
-	// If exactly one processor, check its type
-	if len(processors) == 1 {
-		// Get the first (and only) processor from the map
-		for _, processor := range processors {
-			switch processor.Type {
-			case "nodered_js":
-				return "nodered_js"
-			case "tag_processor":
-				return "tag_processor"
-			default:
-				return "custom"
-			}
-		}
-	}
-
-	// No processors found, fall back to custom
-	return "custom"
-}
-
-// determineProtocol analyzes the input processors to determine the protocol
-func (a *EditProtocolConverterAction) determineProtocol(readDFC *models.ProtocolConverterDFC) string {
-	if readDFC == nil {
-		return "generic"
-	}
-
-	input := readDFC.Inputs
-
-	return input.Type
 }
 
 // convertPipelineToMap converts CommonDataFlowComponentPipelineConfig to map[string]DfcDataConfig

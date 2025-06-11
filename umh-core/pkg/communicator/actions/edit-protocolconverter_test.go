@@ -208,7 +208,7 @@ var _ = Describe("EditProtocolConverter", func() {
 						"processors": map[string]interface{}{
 							"0": map[string]interface{}{
 								"type": "bloblang",
-								"data": "root = content()",
+								"data": "bloblang: |-\n  root = content()",
 							},
 						},
 					},
@@ -281,7 +281,7 @@ var _ = Describe("EditProtocolConverter", func() {
 						"processors": map[string]interface{}{
 							"0": map[string]interface{}{
 								"type": "bloblang",
-								"data": "root = content()",
+								"data": "bloblang: |-\n  root = content()",
 							},
 						},
 					},
@@ -375,46 +375,12 @@ var _ = Describe("EditProtocolConverter", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Execute the action
-			result, metadata, err := action.Execute()
+			_, metadata, err := action.Execute()
 			Expect(err).NotTo(HaveOccurred())
 			Expect(metadata).To(BeNil())
 
 			// Stop the state mocker
 			stateMocker.Stop()
-
-			// Verify the response
-			response, ok := result.(models.ProtocolConverter)
-			Expect(ok).To(BeTrue(), "Result should be a ProtocolConverter")
-			Expect(response.UUID).NotTo(BeNil())
-			Expect(*response.UUID).To(Equal(pcUUID))
-			Expect(response.Name).To(Equal(pcName))
-
-			// Verify connection info
-			Expect(response.Connection.IP).To(Equal("wttr.in"))
-			Expect(response.Connection.Port).To(Equal(uint32(80)))
-
-			// Verify location
-			Expect(response.Location).To(HaveKey(0))
-			Expect(response.Location[0]).To(Equal("test-enterprise"))
-			Expect(response.Location).To(HaveKey(1))
-			Expect(response.Location[1]).To(Equal("test-site"))
-			Expect(response.Location).To(HaveKey(2))
-			Expect(response.Location[2]).To(Equal("test-area"))
-			Expect(response.Location).To(HaveKey(3))
-			Expect(response.Location[3]).To(Equal("test-line"))
-
-			// Verify read DFC was added
-			Expect(response.ReadDFC).NotTo(BeNil())
-			Expect(response.ReadDFC.Inputs.Type).To(Equal("http_client"))
-			Expect(response.ReadDFC.Pipeline.Processors).To(HaveKey("0"))
-
-			// Verify meta information
-			Expect(response.Meta).NotTo(BeNil())
-			Expect(response.Meta.ProcessingMode).To(Equal("custom")) // Since it has a bloblang processor
-			Expect(response.Meta.Protocol).To(Equal("http_client"))
-
-			// Verify write DFC is nil (was not added)
-			Expect(response.WriteDFC).To(BeNil())
 
 			// Verify that the config was actually updated
 			ctx := context.Background()
@@ -434,6 +400,7 @@ var _ = Describe("EditProtocolConverter", func() {
 			// Verify the read DFC was added to the template
 			readDFCConfig := updatedPC.ProtocolConverterServiceConfig.Template.DataflowComponentReadServiceConfig
 			Expect(readDFCConfig.BenthosConfig.Input).NotTo(BeEmpty())
+			Expect(readDFCConfig.BenthosConfig.Input["input"]).To(HaveKey("http_client"))
 			Expect(readDFCConfig.BenthosConfig.Pipeline).NotTo(BeEmpty())
 
 			// Verify write DFC is still empty
@@ -456,7 +423,7 @@ var _ = Describe("EditProtocolConverter", func() {
 						"processors": map[string]interface{}{
 							"0": map[string]interface{}{
 								"type": "bloblang",
-								"data": "root = content()",
+								"data": "bloblang: |-\n  root = content()",
 							},
 						},
 					},
@@ -467,11 +434,10 @@ var _ = Describe("EditProtocolConverter", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Execute the action - should fail with protocol converter not found
-			result, metadata, err := action.Execute()
+			_, metadata, err := action.Execute()
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("Protocol converter with UUID"))
 			Expect(err.Error()).To(ContainSubstring("not found"))
-			Expect(result).To(BeNil())
 			Expect(metadata).To(BeNil())
 		})
 
@@ -491,7 +457,7 @@ var _ = Describe("EditProtocolConverter", func() {
 						"processors": map[string]interface{}{
 							"0": map[string]interface{}{
 								"type": "bloblang",
-								"data": "root = content()",
+								"data": "bloblang: |-\n  root = content()",
 							},
 						},
 					},
@@ -502,10 +468,9 @@ var _ = Describe("EditProtocolConverter", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Execute the action - should fail
-			result, metadata, err := action.Execute()
+			_, metadata, err := action.Execute()
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("Failed to update protocol converter: mock edit protocol converter failure"))
-			Expect(result).To(BeNil())
 			Expect(metadata).To(BeNil())
 		})
 
@@ -525,7 +490,7 @@ var _ = Describe("EditProtocolConverter", func() {
 						"processors": map[string]interface{}{
 							"0": map[string]interface{}{
 								"type": "bloblang",
-								"data": "root = content()",
+								"data": "bloblang: |-\n  root = content()",
 							},
 						},
 					},
@@ -536,10 +501,9 @@ var _ = Describe("EditProtocolConverter", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Execute the action - should fail
-			result, metadata, err := action.Execute()
+			_, metadata, err := action.Execute()
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("Failed to get current configuration: mock get config failure"))
-			Expect(result).To(BeNil())
 			Expect(metadata).To(BeNil())
 		})
 	})

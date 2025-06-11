@@ -27,7 +27,7 @@ var _ = Describe("ParseConfigTemplated", func() {
 			cfg, err := os.ReadFile("../../examples/example-config-protocolconverter-templated.yaml")
 			Expect(err).To(BeNil())
 
-			parsedConfig, err := parseConfig(cfg, false)
+			parsedConfig, anchorMap, err := parseConfig(cfg, false)
 
 			Expect(err).To(BeNil())
 
@@ -35,9 +35,35 @@ var _ = Describe("ParseConfigTemplated", func() {
 			Expect(parsedConfig.ProtocolConverter[0].Name).To(Equal("temperature-sensor-pc"))
 
 			generatedConfigGeneratePart := parsedConfig.ProtocolConverter[0].ProtocolConverterServiceConfig.Template.DataflowComponentReadServiceConfig.BenthosConfig.Input["opcua"]
-			Expect(generatedConfigGeneratePart).To(Equal(map[string]any{
-				"address": "opc.tcp://{{ .IP }}:{{ .PORT }}",
+			Expect(generatedConfigGeneratePart).To(BeNil())
+
+			Expect(anchorMap).To(HaveKeyWithValue("temperature-sensor-pc", "opcua_http"))
+			Expect(parsedConfig.Templates).To(HaveLen(1))
+			Expect(parsedConfig.Templates[0]).To(Equal(map[string]any{
+				"connection": map[string]any{
+					"ip":   "{{ .IP }}",
+					"port": "{{ .PORT }}",
+				},
+				"dataflowcomponent_read": map[string]any{
+					"benthos": map[string]any{
+						"input": map[string]any{
+							"opcua": map[string]any{
+								"address": "opc.tcp://{{ .IP }}:{{ .PORT }}",
+							},
+						},
+					},
+				},
+				"dataflowcomponent_write": map[string]any{
+					"benthos": map[string]any{
+						"output": map[string]any{
+							"http_client": map[string]any{
+								"url": "http://collector.local/ingest",
+							},
+						},
+					},
+				},
 			}))
+
 		})
 	})
 })

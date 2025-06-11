@@ -307,7 +307,7 @@ func (m *FileConfigManager) GetConfig(ctx context.Context, tick uint64) (FullCon
 		return FullConfig{}, ctx.Err()
 	}
 
-	config, err := parseConfig(data, false)
+	config, _, err := parseConfig(data, false)
 	if err != nil {
 		return FullConfig{}, fmt.Errorf("failed to parse config file: %w", err)
 	}
@@ -353,17 +353,144 @@ func (m *FileConfigManager) GetConfig(ctx context.Context, tick uint64) (FullCon
 // The YAML decoder is configured with KnownFields(true) by default so that any
 // unknown or misspelled keys cause an immediate error, preventing silent
 // misconfiguration. Setting allowUnknownFields to true allows YAML anchors and other
-// custom fields to pass validation. No additional semantic validation is performed here;
-// callers are responsible for deeper checks.
-func parseConfig(data []byte, allowUnknownFields bool) (FullConfig, error) {
+// custom fields to pass validation.
+//
+// This function also extracts YAML anchor references from protocol converters without
+// expanding them. It returns a mapping of protocol converter names to their anchor names.
+// When a protocol converter uses a YAML alias (e.g., template: *opcua_http), the template
+// field will be empty in the returned config, and the anchor name will be in the map.
+func parseConfig(data []byte, allowUnknownFields bool) (FullConfig, map[string]string, error) {
 	var cfg FullConfig
+	anchorMap := make(map[string]string)
 
-	dec := yaml.NewDecoder(bytes.NewReader(data))
+	// First, parse with yaml.Node to detect anchors and aliases
+	var rootNode yaml.Node
+	if err := yaml.Unmarshal(data, &rootNode); err != nil {
+		return FullConfig{}, nil, fmt.Errorf("failed to parse YAML structure: %w", err)
+	}
+
+	// Extract anchor mappings and modify the node tree
+	if err := extractAndModifyAnchors(&rootNode, anchorMap); err != nil {
+		return FullConfig{}, nil, fmt.Errorf("failed to extract anchor mappings: %w", err)
+	}
+
+	// Marshal the modified node tree back to bytes
+	modifiedData, err := yaml.Marshal(&rootNode)
+	if err != nil {
+		return FullConfig{}, nil, fmt.Errorf("failed to marshal modified YAML: %w", err)
+	}
+
+	// Now decode the modified YAML into FullConfig
+	dec := yaml.NewDecoder(bytes.NewReader(modifiedData))
 	dec.KnownFields(!allowUnknownFields) // Only reject unknown keys if allowUnknownFields is false
 	if err := dec.Decode(&cfg); err != nil {
-		return FullConfig{}, fmt.Errorf("failed to decode config: %w", err)
+		return FullConfig{}, nil, fmt.Errorf("failed to decode config: %w", err)
 	}
-	return cfg, nil
+
+	return cfg, anchorMap, nil
+}
+
+// extractAndModifyAnchors walks through the YAML node tree to find protocol converter
+// template aliases and extracts the anchor names while replacing alias nodes with empty structures
+func extractAndModifyAnchors(node *yaml.Node, anchorMap map[string]string) error {
+	if node == nil {
+		return nil
+	}
+
+	// Handle document nodes
+	if node.Kind == yaml.DocumentNode && len(node.Content) > 0 {
+		return extractAndModifyAnchors(node.Content[0], anchorMap)
+	}
+
+	// Handle mapping nodes
+	if node.Kind == yaml.MappingNode {
+		for i := 0; i < len(node.Content); i += 2 {
+			keyNode := node.Content[i]
+			valueNode := node.Content[i+1]
+
+			// Look for protocolConverter section
+			if keyNode.Value == "protocolConverter" && valueNode.Kind == yaml.SequenceNode {
+				if err := processProtocolConverterSequence(valueNode, anchorMap); err != nil {
+					return err
+				}
+			}
+
+			// Recursively process child nodes
+			if err := extractAndModifyAnchors(valueNode, anchorMap); err != nil {
+				return err
+			}
+		}
+	}
+
+	// Handle sequence nodes
+	if node.Kind == yaml.SequenceNode {
+		for _, child := range node.Content {
+			if err := extractAndModifyAnchors(child, anchorMap); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+// processProtocolConverterSequence processes the protocol converter sequence to find
+// template aliases and extract anchor names
+func processProtocolConverterSequence(sequenceNode *yaml.Node, anchorMap map[string]string) error {
+	for _, converterNode := range sequenceNode.Content {
+		if converterNode.Kind != yaml.MappingNode {
+			continue
+		}
+
+		var converterName string
+
+		// Find the protocol converter name and process its service config
+		for i := 0; i < len(converterNode.Content); i += 2 {
+			keyNode := converterNode.Content[i]
+			valueNode := converterNode.Content[i+1]
+
+			if keyNode.Value == "name" {
+				converterName = valueNode.Value
+			} else if keyNode.Value == "protocolConverterServiceConfig" && valueNode.Kind == yaml.MappingNode {
+				if err := processServiceConfig(valueNode, converterName, anchorMap); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	return nil
+}
+
+// processServiceConfig processes the protocol converter service config to find template aliases
+func processServiceConfig(serviceConfigNode *yaml.Node, converterName string, anchorMap map[string]string) error {
+	for i := 0; i < len(serviceConfigNode.Content); i += 2 {
+		keyNode := serviceConfigNode.Content[i]
+		valueNode := serviceConfigNode.Content[i+1]
+
+		if keyNode.Value == "template" {
+			// Check if this is an alias node
+			if valueNode.Kind == yaml.AliasNode {
+				// Extract the anchor name (remove the * prefix if present)
+				anchorName := valueNode.Value
+				if len(anchorName) > 0 && anchorName[0] == '*' {
+					anchorName = anchorName[1:]
+				}
+
+				// Store the mapping
+				if converterName != "" {
+					anchorMap[converterName] = anchorName
+				}
+
+				// Replace the alias node with an empty mapping node
+				emptyTemplate := &yaml.Node{
+					Kind:    yaml.MappingNode,
+					Content: []*yaml.Node{},
+				}
+				serviceConfigNode.Content[i+1] = emptyTemplate
+			}
+		}
+	}
+	return nil
 }
 
 // FileConfigManagerWithBackoff wraps a FileConfigManager and implements backoff for GetConfig errors
@@ -1009,7 +1136,7 @@ func generateTemplateAnchorName(pcName string) string {
 			result += "_"
 		}
 	}
-	return result + "_template"
+	return result
 }
 
 // templateExists checks if a template with the given anchor name already exists
@@ -1207,11 +1334,11 @@ func (m *FileConfigManagerWithBackoff) UpdateAndGetCacheModTime(ctx context.Cont
 // If expectedModTime is provided, it will check that the file hasn't been modified since that time
 func (m *FileConfigManager) WriteConfigFromString(ctx context.Context, configStr string, expectedModTime string) error {
 	// First parse the config with strict validation to detect syntax errors and schema problems
-	_, err := parseConfig([]byte(configStr), false)
+	_, _, err := parseConfig([]byte(configStr), false)
 	if err != nil {
 		// If strict parsing fails, try again with allowUnknownFields=true
 		// This allows YAML anchors and other custom fields
-		_, err = parseConfig([]byte(configStr), true)
+		_, _, err = parseConfig([]byte(configStr), true)
 		if err != nil {
 			return fmt.Errorf("failed to parse config: %w", err)
 		}
@@ -1255,7 +1382,7 @@ func (m *FileConfigManager) WriteConfigFromString(ctx context.Context, configStr
 	}
 
 	// Parse the config for the cache
-	parsedConfig, err := parseConfig([]byte(configStr), true)
+	parsedConfig, _, err := parseConfig([]byte(configStr), true)
 	if err != nil {
 		return fmt.Errorf("failed to parse config for cache update: %w", err)
 	}
