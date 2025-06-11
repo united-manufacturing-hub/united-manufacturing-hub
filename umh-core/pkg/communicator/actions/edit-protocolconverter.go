@@ -230,7 +230,7 @@ func (a *EditProtocolConverterAction) Execute() (interface{}, map[string]interfa
 
 	_ = oldConfig
 
-	return nil, nil, nil
+	return "Successfully updated protocol converter", nil, nil
 }
 
 // getUserEmail implements the Action interface by returning the user email associated with this action.

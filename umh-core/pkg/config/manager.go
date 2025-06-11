@@ -755,14 +755,43 @@ func processTemplatesNode(templatesNode *yaml.Node, config FullConfig) error {
 func processProtocolConvertersNode(pcNode *yaml.Node, config FullConfig) error {
 	for _, converterNode := range pcNode.Content {
 		if converterNode.Kind == yaml.MappingNode {
-			// Look for protocol converters that have template references
+			var converterName string
+
+			// First pass: find the converter name
 			for i := 0; i < len(converterNode.Content); i += 2 {
 				keyNode := converterNode.Content[i]
 				valueNode := converterNode.Content[i+1]
 
-				if keyNode.Value == "protocolConverterServiceConfig" && valueNode.Kind == yaml.MappingNode {
-					if err := processProtocolConverterServiceConfig(valueNode); err != nil {
-						return err
+				if keyNode.Value == "name" {
+					converterName = valueNode.Value
+					break
+				}
+			}
+
+			// If we have a converter name, check if it should reference a template
+			if converterName != "" {
+				templateName := generateTemplateAnchorName(converterName)
+
+				// Check if a template with this name exists in the templates section
+				templateExists := false
+				for _, template := range config.Templates {
+					if _, exists := template[templateName]; exists {
+						templateExists = true
+						break
+					}
+				}
+
+				if templateExists {
+					// Look for protocol converter service config and replace template with alias
+					for i := 0; i < len(converterNode.Content); i += 2 {
+						keyNode := converterNode.Content[i]
+						valueNode := converterNode.Content[i+1]
+
+						if keyNode.Value == "protocolConverterServiceConfig" && valueNode.Kind == yaml.MappingNode {
+							if err := processProtocolConverterServiceConfigWithTemplate(valueNode, templateName); err != nil {
+								return err
+							}
+						}
 					}
 				}
 			}
@@ -771,44 +800,20 @@ func processProtocolConvertersNode(pcNode *yaml.Node, config FullConfig) error {
 	return nil
 }
 
-// processProtocolConverterServiceConfig handles template references in protocol converter service config
-func processProtocolConverterServiceConfig(serviceConfigNode *yaml.Node) error {
-	var templateRefName string
-
-	// First pass: find the template reference
+// processProtocolConverterServiceConfigWithTemplate handles template references in protocol converter service config
+func processProtocolConverterServiceConfigWithTemplate(serviceConfigNode *yaml.Node, templateName string) error {
+	// Find the template field and replace it with an alias
 	for i := 0; i < len(serviceConfigNode.Content); i += 2 {
 		keyNode := serviceConfigNode.Content[i]
-		valueNode := serviceConfigNode.Content[i+1]
 
-		if keyNode.Value == "location" && valueNode.Kind == yaml.MappingNode {
-			for j := 0; j < len(valueNode.Content); j += 2 {
-				locationKeyNode := valueNode.Content[j]
-				locationValueNode := valueNode.Content[j+1]
-
-				if locationKeyNode.Value == "_templateRef" {
-					templateRefName = locationValueNode.Value
-					// Remove the metadata field
-					valueNode.Content = append(valueNode.Content[:j], valueNode.Content[j+2:]...)
-					break
-				}
+		if keyNode.Value == "template" {
+			// Replace with alias node
+			aliasNode := &yaml.Node{
+				Kind:  yaml.AliasNode,
+				Value: templateName,
 			}
-		}
-	}
-
-	// Second pass: replace template with alias if we found a reference
-	if templateRefName != "" {
-		for i := 0; i < len(serviceConfigNode.Content); i += 2 {
-			keyNode := serviceConfigNode.Content[i]
-
-			if keyNode.Value == "template" {
-				// Replace with alias node
-				aliasNode := &yaml.Node{
-					Kind:  yaml.AliasNode,
-					Value: templateRefName,
-				}
-				serviceConfigNode.Content[i+1] = aliasNode
-				break
-			}
+			serviceConfigNode.Content[i+1] = aliasNode
+			break
 		}
 	}
 
@@ -1164,6 +1169,9 @@ func (m *FileConfigManager) AtomicAddProtocolConverter(ctx context.Context, pc P
 		templateName: templateContent,
 	}
 	config.Templates = append(config.Templates, templateWithAnchor)
+
+	// Clear the template content from the protocol converter - it will be referenced via anchor
+	pc.ProtocolConverterServiceConfig.Template = protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{}
 
 	// Add the protocol converter
 	config.ProtocolConverter = append(config.ProtocolConverter, pc)
