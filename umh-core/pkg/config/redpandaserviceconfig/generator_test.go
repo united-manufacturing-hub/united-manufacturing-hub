@@ -61,11 +61,27 @@ var _ = Describe("Redpanda YAML Generator", func() {
 					cfg := &RedpandaServiceConfig{}
 					cfg.Topic.DefaultTopicRetentionMs = 1000
 					cfg.Topic.DefaultTopicRetentionBytes = 1000
+					cfg.Topic.DefaultTopicCompressionAlgorithm = "lz4"
 					return cfg
 				}(),
 				expected: []string{
 					"retention_ms: 1000",
 					"retention_bytes: 1000",
+					"log_compression_type: \"lz4\"",
+				},
+			}),
+		Entry("should render default compression algorithm",
+			testCase{
+				config: func() *RedpandaServiceConfig {
+					cfg := &RedpandaServiceConfig{}
+					cfg.Topic.DefaultTopicRetentionMs = 1000
+					cfg.Topic.DefaultTopicRetentionBytes = 1000
+					return cfg
+				}(),
+				expected: []string{
+					"retention_ms: 1000",
+					"retention_bytes: 1000",
+					"log_compression_type: \"snappy\"",
 				},
 			}),
 	)

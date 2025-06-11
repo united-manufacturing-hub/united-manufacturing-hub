@@ -249,7 +249,7 @@ func (s *RedpandaService) generateRedpandaYaml(config *redpandaserviceconfig.Red
 		return "", fmt.Errorf("config is nil")
 	}
 
-	return redpandaserviceconfig.RenderRedpandaYAML(config.Topic.DefaultTopicRetentionMs, config.Topic.DefaultTopicRetentionBytes)
+	return redpandaserviceconfig.RenderRedpandaYAML(config.Topic.DefaultTopicRetentionMs, config.Topic.DefaultTopicRetentionBytes, config.Topic.DefaultTopicCompressionAlgorithm)
 }
 
 // generateS6ConfigForRedpanda creates a S6 config for a given redpanda instance
@@ -335,8 +335,13 @@ func (s *RedpandaService) GetConfig(ctx context.Context, filesystemService files
 	}
 
 	if lastRedpandaMonitorObservedState.ServiceInfo.RedpandaStatus.LastScan != nil {
-		redpandaStatus.Topic.DefaultTopicRetentionMs = lastRedpandaMonitorObservedState.ServiceInfo.RedpandaStatus.LastScan.ClusterConfig.Topic.DefaultTopicRetentionMs
-		redpandaStatus.Topic.DefaultTopicRetentionBytes = lastRedpandaMonitorObservedState.ServiceInfo.RedpandaStatus.LastScan.ClusterConfig.Topic.DefaultTopicRetentionBytes
+		if lastRedpandaMonitorObservedState.ServiceInfo.RedpandaStatus.LastScan.ClusterConfig != nil {
+			redpandaStatus.Topic.DefaultTopicRetentionMs = lastRedpandaMonitorObservedState.ServiceInfo.RedpandaStatus.LastScan.ClusterConfig.Topic.DefaultTopicRetentionMs
+			redpandaStatus.Topic.DefaultTopicRetentionBytes = lastRedpandaMonitorObservedState.ServiceInfo.RedpandaStatus.LastScan.ClusterConfig.Topic.DefaultTopicRetentionBytes
+			redpandaStatus.Topic.DefaultTopicCompressionAlgorithm = lastRedpandaMonitorObservedState.ServiceInfo.RedpandaStatus.LastScan.ClusterConfig.Topic.DefaultTopicCompressionAlgorithm
+		} else {
+			s.logger.Debugf("Cluster config is nil, skipping update")
+		}
 		redpandaStatus.Resources.MaxCores = 1
 		redpandaStatus.Resources.MemoryPerCoreInBytes = 2048 * 1024 * 1024 // 2GB
 	} else {
@@ -537,7 +542,18 @@ func (s *RedpandaService) GetHealthCheckAndMetrics(ctx context.Context, tick uin
 		}
 
 		redpandaStatus.HealthCheck = healthCheck
-		redpandaStatus.RedpandaMetrics = *lastRedpandaMonitorObservedState.ServiceInfo.RedpandaStatus.LastScan.RedpandaMetrics
+
+		// Check if RedpandaMetrics is not nil before dereferencing
+		if lastRedpandaMonitorObservedState.ServiceInfo.RedpandaStatus.LastScan.RedpandaMetrics != nil {
+			redpandaStatus.RedpandaMetrics = *lastRedpandaMonitorObservedState.ServiceInfo.RedpandaStatus.LastScan.RedpandaMetrics
+		} else {
+			// Set empty metrics if nil
+			redpandaStatus.RedpandaMetrics = redpanda_monitor.RedpandaMetrics{
+				Metrics:      redpanda_monitor.Metrics{},
+				MetricsState: nil,
+			}
+		}
+
 		redpandaStatus.Logs = lastRedpandaMonitorObservedState.ServiceInfo.RedpandaStatus.Logs
 	} else {
 		return RedpandaStatus{}, fmt.Errorf("last scan is nil")
@@ -1070,33 +1086,30 @@ func (s *RedpandaService) verifyRedpandaClusterConfig(ctx context.Context, redpa
 	for key, value := range configUpdates {
 		readbackValue, ok := readbackConfig[key]
 		if !ok {
+			s.logger.Debugf("Key %s not found in Redpanda cluster config for %s", key, redpandaName)
 			return fmt.Errorf("key %s not found in Redpanda cluster config for %s", key, redpandaName)
 		}
 
-		switch val := readbackValue.(type) {
-		case string:
-			if val != value.(string) {
-				return fmt.Errorf("value for key %s in Redpanda cluster config for %s does not match expected value %s", key, redpandaName, value)
-			}
-		case float32:
-			if val != value.(float32) {
-				return fmt.Errorf("value for key %s in Redpanda cluster config for %s does not match expected value %f", key, redpandaName, value)
-			}
-		case float64:
-			if val != value.(float64) {
-				return fmt.Errorf("value for key %s in Redpanda cluster config for %s does not match expected value %f", key, redpandaName, value)
-			}
-		case int:
-			if val != value.(int) {
-				return fmt.Errorf("value for key %s in Redpanda cluster config for %s does not match expected value %d", key, redpandaName, value)
-			}
-		case int64:
-			if val != value.(int64) {
-				return fmt.Errorf("value for key %s in Redpanda cluster config for %s does not match expected value %d", key, redpandaName, value)
-			}
+		// Convert both values to strings for comparison to handle type differences
+		expectedStr, err := anyToString(value)
+		if err != nil {
+			s.logger.Debugf("Failed to convert expected value for key %s: %v", key, err)
+			return fmt.Errorf("failed to convert expected value for key %s: %w", key, err)
+		}
+
+		actualStr, err := anyToString(readbackValue)
+		if err != nil {
+			s.logger.Debugf("Failed to convert actual value for key %s: %v", key, err)
+			return fmt.Errorf("failed to convert actual value for key %s: %w", key, err)
+		}
+
+		if expectedStr != actualStr {
+			s.logger.Debugf("Config verification failed for key %s: expected %s, got %s", key, expectedStr, actualStr)
+			return fmt.Errorf("config verification failed for key %s: expected %s, got %s", key, expectedStr, actualStr)
 		}
 	}
 
+	s.logger.Debugf("Config verification passed for %s", redpandaName)
 	return nil
 }
 
@@ -1126,6 +1139,7 @@ func (s *RedpandaService) UpdateRedpandaClusterConfig(ctx context.Context, redpa
 	defer innerCtxCancel()
 
 	// Set the cluster config
+	s.logger.Debugf("Setting Redpanda cluster config: %v", configUpdates)
 	if err := s.setRedpandaClusterConfig(innerCtx, configUpdates); err != nil {
 		return err
 	}
@@ -1136,5 +1150,36 @@ func (s *RedpandaService) UpdateRedpandaClusterConfig(ctx context.Context, redpa
 	}
 
 	// Verify the config was applied correctly
+	s.logger.Debugf("Verifying Redpanda cluster config: %v", configUpdates)
 	return s.verifyRedpandaClusterConfig(innerCtx, redpandaName, configUpdates)
+}
+
+// anyToString converts common data types to string for easier comparison
+func anyToString(input any) (result string, err error) {
+	switch v := input.(type) {
+	case string:
+		return v, nil
+	case int:
+		return fmt.Sprintf("%d", v), nil
+	case int64:
+		return fmt.Sprintf("%d", v), nil
+	case float64:
+		// Check if it's actually an integer represented as float
+		if v == float64(int64(v)) {
+			return fmt.Sprintf("%.0f", v), nil
+		}
+		return fmt.Sprintf("%g", v), nil
+	case float32:
+		if v == float32(int32(v)) {
+			return fmt.Sprintf("%.0f", v), nil
+		}
+		return fmt.Sprintf("%g", v), nil
+	case bool:
+		if v {
+			return "true", nil
+		}
+		return "false", nil
+	default:
+		return result, fmt.Errorf("cannot convert %T to string", input)
+	}
 }

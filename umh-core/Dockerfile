@@ -14,8 +14,9 @@
 # --- Build Stage ---
 FROM golang:1.24.2-alpine as build
 ARG S6_OVERLAY_VERSION=3.2.0.2
-ARG BENTHOS_UMH_VERSION=0.9.3-alpha.2
+ARG BENTHOS_UMH_VERSION=0.9.3
 ARG REDPANDA_VERSION=24.3.8
+ARG NMAP_VERSION=7.95-r1
 ARG DEBUG=false
 ARG PPROF=false
 WORKDIR /go/src/github.com/united-manufacturing-hub/united-manufacturing-hub
@@ -67,8 +68,9 @@ FROM alpine:3.21 as downloader
 RUN apk add --no-cache bash curl jq tzdata ca-certificates xz bc
 
 ARG S6_OVERLAY_VERSION=3.2.0.2
-ARG BENTHOS_UMH_VERSION=0.9.3-alpha.2
+ARG BENTHOS_UMH_VERSION=0.9.3
 ARG REDPANDA_VERSION=24.3.8
+ARG NMAP_VERSION=7.95-r1
 ARG DLV_VERSION=1.24.2
 ARG TARGETARCH=amd64
 
@@ -104,6 +106,9 @@ RUN case "${TARGETARCH}" in \
 COPY --from=cache /redpanda/${TARGETARCH}/ /opt/
 RUN chmod +x /opt/redpanda/bin/redpanda
 
+# Install nmap
+RUN apk add --no-cache nmap=${NMAP_VERSION}
+
 # Cleanup all the files we don't need
 RUN rm -rf /s6-overlay /benthos /redpanda 
 
@@ -114,6 +119,9 @@ COPY --from=downloader / /
 
 # Copy built application
 COPY --from=build /go/bin/umh-core /usr/local/bin/umh-core
+
+# Install coreutils (this allows date resolution beyond seconds)
+RUN apk add --no-cache coreutils
 
 # Handle DEBUG mode - install Go and Delve when DEBUG=true
 # Delve is a debugger for Go (https://github.com/go-delve/delve/)

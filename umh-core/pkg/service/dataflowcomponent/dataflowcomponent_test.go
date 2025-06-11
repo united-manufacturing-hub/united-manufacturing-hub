@@ -24,6 +24,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	benthosfsmmanager "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
@@ -114,7 +115,7 @@ var _ = Describe("DataFlowComponentService", func() {
 			Expect(service.benthosConfigs[0].Name).To(Equal(benthosName))
 
 			// Verify the desired state is set correctly
-			Expect(service.benthosConfigs[0].DesiredFSMState).To(Equal(benthosfsmmanager.OperationalStateActive))
+			Expect(service.benthosConfigs[0].DesiredFSMState).To(Equal(benthosfsmmanager.OperationalStateStopped))
 		})
 
 		It("should return error when component already exists", func() {
@@ -205,7 +206,7 @@ var _ = Describe("DataFlowComponentService", func() {
 			// Wait for the instance to be created and reach stopped state
 			newTick, err := WaitForBenthosManagerInstanceState(
 				ctx,
-				fsm.SystemSnapshot{CurrentConfig: fullCfg, Tick: tick},
+				fsm.SystemSnapshot{CurrentConfig: fullCfg, Tick: tick, SnapshotTime: time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)},
 				manager,
 				mockSvcRegistry,
 				benthosName,
@@ -218,15 +219,19 @@ var _ = Describe("DataFlowComponentService", func() {
 			// Now configure for transition to starting -> running
 			ConfigureBenthosManagerForState(mockBenthosService, benthosName, benthosfsmmanager.OperationalStateActive)
 
+			// Start it
+			err = statusService.StartDataFlowComponent(ctx, mockSvcRegistry.GetFileSystem(), componentName)
+			Expect(err).NotTo(HaveOccurred())
+
 			// Wait for the instance to reach running state
 			newTick, err = WaitForBenthosManagerInstanceState(
 				ctx,
-				fsm.SystemSnapshot{CurrentConfig: fullCfg, Tick: tick},
+				fsm.SystemSnapshot{CurrentConfig: fullCfg, Tick: tick, SnapshotTime: time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)},
 				manager,
 				mockSvcRegistry,
 				benthosName,
 				benthosfsmmanager.OperationalStateActive,
-				15,
+				60, // need to wait for at least 60 ticks for health check debouncing (5 seconds)
 			)
 			Expect(err).NotTo(HaveOccurred())
 			tick = newTick
@@ -314,7 +319,7 @@ var _ = Describe("DataFlowComponentService", func() {
 			for _, config := range service.benthosConfigs {
 				if config.Name == benthosName {
 					found = true
-					Expect(config.DesiredFSMState).To(Equal(benthosfsmmanager.OperationalStateActive))
+					Expect(config.DesiredFSMState).To(Equal(benthosfsmmanager.OperationalStateStopped))
 					// In a real test, we'd verify the BenthosServiceConfig was updated as expected
 					break
 				}
@@ -641,11 +646,23 @@ func SetupBenthosServiceState(
 			IsLive:  true,
 			IsReady: true,
 		}
+		mockService.ServiceStates[serviceName].BenthosStatus.BenthosMetrics.Metrics.Input.ConnectionUp = 1
+		mockService.ServiceStates[serviceName].BenthosStatus.BenthosMetrics.Metrics.Input.ConnectionFailed = 0
+		mockService.ServiceStates[serviceName].BenthosStatus.BenthosMetrics.Metrics.Input.ConnectionLost = 0
+		mockService.ServiceStates[serviceName].BenthosStatus.BenthosMetrics.Metrics.Output.ConnectionUp = 1
+		mockService.ServiceStates[serviceName].BenthosStatus.BenthosMetrics.Metrics.Output.ConnectionFailed = 0
+		mockService.ServiceStates[serviceName].BenthosStatus.BenthosMetrics.Metrics.Output.ConnectionLost = 0
 	} else {
 		mockService.ServiceStates[serviceName].BenthosStatus.HealthCheck = benthos_monitor.HealthCheck{
 			IsLive:  false,
 			IsReady: false,
 		}
+		mockService.ServiceStates[serviceName].BenthosStatus.BenthosMetrics.Metrics.Input.ConnectionUp = 1
+		mockService.ServiceStates[serviceName].BenthosStatus.BenthosMetrics.Metrics.Input.ConnectionFailed = 1
+		mockService.ServiceStates[serviceName].BenthosStatus.BenthosMetrics.Metrics.Input.ConnectionLost = 0
+		mockService.ServiceStates[serviceName].BenthosStatus.BenthosMetrics.Metrics.Output.ConnectionUp = 1
+		mockService.ServiceStates[serviceName].BenthosStatus.BenthosMetrics.Metrics.Output.ConnectionFailed = 1
+		mockService.ServiceStates[serviceName].BenthosStatus.BenthosMetrics.Metrics.Output.ConnectionLost = 0
 	}
 
 	// Setup metrics state if needed
@@ -675,7 +692,12 @@ func WaitForBenthosManagerInstanceState(
 ) (uint64, error) {
 	// Duplicate implementation from fsmtest package
 	tick := snapshot.Tick
+	baseTime := snapshot.SnapshotTime
 	for i := 0; i < maxAttempts; i++ {
+
+		// Update the snapshot time and tick to simulate the passage of time deterministically
+		snapshot.SnapshotTime = baseTime.Add(time.Duration(tick) * constants.DefaultTickerTime)
+		snapshot.Tick = tick
 		err, _ := manager.Reconcile(ctx, snapshot, services)
 		if err != nil {
 			return tick, err

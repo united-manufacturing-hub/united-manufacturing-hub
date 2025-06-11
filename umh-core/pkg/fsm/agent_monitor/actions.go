@@ -16,8 +16,8 @@ package agent_monitor
 
 import (
 	"context"
-	"time"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
@@ -68,7 +68,7 @@ func (a *AgentInstance) CheckForCreation(ctx context.Context, filesystemService 
 
 // UpdateObservedStateOfInstance is called when the FSM transitions to updating.
 // For agent monitoring, this is a no-op as we don't need to update any resources.
-func (a *AgentInstance) UpdateObservedStateOfInstance(ctx context.Context, services serviceregistry.Provider, tick uint64, loopStartTime time.Time) error {
+func (a *AgentInstance) UpdateObservedStateOfInstance(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) error {
 	a.baseFSMInstance.GetLogger().Debugf("Updating observed state for %s (no-op)", a.baseFSMInstance.GetID())
 	return nil
 }

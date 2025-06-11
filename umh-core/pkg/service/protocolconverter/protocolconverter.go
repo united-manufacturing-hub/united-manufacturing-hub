@@ -60,7 +60,7 @@ type IProtocolConverterService interface {
 	// Status aggregates health from Connection, DFC and Redpanda into a single
 	// snapshot.  The returned structure is **read-only** – callers must not
 	// mutate it.
-	Status(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot, protConvName string, tick uint64) (ServiceInfo, error)
+	Status(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot, protConvName string) (ServiceInfo, error)
 
 	// AddToManager adds a ProtocolConverter to the Connection & DFC manager
 	AddToManager(ctx context.Context, filesystemService filesystem.Service, protConvCfg *protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime, protConvName string) error
@@ -90,6 +90,11 @@ type IProtocolConverterService interface {
 	//   err        – unrecoverable problem (configuration bug, ctx cancellation)
 	//   reconciled – true when *any* child manager made progress
 	ReconcileManager(ctx context.Context, services serviceregistry.Provider, tick uint64) (error, bool)
+
+	// EvaluateDFCDesiredStates determines the appropriate desired states for the underlying
+	// DFCs based on the protocol converter's desired state and current DFC configurations.
+	// This is used internally for both initial startup and config change re-evaluation.
+	EvaluateDFCDesiredStates(protConvName string, protocolConverterDesiredState string) error
 }
 
 // ServiceInfo holds information about the ProtocolConverters underlying health states.
@@ -297,7 +302,6 @@ func (p *ProtocolConverterService) Status(
 	services serviceregistry.Provider,
 	snapshot fsm.SystemSnapshot,
 	protConvName string,
-	tick uint64,
 ) (ServiceInfo, error) {
 	start := time.Now()
 	defer func() {
@@ -451,7 +455,7 @@ func (p *ProtocolConverterService) AddToManager(
 	connectionConfig := config.ConnectionConfig{
 		FSMInstanceConfig: config.FSMInstanceConfig{
 			Name:            underlyingConnectionName,
-			DesiredFSMState: connectionfsm.OperationalStateUp,
+			DesiredFSMState: connectionfsm.OperationalStateStopped,
 		},
 		ConnectionServiceConfig: connServiceConfig,
 	}
@@ -459,7 +463,7 @@ func (p *ProtocolConverterService) AddToManager(
 	dfcReadConfig := config.DataFlowComponentConfig{
 		FSMInstanceConfig: config.FSMInstanceConfig{
 			Name:            underlyingDFCReadName,
-			DesiredFSMState: dfcfsm.OperationalStateActive,
+			DesiredFSMState: dfcfsm.OperationalStateStopped,
 		},
 		DataFlowComponentServiceConfig: dfcReadServiceConfig,
 	}
@@ -467,7 +471,7 @@ func (p *ProtocolConverterService) AddToManager(
 	dfcWriteConfig := config.DataFlowComponentConfig{
 		FSMInstanceConfig: config.FSMInstanceConfig{
 			Name:            underlyingDFCWriteName,
-			DesiredFSMState: dfcfsm.OperationalStateActive,
+			DesiredFSMState: dfcfsm.OperationalStateStopped,
 		},
 		DataFlowComponentServiceConfig: dfcWriteServiceConfig,
 	}
@@ -475,6 +479,10 @@ func (p *ProtocolConverterService) AddToManager(
 	// Add the configurations to the lists
 	p.connectionConfig = append(p.connectionConfig, connectionConfig)
 	p.dataflowComponentConfig = append(p.dataflowComponentConfig, dfcReadConfig, dfcWriteConfig)
+
+	p.logger.Infof("ProtocolConverter %s added to manager", protConvName)
+	p.logger.Infof("Connection config: %+v", p.connectionConfig)
+	p.logger.Infof("Dataflow component config: %+v", p.dataflowComponentConfig)
 
 	return nil
 }
@@ -581,6 +589,10 @@ func (p *ProtocolConverterService) UpdateInManager(
 		}
 	}
 
+	p.logger.Info("Updated protocolconverter config in manager")
+	p.logger.Infof("Connection config: %+v", p.connectionConfig)
+	p.logger.Infof("Dataflow component config: %+v", p.dataflowComponentConfig)
+
 	return nil
 }
 
@@ -654,8 +666,90 @@ func (p *ProtocolConverterService) RemoveFromManager(
 	return nil
 }
 
-// Start starts a ProtocolConverter
-// Expects protConvName (e.g. "protocolconverter-myservice") as defined in the UMH config
+// EvaluateDFCDesiredStates determines the appropriate desired states for the underlying
+// DFCs based on the protocol converter's desired state and current DFC configurations.
+//
+// UNIQUE BEHAVIOR: Unlike other FSMs that make start/stop decisions once during initial
+// startup, protocol converters must re-evaluate DFC states whenever configs change because:
+//
+//  1. Protocol converters start with template-based configs containing variables like
+//     {{ .internal.bridged_by }} and {{ .location.0 }}
+//  2. These templates are rendered during reconciliation using runtime data (agent location,
+//     node name, etc.) that's not available at creation time
+//  3. DFC configs may transition from empty -> populated or populated -> empty as templates
+//     are processed, requiring state re-evaluation
+//
+// Logic:
+// - If protocol converter desired state is stopped: all DFCs -> stopped
+// - If protocol converter desired state is active: DFCs -> active only if they have non-empty input configs
+//
+// Called from:
+// 1. StartProtocolConverter() - during initial activation
+// 2. StopProtocolConverter() - during shutdown
+// 3. UpdateObservedStateOfInstance() - when config changes are detected during reconciliation
+func (p *ProtocolConverterService) EvaluateDFCDesiredStates(protConvName string, protocolConverterDesiredState string) error {
+	if p.dataflowComponentManager == nil {
+		return errors.New("dataflowcomponent manager not initialized")
+	}
+
+	dfcReadName := p.getUnderlyingDFCReadName(protConvName)
+	dfcWriteName := p.getUnderlyingDFCWriteName(protConvName)
+
+	// Find and update our cached config for read DFC
+	dfcReadFound := false
+	dfcWriteFound := false
+	for i, config := range p.dataflowComponentConfig {
+		if config.Name == dfcReadName {
+			if protocolConverterDesiredState == "stopped" {
+				p.dataflowComponentConfig[i].DesiredFSMState = dfcfsm.OperationalStateStopped
+			} else {
+				// Only start the DFC, if it has been configured
+				if len(p.dataflowComponentConfig[i].DataFlowComponentServiceConfig.BenthosConfig.Input) > 0 {
+					p.dataflowComponentConfig[i].DesiredFSMState = dfcfsm.OperationalStateActive
+				} else {
+					p.dataflowComponentConfig[i].DesiredFSMState = dfcfsm.OperationalStateStopped
+				}
+			}
+			dfcReadFound = true
+			break
+		}
+	}
+
+	// Find and update our cached config for write DFC
+	for i, config := range p.dataflowComponentConfig {
+		if config.Name == dfcWriteName {
+			if protocolConverterDesiredState == "stopped" {
+				p.dataflowComponentConfig[i].DesiredFSMState = dfcfsm.OperationalStateStopped
+			} else {
+				// Only start the DFC, if it has been configured
+				if len(p.dataflowComponentConfig[i].DataFlowComponentServiceConfig.BenthosConfig.Input) > 0 {
+					p.dataflowComponentConfig[i].DesiredFSMState = dfcfsm.OperationalStateActive
+				} else {
+					p.dataflowComponentConfig[i].DesiredFSMState = dfcfsm.OperationalStateStopped
+				}
+			}
+			dfcWriteFound = true
+			break
+		}
+	}
+
+	if !dfcReadFound && !dfcWriteFound {
+		return ErrServiceNotExist
+	}
+
+	return nil
+}
+
+// StartProtocolConverter starts a ProtocolConverter by setting connection to "up" and
+// evaluating which DFCs should be active based on their current configurations.
+//
+// UNIQUE BEHAVIOR: Unlike other FSM start methods that simply set desired states to active,
+// protocol converters must check DFC config content because:
+// - DFCs start with template configs that may be empty initially
+// - Only DFCs with non-empty input configs should be started
+// - Empty DFCs remain stopped to avoid creating broken Benthos instances
+//
+// This conditional starting is handled by EvaluateDFCDesiredStates.
 func (p *ProtocolConverterService) StartProtocolConverter(
 	ctx context.Context,
 	filesystemService filesystem.Service,
@@ -674,8 +768,6 @@ func (p *ProtocolConverterService) StartProtocolConverter(
 	}
 
 	connectionName := p.getUnderlyingConnectionName(protConvName)
-	dfcReadName := p.getUnderlyingDFCReadName(protConvName)
-	dfcWriteName := p.getUnderlyingDFCWriteName(protConvName)
 
 	// Find and update our cached config
 	connFound := false
@@ -691,30 +783,10 @@ func (p *ProtocolConverterService) StartProtocolConverter(
 		return ErrServiceNotExist
 	}
 
-	// Find and update our cached config
-	dfcReadFound := false
-	dfcWriteFound := false
-	for i, config := range p.dataflowComponentConfig {
-		if config.Name == dfcReadName {
-			p.dataflowComponentConfig[i].DesiredFSMState = dfcfsm.OperationalStateActive
-			dfcReadFound = true
-			break
-		}
-	}
-
-	for i, config := range p.dataflowComponentConfig {
-		if config.Name == dfcWriteName {
-			p.dataflowComponentConfig[i].DesiredFSMState = dfcfsm.OperationalStateActive
-			dfcWriteFound = true
-			break
-		}
-	}
-
-	if !dfcReadFound && !dfcWriteFound {
-		return ErrServiceNotExist
-	}
-
-	return nil
+	// Evaluate and set DFC states based on current configs
+	// NOTE: This is different from other FSMs - we don't just set all DFCs to active,
+	// we check if they have valid configs first (see EvaluateDFCDesiredStates docstring)
+	return p.EvaluateDFCDesiredStates(protConvName, "active")
 }
 
 // Stop stops a ProtocolConverter
@@ -737,8 +809,6 @@ func (p *ProtocolConverterService) StopProtocolConverter(
 	}
 
 	connectionName := p.getUnderlyingConnectionName(protConvName)
-	dfcReadName := p.getUnderlyingDFCReadName(protConvName)
-	dfcWriteName := p.getUnderlyingDFCWriteName(protConvName)
 
 	// Find and update our cached config
 	connFound := false
@@ -754,29 +824,8 @@ func (p *ProtocolConverterService) StopProtocolConverter(
 		return ErrServiceNotExist
 	}
 
-	// Find and update our cached config
-	dfcReadFound := false
-	dfcWriteFound := false
-	for i, config := range p.dataflowComponentConfig {
-		if config.Name == dfcReadName {
-			p.dataflowComponentConfig[i].DesiredFSMState = dfcfsm.OperationalStateStopped
-			dfcReadFound = true
-			break
-		}
-	}
-
-	for i, config := range p.dataflowComponentConfig {
-		if config.Name == dfcWriteName {
-			p.dataflowComponentConfig[i].DesiredFSMState = dfcfsm.OperationalStateStopped
-			dfcWriteFound = true
-		}
-	}
-
-	if !dfcReadFound && !dfcWriteFound {
-		return ErrServiceNotExist
-	}
-
-	return nil
+	// Set all DFCs to stopped
+	return p.EvaluateDFCDesiredStates(protConvName, "stopped")
 }
 
 // ReconcileManager synchronizes all protocolconverters on each tick.

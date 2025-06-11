@@ -132,8 +132,9 @@ type ClusterConfig struct {
 }
 
 type TopicConfig struct {
-	DefaultTopicRetentionMs    int64
-	DefaultTopicRetentionBytes int64
+	DefaultTopicRetentionMs          int64
+	DefaultTopicRetentionBytes       int64
+	DefaultTopicCompressionAlgorithm string
 }
 
 // RedpandaMetrics contains information about the metrics of the Redpanda service
@@ -414,6 +415,7 @@ func (s *RedpandaMonitorService) ParseRedpandaLogs(ctx context.Context, logs []s
 	*/
 
 	if len(logs) == 0 {
+		s.logger.Debugf("No logs provided")
 		return nil, fmt.Errorf("no logs provided")
 	}
 	// Find the markers in a single pass through the logs
@@ -475,6 +477,7 @@ func (s *RedpandaMonitorService) ParseRedpandaLogs(ctx context.Context, logs []s
 	}
 
 	if len(sections) == 0 {
+		s.logger.Debugf("No sections found in logs")
 		return nil, fmt.Errorf("could not parse redpanda metrics/configuration: no sections found. This can happen when the redpanda service is not running, or the logs where rotated")
 	}
 
@@ -609,7 +612,7 @@ func (s *RedpandaMonitorService) ParseRedpandaLogs(ctx context.Context, logs []s
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse timestamp data: %w", err)
 		}
-
+		// Convert the nano seconds to a time.Time object
 		lastUpdatedAt = time.Unix(0, int64(timestampNs))
 	}
 
@@ -920,6 +923,21 @@ func (s *RedpandaMonitorService) processClusterConfigDataBytes(clusterConfigData
 	} else {
 		return nil, fmt.Errorf("failed to parse cluster config data: no retention_bytes found")
 	}
+
+	if value, ok := redpandaConfig["log_compression_type"]; ok {
+		if strValue, ok := value.(string); ok {
+			result.Topic.DefaultTopicCompressionAlgorithm = strValue
+		} else {
+			return nil, fmt.Errorf("failed to parse cluster config data: log_compression_type is not a string")
+		}
+	} else {
+		return nil, fmt.Errorf("failed to parse cluster config data: no log_compression_type found")
+	}
+
+	s.logger.Debugf("Cluster config [log_retention_ms: %d, retention_bytes: %d, log_compression_type: %s]",
+		result.Topic.DefaultTopicRetentionMs,
+		result.Topic.DefaultTopicRetentionBytes,
+		result.Topic.DefaultTopicCompressionAlgorithm)
 
 	return &result, nil
 }

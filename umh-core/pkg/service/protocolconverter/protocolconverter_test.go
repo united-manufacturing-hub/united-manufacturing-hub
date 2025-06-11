@@ -27,7 +27,6 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/connectionserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/nmapserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/variables"
 	connfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/connection"
@@ -80,10 +79,10 @@ var _ = Describe("DataFlowComponentService", func() {
 			// Create a basic config for testing
 			cfg = protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
 				Template: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
-					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
-						NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
+					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+						NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
 							Target: "localhost",
-							Port:   102,
+							Port:   "102",
 						},
 					},
 					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
@@ -144,8 +143,8 @@ var _ = Describe("DataFlowComponentService", func() {
 			Expect(service.dataflowComponentConfig[1].Name).To(Equal(underlyingDFCWriteName))
 
 			// Verify the desired state is set correctly
-			Expect(service.connectionConfig[0].DesiredFSMState).To(Equal(connfsm.OperationalStateUp))
-			Expect(service.dataflowComponentConfig[0].DesiredFSMState).To(Equal(dfcfsm.OperationalStateActive))
+			Expect(service.connectionConfig[0].DesiredFSMState).To(Equal(connfsm.OperationalStateStopped))
+			Expect(service.dataflowComponentConfig[0].DesiredFSMState).To(Equal(dfcfsm.OperationalStateStopped))
 		})
 
 		It("should return error when the protocolConverter already exists", func() {
@@ -190,10 +189,10 @@ var _ = Describe("DataFlowComponentService", func() {
 			// Create a basic config for testing
 			cfg = protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
 				Template: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
-					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
-						NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
+					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+						NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
 							Target: "localhost",
-							Port:   102,
+							Port:   "102",
 						},
 					},
 					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
@@ -256,13 +255,12 @@ var _ = Describe("DataFlowComponentService", func() {
 			// Initial config
 			config = protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
 				Template: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
-					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
-						NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
+					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+						NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
 							Target: "localhost",
-							Port:   102,
+							Port:   "102",
 						},
 					},
-
 					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 							Input: map[string]interface{}{
@@ -280,13 +278,12 @@ var _ = Describe("DataFlowComponentService", func() {
 
 			updatedConfig = protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
 				Template: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
-					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
-						NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
+					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+						NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
 							Target: "localhost",
-							Port:   102,
+							Port:   "102",
 						},
 					},
-
 					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 							Input: map[string]interface{}{
@@ -328,7 +325,7 @@ var _ = Describe("DataFlowComponentService", func() {
 			for _, config := range service.dataflowComponentConfig {
 				if config.Name == underlyingDFCReadName {
 					dfcReadFound = true
-					Expect(config.DesiredFSMState).To(Equal(dfcfsm.OperationalStateActive))
+					Expect(config.DesiredFSMState).To(Equal(dfcfsm.OperationalStateStopped))
 					break
 				}
 			}
@@ -337,7 +334,7 @@ var _ = Describe("DataFlowComponentService", func() {
 			for _, config := range service.dataflowComponentConfig {
 				if config.Name == underlyingDFCWriteName {
 					dfcWriteFound = true
-					Expect(config.DesiredFSMState).To(Equal(dfcfsm.OperationalStateActive))
+					Expect(config.DesiredFSMState).To(Equal(dfcfsm.OperationalStateStopped))
 					break
 				}
 			}
@@ -346,7 +343,7 @@ var _ = Describe("DataFlowComponentService", func() {
 			for _, config := range service.connectionConfig {
 				if config.Name == underlyingConnectionName {
 					connFound = true
-					Expect(config.DesiredFSMState).To(Equal(connfsm.OperationalStateUp))
+					Expect(config.DesiredFSMState).To(Equal(connfsm.OperationalStateStopped))
 					break
 				}
 			}
@@ -372,10 +369,10 @@ var _ = Describe("DataFlowComponentService", func() {
 			// Create a basic config for testing
 			cfg = protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
 				Template: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
-					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
-						NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
+					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+						NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
 							Target: "localhost",
-							Port:   102,
+							Port:   "102",
 						},
 					},
 					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
@@ -401,17 +398,41 @@ var _ = Describe("DataFlowComponentService", func() {
 
 		It("should start a protocolConverter by changing its desired state", func() {
 			// First stop the component
-			err := service.StopProtocolConverter(ctx, mockSvcRegistry.GetFileSystem(), protConvName)
+			err := service.StartProtocolConverter(ctx, mockSvcRegistry.GetFileSystem(), protConvName)
 			Expect(err).NotTo(HaveOccurred())
 
-			// Verify the desired state was changed to stopped
+			// Verify the desired state was changed to started
 			underlyingDFCReadName := service.getUnderlyingDFCReadName(protConvName)
 			underlyingConnectionName := service.getUnderlyingConnectionName(protConvName)
+			var foundDfcActive, foundConnUp bool
+			for _, config := range service.dataflowComponentConfig {
+				if config.Name == underlyingDFCReadName {
+					foundDfcActive = true
+					Expect(config.DesiredFSMState).To(Equal(dfcfsm.OperationalStateActive))
+					break
+				}
+			}
+			Expect(foundDfcActive).To(BeTrue())
+
+			for _, config := range service.connectionConfig {
+				if config.Name == underlyingConnectionName {
+					foundConnUp = true
+					Expect(config.DesiredFSMState).To(Equal(connfsm.OperationalStateUp))
+					break
+				}
+			}
+			Expect(foundConnUp).To(BeTrue())
+
+			// Now start the component
+			err = service.StartProtocolConverter(ctx, mockSvcRegistry.GetFileSystem(), protConvName)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Verify the desired state was changed to active
 			var foundDfcStopped, foundConnStopped bool
 			for _, config := range service.dataflowComponentConfig {
 				if config.Name == underlyingDFCReadName {
 					foundDfcStopped = true
-					Expect(config.DesiredFSMState).To(Equal(dfcfsm.OperationalStateStopped))
+					Expect(config.DesiredFSMState).To(Equal(dfcfsm.OperationalStateActive))
 					break
 				}
 			}
@@ -420,35 +441,11 @@ var _ = Describe("DataFlowComponentService", func() {
 			for _, config := range service.connectionConfig {
 				if config.Name == underlyingConnectionName {
 					foundConnStopped = true
-					Expect(config.DesiredFSMState).To(Equal(connfsm.OperationalStateStopped))
-					break
-				}
-			}
-			Expect(foundConnStopped).To(BeTrue())
-
-			// Now start the component
-			err = service.StartProtocolConverter(ctx, mockSvcRegistry.GetFileSystem(), protConvName)
-			Expect(err).NotTo(HaveOccurred())
-
-			// Verify the desired state was changed to active
-			var foundDfcStarted, foundConnStarted bool
-			for _, config := range service.dataflowComponentConfig {
-				if config.Name == underlyingDFCReadName {
-					foundDfcStarted = true
-					Expect(config.DesiredFSMState).To(Equal(dfcfsm.OperationalStateActive))
-					break
-				}
-			}
-			Expect(foundDfcStarted).To(BeTrue())
-
-			for _, config := range service.connectionConfig {
-				if config.Name == underlyingConnectionName {
-					foundConnStarted = true
 					Expect(config.DesiredFSMState).To(Equal(connfsm.OperationalStateUp))
 					break
 				}
 			}
-			Expect(foundConnStarted).To(BeTrue())
+			Expect(foundConnStopped).To(BeTrue())
 		})
 
 		It("should return error when trying to start/stop non-existent protocolConverter", func() {
@@ -472,10 +469,10 @@ var _ = Describe("DataFlowComponentService", func() {
 			// Create a basic config for testing
 			cfg = protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
 				Template: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
-					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
-						NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
+					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+						NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
 							Target: "localhost",
-							Port:   102,
+							Port:   "102",
 						},
 					},
 					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
@@ -532,10 +529,10 @@ var _ = Describe("DataFlowComponentService", func() {
 			// Add a test component to have something to reconcile
 			cfg := protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
 				Template: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
-					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
-						NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
+					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+						NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
 							Target: "localhost",
-							Port:   102,
+							Port:   "102",
 						},
 					},
 					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
@@ -591,10 +588,10 @@ var _ = Describe("DataFlowComponentService", func() {
 			testComponentName := "test-error-component"
 			cfg := protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
 				Template: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
-					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
-						NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
+					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+						NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
 							Target: "localhost",
-							Port:   102,
+							Port:   "102",
 						},
 					},
 					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
@@ -654,10 +651,10 @@ var _ = Describe("DataFlowComponentService", func() {
 					},
 				},
 				Template: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
-					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
-						NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
+					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+						NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
 							Target: "{{.custom_var}}",
-							Port:   102,
+							Port:   "102",
 						},
 					},
 					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
@@ -727,10 +724,10 @@ var _ = Describe("DataFlowComponentService", func() {
 					},
 				},
 				Template: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
-					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
-						NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
+					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+						NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
 							Target: "{{.custom_var}}",
-							Port:   102,
+							Port:   "102",
 						},
 					},
 					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
@@ -755,6 +752,12 @@ var _ = Describe("DataFlowComponentService", func() {
 		It("should sanitize bridged_by header correctly", func() {
 			spec := protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
 				Template: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
+					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+						NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
+							Target: "localhost",
+							Port:   "443",
+						},
+					},
 					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 							Input: map[string]interface{}{

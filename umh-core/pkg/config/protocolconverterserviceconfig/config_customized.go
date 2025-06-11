@@ -19,15 +19,16 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 )
 
-// GetConnectionServiceConfig converts the component config to a full ProtocolConverterServiceConfig
-// no customization needed
-func (c ProtocolConverterServiceConfigSpec) GetConnectionServiceConfig() connectionserviceconfig.ConnectionServiceConfig {
+// GetConnectionServiceConfig returns the template form of the connection config.
+// This is used during rendering to access the template that may contain variables like {{ .PORT }}.
+// The template will be rendered into a runtime config with proper types during BuildRuntimeConfig.
+func (c ProtocolConverterServiceConfigSpec) GetConnectionServiceConfig() connectionserviceconfig.ConnectionServiceConfigTemplate {
 	return c.Template.ConnectionServiceConfig
 }
 
 // GetDFCReadServiceConfig converts the component config to a full ProtocolConverterServiceConfig
 // For a read DFC, the user is not allowed to set its own output config, so we "enforce" the output config
-// to be the uns output config.
+// to be the UNS output config. This ensures protocol converters always write to the unified namespace.
 func (c ProtocolConverterServiceConfigSpec) GetDFCReadServiceConfig() dataflowcomponentserviceconfig.DataflowComponentServiceConfig {
 	// copy the config
 	dfcReadConfig := c.Template.DataflowComponentReadServiceConfig
@@ -46,7 +47,7 @@ func (c ProtocolConverterServiceConfigSpec) GetDFCReadServiceConfig() dataflowco
 
 // GetDFCWriteServiceConfig converts the component config to a full ProtocolConverterServiceConfig
 // For a write DFC, the user is not allowed to set its own input config, so we "enforce" the input config
-// to be the uns input config.
+// to be the UNS input config. This ensures protocol converters always read from the unified namespace.
 func (c ProtocolConverterServiceConfigSpec) GetDFCWriteServiceConfig() dataflowcomponentserviceconfig.DataflowComponentServiceConfig {
 	dfcWriteConfig := c.Template.DataflowComponentWriteServiceConfig
 

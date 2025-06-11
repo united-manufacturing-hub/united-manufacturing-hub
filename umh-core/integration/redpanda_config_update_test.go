@@ -64,7 +64,6 @@ var _ = Describe("Redpanda Config Update Integration Test", Ordered, Label("inte
 	})
 
 	It("should update Redpanda config and continue producing messages", func() {
-		Skip("This test is currently flaky")
 		// Wait for initial messages to be produced
 		Eventually(func() bool {
 			newOffset, err := checkRPK(topicName, lastOffset, lastTimestamp, 0.1, 0.2, messagesPerSecond)
@@ -75,6 +74,7 @@ var _ = Describe("Redpanda Config Update Integration Test", Ordered, Label("inte
 
 		By("Updating Redpanda configuration with new retention time")
 		builder.full.Internal.Redpanda.RedpandaServiceConfig.Topic.DefaultTopicRetentionMs = 7200000 // 2 hours in milliseconds
+		builder.full.Internal.Redpanda.RedpandaServiceConfig.Topic.DefaultTopicCompressionAlgorithm = "lz4"
 		cfg := builder.BuildYAML()
 		GinkgoWriter.Printf("Updated config: %s\n", cfg)
 		Expect(writeConfigFile(cfg, getContainerName())).To(Succeed())
@@ -82,9 +82,11 @@ var _ = Describe("Redpanda Config Update Integration Test", Ordered, Label("inte
 		By("Checking if the config has been applied")
 		Eventually(func() bool {
 			redpandaConfig, err := getRedpandaConfig("log_retention_ms")
+			compressionConfig, err2 := getRedpandaConfig("log_compression_type")
 			GinkgoWriter.Printf("Redpanda config: %s\n", redpandaConfig)
+			GinkgoWriter.Printf("Compression config: %s\n", compressionConfig)
 			GinkgoWriter.Printf("Error: %v\n", err)
-			return err == nil && redpandaConfig == "7200000"
+			return err == nil && err2 == nil && redpandaConfig == "7200000" && compressionConfig == "lz4"
 		}, 20*time.Second, 1*time.Second).Should(BeTrue(), "Redpanda config should be updated")
 
 		By("Waiting for Redpanda to restart and apply new config")
@@ -132,9 +134,11 @@ var _ = Describe("Redpanda Config Update Integration Test", Ordered, Label("inte
 		By("Checking if the config has not been changed back")
 		Eventually(func() bool {
 			redpandaConfig, err := getRedpandaConfig("log_retention_ms")
+			compressionConfig, err2 := getRedpandaConfig("log_compression_type")
 			GinkgoWriter.Printf("Redpanda config: %s\n", redpandaConfig)
+			GinkgoWriter.Printf("Compression config: %s\n", compressionConfig)
 			GinkgoWriter.Printf("Error: %v\n", err)
-			return err == nil && redpandaConfig == "7200000"
+			return err == nil && err2 == nil && redpandaConfig == "7200000" && compressionConfig == "lz4"
 		}, 5*time.Second, 1*time.Second).Should(BeTrue(), "Redpanda config should not be changed back")
 	})
 })

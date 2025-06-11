@@ -197,8 +197,12 @@ func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePay
 		return
 	}
 
-	// don't log the result for GetLogs
-	// in combination with auto-reloading the logs from the UI, this would cause a lot of noise
+	// Normally, the action.go logs the execution result that is sent back to the frontend. For the get-logs action,
+	// this introduced a problem: in the frontend, we auto-refresh the logs of the companion. The get-logs action
+	// reply is then the whole current log of the companion. If we log this action reply, we double the amount of
+	// log lines on every get-logs call. This exponential growth of logs leads after a short time to problems.
+	// To avoid this, we do not log the get-logs result.
+	// This behavior is signaled to the frontend via the "log-logs-suppression" supported feature flag.
 	if payload.ActionType != models.GetLogs {
 		log.Debugf("Action executed, sending reply: %v", result)
 	}
@@ -211,7 +215,6 @@ func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePay
 // It returns false if an error occurred during message generation or sending.
 func SendActionReply(instanceUUID uuid.UUID, userEmail string, actionUUID uuid.UUID, arstate models.ActionReplyState, payload interface{}, outboundChannel chan *models.UMHMessage, action models.ActionType) bool {
 	// TODO: The 'action' parameter will be used in the future for action-specific logic or logging
-	_ = action
 
 	return SendActionReplyWithAdditionalContext(instanceUUID, userEmail, actionUUID, arstate, payload, outboundChannel, action, nil)
 }
@@ -224,7 +227,6 @@ func SendActionReply(instanceUUID uuid.UUID, userEmail string, actionUUID uuid.U
 // used for confirmation, progress updates, success, and failure notifications.
 func SendActionReplyWithAdditionalContext(instanceUUID uuid.UUID, userEmail string, actionUUID uuid.UUID, arstate models.ActionReplyState, payload interface{}, outboundChannel chan *models.UMHMessage, action models.ActionType, actionContext map[string]interface{}) bool {
 	// TODO: The 'action' parameter will be used in the future for action-specific logic or logging
-	_ = action
 
 	err := sendActionReplyInternal(instanceUUID, userEmail, actionUUID, arstate, payload, outboundChannel, actionContext)
 	if err != nil {
@@ -339,7 +341,6 @@ func SendActionReplyV2(
 	actionContext map[string]interface{},
 ) bool {
 	// TODO: The 'action' parameter will be used in the future for action-specific logic or logging
-	_ = action
 
 	return sendActionReplyWithAdditionalContextV2(instanceUUID, userEmail, actionUUID, arstate, message, errorCode, payloadV2, outboundChannel, action, actionContext)
 }
@@ -357,7 +358,6 @@ func sendActionReplyWithAdditionalContextV2(
 	actionContext map[string]interface{},
 ) bool {
 	// TODO: The 'action' parameter will be used in the future for action-specific logic or logging
-	_ = action
 
 	err := sendActionReplyInternalV2(instanceUUID, userEmail, actionUUID, arstate, message, errorCode, payloadV2, outboundChannel, actionContext)
 	if err != nil {
