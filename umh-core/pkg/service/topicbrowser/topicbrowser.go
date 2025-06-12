@@ -18,8 +18,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/connectionserviceconfig"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/nmapserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/topicbrowserserviceconfig"
 	nmapfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/nmap"
@@ -35,7 +33,7 @@ type ITopicBrowserService interface {
 	GenerateConfig(tbConfig *topicbrowserserviceconfig.Config, tbName string) (s6serviceconfig.S6ServiceConfig, error)
 
 	// GetConfig returns the actual topic browser config
-	GetConfig(ctx context.Context, filesystemService filesystem.Service, tbName string) (s6serviceconfig.S6ServiceConfig, error)
+	GetConfig(ctx context.Context, filesystemService filesystem.Service, tbName string) (topicbrowserserviceconfig.Config, error)
 
 	// Status returns information about the topic browser health
 	Status(ctx context.Context, filesystemService filesystem.Service, tbName string, tick uint64) (ServiceInfo, error)
@@ -112,14 +110,9 @@ func (svc *Service) getName(tbname string) string {
 	return fmt.Sprintf("topicbrowser-%s", tbname)
 }
 
-// GenerateNmapConfigConnection generates a nmap config for a given connection
-func (svc *Service) GenerateNmapConfigForConnection(connectionConfig *connectionserviceconfig.ConnectionServiceConfig, connectionName string) (nmapserviceconfig.NmapServiceConfig, error) {
-	if connectionConfig == nil {
-		return nmapserviceconfig.NmapServiceConfig{}, fmt.Errorf("connection config is nil")
-	}
-
-	// Convert Connection config to Nmap service config
-	return connectionConfig.GetNmapServiceConfig(), nil
+// GenerateConfig generates a config for a given topic browser
+func (svc *Service) GenerateConfig(tbConfig *topicbrowserserviceconfig.Config, tbName string) (s6serviceconfig.S6ServiceConfig, error) {
+	return s6serviceconfig.S6ServiceConfig{}, nil
 }
 
 // GetConfig returns the actual Connection config from the underlying service
@@ -180,8 +173,8 @@ func (svc *Service) Start(
 	return nil
 }
 
-// Stop stops a Connection
-func (svc *Service) StopConnection(
+// Stop stops a topic browser
+func (svc *Service) Stop(
 	ctx context.Context,
 	filesystemService filesystem.Service,
 	tbName string,
@@ -189,7 +182,7 @@ func (svc *Service) StopConnection(
 	return nil
 }
 
-// ReconcileManager synchronizes all connections on each tick.
+// ReconcileManager synchronizes all topic browser on each tick.
 func (svc *Service) ReconcileManager(
 	ctx context.Context,
 	services serviceregistry.Provider,
@@ -198,7 +191,7 @@ func (svc *Service) ReconcileManager(
 	return nil, false
 }
 
-// ServiceExists checks if a connection with the given name exists.
+// ServiceExists checks if a topic browser with the given name exists.
 // Used by the FSM to determine appropriate transitions.
 func (svc *Service) ServiceExists(
 	ctx context.Context,
@@ -208,8 +201,8 @@ func (svc *Service) ServiceExists(
 	return true
 }
 
-// ForceRemoveConnection removes a Connection from the Nmap manager
-func (svc *Service) ForceRemoveConnection(
+// ForceRemove removes a Topic Browser from the manager
+func (svc *Service) ForceRemove(
 	ctx context.Context,
 	filesystemService filesystem.Service,
 	tbName string,
