@@ -62,7 +62,8 @@ import (
 // (which require special handling and cannot be edited via UI) and inline configurations
 // (which can be modified through standard config management operations).
 
-func parseConfig(data []byte, allowUnknownFields bool) (FullConfig, map[string]string, error) {
+// since we use this function in runtime_config_test to best cover the functionality, we export it
+func ParseConfig(data []byte, allowUnknownFields bool) (FullConfig, map[string]string, error) {
 	var cfg FullConfig
 	anchorMap := make(map[string]string)
 
@@ -289,7 +290,7 @@ func (m *FileConfigManager) getConfigWithAnchors(ctx context.Context) (FullConfi
 		return FullConfig{}, nil, fmt.Errorf("failed to read config file: %w", err)
 	}
 
-	config, anchorMap, err := parseConfig(data, true) // Use allowUnknownFields=true for anchor handling
+	config, anchorMap, err := ParseConfig(data, true) // Use allowUnknownFields=true for anchor handling
 	if err != nil {
 		return FullConfig{}, nil, fmt.Errorf("failed to parse config file: %w", err)
 	}

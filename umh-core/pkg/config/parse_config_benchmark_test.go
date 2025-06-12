@@ -29,7 +29,7 @@ func BenchmarkParseConfig_100(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		_, _, err := parseConfig(cfg, false)
+		_, _, err := ParseConfig(cfg, false)
 		if err != nil {
 			b.Fatalf("parseConfig failed: %v", err)
 		}
@@ -46,7 +46,7 @@ func BenchmarkParseConfig_Comm(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		_, _, err := parseConfig(cfg, false)
+		_, _, err := ParseConfig(cfg, false)
 		if err != nil {
 			b.Fatalf("parseConfig failed: %v", err)
 		}

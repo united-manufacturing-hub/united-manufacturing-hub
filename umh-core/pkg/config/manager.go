@@ -307,7 +307,7 @@ func (m *FileConfigManager) GetConfig(ctx context.Context, tick uint64) (FullCon
 		return FullConfig{}, ctx.Err()
 	}
 
-	config, _, err := parseConfig(data, false)
+	config, _, err := ParseConfig(data, false)
 	if err != nil {
 		return FullConfig{}, fmt.Errorf("failed to parse config file: %w", err)
 	}
@@ -1163,11 +1163,11 @@ func (m *FileConfigManagerWithBackoff) UpdateAndGetCacheModTime(ctx context.Cont
 // If expectedModTime is provided, it will check that the file hasn't been modified since that time
 func (m *FileConfigManager) WriteConfigFromString(ctx context.Context, configStr string, expectedModTime string) error {
 	// First parse the config with strict validation to detect syntax errors and schema problems
-	_, _, err := parseConfig([]byte(configStr), false)
+	_, _, err := ParseConfig([]byte(configStr), false)
 	if err != nil {
 		// If strict parsing fails, try again with allowUnknownFields=true
 		// This allows YAML anchors and other custom fields
-		_, _, err = parseConfig([]byte(configStr), true)
+		_, _, err = ParseConfig([]byte(configStr), true)
 		if err != nil {
 			return fmt.Errorf("failed to parse config: %w", err)
 		}
@@ -1211,7 +1211,7 @@ func (m *FileConfigManager) WriteConfigFromString(ctx context.Context, configStr
 	}
 
 	// Parse the config for the cache
-	parsedConfig, _, err := parseConfig([]byte(configStr), true)
+	parsedConfig, _, err := ParseConfig([]byte(configStr), true)
 	if err != nil {
 		return fmt.Errorf("failed to parse config for cache update: %w", err)
 	}

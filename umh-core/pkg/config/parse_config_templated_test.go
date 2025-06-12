@@ -27,7 +27,7 @@ var _ = Describe("ParseConfigTemplated", func() {
 			cfg, err := os.ReadFile("../../examples/example-config-protocolconverter-templated.yaml")
 			Expect(err).To(BeNil())
 
-			parsedConfig, anchorMap, err := parseConfig(cfg, false)
+			parsedConfig, anchorMap, err := ParseConfig(cfg, false)
 
 			Expect(err).To(BeNil())
 
@@ -76,7 +76,7 @@ var _ = Describe("ParseConfigTemplated", func() {
 			cfg, err := os.ReadFile("../../examples/example-config-protocolconverter.yaml")
 			Expect(err).To(BeNil())
 
-			parsedConfig, anchorMap, err := parseConfig(cfg, false)
+			parsedConfig, anchorMap, err := ParseConfig(cfg, false)
 			Expect(err).To(BeNil())
 
 			Expect(anchorMap).To(BeEmpty())
@@ -98,11 +98,11 @@ var _ = Describe("ParseConfigTemplated", func() {
 			cfgUntemplated, err := os.ReadFile("../../examples/example-config-protocolconverter-untemplated.yaml")
 			Expect(err).To(BeNil())
 
-			parsedConfigTemplated, anchorMapTemplated, err := parseConfig(cfgTemplated, false)
+			parsedConfigTemplated, anchorMapTemplated, err := ParseConfig(cfgTemplated, false)
 			Expect(err).To(BeNil())
 			Expect(anchorMapTemplated).ToNot(BeEmpty())
 
-			parsedConfigUntemplated, anchorMapUntemplated, err := parseConfig(cfgUntemplated, false)
+			parsedConfigUntemplated, anchorMapUntemplated, err := ParseConfig(cfgUntemplated, false)
 			Expect(err).To(BeNil())
 			Expect(anchorMapUntemplated).To(BeEmpty())
 

@@ -248,7 +248,7 @@ agent:
     0: Enterprise
     1: Site
 `
-				config, _, err := parseConfig([]byte(validYAML), false)
+				config, _, err := ParseConfig([]byte(validYAML), false)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(config.Internal.Services).To(HaveLen(1))
@@ -281,7 +281,7 @@ internal: {
   services: [
     { name: service1, desiredState: running,
 `
-				_, _, err := parseConfig([]byte(malformedYAML), false)
+				_, _, err := ParseConfig([]byte(malformedYAML), false)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("did not find expected node content"))
 			})
@@ -296,7 +296,7 @@ internal:
   unknownSection:
     key: value
 `
-				_, _, err := parseConfig([]byte(yamlWithUnknownFields), false)
+				_, _, err := ParseConfig([]byte(yamlWithUnknownFields), false)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to decode config"))
 			})
@@ -314,7 +314,7 @@ internal:
 agent:
   location: null
 `
-				config, _, err := parseConfig([]byte(yamlWithNulls), false)
+				config, _, err := ParseConfig([]byte(yamlWithNulls), false)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(config.Internal.Services).To(HaveLen(1))
 				Expect(config.Internal.Services[0].Name).To(Equal("service1"))
@@ -339,7 +339,7 @@ internal:
         configFiles:
           "file with spaces.txt": "content with multiple\nlines\nand \"quotes\""
 `
-				config, _, err := parseConfig([]byte(complexYAML), false)
+				config, _, err := ParseConfig([]byte(complexYAML), false)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(config.Internal.Services).To(HaveLen(1))
@@ -384,7 +384,7 @@ internal:
 					data, err := fsService.ReadFile(ctx, filepath.Join("../../examples", file.Name()))
 					Expect(err).NotTo(HaveOccurred())
 
-					_, _, err = parseConfig(data, false)
+					_, _, err = ParseConfig(data, false)
 					Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to parse %s", file.Name()))
 				}
 			})
@@ -394,7 +394,7 @@ internal:
 				data, err := fsService.ReadFile(ctx, "../../examples/example-config-protocolconverter-templated.yaml")
 				Expect(err).NotTo(HaveOccurred())
 
-				config, anchorMap, err := parseConfig(data, true)
+				config, anchorMap, err := ParseConfig(data, true)
 				Expect(err).NotTo(HaveOccurred())
 
 				// The example should have at least one protocol converter using an anchor
