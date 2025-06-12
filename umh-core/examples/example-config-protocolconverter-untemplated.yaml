@@ -1,0 +1,91 @@
+# Copyright 2025 UMH Systems GmbH
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+
+# ---------- Agent-wide settings ---------- #
+agent:
+  metricsPort: 8080
+  location:            # authoritative, can't be overridden
+    0: "plant-A"
+    1: "line-4"
+
+# ---------- Protocol-converters ---------- #
+protocolConverter:
+  # ────────────────────────────────────────────────────────────────
+  - name: temperature-sensor-pc
+    desiredState: active
+    protocolConverterServiceConfig:
+      # Intentionally tries to override level-0; will be ignored
+      location:
+        0: "override-level0"
+        2: "machine-7"
+      template:       # not uses the anchor
+        connection:
+          nmap:
+            target: "{{ .IP }}"
+            port: "{{ .PORT }}"
+        dataflowcomponent_read:
+          benthos:
+            input:
+              opcua:
+                address: "opc.tcp://{{ .IP }}:{{ .PORT }}"
+        dataflowcomponent_write:
+          benthos:
+            output:
+              http_client:
+                url: "http://collector.local/ingest"   # static
+      variables:                  # <- flat, user-defined variables
+        IP:   "10.0.1.50"
+        PORT: "4840"
+
+  # ────────────────────────────────────────────────────────────────
+  - name: vibration-sensor-pc
+    desiredState: active
+    # No anchor – inline template
+    protocolConverterServiceConfig:
+      template:
+        connection:
+          ip:   "{{ .IP }}"
+          port: "{{ .PORT }}"
+        dataflowcomponent_read:
+          benthos:
+            input:
+              tcp_server:
+                address: ":{{ .PORT }}"
+      variables:
+        IP:   "10.0.1.51"
+        PORT: "9000"
+
+  # ────────────────────────────────────────────────────────────────
+  - name: simple-forwarder
+    desiredState: passive
+    # Template is completely static – no variables needed
+    protocolConverterServiceConfig:
+      template:
+        connection:
+          ip: "192.168.1.10"
+          port: "502"
+      variables: {}               # allowed, but empty
+
+
+# temperature-sensor-pc
+#| Stage           | Variable/field          | Value              | Source                 |
+#| --------------- | ----------------------- | ------------------ | ---------------------- |
+#| User YAML       | `variables.IP`          | `10.0.1.50`        | User                   |
+#| User YAML       | `variables.PORT`        | `4840`             | User                   |
+#| Agent-inherited | `location.0`            | `plant-A`          | Agent (wins over user) |
+#| Agent-inherited | `location.1`            | `line-4`           | Agent                  |
+#| User YAML       | `location.2`            | `machine-7`        | User (no conflict)     |
+#| Central loop    | `global.releaseChannel` | `stable` (example) | Global                 |
+#| PC manager      | `internal.id`           | `3e42d…`           | Internal               |

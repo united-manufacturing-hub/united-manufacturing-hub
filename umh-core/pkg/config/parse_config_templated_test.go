@@ -35,14 +35,16 @@ var _ = Describe("ParseConfigTemplated", func() {
 			Expect(parsedConfig.ProtocolConverter[0].Name).To(Equal("temperature-sensor-pc"))
 
 			generatedConfigGeneratePart := parsedConfig.ProtocolConverter[0].ProtocolConverterServiceConfig.Template.DataflowComponentReadServiceConfig.BenthosConfig.Input["opcua"]
-			Expect(generatedConfigGeneratePart).To(BeNil())
+			Expect(generatedConfigGeneratePart).ToNot(BeNil())
 
 			Expect(anchorMap).To(HaveKeyWithValue("temperature-sensor-pc", "opcua_http"))
 			Expect(parsedConfig.Templates).To(HaveLen(1))
 			Expect(parsedConfig.Templates[0]).To(Equal(map[string]any{
 				"connection": map[string]any{
-					"ip":   "{{ .IP }}",
-					"port": "{{ .PORT }}",
+					"nmap": map[string]any{
+						"target": "{{ .IP }}",
+						"port":   "{{ .PORT }}",
+					},
 				},
 				"dataflowcomponent_read": map[string]any{
 					"benthos": map[string]any{
@@ -83,6 +85,26 @@ var _ = Describe("ParseConfigTemplated", func() {
 			Expect(parsedConfig.ProtocolConverter[0].ProtocolConverterServiceConfig.Template.DataflowComponentReadServiceConfig.BenthosConfig.Input["generate"]).ToNot(BeNil())
 
 			Expect(anchorMap).To(BeEmpty())
+		})
+	})
+
+	Context("when parsing a config with and without anchors", func() {
+		It("should parse both equally", func() {
+			cfgTemplated, err := os.ReadFile("../../examples/example-config-protocolconverter-templated.yaml")
+			Expect(err).To(BeNil())
+
+			cfgUntemplated, err := os.ReadFile("../../examples/example-config-protocolconverter-untemplated.yaml")
+			Expect(err).To(BeNil())
+
+			parsedConfigTemplated, anchorMapTemplated, err := parseConfig(cfgTemplated, false)
+			Expect(err).To(BeNil())
+			Expect(anchorMapTemplated).ToNot(BeEmpty())
+
+			parsedConfigUntemplated, anchorMapUntemplated, err := parseConfig(cfgUntemplated, false)
+			Expect(err).To(BeNil())
+			Expect(anchorMapUntemplated).To(BeEmpty())
+
+			Expect(parsedConfigTemplated.ProtocolConverter).To(Equal(parsedConfigUntemplated.ProtocolConverter))
 		})
 	})
 })

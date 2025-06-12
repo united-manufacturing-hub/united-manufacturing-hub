@@ -73,18 +73,12 @@ func parseConfig(data []byte, allowUnknownFields bool) (FullConfig, map[string]s
 	}
 
 	// Extract anchor mappings and modify the node tree
-	if err := extractAndModifyAnchors(&rootNode, anchorMap); err != nil {
+	if err := extractAnchors(&rootNode, anchorMap); err != nil {
 		return FullConfig{}, nil, fmt.Errorf("failed to extract anchor mappings: %w", err)
 	}
 
-	// Marshal the modified node tree back to bytes
-	modifiedData, err := yaml.Marshal(&rootNode)
-	if err != nil {
-		return FullConfig{}, nil, fmt.Errorf("failed to marshal modified YAML: %w", err)
-	}
-
-	// Now decode the modified YAML into FullConfig
-	dec := yaml.NewDecoder(bytes.NewReader(modifiedData))
+	// Now decode the original YAML into FullConfig
+	dec := yaml.NewDecoder(bytes.NewReader(data))
 	dec.KnownFields(!allowUnknownFields) // Only reject unknown keys if allowUnknownFields is false
 	if err := dec.Decode(&cfg); err != nil {
 		return FullConfig{}, nil, fmt.Errorf("failed to decode config: %w", err)
@@ -93,9 +87,9 @@ func parseConfig(data []byte, allowUnknownFields bool) (FullConfig, map[string]s
 	return cfg, anchorMap, nil
 }
 
-// extractAndModifyAnchors walks through the YAML node tree to find protocol converter
+// extractAnchors walks through the YAML node tree to find protocol converter
 // template aliases and extracts the anchor names while replacing alias nodes with resolved template content
-func extractAndModifyAnchors(node *yaml.Node, anchorMap map[string]string) error {
+func extractAnchors(node *yaml.Node, anchorMap map[string]string) error {
 	if node == nil {
 		return nil
 	}
@@ -104,14 +98,14 @@ func extractAndModifyAnchors(node *yaml.Node, anchorMap map[string]string) error
 	var rootNode *yaml.Node
 	if node.Kind == yaml.DocumentNode && len(node.Content) > 0 {
 		rootNode = node
-		return extractAndModifyAnchorsWithRoot(node.Content[0], anchorMap, rootNode)
+		return extractAnchorsWithRoot(node.Content[0], anchorMap, rootNode)
 	}
 
-	return extractAndModifyAnchorsWithRoot(node, anchorMap, nil)
+	return extractAnchorsWithRoot(node, anchorMap, nil)
 }
 
-// extractAndModifyAnchorsWithRoot walks through the YAML node tree with access to the root for template resolution
-func extractAndModifyAnchorsWithRoot(node *yaml.Node, anchorMap map[string]string, rootNode *yaml.Node) error {
+// extractAnchorsWithRoot walks through the YAML node tree with access to the root for template resolution
+func extractAnchorsWithRoot(node *yaml.Node, anchorMap map[string]string, rootNode *yaml.Node) error {
 	if node == nil {
 		return nil
 	}
@@ -130,7 +124,7 @@ func extractAndModifyAnchorsWithRoot(node *yaml.Node, anchorMap map[string]strin
 			}
 
 			// Recursively process child nodes
-			if err := extractAndModifyAnchorsWithRoot(valueNode, anchorMap, rootNode); err != nil {
+			if err := extractAnchorsWithRoot(valueNode, anchorMap, rootNode); err != nil {
 				return err
 			}
 		}
@@ -139,7 +133,7 @@ func extractAndModifyAnchorsWithRoot(node *yaml.Node, anchorMap map[string]strin
 	// Handle sequence nodes
 	if node.Kind == yaml.SequenceNode {
 		for _, child := range node.Content {
-			if err := extractAndModifyAnchorsWithRoot(child, anchorMap, rootNode); err != nil {
+			if err := extractAnchorsWithRoot(child, anchorMap, rootNode); err != nil {
 				return err
 			}
 		}

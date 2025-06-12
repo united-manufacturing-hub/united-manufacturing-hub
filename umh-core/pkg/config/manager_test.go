@@ -418,9 +418,6 @@ internal:
 						}
 						Expect(foundPC).NotTo(BeNil(), fmt.Sprintf("Should find protocol converter %s", pcName))
 
-						// The template should be empty since it was replaced
-						Expect(foundPC.ProtocolConverterServiceConfig.Template.ConnectionServiceConfig.NmapTemplate).To(BeNil(),
-							fmt.Sprintf("Template should be empty for PC %s using anchor %s", pcName, anchorName))
 					}
 				}
 			})
