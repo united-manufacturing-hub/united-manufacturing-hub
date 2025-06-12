@@ -129,7 +129,6 @@ func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePay
 			actionLogger:          log,
 			systemSnapshotManager: systemSnapshotManager,
 		}
-
 	case models.GetConfigFile:
 		action = &GetConfigFileAction{
 			userEmail:             sender,
@@ -151,7 +150,7 @@ func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePay
 			actionLogger:          log,
 		}
 
-	case models.GetDataFlowComponentMetrics:
+	case models.GetDataFlowComponentMetrics: //nolint:staticcheck // Deprecated but kept for back compat
 		action = &GetDataflowcomponentMetricsAction{
 			userEmail:             sender,
 			actionUUID:            payload.ActionUUID,
@@ -160,6 +159,7 @@ func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePay
 			actionLogger:          log,
 			systemSnapshotManager: systemSnapshotManager,
 		}
+
 	case models.DeployProtocolConverter:
 		action = &DeployProtocolConverterAction{
 			userEmail:       sender,
@@ -181,6 +181,10 @@ func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePay
 		}
 	case models.GetProtocolConverter:
 		action = NewGetProtocolConverterAction(sender, payload.ActionUUID, instanceUUID, outboundChannel, configManager, systemSnapshotManager)
+
+	case models.GetMetrics:
+		action = NewGetMetricsAction(sender, payload.ActionUUID, instanceUUID, outboundChannel, systemSnapshotManager, log)
+
 
 	default:
 		log.Errorf("Unknown action type: %s", payload.ActionType)
