@@ -439,8 +439,8 @@ func (svc *Service) Start(
 	return nil
 }
 
-// Stop stops a Connection
-func (svc *Service) StopConnection(
+// Stop stops a topic browser
+func (svc *Service) Stop(
 	ctx context.Context,
 	filesystemService filesystem.Service,
 	tbName string,
@@ -472,7 +472,7 @@ func (svc *Service) StopConnection(
 	return nil
 }
 
-// ReconcileManager synchronizes all connections on each tick.
+// ReconcileManager synchronizes all topic browser on each tick.
 func (svc *Service) ReconcileManager(
 	ctx context.Context,
 	services serviceregistry.Provider,
@@ -519,8 +519,8 @@ func (svc *Service) ServiceExists(
 	return svc.benthosService.ServiceExists(ctx, services.GetFileSystem(), benthosName)
 }
 
-// ForceRemoveConnection removes a Connection from the Nmap manager
-func (svc *Service) ForceRemoveConnection(
+// ForceRemove removes a Topic Browser from the manager
+func (svc *Service) ForceRemove(
 	ctx context.Context,
 	services serviceregistry.Provider,
 	tbName string,
