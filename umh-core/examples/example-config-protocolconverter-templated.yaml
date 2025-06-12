@@ -19,7 +19,7 @@
 # ---------- Templates ---------- #
 templates:
   # Anchored, re-usable template — will be referenced with *opcua_http
-  - &opcua_http
+  - opcua_http: &opcua_http
       connection:
         nmap:
           target: '{{ .IP }}'

@@ -42,26 +42,28 @@ var _ = Describe("ParseConfigTemplated", func() {
 			Expect(anchorMap).To(HaveKeyWithValue("temperature-sensor-pc", "opcua_http"))
 			Expect(parsedConfig.Templates).To(HaveLen(1))
 			Expect(parsedConfig.Templates[0]).To(Equal(map[string]any{
-				"connection": map[string]any{
-					"nmap": map[string]any{
-						"target": "{{ .IP }}",
-						"port":   "{{ .PORT }}",
+				"opcua_http": map[string]any{
+					"connection": map[string]any{
+						"nmap": map[string]any{
+							"target": "{{ .IP }}",
+							"port":   "{{ .PORT }}",
+						},
 					},
-				},
-				"dataflowcomponent_read": map[string]any{
-					"benthos": map[string]any{
-						"input": map[string]any{
-							"opcua": map[string]any{
-								"address": "opc.tcp://{{ .IP }}:{{ .PORT }}",
+					"dataflowcomponent_read": map[string]any{
+						"benthos": map[string]any{
+							"input": map[string]any{
+								"opcua": map[string]any{
+									"address": "opc.tcp://{{ .IP }}:{{ .PORT }}",
+								},
 							},
 						},
 					},
-				},
-				"dataflowcomponent_write": map[string]any{
-					"benthos": map[string]any{
-						"output": map[string]any{
-							"http_client": map[string]any{
-								"url": "http://collector.local/ingest",
+					"dataflowcomponent_write": map[string]any{
+						"benthos": map[string]any{
+							"output": map[string]any{
+								"http_client": map[string]any{
+									"url": "http://collector.local/ingest",
+								},
 							},
 						},
 					},
@@ -105,6 +107,23 @@ var _ = Describe("ParseConfigTemplated", func() {
 			parsedConfigUntemplated, anchorMapUntemplated, err := ParseConfig(cfgUntemplated, false)
 			Expect(err).To(BeNil())
 			Expect(anchorMapUntemplated).To(BeEmpty())
+
+			// clear the hasAnchors and anchorName for the protocol converters for the comparison
+			newProtocolConvertersTemplated := make([]ProtocolConverterConfig, 0, len(parsedConfigTemplated.ProtocolConverter))
+			for _, pc := range parsedConfigTemplated.ProtocolConverter {
+				pc.hasAnchors = false
+				pc.anchorName = ""
+				newProtocolConvertersTemplated = append(newProtocolConvertersTemplated, pc)
+			}
+			parsedConfigTemplated.ProtocolConverter = newProtocolConvertersTemplated
+
+			newProtocolConvertersUntemplated := make([]ProtocolConverterConfig, 0, len(parsedConfigUntemplated.ProtocolConverter))
+			for _, pc := range parsedConfigUntemplated.ProtocolConverter {
+				pc.hasAnchors = false
+				pc.anchorName = ""
+				newProtocolConvertersUntemplated = append(newProtocolConvertersUntemplated, pc)
+			}
+			parsedConfigUntemplated.ProtocolConverter = newProtocolConvertersUntemplated
 
 			Expect(parsedConfigTemplated.ProtocolConverter).To(Equal(parsedConfigUntemplated.ProtocolConverter))
 		})

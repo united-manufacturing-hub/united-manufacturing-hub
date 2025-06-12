@@ -85,6 +85,17 @@ func ParseConfig(data []byte, allowUnknownFields bool) (FullConfig, map[string]s
 		return FullConfig{}, nil, fmt.Errorf("failed to decode config: %w", err)
 	}
 
+	// set hasAnchors and anchorName for each protocol converter based on the anchorMap
+	newProtocolConverters := make([]ProtocolConverterConfig, 0, len(cfg.ProtocolConverter))
+	for _, pc := range cfg.ProtocolConverter {
+		if anchorName, exists := anchorMap[pc.Name]; exists {
+			pc.hasAnchors = true
+			pc.anchorName = anchorName
+		}
+		newProtocolConverters = append(newProtocolConverters, pc)
+	}
+	cfg.ProtocolConverter = newProtocolConverters
+
 	return cfg, anchorMap, nil
 }
 

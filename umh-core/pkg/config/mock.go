@@ -17,6 +17,7 @@ package config
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -24,6 +25,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	filesystem "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	"gopkg.in/yaml.v3"
 )
 
 // MockConfigManager is a mock implementation of ConfigManager for testing
@@ -91,8 +93,40 @@ func (m *MockConfigManager) GetFileSystemService() filesystem.Service {
 // WriteConfig implements the ConfigManager interface
 // all the functions that call MockConfigManager.writeConfig must hold the mutexReadAndWrite mutex
 func (m *MockConfigManager) writeConfig(ctx context.Context, cfg FullConfig) error {
+	// Check if context is already cancelled
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+
+	// Create the directory if it doesn't exist (using mock filesystem)
+	dir := filepath.Dir(DefaultConfigPath)
+	if err := m.MockFileSystem.EnsureDirectory(ctx, dir); err != nil {
+		return fmt.Errorf("failed to create config directory: %w", err)
+	}
+
+	// Use custom YAML marshaling if we have templates that need anchors
+	var data []byte
+	var err error
+	if len(cfg.Templates) > 0 {
+		data, err = marshalConfigWithAnchors(cfg)
+	} else {
+		data, err = yaml.Marshal(cfg)
+	}
+	if err != nil {
+		return fmt.Errorf("failed to marshal config: %w", err)
+	}
+
+	// Write the file via mock filesystem (give everybody read & write access)
+	configPath := DefaultConfigPath
+	if err := m.MockFileSystem.WriteFile(ctx, configPath, data, 0666); err != nil {
+		return fmt.Errorf("failed to write config file: %w", err)
+	}
+
+	// Update the cache to reflect the new config (simulate file stat)
 	m.Config = cfg
 	m.CacheModTime = time.Now()
+	m.ConfigAsString = string(data) // Update raw config cache too
+
 	return nil
 }
 

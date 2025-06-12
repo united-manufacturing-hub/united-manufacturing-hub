@@ -540,11 +540,6 @@ func processTemplatesNode(templatesNode *yaml.Node, config FullConfig) error {
 				keyNode := templateNode.Content[i]
 				valueNode := templateNode.Content[i+1]
 
-				// Skip metadata fields
-				if keyNode.Value == "_anchor" {
-					continue
-				}
-
 				// Add anchor to the template value node
 				if valueNode.Anchor == "" {
 					valueNode.Anchor = keyNode.Value // Use the template name as anchor
@@ -572,9 +567,21 @@ func processProtocolConvertersNode(pcNode *yaml.Node, config FullConfig) error {
 				}
 			}
 
-			// If we have a converter name, check if it should reference a template
+			// If we have a converter name, check the config for hasAnchors and the anchor name to use
 			if converterName != "" {
-				templateName := generateTemplateAnchorName(converterName)
+				pc := ProtocolConverterConfig{}
+				for _, curPC := range config.ProtocolConverter {
+					if curPC.Name == converterName {
+						pc = curPC
+						break
+					}
+				}
+
+				if !pc.HasAnchors() {
+					continue
+				}
+
+				templateName := pc.AnchorName()
 
 				// Check if a template with this name exists in the templates section
 				templateExists := false

@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"time"
 
@@ -419,6 +420,115 @@ internal:
 						Expect(foundPC).NotTo(BeNil(), fmt.Sprintf("Should find protocol converter %s", pcName))
 
 					}
+				}
+			})
+		})
+	})
+
+	Describe("Round-trip config handling", func() {
+		var (
+			fsService filesystem.Service
+			ctx       context.Context
+			cancel    context.CancelFunc
+		)
+
+		BeforeEach(func() {
+			fsService = filesystem.NewDefaultService()
+			ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
+		})
+
+		AfterEach(func() {
+			cancel()
+		})
+
+		Context("with templated protocol converter example", func() {
+			It("should read, parse, and write the config preserving templates", func() {
+				// Read the original example file
+				originalData, err := fsService.ReadFile(ctx, "../../examples/example-config-protocolconverter-templated.yaml")
+				Expect(err).NotTo(HaveOccurred())
+
+				// Parse the config with anchor extraction enabled
+				config, anchorMap, err := ParseConfig(originalData, true)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Verify we have the expected structure
+				Expect(config.ProtocolConverter).To(HaveLen(3))
+				Expect(config.Templates).NotTo(BeEmpty())
+
+				// Find the temperature-sensor-pc that uses the template
+				var tempSensorPC *ProtocolConverterConfig
+				for _, pc := range config.ProtocolConverter {
+					if pc.Name == "temperature-sensor-pc" {
+						tempSensorPC = &pc
+						break
+					}
+				}
+				Expect(tempSensorPC).NotTo(BeNil())
+				Expect(tempSensorPC.DesiredFSMState).To(Equal("active"))
+
+				// Verify anchor mapping was extracted
+				if len(anchorMap) > 0 {
+					anchorName, exists := anchorMap["temperature-sensor-pc"]
+					if exists {
+						Expect(anchorName).To(Equal("opcua_http"))
+					}
+				}
+
+				// Write the config using the config manager
+				configManager.WithFileSystemService(mockFS)
+
+				// Set up mock filesystem for writing
+				var writtenData []byte
+				mockFS.WithEnsureDirectoryFunc(func(ctx context.Context, path string) error {
+					return nil
+				})
+				mockFS.WithWriteFileFunc(func(ctx context.Context, path string, data []byte, perm os.FileMode) error {
+					writtenData = data
+					return nil
+				})
+				mockFS.WithStatFunc(func(ctx context.Context, path string) (os.FileInfo, error) {
+					return mockFS.NewMockFileInfo("config.yaml", int64(len(writtenData)), 0644, time.Now(), false), nil
+				})
+
+				// Write the config
+				err = configManager.writeConfig(ctx, config)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(writtenData).NotTo(BeEmpty())
+
+				// Parse the written data to verify it's still valid
+				writtenConfig, writtenAnchorMap, err := ParseConfig(writtenData, true)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Verify the structure is preserved
+				Expect(writtenConfig.ProtocolConverter).To(HaveLen(3))
+				Expect(writtenConfig.Agent.Location).To(HaveKeyWithValue(0, "plant-A"))
+				Expect(writtenConfig.Agent.Location).To(HaveKeyWithValue(1, "line-4"))
+
+				// Verify the protocol converters are preserved
+				var writtenTempSensorPC *ProtocolConverterConfig
+				for _, pc := range writtenConfig.ProtocolConverter {
+					if pc.Name == "temperature-sensor-pc" {
+						writtenTempSensorPC = &pc
+						break
+					}
+				}
+				Expect(writtenTempSensorPC).NotTo(BeNil())
+				Expect(writtenTempSensorPC.DesiredFSMState).To(Equal("active"))
+				Expect(writtenTempSensorPC.ProtocolConverterServiceConfig.Variables.User).To(HaveKeyWithValue("IP", "10.0.1.50"))
+				Expect(writtenTempSensorPC.ProtocolConverterServiceConfig.Variables.User).To(HaveKeyWithValue("PORT", "4840"))
+
+				// If templates were preserved, verify anchor mappings still exist
+				if len(writtenConfig.Templates) > 0 {
+					Expect(writtenAnchorMap).NotTo(BeEmpty())
+				}
+
+				// Verify the written YAML contains anchor syntax if templates exist
+				if len(writtenConfig.Templates) > 0 {
+					writtenYAML := string(writtenData)
+					// Should contain anchor definition
+					Expect(writtenYAML).To(ContainSubstring("&"))
+					// Should contain alias reference
+					Expect(writtenYAML).To(ContainSubstring("*"))
 				}
 			})
 		})

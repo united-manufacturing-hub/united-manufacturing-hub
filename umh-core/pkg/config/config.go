@@ -133,11 +133,15 @@ type ProtocolConverterConfig struct {
 
 	// private marker – not (un)marshalled
 	// explanation see templating.go
-	hasAnchors bool `yaml:"-"`
+	hasAnchors bool   `yaml:"-"`
+	anchorName string `yaml:"-"`
 }
 
 // HasAnchors returns true if the ProtocolConverterConfig has anchors, see templating.go
 func (d *ProtocolConverterConfig) HasAnchors() bool { return d.hasAnchors }
+
+// AnchorName returns the anchor name of the ProtocolConverterConfig, see templating.go
+func (d *ProtocolConverterConfig) AnchorName() string { return d.anchorName }
 
 // NmapConfig contains configuration for creating a Nmap service
 type NmapConfig struct {
