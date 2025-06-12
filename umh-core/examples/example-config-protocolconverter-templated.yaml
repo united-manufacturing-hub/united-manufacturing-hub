@@ -18,8 +18,8 @@ templates:
   - &opcua_http
       connection:
         nmap:
-          target: "{{ .IP }}"
-          port: "{{ .PORT }}"
+          target: '{{ .IP }}'
+          port: '{{ .PORT }}'
       dataflowcomponent_read:
         benthos:
           input:

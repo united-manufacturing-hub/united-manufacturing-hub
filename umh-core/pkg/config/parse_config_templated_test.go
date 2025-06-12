@@ -33,6 +33,8 @@ var _ = Describe("ParseConfigTemplated", func() {
 
 			Expect(parsedConfig.ProtocolConverter).To(HaveLen(3))
 			Expect(parsedConfig.ProtocolConverter[0].Name).To(Equal("temperature-sensor-pc"))
+			Expect(parsedConfig.ProtocolConverter[0].ProtocolConverterServiceConfig.Variables.User).To(HaveKeyWithValue("IP", "10.0.1.50"))
+			Expect(parsedConfig.ProtocolConverter[0].ProtocolConverterServiceConfig.Variables.User).To(HaveKeyWithValue("PORT", "4840"))
 
 			generatedConfigGeneratePart := parsedConfig.ProtocolConverter[0].ProtocolConverterServiceConfig.Template.DataflowComponentReadServiceConfig.BenthosConfig.Input["opcua"]
 			Expect(generatedConfigGeneratePart).ToNot(BeNil())
