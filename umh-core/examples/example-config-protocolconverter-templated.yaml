@@ -12,6 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# ------------------------------------------------------------------------------------------------
+# !!!! This config is used in unit tests, please do not change it without updating the tests !!!!
+# ------------------------------------------------------------------------------------------------
+
 # ---------- Templates ---------- #
 templates:
   # Anchored, re-usable template — will be referenced with *opcua_http
