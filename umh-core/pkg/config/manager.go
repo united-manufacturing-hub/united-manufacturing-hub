@@ -75,6 +75,8 @@ type ConfigManager interface {
 	AtomicAddProtocolConverter(ctx context.Context, pc ProtocolConverterConfig) error
 	// AtomicEditProtocolConverter edits a protocol converter in the config atomically
 	AtomicEditProtocolConverter(ctx context.Context, componentUUID uuid.UUID, pc ProtocolConverterConfig) (ProtocolConverterConfig, error)
+	// AtomicDeleteProtocolConverter deletes a protocol converter from the config atomically
+	AtomicDeleteProtocolConverter(ctx context.Context, componentUUID uuid.UUID) error
 	// GetConfigAsString returns the current config as a string
 	// This function is used in the get-config-file action to retrieve the raw config file
 	// without any yaml parsing applied. This allows to display yaml anchors and change them
@@ -1097,6 +1099,93 @@ func (m *FileConfigManager) AtomicEditProtocolConverter(ctx context.Context, com
 	return oldConfig, nil
 }
 
+// AtomicDeleteProtocolConverter deletes a protocol converter from the config atomically
+func (m *FileConfigManager) AtomicDeleteProtocolConverter(ctx context.Context, componentUUID uuid.UUID) error {
+	err := m.mutexAtomicUpdate.Lock(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to lock config file: %w", err)
+	}
+	defer m.mutexAtomicUpdate.Unlock()
+
+	// get the current config and anchor map
+	config, anchorMap, err := m.getConfigWithAnchors(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get config: %w", err)
+	}
+
+	// Find the component to delete and check if it's anchored
+	var componentToDeleteName string
+	var isAnchored bool
+	var anchorName string
+
+	for _, c := range config.ProtocolConverter {
+		if dataflowcomponentserviceconfig.GenerateUUIDFromName(c.Name) == componentUUID {
+			componentToDeleteName = c.Name
+			anchorName, isAnchored = anchorMap[componentToDeleteName]
+			break
+		}
+	}
+
+	if componentToDeleteName == "" {
+		return fmt.Errorf("protocol converter with UUID %s not found", componentUUID)
+	}
+
+	// Handle anchored protocol converters - delete template if it matches expected pattern
+	if isAnchored {
+		expectedAnchorName := generateTemplateAnchorName(componentToDeleteName)
+
+		if anchorName == expectedAnchorName {
+			// Delete the template from the templates section
+			filteredTemplates := make([]map[string]interface{}, 0, len(config.Templates))
+			templateDeleted := false
+
+			for _, template := range config.Templates {
+				if _, exists := template[anchorName]; exists {
+					// Skip this template (delete it)
+					templateDeleted = true
+					continue
+				}
+				filteredTemplates = append(filteredTemplates, template)
+			}
+
+			if !templateDeleted {
+				m.logger.Warnf("template %q referenced by protocol converter %s not found in templates section", anchorName, componentToDeleteName)
+			}
+
+			config.Templates = filteredTemplates
+		} else {
+			m.logger.Warnf("protocol converter %s uses template anchor %q which doesn't match the expected pattern %q; only deleting protocol converter, leaving template intact", componentToDeleteName, anchorName, expectedAnchorName)
+		}
+	}
+
+	// Find and remove the protocol converter with matching UUID
+	found := false
+	filteredConverters := make([]ProtocolConverterConfig, 0, len(config.ProtocolConverter))
+
+	for _, converter := range config.ProtocolConverter {
+		converterID := dataflowcomponentserviceconfig.GenerateUUIDFromName(converter.Name)
+		if converterID != componentUUID {
+			filteredConverters = append(filteredConverters, converter)
+		} else {
+			found = true
+		}
+	}
+
+	if !found {
+		return fmt.Errorf("protocol converter with UUID %s not found", componentUUID)
+	}
+
+	// Update config with filtered converters
+	config.ProtocolConverter = filteredConverters
+
+	// write the config
+	if err := m.writeConfig(ctx, config); err != nil {
+		return fmt.Errorf("failed to write config: %w", err)
+	}
+
+	return nil
+}
+
 // GetConfigAsString returns the current config file contents as a string
 // This function is used in the get-config-file action to retrieve the raw config file
 // without any yaml parsing applied. This allows to display yaml anchors and change them
@@ -1246,6 +1335,14 @@ func (m *FileConfigManagerWithBackoff) AtomicEditProtocolConverter(ctx context.C
 	}
 
 	return m.configManager.AtomicEditProtocolConverter(ctx, componentUUID, pc)
-	// If expectedModTime is provided, check for concurrent modification atomically under the lock
+}
 
+// AtomicDeleteProtocolConverter delegates to the underlying FileConfigManager
+func (m *FileConfigManagerWithBackoff) AtomicDeleteProtocolConverter(ctx context.Context, componentUUID uuid.UUID) error {
+	// Check if context is already cancelled
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+
+	return m.configManager.AtomicDeleteProtocolConverter(ctx, componentUUID)
 }

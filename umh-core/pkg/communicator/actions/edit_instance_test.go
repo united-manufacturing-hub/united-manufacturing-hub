@@ -472,6 +472,24 @@ func (w *writeFailingMockConfigManager) AtomicEditProtocolConverter(ctx context.
 	return config.ProtocolConverterConfig{}, nil
 }
 
+// AtomicDeleteProtocolConverter implements the required interface method but ensures the write fails
+func (w *writeFailingMockConfigManager) AtomicDeleteProtocolConverter(ctx context.Context, componentUUID uuid.UUID) error {
+	// Get the current config
+	configData, err := w.GetConfig(ctx, 0)
+	if err != nil {
+		return err
+	}
+
+	// do not delete anything
+
+	// Write config (will fail with this mock)
+	if err := w.writeConfig(ctx, configData); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // GetConfigAsString implements the ConfigManager interface
 func (w *writeFailingMockConfigManager) GetConfigAsString(ctx context.Context) (string, error) {
 	return w.mockConfigManager.GetConfigAsString(ctx)

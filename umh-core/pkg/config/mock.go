@@ -28,27 +28,29 @@ import (
 
 // MockConfigManager is a mock implementation of ConfigManager for testing
 type MockConfigManager struct {
-	GetConfigCalled                   bool
-	AddDataflowcomponentCalled        bool
-	DeleteDataflowcomponentCalled     bool
-	EditDataflowcomponentCalled       bool
-	AtomicAddProtocolConverterCalled  bool
-	AtomicEditProtocolConverterCalled bool
-	Config                            FullConfig
-	ConfigError                       error
-	AddDataflowcomponentError         error
-	DeleteDataflowcomponentError      error
-	EditDataflowcomponentError        error
-	AtomicAddProtocolConverterError   error
-	AtomicEditProtocolConverterError  error
-	ConfigAsString                    string
-	GetConfigAsStringError            error
-	GetConfigAsStringCalled           bool
-	ConfigDelay                       time.Duration
-	mutexReadOrWrite                  sync.Mutex
-	mutexReadAndWrite                 sync.Mutex
-	MockFileSystem                    *filesystem.MockFileSystem
-	CacheModTime                      time.Time
+	GetConfigCalled                     bool
+	AddDataflowcomponentCalled          bool
+	DeleteDataflowcomponentCalled       bool
+	EditDataflowcomponentCalled         bool
+	AtomicAddProtocolConverterCalled    bool
+	AtomicEditProtocolConverterCalled   bool
+	AtomicDeleteProtocolConverterCalled bool
+	Config                              FullConfig
+	ConfigError                         error
+	AddDataflowcomponentError           error
+	DeleteDataflowcomponentError        error
+	EditDataflowcomponentError          error
+	AtomicAddProtocolConverterError     error
+	AtomicEditProtocolConverterError    error
+	AtomicDeleteProtocolConverterError  error
+	ConfigAsString                      string
+	GetConfigAsStringError              error
+	GetConfigAsStringCalled             bool
+	ConfigDelay                         time.Duration
+	mutexReadOrWrite                    sync.Mutex
+	mutexReadAndWrite                   sync.Mutex
+	MockFileSystem                      *filesystem.MockFileSystem
+	CacheModTime                        time.Time
 }
 
 // NewMockConfigManager creates a new MockConfigManager instance
@@ -142,6 +144,12 @@ func (m *MockConfigManager) WithAtomicEditProtocolConverterError(err error) *Moc
 	return m
 }
 
+// WithAtomicDeleteProtocolConverterError configures the mock to return the given error when AtomicDeleteProtocolConverter is called
+func (m *MockConfigManager) WithAtomicDeleteProtocolConverterError(err error) *MockConfigManager {
+	m.AtomicDeleteProtocolConverterError = err
+	return m
+}
+
 // ResetCalls clears the called flags for testing multiple calls
 func (m *MockConfigManager) ResetCalls() {
 	m.mutexReadOrWrite.Lock()
@@ -152,6 +160,7 @@ func (m *MockConfigManager) ResetCalls() {
 	m.EditDataflowcomponentCalled = false
 	m.AtomicAddProtocolConverterCalled = false
 	m.AtomicEditProtocolConverterCalled = false
+	m.AtomicDeleteProtocolConverterCalled = false
 }
 
 // atomic set location
@@ -395,6 +404,51 @@ func (m *MockConfigManager) AtomicEditProtocolConverter(ctx context.Context, com
 	}
 
 	return oldConfig, nil
+}
+
+// AtomicDeleteProtocolConverter implements the ConfigManager interface
+func (m *MockConfigManager) AtomicDeleteProtocolConverter(ctx context.Context, componentUUID uuid.UUID) error {
+	m.mutexReadAndWrite.Lock()
+	defer m.mutexReadAndWrite.Unlock()
+
+	m.AtomicDeleteProtocolConverterCalled = true
+
+	if m.AtomicDeleteProtocolConverterError != nil {
+		return m.AtomicDeleteProtocolConverterError
+	}
+
+	// get the current config
+	config, err := m.GetConfig(ctx, 0)
+	if err != nil {
+		return fmt.Errorf("failed to get config: %w", err)
+	}
+
+	// Find and remove the protocol converter with matching UUID
+	found := false
+	filteredConverters := make([]ProtocolConverterConfig, 0, len(config.ProtocolConverter))
+
+	for _, converter := range config.ProtocolConverter {
+		converterID := dataflowcomponentserviceconfig.GenerateUUIDFromName(converter.Name)
+		if converterID != componentUUID {
+			filteredConverters = append(filteredConverters, converter)
+		} else {
+			found = true
+		}
+	}
+
+	if !found {
+		return fmt.Errorf("protocol converter with UUID %s not found", componentUUID)
+	}
+
+	// Update config with filtered converters
+	config.ProtocolConverter = filteredConverters
+
+	// write the config
+	if err := m.writeConfig(ctx, config); err != nil {
+		return fmt.Errorf("failed to write config: %w", err)
+	}
+
+	return nil
 }
 
 // generateMockTemplateAnchorName creates a valid YAML anchor name from a protocol converter name
