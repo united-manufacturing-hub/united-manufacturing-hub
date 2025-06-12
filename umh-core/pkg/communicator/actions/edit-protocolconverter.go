@@ -36,6 +36,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/connectionserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
@@ -200,6 +201,14 @@ func (a *EditProtocolConverterAction) Execute() (interface{}, map[string]interfa
 	// Update the appropriate DFC configuration based on dfcType
 	dfcServiceConfig := dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 		BenthosConfig: benthosConfig,
+	}
+
+	// add the connection details to the template
+	targetPC.ProtocolConverterServiceConfig.Template.ConnectionServiceConfig = connectionserviceconfig.ConnectionServiceConfigTemplate{
+		NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
+			Target: "{{ .IP }}",
+			Port:   "{{ .PORT }}",
+		},
 	}
 
 	switch a.dfcType {
