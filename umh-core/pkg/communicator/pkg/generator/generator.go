@@ -134,6 +134,7 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 					"log-logs-suppression", // Prevents logging of GetLogs action results to avoid log flooding when UI auto-refreshes logs (see HandleActionMessage GetLogs suppression for details)
 					"core-health",
 					"action-get-metrics",
+					"action-delete-protocol-converter",
 				},
 			},
 		},
