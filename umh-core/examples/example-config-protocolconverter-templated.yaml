@@ -17,8 +17,9 @@ templates:
   # Anchored, re-usable template — will be referenced with *opcua_http
   - &opcua_http
       connection:
-        ip:   "{{ .IP }}"          # user variable
-        port: "{{ .PORT }}"
+        nmap:
+          target: "{{ .IP }}"
+          port: "{{ .PORT }}"
       dataflowcomponent_read:
         benthos:
           input:

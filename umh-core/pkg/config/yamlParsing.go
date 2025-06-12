@@ -238,15 +238,11 @@ func resolveTemplateFromRoot(rootNode *yaml.Node, anchorName string) (*yaml.Node
 				// Search through the templates for the anchor
 				for _, templateItem := range valueNode.Content {
 					if templateItem.Kind == yaml.MappingNode {
-						for j := 0; j < len(templateItem.Content); j += 2 {
-							templateKeyNode := templateItem.Content[j]
-							templateValueNode := templateItem.Content[j+1]
-
-							if templateKeyNode.Value == anchorName {
-								// Found the template, return a deep copy of the content
-								return deepCopyYAMLNode(templateValueNode), nil
-							}
+						if templateItem.Anchor == anchorName {
+							// Found the template, return a deep copy of the content
+							return deepCopyYAMLNode(templateItem), nil
 						}
+
 					}
 				}
 			}
