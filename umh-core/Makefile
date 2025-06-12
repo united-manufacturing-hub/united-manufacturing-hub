@@ -510,3 +510,17 @@ build-push: build push-platform
 # Retrieve metrics from the UMH Core instance and save them to a file
 dump-metrics:
 	curl -s http://localhost:8081/metrics > metrics.txt
+
+run: 
+	@echo "Running $(IMAGE_NAME):$(TAG)"
+	docker rm -f $(IMAGE_NAME)
+	docker run \
+		--name $(IMAGE_NAME) \
+		-v $(PWD)/data:/data \
+		-p 8081:8080 \
+		-p 4195:4195 \
+		-p 6060:6060 \
+		-p 40000:40000 \
+		--memory $(MEMORY) \
+		--cpus $(CPUS) \
+		$(IMAGE_NAME):$(TAG)

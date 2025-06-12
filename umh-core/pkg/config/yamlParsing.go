@@ -191,85 +191,10 @@ func processServiceConfigWithRoot(serviceConfigNode *yaml.Node, protocolConverte
 					anchorMap[protocolConverterName] = anchorName
 				}
 
-				// Find and resolve the template content from the templates section
-				resolvedTemplate, err := resolveTemplateFromRoot(rootNode, anchorName)
-				if err != nil {
-					// If we can't resolve the template, use an empty template as fallback
-					resolvedTemplate = &yaml.Node{
-						Kind:    yaml.MappingNode,
-						Content: []*yaml.Node{},
-					}
-				}
-
-				// Replace the alias node with the resolved template content
-				serviceConfigNode.Content[i+1] = resolvedTemplate
 			}
 		}
 	}
 	return nil
-}
-
-// resolveTemplateFromRoot finds and returns the template content from the templates section
-func resolveTemplateFromRoot(rootNode *yaml.Node, anchorName string) (*yaml.Node, error) {
-	if rootNode == nil {
-		return nil, fmt.Errorf("root node is nil")
-	}
-
-	// Navigate to the document content
-	var documentNode *yaml.Node
-	if rootNode.Kind == yaml.DocumentNode && len(rootNode.Content) > 0 {
-		documentNode = rootNode.Content[0]
-	} else {
-		documentNode = rootNode
-	}
-
-	// Find the templates section
-	if documentNode.Kind == yaml.MappingNode {
-		for i := 0; i < len(documentNode.Content); i += 2 {
-			keyNode := documentNode.Content[i]
-			valueNode := documentNode.Content[i+1]
-
-			if keyNode.Value == "templates" && valueNode.Kind == yaml.SequenceNode {
-				// Search through the templates for the anchor
-				for _, templateItem := range valueNode.Content {
-					if templateItem.Kind == yaml.MappingNode {
-						if templateItem.Anchor == anchorName {
-							// Found the template, return a deep copy of the content
-							return deepCopyYAMLNode(templateItem), nil
-						}
-
-					}
-				}
-			}
-		}
-	}
-
-	return nil, fmt.Errorf("template with anchor %q not found", anchorName)
-}
-
-// deepCopyYAMLNode creates a deep copy of a YAML node
-func deepCopyYAMLNode(node *yaml.Node) *yaml.Node {
-	if node == nil {
-		return nil
-	}
-
-	copy := &yaml.Node{
-		Kind:   node.Kind,
-		Style:  node.Style,
-		Tag:    node.Tag,
-		Value:  node.Value,
-		Anchor: "", // Don't copy anchor to avoid conflicts
-		Alias:  node.Alias,
-	}
-
-	if node.Content != nil {
-		copy.Content = make([]*yaml.Node, len(node.Content))
-		for i, child := range node.Content {
-			copy.Content[i] = deepCopyYAMLNode(child)
-		}
-	}
-
-	return copy
 }
 
 // getConfigWithAnchors returns the current configuration along with the anchor mapping
