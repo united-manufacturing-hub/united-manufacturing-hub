@@ -983,6 +983,8 @@ func (m *FileConfigManager) AtomicAddProtocolConverter(ctx context.Context, pc P
 
 	// Clear the template content from the protocol converter - it will be referenced via anchor
 	pc.ProtocolConverterServiceConfig.Template = protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{}
+	pc.hasAnchors = true
+	pc.anchorName = templateName
 
 	// Add the protocol converter
 	config.ProtocolConverter = append(config.ProtocolConverter, pc)
@@ -1079,6 +1081,8 @@ func (m *FileConfigManager) AtomicEditProtocolConverter(ctx context.Context, com
 
 		// For anchored protocol converters, clear the template and preserve other fields
 		pc.ProtocolConverterServiceConfig.Template = protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{}
+		pc.hasAnchors = true
+		pc.anchorName = anchorName
 	}
 
 	// Find and update the component with matching UUID
