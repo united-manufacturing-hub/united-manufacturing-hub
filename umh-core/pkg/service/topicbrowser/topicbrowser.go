@@ -60,21 +60,7 @@ type ITopicBrowserService interface {
 	ReconcileManager(ctx context.Context, services serviceregistry.Provider, tick uint64) (error, bool)
 }
 
-type Status struct {
-	Buffer []*Buffer
-	Logs   []s6svc.LogEntry // contain the structured s6 logs entries
-}
-
-// CopyLogs is a go-deepcopy override for the Logs field.
-//
-// go-deepcopy looks for a method with the signature
-//
-//	func (dst *T) Copy<FieldName>(src <FieldType>) error
-func (st *Status) CopyLogs(src []s6svc.LogEntry) error {
-	st.Logs = src
-	return nil
-}
-
+// ServiceInfo holds information about the topic browsers health status.
 type ServiceInfo struct {
 	// benthos state information
 	BenthosObservedState benthosfsm.BenthosObservedState
@@ -90,7 +76,7 @@ type ServiceInfo struct {
 	StatusReason          string
 }
 
-// Service implements ITopicBrowserService
+// Service implements IConnectionService
 type Service struct {
 	logger    *zap.SugaredLogger
 	s6Service s6svc.Service
@@ -104,6 +90,7 @@ type Service struct {
 }
 
 // ServiceOption is a function that configures a Service.
+// This follows the functional options pattern for flexible configuration.
 type ServiceOption func(*Service)
 
 func WithService(svc benthossvc.IBenthosService) ServiceOption {
@@ -118,7 +105,7 @@ func WithManager(mgr *benthosfsm.BenthosManager) ServiceOption {
 	}
 }
 
-// NewDefaultService creates a new topic browser service with default options.
+// NewDefaultService creates a new ConnectionService with default options.
 // It initializes the logger and sets default values.
 func NewDefaultService(tbName string, opts ...ServiceOption) *Service {
 	managerName := fmt.Sprintf("%s%s", logger.ComponentTopicBrowserService, tbName)
@@ -377,7 +364,7 @@ func (svc *Service) UpdateInManager(
 }
 
 // RemoveFromManager deletes a topic browser configuration.
-// This stops monitoring the topic browser and removes all configuration.
+// This stops monitoring the connection and removes all configuration.
 func (svc *Service) RemoveFromManager(
 	ctx context.Context,
 	filesystemService filesystem.Service,
@@ -452,8 +439,8 @@ func (svc *Service) Start(
 	return nil
 }
 
-// Stop stops a Topic Browser
-func (svc *Service) Stop(
+// Stop stops a Connection
+func (svc *Service) StopConnection(
 	ctx context.Context,
 	filesystemService filesystem.Service,
 	tbName string,
@@ -485,7 +472,7 @@ func (svc *Service) Stop(
 	return nil
 }
 
-// ReconcileManager synchronizes the topic browser on each tick.
+// ReconcileManager synchronizes all connections on each tick.
 func (svc *Service) ReconcileManager(
 	ctx context.Context,
 	services serviceregistry.Provider,
@@ -532,8 +519,8 @@ func (svc *Service) ServiceExists(
 	return svc.benthosService.ServiceExists(ctx, services.GetFileSystem(), benthosName)
 }
 
-// ForceRemove removes a topic browser from the s6 manager
-func (svc *Service) ForceRemove(
+// ForceRemoveConnection removes a Connection from the Nmap manager
+func (svc *Service) ForceRemoveConnection(
 	ctx context.Context,
 	services serviceregistry.Provider,
 	tbName string,
