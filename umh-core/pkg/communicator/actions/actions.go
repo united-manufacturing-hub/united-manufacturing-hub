@@ -184,7 +184,8 @@ func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePay
 
 	case models.GetMetrics:
 		action = NewGetMetricsAction(sender, payload.ActionUUID, instanceUUID, outboundChannel, systemSnapshotManager, log)
-
+	case models.DeleteProtocolConverter:
+		action = NewDeleteProtocolConverterAction(sender, payload.ActionUUID, instanceUUID, outboundChannel, configManager, systemSnapshotManager)
 
 	default:
 		log.Errorf("Unknown action type: %s", payload.ActionType)
