@@ -22,7 +22,4 @@ var (
 
 	// ErrServiceAlreadyExists indicates the requested service already exists
 	ErrServiceAlreadyExists = errors.New("service already exists")
-
-	// ErrServiceNoLogFile indicates the health check had no logs to process
-	ErrServiceNoLogFile = errors.New("log file not found")
 )
