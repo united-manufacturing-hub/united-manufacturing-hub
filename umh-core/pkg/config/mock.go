@@ -377,7 +377,7 @@ func (m *MockConfigManager) AtomicAddProtocolConverter(ctx context.Context, pc P
 	}
 
 	// Generate template name from protocol converter name
-	templateName := generateMockTemplateAnchorName(pc.Name)
+	templateName := generateTemplateAnchorName(pc.Name)
 
 	// Check if template name already exists in templates section
 	for _, template := range config.Templates {
@@ -464,7 +464,7 @@ func (m *MockConfigManager) AtomicEditProtocolConverter(ctx context.Context, com
 
 	// Handle anchored protocol converters
 	if isAnchored {
-		expectedAnchorName := generateMockTemplateAnchorName(componentToEditName)
+		expectedAnchorName := generateTemplateAnchorName(componentToEditName)
 
 		if anchorName != expectedAnchorName {
 			return ProtocolConverterConfig{}, fmt.Errorf(
@@ -561,7 +561,7 @@ func (m *MockConfigManager) AtomicDeleteProtocolConverter(ctx context.Context, c
 
 	// Handle anchored protocol converters - delete template if it matches expected pattern
 	if isAnchored {
-		expectedAnchorName := generateMockTemplateAnchorName(componentToDeleteName)
+		expectedAnchorName := generateTemplateAnchorName(componentToDeleteName)
 
 		if anchorName == expectedAnchorName {
 			// Delete the template from the templates section
@@ -613,23 +613,6 @@ func (m *MockConfigManager) AtomicDeleteProtocolConverter(ctx context.Context, c
 	}
 
 	return nil
-}
-
-// generateMockTemplateAnchorName creates a valid YAML anchor name from a protocol converter name
-// This mirrors the real implementation for testing
-func generateMockTemplateAnchorName(pcName string) string {
-	// Replace non-alphanumeric characters with underscores and add template suffix
-	// YAML anchors must contain only alphanumeric characters
-	result := ""
-	for _, r := range pcName {
-		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') {
-			result += string(r)
-		} else {
-			result += "_"
-		}
-	}
-	return result + "_template"
-
 }
 
 // GetConfigAsString implements the ConfigManager interface
