@@ -18,6 +18,7 @@ import (
 	"fmt"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/protocolconverter"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
@@ -120,11 +121,21 @@ func buildProtocolConverterAsDfc(
 			DesiredState:  instance.DesiredState,
 			Category:      healthCat,
 		},
-		// Metrics are not implemented yet for protocol converters
+		// Metrics are added below
 		Metrics: nil,
 		// Bridge info is not applicable for protocol converters
 		Bridge:        nil,
 		IsInitialized: isInitialized,
+	}
+
+	// ---- metrics --------------------------------------------------------
+	svcInfo := observed.ServiceInfo
+	if m := svcInfo.DataflowComponentReadObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.MetricsState; m != nil &&
+		m.Input.LastCount > 0 {
+
+		dfc.Metrics = &models.DfcMetrics{
+			AvgInputThroughputPerMinuteInMsgSec: m.Input.MessagesPerTick / constants.DefaultTickerTime.Seconds(),
+		}
 	}
 
 	return dfc, nil
