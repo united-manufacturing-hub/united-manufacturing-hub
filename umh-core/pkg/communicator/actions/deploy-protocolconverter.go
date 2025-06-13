@@ -293,23 +293,19 @@ func (a *DeployProtocolConverterAction) waitForComponentToAppear() (string, erro
 			systemSnapshot := a.systemSnapshotManager.GetDeepCopySnapshot()
 			if protocolConverterManager, exists := systemSnapshot.Managers[constants.ProtocolConverterManagerName]; exists {
 				instances := protocolConverterManager.GetInstances()
-				found := false
 				for _, instance := range instances {
 					// cast the instance LastObservedState to a dataflowcomponent instance
 					curName := instance.ID
 					if curName != a.payload.Name {
 						continue
 					}
-					found = true
 
 					return "", nil
+				}
 
-				}
-				if !found {
-					stateMessage := RemainingPrefixSec(remainingSeconds) + "waiting for it to appear in the config"
-					SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
-						stateMessage, a.outboundChannel, models.DeployProtocolConverter)
-				}
+				stateMessage := RemainingPrefixSec(remainingSeconds) + "waiting for it to appear in the config"
+				SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
+					stateMessage, a.outboundChannel, models.DeployProtocolConverter)
 
 			} else {
 				stateMessage := RemainingPrefixSec(remainingSeconds) + "waiting for manager to initialise"
