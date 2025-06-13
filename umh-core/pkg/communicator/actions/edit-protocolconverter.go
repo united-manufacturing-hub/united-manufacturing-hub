@@ -33,6 +33,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 
 	"github.com/google/uuid"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
@@ -60,6 +61,7 @@ type EditProtocolConverterAction struct {
 	name                  string // protocol converter name (optional for updates)
 	dfcPayload            models.CDFCPayload
 	dfcType               string // "read" or "write"
+	vb                    []models.ProtocolConverterVariable
 
 	// Runtime observation for health checks
 	systemSnapshotManager *fsm.SnapshotManager
@@ -106,6 +108,12 @@ func (a *EditProtocolConverterAction) Parse(payload interface{}) error {
 		dfcToUpdate = pcPayload.WriteDFC
 	} else {
 		return errors.New("no DFC configuration found in payload (readDFC or writeDFC required)")
+	}
+
+	if pcPayload.TemplateInfo != nil {
+		a.vb = pcPayload.TemplateInfo.Variables
+	} else {
+		a.vb = make([]models.ProtocolConverterVariable, 0)
 	}
 
 	// Convert ProtocolConverterDFC to CDFCPayload for internal processing
@@ -197,6 +205,20 @@ func (a *EditProtocolConverterAction) Execute() (interface{}, map[string]interfa
 			errorMsg, a.outboundChannel, models.EditProtocolConverter)
 		return nil, nil, fmt.Errorf("%s", errorMsg)
 	}
+
+	// add the variables to the template and keep the existing variables
+	newVB := make(map[string]any)
+	for _, variable := range a.vb {
+		newVB[variable.Label] = variable.Value
+	}
+	maps.Copy(newVB, targetPC.ProtocolConverterServiceConfig.Variables.User)
+
+	// as the BuildRuntimeConfig function always adds location and location_path to the user variables,
+	// we need to remove them from the variables here to avoid that they end up in the config file
+	delete(newVB, "location")
+	delete(newVB, "location_path")
+
+	targetPC.ProtocolConverterServiceConfig.Variables.User = newVB
 
 	// Update the appropriate DFC configuration based on dfcType
 	dfcServiceConfig := dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
