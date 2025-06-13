@@ -63,7 +63,6 @@ type DeployProtocolConverterAction struct {
 	outboundChannel       chan *models.UMHMessage
 	configManager         config.ConfigManager
 	systemSnapshotManager *fsm.SnapshotManager // Snapshot Manager holds the latest system snapshot
-	ignoreHealthCheck     bool                 // if true → no delete on timeout
 
 	// Parsed request payload (only populated after Parse)
 	payload models.ProtocolConverter
@@ -256,17 +255,11 @@ func (a *DeployProtocolConverterAction) GetParsedPayload() models.ProtocolConver
 }
 
 // waitForComponentToAppear polls live FSM state until the new component
-// becomes active or the timeout hits (→ delete unless ignoreHealthCheck).
+// becomes available or the timeout hits (→ delete unless ignoreHealthCheck).
 // the function returns the error code and and the error message via an error object
 // the error code is a string that is sent to the frontend to allow it to determine if the action can be retried or not
 // the error message is sent to the frontend to allow the user to see the error message
 func (a *DeployProtocolConverterAction) waitForComponentToAppear() (string, error) {
-	// checks the system snapshot
-	// 1. waits for the instance to appear in the system snapshot
-	// 2. takes the logs of the instance and sends them to the user in 1-second intervals
-	// 3. waits for the instance to be in state "active"
-	// 4. takes the residual logs of the instance and sends them to the user
-	// 5. returns nil
 
 	ticker := time.NewTicker(constants.ActionTickerTime)
 	defer ticker.Stop()
