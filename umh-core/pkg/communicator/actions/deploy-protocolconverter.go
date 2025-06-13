@@ -294,7 +294,6 @@ func (a *DeployProtocolConverterAction) waitForComponentToAppear() (string, erro
 			if protocolConverterManager, exists := systemSnapshot.Managers[constants.ProtocolConverterManagerName]; exists {
 				instances := protocolConverterManager.GetInstances()
 				for _, instance := range instances {
-					// cast the instance LastObservedState to a dataflowcomponent instance
 					curName := instance.ID
 					if curName != a.payload.Name {
 						continue
