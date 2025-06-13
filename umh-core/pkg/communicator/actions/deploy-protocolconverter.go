@@ -46,6 +46,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/variables"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"go.uber.org/zap"
@@ -59,8 +60,10 @@ type DeployProtocolConverterAction struct {
 	actionUUID   uuid.UUID
 	instanceUUID uuid.UUID
 
-	outboundChannel chan *models.UMHMessage
-	configManager   config.ConfigManager
+	outboundChannel       chan *models.UMHMessage
+	configManager         config.ConfigManager
+	systemSnapshotManager *fsm.SnapshotManager // Snapshot Manager holds the latest system snapshot
+	ignoreHealthCheck     bool                 // if true → no delete on timeout
 
 	// Parsed request payload (only populated after Parse)
 	payload models.ProtocolConverter
@@ -69,14 +72,15 @@ type DeployProtocolConverterAction struct {
 }
 
 // NewDeployProtocolConverterAction returns an un-parsed action instance.
-func NewDeployProtocolConverterAction(userEmail string, actionUUID uuid.UUID, instanceUUID uuid.UUID, outboundChannel chan *models.UMHMessage, configManager config.ConfigManager) *DeployProtocolConverterAction {
+func NewDeployProtocolConverterAction(userEmail string, actionUUID uuid.UUID, instanceUUID uuid.UUID, outboundChannel chan *models.UMHMessage, configManager config.ConfigManager, systemSnapshotManager *fsm.SnapshotManager) *DeployProtocolConverterAction {
 	return &DeployProtocolConverterAction{
-		userEmail:       userEmail,
-		actionUUID:      actionUUID,
-		instanceUUID:    instanceUUID,
-		outboundChannel: outboundChannel,
-		configManager:   configManager,
-		actionLogger:    logger.For(logger.ComponentCommunicator),
+		userEmail:             userEmail,
+		actionUUID:            actionUUID,
+		instanceUUID:          instanceUUID,
+		outboundChannel:       outboundChannel,
+		configManager:         configManager,
+		actionLogger:          logger.For(logger.ComponentCommunicator),
+		systemSnapshotManager: systemSnapshotManager,
 	}
 }
 
@@ -166,8 +170,19 @@ func (a *DeployProtocolConverterAction) Execute() (interface{}, map[string]inter
 
 	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
 		"Waiting for protocol converter to be active...", a.outboundChannel, models.DeployProtocolConverter)
-	// sleep for 2 seconds
-	time.Sleep(2 * time.Second)
+
+	// check against observedState
+	if a.systemSnapshotManager != nil {
+		errCode, err := a.waitForComponentToAppear()
+		if err != nil {
+			errorMsg := fmt.Sprintf("Failed to wait for protocol converter to be active: %v", err)
+			SendActionReplyV2(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errorMsg, errCode, nil, a.outboundChannel, models.DeployProtocolConverter, nil)
+			return nil, nil, fmt.Errorf("%s", errorMsg)
+		}
+	}
+
+	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
+		"Protocol converter successfully deployed and activated", a.outboundChannel, models.DeployProtocolConverter)
 
 	return response, nil, nil
 }
@@ -238,4 +253,77 @@ func (a *DeployProtocolConverterAction) getUuid() uuid.UUID {
 // GetParsedPayload returns the parsed payload - exposed primarily for testing purposes.
 func (a *DeployProtocolConverterAction) GetParsedPayload() models.ProtocolConverter {
 	return a.payload
+}
+
+// waitForComponentToAppear polls live FSM state until the new component
+// becomes active or the timeout hits (→ delete unless ignoreHealthCheck).
+// the function returns the error code and and the error message via an error object
+// the error code is a string that is sent to the frontend to allow it to determine if the action can be retried or not
+// the error message is sent to the frontend to allow the user to see the error message
+func (a *DeployProtocolConverterAction) waitForComponentToAppear() (string, error) {
+	// checks the system snapshot
+	// 1. waits for the instance to appear in the system snapshot
+	// 2. takes the logs of the instance and sends them to the user in 1-second intervals
+	// 3. waits for the instance to be in state "active"
+	// 4. takes the residual logs of the instance and sends them to the user
+	// 5. returns nil
+
+	ticker := time.NewTicker(constants.ActionTickerTime)
+	defer ticker.Stop()
+	timeout := time.After(constants.DataflowComponentWaitForActiveTimeout)
+	startTime := time.Now()
+	timeoutDuration := constants.DataflowComponentWaitForActiveTimeout
+	for {
+		elapsed := time.Since(startTime)
+		remaining := timeoutDuration - elapsed
+		remainingSeconds := int(remaining.Seconds())
+
+		select {
+		case <-timeout:
+			stateMessage := Label("deploy", a.payload.Name) + "timeout reached. it did not become active in time. removing"
+			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, stateMessage,
+				a.outboundChannel, models.DeployProtocolConverter)
+
+			ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
+			defer cancel()
+			err := a.configManager.AtomicDeleteProtocolConverter(ctx, dataflowcomponentserviceconfig.GenerateUUIDFromName(a.payload.Name))
+			if err != nil {
+				a.actionLogger.Errorf("failed to remove protocol converter %s: %v", a.payload.Name, err)
+				return models.ErrRetryRollbackTimeout, fmt.Errorf("protocol converter '%s' failed to activate within timeout but could not be removed: %v. Please check system load and consider removing the component manually", a.payload.Name, err)
+			}
+			return models.ErrRetryRollbackTimeout, fmt.Errorf("protocol converter '%s' was removed because it did not become active within the timeout period. Please check system load or component configuration and try again", a.payload.Name)
+
+		case <-ticker.C:
+
+			// the snapshot manager holds the latest system snapshot which is asynchronously updated by the other goroutines
+			// we need to get a deep copy of it to prevent race conditions
+			systemSnapshot := a.systemSnapshotManager.GetDeepCopySnapshot()
+			if protocolConverterManager, exists := systemSnapshot.Managers[constants.ProtocolConverterManagerName]; exists {
+				instances := protocolConverterManager.GetInstances()
+				found := false
+				for _, instance := range instances {
+					// cast the instance LastObservedState to a dataflowcomponent instance
+					curName := instance.ID
+					if curName != a.payload.Name {
+						continue
+					}
+					found = true
+
+					return "", nil
+
+				}
+				if !found {
+					stateMessage := RemainingPrefixSec(remainingSeconds) + "waiting for it to appear in the config"
+					SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
+						stateMessage, a.outboundChannel, models.DeployProtocolConverter)
+				}
+
+			} else {
+				stateMessage := RemainingPrefixSec(remainingSeconds) + "waiting for manager to initialise"
+				SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
+					stateMessage, a.outboundChannel, models.DeployProtocolConverter)
+			}
+		}
+	}
+
 }

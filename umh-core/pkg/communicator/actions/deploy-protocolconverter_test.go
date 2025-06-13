@@ -80,7 +80,7 @@ var _ = Describe("DeployProtocolConverter", func() {
 		// Startup the state mocker and get the mock snapshot
 		stateMocker = actions.NewStateMocker(mockConfig)
 		stateMocker.Tick()
-		action = actions.NewDeployProtocolConverterAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig)
+		action = actions.NewDeployProtocolConverterAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig, nil)
 
 		go actions.ConsumeOutboundMessages(outboundChannel, &messages, true)
 	})

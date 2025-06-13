@@ -162,12 +162,13 @@ func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePay
 
 	case models.DeployProtocolConverter:
 		action = &DeployProtocolConverterAction{
-			userEmail:       sender,
-			actionUUID:      payload.ActionUUID,
-			instanceUUID:    instanceUUID,
-			outboundChannel: outboundChannel,
-			configManager:   configManager,
-			actionLogger:    log,
+			userEmail:             sender,
+			actionUUID:            payload.ActionUUID,
+			instanceUUID:          instanceUUID,
+			outboundChannel:       outboundChannel,
+			configManager:         configManager,
+			actionLogger:          log,
+			systemSnapshotManager: systemSnapshotManager,
 		}
 	case models.EditProtocolConverter:
 		action = &EditProtocolConverterAction{
