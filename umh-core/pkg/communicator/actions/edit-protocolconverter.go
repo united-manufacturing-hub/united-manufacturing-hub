@@ -62,6 +62,7 @@ type EditProtocolConverterAction struct {
 	dfcPayload            models.CDFCPayload
 	dfcType               string // "read" or "write"
 	vb                    []models.ProtocolConverterVariable
+	ignoreHealthCheck     bool
 
 	// Runtime observation for health checks
 	systemSnapshotManager *fsm.SnapshotManager
@@ -126,7 +127,7 @@ func (a *EditProtocolConverterAction) Parse(payload interface{}) error {
 
 	// Handle optional fields
 	if dfcToUpdate.IgnoreErrors != nil {
-		a.dfcPayload.IgnoreErrors = *dfcToUpdate.IgnoreErrors
+		a.ignoreHealthCheck = *dfcToUpdate.IgnoreErrors
 	}
 
 	a.actionLogger.Debugf("Parsed EditProtocolConverter action payload: uuid=%s, name=%s, dfcType=%s",

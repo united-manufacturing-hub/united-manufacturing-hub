@@ -47,6 +47,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/variables"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/protocolconverter"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"go.uber.org/zap"
@@ -293,18 +294,37 @@ func (a *DeployProtocolConverterAction) waitForComponentToAppear() (string, erro
 			systemSnapshot := a.systemSnapshotManager.GetDeepCopySnapshot()
 			if protocolConverterManager, exists := systemSnapshot.Managers[constants.ProtocolConverterManagerName]; exists {
 				instances := protocolConverterManager.GetInstances()
+				found := false
 				for _, instance := range instances {
 					curName := instance.ID
 					if curName != a.payload.Name {
 						continue
 					}
 
+					// cast the instance LastObservedState to a protocolconverter instance
+					pcSnapshot, ok := instance.LastObservedState.(*protocolconverter.ProtocolConverterObservedStateSnapshot)
+					if !ok {
+						continue
+					}
+
+					found = true
+
+					// check the nmap configuration
+					if pcSnapshot.ServiceInfo.ConnectionObservedState.ServiceInfo.NmapObservedState.ObservedNmapServiceConfig.Port != uint16(a.payload.Connection.Port) {
+						stateMessage := RemainingPrefixSec(remainingSeconds) + "waiting for nmap to connect"
+						SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
+							stateMessage, a.outboundChannel, models.DeployProtocolConverter)
+						continue
+					}
+
 					return "", nil
 				}
 
-				stateMessage := RemainingPrefixSec(remainingSeconds) + "waiting for it to appear in the config"
-				SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
-					stateMessage, a.outboundChannel, models.DeployProtocolConverter)
+				if !found {
+					stateMessage := RemainingPrefixSec(remainingSeconds) + "waiting for it to appear in the config"
+					SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
+						stateMessage, a.outboundChannel, models.DeployProtocolConverter)
+				}
 
 			} else {
 				stateMessage := RemainingPrefixSec(remainingSeconds) + "waiting for manager to initialise"

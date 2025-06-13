@@ -115,8 +115,7 @@ func buildProtocolConverterAsDfc(
 		Name:        &instance.ID,
 		Connections: connections,
 		Health: &models.Health{
-			Message: getProtocolConverterStatusMessage(instance.CurrentState, observed.ServiceInfo.ConnectionFSMState, observed.ServiceInfo.ConnectionObservedState.ServiceInfo.NmapFSMState),
-			//Message:       fmt.Sprintf("templatePort is %s", templatePort),
+			Message:       getProtocolConverterStatusMessage(instance.CurrentState, observed.ServiceInfo.ConnectionFSMState, observed.ServiceInfo.ConnectionObservedState.ServiceInfo.NmapFSMState),
 			ObservedState: instance.CurrentState,
 			DesiredState:  instance.DesiredState,
 			Category:      healthCat,
