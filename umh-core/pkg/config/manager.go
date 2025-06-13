@@ -437,19 +437,23 @@ func (m *FileConfigManager) writeConfig(ctx context.Context, config FullConfig) 
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
 
-	// Update the cache to reflect the new config
-	info, err := m.fsService.Stat(ctx, m.configPath)
-	if err != nil {
-		return fmt.Errorf("failed to stat config file after write: %w", err)
-	}
+	// The following section is diabled,
+	// due to a bug when using it togheter with Protocol Converters, which lead to connections (templated) not being rendered
+	// In my (Ferdinand) opinion it is fine to do a read after a write, to ensure consistency
+	/*
+		// Update the cache to reflect the new config
+		info, err := m.fsService.Stat(ctx, m.configPath)
+		if err != nil {
+			return fmt.Errorf("failed to stat config file after write: %w", err)
+		}
 
-	// Update all cache fields atomically in a single critical section
-	m.cacheMu.Lock()
-	m.cacheRawConfig = string(data)
-	m.cacheModTime = info.ModTime()
-	m.cacheConfig = config
-	m.cacheMu.Unlock()
-
+		// Update all cache fields atomically in a single critical section
+		m.cacheMu.Lock()
+		m.cacheRawConfig = string(data)
+		m.cacheModTime = info.ModTime()
+		m.cacheConfig = config
+		m.cacheMu.Unlock()
+	*/
 	m.logger.Infof("Successfully wrote config to %s", m.configPath)
 	return nil
 }
@@ -1304,24 +1308,28 @@ func (m *FileConfigManager) WriteConfigFromString(ctx context.Context, configStr
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
 
-	// Update the cache to reflect the new config
-	info, err := m.fsService.Stat(ctx, m.configPath)
-	if err != nil {
-		return fmt.Errorf("failed to stat config file after write: %w", err)
-	}
+	// The following section is diabled,
+	// due to a bug when using it togheter with Protocol Converters, which lead to connections (templated) not being rendered
+	// In my (Ferdinand) opinion it is fine to do a read after a write, to ensure consistency
+	/*
+		// Update the cache to reflect the new config
+		info, err := m.fsService.Stat(ctx, m.configPath)
+		if err != nil {
+			return fmt.Errorf("failed to stat config file after write: %w", err)
+		}
 
-	// Parse the config for the cache
-	parsedConfig, _, err := ParseConfig([]byte(configStr), true)
-	if err != nil {
-		return fmt.Errorf("failed to parse config for cache update: %w", err)
-	}
-
-	// Update all cache fields atomically in a single critical section
-	m.cacheMu.Lock()
-	m.cacheRawConfig = configStr
-	m.cacheModTime = info.ModTime()
-	m.cacheConfig = parsedConfig
-	m.cacheMu.Unlock()
+		// Parse the config for the cache
+		parsedConfig, _, err := ParseConfig([]byte(configStr), true)
+		if err != nil {
+			return fmt.Errorf("failed to parse config for cache update: %w", err)
+		}
+		// Update all cache fields atomically in a single critical section
+		m.cacheMu.Lock()
+		m.cacheRawConfig = configStr
+		m.cacheModTime = info.ModTime()
+		m.cacheConfig = parsedConfig
+		m.cacheMu.Unlock()
+	*/
 
 	m.logger.Infof("Successfully wrote config to %s", m.configPath)
 	return nil
