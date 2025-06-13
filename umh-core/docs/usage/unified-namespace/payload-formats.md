@@ -1,12 +1,13 @@
 # Payload Formats
 
-UMH-Core recognises **three** payload formats. Pick the one that matches your sensor / message **before** you build a bridge or stream-processor.
+UMH-Core recognises **two** payload formats. Pick the one that matches your sensor / message **before** you build a bridge or stream-processor.
 
 | Type                   | Typical content                                                                  | When to use it                                                                                                                                                                                                   | Producer / Processor     | Sink (example)    |
 | ---------------------- | -------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------ | ----------------- |
 | **Time-series / Tags** | One numeric/boolean/string value + timestamp (sensor readings, counters, states) | Data coming from PLCs or sensors                                                                                                                                                                                 | Bridge + `tag_processor` | TimescaleDB       |
 | **Relational / JSON**  | One self-contained business record (order, recipe, batch header)                 | <p>Data coming from higher-level systems, such as Orders, alarms, set-points, Batch reports, recipes<br><br>OR<br><br>time-series data that belongs together, e.g., that has been merged (see further below)</p> | Bridge + `nodered_js`    | PostgreSQL / REST |
-| **Binary Blob**        | File pointer or binary payload (images, PDFs, CNC files)                         | For everything else                                                                                                                                                                                              | Bridge + `nodered_js`    | S3 Bucket         |
+
+Binary data is not possible directly and requires moving it into a JSON wrapper as it will be rejected otherwise by the UNS Output Plugin.
 
 ### Why you **do not** bundle time-series points into one JSON object
 
