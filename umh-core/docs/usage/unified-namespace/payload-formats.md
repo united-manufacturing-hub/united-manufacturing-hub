@@ -21,6 +21,26 @@ Arrays, primitives and raw binaries are rejected by the UNS Output Plugin – wr
 | Max payload size    | 1024 bytes after JSON decoding                                  | 1024 bytes                   |
 | Examples            | `{"timestamp_ms":1717083000000,"value":23.4}`                   | `{"order_id":42, ...}`       |
 
+### Canonical Examples
+
+**✅ Valid time-series (float)**
+
+```json
+{ "timestamp_ms": 1717083000000, "value": 23.4 }
+```
+
+**✅ Valid time-series (string)**
+
+```json
+{ "timestamp_ms": 1717083000000, "value": "running" }
+```
+
+**❌ Invalid time-series, but ✅ valid relational data: extra field**
+
+```json
+{ "timestamp_ms": 1717083000000, "temperature": 23.4, "humidity": 42.1 }
+```
+
 ### Why so strict? (“one tag, one message, one topic”)
 
 In UMH Classic you could publish a whole weather snapshot in one go:
