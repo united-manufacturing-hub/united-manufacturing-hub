@@ -40,18 +40,18 @@ type ProtocolConverterServiceConfigTemplate struct {
 	// underlying messaging infrastructure. Uses the template form to allow
 	// templating of connection parameters like port numbers.
 	// At render time, this gets converted to the runtime form with proper types.
-	ConnectionServiceConfig connectionserviceconfig.ConnectionServiceConfigTemplate `yaml:"connection"`
+	ConnectionServiceConfig connectionserviceconfig.ConnectionServiceConfigTemplate `yaml:"connection,omitempty"`
 
 	// DataflowComponentReadServiceConfig is the blueprint for the *read* side
 	// of the converter.  At render time we enforce that
 	// `BenthosConfig.Output` is an UNS publisher because read‑DFCs **must not**
 	// decide their own egress.
-	DataflowComponentReadServiceConfig dataflowcomponentserviceconfig.DataflowComponentServiceConfig `yaml:"dataflowcomponent_read"`
+	DataflowComponentReadServiceConfig dataflowcomponentserviceconfig.DataflowComponentServiceConfig `yaml:"dataflowcomponent_read,omitempty"`
 
 	// DataflowComponentWriteServiceConfig is the blueprint for the *write* side
 	// of the converter.  Symmetrically to the read‑DFC we override
 	// `BenthosConfig.Input` so that it always consumes from UNS.
-	DataflowComponentWriteServiceConfig dataflowcomponentserviceconfig.DataflowComponentServiceConfig `yaml:"dataflowcomponent_write"`
+	DataflowComponentWriteServiceConfig dataflowcomponentserviceconfig.DataflowComponentServiceConfig `yaml:"dataflowcomponent_write,omitempty"`
 }
 
 // ProtocolConverterServiceConfigRuntime is the **fully rendered** form of a
@@ -96,7 +96,7 @@ type ProtocolConverterServiceConfigRuntime struct {
 //
 // Spec → (render) → Runtime → FSM.
 type ProtocolConverterServiceConfigSpec struct {
-	Config      ProtocolConverterServiceConfigTemplate `yaml:"config"`
+	Config      ProtocolConverterServiceConfigTemplate `yaml:"config,omitempty"`
 	Variables   variables.VariableBundle               `yaml:"variables,omitempty"`
 	Location    map[string]string                      `yaml:"location,omitempty"`
 	TemplateRef string                                 `yaml:"templateRef,omitempty"`
