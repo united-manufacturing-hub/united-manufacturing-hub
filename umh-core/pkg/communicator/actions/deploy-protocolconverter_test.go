@@ -287,8 +287,6 @@ var _ = Describe("DeployProtocolConverter", func() {
 			addedPC := mockConfig.Config.ProtocolConverter[0]
 			Expect(addedPC.Name).To(Equal(pcName))
 
-			// Verify template was added
-			Expect(mockConfig.Config.Templates).To(HaveLen(1))
 		})
 
 		It("should handle AtomicAddProtocolConverter failure", func() {

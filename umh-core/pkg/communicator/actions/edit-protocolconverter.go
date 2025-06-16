@@ -200,6 +200,9 @@ func (a *EditProtocolConverterAction) Execute() (interface{}, map[string]interfa
 		}
 	}
 
+	// currently, we canot reuse templates, so we need to create a new one
+	targetPC.ProtocolConverterServiceConfig.TemplateRef = targetPC.Name
+
 	if !found {
 		errorMsg := fmt.Sprintf("Protocol converter with UUID %s not found", a.protocolConverterUUID)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
@@ -207,19 +210,61 @@ func (a *EditProtocolConverterAction) Execute() (interface{}, map[string]interfa
 		return nil, nil, fmt.Errorf("%s", errorMsg)
 	}
 
-	// add the variables to the template and keep the existing variables
-	newVB := make(map[string]any)
-	for _, variable := range a.vb {
-		newVB[variable.Label] = variable.Value
+	// Classify the protocol converter instance
+	isChild := targetPC.ProtocolConverterServiceConfig.TemplateRef != "" &&
+		targetPC.ProtocolConverterServiceConfig.TemplateRef != targetPC.Name
+
+	// Determine which instance to modify and which UUID to use for atomic operation
+	var instanceToModify config.ProtocolConverterConfig
+	var atomicEditUUID uuid.UUID
+	var newVB map[string]any
+
+	if isChild {
+		// Find the root instance
+		var rootPC config.ProtocolConverterConfig
+		rootFound := false
+		for _, pc := range currentConfig.ProtocolConverter {
+			if pc.Name == targetPC.ProtocolConverterServiceConfig.TemplateRef &&
+				pc.ProtocolConverterServiceConfig.TemplateRef == pc.Name {
+				rootPC = pc
+				rootFound = true
+				break
+			}
+		}
+
+		if !rootFound {
+			errorMsg := fmt.Sprintf("Root template %s not found for child protocol converter %s",
+				targetPC.ProtocolConverterServiceConfig.TemplateRef, targetPC.Name)
+			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
+				errorMsg, a.outboundChannel, models.EditProtocolConverter)
+			return nil, nil, fmt.Errorf("%s", errorMsg)
+		}
+
+		// Apply mutations to the root, but keep child's variables
+		instanceToModify = rootPC
+		atomicEditUUID = dataflowcomponentserviceconfig.GenerateUUIDFromName(rootPC.Name)
+
+		// preserve existing child variables
+		maps.Copy(newVB, targetPC.ProtocolConverterServiceConfig.Variables.User)
+	} else {
+		// Root or stand-alone: apply mutations directly
+		instanceToModify = targetPC
+		atomicEditUUID = a.protocolConverterUUID
+
+		// add the variables and keep the existing variables
+		newVB = make(map[string]any)
+		for _, variable := range a.vb {
+			newVB[variable.Label] = variable.Value
+		}
+		maps.Copy(newVB, targetPC.ProtocolConverterServiceConfig.Variables.User)
 	}
-	maps.Copy(newVB, targetPC.ProtocolConverterServiceConfig.Variables.User)
 
 	// as the BuildRuntimeConfig function always adds location and location_path to the user variables,
 	// we need to remove them from the variables here to avoid that they end up in the config file
 	delete(newVB, "location")
 	delete(newVB, "location_path")
 
-	targetPC.ProtocolConverterServiceConfig.Variables.User = newVB
+	instanceToModify.ProtocolConverterServiceConfig.Variables.User = newVB
 
 	// Update the appropriate DFC configuration based on dfcType
 	dfcServiceConfig := dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
@@ -227,7 +272,7 @@ func (a *EditProtocolConverterAction) Execute() (interface{}, map[string]interfa
 	}
 
 	// add the connection details to the template
-	targetPC.ProtocolConverterServiceConfig.Config.ConnectionServiceConfig = connectionserviceconfig.ConnectionServiceConfigTemplate{
+	instanceToModify.ProtocolConverterServiceConfig.Config.ConnectionServiceConfig = connectionserviceconfig.ConnectionServiceConfigTemplate{
 		NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
 			Target: "{{ .IP }}",
 			Port:   "{{ .PORT }}",
@@ -236,9 +281,9 @@ func (a *EditProtocolConverterAction) Execute() (interface{}, map[string]interfa
 
 	switch a.dfcType {
 	case "read":
-		targetPC.ProtocolConverterServiceConfig.Config.DataflowComponentReadServiceConfig = dfcServiceConfig
+		instanceToModify.ProtocolConverterServiceConfig.Config.DataflowComponentReadServiceConfig = dfcServiceConfig
 	case "write":
-		targetPC.ProtocolConverterServiceConfig.Config.DataflowComponentWriteServiceConfig = dfcServiceConfig
+		instanceToModify.ProtocolConverterServiceConfig.Config.DataflowComponentWriteServiceConfig = dfcServiceConfig
 	default:
 		errorMsg := fmt.Sprintf("Invalid DFC type: %s", a.dfcType)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
@@ -246,8 +291,8 @@ func (a *EditProtocolConverterAction) Execute() (interface{}, map[string]interfa
 		return nil, nil, fmt.Errorf("%s", errorMsg)
 	}
 
-	// Update the protocol converter using atomic operation
-	oldConfig, err := a.configManager.AtomicEditProtocolConverter(ctx, a.protocolConverterUUID, targetPC)
+	// Update the protocol converter using atomic operation with the correct UUID
+	oldConfig, err := a.configManager.AtomicEditProtocolConverter(ctx, atomicEditUUID, instanceToModify)
 	if err != nil {
 		errorMsg := fmt.Sprintf("Failed to update protocol converter: %v", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,

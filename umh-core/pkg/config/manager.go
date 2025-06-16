@@ -15,6 +15,7 @@
 package config
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -30,7 +31,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/backoff"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/ctxutil/ctxmutex"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/ctxutil/ctxrwmutex"
@@ -401,7 +401,6 @@ func (m *FileConfigManagerWithBackoff) GetFileSystemService() filesystem.Service
 
 // writeConfig writes the config to the file
 // it should not be exposed or used outside of the config manager, due to potential race conditions
-
 func (m *FileConfigManager) writeConfig(ctx context.Context, config FullConfig) error {
 	// we use a write lock here, because we write the config file
 	err := m.mutexReadOrWrite.Lock(ctx)
@@ -422,7 +421,7 @@ func (m *FileConfigManager) writeConfig(ctx context.Context, config FullConfig) 
 	}
 
 	// here we need to serialize the (spec) config to the yaml-representation of the config
-	yamlConfig, err := convertSpecToYAML(config)
+	yamlConfig, err := convertSpecToYaml(config)
 	if err != nil {
 		return fmt.Errorf("failed to convert spec to yaml: %w", err)
 	}
@@ -459,102 +458,24 @@ func (m *FileConfigManager) writeConfig(ctx context.Context, config FullConfig) 
 	return nil
 }
 
-// Our in-memory representation (**Spec FullConfig**) keeps every
-// *instance* fully materialised and **does not** carry the `templates:` map
-// that appears in the YAML-on-disk file.
-//
-// Rationale
-// ─────────
-//  1. **Single source of truth** – CRUD helpers touch only one slice
-//     (`ProtocolConverterInstances`).  No second data-structure to keep in sync.
-//  2. **No drift possible** – the template map is *derived* on save
-//     (`convertSpecToYAML`).  Any bug that forgets a sync is corrected on the
-//     next write.
-//  3. **Simpler code paths** – Add/Edit/Delete are plain list operations;
-//     code no longer needs special “root vs child” branches.
-//  4. **Localised complexity** – the smart compression
-//     (extract roots → templates, strip configs from children)
-//     lives in exactly one place: the IO boundary.
-//
-// **stand-alone instances**
-// ------------------------------------
-//   - If an instance’s `TemplateRef` is **empty**, it is treated as
-//     *stand-alone* – its `Config` remains inline and **no template is emitted**.
-//   - Roots (`Name == TemplateRef`) and children (`Name ≠ TemplateRef`) follow
-//     the template logic described above.
-//
-// Data-flow
-// ─────────
-//
-//	YAML (templates + refs) ──› parseYAMLToSpec() ──› Spec (instances only)
-//
-//	Spec (instances) ──› convertSpecToYAML() ──› YAML (templates + refs)
-//
-// In short: **Spec is expanded, YAML is compressed – with an escape hatch for
-// stand-alone converters.**
-func convertSpecToYAML(spec FullConfig) (FullConfig, error) {
-	// 1) Deep copy to avoid mutating the input
-	clone := spec.Clone()
+// since we use this function in runtime_config_test to best cover the functionality, we export it
+func ParseConfig(data []byte, allowUnknownFields bool) (FullConfig, error) {
+	var rawConfig FullConfig
 
-	// 2) Initialize template map and pending references tracker
-	tplMap := make(map[string]protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate)
-	pendingRefs := make(map[string]bool)
-
-	// 3) Iterate over protocol converters
-	for i, pc := range clone.ProtocolConverter {
-		tr := pc.ProtocolConverterServiceConfig.TemplateRef
-
-		// 0. Stand-alone (tr == "")
-		if tr == "" {
-			// Keep Config intact, don't emit template
-			clone.ProtocolConverter[i] = pc
-			continue
-		}
-
-		// 1. Root (tr == pc.Name)
-		if tr == pc.Name {
-			if existingTemplate, isDuplicate := tplMap[tr]; isDuplicate {
-				// Check if the duplicate root has identical config
-				if !reflect.DeepEqual(existingTemplate, pc.ProtocolConverterServiceConfig.Config) {
-					return FullConfig{}, fmt.Errorf("duplicate root protocol converter %q with different configurations", tr)
-				}
-				// Duplicate but identical - this is OK, continue
-			} else {
-				// First occurrence of this root - add to template map
-				tplMap[tr] = pc.ProtocolConverterServiceConfig.Config
-			}
-		} else {
-			// 2. Child (tr != pc.Name)
-			pendingRefs[tr] = true
-		}
-
-		// Strip config from templated instances (both roots and children)
-		pc.ProtocolConverterServiceConfig.Config = protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{}
-		clone.ProtocolConverter[i] = pc
+	// First decode the YAML into the raw config structure using standard YAML functions
+	dec := yaml.NewDecoder(bytes.NewReader(data))
+	dec.KnownFields(!allowUnknownFields) // Only reject unknown keys if allowUnknownFields is false
+	if err := dec.Decode(&rawConfig); err != nil {
+		return FullConfig{}, fmt.Errorf("failed to decode config: %w", err)
 	}
 
-	// 4) Check for orphaned references (children without corresponding roots)
-	for templateRef := range pendingRefs {
-		if _, exists := tplMap[templateRef]; !exists {
-			return FullConfig{}, fmt.Errorf("protocol converter references unknown template %q", templateRef)
-		}
+	// Process templateRef resolution for protocol converters
+	processedConfig, err := convertYamlToSpec(rawConfig)
+	if err != nil {
+		return FullConfig{}, fmt.Errorf("failed to resolve protocol converter template references: %w", err)
 	}
 
-	// 5) Assign the templates to the config (only if non-empty)
-	if len(tplMap) > 0 {
-		// Initialize Templates.ProtocolConverter if it's nil
-		if clone.Templates.ProtocolConverter == nil {
-			clone.Templates.ProtocolConverter = make(map[string]interface{})
-		}
-
-		// Copy all templates
-		for name, template := range tplMap {
-			clone.Templates.ProtocolConverter[name] = template
-		}
-	}
-
-	// 6) Return the transformed config
-	return clone, nil
+	return processedConfig, nil
 }
 
 // WithFileSystemService allows setting a custom filesystem service on the wrapped FileConfigManager
@@ -880,11 +801,6 @@ func (m *FileConfigManager) AtomicAddProtocolConverter(ctx context.Context, pc P
 		if cmp.Name == pc.Name {
 			return fmt.Errorf("another protocol converter with name %q already exists – choose a unique name", pc.Name)
 		}
-	}
-
-	// Promote to root if needed (empty TemplateRef becomes root)
-	if pc.ProtocolConverterServiceConfig.TemplateRef == "" {
-		pc.ProtocolConverterServiceConfig.TemplateRef = pc.Name
 	}
 
 	// If it's a child (TemplateRef != Name), verify that a root with that TemplateRef exists

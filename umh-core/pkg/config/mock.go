@@ -109,7 +109,7 @@ func (m *MockConfigManager) writeConfig(ctx context.Context, cfg FullConfig) err
 	}
 
 	// Convert spec to YAML using the same logic as the real implementation
-	yamlConfig, err := convertSpecToYAML(cfg)
+	yamlConfig, err := convertSpecToYaml(cfg)
 	if err != nil {
 		return fmt.Errorf("failed to convert spec to yaml: %w", err)
 	}

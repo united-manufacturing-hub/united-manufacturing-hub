@@ -19,21 +19,21 @@
 # ---------- Templates ---------- #
 templates:
   protocolConverter:
-    - opcua_http:
-        connection:
-          nmap:
-            target: '{{ .IP }}'
-            port: '{{ .PORT }}'
-        dataflowcomponent_read:
-          benthos:
-            input:
-              opcua:
-                address: "opc.tcp://{{ .IP }}:{{ .PORT }}"
-        dataflowcomponent_write:
-          benthos:
-            output:
-              http_client:
-                url: "http://collector.local/ingest"   # static
+    opcua_http:
+      connection:
+        nmap:
+          target: '{{ .IP }}'
+          port: '{{ .PORT }}'
+      dataflowcomponent_read:
+        benthos:
+          input:
+            opcua:
+              address: "opc.tcp://{{ .IP }}:{{ .PORT }}"
+      dataflowcomponent_write:
+        benthos:
+          output:
+            http_client:
+              url: "http://collector.local/ingest"   # static
 
 # ---------- Agent-wide settings ---------- #
 agent:
@@ -56,7 +56,7 @@ protocolConverter:
       variables:                  # <- flat, user-defined variables
         IP:   "10.0.1.50"
         PORT: "4840"
-    - name: temperature-sensor-inherited-pc
+  - name: temperature-sensor-inherited-pc
     desiredState: active
     protocolConverterServiceConfig:
       # Intentionally tries to override level-0; will be ignored

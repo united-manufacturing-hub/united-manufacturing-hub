@@ -56,15 +56,6 @@ var _ = Describe("EditProtocolConverter", func() {
 		pcUUID = dataflowcomponentserviceconfig.GenerateUUIDFromName(pcName)
 
 		// Create initial config with a basic protocol converter (like the wetter in config.yaml)
-		wetterTemplate := map[string]interface{}{
-			"connection": map[string]interface{}{
-				"nmap": map[string]interface{}{
-					"target": "{{ .IP }}",
-					"port":   "{{ .PORT }}",
-				},
-			},
-		}
-
 		initialConfig := config.FullConfig{
 			Agent: config.AgentConfig{
 				MetricsPort: 8080,
@@ -78,11 +69,6 @@ var _ = Describe("EditProtocolConverter", func() {
 					1: "test-site",
 					2: "test-area",
 					3: "test-line",
-				},
-			},
-			Templates: config.TemplatesConfig{
-				ProtocolConverter: map[string]interface{}{
-					"wetter_template": wetterTemplate,
 				},
 			},
 			ProtocolConverter: []config.ProtocolConverterConfig{
@@ -388,7 +374,7 @@ var _ = Describe("EditProtocolConverter", func() {
 			}
 			Expect(updatedPC).NotTo(BeNil(), "Protocol converter should exist in updated config")
 
-			// Verify the read DFC was added to the template
+			// Verify the read DFC was added to the protocol converter configuration
 			readDFCConfig := updatedPC.ProtocolConverterServiceConfig.Config.DataflowComponentReadServiceConfig
 			Expect(readDFCConfig.BenthosConfig.Input).NotTo(BeEmpty())
 			Expect(readDFCConfig.BenthosConfig.Input["input"]).To(HaveKey("http_client"))
