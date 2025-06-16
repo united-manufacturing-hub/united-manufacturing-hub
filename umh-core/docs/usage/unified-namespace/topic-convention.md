@@ -1,7 +1,7 @@
 # Topic Convention
 
 ```
-umh.v1.<location_path>.<data_contract>[.<virtual_path>].<tag_name>
+umh.v1.<location_path>.<data_contract>[.<virtual_path>].<name>
 ```
 
 | Segment            | Filled by `tag_processor` meta field  | Description & rules                                                                                                                                               |
