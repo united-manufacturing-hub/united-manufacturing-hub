@@ -249,7 +249,7 @@ agent:
     0: Enterprise
     1: Site
 `
-				config, _, err := ParseConfig([]byte(validYAML), false)
+				config, err := ParseConfig([]byte(validYAML), false)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(config.Internal.Services).To(HaveLen(1))
@@ -282,7 +282,7 @@ internal: {
   services: [
     { name: service1, desiredState: running,
 `
-				_, _, err := ParseConfig([]byte(malformedYAML), false)
+				_, err := ParseConfig([]byte(malformedYAML), false)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("did not find expected node content"))
 			})
@@ -297,7 +297,7 @@ internal:
   unknownSection:
     key: value
 `
-				_, _, err := ParseConfig([]byte(yamlWithUnknownFields), false)
+				_, err := ParseConfig([]byte(yamlWithUnknownFields), false)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to decode config"))
 			})
@@ -315,7 +315,7 @@ internal:
 agent:
   location: null
 `
-				config, _, err := ParseConfig([]byte(yamlWithNulls), false)
+				config, err := ParseConfig([]byte(yamlWithNulls), false)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(config.Internal.Services).To(HaveLen(1))
 				Expect(config.Internal.Services[0].Name).To(Equal("service1"))
@@ -340,7 +340,7 @@ internal:
         configFiles:
           "file with spaces.txt": "content with multiple\nlines\nand \"quotes\""
 `
-				config, _, err := ParseConfig([]byte(complexYAML), false)
+				config, err := ParseConfig([]byte(complexYAML), false)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(config.Internal.Services).To(HaveLen(1))
@@ -385,7 +385,7 @@ internal:
 					data, err := fsService.ReadFile(ctx, filepath.Join("../../examples", file.Name()))
 					Expect(err).NotTo(HaveOccurred())
 
-					_, _, err = ParseConfig(data, false)
+					_, err = ParseConfig(data, false)
 					Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to parse %s", file.Name()))
 				}
 			})
@@ -395,32 +395,12 @@ internal:
 				data, err := fsService.ReadFile(ctx, "../../examples/example-config-protocolconverter-templated.yaml")
 				Expect(err).NotTo(HaveOccurred())
 
-				config, anchorMap, err := ParseConfig(data, true)
+				config, err := ParseConfig(data, true)
 				Expect(err).NotTo(HaveOccurred())
 
 				// The example should have at least one protocol converter using an anchor
 				Expect(config.ProtocolConverter).NotTo(BeEmpty())
 
-				// Check that we extracted anchor mappings for protocol converters that use aliases
-				// The temperature-sensor-pc should use the opcua_http anchor
-				if len(anchorMap) > 0 {
-					By("Verifying extracted anchor mappings")
-					for pcName, anchorName := range anchorMap {
-						Expect(pcName).NotTo(BeEmpty(), "Protocol converter name should not be empty")
-						Expect(anchorName).NotTo(BeEmpty(), "Anchor name should not be empty")
-
-						// Find the corresponding protocol converter
-						var foundPC *ProtocolConverterConfig
-						for _, pc := range config.ProtocolConverter {
-							if pc.Name == pcName {
-								foundPC = &pc
-								break
-							}
-						}
-						Expect(foundPC).NotTo(BeNil(), fmt.Sprintf("Should find protocol converter %s", pcName))
-
-					}
-				}
 			})
 		})
 	})
@@ -448,7 +428,7 @@ internal:
 				Expect(err).NotTo(HaveOccurred())
 
 				// Parse the config with anchor extraction enabled
-				config, anchorMap, err := ParseConfig(originalData, true)
+				config, err := ParseConfig(originalData, true)
 				Expect(err).NotTo(HaveOccurred())
 
 				// Verify we have the expected structure
@@ -465,14 +445,6 @@ internal:
 				}
 				Expect(tempSensorPC).NotTo(BeNil())
 				Expect(tempSensorPC.DesiredFSMState).To(Equal("active"))
-
-				// Verify anchor mapping was extracted
-				if len(anchorMap) > 0 {
-					anchorName, exists := anchorMap["temperature-sensor-pc"]
-					if exists {
-						Expect(anchorName).To(Equal("opcua_http"))
-					}
-				}
 
 				// Write the config using the config manager
 				configManager.WithFileSystemService(mockFS)
@@ -496,7 +468,7 @@ internal:
 				Expect(writtenData).NotTo(BeEmpty())
 
 				// Parse the written data to verify it's still valid
-				writtenConfig, writtenAnchorMap, err := ParseConfig(writtenData, true)
+				writtenConfig, err := ParseConfig(writtenData, true)
 				Expect(err).NotTo(HaveOccurred())
 
 				// Verify the structure is preserved
@@ -516,20 +488,6 @@ internal:
 				Expect(writtenTempSensorPC.DesiredFSMState).To(Equal("active"))
 				Expect(writtenTempSensorPC.ProtocolConverterServiceConfig.Variables.User).To(HaveKeyWithValue("IP", "10.0.1.50"))
 				Expect(writtenTempSensorPC.ProtocolConverterServiceConfig.Variables.User).To(HaveKeyWithValue("PORT", "4840"))
-
-				// If templates were preserved, verify anchor mappings still exist
-				if len(writtenConfig.Templates) > 0 {
-					Expect(writtenAnchorMap).NotTo(BeEmpty())
-				}
-
-				// Verify the written YAML contains anchor syntax if templates exist
-				if len(writtenConfig.Templates) > 0 {
-					writtenYAML := string(writtenData)
-					// Should contain anchor definition
-					Expect(writtenYAML).To(ContainSubstring("&"))
-					// Should contain alias reference
-					Expect(writtenYAML).To(ContainSubstring("*"))
-				}
 			})
 		})
 	})

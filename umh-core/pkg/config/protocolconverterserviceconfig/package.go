@@ -96,9 +96,10 @@ type ProtocolConverterServiceConfigRuntime struct {
 //
 // Spec → (render) → Runtime → FSM.
 type ProtocolConverterServiceConfigSpec struct {
-	Template  ProtocolConverterServiceConfigTemplate `yaml:"template"`
-	Variables variables.VariableBundle               `yaml:"variables,omitempty"`
-	Location  map[string]string                      `yaml:"location,omitempty"`
+	Config      ProtocolConverterServiceConfigTemplate `yaml:"config"`
+	Variables   variables.VariableBundle               `yaml:"variables,omitempty"`
+	Location    map[string]string                      `yaml:"location,omitempty"`
+	TemplateRef string                                 `yaml:"templateRef,omitempty"`
 }
 
 // Equal checks if two ProtocolConverterServiceConfigs are equal
@@ -152,8 +153,8 @@ func ConfigsEqualRuntime(desired, observed ProtocolConverterServiceConfigRuntime
 	// Convert runtime configs to spec configs for comparison
 	// This allows us to reuse the existing comparison logic that operates on specs
 	// The comparison will handle deep equality checking of all nested fields
-	desiredSpec := ProtocolConverterServiceConfigSpec{Template: protocolConverterDesiredTemplate}
-	observedSpec := ProtocolConverterServiceConfigSpec{Template: protocolConverterObservedTemplate}
+	desiredSpec := ProtocolConverterServiceConfigSpec{Config: protocolConverterDesiredTemplate}
+	observedSpec := ProtocolConverterServiceConfigSpec{Config: protocolConverterObservedTemplate}
 	return defaultComparator.ConfigsEqual(desiredSpec, observedSpec)
 }
 
@@ -165,8 +166,8 @@ func ConfigDiffRuntime(desired, observed ProtocolConverterServiceConfigRuntime) 
 	protocolConverterObservedTemplate := convertRuntimeToTemplate(observed)
 
 	// Convert to spec configs for diffing
-	desiredSpec := ProtocolConverterServiceConfigSpec{Template: protocolConverterDesiredTemplate}
-	observedSpec := ProtocolConverterServiceConfigSpec{Template: protocolConverterObservedTemplate}
+	desiredSpec := ProtocolConverterServiceConfigSpec{Config: protocolConverterDesiredTemplate}
+	observedSpec := ProtocolConverterServiceConfigSpec{Config: protocolConverterObservedTemplate}
 	return defaultComparator.ConfigDiff(desiredSpec, observedSpec)
 }
 
@@ -177,14 +178,14 @@ func ConfigDiffRuntime(desired, observed ProtocolConverterServiceConfigRuntime) 
 func SpecToRuntime(spec ProtocolConverterServiceConfigSpec) (ProtocolConverterServiceConfigRuntime, error) {
 	// Convert template connection config to runtime format using existing helper
 	// This handles the string-to-uint16 port conversion properly
-	connRuntime, err := connectionserviceconfig.ConvertTemplateToRuntime(spec.Template.ConnectionServiceConfig)
+	connRuntime, err := connectionserviceconfig.ConvertTemplateToRuntime(spec.Config.ConnectionServiceConfig)
 	if err != nil {
 		return ProtocolConverterServiceConfigRuntime{}, fmt.Errorf("invalid connection configuration: %w", err)
 	}
 
 	return ProtocolConverterServiceConfigRuntime{
 		ConnectionServiceConfig:             connRuntime,
-		DataflowComponentReadServiceConfig:  spec.Template.DataflowComponentReadServiceConfig,
-		DataflowComponentWriteServiceConfig: spec.Template.DataflowComponentWriteServiceConfig,
+		DataflowComponentReadServiceConfig:  spec.Config.DataflowComponentReadServiceConfig,
+		DataflowComponentWriteServiceConfig: spec.Config.DataflowComponentWriteServiceConfig,
 	}, nil
 }

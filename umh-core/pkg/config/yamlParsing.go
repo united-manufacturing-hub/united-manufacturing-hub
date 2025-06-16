@@ -16,274 +16,78 @@ package config
 
 import (
 	"bytes"
-	"context"
 	"fmt"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
 	"gopkg.in/yaml.v3"
 )
 
-// parseConfig unmarshals *data* (a YAML document) into a FullConfig.
-//
-// The YAML decoder is configured with KnownFields(true) by default so that any
-// unknown or misspelled keys cause an immediate error, preventing silent
-// misconfiguration. Setting allowUnknownFields to true allows YAML anchors and other
-// custom fields to pass validation.
-//
-// YAML Anchor Handling for Protocol Converters:
-// This function intelligently processes YAML anchors/aliases in protocol converter templates
-// to prevent anchor expansion while preserving the structure for parsing. When a protocol
-// converter uses a template reference via YAML alias (e.g., template: *opcua_http), this
-// function:
-//
-//   1. Detects the alias reference in the protocol converter's template field
-//   2. Extracts the anchor name (e.g., "opcua_http" from "*opcua_http")
-//   3. Maps the protocol converter name to the anchor name in the returned anchorMap
-//   4. Replaces the alias node with an empty template structure to prevent parsing errors
-//   5. Preserves the templates section unchanged so anchors remain available
-//
-// Protocol Converter Anchor Mapping:
-//   - Templated protocol converters (using YAML aliases): Will have an entry in anchorMap
-//     mapping the converter name to the referenced anchor name
-//   - Inline protocol converters (no YAML aliases): Will NOT appear in anchorMap, their
-//     template content is parsed normally into the FullConfig structure
-//
-// Example behavior:
-//   Input:  template: *opcua_http  (YAML alias)
-//   Result: - template field becomes empty in FullConfig
-//           - anchorMap["converter-name"] = "opcua_http"
-//
-//   Input:  template: { connection: {...} }  (inline template)
-//   Result: - template field contains the inline content in FullConfig
-//           - No entry added to anchorMap
-//
-// This approach allows the system to distinguish between templated configurations
-// (which require special handling and cannot be edited via UI) and inline configurations
-// (which can be modified through standard config management operations).
-
 // since we use this function in runtime_config_test to best cover the functionality, we export it
-func ParseConfig(data []byte, allowUnknownFields bool) (FullConfig, map[string]string, error) {
-	var cfg FullConfig
-	anchorMap := make(map[string]string)
+func ParseConfig(data []byte, allowUnknownFields bool) (FullConfig, error) {
+	var rawConfig FullConfig
 
-	// First, parse with yaml.Node to detect anchors and aliases
-	var rootNode yaml.Node
-	if err := yaml.Unmarshal(data, &rootNode); err != nil {
-		return FullConfig{}, nil, fmt.Errorf("failed to parse YAML structure: %w", err)
-	}
-
-	// Extract anchor mappings and modify the node tree
-	if err := extractAnchors(&rootNode, anchorMap); err != nil {
-		return FullConfig{}, nil, fmt.Errorf("failed to extract anchor mappings: %w", err)
-	}
-
-	// Now decode the original YAML into FullConfig
+	// First decode the YAML into the raw config structure using standard YAML functions
 	dec := yaml.NewDecoder(bytes.NewReader(data))
 	dec.KnownFields(!allowUnknownFields) // Only reject unknown keys if allowUnknownFields is false
-	if err := dec.Decode(&cfg); err != nil {
-		return FullConfig{}, nil, fmt.Errorf("failed to decode config: %w", err)
+	if err := dec.Decode(&rawConfig); err != nil {
+		return FullConfig{}, fmt.Errorf("failed to decode config: %w", err)
 	}
 
-	// set hasAnchors and anchorName for each protocol converter based on the anchorMap
-	newProtocolConverters := make([]ProtocolConverterConfig, 0, len(cfg.ProtocolConverter))
-	for _, pc := range cfg.ProtocolConverter {
-		if anchorName, exists := anchorMap[pc.Name]; exists {
-			pc.hasAnchors = true
-			pc.anchorName = anchorName
-		}
-		newProtocolConverters = append(newProtocolConverters, pc)
-	}
-	cfg.ProtocolConverter = newProtocolConverters
-
-	return cfg, anchorMap, nil
-}
-
-// extractAnchors walks through the YAML node tree to find protocol converter
-// template aliases and extracts the anchor names while replacing alias nodes with resolved template content
-func extractAnchors(node *yaml.Node, anchorMap map[string]string) error {
-	if node == nil {
-		return nil
-	}
-
-	// Get the root document node for template resolution
-	var rootNode *yaml.Node
-	if node.Kind == yaml.DocumentNode && len(node.Content) > 0 {
-		rootNode = node
-		return extractAnchorsWithRoot(node.Content[0], anchorMap, rootNode)
-	}
-
-	return extractAnchorsWithRoot(node, anchorMap, nil)
-}
-
-// extractAnchorsWithRoot walks through the YAML node tree with access to the root for template resolution
-func extractAnchorsWithRoot(node *yaml.Node, anchorMap map[string]string, rootNode *yaml.Node) error {
-	if node == nil {
-		return nil
-	}
-
-	// Handle mapping nodes
-	if node.Kind == yaml.MappingNode {
-		for i := 0; i < len(node.Content); i += 2 {
-			keyNode := node.Content[i]
-			valueNode := node.Content[i+1]
-
-			// Look for protocolConverter section
-			if keyNode.Value == "protocolConverter" && valueNode.Kind == yaml.SequenceNode {
-				if err := processProtocolConverterSequenceWithRoot(valueNode, anchorMap, rootNode); err != nil {
-					return err
-				}
-			}
-
-			// Recursively process child nodes
-			if err := extractAnchorsWithRoot(valueNode, anchorMap, rootNode); err != nil {
-				return err
-			}
-		}
-	}
-
-	// Handle sequence nodes
-	if node.Kind == yaml.SequenceNode {
-		for _, child := range node.Content {
-			if err := extractAnchorsWithRoot(child, anchorMap, rootNode); err != nil {
-				return err
-			}
-		}
-	}
-
-	return nil
-}
-
-// processProtocolConverterSequenceWithRoot processes the protocol converter sequence to find
-// template aliases and extract anchor names with access to the root for template resolution
-func processProtocolConverterSequenceWithRoot(sequenceNode *yaml.Node, anchorMap map[string]string, rootNode *yaml.Node) error {
-	for _, converterNode := range sequenceNode.Content {
-		if converterNode.Kind != yaml.MappingNode {
-			continue
-		}
-
-		var protocolConverterName string
-
-		// Find the protocol converter name and process its service config
-		for i := 0; i < len(converterNode.Content); i += 2 {
-			keyNode := converterNode.Content[i]
-			valueNode := converterNode.Content[i+1]
-
-			if keyNode.Value == "name" {
-				protocolConverterName = valueNode.Value
-			} else if keyNode.Value == "protocolConverterServiceConfig" && valueNode.Kind == yaml.MappingNode {
-				if err := processServiceConfigWithRoot(valueNode, protocolConverterName, anchorMap, rootNode); err != nil {
-					return err
-				}
-			}
-		}
-	}
-	return nil
-}
-
-// processServiceConfigWithRoot processes the protocol converter service config to find template aliases
-// with access to the root for template resolution
-func processServiceConfigWithRoot(serviceConfigNode *yaml.Node, protocolConverterName string, anchorMap map[string]string, rootNode *yaml.Node) error {
-	for i := 0; i < len(serviceConfigNode.Content); i += 2 {
-		keyNode := serviceConfigNode.Content[i]
-		valueNode := serviceConfigNode.Content[i+1]
-
-		if keyNode.Value == "template" {
-			// Check if this is an alias node
-			if valueNode.Kind == yaml.AliasNode {
-				// Extract the anchor name (remove the * prefix if present)
-				anchorName := valueNode.Value
-				if len(anchorName) > 0 && anchorName[0] == '*' {
-					anchorName = anchorName[1:]
-				}
-
-				// Store the mapping
-				if protocolConverterName != "" {
-					anchorMap[protocolConverterName] = anchorName
-				}
-
-			}
-		}
-	}
-	return nil
-}
-
-// getConfigWithAnchors returns the current configuration along with the anchor mapping
-// This is used internally by atomic functions that need to know which protocol converters use anchors
-func (m *FileConfigManager) getConfigWithAnchors(ctx context.Context) (FullConfig, map[string]string, error) {
-	// We need to re-read and parse the file to get the anchor map
-	// since GetConfig() doesn't return the anchor information
-
-	err := m.mutexReadOrWrite.RLock(ctx)
+	// Process templateRef resolution for protocol converters
+	processedConfig, err := resolveProtocolConverterTemplateRefs(rawConfig)
 	if err != nil {
-		return FullConfig{}, nil, fmt.Errorf("failed to lock config file: %w", err)
-	}
-	defer m.mutexReadOrWrite.RUnlock()
-
-	// Read the file
-	data, err := m.fsService.ReadFile(ctx, m.configPath)
-	if err != nil {
-		return FullConfig{}, nil, fmt.Errorf("failed to read config file: %w", err)
+		return FullConfig{}, fmt.Errorf("failed to resolve protocol converter template references: %w", err)
 	}
 
-	config, anchorMap, err := ParseConfig(data, true) // Use allowUnknownFields=true for anchor handling
-	if err != nil {
-		return FullConfig{}, nil, fmt.Errorf("failed to parse config file: %w", err)
-	}
-
-	return config, anchorMap, nil
+	return processedConfig, nil
 }
 
-// generateTemplateAnchorName creates a valid YAML anchor name from a protocol converter name
-func generateTemplateAnchorName(pcName string) string {
-	// Replace non-alphanumeric characters with underscores and add template suffix
-	// YAML anchors must contain only alphanumeric characters
-	result := ""
-	for _, r := range pcName {
-		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') {
-			result += string(r)
-		} else {
-			result += "_"
+// resolveProtocolConverterTemplateRefs processes protocol converter configs to resolve templateRef fields
+// This translates between the "unrendered" config (with templateRef) and "rendered" config (with actual template content)
+func resolveProtocolConverterTemplateRefs(config FullConfig) (FullConfig, error) {
+	// Create a copy to avoid mutating the original
+	processedConfig := config.Clone()
+
+	// Build a map of available protocol converter templates for quick lookup
+	templateMap := make(map[string]protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate)
+
+	// Process protocol converter templates from the enforced structure
+	for templateName, templateContent := range config.Templates.ProtocolConverter {
+		// Convert the template content to the proper structure
+		templateBytes, err := yaml.Marshal(templateContent)
+		if err != nil {
+			return FullConfig{}, fmt.Errorf("failed to marshal template %s: %w", templateName, err)
 		}
-	}
-	return result
-}
 
-// templateExists checks if a template with the given anchor name already exists
-func templateExists(templates []map[string]interface{}, anchorName string) bool {
-	for _, template := range templates {
-		if _, exists := template[anchorName]; exists {
-			return true
+		var template protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate
+		if err := yaml.Unmarshal(templateBytes, &template); err != nil {
+			return FullConfig{}, fmt.Errorf("failed to unmarshal template %s: %w", templateName, err)
 		}
-	}
-	return false
-}
 
-// createTemplateContent converts a template config to a map for YAML anchoring
-func createTemplateContent(template protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate) map[string]interface{} {
-	// Convert the template struct to a map that can be used in YAML templates section
-	templateMap := make(map[string]interface{})
-
-	// Add connection config using the proper struct - let YAML marshaler handle the tags
-	if template.ConnectionServiceConfig.NmapTemplate != nil {
-		templateMap["connection"] = template.ConnectionServiceConfig
+		templateMap[templateName] = template
 	}
 
-	// Add dataflow component configs (currently empty as per deploy action)
-	// These will be populated later via edit actions
-	if !isEmptyDataflowComponentConfig(template.DataflowComponentReadServiceConfig) {
-		templateMap["dataflowcomponent_read"] = template.DataflowComponentReadServiceConfig
+	// Process each protocol converter to resolve templateRef
+	for i, pc := range processedConfig.ProtocolConverter {
+		// Only resolve templateRef if it's not empty/null and there's no inline config
+		if pc.ProtocolConverterServiceConfig.TemplateRef != "" {
+			// Resolve the template reference
+			templateName := pc.ProtocolConverterServiceConfig.TemplateRef
+			template, exists := templateMap[templateName]
+			if !exists {
+				return FullConfig{}, fmt.Errorf("template reference %q not found for protocol converter %s", templateName, pc.Name)
+			}
+
+			// Create a new spec with the resolved template
+			resolvedSpec := pc.ProtocolConverterServiceConfig
+			resolvedSpec.Config = template
+			resolvedSpec.TemplateRef = "" // Clear the reference since it's now resolved
+
+			// Update the config
+			processedConfig.ProtocolConverter[i].ProtocolConverterServiceConfig = resolvedSpec
+		}
+		// If templateRef is empty/null, use the inline config as-is
 	}
 
-	if !isEmptyDataflowComponentConfig(template.DataflowComponentWriteServiceConfig) {
-		templateMap["dataflowcomponent_write"] = template.DataflowComponentWriteServiceConfig
-	}
-
-	return templateMap
-}
-
-// isEmptyDataflowComponentConfig checks if a dataflow component config is empty
-func isEmptyDataflowComponentConfig(config dataflowcomponentserviceconfig.DataflowComponentServiceConfig) bool {
-	// For now, assume it's empty if BenthosConfig is nil or empty
-	return config.BenthosConfig.Input == nil && config.BenthosConfig.Output == nil
+	return processedConfig, nil
 }

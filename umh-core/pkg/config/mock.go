@@ -23,7 +23,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	filesystem "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
@@ -109,14 +108,14 @@ func (m *MockConfigManager) writeConfig(ctx context.Context, cfg FullConfig) err
 		return fmt.Errorf("failed to create config directory: %w", err)
 	}
 
-	// Use custom YAML marshaling if we have templates that need anchors
-	var data []byte
-	var err error
-	if len(cfg.Templates) > 0 {
-		data, err = marshalConfigWithAnchors(cfg)
-	} else {
-		data, err = yaml.Marshal(cfg)
+	// Convert spec to YAML using the same logic as the real implementation
+	yamlConfig, err := convertSpecToYAML(cfg)
+	if err != nil {
+		return fmt.Errorf("failed to convert spec to yaml: %w", err)
 	}
+
+	// Marshal the config to YAML
+	data, err := yaml.Marshal(yamlConfig)
 	if err != nil {
 		return fmt.Errorf("failed to marshal config: %w", err)
 	}
@@ -376,38 +375,30 @@ func (m *MockConfigManager) AtomicAddProtocolConverter(ctx context.Context, pc P
 		}
 	}
 
-	// Generate template name from protocol converter name
-	templateName := generateTemplateAnchorName(pc.Name)
+	// Promote to root if needed (empty TemplateRef becomes root)
+	if pc.ProtocolConverterServiceConfig.TemplateRef == "" {
+		pc.ProtocolConverterServiceConfig.TemplateRef = pc.Name
+	}
 
-	// Check if template name already exists in templates section
-	for _, template := range config.Templates {
-		if _, exists := template[templateName]; exists {
-			return fmt.Errorf("template with anchor name %q already exists – choose a unique protocol converter name", templateName)
+	// If it's a child (TemplateRef != Name), verify that a root with that TemplateRef exists
+	if pc.ProtocolConverterServiceConfig.TemplateRef != pc.Name {
+		templateRef := pc.ProtocolConverterServiceConfig.TemplateRef
+		rootExists := false
+
+		// Scan existing protocol converters to find a root with matching name
+		for _, existing := range config.ProtocolConverter {
+			if existing.Name == templateRef && existing.ProtocolConverterServiceConfig.TemplateRef == existing.Name {
+				rootExists = true
+				break
+			}
+		}
+
+		if !rootExists {
+			return fmt.Errorf("template %q not found for child %s", templateRef, pc.Name)
 		}
 	}
 
-	// Also check if any existing protocol converter uses this anchor name
-	for _, existingPC := range config.ProtocolConverter {
-		if existingPC.anchorName == templateName {
-			return fmt.Errorf("template anchor %q is already in use by another protocol converter – choose a unique protocol converter name", templateName)
-		}
-	}
-
-	// Create the anchored template and add it to the templates section
-	templateContent := createTemplateContent(pc.ProtocolConverterServiceConfig.Template)
-
-	// Add template to config.Templates with anchor metadata
-	templateWithAnchor := map[string]interface{}{
-		templateName: templateContent,
-	}
-	config.Templates = append(config.Templates, templateWithAnchor)
-
-	// Clear the template content from the protocol converter - it will be referenced via anchor
-	pc.ProtocolConverterServiceConfig.Template = protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{}
-	pc.hasAnchors = true
-	pc.anchorName = templateName
-
-	// Add the protocol converter
+	// Add the protocol converter - let convertSpecToYAML handle template generation
 	config.ProtocolConverter = append(config.ProtocolConverter, pc)
 
 	// write the config
@@ -435,86 +426,75 @@ func (m *MockConfigManager) AtomicEditProtocolConverter(ctx context.Context, com
 		return ProtocolConverterConfig{}, fmt.Errorf("failed to get config: %w", err)
 	}
 
-	oldConfig := ProtocolConverterConfig{}
+	// Find target index via GenerateUUIDFromName(Name) == componentUUID
+	targetIndex := -1
+	var oldConfig ProtocolConverterConfig
+	for i, component := range config.ProtocolConverter {
+		curComponentID := dataflowcomponentserviceconfig.GenerateUUIDFromName(component.Name)
+		if curComponentID == componentUUID {
+			targetIndex = i
+			oldConfig = config.ProtocolConverter[i]
+			break
+		}
+	}
 
-	// check for duplicate name before edit
-	for _, cmp := range config.ProtocolConverter {
-		if cmp.Name == pc.Name && dataflowcomponentserviceconfig.GenerateUUIDFromName(cmp.Name) != componentUUID {
+	if targetIndex == -1 {
+		return ProtocolConverterConfig{}, fmt.Errorf("protocol converter with UUID %s not found", componentUUID)
+	}
+
+	// Duplicate-name check (exclude the edited one)
+	for i, cmp := range config.ProtocolConverter {
+		if i != targetIndex && cmp.Name == pc.Name {
 			return ProtocolConverterConfig{}, fmt.Errorf("another protocol converter with name %q already exists – choose a unique name", pc.Name)
 		}
 	}
 
-	// Find the component to edit and check if it's anchored
-	var componentToEditName string
-	var isAnchored bool
-	var anchorName string
+	newIsRoot := pc.ProtocolConverterServiceConfig.TemplateRef != "" &&
+		pc.ProtocolConverterServiceConfig.TemplateRef == pc.Name
+	oldIsRoot := oldConfig.ProtocolConverterServiceConfig.TemplateRef != "" &&
+		oldConfig.ProtocolConverterServiceConfig.TemplateRef == oldConfig.Name
 
-	for _, c := range config.ProtocolConverter {
-		if dataflowcomponentserviceconfig.GenerateUUIDFromName(c.Name) == componentUUID {
-			componentToEditName = c.Name
-			anchorName = c.anchorName
-			isAnchored = c.hasAnchors
-			break
+	// Handle root rename - propagate to children
+	if oldIsRoot && newIsRoot && oldConfig.Name != pc.Name {
+		// Update all children that reference the old root name
+		for i, inst := range config.ProtocolConverter {
+			if i != targetIndex && inst.ProtocolConverterServiceConfig.TemplateRef == oldConfig.Name {
+				inst.ProtocolConverterServiceConfig.TemplateRef = pc.Name
+				config.ProtocolConverter[i] = inst
+			}
 		}
 	}
 
-	if componentToEditName == "" {
-		return ProtocolConverterConfig{}, fmt.Errorf("protocol converter with UUID %s not found", componentUUID)
-	}
+	// If it's a child (not a root), validate that the template reference exists
+	if !newIsRoot {
+		templateRef := pc.ProtocolConverterServiceConfig.TemplateRef
+		rootExists := false
 
-	// Handle anchored protocol converters
-	if isAnchored {
-		expectedAnchorName := generateTemplateAnchorName(componentToEditName)
-
-		if anchorName != expectedAnchorName {
-			return ProtocolConverterConfig{}, fmt.Errorf(
-				"protocol converter %s uses template anchor %q which doesn't match the expected pattern %q; "+
-					"please edit the template manually in the file or rename the anchor to match the expected pattern",
-				componentToEditName, anchorName, expectedAnchorName)
-		}
-
-		// Update the template in the templates section instead of the protocol converter
-		templateUpdated := false
-		for i, template := range config.Templates {
-			if _, exists := template[anchorName]; exists {
-				// Create new template content from the protocol converter's template
-				newTemplateContent := createTemplateContent(pc.ProtocolConverterServiceConfig.Template)
-
-				// Update the template
-				config.Templates[i] = map[string]interface{}{
-					anchorName: newTemplateContent,
-				}
-				templateUpdated = true
+		// Scan existing protocol converters to find a root with matching name
+		// Note: we check the updated slice which may include renamed roots
+		for i, inst := range config.ProtocolConverter {
+			// Skip the instance being edited since it's not committed yet
+			if i == targetIndex {
+				continue
+			}
+			if inst.Name == templateRef && inst.ProtocolConverterServiceConfig.TemplateRef == inst.Name {
+				rootExists = true
 				break
 			}
 		}
 
-		if !templateUpdated {
-			return ProtocolConverterConfig{}, fmt.Errorf("template %q referenced by protocol converter %s not found in templates section", anchorName, componentToEditName)
+		// Also check if the new instance itself becomes the root for this template
+		if pc.Name == templateRef && newIsRoot {
+			rootExists = true
 		}
 
-		// For anchored protocol converters, clear the template and preserve other fields
-		pc.ProtocolConverterServiceConfig.Template = protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{}
-		pc.hasAnchors = true
-		pc.anchorName = anchorName
-	}
-
-	// Find and update the component with matching UUID
-	found := false
-	for i, component := range config.ProtocolConverter {
-		curComponentID := dataflowcomponentserviceconfig.GenerateUUIDFromName(component.Name)
-		if curComponentID == componentUUID {
-			// Found the component to edit, update it
-			oldConfig = config.ProtocolConverter[i]
-			config.ProtocolConverter[i] = pc
-			found = true
-			break
+		if !rootExists {
+			return ProtocolConverterConfig{}, fmt.Errorf("template %q not found for child %s", templateRef, pc.Name)
 		}
 	}
 
-	if !found {
-		return ProtocolConverterConfig{}, fmt.Errorf("protocol converter with UUID %s not found", componentUUID)
-	}
+	// Commit the edit
+	config.ProtocolConverter[targetIndex] = pc
 
 	// write the config
 	if err := m.writeConfig(ctx, config); err != nil {
@@ -541,67 +521,51 @@ func (m *MockConfigManager) AtomicDeleteProtocolConverter(ctx context.Context, c
 		return fmt.Errorf("failed to get config: %w", err)
 	}
 
-	// Find the component to delete and check if it's anchored
-	var componentToDeleteName string
-	var isAnchored bool
-	var anchorName string
-
-	for _, c := range config.ProtocolConverter {
-		if dataflowcomponentserviceconfig.GenerateUUIDFromName(c.Name) == componentUUID {
-			componentToDeleteName = c.Name
-			anchorName = c.anchorName
-			isAnchored = c.hasAnchors
+	// Find the target protocol converter by UUID
+	targetIndex := -1
+	var targetConverter ProtocolConverterConfig
+	for i, converter := range config.ProtocolConverter {
+		converterID := dataflowcomponentserviceconfig.GenerateUUIDFromName(converter.Name)
+		if converterID == componentUUID {
+			targetIndex = i
+			targetConverter = converter
 			break
 		}
 	}
 
-	if componentToDeleteName == "" {
+	if targetIndex == -1 {
 		return fmt.Errorf("protocol converter with UUID %s not found", componentUUID)
 	}
 
-	// Handle anchored protocol converters - delete template if it matches expected pattern
-	if isAnchored {
-		expectedAnchorName := generateTemplateAnchorName(componentToDeleteName)
+	// Determine if target is a root
+	isRoot := targetConverter.ProtocolConverterServiceConfig.TemplateRef != "" &&
+		targetConverter.ProtocolConverterServiceConfig.TemplateRef == targetConverter.Name
 
-		if anchorName == expectedAnchorName {
-			// Delete the template from the templates section
-			filteredTemplates := make([]map[string]interface{}, 0, len(config.Templates))
-			templateDeleted := false
-
-			for _, template := range config.Templates {
-				if _, exists := template[anchorName]; exists {
-					// Skip this template (delete it)
-					templateDeleted = true
-					continue
-				}
-				filteredTemplates = append(filteredTemplates, template)
+	// If it's a root, check for dependent children
+	if isRoot {
+		childCount := 0
+		for i, converter := range config.ProtocolConverter {
+			// Skip the target itself
+			if i == targetIndex {
+				continue
 			}
-
-			if !templateDeleted {
-				m.logger.Warnf("template %q referenced by protocol converter %s not found in templates section", anchorName, componentToDeleteName)
+			// Count children that reference this root
+			if converter.ProtocolConverterServiceConfig.TemplateRef == targetConverter.Name {
+				childCount++
 			}
+		}
 
-			config.Templates = filteredTemplates
-		} else {
-			m.logger.Warnf("protocol converter %s uses template anchor %q which doesn't match the expected pattern %q; only deleting protocol converter, leaving template intact", componentToDeleteName, anchorName, expectedAnchorName)
+		if childCount > 0 {
+			return fmt.Errorf("cannot delete root %q; %d dependent converters exist", targetConverter.Name, childCount)
 		}
 	}
 
-	// Find and remove the protocol converter with matching UUID
-	found := false
-	filteredConverters := make([]ProtocolConverterConfig, 0, len(config.ProtocolConverter))
-
-	for _, converter := range config.ProtocolConverter {
-		converterID := dataflowcomponentserviceconfig.GenerateUUIDFromName(converter.Name)
-		if converterID != componentUUID {
+	// Build new slice omitting the target
+	filteredConverters := make([]ProtocolConverterConfig, 0, len(config.ProtocolConverter)-1)
+	for i, converter := range config.ProtocolConverter {
+		if i != targetIndex {
 			filteredConverters = append(filteredConverters, converter)
-		} else {
-			found = true
 		}
-	}
-
-	if !found {
-		return fmt.Errorf("protocol converter with UUID %s not found", componentUUID)
 	}
 
 	// Update config with filtered converters
@@ -690,11 +654,11 @@ func (m *MockConfigManager) WriteConfigFromString(ctx context.Context, config st
 	}
 
 	// First parse the config with strict validation to detect syntax errors and schema problems
-	parsedConfig, _, err := ParseConfig([]byte(config), false)
+	parsedConfig, err := ParseConfig([]byte(config), false)
 	if err != nil {
 		// If strict parsing fails, try again with allowUnknownFields=true
 		// This allows YAML anchors and other custom fields
-		parsedConfig, _, err = ParseConfig([]byte(config), true)
+		parsedConfig, err = ParseConfig([]byte(config), true)
 		if err != nil {
 			return fmt.Errorf("failed to parse config: %w", err)
 		}

@@ -198,7 +198,7 @@ var _ = Describe("GetProtocolConverter", func() {
 						},
 					},
 					ObservedProtocolConverterSpecConfig: protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
-						Template: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
+						Config: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
 							ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
 								NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
 									Target: "{{ .IP }}",
@@ -342,7 +342,7 @@ var _ = Describe("GetProtocolConverter", func() {
 						DataflowComponentWriteServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{},
 					},
 					ObservedProtocolConverterSpecConfig: protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
-						Template: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
+						Config: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
 							ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
 								NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
 									Target: "192.168.1.101",

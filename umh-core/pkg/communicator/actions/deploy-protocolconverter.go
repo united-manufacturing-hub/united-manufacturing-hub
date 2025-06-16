@@ -212,7 +212,7 @@ func (a *DeployProtocolConverterAction) createProtocolConverterConfig() config.P
 
 	// Create the spec with template and variables
 	spec := protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
-		Template:  template,
+		Config:    template,
 		Variables: variableBundle,
 		Location:  convertIntMapToStringMap(a.payload.Location),
 	}

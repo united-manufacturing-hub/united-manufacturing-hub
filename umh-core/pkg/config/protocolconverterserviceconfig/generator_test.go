@@ -47,7 +47,7 @@ var _ = Describe("ProtocolConverter YAML Generator", func() {
 		Entry("should render empty stdout output correctly",
 			testCase{
 				config: &ProtocolConverterServiceConfigSpec{
-					Template: ProtocolConverterServiceConfigTemplate{
+					Config: ProtocolConverterServiceConfigTemplate{
 						ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
 							NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
 								Target: "127.0.0.1",
@@ -108,7 +108,7 @@ var _ = Describe("ProtocolConverter YAML Generator", func() {
 		Entry("should render configured output correctly",
 			testCase{
 				config: &ProtocolConverterServiceConfigSpec{
-					Template: ProtocolConverterServiceConfigTemplate{
+					Config: ProtocolConverterServiceConfigTemplate{
 						ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
 							NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
 								Target: "127.0.0.1",
@@ -163,7 +163,7 @@ var _ = Describe("ProtocolConverter YAML Generator", func() {
 		Entry("should render empty input correctly",
 			testCase{
 				config: &ProtocolConverterServiceConfigSpec{
-					Template: ProtocolConverterServiceConfigTemplate{
+					Config: ProtocolConverterServiceConfigTemplate{
 						ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
 							NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
 								Target: "127.0.0.1",
@@ -219,7 +219,7 @@ var _ = Describe("ProtocolConverter YAML Generator", func() {
 		Entry("should render Kafka input with processor and AWS S3 output",
 			testCase{
 				config: &ProtocolConverterServiceConfigSpec{
-					Template: ProtocolConverterServiceConfigTemplate{
+					Config: ProtocolConverterServiceConfigTemplate{
 						ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
 							NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
 								Target: "127.0.0.1",

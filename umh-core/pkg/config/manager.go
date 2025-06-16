@@ -15,7 +15,6 @@
 package config
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -309,7 +308,7 @@ func (m *FileConfigManager) GetConfig(ctx context.Context, tick uint64) (FullCon
 		return FullConfig{}, ctx.Err()
 	}
 
-	config, _, err := ParseConfig(data, false)
+	config, err := ParseConfig(data, false)
 	if err != nil {
 		return FullConfig{}, fmt.Errorf("failed to parse config file: %w", err)
 	}
@@ -402,6 +401,7 @@ func (m *FileConfigManagerWithBackoff) GetFileSystemService() filesystem.Service
 
 // writeConfig writes the config to the file
 // it should not be exposed or used outside of the config manager, due to potential race conditions
+
 func (m *FileConfigManager) writeConfig(ctx context.Context, config FullConfig) error {
 	// we use a write lock here, because we write the config file
 	err := m.mutexReadOrWrite.Lock(ctx)
@@ -421,13 +421,14 @@ func (m *FileConfigManager) writeConfig(ctx context.Context, config FullConfig) 
 		return fmt.Errorf("failed to create config directory: %w", err)
 	}
 
-	// Use custom YAML marshaling if we have templates that need anchors
-	var data []byte
-	if len(config.Templates) > 0 {
-		data, err = marshalConfigWithAnchors(config)
-	} else {
-		data, err = yaml.Marshal(config)
+	// here we need to serialize the (spec) config to the yaml-representation of the config
+	yamlConfig, err := convertSpecToYAML(config)
+	if err != nil {
+		return fmt.Errorf("failed to convert spec to yaml: %w", err)
 	}
+
+	// Marshal the config to YAML
+	data, err := yaml.Marshal(yamlConfig)
 	if err != nil {
 		return fmt.Errorf("failed to marshal config: %w", err)
 	}
@@ -458,181 +459,102 @@ func (m *FileConfigManager) writeConfig(ctx context.Context, config FullConfig) 
 	return nil
 }
 
-// marshalConfigWithAnchors handles custom YAML marshaling to create anchors for templates
-func marshalConfigWithAnchors(config FullConfig) ([]byte, error) {
-	// Use yaml.Node to create proper anchors and aliases
-	var rootNode yaml.Node
+// Our in-memory representation (**Spec FullConfig**) keeps every
+// *instance* fully materialised and **does not** carry the `templates:` map
+// that appears in the YAML-on-disk file.
+//
+// Rationale
+// ─────────
+//  1. **Single source of truth** – CRUD helpers touch only one slice
+//     (`ProtocolConverterInstances`).  No second data-structure to keep in sync.
+//  2. **No drift possible** – the template map is *derived* on save
+//     (`convertSpecToYAML`).  Any bug that forgets a sync is corrected on the
+//     next write.
+//  3. **Simpler code paths** – Add/Edit/Delete are plain list operations;
+//     code no longer needs special “root vs child” branches.
+//  4. **Localised complexity** – the smart compression
+//     (extract roots → templates, strip configs from children)
+//     lives in exactly one place: the IO boundary.
+//
+// **stand-alone instances**
+// ------------------------------------
+//   - If an instance’s `TemplateRef` is **empty**, it is treated as
+//     *stand-alone* – its `Config` remains inline and **no template is emitted**.
+//   - Roots (`Name == TemplateRef`) and children (`Name ≠ TemplateRef`) follow
+//     the template logic described above.
+//
+// Data-flow
+// ─────────
+//
+//	YAML (templates + refs) ──› parseYAMLToSpec() ──› Spec (instances only)
+//
+//	Spec (instances) ──› convertSpecToYAML() ──› YAML (templates + refs)
+//
+// In short: **Spec is expanded, YAML is compressed – with an escape hatch for
+// stand-alone converters.**
+func convertSpecToYAML(spec FullConfig) (FullConfig, error) {
+	// 1) Deep copy to avoid mutating the input
+	clone := spec.Clone()
 
-	// First, marshal the config to get the basic structure
-	if err := rootNode.Encode(config); err != nil {
-		return nil, fmt.Errorf("failed to encode config to yaml.Node: %w", err)
-	}
+	// 2) Initialize template map and pending references tracker
+	tplMap := make(map[string]protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate)
+	pendingRefs := make(map[string]bool)
 
-	// Process the node tree to create anchors and aliases
-	if err := processNodeForAnchors(&rootNode, config); err != nil {
-		return nil, fmt.Errorf("failed to process nodes for anchors: %w", err)
-	}
+	// 3) Iterate over protocol converters
+	for i, pc := range clone.ProtocolConverter {
+		tr := pc.ProtocolConverterServiceConfig.TemplateRef
 
-	// Marshal the processed node tree to YAML
-	var buf bytes.Buffer
-	encoder := yaml.NewEncoder(&buf)
-	encoder.SetIndent(2)
-	if err := encoder.Encode(&rootNode); err != nil {
-		return nil, fmt.Errorf("failed to encode processed node: %w", err)
-	}
-	if err := encoder.Close(); err != nil {
-		return nil, fmt.Errorf("failed to close yaml encoder: %w", err)
-	}
+		// 0. Stand-alone (tr == "")
+		if tr == "" {
+			// Keep Config intact, don't emit template
+			clone.ProtocolConverter[i] = pc
+			continue
+		}
 
-	return buf.Bytes(), nil
-}
-
-// processNodeForAnchors processes the yaml.Node tree to create anchors for templates
-func processNodeForAnchors(node *yaml.Node, config FullConfig) error {
-	if node == nil {
-		return nil
-	}
-
-	// Find the templates section and add anchors
-	if node.Kind == yaml.DocumentNode && len(node.Content) > 0 {
-		return processNodeForAnchors(node.Content[0], config)
-	}
-
-	if node.Kind == yaml.MappingNode {
-		for i := 0; i < len(node.Content); i += 2 {
-			keyNode := node.Content[i]
-			valueNode := node.Content[i+1]
-
-			// Process templates section
-			if keyNode.Value == "templates" && valueNode.Kind == yaml.SequenceNode {
-				if err := processTemplatesNode(valueNode, config); err != nil {
-					return err
+		// 1. Root (tr == pc.Name)
+		if tr == pc.Name {
+			if existingTemplate, isDuplicate := tplMap[tr]; isDuplicate {
+				// Check if the duplicate root has identical config
+				if !reflect.DeepEqual(existingTemplate, pc.ProtocolConverterServiceConfig.Config) {
+					return FullConfig{}, fmt.Errorf("duplicate root protocol converter %q with different configurations", tr)
 				}
+				// Duplicate but identical - this is OK, continue
+			} else {
+				// First occurrence of this root - add to template map
+				tplMap[tr] = pc.ProtocolConverterServiceConfig.Config
 			}
+		} else {
+			// 2. Child (tr != pc.Name)
+			pendingRefs[tr] = true
+		}
 
-			// Process protocol converters section to create aliases
-			if keyNode.Value == "protocolConverter" && valueNode.Kind == yaml.SequenceNode {
-				if err := processProtocolConvertersNode(valueNode, config); err != nil {
-					return err
-				}
-			}
+		// Strip config from templated instances (both roots and children)
+		pc.ProtocolConverterServiceConfig.Config = protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{}
+		clone.ProtocolConverter[i] = pc
+	}
 
-			// Recursively process child nodes
-			if err := processNodeForAnchors(valueNode, config); err != nil {
-				return err
-			}
+	// 4) Check for orphaned references (children without corresponding roots)
+	for templateRef := range pendingRefs {
+		if _, exists := tplMap[templateRef]; !exists {
+			return FullConfig{}, fmt.Errorf("protocol converter references unknown template %q", templateRef)
 		}
 	}
 
-	if node.Kind == yaml.SequenceNode {
-		for _, child := range node.Content {
-			if err := processNodeForAnchors(child, config); err != nil {
-				return err
-			}
+	// 5) Assign the templates to the config (only if non-empty)
+	if len(tplMap) > 0 {
+		// Initialize Templates.ProtocolConverter if it's nil
+		if clone.Templates.ProtocolConverter == nil {
+			clone.Templates.ProtocolConverter = make(map[string]interface{})
+		}
+
+		// Copy all templates
+		for name, template := range tplMap {
+			clone.Templates.ProtocolConverter[name] = template
 		}
 	}
 
-	return nil
-}
-
-// processTemplatesNode adds anchors to template definitions
-func processTemplatesNode(templatesNode *yaml.Node, config FullConfig) error {
-	for _, templateNode := range templatesNode.Content {
-		if templateNode.Kind == yaml.MappingNode {
-			// Find template items and add anchors
-			for i := 0; i < len(templateNode.Content); i += 2 {
-				keyNode := templateNode.Content[i]
-				valueNode := templateNode.Content[i+1]
-
-				// Add anchor to the template value node
-				if valueNode.Anchor == "" {
-					valueNode.Anchor = keyNode.Value // Use the template name as anchor
-				}
-			}
-		}
-	}
-	return nil
-}
-
-// processProtocolConvertersNode creates aliases for protocol converters that reference templates
-func processProtocolConvertersNode(pcNode *yaml.Node, config FullConfig) error {
-	for _, converterNode := range pcNode.Content {
-		if converterNode.Kind == yaml.MappingNode {
-			var converterName string
-
-			// First pass: find the converter name
-			for i := 0; i < len(converterNode.Content); i += 2 {
-				keyNode := converterNode.Content[i]
-				valueNode := converterNode.Content[i+1]
-
-				if keyNode.Value == "name" {
-					converterName = valueNode.Value
-					break
-				}
-			}
-
-			// If we have a converter name, check the config for hasAnchors and the anchor name to use
-			if converterName != "" {
-				pc := ProtocolConverterConfig{}
-				for _, curPC := range config.ProtocolConverter {
-					if curPC.Name == converterName {
-						pc = curPC
-						break
-					}
-				}
-
-				if !pc.HasAnchors() {
-					continue
-				}
-
-				templateName := pc.AnchorName()
-
-				// Check if a template with this name exists in the templates section
-				templateExists := false
-				for _, template := range config.Templates {
-					if _, exists := template[templateName]; exists {
-						templateExists = true
-						break
-					}
-				}
-
-				if templateExists {
-					// Look for protocol converter service config and replace template with alias
-					for i := 0; i < len(converterNode.Content); i += 2 {
-						keyNode := converterNode.Content[i]
-						valueNode := converterNode.Content[i+1]
-
-						if keyNode.Value == "protocolConverterServiceConfig" && valueNode.Kind == yaml.MappingNode {
-							if err := processProtocolConverterServiceConfigWithTemplate(valueNode, templateName); err != nil {
-								return err
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-	return nil
-}
-
-// processProtocolConverterServiceConfigWithTemplate handles template references in protocol converter service config
-func processProtocolConverterServiceConfigWithTemplate(serviceConfigNode *yaml.Node, templateName string) error {
-	// Find the template field and replace it with an alias
-	for i := 0; i < len(serviceConfigNode.Content); i += 2 {
-		keyNode := serviceConfigNode.Content[i]
-
-		if keyNode.Value == "template" {
-			// Replace with alias node
-			aliasNode := &yaml.Node{
-				Kind:  yaml.AliasNode,
-				Value: templateName,
-			}
-			serviceConfigNode.Content[i+1] = aliasNode
-			break
-		}
-	}
-
-	return nil
+	// 6) Return the transformed config
+	return clone, nil
 }
 
 // WithFileSystemService allows setting a custom filesystem service on the wrapped FileConfigManager
@@ -940,7 +862,6 @@ func (m *FileConfigManagerWithBackoff) AtomicEditDataflowcomponent(ctx context.C
 }
 
 // AtomicAddProtocolConverter adds a protocol converter to the config atomically
-// Creates an anchored template in the templates section and references it from the protocol converter
 func (m *FileConfigManager) AtomicAddProtocolConverter(ctx context.Context, pc ProtocolConverterConfig) error {
 	err := m.mutexAtomicUpdate.Lock(ctx)
 	if err != nil {
@@ -948,8 +869,8 @@ func (m *FileConfigManager) AtomicAddProtocolConverter(ctx context.Context, pc P
 	}
 	defer m.mutexAtomicUpdate.Unlock()
 
-	// get the current config and anchor map
-	config, anchorMap, err := m.getConfigWithAnchors(ctx)
+	// get the current config
+	config, err := m.GetConfig(ctx, 0)
 	if err != nil {
 		return fmt.Errorf("failed to get config: %w", err)
 	}
@@ -961,36 +882,30 @@ func (m *FileConfigManager) AtomicAddProtocolConverter(ctx context.Context, pc P
 		}
 	}
 
-	// Generate template name from protocol converter name
-	templateName := generateTemplateAnchorName(pc.Name)
-
-	// Check if template name already exists (both in templates section and anchor map)
-	if templateExists(config.Templates, templateName) {
-		return fmt.Errorf("template with anchor name %q already exists – choose a unique protocol converter name", templateName)
+	// Promote to root if needed (empty TemplateRef becomes root)
+	if pc.ProtocolConverterServiceConfig.TemplateRef == "" {
+		pc.ProtocolConverterServiceConfig.TemplateRef = pc.Name
 	}
 
-	// Also check if any existing protocol converter uses this anchor name
-	for _, existingAnchor := range anchorMap {
-		if existingAnchor == templateName {
-			return fmt.Errorf("template anchor %q is already in use by another protocol converter – choose a unique protocol converter name", templateName)
+	// If it's a child (TemplateRef != Name), verify that a root with that TemplateRef exists
+	if pc.ProtocolConverterServiceConfig.TemplateRef != pc.Name {
+		templateRef := pc.ProtocolConverterServiceConfig.TemplateRef
+		rootExists := false
+
+		// Scan existing protocol converters to find a root with matching name
+		for _, existing := range config.ProtocolConverter {
+			if existing.Name == templateRef && existing.ProtocolConverterServiceConfig.TemplateRef == existing.Name {
+				rootExists = true
+				break
+			}
+		}
+
+		if !rootExists {
+			return fmt.Errorf("template %q not found for child %s", templateRef, pc.Name)
 		}
 	}
 
-	// Create the anchored template and add it to the templates section
-	templateContent := createTemplateContent(pc.ProtocolConverterServiceConfig.Template)
-
-	// Add template to config.Templates with anchor metadata
-	templateWithAnchor := map[string]interface{}{
-		templateName: templateContent,
-	}
-	config.Templates = append(config.Templates, templateWithAnchor)
-
-	// Clear the template content from the protocol converter - it will be referenced via anchor
-	pc.ProtocolConverterServiceConfig.Template = protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{}
-	pc.hasAnchors = true
-	pc.anchorName = templateName
-
-	// Add the protocol converter
+	// Add the protocol converter - let convertSpecToYAML handle template generation
 	config.ProtocolConverter = append(config.ProtocolConverter, pc)
 
 	// write the config
@@ -1020,91 +935,81 @@ func (m *FileConfigManager) AtomicEditProtocolConverter(ctx context.Context, com
 	}
 	defer m.mutexAtomicUpdate.Unlock()
 
-	// get the current config and anchor map
-	config, anchorMap, err := m.getConfigWithAnchors(ctx)
+	// get the current config
+	config, err := m.GetConfig(ctx, 0)
 	if err != nil {
 		return ProtocolConverterConfig{}, fmt.Errorf("failed to get config: %w", err)
 	}
 
-	oldConfig := ProtocolConverterConfig{}
+	// Find target index via GenerateUUIDFromName(Name) == componentUUID
+	targetIndex := -1
+	var oldConfig ProtocolConverterConfig
+	for i, component := range config.ProtocolConverter {
+		curComponentID := dataflowcomponentserviceconfig.GenerateUUIDFromName(component.Name)
+		if curComponentID == componentUUID {
+			targetIndex = i
+			oldConfig = config.ProtocolConverter[i]
+			break
+		}
+	}
 
-	// check for duplicate name before edit
-	for _, cmp := range config.ProtocolConverter {
-		if cmp.Name == pc.Name && dataflowcomponentserviceconfig.GenerateUUIDFromName(cmp.Name) != componentUUID {
+	if targetIndex == -1 {
+		return ProtocolConverterConfig{}, fmt.Errorf("protocol converter with UUID %s not found", componentUUID)
+	}
+
+	// Duplicate-name check (exclude the edited one)
+	for i, cmp := range config.ProtocolConverter {
+		if i != targetIndex && cmp.Name == pc.Name {
 			return ProtocolConverterConfig{}, fmt.Errorf("another protocol converter with name %q already exists – choose a unique name", pc.Name)
 		}
 	}
 
-	// Find the component to edit and check if it's anchored
-	var componentToEditName string
-	var isAnchored bool
-	var anchorName string
+	newIsRoot := pc.ProtocolConverterServiceConfig.TemplateRef != "" &&
+		pc.ProtocolConverterServiceConfig.TemplateRef == pc.Name
+	oldIsRoot := oldConfig.ProtocolConverterServiceConfig.TemplateRef != "" &&
+		oldConfig.ProtocolConverterServiceConfig.TemplateRef == oldConfig.Name
 
-	for _, c := range config.ProtocolConverter {
-		if dataflowcomponentserviceconfig.GenerateUUIDFromName(c.Name) == componentUUID {
-			componentToEditName = c.Name
-			anchorName, isAnchored = anchorMap[componentToEditName]
-			break
+	// Handle root rename - propagate to children
+	if oldIsRoot && newIsRoot && oldConfig.Name != pc.Name {
+		// Update all children that reference the old root name
+		for i, inst := range config.ProtocolConverter {
+			if i != targetIndex && inst.ProtocolConverterServiceConfig.TemplateRef == oldConfig.Name {
+				inst.ProtocolConverterServiceConfig.TemplateRef = pc.Name
+				config.ProtocolConverter[i] = inst
+			}
 		}
 	}
 
-	if componentToEditName == "" {
-		return ProtocolConverterConfig{}, fmt.Errorf("protocol converter with UUID %s not found", componentUUID)
-	}
+	// If it's a child (not a root), validate that the template reference exists
+	if !newIsRoot {
+		templateRef := pc.ProtocolConverterServiceConfig.TemplateRef
+		rootExists := false
 
-	// Handle anchored protocol converters
-	if isAnchored {
-		expectedAnchorName := generateTemplateAnchorName(componentToEditName)
-
-		if anchorName != expectedAnchorName {
-			return ProtocolConverterConfig{}, fmt.Errorf(
-				"protocol converter %s uses template anchor %q which doesn't match the expected pattern %q; "+
-					"please edit the template manually in the file or rename the anchor to match the expected pattern",
-				componentToEditName, anchorName, expectedAnchorName)
-		}
-
-		// Update the template in the templates section instead of the protocol converter
-		templateUpdated := false
-		for i, template := range config.Templates {
-			if _, exists := template[anchorName]; exists {
-				// Create new template content from the protocol converter's template
-				newTemplateContent := createTemplateContent(pc.ProtocolConverterServiceConfig.Template)
-
-				// Update the template
-				config.Templates[i] = map[string]interface{}{
-					anchorName: newTemplateContent,
-				}
-				templateUpdated = true
+		// Scan existing protocol converters to find a root with matching name
+		// Note: we check the updated slice which may include renamed roots
+		for i, inst := range config.ProtocolConverter {
+			// Skip the instance being edited since it's not committed yet
+			if i == targetIndex {
+				continue
+			}
+			if inst.Name == templateRef && inst.ProtocolConverterServiceConfig.TemplateRef == inst.Name {
+				rootExists = true
 				break
 			}
 		}
 
-		if !templateUpdated {
-			return ProtocolConverterConfig{}, fmt.Errorf("template %q referenced by protocol converter %s not found in templates section", anchorName, componentToEditName)
+		// Also check if the new instance itself becomes the root for this template
+		if pc.Name == templateRef && newIsRoot {
+			rootExists = true
 		}
 
-		// For anchored protocol converters, clear the template and preserve other fields
-		pc.ProtocolConverterServiceConfig.Template = protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{}
-		pc.hasAnchors = true
-		pc.anchorName = anchorName
-	}
-
-	// Find and update the component with matching UUID
-	found := false
-	for i, component := range config.ProtocolConverter {
-		curComponentID := dataflowcomponentserviceconfig.GenerateUUIDFromName(component.Name)
-		if curComponentID == componentUUID {
-			// Found the component to edit, update it
-			oldConfig = config.ProtocolConverter[i]
-			config.ProtocolConverter[i] = pc
-			found = true
-			break
+		if !rootExists {
+			return ProtocolConverterConfig{}, fmt.Errorf("template %q not found for child %s", templateRef, pc.Name)
 		}
 	}
 
-	if !found {
-		return ProtocolConverterConfig{}, fmt.Errorf("protocol converter with UUID %s not found", componentUUID)
-	}
+	// Commit the edit
+	config.ProtocolConverter[targetIndex] = pc
 
 	// write the config
 	if err := m.writeConfig(ctx, config); err != nil {
@@ -1122,72 +1027,57 @@ func (m *FileConfigManager) AtomicDeleteProtocolConverter(ctx context.Context, c
 	}
 	defer m.mutexAtomicUpdate.Unlock()
 
-	// get the current config and anchor map
-	config, anchorMap, err := m.getConfigWithAnchors(ctx)
+	// get the current config
+	config, err := m.GetConfig(ctx, 0)
 	if err != nil {
 		return fmt.Errorf("failed to get config: %w", err)
 	}
 
-	// Find the component to delete and check if it's anchored
-	var componentToDeleteName string
-	var isAnchored bool
-	var anchorName string
-
-	for _, c := range config.ProtocolConverter {
-		if dataflowcomponentserviceconfig.GenerateUUIDFromName(c.Name) == componentUUID {
-			componentToDeleteName = c.Name
-			anchorName, isAnchored = anchorMap[componentToDeleteName]
+	// Find the target protocol converter by UUID
+	targetIndex := -1
+	var targetConverter ProtocolConverterConfig
+	for i, converter := range config.ProtocolConverter {
+		converterID := dataflowcomponentserviceconfig.GenerateUUIDFromName(converter.Name)
+		if converterID == componentUUID {
+			targetIndex = i
+			targetConverter = converter
 			break
 		}
 	}
 
-	if componentToDeleteName == "" {
+	if targetIndex == -1 {
 		return fmt.Errorf("protocol converter with UUID %s not found", componentUUID)
 	}
 
-	// Handle anchored protocol converters - delete template if it matches expected pattern
-	if isAnchored {
-		expectedAnchorName := generateTemplateAnchorName(componentToDeleteName)
+	// Determine if target is a root
+	isRoot := targetConverter.ProtocolConverterServiceConfig.TemplateRef != "" &&
+		targetConverter.ProtocolConverterServiceConfig.TemplateRef == targetConverter.Name
 
-		if anchorName == expectedAnchorName {
-			// Delete the template from the templates section
-			filteredTemplates := make([]map[string]interface{}, 0, len(config.Templates))
-			templateDeleted := false
-
-			for _, template := range config.Templates {
-				if _, exists := template[anchorName]; exists {
-					// Skip this template (delete it)
-					templateDeleted = true
-					continue
-				}
-				filteredTemplates = append(filteredTemplates, template)
+	// If it's a root, check for dependent children
+	if isRoot {
+		childCount := 0
+		for i, converter := range config.ProtocolConverter {
+			// Skip the target itself
+			if i == targetIndex {
+				continue
 			}
-
-			if !templateDeleted {
-				m.logger.Warnf("template %q referenced by protocol converter %s not found in templates section", anchorName, componentToDeleteName)
+			// Count children that reference this root
+			if converter.ProtocolConverterServiceConfig.TemplateRef == targetConverter.Name {
+				childCount++
 			}
+		}
 
-			config.Templates = filteredTemplates
-		} else {
-			m.logger.Warnf("protocol converter %s uses template anchor %q which doesn't match the expected pattern %q; only deleting protocol converter, leaving template intact", componentToDeleteName, anchorName, expectedAnchorName)
+		if childCount > 0 {
+			return fmt.Errorf("cannot delete root %q; %d dependent converters exist", targetConverter.Name, childCount)
 		}
 	}
 
-	// Find and remove the protocol converter with matching UUID
-	found := false
-	filteredConverters := make([]ProtocolConverterConfig, 0, len(config.ProtocolConverter))
-
-	for _, converter := range config.ProtocolConverter {
-		converterID := dataflowcomponentserviceconfig.GenerateUUIDFromName(converter.Name)
-		if converterID != componentUUID {
+	// Build new slice omitting the target
+	filteredConverters := make([]ProtocolConverterConfig, 0, len(config.ProtocolConverter)-1)
+	for i, converter := range config.ProtocolConverter {
+		if i != targetIndex {
 			filteredConverters = append(filteredConverters, converter)
-		} else {
-			found = true
 		}
-	}
-
-	if !found {
-		return fmt.Errorf("protocol converter with UUID %s not found", componentUUID)
 	}
 
 	// Update config with filtered converters
@@ -1267,11 +1157,11 @@ func (m *FileConfigManagerWithBackoff) UpdateAndGetCacheModTime(ctx context.Cont
 // If expectedModTime is provided, it will check that the file hasn't been modified since that time
 func (m *FileConfigManager) WriteConfigFromString(ctx context.Context, configStr string, expectedModTime string) error {
 	// First parse the config with strict validation to detect syntax errors and schema problems
-	_, _, err := ParseConfig([]byte(configStr), false)
+	_, err := ParseConfig([]byte(configStr), false)
 	if err != nil {
 		// If strict parsing fails, try again with allowUnknownFields=true
 		// This allows YAML anchors and other custom fields
-		_, _, err = ParseConfig([]byte(configStr), true)
+		_, err = ParseConfig([]byte(configStr), true)
 		if err != nil {
 			return fmt.Errorf("failed to parse config: %w", err)
 		}

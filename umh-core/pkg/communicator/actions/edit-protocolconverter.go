@@ -227,7 +227,7 @@ func (a *EditProtocolConverterAction) Execute() (interface{}, map[string]interfa
 	}
 
 	// add the connection details to the template
-	targetPC.ProtocolConverterServiceConfig.Template.ConnectionServiceConfig = connectionserviceconfig.ConnectionServiceConfigTemplate{
+	targetPC.ProtocolConverterServiceConfig.Config.ConnectionServiceConfig = connectionserviceconfig.ConnectionServiceConfigTemplate{
 		NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
 			Target: "{{ .IP }}",
 			Port:   "{{ .PORT }}",
@@ -236,9 +236,9 @@ func (a *EditProtocolConverterAction) Execute() (interface{}, map[string]interfa
 
 	switch a.dfcType {
 	case "read":
-		targetPC.ProtocolConverterServiceConfig.Template.DataflowComponentReadServiceConfig = dfcServiceConfig
+		targetPC.ProtocolConverterServiceConfig.Config.DataflowComponentReadServiceConfig = dfcServiceConfig
 	case "write":
-		targetPC.ProtocolConverterServiceConfig.Template.DataflowComponentWriteServiceConfig = dfcServiceConfig
+		targetPC.ProtocolConverterServiceConfig.Config.DataflowComponentWriteServiceConfig = dfcServiceConfig
 	default:
 		errorMsg := fmt.Sprintf("Invalid DFC type: %s", a.dfcType)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,

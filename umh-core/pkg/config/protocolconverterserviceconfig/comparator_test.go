@@ -25,7 +25,7 @@ var _ = Describe("ProtocolConverter YAML Comparator", func() {
 	Describe("ConfigsEqual", func() {
 		It("should consider identical configs equal", func() {
 			config1 := ProtocolConverterServiceConfigSpec{
-				Template: ProtocolConverterServiceConfigTemplate{
+				Config: ProtocolConverterServiceConfigTemplate{
 					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 							Input: map[string]any{
@@ -50,7 +50,7 @@ var _ = Describe("ProtocolConverter YAML Comparator", func() {
 			}
 
 			config2 := ProtocolConverterServiceConfigSpec{
-				Template: ProtocolConverterServiceConfigTemplate{
+				Config: ProtocolConverterServiceConfigTemplate{
 					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 							Input: map[string]any{
@@ -82,7 +82,7 @@ var _ = Describe("ProtocolConverter YAML Comparator", func() {
 
 		It("should consider configs with different input not equal", func() {
 			config1 := ProtocolConverterServiceConfigSpec{
-				Template: ProtocolConverterServiceConfigTemplate{
+				Config: ProtocolConverterServiceConfigTemplate{
 					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 							Input: map[string]any{
@@ -107,7 +107,7 @@ var _ = Describe("ProtocolConverter YAML Comparator", func() {
 			}
 
 			config2 := ProtocolConverterServiceConfigSpec{
-				Template: ProtocolConverterServiceConfigTemplate{
+				Config: ProtocolConverterServiceConfigTemplate{
 					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 							Input: map[string]any{
@@ -143,7 +143,7 @@ var _ = Describe("ProtocolConverter YAML Comparator", func() {
 		It("should consider configs with different output not equal", func() {
 
 			config1 := ProtocolConverterServiceConfigSpec{
-				Template: ProtocolConverterServiceConfigTemplate{
+				Config: ProtocolConverterServiceConfigTemplate{
 					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 							Input: map[string]any{
@@ -168,7 +168,7 @@ var _ = Describe("ProtocolConverter YAML Comparator", func() {
 			}
 
 			config2 := ProtocolConverterServiceConfigSpec{
-				Template: ProtocolConverterServiceConfigTemplate{
+				Config: ProtocolConverterServiceConfigTemplate{
 					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 							Input: map[string]any{
@@ -204,7 +204,7 @@ var _ = Describe("ProtocolConverter YAML Comparator", func() {
 		It("should consider configs with different Target not equal", func() {
 
 			config1 := ProtocolConverterServiceConfigSpec{
-				Template: ProtocolConverterServiceConfigTemplate{
+				Config: ProtocolConverterServiceConfigTemplate{
 					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 							Input: map[string]any{
@@ -229,7 +229,7 @@ var _ = Describe("ProtocolConverter YAML Comparator", func() {
 			}
 
 			config2 := ProtocolConverterServiceConfigSpec{
-				Template: ProtocolConverterServiceConfigTemplate{
+				Config: ProtocolConverterServiceConfigTemplate{
 					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 							Input: map[string]any{
@@ -266,7 +266,7 @@ var _ = Describe("ProtocolConverter YAML Comparator", func() {
 		It("should consider configs with different Port not equal", func() {
 
 			config1 := ProtocolConverterServiceConfigSpec{
-				Template: ProtocolConverterServiceConfigTemplate{
+				Config: ProtocolConverterServiceConfigTemplate{
 					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 							Input: map[string]any{
@@ -291,7 +291,7 @@ var _ = Describe("ProtocolConverter YAML Comparator", func() {
 			}
 
 			config2 := ProtocolConverterServiceConfigSpec{
-				Template: ProtocolConverterServiceConfigTemplate{
+				Config: ProtocolConverterServiceConfigTemplate{
 					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 							Input: map[string]any{
@@ -329,7 +329,7 @@ var _ = Describe("ProtocolConverter YAML Comparator", func() {
 	Describe("ConfigDiff", func() {
 		It("should generate readable diff for different configs", func() {
 			config1 := ProtocolConverterServiceConfigSpec{
-				Template: ProtocolConverterServiceConfigTemplate{
+				Config: ProtocolConverterServiceConfigTemplate{
 					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 							Input: map[string]any{
@@ -354,7 +354,7 @@ var _ = Describe("ProtocolConverter YAML Comparator", func() {
 			}
 
 			config2 := ProtocolConverterServiceConfigSpec{
-				Template: ProtocolConverterServiceConfigTemplate{
+				Config: ProtocolConverterServiceConfigTemplate{
 					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 							Input: map[string]any{
@@ -394,7 +394,7 @@ var _ = Describe("ProtocolConverter YAML Comparator", func() {
 	Describe("Package-level functions", func() {
 		It("ConfigsEqual should use default comparator", func() {
 			config1 := ProtocolConverterServiceConfigSpec{
-				Template: ProtocolConverterServiceConfigTemplate{
+				Config: ProtocolConverterServiceConfigTemplate{
 					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 							Input: map[string]any{
@@ -419,7 +419,7 @@ var _ = Describe("ProtocolConverter YAML Comparator", func() {
 			}
 
 			config2 := ProtocolConverterServiceConfigSpec{
-				Template: ProtocolConverterServiceConfigTemplate{
+				Config: ProtocolConverterServiceConfigTemplate{
 					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 							Input: map[string]any{
@@ -455,7 +455,7 @@ var _ = Describe("ProtocolConverter YAML Comparator", func() {
 
 		It("ConfigDiff should use default comparator", func() {
 			config1 := ProtocolConverterServiceConfigSpec{
-				Template: ProtocolConverterServiceConfigTemplate{
+				Config: ProtocolConverterServiceConfigTemplate{
 					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 							Input: map[string]any{
@@ -480,7 +480,7 @@ var _ = Describe("ProtocolConverter YAML Comparator", func() {
 			}
 
 			config2 := ProtocolConverterServiceConfigSpec{
-				Template: ProtocolConverterServiceConfigTemplate{
+				Config: ProtocolConverterServiceConfigTemplate{
 					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 							Input: map[string]any{

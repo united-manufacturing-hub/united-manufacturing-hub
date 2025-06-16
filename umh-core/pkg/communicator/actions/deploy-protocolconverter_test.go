@@ -72,7 +72,7 @@ var _ = Describe("DeployProtocolConverter", func() {
 				ReleaseChannel: config.ReleaseChannelStable,
 			},
 			ProtocolConverter: []config.ProtocolConverterConfig{},
-			Templates:         []map[string]interface{}{},
+			Templates:         config.TemplatesConfig{},
 		}
 
 		mockConfig = config.NewMockConfigManager().WithConfig(initialConfig)

@@ -80,9 +80,8 @@ var _ = Describe("EditProtocolConverter", func() {
 					3: "test-line",
 				},
 			},
-			Templates: []map[string]interface{}{
-				{
-					"_anchor":         "wetter_template",
+			Templates: config.TemplatesConfig{
+				ProtocolConverter: map[string]interface{}{
 					"wetter_template": wetterTemplate,
 				},
 			},
@@ -93,7 +92,7 @@ var _ = Describe("EditProtocolConverter", func() {
 						DesiredFSMState: "active",
 					},
 					ProtocolConverterServiceConfig: protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
-						Template: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
+						Config: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
 							ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
 								NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
 									Target: "{{ .IP }}",
@@ -390,13 +389,13 @@ var _ = Describe("EditProtocolConverter", func() {
 			Expect(updatedPC).NotTo(BeNil(), "Protocol converter should exist in updated config")
 
 			// Verify the read DFC was added to the template
-			readDFCConfig := updatedPC.ProtocolConverterServiceConfig.Template.DataflowComponentReadServiceConfig
+			readDFCConfig := updatedPC.ProtocolConverterServiceConfig.Config.DataflowComponentReadServiceConfig
 			Expect(readDFCConfig.BenthosConfig.Input).NotTo(BeEmpty())
 			Expect(readDFCConfig.BenthosConfig.Input["input"]).To(HaveKey("http_client"))
 			Expect(readDFCConfig.BenthosConfig.Pipeline).NotTo(BeEmpty())
 
 			// Verify write DFC is still empty
-			writeDFCConfig := updatedPC.ProtocolConverterServiceConfig.Template.DataflowComponentWriteServiceConfig
+			writeDFCConfig := updatedPC.ProtocolConverterServiceConfig.Config.DataflowComponentWriteServiceConfig
 			Expect(writeDFCConfig.BenthosConfig.Input).To(BeEmpty())
 		})
 

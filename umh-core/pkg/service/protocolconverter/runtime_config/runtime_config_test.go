@@ -45,7 +45,7 @@ var _ = Describe("BuildRuntimeConfig", func() {
 		Expect(err).NotTo(HaveOccurred(), "Failed to read example config file")
 
 		// Use the config manager's parseConfig function to properly handle templates and anchors
-		fullConfig, _, err := config.ParseConfig(data, true) // Allow unknown fields for template handling
+		fullConfig, err := config.ParseConfig(data, true) // Allow unknown fields for template handling
 		Expect(err).NotTo(HaveOccurred(), "Failed to parse example config")
 
 		// Extract the first protocol converter (temperature-sensor-pc)
@@ -70,7 +70,7 @@ var _ = Describe("BuildRuntimeConfig", func() {
 		nodeName = "test-node"
 		pcName = "temperature-sensor-pc"
 
-		spec.Template.DataflowComponentWriteServiceConfig = dataflowcomponentserviceconfig.DataflowComponentServiceConfig{}
+		spec.Config.DataflowComponentWriteServiceConfig = dataflowcomponentserviceconfig.DataflowComponentServiceConfig{}
 	})
 
 	Describe("BuildRuntimeConfig", func() {

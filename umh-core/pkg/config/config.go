@@ -28,10 +28,15 @@ import (
 
 type FullConfig struct {
 	Agent             AgentConfig               `yaml:"agent"`                       // Agent config, requires restart to take effect
-	Templates         []map[string]interface{}  `yaml:"templates,omitempty"`         // proof of concept for general yaml templates, where anchor can be placed, see also examples/example-config-dataflow-templated.yaml
+	Templates         TemplatesConfig           `yaml:"templates,omitempty"`         // Templates section with enforced structure for protocol converters
 	DataFlow          []DataFlowComponentConfig `yaml:"dataFlow,omitempty"`          // DataFlow components to manage, can be updated while running
 	ProtocolConverter []ProtocolConverterConfig `yaml:"protocolConverter,omitempty"` // ProtocolConverter config, can be updated while runnnig
 	Internal          InternalConfig            `yaml:"internal,omitempty"`          // Internal config, not to be used by the user, only to be used for testing internal components
+}
+
+// TemplatesConfig defines the structure for the templates section
+type TemplatesConfig struct {
+	ProtocolConverter map[string]interface{} `yaml:"protocolConverter,omitempty"` // Array of protocol converter templates
 }
 
 type InternalConfig struct {
@@ -179,9 +184,11 @@ type ConnectionConfig struct {
 // Clone creates a deep copy of FullConfig
 func (c FullConfig) Clone() FullConfig {
 	clone := FullConfig{
-		Agent:    c.Agent,
-		DataFlow: make([]DataFlowComponentConfig, len(c.DataFlow)),
-		Internal: InternalConfig{},
+		Agent:             c.Agent,
+		DataFlow:          make([]DataFlowComponentConfig, len(c.DataFlow)),
+		ProtocolConverter: make([]ProtocolConverterConfig, len(c.ProtocolConverter)),
+		Templates:         TemplatesConfig{},
+		Internal:          InternalConfig{},
 	}
 	// deep copy the location map if it exists
 	if c.Agent.Location != nil {
@@ -195,6 +202,14 @@ func (c FullConfig) Clone() FullConfig {
 		return FullConfig{}
 	}
 	err = deepcopy.Copy(&clone.DataFlow, &c.DataFlow)
+	if err != nil {
+		return FullConfig{}
+	}
+	err = deepcopy.Copy(&clone.ProtocolConverter, &c.ProtocolConverter)
+	if err != nil {
+		return FullConfig{}
+	}
+	err = deepcopy.Copy(&clone.Templates, &c.Templates)
 	if err != nil {
 		return FullConfig{}
 	}

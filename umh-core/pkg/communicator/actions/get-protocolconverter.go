@@ -234,7 +234,7 @@ func (a *GetProtocolConverterAction) Execute() (interface{}, map[string]interfac
 					return nil, nil, fmt.Errorf("no observed state found for protocol converter %s", instance.ID)
 				}
 
-				templateConfig := observedState.ObservedProtocolConverterSpecConfig.Template
+				templateConfig := observedState.ObservedProtocolConverterSpecConfig.Config
 				a.actionLogger.Debugf("Template config content: %+v", templateConfig)
 
 				// Extract template information and variables from the observed spec config
