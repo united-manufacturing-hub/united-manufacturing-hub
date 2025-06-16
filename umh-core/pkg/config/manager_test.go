@@ -391,7 +391,7 @@ internal:
 
 			It("should extract templates from the templated protocol converter example", func() {
 				// Test specifically with the example file that has templates
-				data, err := fsService.ReadFile(ctx, "../../examples/example-config-protocolconverter-templatedV2.yaml")
+				data, err := fsService.ReadFile(ctx, "../../examples/example-config-protocolconverter-templated.yaml")
 				Expect(err).NotTo(HaveOccurred())
 
 				config, err := ParseConfig(data, true)

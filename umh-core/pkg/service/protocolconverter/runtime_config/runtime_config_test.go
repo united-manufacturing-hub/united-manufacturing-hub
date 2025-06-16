@@ -38,7 +38,7 @@ var _ = Describe("BuildRuntimeConfig", func() {
 
 	BeforeEach(func() {
 		// Parse the example config file using the config manager's parseConfig function
-		exampleConfigPath := "../../../../examples/example-config-protocolconverter-templatedV2.yaml"
+		exampleConfigPath := "../../../../examples/example-config-protocolconverter-templated.yaml"
 
 		// Read the example config file
 		data, err := os.ReadFile(exampleConfigPath)
