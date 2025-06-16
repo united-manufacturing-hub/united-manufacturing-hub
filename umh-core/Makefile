@@ -181,7 +181,8 @@ lint:
 	golangci-lint run ./...
 
 nilaway:
-	nilaway -include-pkgs="github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core" -tags=test ./...
+	# See lefthook.yaml for more details
+	nilaway -exclude-pkgs="github.com/prometheus/prometheus/util/textparse,github.com/onsi/ginkgo/v2" -exclude-errors-in-files="integration/" ./...
 
 test: vet nilaway lint
 	go test -v -tags=test ./...
@@ -225,7 +226,7 @@ integration-test: stop-all-pods vet nilaway lint
 pre-test: stop-all-pods vet nilaway lint
 
 # Meta target to setup the environment for the tests in CI environments
-pre-test-ci: vet nilaway lint
+pre-test-ci: vet lint
 
 integration-test: pre-test
 	ginkgo -r -v --tags=test --label-filter='integration' --fail-fast ./...

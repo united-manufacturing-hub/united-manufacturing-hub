@@ -37,6 +37,10 @@ func CheckIfAPIIsReachable(insecureTLS bool, apiURL string, logger *zap.SugaredL
 		logger.Errorf("Error while checking if API is reachable: %v", err)
 		return false
 	}
+	if response == nil {
+		logger.Errorf("Received nil response from API check")
+		return false
+	}
 	defer func() {
 		if err := response.Body.Close(); err != nil {
 			logger.Errorf("Error while closing response body: %v", err)

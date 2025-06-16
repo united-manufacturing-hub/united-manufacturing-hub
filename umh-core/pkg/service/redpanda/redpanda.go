@@ -1018,6 +1018,9 @@ func (s *RedpandaService) setRedpandaClusterConfig(ctx context.Context, configUp
 		}
 		return fmt.Errorf("failed to send request: %w", err)
 	}
+	if resp == nil {
+		return fmt.Errorf("received nil response")
+	}
 
 	defer func() {
 		if resp != nil {
@@ -1063,6 +1066,9 @@ func (s *RedpandaService) verifyRedpandaClusterConfig(ctx context.Context, redpa
 			return nil
 		}
 		return fmt.Errorf("failed to send readback request: %w", err)
+	}
+	if readbackResp == nil {
+		return fmt.Errorf("received nil readback response")
 	}
 
 	readbackBody, err := io.ReadAll(readbackResp.Body)

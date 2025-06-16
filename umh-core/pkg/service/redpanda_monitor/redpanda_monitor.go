@@ -824,6 +824,9 @@ func ParseMetricsFast(b []byte) (Metrics, error) {
 
 // helper – cheap split without allocations
 func seriesName(b []byte) string {
+	if b == nil {
+		return ""
+	}
 	if i := bytes.IndexByte(b, '{'); i > 0 {
 		return string(b[:i])
 	}
