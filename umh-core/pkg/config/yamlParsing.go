@@ -61,7 +61,6 @@ func convertYamlToSpec(config FullConfig) (FullConfig, error) {
 			// Create a new spec with the resolved template
 			resolvedSpec := pc.ProtocolConverterServiceConfig
 			resolvedSpec.Config = template
-			resolvedSpec.TemplateRef = "" // Clear the reference since it's now resolved
 
 			// Update the config
 			processedConfig.ProtocolConverter[i].ProtocolConverterServiceConfig = resolvedSpec

@@ -19,7 +19,7 @@
 # ---------- Templates ---------- #
 templates:
   protocolConverter:
-    opcua_http:
+    temperature-sensor-pc:
       connection:
         nmap:
           target: '{{ .IP }}'
@@ -52,7 +52,7 @@ protocolConverter:
       location:
         0: "override-level0"
         2: "machine-7"
-      templateRef: "opcua_http"
+      templateRef: "temperature-sensor-pc"
       variables:                  # <- flat, user-defined variables
         IP:   "10.0.1.50"
         PORT: "4840"
@@ -63,7 +63,7 @@ protocolConverter:
       location:
         0: "override-level0"
         2: "machine-7"
-      templateRef: "opcua_http"
+      templateRef: "temperature-sensor-pc"
       variables:                  # <- flat, user-defined variables
         IP:   "10.0.1.51"
         PORT: "4840"
