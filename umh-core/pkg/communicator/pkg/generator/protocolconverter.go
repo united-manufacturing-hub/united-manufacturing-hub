@@ -115,7 +115,7 @@ func buildProtocolConverterAsDfc(
 		Name:        &instance.ID,
 		Connections: connections,
 		Health: &models.Health{
-			Message:       getProtocolConverterStatusMessage(instance.CurrentState, observed.ServiceInfo.ConnectionFSMState, observed.ServiceInfo.ConnectionObservedState.ServiceInfo.NmapFSMState),
+			Message:       getProtocolConverterStatusMessage(instance.CurrentState, observed.ServiceInfo.StatusReason, observed.ServiceInfo.ConnectionFSMState, observed.ServiceInfo.ConnectionObservedState.ServiceInfo.NmapFSMState),
 			ObservedState: instance.CurrentState,
 			DesiredState:  instance.DesiredState,
 			Category:      healthCat,
@@ -141,7 +141,7 @@ func buildProtocolConverterAsDfc(
 }
 
 // getProtocolConverterStatusMessage returns a human-readable status message for the given state
-func getProtocolConverterStatusMessage(state string, connectionState string, nmapState string) string {
+func getProtocolConverterStatusMessage(state string, statusReason string, connectionState string, nmapState string) string {
 	baseMessage := ""
 	connectionSuffix := ""
 
@@ -222,7 +222,7 @@ func getProtocolConverterStatusMessage(state string, connectionState string, nma
 		}
 	}
 
-	return baseMessage + connectionSuffix
+	return baseMessage + connectionSuffix + " - " + statusReason
 }
 
 // getHealthCategoryFromState converts a FSM state string to models.HealthCategory
