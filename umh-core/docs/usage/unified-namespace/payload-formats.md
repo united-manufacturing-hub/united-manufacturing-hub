@@ -2,16 +2,26 @@
 
 UMH-Core recognises **two** payload formats. Pick the one that matches your sensor / message **before** you build a bridge or stream-processor.
 
-| Type                   | Typical content                                                                  | When to use it                                                                                                                                                                                                   | Producer / Processor     | Sink (example)    |
-| ---------------------- | -------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------ | ----------------- |
-| **Time-series / Tags** | One numeric/boolean/string value + timestamp (sensor readings, counters, states) | Data coming from PLCs or sensors                                                                                                                                                                                 | Bridge + `tag_processor` | TimescaleDB       |
-| **Relational / JSON**  | One self-contained business record (order, recipe, batch header)                 | <p>Data coming from higher-level systems, such as Orders, alarms, set-points, Batch reports, recipes<br><br>OR<br><br>time-series data that belongs together, e.g., that has been merged (see further below)</p> | Bridge + `nodered_js`    | PostgreSQL / REST |
+### TLDR
 
-Both time-series and relational need to be a valid JSON object and will otherwise rejected in the UNS Output Plugin. Therefore, binary data is not possible directly and requires moving it into a JSON wrapper as it will be rejected otherwise by the UNS Output Plugin.
+<table><thead><tr><th>Type</th><th width="260.609375">Typical content (must be a JSON object)</th><th>When to use it</th><th>Producer / Processor</th><th>Sink (example)</th></tr></thead><tbody><tr><td><strong>Time-series / Tags</strong></td><td><strong>Exactly two keys:</strong><br>• <code>timestamp_ms</code> – int / float without fraction<br>• <code>value</code> – scalar number, boolean <strong>or</strong> string<br>Max decoded size ≤ 1024 B</td><td>PLC &#x26; OT sensors streaming individual datapoints</td><td>Bridge + <code>tag_processor</code></td><td>TimescaleDB</td></tr><tr><td><strong>Relational / JSON</strong></td><td>One self-contained business record <strong>or</strong> multi-field snapshot (UMH Classic)<br>(any key set, as long as the root is an object)</td><td>Orders, batch headers, alarms, set-points <strong>or</strong> merged/aggregated time-series</td><td>Bridge + <code>nodered_js</code></td><td>PostgreSQL / REST</td></tr></tbody></table>
 
-### Why you **do not** bundle time-series points into one JSON object
+Arrays, primitives and raw binaries are rejected by the UNS Output Plugin – wrap them in a JSON object first if you need to transmit such data.
 
-#### The tempting shortcut (UMH Classic)
+### Exact validation rules
+
+| Property            | Time-series                                                     | Relational                   |
+| ------------------- | --------------------------------------------------------------- | ---------------------------- |
+| Root type           | JSON object (map)                                               | JSON object (map)            |
+| Mandatory keys      | `timestamp_ms`, `value` **only**                                | ≥ 1 arbitrary keys           |
+| Forbidden keys      | Any extra key (e.g. `temperature`)                              | —                            |
+| `timestamp_ms` type | Integer (signed/unsigned) or float **without** fraction         | _optional_                   |
+| `value` type        | <p>Scalar:<br>- number (float/int)<br>- boolean<br>- string</p> | _n/a_                        |
+| Illegal values      | `NaN`, `+Inf`, `-Inf`, payload > 1024 B                         | — (size limit still applies) |
+| Max payload size    | 1024 bytes after JSON decoding                                  | 1024 bytes                   |
+| Examples            | `{"timestamp_ms":1717083000000,"value":23.4}`                   | `{"order_id":42, ...}`       |
+
+### Why so strict? (“one tag, one message, one topic”)
 
 In UMH Classic you could publish a whole weather snapshot in one go:
 
