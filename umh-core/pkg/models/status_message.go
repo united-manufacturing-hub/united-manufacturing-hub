@@ -140,7 +140,8 @@ type Dfc struct {
 	// For 'data-bridge' type, this array always contains exactly two connections.
 	//
 	// For 'custom' type, this array is empty.
-	Connections []Connection `json:"connections,omitempty"` // Connection details based on DFC type
+	Connections   []Connection `json:"connections,omitempty"` // Connection details based on DFC type
+	IsInitialized bool         `json:"isInitialized"`         // Whether the DFC is initialized
 }
 
 type DfcMetrics struct {

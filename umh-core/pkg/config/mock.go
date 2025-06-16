@@ -17,40 +17,52 @@ package config
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	filesystem "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+	"go.uber.org/zap"
+	"gopkg.in/yaml.v3"
 )
 
 // MockConfigManager is a mock implementation of ConfigManager for testing
 type MockConfigManager struct {
-	GetConfigCalled               bool
-	AddDataflowcomponentCalled    bool
-	DeleteDataflowcomponentCalled bool
-	EditDataflowcomponentCalled   bool
-	GetConfigAsStringCalled       bool
-	Config                        FullConfig
-	ConfigError                   error
-	AddDataflowcomponentError     error
-	DeleteDataflowcomponentError  error
-	EditDataflowcomponentError    error
-	GetConfigAsStringError        error
-	ConfigAsString                string
-	ConfigDelay                   time.Duration
-	mutexReadOrWrite              sync.Mutex
-	mutexReadAndWrite             sync.Mutex
-	MockFileSystem                *filesystem.MockFileSystem
-	CacheModTime                  time.Time
+	GetConfigCalled                     bool
+	AddDataflowcomponentCalled          bool
+	DeleteDataflowcomponentCalled       bool
+	EditDataflowcomponentCalled         bool
+	AtomicAddProtocolConverterCalled    bool
+	AtomicEditProtocolConverterCalled   bool
+	AtomicDeleteProtocolConverterCalled bool
+	Config                              FullConfig
+	ConfigError                         error
+	AddDataflowcomponentError           error
+	DeleteDataflowcomponentError        error
+	EditDataflowcomponentError          error
+	AtomicAddProtocolConverterError     error
+	AtomicEditProtocolConverterError    error
+	AtomicDeleteProtocolConverterError  error
+	ConfigAsString                      string
+	GetConfigAsStringError              error
+	GetConfigAsStringCalled             bool
+	ConfigDelay                         time.Duration
+	mutexReadOrWrite                    sync.Mutex
+	mutexReadAndWrite                   sync.Mutex
+	MockFileSystem                      *filesystem.MockFileSystem
+	CacheModTime                        time.Time
+	logger                              *zap.SugaredLogger
 }
 
 // NewMockConfigManager creates a new MockConfigManager instance
 func NewMockConfigManager() *MockConfigManager {
 	return &MockConfigManager{
 		MockFileSystem: filesystem.NewMockFileSystem(),
+		logger:         logger.For(logger.ComponentConfigManager),
 	}
 }
 
@@ -85,8 +97,40 @@ func (m *MockConfigManager) GetFileSystemService() filesystem.Service {
 // WriteConfig implements the ConfigManager interface
 // all the functions that call MockConfigManager.writeConfig must hold the mutexReadAndWrite mutex
 func (m *MockConfigManager) writeConfig(ctx context.Context, cfg FullConfig) error {
+	// Check if context is already cancelled
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+
+	// Create the directory if it doesn't exist (using mock filesystem)
+	dir := filepath.Dir(DefaultConfigPath)
+	if err := m.MockFileSystem.EnsureDirectory(ctx, dir); err != nil {
+		return fmt.Errorf("failed to create config directory: %w", err)
+	}
+
+	// Convert spec to YAML using the same logic as the real implementation
+	yamlConfig, err := convertSpecToYaml(cfg)
+	if err != nil {
+		return fmt.Errorf("failed to convert spec to yaml: %w", err)
+	}
+
+	// Marshal the config to YAML
+	data, err := yaml.Marshal(yamlConfig)
+	if err != nil {
+		return fmt.Errorf("failed to marshal config: %w", err)
+	}
+
+	// Write the file via mock filesystem (give everybody read & write access)
+	configPath := DefaultConfigPath
+	if err := m.MockFileSystem.WriteFile(ctx, configPath, data, 0666); err != nil {
+		return fmt.Errorf("failed to write config file: %w", err)
+	}
+
+	// Update the cache to reflect the new config (simulate file stat)
 	m.Config = cfg
 	m.CacheModTime = time.Now()
+	m.ConfigAsString = string(data) // Update raw config cache too
+
 	return nil
 }
 
@@ -126,6 +170,24 @@ func (m *MockConfigManager) WithEditDataflowcomponentError(err error) *MockConfi
 	return m
 }
 
+// WithAtomicAddProtocolConverterError configures the mock to return the given error when AtomicAddProtocolConverter is called
+func (m *MockConfigManager) WithAtomicAddProtocolConverterError(err error) *MockConfigManager {
+	m.AtomicAddProtocolConverterError = err
+	return m
+}
+
+// WithAtomicEditProtocolConverterError configures the mock to return the given error when AtomicEditProtocolConverter is called
+func (m *MockConfigManager) WithAtomicEditProtocolConverterError(err error) *MockConfigManager {
+	m.AtomicEditProtocolConverterError = err
+	return m
+}
+
+// WithAtomicDeleteProtocolConverterError configures the mock to return the given error when AtomicDeleteProtocolConverter is called
+func (m *MockConfigManager) WithAtomicDeleteProtocolConverterError(err error) *MockConfigManager {
+	m.AtomicDeleteProtocolConverterError = err
+	return m
+}
+
 // ResetCalls clears the called flags for testing multiple calls
 func (m *MockConfigManager) ResetCalls() {
 	m.mutexReadOrWrite.Lock()
@@ -134,6 +196,9 @@ func (m *MockConfigManager) ResetCalls() {
 	m.AddDataflowcomponentCalled = false
 	m.DeleteDataflowcomponentCalled = false
 	m.EditDataflowcomponentCalled = false
+	m.AtomicAddProtocolConverterCalled = false
+	m.AtomicEditProtocolConverterCalled = false
+	m.AtomicDeleteProtocolConverterCalled = false
 }
 
 // atomic set location
@@ -286,6 +351,234 @@ func (m *MockConfigManager) AtomicEditDataflowcomponent(ctx context.Context, com
 	return oldConfig, nil
 }
 
+// AtomicAddProtocolConverter implements the ConfigManager interface
+func (m *MockConfigManager) AtomicAddProtocolConverter(ctx context.Context, pc ProtocolConverterConfig) error {
+	m.mutexReadAndWrite.Lock()
+	defer m.mutexReadAndWrite.Unlock()
+
+	m.AtomicAddProtocolConverterCalled = true
+
+	if m.AtomicAddProtocolConverterError != nil {
+		return m.AtomicAddProtocolConverterError
+	}
+
+	// get the current config
+	config, err := m.GetConfig(ctx, 0)
+	if err != nil {
+		return fmt.Errorf("failed to get config: %w", err)
+	}
+
+	// check for duplicate name before add
+	for _, cmp := range config.ProtocolConverter {
+		if cmp.Name == pc.Name {
+			return fmt.Errorf("another protocol converter with name %q already exists – choose a unique name", pc.Name)
+		}
+	}
+
+	// Promote to root if needed (empty TemplateRef becomes root)
+	if pc.ProtocolConverterServiceConfig.TemplateRef == "" {
+		pc.ProtocolConverterServiceConfig.TemplateRef = pc.Name
+	}
+
+	// If it's a child (TemplateRef != Name), verify that a root with that TemplateRef exists
+	if pc.ProtocolConverterServiceConfig.TemplateRef != pc.Name {
+		templateRef := pc.ProtocolConverterServiceConfig.TemplateRef
+		rootExists := false
+
+		// Scan existing protocol converters to find a root with matching name
+		for _, existing := range config.ProtocolConverter {
+			if existing.Name == templateRef && existing.ProtocolConverterServiceConfig.TemplateRef == existing.Name {
+				rootExists = true
+				break
+			}
+		}
+
+		if !rootExists {
+			return fmt.Errorf("template %q not found for child %s", templateRef, pc.Name)
+		}
+	}
+
+	// Add the protocol converter - let convertSpecToYAML handle template generation
+	config.ProtocolConverter = append(config.ProtocolConverter, pc)
+
+	// write the config
+	if err := m.writeConfig(ctx, config); err != nil {
+		return fmt.Errorf("failed to write config: %w", err)
+	}
+
+	return nil
+}
+
+// AtomicEditProtocolConverter implements the ConfigManager interface
+func (m *MockConfigManager) AtomicEditProtocolConverter(ctx context.Context, componentUUID uuid.UUID, pc ProtocolConverterConfig) (ProtocolConverterConfig, error) {
+	m.mutexReadAndWrite.Lock()
+	defer m.mutexReadAndWrite.Unlock()
+
+	m.AtomicEditProtocolConverterCalled = true
+
+	if m.AtomicEditProtocolConverterError != nil {
+		return ProtocolConverterConfig{}, m.AtomicEditProtocolConverterError
+	}
+
+	// get the current config
+	config, err := m.GetConfig(ctx, 0)
+	if err != nil {
+		return ProtocolConverterConfig{}, fmt.Errorf("failed to get config: %w", err)
+	}
+
+	// Find target index via GenerateUUIDFromName(Name) == componentUUID
+	targetIndex := -1
+	var oldConfig ProtocolConverterConfig
+	for i, component := range config.ProtocolConverter {
+		curComponentID := dataflowcomponentserviceconfig.GenerateUUIDFromName(component.Name)
+		if curComponentID == componentUUID {
+			targetIndex = i
+			oldConfig = config.ProtocolConverter[i]
+			break
+		}
+	}
+
+	if targetIndex == -1 {
+		return ProtocolConverterConfig{}, fmt.Errorf("protocol converter with UUID %s not found", componentUUID)
+	}
+
+	// Duplicate-name check (exclude the edited one)
+	for i, cmp := range config.ProtocolConverter {
+		if i != targetIndex && cmp.Name == pc.Name {
+			return ProtocolConverterConfig{}, fmt.Errorf("another protocol converter with name %q already exists – choose a unique name", pc.Name)
+		}
+	}
+
+	newIsRoot := pc.ProtocolConverterServiceConfig.TemplateRef != "" &&
+		pc.ProtocolConverterServiceConfig.TemplateRef == pc.Name
+	oldIsRoot := oldConfig.ProtocolConverterServiceConfig.TemplateRef != "" &&
+		oldConfig.ProtocolConverterServiceConfig.TemplateRef == oldConfig.Name
+
+	// Handle root rename - propagate to children
+	if oldIsRoot && newIsRoot && oldConfig.Name != pc.Name {
+		// Update all children that reference the old root name
+		for i, inst := range config.ProtocolConverter {
+			if i != targetIndex && inst.ProtocolConverterServiceConfig.TemplateRef == oldConfig.Name {
+				inst.ProtocolConverterServiceConfig.TemplateRef = pc.Name
+				config.ProtocolConverter[i] = inst
+			}
+		}
+	}
+
+	// If it's a child (not a root), validate that the template reference exists
+	if !newIsRoot {
+		templateRef := pc.ProtocolConverterServiceConfig.TemplateRef
+		rootExists := false
+
+		// Scan existing protocol converters to find a root with matching name
+		// Note: we check the updated slice which may include renamed roots
+		for i, inst := range config.ProtocolConverter {
+			// Skip the instance being edited since it's not committed yet
+			if i == targetIndex {
+				continue
+			}
+			if inst.Name == templateRef && inst.ProtocolConverterServiceConfig.TemplateRef == inst.Name {
+				rootExists = true
+				break
+			}
+		}
+
+		// Also check if the new instance itself becomes the root for this template
+		if pc.Name == templateRef && newIsRoot {
+			rootExists = true
+		}
+
+		if !rootExists {
+			return ProtocolConverterConfig{}, fmt.Errorf("template %q not found for child %s", templateRef, pc.Name)
+		}
+	}
+
+	// Commit the edit
+	config.ProtocolConverter[targetIndex] = pc
+
+	// write the config
+	if err := m.writeConfig(ctx, config); err != nil {
+		return ProtocolConverterConfig{}, fmt.Errorf("failed to write config: %w", err)
+	}
+
+	return oldConfig, nil
+}
+
+// AtomicDeleteProtocolConverter implements the ConfigManager interface
+func (m *MockConfigManager) AtomicDeleteProtocolConverter(ctx context.Context, componentUUID uuid.UUID) error {
+	m.mutexReadAndWrite.Lock()
+	defer m.mutexReadAndWrite.Unlock()
+
+	m.AtomicDeleteProtocolConverterCalled = true
+
+	if m.AtomicDeleteProtocolConverterError != nil {
+		return m.AtomicDeleteProtocolConverterError
+	}
+
+	// get the current config
+	config, err := m.GetConfig(ctx, 0)
+	if err != nil {
+		return fmt.Errorf("failed to get config: %w", err)
+	}
+
+	// Find the target protocol converter by UUID
+	targetIndex := -1
+	var targetConverter ProtocolConverterConfig
+	for i, converter := range config.ProtocolConverter {
+		converterID := dataflowcomponentserviceconfig.GenerateUUIDFromName(converter.Name)
+		if converterID == componentUUID {
+			targetIndex = i
+			targetConverter = converter
+			break
+		}
+	}
+
+	if targetIndex == -1 {
+		return fmt.Errorf("protocol converter with UUID %s not found", componentUUID)
+	}
+
+	// Determine if target is a root
+	isRoot := targetConverter.ProtocolConverterServiceConfig.TemplateRef != "" &&
+		targetConverter.ProtocolConverterServiceConfig.TemplateRef == targetConverter.Name
+
+	// If it's a root, check for dependent children
+	if isRoot {
+		childCount := 0
+		for i, converter := range config.ProtocolConverter {
+			// Skip the target itself
+			if i == targetIndex {
+				continue
+			}
+			// Count children that reference this root
+			if converter.ProtocolConverterServiceConfig.TemplateRef == targetConverter.Name {
+				childCount++
+			}
+		}
+
+		if childCount > 0 {
+			return fmt.Errorf("cannot delete root %q; %d dependent converters exist", targetConverter.Name, childCount)
+		}
+	}
+
+	// Build new slice omitting the target
+	filteredConverters := make([]ProtocolConverterConfig, 0, len(config.ProtocolConverter)-1)
+	for i, converter := range config.ProtocolConverter {
+		if i != targetIndex {
+			filteredConverters = append(filteredConverters, converter)
+		}
+	}
+
+	// Update config with filtered converters
+	config.ProtocolConverter = filteredConverters
+
+	// write the config
+	if err := m.writeConfig(ctx, config); err != nil {
+		return fmt.Errorf("failed to write config: %w", err)
+	}
+
+	return nil
+}
+
 // GetConfigAsString implements the ConfigManager interface
 func (m *MockConfigManager) GetConfigAsString(ctx context.Context) (string, error) {
 	m.mutexReadOrWrite.Lock()
@@ -361,11 +654,11 @@ func (m *MockConfigManager) WriteConfigFromString(ctx context.Context, config st
 	}
 
 	// First parse the config with strict validation to detect syntax errors and schema problems
-	parsedConfig, err := parseConfig([]byte(config), false)
+	parsedConfig, err := ParseConfig([]byte(config), false)
 	if err != nil {
 		// If strict parsing fails, try again with allowUnknownFields=true
 		// This allows YAML anchors and other custom fields
-		parsedConfig, err = parseConfig([]byte(config), true)
+		parsedConfig, err = ParseConfig([]byte(config), true)
 		if err != nil {
 			return fmt.Errorf("failed to parse config: %w", err)
 		}

@@ -146,8 +146,14 @@ type ProtocolConverterObservedState struct {
 	// ServiceInfo contains information about the ProtocolConverter service
 	ServiceInfo protocolconvertersvc.ServiceInfo
 
-	// ObservedProtocolConverterConfig contains the observed ProtocolConverter service config
-	ObservedProtocolConverterConfig protocolconverterconfig.ProtocolConverterServiceConfigRuntime
+	// ObservedProtocolConverterRuntimeConfig contains the observed ProtocolConverter service config
+	ObservedProtocolConverterRuntimeConfig protocolconverterconfig.ProtocolConverterServiceConfigRuntime
+
+	// ObservedProtocolConverterTemplateConfig contains the observed ProtocolConverter service config
+	ObservedProtocolConverterTemplateConfig protocolconverterconfig.ProtocolConverterServiceConfigTemplate
+
+	// ObservedProtocolConverterSpecConfig contains the observed ProtocolConverter service config spec with variables
+	ObservedProtocolConverterSpecConfig protocolconverterconfig.ProtocolConverterServiceConfigSpec
 }
 
 // IsObservedState implements the ObservedState interface

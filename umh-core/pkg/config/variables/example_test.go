@@ -28,7 +28,7 @@ var _ = Describe("VariableBundle User Experience Examples", func() {
 		// Create a bundle with all namespaces (as would happen internally)
 		vb := variables.VariableBundle{
 			User: map[string]any{
-				"HOST":    "localhost",
+				"HOST":    "wttr.in",
 				"PORT":    "8080",
 				"TIMEOUT": 30,
 			},
@@ -49,7 +49,7 @@ var _ = Describe("VariableBundle User Experience Examples", func() {
 		fmt.Printf("User-facing YAML:\n%s\n", string(userYaml))
 
 		// Should only contain user variables at top level
-		Expect(string(userYaml)).To(ContainSubstring("HOST: localhost"))
+		Expect(string(userYaml)).To(ContainSubstring("HOST: wttr.in"))
 		Expect(string(userYaml)).To(ContainSubstring("PORT: \"8080\""))
 		Expect(string(userYaml)).To(ContainSubstring("TIMEOUT: 30"))
 
@@ -76,11 +76,11 @@ var _ = Describe("VariableBundle User Experience Examples", func() {
 	It("should demonstrate user-friendly YAML unmarshaling", func() {
 		// User writes this simple config
 		userConfig := `
-HOST: localhost
+HOST: wttr.in
 PORT: "8080"
 TIMEOUT: 30
 nested:
-  database_url: "postgres://localhost:5432/mydb"
+  database_url: "postgres://wttr.in:5432/mydb"
   retries: 3
 `
 
@@ -90,7 +90,7 @@ nested:
 		Expect(err).NotTo(HaveOccurred())
 
 		// All variables end up in User namespace automatically
-		Expect(vb.User).To(HaveKeyWithValue("HOST", "localhost"))
+		Expect(vb.User).To(HaveKeyWithValue("HOST", "wttr.in"))
 		Expect(vb.User).To(HaveKeyWithValue("PORT", "8080"))
 		Expect(vb.User).To(HaveKeyWithValue("TIMEOUT", 30))
 		Expect(vb.User).To(HaveKey("nested"))
@@ -106,7 +106,7 @@ nested:
 
 		// Template rendering works as expected
 		scope := vb.Flatten()
-		Expect(scope).To(HaveKeyWithValue("HOST", "localhost"))
+		Expect(scope).To(HaveKeyWithValue("HOST", "wttr.in"))
 		Expect(scope).To(HaveKey("global"))
 		Expect(scope).To(HaveKey("internal"))
 

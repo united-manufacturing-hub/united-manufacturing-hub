@@ -332,11 +332,69 @@ func (p *ProtocolConverterInstance) reconcileStartingStates(ctx context.Context,
 		}
 
 		return p.baseFSMInstance.SendEvent(ctx, EventStartDFCUp), true
-	case OperationalStateStartingFailedDFC, OperationalStateStartingFailedDFCMissing:
-	// Do not do anything here.
-	// The only way to get out of this state is to be removed and recreated by the manager when there is a config change.
-	// When the config is changed, the Manager will jump-in to recreate the DFC
-	// So, let's be stuck in this state for sometime
+	case OperationalStateStartingFailedDFCMissing:
+		// For OperationalStateStartingFailedDFCMissing, check if a DFC is now available and retry starting
+
+		// CRITICAL FIX: Recovery mechanism for OperationalStateStartingFailedDFCMissing
+		//
+		// PROBLEM DESCRIPTION:
+		// The Protocol Converter FSM had a design flaw where instances would get permanently
+		// stuck in OperationalStateStartingFailedDFCMissing when created without DFC configuration
+		// and later updated to include DFCs. This created an unrecoverable state that required
+		// manual intervention or instance recreation.
+		//
+		// ROOT CAUSE ANALYSIS:
+		// 1. INITIAL STATE FLOW:
+		//    - User creates Protocol Converter without DFC configuration
+		//    - FSM transitions: stopped → starting_connection → starting_redpanda → starting_dfc
+		//    - In starting_dfc state, IsDFCExisting() returns false (no DFC configured)
+		//    - FSM transitions to OperationalStateStartingFailedDFCMissing via EventStartFailedDFCMissing
+		//
+		// 2. CONFIGURATION UPDATE FLOW:
+		//    - User adds DFC to configuration
+		//    - Base manager detects config change and calls setConfig()
+		//    - UpdateObservedStateOfInstance() successfully creates DFC via EvaluateDFCDesiredStates()
+		//    - BUT the Protocol Converter FSM remains stuck in OperationalStateStartingFailedDFCMissing
+		//
+		// 3. WHY IT STAYED STUCK:
+		//    - Original code had no recovery logic: "Do not do anything here"
+		//    - Comment stated: "only way to get out is to be removed and recreated by manager"
+		//    - However, Protocol Converters do NOT call Remove() on config changes (unlike S6 instances)
+		//    - They only call UpdateInManager() to update configuration in-place
+		//    - Base manager only calls Remove() when instance is completely removed from config
+		//    - Result: Instance permanently stuck with no automatic recovery path
+		//
+		// 4. COMPARISON WITH OTHER FSM TYPES:
+		//    - S6 instances: Call Remove() on config changes → get recreated → automatic recovery
+		//    - Protocol Converters: Call UpdateInManager() → stay in same instance → no recovery
+		//    - This architectural difference created the recovery gap
+		//
+		// SOLUTION IMPLEMENTED:
+		// For OperationalStateStartingFailedDFCMissing specifically:
+		// 1. Check if DFC is now available using existing IsDFCExisting() logic
+		// 2. If DFC exists, send EventStartRetry to restart the startup sequence
+		// 3. EventStartRetry transitions back to OperationalStateStartingConnection
+		// 4. Normal startup flow continues: connection → redpanda → dfc → idle/active
+		// 5. If DFC still missing, remain in failed state with clear status reason
+		//
+
+		existing, reason := p.IsDFCExisting()
+		if existing {
+			// DFC is now available, retry the start process
+			p.ObservedState.ServiceInfo.StatusReason = "retrying start: DFC now available"
+			return p.baseFSMInstance.SendEvent(ctx, EventStartRetry), true
+		}
+		// Still no DFC available, stay in failed state
+		p.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("starting failed: %s", reason)
+		return nil, false
+
+	case OperationalStateStartingFailedDFC:
+
+		// For OperationalStateStartingFailedDFC, do not do anything here.
+		// The only way to get out of this state is to be removed and recreated by the manager when there is a config change.
+		// When the config is changed, the Manager will jump-in to recreate the DFC
+		// So, let's be stuck in this state for sometime
+
 	default:
 		return fmt.Errorf("invalid starting state: %s", currentState), false
 	}
