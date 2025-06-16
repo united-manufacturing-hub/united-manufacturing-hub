@@ -460,6 +460,86 @@ var _ = Describe("ProtocolConverter YAML Normalizer", func() {
 					Expect(hasDownsampler(processors)).To(BeFalse())
 				})
 			})
+
+			Describe("insertProcessorAfter", func() {
+				It("should insert processor after specified index", func() {
+					processors := []any{
+						map[string]any{"mapping": "root = this"},
+						map[string]any{"tag_processor": map[string]any{}},
+					}
+					newProcessor := map[string]any{"downsampler": map[string]any{}}
+
+					result := insertProcessorAfter(processors, 1, newProcessor)
+
+					Expect(result).To(HaveLen(3))
+					Expect(result[0]).To(Equal(processors[0]))
+					Expect(result[1]).To(Equal(processors[1]))
+					Expect(result[2]).To(Equal(newProcessor))
+				})
+
+				It("should insert processor after first index", func() {
+					processors := []any{
+						map[string]any{"tag_processor": map[string]any{}},
+						map[string]any{"mapping": "root = this"},
+					}
+					newProcessor := map[string]any{"downsampler": map[string]any{}}
+
+					result := insertProcessorAfter(processors, 0, newProcessor)
+
+					Expect(result).To(HaveLen(3))
+					Expect(result[0]).To(Equal(processors[0]))
+					Expect(result[1]).To(Equal(newProcessor))
+					Expect(result[2]).To(Equal(processors[1]))
+				})
+
+				It("should return original slice unchanged for negative index", func() {
+					processors := []any{
+						map[string]any{"mapping": "root = this"},
+						map[string]any{"tag_processor": map[string]any{}},
+					}
+					newProcessor := map[string]any{"downsampler": map[string]any{}}
+
+					result := insertProcessorAfter(processors, -1, newProcessor)
+
+					Expect(result).To(Equal(processors))
+					Expect(result).To(HaveLen(2))
+				})
+
+				It("should return original slice unchanged for index >= len(processors)", func() {
+					processors := []any{
+						map[string]any{"mapping": "root = this"},
+						map[string]any{"tag_processor": map[string]any{}},
+					}
+					newProcessor := map[string]any{"downsampler": map[string]any{}}
+
+					result := insertProcessorAfter(processors, 2, newProcessor)
+
+					Expect(result).To(Equal(processors))
+					Expect(result).To(HaveLen(2))
+				})
+
+				It("should return original slice unchanged for index way out of bounds", func() {
+					processors := []any{
+						map[string]any{"mapping": "root = this"},
+					}
+					newProcessor := map[string]any{"downsampler": map[string]any{}}
+
+					result := insertProcessorAfter(processors, 100, newProcessor)
+
+					Expect(result).To(Equal(processors))
+					Expect(result).To(HaveLen(1))
+				})
+
+				It("should handle empty processor slice gracefully", func() {
+					processors := []any{}
+					newProcessor := map[string]any{"downsampler": map[string]any{}}
+
+					result := insertProcessorAfter(processors, 0, newProcessor)
+
+					Expect(result).To(Equal(processors))
+					Expect(result).To(HaveLen(0))
+				})
+			})
 		})
 	})
 })

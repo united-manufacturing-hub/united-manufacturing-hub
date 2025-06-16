@@ -220,6 +220,12 @@ func isTagProcessor(proc interface{}) bool {
 
 // insertProcessorAfter inserts a new processor after the specified index in the processors array
 func insertProcessorAfter(processors []interface{}, index int, newProcessor map[string]any) []interface{} {
+	// Bounds checking to prevent panics
+	if index < 0 || index >= len(processors) {
+		// Return original slice unchanged for invalid index
+		return processors
+	}
+
 	// Create new slice with capacity for one more element
 	result := make([]interface{}, len(processors)+1)
 
