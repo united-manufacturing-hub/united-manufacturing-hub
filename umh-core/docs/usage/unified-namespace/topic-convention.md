@@ -10,7 +10,7 @@ umh.v1.<location_path>.<data_contract>[.<virtual_path>].<tag_name>
 | **location\_path** | `msg.meta.location_path`              | Hierarchical location path (often based on ISA-95 but adaptable to any naming standard like KKS) – **level0 (enterprise) is mandatory**, additional levels are optional. Supports generic level0, level1, level2, etc. for flexibility across different organizational standards. |
 | **data\_contract** | `msg.meta.data_contract`              | Needs to start with an underscore. Logical model that the payload conforms to (e.g. `_historian`, `Pump`, `TemperatureSensor`).                                   |
 | **virtual\_path**† | `msg.meta.virtual_path` _(optional)_  | Zero-to-many sub-segments used by explicit contracts to address **sub-models** or **folders** (e.g. `motor.diagnostics`).                                         |
-| **tag\_name**      | `msg.meta.tag_name` _or_ auto-derived | Leaf field inside the contract (`temperature`, `power`, `status`).                                                                                                |
+| **name**      | `msg.meta.tag_name` _or_ auto-derived | Leaf field inside the contract (`temperature`, `power`, `status`, `order_created`, `batch_completed`).                                                                                                |
 
 † _optional segments – omitted when empty._
 
