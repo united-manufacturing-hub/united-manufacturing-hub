@@ -69,6 +69,9 @@ func convertYamlToSpec(config FullConfig) (FullConfig, error) {
 		// If templateRef is empty/null, use the inline config as-is
 	}
 
+	// remove the templates from the config
+	processedConfig.Templates = TemplatesConfig{}
+
 	return processedConfig, nil
 }
 

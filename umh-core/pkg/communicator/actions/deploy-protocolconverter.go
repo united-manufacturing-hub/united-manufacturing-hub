@@ -141,6 +141,9 @@ func (a *DeployProtocolConverterAction) Execute() (interface{}, map[string]inter
 	// Create the protocol converter config with template and variables
 	pcConfig := a.createProtocolConverterConfig()
 
+	// currently, we canot reuse templates, so we need to create a new one
+	pcConfig.ProtocolConverterServiceConfig.TemplateRef = pcConfig.Name
+
 	// Add to configuration
 	ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
 	defer cancel()
