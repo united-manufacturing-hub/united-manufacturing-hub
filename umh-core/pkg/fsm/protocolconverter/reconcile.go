@@ -332,11 +332,25 @@ func (p *ProtocolConverterInstance) reconcileStartingStates(ctx context.Context,
 		}
 
 		return p.baseFSMInstance.SendEvent(ctx, EventStartDFCUp), true
-	case OperationalStateStartingFailedDFC, OperationalStateStartingFailedDFCMissing:
-	// Do not do anything here.
-	// The only way to get out of this state is to be removed and recreated by the manager when there is a config change.
-	// When the config is changed, the Manager will jump-in to recreate the DFC
-	// So, let's be stuck in this state for sometime
+	case OperationalStateStartingFailedDFCMissing:
+		// For OperationalStateStartingFailedDFCMissing, check if a DFC is now available and retry starting
+		existing, reason := p.IsDFCExisting()
+		if existing {
+			// DFC is now available, retry the start process
+			p.ObservedState.ServiceInfo.StatusReason = "retrying start: DFC now available"
+			return p.baseFSMInstance.SendEvent(ctx, EventStartRetry), true
+		}
+		// Still no DFC available, stay in failed state
+		p.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("starting failed: %s", reason)
+		return nil, false
+
+	case OperationalStateStartingFailedDFC:
+
+		// For OperationalStateStartingFailedDFC, do not do anything here.
+		// The only way to get out of this state is to be removed and recreated by the manager when there is a config change.
+		// When the config is changed, the Manager will jump-in to recreate the DFC
+		// So, let's be stuck in this state for sometime
+
 	default:
 		return fmt.Errorf("invalid starting state: %s", currentState), false
 	}
