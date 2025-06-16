@@ -135,6 +135,7 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 					"core-health",
 					"action-get-metrics",
 					"action-delete-protocol-converter",
+					"action-edit-protocol-converter",
 				},
 			},
 		},
