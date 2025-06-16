@@ -7,7 +7,7 @@ UMH-Core recognises **two** payload formats. Pick the one that matches your sens
 | **Time-series / Tags** | One numeric/boolean/string value + timestamp (sensor readings, counters, states) | Data coming from PLCs or sensors                                                                                                                                                                                 | Bridge + `tag_processor` | TimescaleDB       |
 | **Relational / JSON**  | One self-contained business record (order, recipe, batch header)                 | <p>Data coming from higher-level systems, such as Orders, alarms, set-points, Batch reports, recipes<br><br>OR<br><br>time-series data that belongs together, e.g., that has been merged (see further below)</p> | Bridge + `nodered_js`    | PostgreSQL / REST |
 
-Binary data is not possible directly and requires moving it into a JSON wrapper as it will be rejected otherwise by the UNS Output Plugin.
+Both time-series and relational need to be a valid JSON object and will otherwise rejected in the UNS Output Plugin. Therefore, binary data is not possible directly and requires moving it into a JSON wrapper as it will be rejected otherwise by the UNS Output Plugin.
 
 ### Why you **do not** bundle time-series points into one JSON object
 
