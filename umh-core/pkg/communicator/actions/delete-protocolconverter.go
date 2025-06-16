@@ -41,6 +41,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
@@ -144,11 +145,17 @@ func (a *DeleteProtocolConverterAction) Execute() (interface{}, map[string]inter
 		return nil, nil, fmt.Errorf("%s", errorMsg)
 	}
 
-	// ─── 3  Wait briefly for the system to process the deletion ─────────────
-	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Configuration updated. Waiting for system to process the deletion...", a.outboundChannel, models.DeleteProtocolConverter)
+	// ─── 3  Observe the runtime until the FSM forgets the instance ─────────
+	if a.systemSnapshotManager != nil { // skipping this for the unit tests
 
-	// Simple 2-second wait instead of complex FSM observation
-	time.Sleep(2 * time.Second)
+		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Configuration updated. Waiting for protocol converter to be fully removed from the system...", a.outboundChannel, models.DeleteProtocolConverter)
+		err = a.waitForComponentToBeRemoved()
+		if err != nil {
+			errorMsg := fmt.Sprintf("Failed to wait for protocol converter to be removed: %v", err)
+			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errorMsg, a.outboundChannel, models.DeleteProtocolConverter)
+			return nil, nil, fmt.Errorf("%s", errorMsg)
+		}
+	}
 
 	// ─── 4  Tell the caller we are done (caller will send FinishedSuccessful) ──
 	successMsg := fmt.Sprintf("Successfully deleted protocol converter with UUID: %s", a.componentUUID)
@@ -169,4 +176,63 @@ func (a *DeleteProtocolConverterAction) getUuid() uuid.UUID {
 // GetComponentUUID returns the UUID of the component to be deleted - exposed primarily for testing purposes.
 func (a *DeleteProtocolConverterAction) GetComponentUUID() uuid.UUID {
 	return a.componentUUID
+}
+
+func (a *DeleteProtocolConverterAction) waitForComponentToBeRemoved() error {
+	//check the system snapshot and waits for the instance to be removed
+	ticker := time.NewTicker(constants.ActionTickerTime)
+	defer ticker.Stop()
+	timeout := time.After(constants.DataflowComponentWaitForActiveTimeout)
+	startTime := time.Now()
+	timeoutDuration := constants.DataflowComponentWaitForActiveTimeout
+
+	// try to find the component name for better logging
+	componentName := a.componentUUID.String() // Default to using UUID if name not found
+	// the snapshot manager holds the latest system snapshot which is asynchronously updated by the other goroutines
+	// we need to get a deep copy of it to prevent race conditions
+	systemSnapshot := a.systemSnapshotManager.GetDeepCopySnapshot()
+	if protocolConverterManager, exists := systemSnapshot.Managers[constants.ProtocolConverterManagerName]; exists {
+		for _, inst := range protocolConverterManager.GetInstances() {
+			if dataflowcomponentserviceconfig.GenerateUUIDFromName(inst.ID) == a.componentUUID {
+				componentName = inst.ID
+				break
+			}
+		}
+	}
+
+	for {
+		select {
+		case <-timeout:
+			return fmt.Errorf("protocol converter %s was not removed within the timeout period", componentName)
+		case <-ticker.C:
+			elapsed := time.Since(startTime)
+			remaining := timeoutDuration - elapsed
+			remainingSeconds := int(remaining.Seconds())
+
+			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
+				fmt.Sprintf("Verifying removal of protocol converter '%s' (%ds remaining)...",
+					componentName, remainingSeconds), a.outboundChannel, models.DeleteProtocolConverter)
+
+			systemSnapshot := a.systemSnapshotManager.GetDeepCopySnapshot()
+
+			removed := true
+			if mgr, ok := systemSnapshot.Managers[constants.ProtocolConverterManagerName]; ok {
+				for _, inst := range mgr.GetInstances() {
+					if dataflowcomponentserviceconfig.GenerateUUIDFromName(inst.ID) == a.componentUUID {
+						removed = false
+						SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
+							fmt.Sprintf("Component '%s' still exists in state '%s'. Waiting for removal (%ds remaining)...",
+								inst.ID, inst.CurrentState, remainingSeconds), a.outboundChannel, models.DeleteProtocolConverter)
+						break
+					}
+				}
+			}
+			if removed {
+				SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
+					fmt.Sprintf("Protocol converter '%s' has been successfully removed from the system.", componentName),
+					a.outboundChannel, models.DeleteProtocolConverter)
+				return nil
+			}
+		}
+	}
 }
