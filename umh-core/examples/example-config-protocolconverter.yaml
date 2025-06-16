@@ -15,7 +15,7 @@
 # ---------- Agent-wide settings ---------- #
 agent:
   metricsPort: 8080
-  location:            # authoritative, can’t be overridden
+  location: # authoritative, can’t be overridden
     0: "plant-A"
     1: "line-4"
 
@@ -29,28 +29,28 @@ protocolConverter:
       template:
         connection:
           nmap:
-            target:   "{{ .HOST }}"
-            port:     "{{ .PORT }}"    # Now templatable! Resolves to proper uint16 at runtime
+            target: "{{ .HOST }}"
+            port: "{{ .PORT }}" # Now templatable! Resolves to proper uint16 at runtime
         dataflowcomponent_read:
           benthos:
             input:
               generate:
-                  count: 0
-                  interval: 1s
-                  mapping: |
-                      root = random_int(min:10, max:20)
+                count: 0
+                interval: 1s
+                mapping: |
+                  root = random_int(min:10, max:20)
             pipeline:
               processors:
-                  - tag_processor:
-                      defaults: |
-                        // Minimal example
-                        msg.meta.location_path = "{{ .location_path }}"; // auto-generated path from agent and protocol converter location
-                        msg.meta.data_contract = "_raw";
-                        msg.meta.tag_name      = "random_int";
-                        msg.meta.host          = "{{ .HOST }}"; // optional metadata
-                        msg.meta.port          = "{{ .PORT }}"; // optional metadata
-                        // tag_processor now auto-creates msg.meta.topic
-                        return msg;
+                - tag_processor:
+                    defaults: |
+                      // Minimal example
+                      msg.meta.location_path = "{{ .location_path }}"; // auto-generated path from agent and protocol converter location
+                      msg.meta.data_contract = "_raw";
+                      msg.meta.tag_name      = "random_int";
+                      msg.meta.host          = "{{ .HOST }}"; // optional metadata
+                      msg.meta.port          = "{{ .PORT }}"; // optional metadata
+                      // tag_processor now auto-creates msg.meta.topic
+                      return msg;
       variables:
-        HOST:   "localhost"
+        HOST: "localhost"
         PORT: "8080"
