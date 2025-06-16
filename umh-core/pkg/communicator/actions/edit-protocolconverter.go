@@ -34,6 +34,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
@@ -41,6 +42,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/protocolconverter"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"go.uber.org/zap"
@@ -66,6 +68,9 @@ type EditProtocolConverterAction struct {
 
 	// Runtime observation for health checks
 	systemSnapshotManager *fsm.SnapshotManager
+
+	// Desired DFC config for comparison during health checks
+	desiredDFCConfig dataflowcomponentserviceconfig.DataflowComponentServiceConfig
 
 	actionLogger *zap.SugaredLogger
 }
@@ -271,6 +276,9 @@ func (a *EditProtocolConverterAction) Execute() (interface{}, map[string]interfa
 		BenthosConfig: benthosConfig,
 	}
 
+	// Store the desired DFC config for health check comparison
+	a.desiredDFCConfig = dfcServiceConfig
+
 	// add the connection details to the template
 	instanceToModify.ProtocolConverterServiceConfig.Config.ConnectionServiceConfig = connectionserviceconfig.ConnectionServiceConfigTemplate{
 		NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
@@ -300,12 +308,23 @@ func (a *EditProtocolConverterAction) Execute() (interface{}, map[string]interfa
 		return nil, nil, fmt.Errorf("%s", errorMsg)
 	}
 
-	// TODO: Health check waiting logic similar to deploy-dataflowcomponent
-	// if a.systemSnapshotManager != nil && !a.ignoreHealthCheck {
-	//     // Wait for protocol converter to be active
-	// }
+	// Health check waiting logic similar to deploy-dataflowcomponent
+	if a.systemSnapshotManager != nil && !a.ignoreHealthCheck {
+		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
+			fmt.Sprintf("Waiting for protocol converter %s to be active...", a.name),
+			a.outboundChannel, models.EditProtocolConverter)
 
-	_ = oldConfig
+		errCode, err := a.waitForComponentToBeActive(oldConfig)
+		if err != nil {
+			errorMsg := fmt.Sprintf("Failed to wait for protocol converter to be active: %v", err)
+			SendActionReplyV2(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
+				errorMsg, errCode, nil, a.outboundChannel, models.EditProtocolConverter, nil)
+			return nil, nil, fmt.Errorf("%s", errorMsg)
+		}
+
+		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
+			"Protocol converter successfully updated and activated", a.outboundChannel, models.EditProtocolConverter)
+	}
 
 	return "Successfully updated protocol converter", nil, nil
 }
@@ -333,6 +352,179 @@ func (a *EditProtocolConverterAction) GetProtocolConverterUUID() uuid.UUID {
 // GetDFCType returns the DFC type (read/write) - exposed for testing purposes.
 func (a *EditProtocolConverterAction) GetDFCType() string {
 	return a.dfcType
+}
+
+// waitForComponentToBeActive polls live FSM state until the protocol converter
+// becomes active or the timeout hits. Unlike deploy operations, this method
+// does not remove the component on timeout since it's an edit operation.
+// The function returns the error code and the error message via an error object.
+// The error code is a string that is sent to the frontend to allow it to determine if the action can be retried or not.
+// The error message is sent to the frontend to allow the user to see the error message.
+func (a *EditProtocolConverterAction) waitForComponentToBeActive(oldConfig config.ProtocolConverterConfig) (string, error) {
+	ticker := time.NewTicker(constants.ActionTickerTime)
+	defer ticker.Stop()
+	timeout := time.After(constants.DataflowComponentWaitForActiveTimeout)
+	startTime := time.Now()
+	timeoutDuration := constants.DataflowComponentWaitForActiveTimeout
+
+	for {
+		elapsed := time.Since(startTime)
+		remaining := timeoutDuration - elapsed
+		remainingSeconds := int(remaining.Seconds())
+
+		select {
+		case <-timeout:
+
+			// rollback to previous configuration
+			ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
+			defer cancel()
+			_, err := a.configManager.AtomicEditProtocolConverter(ctx, a.protocolConverterUUID, oldConfig)
+			if err != nil {
+				a.actionLogger.Errorf("Failed to rollback to previous configuration: %v", err)
+				stateMessage := fmt.Sprintf("Protocol converter '%s' edit timeout reached. It did not become active in time. Rolling back to previous configuration failed: %v", a.name, err)
+				return models.ErrRetryRollbackTimeout, fmt.Errorf("%s", stateMessage)
+			} else {
+				stateMessage := fmt.Sprintf("Protocol converter '%s' edit timeout reached. It did not become active in time. Rolled back to previous configuration", a.name)
+				return models.ErrRetryRollbackTimeout, fmt.Errorf("%s", stateMessage)
+			}
+
+		case <-ticker.C:
+			// Get a deep copy of the system snapshot to prevent race conditions
+			systemSnapshot := a.systemSnapshotManager.GetDeepCopySnapshot()
+			if protocolConverterManager, exists := systemSnapshot.Managers[constants.ProtocolConverterManagerName]; exists {
+				instances := protocolConverterManager.GetInstances()
+				found := false
+				for _, instance := range instances {
+					curName := instance.ID
+					if curName != a.name {
+						continue
+					}
+
+					// Cast the instance LastObservedState to a protocolconverter instance
+					pcSnapshot, ok := instance.LastObservedState.(*protocolconverter.ProtocolConverterObservedStateSnapshot)
+					if !ok {
+						stateMessage := RemainingPrefixSec(remainingSeconds) + "waiting for state info"
+						SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
+							stateMessage, a.outboundChannel, models.EditProtocolConverter)
+						continue
+					}
+
+					found = true
+
+					// Verify that the protocol converter has applied the desired DFC configuration.
+					// We compare the desired DFC config with the observed DFC configuration
+					// in the protocol converter snapshot.
+					if !a.compareProtocolConverterDFCConfig(pcSnapshot) {
+						stateMessage := RemainingPrefixSec(remainingSeconds) + fmt.Sprintf("%s DFC config not yet applied. Status reason: %s", a.dfcType, pcSnapshot.ServiceInfo.StatusReason)
+						SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
+							stateMessage, a.outboundChannel, models.EditProtocolConverter)
+						continue
+					}
+
+					// Check if the protocol converter is in an active state
+					if instance.CurrentState == "active" {
+						stateMessage := RemainingPrefixSec(remainingSeconds) + fmt.Sprintf("protocol converter successfully activated with state '%s', %s DFC configuration verified", instance.CurrentState, a.dfcType)
+						SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, stateMessage,
+							a.outboundChannel, models.EditProtocolConverter)
+						return "", nil
+					}
+
+					// Get the current state reason for more detailed information
+					currentStateReason := fmt.Sprintf("current state: %s", instance.CurrentState)
+					if pcSnapshot != nil && pcSnapshot.ServiceInfo.StatusReason != "" {
+						currentStateReason = pcSnapshot.ServiceInfo.StatusReason
+					}
+
+					stateMessage := RemainingPrefixSec(remainingSeconds) + currentStateReason
+					SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
+						stateMessage, a.outboundChannel, models.EditProtocolConverter)
+				}
+
+				if !found {
+					stateMessage := RemainingPrefixSec(remainingSeconds) + "waiting for protocol converter to appear in the system"
+					SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
+						stateMessage, a.outboundChannel, models.EditProtocolConverter)
+				}
+
+			} else {
+				stateMessage := RemainingPrefixSec(remainingSeconds) + "waiting for protocol converter manager to initialise"
+				SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
+					stateMessage, a.outboundChannel, models.EditProtocolConverter)
+			}
+		}
+	}
+}
+
+// compareProtocolConverterDFCConfig compares the desired DFC configuration with the observed
+// DFC configuration in the protocol converter snapshot. Currently only checks the read DFC
+// since write DFC is not yet implemented.
+func (a *EditProtocolConverterAction) compareProtocolConverterDFCConfig(pcSnapshot *protocolconverter.ProtocolConverterObservedStateSnapshot) bool {
+	if pcSnapshot == nil {
+		return false
+	}
+
+	// Only check read DFC for now since write DFC is not yet implemented
+	if a.dfcType != "read" {
+		// For write DFC, just return true for now since it's not implemented
+		return true
+	}
+
+	// Check if the observed Benthos config is available for read DFC
+	if pcSnapshot.ServiceInfo.DataflowComponentReadObservedState.ServiceInfo.BenthosObservedState.ObservedBenthosServiceConfig.Input == nil {
+		return false
+	}
+
+	// Convert observed Benthos config to DFC config format for comparison
+	observedBenthosConfig := pcSnapshot.ServiceInfo.DataflowComponentReadObservedState.ServiceInfo.BenthosObservedState.ObservedBenthosServiceConfig
+	observedDFCConfig := dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+		BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
+			Input:              observedBenthosConfig.Input,
+			Pipeline:           observedBenthosConfig.Pipeline,
+			Output:             observedBenthosConfig.Output,
+			CacheResources:     observedBenthosConfig.CacheResources,
+			RateLimitResources: observedBenthosConfig.RateLimitResources,
+			Buffer:             observedBenthosConfig.Buffer,
+		},
+	}
+
+	// render the desired DFC config template
+	// We need to render the template with the actual protocol converter variables
+	// to compare it properly with the observed config
+	renderedDesiredConfig, err := a.renderDesiredDFCConfig(pcSnapshot)
+	if err != nil {
+		a.actionLogger.Errorf("failed to render desired DFC config: %v", err)
+		return false
+	}
+
+	// do not compare the output since it will be automatically generated
+	observedDFCConfig.BenthosConfig.Output = nil
+	renderedDesiredConfig.BenthosConfig.Output = nil
+
+	// log the observed and desired DFC configs
+	a.actionLogger.Debugf("observed DFC config: %+v", observedDFCConfig)
+	a.actionLogger.Debugf("rendered desired DFC config: %+v", renderedDesiredConfig)
+
+	// Compare with the rendered desired DFC config
+	return dataflowcomponentserviceconfig.NewComparator().ConfigsEqual(observedDFCConfig, renderedDesiredConfig)
+}
+
+// renderDesiredDFCConfig renders the template variables in the desired DFC config
+// using the actual runtime values from the protocol converter observed state
+func (a *EditProtocolConverterAction) renderDesiredDFCConfig(pcSnapshot *protocolconverter.ProtocolConverterObservedStateSnapshot) (dataflowcomponentserviceconfig.DataflowComponentServiceConfig, error) {
+	// Get the observed spec config to extract the variables
+	specConfig := pcSnapshot.ObservedProtocolConverterSpecConfig
+
+	// Build the variable scope from the spec config's variables
+	// This includes user, global, and internal variables that were used to render the observed config
+	variableScope := specConfig.Variables.Flatten()
+
+	// Render the desired DFC config using the same variables that were used for the observed config
+	renderedConfig, err := config.RenderTemplate(a.desiredDFCConfig, variableScope)
+	if err != nil {
+		return dataflowcomponentserviceconfig.DataflowComponentServiceConfig{}, fmt.Errorf("failed to render desired DFC config: %w", err)
+	}
+
+	return renderedConfig, nil
 }
 
 // convertPipelineToMap converts CommonDataFlowComponentPipelineConfig to map[string]DfcDataConfig

@@ -108,9 +108,8 @@ var _ = Describe("EditProtocolConverter", func() {
 		// Setup the state mocker and get the mock snapshot
 		stateMocker = actions.NewStateMocker(mockConfig)
 		stateMocker.Tick()
-		mockStateManager := stateMocker.GetStateManager()
 
-		action = actions.NewEditProtocolConverterAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig, mockStateManager)
+		action = actions.NewEditProtocolConverterAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig, nil)
 
 		go actions.ConsumeOutboundMessages(outboundChannel, &messages, true)
 	})
@@ -383,6 +382,9 @@ var _ = Describe("EditProtocolConverter", func() {
 			// Verify write DFC is still empty
 			writeDFCConfig := updatedPC.ProtocolConverterServiceConfig.Config.DataflowComponentWriteServiceConfig
 			Expect(writeDFCConfig.BenthosConfig.Input).To(BeEmpty())
+
+			// verify that the templateRef is set
+			Expect(updatedPC.ProtocolConverterServiceConfig.TemplateRef).To(Equal(pcName))
 		})
 
 		It("should handle protocol converter not found error", func() {
