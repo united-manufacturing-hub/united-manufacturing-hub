@@ -152,6 +152,9 @@ func (c *DefaultHTTPClient) GetWithBody(ctx context.Context, url string) (*http.
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to execute request for %s: %w", url, err)
 	}
+	if resp == nil {
+		return nil, nil, fmt.Errorf("received nil response for %s", url)
+	}
 	defer func() {
 		err := resp.Body.Close()
 		if err != nil {

@@ -180,6 +180,10 @@ func processCookies(response *http.Response, cookies *map[string]string) {
 
 // processLatencyHeaders handles X-Response-Time header processing and latency calculations
 func processLatencyHeaders(response *http.Response, timeTillFirstByte time.Duration, logger *zap.SugaredLogger) {
+	if response == nil {
+		return
+	}
+
 	xResponseTime := response.Header.Get("X-Response-Time")
 	if xResponseTime == "" {
 		logger.Warn("X-Response-Time header not found")
