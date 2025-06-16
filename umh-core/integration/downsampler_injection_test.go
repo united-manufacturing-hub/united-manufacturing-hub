@@ -55,7 +55,7 @@ var _ = Describe("Downsampler Injection Integration Test", Ordered, Label("integ
 				if err != nil {
 					return false
 				}
-				defer resp.Body.Close()
+				defer func() { _ = resp.Body.Close() }()
 
 				body, err := io.ReadAll(resp.Body)
 				if err != nil {
@@ -74,7 +74,7 @@ var _ = Describe("Downsampler Injection Integration Test", Ordered, Label("integ
 				if err != nil {
 					return 0
 				}
-				defer resp.Body.Close()
+				defer func() { _ = resp.Body.Close() }()
 				return resp.StatusCode
 			}, 5*time.Second, 1*time.Second).Should(Equal(http.StatusOK),
 				"System should remain stable, proving downsampler injection didn't break anything")

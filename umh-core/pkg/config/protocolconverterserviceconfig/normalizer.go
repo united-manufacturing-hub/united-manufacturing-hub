@@ -104,6 +104,35 @@ func (n *Normalizer) NormalizeConfig(cfg ProtocolConverterServiceConfigSpec) Pro
 // - Skips injection if a downsampler already exists anywhere in the pipeline
 // - Injects after the first tag_processor encountered
 // - Uses empty config: downsampler reads configuration from message metadata
+//
+// ## Architectural Decision: Why Normalization vs Generation?
+//
+// This downsampler injection happens during configuration NORMALIZATION rather than during
+// runtime GENERATION for several important architectural reasons:
+//
+//  1. **Config Completeness Philosophy**: Normalization's job is to transform raw user config
+//     into complete, ready-to-use configuration. Adding a downsampler is conceptually similar
+//     to adding default buffers, processors arrays, or input/output configurations.
+//
+//  2. **Transparency & Debuggability**: After normalization, users can inspect the complete
+//     configuration and see exactly what will run. The injected downsampler is visible in
+//     the normalized config, not hidden runtime behavior.
+//
+//  3. **Consistency with Existing Patterns**: Other defaults in this codebase happen during
+//     normalization (DFC normalization, connection normalization, etc.). This follows the
+//     established pattern: normalization completes configs, generation executes them.
+//
+//  4. **Avoiding Runtime Complexity**: If injection happened during generation, we'd need
+//     complex runtime logic that runs repeatedly on every service restart, adding overhead
+//     and potential failure points.
+//
+//  5. **Avoiding Hidden Behavior**: Users can see the injected processor in their normalized
+//     config, making debugging and understanding much easier than hidden runtime injection.
+//
+// 6. **Proper Separation of Concerns**:
+//   - Normalization: "What should the config contain?"
+//   - Generation: "How do we run this config?"
+//     Injecting processors is about config content, not runtime execution.
 func (n *Normalizer) injectDefaultDownsampler(dfc dataflowcomponentserviceconfig.DataflowComponentServiceConfig) dataflowcomponentserviceconfig.DataflowComponentServiceConfig {
 	processors := getProcessorsFromPipeline(dfc.BenthosConfig.Pipeline)
 
