@@ -45,6 +45,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/protocolconverter"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 	"go.uber.org/zap"
 )
 
@@ -367,6 +368,9 @@ func (a *EditProtocolConverterAction) waitForComponentToBeActive(oldConfig confi
 	startTime := time.Now()
 	timeoutDuration := constants.DataflowComponentWaitForActiveTimeout
 
+	var logs []s6.LogEntry
+	var lastLogs []s6.LogEntry
+
 	for {
 		elapsed := time.Since(startTime)
 		remaining := timeoutDuration - elapsed
@@ -433,6 +437,31 @@ func (a *EditProtocolConverterAction) waitForComponentToBeActive(oldConfig confi
 					currentStateReason := fmt.Sprintf("current state: %s", instance.CurrentState)
 					if pcSnapshot != nil && pcSnapshot.ServiceInfo.StatusReason != "" {
 						currentStateReason = pcSnapshot.ServiceInfo.StatusReason
+					}
+
+					// send the benthos logs to the user
+					logs = pcSnapshot.ServiceInfo.DataflowComponentReadObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosLogs
+
+					// only send the logs that have not been sent yet
+					if len(logs) > len(lastLogs) {
+						lastLogs = SendLimitedLogs(logs, lastLogs, a.instanceUUID, a.userEmail, a.actionUUID, a.outboundChannel, models.EditProtocolConverter, remainingSeconds)
+					}
+
+					// CheckBenthosLogLinesForConfigErrors is used to detect fatal configuration errors that would cause
+					// Benthos to enter a CrashLoop. When such errors are detected, we can immediately
+					// abort the startup process rather than waiting for the full timeout period,
+					// as these errors require configuration changes to resolve.
+					if CheckBenthosLogLinesForConfigErrors(logs) {
+						SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, Label("edit", a.name)+"configuration error detected. Rolling back...", a.outboundChannel, models.EditProtocolConverter)
+
+						ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
+						defer cancel()
+						_, err := a.configManager.AtomicEditProtocolConverter(ctx, a.protocolConverterUUID, oldConfig)
+						if err != nil {
+							a.actionLogger.Errorf("failed to roll back protocol converter %s: %v", a.name, err)
+							return models.ErrConfigFileInvalid, fmt.Errorf("protocol converter '%s' has invalid configuration but could not be rolled back: %v. Please check your logs and consider manually restoring the previous configuration", a.name, err)
+						}
+						return models.ErrConfigFileInvalid, fmt.Errorf("protocol converter '%s' was rolled back to its previous configuration due to configuration errors. Please check the component logs, fix the configuration issues, and try editing again", a.name)
 					}
 
 					stateMessage := RemainingPrefixSec(remainingSeconds) + currentStateReason
