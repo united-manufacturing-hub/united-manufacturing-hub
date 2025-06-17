@@ -35,3 +35,7 @@ For authenticated proxies, include credentials in the URL:
 ```
 
 Supported proxy types: HTTP and HTTPS.
+
+## Common Configuration
+
+In most corporate environments, proxy usage and TLS interception go together. If you need to configure a proxy, you'll likely also need to add your corporate CA certificate to handle TLS inspection. See both sections above for complete configuration.
