@@ -122,6 +122,7 @@ func (m *FileConfigManager) AtomicEditProtocolConverter(ctx context.Context, com
 	}
 
 	// Find target index via GenerateUUIDFromName(Name) == componentUUID
+	// the index is used later to update the config
 	targetIndex := -1
 	var oldConfig ProtocolConverterConfig
 	for i, component := range config.ProtocolConverter {
