@@ -149,10 +149,8 @@ type ProtocolConverterObservedState struct {
 	// ObservedProtocolConverterRuntimeConfig contains the observed ProtocolConverter service config
 	ObservedProtocolConverterRuntimeConfig protocolconverterconfig.ProtocolConverterServiceConfigRuntime
 
-	// ObservedProtocolConverterTemplateConfig contains the observed ProtocolConverter service config
-	ObservedProtocolConverterTemplateConfig protocolconverterconfig.ProtocolConverterServiceConfigTemplate
-
 	// ObservedProtocolConverterSpecConfig contains the observed ProtocolConverter service config spec with variables
+	// it is here for the purpose of the UI to display the variables and the location
 	ObservedProtocolConverterSpecConfig protocolconverterconfig.ProtocolConverterServiceConfigSpec
 }
 
