@@ -12,8 +12,8 @@ This is the reference for the central config `/data/config.yaml`
 | `metricsPort`                   | `int`              | **9102**            | Exposes Prometheus metrics for the container.                                                  |
 | `location`                      | map `int → string` | –                   | ISA-95 hierarchy that identifies this gateway. **Level 0 must exist**.                         |
 | `communicator.apiUrl`           | `string`           | – (console-managed) | HTTPS endpoint of the Management Console.                                                      |
-| `communicator.authToken`        | `string`           | –                   | API Key issued by the console. Can be set via `UMH_AUTH_TOKEN` env-var.                        |
-| `communicator.allowInsecureTLS` | `bool`             | `false`             | Skip TLS verification [corporate-firewalls.md](../production/corporate-firewalls.md "mention") |
+| `communicator.authToken`        | `string`           | –                   | API Key issued by the console. Can be set via `AUTH_TOKEN` env-var.                            |
+| `communicator.allowInsecureTLS` | `bool`             | `false`             | Skip TLS verification [corporate-firewalls.md](../production/corporate-firewalls.md "mention"). Can be set via `ALLOW_INSECURE_TLS` env-var. |
 
 **Location levels**
 
