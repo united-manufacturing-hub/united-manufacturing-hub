@@ -262,19 +262,18 @@ agent:
 				Expect(config.Agent.Location[1]).To(Equal("Site"))
 			})
 
-			//TODO: fix this test cases
-			// It("should handle empty input", func() {
-			// 	config, _, err := parseConfig([]byte{}, false)
-			// 	Expect(err).To(HaveOccurred())
-			// 	Expect(config).To(Equal(FullConfig{}))
-			// })
+			It("should handle empty input", func() {
+				config, err := ParseConfig([]byte{}, false)
+				Expect(err).To(HaveOccurred())
+				Expect(config).To(Equal(FullConfig{}))
+			})
 
-			// It("should handle empty but valid YAML", func() {
-			// 	emptyYAML := "---\n"
-			// 	config, _, err := parseConfig([]byte(emptyYAML), false)
-			// 	Expect(err).ToNot(HaveOccurred())
-			// 	Expect(config).To(Equal(FullConfig{}))
-			// })
+			It("should handle empty but valid YAML", func() {
+				emptyYAML := "---\n"
+				config, err := ParseConfig([]byte(emptyYAML), false)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(config).To(Equal(FullConfig{}))
+			})
 
 			It("should return error for malformed YAML", func() {
 				malformedYAML := `
