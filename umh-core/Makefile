@@ -17,18 +17,23 @@
 IMAGE_NAME = umh-core
 TAG = latest
 
-GINKGO_VERSION = v2.23.3
-NILWAY_VERSION = latest
 # Default to the architecture of the host
 TARGETARCH := $(shell go env GOARCH)
 
+# Default values for go tools
+GINKGO_VERSION = v2.23.4
+NILWAY_VERSION = latest
+GOLANGCI_LINT_VERSION = v2.1.6
+DLV_VERSION = v1.25.0
+
 # Default values for build arguments
+GOLANG_VERSION = 1.24.4
+ALPINE_VERSION = 3.21
+NMAP_VERSION = 7.95-r1
 S6_OVERLAY_VERSION = 3.2.0.2
 BENTHOS_UMH_VERSION = 0.9.4
 REDPANDA_VERSION = 24.3.8
 
-# Debug values
-DLV_VERSION = v1.25.0
 
 # Note: Redpanda allocates 2GB of memory per core.
 # Additionally 1.5GB (or 7% of the total memory, whichever is greater) are required to be available, after this allocation to make seastar happy.
@@ -45,7 +50,7 @@ install:
 	go install go.uber.org/nilaway/cmd/nilaway@$(NILWAY_VERSION)
 	go install github.com/onsi/ginkgo/v2/ginkgo@$(GINKGO_VERSION)
 	go install github.com/evilmartians/lefthook@latest
-	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.1.2
+	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
 
 download-docker-binaries:
 	@mkdir -p .docker-cache/s6-overlay .docker-cache/benthos .docker-cache/redpanda
@@ -124,9 +129,13 @@ download-docker-binaries:
 .PHONY: build build-pprof build-debug
 COMMON_ARGS = \
 	--platform linux/$(TARGETARCH) \
+	--build-arg GOLANG_VERSION=$(GOLANG_VERSION) \
+	--build-arg ALPINE_VERSION=$(ALPINE_VERSION) \
+	--build-arg NMAP_VERSION=$(NMAP_VERSION) \
 	--build-arg S6_OVERLAY_VERSION=$(S6_OVERLAY_VERSION) \
 	--build-arg BENTHOS_UMH_VERSION=$(BENTHOS_UMH_VERSION) \
 	--build-arg REDPANDA_VERSION=$(REDPANDA_VERSION) \
+	--build-arg DLV_VERSION=$(DLV_VERSION) \
 	--build-arg APP_VERSION=$(VERSION) \
 	--build-arg TARGETARCH=$(TARGETARCH)
 
@@ -138,7 +147,7 @@ endef
 
 build:
 build-pprof:       EXTRA_ARGS := --build-arg PPROF=true
-build-debug:       EXTRA_ARGS := --build-arg DLV_VERSION=$(DLV_VERSION) --build-arg DEBUG=true
+build-debug:       EXTRA_ARGS := --build-arg DEBUG=true
 
 # Refresh cache and build docker binaries
 build build-pprof build-debug: download-docker-binaries
@@ -249,7 +258,20 @@ update-go-dependencies:
 	go mod tidy
 	go mod vendor
 
+# Print version variables for use in other scripts/tools
+print-versions:
+	@echo "GOLANG_VERSION=$(GOLANG_VERSION)"
+	@echo "ALPINE_VERSION=$(ALPINE_VERSION)"
+	@echo "NMAP_VERSION=$(NMAP_VERSION)"
+	@echo "S6_OVERLAY_VERSION=$(S6_OVERLAY_VERSION)"
+	@echo "BENTHOS_UMH_VERSION=$(BENTHOS_UMH_VERSION)"
+	@echo "REDPANDA_VERSION=$(REDPANDA_VERSION)"
+	@echo "DLV_VERSION=$(DLV_VERSION)"
 
+# Print the Go version
+## Used by go-analysis.yml
+print-golang-version:
+	@echo "$(GOLANG_VERSION)"
 
 ###############################################################################
 # choose build flavour                                                        #

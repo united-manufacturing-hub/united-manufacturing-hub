@@ -1,5 +1,6 @@
 module github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core
 
+// NOTE: Keep this in sync with GOLANG_VERSION in Makefile
 go 1.24.4
 
 require (
