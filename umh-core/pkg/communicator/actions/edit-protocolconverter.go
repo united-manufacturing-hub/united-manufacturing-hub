@@ -68,6 +68,8 @@ type EditProtocolConverterAction struct {
 	vb                    []models.ProtocolConverterVariable
 	ignoreHealthCheck     bool
 	location              map[int]string
+	connectionPort        string
+	connectionIP          string
 
 	// Runtime observation for health checks
 	systemSnapshotManager *fsm.SnapshotManager
@@ -129,6 +131,9 @@ func (a *EditProtocolConverterAction) Parse(payload interface{}) error {
 	if pcPayload.Location != nil {
 		a.location = pcPayload.Location
 	}
+
+	a.connectionPort = strconv.Itoa(int(pcPayload.Connection.Port))
+	a.connectionIP = pcPayload.Connection.IP
 
 	// Convert ProtocolConverterDFC to CDFCPayload for internal processing
 	a.dfcPayload = models.CDFCPayload{
@@ -301,6 +306,10 @@ func (a *EditProtocolConverterAction) Execute() (interface{}, map[string]interfa
 		locationMap[strconv.Itoa(k)] = v
 	}
 	instanceToModify.ProtocolConverterServiceConfig.Location = locationMap
+
+	// update the connection details of the protocol converter (IP and PORT variables)
+	instanceToModify.ProtocolConverterServiceConfig.Variables.User["IP"] = a.connectionIP
+	instanceToModify.ProtocolConverterServiceConfig.Variables.User["PORT"] = a.connectionPort
 
 	switch a.dfcType {
 	case "read":
