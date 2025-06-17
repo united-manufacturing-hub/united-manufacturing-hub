@@ -288,10 +288,8 @@ func (a *EditProtocolConverterAction) Execute() (interface{}, map[string]interfa
 
 	// as the BuildRuntimeConfig function always adds location and location_path to the user variables,
 	// we need to remove them from the variables here to avoid that they end up in the config file
-	if newVB != nil {
-		delete(newVB, "location")
-		delete(newVB, "location_path")
-	}
+	delete(newVB, "location")
+	delete(newVB, "location_path")
 
 	instanceToModify.ProtocolConverterServiceConfig.Variables.User = newVB
 
