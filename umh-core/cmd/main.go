@@ -220,7 +220,9 @@ func enableBackendConnection(config *config.FullConfig, communicationState *comm
 			sentry.ReportIssuef(sentry.IssueTypeError, logger, "[v2.NewLogin] Failed to create login object")
 			return
 		}
+		communicationState.LoginResponseMu.Lock()
 		communicationState.LoginResponse = login
+		communicationState.LoginResponseMu.Unlock()
 		logger.Info("Backend connection enabled, login response: ", zap.Any("login_name", login.Name))
 
 		// Get the config manager from the control loop
@@ -230,6 +232,7 @@ func enableBackendConnection(config *config.FullConfig, communicationState *comm
 		communicationState.InitialiseAndStartPusher()
 		communicationState.InitialiseAndStartSubscriberHandler(time.Minute*5, time.Minute, config, snapshotManager, configManager)
 		communicationState.InitialiseAndStartRouter()
+		communicationState.InitialiseReAuthHandler(config.Agent.AuthToken, config.Agent.AllowInsecureTLS)
 
 	}
 
