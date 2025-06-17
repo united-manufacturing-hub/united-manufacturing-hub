@@ -363,7 +363,12 @@ func (a *EditProtocolConverterAction) Execute() (interface{}, map[string]interfa
 			"Protocol converter successfully updated and activated", a.outboundChannel, models.EditProtocolConverter)
 	}
 
-	return "Successfully updated protocol converter", nil, nil
+	newUUID := dataflowcomponentserviceconfig.GenerateUUIDFromName(a.name)
+	response := map[string]any{
+		"UUID": newUUID,
+	}
+
+	return response, nil, nil
 }
 
 // getUserEmail implements the Action interface by returning the user email associated with this action.

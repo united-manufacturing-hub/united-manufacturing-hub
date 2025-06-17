@@ -508,8 +508,8 @@ func BuildCommonDataFlowComponentPropertiesFromConfig(dfcConfig dataflowcomponen
 // check if the name has spaces or special characters
 func ValidateProtocolConverterName(name string) error {
 	for _, char := range name {
-		if (char < 'a' || char > 'z') && (char < 'A' || char > 'Z') && (char < '0' || char > '9') {
-			return errors.New("name can only contain letters (a-z, A-Z) and numbers (0-9)")
+		if (char < 'a' || char > 'z') && (char < 'A' || char > 'Z') && (char < '0' || char > '9') && char != '-' {
+			return errors.New("name can only contain letters (a-z, A-Z) and numbers (0-9) and hyphens (-)")
 		}
 	}
 	return nil
