@@ -34,6 +34,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -66,6 +67,7 @@ type EditProtocolConverterAction struct {
 	dfcType               string // "read" or "write"
 	vb                    []models.ProtocolConverterVariable
 	ignoreHealthCheck     bool
+	location              map[int]string
 
 	// Runtime observation for health checks
 	systemSnapshotManager *fsm.SnapshotManager
@@ -121,6 +123,11 @@ func (a *EditProtocolConverterAction) Parse(payload interface{}) error {
 		a.vb = pcPayload.TemplateInfo.Variables
 	} else {
 		a.vb = make([]models.ProtocolConverterVariable, 0)
+	}
+
+	// Extract location
+	if pcPayload.Location != nil {
+		a.location = pcPayload.Location
 	}
 
 	// Convert ProtocolConverterDFC to CDFCPayload for internal processing
@@ -287,6 +294,13 @@ func (a *EditProtocolConverterAction) Execute() (interface{}, map[string]interfa
 			Port:   "{{ .PORT }}",
 		},
 	}
+
+	// update the location of the protocol converter (convert the map to a string map)
+	locationMap := make(map[string]string)
+	for k, v := range a.location {
+		locationMap[strconv.Itoa(k)] = v
+	}
+	instanceToModify.ProtocolConverterServiceConfig.Location = locationMap
 
 	switch a.dfcType {
 	case "read":
