@@ -309,6 +309,10 @@ func (a *EditProtocolConverterAction) Execute() (interface{}, map[string]interfa
 		return nil, nil, fmt.Errorf("%s", errorMsg)
 	}
 
+	// remove location and location_path from the user variables
+	delete(oldConfig.ProtocolConverterServiceConfig.Variables.User, "location")
+	delete(oldConfig.ProtocolConverterServiceConfig.Variables.User, "location_path")
+
 	// Health check waiting logic similar to deploy-dataflowcomponent
 	if a.systemSnapshotManager != nil && !a.ignoreHealthCheck {
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
