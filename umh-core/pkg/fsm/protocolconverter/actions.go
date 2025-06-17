@@ -276,6 +276,7 @@ func (p *ProtocolConverterInstance) UpdateObservedStateOfInstance(ctx context.Co
 			if err != nil {
 				return fmt.Errorf("failed to update ProtocolConverter service configuration: %w", err)
 			}
+			p.baseFSMInstance.GetLogger().Debugf("config updated")
 
 			// UNIQUE BEHAVIOR: Re-evaluate DFC desired states after config changes
 			// This is different from other FSMs which set desired states once and don't change them.
@@ -284,6 +285,7 @@ func (p *ProtocolConverterInstance) UpdateObservedStateOfInstance(ctx context.Co
 			// 2. Empty DFCs should remain stopped, populated DFCs should be started
 			// 3. This ensures we don't start broken Benthos instances with empty configs
 			if p.baseFSMInstance.GetDesiredFSMState() == OperationalStateActive {
+				p.baseFSMInstance.GetLogger().Debugf("re-evaluating DFC desired states and will be active")
 				err := p.service.EvaluateDFCDesiredStates(p.baseFSMInstance.GetID(), "active")
 				if err != nil {
 					p.baseFSMInstance.GetLogger().Debugf("Failed to re-evaluate DFC states after config update: %v", err)
