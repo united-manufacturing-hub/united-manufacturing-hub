@@ -461,7 +461,21 @@ func (m *FileConfigManager) writeConfig(ctx context.Context, config FullConfig) 
 	return nil
 }
 
-// since we use this function in runtime_config_test to best cover the functionality, we export it
+// ParseConfig parses YAML configuration data into a FullConfig struct with optional validation.
+// It performs two main operations:
+// 1. Decodes the YAML data using strict field validation (unless allowUnknownFields is true)
+// 2. Processes any templateRef resolution for protocol converters
+//
+// Parameters:
+//   - data: Raw YAML configuration data as bytes
+//   - allowUnknownFields: If true, allows unknown fields in the YAML; if false, rejects them
+//
+// Returns:
+//   - FullConfig: The parsed and processed configuration
+//   - error: Any error encountered during parsing or template processing
+//
+// Note: This function is exported primarily for use in runtime_config_test to provide
+// comprehensive test coverage of the configuration parsing functionality.
 func ParseConfig(data []byte, allowUnknownFields bool) (FullConfig, error) {
 	var rawConfig FullConfig
 
