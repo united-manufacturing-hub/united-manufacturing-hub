@@ -82,7 +82,7 @@ protocolConverter:
                     defaults: |
                       msg.meta.location_path = "{{ .location_path }}";
                       msg.meta.data_contract = "_raw";
-                      msg.meta.tag_name = msg.meta.{protocol}_tag_name;
+                      msg.meta.tag_name = msg.meta.opcua_tag_name;
                       return msg;
             output:
               uns: {}
