@@ -223,7 +223,8 @@ func (a *EditProtocolConverterAction) Execute() (interface{}, map[string]interfa
 	}
 
 	// currently, we canot reuse templates, so we need to create a new one
-	targetPC.ProtocolConverterServiceConfig.TemplateRef = targetPC.Name
+	targetPC.ProtocolConverterServiceConfig.TemplateRef = a.name
+	targetPC.Name = a.name
 
 	if !found {
 		errorMsg := fmt.Sprintf("Protocol converter with UUID %s not found", a.protocolConverterUUID)
