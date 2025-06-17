@@ -1,6 +1,6 @@
 module github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core
 
-go 1.24.2
+go 1.24.4
 
 require (
 	github.com/DataDog/gostackparse v0.7.0

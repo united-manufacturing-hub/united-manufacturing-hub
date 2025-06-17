@@ -28,7 +28,7 @@ BENTHOS_UMH_VERSION = 0.9.4
 REDPANDA_VERSION = 24.3.8
 
 # Debug values
-DLV_VERSION = v1.24.2
+DLV_VERSION = v1.25.0
 
 # Note: Redpanda allocates 2GB of memory per core.
 # Additionally 1.5GB (or 7% of the total memory, whichever is greater) are required to be available, after this allocation to make seastar happy.
