@@ -12,13 +12,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# ------------------------------------------------------------------------------------------------
+# !!!! This config is used in unit tests, please do not change it without updating the tests !!!!
+# ------------------------------------------------------------------------------------------------
+
 # ---------- Templates ---------- #
 templates:
-  # Anchored, re-usable template — will be referenced with *opcua_http
-  - &opcua_http
+  protocolConverter:
+    temperature-sensor-pc:
       connection:
-        ip:   "{{ .IP }}"          # user variable
-        port: "{{ .PORT }}"
+        nmap:
+          target: '{{ .IP }}'
+          port: '{{ .PORT }}'
       dataflowcomponent_read:
         benthos:
           input:
@@ -47,17 +52,29 @@ protocolConverter:
       location:
         0: "override-level0"
         2: "machine-7"
-      template: *opcua_http       # uses the anchor
+      templateRef: "temperature-sensor-pc"
       variables:                  # <- flat, user-defined variables
         IP:   "10.0.1.50"
+        PORT: "4840"
+  - name: temperature-sensor-inherited-pc
+    desiredState: active
+    protocolConverterServiceConfig:
+      # Intentionally tries to override level-0; will be ignored
+      location:
+        0: "override-level0"
+        2: "machine-7"
+      templateRef: "temperature-sensor-pc"
+      variables:                  # <- flat, user-defined variables
+        IP:   "10.0.1.51"
         PORT: "4840"
 
   # ────────────────────────────────────────────────────────────────
   - name: vibration-sensor-pc
     desiredState: active
-    # No anchor – inline template
+    # No anchor – inline config
     protocolConverterServiceConfig:
-      template:
+      templateRef: null
+      config:
         connection:
           ip:   "{{ .IP }}"
           port: "{{ .PORT }}"
@@ -69,26 +86,3 @@ protocolConverter:
       variables:
         IP:   "10.0.1.51"
         PORT: "9000"
-
-  # ────────────────────────────────────────────────────────────────
-  - name: simple-forwarder
-    desiredState: passive
-    # Template is completely static – no variables needed
-    protocolConverterServiceConfig:
-      template:
-        connection:
-          ip: "192.168.1.10"
-          port: "502"
-      variables: {}               # allowed, but empty
-
-
-# temperature-sensor-pc
-#| Stage           | Variable/field          | Value              | Source                 |
-#| --------------- | ----------------------- | ------------------ | ---------------------- |
-#| User YAML       | `variables.IP`          | `10.0.1.50`        | User                   |
-#| User YAML       | `variables.PORT`        | `4840`             | User                   |
-#| Agent-inherited | `location.0`            | `plant-A`          | Agent (wins over user) |
-#| Agent-inherited | `location.1`            | `line-4`           | Agent                  |
-#| User YAML       | `location.2`            | `machine-7`        | User (no conflict)     |
-#| Central loop    | `global.releaseChannel` | `stable` (example) | Global                 |
-#| PC manager      | `internal.id`           | `3e42d…`           | Internal               |

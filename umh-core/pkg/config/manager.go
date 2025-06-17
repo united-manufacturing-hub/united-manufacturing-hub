@@ -70,6 +70,12 @@ type ConfigManager interface {
 	AtomicDeleteDataflowcomponent(ctx context.Context, componentUUID uuid.UUID) error
 	// AtomicEditDataflowcomponent edits a dataflowcomponent in the config atomically
 	AtomicEditDataflowcomponent(ctx context.Context, componentUUID uuid.UUID, dfc DataFlowComponentConfig) (DataFlowComponentConfig, error)
+	// AtomicAddProtocolConverter adds a protocol converter to the config atomically
+	AtomicAddProtocolConverter(ctx context.Context, pc ProtocolConverterConfig) error
+	// AtomicEditProtocolConverter edits a protocol converter in the config atomically
+	AtomicEditProtocolConverter(ctx context.Context, componentUUID uuid.UUID, pc ProtocolConverterConfig) (ProtocolConverterConfig, error)
+	// AtomicDeleteProtocolConverter deletes a protocol converter from the config atomically
+	AtomicDeleteProtocolConverter(ctx context.Context, componentUUID uuid.UUID) error
 	// GetConfigAsString returns the current config as a string
 	// This function is used in the get-config-file action to retrieve the raw config file
 	// without any yaml parsing applied. This allows to display yaml anchors and change them
@@ -305,7 +311,7 @@ func (m *FileConfigManager) GetConfig(ctx context.Context, tick uint64) (FullCon
 		return FullConfig{}, ctx.Err()
 	}
 
-	config, err := parseConfig(data, false)
+	config, err := ParseConfig(data, false)
 	if err != nil {
 		return FullConfig{}, fmt.Errorf("failed to parse config file: %w", err)
 	}
@@ -344,24 +350,6 @@ func (m *FileConfigManager) GetConfig(ctx context.Context, tick uint64) (FullCon
 	m.cacheMu.Unlock()
 
 	return config, nil
-}
-
-// parseConfig unmarshals *data* (a YAML document) into a FullConfig.
-//
-// The YAML decoder is configured with KnownFields(true) by default so that any
-// unknown or misspelled keys cause an immediate error, preventing silent
-// misconfiguration. Setting allowUnknownFields to true allows YAML anchors and other
-// custom fields to pass validation. No additional semantic validation is performed here;
-// callers are responsible for deeper checks.
-func parseConfig(data []byte, allowUnknownFields bool) (FullConfig, error) {
-	var cfg FullConfig
-
-	dec := yaml.NewDecoder(bytes.NewReader(data))
-	dec.KnownFields(!allowUnknownFields) // Only reject unknown keys if allowUnknownFields is false
-	if err := dec.Decode(&cfg); err != nil {
-		return FullConfig{}, fmt.Errorf("failed to decode config: %w", err)
-	}
-	return cfg, nil
 }
 
 // FileConfigManagerWithBackoff wraps a FileConfigManager and implements backoff for GetConfig errors
@@ -435,8 +423,14 @@ func (m *FileConfigManager) writeConfig(ctx context.Context, config FullConfig) 
 		return fmt.Errorf("failed to create config directory: %w", err)
 	}
 
+	// here we need to serialize the (spec) config to the yaml-representation of the config
+	yamlConfig, err := convertSpecToYaml(config)
+	if err != nil {
+		return fmt.Errorf("failed to convert spec to yaml: %w", err)
+	}
+
 	// Marshal the config to YAML
-	data, err := yaml.Marshal(config)
+	data, err := yaml.Marshal(yamlConfig)
 	if err != nil {
 		return fmt.Errorf("failed to marshal config: %w", err)
 	}
@@ -446,24 +440,45 @@ func (m *FileConfigManager) writeConfig(ctx context.Context, config FullConfig) 
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
 
-	// Update the cache to reflect the new config
-	info, err := m.fsService.Stat(ctx, m.configPath)
-	if err != nil {
-		return fmt.Errorf("failed to stat config file after write: %w", err)
-	}
-	if info == nil {
-		return fmt.Errorf("stat returned nil for config file after write: %s", m.configPath)
-	}
+	// The following section is diabled,
+	// due to a bug when using it togheter with Protocol Converters, which lead to connections (templated) not being rendered
+	// In my (Ferdinand) opinion it is fine to do a read after a write, to ensure consistency
+	/*
+		// Update the cache to reflect the new config
+		info, err := m.fsService.Stat(ctx, m.configPath)
+		if err != nil {
+			return fmt.Errorf("failed to stat config file after write: %w", err)
+		}
 
-	// Update all cache fields atomically in a single critical section
-	m.cacheMu.Lock()
-	m.cacheRawConfig = string(data)
-	m.cacheModTime = info.ModTime()
-	m.cacheConfig = config
-	m.cacheMu.Unlock()
-
+		// Update all cache fields atomically in a single critical section
+		m.cacheMu.Lock()
+		m.cacheRawConfig = string(data)
+		m.cacheModTime = info.ModTime()
+		m.cacheConfig = config
+		m.cacheMu.Unlock()
+	*/
 	m.logger.Infof("Successfully wrote config to %s", m.configPath)
 	return nil
+}
+
+// since we use this function in runtime_config_test to best cover the functionality, we export it
+func ParseConfig(data []byte, allowUnknownFields bool) (FullConfig, error) {
+	var rawConfig FullConfig
+
+	// First decode the YAML into the raw config structure using standard YAML functions
+	dec := yaml.NewDecoder(bytes.NewReader(data))
+	dec.KnownFields(!allowUnknownFields) // Only reject unknown keys if allowUnknownFields is false
+	if err := dec.Decode(&rawConfig); err != nil {
+		return FullConfig{}, fmt.Errorf("failed to decode config: %w", err)
+	}
+
+	// Process templateRef resolution for protocol converters
+	processedConfig, err := convertYamlToSpec(rawConfig)
+	if err != nil {
+		return FullConfig{}, fmt.Errorf("failed to resolve protocol converter template references: %w", err)
+	}
+
+	return processedConfig, nil
 }
 
 // WithFileSystemService allows setting a custom filesystem service on the wrapped FileConfigManager
@@ -836,11 +851,11 @@ func (m *FileConfigManagerWithBackoff) UpdateAndGetCacheModTime(ctx context.Cont
 // If expectedModTime is provided, it will check that the file hasn't been modified since that time
 func (m *FileConfigManager) WriteConfigFromString(ctx context.Context, configStr string, expectedModTime string) error {
 	// First parse the config with strict validation to detect syntax errors and schema problems
-	_, err := parseConfig([]byte(configStr), false)
+	_, err := ParseConfig([]byte(configStr), false)
 	if err != nil {
 		// If strict parsing fails, try again with allowUnknownFields=true
 		// This allows YAML anchors and other custom fields
-		_, err = parseConfig([]byte(configStr), true)
+		_, err = ParseConfig([]byte(configStr), true)
 		if err != nil {
 			return fmt.Errorf("failed to parse config: %w", err)
 		}
@@ -853,12 +868,6 @@ func (m *FileConfigManager) WriteConfigFromString(ctx context.Context, configStr
 	}
 	defer m.mutexReadOrWrite.Unlock()
 
-	// Check if context is already cancelled
-	if ctx.Err() != nil {
-		return ctx.Err()
-	}
-
-	// If expectedModTime is provided, check for concurrent modification atomically under the lock
 	if expectedModTime != "" {
 		info, err := m.fsService.Stat(ctx, m.configPath)
 		if err != nil && !errors.Is(err, os.ErrNotExist) {
@@ -888,27 +897,28 @@ func (m *FileConfigManager) WriteConfigFromString(ctx context.Context, configStr
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
 
-	// Update the cache to reflect the new config
-	info, err := m.fsService.Stat(ctx, m.configPath)
-	if err != nil {
-		return fmt.Errorf("failed to stat config file after write: %w", err)
-	}
-	if info == nil {
-		return fmt.Errorf("stat returned nil for config file after write: %s", m.configPath)
-	}
+	// The following section is diabled,
+	// due to a bug when using it togheter with Protocol Converters, which lead to connections (templated) not being rendered
+	// In my (Ferdinand) opinion it is fine to do a read after a write, to ensure consistency
+	/*
+		// Update the cache to reflect the new config
+		info, err := m.fsService.Stat(ctx, m.configPath)
+		if err != nil {
+			return fmt.Errorf("failed to stat config file after write: %w", err)
+		}
 
-	// Parse the config for the cache
-	parsedConfig, err := parseConfig([]byte(configStr), true)
-	if err != nil {
-		return fmt.Errorf("failed to parse config for cache update: %w", err)
-	}
-
-	// Update all cache fields atomically in a single critical section
-	m.cacheMu.Lock()
-	m.cacheRawConfig = configStr
-	m.cacheModTime = info.ModTime()
-	m.cacheConfig = parsedConfig
-	m.cacheMu.Unlock()
+		// Parse the config for the cache
+		parsedConfig, _, err := ParseConfig([]byte(configStr), true)
+		if err != nil {
+			return fmt.Errorf("failed to parse config for cache update: %w", err)
+		}
+		// Update all cache fields atomically in a single critical section
+		m.cacheMu.Lock()
+		m.cacheRawConfig = configStr
+		m.cacheModTime = info.ModTime()
+		m.cacheConfig = parsedConfig
+		m.cacheMu.Unlock()
+	*/
 
 	m.logger.Infof("Successfully wrote config to %s", m.configPath)
 	return nil
@@ -922,4 +932,5 @@ func (m *FileConfigManagerWithBackoff) WriteConfigFromString(ctx context.Context
 	}
 
 	return m.configManager.WriteConfigFromString(ctx, configStr, expectedModTime)
+
 }

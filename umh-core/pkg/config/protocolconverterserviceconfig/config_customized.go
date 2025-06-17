@@ -23,7 +23,7 @@ import (
 // This is used during rendering to access the template that may contain variables like {{ .PORT }}.
 // The template will be rendered into a runtime config with proper types during BuildRuntimeConfig.
 func (c ProtocolConverterServiceConfigSpec) GetConnectionServiceConfig() connectionserviceconfig.ConnectionServiceConfigTemplate {
-	return c.Template.ConnectionServiceConfig
+	return c.Config.ConnectionServiceConfig
 }
 
 // GetDFCReadServiceConfig converts the component config to a full ProtocolConverterServiceConfig
@@ -31,7 +31,7 @@ func (c ProtocolConverterServiceConfigSpec) GetConnectionServiceConfig() connect
 // to be the UNS output config. This ensures protocol converters always write to the unified namespace.
 func (c ProtocolConverterServiceConfigSpec) GetDFCReadServiceConfig() dataflowcomponentserviceconfig.DataflowComponentServiceConfig {
 	// copy the config
-	dfcReadConfig := c.Template.DataflowComponentReadServiceConfig
+	dfcReadConfig := c.Config.DataflowComponentReadServiceConfig
 
 	// Only append UNS output if there's an input config
 	if len(dfcReadConfig.BenthosConfig.Input) > 0 {
@@ -49,7 +49,7 @@ func (c ProtocolConverterServiceConfigSpec) GetDFCReadServiceConfig() dataflowco
 // For a write DFC, the user is not allowed to set its own input config, so we "enforce" the input config
 // to be the UNS input config. This ensures protocol converters always read from the unified namespace.
 func (c ProtocolConverterServiceConfigSpec) GetDFCWriteServiceConfig() dataflowcomponentserviceconfig.DataflowComponentServiceConfig {
-	dfcWriteConfig := c.Template.DataflowComponentWriteServiceConfig
+	dfcWriteConfig := c.Config.DataflowComponentWriteServiceConfig
 
 	// Only append UNS input if there's an output config
 	if len(dfcWriteConfig.BenthosConfig.Output) > 0 {
