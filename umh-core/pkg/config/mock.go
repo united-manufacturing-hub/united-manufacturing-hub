@@ -636,8 +636,8 @@ func (m *MockConfigManager) WithCacheModTime(modTime time.Time) *MockConfigManag
 	return m
 }
 
-// WriteConfigFromString implements the ConfigManager interface
-func (m *MockConfigManager) WriteConfigFromString(ctx context.Context, config string, expectedModTime string) error {
+// WriteYAMLConfigFromString implements the ConfigManager interface
+func (m *MockConfigManager) WriteYAMLConfigFromString(ctx context.Context, config string, expectedModTime string) error {
 	m.mutexReadOrWrite.Lock()
 	defer m.mutexReadOrWrite.Unlock()
 

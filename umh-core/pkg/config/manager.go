@@ -85,8 +85,8 @@ type ConfigManager interface {
 	GetCacheModTimeWithoutUpdate() time.Time
 	// UpdateAndGetCacheModTime updates the cache and returns the modification time
 	UpdateAndGetCacheModTime(ctx context.Context) (time.Time, error)
-	// WriteConfigFromString writes a config from a string to the config file
-	WriteConfigFromString(ctx context.Context, configStr string, expectedModTime string) error
+	// WriteYAMLConfigFromString writes a config from a string to the config file
+	WriteYAMLConfigFromString(ctx context.Context, configStr string, expectedModTime string) error
 
 	// TODO: Add AtomicUnlinkFromTemplate method
 	// AtomicUnlinkFromTemplate converts a templated configuration (using YAML anchors/aliases)
@@ -861,9 +861,23 @@ func (m *FileConfigManagerWithBackoff) UpdateAndGetCacheModTime(ctx context.Cont
 	return m.configManager.UpdateAndGetCacheModTime(ctx)
 }
 
-// WriteConfigFromString writes a config from a string to the config file
-// If expectedModTime is provided, it will check that the file hasn't been modified since that time
-func (m *FileConfigManager) WriteConfigFromString(ctx context.Context, configStr string, expectedModTime string) error {
+// WriteYAMLConfigFromString writes a raw YAML configuration string directly to the config file.
+// This function is primarily used by the frontend via the set-config action to allow direct
+// YAML editing and bypasses the normal template rendering process.
+//
+// The function performs validation by parsing the config with strict field checking before
+// writing, ensuring the YAML is syntactically correct and conforms to the expected schema.
+//
+// Parameters:
+//   - ctx: Context for cancellation and timeout control
+//   - configStr: Raw YAML configuration as a string to write to the config file
+//   - expectedModTime: If provided, ensures the file hasn't been modified since this time.
+//     This prevents concurrent modification conflicts. Pass empty string to skip this check.
+//
+// Note: This function bypasses template processing, allowing users to directly edit YAML
+// configurations that may include anchors, aliases, and other YAML features that would
+// otherwise be processed through the template system.
+func (m *FileConfigManager) WriteYAMLConfigFromString(ctx context.Context, configStr string, expectedModTime string) error {
 	// First parse the config with strict validation to detect syntax errors and schema problems
 	_, err := ParseConfig([]byte(configStr), false)
 	if err != nil {
@@ -938,13 +952,13 @@ func (m *FileConfigManager) WriteConfigFromString(ctx context.Context, configStr
 	return nil
 }
 
-// WriteConfigFromString delegates to the underlying FileConfigManager
-func (m *FileConfigManagerWithBackoff) WriteConfigFromString(ctx context.Context, configStr string, expectedModTime string) error {
+// WriteYAMLConfigFromString delegates to the underlying FileConfigManager
+func (m *FileConfigManagerWithBackoff) WriteYAMLConfigFromString(ctx context.Context, configStr string, expectedModTime string) error {
 	// Check if context is already cancelled
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
 
-	return m.configManager.WriteConfigFromString(ctx, configStr, expectedModTime)
+	return m.configManager.WriteYAMLConfigFromString(ctx, configStr, expectedModTime)
 
 }

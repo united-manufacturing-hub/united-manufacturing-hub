@@ -505,7 +505,7 @@ func (w *writeFailingMockConfigManager) UpdateAndGetCacheModTime(ctx context.Con
 	return w.mockConfigManager.UpdateAndGetCacheModTime(ctx)
 }
 
-// WriteConfigFromString implements the ConfigManager interface
-func (w *writeFailingMockConfigManager) WriteConfigFromString(ctx context.Context, config string, expectedModTime string) error {
-	return w.mockConfigManager.WriteConfigFromString(ctx, config, expectedModTime)
+// WriteYAMLConfigFromString implements the ConfigManager interface
+func (w *writeFailingMockConfigManager) WriteYAMLConfigFromString(ctx context.Context, config string, expectedModTime string) error {
+	return w.mockConfigManager.WriteYAMLConfigFromString(ctx, config, expectedModTime)
 }
