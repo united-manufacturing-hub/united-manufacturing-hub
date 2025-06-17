@@ -141,6 +141,8 @@ func (a *EditProtocolConverterAction) Parse(payload interface{}) error {
 		Pipeline: convertPipelineToMap(dfcToUpdate.Pipeline),
 		// Set default outputs since ProtocolConverterDFC doesn't have outputs
 		Outputs: models.DfcDataConfig{Data: "", Type: ""},
+		// Extract Inject data from RawYAML to support CacheResources, RateLimitResources, and Buffer
+		Inject: extractInjectFromRawYAML(dfcToUpdate.RawYAML),
 	}
 
 	// Handle optional fields
@@ -611,6 +613,15 @@ func convertPipelineToMap(pipeline models.CommonDataFlowComponentPipelineConfig)
 		}
 	}
 	return result
+}
+
+// extractInjectFromRawYAML extracts the inject data from the RawYAML field to support
+// CacheResources, RateLimitResources, and Buffer in protocol converter DFCs
+func extractInjectFromRawYAML(rawYAML *models.CommonDataFlowComponentRawYamlConfig) string {
+	if rawYAML == nil {
+		return ""
+	}
+	return rawYAML.Data
 }
 
 // getUserEmail implements the Action interface by returning the user email associated with this action.
