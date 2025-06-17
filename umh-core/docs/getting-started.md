@@ -94,6 +94,17 @@ If you omit this, you might see `chmod: /data/config.yaml: no such file or direc
 **TLS interception**\
 If your corporate network intercepts TLS traffic, follow the steps in [corporate-firewalls.md](production/corporate-firewalls.md "mention") to add your CA certificate or, as a last resort, set `allowInsecureTLS: true` in `config.yaml`.
 
+**Proxy configuration**\
+If you're behind a corporate proxy, add these environment variables to your Docker run command:
+
+```bash
+-e HTTP_PROXY=http://proxy.company.com:8080 \
+-e HTTPS_PROXY=http://proxy.company.com:8080 \
+-e NO_PROXY=localhost,127.0.0.1,.local
+```
+
+Supported proxy environment variables: `HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY` (and their lowercase variants).
+
 ### Next steps
 
 * **Add a real producer** – point an OPC UA input at your PLC and let the `tag_processor` contextualize your data.
