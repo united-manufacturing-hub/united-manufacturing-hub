@@ -469,6 +469,25 @@ test-no-copy: stop-and-remove-umh-core-latest $(BUILD_TARGET)
 		--cpus $(CPUS) \
 		$(IMAGE_NAME):$(TAG)
 
+# This test runs the UMH Core instance with a proxy (on the host machine) to the backend.
+# On the host install mitmproxy (for example via brew install mitmproxy)
+# Then run mitmweb --listen-port 6060
+test-mitm: stop-and-remove-umh-core-latest $(BUILD_TARGET)
+	@mkdir -p $(PWD)/data
+	docker run \
+		--name $(IMAGE_NAME) \
+		-v $(PWD)/data:/data \
+		-e LOGGING_LEVEL=DEBUG \
+		-e HTTP_PROXY=http://host.docker.internal:6060 \
+		-e HTTPS_PROXY=https://host.docker.internal:6060 \
+		-p 8081:8080 \
+		-p 4195:4195 \
+		-p 40000:40000 \
+		--memory $(MEMORY) \
+		--cpus $(CPUS) \
+		$(IMAGE_NAME):$(TAG)
+
+
 pod-shell:
 	docker exec -it $(IMAGE_NAME) /bin/bash
 
