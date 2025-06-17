@@ -38,6 +38,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: ${{ steps.go_version.outputs.version }}
+          cache: true
 
       - name: Run go vet
         run: make vet
