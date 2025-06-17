@@ -127,9 +127,14 @@ func (a *SetConfigFileAction) Execute() (interface{}, map[string]interface{}, er
 		return nil, nil, fmt.Errorf("failed to write config file: %w", err)
 	}
 
-	// the WriteYAMLConfigFromString call above updates the cache mod time in the config manager
-	// so we can just get it without updating it (which would be a blocking operation)
-	newLastModifiedTime := a.configManager.GetCacheModTimeWithoutUpdate()
+	// the WriteYAMLConfigFromString call above does not update the cache mod time in the config manager
+	newLastModifiedTime, err := a.configManager.UpdateAndGetCacheModTime(ctx)
+	if err != nil {
+		errMsg := fmt.Sprintf("Failed to update cache mod time: %v", err)
+		SendActionReplyV2(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
+			errMsg, models.ErrRetryConfigWriteFailed, nil, a.outboundChannel, models.SetConfigFile, nil)
+		return nil, nil, fmt.Errorf("failed to update cache mod time: %w", err)
+	}
 
 	newLastModifiedTimeString := newLastModifiedTime.Format(time.RFC3339)
 
