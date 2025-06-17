@@ -1,5 +1,7 @@
 # Consuming Data
 
+### 1. Bridge Sink Flows 🚧
+
 > 🚧 **Roadmap Item** - Enhanced consumer tooling, Topic Browser, and REST API are under development.
 
 Consuming data from the Unified Namespace involves subscribing to specific topics or patterns and processing the standardized message formats. UMH Core provides multiple consumption methods for different use cases.
@@ -85,14 +87,15 @@ curl -X GET "https://umh-core:8080/api/v1/uns/values" \
 
 UNS input supports powerful regex patterns to subscribe to specific data. For complete topic structure details, see [Topic Convention](topic-convention.md).
 
-| Pattern | Matches | Use Case |
-|---------|---------|----------|
-| `umh.v1.acme.+.+.+.+._raw.temperature` | All raw temperature sensors | Temperature monitoring dashboard |
-| `umh.v1.acme.plant1.+.+.+._raw.+` | All raw data from plant1 | Plant-specific raw data analytics |
-| `umh.v1.+.+.+.+.pump01._pump.+` | All structured data from pump01 assets | Asset-specific monitoring |
-| `umh.v1.acme.plant1.line4.+.+._temperature.+` | Line 4 structured temperature data | Production line temperature analysis |
+| Pattern                                       | Matches                                | Use Case                             |
+| --------------------------------------------- | -------------------------------------- | ------------------------------------ |
+| `umh.v1.acme.+.+.+.+._raw.temperature`        | All raw temperature sensors            | Temperature monitoring dashboard     |
+| `umh.v1.acme.plant1.+.+.+._raw.+`             | All raw data from plant1               | Plant-specific raw data analytics    |
+| `umh.v1.+.+.+.+.pump01._pump.+`               | All structured data from pump01 assets | Asset-specific monitoring            |
+| `umh.v1.acme.plant1.line4.+.+._temperature.+` | Line 4 structured temperature data     | Production line temperature analysis |
 
 **Regex Support:**
+
 ```yaml
 input:
   uns:
@@ -115,6 +118,7 @@ Simple sensor data follows the [timeseries payload format](payload-formats.md):
 ```
 
 **Processing example:**
+
 ```yaml
 pipeline:
   processors:
@@ -167,10 +171,10 @@ pipeline:
 
 UNS input abstracts away Kafka/Redpanda complexity and provides:
 
-- **Topic pattern matching** with wildcards and regex
-- **Automatic metadata** - `umh_topic` contains the full UNS topic path
-- **Message headers** - All UNS metadata available via `metadata()` function
-- **Embedded broker access** - No need to configure Kafka addresses
+* **Topic pattern matching** with wildcards and regex
+* **Automatic metadata** - `umh_topic` contains the full UNS topic path
+* **Message headers** - All UNS metadata available via `metadata()` function
+* **Embedded broker access** - No need to configure Kafka addresses
 
 ```yaml
 input:
@@ -222,11 +226,12 @@ output:
     # ... database-specific configuration
 ```
 
-For complete database integration examples including TimescaleDB, InfluxDB, and other systems, see [Integration Patterns Guide](../../integrations/README.md).
+For complete database integration examples including TimescaleDB, InfluxDB, and other systems, see [Integration Patterns Guide](../../integrations/).
 
 ## Data Contract Evolution
 
 ### Consuming Raw Data (Simple)
+
 ```yaml
 input:
   uns:
@@ -239,6 +244,7 @@ pipeline:
 ```
 
 ### Consuming Structured Data (Advanced) 🚧
+
 ```yaml
 input:
   uns:
@@ -261,11 +267,11 @@ pipeline:
 
 UMH Core uses UNS input/output instead of direct Kafka access because:
 
-- **Abstraction**: Hides Kafka/Redpanda complexity from users
-- **Embedded Integration**: Works seamlessly with UMH Core's embedded Redpanda
-- **Topic Management**: Automatic topic creation and management
-- **Metadata Handling**: Proper UNS metadata propagation
-- **Pattern Matching**: Advanced regex support for topic patterns
+* **Abstraction**: Hides Kafka/Redpanda complexity from users
+* **Embedded Integration**: Works seamlessly with UMH Core's embedded Redpanda
+* **Topic Management**: Automatic topic creation and management
+* **Metadata Handling**: Proper UNS metadata propagation
+* **Pattern Matching**: Advanced regex support for topic patterns
 
 This aligns with UMH Core's philosophy of embedding Redpanda as an internal implementation detail rather than exposing it directly to users.
 
@@ -273,21 +279,20 @@ This aligns with UMH Core's philosophy of embedding Redpanda as an internal impl
 
 The upcoming Topic Browser provides a visual interface to explore and consume UNS data:
 
-- Real-time topic tree visualization
-- Live value monitoring  
-- Historical data queries
-- Export to various formats
+* Real-time topic tree visualization
+* Live value monitoring
+* Historical data queries
+* Export to various formats
 
 ## Next Steps
 
-- **[Data Modeling](../data-modeling/README.md)** 🚧 - Structure complex data consumption with explicit models
-- **[Data Flows Overview](../data-flows/README.md)** - Advanced processing patterns
-- **[Configuration Reference](../../reference/configuration-reference.md)** - Complete consumer configuration
+* [**Data Modeling**](../data-modeling/) 🚧 - Structure complex data consumption with explicit models
+* [**Data Flows Overview**](../data-flows/) - Advanced processing patterns
+* [**Configuration Reference**](../../reference/configuration-reference.md) - Complete consumer configuration
 
 ## Learn More
 
-- [Historians vs Open-Source databases](https://learn.umh.app/blog/historians-vs-open-source-databases-which-is-better/) - Choose the right storage backend
-- [Why we chose TimescaleDB over InfluxDB](https://learn.umh.app/blog/why-we-chose-timescaledb-over-influxdb/) - Database selection rationale
-- [Simplifying Tag Browsing in Grafana](https://learn.umh.app/blog/simplifying-tag-browsing-in-grafana/) - Visualization best practices
-- [Benthos-UMH UNS Output Documentation](https://docs.umh.app/benthos-umh/output/uns-output) - Complete UNS output reference
-
+* [Historians vs Open-Source databases](https://learn.umh.app/blog/historians-vs-open-source-databases-which-is-better/) - Choose the right storage backend
+* [Why we chose TimescaleDB over InfluxDB](https://learn.umh.app/blog/why-we-chose-timescaledb-over-influxdb/) - Database selection rationale
+* [Simplifying Tag Browsing in Grafana](https://learn.umh.app/blog/simplifying-tag-browsing-in-grafana/) - Visualization best practices
+* [Benthos-UMH UNS Output Documentation](https://docs.umh.app/benthos-umh/output/uns-output) - Complete UNS output reference

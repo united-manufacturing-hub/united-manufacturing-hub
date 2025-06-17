@@ -1,5 +1,7 @@
 # Producing Data
 
+> **UMH Classic Users:** The previous `_historian` data contract is not used anymore in UMH core. Use `_raw` for simple sensor data and explicit data contracts (like `_temperature`, `_pump`) with the new [data modeling system](broken-reference) 🚧 for structured industrial data. See [Migration from UMH Classic to UMH Core](broken-reference) for complete migration instructions.
+
 > 🚧 **Roadmap Item** - Enhanced producer tooling and simplified configuration are under development.
 
 Publishing data to the Unified Namespace involves creating Bridges (shown as `protocolConverter:` in YAML) or Stand-alone Flows (shown as `dataFlow:` in YAML) that read from your devices and format messages according to UNS conventions.
@@ -59,6 +61,7 @@ UMH Core supports 50+ industrial connectors via Benthos-UMH. For complete protoc
 The `tag_processor` is crucial for UNS compliance. It adds required metadata for topic construction. For complete syntax and examples, see [Configuration Reference - Tag Processor](../../reference/configuration-reference.md#tag_processor).
 
 **Essential pattern:**
+
 ```yaml
 pipeline:
   processors:
@@ -74,14 +77,15 @@ pipeline:
 
 Choose the appropriate data contract for your use case:
 
-| Contract | Usage | Payload Format | When to Use |
-|----------|--------|----------------|-------------|
-| `_raw` | Unprocessed device data | `{"value": 42.5, "timestamp_ms": 1733904005123}` | Initial data ingestion, simple sensors |
-| Custom contracts | Structured business data | Model-defined schema | Enterprise data modeling |
+| Contract         | Usage                    | Payload Format                                   | When to Use                            |
+| ---------------- | ------------------------ | ------------------------------------------------ | -------------------------------------- |
+| `_raw`           | Unprocessed device data  | `{"value": 42.5, "timestamp_ms": 1733904005123}` | Initial data ingestion, simple sensors |
+| Custom contracts | Structured business data | Model-defined schema                             | Enterprise data modeling               |
 
 ### Evolution from Raw to Structured
 
 **Start Simple (Raw Data):**
+
 ```yaml
 pipeline:
   processors:
@@ -90,10 +94,11 @@ pipeline:
           msg.meta.data_contract = "_raw";
           msg.meta.tag_name = "temperature";
 ```
-*Results in:* `umh.v1.acme.plant1.line4.sensor1._raw.temperature`
 
-**Evolve to Structured (Data Models):** 🚧
-For structured data evolution using data models, data contracts, and stream processors, see [Data Modeling Documentation](../data-modeling/README.md).
+_Results in:_ `umh.v1.acme.plant1.line4.sensor1._raw.temperature`
+
+**Evolve to Structured (Data Models):** 🚧\
+For structured data evolution using data models, data contracts, and stream processors, see [Data Modeling Documentation](../data-modeling/).
 
 Example result: `umh.v1.acme.plant1.line4.sensor1._temperature.temperature_in_c`
 
@@ -103,15 +108,15 @@ For choosing between Bridges and Stand-alone Flows, see the [complete comparison
 
 ## Migration from UMH Classic
 
-> **UMH Classic Users:** The previous `_historian` data contract is deprecated. Use `_raw` for simple sensor data and explicit data contracts (like `_temperature`, `_pump`) with the new [data modeling system](../data-modeling/README.md) 🚧 for structured industrial data. See [Migration from UMH Classic to UMH Core](../../production/migration-from-classic.md) for complete migration instructions.
+> **UMH Classic Users:** The previous `_historian` data contract is deprecated. Use `_raw` for simple sensor data and explicit data contracts (like `_temperature`, `_pump`) with the new [data modeling system](../data-modeling/) 🚧 for structured industrial data. See [Migration from UMH Classic to UMH Core](../../production/migration-from-classic.md) for complete migration instructions.
 
 ## Next Steps
 
-- **[Consuming Data](consuming-data.md)** 🚧 - Process UNS messages
-- **[Data Modeling](../data-modeling/README.md)** 🚧 - Structure your data with explicit models
-- **[Configuration Reference](../../reference/configuration-reference.md)** - Complete YAML syntax
+* [**Consuming Data**](consuming-data.md) 🚧 - Process UNS messages
+* [**Data Modeling**](../data-modeling/) 🚧 - Structure your data with explicit models
+* [**Configuration Reference**](../../reference/configuration-reference.md) - Complete YAML syntax
 
 ## Learn More
 
-- [Connect ifm IO-Link Masters with the UNS](https://learn.umh.app/blog/connect-ifm-io-link-masters-with-the-uns/) - Real-world sensor connectivity
-- [Node-RED meets Benthos!](https://learn.umh.app/blog/node-red-meets-benthos/) - Custom processing with Node-RED JavaScript
+* [Connect ifm IO-Link Masters with the UNS](https://learn.umh.app/blog/connect-ifm-io-link-masters-with-the-uns/) - Real-world sensor connectivity
+* [Node-RED meets Benthos!](https://learn.umh.app/blog/node-red-meets-benthos/) - Custom processing with Node-RED JavaScript
