@@ -509,7 +509,7 @@ func BuildCommonDataFlowComponentPropertiesFromConfig(dfcConfig dataflowcomponen
 func ValidateProtocolConverterName(name string) error {
 	for _, char := range name {
 		if (char < 'a' || char > 'z') && (char < 'A' || char > 'Z') && (char < '0' || char > '9') {
-			return errors.New("name can only contain letters (a-z, A-Z)")
+			return errors.New("name can only contain letters (a-z, A-Z) and numbers (0-9)")
 		}
 	}
 	return nil
