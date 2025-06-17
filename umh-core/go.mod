@@ -1,6 +1,7 @@
 module github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core
 
-go 1.24.2
+// NOTE: Keep this in sync with GOLANG_VERSION in Makefile
+go 1.24.4
 
 require (
 	github.com/DataDog/gostackparse v0.7.0
