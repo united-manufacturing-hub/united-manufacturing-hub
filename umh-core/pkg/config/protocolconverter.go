@@ -22,7 +22,16 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 )
 
-// AtomicAddProtocolConverter adds a protocol converter to the config atomically
+// AtomicAddProtocolConverter adds a protocol converter to the config atomically.
+//
+// Business logic:
+// - Standalone converters: Always allowed if name is unique
+// - Root converters (TemplateRef == Name): Always allowed if name is unique, becomes a template for others
+// - Child converters (TemplateRef != Name): Only allowed if the referenced template (root) exists
+//
+// Fails if:
+// - Another converter with the same name already exists
+// - Adding a child converter but the referenced template doesn't exist
 func (m *FileConfigManager) AtomicAddProtocolConverter(ctx context.Context, pc ProtocolConverterConfig) error {
 	err := m.mutexAtomicUpdate.Lock(ctx)
 	if err != nil {
@@ -83,7 +92,22 @@ func (m *FileConfigManagerWithBackoff) AtomicAddProtocolConverter(ctx context.Co
 	return m.configManager.AtomicAddProtocolConverter(ctx, pc)
 }
 
-// AtomicEditProtocolConverter edits a protocol converter in the config atomically
+// AtomicEditProtocolConverter edits a protocol converter in the config atomically.
+//
+// Business logic:
+// - Standalone converters: Can be edited freely (name, config) if new name is unique
+// - Root converters: Can be edited, but renaming propagates to all dependent children
+// - Child converters: Can be edited, but TemplateRef must point to an existing root
+// - Converting between types: Standalone ↔ Root ↔ Child transitions are allowed with validation
+//
+// Special behaviors:
+// - When renaming a root: All children automatically get their TemplateRef updated to the new name
+// - When changing a child's TemplateRef: Validates the new template exists
+//
+// Fails if:
+// - Converter with given UUID doesn't exist
+// - New name conflicts with another converter (excluding the one being edited)
+// - Child converter references a non-existent template
 func (m *FileConfigManager) AtomicEditProtocolConverter(ctx context.Context, componentUUID uuid.UUID, pc ProtocolConverterConfig) (ProtocolConverterConfig, error) {
 	err := m.mutexAtomicUpdate.Lock(ctx)
 	if err != nil {
@@ -175,7 +199,21 @@ func (m *FileConfigManager) AtomicEditProtocolConverter(ctx context.Context, com
 	return oldConfig, nil
 }
 
-// AtomicDeleteProtocolConverter deletes a protocol converter from the config atomically
+// AtomicDeleteProtocolConverter deletes a protocol converter from the config atomically.
+//
+// Business logic:
+// - Standalone converters: Can always be deleted safely
+// - Child converters: Can always be deleted safely (doesn't affect other converters)
+// - Root converters: Can only be deleted if no children depend on them
+//
+// Dependency protection:
+// - Before deleting a root, checks if any child converters reference it via TemplateRef
+// - Deletion is blocked if dependent children exist, preventing orphaned references
+// - Error message indicates how many dependent converters exist
+//
+// Fails if:
+// - Converter with given UUID doesn't exist
+// - Attempting to delete a root converter that has dependent children
 func (m *FileConfigManager) AtomicDeleteProtocolConverter(ctx context.Context, componentUUID uuid.UUID) error {
 	err := m.mutexAtomicUpdate.Lock(ctx)
 	if err != nil {
