@@ -468,7 +468,7 @@ func (a *EditProtocolConverterAction) waitForComponentToBeActive(oldConfig confi
 					}
 
 					// Check if the protocol converter is in an active state
-					if instance.CurrentState == "active" {
+					if instance.CurrentState == "active" || instance.CurrentState == "idle" {
 						stateMessage := RemainingPrefixSec(remainingSeconds) + fmt.Sprintf("protocol converter successfully activated with state '%s', %s DFC configuration verified", instance.CurrentState, a.dfcType)
 						SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, stateMessage,
 							a.outboundChannel, models.EditProtocolConverter)
