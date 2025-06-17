@@ -341,10 +341,6 @@ func (a *EditProtocolConverterAction) Execute() (interface{}, map[string]interfa
 		return nil, nil, fmt.Errorf("%s", errorMsg)
 	}
 
-	// remove location and location_path from the user variables
-	delete(oldConfig.ProtocolConverterServiceConfig.Variables.User, "location")
-	delete(oldConfig.ProtocolConverterServiceConfig.Variables.User, "location_path")
-
 	// Health check waiting logic similar to deploy-dataflowcomponent
 	if a.systemSnapshotManager != nil && !a.ignoreHealthCheck {
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
@@ -423,6 +419,9 @@ func (a *EditProtocolConverterAction) waitForComponentToBeActive(oldConfig confi
 			// rollback to previous configuration
 			ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
 			defer cancel()
+			// remove location and location_path from the user variables
+			delete(oldConfig.ProtocolConverterServiceConfig.Variables.User, "location")
+			delete(oldConfig.ProtocolConverterServiceConfig.Variables.User, "location_path")
 			_, err := a.configManager.AtomicEditProtocolConverter(ctx, a.protocolConverterUUID, oldConfig)
 			if err != nil {
 				a.actionLogger.Errorf("Failed to rollback to previous configuration: %v", err)
@@ -494,9 +493,12 @@ func (a *EditProtocolConverterAction) waitForComponentToBeActive(oldConfig confi
 					// as these errors require configuration changes to resolve.
 					if CheckBenthosLogLinesForConfigErrors(logs) {
 						SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, Label("edit", a.name)+"configuration error detected. Rolling back...", a.outboundChannel, models.EditProtocolConverter)
-
+						// remove location and location_path from the user variables
+						delete(oldConfig.ProtocolConverterServiceConfig.Variables.User, "location")
+						delete(oldConfig.ProtocolConverterServiceConfig.Variables.User, "location_path")
 						ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
 						defer cancel()
+						a.actionLogger.Infof("rolling back to previous configuration with user variables: %v", oldConfig.ProtocolConverterServiceConfig.Variables.User)
 						_, err := a.configManager.AtomicEditProtocolConverter(ctx, a.protocolConverterUUID, oldConfig)
 						if err != nil {
 							a.actionLogger.Errorf("failed to roll back protocol converter %s: %v", a.name, err)
