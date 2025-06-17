@@ -160,6 +160,10 @@ func (a *EditProtocolConverterAction) Validate() error {
 		return errors.New("missing or invalid protocol converter UUID")
 	}
 
+	if err := ValidateProtocolConverterName(a.name); err != nil {
+		return err
+	}
+
 	if a.dfcType == "" {
 		return errors.New("missing required field dfcType")
 	}
@@ -279,8 +283,10 @@ func (a *EditProtocolConverterAction) Execute() (interface{}, map[string]interfa
 
 	// as the BuildRuntimeConfig function always adds location and location_path to the user variables,
 	// we need to remove them from the variables here to avoid that they end up in the config file
-	delete(newVB, "location")
-	delete(newVB, "location_path")
+	if newVB != nil {
+		delete(newVB, "location")
+		delete(newVB, "location_path")
+	}
 
 	instanceToModify.ProtocolConverterServiceConfig.Variables.User = newVB
 
