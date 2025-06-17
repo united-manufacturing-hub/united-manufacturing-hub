@@ -25,8 +25,8 @@ Inside that one image you'll find:
 Instance
 └─ Core
    ├─ Bridges 🚧         # ingest or egest data (ex-"Protocol Converters") - Roadmap Item
-   │   ├─ Source Flow  # read side
-   │   └─ Sink Flow    # write side  
+   │   ├─ Read Flow  # read side
+   │   └─ Write Flow    # write side  
    │   └─ Connection   # monitors the network connection
    ├─ Stream Processors 🚧  # Roadmap - transforms messages inside UNS
    └─ Stand-alone Flows ✅  # Available now
@@ -43,12 +43,12 @@ Instance
 ┌──────── PLC / Device ───────┐
 │  OPC UA / Modbus / S7 / …   │
 └────────────┬────────────────┘
-             │  Bridge (Source Flow)
+             │  Bridge (Read Flow)
              ▼
     ┌───────────────────┐
     │ Unified Namespace │
     └───────────────────┘
-             │  Bridge (Sink Flow)
+             │  Bridge (Write Flow)
              ▼
    MQTT broker ▸ Cloud ▸ Historian ▸ Dashboards
 ```
