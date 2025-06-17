@@ -314,8 +314,10 @@ func (a *EditProtocolConverterAction) Execute() (interface{}, map[string]interfa
 	instanceToModify.ProtocolConverterServiceConfig.Location = locationMap
 
 	// update the connection details of the protocol converter (IP and PORT variables)
-	instanceToModify.ProtocolConverterServiceConfig.Variables.User["IP"] = a.connectionIP
-	instanceToModify.ProtocolConverterServiceConfig.Variables.User["PORT"] = a.connectionPort
+	if instanceToModify.ProtocolConverterServiceConfig.Variables.User != nil {
+		instanceToModify.ProtocolConverterServiceConfig.Variables.User["IP"] = a.connectionIP
+		instanceToModify.ProtocolConverterServiceConfig.Variables.User["PORT"] = a.connectionPort
+	}
 
 	switch a.dfcType {
 	case "read":
