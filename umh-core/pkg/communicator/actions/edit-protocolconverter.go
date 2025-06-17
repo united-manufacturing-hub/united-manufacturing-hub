@@ -198,16 +198,58 @@ func (a *EditProtocolConverterAction) Execute() (interface{}, map[string]interfa
 		fmt.Sprintf("Updating protocol converter configuration with %s DFC...", a.dfcType),
 		a.outboundChannel, models.EditProtocolConverter)
 
+	// Apply mutations to create new spec
+	newSpec, atomicEditUUID, err := a.applyMutation(benthosConfig)
+	if err != nil {
+		errorMsg := fmt.Sprintf("Failed to apply configuration mutation: %v", err)
+		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
+			errorMsg, a.outboundChannel, models.EditProtocolConverter)
+		return nil, nil, fmt.Errorf("%s", errorMsg)
+	}
+
+	// Persist the configuration changes
+	oldConfig, err := a.persistConfig(atomicEditUUID, newSpec)
+	if err != nil {
+		errorMsg := fmt.Sprintf("Failed to persist configuration changes: %v", err)
+		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
+			errorMsg, a.outboundChannel, models.EditProtocolConverter)
+		return nil, nil, fmt.Errorf("%s", errorMsg)
+	}
+
+	// Await rollout and perform health checks
+	if a.systemSnapshotManager != nil && !a.ignoreHealthCheck {
+		errCode, err := a.awaitRollout(oldConfig)
+		if err != nil {
+			errorMsg := fmt.Sprintf("Failed during rollout: %v", err)
+			SendActionReplyV2(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
+				errorMsg, errCode, nil, a.outboundChannel, models.EditProtocolConverter, nil)
+			return nil, nil, fmt.Errorf("%s", errorMsg)
+		}
+
+		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
+			"Protocol converter successfully updated and activated", a.outboundChannel, models.EditProtocolConverter)
+	}
+
+	newUUID := dataflowcomponentserviceconfig.GenerateUUIDFromName(a.name)
+	response := map[string]any{
+		"UUID": newUUID,
+	}
+
+	return response, nil, nil
+}
+
+// applyMutation analyzes the current configuration and applies the necessary mutations
+// to create the new protocol converter specification. It handles child/root relationships,
+// variable merging, and DFC configuration updates.
+// Returns the new spec and the atomic edit UUID to use for persistence.
+func (a *EditProtocolConverterAction) applyMutation(benthosConfig dataflowcomponentserviceconfig.BenthosConfig) (config.ProtocolConverterConfig, uuid.UUID, error) {
 	// Get current configuration
 	ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
 	defer cancel()
 
 	currentConfig, err := a.configManager.GetConfig(ctx, 0)
 	if err != nil {
-		errorMsg := fmt.Sprintf("Failed to get current configuration: %v", err)
-		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
-			errorMsg, a.outboundChannel, models.EditProtocolConverter)
-		return nil, nil, fmt.Errorf("%s", errorMsg)
+		return config.ProtocolConverterConfig{}, uuid.Nil, fmt.Errorf("failed to get current configuration: %w", err)
 	}
 
 	// Find the protocol converter in the configuration
@@ -222,16 +264,13 @@ func (a *EditProtocolConverterAction) Execute() (interface{}, map[string]interfa
 		}
 	}
 
-	// currently, we canot reuse templates, so we need to create a new one
+	if !found {
+		return config.ProtocolConverterConfig{}, uuid.Nil, fmt.Errorf("protocol converter with UUID %s not found", a.protocolConverterUUID)
+	}
+
+	// Currently, we cannot reuse templates, so we need to create a new one
 	targetPC.ProtocolConverterServiceConfig.TemplateRef = a.name
 	targetPC.Name = a.name
-
-	if !found {
-		errorMsg := fmt.Sprintf("Protocol converter with UUID %s not found", a.protocolConverterUUID)
-		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
-			errorMsg, a.outboundChannel, models.EditProtocolConverter)
-		return nil, nil, fmt.Errorf("%s", errorMsg)
-	}
 
 	// Classify the protocol converter instance
 	isChild := targetPC.ProtocolConverterServiceConfig.TemplateRef != "" &&
@@ -256,18 +295,15 @@ func (a *EditProtocolConverterAction) Execute() (interface{}, map[string]interfa
 		}
 
 		if !rootFound {
-			errorMsg := fmt.Sprintf("Root template %s not found for child protocol converter %s",
+			return config.ProtocolConverterConfig{}, uuid.Nil, fmt.Errorf("root template %s not found for child protocol converter %s",
 				targetPC.ProtocolConverterServiceConfig.TemplateRef, targetPC.Name)
-			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
-				errorMsg, a.outboundChannel, models.EditProtocolConverter)
-			return nil, nil, fmt.Errorf("%s", errorMsg)
 		}
 
 		// Apply mutations to the root, but keep child's variables
 		instanceToModify = rootPC
 		atomicEditUUID = dataflowcomponentserviceconfig.GenerateUUIDFromName(rootPC.Name)
 
-		// add the new variables and preserve existing child variables
+		// Add the new variables and preserve existing child variables
 		newVB = make(map[string]any)
 		for _, variable := range a.vb {
 			newVB[variable.Label] = variable.Value
@@ -278,7 +314,7 @@ func (a *EditProtocolConverterAction) Execute() (interface{}, map[string]interfa
 		instanceToModify = targetPC
 		atomicEditUUID = a.protocolConverterUUID
 
-		// add the variables and keep the existing variables
+		// Add the variables and keep the existing variables
 		newVB = make(map[string]any)
 		for _, variable := range a.vb {
 			newVB[variable.Label] = variable.Value
@@ -286,7 +322,7 @@ func (a *EditProtocolConverterAction) Execute() (interface{}, map[string]interfa
 		maps.Copy(newVB, targetPC.ProtocolConverterServiceConfig.Variables.User)
 	}
 
-	// as the BuildRuntimeConfig function always adds location and location_path to the user variables,
+	// As the BuildRuntimeConfig function always adds location and location_path to the user variables,
 	// we need to remove them from the variables here to avoid that they end up in the config file
 	delete(newVB, "location")
 	delete(newVB, "location_path")
@@ -301,7 +337,7 @@ func (a *EditProtocolConverterAction) Execute() (interface{}, map[string]interfa
 	// Store the desired DFC config for health check comparison
 	a.desiredDFCConfig = dfcServiceConfig
 
-	// add the connection details to the template
+	// Add the connection details to the template
 	instanceToModify.ProtocolConverterServiceConfig.Config.ConnectionServiceConfig = connectionserviceconfig.ConnectionServiceConfigTemplate{
 		NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
 			Target: "{{ .IP }}",
@@ -309,14 +345,14 @@ func (a *EditProtocolConverterAction) Execute() (interface{}, map[string]interfa
 		},
 	}
 
-	// update the location of the protocol converter (convert the map to a string map)
+	// Update the location of the protocol converter (convert the map to a string map)
 	locationMap := make(map[string]string)
 	for k, v := range a.location {
 		locationMap[strconv.Itoa(k)] = v
 	}
 	instanceToModify.ProtocolConverterServiceConfig.Location = locationMap
 
-	// update the connection details of the protocol converter (IP and PORT variables)
+	// Update the connection details of the protocol converter (IP and PORT variables)
 	if instanceToModify.ProtocolConverterServiceConfig.Variables.User != nil {
 		instanceToModify.ProtocolConverterServiceConfig.Variables.User["IP"] = a.connectionIP
 		instanceToModify.ProtocolConverterServiceConfig.Variables.User["PORT"] = a.connectionPort
@@ -328,70 +364,34 @@ func (a *EditProtocolConverterAction) Execute() (interface{}, map[string]interfa
 	case "write":
 		instanceToModify.ProtocolConverterServiceConfig.Config.DataflowComponentWriteServiceConfig = dfcServiceConfig
 	default:
-		errorMsg := fmt.Sprintf("Invalid DFC type: %s", a.dfcType)
-		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
-			errorMsg, a.outboundChannel, models.EditProtocolConverter)
-		return nil, nil, fmt.Errorf("%s", errorMsg)
+		return config.ProtocolConverterConfig{}, uuid.Nil, fmt.Errorf("invalid DFC type: %s", a.dfcType)
 	}
 
-	// Update the protocol converter using atomic operation with the correct UUID
-	oldConfig, err := a.configManager.AtomicEditProtocolConverter(ctx, atomicEditUUID, instanceToModify)
+	return instanceToModify, atomicEditUUID, nil
+}
+
+// persistConfig performs the atomic configuration update operation.
+// Returns the old configuration for potential rollback operations.
+func (a *EditProtocolConverterAction) persistConfig(atomicEditUUID uuid.UUID, newSpec config.ProtocolConverterConfig) (config.ProtocolConverterConfig, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
+	defer cancel()
+
+	oldConfig, err := a.configManager.AtomicEditProtocolConverter(ctx, atomicEditUUID, newSpec)
 	if err != nil {
-		errorMsg := fmt.Sprintf("Failed to update protocol converter: %v", err)
-		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
-			errorMsg, a.outboundChannel, models.EditProtocolConverter)
-		return nil, nil, fmt.Errorf("%s", errorMsg)
+		return config.ProtocolConverterConfig{}, fmt.Errorf("failed to update protocol converter: %w", err)
 	}
 
-	// Health check waiting logic similar to deploy-dataflowcomponent
-	if a.systemSnapshotManager != nil && !a.ignoreHealthCheck {
-		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
-			fmt.Sprintf("Waiting for protocol converter %s to be active...", a.name),
-			a.outboundChannel, models.EditProtocolConverter)
-
-		errCode, err := a.waitForComponentToBeActive(oldConfig)
-		if err != nil {
-			errorMsg := fmt.Sprintf("Failed to wait for protocol converter to be active: %v", err)
-			SendActionReplyV2(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
-				errorMsg, errCode, nil, a.outboundChannel, models.EditProtocolConverter, nil)
-			return nil, nil, fmt.Errorf("%s", errorMsg)
-		}
-
-		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
-			"Protocol converter successfully updated and activated", a.outboundChannel, models.EditProtocolConverter)
-	}
-
-	newUUID := dataflowcomponentserviceconfig.GenerateUUIDFromName(a.name)
-	response := map[string]any{
-		"UUID": newUUID,
-	}
-
-	return response, nil, nil
+	return oldConfig, nil
 }
 
-// getUserEmail implements the Action interface by returning the user email associated with this action.
-func (a *EditProtocolConverterAction) getUserEmail() string {
-	return a.userEmail
-}
+// awaitRollout waits for the protocol converter to become active and performs health checks.
+// Returns error code and error message for proper error handling in the caller.
+func (a *EditProtocolConverterAction) awaitRollout(oldConfig config.ProtocolConverterConfig) (string, error) {
+	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
+		fmt.Sprintf("Waiting for protocol converter %s to be active...", a.name),
+		a.outboundChannel, models.EditProtocolConverter)
 
-// getUuid implements the Action interface by returning the UUID of this action.
-func (a *EditProtocolConverterAction) getUuid() uuid.UUID {
-	return a.actionUUID
-}
-
-// GetParsedPayload returns the parsed DFC payload - exposed primarily for testing purposes.
-func (a *EditProtocolConverterAction) GetParsedPayload() models.CDFCPayload {
-	return a.dfcPayload
-}
-
-// GetProtocolConverterUUID returns the protocol converter UUID - exposed for testing purposes.
-func (a *EditProtocolConverterAction) GetProtocolConverterUUID() uuid.UUID {
-	return a.protocolConverterUUID
-}
-
-// GetDFCType returns the DFC type (read/write) - exposed for testing purposes.
-func (a *EditProtocolConverterAction) GetDFCType() string {
-	return a.dfcType
+	return a.waitForComponentToBeActive(oldConfig)
 }
 
 // waitForComponentToBeActive polls live FSM state until the protocol converter
@@ -611,4 +611,29 @@ func convertPipelineToMap(pipeline models.CommonDataFlowComponentPipelineConfig)
 		}
 	}
 	return result
+}
+
+// getUserEmail implements the Action interface by returning the user email associated with this action.
+func (a *EditProtocolConverterAction) getUserEmail() string {
+	return a.userEmail
+}
+
+// getUuid implements the Action interface by returning the UUID of this action.
+func (a *EditProtocolConverterAction) getUuid() uuid.UUID {
+	return a.actionUUID
+}
+
+// GetParsedPayload returns the parsed DFC payload - exposed primarily for testing purposes.
+func (a *EditProtocolConverterAction) GetParsedPayload() models.CDFCPayload {
+	return a.dfcPayload
+}
+
+// GetProtocolConverterUUID returns the protocol converter UUID - exposed for testing purposes.
+func (a *EditProtocolConverterAction) GetProtocolConverterUUID() uuid.UUID {
+	return a.protocolConverterUUID
+}
+
+// GetDFCType returns the DFC type (read/write) - exposed for testing purposes.
+func (a *EditProtocolConverterAction) GetDFCType() string {
+	return a.dfcType
 }

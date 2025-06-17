@@ -415,7 +415,7 @@ var _ = Describe("EditProtocolConverter", func() {
 			// Execute the action - should fail with protocol converter not found
 			_, metadata, err := action.Execute()
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("Protocol converter with UUID"))
+			Expect(err.Error()).To(ContainSubstring("protocol converter with UUID"))
 			Expect(err.Error()).To(ContainSubstring("not found"))
 			Expect(metadata).To(BeNil())
 		})
@@ -449,7 +449,7 @@ var _ = Describe("EditProtocolConverter", func() {
 			// Execute the action - should fail
 			_, metadata, err := action.Execute()
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("Failed to update protocol converter: mock edit protocol converter failure"))
+			Expect(err.Error()).To(ContainSubstring("failed to update protocol converter: mock edit protocol converter failure"))
 			Expect(metadata).To(BeNil())
 		})
 
@@ -482,7 +482,7 @@ var _ = Describe("EditProtocolConverter", func() {
 			// Execute the action - should fail
 			_, metadata, err := action.Execute()
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("Failed to get current configuration: mock get config failure"))
+			Expect(err.Error()).To(ContainSubstring("failed to get current configuration: mock get config failure"))
 			Expect(metadata).To(BeNil())
 		})
 	})
