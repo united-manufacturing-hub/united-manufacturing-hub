@@ -196,12 +196,21 @@ func (a *DeployProtocolConverterAction) Execute() (interface{}, map[string]inter
 
 // createProtocolConverterConfig creates a ProtocolConverterConfig with templated configuration
 func (a *DeployProtocolConverterAction) createProtocolConverterConfig() config.ProtocolConverterConfig {
-	// Create variables bundle with IP and PORT as strings in the User namespace
+	// Create variables bundle starting with IP and PORT as strings in the User namespace
+	userVars := map[string]any{
+		"IP":   a.payload.Connection.IP,                      // Keep IP as string
+		"PORT": fmt.Sprintf("%d", a.payload.Connection.Port), // Convert port to string
+	}
+
+	// Add any additional user-supplied variables from TemplateInfo.Variables
+	if a.payload.TemplateInfo != nil {
+		for _, variable := range a.payload.TemplateInfo.Variables {
+			userVars[variable.Label] = variable.Value
+		}
+	}
+
 	variableBundle := variables.VariableBundle{
-		User: map[string]any{
-			"IP":   a.payload.Connection.IP,                      // Keep IP as string
-			"PORT": fmt.Sprintf("%d", a.payload.Connection.Port), // Convert port to string
-		},
+		User: userVars,
 	}
 
 	// Create template configuration with connection and placeholders for DFCs

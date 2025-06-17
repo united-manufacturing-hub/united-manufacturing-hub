@@ -267,7 +267,11 @@ func (a *EditProtocolConverterAction) Execute() (interface{}, map[string]interfa
 		instanceToModify = rootPC
 		atomicEditUUID = dataflowcomponentserviceconfig.GenerateUUIDFromName(rootPC.Name)
 
-		// preserve existing child variables
+		// add the new variables and preserve existing child variables
+		newVB = make(map[string]any)
+		for _, variable := range a.vb {
+			newVB[variable.Label] = variable.Value
+		}
 		maps.Copy(newVB, targetPC.ProtocolConverterServiceConfig.Variables.User)
 	} else {
 		// Root or stand-alone: apply mutations directly
