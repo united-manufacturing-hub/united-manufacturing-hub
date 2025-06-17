@@ -451,8 +451,8 @@ func (p *ProtocolConverterInstance) IsProtocolConverterStopped() (bool, string) 
 //	ok     – true when atleast one DFC is existing, false otherwise.
 //	reason – empty when ok is true; otherwise a service‑provided explanation.
 func (p *ProtocolConverterInstance) IsDFCExisting() (bool, string) {
-	if len(p.specConfig.Template.DataflowComponentReadServiceConfig.BenthosConfig.Input) > 0 ||
-		len(p.specConfig.Template.DataflowComponentWriteServiceConfig.BenthosConfig.Output) > 0 {
+	if len(p.specConfig.Config.DataflowComponentReadServiceConfig.BenthosConfig.Input) > 0 ||
+		len(p.specConfig.Config.DataflowComponentWriteServiceConfig.BenthosConfig.Output) > 0 {
 		return true, ""
 	}
 	return false, "no DFCs configured"
