@@ -30,10 +30,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Go
-        uses: actions/setup-go@v5
+      - name: Get Go version from Makefile
+        id: go_version
+        working-directory: ./umh-core
+        run: echo "version=$(make print-golang-version)" >> $GITHUB_OUTPUT
+
+      - uses: actions/setup-go@v5
         with:
-          go-version: "1.24.2"
+          go-version: ${{ steps.go_version.outputs.version }}
           cache: true
 
       - name: Run go vet
@@ -49,10 +53,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Get Go version from Makefile
+        id: go_version
+        working-directory: ./umh-core
+        run: echo "version=$(make print-golang-version)" >> $GITHUB_OUTPUT
+
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: "1.24.2"
+          go-version: ${{ steps.go_version.outputs.version }}
           cache: true
 
       - name: Install nilaway
