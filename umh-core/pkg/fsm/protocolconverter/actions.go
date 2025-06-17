@@ -263,9 +263,7 @@ func (p *ProtocolConverterInstance) UpdateObservedStateOfInstance(ctx context.Co
 	}
 	metrics.ObserveReconcileTime(logger.ComponentProtocolConverterInstance, p.baseFSMInstance.GetID()+".buildRuntimeConfig", time.Since(start))
 
-	p.baseFSMInstance.GetLogger().Debugf("checking if the config is different")
 	if !protocolconverterserviceconfig.ConfigsEqualRuntime(p.renderedConfig, p.ObservedState.ObservedProtocolConverterRuntimeConfig) {
-		p.baseFSMInstance.GetLogger().Debugf("config is different")
 		// Check if the service exists before attempting to update
 		if p.service.ServiceExists(ctx, services.GetFileSystem(), p.baseFSMInstance.GetID()) {
 			p.baseFSMInstance.GetLogger().Debugf("Observed ProtocolConverter config is different from desired config, updating ProtocolConverter configuration")
@@ -455,8 +453,8 @@ func (p *ProtocolConverterInstance) IsProtocolConverterStopped() (bool, string) 
 //	ok     – true when atleast one DFC is existing, false otherwise.
 //	reason – empty when ok is true; otherwise a service‑provided explanation.
 func (p *ProtocolConverterInstance) IsDFCExisting() (bool, string) {
-	if len(p.config.Config.DataflowComponentReadServiceConfig.BenthosConfig.Input) > 0 ||
-		len(p.config.Config.DataflowComponentWriteServiceConfig.BenthosConfig.Output) > 0 {
+	if len(p.config.Template.DataflowComponentReadServiceConfig.BenthosConfig.Input) > 0 ||
+		len(p.config.Template.DataflowComponentWriteServiceConfig.BenthosConfig.Output) > 0 {
 		return true, ""
 	}
 	return false, "no DFCs configured"
