@@ -24,8 +24,9 @@ import (
 
 // ProtocolConverterObservedStateSnapshot is a deep-copyable snapshot of ProtocolConverterObservedState
 type ProtocolConverterObservedStateSnapshot struct {
-	ObservedProtocolConverterConfig protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime
-	ServiceInfo                     protocolconverter.ServiceInfo
+	ObservedProtocolConverterRuntimeConfig protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime
+	ObservedProtocolConverterSpecConfig    protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec
+	ServiceInfo                            protocolconverter.ServiceInfo
 }
 
 // IsObservedStateSnapshot implements the fsm.ObservedStateSnapshot interface
@@ -38,10 +39,17 @@ func (d *ProtocolConverterInstance) CreateObservedStateSnapshot() fsm.ObservedSt
 	// Create a deep copy of the observed state
 	snapshot := &ProtocolConverterObservedStateSnapshot{}
 
-	// Deep copy observed protocol converter config
-	err := deepcopy.Copy(&snapshot.ObservedProtocolConverterConfig, &d.ObservedState.ObservedProtocolConverterConfig)
+	// Deep copy observed protocol converter runtime config
+	err := deepcopy.Copy(&snapshot.ObservedProtocolConverterRuntimeConfig, &d.ObservedState.ObservedProtocolConverterRuntimeConfig)
 	if err != nil {
-		sentry.ReportIssuef(sentry.IssueTypeError, d.baseFSMInstance.GetLogger(), "failed to deep copy observed protocol converter config: %v", err)
+		sentry.ReportIssuef(sentry.IssueTypeError, d.baseFSMInstance.GetLogger(), "failed to deep copy observed protocol converter runtime config: %v", err)
+		return nil
+	}
+
+	// Deep copy observed protocol converter spec config
+	err = deepcopy.Copy(&snapshot.ObservedProtocolConverterSpecConfig, &d.ObservedState.ObservedProtocolConverterSpecConfig)
+	if err != nil {
+		sentry.ReportIssuef(sentry.IssueTypeError, d.baseFSMInstance.GetLogger(), "failed to deep copy observed protocol converter spec config: %v", err)
 		return nil
 	}
 
