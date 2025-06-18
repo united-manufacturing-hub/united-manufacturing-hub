@@ -100,11 +100,6 @@ func (a *DeleteProtocolConverterAction) Parse(payload interface{}) error {
 		return fmt.Errorf("failed to parse payload: %v", err)
 	}
 
-	// Validate UUID is provided
-	if parsedPayload.UUID == uuid.Nil {
-		return errors.New("missing required field UUID")
-	}
-
 	a.componentUUID = parsedPayload.UUID
 	a.actionLogger.Debugf("Parsed DeleteProtocolConverter action payload: UUID=%s", a.componentUUID)
 

@@ -92,19 +92,6 @@ func (a *DeployProtocolConverterAction) Parse(payload interface{}) error {
 		return fmt.Errorf("failed to parse payload: %v", err)
 	}
 
-	// Validate required fields
-	if parsedPayload.Name == "" {
-		return errors.New("missing required field Name")
-	}
-
-	if parsedPayload.Connection.IP == "" {
-		return errors.New("missing required field Connection.IP")
-	}
-
-	if parsedPayload.Connection.Port == 0 {
-		return errors.New("missing required field Connection.Port")
-	}
-
 	a.payload = parsedPayload
 	a.actionLogger.Debugf("Parsed DeployProtocolConverter action payload: name=%s, ip=%s, port=%d",
 		a.payload.Name, a.payload.Connection.IP, a.payload.Connection.Port)
@@ -114,7 +101,7 @@ func (a *DeployProtocolConverterAction) Parse(payload interface{}) error {
 
 // Validate performs validation of the parsed payload.
 func (a *DeployProtocolConverterAction) Validate() error {
-	// Basic validation was done in Parse, additional validation can be added here
+	// Validate all required fields
 	if a.payload.Name == "" {
 		return errors.New("missing required field Name")
 	}

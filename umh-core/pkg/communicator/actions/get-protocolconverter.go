@@ -289,20 +289,6 @@ func (a *GetProtocolConverterAction) Execute() (interface{}, map[string]interfac
 					RootUUID:    uuid.Nil, // For now, we don't have a root UUID concept
 				}
 
-				// Validate that we have IP and Port
-				// if ip == "" {
-				// 	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
-				// 		fmt.Sprintf("Warning: No IP found for protocol converter '%s'", instance.ID),
-				// 		a.outboundChannel, models.GetProtocolConverter)
-				// 	return nil, nil, fmt.Errorf("no IP found for protocol converter %s", instance.ID)
-				// }
-				// if port == 0 {
-				// 	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
-				// 		fmt.Sprintf("Warning: No port found for protocol converter '%s'", instance.ID),
-				// 		a.outboundChannel, models.GetProtocolConverter)
-				// 	return nil, nil, fmt.Errorf("no port found for protocol converter %s", instance.ID)
-				// }
-
 				// Build ReadDFC if present
 				var readDFC *models.ProtocolConverterDFC
 				if readDFCConfig := specConfig.Config.DataflowComponentReadServiceConfig; len(readDFCConfig.BenthosConfig.Input) > 0 {
