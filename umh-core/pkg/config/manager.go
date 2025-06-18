@@ -191,6 +191,10 @@ func (m *FileConfigManager) GetConfigWithOverwritesOrCreateNew(ctx context.Conte
 		config.Agent.ReleaseChannel = configOverride.Agent.ReleaseChannel
 	}
 
+	if configOverride.Agent.AllowInsecureTLS {
+		config.Agent.AllowInsecureTLS = configOverride.Agent.AllowInsecureTLS
+	}
+
 	if configOverride.Agent.Location != nil {
 		location := configOverride.Agent.Location
 		if location[0] != "" {

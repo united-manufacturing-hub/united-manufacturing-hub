@@ -92,7 +92,7 @@ On RHEL, Rocky, or other SELinux-enabled systems, append `:z` to the volume moun
 If you omit this, you might see `chmod: /data/config.yaml: no such file or directory` and the container fails to start.
 
 **TLS interception**\
-If your corporate network intercepts TLS traffic, follow the steps in [corporate-firewalls.md](production/corporate-firewalls.md "mention") to add your CA certificate or, as a last resort, set `allowInsecureTLS: true` in `config.yaml`.
+If your corporate network intercepts TLS traffic, follow the steps in [corporate-firewalls.md](production/corporate-firewalls.md "mention") to add your CA certificate or, as a last resort, set `allowInsecureTLS: true` in `config.yaml` or use `-e ALLOW_INSECURE_TLS=true` in your docker run command.
 
 **Proxy configuration**\
 If you're behind a corporate proxy, follow the steps in [corporate-firewalls.md](production/corporate-firewalls.md "mention") to configure it, or add the following arguments to your docker run:

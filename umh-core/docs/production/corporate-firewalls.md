@@ -3,12 +3,18 @@
 If you're behind a corporate firewall that performs TLS inspection (MITM), you might see certificate errors. In this case, you can:
 
 1. **Recommended:** Add your corporate CA certificate to the container's trusted certificates
-2. **Last Resort:** Set `allowInsecureTLS: true` in your config:
+2. **Last Resort:** Set `allowInsecureTLS: true` in your config or use the `ALLOW_INSECURE_TLS=true` environment variable:
 
+**Option A: Config file**
 ```yaml
 agent:
   communicator:
     allowInsecureTLS: true  # WARNING: Only use if corporate firewall blocks secure connections
+```
+
+**Option B: Environment variable**
+```bash
+docker run -e ALLOW_INSECURE_TLS=true umh-core:latest
 ```
 
 ⚠️ **Security Warning:** The `allowInsecureTLS` option disables certificate validation. Only use this if:
