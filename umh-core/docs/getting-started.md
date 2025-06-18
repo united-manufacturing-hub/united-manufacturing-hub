@@ -52,7 +52,7 @@ From the Console you can :
           template:
             connection:
               nmap:
-                target:   "{{ .HOST }}"
+                target:   "{{ .IP }}"
                 port:     "{{ .PORT }}"
             dataflowcomponent_read:
               benthos:
@@ -71,7 +71,7 @@ From the Console you can :
                             msg.meta.tag_name      = "random_int"; // Your tag name 
                             return msg;
           variables:
-            HOST:   "localhost"
+            IP:   "localhost"
             PORT: "8080"   
     ```
 3.  **Run the container**

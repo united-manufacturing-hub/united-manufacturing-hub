@@ -56,7 +56,7 @@ protocolConverter:
 
 ### Basic Bridge Pattern
 
-All industrial protocol bridges follow the same pattern - only the input configuration changes:
+All industrial protocol bridges follow the same pattern - only the input configuration changes. This example uses connection variables ([{{ .IP }}](../../reference/variables.md#variables) and [{{ .PORT }}](../../reference/variables.md#variables)) and the location variable ([{{ .location_path }}](../../reference/variables.md#variables)):
 
 ```yaml
 protocolConverter:
@@ -69,8 +69,8 @@ protocolConverter:
       template:
         connection:
           nmap:
-            target: "{{ .DEVICE_IP }}"
-            port: "{{ .DEVICE_PORT }}"
+            target: "{{ .IP }}"
+            port: "{{ .PORT }}"
         dataflowcomponent_read:
           benthos:
             input:
@@ -87,8 +87,8 @@ protocolConverter:
             output:
               uns: {}
       variables:
-        DEVICE_IP: "192.168.1.100"
-        DEVICE_PORT: "502"
+        IP: "192.168.1.100"
+        PORT: "502"
 ```
 
 ### Supported Protocols
@@ -111,7 +111,7 @@ UMH Core supports 50+ industrial protocols via [Benthos-UMH](https://docs.umh.ap
 
 ## Bidirectional Communication
 
-Bridges support both reading from and writing to devices using separate pipelines:
+Bridges support both reading from and writing to devices using separate pipelines. This example uses connection variables ([{{ .IP }}](../../reference/variables.md#variables) and [{{ .PORT }}](../../reference/variables.md#variables)) for device connectivity:
 
 ```yaml
 protocolConverter:
@@ -124,8 +124,8 @@ protocolConverter:
       template:
         connection:
           nmap:
-            target: "{{ .DEVICE_IP }}"
-            port: "{{ .DEVICE_PORT }}"
+            target: "{{ .IP }}"
+            port: "{{ .PORT }}"
         dataflowcomponent_read:
           benthos:
             input:
@@ -149,8 +149,8 @@ protocolConverter:
             output:
               opcua_write: { /* write configuration */ }
       variables:
-        DEVICE_IP: "192.168.1.100"
-        DEVICE_PORT: "4840"
+        IP: "192.168.1.100"
+        PORT: "4840"
 ```
 
 **Pattern:**
@@ -164,10 +164,12 @@ UMH Core currently supports network connectivity monitoring via nmap:
 
 ### Network Connectivity (nmap)
 
+The nmap health check uses connection variables ([{{ .IP }}](../../reference/variables.md#variables) and [{{ .PORT }}](../../reference/variables.md#variables)) to verify device connectivity:
+
 ```yaml
 connection:
   nmap:
-    target: "{{ .HOST }}"
+    target: "{{ .IP }}"
     port: "{{ .PORT }}"
 ```
 
@@ -179,11 +181,11 @@ Bridges use finite state machines to track operational status. For complete stat
 
 ## Template Variables
 
-Use Go template syntax for flexible configuration:
+Use Go template syntax for flexible configuration. For a complete list of all available variables, see the [Template Variables Reference](../../reference/variables.md#variables).
 
 ```yaml
 variables:
-  HOST: "192.168.1.100"
+  IP: "192.168.1.100"
   PORT: "4840"
   SCAN_RATE: "1s"
   TAG_PREFIX: "line4_pump"
@@ -193,7 +195,7 @@ template:
     benthos:
       input:
         opcua:
-          endpoint: "opc.tcp://{{ .HOST }}:{{ .PORT }}"
+          endpoint: "opc.tcp://{{ .IP }}:{{ .PORT }}"
           subscription_interval: "{{ .SCAN_RATE }}"
       pipeline:
         processors:

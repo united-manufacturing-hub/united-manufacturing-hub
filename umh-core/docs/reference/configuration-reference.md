@@ -138,7 +138,7 @@ protocolConverter:
     template:
       connection:
         nmap:
-          target: "{{ .HOST }}"
+          target: "{{ .IP }}"
           port: "{{ .PORT }}"
       dataflowcomponent_read:
         benthos:
@@ -172,7 +172,7 @@ protocolConverter:
 | `template.connection.nmap`                 | TCP liveness check to decide if the device is reachable.                                    |
 | `template.dataflowcomponent_read.benthos`  | Benthos pipeline to pull and forward data.                                                  |
 | `template.dataflowcomponent_write.benthos` | Benthos pipeline to push and forward data.                                                  |
-| `variables`                                | Optional Go-template variables, referenced via `{{ .VARNAME }}` in the template.            |
+| `variables`                                | Optional Go-template variables, referenced via `{{ .VARNAME }}` in the template. See [Template Variables Reference](variables.md#variables) for details. |
 
 ### Benthos-UMH Processors
 

@@ -21,13 +21,13 @@ protocolConverter:
       template:
         connection:
           nmap:
-            target: "{{ .HOST }}"
+            target: "{{ .IP }}"
             port: "{{ .PORT }}"
         dataflowcomponent_read:
           benthos:
             input:
               opcua:
-                endpoint: "opc.tcp://{{ .HOST }}:{{ .PORT }}"
+                endpoint: "opc.tcp://{{ .IP }}:{{ .PORT }}"
                 nodeIDs: ["ns=2;s=Temperature", "ns=2;s=Pressure"]
             pipeline:
               processors:
