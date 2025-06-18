@@ -221,18 +221,6 @@ var _ = Describe("EditProtocolConverter", func() {
 			Expect(err.Error()).To(ContainSubstring("missing required field UUID"))
 		})
 
-		It("should return error for missing DFC configuration", func() {
-			payload := map[string]interface{}{
-				"name": pcName,
-				"uuid": pcUUID.String(),
-				// No readDFC or writeDFC
-			}
-
-			err := action.Parse(payload)
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("no DFC configuration found"))
-		})
-
 		It("should return error for invalid payload format", func() {
 			// Invalid payload that cannot be parsed as ProtocolConverter
 			payload := "invalid string payload"

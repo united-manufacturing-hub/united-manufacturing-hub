@@ -118,7 +118,8 @@ func (a *EditProtocolConverterAction) Parse(payload interface{}) error {
 		a.dfcType = "write"
 		dfcToUpdate = pcPayload.WriteDFC
 	} else {
-		return errors.New("no DFC configuration found in payload (readDFC or writeDFC required)")
+		a.dfcType = "empty"
+		dfcToUpdate = &models.ProtocolConverterDFC{}
 	}
 
 	if pcPayload.TemplateInfo != nil {
@@ -136,18 +137,19 @@ func (a *EditProtocolConverterAction) Parse(payload interface{}) error {
 	a.connectionIP = pcPayload.Connection.IP
 
 	// Convert ProtocolConverterDFC to CDFCPayload for internal processing
-	a.dfcPayload = models.CDFCPayload{
-		Inputs:   models.DfcDataConfig{Data: dfcToUpdate.Inputs.Data, Type: dfcToUpdate.Inputs.Type},
-		Pipeline: convertPipelineToMap(dfcToUpdate.Pipeline),
-		// Set default outputs since ProtocolConverterDFC doesn't have outputs
-		Outputs: models.DfcDataConfig{Data: "", Type: ""},
-		// Extract Inject data from RawYAML to support CacheResources, RateLimitResources, and Buffer
-		Inject: extractInjectFromRawYAML(dfcToUpdate.RawYAML),
-	}
-
-	// Handle optional fields
-	if dfcToUpdate.IgnoreErrors != nil {
-		a.ignoreHealthCheck = *dfcToUpdate.IgnoreErrors
+	if a.dfcType != "empty" {
+		a.dfcPayload = models.CDFCPayload{
+			Inputs:   models.DfcDataConfig{Data: dfcToUpdate.Inputs.Data, Type: dfcToUpdate.Inputs.Type},
+			Pipeline: convertPipelineToMap(dfcToUpdate.Pipeline),
+			// Set default outputs since ProtocolConverterDFC doesn't have outputs
+			Outputs: models.DfcDataConfig{Data: "", Type: ""},
+			// Extract Inject data from RawYAML to support CacheResources, RateLimitResources, and Buffer
+			Inject: extractInjectFromRawYAML(dfcToUpdate.RawYAML),
+		}
+		// Handle optional fields
+		if dfcToUpdate.IgnoreErrors != nil {
+			a.ignoreHealthCheck = *dfcToUpdate.IgnoreErrors
+		}
 	}
 
 	a.actionLogger.Debugf("Parsed EditProtocolConverter action payload: uuid=%s, name=%s, dfcType=%s",
@@ -166,12 +168,10 @@ func (a *EditProtocolConverterAction) Validate() error {
 		return err
 	}
 
-	if a.dfcType == "" {
-		return errors.New("missing required field dfcType")
-	}
-
-	if err := ValidateCustomDataFlowComponentPayload(a.dfcPayload, false); err != nil {
-		return fmt.Errorf("invalid dataflow component configuration: %v", err)
+	if a.dfcType != "empty" {
+		if err := ValidateCustomDataFlowComponentPayload(a.dfcPayload, false); err != nil {
+			return fmt.Errorf("invalid dataflow component configuration: %v", err)
+		}
 	}
 
 	return nil
@@ -183,22 +183,37 @@ func (a *EditProtocolConverterAction) Execute() (interface{}, map[string]interfa
 	a.actionLogger.Info("Executing EditProtocolConverter action")
 
 	// Send confirmation that action is starting
-	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionConfirmed,
-		fmt.Sprintf("Starting edit of protocol converter %s to add %s DFC", a.protocolConverterUUID, a.dfcType),
-		a.outboundChannel, models.EditProtocolConverter)
-
-	// Convert the DFC payload to BenthosConfig
-	benthosConfig, err := CreateBenthosConfigFromCDFCPayload(a.dfcPayload, a.name)
-	if err != nil {
-		errorMsg := fmt.Sprintf("Failed to create Benthos configuration: %v", err)
-		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
-			errorMsg, a.outboundChannel, models.EditProtocolConverter)
-		return nil, nil, fmt.Errorf("%s", errorMsg)
+	var confirmationMessage string
+	if a.dfcType == "empty" {
+		confirmationMessage = fmt.Sprintf("Starting edit of protocol converter %s to update connection and location", a.protocolConverterUUID)
+	} else {
+		confirmationMessage = fmt.Sprintf("Starting edit of protocol converter %s to add %s DFC", a.protocolConverterUUID, a.dfcType)
 	}
+	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionConfirmed,
+		confirmationMessage, a.outboundChannel, models.EditProtocolConverter)
 
-	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
-		fmt.Sprintf("Updating protocol converter configuration with %s DFC...", a.dfcType),
-		a.outboundChannel, models.EditProtocolConverter)
+	var benthosConfig dataflowcomponentserviceconfig.BenthosConfig
+	var err error
+
+	// Only create Benthos config if we have a DFC to configure
+	if a.dfcType != "empty" {
+		// Convert the DFC payload to BenthosConfig
+		benthosConfig, err = CreateBenthosConfigFromCDFCPayload(a.dfcPayload, a.name)
+		if err != nil {
+			errorMsg := fmt.Sprintf("Failed to create Benthos configuration: %v", err)
+			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
+				errorMsg, a.outboundChannel, models.EditProtocolConverter)
+			return nil, nil, fmt.Errorf("%s", errorMsg)
+		}
+
+		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
+			fmt.Sprintf("Updating protocol converter configuration with %s DFC...", a.dfcType),
+			a.outboundChannel, models.EditProtocolConverter)
+	} else {
+		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
+			"Updating protocol converter configuration (connection and location only)...",
+			a.outboundChannel, models.EditProtocolConverter)
+	}
 
 	// Apply mutations to create new spec
 	newSpec, atomicEditUUID, err := a.applyMutation(benthosConfig)
@@ -332,12 +347,14 @@ func (a *EditProtocolConverterAction) applyMutation(benthosConfig dataflowcompon
 	instanceToModify.ProtocolConverterServiceConfig.Variables.User = newVB
 
 	// Update the appropriate DFC configuration based on dfcType
-	dfcServiceConfig := dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
-		BenthosConfig: benthosConfig,
+	var dfcServiceConfig dataflowcomponentserviceconfig.DataflowComponentServiceConfig
+	if a.dfcType != "empty" {
+		dfcServiceConfig = dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+			BenthosConfig: benthosConfig,
+		}
+		// Store the desired DFC config for health check comparison
+		a.desiredDFCConfig = dfcServiceConfig
 	}
-
-	// Store the desired DFC config for health check comparison
-	a.desiredDFCConfig = dfcServiceConfig
 
 	// Add the connection details to the template
 	instanceToModify.ProtocolConverterServiceConfig.Config.ConnectionServiceConfig = connectionserviceconfig.ConnectionServiceConfigTemplate{
@@ -365,6 +382,9 @@ func (a *EditProtocolConverterAction) applyMutation(benthosConfig dataflowcompon
 		instanceToModify.ProtocolConverterServiceConfig.Config.DataflowComponentReadServiceConfig = dfcServiceConfig
 	case "write":
 		instanceToModify.ProtocolConverterServiceConfig.Config.DataflowComponentWriteServiceConfig = dfcServiceConfig
+	case "empty":
+		// For empty dfcType, we only update connection, location, and name - no DFC configuration
+		// The connection, location, and name updates are already handled above
 	default:
 		return config.ProtocolConverterConfig{}, uuid.Nil, fmt.Errorf("invalid DFC type: %s", a.dfcType)
 	}
@@ -469,53 +489,62 @@ func (a *EditProtocolConverterAction) waitForComponentToBeActive(oldConfig confi
 
 					found = true
 
-					// Verify that the protocol converter has applied the desired DFC configuration.
-					// We compare the desired DFC config with the observed DFC configuration
-					// in the protocol converter snapshot.
-					if !a.compareProtocolConverterDFCConfig(pcSnapshot) {
-						stateMessage := RemainingPrefixSec(remainingSeconds) + fmt.Sprintf("%s DFC config not yet applied. Status reason: %s", a.dfcType, pcSnapshot.ServiceInfo.StatusReason)
-						SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
-							stateMessage, a.outboundChannel, models.EditProtocolConverter)
-						continue
-					}
-
-					// Check if the protocol converter is in an active state
-					if instance.CurrentState == "active" || instance.CurrentState == "idle" {
-						stateMessage := RemainingPrefixSec(remainingSeconds) + fmt.Sprintf("protocol converter successfully activated with state '%s', %s DFC configuration verified", instance.CurrentState, a.dfcType)
-						SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, stateMessage,
-							a.outboundChannel, models.EditProtocolConverter)
-						return "", nil
-					}
-
-					// Get the current state reason for more detailed information
 					currentStateReason := fmt.Sprintf("current state: %s", instance.CurrentState)
-					if pcSnapshot != nil && pcSnapshot.ServiceInfo.StatusReason != "" {
-						currentStateReason = pcSnapshot.ServiceInfo.StatusReason
-					}
 
-					// send the benthos logs to the user
-					logs = pcSnapshot.ServiceInfo.DataflowComponentReadObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosLogs
-
-					// only send the logs that have not been sent yet
-					if len(logs) > len(lastLogs) {
-						lastLogs = SendLimitedLogs(logs, lastLogs, a.instanceUUID, a.userEmail, a.actionUUID, a.outboundChannel, models.EditProtocolConverter, remainingSeconds)
-					}
-
-					// CheckBenthosLogLinesForConfigErrors is used to detect fatal configuration errors that would cause
-					// Benthos to enter a CrashLoop. When such errors are detected, we can immediately
-					// abort the startup process rather than waiting for the full timeout period,
-					// as these errors require configuration changes to resolve.
-					if CheckBenthosLogLinesForConfigErrors(logs) {
-						SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, Label("edit", a.name)+"configuration error detected. Rolling back...", a.outboundChannel, models.EditProtocolConverter)
-						ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
-						defer cancel()
-						a.actionLogger.Infof("rolling back to previous configuration with user variables: %v", oldConfig.ProtocolConverterServiceConfig.Variables.User)
-						_, err := a.configManager.AtomicEditProtocolConverter(ctx, a.protocolConverterUUID, oldConfig)
-						if err != nil {
-							a.actionLogger.Errorf("failed to roll back protocol converter %s: %v", a.name, err)
-							return models.ErrConfigFileInvalid, fmt.Errorf("protocol converter '%s' has invalid configuration but could not be rolled back: %v. Please check your logs and consider manually restoring the previous configuration", a.name, err)
+					if a.dfcType != "empty" {
+						// Verify that the protocol converter has applied the desired DFC configuration.
+						// We compare the desired DFC config with the observed DFC configuration
+						// in the protocol converter snapshot.
+						if !a.compareProtocolConverterDFCConfig(pcSnapshot) {
+							stateMessage := RemainingPrefixSec(remainingSeconds) + fmt.Sprintf("%s DFC config not yet applied. Status reason: %s", a.dfcType, pcSnapshot.ServiceInfo.StatusReason)
+							SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
+								stateMessage, a.outboundChannel, models.EditProtocolConverter)
+							continue
 						}
-						return models.ErrConfigFileInvalid, fmt.Errorf("protocol converter '%s' was rolled back to its previous configuration due to configuration errors. Please check the component logs, fix the configuration issues, and try editing again", a.name)
+
+						// Check if the protocol converter is in an active state
+						if instance.CurrentState == "active" || instance.CurrentState == "idle" {
+							stateMessage := RemainingPrefixSec(remainingSeconds) + fmt.Sprintf("protocol converter successfully activated with state '%s', %s DFC configuration verified", instance.CurrentState, a.dfcType)
+							SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, stateMessage,
+								a.outboundChannel, models.EditProtocolConverter)
+							return "", nil
+						}
+
+						// Get the current state reason for more detailed information
+						if pcSnapshot != nil && pcSnapshot.ServiceInfo.StatusReason != "" {
+							currentStateReason = pcSnapshot.ServiceInfo.StatusReason
+						}
+
+						// send the benthos logs to the user
+						logs = pcSnapshot.ServiceInfo.DataflowComponentReadObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosLogs
+
+						// only send the logs that have not been sent yet
+						if len(logs) > len(lastLogs) {
+							lastLogs = SendLimitedLogs(logs, lastLogs, a.instanceUUID, a.userEmail, a.actionUUID, a.outboundChannel, models.EditProtocolConverter, remainingSeconds)
+						}
+
+						// CheckBenthosLogLinesForConfigErrors is used to detect fatal configuration errors that would cause
+						// Benthos to enter a CrashLoop. When such errors are detected, we can immediately
+						// abort the startup process rather than waiting for the full timeout period,
+						// as these errors require configuration changes to resolve.
+						if CheckBenthosLogLinesForConfigErrors(logs) {
+							SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, Label("edit", a.name)+"configuration error detected. Rolling back...", a.outboundChannel, models.EditProtocolConverter)
+							ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
+							defer cancel()
+							a.actionLogger.Infof("rolling back to previous configuration with user variables: %v", oldConfig.ProtocolConverterServiceConfig.Variables.User)
+							_, err := a.configManager.AtomicEditProtocolConverter(ctx, a.protocolConverterUUID, oldConfig)
+							if err != nil {
+								a.actionLogger.Errorf("failed to roll back protocol converter %s: %v", a.name, err)
+								return models.ErrConfigFileInvalid, fmt.Errorf("protocol converter '%s' has invalid configuration but could not be rolled back: %v. Please check your logs and consider manually restoring the previous configuration", a.name, err)
+							}
+							return models.ErrConfigFileInvalid, fmt.Errorf("protocol converter '%s' was rolled back to its previous configuration due to configuration errors. Please check the component logs, fix the configuration issues, and try editing again", a.name)
+						}
+					} else {
+						if fmt.Sprintf("%d", pcSnapshot.ServiceInfo.ConnectionObservedState.ServiceInfo.NmapObservedState.ObservedNmapServiceConfig.Port) != a.connectionPort {
+							currentStateReason = fmt.Sprintf("waiting for nmap to connect to port %s", a.connectionPort)
+						} else {
+							return "", nil
+						}
 					}
 
 					stateMessage := RemainingPrefixSec(remainingSeconds) + currentStateReason
@@ -548,7 +577,8 @@ func (a *EditProtocolConverterAction) compareProtocolConverterDFCConfig(pcSnapsh
 
 	// Only check read DFC for now since write DFC is not yet implemented
 	if a.dfcType != "read" {
-		// For write DFC, just return true for now since it's not implemented
+		// For write DFC and empty DFC, just return true for now since write DFC is not implemented
+		// and empty DFC doesn't have any DFC configuration to compare
 		return true
 	}
 
