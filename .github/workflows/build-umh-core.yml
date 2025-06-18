@@ -41,7 +41,8 @@ jobs:
       matrix:
         architecture: ["amd64", "arm64"]
     runs-on:
-      group: ${{ matrix.architecture == 'arm64' && 'arc-runners-small' || 'arc-runners-build' }}
+      #group: ${{ matrix.architecture == 'arm64' && 'arc-runners-small' || 'arc-runners-build' }}
+      group: arc-runners-build
     outputs:
       tags: ${{ steps.meta.outputs.tags }}
       BASE_TAGS: ${{ steps.output-tags.outputs.BASE_TAGS }}
@@ -216,7 +217,8 @@ jobs:
       contents: read
       packages: write
     runs-on:
-      group: arc-runners-small
+      #group: arc-runners-small
+      group: arc-runners-build
     defaults:
       run:
         shell: bash
@@ -278,7 +280,8 @@ jobs:
     needs: create-manifests
     if: startsWith(github.ref, 'refs/tags/')
     runs-on:
-      group: arc-runners-small
+      #group: arc-runners-small
+      group: arc-runners-build
     steps:
       - name: Notify management console
         run: |
