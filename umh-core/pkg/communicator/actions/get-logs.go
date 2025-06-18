@@ -99,10 +99,10 @@ func (a *GetLogsAction) Validate() (err error) {
 		models.ProtocolConverterReadLogType,
 		models.ProtocolConverterWriteLogType,
 		models.RedpandaLogType,
-		models.TagBrowserLogType,
+		models.TopicBrowserLogType,
 	}
 	if !slices.Contains(allowedLogTypes, a.payload.Type) {
-		return errors.New("log type must be set and must be one of the following: agent, dfc, protocol-converter-read, protocol-converter-write, redpanda, tag-browser")
+		return errors.New("log type must be set and must be one of the following: agent, dfc, protocol-converter-read, protocol-converter-write, redpanda, topic-browser")
 	}
 
 	if a.payload.Type == models.DFCLogType || a.payload.Type == models.ProtocolConverterReadLogType || a.payload.Type == models.ProtocolConverterWriteLogType {
@@ -223,9 +223,9 @@ func (a *GetLogsAction) Execute() (interface{}, map[string]interface{}, error) {
 		} else {
 			res.Logs = mapS6LogsToSlice(observedState.ServiceInfo.DataflowComponentWriteObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosLogs, reqStartTime)
 		}
-	case models.TagBrowserLogType:
-		// TODO: Implement tag browser logs
-		err := errors.New("tag-browser logs are not implemented yet")
+	case models.TopicBrowserLogType:
+		// TODO: Implement topic browser logs
+		err := errors.New("topic-browser logs are not implemented yet")
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, err.Error(), a.outboundChannel, models.GetLogs)
 		return nil, nil, err
 	}

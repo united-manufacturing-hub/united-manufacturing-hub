@@ -234,7 +234,7 @@ var _ = Describe("GetLogsAction", func() {
 
 			err = action.Validate()
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("log type must be set and must be one of the following: agent, dfc, protocol-converter-read, protocol-converter-write, redpanda, tag-browser"))
+			Expect(err.Error()).To(ContainSubstring("log type must be set and must be one of the following: agent, dfc, protocol-converter-read, protocol-converter-write, redpanda, topic-browser"))
 
 			// Missing start time
 			payload = map[string]interface{}{
@@ -260,7 +260,7 @@ var _ = Describe("GetLogsAction", func() {
 
 			err = action.Validate()
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("log type must be set and must be one of the following: agent, dfc, protocol-converter-read, protocol-converter-write, redpanda, tag-browser"))
+			Expect(err.Error()).To(ContainSubstring("log type must be set and must be one of the following: agent, dfc, protocol-converter-read, protocol-converter-write, redpanda, topic-browser"))
 		})
 
 		It("should return an error if the uuid is missing on DFC log type", func() {
