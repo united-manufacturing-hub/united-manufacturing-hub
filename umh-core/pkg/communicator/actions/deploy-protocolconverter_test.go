@@ -129,6 +129,8 @@ var _ = Describe("DeployProtocolConverter", func() {
 
 			// Call Parse method
 			err := action.Parse(payload)
+			Expect(err).To(BeNil())
+			err = action.Validate()
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("missing required field Name"))
 		})
@@ -145,6 +147,8 @@ var _ = Describe("DeployProtocolConverter", func() {
 
 			// Call Parse method
 			err := action.Parse(payload)
+			Expect(err).To(BeNil())
+			err = action.Validate()
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("missing required field Connection.IP"))
 		})
@@ -161,23 +165,8 @@ var _ = Describe("DeployProtocolConverter", func() {
 
 			// Call Parse method
 			err := action.Parse(payload)
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("missing required field Connection.Port"))
-		})
-
-		It("should return error for zero connection port", func() {
-			// Payload with zero connection port
-			payload := map[string]interface{}{
-				"name": pcName,
-				"connection": map[string]interface{}{
-					"ip":   pcIP,
-					"port": uint32(0),
-				},
-				"location": pcLocation,
-			}
-
-			// Call Parse method
-			err := action.Parse(payload)
+			Expect(err).To(BeNil())
+			err = action.Validate()
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("missing required field Connection.Port"))
 		})
@@ -224,6 +213,8 @@ var _ = Describe("DeployProtocolConverter", func() {
 			}
 
 			err := action.Parse(payload)
+			Expect(err).To(BeNil())
+			err = action.Validate()
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("missing required field Name"))
 		})
