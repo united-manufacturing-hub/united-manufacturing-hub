@@ -383,6 +383,19 @@ func (a *EditProtocolConverterAction) persistConfig(atomicEditUUID uuid.UUID, ne
 		return config.ProtocolConverterConfig{}, fmt.Errorf("failed to update protocol converter: %w", err)
 	}
 
+	// deep copy the old config therefore setup a full config
+	// this may seem hacky but like that we can reuse the Clone() function
+	// and we do not need to implement a custom Clone() function for the ProtocolConverterConfig
+	fullConfig := config.FullConfig{
+		ProtocolConverter: []config.ProtocolConverterConfig{oldConfig},
+	}
+
+	copiedConfig := fullConfig.Clone()
+	oldConfig = copiedConfig.ProtocolConverter[0]
+	// remove the location and location_path from the user variables
+	delete(oldConfig.ProtocolConverterServiceConfig.Variables.User, "location")
+	delete(oldConfig.ProtocolConverterServiceConfig.Variables.User, "location_path")
+
 	return oldConfig, nil
 }
 
@@ -423,9 +436,6 @@ func (a *EditProtocolConverterAction) waitForComponentToBeActive(oldConfig confi
 			// rollback to previous configuration
 			ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
 			defer cancel()
-			// remove location and location_path from the user variables
-			delete(oldConfig.ProtocolConverterServiceConfig.Variables.User, "location")
-			delete(oldConfig.ProtocolConverterServiceConfig.Variables.User, "location_path")
 			_, err := a.configManager.AtomicEditProtocolConverter(ctx, a.protocolConverterUUID, oldConfig)
 			if err != nil {
 				a.actionLogger.Errorf("Failed to rollback to previous configuration: %v", err)
@@ -497,9 +507,6 @@ func (a *EditProtocolConverterAction) waitForComponentToBeActive(oldConfig confi
 					// as these errors require configuration changes to resolve.
 					if CheckBenthosLogLinesForConfigErrors(logs) {
 						SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, Label("edit", a.name)+"configuration error detected. Rolling back...", a.outboundChannel, models.EditProtocolConverter)
-						// remove location and location_path from the user variables
-						delete(oldConfig.ProtocolConverterServiceConfig.Variables.User, "location")
-						delete(oldConfig.ProtocolConverterServiceConfig.Variables.User, "location_path")
 						ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
 						defer cancel()
 						a.actionLogger.Infof("rolling back to previous configuration with user variables: %v", oldConfig.ProtocolConverterServiceConfig.Variables.User)
