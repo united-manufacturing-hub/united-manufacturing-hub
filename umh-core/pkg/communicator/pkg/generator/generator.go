@@ -136,6 +136,7 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 					"action-get-metrics",
 					"action-delete-protocol-converter",
 					"action-edit-protocol-converter",
+					"protocol-converter-logs",
 				},
 			},
 		},
