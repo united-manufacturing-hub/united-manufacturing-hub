@@ -515,10 +515,12 @@ type CommonDataFlowComponentRawYamlConfig struct {
 type LogType string
 
 const (
-	AgentLogType      LogType = "agent"
-	DFCLogType        LogType = "dfc"
-	RedpandaLogType   LogType = "redpanda"
-	TagBrowserLogType LogType = "tag-browser"
+	AgentLogType                  LogType = "agent"
+	DFCLogType                    LogType = "dfc"
+	ProtocolConverterReadLogType  LogType = "protocol-converter-read"
+	ProtocolConverterWriteLogType LogType = "protocol-converter-write"
+	RedpandaLogType               LogType = "redpanda"
+	TagBrowserLogType             LogType = "tag-browser"
 )
 
 // GetLogsRequest contains the necessary fields for executing a `get-logs` action.
@@ -528,7 +530,7 @@ type GetLogsRequest struct {
 	// Type represents the type of the logs to retrieve
 	Type LogType `json:"type"`
 	// UUID represents the identifier of the entity to retrieve the logs for.
-	// This is optional and only used for DFC logs.
+	// This is optional and only used for DFC and Protocol Converter logs.
 	UUID string `json:"uuid"`
 }
 
