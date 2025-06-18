@@ -77,6 +77,9 @@ type EditProtocolConverterAction struct {
 	// Desired DFC config for comparison during health checks
 	desiredDFCConfig dataflowcomponentserviceconfig.DataflowComponentServiceConfig
 
+	// Atomic edit UUID used for configuration updates and rollbacks
+	atomicEditUUID uuid.UUID
+
 	actionLogger *zap.SugaredLogger
 }
 
@@ -223,6 +226,9 @@ func (a *EditProtocolConverterAction) Execute() (interface{}, map[string]interfa
 			errorMsg, a.outboundChannel, models.EditProtocolConverter)
 		return nil, nil, fmt.Errorf("%s", errorMsg)
 	}
+
+	// Store the atomic edit UUID for use in rollback operations
+	a.atomicEditUUID = atomicEditUUID
 
 	// Persist the configuration changes
 	oldConfig, err := a.persistConfig(atomicEditUUID, newSpec)
@@ -413,8 +419,11 @@ func (a *EditProtocolConverterAction) persistConfig(atomicEditUUID uuid.UUID, ne
 	copiedConfig := fullConfig.Clone()
 	oldConfig = copiedConfig.ProtocolConverter[0]
 	// remove the location and location_path from the user variables
-	delete(oldConfig.ProtocolConverterServiceConfig.Variables.User, "location")
-	delete(oldConfig.ProtocolConverterServiceConfig.Variables.User, "location_path")
+	// Check if User map exists before trying to delete from it
+	if oldConfig.ProtocolConverterServiceConfig.Variables.User != nil {
+		delete(oldConfig.ProtocolConverterServiceConfig.Variables.User, "location")
+		delete(oldConfig.ProtocolConverterServiceConfig.Variables.User, "location_path")
+	}
 
 	return oldConfig, nil
 }
@@ -456,7 +465,7 @@ func (a *EditProtocolConverterAction) waitForComponentToBeActive(oldConfig confi
 			// rollback to previous configuration
 			ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
 			defer cancel()
-			_, err := a.configManager.AtomicEditProtocolConverter(ctx, a.protocolConverterUUID, oldConfig)
+			_, err := a.configManager.AtomicEditProtocolConverter(ctx, a.atomicEditUUID, oldConfig)
 			if err != nil {
 				a.actionLogger.Errorf("Failed to rollback to previous configuration: %v", err)
 				stateMessage := fmt.Sprintf("Protocol converter '%s' edit timeout reached. It did not become active in time. Rolling back to previous configuration failed: %v", a.name, err)
@@ -532,7 +541,7 @@ func (a *EditProtocolConverterAction) waitForComponentToBeActive(oldConfig confi
 							ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
 							defer cancel()
 							a.actionLogger.Infof("rolling back to previous configuration with user variables: %v", oldConfig.ProtocolConverterServiceConfig.Variables.User)
-							_, err := a.configManager.AtomicEditProtocolConverter(ctx, a.protocolConverterUUID, oldConfig)
+							_, err := a.configManager.AtomicEditProtocolConverter(ctx, a.atomicEditUUID, oldConfig)
 							if err != nil {
 								a.actionLogger.Errorf("failed to roll back protocol converter %s: %v", a.name, err)
 								return models.ErrConfigFileInvalid, fmt.Errorf("protocol converter '%s' has invalid configuration but could not be rolled back: %v. Please check your logs and consider manually restoring the previous configuration", a.name, err)

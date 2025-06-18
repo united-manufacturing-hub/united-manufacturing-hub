@@ -132,7 +132,7 @@ func (a *SetConfigFileAction) Execute() (interface{}, map[string]interface{}, er
 	if err != nil {
 		errMsg := fmt.Sprintf("Failed to update cache mod time: %v", err)
 		SendActionReplyV2(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
-			errMsg, models.ErrRetryConfigWriteFailed, nil, a.outboundChannel, models.SetConfigFile, nil)
+			errMsg, models.ErrGetCacheModTimeFailed, nil, a.outboundChannel, models.SetConfigFile, nil)
 		return nil, nil, fmt.Errorf("failed to update cache mod time: %w", err)
 	}
 
