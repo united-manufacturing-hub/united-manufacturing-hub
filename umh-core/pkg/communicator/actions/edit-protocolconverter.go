@@ -481,7 +481,7 @@ func (a *EditProtocolConverterAction) waitForComponentToBeActive(oldConfig confi
 					// Cast the instance LastObservedState to a protocolconverter instance
 					pcSnapshot, ok := instance.LastObservedState.(*protocolconverter.ProtocolConverterObservedStateSnapshot)
 					if !ok {
-						stateMessage := RemainingPrefixSec(remainingSeconds) + "waiting for state info"
+						stateMessage := RemainingPrefixSec(remainingSeconds) + "waiting for state info of protocol converter instance"
 						SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
 							stateMessage, a.outboundChannel, models.EditProtocolConverter)
 						continue
@@ -496,7 +496,7 @@ func (a *EditProtocolConverterAction) waitForComponentToBeActive(oldConfig confi
 						// We compare the desired DFC config with the observed DFC configuration
 						// in the protocol converter snapshot.
 						if !a.compareProtocolConverterDFCConfig(pcSnapshot) {
-							stateMessage := RemainingPrefixSec(remainingSeconds) + fmt.Sprintf("%s DFC config not yet applied. Status reason: %s", a.dfcType, pcSnapshot.ServiceInfo.StatusReason)
+							stateMessage := RemainingPrefixSec(remainingSeconds) + fmt.Sprintf("%s DFC config not yet applied. State: %s, Status reason: %s", a.dfcType, instance.CurrentState, pcSnapshot.ServiceInfo.StatusReason)
 							SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
 								stateMessage, a.outboundChannel, models.EditProtocolConverter)
 							continue
