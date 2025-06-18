@@ -50,6 +50,33 @@ import (
 	"go.uber.org/zap"
 )
 
+// DFCType represents the type of dataflow component configuration
+type DFCType string
+
+const (
+	// DFCTypeRead represents a read dataflow component
+	DFCTypeRead DFCType = "read"
+	// DFCTypeWrite represents a write dataflow component
+	DFCTypeWrite DFCType = "write"
+	// DFCTypeEmpty represents no dataflow component (connection/location update only)
+	DFCTypeEmpty DFCType = "empty"
+)
+
+// String returns the string representation of the DFCType
+func (d DFCType) String() string {
+	return string(d)
+}
+
+// IsValid checks if the DFCType has a valid value
+func (d DFCType) IsValid() bool {
+	switch d {
+	case DFCTypeRead, DFCTypeWrite, DFCTypeEmpty:
+		return true
+	default:
+		return false
+	}
+}
+
 // EditProtocolConverterAction implements the Action interface for editing
 // protocol converter configurations, particularly for adding DFC configurations.
 type EditProtocolConverterAction struct {
@@ -64,7 +91,7 @@ type EditProtocolConverterAction struct {
 	protocolConverterUUID uuid.UUID
 	name                  string // protocol converter name (optional for updates)
 	dfcPayload            models.CDFCPayload
-	dfcType               string // "read" or "write"
+	dfcType               DFCType
 	vb                    []models.ProtocolConverterVariable
 	ignoreHealthCheck     bool
 	location              map[int]string
@@ -115,13 +142,13 @@ func (a *EditProtocolConverterAction) Parse(payload interface{}) error {
 	// Determine which DFC is being updated and convert it to CDFCPayload
 	var dfcToUpdate *models.ProtocolConverterDFC
 	if pcPayload.ReadDFC != nil {
-		a.dfcType = "read"
+		a.dfcType = DFCTypeRead
 		dfcToUpdate = pcPayload.ReadDFC
 	} else if pcPayload.WriteDFC != nil {
-		a.dfcType = "write"
+		a.dfcType = DFCTypeWrite
 		dfcToUpdate = pcPayload.WriteDFC
 	} else {
-		a.dfcType = "empty"
+		a.dfcType = DFCTypeEmpty
 		dfcToUpdate = &models.ProtocolConverterDFC{}
 	}
 
@@ -140,7 +167,7 @@ func (a *EditProtocolConverterAction) Parse(payload interface{}) error {
 	a.connectionIP = pcPayload.Connection.IP
 
 	// Convert ProtocolConverterDFC to CDFCPayload for internal processing
-	if a.dfcType != "empty" {
+	if a.dfcType != DFCTypeEmpty {
 		a.dfcPayload = models.CDFCPayload{
 			Inputs:   models.DfcDataConfig{Data: dfcToUpdate.Inputs.Data, Type: dfcToUpdate.Inputs.Type},
 			Pipeline: convertPipelineToMap(dfcToUpdate.Pipeline),
@@ -171,7 +198,7 @@ func (a *EditProtocolConverterAction) Validate() error {
 		return err
 	}
 
-	if a.dfcType != "empty" {
+	if a.dfcType != DFCTypeEmpty {
 		if err := ValidateCustomDataFlowComponentPayload(a.dfcPayload, false); err != nil {
 			return fmt.Errorf("invalid dataflow component configuration: %v", err)
 		}
@@ -187,10 +214,10 @@ func (a *EditProtocolConverterAction) Execute() (interface{}, map[string]interfa
 
 	// Send confirmation that action is starting
 	var confirmationMessage string
-	if a.dfcType == "empty" {
+	if a.dfcType == DFCTypeEmpty {
 		confirmationMessage = fmt.Sprintf("Starting edit of protocol converter %s to update connection and location", a.protocolConverterUUID)
 	} else {
-		confirmationMessage = fmt.Sprintf("Starting edit of protocol converter %s to add %s DFC", a.protocolConverterUUID, a.dfcType)
+		confirmationMessage = fmt.Sprintf("Starting edit of protocol converter %s to add %s DFC", a.protocolConverterUUID, a.dfcType.String())
 	}
 	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionConfirmed,
 		confirmationMessage, a.outboundChannel, models.EditProtocolConverter)
@@ -199,7 +226,7 @@ func (a *EditProtocolConverterAction) Execute() (interface{}, map[string]interfa
 	var err error
 
 	// Only create Benthos config if we have a DFC to configure
-	if a.dfcType != "empty" {
+	if a.dfcType != DFCTypeEmpty {
 		// Convert the DFC payload to BenthosConfig
 		benthosConfig, err = CreateBenthosConfigFromCDFCPayload(a.dfcPayload, a.name)
 		if err != nil {
@@ -210,7 +237,7 @@ func (a *EditProtocolConverterAction) Execute() (interface{}, map[string]interfa
 		}
 
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
-			fmt.Sprintf("Updating protocol converter configuration with %s DFC...", a.dfcType),
+			fmt.Sprintf("Updating protocol converter configuration with %s DFC...", a.dfcType.String()),
 			a.outboundChannel, models.EditProtocolConverter)
 	} else {
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
@@ -354,7 +381,7 @@ func (a *EditProtocolConverterAction) applyMutation(benthosConfig dataflowcompon
 
 	// Update the appropriate DFC configuration based on dfcType
 	var dfcServiceConfig dataflowcomponentserviceconfig.DataflowComponentServiceConfig
-	if a.dfcType != "empty" {
+	if a.dfcType != DFCTypeEmpty {
 		dfcServiceConfig = dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 			BenthosConfig: benthosConfig,
 		}
@@ -384,15 +411,15 @@ func (a *EditProtocolConverterAction) applyMutation(benthosConfig dataflowcompon
 	}
 
 	switch a.dfcType {
-	case "read":
+	case DFCTypeRead:
 		instanceToModify.ProtocolConverterServiceConfig.Config.DataflowComponentReadServiceConfig = dfcServiceConfig
-	case "write":
+	case DFCTypeWrite:
 		instanceToModify.ProtocolConverterServiceConfig.Config.DataflowComponentWriteServiceConfig = dfcServiceConfig
-	case "empty":
+	case DFCTypeEmpty:
 		// For empty dfcType, we only update connection, location, and name - no DFC configuration
 		// The connection, location, and name updates are already handled above
 	default:
-		return config.ProtocolConverterConfig{}, uuid.Nil, fmt.Errorf("invalid DFC type: %s", a.dfcType)
+		return config.ProtocolConverterConfig{}, uuid.Nil, fmt.Errorf("invalid DFC type: %s", a.dfcType.String())
 	}
 
 	return instanceToModify, atomicEditUUID, nil
@@ -500,12 +527,12 @@ func (a *EditProtocolConverterAction) waitForComponentToBeActive(oldConfig confi
 
 					currentStateReason := fmt.Sprintf("current state: %s", instance.CurrentState)
 
-					if a.dfcType != "empty" {
+					if a.dfcType != DFCTypeEmpty {
 						// Verify that the protocol converter has applied the desired DFC configuration.
 						// We compare the desired DFC config with the observed DFC configuration
 						// in the protocol converter snapshot.
 						if !a.compareProtocolConverterDFCConfig(pcSnapshot) {
-							stateMessage := RemainingPrefixSec(remainingSeconds) + fmt.Sprintf("%s DFC config not yet applied. State: %s, Status reason: %s", a.dfcType, instance.CurrentState, pcSnapshot.ServiceInfo.StatusReason)
+							stateMessage := RemainingPrefixSec(remainingSeconds) + fmt.Sprintf("%s DFC config not yet applied. State: %s, Status reason: %s", a.dfcType.String(), instance.CurrentState, pcSnapshot.ServiceInfo.StatusReason)
 							SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
 								stateMessage, a.outboundChannel, models.EditProtocolConverter)
 							continue
@@ -513,7 +540,7 @@ func (a *EditProtocolConverterAction) waitForComponentToBeActive(oldConfig confi
 
 						// Check if the protocol converter is in an active state
 						if instance.CurrentState == "active" || instance.CurrentState == "idle" {
-							stateMessage := RemainingPrefixSec(remainingSeconds) + fmt.Sprintf("protocol converter successfully activated with state '%s', %s DFC configuration verified", instance.CurrentState, a.dfcType)
+							stateMessage := RemainingPrefixSec(remainingSeconds) + fmt.Sprintf("protocol converter successfully activated with state '%s', %s DFC configuration verified", instance.CurrentState, a.dfcType.String())
 							SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, stateMessage,
 								a.outboundChannel, models.EditProtocolConverter)
 							return "", nil
@@ -585,7 +612,7 @@ func (a *EditProtocolConverterAction) compareProtocolConverterDFCConfig(pcSnapsh
 	}
 
 	// Only check read DFC for now since write DFC is not yet implemented
-	if a.dfcType != "read" {
+	if a.dfcType != DFCTypeRead {
 		// For write DFC and empty DFC, just return true for now since write DFC is not implemented
 		// and empty DFC doesn't have any DFC configuration to compare
 		return true
@@ -692,5 +719,5 @@ func (a *EditProtocolConverterAction) GetProtocolConverterUUID() uuid.UUID {
 
 // GetDFCType returns the DFC type (read/write) - exposed for testing purposes.
 func (a *EditProtocolConverterAction) GetDFCType() string {
-	return a.dfcType
+	return a.dfcType.String()
 }

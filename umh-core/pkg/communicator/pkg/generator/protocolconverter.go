@@ -211,7 +211,7 @@ func getProtocolConverterStatusMessage(state string, statusReason string, connec
 		case "degraded":
 			nmapSuffix = " (nmap execution failed)"
 		default:
-			nmapSuffix = fmt.Sprintf(" (nmap: %s)", nmapState)
+			nmapSuffix = fmt.Sprintf(" (unexpected nmap state: %s)", nmapState)
 		}
 
 		// Only add nmap details if they add meaningful information
