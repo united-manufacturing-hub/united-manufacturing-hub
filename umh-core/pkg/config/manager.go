@@ -440,23 +440,17 @@ func (m *FileConfigManager) writeConfig(ctx context.Context, config FullConfig) 
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
 
-	// The following section is diabled,
-	// due to a bug when using it togheter with Protocol Converters, which lead to connections (templated) not being rendered
-	// In my (Ferdinand) opinion it is fine to do a read after a write, to ensure consistency
-	/*
-		// Update the cache to reflect the new config
-		info, err := m.fsService.Stat(ctx, m.configPath)
-		if err != nil {
-			return fmt.Errorf("failed to stat config file after write: %w", err)
-		}
+	// For writeConfig, we invalidate the cache instead of updating it directly.
+	// This is because writeConfig converts the spec to YAML using convertSpecToYaml(),
+	// which may not preserve the original YAML structure (anchors/aliases).
+	// Caching the converted data caused Protocol Converter templating bugs.
+	// Cache invalidation forces a fresh read that properly handles YAML templating.
+	m.cacheMu.Lock()
+	m.cacheModTime = time.Time{} // Invalidate cache by setting modtime to zero
+	m.cacheConfig = FullConfig{}
+	m.cacheRawConfig = ""
+	m.cacheMu.Unlock()
 
-		// Update all cache fields atomically in a single critical section
-		m.cacheMu.Lock()
-		m.cacheRawConfig = string(data)
-		m.cacheModTime = info.ModTime()
-		m.cacheConfig = config
-		m.cacheMu.Unlock()
-	*/
 	m.logger.Infof("Successfully wrote config to %s", m.configPath)
 	return nil
 }
@@ -925,28 +919,16 @@ func (m *FileConfigManager) WriteYAMLConfigFromString(ctx context.Context, confi
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
 
-	// The following section is diabled,
-	// due to a bug when using it togheter with Protocol Converters, which lead to connections (templated) not being rendered
-	// In my (Ferdinand) opinion it is fine to do a read after a write, to ensure consistency
-	/*
-		// Update the cache to reflect the new config
-		info, err := m.fsService.Stat(ctx, m.configPath)
-		if err != nil {
-			return fmt.Errorf("failed to stat config file after write: %w", err)
-		}
-
-		// Parse the config for the cache
-		parsedConfig, _, err := ParseConfig([]byte(configStr), true)
-		if err != nil {
-			return fmt.Errorf("failed to parse config for cache update: %w", err)
-		}
-		// Update all cache fields atomically in a single critical section
-		m.cacheMu.Lock()
-		m.cacheRawConfig = configStr
-		m.cacheModTime = info.ModTime()
-		m.cacheConfig = parsedConfig
-		m.cacheMu.Unlock()
-	*/
+	// For WriteYAMLConfigFromString, we invalidate the cache instead of updating it directly.
+	// This is because WriteYAMLConfigFromString writes the raw YAML string directly to the file,
+	// which may not preserve the original YAML structure (anchors/aliases).
+	// Caching the converted data caused Protocol Converter templating bugs.
+	// Cache invalidation forces a fresh read that properly handles YAML templating.
+	m.cacheMu.Lock()
+	m.cacheModTime = time.Time{} // Invalidate cache by setting modtime to zero
+	m.cacheConfig = FullConfig{}
+	m.cacheRawConfig = ""
+	m.cacheMu.Unlock()
 
 	m.logger.Infof("Successfully wrote config to %s", m.configPath)
 	return nil

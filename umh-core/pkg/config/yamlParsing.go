@@ -32,7 +32,7 @@ func convertYamlToSpec(config FullConfig) (FullConfig, error) {
 	templateMap := make(map[string]protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate)
 
 	// Process protocol converter templates from the enforced structure
-	for templateName, templateContent := range config.Templates.ProtocolConverter {
+	for templateName, templateContent := range processedConfig.Templates.ProtocolConverter {
 		// Convert the template content to the proper structure
 		templateBytes, err := yaml.Marshal(templateContent)
 		if err != nil {

@@ -52,8 +52,8 @@ func (m *FileConfigManager) AtomicAddProtocolConverter(ctx context.Context, pc P
 		}
 	}
 
-	// If it's a child (TemplateRef != Name), verify that a root with that TemplateRef exists
-	if pc.ProtocolConverterServiceConfig.TemplateRef != pc.Name {
+	// If it's a child (TemplateRef is non-empty and != Name), verify that a root with that TemplateRef exists
+	if pc.ProtocolConverterServiceConfig.TemplateRef != "" && pc.ProtocolConverterServiceConfig.TemplateRef != pc.Name {
 		templateRef := pc.ProtocolConverterServiceConfig.TemplateRef
 		rootExists := false
 
@@ -161,8 +161,8 @@ func (m *FileConfigManager) AtomicEditProtocolConverter(ctx context.Context, com
 		}
 	}
 
-	// If it's a child (not a root), validate that the template reference exists
-	if !newIsRoot {
+	// If it's a child (TemplateRef is non-empty and not a root), validate that the template reference exists
+	if !newIsRoot && pc.ProtocolConverterServiceConfig.TemplateRef != "" {
 		templateRef := pc.ProtocolConverterServiceConfig.TemplateRef
 		rootExists := false
 

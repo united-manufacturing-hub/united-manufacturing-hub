@@ -375,11 +375,6 @@ func (m *MockConfigManager) AtomicAddProtocolConverter(ctx context.Context, pc P
 		}
 	}
 
-	// Promote to root if needed (empty TemplateRef becomes root)
-	if pc.ProtocolConverterServiceConfig.TemplateRef == "" {
-		pc.ProtocolConverterServiceConfig.TemplateRef = pc.Name
-	}
-
 	// If it's a child (TemplateRef != Name), verify that a root with that TemplateRef exists
 	if pc.ProtocolConverterServiceConfig.TemplateRef != pc.Name {
 		templateRef := pc.ProtocolConverterServiceConfig.TemplateRef
