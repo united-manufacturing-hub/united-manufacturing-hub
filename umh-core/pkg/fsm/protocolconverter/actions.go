@@ -334,7 +334,13 @@ func (p *ProtocolConverterInstance) IsRedpandaHealthy() (bool, string) {
 	if p.ObservedState.ServiceInfo.RedpandaFSMState == redpandafsm.OperationalStateIdle || p.ObservedState.ServiceInfo.RedpandaFSMState == redpandafsm.OperationalStateActive {
 		return true, ""
 	}
-	return false, p.ObservedState.ServiceInfo.RedpandaObservedState.ServiceInfo.StatusReason
+
+	statusReason := p.ObservedState.ServiceInfo.RedpandaObservedState.ServiceInfo.StatusReason
+	if statusReason == "" {
+		statusReason = "Redpanda Health status unknown"
+	}
+
+	return false, statusReason
 }
 
 // IsDFCHealthy checks whether the underlying DFC is healthy
@@ -348,8 +354,14 @@ func (p *ProtocolConverterInstance) IsDFCHealthy() (bool, string) {
 	if p.ObservedState.ServiceInfo.DataflowComponentReadFSMState == dataflowfsm.OperationalStateIdle || p.ObservedState.ServiceInfo.DataflowComponentReadFSMState == dataflowfsm.OperationalStateActive {
 		return true, ""
 	}
+
+	statusReason := p.ObservedState.ServiceInfo.DataflowComponentReadObservedState.ServiceInfo.StatusReason
+	if statusReason == "" {
+		statusReason = "DFC Health status unknown"
+	}
+
 	// TODO: check the write DFC as well
-	return false, p.ObservedState.ServiceInfo.DataflowComponentReadObservedState.ServiceInfo.StatusReason
+	return false, statusReason
 }
 
 // safeBenthosMetrics safely extracts Benthos metrics from the observed state,
@@ -383,7 +395,6 @@ func (p *ProtocolConverterInstance) safeBenthosMetrics() (input, output struct{ 
 //	ok     – true when there is an issue, false otherwise.
 //	reason – empty when ok is true; otherwise a explanation
 func (p *ProtocolConverterInstance) IsOtherDegraded() (bool, string) {
-
 	// TODO: check the write DFC as well
 
 	// Check for case 1.1
@@ -425,7 +436,13 @@ func (p *ProtocolConverterInstance) IsDataflowComponentWithProcessingActivity() 
 	if p.ObservedState.ServiceInfo.DataflowComponentReadFSMState == dataflowfsm.OperationalStateActive {
 		return true, ""
 	}
-	return false, fmt.Sprintf("DFC is %s", p.ObservedState.ServiceInfo.DataflowComponentReadFSMState)
+
+	dfcState := p.ObservedState.ServiceInfo.DataflowComponentReadFSMState
+	if dfcState == "" {
+		dfcState = "not existing"
+	}
+
+	return false, fmt.Sprintf("DFC is %s", dfcState)
 }
 
 // IsProtocolConverterStopped checks whether the ProtocolConverter is stopped
@@ -441,7 +458,18 @@ func (p *ProtocolConverterInstance) IsProtocolConverterStopped() (bool, string) 
 		p.ObservedState.ServiceInfo.DataflowComponentReadFSMState == dataflowfsm.OperationalStateStopped {
 		return true, ""
 	}
-	return false, fmt.Sprintf("connection is %s, DFC is %s", p.ObservedState.ServiceInfo.ConnectionFSMState, p.ObservedState.ServiceInfo.DataflowComponentReadFSMState)
+
+	connState := p.ObservedState.ServiceInfo.ConnectionFSMState
+	if connState == "" {
+		connState = "not existing"
+	}
+
+	dfcState := p.ObservedState.ServiceInfo.DataflowComponentReadFSMState
+	if dfcState == "" {
+		dfcState = "not existing"
+	}
+
+	return false, fmt.Sprintf("connection is %s, DFC is %s", connState, dfcState)
 }
 
 // IsDFCExisting checks whether either the read or write DFC is existing
