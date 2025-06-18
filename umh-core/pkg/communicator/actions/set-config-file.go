@@ -119,7 +119,7 @@ func (a *SetConfigFileAction) Execute() (interface{}, map[string]interface{}, er
 		fmt.Sprintf("Updating config file at %s", configPath), a.outboundChannel, models.SetConfigFile)
 
 	// Write the new content to the file with atomic concurrent modification check
-	err := a.configManager.WriteConfigFromString(ctx, a.payload.Content, a.payload.LastModifiedTime)
+	err := a.configManager.WriteYAMLConfigFromString(ctx, a.payload.Content, a.payload.LastModifiedTime)
 	if err != nil {
 		errMsg := fmt.Sprintf("Failed to write config file: %v", err)
 		SendActionReplyV2(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
@@ -127,7 +127,7 @@ func (a *SetConfigFileAction) Execute() (interface{}, map[string]interface{}, er
 		return nil, nil, fmt.Errorf("failed to write config file: %w", err)
 	}
 
-	// the WriteConfigFromString call above updates the cache mod time in the config manager
+	// the WriteYAMLConfigFromString call above updates the cache mod time in the config manager
 	// so we can just get it without updating it (which would be a blocking operation)
 	newLastModifiedTime := a.configManager.GetCacheModTimeWithoutUpdate()
 
