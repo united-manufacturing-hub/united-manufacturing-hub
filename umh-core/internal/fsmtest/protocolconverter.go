@@ -90,7 +90,7 @@ func CreateProtocolConverterTestConfig(name string, desiredState string) config.
 			DesiredFSMState: desiredState,
 		},
 		ProtocolConverterServiceConfig: protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
-			Template: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
+			Config: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
 				DataflowComponentReadServiceConfig: goodDataflowComponentReadConfig,
 				// ignoring write DFC for now as I get otherwise the error message of
 				// failed to build runtime config: template: pc:5:36: executing "pc" at <.internal.umh_topic>: map has no entry for key "umh_topic"
@@ -110,7 +110,7 @@ func CreateProtocolConverterTestConfigWithMissingDfc(name string, desiredState s
 			DesiredFSMState: desiredState,
 		},
 		ProtocolConverterServiceConfig: protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
-			Template: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
+			Config: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
 				DataflowComponentReadServiceConfig: missingDataflowComponentConfig,
 				// ignoring write DFC for now as I get otherwise the error message of
 				// failed to build runtime config: template: pc:5:36: executing "pc" at <.internal.umh_topic>: map has no entry for key "umh_topic"
@@ -137,7 +137,7 @@ func CreateProtocolConverterTestConfigWithInvalidPort(name string, desiredState 
 			DesiredFSMState: desiredState,
 		},
 		ProtocolConverterServiceConfig: protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
-			Template: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
+			Config: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
 				DataflowComponentReadServiceConfig: goodDataflowComponentReadConfig,
 				// ignoring write DFC for now as I get otherwise the error message of
 				// failed to build runtime config: template: pc:5:36: executing "pc" at <.internal.umh_topic>: map has no entry for key "umh_topic"
