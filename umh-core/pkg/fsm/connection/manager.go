@@ -67,7 +67,7 @@ func NewConnectionManager(name string) *ConnectionManager {
 			if !ok {
 				return false, fmt.Errorf("instance is not a ConnectionInstance")
 			}
-			return connectionInstance.config.Equal(&cfg.ConnectionServiceConfig), nil
+			return connectionInstance.config.Equal(cfg.ConnectionServiceConfig), nil
 		},
 		// Set Connection config
 		func(instance public_fsm.FSMInstance, cfg config.ConnectionConfig) error {

@@ -213,7 +213,7 @@ func (m *MockBenthosService) IsBenthosConfigLoaded(serviceName string) bool {
 	return false
 }
 
-func (m *MockBenthosService) IsBenthosHealthchecksPassed(serviceName string) bool {
+func (m *MockBenthosService) IsBenthosHealthchecksPassed(serviceName string, currentTime time.Time) bool {
 	m.IsBenthosHealthchecksPassedCalled = true
 	if flags := m.GetServiceState(serviceName); flags != nil {
 		return flags.IsHealthchecksPassed

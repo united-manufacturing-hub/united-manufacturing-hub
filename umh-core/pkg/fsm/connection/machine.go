@@ -185,5 +185,5 @@ func (c *ConnectionInstance) PrintState() {
 
 // GetExpectedMaxP95ExecutionTimePerInstance returns the expected max p95 execution time of the instance
 func (c *ConnectionInstance) GetExpectedMaxP95ExecutionTimePerInstance() time.Duration {
-	return constants.DataflowComponentExpectedMaxP95ExecutionTimePerInstance
+	return constants.ConnectionExpectedMaxP95ExecutionTimePerInstance
 }

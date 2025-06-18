@@ -24,7 +24,7 @@ func NewNormalizer() *Normalizer {
 
 // NormalizeConfig applies Redpanda defaults to a structured config
 func (n *Normalizer) NormalizeConfig(cfg RedpandaServiceConfig) RedpandaServiceConfig {
-	// Create a copy
+	// create a shallow copy
 	normalized := cfg
 
 	if normalized.Topic.DefaultTopicRetentionMs == 0 {
@@ -33,6 +33,10 @@ func (n *Normalizer) NormalizeConfig(cfg RedpandaServiceConfig) RedpandaServiceC
 
 	if normalized.Topic.DefaultTopicRetentionBytes == 0 {
 		normalized.Topic.DefaultTopicRetentionBytes = 0
+	}
+
+	if normalized.Topic.DefaultTopicCompressionAlgorithm == "" {
+		normalized.Topic.DefaultTopicCompressionAlgorithm = "snappy"
 	}
 
 	if normalized.Resources.MaxCores == 0 {

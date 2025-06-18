@@ -23,6 +23,7 @@ import (
 
 	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	benthosfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
@@ -175,13 +176,13 @@ func (d *DataflowComponentInstance) getServiceStatus(ctx context.Context, filesy
 }
 
 // UpdateObservedStateOfInstance updates the observed state of the service
-func (d *DataflowComponentInstance) UpdateObservedStateOfInstance(ctx context.Context, services serviceregistry.Provider, tick uint64, loopStartTime time.Time) error {
+func (d *DataflowComponentInstance) UpdateObservedStateOfInstance(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
 
 	start := time.Now()
-	info, err := d.getServiceStatus(ctx, services.GetFileSystem(), tick)
+	info, err := d.getServiceStatus(ctx, services.GetFileSystem(), snapshot.Tick)
 	if err != nil {
 		return fmt.Errorf("error while getting service status: %w", err)
 	}
@@ -214,12 +215,12 @@ func (d *DataflowComponentInstance) UpdateObservedStateOfInstance(ctx context.Co
 		}
 	}
 
-	if !dataflowcomponentserviceconfig.ConfigsEqual(&d.config, &d.ObservedState.ObservedDataflowComponentConfig) {
+	if !dataflowcomponentserviceconfig.ConfigsEqual(d.config, d.ObservedState.ObservedDataflowComponentConfig) {
 		// Check if the service exists before attempting to update
 		if d.service.ServiceExists(ctx, services.GetFileSystem(), d.baseFSMInstance.GetID()) {
 			d.baseFSMInstance.GetLogger().Debugf("Observed DataflowComponent config is different from desired config, updating Benthos configuration")
 
-			diffStr := dataflowcomponentserviceconfig.ConfigDiff(&d.config, &d.ObservedState.ObservedDataflowComponentConfig)
+			diffStr := dataflowcomponentserviceconfig.ConfigDiff(d.config, d.ObservedState.ObservedDataflowComponentConfig)
 			d.baseFSMInstance.GetLogger().Debugf("Configuration differences: %s", diffStr)
 
 			// Update the config in the Benthos manager

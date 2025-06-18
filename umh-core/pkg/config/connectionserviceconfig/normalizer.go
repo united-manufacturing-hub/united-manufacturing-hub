@@ -24,12 +24,15 @@ func NewNormalizer() *Normalizer {
 	return &Normalizer{}
 }
 
-// NormalizeConfig applies normalization to a ConnectionServiceConfig
-// by leveraging the existing normalizer for NmapServiceConfig
-func (n *Normalizer) NormalizeConfig(cfg ConnectionServiceConfig) ConnectionServiceConfig {
+// NormalizeConfig applies normalization to a ConnectionServiceConfigRuntime
+// by leveraging the existing normalizer for NmapServiceConfig.
+// This works on the runtime configuration with proper types.
+func (n *Normalizer) NormalizeConfig(cfg ConnectionServiceConfigRuntime) ConnectionServiceConfigRuntime {
+	// create a copy
+	normalized := cfg
 
 	normalizer := nmapserviceconfig.NewNormalizer()
-	normalized := normalizer.NormalizeConfig(cfg.NmapServiceConfig)
+	normalized.NmapServiceConfig = normalizer.NormalizeConfig(normalized.NmapServiceConfig)
 
-	return FromNmapServiceConfig(normalized)
+	return FromNmapServiceConfig(normalized.NmapServiceConfig)
 }

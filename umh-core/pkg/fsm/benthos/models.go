@@ -142,6 +142,10 @@ type BenthosInstance struct {
 
 	// config contains all the configuration for this service
 	config benthosserviceconfig.BenthosServiceConfig
+
+	// healthChecksPassingSince tracks when health checks started passing continuously
+	// Used for debouncing health check status changes
+	healthChecksPassingSinceTick uint64
 }
 
 // GetLastObservedState returns the last known state of the instance

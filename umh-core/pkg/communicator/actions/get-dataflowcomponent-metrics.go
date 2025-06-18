@@ -25,6 +25,7 @@ import (
 	"go.uber.org/zap"
 )
 
+// Deprecated: Use GetMetricsAction instead. Kept for backward compatibility.
 type GetDataflowcomponentMetricsAction struct {
 	// ─── Request metadata ────────────────────────────────────────────────────
 	userEmail    string
@@ -38,7 +39,7 @@ type GetDataflowcomponentMetricsAction struct {
 	systemSnapshotManager *fsm.SnapshotManager
 
 	// ─── Parsed request payload ─────────────────────────────────────────────
-	payload models.GetDataflowcomponentMetricsRequest
+	payload models.GetDataflowcomponentMetricsRequest //nolint:staticcheck // Deprecated but kept for back compat
 
 	// ─── Utilities ──────────────────────────────────────────────────────────
 	actionLogger *zap.SugaredLogger
@@ -57,7 +58,7 @@ func NewGetDataflowcomponentMetricsAction(userEmail string, actionUUID uuid.UUID
 
 func (a *GetDataflowcomponentMetricsAction) Parse(payload interface{}) (err error) {
 	a.actionLogger.Info("Parsing the payload")
-	a.payload, err = ParseActionPayload[models.GetDataflowcomponentMetricsRequest](payload)
+	a.payload, err = ParseActionPayload[models.GetDataflowcomponentMetricsRequest](payload) //nolint:staticcheck // Deprecated but kept for back compat
 	a.actionLogger.Info("Payload parsed: %v", a.payload)
 	return err
 }
@@ -80,14 +81,14 @@ func (a *GetDataflowcomponentMetricsAction) Validate() (err error) {
 func (a *GetDataflowcomponentMetricsAction) Execute() (interface{}, map[string]interface{}, error) {
 	dfcInstance, err := fsm.FindDfcInstanceByUUID(a.systemSnapshotManager.GetDeepCopySnapshot(), a.payload.UUID)
 	if err != nil {
-		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, "failed to find DFC instance", a.outboundChannel, models.GetDataFlowComponentMetrics)
+		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, "failed to find DFC instance", a.outboundChannel, models.GetDataFlowComponentMetrics) //nolint:staticcheck // Deprecated but kept for back compat
 		return nil, nil, err
 	}
 
 	// Safety check to ensure LastObservedState is not nil
 	if dfcInstance.LastObservedState == nil {
 		err = fmt.Errorf("DFC instance %s has no observed state", a.payload.UUID)
-		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, err.Error(), a.outboundChannel, models.GetDataFlowComponentMetrics)
+		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, err.Error(), a.outboundChannel, models.GetDataFlowComponentMetrics) //nolint:staticcheck // Deprecated but kept for back compat
 		return nil, nil, err
 	}
 
@@ -156,14 +157,16 @@ func (a *GetDataflowcomponentMetricsAction) getUuid() uuid.UUID {
 	return a.actionUUID
 }
 
-func (a *GetDataflowcomponentMetricsAction) GetParsedPayload() models.GetDataflowcomponentMetricsRequest {
+func (a *GetDataflowcomponentMetricsAction) GetParsedPayload() models.GetDataflowcomponentMetricsRequest { //nolint:staticcheck // Deprecated but kept for back compat
 	return a.payload
 }
 
+// Deprecated: Use models.GetMetricsResponse instead. Kept for backward compatibility.
 type DfcMetrics struct {
 	Metrics []DfcMetric `json:"metrics"`
 }
 
+// Deprecated: Use models.Metric instead. Kept for backward compatibility.
 type DfcMetric struct {
 	ValueType     DfcMetricType          `json:"value_type"`
 	Value         any                    `json:"value"`
@@ -172,6 +175,7 @@ type DfcMetric struct {
 	Name          string                 `json:"name"`
 }
 
+// Deprecated: Use models.MetricValueType instead. Kept for backward compatibility.
 type DfcMetricType string
 
 const (
@@ -182,7 +186,7 @@ const (
 // DfcMetricComponentType represents the Redpanda Connect component type that emitted the metric.
 // Each component type uses a specific prefix in its metric names (e.g., input_received, processor_error, output_sent).
 //
-// See: https://docs.redpanda.com/redpanda-connect/components/metrics/about/#metric-names
+// Deprecated: It's now a regular string defined in models.Metric.ComponentType.
 type DfcMetricComponentType string
 
 const (

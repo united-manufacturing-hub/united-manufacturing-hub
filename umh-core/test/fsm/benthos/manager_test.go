@@ -134,12 +134,12 @@ var _ = Describe("BenthosManager", func() {
 
 			newTick, err := fsmtest.WaitForBenthosManagerInstanceState(
 				ctx,
-				fsm.SystemSnapshot{CurrentConfig: cfg, Tick: tick},
+				fsm.SystemSnapshot{CurrentConfig: cfg, Tick: tick, SnapshotTime: time.Now()},
 				manager,
 				mockSvcRegistry,
 				serviceName,
 				benthosfsm.OperationalStateIdle, // or OperationalStateActive, whichever is stable
-				30,
+				90,
 			)
 			tick = newTick
 			Expect(err).NotTo(HaveOccurred())
@@ -165,10 +165,10 @@ var _ = Describe("BenthosManager", func() {
 			fsmtest.ConfigureBenthosManagerForState(mockService, serviceName, benthosfsm.OperationalStateIdle)
 
 			// 1) Wait for idle
-			newTick, err := fsmtest.WaitForBenthosManagerInstanceState(ctx, fsm.SystemSnapshot{CurrentConfig: fullCfg, Tick: tick}, manager, mockSvcRegistry,
+			newTick, err := fsmtest.WaitForBenthosManagerInstanceState(ctx, fsm.SystemSnapshot{CurrentConfig: fullCfg, Tick: tick, SnapshotTime: time.Now()}, manager, mockSvcRegistry,
 				serviceName,
 				benthosfsm.OperationalStateIdle,
-				30,
+				90,
 			)
 			tick = newTick
 			Expect(err).NotTo(HaveOccurred())
@@ -177,10 +177,10 @@ var _ = Describe("BenthosManager", func() {
 			fsmtest.ConfigureBenthosManagerForState(mockService, serviceName, benthosfsm.OperationalStateDegraded)
 
 			// Wait for state transition
-			newTick, err = fsmtest.WaitForBenthosManagerInstanceState(ctx, fsm.SystemSnapshot{CurrentConfig: fullCfg, Tick: tick}, manager, mockSvcRegistry,
+			newTick, err = fsmtest.WaitForBenthosManagerInstanceState(ctx, fsm.SystemSnapshot{CurrentConfig: fullCfg, Tick: tick, SnapshotTime: time.Now()}, manager, mockSvcRegistry,
 				serviceName,
 				benthosfsm.OperationalStateDegraded,
-				30,
+				90,
 			)
 			tick = newTick
 			Expect(err).NotTo(HaveOccurred())
@@ -192,7 +192,7 @@ var _ = Describe("BenthosManager", func() {
 			emptyConfig := config.FullConfig{Internal: config.InternalConfig{Benthos: []config.BenthosConfig{}}}
 			newTick, err = fsmtest.WaitForBenthosManagerInstanceRemoval(
 				ctx,
-				fsm.SystemSnapshot{CurrentConfig: emptyConfig, Tick: tick},
+				fsm.SystemSnapshot{CurrentConfig: emptyConfig, Tick: tick, SnapshotTime: time.Now()},
 				manager,
 				mockSvcRegistry,
 				serviceName,
@@ -219,10 +219,10 @@ var _ = Describe("BenthosManager", func() {
 			fsmtest.ConfigureBenthosManagerForState(mockService, serviceName, benthosfsm.OperationalStateIdle)
 
 			// Wait for idle or active
-			newTick, err := fsmtest.WaitForBenthosManagerInstanceState(ctx, fsm.SystemSnapshot{CurrentConfig: activeCfg, Tick: tick}, manager, mockSvcRegistry,
+			newTick, err := fsmtest.WaitForBenthosManagerInstanceState(ctx, fsm.SystemSnapshot{CurrentConfig: activeCfg, Tick: tick, SnapshotTime: time.Now()}, manager, mockSvcRegistry,
 				serviceName,
 				benthosfsm.OperationalStateIdle,
-				30,
+				90,
 			)
 			tick = newTick
 			Expect(err).NotTo(HaveOccurred())
@@ -251,10 +251,11 @@ var _ = Describe("BenthosManager", func() {
 			fsmtest.ConfigureBenthosManagerForState(mockService, serviceName, benthosfsm.OperationalStateIdle)
 
 			// Switch config back to active
-			newTick, err = fsmtest.WaitForBenthosManagerInstanceState(ctx, fsm.SystemSnapshot{CurrentConfig: activeCfg, Tick: tick}, manager, mockSvcRegistry,
+			// We need to pass the snapshot time as we are passing through the healthcheck waiting state and it needs to be passing for at least constants.benthosStartingConfigLoadingDuration
+			newTick, err = fsmtest.WaitForBenthosManagerInstanceState(ctx, fsm.SystemSnapshot{CurrentConfig: activeCfg, Tick: tick, SnapshotTime: time.Now()}, manager, mockSvcRegistry,
 				serviceName,
 				benthosfsm.OperationalStateIdle,
-				30,
+				90,
 			)
 			tick = newTick
 			Expect(err).NotTo(HaveOccurred())
@@ -284,14 +285,14 @@ var _ = Describe("BenthosManager", func() {
 			// Suppose we want both eventually to be idle
 			newTick, err := fsmtest.WaitForBenthosManagerMultiState(
 				ctx,
-				fsm.SystemSnapshot{CurrentConfig: fullCfg, Tick: tick},
+				fsm.SystemSnapshot{CurrentConfig: fullCfg, Tick: tick, SnapshotTime: time.Now()},
 				manager,
 				mockSvcRegistry,
 				map[string]string{
 					svc1: benthosfsm.OperationalStateIdle,
-					svc2: benthosfsm.OperationalStateStopped,
+					svc2: benthosfsm.OperationalStateStarting, // target state is active, but the state is set to stopped, so it will hang in starting state
 				},
-				30,
+				100,
 			)
 			tick = newTick
 			Expect(err).NotTo(HaveOccurred())
@@ -307,7 +308,7 @@ var _ = Describe("BenthosManager", func() {
 
 			inst2, exists := manager.GetInstance(svc2)
 			Expect(exists).To(BeTrue())
-			Expect(inst2.GetCurrentFSMState()).To(Equal(benthosfsm.OperationalStateStopped))
+			Expect(inst2.GetCurrentFSMState()).To(Equal(benthosfsm.OperationalStateStarting))
 		})
 	})
 
@@ -337,10 +338,10 @@ var _ = Describe("BenthosManager", func() {
 			fsmtest.ConfigureBenthosManagerForState(mockService, serviceName, benthosfsm.OperationalStateIdle)
 
 			// Eventually, it should try again and go to idle
-			newTick, err = fsmtest.WaitForBenthosManagerInstanceState(ctx, fsm.SystemSnapshot{CurrentConfig: fullCfg, Tick: tick}, manager, mockSvcRegistry,
+			newTick, err = fsmtest.WaitForBenthosManagerInstanceState(ctx, fsm.SystemSnapshot{CurrentConfig: fullCfg, Tick: tick, SnapshotTime: time.Now()}, manager, mockSvcRegistry,
 				serviceName,
 				benthosfsm.OperationalStateIdle,
-				30,
+				90,
 			)
 			tick = newTick
 			Expect(err).NotTo(HaveOccurred())
@@ -360,10 +361,10 @@ var _ = Describe("BenthosManager", func() {
 			fsmtest.ConfigureBenthosManagerForState(mockService, serviceName, benthosfsm.OperationalStateIdle)
 
 			// Wait for idle
-			newTick, err := fsmtest.WaitForBenthosManagerInstanceState(ctx, fsm.SystemSnapshot{CurrentConfig: fullCfg, Tick: tick}, manager, mockSvcRegistry,
+			newTick, err := fsmtest.WaitForBenthosManagerInstanceState(ctx, fsm.SystemSnapshot{CurrentConfig: fullCfg, Tick: tick, SnapshotTime: time.Now()}, manager, mockSvcRegistry,
 				serviceName,
 				benthosfsm.OperationalStateIdle,
-				30,
+				90,
 			)
 			tick = newTick
 			Expect(err).NotTo(HaveOccurred())

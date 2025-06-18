@@ -14,7 +14,12 @@
 
 package connectionserviceconfig
 
-import "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/nmapserviceconfig"
+import (
+	"fmt"
+	"strconv"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/nmapserviceconfig"
+)
 
 var (
 	defaultGenerator  = NewGenerator()
@@ -22,21 +27,63 @@ var (
 	defaultComparator = NewComparator()
 )
 
-// ConnectionServiceConfig represents the configuration for a DataFlowComponent
+// ConnectionServiceConfigRuntime represents the fully rendered configuration for a Connection service.
+// This is the runtime form with all template variables resolved and proper types enforced.
 // Only TCP probes are supported at the moment.
-type ConnectionServiceConfig struct {
+//
+// This type is used by:
+// - Connection FSM instances (after template rendering)
+// - Connection service implementations
+// - All existing code that expects typed configuration
+//
+// The port field is uint16 to ensure type safety at runtime.
+type ConnectionServiceConfigRuntime struct {
 	NmapServiceConfig nmapserviceconfig.NmapServiceConfig `yaml:"nmap"`
 }
 
+// ConnectionServiceConfigTemplate represents the template form of connection configuration
+// that may contain Go text/template actions (e.g. {{ .PORT }}).
+// This is used by protocol converters to allow templating of connection parameters.
+//
+// This type is used by:
+// - Protocol converter templates (before rendering)
+// - YAML configuration files that need templating
+//
+// The port field is string to allow template expressions like "{{ .PORT }}".
+type ConnectionServiceConfigTemplate struct {
+	NmapTemplate *NmapConfigTemplate `yaml:"nmap,omitempty"`
+}
+
+// NmapConfigTemplate is the template form of nmap configuration with string fields
+// to support templating. All fields that need templating are strings.
+type NmapConfigTemplate struct {
+	Target string `yaml:"target"`
+	Port   string `yaml:"port"` // string to allow templating like "{{ .PORT }}"
+}
+
+// NmapConfigRuntime is the runtime form of nmap configuration with proper types.
+// This ensures type safety after template rendering.
+type NmapConfigRuntime struct {
+	Target string `yaml:"target"`
+	Port   uint16 `yaml:"port"` // uint16 for type safety at runtime
+}
+
+// ConnectionServiceConfig is a backward compatibility alias.
+// All existing code continues to work unchanged by using the runtime type.
+// This maintains API compatibility while enabling the new template/runtime pattern.
+type ConnectionServiceConfig = ConnectionServiceConfigRuntime
+
 // Equal checks if two ConnectionServiceConfigs are equal
-func (c *ConnectionServiceConfig) Equal(other *ConnectionServiceConfig) bool {
+// This method works on the runtime configuration for backward compatibility.
+func (c ConnectionServiceConfigRuntime) Equal(other ConnectionServiceConfigRuntime) bool {
 	return NewComparator().ConfigsEqual(c, other)
 }
 
 // RenderConnectionYAML is a package-level function for easy YAML generation
+// This works on runtime configuration with proper types.
 func RenderConnectionYAML(nmap nmapserviceconfig.NmapServiceConfig) (string, error) {
 	// Create a config object from the individual components
-	cfg := ConnectionServiceConfig{
+	cfg := ConnectionServiceConfigRuntime{
 		NmapServiceConfig: nmap,
 	}
 
@@ -45,16 +92,71 @@ func RenderConnectionYAML(nmap nmapserviceconfig.NmapServiceConfig) (string, err
 }
 
 // NormalizeConnectionConfig is a package-level function for easy config normalization
-func NormalizeConnectionConfig(cfg ConnectionServiceConfig) ConnectionServiceConfig {
+// This works on runtime configuration with proper types.
+func NormalizeConnectionConfig(cfg ConnectionServiceConfigRuntime) ConnectionServiceConfigRuntime {
 	return defaultNormalizer.NormalizeConfig(cfg)
 }
 
 // ConfigsEqual is a package-level function for easy config comparison
-func ConfigsEqual(desired, observed *ConnectionServiceConfig) bool {
+// This works on runtime configuration with proper types.
+func ConfigsEqual(desired, observed ConnectionServiceConfigRuntime) bool {
 	return defaultComparator.ConfigsEqual(desired, observed)
 }
 
 // ConfigDiff is a package-level function for easy config diff generation
-func ConfigDiff(desired, observed *ConnectionServiceConfig) string {
+// This works on runtime configuration with proper types.
+func ConfigDiff(desired, observed ConnectionServiceConfigRuntime) string {
 	return defaultComparator.ConfigDiff(desired, observed)
+}
+
+// ConvertRuntimeToTemplate converts a runtime configuration to a template configuration
+// This is a helper function, so that when we comapre configs, we can simply use the template comparison and don't need
+// to create runtime normalizer, comparator, etc.
+func ConvertRuntimeToTemplate(cfg ConnectionServiceConfigRuntime) ConnectionServiceConfigTemplate {
+	return ConnectionServiceConfigTemplate{
+		NmapTemplate: &NmapConfigTemplate{
+			Target: cfg.NmapServiceConfig.Target,
+			Port:   strconv.Itoa(int(cfg.NmapServiceConfig.Port)),
+		},
+	}
+}
+
+// ConvertTemplateToRuntime converts a template configuration to a runtime configuration
+// This is a helper function used for template-to-runtime conversion across the codebase.
+//
+// Conversion Process:
+// 1. Parse the string port from template (e.g., "443" or rendered "{{ .PORT }}") to uint16
+// 2. Build runtime config with proper Go types for type safety
+// 3. Return error if conversion fails instead of silently defaulting to zero values
+//
+// Template vs Runtime Types:
+// - Template: Uses string port for YAML templating compatibility
+// - Runtime: Uses uint16 port for type safety during FSM operations
+//
+// This function is used by:
+// - Protocol converter runtime rendering (after template variable substitution)
+// - Spec-to-runtime conversions for structural type conversion
+// - Any code that needs to convert from template form to runtime form
+//
+// NOTE: this does NOT perform template rendering. It only converts the template form to runtime form.
+func ConvertTemplateToRuntime(cfg ConnectionServiceConfigTemplate) (ConnectionServiceConfigRuntime, error) {
+	// Handle nil NmapTemplate (e.g., from empty/uninitialized configs)
+	if cfg.NmapTemplate == nil {
+		return ConnectionServiceConfigRuntime{}, fmt.Errorf("connection template is nil or empty")
+	}
+
+	// Parse string port to uint16 for runtime type safety
+	// Template uses string to allow expressions like "{{ .PORT }}", runtime needs uint16
+	port, err := strconv.ParseUint(cfg.NmapTemplate.Port, 10, 16)
+	if err != nil {
+		return ConnectionServiceConfigRuntime{}, fmt.Errorf("failed to parse port '%s' as uint16: %w", cfg.NmapTemplate.Port, err)
+	}
+
+	// Build runtime config with proper types - this is the final form used by FSMs
+	return ConnectionServiceConfigRuntime{
+		NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
+			Target: cfg.NmapTemplate.Target,
+			Port:   uint16(port), // Convert from string template to uint16 runtime type
+		},
+	}, nil
 }

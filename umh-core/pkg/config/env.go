@@ -111,7 +111,8 @@ func LoadConfigWithEnvOverrides(ctx context.Context, configManager *FileConfigMa
 						// 604800000 is 7 days in milliseconds
 						DefaultTopicRetentionMs: 604800000,
 						// 0 means no limit
-						DefaultTopicRetentionBytes: 0,
+						DefaultTopicRetentionBytes:       0,
+						DefaultTopicCompressionAlgorithm: "snappy",
 					},
 					Resources: redpandaserviceconfig.ResourcesConfig{
 						MaxCores: 1,

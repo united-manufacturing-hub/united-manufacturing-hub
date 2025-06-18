@@ -461,11 +461,6 @@ func (m *BaseFSMManager[C]) Reconcile(
 				continue // Skip this removal for now, will be removed on a future tick
 			}
 
-			// Temporary logging
-			if instanceName == "golden-service" {
-				sentry.ReportIssuef(sentry.IssueTypeError, m.logger, "m.instances: %#v, desiredState: %+v", m.instances, desiredState)
-			}
-
 			// Otherwise, we need to remove the instance
 			m.logger.Debugf("instance %s is in state %s, starting the removing process", instanceName, instance.GetCurrentFSMState())
 			err := instance.Remove(ctx)

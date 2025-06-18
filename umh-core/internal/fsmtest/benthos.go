@@ -20,9 +20,11 @@ package fsmtest
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	benthosfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
@@ -92,11 +94,23 @@ func SetupBenthosServiceState(
 			IsLive:  true,
 			IsReady: true,
 		}
+		mockService.ServiceStates[serviceName].BenthosStatus.BenthosMetrics.Metrics.Input.ConnectionUp = 1
+		mockService.ServiceStates[serviceName].BenthosStatus.BenthosMetrics.Metrics.Input.ConnectionFailed = 0
+		mockService.ServiceStates[serviceName].BenthosStatus.BenthosMetrics.Metrics.Input.ConnectionLost = 0
+		mockService.ServiceStates[serviceName].BenthosStatus.BenthosMetrics.Metrics.Output.ConnectionUp = 1
+		mockService.ServiceStates[serviceName].BenthosStatus.BenthosMetrics.Metrics.Output.ConnectionFailed = 0
+		mockService.ServiceStates[serviceName].BenthosStatus.BenthosMetrics.Metrics.Output.ConnectionLost = 0
 	} else {
 		mockService.ServiceStates[serviceName].BenthosStatus.HealthCheck = benthos_monitor.HealthCheck{
 			IsLive:  false,
 			IsReady: false,
 		}
+		mockService.ServiceStates[serviceName].BenthosStatus.BenthosMetrics.Metrics.Input.ConnectionUp = 1
+		mockService.ServiceStates[serviceName].BenthosStatus.BenthosMetrics.Metrics.Input.ConnectionFailed = 1
+		mockService.ServiceStates[serviceName].BenthosStatus.BenthosMetrics.Metrics.Input.ConnectionLost = 0
+		mockService.ServiceStates[serviceName].BenthosStatus.BenthosMetrics.Metrics.Output.ConnectionUp = 1
+		mockService.ServiceStates[serviceName].BenthosStatus.BenthosMetrics.Metrics.Output.ConnectionFailed = 1
+		mockService.ServiceStates[serviceName].BenthosStatus.BenthosMetrics.Metrics.Output.ConnectionLost = 0
 	}
 
 	// Setup metrics state if needed
@@ -252,6 +266,7 @@ func TestBenthosStateTransition(
 	toState string,
 	maxAttempts int,
 	startTick uint64,
+	startTime time.Time,
 ) (uint64, error) {
 	// 1. Verify the instance is in the expected starting state
 	if instance.GetCurrentFSMState() != fromState {
@@ -271,7 +286,9 @@ func TestBenthosStateTransition(
 		}
 
 		// Perform a reconcile cycle
-		_, _ = instance.Reconcile(ctx, fsm.SystemSnapshot{Tick: tick}, services)
+		// the current time is is the start time * the amount of ticks that have passed
+		currentTime := startTime.Add(time.Duration(tick) * constants.DefaultTickerTime)
+		_, _ = instance.Reconcile(ctx, fsm.SystemSnapshot{Tick: tick, SnapshotTime: currentTime}, services)
 		tick++
 	}
 

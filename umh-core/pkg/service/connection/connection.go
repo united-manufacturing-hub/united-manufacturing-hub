@@ -346,7 +346,7 @@ func (c *ConnectionService) AddConnectionToNmapManager(
 	nmapConfig := config.NmapConfig{
 		FSMInstanceConfig: config.FSMInstanceConfig{
 			Name:            nmapName,
-			DesiredFSMState: nmapfsm.OperationalStateOpen,
+			DesiredFSMState: nmapfsm.OperationalStateStopped,
 		},
 		NmapServiceConfig: nmapServiceConfig,
 	}

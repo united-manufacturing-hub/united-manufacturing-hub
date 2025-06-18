@@ -77,10 +77,10 @@ func NewRedpandaInstance(
 	backoffConfig := backoff.DefaultConfig(cfg.ID, logger)
 
 	instance := &RedpandaInstance{
-		baseFSMInstance: internal_fsm.NewBaseFSMInstance(cfg, backoffConfig, logger),
-		service:         redpanda_service.NewDefaultRedpandaService(config.Name),
-		config:          config.RedpandaServiceConfig,
-		ObservedState:   RedpandaObservedState{},
+		baseFSMInstance:       internal_fsm.NewBaseFSMInstance(cfg, backoffConfig, logger),
+		service:               redpanda_service.NewDefaultRedpandaService(config.Name),
+		config:                config.RedpandaServiceConfig,
+		PreviousObservedState: RedpandaObservedState{},
 	}
 
 	// Note: We intentionally do NOT initialize the S6 service here.
@@ -157,7 +157,7 @@ func (r *RedpandaInstance) WantsToBeStopped() bool {
 func (r *RedpandaInstance) PrintState() {
 	r.baseFSMInstance.GetLogger().Debugf("Current state: %s", r.baseFSMInstance.GetCurrentFSMState())
 	r.baseFSMInstance.GetLogger().Debugf("Desired state: %s", r.baseFSMInstance.GetDesiredFSMState())
-	r.baseFSMInstance.GetLogger().Debugf("Observed state: %+v", r.ObservedState)
+	r.baseFSMInstance.GetLogger().Debugf("Observed state: %+v", r.PreviousObservedState)
 }
 
 // TODO: Add Redpanda-specific health check methods

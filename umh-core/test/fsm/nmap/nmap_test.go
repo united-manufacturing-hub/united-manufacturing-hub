@@ -20,6 +20,7 @@ package nmap_test
 import (
 	"context"
 	"fmt"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -340,6 +341,96 @@ var _ = Describe("NmapInstance FSM", func() {
 				IsDegraded:  true,
 				PortState:   "",
 			})
+			tick, err = fsmtest.TestNmapStateTransition(
+				ctx, instance, mockService, mockServices, serviceName,
+				nmap.OperationalStateOpen,
+				nmap.OperationalStateDegraded,
+				10,
+				tick,
+			)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should transition to Degraded when last scan is too old", func() {
+			// Step 1: to_be_created => creating => stopped
+			var err error
+			tick, err = fsmtest.TestNmapStateTransition(
+				ctx, instance, mockService, mockServices, serviceName,
+				internalfsm.LifecycleStateToBeCreated,
+				internalfsm.LifecycleStateCreating,
+				5,
+				tick,
+			)
+			Expect(err).NotTo(HaveOccurred())
+
+			mockService.ServiceStates[serviceName] = &nmapsvc.ServiceInfo{
+				S6FSMState: s6fsm.OperationalStateStopped}
+			mockService.ExistingServices[serviceName] = true
+
+			tick, err = fsmtest.TestNmapStateTransition(
+				ctx, instance, mockService, mockServices, serviceName,
+				internalfsm.LifecycleStateCreating,
+				nmap.OperationalStateStopped,
+				5,
+				tick,
+			)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Step 2: from stopped => starting => degraded => open
+			Expect(instance.SetDesiredFSMState(nmap.OperationalStateOpen)).To(Succeed())
+
+			// from stopped => starting
+			tick, err = fsmtest.TestNmapStateTransition(
+				ctx, instance, mockService, mockServices, serviceName,
+				nmap.OperationalStateStopped,
+				nmap.OperationalStateStarting,
+				5,
+				tick,
+			)
+			Expect(err).NotTo(HaveOccurred())
+
+			// from starting => degraded
+			mockService.SetServiceState(serviceName, nmapsvc.ServiceStateFlags{
+				IsS6Running: true,
+				S6FSMState:  s6fsm.OperationalStateRunning,
+				IsRunning:   true,
+			})
+			tick, err = fsmtest.TestNmapStateTransition(
+				ctx, instance, mockService, mockServices, serviceName,
+				nmap.OperationalStateStarting,
+				nmap.OperationalStateDegraded,
+				5,
+				tick,
+			)
+			Expect(err).NotTo(HaveOccurred())
+
+			// from degraded => open
+			mockService.SetServiceState(serviceName, nmapsvc.ServiceStateFlags{
+				IsS6Running: true,
+				IsRunning:   true,
+				S6FSMState:  s6fsm.OperationalStateRunning,
+				PortState:   string(nmap.PortStateOpen),
+			})
+			tick, err = fsmtest.TestNmapStateTransition(
+				ctx, instance, mockService, mockServices, serviceName,
+				nmap.OperationalStateDegraded,
+				nmap.OperationalStateOpen,
+				5,
+				tick,
+			)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Step 3: Set an old timestamp that exceeds NmapScanTimeout
+			// First, ensure we have a LastScan with an old timestamp
+			if mockService.ServiceStates[serviceName].NmapStatus.LastScan == nil {
+				mockService.ServiceStates[serviceName].NmapStatus.LastScan = &nmapsvc.NmapScanResult{}
+			}
+			// Set timestamp to 15 seconds ago (NmapScanTimeout is 10 seconds)
+			oldTimestamp := time.Now().Add(-15 * time.Second)
+			mockService.ServiceStates[serviceName].NmapStatus.LastScan.Timestamp = oldTimestamp
+			mockService.ServiceStates[serviceName].NmapStatus.LastScan.PortResult.State = string(nmap.PortStateOpen)
+
+			// The instance should transition from open => degraded due to timeout
 			tick, err = fsmtest.TestNmapStateTransition(
 				ctx, instance, mockService, mockServices, serviceName,
 				nmap.OperationalStateOpen,

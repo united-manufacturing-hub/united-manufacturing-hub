@@ -24,7 +24,7 @@ func NewNormalizer() *Normalizer {
 
 // NormalizeConfig applies Benthos defaults to a structured config
 func (n *Normalizer) NormalizeConfig(cfg BenthosServiceConfig) BenthosServiceConfig {
-	// Create a copy
+	// create a shallow copy
 	normalized := cfg
 
 	// Ensure Input map exists

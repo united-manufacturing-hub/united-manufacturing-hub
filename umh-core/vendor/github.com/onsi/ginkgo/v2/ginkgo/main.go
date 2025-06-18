@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"os"
+	_ "go.uber.org/automaxprocs"
 	"github.com/onsi/ginkgo/v2/ginkgo/build"
 	"github.com/onsi/ginkgo/v2/ginkgo/command"
 	"github.com/onsi/ginkgo/v2/ginkgo/generators"
@@ -11,8 +13,6 @@ import (
 	"github.com/onsi/ginkgo/v2/ginkgo/unfocus"
 	"github.com/onsi/ginkgo/v2/ginkgo/watch"
 	"github.com/onsi/ginkgo/v2/types"
-	_ "go.uber.org/automaxprocs"
-	"os"
 )
 
 var program command.Program

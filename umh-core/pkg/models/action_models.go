@@ -165,6 +165,8 @@ const (
 	// DeleteDataFlowComponent represents the action type for deleting a data flow component
 	DeleteDataFlowComponent ActionType = "delete-data-flow-component"
 	// GetDataFlowComponentMetrics represents the action type for retrieving metrics of a data flow component
+	//
+	// Deprecated: Use GetMetrics instead. Kept for backward compatibility.
 	GetDataFlowComponentMetrics ActionType = "get-data-flow-component-metrics"
 	// GetDataFlowComponentLog reperesents the action type for getting the audit log for a data flow component
 	GetDataFlowComponentLog ActionType = "get-data-flow-component-log"
@@ -182,6 +184,12 @@ const (
 	UpdateConfiguration ActionType = "update-configuration"
 	// GetLogs represents the action type for retrieving logs
 	GetLogs ActionType = "get-logs"
+	// GetMetrics represents the action type for retrieving metrics
+	GetMetrics ActionType = "get-metrics"
+	// GetConfigFile represents the action type for retrieving the configuration file
+	GetConfigFile ActionType = "get-config-file"
+	// SetConfigFile represents the action type for updating the configuration file
+	SetConfigFile ActionType = "set-config-file"
 )
 
 // TestNetworkConnectionPayload contains the necessary fields for executing a TestNetworkConnection action.
@@ -528,6 +536,62 @@ type GetLogsResponse struct {
 	Logs []string `json:"logs"`
 }
 
+type MetricResourceType string
+
+const (
+	DFCMetricResourceType      MetricResourceType = "dfc"
+	RedpandaMetricResourceType MetricResourceType = "redpanda"
+)
+
+// GetMetricsRequest contains the necessary fields for executing a `get-metrics` action.
+type GetMetricsRequest struct {
+	// Type represents the type of the resource to retrieve the metrics for
+	Type MetricResourceType `json:"type" binding:"required"`
+	// UUID represents the identifier of the entity to retrieve the metrics for.
+	// This is optional and only used for DFC metrics.
+	UUID string `json:"uuid"`
+}
+
+type MetricValueType string
+
+const (
+	MetricValueTypeNumber  MetricValueType = "number"
+	MetricValueTypeString  MetricValueType = "string"
+	MetricValueTypeBoolean MetricValueType = "boolean"
+)
+
+// Metric represents a single metric value, agnostic of the resource type.
+type Metric struct {
+	ValueType     MetricValueType `json:"value_type"`
+	Value         any             `json:"value"`
+	ComponentType string          `json:"component_type"`
+	Path          string          `json:"path"`
+	Name          string          `json:"name"`
+}
+
+// GetMetricsResponse contains the metrics yielded by the `get-metrics` action.
+type GetMetricsResponse struct {
+	Metrics []Metric `json:"metrics"`
+}
+
+// GetConfigFileResponse contains the config file content
+type GetConfigFileResponse struct {
+	Content          string `json:"content"`
+	LastModifiedTime string `json:"lastModifiedTime"`
+}
+
+type SetConfigFilePayload struct {
+	Content          string `json:"content"`
+	LastModifiedTime string `json:"lastModifiedTime"`
+}
+
+type SetConfigFileResponse struct {
+	Content          string `json:"content"`
+	LastModifiedTime string `json:"lastModifiedTime"`
+	Success          bool   `json:"success"`
+}
+
+// Deprecated: Use GetMetricsRequest instead.
 type GetDataflowcomponentMetricsRequest struct {
 	UUID string `json:"uuid" binding:"required"`
 }
@@ -597,4 +661,10 @@ const (
 	ErrRetryRollbackTimeout = "ERR_RETRY_ROLLBACK_TIMEOUT"
 	// ErrConfigFileInvalid is sent when the deployment of a dfc fails because the config file is invalid.
 	ErrConfigFileInvalid = "ERR_CONFIG_FILE_INVALID"
+	// ErrRetryConfigWriteFailed is the error code for a config file write failure.
+	// It is retryable because the write failure might be caused by temporary filesystem issues.
+	ErrRetryConfigWriteFailed = "ERR_RETRY_CONFIG_WRITE_FAILED"
+	// ErrGetCacheModTimeFailed is the error code for a failed cache mod time retrieval.
+	// It is not retryable because we already changed the config file and the user should refresh the page.
+	ErrGetCacheModTimeFailed = "ERR_GET_CACHE_MOD_TIME_FAILED"
 )

@@ -226,7 +226,35 @@ func (s *BaseFSMInstance) SendEvent(ctx context.Context, eventName string, args 
 		}
 	}
 
-	return s.fsm.Event(ctx, eventName, args...)
+	// Capture state information for better error reporting
+	currentState := s.fsm.Current()
+	desiredState := s.GetDesiredFSMState()
+	instanceID := s.GetID()
+
+	// Log the transition attempt for debugging
+	s.logger.Debugf("FSM %s attempting transition: current_state='%s' -> event='%s' (desired_state='%s')",
+		instanceID, currentState, eventName, desiredState)
+
+	err := s.fsm.Event(ctx, eventName, args...)
+	if err != nil {
+		// Enhanced error message with state context
+		enhancedErr := fmt.Errorf("FSM %s failed transition: current_state='%s' -> event='%s' (desired_state='%s'): %w",
+			instanceID, currentState, eventName, desiredState, err)
+
+		// Log the failure with full context
+		s.logger.Errorf("FSM transition failed (test): %s", enhancedErr.Error())
+
+		return enhancedErr
+	}
+
+	// Log successful transition
+	newState := s.fsm.Current()
+	if newState != currentState {
+		s.logger.Debugf("FSM %s successful transition: '%s' -> '%s' via event='%s' (desired_state='%s')",
+			instanceID, currentState, newState, eventName, desiredState)
+	}
+
+	return nil
 }
 
 // ClearError clears any error state and resets the backoff

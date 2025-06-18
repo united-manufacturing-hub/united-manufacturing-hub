@@ -234,7 +234,7 @@ func (s *NmapService) parseScanLogs(logs []s6service.LogEntry, port uint16) *Nma
 	}
 
 	// Extract port state
-	portStateRegex := regexp.MustCompile(`(?i)` + strconv.Itoa(int(port)) + `/tcp\s+(\w+)`)
+	portStateRegex := regexp.MustCompile(`(?i)` + strconv.Itoa(int(port)) + `/tcp\s+(open|closed|filtered|unfiltered|open\|filtered|closed\|filtered)`)
 	if matches := portStateRegex.FindStringSubmatch(scanOutput); len(matches) > 1 {
 		result.PortResult.State = matches[1]
 	} else {
@@ -305,6 +305,20 @@ func (s *NmapService) Status(ctx context.Context, filesystemService filesystem.S
 		return ServiceInfo{}, fmt.Errorf("failed to get current FSM state: %w", err)
 	}
 
+	// Now only proceed if the s6 service underneath it is running
+	// otherwise the following code doesn't make sense and will just throw errors
+	// and if it throws errors (that is not ErrServiceNotExist), it will stop the reconilation from happening
+	// might prevent teh service from ever moving from starting to running
+	if fsmState != s6fsm.OperationalStateRunning {
+		return ServiceInfo{
+			S6ObservedState: s6State,
+			S6FSMState:      fsmState,
+			NmapStatus: NmapServiceInfo{
+				IsRunning: false,
+			},
+		}, nil
+	}
+
 	// Get logs
 	s6ServicePath := filepath.Join(constants.S6BaseDir, s6ServiceName)
 	logs, err := s.s6Service.GetLogs(ctx, s6ServicePath, filesystemService)
@@ -317,21 +331,24 @@ func (s *NmapService) Status(ctx context.Context, filesystemService filesystem.S
 		return ServiceInfo{}, fmt.Errorf("failed to get logs: %w", err)
 	}
 
-	// Get scan results from logs
-	var scanResult *NmapScanResult
-	if fsmState == s6fsm.OperationalStateRunning && len(logs) > 0 {
-		// Get the current config to know which port we're scanning
-		config, err := s.GetConfig(ctx, filesystemService, nmapName)
-		if err == nil {
-			// Parse logs to extract scan results
-			scanResult = s.parseScanLogs(logs, config.Port)
-		} else {
-			s.logger.Warnw("Failed to get config", "error", err)
-		}
+	// if the logs are empty, then it did not have the time yet to run
+	if len(logs) == 0 {
+		return ServiceInfo{}, ErrServiceNotExist
 	}
+
+	// Get the current config to know which port we're scanning
+	config, err := s.GetConfig(ctx, filesystemService, nmapName)
+	if err != nil {
+		return ServiceInfo{}, fmt.Errorf("failed to get config: %w", err)
+	}
+
+	// Parse logs to extract scan results
+	scanResult := s.parseScanLogs(logs, config.Port)
 	if scanResult == nil {
-		return ServiceInfo{}, ErrScanFailed
+		return ServiceInfo{}, fmt.Errorf("%w: %s", ErrScanFailed, "no scan result found")
 	}
+
+	// the check if the logs are too old is done in the fsm
 
 	return ServiceInfo{
 		S6ObservedState: s6State,

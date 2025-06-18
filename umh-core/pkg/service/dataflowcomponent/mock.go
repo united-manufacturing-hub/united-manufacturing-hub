@@ -102,6 +102,15 @@ func (m *MockDataFlowComponentService) SetComponentState(componentName string, f
 					MetricsState: &benthos_monitor.BenthosMetricsState{
 						IsActive: flags.IsBenthosProcessingMetricsActive,
 					},
+					Metrics: benthos_monitor.Metrics{
+						Input: benthos_monitor.InputMetrics{
+							ConnectionUp:   boolToInt64(flags.IsBenthosProcessingMetricsActive),
+							ConnectionLost: 0,
+						},
+						Output: benthos_monitor.OutputMetrics{
+							ConnectionUp: 1,
+						},
+					},
 				},
 			},
 		},
@@ -326,4 +335,12 @@ func (m *MockDataFlowComponentService) ServiceExists(ctx context.Context, filesy
 func (m *MockDataFlowComponentService) ReconcileManager(ctx context.Context, services serviceregistry.Provider, tick uint64) (error, bool) {
 	m.ReconcileManagerCalled = true
 	return m.ReconcileManagerError, m.ReconcileManagerReconciled
+}
+
+// boolToInt64 converts a boolean to int64 (1 for true, 0 for false)
+func boolToInt64(b bool) int64 {
+	if b {
+		return 1
+	}
+	return 0
 }

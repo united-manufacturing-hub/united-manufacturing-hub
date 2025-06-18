@@ -25,16 +25,16 @@ func NewNormalizer() *Normalizer {
 }
 
 // NormalizeConfig applies DFC defaults to a structured config
-func (n *Normalizer) NormalizeConfig(cfg *DataflowComponentServiceConfig) {
-	// Create a copy
-	if cfg == nil {
-		return
-	}
+func (n *Normalizer) NormalizeConfig(cfg DataflowComponentServiceConfig) DataflowComponentServiceConfig {
+
+	// create a shallow copy
+	normalized := cfg
 
 	// We need to first normalize the underlying BenthosServiceConfig
 	normalizer := benthosserviceconfig.NewNormalizer()
-	normalizedBenthosConfig := normalizer.NormalizeConfig(cfg.GetBenthosServiceConfig())
+	normalizedBenthosConfig := normalizer.NormalizeConfig(normalized.GetBenthosServiceConfig())
 	// Then we need to put the normalizedBenthosConfig into the DataFlowComponentConfig
 	// Currently the BenthosConfig is the only underlying component of the DFCConfig
-	cfg.BenthosConfig = FromBenthosServiceConfig(normalizedBenthosConfig).BenthosConfig
+	normalized.BenthosConfig = FromBenthosServiceConfig(normalizedBenthosConfig).BenthosConfig
+	return normalized
 }

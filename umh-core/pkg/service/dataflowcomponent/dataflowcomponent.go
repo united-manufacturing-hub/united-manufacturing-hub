@@ -240,7 +240,7 @@ func (s *DataFlowComponentService) AddDataFlowComponentToBenthosManager(ctx cont
 	benthosFSMConfig := config.BenthosConfig{
 		FSMInstanceConfig: config.FSMInstanceConfig{
 			Name:            benthosName,
-			DesiredFSMState: benthosfsmmanager.OperationalStateActive,
+			DesiredFSMState: benthosfsmmanager.OperationalStateStopped,
 		},
 		BenthosServiceConfig: benthosCfg,
 	}

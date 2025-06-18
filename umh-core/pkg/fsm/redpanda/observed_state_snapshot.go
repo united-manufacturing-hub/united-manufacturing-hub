@@ -46,7 +46,7 @@ func (d *RedpandaInstance) CreateObservedStateSnapshot() fsm.ObservedStateSnapsh
 	}
 
 	// Deep copy service info
-	err = deepcopy.Copy(&snapshot.ServiceInfoSnapshot, &d.ObservedState.ServiceInfo)
+	err = deepcopy.Copy(&snapshot.ServiceInfoSnapshot, &d.PreviousObservedState.ServiceInfo)
 	if err != nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, d.baseFSMInstance.GetLogger(), "failed to deep copy service info: %v", err)
 		return nil

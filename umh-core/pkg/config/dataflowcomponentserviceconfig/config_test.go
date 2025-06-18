@@ -94,7 +94,7 @@ var _ = Describe("DataFlowComponentConfig", func() {
 	Context("Utility functions", func() {
 		It("should correctly compare identical configs", func() {
 			// Create two identical configs
-			configA := &dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+			configA := dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 				BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 					Input: map[string]interface{}{
 						"kafka": map[string]interface{}{
@@ -108,7 +108,7 @@ var _ = Describe("DataFlowComponentConfig", func() {
 				},
 			}
 
-			configB := &dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+			configB := dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 				BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 					Input: map[string]interface{}{
 						"kafka": map[string]interface{}{
@@ -127,7 +127,7 @@ var _ = Describe("DataFlowComponentConfig", func() {
 
 		It("should correctly compare different configs", func() {
 			// Create two different configs
-			configA := &dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+			configA := dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 				BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 					Input: map[string]interface{}{
 						"kafka": map[string]interface{}{
@@ -138,7 +138,7 @@ var _ = Describe("DataFlowComponentConfig", func() {
 				},
 			}
 
-			configB := &dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+			configB := dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 				BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 					Input: map[string]interface{}{
 						"kafka": map[string]interface{}{
@@ -155,7 +155,7 @@ var _ = Describe("DataFlowComponentConfig", func() {
 		})
 
 		It("should normalize config correctly", func() {
-			config := &dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+			config := dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 				BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 					Input: map[string]interface{}{
 						"kafka": map[string]interface{}{
@@ -169,7 +169,7 @@ var _ = Describe("DataFlowComponentConfig", func() {
 
 			// Normalize the config
 			normalizer := dataflowcomponentserviceconfig.NewNormalizer()
-			normalizer.NormalizeConfig(config)
+			config = normalizer.NormalizeConfig(config)
 
 			// Output and pipeline should have been added
 			Expect(config.BenthosConfig.Output).NotTo(BeNil())

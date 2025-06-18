@@ -733,6 +733,9 @@ func (s *DefaultService) ExitHistory(ctx context.Context, superviseDir string, f
 	if err != nil {
 		return nil, fmt.Errorf("failed to read dtally file: %w", err)
 	}
+	if data == nil { // Empty history file
+		return nil, nil
+	}
 
 	// Verify that the file size is a multiple of the dtally record size.
 	if len(data)%S6_DTALLY_PACK != 0 {
@@ -1445,6 +1448,9 @@ func (s *DefaultService) GetLogs(ctx context.Context, servicePath string, fsServ
 	fi, err := fsService.Stat(ctx, logFile)
 	if err != nil {
 		return nil, err
+	}
+	if fi == nil {
+		return nil, fmt.Errorf("stat returned nil for log file: %s", logFile)
 	}
 	sys := fi.Sys().(*syscall.Stat_t) // on Linux / Alpine
 	size, ino := fi.Size(), sys.Ino

@@ -23,6 +23,7 @@ import (
 
 	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/connectionserviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/nmap"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
@@ -155,13 +156,13 @@ func (c *ConnectionInstance) getServiceStatus(ctx context.Context, filesystemSer
 }
 
 // UpdateObservedStateOfInstance updates the observed state of the service
-func (c *ConnectionInstance) UpdateObservedStateOfInstance(ctx context.Context, services serviceregistry.Provider, tick uint64, loopStartTime time.Time) error {
+func (c *ConnectionInstance) UpdateObservedStateOfInstance(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
 
 	start := time.Now()
-	info, err := c.getServiceStatus(ctx, services.GetFileSystem(), tick)
+	info, err := c.getServiceStatus(ctx, services.GetFileSystem(), snapshot.Tick)
 	if err != nil {
 		return fmt.Errorf("error while getting service status: %w", err)
 	}
@@ -194,12 +195,12 @@ func (c *ConnectionInstance) UpdateObservedStateOfInstance(ctx context.Context, 
 		}
 	}
 
-	if !connectionserviceconfig.ConfigsEqual(&c.config, &c.ObservedState.ObservedConnectionConfig) {
+	if !connectionserviceconfig.ConfigsEqual(c.config, c.ObservedState.ObservedConnectionConfig) {
 		// Check if the service exists before attempting to update
 		if c.service.ServiceExists(ctx, services.GetFileSystem(), c.baseFSMInstance.GetID()) {
 			c.baseFSMInstance.GetLogger().Debugf("Observed Connection config is different from desired config, updating Nmap configuration")
 
-			diffStr := connectionserviceconfig.ConfigDiff(&c.config, &c.ObservedState.ObservedConnectionConfig)
+			diffStr := connectionserviceconfig.ConfigDiff(c.config, c.ObservedState.ObservedConnectionConfig)
 			c.baseFSMInstance.GetLogger().Debugf("Configuration differences: %s", diffStr)
 
 			// Update the config in the Nmap manager

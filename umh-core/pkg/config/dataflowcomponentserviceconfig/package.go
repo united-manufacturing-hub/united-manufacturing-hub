@@ -25,9 +25,9 @@ var (
 // BenthosConfig contains only the essential Benthos configuration fields
 // that should be exposed to DataFlowComponent users
 type BenthosConfig struct {
-	Input              map[string]any   `yaml:"input"`
-	Pipeline           map[string]any   `yaml:"pipeline"`
-	Output             map[string]any   `yaml:"output"`
+	Input              map[string]any   `yaml:"input,omitempty"`
+	Pipeline           map[string]any   `yaml:"pipeline,omitempty"`
+	Output             map[string]any   `yaml:"output,omitempty"`
 	CacheResources     []map[string]any `yaml:"cache_resources,omitempty"`
 	RateLimitResources []map[string]any `yaml:"rate_limit_resources,omitempty"`
 	Buffer             map[string]any   `yaml:"buffer,omitempty"`
@@ -40,7 +40,7 @@ type DataflowComponentServiceConfig struct {
 
 // Equal checks if two DataFlowComponentServiceConfigs are equal
 func (c DataflowComponentServiceConfig) Equal(other DataflowComponentServiceConfig) bool {
-	return NewComparator().ConfigsEqual(&c, &other)
+	return NewComparator().ConfigsEqual(c, other)
 }
 
 // RenderDataFlowComponentYAML is a package-level function for easy YAML generation
@@ -55,16 +55,16 @@ func RenderDataFlowComponentYAML(benthos benthosserviceconfig.BenthosServiceConf
 }
 
 // NormalizeDataFlowComponentConfig is a package-level function for easy config normalization
-func NormalizeDataFlowComponentConfig(cfg *DataflowComponentServiceConfig) {
-	defaultNormalizer.NormalizeConfig(cfg)
+func NormalizeDataFlowComponentConfig(cfg DataflowComponentServiceConfig) DataflowComponentServiceConfig {
+	return defaultNormalizer.NormalizeConfig(cfg)
 }
 
 // ConfigsEqual is a package-level function for easy config comparison
-func ConfigsEqual(desired, observed *DataflowComponentServiceConfig) bool {
+func ConfigsEqual(desired, observed DataflowComponentServiceConfig) bool {
 	return defaultComparator.ConfigsEqual(desired, observed)
 }
 
 // ConfigDiff is a package-level function for easy config diff generation
-func ConfigDiff(desired, observed *DataflowComponentServiceConfig) string {
+func ConfigDiff(desired, observed DataflowComponentServiceConfig) string {
 	return defaultComparator.ConfigDiff(desired, observed)
 }

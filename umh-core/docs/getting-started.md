@@ -101,6 +101,15 @@ If you omit this, you might see `chmod: /data/config.yaml: no such file or direc
 **TLS interception**\
 If your corporate network intercepts TLS traffic, follow the steps in [corporate-firewalls.md](production/corporate-firewalls.md "mention") to add your CA certificate or, as a last resort, set `allowInsecureTLS: true` in `config.yaml`.
 
+**Proxy configuration**\
+If you're behind a corporate proxy, follow the steps in [corporate-firewalls.md](production/corporate-firewalls.md "mention") to configure it, or add the following arguments to your docker run:
+
+```bash
+-e HTTP_PROXY=http://proxy.company.com:8080 \
+-e HTTPS_PROXY=https://proxy.company.com:8080 \
+-e NO_PROXY=localhost,127.0.0.1,.local
+```
+
 ### Migration from UMH Classic
 
 > **UMH Classic users:** See [Migration from UMH Classic to UMH Core](production/migration-from-classic.md) for complete migration instructions including data contract changes and configuration updates.

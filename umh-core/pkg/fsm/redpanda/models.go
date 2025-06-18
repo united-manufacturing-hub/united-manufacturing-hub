@@ -114,11 +114,11 @@ var _ publicfsm.FSMInstance = (*RedpandaInstance)(nil)
 type RedpandaInstance struct {
 	baseFSMInstance *internalfsm.BaseFSMInstance
 
-	// ObservedState represents the observed state of the service
-	// ObservedState contains all metrics, logs, etc.
+	// PreviousObservedState represents the observed state of the service
+	// PreviousObservedState contains all metrics, logs, etc.
 	// that are updated at the beginning of Reconcile and then used to
 	// determine the next state
-	ObservedState RedpandaObservedState
+	PreviousObservedState RedpandaObservedState
 
 	// service is the Redpanda service implementation to use
 	// It has a manager that manages the S6 service instances
@@ -134,7 +134,7 @@ type RedpandaInstance struct {
 
 // GetLastObservedState returns the last known state of the instance
 func (r *RedpandaInstance) GetLastObservedState() publicfsm.ObservedState {
-	return r.ObservedState
+	return r.PreviousObservedState
 }
 
 // SetService sets the Redpanda service implementation
