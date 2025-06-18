@@ -26,6 +26,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/agent_monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/protocolconverter"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/redpanda"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
@@ -92,14 +93,21 @@ func (a *GetLogsAction) Validate() (err error) {
 		return errors.New("start time must be in the past")
 	}
 
-	allowedLogTypes := []models.LogType{models.AgentLogType, models.DFCLogType, models.RedpandaLogType, models.TagBrowserLogType}
+	allowedLogTypes := []models.LogType{
+		models.AgentLogType,
+		models.DFCLogType,
+		models.ProtocolConverterReadLogType,
+		models.ProtocolConverterWriteLogType,
+		models.RedpandaLogType,
+		models.TagBrowserLogType,
+	}
 	if !slices.Contains(allowedLogTypes, a.payload.Type) {
-		return errors.New("log type must be set and must be one of the following: agent, dfc, redpanda, tag-browser")
+		return errors.New("log type must be set and must be one of the following: agent, dfc, protocol-converter-read, protocol-converter-write, redpanda, tag-browser")
 	}
 
-	if a.payload.Type == models.DFCLogType {
+	if a.payload.Type == models.DFCLogType || a.payload.Type == models.ProtocolConverterReadLogType || a.payload.Type == models.ProtocolConverterWriteLogType {
 		if a.payload.UUID == "" {
-			return errors.New("uuid must be set to retrieve logs for a DFC")
+			return errors.New("uuid must be set to retrieve logs for a DFC or Protocol Converter")
 		}
 
 		_, err = uuid.Parse(a.payload.UUID)
@@ -145,6 +153,7 @@ func (a *GetLogsAction) Execute() (interface{}, map[string]interface{}, error) {
 	res := models.GetLogsResponse{Logs: []string{}}
 	systemSnapshot := a.systemSnapshotManager.GetDeepCopySnapshot()
 
+	// TODO: We should use provider pattern here, will make this more maintainable and easier to test
 	switch logType {
 	case models.RedpandaLogType:
 		redpandaInst, ok := fsm.FindInstance(systemSnapshot, constants.RedpandaManagerName, constants.RedpandaInstanceName)
@@ -194,6 +203,26 @@ func (a *GetLogsAction) Execute() (interface{}, map[string]interface{}, error) {
 		}
 
 		res.Logs = mapS6LogsToSlice(observedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosLogs, reqStartTime)
+	case models.ProtocolConverterReadLogType, models.ProtocolConverterWriteLogType:
+		protocolConverterInstance, err := fsm.FindProtocolConverterInstanceByUUID(systemSnapshot, a.payload.UUID)
+		if err != nil || protocolConverterInstance == nil {
+			err := logsRetrievalError(err, logType)
+			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, err.Error(), a.outboundChannel, models.GetLogs)
+			return nil, nil, err
+		}
+
+		observedState, ok := protocolConverterInstance.LastObservedState.(*protocolconverter.ProtocolConverterObservedStateSnapshot)
+		if !ok || observedState == nil {
+			err := logsRetrievalError(fmt.Errorf("invalid observed state type for Protocol Converter instance %s", protocolConverterInstance.ID), logType)
+			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, err.Error(), a.outboundChannel, models.GetLogs)
+			return nil, nil, err
+		}
+
+		if logType == models.ProtocolConverterReadLogType {
+			res.Logs = mapS6LogsToSlice(observedState.ServiceInfo.DataflowComponentReadObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosLogs, reqStartTime)
+		} else {
+			res.Logs = mapS6LogsToSlice(observedState.ServiceInfo.DataflowComponentWriteObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosLogs, reqStartTime)
+		}
 	case models.TagBrowserLogType:
 		// TODO: Implement tag browser logs
 		err := errors.New("tag-browser logs are not implemented yet")
