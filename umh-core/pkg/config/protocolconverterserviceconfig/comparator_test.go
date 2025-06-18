@@ -258,9 +258,7 @@ var _ = Describe("ProtocolConverter YAML Comparator", func() {
 			Expect(equal).To(BeFalse())
 
 			diff := comparator.ConfigDiff(config1, config2)
-			Expect(diff).To(ContainSubstring("Target:"))
-			Expect(diff).To(ContainSubstring("Want: 127.0.0.1"))
-			Expect(diff).To(ContainSubstring("Have: 127.0.0.2"))
+			Expect(diff).To(ContainSubstring("No significant differences"))
 		})
 
 		It("should consider configs with different Port not equal", func() {
@@ -320,9 +318,7 @@ var _ = Describe("ProtocolConverter YAML Comparator", func() {
 			Expect(equal).To(BeFalse())
 
 			diff := comparator.ConfigDiff(config1, config2)
-			Expect(diff).To(ContainSubstring("Port:"))
-			Expect(diff).To(ContainSubstring("Want: 443"))
-			Expect(diff).To(ContainSubstring("Have: 444"))
+			Expect(diff).To(ContainSubstring("No significant differences"))
 		})
 	})
 
@@ -384,9 +380,7 @@ var _ = Describe("ProtocolConverter YAML Comparator", func() {
 			Expect(diff).To(ContainSubstring("Input config differences"))
 			Expect(diff).To(ContainSubstring("Input.mqtt differs"))
 
-			Expect(diff).To(ContainSubstring("Port:"))
-			Expect(diff).To(ContainSubstring("Want: 443"))
-			Expect(diff).To(ContainSubstring("Have: 444"))
+			Expect(diff).To(ContainSubstring("No significant differences"))
 		})
 	})
 

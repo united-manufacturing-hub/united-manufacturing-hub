@@ -37,5 +37,5 @@ const (
 
 const (
 	// Time to wait for a dataflowcomponent to be active in the action
-	DataflowComponentWaitForActiveTimeout = time.Second * 20
+	DataflowComponentWaitForActiveTimeout = time.Second * 30
 )

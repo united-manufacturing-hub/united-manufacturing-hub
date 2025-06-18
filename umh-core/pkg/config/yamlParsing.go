@@ -180,6 +180,9 @@ func convertSpecToYaml(spec FullConfig) (FullConfig, error) {
 		// duplicating it inside each instance.
 		pc.ProtocolConverterServiceConfig.Config =
 			protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{}
+		// remove the location and location_path from the user variables
+		delete(pc.ProtocolConverterServiceConfig.Variables.User, "location")
+		delete(pc.ProtocolConverterServiceConfig.Variables.User, "location_path")
 		clone.ProtocolConverter[i] = pc
 	}
 

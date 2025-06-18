@@ -91,6 +91,13 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 		dfcData = DfcsFromSnapshot(dfcMgr, s.logger)
 	}
 
+	// --- protocol converters (multiple instances) as DFCs --------------------------
+	protocolConverterMgr, ok := fsm.FindManager(snapshot, constants.ProtocolConverterManagerName)
+	if ok {
+		protocolConverterDfcs := ProtocolConvertersFromSnapshot(protocolConverterMgr, s.logger)
+		dfcData = append(dfcData, protocolConverterDfcs...)
+	}
+
 	// Step 3: Create the status message
 	statusMessage := &models.StatusMessage{
 		Core: models.Core{
@@ -119,6 +126,7 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 					"action-get-data-flow-component",
 					"action-delete-data-flow-component",
 					"action-edit-data-flow-component",
+					"action-deploy-protocol-converter",
 					"action-get-logs",
 					"action-get-config-file",
 					"action-set-config-file",
@@ -126,6 +134,8 @@ func (s *StatusCollectorType) GenerateStatusMessage() *models.StatusMessage {
 					"log-logs-suppression", // Prevents logging of GetLogs action results to avoid log flooding when UI auto-refreshes logs (see HandleActionMessage GetLogs suppression for details)
 					"core-health",
 					"action-get-metrics",
+					"action-delete-protocol-converter",
+					"action-edit-protocol-converter",
 					"protocol-converter-logs",
 				},
 			},
