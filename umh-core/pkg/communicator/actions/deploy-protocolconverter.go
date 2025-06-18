@@ -314,7 +314,7 @@ func (a *DeployProtocolConverterAction) waitForComponentToAppear() (string, erro
 
 					// check the nmap configuration
 					if pcSnapshot.ServiceInfo.ConnectionObservedState.ServiceInfo.NmapObservedState.ObservedNmapServiceConfig.Port != uint16(a.payload.Connection.Port) {
-						stateMessage := RemainingPrefixSec(remainingSeconds) + "waiting for nmap to connect"
+						stateMessage := RemainingPrefixSec(remainingSeconds) + "waiting for nmap to apply the connection configuration"
 						SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
 							stateMessage, a.outboundChannel, models.DeployProtocolConverter)
 						continue
