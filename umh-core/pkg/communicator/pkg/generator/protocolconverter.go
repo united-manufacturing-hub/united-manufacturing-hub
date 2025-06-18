@@ -20,6 +20,8 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/connection"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/nmap"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/protocolconverter"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"go.uber.org/zap"
@@ -170,15 +172,15 @@ func getProtocolConverterStatusMessage(state string, statusReason string, connec
 	// Add connection state information if available
 	if connectionState != "" {
 		switch connectionState {
-		case "up", "active", "connected":
+		case connection.OperationalStateUp:
 			if state == protocolconverter.OperationalStateActive {
 				connectionSuffix = " with healthy connection"
 			}
-		case "down", "disconnected", "failed":
+		case connection.OperationalStateDown:
 			connectionSuffix = " - connection is down"
-		case "degraded", "timeout", "unstable":
+		case connection.OperationalStateDegraded:
 			connectionSuffix = " - connection is unstable"
-		case "connecting", "reconnecting":
+		case connection.OperationalStateStarting:
 			connectionSuffix = " - connection is being established"
 		default:
 			// For specific error states or unknown states, include the raw connection state
@@ -192,23 +194,23 @@ func getProtocolConverterStatusMessage(state string, statusReason string, connec
 	if nmapState != "" {
 		nmapSuffix := ""
 		switch nmapState {
-		case "open":
+		case nmap.OperationalStateOpen:
 			nmapSuffix = " (port is open)"
-		case "closed":
+		case nmap.OperationalStateClosed:
 			nmapSuffix = " (port is closed)"
-		case "filtered":
+		case nmap.OperationalStateFiltered:
 			nmapSuffix = " (port is filtered by firewall)"
-		case "unfiltered":
+		case nmap.OperationalStateUnfiltered:
 			nmapSuffix = " (port is unfiltered)"
-		case "open_filtered", "open|filtered":
+		case nmap.OperationalStateOpenFiltered:
 			nmapSuffix = " (port is open or filtered)"
-		case "closed_filtered", "closed|filtered":
+		case nmap.OperationalStateClosedFiltered:
 			nmapSuffix = " (port is closed or filtered)"
-		case "starting":
+		case nmap.OperationalStateStarting:
 			nmapSuffix = " (nmap is starting)"
-		case "stopped":
+		case nmap.OperationalStateStopped:
 			nmapSuffix = " (nmap is stopped)"
-		case "degraded":
+		case nmap.OperationalStateDegraded:
 			nmapSuffix = " (nmap execution failed)"
 		default:
 			nmapSuffix = fmt.Sprintf(" (unexpected nmap state: %s)", nmapState)
@@ -228,11 +230,11 @@ func getProtocolConverterStatusMessage(state string, statusReason string, connec
 // getHealthCategoryFromState converts a FSM state string to models.HealthCategory
 func getHealthCategoryFromState(state string) models.HealthCategory {
 	switch state {
-	case "up", "active":
+	case connection.OperationalStateUp:
 		return models.Active
-	case "down", "degraded", "stopped":
+	case connection.OperationalStateDown, connection.OperationalStateDegraded, connection.OperationalStateStopped:
 		return models.Degraded
-	case "idle":
+	case protocolconverter.OperationalStateIdle:
 		return models.Neutral
 	default:
 		return models.Neutral
