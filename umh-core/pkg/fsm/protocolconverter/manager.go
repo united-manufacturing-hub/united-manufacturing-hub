@@ -20,7 +20,6 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	public_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
@@ -71,12 +70,7 @@ func NewProtocolConverterManager(name string) *ProtocolConverterManager {
 			if !ok {
 				return false, fmt.Errorf("instance is not a ProtocolConverterInstance")
 			}
-			equal := protocolConverterInstance.specConfig.Equal(cfg.ProtocolConverterServiceConfig)
-			if !equal {
-				diff := protocolconverterserviceconfig.ConfigDiff(protocolConverterInstance.specConfig, cfg.ProtocolConverterServiceConfig)
-				logger.For(logger.ComponentProtocolConverterManager).Debugf("diff: %s", diff)
-			}
-			return equal, nil
+			return protocolConverterInstance.specConfig.Equal(cfg.ProtocolConverterServiceConfig), nil
 		},
 		// Set ProtocolConverter config
 		func(instance public_fsm.FSMInstance, cfg config.ProtocolConverterConfig) error {
