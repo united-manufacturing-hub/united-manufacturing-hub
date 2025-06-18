@@ -29,26 +29,30 @@ import (
 	agent_monitor_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/agent_monitor"
 	benthosfsmmanager "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
 	dfc_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
+	protocolconverter_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/protocolconverter"
 	redpanda_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/redpanda"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/agent_monitor"
 	benthossvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/dataflowcomponent"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/protocolconverter"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 )
 
 var _ = Describe("GetLogsAction", func() {
 	var (
-		action          *actions.GetLogsAction
-		userEmail       string
-		actionUUID      uuid.UUID
-		instanceUUID    uuid.UUID
-		outboundChannel chan *models.UMHMessage
-		dfcName         string
-		dfcUUID         uuid.UUID
-		snapshotManager *fsm.SnapshotManager
-		mockedLogs      []s6.LogEntry
+		action                *actions.GetLogsAction
+		userEmail             string
+		actionUUID            uuid.UUID
+		instanceUUID          uuid.UUID
+		outboundChannel       chan *models.UMHMessage
+		dfcName               string
+		dfcUUID               uuid.UUID
+		protocolConverterName string
+		protocolConverterUUID uuid.UUID
+		snapshotManager       *fsm.SnapshotManager
+		mockedLogs            []s6.LogEntry
 	)
 
 	BeforeEach(func() {
@@ -58,6 +62,8 @@ var _ = Describe("GetLogsAction", func() {
 		outboundChannel = make(chan *models.UMHMessage, 10)
 		dfcName = "test-dfc"
 		dfcUUID = dataflowcomponentserviceconfig.GenerateUUIDFromName(dfcName)
+		protocolConverterName = "test-protocol-converter"
+		protocolConverterUUID = dataflowcomponentserviceconfig.GenerateUUIDFromName(protocolConverterName)
 		snapshotManager = fsm.NewSnapshotManager()
 
 		// Mocked logs contain logs from 6h ago and 2h ago
@@ -91,6 +97,41 @@ var _ = Describe("GetLogsAction", func() {
 			},
 		}
 		dfcManagerSnapshot := &actions.MockManagerSnapshot{Instances: mockDfcInstances}
+
+		// Protocol Converter logs mock
+		protocolConverterServiceInfo := protocolconverter.ServiceInfo{
+			DataflowComponentReadObservedState: dfc_fsm.DataflowComponentObservedState{
+				ServiceInfo: dataflowcomponent.ServiceInfo{
+					BenthosObservedState: benthosfsmmanager.BenthosObservedState{
+						ServiceInfo: benthossvc.ServiceInfo{
+							BenthosStatus: benthossvc.BenthosStatus{
+								BenthosLogs: mockedLogs,
+							},
+						},
+					},
+				},
+			},
+			DataflowComponentWriteObservedState: dfc_fsm.DataflowComponentObservedState{
+				ServiceInfo: dataflowcomponent.ServiceInfo{
+					BenthosObservedState: benthosfsmmanager.BenthosObservedState{
+						ServiceInfo: benthossvc.ServiceInfo{
+							BenthosStatus: benthossvc.BenthosStatus{
+								BenthosLogs: mockedLogs,
+							},
+						},
+					},
+				},
+			},
+		}
+		protocolConverterMockedObservedState := &protocolconverter_fsm.ProtocolConverterObservedStateSnapshot{ServiceInfo: protocolConverterServiceInfo}
+		mockProtocolConverterInstances := map[string]*fsm.FSMInstanceSnapshot{
+			protocolConverterUUID.String(): {
+				ID:                protocolConverterName,
+				CurrentState:      "active",
+				LastObservedState: protocolConverterMockedObservedState,
+			},
+		}
+		protocolConverterManagerSnapshot := &actions.MockManagerSnapshot{Instances: mockProtocolConverterInstances}
 
 		// Agent logs mock
 		agentServiceInfo := agent_monitor.ServiceInfo{AgentLogs: mockedLogs}
@@ -126,6 +167,7 @@ var _ = Describe("GetLogsAction", func() {
 		snapshotManager.UpdateSnapshot(&fsm.SystemSnapshot{
 			Managers: map[string]fsm.ManagerSnapshot{
 				constants.DataflowcomponentManagerName: dfcManagerSnapshot,
+				constants.ProtocolConverterManagerName: protocolConverterManagerSnapshot,
 				constants.AgentManagerName:             agentManagerSnapshot,
 				constants.RedpandaManagerName:          redpandaManagerSnapshot,
 			},
@@ -192,7 +234,7 @@ var _ = Describe("GetLogsAction", func() {
 
 			err = action.Validate()
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("log type must be set and must be one of the following: agent, dfc, redpanda, tag-browser"))
+			Expect(err.Error()).To(ContainSubstring("log type must be set and must be one of the following: agent, dfc, protocol-converter-read, protocol-converter-write, redpanda, tag-browser"))
 
 			// Missing start time
 			payload = map[string]interface{}{
@@ -218,7 +260,7 @@ var _ = Describe("GetLogsAction", func() {
 
 			err = action.Validate()
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("log type must be set and must be one of the following: agent, dfc, redpanda, tag-browser"))
+			Expect(err.Error()).To(ContainSubstring("log type must be set and must be one of the following: agent, dfc, protocol-converter-read, protocol-converter-write, redpanda, tag-browser"))
 		})
 
 		It("should return an error if the uuid is missing on DFC log type", func() {
@@ -231,7 +273,31 @@ var _ = Describe("GetLogsAction", func() {
 
 			err = action.Validate()
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("uuid must be set to retrieve logs for a DFC"))
+			Expect(err.Error()).To(ContainSubstring("uuid must be set to retrieve logs for a DFC or Protocol Converter"))
+		})
+
+		It("should return an error if the uuid is missing on Protocol Converter log types", func() {
+			payload := map[string]interface{}{
+				"type":      models.ProtocolConverterReadLogType,
+				"startTime": time.Now().Add(-24 * time.Hour).UnixMilli(),
+			}
+			err := action.Parse(payload)
+			Expect(err).To(BeNil())
+
+			err = action.Validate()
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("uuid must be set to retrieve logs for a DFC or Protocol Converter"))
+
+			payload = map[string]interface{}{
+				"type":      models.ProtocolConverterWriteLogType,
+				"startTime": time.Now().Add(-24 * time.Hour).UnixMilli(),
+			}
+			err = action.Parse(payload)
+			Expect(err).To(BeNil())
+
+			err = action.Validate()
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("uuid must be set to retrieve logs for a DFC or Protocol Converter"))
 		})
 
 		It("should return an error if the uuid is invalid", func() {
@@ -260,6 +326,10 @@ var _ = Describe("GetLogsAction", func() {
 				payload["uuid"] = dfcUUID.String()
 			}
 
+			if logType == models.ProtocolConverterReadLogType || logType == models.ProtocolConverterWriteLogType {
+				payload["uuid"] = protocolConverterUUID.String()
+			}
+
 			err := action.Parse(payload)
 			Expect(err).To(BeNil())
 
@@ -278,7 +348,9 @@ var _ = Describe("GetLogsAction", func() {
 		},
 			Entry("dfc", models.DFCLogType),
 			Entry("agent", models.AgentLogType),
-			Entry("redpanda", models.RedpandaLogType))
+			Entry("redpanda", models.RedpandaLogType),
+			Entry("protocol-converter-read", models.ProtocolConverterReadLogType),
+			Entry("protocol-converter-write", models.ProtocolConverterWriteLogType))
 
 		It("should return logs for the given start time", func() {
 			// Start time of 3h ago should only yield the mocked log from 2h ago
