@@ -149,4 +149,4 @@ Replace deprecated variables with their current equivalents:
 - `{{ .DEVICE_IP }}` → `{{ .IP }}`
 - `{{ .DEVICE_PORT }}` → `{{ .PORT }}`
 
-For questions about variables not listed here, check the [configuration reference](configuration-reference.md) or consult the UMH Core documentation. 
+For questions about variables not listed here, check the [configuration reference](configuration-reference.md) or consult the UMH Core documentation.
