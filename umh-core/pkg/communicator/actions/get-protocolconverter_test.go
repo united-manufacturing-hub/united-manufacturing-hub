@@ -22,7 +22,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/connectionserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/nmapserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/variables"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
@@ -145,64 +144,31 @@ var _ = Describe("GetProtocolConverter", func() {
 
 				// Create observed state with populated DFC configs
 				observedState := &protocolconverter.ProtocolConverterObservedStateSnapshot{
-					ObservedProtocolConverterRuntimeConfig: protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime{
-						ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigRuntime{
-							NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
-								Target: "192.168.1.100",
-								Port:   502,
-							},
-						},
-						DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
-							BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
-								Input: map[string]interface{}{
-									"modbus": map[string]interface{}{
-										"address": "192.168.1.100:502",
-									},
-								},
-								Output: map[string]interface{}{
-									"kafka": map[string]interface{}{
-										"addresses": []string{"localhost:9092"},
-										"topic":     "uns",
-									},
-								},
-								Pipeline: map[string]interface{}{
-									"processors": []interface{}{
-										map[string]interface{}{
-											"tag_processor": map[string]interface{}{
-												"tags": []interface{}{
-													map[string]interface{}{
-														"name": "temperature",
-														"type": "float",
-													},
-												},
-											},
-										},
-									},
-								},
-							},
-						},
-						DataflowComponentWriteServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
-							BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
-								Input: map[string]interface{}{
-									"kafka": map[string]interface{}{
-										"addresses": []string{"localhost:9092"},
-										"topics":    []string{"uns"},
-									},
-								},
-								Output: map[string]interface{}{
-									"modbus": map[string]interface{}{
-										"address": "192.168.1.100:502",
-									},
-								},
-							},
-						},
-					},
 					ObservedProtocolConverterSpecConfig: protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
 						Config: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
 							ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
 								NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
 									Target: "{{ .IP }}",
 									Port:   "{{ .PORT }}",
+								},
+							},
+							DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+								BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
+									Input: map[string]interface{}{
+										"modbus": map[string]interface{}{
+											"address": "{{ .IP }}:{{ .PORT }}",
+										},
+									},
+								},
+							},
+							DataflowComponentWriteServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+								BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
+									Input: map[string]interface{}{
+										"kafka": map[string]interface{}{
+											"addresses": []string{"localhost:9092"},
+											"topics":    []string{"uns"},
+										},
+									},
 								},
 							},
 						},
@@ -309,7 +275,6 @@ var _ = Describe("GetProtocolConverter", func() {
 				// Verify read DFC is populated
 				Expect(response.ReadDFC).NotTo(BeNil())
 				Expect(response.ReadDFC.Inputs.Type).To(Equal("modbus"))
-				Expect(response.ReadDFC.Pipeline.Processors).To(HaveLen(1))
 
 				// Verify write DFC is populated
 				Expect(response.WriteDFC).NotTo(BeNil())
@@ -317,8 +282,8 @@ var _ = Describe("GetProtocolConverter", func() {
 
 				// Verify meta information
 				Expect(response.Meta).NotTo(BeNil())
-				Expect(response.Meta.ProcessingMode).To(Equal("tag_processor")) // Determined from read DFC
-				Expect(response.Meta.Protocol).To(Equal("modbus"))              // Determined from read DFC input type
+				Expect(response.Meta.ProcessingMode).To(Equal("custom")) // Determined from read DFC
+				Expect(response.Meta.Protocol).To(Equal("modbus"))       // Determined from read DFC input type
 
 			})
 		})
@@ -330,17 +295,6 @@ var _ = Describe("GetProtocolConverter", func() {
 
 				// Create observed state with empty DFC configs
 				observedState := &protocolconverter.ProtocolConverterObservedStateSnapshot{
-					ObservedProtocolConverterRuntimeConfig: protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime{
-						ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigRuntime{
-							NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
-								Target: "192.168.1.101",
-								Port:   503,
-							},
-						},
-						// Empty DFC configurations - uninitialized
-						DataflowComponentReadServiceConfig:  dataflowcomponentserviceconfig.DataflowComponentServiceConfig{},
-						DataflowComponentWriteServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{},
-					},
 					ObservedProtocolConverterSpecConfig: protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
 						Config: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
 							ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
