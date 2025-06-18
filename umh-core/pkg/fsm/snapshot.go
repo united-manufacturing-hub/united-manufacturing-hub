@@ -309,3 +309,25 @@ func FindDfcInstanceByUUID(systemSnapshot SystemSnapshot, dfcUUID string) (*FSMI
 
 	return nil, fmt.Errorf("the requested DFC with UUID %s was not found", dfcUUID)
 }
+
+func FindProtocolConverterInstanceByUUID(systemSnapshot SystemSnapshot, protocolConverterUUID string) (*FSMInstanceSnapshot, error) {
+	protocolConverterManager, ok := FindManager(systemSnapshot, constants.ProtocolConverterManagerName)
+	if !ok {
+		return nil, fmt.Errorf("protocol converter manager not found")
+	}
+
+	protocolConverterInstances := protocolConverterManager.GetInstances()
+
+	for _, instance := range protocolConverterInstances {
+		if instance == nil {
+			continue
+		}
+
+		currentUUID := dataflowcomponentserviceconfig.GenerateUUIDFromName(instance.ID).String()
+		if currentUUID == protocolConverterUUID {
+			return instance, nil
+		}
+	}
+
+	return nil, fmt.Errorf("the requested protocol converter with UUID %s was not found", protocolConverterUUID)
+}
