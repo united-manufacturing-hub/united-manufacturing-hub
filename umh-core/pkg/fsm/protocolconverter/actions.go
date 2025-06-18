@@ -68,7 +68,7 @@ func (p *ProtocolConverterInstance) CreateInstance(ctx context.Context, filesyst
 	// AddToManager intentionally receives an empty runtime config because template
 	// rendering requires SystemSnapshot data not available at creation time.
 	// The first UpdateObservedStateOfInstance() call will render and push the real config.
-	err := p.service.AddToManager(ctx, filesystemService, &p.renderedConfig, p.baseFSMInstance.GetID())
+	err := p.service.AddToManager(ctx, filesystemService, &p.runtimeConfig, p.baseFSMInstance.GetID())
 	if err != nil {
 		if errors.Is(err, protocolconvertersvc.ErrServiceAlreadyExists) {
 			p.baseFSMInstance.GetLogger().Debugf("ProtocolConverter service %s already exists in DFC and Connection manager", p.baseFSMInstance.GetID())
@@ -233,7 +233,7 @@ func (p *ProtocolConverterInstance) UpdateObservedStateOfInstance(ctx context.Co
 	metrics.ObserveReconcileTime(logger.ComponentProtocolConverterInstance, p.baseFSMInstance.GetID()+".getConfig", time.Since(start))
 	if err == nil {
 		// Only update if we successfully got the config
-		p.ObservedState.ObservedProtocolConverterConfig = observedConfig
+		p.ObservedState.ObservedProtocolConverterRuntimeConfig = observedConfig
 	} else {
 		if strings.Contains(err.Error(), protocolconvertersvc.ErrServiceNotExist.Error()) {
 			// Log the error but don't fail - this might happen during creation when the config file doesn't exist yet
@@ -244,10 +244,13 @@ func (p *ProtocolConverterInstance) UpdateObservedStateOfInstance(ctx context.Co
 		}
 	}
 
+	// Store the spec config
+	p.ObservedState.ObservedProtocolConverterSpecConfig = p.specConfig
+
 	// Now render the config
 	start = time.Now()
-	p.renderedConfig, err = runtime_config.BuildRuntimeConfig(
-		p.config,
+	p.runtimeConfig, err = runtime_config.BuildRuntimeConfig(
+		p.specConfig,
 		convertIntMapToStringMap(snapshot.CurrentConfig.Agent.Location),
 		nil,             // TODO: add global vars
 		"unimplemented", // TODO: add node name
@@ -260,19 +263,20 @@ func (p *ProtocolConverterInstance) UpdateObservedStateOfInstance(ctx context.Co
 	}
 	metrics.ObserveReconcileTime(logger.ComponentProtocolConverterInstance, p.baseFSMInstance.GetID()+".buildRuntimeConfig", time.Since(start))
 
-	if !protocolconverterserviceconfig.ConfigsEqualRuntime(p.renderedConfig, p.ObservedState.ObservedProtocolConverterConfig) {
+	if !protocolconverterserviceconfig.ConfigsEqualRuntime(p.runtimeConfig, p.ObservedState.ObservedProtocolConverterRuntimeConfig) {
 		// Check if the service exists before attempting to update
 		if p.service.ServiceExists(ctx, services.GetFileSystem(), p.baseFSMInstance.GetID()) {
 			p.baseFSMInstance.GetLogger().Debugf("Observed ProtocolConverter config is different from desired config, updating ProtocolConverter configuration")
 
-			diffStr := protocolconverterserviceconfig.ConfigDiffRuntime(p.renderedConfig, p.ObservedState.ObservedProtocolConverterConfig)
+			diffStr := protocolconverterserviceconfig.ConfigDiffRuntime(p.runtimeConfig, p.ObservedState.ObservedProtocolConverterRuntimeConfig)
 			p.baseFSMInstance.GetLogger().Debugf("Configuration differences: %s", diffStr)
 
 			// Update the config in the Benthos manager
-			err := p.service.UpdateInManager(ctx, services.GetFileSystem(), &p.renderedConfig, p.baseFSMInstance.GetID())
+			err := p.service.UpdateInManager(ctx, services.GetFileSystem(), &p.runtimeConfig, p.baseFSMInstance.GetID())
 			if err != nil {
 				return fmt.Errorf("failed to update ProtocolConverter service configuration: %w", err)
 			}
+			p.baseFSMInstance.GetLogger().Debugf("config updated")
 
 			// UNIQUE BEHAVIOR: Re-evaluate DFC desired states after config changes
 			// This is different from other FSMs which set desired states once and don't change them.
@@ -281,6 +285,7 @@ func (p *ProtocolConverterInstance) UpdateObservedStateOfInstance(ctx context.Co
 			// 2. Empty DFCs should remain stopped, populated DFCs should be started
 			// 3. This ensures we don't start broken Benthos instances with empty configs
 			if p.baseFSMInstance.GetDesiredFSMState() == OperationalStateActive {
+				p.baseFSMInstance.GetLogger().Debugf("re-evaluating DFC desired states and will be active")
 				err := p.service.EvaluateDFCDesiredStates(p.baseFSMInstance.GetID(), "active")
 				if err != nil {
 					p.baseFSMInstance.GetLogger().Debugf("Failed to re-evaluate DFC states after config update: %v", err)
@@ -448,8 +453,8 @@ func (p *ProtocolConverterInstance) IsProtocolConverterStopped() (bool, string) 
 //	ok     – true when atleast one DFC is existing, false otherwise.
 //	reason – empty when ok is true; otherwise a service‑provided explanation.
 func (p *ProtocolConverterInstance) IsDFCExisting() (bool, string) {
-	if len(p.config.Template.DataflowComponentReadServiceConfig.BenthosConfig.Input) > 0 ||
-		len(p.config.Template.DataflowComponentWriteServiceConfig.BenthosConfig.Output) > 0 {
+	if len(p.specConfig.Template.DataflowComponentReadServiceConfig.BenthosConfig.Input) > 0 ||
+		len(p.specConfig.Template.DataflowComponentWriteServiceConfig.BenthosConfig.Output) > 0 {
 		return true, ""
 	}
 	return false, "no DFCs configured"

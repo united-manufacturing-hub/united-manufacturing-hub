@@ -70,7 +70,7 @@ func NewProtocolConverterManager(name string) *ProtocolConverterManager {
 			if !ok {
 				return false, fmt.Errorf("instance is not a ProtocolConverterInstance")
 			}
-			return protocolConverterInstance.config.Equal(cfg.ProtocolConverterServiceConfig), nil
+			return protocolConverterInstance.specConfig.Equal(cfg.ProtocolConverterServiceConfig), nil
 		},
 		// Set ProtocolConverter config
 		func(instance public_fsm.FSMInstance, cfg config.ProtocolConverterConfig) error {
@@ -78,7 +78,7 @@ func NewProtocolConverterManager(name string) *ProtocolConverterManager {
 			if !ok {
 				return fmt.Errorf("instance is not a ProtocolConverterInstance")
 			}
-			protocolConverterInstance.config = cfg.ProtocolConverterServiceConfig
+			protocolConverterInstance.specConfig = cfg.ProtocolConverterServiceConfig
 			return nil
 		},
 		// Get expected max p95 execution time per instance

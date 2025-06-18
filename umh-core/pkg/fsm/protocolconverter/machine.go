@@ -122,9 +122,9 @@ func NewProtocolConverterInstance(
 	instance := &ProtocolConverterInstance{
 		baseFSMInstance: internal_fsm.NewBaseFSMInstance(cfg, backoffConfig, logger),
 		service:         protocolconvertersvc.NewDefaultProtocolConverterService(config.Name),
-		config:          config.ProtocolConverterServiceConfig,
+		specConfig:      config.ProtocolConverterServiceConfig,
 		ObservedState:   ProtocolConverterObservedState{},
-		renderedConfig:  protocolconverterconfig.ProtocolConverterServiceConfigRuntime{},
+		runtimeConfig:   protocolconverterconfig.ProtocolConverterServiceConfigRuntime{},
 	}
 
 	instance.registerCallbacks()
