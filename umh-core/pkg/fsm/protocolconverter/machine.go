@@ -80,7 +80,7 @@ func NewProtocolConverterInstance(
 			// In benthos, we simply call a EventStartFailed, and then let the system retry
 			// But the protocol converter, an EventStartFailed means an unrecoverable error requiring human intervention
 			// So this is why there is a separate EventStartRetry
-			{Name: EventStartRetry, Src: startingStates, Dst: OperationalStateStartingConnection},
+			{Name: EventStartRetry, Src: startingStatesWithFailed, Dst: OperationalStateStartingConnection},
 
 			// starting -> idle
 			{Name: EventStartDFCUp, Src: []string{OperationalStateStartingDFC}, Dst: OperationalStateIdle},
