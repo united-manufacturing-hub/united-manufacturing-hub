@@ -16,8 +16,8 @@ package protocolconverterserviceconfig
 
 import (
 	"fmt"
+	"reflect"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/connectionserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/variables"
 )
@@ -43,25 +43,15 @@ func (c *Comparator) ConfigsEqual(desired, observed ProtocolConverterServiceConf
 	dfcWriteD := desired.GetDFCWriteServiceConfig()
 	dfcWriteO := observed.GetDFCWriteServiceConfig()
 
-	// compare connections
-	comparatorConnection := connectionserviceconfig.NewComparator()
-
 	// compare dfc's
 	comparatorDFC := dataflowcomponentserviceconfig.NewComparator()
 
 	// compare variables
 	comparatorVariable := variables.NewComparator()
 
-	// If conversion fails for either config, consider them not equal (fail-safe comparison)
-	connectionDTemplate, errD := connectionserviceconfig.ConvertTemplateToRuntime(connectionD)
-	connectionOTemplate, errO := connectionserviceconfig.ConvertTemplateToRuntime(connectionO)
+	connectionEqual := reflect.DeepEqual(connectionD, connectionO)
 
-	// If either conversion fails, they are not equal
-	if errD != nil || errO != nil {
-		return false
-	}
-
-	return comparatorConnection.ConfigsEqual(connectionDTemplate, connectionOTemplate) &&
+	return connectionEqual &&
 		comparatorDFC.ConfigsEqual(dfcReadD, dfcReadO) &&
 		comparatorDFC.ConfigsEqual(dfcWriteD, dfcWriteO) &&
 		comparatorVariable.ConfigsEqual(desired.Variables, observed.Variables)
@@ -78,16 +68,9 @@ func (c *Comparator) ConfigDiff(desired, observed ProtocolConverterServiceConfig
 	dfcWriteD := desired.GetDFCWriteServiceConfig()
 	dfcWriteO := observed.GetDFCWriteServiceConfig()
 
-	// diff for connection
-	comparatorConnection := connectionserviceconfig.NewComparator()
-	connectionDTemplate, errD := connectionserviceconfig.ConvertTemplateToRuntime(connectionD)
-	connectionOTemplate, errO := connectionserviceconfig.ConvertTemplateToRuntime(connectionO)
-
-	var connectionDiff string
-	if errD != nil || errO != nil {
-		connectionDiff = fmt.Sprintf("Connection conversion error - desired: %v, observed: %v\n", errD, errO)
-	} else {
-		connectionDiff = comparatorConnection.ConfigDiff(connectionDTemplate, connectionOTemplate)
+	connectionDiff := ""
+	if !reflect.DeepEqual(connectionD, connectionO) {
+		connectionDiff = fmt.Sprintf("Connection: %v vs %v", connectionD, connectionO)
 	}
 
 	// diff for dfc's

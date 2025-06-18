@@ -25,9 +25,9 @@ var (
 // BenthosConfig contains only the essential Benthos configuration fields
 // that should be exposed to DataFlowComponent users
 type BenthosConfig struct {
-	Input              map[string]any   `yaml:"input"`
-	Pipeline           map[string]any   `yaml:"pipeline"`
-	Output             map[string]any   `yaml:"output"`
+	Input              map[string]any   `yaml:"input,omitempty"`
+	Pipeline           map[string]any   `yaml:"pipeline,omitempty"`
+	Output             map[string]any   `yaml:"output,omitempty"`
 	CacheResources     []map[string]any `yaml:"cache_resources,omitempty"`
 	RateLimitResources []map[string]any `yaml:"rate_limit_resources,omitempty"`
 	Buffer             map[string]any   `yaml:"buffer,omitempty"`

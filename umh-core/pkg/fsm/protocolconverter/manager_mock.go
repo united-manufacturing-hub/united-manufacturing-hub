@@ -67,11 +67,11 @@ func NewProtocolConverterManagerWithMockedServices(name string) (*ProtocolConver
 			}
 
 			// Perform actual comparison - return true if configs are equal
-			configsEqual := protocolconverterserviceconfig.ConfigsEqual(protocolConverterInstance.config, cfg.ProtocolConverterServiceConfig)
+			configsEqual := protocolconverterserviceconfig.ConfigsEqual(protocolConverterInstance.specConfig, cfg.ProtocolConverterServiceConfig)
 
 			// Only update config if configs are different (for mock service)
 			if !configsEqual {
-				protocolConverterInstance.config = cfg.ProtocolConverterServiceConfig
+				protocolConverterInstance.specConfig = cfg.ProtocolConverterServiceConfig
 				if mockSvc, ok := protocolConverterInstance.service.(*protocolconvertersvc.MockProtocolConverterService); ok {
 					runtimeConfig, err := protocolconverterserviceconfig.SpecToRuntime(cfg.ProtocolConverterServiceConfig)
 					if err != nil {
@@ -91,7 +91,7 @@ func NewProtocolConverterManagerWithMockedServices(name string) (*ProtocolConver
 			if !ok {
 				return fmt.Errorf("instance is not a ProtocolConverterInstance")
 			}
-			protocolConverterInstance.config = cfg.ProtocolConverterServiceConfig
+			protocolConverterInstance.specConfig = cfg.ProtocolConverterServiceConfig
 			if mockSvc, ok := protocolConverterInstance.service.(*protocolconvertersvc.MockProtocolConverterService); ok {
 				runtimeConfig, err := protocolconverterserviceconfig.SpecToRuntime(cfg.ProtocolConverterServiceConfig)
 				if err != nil {
