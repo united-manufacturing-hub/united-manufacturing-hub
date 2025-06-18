@@ -234,7 +234,7 @@ func (a *EditProtocolConverterAction) Execute() (interface{}, map[string]interfa
 
 	newUUID := dataflowcomponentserviceconfig.GenerateUUIDFromName(a.name)
 	response := map[string]any{
-		"UUID": newUUID,
+		"uuid": newUUID,
 	}
 
 	return response, nil, nil
