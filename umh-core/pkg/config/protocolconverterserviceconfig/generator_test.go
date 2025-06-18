@@ -19,12 +19,11 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/connectionserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/nmapserviceconfig"
 )
 
 var _ = Describe("ProtocolConverter YAML Generator", func() {
 	type testCase struct {
-		config      *ProtocolConverterServiceConfig
+		config      *ProtocolConverterServiceConfigSpec
 		expected    []string
 		notExpected []string
 	}
@@ -47,17 +46,32 @@ var _ = Describe("ProtocolConverter YAML Generator", func() {
 		},
 		Entry("should render empty stdout output correctly",
 			testCase{
-				config: &ProtocolConverterServiceConfig{
-					connectionserviceconfig.ConnectionServiceConfig{
-						NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
-							Target: "127.0.0.1",
-							Port:   443,
+				config: &ProtocolConverterServiceConfigSpec{
+					Template: ProtocolConverterServiceConfigTemplate{
+						ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+							NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
+								Target: "127.0.0.1",
+								Port:   "443",
+							},
 						},
-					},
-					dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
-						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
-							Output: map[string]any{
-								"stdout": map[string]any{},
+						DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+							BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
+								Output: map[string]any{
+									"stdout": map[string]any{},
+								},
+							},
+						},
+						DataflowComponentWriteServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+							BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
+								Input: map[string]any{
+									"stdin": map[string]any{},
+								},
+								Output: map[string]any{
+									"kafka": map[string]any{
+										"addresses": []string{"kafka:9092"},
+										"topic":     "output-topic",
+									},
+								},
 							},
 						},
 					},
@@ -67,7 +81,7 @@ var _ = Describe("ProtocolConverter YAML Generator", func() {
 					"connection:",
 					"  target: 127.0.0.1",
 					"  port: 443",
-					"dataflowcomponent:",
+					"dataflowcomponent_read:",
 					"  benthos:",
 					"    output:",
 					"      stdout: {}",
@@ -75,25 +89,52 @@ var _ = Describe("ProtocolConverter YAML Generator", func() {
 					"      address: 0.0.0.0:0",
 					"    logger:",
 					"      level: INFO",
+					"dataflowcomponent_write:",
+					"  benthos:",
+					"    input:",
+					"      stdin: {}",
+					"    output:",
+					"      kafka:",
+					"        addresses:",
+					"        - kafka:9092",
+					"        topic: output-topic",
+					"    http:",
+					"      address: 0.0.0.0:0",
+					"    logger:",
+					"      level: INFO",
 				},
-				notExpected: []string{
-					"stdin",
-				},
+				notExpected: []string{},
 			}),
 		Entry("should render configured output correctly",
 			testCase{
-				config: &ProtocolConverterServiceConfig{
-					connectionserviceconfig.ConnectionServiceConfig{
-						NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
-							Target: "127.0.0.1",
-							Port:   443,
+				config: &ProtocolConverterServiceConfigSpec{
+					Template: ProtocolConverterServiceConfigTemplate{
+						ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+							NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
+								Target: "127.0.0.1",
+								Port:   "443",
+							},
 						},
-					},
-					dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
-						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
-							Output: map[string]any{
-								"stdout": map[string]any{
-									"codec": "lines",
+						DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+							BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
+								Output: map[string]any{
+									"stdout": map[string]any{
+										"codec": "lines",
+									},
+								},
+							},
+						},
+						DataflowComponentWriteServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+							BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
+								Input: map[string]any{
+									"http_server": map[string]any{
+										"path": "/data",
+									},
+								},
+								Output: map[string]any{
+									"http_client": map[string]any{
+										"url": "http://api.example.com/ingest",
+									},
 								},
 							},
 						},
@@ -103,30 +144,52 @@ var _ = Describe("ProtocolConverter YAML Generator", func() {
 					"connection:",
 					"  target: 127.0.0.1",
 					"  port: 443",
-					"dataflowcomponent:",
+					"dataflowcomponent_read:",
 					"  benthos:",
 					"    output:",
 					"      stdout:",
 					"        codec: lines",
+					"dataflowcomponent_write:",
+					"  benthos:",
+					"    input:",
+					"      http_server:",
+					"        path: /data",
+					"    output:",
+					"      http_client:",
+					"        url: http://api.example.com/ingest",
 				},
-				notExpected: []string{
-					"stdin",
-				},
+				notExpected: []string{},
 			}),
 		Entry("should render empty input correctly",
 			testCase{
-				config: &ProtocolConverterServiceConfig{
-					connectionserviceconfig.ConnectionServiceConfig{
-						NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
-							Target: "127.0.0.1",
-							Port:   443,
+				config: &ProtocolConverterServiceConfigSpec{
+					Template: ProtocolConverterServiceConfigTemplate{
+						ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+							NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
+								Target: "127.0.0.1",
+								Port:   "443",
+							},
 						},
-					},
-					dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
-						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
-							Input: map[string]any{},
-							Output: map[string]any{
-								"stdout": map[string]any{},
+						DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+							BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
+								Input: map[string]any{},
+								Output: map[string]any{
+									"stdout": map[string]any{},
+								},
+							},
+						},
+						DataflowComponentWriteServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+							BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
+								Input: map[string]any{
+									"file": map[string]any{
+										"paths": []string{"/tmp/input.txt"},
+									},
+								},
+								Output: map[string]any{
+									"file": map[string]any{
+										"path": "/tmp/output.txt",
+									},
+								},
 							},
 						},
 					},
@@ -135,10 +198,19 @@ var _ = Describe("ProtocolConverter YAML Generator", func() {
 					"connection:",
 					"  target: 127.0.0.1",
 					"  port: 443",
-					"dataflowcomponent:",
+					"dataflowcomponent_read:",
 					"  benthos:",
 					"    output:",
 					"      stdout: {}",
+					"dataflowcomponent_write:",
+					"  benthos:",
+					"    input:",
+					"      file:",
+					"        paths:",
+					"        - /tmp/input.txt",
+					"    output:",
+					"      file:",
+					"        path: /tmp/output.txt",
 				},
 				notExpected: []string{
 					"input: {}", // Empty input should not render as an empty object
@@ -146,37 +218,65 @@ var _ = Describe("ProtocolConverter YAML Generator", func() {
 			}),
 		Entry("should render Kafka input with processor and AWS S3 output",
 			testCase{
-				config: &ProtocolConverterServiceConfig{
-					connectionserviceconfig.ConnectionServiceConfig{
-						NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
-							Target: "127.0.0.1",
-							Port:   443,
-						},
-					},
-					dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
-						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
-							Input: map[string]any{
-								"kafka": map[string]any{
-									"addresses": []string{"kafka:9092"},
-									"topics":    []string{"benthos_topic"},
-									"consumer_group": map[string]any{
-										"session_timeout": "6s",
-									},
-								},
+				config: &ProtocolConverterServiceConfigSpec{
+					Template: ProtocolConverterServiceConfigTemplate{
+						ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+							NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
+								Target: "127.0.0.1",
+								Port:   "443",
 							},
-							Pipeline: map[string]any{
-								"processors": []any{
-									map[string]any{
-										"text": map[string]any{
-											"operator": "to_upper",
+						},
+						DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+							BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
+								Input: map[string]any{
+									"kafka": map[string]any{
+										"addresses": []string{"kafka:9092"},
+										"topics":    []string{"benthos_topic"},
+										"consumer_group": map[string]any{
+											"session_timeout": "6s",
 										},
 									},
 								},
+								Pipeline: map[string]any{
+									"processors": []any{
+										map[string]any{
+											"text": map[string]any{
+												"operator": "to_upper",
+											},
+										},
+									},
+								},
+								Output: map[string]any{
+									"aws_s3": map[string]any{
+										"bucket": "example-bucket",
+										"path":   "${!count:files}-${!timestamp_unix_nano}.txt",
+									},
+								},
 							},
-							Output: map[string]any{
-								"aws_s3": map[string]any{
-									"bucket": "example-bucket",
-									"path":   "${!count:files}-${!timestamp_unix_nano}.txt",
+						},
+						DataflowComponentWriteServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+							BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
+								Input: map[string]any{
+									"mqtt": map[string]any{
+										"urls":   []string{"tcp://mqtt-broker:1883"},
+										"topics": []string{"sensor/data"},
+									},
+								},
+								Pipeline: map[string]any{
+									"processors": []any{
+										map[string]any{
+											"json": map[string]any{
+												"operator": "select",
+												"path":     "payload",
+											},
+										},
+									},
+								},
+								Output: map[string]any{
+									"redis_pubsub": map[string]any{
+										"url":     "redis://redis:6379",
+										"channel": "processed_data",
+									},
 								},
 							},
 						},
@@ -186,7 +286,7 @@ var _ = Describe("ProtocolConverter YAML Generator", func() {
 					"connection:",
 					"  target: 127.0.0.1",
 					"  port: 443",
-					"dataflowcomponent:",
+					"dataflowcomponent_read:",
 					"  benthos:",
 					"    input:",
 					"      kafka:",
@@ -204,76 +304,25 @@ var _ = Describe("ProtocolConverter YAML Generator", func() {
 					"      aws_s3:",
 					"        bucket: example-bucket",
 					"        path: ${!count:files}-${!timestamp_unix_nano}.txt",
+					"dataflowcomponent_write:",
+					"  benthos:",
+					"    input:",
+					"      mqtt:",
+					"        urls:",
+					"        - tcp://mqtt-broker:1883",
+					"        topics:",
+					"        - sensor/data",
+					"    pipeline:",
+					"      processors:",
+					"      - json:",
+					"          operator: select",
+					"          path: payload",
+					"    output:",
+					"      redis_pubsub:",
+					"        url: redis://redis:6379",
+					"        channel: processed_data",
 				},
-				notExpected: []string{
-					"stdin",
-				},
+				notExpected: []string{},
 			}),
 	)
-
-	// Add package-level function test
-	Describe("RenderProtocolConverterYAML package function", func() {
-		It("should produce the same output as the Generator", func() {
-			// Setup test configs
-			connectionConfig := connectionserviceconfig.ConnectionServiceConfig{
-				NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
-					Target: "127.0.0.1",
-					Port:   443,
-				},
-			}
-
-			dfcConfig := dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
-				BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
-					Input: map[string]any{
-						"kafka": map[string]any{
-							"addresses": []string{"kafka:9092"},
-							"topics":    []string{"test_topic"},
-						},
-					},
-					Output: map[string]any{
-						"kafka": map[string]any{
-							"addresses": []string{"kafka:9092"},
-							"topic":     "output_topic",
-						},
-					},
-				},
-			}
-
-			// Use package-level function
-			yamlStr1, err := RenderProtocolConverterYAML(connectionConfig, dfcConfig)
-			Expect(err).NotTo(HaveOccurred())
-
-			// Use Generator directly
-			cfg := ProtocolConverterServiceConfig{
-				ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfig{
-					NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
-						Target: "127.0.0.1",
-						Port:   443,
-					},
-				},
-				DataflowComponentServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
-					BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
-						Input: map[string]any{
-							"kafka": map[string]any{
-								"addresses": []string{"kafka:9092"},
-								"topics":    []string{"test_topic"},
-							},
-						},
-						Output: map[string]any{
-							"kafka": map[string]any{
-								"addresses": []string{"kafka:9092"},
-								"topic":     "output_topic",
-							},
-						},
-					},
-				},
-			}
-			generator := NewGenerator()
-			yamlStr2, err := generator.RenderConfig(cfg)
-			Expect(err).NotTo(HaveOccurred())
-
-			// Both should produce the same result
-			Expect(yamlStr1).To(Equal(yamlStr2))
-		})
-	})
 })

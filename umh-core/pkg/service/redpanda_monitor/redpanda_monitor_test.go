@@ -357,6 +357,12 @@ var _ = Describe("Redpanda Monitor Service", func() {
 
 		// Verify topic metrics
 		Expect(metricsResult.Metrics.Topic.TopicPartitionMap).To(HaveLen(0))
+
+		// Verify the cluster config
+		config := redpandaMetricsConfig.ClusterConfig
+		Expect(config.Topic.DefaultTopicCompressionAlgorithm).To(Equal("producer"))
+		Expect(config.Topic.DefaultTopicRetentionBytes).To(Equal(int64(0)))
+		Expect(config.Topic.DefaultTopicRetentionMs).To(Equal(int64(604800000)))
 	})
 
 	Describe("RedpandaMetricsState", func() {

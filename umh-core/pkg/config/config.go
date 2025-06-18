@@ -19,6 +19,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/connectionserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/nmapserviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/redpandaserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
 
@@ -26,9 +27,11 @@ import (
 )
 
 type FullConfig struct {
-	Agent    AgentConfig               `yaml:"agent"`              // Agent config, requires restart to take effect
-	DataFlow []DataFlowComponentConfig `yaml:"dataFlow,omitempty"` // DataFlow components to manage, can be updated while running
-	Internal InternalConfig            `yaml:"internal,omitempty"` // Internal config, not to be used by the user, only to be used for testing internal components
+	Agent             AgentConfig               `yaml:"agent"`                       // Agent config, requires restart to take effect
+	DataFlow          []DataFlowComponentConfig `yaml:"dataFlow,omitempty"`          // DataFlow components to manage, can be updated while running
+	ProtocolConverter []ProtocolConverterConfig `yaml:"protocolConverter,omitempty"` // ProtocolConverter config, can be updated while runnnig
+	Internal          InternalConfig            `yaml:"internal,omitempty"`          // Internal config, not to be used by the user, only to be used for testing internal components
+	Templates         []map[string]interface{}  `yaml:"templates,omitempty"`         // proof of concept for general yaml templates, where anchor can be placed, see also examples/example-config-dataflow-templated.yaml
 }
 
 type InternalConfig struct {
@@ -112,7 +115,29 @@ type DataFlowComponentConfig struct {
 	FSMInstanceConfig `yaml:",inline"`
 
 	DataFlowComponentServiceConfig dataflowcomponentserviceconfig.DataflowComponentServiceConfig `yaml:"dataFlowComponentConfig"`
+
+	// private marker – not (un)marshalled
+	// explanation see templating.go
+	hasAnchors bool `yaml:"-"`
 }
+
+// HasAnchors returns true if the DataFlowComponentConfig has anchors, see templating.go
+func (d *DataFlowComponentConfig) HasAnchors() bool { return d.hasAnchors }
+
+// ProtocolConverterConfig contains configuration for creating a ProtocolConverter
+type ProtocolConverterConfig struct {
+	// For the FSM
+	FSMInstanceConfig `yaml:",inline"`
+
+	ProtocolConverterServiceConfig protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec `yaml:"protocolConverterServiceConfig"`
+
+	// private marker – not (un)marshalled
+	// explanation see templating.go
+	hasAnchors bool `yaml:"-"`
+}
+
+// HasAnchors returns true if the ProtocolConverterConfig has anchors, see templating.go
+func (d *ProtocolConverterConfig) HasAnchors() bool { return d.hasAnchors }
 
 // NmapConfig contains configuration for creating a Nmap service
 type NmapConfig struct {

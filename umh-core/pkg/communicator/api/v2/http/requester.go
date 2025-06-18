@@ -52,6 +52,7 @@ func GetClient(insecureTLS bool) *http.Client {
 		transport := &http.Transport{
 			ForceAttemptHTTP2: false,
 			TLSNextProto:      make(map[string]func(authority string, c *tls.Conn) http.RoundTripper),
+			Proxy:             http.ProxyFromEnvironment,
 		}
 
 		// Create an HTTP client with the custom transport
@@ -65,6 +66,7 @@ func GetClient(insecureTLS bool) *http.Client {
 		transport := &http.Transport{
 			ForceAttemptHTTP2: false,
 			TLSNextProto:      make(map[string]func(authority string, c *tls.Conn) http.RoundTripper),
+			Proxy:             http.ProxyFromEnvironment,
 			TLSClientConfig: &tls.Config{
 				InsecureSkipVerify: insecureTLS,
 				MinVersion:         tls.VersionTLS10, // Allow older TLS versions
@@ -180,6 +182,10 @@ func processCookies(response *http.Response, cookies *map[string]string) {
 
 // processLatencyHeaders handles X-Response-Time header processing and latency calculations
 func processLatencyHeaders(response *http.Response, timeTillFirstByte time.Duration, logger *zap.SugaredLogger) {
+	if response == nil {
+		return
+	}
+
 	xResponseTime := response.Header.Get("X-Response-Time")
 	if xResponseTime == "" {
 		logger.Warn("X-Response-Time header not found")

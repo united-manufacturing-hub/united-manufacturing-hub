@@ -91,8 +91,8 @@ func (a *AgentInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapsh
 		return nil, false
 	}
 
-	// Print system state every 10 ticks
-	if snapshot.Tick%10 == 0 {
+	// Print system state every 100 ticks
+	if snapshot.Tick%100 == 0 {
 		a.printSystemState(instanceName, snapshot.Tick)
 	}
 
@@ -126,6 +126,7 @@ func (a *AgentInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapsh
 }
 
 // printSystemState prints the full system state in a human-readable format
+// TODO: move this into status reason as well to be shown centrally in the system snapshot logger
 func (a *AgentInstance) printSystemState(instanceName string, tick uint64) {
 	logger := a.baseFSMInstance.GetLogger()
 	status := a.ObservedState.ServiceInfo

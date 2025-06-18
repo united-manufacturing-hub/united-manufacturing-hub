@@ -61,7 +61,6 @@ func (r *RedpandaInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSna
 	// Step 1: If there's a lastError, see if we've waited enough.
 	if r.baseFSMInstance.ShouldSkipReconcileBecauseOfError(snapshot.Tick) {
 		err := r.baseFSMInstance.GetBackoffError(snapshot.Tick)
-		r.baseFSMInstance.GetLogger().Debugf("Skipping reconcile for Redpanda pipeline %s: %w", redpandaInstanceName, err)
 
 		// if it is a permanent error, start the removal process and reset the error (so that we can reconcile towards a stopped / removed state)
 		if backoff.IsPermanentFailureError(err) {
@@ -91,7 +90,9 @@ func (r *RedpandaInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSna
 	}
 
 	// Step 2: Detect external changes.
-	if err := r.reconcileExternalChanges(ctx, services, snapshot.Tick, start); err != nil {
+	var externalReconciled bool
+	err, externalReconciled = r.reconcileExternalChanges(ctx, services, snapshot)
+	if err != nil {
 		// I am using strings.Contains as i cannot get it working with errors.Is
 		isExpectedError := strings.Contains(err.Error(), redpanda_monitor_service.ErrServiceNotExist.Error()) ||
 			strings.Contains(err.Error(), redpanda_monitor_service.ErrServiceNoLogFile.Error()) ||
@@ -142,20 +143,19 @@ func (r *RedpandaInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSna
 		return nil, false
 	}
 
-	// If either Redpanda state or S6 state was reconciled, we return reconciled so that nothing happens anymore in this tick
-	// nothing should happen as we might have already taken up some significant time of the avaialble time per tick, so better
+	// If either Redpanda state, S6 state or the internal redpanda state via the Admin API was reconciled, we return reconciled so that nothing happens anymore in this tick
+	// nothing should happen as we might have already taken up some significant time of the available time per tick, so better
 	// to be on the safe side and let the rest handle in another tick
-	reconciled = reconciled || s6Reconciled
+	reconciled = reconciled || s6Reconciled || externalReconciled
 
 	// It went all right, so clear the error
 	r.baseFSMInstance.ResetState()
-
 	return nil, reconciled
 }
 
 // reconcileExternalChanges checks if the RedpandaInstance service status has changed
 // externally (e.g., if someone manually stopped or started it, or if it crashed)
-func (r *RedpandaInstance) reconcileExternalChanges(ctx context.Context, services serviceregistry.Provider, tick uint64, loopStartTime time.Time) error {
+func (r *RedpandaInstance) reconcileExternalChanges(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) (err error, reconciled bool) {
 	start := time.Now()
 	defer func() {
 		metrics.ObserveReconcileTime(metrics.ComponentRedpandaInstance, r.baseFSMInstance.GetID()+".reconcileExternalChanges", time.Since(start))
@@ -165,12 +165,11 @@ func (r *RedpandaInstance) reconcileExternalChanges(ctx context.Context, service
 	// that a single status of a single instance does not block the whole reconciliation
 	observedStateCtx, cancel := context.WithTimeout(ctx, constants.RedpandaUpdateObservedStateTimeout)
 	defer cancel()
-
-	err := r.UpdateObservedStateOfInstance(observedStateCtx, services, tick, loopStartTime)
+	err = r.UpdateObservedStateOfInstance(observedStateCtx, services, snapshot)
 	if err != nil {
-		return fmt.Errorf("failed to update observed state: %w", err)
+		return fmt.Errorf("failed to update observed state: %w", err), false
 	}
-	return nil
+	return nil, false
 }
 
 // reconcileStateTransition compares the current state with the desired state
@@ -276,21 +275,21 @@ func (r *RedpandaInstance) reconcileStartingStates(ctx context.Context, services
 		// First we need to ensure the S6 service is started
 		running, reason := r.IsRedpandaS6Running()
 		if !running {
-			r.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("starting: %s", reason)
+			r.PreviousObservedState.ServiceInfo.StatusReason = fmt.Sprintf("starting: %s", reason)
 			return nil, false
 		}
 
 		// Check if "Successfully started Redpanda!" is found in logs
 		started, reasonStarted := r.IsRedpandaStarted()
 		if !started {
-			r.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("starting: %s", reasonStarted)
+			r.PreviousObservedState.ServiceInfo.StatusReason = fmt.Sprintf("starting: %s", reasonStarted)
 			return nil, false
 		}
 
 		// Set the transition time when we detect successful start
 		r.transitionToRunningTime = currentTime
 
-		r.ObservedState.ServiceInfo.StatusReason = ""
+		r.PreviousObservedState.ServiceInfo.StatusReason = ""
 		return r.baseFSMInstance.SendEvent(ctx, EventStartDone), true
 	default:
 		return fmt.Errorf("invalid starting state: %s", currentState), false
@@ -310,10 +309,10 @@ func (r *RedpandaInstance) reconcileRunningStates(ctx context.Context, services 
 		degraded, reasonDegraded := r.IsRedpandaDegraded(currentTime, constants.RedpandaLogWindow)
 		processingActivity, reasonProcessingActivity := r.IsRedpandaWithProcessingActivity()
 		if degraded {
-			r.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("degraded: %s", reasonDegraded)
+			r.PreviousObservedState.ServiceInfo.StatusReason = fmt.Sprintf("degraded: %s", reasonDegraded)
 			return r.baseFSMInstance.SendEvent(ctx, EventDegraded), true
 		} else if !processingActivity { // if there is no activity, we move to Idle
-			r.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("idling: %s", reasonProcessingActivity)
+			r.PreviousObservedState.ServiceInfo.StatusReason = fmt.Sprintf("idling: %s", reasonProcessingActivity)
 			return r.baseFSMInstance.SendEvent(ctx, EventNoDataTimeout), true
 		}
 		// If we're in Active,  send no status reason
@@ -324,22 +323,22 @@ func (r *RedpandaInstance) reconcileRunningStates(ctx context.Context, services 
 		processingActivity, reasonProcessingActivity := r.IsRedpandaWithProcessingActivity()
 
 		if degraded {
-			r.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("degraded: %s", reasonDegraded)
+			r.PreviousObservedState.ServiceInfo.StatusReason = fmt.Sprintf("degraded: %s", reasonDegraded)
 			return r.baseFSMInstance.SendEvent(ctx, EventDegraded), true
 		} else if processingActivity { // if there is activity, we move to Active
-			r.ObservedState.ServiceInfo.StatusReason = ""
+			r.PreviousObservedState.ServiceInfo.StatusReason = ""
 			return r.baseFSMInstance.SendEvent(ctx, EventDataReceived), true
 		}
-		r.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("idle: %s", reasonProcessingActivity)
+		r.PreviousObservedState.ServiceInfo.StatusReason = fmt.Sprintf("idle: %s", reasonProcessingActivity)
 		return nil, false
 	case OperationalStateDegraded:
 		// If we're in Degraded, we need to recover to move to Idle
 		degraded, reason := r.IsRedpandaDegraded(currentTime, constants.RedpandaLogWindow)
 		if !degraded {
-			r.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("recovering: %s", reason)
+			r.PreviousObservedState.ServiceInfo.StatusReason = fmt.Sprintf("recovering: %s", reason)
 			return r.baseFSMInstance.SendEvent(ctx, EventRecovered), true
 		}
-		r.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("degraded: %s", reason)
+		r.PreviousObservedState.ServiceInfo.StatusReason = fmt.Sprintf("degraded: %s", reason)
 		return nil, false
 	default:
 		return fmt.Errorf("invalid running state: %s", currentState), false
@@ -361,7 +360,7 @@ func (r *RedpandaInstance) reconcileTransitionToStopped(ctx context.Context, ser
 			return err, false
 		}
 		// Send event to transition to Stopping
-		r.ObservedState.ServiceInfo.StatusReason = "stopping"
+		r.PreviousObservedState.ServiceInfo.StatusReason = "stopping"
 		return r.baseFSMInstance.SendEvent(ctx, EventStop), true
 	}
 
@@ -369,11 +368,11 @@ func (r *RedpandaInstance) reconcileTransitionToStopped(ctx context.Context, ser
 	isStopped, reason := r.IsRedpandaS6Stopped()
 	if currentState == OperationalStateStopping {
 		if !isStopped {
-			r.ObservedState.ServiceInfo.StatusReason = fmt.Sprintf("stopping: %s", reason)
+			r.PreviousObservedState.ServiceInfo.StatusReason = fmt.Sprintf("stopping: %s", reason)
 			return nil, false
 		}
 		// Transition from Stopping to Stopped
-		r.ObservedState.ServiceInfo.StatusReason = ""
+		r.PreviousObservedState.ServiceInfo.StatusReason = ""
 		return r.baseFSMInstance.SendEvent(ctx, EventStopDone), true
 	}
 

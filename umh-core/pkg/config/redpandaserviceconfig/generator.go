@@ -19,6 +19,8 @@ import (
 	"fmt"
 	"strings"
 	"text/template"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 )
 
 // Generator handles the generation of Redpanda YAML configurations
@@ -36,11 +38,15 @@ func NewGenerator() *Generator {
 // RenderConfig generates a Redpanda YAML configuration from a RedpandaServiceConfig
 func (g *Generator) RenderConfig(cfg RedpandaServiceConfig) (string, error) {
 	if cfg.Topic.DefaultTopicRetentionBytes == 0 {
-		cfg.Topic.DefaultTopicRetentionBytes = 0
+		cfg.Topic.DefaultTopicRetentionBytes = constants.DefaultRedpandaTopicDefaultTopicRetentionBytes
 	}
 
 	if cfg.Topic.DefaultTopicRetentionMs == 0 {
-		cfg.Topic.DefaultTopicRetentionMs = 604800000 // Redpanda by default sets this to 7 days when set to 0, therefore we just set it to 7 days to keep the code a bit cleaner
+		cfg.Topic.DefaultTopicRetentionMs = constants.DefaultRedpandaTopicDefaultTopicRetentionMs
+	}
+
+	if cfg.Topic.DefaultTopicCompressionAlgorithm == "" {
+		cfg.Topic.DefaultTopicCompressionAlgorithm = constants.DefaultRedpandaTopicDefaultTopicCompressionAlgorithm
 	}
 
 	if cfg.BaseDir == "" {
@@ -52,9 +58,20 @@ func (g *Generator) RenderConfig(cfg RedpandaServiceConfig) (string, error) {
 
 	// Resources.MaxCores & Resources.MemoryPerCoreInBytes are not used in the template, but directly passed to the redpanda binary
 
+	// The admin api port is not configureable via the config, but we have it set in the constants.
+	type extendedRedpandaServiceConfig struct {
+		RedpandaServiceConfig
+		AdminAPIPort int
+	}
+
+	extendedCfg := extendedRedpandaServiceConfig{
+		RedpandaServiceConfig: cfg,
+		AdminAPIPort:          constants.AdminAPIPort,
+	}
+
 	// Render the template
 	var rendered bytes.Buffer
-	if err := g.tmpl.Execute(&rendered, cfg); err != nil {
+	if err := g.tmpl.Execute(&rendered, extendedCfg); err != nil {
 		return "", fmt.Errorf("failed to execute template: %w", err)
 	}
 
@@ -86,13 +103,14 @@ redpanda:
 
   admin:
     address: "0.0.0.0"
-    port: 9644
+    port: {{.AdminAPIPort}}
 
   developer_mode: true
 
   # Default topic retention configuration:
   log_retention_ms: {{if eq .Topic.DefaultTopicRetentionMs 0}}-1{{else}}{{.Topic.DefaultTopicRetentionMs}}{{end}}
   retention_bytes: {{if eq .Topic.DefaultTopicRetentionBytes 0}}null{{else}}{{.Topic.DefaultTopicRetentionBytes}}{{end}}
+  log_compression_type: "{{.Topic.DefaultTopicCompressionAlgorithm}}"
 
   # Set the default number of partitions for new topics
   default_topic_partitions: 1

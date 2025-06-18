@@ -67,6 +67,14 @@
             "buildFlags": "--tags=test"
         },
         {
+            "name": "Debug Ginkgo Tests (test-fsm-protocolconverter)",
+            "type": "go",
+            "request": "launch",
+            "mode": "test",
+            "program": "${workspaceFolder}/umh-core/test/fsm/protocolconverter",
+            "buildFlags": "--tags=test"
+        },
+        {
             "name": "Debug Ginkgo Tests (service-nmap)",
             "type": "go",
             "request": "launch",
@@ -100,6 +108,14 @@
             "request": "launch",
             "mode": "test",
             "program": "${workspaceFolder}/umh-core/pkg/service/container_monitor"
+        },
+        {
+            "name": "Debug Ginkgo Tests (service-protocolconverter)",
+            "type": "go",
+            "request": "launch",
+            "mode": "test",
+            "program": "${workspaceFolder}/umh-core/pkg/service/protocolconverter",
+            "buildFlags": "--tags=test"
         },
         {
             "name": "Debug Ginkgo Tests (fsm-container)",
@@ -162,6 +178,14 @@
             "request": "launch",
             "mode": "test",
             "program": "${workspaceFolder}/umh-core/pkg/service/connection",
+            "buildFlags": "--tags=test"
+        },
+        {
+            "name": "Debug Ginkgo Tests (dataflowcomponentserviceconfig)",
+            "type": "go",
+            "request": "launch",
+            "mode": "test",
+            "program": "${workspaceFolder}/umh-core/pkg/config/dataflowcomponentserviceconfig",
             "buildFlags": "--tags=test"
         }
     ]

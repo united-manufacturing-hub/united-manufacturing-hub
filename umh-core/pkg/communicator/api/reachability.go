@@ -15,10 +15,10 @@
 package api
 
 import (
-	"crypto/tls"
-	"net/http"
+	"os"
 	"strings"
 
+	httpv2 "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2/http"
 	"go.uber.org/zap"
 )
 
@@ -26,15 +26,31 @@ import (
 func CheckIfAPIIsReachable(insecureTLS bool, apiURL string, logger *zap.SugaredLogger) bool {
 	baseUrl := apiURL
 
-	// Copy the default transport to avoid modifying it (and then modify the copy)
-	tr := http.DefaultTransport.(*http.Transport).Clone()
-	tr.TLSClientConfig = &tls.Config{InsecureSkipVerify: insecureTLS}
-	client := &http.Client{Transport: tr}
+	// Log proxy configuration that ProxyFromEnvironment will use
+	logger.Debugf("Proxy configuration for API reachability check:")
+	proxyVars := []string{"HTTP_PROXY", "http_proxy", "HTTPS_PROXY", "https_proxy", "NO_PROXY", "no_proxy"}
+	for _, envVar := range proxyVars {
+		if value := os.Getenv(envVar); value != "" {
+			logger.Debugf("  %s = %s", envVar, value)
+		} else {
+			logger.Debugf("  %s = (not set)", envVar)
+		}
+	}
+
+	if insecureTLS {
+		logger.Debugf("Insecure TLS is enabled, skipping certificate verification")
+	}
+
+	client := httpv2.GetClient(insecureTLS)
 
 	response, err := client.Get(baseUrl)
 
 	if err != nil {
 		logger.Errorf("Error while checking if API is reachable: %v", err)
+		return false
+	}
+	if response == nil {
+		logger.Errorf("Received nil response from API check")
 		return false
 	}
 	defer func() {

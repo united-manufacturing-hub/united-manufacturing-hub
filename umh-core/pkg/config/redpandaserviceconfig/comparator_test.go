@@ -39,10 +39,12 @@ var _ = Describe("Redpanda YAML Comparator", func() {
 			config1 := RedpandaServiceConfig{}
 			config1.Topic.DefaultTopicRetentionMs = 1000
 			config1.Topic.DefaultTopicRetentionBytes = 1000
+			config1.Topic.DefaultTopicCompressionAlgorithm = "snappy"
 
 			config2 := RedpandaServiceConfig{}
 			config2.Topic.DefaultTopicRetentionMs = 1000
-			config2.Topic.DefaultTopicRetentionBytes = 1001
+			config2.Topic.DefaultTopicRetentionBytes = 1000
+			config2.Topic.DefaultTopicCompressionAlgorithm = "lz4"
 
 			comparator := NewComparator()
 			equal := comparator.ConfigsEqual(config1, config2)
@@ -56,17 +58,20 @@ var _ = Describe("Redpanda YAML Comparator", func() {
 			config1 := RedpandaServiceConfig{}
 			config1.Topic.DefaultTopicRetentionMs = 1000
 			config1.Topic.DefaultTopicRetentionBytes = 1000
+			config1.Topic.DefaultTopicCompressionAlgorithm = "snappy"
 
 			config2 := RedpandaServiceConfig{}
 			config2.Topic.DefaultTopicRetentionMs = 1001
 			config2.Topic.DefaultTopicRetentionBytes = 1000
+			config2.Topic.DefaultTopicCompressionAlgorithm = "lz4"
 
 			comparator := NewComparator()
 			diff := comparator.ConfigDiff(config1, config2)
 
 			Expect(diff).To(ContainSubstring("Topic.DefaultTopicRetentionMs"))
-			Expect(diff).To(ContainSubstring("1000"))
-			Expect(diff).To(ContainSubstring("1001"))
+			Expect(diff).To(ContainSubstring("Topic.DefaultTopicCompressionAlgorithm"))
+			Expect(diff).To(ContainSubstring("snappy"))
+			Expect(diff).To(ContainSubstring("lz4"))
 		})
 	})
 })

@@ -26,6 +26,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
 // EditInstance tests verify the behavior of the EditInstanceAction.
@@ -334,6 +335,11 @@ type writeFailingMockConfigManager struct {
 	mockConfigManager *config.MockConfigManager
 }
 
+// GetFileSystemService is never called in the mock but only here to implement the ConfigManager interface
+func (w *writeFailingMockConfigManager) GetFileSystemService() filesystem.Service {
+	return nil
+}
+
 // GetConfig passes through to the underlying mock implementation
 func (w *writeFailingMockConfigManager) GetConfig(ctx context.Context, tick uint64) (config.FullConfig, error) {
 	return w.mockConfigManager.GetConfig(ctx, tick)
@@ -428,4 +434,24 @@ func (w *writeFailingMockConfigManager) AtomicEditDataflowcomponent(ctx context.
 	}
 
 	return config.DataFlowComponentConfig{}, nil
+}
+
+// GetConfigAsString implements the ConfigManager interface
+func (w *writeFailingMockConfigManager) GetConfigAsString(ctx context.Context) (string, error) {
+	return w.mockConfigManager.GetConfigAsString(ctx)
+}
+
+// GetCacheModTimeWithoutUpdate returns the modification time without updating the cache
+func (w *writeFailingMockConfigManager) GetCacheModTimeWithoutUpdate() time.Time {
+	return w.mockConfigManager.GetCacheModTimeWithoutUpdate()
+}
+
+// UpdateAndGetCacheModTime updates the cache and returns the modification time
+func (w *writeFailingMockConfigManager) UpdateAndGetCacheModTime(ctx context.Context) (time.Time, error) {
+	return w.mockConfigManager.UpdateAndGetCacheModTime(ctx)
+}
+
+// WriteConfigFromString implements the ConfigManager interface
+func (w *writeFailingMockConfigManager) WriteConfigFromString(ctx context.Context, config string, expectedModTime string) error {
+	return w.mockConfigManager.WriteConfigFromString(ctx, config, expectedModTime)
 }

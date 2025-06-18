@@ -19,13 +19,14 @@ import (
 )
 
 // GetNmapServiceConfig converts the component config to a full NmapServiceConfig
-func (c *ConnectionServiceConfig) GetNmapServiceConfig() nmapserviceconfig.NmapServiceConfig {
+func (c ConnectionServiceConfig) GetNmapServiceConfig() nmapserviceconfig.NmapServiceConfig {
 	return c.NmapServiceConfig
 }
 
-// FromNmapServiceConfig creates a ConnectionServiceConfig from a NmapServiceConfig,
-func FromNmapServiceConfig(nmap nmapserviceconfig.NmapServiceConfig) ConnectionServiceConfig {
-	return ConnectionServiceConfig{
+// FromNmapServiceConfig creates a ConnectionServiceConfigRuntime from a NmapServiceConfig.
+// This is used when converting from nmap-specific config to connection config.
+func FromNmapServiceConfig(nmap nmapserviceconfig.NmapServiceConfig) ConnectionServiceConfigRuntime {
+	return ConnectionServiceConfigRuntime{
 		NmapServiceConfig: nmap,
 	}
 }

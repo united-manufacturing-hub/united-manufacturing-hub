@@ -102,8 +102,8 @@ func (c *ContainerInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSn
 		return nil, false
 	}
 
-	// Print system state every 10 ticks
-	if snapshot.Tick%10 == 0 {
+	// Print system state every 100 ticks
+	if snapshot.Tick%100 == 0 {
 		c.printSystemState(instanceName, snapshot.Tick)
 	}
 
@@ -137,6 +137,7 @@ func (c *ContainerInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSn
 }
 
 // printSystemState prints the full system state in a human-readable format
+// TODO: move this into status reason as well to be shown centrally in the system snapshot logger
 func (c *ContainerInstance) printSystemState(instanceName string, tick uint64) {
 	logger := c.baseFSMInstance.GetLogger()
 	status := c.ObservedState.ServiceInfo

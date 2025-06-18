@@ -15,8 +15,11 @@
 package protocolconverterserviceconfig
 
 import (
+	"fmt"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/connectionserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/variables"
 )
 
 // Comparator handles the comparison of Connection configurations
@@ -30,12 +33,15 @@ func NewComparator() *Comparator {
 
 // ConfigsEqual compares two ConnectionServiceConfigs by converting to NmapServiceConfig
 // and using the existing comparison utilization
-func (c *Comparator) ConfigsEqual(desired, observed *ProtocolConverterServiceConfig) (isEqual bool) {
+func (c *Comparator) ConfigsEqual(desired, observed ProtocolConverterServiceConfigSpec) (isEqual bool) {
 	connectionD := desired.GetConnectionServiceConfig()
 	connectionO := observed.GetConnectionServiceConfig()
 
-	dfcD := desired.GetDFCServiceConfig()
-	dfcO := observed.GetDFCServiceConfig()
+	dfcReadD := desired.GetDFCReadServiceConfig()
+	dfcReadO := observed.GetDFCReadServiceConfig()
+
+	dfcWriteD := desired.GetDFCWriteServiceConfig()
+	dfcWriteO := observed.GetDFCWriteServiceConfig()
 
 	// compare connections
 	comparatorConnection := connectionserviceconfig.NewComparator()
@@ -43,25 +49,55 @@ func (c *Comparator) ConfigsEqual(desired, observed *ProtocolConverterServiceCon
 	// compare dfc's
 	comparatorDFC := dataflowcomponentserviceconfig.NewComparator()
 
-	return comparatorConnection.ConfigsEqual(connectionD, connectionO) &&
-		comparatorDFC.ConfigsEqual(dfcD, dfcO)
+	// compare variables
+	comparatorVariable := variables.NewComparator()
+
+	// If conversion fails for either config, consider them not equal (fail-safe comparison)
+	connectionDTemplate, errD := connectionserviceconfig.ConvertTemplateToRuntime(connectionD)
+	connectionOTemplate, errO := connectionserviceconfig.ConvertTemplateToRuntime(connectionO)
+
+	// If either conversion fails, they are not equal
+	if errD != nil || errO != nil {
+		return false
+	}
+
+	return comparatorConnection.ConfigsEqual(connectionDTemplate, connectionOTemplate) &&
+		comparatorDFC.ConfigsEqual(dfcReadD, dfcReadO) &&
+		comparatorDFC.ConfigsEqual(dfcWriteD, dfcWriteO) &&
+		comparatorVariable.ConfigsEqual(desired.Variables, observed.Variables)
 }
 
 // ConfigDiff returns a human-readable string describing differences between configs
-func (c *Comparator) ConfigDiff(desired, observed *ProtocolConverterServiceConfig) string {
+func (c *Comparator) ConfigDiff(desired, observed ProtocolConverterServiceConfigSpec) string {
 	connectionD := desired.GetConnectionServiceConfig()
 	connectionO := observed.GetConnectionServiceConfig()
 
-	dfcD := desired.GetDFCServiceConfig()
-	dfcO := observed.GetDFCServiceConfig()
+	dfcReadD := desired.GetDFCReadServiceConfig()
+	dfcReadO := observed.GetDFCReadServiceConfig()
+
+	dfcWriteD := desired.GetDFCWriteServiceConfig()
+	dfcWriteO := observed.GetDFCWriteServiceConfig()
 
 	// diff for connection
 	comparatorConnection := connectionserviceconfig.NewComparator()
-	connectionDiff := comparatorConnection.ConfigDiff(connectionD, connectionO)
+	connectionDTemplate, errD := connectionserviceconfig.ConvertTemplateToRuntime(connectionD)
+	connectionOTemplate, errO := connectionserviceconfig.ConvertTemplateToRuntime(connectionO)
+
+	var connectionDiff string
+	if errD != nil || errO != nil {
+		connectionDiff = fmt.Sprintf("Connection conversion error - desired: %v, observed: %v\n", errD, errO)
+	} else {
+		connectionDiff = comparatorConnection.ConfigDiff(connectionDTemplate, connectionOTemplate)
+	}
 
 	// diff for dfc's
 	comparatorDFC := dataflowcomponentserviceconfig.NewComparator()
-	dfcDiff := comparatorDFC.ConfigDiff(dfcD, dfcO)
+	dfcReadDiff := comparatorDFC.ConfigDiff(dfcReadD, dfcReadO)
+	dfcWriteDiff := comparatorDFC.ConfigDiff(dfcWriteD, dfcWriteO)
 
-	return connectionDiff + dfcDiff
+	// diff for variables
+	comparatorVariable := variables.NewComparator()
+	variableDiff := comparatorVariable.ConfigDiff(desired.Variables, observed.Variables)
+
+	return connectionDiff + dfcReadDiff + dfcWriteDiff + variableDiff
 }

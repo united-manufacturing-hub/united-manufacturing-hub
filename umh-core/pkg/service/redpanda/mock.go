@@ -48,6 +48,7 @@ type MockRedpandaService struct {
 	HasProcessingActivityCalled       bool
 	ServiceExistsCalled               bool
 	ForceRemoveRedpandaCalled         bool
+	UpdateRedpandaClusterConfigCalled bool
 
 	// Return values for each method
 	GenerateS6ConfigForRedpandaResult s6serviceconfig.S6ServiceConfig
@@ -65,7 +66,7 @@ type MockRedpandaService struct {
 	ReconcileManagerReconciled        bool
 	ServiceExistsResult               bool
 	ForceRemoveRedpandaError          error
-
+	UpdateRedpandaClusterConfigError  error
 	// For more complex testing scenarios
 	ServiceState      *ServiceInfo
 	ServiceExistsFlag bool
@@ -151,7 +152,7 @@ func (m *MockRedpandaService) GetConfig(ctx context.Context, filesystemService f
 	}
 
 	// If a result is preset, return it
-	if m.GetConfigResult.Topic.DefaultTopicRetentionMs != 0 || m.GetConfigResult.Topic.DefaultTopicRetentionBytes != 0 {
+	if m.GetConfigResult.Topic.DefaultTopicRetentionMs != 0 || m.GetConfigResult.Topic.DefaultTopicRetentionBytes != 0 || m.GetConfigResult.Topic.DefaultTopicCompressionAlgorithm != "" {
 		return m.GetConfigResult, nil
 	}
 
@@ -159,6 +160,7 @@ func (m *MockRedpandaService) GetConfig(ctx context.Context, filesystemService f
 	config := redpandaserviceconfig.RedpandaServiceConfig{}
 	config.Topic.DefaultTopicRetentionMs = 1000000
 	config.Topic.DefaultTopicRetentionBytes = 1000000000
+	config.Topic.DefaultTopicCompressionAlgorithm = "snappy"
 	return config, nil
 }
 
@@ -358,4 +360,10 @@ func (m *MockRedpandaService) ServiceExists(ctx context.Context, filesystemServi
 func (m *MockRedpandaService) ForceRemoveRedpanda(ctx context.Context, filesystemService filesystem.Service, redpandaName string) error {
 	m.ForceRemoveRedpandaCalled = true
 	return m.ForceRemoveRedpandaError
+}
+
+// UpdateRedpandaClusterConfig mocks updating the cluster config of a Redpanda instance
+func (m *MockRedpandaService) UpdateRedpandaClusterConfig(ctx context.Context, redpandaName string, configUpdates map[string]interface{}) error {
+	m.UpdateRedpandaClusterConfigCalled = true
+	return m.UpdateRedpandaClusterConfigError
 }

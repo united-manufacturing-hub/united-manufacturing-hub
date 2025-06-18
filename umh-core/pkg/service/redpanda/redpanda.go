@@ -15,9 +15,13 @@
 package redpanda
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"net/http"
 	"path/filepath"
 	"strings"
 	"time"
@@ -87,6 +91,8 @@ type IRedpandaService interface {
 	//   ok     – true when activity is detected, false otherwise.
 	//   reason – empty when ok is true; otherwise a brief throughput summary.
 	HasProcessingActivity(status RedpandaStatus) (bool, string)
+	// UpdateRedpandaClusterConfig updates the cluster config of a Redpanda service by sending a PUT request to the Redpanda API
+	UpdateRedpandaClusterConfig(ctx context.Context, redpandaName string, configUpdates map[string]interface{}) error
 }
 
 // ServiceInfo contains information about a Redpanda service
@@ -224,7 +230,7 @@ func NewDefaultRedpandaService(redpandaName string, opts ...RedpandaServiceOptio
 		logger:                 logger.For(managerName),
 		s6Manager:              s6fsm.NewS6Manager(managerName),
 		s6Service:              s6service.NewDefaultService(),
-		httpClient:             nil, // this is only for a mock in the tests
+		httpClient:             httpclient.NewDefaultHTTPClient(),
 		baseDir:                constants.DefaultRedpandaBaseDir,
 		redpandaMonitorManager: redpanda_monitor_fsm.NewRedpandaMonitorManager(redpandaName),
 	}
@@ -243,7 +249,7 @@ func (s *RedpandaService) generateRedpandaYaml(config *redpandaserviceconfig.Red
 		return "", fmt.Errorf("config is nil")
 	}
 
-	return redpandaserviceconfig.RenderRedpandaYAML(config.Topic.DefaultTopicRetentionMs, config.Topic.DefaultTopicRetentionBytes)
+	return redpandaserviceconfig.RenderRedpandaYAML(config.Topic.DefaultTopicRetentionMs, config.Topic.DefaultTopicRetentionBytes, config.Topic.DefaultTopicCompressionAlgorithm)
 }
 
 // generateS6ConfigForRedpanda creates a S6 config for a given redpanda instance
@@ -329,8 +335,13 @@ func (s *RedpandaService) GetConfig(ctx context.Context, filesystemService files
 	}
 
 	if lastRedpandaMonitorObservedState.ServiceInfo.RedpandaStatus.LastScan != nil {
-		redpandaStatus.Topic.DefaultTopicRetentionMs = lastRedpandaMonitorObservedState.ServiceInfo.RedpandaStatus.LastScan.ClusterConfig.Topic.DefaultTopicRetentionMs
-		redpandaStatus.Topic.DefaultTopicRetentionBytes = lastRedpandaMonitorObservedState.ServiceInfo.RedpandaStatus.LastScan.ClusterConfig.Topic.DefaultTopicRetentionBytes
+		if lastRedpandaMonitorObservedState.ServiceInfo.RedpandaStatus.LastScan.ClusterConfig != nil {
+			redpandaStatus.Topic.DefaultTopicRetentionMs = lastRedpandaMonitorObservedState.ServiceInfo.RedpandaStatus.LastScan.ClusterConfig.Topic.DefaultTopicRetentionMs
+			redpandaStatus.Topic.DefaultTopicRetentionBytes = lastRedpandaMonitorObservedState.ServiceInfo.RedpandaStatus.LastScan.ClusterConfig.Topic.DefaultTopicRetentionBytes
+			redpandaStatus.Topic.DefaultTopicCompressionAlgorithm = lastRedpandaMonitorObservedState.ServiceInfo.RedpandaStatus.LastScan.ClusterConfig.Topic.DefaultTopicCompressionAlgorithm
+		} else {
+			s.logger.Debugf("Cluster config is nil, skipping update")
+		}
 		redpandaStatus.Resources.MaxCores = 1
 		redpandaStatus.Resources.MemoryPerCoreInBytes = 2048 * 1024 * 1024 // 2GB
 	} else {
@@ -531,7 +542,18 @@ func (s *RedpandaService) GetHealthCheckAndMetrics(ctx context.Context, tick uin
 		}
 
 		redpandaStatus.HealthCheck = healthCheck
-		redpandaStatus.RedpandaMetrics = *lastRedpandaMonitorObservedState.ServiceInfo.RedpandaStatus.LastScan.RedpandaMetrics
+
+		// Check if RedpandaMetrics is not nil before dereferencing
+		if lastRedpandaMonitorObservedState.ServiceInfo.RedpandaStatus.LastScan.RedpandaMetrics != nil {
+			redpandaStatus.RedpandaMetrics = *lastRedpandaMonitorObservedState.ServiceInfo.RedpandaStatus.LastScan.RedpandaMetrics
+		} else {
+			// Set empty metrics if nil
+			redpandaStatus.RedpandaMetrics = redpanda_monitor.RedpandaMetrics{
+				Metrics:      redpanda_monitor.Metrics{},
+				MetricsState: nil,
+			}
+		}
+
 		redpandaStatus.Logs = lastRedpandaMonitorObservedState.ServiceInfo.RedpandaStatus.Logs
 	} else {
 		return RedpandaStatus{}, fmt.Errorf("last scan is nil")
@@ -955,4 +977,215 @@ func formatMemory(memory int) string {
 	}
 
 	return fmt.Sprintf("%d%s", memory, units[unitIndex])
+}
+
+// setRedpandaClusterConfig sends a PUT request to update Redpanda's cluster config
+func (s *RedpandaService) setRedpandaClusterConfig(ctx context.Context, configUpdates map[string]interface{}) (err error) {
+	if s.httpClient == nil {
+		return fmt.Errorf("http client not initialized")
+	}
+
+	// Construct the request body
+	requestBody := map[string]interface{}{
+		"upsert": configUpdates,
+		"remove": []string{},
+	}
+
+	// Convert to JSON
+	var jsonBody []byte
+	jsonBody, err = json.Marshal(requestBody)
+	if err != nil {
+		return fmt.Errorf("failed to marshal request body: %w", err)
+	}
+
+	// Create the request
+	var req *http.Request
+	req, err = http.NewRequestWithContext(ctx, http.MethodPut, fmt.Sprintf("http://127.0.0.1:%d/v1/cluster_config", constants.AdminAPIPort), bytes.NewBuffer(jsonBody))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	// Set headers
+	req.Header.Set("Content-Type", "application/json")
+
+	// Send the request
+	var resp *http.Response
+	resp, err = s.httpClient.Do(req)
+	if err != nil {
+		// If we get a connection refused error, it means that the Redpanda service is not yet ready, so we just ignore it
+		if strings.Contains(err.Error(), "connection refused") {
+			return nil
+		}
+		return fmt.Errorf("failed to send request: %w", err)
+	}
+	if resp == nil {
+		return fmt.Errorf("received nil response")
+	}
+
+	defer func() {
+		if resp != nil {
+			closeErr := resp.Body.Close()
+			if closeErr != nil {
+				err = fmt.Errorf("failed to close response body: %w", closeErr)
+			}
+		}
+	}()
+
+	// Check response status
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("request failed with status %d: %s", resp.StatusCode, string(body))
+	}
+
+	// Parse response
+	var response struct {
+		ConfigVersion int `json:"config_version"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
+		return fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return nil
+}
+
+// verifyRedpandaClusterConfig reads back the cluster config and verifies that the updates were applied correctly
+func (s *RedpandaService) verifyRedpandaClusterConfig(ctx context.Context, redpandaName string, configUpdates map[string]interface{}) error {
+	if s.httpClient == nil {
+		return fmt.Errorf("http client not initialized")
+	}
+
+	readbackReq, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("http://127.0.0.1:%d/v1/cluster_config", constants.AdminAPIPort), nil)
+	if err != nil {
+		return fmt.Errorf("failed to create readback request: %w", err)
+	}
+
+	readbackResp, err := s.httpClient.Do(readbackReq)
+	if err != nil {
+		// If we get a connection refused error, it means that the Redpanda service is not yet ready (or is in the progress of restarting), so we just ignore it
+		if strings.Contains(err.Error(), "connection refused") {
+			return nil
+		}
+		return fmt.Errorf("failed to send readback request: %w", err)
+	}
+	if readbackResp == nil {
+		return fmt.Errorf("received nil readback response")
+	}
+
+	readbackBody, err := io.ReadAll(readbackResp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read readback response body: %w", err)
+	}
+
+	err = readbackResp.Body.Close()
+	if err != nil {
+		return fmt.Errorf("failed to close readback response body: %w", err)
+	}
+
+	// Parse as JSON
+	var readbackConfig map[string]interface{}
+	if err := json.Unmarshal(readbackBody, &readbackConfig); err != nil {
+		return fmt.Errorf("failed to unmarshal readback response body: %w", err)
+	}
+
+	// Validate all keys against the readback config
+	// Since the types of our request and the response might differ we need to handle the different types
+	for key, value := range configUpdates {
+		readbackValue, ok := readbackConfig[key]
+		if !ok {
+			s.logger.Debugf("Key %s not found in Redpanda cluster config for %s", key, redpandaName)
+			return fmt.Errorf("key %s not found in Redpanda cluster config for %s", key, redpandaName)
+		}
+
+		// Convert both values to strings for comparison to handle type differences
+		expectedStr, err := anyToString(value)
+		if err != nil {
+			s.logger.Debugf("Failed to convert expected value for key %s: %v", key, err)
+			return fmt.Errorf("failed to convert expected value for key %s: %w", key, err)
+		}
+
+		actualStr, err := anyToString(readbackValue)
+		if err != nil {
+			s.logger.Debugf("Failed to convert actual value for key %s: %v", key, err)
+			return fmt.Errorf("failed to convert actual value for key %s: %w", key, err)
+		}
+
+		if expectedStr != actualStr {
+			s.logger.Debugf("Config verification failed for key %s: expected %s, got %s", key, expectedStr, actualStr)
+			return fmt.Errorf("config verification failed for key %s: expected %s, got %s", key, expectedStr, actualStr)
+		}
+	}
+
+	s.logger.Debugf("Config verification passed for %s", redpandaName)
+	return nil
+}
+
+// UpdateRedpandaClusterConfig updates Redpanda's cluster configuration through its admin API.
+// The function performs two key operations:
+//  1. Sends a PUT request to update the cluster configuration
+//  2. Verifies the changes by reading back and comparing the new values
+//
+// Note on restarts:
+//   - This function does not directly trigger a Redpanda restart
+//   - Restarts are handled by the reconcile loop when S6 service config changes
+//   - This ensures all configuration changes are applied, including those requiring restarts
+//
+// The reconcile loop continues smoothly because:
+//   - Configuration readback confirms changes are applied
+//   - Redpanda metrics reflect updated values (therefore not blocking the loop)
+//   - Both HTTP operations complete within the standard context timeout
+func (s *RedpandaService) UpdateRedpandaClusterConfig(ctx context.Context, redpandaName string, configUpdates map[string]interface{}) error {
+	// If the parent context is done, return an error
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+
+	// Since we are doing 2 API calls, we just allocate double the time
+	// This also helps smooth out the time, as one of them then can take slightly longer, but both still are bound by the same timeout
+	innerCtx, innerCtxCancel := context.WithTimeout(ctx, constants.AdminAPITimeout*2)
+	defer innerCtxCancel()
+
+	// Set the cluster config
+	s.logger.Debugf("Setting Redpanda cluster config: %v", configUpdates)
+	if err := s.setRedpandaClusterConfig(innerCtx, configUpdates); err != nil {
+		return err
+	}
+
+	// If the parent context is done, return an error
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+
+	// Verify the config was applied correctly
+	s.logger.Debugf("Verifying Redpanda cluster config: %v", configUpdates)
+	return s.verifyRedpandaClusterConfig(innerCtx, redpandaName, configUpdates)
+}
+
+// anyToString converts common data types to string for easier comparison
+func anyToString(input any) (result string, err error) {
+	switch v := input.(type) {
+	case string:
+		return v, nil
+	case int:
+		return fmt.Sprintf("%d", v), nil
+	case int64:
+		return fmt.Sprintf("%d", v), nil
+	case float64:
+		// Check if it's actually an integer represented as float
+		if v == float64(int64(v)) {
+			return fmt.Sprintf("%.0f", v), nil
+		}
+		return fmt.Sprintf("%g", v), nil
+	case float32:
+		if v == float32(int32(v)) {
+			return fmt.Sprintf("%.0f", v), nil
+		}
+		return fmt.Sprintf("%g", v), nil
+	case bool:
+		if v {
+			return "true", nil
+		}
+		return "false", nil
+	default:
+		return result, fmt.Errorf("cannot convert %T to string", input)
+	}
 }
