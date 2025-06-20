@@ -7,11 +7,6 @@ import (
 	"unsafe"
 )
 
-var (
-	errType   = reflect.TypeOf((*error)(nil)).Elem()
-	ifaceType = reflect.TypeOf((*any)(nil)).Elem()
-)
-
 // structCopier data structure of copier that copies from a `struct`
 type structCopier struct {
 	ctx            *Context
@@ -26,7 +21,7 @@ func (c *structCopier) Copy(dst, src reflect.Value) error {
 			return err
 		}
 	}
-	// Executes post-copy function on the struct values
+	// Executes post-copy function of the destination struct
 	if c.postCopyMethod != nil {
 		dst = dst.Addr().Method(*c.postCopyMethod)
 		errVal := dst.Call([]reflect.Value{src})[0]
@@ -34,7 +29,7 @@ func (c *structCopier) Copy(dst, src reflect.Value) error {
 			return nil
 		}
 		err, ok := errVal.Interface().(error)
-		if !ok { // Should never get here
+		if !ok { // Should never get in here
 			return fmt.Errorf("%w: PostCopy method returns non-error value", ErrTypeInvalid)
 		}
 		return err
@@ -44,9 +39,13 @@ func (c *structCopier) Copy(dst, src reflect.Value) error {
 
 //nolint:gocognit,gocyclo
 func (c *structCopier) init(dstType, srcType reflect.Type) (err error) {
-	dstCopyingMethods := c.parseStructMethods(dstType)
-	dstDirectFields, mapDstDirectFields, dstInheritedFields, mapDstInheritedFields := c.parseAllFields(dstType)
-	srcDirectFields, mapSrcDirectFields, srcInheritedFields, mapSrcInheritedFields := c.parseAllFields(srcType)
+	dstCopyingMethods, postCopyMethod := typeParseMethods(c.ctx, dstType)
+	if postCopyMethod != nil {
+		c.postCopyMethod = &postCopyMethod.Index
+	}
+
+	dstDirectFields, mapDstDirectFields, dstInheritedFields, mapDstInheritedFields := structParseAllFields(dstType)
+	srcDirectFields, mapSrcDirectFields, srcInheritedFields, mapSrcInheritedFields := structParseAllFields(srcType)
 	c.fieldCopiers = make([]copier, 0, len(dstDirectFields)+len(dstInheritedFields))
 
 	for _, key := range append(srcDirectFields, srcInheritedFields...) {
@@ -114,106 +113,6 @@ func (c *structCopier) init(dstType, srcType reflect.Type) (err error) {
 	return nil
 }
 
-// parseStructMethods collects all copying methods from the given struct type
-func (c *structCopier) parseStructMethods(structType reflect.Type) map[string]*reflect.Method {
-	ptrType := reflect.PointerTo(structType)
-	numMethods := ptrType.NumMethod()
-	result := make(map[string]*reflect.Method, numMethods)
-	for i := 0; i < numMethods; i++ {
-		method := ptrType.Method(i)
-		switch {
-		// Field copying method name must be something like `Copy<something>`
-		case c.ctx.CopyBetweenStructFieldAndMethod && strings.HasPrefix(method.Name, "Copy"):
-			if method.Type.NumIn() != 2 || method.Type.NumOut() != 1 {
-				continue
-			}
-			if method.Type.Out(0) != errType {
-				continue
-			}
-			result[method.Name] = &method
-
-		// The method is for `post-copy` event
-		case method.Name == "PostCopy":
-			if method.Type.NumIn() != 2 || method.Type.NumOut() != 1 {
-				continue
-			}
-			if method.Type.In(1) != ifaceType {
-				continue
-			}
-			if method.Type.Out(0) != errType {
-				continue
-			}
-			c.postCopyMethod = &method.Index
-		}
-	}
-	return result
-}
-
-// parseAllFields parses all fields of a struct including direct fields and fields inherited from embedded structs
-func (c *structCopier) parseAllFields(typ reflect.Type) (
-	directFieldKeys []string,
-	mapDirectFields map[string]*fieldDetail,
-	inheritedFieldKeys []string,
-	mapInheritedFields map[string]*fieldDetail,
-) {
-	numFields := typ.NumField()
-	directFieldKeys = make([]string, 0, numFields)
-	mapDirectFields = make(map[string]*fieldDetail, numFields)
-	inheritedFieldKeys = make([]string, 0, numFields)
-	mapInheritedFields = make(map[string]*fieldDetail, numFields)
-
-	for i := 0; i < numFields; i++ {
-		sf := typ.Field(i)
-		fDetail := &fieldDetail{field: &sf, index: []int{i}}
-		parseTag(fDetail)
-		if fDetail.ignored {
-			continue
-		}
-		directFieldKeys = append(directFieldKeys, fDetail.key)
-		mapDirectFields[fDetail.key] = fDetail
-
-		// Parse embedded struct to get its fields
-		if sf.Anonymous {
-			for key, detail := range c.parseAllNestedFields(sf.Type, fDetail.index) {
-				inheritedFieldKeys = append(inheritedFieldKeys, key)
-				mapInheritedFields[key] = detail
-				fDetail.nestedFields = append(fDetail.nestedFields, detail)
-			}
-		}
-	}
-	return directFieldKeys, mapDirectFields, inheritedFieldKeys, mapInheritedFields
-}
-
-// parseAllNestedFields parses all fields with initial index of starting field
-func (c *structCopier) parseAllNestedFields(typ reflect.Type, index []int) map[string]*fieldDetail {
-	if typ.Kind() == reflect.Pointer {
-		typ = typ.Elem()
-	}
-	if typ.Kind() != reflect.Struct {
-		return nil
-	}
-	numFields := typ.NumField()
-	result := make(map[string]*fieldDetail, numFields)
-
-	for i := 0; i < numFields; i++ {
-		sf := typ.Field(i)
-		fDetail := &fieldDetail{field: &sf, index: append(index, i)}
-		parseTag(fDetail)
-		if fDetail.ignored {
-			continue
-		}
-		result[fDetail.key] = fDetail
-		// Parse embedded struct recursively to get its fields
-		if sf.Anonymous {
-			for key, detail := range c.parseAllNestedFields(sf.Type, fDetail.index) {
-				result[key] = detail
-				fDetail.nestedFields = append(fDetail.nestedFields, detail)
-			}
-		}
-	}
-	return result
-}
-
 func (c *structCopier) buildCopier(
 	dstStructType, srcStructType reflect.Type,
 	dstFieldDetail, srcFieldDetail *fieldDetail,
@@ -234,6 +133,10 @@ func (c *structCopier) buildCopier(
 
 	cp, err := buildCopier(c.ctx, df.Type, sf.Type)
 	if err != nil {
+		// NOTE: If the copy is not required and the field is unexported, ignore the error
+		if !dstFieldDetail.required && !srcFieldDetail.required && !df.IsExported() {
+			return defaultNopCopier, nil
+		}
 		return nil, err
 	}
 	if c.ctx.IgnoreNonCopyableTypes && (srcFieldDetail.required || dstFieldDetail.required) {
@@ -252,10 +155,10 @@ func (c *structCopier) buildCopier(
 
 func (c *structCopier) createField2MethodCopier(dM *reflect.Method, sfDetail *fieldDetail) copier {
 	return &structField2MethodCopier{
-		dstMethod:           dM.Index,
-		dstMethodUnexported: !dM.IsExported(),
-		srcFieldIndex:       sfDetail.index,
-		srcFieldUnexported:  !sfDetail.field.IsExported(),
+		dstMethod:          dM.Index,
+		srcFieldIndex:      sfDetail.index,
+		srcFieldUnexported: !sfDetail.field.IsExported(),
+		required:           sfDetail.required || sfDetail.field.IsExported(),
 	}
 }
 
@@ -267,10 +170,11 @@ func (c *structCopier) createField2FieldCopier(df, sf *fieldDetail, cp copier) c
 		dstFieldSetNilOnZero: df.nilOnZero,
 		srcFieldIndex:        sf.index,
 		srcFieldUnexported:   !sf.field.IsExported(),
+		required:             sf.required || df.required || df.field.IsExported(),
 	}
 }
 
-// structFieldDirectCopier data structure of copier that copies from
+// structField2FieldCopier data structure of copier that copies from
 // a src field to a dst field directly
 type structField2FieldCopier struct {
 	copier               copier
@@ -279,6 +183,7 @@ type structField2FieldCopier struct {
 	dstFieldSetNilOnZero bool
 	srcFieldIndex        []int
 	srcFieldUnexported   bool
+	required             bool
 }
 
 // Copy implementation of Copy function for struct field copier direct.
@@ -298,8 +203,11 @@ func (c *structField2FieldCopier) Copy(dst, src reflect.Value) (err error) {
 	}
 	if c.srcFieldUnexported {
 		if !src.CanAddr() {
-			return fmt.Errorf("%w: accessing unexported field requires it to be addressable",
-				ErrValueUnaddressable)
+			if c.required {
+				return fmt.Errorf("%w: accessing unexported source field requires it to be addressable",
+					ErrValueUnaddressable)
+			}
+			return nil
 		}
 		src = reflect.NewAt(src.Type(), unsafe.Pointer(src.UnsafeAddr())).Elem() //nolint:gosec
 	}
@@ -311,17 +219,17 @@ func (c *structField2FieldCopier) Copy(dst, src reflect.Value) (err error) {
 		dst = structFieldGetWithInit(dst, c.dstFieldIndex)
 	}
 	if c.dstFieldUnexported {
-		if !dst.CanAddr() {
-			return fmt.Errorf("%w: accessing unexported field requires it to be addressable",
-				ErrValueUnaddressable)
-		}
+		// NOTE: dst is always addressable as Copy() requires `dst` to be pointer
 		dst = reflect.NewAt(dst.Type(), unsafe.Pointer(dst.UnsafeAddr())).Elem() //nolint:gosec
 	}
 
 	// Use custom copier if set
 	if c.copier != nil {
 		if err = c.copier.Copy(dst, src); err != nil {
-			return err
+			if c.required {
+				return err
+			}
+			return nil
 		}
 	} else {
 		// Otherwise, just perform simple direct copying
@@ -338,10 +246,10 @@ func (c *structField2FieldCopier) Copy(dst, src reflect.Value) (err error) {
 
 // structField2MethodCopier data structure of copier that copies between `fields` and `methods`
 type structField2MethodCopier struct {
-	dstMethod           int
-	dstMethodUnexported bool
-	srcFieldIndex       []int
-	srcFieldUnexported  bool
+	dstMethod          int
+	srcFieldIndex      []int
+	srcFieldUnexported bool
+	required           bool
 }
 
 // Copy implementation of Copy function for struct field copier between `fields` and `methods`.
@@ -359,17 +267,16 @@ func (c *structField2MethodCopier) Copy(dst, src reflect.Value) (err error) {
 	}
 	if c.srcFieldUnexported {
 		if !src.CanAddr() {
-			return fmt.Errorf("%w: accessing unexported field requires it to be addressable",
-				ErrValueUnaddressable)
+			if c.required {
+				return fmt.Errorf("%w: accessing unexported source field requires it to be addressable",
+					ErrValueUnaddressable)
+			}
+			return nil
 		}
 		src = reflect.NewAt(src.Type(), unsafe.Pointer(src.UnsafeAddr())).Elem() //nolint:gosec
 	}
 
 	dst = dst.Addr().Method(c.dstMethod)
-	if c.dstMethodUnexported {
-		dst = reflect.NewAt(dst.Type(), unsafe.Pointer(dst.UnsafeAddr())).Elem() //nolint:gosec
-	}
-
 	errVal := dst.Call([]reflect.Value{src})[0]
 	if errVal.IsNil() {
 		return nil
