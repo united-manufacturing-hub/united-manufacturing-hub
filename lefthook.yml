@@ -37,6 +37,17 @@ pre-push:
       run: |
         golangci-lint run ./...
 
+    - name: protobuf-check
+      root: "umh-core"
+      run: |
+        make build-protobuf
+        if [ -n "$(git status --porcelain pkg/communicator/models/topicbrowser/pb/)" ]; then
+          echo "ERROR: Protobuf files are out of sync!"
+          echo "Run 'make build-protobuf' and commit the changes before pushing."
+          git status pkg/communicator/models/topicbrowser/pb/
+          exit 1
+        fi
+
 pre-commit:
   parallel: true
   jobs:
