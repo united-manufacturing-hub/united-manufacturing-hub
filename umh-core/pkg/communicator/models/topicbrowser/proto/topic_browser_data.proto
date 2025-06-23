@@ -249,3 +249,4 @@ message UnsBundle {
   TopicMap uns_map  = 1; // Map of all topics if new or changed topics or a metadata was changed
   EventTable events = 2; // Events associated with these topics
 }
+

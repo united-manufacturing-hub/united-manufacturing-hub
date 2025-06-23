@@ -38,6 +38,7 @@ pre-push:
         golangci-lint run ./...
 
     - name: protobuf-check
+      glob: "**/*.{proto,pb.go}"
       root: "umh-core"
       run: |
         make build-protobuf
