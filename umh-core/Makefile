@@ -33,6 +33,9 @@ NMAP_VERSION = 7.95-r1
 S6_OVERLAY_VERSION = 3.2.0.2
 BENTHOS_UMH_VERSION = 0.9.4
 REDPANDA_VERSION = 24.3.8
+BUF_VERSION = 1.55.1
+PROTOC_GEN_GO_VERSION = 1.36.6
+
 
 
 # Note: Redpanda allocates 2GB of memory per core.
@@ -276,13 +279,13 @@ print-golang-version:
 ## Install buf for protobuf generation
 install-buf:
 	@echo "Installing buf via Go..."
-	@go install github.com/bufbuild/buf/cmd/buf@latest
+	@go install github.com/bufbuild/buf/cmd/buf@v$(BUF_VERSION)
 	@echo "Buf installed via Go"
 
 ## Generate go files from protobuf for topic browser
 build-protobuf: install-buf
 	@echo "Installing protobuf dependencies..."
-	@go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+	@go install google.golang.org/protobuf/cmd/protoc-gen-go@v$(PROTOC_GEN_GO_VERSION)
 	@echo "Generating Go from protobuf..."
 	@mkdir -p pkg/communicator/models/topicbrowser/pb
 	@rm -f pkg/communicator/models/topicbrowser/pb/topic_browser_data.pb.go || true
